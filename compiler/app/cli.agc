@@ -1,8 +1,8 @@
 ## The command line of `agentica`: the entry point of the front end, `run`. It reads the options, then does what the
 ## first word asks: run a program, `check` it, `compile` it to a file, print `help`, print the API of a module with
-## `doc`, format files with `fmt`, list the declarations of a file with `outline`, give the type
-## at a position with `type-at`, list the references to a name with `refs`, write the packages of the lock to deps/
-## with `install`, change the packages with `add` and `update`, or start the tests.
+## `doc`, format files with `fmt`, suggest style changes with `lint`, list the declarations of a file with `outline`,
+## give the type at a position with `type-at`, list the references to a name with `refs`, write the packages of the
+## lock to deps/ with `install`, change the packages with `add` and `update`, or start the tests.
 ##
 ## `run` takes everything it cannot know from outside (docs/future/35-self-hosting.md, 35.3, "Front-end inputs"): the
 ## settings (the Agentica version, the provider of the `std/` sources, the path of the binary that `agentica test`
@@ -54,6 +54,7 @@ import Add from "cli_add"
 import CliCheck from "cli_check"
 import CliDoc from "cli_doc"
 import CliFmt from "cli_fmt"
+import CliLint from "cli_lint"
 import Help from "cli_help"
 import HelpStd from "cli_help_std"
 import Install from "cli_install"
@@ -108,6 +109,8 @@ def dispatch(session: Session) -> Int
     return doc(session, words)
   elsif first == "fmt"
     return fmt(session, words.drop(1))
+  elsif first == "lint"
+    return lint(session, words.drop(1))
   elsif first == "install"
     return install(session, words.drop(1))
   elsif first == "add"
@@ -361,6 +364,75 @@ def fmt(session: Session, words: List[String]) -> Int
       end
 
       return status
+  end
+end
+
+# `lint [PATH...] [--strict]` (cli_lint.agc): the style suggestions of every `.agc` file of the paths, as `check` finds
+# them (none: the working folder). Suggestions go to the standard output and exit 0; `--strict` makes any of them
+# exit 1. A file that does not parse prints its diagnostic and exits 1, one that cannot be read exits 2. `--stdin` is a
+# usage error, as for `check` with several files.
+def lint(session: Session, words: List[String]) -> Int
+  strict = words.include?("--strict")
+  rest = words.select do |word: String| word != "--strict" end
+  if rest.include?("--stdin")
+    return answered(
+      session,
+      Reply.Answer.Rejected(QueryOptions.refusal("lint reads files, not standard input", CliLint.usage())),
+      "",
+    )
+  end
+
+  case QueryOptions.parse(rest, session.options.style, CliLint.usage(), false)
+    QueryOptions.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
+    QueryOptions.Parsed.Ready(asked) ->
+      styled = session.with(options: session.options.with(style: asked.style))
+      case SymbolPaths.expand(styled.settings.workspace, asked.words, "", CliLint.usage())
+        SymbolPaths.Expanded.Refused(problem) -> return answered(styled, Reply.Answer.Rejected(problem), "")
+        SymbolPaths.Expanded.Files(roots) ->
+          entries = roots.map do |root: SymbolPaths.Root| lint_entry(root.typed) end
+          return lint_report(styled, entries, strict)
+      end
+  end
+end
+
+def lint_entry(file: String) -> CliLint.Entry
+  case SourceReader.read(file)
+    SourceFile.Read.Unreadable(_) -> return CliLint.Entry.Unreadable(file)
+    SourceFile.Read.Invalid(at) ->
+      return CliLint.Entry.Unparsed(file, Front.stage_problem(file, SourceFile.invalid_utf8(at)))
+    SourceFile.Read.Text(text) -> return CliLint.entry(file, text)
+  end
+end
+
+# The answer of a run of `lint`. The JSON form is one document on stdout; the others print the suggestions and the
+# last line (the count, or `lint failed` when a file did not parse or read) on stdout, and the diagnostics of the files
+# that did not parse or read on stderr, in the order of the files.
+def lint_report(session: Session, entries: List[CliLint.Entry], strict: Bool) -> Int
+  if session.options.style == "json"
+    print(CliLint.json_text(entries))
+    return CliLint.status(entries, strict)
+  end
+
+  for entry in entries
+    show_lint_entry(session, entry)
+  end
+
+  print(CliLint.summary_text(entries))
+  return CliLint.status(entries, strict)
+end
+
+def show_lint_entry(session: Session, entry: CliLint.Entry) -> Void
+  case entry
+    CliLint.Entry.Clean(_) -> return
+    CliLint.Entry.Suggested(_, found) -> print(CliLint.suggestions_text(found))
+    CliLint.Entry.Unparsed(file, problem) ->
+      text = render(session, problem, file)
+      if session.options.style == "ai"
+        text = CliCheck.headed(file, text)
+      end
+
+      IO.warn(text)
+    CliLint.Entry.Unreadable(file) -> IO.warn("agentica: cannot read #{file}")
   end
 end
 

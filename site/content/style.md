@@ -595,3 +595,14 @@ end
 ```
 
 Use a `List` for order, a `Set` for membership, a `Map` for lookup by key, and a struct for a record with known fields.
+
+## Check your code
+
+`agentica fmt` fixes the layout and `agentica check` refuses what is always a mistake. `agentica lint` suggests the rest of this guide that the syntax shows, and never fails the build unless you pass `--strict` (see [Suggest style changes](/cli/#suggest-style-changes)). Its rules, each with the part of the guide it comes from:
+
+- `LINT-PRIVATE-DOC` and `LINT-REPEATED-QUALIFIED-NAME`: [Files and docs](#files-and-docs) (a private function never gets `##`; import a name used often).
+- `LINT-IF-CHAIN`: [if and case](#if-and-case) (`case` for three or more branches on one value).
+- `LINT-NEGATED-ELSE` and `LINT-BOOL-COMPARE`: [Naming](#naming) and [Functions](#functions) (say it positively; use a `Bool` as it is).
+- `LINT-SINGLE-PIPE`: [Pipes](#pipes) (one step is a plain call).
+- `LINT-TO-S-CONCAT`: [Text and collections](#text-and-collections) (interpolation, not `+` and `.to_s`).
+- `LINT-STRING-APPEND-IN-LOOP`: [Text and collections](#text-and-collections) (a String that grows by `+` in a loop is copied on every pass: `push` the pieces and `join` them once).

@@ -47,6 +47,31 @@ expected Int, found String
 - Codes start with `LEX-`, `PARSE-`, `CHECK-` or `RUNTIME-`. A runtime error also prints the call stack. See [Diagnostics](/reference/diagnostics/).
 - `--ai` and `--json` print the same error for tools: `{"code":"CHECK-TYPE-MISMATCH","file":"bad.agc","range":{...},...}`.
 
+## Suggest style changes
+
+```sh
+agentica lint src    # PATH is a file or a folder, default .; --json prints one document; --strict exits 1 for any suggestion
+```
+
+```text
+src/orders.agc:12:5 LINT-STRING-APPEND-IN-LOOP this loop grows a String with +, which copies the text on every pass
+  help: push the pieces on a List and join them once after the loop: parts = parts.push(piece), parts.join("")
+lint: 1 suggestion in 1 of 12 files
+```
+
+`lint` suggests changes from the [style guide](/style/). It only parses each file, so the imports need not exist and it reads no types. A suggestion is not an error: what is always a mistake (an unused import, unreachable code) stays an error of `check`. Each line is `file:line:column CODE message`, with the way to write it on the next line. Exit codes: `0` with or without suggestions, `1` with `--strict` and any suggestion (for CI) or when a file does not parse (its first diagnostic is printed, and the last line says `lint failed: 1 of 2 files could not be parsed`), `2` for a bad call or an unreadable file. `--json` prints one object: `ok`, `checked`, `suggestions` and `files`, an entry for each file with its `suggestions` (each has `code`, `message`, `help`, `file` and `range`, as a diagnostic does) or its `diagnostic`; the files that did not parse or read are those with a `diagnostic`. The rules, in the order of the guide:
+
+| Code | Suggests |
+|---|---|
+| `LINT-PRIVATE-DOC` | no `##` doc on a private function, struct or enum |
+| `LINT-REPEATED-QUALIFIED-NAME` | `import {Value} from "db"` for a name such as `Db.Value` that a file writes twenty times or more |
+| `LINT-IF-CHAIN` | `case` for an `if` chain of three or more branches that test one variable against literals |
+| `LINT-NEGATED-ELSE` | the positive case first, not `if not x` with an `else` |
+| `LINT-BOOL-COMPARE` | `if done`, not `if done == true` |
+| `LINT-SINGLE-PIPE` | a plain call, not `x \|> f()` with one step |
+| `LINT-TO-S-CONCAT` | interpolation, not `"n=" + n.to_s` |
+| `LINT-STRING-APPEND-IN-LOOP` | `push` and one `join`, not `s = s + piece` in a `for` or `while` loop, which copies the text on every pass |
+
 ## Look up a builtin
 
 ```sh
@@ -147,6 +172,7 @@ The first line is the declaration. Each other line is a use, with its kind (`cal
 | `type-at --stdin FILE:LINE:COL`, `refs --stdin FILE:LINE:COL` | answer for the text on standard input, as if `FILE` held it |
 | `symbol NAME --stdin FILE`, `refs NAME --stdin FILE` | search that text as one more file, the first |
 | `check [PATH...]` | checks every `.agc` file of the files and folders named, or of the current folder with no PATH. One file path prints `check ok`, or its first diagnostic; with `--json`, `{"ok":true}` or the diagnostic. A folder, no path or several paths end with a count (`check ok: 3 files`, or `check failed: 1 of 3 files` and exit 1), and each failing file prints its first diagnostic (with `--ai`, under the file name). With `--json` the output is one object on stdout, `{ok, checked, failed, files}`, with `{file, ok, diagnostic}` for each file. A folder skips hidden folders, `agc_libs/`, the `deps/` of a project and symbolic links to files, as `symbol` does; `build/` is not skipped. A path that does not exist, or a folder with no `.agc` file, is `QUERY-USAGE` and exit 2, and no file is checked. A file that cannot be read is `QUERY-USAGE` in its entry and makes the exit code 2; the other files are still checked |
+| `lint [PATH...]` | suggests style changes for every `.agc` file of the files and folders named (the current folder with no PATH), searched as `check` searches them, and prints the count last; see [Suggest style changes](#suggest-style-changes). `--strict` exits 1 when there is any suggestion; `--stdin` is a usage error |
 | `fmt [PATH...]` | formats every `.agc` file of the files and folders named (the current folder with no PATH) in place; a file that is already formatted is not written. Folders are searched as `check` searches them, so `agc_libs/` is skipped unless you name it. The layout is the one of `compiler/` and `stdlib/`: one statement per line, two-space indents, and a call, list, map or `def` header on one line when it fits, else one item per line with a trailing comma. A pipe chain of two or more `|>` that is a whole statement, binding value or return value is one stage per line even when it fits, in parentheses closed by a lone `)`; a method chain that is a whole statement, binding value or return value and that the source writes with a `.` at the start of each line keeps that form, with no parentheses; a statement that takes several lines is followed by an empty line, unless a comment that closes its block comes next. Comments keep their words and order; a `#` line wider than the width is wrapped. CRLF line ends become LF. The `[style]` of the nearest `agentica.toml` above each file sets the width (`max_line_width`, 119 without it), and `blank_line_after_end = true` adds the empty line after every bare `end` that `check` asks for; a bad value is `PKG-MANIFEST-INVALID`. `fmt` never splits a name or a string, and keeps a trailing comment on the last line of a statement of several lines, so a line can stay too long; `check` reports it as `CHECK-LINE-TOO-LONG`. A file that does not parse prints its diagnostic, is left as it is and makes the exit code 1. A file named on the command line is formatted whatever its extension, as `check` does; a file whose name starts with `-` is written `./-x.agc`. An unknown option, a path that does not exist or a folder with no `.agc` file is `FMT-USAGE` and exit 2, and no file is written |
 | `fmt --check [PATH...]` | writes nothing: lists, one per line, every file that `fmt` would change, and exits 1 if there is one, 0 if there is none. A CRLF file counts as changed |
 | `fmt -` | formats the text on standard input to standard output, with the `[style]` of the working folder; a text that does not parse prints its diagnostic and nothing on standard output (exit 1) |
