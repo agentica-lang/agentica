@@ -1574,6 +1574,71 @@ end
     assert result.stdout.split("\n") == ["0", awaited, "1", "0", ""]
 
 
+CHILD_EXTERN = """extern "{library}"
+  resource Res, free: peer_res_free
+  resource Child, free: peer_child_free
+  def peer_res_open(value: C.Int32) -> Res
+  def peer_child_open(res: Res) -> Child
+  compute def child_open_pool(res: Res) -> Child = "peer_child_open"
+  def peer_child_open_out(res: Res, out child: Child) -> C.Int32
+  def peer_child_of(child: Child) -> Child
+  compute def peer_child_hold(child: Child, limit_ms: C.Int32) -> C.Int32
+  def peer_child_frees() -> C.Int32
+  def peer_res_holding() -> C.Int32
+  def peer_res_frees() -> C.Int32
+  def peer_res_busy_frees() -> C.Int32
+  def peer_set_flag() -> Void
+end
+
+def hold_child(res: Res) -> Result[Int]
+  child = %s
+  return ok(peer_child_hold(child, 20_000))
+end
+
+def main() -> Void
+  res = peer_res_open(9).unwrap!
+  holder = Task.spawn(&hold_child, res)
+  n = 0
+  while peer_res_holding() == 0 and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+  Native.close(res)
+  puts(Native.closed?(res))
+  puts(peer_res_frees())
+  peer_set_flag()
+  puts(Task.await(holder))
+  n = 0
+  while peer_res_frees() == 0 and n < 2000
+    Task.sleep(1)
+    n += 1
+  end
+  puts(peer_res_frees())
+  puts(peer_res_busy_frees())
+  puts(peer_child_frees())
+end
+"""
+
+
+# A compute call on a resource also holds what that resource comes from, the resources of the call that made it
+# (#1080: mysql_stmt_execute on a Stmt while another task closes its Handle). The close marks the parent closed at once,
+# and its free runs only when the call on the child returns, whether a fast call, a compute call or an out parameter made
+# the child, and through a child of a child too. The child is freed at the end of its task.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+@pytest.mark.parametrize("make, children", [
+    ("peer_child_open(res).unwrap!", 1),
+    ("child_open_pool(res).unwrap!", 1),
+    ("peer_child_open_out(res).child", 1),
+    ("peer_child_of(peer_child_open(res).unwrap!).unwrap!", 2),
+])
+def test_a_compute_call_on_a_child_keeps_its_parent_until_it_returns(tmp_path, peer, schedulers, make, children):
+    source = CHILD_EXTERN.format(library=literal(peer)).replace("%s", make)
+    result = agentica("--schedulers", schedulers, program(tmp_path, source))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == ["true", "0", "ok(9)", "1", "0", str(children), ""]
+
+
 # The resource that a cancelled compute call returns is dropped with its result, and so freed: nothing leaks.
 @NATIVE_CALLS
 def test_a_dropped_compute_result_frees_its_resource(tmp_path, peer):

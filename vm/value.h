@@ -300,8 +300,9 @@ struct agc_ffi_call;
 /* A resource of native code (vm/ffi.c): the non-NULL C pointer that an extern function declared `-> Name` returned,
    the prepared call of the free function of its block, its name as declared (IO.inspect prints it) and its registry
    entry, whose native is this struct and which holds the owner task (§14.5). `jobs` counts the compute calls that use
-   it now. A close marks it `closed` and takes it off its owner; the free runs then, or at the end of the last of those
-   calls, so C never sees the pointer freed while a pool thread uses it. An owned buffer (Native.memory_pointer or
+   it now, directly or through a resource that comes from it (`from`). A close marks it `closed` and takes it off its
+   owner; the free runs then, or at the end of the last of those calls, so C never sees the pointer freed while a pool
+   thread uses it. An owned buffer (Native.memory_pointer or
    Native.from_string) is one too, with `buffer` set: `pointer` is its malloc'd memory of `size` bytes, freed with
    free(), and `free` is NULL; the program sees it as a C.Pointer. A resource declared `free: C.Function` has its own
    free function at `free_at`, the address that the call which made it got (`free` is then a call prepared without a
@@ -313,9 +314,15 @@ struct agc_ffi_call;
    `closed` of its own: the parent's closed, jobs and free stand for it. NULL for the others.
    A callback (Native.callback) has `callback` set to its data in GC memory, which this keeps alive while C may call
    it: `pointer` is the code that C calls, `free_at` the closure (agc_ffi_closure, malloc'd) that the free gives back,
-   and `free` is NULL. NULL for the others. Changes under rt->sync. */
+   and `free` is NULL. NULL for the others.
+   `from` (`from_count` entries, GC memory) is what a resource of an extern function comes from: what the call that
+   made it held, and what each of those comes from, once each (a database under its statement). A call that holds the
+   resource holds these too, so a close of one of them during a compute call on the resource frees it at the end of
+   that call. NULL for the others. Changes under rt->sync. */
 typedef struct agc_c_resource {
   struct agc_c_resource *parent;
+  struct agc_c_resource **from;
+  size_t from_count;
   agc_resource *state;
   void *pointer;
   struct agc_ffi_call *free;

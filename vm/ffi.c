@@ -117,6 +117,13 @@ typedef struct {
   made_kind *made;
 } ffi_entry;
 
+/* What the resources that one call makes come from (agc_c_resource.from): `count` resources and owned buffers in GC
+   memory, shared by every resource of the call. */
+typedef struct {
+  agc_c_resource **items;
+  size_t count;
+} made_from;
+
 /* One compute call, in malloc memory: the C arguments copied on the scheduler (each C.String and C.Bytes a malloc'd
    copy), the resource of each resource argument and the owned buffer of each C.Pointer one (NULL for the others),
    which the call holds (`jobs`) until its end on a scheduler, and the result, which the pool thread stores with a
@@ -850,7 +857,8 @@ static void free_resource(agc_vm *vm, agc_c_resource *res) {
 }
 
 /* Native.close and the end of the owning task (§14.5): the resource is closed and leaves its owner at once, and is
-   freed now, or by the end of the last compute call that holds it (release_held). A closed resource is left alone. */
+   freed now, or by the end of the last compute call that holds it or a resource that comes from it (release_held). A
+   closed resource is left alone. */
 static void close_resource(agc_vm *vm, agc_c_resource *res) {
   agc_sync_assert(vm);
   if (res->closed) return;
@@ -991,14 +999,16 @@ bool agc_ffi_end(agc_vm *vm, int (*stop_signal)(void)) {
 }
 
 /* A resource NAME around POINTER, freed by FREE_CALL (at the address FREE_AT unless NULL; with the address of the
-   pointer when BY_REF) and owned by the calling task (none for a detached compute call, whose result is dropped and so
+   pointer when BY_REF), coming from FROM, and owned by the calling task (none for a detached compute call, whose result is dropped and so
    freed at once). A NULL pointer (an out resource that C left NULL) gives a resource that is closed already and was
    never registered: no close, owner's end or end of the run frees it, and a call that takes it is
    RUNTIME-NATIVE-CLOSED. */
 static agc_value make_resource(agc_vm *vm, agc_ffi_call *free_call, void *free_at, bool by_ref, const char *name,
-                               void *pointer) {
+                               void *pointer, const made_from *from) {
   agc_c_resource *res = agc_alloc(sizeof *res);
   res->parent = NULL;
+  res->from = from->items;
+  res->from_count = from->count;
   res->pointer = pointer;
   res->free = free_call;
   res->free_at = free_at;
@@ -1022,23 +1032,61 @@ static void *free_target(bool by_pointer, void *free_at) { return by_pointer ? f
 
 /* The resource that a call returned, as Result ok; NULL is an error that names the function. FREE_AT is the free
    function that the call got (code e), else NULL. */
-static agc_value resource_result(agc_vm *vm, const ffi_entry *e, void *pointer, void *free_at) {
+static agc_value resource_result(agc_vm *vm, const ffi_entry *e, void *pointer, void *free_at, const made_from *from) {
   if (!pointer) {
     char message[512];
     snprintf(message, sizeof message, "%s returned NULL", e->symbol);
     return agc_error_value(message);
   }
   return agc_result_value(true, make_resource(vm, e->free, free_target(e->free_by_pointer, free_at),
-                                              e->free_by_ref, e->resource, pointer));
+                                              e->free_by_ref, e->resource, pointer, from));
 }
 
-/* The compute calls that held these resources are over: a resource closed meanwhile is freed by the last of them. */
+/* A call that held RES is over: if RES was closed meanwhile, the last such call frees it. */
+static void let_go_of(agc_vm *vm, agc_c_resource *res) {
+  if (--res->jobs == 0 && res->closed && !res->freed) free_resource(vm, res);
+}
+
+/* The calls that held these resources, and what each comes from, are over: a resource closed meanwhile is freed by the
+   last of them. A resource is let go before what it comes from, so a statement closed with its database during the
+   call is freed first. */
 static void release_held(agc_vm *vm, const ffi_entry *e, agc_c_resource **held) {
   agc_sync_assert(vm);
   for (uint32_t k = 0; k < e->holds; k++) {
     agc_c_resource *res = held[k];
-    if (res && --res->jobs == 0 && res->closed && !res->freed) free_resource(vm, res);
+    if (!res) continue;
+    let_go_of(vm, res);
+    for (size_t j = 0; j < res->from_count; j++) let_go_of(vm, res->from[j]);
   }
+}
+
+/* Whether a call of E makes a resource, as its result or an out parameter. */
+static bool makes_resources(const ffi_entry *e) { return e->resource || e->made; }
+
+static void add_once(agc_c_resource **items, size_t *n, agc_c_resource *res) {
+  for (size_t k = 0; k < *n; k++)
+    if (items[k] == res) return;
+  items[(*n)++] = res;
+}
+
+/* What the resources that a call makes come from: what it holds (HELD, E->holds entries) and what each of those comes
+   from, once each, in that order. Each set is complete when it is made, so a hold reads one level and walks no chain.
+   Its size is the number of resources above the new one, which only a program that runs native code can grow (and
+   --deny-native refuses). Under rt->sync, before the release of HELD, which keeps every entry alive across the
+   allocation. */
+static made_from origins(const ffi_entry *e, agc_c_resource *const *held) {
+  size_t cap = 0;
+  for (uint32_t k = 0; k < e->holds; k++)
+    if (held[k]) cap = agc_size_add(cap, agc_size_add(1, held[k]->from_count));
+  if (!cap) return (made_from){NULL, 0};
+  agc_c_resource **items = agc_alloc(agc_size_mul(cap, sizeof *items));
+  size_t n = 0;
+  for (uint32_t k = 0; k < e->holds; k++) {
+    if (!held[k]) continue;
+    add_once(items, &n, held[k]);
+    for (size_t j = 0; j < held[k]->from_count; j++) add_once(items, &n, held[k]->from[j]);
+  }
+  return (made_from){items, n};
 }
 
 /* Frees the callbacks of `dying`, once C has returned from a native call: none of them runs any more. */
@@ -1323,7 +1371,8 @@ static agc_value text_value(const uint8_t *p, size_t n) {
   return agc_string_value(agc_utf8_decode(n ? p : (const uint8_t *)"", n, "\xEF\xBF\xBD", false));
 }
 
-static agc_value result_value(agc_vm *vm, const ffi_entry *e, const agc_c_value *r, void *free_at) {
+static agc_value result_value(agc_vm *vm, const ffi_entry *e, const agc_c_value *r, void *free_at,
+                              const made_from *from) {
   switch (e->result) {
     INT_CASES: return int_load(e->result, r);
     case AGC_C_DOUBLE: return agc_float(r->d);
@@ -1335,7 +1384,7 @@ static agc_value result_value(agc_vm *vm, const ffi_entry *e, const agc_c_value 
       return text_value((const uint8_t *)s, strlen(s));
     }
     case AGC_C_POINTER: return agc_c_pointer_value(r->p);
-    case AGC_C_RESOURCE: return resource_result(vm, e, r->p, free_at);
+    case AGC_C_RESOURCE: return resource_result(vm, e, r->p, free_at, from);
     case AGC_C_STRUCT: return struct_value(e->result_struct, r->p);
     case AGC_C_BYTES:
     case AGC_C_VOID: break;
@@ -1345,7 +1394,8 @@ static agc_value result_value(agc_vm *vm, const ffi_entry *e, const agc_c_value 
 
 /* The value of the out parameter K from its slot, which C wrote (or left zeroed). A C.Bool is read as the byte C
    wrote, so a slot that does not hold 0 or 1 is never read as a _Bool. */
-static agc_value out_value(agc_vm *vm, const ffi_entry *e, uint32_t k, const agc_c_value *slot, void *free_at) {
+static agc_value out_value(agc_vm *vm, const ffi_entry *e, uint32_t k, const agc_c_value *slot, void *free_at,
+                           const made_from *from) {
   switch (e->params[k]) {
     INT_CASES: return int_load(e->params[k], slot);
     case AGC_C_DOUBLE: return agc_float(slot->d);
@@ -1359,7 +1409,7 @@ static agc_value out_value(agc_vm *vm, const ffi_entry *e, uint32_t k, const agc
     case AGC_C_RESOURCE: {
       const made_kind *kind = &e->made[k];
       return make_resource(vm, kind->free, free_target(kind->by_pointer, free_at), kind->by_ref, kind->name,
-                           slot->p);
+                           slot->p, from);
     }
     case AGC_C_STRING:
     case AGC_C_BYTES:
@@ -1370,15 +1420,16 @@ static agc_value out_value(agc_vm *vm, const ffi_entry *e, uint32_t k, const agc
 }
 
 /* The value of a call: the C result, or for a function with out parameters the List of the fields of its record (the
-   C result unless Void, then each out value from its slot). FREE_AT is the free function that the call got. */
+   C result unless Void, then each out value from its slot). FREE_AT is the free function that the call got, FROM what
+   the resources it makes come from. */
 static agc_value call_value(agc_vm *vm, const ffi_entry *e, const agc_c_value *r, const agc_c_value *slots,
-                            void *free_at) {
-  if (!e->outs) return result_value(vm, e, r, free_at);
+                            void *free_at, const made_from *from) {
+  if (!e->outs) return result_value(vm, e, r, free_at, from);
   agc_value items[AGC_FFI_MAX_PARAMS + 1];
   size_t n = 0;
-  if (e->result != AGC_C_VOID) items[n++] = result_value(vm, e, r, free_at);
+  if (e->result != AGC_C_VOID) items[n++] = result_value(vm, e, r, free_at, from);
   for (uint32_t k = 0; k < e->count; k++)
-    if (e->out[k]) items[n++] = out_value(vm, e, k, &slots[k], free_at);
+    if (e->out[k]) items[n++] = out_value(vm, e, k, &slots[k], free_at, from);
   return agc_list_value(agc_list_from_array(items, n));
 }
 
@@ -1441,6 +1492,8 @@ static agc_value compute_done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   compute_call *c = data;
   const ffi_entry *e = c->entry;
+  /* Before the release, which may free and unregister a held resource that nothing else keeps alive. */
+  made_from from = c->ran && makes_resources(e) ? origins(e, c->held) : (made_from){NULL, 0};
   release_held(vm, e, c->held);
   agc_value v = agc_void();
   /* A call with out parameters gives a List, which the detached end (discard in vm/loop.c) does not look into, so its
@@ -1452,7 +1505,7 @@ static agc_value compute_done(agc_vm *vm, void *data, agc_value context) {
   if (c->ran && (refused || (e->outs && !vm->in_turn)))
     drop_made(e, &c->out, c->slots, c->free_at);
   else if (c->ran)
-    v = call_value(vm, e, &c->out, c->slots, c->free_at);
+    v = call_value(vm, e, &c->out, c->slots, c->free_at, &from);
   uint32_t span = c->span;
   compute_free(c);
   /* C called a callback on the pool thread, where it gave zero: the call's result may be wrong, so the task fails. */
@@ -1486,15 +1539,22 @@ static void *function_at(agc_vm *vm, agc_value v, uint32_t span) {
 }
 
 /* Fills HELD (e->holds entries) with what a call holds, in order: the resource or owned buffer of each parameter
-   (held_by), then those in the C.Pointer fields of the struct arguments, and counts the call in the `jobs` of each. */
-static void hold_arguments(agc_vm *vm, const ffi_entry *e, const agc_list *values, agc_c_resource **held) {
+   (held_by), then those in the C.Pointer fields of the struct arguments. */
+static void find_held(agc_vm *vm, const ffi_entry *e, const agc_list *values, agc_c_resource **held) {
   uint32_t holds = e->count;
   for (uint32_t k = 0; k < e->count; k++) {
     held[k] = held_by(vm, e, values, k);
     if (e->structs[k]) struct_held(vm, e->structs[k], agc_list_get(values, e->arg[k]), held, &holds);
   }
-  for (uint32_t k = 0; k < e->holds; k++)
-    if (held[k]) held[k]->jobs++;
+}
+
+/* Counts the call in the `jobs` of each resource of HELD and of what each comes from (release_held undoes it). */
+static void hold(const ffi_entry *e, agc_c_resource *const *held) {
+  for (uint32_t k = 0; k < e->holds; k++) {
+    if (!held[k]) continue;
+    held[k]->jobs++;
+    for (size_t j = 0; j < held[k]->from_count; j++) held[k]->from[j]->jobs++;
+  }
 }
 
 /* Native.call(signature, arguments): one call of an extern function, on the scheduler, or for a compute def on the
@@ -1557,7 +1617,8 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
       c->in[k] = entry_argument(vm, e, values, k, bytes[k], memory);
       if (e->structs[k]) used += STRUCT_ROUND(e->structs[k]->size);
     }
-    hold_arguments(vm, e, values, c->held);
+    find_held(vm, e, values, c->held);
+    hold(e, c->held);
     if (e->result_struct) c->out.p = c->structs + used;
     agc_io_compute(vm, &compute_io, c);
     return agc_void();
@@ -1579,23 +1640,30 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
   }
   agc_c_value out = {0};
   if (e->result_struct) out.p = structs + used;
-  /* What the call holds once the run has callbacks: on the stack, unless struct fields make it longer. */
+  /* What the call holds once the run has callbacks, and what the resources it makes come from: on the stack, unless
+     struct fields make it longer. */
   agc_ffi_cache *c = vm->rt->ffi;
+  /* Read once: a callback that makes a callback sets c->callbacks during the call. */
+  bool holding = c->callbacks, makes = makes_resources(e);
   agc_c_resource *stack_held[AGC_FFI_MAX_PARAMS], **held = NULL;
-  if (e->holds && c->callbacks) {
+  if (e->holds && (holding || makes)) {
     held = stack_held;
     if (e->holds > AGC_FFI_MAX_PARAMS) {
       held = malloc(agc_size_mul(e->holds, sizeof *held));
       if (!held) agc_out_of_memory();
     }
-    hold_arguments(vm, e, values, held);
+    find_held(vm, e, values, held);
+    if (holding) hold(e, held);
   }
   native_site site = {.vm = vm, .span = span, .outer = current_site};
   current_site = &site;
   agc_ffi_invoke(e->call, fn, in, &out);
   current_site = site.outer;
+  made_from from = {NULL, 0};
   if (held) {
-    release_held(vm, e, held);
+    /* Before the release, as in compute_done. The values of the arguments keep what HELD points at alive. */
+    if (makes && !site.failed) from = origins(e, held);
+    if (holding) release_held(vm, e, held);
     if (held != stack_held) free(held);
   }
   if (c->dying_count) free_dying(vm, c);
@@ -1609,7 +1677,7 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
     if (site.kept->kind == AGC_DONE) return agc_void();
     agc_raise(vm, site.kept);
   }
-  agc_value v = call_value(vm, e, &out, slots, free_at);
+  agc_value v = call_value(vm, e, &out, slots, free_at, &from);
   free(structs);
   return v;
 }

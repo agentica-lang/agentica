@@ -283,11 +283,12 @@ makes a task and before any handle of the argument moves (all or none).
 
 A resource of native code (`vm/ffi.c`) closes by running its C `free` once,
 on `Native.close` or at its owner's end. A `compute def` call holds its
-resource arguments until the call returns: a close meanwhile marks the
-resource closed and takes it off its owner, and the end of the last such call
-runs the `free` on a scheduler, so C never sees the pointer freed while a pool
-thread uses it. The end of the run frees what is still open (§14.4, step 3).
-There are no GC finalizers.
+resource arguments until the call returns, and what each comes from (the
+resources of the call that made it, and theirs: a statement's database): a
+close meanwhile marks the resource closed and takes it off its owner, and the
+end of the last such call runs the `free` on a scheduler, so C never sees the
+pointer freed while a pool thread uses it. The end of the run frees what is
+still open (§14.4, step 3). There are no GC finalizers.
 
 A channel is the one handle made unowned. `Channel.new` makes no registry entry.
 The first `Task.spawn_owning` of it (any task may do it) registers an entry with

@@ -107,6 +107,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica fmt` keeps a too-wide trailing comment on the last line of a
   statement of several lines, and adds no empty line before the comment that
   closes a block.
+- A `compute def` call on a resource also keeps the resources that the call
+  which made it took (a `Stmt` keeps its `Handle`): `Native.close` of the
+  `Handle` during the call frees it when the call returns, not while C uses it.
 
 ### Fixed
 
