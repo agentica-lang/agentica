@@ -3,8 +3,8 @@
 
 import Ast from "../syntax/ast"
 import Declarations from "declarations"
-import Env from "link_env"
 import ImportUse from "import_use"
+import Env from "link_env"
 import Failure from "link_failure"
 import Modules from "modules"
 import Resolve from "resolve"
@@ -302,7 +302,10 @@ def rewrite_module(loaded: Modules.Loaded, settings: Env.Settings, ids: Int, key
   )
 
   declarations = try Rewrite.rewrite_declarations(cx)
-  try ImportUse.check(module, loaded.modules)
+  if settings.unused_imports
+    try ImportUse.check(module, loaded.modules)
+  end
+
   return ok(
     LinkedModule(
       key: key,

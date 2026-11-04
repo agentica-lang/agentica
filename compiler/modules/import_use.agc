@@ -56,15 +56,27 @@ export def check(module: Modules.Module, modules: Map[String, Modules.Module]) -
 
   try bare_alias(module, modules, written)
   heads: List[String] = []
+  libraries: List[String] = []
   for item in written
-    if item.name.contains?(".") or item.role == Role.Variant
+    if item.role == Role.Module
+      libraries = libraries.push(item.name)
+    elsif item.name.contains?(".") or item.role == Role.Variant
       heads = heads.push(item.name.split(".")[0])
     end
   end
 
+  # A regex literal or a template uses every alias of the module it needs.
+  needed = Set.new(libraries)
   for alias in module.aliases.keys
-    if written.any? do |item: Written| item.role == Role.Module and item.name == module.aliases[alias] end
+    if needed.include?(module.aliases[alias])
       heads = heads.push(alias)
+    end
+  end
+
+  for decl in module.program.declarations
+    case decl
+      Ast.Decl.Reexport(node) -> heads = heads.push(node.alias)
+      _ -> next
     end
   end
 
@@ -73,7 +85,7 @@ export def check(module: Modules.Module, modules: Map[String, Modules.Module]) -
     case decl
       Ast.Decl.Import(node) ->
         alias = Declarations.alias_of(node)
-        if alias != "" and !used.include?(alias) and !reexported?(module, alias)
+        if alias != "" and !used.include?(alias)
           return error(unused_failure(module, node, alias))
         end
 
@@ -82,16 +94,6 @@ export def check(module: Modules.Module, modules: Map[String, Modules.Module]) -
   end
 
   return ok(true)
-end
-
-# True when a re-export (`export Alias.name`) names the alias.
-def reexported?(module: Modules.Module, alias: String) -> Bool
-  return module.program.declarations.any? do |decl: Ast.Decl|
-    case decl
-      Ast.Decl.Reexport(node) -> return node.alias == alias
-      _ -> return false
-    end
-  end
 end
 
 # True when a call is written `Head.name` and Head is nothing the checker would resolve: no alias, no declaration or
@@ -220,92 +222,89 @@ def alias_span(text: String, node: Ast.ImportDecl, alias: String) -> Source.Span
   return Source.Span(start: first, stop: last)
 end
 
-# Every name the declarations of the file write, in the places that can name an alias.
+# Every name the declarations of the file write, in the places that can name an alias. Each function below takes the
+# names found so far and gives them back with its own pushed on, so no list is copied while the file is walked.
 def of_program(program: Ast.Program) -> List[Written]
   out: List[Written] = []
   for decl in program.declarations
-    out = out.concat(of_declaration(Declarations.unwrap(decl)))
+    out = of_declaration(out, Declarations.unwrap(decl))
   end
 
   return out
 end
 
-def of_declaration(decl: Ast.Decl) -> List[Written]
+def of_declaration(found: List[Written], decl: Ast.Decl) -> List[Written]
+  out = found
   case decl
     Ast.Decl.Function(node) ->
-      out = of_type(node.result, node.type_parameters)
+      out = of_type(out, node.result, node.type_parameters)
       for param in node.params
-        out = out.concat(of_type(param.type, node.type_parameters)).concat(of_optional(param.default))
+        out = of_type(out, param.type, node.type_parameters)
+        out = of_optional(out, param.default, node.type_parameters)
       end
 
-      return out.concat(of_body(node.body, node.type_parameters))
+      return of_nodes(out, node.body.map do |stmt: Ast.Stmt| Walk.Node.Stmt(stmt) end, node.type_parameters)
     Ast.Decl.Struct(node) ->
-      out: List[Written] = []
       for field in node.fields
-        out = out.concat(of_type(field.type, node.type_parameters)).concat(of_optional(field.default))
+        out = of_type(out, field.type, node.type_parameters)
+        out = of_optional(out, field.default, node.type_parameters)
       end
 
       return out
     Ast.Decl.Enum(node) ->
-      out: List[Written] = []
       for variant in node.variants
         for type in variant.payload_types
-          out = out.concat(of_type(type, node.type_parameters))
+          out = of_type(out, type, node.type_parameters)
         end
       end
 
       return out
-    Ast.Decl.TypeAlias(node) -> return of_type(node.target, node.type_parameters)
-    Ast.Decl.Constant(node) -> return of_optional_type(node.type).concat(of_nodes([Walk.Node.Expr(node.value)], []))
-    _ -> return []
+    Ast.Decl.TypeAlias(node) -> return of_type(out, node.target, node.type_parameters)
+    Ast.Decl.Constant(node) ->
+      out = of_optional_type(out, node.type, [])
+      return of_nodes(out, [Walk.Node.Expr(node.value)], [])
+    _ -> return out
   end
 end
 
-def of_optional(value: Optional[Ast.Expr]) -> List[Written]
+def of_optional(found: List[Written], value: Optional[Ast.Expr], parameters: List[String]) -> List[Written]
   case value
-    some(found) -> return of_nodes([Walk.Node.Expr(found)], [])
-    none -> return []
+    some(expr) -> return of_nodes(found, [Walk.Node.Expr(expr)], parameters)
+    none -> return found
   end
 end
 
-def of_optional_type(type: Optional[Ast.TypeRef]) -> List[Written]
+def of_optional_type(found: List[Written], type: Optional[Ast.TypeRef], parameters: List[String]) -> List[Written]
   case type
-    some(found) -> return of_type(found, [])
-    none -> return []
+    some(ref) -> return of_type(found, ref, parameters)
+    none -> return found
   end
 end
 
-def of_body(body: List[Ast.Stmt], parameters: List[String]) -> List[Written]
-  return of_nodes(body.map do |stmt: Ast.Stmt| Walk.Node.Stmt(stmt) end, parameters)
-end
-
-# A type and its arguments. A bare name that is a type parameter of the declaration is no alias.
-def of_type(type: Ast.TypeRef, parameters: List[String]) -> List[Written]
-  out: List[Written] = []
+# A type and its arguments. A bare name that is a type parameter in scope is no alias.
+def of_type(found: List[Written], type: Ast.TypeRef, parameters: List[String]) -> List[Written]
+  out = found
   if type.name.contains?(".") or !parameters.include?(type.name)
-    out = [Written(name: type.name, role: Role.Type, span: type.span, member: "")]
+    out = out.push(Written(name: type.name, role: Role.Type, span: type.span, member: ""))
   end
 
   for arg in type.args
-    out = out.concat(of_type(arg, parameters))
+    out = of_type(out, arg, parameters)
   end
 
   return out
 end
 
-# The names of the nodes below `start` and of the nodes themselves, with a worklist and no recursion, like the walk of
-# a constant (Walk.references): the tree may be as deep as the parser allows.
-def of_nodes(start: List[Walk.Node], parameters: List[String]) -> List[Written]
-  out: List[Written] = []
+# The names of the nodes in `start` and below them, with a worklist and no recursion, like the walk of a constant
+# (Walk.references): the tree may be as deep as the parser allows.
+def of_nodes(found: List[Written], start: List[Walk.Node], parameters: List[String]) -> List[Written]
+  out = found
   work = start
   at = 0
   while at < work.size
     node = work[at]
     at += 1
-    for found in of_node(node, parameters)
-      out = out.push(found)
-    end
-
+    out = of_node(out, node, parameters)
     for child in Walk.children(node)
       work = work.push(child)
     end
@@ -314,31 +313,33 @@ def of_nodes(start: List[Walk.Node], parameters: List[String]) -> List[Written]
   return out
 end
 
-def of_node(node: Walk.Node, parameters: List[String]) -> List[Written]
+def of_node(found: List[Written], node: Walk.Node, parameters: List[String]) -> List[Written]
   case node
-    Walk.Node.Expr(expr) -> return of_expr(expr, parameters)
-    Walk.Node.Stmt(stmt) -> return of_stmt(stmt)
+    Walk.Node.Expr(expr) -> return of_expr(found, expr, parameters)
+    Walk.Node.Stmt(stmt) -> return of_stmt(found, stmt, parameters)
   end
 end
 
-def of_expr(expr: Ast.Expr, parameters: List[String]) -> List[Written]
+def of_expr(found: List[Written], expr: Ast.Expr, parameters: List[String]) -> List[Written]
   case expr
-    Ast.Expr.Call(node) -> return [Written(name: node.name, role: Role.Call, span: node.span, member: "")]
-    Ast.Expr.FunctionRef(node) -> return [Written(name: node.name, role: Role.Call, span: node.span, member: "")]
+    Ast.Expr.Call(node) -> return found.push(Written(name: node.name, role: Role.Call, span: node.span, member: ""))
+    Ast.Expr.FunctionRef(node) ->
+      return found.push(Written(name: node.name, role: Role.Call, span: node.span, member: ""))
     Ast.Expr.EnumConstructor(node) ->
-      return [Written(name: node.enum_name, role: Role.Variant, span: node.span, member: node.variant_name)]
-    Ast.Expr.RegexLit(node) -> return [library(Rewrite.REGEX_MODULE, node.span)]
-    Ast.Expr.EagLit(node) -> return [library(Rewrite.EAG_MODULE, node.span)]
-    Ast.Expr.Construct(node) -> return [Written(name: node.type_name, role: Role.Type, span: node.span, member: "")]
-    Ast.Expr.TypeName(node) -> return typed_name(node, parameters)
+      return found.push(Written(name: node.enum_name, role: Role.Variant, span: node.span, member: node.variant_name))
+    Ast.Expr.RegexLit(node) -> return found.push(library(Rewrite.REGEX_MODULE, node.span))
+    Ast.Expr.EagLit(node) -> return found.push(library(Rewrite.EAG_MODULE, node.span))
+    Ast.Expr.Construct(node) ->
+      return found.push(Written(name: node.type_name, role: Role.Type, span: node.span, member: ""))
+    Ast.Expr.TypeName(node) -> return typed_name(found, node, parameters)
     Ast.Expr.BlockLit(node) ->
-      out: List[Written] = []
+      out = found
       for param in node.params
-        out = out.concat(of_optional_type(param.type))
+        out = of_optional_type(out, param.type, parameters)
       end
 
       return out
-    _ -> return []
+    _ -> return found
   end
 end
 
@@ -347,41 +348,41 @@ def library(key: String, span: Source.Span) -> Written
 end
 
 # A bare type name that is a type parameter in an expression (`T`) is no alias.
-def typed_name(node: Ast.TypeName, parameters: List[String]) -> List[Written]
+def typed_name(found: List[Written], node: Ast.TypeName, parameters: List[String]) -> List[Written]
   if !node.name.contains?(".") and parameters.include?(node.name)
-    return []
+    return found
   end
 
-  return [Written(name: node.name, role: Role.Type, span: node.span, member: "")]
+  return found.push(Written(name: node.name, role: Role.Type, span: node.span, member: ""))
 end
 
-def of_stmt(stmt: Ast.Stmt) -> List[Written]
+def of_stmt(found: List[Written], stmt: Ast.Stmt, parameters: List[String]) -> List[Written]
   case stmt
-    Ast.Stmt.Binding(node) -> return of_optional_type(node.type)
+    Ast.Stmt.Binding(node) -> return of_optional_type(found, node.type, parameters)
     Ast.Stmt.Case(node) ->
-      out: List[Written] = []
+      out = found
       for arm in node.arms
-        out = out.concat(of_pattern(arm.pattern))
+        out = of_pattern(out, arm.pattern)
       end
 
       return out
-    _ -> return []
+    _ -> return found
   end
 end
 
 # The enum of a variant pattern and of each variant nested in its slots.
-def of_pattern(pattern: Ast.Pattern) -> List[Written]
+def of_pattern(found: List[Written], pattern: Ast.Pattern) -> List[Written]
   case pattern
     Ast.Pattern.Variant(node) ->
-      out = [Written(name: node.enum_name, role: Role.Variant, span: node.span, member: node.variant_name)]
+      out = found.push(Written(name: node.enum_name, role: Role.Variant, span: node.span, member: node.variant_name))
       for slot in node.slots
         case slot
-          Ast.Slot.Nested(inner) -> out = out.concat(of_pattern(inner))
+          Ast.Slot.Nested(inner) -> out = of_pattern(out, inner)
           _ -> out = out
         end
       end
 
       return out
-    _ -> return []
+    _ -> return found
   end
 end

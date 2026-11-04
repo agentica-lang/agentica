@@ -12,7 +12,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Breaking:** an import alias that its file never uses is an error
   (`CHECK-UNUSED-IMPORT`, at the alias); remove the import. An alias written
-  without its member (`u: User`) is `CHECK-IMPORT-NAME`.
+  without its member (`u: User`) is `CHECK-IMPORT-NAME`. The query commands
+  (`type-at`, `refs`, `symbol`) do not report an unused import.
 
 ### Fixed
 

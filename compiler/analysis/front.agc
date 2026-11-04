@@ -241,7 +241,11 @@ def skipped(
       # A module read from its stub keeps its text, so the style rules see every file; one whose entry says its text
       # follows the rule is not lexed again.
       styled = styled_files(loaded)
-      enter_checked(loaded, checked, settings, styled)
+      # A query does not refuse an unused import, so what it checked is not what the cache says passed `check`.
+      if settings.unused_imports
+        enter_checked(loaded, checked, settings, styled)
+      end
+
       return checked_outcome(program, checking, styled)
   end
 end

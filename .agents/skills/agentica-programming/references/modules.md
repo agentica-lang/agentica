@@ -16,7 +16,9 @@ part with a dot such as `"models.rb"`): a module file name has no dot except
   invalid path `CHECK-IMPORT-PATH`; each is reported at the import.
 - An import alias that the file never uses is `CHECK-UNUSED-IMPORT` at the
   alias: remove the import. A use is any `Alias.name` (call, `&Alias.f`, type,
-  construction, pattern, constant) or a re-export. An alias with no member
+  construction, pattern, constant) or a re-export; a regex literal uses the
+  `std/regex` import and a `<<~EAG` template the `std/eag` one. Query commands
+  (`type-at`, `symbol`, `refs`) do not report it. An alias with no member
   (`u: User`) is `CHECK-IMPORT-NAME`. Unused names of `import {a, b}` are fine.
 
 ## Exports and names

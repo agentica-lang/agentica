@@ -79,6 +79,14 @@ def one(*words, cwd, stdin=None):
     return matches[0]
 
 
+def test_symbol_searches_a_file_with_an_unused_import(tmp_path):
+    # A query does not refuse an import that nothing uses yet: an editor adds it before the first use.
+    draft = 'import Models from "models"\n\ndef draft() -> Int\n  return 1\nend\n'
+    for name, text in {"models.agc": MODELS, "draft.agc": draft}.items():
+        (tmp_path / name).write_text(text, encoding="utf-8")
+    assert [match["module"] for match in answer("draft", "draft.agc", cwd=tmp_path)["matches"]] == ["draft.agc"]
+
+
 @pytest.fixture
 def program(tmp_path):
     (tmp_path / "models.agc").write_text(MODELS, encoding="utf-8")
@@ -249,7 +257,7 @@ def test_a_root_is_a_transaction_the_modules_it_linked_stay_and_a_module_that_fa
         'import Lib from "lib"\n\nexport def bad() -> Int\n  return Lib.nothere()\nend\n', encoding="utf-8")
     for name in ("a_first", "b_second"):
         (tmp_path / f"{name}.agc").write_text(
-            'import Lib from "lib"\nimport Dep from "dep_bad"\n\ndef %s() -> Int\n  return Lib.helper() + Dep.bad()\nend\n' % name,
+            'import Lib from "lib"\nimport Dep from "dep_bad"\n\ndef %s() -> Int\n  return Lib.helper()\nend\n' % name,
             encoding="utf-8")
     (tmp_path / "z_third.agc").write_text(
         'import Lib from "lib"\n\ndef z_third() -> Int\n  return Lib.helper()\nend\n', encoding="utf-8")

@@ -183,8 +183,9 @@ if syntax changes.
 Add a struct to `ast.agc` with `id` first and `span` last, plus a variant in
 `Expr`, `Stmt` or `Decl`. Construct it in `parser.agc` with the span from the
 first to the last consumed token (`Base.span_from`) and the next free id. Update
-every walker: `rewrite.agc`, `ast_walk.agc`, the checker, lowering,
-`parse_text.agc`. Parser golden: `tests/fixtures/frontend/parser/NAME.input`.
+every walker: `rewrite.agc`, `ast_walk.agc`, `modules/import_use.agc`, the
+checker, lowering, `parse_text.agc`. Parser golden:
+`tests/fixtures/frontend/parser/NAME.input`.
 
 ### Add syntax
 

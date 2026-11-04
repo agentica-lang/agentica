@@ -563,7 +563,8 @@ class TestModuleRules:
         assert results[3][1]["help"]
 
     SHAPES = ("export LIMIT = 3\n\nexport struct Square\n  side: Int\nend\n\nexport enum Shade\n  Dark\n  Light(Int)\nend\n\n"
-              "export def area(s: Square) -> Int\n  return s.side * s.side\nend\n\n")
+              "export def area(s: Square) -> Int\n  return s.side * s.side\nend\n\n"
+              "export def pick() -> Optional[Shade]\n  return none\nend\n\n")
 
     def test_an_import_alias_that_nothing_uses_is_refused_at_the_alias(self):
         shapes = {"shapes.agc": self.SHAPES, "extra.agc": "export def one() -> Int\n  return 1\nend\n\n"}
@@ -579,14 +580,45 @@ class TestModuleRules:
                                                   "def later() -> Int\n  return Extra.one()\nend\n\n" + MAIN})
         assert used[1] is None
 
-    def test_every_place_that_writes_an_alias_with_a_member_counts_as_a_use(self):
-        shapes = {"shapes.agc": self.SHAPES, "facade.agc": 'import Shapes from "shapes"\n\nexport Shapes.area\n'}
-        body = ("def main() -> Void\n  sq = Shapes.Square(side: 2)\n  f = &Shapes.area\n  shade: Shapes.Shade = Shapes.Shade.Dark\n"
-                "  puts(Shapes.LIMIT + f.call(sq))\n  case shade\n    Shapes.Shade.Dark -> puts(\"d\")\n"
-                "    Shapes.Shade.Light(n) -> puts(n)\n  end\nend\n")
-        both = self.check({**shapes, "root.agc": 'import Shapes from "shapes"\nimport Facade from "facade"\n\n' + body
-                           + "\ndef g() -> Int\n  return Facade.area(Shapes.Square(side: 1))\nend\n"})
-        assert both[1] is None
+    # The only place that writes `Shapes.` in each program: the alias is used there and nowhere else, so each case
+    # is one use site. The names `Square`, `area` and `pick` come by name, which is no use of the alias.
+    USE_SITES = [
+        ("a parameter type", "def f(s: Shapes.Square) -> Int\n  return area(s)\nend\n\n"),
+        ("a result type", "def f() -> Shapes.Square\n  return Square(side: 1)\nend\n\n"),
+        ("a struct field type", "struct Holder\n  s: Shapes.Square\nend\n\n"),
+        ("an enum payload type", "enum Box\n  Full(Shapes.Square)\nend\n\n"),
+        ("a type alias target", "type Sq = Shapes.Square\n\n"),
+        ("a constant initializer", "COPY = Shapes.LIMIT\n\n"),
+        ("a parameter default", "def f(n: Int = Shapes.LIMIT) -> Int\n  return n\nend\n\n"),
+        ("a binding type", "def main() -> Void\n  s: Shapes.Square = Square(side: 1)\n  puts(area(s))\nend\n"),
+        ("a block parameter type", "def main() -> Void\n  xs = [Square(side: 1)]\n"
+                                   "  ys = xs.map do |s: Shapes.Square| s.side end\n  puts(ys.size)\nend\n"),
+        ("an interpolation", 'def main() -> Void\n  puts("n=#{Shapes.LIMIT}")\nend\n'),
+        ("a pipe", "def main() -> Void\n  puts(Square(side: 2) |> Shapes.area())\nend\n"),
+        ("a function value", "def main() -> Void\n  f = &Shapes.area\n  puts(f.call(Square(side: 1)))\nend\n"),
+        ("a construction", "def main() -> Void\n  puts(area(Shapes.Square(side: 1)))\nend\n"),
+        ("a nested pattern", "def main() -> Void\n  case pick()\n    some(Shapes.Shade.Dark) -> puts(1)\n"
+                             "    _ -> puts(2)\n  end\nend\n"),
+    ]
+
+    @pytest.mark.parametrize("site, body", USE_SITES, ids=[site for site, _body in USE_SITES])
+    def test_every_place_that_writes_an_alias_with_a_member_counts_as_a_use(self, site, body):
+        header = 'import Shapes from "shapes"\nimport {Square, area, pick} from "shapes"\n\n'
+        root = header + body + ("" if "def main()" in body else MAIN)
+        assert self.check({"shapes.agc": self.SHAPES, "root.agc": root})[1] is None, site
+        # The same program without the use is the unused import.
+        bare = header + MAIN
+        self.assert_rejected(self.check({"shapes.agc": self.SHAPES, "root.agc": bare}), "CHECK-UNUSED-IMPORT", line=1)
+
+    def test_a_re_export_a_regex_literal_and_a_template_use_the_import_they_need(self):
+        url = {"url.agc": self.URL}
+        facade = {**url, "facade.agc": 'import Url from "url"\n\nexport Url.parse\n',
+                  "root.agc": 'import Facade from "facade"\n\ndef main() -> Void\n  puts(Facade.parse("a").host)\nend\n'}
+        regex = 'import Regex from "std/regex"\n\ndef main() -> Void\n  r = /a+/\nend\n'
+        template = 'import EAG from "std/eag"\n\ndef page() -> String\n  return <<~EAG\n    hi\n  EAG\nend\n\n' + MAIN
+        results = self.checks([(facade, "root.agc", None), ({"root.agc": regex}, "root.agc", None),
+                               ({"root.agc": template}, "root.agc", None)])
+        assert [problem for _directory, problem in results] == [None, None, None]
 
     def test_an_unused_alias_is_reported_in_the_file_that_has_it(self):
         files = {"shapes.agc": self.SHAPES,

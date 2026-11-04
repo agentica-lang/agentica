@@ -28,8 +28,10 @@ the alias, with the help `remove import Alias from "path"`. A use is any place
 that writes a name with the alias first: a call, a `&function` value, a type
 (in an annotation, a signature, a field or a block parameter), a construction,
 an enum constructor or a pattern, an enum type and a constant (`Alias.NAME`),
-and the alias of a re-export (`export Alias.name`). A use inside a function
-that nothing calls counts: the rule is about the text of the file. An import
+and the alias of a re-export (`export Alias.name`). A regex literal counts as a
+use of the `std/regex` import and a `<<~EAG` template as a use of the `std/eag`
+import, since each needs it in some form. A use inside a function that nothing
+calls counts: the rule is about the text of the file. An import
 has no effect besides its names, so removing an unused one never changes what a
 program does. The rule holds for every file, `pkg/` libraries and `std/`
 included: a package with a stray import fails the build of every program that
@@ -41,7 +43,10 @@ with the help `write User.<Type>`, not an unused import. A file with a call
 `Alias.name` whose first part is no alias, no name of the file and no builtin
 module (a mistyped alias) gets `CHECK-UNKNOWN-NAME` from the checker instead.
 The first alias never used is reported, imports in source order and files in
-link order (the root first), after the errors found while resolving names.
+link order (the root first), after that file's own resolve errors. The query
+commands (`type-at`, `refs`, `symbol`, `--partial`) do not report it, since an
+editor adds an import before it writes the first use; `agentica check`, `run`
+and `compile` do.
 
 #### Importing names
 

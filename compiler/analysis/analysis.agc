@@ -123,6 +123,7 @@ end
 ## The type and the definition at the position `asked` of a file of the disk (never a `std/` module), linked and
 ## checked with what it imports and without requiring `main`. `cache` only saves work, as for `check`.
 export def type_at(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
+  settings = for_query(settings)
   case position_front(cache, settings, asked, true)
     Fronted.Unreadable -> return Typed.Unreadable
     Fronted.Rejected(problem) -> return Typed.Rejected(problem)
@@ -138,6 +139,7 @@ end
 ## that the link cannot name are the first problem, as for `type_at`; a position on no expression is
 ## QUERY-NO-EXPRESSION.
 export def type_at_partial(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
+  settings = for_query(settings)
   case partial_front(cache, settings, asked)
     Partly.Unreadable -> return Typed.Unreadable
     Partly.Rejected(problem) -> return Typed.Rejected(problem)
@@ -163,6 +165,7 @@ end
 ## position in a function that did not check that the link cannot name. Any other position that names nothing is
 ## QUERY-NO-EXPRESSION.
 export def refs_partial(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Referenced
+  settings = for_query(settings)
   case partial_front(cache, settings, asked)
     Partly.Unreadable -> return Referenced.Unreadable
     Partly.Rejected(problem) -> return Referenced.Rejected(problem)
@@ -191,6 +194,7 @@ end
 ## and checked as for `type_at`) and what it imports; a file that only imports it is not seen: `refs_at` adds files.
 ## `cache` only saves work.
 export def refs(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Referenced
+  settings = for_query(settings)
   case position_front(cache, settings, asked, false)
     Fronted.Unreadable -> return Referenced.Unreadable
     Fronted.Rejected(problem) -> return Referenced.Rejected(problem)
@@ -210,6 +214,7 @@ export def refs_at(
   paths: List[String],
   usage: String,
 ) -> Referenced
+  settings = for_query(settings)
   if paths.size == 0
     return refs(cache, settings, asked)
   end
@@ -251,6 +256,7 @@ export def refs_named(
   buffer: String,
   usage: String,
 ) -> Referenced
+  settings = for_query(settings)
   if name == ""
     return Referenced.Rejected(QueryOptions.refusal("missing NAME or FILE:LINE:COL", usage))
   end
@@ -282,6 +288,7 @@ export def symbol(
   buffer: String,
   usage: String,
 ) -> Found
+  settings = for_query(settings)
   if name == ""
     return Found.Rejected(QueryOptions.refusal("missing NAME", usage))
   end
@@ -467,4 +474,10 @@ def shown(settings: Env.Settings, match: Symbol.Match) -> Symbol.Match
   end
 
   return match.with(file: QueryFiles.display(settings, match.file, true))
+end
+
+# The settings of a query: an import that nothing uses yet is not an error, since an editor adds the import first.
+# `check` keeps refusing it.
+def for_query(settings: Env.Settings) -> Env.Settings
+  return settings.with(unused_imports: false)
 end

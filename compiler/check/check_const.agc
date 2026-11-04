@@ -9,11 +9,11 @@ import {ENTRIES} from "../catalog/builtins"
 import Linker from "../modules/linker"
 import {REGEX_MODULE} from "../modules/rewrite"
 import Ast from "../syntax/ast"
+import AstWalk from "../syntax/ast_walk"
 import Source from "../syntax/source"
 import T from "../syntax/types"
 import State from "check_state"
 import CheckTypes from "check_types"
-import AstWalk from "../syntax/ast_walk"
 
 ## What checking the constants leaves: the context with the type of every constant, the state with the types of the
 ## initializers, and the linked names of the constants in initialization order.
