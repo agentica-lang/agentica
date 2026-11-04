@@ -31,8 +31,8 @@ end
 ## writer's input; the linker and the checker do not read it), the path of the `agentica` binary that runs the front
 ## end ("" when the front end is run as an ordinary program with `agentica run`; a command that starts the binary
 ## again, as `test` does, takes it from here). unused_imports says that an import alias that its file never uses is
-## CHECK-UNUSED-IMPORT; the query commands turn it off for the root file only (the imported files keep the rule), since
-## an editor adds an import before it writes the first use.
+## CHECK-UNUSED-IMPORT; the query functions are lenient only when it is false, and then for the root files only (the
+## imported files keep the rule): an editor adds an import before it writes the first use.
 export struct Settings
   std: StdProvider
   embedded_bdd: Bool

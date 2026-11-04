@@ -85,6 +85,13 @@ def test_symbol_searches_a_file_with_an_unused_import(tmp_path):
     for name, text in {"models.agc": MODELS, "draft.agc": draft}.items():
         (tmp_path / name).write_text(text, encoding="utf-8")
     assert [match["module"] for match in answer("draft", "draft.agc", cwd=tmp_path)["matches"]] == ["draft.agc"]
+    # A searched file is a root, so it is forgiven; a file that is only imported keeps the rule.
+    (tmp_path / "user.agc").write_text('import Draft from "draft"\n\nexport def one() -> Int\n  return 1\nend\n',
+                                       encoding="utf-8")
+    (tmp_path / "main.agc").write_text('import User from "user"\n\ndef main() -> Void\n  puts(User.one())\nend\n',
+                                       encoding="utf-8")
+    refused = symbol("main", "main.agc", cwd=tmp_path)
+    assert problem(refused, "CHECK-UNUSED-IMPORT", 1)["file"].endswith("user.agc")
 
 
 @pytest.fixture

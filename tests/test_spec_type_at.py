@@ -852,3 +852,13 @@ def test_a_query_answers_a_file_with_an_unused_import_and_check_still_refuses_it
     checked = run(cli() + ["--json", "check", "draft.agc"], env=vm_environment(), cwd=program)
     refused = problem(checked, "CHECK-UNUSED-IMPORT", 1)
     assert start(refused) == (1, 8)
+
+
+def test_a_query_still_refuses_an_alias_written_without_its_member(program):
+    # Only the unused rule is relaxed: `u: Models` is CHECK-IMPORT-NAME at the alias, in a root too.
+    draft = 'import Models from "models"\n\ndef f(u: Models) -> Int\n  return 1\nend\n'
+    (program / "draft.agc").write_text(draft, encoding="utf-8")
+    done = run(cli() + ["--json", "type-at", "draft.agc:%d:%d" % where(draft, "return 1")], env=vm_environment(),
+               cwd=program)
+    refused = problem(done, "CHECK-IMPORT-NAME", 1)
+    assert start(refused) == where(draft, "Models)")

@@ -168,12 +168,7 @@ end
 
 ## Links files that were loaded (Modules.load_with): the second half of `link_file`.
 export def link_loaded(loaded: Modules.Loaded, settings: Env.Settings) -> Linking
-  first: List[String] = []
-  if loaded.order.size > 0
-    first = [loaded.order[0]]
-  end
-
-  files = rewrite_all(loaded, settings, first)
+  files = rewrite_all(loaded, settings, loaded.order.take(1))
   if files.ok?
     root = loaded.modules[loaded.order[0]].program
     return Linking.Done(

@@ -308,15 +308,21 @@ def test_a_query_forgives_an_unused_import_of_the_root_only_and_check_still_refu
         problem = json.loads(done.stderr) if done.code else None
         return done.code, (problem["code"], problem["file"].endswith("lib.agc")) if problem else None
 
-    # An imported file keeps the rule in a query, cold and warm, and `check` after a query says the same.
+    # An imported file keeps the rule in a query, and `check` after a query says the same.
     refused = (1, ("CHECK-UNUSED-IMPORT", True))
-    assert [asked("type-at", "main.agc:4:8"), asked("type-at", "main.agc:4:8"), asked("check", "main.agc")] == [refused] * 3
+    assert [asked("type-at", "main.agc:4:8"), asked("check", "main.agc")] == [refused] * 2
 
     # The file a query is asked about is forgiven, and `check` still refuses it after the query.
     (project / "main.agc").write_text('import Shapes from "shapes"\n\ndef main() -> Void\n  puts(1)\nend\n',
                                       encoding="utf-8")
     assert asked("type-at", "main.agc:4:8")[0] == 0
     assert asked("check", "main.agc") == (1, ("CHECK-UNUSED-IMPORT", False))
+
+    # A file that a query forgave as its root is still refused when another file imports it, after that query.
+    (project / "main.agc").write_text('import Lib from "lib"\n\ndef main() -> Void\n  puts(Lib.one())\nend\n',
+                                      encoding="utf-8")
+    assert asked("type-at", "lib.agc:4:10")[0] == 0
+    assert asked("check", "main.agc") == refused
 
 
 def test_a_package_changed_behind_its_lock_is_refused_with_entries_in_place(warm):

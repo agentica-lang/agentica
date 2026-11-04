@@ -248,8 +248,8 @@ end
 ## that names no `*.agc` file is `QUERY-USAGE`, a name that nothing declares is `QUERY-NOT-FOUND`, and when no file
 ## links the error is the first problem of the first one. The `QUERY-` diagnostics of `symbol` have the file
 ## `<arguments>`, and no usage `help` (the command line's line); `QUERY-NOT-FOUND` keeps its `help`, the files not
-## searched. An unused import of a file searched is not an error, as for `type_at`; one of a file that is only imported
-## is.
+## searched. Every searched file is a root, so an unused import in a searched file is not reported there, as for
+## `type_at`; one in a file that is only imported is.
 export def symbol(session: Session, name: String, paths: List[String]) -> Result[Symbols]
   settings = Sessions.asking(session.internal)
   # Sorted, since `update` moves a buffer to the end of the list and the order of the matches must not depend on it.
@@ -269,7 +269,7 @@ end
 ## Returns the declaration of the name at the position `line`, `column` (from 1, in characters) of the file `path` and
 ## every reference to it, as `agentica refs` answers: in that file, linked and checked as for `type_at`, and in what it
 ## imports; a file that only imports it is not seen. A position that names nothing is `QUERY-NO-EXPRESSION`. An unused
-## import of the file itself is not an error, as for `type_at`.
+## import of the file itself is not an error, as for `type_at`; the files it imports keep the rule.
 export def refs(session: Session, path: String, line: Int, column: Int) -> Result[Refs]
   settings = Sessions.asking(session.internal)
   if path == "" or line < 1 or column < 1

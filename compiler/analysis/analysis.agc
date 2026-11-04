@@ -78,8 +78,7 @@ enum Partly
 end
 
 ## Links and checks the file at `path`, as `agentica check` does: every rule of a build except that the program
-## declares a `main`, so a library file passes, and that an unused import of the file itself is not an error (the files
-## it imports keep the rule). `cache` (cache.agc) only saves work: `Cache.empty()` gives the same
+## declares a `main`, so a library file passes. `cache` (cache.agc) only saves work: `Cache.empty()` gives the same
 ## answer.
 export def check(cache: Cache.Cache, settings: Env.Settings, path: String) -> Verdict
   case Front.read_root(settings.workspace, path)
