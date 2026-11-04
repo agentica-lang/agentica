@@ -275,7 +275,7 @@ class TestSpecParser:
                    ["3"]),
         ])
         self.check_accepted([
-            Accept(main_of("  while true\n    next\n    break\n  end\n  next = 1\n")),
+            Accept(main_of("  while true\n    if false\n      next\n    end\n    break\n  end\n  next = 1\n")),
         ])
 
     def test_result_spellings_bare_gets_and_nullary_variants_through_an_alias(self):

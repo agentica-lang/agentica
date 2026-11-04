@@ -135,6 +135,21 @@ end
 3
 ```
 
+A statement after `return`, `break` or `next`, or after an `if` or `case` whose every branch ends in one, can never run, so it is an error (`CHECK-UNREACHABLE-CODE`). Remove it or move it before.
+
+```agentica {expect="CHECK-UNREACHABLE-CODE"}
+def main() -> Void
+  for n in [1, 2, 3]
+    if n == 2
+      break
+      puts("never")
+    end
+
+    puts(n)
+  end
+end
+```
+
 ## case on values
 
 `case` runs the first arm that matches; `_` matches anything. On a number, string or `Bool`, end with a `_` arm.

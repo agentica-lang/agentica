@@ -15,6 +15,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   without its member (`u: User`) is `CHECK-IMPORT-NAME`. The query commands
   (`type-at`, `refs`, `symbol`) do not report it in the file they are asked
   about.
+- **Breaking:** a statement after `return`, `break` or `next`, or after an `if`
+  or `case` whose every branch ends in one, is an error
+  (`CHECK-UNREACHABLE-CODE`); remove it or move it before. The query commands
+  report it too.
 
 ### Fixed
 

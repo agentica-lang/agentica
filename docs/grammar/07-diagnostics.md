@@ -16,7 +16,7 @@ When the checker knows the fix, the diagnostic ends with a `= help:` line.
 
 There are no warnings: a program that the compiler accepts has nothing to
 report, and what would be a warning in another language is an error with its
-own code (for example `CHECK-UNUSED-IMPORT`).
+own code (for example `CHECK-UNUSED-IMPORT` and `CHECK-UNREACHABLE-CODE`).
 
 A compile-time diagnostic names the first file as you typed it and an imported
 file by its absolute path. A runtime diagnostic and the frames of its stack name
@@ -277,6 +277,10 @@ is a rule:
 - `m = {}`, `xs = []`, `s = Set.new([])` (`CHECK-EMPTY-MAP-TYPE`,
   `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-SET-TYPE`)
   Help: annotate: `m: Map[String, Int] = {}`, `s: Set[Int] = Set.new([])`
+- a statement after `return`, `break`, `next`, or an `if` or `case` whose every
+  branch ends in one (`CHECK-UNREACHABLE-CODE`)
+  Help: the block ends at the return on line N; remove the statement, or move it
+  before the return
 - a loop, `if` or `case` as the last statement (`CHECK-MISSING-RETURN`)
   Help: a loop is not a return; each branch or arm must return, or return after
   it

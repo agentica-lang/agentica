@@ -336,6 +336,16 @@ block: a block cannot break or skip its caller's loop. Inside a block, `return`
 leaves the block. There are no statement modifiers (`break if x`), no
 `continue`, and no assignment to fields or indexes.
 
+A statement that follows a terminator in the same block is
+`CHECK-UNREACHABLE-CODE`, at the first such statement; remove it or move it
+before the terminator. The terminators are `return`, `break` and `next`; an `if`
+with an `else` whose every branch ends in a terminator; and a `case` whose every
+arm does (any mix). The check does not look into loops or calls: `System.exit`,
+a `!` function such as `unwrap!`, `while true` without a `break` and `try` are
+not terminators. A branch is its own block: `if c` with a `return` and no `else`
+is not a terminator, but a statement after that `return` inside the branch is
+dead.
+
 ### Expressions and precedence
 
 ```ebnf

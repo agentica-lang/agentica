@@ -12886,5 +12886,229 @@
       ],
       "code": null
     }
+  ],
+  "a statement after a terminator (return, break, next, or an if or case that ends on every path) is unreachable": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(\"a\")",
+        "  return",
+        "  puts(\"b\")",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNREACHABLE-CODE",
+      "start": [4, 3],
+      "help": true
+    },
+    {
+      "program": [
+        "def sign(n: Int) -> String",
+        "  if n < 0",
+        "    return \"negative\"",
+        "  else",
+        "    return \"not negative\"",
+        "  end",
+        "  puts(\"done\")",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(sign(1))",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNREACHABLE-CODE",
+      "start": [7, 3],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  for n in [1, 2]",
+        "    break",
+        "    puts(n)",
+        "  end",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNREACHABLE-CODE",
+      "start": [4, 5],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  for n in [1, 2]",
+        "    next",
+        "    puts(n)",
+        "  end",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNREACHABLE-CODE",
+      "start": [4, 5]
+    },
+    {
+      "program": [
+        "def f(n: Int) -> Int",
+        "  case n",
+        "    0 -> return 1",
+        "    1 ->",
+        "      puts(\"one\")",
+        "      return 2",
+        "    _ -> return 3",
+        "  end",
+        "  return 4",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(f(1))",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNREACHABLE-CODE",
+      "start": [9, 3],
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  while true",
+        "    if true",
+        "      break",
+        "    else",
+        "      next",
+        "    end",
+        "    puts(\"x\")",
+        "  end",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNREACHABLE-CODE",
+      "start": [8, 5]
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  [1].each do |x|",
+        "    return",
+        "    puts(x)",
+        "  end",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNREACHABLE-CODE",
+      "start": [4, 5]
+    },
+    {
+      "program": [
+        "def f(c: Bool) -> Int",
+        "  if c",
+        "    return 1",
+        "    puts(\"dead\")",
+        "  end",
+        "  return 2",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(f(true))",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNREACHABLE-CODE",
+      "start": [4, 5]
+    },
+    {
+      "program": [
+        "def f(n: Int) -> String",
+        "  if n < 0",
+        "    return \"negative\"",
+        "  end",
+        "  puts(\"checked\")",
+        "  return \"ok\"",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(f(1))",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def f(n: Int) -> String",
+        "  if n < 0",
+        "    return \"negative\"",
+        "  elsif n == 0",
+        "    return \"zero\"",
+        "  end",
+        "  return \"positive\"",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(f(1))",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  while true",
+        "    puts(\"loop\")",
+        "  end",
+        "  puts(\"after\")",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  System.exit(1)",
+        "  puts(\"after\")",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  for n in [1, 2]",
+        "    if n == 1",
+        "      next",
+        "    end",
+        "    puts(n)",
+        "  end",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  return 1 + \"a\"",
+        "  puts(\"dead\")",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  return",
+        "  puts(missing)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNREACHABLE-CODE",
+      "start": [3, 3]
+    }
   ]
 }

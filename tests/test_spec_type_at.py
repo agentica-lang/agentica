@@ -862,3 +862,13 @@ def test_a_query_still_refuses_an_alias_written_without_its_member(program):
                cwd=program)
     refused = problem(done, "CHECK-IMPORT-NAME", 1)
     assert start(refused) == where(draft, "Models)")
+
+
+def test_a_query_refuses_code_after_a_return_as_check_does(program):
+    # Unlike an unused import, dead code is no state an editor needs to answer from: the query fails at the statement.
+    draft = 'def f(n: Int) -> Int\n  return n + 1\n  puts("dead")\nend\n'
+    (program / "draft.agc").write_text(draft, encoding="utf-8")
+    done = run(cli() + ["--json", "type-at", "draft.agc:%d:%d" % where(draft, "n + 1")], env=vm_environment(),
+               cwd=program)
+    refused = problem(done, "CHECK-UNREACHABLE-CODE", 1)
+    assert start(refused) == where(draft, 'puts("dead")')

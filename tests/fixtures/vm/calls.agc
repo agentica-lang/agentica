@@ -29,5 +29,4 @@ def main() -> Void
   nothing()
   puts("end")
   return
-  puts("unreachable")
 end
