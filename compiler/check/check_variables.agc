@@ -62,9 +62,17 @@ end
 def variable_help(cx: State.Cx, st: State.St, key: Int, local: State.Local, keep: String) -> String
   if T.is?(local.type, "Result") and local.value.some?
     text = value_text(cx, local.value)
+    if can_try?(st)
+      return (
+        "handle the Result: try #{text}, a case on ok(_) and error(message), or .unwrap!; " +
+        "or discard it with _ = #{text}, or #{keep}"
+      )
+    end
+
+    # try is not allowed here (main, or a function that does not return a Result), so it is not offered.
     return (
-      "handle the Result: try #{text}, a case on ok(_) and error(message), or .unwrap!; " +
-      "or discard it with _ = #{text}"
+      "handle the Result: a case on ok(_) and error(message), or .unwrap!; " +
+      "or discard it with _ = #{text}, or #{keep}"
     )
   end
 
@@ -72,11 +80,36 @@ def variable_help(cx: State.Cx, st: State.St, key: Int, local: State.Local, keep
     return "it is only updated, never read; remove it, or #{keep}"
   end
 
+  if try?(local.value)
+    # Removing the name alone would drop the error that `try` returns to the caller.
+    return "write #{value_text(cx, local.value)} as a statement, without the name, or #{keep}"
+  end
+
   if call?(local.value)
     return "remove it, keep the call as a statement if it has effects, or #{keep}"
   end
 
   return "remove it, or #{keep}"
+end
+
+# True when `try` is allowed in the function being checked: it returns a Result.
+def can_try?(st: State.St) -> Bool
+  case st.result
+    State.Slot.Known(type) -> return T.is?(type, "Result")
+    _ -> return false
+  end
+end
+
+def try?(value: Optional[Ast.Expr]) -> Bool
+  case value
+    some(found) ->
+      case found
+        Ast.Expr.Try(_) -> return true
+        _ -> return false
+      end
+
+    none -> return false
+  end
 end
 
 def call?(value: Optional[Ast.Expr]) -> Bool

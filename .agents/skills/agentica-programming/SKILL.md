@@ -41,9 +41,10 @@ in one command, `for f in cases/*.txt; do agentica p.agc < "$f" || break; done`.
   `"x".to_i` is a Result: `try s.to_i`, not `try s.to_i!`.
 - A value that may be missing is `Optional[T]` (`some(x)`, `none`), not `nil`
   and not an enum of your own; a failure with a reason is a `Result`.
-- An import alias the file never uses (`CHECK-UNUSED-IMPORT`) and a statement
-  after `return`, `break` or `next` (`CHECK-UNREACHABLE-CODE`) are errors:
-  delete them. A missing `end` is `PARSE-UNCLOSED-BLOCK` at the end of the file,
+- An import alias or a variable the file never reads (`CHECK-UNUSED-IMPORT`,
+  `CHECK-UNUSED-VARIABLE`: also `|ctx, args|` in BDD steps and `for i in`;
+  write `_` or `_name`) and a statement after `return`, `break` or `next`
+  (`CHECK-UNREACHABLE-CODE`) are errors: delete them. A missing `end` is `PARSE-UNCLOSED-BLOCK` at the end of the file,
   or `PARSE-UNEXPECTED-TOKEN` at the next `def`: count the `end`s.
 - A method not in `references/` does not exist (`contains?` on a List, `value!`,
   `len`): `CHECK-UNKNOWN-METHOD`.
