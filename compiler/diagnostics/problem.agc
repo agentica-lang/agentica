@@ -136,7 +136,7 @@ end
 
 def help_flag(help: Diag.Help) -> String
   case help
-    Diag.Help.Hint(text) -> return "1"
+    Diag.Help.Hint(_) -> return "1"
     Diag.Help.NoHelp -> return "0"
   end
 end

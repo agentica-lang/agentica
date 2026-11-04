@@ -12,8 +12,8 @@ def main() -> Void
   end
 
   Logger.set_level(LogLevel.Debug)
-  gone = Logger.detach("console")
-  attached = Logger.attach("json", LogLevel.Debug, &Logger.stderr_json)
+  _ = Logger.detach("console")
+  _ = Logger.attach("json", LogLevel.Debug, &Logger.stderr_json)
   Logger.info("plain")
   Logger.warning("quote \" backslash \\ newline \n tab \t", {"k": "café"})
   Logger.err("unicode 世界 and DEL " + String.from_code(127))

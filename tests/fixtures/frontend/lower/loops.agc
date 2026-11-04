@@ -21,7 +21,7 @@ def main() -> Void
       total += y
     end
   end
-  for x in xs
+  for _ in xs
   end
   names = Set.new(["b", "a"])
   for name in names
@@ -40,7 +40,7 @@ def main() -> Void
   for i in r
     total += i
   end
-  for i in 5...5
+  for _ in 5...5
   end
   puts(total)
 end

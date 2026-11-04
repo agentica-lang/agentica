@@ -1,4 +1,4 @@
-program #79 0:1:1-493:23:1
+program #79 0:1:1-494:23:1
   module "valid-9.agc"
     declaration: struct-decl #13 0:1:1-102:8:1 name="User"
       field: field-decl #1 14:2:3-27:3:1 name="name"
@@ -28,7 +28,7 @@ program #79 0:1:1-493:23:1
             value: map-lit #21 176:10:55-178:10:57 type=Map(String, Int)
           arg: named-arg #24 180:10:59-187:10:66 name="with"
             value: literal #23 186:10:65-187:10:66 value=int:0 type=Int
-    declaration: function-decl #78 194:13:1-492:22:1 name="main"
+    declaration: function-decl #78 194:13:1-493:22:1 name="main"
       result: type-ref #28 208:13:15-212:13:19 name="Void"
       body: binding #30 215:14:3-228:15:1 name="ana"
         value: call #29 221:14:9-227:14:15 name="make" piped=false type=Struct(User)
@@ -63,22 +63,22 @@ program #79 0:1:1-493:23:1
         type: type-ref #58 379:18:6-382:18:9 name="Int"
         value: field-access #60 385:18:12-393:18:20 name="with" type=Int
           target: name-ref #59 385:18:12-388:18:15 name="ana" type=Struct(User)
-      body: binding #66 396:19:3-426:20:1 name="same_name"
-        value: struct-update #65 408:19:15-425:19:32 visible=["User"] type=Struct(User)
-          target: name-ref #62 408:19:15-411:19:18 name="ana" type=Struct(User)
-          arg: named-arg #64 417:19:24-424:19:31 name="with"
-            value: literal #63 423:19:30-424:19:31 value=int:5 type=Int
-      body: expr-stmt #77 428:20:3-488:21:1
-        value: call #76 428:20:3-487:20:62 name="puts" piped=false type=Void
-          arg: interpolation #75 433:20:8-486:20:61 type=String
-            part: field-access #68 436:20:11-445:20:20 name="age" type=Int
-              target: name-ref #67 436:20:11-441:20:16 name="older" type=Struct(User)
+      body: binding #66 396:19:3-427:20:1 name="_same_name"
+        value: struct-update #65 409:19:16-426:19:33 visible=["User"] type=Struct(User)
+          target: name-ref #62 409:19:16-412:19:19 name="ana" type=Struct(User)
+          arg: named-arg #64 418:19:25-425:19:32 name="with"
+            value: literal #63 424:19:31-425:19:32 value=int:5 type=Int
+      body: expr-stmt #77 429:20:3-489:21:1
+        value: call #76 429:20:3-488:20:62 name="puts" piped=false type=Void
+          arg: interpolation #75 434:20:8-487:20:61 type=String
+            part: field-access #68 437:20:11-446:20:20 name="age" type=Int
+              target: name-ref #67 437:20:11-442:20:16 name="older" type=Struct(User)
             part: text " "
-            part: field-access #71 449:20:24-466:20:41 name="size" type=Int resolved=call("List.size", List(String))
-              target: field-access #70 449:20:24-461:20:36 name="tags" type=List(String)
-                target: name-ref #69 449:20:24-456:20:31 name="cleared" type=Struct(User)
+            part: field-access #71 450:20:24-467:20:41 name="size" type=Int resolved=call("List.size", List(String))
+              target: field-access #70 450:20:24-462:20:36 name="tags" type=List(String)
+                target: name-ref #69 450:20:24-457:20:31 name="cleared" type=Struct(User)
             part: text " "
-            part: field-access #73 470:20:45-479:20:54 name="name" type=String
-              target: name-ref #72 470:20:45-474:20:49 name="deep" type=Struct(User)
+            part: field-access #73 471:20:45-480:20:54 name="name" type=String
+              target: name-ref #72 471:20:45-475:20:49 name="deep" type=Struct(User)
             part: text " "
-            part: name-ref #74 483:20:58-484:20:59 name="w" type=Int
+            part: name-ref #74 484:20:58-485:20:59 name="w" type=Int

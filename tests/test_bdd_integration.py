@@ -34,10 +34,10 @@ STREAM_SPEC = str(TESTS / "bdd" / "specs" / "json-lines.feature")
 HOLDER_PROGRAM = f"""\
 def main() -> Void
   p = Process.spawn("/bin/sh", ["-c", "echo $$ > pid.txt; echo started; exec sleep 60"], {ms(5000)}).unwrap!
-  started = Process.read_line(p, {ms(5000)}).unwrap!
+  _started = Process.read_line(p, {ms(5000)}).unwrap!
   puts("ready")
   IO.flush()
-  line = IO.gets()
+  _line = IO.gets()
 end
 """
 
@@ -56,7 +56,7 @@ def main() -> Void
   publish("pid.txt", pid)
   puts("ready")
   IO.flush()
-  line = IO.gets()
+  _line = IO.gets()
 end
 """
 HOLDER = WINDOWS_HOLDER_PROGRAM if os.name == "nt" else HOLDER_PROGRAM
@@ -157,7 +157,7 @@ def test_live_json_replies_arrive_before_eof_and_recover_after_errors():
 
 def test_a_task_receives_while_its_handler_sends_and_a_pending_read_fails_its_scenario(tmp_path):
     directory = suite(tmp_path, {
-        "echo.agc": "def main() -> Void\n  line = IO.gets!()\n  puts(line)\n  IO.flush()\n  ending = IO.gets()\nend\n",
+        "echo.agc": "def main() -> Void\n  line = IO.gets!()\n  puts(line)\n  IO.flush()\n  _ = IO.gets()\nend\n",
         "steps.agc": dedent(f"""\
             import BDD from "std/bdd"
 
@@ -168,7 +168,7 @@ def test_a_task_receives_while_its_handler_sends_and_a_pending_read_fails_its_sc
             def exchange(ctx: BDD.Context, args: List[String]) -> BDD.Context
               task = Task.spawn(&receive, ctx)
               Task.sleep(0)
-              sent = BDD.when_line(ctx, "hello")
+              _sent = BDD.when_line(ctx, "hello")
               return Task.await(task)
             end
 
@@ -177,7 +177,7 @@ def test_a_task_receives_while_its_handler_sends_and_a_pending_read_fails_its_sc
             end
 
             def pending(ctx: BDD.Context, args: List[String]) -> BDD.Context
-              task = Task.spawn(&wait, ctx)
+              _task = Task.spawn(&wait, ctx)
               Task.sleep(0)
               return ctx
             end
@@ -200,7 +200,7 @@ def test_a_task_receives_while_its_handler_sends_and_a_pending_read_fails_its_sc
 def test_a_step_reads_the_next_line_as_a_result_that_fails_at_the_end_of_the_output_or_a_timeout(tmp_path):
     directory = suite(tmp_path, {
         "two.agc": 'def main() -> Void\n  puts("one")\n  puts("two")\nend\n',
-        "wait.agc": 'def main() -> Void\n  puts("one")\n  IO.flush()\n  ending = IO.gets()\nend\n',
+        "wait.agc": 'def main() -> Void\n  puts("one")\n  IO.flush()\n  _ = IO.gets()\nend\n',
         "steps.agc": dedent(f"""\
             import BDD from "std/bdd"
 
@@ -243,7 +243,7 @@ end
             import BDD from "std/bdd"
 
             def main() -> Void
-              BDD.run([BDD.step("stdout repeats the seeded draw") do |ctx, args| BDD.then_stdout(ctx, {draw} + "\\n") end])
+              BDD.run([BDD.step("stdout repeats the seeded draw") do |ctx, _| BDD.then_stdout(ctx, {draw} + "\\n") end])
             end
             """),
         "seed.feature": ('Feature: Seeds\nScenario: seeded\nGiven the Agentica program "draw.agc"\n'
@@ -316,7 +316,7 @@ AFTER_STEPS = dedent("""\
       if name == "bad"
         return error("cleanup failed")
       elsif name == "crash"
-        invalid = 1 / 0
+        _invalid = 1 / 0
       elsif name == "check"
         BDD.assert(closing, false, "hook check")
       elsif name == "skip"
@@ -336,7 +336,7 @@ AFTER_STEPS = dedent("""\
     # The hook checks the context of its registration, not the one it is given: the check still fails only the hook.
     def stale(ctx: BDD.Context, args: List[String]) -> BDD.Context
       log = args[0]
-      return BDD.after(ctx) do |closing| stale_check(ctx, log) end
+      return BDD.after(ctx) do |_| stale_check(ctx, log) end
     end
 
     def stale_check(ctx: BDD.Context, log: String) -> Result[Void]
@@ -346,14 +346,14 @@ AFTER_STEPS = dedent("""\
     end
 
     def older(ctx: BDD.Context, args: List[String]) -> BDD.Context
-      registered = hook(ctx, args)
+      _registered = hook(ctx, args)
       return BDD.assert(ctx, false, "failed on the older context")
     end
 
     def folder(ctx: BDD.Context, args: List[String]) -> BDD.Context
       path = args[0]
       Dir.mkdir(path, 5000).unwrap!
-      return BDD.after(ctx) do |closing| Path.remove(path, 5000) end
+      return BDD.after(ctx) do |_| Path.remove(path, 5000) end
     end
 
     def main() -> Void
@@ -362,9 +362,9 @@ AFTER_STEPS = dedent("""\
         BDD.step("the hook {string} logs to {string} and the step fails on the older context", &older),
         BDD.step("a hook that checks its older context logs to {string}", &stale),
         BDD.step("the folder {string} exists until the scenario ends", &folder),
-        BDD.step("the scenario fails") do |ctx, args| BDD.assert(ctx, false, "the step failed") end,
-        BDD.step("the scenario passes") do |ctx, args| BDD.assert(ctx, true, "never") end,
-        BDD.step("the scenario is skipped") do |ctx, args| BDD.skip(ctx, "not here") end,
+        BDD.step("the scenario fails") do |ctx, _| BDD.assert(ctx, false, "the step failed") end,
+        BDD.step("the scenario passes") do |ctx, _| BDD.assert(ctx, true, "never") end,
+        BDD.step("the scenario is skipped") do |ctx, _| BDD.skip(ctx, "not here") end,
       ])
     end
     """)
@@ -513,7 +513,7 @@ def test_a_temporary_directory_others_can_write_to_without_the_sticky_bit_is_ref
 def test_a_handler_that_prints_for_ever_fails_at_the_output_limit_long_before_the_scenario_deadline(tmp_path):
     directory = suite(tmp_path, {
         "steps.agc": ('import BDD from "std/bdd"\n\ndef main() -> Void\n'
-                      '  BDD.run([BDD.step("the handler prints for ever") do |ctx, args|\n'
+                      '  BDD.run([BDD.step("the handler prints for ever") do |ctx, _|\n'
                       '    chunk = String.join(List.repeat("x", 100000), "")\n'
                       "    while true\n      puts(chunk)\n      Task.sleep(5)\n    end\n"
                       "    ctx\n  end])\nend\n"),
@@ -547,15 +547,15 @@ def test_programs_under_test_output_without_a_flush_wrong_output_the_output_limi
         "buffered.agc": BUFFERED_PROGRAM,
         "output.agc": OUTPUT_PROGRAM,
         "oversized.agc": 'def main() -> Void\n  puts(String.join(List.repeat("x", 1048576), ""))\nend\n',
-        "flood.agc": 'def main() -> Void\n  IO.warn(String.join(List.repeat("x", 1048576), ""))\n  line = IO.gets()\nend\n',
+        "flood.agc": 'def main() -> Void\n  IO.warn(String.join(List.repeat("x", 1048576), ""))\n  _ = IO.gets()\nend\n',
         "where.agc": "def main() -> Void\n  puts(Path.cwd().unwrap!)\nend\n",
         "json.agc": JSON_PROGRAM,
         "quotes.agc": 'def main() -> Void\n  puts(String.join(List.repeat("\\"", 300000), ""))\nend\n',
         "steps.agc": ('import BDD from "std/bdd"\n\ndef main() -> Void\n'
-                      '  BDD.run([BDD.step("the handler floods stdout") do |ctx, args|\n'
+                      '  BDD.run([BDD.step("the handler floods stdout") do |ctx, _|\n'
                       '    puts(String.join(List.repeat(String.join(List.repeat("x", 1000), ""), 1100), "\\n"))\n'
                       "    ctx\n  end,\n"
-                      '  BDD.step("the handler fails with a huge message") do |ctx, args|\n'
+                      '  BDD.step("the handler fails with a huge message") do |ctx, _|\n'
                       '    BDD.assert(ctx, false, String.join(List.repeat("xxxxxxxxxx", 110000), ""))\n'
                       "  end])\nend\n"),
         "lifecycle.feature": (

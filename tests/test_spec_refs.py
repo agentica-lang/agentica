@@ -80,11 +80,11 @@ end
 def build() -> Models.User
   made = Models.make("a")
   copy = made.with(age: 5)
-  other = create("b")
-  piped = "c" |> Models.make()
-  pet = Models.Pet(name: "p")
-  shape = Models.Shape.Circle(2.0)
-  total_of = &total
+  _other = create("b")
+  _piped = "c" |> Models.make()
+  _pet = Models.Pet(name: "p")
+  _shape = Models.Shape.Circle(2.0)
+  _total_of = &total
   return copy
 end
 '''

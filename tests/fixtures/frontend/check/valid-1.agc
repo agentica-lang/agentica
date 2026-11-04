@@ -49,7 +49,7 @@ def main() -> Void
   Task.spawn_owning(&edit, File.open("x", "read", 10).unwrap!)
   Task.spawn_owning(&watch, Process.spawn("x", [], 10).unwrap!)
   ch: Channel[Int] = Channel.new(4)
-  fed: Task[Result[Int]] = Task.spawn_owning(&feed, ch)
+  _fed: Task[Result[Int]] = Task.spawn_owning(&feed, ch)
   Task.spawn_owning(&feed, Channel.new(2))
 end
 

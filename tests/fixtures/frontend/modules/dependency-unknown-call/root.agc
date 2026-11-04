@@ -5,6 +5,6 @@ def helpe() -> Int
 end
 
 def main() -> Void
-  n = C.go()
+  _n = C.go()
 end
 

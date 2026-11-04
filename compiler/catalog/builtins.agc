@@ -370,10 +370,10 @@ def default_fits?(parameter: Model.Named) -> Bool
   type = parameter.type
   case parameter.default
     Model.Default.Absent -> return true
-    Model.Default.Whole(number) -> return Types.is?(type, "Int")
-    Model.Default.Real(number) -> return Types.is?(type, "Float")
-    Model.Default.Text(text) -> return Types.is?(type, "String")
-    Model.Default.Flag(flag) -> return Types.is?(type, "Bool")
+    Model.Default.Whole(_) -> return Types.is?(type, "Int")
+    Model.Default.Real(_) -> return Types.is?(type, "Float")
+    Model.Default.Text(_) -> return Types.is?(type, "String")
+    Model.Default.Flag(_) -> return Types.is?(type, "Bool")
     Model.Default.Nothing -> return Types.is?(type, "Nil")
     Model.Default.EmptyList -> return Types.is?(type, "List")
     Model.Default.EmptyMap -> return Types.is?(type, "Map")

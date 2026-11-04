@@ -113,7 +113,7 @@ def main() -> Void
   puts(first_big([1, 2, 3], 9))
   puts(lengths(["ab", "abc"]))
   puts(lengths(["ab", "bad", "c"]))
-  [1, 2].each do |x|
+  [1, 2].each do |_|
   end
   g = quiet() do |v: Int|
     if v > 1

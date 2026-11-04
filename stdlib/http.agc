@@ -1922,7 +1922,7 @@ def upload_answer(conn: Connection, response: HttpWire.Response) -> Result[HttpR
     return error(proxy_denied(conn.options, offered?(conn)))
   end
 
-  exchange = try take_exchange(conn)
+  try take_exchange(conn)
   put_exchange(conn, finished_exchange(conn, exchange_of(response)))
   whole = try read_whole(conn, conn.options.max_body_bytes)
   return ok(HttpResponse(status: response.status, headers: response.headers, body: whole))

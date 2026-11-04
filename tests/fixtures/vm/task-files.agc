@@ -5,7 +5,7 @@ end
 
 def spin(n: Int) -> Int
   total = 0
-  for i in 0...n
+  for _ in 0...n
     total = total + 1
   end
   return total

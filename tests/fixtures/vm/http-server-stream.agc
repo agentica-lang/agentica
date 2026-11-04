@@ -336,7 +336,7 @@ def main() -> Void
   puts("-- a slow producer is not cut by the timeouts")
   ask(socket, "GET", "/slow", "")
   puts(head_of(socket))
-  for n in 1..4
+  for _ in 1..4
     puts(chunk_of(socket))
   end
 

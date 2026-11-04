@@ -22,7 +22,7 @@ end
 def area(s: Shape) -> Float
   case s
     Shape.Circle(r) -> return r * r * 3.0
-    Shape.Rect(w, h) ->
+    Shape.Rect(_, _) ->
       return 0.5
     Shape.Dot -> return 0.0
   end

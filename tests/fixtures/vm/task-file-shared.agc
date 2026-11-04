@@ -4,7 +4,7 @@ def read_all(input: FileHandle) -> List[Int]
   while running
     case File.read_line(input, 60000)
       ok(line) -> got = got.append(Result.unwrap!(line.to_int))
-      error(message) -> running = false
+      error(_) -> running = false
     end
   end
   return got

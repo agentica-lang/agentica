@@ -47,7 +47,7 @@ end
 def main() -> Void
   handles: Channel[Task[Result[Int]]] = Channel.new(8)
   top = Task.spawn(&root, handles)
-  tasks = (1..4).to_a.map do |i|
+  tasks = (1..4).to_a.map do |_|
     handles.recv(5000).unwrap!
   end
   Task.cancel(top)

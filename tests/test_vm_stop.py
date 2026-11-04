@@ -47,7 +47,7 @@ end
 FULL_STDOUT = """\
 def main() -> Void
   line = "y"
-  for i in 0..12
+  for _ in 0..12
     line = line + line
   end
   while true
@@ -63,7 +63,7 @@ end
 STUCK_STDOUT = """\
 def main() -> Void
   line = "y"
-  for i in 0..9
+  for _ in 0..9
     line = line + line
   end
   n = 0
@@ -98,9 +98,9 @@ def main() -> Void
   if System.args()[1] == "sleep"
     Task.sleep(30000)
   else
-    n = 0
+    _n = 0
     while true
-      n = n + 1
+      _n = _n + 1
     end
   end
 end

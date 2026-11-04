@@ -274,7 +274,7 @@ def pin_prelude_spans(functions: List[Ir.Function], sources: List[Ir.SourceFile]
 end
 
 def pin_instr(instr: Ir.Instr, pinned: Source.Span) -> Ir.Instr
-  return instr.with(spans: instr.spans.map do |span: Source.Span| pinned end)
+  return instr.with(spans: instr.spans.map do |_span: Source.Span| pinned end)
 end
 
 # The functions that have default values, by name, with the file each is declared in. A default that names a constant

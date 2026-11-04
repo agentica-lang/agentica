@@ -27,7 +27,7 @@ STDIN_CAP = 16 * 1024 * 1024
 
 EXIT_THREE = 'def main() -> Void\n  puts("before")\n  System.exit(3)\nend\n'
 TYPE_ERROR = 'def main() -> Void\n  x: Int = "a"\n  puts(x)\nend\n'
-LOOP = "def main() -> Void\n  i = 0\n  while true\n    i += 1\n  end\nend\n"
+LOOP = "def main() -> Void\n  _i = 0\n  while true\n    _i += 1\n  end\nend\n"
 RANDOM = "def main() -> Void\n  puts(Random.int(0, 1000000))\nend\n"
 STDIN_AND_ARGS = (
     'def main() -> Void\n  puts("args #{System.args()}")\n  puts("line #{IO.gets()}")\n  System.exit(3)\nend\n')
@@ -309,7 +309,7 @@ GATED = (
     ("File.append_text", 'File.append_text("x.txt", "a", 1000)', "--deny-fs"),
     ("File.stat", 'File.stat("x.txt", 1000)', "--deny-fs"),
     ("File.lstat", 'File.lstat("x.txt", 1000)', "--deny-fs"),
-    ("File.each_line", 'File.each_line("x.txt", 4096, 1000) do |line| ok() end', "--deny-fs"),
+    ("File.each_line", 'File.each_line("x.txt", 4096, 1000) do |_| ok() end', "--deny-fs"),
     ("File.foreach", 'File.foreach("x.txt", 4096, 1000).to_a', "--deny-fs"),
     ("Lazy.write_lines", '["a"].lazy.write_lines("x.txt", 1000)', "--deny-fs"),
     ("Dir.list", 'Dir.list(".", 1000)', "--deny-fs"),

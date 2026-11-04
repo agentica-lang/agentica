@@ -97,7 +97,7 @@ def main() -> Void
       ok(line) ->
         failed += check(line)
         count += 1
-      error(message) ->
+      error(_) ->
         running = false
     end
   end

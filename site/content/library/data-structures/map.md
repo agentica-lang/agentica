@@ -175,7 +175,7 @@ Keeps the entries for which the function gives `true`, in insertion order. O(n),
 ```agentica
 def main() -> Void
   stock = {"apple": 3, "fig": 0, "kiwi": 7}
-  puts(stock.select do |name, count| count > 0 end)
+  puts(stock.select do |_, count| count > 0 end)
 end
 ```
 

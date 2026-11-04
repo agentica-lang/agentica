@@ -33,7 +33,7 @@ end
 
 def answered(r: Result[HttpResponse]) -> String
   case r
-    ok(response) -> return "answered"
+    ok(_) -> return "answered"
     error(message) -> return message
   end
 end

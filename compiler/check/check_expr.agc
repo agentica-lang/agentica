@@ -136,12 +136,12 @@ end
 
 def check_literal(cx: State.Cx, st: State.St, node: Ast.Literal) -> Result[State.Out]
   case node.value
-    Ast.LitValue.Whole(number) -> return ok(State.Out(st: st, type: T.Type.Int))
-    Ast.LitValue.Huge(digits) ->
+    Ast.LitValue.Whole(_) -> return ok(State.Out(st: st, type: T.Type.Int))
+    Ast.LitValue.Huge(_) ->
       return error(State.fail(cx, st, "CHECK-INT-RANGE", "Int literal is outside the signed 64-bit range", node.span))
-    Ast.LitValue.Real(number) -> return ok(State.Out(st: st, type: T.Type.Float))
-    Ast.LitValue.Text(text) -> return ok(State.Out(st: st, type: T.Type.String))
-    Ast.LitValue.Flag(flag) -> return ok(State.Out(st: st, type: T.Type.Bool))
+    Ast.LitValue.Real(_) -> return ok(State.Out(st: st, type: T.Type.Float))
+    Ast.LitValue.Text(_) -> return ok(State.Out(st: st, type: T.Type.String))
+    Ast.LitValue.Flag(_) -> return ok(State.Out(st: st, type: T.Type.Bool))
     Ast.LitValue.Nothing -> return ok(State.Out(st: st, type: T.Type.Nil))
   end
 end
@@ -164,7 +164,7 @@ def check_name(cx: State.Cx, st: State.St, node: Ast.NameRef) -> Result[State.Ou
 
   binding = State.lookup(st, node.name)
   if binding.some?
-    return ok(State.Out(st: st, type: binding.unwrap!.type))
+    return ok(State.Out(st: State.read(st, binding.unwrap!), type: binding.unwrap!.type))
   end
 
   if cx.functions.has_key?(node.name) or ENTRIES.has_key?(node.name)
@@ -306,7 +306,7 @@ def check_interpolation(cx: State.Cx, st: State.St, node: Ast.Interpolation) -> 
         out = try State.expr(cx, current, code, T.Type.Unknown)
         try Rules.ensure_printable(cx, out.st, out.type, Ast.expr_span(code))
         current = out.st
-      Ast.Part.Text(text) -> current = current
+      Ast.Part.Text(_) -> current = current
     end
   end
 
@@ -616,8 +616,6 @@ end
 
 # The result type of the operator, or the first rule it breaks.
 def binary_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
-  left = sides.left
-  right = sides.right
   case node.op
     "plus" ->
       try same_types(cx, sides, node, true)

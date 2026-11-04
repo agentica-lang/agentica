@@ -9,7 +9,7 @@ end
 def sorter(n: Int) -> Int
   xs = (0...n).to_a.reverse
   while true
-    ys = xs.sort
+    _ys = xs.sort
   end
   return 0
 end
@@ -18,7 +18,7 @@ def concat(n: Int) -> Int
   big = String.join(List.repeat("x", n), "")
   small = "a"
   while true
-    t = small + big
+    _t = small + big
   end
   return 0
 end
@@ -55,9 +55,9 @@ def echo(rounds: Int) -> Int
 end
 
 def main() -> Void
-  a = Task.spawn(&spin, 7)
-  b = Task.spawn(&sorter, 100000)
-  c = Task.spawn(&concat, 1048576)
+  _a = Task.spawn(&spin, 7)
+  _b = Task.spawn(&sorter, 100000)
+  _c = Task.spawn(&concat, 1048576)
   Task.sleep(50)
   if System.args()[0] == "sleep"
     puts("worst #{Task.await(Task.spawn(&sleeper, 30))}")

@@ -32,7 +32,7 @@ end
 def show(label: String, outcome: Result[HttpResponse]) -> Void
   case outcome
     ok(response) -> puts("#{label}: #{response.status} #{HTTP.text(response.body, response.headers).unwrap!}")
-    error(message) -> puts("#{label}: refused")
+    error(_) -> puts("#{label}: refused")
   end
 end
 

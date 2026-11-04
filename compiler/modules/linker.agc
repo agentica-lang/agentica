@@ -297,7 +297,7 @@ def rewrite_all(loaded: Modules.Loaded, settings: Env.Settings, roots: List[Stri
 end
 
 # The file `key` of `loaded` with its names rewritten. `ids` is the number of node ids of the parser, which the
-# receivers of rewritten constant members count from. A query (`settings.unused_imports` false) is lenient about an
+# receivers of rewritten constant members count from. A query (`settings.unused` false) is lenient about an
 # unused import only in a root, the file the editor is changing; every file it imports keeps the rule, so what a query
 # accepts of them is what `check` accepts, and the check cache may hold them.
 def rewrite_module(
@@ -318,7 +318,7 @@ def rewrite_module(
   )
 
   declarations = try Rewrite.rewrite_declarations(cx)
-  try ImportUse.check(module, loaded.modules, settings.unused_imports or !roots.include?(key))
+  try ImportUse.check(module, loaded.modules, settings.unused or !roots.include?(key))
 
   return ok(
     LinkedModule(

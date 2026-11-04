@@ -1,5 +1,5 @@
 def lines(path: String, buffer: Int) -> Result[Int]
-  r = File.each_line(path, buffer, 60000) do |line|
+  r = File.each_line(path, buffer, 60000) do |_|
     ok()
   end
   case r

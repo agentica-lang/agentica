@@ -51,7 +51,7 @@ def lower_deep_cases():
     def bind(text):
         return checked_body("  y = " + text + "\n  puts(y)\n")
 
-    blocks = "".join("xs.map do |v%d| " % i for i in range(200))
+    blocks = "xs.map do |_| " * 199 + "xs.map do |v199| "
     return {
         "chain-997": bind("x" + repeat(" + x", 997)),
         "calls-998": bind(repeat("f(", 998) + "x" + repeat(")", 998)),
@@ -61,7 +61,7 @@ def lower_deep_cases():
         "interpolations": bind(repeat('"#{', 990) + "x" + repeat('}"', 990)),
         "ifs-990": checked_body(repeat("  if x == 1\n", 990) + "  puts(x)\n" + repeat("  end\n", 990)),
         "whiles-990": checked_body(repeat("  while x < 0\n", 990) + "  puts(x)\n" + repeat("  end\n", 990)),
-        "blocks-200": checked_body("  xs = [1]\n  y = " + blocks + "v199" + repeat(" end", 200) + "\n"),
+        "blocks-200": checked_body("  xs = [1]\n  puts(x)\n  _y = " + blocks + "v199" + repeat(" end", 200) + "\n"),
     }
 
 

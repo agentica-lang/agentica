@@ -65,7 +65,7 @@ def main() -> Void
   client = TCP.connect("127.0.0.1", TCP.local_port(listener), 2000).unwrap!
   connection = TCP.accept(listener, 2000).unwrap!
   worker = Task.spawn_owning(&echo, connection)
-  sent = TCP.send(client, "hello\n", 2000)
+  _ = TCP.send(client, "hello\n", 2000)
   puts(TCP.read_line(client, 2000))
   puts(Task.await(worker))
   puts(TCP.read_line(client, 2000))
@@ -308,7 +308,7 @@ end
 def main() -> Void
   task = Task.spawn(&late, "second")
   puts("first")
-  done = Task.await(task)
+  _done = Task.await(task)
 end
 ```
 
@@ -425,7 +425,7 @@ end
 
 def main() -> Void
   puts(Task.unobserved_crash().ok?)
-  task = Task.spawn(&boom, 0)
+  _task = Task.spawn(&boom, 0)
   while !Task.unobserved_crash().ok?
     Task.sleep(1)
   end

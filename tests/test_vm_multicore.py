@@ -328,10 +328,10 @@ end
 
 def main() -> Void
   ch: Channel[Int] = Channel.new(4)
-  producers = (1..6).to_a.map do |k|
+  producers = (1..6).to_a.map do |_|
     Task.spawn(&producer, ch)
   end
-  consumers = (1..3).to_a.map do |k|
+  consumers = (1..3).to_a.map do |_|
     Task.spawn(&consumer, ch)
   end
   for p in producers
@@ -372,13 +372,13 @@ end
 def main() -> Void
   path = System.args()[0]
   ch: Channel[Int] = Channel.new(4)
-  producers = (1..6).to_a.map do |k|
+  producers = (1..6).to_a.map do |_|
     Task.spawn(&producer, ch)
   end
-  consumers = (1..3).to_a.map do |k|
+  consumers = (1..3).to_a.map do |_|
     Task.spawn(&consumer, ch)
   end
-  readers = (1..4).to_a.map do |k|
+  readers = (1..4).to_a.map do |_|
     Task.spawn(&lengths, path)
   end
   for p in producers
@@ -661,7 +661,7 @@ def rally(k: Int) -> Result[Int]
 end
 
 def doomed(k: Int) -> Result[Int]
-  (1..3).to_a.each do |j|
+  (1..3).to_a.each do |_|
     _ = Task.spawn(&play, pair())
   end
   Task.sleep(20)
@@ -1290,13 +1290,13 @@ def test_the_child_channel_between_two_runs_on_several_schedulers(tmp_path, repe
 
 
 PROC_CLOSE_CANCEL = r"""def closer(p: Process) -> Void
-  sent = Process.send(p, "closing\n", 5000)
+  _ = Process.send(p, "closing\n", 5000)
   Process.close(p)
 end
 
 def parent(p: Process) -> Result[Int]
   Task.spawn_owning(&closer, p)
-  line = Process.read_line(p, 5000)
+  _ = Process.read_line(p, 5000)
   return ok(10 / (List.size(System.args()) - 3))
 end
 
@@ -1394,7 +1394,7 @@ SPAWN_AT_END = r"""def spawner(dir: String) -> Int
   args = System.args()
   n = 0
   while n < 100000
-    p = Process.spawn(args[0], [args[1], args[2], "record", dir], 5000)
+    _ = Process.spawn(args[0], [args[1], args[2], "record", dir], 5000)
     n = n + 1
   end
   return n
@@ -1656,7 +1656,7 @@ def main() -> Void
   end
   acceptor = Task.spawn(&accept_all, listener)
   d = Dial(port: TCP.local_port(listener), ca: ca, lines: lines)
-  tasks = (1..clients).to_a.map do |k|
+  tasks = (1..clients).to_a.map do |_|
     Task.spawn(&client, d)
   end
   same = 0
@@ -1954,7 +1954,7 @@ def main() -> Void
   port = TCP.local_port(listener)
   case Task.await(Task.spawn_owning(&own, listener))
     ok(n) -> puts(n)
-    error(e) -> puts("owner crashed")
+    error(_) -> puts("owner crashed")
   end
   again = TCP.listen("127.0.0.1", port)
   puts(again.ok?)
@@ -2105,7 +2105,7 @@ end
 def wait(listener: Listener) -> Result[Int]
   case TCP.accept(listener, 60000)
     ok(socket) -> TCP.close(socket)
-    error(e) -> return ok(0)
+    error(_) -> return ok(0)
   end
   return ok(1)
 end
@@ -2166,7 +2166,7 @@ end
 
 def ended_middle(e: Ending) -> Result[Channel[Int]]
   if e.kind.starts_with?("map")
-    results = Task.map([e.up], 1, 200, &hand_on)
+    _results = Task.map([e.up], 1, 200, &hand_on)
     return e.up.recv(5000)
   end
   middle = Task.spawn(&hand_on, e.up)
@@ -2656,7 +2656,7 @@ def until_closed(l: Load) -> Int
           return -1000
         end
         answers = answers + 1
-      error(message) -> return answers
+      error(_) -> return answers
     end
   end
   return answers
@@ -2667,7 +2667,7 @@ end
 def phase(base: String, clients: Int, requests: Int) -> Int
   pool = HTTP.client(HttpClientOptions(max_connections: 8, timeout_ms: 20000)).unwrap!
   l = Load(pool: pool, base: base, requests: requests)
-  tasks = (1..clients).to_a.map do |k|
+  tasks = (1..clients).to_a.map do |_|
     Task.spawn(&load, l)
   end
   cancelled = Task.map([l, l, l, l], 4, 50, &slow)
@@ -2698,7 +2698,7 @@ def main() -> Void
   # during the load), every caller then gets an error (none hangs), and wait returns.
   pool = HTTP.client(HttpClientOptions(max_connections: 8, timeout_ms: 20000)).unwrap!
   l = Load(pool: pool, base: "https://localhost:#{HTTP.local_port(secure)}", requests: 0)
-  callers = (1..clients).to_a.map do |k|
+  callers = (1..clients).to_a.map do |_|
     Task.spawn(&until_closed, l)
   end
   Task.sleep(200)

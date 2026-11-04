@@ -5,7 +5,7 @@ program #11 0:1:1-134:7:1
       body: binding #4 83:4:3-105:5:1 name="q"
         type: type-ref #2 86:4:6-96:4:16 name="@2::QueueState"
         value: call #3 99:4:19-104:4:24 name="@2::new" piped=false
-      body: binding #9 107:5:3-130:6:1 name="r"
+      body: binding #9 107:5:3-130:6:1 name="_"
         value: call #8 111:5:7-129:5:25 name="@2::pop" piped=false
           arg: call #7 116:5:12-128:5:24 name="@2::push" piped=false
             arg: name-ref #5 121:5:17-122:5:18 name="q"

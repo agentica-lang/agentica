@@ -95,6 +95,26 @@ are not visible after its `end`.
 nothing, so it can repeat and never conflicts with another name. Reading `_` is
 `CHECK-UNKNOWN-NAME`, and `_: Int = x` is `PARSE-UNEXPECTED-TOKEN`.
 
+A name that is never read is `CHECK-UNUSED-VARIABLE`, unless it starts with `_`
+(`_count`): the opt-out for a name kept on purpose, and the name can still be
+read. The rule covers a variable introduced by an assignment, a `for` variable,
+a block parameter and a name in a `case` pattern; it never covers a function
+parameter, which is part of the signature that callers, `&name` callbacks and
+adapters depend on. A name is read when it is evaluated as an expression
+anywhere in its scope, in a nested block too. An assignment to the name itself
+is not a read of it: in `x += 1`, `x = x + 1` and `xs = xs.push(v)` the `x` on
+the right does not count, so a counter that is only incremented, or a list that
+is only appended to, is unused. The rule is per variable, not per assignment:
+`x = 1`, `x = 2`, `puts(x)` is valid. The error is at the place where the name
+is introduced (the assignment statement, the `for` variable, the block
+parameter or the pattern name), the first in the source when several are unused,
+and it is found at the end of the function, after every other error of it. To
+drop a value, write `_ = f()`; to ignore a loop variable, a parameter or a
+payload, write `for _ in 0...n`, `|_, i|` or `error(_)`. The query commands
+(`type-at`, `refs`, `symbol`) do not report it in the file they are asked about,
+since an editor writes a name before its first use; the files that file imports
+keep the rule.
+
 ### Module constants
 
 A constant (section 5) is a value fixed for the whole run. It is read by its

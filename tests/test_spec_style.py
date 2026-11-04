@@ -280,7 +280,7 @@ def span(problem):
 
 
 def test_a_line_over_the_width_is_reported_from_its_first_character_past_the_width(tmp_path):
-    line = "  x = 1234567890123"
+    line = "  _ = 1234567890123"
     assert len(line) == 19
     assert check(tmp_path, wide(line), manifest=WIDTH_20) is None
     assert check(tmp_path, wide(line + "4"), manifest=WIDTH_20) is None
@@ -294,9 +294,9 @@ def test_a_line_over_the_width_is_reported_from_its_first_character_past_the_wid
 # (what, line 2 of the program, the problem is at (line, column), or None when the program is clean)
 WIDTH_CASES = [
     ("a comment counts", "  # a comment that is long", (2, 21)),
-    ("a character is one code point", "  x = \"%s\"" % ("é" * 11), None),
-    ("a wide character is one code point", "  x = \"%s\"" % ("世" * 13), (2, 21)),
-    ("a string counts", "  x = \"a long string\"", (2, 21)),
+    ("a character is one code point", "  _ = \"%s\"" % ("é" * 11), None),
+    ("a wide character is one code point", "  _ = \"%s\"" % ("世" * 13), (2, 21)),
+    ("a string counts", "  _ = \"a long string\"", (2, 21)),
 ]
 
 
@@ -310,9 +310,9 @@ def test_what_the_width_counts(tmp_path, what, line, expected):
 
 
 def test_a_carriage_return_is_not_counted(tmp_path):
-    program = wide("  x = 12345678901234").replace("\n", "\r\n")
+    program = wide("  _ = 12345678901234").replace("\n", "\r\n")
     assert check(tmp_path, program, manifest=WIDTH_20) is None
-    problem = check(tmp_path, wide("  x = 123456789012345").replace("\n", "\r\n"), manifest=WIDTH_20)
+    problem = check(tmp_path, wide("  _ = 123456789012345").replace("\n", "\r\n"), manifest=WIDTH_20)
     assert (problem["code"], span(problem)) == ("CHECK-LINE-TOO-LONG", ((2, 21), (2, 22)))
 
 

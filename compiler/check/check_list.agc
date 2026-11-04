@@ -379,7 +379,7 @@ end
 
 def block?(node: Ast.Expr) -> Bool
   case node
-    Ast.Expr.BlockLit(block) -> return true
+    Ast.Expr.BlockLit(_) -> return true
     _ -> return false
   end
 end

@@ -14,7 +14,7 @@ def main() -> Void
     puts(i)
   end
 
-  for i in 3..1
+  for _ in 3..1
     puts("never")
   end
 end

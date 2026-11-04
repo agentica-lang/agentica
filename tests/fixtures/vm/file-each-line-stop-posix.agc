@@ -83,10 +83,10 @@ def main() -> Void
     ok()
   end)
   long = String.join(List.repeat("z", 2000), "")
-  report("a line over the buffer ends the call", before, File.each_line(put(dir, "long.txt", long), 1024, 60000) do |line|
+  report("a line over the buffer ends the call", before, File.each_line(put(dir, "long.txt", long), 1024, 60000) do |_|
     ok()
   end)
-  report("a missing file", before, File.each_line(at(dir, "missing.txt"), 1024, 60000) do |line|
+  report("a missing file", before, File.each_line(at(dir, "missing.txt"), 1024, 60000) do |_|
     ok()
   end)
   early = Task.spawn(&stop_at_two, numbers)

@@ -502,7 +502,7 @@ def slot_text(slot: Ast.Slot) -> String
   case slot
     Ast.Slot.Bind(name, _) -> return Text.quote(name)
     Ast.Slot.Skip -> return "-"
-    Ast.Slot.Nested(inner) -> return "*"
+    Ast.Slot.Nested(_) -> return "*"
   end
 end
 

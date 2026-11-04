@@ -1,5 +1,5 @@
 import Lib from "sub/lib"
 
 def main() -> Void
-  x = Lib.NAMES
+  _x = Lib.NAMES
 end

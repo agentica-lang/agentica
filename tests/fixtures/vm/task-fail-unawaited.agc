@@ -4,7 +4,7 @@ def boom(n: Int) -> Int
 end
 
 def main() -> Void
-  t = Task.spawn(&boom, 5)
+  _t = Task.spawn(&boom, 5)
   puts("waiting")
   Task.sleep(10)
   puts("main goes on")

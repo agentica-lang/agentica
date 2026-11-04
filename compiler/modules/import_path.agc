@@ -84,7 +84,7 @@ export def stored_name(root_dir: String, file: String) -> String
   end
 
   out: List[String] = []
-  for index in shared...from.size
+  for _ in shared...from.size
     out = out.push("..")
   end
 

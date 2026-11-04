@@ -44,7 +44,7 @@ def main() -> Void
   Task.spawn(&stall, slow)
   puts("a timeout: #{slow.lazy(20).map do |n| n * 10 end.to_a}")
   empty: Channel[String] = Channel.new(1)
-  waits = Task.map([1], 1, 50) do |n|
+  waits = Task.map([1], 1, 50) do |_|
     empty.lazy(60000).map do |s| s.upcase end.to_a
   end
   puts("a cancel while parked: #{waits[0]}")

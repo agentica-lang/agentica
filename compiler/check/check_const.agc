@@ -14,6 +14,7 @@ import Source from "../syntax/source"
 import T from "../syntax/types"
 import State from "check_state"
 import CheckTypes from "check_types"
+import Variables from "check_variables"
 
 ## What checking the constants leaves: the context with the type of every constant, the state with the types of the
 ## initializers, and the linked names of the constants in initialization order.
@@ -86,8 +87,9 @@ def check_one(done: Done, entry: Entry) -> Result[Done]
     none -> declared = declared
   end
 
-  out = try State.expr(here, done.st, entry.decl.value, declared)
+  out = try State.expr(here, State.forget_locals(done.st), entry.decl.value, declared)
   try validate(here, out.st, entry.decl.value)
+  try Variables.check(here, out.st)
   type = out.type
   if !T.unknown?(declared)
     type = declared
@@ -242,7 +244,7 @@ end
 # The builtin a call, method call or field access names: not a call of a function of the program.
 def builtin_of(cx: State.Cx, st: State.St, node: AstWalk.Node) -> Optional[Model.Builtin]
   case node
-    AstWalk.Node.Stmt(stmt) -> return none
+    AstWalk.Node.Stmt(_) -> return none
     AstWalk.Node.Expr(expr) ->
       case expr
         Ast.Expr.Call(found) ->
@@ -274,14 +276,14 @@ def entry_resolved(cx: State.Cx, st: State.St, id: Int) -> Optional[Model.Builti
   end
 
   case resolved.unwrap!
-    State.Resolved.Call(name, type) -> return entry_named(cx, name)
+    State.Resolved.Call(name, _) -> return entry_named(cx, name)
     _ -> return none
   end
 end
 
 def refuse_form(cx: State.Cx, st: State.St, node: AstWalk.Node, entry: Optional[Model.Builtin]) -> Result[Bool]
   case node
-    AstWalk.Node.Stmt(stmt) -> return ok(true)
+    AstWalk.Node.Stmt(_) -> return ok(true)
     AstWalk.Node.Expr(expr) -> return refuse_expr(cx, st, expr, entry)
   end
 end
@@ -289,7 +291,7 @@ end
 def refuse_expr(cx: State.Cx, st: State.St, expr: Ast.Expr, entry: Optional[Model.Builtin]) -> Result[Bool]
   span = Ast.expr_span(expr)
   case expr
-    Ast.Expr.FunctionRef(found) ->
+    Ast.Expr.FunctionRef(_) ->
       return error(
         refuse(
           cx,
@@ -299,7 +301,7 @@ def refuse_expr(cx: State.Cx, st: State.St, expr: Ast.Expr, entry: Optional[Mode
           "a constant is built from literals, constructors and builtins",
         ),
       )
-    Ast.Expr.Invoke(found) ->
+    Ast.Expr.Invoke(_) ->
       return error(
         refuse(
           cx,
@@ -351,7 +353,7 @@ end
 # the constant.
 def check_data(cx: State.Cx, st: State.St, node: AstWalk.Node, block_allowed: Bool) -> Result[Bool]
   case node
-    AstWalk.Node.Stmt(stmt) -> return ok(true)
+    AstWalk.Node.Stmt(_) -> return ok(true)
     AstWalk.Node.Expr(expr) ->
       type = st.types[Ast.expr_id(expr)]
       if T.unknown?(type) or (block_allowed and block?(expr)) or CheckTypes.data?(cx, type)
@@ -384,7 +386,7 @@ end
 
 def block?(expr: Ast.Expr) -> Bool
   case expr
-    Ast.Expr.BlockLit(found) -> return true
+    Ast.Expr.BlockLit(_) -> return true
     _ -> return false
   end
 end

@@ -5,8 +5,8 @@ struct Local
 end
 
 def main() -> Void
-  a = Lib.make().with(n: 5)
-  b = Local(n: 1).with(n: Lib.make().n)
-  c = Header(name: "a", value: "b").with(value: "c")
+  _a = Lib.make().with(n: 5)
+  _b = Local(n: 1).with(n: Lib.make().n)
+  _c = Header(name: "a", value: "b").with(value: "c")
 end
 

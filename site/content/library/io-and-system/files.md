@@ -154,7 +154,7 @@ Opens a file for streaming.
 ```agentica {mode="check"}
 def main() -> Void
   file = File.open("out.txt", "write", 1000).unwrap!
-  r = File.write(file, "hello\n", 1000)
+  _ = File.write(file, "hello\n", 1000)
   closed = File.close(file, 1000)
   puts(closed.ok?)
 end
@@ -232,7 +232,7 @@ def main() -> Void
     puts("another copy is running")
   end
 
-  closed = File.close(file, 1000)
+  _ = File.close(file, 1000)
 end
 ```
 
@@ -284,8 +284,8 @@ Both take and give a [`Bytes`](/library/data-structures/bytes/). `read_bytes` re
 ```agentica {mode="check"}
 def main() -> Void
   out = File.open("data.bin", "write", 1000).unwrap!
-  w = File.write_bytes(out, Bytes.from_list([0, 1, 255]).unwrap!, 1000)
-  c = File.close(out, 1000)
+  _ = File.write_bytes(out, Bytes.from_list([0, 1, 255]).unwrap!, 1000)
+  _ = File.close(out, 1000)
   input = File.open("data.bin", "read", 1000).unwrap!
   puts(File.read_bytes(input, 16, 1000).unwrap!.to_a)
 end
@@ -424,7 +424,7 @@ Renames a file, a symbolic link or a directory to a path that does not exist yet
 
 ```agentica {mode="check"}
 def main() -> Void
-  made = Dir.mkdir_private("/tmp/job-new", 1000)
+  _ = Dir.mkdir_private("/tmp/job-new", 1000)
   claimed = Path.rename("/tmp/job-new", "/tmp/job", 1000)
   puts(claimed.ok?)
 end

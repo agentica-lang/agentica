@@ -216,13 +216,13 @@ def test_streaming_exceeds_1_mib_with_concurrent_reads_and_independently_drained
 
 def test_wait_retries_preserve_children_active_stream_deadlines_abort_them(tmp_path):
     node = tool("node")
-    body = ("  pid = Result.unwrap!(Process.read_line(p, 5000))\n  reader = Task.spawn(&read, p)\n  Task.sleep(100)\n"
+    body = ("  _pid = Result.unwrap!(Process.read_line(p, 5000))\n  reader = Task.spawn(&read, p)\n  Task.sleep(100)\n"
             "  IO.inspect(Result.ok?(Process.read_line(p, 20)))\n"
             '  Result.unwrap!(Process.send(p, "exit\\n", 5000))\n'
             "  IO.inspect(Result.ok?(Task.await(reader)))\n  IO.inspect(Process.wait(p, 5000))")
     read = "def read(p: Process) -> Result[String]\n  return Process.read_line(p, 5000)\nend\n\n"
     assert output(tmp_path, program(node, "release", body, read)) == "false\nfalse\nok(3)\n"
-    body = ("  pid = Result.unwrap!(Process.read_line(p, 5000))\n  IO.inspect(Result.ok?(Process.wait(p, 20)))\n"
+    body = ("  _pid = Result.unwrap!(Process.read_line(p, 5000))\n  IO.inspect(Result.ok?(Process.wait(p, 20)))\n"
             '  Result.unwrap!(Process.send(p, "exit\\n", 5000))\n  IO.inspect(Process.wait(p, 5000))')
     assert output(tmp_path, program(node, "release", body)) == "false\nok(3)\n"
     assert output(tmp_path, program(
@@ -249,9 +249,9 @@ def test_hold_operations_abort_when_the_stream_deadline_passes(tmp_path, operati
 @pytest.mark.parametrize("ending", (
     "",
     "  System.exit(4)",
-    "  x = 1 / 0",
+    "  _ = 1 / 0",
     "  while true\n  end",
-    "  task = Task.spawn(&crash, 0)\n  n = Task.await(task)",
+    "  task = Task.spawn(&crash, 0)\n  _n = Task.await(task)",
 ), ids=("clean-exit", "exit-4", "divide-by-zero", "infinite-loop", "task-crash"))
 def test_every_way_a_run_ends_kills_and_reaps_its_children(tmp_path, ending):
     node = tool("node")

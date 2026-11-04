@@ -3,14 +3,14 @@ def greet(socket: Socket) -> Result[Void]
 end
 
 def handler(socket: Socket) -> Result[Int]
-  sent = Task.await(Task.spawn(&greet, socket))
+  _ = Task.await(Task.spawn(&greet, socket))
   zero = 0
   return ok(1 / zero)
 end
 
 def client(port: Int) -> Result[String]
   socket = try TCP.connect("127.0.0.1", port, 1000)
-  first = try TCP.read_line(socket, 1000)
+  _first = try TCP.read_line(socket, 1000)
   second = TCP.read_line(socket, 1500)
   return second
 end

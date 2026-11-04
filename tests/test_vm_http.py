@@ -1452,7 +1452,7 @@ end
 # 1000 bytes of the digit n.
 def piece(n: Int) -> Bytes
   text = ""
-  for i in 0..999
+  for _ in 0..999
     text = text + "#{n}"
   end
 

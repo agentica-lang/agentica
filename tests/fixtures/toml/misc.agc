@@ -55,7 +55,7 @@ def flat(text: String) -> String
 end
 
 def order_case() -> Void
-  rows: Map[String, Toml.Value] = {}
+  _rows: Map[String, Toml.Value] = {}
   sub: Map[String, Toml.Value] = {"z": Toml.Value.Int(1)}
   one: Map[String, Toml.Value] = {"n": Toml.Value.Int(1)}
   two: Map[String, Toml.Value] = {"n": Toml.Value.Int(2)}
@@ -159,7 +159,7 @@ end
 def table_chain(n: Int) -> Toml.Value
   inner: Map[String, Toml.Value] = {"x": Toml.Value.Int(1)}
   v = table(inner)
-  for i in 0...n
+  for _ in 0...n
     wrap: Map[String, Toml.Value] = {"a": v}
     v = table(wrap)
   end
@@ -169,7 +169,7 @@ end
 # `n` arrays inside each other as the value of the key `k`.
 def array_chain(n: Int) -> Toml.Value
   v = Toml.Value.Int(1)
-  for i in 0...n
+  for _ in 0...n
     v = Toml.Value.Array([v])
   end
   root: Map[String, Toml.Value] = {"k": v}
@@ -210,7 +210,7 @@ end
 # costs on the same text. A ratio on one machine at one moment does not depend on how loaded it is.
 def dates_case() -> Void
   items: List[Toml.Value] = []
-  for i in 0...10000
+  for _ in 0...10000
     items = items.push(Toml.Value.DateTime("1979-05-27T07:32:00Z"))
   end
   root: Map[String, Toml.Value] = {"when": Toml.Value.Array(items)}

@@ -161,7 +161,6 @@ export def program_doc(c: Context, program: Ast.Program) -> Docs.Doc
   end
 
   for placed in c.dangling.get(Comments.key_of("Program", program.span), [])
-    line = placed.comment.span.start.line
     items = items.push(comment_item(placed.comment))
   end
 
@@ -1175,7 +1174,7 @@ def call_doc_keyed(c: Context, node: Ast.Call, key: String) -> Docs.Doc
   block: List[Docs.Doc] = []
   if args.size > 0
     case args[args.size - 1]
-      Ast.Expr.BlockLit(lit) ->
+      Ast.Expr.BlockLit(_) ->
         block = [text(" "), expr_doc(c, args[args.size - 1], false)]
         args = args.take(args.size - 1)
       _ -> block = block

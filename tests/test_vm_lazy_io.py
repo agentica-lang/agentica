@@ -28,7 +28,7 @@ EVENT = re.compile(r" io file_(open|close) handle=([0-9]+)$")
 
 STEP_LIMITED = """\
 def main() -> Void
-  r = File.foreach(System.args()[0], 1024, 60000).map do |line| line.length end.each do |n|
+  r = File.foreach(System.args()[0], 1024, 60000).map do |line| line.length end.each do |_|
     ok()
   end
   puts(r)

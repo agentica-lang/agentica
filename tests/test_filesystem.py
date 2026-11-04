@@ -390,12 +390,12 @@ end
 def main() -> Void
   fifo = System.args()[0]
   reader = File.open(fifo, "read", 1000).unwrap!
-  writer = File.open(fifo, "append", 1000).unwrap!
+  _writer = File.open(fifo, "append", 1000).unwrap!
   out = File.open(System.args()[1], "write", 1000).unwrap!
   File.write(out, "flushed", 1000).unwrap!
   IO.inspect(File.read_line(reader, 100))
   IO.inspect(File.read_text(fifo, 100))
-  for i in [1, 2, 3, 4]
+  for _ in [1, 2, 3, 4]
     Task.spawn(&stuck, fifo)
   end
   Task.sleep(50)
@@ -423,7 +423,7 @@ def feed(p: Pair) -> Result[Void]
   try File.write(p.first, "hello\n", 5000)
   try File.close(p.first, 5000)
   big = "line\n"
-  for i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+  for _ in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
     big = big + big
   end
   try File.write(p.second, big, 5000)
@@ -435,7 +435,7 @@ def main() -> Void
   b = System.args()[1]
   r = File.open(a, "read", 1000).unwrap!
   w = File.open(a, "append", 1000).unwrap!
-  holder = File.open(b, "read", 1000).unwrap!
+  _holder = File.open(b, "read", 1000).unwrap!
   w2 = File.open(b, "append", 1000).unwrap!
   t = Task.spawn(&feed, Pair(first: w, second: w2))
   IO.inspect(File.read_line(r, 5000))
@@ -458,7 +458,7 @@ def test_a_fifo_write_waits_on_the_loop_for_a_slow_reader_and_a_reader_that_leav
     assert peer.next_line(VM_WAIT_SECONDS) == "ready", mode
     code, output, errors = run_vm_bounded(root, r"""def main() -> Void
   big = "0123456789"
-  for i in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+  for _ in [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
     big = big + big
   end
   IO.inspect(File.write_text(System.args()[0], big, 10000))
@@ -501,8 +501,8 @@ end
 
 def main() -> Void
   fifo = System.args()[0]
-  keep = File.open(fifo, "read", 1000).unwrap!
-  holder = File.open(fifo, "append", 1000).unwrap!
+  _keep = File.open(fifo, "read", 1000).unwrap!
+  _holder = File.open(fifo, "append", 1000).unwrap!
   before = count()
   Task.spawn(&parent, fifo)
   Task.sleep(150)
@@ -682,8 +682,8 @@ def test_invalid_modes_closed_handles_invalid_utf8_and_whole_file_bounds_return_
   invalid_mode: Result[FileHandle] = File.open(%s, "readwrite", 1000)
   opened: Result[FileHandle] = File.open(%s, "write", 1000)
   handle: FileHandle = Result.unwrap!(opened)
-  wrote: Result[Void] = File.write_bytes(handle, Bytes.from_list([255]).unwrap!, 1000)
-  closed: Result[Void] = File.close(handle, 1000)
+  _wrote: Result[Void] = File.write_bytes(handle, Bytes.from_list([255]).unwrap!, 1000)
+  _closed: Result[Void] = File.close(handle, 1000)
   closed_read: Result[Bytes] = File.read_bytes(handle, 1, 1000)
   invalid_utf8: Result[String] = File.read_text(%s, 1000)
   oversized: Result[String] = File.read_text(%s, 1000)
@@ -710,7 +710,7 @@ def test_bounded_stream_reads_and_line_decoding_preserve_eof_semantics(new_dir, 
   second: Result[String] = File.read_line(handle, 1000)
   rest: Result[Bytes] = File.read_bytes(handle, 100, 1000)
   eof: Result[Bytes] = File.read_bytes(handle, 100, 1000)
-  closed: Result[Void] = File.close(handle, 1000)
+  _closed: Result[Void] = File.close(handle, 1000)
   IO.inspect(first)
   IO.inspect(second)
   IO.inspect(rest)
@@ -914,7 +914,7 @@ def test_the_end_of_a_run_flushes_and_closes_an_unclosed_file_handle(new_dir, ru
     run_program(r"""def main() -> Void
   opened: Result[FileHandle] = File.open(%s, "write", 1000)
   handle: FileHandle = Result.unwrap!(opened)
-  wrote: Result[Void] = File.write(handle, "cleanup", 1000)
+  _wrote: Result[Void] = File.write(handle, "cleanup", 1000)
 end
 
 """ % literal(path))

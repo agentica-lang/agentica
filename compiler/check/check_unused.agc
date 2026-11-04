@@ -56,7 +56,7 @@ end
 
 def resolved_call_name(found: State.Resolved) -> String
   case found
-    State.Resolved.Call(name, receiver) -> return name
+    State.Resolved.Call(name, _) -> return name
     _ -> return ""
   end
 end
@@ -85,7 +85,7 @@ end
 
 def struct_update?(value: Ast.Expr) -> Bool
   case value
-    Ast.Expr.Update(node) -> return true
+    Ast.Expr.Update(_) -> return true
     _ -> return false
   end
 end
@@ -99,7 +99,7 @@ end
 
 def resolved_is_call?(found: State.Resolved) -> Bool
   case found
-    State.Resolved.Call(name, receiver) -> return true
+    State.Resolved.Call(_, _) -> return true
     State.Resolved.FieldCall -> return true
     _ -> return false
   end
@@ -164,7 +164,7 @@ end
 
 def self_resolution?(found: State.Resolved) -> Bool
   case found
-    State.Resolved.Self(receiver) -> return true
+    State.Resolved.Self(_) -> return true
     _ -> return false
   end
 end

@@ -13,8 +13,8 @@ def count(n: Int) -> Void
 end
 
 def main() -> Void
-  a = Task.spawn(&nap, 600000)
-  b = Task.spawn(&count, 50)
+  _a = Task.spawn(&nap, 600000)
+  _b = Task.spawn(&count, 50)
   Task.sleep(5)
   puts("main returns")
 end

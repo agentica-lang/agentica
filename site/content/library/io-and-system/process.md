@@ -65,7 +65,7 @@ Write to the program's standard input, and flush. A send takes at most 1048576 b
 ```agentica {mode="check"}
 def main() -> Void
   p = Process.spawn("cat", [], 1000).unwrap!
-  sent = Process.send(p, "ping\n", 1000)
+  _ = Process.send(p, "ping\n", 1000)
   puts(Process.read_line(p, 1000))
   Process.close(p)
 end
@@ -98,8 +98,8 @@ Closes the program's input, so it sees the end of input. It flushes first, and c
 ```agentica {mode="check"}
 def main() -> Void
   p = Process.spawn("wc", ["-l"], 1000).unwrap!
-  sent = Process.send(p, "a\nb\n", 1000)
-  closed = Process.close_stdin(p, 1000)
+  _ = Process.send(p, "a\nb\n", 1000)
+  _ = Process.close_stdin(p, 1000)
   puts(Process.read_line(p, 1000).unwrap!.strip)
 end
 ```
@@ -204,7 +204,7 @@ Process.channel_close(p: Process, timeout_ms: Int) -> Result[Void]
 def main() -> Void
   script = "read line <&3; echo \"got $line\" >&3"
   p = Process.spawn_channel("sh", ["-c", script], ".", 1000).unwrap!
-  sent = Process.channel_send(p, "hello\n", 1000)
+  _ = Process.channel_send(p, "hello\n", 1000)
   puts(Process.channel_read_line(p, 1000))
   Process.close(p)
 end
@@ -260,7 +260,7 @@ These calls are for runner code such as `agentica test`. A test that calls them 
 def main() -> Void
   line = Process.parent_read_line(5000)
   if line.ok?
-    sent = Process.parent_send("echo " + line.unwrap! + "\n", 5000)
+    _ = Process.parent_send("echo " + line.unwrap! + "\n", 5000)
   end
 end
 ```

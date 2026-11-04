@@ -71,9 +71,9 @@ def main() -> Void
     puts(x)
   end
   puts(items)
-  for x in [1, 2]
+  for _ in [1, 2]
   end
-  for x in empty
+  for _ in empty
     puts("never")
   end
   i = 0

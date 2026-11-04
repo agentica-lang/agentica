@@ -54,7 +54,7 @@ cannot convert "x" to Int
 
 ```agentica {expect="RUNTIME-UNWRAP-ERROR"}
 def main() -> Void
-  n = "x".to_i.unwrap!
+  _n = "x".to_i.unwrap!
 end
 ```
 

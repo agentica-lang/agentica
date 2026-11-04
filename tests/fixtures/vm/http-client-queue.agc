@@ -47,7 +47,7 @@ def main() -> Void
   pool = Result.unwrap!(HTTP.client(HttpClientOptions(max_connections: 1, timeout_ms: 5000)))
   first = Task.spawn(&get, Call(pool: pool, url: base + "/slow"))
   Task.sleep(100)
-  puts(Task.map([1], 1, 200) do |n| HTTP.post(pool, base + "/queued", "x".bytes) end)
+  puts(Task.map([1], 1, 200) do |_| HTTP.post(pool, base + "/queued", "x".bytes) end)
   IO.inspect(Task.await(first))
   IO.inspect(HTTP.get(pool, base + "/after"))
   HTTP.close_client(pool)

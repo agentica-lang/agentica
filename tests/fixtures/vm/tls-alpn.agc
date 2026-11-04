@@ -43,7 +43,7 @@ def main() -> Void
   IO.inspect(TLS.alpn(TCP.connect("127.0.0.1", TCP.local_port(plain), 5000).unwrap!))
   IO.inspect(TLS.client_context(TlsClientOptions(alpn: [""])))
   long = ""
-  for n in 0...256
+  for _ in 0...256
     long = long + "x"
   end
   IO.inspect(TLS.client_context(TlsClientOptions(alpn: [long.slice(0, 255)])).ok?)
