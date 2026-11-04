@@ -43,10 +43,11 @@ with the help `write User.<Type>`, not an unused import. A file with a call
 `Alias.name` whose first part is no alias, no name of the file and no builtin
 module (a mistyped alias) gets `CHECK-UNKNOWN-NAME` from the checker instead.
 The first alias never used is reported, imports in source order and files in
-link order (the root first), after that file's own resolve errors. The query
-commands (`type-at`, `refs`, `symbol`, `--partial`) do not report it, since an
-editor adds an import before it writes the first use; `agentica check`, `run`
-and `compile` do.
+link order (the root first), after that file's own resolve errors. Any command
+that builds or checks a program (`check`, `run`, `compile`, `test`) reports it.
+The query commands (`type-at`, `refs`, `symbol`, `--partial`) do not report it
+in the file they are asked about, since an editor adds an import before it
+writes the first use; the files that file imports keep the rule.
 
 #### Importing names
 

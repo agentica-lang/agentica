@@ -78,7 +78,8 @@ enum Partly
 end
 
 ## Links and checks the file at `path`, as `agentica check` does: every rule of a build except that the program
-## declares a `main`, so a library file passes. `cache` (cache.agc) only saves work: `Cache.empty()` gives the same
+## declares a `main`, so a library file passes, and that an unused import of the file itself is not an error (the files
+## it imports keep the rule). `cache` (cache.agc) only saves work: `Cache.empty()` gives the same
 ## answer.
 export def check(cache: Cache.Cache, settings: Env.Settings, path: String) -> Verdict
   case Front.read_root(settings.workspace, path)
@@ -476,8 +477,8 @@ def shown(settings: Env.Settings, match: Symbol.Match) -> Symbol.Match
   return match.with(file: QueryFiles.display(settings, match.file, true))
 end
 
-# The settings of a query: an import that nothing uses yet is not an error, since an editor adds the import first.
-# `check` keeps refusing it.
+# The settings of a query: an import that nothing uses yet is not an error in the file asked about, since an editor
+# adds the import first. The files it imports keep the rule, and `check` keeps refusing it everywhere.
 def for_query(settings: Env.Settings) -> Env.Settings
   return settings.with(unused_imports: false)
 end

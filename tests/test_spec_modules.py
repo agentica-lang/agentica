@@ -599,15 +599,23 @@ class TestModuleRules:
         ("a construction", "def main() -> Void\n  puts(area(Shapes.Square(side: 1)))\nend\n"),
         ("a nested pattern", "def main() -> Void\n  case pick()\n    some(Shapes.Shade.Dark) -> puts(1)\n"
                              "    _ -> puts(2)\n  end\nend\n"),
+        ("an enum constructor expression", "def main() -> Void\n  s = Shapes.Shade.Light(1)\n  puts(1)\nend\n"),
+        ("a direct variant pattern arm", "def f(s: Shade) -> Int\n  case s\n    Shapes.Shade.Dark -> return 1\n"
+                                         "    Shapes.Shade.Light(n) -> return n\n  end\nend\n\n"),
+        ("a case guard", "def main() -> Void\n  case some(1)\n    some(n) if n < Shapes.LIMIT -> puts(n)\n"
+                         "    _ -> puts(0)\n  end\nend\n"),
+        ("a type argument", "def f(xs: List[Shapes.Square]) -> Int\n  return xs.size\nend\n\n"),
     ]
 
     @pytest.mark.parametrize("site, body", USE_SITES, ids=[site for site, _body in USE_SITES])
     def test_every_place_that_writes_an_alias_with_a_member_counts_as_a_use(self, site, body):
-        header = 'import Shapes from "shapes"\nimport {Square, area, pick} from "shapes"\n\n'
-        root = header + body + ("" if "def main()" in body else MAIN)
+        root = self.USE_HEADER + body + ("" if "def main()" in body else MAIN)
         assert self.check({"shapes.agc": self.SHAPES, "root.agc": root})[1] is None, site
-        # The same program without the use is the unused import.
-        bare = header + MAIN
+
+    USE_HEADER = 'import Shapes from "shapes"\nimport {Shade, Square, area, pick} from "shapes"\n\n'
+
+    def test_the_same_program_without_a_use_is_the_unused_import(self):
+        bare = self.USE_HEADER + MAIN
         self.assert_rejected(self.check({"shapes.agc": self.SHAPES, "root.agc": bare}), "CHECK-UNUSED-IMPORT", line=1)
 
     def test_a_re_export_a_regex_literal_and_a_template_use_the_import_they_need(self):

@@ -43,8 +43,9 @@ end
 
 ## CHECK-UNUSED-IMPORT for the first alias of the file that nothing uses, or CHECK-IMPORT-NAME for an alias written
 ## without its member. A module read from the stub of the check cache has no bodies to read, and passed this check
-## when its entry was made, so it is not checked.
-export def check(module: Modules.Module, modules: Map[String, Modules.Module]) -> Result[Bool]
+## when its entry was made, so it is not checked. With `unused` false (a query about this file, whose editor adds the
+## import before the code that uses it) only CHECK-IMPORT-NAME is reported: the other rule is skipped.
+export def check(module: Modules.Module, modules: Map[String, Modules.Module], unused: Bool) -> Result[Bool]
   if module.stubbed
     return ok(true)
   end
@@ -55,6 +56,10 @@ export def check(module: Modules.Module, modules: Map[String, Modules.Module]) -
   end
 
   try bare_alias(module, modules, written)
+  if !unused
+    return ok(true)
+  end
+
   heads: List[String] = []
   libraries: List[String] = []
   for item in written

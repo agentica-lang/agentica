@@ -1,6 +1,7 @@
 ## The first stages of every command that reads a program: read the root file, link it and check it, each giving the
 ## data of the next stage or the first problem. The command line (app/), the BDD driver and the queries (analysis.agc)
-## all run it, so what one of them accepts, the others accept.
+## all run it, so what one of them accepts, the others accept, except that a query does not refuse an unused import in
+## the file it is asked about (`Settings.unused_imports`).
 
 import Checker from "../check/checker"
 import Style from "../check/check_style"
@@ -66,7 +67,8 @@ export def check_file(path: String, settings: Env.Settings) -> Outcome
 end
 
 ## Links the file at `path` and checks it as `agentica check` and `agentica type-at` do: every rule of `check_file`
-## except that the program declares a `main`, so a library file passes. A `main` that is declared keeps its signature.
+## except that the program declares a `main`, so a library file passes, and that an unused import of the file itself is
+## not an error (the files it imports keep the rule). A `main` that is declared keeps its signature.
 export def query_file(path: String, settings: Env.Settings) -> Outcome
   return query_cached(Cache.empty(), path, settings)
 end
@@ -241,10 +243,7 @@ def skipped(
       # A module read from its stub keeps its text, so the style rules see every file; one whose entry says its text
       # follows the rule is not lexed again.
       styled = styled_files(loaded)
-      # A query does not refuse an unused import, so what it checked is not what the cache says passed `check`.
-      if settings.unused_imports
-        enter_checked(loaded, checked, settings, styled)
-      end
+      enter_checked(loaded, checked, settings, styled)
 
       return checked_outcome(program, checking, styled)
   end
