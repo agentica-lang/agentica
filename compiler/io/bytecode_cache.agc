@@ -27,7 +27,8 @@
 ## checkout changes the file, and the version alone would not. Two builds of one size that are made within a second, or
 ## a copy that keeps the time, are not told apart, and the check of the header of the program (the version) is what is
 ## left. std/ sources are inside the binary, so they are not in the list. No flag of the command line changes the
-## bytes of the program (--dump and --dump-ir do not compile to bytes), so none is in the key.
+## bytes of the program (--dump and --dump-ir do not compile to bytes), so none is in the key; a test file compiled for
+## `agentica test` has its own key and entry (`test PATH` in place of `root PATH`).
 ##
 ## The checks are by path (there is no `fstat` on a handle), so a swap of the folder between the check and the open is
 ## not closed. It needs write access to the parent of the folder: for `_build/` that is the folder of the project,
@@ -213,9 +214,18 @@ def entry_for(settings: Env.Settings, root: String) -> Result[Entry]
   end
 
   site = try CacheFiles.site(settings, real)
-  key = [FORMAT, "version #{settings.version}", site.binary, "root #{real}", site.inputs].join("\n")
+  # A test file compiled for `agentica test` gets a `main` that a run does not (Settings.test_file), so the two have
+  # entries of their own.
+  root = "root #{real}"
+  named = real
+  if settings.test_file
+    root = "test #{real}"
+    named = root
+  end
+
+  key = [FORMAT, "version #{settings.version}", site.binary, root, site.inputs].join("\n")
   folder = Paths.join(site.build, BYTECODE_FOLDER)
-  name = "#{Paths.last_part(real)}-#{CacheFiles.digest(real.bytes).slice(0, 16)}.agcb"
+  name = "#{Paths.last_part(real)}-#{CacheFiles.digest(named.bytes).slice(0, 16)}.agcb"
   return ok(
     Entry(
       build: site.build,

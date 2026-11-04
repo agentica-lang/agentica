@@ -51,6 +51,12 @@ or the site).
   default paths `specs/` and `test/` (a missing default is skipped; nothing
   found is `CHECK-BDD-EMPTY`). A `--only` that matches no name adds a
   `CHECK-BDD-EMPTY` file error.
+- Test functions (#983): `compile_test` compiles with `Settings.test_file`
+  true (`check` sets it for a `*_test.agc` name; nothing else does), and
+  `modules/test_main.agc` adds the `main` of a root file with `test_*`
+  functions and none (fresh trees only, ids from the Program's on) before the
+  linker registers its names. The bytecode cache keys such a compile apart
+  (`test PATH`). The runner and protocol do not change.
 - Without `--steps`, `default_steps` takes the nearest `steps.agc` from each
   path that holds a feature up to the working directory (two different files
   are a usage report). Steps are listed only when there is a feature; a broken

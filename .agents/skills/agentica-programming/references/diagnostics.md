@@ -111,6 +111,10 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
   `Lazy` method block accepts any `try`: its failure ends the pipeline).
 - `CHECK-MAIN`: no `main` (for a run or `compile`; `check` needs none), or a
   `main` with parameters or a result other than `Void`.
+- `CHECK-TEST-SIGNATURE`, `CHECK-TEST-NAME`, `CHECK-TEST-MAIN`: in a
+  `*_test.agc` file, a `test_*` function that takes parameters or does not
+  return `Result[Void]` (written so); one named just `test_`; `main` beside
+  `test_*` functions (`testing.md`).
 - `CHECK-NOT-INDEXABLE`, `CHECK-NOT-A-LIST`: an index on a non-list/map (a
   String uses `s.at(i)` or `s.slice(start, length)`); `for` over something that
   is not a list, set or range.
