@@ -297,6 +297,16 @@ export def then_stderr(ctx: Context, expected: String) -> Context
   return compare_text(ctx, finished(ctx, exited(ctx, program(ctx))).stderr, expected)
 end
 
+## Checks that the output no line step has read yet includes `expected` as a substring. The program must have exited.
+export def then_stdout_includes(ctx: Context, expected: String) -> Context
+  return compare_includes(ctx, finished(ctx, exited(ctx, program(ctx))).stdout, expected)
+end
+
+## Checks that the whole error output includes `expected` as a substring. The program must have exited.
+export def then_stderr_includes(ctx: Context, expected: String) -> Context
+  return compare_includes(ctx, finished(ctx, exited(ctx, program(ctx))).stderr, expected)
+end
+
 def predefined() -> List[Step]
   return [
     step("the Agentica program {string}") do |ctx, args| given_program(ctx, args[0]) end,
@@ -321,6 +331,8 @@ def predefined() -> List[Step]
     end,
     step("stdout is:") do |ctx, args| then_stdout(ctx, doc_string(ctx)) end,
     step("stderr is:") do |ctx, args| then_stderr(ctx, doc_string(ctx)) end,
+    step("stdout includes:") do |ctx, args| then_stdout_includes(ctx, doc_string(ctx)) end,
+    step("stderr includes:") do |ctx, args| then_stderr_includes(ctx, doc_string(ctx)) end,
   ]
 end
 
@@ -569,6 +581,11 @@ end
 
 def compare_text(ctx: Context, actual: String, expected: String) -> Context
   return compare(ctx, Test.eq(actual, expected), expected.inspect, actual.inspect)
+end
+
+# The failure shows the whole stream as `actual`, so a log scenario sees what the substring missed.
+def compare_includes(ctx: Context, actual: String, expected: String) -> Context
+  return compare(ctx, Test.eq(actual.contains?(expected), true), "text including #{expected.inspect}", actual.inspect)
 end
 
 def compare(ctx: Context, checked: Result[Void], expected: String, actual: String) -> Context

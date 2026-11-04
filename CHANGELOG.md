@@ -10,6 +10,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `std/bdd`: the steps `stdout includes:` and `stderr includes:` (and
+  `BDD.then_stdout_includes`, `BDD.then_stderr_includes`) check a substring
+  of the output after the program exits. The BDD page shows how a scenario
+  runs a peer program with `Process.spawn_captured` and `BDD.keep`.
 - `std/option_parser`: `min` and `max` on an `Int` `Opt` or `Arg`
   (`min: some(1)`), refused as any bad value is (exit 2) and shown in the help.
   A number too big for an `Int` says it does not fit one.
