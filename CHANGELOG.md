@@ -76,8 +76,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - On Windows a spawn `env` map with two names that differ only in the case of a
   letter outside ASCII (`Ä`, `ä`) is now an error, as for ASCII letters.
 - A `compute def` call on a resource also keeps the resources that the call
-  which made it took (a `Stmt` keeps its `Handle`): `Native.close` of the
-  `Handle` during the call frees it when the call returns, not while C uses it.
+  which made it took (a `Stmt` keeps its `Handle`), less one that another of
+  them comes from (`next(ctx, x)` keeps only `x` when `x` comes from `ctx`:
+  close `x` before `ctx`): `Native.close` of the `Handle` during the call frees
+  it when the call returns, not while C uses it.
+- A native callback closed by another task stays callable (it gives zero) by
+  the native calls that ran it until they return; any task's native call could
+  free its code while C still used it.
 
 ## [0.23.0] - 2026-11-03
 

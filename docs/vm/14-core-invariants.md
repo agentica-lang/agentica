@@ -289,8 +289,13 @@ marks the resource closed and takes it off its owner, and the end of the last
 such call runs the `free` on a scheduler, so C never sees the pointer freed
 while a pool thread uses it. A resource closed while held holds what it comes
 from in turn until its free, so the hold goes further up only through closed
-resources and a call costs the same whatever the chain above. The end of the
-run frees what is still open (§14.4, step 3). There are no GC finalizers.
+resources. A walk up passes freed links and points each one it passed at
+where it ended, so a call costs about the same whatever the chain above, also
+after a long chain is closed at once. A callback closed while native calls
+that ran it are still in C is freed when the last of them returns: C may call
+it again until then (it gives zero), and libffi's frames of its run are on
+that call's stack. The end of the run frees what is still open (§14.4, step
+3). There are no GC finalizers.
 
 A channel is the one handle made unowned. `Channel.new` makes no registry entry.
 The first `Task.spawn_owning` of it (any task may do it) registers an entry with
