@@ -6,7 +6,7 @@ Arguments:
   <file>           file to serve
 
 Options:
-  -p, --port PORT  port (default: 8080)
+  -p, --port PORT  port [default: 8080]
   -v, --verbose    more output
   -q, --quiet      less output
   -u, --user USER  user name

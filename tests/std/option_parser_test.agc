@@ -14,6 +14,21 @@ def parser() -> OP.Parser
       Opt(name: "label", short: "l"),
       Opt(name: "user", kind: K.String, choices: ["ana", "bob"], help: "user name"),
       Opt(name: "mode", short: "m", default: "fast", choices: ["fast", "slow"]),
+      Opt(name: "jobs", kind: K.Int, min: some(1), max: some(64), help: "jobs (a few)"),
+      Opt(name: "level", kind: K.Int, choices: ["1", "2"], metavar: "N"),
+    ],
+  )
+end
+
+# An Int argument with a min, an option with only a max and one with a negative min.
+def limited() -> OP.Parser
+  return OP.new(
+    "tool",
+    "",
+    [Arg(name: "count", kind: K.Int, min: some(1))],
+    [
+      Opt(name: "cap", kind: K.Int, max: some(9)),
+      Opt(name: "offset", kind: K.Int, min: some(-10)),
     ],
   )
 end
@@ -91,19 +106,66 @@ def main() -> Void
       try Test.assert(!OP.help?(failed), "an error is not a request for help")
       Test.eq(OP.message(failed), failed)
     end,
+    Test.test("an Int limit refuses a value outside it and the edges are valid") do
+      try fails(["--jobs", "0", "f"], "invalid value for --jobs: '0' is below the minimum 1")
+      try fails(["--jobs=65", "f"], "invalid value for --jobs: '65' is above the maximum 64")
+      try fails(["--jobs", "-3", "f"], "'-3' is below the minimum 1")
+      for edge in [1, 64]
+        p = try OP.parse(parser(), ["--jobs", "#{edge}", "f"])
+        try Test.eq(OP.int(p, "jobs"), edge)
+      end
+      p = try OP.parse(parser(), ["--port", "-7", "f"])
+      Test.eq(OP.int(p, "port"), -7)
+    end,
+    Test.test("limits on an argument, a max alone and a negative min") do
+      refused = OP.parse(limited(), ["0"])
+      try Test.assert(!refused.ok?, "0 is below the minimum of the argument")
+      try Test.assert(refused.message.include?("for <count>: '0' is below the minimum 1"), refused.message)
+      cap = OP.parse(limited(), ["--cap", "10", "1"])
+      try Test.assert(cap.message.include?("invalid value for --cap: '10' is above the maximum 9"), cap.message)
+      low = OP.parse(limited(), ["--offset", "-11", "1"])
+      try Test.assert(low.message.include?("invalid value for --offset: '-11' is below the minimum -10"), low.message)
+      p = try OP.parse(limited(), ["--cap", "-100", "--offset=-10", "1"])
+      try Test.eq(OP.int(p, "cap"), -100)
+      try Test.eq(OP.int(p, "offset"), -10)
+      Test.eq(OP.int(p, "count"), 1)
+    end,
+    Test.test("a number too big for an Int says so, and a word is still not an Int") do
+      try fails(["--port", "99999999999999999999", "f"], "for --port: '99999999999999999999' does not fit an Int")
+      try fails(["--port=-99999999999999999999", "f"], "'-99999999999999999999' does not fit an Int")
+      try fails(["--port", "1x", "f"], "'1x' is not an Int")
+      Test.assert(!OP.parse(parser(), ["--port", "-", "f"]).ok?, "a lone minus is refused")
+    end,
     Test.test("a wrong specification is an error of parse, with the option named") do
       cases = [
         OP.new("tool", "", [], [Opt(name: "port", kind: K.Int, default: "x")]),
         OP.new("tool", "", [], [Opt(name: "a", short: "p"), Opt(name: "b", short: "p")]),
         OP.new("tool", "", [Arg(name: "a"), Arg(name: "a")]),
         OP.new("tool", "", [], [Opt(name: "mode", choices: ["a"], default: "b")]),
+        OP.new("tool", "", [], [Opt(name: "jobs", kind: K.Int, min: some(5), max: some(4))]),
+        OP.new("tool", "", [], [Opt(name: "name", min: some(1))]),
+        OP.new("tool", "", [], [Opt(name: "jobs", kind: K.Int, default: "0", min: some(1))]),
         OP.new("tool", "", [Arg(name: "file", kind: K.Flag)]),
         OP.new("tool", "", [], [Opt(name: "eq", short: "=")]),
         OP.new("tool", "", [], [Opt(name: "one", short: "1")]),
         OP.new("tool", "", [], [Opt(name: "a b")]),
         OP.new("", "", [], []),
       ]
-      names = ["--port", "--b", "<a>", "--mode", "<file>", "--eq", "--one", "a b", "program name"]
+      # What each specification above must name in its error, in the same order.
+      names = [
+        "--port",
+        "--b",
+        "<a>",
+        "--mode",
+        "above its max",
+        "min or max",
+        "--jobs",
+        "<file>",
+        "--eq",
+        "--one",
+        "a b",
+        "program name",
+      ]
       for index in 0...cases.size
         failed = OP.parse(cases[index], [])
         try Test.assert(!failed.ok?, "the specification #{index} is refused")
@@ -119,17 +181,19 @@ def main() -> Void
         "Serves a file over HTTP",
         "",
         "Arguments:",
-        "  <file>             file to serve",
+        "  <file>                file to serve",
         "",
         "Options:",
-        "  -p, --port PORT    port (default: 8080)",
-        "      --ratio RATIO  scale",
-        "  -v, --verbose      more output",
+        "  -p, --port PORT       port [default: 8080]",
+        "      --ratio RATIO     scale",
+        "  -v, --verbose         more output",
         "  -q, --quiet",
         "  -l, --label LABEL",
-        "      --user USER    user name (choices: ana, bob)",
-        "  -m, --mode MODE    (default: fast) (choices: fast, slow)",
-        "  -h, --help         show this help",
+        "      --user ana|bob    user name",
+        "  -m, --mode fast|slow  [default: fast]",
+        "      --jobs JOBS       jobs (a few) [min: 1, max: 64]",
+        "      --level N         [choices: 1, 2]",
+        "  -h, --help            show this help",
       ].join("\n")
       try Test.eq(OP.usage(parser()), expected)
       for args in [["--help"], ["f", "-h"], ["-vh"]]
