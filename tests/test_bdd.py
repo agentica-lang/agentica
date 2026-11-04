@@ -255,6 +255,24 @@ def test_a_failed_check_points_at_its_step_keyword_and_outline_rows_have_their_o
         "PARSE-GHERKIN-UNSUPPORTED", {"line": 3, "column": 1})
 
 
+def test_an_outline_keeps_html_that_is_not_a_column_and_still_rejects_a_misspelled_column(bdd):
+    steps = steps_program(main_running(
+        'BDD.step("<input type=\\"checkbox\\" value=\\"x\\"> is row {int} of <br/>") do |ctx, args|\n'
+        '      BDD.assert(ctx, args[0] == "1" or args[0] == "2", "markup was changed")\n    end'))
+    row = '    Then <input type="checkbox" value="x"> is row <id> of <br/>\n'
+    directory = bdd.suite({
+        "steps.agc": steps,
+        "html.feature": "Feature: Html\n\n  Scenario Outline: row <id>\n%s\n  Examples:\n    | id |\n    | 1 |\n    | 2 |\n" % row,
+        "typo.feature": "Feature: Typo\n\n  Scenario Outline: row\n%s\n  Examples:\n    | id |\n    | 1 |\n" % row.replace("<id>", "<idd>")})
+    status, report = bdd.json_test(joined(directory, "html.feature"), "--steps", joined(directory, "steps.agc"))
+    assert status == 0
+    assert [(item["name"], item["status"]) for item in report_cases(report)] == [
+        ("row 1", "passed"), ("row 2", "passed")]
+    status, report = bdd.json_test(joined(directory, "typo.feature"), "--steps", joined(directory, "steps.agc"))
+    assert status == 1
+    assert file_error(report)["code"] == "PARSE-GHERKIN-PARAMETER"
+
+
 def test_a_crashing_handler_shows_its_stack_in_the_text_and_ai_reports(bdd):
     directory = bdd.suite({"crash.feature": "Feature: Crash\nScenario: runtime\nThen execution crashes\n"})
     feature = joined(directory, "crash.feature")

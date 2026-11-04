@@ -671,7 +671,8 @@ def substitute_argument(argument: Argument, bindings: Map[String, String]) -> Re
   end
 end
 
-# Replaces each <name> (no < or > inside) from the left; the error is the first unknown name.
+# Replaces each <name> (no < or > inside) from the left; the error is the first unknown plain name. A <...> that is
+# not a column and does not look like a plain name (HTML such as <input type="text"> or <br/>) stays as written.
 def substitute(text: String, bindings: Map[String, String]) -> Result[String]
   if not text.include?("<")
     return ok(text)
@@ -691,7 +692,20 @@ def substitute_part(part: String, bindings: Map[String, String]) -> Result[Strin
   end
   name = part.slice(0, close)
   if not bindings.has_key?(name)
-    return error(name)
+    if plain_name?(name)
+      return error(name)
+    end
+    return ok("<#{part}")
   end
   return ok(bindings[name] + rest_of(part, close + 1))
+end
+
+# Examples accepts any nonempty header, so a column is found first; this only tells a typo from markup.
+def plain_name?(name: String) -> Bool
+  for c in name.split("")
+    if " \t=\"'/".include?(c)
+      return false
+    end
+  end
+  return true
 end

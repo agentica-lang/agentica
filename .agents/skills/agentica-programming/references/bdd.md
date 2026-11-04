@@ -18,6 +18,8 @@ English syntax: `Feature`, one optional `Background` before scenarios,
 `Given`/`When`/`Then`/`And`/`But`. Each Examples row becomes a scenario,
 substituting `<column>` in names, steps, Doc Strings and tables; its name ends
 with ` (values)` of the columns the name does not show (`Name (sqlite, 42)`).
+Any other `<name>` with no space, `=`, quote or `/` is
+`PARSE-GHERKIN-PARAMETER`; the rest (`<input type="text">`, `<br/>`) stays.
 Comments, tags and descriptions before steps are accepted; only `--tags` uses
 tags. `Rule`, `*`, other keyword aliases and localized syntax fail explicitly.
 `And`/`But` inherit the previous kind. Triple-quote Doc Strings are dedented;
