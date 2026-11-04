@@ -23,4 +23,5 @@ pytest = "^9.1.1"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+tmp_path_retention_count = 1
 markers = ["slow: slow tests, run by make test-slow and CI"]
