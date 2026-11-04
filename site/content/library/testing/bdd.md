@@ -71,6 +71,7 @@ No code needed. `{string}` is text in double quotes, `{int}` a whole number.
 | `stdin remains open` | checks that the program still runs |
 | `the program exits with code {int} within {int} milliseconds` | waits for the exit code |
 | `stdout is:` / `stderr is:` | after the program ends, compares the stdout that no line step has read yet, or all of stderr |
+| `stdout includes:` / `stderr includes:` | after the program ends, checks that the same text contains the Doc String as a substring |
 
 `Given`, `When`, `Then`, `And` and `But` match the same steps. `Background`, `Scenario Outline` with `Examples`, Doc Strings (`"""`) and Data Tables work. A `<...>` in an outline is replaced when it names an `Examples` column; any other `<...>` is `PARSE-GHERKIN-PARAMETER` unless it holds `=`, a quote or `/`, as `<input type="text">` and `<br/>` do, and then it stays as written (a bare tag such as `<br>` or `<p>` still fails: write `<br/>`, or put the tag in a column).
 
@@ -94,7 +95,7 @@ Scenario Outline: Greet in a language
 - A variable is added to the environment `agentica test` runs in; the program sees the others as they are. Setting a name again replaces its value. The variable reaches only the program of that scenario: not the runner, and no other scenario.
 - Each `the program argument` adds one argument, in order, with no splitting on spaces: `"a b"` is one argument. The program reads them with `System.args`.
 - Both come before `the Agentica program`; after it they fail with `RUNTIME-BDD-CONTEXT`, since the program has already started. A variable name must be nonempty and cannot contain `=`, a name or value cannot contain a NUL byte, and `AGENTICA_CHANNEL`, `AGENTICA_VM_METRICS`, `AGENTICA_VM_METRICS_FILE` and `UV_USE_IO_URING`, which the VM owns, cannot be set: each is `RUNTIME-BDD-CONTEXT`. On Windows names ignore case, so `Path` and then `PATH` set one variable, to the second value; two names that differ only in the case of a letter outside ASCII, such as `Ä` and `ä`, make `the Agentica program` fail with `RUNTIME-BDD-IO`.
-- A scenario starts one program. To run it again with other values, write another scenario (an outline row is one).
+- A scenario starts one program. To run it again with other values, write another scenario (an outline row is one). For a peer that runs beside the program, see [A peer program](#a-peer-program).
 
 ## Your own steps
 
@@ -231,6 +232,41 @@ def main() -> Void
 end
 ```
 
+## A peer program
+
+`BDD.given_program` starts one program, and every step that sends, reads or checks talks to it. A second named program would need a name in each of those steps, and a peer needs its own steps anyway (to learn its port, or to read what it received). So a step starts the peer itself with [Process.spawn_captured](/library/io-and-system/process/#processspawn_captured) and keeps the handle with `BDD.keep`. A program started by a step belongs to the scenario and stops when it ends, so no cleanup is needed. Start the peer first, then pass what the program needs from it with `BDD.given_env` or `BDD.given_argument`:
+
+```agentica {mode="check"}
+import BDD from "std/bdd"
+
+# ./peer prints the port it listens on, then one line for each message it receives.
+def start_peer(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  peer = Process.spawn_captured("./peer", [], ".", 5000).unwrap!
+  port = Process.read_line(peer, 5000).unwrap!
+  kept = BDD.keep(ctx, "peer") do |_request| ok(JSON.from(Process.read_line(peer, 5000).unwrap_or(""))) end
+  return BDD.given_env(kept, "PEER_PORT", port)
+end
+
+def check_received(ctx: BDD.Context, args: List[String]) -> BDD.Context
+  line = JSON.string(BDD.call(ctx, "peer", JSON.null()).unwrap!).unwrap!
+  return BDD.assert(ctx, line == args[0], "the peer received #{line.inspect}")
+end
+
+def main() -> Void
+  BDD.run([BDD.step("a peer", &start_peer), BDD.step("the peer received {string}", &check_received)])
+end
+```
+
+```gherkin
+Scenario: The program talks to the peer
+  Given a peer
+  And the Agentica program "../app.agc"
+  When I send the line "hello"
+  Then the peer received "hello"
+```
+
+The peer's handle lives in the closure of the service, so a later step reads from it through `BDD.call`, and the read has a timeout so a silent peer fails the step. A read that times out kills the peer, as it does a program under test (see [Process](/library/io-and-system/process/)), so make it the last use. Start the peer in the step handler itself: a program belongs to the task that started it, so one started in a `Task.spawn` stops when that task ends, and a step may not leave a task running.
+
 ## BDD.after
 
 ```signature
@@ -306,13 +342,15 @@ BDD.then_stdin_open(ctx: BDD.Context) -> BDD.Context
 BDD.then_exit(ctx: BDD.Context, code: Int, timeout_ms: Int) -> BDD.Context
 BDD.then_stdout(ctx: BDD.Context, expected: String) -> BDD.Context
 BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
+BDD.then_stdout_includes(ctx: BDD.Context, expected: String) -> BDD.Context
+BDD.then_stderr_includes(ctx: BDD.Context, expected: String) -> BDD.Context
 ```
 
 The built-in steps as functions, to combine in your own steps. Pass on the context `BDD.given_program` returns: it holds the program. `BDD.given_env` and `BDD.given_argument` come before `BDD.given_program` and return the context to pass to it.
 
 `BDD.read_line` gives the next output line instead of comparing it, so a step can use it. It is an error when the output ended or no line came within `timeout_ms`; a timeout stops the program under test, as for `BDD.then_line`: every later read, send or exit check fails with `RUNTIME-BDD-IO`, so make it the last use of the program.
 
-`stdout is:` compares the output that no line step has read yet. Output is kept up to 1 MiB per stream.
+`stdout is:` compares the output that no line step has read yet. `stdout includes:` and `stderr includes:` check the same text for a substring, as `String.contains?` does (an empty text is `RUNTIME-BDD-CONTEXT`), so a log scenario can assert one line of a noisy stderr; a failure shows the whole stream as `actual`. All four need the program to have exited. Output is kept up to 1 MiB per stream.
 
 A failed `then_*` check reports `expected` and `actual` in the inspect form, as `Test.eq` does: a line or output in quotes, an exit code as a number, a JSON line as its sorted-key text. An undefined or ambiguous step's `actual` is the step text in quotes. Text over 64 Ki characters is cut and ends with `...` and the count left out. A front-end error of the step program keeps the raw type names (`Int`, `String`), so its `--json` form depends on the code.
 

@@ -308,6 +308,94 @@ def test_a_scenario_gives_its_program_environment_variables_and_arguments_that_r
     assert [[step["status"] for step in item["steps"]] for item in cases[5:]] == [["failed", "not_executed"]] * 2
 
 
+def test_stdout_and_stderr_includes_check_a_substring_after_the_program_exits(tmp_path):
+    directory = suite(tmp_path, {
+        "log.agc": ('def main() -> Void\n  puts("alpha beta")\n  IO.warn("warn: one")\n  IO.warn("warn: two")\n'
+                    '  System.exit(3)\nend\n'),
+        "wait.agc": "def main() -> Void\n  line = IO.gets()\nend\n",
+        "log.feature": (
+            "Feature: Includes\n"
+            'Scenario: both streams\nGiven the Agentica program "log.agc"\n'
+            "Then the program exits with code 3 within " + ms(5000) + " milliseconds\n"
+            "And stdout includes:\n" + doc("beta")
+            + "And stderr includes:\n" + doc("warn: two")
+            + 'Scenario: a substring that is missing\nGiven the Agentica program "log.agc"\n'
+            "Then the program exits with code 3 within " + ms(5000) + " milliseconds\n"
+            "And stderr includes:\n" + doc("warn: three")
+            + 'Scenario: stdout missing\nGiven the Agentica program "log.agc"\n'
+            "Then the program exits with code 3 within " + ms(5000) + " milliseconds\n"
+            "And stdout includes:\n" + doc("gamma")
+            + 'Scenario: the program still runs\nGiven the Agentica program "wait.agc"\n'
+            "Then stderr includes:\n" + doc("x")
+            + 'Scenario: an empty text\nGiven the Agentica program "log.agc"\n'
+            "Then the program exits with code 3 within " + ms(5000) + " milliseconds\n"
+            'And stdout includes:\n  """\n  """\n')})
+    report = json_test(directory / "log.feature")
+    assert [item["status"] for item in report_cases(report)] == ["passed", "failed", "failed", "failed", "failed"]
+    assert codes(report) == [None, "RUNTIME-BDD-ASSERTION", "RUNTIME-BDD-ASSERTION", "RUNTIME-BDD-CONTEXT",
+                             "RUNTIME-BDD-CONTEXT"]
+    results = report_cases(report)
+    assert details(results[1]) == ['text including "warn: three"', '"warn: one\\nwarn: two\\n"']
+    assert details(results[2]) == ['text including "gamma"', '"alpha beta\\n"']
+
+
+def test_a_step_runs_a_peer_with_spawn_captured_and_keep_beside_the_program_and_it_ends_with_the_scenario(tmp_path):
+    """The pattern the BDD page gives for a scenario that needs a second program: the step starts the peer, learns
+    what the program needs from it, and keeps its handle in a service; the peer stops when the scenario ends."""
+    directory = (tmp_path / "suite").resolve()
+    peer_pid = directory / "peer-pid.txt"
+    files = {
+        "app.agc": 'def main() -> Void\n  puts(System.env("PEER_PID").unwrap_or("none"))\nend\n',
+        "steps.agc": dedent(f"""\
+            import BDD from "std/bdd"
+
+            def start_peer(ctx: BDD.Context, args: List[String]) -> BDD.Context
+              peer = Process.spawn_captured({agc_literal(PYTHON)}, [{agc_literal(FIXTURES / "process-peer.py")}, "hold"], ".", {ms(5000)}).unwrap!
+              pid = Process.read_line(peer, {ms(5000)}).unwrap!
+              File.write_text({agc_literal(peer_pid)}, pid, {ms(5000)}).unwrap!
+              kept = BDD.keep(ctx, "peer") do |_request|
+                ok(JSON.from(not Process.wait(peer, 1).ok?))
+              end
+              return BDD.given_env(BDD.set(kept, "pid", JSON.from(pid)), "PEER_PID", pid)
+            end
+
+            def main() -> Void
+              BDD.run([
+                BDD.step("a peer program", &start_peer),
+                BDD.step("the program printed the pid of the peer") do |ctx, args|
+                  pid = JSON.string(BDD.get(ctx, "pid").unwrap!).unwrap!
+                  BDD.then_line(ctx, pid, {ms(5000)})
+                end,
+                BDD.step("the scenario fails") do |ctx, args| BDD.assert(ctx, false, "on purpose") end,
+                BDD.step("the peer still runs") do |ctx, args|
+                  running = JSON.bool(BDD.call(ctx, "peer", JSON.null()).unwrap!).unwrap!
+                  BDD.assert(ctx, running, "the peer ended")
+                end,
+              ])
+            end
+            """),
+        "peer.feature": (
+            "Feature: Peer\nScenario: the program and its peer\nGiven a peer program\n"
+            'And the Agentica program "app.agc"\nThen the program printed the pid of the peer\n'
+            "And the peer still runs\n"),
+        "failing.feature": "Feature: Failing\nScenario: a failed scenario\nGiven a peer program\nThen the scenario fails\n"}
+    suite(tmp_path, files)
+    pids = []
+    try:
+        report = json_test(directory / "peer.feature", "--steps", directory / "steps.agc")
+        assert [item["status"] for item in report_cases(report)] == ["passed"], str(report)
+        pids.append(peer_pid.read_text())
+        assert wait_until(lambda: not process_alive(pids[0])), "the peer outlived its scenario"
+        failed = json_test(directory / "failing.feature", "--steps", directory / "steps.agc")
+        assert [item["status"] for item in report_cases(failed)] == ["failed"], str(failed)
+        pids.append(peer_pid.read_text())
+        assert pids[1] != pids[0]
+        assert wait_until(lambda: not process_alive(pids[1])), "the peer outlived its failed scenario"
+    finally:
+        for pid in pids:
+            kill_process(pid)
+
+
 AFTER_STEPS = dedent("""\
     import BDD from "std/bdd"
 

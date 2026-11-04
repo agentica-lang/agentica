@@ -43,6 +43,7 @@ I receive a JSON line within {int} milliseconds:   expected JSON Doc String; key
 stdin remains open                                 input open and program active
 the program exits with code {int} within {int} milliseconds   wait and check the exit code
 stdout is: / stderr is:                            after exit: the stdout no line step read yet / all of stderr
+stdout includes: / stderr includes:                after exit: the same text contains the Doc String (substring; empty is RUNTIME-BDD-CONTEXT)
 ```
 
 ## Step programs
@@ -99,6 +100,8 @@ BDD.then_stdin_open(ctx: BDD.Context) -> BDD.Context
 BDD.then_exit(ctx: BDD.Context, code: Int, timeout_ms: Int) -> BDD.Context
 BDD.then_stdout(ctx: BDD.Context, expected: String) -> BDD.Context
 BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
+BDD.then_stdout_includes(ctx: BDD.Context, expected: String) -> BDD.Context
+BDD.then_stderr_includes(ctx: BDD.Context, expected: String) -> BDD.Context
 ```
 
 - The context rule: most BDD calls take the scenario's `ctx` first and return
@@ -129,7 +132,13 @@ BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
   context does not run it.
 - `BDD.given_env` and `BDD.given_argument` (or the steps) come before
   `BDD.given_program` (`RUNTIME-BDD-CONTEXT` after): the variable and arguments
-  reach only that scenario's program. A scenario starts one program. A NUL
+  reach only that scenario's program. A scenario starts one program; a peer (an
+  SMTP server the program sends to) is started by a step with
+  `Process.spawn_captured` in the handler itself (not in a `Task.spawn`: a
+  program stops with the task that started it), kept with `BDD.keep` and read
+  through `BDD.call`; it stops with the scenario, also a failed one, and a read
+  that times out kills it. What the program needs from it goes in
+  `BDD.given_env` before `BDD.given_program`. A NUL
   byte or a name the VM owns (`AGENTICA_CHANNEL`, `AGENTICA_VM_METRICS`,
   `AGENTICA_VM_METRICS_FILE`, `UV_USE_IO_URING`) is `RUNTIME-BDD-CONTEXT`; on
   Windows `Path` and `PATH` are one name, so the second replaces the first,
