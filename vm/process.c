@@ -1007,21 +1007,26 @@ static char **child_args(agc_vm *vm, char *path, const agc_list *list) {
   return argv;
 }
 
-static bool env_prefix(const char *entry, const char *prefix) {
-  size_t n = strlen(prefix);
-  return strlen(entry) >= n && agc_proc_env_name_equal(entry, n, prefix, n);
+/* True when two names are one variable on this system: the adapter's order, so the sort of case_twins agrees. */
+static bool env_name_equal(const char *a, size_t asize, const char *b, size_t bsize) {
+  return agc_proc_env_name_compare(a, asize, b, bsize) == 0;
 }
 
-static bool own_env(bool drop_uring, const char *entry) {
-  bool uring = drop_uring && env_prefix(entry, URING_ENV);
-  return uring || env_prefix(entry, CHANNEL_PREFIX);
+/* True when the variable NAME is the one of PREFIX, a name with the "=" that ends it. */
+static bool env_prefix(const char *name, const char *prefix) {
+  return env_name_equal(name, strlen(name), prefix, strlen(prefix) - 1);
+}
+
+static bool own_env(bool drop_uring, const char *name) {
+  bool uring = drop_uring && env_prefix(name, URING_ENV);
+  return uring || env_prefix(name, CHANNEL_PREFIX);
 }
 
 /* One VM owns the metrics port and file (docs/future/28-vm-metrics.md 28.5): a child VM, or a runner the BDD
-   driver starts, would fight for them. Each name is matched with its "=", so the first never catches the second. */
-static bool metrics_env(const char *entry) {
-  return env_prefix(entry, METRICS_ENV) ||
-         env_prefix(entry, METRICS_FILE_ENV);
+   driver starts, would fight for them. Whole names are matched, so the first never catches the second. */
+static bool metrics_env(const char *name) {
+  return env_prefix(name, METRICS_ENV) ||
+         env_prefix(name, METRICS_FILE_ENV);
 }
 
 /* "NAME=VALUE" in malloc memory. */
@@ -1039,7 +1044,7 @@ static char *env_entry(const char *name, size_t name_size, const char *value, si
 static bool env_overridden(const char *host_name, const env_pair *pairs, size_t count) {
   size_t size = strlen(host_name);
   for (size_t k = 0; k < count; k++)
-    if (agc_proc_env_name_equal(host_name, size, pairs[k].name->data, pairs[k].name->bytes)) return true;
+    if (env_name_equal(host_name, size, pairs[k].name->data, pairs[k].name->bytes)) return true;
   return false;
 }
 
@@ -1054,9 +1059,9 @@ static char **child_env(bool drop_uring, const char *channel, const env_pair *pa
   if (!env) { uv_os_free_environ(host, count); agc_out_of_memory(); }
   size_t kept = 0;
   for (int k = 0; k < count; k++) {
-    char *entry = env_entry(host[k].name, strlen(host[k].name), host[k].value, strlen(host[k].value));
-    if (own_env(drop_uring, entry) || metrics_env(entry) || env_overridden(host[k].name, pairs, added)) free(entry);
-    else env[kept++] = entry;
+    const char *name = host[k].name;
+    if (own_env(drop_uring, name) || metrics_env(name) || env_overridden(name, pairs, added)) continue;
+    env[kept++] = env_entry(name, strlen(name), host[k].value, strlen(host[k].value));
   }
   uv_os_free_environ(host, count);
   for (size_t k = 0; k < added; k++)
@@ -1165,29 +1170,17 @@ static const char *const reserved_names[] = {URING_ENV, CHANNEL_PREFIX, METRICS_
 static bool reserved_env(const agc_string *name) {
   for (size_t k = 0; k < sizeof reserved_names / sizeof reserved_names[0]; k++) {
     size_t size = strlen(reserved_names[k]) - 1;
-    if (agc_proc_env_name_equal((const char *)name->data, name->bytes, reserved_names[k], size)) return true;
+    if (env_name_equal(name->data, name->bytes, reserved_names[k], size)) return true;
   }
   return false;
 }
 
-static unsigned char ascii_lower(char c) {
-  unsigned char b = (unsigned char)c;
-  return b >= 'A' && b <= 'Z' ? (unsigned char)(b + ('a' - 'A')) : b;
-}
-
-/* qsort order of names as a case-blind system compares them: ASCII letters in lower case, every other byte as it is.
-   Two names that agc_proc_env_name_equal finds equal there compare 0, so after the sort they are neighbours. Like that
-   function it folds ASCII only, so names that differ only in the case of a non-ASCII letter are not refused yet,
-   though Windows treats them as one (a known gap, see #1041). */
-static int compare_folded(const void *a, const void *b) {
+/* qsort order of names as the system compares them (agc_proc_env_name_compare). Two names that are one variable
+   compare 0, so after the sort they are neighbours. */
+static int compare_names(const void *a, const void *b) {
   const agc_string *x = *(const agc_string *const *)a;
   const agc_string *y = *(const agc_string *const *)b;
-  size_t size = x->bytes < y->bytes ? x->bytes : y->bytes;
-  for (size_t k = 0; k < size; k++) {
-    int cx = ascii_lower(x->data[k]), cy = ascii_lower(y->data[k]);
-    if (cx != cy) return cx - cy;
-  }
-  return (x->bytes > y->bytes) - (x->bytes < y->bytes);
+  return agc_proc_env_name_compare(x->data, x->bytes, y->data, y->bytes);
 }
 
 /* True when two of the COUNT names are one variable on a case-blind system: a sort and a pass over neighbours, so a big
@@ -1195,9 +1188,9 @@ static int compare_folded(const void *a, const void *b) {
 static bool case_twins(const env_pair *pairs, size_t count) {
   const agc_string **names = agc_alloc(agc_size_mul(count, sizeof *names));
   for (size_t k = 0; k < count; k++) names[k] = pairs[k].name;
-  qsort(names, count, sizeof *names, compare_folded);
+  qsort(names, count, sizeof *names, compare_names);
   for (size_t k = 1; k < count; k++)
-    if (agc_proc_env_name_equal(names[k - 1]->data, names[k - 1]->bytes, names[k]->data, names[k]->bytes)) return true;
+    if (env_name_equal(names[k - 1]->data, names[k - 1]->bytes, names[k]->data, names[k]->bytes)) return true;
   return false;
 }
 

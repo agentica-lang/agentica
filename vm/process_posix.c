@@ -41,8 +41,9 @@ const char *const *agc_proc_suffixes(void) {
   return none;
 }
 
-bool agc_proc_env_name_equal(const char *a, size_t asize, const char *b, size_t bsize) {
-  return asize == bsize && memcmp(a, b, asize) == 0;
+int agc_proc_env_name_compare(const char *a, size_t asize, const char *b, size_t bsize) {
+  int order = memcmp(a, b, asize < bsize ? asize : bsize);
+  return order ? order : (asize > bsize) - (asize < bsize);
 }
 
 bool agc_proc_env_case_blind(void) { return false; }

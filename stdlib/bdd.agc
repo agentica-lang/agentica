@@ -164,7 +164,8 @@ end
 ## Returns the context with the environment variable `name` set to `value` for the program that `given_program` starts
 ## later, on top of the environment `agentica test` runs in. The scenario's own environment does not change, and the
 ## variable does not reach any other scenario. Setting a name again replaces its value; on Windows, where names ignore
-## ASCII case, `"Path"` and `"PATH"` are one name. It must come before `given_program`. `name` must be nonempty and
+## case, `"Path"` and `"PATH"` are one name, and two names that differ only in the case of a letter outside ASCII
+## (`"Ä"`, `"ä"`) make `given_program` fail. It must come before `given_program`. `name` must be nonempty and
 ## cannot contain `=` or a NUL byte, `value` cannot contain a NUL byte, and the names the VM owns (`AGENTICA_CHANNEL`,
 ## `AGENTICA_VM_METRICS`, `AGENTICA_VM_METRICS_FILE`, `UV_USE_IO_URING`) cannot be set.
 export def given_env(ctx: Context, name: String, value: String) -> Context
@@ -683,8 +684,8 @@ def has_nul?(text: String) -> Bool
 end
 
 # True when two names are one variable for `Process.spawn_captured` on this system: byte for byte, except that on
-# Windows ASCII case is ignored, as `agc_proc_env_name_equal` in vm/ does. Non-ASCII case twins are a known gap there
-# (see #1041).
+# Windows ASCII case is ignored. Windows ignores the case of other letters too, by a table of its own that std/ cannot
+# read; such twins stay in the map, and the VM refuses them when `given_program` spawns (`case_twins` in vm/process.c).
 def same_env_name?(a: String, b: String) -> Bool
   if a == b
     return true

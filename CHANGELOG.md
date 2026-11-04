@@ -14,6 +14,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   (`CHECK-UNUSED-IMPORT`, at the alias); remove the import. An alias written
   without its member (`u: User`) is `CHECK-IMPORT-NAME`.
 
+### Fixed
+
+- On Windows a spawn `env` map with two names that differ only in the case of a
+  letter outside ASCII (`Ä`, `ä`) is now an error, as for ASCII letters.
+
 ## [0.23.0] - 2026-11-03
 
 ### Added
