@@ -3209,7 +3209,7 @@ CALLBACK_PARENT_SEND = """extern "%s"
 end
 
 def fills(x: Int) -> Int
-  sent = Process.parent_send(List.repeat("a", 1_000_000).join("") + "\\n", 30000)
+  _sent = Process.parent_send(List.repeat("a", 1_000_000).join("") + "\\n", 30000)
   return x
 end
 
