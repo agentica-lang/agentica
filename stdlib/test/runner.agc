@@ -280,7 +280,7 @@ def list_steps(config: Config, where: Report.Span) -> Listing
     return Listing.Broken(Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where))
   end
   p = spawned.unwrap!
-  Process.close_stdin(p, 5000)
+  _ = Process.close_stdin(p, 5000)
   deadline = Time.monotonic_ms() + 30000
   read = Child.read_records(p, deadline)
   if read.problem == "process: output exceeds 1048576 bytes"
@@ -407,7 +407,7 @@ def run_child(
     return Run(failed_at: 0, verdict: failure("RUNTIME-BDD-INFRA", spawned.message, item.steps[0].span))
   end
   p = spawned.unwrap!
-  Process.close_stdin(p, 5000)
+  _ = Process.close_stdin(p, 5000)
   deadline = started + 30000
   fields: Map[String, Json] = {
     "base": JSON.from(base),
@@ -441,7 +441,7 @@ def run_child(
     end
   end
   if run.failed_at == count
-    Process.channel_close(p, Child.left(deadline))
+    _ = Process.channel_close(p, Child.left(deadline))
     ending = await_exit(p, deadline, item.span)
     case ending
       Report.Verdict.Fail(_) -> run = Run(failed_at: count, verdict: ending)

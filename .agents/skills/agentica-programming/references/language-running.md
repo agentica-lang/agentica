@@ -20,6 +20,9 @@ program, the bytecode cache and the sandbox flags.
   output. A file that does not parse is left as it is (exit 1); a wrong call is
   `FMT-USAGE` (exit 2). The `[style]` of the nearest `agentica.toml` sets the
   width (default 119) and `blank_line_after_end`.
+- `agentica lint [PATH...] [--json] [--strict]` suggests style changes
+  (`LINT-` codes, never errors): it exits 0 with suggestions, 1 with `--strict`
+  and any; it only parses, so run `check` for correctness.
 - `--ai` prints a diagnostic as compact text, `--json` as one object (the last
   stderr line, after the program's own stderr). Put them before the file.
 - `agentica help NAME` prints a builtin's signature (unknown name: exit 2);

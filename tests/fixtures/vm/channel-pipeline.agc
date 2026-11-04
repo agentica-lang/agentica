@@ -15,7 +15,7 @@ end
 
 def produce(jobs: Channel[Int]) -> Void
   for i in 1..30
-    jobs.send(i, 5000)
+    _ = jobs.send(i, 5000)
   end
   jobs.close
 end
@@ -25,7 +25,7 @@ def work(lines: Lines) -> Int
   while true
     case lines.jobs.recv(5000)
       ok(n) ->
-        lines.results.send(Item(index: n, square: n * n), 5000)
+        _ = lines.results.send(Item(index: n, square: n * n), 5000)
         done += 1
       error(_) ->
         if lines.jobs.closed?

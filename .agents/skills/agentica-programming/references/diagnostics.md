@@ -212,6 +212,12 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
   the real one (`s.chars` says `s.split("")`, `to_string` says `to_s`).
 - `CHECK-UNUSED-VALUE`: the result of a builtin without effects is ignored
   (`xs.push(1)` alone), or of a struct update (`user.with(age: 31)` alone).
+- `CHECK-UNUSED-RESULT`: a `Result` is dropped, as a statement or the last
+  statement of a `Void` block, from any call: yours, a builtin
+  (`File.close`, `Channel.send`, `"3".to_i`), `Task.await`, `.call`
+  (`Result[Void]` too). Use `try` where it is allowed, a `case` on `ok(_)` and
+  `error(message)`, or `.unwrap!`; `_ = f(...)` drops it on purpose.
+  `IO.inspect(r)` is exempt, and `Task.spawn(&f)` is not a Result.
 - `CHECK-BLOCK-TYPE`: a block parameter has no type from the call (`do |x:
   Int|`).
 - `CHECK-LOOP-CONTROL`: `break` or `next` outside a `while`/`for` body, or

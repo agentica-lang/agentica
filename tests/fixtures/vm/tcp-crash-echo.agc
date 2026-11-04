@@ -6,7 +6,7 @@ end
 def echo(socket: Socket) -> Result[String]
   line = TCP.read_line(socket, 5000).unwrap!
   n = 100 / (line.length - 4)
-  TCP.send(socket, "#{line} #{n}\n", 5000)
+  _ = TCP.send(socket, "#{line} #{n}\n", 5000)
   TCP.close(socket)
   return ok(line)
 end

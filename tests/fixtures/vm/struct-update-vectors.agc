@@ -131,7 +131,7 @@ def check(line: String) -> Int
 end
 
 def main() -> Void
-  IO.gets()
+  _ = IO.gets()
   count = 0
   failed = 0
   running = true

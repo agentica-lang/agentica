@@ -829,7 +829,8 @@ def _save(program, result, steps=None):
 
 
 def write_goldens():
-    """Rewrite the .expected files of the selected fixtures (all of them without AGENTICA_FIXTURES)."""
+    """Rewrite the .expected files of the selected fixtures (all of them without AGENTICA_FIXTURES), except the
+    variant fixtures of the other family of systems (skip_reason)."""
     check_fixture_filter()
     vm_binary()
     for directory in (FIXTURE_DIR, RUNAWAY_DIR):
@@ -839,6 +840,12 @@ def write_goldens():
     with tempfile.TemporaryDirectory(prefix="agentica-goldens-") as scratch:
         work = Path(scratch).resolve()
         for program in selected(fixture_programs()):
+            # A -posix or -windows golden holds what its own family answers: another family would overwrite it with a
+            # wrong one (the errno text, the drive letter, a missing executable), which only its CI job notices.
+            reason = skip_reason(program.name)
+            if reason and reason.startswith("host-only:"):
+                sys.stderr.write("%s kept: %s\n" % (program.name, reason))
+                continue
             fixture = Fixture.of(program)
             bytecode = compile_agc(program, work / (program.stem + ".agcb"))
             total = total_steps(lambda limit: step_limited(run_fixture_vm(fixture, bytecode, limit, work)))

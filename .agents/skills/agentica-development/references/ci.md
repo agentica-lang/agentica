@@ -291,7 +291,9 @@ Skip rules, checked by the report:
   names on macOS). The reason starts with `host-only:`, names the capability and
   any counterpart test, and the (module, system) pair must be in
   `HOST_ONLY_ALLOWED`. A harness limit or a product gap is not host-only. A
-  golden named `-posix` or `-windows` is host-only on the other family; a golden
+  golden named `-posix` or `-windows` is host-only on the other family, and
+  `make goldens` leaves it alone there (refresh it by running it on that family:
+  `python3 -m tests.vm_diff_support` with `AGENTICA_FIXTURES=name`); a golden
   that differs by system is split into a shared part and those parts.
 - `known_issue(condition, number, reason)`: the promise holds but its test is
   missing, or the product has a bug. The reason is `known-issue: #N ...`, the

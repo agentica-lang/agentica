@@ -998,7 +998,7 @@ end
 export def whole(data: Bytes) -> Channel[Bytes]
   body: Channel[Bytes] = Channel.new(1)
   if not data.empty?
-    body.send(data, 0)
+    _ = body.send(data, 0)
   end
   body.close
   return body
@@ -1186,7 +1186,7 @@ def connection_headers(conn: Connection, headers: List[Header]) -> List[Header]
 
   case conn.login.recv(0)
     ok(login) ->
-      conn.login.send(login, 0)
+      _ = conn.login.send(login, 0)
       return add_login(login, headers)
     error(_) -> return headers
   end
@@ -1204,7 +1204,7 @@ end
 def offered?(conn: Connection) -> Bool
   case conn.login.recv(0)
     ok(login) ->
-      conn.login.send(login, 0)
+      _ = conn.login.send(login, 0)
       return login != ""
     error(_) -> return false
   end
@@ -1453,14 +1453,14 @@ def connect_to(where: Target, options: HttpClientOptions) -> Result[Connection]
   kept = options
   if options.proxy != ""
     proxy = try proxy_of(options)
-    login.send(proxy.login, 0)
+    _ = login.send(proxy.login, 0)
     kept = options.with(proxy: "http://#{host_authority(proxy.target.host, proxy.target.port)}")
   else
-    login.send("", 0)
+    _ = login.send("", 0)
   end
 
   cell: Channel[Exchange] = Channel.new(1)
-  cell.send(settled(IDLE, false), 0)
+  _ = cell.send(settled(IDLE, false), 0)
   return ok(
     Connection(
       socket: socket,
@@ -1650,15 +1650,15 @@ def take_exchange(conn: Connection) -> Result[Exchange]
 end
 
 def put_exchange(conn: Connection, exchange: Exchange) -> Void
-  conn.cell.send(exchange, 0)
+  _ = conn.cell.send(exchange, 0)
 end
 
 # Closes the socket and leaves the connection over, whatever it was doing. A cell that another call holds is left to
 # it: its next step fails on the closed socket.
 def end_connection(conn: Connection) -> Void
   TCP.close(conn.socket)
-  conn.cell.recv(0)
-  conn.cell.send(settled(OVER, true), 0)
+  _ = conn.cell.recv(0)
+  _ = conn.cell.send(settled(OVER, true), 0)
 end
 
 # The request head and body written and the response head read: the connection is now in the response, or ended.
@@ -2122,7 +2122,7 @@ def start_server(listener: Listener, app: App, options: HttpServerOptions) -> Ht
   # The `done` of every request with no body. It ends here, in the caller's task: `close_server` cancels the
   # server's tasks, and a task of its own could end cancelled before it ran.
   ended = Task.spawn(&no_body)
-  Task.await(ended)
+  _ = Task.await(ended)
   return HttpWire.server(listener, options.max_connections) do |server|
     accept_all(Service(server: server, app: app, options: options, ended: ended))
   end
@@ -2246,7 +2246,7 @@ def answer_app(reading: Reading, service: Service) -> Sent
   whole = Result.ok?(past)
   sent = send_answer(socket, request, result, whole, Result.unwrap_or(past, NO_BYTES), options)
   if whole
-    Task.await(feeder)
+    _ = Task.await(feeder)
     return sent
   end
   Task.cancel(feeder)
@@ -2905,7 +2905,7 @@ def feed_request(feeding: Feeding) -> Result[Void]
   outcome = feed_body(feeding)
   case outcome
     ok(past) ->
-      feeding.rest.send(past, 0)
+      _ = feeding.rest.send(past, 0)
       feeding.pieces.close
       return ok()
     error(message) ->
@@ -3400,17 +3400,17 @@ def watch(watching: Watch) -> Result[Bytes]
     case TCP.recv_bytes(watching.socket, READ_BYTES, WATCH_MS)
       ok(data) ->
         if data.empty?
-          watching.left.send(true, 0)
+          _ = watching.left.send(true, 0)
           watching.body.close
           return ok(data)
         end
         # Set before the test: a pump that ends the stream in between must see these bytes as early, not as a request.
-        watching.sent.send(true, 0)
+        _ = watching.sent.send(true, 0)
         if watching.body.closed?
           return ok(data)
         end
       error(message) ->
-        watching.left.send(true, 0)
+        _ = watching.left.send(true, 0)
         watching.body.close
         return error(message)
     end
@@ -3453,7 +3453,7 @@ def send_response(
 end
 
 def failed(socket: Socket, request: HttpRequest, timeout: Int) -> Void
-  write_response(
+  _ = write_response(
     socket,
     request,
     HttpResponse(status: 500, headers: [Header(name: "Connection", value: "close")], body: NO_BYTES),
@@ -3476,7 +3476,7 @@ def supervise_pool(client: HttpClient) -> Void
   jobs = HttpWire.jobs(client)
   options = HttpWire.options(client)
   pool = Pool(client: client, options: options, jobs: jobs, origins: {}, inboxes: {}, busy: {}, next_id: 1)
-  Task.await(Task.spawn(&run_pool, pool))
+  _ = Task.await(Task.spawn(&run_pool, pool))
   jobs.close
   # Connections still open or in their handshake keep the context until they end.
   HttpWire.drop_tls(client)
@@ -3556,7 +3556,7 @@ def place(pool: Pool, job: HttpWire.Job) -> Placed
   # The first job waits in the new worker's inbox, so no task keeps it (and its body) for the life of the worker.
   inbox: Channel[HttpWire.Job] = Channel.new(1)
   # A new channel with room for one: this send cannot fail.
-  inbox.send(job, 0)
+  _ = inbox.send(job, 0)
   notice = job.with(head: "", body: NO_BYTES, worker: id, kept: false)
   worker = Worker(id: id, client: pool.client, options: pool.options, jobs: pool.jobs, inbox: inbox, notice: notice)
   Task.spawn(&supervise, worker)
@@ -3582,7 +3582,7 @@ end
 def gone(pool: Pool, message: HttpWire.Job) -> Pool
   id = message.worker
   case Map.get(pool.busy, id)
-    some(reply) -> reply.send(error(FAILED), 0)
+    some(reply) -> _ = reply.send(error(FAILED), 0)
     none -> id = id
   end
   origin = origin_of(pool, message.origin)
@@ -3635,11 +3635,11 @@ end
 def shut_pool(pool: Pool) -> Void
   for origin in Map.values(pool.origins)
     for job in List.drop(origin.waiting, origin.front)
-      job.reply.send(error(CLIENT_CLOSED), 0)
+      _ = job.reply.send(error(CLIENT_CLOSED), 0)
     end
   end
   for reply in Map.values(pool.busy)
-    reply.send(error(CLIENT_CLOSED), 0)
+    _ = reply.send(error(CLIENT_CLOSED), 0)
   end
   for inbox in Map.values(pool.inboxes)
     inbox.close
@@ -3653,7 +3653,7 @@ def supervise(worker: Worker) -> Void
     ok(_) -> return
     error(_) ->
       worker.inbox.close
-      worker.jobs.send(worker.notice, OWNER_WAIT_MS)
+      _ = worker.jobs.send(worker.notice, OWNER_WAIT_MS)
   end
 end
 
@@ -3666,7 +3666,7 @@ def work(worker: Worker) -> Result[Void]
     # Once the client is closed (even while the owner still has jobs to drain), a job is not sent: it is answered
     # with CLIENT_CLOSED, here or by shut_pool, whichever comes first (the second finds the reply channel full).
     if worker.jobs.closed?
-      job.reply.send(error(CLIENT_CLOSED), 0)
+      _ = job.reply.send(error(CLIENT_CLOSED), 0)
       close_socket(socket)
       return ok()
     end
@@ -3674,7 +3674,7 @@ def work(worker: Worker) -> Result[Void]
     # The caller gave up on the reply (cancelled, or its wait timed out): the connection is closed, not pooled, so a
     # timed-out call leaves no connection behind (site/content/library/concurrency/task.md, Task.map).
     awaited = HttpWire.awaited?(job.reply)
-    job.reply.send(done.answer, 0)
+    _ = job.reply.send(done.answer, 0)
     # The idle wait below keeps job only for its origin and reply.
     job = job.with(head: "", body: NO_BYTES)
     if not done.kept or not awaited
@@ -4032,7 +4032,7 @@ end
 
 # Closes both handles after a failure and reports it; the partial file stays for inspection.
 def fail_download(socket: Socket, out: FileHandle, deadline: Int, message: String) -> Result[Download]
-  File.close(out, larger(deadline - Time.monotonic_ms(), 1))
+  _ = File.close(out, larger(deadline - Time.monotonic_ms(), 1))
   TCP.close(socket)
   return error(message)
 end

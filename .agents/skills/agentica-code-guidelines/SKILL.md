@@ -20,6 +20,10 @@ rules are review-only.
 - `site/content/style.md`: the short version for people, on the site; change
   it together with these rules.
 
+`agentica lint` suggests the rules the syntax tree shows (`LINT-` codes; see
+`site/content/style.md`); it never fails unless `--strict`. A new lint rule
+needs its rule in `compiler/lint/`, a test and a row in `site/content/cli.md`.
+
 Change style only in code you touch. Restyle untouched code separately.
 
 ## Layout

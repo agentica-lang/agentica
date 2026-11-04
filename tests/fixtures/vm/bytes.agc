@@ -61,5 +61,5 @@ def main() -> Void
 
   nested = [made]
   puts(nested.inspect)
-  Test.eq("abc".bytes, "abc".bytes)
+  _ = Test.eq("abc".bytes, "abc".bytes)
 end

@@ -7,7 +7,7 @@ end
 def main() -> Void
   dir: String = System.args()[0]
   file = Result.unwrap!(Path.join([dir, "plain.txt"]))
-  File.write_text(file, "data", 60000)
+  _ = File.write_text(file, "data", 60000)
   device = {"windows": "NUL"}.get(System.os(), "/dev/null")
   show("dir", File.stat(dir, 60000))
   show("file", File.stat(file, 60000))

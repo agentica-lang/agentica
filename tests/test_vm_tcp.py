@@ -126,7 +126,7 @@ def main() -> Void
   Task.await(Task.spawn(&dial, %d))
   puts("ready")
   IO.flush()
-  IO.gets()
+  _ = IO.gets()
 end
 """
 
@@ -435,7 +435,7 @@ def main() -> Void
   end
   puts(Task.pending_count())
   IO.flush()
-  IO.gets()
+  _ = IO.gets()
 end
 """
 
@@ -465,7 +465,7 @@ def main() -> Void
   TCP.close_listener(listener)
   puts("served")
   IO.flush()
-  IO.gets()
+  _ = IO.gets()
 end
 """
 
@@ -648,7 +648,7 @@ def main() -> Void
   listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
   puts(TCP.local_port(listener))
   IO.flush()
-  IO.gets()
+  _ = IO.gets()
   count = 0
   while count < %d
     answer(Result.unwrap!(TCP.accept(listener, 5000)))
@@ -657,7 +657,7 @@ def main() -> Void
   IO.inspect(TCP.accept(listener, 50))
   puts(Task.await(Task.spawn(&parent, listener)).ok?)
   IO.flush()
-  IO.gets()
+  _ = IO.gets()
   TCP.close_listener(listener)
   IO.inspect(TCP.accept(listener, 1000))
 end

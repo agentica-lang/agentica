@@ -638,7 +638,7 @@ CHILD_STDERR_PROGRAM = """\
 def main() -> Void
   %s
   child = Result.unwrap!(Process.spawn(%s, ["-c", "import sys; sys.stderr.buffer.write(b'e' * 200000)"], 60000))
-  Process.wait(child, 60000)
+  _ = Process.wait(child, 60000)
   %s
 end
 
@@ -743,7 +743,7 @@ def ticker(child: Process) -> Int
   while n < 8
     start = Time.monotonic_ms()
     Task.sleep(100)
-    Process.wait(child, 100)
+    _ = Process.wait(child, 100)
     took = Time.monotonic_ms() - start
     if took > slowest
       slowest = took
@@ -877,7 +877,7 @@ def test_a_reader_that_leaves_once_only_child_bytes_are_pending_keeps_the_exit_c
     # The warn is written while the child streams; the reader leaves later, at 3 MB, so only the child's bytes are lost.
     program = STREAMING_PROGRAM.replace("  start = Time.monotonic_ms()\n", "").replace(
         '  puts("took #{Time.monotonic_ms() - start}")\n', "").replace(
-        "IO.inspect(Process.wait(child, 60000))", "Process.wait(child, 60000)")
+        "IO.inspect(Process.wait(child, 60000))", "_ = Process.wait(child, 60000)")
     summary, out, _ = run_case(tmp_path, "streaming-gone", program, peer=["--merge", "--chunk", "8192", "--pause",
                                                                           "0.002", "--close-after", "3000000"])
     assert STREAMING_WARN.encode() + b"\n" in out

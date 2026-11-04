@@ -15,7 +15,7 @@ export def write_bytes(path: String, bytes: Bytes) -> Result[Void]
   while rest.size > 0
     written = File.write_bytes(out, rest.take(PIECE_BYTES), IO_TIMEOUT)
     if !written.ok?
-      File.close(out, IO_TIMEOUT)
+      _ = File.close(out, IO_TIMEOUT)
       return written
     end
 
@@ -37,7 +37,7 @@ export def write_text(path: String, text: String) -> Result[Void]
 
     written = File.write(out, text.slice(at, size), IO_TIMEOUT)
     if !written.ok?
-      File.close(out, IO_TIMEOUT)
+      _ = File.close(out, IO_TIMEOUT)
       return written
     end
 

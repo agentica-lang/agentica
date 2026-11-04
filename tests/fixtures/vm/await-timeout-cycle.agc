@@ -24,15 +24,15 @@ end
 def main() -> Void
   mine: Channel[Task[Result[Int]]] = Channel.new(1)
   one = Task.spawn(&follow, mine)
-  mine.send(one, 5000)
+  _ = mine.send(one, 5000)
   report("self", Task.await(one))
 
   left: Channel[Task[Result[Int]]] = Channel.new(1)
   right: Channel[Task[Result[Int]]] = Channel.new(1)
   a = Task.spawn(&follow_plain, left)
   b = Task.spawn(&follow, right)
-  left.send(b, 5000)
-  right.send(a, 5000)
+  _ = left.send(b, 5000)
+  _ = right.send(a, 5000)
   report("a", Task.await(a))
   report("b", Task.await(b))
 
@@ -40,8 +40,8 @@ def main() -> Void
   second: Channel[Task[Result[Int]]] = Channel.new(1)
   c = Task.spawn(&follow, first)
   d = Task.spawn(&follow, second)
-  first.send(d, 5000)
-  second.send(c, 5000)
+  _ = first.send(d, 5000)
+  _ = second.send(c, 5000)
   report("c", Task.await(c))
   report("d", Task.await(d))
 end

@@ -4,7 +4,7 @@ struct Pool[T]
   items: List[T]
 end
 
-## The first item of xs, or fallback when xs is empty.
+# The first item of xs, or fallback when xs is empty.
 def first_or[T](xs: List[T], fallback: T) -> T
   if xs.length == 0
     return fallback
@@ -13,7 +13,7 @@ def first_or[T](xs: List[T], fallback: T) -> T
   return xs[0]
 end
 
-## The item with the largest key, or none when xs is empty.
+# The item with the largest key, or none when xs is empty.
 def max_by[T](xs: List[T], key: Fn[T, Int]) -> Optional[T]
   if xs.length == 0
     return none
@@ -32,7 +32,7 @@ def max_by[T](xs: List[T], key: Fn[T, Int]) -> Optional[T]
   return some(best)
 end
 
-## Runs body on the first item of the pool, or fails when the pool is empty.
+# Runs body on the first item of the pool, or fails when the pool is empty.
 def with[T, R](pool: Pool[T], body: Fn[T, Result[R]]) -> Result[R]
   if pool.items.length == 0
     return error("empty pool")

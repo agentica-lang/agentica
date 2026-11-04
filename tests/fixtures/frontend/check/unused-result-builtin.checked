@@ -1,0 +1,1 @@
+ERROR CHECK-UNUSED-RESULT 74:3:3-96:3:25 "the Result of File.close is not used, so its error is lost" "handle the Result: a case on ok(_) and error(message), or .unwrap!; or discard it with _ = File.close(file, 1000)" signature="main() -> Void" file="unused-result-builtin.agc"

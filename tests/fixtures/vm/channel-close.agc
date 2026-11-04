@@ -7,9 +7,9 @@ end
 
 def main() -> Void
   ch: Channel[Int] = Channel.new(4)
-  ch.send(1, 100)
-  ch.send(2, 100)
-  ch.send(3, 100)
+  _ = ch.send(1, 100)
+  _ = ch.send(2, 100)
+  _ = ch.send(3, 100)
   puts("closed? #{ch.closed?}, empty? #{ch.empty?}")
   ch.close
   ch.close

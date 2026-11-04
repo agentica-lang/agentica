@@ -75,9 +75,11 @@ for `*_test.agc` files; a run of a test file with no `main` is `CHECK-MAIN`.
 - `Test.ok?(r)` and `Test.error?(r)` check a Result's tag: `expected ok; actual
   error("...")`, `expected an error; actual ok(0)`. `Test.assert(cond, message)`
   fails with `message`.
-- A failed assertion counts against its test even when its Result is dropped
-  (`Test.eq(a, b)` as a statement), including one made in a task the test
-  spawned. Outside a test an assertion only returns its Result.
+- A failed assertion counts against its test even when its Result is
+  discarded (`_ = Test.eq(a, b)`), including one made in a task the test
+  spawned. A bare assertion followed by another statement is
+  `CHECK-UNUSED-RESULT`: `try` it, or leave it as the last statement of a test
+  block. Outside a test an assertion only returns its Result.
 - Names must be non-empty and different in a file (`RUNTIME-TEST-NAME` at the
   `Test.test` call). Call `Test.run` from `main` itself: in a test or a spawned
   task it is `RUNTIME-TEST-RUN`. `Test.run` never returns; run directly it

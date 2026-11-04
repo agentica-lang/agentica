@@ -148,7 +148,7 @@ def main() -> Void
     Await.TimedOut -> puts("still working")
   end
 
-  inbox.send(21, 1000)
+  _ = inbox.send(21, 1000)
   case Task.await(task, 10000)
     Await.Done(n) -> puts("done #{n}")
     Await.TimedOut -> puts("gave up")
@@ -362,7 +362,7 @@ end
 def main() -> Void
   inbox: Channel[Int] = Channel.new(4)
   keeper = Task.spawn(&keep, inbox)
-  inbox.send(5, 1000)
+  _ = inbox.send(5, 1000)
   Task.cancel(keeper)
   puts(Task.await(keeper))
 end

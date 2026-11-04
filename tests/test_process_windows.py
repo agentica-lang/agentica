@@ -20,7 +20,7 @@ PROGRAM = """\
 def main() -> Void
   args = System.args()
   p = Result.unwrap!(Process.%s(args[0], [args[1], "hold"]%s, 5000))
-  Process.read_line(p, 5000)
+  _ = Process.read_line(p, 5000)
   Process.close(p)
   Task.sleep(1500)
 end

@@ -1,5 +1,5 @@
 program 0:1:1-31:1 entry=3 globals=0
-source 0 "tasks.agc" chars=568
+source 0 "tasks.agc" chars=572
 enum "Await" v0="Done"/1 v1="TimedOut"/0
 fn0 "work" params=1 captures=0 slots=3 @ 0:1:1-4:1
     step @ 0:2:3-3:1
@@ -117,14 +117,14 @@ fn3 "main" params=0 captures=0 slots=7 entry @ 0:19:1-31:1
     call-builtin r3 "Channel.new" 1 @ 0:25:22-25:36 0:25:34-25:35
     move r2 r3 @ 0:25:22-25:36
     step @ 0:26:3-27:1
-    step @ 0:26:3-26:18
-    step @ 0:26:3-26:5
-    move r3 r2 @ 0:26:3-26:5
-    step @ 0:26:11-26:12
-    const r4 int:1 @ 0:26:11-26:12
-    step @ 0:26:14-26:17
-    const r5 int:100 @ 0:26:14-26:17
-    call-builtin r3 "Channel.send" 3 @ 0:26:3-26:18 0:26:3-26:5 0:26:11-26:12 0:26:14-26:17
+    step @ 0:26:7-26:22
+    step @ 0:26:7-26:9
+    move r3 r2 @ 0:26:7-26:9
+    step @ 0:26:15-26:16
+    const r4 int:1 @ 0:26:15-26:16
+    step @ 0:26:18-26:21
+    const r5 int:100 @ 0:26:18-26:21
+    call-builtin r3 "Channel.send" 3 @ 0:26:7-26:22 0:26:7-26:9 0:26:15-26:16 0:26:18-26:21
     step @ 0:27:3-28:1
     step @ 0:27:3-27:29
     step @ 0:27:8-27:28

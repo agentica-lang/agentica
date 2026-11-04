@@ -87,7 +87,7 @@ end
 def repeat(path: String, times: Int) -> Void
   count = 0
   while count < times
-    scan(path)
+    _ = scan(path)
     count = count + 1
   end
 end

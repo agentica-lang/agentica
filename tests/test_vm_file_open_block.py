@@ -26,7 +26,7 @@ def main() -> Void
     ok(args.size - 1)
   end
   puts("written #{r}")
-  gets
+  _ = gets
   puts("done")
 end
 """

@@ -112,7 +112,7 @@ def read_bytes(path: String) -> Result[Bytes]
   while !finished
     got = File.read_bytes(handle, CHUNK_BYTES, STAT_TIMEOUT_MS)
     if !got.ok?
-      File.close(handle, STAT_TIMEOUT_MS)
+      _ = File.close(handle, STAT_TIMEOUT_MS)
       return error(got.message)
     end
 
@@ -120,7 +120,7 @@ def read_bytes(path: String) -> Result[Bytes]
     parts = parts.push(got.unwrap!)
   end
 
-  File.close(handle, STAT_TIMEOUT_MS)
+  _ = File.close(handle, STAT_TIMEOUT_MS)
   return ok(Bytes.concat(parts))
 end
 

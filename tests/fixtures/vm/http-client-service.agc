@@ -9,7 +9,7 @@ def serve(listener: Listener) -> String
     case TCP.read_line(socket, 5000)
       ok(line) ->
         if line == ""
-          TCP.send(socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", 5000)
+          _ = TCP.send(socket, "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok", 5000)
         end
       error(message) -> ended = message
     end
@@ -20,7 +20,7 @@ end
 
 # Makes a client, hands it over and crashes: the client is not the crashed task's.
 def make_and_crash(clients: Channel[HttpClient]) -> Result[Void]
-  clients.send(Result.unwrap!(HTTP.client()), 5000)
+  _ = clients.send(Result.unwrap!(HTTP.client()), 5000)
   failed: Result[Int] = error("the maker crashes")
   Result.unwrap!(failed)
   return ok()

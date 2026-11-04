@@ -10,6 +10,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `agentica lint [PATH...] [--json] [--strict]` suggests changes from the
+  style guide with `LINT-` codes (a String grown by `+` in a loop, a Bool
+  compared with `true`, a one-step pipe, a private `##` doc, an `if` chain on
+  one value, and more). A suggestion is not an error: it exits 0, and
+  `--strict` exits 1 for CI.
 - `std/bdd`: the steps `stdout includes:` and `stderr includes:` (and
   `BDD.then_stdout_includes`, `BDD.then_stderr_includes`) check a substring
   of the output after the program exits. The BDD page shows how a scenario
@@ -54,6 +59,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   or a pattern slot. A function parameter is never reported, and `count += 1`
   alone is no read. The query commands (`type-at`, `refs`, `symbol`) do not
   report it in the file they are asked about.
+- **Breaking:** a `Result` that is dropped, from any call (yours, a builtin,
+  `Task.await`; `Result[Void]` too), is an error (`CHECK-UNUSED-RESULT`). Use
+  `try`, a `case` or `.unwrap!`, or write `_ = f()` to drop it on purpose. A
+  pure builtin that gives a `Result` (`s.to_i`) is this error instead of
+  `CHECK-UNUSED-VALUE`.
 
 ### Fixed
 

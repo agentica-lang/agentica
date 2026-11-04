@@ -16,8 +16,8 @@ When the checker knows the fix, the diagnostic ends with a `= help:` line.
 
 There are no warnings: a program that the compiler accepts has nothing to
 report, and what would be a warning in another language is an error with its
-own code (for example `CHECK-UNUSED-IMPORT`, `CHECK-UNREACHABLE-CODE` and
-`CHECK-UNUSED-VARIABLE`).
+own code (for example `CHECK-UNUSED-IMPORT`, `CHECK-UNREACHABLE-CODE`,
+`CHECK-UNUSED-VARIABLE` and `CHECK-UNUSED-RESULT`).
 
 A compile-time diagnostic names the first file as you typed it and an imported
 file by its absolute path. A runtime diagnostic and the frames of its stack name
@@ -115,6 +115,11 @@ file), located at `<arguments>` as `QUERY-USAGE` is, with exit 2. A file named
 in the call is formatted whatever its extension, as `check` does. `FMT-INTERNAL` is a file
 whose formatted text would not keep its tree or its comments; the file is left
 as it is, and the command exits 1, as for a file that does not parse.
+
+`LINT-` is the prefix of `agentica lint`. A `LINT-` code is a suggestion from
+the style guide, not an error: the program is valid without it, and the command
+exits 0 unless `--strict` is given. A suggestion has a source span and a help
+that names the form to write.
 
 Names and forms from other languages get a `help` that names the Agentica form
 (`len(x)`, `elif`, `let x = 5`, `Mutex.new`, `Agent.start_link`, `Thread.new`, a
@@ -286,6 +291,10 @@ is a rule:
   never read (`CHECK-UNUSED-VARIABLE`)
   Help: remove it, or name it `_count` if it is unused on purpose; `for _ in
   0...n`, `|_, i|`, `error(_)`; for a `Result`, handle it or write `_ = f(...)`
+- a call whose `Result` is dropped (`save()`, `File.close(f, 1000)`,
+  `"3".to_i`) (`CHECK-UNUSED-RESULT`)
+  Help: handle the Result: `try save()` where `try` is allowed, a `case` on
+  `ok(_)` and `error(message)`, or `.unwrap!`; or discard it with `_ = save()`
 - a loop, `if` or `case` as the last statement (`CHECK-MISSING-RETURN`)
   Help: a loop is not a return; each branch or arm must return, or return after
   it

@@ -1,9 +1,12 @@
 {
-  "exit": 1,
-  "code": "RUNTIME-UNWRAP-ERROR",
-  "steps": 13,
+  "exit": 0,
+  "code": null,
+  "steps": 47,
   "stdout": [
-    "ok(<Process>)",
+    "error(\"process: executable is unavailable\")",
+    "ok(0)",
+    "true",
+    "\"\"",
     ""
   ],
   "stderr": []

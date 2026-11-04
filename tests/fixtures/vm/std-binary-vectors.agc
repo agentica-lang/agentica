@@ -203,7 +203,7 @@ def check(t: Tables, line: String) -> Int
 end
 
 def main() -> Void
-  IO.gets()
+  _ = IO.gets()
   t = tables()
   count = 0
   failed = 0

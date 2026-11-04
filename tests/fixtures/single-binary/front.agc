@@ -88,6 +88,6 @@ def program(file: String) -> Bytes
     parts = parts.push(chunk)
     chunk = File.read_bytes(handle, 1048576, 5000).unwrap!
   end
-  File.close(handle, 5000)
+  _ = File.close(handle, 5000)
   return Bytes.concat(parts)
 end

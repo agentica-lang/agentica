@@ -21,8 +21,8 @@ end
 # Sends a piece, then waits for main to read it before the next one.
 def gated(feed: Feed) -> Void
   for piece in ["one".bytes, "two".bytes]
-    feed.body.send(piece, 5000)
-    feed.hub.gate.recv(5000)
+    _ = feed.body.send(piece, 5000)
+    _ = feed.hub.gate.recv(5000)
   end
   finish(feed)
 end
@@ -30,7 +30,7 @@ end
 # Waits a moment first, so the handler has returned with the channel still open.
 def short(feed: Feed) -> Void
   Task.sleep(20)
-  feed.body.send("a".bytes, 5000)
+  _ = feed.body.send("a".bytes, 5000)
   finish(feed)
 end
 
@@ -47,8 +47,8 @@ end
 # What a producer says once the channel is closed: a send fails.
 def say_stopped(feed: Feed) -> Void
   case feed.body.send("x".bytes, 0)
-    error(message) -> feed.hub.said.send("producer stopped: #{message}", 5000)
-    ok(_) -> feed.hub.said.send("producer was not stopped", 5000)
+    error(message) -> _ = feed.hub.said.send("producer stopped: #{message}", 5000)
+    ok(_) -> _ = feed.hub.said.send("producer was not stopped", 5000)
   end
 end
 
@@ -63,8 +63,8 @@ end
 # Sends one piece, waits until main has read it (the gate), so that its own recv cannot take the piece from the server,
 # and then waits for the close.
 def until_closed(feed: Feed) -> Void
-  feed.body.send("x".bytes, 5000)
-  feed.hub.gate.recv(5000)
+  _ = feed.body.send("x".bytes, 5000)
+  _ = feed.hub.gate.recv(5000)
   wait_closed(feed)
   say_stopped(feed)
 end
@@ -72,9 +72,9 @@ end
 # Pieces that are not UTF-8, and one that is text.
 def binary(feed: Feed) -> Void
   Task.sleep(20)
-  feed.body.send(Bytes.from_list([255, 0, 128]).unwrap!, 5000)
-  feed.body.send("".bytes, 5000)
-  feed.body.send("ok".bytes, 5000)
+  _ = feed.body.send(Bytes.from_list([255, 0, 128]).unwrap!, 5000)
+  _ = feed.body.send("".bytes, 5000)
+  _ = feed.body.send("ok".bytes, 5000)
   finish(feed)
 end
 
@@ -87,19 +87,19 @@ def large(feed: Feed) -> Void
   while piece.size < 524288
     piece = piece + piece
   end
-  feed.body.send(piece.take(524287) + "\n012345678".bytes, 5000)
+  _ = feed.body.send(piece.take(524287) + "\n012345678".bytes, 5000)
   finish(feed)
 end
 
 # Sends one piece and then nothing at all: it can only learn that the client left by looking at the channel.
 def quiet(feed: Feed) -> Void
-  feed.body.send("q".bytes, 5000)
-  feed.hub.gate.recv(5000)
+  _ = feed.body.send("q".bytes, 5000)
+  _ = feed.hub.gate.recv(5000)
   wait_closed(feed)
   if feed.body.closed?
-    feed.hub.said.send("quiet producer saw the close", 5000)
+    _ = feed.hub.said.send("quiet producer saw the close", 5000)
   else
-    feed.hub.said.send("quiet producer woke with the channel open", 5000)
+    _ = feed.hub.said.send("quiet producer woke with the channel open", 5000)
   end
 end
 
@@ -107,7 +107,7 @@ end
 def slow(feed: Feed) -> Void
   for piece in ["a".bytes, "b".bytes, "c".bytes]
     Task.sleep(700)
-    feed.body.send(piece, 5000)
+    _ = feed.body.send(piece, 5000)
   end
   finish(feed)
 end
@@ -233,9 +233,9 @@ def main() -> Void
   ask(socket, "GET", "/gated", "")
   puts(head_of(socket))
   puts(chunk_of(socket))
-  hub.gate.send(true, 5000)
+  _ = hub.gate.send(true, 5000)
   puts(chunk_of(socket))
-  hub.gate.send(true, 5000)
+  _ = hub.gate.send(true, 5000)
   puts(chunk_of(socket))
   ask(socket, "GET", "/whole", "")
   puts(head_of(socket))
@@ -303,7 +303,7 @@ def main() -> Void
   ask(socket, "GET", "/leave", "")
   puts(head_of(socket))
   puts(chunk_of(socket))
-  hub.gate.send(true, 5000)
+  _ = hub.gate.send(true, 5000)
   TCP.close(socket)
   puts(hub.said.recv(5000).unwrap!)
   socket = connect(port)
@@ -317,7 +317,7 @@ def main() -> Void
   ask(socket, "GET", "/quiet", "")
   puts(head_of(socket))
   puts(chunk_of(socket))
-  hub.gate.send(true, 5000)
+  _ = hub.gate.send(true, 5000)
   TCP.close(socket)
   puts(hub.said.recv(5000).unwrap!)
   socket = connect(port)
@@ -328,7 +328,7 @@ def main() -> Void
   TCP.send(socket, "GET /quiet HTTP/1.1\r\nHost: x\r\n\r\nG", 5000).unwrap!
   puts(head_of(socket))
   puts(chunk_of(socket))
-  hub.gate.send(true, 5000)
+  _ = hub.gate.send(true, 5000)
   TCP.close(socket)
   puts(hub.said.recv(5000).unwrap!)
   socket = connect(port)
@@ -363,7 +363,7 @@ def main() -> Void
   ask(socket, "GET", "/leave", "")
   puts(head_of(socket))
   puts(chunk_of(socket))
-  hub.gate.send(true, 5000)
+  _ = hub.gate.send(true, 5000)
   HTTP.close_server(server)
   IO.inspect(HTTP.wait(server))
   # The pieces already sent still arrive; then the connection ends.

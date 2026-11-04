@@ -747,10 +747,10 @@ end
 
 def main() -> Void
   _writer = Task.spawn(&hold_stream, 0)
-  IO.read_bytes(1)
+  _ = IO.read_bytes(1)
   {buffer}({free_stream_id})
   puts("done")
-  File.write_text("{main_marker}", "after puts", 2000)
+  _ = File.write_text("{main_marker}", "after puts", 2000)
   {ending}
 end
 '''.format(library=literal(library), hold_signature=hold_signature, hold_call=hold_call, buffer=buffer,
@@ -1988,7 +1988,7 @@ def main() -> Void
   end
   peer_set_flag()
   for task in holders
-    Task.await(task)
+    _ = Task.await(task)
   end
   Native.close(res)
   Task.sleep(50)
@@ -2606,7 +2606,9 @@ end
     ("open(slot(api(), OPEN), 1, Native.memory_pointer(8))", "RUNTIME-NATIVE-BOUNDS"),
 ])
 def test_a_null_function_pointer_is_refused(tmp_path, peer, call, code):
-    main = "def main() -> Void\n  %s\n  puts(peer_api_releases())\nend\n" % call
+    # `open` gives a Result, which a statement must not drop.
+    drop = "_ = " if call.startswith("open(") else ""
+    main = "def main() -> Void\n  %s%s\n  puts(peer_api_releases())\nend\n" % (drop, call)
     refused_at_extern(tmp_path, peer, API_EXTERN, main, call, code)
 
 

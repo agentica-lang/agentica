@@ -28,7 +28,7 @@ def backed_up(feed: Feed) -> Void
         more = false
     end
   end
-  feed.said.send("producer was held back: #{sent < 2000}, then: #{failure}", 5000)
+  _ = feed.said.send("producer was held back: #{sent < 2000}, then: #{failure}", 5000)
   feed.body.close
 end
 

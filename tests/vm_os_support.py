@@ -24,7 +24,7 @@ def main() -> Void
   Result.unwrap!(Path.rename(fresh, base + "/final-dir", 5000))
   puts("renamed")
   IO.flush()
-  IO.gets()
+  _ = IO.gets()
 end
 """
 
@@ -67,7 +67,7 @@ def main() -> Void
     puts("closed")
   end
   IO.flush()
-  IO.gets()
+  _ = IO.gets()
 end
 """
 
