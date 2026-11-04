@@ -399,10 +399,12 @@ typedef struct {
 } agc_function;
 
 /* A JSON field type. AGC_TYPE_JSON_FIELD is JsonField[T], an optional and nullable struct field (arg is T), and
-   AGC_TYPE_OPTIONAL is Optional[T] (null or T, anywhere a type is); both point to an earlier type like List and Map. */
+   AGC_TYPE_OPTIONAL is Optional[T] (null or T, anywhere a type is); both point to an earlier type like List and Map.
+   AGC_TYPE_ENUM is a user enum (arg is its index), like STRUCT a leaf of the table: its payload types are in the
+   variants (agc_enum_def.payload_types). */
 typedef enum {
   AGC_TYPE_INT, AGC_TYPE_FLOAT, AGC_TYPE_BOOL, AGC_TYPE_STRING, AGC_TYPE_LIST, AGC_TYPE_MAP, AGC_TYPE_STRUCT,
-  AGC_TYPE_JSON_FIELD, AGC_TYPE_OPTIONAL
+  AGC_TYPE_JSON_FIELD, AGC_TYPE_OPTIONAL, AGC_TYPE_ENUM
 } agc_type_kind;
 
 /* The variants of the builtin JsonField enum, in table order from agc_program.json_field. */
@@ -428,9 +430,14 @@ typedef struct {
   uint32_t *fields;
 } agc_update_def;
 
+/* json_name is set when JSON.decode may build the enum (the Decodable enums section, docs/vm/03-ir-and-bytecode.md
+   4.6), else NULL; payload_types then holds one type index for each payload item of its variants, in order (the
+   variant arities add up to its length). The variants are kept small: a file may have 65,535 of them. */
 typedef struct {
   agc_string *name;
   uint32_t first, count;
+  agc_string *json_name;
+  uint32_t *payload_types;
 } agc_enum_def;
 
 typedef struct {

@@ -43,6 +43,15 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 - Recursively check encoding eligibility, including declared struct fields and
   empty containers. A seen-struct path prevents infinite recursion without
   skipping other fields. Results and Int-keyed maps are CHECK-NOT-ENCODABLE.
+- JSON for enums: a user enum is the tagged object {"tag", "values"}
+  (`enum_walk` in check_types.agc for encode and decode, `place_enum` for
+  JsonField in a payload). The writer is the generic walk of vm/json_value.c
+  (an enum value is an object of two children); decode and schema are in
+  vm/json_typed.c. The payload types of a decodable enum are the optional last
+  section of the .agcb (docs/vm/03-ir-and-bytecode.md 4.6), type kind 9; only
+  the enums that a decode target or a decodable struct reaches are in it
+  (`with_reachable_enums` in lower_program.agc), and a program with none writes
+  no section.
 - False/null are present values. Int extraction is signed 64-bit and rejects
   decimal/exponent forms; Float extraction permits integer conversion only if
   finite. Parse rejects non-finite numbers, while large integer Json payloads

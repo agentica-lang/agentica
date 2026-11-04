@@ -340,8 +340,8 @@ def check_none(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out
   return ok(State.Out(st: st, type: expected))
 end
 
-# JSON.decode(source, Type) and JSON.schema(Type): the type argument is a struct name whose fields can all be
-# decoded. The source of JSON.decode is JSON text (String) or a Json value.
+# JSON.decode(source, Type) and JSON.schema(Type): the type argument is a struct or enum name whose fields or payloads
+# can all be decoded. The source of JSON.decode is JSON text (String) or a Json value.
 def check_json_type(cx: State.Cx, st: State.St, site: State.Site, decode: Bool) -> Result[State.Out]
   current = st
   target = site.args[0]
@@ -350,7 +350,7 @@ def check_json_type(cx: State.Cx, st: State.St, site: State.Site, decode: Bool) 
     target = site.args[1]
   end
 
-  type = try json_struct(cx, current, target)
+  type = try json_type(cx, current, target)
   if decode
     return ok(State.Out(st: current, type: T.Type.Result(type)))
   end
@@ -358,9 +358,9 @@ def check_json_type(cx: State.Cx, st: State.St, site: State.Site, decode: Bool) 
   return ok(State.Out(st: current, type: T.Type.Json))
 end
 
-# JSON.codec(Type): the codec of the struct, with the type argument JSON.decode takes.
+# JSON.codec(Type): the codec of the struct or enum, with the type argument JSON.decode takes.
 def check_json_codec(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
-  type = try json_struct(cx, st, site.args[0])
+  type = try json_type(cx, st, site.args[0])
   return ok(State.Out(st: st, type: T.Type.Codec(type)))
 end
 
@@ -391,14 +391,13 @@ def check_decode_source(cx: State.Cx, st: State.St, source: Ast.Expr) -> Result[
   return ok(out.st)
 end
 
-# The struct a JSON type argument names, which must be a struct name whose fields can all be decoded.
-def json_struct(cx: State.Cx, st: State.St, target: Ast.Expr) -> Result[T.Type]
+# The struct or enum a JSON type argument names, which must be a name whose fields or payloads can all be decoded.
+def json_type(cx: State.Cx, st: State.St, target: Ast.Expr) -> Result[T.Type]
   case target
     Ast.Expr.TypeName(node) -> return json_target(cx, st, node)
     _ ->
-      return error(
-        State.fail(cx, st, "CHECK-TYPE-MISMATCH", "JSON type argument requires a struct name", Ast.expr_span(target)),
-      )
+      message = "JSON type argument requires a struct or enum name"
+      return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", message, Ast.expr_span(target)))
   end
 end
 
@@ -414,7 +413,7 @@ def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[T.Type
   ref = Ast.TypeRef(id: node.id, name: node.name, args: [], span: node.span)
   type = try CheckTypes.resolve_type(cx, st, ref, false)
   try json_field_place(cx, st, type, "decode target", node.span)
-  if !T.is?(type, "Struct") or !CheckTypes.decodable?(cx, type)
+  if !(T.is?(type, "Struct") or T.is?(type, "Enum")) or !CheckTypes.decodable?(cx, type)
     return error(
       State.fail_maybe(
         cx,
