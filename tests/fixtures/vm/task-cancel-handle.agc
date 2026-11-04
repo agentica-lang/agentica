@@ -34,7 +34,7 @@ def child(handles: Channel[Task[Result[Int]]]) -> Result[Int]
 end
 
 def parent(handles: Channel[Task[Result[Int]]]) -> Result[Int]
-  kid = Task.spawn(&child, handles)
+  _kid = Task.spawn(&child, handles)
   Task.sleep(600000)
   puts("never: parent")
   return ok(4)

@@ -51,8 +51,8 @@ end
 
 def build(names: List[String]) -> List[Models.User]
   made = Models.make("é😀 x")
-  shape = Models.Shape.Circle(1.5)
-  upper = names.map do |name: String| name.upcase end
+  _shape = Models.Shape.Circle(1.5)
+  _upper = names.map do |name: String| name.upcase end
   fixed = LIMIT. to_s
   pile = Queue.new()
   built = Models.User(name: "n", age: 1)
@@ -841,13 +841,18 @@ def test_a_type_is_written_with_the_alias_of_its_own_file_when_the_root_imports_
     assert report["type"] == "Models.User"
 
 
-def test_a_query_answers_a_file_with_an_unused_import_and_check_still_refuses_it(program):
-    # An editor adds the import before it writes the first use, so the query commands do not refuse it.
-    draft = 'import Models from "models"\n\ndef f(n: Int) -> Int\n  return n + 1\nend\n'
+def assert_draft_answers_int(program, draft):
+    """Both query forms (type-at and its --partial answer) give Int at `n + 1` of the file `draft.agc` of `draft`."""
     (program / "draft.agc").write_text(draft, encoding="utf-8")
     for words in ([], ["--partial"]):
         report = answer(("draft.agc", where(draft, "n + 1")), *words, cwd=program)
         assert report["type"] == "Int"
+
+
+def test_a_query_answers_a_file_with_an_unused_import_and_check_still_refuses_it(program):
+    # An editor adds the import before it writes the first use, so the query commands do not refuse it.
+    draft = 'import Models from "models"\n\ndef f(n: Int) -> Int\n  return n + 1\nend\n'
+    assert_draft_answers_int(program, draft)
     # The query left nothing that `check` would take as proof: it still refuses the import, at the alias.
     checked = run(cli() + ["--json", "check", "draft.agc"], env=vm_environment(), cwd=program)
     refused = problem(checked, "CHECK-UNUSED-IMPORT", 1)
@@ -872,3 +877,17 @@ def test_a_query_refuses_code_after_a_return_as_check_does(program):
                cwd=program)
     refused = problem(done, "CHECK-UNREACHABLE-CODE", 1)
     assert start(refused) == where(draft, 'puts("dead")')
+
+
+def test_a_query_answers_a_file_with_an_unused_variable_and_check_still_refuses_it(program):
+    # An editor writes a name before its first use, so the query commands do not refuse it in the file they are asked
+    # about; check does, and so does a file that is only imported.
+    draft = "export def f(n: Int) -> Int\n  later = n\n  return n + 1\nend\n"
+    assert_draft_answers_int(program, draft)
+    checked = run(cli() + ["--json", "check", "draft.agc"], env=vm_environment(), cwd=program)
+    assert start(problem(checked, "CHECK-UNUSED-VARIABLE", 1)) == (2, 3)
+    user = 'import Draft from "draft"\n\ndef main() -> Void\n  puts(Draft.f(1))\nend\n'
+    (program / "user.agc").write_text(user, encoding="utf-8")
+    done = run(cli() + ["--json", "type-at", "user.agc:%d:%d" % where(user, "Draft.f")], env=vm_environment(),
+               cwd=program)
+    assert problem(done, "CHECK-UNUSED-VARIABLE", 1)["file"].endswith("draft.agc")

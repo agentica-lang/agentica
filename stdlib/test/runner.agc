@@ -82,9 +82,9 @@ export def main() -> Void
   # The driver writes one feature file or discovery error per line after the settings, then, only when `--tags` was
   # given, the expression as a JSON string. It is a line of its own, not a field of `Config`, because the decode of
   # `Config` has no optional fields and the driver of stage0 (which never writes it) must keep working.
-  read = (0...config.count).to_a.map do |i| JSON.decode(File.read_line(handle, 5000).unwrap_or(""), Entry) end
+  read = (0...config.count).to_a.map do |_| JSON.decode(File.read_line(handle, 5000).unwrap_or(""), Entry) end
   tags = read_tags(handle)
-  closed = File.close(handle, 5000)
+  _ = File.close(handle, 5000)
   if read.any? do |entry| not entry.ok? end
     IO.warn("invalid BDD runner configuration: a feature entry does not decode")
     System.exit(2)

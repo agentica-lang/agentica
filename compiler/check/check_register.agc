@@ -311,6 +311,7 @@ def register_fields(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[
   here = cx.with(type_params: node.type_parameters)
   seen: Set[String] = Set.new([])
   fields: List[Model.Named] = []
+  spans: List[Source.Span] = []
   defaulted: Set[String] = Set.new([])
   for field in node.fields
     try State.reserve_constructor(cx, st, field.name, field.span)
@@ -332,6 +333,7 @@ def register_fields(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[
     end
 
     fields = fields.push(Model.Named(name: field.name, type: type))
+    spans = spans.push(field.span)
   end
 
   c_structs = cx.c_structs
@@ -342,6 +344,7 @@ def register_fields(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[
   return ok(
     cx.with(
       structs: cx.structs.put(node.name, fields),
+      field_sites: cx.field_sites.put(node.name, State.FieldSite(file: cx.file, spans: spans)),
       field_defaults: cx.field_defaults.put(node.name, defaulted),
       c_structs: c_structs,
     ),

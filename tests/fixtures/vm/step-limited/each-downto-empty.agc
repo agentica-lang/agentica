@@ -1,7 +1,7 @@
 def main() -> Void
   r = (-9223372036854775807)..9223372036854775807
-  r.each do |i|
+  r.each do |_|
   end
-  9223372036854775807.downto(0) do |i|
+  9223372036854775807.downto(0) do |_|
   end
 end

@@ -368,13 +368,13 @@ def main() -> Void
   child = Process.spawn_captured("sh", ["-c", "trap '' TERM; echo ready; exec sleep 10"]).unwrap!
   puts(Process.read_line(child, 10000).unwrap!)
   started: Channel[Bool] = Channel.new(256)
-  tasks = (1..200).to_a.map do |i|
+  tasks = (1..200).to_a.map do |_|
     Task.spawn do
       started.send(true, 0)
       KDF.scrypt("password".bytes, "NaCl".bytes, 4096, 8, 1, 32)
     end
   end
-  tasks.each do |t| started.recv(60000) end
+  tasks.each do |_| started.recv(60000) end
   Task.sleep(0)
   puts("main ends")
 end

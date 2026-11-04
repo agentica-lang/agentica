@@ -158,7 +158,7 @@ class TestModuleRules:
             "calls.agc": "export def go() -> Int\n  return helpr()\nend\n\ndef helper() -> Int\n  return 1\nend\n\n",
             "types.agc": 'import B from "bad"\n\ndef shown(p: B.Point) -> Void\nend\n\n' + MAIN,
             "funcs.agc": 'import C from "calls"\n\ndef helpe() -> Int\n  return 2\nend\n\n'
-                         "def main() -> Void\n  n = C.go()\nend\n\n"}
+                         "def main() -> Void\n  _n = C.go()\nend\n\n"}
         types, funcs = self.checks([(files, "types.agc", None), (files, "funcs.agc", None)])
         problem = self.assert_rejected(types, "CHECK-UNKNOWN-TYPE")
         assert start(problem) == (6, 6)
@@ -226,8 +226,8 @@ class TestModuleRules:
         lib = ("HIDDEN = 5\nexport LIMIT = HIDDEN + 1\nexport NAMES = [\"a\"]\nexport CONFIG = Config(port: 80)\n\n"
                "export struct Config\n  port: Int\nend\n\n")
         header = 'import Lib from "lib"\n\ndef main() -> Void\n'
-        good = ("  x = Lib.LIMIT + 1\n  puts(Lib.NAMES.size)\n  puts(Lib.CONFIG.port)\n"
-                "  moved: Lib.Config = Lib.CONFIG.with(port: 81)\n  puts(\"#{Lib.LIMIT}\")\n")
+        good = ("  _x = Lib.LIMIT + 1\n  puts(Lib.NAMES.size)\n  puts(Lib.CONFIG.port)\n"
+                "  _moved: Lib.Config = Lib.CONFIG.with(port: 81)\n  puts(\"#{Lib.LIMIT}\")\n")
         cases = [good, "  puts(Lib.HIDDEN)\n", "  puts(Lib.HIDDEN.size)\n", "  puts(Lib.MISSING)\n"]
         checked = self.checks([({"lib.agc": lib, "root.agc": header + body + "end\n"}, "root.agc", None)
                                for body in cases])
@@ -247,7 +247,7 @@ class TestModuleRules:
         header = 'import Lib from "lib"\n\n' + local + "def main() -> Void\n"
         bodies = ["  a = Lib.Shade.Dark\n  b = Lib.Shade.Light(Lib.LIMIT)\n  puts(Lib.LIMIT.to_s + a.to_s + b.to_s)\n",
                   "  puts(Lib.NAMES.map do |name| name + \"!\" end)\n"
-                  "  puts(Lib.NAMES.reduce(0) do |n, name| n + 1 end)\n",
+                  "  puts(Lib.NAMES.reduce(0) do |n, _| n + 1 end)\n",
                   # A method on a variant reads the same for an all-capitals variant and a CamelCase one.
                   "  puts(Level.HIGH.to_s)\n  puts(Mix.Low.to_s)\n  puts(Lib.Shade.Dark.to_s)\n"]
         checked = self.checks([({"lib.agc": lib, "root.agc": header + body + "end\n"}, "root.agc", None)
@@ -448,7 +448,7 @@ class TestModuleRules:
     def test_embedded_std_modules_follow_the_rule_so_importing_them_never_trips_it(self):
         names = {"std/http": "client", "std/logger": "debug", "std/binary": "read_u8", "std/toml": "parse",
                  "std/queue": "new"}
-        results = self.checks([({"root.agc": 'import M from "%s"\n\ndef main() -> Void\n  f = &M.%s\nend\n' % (name, member)},
+        results = self.checks([({"root.agc": 'import M from "%s"\n\ndef main() -> Void\n  _f = &M.%s\nend\n' % (name, member)},
                                 "root.agc", None) for name, member in names.items()])
         for name, (_directory, problem) in zip(names, results):
             assert problem is None
@@ -483,8 +483,8 @@ class TestModuleRules:
             "root.agc": 'import Web from "web"\nimport Url from "url"\n\n'
                         "def main() -> Void\n"
                         '  address: Url.Address = Web.parse("a")\n'
-                        "  same: Web.Address = address.with(host: \"b\")\n"
-                        "  parse: Fn[String, Url.Address] = &Web.parse\n"
+                        "  _same: Web.Address = address.with(host: \"b\")\n"
+                        "  _parse: Fn[String, Url.Address] = &Web.parse\n"
                         "  option: Url.Option = Web.Option.Some(1)\n"
                         "  case option\n    Web.Option.Some(n) -> puts(n)\n    Url.Option.None -> puts(0)\n  end\n"
                         "end\n\n"}
@@ -599,7 +599,7 @@ class TestModuleRules:
         ("a construction", "def main() -> Void\n  puts(area(Shapes.Square(side: 1)))\nend\n"),
         ("a nested pattern", "def main() -> Void\n  case pick()\n    some(Shapes.Shade.Dark) -> puts(1)\n"
                              "    _ -> puts(2)\n  end\nend\n"),
-        ("an enum constructor expression", "def main() -> Void\n  s = Shapes.Shade.Light(1)\n  puts(1)\nend\n"),
+        ("an enum constructor expression", "def main() -> Void\n  _s = Shapes.Shade.Light(1)\n  puts(1)\nend\n"),
         ("a direct variant pattern arm", "def f(s: Shade) -> Int\n  case s\n    Shapes.Shade.Dark -> return 1\n"
                                          "    Shapes.Shade.Light(n) -> return n\n  end\nend\n\n"),
         ("a case guard", "def main() -> Void\n  case some(1)\n    some(n) if n < Shapes.LIMIT -> puts(n)\n"
@@ -622,7 +622,7 @@ class TestModuleRules:
         url = {"url.agc": self.URL}
         facade = {**url, "facade.agc": 'import Url from "url"\n\nexport Url.parse\n',
                   "root.agc": 'import Facade from "facade"\n\ndef main() -> Void\n  puts(Facade.parse("a").host)\nend\n'}
-        regex = 'import Regex from "std/regex"\n\ndef main() -> Void\n  r = /a+/\nend\n'
+        regex = 'import Regex from "std/regex"\n\ndef main() -> Void\n  _r = /a+/\nend\n'
         template = 'import EAG from "std/eag"\n\ndef page() -> String\n  return <<~EAG\n    hi\n  EAG\nend\n\n' + MAIN
         results = self.checks([(facade, "root.agc", None), ({"root.agc": regex}, "root.agc", None),
                                ({"root.agc": template}, "root.agc", None)])

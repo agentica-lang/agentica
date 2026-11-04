@@ -9,14 +9,14 @@ def chatter(n: Int) -> Int
 end
 
 def parent(n: Int) -> Result[Int]
-  child = Task.spawn(&middle, n + 1)
+  _child = Task.spawn(&middle, n + 1)
   Task.sleep(0)
   Task.sleep(0)
   return ok(10 / n)
 end
 
 def middle(n: Int) -> Int
-  grandchild = Task.spawn(&chatter, n + 1)
+  _grandchild = Task.spawn(&chatter, n + 1)
   return Task.await(Task.spawn(&chatter, n))
 end
 

@@ -19,6 +19,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   A number too big for an `Int` says it does not fit one.
 - `s * n` repeats a String, as Ruby's `String#*` (`"ab" * 3` is `"ababab"`); a
   negative count or a result over 256 MiB is `RUNTIME-INVALID-COUNT`.
+- A `==` or `!=` refused because a struct field has no equality
+  (`CHECK-TYPE-MISMATCH`) also marks that field in its declaration (a note,
+  when the struct is in the same file).
 
 ### Changed
 
@@ -37,6 +40,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** `xs.min_by` and `xs.max_by` give an `Optional` (`none` for an
   empty list), as `min` and `max` do, not a `Result`; `unwrap!` and
   `unwrap_or` still work, `ok?` becomes `some?`.
+- **Breaking:** a variable, `for` variable, block parameter or `case` pattern
+  name that is never read is an error (`CHECK-UNUSED-VARIABLE`), unless its name
+  starts with `_` (`_count`); write `_` for a loop variable, a block parameter
+  or a pattern slot. A function parameter is never reported, and `count += 1`
+  alone is no read. The query commands (`type-at`, `refs`, `symbol`) do not
+  report it in the file they are asked about.
 
 ### Fixed
 

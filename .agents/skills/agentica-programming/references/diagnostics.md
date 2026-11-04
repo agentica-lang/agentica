@@ -211,6 +211,9 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
   Int|`).
 - `CHECK-LOOP-CONTROL`: `break` or `next` outside a `while`/`for` body, or
   inside a block.
+- `CHECK-UNUSED-VARIABLE`: a variable, `for` variable, block parameter or
+  pattern name that is never read (not a function parameter); name it `_x`, or
+  write `_` (`for _ in`, `|_, i|`, `error(_)`), or remove it.
 - `CHECK-UNREACHABLE-CODE`: a statement after `return`, `break`, `next` or an
   `if`/`case` that ends on every path; remove it or move it before.
 - `CHECK-CAPTURED-ASSIGNMENT`: a block assigns to an outer variable (use a `for`

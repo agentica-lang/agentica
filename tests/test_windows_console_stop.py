@@ -45,7 +45,7 @@ end
 STUCK_STDOUT = """\
 def main() -> Void
   line = "y"
-  for i in 0..9
+  for _ in 0..9
     line = line + line
   end
   n = 0
@@ -72,11 +72,11 @@ end
 CUT_PROGRAM = """\
 def main() -> Void
   block = "€é"
-  for i in 0..9
+  for _ in 0..9
     block = block + block
   end
   line = ""
-  for i in 0..12
+  for _ in 0..12
     line = line + block
   end
   puts(line)
@@ -113,7 +113,7 @@ end
 CONSOLE_LINES = """\
 def main() -> Void
   out = ""
-  for i in 0..3
+  for _ in 0..3
     out = out + "[" + IO.gets().unwrap_or("<end>") + "]"
   end
   File.write_text(System.args()[0], out, 1000).unwrap!

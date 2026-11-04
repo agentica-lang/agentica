@@ -758,7 +758,7 @@ export def block_call?(call: Call) -> Bool
   end
 
   case call.args[call.args.size - 1]
-    Expr.BlockLit(block) -> return true
+    Expr.BlockLit(_) -> return true
     _ -> return false
   end
 end

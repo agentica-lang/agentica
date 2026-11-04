@@ -184,7 +184,7 @@ class TestSpecParser:
         ])
         self.check_accepted([
             Accept(main_of("  for i in 0...3 do\n    puts(i)\n  end\n")),
-            Accept(main_of("  r = (1..5).to_a\n")),
+            Accept(main_of("  _r = (1..5).to_a\n")),
         ])
         self.check_rejected([
             Reject(main_of("  x = 1..2..3\n"), "PARSE-UNEXPECTED-TOKEN", (2, 11, 2, 13)),
@@ -248,7 +248,7 @@ class TestSpecParser:
             Output(main_of("  puts(List.reduce([1, 2, 3], 0) do |a, b| a + b end)\n"), ["6"]),
         ])
         self.check_accepted([
-            Accept(main_of("  xs = [1]\n  ys = xs.map do |x: Int| x end\n"
+            Accept(main_of("  xs = [1]\n  _ys = xs.map do |x: Int| x end\n"
                            "  case (xs.map do |x| x end) do\n    _ ->\n      puts(\"b\")\n  end\n")),
         ])
         self.check_rejected([
@@ -261,7 +261,7 @@ class TestSpecParser:
     def test_ruby_headers_one_line_case_arms_and_module_calls_without_parentheses(self):
         self.check_output([
             Output(main_of("  xs = [1, 2]\n  n = 1\n"
-                           "  while !IO.eof? do\n    line = IO.gets!\n  end\n"
+                           "  while !IO.eof? do\n    _line = IO.gets!\n  end\n"
                            "  for x in xs.reverse do\n    puts(x)\n  end\n"
                            "  case n\n    1 -> puts(\"one\")\n    _ ->\n      puts(\"other\")\n      puts(\"more\")\n"
                            "  end\n"),
@@ -275,15 +275,15 @@ class TestSpecParser:
                    ["3"]),
         ])
         self.check_accepted([
-            Accept(main_of("  while true\n    if false\n      next\n    end\n    break\n  end\n  next = 1\n")),
+            Accept(main_of("  while true\n    if false\n      next\n    end\n    break\n  end\n  next = 1\n  puts(next)\n")),
         ])
 
     def test_result_spellings_bare_gets_and_nullary_variants_through_an_alias(self):
         self.check_accepted([
             Accept(
                 "import M from \"./m\"\n\n"
-                + main_of("  a = Result.Ok(1)\n  b: Result[Int] = Result.Err(\"x\")\n  c = gets!\n"
-                          "  d = M.Shape.Dot\n  case a\n    ok(v) -> puts(v)\n    error(_) -> puts(\"e\")\n  end\n"),
+                + main_of("  a = Result.Ok(1)\n  _b: Result[Int] = Result.Err(\"x\")\n  _c = gets!\n"
+                          "  _d = M.Shape.Dot\n  case a\n    ok(v) -> puts(v)\n    error(_) -> puts(\"e\")\n  end\n"),
                 {"m.agc": SHAPE}),
         ])
 
@@ -311,8 +311,8 @@ class TestSpecParser:
 
     def test_map_literals_still_parse_where_a_block_head_does_not(self):
         self.check_accepted([
-            Accept(main_of("  xs = [1]\n  m: Map[String, Int] = {}\n  n = {\"a\": 1}\n"
-                           "  ys = xs.map do |x| {\"k\": x} end\n")),
+            Accept(main_of("  xs = [1]\n  _m: Map[String, Int] = {}\n  _n = {\"a\": 1}\n"
+                           "  _ys = xs.map do |x| {\"k\": x} end\n")),
         ])
 
     def test_import_forms_an_alias_or_a_list_of_names_with_optional_renames(self):
@@ -432,7 +432,7 @@ class TestSpecParser:
 
     def test_type_applications_parse(self):
         self.check_accepted([
-            Accept("def f(x: List[List[Int]]) -> List[List[Int]]\n  y: List[String] = []\n  return x\nend\n\n"
+            Accept("def f(x: List[List[Int]]) -> List[List[Int]]\n  _y: List[String] = []\n  return x\nend\n\n"
                    + main_of("")),
         ])
 
@@ -517,7 +517,7 @@ class TestSpecParser:
         self.check_output([Output(program, ["-4", "3"])])
         self.check_accepted([
             Accept(TRY_PRELUDE + "def g() -> Result[Int]\n  s = 1 |> try add(2) |> try add(3)\n"
-                                 "  t = try good(4) |> plus(2)\n  return Result.Ok(s)\nend\n\n"
+                                 "  _t = try good(4) |> plus(2)\n  return Result.Ok(s)\nend\n\n"
                                  + main_of("")),
         ])
 
@@ -594,8 +594,8 @@ class TestSpecParser:
             return "def main() -> Void\n  " + text + "\nend\n\n"
 
         self.check_accepted([
-            Accept(body("x = " + "(" * 900 + "1" + ")" * 900)),
-            Accept(body("x = 1" + " + 1" * 900)),
+            Accept(body("_ = " + "(" * 900 + "1" + ")" * 900)),
+            Accept(body("_ = 1" + " + 1" * 900)),
         ])
         self.check_rejected([
             Reject(body("x = " + "(" * 1000 + "1" + ")" * 1000), "PARSE-TOO-DEEP"),

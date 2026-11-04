@@ -1,0 +1,1 @@
+ERROR CHECK-UNUSED-VARIABLE 44:3:3-54:4:1 "the variable \"count\" is never read" "it is only updated, never read; remove it, or name it _count if it is unused on purpose" signature="total(xs: List[Int]) -> Int" file="unused-variable.agc"

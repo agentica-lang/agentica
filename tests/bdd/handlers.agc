@@ -32,7 +32,7 @@ def noop(ctx: BDD.Context, args: List[String]) -> BDD.Context
 end
 
 def crash(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  invalid = 1 / 0
+  _invalid = 1 / 0
   return ctx
 end
 

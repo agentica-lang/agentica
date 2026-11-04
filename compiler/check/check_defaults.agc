@@ -155,7 +155,7 @@ end
 # parser reads a bare none as a call with no arguments): a value that the call site can build with no code of its own.
 def constant?(value: Ast.Expr) -> Bool
   case value
-    Ast.Expr.Literal(node) -> return true
+    Ast.Expr.Literal(_) -> return true
     Ast.Expr.Unary(node) -> return node.op == "minus" and number?(node.operand)
     Ast.Expr.ListLit(node) -> return node.elements.size == 0
     Ast.Expr.MapLit(node) -> return node.entries.size == 0
@@ -178,9 +178,9 @@ def number?(value: Ast.Expr) -> Bool
   case value
     Ast.Expr.Literal(node) ->
       case node.value
-        Ast.LitValue.Whole(number) -> return true
-        Ast.LitValue.Huge(digits) -> return true
-        Ast.LitValue.Real(number) -> return true
+        Ast.LitValue.Whole(_) -> return true
+        Ast.LitValue.Huge(_) -> return true
+        Ast.LitValue.Real(_) -> return true
         _ -> return false
       end
 

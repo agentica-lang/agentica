@@ -196,7 +196,7 @@ CLEAN = [
      "def h() -> Int\r\n  return 1\r\nend\r\n\r\n## a\r\ndef main() -> Void\r\nend\r\n"),
     ("doc lines with CRLF", "## a\r\n## b\r\ndef main() -> Void\r\nend\r\n"),
     ("leading-dot chain with a comment line and CRLF",
-     "def main() -> Void\r\n  xs = [1, 2]  # raw\r\n  # step\r\n    .map do |x| x end\r\nend\r\n"),
+     "def main() -> Void\r\n  _xs = [1, 2]  # raw\r\n  # step\r\n    .map do |x| x end\r\nend\r\n"),
     ("doc lines with tabs", PRE + "  ## a\n\t## b\ndef main() -> Void\nend\n"),
     # An empty file lexes and parses with no error; `check` does not need a main.
     ("empty file", ""),
@@ -292,7 +292,7 @@ RUNS = [
     ("digit separators are dropped from the value",
      program(MAIN, "  puts(1_000)", "  puts(1_000_000)", "  puts(1_000.000_5)", "  puts(0.5_5)", "  puts(1_000.5)",
              "  puts(-1_000)", "  puts(1_000.to_s)", "  puts((1_000..1_002).to_a)", "  puts((1_000...1_002).to_a)",
-             "  _1 = 5", "  puts(_1)", "  _n = 2", "  puts((0.._n).to_a)", "  1_000.times do |i|", "  end", "end"),
+             "  _1 = 5", "  puts(_1)", "  _n = 2", "  puts((0.._n).to_a)", "  1_000.times do |_|", "  end", "end"),
      "1000\n1000000\n1000.0005\n0.55\n1000.5\n-1000\n1000\n[1000, 1001, 1002]\n[1000, 1001]\n5\n[0, 1, 2]\n"),
     ("hex, binary and octal literals in either case, with separators, the Int bounds and a pattern",
      program(MAIN, "  puts(0xFF + 0Xff_ff)", "  puts(0b1010 + 0B1111_0000)", "  puts(0o755 + 0O17)",

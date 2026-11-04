@@ -246,6 +246,15 @@ registration first (`check_register.agc`), then bodies.
 - Expected types must reach builtin calls for contextual ok/error and
   unwrap/default. An untyped error is `CHECK-RESULT-TYPE`; `Channel.new` or
   `ATS.new` with no expected type is `CHECK-EXPECTED-TYPE`.
+- `CHECK-UNUSED-VARIABLE` (`check_variables.agc`): `State.introduce_local`
+  watches a variable, `for` variable, block parameter or pattern name (a
+  function parameter uses `introduce` and is never watched) in `St.locals`,
+  keyed by the offset of its span; `check_name` reads it (`State.read`), except
+  while its own assignment is checked (`St.assigning`, `check_assignment`).
+  `Variables.check` runs at the end of `check_function_body` and of each
+  constant, reports the unused name that starts first, and skips a file of
+  `Cx.lenient`: the roots of a query (`Settings.unused` false, the flag of the
+  unused import). `json_needs` makes its own run with the file lenient.
 - `CHECK-UNREACHABLE-CODE`: `check_block` and `block_statements`
   (`check_stmt.agc`) fail at the statement after one that `Flow.ends?`
   (`check_flow.agc`: return, break, next, an if with else or a case whose every

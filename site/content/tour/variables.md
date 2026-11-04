@@ -108,6 +108,36 @@ end
 
 `_: Int = x` is `PARSE-UNEXPECTED-TOKEN`, `_ = puts("x")` is `CHECK-VOID-VALUE` and `_ += 1` is `CHECK-UNKNOWN-NAME`.
 
+## Unused variables
+
+A variable that is never read is an error (`CHECK-UNUSED-VARIABLE`): remove it, or start its name with `_` when it is unused on purpose. The same holds for a `for` variable, a block parameter and a name in a `case` pattern; use `_` there as above. A function parameter is never reported, since callers depend on the signature.
+
+Updating a variable does not read it: `count += 1` alone leaves `count` unused. A variable that is assigned twice and read once is fine.
+
+```agentica {expect="CHECK-UNUSED-VARIABLE"}
+def main() -> Void
+  total = 0
+  count = 0 # error: count is only updated, never read
+  for n in [1, 2]
+    total += n
+    count += 1
+  end
+
+  puts(total)
+end
+```
+
+```agentica
+def main() -> Void
+  _count = 0 # kept on purpose
+  puts("ok")
+end
+```
+
+```output
+ok
+```
+
 ## Scope
 
 A variable made inside a block (`if`, `while`, `for`, ...) is gone after its `end`. Create it before the block to use it after.

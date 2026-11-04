@@ -77,7 +77,7 @@ def std_wrapper(name, source):
     if found is None:
         return header + "def main() -> Void\nend\n"
     if found.group(1) == "def":
-        return header + "def main() -> Void\n  f = &Module.%s\nend\n" % found.group(2)
+        return header + "def main() -> Void\n  _f = &Module.%s\nend\n" % found.group(2)
     return header + "def shown(x: Module.%s) -> Void\nend\n\ndef main() -> Void\nend\n" % found.group(2)
 
 

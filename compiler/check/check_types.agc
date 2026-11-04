@@ -26,11 +26,22 @@ struct Placed
 end
 
 # What a walk of a type found: whether the test passed, and the structs walked so far (see struct_walk). why is the
-# struct field or enum variant where the walk of equality stopped, or "" (see equality_gap).
+# struct field or enum variant where the walk of equality stopped, or "" (see equality_gap). When it is a struct field,
+# file and field are where the field is declared.
 struct Walk
   passes: Bool
   seen: Map[String, Bool]
   why: String
+  file: String
+  field: Optional[Source.Span]
+end
+
+## Why a type has no equality (equality_gap): why is the text ("" when nothing on the way explains it), and field the
+## declaration of the struct field that blocks it, in file, when there is one.
+export struct Gap
+  why: String
+  file: String
+  field: Optional[Source.Span]
 end
 
 ## The type a type written in the source stands for. completion says Void is allowed here (a result type, or the item
@@ -247,15 +258,16 @@ end
 
 ## Why a type that equality? refuses has no equality: a type variable of a generic function, else the innermost
 ## struct field or enum variant on the way ("field User.on_save is Fn[User, Void]"), or "" when neither is on the way
-## (List[Fn[Int, Int]]).
-export def equality_gap(cx: State.Cx, type: ResolvedType) -> String
-  return data_walk(cx, type, {}, true).why
+## (List[Fn[Int, Int]]). A struct field also gives its declaration.
+export def equality_gap(cx: State.Cx, type: ResolvedType) -> Gap
+  found = data_walk(cx, type, {}, true)
+  return Gap(why: found.why, file: found.file, field: found.field)
 end
 
 ## True when the type has a type variable inside.
 export def has_variables?(type: ResolvedType) -> Bool
   case type
-    Types.Type.Var(name) -> return true
+    Types.Type.Var(_) -> return true
     Types.Type.Result(item) -> return has_variables?(item)
     Types.Type.Optional(item) -> return has_variables?(item)
     Types.Type.Task(item) -> return has_variables?(item)
@@ -268,8 +280,8 @@ export def has_variables?(type: ResolvedType) -> Bool
     Types.Type.ATS(key, value) -> return has_variables?(key) or has_variables?(value)
     Types.Type.Fn(params, result) ->
       return params.any? do |param: ResolvedType| has_variables?(param) end or has_variables?(result)
-    Types.Type.Struct(name, args) -> return args.any? do |arg: ResolvedType| has_variables?(arg) end
-    Types.Type.Enum(name, args) -> return args.any? do |arg: ResolvedType| has_variables?(arg) end
+    Types.Type.Struct(_, args) -> return args.any? do |arg: ResolvedType| has_variables?(arg) end
+    Types.Type.Enum(_, args) -> return args.any? do |arg: ResolvedType| has_variables?(arg) end
     _ -> return false
   end
 end
@@ -1038,11 +1050,11 @@ def place_fields(cx: State.Cx, type: ResolvedType) -> List[Model.Named]
 end
 
 def passed(seen: Map[String, Bool]) -> Walk
-  return Walk(passes: true, seen: seen, why: "")
+  return Walk(passes: true, seen: seen, why: "", file: "", field: none)
 end
 
 def refused(seen: Map[String, Bool]) -> Walk
-  return Walk(passes: false, seen: seen, why: "")
+  return Walk(passes: false, seen: seen, why: "", file: "", field: none)
 end
 
 # The refused walk found, with why as its reason when no part deeper in it gave one.
@@ -1052,6 +1064,22 @@ def refused_at(found: Walk, why: String) -> Walk
   end
 
   return found.with(why: why)
+end
+
+# refused_at for the field at index of the struct: the declaration of the field goes with the reason. A struct with no
+# site (a builtin record) gives the reason alone.
+def refused_in_field(cx: State.Cx, found: Walk, name: String, index: Int, why: String) -> Walk
+  if found.why != ""
+    return found
+  end
+
+  sites = cx.field_sites.get(name)
+  if !sites.some? or index >= sites.unwrap!.spans.size
+    return found.with(why: why)
+  end
+
+  site = sites.unwrap!
+  return found.with(why: why, file: site.file, field: some(site.spans[index]))
 end
 
 def encode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
@@ -1129,14 +1157,14 @@ def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equal: 
   if primitive?(type) or Types.is?(type, "Range") or Types.is?(type, "Bytes")
     return passed(seen)
   elsif Types.is?(type, "Json")
-    return Walk(passes: !equal, seen: seen, why: "")
+    return Walk(passes: !equal, seen: seen, why: "", file: "", field: none)
   elsif Types.is?(type, "Var")
     why = ""
     if !cx.prelude
       why = "the type variable #{Types.name(type)} of a generic function could be a function"
     end
 
-    return Walk(passes: cx.prelude, seen: seen, why: why)
+    return Walk(passes: cx.prelude, seen: seen, why: why, file: "", field: none)
   elsif Types.is?(type, "List")
     return data_walk(cx, Types.item(type), seen, equal)
   elsif Types.is?(type, "Map")
@@ -1262,7 +1290,8 @@ def nominal_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equa
     while index < fields.size
       found = data_walk(cx, fields[index].type, seen, equal)
       if !found.passes
-        return refused_at(found, "field #{place}.#{fields[index].name} is #{Types.to_text(declared[index].type)}")
+        why = "field #{place}.#{fields[index].name} is #{Types.to_text(declared[index].type)}"
+        return refused_in_field(cx, found, name, index, why)
       end
 
       seen = found.seen
@@ -1383,8 +1412,8 @@ def parts(type: ResolvedType) -> List[ResolvedType]
     Types.Type.Map(key, value) -> return [key, value]
     Types.Type.ATS(key, value) -> return [key, value]
     Types.Type.Fn(params, result) -> return params.concat([result])
-    Types.Type.Struct(name, args) -> return args
-    Types.Type.Enum(name, args) -> return args
+    Types.Type.Struct(_, args) -> return args
+    Types.Type.Enum(_, args) -> return args
     _ -> return []
   end
 end

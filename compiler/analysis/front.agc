@@ -1,7 +1,7 @@
 ## The first stages of every command that reads a program: read the root file, link it and check it, each giving the
 ## data of the next stage or the first problem. The command line (app/), the BDD driver and the queries (analysis.agc)
 ## all run it, so what one of them accepts, the others accept, except that the query functions do not refuse an unused
-## import in the root file when `settings.unused_imports` is false.
+## import or variable in the root file when `settings.unused` is false.
 
 import Checker from "../check/checker"
 import Style from "../check/check_style"
@@ -67,9 +67,9 @@ export def check_file(path: String, settings: Env.Settings) -> Outcome
 end
 
 ## Links the file at `path` and checks it as `agentica check` and `agentica type-at` do: every rule of `check_file`
-## except that the program declares a `main`, so a library file passes, and that an unused import of the root file is
-## not an error when `settings.unused_imports` is false (the files it imports keep the rule). A `main` that is declared
-## keeps its signature.
+## except that the program declares a `main`, so a library file passes, and that an unused import or variable of the
+## root file is not an error when `settings.unused` is false (the files it imports keep the rule). A `main` that is
+## declared keeps its signature.
 export def query_file(path: String, settings: Env.Settings) -> Outcome
   return query_cached(Cache.empty(), path, settings)
 end
@@ -85,7 +85,12 @@ export def query_cached(cache: Cache.Cache, path: String, settings: Env.Settings
   end
 
   case Cache.find(cache, walked.unwrap!)
-    Cache.Found.Hit(root) -> return stored_outcome(root)
+    Cache.Found.Hit(root) ->
+      if strict_failure?(root, settings)
+        return link_reusing(cache, walked.unwrap!, settings)
+      end
+
+      return stored_outcome(root)
     Cache.Found.Miss -> return link_reusing(cache, walked.unwrap!, settings)
   end
 end
@@ -157,7 +162,7 @@ export def refresh(cache: Cache.Cache, path: String, settings: Env.Settings) -> 
 end
 
 ## Checks `linked`, a program that `Linker.link_programs` made from several files, as `query_file` does: with
-## `settings.unused_imports` false, an unused import is no error in a root.
+## `settings.unused` false, an unused import or variable is no error in a root.
 export def query_linked(linked: Linker.Linked, settings: Env.Settings) -> Outcome
   return check(linked, settings, false)
 end
@@ -377,5 +382,15 @@ def finished(linked: Linker.Linked, checking: Checker.Checking, style: Optional[
         some(problem) -> return Outcome.Rejected(problem)
         none -> return Outcome.Done(Checked(linked: linked, checked: checked))
       end
+  end
+end
+
+# A refresh checks as `check` does, so a root it kept may have failed on a name that nothing reads, which a query about
+# its file (`settings.unused` false) does not refuse: the query checks again. Any other failure is the same either way,
+# since the checker stops at the first problem and reports an unread name after the rest of its function.
+def strict_failure?(root: Cache.Root, settings: Env.Settings) -> Bool
+  case root.checking
+    Checker.Checking.Failed(problem) -> return !settings.unused and problem.code == "CHECK-UNUSED-VARIABLE"
+    Checker.Checking.Done(_) -> return false
   end
 end

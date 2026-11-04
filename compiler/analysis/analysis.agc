@@ -476,8 +476,8 @@ def shown(settings: Env.Settings, match: Symbol.Match) -> Symbol.Match
   return match.with(file: QueryFiles.display(settings, match.file, true))
 end
 
-# The settings of a query: an import that nothing uses yet is not an error in the file asked about, since an editor
-# adds the import first. The files it imports keep the rule, and `check` keeps refusing it everywhere.
+# The settings of a query: an import or a variable that nothing uses yet is not an error in the file asked about,
+# since an editor adds the name first. The files it imports keep the rule, and `check` keeps refusing it everywhere.
 def for_query(settings: Env.Settings) -> Env.Settings
-  return settings.with(unused_imports: false)
+  return settings.with(unused: false)
 end

@@ -93,7 +93,7 @@ def main() -> Void
   end
   puts("")
   puts(walk)
-  for n in no_items
+  for _ in no_items
     puts("never")
   end
 

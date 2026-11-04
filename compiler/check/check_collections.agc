@@ -102,7 +102,7 @@ end
 # The help of a one-parameter function given to Task.spawn alone: a reference gets its argument, a block loses its.
 def spawn_argument_help(callback: Ast.Expr) -> String
   case callback
-    Ast.Expr.BlockLit(block) ->
+    Ast.Expr.BlockLit(_) ->
       return "a block with a parameter needs an argument: pass it through an Fn variable, or drop the parameter"
     _ -> return "pass its argument: Task.spawn(&f, x)"
   end
@@ -362,7 +362,7 @@ end
 
 def type_name?(expr: Ast.Expr) -> Bool
   case expr
-    Ast.Expr.TypeName(node) -> return true
+    Ast.Expr.TypeName(_) -> return true
     _ -> return false
   end
 end

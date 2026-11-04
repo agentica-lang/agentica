@@ -43,6 +43,6 @@ def main() -> Void
       Command.Show -> puts("total #{total}")
     end
   end
-  big = 9223372036854775807
-  big += 1
+  _big = 9223372036854775807
+  _big += 1
 end

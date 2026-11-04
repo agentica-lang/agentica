@@ -420,7 +420,7 @@ end
 
 def type_name?(expr: Ast.Expr) -> Bool
   case expr
-    Ast.Expr.TypeName(node) -> return true
+    Ast.Expr.TypeName(_) -> return true
     _ -> return false
   end
 end
@@ -479,7 +479,7 @@ def lower_literal(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Literal, want: Int
     Ast.LitValue.Text(text) -> value = Ir.Imm.Text(text)
     Ast.LitValue.Flag(flag) -> value = Ir.Imm.Bool(flag)
     Ast.LitValue.Nothing -> value = Ir.Imm.Nil
-    Ast.LitValue.Huge(digits) -> return error(Lowering.internal(cx, "lower: integer literal out of range", node.span))
+    Ast.LitValue.Huge(_) -> return error(Lowering.internal(cx, "lower: integer literal out of range", node.span))
   end
 
   fx = Lowering.step(fx, node.span)
@@ -1064,7 +1064,7 @@ def referenced_names(body: List[Ast.Stmt]) -> List[String]
     at += 1
     case node
       AstWalk.Node.Expr(expr) -> reads = push_name(reads, expr)
-      AstWalk.Node.Stmt(stmt) -> reads = reads
+      AstWalk.Node.Stmt(_) -> reads = reads
     end
 
     work = work.concat(AstWalk.children(node))

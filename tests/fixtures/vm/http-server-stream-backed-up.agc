@@ -33,7 +33,7 @@ def backed_up(feed: Feed) -> Void
 end
 
 def routes(said: Channel[String]) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
-  return handler_of() do |request|
+  return handler_of() do |_|
     body: Channel[Bytes] = Channel.new(2)
     Task.spawn(&backed_up, Feed(said: said, body: body))
     return ok(

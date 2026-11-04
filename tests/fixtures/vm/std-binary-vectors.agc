@@ -213,7 +213,7 @@ def main() -> Void
       ok(line) ->
         failed += check(t, line)
         count += 1
-      error(message) ->
+      error(_) ->
         running = false
     end
   end

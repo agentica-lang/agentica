@@ -306,7 +306,7 @@ def into_statement(ask: Query, stmt: Ast.Stmt, scope: Map[String, Local]) -> Mov
     Ast.Stmt.While(node) -> return into_part(ask, node.condition, node.body, scope)
     Ast.Stmt.For(node) -> return into_for(ask, node, scope)
     Ast.Stmt.Case(node) -> return into_case(ask, node, scope)
-    Ast.Stmt.Control(node) -> return stop(scope)
+    Ast.Stmt.Control(_) -> return stop(scope)
   end
 end
 
@@ -434,7 +434,7 @@ def slot_locals(ask: Query, node: Ast.VariantPattern) -> List[Local]
           Local(kind: "pattern", name: name, span: span, name_span: span, type: bound_type(ask, node.id, index)),
         )
       Ast.Slot.Skip -> out = out
-      Ast.Slot.Nested(inner) -> out = out
+      Ast.Slot.Nested(_) -> out = out
     end
 
     index += 1
@@ -511,7 +511,7 @@ def visit_statement(ask: Query, target: Local, stmt: Ast.Stmt, scope: Map[String
       inner = declare(scope, loop_variable(ask, node))
       return below([pending_expr(node.iterable, scope), Pending(step: Step.Block(node.body), scope: inner)])
     Ast.Stmt.Case(node) -> return below(case_parts(ask, node, scope))
-    Ast.Stmt.Control(node) -> return below([])
+    Ast.Stmt.Control(_) -> return below([])
   end
 end
 

@@ -4,7 +4,7 @@ SEP = "\n\n".bytes
 
 def main() -> Void
   total = 0
-  for k in 0...1000
+  for _ in 0...1000
     total += "xy".bytes.length
   end
 

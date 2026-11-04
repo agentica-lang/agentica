@@ -50,5 +50,5 @@ def main() -> Void
 
   # Strings compare in the order of sort.
   puts("apple".compare("banana"))
-  puts(by_customer.filter do |customer, list| list.size > 1 end.keys)
+  puts(by_customer.filter do |_, list| list.size > 1 end.keys)
 end

@@ -4,7 +4,7 @@ def main() -> Void
     numbers.send(i * i, 100)
   end
   line = ""
-  for i in 1..6
+  for _ in 1..6
     case numbers.recv(100)
       ok(n) -> line = "#{line} #{n}"
       error(e) -> puts(e)
@@ -15,7 +15,7 @@ def main() -> Void
     numbers.send(i * i, 100)
   end
   line = ""
-  for i in 7..20
+  for _ in 7..20
     case numbers.recv(100)
       ok(n) -> line = "#{line} #{n}"
       error(e) -> puts(e)

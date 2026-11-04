@@ -203,12 +203,12 @@ def run_command(shop: Shop, line: String) -> Shop
 end
 
 def main() -> Void
-  shop = new_shop()
+  _shop = new_shop()
   while !IO.eof?()
     line = IO.gets!().strip
     if line == ""
       next
     end
-    shop = run_command(shop, line)
+    _shop = run_command(_shop, line)
   end
 end

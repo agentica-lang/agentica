@@ -33,7 +33,7 @@ def main() -> Void
 
   stale = 0
   for n in 0...200
-    file = Task.await(Task.spawn(&write_and_return, Job(path: path, n: n, files: files)))
+    _file = Task.await(Task.spawn(&write_and_return, Job(path: path, n: n, files: files)))
     if not saw(path, "returned #{n}\n")
       stale = stale + 1
     end
@@ -42,7 +42,7 @@ def main() -> Void
 
   stale = 0
   for n in 0...4
-    outcome = Task.await(Task.spawn(&write_and_crash, Job(path: path, n: n, files: files)))
+    _ = Task.await(Task.spawn(&write_and_crash, Job(path: path, n: n, files: files)))
     if not saw(path, "crashed #{n}\n")
       stale = stale + 1
     end
@@ -53,8 +53,8 @@ def main() -> Void
   failed = 0
   for n in 0...100
     Task.spawn(&write_and_send, Job(path: path, n: n, files: files))
-    file = Result.unwrap!(files.recv(5000))
-    if not File.close(file, 5000).ok?
+    _file = Result.unwrap!(files.recv(5000))
+    if not File.close(_file, 5000).ok?
       failed = failed + 1
     end
     if not saw(path, "sent #{n}\n")

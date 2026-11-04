@@ -136,12 +136,12 @@ end
 
 def check_literal(cx: State.Cx, st: State.St, node: Ast.Literal) -> Result[State.Out]
   case node.value
-    Ast.LitValue.Whole(number) -> return ok(State.Out(st: st, type: T.Type.Int))
-    Ast.LitValue.Huge(digits) ->
+    Ast.LitValue.Whole(_) -> return ok(State.Out(st: st, type: T.Type.Int))
+    Ast.LitValue.Huge(_) ->
       return error(State.fail(cx, st, "CHECK-INT-RANGE", "Int literal is outside the signed 64-bit range", node.span))
-    Ast.LitValue.Real(number) -> return ok(State.Out(st: st, type: T.Type.Float))
-    Ast.LitValue.Text(text) -> return ok(State.Out(st: st, type: T.Type.String))
-    Ast.LitValue.Flag(flag) -> return ok(State.Out(st: st, type: T.Type.Bool))
+    Ast.LitValue.Real(_) -> return ok(State.Out(st: st, type: T.Type.Float))
+    Ast.LitValue.Text(_) -> return ok(State.Out(st: st, type: T.Type.String))
+    Ast.LitValue.Flag(_) -> return ok(State.Out(st: st, type: T.Type.Bool))
     Ast.LitValue.Nothing -> return ok(State.Out(st: st, type: T.Type.Nil))
   end
 end
@@ -164,7 +164,7 @@ def check_name(cx: State.Cx, st: State.St, node: Ast.NameRef) -> Result[State.Ou
 
   binding = State.lookup(st, node.name)
   if binding.some?
-    return ok(State.Out(st: st, type: binding.unwrap!.type))
+    return ok(State.Out(st: State.read(st, binding.unwrap!), type: binding.unwrap!.type))
   end
 
   if cx.functions.has_key?(node.name) or ENTRIES.has_key?(node.name)
@@ -306,7 +306,7 @@ def check_interpolation(cx: State.Cx, st: State.St, node: Ast.Interpolation) -> 
         out = try State.expr(cx, current, code, T.Type.Unknown)
         try Rules.ensure_printable(cx, out.st, out.type, Ast.expr_span(code))
         current = out.st
-      Ast.Part.Text(text) -> current = current
+      Ast.Part.Text(_) -> current = current
     end
   end
 
@@ -616,15 +616,13 @@ end
 
 # The result type of the operator, or the first rule it breaks.
 def binary_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
-  left = sides.left
-  right = sides.right
   case node.op
     "plus" ->
       try same_types(cx, sides, node, true)
       return plus_type(cx, sides, node)
     "minus" -> return arithmetic_type(cx, sides, node)
     "multiply" ->
-      if T.is?(left, "String") or T.is?(right, "String")
+      if T.is?(sides.left, "String") or T.is?(sides.right, "String")
         return repeat_type(cx, sides, node)
       end
 
@@ -788,9 +786,9 @@ def equality_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type
   try same_types(cx, sides, node, true)
   if !CheckTypes.equality?(cx, sides.left)
     message = "#{T.to_text(sides.left)} has no equality"
-    why = CheckTypes.equality_gap(cx, sides.left)
-    if why != ""
-      message += ": #{why}"
+    gap = CheckTypes.equality_gap(cx, sides.left)
+    if gap.why != ""
+      message += ": #{gap.why}"
     end
 
     help = (
@@ -799,10 +797,29 @@ def equality_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type
       "equality"
     )
 
-    return error(type_error(cx, sides, node, message, help))
+    base = Failure.problem(
+      cx.file,
+      sides.st.signature,
+      "CHECK-TYPE-MISMATCH",
+      message,
+      node.op_span,
+      State.hint_of(help),
+    )
+
+    return error(Failure.pack(base.with(labels: field_labels(cx, gap))))
   end
 
   return ok(T.Type.Bool)
+end
+
+# The note on the field that blocks ==, when the field is declared in the file being checked: a note holds a span and
+# no file, so a field of another file is left to the message.
+def field_labels(cx: State.Cx, gap: CheckTypes.Gap) -> List[Failure.Label]
+  if gap.file != cx.file or !gap.field.some?
+    return []
+  end
+
+  return [Failure.Label(span: gap.field.unwrap!, text: "this field has no equality")]
 end
 
 def logical_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]

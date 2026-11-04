@@ -543,7 +543,7 @@ def main() -> Void
   puts({"a": 1, "b": 2}.to_s)
   case JSON.parse("{\\"a\\":[1,true]}")
     ok(j) -> puts(j.to_s)
-    error(e) -> puts("parse failed")
+    error(_) -> puts("parse failed")
   end
   puts("steps #{Profile.steps()}")
 end
@@ -1432,7 +1432,7 @@ end
 
 def main() -> Void
   good = ["a", "é", "z"]
-  warm = scan(good, 3000, true) + scan(good, 3000, false)
+  _warm = scan(good, 3000, true) + scan(good, 3000, false)
   puts("before")
   END
 end
@@ -1440,7 +1440,7 @@ end
 
 
 def test_string_code_runs_in_compiled_code_without_leaving(tmp_path):
-    bytecode = compile_text(CODES.replace("END", 'puts(warm)\n  puts("steps #{Profile.steps()}")'), "codes", tmp_path)
+    bytecode = compile_text(CODES.replace("END", 'puts(_warm)\n  puts("steps #{Profile.steps()}")'), "codes", tmp_path)
     code, stdout, _ = assert_same(bytecode)
     assert code == 0 and stdout.startswith("before\n904000\n"), stdout
     assert compiled(bytecode, tmp_path, "on") == (["letter", "scan"] if jit_host() else [])

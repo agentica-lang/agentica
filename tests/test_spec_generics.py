@@ -129,7 +129,7 @@ RULES = {
         + main("puts(nest(1, 3))"), None, None),
     "a T value is stored, returned and captured": (
         "def keep[T](x: T) -> Map[String, List[Result[T]]]\n"
-        "  rs = [1, 2].map do |i|\n"
+        "  rs = [1, 2].map do |_|\n"
         "    ok(x)\n"
         "  end\n"
         '  return {"a": rs}\n'
@@ -206,7 +206,7 @@ RULES = {
     "ordering on T": (body("z = x < y"), "CHECK-TYPE-MISMATCH", "<"),
     "to_s on T": (body("z = x.to_s"), "CHECK-UNKNOWN-METHOD", "x.to_s"),
     "inspect on T": (body("z = x.inspect"), "CHECK-UNKNOWN-METHOD", "x.inspect"),
-    "interpolation of T": (body('z = "#{x}"'), "CHECK-TYPE-MISMATCH", "x"),
+    "interpolation of T": (body('_z = "#{x}"'), "CHECK-TYPE-MISMATCH", "x"),
     "puts of T": (body("puts(x)"), "CHECK-TYPE-MISMATCH", "x"),
     "puts of a list of T": (body("puts([x])"), "CHECK-TYPE-MISMATCH", "[x]"),
     "a field of T": (body("z = x.name"), "CHECK-UNKNOWN-METHOD", "x.name"),
@@ -219,9 +219,9 @@ RULES = {
         "CHECK-PATTERN-TYPE", "Maybe.None"),
     # JSON.encode and JSON.from on a type with T are checked where a call binds T: the argument that binds it is the
     # span, and a generic caller passes the need on to its own callers.
-    "JSON.encode of T": (body("z = JSON.encode(x)"), None, None),
+    "JSON.encode of T": (body("_z = JSON.encode(x)"), None, None),
     "JSON.from of a list of T and JSON.encode of a map of T": (
-        elements("a = JSON.from(xs)", "b = JSON.encode(m)"), None, None),
+        elements("_a = JSON.from(xs)", "_b = JSON.encode(m)"), None, None),
     "JSON.encode of a Task of T": (body("t = Task.spawn do x end", "z = JSON.encode(t)"), "CHECK-NOT-ENCODABLE", "t"),
     "calls that bind encodable types": (
         ENCODES + ID + main("puts(show(1))", "puts(wrap([1]))", "puts(maybe(some(1)))", "g: Fn[Int, String] = &show",
@@ -238,7 +238,7 @@ RULES = {
         + main('puts(outer("a".bytes))'), "CHECK-NOT-ENCODABLE", '"a".bytes'),
     "a reference that binds Bytes": (
         ENCODES + main("g: Fn[Bytes, String] = &show"), "CHECK-NOT-ENCODABLE", "&show"),
-    "JSON.decode to T": (body('z = JSON.decode("{}", T)'), "CHECK-NOT-DECODABLE", "T"),
+    "JSON.decode to T": (body('_z = JSON.decode("{}", T)'), "CHECK-NOT-DECODABLE", "T"),
     "T as a Map key": (
         "def f[T](m: Map[T, Int]) -> Int\n  return 0\nend\n\n" + main("puts(1)"), "CHECK-MAP-KEY-TYPE", "T"),
     "T as a Set element": (
@@ -246,14 +246,14 @@ RULES = {
     "T as a Map key does not become valid with Int": (
         "def f[T](m: Map[T, Int]) -> Int\n  return 0\nend\n\n" + main("puts(f({1: 2}))"), "CHECK-MAP-KEY-TYPE", "T"),
     "find and group_by on a List of T": (
-        elements("a = xs.find do |a: T| true end", "g = xs.group_by do |x| \"k\" end", "puts(g.size)"), None, None),
+        elements("_ = xs.find do |_a: T| true end", "g = xs.group_by do |_| \"k\" end", "puts(g.size)"), None, None),
     "the other block methods on a List of T": (
-        elements("xs.each_with_index do |x, i|", "  puts(i)", "end", "puts(xs.take_while do |x| true end.size)",
-                 "puts(xs.partition do |x| true end.size)", "puts(xs.min_by do |x| 1 end.some?)",
+        elements("xs.each_with_index do |_, i|", "  puts(i)", "end", "puts(xs.take_while do |_| true end.size)",
+                 "puts(xs.partition do |_| true end.size)", "puts(xs.min_by do |_| 1 end.some?)",
                  "puts(xs.flat_map do |x| [x] end.size)"), None, None),
     "each and filter on a Map of T": (
-        elements("m.each do |k, v|", "  puts(k)", "end", "puts(m.filter do |k, v| true end.size)"), None, None),
-    "lazy filter on a List of T": (elements("l = xs.lazy.filter do |x| true end", "puts(1)"), None, None),
+        elements("m.each do |k, _|", "  puts(k)", "end", "puts(m.filter do |_, _| true end.size)"), None, None),
+    "lazy filter on a List of T": (elements("_l = xs.lazy.filter do |_| true end", "puts(1)"), None, None),
     "a generic function reference as the callback of filter": (
         elements("puts(xs.filter(&yes).size)", header=YES), None, None),
     "Void in a parameter type is CHECK-VOID-TYPE at the call": (
@@ -261,7 +261,7 @@ RULES = {
         + main("n = hold([]) do |x|", "  puts(x)", "end", "puts(n)"), "CHECK-VOID-TYPE",
         "hold([]) do |x|\n    puts(x)\n  end"),
     "a T annotation in the body": (
-        body("z: T = x", "w: List[T] = []", "puts(w.size)"), None, None),
+        body("_z: T = x", "w: List[T] = []", "puts(w.size)"), None, None),
     "a block parameter annotated with T": (
         "def apply[T](x: T, f: Fn[T, T]) -> T\n  return f.call(x)\nend\n\n"
         "def twice[T](x: T) -> T\n  return apply(x) do |y: T|\n    y\n  end\nend\n\n" + main("puts(twice(3))"),
@@ -327,8 +327,8 @@ CODEC = (
 
 def with_codec(*lines: str, header: str = "") -> str:
     """The structs User and Bad, the generic functions body_as and show, and a main with `c = JSON.codec(User)`
-    then the lines."""
-    return header + CODEC + main("c = JSON.codec(User)", *lines)
+    (read at once, so a case that leaves `c` alone stays valid) then the lines."""
+    return header + CODEC + main("c = JSON.codec(User)", "_ = c", *lines)
 
 
 CODEC_RULES = {

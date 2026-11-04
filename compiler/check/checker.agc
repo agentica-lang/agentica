@@ -177,6 +177,7 @@ def start(linked: Linker.Linked) -> State.Cx
     help: Help.tables(),
     structs: RECORDS,
     struct_params: {},
+    field_sites: {},
     field_defaults: record_defaults(),
     enums: ENUMS,
     aliases: {},
@@ -193,6 +194,7 @@ def start(linked: Linker.Linked) -> State.Cx
     expression: &Expr.check_expression,
     prelude: false,
     json_needs: {},
+    lenient: Set.new([]),
   )
 end
 
@@ -238,6 +240,20 @@ def stub_open(text: String, zero: Int) -> Int
   return zero - 1
 end
 
+# The files whose unused names are no error: the roots of a query (`settings.unused` false), as for an unused import.
+def lenient_files(linked: Linker.Linked, settings: Env.Settings) -> Set[String]
+  files: List[String] = []
+  if !settings.unused
+    for module in linked.modules
+      if linked.roots.include?(module.key)
+        files = files.push(module.file)
+      end
+    end
+  end
+
+  return Set.new(files)
+end
+
 # `recover` keeps the problem of a function body and goes on with the next function; without it the first problem ends
 # the run.
 def run(
@@ -247,7 +263,7 @@ def run(
   recover: Bool,
   taken: Reuse.Taken,
 ) -> Result[Recovered]
-  base = start(linked)
+  base = start(linked).with(lenient: lenient_files(linked, settings))
   cx = try Register.register(base, linked.modules)
   try Register.check_main(cx, linked.modules, linked.roots, linked.root.span, main_required)
   cx = cx.with(constants: taken.constants)
@@ -322,7 +338,8 @@ def json_needs(cx: State.Cx, st: State.St, modules: List[Linker.LinkedModule]) -
   needs: Map[String, List[T.Type]] = {}
   passes: List[JsonPass] = []
   for module in modules
-    here = cx.with(file: module.file)
+    # A body with a name nobody reads still has its needs; the check of the bodies reports the name.
+    here = cx.with(file: module.file, lenient: Set.new([module.file]))
     for decl in module.declarations
       case decl
         Ast.Decl.Function(node) if node.type_parameters.size > 0 ->

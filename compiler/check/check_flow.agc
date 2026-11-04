@@ -19,8 +19,8 @@ end
 ## functions may halt, but have no "never returns" type), and a try leaves early only on an error.
 export def ends?(statement: Ast.Stmt) -> Bool
   case statement
-    Ast.Stmt.Return(node) -> return true
-    Ast.Stmt.Control(node) -> return true
+    Ast.Stmt.Return(_) -> return true
+    Ast.Stmt.Control(_) -> return true
     Ast.Stmt.If(node) -> return if_ends?(node)
     Ast.Stmt.Case(node) -> return node.arms.all? do |arm: Ast.CaseArm| block_ends?(arm.body) end
     _ -> return false
@@ -30,9 +30,9 @@ end
 ## The help of CHECK-UNREACHABLE-CODE: the statement before the dead one is the terminator, on `line`.
 export def unreachable_help(terminator: Ast.Stmt, line: Int) -> String
   case terminator
-    Ast.Stmt.If(node) -> return "every branch of the if above ends with return, break or next; #{fix_text("if")}"
-    Ast.Stmt.Case(node) -> return "every arm of the case above ends with return, break or next; #{fix_text("case")}"
-    Ast.Stmt.Return(node) -> return "the block ends at the return on line #{line}; #{fix_text("return")}"
+    Ast.Stmt.If(_) -> return "every branch of the if above ends with return, break or next; #{fix_text("if")}"
+    Ast.Stmt.Case(_) -> return "every arm of the case above ends with return, break or next; #{fix_text("case")}"
+    Ast.Stmt.Return(_) -> return "the block ends at the return on line #{line}; #{fix_text("return")}"
     Ast.Stmt.Control(node) -> return "the block ends at the #{node.kind} on line #{line}; #{fix_text(node.kind)}"
     _ -> return ""
   end
@@ -64,10 +64,9 @@ export def missing_return_help(body: List[Ast.Stmt], type_name: String) -> Strin
   last = body[body.size - 1]
   case last
     Ast.Stmt.If(node) -> return if_help(node, type_name)
-    Ast.Stmt.While(node) -> return loop_help(type_name)
-    Ast.Stmt.For(node) -> return loop_help(type_name)
-    Ast.Stmt.Case(node) ->
-      return "every arm of the last \"case\" must end with return, or return #{type_name} after it"
+    Ast.Stmt.While(_) -> return loop_help(type_name)
+    Ast.Stmt.For(_) -> return loop_help(type_name)
+    Ast.Stmt.Case(_) -> return "every arm of the last \"case\" must end with return, or return #{type_name} after it"
     _ -> return ""
   end
 end
@@ -136,7 +135,7 @@ end
 
 def returns?(statement: Ast.Stmt) -> Bool
   case statement
-    Ast.Stmt.Return(node) -> return true
+    Ast.Stmt.Return(_) -> return true
     Ast.Stmt.If(node) -> return if_returns?(node)
     Ast.Stmt.Case(node) -> return node.arms.all? do |arm: Ast.CaseArm| block_returns?(arm.body) end
     _ -> return false
@@ -175,7 +174,7 @@ end
 
 def holds_return?(statement: Ast.Stmt) -> Bool
   case statement
-    Ast.Stmt.Return(node) -> return true
+    Ast.Stmt.Return(_) -> return true
     Ast.Stmt.If(node) -> return if_holds_return?(node)
     Ast.Stmt.While(node) -> return contains_return?(node.body)
     Ast.Stmt.For(node) -> return contains_return?(node.body)
@@ -197,7 +196,7 @@ end
 
 def if_help(node: Ast.IfStmt, type_name: String) -> String
   case node.else_body
-    some(body) -> return "every branch of the last \"if\" must end with return, or return #{type_name} after it"
+    some(_) -> return "every branch of the last \"if\" must end with return, or return #{type_name} after it"
     none -> return "the last \"if\" has no \"else\"; add an \"else\" that returns #{type_name}, or return after it"
   end
 end

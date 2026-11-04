@@ -57,7 +57,7 @@ def main() -> Void
   for i in 3..1
     print(i)
   end
-  for i in 2...2
+  for _ in 2...2
   end
   r = 9223372036854775806..9223372036854775807
   for i in r

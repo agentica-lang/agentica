@@ -4,7 +4,7 @@ def reader(n: Int) -> List[String]
   while running
     case gets()
       ok(line) -> lines = lines.append(line)
-      error(message) -> running = false
+      error(_) -> running = false
     end
   end
   return lines
@@ -12,7 +12,7 @@ end
 
 def count(n: Int) -> Int
   total = 0
-  for i in 0...n
+  for _ in 0...n
     total = total + 1
   end
   return total

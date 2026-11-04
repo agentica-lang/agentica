@@ -403,7 +403,7 @@ def test_a_library_is_not_searched_in_the_working_directory(tmp_path, peer):
 def test_calls_from_tasks_on_several_schedulers(tmp_path, peer):
     main = """def work(n: Int) -> Int
   total = 0
-  for k in 1..200
+  for _ in 1..200
     total = peer_add(total, peer_len(peer_upper("ab")) - 1)
   end
   return total + n * 0
@@ -551,7 +551,7 @@ def test_the_run_ends_while_a_compute_call_runs(tmp_path, peer, ending, code):
 end
 
 def main() -> Void
-  napper = Task.spawn(&nap, 3_000)
+  _napper = Task.spawn(&nap, 3_000)
   Task.sleep(50)
   %s
 end
@@ -582,7 +582,7 @@ def write(times: Int) -> Int
 end
 
 def main() -> Void
-  writer = Task.spawn(&write, 1)
+  _writer = Task.spawn(&write, 1)
   n = 0
   while peer_write_started() == 0 and n < 2000
     Task.sleep(1)
@@ -746,7 +746,7 @@ def hold_stream(n: Int) -> Int
 end
 
 def main() -> Void
-  writer = Task.spawn(&hold_stream, 0)
+  _writer = Task.spawn(&hold_stream, 0)
   IO.read_bytes(1)
   {buffer}({free_stream_id})
   puts("done")
@@ -775,7 +775,7 @@ end
 
 def main() -> Void
   tasks: List[Task[Result[Int]]] = []
-  for k in 1..50
+  for _ in 1..50
     tasks = tasks.push(Task.spawn(&nap, 100))
   end
   n = 0
@@ -1284,7 +1284,7 @@ def test_bounds_null_and_freed_buffers_stop_the_run(tmp_path, peer, line, code, 
     text = "  %s" % line if line.startswith(("Native.put", "Native.free")) else "  IO.inspect(%s)" % line
     main = 'def main() -> Void\n  buf = Native.memory_pointer(16)\n  gone = Native.memory_pointer(4)\n' \
         '  gone_view = Native.offset(gone, 2)\n  Native.free(gone)\n  full = Native.memory_pointer(2)\n' \
-        '  Native.put_int16(full, 0, 24_929)\n  puts("before")\n%s\nend\n' % text
+        '  Native.put_int16(full, 0, 24_929)\n  puts("before")\n%s\n  _ = buf\n  _ = gone_view\n  _ = full\nend\n' % text
     result = agentica("--json", program(tmp_path, BUFFER_EXTERN.format(library=literal(peer)) + main))
     assert result.stdout == "before\n"
     # An extern call fails at its extern function, as for a closed resource.
@@ -1309,7 +1309,7 @@ def test_put_bytes_writes_what_get_bytes_reads_back(tmp_path, peer):
   puts(Native.get_bytes(copy, 7, 3).to_a)
   IO.inspect(Native.get_bytes(copy, 16, 0))
   part = Bytes.from_list((0..255).to_a).unwrap!
-  large = Bytes.concat((1..16_384).to_a.map do |i: Int| part end)
+  large = Bytes.concat((1..16_384).to_a.map do |_i: Int| part end)
   big = Native.memory_pointer(large.size)
   Native.put_bytes(big, 0, large)
   back = Native.get_bytes(big, 0, large.size)
@@ -1424,6 +1424,7 @@ end
 
 def main() -> Void
   out: Channel[C.Pointer] = Channel.new(1)
+  _ = out
   sum = Native.memory_pointer(16) do |buf|
     Native.put_array_of_float32(buf, 4, [2.0, 3.5, 4.0])
     peer_sum_floats(buf, 4)
@@ -1619,7 +1620,7 @@ end
 def main() -> Void
   res = peer_res_open(1).unwrap!
   holders: List[Task[Result[Int]]] = []
-  for k in 1..SCHEDULERS
+  for _ in 1..SCHEDULERS
     holders = holders.push(Task.spawn(&hold, res))
   end
   n = 0
@@ -1703,16 +1704,16 @@ end
 
 def main() -> Void
   opened: Channel[Int] = Channel.new(1)
-  keeper = Task.spawn do keep("%s", opened) end
+  _keeper = Task.spawn do keep("%s", opened) end
   opened.recv(10_000).unwrap!
   stream = fopen("%s", "w").unwrap!
   fputs("from main\\n", stream)
-  a = peer_note_open("NOTES", "a").unwrap!
+  _a = peer_note_open("NOTES", "a").unwrap!
   b = peer_note_open("NOTES", "b").unwrap!
-  c = peer_note_open("NOTES", "c").unwrap!
+  _c = peer_note_open("NOTES", "c").unwrap!
   Native.close(b)
   buf = Native.memory_pointer(16)
-  view = Native.offset(buf, 4)
+  _view = Native.offset(buf, 4)
   puts("main ends")
   %s
 end
@@ -1736,15 +1737,15 @@ def test_the_end_of_main_frees_a_held_resource_when_the_call_returns(tmp_path, p
 end
 
 def main() -> Void
-  parent = peer_note_open("NOTES", "parent").unwrap!
+  _parent = peer_note_open("NOTES", "parent").unwrap!
   child = peer_note_open("NOTES", "child").unwrap!
-  holder = Task.spawn(&hold, child)
+  _holder = Task.spawn(&hold, child)
   n = 0
   while peer_note_holding() < 1 and n < 2000
     Task.sleep(1)
     n += 1
   end
-  last = peer_note_open("NOTES", "last").unwrap!
+  _last = peer_note_open("NOTES", "last").unwrap!
   puts(peer_note_holding())
 end
 """
@@ -1771,9 +1772,9 @@ end
 
 def main() -> Void
   note = peer_note_open("NOTES", "freed").unwrap!
-  nappers: List[Task[Int]] = []
-  for k in 1..SCHEDULERS
-    nappers = nappers.push(Task.spawn(&nap, 20_000))
+  _nappers: List[Task[Int]] = []
+  for _ in 1..SCHEDULERS
+    _nappers = _nappers.push(Task.spawn(&nap, 20_000))
   end
   n = 0
   while peer_nap_starts() < SCHEDULERS and n < 2000
@@ -1781,7 +1782,7 @@ def main() -> Void
     n += 1
   end
   calling: Channel[Int] = Channel.new(1)
-  holder = Task.spawn do hold(note, calling) end
+  _holder = Task.spawn do hold(note, calling) end
   calling.recv(10_000).unwrap!
   puts(peer_note_holding())
 end
@@ -1799,9 +1800,9 @@ end
 @NATIVE_CALLS
 def test_a_free_that_hangs_ends_at_the_flush_limit(tmp_path, peer):
     main = """def main() -> Void
-  a = peer_note_open("NOTES", "a").unwrap!
-  slow = peer_note_open_slow("NOTES", "slow").unwrap!
-  b = peer_note_open("NOTES", "b").unwrap!
+  _a = peer_note_open("NOTES", "a").unwrap!
+  _slow = peer_note_open_slow("NOTES", "slow").unwrap!
+  _b = peer_note_open("NOTES", "b").unwrap!
   puts("main ends")
 end
 """
@@ -1827,10 +1828,10 @@ def test_a_stop_signal_frees_what_is_still_open(tmp_path, peer, ending):
 end
 
 def main() -> Void
-  parent = peer_note_open("NOTES", "parent").unwrap!
+  _parent = peer_note_open("NOTES", "parent").unwrap!
   held = peer_note_open("NOTES", "held").unwrap!
-  note = peer_note_open("NOTES", "a").unwrap!
-  holder = Task.spawn(&hold, held)
+  _note = peer_note_open("NOTES", "a").unwrap!
+  _holder = Task.spawn(&hold, held)
   n = 0
   while peer_note_holding() < 1 and n < 2000
     Task.sleep(1)
@@ -2447,7 +2448,7 @@ end
 ])
 def test_what_c_cannot_take_in_a_struct_field_stops_the_run(tmp_path, peer, call, code):
     main = "def main() -> Void\n  freed = Native.memory_pointer(4)\n  freed_view = Native.offset(freed, 0)\n" \
-        "  Native.free(freed)\n  %s\n  puts(1)\nend\n" % call
+        "  Native.free(freed)\n  %s\n  puts(1)\n  _ = freed\n  _ = freed_view\nend\n" % call
     refused_at_extern(tmp_path, peer, STRUCT_EXTERN, main, call, code)
 
 
@@ -2550,7 +2551,7 @@ def test_a_struct_outside_its_buffer_or_with_a_bad_field_stops_the_run(tmp_path,
     text = "  %s" % line if line.startswith("Native.put") else "  IO.inspect(%s)" % line
     main = "def main() -> Void\n  rows = Native.memory_pointer(Native.size_of(PeerRow))\n" \
         "  row = PeerRow(id: 1, count: 2, score: 3.0)\n  gone = Native.memory_pointer(64)\n  Native.free(gone)\n" \
-        '  puts("before")\n%s\nend\n' % text
+        '  puts("before")\n%s\n  _ = rows\n  _ = row\n  _ = gone\nend\n' % text
     result = agentica("--json", program(tmp_path, ROWS_EXTERN.format(library=literal(peer)) + main))
     assert result.stdout == "before\n"
     assert diagnostic(result, 1) == (code, (ROWS_EXTERN.count("\n") + 7, text.index(argument) + 1))
@@ -2753,7 +2754,7 @@ end
 @NATIVE_CALLS
 def test_the_run_ends_while_a_task_waits(tmp_path, peer):
     main = """def main() -> Void
-  waiter = Task.spawn(&wait, peer_pipe())
+  _waiter = Task.spawn(&wait, peer_pipe())
   Task.sleep(20)
   puts("done")
 end
@@ -3208,7 +3209,7 @@ CALLBACK_PARENT_SEND = """extern "%s"
 end
 
 def fills(x: Int) -> Int
-  sent = Process.parent_send(List.repeat("a", 1_000_000).join("") + "\\n", 30000)
+  _sent = Process.parent_send(List.repeat("a", 1_000_000).join("") + "\\n", 30000)
   return x
 end
 
@@ -3385,9 +3386,9 @@ end
 
 def waits(x: Int) -> Int
   peer_bump()
-  turns = 0
+  _turns = 0
   while peer_flag() == 0
-    turns = turns + 1
+    _turns = _turns + 1
   end
 
   return x

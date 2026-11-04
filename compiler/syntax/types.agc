@@ -48,21 +48,21 @@ export def tag(type: Type) -> String
     Type.Range -> return "Range"
     Type.Bytes -> return "Bytes"
     Type.Unknown -> return "Unknown"
-    Type.Opaque(name) -> return "Opaque"
-    Type.Result(item) -> return "Result"
-    Type.Optional(item) -> return "Optional"
-    Type.Task(item) -> return "Task"
-    Type.Channel(item) -> return "Channel"
-    Type.Lazy(item) -> return "Lazy"
-    Type.Codec(item) -> return "Codec"
-    Type.List(item) -> return "List"
-    Type.Set(item) -> return "Set"
-    Type.Map(key, value) -> return "Map"
-    Type.ATS(key, value) -> return "ATS"
-    Type.Fn(params, result) -> return "Fn"
-    Type.Struct(name, args) -> return "Struct"
-    Type.Enum(name, args) -> return "Enum"
-    Type.Var(name) -> return "Var"
+    Type.Opaque(_) -> return "Opaque"
+    Type.Result(_) -> return "Result"
+    Type.Optional(_) -> return "Optional"
+    Type.Task(_) -> return "Task"
+    Type.Channel(_) -> return "Channel"
+    Type.Lazy(_) -> return "Lazy"
+    Type.Codec(_) -> return "Codec"
+    Type.List(_) -> return "List"
+    Type.Set(_) -> return "Set"
+    Type.Map(_, _) -> return "Map"
+    Type.ATS(_, _) -> return "ATS"
+    Type.Fn(_, _) -> return "Fn"
+    Type.Struct(_, _) -> return "Struct"
+    Type.Enum(_, _) -> return "Enum"
+    Type.Var(_) -> return "Var"
   end
 end
 
@@ -94,8 +94,8 @@ end
 ## The key type of a Map or an ATS; Unknown for any other type.
 export def key(type: Type) -> Type
   case type
-    Type.Map(inner, value) -> return inner
-    Type.ATS(inner, value) -> return inner
+    Type.Map(inner, _) -> return inner
+    Type.ATS(inner, _) -> return inner
     _ -> return Type.Unknown
   end
 end
@@ -103,8 +103,8 @@ end
 ## The value type of a Map or an ATS; Unknown for any other type.
 export def value(type: Type) -> Type
   case type
-    Type.Map(key, inner) -> return inner
-    Type.ATS(key, inner) -> return inner
+    Type.Map(_, inner) -> return inner
+    Type.ATS(_, inner) -> return inner
     _ -> return Type.Unknown
   end
 end
@@ -112,7 +112,7 @@ end
 ## The parameter types of an Fn; empty for any other type.
 export def params(type: Type) -> List[Type]
   case type
-    Type.Fn(found, result) -> return found
+    Type.Fn(found, _) -> return found
     _ -> return []
   end
 end
@@ -120,7 +120,7 @@ end
 ## The result type of an Fn; Unknown for any other type.
 export def result(type: Type) -> Type
   case type
-    Type.Fn(found, last) -> return last
+    Type.Fn(_, last) -> return last
     _ -> return Type.Unknown
   end
 end
@@ -130,8 +130,8 @@ export def name(type: Type) -> String
   case type
     Type.Opaque(found) -> return found
     Type.Var(found) -> return found
-    Type.Struct(found, list) -> return found
-    Type.Enum(found, args) -> return found
+    Type.Struct(found, _) -> return found
+    Type.Enum(found, _) -> return found
     _ -> return ""
   end
 end
@@ -139,8 +139,8 @@ end
 ## The type arguments of a Struct or Enum type; empty for any other type.
 export def args(type: Type) -> List[Type]
   case type
-    Type.Struct(found, list) -> return list
-    Type.Enum(found, list) -> return list
+    Type.Struct(_, list) -> return list
+    Type.Enum(_, list) -> return list
     _ -> return []
   end
 end

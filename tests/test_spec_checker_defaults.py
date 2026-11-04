@@ -194,31 +194,31 @@ SINGLE_FILE = [
      main_with('  puts(Zlib.crc32("a".bytes, "x"))\n'), "CHECK-TYPE-MISMATCH", '"x"'),
     ("a filesystem builtin may leave out the timeout, and File.open the mode and the timeout",
      main_with('  puts(File.read_text("a.txt"))\n  puts(File.stat("a.txt", 50))\n  puts(Path.rename("a", "b"))\n'
-               '  a = File.open("a.txt")\n  b = File.open("a.txt", "write")\n'
-               '  c = File.open("a.txt", "append", 50)\n'), None, None),
+               '  _ = File.open("a.txt")\n  _ = File.open("a.txt", "write")\n'
+               '  _ = File.open("a.txt", "append", 50)\n'), None, None),
     ("a filesystem builtin timeout is still an Int",
      main_with('  puts(Dir.list("d", "soon"))\n'), "CHECK-TYPE-MISMATCH", '"soon"'),
     ("a file handle call and each_line, foreach and write_lines may leave out the timeout",
      main_with('  f = File.open("a.txt").unwrap!\n  puts(File.read_line(f))\n  puts(File.write(f, "x"))\n'
                '  puts(File.close(f, 50))\n  puts(File.read_bytes(f, 4))\n  puts(File.flush(f))\n'
                '  puts(File.write_bytes(f, "a".bytes))\n  puts(File.try_lock(f))\n'
-               '  File.each_line("a.txt", 4096) do |l|\n    ok()\n  end\n'
+               '  File.each_line("a.txt", 4096) do |_|\n    ok()\n  end\n'
                '  File.each_line("a.txt") do |line|\n    puts(line)\n    ok()\n  end\n'
                '  puts(File.foreach("a.txt").first(1))\n  puts(File.foreach("a.txt", 4096).first(1))\n'
                '  puts(File.foreach("a.txt").write_lines("b.txt"))\n'), None, None),
     ("the process starts may leave out the timeout, and the captured ones the directory too",
-     main_with('  a = Process.spawn("ls", ["-l"])\n  b = Process.spawn("ls", [], 50)\n'
-               '  c = Process.spawn_captured("ls", [])\n  d = Process.spawn_captured("ls", [], "d")\n'
-               '  e = Process.spawn_channel("ls", [], "d", 50)\n  f = Process.spawn_channel("ls", [])\n'), None, None),
+     main_with('  _ = Process.spawn("ls", ["-l"])\n  _ = Process.spawn("ls", [], 50)\n'
+               '  _ = Process.spawn_captured("ls", [])\n  _ = Process.spawn_captured("ls", [], "d")\n'
+               '  _ = Process.spawn_channel("ls", [], "d", 50)\n  _ = Process.spawn_channel("ls", [])\n'), None, None),
     ("Process.spawn_captured still needs its command and arguments",
      main_with('  c = Process.spawn_captured("ls")\n'), "CHECK-ARITY", 'Process.spawn_captured("ls")'),
     ("TlsClientOptions may leave out every field, and HttpClientOptions its tls, which is none",
-     main_with('  a = TLS.client_context(TlsClientOptions())\n  b = TlsClientOptions(ca_file: "ca.pem")\n'
-               '  c = HttpClientOptions()\n  d: Optional[TlsContext] = c.tls\n'
-               '  e = HttpClientOptions(tls: some(a.unwrap!))\n'), None, None),
+     main_with('  a = TLS.client_context(TlsClientOptions())\n  _b = TlsClientOptions(ca_file: "ca.pem")\n'
+               '  c = HttpClientOptions()\n  _d: Optional[TlsContext] = c.tls\n'
+               '  _e = HttpClientOptions(tls: some(a.unwrap!))\n'), None, None),
     ("alpn is a list of protocol names that both options records may leave out",
-     main_with('  a = TlsClientOptions(alpn: ["h2", "http/1.1"])\n'
-               '  b = TlsServerOptions(cert_file: "c.pem", key_file: "k.pem")\n  c: List[String] = b.alpn\n'),
+     main_with('  _a = TlsClientOptions(alpn: ["h2", "http/1.1"])\n'
+               '  b = TlsServerOptions(cert_file: "c.pem", key_file: "k.pem")\n  _c: List[String] = b.alpn\n'),
      None, None),
     ("alpn takes a list of names, not one name",
      main_with('  a = TlsClientOptions(alpn: "h2")\n'), "CHECK-TYPE-MISMATCH", '"h2"'),
@@ -314,7 +314,7 @@ SINGLE_FILE = [
     ("with changes a field and leaves the others, defaults included",
      POINT + main_with("  puts(Point(y: 1).with(x: 5).inspect)\n"), None, None),
     ("a builtin record with catalog defaults may leave every field out",
-     main_with("  c = HttpClientOptions()\n  s = HttpServerOptions(max_connections: 1)\n  puts(c.timeout_ms)\n"),
+     main_with("  c = HttpClientOptions()\n  _s = HttpServerOptions(max_connections: 1)\n  puts(c.timeout_ms)\n"),
      None, None),
     ("a field of a builtin record without a catalog default must still be given",
      main_with('  h = Header(name: "a")\n  puts(h.name)\n'), "CHECK-MISSING-FIELD", 'Header(name: "a")'),

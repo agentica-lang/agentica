@@ -101,7 +101,7 @@ def walked_children(node: AstWalk.Node) -> List[AstWalk.Node]
       case expr
         Ast.Expr.FieldAccess(access) ->
           case access.target
-            Ast.Expr.TypeName(found) -> return []
+            Ast.Expr.TypeName(_) -> return []
             _ -> return AstWalk.children(node)
           end
 

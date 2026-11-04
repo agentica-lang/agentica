@@ -267,7 +267,7 @@ def test_the_profile_names_a_byte_builtin_by_its_catalog_name(tmp_path, traced_v
 def test_the_profile_counts_each_opcode_the_pairs_and_the_paths_of_builtin_calls(tmp_path, traced_vm):
     vm = traced_vm[0]
     source = tmp_path / "ops.agc"
-    source.write_text('def main() -> Void\n  total = 0\n  word = "hello"\n  for k in 0...50\n'
+    source.write_text('def main() -> Void\n  total = 0\n  word = "hello"\n  for _ in 0...50\n'
                       "    total += word.length\n  end\n  puts(total)\nend\n")
     bytecode = compile_fixture(source, tmp_path)
     path = tmp_path / "ops.trace"
@@ -498,7 +498,7 @@ def test_profile_measure_adds_a_section_row_for_each_label(tmp_path, traced_vm):
 def test_profile_steps_gives_the_same_counts_with_the_profile_off_or_on(tmp_path, traced_vm):
     vm = traced_vm[0]
     source = tmp_path / "steps.agc"
-    source.write_text("def main() -> Void\n  a = Profile.steps()\n  10.times do |k|\n    puts(Profile.steps() - a)\n"
+    source.write_text("def main() -> Void\n  a = Profile.steps()\n  10.times do |_|\n    puts(Profile.steps() - a)\n"
                       "  end\n  puts(Profile.measure(\"m\") do Profile.steps() end)\nend\n")
     bytecode = compile_fixture(source, tmp_path)
     plain = run_vm(vm, bytecode)

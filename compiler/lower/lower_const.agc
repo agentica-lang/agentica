@@ -163,7 +163,7 @@ def plain(value: Ast.LitValue) -> Optional[Ir.Imm]
     Ast.LitValue.Text(text) -> return some(Ir.Imm.Text(text))
     Ast.LitValue.Flag(flag) -> return some(Ir.Imm.Bool(flag))
     Ast.LitValue.Nothing -> return some(Ir.Imm.Nil)
-    Ast.LitValue.Huge(digits) -> return none
+    Ast.LitValue.Huge(_) -> return none
   end
 end
 

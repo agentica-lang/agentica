@@ -30,8 +30,8 @@ TEMPLATE = '''<h1><%= title %></h1>
   <p><%= name %> <%= n %></p>
     <%- end -%>
 A literal <%% tag, #{raw} \\n and 100%> text.
-ab  <%- k = 5 %>cd
-    <%- k = 6 %>ef
+ab  <%- _k = 5 %>cd
+    <%- _k = 6 %>ef
 
 <% if flag %>flag<% end %> and <%= title + "!" -%>
 tail

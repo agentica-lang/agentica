@@ -194,7 +194,7 @@ def lower_if(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.IfStmt, saved: Int) -> 
   end_label = fx.labels - 1
   has_else = false
   case node.else_body
-    some(body) -> has_else = true
+    some(_) -> has_else = true
     none -> has_else = false
   end
 
@@ -457,7 +457,7 @@ end
 def lower_test(cx: Lowering.Cx, fx: Lowering.Fx, pattern: Ast.Pattern, value: Int, skip: Int) -> Result[Lowering.Fx]
   span = Ast.pattern_span(pattern)
   case pattern
-    Ast.Pattern.Wildcard(node) -> return ok(fx)
+    Ast.Pattern.Wildcard(_) -> return ok(fx)
     Ast.Pattern.Literal(node) -> return lower_literal_test(cx, fx, node, value, skip)
     Ast.Pattern.Variant(node) ->
       fx = Lowering.alloc(fx)
@@ -588,7 +588,7 @@ end
 
 def slot_binds?(slot: Ast.Slot) -> Bool
   case slot
-    Ast.Slot.Bind(name, _) -> return true
+    Ast.Slot.Bind(_, _) -> return true
     Ast.Slot.Skip -> return false
     Ast.Slot.Nested(inner) -> return binds?(inner)
   end
@@ -620,7 +620,7 @@ end
 
 def final_expression?(statement: Ast.Stmt) -> Bool
   case statement
-    Ast.Stmt.Expression(node) -> return true
+    Ast.Stmt.Expression(_) -> return true
     _ -> return false
   end
 end

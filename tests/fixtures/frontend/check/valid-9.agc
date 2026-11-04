@@ -16,7 +16,7 @@ def main() -> Void
   cleared = ana.with(tags: [], scores: {})
   deep = make().with(name: "Bea", age: 2).with(tags: ["a"])
   w: Int = ana.with
-  same_name = ana.with(with: 5)
+  _same_name = ana.with(with: 5)
   puts("#{older.age} #{cleared.tags.size} #{deep.name} #{w}")
 end
 

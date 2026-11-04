@@ -178,7 +178,7 @@ READ_ORDINARY_PROGRAM = """\
 def main() -> Void
   args = System.args()
   file = Result.unwrap!(File.open(args[0], "read", 5000))
-  for i in 0...args[1].to_i!
+  for _ in 0...args[1].to_i!
     IO.inspect(File.read_line(file, 5000))
   end
   puts(File.close(file, 5000).ok?)

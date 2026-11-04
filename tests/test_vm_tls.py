@@ -204,7 +204,7 @@ def main() -> Void
   # once here and a second client that shares it. A new context reads the file again and fails.
   Result.unwrap!(File.write_text(ca, "not a certificate", 5000))
   calls: List[Task[Result[HttpResponse]]] = []
-  for n in 0...3
+  for _ in 0...3
     calls = calls.push(Task.spawn(&get, Call(pool: pool, url: base + "/again")))
   end
   for call in calls
@@ -907,7 +907,7 @@ def test_a_context_of_the_wrong_role_is_runtime_tls_context_role_at_its_argument
         '  client = TLS.client_context(TlsClientOptions()).unwrap!\n'
         '  server = TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", '
         'key_file: "#{dir}/server-key.pem")).unwrap!\n'
-        f"  IO.inspect({call})\nend\n", encoding="utf-8")
+        f"  IO.inspect({call})\n  _ = client\n  _ = server\nend\n", encoding="utf-8")
     result = run(cli() + ["--json", "main.agc", CERTS], cwd=tmp_path, env=vm_environment())
     assert result.code == 1, name
     problem = json.loads(result.stderr)

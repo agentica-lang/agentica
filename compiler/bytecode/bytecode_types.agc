@@ -94,7 +94,7 @@ def type_id(
     Types.Type.Optional(item) ->
       inner = try type_id(program, struct_index, pool, item)
       return ok(entry_of(inner.pool, 8, inner.id))
-    Types.Type.Struct(name, args) ->
+    Types.Type.Struct(name, _) ->
       if !struct_index.has_key?(name)
         return error(unsupported(program, "the struct #{name} in a JSON field type is not in the table"))
       end
@@ -116,8 +116,8 @@ end
 def nesting(type: Types.Type) -> Int
   case type
     Types.Type.List(item) -> return 1 + nesting(item)
-    Types.Type.Map(key, item) -> return 1 + nesting(item)
-    Types.Type.Enum(name, args) -> return 1 + nesting(args[0])
+    Types.Type.Map(_, item) -> return 1 + nesting(item)
+    Types.Type.Enum(_, args) -> return 1 + nesting(args[0])
     Types.Type.Optional(item) -> return 1 + nesting(item)
     _ -> return 0
   end

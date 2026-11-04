@@ -2,15 +2,15 @@ import Logger from "std/logger"
 
 def reset() -> Void
   for name in Logger.handlers()
-    gone = Logger.detach(name)
+    _ = Logger.detach(name)
   end
-  back = Logger.attach("console", LogLevel.Info, &Logger.stderr_text)
+  _ = Logger.attach("console", LogLevel.Info, &Logger.stderr_text)
   Logger.set_level(LogLevel.Info)
 end
 
 def collect(events: Channel[LogEvent]) -> Result[Void]
   attached = Logger.attach("collect", LogLevel.Debug) do |event|
-    sent = events.send(event, 0)
+    _ = events.send(event, 0)
   end
   return attached
 end
@@ -55,8 +55,8 @@ def main() -> Void
       Logger.set_level(LogLevel.Debug)
       Logger.debug("d2")
       Logger.info("i")
-      back = Logger.attach("warn", LogLevel.Warning) do |event|
-        sent = events.send(LogEvent(level: event.level, message: "warn " + event.message, fields: event.fields, time_ms: 0, task: 0), 0)
+      _ = Logger.attach("warn", LogLevel.Warning) do |event|
+        _ = events.send(LogEvent(level: event.level, message: "warn " + event.message, fields: event.fields, time_ms: 0, task: 0), 0)
       end
       Logger.info("i2")
       Logger.err("e")
@@ -77,7 +77,7 @@ def main() -> Void
       try Test.eq(Logger.enabled?(LogLevel.Warning), false)
       try Test.eq(Logger.enabled?(LogLevel.Error), true)
       for name in Logger.handlers()
-        gone = Logger.detach(name)
+        _ = Logger.detach(name)
       end
       try Test.eq(Logger.enabled?(LogLevel.Error), false)
       reset()
@@ -99,12 +99,12 @@ def main() -> Void
     Test.test("an event keeps its handlers when one detaches another") do
       reset()
       events: Channel[LogEvent] = Channel.new(8)
-      back = Logger.attach("first", LogLevel.Info) do |event|
-        sent = events.send(event, 0)
-        gone = Logger.detach("second")
+      _ = Logger.attach("first", LogLevel.Info) do |event|
+        _ = events.send(event, 0)
+        _ = Logger.detach("second")
       end
-      later = Logger.attach("second", LogLevel.Info) do |event|
-        sent = events.send(event, 0)
+      _ = Logger.attach("second", LogLevel.Info) do |event|
+        _ = events.send(event, 0)
       end
       Logger.info("one")
       Logger.info("two")

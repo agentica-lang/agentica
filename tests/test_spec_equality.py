@@ -6,7 +6,7 @@ the diagnostic and the source text its range covers; a program that must check c
 
 import pytest
 
-from tests.spec_support import assert_rule
+from tests.spec_support import assert_rule, covered
 
 TYPES = """\
 struct User
@@ -124,3 +124,31 @@ REFUSED = [
 def test_equality_rules(agentica_check, program, code, text):
     assert_rule(agentica_check(program), program, code, text)
 
+
+
+def label_texts(program, found):
+    return [covered(program, label["range"]).strip() for label in found["labels"]]
+
+
+def test_refused_equality_marks_the_field_that_blocks_it(agentica_check):
+    # The note is on the innermost field, even through a list and a second struct.
+    program = main("  h = Holder(hooks: [])\n  puts(h == h)\n")
+    found = agentica_check(program)
+    assert found["code"] == "CHECK-TYPE-MISMATCH"
+    assert covered(program, found["range"]) == "=="
+    assert label_texts(program, found) == ["run: Fn[Int, Int]"]
+
+
+def test_refused_equality_leaves_the_note_out_for_a_field_of_another_file(agentica_check):
+    files = {
+        "hook.agc": "export struct Hook\n  run: Fn[Int, Int]\nend\n",
+        "main.agc": (
+            'import {Hook} from "hook"\n\n'
+            "def same(h: Hook) -> Bool\n  return h == h\nend\n\n"
+            "def main() -> Void\nend\n"
+        ),
+    }
+    found = agentica_check(files)
+    assert found["code"] == "CHECK-TYPE-MISMATCH"
+    assert found["file"].endswith("main.agc")
+    assert found.get("labels", []) == []

@@ -161,7 +161,7 @@ Tells whether input has ended. It peeks without consuming, and it can block unti
 def main() -> Void
   count = 0
   while !IO.eof?
-    line = IO.gets!
+    _line = IO.gets!
     count += 1
   end
 

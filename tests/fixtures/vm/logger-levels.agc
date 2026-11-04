@@ -97,7 +97,7 @@ def main() -> Void
   _ = Logger.detach("json")
   _ = Logger.attach("first", LogLevel.Info) do |event|
     IO.warn("  first: #{event.message}")
-    gone = Logger.detach("second")
+    _ = Logger.detach("second")
   end
   _ = Logger.attach("second", LogLevel.Info) do |event|
     IO.warn("  second: #{event.message}")

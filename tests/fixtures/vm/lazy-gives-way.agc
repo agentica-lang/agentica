@@ -5,7 +5,7 @@ def endless(skip: Int) -> Result[List[Int]]
 end
 
 def main() -> Void
-  t = Task.spawn(&endless, 9000000000000000000)
+  _t = Task.spawn(&endless, 9000000000000000000)
   total = 0
   i = 0
   while i < 3000

@@ -111,7 +111,7 @@ def method_form?(node: Ast.Call) -> Bool
   end
 
   case node.args[0]
-    Ast.Expr.Typed(found) -> return true
+    Ast.Expr.Typed(_) -> return true
     _ -> return false
   end
 end
