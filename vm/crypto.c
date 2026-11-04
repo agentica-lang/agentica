@@ -537,8 +537,8 @@ static agc_value builtin_aes_256_gcm_decrypt(agc_vm *vm, agc_value *args, uint32
 /* A KDF runs on the compute pool (docs/vm/14-core-invariants.md §14.1), where neither --max-steps, a cancel nor a
    signal stops it once it started, and it holds one of that pool's threads (one per scheduler, shared with the
    `compute def` calls) meanwhile. So its work is capped before the call, so the worst valid call takes tens of seconds
-   at most on one core: about 80 and 32 times the OWASP password storage figures (PBKDF2-HMAC-SHA256 with 600000 iterations of one 32-byte block;
-   scrypt with n = 2^17, r = 8, p = 1).
+   at most on one core: about 80 and 32 times the OWASP password storage figures (PBKDF2-HMAC-SHA256 with 600000
+   iterations of one 32-byte block; scrypt with n = 2^17, r = 8, p = 1).
    PBKDF2's work is iterations * ceil(length / 32). scrypt's is r * p * (n + 16): each of the p lanes mixes n blocks of
    128 * r bytes, and PBKDF2 makes and reads each lane's block too, which costs about as much as 16 more blocks (a
    call with n = 2 and a large p measured about 9 block-times per lane). */
@@ -621,7 +621,8 @@ static agc_value kdf_value(agc_vm *vm, agc_value *args, size_t length_at, const 
     return agc_error_value("KDF.pbkdf2_hmac_sha256 needs iterations * ceil(length / 32) of at most 50000000");
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "the thread pool is off in this run", span);
   /* The call parks, which a callback of native code cannot (agc_task_parking), and a loop that cannot start fails in
-     agc_io_loop: both are refused here, before the copies of the password exist, as vm/ffi.c does for a compute call. */
+     agc_io_loop: both are refused here, before the copies of the password exist, as vm/ffi.c does for a compute
+     call. */
   if (vm->task->callbacks)
     agc_fail(vm, "RUNTIME-NATIVE-CALLBACK", "a callback of native code cannot wait for a KDF call", span);
   (void)agc_io_loop(vm);

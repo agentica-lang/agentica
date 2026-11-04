@@ -150,8 +150,8 @@ in a PR that rewrites the goldens.
   calls `EVP_KDF_derive` on malloc'd copies of the password and the salt
   (`PBKDF2` with `pkcs5` set, so no SP 800-132 floors; `SCRYPT` with `maxmem`
   at the same 1025 MiB cap). The `done` half copies the key into the result and
-  wipes the copies. A library failure is `RUNTIME-INTERNAL` at the call. All
-  four run without the shared lock.
+  wipes the password and key copies. A library failure is `RUNTIME-INTERNAL` at
+  the call. All four run without the shared lock.
 - `SecureRandom.random_bytes(n)` and `hex(n)` check `0 <= n <= 1048576` (else
   `RUNTIME-INVALID-COUNT` at the argument), draw with `RAND_bytes`
   (`agc_secure_random` in `vm/digest_openssl.c`) and charge `AGC_COST_SIZE`;

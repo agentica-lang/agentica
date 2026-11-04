@@ -128,8 +128,9 @@ KDF.scrypt(password: Bytes, salt: Bytes, n: Int, r: Int, p: Int, length: Int) ->
   values give an `error(...)`. OWASP's password storage cheat sheet
   advises 600000 iterations for PBKDF2-HMAC-SHA256, and scrypt with
   `n = 131072, r = 8, p = 1`. A call runs on the compute pool: its task waits
-  and the other tasks keep running (not allowed inside a native callback). Compare a derived key with
-  `HMAC.secure_compare`. `KDF` is a reserved type name.
+  and the other tasks keep running (not allowed inside a native callback).
+  Compare a derived key with `HMAC.secure_compare`. `KDF` is a reserved type
+  name.
 
 ```text
 Base64.strict_encode64(data: Bytes) -> String     # padded, one line

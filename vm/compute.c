@@ -1,9 +1,9 @@
 /*
  * The compute pool: the threads that run the work of a job that agc_io_compute started (a native call of a `compute
- * def`), apart from the libuv pool, which takes only bounded work (docs/vm/14-core-invariants.md §14.1). At most one
- * thread per scheduler, started on demand; items run in the order they came. A thread never touches GC memory, and
- * an item that ends goes back to the loop's thread through the pool's own inbox. Core layer. Design:
- * docs/vm/16-architecture.md §16.9, "Compute pool".
+ * def`, or a KDF derivation of vm/crypto.c), apart from the libuv pool, which takes only bounded work
+ * (docs/vm/14-core-invariants.md §14.1). At most one thread per scheduler, started on demand; items run in the order
+ * they came. A thread never touches GC memory, and an item that ends goes back to the loop's thread through the
+ * pool's own inbox. Core layer. Design: docs/vm/16-architecture.md §16.9, "Compute pool".
  */
 #include "core.h"
 
