@@ -151,7 +151,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     user_types: tables.user_types,
     structs: tables.infos,
     variants: tables.variants,
-    json_structs: tables.json_structs,
+    json_types: tables.json_types,
     layouts: {},
     functions: by_name,
     bodies: checked.bodies,

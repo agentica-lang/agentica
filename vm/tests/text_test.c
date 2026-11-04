@@ -81,7 +81,7 @@ int main(void) {
 
   agc_string *field_names[] = {agc_make_string("value", 5, 5)};
   agc_struct_def structs[] = {{agc_make_string("Node", 4, 4), 1, field_names, NULL, NULL}};
-  agc_enum_def enums[] = {{agc_make_string("@2::Chain", 9, 9), 0, 2}};
+  agc_enum_def enums[] = {{agc_make_string("@2::Chain", 9, 9), 0, 2, NULL, NULL}};
   agc_enum *end = agc_new_enum(1, 0);
   agc_variant_def variants[] = {{agc_make_string("Link", 4, 4), 0, 2, NULL},
                                 {agc_make_string("End", 3, 3), 0, 0, end}};

@@ -258,6 +258,19 @@ in a PR that rewrites the goldens.
   so `some(none)` is `null`. The loader finds the builtin `Optional` enum by
   its name and shape (None, Some with arities 0, 1); an enum named `Optional`
   of another shape, from an older file, is an ordinary enum.
+- An enum (type kind 9) is the object `{"tag": name, "values": [...]}`. The
+  encoders write both keys, `tag` first, for any enum value that is not an
+  `Optional` or a `JsonField` (at the root, in a list, a struct and so on); the
+  `values` are the payloads in order. `JSON.decode` finds the variant by `tag`
+  in the enum's variants, takes `values` as an array of exactly its arity (a
+  variant with no payload may leave it out, and it is then the shared value),
+  and decodes each item as the variant's payload type. Its checks run in this
+  order, each an error at the object's path: the value is an `object`; `tag` is
+  there (`tag: expected required field`), a `String` and the name of a variant
+  (`tag: expected one of A, B`); `values` is there for a variant with payloads,
+  an `array`, and has `array of N items`. A payload error has the path
+  `<object>.values[i]` and then its own path. The error "expected object" of a
+  `JsonField`, `Optional` or the root has the ` or null` text where it applies.
 - Errors are values `"<path>: expected <what>"`. The path is `$`, `a.b` for
   fields, `a[3]` for list items and `a["k"]` for map keys. `<what>` is `object`,
   `array`, `required field`, `signed 64-bit Int` (a JSON float, or an integer
@@ -270,7 +283,14 @@ in a PR that rewrites the goldens.
   reached appears once in `$defs` under its linked name (`@2::Point` for an
   imported one). A struct field is `{"$ref": "#/$defs/<name>"}`, with `~`
   written `~0` and `/` written `~1`. Int is `{"type": "integer", "minimum":
-  -2^63, "maximum": 2^63-1}`.
+  -2^63, "maximum": 2^63-1}`. The schema of an enum is `{"oneOf": [...]}` with
+  one object for each variant: `tag` is `{"enum": ["Name"]}` and `values` an
+  array with `minItems` and `maxItems` equal to the payload count and, when
+  there is a payload, `prefixItems` with one schema each; a variant with no
+  payload has `{"type": "array", "maxItems": 0}` and `required` is `["tag"]`
+  (`["tag", "values"]` otherwise). An enum reached from the target appears once
+  in `$defs` like a struct and is referenced the same way; an enum target is its
+  own `oneOf` with the `$defs` beside it.
 - The VM walks the JSON tree and the type table with an explicit stack and
   builds the error path only on failure. Schema uses a queue. Neither recurses,
   so recursive structs and deep values are safe.

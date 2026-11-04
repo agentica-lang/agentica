@@ -20,7 +20,7 @@ CI does not run it; commit both files when the vectors change.
 import json
 from pathlib import Path
 
-from json_typed_peer import EXPECTED, decode_scalar, encode_scalar, fail, scalar_kind_ok, write_vectors
+from json_typed_peer import UNHANDLED, decode_common, decode_struct, encode_common, encode_struct, fail, write_vectors
 
 OUTPUT = Path(__file__).resolve().parent / "vm" / "json-optional-vectors.stdin"
 HEADER = (
@@ -77,73 +77,25 @@ DOCUMENTS = [
 ]
 
 
-NONE = object()
-
-
-def optional(kind):
-    return isinstance(kind, tuple) and kind[0] == "optional"
-
-
-def top_kind_ok(value, kind):
-    """The top kind check of an Optional, before its T is decoded; an Optional T makes its own."""
-    if optional(kind):
-        return True
-    if kind in EXPECTED:
-        return scalar_kind_ok(value, kind)
-    if isinstance(kind, tuple) and kind[0] == "list":
-        return isinstance(value, list)
-    return isinstance(value, dict)
-
-
-def top_kind_name(kind):
-    if isinstance(kind, tuple) and kind[0] == "list":
-        return "array"
-    return EXPECTED.get(kind, "object")
-
-
 def decode(value, kind, path):
-    if optional(kind):
-        if value is None:
-            return NONE
-        if not top_kind_ok(value, kind[1]):
-            fail(path, f"{top_kind_name(kind[1])} or null")
-        return ("some", decode(value, kind[1], path))
-    if kind in EXPECTED:
-        return decode_scalar(value, kind, path)
-    if isinstance(kind, tuple) and kind[0] == "list":
-        if not isinstance(value, list):
-            fail(path, "array")
-        return [decode(item, kind[1], f"{path}[{index}]") for index, item in enumerate(value)]
+    found = decode_common(value, kind, path, decode)
+    if found is not UNHANDLED:
+        return found
     if isinstance(kind, tuple):
         if not isinstance(value, dict):
             fail(path, "object")
         return {key: decode(item, kind[1], f"{path}[{json.dumps(key)}]") for key, item in sorted(value.items())}
-    if not isinstance(value, dict):
-        fail(path, "object")
-    record = {}
-    for name, field_kind in STRUCTS[kind]:
-        here = f"{path}.{name}" if path else name
-        if name not in value:
-            if not optional(field_kind):
-                fail(here, "required field")
-            record[name] = NONE
-        else:
-            record[name] = decode(value[name], field_kind, here)
-    return record
+    return decode_struct(value, STRUCTS[kind], path, decode)
 
 
 def encode(value, kind):
     """The text JSON.encode writes: struct keys in declaration order, map keys sorted, no spaces."""
-    if optional(kind):
-        return "null" if value is NONE else encode(value[1], kind[1])
-    if isinstance(kind, tuple) and kind[0] == "list":
-        return "[" + ",".join(encode(item, kind[1]) for item in value) + "]"
+    found = encode_common(value, kind, encode)
+    if found is not UNHANDLED:
+        return found
     if isinstance(kind, tuple):
         return "{" + ",".join(json.dumps(key) + ":" + encode(item, kind[1]) for key, item in value.items()) + "}"
-    if kind in STRUCTS:
-        parts = [json.dumps(name) + ":" + encode(value[name], field_kind) for name, field_kind in STRUCTS[kind]]
-        return "{" + ",".join(parts) + "}"
-    return encode_scalar(value, kind)
+    return encode_struct(value, STRUCTS[kind], encode)
 
 
 def main():

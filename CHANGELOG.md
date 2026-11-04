@@ -20,6 +20,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A `==` or `!=` refused because a struct field has no equality
   (`CHECK-TYPE-MISMATCH`) also marks that field in its declaration (a note,
   when the struct is in the same file).
+- `JSON.encode`, `JSON.from`, `JSON.decode`, `JSON.schema` and `JSON.codec`
+  take user enums, written as `{"tag": "Rect", "values": [1.0, 2.0]}`. Only
+  non-generic enums can be decoded.
 
 ### Changed
 

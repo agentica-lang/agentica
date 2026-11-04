@@ -553,7 +553,7 @@ static void new_prog(prog *p) {
   for (size_t k = 0; k < sizeof test_builtins / sizeof test_builtins[0]; k++) p->builtins[B_MARK + k] = &test_builtins[k];
   agc_test_program(&p->program, &p->source, p->span_table, 128, p->constants, p->builtins, B_COUNT, p->fns, MAX_FNS,
                    &p->code[0][0], &p->spans[0][0], MAX_CODE, F_MAIN);
-  p->enum_defs[0] = (agc_enum_def){agc_make_string("Await", 5, 5), 0, 2};
+  p->enum_defs[0] = (agc_enum_def){agc_make_string("Await", 5, 5), 0, 2, NULL, NULL};
   p->variant_defs[0] = (agc_variant_def){agc_make_string("Done", 4, 4), 0, 1, NULL};
   p->variant_defs[1] = (agc_variant_def){agc_make_string("TimedOut", 8, 8), 0, 0, agc_new_enum(1, 0)};
   p->program.enums = p->enum_defs;

@@ -72,6 +72,8 @@ typedef struct {
   int64_t second_int;
   /* Added to the length a Bytes constant (extra_kind 7) declares, for a length past the end of the file. */
   uint32_t extra_bytes_over;
+  /* Bytes written after the entry: the Decodable enums section. */
+  const buffer *tail;
 } spec;
 
 static const agc_instr puts_code[] = {
@@ -133,7 +135,7 @@ static size_t function(buffer *b, const char *name, uint32_t params, uint32_t ca
 static spec base(void) {
   spec s = {"AGCB", AGC_FORMAT_VERSION, AGC_VERSION, "t.agc",
             {{0, 1, 1, 4, 1}, {0, 2, 3, 2, 10}, {0, 2, 8, 2, 9}},
-            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false, 0, 0, NULL, 1.5, 0, 0, 0, NULL, NULL, 0, {{0}}, 0, 0, 0, 0, NULL, 0, 0, 0};
+            0, -1, NULL, "puts", 0, 1, puts_code, puts_spans, 5, 0, 0, false, 0, 0, NULL, 1.5, 0, 0, 0, NULL, NULL, 0, {{0}}, 0, 0, 0, 0, NULL, 0, 0, 0, NULL};
   return s;
 }
 
@@ -226,6 +228,10 @@ static buffer build(spec s) {
                two_spans, 2, s.helper_prelude);
   }
   u32(&b, s.entry);
+  if (s.tail) {
+    memcpy(b.data + b.len, s.tail->data, s.tail->len);
+    b.len += s.tail->len;
+  }
   if (s.trailing) u8(&b, 0);
   return b;
 }
@@ -388,7 +394,8 @@ static bool loads_tables(uint32_t arity, const char *reason) {
 }
 
 /* The front end that the binary carries may name another Agentica version (the stages of a bootstrap do); only the
- * format version and the rest of the file are checked. A user program never loads this way. */
+ * format version and the rest of the file are checked. A user program never loads this way. A stray byte after the
+ * entry starts a Decodable enums section, which it cannot complete. */
 static void front_end_tests(void) {
   char error[160] = "";
   agc_program *p;
@@ -405,7 +412,7 @@ static void front_end_tests(void) {
   s = base();
   s.trailing = true;
   b = build(s);
-  assert(!agc_load_front_end(b.data, b.len, &p, error, sizeof error, NULL) && strstr(error, "trailing bytes"));
+  assert(!agc_load_front_end(b.data, b.len, &p, error, sizeof error, NULL) && strstr(error, "truncated file"));
   free(b.data);
 }
 
@@ -551,7 +558,7 @@ static buffer type_tables(int which) {
   } else {
     u32(&t, which == 8 ? 0x10000000 : 3);
     u8(&t, 0);
-    u8(&t, which == 1 ? 9 : which >= 19 ? 8 : which >= 13 ? 7 : 4);
+    u8(&t, which == 1 ? 10 : which >= 19 ? 8 : which >= 13 ? 7 : 4);
     u32(&t, which == 2 ? 1 : 0);
     u8(&t, 6);
     u32(&t, which == 3 ? 2 : 0);
@@ -1139,6 +1146,123 @@ static void test_fuzz_timed_waits(void) {
   free(b.data);
 }
 
+/* The Decodable enums section (docs/vm/03-ir-and-bytecode.md 4.6). The tables have no structs, an Int type (0) and an
+   enum type (1) of enum `enum_arg`, and the enums E(A(Int), B) and F(C(Int, Int)); the tail has records of E and F, in the order and with the type indexes the arguments give. */
+static buffer enum_tables(uint32_t enum_arg) {
+  buffer t;
+  t.data = malloc(512);
+  assert(t.data);
+  t.len = 0;
+  u32(&t, 0);
+  u32(&t, 2);
+  u8(&t, 0);
+  u8(&t, 9);
+  u32(&t, enum_arg);
+  u32(&t, 0);
+  u32(&t, 2);
+  str(&t, "E");
+  u32(&t, 2);
+  str(&t, "A");
+  u32(&t, 1);
+  str(&t, "B");
+  u32(&t, 0);
+  str(&t, "F");
+  u32(&t, 1);
+  str(&t, "C");
+  u32(&t, 2);
+  return t;
+}
+
+static buffer enum_tail(uint32_t first, const char *first_name, uint32_t second, uint32_t payload, bool two) {
+  buffer t;
+  t.data = malloc(512);
+  assert(t.data);
+  t.len = 0;
+  u32(&t, two ? 2 : 1);
+  u32(&t, first);
+  str(&t, first_name);
+  u32(&t, payload);
+  if (two) {
+    u32(&t, second);
+    str(&t, "F");
+    u32(&t, 0);
+    u32(&t, 0);
+  }
+  return t;
+}
+
+static bool loads_enums(uint32_t enum_arg, const buffer *tail, const char *reason) {
+  buffer t = enum_tables(enum_arg);
+  spec s = base();
+  s.tables = &t;
+  s.tail = tail;
+  bool ok = loads(s, reason);
+  free(t.data);
+  return ok;
+}
+
+static void json_enum_tests(void) {
+  buffer good = enum_tail(0, "E", 1, 0, true);
+  assert(loads_enums(0, &good, NULL));
+  buffer one = enum_tail(0, "E", 0, 0, false);
+  assert(loads_enums(0, &one, NULL));
+  assert(!loads_enums(0, NULL, "type names an enum without payload types"));
+  assert(loads_enums(1, &good, NULL));
+  assert(!loads_enums(1, &one, "type names an enum without payload types"));
+  assert(!loads_enums(2, &good, "enum index out of range"));
+  buffer range = enum_tail(2, "E", 0, 0, false);
+  assert(!loads_enums(0, &range, "enum index out of range"));
+  buffer type = enum_tail(0, "E", 0, 2, false);
+  assert(!loads_enums(0, &type, "type index out of range"));
+  buffer order = enum_tail(1, "F", 0, 0, false);
+  order.len = 0;
+  u32(&order, 2);
+  u32(&order, 1);
+  str(&order, "F");
+  u32(&order, 0);
+  u32(&order, 0);
+  u32(&order, 0);
+  str(&order, "E");
+  u32(&order, 0);
+  assert(!loads_enums(0, &order, "decodable enums out of order"));
+  buffer same = enum_tail(0, "F", 1, 0, true);
+  assert(!loads_enums(0, &same, "duplicate JSON type name"));
+  /* The record of E needs one type index for A, and F two for C. */
+  buffer cut = enum_tail(0, "E", 1, 0, true);
+  cut.len -= 2;
+  assert(!loads_enums(0, &cut, "payload type count exceeds the file"));
+  buffer big = enum_tail(0, "E", 0, 0, false);
+  big.data[0] = 0xff;
+  big.data[1] = 0xff;
+  assert(!loads_enums(0, &big, "decodable enum count exceeds the file"));
+
+  buffer t = enum_tables(0);
+  spec s = base();
+  s.tables = &t;
+  s.tail = &good;
+  s.trailing = true;
+  assert(!loads(s, "trailing bytes"));
+  s.trailing = false;
+  buffer file = build(s);
+  agc_program *p;
+  char error[160] = "";
+  assert(agc_load(file.data, file.len, &p, error, sizeof error));
+  assert(p->enums[0].json_name->bytes == 1 && p->enums[1].json_name->bytes == 1);
+  assert(p->enums[0].payload_types[0] == 0 && p->variants[1].arity == 0);
+  assert(p->enums[1].payload_types[1] == 0);
+  for (size_t n = 0; n < file.len; n++) assert(!agc_load(file.data, n, &p, error, sizeof error));
+  free(file.data);
+  free(t.data);
+  free(good.data);
+  free(one.data);
+  free(range.data);
+  free(type.data);
+  free(order.data);
+  free(same.data);
+  free(cut.data);
+  free(big.data);
+}
+
 int main(void) {
   agc_init();
   buffer b = build(base());
@@ -1178,7 +1302,7 @@ int main(void) {
   front_end_tests();
   s = base();
   s.trailing = true;
-  assert(!loads(s, "trailing bytes"));
+  assert(!loads(s, "truncated file"));
   s = base();
   s.entry = 1;
   assert(!loads(s, "entry out of range"));
@@ -2030,7 +2154,7 @@ int main(void) {
   assert(range_wrong.kind == AGC_FAILED && strcmp(range_wrong.code, "RUNTIME-INTERNAL") == 0);
 
   assert(loads_types(0, NULL));
-  assert(!loads_types(1, "unknown type kind 9"));
+  assert(!loads_types(1, "unknown type kind 10"));
   assert(!loads_types(2, "element type is not an earlier type"));
   assert(!loads_types(3, "struct index out of range"));
   assert(!loads_types(4, "type index out of range"));
@@ -2151,6 +2275,7 @@ int main(void) {
   source_root_tests();
   line_index_tests();
   table_count_tests();
+  json_enum_tests();
   collector_tests();
   test_fuzz_timed_waits();
 

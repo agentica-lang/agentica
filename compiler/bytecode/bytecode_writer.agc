@@ -1,7 +1,8 @@
 ## The bytecode writer: the .agcb bytes of a lowered program.
 ## The file is, in this order, the header, the sources, the spans, the constants, the structs, the JSON field types,
-## the Decodable structs, the enums, the struct updates, the Globals count, the builtins, the functions and the entry
-## (docs/vm/03-ir-and-bytecode.md 4.6). tests/test_frontend_bytecode.py compares them with frozen goldens.
+## the Decodable structs, the enums, the struct updates, the Globals count, the builtins, the functions, the entry and,
+## when some enum can be decoded, the Decodable enums (docs/vm/03-ir-and-bytecode.md 4.6).
+## tests/test_frontend_bytecode.py compares them with frozen goldens.
 ##
 ## The functions are walked first, because they decide the entries of the constant, update, builtin and span tables,
 ## which come before them in the file. The output is a list of chunks that is joined once at the end.
@@ -49,7 +50,14 @@ def build(program: Ir.Program, version: String) -> Result[Bytes]
     at += 1
   end
 
-  json = try JsonTypes.build(program, struct_index)
+  enum_index: Map[String, Int] = {}
+  at = 0
+  for entry in program.enums
+    enum_index = enum_index.put(entry.name, at)
+    at += 1
+  end
+
+  json = try JsonTypes.build(program, struct_index, enum_index)
   # The span of the program is the first run of the span table.
   spans = Spans.intern_one(Pool.empty(), 0, program.span).pool
   tables = Function.Tables(constants: Pool.empty(), updates: Pool.empty(), builtins: Pool.empty(), spans: spans)
@@ -76,6 +84,7 @@ def build(program: Ir.Program, version: String) -> Result[Bytes]
     |> Wire.add(Wire.u32(program.functions.size))
     |> Wire.add_all(functions)
     |> Wire.add(Wire.u32(program.entry))
+    |> decodable_enums(json)
   )
 
   joined = Wire.join(out)
@@ -84,6 +93,16 @@ def build(program: Ir.Program, version: String) -> Result[Bytes]
   end
 
   return joined
+end
+
+# The decodable enums, after the entry: a count and the records, written only when some enum can be decoded, so a
+# program without one has the bytes it always had.
+def decodable_enums(out: Wire.Chunks, json: JsonTypes.Section) -> Wire.Chunks
+  if json.enums_count == 0
+    return out
+  end
+
+  return Wire.add_all(Wire.add(out, Wire.u32(json.enums_count)), json.enums)
 end
 
 # The first limits of the format, in this order. The limits of the types, the registers and the updates are met
