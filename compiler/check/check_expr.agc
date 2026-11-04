@@ -771,9 +771,9 @@ def equality_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type
   try same_types(cx, sides, node, true)
   if !CheckTypes.equality?(cx, sides.left)
     message = "#{T.to_text(sides.left)} has no equality"
-    why = CheckTypes.equality_gap(cx, sides.left)
-    if why != ""
-      message += ": #{why}"
+    gap = CheckTypes.equality_gap(cx, sides.left)
+    if gap.why != ""
+      message += ": #{gap.why}"
     end
 
     help = (
@@ -782,10 +782,29 @@ def equality_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type
       "equality"
     )
 
-    return error(type_error(cx, sides, node, message, help))
+    base = Failure.problem(
+      cx.file,
+      sides.st.signature,
+      "CHECK-TYPE-MISMATCH",
+      message,
+      node.op_span,
+      State.hint_of(help),
+    )
+
+    return error(Failure.pack(base.with(labels: field_labels(cx, gap))))
   end
 
   return ok(T.Type.Bool)
+end
+
+# The note on the field that blocks ==, when the field is declared in the file being checked: a note holds a span and
+# no file, so a field of another file is left to the message.
+def field_labels(cx: State.Cx, gap: CheckTypes.Gap) -> List[Failure.Label]
+  if gap.file != cx.file or !gap.field.some?
+    return []
+  end
+
+  return [Failure.Label(span: gap.field.unwrap!, text: "this field has no equality")]
 end
 
 def logical_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]

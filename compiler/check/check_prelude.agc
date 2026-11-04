@@ -181,7 +181,7 @@ def check_equality(
   end
 
   message = "#{form.name} needs #{limit.what} with equality, found #{T.to_text(found)}"
-  why = CheckTypes.equality_gap(cx, found)
+  why = CheckTypes.equality_gap(cx, found).why
   if why != ""
     message += ": #{why}"
   end

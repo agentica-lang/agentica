@@ -17,6 +17,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `std/option_parser`: `min` and `max` on an `Int` `Opt` or `Arg`
   (`min: some(1)`), refused as any bad value is (exit 2) and shown in the help.
   A number too big for an `Int` says it does not fit one.
+- A `==` or `!=` refused because a struct field has no equality
+  (`CHECK-TYPE-MISMATCH`) also marks that field in its declaration (a note,
+  when the struct is in the same file).
 
 ### Changed
 

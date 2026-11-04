@@ -74,8 +74,17 @@ export struct ConstSite
   blanked: Bool
 end
 
+## Where the fields of a struct are declared: the file, and the span of each field in declaration order (the same
+## order as Cx.structs). A diagnostic that points at a field of a struct from another file leaves the note out, because
+## a note holds a span and no file.
+export struct FieldSite
+  file: String
+  spans: List[Source.Span]
+end
+
 ## What is fixed while the declarations are checked. structs and enums hold the builtin ones and the program's;
-## struct_params the type parameters of each generic struct (a plain struct has no entry); c_structs the C structs of
+## struct_params the type parameters of each generic struct (a plain struct has no entry); field_sites where the
+## fields of each struct of the program are declared (a builtin record has none); c_structs the C structs of
 ## the extern blocks (Ast.StructDecl.layout), by linked name; callbacks the Fn type that the function of each callback
 ## of the extern blocks takes (Ast.Callback), by linked name; natives the functions of the extern blocks, by linked
 ## name; field_defaults the names of the fields that have a default value, by struct; functions the program's;
@@ -94,6 +103,7 @@ export struct Cx
   help: Help.Tables
   structs: Map[String, List[Model.Named]]
   struct_params: Map[String, List[String]]
+  field_sites: Map[String, FieldSite]
   field_defaults: Map[String, Set[String]]
   enums: Map[String, Model.EnumDef]
   aliases: Map[String, Ast.TypeAliasDecl]
