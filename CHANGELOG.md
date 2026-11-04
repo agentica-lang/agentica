@@ -75,6 +75,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `error("process: the channel is in use")` until that line is out.
 - On Windows a spawn `env` map with two names that differ only in the case of a
   letter outside ASCII (`Ä`, `ä`) is now an error, as for ASCII letters.
+- A `compute def` call on a resource also keeps the resources that the call
+  which made it took (a `Stmt` keeps its `Handle`): `Native.close` of the
+  `Handle` during the call frees it when the call returns, not while C uses it.
 
 ## [0.23.0] - 2026-11-03
 

@@ -466,6 +466,48 @@ int32_t peer_res_hold(void *p, int32_t limit_ms) {
 /* How many peer_res_hold calls have started. */
 int32_t peer_res_holding(void) { return atomic_load(&res_holding); }
 
+/* For a resource that comes from another, as a MYSQL_STMT from its MYSQL: a child keeps the peer_res it was opened
+   from, and peer_child_hold, a compute call, uses that peer_res (peer_res_hold) and never the child's own memory. */
+typedef struct {
+  peer_res *root;
+} peer_child;
+
+static atomic_int child_frees;
+
+void *peer_child_open(void *res) {
+  peer_child *c = malloc(sizeof *c);
+  if (!c) return NULL;
+  c->root = res;
+  return c;
+}
+
+int32_t peer_child_open_out(void *res, void **child) {
+  *child = peer_child_open(res);
+  return 0;
+}
+
+void *peer_child_of(void *child) { return peer_child_open(((peer_child *)child)->root); }
+
+void peer_child_free(void *p) {
+  atomic_fetch_add(&child_frees, 1);
+  free(p);
+}
+
+int32_t peer_child_frees(void) { return atomic_load(&child_frees); }
+int32_t peer_child_hold(void *p, int32_t limit_ms) { return peer_res_hold(((peer_child *)p)->root, limit_ms); }
+
+/* A child of CTX made with the child before it, as a cursor next(ctx, x): it keeps CTX and nothing of CHILD. */
+void *peer_child_next(void *ctx, void *child) {
+  (void)child;
+  return peer_child_open(ctx);
+}
+
+/* Reads the peer_res a child keeps, which must not be freed. */
+int32_t peer_child_value(void *p) { return peer_res_get(((peer_child *)p)->root); }
+
+/* Uses nothing of the child, whose root may be a callback. */
+int32_t peer_child_touch(void *p) { return p != NULL; }
+
 /* A compute call that opens a resource once peer_set_flag has run. */
 void *peer_res_open_later(int32_t value, int32_t limit_ms) {
   peer_wait_flag(limit_ms);
@@ -893,6 +935,9 @@ int32_t peer_res_after(void *res, peer_int_fn fn) {
   int32_t b = fn(2);
   return peer_res_get(res) * 100 + a * 10 + b;
 }
+
+/* Calls the stored callback, then FN, as a library that runs a callback it was given earlier before one it gets now. */
+int32_t peer_call_stored_then(peer_int_fn fn) { return stored_fn(1) * 10 + fn(2); }
 
 int32_t peer_flag(void) { return atomic_load(&flag); }
 
