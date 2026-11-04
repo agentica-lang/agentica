@@ -1,0 +1,12 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 21,
+  "stdout": [
+    "{\"oneOf\":[{\"properties\":{\"tag\":{\"enum\":[\"L\"]},\"values\":{\"maxItems\":1,\"minItems\":1,\"prefixItems\":[{\"maximum\":9223372036854775807,\"minimum\":-9223372036854775808,\"type\":\"integer\"}],\"type\":\"array\"}},\"required\":[\"tag\",\"values\"],\"type\":\"object\"},{\"properties\":{\"tag\":{\"enum\":[\"M\"]},\"values\":{\"maxItems\":0,\"type\":\"array\"}},\"required\":[\"tag\"],\"type\":\"object\"}]}",
+    "ok(Leaf.L(4))",
+    "ok(Point(x: 1))",
+    ""
+  ],
+  "stderr": []
+}

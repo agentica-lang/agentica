@@ -368,6 +368,7 @@ def scan_all(
     constant_scans = constant_scans.push(scan)
     written = written.concat(scan.written)
     covered = covered.concat(scan.covered)
+    type_names = type_names.concat(scan.type_names)
     case decl.type
       some(ref) -> written = written.concat(Scans.written_in(ref, watched))
       none -> written = written
