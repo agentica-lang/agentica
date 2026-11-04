@@ -13109,6 +13109,67 @@
       ],
       "code": "CHECK-UNREACHABLE-CODE",
       "start": [3, 3]
+    },
+    {
+      "program": [
+        "def f() -> Result[Int]",
+        "  x = try \"5\".to_i",
+        "  puts(x)",
+        "  return ok(x)",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(f().unwrap!)",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  n = \"1\".to_i!",
+        "  puts(n)",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  for n in [1, 2]",
+        "    case n",
+        "      1 ->",
+        "        break",
+        "        puts(\"dead\")",
+        "      _ -> puts(n)",
+        "    end",
+        "  end",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNREACHABLE-CODE",
+      "start": [6, 9]
+    },
+    {
+      "program": [
+        "def f(n: Int) -> Int",
+        "  case n",
+        "    0 ->",
+        "      return 1",
+        "      puts(\"dead\")",
+        "    _ -> return 2",
+        "  end",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(f(0))",
+        "end",
+        ""
+      ],
+      "code": "CHECK-UNREACHABLE-CODE",
+      "start": [5, 7]
     }
   ]
 }
