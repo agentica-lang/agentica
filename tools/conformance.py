@@ -123,7 +123,7 @@ AREAS = {
             "tests/test_spec_parser.py", "tests/test_spec_style.py",
             "tests/test_spec_patterns.py", "tests/test_spec_extern.py", "tests/test_spec_generic_structs.py",
             "tests/test_spec_generics.py", "tests/test_spec_bytes.py", "tests/test_spec_optional.py",
-            "tests/test_spec_equality.py",
+            "tests/test_spec_equality.py", "tests/test_spec_string_repeat.py",
         ],
     ),
     "golden": (
