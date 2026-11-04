@@ -181,6 +181,7 @@ export def reaching(cache: Cache, loaded: Modules.Loaded) -> Cache
       key,
       Modules.Kept(text: module.text, first_id: module.first_id, program: module.program, tested: module.tested),
     )
+
     next = Ast.next_free_id(module.program)
     if next > top
       top = next
