@@ -55,13 +55,14 @@ def sweep_stale_roots(owner: Path, keep: Path | None = None, now: float | None =
     """Remove the roots under OWNER whose last session started more than MAX_AGE seconds ago, except KEEP.
 
     Safe against sessions that start at the same time, in this and other processes: a session touches its root when
-    it starts (assign_root), so a root in use is never old. The sweep looks at the age again right before it acts and
-    moves a stale root aside with one rename before it removes it, so a session never finds a root half removed: the
-    root is whole or briefly absent, and the session that lost its root creates it again (assign_root retries). If a
-    session touched the root between the check and the rename, the sweep sees it on the moved folder and puts it back.
-    The age is wall-clock time: a clock set forward makes roots look stale, and the sessions that lose their root
-    simply create it again; a clock set back keeps roots longer. Failures are ignored: the sweep is housekeeping and
-    must not fail a run.
+    it starts (assign_root), so a root in use is never old. The sweep looks at the age again right before it acts
+    and moves a stale root aside with one rename before it removes it, so a session never finds a root half removed:
+    the root is whole or briefly absent. While assign_root runs, a session that finds its root gone creates it again
+    (_touch_root retries); after that nothing does, which is safe because the put-back takes microseconds and a
+    session first uses its root later, at its first tmp_path. If a session touched the root between the check and
+    the rename, the sweep sees it on the moved folder and puts it back. The age is wall-clock time: a clock set
+    forward makes roots look stale, and the sessions that lose their root simply create it again; a clock set back
+    keeps roots longer. Failures are ignored: the sweep is housekeeping and must not fail a run.
     """
     now = time.time() if now is None else now
     try:

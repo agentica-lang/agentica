@@ -142,7 +142,16 @@ while time.time() < start:
     pass
 assign_root(config)
 root = Path(os.environ["PYTEST_DEBUG_TEMPROOT"])
-(root / "pytest-of-x").mkdir(exist_ok=True)
+# Another racer's sweep may hold this root aside for a few microseconds before it puts it back (a fresh root is
+# never removed); the final asserts check that no root was lost, so wait out that window here.
+for _ in range(1000):
+    try:
+        (root / "pytest-of-x").mkdir(exist_ok=True)
+        break
+    except (FileNotFoundError, FileExistsError):
+        time.sleep(0.001)
+else:
+    raise SystemExit("root never came back: " + str(root))
 """
 
 
@@ -167,7 +176,10 @@ def test_sessions_that_start_together_keep_their_roots(tmp_path):
         deadline = time.time() + 60
         while len(list(gate.glob("ready-*"))) < len(names) and time.time() < deadline:
             time.sleep(0.01)
-        (gate / "go").write_text(str(time.time() + 0.1))
+        assert len(list(gate.glob("ready-*"))) == len(names), "a racer did not start"
+        # Written aside and renamed, so a racer never reads a half-written start time.
+        (gate / "go.tmp").write_text(str(time.time() + 0.1))
+        os.replace(gate / "go.tmp", gate / "go")
         for child in children:
             output = child.communicate(timeout=120)[0]
             assert child.returncode == 0, output
