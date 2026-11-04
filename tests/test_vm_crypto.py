@@ -39,7 +39,7 @@ import uuid
 
 import pytest
 
-from tests.agentica_test import FIXTURES, compile_agc, run, run_vm
+from tests.agentica_test import FIXTURES, WINDOWS, compile_agc, compile_text, host_only, run, run_vm
 
 SIZES = [0, 1, 3, 55, 56, 63, 64, 65, 111, 112, 119, 120, 127, 128, 129, 1000, 4096 + 7, 1024 * 1024]
 DIGESTS = ["md5", "sha1", "sha256", "sha512"]
@@ -361,6 +361,40 @@ def test_kdf_matches_hashlib(tmp_path):
         assert got["pbkdf2"] == want.hex(), case
         want = hashlib.scrypt(password, salt=salt, n=case["n"], r=case["r"], p=case["p"], dklen=case["length"])
         assert got["scrypt"] == want.hex(), case
+
+
+KDF_AFTER_MAIN = """\
+def main() -> Void
+  child = Process.spawn_captured("sh", ["-c", "trap '' TERM; echo ready; exec sleep 10"]).unwrap!
+  puts(Process.read_line(child, 10000).unwrap!)
+  started: Channel[Bool] = Channel.new(256)
+  tasks = (1..200).to_a.map do |i|
+    Task.spawn do
+      started.send(true, 0)
+      KDF.scrypt("password".bytes, "NaCl".bytes, 4096, 8, 1, 32)
+    end
+  end
+  tasks.each do |t| started.recv(60000) end
+  Task.sleep(0)
+  puts("main ends")
+end
+"""
+
+
+# Once main returns no queued KDF job starts. main leaves 200 scrypts of about 10 ms each on the compute pool and a
+# captured child that ignores SIGTERM, so the end of the run waits about one second for it (its grace) before the kill.
+# A pool that went on taking jobs would spend that second deriving keys nobody takes: about one CPU second per pool
+# thread. Only the jobs running when main returned may end, a few milliseconds each.
+@host_only(WINDOWS, "Windows has no SIGTERM, so the end of the run does not wait for a child")
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_no_queued_kdf_job_starts_after_main_returns(tmp_path, schedulers):
+    import resource
+    program = compile_text(KDF_AFTER_MAIN, "kdf-after-main", tmp_path)
+    before = resource.getrusage(resource.RUSAGE_CHILDREN).ru_utime
+    result = run_vm(program, "--schedulers", schedulers)
+    cpu = resource.getrusage(resource.RUSAGE_CHILDREN).ru_utime - before
+    assert (result.code, result.stdout, result.stderr) == (0, "ready\nmain ends\n", "")
+    assert cpu < 0.5
 
 
 # AES-256-GCM on data and auth_data on both sides of the 16-byte block, empty and up to 64 KiB. Python's standard

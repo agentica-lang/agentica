@@ -145,6 +145,7 @@ static agc_value start_build(agc_vm *vm, agc_value options, bool server, uint32_
   size_t alpn_len;
   const char *refused = alpn_size(vm, alpn, &alpn_len);
   if (refused) return agc_error_value(refused);
+  agc_task_can_park(vm, "a callback of native code cannot wait for a TLS context", span);
   build *b = calloc(1, sizeof *b);
   if (!b) agc_out_of_memory();
   b->server = server;

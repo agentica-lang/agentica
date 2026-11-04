@@ -390,10 +390,11 @@ typedef struct {
   bool shared;
   /* The scheduler threads (docs/vm/16-architecture.md §16.9, "Threads"): `schedulers` is N (1 runs the scheduler on the
      loop's thread, the default), `scheds` their contexts (GC memory, so the collector sees them) and `threads` their
-     malloc'd ids, of which `started` are running. `over` is set once, by the first agc_run_over: the run is over and
-     rt->outcome holds its end. `entry_done` opens the run queue to the other schedulers once the entry has written the
-     Globals table. `timers_armed` counts the armed task timers of every heap, for the stall check, and `timers_weak`
-     how many of them belong to service tasks, which the stall check does not wait for (agc_task_service). */
+     malloc'd ids, of which `started` are running. `over` is set by the first agc_run_over, or at one scheduler by
+     agc_launch_settle: the run is over and rt->outcome holds its end. `entry_done` opens the run queue to the other
+     schedulers once the entry has written the Globals table. `timers_armed` counts the armed task timers of every
+     heap, for the stall check, and `timers_weak` how many of them belong to service tasks, which the stall check does
+     not wait for (agc_task_service). */
   int64_t schedulers;
   struct agc_vm **scheds;
   void *threads;
@@ -696,6 +697,10 @@ agc_recv_status agc_channel_receive(agc_vm *vm, agc_channel *c, int64_t timeout_
 void agc_task_wake(agc_vm *vm, agc_task *t, const char *by);
 bool agc_task_waiting(const agc_task *t);
 void agc_task_parking(agc_vm *vm);
+/* The first step of a builtin that parks on a job made from malloc'd copies (a compute call, a KDF call, a TLS
+   context): what would fail the park fails here, before the copies exist, so none leaks. A callback of native code
+   cannot park (RUNTIME-NATIVE-CALLBACK with MESSAGE at SPAN), and the loop is made, which fails when it cannot start. */
+void agc_task_can_park(agc_vm *vm, const char *message, uint32_t span);
 void agc_task_unpark(agc_vm *vm);
 void agc_task_park(agc_vm *vm, bool retry);
 void agc_task_stepper(agc_vm *vm, agc_stepper *stepper);

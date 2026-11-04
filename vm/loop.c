@@ -475,10 +475,14 @@ static int queue_work(agc_loop *loop, job *j) { return agc_io_queue_work(&loop->
 /* The compute pool's half of a job, as libuv's run_work and work_finished are the pool's: the work on a pool thread,
    then its end on the loop's thread. A job whose task was cancelled while it waited in the pool's queue skips its work
    (a native call not made, so none of its effects happen); its `done` then sees that the work did not run, builds no
-   result from it, and the detached end drops what it gives. A work already running runs to its end. */
+   result from it, and the detached end drops what it gives. Once the run is over no job's work starts either, as in
+   start_pieces: no task takes a value any more, and the work (a scrypt of up to 1 GiB) would only hold a core and its
+   memory while the end's steps run, until the exit. A compute call of vm/ffi.c skipped so stays QUEUED, which
+   agc_ffi_stop_queued then makes ABANDONED. A work already running runs to its end. */
 static void run_compute(void *item) {
   job *j = item;
-  if (!atomic_load(&j->detached)) j->kind->work(j->data);
+  if (!atomic_load(&j->detached) && !atomic_load_explicit(&j->loop->vm->rt->over, memory_order_acquire))
+    j->kind->work(j->data);
 }
 
 static void compute_finished(void *item) { work_finished(&((job *)item)->work, 0); }

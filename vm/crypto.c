@@ -592,8 +592,16 @@ static agc_value kdf_done(agc_vm *vm, void *data, agc_value context) {
 
 static void kdf_drop(void *data) { kdf_free(data); }
 
-/* A compute job has no deadline, so no `expired` half. */
-static const agc_io_kind kdf_io = {kdf_work, kdf_done, NULL, kdf_drop, false, "kdf", NULL, false, NULL};
+/* Never reached: the job has no deadline and nothing else wakes the task, but agc_io_finish calls this half for an
+   outcome that is still pending, so it fails the run as compute_expired in vm/ffi.c does. The job stays (the work may
+   still use its data). */
+static agc_value kdf_expired(agc_vm *vm, void *data, agc_value context) {
+  (void)data;
+  (void)context;
+  agc_fail(vm, "RUNTIME-INTERNAL", "a KDF call ended without its key", 0);
+}
+
+static const agc_io_kind kdf_io = {kdf_work, kdf_done, kdf_expired, kdf_drop, false, "kdf", NULL, false, NULL};
 
 /* A malloc'd copy of the n bytes at data (NULL for none). */
 static uint8_t *kdf_copy(const uint8_t *data, size_t n) {
@@ -620,12 +628,7 @@ static agc_value kdf_value(agc_vm *vm, agc_value *args, size_t length_at, const 
   if (!kdf->scrypt && (__builtin_mul_overflow(kdf->iterations, blocks, &rounds) || rounds > PBKDF2_MAX_WORK))
     return agc_error_value("KDF.pbkdf2_hmac_sha256 needs iterations * ceil(length / 32) of at most 50000000");
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "the thread pool is off in this run", span);
-  /* The call parks, which a callback of native code cannot (agc_task_parking), and a loop that cannot start fails in
-     agc_io_loop: both are refused here, before the copies of the password exist, as vm/ffi.c does for a compute
-     call. */
-  if (vm->task->callbacks)
-    agc_fail(vm, "RUNTIME-NATIVE-CALLBACK", "a callback of native code cannot wait for a KDF call", span);
-  (void)agc_io_loop(vm);
+  agc_task_can_park(vm, "a callback of native code cannot wait for a KDF call", span);
   kdf_job *k = calloc(1, sizeof *k);
   if (!k) agc_out_of_memory();
   k->kdf = *kdf;

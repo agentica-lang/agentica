@@ -1517,11 +1517,7 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
     else if (!e->out[k])
       check_argument(vm, e->params[k], e->structs[k], agc_list_get(values, e->arg[k]), span);
   }
-  /* A compute call parks, which a callback cannot (agc_task_parking): refused before the copies exist. */
-  if (e->compute && vm->task->callbacks)
-    agc_fail(vm, "RUNTIME-NATIVE-CALLBACK", "a callback of native code cannot wait for a compute call", span);
-  /* The loop is made first: a loop that cannot start fails here, before the copies exist. */
-  if (e->compute) (void)agc_io_loop(vm);
+  if (e->compute) agc_task_can_park(vm, "a callback of native code cannot wait for a compute call", span);
   check_open(vm, e, values, NULL, span);
   uint8_t *bytes[AGC_FFI_MAX_PARAMS];
   copy_byte_arguments(vm, e, values, bytes);

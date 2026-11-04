@@ -168,9 +168,10 @@ seconds by default, set with
 2026-10-13 (row 7.2.1d). At exit, stdout and stderr count as part of the file
 flush. **When `main` ends, the program ends.** The steps are:
 
-0. drop the compute calls that no pool thread has started
-   (`agc_ffi_stop_queued` in `vm/ffi.c`): a call is made in full or never, one
-   CAS on its phase decides;
+0. start no queued compute job any more, a KDF derivation included
+   (`rt->over`, read by `run_compute` in `vm/loop.c`), and drop the compute
+   calls that no pool thread has started (`agc_ffi_stop_queued` in
+   `vm/ffi.c`): a call is made in full or never, one CAS on its phase decides;
 1. kill child processes (`close_children`, about 2 seconds at most, driving the
    loop for their exit callbacks, §10.4 Close);
 2. flush stdout, stderr and open files (the file flush within the flush limit);
