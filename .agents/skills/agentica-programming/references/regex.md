@@ -26,6 +26,10 @@ struct Regex.Group  # text, start, stop, matched; "" and -1 when not matched
   `m` is `(?s)` (`.` matches `\n`, as Ruby's `m`); `/a/im` has the `source`
   `(?is)a`. After a value `/` is division: `puts(/x/)`, not `puts /x/`. A
   literal is not a `case` pattern.
+  Lexical errors: no closing `/` on the line (`LEX-UNTERMINATED-REGEX`; a `/`
+  inside `[...]` ends the literal, so write `\/`), `#{` in the body
+  (`LEX-REGEX-INTERPOLATION`), a flag other than `i` or `m`, or one twice
+  (`LEX-REGEX-FLAG`).
 - `Regex.compile(text)` is for a pattern built at run time: a `String`, so
   double each backslash (`"\\d+"`), and compile it once, outside loops. Text
   first: `text |> Regex.split(re)`.

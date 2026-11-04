@@ -17,9 +17,9 @@ part with a dot such as `"models.rb"`): a module file name has no dot except
 - An import alias that the file never uses is `CHECK-UNUSED-IMPORT` at the
   alias: remove the import. A use is any `Alias.name` (call, `&Alias.f`, type,
   construction, pattern, constant) or a re-export; a regex literal uses the
-  `std/regex` import and a `<<~EAG` template the `std/eag` one. Query commands
-  (`type-at`, `symbol`, `refs`) do not report it. An alias with no member
-  (`u: User`) is `CHECK-IMPORT-NAME`. Unused names of `import {a, b}` are fine.
+  `std/regex` import and a `<<~EAG` template the `std/eag` one. An alias with no
+  member (`u: User`) is `CHECK-IMPORT-NAME`. Unused names of `import {a, b}` are
+  fine.
 
 ## Exports and names
 
@@ -161,9 +161,9 @@ import Sqlite from "pkg/sqlite/db"
   `PKG-MANIFEST-INVALID`) makes a line with only `end` need an empty line
   after it, in the files below the manifest's folder that have no manifest of
   their own nearer (not `std/`, packages, `agc_libs/` or any `pkg/` library,
-  even one inside the folder): `CHECK-BLANK-LINE-AFTER-END` at the `end`. The next line may
-  start with `end`, `else`, `elsif`, `)`, `]`, `}` or `.name`; a comment line is
-  not an empty line; the end of the file needs none.
+  even one inside the folder): `CHECK-BLANK-LINE-AFTER-END` at the `end`. The
+  next line may start with `end`, `else`, `elsif`, `)`, `]`, `}` or `.name`; a
+  comment line is not an empty line; the end of the file needs none.
 - `subdir = "postgres"` makes the package a folder of the repository (several
   packages in one repository, prefixed tags such as `postgres-0.1.0`): plain
   folder names joined by `/`, at most 128 characters, no `..`, no leading `/`,
@@ -216,22 +216,15 @@ import Sqlite from "pkg/sqlite/db"
   project manifest and `PKG-SOURCE-CONFLICT` in a package manifest. A bad lock
   (a `version` other than 1, a name twice, a bad value) is `PKG-LOCK-INVALID`; a
   bad manifest `PKG-MANIFEST-INVALID`. Both name a file and a key path.
-- The cache folder of a package is `<cache>/<host>/<owner>/<repo>/<commit>/`,
-  with no `.git` in `<repo>` (`<commit>@<subdir>` with `/` written `@` for a
-  `subdir`, holding only that folder). `agentica install` (no arguments; the
-  project of the working folder) fills it with the system `git`, writes `deps/`
-  from it and never writes the lock. A package already cached with the locked
-  hash is not fetched, so a full cache needs no git and no network. A fetch gets
-  the tag (or the locked commit) without a checkout and copies the `.agc` files
-  (each at most 1 MiB) and the root `agentica.toml`. It fails with
-  `PKG-TAG-MOVED` (the tag is another commit than the lock), `PKG-HASH-MISMATCH`
-  (the files are not the locked ones; a cached folder is never overwritten),
-  `PKG-SYMLINK`, `PKG-PATH-COLLISION` (two paths differing only in case),
-  `PKG-FETCH` (git failed, no such tag or commit, cache not writable) and
+- `agentica install` (no arguments; the project of the working folder) fills a
+  download cache with the system `git`, writes `deps/` from it and never writes
+  the lock. A package already cached with the locked hash is not fetched, so a
+  full cache needs no git and no network. It fails with `PKG-TAG-MOVED` (the tag
+  is another commit than the lock), `PKG-HASH-MISMATCH` (the files are not the
+  locked ones), `PKG-SYMLINK`, `PKG-PATH-COLLISION` (two paths differing only in
+  case), `PKG-FETCH` (git failed, no such tag or commit, cache not writable) and
   `PKG-MANIFEST-MISSING` (no `agentica.toml`). Each names `agentica.lock` and
-  the entry's key, such as `package[0].tag`. `<cache>` is
-  `$XDG_CACHE_HOME/agentica/pkg` when `XDG_CACHE_HOME` is absolute, else
-  `~/.cache/agentica/pkg`; on Windows `%LOCALAPPDATA%\agentica\cache\pkg`.
+  the entry's key, such as `package[0].tag`.
 - `add` and `update` run `git` as `install` does and write `agentica.lock`
   (every package of the build, sorted by name, and no other). `add` puts one
   line in `[dependencies]` of `agentica.toml` and changes no other byte; a name
@@ -247,29 +240,16 @@ import Sqlite from "pkg/sqlite/db"
   to make the lock match it again. Both then refresh `deps/` and remove the
   folder of a package the lock dropped.
 - `deps/<name>/` holds the `.agc` files and the `agentica.toml` of each locked
-  package that is not a workspace member, direct or not, flat (for a `subdir`,
-  that folder only). `install` replaces the folder of each locked package that
-  is not a real folder or whose `.agc` files differ from the lock (run it again
-  to restore an edited file) and leaves every other entry of `deps/` alone (a
-  killed run may leave a hidden `.tmp-*` or `.old-*` entry; the next command
-  removes it once it is older than ten minutes). The
-  tool writes no `.gitignore` there: commit `deps/` or ignore it. `deps/` as a
-  symbolic link is `PKG-SYMLINK`; a failed write is `PKG-WRITE` (after `add` or
-  `update` saved the lock, run `agentica install` to write the locked packages
-  into `deps/`). `test` and
-  `symbol` walks skip the `deps/` of a project. `agc_libs/` stays for local
-  libraries.
-- The hash is `sha256:` and the SHA-256 in hex (`Digest.sha256`) of one byte
-  stream: for each `.agc` file below the package folder, in bytewise order of
-  its path relative to the folder (written with `/`), the path, a zero byte, the
-  size in decimal, a zero byte and the file bytes. The files are the `.agc`
-  files and every file of `native/` at the package root. Hidden folders (any
-  depth), `agc_libs/` at the package root, dotfiles and other files are left
-  out. The package's `agentica.toml` is not hashed, except for a package with a
-  non-`.agc` file in `native/` or a `[native]` table. A build hashes a package (its
-  `deps/` folder) the first time an import loads it; a difference is
-  `PKG-HASH-MISMATCH`, and a symbolic link named `*.agc`, `native` or in
-  `native/` is `PKG-SYMLINK`.
+  package that is not a workspace member, direct or not, flat. `install`
+  replaces a folder that is not a real folder or whose `.agc` files differ from
+  the lock (run it again to restore an edited file) and leaves every other entry
+  of `deps/` alone. The tool writes no `.gitignore` there: commit `deps/` or
+  ignore it. `deps/` as a symbolic link is `PKG-SYMLINK`; a failed write is
+  `PKG-WRITE`. `test` and `symbol` walks skip the `deps/` of a project;
+  `agc_libs/` stays for local libraries.
+- A build hashes a package (its `deps/` folder) the first time an import loads
+  it; a difference is `PKG-HASH-MISMATCH`, and a symbolic link named `*.agc`,
+  `native` or in `native/` is `PKG-SYMLINK`.
 - A package declares native libraries in its own `agentica.toml`, one table
   `[native.NAME]` each, with an inline table for each of `linux`, `macos` and
   `windows` that has exactly one of `file = "native/path"` (shipped in the
@@ -277,8 +257,8 @@ import Sqlite from "pkg/sqlite/db"
   `system = "libname"` (a name the system loader looks up, or an absolute
   path; a list `["libpq.5.dylib", "/opt/homebrew/lib/libpq.5.dylib"]` gives
   candidates, and the first existing absolute path wins, else the first
-  name), or
-  `{ url, sha256, member }` (a pinned TAR or ZIP download, fetched for the host; the format is detected from file magic, never the URL):
+  name), or `{ url, sha256, member }` (a pinned TAR or ZIP download, fetched
+  for the host; the format is detected from file magic, never the URL):
 
   ```toml
   [native.sqlite3]
@@ -298,12 +278,8 @@ import Sqlite from "pkg/sqlite/db"
 
 ## String queue (`std/queue`)
 
-Written in Agentica. Exported records: `QueueState(items: List[String])` and
-`Popped(value: String, remaining: QueueState)`. Functions: `new`, `push`,
-`pop`, `peek`, `size`, `empty?` (signatures: `agentica doc std/queue`). Push
-adds at the back; pop removes the oldest value; pop and peek on an empty queue
-return an error Result. Inputs never change: assign the returned queue (or
-`Popped.remaining`). Empty strings and duplicates are valid. `QueueState` is a
-normal exported struct, not an opaque handle. The queue holds only strings, and
-there are no blocking cross-task queue operations. `push`, `pop`, `peek`,
-`size` and `empty?` are O(n); no constant-time FIFO is promised.
+An immutable first-in, first-out queue of Strings: `Queue.new`, `push`, `pop`,
+`peek`, `size`, `empty?` (signatures: `agentica doc std/queue`). Every function
+returns a new queue (`QueueState`); `pop` gives `Popped(value, remaining)` and
+`pop` or `peek` on an empty queue an error Result. There are no blocking
+cross-task operations, and the operations are O(n).

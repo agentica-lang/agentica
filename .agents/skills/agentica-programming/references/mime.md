@@ -11,10 +11,10 @@ MIME.text?(type: String) -> Bool
 
 - A text that starts with `.`, has no other `.` and no `/` or `\` is an
   extension (`.css`). Any other text is a path: cut at the first `?` or `#`,
-  take the last `/` part, then the extension of `File.extname` (the last one;
-  a leading dot does not count: `dir/.json` has none, `.env.json` is `json`).
-  Case does not matter. A name with no dot (`css`, `README`), an empty or an
-  unknown extension gives `fallback`.
+  take the last `/` part, then its extension as Ruby's `File.extname` gives it
+  (the last one; a leading dot does not count: `dir/.json` has none, `.env.json`
+  is `json`). Case does not matter. A name with no dot (`css`, `README`), an
+  empty or an unknown extension gives `fallback`.
 - The table is fixed and small: web text and data, images, fonts, audio,
   video, `wasm`, `pdf`, archives. Types are bare (no `; charset=utf-8`);
   `js` is `text/javascript`, `xml` is `application/xml`, `wav` is `audio/wav`.
