@@ -58,9 +58,9 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
 - `LEX-INVALID-NUMBER`: a `_` in a number that is not between two digits (`1_`,
   `1__0`, `1_.5`, `1._5`).
 - `LEX-UNTERMINATED-REGEX`, `LEX-REGEX-INTERPOLATION`, `LEX-REGEX-FLAG`: a regex
-  literal with no closing `/` on its line (a `/` inside `[...]` ends it; a line
-  that starts with `/ 2` is one), with `#{` in the body, or with a flag other
-  than `i` and `m` or a repeated one (`regex.md`).
+  literal with no closing `/` on its line (a `/` inside `[...]` ends it, so
+  write `\/`; a line that starts with `/ 2` is one), with `#{` in the body, or
+  with a flag other than `i` and `m` or a repeated one.
 - `PARSE-UNEXPECTED-TOKEN`: the parser expected something else. A `{` after
   `def ... -> T`, `if`, `elsif`, `else`, `while`, `for`, `case` or `do |x|` says
   blocks have no braces; `//` or `/*` says comments start with `#`;
@@ -155,14 +155,18 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
   `deps/<name>/` or the cache (or just fetched by `install`) are not the ones
   the lock hashes (edited, added or missing), or one is a symbolic link or
   submodule, or the package's `agentica.toml` is not a regular file. Run
-  `agentica install` again for `deps/`; remove the cache folder and run it for
-  the cache. `deps/` itself as a link is `PKG-SYMLINK` for `install`.
+  `agentica install` again for `deps/`; for the cache, remove the package's
+  folder (`~/.cache/agentica/pkg`, under `$XDG_CACHE_HOME` when set;
+  `%LOCALAPPDATA%\agentica\cache\pkg` on Windows) and run it: a cached folder
+  is never overwritten. `deps/` itself as a link is `PKG-SYMLINK` for `install`.
 - `PKG-NATIVE-PLATFORM`, `PKG-NATIVE-MISSING`, `PKG-NATIVE-ARCHIVE`: a file of a
   package opens a library that its `agentica.toml` declares under
   `[native.NAME]`, but the table has no entry for this system (key
-  `native.NAME`: add `linux`, `macos` or `windows`); its `file` is not in the
+  `native.NAME`: add `linux`, `macos` or `windows`); or its `file` is not in the
   package (key `native.NAME.linux.file`), or a downloaded archive holds no file
-  for its `member`; the download is not a plain or gzipped TAR or a ZIP. The
+  for its `member` (`PKG-NATIVE-MISSING`); or the download is not a plain or
+  gzipped TAR or a ZIP, or its `member` cannot be read (a link, a duplicate, a
+  late entry) (`PKG-NATIVE-ARCHIVE`, key `native.NAME.PLATFORM.member`). The
   file is the package's `agentica.toml`.
 - `PKG-FETCH`, `PKG-TAG-MOVED`, `PKG-PATH-COLLISION`, `PKG-MANIFEST-MISSING`:
   `agentica install` failed: git did not start or failed, the tag or commit does

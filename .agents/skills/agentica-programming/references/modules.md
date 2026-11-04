@@ -245,8 +245,9 @@ import Sqlite from "pkg/sqlite/db"
   the lock (run it again to restore an edited file) and leaves every other entry
   of `deps/` alone. The tool writes no `.gitignore` there: commit `deps/` or
   ignore it. `deps/` as a symbolic link is `PKG-SYMLINK`; a failed write is
-  `PKG-WRITE`. `test` and `symbol` walks skip the `deps/` of a project;
-  `agc_libs/` stays for local libraries.
+  `PKG-WRITE` (after `add` or `update` saved the lock, run `agentica install` to
+  write the locked packages into `deps/`). `test` and `symbol` walks skip the
+  `deps/` of a project; `agc_libs/` stays for local libraries.
 - A build hashes a package (its `deps/` folder) the first time an import loads
   it; a difference is `PKG-HASH-MISMATCH`, and a symbolic link named `*.agc`,
   `native` or in `native/` is `PKG-SYMLINK`.

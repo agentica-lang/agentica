@@ -2,8 +2,9 @@
 name: agentica-programming
 description: >-
   Write, check, run and repair Agentica programs (`.agc` files), a Ruby-like
-  language with static types and immutable values: language rules, builtins,
-  `std/` modules (HTTP, JSON, tasks, regex, option_parser), `agentica.toml`
+  language with static types and immutable values: language rules,
+  builtins and `std/` modules (HTTP, JSON, tasks, regex, option_parser),
+  `agentica.toml`
   packages, `agentica test` and BDD specs, and the `CHECK-`, `PARSE-`,
   `RUNTIME-` and `PKG-` diagnostics. Use whenever a task writes, edits, runs or
   debugs Agentica application code or fixes one of its diagnostics. Not for the
@@ -24,8 +25,6 @@ does not exist; `agentica help NAME` prints a builtin's signature.
 done. Exit 1 prints the first diagnostic (stable code, span, a `help` line): fix
 it and rerun. Exit 2 is bad usage. A check does not test behavior: run all cases
 in one command, `for f in cases/*.txt; do agentica p.agc < "$f" || break; done`.
-`agentica fmt` formats files in place; `agentica test` runs `*_test.agc` and
-`.feature` specs (`testing.md`, `bdd.md`).
 
 ## Rules agents break
 
@@ -75,7 +74,7 @@ Read only what the task needs.
 | `testing.md` | unit tests (`Test`, `*_test.agc`) |
 | `bdd.md` | `.feature` specs and step programs |
 | `performance.md` | slow code, `Profile`, step costs |
-| `binary.md` | bit operations, `Digest`, `HMAC`, `Cipher`, `CMAC`, `KDF`, `Base64`, hex, `SecureRandom`, `std/binary` |
+| `binary.md` | bit operations, `Digest` hashes, `HMAC`, `Cipher` (AES-GCM, Triple DES), `CMAC`, password hashing (`KDF`), `Base64`, hex, `SecureRandom`, `std/binary` |
 | `logger.md` | `std/logger` |
 | `toml.md` | `std/toml` |
 | `uri.md` | `std/uri` (percent-encoding, query strings) |
