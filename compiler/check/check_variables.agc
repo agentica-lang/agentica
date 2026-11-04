@@ -2,6 +2,7 @@
 ## The names are watched while the function is checked (State.introduce_local, State.read); this runs at its end.
 
 import Ast from "../syntax/ast"
+import Walk from "../syntax/ast_walk"
 import T from "../syntax/types"
 import State from "check_state"
 
@@ -60,29 +61,30 @@ def help(cx: State.Cx, st: State.St, key: Int, local: State.Local) -> String
 end
 
 def variable_help(cx: State.Cx, st: State.St, key: Int, local: State.Local, keep: String) -> String
+  text = value_text(cx, local.value)
+  # Removing a name whose value holds a `try` would drop the error that the `try` returns to the caller.
+  if try?(local.value)
+    return "write #{text} as a statement, without the name, or #{keep}"
+  end
+
+  if has_try?(local.value)
+    return "discard it with _ = #{text} to keep its try, or #{keep}"
+  end
+
   if T.is?(local.type, "Result") and local.value.some?
-    text = value_text(cx, local.value)
-    if can_try?(st)
-      return (
-        "handle the Result: try #{text}, a case on ok(_) and error(message), or .unwrap!; " +
-        "or discard it with _ = #{text}, or #{keep}"
-      )
+    attempt = ""
+    if local.tryable
+      attempt = "try #{text}, "
     end
 
-    # try is not allowed here (main, or a function that does not return a Result), so it is not offered.
     return (
-      "handle the Result: a case on ok(_) and error(message), or .unwrap!; " +
+      "handle the Result: #{attempt}a case on ok(_) and error(message), or .unwrap!; " +
       "or discard it with _ = #{text}, or #{keep}"
     )
   end
 
   if st.writes.include?(key)
     return "it is only updated, never read; remove it, or #{keep}"
-  end
-
-  if try?(local.value)
-    # Removing the name alone would drop the error that `try` returns to the caller.
-    return "write #{value_text(cx, local.value)} as a statement, without the name, or #{keep}"
   end
 
   if call?(local.value)
@@ -92,14 +94,7 @@ def variable_help(cx: State.Cx, st: State.St, key: Int, local: State.Local, keep
   return "remove it, or #{keep}"
 end
 
-# True when `try` is allowed in the function being checked: it returns a Result.
-def can_try?(st: State.St) -> Bool
-  case st.result
-    State.Slot.Known(type) -> return T.is?(type, "Result")
-    _ -> return false
-  end
-end
-
+# True when the value is a `try` itself.
 def try?(value: Optional[Ast.Expr]) -> Bool
   case value
     some(found) ->
@@ -108,6 +103,26 @@ def try?(value: Optional[Ast.Expr]) -> Bool
         _ -> return false
       end
 
+    none -> return false
+  end
+end
+
+# True when a `try` is anywhere in the value. It walks with a worklist, as the other stages do.
+def has_try?(value: Optional[Ast.Expr]) -> Bool
+  case value
+    some(found) ->
+      work: List[Walk.Node] = [Walk.Node.Expr(found)]
+      at = 0
+      while at < work.size
+        node = work[at]
+        at += 1
+        case node
+          Walk.Node.Expr(Ast.Expr.Try(_)) -> return true
+          _ -> work = work.concat(Walk.children(node))
+        end
+      end
+
+      return false
     none -> return false
   end
 end
