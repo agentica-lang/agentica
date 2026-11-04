@@ -57,10 +57,18 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
   that are not UTF-8; the span is the first bad byte.
 - `LEX-INVALID-NUMBER`: a `_` in a number that is not between two digits (`1_`,
   `1__0`, `1_.5`, `1._5`).
+- `LEX-UNTERMINATED-REGEX`, `LEX-REGEX-INTERPOLATION`, `LEX-REGEX-FLAG`: a regex
+  literal with no closing `/` on its line (a `/` inside `[...]` ends it, so
+  write `\/`; a line that starts with `/ 2` is one), with `#{` in the body, or
+  with a flag other than `i` and `m` or a repeated one.
 - `PARSE-UNEXPECTED-TOKEN`: the parser expected something else. A `{` after
   `def ... -> T`, `if`, `elsif`, `else`, `while`, `for`, `case` or `do |x|` says
   blocks have no braces; `//` or `/*` says comments start with `#`;
   `value.with()` and `value.with(31)` say to name each field.
+- `PARSE-UNCLOSED-BLOCK`: a `def`, `if`, `case`, loop or `do` block with no
+  `end` before the end of the file (the span is the end of the file: look for
+  the block never closed). A block left open before the next `def` is
+  `PARSE-UNEXPECTED-TOKEN` at that `def`.
 - `PARSE-MISSING-BLANK-LINE`: no blank line between the `end` of a declaration
   and the next one (a `##` doc block belongs to the next declaration: the blank
   line goes before it).
@@ -147,13 +155,19 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
   `deps/<name>/` or the cache (or just fetched by `install`) are not the ones
   the lock hashes (edited, added or missing), or one is a symbolic link or
   submodule, or the package's `agentica.toml` is not a regular file. Run
-  `agentica install` again for `deps/`; remove the cache folder and run it for
-  the cache. `deps/` itself as a link is `PKG-SYMLINK` for `install`.
-- `PKG-NATIVE-PLATFORM`, `PKG-NATIVE-MISSING`: a file of a package opens a
-  library that its `agentica.toml` declares under `[native.NAME]`, but the
-  table has no entry for this system (key `native.NAME`: add `linux`, `macos`
-  or `windows`), or its `file` is not in the package (key
-  `native.NAME.linux.file`). The file is the package's `agentica.toml`.
+  `agentica install` again for `deps/`; for the cache, remove the package's
+  folder (`~/.cache/agentica/pkg`, under `$XDG_CACHE_HOME` when set;
+  `%LOCALAPPDATA%\agentica\cache\pkg` on Windows) and run it: a cached folder
+  is never overwritten. `deps/` itself as a link is `PKG-SYMLINK` for `install`.
+- `PKG-NATIVE-PLATFORM`, `PKG-NATIVE-MISSING`, `PKG-NATIVE-ARCHIVE`: a file of a
+  package opens a library that its `agentica.toml` declares under
+  `[native.NAME]`, but the table has no entry for this system (key
+  `native.NAME`: add `linux`, `macos` or `windows`); or its `file` is not in the
+  package (key `native.NAME.linux.file`), or a downloaded archive holds no file
+  for its `member` (`PKG-NATIVE-MISSING`); or the download is not a plain or
+  gzipped TAR or a ZIP, or its `member` cannot be read (a link, a duplicate, a
+  late entry) (`PKG-NATIVE-ARCHIVE`, key `native.NAME.PLATFORM.member`). The
+  file is the package's `agentica.toml`.
 - `PKG-FETCH`, `PKG-TAG-MOVED`, `PKG-PATH-COLLISION`, `PKG-MANIFEST-MISSING`:
   `agentica install` failed: git did not start or failed, the tag or commit does
   not exist, a copied path is unsafe, a file is over 1 MiB (16 MiB in all) or
@@ -229,6 +243,8 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
 - `RUNTIME-STACK-OVERFLOW`: recursion deeper than 10000; the stack shows the
   repeating function once, with its count. Only `return f(...)` tail calls are
   free.
+- `RUNTIME-END-OF-INPUT`: `IO.gets!` (or `gets!`) at the end of input; test
+  `IO.eof?()` first, or use `IO.gets`, which gives an error Result.
 - `RUNTIME-INVALID-DURATION`: a negative `Task.sleep` duration, a negative
   `Channel.send`/`recv` timeout, a `Task.await(task, timeout_ms)` or `Task.map`
   `timeout_ms` of 0 or less.

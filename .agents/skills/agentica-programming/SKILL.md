@@ -1,10 +1,15 @@
 ---
 name: agentica-programming
 description: >-
-  Write, check, run and repair Agentica programs (`.agc` files): a Ruby-like
-  language with static types and immutable values. Use for Agentica application
-  code. Not for interpreter, VM or test-suite changes (use
-  agentica-development).
+  Write, check, run and repair Agentica programs (`.agc` files), a Ruby-like
+  language with static types and immutable values: language rules,
+  builtins and `std/` modules (HTTP, JSON, tasks, regex, option_parser),
+  `agentica.toml`
+  packages, `agentica test` and BDD specs, and the `CHECK-`, `PARSE-`,
+  `RUNTIME-` and `PKG-` diagnostics. Use whenever a task writes, edits, runs or
+  debugs Agentica application code or fixes one of its diagnostics. Not for the
+  interpreter, compiler, VM or its test suite (use agentica-development) or for
+  style (use agentica-code-guidelines).
 ---
 
 # Agentica programming
@@ -36,6 +41,10 @@ in one command, `for f in cases/*.txt; do agentica p.agc < "$f" || break; done`.
   `"x".to_i` is a Result: `try s.to_i`, not `try s.to_i!`.
 - A value that may be missing is `Optional[T]` (`some(x)`, `none`), not `nil`
   and not an enum of your own; a failure with a reason is a `Result`.
+- An import alias the file never uses (`CHECK-UNUSED-IMPORT`) and a statement
+  after `return`, `break` or `next` (`CHECK-UNREACHABLE-CODE`) are errors:
+  delete them. A missing `end` is `PARSE-UNCLOSED-BLOCK` at the end of the file,
+  or `PARSE-UNEXPECTED-TOKEN` at the next `def`: count the `end`s.
 - A method not in `references/` does not exist (`contains?` on a List, `value!`,
   `len`): `CHECK-UNKNOWN-METHOD`.
 
@@ -65,7 +74,7 @@ Read only what the task needs.
 | `testing.md` | unit tests (`Test`, `*_test.agc`) |
 | `bdd.md` | `.feature` specs and step programs |
 | `performance.md` | slow code, `Profile`, step costs |
-| `binary.md` | bytes, bit operations, `Digest` hashes, `HMAC`, AES-256-GCM and Triple DES (`Cipher`), `CMAC`, password hashing (`KDF`), `Base64`, hex, `SecureRandom`, `std/binary` (`read_u16_be`, `frame`) |
+| `binary.md` | bit operations, `Digest` hashes, `HMAC`, `Cipher` (AES-GCM, Triple DES), `CMAC`, password hashing (`KDF`), `Base64`, hex, `SecureRandom`, `std/binary` |
 | `logger.md` | `std/logger` |
 | `toml.md` | `std/toml` |
 | `uri.md` | `std/uri` (percent-encoding, query strings) |
