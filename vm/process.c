@@ -1288,10 +1288,6 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   size_t pair_count;
   const char *env_text = env_problem(vm, env, &pairs, &pair_count);
   if (env_text) return agc_error_value(env_text);
-  /* With several schedulers the spawn parks (start_request below), so a callback of native code is refused before the
-     path, the launch and the child exist. The loop goes first, since agc_io_here reads it. */
-  (void)agc_io_loop(vm);
-  if (!agc_io_here(vm)) agc_task_check_wait(vm);
   agc_process *pr = agc_alloc(sizeof(agc_process));
   pr->reader = agc_new_lock(vm);
   pr->writer = agc_new_lock(vm);
@@ -1322,6 +1318,14 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
     AGC_TRACE(&vm->rt->trace, AGC_TRACE_PROC, "spawn_failed path=%s rc=%d", path, UV_ENOMEM);
     free_launch(l);
     return agc_system_error(vm, "process: cannot run the executable", agc_net_errno(UV_ENOMEM));
+  }
+  /* With several schedulers the spawn parks (start_request below), which a callback of native code cannot: the errors
+     above still come back as a Result, and the launch is freed before the refusal, before the child exists. The loop
+     is made first, since agc_io_here reads it. agc_task_parking never returns inside a callback. */
+  (void)agc_io_loop(vm);
+  if (vm->task->callbacks && !agc_io_here(vm)) {
+    free_launch(l);
+    agc_task_parking(vm);
   }
   proc *p = calloc(1, sizeof(proc));
   if (!p) agc_out_of_memory();
@@ -1565,7 +1569,12 @@ static bool begin_close(void *data, agc_io_job *job) {
 }
 
 static agc_value builtin_close(agc_vm *vm, agc_value *args, uint32_t span) {
-  proc *p = unregister_child(vm, agc_as_process(vm, args[0])->state);
+  agc_resource *r = agc_as_process(vm, args[0])->state;
+  /* The close parks with several schedulers, and at N = 1 while a plain child still runs (reaped_on_close, read here
+     before shut): a callback of native code is refused while the child still has its resource. */
+  const proc *child = r->native;
+  if (child && (!agc_io_here(vm) || reaped_on_close(child))) agc_task_check_wait(vm);
+  proc *p = unregister_child(vm, r);
   if (!p) return agc_void();
   if (!agc_io_here(vm)) {
     request *q = new_request(vm, p, REQ_CLOSE);

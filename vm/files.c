@@ -1565,15 +1565,20 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
   return result;
 }
 
-static agc_value expired(agc_vm *vm, void *data, agc_value context) {
-  op *o = data;
-  agc_poller *p = poller_of(o);
-  if (p) agc_poller_pause(p);
+/* A close that stopped partway keeps only the bytes it has not sent, so a later flush does not write the rest twice. */
+static void keep_unsent(op *o) {
   if (o->kind == OP_CLOSE && o->sent) {
     memmove(o->st->buf, o->st->buf + o->sent, o->st->end - o->sent);
     o->st->end -= o->sent;
     o->sent = 0;
   }
+}
+
+static agc_value expired(agc_vm *vm, void *data, agc_value context) {
+  op *o = data;
+  agc_poller *p = poller_of(o);
+  if (p) agc_poller_pause(p);
+  keep_unsent(o);
   if (agc_is(context, AGC_T_HANDLE)) {
     o->owns_st = true;
     agc_resource *r = agc_as_handle(vm, context);
@@ -1608,10 +1613,12 @@ static agc_value start(agc_vm *vm, op *o, agc_value context, int64_t timeout) {
   }
   if (step(o)) return done(vm, o, context);
   /* The call must wait for the descriptor, which a callback of native code cannot: the op goes first, as done would
-     let it go. */
+     let it go (a close's state is flushed from its first unsent byte). agc_task_parking never returns inside a
+     callback, so nothing reads the op after the drop. */
   if (vm->task->callbacks) {
+    keep_unsent(o);
     drop(o);
-    agc_task_check_wait(vm);
+    agc_task_parking(vm);
   }
   agc_io_start_then(vm, &poll_io, o, context, timeout, begin_wait);
   return agc_void();
