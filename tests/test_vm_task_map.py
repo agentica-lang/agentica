@@ -126,7 +126,7 @@ DETACHED_READ_PROGRAM = """\
 def main() -> Void
   port = Result.unwrap!(String.to_int(System.args()[0]))
   socket = Result.unwrap!(TCP.connect("127.0.0.1", port, 5000))
-  results = Task.map([1], 1, @300@) do |n|
+  results = Task.map([1], 1, @300@) do |_|
     line = try TCP.read_line(socket, 20000)
     ok(line)
   end
@@ -250,7 +250,7 @@ def main() -> Void
   jobs: Channel[Int] = Channel.new(1)
   Task.spawn(&second, jobs)
   Task.spawn(&sender, jobs)
-  results = Task.map([1], 1, @250@) do |n|
+  results = Task.map([1], 1, @250@) do |_|
     got = try jobs.recv(5000)
     ok(got)
   end
@@ -281,14 +281,14 @@ def sender(hold: Hold) -> Void
   Task.sleep(hold.wait)
   sent = Time.monotonic_ms()
   Result.unwrap!(hold.jobs.send(7, 1000))
-  sorted = List.sort(hold.big)
+  _sorted = List.sort(hold.big)
   puts("sent #{sent - hold.start} held #{Time.monotonic_ms() - sent}")
 end
 
 def main() -> Void
   big = Range.to_a(1..1000000).map do |x| "k#{x}" end
   before = Time.monotonic_ms()
-  trial = List.sort(big)
+  _trial = List.sort(big)
   trial_ms = Time.monotonic_ms() - before
   wait = @100@
   deadline = wait + trial_ms / 2
@@ -297,7 +297,7 @@ def main() -> Void
   start = Time.monotonic_ms()
   Task.spawn(&second, Hold(jobs: jobs, big: big, wait: 0, start: start, tail: deadline + @1000@))
   Task.spawn(&sender, Hold(jobs: jobs, big: big, wait: wait, start: start, tail: 0))
-  results = Task.map([1], 1, deadline) do |n|
+  results = Task.map([1], 1, deadline) do |_|
     got = try jobs.recv(60000)
     ok(got)
   end
@@ -555,7 +555,7 @@ def test_the_arguments_are_diagnostics_at_their_own_span(tmp_path):
         ("timeout -5", "Task.map([1], 2, -5)", "-5", "RUNTIME-INVALID-DURATION"),
     ]
     for _name, call, argument, code in cases:
-        program = "def main() -> Void\n  empty: List[Int] = []\n  puts(%s do |n| ok(n) end)\nend\n" % call
+        program = "def main() -> Void\n  empty: List[Int] = []\n  _ = empty\n  puts(%s do |n| ok(n) end)\nend\n" % call
         result = diagnostic(tmp_path, program, "arguments")
         assert result["code"] == code
         line, column = position(program, call)
