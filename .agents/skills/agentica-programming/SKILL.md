@@ -46,10 +46,10 @@ in one command, `for f in cases/*.txt; do agentica p.agc < "$f" || break; done`.
   `for i in`) and a statement after `return`, `break` or `next`
   (`CHECK-UNREACHABLE-CODE`) are errors: delete them, or for a name that is
   unused on purpose write `_` or `_name`. A dropped `Result` from any call
-  (`File.close(f, 1000)`, `ch.send(x, 0)`, `Task.await(t)`) is
-  `CHECK-UNUSED-RESULT`: `try` it, `case` it or write `_ = f(...)`. A missing `end` is
-  `PARSE-UNCLOSED-BLOCK` at the end of the file, or `PARSE-UNEXPECTED-TOKEN` at
-  the next `def`: count the `end`s.
+  (`File.close(f, 1000)`, `ch.send(x, 0)`) is `CHECK-UNUSED-RESULT`: `try` it,
+  `case` it or write `_ = f(...)`. A missing `end` is `PARSE-UNCLOSED-BLOCK` at
+  the end of the file, or `PARSE-UNEXPECTED-TOKEN` at the next `def`: count
+  the `end`s.
 - A method not in `references/` does not exist (`contains?` on a List, `value!`,
   `len`): `CHECK-UNKNOWN-METHOD`.
 
