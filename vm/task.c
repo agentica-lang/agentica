@@ -156,6 +156,11 @@ void agc_task_parking(agc_vm *vm) {
     atomic_store_explicit(&t->state, AGC_TASK_PARKING, memory_order_release);
 }
 
+void agc_task_check_park(agc_vm *vm, const char *message, uint32_t span) {
+  if (vm->task->callbacks) agc_fail(vm, "RUNTIME-NATIVE-CALLBACK", message, span);
+  (void)agc_io_loop(vm);
+}
+
 /* The wait is not needed after all (the condition is already true, or the task was cancelled): back to RUNNING from
    PARKING or from WOKEN, whichever a waker left. A task that was woken has nothing to do with the wake, which was
    only a hint. */

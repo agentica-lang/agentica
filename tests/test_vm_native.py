@@ -3074,10 +3074,19 @@ def derives(x: Int) -> Int
   return x + key.unwrap!.length
 end
 
+def contexts(x: Int) -> Int
+  if TLS.client_context(TlsClientOptions()).ok?
+    return x
+  end
+
+  return 0
+end
+
 def main() -> Void
   case System.args().first()
     "divide" -> puts(peer_call_twice(Native.callback(Step, &divide), 1))
     "kdf" -> puts(peer_call_twice(Native.callback(Step, &derives), 1))
+    "tls" -> puts(peer_call_twice(Native.callback(Step, &contexts), 1))
     "wait" -> puts(peer_call_twice(Native.callback(Step, &waits), 1))
     "huge" -> puts(peer_call_twice(Native.callback(Step, &huge), 1))
     "exit" -> puts(peer_call_twice(Native.callback(Step, &leaves), 1))
@@ -3092,13 +3101,14 @@ end
 # and from every later callback of the call, which run nothing (one "divide" line for two calls). A wait in a callback
 # is RUNTIME-NATIVE-CALLBACK at the wait, a result outside its C type RUNTIME-INTEGER-OVERFLOW at the extern def,
 # --max-steps counts the callback's steps, and an exit in a callback ends the run. A compute def runs C on the pool,
-# where no callback runs: the call is RUNTIME-NATIVE-CALLBACK. A KDF call parks, so in a callback it is
-# RUNTIME-NATIVE-CALLBACK at the call.
+# where no callback runs: the call is RUNTIME-NATIVE-CALLBACK. A KDF call and a TLS context build park, so in a
+# callback each is RUNTIME-NATIVE-CALLBACK at the call.
 @NATIVE_CALLS
 @pytest.mark.parametrize("mode, flags, status, code, start, out", [
     ("divide", [], 1, "RUNTIME-DIVISION-BY-ZERO", (9, 13), "divide 1\n"),
     ("wait", [], 1, "RUNTIME-NATIVE-CALLBACK", (13, 3), ""),
     ("kdf", [], 1, "RUNTIME-NATIVE-CALLBACK", (36, 9), ""),
+    ("tls", [], 1, "RUNTIME-NATIVE-CALLBACK", (41, 6), ""),
     ("huge", [], 1, "RUNTIME-INTEGER-OVERFLOW", (3, 3), ""),
     ("steps", ["--max-steps", "100000"], 1, "RUNTIME-STEP-LIMIT", (29, 21), ""),
     ("pool", [], 1, "RUNTIME-NATIVE-CALLBACK", (4, 3), ""),

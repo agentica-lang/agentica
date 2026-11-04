@@ -66,7 +66,8 @@ WINDOWS_ONLY_MODULES = frozenset({
 # The modules that have some cases a system cannot run because it really lacks the capability. A case of a module that
 # is not listed for its system, as host-only, fails the report. Windows lacks POSIX signals, FIFOs, /dev/stdin, modes,
 # descriptor flags and colon names (and the descriptor flags, FIFOs and ptys of the Native.wait_* cases in
-# tests/test_vm_native.py, where Windows waits only on sockets); macOS lacks non-UTF-8 names and a way to limit the
+# tests/test_vm_native.py, where Windows waits only on sockets, and the SIGTERM grace of a child at the end of the run
+# that tests/test_vm_crypto.py uses to hold the run open); macOS lacks non-UTF-8 names and a way to limit the
 # CPUs of a process; the other systems lack the Windows-only modules above.
 # Golden fixtures named -posix or -windows are allowed by name (host_only_fixture).
 _NEEDS_POSIX = frozenset({
@@ -78,7 +79,7 @@ _NEEDS_POSIX = frozenset({
     "tests/test_vm_file_sha256.py",
     "tests/test_vm_os.py", "tests/test_vm_stdout.py", "tests/test_vm_stop.py", "tests/test_vm_lazy_io.py",
     "tests/test_vm_multicore.py", "tests/test_bytecode_cache.py", "tests/test_check_cache.py",
-    "tests/test_vm_native.py", "tests/test_vm_http_proxy.py",
+    "tests/test_vm_native.py", "tests/test_vm_http_proxy.py", "tests/test_vm_crypto.py",
 })
 _NEEDS_LINUX = frozenset({"tests/test_vm_diff_8.py", "tests/test_single_binary.py", "tests/test_vm_file_open_block.py"})
 HOST_ONLY_ALLOWED = {
