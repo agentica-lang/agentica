@@ -246,6 +246,12 @@ registration first (`check_register.agc`), then bodies.
 - Expected types must reach builtin calls for contextual ok/error and
   unwrap/default. An untyped error is `CHECK-RESULT-TYPE`; `Channel.new` or
   `ATS.new` with no expected type is `CHECK-EXPECTED-TYPE`.
+- `CHECK-UNREACHABLE-CODE`: `check_block` and `block_statements`
+  (`check_stmt.agc`) fail at the statement after one that `Flow.ends?`
+  (`check_flow.agc`: return, break, next, an if with else or a case whose every
+  branch ends). It runs after each statement, so errors before the terminator
+  come first and the dead statement is not checked. Query commands keep it
+  strict. `block_returns?` looks only at the last statement because of it.
 - `try` needs a Result-returning function and a Result operand. Its payload may
   differ from the success type, and it does not guarantee a return. It also
   works in a block whose expected `Fn` has a fixed `Result` type (`Test.test`,

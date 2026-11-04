@@ -58,6 +58,8 @@ def main() -> Void
 end
 ```
 
+Code after a `return` can never run, so it is also an error (`CHECK-UNREACHABLE-CODE`): remove it or move it before the `return`.
+
 ## Void functions
 
 A function that gives nothing returns `Void`. It ends at its last line, or at a bare `return`.

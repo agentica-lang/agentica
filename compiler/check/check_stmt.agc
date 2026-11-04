@@ -35,11 +35,15 @@ export def check_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) ->
   return check_function_body(cx, st, node)
 end
 
-## Checks the statements in order.
+## Checks the statements in order. A statement that follows a terminator (return, break, next, or an if or case that
+## ends on every path) is CHECK-UNREACHABLE-CODE; it is not checked, so every error before the terminator comes first.
 export def check_block(cx: State.Cx, st: State.St, statements: List[Ast.Stmt]) -> Result[State.St]
   current = st
-  for statement in statements
-    current = try check_statement(cx, current, statement)
+  index = 0
+  while index < statements.size
+    current = try check_statement(cx, current, statements[index])
+    try check_reachable(cx, current, statements, index)
+    index += 1
   end
 
   return ok(current)
@@ -90,6 +94,26 @@ export def check_block_in(
   end
 
   return check_block_run(cx, st, block, known_params, known_result, each_receiver, step)
+end
+
+# Fails at statements[index + 1] when statements[index], already checked, never falls through to it.
+def check_reachable(cx: State.Cx, st: State.St, statements: List[Ast.Stmt], index: Int) -> Result[Void]
+  if index + 1 >= statements.size or !Flow.ends?(statements[index])
+    return ok()
+  end
+
+  terminator = statements[index]
+  line = statement_span(terminator).start.line
+  return error(
+    State.fail_help(
+      cx,
+      st,
+      "CHECK-UNREACHABLE-CODE",
+      "this statement never runs",
+      statement_span(statements[index + 1]),
+      Flow.unreachable_help(terminator, line),
+    ),
+  )
 end
 
 def check_function_body(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Result[State.St]
@@ -925,6 +949,7 @@ def block_statements(cx: State.Cx, st: State.St, statements: List[Ast.Stmt]) -> 
   index = 0
   while index < statements.size - 1
     current = try check_statement(cx, current, statements[index])
+    try check_reachable(cx, current, statements, index)
     index += 1
   end
 

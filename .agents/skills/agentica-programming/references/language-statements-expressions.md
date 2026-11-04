@@ -42,6 +42,10 @@ expressions and operators. Builtin methods and `to_s`: `builtins.md`.
 - `break` leaves the innermost `while` or `for`; `next` skips to its next
   iteration. Each stands alone on its line and neither crosses a block or
   function (`CHECK-LOOP-CONTROL`). In a block, `return` leaves the block.
+- A statement after `return`, `break`, `next`, or an `if` (with `else`) or
+  `case` whose every branch ends in one is `CHECK-UNREACHABLE-CODE`: remove it
+  or move it before. `System.exit`, `!` functions, `while true` and `try` do not
+  count as ending.
 - Assignment is a statement. There is no `x[i] = v`, `x.f = v` or `continue`.
 
 ## Expressions

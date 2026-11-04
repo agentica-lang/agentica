@@ -4,9 +4,38 @@
 import Ast from "../syntax/ast"
 import State from "check_state"
 
-## True when every path of the statements ends in a return.
+## True when every path of the statements ends in a return. A terminator is always the last statement of its block
+## (CHECK-UNREACHABLE-CODE), so only the last one is looked at.
 export def block_returns?(statements: List[Ast.Stmt]) -> Bool
-  return statements.any? do |statement: Ast.Stmt| returns?(statement) end
+  if statements.size == 0
+    return false
+  end
+
+  return returns?(statements[statements.size - 1])
+end
+
+## True when the statement never falls through to the next one: a return, break or next, an if with an else whose
+## branches all end so, or a case whose arms all do. It does not look into loops or calls (System.exit and the `!`
+## functions may halt, but have no "never returns" type), and a try leaves early only on an error.
+export def ends?(statement: Ast.Stmt) -> Bool
+  case statement
+    Ast.Stmt.Return(node) -> return true
+    Ast.Stmt.Control(node) -> return true
+    Ast.Stmt.If(node) -> return if_ends?(node)
+    Ast.Stmt.Case(node) -> return node.arms.all? do |arm: Ast.CaseArm| block_ends?(arm.body) end
+    _ -> return false
+  end
+end
+
+## The help of CHECK-UNREACHABLE-CODE: the statement before the dead one is the terminator, on `line`.
+export def unreachable_help(terminator: Ast.Stmt, line: Int) -> String
+  case terminator
+    Ast.Stmt.If(node) -> return "every branch of the if above ends with return, break or next; #{fix_text("if")}"
+    Ast.Stmt.Case(node) -> return "every arm of the case above ends with return, break or next; #{fix_text("case")}"
+    Ast.Stmt.Return(node) -> return "the block ends at the return on line #{line}; #{fix_text("return")}"
+    Ast.Stmt.Control(node) -> return "the block ends at the #{node.kind} on line #{line}; #{fix_text(node.kind)}"
+    _ -> return ""
+  end
 end
 
 ## True when the statements give an error(...) call or none as the value of a return (also inside an if, a loop or a
@@ -101,12 +130,33 @@ def template_block?(capture: State.Capture) -> Bool
   return capture.params.size == 1 and capture.params[0].name == Ast.EAG_SEED
 end
 
+def fix_text(word: String) -> String
+  return "remove this statement, or move it before the #{word}"
+end
+
 def returns?(statement: Ast.Stmt) -> Bool
   case statement
     Ast.Stmt.Return(node) -> return true
     Ast.Stmt.If(node) -> return if_returns?(node)
     Ast.Stmt.Case(node) -> return node.arms.all? do |arm: Ast.CaseArm| block_returns?(arm.body) end
     _ -> return false
+  end
+end
+
+def block_ends?(statements: List[Ast.Stmt]) -> Bool
+  if statements.size == 0
+    return false
+  end
+
+  return ends?(statements[statements.size - 1])
+end
+
+# An if ends on every path when it has an else and every branch ends.
+def if_ends?(node: Ast.IfStmt) -> Bool
+  case node.else_body
+    some(body) ->
+      return block_ends?(body) and node.branches.all? do |branch: Ast.IfBranch| block_ends?(branch.body) end
+    none -> return false
   end
 end
 

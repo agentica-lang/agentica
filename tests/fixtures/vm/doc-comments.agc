@@ -28,7 +28,6 @@ export def describe(outcome: Outcome) -> String
     Outcome.Moved(p) -> return "moved to #{p.x},#{p.y}"
     Outcome.Blocked -> return "blocked"
   end
-  return ""
 end
 
 ## Moves a point one column to the right.

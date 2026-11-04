@@ -232,4 +232,5 @@ end
 - A non-Void function must `return` on every path (`CHECK-MISSING-RETURN`); a
   loop does not count (put a `return` after `while true`) and the last
   expression is not returned implicitly. A Void function completes at `return`
-  or at its end. A `Nil` function returns `nil` explicitly.
+  or at its end. A `Nil` function returns `nil` explicitly. A statement after a
+  `return` is `CHECK-UNREACHABLE-CODE`.
