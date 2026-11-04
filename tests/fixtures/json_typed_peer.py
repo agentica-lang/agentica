@@ -1,5 +1,6 @@
-"""The parts of the typed JSON peers (json-field-vectors.py, json-optional-vectors.py) that both models share: the
-scalar rules of JSON.decode, the text JSON.encode writes for a scalar, and the writer of a vectors file.
+"""The parts of the typed JSON peers (json-field-vectors.py, json-optional-vectors.py, json-enum-vectors.py) that the
+models share: the scalar rules of JSON.decode, the Optional and list rules of both directions, the text JSON.encode
+writes for a scalar, and the writer of a vectors file.
 
 Python's json module and the rules of docs/grammar/06b-builtins.md only; no code is shared with the VM.
 """
@@ -19,6 +20,10 @@ EXPECTED = {
 
 class DecodeError(Exception):
     pass
+
+
+NONE = object()
+UNHANDLED = object()
 
 
 def fail(path, expected):
@@ -81,3 +86,79 @@ def write_vectors(output, header, documents, decode, encode):
         rows.append("\t".join([document, "ok", text, same]))
     output.write_text(header + "\n" + "\n".join(rows) + "\n", encoding="utf-8")
     print(f"wrote {len(rows)} vectors to {output}")
+
+
+def is_optional(kind):
+    return isinstance(kind, tuple) and kind[0] == "optional"
+
+
+def is_list(kind):
+    return isinstance(kind, tuple) and kind[0] == "list"
+
+
+def top_kind_ok(value, kind):
+    """The top kind check of an Optional, before its T is decoded; an Optional T makes its own."""
+    if is_optional(kind):
+        return True
+    if kind in EXPECTED:
+        return scalar_kind_ok(value, kind)
+    if is_list(kind):
+        return isinstance(value, list)
+    return isinstance(value, dict)
+
+
+def top_kind_name(kind):
+    if is_list(kind):
+        return "array"
+    return EXPECTED.get(kind, "object")
+
+
+def decode_common(value, kind, path, decode):
+    """The Optional, scalar and list kinds, with decode for the types inside; UNHANDLED for any other kind."""
+    if is_optional(kind):
+        if value is None:
+            return NONE
+        if not top_kind_ok(value, kind[1]):
+            fail(path, f"{top_kind_name(kind[1])} or null")
+        return ("some", decode(value, kind[1], path))
+    if kind in EXPECTED:
+        return decode_scalar(value, kind, path)
+    if is_list(kind):
+        if not isinstance(value, list):
+            fail(path, "array")
+        return [decode(item, kind[1], f"{path}[{index}]") for index, item in enumerate(value)]
+    return UNHANDLED
+
+
+def encode_common(value, kind, encode):
+    """The text JSON.encode writes for an Optional, a list or a scalar, with encode for the types inside; UNHANDLED
+    for any other kind."""
+    if is_optional(kind):
+        return "null" if value is NONE else encode(value[1], kind[1])
+    if is_list(kind):
+        return "[" + ",".join(encode(item, kind[1]) for item in value) + "]"
+    if kind in EXPECTED:
+        return encode_scalar(value, kind)
+    return UNHANDLED
+
+
+def decode_struct(value, fields, path, decode):
+    """A struct from an object: fields are (name, kind) in declaration order; only an Optional field may be missing."""
+    if not isinstance(value, dict):
+        fail(path, "object")
+    record = {}
+    for name, kind in fields:
+        here = f"{path}.{name}" if path else name
+        if name not in value:
+            if not is_optional(kind):
+                fail(here, "required field")
+            record[name] = NONE
+        else:
+            record[name] = decode(value[name], kind, here)
+    return record
+
+
+def encode_struct(value, fields, encode):
+    """The text of a struct: its keys in declaration order, no spaces."""
+    parts = [json.dumps(name) + ":" + encode(value[name], kind) for name, kind in fields]
+    return "{" + ",".join(parts) + "}"

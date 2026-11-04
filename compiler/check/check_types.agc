@@ -998,9 +998,58 @@ def place_walk(
 
       seen = found.seen
     end
+  elsif Types.is?(type, "Enum") and user_enum?(cx, type)
+    return place_enum(cx, type, seen)
   end
 
   return Placed(place: "", seen: seen)
+end
+
+# place_walk for an instance of a user enum. A JsonField is never allowed in a payload, whatever the enum's arguments
+# are, so an argument is walked as a type of its own (not direct) and the payloads are walked with Int for each
+# parameter, once for each enum.
+def place_enum(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Placed
+  for argument in Types.args(type)
+    found = place_walk(cx, argument, false, "type argument", "", seen)
+    if found.place != ""
+      return found
+    end
+
+    seen = found.seen
+  end
+
+  name = Types.name(type)
+  key = "Enum:#{name}"
+  if seen.has_key?(key)
+    return Placed(place: "", seen: seen)
+  end
+
+  seen = seen.put(key, true)
+  definition = cx.enums[name]
+  stand: Map[String, ResolvedType] = {}
+  for parameter in definition.parameters
+    stand = stand.put(parameter, Types.Type.Int)
+  end
+
+  for variant in definition.variants
+    owner = "#{Types.display_name(name)}.#{variant.name}"
+    for payload in variant.payload
+      found = place_walk(cx, substitute(payload, stand), false, "payload", owner, seen)
+      if found.place != ""
+        return found
+      end
+
+      seen = found.seen
+    end
+  end
+
+  return Placed(place: "", seen: seen)
+end
+
+# True for an enum the program declares: not a builtin one (JsonField, LogLevel ...), which JSON handles on its own or
+# not at all.
+def user_enum?(cx: State.Cx, type: ResolvedType) -> Bool
+  return cx.enums.has_key?(Types.name(type)) and !ENUMS.has_key?(Types.name(type))
 end
 
 # The name of a struct type and a J for each JsonField argument and an I for each other one ("Box[J]"): what the
@@ -1101,6 +1150,8 @@ def encode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Wa
     return encode_walk(cx, Types.value(type), seen)
   elsif Types.is?(type, "Struct")
     return struct_walk(cx, type, seen, 0)
+  elsif Types.is?(type, "Enum")
+    return enum_walk(cx, type, seen, 0)
   end
 
   return refused(seen)
@@ -1129,9 +1180,55 @@ def decode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Wa
     end
 
     return struct_walk(cx, type, seen, 1)
+  elsif Types.is?(type, "Enum")
+    if Types.args(type).size != 0
+      return refused(seen)
+    end
+
+    return enum_walk(cx, type, seen, 1)
   end
 
   return refused(seen)
+end
+
+# The walk of a user enum type for the test (0 encodable, 1 decodable), as struct_walk walks a struct: the type
+# arguments first (an encodable generic enum such as Option[Int] has them; a decodable enum has none), then every
+# payload once for each key, with a stand-in for each parameter. A builtin enum other than JsonField, which the callers
+# handle, has no JSON form.
+def enum_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test: Int) -> Walk
+  if !user_enum?(cx, type)
+    return refused(seen)
+  end
+
+  for argument in Types.args(type)
+    found = test_walk(cx, argument, seen, test)
+    if !found.passes
+      return found
+    end
+
+    seen = found.seen
+  end
+
+  key = "Enum:#{walk_key(type)}"
+  if seen.has_key?(key)
+    return passed(seen)
+  end
+
+  seen = seen.put(key, true)
+  definition = cx.enums[Types.name(type)]
+  stand = stand_ins(definition.parameters, Types.args(type))
+  for variant in definition.variants
+    for payload in variant.payload
+      found = test_walk(cx, substitute(payload, stand), seen, test)
+      if !found.passes
+        return found
+      end
+
+      seen = found.seen
+    end
+  end
+
+  return passed(seen)
 end
 
 # T of a JsonField[T] or an Optional[T].
@@ -1456,7 +1553,7 @@ def variable_needs(type: ResolvedType, found: List[ResolvedType]) -> List[Resolv
     end
 
     return variable_needs(Types.value(type), variable_needs(Types.key(type), found))
-  elsif Types.is?(type, "Struct")
+  elsif Types.is?(type, "Struct") or Types.is?(type, "Enum")
     return Types.args(type).reduce(found) do |sum: List[ResolvedType], arg: ResolvedType| variable_needs(arg, sum) end
   end
 

@@ -193,6 +193,8 @@ static bool open_frame(agc_vm *vm, agc_value v, walk_frame *f) {
     f->keys = m->size ? agc_map_keys(vm, m, 0) : NULL;
   } else if (agc_is(v, AGC_T_STRUCT)) {
     f->n = agc_struct_def_of(vm, agc_as_struct(vm, v))->count;
+  } else if (agc_is(v, AGC_T_ENUM)) {
+    f->n = 2; /* "tag" and "values" */
   } else if (json_kind(vm, v, AGC_JSON_ARRAY)) {
     f->n = agc_list_len(agc_as_list(vm, agc_as_json(vm, v)->scalar));
   } else if (json_kind(vm, v, AGC_JSON_OBJECT)) {
@@ -204,7 +206,23 @@ static bool open_frame(agc_vm *vm, agc_value v, walk_frame *f) {
 }
 
 static bool is_object(agc_vm *vm, agc_value v) {
-  return agc_is(v, AGC_T_MAP) || agc_is(v, AGC_T_STRUCT) || json_kind(vm, v, AGC_JSON_OBJECT);
+  return agc_is(v, AGC_T_MAP) || agc_is(v, AGC_T_STRUCT) || agc_is(v, AGC_T_ENUM) ||
+         json_kind(vm, v, AGC_JSON_OBJECT);
+}
+
+/* The two children of an enum value: its variant name under "tag", then its payload items as the array under
+   "values" (an enum with no payload writes an empty one). Optional and JsonField have their own forms and never get
+   here from a checked program. */
+static agc_value enum_child(agc_vm *vm, const agc_enum *e, size_t k, agc_string **key) {
+  if (k == 0) {
+    *key = agc_json_ascii("tag", 3);
+    return agc_string_value(vm->rt->program->variants[e->variant].name);
+  }
+  *key = agc_json_ascii("values", 6);
+  agc_list_builder items;
+  agc_list_builder_sized(&items, e->n);
+  for (uint32_t i = 0; i < e->n; i++) agc_list_builder_push(&items, e->payload[i]);
+  return agc_list_value(agc_list_builder_finish(&items));
 }
 
 static agc_value child(agc_vm *vm, walk_frame *f, agc_string **key) {
@@ -224,6 +242,7 @@ static agc_value child(agc_vm *vm, walk_frame *f, agc_string **key) {
     *key = agc_struct_def_of(vm, st)->fields[k];
     return st->fields[k];
   }
+  if (agc_is(v, AGC_T_ENUM)) return enum_child(vm, agc_as_enum(vm, v), k, key);
   const agc_json *j = agc_as_json(vm, v);
   if (j->kind == AGC_JSON_ARRAY) {
     *key = NULL;
@@ -236,8 +255,7 @@ static agc_value child(agc_vm *vm, walk_frame *f, agc_string **key) {
 /* A struct field's value as JSON writes it (docs/grammar/06b-builtins.md, typed JSON): false for JsonField.Absent,
    whose key is left out; JsonField.Null is nil (null) and JsonField.Value(x) is x. Any other value is unchanged. The
    checker allows JsonField only as the direct type of a struct field, so only struct children are looked at. Only
-   hostile bytecode puts a JsonField, or an enum other than Optional, anywhere else; the writers then read it as a
-   scalar and fail with RUNTIME-INTERNAL (wrong value type). */
+   hostile bytecode puts a JsonField anywhere else; it is then written as a tagged enum object like any other enum. */
 static bool field_value(agc_vm *vm, agc_value *item) {
   if (!agc_is(*item, AGC_T_ENUM)) return true;
   uint32_t first = vm->rt->program->json_field;

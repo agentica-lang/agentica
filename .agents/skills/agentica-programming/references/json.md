@@ -46,9 +46,17 @@ JSON.list(j: Json) -> Result[List[Json]]
 - `JSON.decode` takes JSON text or a `Json` value (`JSON.decode(item, User)` for
   an item of a parsed document, with the same errors; no `JSON.encode` first).
 - Decoded fields may be Int, Float, Bool, String, lists, String-keyed maps,
-  nested or recursive structs, and `Optional` and `JsonField` of those; other
-  types, an instance of a generic struct or enum included, are
-  `CHECK-NOT-DECODABLE`.
+  nested or recursive structs and enums, and `Optional` and `JsonField` of
+  those; other types, an instance of a generic struct or enum included, are
+  `CHECK-NOT-DECODABLE`. `JSON.decode(text, Shape)`, `schema` and `codec` take
+  an enum name too.
+- An enum is a tagged object, `{"tag":"Rect","values":[1.0,2.0]}`: the variant
+  name and its payloads in order. Encode writes both keys (a variant with no
+  payload writes `"values":[]`); decode accepts a missing `values` for such a
+  variant, ignores extra keys, and gives paths such as `shapes[0].values[1]`.
+  Any user enum with encodable payloads can be encoded, generic instances
+  included (`Maybe[Int]`); only non-generic ones are decodable. A `JsonField`
+  in a payload is `CHECK-JSON-FIELD-PLACE`.
 - `JSON.decode` returns errors, with field or index paths, for malformed JSON,
   missing fields, wrong types, Int overflow and non-finite Floats. Extra object
   keys are ignored. An integer may decode as Float; a decimal or exponent value

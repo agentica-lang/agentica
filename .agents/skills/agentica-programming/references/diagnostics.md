@@ -198,12 +198,13 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
 - `CHECK-DECL-ORDER`: a declaration out of the file order (imports, constants,
   `struct`/`enum`/aliases, `export def`, `def`).
 - `CHECK-NOT-DECODABLE`: a `JSON.decode`/`schema`/`codec` target that is not a
-  struct or has unsupported field types.
+  struct or enum or has unsupported field or payload types.
 - `CHECK-NOT-ENCODABLE`: `JSON.encode` of a type with unsupported nested values
-  or Int-keyed maps.
+  (a `Result`, a builtin enum) or Int-keyed maps.
 - `CHECK-JSON-FIELD-PLACE`: a `JsonField` in a JSON target or argument that is
   not the direct type of a struct field (a list item, a map value, an
-  `Optional` item, a nested `JsonField`, or the whole `JSON.encode` argument).
+  `Optional` item, an enum payload, a nested `JsonField`, or the whole
+  `JSON.encode` argument).
 - `CHECK-PIPE-METHOD`: `x |> String.upcase()`: a builtin with a method form for
   the left value is written with `.` (`x.upcase`).
 - `CHECK-UNKNOWN-METHOD`: a method not defined for the receiver's type, a method

@@ -1,0 +1,33 @@
+# json-enum-vectors.stdin: made by python3 tests/fixtures/json-enum-vectors.py (Python json module); do not edit by hand
+{"title": "t", "main": {"tag": "Empty"}, "shapes": []}	ok	{"title":"t","main":{"tag":"Empty","values":[]},"shapes":[],"spare":null}	changed
+{"title": "t", "main": {"tag": "Empty", "values": []}, "shapes": [], "spare": null}	ok	{"title":"t","main":{"tag":"Empty","values":[]},"shapes":[],"spare":null}	same
+{"title": "t", "main": {"tag": "Circle", "values": [2.5]}, "shapes": [{"values": [1, 2], "tag": "Rect"}], "spare": {"tag": "Label", "values": ["x", null]}}	ok	{"title":"t","main":{"tag":"Circle","values":[2.5]},"shapes":[{"tag":"Rect","values":[1.0,2.0]}],"spare":{"tag":"Label","values":["x",null]}}	changed
+{"title": "t", "main": {"tag": "Label", "values": ["x", 7]}, "shapes": [{"tag": "Group", "values": [[{"tag": "Empty"}, {"tag": "Group", "values": [[]]}]]}], "extra": true}	ok	{"title":"t","main":{"tag":"Label","values":["x",7]},"shapes":[{"tag":"Group","values":[[{"tag":"Empty","values":[]},{"tag":"Group","values":[[]]}]]}],"spare":null}	changed
+{"title": "t", "main": {"tag": "Circle", "values": [3], "note": "ignored"}, "shapes": []}	ok	{"title":"t","main":{"tag":"Circle","values":[3.0]},"shapes":[],"spare":null}	changed
+{"title": "t", "main": 3, "shapes": []}	error	main: expected object	-
+{"title": "t", "main": [], "shapes": []}	error	main: expected object	-
+{"title": "t", "main": {}, "shapes": []}	error	main.tag: expected required field	-
+{"title": "t", "main": {"values": [1.0]}, "shapes": []}	error	main.tag: expected required field	-
+{"title": "t", "main": {"tag": 7}, "shapes": []}	error	main.tag: expected String	-
+{"title": "t", "main": {"tag": null}, "shapes": []}	error	main.tag: expected String	-
+{"title": "t", "main": {"tag": "Square"}, "shapes": []}	error	main.tag: expected one of Circle, Rect, Label, Group, Empty	-
+{"title": "t", "main": {"tag": "circle"}, "shapes": []}	error	main.tag: expected one of Circle, Rect, Label, Group, Empty	-
+{"title": "t", "main": {"tag": "Circle"}, "shapes": []}	error	main.values: expected required field	-
+{"title": "t", "main": {"tag": "Circle", "values": null}, "shapes": []}	error	main.values: expected array	-
+{"title": "t", "main": {"tag": "Circle", "values": {}}, "shapes": []}	error	main.values: expected array	-
+{"title": "t", "main": {"tag": "Circle", "values": []}, "shapes": []}	error	main.values: expected array of 1 items	-
+{"title": "t", "main": {"tag": "Circle", "values": [1.0, 2.0]}, "shapes": []}	error	main.values: expected array of 1 items	-
+{"title": "t", "main": {"tag": "Empty", "values": [1]}, "shapes": []}	error	main.values: expected array of 0 items	-
+{"title": "t", "main": {"tag": "Rect", "values": [1.0, "x"]}, "shapes": []}	error	main.values[1]: expected finite Float	-
+{"title": "t", "main": {"tag": "Label", "values": ["a", "b"]}, "shapes": []}	error	main.values[1]: expected signed 64-bit Int or null	-
+{"title": "t", "main": {"tag": "Label", "values": [1, null]}, "shapes": []}	error	main.values[0]: expected String	-
+{"title": "t", "main": {"tag": "Empty"}, "shapes": [{"tag": "Empty"}, 5]}	error	shapes[1]: expected object	-
+{"title": "t", "main": {"tag": "Empty"}, "shapes": [{"tag": "Rect", "values": [1.0]}]}	error	shapes[0].values: expected array of 2 items	-
+{"title": "t", "main": {"tag": "Empty"}, "shapes": [{"tag": "Group", "values": [[{"tag": "Nope"}]]}]}	error	shapes[0].values[0][0].tag: expected one of Circle, Rect, Label, Group, Empty	-
+{"title": "t", "main": {"tag": "Empty"}, "shapes": [{"tag": "Group", "values": [3]}]}	error	shapes[0].values[0]: expected array	-
+{"title": "t", "main": {"tag": "Empty"}, "shapes": [], "spare": 5}	error	spare: expected object or null	-
+{"title": "t", "main": {"tag": "Empty"}, "shapes": [], "spare": {"tag": "Rect", "values": [1.0, true]}}	error	spare.values[1]: expected finite Float	-
+{"title": "t", "main": {"tag": "Empty"}, "shapes": [], "spare": []}	error	spare: expected object or null	-
+{"main": {"tag": "Empty"}, "shapes": []}	error	title: expected required field	-
+{"title": "t", "shapes": []}	error	main: expected required field	-
+[]	error	$: expected object	-

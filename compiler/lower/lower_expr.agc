@@ -506,7 +506,7 @@ end
 
 # A type name as a value (JSON.decode(Person, text)): the name as a string, for a struct the VM can decode.
 def lower_type_name(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.TypeName, want: Int) -> Result[Lowering.Out]
-  if !cx.json_structs.include?(node.name)
+  if !cx.json_types.include?(node.name)
     return error(Lowering.unsupported(cx, "the type #{Types.display_name(node.name)}", node.span))
   end
 
