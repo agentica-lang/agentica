@@ -154,9 +154,9 @@ class TestModuleRules:
 
     def test_unknown_types_and_names_in_imported_files_are_reported_in_those_files(self):
         files = {
-            "bad.agc": "struct Point\n  x: Int\nend\n\nstruct Pair\n  p: Pont\nend\n\n",
+            "bad.agc": "export struct Point\n  x: Int\nend\n\nstruct Pair\n  p: Pont\nend\n\n",
             "calls.agc": "export def go() -> Int\n  return helpr()\nend\n\ndef helper() -> Int\n  return 1\nend\n\n",
-            "types.agc": 'import B from "bad"\n' + MAIN,
+            "types.agc": 'import B from "bad"\n\ndef shown(p: B.Point) -> Void\nend\n\n' + MAIN,
             "funcs.agc": 'import C from "calls"\n\ndef helpe() -> Int\n  return 2\nend\n\n'
                          "def main() -> Void\n  n = C.go()\nend\n\n"}
         types, funcs = self.checks([(files, "types.agc", None), (files, "funcs.agc", None)])
@@ -347,7 +347,7 @@ class TestModuleRules:
                   ("  x = close_clien(1)\n", "CHECK-UNKNOWN-NAME"),
                   ("  x = HTTP.exchang(1)\n", "CHECK-IMPORT-NAME")]
         names = ["HttpWire", "HttpResponse", "HttpRequest", "HttpServer", "HttpServerOptions"]
-        http = 'import HTTP from "std/http"\ndef main() -> Void\n'
+        http = 'import HTTP from "std/http"\ndef main() -> Void\n  puts(HTTP.proxy_from_env("x"))\n'
         results = self.checks(
             [({"root.agc": text, "lib.agc": call, "libs/wire.agc": call},
               "root.agc", {"AGENTICA_PATH": "{dir}/libs"}) for _name, text in roots]
@@ -436,7 +436,7 @@ class TestModuleRules:
                         "export enum Kind\n  A\nend\n\nstruct Box\n  n: Int\nend\n\n"
                         "export struct Pair\n  n: Int\nend\n\nenum Hidden\n  B\nend\n\n"
                         "export def api() -> Void\n  Lib.go()\n  helper()\nend\n\n"
-                        "def helper() -> Void\nend\n\n" + MAIN})[1] is None
+                        "def helper() -> Void\n  _ = Queue.new()\nend\n\n" + MAIN})[1] is None
 
     def test_an_imported_module_is_checked_too_and_the_diagnostic_names_its_file(self):
         checked = self.check({
@@ -446,9 +446,10 @@ class TestModuleRules:
         assert start(problem) == (4, 1)
 
     def test_embedded_std_modules_follow_the_rule_so_importing_them_never_trips_it(self):
-        names = ["std/http", "std/logger", "std/binary", "std/toml", "std/queue"]
-        results = self.checks([({"root.agc": 'import M from "%s"\n' % name + MAIN}, "root.agc", None)
-                               for name in names])
+        names = {"std/http": "client", "std/logger": "debug", "std/binary": "read_u8", "std/toml": "parse",
+                 "std/queue": "new"}
+        results = self.checks([({"root.agc": 'import M from "%s"\n\ndef main() -> Void\n  f = &M.%s\nend\n' % (name, member)},
+                                "root.agc", None) for name, member in names.items()])
         for name, (_directory, problem) in zip(names, results):
             assert problem is None
 
@@ -560,3 +561,51 @@ class TestModuleRules:
             assert start(problem) == (line, column)
         # The alias of the facade is the usual cause of the last one, so the diagnostic says what to do.
         assert results[3][1]["help"]
+
+    SHAPES = ("export LIMIT = 3\n\nexport struct Square\n  side: Int\nend\n\nexport enum Shade\n  Dark\n  Light(Int)\nend\n\n"
+              "export def area(s: Square) -> Int\n  return s.side * s.side\nend\n\n")
+
+    def test_an_import_alias_that_nothing_uses_is_refused_at_the_alias(self):
+        shapes = {"shapes.agc": self.SHAPES, "extra.agc": "export def one() -> Int\n  return 1\nend\n\n"}
+        root = 'import Shapes from "shapes"\nimport Extra from "extra"\n\n'
+        # The first alias that is never used is the one reported, at the alias and not at the whole line.
+        unused = self.check({**shapes, "root.agc": root + "def main() -> Void\n  puts(Shapes.LIMIT)\nend\n"})
+        problem = self.assert_rejected(unused, "CHECK-UNUSED-IMPORT", line=2, file="root.agc")
+        assert start(problem) == (2, 8)
+        assert problem["range"]["end"]["column"] == 13
+        assert problem["help"]
+        # Names of an import list are not reported, and an unused function of a file still counts as a use.
+        used = self.check({**shapes, "root.agc": 'import {area} from "shapes"\nimport Extra from "extra"\n\n'
+                                                  "def later() -> Int\n  return Extra.one()\nend\n\n" + MAIN})
+        assert used[1] is None
+
+    def test_every_place_that_writes_an_alias_with_a_member_counts_as_a_use(self):
+        shapes = {"shapes.agc": self.SHAPES, "facade.agc": 'import Shapes from "shapes"\n\nexport Shapes.area\n'}
+        body = ("def main() -> Void\n  sq = Shapes.Square(side: 2)\n  f = &Shapes.area\n  shade: Shapes.Shade = Shapes.Shade.Dark\n"
+                "  puts(Shapes.LIMIT + f.call(sq))\n  case shade\n    Shapes.Shade.Dark -> puts(\"d\")\n"
+                "    Shapes.Shade.Light(n) -> puts(n)\n  end\nend\n")
+        both = self.check({**shapes, "root.agc": 'import Shapes from "shapes"\nimport Facade from "facade"\n\n' + body
+                           + "\ndef g() -> Int\n  return Facade.area(Shapes.Square(side: 1))\nend\n"})
+        assert both[1] is None
+
+    def test_an_unused_alias_is_reported_in_the_file_that_has_it(self):
+        files = {"shapes.agc": self.SHAPES,
+                 "lib.agc": 'import Shapes from "shapes"\n\nexport def one() -> Int\n  return 1\nend\n',
+                 "root.agc": 'import Lib from "lib"\n\ndef main() -> Void\n  puts(Lib.one())\nend\n'}
+        self.assert_rejected(self.check(files), "CHECK-UNUSED-IMPORT", line=1, file="lib.agc")
+
+    def test_an_alias_without_its_member_or_a_mistyped_alias_is_not_an_unused_import(self):
+        shapes = {"shapes.agc": self.SHAPES}
+        header = 'import Shapes from "shapes"\n\n'
+        results = self.checks([
+            ({**shapes, "root.agc": header + "def main() -> Void\n  x: Shapes = nil\nend\n"}, "root.agc", None),
+            ({**shapes, "root.agc": header + "def main() -> Void\n  s = Shapes.Square(side: 1)\n  puts(Shpaes.area(s))\nend\n"},
+             "root.agc", None),
+            ({**shapes, "root.agc": header + "def main() -> Void\n  x = Shapes.Light(1)\nend\n"}, "root.agc", None)])
+        bare = self.assert_rejected(results[0], "CHECK-IMPORT-NAME", line=4, file="root.agc")
+        assert start(bare) == (4, 6)
+        # A variant of an enum named like the alias: the enum is missing, and the help names it.
+        variant = self.assert_rejected(results[2], "CHECK-IMPORT-NAME", line=4, file="root.agc")
+        assert start(variant) == (4, 7)
+        assert "Shade" in variant["help"]
+        self.assert_rejected(results[1], "CHECK-UNKNOWN-NAME", line=5)

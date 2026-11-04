@@ -100,8 +100,9 @@ def test_a_package_module_cannot_import_the_private_core_of_std(ws):
     assert problem["range"] == {"start": {"line": 1, "column": 1}, "end": {"line": 2, "column": 1}}
 
 
-def write_main(ws, text):
-    (ws.project / "main.agc").write_text(text + "\ndef main() -> Void\nend\n", encoding="utf-8")
+def write_main(ws, text, body=""):
+    """Writes main.agc: the imports in `text` and a main with `body`, which uses an alias that must not be unused."""
+    (ws.project / "main.agc").write_text(text + "\ndef main() -> Void\n" + body + "end\n", encoding="utf-8")
 
 
 def test_a_package_import_runs_from_deps_and_stores_logical_paths(ws, tmp_path):
@@ -399,7 +400,7 @@ def test_a_package_import_is_pkg_name_and_a_module(ws, what, line, code):
 def test_an_undeclared_name_falls_back_to_the_pkg_roots_and_the_project_cannot_reach_a_transitive_package(ws):
     # tools is in the lock because greeter needs it, but the manifest of the project does not declare it, so
     # pkg/tools/ is today's library search: nothing there.
-    write_main(ws, 'import Tools from "pkg/tools/bang"\n')
+    write_main(ws, 'import Tools from "pkg/tools/bang"\n', "  puts(Tools.bang())\n")
     assert_at_import(check(ws), "CHECK-IMPORT-IO")
     # deps/tools is the locked package, never a library, but agc_libs/ is the project's own: a library there is found.
     (ws.project / "agc_libs" / "tools").mkdir(parents=True)
@@ -417,7 +418,7 @@ def test_agc_libs_of_a_locked_but_undeclared_name_is_searched(ws):
     # tools is locked (greeter needs it) and not declared by the project: agc_libs/tools is the project's own library.
     (ws.project / "agc_libs" / "tools").mkdir(parents=True)
     (ws.project / "agc_libs" / "tools" / "bang.agc").write_text(BANG, encoding="utf-8")
-    write_main(ws, 'import Tools from "pkg/tools/bang"\n')
+    write_main(ws, 'import Tools from "pkg/tools/bang"\n', "  puts(Tools.bang())\n")
     assert check(ws) is None
 
 
@@ -505,7 +506,7 @@ def add_alone(ws, files=None, **extra):
     ws.add_package("alone", ALONE_GIT, files or {"one.agc": ONE}, tag="v1.0.0", **extra)
     ws.write_manifest({"greeter": GREETER, "alone": dependency(ALONE_GIT, tag="v1.0.0")})
     ws.write_lock()
-    (ws.project / "use.agc").write_text(USE_ALONE + "\ndef main() -> Void\nend\n", encoding="utf-8")
+    (ws.project / "use.agc").write_text(USE_ALONE + "\ndef main() -> Void\n  puts(Alone.one())\nend\n", encoding="utf-8")
     return ws.deps / "alone"
 
 

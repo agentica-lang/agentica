@@ -13,7 +13,7 @@ import Source from "../syntax/source"
 import T from "../syntax/types"
 import State from "check_state"
 import CheckTypes from "check_types"
-import ConstWalk from "const_walk"
+import AstWalk from "../syntax/ast_walk"
 
 ## What checking the constants leaves: the context with the type of every constant, the state with the types of the
 ## initializers, and the linked names of the constants in initialization order.
@@ -147,7 +147,7 @@ def order_of(cx: State.Cx, st: State.St, entries: List[Entry]) -> Result[List[In
 end
 
 def begin_visit(entries: List[Entry], index: Int) -> Visit
-  return Visit(index: index, reads: ConstWalk.references(entries[index].decl.value), next: 0)
+  return Visit(index: index, reads: AstWalk.references(entries[index].decl.value), next: 0)
 end
 
 # CHECK-CONSTANT-CYCLE at the read that closes the cycle, in the file of the constant that reads it. The help lists the
@@ -178,14 +178,14 @@ end
 # The value rules on a checked initializer. A node is visited after its children, in source order; a while is refused
 # before its body. A block is allowed only as an argument of a builtin.
 def validate(cx: State.Cx, st: State.St, root: Ast.Expr) -> Result[Bool]
-  return visit(cx, st, ConstWalk.Node.Expr(root), false)
+  return visit(cx, st, AstWalk.Node.Expr(root), false)
 end
 
-def visit(cx: State.Cx, st: State.St, node: ConstWalk.Node, block_allowed: Bool) -> Result[Bool]
+def visit(cx: State.Cx, st: State.St, node: AstWalk.Node, block_allowed: Bool) -> Result[Bool]
   try refuse_early(cx, st, node, block_allowed)
   entry = builtin_of(cx, st, node)
   inside = has_entry?(entry)
-  for child in ConstWalk.children(node)
+  for child in AstWalk.children(node)
     try visit(cx, st, child, inside)
   end
 
@@ -201,9 +201,9 @@ def refuse(cx: State.Cx, st: State.St, span: Source.Span, what: String, help: St
   return State.fail_help(cx, st, "CHECK-CONSTANT-EXPRESSION", what, span, help)
 end
 
-def refuse_early(cx: State.Cx, st: State.St, node: ConstWalk.Node, block_allowed: Bool) -> Result[Bool]
+def refuse_early(cx: State.Cx, st: State.St, node: AstWalk.Node, block_allowed: Bool) -> Result[Bool]
   case node
-    ConstWalk.Node.Stmt(stmt) ->
+    AstWalk.Node.Stmt(stmt) ->
       case stmt
         Ast.Stmt.While(found) ->
           return error(
@@ -218,7 +218,7 @@ def refuse_early(cx: State.Cx, st: State.St, node: ConstWalk.Node, block_allowed
         _ -> return ok(true)
       end
 
-    ConstWalk.Node.Expr(expr) ->
+    AstWalk.Node.Expr(expr) ->
       case expr
         Ast.Expr.BlockLit(found) ->
           if !block_allowed
@@ -240,10 +240,10 @@ def refuse_early(cx: State.Cx, st: State.St, node: ConstWalk.Node, block_allowed
 end
 
 # The builtin a call, method call or field access names: not a call of a function of the program.
-def builtin_of(cx: State.Cx, st: State.St, node: ConstWalk.Node) -> Optional[Model.Builtin]
+def builtin_of(cx: State.Cx, st: State.St, node: AstWalk.Node) -> Optional[Model.Builtin]
   case node
-    ConstWalk.Node.Stmt(stmt) -> return none
-    ConstWalk.Node.Expr(expr) ->
+    AstWalk.Node.Stmt(stmt) -> return none
+    AstWalk.Node.Expr(expr) ->
       case expr
         Ast.Expr.Call(found) ->
           if cx.functions.has_key?(found.name)
@@ -279,10 +279,10 @@ def entry_resolved(cx: State.Cx, st: State.St, id: Int) -> Optional[Model.Builti
   end
 end
 
-def refuse_form(cx: State.Cx, st: State.St, node: ConstWalk.Node, entry: Optional[Model.Builtin]) -> Result[Bool]
+def refuse_form(cx: State.Cx, st: State.St, node: AstWalk.Node, entry: Optional[Model.Builtin]) -> Result[Bool]
   case node
-    ConstWalk.Node.Stmt(stmt) -> return ok(true)
-    ConstWalk.Node.Expr(expr) -> return refuse_expr(cx, st, expr, entry)
+    AstWalk.Node.Stmt(stmt) -> return ok(true)
+    AstWalk.Node.Expr(expr) -> return refuse_expr(cx, st, expr, entry)
   end
 end
 
@@ -349,10 +349,10 @@ end
 
 # CHECK-CONSTANT-TYPE for an expression whose type is not a data type. A block passed to a builtin is not a value of
 # the constant.
-def check_data(cx: State.Cx, st: State.St, node: ConstWalk.Node, block_allowed: Bool) -> Result[Bool]
+def check_data(cx: State.Cx, st: State.St, node: AstWalk.Node, block_allowed: Bool) -> Result[Bool]
   case node
-    ConstWalk.Node.Stmt(stmt) -> return ok(true)
-    ConstWalk.Node.Expr(expr) ->
+    AstWalk.Node.Stmt(stmt) -> return ok(true)
+    AstWalk.Node.Expr(expr) ->
       type = st.types[Ast.expr_id(expr)]
       if T.unknown?(type) or (block_allowed and block?(expr)) or CheckTypes.data?(cx, type)
         return ok(true)

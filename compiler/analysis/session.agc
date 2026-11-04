@@ -7,7 +7,6 @@
 
 import Env from "../modules/link_env"
 import Overlay from "../modules/overlay"
-import Ast from "../syntax/ast"
 import SourceFile from "../syntax/source_file"
 import Cache from "cache"
 import Front from "front"

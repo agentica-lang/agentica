@@ -64,14 +64,29 @@ def direct_files(files, folder):
     return sorted(path for path in files if path.startswith(folder + "/") and "/" not in path[len(folder) + 1:])
 
 
+EXPORT = re.compile(r"^export (def|struct|enum|type) (\w+)", re.MULTILINE)
+
+
+def std_wrapper(name, source):
+    """A program that imports the std module `name` and uses its alias: an unused import is CHECK-UNUSED-IMPORT.
+
+    The use is its first export, as a function value or as a type; a module with no export is only imported.
+    """
+    found = EXPORT.search(source)
+    header = 'import Module from "std/%s"\n\n' % name
+    if found is None:
+        return header + "def main() -> Void\nend\n"
+    if found.group(1) == "def":
+        return header + "def main() -> Void\n  f = &Module.%s\nend\n" % found.group(2)
+    return header + "def shown(x: Module.%s) -> Void\nend\n\ndef main() -> Void\nend\n" % found.group(2)
+
+
 def stdlib_compiler_sources():
     """Return wrapper programs for every std module and the compiler's direct source files."""
     wrappers = {}
-    for path in load_corpus("stdlib"):
+    for path, source in load_corpus("stdlib").items():
         name = path[len("stdlib/"):-len(".agc")]
-        wrappers["std-" + name.replace("/", "_")] = (
-            'import Module from "std/%s"\n\ndef main() -> Void\nend\n' % name
-        )
+        wrappers["std-" + name.replace("/", "_")] = std_wrapper(name, source)
     compiler = load_corpus("compiler")
     files = {path: compiler[path] for path in direct_files(compiler, "compiler")}
     assert len(wrappers) + len(files) > 50

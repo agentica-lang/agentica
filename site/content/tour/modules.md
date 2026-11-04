@@ -177,6 +177,8 @@ end
 
 An imported name cannot clash with a declaration, an alias, another import or a builtin (`CHECK-REDEFINED-NAME`). A path may appear in two imports, one with an alias and one with names. A module imported only by names has no alias.
 
+An import alias that the file never uses is an error at the alias (`CHECK-UNUSED-IMPORT`); remove the import. An alias written without a member, such as `x: Shapes`, is `CHECK-IMPORT-NAME`. Unused names of an import list are not reported.
+
 Only the root file needs `main`. Imported files have no top-level code, so importing a file never runs anything.
 
 ## Re-exports

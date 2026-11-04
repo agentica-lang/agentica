@@ -66,7 +66,7 @@ HAND_OFF = "def main() -> Void\n  puts(FrontEnd.hand_off(\"a\".bytes, [], []).ok
 BROKEN_STD = '\nexport def broken() -> Int\n  return "text"\nend\n'
 INTERLEAVED = (
     'def main() -> Void\n  for i in 0...6\n    puts("out #{i}")\n    IO.warn("err #{i}")\n  end\nend\n')
-USES_STD = 'import Queue from "std/queue"\n\ndef main() -> Void\n  puts("unused")\nend\n'
+USES_STD = 'import Queue from "std/queue"\n\ndef main() -> Void\n  _ = Queue.new()\nend\n'
 
 
 def version():

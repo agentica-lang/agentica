@@ -1,2 +1,3 @@
-import E from "empty"
 import Deep from "deep"
+
+export Deep.deep

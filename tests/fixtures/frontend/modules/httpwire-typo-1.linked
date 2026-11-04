@@ -1,10 +1,14 @@
-program #6 0:1:1-73:6:1
+program #10 0:1:1-106:7:1
   module "root.agc"
-    declaration: function-decl #5 28:2:1-72:5:1 name="main"
+    declaration: function-decl #9 28:2:1-105:6:1 name="main"
       result: type-ref #1 42:2:15-46:2:19 name="Void"
       body: binding #4 49:3:3-68:4:1 name="x"
         value: call #3 53:3:7-67:3:21 name="close_clien" piped=false
           arg: literal #2 65:3:19-66:3:20 value=int:1
+      body: expr-stmt #8 70:4:3-101:5:1
+        value: call #7 70:4:3-100:4:33 name="puts" piped=false
+          arg: call #6 75:4:8-99:4:32 name="@2::proxy_from_env" piped=false
+            arg: literal #5 95:4:28-98:4:31 value=string:"x"
   module "std/http.agc"
     declaration: const-decl #3 463:10:1-482:11:1 name="@2::READ_BYTES"
       value: literal #2 476:10:14-481:10:19 value=int:65536
@@ -1261,7 +1265,7 @@ program #6 0:1:1-73:6:1
               left: name-ref #1281 39513:853:6-39520:853:13 name="charset"
               right: literal #1282 39524:853:17-39526:853:19 value=string:""
             right: method-call #1288 39530:853:23-39579:853:72 name="include?"
-              target: const-ref #15156 39530:853:23-39543:853:36 name="@2::UTF8_CHARSETS"
+              target: const-ref #15160 39530:853:23-39543:853:36 name="@2::UTF8_CHARSETS"
               arg: method-call #1287 39553:853:46-39578:853:71 name="replace"
                 target: name-ref #1284 39553:853:46-39560:853:53 name="charset"
                 arg: literal #1285 39569:853:62-39572:853:65 value=string:"_"
@@ -13555,7 +13559,7 @@ program #6 0:1:1-73:6:1
                   arg: name-ref #165 4134:85:24-4135:85:25 name="s"
           branch: if-branch #176 4151:87:5-4205:89:1
             condition: method-call #171 4157:87:11-4177:87:31 name="include?"
-              target: const-ref #14039 4157:87:11-4162:87:16 name="@5::PLAIN"
+              target: const-ref #14043 4157:87:11-4162:87:16 name="@5::PLAIN"
               arg: name-ref #170 4172:87:26-4176:87:30 name="byte"
             body: binding #175 4184:88:7-4205:89:1 name="out"
               value: method-call #174 4190:88:13-4204:88:27 name="push"

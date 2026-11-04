@@ -38,7 +38,6 @@
 ## about the file itself, and an edit of an imported module checks that module and those that import it. The answers
 ## are those of a check from the start.
 
-import Ast from "std/internal/compiler/syntax/ast"
 import Cache from "std/internal/compiler/analysis/cache"
 import Core from "std/internal/compiler/analysis/analysis"
 import DiagnosticJson from "std/internal/compiler/diagnostics/diagnostic_json"

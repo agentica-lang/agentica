@@ -12,7 +12,7 @@
 ## Only the path from the function to the position is walked, one level at a time and with no recursion, so a deep tree
 ## cannot reach the limit of VM calls.
 
-import Walk from "../check/const_walk"
+import Walk from "../syntax/ast_walk"
 import Linker from "../modules/linker"
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"

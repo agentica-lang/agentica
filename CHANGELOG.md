@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** an import alias that its file never uses is an error
+  (`CHECK-UNUSED-IMPORT`, at the alias); remove the import. An alias written
+  without its member (`u: User`) is `CHECK-IMPORT-NAME`.
+
 ## [0.23.0] - 2026-11-03
 
 ### Added

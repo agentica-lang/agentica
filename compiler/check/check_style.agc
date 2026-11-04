@@ -13,7 +13,6 @@
 import Diag from "../diagnostics/diagnostic"
 import Failure from "../diagnostics/problem"
 import Linker from "../modules/linker"
-import Ast from "../syntax/ast"
 import Lexer from "../syntax/lexer"
 import Source from "../syntax/source"
 import Tokens from "../syntax/token"

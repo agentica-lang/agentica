@@ -8,7 +8,7 @@
 import Model from "../catalog/builtin_model"
 import Builtins from "../catalog/builtins"
 import State from "../check/check_state"
-import ConstWalk from "../check/const_walk"
+import AstWalk from "../syntax/ast_walk"
 import Defaults from "../check/defaults"
 import Ast from "../syntax/ast"
 import Names from "../syntax/prelude_name"
@@ -1052,18 +1052,18 @@ end
 # The names a block's body reads, in the order of their first read: the walk collects every name and sorts them by
 # where they start in the source, which is the order the lowering finds them in.
 def referenced_names(body: List[Ast.Stmt]) -> List[String]
-  work: List[ConstWalk.Node] = body.map do |stmt: Ast.Stmt| ConstWalk.Node.Stmt(stmt) end
+  work: List[AstWalk.Node] = body.map do |stmt: Ast.Stmt| AstWalk.Node.Stmt(stmt) end
   reads: List[Ast.NameRef] = []
   at = 0
   while at < work.size
     node = work[at]
     at += 1
     case node
-      ConstWalk.Node.Expr(expr) -> reads = push_name(reads, expr)
-      ConstWalk.Node.Stmt(stmt) -> reads = reads
+      AstWalk.Node.Expr(expr) -> reads = push_name(reads, expr)
+      AstWalk.Node.Stmt(stmt) -> reads = reads
     end
 
-    work = work.concat(ConstWalk.children(node))
+    work = work.concat(AstWalk.children(node))
   end
 
   ordered = reads.sort_by do |read: Ast.NameRef| read.span.start.offset end

@@ -14,7 +14,7 @@ import pytest
 from tests.agentica_test import ROOT, scaled, timeout
 from tests.frontend_cases import check_deep_cases, check_generated_program
 from tests.frontend_support import (FROZEN, PytestStageCase, direct_files, fixture_roots, load_corpus, load_json,
-                                    pytest_stage_fixtures, write_files)
+                                    pytest_stage_fixtures, std_wrapper, write_files)
 
 FIXTURES = ROOT / "tests" / "fixtures" / "frontend" / "check"
 
@@ -112,10 +112,9 @@ def test_examples_and_the_vm_fixtures(check_stage, tmp_path):
 def test_every_std_module_and_the_compiler(check_stage, tmp_path):
     stdlib = load_corpus("stdlib")
     wrappers = {}
-    for path in stdlib:
+    for path, source in stdlib.items():
         name = path[len("stdlib/"):-len(".agc")]
-        wrappers["std-" + name.replace("/", "_")] = (
-            "import Module from \"std/%s\"\n\ndef main() -> Void\nend\n" % name)
+        wrappers["std-" + name.replace("/", "_")] = std_wrapper(name, source)
     compiler = load_corpus("compiler")
     cases = dict(wrappers)
     cases.update({path: compiler[path] for path in direct_files(compiler, "compiler")})

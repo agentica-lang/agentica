@@ -25,6 +25,7 @@ export def api() -> Void
 end
 
 def helper() -> Void
+  _ = Queue.new()
 end
 
 def main() -> Void

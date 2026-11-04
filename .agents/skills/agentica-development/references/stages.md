@@ -209,6 +209,14 @@ name.
   taken from an export comes from `Modules.linked_name`, never `prefix + name`.
   The declaration is not copied; nothing reaches the checker or lowering.
 
+- `import_use.agc` runs after the rewrite of each file (`rewrite_module`):
+  `CHECK-UNUSED-IMPORT` at the alias of the first import whose alias no written
+  name starts with (a regex literal or `<<~EAG` template uses the import of
+  `std/regex` or `std/eag`), and `CHECK-IMPORT-NAME` for an alias written
+  without a member. It reads the parser's tree, so a file read from a check
+  cache stub (`Module.stubbed`) is skipped, and a file with a call `Alias.f`
+  whose head names nothing is left to `CHECK-UNKNOWN-NAME`.
+
 ## Checker (`compiler/check/checker.agc` and the `check_*.agc` files)
 
 `check(linked, settings) -> Checking.Done(Checked) | Failed(Problem)`:

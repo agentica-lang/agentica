@@ -325,8 +325,8 @@ class TestSpecParser:
         }
         imports = ("import Old from \"old\"\nimport New from \"new\"\n"
                    "import {\n  as as from,\n  Token,\n} from \"lexer\"\n\n")
-        program = imports + main_of("  puts(from())\n  puts(Old.one())\n")
-        self.check_output([Output(program, ["1", "1"], files)])
+        program = imports + main_of("  puts(from())\n  puts(Old.one())\n  puts(New.one())\n")
+        self.check_output([Output(program, ["1", "1", "1"], files)])
         self.check_rejected([
             Reject("import {} from \"a\"\n", "PARSE-UNEXPECTED-TOKEN", (1, 9)),
             Reject("import {A as} from \"a\"\n", "PARSE-UNEXPECTED-TOKEN", (1, 13)),
@@ -338,7 +338,8 @@ class TestSpecParser:
 
     def test_declarations_need_a_blank_line_after_their_end(self):
         self.check_accepted([
-            Accept("import A from \"a\"\ndef f() -> Void\nend\n# note\ndef main() -> Void\nend", {"a.agc": ALPHA}),
+            Accept("import A from \"a\"\ndef f() -> Int\n  return A.one()\nend\n# note\ndef main() -> Void\nend",
+                   {"a.agc": ALPHA}),
         ])
         self.check_rejected([
             Reject("struct A\n  n: Int\nend\ndef main() -> Void\nend\n\n", "PARSE-MISSING-BLANK-LINE", (4,)),
@@ -563,7 +564,7 @@ class TestSpecParser:
                    + main_of("")),
             Accept("## Not a module doc.\ndef main() -> Void\nend\n"),
             Accept("## Only a module doc.\n\n"),
-            Accept("## Module.\n\nimport A from \"a\"\n", {"a.agc": ALPHA}),
+            Accept("## Module.\n\nimport {one} from \"a\"\n", {"a.agc": ALPHA}),
         ])
 
     def test_every_detached_doc_block_is_parse_detached_doc_at_its_first_line(self):
@@ -585,7 +586,7 @@ class TestSpecParser:
         self.check_accepted([
             Accept("def a() -> Void\nend\n\n## d\ndef b() -> Void\nend\n\n" + main_of("")),
             Accept("def a() -> Void\nend\n# note\n## d\ndef b() -> Void\nend\n\n" + main_of("")),
-            Accept("import A from \"a\"\n## d\ndef b() -> Void\nend\n\n" + main_of(""), {"a.agc": ALPHA}),
+            Accept("import {one} from \"a\"\n## d\ndef b() -> Void\nend\n\n" + main_of(""), {"a.agc": ALPHA}),
         ])
 
     def test_nesting_and_chains_beyond_1000_levels_are_parse_too_deep(self):

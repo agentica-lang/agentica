@@ -3,7 +3,6 @@
 
 import Model from "../catalog/builtin_model"
 import RubyForm from "ruby_form"
-import Ast from "../syntax/ast"
 import Suggest from "../syntax/suggest"
 import Types from "../syntax/types"
 import Data from "check_tables"

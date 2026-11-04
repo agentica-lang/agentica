@@ -289,10 +289,10 @@ def test_the_buffer_on_standard_input_wins_over_the_file_on_the_disk(program):
 
 
 def test_a_check_error_in_the_file_or_in_an_import_exits_1_with_its_code(program):
-    (program / "bad.agc").write_text('def f() -> Int\n  return "x"\nend\n', encoding="utf-8")
+    (program / "bad.agc").write_text('export def f() -> Int\n  return "x"\nend\n', encoding="utf-8")
     here = problem(type_at(("bad.agc", (2, 10)), cwd=program), "CHECK-TYPE-MISMATCH", 1)
     assert (here["file"], here["range"]["start"]["line"]) == ("bad.agc", 2)
-    (program / "uses.agc").write_text('import Bad from "bad"\n\ndef g() -> Int\n  return 1\nend\n', encoding="utf-8")
+    (program / "uses.agc").write_text('import Bad from "bad"\n\ndef g() -> Int\n  return Bad.f()\nend\n', encoding="utf-8")
     there = problem(type_at(("uses.agc", (4, 10)), cwd=program), "CHECK-TYPE-MISMATCH", 1)
     assert there["file"].endswith("bad.agc")
     (program / "lex.agc").write_text("def f(\n", encoding="utf-8")
@@ -834,7 +834,7 @@ def test_a_type_through_a_facade_is_written_with_the_alias_of_the_facade(program
 def test_a_type_is_written_with_the_alias_of_its_own_file_when_the_root_imports_it_too(program):
     facade = 'import Models from "models"\n\nexport Models.make\nexport Models.User\n'
     through = ('import Facade from "facade"\nimport Models from "models"\n\ndef build() -> Int\n'
-               '  user = Facade.make("a")\n  return user.age\nend\n')
+               '  user = Facade.make("a")\n  _ = Models.make("b")\n  return user.age\nend\n')
     (program / "facade.agc").write_text(facade, encoding="utf-8")
     (program / "through.agc").write_text(through, encoding="utf-8")
     report = answer(("through.agc", where(through, "user =")), cwd=program)

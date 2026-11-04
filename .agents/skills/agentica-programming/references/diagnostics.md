@@ -126,6 +126,9 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
   module. `Mod.NAME` reads an exported constant; a private or unknown name is
   `CHECK-IMPORT-NAME`, and `Mod.NAME()` or `x: Mod.NAME` is
   `CHECK-TYPE-MISMATCH` (`modules.md`).
+- `CHECK-UNUSED-IMPORT`: an import alias the file never uses (`Mod.` is never
+  written); remove the import line. An alias with no member (`u: User`) is
+  `CHECK-IMPORT-NAME`.
 - `CHECK-IMPORT-PACKAGE`: a package declared in `agentica.toml` is not in
   `deps/` (run `agentica install`), or a package file imports a `pkg/` name its
   own `agentica.toml` does not declare.

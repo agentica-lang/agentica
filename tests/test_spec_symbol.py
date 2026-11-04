@@ -249,7 +249,7 @@ def test_a_root_is_a_transaction_the_modules_it_linked_stay_and_a_module_that_fa
         'import Lib from "lib"\n\nexport def bad() -> Int\n  return Lib.nothere()\nend\n', encoding="utf-8")
     for name in ("a_first", "b_second"):
         (tmp_path / f"{name}.agc").write_text(
-            'import Lib from "lib"\nimport Dep from "dep_bad"\n\ndef %s() -> Int\n  return Lib.helper()\nend\n' % name,
+            'import Lib from "lib"\nimport Dep from "dep_bad"\n\ndef %s() -> Int\n  return Lib.helper() + Dep.bad()\nend\n' % name,
             encoding="utf-8")
     (tmp_path / "z_third.agc").write_text(
         'import Lib from "lib"\n\ndef z_third() -> Int\n  return Lib.helper()\nend\n', encoding="utf-8")

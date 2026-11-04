@@ -1,7 +1,6 @@
 ## The help of an unknown import name: the "did you mean" of the linker.
 
 import Diag from "../diagnostics/diagnostic"
-import Ast from "../syntax/ast"
 import Suggest from "../syntax/suggest"
 import Declarations from "declarations"
 

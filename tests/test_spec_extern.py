@@ -795,8 +795,8 @@ def test_an_exported_extern_struct_is_imported_like_a_struct(tmp_path):
     ("  buf = Native.memory_pointer(2 * Native.size_of(Outer))\n"
      "  Native.put_struct(buf, Native.size_of(OuterAlias), Outer(inner: Inner(x: 1.5, n: 2), scale: 0.5))\n"
      "  o: Outer = Native.get_struct(buf, 0, OuterAlias)\n  puts(o.inner.n)", None, None, None),
-    ("  buf = Native.memory_pointer(Native.size_of(Raw.ModelParams))\n"
-     "  p: Raw.ModelParams = Native.get_struct(buf, 0, Raw.ModelParams)\n  Native.put_struct(buf, 0, p)",
+    ("  buf = Native.memory_pointer(Native.size_of(RawParams))\n"
+     "  p: RawParams = Native.get_struct(buf, 0, RawParams)\n  Native.put_struct(buf, 0, p)",
      None, None, None),
     ("  puts(Native.size_of(Plain))", "CHECK-TYPE-MISMATCH", (32, 23), (32, 28)),
     ("  puts(Native.get_struct(Native.null(), 0, Plain))", "CHECK-TYPE-MISMATCH", (32, 44), (32, 49)),
@@ -808,7 +808,7 @@ def test_an_exported_extern_struct_is_imported_like_a_struct(tmp_path):
 ])
 def test_structs_through_pointers_take_a_struct_of_an_extern_block(tmp_path, body, code, start, stop):
     source(tmp_path, STRUCTS % "  puts(1)", "raw.agc")
-    text = 'import Raw from "./raw"\n\nstruct Plain\n  x: Int\nend\n\ntype OuterAlias = Outer\n\n' + STRUCTS % body
+    text = 'import {ModelParams as RawParams} from "./raw"\n\nstruct Plain\n  x: Int\nend\n\ntype OuterAlias = Outer\n\n' + STRUCTS % body
     assert_checks(check(source(tmp_path, text)), code, start, stop)
 
 
