@@ -1,0 +1,1 @@
+ERROR CHECK-UNUSED-VARIABLE 67:6:3-83:7:1 "the variable \"result\" is never read" "handle the Result: a case on ok(_) and error(message), or .unwrap!; or discard it with _ = load(), or name it _result if it is unused on purpose" signature="main() -> Void" file="unused-variable-result-main.agc"

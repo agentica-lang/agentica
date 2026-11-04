@@ -38,13 +38,15 @@ export enum Origin
 end
 
 ## A name that has to be read before the function ends (CHECK-UNUSED-VARIABLE): where it is introduced (`span`), how,
-## its type, and the value it is set to (the iterable of a `for`), none for a parameter or a pattern name.
+## its type, and the value it is set to (the iterable of a `for`), none for a parameter or a pattern name. `tryable` is
+## whether `try` is allowed where the name is introduced (try_allowed?), which its help depends on.
 export struct Local
   name: String
   span: Source.Span
   origin: Origin
   type: Types.Type
   value: Optional[Ast.Expr]
+  tryable: Bool
 end
 
 ## The result type of the function or block being checked. Infer is a block whose result is not known yet: the first
@@ -375,6 +377,21 @@ export def leave(st: St, before: St) -> St
   return st.with(vars: before.vars, depth: before.depth)
 end
 
+## Whether `try` is allowed in the function or block being checked: it returns a Result (a block with an inferred
+## result qualifies only when it must give a Result), or it is the block of a Lazy method, where a failed `try` ends
+## the pipeline.
+export def try_allowed?(st: St) -> Bool
+  if st.step
+    return true
+  end
+
+  case st.result
+    Slot.Known(type) -> return Types.is?(type, "Result")
+    Slot.InferResult -> return true
+    Slot.Infer -> return false
+  end
+end
+
 ## Introduces a name (a parameter, a binding, a pattern variable, a for variable) in the scope: no builtin constructor
 ## or function name, and no shadowing. `_` binds nothing: it can repeat and it is never in scope to be read. The name
 ## is not watched by CHECK-UNUSED-VARIABLE (a parameter of a function).
@@ -402,7 +419,7 @@ export def introduce_local(
 
   key = shown.start.offset
   introduced = try introduce_slot(cx, st, name, type, span, immutable, key)
-  local = Local(name: name, span: shown, origin: origin, type: type, value: value)
+  local = Local(name: name, span: shown, origin: origin, type: type, value: value, tryable: try_allowed?(introduced))
   return ok(introduced.with(locals: introduced.locals.put(key, local)))
 end
 

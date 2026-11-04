@@ -27,8 +27,8 @@ Exit 2 is a bad question, 1 a program that does not check:
 `QUERY-USAGE` is at `<arguments>` (a missing or extra argument, an unknown
 option, `--stdin` without a file, a bad `FILE:LINE:COL`, an unreadable path, a
 folder with no `*.agc`). Errors print as `check` prints them. A question about
-a file does not report `CHECK-UNUSED-IMPORT` in that file (it may be half
-written); an unused import in a file it imports is reported, and
+a file does not report `CHECK-UNUSED-IMPORT` or `CHECK-UNUSED-VARIABLE` in
+that file (it may be half written); one in a file it imports is reported, and
 `CHECK-UNREACHABLE-CODE` always is.
 
 ## outline

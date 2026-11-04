@@ -259,7 +259,7 @@ end
 # give a Result), and an operand that is a Result. In the block of a Lazy method any `try` works: its error ends the
 # pipeline and is the terminal's result, so it is recorded for the lowering (try-step).
 def check_try(cx: State.Cx, st: State.St, node: Ast.TryExpr, expected: T.Type) -> Result[State.Out]
-  if !st.step and !result_context?(st)
+  if !State.try_allowed?(st)
     return error(
       State.fail_help(
         cx,
@@ -288,14 +288,6 @@ def check_try(cx: State.Cx, st: State.St, node: Ast.TryExpr, expected: T.Type) -
   end
 
   return ok(State.Out(st: after, type: T.item(out.type)))
-end
-
-def result_context?(st: State.St) -> Bool
-  case st.result
-    State.Slot.Known(type) -> return T.is?(type, "Result")
-    State.Slot.InferResult -> return true
-    State.Slot.Infer -> return false
-  end
 end
 
 def check_interpolation(cx: State.Cx, st: State.St, node: Ast.Interpolation) -> Result[State.Out]
