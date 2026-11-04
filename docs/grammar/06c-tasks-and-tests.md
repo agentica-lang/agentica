@@ -70,6 +70,19 @@ import. A test file is a program whose `main` calls `Test.run` with a list of
 assertions, the report, `Test.run` and the order in which a test fails are in
 the [`Test` page](../../site/content/library/testing/test.md).
 
+- Test functions: a `*_test.agc` file may have no `main`. Then `agentica test`
+  runs its top-level `test_*` functions, in source order, as if `main` called
+  `Test.run` with `Test.test("name", &test_name)` for each; the name is the
+  function name without `test_`, with each `_` a space. A file with both
+  `main` and `test_*` functions is `CHECK-TEST-MAIN`, at `main`, whatever the
+  `test_*` functions are. Without `main`, a test function takes no parameters
+  and its result is written `Result[Void]`, not an alias of it
+  (`CHECK-TEST-SIGNATURE`, at the function), and `test_` alone is
+  `CHECK-TEST-NAME`. `agentica check` applies
+  these rules to a `*_test.agc` file; a run of such a file with no `main` is
+  still `CHECK-MAIN`, and in a file of any other name `test_*` functions are
+  ordinary functions.
+
 - `Test.eq` compares by value. Both arguments must have one data type: `Int`,
   `Float`, `Bool`, `String`, `Nil`, `Range`, `Json`, or lists, maps, sets,
   Results, structs and enums of them (`Result[Void]` too). Other types, such as

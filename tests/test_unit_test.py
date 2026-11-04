@@ -91,6 +91,22 @@ class UnitTest(TestCase):
         self.assertIn('actual "a\\"b" | output "first line\\n\\u001Eagentica-bdd ', ai)
         self.assertRegex(ai, r"\[RUNTIME-DIVISION-BY-ZERO\] division by zero \| stack divide at [^;]*:2:13; block at ")
 
+    def test_a_file_without_main_runs_its_test_functions_in_source_order_named_after_them(self):
+        status, report = self.json_test(fixture("functions_test.agc"))
+        self.assertEqual(status, 1)
+        results = report_cases(report)
+        self.assertEqual([item["name"] for item in results], [
+            "adds", "compares text", "returns an error", "crashes", "runs after a crash"])
+        self.assertEqual(statuses(report), ["passed", "failed", "failed", "failed", "passed"])
+        self.assertEqual([field(item, "code") for item in results], [
+            None, "RUNTIME-TEST-ASSERTION", "RUNTIME-TEST-ERROR", "RUNTIME-DIVISION-BY-ZERO", None])
+        # A test is reported at its def; a crash keeps the stack down to the test function.
+        self.assertEqual([item["location"]["line"] for item in results], [3, 8, 13, 17, 21])
+        self.assertEqual(results[1]["output"], "shown when failing")
+        self.assertEqual([frame["function"] for frame in results[3]["error"]["stack"]], ["divide", "test_crashes"])
+        _status, only = self.json_test("--only", "crash", fixture("functions_test.agc"))
+        self.assertEqual([item["name"] for item in report_cases(only)], ["crashes", "runs after a crash"])
+
     def test_a_stack_cut_after_15_frames_says_how_many_frames_are_not_shown_in_the_text_and_ai_reports(self):
         plain = self.agentica_test(fixture("deep_test.agc")).stdout
         ai = self.agentica_test("--ai", fixture("deep_test.agc")).stdout

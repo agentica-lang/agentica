@@ -495,7 +495,8 @@ closes each child on every path.
 
 ## Unit test files (`Test.run`)
 
-A unit test file is a `*_test.agc` program whose `main` calls `Test.run`; the
+A unit test file is a `*_test.agc` program whose `main` calls `Test.run`, or one
+with no `main` whose `test_*` functions the front end runs that way; the
 language rules are in
 [`grammar/06c-tasks-and-tests.md`](grammar/06c-tasks-and-tests.md). Each file is
 compiled on its own, and runs in its own child VM with one task per test. A test

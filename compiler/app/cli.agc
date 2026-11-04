@@ -23,6 +23,7 @@
 import Core from "../analysis/analysis"
 import Cache from "../analysis/cache"
 import Front from "../analysis/front"
+import Discover from "../bdd/bdd_discover"
 import Driver from "../bdd/bdd_driver"
 import Opts from "../bdd/bdd_options"
 import Report from "../bdd/bdd_report"
@@ -461,8 +462,7 @@ def check_all(session: Session, paths: List[String]) -> Int
 end
 
 def check_entry(session: Session, file: String) -> CliCheck.Entry
-  settings = CheckCache.attach(session.settings, file, !session.options.no_cache)
-  case Core.check(Cache.empty(), settings, file)
+  case Core.check(Cache.empty(), check_settings(session, file), file)
     Core.Verdict.Passed -> return CliCheck.Entry.Passed(file)
     Core.Verdict.Unreadable -> return CliCheck.Entry.Unreadable(file)
     Core.Verdict.Rejected(problem) -> return CliCheck.Entry.Failed(file, Core.named(session.settings, problem, file))
@@ -538,8 +538,7 @@ end
 def program(session: Session, verb: String, rest: List[String]) -> Int
   source = rest[0]
   if verb == "check"
-    settings = CheckCache.attach(session.settings, source, !session.options.no_cache)
-    return verdict(session, source, Core.check(Cache.empty(), settings, source))
+    return verdict(session, source, Core.check(Cache.empty(), check_settings(session, source), source))
   end
 
   plan = cache_plan(session, verb, source)
@@ -547,6 +546,13 @@ def program(session: Session, verb: String, rest: List[String]) -> Int
     BytecodeCache.Lookup.Hit(bytes) -> return start(session, rest, bytes)
     BytecodeCache.Lookup.Miss -> return read(session, verb, rest, plan)
   end
+end
+
+# The settings `check` reads `file` with: the check cache, and a `*_test.agc` file is a test file, as for `agentica
+# test`, so its `test_*` functions are checked as tests.
+def check_settings(session: Session, file: String) -> Env.Settings
+  settings = CheckCache.attach(session.settings, file, !session.options.no_cache)
+  return settings.with(test_file: Discover.test_file?(file))
 end
 
 # The bytecode cache (io/bytecode_cache.agc) serves a run: not `compile`, which is the explicit way to build a file,

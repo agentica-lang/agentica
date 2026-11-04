@@ -293,7 +293,8 @@ def compile_steps(directory: String, options: Opts.Options, settings: Env.Settin
   end
 end
 
-# Compiles each test file (`_test.agc`) into the run directory. A file that does not compile keeps its diagnostic in
+# Compiles each test file (`_test.agc`) into the run directory, as a test file: one with no `main` runs its `test_*`
+# functions (modules/test_main.agc). A file that does not compile keeps its diagnostic in
 # `front_end` for the runner to report, and writes nothing. The other entries (feature files and problems) are not
 # compiled.
 def compile_tests(
@@ -319,7 +320,8 @@ end
 
 def compile_test(entry: Discover.Entry, output: String, settings: Env.Settings, cached: Bool) -> Result[Discover.Entry]
   front_end = ""
-  case Compile.file(entry.path, settings, "cannot read the test file #{entry.path}", cached)
+  tested = settings.with(test_file: true)
+  case Compile.file(entry.path, tested, "cannot read the test file #{entry.path}", cached)
     Pipeline.Compiled.Rejected(problem) -> front_end = JSON.encode(DiagnosticJson.json(problem))
     Pipeline.Compiled.Bytes(bytes) -> try write_bytes(output, bytes)
   end

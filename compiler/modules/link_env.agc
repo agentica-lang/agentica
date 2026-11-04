@@ -33,7 +33,8 @@ end
 ## again, as `test` does, takes it from here). unused says that an import alias that its file never uses is
 ## CHECK-UNUSED-IMPORT and a name that nothing reads is CHECK-UNUSED-VARIABLE; the query functions are lenient only
 ## when it is false, and then for the root files only (the imported files keep the rule): an editor adds an import, or
-## a name, before it writes the first use.
+## a name, before it writes the first use. test_file says that the root file is a test file (`agentica test` and
+## `agentica check` decide by its name): when it has no `main`, its `test_*` functions are its tests (test_main.agc).
 export struct Settings
   std: StdProvider
   embedded_bdd: Bool
@@ -42,6 +43,7 @@ export struct Settings
   version: String
   self_path: String
   unused: Bool
+  test_file: Bool
 end
 
 ## Settings for a stdlib/ folder and an environment. The version is "": a program that writes .agcb files sets it
@@ -55,6 +57,7 @@ export def settings(workspace: Workspace.Workspace, stdlib: String, env: Env) ->
     version: "",
     self_path: "",
     unused: true,
+    test_file: false,
   )
 end
 
@@ -69,5 +72,6 @@ export def embedded_settings(workspace: Workspace.Workspace, env: Env, version: 
     version: version,
     self_path: "",
     unused: true,
+    test_file: false,
   )
 end

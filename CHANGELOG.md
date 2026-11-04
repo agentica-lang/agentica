@@ -25,6 +25,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** `agentica test`: a `*_test.agc` file may have no `main`; its
+  top-level `test_*` functions are its tests, named after the function
+  (`test_parses_port` is `parses port`). A test file with both `main` and
+  `test_*` functions is `CHECK-TEST-MAIN`; also new: `CHECK-TEST-SIGNATURE`
+  and `CHECK-TEST-NAME`.
 - **Breaking:** the help of `std/option_parser` writes its notes in square
   brackets (`[default: 8080]`, `[choices: a, b]`, `[min: 0]`) and shows the
   choices as the value name (`--stats on|off`).
