@@ -3082,11 +3082,53 @@ def contexts(x: Int) -> Int
   return 0
 end
 
+def reads(x: Int) -> Int
+  if File.read_text("missing.txt").ok?
+    return x
+  end
+
+  return 0
+end
+
+def listens(x: Int) -> Int
+  if TCP.listen("127.0.0.1", 0).ok?
+    return x
+  end
+
+  return 0
+end
+
+def polls(x: Int) -> Int
+  if Native.wait_readable(0, 1000).ok?
+    return x
+  end
+
+  return 0
+end
+
+def reads_stdin(x: Int) -> Int
+  if gets().ok?
+    return x
+  end
+
+  return 0
+end
+
+def spawns(x: Int) -> Int
+  puts(Process.spawn("no-such-executable-1060", [], 1000).ok?)
+  return x
+end
+
 def main() -> Void
   case System.args().first()
     "divide" -> puts(peer_call_twice(Native.callback(Step, &divide), 1))
     "kdf" -> puts(peer_call_twice(Native.callback(Step, &derives), 1))
     "tls" -> puts(peer_call_twice(Native.callback(Step, &contexts), 1))
+    "file" -> puts(peer_call_twice(Native.callback(Step, &reads), 1))
+    "tcp" -> puts(peer_call_twice(Native.callback(Step, &listens), 1))
+    "poll" -> puts(peer_call_twice(Native.callback(Step, &polls), 1))
+    "stdin" -> puts(peer_call_twice(Native.callback(Step, &reads_stdin), 1))
+    "spawn" -> puts(peer_call_twice(Native.callback(Step, &spawns), 1))
     "wait" -> puts(peer_call_twice(Native.callback(Step, &waits), 1))
     "huge" -> puts(peer_call_twice(Native.callback(Step, &huge), 1))
     "exit" -> puts(peer_call_twice(Native.callback(Step, &leaves), 1))
@@ -3101,14 +3143,20 @@ end
 # and from every later callback of the call, which run nothing (one "divide" line for two calls). A wait in a callback
 # is RUNTIME-NATIVE-CALLBACK at the wait, a result outside its C type RUNTIME-INTEGER-OVERFLOW at the extern def,
 # --max-steps counts the callback's steps, and an exit in a callback ends the run. A compute def runs C on the pool,
-# where no callback runs: the call is RUNTIME-NATIVE-CALLBACK. A KDF call and a TLS context build park, so in a
-# callback each is RUNTIME-NATIVE-CALLBACK at the call.
+# where no callback runs: the call is RUNTIME-NATIVE-CALLBACK. A KDF call, a TLS context build, a file call, a TCP
+# listen, a wait for a descriptor and a read of stdin park, so in a callback each is RUNTIME-NATIVE-CALLBACK at the
+# call. A spawn that fails before its child exists gives its error, also with several schedulers, where a spawn parks.
 @NATIVE_CALLS
 @pytest.mark.parametrize("mode, flags, status, code, start, out", [
     ("divide", [], 1, "RUNTIME-DIVISION-BY-ZERO", (9, 13), "divide 1\n"),
     ("wait", [], 1, "RUNTIME-NATIVE-CALLBACK", (13, 3), ""),
     ("kdf", [], 1, "RUNTIME-NATIVE-CALLBACK", (36, 9), ""),
     ("tls", [], 1, "RUNTIME-NATIVE-CALLBACK", (41, 6), ""),
+    ("file", [], 1, "RUNTIME-NATIVE-CALLBACK", (49, 6), ""),
+    ("tcp", [], 1, "RUNTIME-NATIVE-CALLBACK", (57, 6), ""),
+    ("poll", [], 1, "RUNTIME-NATIVE-CALLBACK", (65, 6), ""),
+    ("stdin", [], 1, "RUNTIME-NATIVE-CALLBACK", (73, 6), ""),
+    ("spawn", ["--schedulers", "2"], 0, None, None, "false\nfalse\n1002\n"),
     ("huge", [], 1, "RUNTIME-INTEGER-OVERFLOW", (3, 3), ""),
     ("steps", ["--max-steps", "100000"], 1, "RUNTIME-STEP-LIMIT", (29, 21), ""),
     ("pool", [], 1, "RUNTIME-NATIVE-CALLBACK", (4, 3), ""),

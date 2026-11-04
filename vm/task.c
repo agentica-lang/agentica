@@ -161,6 +161,12 @@ void agc_task_check_park(agc_vm *vm, const char *message, uint32_t span) {
   (void)agc_io_loop(vm);
 }
 
+/* In a callback agc_task_parking fails, and never marks the task. */
+void agc_task_check_wait(agc_vm *vm) {
+  if (vm->task->callbacks) agc_task_parking(vm);
+  (void)agc_io_loop(vm);
+}
+
 /* The wait is not needed after all (the condition is already true, or the task was cancelled): back to RUNNING from
    PARKING or from WOKEN, whichever a waker left. A task that was woken has nothing to do with the wake, which was
    only a hint. */
