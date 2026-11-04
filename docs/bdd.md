@@ -142,8 +142,9 @@ feeds); a range runs to the end of the line.
   row's line) tells them apart. A `<...>` that is not a column is
   `PARSE-GHERKIN-PARAMETER`, unless it holds `=`, a quote or `/` (HTML such as
   `<input type="text">` or `<br/>`), which stays as written; a bare `<br>` or
-  `<p>` still fails. Several `Examples` blocks add their rows in order, and a row's tags are the Feature's,
-  then the scenario's, then its `Examples` block's.
+  `<p>` still fails. Several `Examples` blocks add their rows in order, and a
+  row's tags are the Feature's, then the scenario's, then its `Examples`
+  block's.
 - **Steps.** A step outside a Background or scenario, or after `Examples`, is
   `PARSE-GHERKIN-STEP`. `And` and `But` take the kind of the step before them in
   the section, and need one. The keyword does not matter for matching; the kind
