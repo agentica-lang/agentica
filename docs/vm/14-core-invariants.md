@@ -281,20 +281,21 @@ at the handle argument when the caller does not own a handle of its argument (a
 struct, enum, List, Map or Result may hold several) or it is closed, before it
 makes a task and before any handle of the argument moves (all or none).
 
-A resource of native code (`vm/ffi.c`) closes by running its C `free` once,
-on `Native.close` or at its owner's end. A `compute def` call holds its
-resource arguments until the call returns, and what each comes from (the
-resources of the call that made it: a statement's database): a close meanwhile
-marks the resource closed and takes it off its owner, and the end of the last
-such call runs the `free` on a scheduler, so C never sees the pointer freed
-while a pool thread uses it. A resource closed while held holds what it comes
-from in turn until its free, so the hold goes further up only through closed
-resources. A walk up passes freed links and points each one it passed at
-where it ended, so a call costs about the same whatever the chain above, also
-after a long chain is closed at once. A closed callback is freed once every
-native call whose C called it while its code existed has returned: C may call
-it again until then (it gives zero), and libffi's frames of its run are on
-that call's stack. The end of the run frees what is still open (§14.4, step
+A resource of native code (`vm/ffi.c`) closes by running its C `free` once, on
+`Native.close` or at its owner's end. A `compute def` call holds its resource
+arguments until the call returns, and what each comes from (the resources of the
+call that made it: a statement's database): a close meanwhile marks the resource
+closed and takes it off its owner, and the end of the last such call runs the
+`free` on a scheduler, so C never sees the pointer freed while a pool thread
+uses it. A resource closed while held holds what it comes from in turn until its
+free, so the hold goes further up only through closed resources. A walk up
+passes freed links and points each one it passed at where it ended, so a call
+costs about the same whatever the chain above, also after a long chain is closed
+at once. A closed callback is freed once every fast native call whose C called
+it while its code existed has returned: C may call it again until then (it gives
+zero), and libffi's frames of its run are on that call's stack. A compute call
+is not counted (its pool thread does not hold `rt->sync`), so its C must not
+call a closed callback. The end of the run frees what is still open (§14.4, step
 3). There are no GC finalizers.
 
 A channel is the one handle made unowned. `Channel.new` makes no registry entry.

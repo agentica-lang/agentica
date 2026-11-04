@@ -1247,6 +1247,7 @@ static made_from origins(agc_vm *vm, const ffi_entry *e, agc_c_resource *const *
    again until it returns. A callback stamped with this call's id is listed already; one stamped by another call (a
    nested one, or one on another scheduler) is searched for, in `more` only when this call has called two or more. */
 static void site_ran(agc_vm *vm, native_site *site, agc_c_resource *res) {
+  agc_sync_assert(vm);
   callback_data *cb = res->callback;
   if (!site->id) site->id = ++ffi_cache(vm)->sites;
   if (cb->listed_by == site->id) return;

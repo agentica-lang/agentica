@@ -80,9 +80,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   them comes from (`next(ctx, x)` keeps only `x` when `x` comes from `ctx`:
   close `x` before `ctx`): `Native.close` of the `Handle` during the call frees
   it when the call returns, not while C uses it.
-- A native callback closed while a native call that ran it is still in C stays
-  callable (it gives zero) until that call returns; before, its code could be
-  freed while C still used it.
+- A native callback closed while a fast native call whose C called it is still
+  in C stays callable (it gives zero) until that call returns; before, its code
+  could be freed while C still used it.
 
 ## [0.23.0] - 2026-11-03
 
