@@ -82,20 +82,24 @@ def show(value):
     if isinstance(value, list):
         return "[" + ", ".join(show(item) for item in value) + "]"
     if isinstance(value, tuple):
-        return ("ok(%s)" % show(value[1])) if value[0] == "ok" else 'error("%s")' % value[1]
+        if value[0] == "none":
+            return "none"
+        if value[0] in ("ok", "some"):
+            return "%s(%s)" % (value[0], show(value[1]))
+        return 'error("%s")' % value[1]
     return str(value)
 
 
 def pick(keys, wins):
     """Select the first index that wins; NaN wins only when every key is NaN."""
     if not keys:
-        return ("error", "the list is empty")
+        return ("none",)
     best = 0
     for index in range(1, len(keys)):
         key = keys[index]
         if key == key and (keys[best] != keys[best] or wins(key, keys[best])):
             best = index
-    return ("ok", best)
+    return ("some", best)
 
 
 def peer_lines(numbers, words, floats, names):

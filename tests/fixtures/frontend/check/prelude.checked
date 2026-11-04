@@ -136,7 +136,7 @@ program #195 0:1:1-1167:37:1
                 value: field-access #127 789:25:30-800:25:41 name="weight" type=Float
                   target: name-ref #126 789:25:30-793:25:34 name="item" type=Struct(Item)
       body: binding #140 811:26:3-861:27:1 name="lightest"
-        value: method-call #139 822:26:14-860:26:52 name="min_by" type=Result(Struct(Item)) resolved=call("List.min_by", List(Struct(Item)))
+        value: method-call #139 822:26:14-860:26:52 name="min_by" type=Optional(Struct(Item)) resolved=call("List.min_by", List(Struct(Item)))
           target: name-ref #133 822:26:14-827:26:19 name="items" type=List(Struct(Item))
           arg: block-lit #138 835:26:27-860:26:52 type=Fn([Struct(Item)], Float)
             param: block-param #134 839:26:31-843:26:35 name="item"
@@ -144,7 +144,7 @@ program #195 0:1:1-1167:37:1
               value: field-access #136 845:26:37-856:26:48 name="weight" type=Float
                 target: name-ref #135 845:26:37-849:26:41 name="item" type=Struct(Item)
       body: binding #148 863:27:3-913:28:1 name="first_name"
-        value: method-call #147 876:27:16-912:27:52 name="min_by" type=Result(Struct(Item)) resolved=call("List.min_by", List(Struct(Item)))
+        value: method-call #147 876:27:16-912:27:52 name="min_by" type=Optional(Struct(Item)) resolved=call("List.min_by", List(Struct(Item)))
           target: name-ref #141 876:27:16-881:27:21 name="items" type=List(Struct(Item))
           arg: block-lit #146 889:27:29-912:27:52 type=Fn([Struct(Item)], String)
             param: block-param #142 893:27:33-897:27:37 name="item"
@@ -152,7 +152,7 @@ program #195 0:1:1-1167:37:1
               value: field-access #144 899:27:39-908:27:48 name="name" type=String
                 target: name-ref #143 899:27:39-903:27:43 name="item" type=Struct(Item)
       body: binding #156 915:28:3-960:29:1 name="most"
-        value: method-call #155 922:28:10-959:28:47 name="max_by" type=Result(Struct(Item)) resolved=call("List.max_by", List(Struct(Item)))
+        value: method-call #155 922:28:10-959:28:47 name="max_by" type=Optional(Struct(Item)) resolved=call("List.max_by", List(Struct(Item)))
           target: name-ref #149 922:28:10-927:28:15 name="items" type=List(Struct(Item))
           arg: block-lit #154 935:28:23-959:28:47 type=Fn([Struct(Item)], Int)
             param: block-param #150 939:28:27-943:28:31 name="item"

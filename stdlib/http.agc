@@ -96,8 +96,6 @@ WRONG_SIZE = "the body is not the length it was given"
 CRLF = "\r\n".bytes
 # The widest body a download may write, in bytes, and the ceiling of a server's `max_body_bytes`. A client's bodies
 # stay capped at CLIENT_MAX_BODY by check_options; only a download streamed to a file may use up to this.
-# DownloadOptions.max_total_bytes defaults to this value as a literal (a field default cannot name a constant), so the
-# two must match.
 DOWNLOAD_MAX_BYTES = 268435456
 CLIENT_MAX_BODY = 67108864
 # The error of an awaited task that was cancelled (Task.await), as the feeder of a closing server gives it.
@@ -278,7 +276,7 @@ export struct DownloadOptions
   ## The milliseconds the whole download may take.
   timeout_ms: Int = 30000
   ## The most body bytes written to the file.
-  max_total_bytes: Int = 268435456
+  max_total_bytes: Int = DOWNLOAD_MAX_BYTES
 end
 
 ## What a download wrote: the response `status` and `headers` with the count of body `bytes_written` to the file.

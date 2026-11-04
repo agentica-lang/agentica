@@ -74,7 +74,7 @@ export VM_BUILTINS = Set.new([
   "Bytes.to_a", "Bytes.length", "Bytes.at", "Bytes.slice", "Bytes.take", "Bytes.drop", "Bytes.equal", "Bytes.plus",
   "Bytes.concat", "String.bytes", "Optional.equal", "Value.equal", "Bytes.decode", "String.encode", "Int.abs",
   "Int.pow", "Int.gcd", "Int.clamp", "Float.abs", "Float.floor", "Float.ceil", "Float.round", "Float.clamp",
-  "Math.sqrt",
+  "Math.sqrt", "String.multiply",
 ])
 
 ## The instruction of an operator on two Ints, by the token kind of the operator. `>` and `>=` use the instruction of
@@ -84,7 +84,7 @@ export INT_OPS: Map[String, String] = {
   "less-equal": "le-i", "greater": "lt-i", "greater-equal": "le-i",
 }
 
-## The operators on two Strings: only `+`.
+## The operators on two Strings: only `+` (`String * Int` is the builtin String.multiply, lower_expr.agc).
 export STRING_OPS: Map[String, String] = {"plus": "concat"}
 
 ## The same for two Floats.

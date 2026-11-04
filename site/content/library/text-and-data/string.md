@@ -245,6 +245,24 @@ end
 desserts
 ```
 
+## Repeating with *
+
+`s * n` gives `n` copies of `s`, as Ruby's `String#*`. The count is an `Int` and comes second: `3 * "ab"` and `"ab" * "c"` are `CHECK-TYPE-MISMATCH`. A negative count, or one that would make more than 256 MiB (268435456 bytes), stops the program with `RUNTIME-INVALID-COUNT` at the count.
+
+```agentica
+def main() -> Void
+  puts("ab" * 3)
+  puts("=" * 10)
+  puts(("x" * 0).empty?)
+end
+```
+
+```output
+ababab
+==========
+true
+```
+
 ## code and from_code
 
 ```signature

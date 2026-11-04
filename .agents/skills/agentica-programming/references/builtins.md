@@ -84,6 +84,7 @@ String.slice(s: String, start: Int, length: Int) -> String   # bad range halts
 String.index_of(s: String, part: String) -> Optional[Int]    # first match; none if absent
 String.at(s: String, index: Int) -> String               # one character; halts outside
 String.reverse(s: String) -> String
+s * n -> String                                          # n copies; n < 0 or over 256 MiB halts (RUNTIME-INVALID-COUNT)
 c.code() -> Int                                          # code point of one character; other lengths halt
 String.compare(a: String, b: String) -> Int              # -1, 0 or 1 in sort order; also a.compare(b)
 String.from_code(n: Int) -> String                       # Unicode scalar value; halts otherwise
@@ -141,8 +142,8 @@ List.uniq(list: List[K]) -> List[K]                      # K is Int or String; k
 List.sum(list: List[N]) -> N                             # Int or Float; empty gives 0 or 0.0; Int overflow halts
 List.include?(list: List[T], value: T) -> Bool           # any T with ==; also member?; stops at the first match
 List.min(list: List[T]) -> Optional[T]                   # T Int, Float or String; none when empty; also max
-List.min_by(list: List[A], key: Fn[A, O]) -> Result[A]   # key Int, Float or String; first wins ties; empty is an error
-List.max_by(list: List[A], key: Fn[A, O]) -> Result[A]   # NaN keys never win unless all are NaN
+List.min_by(list: List[A], key: Fn[A, O]) -> Optional[A]   # key Int, Float or String; first wins ties; empty is none
+List.max_by(list: List[A], key: Fn[A, O]) -> Optional[A]   # NaN keys never win unless all are NaN
 List.lazy(list: List[A]) -> Lazy[A]                      # a recipe; steps run in a terminal (lazy.md)
 ```
 

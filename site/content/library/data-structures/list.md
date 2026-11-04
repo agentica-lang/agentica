@@ -404,11 +404,11 @@ none
 ## min_by and max_by
 
 ```signature
-List.min_by(list: List[A], key: Fn[A, O]) -> Result[A]
-List.max_by(list: List[A], key: Fn[A, O]) -> Result[A]
+List.min_by(list: List[A], key: Fn[A, O]) -> Optional[A]
+List.max_by(list: List[A], key: Fn[A, O]) -> Optional[A]
 ```
 
-`ok` with the element of least or greatest key, else `error("the list is empty")`. The key is an `Int`, `Float` or `String` (compared with `String.compare`); the function runs once per element. The first element wins a tie, and a `NaN` key never wins unless all are `NaN`.
+`some` with the element of least or greatest key, or `none` for an empty list, as `min` and `max` give. The key is an `Int`, `Float` or `String` (compared with `String.compare`); the function runs once per element. The first element wins a tie, and a `NaN` key never wins unless all are `NaN`.
 
 ```agentica
 def main() -> Void
@@ -420,9 +420,9 @@ end
 ```
 
 ```output
-ok("fig")
-ok("apple")
-ok("pear")
+some("fig")
+some("apple")
+some("pear")
 ```
 
 ## Costs and names

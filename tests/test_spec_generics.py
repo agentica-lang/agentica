@@ -249,7 +249,7 @@ RULES = {
         elements("a = xs.find do |a: T| true end", "g = xs.group_by do |x| \"k\" end", "puts(g.size)"), None, None),
     "the other block methods on a List of T": (
         elements("xs.each_with_index do |x, i|", "  puts(i)", "end", "puts(xs.take_while do |x| true end.size)",
-                 "puts(xs.partition do |x| true end.size)", "puts(xs.min_by do |x| 1 end.ok?)",
+                 "puts(xs.partition do |x| true end.size)", "puts(xs.min_by do |x| 1 end.some?)",
                  "puts(xs.flat_map do |x| [x] end.size)"), None, None),
     "each and filter on a Map of T": (
         elements("m.each do |k, v|", "  puts(k)", "end", "puts(m.filter do |k, v| true end.size)"), None, None),

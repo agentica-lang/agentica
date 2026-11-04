@@ -17,6 +17,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `std/option_parser`: `min` and `max` on an `Int` `Opt` or `Arg`
   (`min: some(1)`), refused as any bad value is (exit 2) and shown in the help.
   A number too big for an `Int` says it does not fit one.
+- `s * n` repeats a String, as Ruby's `String#*` (`"ab" * 3` is `"ababab"`); a
+  negative count or a result over 256 MiB is `RUNTIME-INVALID-COUNT`.
 
 ### Changed
 
@@ -32,6 +34,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   or `case` whose every branch ends in one, is an error
   (`CHECK-UNREACHABLE-CODE`); remove it or move it before. The query commands
   report it too.
+- **Breaking:** `xs.min_by` and `xs.max_by` give an `Optional` (`none` for an
+  empty list), as `min` and `max` do, not a `Result`; `unwrap!` and
+  `unwrap_or` still work, `ok?` becomes `some?`.
 
 ### Fixed
 
