@@ -1433,9 +1433,10 @@ static void compute_work(void *data) {
 /* On the scheduler that resumes the task, with rt->sync held (the kind is `locked`): the held resources are let go and
    the result becomes a value there. For a cancelled task it runs too and the value is dropped (the detached end of the
    job), a resource result with it; a call whose work was skipped (cancelled while it waited) has no result, so it
-   gives Void, which the detached end drops. A job dropped without this half (its pool work could not start, or the
-   run is over) keeps its holds: the task fails, and a resource that the job held is never freed, a leak and never a
-   use after free. */
+   gives Void, which the detached end drops. A call skipped because the run was over (run_compute in vm/loop.c, or
+   ABANDONED) has none either, and its task is never woken (drain in vm/loop.c), so no task takes that Void. A job
+   dropped without this half (its pool work could not start, or the run is over) keeps its holds: the task fails, and
+   a resource that the job held is never freed, a leak and never a use after free. */
 static agc_value compute_done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   compute_call *c = data;
@@ -1517,7 +1518,7 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
     else if (!e->out[k])
       check_argument(vm, e->params[k], e->structs[k], agc_list_get(values, e->arg[k]), span);
   }
-  if (e->compute) agc_task_can_park(vm, "a callback of native code cannot wait for a compute call", span);
+  if (e->compute) agc_task_check_park(vm, "a callback of native code cannot wait for a compute call", span);
   check_open(vm, e, values, NULL, span);
   uint8_t *bytes[AGC_FFI_MAX_PARAMS];
   copy_byte_arguments(vm, e, values, bytes);

@@ -700,7 +700,7 @@ void agc_task_parking(agc_vm *vm);
 /* The first step of a builtin that parks on a job made from malloc'd copies (a compute call, a KDF call, a TLS
    context): what would fail the park fails here, before the copies exist, so none leaks. A callback of native code
    cannot park (RUNTIME-NATIVE-CALLBACK with MESSAGE at SPAN), and the loop is made, which fails when it cannot start. */
-void agc_task_can_park(agc_vm *vm, const char *message, uint32_t span);
+void agc_task_check_park(agc_vm *vm, const char *message, uint32_t span);
 void agc_task_unpark(agc_vm *vm);
 void agc_task_park(agc_vm *vm, bool retry);
 void agc_task_stepper(agc_vm *vm, agc_stepper *stepper);

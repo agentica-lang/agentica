@@ -596,9 +596,8 @@ static void kdf_drop(void *data) { kdf_free(data); }
    outcome that is still pending, so it fails the run as compute_expired in vm/ffi.c does. The job stays (the work may
    still use its data). */
 static agc_value kdf_expired(agc_vm *vm, void *data, agc_value context) {
-  (void)data;
   (void)context;
-  agc_fail(vm, "RUNTIME-INTERNAL", "a KDF call ended without its key", 0);
+  agc_fail(vm, "RUNTIME-INTERNAL", "a KDF call ended without its key", ((const kdf_job *)data)->span);
 }
 
 static const agc_io_kind kdf_io = {kdf_work, kdf_done, kdf_expired, kdf_drop, false, "kdf", NULL, false, NULL};
@@ -628,7 +627,7 @@ static agc_value kdf_value(agc_vm *vm, agc_value *args, size_t length_at, const 
   if (!kdf->scrypt && (__builtin_mul_overflow(kdf->iterations, blocks, &rounds) || rounds > PBKDF2_MAX_WORK))
     return agc_error_value("KDF.pbkdf2_hmac_sha256 needs iterations * ceil(length / 32) of at most 50000000");
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "the thread pool is off in this run", span);
-  agc_task_can_park(vm, "a callback of native code cannot wait for a KDF call", span);
+  agc_task_check_park(vm, "a callback of native code cannot wait for a KDF call", span);
   kdf_job *k = calloc(1, sizeof *k);
   if (!k) agc_out_of_memory();
   k->kdf = *kdf;

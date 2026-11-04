@@ -477,8 +477,11 @@ static int queue_work(agc_loop *loop, job *j) { return agc_io_queue_work(&loop->
    (a native call not made, so none of its effects happen); its `done` then sees that the work did not run, builds no
    result from it, and the detached end drops what it gives. Once the run is over no job's work starts either, as in
    start_pieces: no task takes a value any more, and the work (a scrypt of up to 1 GiB) would only hold a core and its
-   memory while the end's steps run, until the exit. A compute call of vm/ffi.c skipped so stays QUEUED, which
-   agc_ffi_stop_queued then makes ABANDONED. A work already running runs to its end. */
+   memory while the end's steps run, until the exit; drain wakes no task then, so no `done` of a skipped work gives a
+   task its value. A compute call of vm/ffi.c skipped so stays QUEUED, which agc_ffi_stop_queued then makes
+   ABANDONED. A work already running runs to its end. The pool thread reads j->loop->vm->rt, which is GC memory:
+   Boehm does not move objects, and the runtime stays reachable from the loop's thread for the whole run, so the
+   pointer holds; only the atomic `over` is read through it. */
 static void run_compute(void *item) {
   job *j = item;
   if (!atomic_load(&j->detached) && !atomic_load_explicit(&j->loop->vm->rt->over, memory_order_acquire))
@@ -911,7 +914,12 @@ static void drain(agc_vm *vm) {
     if (!atomic_load(&j->ended) && j->res->native == j) {
       agc_resource *r = j->res;
       if (!atomic_load(&j->detached)) {
-        agc_task *t = atomic_exchange(&r->task, NULL);
+        /* Once the run is over no task is woken: it would take a value after main returned, in the turn that a
+           scheduler may still run before agc_runq_end, and a job that run_compute skipped has none. Its task stays
+           parked with its job, as at any end of the run. The pool thread that skipped the work read rt->over before
+           it posted the end that put the job here, so this load sees it. */
+        bool over = atomic_load_explicit(&vm->rt->over, memory_order_acquire);
+        agc_task *t = over ? NULL : atomic_exchange(&r->task, NULL);
         if (t) agc_task_wake(vm, t, "job");
       } else if (j->detach_seen) {
         /* A job whose DETACH request has not run yet is left alone: that request puts it back on this list. */

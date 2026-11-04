@@ -156,7 +156,7 @@ void agc_task_parking(agc_vm *vm) {
     atomic_store_explicit(&t->state, AGC_TASK_PARKING, memory_order_release);
 }
 
-void agc_task_can_park(agc_vm *vm, const char *message, uint32_t span) {
+void agc_task_check_park(agc_vm *vm, const char *message, uint32_t span) {
   if (vm->task->callbacks) agc_fail(vm, "RUNTIME-NATIVE-CALLBACK", message, span);
   (void)agc_io_loop(vm);
 }

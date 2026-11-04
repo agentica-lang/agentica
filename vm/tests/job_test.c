@@ -274,8 +274,10 @@ static void test_cancel_during_compute(void) {
 
 /* The run ends while a compute job waits in the pool's queue (one thread here) behind one that runs: the running work
    goes on to its end, and the queued one never starts, so after main returns it takes no core (a scrypt would hold
-   one, and up to 1 GiB, until the exit). Its `done` sees work that did not run. Its gate is open, so a work that ran
-   anyway would set `started` and end. */
+   one, and up to 1 GiB, until the exit). Neither task is woken once `over` is set: with several schedulers one may
+   still run a turn before agc_runq_end (not called here), and the skipped job has no value to give it. Its gate is
+   open, so a work that ran anyway would set `started` and end. The tasks are then resumed by hand, so the jobs end
+   and the loop closes: the skipped work's `done` sees no work. */
 static void test_compute_queued_after_the_run_is_over(void) {
   agc_task *first = vm.task, *second = agc_new_task(&vm);
   gate *g = new_gate(), *h = new_gate();
@@ -286,8 +288,9 @@ static void test_compute_queued_after_the_run_is_over(void) {
   uv_sem_post(&h->go);
   atomic_store(&vm.rt->over, true);
   uv_sem_post(&g->go);
-  wait_woken(first);
-  wait_woken(second);
+  pump_until_idle();
+  assert(first->state == AGC_TASK_PARKED && second->state == AGC_TASK_PARKED);
+  assert(atomic_load_explicit(&g->worked, memory_order_acquire));
   assert(!atomic_load_explicit(&h->started, memory_order_acquire));
   assert(take(second) == 0);
   vm.task = first;
