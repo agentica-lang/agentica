@@ -25,11 +25,7 @@ end
 
 ## Builds the sections for the structs and enums of the program. struct_index and enum_index map a name to its place in
 ## the table.
-export def build(
-  program: Ir.Program,
-  struct_index: Map[String, Int],
-  enum_index: Map[String, Int],
-) -> Result[Section]
+export def build(program: Ir.Program, struct_index: Map[String, Int], enum_index: Map[String, Int]) -> Result[Section]
   pool = Pool.empty()
   chunks = Wire.start()
   count = 0
