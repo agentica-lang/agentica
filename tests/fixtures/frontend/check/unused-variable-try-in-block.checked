@@ -1,0 +1,1 @@
+ERROR CHECK-UNUSED-VARIABLE 175:10:3-238:14:1 "the variable \"out\" is never read" "handle the Result: try ..., a case on ok(_) and error(message), or .unwrap!; or discard it with _ = ..., or name it _out if it is unused on purpose" signature="run() -> Result[Void]" file="unused-variable-try-in-block.agc"

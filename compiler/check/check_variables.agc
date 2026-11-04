@@ -62,6 +62,10 @@ end
 
 def variable_help(cx: State.Cx, st: State.St, key: Int, local: State.Local, keep: String) -> String
   text = value_text(cx, local.value)
+  if st.writes.include?(key) and has_try?(local.value)
+    return "it is only updated, never read; remove it and keep its try as a statement, or #{keep}"
+  end
+
   # Removing a name whose value holds a `try` would drop the error that the `try` returns to the caller.
   if try?(local.value)
     return "write #{text} as a statement, without the name, or #{keep}"
@@ -107,7 +111,7 @@ def try?(value: Optional[Ast.Expr]) -> Bool
   end
 end
 
-# True when a `try` is anywhere in the value. It walks with a worklist, as the other stages do.
+# True when a `try` is anywhere in the value, outside any block. It walks with a worklist, as the other stages do.
 def has_try?(value: Optional[Ast.Expr]) -> Bool
   case value
     some(found) ->
@@ -118,6 +122,8 @@ def has_try?(value: Optional[Ast.Expr]) -> Bool
         at += 1
         case node
           Walk.Node.Expr(Ast.Expr.Try(_)) -> return true
+          # A `try` in a block returns from the block, not from the scope of the variable.
+          Walk.Node.Expr(Ast.Expr.BlockLit(_)) -> work = work
           _ -> work = work.concat(Walk.children(node))
         end
       end
