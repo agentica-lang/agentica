@@ -1,8 +1,8 @@
 ## What lowering reads off the tree before it lowers anything: the module constants, the functions and the watched type
 ## names a body mentions. One walk per body, with a worklist, so the depth of the tree does not matter.
 
-import ConstWalk from "../check/const_walk"
 import Ast from "../syntax/ast"
+import AstWalk from "../syntax/ast_walk"
 
 ## What a body mentions. consts are the linked names of the constants it reads and calls the names of the functions it
 ## calls or takes with `&`, in the order found. written are the watched type names it writes (a type, a type used as a
@@ -22,14 +22,14 @@ end
 
 ## The scan of the statements of a function body, and of the types it writes.
 export def scan_body(body: List[Ast.Stmt], watched: Set[String]) -> Scan
-  work: List[ConstWalk.Node] = body.map do |stmt: Ast.Stmt| ConstWalk.Node.Stmt(stmt) end
+  work: List[AstWalk.Node] = body.map do |stmt: Ast.Stmt| AstWalk.Node.Stmt(stmt) end
   return walk(work, watched, empty(), true)
 end
 
 ## The scan of the initializer of a constant. A regex literal there is built with the constant, so the scan goes into
 ## its call.
 export def scan_value(value: Ast.Expr, watched: Set[String]) -> Scan
-  return walk([ConstWalk.Node.Expr(value)], watched, empty(), false)
+  return walk([AstWalk.Node.Expr(value)], watched, empty(), false)
 end
 
 ## The linked name of the constant that holds a regex literal of a function body. `#` keeps it apart from every name a
@@ -66,7 +66,7 @@ def empty() -> Scan
   return Scan(consts: [], calls: [], written: [], type_value: false, covered: [], regexes: [])
 end
 
-def walk(start: List[ConstWalk.Node], watched: Set[String], first: Scan, hoist: Bool) -> Scan
+def walk(start: List[AstWalk.Node], watched: Set[String], first: Scan, hoist: Bool) -> Scan
   work = start
   found = first
   at = 0
@@ -74,17 +74,17 @@ def walk(start: List[ConstWalk.Node], watched: Set[String], first: Scan, hoist: 
     node = work[at]
     at += 1
     case node
-      ConstWalk.Node.Expr(expr) -> found = see_expr(found, expr, watched)
-      ConstWalk.Node.Stmt(stmt) -> found = see_stmt(found, stmt, watched)
+      AstWalk.Node.Expr(expr) -> found = see_expr(found, expr, watched)
+      AstWalk.Node.Stmt(stmt) -> found = see_stmt(found, stmt, watched)
     end
 
     work = work.concat(walked_children(node))
     case node
-      ConstWalk.Node.Expr(Ast.Expr.RegexLit(regex)) ->
+      AstWalk.Node.Expr(Ast.Expr.RegexLit(regex)) ->
         if hoist
           found = found.with(consts: found.consts.push(regex_constant(regex)), regexes: found.regexes.push(regex))
         else
-          work = work.push(ConstWalk.Node.Expr(regex.call))
+          work = work.push(AstWalk.Node.Expr(regex.call))
         end
 
       _ -> found = found
@@ -95,20 +95,20 @@ def walk(start: List[ConstWalk.Node], watched: Set[String], first: Scan, hoist: 
 end
 
 # The children of a node, except the type name of Type.members, which is no type used as a value.
-def walked_children(node: ConstWalk.Node) -> List[ConstWalk.Node]
+def walked_children(node: AstWalk.Node) -> List[AstWalk.Node]
   case node
-    ConstWalk.Node.Expr(expr) ->
+    AstWalk.Node.Expr(expr) ->
       case expr
         Ast.Expr.FieldAccess(access) ->
           case access.target
             Ast.Expr.TypeName(found) -> return []
-            _ -> return ConstWalk.children(node)
+            _ -> return AstWalk.children(node)
           end
 
-        _ -> return ConstWalk.children(node)
+        _ -> return AstWalk.children(node)
       end
 
-    _ -> return ConstWalk.children(node)
+    _ -> return AstWalk.children(node)
   end
 end
 

@@ -1,6 +1,7 @@
 ## The first stages of every command that reads a program: read the root file, link it and check it, each giving the
 ## data of the next stage or the first problem. The command line (app/), the BDD driver and the queries (analysis.agc)
-## all run it, so what one of them accepts, the others accept.
+## all run it, so what one of them accepts, the others accept, except that the query functions do not refuse an unused
+## import in the root file when `settings.unused_imports` is false.
 
 import Checker from "../check/checker"
 import Style from "../check/check_style"
@@ -13,7 +14,6 @@ import CheckCache from "../modules/check_cache"
 import Modules from "../modules/modules"
 import TypeCode from "../modules/type_code"
 import Workspace from "../modules/workspace"
-import Ast from "../syntax/ast"
 import SourceFile from "../syntax/source_file"
 import T from "../syntax/types"
 import Cache from "cache"
@@ -67,7 +67,9 @@ export def check_file(path: String, settings: Env.Settings) -> Outcome
 end
 
 ## Links the file at `path` and checks it as `agentica check` and `agentica type-at` do: every rule of `check_file`
-## except that the program declares a `main`, so a library file passes. A `main` that is declared keeps its signature.
+## except that the program declares a `main`, so a library file passes, and that an unused import of the root file is
+## not an error when `settings.unused_imports` is false (the files it imports keep the rule). A `main` that is declared
+## keeps its signature.
 export def query_file(path: String, settings: Env.Settings) -> Outcome
   return query_cached(Cache.empty(), path, settings)
 end
@@ -154,7 +156,8 @@ export def refresh(cache: Cache.Cache, path: String, settings: Env.Settings) -> 
   end
 end
 
-## Checks `linked`, a program that `Linker.link_programs` made from several files, as `query_file` does.
+## Checks `linked`, a program that `Linker.link_programs` made from several files, as `query_file` does: with
+## `settings.unused_imports` false, an unused import is no error in a root.
 export def query_linked(linked: Linker.Linked, settings: Env.Settings) -> Outcome
   return check(linked, settings, false)
 end
@@ -243,6 +246,7 @@ def skipped(
       # follows the rule is not lexed again.
       styled = styled_files(loaded)
       enter_checked(loaded, checked, settings, styled)
+
       return checked_outcome(program, checking, styled)
   end
 end

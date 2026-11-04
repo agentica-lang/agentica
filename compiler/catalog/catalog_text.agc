@@ -1,7 +1,6 @@
 ## The text form of the builtin catalog, for tests. See catalog_text. The golden is
 ## tests/fixtures/frontend/catalog/catalog.text.
 
-import Ast from "../syntax/ast"
 import Suggest from "../syntax/suggest"
 import Text from "../syntax/text"
 import Types from "../syntax/types"

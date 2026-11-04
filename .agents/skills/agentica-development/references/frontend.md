@@ -130,8 +130,9 @@ copy).
 - Module constants: the parser reads a top-level `NAME = ...`; `NAME.x` parses
   as a module call; only the linker makes `ConstRef`, turning a receiver one
   into a `FieldAccess` when the call has no parentheses and no arguments.
-  `const_walk.agc` is shared by the checker and lowering; `check_const.agc` runs
-  after `main`, in `Checked.constants` order; `lower_const.agc` plans them.
+  `syntax/ast_walk.agc` is shared by the linker, the checker and lowering;
+  `check_const.agc` runs after `main`, in `Checked.constants` order;
+  `lower_const.agc` plans them.
 - Default parameters: `Param.default`, rewritten by the linker with the
   declaring module's names. `check_defaults.agc` checks order and shape;
   `defaults.agc` gives the `Shape` and which parameter an argument fills. The
@@ -182,8 +183,9 @@ if syntax changes.
 Add a struct to `ast.agc` with `id` first and `span` last, plus a variant in
 `Expr`, `Stmt` or `Decl`. Construct it in `parser.agc` with the span from the
 first to the last consumed token (`Base.span_from`) and the next free id. Update
-every walker: `rewrite.agc`, `const_walk.agc`, the checker, lowering,
-`parse_text.agc`. Parser golden: `tests/fixtures/frontend/parser/NAME.input`.
+every walker: `rewrite.agc`, `ast_walk.agc`, `modules/import_use.agc`, the
+checker, lowering, `parse_text.agc`. Parser golden:
+`tests/fixtures/frontend/parser/NAME.input`.
 
 ### Add syntax
 

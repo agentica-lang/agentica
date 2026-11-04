@@ -38,7 +38,6 @@
 ## about the file itself, and an edit of an imported module checks that module and those that import it. The answers
 ## are those of a check from the start.
 
-import Ast from "std/internal/compiler/syntax/ast"
 import Cache from "std/internal/compiler/analysis/cache"
 import Core from "std/internal/compiler/analysis/analysis"
 import DiagnosticJson from "std/internal/compiler/diagnostics/diagnostic_json"
@@ -206,7 +205,8 @@ end
 
 ## Returns what the position `line`, `column` (from 1, in characters) of the file `path` is on, as `agentica type-at`
 ## answers: the type of the innermost expression or name and the definition of what it names. The file is linked and
-## checked with what it imports, and needs no `main`.
+## checked with what it imports, and needs no `main`. An import that the file itself never uses is not an error (an
+## editor adds the import first); the files it imports keep that rule, as `check` does.
 export def type_at(session: Session, path: String, line: Int, column: Int) -> Result[TypeAt]
   settings = Sessions.asking(session.internal)
   if path == "" or line < 1 or column < 1
@@ -248,7 +248,8 @@ end
 ## that names no `*.agc` file is `QUERY-USAGE`, a name that nothing declares is `QUERY-NOT-FOUND`, and when no file
 ## links the error is the first problem of the first one. The `QUERY-` diagnostics of `symbol` have the file
 ## `<arguments>`, and no usage `help` (the command line's line); `QUERY-NOT-FOUND` keeps its `help`, the files not
-## searched.
+## searched. Every searched file is a root, so an unused import in a searched file is not reported there, as for
+## `type_at`; one in a file that is only imported is.
 export def symbol(session: Session, name: String, paths: List[String]) -> Result[Symbols]
   settings = Sessions.asking(session.internal)
   # Sorted, since `update` moves a buffer to the end of the list and the order of the matches must not depend on it.
@@ -267,7 +268,8 @@ end
 
 ## Returns the declaration of the name at the position `line`, `column` (from 1, in characters) of the file `path` and
 ## every reference to it, as `agentica refs` answers: in that file, linked and checked as for `type_at`, and in what it
-## imports; a file that only imports it is not seen. A position that names nothing is `QUERY-NO-EXPRESSION`.
+## imports; a file that only imports it is not seen. A position that names nothing is `QUERY-NO-EXPRESSION`. An unused
+## import of the file itself is not an error, as for `type_at`; the files it imports keep the rule.
 export def refs(session: Session, path: String, line: Int, column: Int) -> Result[Refs]
   settings = Sessions.asking(session.internal)
   if path == "" or line < 1 or column < 1

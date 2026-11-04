@@ -7,7 +7,6 @@
 
 import {BARE_NAMES, ENUMS, RECORDS, RESERVED, STD_ONLY} from "../catalog/builtins"
 import Diag from "../diagnostics/diagnostic"
-import Ast from "../syntax/ast"
 import Base from "../syntax/parse_base"
 import Source from "../syntax/source"
 import Suggest from "../syntax/suggest"

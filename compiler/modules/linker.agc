@@ -3,6 +3,7 @@
 
 import Ast from "../syntax/ast"
 import Declarations from "declarations"
+import ImportUse from "import_use"
 import Env from "link_env"
 import Failure from "link_failure"
 import Modules from "modules"
@@ -132,6 +133,7 @@ export def link_programs(roots: List[String], settings: Env.Settings, parses: Mo
     ids = parser_ids(loaded)
   end
 
+  root_keys = many.entries.map do |entry: Modules.Entry| entry.key end
   pool = Pool(kept: [], held: {}, made: {}, failed: {})
   skipped: List[Left] = []
   kept: List[Modules.Entry] = []
@@ -139,7 +141,7 @@ export def link_programs(roots: List[String], settings: Env.Settings, parses: Mo
     case entry.failure
       some(failure) -> skipped = skipped.push(Left(root: entry.typed, failure: failure))
       none ->
-        admitted = admit(loaded, settings, ids, pool, entry.key)
+        admitted = admit(loaded, settings, ids, pool, entry.key, root_keys)
         pool = admitted.pool
         case admitted.failure
           some(failure) -> skipped = skipped.push(Left(root: entry.typed, failure: failure))
@@ -166,7 +168,7 @@ end
 
 ## Links files that were loaded (Modules.load_with): the second half of `link_file`.
 export def link_loaded(loaded: Modules.Loaded, settings: Env.Settings) -> Linking
-  files = rewrite_all(loaded, settings)
+  files = rewrite_all(loaded, settings, loaded.order.take(1))
   if files.ok?
     root = loaded.modules[loaded.order[0]].program
     return Linking.Done(
@@ -211,8 +213,15 @@ end
 
 # Rewrites the files of the root `key` that the pool does not hold. When every one rewrites, they join the pool; the
 # first that does not is the failure of the root, and the pool keeps what it learned (the files rewritten, the
-# failure).
-def admit(loaded: Modules.Loaded, settings: Env.Settings, ids: Int, pool: Pool, key: String) -> Admission
+# failure). `roots` are the files the command asked about (see `rewrite_module`).
+def admit(
+  loaded: Modules.Loaded,
+  settings: Env.Settings,
+  ids: Int,
+  pool: Pool,
+  key: String,
+  roots: List[String],
+) -> Admission
   fresh: List[LinkedModule] = []
   made = pool.made
   failed = pool.failed
@@ -224,7 +233,7 @@ def admit(loaded: Modules.Loaded, settings: Env.Settings, ids: Int, pool: Pool, 
     elsif made.has_key?(file)
       fresh = fresh.push(made[file])
     else
-      rewritten = rewrite_module(loaded, settings, ids, file)
+      rewritten = rewrite_module(loaded, settings, ids, file, roots)
       if !rewritten.ok?
         failure = Failure.unpack_failure(rewritten.message)
         return Admission(pool: pool.with(made: made, failed: failed.put(file, failure)), failure: some(failure))
@@ -276,11 +285,11 @@ def receivers_at(loaded: Modules.Loaded) -> Int
   return -1
 end
 
-def rewrite_all(loaded: Modules.Loaded, settings: Env.Settings) -> Result[List[LinkedModule]]
+def rewrite_all(loaded: Modules.Loaded, settings: Env.Settings, roots: List[String]) -> Result[List[LinkedModule]]
   out: List[LinkedModule] = []
   ids = parser_ids(loaded)
   for key in loaded.order
-    module = try rewrite_module(loaded, settings, ids, key)
+    module = try rewrite_module(loaded, settings, ids, key, roots)
     out = out.push(module)
   end
 
@@ -288,8 +297,16 @@ def rewrite_all(loaded: Modules.Loaded, settings: Env.Settings) -> Result[List[L
 end
 
 # The file `key` of `loaded` with its names rewritten. `ids` is the number of node ids of the parser, which the
-# receivers of rewritten constant members count from.
-def rewrite_module(loaded: Modules.Loaded, settings: Env.Settings, ids: Int, key: String) -> Result[LinkedModule]
+# receivers of rewritten constant members count from. A query (`settings.unused_imports` false) is lenient about an
+# unused import only in a root, the file the editor is changing; every file it imports keeps the rule, so what a query
+# accepts of them is what `check` accepts, and the check cache may hold them.
+def rewrite_module(
+  loaded: Modules.Loaded,
+  settings: Env.Settings,
+  ids: Int,
+  key: String,
+  roots: List[String],
+) -> Result[LinkedModule]
   module = loaded.modules[key]
   cx = Resolve.Context(
     settings: settings,
@@ -301,6 +318,8 @@ def rewrite_module(loaded: Modules.Loaded, settings: Env.Settings, ids: Int, key
   )
 
   declarations = try Rewrite.rewrite_declarations(cx)
+  try ImportUse.check(module, loaded.modules, settings.unused_imports or !roots.include?(key))
+
   return ok(
     LinkedModule(
       key: key,

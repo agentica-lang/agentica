@@ -1,16 +1,23 @@
-program #3 0:1:1-50:5:1
+program #6 0:1:1-71:5:1
   module "root.agc"
-    declaration: function-decl #2 26:2:1-49:4:1 name="main"
+    declaration: function-decl #5 26:2:1-71:5:1 name="main"
       result: type-ref #1 40:2:15-44:2:19 name="Void"
+      body: expr-stmt #4 47:3:3-67:4:1
+        value: call #3 47:3:3-66:3:22 name="puts" piped=false
+          arg: call #2 52:3:8-65:3:21 name="@2::count" piped=false
   module "steps.agc"
-    declaration: function-decl #9 63:4:1-140:7:1 name="@2::main"
-      result: type-ref #2 77:4:15-81:4:19 name="Void"
-      body: expr-stmt #8 84:5:3-136:6:1
-        value: call #7 84:5:3-135:5:54 name="@3::run" piped=false
-          arg: list-lit #6 92:5:11-134:5:53
-            element: call #5 93:5:12-133:5:52 name="@3::step" piped=false
-              arg: literal #3 102:5:21-112:5:31 value=string:"it works"
-              arg: function-ref #4 114:5:33-132:5:51 name="@4::verify"
+    declaration: function-decl #5 70:4:8-104:7:1 name="@2::count"
+      result: type-ref #2 85:4:23-88:4:26 name="Int"
+      body: return-stmt #4 91:5:3-100:6:1
+        value: literal #3 98:5:10-99:5:11 value=int:1
+    declaration: function-decl #14 105:8:1-182:11:1 name="@2::main"
+      result: type-ref #7 119:8:15-123:8:19 name="Void"
+      body: expr-stmt #13 126:9:3-178:10:1
+        value: call #12 126:9:3-177:9:54 name="@3::run" piped=false
+          arg: list-lit #11 134:9:11-176:9:53
+            element: call #10 135:9:12-175:9:52 name="@3::step" piped=false
+              arg: literal #8 144:9:21-154:9:31 value=string:"it works"
+              arg: function-ref #9 156:9:33-174:9:51 name="@4::verify"
   module "std/bdd.agc"
     declaration: const-decl #5 370:7:1-476:8:1 name="@3::VM_ENV_NAMES"
       value: list-lit #4 385:7:16-475:7:106
@@ -434,7 +441,7 @@ program #3 0:1:1-50:5:1
       body: if-stmt #444 7068:180:3-7247:183:1
         branch: if-branch #443 7068:180:3-7241:182:1
           condition: method-call #436 7071:180:6-7131:180:66 name="any?"
-            target: const-ref #2960 7071:180:6-7083:180:18 name="@3::VM_ENV_NAMES"
+            target: const-ref #2968 7071:180:6-7083:180:18 name="@3::VM_ENV_NAMES"
             arg: block-lit #435 7089:180:24-7131:180:66
               param: block-param #430 7093:180:28-7098:180:33 name="owned"
               body: expr-stmt #434 7100:180:35-7127:180:62

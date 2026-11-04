@@ -208,6 +208,17 @@ name.
   original module key and name (a chain is already followed). Every linked name
   taken from an export comes from `Modules.linked_name`, never `prefix + name`.
   The declaration is not copied; nothing reaches the checker or lowering.
+- `import_use.agc` runs after the rewrite of each file (`rewrite_module`):
+  `CHECK-UNUSED-IMPORT` at the alias of the first import whose alias no written
+  name starts with (a regex literal or `<<~EAG` template uses the import of
+  `std/regex` or `std/eag`), and `CHECK-IMPORT-NAME` for an alias written
+  without a member. `Settings.unused_imports` is off for the query commands
+  (`for_query` in `analysis/analysis.agc`): the unused rule is skipped for the
+  root file only (`rewrite_module` gets the roots), so an imported file stays
+  strict and still enters the check cache; `CHECK-IMPORT-NAME` runs always. It
+  reads the parser's tree, so a file read from a check cache stub
+  (`Module.stubbed`) is skipped, and a file with a call `Alias.f` whose head
+  names nothing is left to `CHECK-UNKNOWN-NAME`.
 
 ## Checker (`compiler/check/checker.agc` and the `check_*.agc` files)
 

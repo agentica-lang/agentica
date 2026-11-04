@@ -900,8 +900,10 @@ def test_a_dropped_context_stays_valid_for_its_listener_and_sockets(tmp_path):
 ])
 def test_a_context_of_the_wrong_role_is_runtime_tls_context_role_at_its_argument(tmp_path, name, call, file, covers):
     program = tmp_path / "main.agc"
+    # An import that nothing uses is an error, so only the cases that call HTTP import it (the line stays 1).
+    header = 'import HTTP from "std/http"\n' if "HTTP." in call else "# no import\n"
     program.write_text(
-        'import HTTP from "std/http"\n\ndef main() -> Void\n  dir = System.args()[0]\n'
+        header + '\ndef main() -> Void\n  dir = System.args()[0]\n'
         '  client = TLS.client_context(TlsClientOptions()).unwrap!\n'
         '  server = TLS.server_context(TlsServerOptions(cert_file: "#{dir}/server.pem", '
         'key_file: "#{dir}/server-key.pem")).unwrap!\n'

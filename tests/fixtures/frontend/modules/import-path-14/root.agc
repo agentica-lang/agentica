@@ -3,5 +3,6 @@
 
 import Util from "lib//util"
 def main() -> Void
+  puts(Util.read())
 end
 

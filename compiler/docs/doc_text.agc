@@ -3,7 +3,6 @@
 ## of a struct or the variants of an enum with their docs. An export without a doc is listed with its signature only.
 ## The docs are printed as written, with the `##` markers removed.
 
-import Ast from "../syntax/ast"
 import Model from "doc_model"
 import Signature from "signature"
 

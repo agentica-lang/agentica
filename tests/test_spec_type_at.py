@@ -839,3 +839,26 @@ def test_a_type_is_written_with_the_alias_of_its_own_file_when_the_root_imports_
     (program / "through.agc").write_text(through, encoding="utf-8")
     report = answer(("through.agc", where(through, "user =")), cwd=program)
     assert report["type"] == "Models.User"
+
+
+def test_a_query_answers_a_file_with_an_unused_import_and_check_still_refuses_it(program):
+    # An editor adds the import before it writes the first use, so the query commands do not refuse it.
+    draft = 'import Models from "models"\n\ndef f(n: Int) -> Int\n  return n + 1\nend\n'
+    (program / "draft.agc").write_text(draft, encoding="utf-8")
+    for words in ([], ["--partial"]):
+        report = answer(("draft.agc", where(draft, "n + 1")), *words, cwd=program)
+        assert report["type"] == "Int"
+    # The query left nothing that `check` would take as proof: it still refuses the import, at the alias.
+    checked = run(cli() + ["--json", "check", "draft.agc"], env=vm_environment(), cwd=program)
+    refused = problem(checked, "CHECK-UNUSED-IMPORT", 1)
+    assert start(refused) == (1, 8)
+
+
+def test_a_query_still_refuses_an_alias_written_without_its_member(program):
+    # Only the unused rule is relaxed: `u: Models` is CHECK-IMPORT-NAME at the alias, in a root too.
+    draft = 'import Models from "models"\n\ndef f(u: Models) -> Int\n  return 1\nend\n'
+    (program / "draft.agc").write_text(draft, encoding="utf-8")
+    done = run(cli() + ["--json", "type-at", "draft.agc:%d:%d" % where(draft, "return 1")], env=vm_environment(),
+               cwd=program)
+    refused = problem(done, "CHECK-IMPORT-NAME", 1)
+    assert start(refused) == where(draft, "Models)")

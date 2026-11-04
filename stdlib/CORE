@@ -33,7 +33,6 @@ check/check_tables.agc
 check/check_types.agc
 check/check_unused.agc
 check/checker.agc
-check/const_walk.agc
 check/defaults.agc
 check/prelude_files.agc
 check/ruby_form.agc
@@ -53,6 +52,7 @@ modules/check_cache.agc
 modules/declarations.agc
 modules/import_help.agc
 modules/import_path.agc
+modules/import_use.agc
 modules/link_env.agc
 modules/link_failure.agc
 modules/linker.agc
@@ -94,6 +94,7 @@ query/symbol_paths.agc
 query/type_at.agc
 query/type_at_json.agc
 syntax/ast.agc
+syntax/ast_walk.agc
 syntax/eag.agc
 syntax/lexer.agc
 syntax/parse_base.agc

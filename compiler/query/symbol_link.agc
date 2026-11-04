@@ -7,7 +7,6 @@ import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
 import Linker from "../modules/linker"
 import Modules from "../modules/modules"
-import Ast from "../syntax/ast"
 import QueryFiles from "query_files"
 import SymbolPaths from "symbol_paths"
 

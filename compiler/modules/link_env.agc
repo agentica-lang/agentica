@@ -30,7 +30,9 @@ end
 ## environment, the workspace that reads files, the Agentica version that the header of the .agcb file names (the
 ## writer's input; the linker and the checker do not read it), the path of the `agentica` binary that runs the front
 ## end ("" when the front end is run as an ordinary program with `agentica run`; a command that starts the binary
-## again, as `test` does, takes it from here).
+## again, as `test` does, takes it from here). unused_imports says that an import alias that its file never uses is
+## CHECK-UNUSED-IMPORT; the query functions are lenient only when it is false, and then for the root files only (the
+## imported files keep the rule): an editor adds an import before it writes the first use.
 export struct Settings
   std: StdProvider
   embedded_bdd: Bool
@@ -38,6 +40,7 @@ export struct Settings
   workspace: Workspace.Workspace
   version: String
   self_path: String
+  unused_imports: Bool
 end
 
 ## Settings for a stdlib/ folder and an environment. The version is "": a program that writes .agcb files sets it
@@ -50,6 +53,7 @@ export def settings(workspace: Workspace.Workspace, stdlib: String, env: Env) ->
     workspace: workspace,
     version: "",
     self_path: "",
+    unused_imports: true,
   )
 end
 
@@ -63,5 +67,6 @@ export def embedded_settings(workspace: Workspace.Workspace, env: Env, version: 
     workspace: workspace,
     version: version,
     self_path: "",
+    unused_imports: true,
   )
 end

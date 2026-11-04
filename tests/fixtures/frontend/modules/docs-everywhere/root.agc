@@ -20,5 +20,6 @@ end
 
 ## Main.
 def main() -> Void
+  Lib.go()
 end
 

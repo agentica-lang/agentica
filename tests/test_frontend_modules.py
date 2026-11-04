@@ -131,7 +131,7 @@ def wide_files():
     files = {"wide/w%d.agc" % n: "export def g%d() -> Int\n  return %d\nend\n\n" % (n, n) for n in range(2000)}
     files["wide/root.agc"] = (
         "".join("import W%d from \"w%d\"\n" % (n, n) for n in range(2000))
-        + "def main() -> Void\n  puts(W0.g0())\nend\n\n")
+        + "def main() -> Void\n" + "".join("  puts(W%d.g%d())\n" % (n, n) for n in range(2000)) + "end\n\n")
     return files
 
 
@@ -260,12 +260,14 @@ def test_the_files_of_a_link_share_one_numbering_of_node_ids(stage):
     assert_manifest(found, "modules/ids.sha256", inputs)
 
 
-def test_the_empty_files_of_a_link_take_ids_too(stage):
+def test_a_file_with_no_declaration_of_its_own_takes_ids_too(stage):
+    # An imported file that only imports and re-exports has no declaration in the linked program. A file with nothing
+    # at all cannot be imported: its alias would never be used (CHECK-UNUSED-IMPORT).
     directory = stage.temp_dir()
     env = stage.fixture_copy("empty-modules", directory / "empty-modules")
     root = str(directory / "empty-modules" / "root.agc")
     names = [name for name, _, _ in ids_ranges(stage.link([(env, root)], directory, "--ids")[root])]
-    assert names == ["root.agc", "empty.agc", "imports_only.agc", "deep.agc", "after.agc"]
+    assert names == ["root.agc", "imports_only.agc", "deep.agc", "after.agc"]
 
 
 def test_a_root_file_that_cannot_be_read_is_check_import_io_at_the_start_of_the_file(stage):

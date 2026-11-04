@@ -14,6 +14,10 @@ expected Int, found String
 
 When the checker knows the fix, the diagnostic ends with a `= help:` line.
 
+There are no warnings: a program that the compiler accepts has nothing to
+report, and what would be a warning in another language is an error with its
+own code (for example `CHECK-UNUSED-IMPORT`).
+
 A compile-time diagnostic names the first file as you typed it and an imported
 file by its absolute path. A runtime diagnostic and the frames of its stack name
 each file as you can open it from the working directory: `agentica
@@ -306,6 +310,12 @@ is a rule:
   the file, an alias, another imported name, a builtin function such as `puts`
   or a reserved type name such as `Int` (`CHECK-REDEFINED-NAME`)
   Help: rename the import: `import {name as other} from "path"`
+- `import Json from "json_util"` when the file never writes `Json.`
+  (`CHECK-UNUSED-IMPORT`)
+  Help: `remove import Json from "json_util"`; the span is the alias
+- `u: User` or `User(name: "Ana")` when `User` is an import alias, with no
+  member (`CHECK-IMPORT-NAME`)
+  Help: `write User.<Type>` (`write User.User` when the module exports `User`)
 - `M.nme` or `import {nme} from "path"` when module `M` exports `name`
   (`CHECK-IMPORT-NAME`)
   Help: the help suggests the closest export of `M` (`did you mean "name"?`); it

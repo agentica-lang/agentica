@@ -9,7 +9,6 @@ import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
 import Linker from "../modules/linker"
 import Modules from "../modules/modules"
-import Ast from "../syntax/ast"
 import Cache from "cache"
 import Front from "front"
 

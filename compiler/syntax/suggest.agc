@@ -1,6 +1,5 @@
 ## The "did you mean" help of an unknown name.
 
-import Ast from "ast"
 import Types from "types"
 
 ## The help text for the exported name closest to name, or `none` when none is close. A name of up to 4 characters may

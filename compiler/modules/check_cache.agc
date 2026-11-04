@@ -33,7 +33,7 @@ import Declarations from "declarations"
 import Workspace from "workspace"
 
 # The first line of an entry and of every tree digest; change it when the meaning of an entry changes.
-FORMAT = "agentica-check-3"
+FORMAT = "agentica-check-4"
 
 # The digest of a tree and of a text is 64 hex digits; an entry without a vouched tree holds this in its place.
 DIGEST_CHARS = 64

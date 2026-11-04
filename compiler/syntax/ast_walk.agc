@@ -1,7 +1,8 @@
-## How the checker reads the tree of a constant's initializer (docs/future/44-module-constants.md): the children of a
-## node in source order, and the reads of other constants below it.
+## How the stages walk a tree without recursion: the children of a node in source order, and the reads of other
+## constants below the initializer of a constant (docs/future/44-module-constants.md). The linker (unused imports), the
+## checker, lowering and the queries share it.
 
-import Ast from "../syntax/ast"
+import Ast from "ast"
 
 ## An expression or a statement, the two kinds of node a block body mixes.
 export enum Node
