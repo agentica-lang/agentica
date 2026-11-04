@@ -297,16 +297,16 @@ typedef struct {
 
 struct agc_ffi_call;
 
-/* A resource of native code (vm/ffi.c): the non-NULL C pointer that an extern function declared `-> Name` returned,
-   the prepared call of the free function of its block, its name as declared (IO.inspect prints it) and its registry
-   entry, whose native is this struct and which holds the owner task (§14.5). `jobs` counts the compute calls that use
-   it now, directly or through a resource that comes from it (`up`). A close marks it `closed` and takes it off its
-   owner; the free runs then, or at the end of the last of those calls, so C never sees the pointer freed while a pool
-   thread uses it. An owned buffer (Native.memory_pointer or
-   Native.from_string) is one too, with `buffer` set: `pointer` is its malloc'd memory of `size` bytes, freed with
-   free(), and `free` is NULL; the program sees it as a C.Pointer. A resource declared `free: C.Function` has its own
-   free function at `free_at`, the address that the call which made it got (`free` is then a call prepared without a
-   symbol); NULL for the others.
+/* A resource of native code (vm/ffi.c): the non-NULL C pointer that an extern function declared `-> Name` returned, the
+   prepared call of the free function of its block, its name as declared (IO.inspect prints it) and its registry entry,
+   whose native is this struct and which holds the owner task (§14.5). `jobs` counts the compute calls that use it now,
+   directly or through a resource that comes from it (`up`), and the closed resources that come from it whose free waits
+   for such a call (`carries`). A close marks it `closed` and takes it off its owner; the free runs then, or at the end
+   of the last of those calls, so C never sees the pointer freed while a pool thread uses it. An owned buffer
+   (Native.memory_pointer or Native.from_string) is one too, with `buffer` set: `pointer` is its malloc'd memory of
+   `size` bytes, freed with free(), and `free` is NULL; the program sees it as a C.Pointer. A resource declared
+   `free: C.Function` has its own free function at `free_at`, the address that the call which made it got (`free` is
+   then a call prepared without a symbol); NULL for the others.
    A resource declared `free_ref:` (`by_ref`) gives its free function the address of `pointer`, where C may
    write NULL.
    A view of a buffer (Native.offset) is a buffer too, with `parent` set to the owned buffer whose memory it shows:
@@ -316,18 +316,20 @@ struct agc_ffi_call;
    it: `pointer` is the code that C calls, `free_at` the closure (agc_ffi_closure, malloc'd) that the free gives back,
    and `free` is NULL. NULL for the others.
    `up` is what a resource of an extern function comes from, the resource or owned buffer that the call which made it
-   held (a database under its statement); `ups` (`up_count` entries, GC memory) holds them instead when there were two
-   or more, and `up` is then NULL. A call that holds the resource holds what is still open above it too, so a close of
-   one of them during a compute call on the resource frees it at the end of that call. An entry that points at a freed
-   resource with at most one parent of its own is moved to that parent when a walk meets it, so a chain keeps no freed
-   links.
-   `seen` marks a resource in such a walk (agc_ffi_cache.walk). NULL and 0 for the others. Changes under rt->sync. */
+   held (a database under its statement), less any that another of those comes from; `ups` (`up_count` entries, GC
+   memory) holds them instead when there were two or more, and `up` is then NULL. A call that holds the resource holds
+   what it comes from that is still open, one level up. A resource closed while held (`carries`) holds its own in
+   turn until its free, so a close of one of them during a compute call on the resource frees it at the end of that
+   call. A link that points at a freed resource with at most one parent of its own is moved to that parent when it is
+   read, so a chain keeps no freed links. `seen` marks a resource while a call's arguments are sorted out
+   (agc_ffi_cache.walk). NULL, 0 and false for the others. Changes under rt->sync. */
 typedef struct agc_c_resource {
   struct agc_c_resource *parent;
   struct agc_c_resource *up;
   struct agc_c_resource **ups;
   size_t up_count;
   uint64_t seen;
+  bool carries;
   agc_resource *state;
   void *pointer;
   struct agc_ffi_call *free;

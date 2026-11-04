@@ -496,6 +496,18 @@ void peer_child_free(void *p) {
 int32_t peer_child_frees(void) { return atomic_load(&child_frees); }
 int32_t peer_child_hold(void *p, int32_t limit_ms) { return peer_res_hold(((peer_child *)p)->root, limit_ms); }
 
+/* A child of CTX made with the child before it, as a cursor next(ctx, x): it keeps CTX and nothing of CHILD. */
+void *peer_child_next(void *ctx, void *child) {
+  (void)child;
+  return peer_child_open(ctx);
+}
+
+/* Reads the peer_res a child keeps, which must not be freed. */
+int32_t peer_child_value(void *p) { return peer_res_get(((peer_child *)p)->root); }
+
+/* Uses nothing of the child, whose root may be a callback. */
+int32_t peer_child_touch(void *p) { return p != NULL; }
+
 /* A compute call that opens a resource once peer_set_flag has run. */
 void *peer_res_open_later(int32_t value, int32_t limit_ms) {
   peer_wait_flag(limit_ms);
@@ -923,6 +935,9 @@ int32_t peer_res_after(void *res, peer_int_fn fn) {
   int32_t b = fn(2);
   return peer_res_get(res) * 100 + a * 10 + b;
 }
+
+/* Calls the stored callback, then FN, as a library that runs a callback it was given earlier before one it gets now. */
+int32_t peer_call_stored_then(peer_int_fn fn) { return stored_fn(1) * 10 + fn(2); }
 
 int32_t peer_flag(void) { return atomic_load(&flag); }
 
