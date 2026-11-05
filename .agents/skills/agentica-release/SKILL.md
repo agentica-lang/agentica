@@ -1,14 +1,13 @@
 ---
 name: agentica-release
 description: >-
-  Cut an Agentica release end to end. Covers the version bump PR (VERSION,
-  CHANGELOG, compare links, stage0 refresh), the annotated tag, the release
-  workflow that publishes the five native archives, the hand-written GitHub
-  release notes, the GitHub Pages rebuild, and the post-release checks. Use
-  when asked to make, tag, publish or announce a release or beta (for example
-  "release 0.5.0-beta.1"). Not for building or testing packages locally without
-  releasing (see the release targets in references/ci.md of
-  agentica-development).
+  Cut an Agentica release end to end: the version bump PR (VERSION, CHANGELOG,
+  compare links, stage0 refresh), the annotated tag, the release workflow that
+  publishes the five native archives, the hand-written release notes, the
+  GitHub Pages rebuild and the post-release checks. Use when asked to make,
+  tag, publish or announce a release or beta (for example "release
+  0.5.0-beta.1"). Not for building or testing packages locally (release
+  targets: references/ci.md of agentica-development).
 ---
 
 # Agentica release
@@ -27,8 +26,6 @@ check before it fails.
   the owner if unsure.
 - A tag containing `-` is published as a GitHub pre-release
   (`--prerelease` in the `publish` job).
-- The previous version is in `VERSION`, and `git tag --sort=-creatordate`
-  lists the tags.
 
 ## 1. Version bump PR
 
@@ -47,8 +44,7 @@ branch such as `release/<version>`. Change only:
      [<version>]: https://github.com/agentica-lang/agentica/compare/<previous>...<version>
      ```
 
-   - Read the entries once: they must say what users see. Mark a breaking
-     change `**Breaking:**`.
+   - Read the entries once: they must say what users see.
 3. `bootstrap/stage0.agcb`: refresh it before every release. Run
    `make fixed-point stage0`, check the diff is only that one binary file,
    run `make` again (it must build from the new stage0), and commit it. CI
@@ -80,8 +76,8 @@ git push origin <version>
 - The tag push starts `release.yml` (the job chain: "Release" in
   `.agents/skills/agentica-development/references/ci.md`); `publish` creates the
   release with empty notes.
-- Watch the run with one background loop: `gh run list --workflow
-  release.yml -L 3`, then `gh run watch <id>`.
+- Watch it with `gh run list --workflow release.yml -L 3`, then
+  `gh run watch <id>` in one background loop.
 - If a job fails before `publish`, nothing is public yet. Read the log, fix it
   on master with a normal PR, then ask the owner before deleting and
   re-pushing the tag. Deleting a tag is outward-facing.
@@ -112,8 +108,8 @@ site by hand:
 gh workflow run pages.yml --ref master
 ```
 
-Then check that the Install section of the site shows the new version, and
-that its release link opens the release.
+Then check that the site's Install section shows the new version and its
+release link opens the release.
 
 ## 5. Post-release checks
 
@@ -122,8 +118,7 @@ that its release link opens the release.
 - Download one archive, check it against `SHA256SUMS`, and run
   `bin/agentica --version`: it prints `<version>`.
 - CI and Pages on master are green.
-- Report to the owner: the release URL, the archive list, the notes, and
-  anything skipped.
+- Report the release URL, the archives, the notes and anything skipped.
 
 ## Gotchas
 

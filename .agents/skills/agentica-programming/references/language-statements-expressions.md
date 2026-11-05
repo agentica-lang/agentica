@@ -16,9 +16,7 @@ expressions and operators. Builtin methods and `to_s`: `builtins.md`.
   the name with `_` (`_count`) to keep it, or write `_` for a `for` variable
   (`for _ in 0...n`), a block parameter (`|_, i|`) or a pattern slot
   (`error(_)`). Updating is no read: `count += 1`, `x = x + 1` and
-  `xs = xs.push(v)` leave the name unused unless something else reads it. The
-  error is at the first unused name in the source, after the function's other
-  errors. A `Result` assigned and never read: handle it or write `_ = f(...)`.
+  `xs = xs.push(v)` leave the name unused unless something else reads it.
 - `x += e` (also `-=`, `*=`, `/=`, `%=`) is `x = x op e`; `x` must exist.
 - A name created in a block is not visible after its `end`. A new variable
   cannot reuse a visible name (no shadowing: `CHECK-SHADOWED-NAME`).
@@ -51,48 +49,42 @@ expressions and operators. Builtin methods and `to_s`: `builtins.md`.
   iteration. Each stands alone on its line and neither crosses a block or
   function (`CHECK-LOOP-CONTROL`). In a block, `return` leaves the block.
 - A statement after `return`, `break`, `next`, or an `if` (with `else`) or
-  `case` whose every branch ends in one is `CHECK-UNREACHABLE-CODE`: remove it
-  or move it before. `System.exit`, `!` functions, `while true` and `try` do not
-  count as ending.
+  `case` whose every branch ends in one is `CHECK-UNREACHABLE-CODE`.
+  `System.exit`, `!` functions, `while true` and `try` do not count as ending.
 - Assignment is a statement. There is no `x[i] = v`, `x.f = v` or `continue`.
 
 ## Expressions
 
-- Literals: `42`, `3.14`, `1.5e-3`, `1e5` (a Float; `1.e5` is not), `1_000` (a
-  `_` between digits is only visual; another `_` is `LEX-INVALID-NUMBER`),
-  `0xFF`, `0b1010`, `0o755` (Int in base 16, 2, 8; either case; a bad digit or
-  a prefix with none is `LEX-INVALID-NUMBER`; `0755` is decimal), `"text"`
-  (escapes `\" \\ \# \n \r \t`), `true`,
-  `false`, `nil`. A minus sign is an operator, not part of the literal; an
-  integer that does not fit is `CHECK-INT-RANGE`.
+- Literals: `42`, `3.14`, `1.5e-3`, `1e5` (a Float), `1_000` (a `_` between
+  digits is only visual), `0xFF`, `0b1010`, `0o755` (`0755` is decimal; a bad
+  digit is `LEX-INVALID-NUMBER`), `"text"` (escapes `\" \\ \# \n \r \t`),
+  `true`, `false`, `nil`. A minus sign is an operator, not part of the literal;
+  an integer that does not fit is `CHECK-INT-RANGE`.
 - Interpolation: `"total: #{n + 1}"`. Strings go in as is, `Json` as its JSON
   text, other data in their `IO.inspect` form. Keep the expression on one line;
   `\#{` is literal text. `case` patterns and `import` paths take plain strings
   only.
 - Heredocs: `<<~NAME`, the text lines, then a line with only `NAME` (capitals,
-  digits, `_`; `<<NAME`, `<<-NAME`, `<<~'NAME'` and `<<~name` are
-  `LEX-UNEXPECTED-CHAR`). The smallest indentation among the text lines is
-  removed, a space-only line becomes empty, and every line, the last too, ends
-  with `\n`: `<<~T`, `  a`, `    b`, `T` is `"a\n  b\n"`. Escapes and `#{...}`
-  work as in a string (indentation is removed first). The rest of the opener
-  line is code (`puts(<<~T)`, `<<~T.length`, `f(<<~A, <<~B)`); inside `(...)`
-  the call goes on after the end line. It needs two text lines or more
-  (`LEX-HEREDOC-ONE-LINE`; write `"text\n"`); a tab in the indentation is
-  `LEX-HEREDOC-INDENT`; no end line is `LEX-UNTERMINATED-HEREDOC`.
+  digits, `_`; other opener forms are `LEX-UNEXPECTED-CHAR`). The smallest
+  indentation among the text lines is removed, and every line, the last too,
+  ends with `\n`: `<<~T`, `  a`, `    b`, `T` is `"a\n  b\n"`. Escapes and
+  `#{...}` work as in a string. The rest of the opener line is code
+  (`puts(<<~T)`, `f(<<~A, <<~B)`); inside `(...)` the call goes on after the end
+  line. It needs two text lines or more (`LEX-HEREDOC-ONE-LINE`; write
+  `"text\n"`); a tab in the indentation is `LEX-HEREDOC-INDENT`; no end line is
+  `LEX-UNTERMINATED-HEREDOC`.
 - Regex literals: `/\d+-\d+/i`, a `Regex.Regex` of `std/regex`, which the file
-  must import (`CHECK-REGEX-IMPORT`). No string escapes (`\/` is a slash);
-  flags `i` and `m` (`.` matches `\n`); no `#{}`. Checked when compiled
-  (`CHECK-INVALID-REGEX`) and built once. After a value `/` is division, so a
-  call takes it in parentheses: `puts(/x/)`. Details: `regex.md`.
+  must import (`CHECK-REGEX-IMPORT`). After a value `/` is division, so a call
+  takes it in parentheses: `puts(/x/)`. Details: `regex.md`.
 - Lists `[1, 2, 3]`; maps `{"a": 1, "b": 2}`. A repeated key keeps the last
   value at its first position.
 - `[]`, `{}` and `Set.new([])` need a type from an annotation, parameter, field
   or function result (`CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE`,
   `CHECK-EMPTY-SET-TYPE`): `m: Map[String, Int] = {}`. A non-empty list needs
   one element type.
-- Struct construction names each field at most once, in any order: `User(name:
-  "Ana", age: 25)` (`CHECK-MISSING-FIELD`, `CHECK-DUPLICATE-FIELD`). A field
-  with a default may be left out (`CHECK-MISSING-FIELD` only for one without).
+- Struct construction names each field once, in any order: `User(name: "Ana",
+  age: 25)` (`CHECK-MISSING-FIELD` for a field with no default left out,
+  `CHECK-DUPLICATE-FIELD`).
 - Update: `user.with(age: 31)` copies the struct with named fields changed. It
   takes at least one field, each named once, only by name (`user.with()` and
   `user.with(31)` are `PARSE-UNEXPECTED-TOKEN`), each with a value of the
@@ -103,7 +95,6 @@ expressions and operators. Builtin methods and `to_s`: `builtins.md`.
   `user.with(...)` is `CHECK-UNUSED-VALUE`; on a non-struct,
   `CHECK-UNKNOWN-METHOD`. A struct from another module updates only when that
   module exports it and you import it (`CHECK-IMPORT-NAME`).
-  `return step(s.with(pos: s.pos + 1))` is a tail call.
 - Enum variants are qualified by their type. Payload variants take positional
   arguments (`Change.Added("hi")`; `CHECK-ENUM-POSITIONAL-ARGS`); nullary ones
   take `Level.Info` or `Level.Info()`. Generic arguments come from payloads
@@ -111,8 +102,7 @@ expressions and operators. Builtin methods and `to_s`: `builtins.md`.
   (`CHECK-ENUM-TYPE-INFERENCE`). An unknown variant is `CHECK-UNKNOWN-VARIANT`.
 - Field access `user.name`; index `items[0]`, `stock["apple"]` (a missing key is
   `RUNTIME-KEY-NOT-FOUND`, a bad list index `RUNTIME-INDEX-OUT-OF-RANGE`).
-  Strings cannot be indexed (`CHECK-NOT-INDEXABLE`: use `s.at(i)`). List
-  indexing is O(log32 n); `for` visits items in order.
+  Strings cannot be indexed (`CHECK-NOT-INDEXABLE`: use `s.at(i)`).
 - `&name` references a top-level function without capturing locals: `f: Fn[Int,
   Int] = &double`, then `f.call(21)`. An `Fn` field of a struct is called by its
   name: `store.put(a, b)` is `store.put.call(a, b)`. A block is also a function
@@ -171,8 +161,7 @@ Operators, from highest to lowest precedence:
 
 ## Forms from other languages
 
-Rejected with a `help` line that names the Agentica form: `let x = 5`, `match`,
-`when`, `if x then`, `elif`, `fn(x: Int)`, `lambda do`, `len(x)`, `Hash.new`,
-`range(n)`, `break if x`, `loop do`, `puts(x) if ok`, `continue` (use `next`),
-`;`, `while x {` ... `}`, single-quoted strings. `xs << x` is
-`xs = xs.push(x)`.
+Rejected with a `help` line that names the Agentica form: `let`, `match`,
+`when`, `elif`, `fn(x: Int)`, `lambda do`, `len(x)`, `Hash.new`, `range(n)`,
+`break if x`, `loop do`, `puts(x) if ok`, `continue` (use `next`), `;`, braces,
+single-quoted strings. `xs << x` is `xs = xs.push(x)`.

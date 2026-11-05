@@ -32,120 +32,92 @@ Read first: `references/vm.md` (the trust model and the layers).
 - Size arithmetic goes through `agc_size_add`/`agc_size_mul`; the loader's
   index and size sums use `uint64_t`.
 - Every `vm/*.c`, `vm/*.h` and `vm/tests/*.c` file starts with a header comment,
-  except the generated `vm/unicode_data.c`, and a new C file needs one too. A
-  source file's header is about 3 to 8 lines of text (the `/*` and `*/` lines do
-  not count): what the file is, its main functions or builtin family, its layer,
-  and where its design lives in `docs/vm/`, as `vm/agentica.c` does. A C test's
-  header is 1 to 4 lines on what it tests. A legal header may come before it.
-  *Checked* by `tests/test_vm_style.py` (3 to 8 lines of text for a source file,
-  1 to 4 for a C test, the generated file skipped).
-- Comments are welcome where the C is complex or not obvious, and they say
-  why, not what: an invariant, a subtle ownership or lifetime rule, GC
-  reachability (why a pointer is still alive after an allocation), an order
-  that is not obvious, a protocol or an OpenSSL or libuv quirk, the RFC or spec
-  section the code follows, or the check that rejects hostile input (a length,
-  offset or count from a `.agcb` or the wire). Use short `/* */` block
-  comments. Never narrate obvious code and never leave commented-out code. Tool
-  markers (`// NOLINT(...)`, `/* fall through */`) are not comments in this
-  sense.
-- Only `value.c` and the inline constructors and accessors of `value.h`
-  (`agc_int`, `agc_as_int`, ... for the common types, with `agc_wrong_tag` as
-  their one out-of-line failure) read the value union, besides the two inline
-  word helpers of `value.h` (`agc_value_word`, `agc_word_value`) that list
-  leaves use for the 8-byte payload of an Int or Float. Immediates write the
-  full word. A new constructor or accessor for a hot type goes inline in
-  `value.h`; one for a service resource stays in `value.c`.
+  except the generated `vm/unicode_data.c`. A source file's header is 3 to 8
+  lines of text: what the file is, its main functions or builtin family, its
+  layer, and where its design lives in `docs/vm/`, as `vm/agentica.c` does. A C
+  test's header is 1 to 4 lines on what it tests. A legal header may come before
+  it. *Checked* by `tests/test_vm_style.py`.
+- Comments are welcome where the C is complex or not obvious, and they say why,
+  not what: an invariant, an ownership or lifetime rule, GC reachability (why a
+  pointer is still alive after an allocation), an order that is not obvious, a
+  protocol or an OpenSSL or libuv quirk, the RFC section the code follows, or
+  the check that rejects hostile input (a length, offset or count from a `.agcb`
+  or the wire). Use short `/* */` block comments. Never narrate obvious code and
+  never leave commented-out code. Tool markers (`// NOLINT(...)`, `/* fall
+  through */`) are not comments in this sense.
+- Only `value.c` and the inline constructors and accessors of `value.h` read the
+  value union (`docs/vm/05-values-execution-builtins.md` §5.2), besides the two
+  inline word helpers (`agc_value_word`, `agc_word_value`) that list leaves use
+  for the 8-byte payload of an Int or Float. Immediates write the full word. A
+  new constructor or accessor for a hot type goes inline in `value.h`; one for a
+  service resource stays in `value.c`.
 
-`make vm-lint` (clang-tidy 19 or newer, for `misc-use-internal-linkage`)
-skips only `vm/unicode_data.c` (generated). A hook name that a tool fixes
-(`__asan_default_options`) takes an exact `NOLINT(check,...)`. The style test
-is a line scanner with known limits: it misses prototypes of functions that
-return function pointers or that start with a macro or attribute; it reports
-static arrays whose size contains `(` (`x[sizeof(y)]`) as prototypes; it
-miscounts when `#if` branches open or close different numbers of braces; and
-a `\`+newline inside a literal shifts its line numbers. The `_WIN32` and
-macOS branches are not linted: CI runs `make vm-lint` on Linux only.
+`make vm-lint` (clang-tidy 19 or newer, for `misc-use-internal-linkage`) skips
+only `vm/unicode_data.c`. A hook name that a tool fixes
+(`__asan_default_options`) takes an exact `NOLINT(check,...)`. The style test is
+a line scanner with known limits (read `tests/test_vm_style.py` before trusting
+a pass or a false report on prototypes, `#if` branches or `\`+newline literals).
+The `_WIN32` and macOS branches are not linted: CI runs `make vm-lint` on Linux
+only.
 
 **Platform code (Linux, macOS, Windows).** One behavior, one copy; only the
-operating system call differs.
+operating system call differs. The adapter shape (a plain header, one file per
+system family, each guarded whole) and the list of older code to move behind
+one are in `docs/vm/15-layers.md` §15.3.
 
-- Use libuv's portable API first (`uv_fs_*`, `uv_pipe_t`, `uv_hrtime`,
-  `uv_os_*`). Write an OS branch only where libuv has no call, or where its
-  call breaks a rule of `docs/vm/14-core-invariants.md` (for example a write
-  that runs on the loop thread).
-- Shared files (validation, buffers, ownership, scheduling, Result and
-  timeout) keep no `#ifdef` inside a function body. An OS difference is a
-  function of a platform adapter, in the façade/adapter shape of
-  `docs/vm/15-layers.md` §15.1 ("Files have a platform adapter") and §15.3:
-  - one plain header (`file_io.h` is the model) with a few operations, opaque
-    handles, no VM values, and one error convention (libuv codes or errno);
-    its comment names the real differences between systems, if any; declarations
-    that exist on one system only sit in one whole `#ifdef` block;
-  - one file per system family (`<area>_posix.c`, `<area>_windows.c`), each
-    guarded whole by `#ifdef _WIN32` or `#ifndef _WIN32`, like
-    `file_windows.c`; `__APPLE__` and `__linux__` only for a real API gap
-    inside the POSIX file;
-  - no VM state, scheduling, timeouts or resource ownership in the adapter.
-- Older code is debt: `file_io.c` (POSIX and Windows mixed; split it into
-  `file_io_posix.c`) and the platform `#if` blocks in shared files such as
-  `files.c`, `loop.c`, `launch.c`, `process.c`, `input.c` and `output.c`. A PR
-  that adds a platform branch to one of them moves that operation behind an
-  adapter instead; a PR that only touches nearby code need not.
-- Signal to split: a shared file whose `#if` count grows with a port, two
-  copies of one function under `#ifdef`, or flags that only make sense on one
-  system. Move the operation behind the adapter header in the same PR, and
-  add the new file to the VM source list in mk/vm.mk,
-  `vm/tools/check-layers.sh` and `references/repo-map.md`.
+- Use libuv's portable API first. Write an OS branch only where libuv has no
+  call, or where its call breaks a rule of `docs/vm/14-core-invariants.md` (for
+  example a write that runs on the loop thread).
+- Shared files (validation, buffers, ownership, scheduling, Result and timeout)
+  keep no `#ifdef` inside a function body. The adapter has no VM state,
+  scheduling, timeouts or resource ownership, and its header comment names the
+  real differences between systems. `file_io.h` with `file_windows.c` is the
+  model; `__APPLE__` and `__linux__` only for a real API gap inside a POSIX
+  file.
+- Signal to split: a shared file whose `#if` count grows with a port, two copies
+  of one function under `#ifdef`, or flags that only make sense on one system.
+  Move the operation behind an adapter in the same PR, and add the new file to
+  `VM_SRC` in `mk/vm.mk`, `vm/tools/check-layers.sh` and
+  `references/repo-map.md`.
 - Tests of the shared behavior go in an area of `tools/conformance.py` (the
   conformance matrix of `platforms.yml`; a test module in no area fails
-  `tests/test_conformance.py`), so they run on every system, and on Windows
-  also in `WINDOWS_TEST_MODULES` for the local Wine check. A test of one
-  system's adapter skips elsewhere with `host_only(...)` and a reason that
-  names the capability; any other skip fails the report.
+  `tests/test_conformance.py`), so they run on every system, and on Windows also
+  in `WINDOWS_TEST_MODULES` for the local Wine check. A test of one system's
+  adapter skips elsewhere with `host_only(...)` and a reason that names the
+  capability; any other skip fails the report.
 
-**Failure and exit.** Runtime failures call `agc_fail`, which `longjmp`s to
-`agc_vm_run`; call it only from interpreter or builtin code on the VM's own C
-stack. It keeps CODE and MESSAGE by pointer, so pass a literal, static data or
-GC memory, never a stack buffer. `System.exit` calls `agc_exit`, which records
-`AGC_EXITED` and the code and `longjmp`s the same way. Only the driver
-(`vm/launch.c`, with `agentica.c`) prints and exits: it flushes stdout and maps
-the code (1..255 as is, anything else 0). SIGPIPE is ignored and every write is
-checked.
+**Failure and exit** (`docs/vm/05-values-execution-builtins.md` §6.2).
+`agc_fail` `longjmp`s to `agc_vm_run`, so call it only from interpreter or
+builtin code on the VM's own C stack. It keeps CODE and MESSAGE by pointer, so
+pass a literal, static data or GC memory, never a stack buffer. `System.exit`
+calls `agc_exit`, which records `AGC_EXITED` and the code and `longjmp`s the
+same way. Only the driver (`vm/launch.c`, with `agentica.c`) prints and exits:
+it flushes stdout and maps the code (1..255 as is, anything else 0). SIGPIPE is
+ignored and every write is checked.
 
-**Boehm GC.**
+**Boehm GC** (`docs/vm/05-values-execution-builtins.md` §5.3).
 - Allocate only through `agc_alloc` (objects that hold `agc_value`s) and
   `agc_alloc_atomic` (strings, byte buffers, the leaf blocks of Int and Float
   lists; not zeroed under Boehm, so never expose an unfilled tail), or
-  `load_alloc` in the loader. They switch to
-  `calloc` under `AGC_NO_GC` and route out-of-memory to the handler. Only
-  `value.c` calls `GC_*` or includes `gc.h`.
+  `load_alloc` in the loader. They switch to `calloc` under `AGC_NO_GC` and
+  route out-of-memory to the handler. Only `value.c` calls `GC_*` or includes
+  `gc.h`.
 - Under `AGC_NO_GC`, `agc_fuzz_one` frees every block after each mutant
-  (`agc_release_all`), so never cache an `agc_alloc` pointer in a static.
-  It also sets a 256 MB budget (`agc_set_alloc_limit`, blocks tracked only
-  while it is set); an allocation past it longjmps out of the mutant and
-  `agc_fuzz_one` returns 2. yyjson allocates through `agc_alloc_atomic` under
-  `AGC_NO_GC` for this reason; anything else outside the agc heap (a libuv
-  loop) must be closed on that path too.
+  (`agc_release_all`), so never cache an `agc_alloc` pointer in a static. It
+  also sets a 256 MB budget (`agc_set_alloc_limit`): an allocation past it
+  longjmps out of the mutant and `agc_fuzz_one` returns 2. yyjson allocates
+  through `agc_alloc_atomic` under `AGC_NO_GC` for this reason; anything else
+  outside the agc heap (a libuv loop) must be closed on that path too.
 - Never keep a GC pointer in `malloc` memory, an atomic object or a
   `_Thread_local`; never tag pointers. Frames hold register offsets, not
-  pointers, because the register array moves when it grows.
-- No GC finalizers for OS resources. OOM and abort handlers only `write(2)`
-  and `_Exit(70)`.
-- The submodule is pinned to a release tag. To bump it: check out the new
-  tag inside `vm/third_party/bdwgc`, then `git add vm/third_party/bdwgc` (the
-  index keeps the old commit otherwise), rebuild with `AGENTICA_GC=vendored`,
-  and run the sanitizer and diff tests.
-- `AGENTICA_GC` picks the libgc (`docs/vm/11-build-ci-supply-chain.md`):
-  `system` (the Linux default) links the distro's libgc with `pkg-config`; the
-  stamp `$(VM_BUILD)/gc-system` checks the package and `GC_MIN` (8.2.0);
-  `vendored` builds `build/vm/gc.o` from the submodule (non-Linux hosts, the
-  release, and `GC_STRESS=1` always); `SANITIZE=1` has no libgc. The mode is
-  not remembered: pass it to every make command or export it. Both builds
-  have thread support (Debian's libgc, and `gc.o` with the defines above;
-  `vm/value.c` defines `GC_THREADS` before `gc.h`). The collector starts no
-  marker threads until `agc_gc_allow_threads`, which a run with N > 1 and the
-  C tests call, so N=1 has none. Keep pool threads off GC memory (they use
-  `malloc` only); a thread that touches the heap calls `agc_gc_thread_enter`
-  first and `agc_gc_thread_leave` before it ends.
-  `agc_init` sets `GC_set_all_interior_pointers(1)` before `GC_INIT` so both
-  builds agree.
+  pointers, because the register array moves when it grows. No GC finalizers
+  for OS resources. OOM and abort handlers only `write(2)` and `_Exit(70)`.
+- `AGENTICA_GC` picks the libgc (`docs/vm/11-build-ci-supply-chain.md`,
+  `vm-build.md`). The mode is not remembered: pass it to every make command or
+  export it. Both builds have thread support (`vm/value.c` defines `GC_THREADS`
+  before `gc.h`). The collector starts no marker threads until
+  `agc_gc_allow_threads`, which a run with N > 1 and the C tests call, so N=1
+  has none. Keep pool threads off GC memory (they use `malloc` only); a thread
+  that touches the heap calls `agc_gc_thread_enter` first and
+  `agc_gc_thread_leave` before it ends. `agc_init` sets
+  `GC_set_all_interior_pointers(1)` before `GC_INIT` so both builds agree.

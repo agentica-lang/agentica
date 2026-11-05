@@ -37,32 +37,27 @@ section for the area you are changing.
   The checker allows only Int, Float or String elements/keys. sort_by calls the
   key once per element; the key callback's parameter type types an empty input
   list.
-- `index_of` returns character positions (an empty part is some(0));
-  `from_code` rejects surrogates. `Float.to_int/to_int!` share `fallible`:
-  NaN/infinity give RUNTIME-INVALID-NUMBER, out-of-range truncation
-  RUNTIME-INTEGER-OVERFLOW. `Float` works as a builtin module prefix because
-  catalog names are full dotted strings.
+- `Float.to_int/to_int!` share `fallible`: NaN/infinity give
+  RUNTIME-INVALID-NUMBER, out-of-range truncation RUNTIME-INTEGER-OVERFLOW.
+  `Float` works as a builtin module prefix because catalog names are full dotted
+  strings.
 - Random: each run seeds its generator from `--seed` (0..2^31-1) or OS
-  randomness; the VM uses xoshiro256** with one generator per task
-  (`references/vm-core.md`). `agentica --seed N test` passes `--seed N` to the
-  runner, each scenario VM and each program under test, so handlers and programs
-  under test draw the same sequence.
+  randomness, one generator per task (`references/vm-core.md`). `agentica --seed
+  N test` passes it to the runner, each scenario VM and each program under test.
 - Generic rules propagate expected types into list construction/updates,
   `List.concat` (it can infer an empty first list from the second) and
   `Map.get`. Keep false/nil lookup payloads distinct from absent keys.
   `Map.delete` updates both the hash and insertion-order keys; reinsertion goes
   last; `Map.values` follows `Map.keys` order.
-- Catalog entries with several signatures (Map.get): `references/stages.md`
-  (Builtin catalog).
 
 ## Ranges and sets
 
 - `a..b` / `a...b` are `Binary` nodes with the operator kinds `dot-dot` /
   `dot-dot-dot`; ranges bind looser than `or` and do not chain. The checker type
   is `Type.Range` (a reserved type name, printable, `==` allowed, not
-  encodable). `for` over a Range binds an `Int`. `Range` and `Int` are method
-  modules, so `r.size` is `Range.size(r)` and `3.times` is `Int.times(3, f)`;
-  the catalog rows use the generic `#f` rule. VM: `references/vm-lowering.md`.
+  encodable). `Range` and `Int` are method modules, so `r.size` is
+  `Range.size(r)` and `3.times` is `Int.times(3, f)`. VM:
+  `references/vm-lowering.md`.
 - `Set[T]` is `Type.Set(T)` with `T` `Int` or `String`
   (`CHECK-SET-ELEMENT-TYPE`; `Set` is a reserved type name). Printable, not
   encodable; `==` and `Test.eq` compare it in any order. `Set` is a method
@@ -75,12 +70,10 @@ section for the area you are changing.
 
 ## Bytes
 
-- `Type.Bytes` is its own variant (a reserved type name), not an `Opaque`: it
-  has `==`, keys, `to_s` and `inspect`. It is a Map key or Set item
-  (`key_type?`) but not an `ATS` key (`resolve_ats`), and not JSON
-  (`CHECK-NOT-ENCODABLE`; `bytes_inside?` picks the Base64 help). Its method
-  module is `Bytes`; `b.size` is the synonym of `b.length`; `each` and `empty?`
-  are prelude rows (`stdlib/prelude/bytes.agc`).
+- `Type.Bytes` is its own variant (a reserved type name), not an `Opaque`. It
+  is a Map key or Set item (`key_type?`) but not an `ATS` key (`resolve_ats`),
+  and not JSON (`CHECK-NOT-ENCODABLE`; `bytes_inside?` picks the Base64 help).
+  `each` and `empty?` are prelude rows (`stdlib/prelude/bytes.agc`).
 - The VM's `eq`, `ne`, `concat`, `list-get` and `list-len` do not take a Bytes,
   so lowering calls builtins: `a + b` is `Bytes.plus`, `==` is `Bytes.equal`
   (`!=` adds `not`), `b[i]` and the element read of `for` are `Bytes.at`, and
@@ -113,8 +106,7 @@ section for the area you are changing.
   Alias/declaration collisions and builtin-name redefinitions are rejected
   before renaming. `as` is contextual, `import`/`export` are keywords.
 - CLI check/run/dump/compile and the BDD driver's step program share this
-  resolver. Raw import/export nodes passed directly to check give
-  `CHECK-MODULE-CONTEXT`. Exported signatures may mention private types;
+  resolver. Exported signatures may mention private types;
   importers cannot name or construct them. `std/` reads the sources embedded in
   the binary (`stdlib/MODULES`, `gen-embedded.sh`), with virtual source names
   and no filesystem fallback; add shipped modules to `stdlib/MODULES`. `pkg/`
@@ -126,17 +118,15 @@ section for the area you are changing.
   declares (`package_import.agc`): the files then come from `deps/<name>/`
   beside `agentica.toml`, hashed once per build, and a package file may not
   import outside its package.
-- Linking, visibility and cross-file diagnostics are tested through `--json
-  check` in `tests/test_spec_*.py` and against the frozen goldens in
-  `tests/test_frontend_modules.py`. Unknown dotted calls without a matching
-  import alias pass to the checker so misspelled builtin calls keep
-  `CHECK-UNKNOWN-NAME`; unknown qualified type aliases stay `CHECK-IMPORT-NAME`.
+- Unknown dotted calls without a matching import alias pass to the checker so
+  misspelled builtin calls keep `CHECK-UNKNOWN-NAME`; unknown qualified type
+  aliases stay `CHECK-IMPORT-NAME`.
 
 ## Methods on builtin types
 
 - The parser makes `MethodCall` for `x.name(args)` (except `.call(`, which
   stays `Invoke`, and `.with(`, which is the `StructUpdate` node) and
-  `FieldAccess` for `x.name`. Method names may carry `?`/`!`.
+  `FieldAccess` for `x.name`.
 - A `MethodCall` on a struct whose field of that name is an `Fn` is the call of
   the field: the checker records `Resolved.FieldCall` (arguments by
   `Methods.apply_function`, shared with `Invoke`), and `lower_field_call` emits
@@ -156,9 +146,7 @@ section for the area you are changing.
   sets the node's `visible` list: own structs plus the exported structs of
   directly imported modules), and a field of `Fn` type named `with` is
   `CHECK-REDEFINED-NAME` because the update would hide it.
-- Field access on a struct is unchanged; on anything else it is a zero-argument
-  method. Unknown methods are `CHECK-UNKNOWN-METHOD` with did-you-mean or the
-  method list.
+- Field access on anything but a struct is a zero-argument method.
 - `CHECK-UNUSED-VALUE`: an expression statement whose (resolved) call is a
   builtin with no effects, a non-`!` name and a non-Void result. The
   `FieldAccess` and `MethodCall` nodes have an auto `resolved` field that the
@@ -170,11 +158,10 @@ section for the area you are changing.
   resumes string scanning, and the resumed token starts at that `}` so parse
   errors point at it. Newlines and EOF inside an open frame are
   `LEX-UNTERMINATED-STRING` at the string start. `\#` escapes `#`.
-- The parser builds `Interpolation` with text and expression parts (empty text
-  pieces dropped). The checker checks each expression with no context (Void is
+- The checker checks each interpolated expression with no context (Void is
   rejected, and `ensure_printable` rejects types without `to_s`: functions,
-  tasks, handles) and types the node as String; the VM inserts each value in its
-  `to_s` form (strings raw, `Json` as JSON text, others in the inspect form).
+  tasks, handles); the VM inserts each value in its `to_s` form (strings raw,
+  `Json` as JSON text, others in the inspect form).
 - `puts`/`print`/`IO.puts`/`IO.print`/`IO.warn` take `T` with the `show` rule
   tag, which only calls `ensure_printable`; the VM writes the `to_s` form.
   `x.to_s` resolves through the method tables for String/Int/Float; for any
@@ -192,25 +179,22 @@ section for the area you are changing.
 
 - Lexer: `def struct enum if while for do` push a keyword frame on
   `delimiters` and `end` pops it, so NL is emitted when the stack is empty or
-  its top is a keyword frame. That keeps statement newlines inside a block
-  written within `(...)`. Keyword frames left open at EOF are not a lexer error
-  (the parser reports `PARSE-UNCLOSED-BLOCK`); a `)` that meets a keyword frame
-  is `LEX-UNMATCHED-DELIMITER`. `|` is the `pipe` token; `||` stays `or`.
+  its top is a keyword frame (statement newlines inside a block written within
+  `(...)`). Keyword frames left open at EOF are the parser's
+  `PARSE-UNCLOSED-BLOCK`; a `)` that meets one is `LEX-UNMATCHED-DELIMITER`.
 - Parser: `parse_postfix` turns `do` after a `Call`, `MethodCall` or bare
   `FieldAccess` into a `BlockLit` appended as the last argument. `allow_blocks`
   is off while parsing a `case` scrutinee, a `while` condition and a `for`
   iterable, and back on inside `(...)`, `[...]` and argument lists. Only the
   direct statements of a block body may end at `end` instead of NL, which
-  allows `do |x| x * 2 end`; `parse_block`/`parse_case_body` reset the block
-  depth to 0 for nested bodies. A block that meets a non-`Fn` last parameter is
+  allows `do |x| x * 2 end`. A block that meets a non-`Fn` last parameter is
   `CHECK-BLOCK-TARGET` (`check_builtin_call` in `check_rules.agc`), before any
   rule runs.
-- Checker: `check_block_body` takes known parameter types and result (or none).
-  With no known result, the first `return` or the last expression fixes it.
-  The checker keeps the scope depth at the block; assigning to a name found
-  below it is `CHECK-CAPTURED-ASSIGNMENT`. List callback rules check the list
-  first when the callback is a block, then the block with the element type; the
-  `&f` path is unchanged.
+- Checker: `check_block_body` takes known parameter types and result (or none);
+  with none, the first `return` or the last expression fixes it. Assigning to a
+  name found below the block's scope depth is `CHECK-CAPTURED-ASSIGNMENT`. List
+  callback rules check the list first when the callback is a block, then the
+  block with the element type.
 
 ## Hints for foreign habits
 
@@ -223,14 +207,10 @@ section for the area you are changing.
   `loop do`) are hints in the lexer and parser (`rg 'bail' compiler/syntax/`;
   `bail` takes a help). Tests assert the code and a regexp on the help, never
   the full text. For an unknown plain name the checker prefers did-you-mean over
-  `foreign_names`, so `next` near a visible `nexts` still suggests `nexts`. The
-  linker's failures take a help too (an unknown alias in expression position
-  says it is neither an import nor a local enum; `Result.X` without parentheses
-  names the Result spellings; in a type or pattern it only suggests the import).
+  `foreign_names`, so `next` near a visible `nexts` still suggests `nexts`.
 - `break`/`next` are contextual: the parser makes a `LoopControl` node only when
-  the name is followed by NL, `end` or EOF, so they still work as variable
-  names. The checker's loop depth is reset per function and per block
-  (saved/restored in `check_block_body`), so they cannot cross a block.
+  the name is followed by NL, `end` or EOF. The checker's loop depth is reset
+  per function and per block, so they cannot cross a block.
 - Two spellings for Result: the parser turns `Result.Ok(...)`/`Result.Err(...)`
   into `ok`/`error` calls (in `parse_base.agc`/`parser.agc`), and the patterns
   `ok(v)`/`error(m)` into a `VariantPattern` of `Result` (the case arm lookahead
@@ -239,11 +219,10 @@ section for the area you are changing.
   rewrite turns it into an `EnumConstructor` when the first part is a local
   enum; three parts (`M.Enum.Variant`) parse directly. Programs checked without
   linking keep `CHECK-TYPE-MISMATCH` for `Enum.Variant`.
-- Ruby headers: a case arm may hold one simple statement on the arrow line
-  (parsed at block depth 0, so it needs its NL); the arm lookahead needs the
-  pattern followed by `->`, or by `if` and a guard that reaches a `->` on the
-  same line (the look-ahead is iterative, with an open-paren count, so a deep
-  pattern costs no stack). `Module.fn` without `(` is a zero-argument `Call`.
+- A case arm may hold one simple statement on the arrow line (parsed at block
+  depth 0, so it needs its NL); the arm lookahead needs the pattern followed by
+  `->`, or by `if` and a guard that reaches a `->` on the same line (iterative,
+  so a deep pattern costs no stack).
 
 ## Enums and pattern matching
 
@@ -251,26 +230,23 @@ section for the area you are changing.
   `Nested(pattern)`. Names and `_` have no node ids, so a program without nested
   patterns numbers its nodes as before; a nested pattern node gets its id before
   its parent variant (post-order), and `CaseArm.guard` is parsed after the
-  pattern ids and before the body. A nested variant counts one nesting level in
-  `parse_base.agc` (`PARSE-TOO-DEEP`). The lowering tests a nested slot by
+  pattern ids and before the body. The lowering tests a nested slot by
   reading the payload into a temporary register (`read_payload`) and testing
   that, then binds; the guard is lowered after the bindings with a
   `jump-if-false` to the same skip label as a failed test.
 - Generic type variables exist only while resolving an enum's payload or a
   struct's field declarations. Preserve those names while the module linker
   rewrites type references (`rewrite_payload`); otherwise `T` becomes a
-  module-qualified ordinary type and generic registration fails. Imported enum
-  references resolve `Alias.Enum`; variants need `Alias.Enum.Variant`.
+  module-qualified ordinary type and generic registration fails.
 - Nullary enum construction with `Option.None()` is parsed as a general
-  `Construct` node (empty argument list); module linking, checking and lowering
-  must recognize the enum prefix. Payload variants parse as `EnumConstructor`.
-  Imported nullary calls have three segments and must be rewritten before
-  ordinary struct constructor resolution.
+  `Construct` node; module linking, checking and lowering must recognize the
+  enum prefix. Imported nullary calls have three segments and must be rewritten
+  before ordinary struct constructor resolution.
 - Checker enum types are nominal and retain their enum name plus resolved type
-  arguments. Infer type variables structurally from payload types and seed
-  inference from a matching expected enum type. `Result[T]` is still the builtin
-  Result, but case patterns use tags `Result.Ok` and `Result.Err`;
-  `Result[Void]` can only discard its Ok payload with `_`.
+  arguments; type variables are inferred structurally from payload types, seeded
+  by a matching expected enum type. Case patterns on `Result[T]` use the tags
+  `Result.Ok` and `Result.Err`; `Result[Void]` can only discard its Ok payload
+  with `_`.
 - Generic structs follow the enum path. The type is `Type.Struct(name, args)`
   and `Cx.struct_params` holds the parameters. `CheckTypes.fields_of` gives the
   fields with the arguments put in (field access, `with`, JSON encode);
@@ -280,7 +256,7 @@ section for the area you are changing.
   arguments. `debug_text` keeps `Struct(Name)` for no arguments (the goldens).
   `vm_type?` takes a `Var` as a VM value, because the default of a field
   (`items: List[T] = []`) is typed with the parameter. No VM or bytecode change.
-- Generic functions: `FunctionDecl.type_parameters` (and their spans),
+- Generic functions: `FunctionDecl.type_parameters`,
   `State.Signature.type_parameters`. A signature keeps `Type.Var`; a call
   (`check_generic_call` in `check_call.agc`) never substitutes a type that holds
   a variable of the caller again: `Types.open_variables?` asks of the template
@@ -289,19 +265,14 @@ section for the area you are changing.
   checked once with `Cx.type_params` set; there `data?` refuses a `Var` (only
   `Cx.prelude` accepts it). The linker keeps the names in
   `Resolve.Context.type_parameters`. `vm_type?` already takes a `Var`.
-- Enum cases require every variant or `_`. All non-enum scrutinees—including
-  Bool and Nil—require `_`. Reject repeated/covered arms, require an unguarded
-  `_` last (a guarded arm, or one with a literal or nested slot, covers nothing
-  and may repeat a pattern), and validate pattern payload arity/types before
-  checking each arm in a fresh scope. Exhaustive case branches participate in
-  all-path return analysis.
-- Keep the independent module-linker tests for exported/private enums and
-  imported patterns.
+- Enum cases require every variant or `_`; all non-enum scrutinees require `_`.
+  An unguarded `_` goes last; a guarded arm, or one with a literal or nested
+  slot, covers nothing and may repeat a pattern. Exhaustive case branches
+  participate in all-path return analysis.
 
 ## Function values
 
 - `&name` creates a named `FunctionRef`; `Fn[A, ..., R]` uses the final
   argument as return type, and `.call(...)` is a dedicated `Invoke` node.
-  Resolve only declared functions; no closures, builtin references, function
-  equality or JSON encoding. Inspect is `<Fn>`.
-- The `agentica test` step handlers and their rules are in `references/bdd.md`.
+  Resolve only declared functions; no builtin references, function equality or
+  JSON encoding. Inspect is `<Fn>`.

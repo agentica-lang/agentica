@@ -1,34 +1,29 @@
 # Running
 
-The exact rules of the command line: running, checking and compiling a
-program, the bytecode cache and the sandbox flags.
+Rules of the command line that `agentica --help` does not spell out; run it for
+the list of commands and flags.
 
 - `agentica FILE.agc ARGS` checks, then runs; `System.args()` returns ARGS (the
   words after the file are the program's). Exit 0 is success, 1 a diagnostic,
   2 bad usage or an unreadable file.
-- `agentica check [PATH...]` only checks. One file path prints `check ok` (with
-  `--json` `{"ok":true}`, or the diagnostic). A folder, no path (the current
-  folder) or several paths check every `.agc` file, print each failing file's
-  first diagnostic and a count line, and exit 1 (2 if a file is unreadable);
-  with `--json` they print one object `{ok, checked, failed, files}` on stdout.
-  A folder skips hidden folders, `agc_libs/`, the `deps/` of a project and
-  symbolic links to files, as `symbol` does; `build/` is not skipped.
-  `check --stdin FILE.agc` reads the text from standard input.
-- `agentica fmt [PATH...]` formats the `.agc` files in place (default: the
-  current folder, without `agc_libs/`); `--check` only lists the files it would
-  change (exit 1 if any); `agentica fmt -` formats standard input to standard
-  output. A file that does not parse is left as it is (exit 1); a wrong call is
-  `FMT-USAGE` (exit 2). The `[style]` of the nearest `agentica.toml` sets the
-  width (default 119) and `blank_line_after_end`.
-- `agentica lint [PATH...] [--json] [--strict]` suggests style changes
-  (`LINT-` codes, never errors): it exits 0 with suggestions, 1 with `--strict`
-  and any; it only parses, so run `check` for correctness.
+- `agentica check [PATH...]` only checks. One file prints `check ok` (with
+  `--json` `{"ok":true}`, or the diagnostic). A folder, no path or several
+  paths check every `.agc` file, print each failing file's first diagnostic and
+  a count line, and exit 1 (2 if a file is unreadable); `--json` prints one
+  object `{ok, checked, failed, files}`. A folder skips hidden folders,
+  `agc_libs/`, the `deps/` of a project and symbolic links to files, as `symbol`
+  does; `build/` is not skipped.
+- `agentica fmt` formats in place; a file that does not parse is left as it is
+  (exit 1). `[style]` of the nearest `agentica.toml` sets the width (default
+  119) and `blank_line_after_end`. `agentica lint` suggests style changes
+  (`LINT-` codes, never errors); it only parses, so run `check` for
+  correctness.
 - `--ai` prints a diagnostic as compact text, `--json` as one object (the last
   stderr line, after the program's own stderr). Put them before the file.
 - `agentica help NAME` prints a builtin's signature (unknown name: exit 2);
   `agentica doc PATH` the exported API of a file or `std/` module;
-  `agentica help std/MODULE[.NAME]` lists a `std/` module's exports with
-  their summaries, or prints one export with its doc.
+  `agentica help std/MODULE[.NAME]` the exports of a module or one export with
+  its doc.
 - `--deny-run`, `--deny-net`, `--deny-fs`, `--deny-env` and `--deny-native` make
   the blocked calls fail with `denied: --deny-X`; `--sandbox` sets all of them,
   for untrusted code. A program can start a process past one flag, so use
@@ -36,11 +31,9 @@ program, the bytecode cache and the sandbox flags.
 - `--max-steps N` bounds expression and statement entries across all tasks
   (`RUNTIME-STEP-LIMIT`); it is not an I/O timeout.
 - `agentica compile FILE.agc -o OUT.agcb` writes bytecode; `agentica run
-  [FLAGS] -- OUT.agcb [ARGS...]` runs it (`run` only as the first word), on the
-  same Agentica version only. Flags go before `--`: `--max-steps`, `--seed`,
-  `--flush-timeout`, `--schedulers N`, `--jit MODE` (`on` by default, x86-64
-  and arm64), the `--deny-*` flags, `--sandbox`, `--source-root DIR`, `--ai`,
-  `--json`. `agentica run --version` also lists the libraries.
+  [FLAGS] -- OUT.agcb [ARGS...]` runs it, on the same Agentica version only.
+  Flags go before `--` (`--max-steps`, `--seed`, `--schedulers N`, `--jit MODE`,
+  `--deny-*`, `--sandbox`, `--source-root DIR`, `--ai`, `--json`).
 - `agentica F.agc` and `agentica test` keep the compiled program of each root
   file in `_build/bytecode/`, in the folder of the nearest `agentica.toml`
   (else beside F), and read it while F, its imports, `agentica.toml`,

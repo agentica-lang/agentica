@@ -5,51 +5,43 @@ Read before running or changing `benchmarks/`, `make bench`, the HTTP benchmark,
 
 ## Benchmarks
 
-`make bench` (or `python3 benchmarks/run.py --runs N --size S
---only NAMES --runners exe,vm,python` (`exe` is `agentica FILE.agc`, `vm` is
-`agentica run` on bytecode)) times `benchmarks/programs/*.agc` on each runner
-against the CPython versions in `benchmarks/python/`, checks that every runner
-prints the same output, reports `LOWER-UNSUPPORTED` programs as unsupported, and
-times `hello.agc` start-up apart, then the front end of `dist/agentica` (`check`
-of hello, gherkin, parser and `compiler/front_end.agc`, and one small `agentica
-test`; the heading prints the load average and says "measured under load" above
-2; `--no-startup` skips both). For where the time goes,
-`AGENTICA_VM_TRACE=profile` (`references/vm-build.md`). It is outside `make
-test` and CI; `BENCH_ARGS="--runs 3 --size 2"` passes options through `make
-bench`; `AGENTICA_JIT=off` in the environment sets the JIT mode of every run
-(`on` by default); record new numbers in `docs/vm-benchmarks.md`.
-`list-build` (n pushes, n scattered `set`s and a `for` sum) is the gate of the
-list representation, in both modes:
-160,000 pushes (`--size 8`) take under 1 s, doubling n costs less than 2.5 times
-the time, and no other benchmark slows by more than 2%; `small-values` (the
-shared small values (`docs/vm/05-values-execution-builtins.md` §5.4): one-character and empty Strings, empty Lists, Maps
-and Sets) is the guard for a change near those paths; `list-bulk` (`repeat`,
-`to_a`, `reverse`, `take`, `drop`, `concat`, `join`, `String.split` and `sort`
-of 60,000 to 500,000 items) guards bulk builds, which must stay within 1.3
-times the flat array; compare against a VM built from master, alternating the
-runs, and time loop-bound programs under more than one link layout before
-blaming list code. `channel-pingpong` and `print-lines` guard the cost of the
-shared-state locks: compare a change to the locks or the scheduler against a
-VM built from master, and run them again with `AGENTICA_VM_TEST_SHARED=1` to
-see the cost of the locks when they are on. `deadline-pingpong` and `sleepers`
-time the timed parks; run them at `--size 8` to compare a change near the
-timers, under the same rule. A new program needs `def
-scale() -> Int` returning 1 (the script rewrites it for `--size`), a
-deterministic checksum line, and a Python twin that takes the size as `argv[1]`.
-The HTTP sanity check is apart: `python3 benchmarks/http_bench.py` (Python 3.10
-or newer) compares `examples/http_server.agc serve` with Node, asyncio and
-`ThreadingHTTPServer` servers under one keep-alive client, interleaved and
-pinned; record numbers only from an idle machine, in the last section of
-`docs/vm-benchmarks.md`.
+`make bench` (options: `BENCH_ARGS="--runs 3 --size 2"`; `python3
+benchmarks/run.py --help` lists the rest) times `benchmarks/programs/*.agc` on
+each runner (`exe` is `agentica FILE.agc`, `vm` is `agentica run` on bytecode)
+against the CPython twins in `benchmarks/python/`, checks that every runner
+prints the same output, and times start-up and the front end of `dist/agentica`
+apart. It is outside `make test` and CI. `AGENTICA_JIT=off` in the environment
+sets the JIT mode of every run (`on` by default); record new numbers in
+`docs/vm-benchmarks.md`. For where the time goes, `AGENTICA_VM_TRACE=profile`
+(`references/vm-build.md`).
+
+Guards for a change near their paths (compare against a VM built from master,
+alternating the runs, and time loop-bound programs under more than one link
+layout before blaming list code):
+
+- `list-build` is the gate of the list representation, in both JIT modes:
+  160,000 pushes (`--size 8`) take under 1 s, doubling n costs less than 2.5
+  times the time, and no other benchmark slows by more than 2%.
+- `small-values` guards the shared small values (`docs/vm/05-values-execution-builtins.md`
+  §5.4); `list-bulk` guards bulk
+  builds, which must stay within 1.3 times the flat array.
+- `channel-pingpong` and `print-lines` guard the cost of the shared-state locks;
+  run them again with `AGENTICA_VM_TEST_SHARED=1` to see the cost with the locks
+  on. `deadline-pingpong` and `sleepers` time the timed parks (`--size 8`).
+
+A new program needs `def scale() -> Int` returning 1 (the script rewrites it for
+`--size`), a deterministic checksum line, and a Python twin that takes the size
+as `argv[1]`. The HTTP sanity check is apart: `python3
+benchmarks/http_bench.py`; record numbers only from an idle machine, in the last
+section of `docs/vm-benchmarks.md`.
 
 ## Speed work
 
 - Profile before timing. `AGENTICA_VM_TRACE=profile` prints the report when a
-  run ends (stderr, or `AGENTICA_VM_TRACE_FILE`); its rows, the section
-  and folded-stack options and the costs in steps are in `agentica-programming`
-  `references/performance.md`. The `events`, `op` and `pair` rows at its end
-  (`docs/vm/08-loader-and-cli.md` §9) say what to fuse or open-code. `check` of
-  a file with no `main` prints its report too.
+  run ends; its rows, options and the costs in steps are in
+  `agentica-programming` `references/performance.md`. The `events`, `op` and
+  `pair` rows at its end (`docs/vm/08-loader-and-cli.md` §9) say what to fuse
+  or open-code.
 - Steps are exact and repeat from run to run, so they are the main evidence.
   Wall time is supporting: a profiled run is slower (up to 15 times on cheap
   builtin calls, each of which it times), so time
@@ -73,11 +65,9 @@ pinned; record numbers only from an idle machine, in the last section of
 
 ## Agent evaluation
 
-Agent evaluation (not part of `make test`): `python3 tests/eval/run.py --help`.
+`python3 tests/eval/run.py --help` (not part of `make test`).
 `--check-references` grades every `reference.*` of `tests/eval/tasks/` in the
 Docker sandbox without a model and exits 1 on a failure; run it after any
 change to a task, `tests/eval/run.py`, the Dockerfile or the VM
-(`make eval-references` is the same with `--jobs 8`; it is not in CI). Docker
-is the default sandbox, and its image is built automatically when missing.
-Provider credentials pass by name with repeatable `--pass-env NAME`. The arms,
+(`make eval-references` is the same with `--jobs 8`; it is not in CI). The arms,
 the task layout, the sandboxes and the details are in `docs/eval.md`.

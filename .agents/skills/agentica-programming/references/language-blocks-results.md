@@ -28,8 +28,7 @@ A block is a function written at the call site as the last argument: `xs.map do
 - Blocks capture values when created; later outer changes do not affect them. A
   block cannot assign an outer variable (`CHECK-CAPTURED-ASSIGNMENT`): use
   `map`, `reduce` or a `for` loop. Block parameters cannot reuse visible names.
-- A block is a `Fn[...]` value: return it, store it, pass it to `Task.spawn`, or
-  make a BDD step with `BDD.step("pattern") do |ctx, args| ... end`.
+- A block is a `Fn[...]` value: return it, store it, pass it to `Task.spawn`.
 
 ## Result and try
 
@@ -39,8 +38,7 @@ ok() -> Result[Void]
 error(message: String) -> Result[T]
 ```
 
-- `ok(1)` is `Result[Int]`. An expected `Result[T]` checks the payload against
-  T, even for `ok([])`.
+- An expected `Result[T]` checks the payload against T, even for `ok([])`.
 - `error("bad")` needs an expected Result type from an annotation, an existing
   binding, a return, an argument, a field or a typed container element; `r =
   error("bad")` alone is `CHECK-RESULT-TYPE`. Lists and maps infer from the
@@ -51,18 +49,14 @@ error(message: String) -> Result[T]
   returns from the current function, which must return a Result
   (`CHECK-TRY-CONTEXT`; never in `main`). The operand and the function's success
   type may differ. `try` binds like unary `not`; parenthesize a larger operand.
-  Success paths still return explicitly. The operand must be a Result: `try
-  text.to_i`, not `try text.to_i!`. A `try` supplies `Result[T]` to its operand;
-  the function's return type alone does not.
+  The operand must be a Result: `try text.to_i`, not `try text.to_i!`.
 - `r.unwrap!` halts with `RUNTIME-UNWRAP-ERROR` on an error and passes its
   expected type to the operand as `Result[T]`. `unwrap_or` takes the expected T
   or the default's type and evaluates both arguments, left to right, even on
   success. `r.ok?` and `r.message` need a known Result type; `message` is `""`
   for a success.
-- A `Result` that is dropped (a statement `f(x)`, `File.close(f, 1000)`,
-  `"3".to_i`; `Result[Void]` too) is `CHECK-UNUSED-RESULT`: `try f(x)` in a
-  function that returns a Result, a `case`, `.unwrap!`, or `_ = f(x)` to drop it
-  on purpose. `IO.inspect(r)` is exempt.
+- A dropped `Result` from any call is `CHECK-UNUSED-RESULT`: `try` it, `case`
+  it, `.unwrap!`, or write `_ = f(x)`.
 - `ok(false)` and `ok(nil)` are successes. Results nest and hold lists, maps and
   structs; they have no fields or indexing. `r == ok(1)` and `r == error("x")`
   compare the tag and the payload or message.
@@ -95,8 +89,8 @@ none -> Optional[T]
   `none`), `o.map do |x| x + 1 end`, `o.some?`, `o.none?`,
   `o.to_result("missing")` (a Result for `try`).
 - `m.get(k)` and `s.index_of(part)` give an Optional. A missing value that is
-  normal is an Optional; a failure the caller needs a reason for is a Result.
-  `List.find` and `Lazy.find` give a Result (`error("not found")`).
+  normal is an Optional; a failure with a reason is a Result (`List.find` and
+  `Lazy.find` give `error("not found")`).
 - `==` compares two Optionals of a type with `==`: `o == none`,
   `o == some(3)`. Prints as `some(3)` or `none`. JSON writes `none` as `null`
   and reads `null` or a missing key as `none` (`json.md`).

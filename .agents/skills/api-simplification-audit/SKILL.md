@@ -14,11 +14,10 @@ description: >-
 
 # API simplification audit
 
-A campaign in three steps, **analyze, diagnose, report**, run as passes from
-the lightest to the most complete. Stop after the pass the request asks for
-(default: all three). Change nothing in `compiler/`, `stdlib/` or docs: the
-output is a report; PRs come later, one per issue item, after the owner
-agrees.
+Three passes, lightest first: signatures, real usage, proposal. Stop after
+the pass the request asks for (default: all three). Change nothing in
+`compiler/`, `stdlib/` or docs: the output is a report; PRs come later, one
+per issue item, after the owner agrees.
 
 ## What a default may be
 
@@ -37,8 +36,8 @@ Check every proposal against these rules first; they decide its cost.
   bigger PR, and the cost line of the proposal says so.
 - A **std struct** field may have a default (`NAME: type = expr`), so a
   `*_options()` function that only returns defaults may become field defaults.
-  A builtin record (such as `HttpClientOptions`) cannot: only builtin
-  parameters take defaults (`compiler/catalog/builtin_model.agc`).
+  A builtin record field takes one in its catalog row (`Model.Default` in
+  `compiler/catalog/builtin_model.agc`).
 - "Nothing waits forever" stays true: a timeout default is a finite number,
   never "no timeout". Precedent: `File.chunks(path, size = 65536,
   timeout_ms = 30000)`.
@@ -49,23 +48,21 @@ Check every proposal against these rules first; they decide its cost.
 
 ## Pass 1: signatures (minutes)
 
-Use a binary built from the checkout you audit (a worktree's
-`dist/agentica`; the main checkout's `dist/` may be stale). An older binary
-skips the newer std/ modules and makes pass 2 read the wrong lines. Then:
+Use a binary built from the checkout you audit; an older one skips newer std/
+modules and makes pass 2 read the wrong lines. Then:
 
 ```bash
 python3 .agents/skills/api-simplification-audit/scripts/signatures.py \
   <binary> --root . --tsv <scratch>/signatures.tsv
 ```
 
-It lists the most repeated parameters without a default, the tuning-like ones
-(`timeout_ms`, `max_*`, `size`, `count`, `mode`, `options`...) and the defaults
-that exist today, and names the builtins with overloads (`Task.await`...), which
-take no defaults and are read by hand. `help --json` does not show a row's rule;
-read it from the golden `tests/fixtures/frontend/catalog/catalog.text`. Group
-the candidates by family (all `timeout_ms` of `File.*`, of `Channel.*`...), not
-one by one. Drop the ones that are the subject of the call (`List.take(count)`:
-the count is the point).
+It lists the repeated parameters without a default, the tuning-like ones, the
+defaults that exist today, and the builtins with overloads (`Task.await`...),
+which take no defaults and are read by hand. `help --json` does not show a
+row's rule; read it from the golden
+`tests/fixtures/frontend/catalog/catalog.text`. Group the candidates by family
+(all `timeout_ms` of `File.*`...), not one by one. Drop the ones that are the
+subject of the call (`List.take(count)`).
 
 ## Pass 2: real usage (an hour)
 
@@ -77,16 +74,14 @@ python3 .agents/skills/api-simplification-audit/scripts/arg_usage.py \
 ```
 
 Run it on `examples`, `compiler`, and on the sibling repos when present
-(`../bond`, `../agentica-db` next to the checkout). `refs` stops at the first
-check error of any file, so pass folders that check (bare `stdlib` and test
-fixtures do not; `site/content` has no `.agc`). Many `stdlib/*.agc` files do not
-check alone: count calls inside `stdlib/` with `rg`, and treat the `std/...`
-spans a run reports (from programs that import std, mostly `examples`) as a
-bonus. The script lists the files `refs` skipped because they do not link: read
-their calls by hand. Count the site samples with `rg`, compare the total with
-`rg -c 'read_text\('`, and read the unparsed sites by hand. A value used in most
-calls is the default candidate; a spread of values means keep it required. Note
-the values in tests apart: tests pick small timeouts on purpose.
+(`../bond`, `../agentica-db`). `refs` stops at the first check error of any
+file, so pass folders that check (bare `stdlib` and test fixtures do not; many
+`stdlib/*.agc` files do not check alone: count those calls with `rg`). The
+script lists the files `refs` skipped because they do not link, and the
+unparsed sites: read them by hand, compare the total with
+`rg -c 'read_text\('`, and count the site samples with `rg`. A value used in
+most calls is the default candidate; a spread of values means keep it
+required. Note test values apart: tests pick small timeouts on purpose.
 
 ## Pass 3: proposal (the full report)
 

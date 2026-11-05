@@ -33,7 +33,6 @@ def main() -> Void
 end
 ```
 
-- The data is `Bytes` (`bytes.md`); a stream is a `Lazy[Bytes]` of chunks.
 - One-shot `data` is at most 1048576 bytes (empty input is valid for
   encoding); `max_bytes` caps the output, 1..1048576; `level` is 0..9.
 - `Zlib.crc32` chains the CRC32 (RFC 1952) after `seed`: leave it out first (0),
@@ -45,8 +44,6 @@ end
   65536 bytes. A decoder's `max_bytes` (at least 1) holds while it streams.
   Truncation, a checksum, a trailing byte, the cap, a bad `level` or
   `max_bytes` end the terminal with an error Result that begins `zlib: `.
-- A run that stops early (`first`, `find`, a failed `try`, an error, a cancel)
-  frees its zlib streams and closes its files.
 - `File.chunks` reads regular files only, `size` is 1..16777216 (outside it is
   `RUNTIME-INVALID-COUNT`); `write_bytes` creates or truncates (`lazy.md`).
   Only these two take `--deny-fs`; the steps and `Zlib` calls run anywhere.

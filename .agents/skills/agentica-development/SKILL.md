@@ -2,23 +2,21 @@
 name: agentica-development
 description: >-
   Develops the Agentica interpreter: the front end written in Agentica
-  (compiler/: lexer, parser, module linker, checker, lowering, bytecode writer)
-  and the C11 bytecode VM that runs every program (vm/ with the Boehm GC, the
-  runtime libraries, loader safety, golden tests). Covers where code goes, how
-  to add tokens, AST nodes, syntax, diagnostics, builtins, opcodes and tests,
-  the Agentica and C gotchas of this repo, and the VM build, CI, release,
-  documentation site, benchmarks and copy-paste check. Use when working in the
-  agentica repository on compiler/, vm/, tests/, site/, the Makefile or CI.
-  Don't use for writing Agentica programs (agentica-programming), for the
-  grammar documents alone, or for other C projects.
+  (compiler/: lexer, parser, linker, checker, lowering, bytecode writer) and
+  the C11 bytecode VM (vm/ with the Boehm GC, runtime libraries, loader
+  safety, golden tests). Covers where code goes, how to add tokens, AST nodes,
+  syntax, diagnostics, builtins, opcodes and tests, the gotchas of this repo,
+  and the VM build, CI, release, site, benchmarks and copy-paste check. Use
+  when working in the agentica repository on compiler/, vm/, tests/, site/,
+  the Makefile or CI. Don't use for writing Agentica programs
+  (agentica-programming), for the grammar documents alone, or for other C
+  projects.
 ---
 
 # Agentica development
 
-`compiler/` (Agentica) compiles programs to bytecode; `vm/` (C11) runs them,
-both linked into one binary. The repo tree is in `AGENTS.md`; this file says
-how to work and which reference to read. Load only the references your change
-needs.
+This file says how to work and which reference to read; the tree is in
+`AGENTS.md`. Load only the references your change needs.
 
 - The rules of `AGENTS.md` apply. Read the GitHub issue of the work first
   (`gh issue view N -R agentica-lang/agentica`) and build only what it asks;
@@ -45,14 +43,14 @@ needs.
 
 ## Commands while you work
 
-`AGENTS.md` ("Commands") lists the build and test commands. The others:
+`AGENTS.md` ("Commands") and `make help` list the build and test commands.
+Beyond them:
 
 ```sh
 AGENTICA_VM_TRACE=profile dist/agentica check FILE   # step profile (references/vm-build.md)
-make build/vm/release/<name>-test     # one C test
-poetry run python tools/refreeze.py  # rewrite frozen goldens; --stage, --fast-only
-make vm-golden-check FIXTURES="a b"   # check only those fixtures; make goldens FIXTURES=... rewrites them
-make dup-check                # jscpd: a new copy fails CI; share a helper instead
+make build/vm/release/<name>-test     # one C test (vm/tests/<name>_test.c)
+make vm-golden-check FIXTURES="a b"   # only those fixtures; make goldens FIXTURES=... rewrites them
+make dup-check                        # jscpd: a new copy fails CI; share a helper
 ```
 
 Run what the change touches and the affected example with `dist/agentica`.
@@ -60,16 +58,14 @@ One pytest process runs per module, so keep xdist off.
 
 ## Stage contract
 
-One entry per stage: `Lexer.lex`, `Parser.parse`, `Linker.link_file`,
-`Checker.check`, `Lowering.lower`, `Writer.write` (`references/stages.md`). The
-contract is in `AGENTS.md` ("Stages"). `compiler/app/cli.agc` prints the
-diagnostic and exits 1. Thread spans through; an impossible state is a
-`*-INTERNAL` diagnostic.
+Entries: `Lexer.lex`, `Parser.parse`, `Linker.link_file`, `Checker.check`,
+`Lowering.lower`, `Writer.write` (`references/stages.md`); the contract is in
+`AGENTS.md` ("Stages"). `compiler/app/cli.agc` prints the diagnostic and exits
+1. Thread spans through; an impossible state is a `*-INTERNAL` diagnostic.
 
 ## Where new code goes
 
-Recipes for each kind are in `references/frontend.md` ("Common tasks"); this
-list gives the homes.
+Recipes: `references/frontend.md` ("Common tasks"). Homes:
 
 - Keyword, operator, AST node, syntax: `compiler/syntax/` (lexer tables,
   `ast.agc`, the parser), with a golden. Prefer the Ruby syntax.
