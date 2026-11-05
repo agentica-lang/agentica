@@ -63,9 +63,10 @@ static void running_remove(map_group *g, map_item *it) {
    of time is settled and the hook has nothing to do. Any other end, a cancel included, settles the item and wakes the
    caller: an item can be cancelled alone, by itself or by another task that got its handle (Task.current), and its
    slot is then error("task: cancelled"). When the cancel is that of the caller or an ancestor, the walk ends the items
-   before the caller (children first), so the hook cannot tell; the caller it wakes is ended by the same walk and never
-   collects. An item that still has files to close is not settled, as for Task.await (state DONE and no close
-   pending): it puts the hook back, and agc_task_close_done calls it again when the last close ends. */
+   before the caller (children first), so the hook cannot tell; the caller it wakes is ended by the same walk, and a
+   step it may still run writes slots nobody reads. An item that still has files to close is not settled, as for
+   Task.await (state DONE and no close pending): it puts the hook back, and agc_task_close_done calls it again when
+   the last close ends. */
 static void item_ended(agc_vm *vm, agc_task *t) {
   map_item *it = t->end_data;
   if (!it->running) {

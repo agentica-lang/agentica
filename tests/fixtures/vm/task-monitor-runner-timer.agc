@@ -1,7 +1,7 @@
 # The task that runs a monitor's wrap keeps the run waiting for its timers: here main awaits, with no timer of its
 # own, a task that the wrap started and that sleeps, and the run does not stop as stalled.
 def nap() -> Int
-  Task.sleep(30)
+  Task.sleep(200)
   return 5
 end
 
