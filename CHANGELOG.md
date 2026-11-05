@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `agentica test --jobs N` runs up to `N` test files at the same time (default
+  1); the report keeps the order of the files.
+
 ## [0.24.0] - 2026-11-05
 
 ### Added

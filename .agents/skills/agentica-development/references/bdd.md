@@ -79,11 +79,13 @@ or the site).
   writes it), then `count` lines of `{path, problem, kind, bytecode,
   source_root, front_end}`. For unit tests the config gains `only`,
   `test_timeout_ms` (`--test-timeout-ms N`, default 30000), `steps_given` and
-  `empty_message`. `--tags EXPR` is a last extra line with the expression as a
+  `empty_message`. `--tags EXPR` is an extra line with the expression as a
   JSON string (a missing line is no filter); the runner compiles it with
   `Tags.compile` (the driver checked it in `Opts.parse`), keeps the scenarios
   `Tags.selects?` and leaves unit test files out; a bad expression is
-  `RUNTIME-BDD-USAGE`.
+  `RUNTIME-BDD-USAGE`. `--jobs N` (more than 1) is one more line after it, a
+  JSON integer (a missing line is 1; with no `--tags` the tags line is an empty
+  string).
 - The runner's stdin is closed at once. The seed is `--seed` or one drawn with
   `Random.int`, passed to every child and to the report; usage and
   infrastructure reports carry `--seed` when given.
@@ -103,6 +105,8 @@ or the site).
   and runs every resolved scenario in its own child VM (`--agentica-bdd
   scenario`, `--max-steps` 1,000,000 per step plus one, 30 s deadline), then
   prints `Report.json` or `Report.text` and exits with `Report.exit_code`.
+  The files run in order, or `--jobs N` at a time with `Task.map` in
+  `run_entries`; the results are in file order.
 - The child talks over a channel (`Process.spawn_channel`, stdin closed at
   once): an init line, then one step line per step (`Process.channel_send`);
   the child answers with JSON line records (`assert`, `step`, `fail`, `end`,

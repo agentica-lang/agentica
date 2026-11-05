@@ -5,10 +5,13 @@
 ## run` for the runner and the tests), `--version V` (the Agentica version the programs it compiles are written for),
 ## `--agentica WORD` (once for each word of the command that runs `agentica`), `--style plain|ai|json`,
 ## `--seed N` and `--test-timeout-ms N`. ARGUMENTS are the words the user wrote after `test`: paths, `--steps FILE`,
-## `--only TEXT`, `--tags EXPR`, `--json`, `--ai`, `--no-cache`, the `--deny-*` flags and `--sandbox` (cli.agc adds the
-## ones in front of `test`).
+## `--only TEXT`, `--tags EXPR`, `--jobs N`, `--json`, `--ai`, `--no-cache`, the `--deny-*` flags and `--sandbox`
+## (cli.agc adds the ones in front of `test`).
 
 import Tags from "std/bdd/tags"
+
+# The most test files that run at once: the `limit` of `Task.map` takes 1 to 1024.
+MAX_JOBS = 1024
 
 # The flags that the VMs of the user's code get (the test files, the step program and the programs it starts), never
 # the runner. A flag given twice counts once.
@@ -25,6 +28,7 @@ export struct Options
   test_timeout_ms: Int
   only: String
   tags: String
+  jobs: Int
   steps: List[String]
   paths: List[String]
   deny: List[String]
@@ -51,6 +55,7 @@ export def parse(arguments: List[String]) -> Parsed
     test_timeout_ms: 30_000,
     only: "",
     tags: "",
+    jobs: 1,
     steps: [],
     paths: [],
     deny: [],
@@ -105,10 +110,11 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
     end
   end
 
+  jobs_seen = false
   at = 0
   while at < words.size
     word = words[at]
-    if word == "--steps" or word == "--only" or word == "--tags"
+    if word == "--steps" or word == "--only" or word == "--tags" or word == "--jobs"
       if at + 1 >= words.size
         return Parsed.Usage("option needs a value", shown)
       end
@@ -130,6 +136,18 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
         end
 
         shown = shown.with(tags: value)
+      elsif word == "--jobs"
+        if jobs_seen
+          return Parsed.Usage("one --jobs N", shown)
+        end
+
+        parsed = value.to_int
+        if !parsed.ok? or parsed.unwrap! < 1 or parsed.unwrap! > MAX_JOBS
+          return Parsed.Usage("--jobs needs a whole number from 1 to #{MAX_JOBS}", shown)
+        end
+
+        jobs_seen = true
+        shown = shown.with(jobs: parsed.unwrap!)
       elsif shown.only != ""
         return Parsed.Usage("one --only TEXT", shown)
       elsif value == ""

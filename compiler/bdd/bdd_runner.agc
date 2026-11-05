@@ -52,12 +52,18 @@ export enum Ran
 end
 
 ## The text of the configuration file: the settings, one line for each entry, then the `--tags` expression as a JSON
-## string when there is one. That last line is not a field of `Config` because the runner decodes `Config` with no
-## optional fields, and a driver that does not write it (stage0) must keep working with the runner.
-export def config_text(config: Config, entries: List[Discover.Entry], tags: String) -> String
+## string when there is one, then `--jobs` as a JSON integer when it is more than 1. Those last lines are not fields of
+## `Config` because the runner decodes `Config` with no optional fields, and a driver that does not write them (stage0)
+## must keep working with the runner. The jobs line follows the tags line, so a run with jobs and no tags writes an
+## empty tags string, which is no filter.
+export def config_text(config: Config, entries: List[Discover.Entry], tags: String, jobs: Int) -> String
   lines = [JSON.encode(config)].concat(entries.map do |entry: Discover.Entry| JSON.encode(entry) end)
-  if tags != ""
+  if tags != "" or jobs > 1
     lines = lines.push(JSON.encode(tags))
+  end
+
+  if jobs > 1
+    lines = lines.push(JSON.encode(jobs))
   end
 
   return "#{lines.join("\n")}\n"

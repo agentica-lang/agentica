@@ -435,7 +435,9 @@ def test_usage_errors_exit_2_an_empty_directory_exits_1_and_missing_pieces_are_i
     def path(name):
         return joined(directory, name)
 
-    for arguments in (["--steps"], ["--only"], ["--unknown"], ["--steps", "a.agc", "--steps", "b.agc"]):
+    for arguments in (["--steps"], ["--only"], ["--unknown"], ["--steps", "a.agc", "--steps", "b.agc"],
+                      ["--jobs"], ["--jobs", "0"], ["--jobs", "-1"], ["--jobs", "x"], ["--jobs", "1025"],
+                      ["--jobs", "2", "--jobs", "3"]):
         status, report = bdd.json_test(*arguments)
         assert status == 2, str(arguments)
         assert file_error(report)["code"] == "RUNTIME-BDD-USAGE"
@@ -787,3 +789,37 @@ def test_the_infrastructure_message_names_the_runners_final_diagnostic_not_an_ea
     assert re.search("RUNTIME-INDEX-OUT-OF-RANGE", message)
     assert not re.search("DIVISION-BY-ZERO", message)
 
+
+# A scenario that writes its own mark and waits for the other's, so it can pass only while the other file runs too.
+MEETING_STEPS = steps_program(
+    'def meet(ctx: BDD.Context, args: List[String]) -> BDD.Context\n'
+    '  _ = File.write_text(args[0], "here")\n'
+    '  waited = 0\n'
+    '  while not File.stat(args[1]).ok? and waited < 10000\n'
+    '    Task.sleep(20)\n'
+    '    waited += 20\n'
+    '  end\n'
+    '  return BDD.assert(ctx, File.stat(args[1]).ok?, "the other file did not run at the same time")\n'
+    'end\n',
+    main_running(
+        'BDD.step("{string} meets {string}", &meet)',
+        'BDD.step("I linger {int} ms") do |ctx, args|\n      Task.sleep(args[0].to_i!)\n      ctx\n    end'))
+
+
+def test_jobs_run_the_files_at_the_same_time_and_the_report_keeps_the_order_of_the_files(bdd):
+    directory = bdd.suite({})
+    marks = [(directory / name).as_posix() for name in ("a.mark", "b.mark")]
+
+    def feature(name, mine, other, linger):
+        return ("Feature: %s\n@meet\nScenario: %s\nWhen \"%s\" meets \"%s\"\nAnd I linger %d ms\n"
+                % (name, name, mine, other, linger))
+
+    # `a` ends after `b`: with the files in the order they end, the report would list b first.
+    write_files(directory, {"a.feature": feature("a", marks[0], marks[1], 400),
+                            "b.feature": feature("b", marks[1], marks[0], 0)})
+    steps = directory / "steps.agc"
+    steps.write_text(MEETING_STEPS, encoding="utf-8")
+    # --tags adds the tags line before the jobs line of the config.
+    status, report = bdd.json_test(directory, "--steps", steps, "--jobs", "2", "--tags", "@meet")
+    assert status == 0
+    assert [(item["name"], item["status"]) for item in report_cases(report)] == [("a", "passed"), ("b", "passed")]

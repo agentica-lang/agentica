@@ -20,7 +20,7 @@ make test-bdd
 `agentica test` builds and installs nothing.
 
 ```text
-agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR]
+agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR] [--jobs N]
 ```
 
 - **Discovery.** With no paths, `specs/` and `test/` are searched; a missing
@@ -57,6 +57,13 @@ agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [-
   `<arguments>`, found before anything is compiled, and nothing runs. Unit test
   files have no tags, so `--tags` leaves them out. With `--only`, a scenario
   must pass both. If nothing is kept, the run fails with `CHECK-BDD-EMPTY`.
+- **`--jobs N`** (once, a whole number from 1 to 1024; otherwise
+  `RUNTIME-BDD-USAGE`) runs up to `N` test files at the same time, each in its
+  own child as before. The default is 1, one file after another. Scenarios and
+  tests of one file never overlap, and the report lists the files in the same
+  order whatever `N` is. The step program is listed once, before any file runs.
+  Files that share a port, a path or a database need `--jobs 1`, and a high `N`
+  makes per-test timeouts likelier under CPU load.
 - **Seed.** Every run has one: `--seed N`, or one the runner draws. It reaches
   every step program, test file and program under test. A failing run's text
   report shows it on the summary line, so `--seed N` replays the run. The JSON

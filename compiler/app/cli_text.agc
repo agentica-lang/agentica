@@ -30,7 +30,10 @@ USAGE = [
   "       agentica [--ai|--json] install",
   "       agentica [--ai|--json] add NAME URL --tag TAG|--ref COMMIT [--subdir DIR]",
   "       agentica [--ai|--json] update [NAME]",
-  "       agentica [--ai|--json] [--seed N] [--no-cache] test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR]",
+  [
+    "       agentica [--ai|--json] [--seed N] [--no-cache] test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR] ",
+    "[--jobs N]",
+  ].join(""),
   "       agentica run [OPTIONS] -- <file.agcb> [args...]",
 ]
 
@@ -55,12 +58,14 @@ SUMMARY = [
   "                                          the current folder); suggestions exit 0, --strict exits 1 for any;",
   "                                          --json prints one document",
   "  agentica test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR]",
+  "                                          [--jobs N]",
   "                                          run *_test.agc and .feature files (default PATH: test/ and specs/);",
   "                                          --steps FILE is the step program of the .feature files (default:",
   "                                          the nearest steps.agc in or above the folder of each PATH, up to",
   "                                          the current folder);",
   "                                          --tags EXPR keeps the scenarios whose tags match, as in",
-  "                                          \"@db and not @slow\" (not, and, or)",
+  "                                          \"@db and not @slow\" (not, and, or);",
+  "                                          --jobs N runs up to N files at once (1 to 1024, default 1)",
   "  agentica install                        fetch the packages of agentica.lock with git (a package already in",
   "                                          the package cache is not fetched) and write them to deps/NAME/;",
   "                                          the lock is never changed",
