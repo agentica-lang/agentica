@@ -382,13 +382,13 @@ returns.
   of the run, and the functions not yet compiled stay interpreted. A function
   whose cost alone exceeds the budget stays interpreted.
   `AGENTICA_VM_TEST_JIT_BUDGET=N` gives a test a smaller budget (`vm/launch.c`).
-- **Perf map.** With `AGENTICA_PERF_MAP=1` (any POSIX host; Linux `perf`
-  reads it), each function
-  is added to `/tmp/perf-PID.map` when its code is published, as
-  `START SIZE agentica:NAME` in hex, so `perf report` names compiled code
-  instead of showing `[JIT]` addresses. The file is opened to append, with
-  `O_NOFOLLOW`, and used only when it is a regular file of the user who runs
-  the VM. It stays after the run. Off by default.
+- **Perf map.** With `AGENTICA_PERF_MAP=1` (any POSIX host; Linux `perf` reads
+  it), each function is added to `/tmp/perf-PID.map` when its code is
+  published, as `START SIZE agentica:NAME` in hex, so `perf report` names
+  compiled code instead of showing `[JIT]` addresses. The file is opened to append, with
+  `O_NOFOLLOW` and `O_NONBLOCK`, and used only when it is a regular file of
+  the user who runs the VM with one link. It stays after the run, and a later
+  process with the same PID appends to it. Off by default.
 - **Why.**
   - A function without a loop runs each instruction once per entry. The entry,
     the exit and the `RETURN` cost more than the few instructions they save.
