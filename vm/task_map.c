@@ -2,7 +2,7 @@
  * Task.map: runs a block for each item of a list in its own task, at most `limit` at a time, each item with its own
  * deadline, and gives one Result per item in input order. The caller parks in a stepper and does all the work in its
  * own turns, so every spawn, cancel and slot write happens with the caller as the running task. Core layer. Design:
- * docs/future/27-iteration-and-concurrency.md §27.1 and docs/vm/10-io-scheduler.md §10.2.1 (Task.map).
+ * docs/vm/10-io-scheduler.md §10.2.1 (Task.map).
  */
 #include "core.h"
 

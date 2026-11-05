@@ -1,8 +1,8 @@
 # URI (`std/uri`)
 
 `import URI from "std/uri"`. Percent-encoding and query strings with the names
-and rules of Ruby's `URI`. Written in Agentica; a decoder returns an `error`
-for bad input and none halts.
+and rules of Ruby's `URI`. A decoder returns an `error` for bad input; none
+halts.
 
 ```text
 URI.encode_www_form_component(text: String) -> String          # space is +
@@ -24,4 +24,3 @@ URI.Pair(name: String, value: String)
   kept. `decode_www_form` splits on `&` and the first `=`; a piece
   without `=` has the value `""`. Unlike Ruby it skips empty pieces (`a=1&&b=2`)
   and errors on a bad `%`.
-- `encode_www_form` cannot fail; a name alone is `Pair(name: n, value: "")`.

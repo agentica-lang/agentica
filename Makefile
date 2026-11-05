@@ -24,8 +24,7 @@ POETRY ?= poetry
 # Read by the version target, the VM flags (vm.mk) and the site (site.mk).
 AGC_VERSION := $(shell cat VERSION)
 
-# `make` builds the product, dist/agentica: the VM with the front end inside (docs/future/18-front-end-language.md §18.2 and
-# §18.8). It needs only a C toolchain: the bootstrap (mk/bootstrap.mk) starts from bootstrap/stage0.agcb. The host is the default
+# `make` builds the product, dist/agentica: the VM with the front end inside. It needs only a C toolchain: the bootstrap (mk/bootstrap.mk) starts from bootstrap/stage0.agcb. The host is the default
 # target; `make windows-docker-check` cross-builds the Windows VM on a Linux or macOS host with docker (VM_OS above).
 .DEFAULT_GOAL := all
 

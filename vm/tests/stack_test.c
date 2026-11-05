@@ -418,7 +418,7 @@ static void long_names(void) {
 }
 
 
-/* Prelude frames (docs/future/25-ruby-typed-idioms.md §25.6): an error raised while one runs is reported at the call
+/* Prelude frames: an error raised while one runs is reported at the call
  * of the user's frame under the run, a native frame the prelude called belongs to the run, and the stack lists no
  * frame of the prelude. code[1] of a function is the instruction its frame last ran (pc 2). */
 static void fail_at(agc_vm *vm, int64_t argument, uint32_t span) {

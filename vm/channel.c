@@ -1,8 +1,7 @@
 /*
  * The Channel builtins: a GC ring of values, with FIFOs of the receivers and
  * senders that wait for it. A call that must wait parks its task on the
- * scheduler. Core layer. Design: docs/future/27-iteration-and-concurrency.md
- * §27.2 and docs/vm/10-io-scheduler.md §10.2.2 (Channel waits).
+ * scheduler. Core layer. Design: docs/vm/10-io-scheduler.md §10.2.2 (Channel waits).
  */
 #include "core.h"
 

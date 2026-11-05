@@ -127,16 +127,11 @@ in the file, and two out parameters of one name, are `CHECK-REDEFINED-NAME`.
 
 The C name of an extern function is its `def` name, or the string after the
 result (`-> C.Int32 = "fcntl"`), so one C function can be declared in several
-shapes. The string is a plain literal of letters, digits and `_` that does not
-start with a digit (`PARSE-EXTERN-SYMBOL` at the string). `...` among the
-parameters declares a variadic C function: the parameters after it are its
-variadic arguments, each with the C type the call passes, and they may be none.
-It comes after one C parameter at least, not counting a `C.Function`
-(`PARSE-EXTERN-VARIADIC-FIXED` at the `...`), at most once in a function, and
-only in an extern block (`PARSE-EXTERN-VARIADIC` at the `...`). A variadic
-parameter is not an out parameter, not `C.Bool`, `C.Int8`, `C.Int16`, `C.UInt8`
-or `C.UInt16`, which C promotes to `int`, and not `C.Float`, which C promotes to
-`double` (`PARSE-EXTERN-VARIADIC-TYPE`); the 64 parameters count both parts.
+shapes (`PARSE-EXTERN-SYMBOL` at a string that is not a plain name). `...` among
+the parameters declares a variadic C function: the parameters after it are its
+variadic arguments, each with the C type the call passes. The rules and the
+codes of a bad one (`PARSE-EXTERN-VARIADIC*`) are in the
+[`Types and resources` page](../../site/content/library/io-and-system/native/types.md#variadic-functions-and-c-names).
 
 A `C.Function` parameter is the address of a C function, a `C.Pointer` for the
 checker. As the first parameter it makes the `def` a call through a function
@@ -395,14 +390,15 @@ literal          = INTEGER | FLOAT | STRING | "true" | "false" | "nil" ;
 
 Calls are to named functions, or to function values through `.call(...)`; there
 are no user methods. A struct field of type `Fn` is called by its name:
-`store.put(a, b)` means `store.put.call(a, b)`. Parentheses are required for
-every call. They may be dropped only for builtin methods, and for module
-functions without arguments, builtin or reached through an import alias:
-`s.length`, `IO.gets!`, `while !IO.eof? do`, `Util.reset`. So `f = Util.helper`
-calls `helper`; write `&Util.helper` for the function value. `&name` references
-a declared top-level function without captures. A bare `Enum.Variant` of an enum
-in the same file is that nullary variant, and `M.Enum.Variant` through an import
-alias is one too.
+`store.put(a, b)` means `store.put.call(a, b)`. `call` is not a reserved word:
+it means a function-value call only right after a `.` and before `(`.
+Parentheses are required for every call. They may be dropped only for builtin
+methods, and for module functions without arguments, builtin or reached through
+an import alias: `s.length`, `IO.gets!`, `while !IO.eof? do`, `Util.reset`. So
+`f = Util.helper` calls `helper`; write `&Util.helper` for the function value.
+`&name` references a declared top-level function without captures. A bare
+`Enum.Variant` of an enum in the same file is that nullary variant, and
+`M.Enum.Variant` through an import alias is one too.
 
 A struct update `value.with(name: expr, ...)` is the one postfix form with named
 arguments, and it needs at least one. `with` is not a reserved word: it has this

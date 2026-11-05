@@ -154,7 +154,7 @@ struct TlsServerOptions
 end
 ```
 
-A `TlsContext` is the TLS setup of one role, built once and shared by every socket, listener and HTTP client made from it. TLS sockets and listeners use the same `TCP` functions, with the same limits and timeouts.
+A `TlsContext` is the TLS setup of one role, built once and shared by every socket, listener and HTTP client made from it. `HttpClientOptions` holds one, so `JSON.schema`, `JSON.decode` and `JSON.encode` refuse it. TLS sockets and listeners use the same `TCP` functions, with the same limits and timeouts.
 
 - `TLS.client_context` and `TLS.server_context` read and check the PEM files when they run, so a bad file fails there, not at each connect. A file that changes later does not change the context: build a new one.
 - `TLS.connect` takes a client context and `TLS.listen` a server context; the other role stops the program with `RUNTIME-TLS-CONTEXT-ROLE`. A context stays valid while a socket or listener made from it is open.
@@ -228,21 +228,6 @@ def main() -> Void
   TCP.close(socket)
 end
 ```
-
-### Moving to contexts
-
-Before 0.20.0, TLS calls took PEM paths. Each old form and its new one:
-
-| Before | Now |
-|---|---|
-| `TLS.connect(host, port, "ca.pem", ms)` | `TLS.connect(host, port, TLS.client_context(TlsClientOptions(ca_file: "ca.pem")).unwrap!, ms)` |
-| `TLS.connect(host, port, ca, ms, cert, key)` | `TLS.connect(host, port, TLS.client_context(TlsClientOptions(ca_file: ca, cert_file: cert, key_file: key)).unwrap!, ms)` |
-| `TLS.listen(host, port, cert, key)` | `TLS.listen(host, port, TLS.server_context(TlsServerOptions(cert_file: cert, key_file: key)).unwrap!)` |
-| `HTTP.listen_tls`, `listen_stream_tls`, `listen_upload_tls` and `listen_websocket_tls` `(host, port, cert, key, handler)` | `HTTP.serve_tls(host, port, server_context, app)`, with the app of the matching form in [Moving from the listen forms](#moving-from-the-listen-forms) |
-| `HttpClientOptions(ca_file: path)` | `HttpClientOptions(tls: some(TLS.client_context(TlsClientOptions(ca_file: path)).unwrap!))` |
-| `HttpClientOptions(ca_file: "")` | `HttpClientOptions()`: `tls` is `none`, the system trust |
-
-Build each context once and share it. `HttpClientOptions` holds a `TlsContext`, so `JSON.schema`, `JSON.decode` and `JSON.encode` refuse it.
 
 ## HTTP client
 
@@ -974,7 +959,6 @@ Up to 0.21.0, each kind of route had its own server form. Each old form and its 
 | `HTTP.upgrade_only(handler).call(request)` | `HTTP.app(handler).call(request, body)` |
 | the `_tls` form of each | `HTTP.serve_tls(host, port, tls, app, options)` |
 
-- `HTTP.StreamHandler`, `HTTP.UploadHandler` and `HTTP.UpgradeHandler` are gone: an app is an `HTTP.App`, and a route that takes the request whole is an `HTTP.Handler`.
 - `listen_stream` and `listen_websocket` read the body before the handler ran. An app that answers a stream or an upgrade before it read a body that is still coming closes the connection after it (an upgrade is then a `500`); call `HTTP.read_all` first where a request has a body, and answer its error with `HTTP.body_refusal`.
 - A WebSocket handshake reaches the app on every `serve` server; the `listen` forms other than `listen_websocket` answered it `501`. A route that does not upgrade answers it as any other request.
 

@@ -127,25 +127,19 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - stdout is read only while a reader waits, 4 KiB at a time. stderr is
     forwarded in its read callback (`agc_output_forward`), and reading stops
     while its queue is full (`resume_err` restarts it).
-  - One close path, `shut`: `SIGKILL`, with no `waitpid` and no sleep
-    anywhere in the file. libuv's exit callback `exited` reaps the child;
-    `retire` closes its handle. A failed kill in `Process.close` is
-    `RUNTIME-PROCESS-CLOSE`.
-  - `Process.close` of a plain child that still runs parks its task on a
-    `REQ_CLOSE` request (an `external` job with a 1 s timer, readied by
-    `exited`). `expired` returns `Void`, so a child in uninterruptible sleep
-    is never waited for. Other closes only signal (§10.4, Close). The park is
-    skipped when the kill failed.
-  - The per-run guard (`vm->process_guard`) lists the running children.
-    `agc_processes_stop`, the first step of the exit path, calls
-    `close_children` once per run: it signals, then `await_exits` runs
-    `uv_run` ONCE under a 1 s stack timer until the awaited children exit.
-    `unlink_child` clears `proc.g`, so a release after the guard is freed
-    never reaches it.
-  - Captured children (`Process.spawn_captured`, `Process.output`) read
-    both pipes into `out_buf` and `err_kept`, held to 1 MiB (`out_cut`,
-    `err_cut`). A close sends `SIGTERM` and starts a 1 s `grace` timer for
-    `SIGKILL`.
+  - One close path, `shut`: `SIGKILL`, with no `waitpid` and no sleep anywhere
+    in the file; libuv's exit callback `exited` reaps the child and `retire`
+    closes its handle. `Process.close` of a plain child that still runs parks
+    its task on a `REQ_CLOSE` request (an `external` job with a 1 s timer,
+    readied by `exited`; `expired` returns `Void`, so a child in uninterruptible
+    sleep is never waited for). Captured children (`Process.spawn_captured`,
+    `Process.output`) hold at most 1 MiB per pipe (`out_cut`, `err_cut`) and
+    close with `SIGTERM` and a 1 s `grace` timer for `SIGKILL`. The per-run
+    guard (`vm->process_guard`) lists the running children for
+    `agc_processes_stop`, the first step of the exit path
+    (`docs/vm/10-io-processes.md`, `docs/vm/14-core-invariants.md` §14.4);
+    `unlink_child` clears `proc.g`, so a release after the guard is freed never
+    reaches it.
   - Channel children (`Process.spawn_channel`): `agc_chan_pair` (a
     `uv_socketpair`, or on Windows two `uv_pipe` pairs with blocking child
     ends) on stdio slots 3 and
@@ -166,15 +160,13 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 - The head adapter and body decoder (`vm/http_parse.h`, `vm/http_pico.c`,
   `vm/http_body.c`; §10.6, §10.6.1). The rules of §10.6 apply. Tests check
   codes, not messages.
-  - Head parsing runs our pre-scan and start-line checks, then
-    picohttpparser (`vm/third_party/picohttpparser`, tag v1.4, built at the
-    baseline without `-msse4.2`), then our token, value, obs-fold, Host and
-    status checks. Only `vm/http_pico.c` includes `picohttpparser.h`. It runs
+  - Head parsing runs our pre-scan and start-line checks, then picohttpparser
+    (`vm/third_party/picohttpparser`, tag v1.4, built at the baseline without
+    `-msse4.2`), then our token, value, obs-fold, Host and status checks
+    (§10.6.1). Only `vm/http_pico.c` includes `picohttpparser.h`. It runs
     without `last_len` and only when new bytes complete a line. The head is
     limited to an 8192-byte start line plus 64 KiB of headers. A -1 becomes a
     400 or a client error `Result`.
-  - The pre-scan skips one leading CRLF and stops at the end of the start
-    line.
   - Bodies (Content-Length, chunked with saturating sizes and checked
     trailers, close-delimited) go through our incremental decoder: `feed`
     returns bytes consumed, body slices, and NEED_MORE, DONE or ERROR. There
@@ -211,87 +203,51 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     handles it owns as it ends. Closes may nest, which is safe because each
     takes the head of its own task's list. Every wait is an `external` job with
     a `cancel` half.
-- `stdlib/http.agc` reads requests and writes responses (§10.7.2):
-  - The first byte comes through a 1-byte `TCP.recv_bytes`, then the head
-    through `HttpWire.read_head`. The order of §10.7.3 (parse errors,
-    `Upgrade` 501, `Expect` 417, the `Content-Length` limit 413,
-    `100 Continue`, then the body with its UTF-8 check as bytes arrive) is in
-    `agc_http_head_value`.
-  - Every error answer is `HttpWire.error_answer`, then a lingering close:
-    drop input until the peer closes, the deadline, or `DRAIN_BYTES` (256
-    KiB), so no reset loses the answer.
-  - Bytes past one request stay in the input for the next; a chunked
-    body's last read gives them back as `rest`. TCP reads only while a reader
-    waits, so pipelined bytes cannot pile up.
-  - `HttpWire.encode_response` builds the head first: status 200..599, no
-    body on 204, 304 or `HEAD`, `Content-Length` and `Transfer-Encoding`
-    managed, a `Date` header. When the request or the response says
-    `Connection: close`, the handler's `Connection` headers are dropped for
-    one `Connection: close`. It returns whether the connection closes, or the
-    reason it does not write.
-- Client connections: a connection is kept only with nothing left after the
-  response (the `buffered` and `ended` fields, and `HttpWire.idle?` after any
-  body). An idempotent call that fails on a reused connection before any
-  response byte is retried once on a new one (`run_job`). A close-delimited body
-  over TLS needs `close_notify` (`HttpWire.clean_eof?`); a bare FIN gives
-  "truncated HTTP body". A worker whose caller gave up (`HttpWire.awaited?`: the
-  channel's `abandoned` flag) closes the connection instead of pooling it. Each
-  connection is one worker task under a supervisor that awaits it as a `Result`
-  task: a crash frees the slot and answers `http: connection failed`. The idle
-  timer is the `Channel.recv` timeout.
-- Server connections are `hidden`. Of their unobserved crashes only the first
-  per test (or per run) stays in the crash list; the rest count on it
-  (`quiet_more`), so a long-running server does not grow the list. Observed
-  crashes leave the list. Handlers cannot reach their own `HttpServer` (values
-  are immutable, and the handler is fixed before the server exists), so the
-  self-close case is a C test.
+- `stdlib/http.agc` reads requests, writes responses and runs the client pool;
+  the order of checks, the lingering close, the response head rules, connection
+  reuse and retry, and the crash accounting of `hidden` server connections are
+  `docs/vm/10-io-http.md` (§10.6 to §10.7) and `docs/vm/10-io-scheduler.md`
+  (`quiet_more`). The C side only gives `HttpWire` its bytes-in, string-out
+  helpers. Handlers cannot reach their own `HttpServer` (values are immutable,
+  and the handler is fixed before the server exists), so the self-close case is
+  a C test.
 
 ## OpenSSL and the build
 
-- `AGENTICA_OPENSSL` picks the OpenSSL (OpenSSL 3.5;
-  `docs/vm/10-dependencies-and-platforms.md` §10.0). `system` links the system
-  library through `pkg-config`. A stamp (`OSSL_DEP` in `mk/vm.mk`) fails with a
-  clear message when the package is missing or older than `OSSL_MIN` (3.0.0, the
-  APIs the code uses, such as `SSL_CTX_load_verify_file`). `vm/tls_openssl.c`
-  has an `#error` for older versions and for LibreSSL.
+The modes, the stamp, the vendored build and the release link are
+`docs/vm/10-dependencies-and-platforms.md` §10.0 (`OSSL_*` in `mk/vm.mk`).
+Rules for a change:
+
 - The mode is not remembered: pass `AGENTICA_OPENSSL=vendored` to every make
-  command, or export it.
-- `vendored` (the release and Platforms jobs) builds the submodule static per
-  build mode (`OSSL_OPTS` and `OSSL_CFLAGS` in `mk/vm.mk`). The sanitizer build
-  uses a non-instrumented OpenSSL; ASan's interceptors still check the buffers
-  we pass it. Both commands run under `env -u` for make and compiler variables,
-  and the sub-make is a plain `make` (never `$(MAKE)`, so `make -n` skips it).
+  command, or export it. `vm/tls_openssl.c` has an `#error` for OpenSSL older
+  than 3.0 and for LibreSSL.
+- The vendored sanitizer build uses a non-instrumented OpenSSL; ASan's
+  interceptors still check the buffers we pass it. The vendored commands run
+  under `env -u` for make and compiler variables, and the sub-make is a plain
+  `make` (never `$(MAKE)`, so `make -n` skips it).
 - `$(VM_BUILD)/openssl-flags` is the key of the vendored build only
-  (`make -s vm-openssl-key AGENTICA_OPENSSL=vendored`). It changes only when the
-  key does, and the archives depend only on it, so `TRACE` and VM flag changes
-  never rebuild OpenSSL. After hand edits to OpenSSL sources, remove
-  `$(VM_BUILD)/openssl`. `build/vm/flags` records the mode, so switching
-  relinks.
+  (`make -s vm-openssl-key AGENTICA_OPENSSL=vendored`), so `TRACE` and VM flag
+  changes never rebuild OpenSSL. After hand edits to OpenSSL sources, remove
+  `$(VM_BUILD)/openssl`.
 - Never hand OpenSSL a GC pointer, and keep file loading off the scheduler
   thread (the config loads in a libuv pool job).
-- The release (`zig cc`, glibc 2.28) sets `AGENTICA_OPENSSL=vendored` and
-  `AGENTICA_GC=vendored`. `make vendored-check` lists the shared libraries: no
-  `libssl`, `libcrypto`, `libgc` or `msys-2.0.dll`, and `--version` names the
-  submodule's version (`OpenSSL_version`). On Windows a static libcrypto also
-  needs `-lcrypt32 -lgdi32`; on macOS the trust loader needs the Security and
-  CoreFoundation frameworks.
-- Bumping: fetch the new 3.5.x tag in the submodule, commit it, rebuild with
-  `AGENTICA_OPENSSL=vendored`, and rerun the TLS, sanitizer and golden tests.
+- A static libcrypto on Windows also needs `-lcrypt32 -lgdi32`; on macOS the
+  trust loader needs the Security and CoreFoundation frameworks.
+- Bumping OpenSSL: `references/vm-build.md`, "Submodules".
 
 ## Tests and peers
 
 Read the test files for the cases; these are the rules behind them.
 
 - Processes: `tests/test_vm_diff_8.py` checks that no grandchild outlives its
-  run (a child that started `sleep`, closed by `Process.close` or a `read_line`
-  timeout; one that ignores `SIGTERM`; one that dies on `SIGTERM` right before
-  `main` returns). Signal tests (`tests/test_vm_stop.py`, `test_vm_diff_8.py`)
-  signal with `os.kill` and bound every wait; each run must end with `end
-  code=0 signal=0` in the `io` trace. Captured children run `std/bdd`'s
-  scenario VMs: never block in their close (only the bounded end-of-run cleanup
-  may wait), and send `SIGTERM` first, since the child VM's exit path stops the
-  programs it started. C tests use `vm/tests/process_test.c` with their own
-  executable as the child.
+  run (closed by `Process.close` or a `read_line` timeout; one that ignores
+  `SIGTERM`; one that dies on `SIGTERM` right before `main` returns). Signal
+  tests (`tests/test_vm_stop.py`, `test_vm_diff_8.py`) signal with `os.kill` and
+  bound every wait; each run must end with `end code=0 signal=0` in the `io`
+  trace. Captured children run `std/bdd`'s scenario VMs: never block in their
+  close (only the bounded end-of-run cleanup may wait), and send `SIGTERM`
+  first, since the child VM's exit path stops the programs it started. C tests
+  use `vm/tests/process_test.c` with their own executable as the child.
 - Golden fixtures keep their step counts independent of timing: wait for an
   event (`wait`, a read, `output`) before a call whose result depends on it;
   avoid the "process is closed" path after a stream timeout. The `tcp-*`,
@@ -299,9 +255,8 @@ Read the test files for the cases; these are the rules behind them.
   clients in one program), print only from `main` after its awaits, and read
   bytes only after the writer is done, since `recv_bytes` returns what has
   arrived. A golden that needs a write to stay parked sends one String far
-  larger than the loopback buffers (64 MiB), never a loop of sends (the sends
-  that complete depend on kernel buffers). A connect timeout has no hermetic
-  test (it needs an address that drops SYNs).
+  larger than the loopback buffers (64 MiB), never a loop of sends. A connect
+  timeout has no hermetic test (it needs an address that drops SYNs).
 - `tests/test_vm_tcp.py`, `test_vm_tls.py`, `test_vm_http.py` run in the macOS
   and Windows jobs of `platforms.yml`; use short timeouts, small payloads, no
   sleeps, and one case per behavior. Node (TCP, TLS, HTTP server) and Python 3
@@ -322,6 +277,3 @@ Read the test files for the cases; these are the rules behind them.
   `tests/fixtures/http-server-peer.py` and `.js`; streams, uploads, WebSocket
   (`tests/test_vm_websocket.py` with its own RFC 6455 client) and the proxy
   (`tests/test_vm_http_proxy.py`) have their own peers in `tests/fixtures/`.
-- Bumping picohttpparser: check out the new tag inside
-  `vm/third_party/picohttpparser`, `git add` it, and rerun
-  `vm/tests/http_parse_test.c`, the HTTP goldens and `tests/test_vm_http.py`.

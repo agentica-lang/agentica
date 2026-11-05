@@ -1,4 +1,4 @@
-"""Native libraries in packages (docs/grammar/05b-modules.md, docs/future/45-packages.md 45.10), through the CLI.
+"""Native libraries in packages (docs/grammar/05b-modules.md), through the CLI.
 
 The package is a bare git repository in a temporary folder (tests/package_support.py, `Remotes`) that ships a small
 library, built here from tests/fixtures/native/pkgdemo.c with the system C compiler, in its native/ folder. `install`

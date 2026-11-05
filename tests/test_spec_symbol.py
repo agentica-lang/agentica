@@ -1,6 +1,5 @@
-"""`agentica symbol` through the product CLI: where a name is defined in the files of PATH... and what they import
-(docs/future/39-semantic-cli.md, 39.3 to 39.7). The cases read the JSON form and assert kinds, names, spans, codes and
-exit codes, never message text; one case reads the text form."""
+"""`agentica symbol` through the product CLI: where a name is defined in the files of PATH... and what they import. The cases read the JSON form and assert kinds, names, spans,
+codes and exit codes, never message text; one case reads the text form."""
 import json
 import os
 

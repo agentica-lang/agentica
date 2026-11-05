@@ -7,13 +7,11 @@ rules those comments do not carry.
 
 ## Layers and headers
 
-- `value.h` has `agc_opcode`, in the same order as `OPCODES` in
-  `compiler/bytecode/bytecode_tables.agc`. `port.h` holds the stepper protocol
-  (`references/vm-builtins.md`).
-- `vm/list_impl.h` is private to the core: `list.c`, `interp.c` (`LIST_LEN`,
-  `LIST_GET`, hot in `for` loops) and `vm/tests/list_test.c` may include it.
-  `make vm-layers` fails any other include; it reads `nm`, so Linux only
-  (`docs/vm/15-layers.md` §15.5).
+`value.h` has `agc_opcode`, in the same order as `OPCODES` in
+`compiler/bytecode/bytecode_tables.agc`. `port.h` holds the stepper protocol
+(`references/vm-builtins.md`). `list_impl.h` is private to the core
+(`docs/vm/15-layers.md` §15.4, §15.5).
+
 ## Loader
 
 - `vm/loader.c` validates all untrusted `.agcb` input
@@ -28,14 +26,12 @@ rules those comments do not carry.
 
 ## Values, strings and bytes
 
-- `value.c`: allocation and the GC stress hook; `agc_error_value` (an `error`
-  Result from C text); the OOM and abort handlers.
 - `agc_small_string` returns the shared empty String for no bytes, the shared
   one-character String for one ASCII byte, else a new String. Use it wherever a
   builtin cuts or builds a String from bytes it does not own.
 - `strings.c`: `trim`, `reverse` and the case maps return their argument when
   nothing changes. `agc_utf8_offset` keeps each task's one-entry cursor (string,
-  code point index, byte offset). Search is the KMP finder (`agc_text_find`).
+  code point index, byte offset).
 - `text.c`: `agc_text`, `agc_debug` and `agc_test_text` (the debug form with
   each Json as its canonical text, for `Test.eq`) share one explicit
   `agc_alloc`'d stack and a growing String. `agc_write_form` is the one escaper
@@ -44,38 +40,22 @@ rules those comments do not carry.
   bytes). `slice`, `take` and `drop` charge what they copy, not the parent's
   size. `==` on Bytes is the builtin `Bytes.equal`: `EQ` refuses a Bytes, since
   a case in `equal_values` moves `plain_turn` (`make layout-check`).
-- `digest.h` is the adapter interface; the OpenSSL code is only in
-  `digest_openssl.c`.
 
 ## Lists (`vm/list.c`)
 
-- `struct agc_list` is defined in `list_impl.h` and opaque everywhere else.
-- The kind comes from the values stored: 0 for 16-byte `agc_value` items;
-  `AGC_T_INT` or `AGC_T_FLOAT` when every item has that tag, and then leaves and
-  tail hold 8 raw bytes per item (leaves from `agc_alloc_atomic`, branches and
-  the list object from `agc_alloc`). An empty list has kind 0; the first item
-  decides (`docs/vm/17-lists.md` §17.12).
-- Shared leaves exist only between lists of one kind.
-- The sized builder allocates at its first push. `agc_list_builder_more` is its
-  slow path: it turns a numeric builder boxed when a tag differs. `append`,
-  `set`, `concat` (of lists of different kinds) and `agc_list_from_array` box in
-  the same case, which only hostile bytecode causes.
-- Only `agc_list_builder_sized`, `_push` and `_finish` write a list, and only
-  before it is returned; a wrong count aborts. Use the builder for any new list
-  whose count is known, and `agc_list_from_array` for a staged array (`filter`).
+The design (trie, unboxed Int and Float leaves, builders, costs) is
+`docs/vm/17-lists.md`. Rules for code that touches it:
+
+- `struct agc_list` is opaque outside `list_impl.h`. Only
+  `agc_list_builder_sized`, `_push` and `_finish` write a list, and only before
+  it is returned; a wrong count aborts. Use the builder for a new list whose
+  count is known, and `agc_list_from_array` for a staged array (`filter`).
   Builders and cursors live on the C stack or in `agc_alloc` memory.
 - `agc_list_get` aborts on a bad index; the caller checks first and fails with
-  the program's diagnostic. `agc_list_append`, `_set`, `_slice` and `_concat`
-  never write their input. `agc_list_repeat` shares one leaf over the whole
-  trie, so `List.repeat` is O(log n).
-- Never allocate one node per push: a flat array is about six times faster for a
-  million items, and the per-node version starves the GC-stress fixtures.
-- A leaf is a slice of the array of the build that made it, so a list that
-  shares leaves keeps that array alive (`slice` shares only when it keeps at
-  least half of the source).
-- A persistent vector with an inline tail; the costs are in
-  `docs/vm/17-lists.md`. `reverse`, a `drop` inside a leaf and the right side of
-  a `concat` stay O(n).
+  the program's diagnostic. `append`, `set`, `slice` and `concat` never write
+  their input.
+- Never allocate one node per push: a flat array is about six times faster for
+  a million items, and the per-node version starves the GC-stress fixtures.
 - `List.append`, `List.set` and `List.concat` with 32 items or fewer cost no
   turn units; a longer right list is charged `2 * (a + b)`. The gate is
   `benchmarks/programs/list-build.agc`.
@@ -83,18 +63,15 @@ rules those comments do not carry.
 ## Maps and sets
 
 - Maps keep insertion order: a HAMT from key to value plus a reversed cons list
-  of keys. A new key conses one cell carrying its insertion number (`seq`); a
-  replaced key keeps its cell. Never keep order in an array copied on every put.
-- The hash is keyed per run, so nothing observable may depend on it. The
-  printer, `Map.keys` and `Map.values` walk the key list, not the trie.
-- `Map.delete` copies the trie path, shares the key list and adds the key's
-  `seq` to the map's `dropped` list. Walks skip dead cells by `seq` (a bitmap or
-  a sorted merge, never a key lookup). When dead cells outnumber live ones, the
-  delete rebuilds the list in one block. A missing key returns the same map.
-- Cost: O(log32 n) amortized, `AGC_COST_NONE` like `Map.put`; the rebuild
-  charges the list length as turn cost. `MAP` and `Map.put` share `agc_map_put`.
-  HAMT recursion is bounded by 14 levels; nested maps print through the
-  explicit-stack printer, never C recursion.
+  of keys (`docs/vm/05-values-execution-builtins.md` §7: representation, delete
+  and its dead cells). Never keep order in an array copied on every put. The
+  hash is keyed per run, so nothing observable may depend on it: the printer,
+  `Map.keys` and `Map.values` walk the key list, not the trie. Walks skip dead
+  cells by `seq` (a bitmap or a sorted merge, never a key lookup).
+- Cost: O(log32 n) amortized, `AGC_COST_NONE` like `Map.put`; the rebuild of the
+  key list charges its length as turn cost. `MAP` and `Map.put` share
+  `agc_map_put`. HAMT recursion is bounded by 14 levels; nested maps print
+  through the explicit-stack printer, never C recursion.
 - Sets are the same `agc_map` with nil values under `AGC_T_SET`
   (`agc_set_value`, `agc_as_set`); nothing else reads their layout. `Set.add`,
   `Set.new` and `union` use `agc_map_add_hash`, which returns the input map for
@@ -181,7 +158,7 @@ rules those comments do not carry.
 - Shared values: `LIST` and `MAP` with no items return `rt->empty_list` and
   `rt->empty_map`. The runtime also holds `rt->empty_set`, `rt->empty_string`
   and `rt->chars[128]`, all made by `agc_vm_init`
-  (`docs/future/34-shared-small-values.md` §34.6 lists the paths). Nothing
+  (`docs/vm/05-values-execution-builtins.md` §5.4 lists them). Nothing
   writes a list or map after it is returned, so the sharing cannot be seen. New
   code writes only objects from `agc_new_*`, and only before they are returned;
   a path with nothing to return gives the shared value; never compare or key
@@ -213,68 +190,46 @@ rules those comments do not carry.
   be set, else `RUNTIME-INTERNAL`. The block's or job's result becomes the next
   `last` (read from the native frame's base register). A native top frame is
   resumed at the start of every turn.
+
 ## JIT (`vm/jit/`)
 
-Core layer, `docs/vm/05-values-execution-builtins.md` §6.4; `--jit` and
-`AGENTICA_JIT` (`on` is the default on x86-64 and arm64).
+Core layer; the design (modes, native calls, exits, helper contract) is
+`docs/vm/05-values-execution-builtins.md` §6.4. `--jit` and `AGENTICA_JIT`
+(`on` is the default on x86-64 and arm64).
 
-- `jit.c` decides every function once, in `agc_jit_new`. For `on`: a backward
-  jump, and innermost loops that seldom leave the code. A call of a builtin that
-  may park counts as `AGC_JIT_PARK_WEIGHT` trips out of the code; the sorted
-  `agc_jit_parking` list is checked against the tables by `jit_test.c`. It
-  returns NULL when no function is left, so the run takes the plain turn loop.
-- `agc_jit_turn` (from `agc_run_turn`) samples turns at random for `on`. The jit
-  copy interprets up to 1.4 times slower than the plain one.
-- The scheduler that claims a function compiles it (one `agc_emit_*` per
-  instruction; fused ones as their STEP or CONST), seals it in the run's code
-  chunks, and publishes it with a release store (`agc_jit_code_of`).
-- Budget of a run: `AGC_JIT_BUDGET` work units and `AGC_JIT_CODE_CAP` bytes;
-  `AGENTICA_VM_TEST_JIT_BUDGET` sets a small one for tests. The first compile
-  that fits neither claims every function not yet claimed (`spend`), so the rest
-  of the run interprets them. The jit trace says `budget spent=work` or
-  `spent=bytes` once.
-- `run_compiled` (`vm/interp.c`) enters at each reload of the jit copy of
-  `turn_loop`, after the one-byte `agc_jit_may_run` test. The plain copy has no
-  JIT test: one cost arithmetic moved 20% by code layout alone. Each exit is
-  handled by the same handler the interpreter uses for that instruction. A
-  change to `resume_native` or `call_value` needs the same change there.
-- A CALL, CALL_VALUE or TAIL_CALL of a function with code is native
-  (`agc_emit_call`, `agc_jit_call_value`, `agc_emit_tail_call`). A tail call
-  replaces the top frame in place. It exits only when the callee has no code,
-  the register file would grow, or it takes more than `AGC_JIT_TAIL_PARAMS` (32)
-  arguments. `on` counts a self TAIL_CALL within that limit as a loop
-  (`backward` in `jit.c`).
-- Two emitters: `emit_x64.c` and `emit_a64.c` (arm64, Linux and macOS;
-  `jit_a64_test.c` checks its words on any machine, the `jit-arm64` CI job and
-  Platforms run it). On arm64 a code slot is read with `ldar`; a native call
-  runs `isb` before it branches unless each seal runs membarrier `SYNC_CORE`
-  (Linux; `agc_launch_init` registers it before `agc_init` starts threads, as
-  the registration waits for every thread). macOS seals with plain
-  `mprotect`, so the binary must not have the hardened runtime
-  (`tools/release-check.sh` checks it, and `release.py smoke` checks that the
-  package compiles).
+- `AGENTICA_VM_TEST_JIT_BUDGET` sets a small budget (`AGC_JIT_BUDGET` work
+  units, `AGC_JIT_CODE_CAP` bytes) for tests. The jit trace says `budget
+  spent=work` or `spent=bytes` once.
 - A new instruction with code needs: a case in `has_code` and in the walk, its
-  `agc_emit_*` in both emitters, a case in `jit_test.c`, `jit_a64_test.c` and
-  `tests/test_vm_jit.py`. Compiled
-  code never fails, allocates or parks, and pushes or pops a frame only in room
-  the task already has; any slow path leaves for the interpreter. It calls a
-  builtin only when the row is marked `direct` (`agc_builtin.direct`, checked by
-  `sync_test.c`) or `leaf` (through `agc_jit_call_builtin`, `agc_jit_call_leaf`
-  or `agc_jit_call_plain`). Their catch, `vm->jit_catch`, keeps `agc_fail` from
-  jumping across compiled code. Mark a row only if it never parks, starts a
-  block or moves frames.
-- An edit of `turn_loop`, even in its jit copy, changes the plain copy's machine
-  code. Keep JIT logic in `run_compiled`, and put new JIT exit handling in
-  out-of-line `noinline` helpers. Growth of `run_compiled` moves `plain_turn`: a
-  move of 128 bytes with the same instructions cost `--jit off` up to 12%
-  (`make layout-check` fails on it; `references/ci.md`).
+  `agc_emit_*` in both emitters (`emit_x64.c`, `emit_a64.c`), a case in
+  `jit_test.c`, `jit_a64_test.c` and `tests/test_vm_jit.py`. Compiled code
+  never fails, allocates or parks, and pushes or pops a frame only in room the
+  task already has; any slow path leaves for the interpreter. It calls a
+  builtin only when the row is marked `direct` (`agc_builtin.direct`, checked
+  by `sync_test.c`) or `leaf`; mark a row only if it never parks, starts a
+  block or moves frames. `vm->jit_catch` keeps `agc_fail` from jumping across
+  compiled code.
+- `run_compiled` (`vm/interp.c`) handles each exit as the interpreter handles
+  that instruction. A change to `resume_native` or `call_value` needs the same
+  change there.
+- An edit of `turn_loop`, even in its jit copy, changes the plain copy's
+  machine code (one cost arithmetic moved 20% by code layout alone). Keep JIT
+  logic in `run_compiled`, and put new JIT exit handling in out-of-line
+  `noinline` helpers. Growth of `run_compiled` moves `plain_turn`: a move of
+  128 bytes with the same instructions cost `--jit off` up to 12% (`make
+  layout-check` fails on it; `references/ci.md`).
+- arm64: a code slot is read with `ldar`; a native call runs `isb` before it
+  branches unless each seal runs membarrier `SYNC_CORE` (Linux;
+  `agc_launch_init` registers it before `agc_init` starts threads). macOS seals
+  with plain `mprotect`, so the binary must not have the hardened runtime
+  (`tools/release-check.sh` checks it).
 
 ## Launch, front end and trace
 
-- `launch.[ch]`: driver code shared by the two runs of the binary
-  (`agentica run` and the front end): `agc_launch_parse`, seeds,
-  `agc_launch_vm`. A front end gets `rt->front_end`, no stdin and no parent
-  channel. `agc_launch_settle` and `agc_launch_exit` are the one exit path.
+- `launch.[ch]` is driver code shared by the two runs of the binary (`agentica
+  run` and the front end). A front end gets `rt->front_end`, no stdin and no
+  parent channel. `agc_launch_settle` and `agc_launch_exit` are the one exit
+  path.
 - `agentica.c` loads the front end (`agc_load_front_end`) and runs it. When it
   called `FrontEnd.hand_off` and ended with status 0, it retires it
   (`agc_launch_settle`, `agc_io_close`, `agc_gc_collect`) and runs the handed
@@ -283,8 +238,7 @@ Core layer, `docs/vm/05-values-execution-builtins.md` §6.4; `--jit` and
 - `front_end.c`: `FrontEnd.hand_off`, `FrontEnd.std_source` and
   `FrontEnd.stdin_bytes` fail with `RUNTIME-FRONT-END-ONLY` unless
   `rt->front_end` is set. `Std.source` is not guarded.
-- `trace.[ch]`, `profile.c`: `AGENTICA_VM_TRACE` (`docs/vm/08-loader-and-cli.md`
-  §9). `agc_trace_emit` writes one 512-byte line with one `write(2)`.
+
 ## Diagnostics (`vm/diag.c`)
 
 - Formats as `compiler/diagnostics/diagnostic_*.agc`; only the code must match.
@@ -306,13 +260,9 @@ Core layer, `docs/vm/05-values-execution-builtins.md` §6.4; `--jit` and
 ## Gotchas
 
 - JSON parsing follows `docs/vm/02-reference-behavior.md` §2.6, not RFC 8259
-  alone. The control-character pass runs first over the whole text. A top-level
-  number or literal stops early (`01` is unexpected content, `truex` is
-  invalid). The finite check comes after the trailing check. A mantissa of zeros
-  is `0.0` whatever its sign. Duplicate keys keep the last value. yyjson reads
-  numbers as raw text so the VM converts them itself: never turn on its
-  `ALLOW_*` flags or its writer. Bumping yyjson: check out the new tag in
-  `vm/third_party/yyjson`, `git add` it, and rerun the sanitizer and diff tests.
+  alone (the control-character pass runs first; the finite check comes after the
+  trailing check). yyjson reads numbers as raw text so the VM converts them
+  itself: never turn on its `ALLOW_*` flags or its writer.
 - A Json is canonical: `agc_json_encode` is the one writer (for `JSON.encode`
   and the text form of a Json), and `agc_json_finish` sorts members by key bytes
   and drops repeated keys.
@@ -321,9 +271,8 @@ Core layer, `docs/vm/05-values-execution-builtins.md` §6.4; `--jit` and
   checks), never drawn numbers.
 - Float text is not `printf("%.17g")` or the first `%.*e` that round-trips: it
   breaks exact ties upward and uses the asymmetric interval at powers of two.
-  Keep `agc_float_text` as `docs/vm/02-reference-behavior.md` §2.2 describes
-  it, and add any new tricky value to `vm/tests/float_text_test.c`. Float text
-  goes to `strtod` only after the pattern check.
+  Keep `agc_float_text` as `docs/vm/02-reference-behavior.md` §2.2 describes it,
+  and add any new tricky value to `vm/tests/float_text_test.c`.
 - Callback builtins are native frames, not C calls into the loop: `CALL_BUILTIN`
   copies the arguments into an `agc_native` GC object and pushes a frame with
   `native` set at `R[a]`. Callbacks run at `R[a+1]` with result register `R[a]`,

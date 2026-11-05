@@ -29,35 +29,25 @@ s.encode(encoding) -> Result[Bytes]
 
 - `decode` and `encode` take `utf-8`, `utf-16`, `utf-16le`, `utf-16be`,
   `utf-32`, `utf-32le`, `utf-32be`, `ascii`, `latin-1`, `iso-8859-15` and
-  `windows-1252`, without case and with `_` as `-` (aliases: `utf8`, `utf16`,
-  `utf32`, `utf-16-le`, `us-ascii`, `latin1`, `iso-8859-1`, `iso8859-1`, `l1`,
-  `cp819`, `iso8859-15`, `latin9`, `l9`, `cp1252`). Plain `utf-16` and `utf-32`
-  read and drop a byte order mark (big-endian without one) and write one with
-  big-endian units; the other forms keep a mark as U+FEFF. Errors are strict and
-  end with `at byte N` (decode; Windows-1252 leaves five bytes undefined) or `at
-  index N` (encode, a character a one-byte encoding lacks); an unknown name is
-  an error too (other encodings: the `agentica-lang/charset` package). For
-  UTF-8, use `s.bytes` and `String.from_bytes`.
+  `windows-1252`, without case and with `_` as `-` (common aliases such as
+  `utf8`, `latin1`, `cp1252` work). Plain `utf-16` and `utf-32` read and drop a
+  byte order mark (big-endian without one) and write one; the other forms keep a
+  mark as U+FEFF. Errors are strict and end with `at byte N` (decode) or `at
+  index N` (encode); an unknown name is an error too. For UTF-8, use `s.bytes`
+  and `String.from_bytes`.
 
 - `==` and `!=` compare length and bytes. They are not constant time: compare
   MACs and tokens with `HMAC.secure_compare`. There is no `<`, and `b == "s"`
   is `CHECK-TYPE-MISMATCH`.
 - A `Bytes` is a `Map` key, an `ATS` key or a `Set` item.
-- `"#{b}"` is `<Bytes 3>`; `b.inspect` is `<Bytes 3 616263>` (the first 32 bytes
-  in hex).
 - Not JSON: `JSON.encode(b)` is `CHECK-NOT-ENCODABLE`, and a `Bytes` field of a
   decode target is `CHECK-NOT-DECODABLE`. Write it as Base64 text first.
 - `slice`, `take` and `drop` copy. `+` in a loop is quadratic: collect the parts
   in a list and call `Bytes.concat` once. To build bytes one at a time, build a
   `List[Int]` and call `Bytes.from_list` once.
-- `Digest`, `HMAC`, `Cipher`, `CMAC`, `KDF`, `Base64`,
-  `SecureRandom.random_bytes`, `IO.read_bytes`, `File.read_bytes`,
-  `File.write_bytes`, `File.sha256`, `String.from_bytes`, `Zlib`,
-  `File.chunks`, the Lazy byte steps, `TCP.send_bytes`, `TCP.recv_bytes`,
-  `Process.send_bytes`, `Process.read_bytes` and `std/binary` take and return
-  `Bytes`. The `Native` array builtins
-  (`get_array_of_*`, `put_array_of_*`) use `List[Int]` or `List[Float]`: they
-  hold 32- and 64-bit numbers, not bytes.
+- `Digest`, `HMAC`, `Cipher`, `Base64`, `Zlib`, the `*_bytes` calls of `IO`,
+  `File`, `TCP` and `Process`, and `std/binary` take and return `Bytes`. The
+  `Native` array builtins use `List[Int]` or `List[Float]`, not bytes.
 - `List.uniq`, `tally` and `group_by` take `Int` or `String` keys only: use a
   `Set[Bytes]` or a `Map[Bytes, _]`. `==` compares a `List[Bytes]` item by
   item.

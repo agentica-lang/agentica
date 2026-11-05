@@ -1,5 +1,5 @@
 """`agentica outline` through the product CLI: the declarations of one file, private ones included, with their docs and
-spans (docs/future/39-semantic-cli.md, 39.2 to 39.7). The cases read the JSON form and assert fields, spans, codes and
+spans. The cases read the JSON form and assert fields, spans, codes and
 exit codes, never message text; one case reads the text form."""
 import json
 import os

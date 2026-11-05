@@ -3,7 +3,7 @@
  * the compiled program to the driver and ends the run; std_source reads a std/ source the binary carries; stdin_bytes
  * reads standard input. Any other runtime has no agc_front_end and fails with RUNTIME-FRONT-END-ONLY. Std.source
  * (agc_std_builtins) reads the same sources for every program. Service layer.
- * Design: docs/vm/08-loader-and-cli.md and docs/future/18-front-end-language.md §18.4.
+ * Design: docs/vm/08-loader-and-cli.md.
  */
 #include "services.h"
 

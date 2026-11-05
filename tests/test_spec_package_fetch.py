@@ -1,4 +1,4 @@
-"""`agentica install`: the git fetch, the commit and hash checks, and the cache fill (docs/future/45-packages.md, 45b).
+"""`agentica install`: the git fetch, the commit and hash checks, and the cache fill.
 
 The remote of every case is a bare git repository in a temporary folder; a throwaway HOME has a .gitconfig whose
 `url.<base>.insteadOf` sends `https://example.test/` there (tests/package_support.py, `Remotes`). The manifest and the lock

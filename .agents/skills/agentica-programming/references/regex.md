@@ -1,8 +1,8 @@
 # Regex (`std/regex`)
 
 `import Regex from "std/regex"`. Regular expressions with the RE2 and Go
-syntax, leftmost-first, in linear time (no backtracking). Written in Agentica;
-nothing halts. Positions count characters.
+syntax, leftmost-first, in linear time (no backtracking). Nothing halts.
+Positions count characters.
 
 ```text
 Regex.compile(pattern: String) -> Result[Regex.Regex]
@@ -39,12 +39,10 @@ struct Regex.Group  # text, start, stop, matched; "" and -1 when not matched
   `/(?m)^ERROR/`. `.` skips `\n` unless `(?s)` or the `m` flag. `$` never
   matches before a final newline. No `=~` and no `$1`: use `Regex.match` and
   its groups.
-- `find_all`, `replace`: after an empty match move one character; drop an
-  empty match where the last match ended (Go: `x*` → `-` in `abxd` is
-  `-a-b-d-`). `split` cuts only at matches of 1+ characters, keeps empty parts.
+- `find_all`, `replace`: after an empty match move one character, as Go does.
+  `split` cuts only at matches of 1+ characters, keeps empty parts.
 - Template: `$0`, `$1`, `${1}`, `${name}`, `$$`; a missing group or another
   `$` form is an error. `"#{x}"` interpolates a variable; `"${x}"` is a group.
-- Compile errors start with `character N: ` (from 1). Limits: 4096
-  characters, counts up to 1000, 10000 instructions, 256 groups and depth.
-- A search costs O(length · pattern size) steps; `--max-steps` stops it. For a
-  time limit run it in a task and `Task.await(task, timeout_ms)`.
+- Compile errors start with `character N: ` (from 1); a pattern is at most
+  4096 characters.
+- A search costs O(length · pattern size) steps; `--max-steps` stops it.

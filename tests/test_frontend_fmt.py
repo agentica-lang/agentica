@@ -1,4 +1,4 @@
-"""The printer of the formatter (compiler/format/, docs/future/47-formatter.md 47.5 and 47.7).
+"""The printer of the formatter (compiler/format/).
 
 The stage compiler/format/fmt.agc prints each file formatted, or the diagnostic line of a file it refuses; with
 `--tree` it prints the normal form of 47.7. The goldens are the `.formatted` files beside the `.input` files of

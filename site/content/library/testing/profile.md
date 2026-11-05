@@ -181,6 +181,6 @@ perf report
 ## Performance notes
 
 - With the profile off, `Profile.steps` is one builtin call; leave `Profile.measure` and `Profile.steps` in the code.
-- The profile counts every step and instruction and times every builtin call, so a profiled run is slower: about 1.1 to 1.7 times on loops and function calls, and up to about 15 times on a loop of cheap builtin calls such as String methods. Folded output at the default sample adds a few percent more; a sample every 100 steps adds about a fifth.
+- The profile counts every step and instruction and times every builtin call, so a profiled run is slower, most on a loop of cheap builtin calls such as String methods. Folded output adds more, the more often it samples.
 - Rank by steps; use `us` to compare builtins and sections in one run, and time the program without the profile.
 - The profile runs on one scheduler: a profiled run uses one unless `--schedulers` or `AGENTICA_SCHEDULERS` asks for more, which it refuses.

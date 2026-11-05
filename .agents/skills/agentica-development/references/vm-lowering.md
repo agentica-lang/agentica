@@ -41,17 +41,15 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Linked programs
 
-Imports never reach the VM. The front end of the binary
-(`compiler/front_end.agc`) links the imports (`compiler/modules/linker.agc`)
-before `check`, so `lower` sees one program whose imported declarations carry
-`@N::` prefixes (display names drop them, the bytecode writer uses the display
-name). The span table names its source per span: `lower` collects every `source`
-a span points to (`note-source!`, entry file first), and `vm/diag.c` prints
-`p->sources[span->source]`, so a diagnostic in imported code shows that file
-(full path, or `std/queue.agc` for an embedded module). Block function names use
-only the file's base name, so two imported files may give equal
-`block@m.agc:2:17` names (the `same-basename` fixture); nothing looks functions
-up by name.
+Imports never reach the VM. The front end of the binary links them
+(`compiler/modules/linker.agc`) before `check`, so `lower` sees one program
+whose imported declarations carry `@N::` prefixes (display names drop them, the
+bytecode writer uses the display name). `lower` collects every `source` a span
+points to (`note-source!`, entry file first), and `vm/diag.c` prints
+`p->sources[span->source]`, so a diagnostic in imported code shows that file.
+Block function names use only the file's base name, so two imported files may
+give equal `block@m.agc:2:17` names (the `same-basename` fixture); nothing looks
+functions up by name.
 
 ## Gotchas
 
@@ -70,25 +68,22 @@ up by name.
   `const` of `Ir.Imm.Bytes` (constant kind 7, made once at load) in
   `lower_resolved` (`compiler/lower/lower_expr.agc`), with the steps of the call
   and the literal; an interpolated string keeps the `String.bytes` call.
-- How the lowering handles constants. The linked program is flat, so
-  `compiler/lower/lower_const.agc` decides from the call graph: the functions
-  reachable from `main` (calls, `&f`, blocks) keep the constants they read, and
-  the constants those read; only kept constants are initialized. A scalar
-  literal constant (one literal, or `-` and a number) is a `CONST` at each read
-  and has no slot. Every other constant that any emitted function reads gets a
-  slot, numbered in initialization order (`Checked.constants`), so an
-  unreachable function still loads; a slot nothing writes stays unset, and
-  nothing can run the function that reads it. A kept constant is a function with
-  no parameters named by its linked name whose body is `return <value>`. The
-  function table is: the declared functions in program order, the kept
-  constants' functions in initialization order, `<start>`, then the block
-  functions in the order they are lowered (functions first, then constants).
-  `<start>` exists whenever the Globals count is above zero, even with no kept
-  constant, so the entry is never `main` when slots exist (the loader would
-  reject a call of `main` inside `main`); it starts with a `step` and ends with
-  `return` after the tail call, as the loader wants of every function. An error
-  in an initializer shows the constant's function, then `<start>`, in the stack
-  trace (`tests/fixtures/vm/constants-error`).
+- How the lowering handles constants. `compiler/lower/lower_const.agc` decides
+  from the call graph: the functions reachable from `main` (calls, `&f`, blocks)
+  keep the constants they read, and the constants those read; only kept
+  constants are initialized. A scalar literal constant (one literal, or `-` and
+  a number) is a `CONST` at each read and has no slot. Every other constant that
+  any emitted function reads gets a slot, numbered in initialization order
+  (`Checked.constants`), so an unreachable function still loads. A kept constant
+  is a function with no parameters named by its linked name whose body is
+  `return <value>`. The function table is: the declared functions in program
+  order, the kept constants' functions in initialization order, `<start>`, then
+  the block functions in the order they are lowered. `<start>` exists whenever
+  the Globals count is above zero, even with no kept constant, so the entry is
+  never `main` when slots exist; it starts with a `step` and ends with `return`
+  after the tail call, as the loader wants of every function. An error in an
+  initializer shows the constant's function, then `<start>`, in the stack trace
+  (`tests/fixtures/vm/constants-error`).
 - Typed JSON: `lower_program.agc` gives each IR struct its JSON field types when
   the struct is decodable (greatest fixpoint, so recursive structs stay in), and
   the bytecode writer interns them into the Types section. `$defs` names and the
@@ -151,11 +146,10 @@ up by name.
   step even with an empty body (never drop the loop); the counting natives call
   `count_step`, shared with `STEP`, before each callback.
   `tests/fixtures/vm/step-limited/` holds huge loops that the extras shard runs
-  only with small `--max-steps` values. `Range.each`, `Int.times`, `upto` and
-  `downto` are counting native frames (`counting()` in `vm/interp.c`): no list,
-  a current value, a last value, a direction and a "more" flag. The range text
-  is at most 43 bytes, so `AGC_SCALAR_TEXT` is 48 (a `_Static_assert` keeps it
-  at least 44).
+  only with small `--max-steps` values.
+  `Range.each`, `Int.times`, `upto` and `downto` are counting native frames
+  (`counting()` in `vm/interp.c`): no list, a current value, a last value, a
+  direction and a "more" flag.
 - Results: `ok`, `error` and `Result.*` are builtins (`vm/builtins.c`);
   `try`, `is-ok` and `result-value` are opcodes. A Result pattern is a
   `variant-pattern` with enum name `"Result"` and variant `"Ok"` or `"Err"`

@@ -10,49 +10,39 @@ description: >-
 
 # Documentation pruning
 
-Minimize **tokens loaded per agent task**, then total maintained text. Preserve
-correctness, essential knowledge, and navigability. Do not optimize file count
-at the expense of context efficiency.
-
-To decide whether a change needs new docs at all, use `documentation-writing`.
+Minimize **tokens loaded per agent task**, then total maintained text. Keep
+correctness, essential knowledge and navigability; file count does not matter
+more than context cost. To decide whether a change needs new docs at all, use
+`documentation-writing`.
 
 ## 1. Discover
 
-Before editing, discover, in order:
+Before editing, find, in order:
 
-1. **The lifecycle rules.** The indexes that assign a home per topic, the
-   rules for moving content when a plan lands, and archived-history policies
-   (what git keeps, what the doc keeps). Adopt them instead of inventing a
-   parallel system.
-2. **The structure and generators.** Actual paths, build system, site
-   generators, tests that validate docs, and cross-tree wiring. Never assume
-   a specific repository layout.
-3. **Size outliers.** Record Markdown file count, bytes, lines, and estimated
-   tokens by area (measure with `scripts/tokens.sh`, tiktoken `o200k_base`),
-   and rank the largest files. Start with the top outliers: a big
-   always-loaded index or plan document is where pruning pays most.
+1. **The lifecycle rules:** the indexes that assign a home per topic, the
+   rules for moving content when a plan lands, the archived-history policies.
+   Adopt them; do not invent a parallel system.
+2. **The structure and generators:** real paths, build system, site
+   generators, tests that validate docs. Assume no layout.
+3. **Size outliers:** measure Markdown by area with `scripts/tokens.sh`
+   (tiktoken `o200k_base`) and start with the largest files; a big
+   always-loaded index or plan is where pruning pays most.
 
 Identify roles by purpose, not path: skills (`SKILL.md`: minimal,
 self-contained), resources (`references/`: on demand), internal docs
-(authoritative), public docs (only when in scope), code, tests and CLI
-(prefer over repeated facts).
+(authoritative), public docs, and code, tests and CLI (prefer them over
+repeated facts).
 
-For Agentica, do not crawl `site/content/` during a general docs audit. Include
-Hugo pages when requested or explicitly in scope, and inspect only relevant
-pages. Any in-scope user-facing language or builtin change must update its
-corresponding site page.
+For Agentica, do not crawl `site/content/` in a general audit; include Hugo
+pages when requested, and inspect only the relevant ones. An in-scope
+user-facing language or builtin change must update its site page.
 
-Two classes of information decide what stays loaded:
-
-- **Know before acting:** conventions, critical constraints, essential
-  commands, success criteria. Keep them in always-loaded files and in the
-  skill itself.
-- **Discover on demand:** implementation detail, signatures, extended examples,
-  specifications, public documentation. Keep them behind a pointer, a
-  reference file, or a discovery command.
-
-Load a document because the task needs it, not because it exists. Check that
-each navigation path reaches its section without loading siblings.
+What stays loaded: **know before acting** (conventions, critical constraints,
+essential commands, success criteria) lives in always-loaded files and the
+skill; **discover on demand** (implementation detail, signatures, extended
+examples, specifications) sits behind a pointer, a reference file or a
+discovery command. Load a document because the task needs it; check that each
+navigation path reaches its section without loading siblings.
 
 ## 2. Lifecycle dispositions
 
@@ -64,9 +54,8 @@ starting point; the repository's own lifecycle rules (§1) override it.
 | Built, language | Rules to the grammar; delete the spec; keep the index row as a gap; no renumbering |
 | Built, runtime/VM | Design and rationale to the runtime docs; delete the spec file |
 | Built, user-facing | Site page (add it if missing, same PR) and the programming skill; internal copy deleted |
-| Built, roadmap row | Frozen: leave it |
-| Pending, planned | **One home**: its GitHub issue; every other location holds only a pointer |
-| Pending, idea only | One row in the ideas index |
+| Built, plan row or section | Delete it; the CHANGELOG and the merged PR hold the record |
+| Pending, planned | **One home**: its GitHub issue. A plan's decisions may stay in `docs/future/` when the issue points there; every other location holds only a pointer |
 | Decided against | One index line linking the rationale; no file |
 
 **Plan documents keep decisions, not recipes.** A plan file holds what was
@@ -79,154 +68,109 @@ decision.
 **Agentica map (verify before use):** `docs/grammar/` is the current language
 contract (the site renders it; one line per paragraph); the builtin library
 reference lives only in `site/content/library/`. `docs/vm/` is the VM
-design. `docs/future/` and `docs/roadmap/` are frozen history (2026-11-03):
-do not prune or edit them; their section and phase numbers stay for the code
-and tests that cite them. Pending work lives in GitHub issues. Built VM records
-that still sit in `docs/future/` (for example small-value sharing, value
-representation, JIT, SIMD) stay there. `docs/bdd.md` is the contract for BDD.
+design. Pending work lives in GitHub issues; `docs/future/` keeps only the
+decisions of planned features whose issue points there, and what was decided
+against (its README lists the files). Shipped work is in `CHANGELOG.md` and the
+merged PR. `docs/bdd.md` is the contract for BDD.
 Site pages are the user-facing home of built features.
 
 ## 3. Identify waste
 
 Find:
 
-- Exact and semantic duplication across skills, resources, internal docs, and
-  public docs — including the same topic living in two trees (spec plus
-  derived plan) and the same rule restated in two indexes.
-- Verbose explanations, repeated introductions, excessive examples, and
-  oversized indexes.
+- Exact and semantic duplication across skills, resources, internal docs and
+  public docs, including a topic living in two trees and a rule restated in
+  two indexes.
+- Verbose text, repeated introductions, excessive examples, oversized indexes.
 - Stale plans, obsolete behavior, completed TODOs, paths of files that no
-  longer exist, and historical notes without ongoing value.
-- Information easily discoverable from code, types, tests, CLI help, schemas,
-  or generated APIs.
-- References loaded unnecessarily, overlapping skills, and instructions
-  repeated across agent entry points.
+  longer exist, historical notes without ongoing value.
+- Facts discoverable from code, types, tests, CLI help, schemas or generated
+  APIs.
+- References loaded unnecessarily and instructions repeated across agent entry
+  points.
 
-Classify candidates as `keep`, `shorten`, `merge`, `delete`, or `investigate`.
+Classify each candidate `keep`, `shorten`, `merge`, `delete` or `investigate`.
+For a nontrivial one, record the location, claim, evidence, confidence and
+disposition. "Already implemented" needs evidence, not memory:
 
-For each nontrivial candidate, record the exact location, claim, evidence,
-confidence (high/medium/low), and proposed disposition. Verify claims against
-current code, tests, config, history, or a later decision. "Already
-implemented" needs evidence, not memory:
-
-- the construct appears in the current contract (grammar, library reference,
-  or VM docs), with its rules;
+- the construct appears in the current contract (grammar, library reference or
+  VM docs), with its rules;
 - spec or behavior tests exercise it (`tests/test_spec_*.py` and peers);
-- the frozen roadmap row or index says complete, with the phase date;
-- a CHANGELOG entry exists; when cheap, the binary demonstrates it
-  (`dist/agentica check`).
+- a closed issue with its milestone, or a CHANGELOG entry; when cheap,
+  `dist/agentica check` demonstrates it.
 
-Grammar plus tests gives high confidence; only a frozen roadmap tick gives
-medium. If intent and implementation conflict without a clear superseding
-authority, mark it unresolved; do not silently rewrite it. Similar topics
+Grammar plus tests gives high confidence; only a closed issue gives medium. If
+intent and implementation conflict with no clear superseding authority, mark it
+unresolved; do not rewrite it silently. Similar topics
 alone do not prove duplication.
 
-## 4. Optimize for token efficiency
+## 4. Token efficiency
 
-Prioritize in this order:
-
-1. **Always-loaded context:** global agent instructions, skill metadata,
-   automatically injected files.
-2. **Activated skills:** keep triggers, procedure, critical constraints, and
-   validation.
-3. **Skill resources:** keep only genuinely useful, selectively loaded detail.
-4. **Internal docs:** consolidate without losing authority; start from the
-   size outliers of §1.
-5. **Public docs:** simplify relevant pages when the site is in scope, keeping
-   useful reader-facing content.
+Prioritize in this order: always-loaded context (global instructions, skill
+metadata), activated skills (triggers, procedure, critical constraints,
+validation), skill resources (selectively loaded detail), internal docs
+(consolidate without losing authority; start from the size outliers of §1),
+public docs (only when in scope).
 
 Prefer instructions over explanations, pointers over copies, and commands over
 static inventories. Do not replace a small, frequently needed instruction with
 a dependency on a large document.
 
-## 5. Controlled duplication
+Duplication is acceptable only when it lowers the expected tokens loaded per
+task or serves distinct audiences: a short, self-contained fact in a skill that
+saves loading a large doc. A skill points to the source; it does not copy
+specifications, API catalogs, tutorials or implementation detail.
 
-Duplication is acceptable when it reduces **expected tokens loaded per task**
-(not repository size) or preserves distinct audiences.
+## 5. Prefer executable truth
 
-Keep short, self-contained facts in skills when they prevent loading large
-documentation. Keep detailed specifications in internal docs and
-user-oriented explanations in public docs. A skill guides the agent to the
-source; it does not copy entire specifications, API catalogs, tutorials, or
-implementation details.
+Before keeping a hand-maintained fact, check whether code, types, tests, CLI
+help, schemas, build scripts or CI definitions already say it; replace
+inventories with a discovery command or a pointer when that is reliable.
+Preserve what code does not say: design rationale, security invariants,
+compatibility promises, intentional tradeoffs, rejected alternatives likely to
+recur, unresolved decisions.
 
-## 6. Prefer executable truth
+Before deleting or moving built user-facing content, verify a site page covers
+it; if not and the site is in scope, add the page in the same PR. Internal
+runtime docs need no site coverage.
 
-Before keeping manually maintained documentation, check whether the
-information is reliably retrievable from code, types, tests, examples, CLI
-help, introspection, schemas, build scripts, config, or CI definitions.
-Replace redundant inventories with discovery commands or pointers when cheaper
-and reliable. Preserve non-derivable knowledge (code describes behavior, not
-intent): design rationale, security invariants, compatibility promises,
-intentional tradeoffs, rejected alternatives likely to recur, and unresolved
-decisions.
+## 6. Edit safely
 
-**Site coverage check:** before deleting or moving built user-facing content,
-verify a site page already covers it for readers. If it does not and the site
-is in scope, add the page in the same PR. Internal runtime docs need no site
-coverage; the code, tests and skill references are their readers.
+- Respect scope, repo rules and existing changes. Work by topic; prefer
+  deletion and consolidation over rewriting.
+- Preserve normative contracts, unfinished work, decisions and stable links.
+- Update in-scope indexes and cross-references together.
+- Do not move whole documents into skill resources to hide duplication.
+- When merging two documents, keep the richer one and delete the other; no
+  summary of what was deleted unless it lowers real cost.
+- Never change product behavior for a docs cleanup.
 
-## 7. Edit safely
+**Reference fan-out.** Before deleting or moving a document, search for every
+reference, by file name and by section number or anchor, in docs, skills, site
+content and the changelog (one built-spec drop touched 10 to 13 files). Update
+them all in the same commit. Never renumber surviving sections.
 
-- Respect scope, repo rules, existing changes, and user authorization.
-- Work incrementally by topic. Prefer deletion and consolidation over
-  rewriting.
-- Preserve normative contracts, unfinished work, important decisions, and
-  stable links.
-- Update in-scope indexes and cross-references together; an in-scope
-  user-facing language change also updates its site page and navigation.
-- Do not move entire documents into skill resources merely to hide duplication.
-- Do not change product behavior to accommodate documentation cleanup.
+## 7. Validate and report
 
-**Reference fan-out protocol.** Deleting or moving a document breaks its
-references. Before the edit, search for them all — by file name and by section
-number or anchor — in internal docs, skills, site content and the changelog.
-Typical cost here: a single built-spec drop touched 10 to 13 files. Update
-every reference in the same commit; a deleted spec that still has a link is a
-failed edit. Never renumber surviving sections; keep numbering gaps.
+A docs-only PR skips CI, so run what CI would have run:
 
-**No replacement summaries.** When merging two documents, keep the richer one
-and delete the other; leave a summary of what was deleted only if it reduces
-actual maintenance or context cost.
+- `git diff --check`; 80 columns for `docs/` and `.agents/skills/`, one line
+  per paragraph in the site.
+- Dangling references: `§N` anchors, section titles and deleted file names
+  across `docs/`, `.agents/` and `site/`.
+- Index consistency: every index row has a file and every file a row; counts a
+  generator hardcodes still match.
+- `make site` only when site content changed; targeted tests when examples or
+  executable documentation changed.
 
-Handle source conflicts as in §3; never invent consensus.
-
-## 8. Validate and report
-
-For docs-only PRs the repository skips CI, so validation is the only gate:
-run the checks that CI would have run.
-
-- `git diff --check` and the repo's Markdown prose rules (for Agentica: 80
-  columns for `docs/` and `.agents/skills/`; the site keeps one line per
-  paragraph).
-- Scan for dangling references: `§N` anchors, section titles, and deleted file
-  names across `docs/`, `.agents/`, and `site/`.
-- Check index consistency: every index row matches a file on disk, and every
-  file has a row; counts that a generator hardcodes (a file count, an adapter)
-  still match.
-- Run generators or builds only when in scope; for Agentica, `make site` only
-  when site content changed.
-- Run targeted tests if examples or executable documentation changed.
-
-Report:
-
-- For each material edit, its location, claim, evidence, confidence and
-  disposition; unresolved findings separately.
-- A disposition table (deleted, merged, shortened, retained, moved) with bytes
-  freed per tree (internal docs, skills, site).
-- Pairs unified into one home, and intentional duplication kept, with its
-  context-loading justification.
-- Before/after files, lines, bytes, and estimated tokens, same scope
-  (`scripts/tokens.sh`); always-loaded and activated-skill savings separately
-  (this skill's own activated tokens included).
-- Broken references fixed, unresolved conflicts, and validation results.
-
-Estimate task-level savings with representative workflows when possible, and
-label measured results apart from estimates.
+Report: per material edit its location, claim, evidence and disposition
+(unresolved findings apart); a disposition table with bytes freed per tree;
+pairs unified and duplication kept, with the reason; before/after files, lines,
+bytes and tokens from `scripts/tokens.sh`, same scope (activated-skill savings
+apart); broken references fixed. Label measured results apart from estimates.
 
 ## Success criteria
 
-Minimum practical tokens per agent task; short skills with selective resource
-loading; one home per topic, every other location a pointer; built content
-where its readers are; no loss of essential technical knowledge; no broken
-navigation or critical workflows.
+Minimum tokens per agent task; short skills with selective resource loading;
+one home per topic, every other location a pointer; built content where its
+readers are; no loss of essential knowledge; no broken navigation.

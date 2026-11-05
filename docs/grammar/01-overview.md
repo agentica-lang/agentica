@@ -3,8 +3,7 @@
 Implemented by the interpreter: the single binary `agentica`, a C VM (`vm/`)
 that runs every program, with a front end written in Agentica (`compiler/`)
 inside it that compiles to bytecode. This document describes what the
-interpreter accepts; remaining proposals live in
-[`future/`](../future/README.md).
+interpreter accepts; planned work lives in GitHub issues.
 
 ## 1. What we want to validate
 

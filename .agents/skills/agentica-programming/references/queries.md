@@ -7,13 +7,11 @@ FILE` (standard input is FILE, saved or not; `type-at` and `refs` take `--stdin
 FILE:LINE:COL`, before the position). `--stdin FILE` takes the place of the FILE
 argument (`outline --stdin FILE`); FILE need not exist, but imports are found
 from its folder, and `std/...` is then a path on disk, not a `std/` module.
-Options may come before the command or after it. Answers go to stdout and
-diagnostics to stderr; `--ai` changes only how diagnostics print. The text form
-starts with `file:line:column`, like `rg`; lines and columns count from 1, in
-code points. Every JSON answer has `"version": 1` and `"command"`; new fields
-can appear within a version (ignore unknown keys); types and signatures are
-strings. From a program, `std/analysis` gives the same answers as structs
-(`analysis.md`).
+Answers go to stdout and diagnostics to stderr. The text form starts with
+`file:line:column`, like `rg`; lines and columns count from 1, in code points.
+Every JSON answer has `"version": 1` and `"command"`; new fields can appear
+(ignore unknown keys). From a program, `std/analysis` gives the same answers as
+structs (`analysis.md`).
 
 Exit 2 is a bad question, 1 a program that does not check:
 
@@ -51,22 +49,14 @@ re-exports is linked, to list the original declarations). FILE may be a
 too (`agentica doc` shows only the exported API). `--partial` is accepted and
 changes nothing.
 
-JSON: `{version: 1, command: "outline", file, doc, imports, items}`.
-
-- `imports`: `{path, alias, names, span}`; `alias` is null for `import {a, B as
-  C} from "p"`, whose `names` are `{name, local, span}`.
-- `items`, in source order: `{kind, name, exported, signature, doc, summary,
-  span, name_span}`. `kind` is `function`, `struct`, `enum`, `alias`, `resource`
-  or `constant`; `summary` is the first paragraph of the `##` doc, or null. A
-  function adds `parameters` (`{name, type, default}`) and `result`; a struct
-  `fields` (`{name, type, doc, name_span}`); an enum `variants` (`{name,
-  payload, doc, name_span}`).
-- A span is `{file, range: {start: {line, column}, end: {line, column}}}`, end
-  exclusive. `span` covers the whole declaration (`export` included);
-  `name_span` is the name alone, the place to edit.
-- `file` is canonical: relative to the working folder when below it
-  (`std/NAME.agc` for a `std/` module), absolute otherwise. A diagnostic keeps
-  the name as typed.
+JSON: `{version, command, file, doc, imports, items}`. `items`, in source order:
+`{kind, name, exported, signature, doc, summary, span, name_span}`; `kind` is
+`function`, `struct`, `enum`, `alias`, `resource` or `constant`; a function adds
+`parameters` and `result`, a struct `fields`, an enum `variants`. A span is
+`{file, range: {start: {line, column}, end: {line, column}}}`, end exclusive;
+`span` covers the whole declaration (`export` included), `name_span` is the name
+alone, the place to edit. `file` is relative to the working folder when below
+it, absolute otherwise.
 
 ## type-at
 
@@ -85,38 +75,25 @@ type. Line 2, if any: the definition (on a builtin, `builtin` and its
 signature). On a field or method name the expression is the whole access
 (`user.email`). It checks the file and its imports but needs no `main` (a `main`
 with the wrong signature is still `CHECK-MAIN`). A type of another file is
-written as the file writes it (`Models.User` through the import alias); one from
-a module the file does not import is written by its bare name. A type name in an
-annotation, a type argument (`Models.User` in `List[Models.User]`) or a field or
-variant payload has `kind` `type`: the span is the name (`Models.User` is one
-span), the `type` field is that name alone as written (`List` on
-`List[Models.User]`, the alias name for an alias use), and the definition is the
-struct, enum, alias (kind `alias`) or resource it names, also from an imported
-file. A builtin type (`Int`, `List`) has no definition. `refs` lists these uses
-as `type`. A keyword of an expression (`try`, `do`, `and`, `!`) answers that
-expression; `return`, `end` and `case` are on no expression.
+written as the file writes it (`Models.User` through the import alias). A type
+name in an annotation, a type argument or a field or variant payload has `kind`
+`type`: the span is the name, and the definition is the struct, enum, alias or
+resource it names; a builtin type (`Int`, `List`) has none. `refs` lists these
+uses as `type`. A keyword of an expression (`try`, `do`, `and`, `!`) answers
+that expression; `return`, `end` and `case` are on no expression.
 
-JSON: `{version: 1, command: "type-at", position: {file, line, column}, kind,
-text, type, span, definition, help}`.
+JSON: `{version, command, position, kind, text, type, span, definition, help}`.
 
-- `kind`: `builtin` (on a builtin's name, `split` in `xs.split(",")`; `to_s` and
-  `inspect` only where the checker resolves them to one, as on a number), `name`
-  (a variable, constant, callee, field or method name, or the name that binds a
-  local), `type` or `expression`. An open set: accept unknown values. `span` is
-  always the whole expression; `text` is its source.
-- `definition`: null, or `{file, range, kind, name, name_span, signature, doc}`.
-  `kind` is `function`, `struct`, `enum`, `alias`, `resource`, `variant`,
-  `field` or `constant` (`signature` e.g. `make(name: String) -> User`, `age:
-  Int`, `Circle(Float)`; `doc` is the whole `##` text or null). A local answers
-  with `kind` `parameter`, `local`, `loop` or `pattern`, `signature` `name:
-  Type` and `doc` null; its `range` is the binding node (the whole parameter or
-  assignment), else the name, and `name_span` is where it is bound. A use and
-  the binding give the same answer. A name bound in sibling blocks answers its
-  own binding; `total += 1` is a use of the binding of `total`; `_` is on no
+- `kind`: `builtin`, `name` (a variable, constant, callee, field or method
+  name), `type` or `expression`; an open set. `span` is always the whole
   expression.
+- `definition`: null, or `{file, range, kind, name, name_span, signature, doc}`
+  with `kind` `function`, `struct`, `enum`, `alias`, `resource`, `variant`,
+  `field` or `constant`. A local answers with `kind` `parameter`, `local`,
+  `loop` or `pattern`, and `name_span` is where it is bound. A use and the
+  binding give the same answer; `_` is on no expression.
 - `help`: null, except for `builtin`, where it is the object of `agentica help
-  NAME --json` (`name`, `signature`, `description`, `parameters`, `effects`, and
-  `overloads` for several forms).
+  NAME --json`.
 
 ## refs
 
@@ -140,9 +117,8 @@ declaration is found if that file is among them. A position links FILE and
 NAME searches `PATH...` (default `.`).
 
 The position is on a use, on the name where a declaration is written, or on a
-name of an import list (`make` or `create` of `import {make as create} from
-"models"`), which selects the imported declaration. Two different declarations
-never mix (the `i` of two loops). A position on the module alias of
+name of an import list, which selects the imported declaration. Two different
+declarations never mix (the `i` of two loops). A position on the module alias of
 `Models.total(u)` selects `total`, not `Models`; on a module alias or a path in
 an import line it is `QUERY-NO-EXPRESSION`.
 
@@ -151,21 +127,16 @@ A NAME is resolved as for `symbol` and must pick one declaration: a `total` or
 lists each candidate as `FILE:LINE:COL`, ready for the position form. A builtin
 (`puts`, `List.map`) is a name too.
 
-JSON: `{version: 1, command: "refs", query, definition, builtin, references,
-skipped}`.
+JSON: `{version, command, query, definition, builtin, references, skipped}`.
 
-- `definition`: null for a builtin, else a `symbol` match (below). A local is
-  `parameter`, `local`, `loop` or `pattern`, with no doc. It is not repeated in
-  `references`.
-- `builtin`: the builtin's name (`File.read_text`, `List.map`), else null.
-- `references`: `{kind, function, span}`, FILE's files first, then by position.
-  `span` is the name alone (`make` of `Models.make`). `query` is the NAME or the
-  `FILE:LINE:COL` as asked. `kind` is `call`, `value` (`&f`, a constant), `type`
+- `definition`: null for a builtin, else a `symbol` match (below); not repeated
+  in `references`. `builtin`: the builtin's name, else null.
+- `references`: `{kind, function, span}`, FILE's files first, then by position;
+  `span` is the name alone. `kind` is `call`, `value` (`&f`, a constant), `type`
   (an annotation), `construct` (a struct construction, a `with`, or a variant
-  constructor; the span of a field name for a field), `read` (a field read),
-  `pattern` (a variant in a `case` arm) or `binding` (a use of a local, `x += 1`
-  included). `function` is the enclosing function or null. An open set. No
-  references is an empty list, exit 0.
+  constructor), `read` (a field read), `pattern` (a variant in a `case` arm) or
+  `binding` (a use of a local, `x += 1` included); an open set. No references
+  is an empty list, exit 0.
 - `skipped`: files of `PATH...` that do not link, as for `symbol`.
 
 ## symbol
@@ -200,19 +171,13 @@ for each (`refs` too). A file that imports a failing module is skipped with the
 same diagnostic. `--stdin FILE` is searched too, first, and need not exist on
 disk.
 
-JSON: `{version: 1, command: "symbol", query, matches, skipped}`.
-
-- `matches[]`: `{kind, name, module, exported, signature, doc, span,
-  name_span}`. `kind` is `function`, `struct`, `enum`, `alias`, `resource`,
-  `constant`, `field`, `variant` or `builtin` (an open set). `name` is the name
-  alone; `module` is the file's name. A `signature` writes its types as the
-  declaring module does. `span` is the declaration (`export` included), so
-  compare `name_span`, not `range`, with a `type-at` definition (its `range`
-  starts after `export`).
-- A field adds `type` and `struct`; a variant adds `payload` and `enum`. A
-  builtin has `help` and null `module`, `span`, `name_span` and `doc`.
-- `skipped[]`: `{file, diagnostic}`, the first problem of that file or of what
-  it imports.
+JSON: `{version, command, query, matches, skipped}`. `matches[]`: `{kind, name,
+module, exported, signature, doc, span, name_span}`; `kind` is `function`,
+`struct`, `enum`, `alias`, `resource`, `constant`, `field`, `variant` or
+`builtin`. `span` is the declaration (`export` included), so compare
+`name_span`, not `range`, with a `type-at` definition. A field adds `type` and
+`struct`; a variant `payload` and `enum`; a builtin has `help` and null
+`module`. `skipped[]`: `{file, diagnostic}`.
 
 ## Partial answers
 

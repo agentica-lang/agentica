@@ -6,8 +6,8 @@ close when it ends. No CLI flag is needed; `--deny-net` turns them off
 ([`06b-builtins.md`](06b-builtins.md)). The functions, the timeouts, the limits
 and the errors are in the
 [`TCP, TLS and HTTP` page](../../site/content/library/io-and-system/network.md);
-the protocol is in [`docs/vm/10-io-http.md`](../vm/10-io-http.md) and
-[`docs/vm/10-io-tls.md`](../vm/10-io-tls.md).
+the protocol is in [`docs/vm/10-io-http.md`](https://github.com/agentica-lang/agentica/blob/master/docs/vm/10-io-http.md) and
+[`docs/vm/10-io-tls.md`](https://github.com/agentica-lang/agentica/blob/master/docs/vm/10-io-tls.md).
 
 #### HTTP client and server (`std/http`)
 

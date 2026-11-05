@@ -7,15 +7,10 @@ rule that a site page shows.
 
 ## Build
 
-- The site is in `site/` and uses Hugo extended (the version and the Dart Sass
-  version, with their sha256, are pinned in `pages.yml`).
-- `make site` builds `site/public`. Warnings fail the build.
-- `make site-serve` serves it at `http://localhost:1313/agentica/`.
-- Styles are SCSS partials in `site/assets/scss/` (custom properties in
-  `_tokens.scss`). Dart Sass compiles them through Hugo Pipes; they are
-  minified with the JS and HTML.
-- `make site` needs Dart Sass's `sass` on PATH or in
-  `~/.local/opt/dart-sass`.
+- `make site` builds `site/public` (Hugo extended; the Hugo and Dart Sass
+  versions are pinned in `pages.yml`; `mk/site.mk` says where `sass` must be).
+  Warnings fail the build. `make site-serve` serves it. Styles are SCSS partials
+  in `site/assets/scss/` (custom properties in `_tokens.scss`).
 - `make site` also needs Node: after Hugo, `site/highlight/highlight.mjs` colors
   every `agentica` block with the TextMate grammar of agc-tmlanguage (copied to
   `site/highlight/agentica.tmLanguage.json`; its `package.json` `grammar` field
@@ -24,53 +19,32 @@ rule that a site page shows.
   (`linenos`, `hl_lines`); the script fails on a block of another shape, an
   unknown HTML entity or a `CLASSES` entry that colors no token.
   `make site-serve` skips the script. The same script colors the `signature`
-  blocks (module, function, parameter names, types, `->`) with a small
-  tokenizer and fails on a line of another shape.
+  blocks with a small tokenizer and fails on a line of another shape.
 - To update the grammar, copy `syntaxes/agentica.tmLanguage.json` from
   agc-tmlanguage, set the `grammar` field to its commit and run `make site`.
-
-## Version
-
-- The site shows the version of the `VERSION` file in the header, the footer,
-  `llms.txt`, `llms-full.txt` and the Install section of Getting started, with
-  links to the GitHub release of that tag and to all releases.
-- `make site` and `make site-serve` read it (`AGC_VERSION`) and pass it to Hugo
-  as `HUGO_PARAMS_VERSION`; `pages.yml` builds with `make site`, so it follows.
-  `_partials/version.html` fails the build when it is missing (plain `hugo`
-  without the variable). Never type the version in `site/`.
-- The Getting started text comes from the `release` shortcode
-  (`layouts/_shortcodes/release.md`).
-
-## Search
-
-`/search.json` is built from `layouts/home.search.json` (never edit it by hand);
-the UI is plain JS in `assets/js/`.
+- The site shows the version of the `VERSION` file (header, footer, `llms.txt`,
+  `llms-full.txt`, Getting started). `make site` passes it to Hugo as
+  `HUGO_PARAMS_VERSION`, and `_partials/version.html` fails a plain `hugo`
+  build without it. Never type the version in `site/`. The Getting started text
+  comes from the `release` shortcode (`layouts/_shortcodes/release.md`).
+- `/search.json` is built from `layouts/home.search.json` (never edit it by
+  hand).
 
 ## Content
 
-- The user docs live in `site/content`: Getting started, the command line in
-  `cli.md`, the Language tour in `tour/`, the Library in `library/`, `vm.md`
-  (the Aurora VM and its libraries) and `design.md` (the main design decisions
-  and why each was taken).
 - The Library is grouped by topic: `library/TOPIC/_index.md` (a short intro
   that says which form fits which job) and one page per builtin module in
-  `library/TOPIC/NAME.md`, plus the `algorithms.md` page of runnable recipes.
-  A new module page goes into a topic folder, so its URL is
-  `/library/TOPIC/NAME/`. Order and titles come from front matter (`title`,
-  `weight`); the sidebar, the list pages, `llms.txt` and `search.json` follow
-  the tree.
+  `library/TOPIC/NAME.md`. A new module page goes into a topic folder. Order and
+  titles come from front matter (`title`, `weight`); the sidebar, the list
+  pages, `llms.txt` and `search.json` follow the tree.
 - `docs/grammar/*.md` is the language specification (`/reference/`). The
   index is `content/reference/_index.md`. The content adapter
   `content/_content.gotmpl` adds one page per file at `/reference/<slug>/`,
-  the file name without its number (`04-lexical.md` is `lexical`), read through
-  an assets mount (`hugo.toml`). Weights follow the sorted file names. Every
-  file needs an entry in the adapter's `$info` table (short title and one-line
+  the file name without its number (`04-lexical.md` is `lexical`). Every file
+  needs an entry in the adapter's `$info` table (short title and one-line
   description), and every entry needs a file; the build fails otherwise. A
-  file's first heading is the page's own heading: it is removed from the body
-  so no heading shows twice. The other headings move up so the top sections are
-  h2, which the in-page TOC lists. The adapter fails the build when fewer than
-  10 files are found. `layouts/reference/list.html` lists the parts with their
-  descriptions.
+  file's first heading is the page's own heading and is removed from the body;
+  the other headings move up one level.
 - The adapter rewrites the links between parts: `](NN-name.md#anchor)` (or
   `./NN-name.md`) becomes `](/reference/<slug>/#anchor)`, and
   `](../../site/content/library/TOPIC/NAME.md)` becomes

@@ -1,4 +1,4 @@
-"""The comment attachment of the formatter (compiler/format/, docs/future/47-formatter.md 47.4).
+"""The comment attachment of the formatter (compiler/format/).
 
 The stage compiler/format/attach.agc lexes each file with its plain comments (Lexer.lex_with_comments), parses it and
 prints one line per comment: where it starts, its role (leading, trailing or dangling), the kind of its node and where

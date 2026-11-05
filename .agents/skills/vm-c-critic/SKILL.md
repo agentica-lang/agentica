@@ -46,12 +46,13 @@ will not match the diff.
 1. **Recall once.** Call gmem `recall` (limit 3–5) naming the component
    ("vm list trie builder", "vm task cancel timer"). Treat weak results as
    nothing known.
-2. **Load the rules.** Read `AGENTS.md`. From
-   `.agents/skills/agentica-development/references/`, read `vm.md` ("Trust
-   model") and `vm-c.md` (C style, failure and exit, Boehm GC), plus the
-   `vm-*.md` file the "Read next" table of `vm.md` names for the touched
-   area. Read the touched sections of `docs/vm/14-core-invariants.md`
-   (§14.1–§14.6) and `docs/vm/15-layers.md`, plus the area design doc.
+2. **Load the rules.** Read `AGENTS.md`. In
+   `.agents/skills/agentica-development/references/` (later `vm.md`, `vm-c.md`
+   and `bench-eval.md` mean files there), read `vm.md` ("Trust model") and
+   `vm-c.md` (C style, failure and exit, Boehm GC), plus the `vm-*.md` file the
+   "Read next" table of `vm.md` names for the touched area. Read the touched
+   sections of `docs/vm/14-core-invariants.md` (§14.1–§14.6) and
+   `docs/vm/15-layers.md`, plus the area design doc.
 3. **Map the change** with `code_diff`, then cross-check with `git diff --stat`
    so no file is missed. Note new files, new `agc_*` exports, new opcodes,
    builtin table rows, new resource kinds and new fields in `agc_vm`,
@@ -73,14 +74,14 @@ will not match the diff.
   source may hold fewer. Release builds can hide this; ASan finds it.
 - Size arithmetic goes through `agc_size_add` / `agc_size_mul`. Signed
   overflow, shifts by ≥ 64 or by a negative count, and narrowing casts are UB
-  or silent bugs: compute on `uint64_t`.
+  or silent bugs.
 - Strings: an `agc_string` is not NUL-terminated for libc unless the code made
   it so; embedded NUL bytes must be rejected before libc calls.
 - `malloc` memory: freed on every path, including a `longjmp` from `agc_fail`
   that skips the cleanup, a cancelled task, a detached job and the end of the
   run. libuv requests get `uv_*_req_cleanup`.
-- Type punning goes through `memcpy`. Only `value.c` and the inline
-  constructors and accessors of `value.h` read the value union.
+- Type punning goes through `memcpy`; the value union is read only where
+  `vm-c.md` says.
 
 ### Hostile bytecode (trust model)
 
@@ -98,9 +99,7 @@ loop past `--max-steps`.
 
 ### Boehm GC
 
-Apply the rules of `vm-c.md` ("Boehm GC"): which allocator holds which data,
-no GC pointer outside the heap, no tagged pointers, pool threads on `malloc`
-only. The critic also checks:
+Apply `vm-c.md` ("Boehm GC"). The critic also checks:
 
 - `agc_alloc_atomic` holding a pointer is a use-after-free waiting to happen.
 - No packed struct that holds a pointer (the GC scans only 8-byte aligned
@@ -139,8 +138,8 @@ a finding.
   where the design promises O(1) or O(log n). Check builders, slices and copies.
 - Speed claims need numbers. Only when a PR claims one, compare it with
   `origin/<base>` built in a scratch worktree: interleaved runs, medians
-  (`references/bench-eval.md` of agentica-development); code layout alone moves
-  a binary by 20–35 %. Peak RSS (`/usr/bin/time -v`) when memory is the claim.
+  (`bench-eval.md`); code layout alone moves a binary by 20–35 %. Peak RSS
+  (`/usr/bin/time -v`) when memory is the claim.
 
 ### Simplicity and architecture
 
@@ -152,17 +151,14 @@ a finding.
   `uv.h`, OpenSSL or private headers such as `list_impl.h`. An exemption added
   to `vm/tools/check-layers.sh` needs a reason, and an exact path, not a bare
   basename glob.
-- Platform code: a new `#ifdef` inside a shared function, two copies of one
-  function under `#ifdef`, or one-system flags in a shared struct is a finding
-  (flag what the diff adds, not older code). Fix with a platform adapter
-  (`references/vm-c.md` of agentica-development, "Platform code").
-- C style and comments: apply `references/vm-c.md` of agentica-development
-  ("C style"). Its *checked* rules run in `make vm-lint` and
-  `tests/test_vm_style.py`; judge the rest by reading. Flag a comment that
-  narrates obvious code, or commented-out code, as a Nit. Ask for a short
-  `/* */` comment as a Nit where complex code gives no reason (an invariant, a
-  GC or ownership rule, a protocol quirk, a hostile-input check). Do not flag a
-  useful comment.
+- Platform code: what the diff adds against "Platform code" of `vm-c.md` is a
+  finding (a new `#ifdef` inside a shared function, two copies of one function
+  under `#ifdef`, one-system flags in a shared struct); not older code.
+- C style and comments: apply `vm-c.md` ("C style"). Its *checked* rules run in
+  `make vm-lint` and `tests/test_vm_style.py`; judge the rest by reading. A
+  comment that narrates obvious code, commented-out code, or complex code with
+  no reason comment (an invariant, a GC or ownership rule, a protocol quirk, a
+  hostile-input check) is a Nit. Do not flag a useful comment.
 - Duplication: flag the clones you see and suggest a shared helper; CI runs
   `make dup-check`. Never fix a clone by adding it to the baseline.
 - Builtin tables: a C test may index a table by position, for example

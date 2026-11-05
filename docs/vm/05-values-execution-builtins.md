@@ -2,107 +2,58 @@
 
 ### 5.1 Representation
 
-A value is a 16-byte tagged union passed by value (`vm/value.h`). Tag 0 is Void,
-so zeroed registers are valid values.
+A value is a 16-byte tagged union passed by value (`vm/value.h` has the
+layouts). Tag 0 is Void, so zeroed registers are valid values. Notes the code
+does not make obvious:
 
-- **Type:** Void, Nil, Bool
-  - **Representation:** Immediate.
-
-- **Type:** Int, Float
-  - **Representation:** `int64_t` with `__builtin_*_overflow`; `double`.
-
-- **Type:** String
-  - **Representation:** `{ bytes, chars, data[] }`, `GC_MALLOC_ATOMIC`. `chars
-    == bytes` means ASCII, so indexing is O(1). Not NUL-terminated by contract.
-    Character counts are always computed, never read from a file.
-
-- **Type:** Bytes
-  - **Representation:** `{ len, data[] }`, `GC_MALLOC_ATOMIC`, immutable (tag
-    `AGC_T_BYTES`). Items read as Int 0 to 255. The empty Bytes is one
-    constant (`agc_empty_bytes`); `slice`, `take` and `drop` copy. `==` is the
-    builtin `Bytes.equal`, not `EQ`, so the turn loop stays as it is: the same
-    length and bytes (`memcmp`, not constant time). A Map key or Set item
-    hashes its bytes with the tag as SipHash domain, so it never equals a
-    String of the same bytes. `to_s` is `<Bytes 3>`; inspect adds the first 32
-    bytes in hex (`<Bytes 3 616263>`, `...` past them). No JSON form: the
-    encoder fails with `RUNTIME-INTERNAL`. No bytecode constant holds one.
-
-- **Type:** List
-  - **Representation:** Opaque: `struct agc_list` is defined in `vm/list.c` and
-    the private `vm/list_impl.h`, and every other file reaches a list through
-    the API of `value.h` ([§17.4](17-lists.md)), so no file reads the layout.
-    Only a builder writes a list, and only before it returns it. The layout is
-    a persistent vector as in Clojure: a 32-way trie of leaves of 32 items plus
-    a tail of 1 to 32 items held inline in the list object (`{ len, root, shift,
-    kind, tail[] }`; `root` is NULL up to 32 items), immutable. A list whose
-    items are all Ints, or all Floats, keeps 8 raw bytes per item, with no tag,
-    in atomic leaves, and `kind` says which
-    ([§17.12](17-lists.md#1712-unboxed-numeric-leaves)); the code that builds
-    the list picks the kind from the values, so a mixed list from hostile
-    bytecode is simply boxed. `append`, `set` and `get` are near constant time,
-    a build of n pushes is O(n), and `take`, `drop`, `reverse` and a `concat`
-    with a long right list stay O(n) ([§17.2](17-lists.md)).
-
-- **Type:** Map
-  - **Representation:** A persistent 32-way HAMT from key to value (`vm/map.c`),
-    plus a persistent list of keys, newest first, which gives the order. A node
-    keeps its leaves, then its child pointers, so a put copies only its path
-    and a child link costs 8 bytes. Put and lookup are O(log32 n). A delete is
-    O(log32 n) amortized along one line of versions: it marks its key's cell
-    dead by adding the key's insertion number to the map's dropped list, and
-    the list is rebuilt without dead cells (O(n)) once they outnumber the live
-    ones. Printing, `keys` and `values` walk the key list oldest first and skip
-    dead cells by insertion number, with no key lookup. Keys are Int, String or
-    Bytes, compared by tag and value. String and Bytes keys are hashed with
-    SipHash-1-3. An Int key is XORed with the key and mixed with
-    MurmurHash3's finalizer: a bijection, so two Ints never share a hash, and
-    since only keys with the same full hash share a node, no set of Int keys
-    makes a lookup scan (the worst is 13 levels). The key is seeded once per
-    run from OS entropy (`getrandom`, then `/dev/urandom`; `rand_s` on
-    Windows), independent of `--seed`. Tests and the fuzzer use
-    the fixed default key. Iteration order never depends on the hash.
-    `Map.delete` copies the path to the key and returns the same map for a
-    missing key.
-
-- **Type:** Set
-  - **Representation:** The `agc_map` of a Map under its own tag (`AGC_T_SET`):
-    the same HAMT and key list, every value nil, so the elements are the keys,
-    in first-insertion order. `Set.add` of a member and `Set.delete` of a
-    missing element return the same map. Text `Set[1, 2]`, elements as in a
-    list. `==` and `Test.eq` compare by size and membership; there is no
-    JSON form.
-
-- **Type:** Struct
-  - **Representation:** `{ type, n, fields[] }` in declaration order.
-
-- **Type:** Enum
-  - **Representation:** `{ variant, n, payload[] }`. Nullary variants are
-    shared, one object per variant, made at load time.
-
-- **Type:** Result
-  - **Representation:** `{ ok, value }`. An error holds its String message.
-    `ok()` holds Void.
-
-- **Type:** Range
-  - **Representation:** `{ start, end, exclusive }`, immutable. Text `1..5` or
-    `1...5`. `Range.size` fails with `RUNTIME-INTEGER-OVERFLOW`. `Range.to_a`
-    above 1048576 values fails with `RUNTIME-INVALID-COUNT`. `first` and `last`
-    of an empty range are an error value.
-
-- **Type:** Function value
-  - **Representation:** `{ function, n, captured[] }`. `&name` has `n = 0`. Text
-    `<Fn>`.
-
-- **Type:** Json
-  - **Representation:** `{ kind, scalar, count, members }`: null, bool, int64,
-    big integer (kept as its decimal text until extracted), double, string,
-    array (a List of Json), or object. Object members are sorted by key bytes,
-    and the last of equal keys wins. `JSON.get` is a binary search. Text form is
-    the JSON text.
-
-- **Type:** Handles
-  - **Representation:** One tag and GC record per kind: Task, Channel, Socket,
-    Listener, HTTP values, FileHandle and Process.
+- **Int, Float.** Int uses `__builtin_*_overflow`.
+- **String.** `GC_MALLOC_ATOMIC`, not NUL-terminated by contract. `chars ==
+  bytes` means ASCII, so indexing is O(1). Character counts are always computed,
+  never read from a file.
+- **Bytes.** Immutable, `GC_MALLOC_ATOMIC`. `slice`, `take` and `drop` copy.
+  `==` is the builtin `Bytes.equal` (`memcmp`, not constant time), not `EQ`. A
+  Map key or Set item hashes its bytes with the tag as SipHash domain, so it
+  never equals a String of the same bytes. `to_s` is `<Bytes 3>`; inspect adds
+  the first 32 bytes in hex. No JSON form (the encoder fails with
+  `RUNTIME-INTERNAL`) and no bytecode constant holds one.
+- **List.** Opaque: `struct agc_list` lives in `vm/list.c` and the private
+  `vm/list_impl.h`, and every other file uses the API of `value.h` (§17.4,
+  [17-lists.md](17-lists.md)). Only a builder writes a list, and only before it
+  returns it. It is a persistent vector (a 32-way trie with an inline tail) and
+  a list of all Ints or all Floats keeps 8 raw bytes per item
+  ([§17.12](17-lists.md#1712-unboxed-numeric-leaves)); the builder picks the
+  kind from the values, so a mixed list from hostile bytecode is simply boxed.
+  `append`, `set` and `get` are near constant time; `take`, `drop`, `reverse`
+  and a `concat` with a long right list stay O(n) (§17.2).
+- **Map.** A persistent 32-way HAMT (`vm/map.c`) plus a persistent list of keys,
+  newest first, which gives the order. A put copies only its path. A delete is
+  O(log32 n) amortized along one line of versions: it marks the key's cell dead
+  by adding its insertion number to the map's dropped list, and the key list is
+  rebuilt (O(n)) once dead cells outnumber live ones. Printing, `keys` and
+  `values` walk the key list oldest first and skip dead cells without a key
+  lookup. Keys are Int, String or Bytes. String and Bytes keys use SipHash-1-3.
+  An Int key is XORed with the key and mixed with MurmurHash3's finalizer: a
+  bijection, so two Ints never share a hash and no set of Int keys makes a
+  lookup scan. The hash key is seeded once per run from OS entropy
+  (`getrandom`, `/dev/urandom`, `rand_s` on Windows), independent of `--seed`;
+  tests and the fuzzer use the fixed default key. Iteration order never depends
+  on the hash. `Map.delete` of a missing key returns the same map.
+- **Set.** The `agc_map` of a Map under its own tag (`AGC_T_SET`): every value
+  nil, so the elements are the keys in first-insertion order. `Set.add` of a
+  member and `Set.delete` of a missing element return the same map. `==` and
+  `Test.eq` compare by size and membership; there is no JSON form.
+- **Enum.** Nullary variants are shared, one object per variant, made at load
+  time.
+- **Result.** An error holds its String message; `ok()` holds Void.
+- **Range.** Immutable. `Range.size` fails with `RUNTIME-INTEGER-OVERFLOW`;
+  `Range.to_a` above 1048576 values fails with `RUNTIME-INVALID-COUNT`; `first`
+  and `last` of an empty range are an error value.
+- **Function value.** `&name` has no captures.
+- **Json.** Big integers stay decimal text until extracted. Object members are
+  sorted by key bytes and the last of equal keys wins, so `JSON.get` is a binary
+  search.
+- **Handles.** One tag and GC record per kind: Task, Channel, Socket, Listener,
+  HTTP values, FileHandle and Process.
 
 ### 5.2 Safety rules for values
 
@@ -115,11 +66,9 @@ so zeroed registers are valid values.
   the `ADD_I` they served.
 - `CALL_BUILTIN` checks each argument's tag against the builtin's parameter
   tags. Builtins check list and map elements when they touch them.
-- `FIELD` and `PAYLOAD` check the index against the value's own `n`, not only
-  against the tables. `STRUCT_WITH` checks that the receiver has the struct type
-  and the field count of its update entry. The count test is a defence: the C
-  creators of a record go through `agc_builtin_struct`, which checks the name,
-  the count and the field names.
+- `FIELD`, `PAYLOAD` and `STRUCT_WITH` check against the value's own size, not
+  only the tables (4.2). The C creators of a record go through
+  `agc_builtin_struct`, which checks the name, the count and the field names.
 - A builtin that reads a builtin record (`Header`, `HttpRequest`,
   `HttpResponse`, `FileInfo`, `ProcessOutput`) finds its struct by exact name
   and fields (`agc_builtin_struct`, `vm/builtins.c`). If the struct is missing,
@@ -152,6 +101,68 @@ so zeroed registers are valid values.
   environment still wins: 3 gives back libgc's default, and 1 is faster still
   for more memory.
 
+### 5.4 Shared small values
+
+`agc_runtime` (`vm/port.h`) holds objects that `agc_vm_init` makes once and the
+builtins return every time a program computes them: `empty_list`, `empty_map`
+and `empty_set` (the Map and the Set are one `agc_map` under two tags),
+`empty_string` and the 128 one-character ASCII Strings (`chars[128]`).
+`agc_small_string` (`vm/value.c`) returns the shared String for no bytes or one
+ASCII byte, else a new one; the other paths read the table directly. Callers:
+`rg agc_small_string vm/`. Numbers: `docs/vm-benchmarks.md`.
+
+Why it is safe:
+
+- **Immutable.** Only objects from `agc_new_*` are written, and only before they
+  are returned. `List.append` and `List.set` copy, then write into the copy, so
+  `list_slice` must keep returning a fresh list. Any future update in place
+  (transients, §10.2.3 of `docs/vm/10-io-multicore.md`) must treat the shared
+  objects as never unique.
+- **No identity.** `==` compares Strings by bytes and does not apply to lists
+  or maps; there is no object id and printing shows no addresses, so sharing
+  cannot change output.
+- **GC and threads.** The table is a GC object reachable from every scheduler,
+  and strings are atomic. The runtime is read-only after start-up, so
+  schedulers read the table with no lock.
+
+Every shared path keeps the turn cost it had, since the cost rule reads sizes
+and not objects. Left out after a measurement: `CONCAT` with an empty side
+returning the other String (no real program gains), `filter` and `map` with
+nothing to return (one small list per call; the edit moved a loop by +12% in
+one link layout, and layouts differ by that much without any edit), and the
+strings of `agc_utf8_decode`, HTTP bodies and `Dir.list`.
+
+### 5.5 Why a value is 16 bytes
+
+A value is a `uint32_t` tag and an 8-byte union: 12 bytes of data and 4 of
+padding, passed in two registers by the SysV x86-64 ABI. `Int` and `Float`
+never allocate, and `Int` is 64-bit with overflow a runtime error. Boehm is
+conservative and compiled with `ALL_INTERIOR_POINTERS`, and it reads heap
+objects, stack and roots only at 8-byte aligned offsets. Alternatives weighed:
+
+- **Packed struct (12 or 9 bytes): rejected.** Boehm reads only aligned words,
+  so in an array of 12-byte values every second payload is invisible and a live
+  object would be freed. Also unaligned loads, no atomic access, and a struct
+  with unaligned fields is class MEMORY in the SysV ABI, so calls get worse.
+- **NaN-boxing (8 bytes).** A 64-bit `Int` does not fit in the free bits, so
+  large Ints need heap boxes or the language must narrow `Int`.
+- **Low-bit pointer tagging (8 bytes).** Works with Boehm, but Ints become 62
+  or 63 bits (a language change) and Floats need heap boxes.
+- **Struct of arrays (9 bytes).** A 1-byte tag array beside the 8-byte payloads
+  keeps alignment, but every container manages two arrays and rebuilds an
+  `agc_value` on every read.
+
+The direction, if memory or speed ever asks (issue #396): use the static types,
+which make most tags redundant. Unboxed `List[Int]` and `List[Float]` are built
+(`docs/vm/17-lists.md` §17.12). Typed registers belong to the JIT (§6.4).
+Compact struct fields would store an `Int`, `Float` or `Bool` field in 8 bytes
+with no tag and a pointer field as a bare aligned pointer, and a read rebuilds
+the `agc_value` from the static type. `Int` stays 64-bit, pointers stay aligned
+and visible to the GC, and `agc_value` stays the general form in registers,
+calls and generic code. Measure first (the server benchmark and the
+cross-language benchmarks, wall time and peak RSS): change the value layout
+only if value size, and not lists or dispatch, is the limit.
+
 ## 6. Execution
 
 ### 6.1 Stack, call depth and steps
@@ -165,12 +176,11 @@ so zeroed registers are valid values.
 - The loop keeps the top frame's code, span table, register window and next
   `pc` in locals, and reloads them only after an instruction that changes the
   frame stack or can move the frame or register arrays (`CALL`, `CALL_VALUE`,
-  `TAIL_CALL`, `RETURN`, a failing `TRY`, and a builtin that pushes a native
-  frame). A builtin that returns normally leaves them valid: frames and
-  registers are pushed only by the interpreter, on the running task, and a
-  builtin spawns its tasks' frames, never its own. The saved `pc` of the frame
-  is still written before each instruction runs, because a failure (the stack
-  trace), a park and a yield read it.
+  `TAIL_CALL`, `RETURN`, a failing `TRY`, a builtin that pushes a native frame).
+  A builtin that returns normally leaves them valid: frames and registers are
+  pushed only by the interpreter, on the running task. The saved `pc` of the
+  frame is still written before each instruction runs, because a failure, a
+  park and a yield read it.
 - Before `CALL`, `CALL_VALUE` or a callback push, a call depth of 10000 fails
   with `RUNTIME-STACK-OVERFLOW` at that instruction's span. `main` runs at
   depth 1. Native frames do not count, and each task starts at 0. `TAIL_CALL`
@@ -179,29 +189,22 @@ so zeroed registers are valid values.
   same way. A valid program reaches it only with more than about 1,600 registers
   per frame at full depth.
 - A tail call removes frames, so a deep tail-recursive loop runs without
-  overflow. The removed frames are not visible, but `TAIL_CALL` sets the `tail`
-  flag of the frame it reuses, and a frame that `CALL` or a native pushes starts
-  with the flag clear. Those stores of the flag (one per `TAIL_CALL`, `CALL` and
-  native push) are all the stack trace costs while a program runs, plus the span
-  of the spawning call that a task keeps (`spawn_span`, set when the task is
-  spawned).
+  overflow. `TAIL_CALL` sets the `tail` flag of the frame it reuses, and a frame
+  that `CALL` or a native pushes starts with it clear. Those stores, plus the
+  span of the spawning call that a task keeps (`spawn_span`), are all the stack
+  trace costs while a program runs.
 - The stack trace is built when the program fails (the shape is in
   [`02-reference-behavior.md`](02-reference-behavior.md)). `agc_fail` and
-  `agc_fail_text` call `agc_stack_capture` (`vm/diag.c`)
-  before the `longjmp`, only while a task runs (`vm->in_turn`). It walks the
-  frames of `vm->task` from the innermost one, skips the native frames, merges
-  neighbouring frames with the same function, place and tail flag, and keeps
-  the 15 innermost and the 5 outermost lines in `outcome.stack`, a fixed array:
-  it allocates nothing, so it cannot fail, and it reads at most the frames of
-  one task (the depth is capped at 10000), twice. The place of the innermost
-  frame is the span of the error; the place of a caller is the span of the
-  instruction at its saved `pc - 1`, read through the function's own span table
-  with `pc` clamped to the code. A function index or span index that is out
-  of range (a hand-built program; the loader checks them) drops the frame or
-  uses span 0, so a hostile `.agcb` cannot make the walk read out of bounds.
-  The outcome is printed later, by `vm/launch.c` at the end of the run or by the
-  scheduler for the crash of a task other than `main`, when the failing task may
-  be finished and its frames freed, so the lines are copied at the failure.
+  `agc_fail_text` call `agc_stack_capture` (`vm/diag.c`) before the `longjmp`,
+  only while a task runs (`vm->in_turn`). It keeps the 15 innermost and the 5
+  outermost lines in `outcome.stack`, a fixed array: it allocates nothing, so it
+  cannot fail, and it reads at most the frames of one task (the depth is capped
+  at 10000), twice. A caller's place is the span at its saved `pc - 1`, with
+  `pc` clamped to the code; a function or span index out of range (a
+  hand-built program) drops the frame or uses span 0, so a hostile `.agcb`
+  cannot make the walk read out of bounds. The lines are copied at the failure
+  because the outcome is printed later, when the failing task's frames may be
+  freed.
 - `steps_left` is an atomic `int64_t`: the limit, or `INT64_MAX` without one.
   All tasks share it. A turn takes it in batches (10.2.1). `STEP` compares
   against a "next stop" counter. Long builtins and opcodes charge their work to
@@ -242,244 +245,140 @@ ignored (`GC_set_warn_proc`), so they never reach the program's stderr.
 ### 6.4 JIT
 
 The JIT (`vm/jit/`) compiles hot functions of the user's program to x86-64 or
-arm64 (Linux and macOS) machine code. The front end runs in the interpreter,
-except under the test-only `AGENTICA_VM_TEST_FRONT_END_JIT`: on the short run
-that compiles a small program, its own compiles cost more than they save. The
-JIT changes no exit code, output, diagnostic, span or step count
-(`tests/test_vm_jit.py`).
+arm64 (Linux and macOS) machine code. Other hosts run the interpreter. The front
+end runs in the interpreter, except under the test-only
+`AGENTICA_VM_TEST_FRONT_END_JIT`: on the short run that compiles a small
+program, its own compiles cost more than they save. The JIT changes no exit
+code, output, diagnostic, span or step count (`tests/test_vm_jit.py`).
 `vm/jit/jit.h` is its only boundary with the interpreter: the interpreter asks
 for a function's code, enters it at the frame's `pc`, and handles the exit it
 returns.
 
-- **Modes.** `--jit MODE`, or `AGENTICA_JIT` (the flag wins), takes `off`, `on`
-  or `always`. `off` has no JIT; `on` is the default. At the start of a run `on`
-  decides every function once (`agc_jit_settle`), in time linear in the program:
-  about 1.2 ms for the 174,000 instructions of the front end's bytecode on the
-  Ryzen 5 3550H of `docs/vm-benchmarks.md` (`agentica run -- stage2.agcb
-  --version 0 -- --help`: median 33 ms with `off`, 35 ms with `on`). An entry of
-  a function is a call, a return into it, or a turn that starts in it. `on`
-  compiles a function with a loop (a backward jump, or a `TAIL_CALL` of itself)
-  at its 100th entry, once 32 of its entries were passes (an entry at or before
-  the previous one: a new call, or a loop that went round). It keeps a function
-  out when one of its innermost loops has more than one instruction that leaves
-  compiled code per 16 instructions; a builtin that may park (a channel or task
-  wait, a sleep, a read of stdin, a file, path, process or socket call:
-  `agc_jit_parking` in `vm/jit/jit.c`) counts as three. A function without a
-  loop gets code only for native calls, and only when none of its instructions
-  leaves compiled code: at its first `CALL`, `TAIL_CALL` or `CALL_VALUE` exit
-  from compiled code when it calls a function, else at its 16th call that leaves
-  compiled code. `always` compiles every function at its first entry, for tests.
-  A host without an emitter runs every mode in the interpreter.
-- **Native calls.** A `CALL` of a function that has code is a native call. So is
-  a `CALL_VALUE` (a block, a closure or `&name`) whose function has code.
-  Compiled code pushes the frame and calls the callee's code, up to 256 deep
-  (`AGC_JIT_NATIVE_DEPTH`); the callee's `RETURN` pops it. A `TAIL_CALL` of a
-  function that has code replaces the top frame in place, as the interpreter
-  does (same base, `ret` and depth, `tail` set), and jumps to the callee's code;
-  a `TAIL_CALL` of the function itself jumps to its first instruction. It nests
-  nothing on the C stack and charges nothing; the callee's `STEP`s do. A call
-  that cannot be native (no code, the frames or registers would grow, or a tail
-  call of more than 32 arguments, `AGC_JIT_TAIL_PARAMS`) takes an exit. `on`
-  counts a `CALL_VALUE` as a call, not as leaving.
-- **Exits.** Three kinds of builtin matter here:
-  - A *direct* builtin only returns a value. It may allocate, do work that grows
-    with its arguments, charge turn cost and fail. It never parks, starts a
-    block or a native frame, or moves frames, and it never yields halfway: `==`
-    on two large equal values (`Value.equal`, like `Optional.equal`) runs whole
-    in one turn, and the task yields after it returns when the units it charged
-    spent the turn (10.2.1). `Test.eq` runs whole in one turn too, but it is a
-    shared row, not a direct one.
-  - A *leaf* builtin is a plain C call. It never parks, starts a block or a
-    stepper, or charges turn cost, and its work is bounded.
-  - A *block call* is a builtin row with a native kind (`map`, `filter`,
-    `reduce` and the others). Its native frame calls a block, and the block's
-    frames run in compiled code when the block has code. Compiled code starts
-    the call itself (`agc_jit_block_start`) when the block has code and the
-    task has room, and calls the block natively for each item;
-    `agc_jit_block_next` takes the native frame's next step after each
-    `RETURN`.
-
-  Compiled code calls a direct builtin itself, and a leaf builtin when a native
-  call is below it, so the native calls stay on the C stack. A leaf at native
-  depth 0 takes the `INTERPRET` exit, which unwinds nothing and costs less than
-  the catch of the call. The hottest leaves that cannot fail once their
-  arguments pass a check (`plain_leaves` in `vm/jit/jit.c`) are called at any
-  depth, with no catch, after that check: the tags for `size` of a List,
-  `append`, `ok`, `ok?` and `length` of a String, and for `code` of a String
-  also that the String has one character. A failed check takes the `INTERPRET`
-  exit. Compiled code returns `{status, pc}` at its first exit.
-  `run_compiled` (`vm/interp.c`) handles it as the interpreter handles the
-  instruction at `pc`:
-  - `STEP`: the slow step (`step_slow`), which may stop, yield or start a batch.
-  - `COST`: applies a turn cost.
-  - `INTERPRET`: an instruction without code or with a slow path, which the
-    interpreter runs. `run_compiled` calls a leaf builtin itself, at native
-    depth 0 or after a failed tag check. It starts a block call that compiled
-    code did not start, whose block then runs in its code.
-  - `RESUME`: a block call that compiled code started has a step that may
-    fail, take a slow step or sort (a value of `filter`, `any?` or `all?` that
-    is not a Bool, a slow step of `times`, `upto`, `downto` or `each` of a
-    Range, the last item of `sort_by`). `run_compiled` resumes the native
-    frame, as the interpreter's `RETURN` does.
-  - `CALL`, `CALL_VALUE`, `TAIL_CALL` and `RETURN`: the interpreter's frame
-    transitions, then the code of the new top frame if it has some.
-  - `RETURNED`: a native `RETURN` to the caller's code. It never reaches
-    `run_compiled`.
-  - A block's `RETURN` to a block call that calls the same function again
-    takes no exit. `agc_jit_block_return` does what the native frame does with
-    the value and charges the step or turn cost of the next call. Then the
-    block's frame starts over in place, at instruction 0 with the next
-    arguments. A turn that this cost ends takes the `YIELD` exit at pc
-    `UINT32_MAX` (`AGC_JIT_PC_RESTART`), so the frame's pc stays 0. The other
-    cases take the `RETURN` exit: the last item, a value that ends the call
-    (`any?`, `all?`) or that it would fail on, a slow step, a stepper (`Lazy`,
-    `File.each_line`), a block call whose function value is not the
-    returning frame's function, and a frame that a native tail call reached.
-  - `YIELD` and `RAISE`: a direct builtin that compiled code called ended the
-    turn or failed.
+- **Modes.** `--jit MODE`, or `AGENTICA_JIT` (the flag wins): `off`, `on` (the
+  default) or `always` (every function at its first entry, for tests). At the
+  start of a run `on` decides every function once (`agc_jit_settle`), in time
+  linear in the program. The policy lives in `vm/jit/jit.c` (the thresholds are
+  constants there). In short: a function with a loop is compiled at its 100th
+  entry once enough entries were passes, unless one of its innermost loops
+  leaves compiled code too often (a builtin that may park counts as three
+  exits); a function without a loop gets code only for native calls, when none
+  of its instructions leaves compiled code.
+- **Native calls.** A `CALL`, or a `CALL_VALUE` (a block, a closure or `&name`),
+  of a function that has code is a native call: compiled code pushes the frame
+  and calls the callee's code, up to `AGC_JIT_NATIVE_DEPTH` (256) deep; the
+  callee's `RETURN` pops it. A `TAIL_CALL` of a function that has code replaces
+  the top frame in place, as the interpreter does, and nests nothing on the C
+  stack. A call that cannot be native (no code, the frames or registers would
+  grow, or a tail call of more than `AGC_JIT_TAIL_PARAMS` arguments) takes an
+  exit.
+- **Exits.** Three kinds of builtin matter. A *direct* builtin only returns a
+  value: it may allocate, do work that grows with its arguments, charge turn
+  cost and fail, but it never parks, starts a block or a native frame, moves
+  frames or yields halfway (`==` on two large equal values runs whole in one
+  turn, and the task yields after it returns). A *leaf* builtin is a plain C
+  call that also never charges turn cost, and its work is bounded. A *block
+  call* is a builtin row with a native kind (`map`, `filter`, `reduce` and the
+  others): its block runs in compiled code when it has code. Compiled code calls
+  a direct builtin itself, and a leaf builtin when a native call is below it, so
+  the native calls stay on the C stack; a leaf at native depth 0 takes the
+  `INTERPRET` exit, which costs less than the catch of the call. A few hot
+  leaves that cannot fail once their arguments pass a check (`plain_leaves` in
+  `vm/jit/jit.c`) are called at any depth. Compiled code returns `{status, pc}`
+  at its first exit, and `run_compiled` (`vm/interp.c`) handles it as the
+  interpreter handles the instruction at `pc`. The exit kinds are `STEP` (the
+  slow step), `COST`, `INTERPRET`, `RESUME` (a block call whose next step may
+  fail, take a slow step or sort), `CALL`, `CALL_VALUE`, `TAIL_CALL` and
+  `RETURN` (the interpreter's frame transitions), `RETURNED` (a native return,
+  never seen by `run_compiled`), `YIELD` and `RAISE`. A block's `RETURN` to a
+  block call that calls the same function again takes no exit: the block's frame
+  starts over in place (`agc_jit_block_return`), and a turn that its cost ends
+  yields at pc `AGC_JIT_PC_RESTART` so the frame's pc stays 0.
 - **Helper contract.** The machine code never fails itself. Its `agc_op_*`
-  helpers (`vm/core.h`) return an `agc_status`: `OK`, `OVERFLOW`,
-  `DIVISION_BY_ZERO`, `INDEX_OUT_OF_RANGE` or `WRONG_TAG`. A status other than
-  `OK` makes compiled code return as an exit. The interpreter then raises the
-  failure at the span of the instruction at `pc`; `WRONG_TAG` fails at span 0.
-  Before it raises, `run_compiled` sets `frame->pc` past that instruction,
-  which the stack trace reads. Helpers charge no step and no turn cost; the
-  caller does.
-
-  Compiled code never calls `agc_fail`. On Windows x64, `longjmp` unwinds the
-  stack, and JIT frames have no unwind info. A direct builtin is called through
-  `agc_jit_call_builtin`, a leaf one through `agc_jit_call_leaf`. Both set
-  `vm->jit_catch`, so a failure inside the builtin jumps back to them and not
-  across compiled code. The builtin's registers stay in the frame's register
-  file during the call, so the collector sees them.
+  helpers (`vm/core.h`) return an `agc_status`; a status other than `OK` makes
+  compiled code return as an exit, and the interpreter raises the failure at the
+  span of the instruction at `pc` (`WRONG_TAG` at span 0), after `run_compiled`
+  sets `frame->pc` past that instruction for the stack trace. Helpers charge no
+  step and no turn cost; the caller does. Compiled code never calls `agc_fail`:
+  on Windows x64, `longjmp` unwinds the stack, and JIT frames have no unwind
+  info. A direct or leaf builtin is called through `agc_jit_call_builtin` or
+  `agc_jit_call_leaf`, which set `vm->jit_catch`, so a failure jumps back to
+  them and not across compiled code. The builtin's registers stay in the
+  frame's register file during the call, so the collector sees them.
 - **Code.** Each instruction has fixed code, emitted in one pass over the
-  bytecode. The register conventions are in the headers of `vm/jit/emit_x64.c`
-  and `vm/jit/emit_a64.c`. On arm64, the thread that runs compiled code first
-  runs `isb` (`agc_jit_sync`), as the code may come from another thread; a
-  native call reads the callee's code with an acquire load (`ldar`). On Linux
-  each seal then runs membarrier's `SYNC_CORE` command, which makes every
-  thread synchronize, so a native call branches without `isb`. The launch
-  registers for it before any other thread starts, as the registration waits
-  for them. Where it fails (an old kernel, seccomp), and on macOS, which
-  documents no such guarantee, a native call runs `isb` first
+  bytecode; the register conventions are in the headers of `vm/jit/emit_x64.c`
+  and `vm/jit/emit_a64.c`. On arm64 the thread that runs compiled code first
+  runs `isb` (`agc_jit_sync`), as the code may come from another thread. On
+  Linux each seal runs membarrier's `SYNC_CORE`, registered by the launch before
+  any other thread starts, so a native call branches without `isb`; where that
+  fails (an old kernel, seccomp) and on macOS, a native call runs `isb` first
   (`agc_jit_use_sync`).
-- **Code memory.** At most 64 MiB per run (`AGC_JIT_CODE_CAP`). Memory is
-  reserved in chunks of 1 MiB, each twice the last, so the address space follows
-  the code. Code is written read-write, then sealed read-execute (`mprotect` on
-  Linux and macOS, `VirtualProtect` on Windows). No page is writable and
-  executable at once, and a sealed page is never written again. Only the
-  scheduler that claims a function compiles it; another scheduler interprets the
-  function until its code is published. A function without a loop waits in a
-  16 KiB batch. The batch is sealed with the next function compiled to run at
-  once (a hot function the interpreter enters, a callee that calls, or a block
-  at its first block call), when a function in it reaches its 32nd call that
-  leaves compiled code, or when the batch holds 16 KiB. So the callees of one
-  loop body can share a seal. After a memory failure nothing more compiles.
-- **Compile budget.** Each compile first takes the function's instruction count
-  plus 32 units from `AGC_JIT_BUDGET` (1,000,000 units). A unit is a count of
-  work, not a time, so every host compiles the same functions. The first compile
-  that does not fit the budget or the code memory stops compiling for the rest
-  of the run, and the functions not yet compiled stay interpreted. A function
-  whose cost alone exceeds the budget stays interpreted.
-  `AGENTICA_VM_TEST_JIT_BUDGET=N` gives a test a smaller budget (`vm/launch.c`).
-- **Perf map.** With `AGENTICA_PERF_MAP=1` (any POSIX host; Linux `perf` reads
-  it), each function is added to `/tmp/perf-PID.map` when its code is
-  published, as `START SIZE agentica:NAME` in hex, so `perf report` names
-  compiled code instead of showing `[JIT]` addresses. The file is opened to
-  append, with `O_NOFOLLOW` and `O_NONBLOCK`, and used only when it is a
-  regular file of the user who runs the VM with one link. The first open of a
-  process empties a map that an earlier process with the same PID left; the
-  file stays after the run. Off by default.
-- **Why.**
-  - A function without a loop runs each instruction once per entry. The entry,
-    the exit and the `RETURN` cost more than the few instructions they save.
-    Blocks of a few instructions that `filter`, `map` or `reduce` call, and an
-    empty function called many times, ran slower compiled. So `on` gives such a
-    function code only for native calls. A call in it of a function without
-    code does not keep it out. When that call runs, it costs a `CALL` exit and
-    a `RETURN` exit, two trips where the function without code took one (a
-    probe of 300,000 such calls kept its time), but a call on a rare path costs
-    nothing on the common one. So `Logger.debug`, which calls functions that
-    stay out only when it logs, gets code, and a disabled call stays in
-    compiled code.
-  - `on` keeps out a function whose loop leaves compiled code often: each trip
-    out and back costs more than the instructions it saves. The loops of
-    `benchmarks/programs/print-lines.agc`, `small-values.agc` and `strings.agc`
-    leave every few instructions, and ran slower compiled.
-  - A channel or task wait that parks ends the turn, and the woken task enters
-    the code again only to leave at the same call, which it retries. The loops
-    of `benchmarks/programs/channel-pingpong.agc` (32 instructions, a send and a
-    receive) ran 1.2 times slower compiled; with longer bodies, two such calls
-    broke even at 64 to 96 instructions, about three plain exits each.
-  - A block call does not count as leaving, as compiled code starts it. A
-    function without a loop that makes one gets code at its first exit, as a
-    function that calls does. A block without a loop gets code at the first
-    block call that compiled code starts with it, since that call runs it once
-    per item.
-  - The jit copy of the turn loop has the same handlers as the plain copy, but
-    its machine code sits at other addresses. That alone changed the timings of
-    programs that compiled nothing. So a run with no function to compile has no
-    JIT: `agc_jit_new` returns NULL, for `off` and for an `on` run that keeps
-    every function out. `make layout-check` guards the layout of the plain copy.
-- **Trace.** `AGENTICA_VM_TRACE=jit` (or `all`) writes these lines:
-  - `skip function=F loop=none` or `loop=exits` at the start, for each function
-    that `on` keeps out.
-  - `compile function=F instructions=N bytes=B` for each compile.
-  - `skip function=F size` when the emitter cannot encode the function, or
-    `skip function=F budget` when it costs more than the budget.
-  - `memory pages=N` when the code memory fails.
-  - `budget spent=work|bytes ...` once, when compiling stops: `work` for the
-    budget, `bytes` for the code memory.
-  - At the end: `exit op=OP count=N` (interpreter exits by opcode), `leaf
-    count=N` (the leaf exits at native depth 0, and the plain leaves whose
-    check failed), `block count=N`, `transition count=N` (the `CALL`,
-    `CALL_VALUE`, `TAIL_CALL` and `RETURN` exits; a native call, tail call or
-    return is not one), `transition op=tail-call count=N compiled=M` (the
-    `TAIL_CALL` exits, and those whose callee had code) and `turn count=N` (the
-    turns that ran the jit copy of the turn loop).
+- **Code memory.** At most 64 MiB per run (`AGC_JIT_CODE_CAP`), reserved in
+  chunks that double from 1 MiB. Code is written read-write, then sealed
+  read-execute (`mprotect`, `VirtualProtect` on Windows): no page is writable
+  and executable at once, and a sealed page is never written again. Only the
+  scheduler that claims a function compiles it; another scheduler interprets it
+  until its code is published. A function without a loop waits in a 16 KiB batch
+  that is sealed with the next function compiled to run at once, so the callees
+  of one loop body can share a seal. After a memory failure nothing more
+  compiles.
+- **Compile budget.** Each compile takes the function's instruction count plus
+  32 units from `AGC_JIT_BUDGET` (1,000,000). A unit counts work, not time, so
+  every host compiles the same functions. The first compile that does not fit
+  the budget or the code memory stops compiling for the rest of the run.
+  `AGENTICA_VM_TEST_JIT_BUDGET=N` gives a test a smaller budget.
+- **Perf map.** With `AGENTICA_PERF_MAP=1` (any POSIX host), each function is
+  added to `/tmp/perf-PID.map` when its code is published, so `perf report`
+  names compiled code. The file is opened to append with `O_NOFOLLOW` and
+  `O_NONBLOCK` and used only when it is a regular file of the user who runs the
+  VM with one link. The first open of a process empties a map that an earlier
+  process with the same PID left.
+- **Why the policy.** Each point was measured on `benchmarks/programs/`.
+  - A function without a loop runs each instruction once per entry; the entry,
+    the exit and the `RETURN` cost more than the instructions they save, so a
+    small block or an empty function ran slower compiled. It still gets code for
+    native calls, so a call on a rare path (`Logger.debug`) costs nothing on the
+    common one.
+  - A loop that leaves compiled code often loses: each trip out and back costs
+    more than it saves (`print-lines`, `small-values`, `strings`). A channel or
+    task wait that parks ends the turn and the woken task enters the code only
+    to leave at the same call (`channel-pingpong` ran 1.2 times slower).
+  - A block call does not count as leaving, as compiled code starts it.
+  - The jit copy of the turn loop has the same handlers as the plain copy at
+    other addresses, and that alone changed the timings of programs that
+    compiled nothing. So a run with no function to compile has no JIT
+    (`agc_jit_new` returns NULL). `make layout-check` guards the layout of the
+    plain copy.
+- **Trace.** `AGENTICA_VM_TRACE=jit` (or `all`) writes the `skip`, `compile`,
+  `memory`, `budget` and exit-count lines; `tests/test_vm_jit.py` shows each.
 - **Tests.** `tests/test_vm_jit.py` covers the modes, failures, cancels, turns
-  that end inside compiled code, native and block calls, tail calls and the exit
-  counts of the trace. `vm/tests/jit_test.c` covers the emitter, code memory,
-  helpers and exits; `make vm-tsan` runs it under ThreadSanitizer. `make
-  vm-jit-test` runs the goldens with `AGENTICA_JIT=always` and half the shards
-  with `off`, in CI. `make vm-jit-self-compile` compiles the front end under
-  each mode and compares the bytes. `make test-jit-off` runs the conformance
-  areas with `off`, and `jit-soak.yml` runs it daily on the five systems.
-- **Fuzzing and layout.** `make vm-libfuzz` needs clang and runs on Linux. It
-  runs each accepted input with `always` and `on` and compares the result with
-  the interpreter's. Only runs that read no clock are compared. A JIT run that
-  stops at the allocation limit, where the interpreter's run did not, is counted
-  and not compared. `make layout-check` runs on Linux x86-64, release build
-  only. It compares the layout of the `--jit off` loop with a base revision. An
-  intended move carries the `layout-change` label in CI, which accepts it.
+  that end inside compiled code, native and block calls, tail calls and the
+  trace counts. `vm/tests/jit_test.c` covers the emitter, code memory, helpers
+  and exits. `make vm-jit-test` runs the goldens with `AGENTICA_JIT=always` and
+  half the shards with `off`; `make vm-jit-self-compile` compiles the front end
+  under each mode and compares the bytes; `make test-jit-off` runs the
+  conformance areas with `off` (`jit-soak.yml` daily on the five systems).
+  `make vm-libfuzz` (clang, Linux) runs each accepted input with `always` and
+  `on` and compares the result with the interpreter's, for runs that read no
+  clock. `make layout-check` (Linux x86-64, release) compares the layout of the
+  `--jit off` loop with a base revision; an intended move carries the
+  `layout-change` label.
 - **Known limits.**
-  - x86-64 and arm64 (Linux and macOS) have an emitter; Windows on arm64 and
-    32-bit hosts run the interpreter. On macOS the code pages are sealed with
-    plain `mprotect`, which needs a binary without the hardened runtime: the
-    release signs it ad hoc, and `tools/release-check.sh` fails a binary
-    signed with `--options runtime`.
-  - A builtin that is neither leaf, direct nor a block call (for example
-    output, tasks, channels and files) returns to the turn loop and unwinds the
-    native calls below it.
-  - A block call whose block has code takes the `RESUME` exit at a slow step
-    of `times`, `upto`, `downto` or `each` of a Range and at the end of
-    `sort_by`. After a turn ended inside it, it takes the `RETURN` exit at its
-    end. A block that a stepper calls takes it at each call.
+  - Windows on arm64 and 32-bit hosts run the interpreter. On macOS the code
+    pages are sealed with plain `mprotect`, which needs a binary without the
+    hardened runtime: the release signs it ad hoc, and `tools/release-check.sh`
+    fails a binary signed with `--options runtime`.
+  - A builtin that is neither leaf, direct nor a block call (output, tasks,
+    channels, files) returns to the turn loop and unwinds the native calls below
+    it.
   - A function with a loop that is called often but whose loop rarely runs still
     pays the entry and the exit at each call.
   - Until some code is published, only turns that start near a function that may
-    get code, and a turn drawn at random (one in 16 on average), run the jit
-    copy of the turn loop. Code that runs only inside turns therefore compiles
-    later. After 8 drawn turns in a row with no entry counted, the draw takes
-    half as many turns, down to one in 256; an entry counted sets it back to one
-    in 16.
-  - The jit copy of the turn loop interprets slower than the plain copy: it
-    tests the resume pc at each instruction, and gcc keeps its code pointer on
-    the stack. With every turn in it and nothing compiled, `logger-disabled`
-    took about 1.4 times as long, `arithmetic` 1.2 and `channel-pingpong` 1.2
-    (the Ryzen 5 3550H and gcc 14.2.0 of `docs/vm-benchmarks.md`).
-    Once some code is published every turn runs it, so the interpreted part of
-    such a run pays this.
+    get code, and a turn drawn at random (one in 16 on average, down to one in
+    256 after 8 drawn turns with no entry counted), run the jit copy of the turn
+    loop. Code that runs only inside turns therefore compiles later.
+  - The jit copy interprets slower than the plain copy (it tests the resume pc
+    at each instruction): `logger-disabled` took about 1.4 times as long with
+    nothing compiled (the machine of `docs/vm-benchmarks.md`).
 
 ## 7. Builtins in C
 

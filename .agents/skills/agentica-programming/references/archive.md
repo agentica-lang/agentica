@@ -2,9 +2,8 @@
 
 `import Archive from "std/archive"`. Copies an explicit allowlist of regular
 files out of a plain `.tar`, gzipped `.tar.gz`, or classic single-disk `.zip`
-(stored and raw deflate only) into a new private directory. Written in Agentica
-over `File.chunks` and the Lazy zlib steps; every failure is an `error` and none
-halts, whatever the input.
+(stored and raw deflate only) into a new private directory. Every failure is
+an `error`; none halts.
 
 ```text
 Archive.extract_tar(src, members, dest_dir, options = Archive.Options()) -> Result[List[Int]]
@@ -21,16 +20,10 @@ Archive.extract_zip(src, members, dest_dir, options = Archive.Options()) -> Resu
   is created. `dest_dir` is made private and must not exist; files are created
   never-overwriting with parents under the new base.
 - Only regular files are written; a selected link, directory, device or sparse
-  entry is an error. The whole container is scanned through the two zero end
-  blocks, so a duplicate, a missing member or a bad checksum after a selected
-  file still fails. A gzipped archive must hold exactly one member with its
-  CRC and size verified and no trailing bytes. The source must be a stable
-  caller-owned regular file (`File.lstat` cannot rule out a rename race).
-- Fixed ceilings: raw TAR scan 1073741824 bytes, gzipped source 268435456
-  compressed bytes, 8192 entries, 1024 name bytes, 65536 bytes of PAX and GNU
-  extension data. USTAR with PAX `path`/`size` and GNU long names; other PAX
-  records are ignored, sparse entries are refused. ZIP: source at most
-  268435456 bytes over three forward-only passes (768 MiB of physical reads),
-  8192 entries, 1024 name bytes; strict UTF-8 with flag 11 else pure ASCII.
-  Selected payloads stream in their exact window with CRC32 and size checked;
-  unselected payloads are skipped by size and offset only, never CRC-checked.
+  entry is an error. The whole container is scanned, so a duplicate, a missing
+  member or a bad checksum after a selected file still fails. A gzipped
+  archive must hold exactly one member with no trailing bytes. The source must
+  be a stable caller-owned regular file.
+- Fixed ceilings: 8192 entries, 1024 name bytes, a 256 MiB compressed source.
+  USTAR with PAX `path`/`size` and GNU long names; other PAX records are
+  ignored. Unselected ZIP payloads are skipped, never CRC-checked.

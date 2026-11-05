@@ -402,7 +402,7 @@ typedef struct {
   bool direct;
 } agc_builtin;
 
-/* prelude marks a function of the compiler prelude (docs/future/25-ruby-typed-idioms.md §25.6): its spans are not
+/* prelude marks a function of the compiler prelude: its spans are not
    the user's, so a runtime error in it is reported at the call the user wrote (agc_fail). */
 typedef struct {
   agc_string *name;
@@ -482,9 +482,8 @@ typedef struct {
   /* The index in builtins of the first native import (a name that starts with AGC_NATIVE_PREFIX), and of the first
      function that calls it, or UINT32_MAX. */
   uint32_t native_import, native_function;
-  /* The Globals slots (module constants, docs/future/44-module-constants.md
-     §44.8): global_count values in zeroed memory, so an unset slot has tag
-     AGC_T_VOID. No module constant has type Void (44.5), so tag 0 means "never
+  /* The Globals slots (module constants): global_count values in zeroed memory, so an unset slot has tag
+     AGC_T_VOID. No module constant has type Void, so tag 0 means "never
      set"; a hand-made CONST of a Void and a GLOBAL_SET can unset a slot again.
      The only part of a loaded program that a run writes. The loader allows
      GLOBAL_SET only in the entry function, which has no backward jump and, in
@@ -771,7 +770,7 @@ agc_string *agc_small_string(agc_vm *vm, const char *data, size_t bytes, size_t 
 /* A Bytes object of len bytes, not filled: the caller writes every byte before the value is stored anywhere. */
 agc_bytes *agc_new_bytes(size_t len);
 /* The one empty Bytes of the process, a constant outside the GC heap: like the shared empty String of a run
-   (docs/future/34-shared-small-values.md), but with nothing in it that belongs to a run. Never written. */
+   (docs/vm/05-values-execution-builtins.md §5.4), but with nothing in it that belongs to a run. Never written. */
 const agc_bytes *agc_empty_bytes(void);
 /* The output helper of the byte builtins: agc_empty_bytes for no bytes, else a copy of data. */
 const agc_bytes *agc_make_bytes(const uint8_t *data, size_t len);

@@ -1,4 +1,4 @@
-"""Package imports, the manifest and the lock, through the CLI (docs/future/45-packages.md, phase 45a).
+"""Package imports, the manifest and the lock, through the CLI.
 
 Each case builds a project folder with its deps/ folder by hand (no fetching), runs `--json check` on
 the root file and asserts the code and where it is: the span of the import, or the file and key path of a manifest or

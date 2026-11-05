@@ -18,72 +18,52 @@ libSystem on macOS, and on Windows the system DLLs with the Universal C Runtime,
 which is part of Windows 10. `tools/release-check.sh` fails on a wrong
 architecture, a library outside that list or missing hardening.
 
-- **Dependency:** C compiler
-  - **Choice:** C11, gcc or clang. Windows: MSYS2 UCRT64 gcc. No MSVC: it lacks
-    `__builtin_*_overflow`, and one compiler family keeps one Makefile.
+Each submodule under `vm/third_party/` is pinned to a release commit and
+upgraded only by a reviewed PR; `git submodule status` shows the pin.
 
-- **Dependency:** libc
-  - **Choice:** Dynamic. A static glibc breaks NSS, and macOS forbids a static
-    libc.
-
-- **Dependency:** Boehm GC
-  - **Choice:** Vendored submodule `vm/third_party/bdwgc`, tag v8.2.12. With
-    `AGENTICA_GC=vendored` (the release, the GC-stress build, and the default
-    off Linux) `make` compiles its single-file amalgamation (`extra/gc.c`) and
-    links it statically. The Linux default, `system`, links the distro's libgc
-    8.2.0 or newer dynamically, as OpenSSL does (11).
-
-- **Dependency:** yyjson
-  - **Choice:** Vendored submodule `vm/third_party/yyjson` (MIT), tag 0.13.0.
-    Only the reader is built, with the writer, file API, JSON Pointer and
-    extensions disabled. The reader does not recurse and is fuzzed on OSS-Fuzz.
-    It allocates with `malloc` and holds no GC pointers. In the `AGC_NO_GC`
-    build (sanitizer and fuzz), `vm/json.c` routes its allocations through
-    `agc_alloc_atomic`, so its documents count toward the fuzzer's 256 MB limit
-    (11, Fuzzing). In the GC build the document is freed right after its copy
-    into GC nodes (2.6). The encoder is our own (2.4), since yyjson formats
-    floats and escapes differently.
-
-- **Dependency:** libuv
-  - **Choice:** Vendored submodule `vm/third_party/libuv` (MIT, with
-    BSD-2-Clause and ISC parts in its `LICENSE-extra`), tag v1.53.0. The native
-    Linux, Darwin or Windows source list is built per mode into
-    `$(VM_BUILD)/uv/` and linked statically. System libraries are selected for
-    each host.
-
-- **Dependency:** picohttpparser
-  - **Choice:** Vendored submodule `vm/third_party/picohttpparser` (dual MIT or
-    Perl; we take MIT), tag v1.4. It parses and validates request and response
-    heads behind our adapter (10.6). `phr_decode_chunked` is not used, since it
-    knows no limits. It is built at the baseline, without `-msse4.2`. Its SSE4.2
-    path is a SIMD candidate (`docs/future/19-simd.md` §19).
-
-- **Dependency:** libffi
-  - **Choice:** Vendored submodule `vm/third_party/libffi` (MIT), tag v3.8.0.
-    It calls the C functions of `extern` blocks. Built on Linux (x86_64,
-    arm64), Windows x64 and macOS (x86_64, arm64): the sources that libffi's
-    `configure.host` lists for the target are compiled per mode into
-    `$(VM_BUILD)/ffi/`, with the `ffi.h` and `fficonfig.h` that its configure
-    script would write made by `mk/vm.mk`, and linked statically. Only
-    `vm/ffi_libffi.c` includes `ffi.h`.
-
-- **Dependency:** zlib
-  - **Choice:** Vendored submodule `vm/third_party/zlib` (zlib/libpng,
-    permission to use for any purpose with attribution, no copyleft), tag
-    v1.3.1. With `AGENTICA_ZLIB=vendored` (the release, and the default off
-    Linux) only the codec side is built, without configure and without the `gz*`
-    file API. The Linux default, `system`, links the distro's zlib 1.2.0 or
-    newer dynamically instead (11). `Zlib` compresses and decompresses through
-    either behind the adapter (`vm/zlib_codec.c`); only that file includes
-    `zlib.h` (15.5).
-
-- **Dependency:** OpenSSL 3.5 LTS
-  - **Choice:** Vendored submodule `vm/third_party/openssl` (Apache-2.0),
-    shallow, tag `openssl-3.5.9`. Linked statically in the release
-    (`AGENTICA_OPENSSL=vendored`, 10.0). The default, `system`, links the system
-    OpenSSL 3.0 or newer dynamically, so a fresh checkout does not spend minutes
-    building OpenSSL. Only the OpenSSL adapter files (`vm/tls_openssl.c`,
-    `vm/digest_openssl.c`, `vm/tls_trust*.c`) include OpenSSL headers (10.3).
+- **C compiler:** C11, gcc or clang. Windows: MSYS2 UCRT64 gcc. No MSVC: it
+  lacks `__builtin_*_overflow`, and one compiler family keeps one Makefile.
+- **libc:** dynamic. A static glibc breaks NSS, and macOS forbids a static libc.
+- **Boehm GC** (`bdwgc`): with `AGENTICA_GC=vendored` (the release, the
+  GC-stress build, and the default off Linux) `make` compiles its single-file
+  amalgamation (`extra/gc.c`) and links it statically. The Linux default,
+  `system`, links the distro's libgc 8.2.0 or newer dynamically (11).
+- **yyjson:** only the reader is built, with the writer, file API, JSON Pointer
+  and extensions disabled. The reader does not recurse and is fuzzed on
+  OSS-Fuzz. It allocates with `malloc` and holds no GC pointers. In the
+  `AGC_NO_GC` build (sanitizer and fuzz), `vm/json.c` routes its allocations
+  through `agc_alloc_atomic`, so its documents count toward the fuzzer's 256 MB
+  limit (11, Fuzzing). In the GC build the document is freed right after its
+  copy into GC nodes (2.6). The encoder is our own (2.4), since yyjson formats
+  floats and escapes differently.
+- **libuv:** the source list of the target system is built per mode into
+  `$(VM_BUILD)/uv/` and linked statically.
+- **picohttpparser:** parses and validates request and response heads behind
+  our adapter (10.6). `phr_decode_chunked` is not used, since it knows no
+  limits. It is built at the baseline, without `-msse4.2`; its SSE4.2 path is a
+  SIMD candidate (`docs/future/19-simd.md` §19).
+- **libffi:** calls the C functions of `extern` blocks. The sources that
+  libffi's `configure.host` lists for the target are compiled per mode into
+  `$(VM_BUILD)/ffi/`, with the `ffi.h` and `fficonfig.h` that its configure
+  script would write made by `mk/vm.mk`, and linked statically. Only
+  `vm/ffi_libffi.c` includes `ffi.h`.
+- **zlib:** with `AGENTICA_ZLIB=vendored` (the release, and the default off
+  Linux) only the codec side is built, without configure and without the `gz*`
+  file API. The Linux default, `system`, links the distro's zlib 1.2.0 or newer
+  (11). Only `vm/zlib_codec.c` includes `zlib.h` (15.5).
+- **OpenSSL 3.5 LTS:** linked statically in the release
+  (`AGENTICA_OPENSSL=vendored`, 10.0); the default, `system`, links the system
+  OpenSSL 3.0 or newer dynamically, so a fresh checkout does not spend minutes
+  building OpenSSL. Only the adapter files (`vm/tls_openssl.c`,
+  `vm/digest_openssl.c`, `vm/tls_trust*.c`) include OpenSSL headers (10.3). A
+  feature that only 3.5 has (Argon2id, `OSSL_set_max_threads`) is not always
+  there: adding one means raising `OSSL_MIN` of `mk/vm.mk` and the `#error` in
+  `vm/tls_openssl.c` to 3.5, or checking at run time on system builds and
+  returning an error `Result` that names the missing feature. An algorithm that
+  a system build leaves out (a FIPS-only OpenSSL has no MD5, SHA-1 or scrypt)
+  stops the call with `RUNTIME-INTERNAL`. The crypto API has no low-level
+  primitives (no raw block ciphers, no ECB, no unauthenticated modes); the one
+  exception is Triple DES CBC with CMAC, for payment formats.
 
 **License rule.** Vendored or statically linked third-party code must be MIT,
 BSD, ISC, zlib, Apache-2.0 or similarly permissive. No copyleft. Its license
@@ -97,24 +77,20 @@ and `NOTICE` with the third-party licenses.
 
 ### 10.0 Building and linking OpenSSL
 
-`AGENTICA_OPENSSL` picks `system` (the default: the system OpenSSL 3.0 or newer,
-dynamically, so a fresh checkout does not spend minutes building OpenSSL) or
-`vendored` (the pinned submodule, statically). The stamp, the mode flags and the
-CI split are in §11. `vm/tls_openssl.c` also stops with `#error` on an older
-OpenSSL or on LibreSSL. The release uses `vendored`, so the shipped VM needs
-only glibc's own libraries and runs on any glibc 2.28 system.
+`AGENTICA_OPENSSL` picks `system` (the default) or `vendored` (the pinned
+submodule, statically). The stamp, the mode flags and the CI split are in §11.
+`vm/tls_openssl.c` stops with `#error` on an older OpenSSL or on LibreSSL. The
+release uses `vendored`, so the shipped VM needs only glibc's own libraries and
+runs on any glibc 2.28 system.
 
-The vendored build:
+The vendored build (`mk/vm.mk`, `OSSL_OPTS`):
 
 - Configure runs out of tree in `$(VM_BUILD)/openssl/` with the mode's compiler
-  (`VM_CC`: `cc`, `clang` for `SANITIZE=1`, `zig cc` in the release), then
-  `make build_libs`. The parent's `MAKEFLAGS`, `CC`, `CFLAGS` and `LDFLAGS` are
-  cleared with `env -u`, so nothing leaks in. It needs Perl 5 with its core
-  modules (`IPC::Cmd`), and the rule stops with a message when they are missing.
-- Options (`OSSL_OPTS` in `mk/vm.mk`): static libraries only, no loadable code,
-  no legacy provider, no automatic `openssl.cnf` loading, no parts TLS does not
-  use, and `no-deprecated`, so only the 3.x API is visible. The libraries are
-  PIC, so the PIE link works.
+  (`VM_CC`), with the parent's `MAKEFLAGS`, `CC`, `CFLAGS` and `LDFLAGS`
+  cleared, so nothing leaks in. It needs Perl 5 with its core modules.
+- Static libraries only, no loadable code, no legacy provider, no automatic
+  `openssl.cnf` loading, no parts TLS does not use, and `no-deprecated`, so only
+  the 3.x API is visible. The libraries are PIC, so the PIE link works.
 - The sanitizer mode builds OpenSSL with clang and `-g -fno-omit-frame-pointer`
   but without `-fsanitize`: an instrumented OpenSSL would make the sanitizer job
   much slower. ASan still wraps OpenSSL's `memcpy` and friends, so an overflow
@@ -123,21 +99,18 @@ The vendored build:
   lines, compiler version, `VERSION.dat`, submodule commit), not on source
   times, so toggling `TRACE` or touching sources never rebuilds OpenSSL. After
   editing OpenSSL sources by hand, remove `$(VM_BUILD)/openssl`.
-- Only the OpenSSL adapter files include its headers (layer rule 5, §15.5).
 - Initialization uses `OPENSSL_INIT_NO_LOAD_CONFIG | OPENSSL_INIT_NO_ATEXIT`:
   the built-in `OPENSSLDIR` points at the build machine, and the VM may end with
   `_exit` while a pool thread still runs. Contexts set TLS 1.2 and security
   level 2 as minimums.
 - Bumping: check out the new 3.5.x tag inside `vm/third_party/openssl`,
-  `git add` it and rebuild. The changed `VERSION.dat` changes the stamp and the
-  CI keys. Then rerun the TLS, sanitizer and diff tests. Moving to the next LTS
-  line is a reviewed change of its own.
+  `git add` it and rebuild; the changed `VERSION.dat` changes the stamp and the
+  CI keys. Then rerun the TLS, sanitizer and diff tests. The next LTS line is a
+  reviewed change of its own.
 - Rejected: loading OpenSSL with `dlopen` only when a program uses TLS. It is
-  more complex, and the static build costs only about 6 MB more for
-  `dist/agentica`.
-- TLS sockets and `std/http` (HTTP and HTTPS) run on every system, with the
-  native trust stores (10.3). `make vendored-check` fails if the binary loads
-  OpenSSL, libgc or `msys-2.0.dll`.
+  more complex, and the static build costs only about 6 MB more.
+- `make vendored-check` fails if the binary loads OpenSSL, libgc or
+  `msys-2.0.dll`.
 
 ### 10.1 Event loop: libuv, not libevent
 
