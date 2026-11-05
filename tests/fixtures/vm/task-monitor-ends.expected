@@ -1,0 +1,22 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 170,
+  "stdout": [
+    "TaskExit.Ok same id: true",
+    "  \"\" \"\" false",
+    "  0:0",
+    "TaskExit.Crashed same id: true",
+    "  \"RUNTIME-DIVISION-BY-ZERO\" \"division by zero\" true",
+    "  8:13",
+    "TaskExit.Cancelled same id: true",
+    "  \"\" \"\" false",
+    "  0:0",
+    "false",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/task-monitor-ends.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":14,\"line\":8},\"start\":{\"column\":13,\"line\":8}},\"spawned_at\":{\"column\":9,\"file\":\"@fixtures/vm/task-monitor-ends.agc\",\"line\":28},\"stack\":[{\"column\":13,\"file\":\"@fixtures/vm/task-monitor-ends.agc\",\"function\":\"divide\",\"line\":8}],\"task\":true}",
+    ""
+  ]
+}

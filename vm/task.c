@@ -230,13 +230,120 @@ static void leave_parent(agc_task *t) {
   t->parent = t->prev_sibling = t->next_sibling = NULL;
 }
 
-/* An ended task with nothing pending (`closing` is 0) has settled: its awaiters wake and an end hook that found a
-   close pending, and so put itself back (Task.map), runs again. A task that held another (`holder`, see hold) gives
-   its count back, and a holder that has ended and now has nothing pending settles in turn: a loop, not a recursion,
-   so a deep chain of cancelled tasks needs no stack. A holder that has not ended yet settles in its finish_task. */
+static void trace_spawn(const agc_vm *vm, const agc_task *t, const agc_task *parent) {
+  const agc_trace *tr = &vm->rt->trace;
+  if (!AGC_TRACE_ON(tr, AGC_TRACE_SCHED) || !t->frame_count) return;
+  const agc_string *name = vm->rt->program->functions[t->frames[0].function].name;
+  if (parent && parent->group)
+    AGC_TRACE(tr, AGC_TRACE_SCHED, "spawn task=%" PRIu64 " parent=group:%" PRIu64 " fn=%.*s", t->id,
+              parent->parent ? parent->parent->id : 0, agc_trace_len(name->bytes), name->data);
+  else
+    AGC_TRACE(tr, AGC_TRACE_SCHED, "spawn task=%" PRIu64 " parent=%" PRIu64 " fn=%.*s", t->id, parent ? parent->id : 0,
+              agc_trace_len(name->bytes), name->data);
+}
+
+/* A child made but not yet started: no scheduler can run it, so the caller sets its random stream (and a test its own
+   mark) here. Once start_child enqueues it, another scheduler may run it at once (N > 1), and a field written after
+   that would race with its first turn: an unset stream is all zero, and Random.int never ends on it. */
+static agc_task *make_child(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
+                            uint32_t span) {
+  agc_task *child = agc_new_task(vm);
+  child->input_seen = vm->rt->in.eof_seq;
+  child->service = parent->service;
+  child->weak_timers = parent->weak_timers;
+  child->test = child->service ? NULL : vm->task->test;
+  /* Counted as done from the start, so Task.pending_count (made - done) never sees it; finish_task skips it. */
+  if (child->service) atomic_fetch_add_explicit(&vm->rt->tasks_done, 1, memory_order_relaxed);
+  child->spawned = true;
+  child->spawn_span = span;
+  agc_task_call(vm, child, fn, 0, args, argc, 0, span);
+  return child;
+}
+
+/* A service root: a node like agc_task_group that never runs, but it has no parent, so no task's crash, cancel or end
+   reaches it, and Test.test finds no leftover under the caller. Its descendants are service tasks: Task.pending_count
+   leaves them out and they are in no test. They end by themselves or with the run. Their timers keep a stalled run
+   waiting unless the caller sets `weak_timers` on the root (agc_task_service). */
+static agc_task *service_root(void) {
+  agc_task *root = agc_alloc(sizeof(agc_task));
+  root->group = true;
+  root->service = true;
+  atomic_store_explicit(&root->state, AGC_TASK_PARKED, memory_order_relaxed);
+  root->result = agc_void();
+  return root;
+}
+
+/* The notice of a settled task: TaskDown(task_id, reason, code, message, file, line, column), with the reason read as
+   Task.await reads it (a crash first, then a cancel). For a crash the rest is its diagnostic: the stable code, the
+   message and where the error was raised, the parts of the crash text of Task.await_result; otherwise "" and 0. */
+static agc_value monitor_down(agc_vm *vm, const agc_task *t) {
+  const agc_runtime *rt = vm->rt;
+  uint32_t reason = t->crashed ? rt->exit_crashed : t->cancelled ? rt->exit_cancelled : rt->exit_ok;
+  agc_struct *s = agc_new_struct(rt->down_struct, 7);
+  agc_value empty = agc_string_value(agc_make_string("", 0, 0));
+  s->fields[0] = agc_int((int64_t)t->id);
+  s->fields[1] = agc_enum_value(rt->program->variants[reason].shared);
+  s->fields[2] = s->fields[3] = s->fields[4] = empty;
+  s->fields[5] = s->fields[6] = agc_int(0);
+  if (t->crashed) {
+    const agc_span *span = &rt->program->spans[t->crash_span];
+    size_t code = strlen(t->crash_code);
+    s->fields[2] = agc_string_value(agc_make_string(t->crash_code, code, code));
+    s->fields[3] = agc_string_value(t->crash_message);
+    s->fields[4] = agc_string_value(rt->program->sources[span->source].name);
+    s->fields[5] = agc_int((int64_t)span->start_line);
+    s->fields[6] = agc_int((int64_t)span->start_column);
+  }
+  return agc_struct_value(s);
+}
+
+/* The end hook of a monitor's task: a wrap that returned has its value offered to the channel, and a crash whose notice
+   went in counts as observed, like an await of it. A wrap that crashed is reported as any task crash; its notice is
+   lost. */
+static void monitor_sent(agc_vm *vm, agc_task *runner) {
+  agc_monitor *m = runner->end_data;
+  if (runner->crashed || runner->cancelled) return;
+  if (agc_channel_offer(vm, m->channel, runner->result) && m->target->crashed) agc_task_observe(vm, m->target);
+}
+
+/* Runs wrap(TaskDown) in a service task (service_root), whatever task or scheduler ends the target, and with no wait:
+   the target's end never runs code of the program, never blocks and cannot fail here (Task.monitor checked the wrap
+   and found the types). The hook is set before the task is queued. */
+static void monitor_fire(agc_vm *vm, agc_monitor *m) {
+  agc_value down = monitor_down(vm, m->target);
+  agc_task *root = service_root();
+  agc_task *runner = make_child(vm, root, m->wrap, &down, 1, m->span);
+  agc_random_seed(&runner->random, runner->id);
+  runner->end = monitor_sent;
+  runner->end_data = m;
+  /* start_child without its cancelled branch: nothing cancels a service root. */
+  adopt(vm, root, runner);
+  trace_spawn(vm, runner, root);
+  enqueue(vm, runner);
+}
+
+/* The monitors fire in the order they were added (the list is newest first). */
+static void fire_monitors(agc_vm *vm, agc_task *t) {
+  agc_monitor *m = t->monitors, *older = NULL;
+  t->monitors = NULL;
+  while (m) {
+    agc_monitor *next = m->next;
+    m->next = older;
+    older = m;
+    m = next;
+  }
+  for (; older; older = older->next) monitor_fire(vm, older);
+}
+
+/* An ended task with nothing pending (`closing` is 0) has settled: its awaiters wake, its monitors fire, and an end
+   hook that found a close pending, and so put itself back (Task.map), runs again. A task that held another (`holder`,
+   see hold) gives its count back, and a holder that has ended and now has nothing pending settles in turn: a loop, not
+   a recursion, so a deep chain of cancelled tasks needs no stack. A holder that has not ended yet settles in its
+   finish_task. */
 static void settle(agc_vm *vm, agc_task *t) {
   while (t) {
     agc_task_wake_all(vm, &t->waiters, &t->waiters_tail, "await");
+    fire_monitors(vm, t);
     agc_end_fn end = t->end;
     t->end = NULL;
     if (end) end(vm, t);
@@ -438,18 +545,6 @@ static void resume(agc_vm *vm, agc_task *t) {
     t->timer.timed = false;
   }
   t->retry = false;
-}
-
-static void trace_spawn(const agc_vm *vm, const agc_task *t, const agc_task *parent) {
-  const agc_trace *tr = &vm->rt->trace;
-  if (!AGC_TRACE_ON(tr, AGC_TRACE_SCHED) || !t->frame_count) return;
-  const agc_string *name = vm->rt->program->functions[t->frames[0].function].name;
-  if (parent && parent->group)
-    AGC_TRACE(tr, AGC_TRACE_SCHED, "spawn task=%" PRIu64 " parent=group:%" PRIu64 " fn=%.*s", t->id,
-              parent->parent ? parent->parent->id : 0, agc_trace_len(name->bytes), name->data);
-  else
-    AGC_TRACE(tr, AGC_TRACE_SCHED, "spawn task=%" PRIu64 " parent=%" PRIu64 " fn=%.*s", t->id, parent ? parent->id : 0,
-              agc_trace_len(name->bytes), name->data);
 }
 
 static void trace_turn(const agc_vm *vm, const agc_task *t, agc_turn_result r, bool ran) {
@@ -697,8 +792,9 @@ bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
 
 /* The wait of a scheduler whose run queue is empty. With no timer it is agc_io_poll(vm, true), and a loop with nothing
    alive means a stall. With a timer the loop runs once until the nearest deadline at most, alive or not, unless every
-   armed timer is a service task's: those only end idle waits that no other task depends on, so the run still stalls
-   when the loop has nothing alive. A pending channel wait starts its clock first, so it bounds the wait. */
+   armed timer is weak (`weak_timers`, an HttpClient's tasks): those only end idle waits that no other task depends on,
+   so the run still stalls when the loop has nothing alive. A pending channel wait starts its clock first, so it bounds
+   the wait. */
 static bool idle_wait(agc_vm *vm) {
   agc_timers_settle(vm);
   uint64_t due = agc_timers_next_due(vm);
@@ -956,23 +1052,6 @@ static bool cancelled_parent(const agc_task *parent) {
   return false;
 }
 
-/* A child made but not yet started: no scheduler can run it, so the caller sets its random stream (and a test its own
-   mark) here. Once start_child enqueues it, another scheduler may run it at once (N > 1), and a field written after
-   that would race with its first turn: an unset stream is all zero, and Random.int never ends on it. */
-static agc_task *make_child(agc_vm *vm, agc_task *parent, agc_value fn, const agc_value *args, uint32_t argc,
-                            uint32_t span) {
-  agc_task *child = agc_new_task(vm);
-  child->input_seen = vm->rt->in.eof_seq;
-  child->service = parent->service;
-  child->test = child->service ? NULL : vm->task->test;
-  /* Counted as done from the start, so Task.pending_count (made - done) never sees it; finish_task skips it. */
-  if (child->service) atomic_fetch_add_explicit(&vm->rt->tasks_done, 1, memory_order_relaxed);
-  child->spawned = true;
-  child->spawn_span = span;
-  agc_task_call(vm, child, fn, 0, args, argc, 0, span);
-  return child;
-}
-
 /* The HANDED resources (N of them) move to the child before it can end, so a child that starts cancelled closes
    them. */
 static agc_task *start_child(agc_vm *vm, agc_task *parent, agc_task *child, agc_resource *const *handed, size_t n) {
@@ -1010,6 +1089,7 @@ agc_task *agc_task_group(agc_vm *vm) {
   g->result = agc_void();
   /* A group inside a service tree is a service task too, so the tasks spawned in it are (agc_task_spawn_in). */
   g->service = vm->task->service;
+  g->weak_timers = vm->task->weak_timers;
   g->test = vm->task->test;
   adopt(vm, vm->task, g);
   return g;
@@ -1199,18 +1279,12 @@ agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_
 }
 
 /* Runs fn(arg) as the owner of handle under a service root, the task tree of an HttpClient (HttpWire.service). The
-   root is a node like agc_task_group that never runs, but it has no parent, so no task's crash, cancel or end reaches
-   it, and Test.test finds no leftover under the caller. Its descendants are service tasks: Task.pending_count leaves
-   them out, they are in no test, and their timers do not keep a stalled run waiting (idle_wait). They end by
-   themselves or with the run. The seed comes from the task's id, not from the caller's stream, so making a client
-   does not change the caller's Random values. */
+   seed comes from the task's id, not from the caller's stream, so making a client does not change the caller's
+   Random values. */
 agc_task *agc_task_service(agc_vm *vm, agc_value fn, agc_value handle, agc_value arg, uint32_t span) {
   agc_resource *r = claim(vm, handle, span);
-  agc_task *root = agc_alloc(sizeof(agc_task));
-  root->group = true;
-  root->service = true;
-  atomic_store_explicit(&root->state, AGC_TASK_PARKED, memory_order_relaxed);
-  root->result = agc_void();
+  agc_task *root = service_root();
+  root->weak_timers = true;
   agc_task *child = make_child(vm, root, fn, &arg, 1, span);
   agc_random_seed(&child->random, child->id);
   return start_child(vm, root, child, &r, 1);
@@ -1354,8 +1428,8 @@ static agc_value builtin_sleep(agc_vm *vm, agc_value *args, uint32_t span) {
 
 /* Task.cancel: marks the task and its descendants cancelled and returns at once; it never waits. A task that has
    ended, or was cancelled, is left as it is. A task may cancel itself or an ancestor (it is then a descendant of the
-   root and is cancelled too): cancel_one sets `yield` for the caller's own task, so it stops after this call. No
-   handle reaches main (a program gets handles only from spawns), and the walk refuses it anyway. */
+   root and is cancelled too): cancel_one sets `yield` for the caller's own task, so it stops after this call. main's
+   own handle (Task.current) is refused by the walk, so main is never cancelled. */
 static agc_value builtin_cancel(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   cancel_tree(vm, agc_as_task(vm, args[0]), "call", NULL);
@@ -1376,6 +1450,55 @@ static agc_value builtin_unobserved_crash(agc_vm *vm, agc_value *args, uint32_t 
   return agc_result_value(true, agc_string_value(t->crash));
 }
 
+/* The TaskDown struct and the TaskExit variants, found once; missing from forged bytecode, the call fails here and not
+   at the end of a task. */
+static void down_types(agc_vm *vm) {
+  agc_runtime *rt = vm->rt;
+  if (rt->down_found) return;
+  static const char *const fields[] = {"task_id", "reason", "code", "message", "file", "line", "column"};
+  rt->down_struct = agc_builtin_struct(vm, "TaskDown", fields, 7);
+  rt->exit_ok = agc_builtin_variant(vm, "TaskExit", "Ok", 0);
+  rt->exit_crashed = agc_builtin_variant(vm, "TaskExit", "Crashed", 0);
+  rt->exit_cancelled = agc_builtin_variant(vm, "TaskExit", "Cancelled", 0);
+  rt->down_found = true;
+}
+
+/* Task.monitor(task, channel, wrap): fires at once for a task that has settled, else when it settles (settle). The
+   wrap is checked as the call of its task will make it (call_value in vm/interp.c), so that call cannot fail. */
+static agc_value builtin_monitor(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_task *target = agc_as_task(vm, args[0]);
+  agc_channel *channel = agc_as_channel(vm, args[1]);
+  const agc_fn *fn = agc_as_fn(vm, args[2]);
+  const agc_program *p = vm->rt->program;
+  if (fn->function >= p->function_count || p->functions[fn->function].params != 1 ||
+      p->functions[fn->function].captures != fn->n)
+    agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: function value does not match its call", span + 3);
+  down_types(vm);
+  agc_monitor *m = agc_alloc(sizeof *m);
+  m->target = target;
+  m->channel = channel;
+  m->wrap = args[2];
+  m->span = span;
+  if (target->state == AGC_TASK_DONE && !target->closing) {
+    monitor_fire(vm, m);
+    return agc_void();
+  }
+  m->next = target->monitors;
+  target->monitors = m;
+  return agc_void();
+}
+
+static agc_value builtin_current(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  return agc_task_value(vm->task);
+}
+
+static agc_value builtin_id(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return agc_int((int64_t)agc_as_task(vm, args[0])->id);
+}
+
 const agc_builtin agc_task_builtins[] = {
   {"Task.spawn", 2, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Task.await", 1, builtin_await, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
@@ -1388,6 +1511,9 @@ const agc_builtin agc_task_builtins[] = {
   {"Task.spawn_owning", 2, builtin_spawn_owning, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"Task.cancel", 1, builtin_cancel, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Task.spawn", 1, builtin_spawn_bare, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Task.monitor", 3, builtin_monitor, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Task.current", 0, builtin_current, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Task.id", 1, builtin_id, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
 };
 
 const size_t agc_task_builtin_count = sizeof agc_task_builtins / sizeof agc_task_builtins[0];

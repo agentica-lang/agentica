@@ -343,7 +343,10 @@ TLS.upgrade
 Task.await
 Task.await_result
 Task.cancel
+Task.current
+Task.id
 Task.map
+Task.monitor
 Task.pending_count
 Task.sleep
 Task.spawn

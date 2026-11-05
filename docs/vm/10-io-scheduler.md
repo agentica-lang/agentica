@@ -188,19 +188,20 @@ section says how the scheduler and the loop keep them.
   descendants), starts items up to `limit`, and ends with the list once every
   slot is set. An item reports its end through a hook (`end`, `end_data`), which
   `finish_task` calls for a return, a crash and a cancel. The hook ignores an
-  item that already timed out. An item cancelled by someone else can only be
-  cancelled through its caller. The caller, a stepper parked on the group's
-  timer, is then cancelled like any parked task (its timer is disarmed): it
-  cancels its children first, never runs the step function again, and so starts
-  nothing and writes no slot. An item with a file close pending is not settled:
-  the hook waits, and `agc_task_close_done` calls it when the last close ends.
-  If the deadline comes first, the item settles as timed out without waiting
-  for the close (`expire` marks its crash, if any, as observed), and the hook,
-  when the close ends, finds a settled item and does nothing. An item that ends
-  after its deadline, but before the caller runs, keeps its result.
-  The handles an item opened are closed when it ends or is cancelled (Owners).
-  At N>1 the hook runs on the item's scheduler, under `rt->sync` (§16.9, "One
-  coarse lock").
+  item that already timed out. An item cancelled alone (through its handle from
+  `Task.current`) settles as `error("task: cancelled")`. When the cancel is that
+  of the caller, a stepper parked on the group's timer, or of an ancestor, the
+  walk cancels the items first, and the hook wakes the caller; the same walk
+  then ends the caller like any parked task (its timer is disarmed), and a step
+  it may still run writes slots nobody reads. An item with a file close pending
+  is not settled: the hook waits, and `agc_task_close_done` calls it when the
+  last close ends. If the deadline comes first, the item settles as timed out
+  without waiting for the close (`expire` marks its crash, if any, as observed),
+  and the hook, when the close ends, finds a settled item and does nothing. An
+  item that ends after its deadline, but before the caller runs, keeps its
+  result. The handles an item opened are closed when it ends or is cancelled
+  (Owners). At N>1 the hook runs on the item's scheduler, under `rt->sync`
+  (§16.9, "One coarse lock").
 - **Stall check (N=1).** If the queue is empty, no libuv handle is alive, no
   timer of a task is armed (§16.9, "Timers"), and `main` is not done, the VM
   fails with `RUNTIME-INTERNAL` ("every task is waiting and nothing can wake

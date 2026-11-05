@@ -74,7 +74,7 @@ export VM_BUILTINS = Set.new([
   "Bytes.to_a", "Bytes.length", "Bytes.at", "Bytes.slice", "Bytes.take", "Bytes.drop", "Bytes.equal", "Bytes.plus",
   "Bytes.concat", "String.bytes", "Optional.equal", "Value.equal", "Bytes.decode", "String.encode", "Int.abs",
   "Int.pow", "Int.gcd", "Int.clamp", "Float.abs", "Float.floor", "Float.ceil", "Float.round", "Float.clamp",
-  "Math.sqrt", "String.multiply",
+  "Math.sqrt", "String.multiply", "Task.current", "Task.id", "Task.monitor",
 ])
 
 ## The instruction of an operator on two Ints, by the token kind of the operator. `>` and `>=` use the instruction of
@@ -102,7 +102,7 @@ export NATIVE_LAYOUTS = Set.new(["Native.size_of", "Native.get_struct", "Native.
 export BUILTIN_STRUCTS = [
   "FileInfo", "Header", "HttpRequest", "HttpResponse", "HttpClientOptions", "HttpServerOptions", "ProcessOutput",
   "LogEvent", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Reply", "HttpWire.Job", "HttpWire.Response", "StructMember",
-  "TlsClientOptions", "TlsServerOptions",
+  "TlsClientOptions", "TlsServerOptions", "TaskDown",
 ]
 
 ## The builtin structs that another one has a field of: using the key also puts these in the table.

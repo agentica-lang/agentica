@@ -7,8 +7,8 @@ import Model from "builtin_model"
 
 ## Every builtin, sorted by name; the Zlib rows, the ATS rows, the Base64 and hex rows, the digest rows, the HMAC rows,
 ## the SecureRandom rows, the HMAC.secure_compare row, the Bytes rows, the Cipher and CMAC rows, the AES-GCM and KDF
-## rows, the Optional rows and then the text codec rows are appended last, in contract order, so the positions of the
-## existing rows never shift.
+## rows, the Optional rows, the text codec rows and then the task monitor rows are appended last, in contract order, so
+## the positions of the existing rows never shift.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
 BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
 BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
@@ -22,7 +22,7 @@ BUILTIN_GROUP_10 = ROWS_46.concat(ROWS_47.concat(ROWS_48.concat(ROWS_49.concat(R
 BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(ROWS_55))))
 BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58.concat(ROWS_59.concat(ROWS_60))))
 BUILTIN_GROUP_13 = ROWS_61.concat(ROWS_62.concat(ROWS_63.concat(ROWS_64.concat(ROWS_65))))
-BUILTIN_GROUP_14 = ROWS_66.concat(ROWS_67)
+BUILTIN_GROUP_14 = ROWS_66.concat(ROWS_67.concat(ROWS_68))
 BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
 BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
 BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
@@ -182,6 +182,19 @@ export RECORDS: List[Model.Record] = [
     name: "StructMember",
     fields: [Model.Named(name: "name", type: Types.Type.String), Model.Named(name: "type", type: Types.Type.String)],
   ),
+  # vm/task.c builds it with these fields in this order (monitor_down): keep them in step.
+  Model.Record(
+    name: "TaskDown",
+    fields: [
+      Model.Named(name: "task_id", type: Types.Type.Int),
+      Model.Named(name: "reason", type: Types.Type.Enum("TaskExit", [])),
+      Model.Named(name: "code", type: Types.Type.String),
+      Model.Named(name: "message", type: Types.Type.String),
+      Model.Named(name: "file", type: Types.Type.String),
+      Model.Named(name: "line", type: Types.Type.Int),
+      Model.Named(name: "column", type: Types.Type.Int),
+    ],
+  ),
   # vm/tls_context.c reads these fields by position: keep them in step.
   Model.Record(
     name: "TlsClientOptions",
@@ -231,14 +244,25 @@ export ENUMS: List[Model.EnumDef] = [
       Model.Variant(name: "Error", payload: []),
     ],
   ),
+  Model.EnumDef(
+    name: "TaskExit",
+    parameters: [],
+    variants: [
+      Model.Variant(name: "Ok", payload: []),
+      Model.Variant(name: "Crashed", payload: []),
+      Model.Variant(name: "Cancelled", payload: []),
+    ],
+  ),
 ]
 
 ## The handle types a task can be given with Task.spawn_owning.
 export HANDLE_TYPES: List[String] = ["Socket", "Listener", "HttpServer", "FileHandle", "Process"]
 
-## The builtin types with no structure: handles, TestCase, TlsContext and C.Pointer (a C pointer of native code).
+## The builtin types with no structure: handles, TestCase, TlsContext, C.Pointer (a C pointer of native code) and
+## TaskRef (the running task, from Task.current).
 export OPAQUE_TYPES: List[String] = [
   "Socket", "Listener", "HttpClient", "HttpServer", "FileHandle", "Process", "TestCase", "TlsContext", "C.Pointer",
+  "TaskRef",
 ]
 
 ## The type names no declaration or import alias may take.
@@ -302,6 +326,9 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "TCP",
   "TLS",
   "Task",
+  "TaskDown",
+  "TaskExit",
+  "TaskRef",
   "Test",
   "TestCase",
   "Time",
@@ -4943,8 +4970,8 @@ ROWS_50: List[Model.Builtin] = [
     implementation: "Task.cancel",
     effects: ["concurrency"],
     description: (
-      "Cancel a task and its descendants without waiting: each runs at most the rest of its current turn and " +
-      "closes what it owns; does nothing for a task that has ended; VM only."
+      "Cancel a task (or TaskRef) and its descendants without waiting: each runs at most the rest of its current " +
+      "turn and closes what it owns; does nothing for a task that has ended; VM only."
     ),
     alternatives: [],
   ),
@@ -6416,6 +6443,50 @@ ROWS_67: List[Model.Builtin] = [
     implementation: "String.encode",
     effects: [],
     description: "Write the text in an encoding; a character it cannot hold or an unknown encoding gives an error.",
+    alternatives: [],
+  ),
+]
+
+## The task monitor rows; appended last so the positions of the existing rows never shift.
+ROWS_68: List[Model.Builtin] = [
+  Model.Builtin(
+    name: "Task.current",
+    parameters: [],
+    result: Types.Type.Opaque("TaskRef"),
+    rule: Model.Rule.Plain,
+    implementation: "Task.current",
+    effects: ["concurrency"],
+    description: (
+      "Return the running task as a TaskRef, which Task.monitor, Task.cancel and id take but no await, since its " +
+      "result type is not known here; VM only."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Task.id",
+    parameters: [Model.Named(name: "task", type: Types.Type.Task(Types.Type.Var("R")))],
+    result: Types.Type.Int,
+    rule: Model.Rule.TaskTarget,
+    implementation: "Task.id",
+    effects: [],
+    description: "Return the number that identifies the task (or TaskRef) in this run, the task_id of its TaskDown.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Task.monitor",
+    parameters: [
+      Model.Named(name: "task", type: Types.Type.Task(Types.Type.Var("R"))),
+      Model.Named(name: "channel", type: Types.Type.Channel(Types.Type.Var("M"))),
+      Model.Named(name: "wrap", type: Types.Type.Fn([Types.Type.Struct("TaskDown", [])], Types.Type.Var("M"))),
+    ],
+    result: Types.Type.Void,
+    rule: Model.Rule.TaskMonitor,
+    implementation: "Task.monitor",
+    effects: ["concurrency"],
+    description: (
+      "When the task (or TaskRef) ends (returns, crashes or is cancelled), send wrap(TaskDown) into the channel " +
+      "once, without waiting; at once for a task that has ended; dropped when the channel is closed or full; VM only."
+    ),
     alternatives: [],
   ),
 ]

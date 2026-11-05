@@ -1,0 +1,13 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 73,
+  "stdout": [
+    "parent returns",
+    "parent ended: TaskExit.Ok, same id: true",
+    "7",
+    "true",
+    ""
+  ],
+  "stderr": []
+}

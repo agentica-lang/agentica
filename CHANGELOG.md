@@ -12,7 +12,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `AGENTICA_PERF_MAP=1` writes `/tmp/perf-PID.map`, so Linux `perf` names the
   functions the JIT compiled.
-
+- `Task.monitor(task, channel, wrap)` sends a `TaskDown` notice when a task
+  ends; `Task.current` and `task.id` name the running task.
 - `std/cache`: a contract for caches of strings that tasks share (`Cache.Store`, a
   struct of functions) with `fetch`, `get`, `put`, `put_new`, `delete`, `clear`,
   `cleanup` and `bytes`, and `Cache.memory`, a bounded one on top of `ATS` with a

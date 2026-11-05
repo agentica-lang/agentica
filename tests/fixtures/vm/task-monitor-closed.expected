@@ -1,0 +1,12 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 44,
+  "stdout": [
+    "ok(\"down TaskExit.Ok\")",
+    "error(\"channel: closed\")",
+    "1",
+    ""
+  ],
+  "stderr": []
+}

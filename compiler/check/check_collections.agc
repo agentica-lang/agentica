@@ -22,6 +22,7 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
     Model.Rule.TaskAwait -> return check_await(cx, st, site)
     Model.Rule.TaskAwaitTimeout -> return check_await_timeout(cx, st, site)
     Model.Rule.TaskMap -> return check_task_map(cx, st, site)
+    Model.Rule.TaskMonitor -> return check_monitor(cx, st, site)
     Model.Rule.TaskTarget -> return check_target(cx, st, site, &Args.task_argument)
     Model.Rule.AtsNew -> return check_ats_new(cx, st, site)
     Model.Rule.AtsCall -> return check_ats_call(cx, st, site)
@@ -386,12 +387,23 @@ end
 def check_await(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   target = try State.expr(cx, st, site.args[0], T.task_of(site.expected))
   if !T.is?(target.type, "Task")
-    return error(
-      State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", "Task.await requires a task", Ast.expr_span(site.args[0])),
-    )
+    return error(not_awaitable(cx, target, site))
   end
 
   return ok(State.Out(st: target.st, type: T.item(target.type)))
+end
+
+# CHECK-TYPE-MISMATCH of an await of something that is not a Task[R]; the TaskRef of Task.current has no result type to
+# give, and its help names the way to wait for its end.
+def not_awaitable(cx: State.Cx, target: State.Out, site: State.Site) -> String
+  span = Ast.expr_span(site.args[0])
+  if Args.task_ref?(target.type)
+    message = "Task.await requires a Task[R], found TaskRef"
+    help = "a TaskRef from Task.current has no result to await; to learn when it ends, use Task.monitor"
+    return State.fail_help(cx, target.st, "CHECK-TYPE-MISMATCH", message, span, help)
+  end
+
+  return State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", "Task.await requires a task", span)
 end
 
 # Task.await with a timeout gives Await[R]: Await.Done(value) or Await.TimedOut.
@@ -403,13 +415,26 @@ def check_await_timeout(cx: State.Cx, st: State.St, site: State.Site) -> Result[
 
   target = try State.expr(cx, st, site.args[0], context)
   if !T.is?(target.type, "Task")
-    return error(
-      State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", "Task.await requires a task", Ast.expr_span(site.args[0])),
-    )
+    return error(not_awaitable(cx, target, site))
   end
 
   timeout = try State.expr(cx, target.st, site.args[1], T.Type.Int)
   return ok(State.Out(st: timeout.st, type: T.Type.Enum("Await", [T.item(target.type)])))
+end
+
+# Task.monitor(task, channel, wrap): a task of any result, a Channel[M], and a block or function that takes the
+# TaskDown and gives the M the channel carries.
+def check_monitor(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  target = try Args.task_argument(cx, st, site)
+  channel = try State.expr(cx, target.st, site.args[1], T.Type.Unknown)
+  if !T.is?(channel.type, "Channel")
+    shape = T.Type.Channel(T.Type.Var("M"))
+    return error(State.mismatch(cx, channel.st, shape, channel.type, Ast.expr_span(site.args[1])))
+  end
+
+  wrap = T.Type.Fn([T.Type.Struct("TaskDown", [])], T.item(channel.type))
+  checked = try State.expr(cx, channel.st, site.args[2], wrap)
+  return ok(State.Out(st: checked.st, type: T.Type.Void))
 end
 
 # Task.map(items, limit, timeout_ms, f): the callback is a block (which gets the item type from the list) or a function

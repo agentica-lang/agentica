@@ -67,11 +67,11 @@ static void claim(agc_vm *vm, agc_task *t) {
   if (t->parked) agc_fail(vm, "RUNTIME-INTERNAL", "a task parked on a job armed a timer", 0);
   t->timer.timed = true;
   atomic_fetch_add_explicit(&vm->rt->timers_armed, 1, memory_order_relaxed);
-  if (t->service) atomic_fetch_add_explicit(&vm->rt->timers_weak, 1, memory_order_relaxed);
+  if (t->weak_timers) atomic_fetch_add_explicit(&vm->rt->timers_weak, 1, memory_order_relaxed);
 }
 
 static void unclaim(agc_vm *vm, const agc_task *t) {
-  if (t->service) atomic_fetch_sub_explicit(&vm->rt->timers_weak, 1, memory_order_relaxed);
+  if (t->weak_timers) atomic_fetch_sub_explicit(&vm->rt->timers_weak, 1, memory_order_relaxed);
   atomic_fetch_sub_explicit(&vm->rt->timers_armed, 1, memory_order_relaxed);
 }
 
@@ -139,12 +139,12 @@ void agc_timers_disarm(agc_vm *vm, agc_task *t) {
   unclaim(vm, t);
 }
 
-/* True when some armed timer is not a service task's: the stall checks wait for those only. A timer is counted as
-   armed before it is counted as weak and stops being weak before it stops being armed, and the weak count is read
-   first, so a change in between can only make this true, which delays a stall to the next check. The relaxed loads
-   are enough only because of the two callers: stalled() runs once every run queue is quiet, and timers are armed
-   only by running tasks, so it sees no change; idle_wait uses the answer only to pick alive_required for one wait,
-   where a stale answer costs one more turn of the loop. */
+/* True when some armed timer is not a weak one (`weak_timers`, the tasks of an HttpClient's tree): the stall checks
+   wait for those only. A timer is counted as armed before it is counted as weak and stops being weak before it stops
+   being armed, and the weak count is read first, so a change in between can only make this true, which delays a stall
+   to the next check. The relaxed loads are enough only because of the two callers: stalled() runs once every run queue
+   is quiet, and timers are armed only by running tasks, so it sees no change; idle_wait uses the answer only to pick
+   alive_required for one wait, where a stale answer costs one more turn of the loop. */
 bool agc_timers_strong(const agc_vm *vm) {
   uint64_t weak = atomic_load_explicit(&vm->rt->timers_weak, memory_order_relaxed);
   return atomic_load_explicit(&vm->rt->timers_armed, memory_order_relaxed) > weak;
