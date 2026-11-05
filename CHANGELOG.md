@@ -12,6 +12,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `Task.monitor(task, channel, wrap)` sends a `TaskDown` notice when a task
   ends; `Task.current` and `task.id` name the running task.
+- `std/cache`: a contract for caches of strings that tasks share (`Cache.Store`, a
+  struct of functions) with `fetch`, `get`, `put`, `put_new`, `delete`, `clear`,
+  `cleanup` and `bytes`, and `Cache.memory`, a bounded one on top of `ATS` with a
+  byte budget, `max_entries` and a time to live.
 
 ## [0.24.2] - 2026-11-05
 

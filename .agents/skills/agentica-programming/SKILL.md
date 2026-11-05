@@ -86,6 +86,7 @@ Read only what the task needs.
 | `html.md` | `std/html` (HTML escaping) |
 | `cookie.md` | `std/cookie` (`Cookie` and `Set-Cookie` headers) |
 | `option_parser.md` | `std/option_parser` (command-line options and arguments, typed getters, help) |
+| `cache.md` | `std/cache` (a bounded cache of strings that tasks share) |
 | `mime.md` | `std/mime` (media type of a file) |
 | `utc.md` | `std/utc` (Unix ms to UTC date and RFC 3339 text) |
 | `regex.md` | `std/regex` (regular expressions: match, find, replace, split) |
