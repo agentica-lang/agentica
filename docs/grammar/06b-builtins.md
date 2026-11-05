@@ -89,15 +89,9 @@ the checker enforces:
   (`Box[List[Int]]`, `Maybe[Int]`). Results, builtin enums (`LogLevel`) and
   Int-keyed maps are `CHECK-NOT-ENCODABLE`. Untyped empty containers need an
   annotation.
-- A user enum is a tagged object: `{"tag": "Rect", "values": [1.0, 2.0]}`. `tag`
-  is the variant name (without the enum name) and `values` the payloads in
-  order. `JSON.encode` and `JSON.from` always write both keys, `tag` first;
-  `JSON.decode` accepts a missing `values` for a variant with no payload and
-  ignores extra keys, as for structs. Errors name the same paths as for struct
-  fields (`shapes[0].values[1]`), for an unknown `tag`, a missing or wrong `tag`
-  or `values`, a wrong number of values or a wrong value type.
-  `JSON.schema` describes it as a `oneOf` with one object per variant, and enums
-  go in `$defs` like structs. A `JsonField` in a payload is
+- A user enum is a tagged object `{"tag": "Rect", "values": [1.0, 2.0]}`: `tag`
+  is the variant name and `values` the payloads in order. The page has the
+  errors and the schema (a `oneOf`). A `JsonField` in a payload is
   `CHECK-JSON-FIELD-PLACE`.
 - `JSON.codec(T)` takes the targets of `decode`, with its diagnostics, and
   returns a `JSON.Codec[T]`: the JSON of `T` as a value, for generic code, which
@@ -111,8 +105,7 @@ the checker enforces:
 `Optional[T]` is JSON's `null` or a `T`, anywhere a type is: a struct field, a
 list item, a map value, an `Optional` item, or the whole value of `JSON.encode`
 and `JSON.from`. `none` is `null`, `some(x)` is `x`, and a missing key of an
-`Optional` struct field decodes as `none`; the rest (schema, error texts, round
-trip) is in the library page.
+`Optional` struct field decodes as `none`.
 
 - `Optional[Nil]` is `CHECK-NOT-ENCODABLE` or `CHECK-NOT-DECODABLE`, since
   `some(nil)` would be written as `null`. An `Optional` cannot hold a
@@ -159,9 +152,6 @@ end
   and it has no `==`. A user `struct JsonField`, `enum JsonField` or `import ...
   as JsonField` is `CHECK-REDEFINED-NAME`.
 
-The decode, encode and schema forms, the error texts and the round trip are in
-the library page.
-
 ### Builtin discovery and execution budget
 
 `agentica help NAME --json` prints the name, arity, parameter types, result,
@@ -182,108 +172,59 @@ the builtins it stands for, and `--json` prints
 every public builtin as one JSON array, sorted by name, each element exactly
 what `help NAME --json` prints.
 
-`agentica doc PATH [--json]` prints the exported API of a module with its `##`
-docs (section 4): PATH is a source file or a `std/` module name. It lexes and
-parses the module, so its imports need not exist; only a module that re-exports
-a name is linked, as `outline` below. Declarations without `export` are left
-out. A lex or parse error exits 1, an unreadable path exits 2.
+The query commands (`doc`, `help std/...`, `outline`, `type-at`, `symbol` and
+`refs`) are described for users in [Command line](../../site/content/cli.md).
+None of them runs the program. The contract that page leaves out:
 
-`agentica help std/MODULE[.NAME] [--json]` reads a `std/` module the way `doc`
-does. `std/MODULE` lists its exports, each with its signature and summary (the
-first paragraph of its doc); `std/MODULE.NAME` prints that export's signature
-and whole doc, and a struct's fields or an enum's variants. With `--json` a
-module is `{module, doc, items: [{kind, name, summary}]}` and a name has the
-`help NAME --json` fields that apply (`name`, `arity`, `parameters`, `result`,
-`signature`), `description` (the whole doc or null), `summary`, `kind` and
-`module`, and no `effects`. A module or name that does not exist is
-`QUERY-NOT-FOUND`, with a "did you mean" over the exports for a name; a name
-that is empty after the dot is `QUERY-USAGE`; both exit 2.
-
-`agentica outline FILE [--json] [--stdin FILE]` lists the top-level declarations
-of one file in source order, private ones too: imports, functions, structs with
-their fields, enums with their variants, type aliases, resources and constants,
-each with `exported`, its signature, its `##` doc and summary, and its span and
-the span of its name. FILE is a source file or a `std/` module name. It lexes
-and parses the file only, as `doc` does; a file that re-exports a name, such as
-`export Url.parse`, is linked to list the original declaration with its doc, and
-a re-export whose module does not link is left out. `--stdin FILE` takes the
-text of FILE from standard input. A lex or parse error exits 1; a mistake in the
-arguments or an unreadable path is `QUERY-USAGE` (section 7) and exits 2.
-
-`agentica type-at FILE:LINE:COL [--json]` gives the checked type of the
-innermost expression at a position (line and column from 1, in code points as
-diagnostics count them), its span and source text, and the definition of what it
-names: a function, struct, enum, variant, field or constant, with the span of
-the declaration and of its name, its signature and its `##` doc (null when it
-has none). A type name (in an annotation, a type argument or a field or
-payload type) has the `kind` `type`, the span of the name (`Models.User` is one
-span) and the struct, enum, type alias or resource it names as definition
-(`alias` kind for an alias); a builtin type (`Int`, `List`) has no definition. A
-type of another file is written through the import alias of
-FILE (`Models.User`). On the name of a builtin (`split` in `xs.split(",")`) the
-`kind` is `builtin` and `help` holds the object of `agentica help NAME --json`;
-a builtin has no definition. A local (a parameter, a binding, a `for` variable
-or a name in a `case` pattern) has its type and a definition at its binding,
-whether the position is on a use or on the binding itself. The `kind` of the
-JSON answer is an open set: a client accepts a value it does not know. FILE is a
-path of the disk, linked and checked with its imports; it needs no `main`.
-`--stdin` before the position (`type-at --stdin FILE:LINE:COL`) takes the text
-of FILE from standard input. An error of the program is its own diagnostic and
-exits 1. A position on no token of an expression (a blank, a comment, the body
-text of a heredoc, a keyword such as `return` that is part of no expression) is
-`QUERY-NO-EXPRESSION` and exits 2, as is a bad position (`QUERY-USAGE`). With
-`--partial` (also on `refs`; `outline` accepts it and ignores it, since it never
-checks) a program in which some functions do not check is answered from the
-functions that do: the answer has `"partial": true` and `diagnostics`, and exits
-0. A name in a function that did not check is answered by its definition after
-linking, with a `type` of null. A program that does not link, or a position that
-cannot be answered this way, is the first diagnostic and exits 1 as before.
-
-`agentica symbol NAME [PATH...] [--json] [--stdin FILE]` finds where a name is
-defined in the modules linked from the files under PATH (a file or a folder;
-every `*.agc` file below a folder; default `.`). NAME is written as the code
-writes it: `total`, `User.email`, `Level.Info`, `Models.User` through an import
-alias of a file of PATH, `std/queue.pop`, or a builtin (`Map.get`). Each match
-has its `kind` (`function`, `struct`, `enum`, `alias`, `resource`, `constant`,
-`field`, `variant` or `builtin`), `module`, `exported` (private declarations
-too), `signature`, `doc` and spans; a builtin has `help`, the object of
-`agentica help NAME --json`. The answer with `--json` is one object, `{version,
-command, query, matches, skipped}`. Only lexing, parsing and linking are needed.
-The files of PATH are linked together; one that does not lex, parse or link is
-listed under `skipped` with its first diagnostic while the others still answer
-(exit 0). If none links, that first diagnostic is the answer and the exit status
-is 1. A name that nothing declares is `QUERY-NOT-FOUND` and exits 2, as is a
-mistake in the arguments (`QUERY-USAGE`). `--stdin FILE` takes the text of FILE
-from standard input and searches it too.
-
-`agentica refs NAME|FILE:LINE:COL [PATH...] [--json]` lists every reference to a
-declaration: a function, struct, enum, variant, field (in a read, a construction
-and a `with`), constant, type alias, resource, local or builtin. The declaration
-is the one that NAME names, written and resolved as for `symbol`, or the one the
-name at the position stands for. The files are linked together: FILE and the
-files under PATH for a position, the files under PATH (default `.`) for a NAME,
-and everything they import. One that does not link is listed under `skipped` and
-the others still answer, except FILE, which must link. The program is checked as
-`type-at` checks it, with the same exit codes. The answer is one object,
-`{version, command, query, definition, builtin, references, skipped}`:
-`definition` is the `symbol` match (null for a builtin, which `builtin` names),
-and `references` lists each use with its `kind`, the `function` it is in and the
-span of the name; the definition is not a reference, and no references is an
-empty list. The linker and the checker decide what a name is, so two fields of
-one name in two structs, or a name bound in two sibling blocks, are never mixed.
-A NAME that nothing declares is `QUERY-NOT-FOUND`; one that several declarations
-answer to is `QUERY-AMBIGUOUS-NAME`, whose help lists each as `FILE:LINE:COL`. A
-position on the name in a declaration picks it, and so does one on a name of an
-import list (`make` of `import {make} from "models"`), which selects the
-imported declaration. A position on the module alias of `Models.total(u)`
-selects the function `total`, not the module; one on a module alias or a path of
-an import line is `QUERY-NO-EXPRESSION`. `--stdin FILE:LINE:COL` takes the text
-of FILE from standard input; with a NAME, `--stdin FILE` searches that text as
-one more file, as for `symbol`. With `--partial` and a position alone (no PATH),
-the references to a function, struct, enum, alias, resource, constant or variant
-are complete even when some functions do not check, and so are those of a local
-of a function that checks; a field or a builtin needs every function checked. A
-NAME or a PATH with `--partial` is `QUERY-USAGE`.
+- `agentica doc PATH` and `outline FILE` take a source file or a `std/` module
+  name and only lex and parse it, so its imports need not exist; a file that
+  re-exports a name (`export Url.parse`) is also linked, and a re-export whose
+  module does not link is left out of `outline`. A lex or parse error exits 1;
+  an unreadable path exits 2 (`QUERY-USAGE` in `outline`).
+- `agentica help std/MODULE[.NAME] --json`: a module is `{module, doc, items:
+  [{kind, name, summary}]}`, and a name has the `help NAME --json` fields that
+  apply (`name`, `arity`, `parameters`, `result`, `signature`), `description`
+  (the whole doc or null), `summary`, `kind` and `module`, and no `effects`. A
+  name that is empty after the dot is `QUERY-USAGE`.
+- Positions of `type-at` and `refs` count from 1, in code points as diagnostics
+  count them. The `kind` of the JSON answer of `type-at` is an open set: a
+  client accepts a value it does not know. A bad position is `QUERY-USAGE` and a
+  position on no expression is `QUERY-NO-EXPRESSION`, both exit 2 (section 7);
+  an error of the program is its own diagnostic and exits 1.
+- `--stdin` replaces the text of FILE with standard input: before the position
+  in `type-at --stdin FILE:LINE:COL`, and with a NAME in `symbol` and `refs` the
+  text is searched as one more file.
+- With `--partial` (`type-at`, and `refs` with a position and no PATH;
+  `outline` accepts it and ignores it) a program in which some functions do not
+  check is answered from the functions that do: the answer has `"partial":
+  true` and `diagnostics`, and exits 0. A name in a function that did not check
+  is answered by its definition after linking, with a `type` of null. The
+  references to a function, struct, enum, alias, resource, constant or variant
+  are complete, and so are those of a local of a function that checks; a field
+  or a builtin needs every function checked. A program that does not link, or a
+  position that cannot be answered this way, is the first diagnostic and exits
+  1. A NAME or a PATH with `--partial` is `QUERY-USAGE`.
+- `symbol` and `refs` link the files under PATH (default `.`) together and
+  everything they import; one that does not lex, parse or link is listed under
+  `skipped` with its first diagnostic while the others still answer (exit 0),
+  except the FILE of a `refs` position, which must link. If none links, the
+  first diagnostic is the answer (exit 1). A match has `kind` (`function`,
+  `struct`, `enum`, `alias`, `resource`, `constant`, `field`, `variant` or
+  `builtin`), `module`, `exported` (private declarations too), `signature`,
+  `doc` and spans; a builtin has `help`, the object of `agentica help NAME
+  --json`. The answer of `symbol` is `{version, command, query, matches,
+  skipped}`.
+- `refs` lists every reference to a declaration (a function, struct, enum,
+  variant, field in a read, a construction and a `with`, constant, type alias,
+  resource, local or builtin); the definition is not a reference. The
+  linker and the checker decide what a name is, so two fields of one name in
+  two structs, or a name bound in two sibling blocks, are never mixed. A NAME
+  that nothing declares is `QUERY-NOT-FOUND`; one that several declarations
+  answer to is `QUERY-AMBIGUOUS-NAME`, whose help lists each as `FILE:LINE:COL`.
+  A position on a name in a declaration picks it, and so does one on a name of
+  an import list (`make` of `import {make} from "models"`), which selects the
+  imported declaration; a position on the module alias of `Models.total(u)`
+  selects the function `total`, not the module.
 
 `agentica --max-steps N program.agc` limits a run to N expression or statement
 entries across all tasks; N must be a positive integer. Runs are unlimited by
@@ -319,17 +260,15 @@ read `AGENTICA_SCHEDULERS`.
 Everything is allowed by default. `--deny-run`, `--deny-net`, `--deny-fs` and
 `--deny-env` each turn off a family of builtins: a call returns an error that
 begins with `denied: ` and the flag (`denied: --deny-fs`), and the program goes
-on. `--deny-run` turns off the `Process` starts; `--deny-net` every connect and
-listen of `TCP` and `TLS`, so `std/http` too, before any DNS lookup; `--deny-fs`
-every `File`, `Dir` and `Path` call but `Path.join`, `Lazy.write_lines`,
-`Lazy.write_bytes`, and a TLS call that names a file; `--deny-env` `System.env`
-(`System.os` and `System.pid` stay on: they hold no secret; the locale of error
-texts still follows `LANG`). Each turns on `--deny-native`, since native code
-could do the same. A program that can start processes escapes a single flag; use
-`--sandbox`, or add `--deny-run`. `--sandbox` is all of them: the one flag for
-code you do not trust. They apply to the program, not to the front end.
-`agentica test` gives them to the test files, the step programs and the programs
-under test, not to its runner.
+on. `--deny-net` stops every connect and listen of `TCP` and `TLS`, `std/http`
+too, before any DNS lookup. `--deny-fs` covers every `File`, `Dir` and `Path`
+call but `Path.join`, `Lazy.write_lines`, `Lazy.write_bytes`, and a TLS call
+that names a file. `--deny-env` covers `System.env` (`System.os` and
+`System.pid` stay on: they hold no secret). Each turns on `--deny-native`, since
+native code could do the same. `--sandbox` is all of them. The flags apply to
+the program, not to the front end; `agentica test` gives them to the test files,
+the step programs and the programs under test, not to its runner. The table of
+flags is in [Command line](../../site/content/cli.md#options).
 
 Calls nest at most 10000 deep in each task; a deeper call is
 `RUNTIME-STACK-OVERFLOW` at the call. A tail call (`return f(...)` to a user
@@ -340,25 +279,19 @@ call of a builtin are not tail calls.
 ### The bytecode cache
 
 `agentica FILE.agc` and each test file of `agentica test` keep their compiled
-program in `_build/bytecode/`, with `_build/` in the folder of the nearest
-`agentica.toml` or, with none, beside the root file (`AGENTICA_BUILD_DIR` names
-another folder in place of `_build/`). The entry holds the bytes `agentica compile` writes, the
-version, build and path of the binary, the SHA-256 of every file the front end
-read (with `agentica.toml` and `agentica.lock`), and what the resolver looked
-at: each place of the `pkg/` search that was empty or held a file, and where
-each relative import led. A lookup checks them again; any difference, or a
-damaged entry, compiles the program again and replaces the entry. A run that
-hits has no front-end diagnostics, since the program checked when it was
-cached. The entry is used only when `_build/`, `bytecode/` and the file are
-what the cache made: real folders and a regular file, never a link, owned by
-the user and writable by no one else (the folders are made with mode 0700).
-Otherwise the run goes on without the cache. On Windows, which has no modes or
-owner ids to read, only the link and file-kind checks apply: the cache trusts
-its folder, with no owner or ACL check, and a folder that other users can write
-is out of scope. `check`, `compile`, `--dump`, `--dump-ir`, `check --stdin` and
-`run` do not use it; `--no-cache` skips it for one run; a folder that cannot be
-written is not an error. The `--deny-*` flags do not apply to it: they are for
-the program.
+program in `_build/bytecode/` and read it back while the sources are the same
+(files, ownership checks and flags in [Command
+line](../../site/content/cli.md#bytecode-cache)). The entry holds the bytes
+`agentica compile` writes, the version, build and path of the binary, the
+SHA-256 of every file the front end read (with `agentica.toml` and
+`agentica.lock`), and what the resolver looked at: each place of the `pkg/`
+search that was empty or held a file, and where each relative import led. A
+lookup checks them again; any difference, or a damaged entry, compiles the
+program again and replaces the entry. A run that hits has no front-end
+diagnostics, since the program checked when it was cached. When the folders fail
+the ownership checks the run goes on without the cache, and a folder that cannot
+be written is not an error. The `--deny-*` flags do not apply to the cache: they
+are for the program.
 
 ### Running a compiled program
 
