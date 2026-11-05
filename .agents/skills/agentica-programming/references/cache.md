@@ -25,15 +25,25 @@ Cache.bytes(cache: Cache.Store) -> Int
 - `Cache.memory`: an entry costs key + value + 64 bytes. Each of two live
   generations holds half of `max_bytes` (and of `max_entries`); the oldest
   generation is dropped whole when the young one is full, and a `get` copies a
-  hit from the old one forward. A value over half of `max_bytes` is returned
-  by `fetch` and not stored; `put` of one also removes the old value.
-- `ttl_ms` gives each entry that life from its write (a read does not renew
-  it). `get` drops an expired entry; `cleanup` removes all expired entries and
-  returns how many (run it in a task: `while true`, `Cache.cleanup`,
-  `Task.sleep(5_000)`); a generation young for half the ttl is dropped when
-  the next put comes. `clock` is for tests (a block that reads a number).
-- `bytes` is exact (delete, replace, expiry and `cleanup` give bytes back) and
-  never above `max_bytes`. A drop deletes entries one by one: one `put` waits.
+  hit from the old one forward (never turning a generation). An entry whose
+  cost is over `max_bytes / 2` is returned by `fetch` and not stored; `put` of
+  one also removes the old value. `put` is a removal then a store, not atomic:
+  a reader may see a miss between, and a `put` with no room is dropped after
+  the old value went. `clear` may drop concurrent puts the same way.
+- `ttl_ms`: an entry is never read more than that long after its write (a
+  read does not renew it). `get` drops an expired entry; `cleanup` removes all
+  expired entries and returns how many (run it in a task: `while true`,
+  `Cache.cleanup`, `Task.sleep(5_000)`). Generations also turn by time, but
+  only on writes: with no puts, expired entries stay in memory until read or
+  `cleanup`; with puts they are gone by about 1.5 ttl, and a generation drop may
+  remove an entry earlier, no sooner than about ttl/2. `clock` is for tests.
+- `bytes` is exact when no call runs (delete, replace, expiry and `cleanup` give
+  bytes back) and never above `max_bytes`. A task cancelled between reserving
+  and storing leaves its reservation counted until its generation drops. A drop
+  deletes entries one by one: one `put` waits (about 5 us an entry).
 - Another implementation returns a `Cache.Store` with the same seven
-  functions; a block is a value only when passed to a call, so a helper
-  `def block1[A, R](f: Fn[A, R]) -> Fn[A, R]` returns it to hold state.
+  functions: an expired entry is a miss, a too-big `put` drops the old value,
+  `cleanup` gives 0 without a ttl, `bytes` counts as `max_bytes`. A block is a
+  value only when passed to a call, so a helper
+  `def block1[A, R](f: Fn[A, R]) -> Fn[A, R]` returns it to hold state (full
+  example on the site page).

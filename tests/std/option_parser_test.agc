@@ -26,10 +26,7 @@ def limited() -> OP.Parser
     "tool",
     "",
     [Arg(name: "count", kind: K.Int, min: some(1))],
-    [
-      Opt(name: "cap", kind: K.Int, max: some(9)),
-      Opt(name: "offset", kind: K.Int, min: some(-10)),
-    ],
+    [Opt(name: "cap", kind: K.Int, max: some(9)), Opt(name: "offset", kind: K.Int, min: some(-10))],
   )
 end
 
@@ -54,6 +51,7 @@ def main() -> Void
         ["-p=3000", "-v", "f"],
         ["-vp3000", "f"],
       ]
+
       for args in forms
         p = try OP.parse(parser(), args)
         try Test.eq(OP.string(p, "file"), "f")
@@ -151,6 +149,7 @@ def main() -> Void
         OP.new("tool", "", [], [Opt(name: "a b")]),
         OP.new("", "", [], []),
       ]
+
       # What each specification above must name in its error, in the same order.
       names = [
         "--port",
@@ -166,6 +165,7 @@ def main() -> Void
         "a b",
         "program name",
       ]
+
       for index in 0...cases.size
         failed = OP.parse(cases[index], [])
         try Test.assert(!failed.ok?, "the specification #{index} is refused")
@@ -195,6 +195,7 @@ def main() -> Void
         "      --level N         [choices: 1, 2]",
         "  -h, --help            show this help",
       ].join("\n")
+
       try Test.eq(OP.usage(parser()), expected)
       for args in [["--help"], ["f", "-h"], ["-vh"]]
         help = OP.parse(parser(), args)

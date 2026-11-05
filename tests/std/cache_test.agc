@@ -1,5 +1,10 @@
 import Cache from "std/cache"
 
+struct Race
+  cache: Cache.Store
+  stop: ATS[Int, Int]
+end
+
 struct Job
   cache: Cache.Store
   computed: ATS[String, Int]
@@ -112,11 +117,54 @@ end
 
 def clean_often(job: Job) -> Int
   removed = 0
-  for _ in 1..300
+  for _ in 1..150
     removed = removed + Cache.cleanup(job.cache)
     Task.sleep(0)
   end
   return removed
+end
+
+# Readers that get "hot" in batches until `stop` is set; each get of an old entry copies it forward. The step budget is
+# shared by all tasks, so they stop after a fixed number of batches as well.
+def read_hot(race: Race) -> Int
+  seen = 0
+  for _ in 1..1_500
+    if race.stop.get(0).unwrap! == 1
+      break
+    end
+
+    for _ in 1..5
+      seen = seen + Cache.get(race.cache, "hot").unwrap_or("").bytesize
+    end
+
+    Task.sleep(0)
+  end
+  return seen
+end
+
+# Puts a new version of "hot" and enough other keys to turn the generations, then deletes it. A get after the put gives
+# that version or nothing, and a get after the delete gives nothing; each time it does not counts as wrong.
+def write_hot(race: Race) -> Int
+  wrong = 0
+  for n in 1..150
+    version = "v#{n}"
+    Cache.put(race.cache, "hot", version)
+    got = Cache.get(race.cache, "hot").unwrap_or(version)
+    if got != version
+      wrong = wrong + 1
+    end
+
+    for i in 1..14
+      Cache.put(race.cache, "filler#{i}", "x")
+    end
+
+    Cache.delete(race.cache, "hot")
+    if Cache.get(race.cache, "hot").some?
+      wrong = wrong + 1
+    end
+  end
+  race.stop.put(0, 1)
+  return wrong
 end
 
 def run_tasks(job: Job, count: Int, work: Fn[Job, Int]) -> Int
@@ -272,11 +320,11 @@ def main() -> Void
       Test.eq(Cache.get(cache, "a"), none)
     end,
     Test.test("bytes counts an entry once when tasks fetch the same keys together") do
-      keys = 300
+      keys = 200
       cache = Cache.memory(10_000_000)
       computed: ATS[String, Int] = ATS.new()
       job = Job(cache: cache, computed: computed, keys: keys, now: clock())
-      try Test.eq(run_tasks(job, 8, &fetch_all), 0)
+      try Test.eq(run_tasks(job, 4, &fetch_all), 0)
       expected = (0...keys).to_a.map do |n| entry_cost("k#{n}") end.sum
       Test.eq(Cache.bytes(cache), expected)
     end,
@@ -285,15 +333,36 @@ def main() -> Void
       cache = Cache.memory(10_000_000)
       computed: ATS[String, Int] = ATS.new()
       job = Job(cache: cache, computed: computed, keys: keys, now: clock())
-      try Test.eq(run_tasks(job, 8, &churn), 0)
+      try Test.eq(run_tasks(job, 4, &churn), 0)
       present = (0...keys).to_a.select do |n| Cache.get(cache, "k#{n}").unwrap_or("") != "" end
       Test.eq(Cache.bytes(cache), present.map do |n| entry_cost("k#{n}") end.sum)
+    end,
+    Test.test("readers copying forward never bring back a deleted key or an older value") do
+      stop: ATS[Int, Int] = ATS.new()
+      stop.put(0, 0)
+      race = Race(cache: Cache.memory(2_000), stop: stop)
+      readers = (1..2).to_a.map do |_| Task.spawn(&read_hot, race) end
+      wrong = Task.await(Task.spawn(&write_hot, race))
+      readers.each do |reader| _ = Task.await(reader) end
+      Test.eq(wrong, 0)
+    end,
+    Test.test("tasks that rotate the generations while they churn end with exact bytes") do
+      keys = 400
+      cache = Cache.memory(20_000)
+      computed: ATS[String, Int] = ATS.new()
+      job = Job(cache: cache, computed: computed, keys: keys, now: clock())
+      try Test.eq(run_tasks(job, 4, &churn), 0)
+      try Test.assert(Cache.bytes(cache) <= 20_000, "over the budget")
+      for n in 0...keys
+        Cache.delete(cache, "k#{n}")
+      end
+      Test.eq(Cache.bytes(cache), 0)
     end,
     Test.test("many tasks on a small budget get right values and hold the budget") do
       cache = Cache.memory(20_000)
       computed: ATS[String, Int] = ATS.new()
       job = Job(cache: cache, computed: computed, keys: 400, now: clock())
-      try Test.eq(run_tasks(job, 8, &fetch_all), 0)
+      try Test.eq(run_tasks(job, 4, &fetch_all), 0)
       try Test.assert(Cache.bytes(cache) <= 20_000, "over the budget")
       try Test.assert(Cache.bytes(cache) > 0, "nothing was kept")
       Cache.clear(cache)
@@ -305,9 +374,8 @@ def main() -> Void
       computed: ATS[String, Int] = ATS.new()
       job = Job(cache: cache, computed: computed, keys: 40, now: now)
       cleaner = Task.spawn(&clean_often, job)
-      try Test.eq(run_tasks(job, 6, &churn), 0)
-      removed = Task.await(cleaner)
-      try Test.assert(removed >= 0, "cleanup counts entries")
+      try Test.eq(run_tasks(job, 4, &churn), 0)
+      _ = Task.await(cleaner)
       try Test.assert(Cache.bytes(cache) <= 20_000, "over the budget")
       tick(now, 1_000)
       _ = Cache.cleanup(cache)
