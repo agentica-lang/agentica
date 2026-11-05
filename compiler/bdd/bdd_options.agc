@@ -10,11 +10,11 @@
 
 import Tags from "std/bdd/tags"
 
-# The flags that the VMs of the user's code get (the test files, the step program and the programs it starts), never
-# the runner. A flag given twice counts once.
 # The most test files that run at once: the `limit` of `Task.map` takes 1 to 1024.
 MAX_JOBS = 1024
 
+# The flags that the VMs of the user's code get (the test files, the step program and the programs it starts), never
+# the runner. A flag given twice counts once.
 DENY = Set.new(["--deny-run", "--deny-net", "--deny-fs", "--deny-env", "--deny-native", "--sandbox"])
 
 ## Everything a run needs.

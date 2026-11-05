@@ -62,7 +62,8 @@ agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [-
   own child as before. The default is 1, one file after another. Scenarios and
   tests of one file never overlap, and the report lists the files in the same
   order whatever `N` is. The step program is listed once, before any file runs.
-  Files that share a port, a path or a database need `--jobs 1`.
+  Files that share a port, a path or a database need `--jobs 1`, and a high `N`
+  makes per-test timeouts likelier under CPU load.
 - **Seed.** Every run has one: `--seed N`, or one the runner draws. It reaches
   every step program, test file and program under test. A failing run's text
   report shows it on the summary line, so `--seed N` replays the run. The JSON

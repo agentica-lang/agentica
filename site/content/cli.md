@@ -214,7 +214,7 @@ agentica test test/ports_test.agc --only port    # only tests whose name has "po
 agentica test --jobs 4                           # up to 4 files at once
 ```
 
-Runs `*_test.agc` files ([Test](/library/testing/test/)) and `.feature` specs ([BDD](/library/testing/bdd/)). `--jobs N` (1 to 1024, default 1) runs up to `N` files at the same time; the report keeps the order of the files. Files that share a port, a path or a database need `--jobs 1`.
+Runs `*_test.agc` files ([Test](/library/testing/test/)) and `.feature` specs ([BDD](/library/testing/bdd/)). `--jobs N` (1 to 1024, default 1) runs up to `N` files at the same time; the report keeps the order of the files. Files that share a port, a path or a database need `--jobs 1`, and a high `N` makes per-test timeouts likelier under CPU load.
 
 ## Editor support
 

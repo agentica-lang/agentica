@@ -790,7 +790,6 @@ def test_the_infrastructure_message_names_the_runners_final_diagnostic_not_an_ea
     assert not re.search("DIVISION-BY-ZERO", message)
 
 
-
 # A scenario that writes its own mark and waits for the other's, so it can pass only while the other file runs too.
 MEETING_STEPS = steps_program(
     'def meet(ctx: BDD.Context, args: List[String]) -> BDD.Context\n'
@@ -812,7 +811,7 @@ def test_jobs_run_the_files_at_the_same_time_and_the_report_keeps_the_order_of_t
     marks = [(directory / name).as_posix() for name in ("a.mark", "b.mark")]
 
     def feature(name, mine, other, linger):
-        return ("Feature: %s\nScenario: %s\nWhen \"%s\" meets \"%s\"\nAnd I linger %d ms\n"
+        return ("Feature: %s\n@meet\nScenario: %s\nWhen \"%s\" meets \"%s\"\nAnd I linger %d ms\n"
                 % (name, name, mine, other, linger))
 
     # `a` ends after `b`: with the files in the order they end, the report would list b first.
@@ -820,6 +819,7 @@ def test_jobs_run_the_files_at_the_same_time_and_the_report_keeps_the_order_of_t
                             "b.feature": feature("b", marks[1], marks[0], 0)})
     steps = directory / "steps.agc"
     steps.write_text(MEETING_STEPS, encoding="utf-8")
-    status, report = bdd.json_test(directory, "--steps", steps, "--jobs", "2")
+    # --tags adds the tags line before the jobs line of the config.
+    status, report = bdd.json_test(directory, "--steps", steps, "--jobs", "2", "--tags", "@meet")
     assert status == 0
     assert [(item["name"], item["status"]) for item in report_cases(report)] == [("a", "passed"), ("b", "passed")]

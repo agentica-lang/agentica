@@ -102,9 +102,11 @@ or the site).
   (`--agentica-bdd list`, read to its end with `Child.read_records`; output
   over the cap while listing closes the child: `RUNTIME-BDD-OUTPUT-LIMIT`),
   compiles the patterns, reads each `.feature` (over 1 MiB: `RUNTIME-BDD-IO`),
-  and runs every resolved scenario in its own child VM (files in order, or `--jobs N` at a time with `Task.map` in `run_entries`, results in file order) (`--agentica-bdd
+  and runs every resolved scenario in its own child VM (`--agentica-bdd
   scenario`, `--max-steps` 1,000,000 per step plus one, 30 s deadline), then
   prints `Report.json` or `Report.text` and exits with `Report.exit_code`.
+  The files run in order, or `--jobs N` at a time with `Task.map` in
+  `run_entries`; the results are in file order.
 - The child talks over a channel (`Process.spawn_channel`, stdin closed at
   once): an init line, then one step line per step (`Process.channel_send`);
   the child answers with JSON line records (`assert`, `step`, `fail`, `end`,

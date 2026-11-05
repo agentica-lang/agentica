@@ -58,7 +58,7 @@ SUMMARY = [
   "                                          the current folder); suggestions exit 0, --strict exits 1 for any;",
   "                                          --json prints one document",
   "  agentica test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR]",
-  "                                      [--jobs N]",
+  "                                          [--jobs N]",
   "                                          run *_test.agc and .feature files (default PATH: test/ and specs/);",
   "                                          --steps FILE is the step program of the .feature files (default:",
   "                                          the nearest steps.agc in or above the folder of each PATH, up to",
