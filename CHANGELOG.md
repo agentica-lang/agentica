@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `agentica test --jobs N` runs up to `N` test files at the same time (default
+  1); the report keeps the order of the files.
 - `agentica lint [PATH...] [--json] [--strict]` suggests changes from the
   style guide with `LINT-` codes (a String grown by `+` in a loop, a Bool
   compared with `true`, a one-step pipe, a private `##` doc, an `if` chain on

@@ -1,7 +1,7 @@
 # BDD feature specifications
 
 `agentica test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR]
-[--ai|--json]` runs `.feature` files and `*_test.agc` unit test files. It
+[--jobs N] [--ai|--json]` runs `.feature` files and `*_test.agc` unit test files. It
 searches directories in sorted order (folder links are not followed; a feature
 file is at most 1 MiB); the default paths are `specs/` and `test/`. `--steps
 FILE` names the one step program (repeating it is `RUNTIME-BDD-USAGE`); without
@@ -193,7 +193,10 @@ BDD.then_stderr_includes(ctx: BDD.Context, expected: String) -> BDD.Context
   before `and` before `or`; no parentheses). A scenario has its Feature's tags,
   its own and its `Examples` block's; unit tests have none, so `--tags` leaves
   them out. A bad expression is `RUNTIME-BDD-USAGE`; none kept is
-  `CHECK-BDD-EMPTY`. Without `--seed N` every child shares
+  `CHECK-BDD-EMPTY`. `--jobs N` (once, 1 to 1024, default 1; else
+  `RUNTIME-BDD-USAGE`) runs up to `N` files at once, never the scenarios of
+  one file; the report keeps the file order. Files that share a port, a path
+  or a database need `--jobs 1`. Without `--seed N` every child shares
   the seed the runner drew (`testing.md`). A `*_test.agc` file in `specs/` is a
   test file: a helper with that name fails with `RUNTIME-TEST-RUN`. Use port 0
   and fresh temporary directories, not fixed names.

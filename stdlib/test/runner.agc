@@ -84,6 +84,7 @@ export def main() -> Void
   # `Config` has no optional fields and the driver of stage0 (which never writes it) must keep working.
   read = (0...config.count).to_a.map do |_| JSON.decode(File.read_line(handle, 5000).unwrap_or(""), Entry) end
   tags = read_tags(handle)
+  jobs = read_jobs(handle)
   _ = File.close(handle, 5000)
   if read.any? do |entry| not entry.ok? end
     IO.warn("invalid BDD runner configuration: a feature entry does not decode")
@@ -93,7 +94,7 @@ export def main() -> Void
   if not config.seeded
     seed = Random.int(0, 2147483647)
   end
-  files = selected(seeded(config, seed), tags, read.map do |entry| entry.unwrap! end)
+  files = selected(seeded(config, seed), tags, jobs, read.map do |entry| entry.unwrap! end)
   text = Report.text(files, config.style == "ai", seed)
   if config.style == "json"
     text = JSON.encode(Report.json(files, seed))
@@ -148,9 +149,25 @@ def read_tags(handle: FileHandle) -> Result[String]
   return text
 end
 
+# The `--jobs` line, after the tags line: a JSON integer. A missing or unusable line is one file at a time, the
+# behaviour without the flag.
+def read_jobs(handle: FileHandle) -> Int
+  line = File.read_line(handle, 5000)
+  if !line.ok?
+    return 1
+  end
+
+  parsed = JSON.int(JSON.parse(line.unwrap!).unwrap_or(JSON.null()))
+  if !parsed.ok? or parsed.unwrap! < 1
+    return 1
+  end
+
+  return parsed.unwrap!
+end
+
 # The report of the run. A `--tags` expression that cannot be read or is bad is a usage error and nothing runs (the
 # driver has checked the expression already, so this is a mismatch of driver and runner).
-def selected(config: Config, tags: Result[String], entries: List[Entry]) -> List[Report.FileResult]
+def selected(config: Config, tags: Result[String], jobs: Int, entries: List[Entry]) -> List[Report.FileResult]
   compiled = Tags.compile(tags.unwrap_or(""))
   message = ""
   if !tags.ok?
@@ -164,10 +181,10 @@ def selected(config: Config, tags: Result[String], entries: List[Entry]) -> List
     return [Report.file_error("<arguments>", "", Report.error_at("RUNTIME-BDD-USAGE", message, where))]
   end
 
-  return matched(config, tags.unwrap!, compiled.unwrap!, run_all(config, compiled.unwrap!, entries))
+  return matched(config, tags.unwrap!, compiled.unwrap!, run_all(config, compiled.unwrap!, jobs, entries))
 end
 
-def run_all(config: Config, tags: Tags.Expr, found: List[Entry]) -> List[Report.FileResult]
+def run_all(config: Config, tags: Tags.Expr, jobs: Int, found: List[Entry]) -> List[Report.FileResult]
   if found.size == 0
     problem = Child.located("CHECK-BDD-EMPTY", config.empty_message, config.empty_path)
     return [Report.file_error(config.empty_path, "", problem)]
@@ -186,10 +203,40 @@ def run_all(config: Config, tags: Tags.Expr, found: List[Entry]) -> List[Report.
   end
   case listing
     Listing.Broken(problem) ->
-      tests = entries.filter do |entry| entry.kind == "tests" end.map do |entry| run_entry(config, tags, [], entry) end
+      tests = run_entries(config, tags, [], jobs, entries.filter do |entry| entry.kind == "tests" end)
       return [Report.file_error(config.steps_source, "steps", problem)].concat(tests)
-    Listing.Ready(patterns) -> return entries.map do |entry| run_entry(config, tags, patterns, entry) end
+    Listing.Ready(patterns) -> return run_entries(config, tags, patterns, jobs, entries)
   end
+end
+
+# Runs the files, `jobs` at a time, and gives their results in the order of `entries`, so the report does not depend
+# on which file ends first. Each file already runs in its own child VM, so a task only waits for its children. One
+# file at a time (the default) does not start tasks. The task deadline covers the wait for a free slot and the whole
+# file, and a file has no limit of its own (each scenario and test has one), so it is a day.
+def run_entries(
+  config: Config,
+  tags: Tags.Expr,
+  patterns: List[Match.Pattern],
+  jobs: Int,
+  entries: List[Entry],
+) -> List[Report.FileResult]
+  if jobs <= 1 or entries.size <= 1
+    return entries.map do |entry| run_entry(config, tags, patterns, entry) end
+  end
+
+  ended = Task.map(entries, jobs, 86_400_000) do |entry| ok(run_entry(config, tags, patterns, entry)) end
+  results: List[Report.FileResult] = []
+  for at in 0...entries.size
+    case ended[at]
+      ok(result) -> results = results.push(result)
+      error(message) ->
+        entry = entries[at]
+        problem = Child.located("RUNTIME-BDD-INFRA", message, entry.path)
+        results = results.push(Report.file_error(entry.path, entry.kind, problem))
+    end
+  end
+
+  return results
 end
 
 # A filter (`--only` or `--tags`) that keeps nothing is an error, not a pass.

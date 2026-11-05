@@ -211,9 +211,10 @@ A flag wins over its environment variable.
 ```sh
 agentica test                                    # test/ and specs/
 agentica test test/ports_test.agc --only port    # only tests whose name has "port"
+agentica test --jobs 4                           # up to 4 files at once
 ```
 
-Runs `*_test.agc` files ([Test](/library/testing/test/)) and `.feature` specs ([BDD](/library/testing/bdd/)).
+Runs `*_test.agc` files ([Test](/library/testing/test/)) and `.feature` specs ([BDD](/library/testing/bdd/)). `--jobs N` (1 to 1024, default 1) runs up to `N` files at the same time; the report keeps the order of the files. Files that share a port, a path or a database need `--jobs 1`.
 
 ## Editor support
 
