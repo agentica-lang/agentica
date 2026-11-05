@@ -99,6 +99,9 @@ agc_task *agc_runq_wait_until(agc_runq *q, uint64_t due_ms);
  * for a task without the lock and returns it, or NULL when none came (then the caller waits). A push skips the condvar
  * signal while a scheduler spins. agc_runq_stats is for the tests (agc_runq_counts). */
 void agc_runq_spin_setup(agc_runq *q, uint32_t max, uint64_t budget_ns);
+/* How many AGC_CPU_PAUSE take about NS nanoseconds on this machine: the spins count pauses and read no clock, which
+ * can cost a system call (a machine whose clock source is not the TSC). Timed once, at the first call. */
+uint64_t agc_pauses_for(uint64_t ns);
 agc_task *agc_runq_spin(agc_runq *q);
 agc_runq_counts agc_runq_stats(agc_runq *q);
 /* A nudge is work for a scheduler that is not a task: agc_runq_nudge ends one wait with NULL, agc_runq_nudged is the
@@ -164,10 +167,18 @@ void agc_inbox_wake(agc_inbox *in);
  * thread. submit gives ITEM to WORK on a pool thread and returns false when no thread exists and none can start;
  * FINISHED(ITEM) runs on LOOP's thread once the work is over. The pool keeps the loop alive while items run. close
  * drops the items no thread took, joins the idle threads and detaches a thread that still works, which ends by itself
- * after its work, and its item is never finished. */
+ * after its work, and its item is never finished. submit_direct may run on any thread: its ITEM ends with ENDED(ITEM)
+ * on the pool thread, under the pool's lock, unless the pool is closed by then; such items do not keep the loop
+ * alive, and direct_busy says whether any is queued or running (false from submit_direct when ENDED is NULL).
+ * end_direct (LOOP's thread, once no other thread submits) turns the direct items still queued or running into the
+ * loop's own: they end with FINISHED and keep the loop alive, and submit_direct refuses from then on. */
 typedef struct agc_compute agc_compute;
-agc_compute *agc_compute_open(struct uv_loop_s *loop, uint32_t size, void (*finished)(void *item));
+agc_compute *agc_compute_open(struct uv_loop_s *loop, uint32_t size, void (*finished)(void *item),
+                              void (*ended)(void *item));
 bool agc_compute_submit(agc_compute *pool, void (*work)(void *item), void *item);
+bool agc_compute_submit_direct(agc_compute *pool, void (*work)(void *item), void *item);
+void agc_compute_end_direct(agc_compute *pool);
+bool agc_compute_direct_busy(agc_compute *pool);
 void agc_compute_close(agc_compute *pool);
 
 /* The outcome of a job and its reference count (docs/vm/16-architecture.md §16.5, rules 2 to 4). The outcome starts as
@@ -328,6 +339,10 @@ bool agc_io_run_for(agc_vm *vm, uint64_t ms, bool alive_required);
    millisecond while the other schedulers end the jobs (agc_io_service). */
 void agc_io_pause(agc_vm *vm, uint64_t ms);
 uint64_t agc_clock_ms(void);
+/* The OS side of a clock that costs no system call (vm/clock_posix.c, vm/clock_windows.c): Linux's coarse monotonic
+   clock, which is never ahead of agc_clock_ms and lags it by at most its tick. Fills NOW_MS and TICK_MS (its
+   resolution); false where the system has no such clock. */
+bool agc_coarse_clock_ms(uint64_t *now_ms, uint64_t *tick_ms);
 
 /* Timers (vm/timers.c). A task that waits for a deadline marks itself PARKING (agc_task_parking), registers its other
  * waits, and calls agc_task_park_until; the deadline is an agc_clock_ms value. All of these run with rt->sync held,
