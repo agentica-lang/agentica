@@ -342,7 +342,7 @@ typedef struct {
   const agc_program *program;
   agc_output out, err;
   agc_value args;
-  /* The shared small values of the run (docs/future/34-shared-small-values.md), made once by agc_vm_init and never
+  /* The shared small values of the run (docs/vm/05-values-execution-builtins.md §5.4), made once by agc_vm_init and never
      written: the empty List, Map, Set and String, and the one-character ASCII Strings by code. A builtin that computes
      one of them returns the shared value instead of allocating. Values are immutable and compared by content, so
      nothing can tell the object from a fresh one. */
@@ -924,7 +924,7 @@ uint64_t agc_value_units(agc_value v);
 _Noreturn void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span);
 _Noreturn void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint32_t span);
 /* __fail_arg: fails at argument number `argument` of the call a prelude function was given (agc_fail's rule for the
-   span, docs/future/25-ruby-typed-idioms.md §25.6), or at the call when there is no such argument span. */
+   span), or at the call when there is no such argument span. */
 _Noreturn void agc_fail_argument(agc_vm *vm, const char *code, const agc_string *message, int64_t argument,
                                  uint32_t span);
 _Noreturn void agc_exit(agc_vm *vm, int64_t code);

@@ -64,6 +64,7 @@ The language specification at /reference/: an index section and one page per fil
   {{- end -}}
   {{- $text = replaceRE `\]\((?:\.\./){2}site/content/library/((?:[a-z0-9-]+/)*)_index\.md(#[^)\s]*)?\)` `](/library/${1}${2})` $text -}}
   {{- $text = replaceRE `\]\((?:\.\./){2}site/content/library/((?:[a-z0-9-]+/)*[a-z0-9-]+)\.md(#[^)\s]*)?\)` `](/library/${1}/${2})` $text -}}
+  {{- $text = replaceRE `\]\((?:\.\./){2}site/content/cli\.md(#[^)\s]*)?\)` `](/cli/${1})` $text -}}
   {{- $min := 7 -}}
   {{- $fence := false -}}
   {{- range split $text "\n" -}}

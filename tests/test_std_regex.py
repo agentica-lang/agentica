@@ -1,4 +1,4 @@
-"""std/regex: regular expressions with a Pike VM written in Agentica (docs/future/48-regex.md, phase 48a).
+"""std/regex: regular expressions with a Pike VM written in Agentica.
 
 tests/fixtures/regex/driver.agc reads one JSON case per line of stdin and prints one JSON reply per line. The peer is
 Python's re with re.ASCII, which is not the code under test, after mechanical translations of the forms where Python

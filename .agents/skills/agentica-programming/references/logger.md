@@ -26,11 +26,10 @@ Logger.time_text(ms: Int) -> String
 - `LogLevel` is a builtin enum, `LogLevel.Debug < Info < Warning < Error`.
   `LogEvent` is a builtin record: `level: LogLevel`, `message: String`, `fields:
   Map[String, String]`, `time_ms: Int`, `task: Int` (main is 1). Both names are
-  reserved (`CHECK-REDEFINED-NAME`) and neither is JSON-decodable.
+  reserved.
 - The function for the last level is `err`: `Logger.error` is
-  `CHECK-IMPORT-NAME` because `error` is reserved. Each level has one function
-  and `fields` is optional: `Logger.info("started")`, `Logger.info("done",
-  {"path": "/items"})`.
+  `CHECK-IMPORT-NAME` because `error` is reserved. `fields` is optional:
+  `Logger.info("done", {"path": "/items"})`.
 - No setup is needed. The first call of any `Logger` function attaches a handler
   named `console` (`stderr_text`, level `info`), so `Logger.info("started")`
   writes `2026-10-12T10:15:02.345Z INFO started` on stderr. Change the setup at
@@ -48,15 +47,12 @@ Logger.time_text(ms: Int) -> String
 - Handlers run in attach order, synchronously, in the task that logs, so a line
   is written when the call returns. A handler error is that task's error. A
   handler that logs recurses until `RUNTIME-STACK-OVERFLOW`.
-- Text lines are `TIME LEVEL MESSAGE key=value ...`; a message, key or value is
-  written as a JSON string when it is empty, has `=`, a quote, a backslash or a
-  control character, or (key or value) a space. JSON lines have the keys `time`,
-  `level`, `msg`, `fields` (nested) and `task`.
+- Text lines are `TIME LEVEL MESSAGE key=value ...`. JSON lines have the keys
+  `time`, `level`, `msg`, `fields` (nested) and `task`.
 - There is no file handler. Write one: `_ = File.append_text(path,
   Logger.format_json(event) + "\n", 1000)` in a block. For a slow handler, send
   each event into a `Channel[LogEvent]` read by a writer task started with
   `Task.spawn_owning`; detach the handler, close the channel and await the
   writer before `main` returns.
-- The handlers and the level belong to one run (the registry is the language's
-  one global state); a `Process.spawn` child has its own. Log calls count
-  against `--max-steps`.
+- The handlers and the level belong to one run; a `Process.spawn` child has its
+  own.

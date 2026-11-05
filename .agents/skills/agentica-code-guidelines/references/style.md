@@ -1,57 +1,8 @@
 # Style rules with examples
 
-Read this when a rule in SKILL.md needs a bad/good pair. Each example was run
-with the release binary. A `bad` example whose first line names a diagnostic is
-refused with that code; one without a code is accepted and is bad style only.
-
-## Layout
-
-Wrap a long call one item per line with a trailing comma, and a long expression
-in parentheses.
-
-```ruby
-# bad
-def label(first: String, last: String, title: String, suffix: String) -> String
-  return "#{title} #{first} #{last}, #{suffix}, member of the board of directors of the company since the year 2001"
-end
-```
-
-```ruby
-# good
-def label(first: String, last: String, title: String, suffix: String) -> String
-  return (
-    "#{title} #{first} #{last}, #{suffix}, " +
-    "member of the board of directors of the company since the year 2001"
-  )
-end
-```
-
-## Naming
-
-Say it positively. Put the positive branch first and never combine a negated
-test with `else`.
-
-```ruby
-# bad
-def describe(hidden: Bool) -> String
-  if !hidden
-    return "shown"
-  else
-    return "hidden"
-  end
-end
-```
-
-```ruby
-# good
-def describe(visible: Bool) -> String
-  if visible
-    return "shown"
-  end
-
-  return "hidden"
-end
-```
+Bad/good pairs for the rules in SKILL.md that are not obvious. A `bad` example
+whose first line names a diagnostic is refused with that code; one without a
+code is accepted and is bad style only.
 
 ## Modules and docs
 
@@ -239,23 +190,5 @@ end
 def double_text(text: String) -> Result[Int]
   n = try text.to_i
   return ok(n * 2)
-end
-```
-
-## Strings and collections
-
-Interpolate; do not join pieces with `+` and `.to_s`.
-
-```ruby
-# bad
-def line(name: String, count: Int) -> String
-  return name + ": " + count.to_s + " items"
-end
-```
-
-```ruby
-# good
-def line(name: String, count: Int) -> String
-  return "#{name}: #{count} items"
 end
 ```

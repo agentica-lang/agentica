@@ -71,41 +71,34 @@ reads no `openssl.cnf`, so both builds behave the same.
   - Linux and other POSIX (`tls_trust_posix.c`): the first readable file of the
     CA bundle paths listed there. No other path is read.
   - macOS (`tls_trust_darwin.c`, Security framework): the user and admin trust
-    settings, then the system anchors. The user domain overrides the admin
-    domain. A setting counts when its policy is absent or TLS. An empty settings
-    array or a `TrustRoot` result adds a root. `TrustAsRoot` on an intermediate
-    has no effect, because without `X509_V_FLAG_PARTIAL_CHAIN` (kept off)
-    OpenSSL ends a chain only at a self-signed certificate. A `Deny` adds the
-    certificate as rejected, so it fails a chain even under a system anchor. A
-    grant limited to an application, a host name or a key use is ignored. This
-    is stricter than Apple's first-match order and fails closed: any matching
-    `Deny` wins, and a `Deny` limited to one host rejects the certificate
-    everywhere.
+    settings (the user domain overrides the admin domain), then the system
+    anchors. A setting counts when its policy is absent or TLS. An empty
+    settings array or a `TrustRoot` result adds a root; `TrustAsRoot` on an
+    intermediate has no effect, because OpenSSL ends a chain only at a
+    self-signed certificate (`X509_V_FLAG_PARTIAL_CHAIN` stays off). A `Deny`
+    adds the certificate as rejected, so it fails a chain even under a system
+    anchor. A grant limited to an application, a host name or a key use is
+    ignored. This is stricter than Apple's first-match order and fails closed:
+    any matching `Deny` wins, and a `Deny` limited to one host rejects the
+    certificate everywhere.
   - Windows (`tls_trust_windows.c`, Crypt32): the current user's `Disallowed`
-    store first, every certificate in it added rejected. Then the `ROOT` store
-    (`CertOpenSystemStoreW`), each certificate whose valid uses include server
-    authentication, then the `CA` store as intermediates, as CPython's
-    `ssl.load_default_certs` reads `ROOT` and `CA`. Every view includes the
-    machine's stores. A `CA` certificate is only a chain certificate, never an
-    anchor:
-    - one whose subject equals its issuer is left out
-      (`agc_tls_trust_add_intermediate_der`), since OpenSSL trusts a self-signed
-      certificate in the store. So a server that sends only its leaf still
-      verifies when Windows keeps its intermediate;
-    - a copy with the subject and public key of a self-signed anchor already in
-      the store is left out, because OpenSSL looks issuers up by name and the
-      store order is not stable;
-    - one whose EKU extension excludes server authentication is left out, on
-      every system: OpenSSL would take a store copy first, and a valid
-      intermediate's sibling with the same subject and key would fail a chain
-      the server sends correctly;
-    - one whose Crypt32 EKU property alone excludes server authentication is
-      added rejected, so a server that sends it still fails with
-      `VERIFY_UNTRUSTED`. It also shadows same-key siblings, which is taken as
-      the administrator's intent.
-
-A root that Windows would download on demand is not in the store until
-Windows fetched it; `SSL_CERT_FILE` or `ca_file` covers that case.
+    store first, every certificate in it added rejected. Then the `ROOT` store,
+    each certificate whose valid uses include server authentication, then the
+    `CA` store as intermediates, as CPython's `ssl.load_default_certs` does.
+    Every view includes the machine's stores. A `CA` certificate is only a chain
+    certificate, never an anchor, so these are left out
+    (`agc_tls_trust_add_intermediate_der`): one whose subject equals its issuer
+    (OpenSSL trusts a self-signed certificate in the store); a copy with the
+    subject and public key of a self-signed anchor already in the store (OpenSSL
+    looks issuers up by name and the store order is not stable); one whose EKU
+    extension excludes server authentication, on every system (OpenSSL would
+    take a store copy first, and a valid intermediate's sibling with the same
+    subject and key would fail a chain the server sends correctly). One whose
+    Crypt32 EKU property alone excludes server authentication is added rejected,
+    so a server that sends it still fails with `VERIFY_UNTRUSTED`; it also
+    shadows same-key siblings, which is taken as the administrator's intent. A
+    root that Windows would download on demand is not in the store until Windows
+    fetched it; `SSL_CERT_FILE` or `ca_file` covers that case.
 - **Verification (security rule).** The client always verifies the peer; there
   is no verify-none path. An IP-literal host is checked against IP SANs and
   sends no SNI. Any other host gets SNI and hostname verification, with no
@@ -125,15 +118,13 @@ Windows fetched it; `SSL_CERT_FILE` or `ca_file` covers that case.
   HTTP/1.1, so `HttpWire.service`, `HttpWire.connect_context`,
   `HttpWire.upgrade_context` and `HttpWire.server` halt with
   `RUNTIME-TLS-CONTEXT-ALPN` on any other list.
-- **CONNECT tunnels (std-only).** std/http reaches an `https://` target through a
-  proxy with a TCP socket that a CONNECT made a pipe, and starts TLS on it with
-  `TLS.upgrade`'s machinery, under two names: `HttpWire.upgrade_context(socket,
-  context, host, timeout_ms)` for a client `TlsContext` (the `TLS.upgrade` of
-  a client context plus the ALPN check above), and `HttpWire.upgrade_tls(client,
-  socket, host, timeout_ms)` for the client's shared system-trust context of
-  `HttpWire.connect_tls`: the upgraded net takes a count on it (an error when
-  the client gave it back), and its handshake starts when the context is built,
-  as a connect's DNS does.
+- **CONNECT tunnels (std-only).** std/http reaches an `https://` target through
+  a proxy with a TCP socket that a CONNECT made a pipe, and starts TLS on it
+  with `TLS.upgrade`'s machinery: `HttpWire.upgrade_context(socket, context,
+  host, timeout_ms)` for a client `TlsContext` (plus the ALPN check above), and
+  `HttpWire.upgrade_tls(client, socket, host, timeout_ms)` for the client's
+  shared system-trust context of `HttpWire.connect_tls` (the upgraded net takes
+  a count on it, an error when the client gave it back).
 - **Data path.** A TLS socket is the TCP socket of 10.3.1 with a session.
   Decrypted bytes go into the socket's input buffer, so `read_line`,
   `recv_bytes`, the 1 MiB limits, the locks and the timeouts are the TCP ones.
@@ -181,8 +172,7 @@ texts.
 - **Ownership.** The native state is freed when its users (the resource and each
   request) and its callbacks (a DNS lookup, one close callback per link) are all
   done, so no callback sees freed memory. It is registered before any libuv
-  work, so the end of the run finds every handle. Each operation parks only its
-  task, on an external job.
+  work, so the end of the run finds every handle.
 - **Connect.** The timeout, port (1..65535) and host (no NUL) are checked. The
   host resolves (`AF_UNSPEC`, `SOCK_STREAM`), and each address is tried in order
   until one connects. One timer covers the lookup and every try. On timeout the
@@ -191,11 +181,10 @@ texts.
 - **Listen.** The port (0..65535) and host are checked. The listener binds every
   resolved address with backlog 128. The first address that binds fixes the port
   (read back for port 0), and the others bind to that port. Duplicate addresses
-  are skipped, and so are `EADDRNOTAVAIL` and `EAFNOSUPPORT` (an IPv6 address on
-  a host without IPv6). Any other failure closes every handle and fails the
-  listen. For port 0, if a later address finds the chosen port in use, the VM
-  starts again with a new port, up to 8 times. With more than one address, IPv6
-  handles are `UV_TCP_IPV6ONLY`. Listen has no timeout.
+  are skipped, and so are `EADDRNOTAVAIL` and `EAFNOSUPPORT`. Any other failure
+  closes every handle and fails the listen. For port 0, if a later address finds
+  the chosen port in use, the VM starts again with a new port, up to 8 times.
+  With more than one address, IPv6 handles are `UV_TCP_IPV6ONLY`.
 - **Accept.** `network: listener is closed` is checked first, then the timeout.
   Waiting accepts form one FIFO for all of a listener's handles, and a
   connection is accepted only into the head waiter's `done` half, so it never
@@ -242,8 +231,7 @@ texts.
 - **Platforms.** The code is shared; libuv hides the socket types. What it does
   not hide:
   - *Error numbers.* `vm/net_os.h` maps a libuv error to the errno the message
-    shows: the negated code on POSIX, the UCRT's errno on Windows
-    (`ECONNREFUSED` 107, `ECONNRESET` 108), whose `strerror` names it. Texts and
+    shows: the negated code on POSIX, the UCRT's errno on Windows. Texts and
     numbers differ per system; the message head does not.
   - *Accept.* On Unix libuv reports one connection and waits for `uv_accept`; on
     Windows several `AcceptEx` requests can complete first, so each link counts
@@ -254,13 +242,10 @@ texts.
     So on Windows a listener on a specific address can bind a port that another
     program of the same user holds on the wildcard address, where Linux refuses
     it; two listeners on the same address conflict on every system.
-  - *Send buffers.* How many bytes the kernel takes before a send parks is the
-    host's: on the Windows CI runner one 32 MiB send to a peer that does not
-    read returns `ok()` at once, where Linux and macOS park it until the
-    timeout.
-  - *Refusal.* Windows resends a SYN that a closed port refused before it
-    reports `ECONNREFUSED`, so a refused connect, and a name whose first address
-    refuses (`localhost` to an IPv4-only server), take longer there; the connect
-    timeout covers them.
+  - *Send buffers and refusal.* How many bytes the kernel takes before a send
+    parks is the host's (on the Windows CI runner one 32 MiB send to a peer that
+    does not read returns `ok()` at once). Windows resends a SYN that a closed
+    port refused before it reports `ECONNREFUSED`, so a refused connect takes
+    longer there; the connect timeout covers it.
 - **Fuzzing.** Under `no_files`, `TCP.connect` and `TCP.listen` end the run with
   `RUNTIME-INTERNAL`, and the other TCP builtins need a handle from these two.

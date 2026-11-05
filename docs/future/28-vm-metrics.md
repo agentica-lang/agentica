@@ -1,492 +1,241 @@
 ## 28. VM metrics
 
-**Status:** planned (roadmap phase 18). A tool inside the VM (`agentica run`)
-for operators, like VM tracing (`docs/vm/08-loader-and-cli.md` §9) is for VM
+Issue #992 (one issue per phase). A tool inside the VM (`agentica run`) for
+operators, like VM tracing (`docs/vm/08-loader-and-cli.md` §9) is for VM
 developers: the VM exports numbers about itself (the GC, tasks, the scheduler,
 I/O, processes, TCP) in the Prometheus text format, so Prometheus can scrape
 them and Grafana can graph them. It is not a language feature: no grammar
-change, no builtin, nothing in the programming skill. It is VM-only. Three
-small PRs, and a fourth after 17b:
+change, no builtin, nothing in the programming skill. It is VM-only. Only the
+env names are reserved today (`metrics_env` in `vm/process.c`, matched by the
+whole name, so a child VM or a BDD runner never fights for the port or file;
+`System.env` still shows them).
 
-- 18a, **metrics from state the VM already keeps, written to a file** (28.3,
-  28.5): the snapshot taken by the scheduler (28.4), the text format, and
-  `AGENTICA_VM_METRICS_FILE` for node_exporter's textfile collector.
-- 18b, **the scrape endpoint** (28.5): `AGENTICA_VM_METRICS=[IP:]PORT` serves
+- **18a, metrics from state the VM already keeps, written to a file** (28.3,
+  28.5): `AGENTICA_VM_METRICS_FILE` for node_exporter's textfile collector.
+- **18b, the scrape endpoint** (28.5): `AGENTICA_VM_METRICS=[IP:]PORT` serves
   `GET /metrics` from its own thread.
-- 18c, **enabled-only hooks** (28.3, 28.4): the counters and the one histogram
-  that need a hook at an event, turned on at the first scrape, with the overhead
-  check of 28.8.
-- 18d, **memory diagnosis** (28.12): per-task allocation counters and an
-  on-demand dump of the tasks that hold the most. Decided by the owner on
-  2026-10-13, after 17b.
+- **18c, enabled-only hooks** (28.3): the counters and the one histogram that
+  need a hook at an event, turned on at the first scrape, with the overhead
+  check.
+- **18d, memory diagnosis** (28.8), decided by the owner on 2026-10-13.
 
-### 28.1 Today
-
-The VM has no metrics; tracing (`AGENTICA_VM_TRACE`) is per-event and has no
-totals. The VM already keeps the GC totals, the task counters, `steps_left`,
-the run queue and the resource registry, and trace points sit at every event
-an operator would count. Two constraints: Boehm has no per-collection callback
-with user data (it would need a mutable global, which `vm/` forbids), and the
-metrics thread must start with the stop signals blocked (§10.2.2).
+Two constraints: Boehm has no per-collection callback with user data (it would
+need a mutable global, which `vm/` forbids), and the metrics thread must start
+with the stop signals blocked (`docs/vm/10-io-scheduler.md` §10.2.2).
 
 ### 28.2 Rules
 
-The same rules as tracing (`docs/vm/08-loader-and-cli.md` §9), plus one about
-cost:
+The same rules as tracing, plus one about cost:
 
 1. **It never changes what the program sees.** Exit code, stdout, stderr (except
-   the one-line start-up warnings of 28.5, only when the setting is wrong), step
-   counts, `--max-steps` outcomes and task order stay the same with metrics on.
-   Metrics code allocates no GC memory, charges no steps and no turn cost, and
-   never makes a task switch happen earlier or later.
+   the one-line start-up warnings, only when the setting is wrong), step counts,
+   `--max-steps` outcomes and task order stay the same with metrics on. Metrics
+   code allocates no GC memory, charges no steps and no turn cost, and never
+   makes a task switch happen earlier or later.
 2. **It never crashes the VM or changes the exit code.** Every failure (a port
-   in use, a full disk, `malloc` failing, a client that sends garbage or never
-   reads) is ignored or reported with one `agc-metrics` line, and the run goes
-   on. Metrics code never calls `abort`, never calls Boehm from another thread,
-   and never touches GC memory outside the scheduler thread.
+   in use, a full disk, a client that sends garbage or never reads) is ignored
+   or reported with one `agc-metrics` line, and the run goes on. Metrics code
+   never calls Boehm from another thread and never touches GC memory outside
+   the scheduler thread.
 3. **It never keeps the VM alive.** When `main` ends, the run ends, scraped or
-   not (28.5).
-4. **No cost while nobody asks.** This picks how each metric is made:
-   - Prefer a metric **derived at scrape** time from state the VM already keeps
-     (28.1). It costs nothing between scrapes: no counter, no branch, no hook.
-   - A metric that needs a hook at an event (an **enabled-only hook**) uses a
-     hook that exists only while metrics are on and someone has asked (rule 5).
-     It sits at an existing trace point and shares that point's one test, so
-     turning metrics off adds no branch on any path that runs per turn or per
-     event (28.4). The only new test is at the dequeue point after a blocking
-     poll, a path that runs only when the scheduler has just been idle. The hook
-     is a plain increment of a field of the scheduler that runs the event: no
-     atomic, no lock, no allocation. It reads the clock only where a histogram
-     needs it.
-   - A metric that would need work on the hot path even when nobody scrapes is
-     dropped. Per-instruction counts are never metrics.
-   - With `make METRICS=0`, the metrics code is not compiled at all.
-5. **Lazy start of hooks.** Decided: the enabled-only hooks start at the first
-   request for a snapshot, not at start-up. With the endpoint that is the first
-   scrape; with the file (28.5) it is start-up, since the file is always written
-   at the end, so its consumer always asks. Until then, "enabled, never scraped"
-   costs the same as off, plus one flag load per turn (28.4). Hook counters
-   start at 0 at the first scrape; Prometheus's `rate()` and `increase()` treat
-   that like a process restart, so nothing is lost but the events before the
-   first scrape. Gauges and derived counters are always whole, since they are
-   read from the VM's own state.
+   not. There is no "wait for a last scrape" option: it would let monitoring
+   change when a program ends.
+4. **No cost while nobody asks.** Prefer a metric **derived at scrape** time
+   from state the VM already keeps: no counter, no branch, no hook. A metric
+   that needs an **enabled-only hook** uses one that exists only while metrics
+   are on and someone has asked, sits at an existing trace point and shares its
+   one test, and is a plain increment of a scheduler field (no atomic, no lock,
+   no allocation). A metric that would need work on the hot path even when
+   nobody scrapes is dropped; per-instruction counts are never metrics. With
+   `make METRICS=0` the code is not compiled at all.
+5. **Lazy start of hooks.** The hooks start at the first request for a
+   snapshot, not at start-up (with the file, at start-up, since its consumer
+   always asks). Hook counters start at 0 at the first scrape, which
+   Prometheus's `rate()` and `increase()` treat like a process restart.
 6. **Strict, one way.** A long-running process is scraped at its endpoint; a run
-   that ends (a batch job, a cron script) leaves its last numbers in a file.
-   There are no options for the format, the path of the endpoint, the label set
-   or the file interval.
-7. **Linux first.** On other systems the VM ignores both variables and writes
-   one line `agc-metrics not supported on this system`; the code sits under a
-   Linux branch of a platform adapter (`docs/vm/15-layers.md` §15.3).
+   that ends leaves its last numbers in a file. No options for the format, the
+   path, the label set or the file interval.
+7. **Linux first.** Elsewhere the VM ignores both variables and writes one line
+   `agc-metrics not supported on this system`.
 
 ### 28.3 What is measured
 
-Names follow the Prometheus rules: `agentica_vm_` prefix, base units (seconds,
-bytes), `_total` for counters, `_info` for a constant with labels. Label values
-come only from fixed lists in the C code. "How" says how each one is made:
-**derived** (read at scrape from state the VM already keeps), **existing
-counter** (a counter the VM already keeps for itself, read at scrape), or
-**hook** (enabled-only hook at the named trace point, from the first scrape on,
-18c). Every metric is in the endpoint and the file, except the end-of-run ones,
-which only the last file write has.
+Names follow the Prometheus rules: `agentica_vm_` prefix, base units, `_total`
+for counters. Label values come only from fixed lists in the C code, so there
+are about 30 names and at most about 80 series. "Derived" means read at scrape;
+"hook" means an enabled-only hook (18c).
 
-**Build and process**
-
-| Name | Type | Labels | How | Why |
-| --- | --- | --- | --- | --- |
-| `agentica_vm_build_info` | gauge, always 1 | `version`, `libgc` (`none` on a sanitizer build), `libuv`, `yyjson`, `trace` (`on`/`off`) | derived (the `--version` data) | join a dashboard to the VM version |
-| `process_start_time_seconds` | gauge | none | derived (wall clock read once when metrics start) | uptime is `time() - process_start_time_seconds`; Prometheus prefers a start time to an uptime gauge |
-| `process_cpu_seconds_total` | counter | none | derived (`/proc/self/stat`, on the metrics thread) | close to 1 per second means the scheduler is busy, near 0 means it waits; it replaces a "time blocked in the loop" counter, which would need clock reads around every poll |
-| `process_resident_memory_bytes` | gauge | none | derived (`/proc/self/statm`) | RSS; Boehm's heap is not what the OS gives |
-| `process_open_fds`, `process_max_fds` | gauge | none | derived (`/proc/self/fd`, `getrlimit`) | descriptor leaks and limits, for servers |
-
-The `process_*` names are the standard ones from Prometheus client libraries, so
-ready-made Grafana panels work. The metrics thread reads them and touches no VM
-state for them.
-
-**GC** (left out under `AGC_NO_GC`, the sanitizer build, which has no collector)
-
-| Name | Type | How | Why |
-| --- | --- | --- | --- |
-| `agentica_vm_gc_collections_total` | counter | derived (`GC_get_gc_no`) | when collections happen (`increase()` per scrape interval); the exact moment is the `gc` trace category's job |
-| `agentica_vm_gc_heap_bytes` | gauge | derived (`GC_get_heap_size`) | heap growth, leaks |
-| `agentica_vm_gc_free_bytes` | gauge | derived (`GC_get_free_bytes`) | how much of the heap is unused |
-| `agentica_vm_gc_allocated_since_collection_bytes` | gauge | derived (`GC_get_bytes_since_gc`) | how close the next collection is |
-| `agentica_vm_gc_allocated_bytes_total` | counter | derived (`GC_get_total_bytes`) | allocation rate with `rate()`; a sawtooth gauge alone samples badly |
-| `agentica_vm_gc_pause_seconds_total` | counter | hook: `GC_start_performance_measurement()` at the lazy start, read with `GC_get_full_gc_total_time()` | time the program was stopped by the GC; mean pause is `rate(pause) / rate(collections)`; millisecond steps, so a short run shows 0 |
-
-A pause **histogram** is not planned: Boehm has no collection callback with user
-data, so it would need a mutable global set under the GC lock, an exception to
-the rule of §10.2.3. To evaluate later, if the server measurement (7j) shows
-that single long pauses matter. Then it would be one documented `NOLINT`
-exception, registered only at the lazy start.
-
-**Tasks and the scheduler**
-
-- `agentica_vm_tasks_spawned_total` (counter): existing counter
-  (`next_task_id - 1`, main included). Spawn rate.
-- `agentica_vm_tasks_finished_total` (counter): existing counter, `tasks_done`
-  while the run goes on (main is never in it) and `tasks_done + 1` in the
-  end-of-run snapshot: main counts as finished at the end however the run ended.
-  Finish rate. While the run goes on, spawned minus finished is the live count,
-  main included (at least 1 at every scrape); at the end it is the number of
-  tasks the run cut off (ready and parked tasks cancelled, plus the child whose
-  failure or `System.exit` ended the run, which never reaches `finish_task`).
-- `agentica_vm_tasks` (gauge, label `state`: `ready`, `parked`): derived.
-  `ready` walks the run queue at the snapshot; `parked` is live (spawned minus
-  finished, main included) minus ready (the snapshot is taken between turns, so
-  no task is running). Many ready tasks mean CPU contention; many parked tasks
-  mean waiting on I/O.
-- `agentica_vm_steps_total` (counter): existing counter (`--max-steps` start
-  value minus `steps_left`; exact to one step batch). Interpreter work rate.
-- `agentica_vm_turns_total` (counter, label `end`: `yield`, `park`, `done`):
-  hook at the `sched turn` trace point. How often tasks are preempted (`yield`)
-  against how often they wait (`park`).
-- `agentica_vm_turn_cost_units_total` (counter): hook at the `sched turn` trace
-  point (`turn_cost_used`). How much long builtins (sorts, big joins, JSON)
-  weigh on fairness.
-- `agentica_vm_run_queue_delay_seconds` (histogram, buckets 0.0001, 0.001,
-  0.005, 0.01, 0.05, 0.1, 0.25, 1, `+Inf`): hook at the dequeue point only
-  (28.4), one clock read per `dequeue`. The latency a server's tasks see: how
-  long a ready task waits for its turn. It is the production form of the 250 ms
-  latency rule of `docs/vm/10-io-scheduler.md` §10.2.1.
-
-**I/O, processes, TCP**
-
-- `agentica_vm_resources_open` (gauge, label `kind`: `file`, `process`, `job`,
-  `tcp_socket`, `tcp_listener`): derived, one walk of the resource registry at
-  the snapshot; `lock` jobs are skipped, as in
-  `agentica_vm_io_jobs_finished_total`. A leak shows as a line that only grows.
-- `agentica_vm_io_jobs_finished_total` (counter, labels `kind`: the
-  `agc_io_kind` names except `lock`; `result`: `ok`, `error`, `timeout`, a plain
-  `value` result counts as `ok`): hook in `trace_finish` (the `io done` and
-  `io timeout` trace points), placed after its one combined test and before its
-  trace-only early returns (no start time, a `lock` job), so it counts jobs
-  whether `io` tracing is on or not; `lock` jobs are skipped. I/O rate and error
-  rate by kind. Jobs in flight are `agentica_vm_resources_open{kind="job"}`, so
-  no start counter.
-- `agentica_vm_io_bytes_total` (counter, labels `kind`: `file`, `stdin`,
-  `process`, `tcp`; `direction`: `read`, `write`): hook in `trace_finish` next
-  to the jobs counter, for every kind, TCP included. Each kind keeps its byte
-  count in its own `data` struct, next to the system call, and reports it
-  through an out-parameter that `agc_io_finish` copies onto the job before
-  `trace_finish` runs. Cost with metrics off: one store per I/O job and no
-  branch. Throughput.
-- `agentica_vm_processes_spawned_total` (counter): hook at `proc spawn`.
-  `agentica_vm_process_spawn_failures_total` (counter): hook at `proc
-  spawn_failed`; missing executables, limits.
-- `agentica_vm_processes_exited_total` (counter, label `exit`: `zero`,
-  `nonzero`, `signal`): hook at `proc exit`. Three values instead of the exit
-  code, so the label set stays fixed.
-- `agentica_vm_tcp_connections_total` (counter, label `side`: `accepted`,
-  `connected`): hook at `tcp_accept` and `tcp_connected`.
-  `agentica_vm_tcp_errors_total` (counter, label `op`: `accept`, `connect`):
-  hook at `tcp_accept_error` and `tcp_connect_error`.
-
-Bytes written to stdout and stderr are not counted: they go through `agc_write`,
-which has no trace point, and adding a test there would put a branch on the
-output path. Later PRs (TLS, HTTP, UDP) add their metrics in the same PR, at
-their own trace points, under these rules (for HTTP: requests by method class
-and status class, never by path).
-
-**End of run** (only in the last file write, 28.5; the endpoint is closed by
-then)
-
-- `agentica_vm_exit_code` (gauge): derived (the code `vm/launch.c` returns). The
-  main alert of a batch job.
-- `agentica_vm_end_time_seconds` (gauge): derived (wall clock at the last
-  write). Alert when a cron job has not run for a day.
-- `agentica_vm_runtime_errors_total` (counter, label `code`: a `RUNTIME-` code):
-  derived (the outcome); one series with value 1 when the run failed, none
-  otherwise. Codes are a fixed list, messages are never exported.
+- **Build and process:** `agentica_vm_build_info` (gauge, always 1; labels
+  `version`, `libgc`, `libuv`, `yyjson`, `trace`), `process_start_time_seconds`,
+  `process_cpu_seconds_total` (from `/proc/self/stat`: near 1 per second means
+  the scheduler is busy), `process_resident_memory_bytes`, `process_open_fds`
+  and `process_max_fds`. The `process_*` names are the standard ones, so
+  ready-made Grafana panels work.
+- **GC** (not under `AGC_NO_GC`): `agentica_vm_gc_collections_total`,
+  `_gc_heap_bytes`, `_gc_free_bytes`, `_gc_allocated_since_collection_bytes`,
+  `_gc_allocated_bytes_total` (all derived from `GC_get_*`) and
+  `_gc_pause_seconds_total` (hook: `GC_start_performance_measurement` at the
+  lazy start). A pause histogram is not planned: Boehm has no callback with user
+  data, so it would be one documented exception to the no-globals rule.
+- **Tasks and scheduler:** `agentica_vm_tasks_spawned_total` and
+  `_tasks_finished_total` (existing counters; spawned minus finished is the live
+  count, main included), `agentica_vm_tasks{state="ready|parked"}` (derived),
+  `_steps_total` (existing counter), `_turns_total{end="yield|park|done"}` and
+  `_turn_cost_units_total` (hooks at the `sched turn` trace point), and
+  `agentica_vm_run_queue_delay_seconds` (histogram, hook at the dequeue point:
+  how long a ready task waits for its turn, the production form of the 250 ms
+  latency rule of `docs/vm/10-io-scheduler.md` §10.2.1).
+- **I/O, processes, TCP:** `agentica_vm_resources_open{kind}` (derived from the
+  resource registry; a line that only grows is a leak),
+  `_io_jobs_finished_total{kind,result}` and `_io_bytes_total{kind,direction}`
+  (hooks in `trace_finish`), `_processes_spawned_total`,
+  `_process_spawn_failures_total`,
+  `_processes_exited_total{exit="zero|nonzero|signal"}`,
+  `_tcp_connections_total{side}` and `_tcp_errors_total{op}`. Bytes written to
+  stdout and stderr are not counted (no trace point; a test there would put a
+  branch on the output path). Later TLS, HTTP and UDP metrics arrive with their
+  PR (HTTP: requests by method class and status class, never by path).
+- **End of run** (only in the last file write): `agentica_vm_exit_code` (the
+  main alert of a batch job), `agentica_vm_end_time_seconds` and
+  `agentica_vm_runtime_errors_total{code}` (one series when the run failed).
 
 Not measured: anything per function, per instruction, per task id, per path, per
-host or per program value; message text; the step limit. Task ids, paths and
-hosts stay in trace lines.
-
-About 30 metric names and at most about 80 series (the histogram's 11 included),
-fixed by the C lists, so a scrape is a few kilobytes.
+host or per program value; message text; the step limit.
 
 ### 28.4 How a snapshot is taken
 
-Two kinds of thread: each **scheduler thread** owns the VM state and its hook
-counters; the **metrics thread** owns the sockets, the file and the text
-format. Neither reads the other's plain data. The scheduler takes the snapshot
-because Boehm's getters are unsynchronized (until §10.2.3) and the run queue
-and the registry are plain scheduler data; so every hook is a plain increment
-and every derived metric is free (rule 4).
+Each **scheduler thread** owns the VM state and its hook counters; the
+**metrics thread** owns the sockets, the file and the text format, and runs no
+Agentica code, never allocates GC memory and never calls Boehm. Neither reads
+the other's plain data. The metrics thread asks with an atomic sequence number
+and `uv_async_send`; the scheduler sees it at the dequeue point (between turns,
+so no task is in no list), fills a `malloc`'d part, publishes the number it
+answered and wakes the thread, which sums the parts. The first request does the
+lazy start. The async handle is `uv_unref`'d, so the stall check and the end of
+the run are as without metrics. The cost on the program's thread is O(ready
+tasks + open resources) between turns, and only while someone asks. No answer in
+4 seconds is a `503` (a late snapshot is never served as current); file mode
+skips that write.
 
-- **One observe word** per scheduler joins the trace categories and the metric
-  bits, in a `malloc`'d block (never GC memory) with the hook counters (plain
-  `uint64_t`, written only by that scheduler). A point with both a trace and a
-  hook costs two loads and one test. The metric bits are set only at the lazy
-  start (rule 5); a build without the feature compiles them to 0.
-- **The dequeue point.** Snapshot requests and the run-queue delay hook run at
-  the two `agc_io_poll` call sites of the run loop, after the bookkeeping, so a
-  snapshot never sees a task in no list. After a turn one test of `observe`
-  replaces the `gc` turn-end test; after a blocking poll the test is new but
-  runs only when the thread was idle.
-- **Run-queue delay.** One clock read per dequeue. A task spawned or woken
-  inside a turn gets the turn's start as its queue time; tasks queued after the
-  turn ended get the clock read at the dequeue. Built for one scheduler; revisit
-  with the multicore run queue (§16.3).
-- **A request.** The metrics thread stores a number in each scheduler's
-  `_Atomic uint64_t snapshot_seq` and calls `uv_async_send`. The scheduler sees
-  it at the dequeue point, fills a `malloc`'d part (no GC pointers), publishes
-  the number it answered (release) and wakes the thread, which ignores late
-  answers and sums the parts when N>1 (no lock, no atomic add on the hot
-  path). The first request does the lazy start (stamps the queued tasks, sets
-  the bits, starts `GC_start_performance_measurement`); file mode does it
-  before `agc_vm_run`.
-- **Cost on the program's thread:** only while someone asks, O(ready tasks +
-  open resources) between turns; no steps, no turn cost, so `--max-steps`
-  outcomes do not change. The async handle is `uv_unref`'d, so the stall check
-  and the end of the run are as without metrics.
-- **No answer in 4 seconds:** `503` for that scrape (shorter than the
-  connection's 5-second deadline); a late snapshot is never served as current;
-  file mode skips that write.
-- **The metrics thread** is started by `vm/launch.c` only when a variable is
-  set and valid. It has its own `uv_loop_t`, blocks every asynchronous signal,
-  never allocates GC memory, never calls Boehm, runs no Agentica code, reads
-  `/proc/self` itself, and does file I/O with plain POSIX calls, never
-  `uv_fs_*` (the libuv pool is shared with the program's file jobs).
-- **Stopping requests:** a mutex guards a plain `bool stop`; requests are sent
-  under the lock and main sets `stop` under it before closing the async handle.
-- **End of run,** in `agc_launch_settle` (`vm/launch.c`, §14.4): main fills the
-  end-of-run snapshot (exit code, `RUNTIME-` code, `tasks_done + 1`), sets
-  `stop` and sends it with a "final" async; the thread writes the last file and
-  leaves. Main waits at most 1 second (`pthread_timedjoin_np`) and then
-  `_exit`s: the exit code and output are right, but the last file may be
-  missing or old. A run killed by a signal or by the out-of-memory handler
-  (exit 70) writes no last file; the periodic writes cover it.
+At the end of the run main fills the end-of-run snapshot and sends a "final"
+async; the thread writes the last file and leaves. Main waits at most 1 second
+and then `_exit`s: the exit code and output are right, but the last file may be
+missing or old. A run killed by a signal or by the out-of-memory handler writes
+no last file; the periodic writes cover it.
 
 ### 28.5 How it is exported
 
-**Compared:**
+| Way | Decision |
+| --- | --- |
+| (a) Pull endpoint: the VM serves `GET /metrics` | Planned (18b): the normal Prometheus way for servers and workers |
+| (b) Textfile for node_exporter's textfile collector | Planned (18a), first, since it needs no socket: batch jobs that end before any scrape |
+| (c) Push to a Pushgateway | Not planned: needs an HTTP client in C; (b) covers batch jobs |
+| (d) OpenTelemetry (OTLP) | Not planned: a large dependency for the same numbers; the OTel Collector can scrape (a) |
 
-| Way | Fits | Cost and risk | Decision |
-| --- | --- | --- | --- |
-| (a) Pull endpoint: the VM serves `GET /metrics` | long-running programs (servers, workers); the normal Prometheus way | a listener and a tiny HTTP responder; must never keep the VM alive; a run that ends before a scrape is never seen | **Planned (18b)** |
-| (b) Textfile for node_exporter's textfile collector | batch jobs and scripts, which end before any scrape; hosts that already run node_exporter | one atomic file write every 15 seconds and at the end; file safety rules | **Planned (18a)**, first, since it needs no socket |
-| (c) Push to a Pushgateway | batch jobs | needs an HTTP client in C, retries, a reachable gateway; Prometheus advises it only for batch jobs, which (b) covers | Not planned |
-| (d) OpenTelemetry (OTLP) | shops on OTel | protobuf over HTTP or gRPC in C; a large dependency for the same numbers; the OTel Collector's Prometheus receiver can scrape (a) | Not planned; to evaluate later only if a user needs push to OTLP |
+(a) and (b) may both be set; they share the snapshot and the text format. The
+format is the Prometheus text exposition format 0.0.4 (`# HELP`, `# TYPE`,
+samples; `Content-Type: text/plain; version=0.0.4; charset=utf-8`), not
+OpenMetrics, no protobuf, no gzip.
 
-(a) and (b) answer different needs (a process that runs, a run that ended), and
-both may be set at once; they share the snapshot and the text format.
+**(a) `AGENTICA_VM_METRICS=[IP:]PORT`.** `9464` means `127.0.0.1:9464`; an IPv4
+literal or `[IPv6]:PORT` binds that address (`0.0.0.0:9464` is how a container
+exposes it); no host names; port 0 picks a free port, for tests; there is no
+default port. `vm/launch.c` binds before the run, so a bind error is seen at
+once: one line `agc-metrics cannot listen VALUE` and the run goes on without the
+endpoint. The chosen address is written as a trace line (`metrics listen
+host=... port=...`), which is how tests find a port-0 endpoint. The responder is
+not the HTTP stack and shares no code with it: it reads at most 8 KiB up to the
+first `\r\n\r\n`, accepts only `GET /metrics HTTP/1.1` or `HTTP/1.0`, and
+answers 200, 404 (another target), 405 with `Allow: GET`, 400, 431 or 503, with
+`Content-Length` and `Connection: close`. Each connection has one 5-second
+deadline from accept to close, and at most 4 are open. The listener lives on the
+metrics thread's own loop, so it never delays the stall check. A run that ends
+before the first scrape is never seen at the endpoint; use the file.
 
-**The format** is the Prometheus text exposition format 0.0.4: `# HELP` and
-`# TYPE` lines, then samples, with
-`Content-Type: text/plain; version=0.0.4; charset=utf-8`. Not OpenMetrics, not
-protobuf, no gzip: Prometheus reads 0.0.4 everywhere, and it is the one format.
-Label values are fixed C strings that need no escaping; the version strings in
-`agentica_vm_build_info` are checked at build time to contain no `"`, `\` or
-newline.
+**(b) `AGENTICA_VM_METRICS_FILE=path`.** The path must end in `.prom` and its
+directory must exist. Before each `rename` the writer `lstat`s the path: if
+something is there it must be a regular file owned by the VM's user, otherwise
+the write is skipped. The write is atomic: the whole text goes to
+`DIR/.NAME.PID.RANDOM.tmp` (`O_EXCL|O_NOFOLLOW`, mode 0644), then `rename`
+replaces the path (a symlink there is replaced, not followed). The temp name
+does not end in `.prom`, so the collector never reads it, and temp files of
+killed runs older than 1 hour are removed at start-up. No `fsync`. It writes at
+start-up (so a run that dies early leaves a file without `agentica_vm_exit_code`
+instead of the previous run's `0`), every 15 seconds (fixed), and at the end
+with the end-of-run metrics. A failed write is reported once on the `metrics`
+trace category and retried at the next interval.
 
-**(a) The endpoint: `AGENTICA_VM_METRICS=[IP:]PORT`.**
-
-- `9464` means `127.0.0.1:9464`. `IP:PORT` with an IPv4 literal, or
-  `[IPv6]:PORT`, binds that address; `0.0.0.0:9464` is how a container exposes
-  it, and it must be written out. No host names (no DNS at start-up). Port 0
-  picks a free port, for tests. 9464 is the port OpenTelemetry's Prometheus
-  exporter uses; it is only an example, there is no default port.
-- `vm/launch.c` binds and listens before the run, on the metrics thread's loop
-  (made on the main thread, then run on the metrics thread), so the bound port
-  is known before the program starts and a bind error is seen at once. A bad
-  value, or a failed bind, writes one line `agc-metrics cannot listen VALUE`
-  (with the reason) to stderr and the run goes on without the endpoint, as
-  `AGENTICA_VM_TRACE_FILE` does with `cannot open`. The chosen address and port
-  are written as a trace line `metrics listen host=127.0.0.1 port=41234` (the
-  `metrics` trace category, added in 18a for the file writes), which is how
-  tests find a port-0 endpoint: they set `AGENTICA_VM_TRACE_FILE`, so the line
-  goes to a file and stderr does not change.
-- **The responder is not the HTTP stack.** It reads at most 8 KiB up to the
-  first `\r\n\r\n` and looks only at the request line, which must be exactly
-  `GET /metrics HTTP/1.1` or `HTTP/1.0`; headers are ignored and no body is
-  read. Replies: 200; 404 for another target; 405 with `Allow: GET` for another
-  method; 400 for another request-line shape; 431 when 8 KiB pass without the
-  end of the head; 503 when the snapshot misses its 4-second budget (28.4).
-  Every reply has `Content-Length` and `Connection: close`. Each connection has
-  one deadline, 5 seconds from accept to close (not an idle timeout), and at
-  most 4 connections are open (more are accepted and closed at once). It shares
-  no code with picohttpparser or the HTTP stack, so a bug in it cannot reach the
-  program's HTTP server.
-- **It never keeps the VM alive.** The listener lives on the metrics thread's
-  own loop, so it is never in the program's `uv_loop_alive` and never delays the
-  stall check. When `main` ends the VM stops and joins the thread and exits,
-  even with a client connected. There is no "wait for a last scrape" option: it
-  would let monitoring change when a program ends. A run that ends before the
-  first scrape is never seen at the endpoint; use the file for runs that end.
-- **Children.** `Process.spawn` removes `AGENTICA_VM_METRICS` and
-  `AGENTICA_VM_METRICS_FILE` from the environment a child inherits (built:
-  `metrics_env` in `vm/process.c`, `docs/vm/10-io-processes.md` §10.4), since a
-  child VM would fight for the port or overwrite the parent's file. To get
-  metrics from a child VM, run it through `env` with another port or file; no
-  environment parameter is planned.
-
-**(b) The file: `AGENTICA_VM_METRICS_FILE=path`.**
-
-- The path must end in `.prom` (node_exporter's textfile collector reads only
-  those) and its directory must exist. Before each `rename` the writer calls
-  `lstat` on the path: if something is there it must be a regular file owned by
-  the VM's user, otherwise the write is skipped. (The trace file uses `fstat`
-  after open, which does not fit a file replaced by `rename`.) At start-up a
-  failed check writes one line `agc-metrics cannot write PATH` and turns file
-  output off; later a failed check skips that write and is reported on the
-  `metrics` trace category.
-- **Atomic rewrite:** the thread writes the whole text to
-  `DIR/.NAME.PID.RANDOM.tmp` (`O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC`,
-  mode 0644 by `fchmod`), then `rename`s it over the path. `RANDOM` is 16 hex
-  digits from `getrandom`, drawn per write; on `EEXIST` it draws again up to 4
-  times, so a temp file left by a killed run or planted by someone else never
-  blocks the write. A reader sees the old file or the new one; `rename` replaces
-  a symlink at the path instead of writing through it. The temp name starts with
-  `.` and does not end in `.prom`, so the collector never reads it. No `fsync`:
-  the file is a view of a running process, not a record.
-- **Old temp files.** At start-up the writer removes `.NAME.*.tmp` files of its
-  own path left by killed runs: regular files owned by the VM's user and older
-  than 1 hour.
-- **When:** at start-up (as soon as the path checks pass, before `agc_vm_run`,
-  from a snapshot without end-of-run metrics), every 15 seconds (fixed; a knob
-  would be a second way to tune the same thing), and at the end with the
-  end-of-run metrics. The start-up write replaces the previous run's file, so a
-  run that dies early leaves a file with no `agentica_vm_exit_code` and an alert
-  sees that it did not end cleanly instead of the previous run's `0`. Periodic
-  writes go through a snapshot request like a scrape, and the hooks start at
-  start-up in this mode (28.2 rule 5). A failed write is reported once on the
-  `metrics` trace category and retried at the next interval; it never ends the
-  run.
-
-**Scraping cost is not the program's.** Accepting, reading, formatting and
-writing happen on the metrics thread. The scheduler's share (28.4) charges no
-steps and no turn cost.
+`Process.spawn` removes both variables from a child's environment; to get
+metrics from a child VM, run it through `env` with another port or file.
 
 ### 28.6 Program-level metrics
 
-Should a program define its own counters, gauges and histograms on the same
-endpoint (a `Metrics` builtin or `std/metrics`)? **Decided: not in phase 18; to
-evaluate after shared tables (phase 9) and HTTP on the VM.** Reasons:
-
-- A counter is shared mutable state, and the one way to share it is the `ATS`
-  tables (grammar, "Shared tables"). A `Metrics` builtin with hidden mutable
-  state would be a second special form, next to the logger registry.
-- Std-first (roadmap README): rendering the text format is pure computation, so
-  it belongs in a `std/` module; only the hidden state would need C.
-- Program data in labels is how secrets and unbounded label sets leak (28.7);
-  the VM's endpoint is safe because every label value is a fixed C string.
-- A program can already serve its own metrics once HTTP runs on the VM:
-  `HTTP.serve` on its own port with a `/metrics` route. Two scrape targets are
-  normal.
-
-The candidate is a pure `std/metrics` module that renders the text format from
-values the program holds, served by the program's own listener, with no link to
-the VM's endpoint.
+Should a program define its own counters on the same endpoint (a `Metrics`
+builtin or `std/metrics`)? **Decided: not now.** A counter is shared mutable
+state, and the one way to share it is the `ATS` tables; a builtin with hidden
+state would be a second special form next to the logger registry. Program data
+in labels is how secrets and unbounded label sets leak; the VM's endpoint is
+safe because every label value is a fixed C string. A program can serve its own
+metrics with `HTTP.serve` on its own port. The candidate is a pure
+`std/metrics` module that renders the text format from values the program holds,
+with no link to the VM's endpoint.
 
 ### 28.7 Security
 
-- **Localhost by default.** A bare port binds `127.0.0.1`. Any other address
-  must be written out. There is no authentication and no TLS: when the endpoint
-  must be reached from outside the host, put it behind the network's own
-  controls (a firewall, a Kubernetes network policy, a reverse proxy with TLS).
-  Do not expose it to the internet.
-- **No program data.** No label or value comes from the program: no paths,
-  hosts, function names, task ids, messages, arguments, environment or input.
-  Label values are fixed C strings; the only free text is the build versions. So
-  the file can be world-readable (0644) and the endpoint leaks only how busy the
-  VM is and how much memory it uses.
-- **Bounded label sets.** At most about 80 series, fixed at compile time; a
-  program cannot add one.
-- **Bounded work per client:** 8 KiB of head, 5 seconds from accept to close, 4
-  connections, one reply, no request body. A flood costs the metrics thread,
-  never the program's thread.
-- **The file** is replaced by `rename`, never written in place, after the
-  `lstat` check of 28.5; the random temp name cannot be predicted or blocked.
+Localhost by default; no authentication and no TLS (put it behind a firewall, a
+network policy or a reverse proxy; never expose it to the internet). No program
+data in any label or value, so the file can be world-readable and the endpoint
+leaks only how busy the VM is and how much memory it uses. At most about 80
+series, fixed at compile time. Bounded work per client (8 KiB of head, 5
+seconds, 4 connections, no request body): a flood costs the metrics thread,
+never the program's thread.
 
-### 28.8 Tests
+### 28.8 Memory diagnosis (18d)
 
-Hermetic: localhost, port 0, temporary directories. Decisions that stay: the
-text format is checked by an independent Python parser, not `promtool`; goldens
-give byte-identical output with the endpoint on and scraped, and with the file
-on; the snapshot budget and the deadline come from a test-only switch
-(`AGENTICA_VM_TEST_METRICS_TIMES=budget_ms,deadline_ms`) so no test depends on
-machine speed; the Makefile `unexport`s the metrics variables; a `METRICS=0`
-build runs in the sanitizer job. **Overhead gate** (manual, like `make
-bench`): a CPU-heavy program of at least 10 seconds with metrics off, the
-endpoint idle, and the endpoint scraped every second; expected overhead about
-0, about 0 and below 2%. A run over the bound blocks the PR until the hook is
-made cheaper or dropped.
+A program grows in memory and the gauges show it, but not which task did it. v1,
+KISS:
 
-### 28.9 Where the code goes
+- **Per-task counters:** bytes allocated by the task (a plain add at the central
+  allocation path, `agc_alloc` and `agc_alloc_atomic`, into the running task's
+  counter; total bytes allocated, not bytes alive, since Boehm does not say who
+  holds an object) and bytes of C buffers held by the task's handles (exact,
+  because a handle has one owner).
+- **Global numbers:** what Boehm already gives next to the process RSS.
+- **An on-demand dump of the top N tasks** by those numbers, each with its entry
+  function, its parent and its age. How it is asked for is open: a path on the
+  endpoint, a signal, or a variable that writes it at the end of the run.
 
-All state is in the runtime, the scheduler and the thread's own `malloc`'d
-struct: no mutable globals; `METRICS=0` compiles it out. Multicore
-(`docs/vm/10-io-multicore.md` §10.2.3): each scheduler has its own counts,
-observe word and snapshot part; scheduler 0 reads the GC and the shared atomics;
-an idle scheduler waits on the run queue's condvar (§16.3), where a request
-wakes it.
+Not in v1: a per-category heap walk, hooks into libuv's and OpenSSL's
+allocators, heap snapshots, per-task Prometheus labels.
 
-### 28.10 Tracing and metrics
+**Cost.** The per-task add is hot-path work that rule 4 drops: the 18d PR must
+show that it passes the overhead gate (a CPU-heavy program of at least 10
+seconds with metrics off, the endpoint idle, and the endpoint scraped every
+second; expected overhead about 0, about 0 and below 2%), or change rule 4
+first, with the reason. **Open:** how the allocation path finds the running
+task's counter (`agc_alloc` takes no scheduler, and `vm/` has no mutable
+globals): a new parameter on the allocation functions, a thread-local variable
+(one documented exception), or counting in the callers that have the scheduler,
+which misses allocations made deeper in helpers.
 
-They share the rules (never crash, never change the program, variables read
-once at start-up, compiled out by a build flag), the owner check for files and
-the observe word. They answer different questions: a trace is every event of
-one run, read after the fact; metrics are a few totals and gauges of a running
-VM, polled and graphed over days. Metrics never write per-event lines and
-tracing never keeps totals; to see why a number moved, turn on the matching
-trace category.
+### 28.9 Tests, tracing and metrics
 
-### 28.11 Not planned
+Hermetic: localhost, port 0, temporary directories. The text format is checked
+by an independent Python parser, not `promtool`; goldens give byte-identical
+output with the endpoint on and scraped, and with the file on; the snapshot
+budget and the deadline come from a test-only switch so no test depends on
+machine speed; a `METRICS=0` build runs in the sanitizer job.
 
-- Push to a Pushgateway, OTLP export, OpenMetrics or protobuf formats, gzip, TLS
-  or authentication on the endpoint, a configurable path, port or file interval.
-- Keeping the VM alive for a last scrape.
-- A GC pause histogram (to evaluate later, 28.3), per-function or
-  per-instruction metrics, labels from program data.
-- Metrics defined by programs (to evaluate later, 28.6).
-- Metrics on platforms other than Linux, until those platforms are tested again.
+Tracing and metrics share the rules and the observe word but answer different
+questions: a trace is every event of one run, read after the fact; metrics are a
+few totals and gauges of a running VM. Metrics never write per-event lines and
+tracing never keeps totals.
 
-### 28.12 Memory diagnosis (18d)
+### 28.10 Not planned
 
-**Status:** planned by the owner on 2026-10-13, as the fourth PR of phase 18,
-after 17b. KISS. A program grows in memory and the gauges of 28.3 show it, but
-not which task did it. This section adds the least that answers that. It follows
-the rules of 28.2, except as noted under "Cost".
-
-**In v1:**
-
-- **Per-task counters.** Two numbers for each task. Bytes allocated by the task:
-  counted at the central allocation path (`agc_alloc` and `agc_alloc_atomic` in
-  `vm/value.c`) into the running task's counter, with a plain add and no atomic,
-  since only the thread that runs the task writes it. It is bytes allocated in
-  total, not bytes alive: Boehm does not say who holds an object. Bytes of C
-  buffers held by the task's handles: exact, because a handle has one owner (the
-  rule of 14.5, row 7.2.1a, 24b); each handle's `malloc`'d bytes are counted
-  where it allocates and frees them, and they are added up by owner.
-- **Global numbers.** What Boehm already gives (the heap, the free bytes and the
-  total allocated, `agentica_vm_gc_*` of 28.3) next to the process RSS
-  (`process_resident_memory_bytes`). Nothing new is measured.
-- **An on-demand dump of the top N tasks** by the numbers above, each with its
-  entry function, its parent and its age. How it is asked for is open. Options:
-  a path on the metrics endpoint (18b); a signal; a variable that writes the
-  dump at the end of the run. N is a small constant set in the 18d spec.
-
-**Not in v1:** a per-category heap walk; hooks into libuv's and OpenSSL's
-allocators; heap snapshots; per-task Prometheus labels (task ids stay out of
-labels, 28.3).
-
-**Cost.** The per-task add is the hot-path work that rule 4 of 28.2 drops: one
-non-atomic add per allocation. The 18d PR must show that it passes the overhead
-check of 28.8, or change rule 4 first, with the reason.
-
-**Open.** How the allocation path finds the running task's counter: `agc_alloc`
-takes no scheduler, and `vm/` has no mutable globals
-(`docs/vm/10-io-multicore.md` §10.2.3). Options: a new parameter on the
-allocation functions (every caller changes); a thread-local variable (one
-documented exception to the no-globals rule); or counting in the callers that
-have the scheduler (builtins and opcodes), which misses allocations made deeper
-in helpers.
-
-### 28.13 Implementation (row 7.7)
-
-Done when: Prometheus scrapes a running Agentica server and Grafana graphs GC,
-tasks, run-queue delay and I/O; a cron script leaves its exit code and totals in
-a `.prom` file; goldens give the same output with metrics on (§28.11 lists what
-is not in this phase).
+Push to a Pushgateway, OTLP, OpenMetrics or protobuf formats, gzip, TLS or
+authentication on the endpoint, a configurable path, port or file interval;
+keeping the VM alive for a last scrape; a GC pause histogram (to evaluate if the
+server measurement shows single long pauses matter); per-function or
+per-instruction metrics; labels from program data; metrics defined by programs;
+metrics on platforms other than Linux until those platforms are tested again.

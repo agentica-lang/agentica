@@ -3,12 +3,12 @@
 Signatures of the core namespaces. A row written `x.name(...)` is a Ruby name:
 write it in method form only (`String.strip(s)` is `CHECK-UNKNOWN-NAME`). Other
 rows may be written either way (`String.length(s)` or `s.length`). `agentica
-help NAME` prints a signature in method form (`s.strip()`; `--json` adds
-`ruby`). A Ruby or other name (`strip`, `value!`) prints the builtin it stands
-for (`--json`: `{"alias", "builtins", "hints"}`); one with only a hint (`len`,
-`int`) prints it and exits 2, as does an unknown name. Builtin namespaces and
-type names are reserved: no declaration, local, parameter, field or import alias
-may use them. `ok`, `error`, `some` and `none` are calls, never declared names.
+help NAME` prints a signature in method form (`s.strip()`); a Ruby or other name
+(`strip`, `value!`) prints the builtin it stands for, and a name with only a
+hint (`len`) prints it and exits 2, as does an unknown name. Builtin namespaces
+and type names are reserved: no declaration, local, parameter, field or import
+alias may use them. `ok`, `error`, `some` and `none` are calls, never declared
+names.
 
 ## Output, input, system
 
@@ -39,9 +39,8 @@ Random.float() -> Float                 # 0.0 up to, not including, 1.0
 - `IO.gets` strips LF, CR or CRLF; a blank line is `ok("")`, not the end.
   `IO.eof?` consumes nothing. Reads have no timeout; step budgets do not
   interrupt blocking input.
-- `Random` has one generator per run, seeded from the OS unless `--seed N` is
-  given (N in `0 .. 2147483647`); each task's generator is split at spawn. Not
-  for secrets: use `SecureRandom` (`binary.md`).
+- `Random` is seeded from the OS unless `--seed N` is given; not for secrets:
+  use `SecureRandom` (`binary.md`).
 
 ## Int, Float
 
@@ -60,7 +59,6 @@ x.floor() -> Int                                         # also ceil, round (hal
 Math.sqrt(x: Float) -> Float                             # negative x: RUNTIME-INVALID-NUMBER
 ```
 
-A negative literal receiver needs parentheses: `(-3).upto(3) do |i| ... end`.
 `floor`, `ceil` and `round` halt like `to_i!` on NaN, infinity or a result
 outside Int; `round` takes no digits: `(x * 100.0).round.to_f / 100.0`.
 Bit operations: `binary.md`.
@@ -98,8 +96,6 @@ s.to_i!() -> Int                                         # halts on bad text (RU
 s.to_f!() -> Float
 ```
 
-- `"a,,b,".split(",")` is `["a", "", "b", ""]`; `"abc".split("")` is
-  `["a", "b", "c"]`.
 - `index_of` and `at` count characters, like `length`. Use `code` and
   `from_code` for character arithmetic. Strings cannot be indexed (`s[0]`).
 - No regex builtin or `=~`: use `std/regex` (`regex.md`). `s.chars` is
@@ -147,18 +143,16 @@ List.max_by(list: List[A], key: Fn[A, O]) -> Optional[A]   # NaN keys never win 
 List.lazy(list: List[A]) -> Lazy[A]                      # a recipe; steps run in a terminal (lazy.md)
 ```
 
-- `map`, `select`, `reduce` are O(n); `sort`, `sort_by` O(n log n); callbacks
-  run once per element, left to right, under the caller's execution budget.
-- `find` to `max_by` are written in Agentica: O(n), 4 to 28 steps per element
-  (`performance.md`); a runtime error in one is reported at your call.
+- Callbacks run once per element, left to right, under the caller's execution
+  budget. `find` to `max_by` are written in Agentica: O(n), 4 to 28 steps per
+  element (`performance.md`); a runtime error in one is reported at your call.
 - `reject` is `CHECK-UNKNOWN-METHOD` (use `xs.select do |x| !cond end`). A List
   has `include?` (also `member?`), not `contains?`. A range has no `map` or
   `select`: `(1..5).to_a.map do ... end`. A block after `each_slice` is
   `CHECK-BLOCK-TARGET`: `xs.each_slice(2).each do |pair| ... end`.
 - Callback types must match exactly. A callback given as `&name`, a `Fn`
   variable or a block with typed parameters (`do |x: Int|`) types empty lists
-  and empty reduce starts. `List.repeat(x, 0)` is an empty list of the inferred
-  type.
+  and empty reduce starts.
 - Strings sort by code point (`"B"` before `"a"`); Float NaN sorts last; other
   element types are `CHECK-TYPE-MISMATCH`.
 
@@ -178,8 +172,8 @@ Map.each(map: Map[K, V], f: Fn[K, V, Void]) -> Void      # f(key, value) in inse
 m.select(f: Fn[K, V, Bool]) -> Map[K, V]                 # keeps the entries f accepts, in order
 ```
 
-- Lookup, `key?` and `put` are effectively constant time (a persistent
-  32-way HAMT). `m[key]` on a missing key is `RUNTIME-KEY-NOT-FOUND`.
+- Lookup, `key?` and `put` are effectively constant time. `m[key]` on a missing
+  key is `RUNTIME-KEY-NOT-FOUND`.
 - `false` and `nil` are present values. Deleting keeps the order of the rest;
   re-inserting puts a key at the end; `put` on an existing key keeps its place.
 
@@ -199,12 +193,9 @@ Set.difference(a: Set[T], b: Set[T]) -> Set[T]           # in a's order
 Set.subset?(a: Set[T], b: Set[T]) -> Bool                # every element of a is in b
 ```
 
-- `seen = seen.add(x)`; a bare `seen.add(x)` is `CHECK-UNUSED-VALUE`. Membership
-  and `add` are effectively constant time. Re-adding a deleted element puts it
-  at the end. `for x in set` visits in order.
-- No index (`s[0]` is `CHECK-NOT-INDEXABLE`). `Test.eq` compares two sets in any
-  order. Element and empty-set typing:
-  `language-statements-expressions.md`.
+- `seen = seen.add(x)`; a bare `seen.add(x)` is `CHECK-UNUSED-VALUE`.
+  Re-adding a deleted element puts it at the end. `for x in set` visits in
+  order. No index (`s[0]` is `CHECK-NOT-INDEXABLE`).
 
 ## Range
 
@@ -237,8 +228,7 @@ r.message() -> String                                    # the error message, or
 ```
 
 `r.is_err?`, `r.error?`, `r.value!` and `r.ok!` do not exist: write `!r.ok?` and
-`r.unwrap!`. Rules for `ok`, `error` and `try`:
-`language-blocks-results.md`; Void: `language-program-types.md`.
+`r.unwrap!`. Rules: `language-blocks-results.md`.
 
 ## Optional
 
@@ -253,29 +243,20 @@ o.none?() -> Bool
 o.to_result(message: String) -> Result[T]                # ok(x), or error(message) for none
 ```
 
-Rules: `language-blocks-results.md`.
-
 ## Methods and Ruby names
 
 `receiver.name(args)` calls the builtin of the receiver's static type with the
 receiver first; the module is the type's name (`List[T]` uses `List`), except
-`Json`, which uses `JSON`. `Int` takes `times`, `upto`, `downto` and the bit
-functions; `Channel[T]` takes `send`, `recv`, `close`, `closed?`, `empty?`;
-`ATS[K, V]` takes every `ATS` function but `new`. Without parentheses,
+`Json`, which uses `JSON`. Without parentheses,
 `receiver.name` on a non-struct value calls a method with no arguments
 (`s.length`, `xs.size`, `r.ok?`); on a struct it reads a field, and structs and
 enums have no methods. `.call(...)` invokes a function value, and an `Fn`
 field is called by its name (`store.put(a, b)`). An unknown method
 is `CHECK-UNKNOWN-METHOD`, with a suggestion or the type's methods.
 
-Write the Ruby method names: `strip`, `include?`, `start_with?`, `end_with?`,
-`to_i`, `to_f`, `to_i!`, `to_f!`, `push`, `select`, `key?`, `join` on a
-`List[String]`, `to_s` and `inspect` on any data value, `n.to_f`, `x.to_i`.
-`length` and `size` both work on String, List, Map, Set and Range.
-
-Unlike Ruby, `"abc".to_i` is a `Result[Int]` (an error here), not `0`. A
-negative literal receiver needs parentheses: `(-5).to_s` (`-5.to_s` is
-`-(5.to_s)`).
+Write the Ruby method names. `length` and `size` both work on String, List,
+Map, Set and Range. Unlike Ruby, `"abc".to_i` is a `Result[Int]` (an error
+here), not `0`. A negative literal receiver needs parentheses: `(-5).to_s`.
 
 ## to_s and inspect
 
@@ -293,11 +274,10 @@ negative literal receiver needs parentheses: `(-5).to_s` (`-5.to_s` is
 
 ## Other rules
 
-- Values never change, so a method never changes its receiver: assign the
-  result (`xs = xs.push(4)`, `m = m.put("k", 1)`). A builtin without effects
-  whose non-Void result is ignored is `CHECK-UNUSED-VALUE`; `!`-suffixed
-  functions and builtins that take a function are exempt. An ignored `Result`
-  is `CHECK-UNUSED-RESULT` for any call: `try` it, `case` it or `_ = f(...)`.
+- A method never changes its receiver: assign the result (`xs = xs.push(4)`,
+  `m = m.put("k", 1)`). A builtin without effects whose non-Void result is
+  ignored is `CHECK-UNUSED-VALUE`; `!`-suffixed functions and builtins that take
+  a function are exempt.
 - A `?` or `!` suffix belongs to a function name, even with a space before `(`.
   `a!=b` is `a != b`. Variables, parameters and fields cannot take those
   suffixes. By convention `?` means Bool and `!` halts on failure.

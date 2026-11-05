@@ -52,42 +52,6 @@ def main() -> Void
 end
 ```
 
-Filtering with a block:
-
-```ruby
-struct Todo
-  title: String
-  done: Bool
-end
-
-def main() -> Void
-  tasks: List[Todo] = [
-    Todo(title: "write code", done: false),
-    Todo(title: "review code", done: true)
-  ]
-  pending = tasks.select do |task| !task.done end
-  pending.each do |task|
-    puts("todo: #{task.title}")
-  end
-
-  puts("#{pending.size} of #{tasks.size} left")
-end
-```
-
-Maps:
-
-```ruby
-def main() -> Void
-  stock: Map[String, Int] = {"apple": 3, "pear": 0}
-  stock = stock.put("kiwi", 7)
-  for name in stock.keys
-    if stock[name] > 0
-      puts("#{name.upcase}: #{stock[name]}")
-    end
-  end
-end
-```
-
 Reading input:
 
 ```ruby

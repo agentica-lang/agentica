@@ -1,41 +1,28 @@
 ## 41. Dates and times
 
-**Status:** designed, not scheduled (the owner's scope of 2026-10-14; the
-roadmap order table does not place it). The types are checker changes, so they
-are written in `compiler/` (41.13), as the owner decided on 2026-10-15.
-`Time.monotonic_ns` (41.10) is independent and has landed. `std/utc`
+Issue #985, designed and not scheduled. The types are checker changes in
+`compiler/` (owner, 2026-10-15). `Time.monotonic_ns` has landed; `std/utc`
 (`UTC.parts`, `UTC.iso8601`) is the stopgap until the `Time` functions replace
-it; they differ: microseconds, not milliseconds; a year outside 1 to 9999 is an
+it. They differ: microseconds, not milliseconds; a year outside 1 to 9999 is an
 error, where `std/utc` writes it with its sign; and `Time.format` always writes
 six fraction digits, where `UTC.iso8601` takes a count (0 to 9). No grammar
 syntax is added: new builtin types and new functions of the existing `Time`
 module. Every name is a proposal for the owner to review. The precision is
 microseconds (owner, 2026-10-15; 41.8).
 
-Programs compute with dates and times (a due date, a log timestamp, an expiry,
-a time from a JSON API), and today have only `Time.now_ms()` and
-`Time.monotonic_ms()`. `Time.from_unix(info.modified_seconds)` turns the
-`File.stat` result into a `DateTime`.
+Programs compute with dates and times (a due date, a log timestamp, an expiry, a
+time from a JSON API), and have only `Time.now_ms()` and `Time.monotonic_ms()`
+(plus `Time.from_unix` of `File.stat` data through `std/utc`).
 
-### 41.1 Where it lives, and the exception to "std/ first"
+### 41.1 Builtins, an exception to "std/ first"
 
-The roadmap rule "New library features: `std/` first" puts pure computation in
-`stdlib/*.agc`. This section is a deliberate exception (owner, 2026-10-14): the
-calendar types and their conversions are builtins of the existing `Time`
-module, written in C under `vm/`.
-
-- The types are what a `std/` module cannot give: a struct declared in a module
-  is constructible by any program and its name is not reserved, so the rule "a
-  `Date` is a real day" cannot be kept. The functions that build and read them
-  belong next to them (41.2).
-- One place for time: `Time.now_ms` and `Time.monotonic_ms` already live there,
-  and `Time.now()` returns the same clock as a `DateTime`.
-- Speed: a conversion is a few dozen integer operations in C, one builtin call;
-  an Agentica version would cost about a hundred interpreted steps (an estimate,
-  not measured), each counting against `--max-steps`.
-
-When the types land, the roadmap rule gets an item for calendar types that need
-a builtin type.
+The calendar types and their conversions are builtins of the existing `Time`
+module, written in C under `vm/dates.c` (owner, 2026-10-14). A struct declared
+in a `std/` module is constructible by any program and its name is not reserved,
+so the rule "a `Date` is a real day" cannot be kept. The functions that build
+and read the types belong next to them, next to `Time.now_ms` and
+`Time.monotonic_ms`, and a conversion is one builtin call instead of about a
+hundred interpreted steps counted against `--max-steps`.
 
 ### 41.2 Types
 
@@ -82,7 +69,7 @@ Enum variants are not reserved. A variant is always written with its enum
 (`Toml.Value.DateTime`), so a variant named like a builtin type does not clash
 with it. The same holds today for `Toml.Value.Int` and `Toml.Value.Bool`, and
 it keeps `Toml.Value.DateTime` valid when §41 lands. The checker must not start
-reserving variant names: a variant named `Date` or `DateTime` checks ok (41.15).
+reserving variant names: a variant named `Date` or `DateTime` checks ok.
 
 Construction. Builtin records can be constructed today: `Header(name: "a",
 value: "b")` checks. For dates that is wrong: `Date(year: 2026, month: 13, day:
@@ -95,10 +82,11 @@ invariant then lives in every function, and a bad value is found at use, not at
 construction); opaque types with accessor functions, as `Process` is (`dt.hour`
 is what programs expect from a record, as `FileInfo` shows).
 
-Records have no equality (`==` on a struct is `CHECK-TYPE-MISMATCH`,
-`docs/grammar/06-semantics.md`), so use `Time.compare`, `Time.compare_naive`,
-`Time.compare_date` or `Time.compare_time`. `puts(dt)` prints the struct form,
-so use `Time.format` for text.
+Order with `Time.compare`, `Time.compare_naive`, `Time.compare_date` or
+`Time.compare_time`. `puts(dt)` prints the struct form, so use `Time.format` for
+text. Open: structs compare field by field with `==`, so `==` on two `DateTime`
+values compares readings, not instants; the owner decides whether these types
+opt out of `==` (41.20).
 
 ### 41.3 Constructors
 
@@ -162,7 +150,7 @@ Time.now() -> DateTime
   about 2.5e17 us of the 9.2e18 an Int holds (§42.4). The two directions are
   not exact inverses at the edges: an aware value at offset -1439 can have an
   instant up to a day past 9999-12-31, so `to_unix_us` can return a value that
-  `from_unix_us` rejects (41.15 tests it).
+  `from_unix_us` rejects.
 - `Time.now()` is the wall clock in UTC. It reads the clock the way
   `Time.now_ms` does (`timespec_get` with `TIME_UTC`), and it keeps the
   nanoseconds truncated to microseconds. The resolution is the OS clock's, so a
@@ -311,8 +299,7 @@ Not in v1: `add_months` and `add_years` (41.16), and arithmetic on `TimeOfDay`.
 ### 41.8 Calendar, range and clock rules
 
 - The calendar is proleptic Gregorian: the Gregorian leap rule applies to every
-  year, as in Python's `datetime`, so the Python vectors (41.15) need no model
-  of history.
+  year, as in Python's `datetime`, so Python vectors need no model of history.
 - Years are 1 to 9999, four digits, as in ISO 8601. Year 0 and negative years
   are not dates. The bounds are on the local reading: every `Date`,
   `NaiveDateTime` and `DateTime` has its reading in years 1 to 9999, whatever
@@ -343,14 +330,6 @@ Not in v1: `add_months` and `add_years` (41.16), and arithmetic on `TimeOfDay`.
 - Offsets are fixed. There is no daylight saving time, so every day of a fixed
   offset is 86400000000 us.
 
-### 41.9 Algorithms
-
-Days from civil date and back use Howard Hinnant's `days_from_civil` and
-`civil_from_days`, written for this repo from those steps. The algorithms need
-floor division for negative values, while integer `/` and `%` truncate
-(`docs/grammar/06-semantics.md`); the code uses `floor_div` and `floor_mod`
-helpers with a positive divisor, and the vectors cover negative inputs (41.15).
-
 ### 41.10 Measuring elapsed time
 
 Durations come from the monotonic clock, and the pattern is:
@@ -374,7 +353,7 @@ end
   the raw count by 10^9 overflows an Int after about 15 minutes at 10 MHz). Why
   nanoseconds: short work is invisible in milliseconds. Why not `uv_hrtime`: a
   second clock path would let the two builtins disagree (the owner may prefer
-  libuv). It is exception 1 of the std-first rule (the OS clock).
+  libuv). It is a builtin because it touches the OS clock.
 - No `elapsed` helper: it would be `Time.monotonic_ms() - start` with a name and
   would hide which clock it reads (`stdlib/test/runner.agc` writes the
   subtraction).
@@ -395,37 +374,6 @@ The text changes with this. The time has six fraction digits
 examples and its "with milliseconds" are updated in the implementation PR, and
 the owner decides the digits (41.20). The grammar's logging section is updated
 there too.
-
-### 41.12 Cost
-
-A conversion is one builtin call. Allocation is one fixed-size record per value
-(no list or nested record field) and one `String` for text. Parsing scans the
-text once.
-
-### 41.13 Freeze and roadmap impact
-
-The types, the reserved names, the construction rule and its code are a checker
-change, and the `Time.*` functions return the new types, so their catalog rows
-come with them: all in `compiler/` (§18), with the C side in a new
-`vm/dates.c` (owner, 2026-10-15). The order table is not changed by this
-section. `Time.monotonic_ns` (41.10) landed alone, as a builtin row.
-
-### 41.14 Docs of the implementation PR
-
-The grammar, the programming skill (`references/dates.md`), a site page and a
-**Breaking:** CHANGELOG entry for the reserved names. When the feature lands,
-§41 leaves `docs/future/`.
-
-### 41.15 Tests
-
-The peer is a Python generator (standard library only, `datetime`, fixed seed)
-that writes the input of a golden fixture. The vectors cover the epoch and the
-microseconds before it, the bounds of years 1 and 9999 at the extreme offsets
-(41.8), leap days, month ends, offsets from -1439 to 1439, and fractions of six,
-seven and nine digits. Round trips: `parse` of `format`, `from_unix_us` of
-`to_unix_us`, the naive and time forms, `add_days` of `days_between`; records
-have no `==` (41.2), so checks use `compare`. Every error message of 41.3 and
-41.6 has a golden, and the checker codes are asserted with their spans.
 
 ### 41.16 Later
 
@@ -472,7 +420,7 @@ chosen.
     `vm/value.h`, read by `load_types` in `vm/loader.c`), so the `.agcb` format
     changes. The typed encoder and decoder (`vm/json_typed.c`,
     `vm/json_value.c`) get a text branch for each kind. The format version
-    order against §42 is in 42.11.
+    order against §42 is the order the two land in.
   - Top level: `JSON.decode(text, DateTime)` reads a JSON string with
     `Time.parse` and gives `Result[DateTime]`; text that is not a JSON string is
     an error. `JSON.encode` of a `DateTime` gives the JSON string.
@@ -490,7 +438,7 @@ chosen.
 
 ### 41.19 TOML (std/toml)
 
-std/toml (§45.14 question 11) keeps the text of a TOML date-time: its
+std/toml keeps the text of a TOML date-time: its
 `DateTime(String)` variant holds the text as written, until these types land.
 When §41 lands, std/toml maps TOML's four kinds of date and time to four
 variants, named after the types:
@@ -524,6 +472,8 @@ The costs, to be accepted when it lands:
 
 ### 41.20 Questions for the owner
 
+- **Equality (41.2).** Keep field-wise `==` on the four types, or refuse it so
+  that `Time.compare` is the one way to compare instants.
 - **JSON (41.18).** Option A or option B for v1. Recommendation: B.
 - **Name of the time-of-day type (41.2).** `TimeOfDay`, as proposed, or
   `LocalTime`, which says what the value lacks, as `NaiveDateTime` does for the

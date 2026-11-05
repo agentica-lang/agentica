@@ -1,17 +1,15 @@
 # BDD feature specifications
 
-`agentica test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR]
-[--jobs N] [--ai|--json]` runs `.feature` files and `*_test.agc` unit test
-files. It searches directories in sorted order (folder links are not followed; a feature
-file is at most 1 MiB); the default paths are `specs/` and `test/`. `--steps
-FILE` names the one step program (repeating it is `RUNTIME-BDD-USAGE`); without
-it, a run with features uses the nearest `steps.agc` in the folder of each path
-that holds a feature
-(the path if a folder) or above it, up to the working directory (two different
-ones are `RUNTIME-BDD-USAGE`). Empty discovery fails. Exit codes: 0 all pass, 1
-verification fails, 2 infrastructure or usage fails. Programs under test run as
-local processes on the VM. File and output rules shared with unit tests:
-`testing.md`.
+`agentica test [PATH...]` runs `.feature` files and `*_test.agc` unit test files
+(flags: `agentica --help`). It searches directories in sorted order (folder
+links are not followed; a feature file is at most 1 MiB); the default paths are
+`specs/` and `test/`. `--steps FILE` names the one step program (repeating it
+is `RUNTIME-BDD-USAGE`); without it, a run with features uses the nearest
+`steps.agc` in the folder of each path that holds a feature or above it, up to
+the working directory (two different ones are `RUNTIME-BDD-USAGE`). Empty
+discovery fails. Exit codes: 0 all pass, 1 verification fails, 2 infrastructure
+or usage fails. Programs under test run as local processes on the VM. File and
+output rules shared with unit tests: `testing.md`.
 
 English syntax: `Feature`, one optional `Background` before scenarios,
 `Scenario`/`Example`, `Scenario Outline` plus `Examples`, and
@@ -88,20 +86,12 @@ BDD.keep(ctx: BDD.Context, name: String, service: Fn[Json, Result[Json]]) -> BDD
 BDD.call(ctx: BDD.Context, name: String, request: Json) -> Result[Json]
 BDD.read_line(ctx: BDD.Context, timeout_ms: Int) -> Result[String]
 BDD.after(ctx: BDD.Context, hook: Fn[BDD.Context, Result[Void]]) -> BDD.Context
-BDD.given_env(ctx: BDD.Context, name: String, value: String) -> BDD.Context
-BDD.given_argument(ctx: BDD.Context, value: String) -> BDD.Context
-BDD.given_program(ctx: BDD.Context, path: String) -> BDD.Context
-BDD.when_line(ctx: BDD.Context, text: String) -> BDD.Context
-BDD.when_input(ctx: BDD.Context, text: String) -> BDD.Context
-BDD.when_eof(ctx: BDD.Context) -> BDD.Context
-BDD.then_line(ctx: BDD.Context, expected: String, timeout_ms: Int) -> BDD.Context
-BDD.then_json_line(ctx: BDD.Context, expected: String, timeout_ms: Int) -> BDD.Context
-BDD.then_stdin_open(ctx: BDD.Context) -> BDD.Context
-BDD.then_exit(ctx: BDD.Context, code: Int, timeout_ms: Int) -> BDD.Context
-BDD.then_stdout(ctx: BDD.Context, expected: String) -> BDD.Context
-BDD.then_stderr(ctx: BDD.Context, expected: String) -> BDD.Context
-BDD.then_stdout_includes(ctx: BDD.Context, expected: String) -> BDD.Context
-BDD.then_stderr_includes(ctx: BDD.Context, expected: String) -> BDD.Context
+BDD.given_env(ctx, name, value) / given_argument(ctx, value) / given_program(ctx, path)
+BDD.when_line(ctx, text) / when_input(ctx, text) / when_eof(ctx)
+BDD.then_line(ctx, expected, timeout_ms) / then_json_line(ctx, expected, timeout_ms)
+BDD.then_stdin_open(ctx) / then_exit(ctx, code, timeout_ms)
+BDD.then_stdout(ctx, expected) / then_stderr(ctx, expected)
+BDD.then_stdout_includes(ctx, expected) / then_stderr_includes(ctx, expected)
 ```
 
 - The context rule: most BDD calls take the scenario's `ctx` first and return
@@ -144,9 +134,9 @@ BDD.then_stderr_includes(ctx: BDD.Context, expected: String) -> BDD.Context
   Windows `Path` and `PATH` are one name, so the second replaces the first,
   but `Ä` and `ä` make `BDD.given_program` fail (`RUNTIME-BDD-IO`).
 - `BDD.read_line(ctx, timeout_ms)` returns the program's next output line as a
-  `Result[String]` (an error at the end of the output or a timeout). A timeout stops
-  the program: later reads, sends and exit checks fail with `RUNTIME-BDD-IO`,
-  so it must be its last use.
+  `Result[String]` (an error at the end of the output or a timeout). A timeout
+  stops the program: later reads, sends and exit checks fail with
+  `RUNTIME-BDD-IO`, so it must be its last use.
 - `BDD` is not a builtin: without the import `BDD.step` is `CHECK-UNKNOWN-NAME`
   with the import as help. `BDD.run` adds the predefined steps in front and
   never returns; run directly, a step program exits 2 with a hint.
@@ -158,8 +148,7 @@ BDD.then_stderr_includes(ctx: BDD.Context, expected: String) -> BDD.Context
   Captures are strings in order; quoted strings lose delimiters and unescape
   backslash-prefixed characters; decimal integers may have a minus sign.
 - The `then_*` checks compare with `Test.eq`: a failure shows `expected` and
-  `actual` in the inspect form (`"text"` quoted, `3`, a JSON line as canonical
-  text), each cut at 64 Ki characters.
+  `actual` in the inspect form, each cut at 64 Ki characters.
 - Missing Doc Strings/tables fail (`RUNTIME-BDD-CONTEXT`); absent state returns
   an error Result. Every `Then` (And/But included) and every scenario must
   perform a BDD assertion. A BDD failure ends the step at once. `BDD.skip` ends
@@ -185,8 +174,8 @@ BDD.then_stderr_includes(ctx: BDD.Context, expected: String) -> BDD.Context
   as working directory; BDD gives no filesystem or network isolation. Timeouts
   are positive; a scenario has 30 seconds, program-driving calls without a
   timeout 5 seconds, each scenario child one million steps per step plus one
-  million (library work included); output is limited to 1 MiB of unread stdout,
-  1 MiB of stderr and 1 MiB of handler output per step.
+  million; output is limited to 1 MiB each of unread stdout, stderr and handler
+  output per step.
 - `--only TEXT` (once, not empty) keeps scenarios and tests whose name contains
   `TEXT`; no match is `CHECK-BDD-EMPTY`. `--tags EXPR` (once) keeps the
   scenarios whose tags match: `@a`, `not @a`, joined with `and` and `or` (`not`
@@ -202,45 +191,38 @@ BDD.then_stderr_includes(ctx: BDD.Context, expected: String) -> BDD.Context
   test file: a helper with that name fails with `RUNTIME-TEST-RUN`. Use port 0
   and fresh temporary directories, not fixed names.
 - To run a suite from a program, start `agentica test --json` with
-  `Process.spawn` and parse its report: `ok`, `passed`, `failed`,
-  `skipped`, `not_executed`, `file_errors`, `exit_code`, `seed`, `files`.
+  `Process.spawn` and parse its report.
 
 ## Diagnostics
 
 `agentica test` reports the first problem of each kind with a stable code:
 
-- `PARSE-GHERKIN-HEADER`, `PARSE-GHERKIN-STEP`, `PARSE-GHERKIN-ARGUMENT`,
-  `PARSE-GHERKIN-TABLE`, `PARSE-GHERKIN-EXAMPLES`, `PARSE-GHERKIN-TAGS`,
-  `PARSE-GHERKIN-EMPTY`, `PARSE-GHERKIN-PARAMETER`, `PARSE-GHERKIN-UNSUPPORTED`:
-  the `.feature` file breaks the supported Gherkin subset (section order, a step
-  outside a scenario, a Doc String or table in the wrong place, bad Examples,
-  misplaced tags, a Feature without scenarios or a Background without steps, an
-  Examples column missing for a `<parameter>`, a non-English keyword).
+- `PARSE-GHERKIN-*`: the `.feature` file breaks the supported Gherkin subset
+  (section order, a step outside a scenario, a misplaced Doc String, table or
+  tag, bad Examples or `<parameter>`, an empty Feature or Background, a
+  non-English keyword).
 - `CHECK-BDD-UNDEFINED`, `CHECK-BDD-AMBIGUOUS`, `CHECK-BDD-EMPTY`: no step
   pattern matches; more than one matches; no `.feature` or `*_test.agc` files
   found (or no name matches `--only`).
 - `RUNTIME-BDD-ASSERTION`, `RUNTIME-BDD-NO-ASSERTION`: an expectation failed; a
   `Then` step or a whole scenario made no BDD assertion.
-- `RUNTIME-BDD-TIMEOUT`, `RUNTIME-BDD-PREMATURE-EXIT`: an operation or the
-  scenario passed its deadline, or got a bad timeout; a step called
-  `System.exit` or its child ended without a diagnostic.
+- `RUNTIME-BDD-TIMEOUT`, `RUNTIME-BDD-PREMATURE-EXIT`: a deadline passed, or a
+  bad timeout; a step called `System.exit` or its child ended without a
+  diagnostic.
 - `RUNTIME-BDD-AFTER`: an after hook failed.
 - `RUNTIME-BDD-CONTEXT`, `RUNTIME-BDD-PROGRAM`, `RUNTIME-BDD-JSON`: a missing
   Doc String or table, a stream call before a program started, a second program,
-  an environment variable or argument set after the program started,
-  a step program that never calls `BDD.run`; a missing `.agc` program; a JSON
-  expectation that is not valid JSON.
+  an environment variable or argument set after it started, a step program that
+  never calls `BDD.run`; a missing `.agc` program; a JSON expectation that is
+  not valid JSON.
 - `RUNTIME-BDD-DUPLICATE`, `RUNTIME-BDD-PATTERN`, `RUNTIME-BDD-PENDING-TASKS`: a
-  pattern used twice, an invalid pattern (both at the step program's first
-  line); tasks left running by a handler or by `main` before `BDD.run`.
+  pattern used twice, an invalid pattern; tasks left running by a handler or by
+  `main` before `BDD.run`.
 - `RUNTIME-BDD-OUTPUT-LIMIT`, `RUNTIME-BDD-IO`, `RUNTIME-BDD-INFRA`,
-  `RUNTIME-BDD-USAGE`: program or handler output over 1 MiB; a stream I/O
-  failure, a feature file or step line over 1 MiB; a missing executable, VM or
-  feature path, an unreadable folder or broken `.feature` link, a step program
-  that cannot be read; bad command-line usage, such as two `--steps`.
+  `RUNTIME-BDD-USAGE`: output over 1 MiB; a stream I/O failure; a missing
+  executable, VM or feature path or an unreadable step program; bad
+  command-line usage, such as two `--steps`.
 
-A step program that does not compile is a file error with its own diagnostic
-(for example `CHECK-TYPE-MISMATCH` for a handler of the wrong type). A crash in
-a step keeps the VM's code (`RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-STEP-LIMIT`,
-...) and its span in the step program; BDD failures are located at the feature
-step.
+A step program that does not compile is a file error with its own diagnostic. A
+crash in a step keeps the VM's code and its span in the step program; BDD
+failures are located at the feature step.

@@ -1,8 +1,8 @@
 ## 19. SIMD in the VM
 
-**Status:** on demand. It starts only if profiling (the server measurement,
-roadmap 7j, or the cross-language benchmarks, phase 12) shows time spent in the
-routines below. No language change.
+**Status:** issue #996, on demand. It starts only if profiling (the server
+measurement, issue #1003, or the cross-language benchmarks, issue #1004) shows
+time spent in the routines below. No language change.
 
 **Targets:** AVX2 first, then AVX-512 on x86-64; NEON on ARM later. AVX-512 can
 lower the clock speed on some Intel CPUs, so a routine uses it only where it was
@@ -20,8 +20,8 @@ measured faster than AVX2.
    time, so this needs no build change and can land at any time.
 4. Sorting `List[Int]` and `List[Float]` with an AVX-512 sort (for example
    Intel's x86-simd-sort, BSD-3-Clause, which fits the dependency policy).
-   Step 3 of faster lists (8d) added unboxed Int and Float storage, so these
-   lists hold raw 8-byte numbers and a vector sort can work on them. Today
+   The unboxed Int and Float lists (`docs/vm/17-lists.md` §17.12) hold raw
+   8-byte numbers, so a vector sort can work on them. Today
    `List.sort` sorts `(key, item)` entries with a scalar merge.
 5. HTTP head parsing: picohttpparser (`vm/http_pico.c`, behind
    `vm/http_parse.h`, `docs/vm/10-io-http.md` 10.6) has an SSE4.2 path that the

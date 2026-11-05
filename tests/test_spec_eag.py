@@ -1,4 +1,4 @@
-"""`<<~EAG` templates through the product CLI (docs/future/51-templates.md): the output of a template against an
+"""`<<~EAG` templates through the product CLI: the output of a template against an
 independent implementation of ERB's rules, and the diagnostics, asserted by code and span, never message text.
 
 The peer is `peer_render` below, written from the rules of Ruby's ERB with `trim_mode: "-"` plus the rule for a line that

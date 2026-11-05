@@ -20,8 +20,8 @@ Start tasks before awaiting them to overlap I/O. A task calls a named function
 with one argument or none (pass a struct for several values) and has its own
 variables.
 Await returns the cached value and can repeat. `false`, `nil` and error Results
-are normal values. `Task[R]` has no constructor, equality, fields, indexing or
-JSON encoding; inspect prints `<Task>`. `Task.spawn do ... end` runs a
+are normal values. `Task[R]` has no constructor, equality, fields or
+JSON encoding. `Task.spawn do ... end` runs a
 block as the task (it may capture locals); give a block or `&f`, not both. A
 block that takes the argument goes through a `Fn` variable or parameter.
 
@@ -33,30 +33,24 @@ FILE:LINE:COLUMN: MESSAGE")` when `R` is a `Result`, else the awaiter halts with
 `RUNTIME-TASK-CRASHED` at its await: give a task a `Result` return type when
 its caller should handle a crash. When `main` returns with a crash never
 awaited, the run exits 1 with `1 task crash was not observed; first: ...` on
-stderr (`--json`: a final `{"unobserved_crashes": ...}` line; a task crash line
-is not the run's diagnostic). `Task.unobserved_crash()` returns `ok(text)` for
-the first such crash, or an error, without observing it.
+stderr. `Task.unobserved_crash()` returns `ok(text)` for the first such crash,
+or an error, without observing it.
 
 A runtime error in `main`, `RUNTIME-STEP-LIMIT` and `System.exit` in any task
 end the whole run (`System.exit` keeps its code). Returning from `main` cancels
-pending work: await tasks that must finish. External interruption cancels tasks
-and closes newly created resources, keeping caller-supplied ports. Cross-task
-output order is unspecified. Tasks inherit ports, program arguments and
-services.
+pending work: await tasks that must finish. Cross-task output order is
+unspecified.
 
-Tasks run in parallel on one scheduler per logical core (`--schedulers N`, 1 to
-1024, or `AGENTICA_SCHEDULERS`; `agentica test` reads only the variable; an
-empty variable is unset). `--schedulers 1` runs one task at a time in a fixed
-order. With more than one, `--max-steps` can trip a little late. Each task has
-its own `Random` generator split from its parent at spawn, so `--seed N` repeats
-each task's values but not the interleaving (timers, sleeps, file and stdin
-reads and the thread pool vary it): do not depend on cross-task order.
+Tasks run in parallel on one scheduler per logical core (`--schedulers N` or
+`AGENTICA_SCHEDULERS`; `agentica test` reads only the variable).
+`--schedulers 1` runs one task at a time in a fixed order. Each task has its
+own `Random` generator split from its parent at spawn, so `--seed N` repeats
+each task's values but not the interleaving: do not depend on cross-task order.
 
 `Task.sleep` takes nonnegative milliseconds (0 yields); a negative value is
 `RUNTIME-INVALID-DURATION` at the argument. `pending_count` counts tasks of this
-run that have not ended, not `main`: waiting to run, the caller when it is not
-`main`, sleeping, awaiting, or waiting on a channel or I/O. Ended tasks and the
-tasks `std/http` starts for an `HttpClient` are not counted.
+run that have not ended, not `main` and not the tasks `std/http` starts for an
+`HttpClient`.
 
 ## Handles and ownership
 
@@ -91,22 +85,19 @@ flushed and closed (not after a flush to a FIFO or pipe).
 parentheses). Match both or add `_`; `Await` is reserved (`CHECK-REDEFINED-NAME`
 for a struct, enum, type parameter or import alias with it) and `try` does not
 apply. A timeout does not cancel the task or stop the caller: the task runs on,
-and a later await returns its result. A task that already ended never times
-out. `timeout_ms` must be positive: 0 or less is `RUNTIME-INVALID-DURATION` at
-the argument (no poll with 0, unlike `Channel`). Call it once with the total
-time you can spare, not in a polling loop. A crash or cancel before the timeout
-gives the plain-await outcome (`Await.Done(error("task crashed: ..."))` for a
-`Result` task, else a halt); one after `Await.TimedOut` does not reach the
-caller. A `Task[Void]` gives `Await[Void]`: match `Await.Done(_)` (a named
-binding is `CHECK-VOID-TYPE`). For a `Result` task `Await.Done(r)` holds the
-Result: match it in a second `case`.
+and a later await returns its result. `timeout_ms` must be positive: 0 or less
+is `RUNTIME-INVALID-DURATION` (no poll with 0, unlike `Channel`). Call it once
+with the total time you can spare, not in a polling loop. A crash or cancel
+before the timeout gives the plain-await outcome (`Await.Done(error("task
+crashed: ..."))` for a `Result` task, else a halt). A `Task[Void]` gives
+`Await[Void]`: match `Await.Done(_)` (a named binding is `CHECK-VOID-TYPE`). For
+a `Result` task `Await.Done(r)` holds the Result: match it in a second `case`.
 
 The plain `Task.await` halts with `RUNTIME-TASK-AWAIT-CYCLE` at the await when
 the awaited task, or a task it awaits in turn, is waiting for the caller (a task
 awaiting its own handle, received over a channel or captured, is the shortest
-cycle). The timed form takes no part in a cycle: a task that timed-awaits its
-own handle, or two that timed-await each other, get `Await.TimedOut` after the
-timeout, and a plain await of a task waiting with a timeout does not halt.
+cycle). The timed form takes no part in a cycle: it gives `Await.TimedOut` after
+the timeout.
 
 ## Cancel
 
@@ -114,18 +105,15 @@ timeout, and a plain await of a task waiting with a timeout does not halt.
 keeps state) without a "stop" message. It does not wait: it marks the task and
 every task it started cancelled and returns. A cancelled task runs at most the
 rest of its current turn: a sleep, channel wait, await or I/O wait ends at once;
-a task mid-turn on another scheduler (a long loop) stops at the end of that
-turn, so one in its last turn may end cancelled although it reached its return.
-Its handles close as for any task end (a channel it owns closes, and receivers
-get `error("channel: closed")`). Cancelling an ended task, or twice, does
-nothing. Any task holding the handle may cancel it, also one received on a
-channel. A task that cancels itself or an ancestor is cancelled too and stops
-right after the call. A cancel is not a crash: no report, no exit code change. A
-timed await does not cancel; the VM also cancels a task when an ancestor crashes
-or its `Task.map` item times out. `Task.await` on a cancelled task returns
-`error("task: cancelled")` when `R` is a `Result`, else halts with
-`RUNTIME-TASK-CANCELLED` at the await: give a task you may cancel a `Result`
-return type when something awaits it.
+a long loop stops at the end of its turn. Its handles close as for any task end
+(a channel it owns closes, and receivers get `error("channel: closed")`).
+Cancelling an ended task, or twice, does nothing. Any task holding the handle
+may cancel it, also one received on a channel. A cancel is not a crash: no
+report, no exit code change. A timed await does not cancel; the VM also cancels
+a task when an ancestor crashes or its `Task.map` item times out. `Task.await`
+on a cancelled task returns `error("task: cancelled")` when `R` is a `Result`,
+else halts with `RUNTIME-TASK-CANCELLED` at the await: give a task you may
+cancel a `Result` return type when something awaits it.
 
 ## Monitors
 
@@ -139,14 +127,12 @@ channel of an enum (there is no `select`). `TaskDown` is a builtin record:
 `code` (the stable `RUNTIME-` code, to match on), `message`, `file`, `line`
 and `column` (`""` and `0` otherwise). The send never
 waits or fails: a closed or full channel drops the notice, so give it room. A
-crash whose notice went in counts as observed, received or not. `wrap` runs in
-a task of its own (a crash there loses the notice). A coordinator keeps
-`Map[Int, Job]` by `task.id` and starts a job again on `TaskExit.Crashed`.
+crash whose notice went in counts as observed. `wrap` runs in a task of its
+own.
 
-`Task.current` is the running task as a `TaskRef` (reserved; its result type is
-unknown there): `Task.monitor`, `Task.cancel` and `.id` take it, so a child can
-monitor its parent, but `Task.await` of it is `CHECK-TYPE-MISMATCH`. A
-`Task.map` item that cancels itself gives `error("task: cancelled")`.
+`Task.current` is the running task as a `TaskRef`: `Task.monitor`,
+`Task.cancel` and `.id` take it, but `Task.await` of it is
+`CHECK-TYPE-MISMATCH`.
 
 ## Task.map
 
@@ -194,22 +180,15 @@ end
   per scheduler, and an item's clock includes its run-queue time, so a `limit`
   above the scheduler count over CPU work makes timeouts likelier, not the work
   faster.
-- A cancelled item runs no more user code, nor does anything it started (a
-  grandchild too, and a `Task.map` it called starts no more items). An I/O wait
-  is detached, not abandoned: it ends on its own, its result is dropped and it
-  never closes the handle; a `TCP.accept` or socket read that has taken nothing
-  yet is dropped at once, so the next connection or bytes go to the next call.
-  The item's handles close when it ends or is cancelled; an item that ended in
-  time settles after its regular files are written and closed (a file it wrote
-  is on disk when the call returns); a timed-out item settles at its deadline
-  without waiting for its close. A timed-out `HTTP.get` connection is closed,
-  not pooled.
+- A cancelled item runs no more user code, nor does anything it started. An I/O
+  wait ends on its own, its result is dropped and it never closes the handle.
+  The item's handles close when it ends or is cancelled; a file it wrote is on
+  disk when the call returns, except for a timed-out item.
 - Open the handles an item needs inside the item. Calls on one handle wait for
   each other, so give a handle that many tasks need to one owner task and talk
   to it over a `Channel`. Items, captured variables and results are immutable
   and shared without copies.
-- An item may call `Task.map`; the limits multiply. Starting an item costs one
-  step of `--max-steps`.
+- An item may call `Task.map`; the limits multiply.
 
 ## Channels
 
@@ -228,23 +207,20 @@ A channel is a bounded queue that tasks send into and receive from. All but
 `ch.closed?`, `ch.empty?`. `Channel[T]` takes any type a variable can have
 except `Void` (`CHECK-VOID-TYPE`; use `Bool` or `Nil` for a signal), including a
 task handle, a socket or another channel. A channel is a handle: passing it
-shares it. It has no equality, text or JSON encoding; inspect prints
-`<Channel>`.
+shares it. It has no equality, text or JSON encoding.
 
 `Channel.new` needs an expected type (annotation, parameter, field or return
 type): `jobs: Channel[Int] = Channel.new(16)`, else `CHECK-EXPECTED-TYPE`. The
-capacity is 1 to 1048576, else `RUNTIME-INVALID-COUNT`. A full channel slows the
-producer down.
+capacity is 1 to 1048576, else `RUNTIME-INVALID-COUNT`.
 
 `send` returns `ok()` once the value is in; a full channel makes the task wait
 for room, a close or the timeout. `recv` returns `ok(v)` with the oldest value;
 an empty channel makes the task wait for a value, a close or the timeout.
-Errors: `error("channel: closed")` (a send to a closed channel, or a recv from
-a closed, drained one) and `error("channel: timed out")`. A value that did not
-go in is not added; values sent before `close` are still received after it.
-Every call has a timeout: 0 tries once, a negative value is
-`RUNTIME-INVALID-DURATION`, and there is no wait-forever value. Values come out
-in order and waiting tasks are served in the order they began waiting.
+Errors: `error("channel: closed")` (a send to a closed channel, or a recv from a
+closed, drained one) and `error("channel: timed out")`. Values sent before
+`close` are still received after it. Every call has a timeout: 0 tries once, a
+negative value is `RUNTIME-INVALID-DURATION`, and there is no wait-forever
+value.
 
 `ch.lazy(timeout_ms)` reads the channel as a `Lazy` until it is closed and
 drained (`lazy.md`): `jobs.lazy(5000).select do |n| n > 0 end.reduce(0) do |s,
@@ -311,19 +287,16 @@ ownership, and only the owner can hand an owned channel on
 producers keep a coordinator that awaits them all and then closes.
 
 Patterns. Pipeline: one producer, several workers running the receive loop,
-one collector; pass several channels in a struct, have workers return how many
-items they handled, and sort what the collector gets so output does not depend
-on timing. Fan-in: several sources send into one channel of an enum type with a
-variant per source; a coordinator awaits every source, then closes the channel
-so the consumer's loop ends. There is no `select`. A channel wait holds a timer,
-so tasks waiting on each other through channels get timeout errors, not a hang.
-A handle sent over a channel stays owned by the task that opened it, which must
-outlive its users, or hand the handle over with `Task.spawn_owning`.
+one collector; sort what the collector gets so output does not depend on
+timing. Fan-in: several sources send into one channel of an enum type with a
+variant per source; a coordinator awaits every source, then closes the channel.
+There is no `select`. A handle sent over a channel stays owned by the task that
+opened it, which must outlive its users, or hand it over with
+`Task.spawn_owning`.
 
-A counter or a cache that several tasks update goes in an `ATS` table (below).
-Other state that several tasks update belongs to one owner task that receives
-messages on a channel and keeps the state in local variables; others send it
-requests. Apart from `ATS` tables and the `std/logger` registry there is no
+A counter or a cache that several tasks update goes in an `ATS` table (below);
+other shared state belongs to one owner task that receives messages on a
+channel. Apart from `ATS` tables and the `std/logger` registry there is no
 shared mutable state, and there is no `Agent`, `Mutex`, `Thread`, `SizedQueue`,
 `Enumerator` or `Fiber`; a `Lazy` is a recipe one terminal runs in the calling
 task, not a producer. A producer task sending into a channel is the generator:
@@ -332,15 +305,12 @@ its capacity gives backpressure and `recv` is `next`.
 ## One form per job
 
 - Change, select or combine list items: `map`, `select`, `reduce` (eager).
-- A running total or a value built in a loop: `reduce`; a `for` loop (its body
-  can assign outer variables) only to update several at once.
 - Run over a list at the same time, a few at a time, a timeout each, results in
   input order: `Task.map(items, limit, timeout_ms)`.
 - Long-lived workers, producer and consumer, flows of unknown length, results in
   the order they end: tasks and a `Channel`.
-- A counter or cache several tasks update: an `ATS` table (`add`, `put_new`).
-- Other state several tasks update: one owner task receiving messages on a
-  channel.
+- Shared state: an `ATS` table (counter, cache) or one owner task receiving
+  messages on a channel.
 - Each line of a big file in bounded memory: `File.each_line`.
 - An endless sequence or a source too big for a list: `Lazy` (`lazy.md`).
 
@@ -364,17 +334,15 @@ it shares it, never copies it. All but `new` are methods: `hits.add("home",
 1)`. `hits: ATS[String, Int] = ATS.new()`, else `CHECK-EXPECTED-TYPE`. Keys are
 `Int` or `String` (`CHECK-MAP-KEY-TYPE`); `V` is data with no `Fn`, `Task`,
 `Channel`, handle or table anywhere inside, and not `Nil` (`CHECK-ATS-VALUE`).
-A table may be a struct field or a `Task.spawn` argument; no task owns it, the
-GC frees it, and there is no size limit or expiry. No `==`, text or JSON;
-inspect prints `<ATS>`; use `to_map` to see it.
+A table may be a struct field or a `Task.spawn` argument; no task owns it, and
+there is no size limit or expiry. No `==`, text or JSON; use `to_map` to see it.
 
-Each call is atomic on any scheduler; there are no multi-key transactions and
-no block-based update. `add` is the one atomic read-modify-write (`Int` values
+Each call is atomic on any scheduler; there are no multi-key transactions and no
+block-based update. `add` is the one atomic read-modify-write (`Int` values
 only, `CHECK-TYPE-MISMATCH` otherwise; overflow is `RUNTIME-INTEGER-OVERFLOW`
 and leaves the table unchanged), and `put_new` the one conditional insert: the
 cache pattern is `get`, compute on a miss, then `put_new`, which stores one
-value even when two tasks miss at once. `keys` and `to_map` are snapshots; a
-key deleted and put again goes to the end. `get`, `put`, `put_new`, `has_key?`,
-`delete` and `add` are O(log n). Sort `keys` before printing when tasks fill
-the table, since their order follows the schedule. In BDD, a table made in
+value even when two tasks miss at once. `keys` and `to_map` are snapshots; a key
+deleted and put again goes to the end. Sort `keys` before printing when tasks
+fill the table, since their order follows the schedule. In BDD, a table made in
 `main` and captured by step blocks starts fresh in each scenario.

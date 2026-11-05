@@ -47,8 +47,7 @@ docs. Do not create files under `docs/` unless the user asks for one
 - Every claim maps to code, a test or a CI run you can name.
 - No "always", "every", "never" or "all" until you checked each case
   (`rg` the sites and count them).
-- Put the conditions in the sentence: "when libuv can assign its job object",
-  not a bare "children die with the job".
+- Put the conditions in the sentence, not a bare absolute.
 - Keep built and planned apart. Describe a rule in the grammar or the site
   only once the code that enforces it has merged.
 - No numbers (speed, size, counts) without a source the reader can rerun: the
@@ -73,18 +72,8 @@ docs. Do not create files under `docs/` unless the user asks for one
 - `rg` the old names, removed symbols and changed numbers across `docs/`,
   `.agents/`, `site/` and `CHANGELOG.md`; fix every stale hit.
 - When you move or delete a section, apply the reference fan-out protocol of
-  `documentation-pruning` (§7).
+  `documentation-pruning` (§6).
 - Prose wrap (AGENTS.md): 80 columns in `docs/` and `.agents/skills/`; one
   line per paragraph in `site/content/`. Run `git diff --check`.
 - Run `make site` only when `site/content/` changed.
 - Reread each new sentence against §3 before committing.
-
-## Gotchas
-
-Real overclaims, each caught only by a critic (see §3 for the rules they
-break):
-
-- "Descendants die with the job object": only direct children do, under
-  `JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK`.
-- "A stopped Windows child exits with code 1": it is 128 + signal.
-- "`agc_sync_assert` in every mutator": it was in some mutators, not all.

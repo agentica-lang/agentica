@@ -624,7 +624,7 @@ static bool loads_types(int which, const char *reason) {
   return ok;
 }
 
-/* Globals (module constants, docs/future/44-module-constants.md §44.8). The two functions of the files below
+/* Globals (module constants). The two functions of the files below
    take 4 registers each and every instruction uses span 0. */
 static const uint32_t zero_spans[16] = {0};
 
@@ -985,7 +985,7 @@ static void source_root_tests(void) {
 }
 
 
-/* The prelude flag of version 6 (docs/future/25-ruby-typed-idioms.md §25.6): what the loader checks, and the span a
+/* The prelude flag of version 6: what the loader checks, and the span a
  * runtime error of a prelude function is reported at. Constant 0 is the Int 1 and constant 2 the String below, which
  * is both the code and the message of every __fail_arg call. */
 static const char fail_code[] = "RUNTIME-INVALID-COUNT";

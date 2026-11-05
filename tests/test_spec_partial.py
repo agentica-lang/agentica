@@ -1,6 +1,5 @@
-"""`--partial` of `agentica type-at` and `refs`: answers from a program in which some functions do not check
-(docs/future/39-semantic-cli.md, 39.6). The cases read the JSON form and assert the marker, kinds, spans, the codes and
-the exit codes, never message text; one case reads the text form."""
+"""`--partial` of `agentica type-at` and `refs`: answers from a program in which some functions do not check. The cases read the JSON form and assert the marker, kinds, spans,
+the codes and the exit codes, never message text; one case reads the text form."""
 import json
 import re
 

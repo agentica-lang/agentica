@@ -28,23 +28,16 @@ JSON.list(j: Json) -> Result[List[Json]]
 
 ## Building
 
-- `JSON.object` takes a `Map[String, Json]`, `JSON.array` a `List[Json]`.
-  `JSON.from` accepts the same recursively encodable data as `JSON.encode`; a
-  non-finite Float halts with `RUNTIME-JSON-ENCODE` at the `JSON.from` or
-  `JSON.encode` call.
-- Null and false stay distinct, and so do empty objects and empty arrays.
+- `JSON.from` accepts the same recursively encodable data as `JSON.encode`; a
+  non-finite Float halts with `RUNTIME-JSON-ENCODE` at the call.
 
 ## Schema and decoding
 
 - `JSON.schema(User)`, `JSON.decode(text, User)` and `JSON.codec(User)` take a
-  named struct type, not a value (bare type names are valid only there). The
-  schema has `properties` and `required` (left out when no field is required);
-  Int schemas carry signed 64-bit bounds; lists use `items`; String-keyed maps
-  `additionalProperties`; nested and recursive structs `$defs` and `$ref`. Extra
-  struct keys stay allowed, as in decoding. A schema is a `Json` value, not
-  text.
+  named struct type, not a value (bare type names are valid only there). A
+  schema is a `Json` value, not text.
 - `JSON.decode` takes JSON text or a `Json` value (`JSON.decode(item, User)` for
-  an item of a parsed document, with the same errors; no `JSON.encode` first).
+  an item of a parsed document; no `JSON.encode` first).
 - Decoded fields may be Int, Float, Bool, String, lists, String-keyed maps,
   nested or recursive structs and enums, and `Optional` and `JsonField` of
   those; other types, an instance of a generic struct or enum included, are
@@ -53,14 +46,13 @@ JSON.list(j: Json) -> Result[List[Json]]
 - An enum is a tagged object, `{"tag":"Rect","values":[1.0,2.0]}`: the variant
   name and its payloads in order. Encode writes both keys (a variant with no
   payload writes `"values":[]`); decode accepts a missing `values` for such a
-  variant, ignores extra keys, and gives paths such as `shapes[0].values[1]`.
-  Any user enum with encodable payloads can be encoded, generic instances
-  included (`Maybe[Int]`); only non-generic ones are decodable. A `JsonField`
-  in a payload is `CHECK-JSON-FIELD-PLACE`.
-- `JSON.decode` returns errors, with field or index paths, for malformed JSON,
-  missing fields, wrong types, Int overflow and non-finite Floats. Extra object
-  keys are ignored. An integer may decode as Float; a decimal or exponent value
-  never decodes as Int. Decoded maps use sorted key order.
+  variant. Any user enum with encodable payloads can be encoded, generic
+  instances included (`Maybe[Int]`); only non-generic ones are decodable. A
+  `JsonField` in a payload is `CHECK-JSON-FIELD-PLACE`.
+- `JSON.decode` returns errors, with field or index paths
+  (`shapes[0].values[1]`), for malformed JSON, missing fields, wrong types, Int
+  overflow and non-finite Floats. Extra object keys are ignored. An integer may
+  decode as Float; a decimal or exponent value never decodes as Int.
 
 ## Generic code: codecs
 
@@ -72,9 +64,7 @@ the check. `JSON.decode(text, T)` stays `CHECK-NOT-DECODABLE`: take a
 `JSON.Codec[T]` parameter; the caller passes `JSON.codec(User)`. `codec.decode`,
 `encode` and `from` behave as `JSON.decode`, `JSON.encode` and `JSON.from` for
 that struct. A codec is like an `Fn` value: a parameter, field or list item, but
-no printing, `inspect` (`IO.inspect` too), `==`, constant or `ATS` value. Its
-methods have no function form (`JSON.Codec.decode(c, s)` is
-`CHECK-UNKNOWN-NAME`).
+no printing, `==`, constant or `ATS` value.
 
 ```ruby
 struct User
@@ -100,8 +90,6 @@ value, the whole value of `JSON.encode`).
 - Decode: `null` and a missing key of an `Optional` field are `none`; a wrong
   kind reads `age: expected signed 64-bit Int or null`. Schema: not
   `required`, allows `null` (`anyOf`).
-- Round trip: what decode gives encodes back the same (a missing key comes back
-  as `null`). `some(none)` writes `null` and reads back as `none`.
 - `Optional[Nil]` is not encodable or decodable; `Optional[JsonField[T]]` is
   `CHECK-JSON-FIELD-PLACE`; `JsonField[Optional[T]]` is not encodable or
   decodable. Use `JsonField` only to tell a missing key from `null`.
@@ -160,24 +148,19 @@ end
 ## Json values
 
 - `Json` is opaque: no constructor, equality, fields, `j[key]` or `j[index]`.
-  `IO.inspect` prints `<Json>`, `j.inspect` gives `"<Json>"`; `j.to_s`,
-  `"#{j}"`, `puts(j)` and `JSON.encode(j)` give the JSON text.
-- `JSON.parse` needs exactly one value, with optional surrounding space, tab, CR
-  or LF. Empty input, malformed JSON, trailing content, bad Unicode escapes, raw
-  control characters in strings and non-finite numbers return errors. A repeated
-  object key keeps its last value.
-- `JSON.get` needs an object and a present key; `JSON.at` an array and a
-  nonnegative index below its length. Wrong kinds, missing keys and bad indexes
-  return errors. JSON `false` and `null` are present values.
+  `j.to_s`, `"#{j}"`, `puts(j)` and `JSON.encode(j)` give the JSON text.
+- `JSON.parse` needs exactly one value; empty input, malformed JSON and
+  trailing content return errors. A repeated object key keeps its last value.
+- `JSON.get` needs an object and a present key; `JSON.at` an array and an index
+  in range. Anything else returns an error. `false` and `null` are present
+  values.
 - `JSON.string` and `JSON.bool` need that exact kind. `JSON.int` needs a signed
   64-bit integer (`1.0` and `1e0` are not Int). `JSON.float` accepts integers
-  and decimal or exponent numbers (binary64 rounding) and rejects overflow.
-  Parsed integers may exceed Int bounds until extracted.
+  and decimal or exponent numbers and rejects overflow.
 - `JSON.kind` returns `"null"`, `"bool"`, `"int"`, `"float"`, `"string"`,
   `"array"` or `"object"` and never fails. `1` and `-0` are `"int"` (even beyond
   Int bounds, where `JSON.int` still errors); `1.0` and `1e2` are `"float"`.
-- `JSON.list` returns elements as `Json` values, mixed arrays included. Null
-  stays inside `Json`; there is no null extractor.
+- `JSON.list` returns elements as `Json` values, mixed arrays included.
 
 ## Encoding
 
@@ -187,11 +170,10 @@ end
   `CHECK-NOT-ENCODABLE`, even when empty or nested. Empty literals still need a
   known type.
 - Output is compact. Structs follow declaration order; maps follow insertion
-  order. A parsed object encodes with keys sorted by UTF-8 bytes and each key
-  once (the last duplicate wins), so `JSON.encode(JSON.parse(x))` is canonical:
-  compare two JSON texts by their canonical forms, which ignore key order but
-  keep array order and number kinds (`1` is not `1.0`). Objects from
-  `JSON.object` or `JSON.from` have no fixed order.
+  order. A parsed object encodes with keys sorted by UTF-8 bytes, so
+  `JSON.encode(JSON.parse(x))` is canonical: compare two JSON texts by their
+  canonical forms (`1` is not `1.0`). Objects from `JSON.object` or `JSON.from`
+  have no fixed order.
 
 ## Prefer structs for fixed shapes
 
@@ -200,18 +182,14 @@ envelope, declare the struct (`struct RpcResponse` with `jsonrpc: String`, `id:
 Json`, `result: Json`) and `puts(JSON.encode(RpcResponse(...)))`, then
 `IO.flush()`, instead of wrapping every scalar with `JSON.from`.
 
-- Use a separate shape for each message kind, so only its fields are emitted.
 - `ok` and `error` are reserved field names, so a JSON-RPC error envelope cannot
   be a struct: use a String-keyed map for the envelope and a typed struct for
   its nested code and message.
 - Give fixed nested records typed fields. Keep `Json` for variable payloads or
   identifiers, and call `JSON.from(payload)` once at that boundary.
-- `JSON.encode` takes structs and String-keyed maps directly, so `JSON.object`
-  is not needed before encoding; use builders for dynamic objects or mixed
-  arrays.
-- A shared stdio helper takes the encoded `String`, prints it and flushes. There
-  are no structural unions to accept any struct; a generic `def emit[T](x: T)`
-  can `JSON.encode(x)` instead.
+- `JSON.encode` takes structs and String-keyed maps directly; use builders for
+  dynamic objects or mixed arrays. A generic `def emit[T](x: T)` can
+  `JSON.encode(x)`.
 
 ```ruby
 def greet_json(text: String) -> Result[String]

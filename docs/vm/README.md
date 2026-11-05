@@ -7,9 +7,8 @@ binary (`agentica`), the `AGENTICA_VM_*` variables, the `agc_` prefix, `.agcb`
 and `vm/` keep their names.
 
 The section numbers stay as they were, so a reference such as `§10.4` still
-finds its place. The table below gives the file for each number. The frozen
-checklist of what was built is `docs/roadmap/07-vm.md`; pending work is in
-GitHub issues.
+finds its place. The table below gives the file for each number. Pending
+work is in GitHub issues, and what shipped is in `CHANGELOG.md`.
 
 ## 1. Overview
 
@@ -90,6 +89,6 @@ out-of-memory exit. A heap cap is an open question (13).
 - **§11:** [Build, CI and supply chain](11-build-ci-supply-chain.md).
 - **§§12–13:** [Tests and PR plan](12-testing-and-pr-plan.md); open questions.
 - **§14:** [Core invariants](14-core-invariants.md).
-- **§15:** [VM layers](15-layers.md); roadmap 7.2.1b.
-- **§16:** [VM architecture](16-architecture.md); roadmap 7.2.1c.
-- **§17:** [Persistent lists](17-lists.md); design for roadmap 8d.
+- **§15:** [VM layers](15-layers.md).
+- **§16:** [VM architecture](16-architecture.md).
+- **§17:** [Persistent lists](17-lists.md).

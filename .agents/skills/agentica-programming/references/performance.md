@@ -1,7 +1,6 @@
 # Performance
 
-Measured on the release VM, one run each unless a count is given; times are wall
-milliseconds. Time code inside the program:
+Time code inside the program:
 
 ```ruby
 start = Time.monotonic_ns()
@@ -9,72 +8,47 @@ work()
 ms = (Time.monotonic_ns() - start) / 1000000
 ```
 
-## Lookup tables
+## Lookup tables and loops
 
 Build a `Set` or `Map` once and test it with `include?` or `get`, not a chain of
 comparisons. A table that does not depend on the arguments belongs in a module
-constant: built once before `main`, read with one array access. Build it in the
-function only when it depends on the input. On 900,000 characters a
-`Set[String]` test took 185 ms against 400 ms for an `or` chain of five
-comparisons, and a `Set[Int]` test 205 ms against 305 ms [measured, three
-runs].
+constant: built once before `main`. Build it in the function only when it
+depends on the input.
 
-For one pass over a text, a `while` with `text.at(j).code` is enough
-(283 ms on 1M ASCII characters). Keep the codes in a list
-(`text.split("").map do |c| c.code end`) when you scan the same text
-twice or move back and forth.
+For one pass over a text, a `while` with `text.at(j).code` is enough; keep the
+codes in a list (`text.split("").map do |c| c.code end`) when you scan the same
+text twice or move back and forth.
 
-## Loops and structs
-
-- A `while` over an index with mutable locals is 3% to 6% faster than a
-  `step(state)` tail-call loop with `.with`. Mutual tail calls also run to depth
-  1,000,000 when each function ends in `return` of the other.
-- `value.with(field: x)` copies the struct in one instruction; a constructor
-  writes every field. For 1,000,000 updates `.with` takes about 8% longer than
-  the constructor for 2 fields and 15% to 34% less time for 4 to 16, so use it
-  from 4 fields up, once per token or node, not once per character.
+A `while` over an index with mutable locals is a little faster than a
+`step(state)` tail-call loop with `.with`. `value.with(field: x)` copies the
+struct in one instruction, a constructor writes every field: `.with` pays from
+4 fields up.
 
 ## VM steps
 
 `AGENTICA_VM_TRACE=profile` prints a report to stderr when a run ends (`agentica
 FILE.agc`, `agentica check FILE`, `agentica run -- FILE.agcb`). Its first line
 is `total wall_ms= steps= calls= builtin_calls= builtin_ms= gc_ms=
-collections=`; then up to 30 `fn calls= steps= name= at=FILE:LINE` rows (a block
-is `block@FILE:LINE:COL`), 12 `file` rows, 30 `builtin calls= us= name=` rows
-and the `section` rows of `Profile.measure`; it ends with what the VM ran (an
-`events` line, an `op` row per opcode with its share, the top 20 `pair` rows of
-opcodes run in a row), which is for work on the VM. `agentica FILE.agc` prints
-the front end's report, then the program's: the program's `steps` are its own,
-while `gc_ms` and `collections` count the whole process.
+collections=`; then `fn` rows (a block is `block@FILE:LINE:COL`), `file` rows,
+`builtin calls= us= name=` rows and the `section` rows of `Profile.measure`; the
+`events`, `op` and `pair` rows at the end are for work on the VM. `agentica
+FILE.agc` prints the front end's report, then the program's (its `steps` are its
+own, while `gc_ms` and `collections` count the whole process).
 `AGENTICA_VM_TRACE_FILE=PATH` writes the report to a file. Steps repeat exactly
 from run to run; wall time does not, so compare steps. A profiled run is slower
-(about 1.1 to 1.7 times for loops and calls, up to about 15 times for a loop of
-cheap builtin calls, since each call is timed): rank builtins with the `builtin
-... us=` rows, then time the program without the profiler. A `<native>` row is
-the steps of a range loop such as `(0...n).each`, one per item (the block's own
-steps are on its `block@` row); a list's `each` and `map` add none.
+(up to about 15 times for a loop of cheap builtin calls, since each is timed):
+rank builtins with the `builtin ... us=` rows, then time the program without the
+profiler. A `<native>` row is the steps of a range loop such as `(0...n).each`,
+one per item (the block's own steps are on its `block@` row); a list's `each`
+and `map` add none.
 
-Costs in steps, measured on 100,000 repeats:
-
-- `while set.include?(chars[i])` and `while chars[i] == "a"`: 9 per character. A
-  sentinel after the last element (`""` or `-1`, in no set) takes `i < size` out
-  of the loop.
-- A 3-field struct built in place: 9 steps (7 with a precomputed sum). A token
-  with positions, span, value and the `push`: about 36. `xs.push(x)` 4,
-  `Map.get(k, d)` 5. A `case` on an enum is a jump table: first and last variant
-  cost the same.
-- A call costs several steps. Inline a function that runs for each token when
-  the loop makes a token every few characters: a lexer went from 52 to 24 steps
-  per character by moving hot arms into `lex`, tables into module constants and
-  using `text.split("")` instead of `code` of each character. Inlining
-  one helper alone cut 2.1%, so first find the work done per item: a closure
-  called per character, a table built per call, a call per token.
-- `text.split("").map do |c| c.code end` costs 3 steps and a builtin
-  call per character. `Set[String]` tests cost as much as `Set[Int]`.
-- The line lengths of `text.split("\n")` find the end of a line or comment with
-  no scan (a CR needs the scan: it ends a line too). A value used again goes in
-  a local (a computed column, or the top and depth of a bracket stack): 2% to 3%
-  off a lexer's steps.
+Costs in steps: `while chars[i] == "a"` 9 per character (a sentinel after the
+last element takes `i < size` out of the loop); `xs.push(x)` 4; `Map.get(k, d)`
+5; a 3-field struct built in place 9; `text.split("").map do |c| c.code end` 3
+and a builtin call per character. A `case` on an enum is a jump table. A call
+costs several steps: inline a function that runs for each token, build a table
+once, and find the work done per item (a closure per character, a table per
+call) before tuning a helper.
 
 ## Sections, step budgets and flame graphs
 
@@ -89,13 +63,11 @@ steps= us= gc_ms= name=LABEL` row after the builtin rows (up to 30, most steps
 first). Without it the call is one block call (one step), so it can stay in the
 code; `Profile.steps()` works with or without the profile.
 
-- A run keeps 4096 labels; later ones share an `[overflow]` section (frame
-  `measure[overflow]`). Do not build labels from data.
+- A run keeps 4096 labels: do not build labels from data.
 - Sections are inclusive. In one task, a label inside itself (recursion) counts
   every call but its steps and time once, for the outermost call.
 - `steps` are the running task's; `us` and `gc_ms` are wall time, which goes on
-  while the task waits. A block that ends in a runtime error or a cancel counts
-  a call with no steps.
+  while the task waits.
 - A block that uses `try` needs a `Result` type from the call: `r: Result[Int] =
   Profile.measure("parse") do ... end`, else `CHECK-TRY-CONTEXT`.
 
@@ -129,23 +101,17 @@ writes `/tmp/perf-PID.map`, so `perf report` names the compiled functions
   `measure:LABEL` for a `Profile.measure`.
 - One sample every 1000 steps, weight 1000; `AGENTICA_PROFILE_SAMPLE=N` sets N
   (1 counts every step, so the weights add up to the report's `steps`). There is
-  no time weight, so the file is the same on every run. Sampling adds a few
-  percent at N = 1000, about a fifth at N = 100.
-- `;`, `%` and control bytes in a name become `%XX`. At most 1,048,576 distinct
-  stacks; later new stacks go to one `[truncated]` line, then an `agc-trace
-  folded profile full` line.
+  no time weight, so the file is the same on every run.
 
 ## Collections and strings
 
 - `Map` and `Set` lookups and inserts (`get`, `put`, `include?`, `add`) take
   effectively constant time (a 32-way hash trie).
 - A table keyed by dense `Int` ids is faster as a `List` (`List.repeat` once,
-  then `set` and `[]`) than as a `Map[Int, T]`: `List.set` about 1.6 µs,
-  `Map.put` about 5 µs at 5,000 entries. `List.repeat` halts above 1,048,576
-  items: build a bigger list from several repeats.
-- `Set.new` costs 7 to 10 µs per element, rising with size (100,000 items took
-  0.69 s, 1,000,000 took 10.3 s [one run each]); one `include?` costs about
-  0.2 µs. Build a large set once and keep it.
+  then `set` and `[]`) than as a `Map[Int, T]`. `List.repeat` halts above
+  1,048,576 items: build a bigger list from several repeats.
+- `Set.new` costs 7 to 10 µs per element, rising with size; one `include?`
+  about 0.2 µs. Build a large set once and keep it.
 - A builtin runs to the end of its turn, except the resumable ones (`map`,
   `select`, `reduce`, `each`, `any?`, `all?`, `sort_by`), so a 10-second
   `Set.new` stalls every other task. Keep big builds out of code others wait on.
@@ -159,16 +125,12 @@ writes `/tmp/perf-PID.map`, so `perf report` names the compiled functions
 `each_slice`, `group_by`, `tally`, `uniq`, `sum`, `min`, `max`, `min_by`,
 `max_by`, `Map.each` and `Map.select` are written in Agentica and run in your
 program, so their steps count against `--max-steps`. Each is one O(n) pass
-with no list copy per element. `min` and `max` take 4 to 6 steps per element on
-Int and String lists and 12 to 14 on Float lists (3,000 items, profiler total
-minus the steps that build the list); the others take 4 to 28 steps per element
-of their own (not the block's). Measure the one you use with the profiler.
+with no list copy per element, 4 to 28 steps per element of its own (not the
+block's; `min` and `max` on Floats take 12 to 14). Measure the one you use with
+the profiler.
 
 Wall time of `tally`, `uniq` and `group_by` also grows with the number of
-distinct keys (the VM's `Map` and `Set` insert cost: about 4 s at 400,000
-distinct keys, as in a hand-written loop). Each block call adds 4 to 6 steps on
-its own `block@` row. The bodies avoid `concat`, `take`, `drop`, `reverse`,
-`sort`, `Map.keys` and `Map.values` inside a loop, because an O(n)
-builtin in a loop is quadratic in time while its steps look linear: write your
-own loops the same way. `take_while` and `drop_while` do one `take` or `drop`
-after the scan.
+distinct keys (the cost of the VM's `Map` and `Set` insert). The bodies avoid
+`concat`, `take`, `drop`, `reverse`, `sort`, `Map.keys` and `Map.values` inside
+a loop, because an O(n) builtin in a loop is quadratic in time while its steps
+look linear: write your own loops the same way.

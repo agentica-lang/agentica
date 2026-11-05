@@ -640,26 +640,18 @@ import Sqlite from "pkg/sqlite/db"
   the bytes do not depend on the folder of the project. Diagnostics inside a
   package name the real file in `deps/`.
 
-#### String queue (`std/queue`)
+**Decided against (packages).**
 
-`std/queue` is written in Agentica: a first-in, first-out queue of `String`
-values. Its functions are in the
-[`Queue` page](../../site/content/library/data-structures/queue.md).
-
-#### Binary data (`std/binary`)
-
-`std/binary` reads and writes binary numbers in a `Bytes`. It is written in
-Agentica on the `Int` and `Float` bit builtins; its functions and errors are in
-the [`Binary` page](../../site/content/library/text-and-data/binary.md).
-
-#### TOML (`std/toml`)
-
-`std/toml` reads and writes TOML 1.0 documents. It is written in Agentica; its
-functions and errors are in the
-[`Toml` page](../../site/content/library/text-and-data/toml.md).
-
-#### BDD steps (`std/bdd`)
-
-`std/bdd` is the step API of `agentica test`, written in Agentica. See
-[`library/testing/bdd.md`](../../site/content/library/testing/bdd.md) and
-[`bdd.md`](../bdd.md).
+- Semver and a major-version rule, and a `v2` path segment (it clashes with
+  folders in the repository): one name has one source, and two majors can be
+  used under two names.
+- `dev_dependencies`: there is one list of dependencies.
+- `owner/repo/mod` as the import form (it clashes with local folders and needs
+  an ambiguity rule) and `./` for relative imports: the form is
+  `pkg/<name>/<module>`.
+- Hashing only at install: every build hashes each package it loads, so a
+  changed file of `deps/` is caught.
+- A `files` list in the manifest: only `.agc` files and the files of `native/`
+  are used and hashed.
+- A `Json` value or typed decoding for `Toml.parse`: the result is the enum
+  `Toml.Value`, which keeps the types of TOML and works with `case`.

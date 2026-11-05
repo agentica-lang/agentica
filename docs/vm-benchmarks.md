@@ -1,7 +1,7 @@
 # VM benchmarks
 
 Speed of the VM against CPython and of the JIT against the interpreter, the
-HTTP sanity check of roadmap 20c, and the speed passes of the front end. Each
+HTTP sanity check, and the speed passes of the front end. Each
 section keeps its result, its method and what was tried and dropped; the full
 tables of each round are in git history.
 
@@ -73,7 +73,7 @@ there is a good result. Start-up on precompiled bytecode: the VM takes about 1
 ms and 2 MB, CPython 19 ms and 8 MB; the VM uses about a fifth of CPython's
 memory.
 
-## Lists (roadmap 8d)
+## Lists
 
 The persistent vector of 8d (`docs/vm/17-lists.md`) against the flat array
 (71717e0), 2026-10-14:
@@ -123,7 +123,7 @@ to 25 ms here), and `map` and `filter` are 70 to 100 ns of callback per item.
 the keys are read once and compared as `uint64_t`. `list-bulk` (size 2) went
 from 0.44 s to 0.22 s (CPython 0.455 s).
 
-## Unboxed numeric leaves (roadmap 8d step 3)
+## Unboxed numeric leaves
 
 A list whose items are all Int, or all Float, stores 8 bytes per item and no tag
 (`docs/vm/17-lists.md` §17.12). Master (88b9dbb) against the PR, 2026-10-15, one
@@ -171,7 +171,7 @@ parts, 262,144 `std/binary` reads, a 4 MiB file write and read; `make bench
 BENCH_ARGS="--only bytes"`): 0.442 s from source and 0.428 s on bytecode with
 30 MB, against 0.381 s and 28 MB in CPython.
 
-## Sets (8b)
+## Sets
 
 `Set[T]` is a map with nil values (`vm/map.c`), so it shares the HAMT, and a
 member of a set costs the same as a key of a map: 466 to 526 ns for a lookup
@@ -230,7 +230,7 @@ The third row deletes again and again from one map at the rebuild threshold,
 so every delete rebuilds the key list; the rebuild is one pass over integers
 and one block.
 
-## Struct update (15c)
+## Struct update
 
 `value.with(f: x)` lowers to one `STRUCT_WITH` instruction (a `memcpy` of the
 fields and one store per changed field, charged by size as `CONCAT` is). The
@@ -346,15 +346,15 @@ python3 benchmarks/http_bench.py                                          # 4000
 python3 benchmarks/http_bench.py --requests 8000 --rounds 2 --retries 0   # a quick check of the script
 ```
 
-Results are not recorded yet. They need an idle-machine run (§30.14, item
-20c-bench), and the script marks any round that ran on a busy machine. The
-results include connection count, server, requests per second, min-to-max
-latency, p50 and p99 latency, server CPU and maximum client CPU.
+Results are not recorded yet. They need an idle-machine run, and the script
+marks any round that ran on a busy machine. The results include connection
+count, server, requests per second, min-to-max latency, p50 and p99 latency,
+server CPU and maximum client CPU.
 
-## Front end (post-bootstrap row 3)
+## Front end
 
 With the `exe` runner, `benchmarks/run.py` also times the front end inside
-`dist/agentica` (§18.5): `check` of `examples/hello.agc`, of
+`dist/agentica`: `check` of `examples/hello.agc`, of
 `stdlib/bdd/gherkin.agc` and of `compiler/syntax/parser.agc` (`check` checks
 every body, with or without a `main`), of a three-line `main` that imports
 gherkin, and of `compiler/front_end.agc`, and one `agentica test` of a one-test
@@ -372,7 +372,7 @@ counts are exact). `AGENTICA_VM_TRACE=loader` prints the loader time.
 
 Where things stand after the passes below (2026-10-16): `check
 examples/hello.agc` 17.5 ms (the loader 8.3 ms of it), `check
-stdlib/bdd/gherkin.agc` about 65 to 80 ms (the target of §18.5 is 100 ms),
+stdlib/bdd/gherkin.agc` about 65 to 80 ms (the target is 100 ms, issue #1007),
 `check compiler/syntax/parser.agc` about 205 to 225 ms. The parser is the next
 front-end cost.
 
@@ -388,7 +388,7 @@ The profile then showed the lexer at 51% of the steps of `check
 compiler/front_end.agc` (76.5 M steps), and the loader at 15 to 16 ms of every
 command: the lexer came first, then the loader.
 
-### Speed pass, VM start-up (row 8.3)
+### Speed pass, VM start-up
 
 Every command that runs the front end first loads the carried `stage2` (3.8 MB,
 about 1,400 functions and 90,000 spans), and the loader checks all of it: a
@@ -488,9 +488,9 @@ under load:
   `TAIL_CALL`, `RETURN`, a failing `TRY` and a builtin that pushes a native
   frame (`docs/vm/05-values-execution-builtins.md` §6.1). `frame->pc` is still
   written before each instruction, for traces, parks and yields.
-- **The empty List and Map are shared** (`agc_vm_init`), the first part of §34:
-  a call with a `{}` argument went from 70 ns to 15 ns over the loop, and a
-  disabled `Logger.debug` from 393 to 148 ms per million.
+- **The empty List and Map are shared** (`agc_vm_init`), the first part of the
+  shared small values: a call with a `{}` argument went from 70 ns to 15 ns over
+  the loop, and a disabled `Logger.debug` from 393 to 148 ms per million.
 
 A `SIGPROF` sample of the front-end checks after this pass: the turn loop 41% to
 52% (a third of it the dispatch), the collector 21% to 26%, the loader about 10%
@@ -503,19 +503,19 @@ noise). Kept inside the noise: lazy span reads and the opcode range check
 before the jump table (second line of defence). Not tried: counting `STEP`
 in a local (every failure path would store it back before the `longjmp`).
 
-### Speed pass, shared small values (§34)
+### Speed pass, shared small values
 
 The VM returns one shared object for `""`, the one-character ASCII Strings,
 `[]`, `{}` and the empty `Set` from the builtins that compute them (the paths
-are in `docs/future/34-shared-small-values.md`, §34.6). Output, steps and
+are in `docs/vm/05-values-execution-builtins.md`, §5.4). Output, steps and
 goldens are the same.
 
 The micro loops of each path allocate 25% to 98% fewer bytes and take 0.61 to
 0.95 of the time: Boehm already takes small atomic objects from a free list, so
 time falls less than bytes. `benchmarks/programs/small-values.agc`, the median
-over seven padded layouts: 0.1448 s on master, 0.1111 s here (0.77; the gate of
-§34.4 is 10%). The other programs stay within 0.92 to 1.08 (layout noise), and
-the front end is neutral (it allocates 0.15% less).
+over seven padded layouts: 0.1448 s on master, 0.1111 s here (0.77; the gate is
+10%). The other programs stay within 0.92 to 1.08 (layout noise), and the front
+end is neutral (it allocates 0.15% less).
 
 Tried and dropped: `CONCAT` with an empty side returning the other String
 (a branch in the hottest opcode, for a case real programs do not hit);

@@ -1,9 +1,7 @@
 # Front-end recipes and gotchas
 
-Read before editing `compiler/`. The front end is Agentica code in `compiler/`,
-the only one. Every language change is made there with a golden: syntax, checker
-rule, builtin row, builtin record or enum entry, registry line, std-only or
-reserved name, message text.
+Read before editing `compiler/`. Every language change is made there with a
+golden (the rule is in `AGENTS.md`).
 
 ## The front end in Agentica
 
@@ -20,43 +18,39 @@ diagnostic: `Lexer.lex` returns `Diag.Outcome`, and other stages may use
   are passed in, never read inside. A new environment variable gets a `--name=V`
   flag in `link.agc`, `check.agc`, `lower.agc` and `bytecode.agc`, and a value
   in the hermetic test environment.
-- Packages (`packages/`, §45): rules in `docs/grammar/05b-modules.md`. Docs
-  (`docs/`, §32.5): `agentica doc` links a module only when it has re-exports
-  (`docs/doc_origins.agc`); tests in `tests/test_spec_doc.py`.
-- Query (`query/`, §39): `outline`, `type-at`, `symbol`, `refs`
-  (`app/cli_query.agc`). `type-at` and `refs` link and check
+- Packages (`packages/`): rules in `docs/grammar/05b-modules.md`. Docs
+  (`docs/`): `agentica doc` links a module only when it has re-exports.
+- Query (`query/`): `type-at` and `refs` link and check
   (`analysis/front.agc` `query_file`; a missing `main` is not `CHECK-MAIN`);
   `symbol` links only. A local comes from `locals.agc` and `Checked.bound`, kept
   apart from `Checked.types` so lowering never sees it. The tree has no span for
   a name inside a call or a pattern, so `written` reads the dotted name from the
-  text. Tests: `tests/test_spec_{outline,type_at,symbol,refs}.py`.
-- Analysis (`analysis/`, §39, `std/analysis`): `analysis.agc` is the one
+  text.
+- Formatter (`format/`): a syntax change updates the printer in the same PR. A
+  node without a layout rule makes `fmt` refuse the file (`FMT-INTERNAL`); it
+  never guesses. Heredocs are printed byte for byte and force a broken call.
+  Goldens: `tests/fixtures/frontend/format/`.
+- Analysis (`analysis/`, `std/analysis`): `analysis.agc` is the one
   implementation of `check`, `outline`, `type-at`, `symbol` and `refs`, called
   by `app/` and `stdlib/analysis.agc`. It returns the plain structs of
   `model.agc` (no enum; `""` and empty lists for absent values), which `query/`
   prints. `stdlib/analysis.agc` compiles `stdlib/CORE` as
   `std/internal/compiler/`, so anything the library needs must be there.
-  - Session cache (`cache.agc`): node ids have gaps and are not in
-    walk order, so nothing reads a node id except through a node it holds
-    (`Linker.parser_ids` is the highest `next_free_id`). A cached root is
-    used only when `Cache.find` sees the same fingerprint and texts
+  - Session cache (`cache.agc`): node ids have gaps and are not in walk
+    order, so nothing reads a node id except through a node it holds. A cached
+    root is used only when `Cache.find` sees the same fingerprint and texts
     (`test_std_analysis.py` compares cached and uncached answers).
     `Analysis.entry` and `adopt` move a root between sessions with
     `Cache.alone`, never merged, since two caches' ids can overlap.
-    `check_reuse.agc` copies the entries of an unchanged module from the
-    root's last checked program (`Cache.Good`).
-  - Check cache (`modules/check_cache.agc`, `io/check_cache.agc`;
-    `check` and `type-at` only): one file per imported source in
-    `_build/check/`, holding the text digest, the tree digest at which it
-    passed, a same-length stub (bodies and private functions blanked) and
-    the constant types. A module whose tree digest the entry vouches for
-    is `clean`: its bodies are not checked, and it is parsed from the
-    stub. A walk with a stubbed module that is not clean is redone without
-    stubs, and a problem in a stubbed file falls back to `query_cached`,
-    so the answer is always the cold one. Anything the core or the CLI
-    adds to `Modules` or `Checker` that new entries depend on must be in
-    the tree digest (`Modules.shape_of`). `test_check_cache.py` compares
-    cold, warm and `--no-cache` runs.
+  - Check cache (`modules/check_cache.agc`, `io/check_cache.agc`; `check` and
+    `type-at` only): one file per imported source in `_build/check/`, holding
+    digests and a same-length stub (bodies and private functions blanked). A
+    module whose tree digest the entry vouches for is `clean`: its bodies are
+    not checked, and it is parsed from the stub. A walk with a stubbed module
+    that is not clean is redone without stubs, so the answer is always the cold
+    one. Anything the core or the CLI adds to `Modules` or `Checker` that new
+    entries depend on must be in the tree digest (`Modules.shape_of`).
+    `test_check_cache.py` compares cold, warm and `--no-cache` runs.
 
 ### Pure core, one port
 
@@ -72,11 +66,9 @@ The entry programs (`syntax/lex.agc`, `syntax/parse.agc`, `modules/link.agc`,
 `check/check.agc`, `lower/lower.agc`, `bytecode/bytecode.agc`,
 `catalog/catalog.agc`) may call `System.args`, print with `puts` and import the
 `io/` adapters. A new entry program needs a line in `ENTRY_PROGRAMS`.
-`tests/test_style_core_purity.py` runs the real lexer over the stage folders and
-fails on a call (`Module.name` as tokens, so strings, comments and data rows do
-not count) or an import. The linker (`modules/`, `packages/`) imports no later
-stage. `catalog/` imports only `syntax/` and itself, so every later stage reads
-it.
+`tests/test_style_core_purity.py` fails on a call or an import. The linker
+(`modules/`, `packages/`) imports no later stage. `catalog/` imports only
+`syntax/` and itself, so every later stage reads it.
 
 Code style follows the speed rules: build lists with `push`, strings with
 `join`, and loops rather than recursion over the input.
@@ -94,11 +86,9 @@ dist/agentica compiler/lower/lower.agc --stdlib=$PWD/stdlib file.agc      # IR; 
 dist/agentica compiler/bytecode/bytecode.agc --stdlib=$PWD/stdlib file.agc -o out.agcb  # several `FILE -o OUT` pairs allowed
 ```
 
-Goldens: `tests/fixtures/frontend/<stage>/` (`NAME.input` and `NAME.tokens` for
-the lexer; `NAME.input` and `NAME.ast` for the parser; `NAME.agc` or a folder
-with `root.agc`, and `NAME.linked`, `NAME.checked`, `NAME.ir`). They hold
-message and help text on purpose: a deliberate exception to "tests assert codes,
-not messages". Module fixtures are folders in `modules/`: `root.agc`, an
+Goldens: `tests/fixtures/frontend/<stage>/` (`ls` shows the file kinds). They
+hold message and help text on purpose: a deliberate exception to "tests assert
+codes, not messages". Module fixtures are folders in `modules/`: `root.agc`, an
 optional `fixture.env` (`AGENTICA_PATH=`, `XDG_DATA_HOME=`, where `@/` is the
 fixture folder), and `fixture.links` (`LINK TARGET`, made as symlinks in a
 copy).
@@ -120,47 +110,38 @@ copy).
 - Depth limits: the parser and the checker stop at 1,000 levels
   (`references/stages.md`); lowering uses at most 3 VM frames per level; the
   writer recurses only on JSON field types (1 frame per level, at most 1,024).
-  The VM call limit is 10,000 frames. The linker's rewrite is about one VM call
-  per level.
+  The VM call limit is 10,000 frames, so recurse on the tree only with a bounded
+  depth, or use an explicit stack and loops. The linker's rewrite is about one
+  VM call per level.
 - The checker's `Cx` is immutable; state is a threaded `St`; scopes are one
   persistent `Map` that a scope snapshots and restores. `Checked.types` is a
   `List[Type]` indexed by node id (a `Map` measured 50% slower). A builtin
   method call is checked as a call with the receiver as an `Ast.Expr.Typed`
   first argument, added by the checker, never by the parser.
-- Module constants: the parser reads a top-level `NAME = ...`; `NAME.x` parses
-  as a module call; only the linker makes `ConstRef`, turning a receiver one
-  into a `FieldAccess` when the call has no parentheses and no arguments.
-  `syntax/ast_walk.agc` is shared by the linker, the checker and lowering;
-  `check_const.agc` runs after `main`, in `Checked.constants` order;
-  `lower_const.agc` plans them.
+- Module constants: `NAME.x` parses as a module call; only the linker makes
+  `ConstRef`, turning a receiver one into a `FieldAccess` when the call has no
+  parentheses and no arguments. `check_const.agc` runs after `main`, in
+  `Checked.constants` order.
 - Default parameters: `Param.default`, rewritten by the linker with the
   declaring module's names. `check_defaults.agc` checks order and shape;
-  `defaults.agc` gives the `Shape` and which parameter an argument fills. The
-  checker and `lower_argument` share these functions. A default may be the name
-  of a constant (`ConstRef`) whose value is a constant form: `check_defaults.agc`
-  reads it from `Cx.const_sites`, and the lowering writes the value in place
-  (`Const.in_place`, in `fills_of` and `field_fills_of`), so a call reads no
-  global. Compiler code must not use
-  defaults until `bootstrap/stage0.agcb` can compile them (the two-step refresh
-  in `references/ci.md`).
+  `defaults.agc` is shared by the checker and `lower_argument`. A default may be
+  the name of a constant (`ConstRef`) whose value is a constant form: the
+  lowering writes the value in place (`Const.in_place`), so a call reads no
+  global. Compiler code must not use defaults until `bootstrap/stage0.agcb` can
+  compile them (the two-step refresh in `references/ci.md`).
 - Builtin defaults: a catalog parameter may have
   `default: Model.Default.Whole(0)` (`Model.Named`; also `Real`, `Text`, `Flag`,
   `Nothing`, `EmptyList`, `EmptyMap`, `EmptyBytes`, `Variant("LogLevel.Info")`).
-  `Defaults.builtin_shape` gives the shape, and `Builtins.form_for` picks the
-  form for each count. `check_plain` and `check_prelude` map arguments with
-  `Defaults.param_of`; `lower_call` fills the omitted ones
-  (`lower_builtin_default`) and emits `call-builtin` with the full count, so the
-  VM never sees a short call. A default is only for a Plain or Prelude row with
-  no alternatives (`Builtins.default_problem`, checked by
-  `test_frontend_catalog.py`). The signature, `help`, its JSON (`default`) and
-  the CHECK-ARITY range (`Builtins.arity_text`) show it. A builtin has no
-  function value.
+  `lower_call` fills the omitted arguments (`lower_builtin_default`) and emits
+  `call-builtin` with the full count, so the VM never sees a short call. A
+  default is only for a Plain or Prelude row with no alternatives
+  (`Builtins.default_problem`, checked by `test_frontend_catalog.py`).
 - Import forms and the linker's `named` table: `references/stages.md` (Linker).
-- Type aliases: `Ast.Decl.TypeAlias`. `check_register.agc` registers them before
-  signatures; `check_types.agc` expands them (`CHECK-TYPE-ALIAS-CYCLE`): the
-  arguments first, then the target with only the alias's own parameters in
-  scope, then the arguments put in as a plain substitution (a name in the target
-  is never an enum parameter of the use).
+- Type aliases: `check_register.agc` registers them before signatures;
+  `check_types.agc` expands them (`CHECK-TYPE-ALIAS-CYCLE`): the arguments
+  first, then the target with only the alias's own parameters in scope, then the
+  arguments put in as a plain substitution (a name in the target is never an
+  enum parameter of the use).
 
 ## Common tasks
 
@@ -216,12 +197,7 @@ another result type (`Map.get`).
 
 See "Where new code goes" in SKILL.md; for an opcode, "Refreeze" has the stage
 order. A new stage also needs an entry program that prints its text form (like
-`check.agc`).
-
-### Add tests
-
-A language rule runs `cli() + ["--json", "check", path]` in
-`tests/test_spec_<area>.py`; many small cases go in
+`check.agc`). Many small spec cases go in
 `tests/fixtures/spec/checker-rest.json`.
 
 ### Speed change to a stage (differential run against master)
@@ -270,29 +246,24 @@ The slow tiers compare the stages with the frozen outputs in
 product CLI); helpers in `tests/frontend_support.py` and `frontend_cases.py`.
 
 - `frozen/corpus/*.json` is a fixed snapshot of inputs (a new `stdlib/` file is
-  not in it). Seeded inputs are checked in; formula inputs are rebuilt by
-  Python and their SHA-256 in the manifest must match, or the test is buggy.
+  not in it).
 - Manifests `frozen/<stage>/<set>.sha256` hold the output's and the input's
   SHA-256 and size. `.agcb` files hash without the length and the version text,
   so a release does not change the freeze. `stdlib-registry.expected` (a new
   `stdlib/` file is one line) and `check/tables.expected` (a copy of
   `check_tables.agc`) are the other lists.
-- Every input has a golden and no golden is left over. `builtins_data.agc` is
-  hand-edited, so it is not compared with a fresh generation.
+- Every input has a golden and no golden is left over.
 - Fixtures that Python reads live are frozen with derived results
   (`modules/<name>/`, `limits/limits.agc`, which imports the live `compiler/`,
   `parser/synthetic.input`, `bytecode/*.agc`): editing one, or a `compiler/`
   file `limits.agc` imports, changes a frozen hash. Refreeze and inspect the
   diff.
 
-## Agentica gotchas
+## Agentica gotcha
 
 - `==` follows IEEE 754 on Floats (`nan != nan`, `0.0 == -0.0`). Compare types
   with `Types.same?`; `compiler/` does not compare enums, structs or lists with
   `==` until `bootstrap/stage0.agcb` lowers them (`Value.equal`).
-- The VM call depth is 10,000 frames. Recurse on the tree only with a bounded
-  depth, or use an explicit stack and loops.
-- A value that cannot happen is a `*-INTERNAL` diagnostic, not a crash.
 
 ## Lexer gotcha: stray NL tokens
 
@@ -326,9 +297,8 @@ block on each `def`, `struct` or `enum` you add or touch in `compiler/**/*.agc`
 
 `Cli.run` (`references/stages.md`, "Command line") runs a command through
 `pipeline.agc`, which the BDD driver shares. A command never prints: it returns
-a `Reply` (code, stdout, stderr), and `cli.agc` writes it. `hand_off` calls
-`FrontEnd.hand_off`, so an ordinary run stays in the binary's process.
-`cli_text.agc` keeps the help texts as data.
+a `Reply` (code, stdout, stderr), and `cli.agc` writes it. `cli_text.agc` keeps
+the help texts as data.
 
 To run a `compiler/` change without the build chain:
 `dist/agentica run -- build/stage/stage2.agcb --version V --stdlib stdlib --self PATH -- WORDS`

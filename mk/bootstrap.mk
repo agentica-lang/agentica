@@ -4,7 +4,7 @@
 
 .PHONY: bootstrap-smoke stage1 stage2 stage3 stage0 stage0-check fixed-point
 
-# The binary and its bootstrap (docs/future/18-front-end-language.md §18.2 and §18.8; docs/vm/08-loader-and-cli.md). The front end is
+# The binary and its bootstrap (docs/vm/08-loader-and-cli.md). The front end is
 # compiler/front_end.agc, a program that the binary carries as data. Each stage is its .agcb, in build/stage/. The seed is
 # bootstrap/stage0.agcb, a stage2 that was checked in (make stage0 refreshes it):
 #   first binary  linked with stage0 and the std/ sources of this checkout (build/vm/<mode>/bootstrap/agentica)

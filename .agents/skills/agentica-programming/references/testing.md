@@ -56,12 +56,11 @@ def test_parses_port() -> Result[Void]
 end
 ```
 
-`CHECK-TEST-MAIN`: a test file with both `main` and `test_*` functions (any
-`test_*` function, a helper of the `Test.run` form too: rename it). Without
-`main`: `CHECK-TEST-SIGNATURE` for a test function with parameters, type
-parameters or another result; `CHECK-TEST-NAME` for one named just `test_`.
-`agentica check` checks these
-for `*_test.agc` files; a run of a test file with no `main` is `CHECK-MAIN`.
+`CHECK-TEST-MAIN`: a test file with both `main` and `test_*` functions (a
+helper named `test_*` too: rename it). Without `main`: `CHECK-TEST-SIGNATURE`
+for a test function with parameters, type parameters or another result;
+`CHECK-TEST-NAME` for one named just `test_`. `agentica check` checks these for
+`*_test.agc` files; running a test file with no `main` is `CHECK-MAIN`.
 
 - `Test.eq(actual, expected)`: actual first (the expected type comes from the
   left argument, so `Test.eq(error("x"), r)` is `CHECK-RESULT-TYPE`; write
@@ -70,11 +69,9 @@ for `*_test.agc` files; a run of a test file with no `main` is `CHECK-MAIN`.
   those; `Fn`, `Task`, handles, `TestCase` and two different types are
   `CHECK-TYPE-MISMATCH`. Maps compare in any key order and sets in any element
   order; Floats by IEEE 754 (NaN is not equal to itself); a `Json` as its
-  canonical text (sorted keys). A failure says `values are not equal; expected
-  E; actual A`, in the `inspect` form with `Json` as its JSON text.
-- `Test.ok?(r)` and `Test.error?(r)` check a Result's tag: `expected ok; actual
-  error("...")`, `expected an error; actual ok(0)`. `Test.assert(cond, message)`
-  fails with `message`.
+  canonical text (sorted keys).
+- `Test.ok?(r)` and `Test.error?(r)` check a Result's tag;
+  `Test.assert(cond, message)` fails with `message`.
 - A failed assertion counts against its test even when its Result is
   discarded (`_ = Test.eq(a, b)`), including one made in a task the test
   spawned. A bare assertion followed by another statement is
@@ -85,12 +82,9 @@ for `*_test.agc` files; a run of a test file with no `main` is `CHECK-MAIN`.
   task it is `RUNTIME-TEST-RUN`. `Test.run` never returns; run directly it
   prints `run this file with agentica test` and exits 2.
 - Under `agentica test` the runner talks to the file on a channel of its own
-  (descriptor 3; `Process.parent_read_line` and `Process.parent_send` in
-  `processes.md`), so the file's stdin and stdout are its own. The runner closes
+  (descriptor 3), so the file's stdin and stdout are its own. The runner closes
   stdin at once (`IO.gets` is an end-of-input error). Print anything with
-  `puts`/`print`/`IO.inspect`, even a line that looks like a record: it is
-  output, shown only under a failed test. `Test.run` without that channel, under
-  the arguments `agentica test` passes, is `RUNTIME-TEST-RUN`.
+  `puts`/`print`/`IO.inspect`: it is shown only under a failed test.
 - A task crash outside every test (say, in a task `main` started) that nothing
   awaited fails the whole file (exit 1 with the crash summary).
 - Each test runs in its own task and fails with, in this order: a crash (its own
@@ -110,11 +104,8 @@ for `*_test.agc` files; a run of a test file with no `main` is `CHECK-MAIN`.
   files share one report and the BDD exit codes (0 all passed, 1 a failure or
   nothing found, 2 usage or infrastructure).
 - Lines: `PASS file / name`, `FAIL file / name` then `file:line:col [CODE]
-  message; expected E; actual A`, for a crash the call stack (`  stack,
-  innermost first:` and one `name at file:line:col` line each; `stack` in
-  `--json`), and the test's own stdout indented by two spaces; `NOT RUN file /
-  name` for a test not run. `--json` adds `kind: "tests"`, `output` and `status:
-  "not_executed"`; `--ai` puts the output after ` | output`. A file that fails
+  message`, for a crash the call stack, and the test's own stdout indented by
+  two spaces; `NOT RUN file / name` for a test not run. A file that fails
   before or after its tests (exit, crash in `main`, no `Test.run`:
   `RUNTIME-TEST-RUN`) is a file error with what it printed and its stderr.
 - Each test file runs in its own child VM, each test in its own task, 30 seconds
@@ -122,10 +113,7 @@ for `*_test.agc` files; a run of a test file with no `main` is `CHECK-MAIN`.
   a test ends the file's run: the rest is not executed. A front-end error in a
   test file is a file error; the other files still run.
 - A passed test's output is dropped; a failed one shows the last 64 Ki
-  characters. Stdout is limited to 1 MiB per test (unread stdout too) and stderr
-  to 1 MiB for the whole file: past a limit the running test fails (or the
-  file, when it exits within 2 seconds of the cut) with
-  `RUNTIME-BDD-OUTPUT-LIMIT`; a file that prints more than 1 MiB before
-  `Test.run` has listed its tests is a file error with that code. A test that
-  times out keeps what it printed. The run always has a seed; `--seed N` replays
-  it (the report shows the seed when the run fails).
+  characters. Stdout is limited to 1 MiB per test and stderr to 1 MiB for the
+  whole file: past a limit the running test (or the file) fails with
+  `RUNTIME-BDD-OUTPUT-LIMIT`. The run always has a seed; `--seed N` replays it
+  (the report shows the seed when the run fails).

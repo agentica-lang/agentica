@@ -67,12 +67,11 @@ end
 - `take`, `take_while`, `first` and `find` stop the source, so an endless source
   ends. `to_a`, `reduce` and `each` on an endless source never end;
   `--max-steps` stops them (`RUNTIME-STEP-LIMIT`).
-- Each item pulled costs one step, each callback a step plus its body. Other
-  tasks keep running while a terminal runs. Callbacks run on the calling task; a
-  `Lazy` can be shared by tasks.
+- Each item pulled costs one step. Callbacks run on the calling task; a `Lazy`
+  can be shared by tasks.
 - No `filter_map` (write `select` then `map`) and no tuples (return a struct
   from `with_index` to keep an item and its index).
-- A `Lazy` has no `==`, `to_s` or JSON form; inspect prints `<Lazy>`. A `List`
+- A `Lazy` has no `==`, `to_s` or JSON form. A `List`
   method on it (`lz.size`) is `CHECK-UNKNOWN-METHOD`: get a list first with `try
   lz.to_a`. A step only `Lazy` has, on a list or range (`xs.each_cons(2)`), is
   `CHECK-UNKNOWN-METHOD`: write `xs.lazy.each_cons(2)`.
@@ -91,25 +90,20 @@ there is `CHECK-TRY-CONTEXT` unless that block returns a Result.
 ## Files and channels
 
 - `File.foreach` opens nothing until a terminal starts, and the terminal closes
-  the file before it returns, on every path (end, `first`/`find` had enough, an
-  error from the block, a failed `try`, a read error). A crash or cancel of the
-  task closes it at the task's end. Read errors, a missing file or a timeout
-  `<= 0` end the terminal with an error Result; `buffer_bytes` outside
-  1024..16777216 is `RUNTIME-INVALID-COUNT` at the argument.
-- `File.chunks` opens and closes like `File.foreach`; a missing or non-regular
-  file ends the terminal with an error Result, and `size` outside 1..16777216
-  is `RUNTIME-INVALID-COUNT` at the argument.
+  the file before it returns, on every path. Read errors, a missing file or a
+  timeout `<= 0` end the terminal with an error Result; `buffer_bytes` outside
+  1024..16777216 is `RUNTIME-INVALID-COUNT`.
+- `File.chunks` opens and closes like `File.foreach`; `size` outside
+  1..16777216 is `RUNTIME-INVALID-COUNT`.
 - `File.foreach(...).each do ... end` with no step in between, written as one
   chain, is `CHECK-LAZY-NO-STEP`: write `File.each_line(path, n, ms) do |line|
   ... end`.
 - `ch.lazy(timeout_ms)`: each wait for a value obeys the timeout; a timeout ends
-  the terminal with `error("channel: timed out")`. Unlike `File.foreach`, a
-  negative timeout is `RUNTIME-INVALID-DURATION` (not an error Result), and
-  `ch.lazy(0)` is valid (only what is already there).
-- A value a terminal took is gone even if a later step dropped it; `take`,
-  `first` and `find` take only what they need, `take_while` consumes the first
-  value it rejects. A second terminal on a drained, closed channel gives
-  `ok([])`, not an error.
+  the terminal with `error("channel: timed out")`. A negative timeout is
+  `RUNTIME-INVALID-DURATION`; `ch.lazy(0)` is valid (only what is already
+  there).
+- A value a terminal took is gone even if a later step dropped it;
+  `take_while` consumes the first value it rejects.
 
 ## write_lines
 
@@ -118,13 +112,10 @@ there is `CHECK-TRY-CONTEXT` unless that block returns a Result.
   the file and writes each item and `\n`: `File.foreach(src, 4096,
   1000).drop(1).map do |line| ... end.write_lines("out.txt", 1000)` is `ok()`
   or the first error.
-- The file opens before the first item is pulled (a failed open reads nothing)
-  and is flushed and closed before the terminal returns, on every path. What was
-  written before an error stays. A crash or cancel of the task closes it at the
-  task's end.
+- The file opens before the first item is pulled and is flushed and closed
+  before the terminal returns, on every path. What was written before an error
+  stays.
 - A timeout `<= 0`, a bad path, a failed open, write or close, and a line over 1
-  MiB end the terminal with an error Result. `timeout_ms` bounds the open, each
-  64 KiB write and the close.
+  MiB end the terminal with an error Result.
 - `write_bytes(path, timeout_ms = 30000)` takes a `Lazy[Bytes]` and works like
-  `write_lines` without line feeds; it gives the bytes written. Chunks of any
-  size are fine.
+  `write_lines` without line feeds; it gives the bytes written.
