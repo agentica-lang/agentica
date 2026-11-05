@@ -18,28 +18,34 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `std/option_parser`: `min` and `max` on an `Int` option or argument.
 - `s * n` repeats a String, as Ruby's `String#*`.
 - A `==` refused because a struct field has no equality also marks that field.
-- `JSON.encode`, `from`, `decode`, `schema` and `codec` take user enums.
+- `JSON.encode`, `from`, `decode`, `schema` and `codec` take user enums
+  (`{"tag": "Rect", "values": [...]}`); only non-generic ones decode.
 
 ### Changed
 
-- **Breaking:** an unused import alias is an error (`CHECK-UNUSED-IMPORT`).
+- **Breaking:** an unused import alias is an error (`CHECK-UNUSED-IMPORT`), and
+  an alias without its member (`u: User`) is `CHECK-IMPORT-NAME`.
 - **Breaking:** an unused variable, block parameter or pattern name is an error
-  (`CHECK-UNUSED-VARIABLE`); name it `_` or `_name`.
+  (`CHECK-UNUSED-VARIABLE`); name it `_` or `_name`. Function parameters are
+  never reported.
 - **Breaking:** a dropped `Result` is an error (`CHECK-UNUSED-RESULT`); write
-  `_ = f()` to drop it on purpose.
-- **Breaking:** a statement after `return`, `break` or `next` is an error
-  (`CHECK-UNREACHABLE-CODE`).
+  `try`, a `case` or `.unwrap!`, or `_ = f()` to drop it on purpose.
+- **Breaking:** a statement after `return`, `break` or `next`, or after an `if`
+  or `case` that always ends in one, is an error (`CHECK-UNREACHABLE-CODE`).
 - **Breaking:** a `*_test.agc` file may have top-level `test_*` functions
-  instead of `main`, but not both (`CHECK-TEST-MAIN`).
+  instead of `main`, but not both (`CHECK-TEST-MAIN`; also new:
+  `CHECK-TEST-SIGNATURE`, `CHECK-TEST-NAME`).
 - **Breaking:** `std/option_parser` help shows its notes in brackets
-  (`[default: 8080]`).
-- **Breaking:** `xs.min_by` and `xs.max_by` give an `Optional`, not a `Result`.
+  (`[default: 8080]`) and choices as the value name (`--stats on|off`).
+- **Breaking:** `xs.min_by` and `xs.max_by` give an `Optional`, not a `Result`
+  (`ok?` becomes `some?`).
 
 ### Fixed
 
 - A `Scenario Outline` keeps an unknown `<...>` that looks like HTML as written.
 - `KDF.scrypt` and `KDF.pbkdf2_hmac_sha256` run on the compute pool, so other
-  tasks keep running.
+  tasks keep running; a queued call of a cancelled task, or after `main` has
+  returned, does not start.
 - **Breaking:** a KDF call inside a native callback is
   `RUNTIME-NATIVE-CALLBACK`.
 - Failed I/O calls inside a native callback no longer leak memory.
