@@ -22,7 +22,9 @@
 #ifndef _WIN32
 #include <fcntl.h>
 #endif
-#if defined(__GLIBC__) && !defined(AGC_NO_GC)
+/* mallinfo2 is glibc 2.33; the release build links against glibc 2.28 (release.yml), where the count is
+   skipped. */
+#if defined(__GLIBC__) && !defined(AGC_NO_GC) && (__GLIBC__ > 2 || __GLIBC_MINOR__ >= 33)
 #include <malloc.h>
 #define MALLOC_COUNT 1
 #endif

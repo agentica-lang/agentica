@@ -203,6 +203,12 @@ import BDD from "std/bdd"
 import HTTP from "std/http"
 
 def main() -> Void
+  # One use of each module, since an unused import alias is CHECK-UNUSED-IMPORT.
+  _ = &Binary.read_u8
+  _ = &Toml.parse
+  _ = &Logger.info
+  _ = &BDD.step
+  _ = &HTTP.client
   q = Queue.push(Queue.new(), "embedded")
   puts(Result.unwrap!(Queue.peek(q)))
 end
