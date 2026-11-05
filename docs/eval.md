@@ -26,11 +26,10 @@ The first eight tasks are small programs on stdin and stdout.
 | `t7-json-stream` | answer JSON-lines requests, and go on after bad ones |
 | `t8-enum-ledger` | run a ledger of commands with enums and `case` |
 
-The twelve tasks t9 to t20 are the harder kinds of [roadmap phase
-6c](roadmap/06-validation.md#phase-6c-agentica-against-typed-python), for the
-pilot. The start programs of t9, t10 and t12 are 170 to 210 lines in both
-languages (`wc -l` of `start.agc` and `start.py`); the others are 28 to 132
-lines.
+The twelve tasks t9 to t20 are the harder kinds of the 6c comparison (Agentica
+against typed Python), for the pilot. The start programs of t9, t10 and t12 are
+170 to 210 lines in both languages (`wc -l` of `start.agc` and `start.py`); the
+others are 28 to 132 lines.
 
 | Task | Kind | The agent does |
 |---|---|---|
@@ -53,10 +52,9 @@ The arms are the context an agent gets:
 - `typed-python`: the same task in Python with type annotations, checked by
   `mypy --strict` (see "The typed Python arm").
 - `skill`: the `agentica-programming` skill and the `agentica` binary.
-- `skill-nocli`: the `skill` arm without the four query commands (`agentica
-  outline`, `type-at`, `symbol`, `refs`), for the measurement of [§39.12](
-  future/39-semantic-cli.md). It is opt-in: `--arms` must name it. See "The
-  no-CLI arm".
+- `skill-nocli`: the `skill` arm without the four query commands
+  (`agentica outline`, `type-at`, `symbol`, `refs`), for the measurement of the
+  query commands. It is opt-in: `--arms` must name it. See "The no-CLI arm".
 - `grammar`: `docs/grammar.md` and `examples/`, without the skill. Its prompt
   gained the `agentica help` pointer (commit efba1a0b), so older grammar-arm
   results are not comparable.
@@ -157,7 +155,7 @@ by weakening its options.
 
 - Checker: mypy 2.3.1 (compiled), run with `--strict`. The version and its five
   dependencies are pinned in `tests/eval/Dockerfile`; `run.json` records the
-  version the image reports. mypy is the checker the roadmap names. It installs
+  version the image reports. mypy is the checker of this arm. It installs
   from PyPI as compiled wheels, with no download at run time; the `pyright`
   package on PyPI fetches its npm package on first use, which the grader (no
   network) cannot do.
@@ -257,6 +255,21 @@ the task statements (the start programs are 100 to 194 lines):
 Left out: t3 (a 19-line start, one field), t10 (new operators, not a type
 change), and the small programs, where reading the file costs less than a query.
 With 3 reps, that is 15 extra runs per model.
+
+### The full 6c round
+
+Issue #1009 tracks it. The Agentica `skill` arm and the typed Python arm run
+with the same model and budget, with enough reps per cell that the spread
+between reps is smaller than the differences reported (round 1 had too few).
+Measure hidden tests passed, tokens, repair attempts (failing check or run
+calls; the Python checker's runs count as check calls on both sides) and time,
+and separate type errors from logic errors. Round 13 ran it with 3 reps and
+stays open. It also counts the query-command calls of each run, with the
+`skill-nocli` arm on the tasks that cross a program. Keep the commands in the
+skill if agents call them and the arm with them is not worse. If agents never
+call them, change how the skill presents them before the next round, not the
+commands. The same issue holds the measurement of `--ai` and labels against
+plain text on the `binary` arm.
 
 ### The budget cap
 
@@ -415,7 +428,7 @@ reports it:
   raw logs (`agent.jsonl`), none of the 1,040 bash calls runs `outline`,
   `type-at`, `symbol` or `refs`, no call names `queries.md` or `analysis.md`,
   and `skill-nocli` refused 0 calls (`refused_queries` 0). The round cannot
-  show the value of the semantic CLI (§39.12): the measure is inconclusive.
+  show the value of the semantic CLI: the measure is inconclusive.
   The skill names them (`SKILL.md` step 5 and the `references/queries.md`
   row), so how it presents them is what to change before the next round.
 - **`skill` against `skill-nocli`** (shared tasks: DeepSeek t11 to t14, GLM t9
@@ -463,8 +476,7 @@ the diagnostics worked as a repair signal.
 - Whether `--ai` or `--json` help. They were not measured.
 - Whether Agentica beats typed Python with confidence. The round 10 pilot points
   that way for two of three models, with 3 reps per cell. The full comparison is
-  [roadmap phase
-  6c](roadmap/06-validation.md#phase-6c-agentica-against-typed-python).
+  issue #1009 (see "The full 6c round").
 - Time in rounds 10 and 11, which ran next to each other with more runs at a
   time.
 - Whether the semantic CLI helps. In round 13 no agent called it.

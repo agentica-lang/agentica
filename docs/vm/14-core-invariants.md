@@ -312,26 +312,29 @@ the caller. A channel never handed over is closed only by `Channel.close`.
 
 - No new subsystem in `vm/` without a demonstrated use case: a program that
   needs it and cannot be written well without it.
-- Prefer Agentica code first (`std/`, the roadmap's "`std/` first" rule), then a
-  separate process. C in the core is the last choice.
+- Prefer Agentica code first (a `std/` module, then a package), then a
+  separate process. C in the core is the last choice. The development skill's
+  `references/library-notes.md` lists what is a builtin from day one.
+- The core stays small, safe and stable: the language, the VM, the GC, the
+  scheduler, tasks and channels, JSON, and the OS primitives that need the
+  event loop (files, processes, timers, TCP, TLS; UDP is not in the core
+  plan). Everything else is an extension: a package written in Agentica, and a
+  native library through the FFI only when it needs a library in C, C++ or
+  Rust. The core changes for bugs, platforms and speed.
 - Each new core concept replaces something, or justifies itself against §14.1 to
   §14.5: how it waits, times out, is cancelled, ends and owns its handles. If it
   needs a second way for any of them, it does not go in.
 
-Items in the plan to re-check with this rule before they start:
+Planned work to re-check with this rule before it starts:
 
-- **Item:** The rest of the VM layers (7l, row 8.1; the first part is §15)
+- **Item:** The rest of the VM layers (issue #998; the first part is §15)
   - **Question:** Does each layer replace code, or only add a boundary?
 
-- **Item:** VM metrics (phase 18, §28)
+- **Item:** VM metrics (issue #992, `docs/future/28-vm-metrics.md`)
   - **Question:** It adds a metrics thread and hooks in the core. Could a dump
-    at exit, or an outside reader of the VM's state, do the job? 18d adds one
-    add on the allocation path while nobody asks (§28.12): it must pass the
-    overhead check or change rule 4 of §28.2 first.
-
-- **Item:** JIT (7m, §6.4)
-  - **Question:** Required by the roadmap; it must keep the same five rules and
-    add no runtime of its own.
+    at exit, or an outside reader of the VM's state, do the job? The memory
+    diagnosis adds one add on the allocation path while nobody asks: it must
+    pass the overhead check or change rule 4 of the design first.
 
 - **Item:** K I/O threads, local run queues with work stealing (§16.10)
   - **Question:** Only if measurements ask. Does the model of §16 stop being

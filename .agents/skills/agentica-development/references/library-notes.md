@@ -277,7 +277,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 
 ## std/regex
 
-- `std/regex` (`stdlib/regex.agc`, §48): the parser to a `Node` tree and the
+- `std/regex` (`stdlib/regex.agc`): the parser to a `Node` tree and the
   compiler to the parallel `ops`/`xs`/`ys` lists of `Program` are Agentica;
   `x*` with a nullable `x` compiles as `(x+)?`, as in Go (issue 46123). The
   Pike VM is the std-only builtin `RegexEngine.search` (`vm/regex.c`, 48c), a
@@ -292,6 +292,37 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   in `stdlib/CORE`) to check regex literals (48b), so `compile`, its errors and
   any builtin it calls are part of the front end: a change there needs the
   stage0 refresh of `references/ci.md`.
+
+## Where a new library feature goes
+
+- Pure computation over types that exist (numbers to bytes, bit tricks on the
+  `Int` builtins, text formatting, algorithms) starts as a `std/` module in
+  Agentica (`stdlib/*.agc`, listed in `stdlib/MODULES`), not as a builtin.
+- A function becomes a C builtin only when a measurement shows it is hot
+  (`make bench`). Its `std/` API does not change, error strings included; the
+  `std/` function becomes a one-line wrapper. The builtin is public (no
+  internal helper builtins), goes in an existing builtin module whose first
+  parameter type fits (`List.read_u32_be(data, offset)`), and never under a
+  module named like the `std/` module's import alias.
+- Builtins from day one, in C: anything that touches the OS (files, stdio,
+  processes, sockets, TLS, time, signals, OS random bytes); crypto, always
+  through the TLS/crypto provider adapter, never hand-written (a constant-time
+  compare is impossible in an interpreter); parsers of untrusted input with a
+  mature library (JSON on yyjson, HTTP on picohttpparser); anything that needs
+  its own memory layout (`Bytes`, the insides of `Map` and `List`); operator
+  level operations on core types (the `Int` bit operations); the log registry
+  state of `std/logger`.
+- Library code that is generic over the builtin type variables, or called as a
+  method on a builtin type (`xs.find do ... end`), cannot be a `std/` module: it
+  goes in the compiler prelude (`stdlib/prelude/*.agc`, `references/stages.md`).
+  Only prelude functions may call `__fail_arg` and `__float_fixed`. A
+  concurrency helper that needs the scheduler is a C builtin.
+- `HttpWire` and `LogRegistry` are std-only builtin modules: the linker lets
+  only modules embedded from `stdlib/` call them (`std_only_name?` in
+  `compiler/catalog/builtins.agc`), and user code gets `CHECK-UNKNOWN-NAME`
+  with the std module to import. A public raw layer would be a second way to
+  do the same job.
+- Not retroactive: existing builtins, JSON included, stay as they are.
 
 ## Comments and style in stdlib/
 
