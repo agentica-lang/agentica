@@ -79,9 +79,9 @@ static uint64_t siphash13(const uint64_t key[2], uint64_t domain, const uint8_t 
 
 /* The hash of an Int key: the key XORed with the run's hash key, then the finalizer of MurmurHash3 (fmix64). Only the
    key before the mix matters: an XOR after it would rename the slots of every node in the same way, and the table
-   would keep its shape, so there is none. Every step is a bijection of 64-bit words, so two different Ints never share a hash. The table only
-   chains keys with the same full hash (a collision node), so no choice of Int keys, even one that knows the key,
-   makes a lookup scan: the worst it can do is put keys at the last level, 13 nodes down
+   would keep its shape, so there is none. Every step is a bijection of 64-bit words, so two different Ints never
+   share a hash. The table only chains keys with the same full hash (a collision node), so no choice of Int keys,
+   even one that knows the key, makes a lookup scan: the worst it can do is put keys at the last level, 13 nodes down
    (HAMT_HASH_BITS / HAMT_BITS + 1). SipHash stays for String and Bytes keys, whose full hashes can collide. */
 static uint64_t int_hash(uint64_t key, uint64_t x) {
   x ^= key;

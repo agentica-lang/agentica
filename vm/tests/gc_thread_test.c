@@ -2,7 +2,7 @@
  * Boehm with threads (docs/vm/10-io-multicore.md §10.2.3, "GC"): threads that libuv starts register with the
  * collector, allocate, and are scanned and stopped by collections that any of them starts. Each thread keeps its list
  * head only in a local variable, so a collector that missed its stack would free live nodes, and the list check after
- * would fail; and agc_init's heap growth divisor. The sanitizer build has no collector: there only the threads run.
+ * would fail. Also: agc_init's heap growth divisor. The sanitizer build has no collector: there only threads run.
  */
 #include "../value.h"
 
