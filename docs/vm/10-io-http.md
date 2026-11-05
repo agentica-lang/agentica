@@ -60,8 +60,8 @@ after the limit check.
 
 HTTP is split between the C builtin module `HttpWire` and the Agentica module
 `std/http.agc`, which programs import as `HTTP`. The API, options, limits and
-answers are in `site/content/library/io-and-system/network.md`. Client
-streaming is planned in `docs/future/30-hybrid-http.md`.
+answers are in `site/content/library/io-and-system/network.md`. The decisions
+behind streaming are in `docs/future/30-hybrid-http.md`.
 Both halves build and run on Linux, macOS and Windows: the C side works on
 libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
 
@@ -121,31 +121,20 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   headers, and CR, LF and control bytes. It writes a large body while it reads
   the response, so an early 413 cannot deadlock the call.
 - **Pool.** `HttpClient` keeps idle keep-alive connections per scheme, host and
-  port, at most `max_connections` per origin. A call waits in FIFO order for a
-  free one, within its timeout. A connection is leased for one call, and goes
-  back to the pool only when the response was complete and neither side asked to
-  close.
+  port, at most `max_connections` per origin. A connection is leased for one
+  call, and goes back to the pool only when the response was complete and
+  neither side asked to close.
 - **Server.** One task per connection, and requests on one connection run one at
   a time. `Upgrade` and `CONNECT` get 501 (a WebSocket handshake is the one
-  `Upgrade` that reaches the app, 10.7.2), and `HTTP/1.1` only is
-  accepted. At most `max_connections` connections are open at once, and an
-  extra one waits in the kernel's backlog. `HTTP.wait` returns only after
-  `HTTP.close_server`. When `main` returns or the run fails, every server and
-  client is closed and every handler task stops.
-- **Exposure.** `std/http` is reached by an explicit import,
-  `import HTTP from "std/http"`, like `std/queue`. `HTTP` is a free alias. The
-  record and handle types (`HttpRequest`, `HttpResponse`, `HttpClientOptions`,
-  `HttpServerOptions`, `Header`, `HttpClient`, `HttpServer`) are global builtin
-  names.
+  `Upgrade` that reaches the app, 10.7.2). At most `max_connections` connections
+  are open at once, and an extra one waits in the kernel's backlog. When `main`
+  returns or the run fails, every server and client is closed and every handler
+  task stops.
 - **`HttpWire` is std-only.** A public raw layer would be a second way to do
-  HTTP. The linker (`compiler/modules/resolve.agc`) gives `CHECK-UNKNOWN-NAME`
-  for a qualified `HttpWire.f` in any module not embedded from `stdlib/` (the
-  std-only modules of `compiler/catalog/builtins_data.agc`), and `help` leaves
-  it out. The loader does not guard it: a crafted `.agcb` gets nothing `TCP` and
-  `TLS` do not give (the trust model of `docs/vm/README.md` §1). `HttpWire` is
-  a reserved name.
-- **Options.** `HTTP.client` and the servers check every number first (limits
-  in 10.5). A bad record is an `error` result.
+  HTTP. The linker gives `CHECK-UNKNOWN-NAME` for a qualified `HttpWire.f` in any
+  module not embedded from `stdlib/`, and `help` leaves it out. The loader does
+  not guard it: a crafted `.agcb` gets nothing `TCP` and `TLS` do not give (the
+  trust model of §1). `HttpWire` is a reserved name.
 - **TLS** takes a `TlsContext` (10.3): `HttpClientOptions.tls` a client one
   (`none`: system trust), and `serve_tls` a server one.
 
@@ -168,38 +157,20 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   answer until its deadline, `timeout_ms` after the call, plus 100 ms of grace.
   `close_client` closes `jobs`, and a later call gets `http: client is closed`
   (what still runs: the last item of the differences below).
-- With `proxy` in the options, std/http passes the absolute URL
-  (`http://host:port/path`) as the target of `encode_request`, which still
-  writes the target's `Host`. The job names the proxy as its origin, scheme,
-  host and port, so the owner pools connections by the proxy and the worker
-  connects to it (a failure names the proxy). `open`, `upload`, `download` and
-  `start` do the same on their own connection. An `https` URL keeps the target
-  as the job's origin, scheme, host and port (so a pool keeps one tunnel per
-  target) and the worker, or the call, opens the tunnel itself: `connect_https`
-  connects to the proxy, sends `CONNECT host:port` with the `Host` of the
-  authority and the login, and reads the head of the answer (HTTP/1.0 or 1.1;
-  only the head is read, a 2xx is followed by the tunnel and any other status
-  drops the socket and is an error that names the proxy, a 407 as below). An
-  error after the CONNECT went out (a timeout, an end of input, a head that is
-  not HTTP, bytes that came with the head before the TLS handshake) names the
-  proxy and the target as well, never the login. Then `HttpWire.upgrade_tls`
-  (the client's shared system-trust context) or `HttpWire.upgrade_context`
-  (`options.tls`, or a context built for a call that has no client) starts TLS
-  on that socket, with the target as the host to verify. Inside the tunnel the
-  request is in origin form and a 407 is the target's. The login comes only from
-  the proxy URL and goes only with the CONNECT: a `Proxy-Authorization` header
-  that the caller sets in an `https` call goes to the target, as any header
-  does. The user info of the proxy URL is cut out before `parse_url` (which
-  refuses it) and decoded into one `Proxy-Authorization: Basic` header, added to
-  the head of each request and never to the URL, the job or an error; a 407 from
-  the proxy ends the call with an error that names the proxy and closes the
-  connection, pooled or not. A `Connection` keeps the proxy without user info in
-  its options and the login in a channel, so printing it shows no password.
-  `proxy_from_env(url)` is the only reader of the environment (`System.env`,
-  which std/http may call; the pure `compiler/` folders never import it, only
-  `io/native_artifact.agc` does): it picks the variable by the URL scheme,
-  matches `no_proxy` against the parsed host and port, and returns `""` or the
-  proxy text.
+- Proxies (the behavior is in the network page). With `proxy` in the options,
+  std/http passes the absolute URL as the target of `encode_request`, which still
+  writes the target's `Host`, and the job names the proxy as its origin, so the
+  owner pools connections by the proxy. An `https` URL keeps the target as the
+  job's origin (one tunnel per target) and the worker, or the call, opens the
+  tunnel itself: `connect_https` sends `CONNECT host:port`, reads only the head of
+  the answer, and then `HttpWire.upgrade_tls` or `HttpWire.upgrade_context` starts
+  TLS on that socket, with the target as the host to verify. The login is cut out
+  of the proxy URL before `parse_url` (which refuses user info) and decoded into
+  one `Proxy-Authorization: Basic` header, never put in the URL, the job or an
+  error; a `Connection` keeps the proxy without user info in its options and the
+  login in a channel, so printing it shows no password. `proxy_from_env(url)` is
+  the only reader of the environment (`System.env`, which std/http may call; the
+  pure `compiler/` folders never import it).
 - The owner keeps, per origin (scheme, host and port), the open count, the idle
   workers and a FIFO of waiting jobs. A job goes to the idle worker freed last,
   else to a new worker while fewer than `max_connections` are open, else to the
@@ -221,25 +192,21 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   cancelled with the owner and calls in flight return their timeout.
 - A worker owns one connection, made with `TCP.connect`, `TLS.connect` (a
   client with `tls: some(context)`) or `HttpWire.connect_tls`, so DNS, connect,
-  TLS and the close rules stay in tcp.c. `HttpWire.connect_tls` is
-  `TLS.connect` with the client's own system-trust context: tcp.c builds one
-  `SSL_CTX` on a pool thread at the first `https://` connection, and every
-  later connection makes its `SSL` from it. Each connection, and the build,
-  holds a reference, so `HttpWire.drop_tls` (run by the service task after
-  `close_client`) frees the context only after the last handshake and
-  connection let it go. A failed build is not kept: the next connection tries
-  again. A `TlsContext` reads its CA file once, so a change to it reaches new
-  contexts only. Its first job waits in its inbox, so no task keeps that job's
-  body for the worker's life; the owner keeps only each
-  worker's last reply channel. It runs a job, answers on the job's reply
-  channel, tells the owner on `jobs` whether it keeps the connection, then waits
-  on its inbox for `idle_timeout_ms`. The timeout closes the connection and ends
-  the worker. The worker closes its inbox before its last look at it, so the
-  owner cannot hand a job to a worker that has left: the send fails, and another
-  worker takes the job. When the caller gave up on the reply channel
-  (`HttpWire.awaited?`), the worker closes the connection instead of keeping it,
-  as the library page says of a timed-out call
-  (`site/content/library/concurrency/task.md`, "Task.map").
+  TLS and the close rules stay in tcp.c. `HttpWire.connect_tls` is `TLS.connect`
+  with the client's own system-trust context: tcp.c builds one `SSL_CTX` on a pool
+  thread at the first `https://` connection, and every later connection makes its
+  `SSL` from it. Each connection, and the build, holds a reference, so
+  `HttpWire.drop_tls` (run by the service task after `close_client`) frees the
+  context only after the last handshake and connection let it go. A failed build
+  is not kept: the next connection tries again. A worker runs a job, answers on
+  the job's reply channel, tells the owner on `jobs` whether it keeps the
+  connection, then waits on its inbox for `idle_timeout_ms`; the timeout closes
+  the connection and ends the worker. The owner keeps only each worker's last
+  reply channel, so no task keeps a job's body for the worker's life. The worker
+  closes its inbox before its last look at it, so the owner cannot hand a job to a
+  worker that has left: the send fails, and another worker takes the job. When the
+  caller gave up on the reply channel (`HttpWire.awaited?`), the worker closes the
+  connection instead of keeping it.
 - Retry: a job on a reused connection that fails before any response byte (end
   of input, a read or write error) is retried once on a new connection, within
   the same deadline, if its method is `GET`, `HEAD`, `OPTIONS`, `PUT` or
@@ -385,59 +352,44 @@ Properties of the client that no test checks:
   The loop ends when the write returns anything but `ok(true)`.
 - The connection loop reads the head (and the framing checks: 413 over
   `max_body_bytes`, before any `100 Continue`, then 400, 411, 417 and the
-  `100 Continue`), lets a WebSocket handshake through, then spawns a feeder
-  task and calls the app with `RequestBody(pieces, done)`. The feeder reads the
-  socket in steps of at most 64 KiB (the wait of each is `request_timeout_ms`,
-  also for a piece the app has not taken) and sends each piece, chunked bodies
-  decoded, into an 8-slot channel, so memory per connection is about 512 KiB. A
-  chunked body that grows past `max_body_bytes` fails `done` with the error of
-  `read_all`. The feeder sends the bytes it read past the body to a one-slot
-  `rest` channel, then closes `pieces`, and its result is `done`. When the app
-  returns, the server closes `pieces` and waits for `rest` at most the answer
-  time: the feeder sends the bytes past a whole body, and closes `rest` when the
-  body failed or the closed `pieces` stopped it. So a body that had all arrived
-  (an empty chunked one) counts as read whether the app read it or not, and a
-  request with no body counts as read at once. Then the connection serves the
-  next request, starting from `rest`. Otherwise the answer gets
-  `Connection: close`, the feeder is cancelled, the input is drained for at most
-  the answer time and the connection closes. `HTTP.read_all` is a receive loop
-  over `pieces` with a byte limit that awaits `done`, and `HTTP.app` reads the
-  body with it before it calls its handler.
+  `100 Continue`), lets a WebSocket handshake through, then spawns a feeder task
+  and calls the app with `RequestBody(pieces, done)`. The feeder reads the socket
+  in steps of at most 64 KiB (each wait is `request_timeout_ms`, also for a piece
+  the app has not taken) and sends each piece, chunked bodies decoded, into an
+  8-slot channel, so memory per connection is about 512 KiB. When the app returns,
+  the server closes `pieces` and waits for the bytes past the body on a one-slot
+  `rest` channel, at most the answer time. A body that had all arrived (an empty
+  chunked one) counts as read whether the app read it or not, and a request with
+  no body counts as read at once; the connection then serves the next request,
+  starting from `rest`. Otherwise the answer gets `Connection: close`, the feeder
+  is cancelled, the input is drained for at most the answer time and the
+  connection closes. `HTTP.app` reads the whole body (`HTTP.read_all`) before it
+  calls its handler.
 - The answer goes out as a whole response (`Whole`, with `Connection: close`
-  unless the body was read whole), as a stream (`Stream`, with the same header)
-  or as an upgrade (`Upgrade`, only when the body was read whole; otherwise an
-  `Accept` is a 500 and a `Reply` closes after it).
-- A `Stream` answer carries a `StreamResponse`. A body channel that is already
-  closed with its pieces buffered is the whole body: it goes out with
-  `Content-Length`, in the head of the same encoding. Pieces are `Bytes` and go
-  out with `TCP.send_bytes`, so no UTF-8 check runs on them. Otherwise the head
-  is `encode_response` of the same status and headers with an empty body, its
-  `Content-Length: 0` swapped for `Transfer-Encoding: chunked` (so the head
+  unless the body was read whole), as a stream (`Stream`, same header) or as an
+  upgrade (`Upgrade`, only when the body was read whole; otherwise an `Accept` is
+  a 500 and a `Reply` closes after it).
+- A `Stream` answer: a body channel that is already closed with its pieces
+  buffered is the whole body and goes out with `Content-Length`. Otherwise the
+  head is `encode_response` of the same status and headers with an empty body,
+  its `Content-Length: 0` swapped for `Transfer-Encoding: chunked` (so the head
   checks and the C code are the same), and the connection task sends the pieces
-  as it takes them from the channel. With `length: some(n)` the head carries
-  `Content-Length: n` in place of the chunked header and the pieces go out raw;
-  the pump counts the bytes, cuts the connection when the body ends short or a
-  piece would pass `n`, sends no last chunk and ends the body when it is full:
-  it reads the watcher before the last byte goes out, as it does before a last
-  chunk, closes the channel, and does not wait for the producer to close, since
-  the client has its bytes and may send its next request at once. A length of 0
-  never streams: it goes out like an empty closed body, since the head is then
-  the whole answer. A watcher task, spawned in the group, loops on
-  `TCP.recv_bytes` for the whole stream: the end of the client's input (or a
-  read error) sets a one-slot `left` channel and closes the body channel, which
-  wakes the connection task and fails the producer's next `send`, with no write
-  needed; the pump then sees `left` and does not send the last chunk, so the
-  client sees a cut body. Bytes read while the stream runs are dropped and set a
-  `sent` channel: a socket read cannot be stopped without losing bytes (the
-  cancel of a read that has completed drops its result), so the bytes of a
+  (`Bytes`, `TCP.send_bytes`) as it takes them from the channel. With
+  `length: some(n)` the head carries `Content-Length: n`, the pieces go out raw,
+  and the pump cuts the connection when the body ends short or a piece would pass
+  `n`; it ends the body when it is full without waiting for the producer to close,
+  since the client has its bytes. A length of 0 never streams. A watcher task,
+  spawned in the group, loops on `TCP.recv_bytes` for the whole stream: the end of
+  the client's input (or a read error) sets a one-slot `left` channel and closes
+  the body channel, which wakes the connection task and fails the producer's next
+  `send`, with no write needed; the pump then sees `left` and sends no last chunk,
+  so the client sees a cut body. Bytes read while the stream runs are dropped (a
+  socket read cannot be stopped without losing bytes), so the bytes of a
   pipelined request are not kept and the connection closes at the end of the
-  stream, after `close_write` and a drain (as does `Connection: close`, or a
-  request already in the buffer). When the stream has ended with nothing read,
-  the watcher's pending read is the wait for the next request: its bytes go back
-  as the start of the request, and the connection task waits for them at most
-  `idle_timeout_ms`. `take_ready` and the pump read the end of the body from the
-  receive's own error (`channel: closed`), not from a later `closed?`. HTTP/1.0
-  never gets here: the parser answers 505.
+  stream, after `close_write` and a drain. When the stream has ended with nothing
+  read, the watcher's pending read is the wait for the next request: its bytes go
+  back as the start of the request, and the connection task waits for them at most
+  `idle_timeout_ms`. HTTP/1.0 never gets here: the parser answers 505.
 - An `Upgrade` answer is a `Reply` (served as a whole answer, the connection
   kept) or an `Accept`. An `Accept` writes the 101 head by hand, then runs the
   session in the connection task with three tasks around it. The reader is the
@@ -447,14 +399,11 @@ Properties of the client that no test checks:
   checks UTF-8 and close codes, and sends whole messages to `incoming`. The
   forwarder turns the handler's `outgoing` messages into frames for the writer.
   The writer is the only task that writes the socket and the one that ends the
-  connection: its channel holds frames and four verdicts (our close frame, the
-  answer to the peer's, a failure frame, the loss of the peer), and it finishes
-  when the handshake is done, on a failed write, or `close_ms` after our close
-  frame. The reader answers a close frame (the echo goes to the writer before
-  the handler hears the `Close`). Every path ends with one `Close` on
+  connection: it finishes when the handshake is done, on a failed write, or
+  `close_ms` after our close frame. Every path ends with one `Close` on
   `incoming`: the peer's, the code of the failure, or 1006. The pure part (the
-  frame codec, the checks and the accept key) is `std/internal/websocket`; a
-  read timeout closes the socket, so `idle_ms` is the timeout of each read and
+  frame codec, the checks and the accept key) is `std/internal/websocket`; a read
+  timeout closes the socket, so `idle_ms` is the timeout of each read and
   `ping_ms` is the timeout of the writer's wait.
 
 #### 10.7.3 Errors and status codes
