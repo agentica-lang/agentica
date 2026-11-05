@@ -4,6 +4,7 @@ struct Job
   cache: Cache.Store
   computed: ATS[String, Int]
   keys: Int
+  now: ATS[Int, Int]
 end
 
 def value_of(key: String) -> String
@@ -13,6 +14,63 @@ end
 # An entry costs the 64 bytes of overhead, its key and its value.
 def entry_cost(key: String) -> Int
   return 64 + key.bytesize + value_of(key).bytesize
+end
+
+# A block is a value only when it is passed to a call: these return the blocks a cache of ours is made of.
+def block0[R](f: Fn[R]) -> Fn[R]
+  return f
+end
+
+def block1[A, R](f: Fn[A, R]) -> Fn[A, R]
+  return f
+end
+
+def block2[A, B, R](f: Fn[A, B, R]) -> Fn[A, B, R]
+  return f
+end
+
+# The clock of a test is the number in `now`.
+def ticking(now: ATS[Int, Int], ttl_ms: Int) -> Cache.Options
+  return Cache.Options(ttl_ms: ttl_ms, clock: some(block0() do now.get(0).unwrap! end))
+end
+
+def tick(now: ATS[Int, Int], ms: Int) -> Void
+  now.add(0, ms)
+end
+
+def clock() -> ATS[Int, Int]
+  now: ATS[Int, Int] = ATS.new()
+  now.put(0, 0)
+  return now
+end
+
+def table_get(table: ATS[String, String], key: String) -> Optional[String]
+  found = table.get(key)
+  if found.ok?
+    return some(found.unwrap!)
+  end
+
+  return none
+end
+
+def table_clear(table: ATS[String, String]) -> Void
+  for key in table.keys
+    table.delete(key)
+  end
+end
+
+# A cache of our own over one table, with no limit: it shows that the helpers need only the struct.
+def table_cache() -> Cache.Store
+  table: ATS[String, String] = ATS.new()
+  return Cache.Store(
+    get: block1() do |key| table_get(table, key) end,
+    put: block2() do |key, value| table.put(key, value) end,
+    put_new: block2() do |key, value| table.put_new(key, value) end,
+    delete: block1() do |key| table.delete(key) end,
+    clear: block0() do table_clear(table) end,
+    cleanup: block0() do 0 end,
+    bytes: block0() do table.size end,
+  )
 end
 
 # Fetches every key (7 is no factor of the key counts used) and counts a value that is not the one its key stands for.
@@ -32,21 +90,50 @@ def fetch_all(job: Job) -> Int
   return wrong
 end
 
-def run_tasks(job: Job, count: Int) -> Int
-  tasks = (1..count).to_a.map do |_| Task.spawn(&fetch_all, job) end
+# Puts, put_news, deletes and fetches the same few keys from every task; the clock of the test runs on.
+def churn(job: Job) -> Int
+  wrong = 0
+  for n in 0...600
+    tick(job.now, 1)
+    key = "k#{n * 7 % job.keys}"
+    step = n % 4
+    if step == 0 and Cache.fetch(job.cache, key) do value_of(key) end != value_of(key)
+      wrong = wrong + 1
+    elsif step == 1
+      Cache.put(job.cache, key, value_of(key))
+    elsif step == 2
+      Cache.delete(job.cache, key)
+    elsif step == 3
+      _ = Cache.put_new(job.cache, key, value_of(key))
+    end
+  end
+  return wrong
+end
+
+def clean_often(job: Job) -> Int
+  removed = 0
+  for _ in 1..300
+    removed = removed + Cache.cleanup(job.cache)
+    Task.sleep(0)
+  end
+  return removed
+end
+
+def run_tasks(job: Job, count: Int, work: Fn[Job, Int]) -> Int
+  tasks = (1..count).to_a.map do |_| Task.spawn(work, job) end
   return tasks.map do |task| Task.await(task) end.sum
 end
 
 def main() -> Void
   Test.run([
     Test.test("a stored value is a hit and an unknown key a miss") do
-      cache = Cache.new(10_000)
+      cache = Cache.memory(10_000)
       Cache.put(cache, "a", "one")
       try Test.eq(Cache.get(cache, "a"), some("one"))
       Test.eq(Cache.get(cache, "b"), none)
     end,
     Test.test("fetch runs the block on a miss only") do
-      cache = Cache.new(10_000)
+      cache = Cache.memory(10_000)
       calls: ATS[String, Int] = ATS.new()
       first = Cache.fetch(cache, "a") do
         calls.add("a", 1)
@@ -61,18 +148,22 @@ def main() -> Void
       try Test.eq([first, second], ["one", "one"])
       Test.eq(calls.get("a"), ok(1))
     end,
-    Test.test("put replaces a value and delete removes it") do
-      cache = Cache.new(10_000)
+    Test.test("put replaces a value, delete removes it, and the bytes follow") do
+      cache = Cache.memory(10_000)
       Cache.put(cache, "a", "one")
+      try Test.eq(Cache.put_new(cache, "a", "zero"), false)
       Cache.put(cache, "a", "two")
       try Test.eq(Cache.get(cache, "a"), some("two"))
+      try Test.eq(Cache.bytes(cache), 64 + 1 + 3)
       Cache.delete(cache, "a")
       try Test.eq(Cache.get(cache, "a"), none)
+      try Test.eq(Cache.bytes(cache), 0)
       Cache.delete(cache, "a")
-      Test.eq(Cache.get(cache, "a"), none)
+      try Test.eq(Cache.put_new(cache, "a", "three"), true)
+      Test.eq(Cache.get(cache, "a"), some("three"))
     end,
     Test.test("clear removes every entry and the count") do
-      cache = Cache.new(10_000)
+      cache = Cache.memory(10_000)
       Cache.put(cache, "a", "one")
       Cache.put(cache, "b", "two")
       Cache.clear(cache)
@@ -83,7 +174,7 @@ def main() -> Void
       Test.eq(Cache.get(cache, "c"), some("three"))
     end,
     Test.test("the budget holds under many puts and the oldest keys go first") do
-      cache = Cache.new(4_000)
+      cache = Cache.memory(4_000)
       for n in 0...200
         key = "k#{n}"
         Cache.put(cache, key, value_of(key))
@@ -93,7 +184,7 @@ def main() -> Void
       Test.eq(Cache.get(cache, "k199"), some(value_of("k199")))
     end,
     Test.test("a key that is read stays through the rotations") do
-      cache = Cache.new(4_000)
+      cache = Cache.memory(4_000)
       Cache.put(cache, "hot", "kept")
       for n in 0...200
         key = "k#{n}"
@@ -102,32 +193,124 @@ def main() -> Void
       end
       Test.eq(Cache.get(cache, "k0"), none)
     end,
-    Test.test("a value over half the budget is returned and not stored") do
-      cache = Cache.new(1_000)
+    Test.test("a value over half the budget is returned and not stored, and drops the old value of its key") do
+      cache = Cache.memory(1_000)
       big = "x" * 600
+      Cache.put(cache, "k", "small")
+      try Test.eq(Cache.get(cache, "k"), some("small"))
+      Cache.put(cache, "k", big)
+      try Test.eq(Cache.get(cache, "k"), none)
       try Test.eq(Cache.fetch(cache, "big") do big end, big)
       try Test.eq(Cache.get(cache, "big"), none)
+      Test.eq(Cache.bytes(cache), 0)
+    end,
+    Test.test("max_entries bounds the number of entries") do
+      cache = Cache.memory(1_000_000, Cache.Options(max_entries: 6))
+      for n in 0...50
+        Cache.put(cache, "k#{n}", "v")
+      end
+      kept = (0...50).to_a.select do |n| Cache.get(cache, "k#{n}").unwrap_or("") != "" end
+      try Test.assert(kept.size <= 6, "more than 6 entries: #{kept.size}")
+      Test.eq(kept.last, 49)
+    end,
+    Test.test("an entry past its ttl is a miss and gives its bytes back") do
+      now = clock()
+      cache = Cache.memory(10_000, ticking(now, 100))
+      Cache.put(cache, "a", "one")
+      tick(now, 99)
+      try Test.eq(Cache.get(cache, "a"), some("one"))
+      try Test.eq(Cache.put_new(cache, "a", "two"), false)
+      tick(now, 1)
+      try Test.eq(Cache.get(cache, "a"), none)
       try Test.eq(Cache.bytes(cache), 0)
-      Cache.put(cache, "small", "ok")
-      Test.eq(Cache.get(cache, "small"), some("ok"))
+      try Test.eq(Cache.put_new(cache, "a", "two"), true)
+      Test.eq(Cache.get(cache, "a"), some("two"))
+    end,
+    Test.test("a read does not make a value live longer") do
+      now = clock()
+      cache = Cache.memory(10_000, ticking(now, 100))
+      Cache.put(cache, "a", "one")
+      tick(now, 60)
+      try Test.eq(Cache.get(cache, "a"), some("one"))
+      tick(now, 60)
+      Test.eq(Cache.get(cache, "a"), none)
+    end,
+    Test.test("cleanup removes every expired entry and only those, and gives their bytes back") do
+      now = clock()
+      cache = Cache.memory(10_000, ticking(now, 100))
+      for key in ["a", "b", "c"]
+        Cache.put(cache, key, "v")
+      end
+      tick(now, 60)
+      Cache.put(cache, "d", "v")
+      tick(now, 40)
+      try Test.eq(Cache.cleanup(cache), 3)
+      try Test.eq(Cache.bytes(cache), 64 + 1 + 1)
+      try Test.eq(Cache.cleanup(cache), 0)
+      Test.eq(Cache.get(cache, "d"), some("v"))
+    end,
+    Test.test("a generation older than the ttl is dropped without a read") do
+      now = clock()
+      cache = Cache.memory(10_000, ticking(now, 1_000))
+      Cache.put(cache, "a", "v")
+      tick(now, 600)
+      Cache.put(cache, "b", "v")
+      tick(now, 600)
+      Cache.put(cache, "c", "v")
+      Test.eq(Cache.bytes(cache), 2 * (64 + 1 + 1))
+    end,
+    Test.test("fetch and the helpers work on a cache of any implementation") do
+      cache = table_cache()
+      try Test.eq(Cache.fetch(cache, "a") do "one" end, "one")
+      try Test.eq(Cache.fetch(cache, "a") do "two" end, "one")
+      try Test.eq(Cache.put_new(cache, "a", "three"), false)
+      Cache.put(cache, "a", "four")
+      try Test.eq(Cache.get(cache, "a"), some("four"))
+      Cache.delete(cache, "a")
+      try Test.eq(Cache.bytes(cache), 0)
+      try Test.eq(Cache.cleanup(cache), 0)
+      Test.eq(Cache.get(cache, "a"), none)
     end,
     Test.test("bytes counts an entry once when tasks fetch the same keys together") do
       keys = 300
-      cache = Cache.new(10_000_000)
+      cache = Cache.memory(10_000_000)
       computed: ATS[String, Int] = ATS.new()
-      job = Job(cache: cache, computed: computed, keys: keys)
-      try Test.eq(run_tasks(job, 8), 0)
+      job = Job(cache: cache, computed: computed, keys: keys, now: clock())
+      try Test.eq(run_tasks(job, 8, &fetch_all), 0)
       expected = (0...keys).to_a.map do |n| entry_cost("k#{n}") end.sum
       Test.eq(Cache.bytes(cache), expected)
     end,
-    Test.test("many tasks on a small budget get right values and hold the budget") do
-      cache = Cache.new(20_000)
+    Test.test("bytes is exact after tasks put, replace, delete and fetch the same keys together") do
+      keys = 50
+      cache = Cache.memory(10_000_000)
       computed: ATS[String, Int] = ATS.new()
-      job = Job(cache: cache, computed: computed, keys: 400)
-      try Test.eq(run_tasks(job, 8), 0)
+      job = Job(cache: cache, computed: computed, keys: keys, now: clock())
+      try Test.eq(run_tasks(job, 8, &churn), 0)
+      present = (0...keys).to_a.select do |n| Cache.get(cache, "k#{n}").unwrap_or("") != "" end
+      Test.eq(Cache.bytes(cache), present.map do |n| entry_cost("k#{n}") end.sum)
+    end,
+    Test.test("many tasks on a small budget get right values and hold the budget") do
+      cache = Cache.memory(20_000)
+      computed: ATS[String, Int] = ATS.new()
+      job = Job(cache: cache, computed: computed, keys: 400, now: clock())
+      try Test.eq(run_tasks(job, 8, &fetch_all), 0)
       try Test.assert(Cache.bytes(cache) <= 20_000, "over the budget")
       try Test.assert(Cache.bytes(cache) > 0, "nothing was kept")
       Cache.clear(cache)
+      Test.eq(Cache.bytes(cache), 0)
+    end,
+    Test.test("tasks that churn while another cleans up end with no bytes once everything expired") do
+      now = clock()
+      cache = Cache.memory(20_000, ticking(now, 50))
+      computed: ATS[String, Int] = ATS.new()
+      job = Job(cache: cache, computed: computed, keys: 40, now: now)
+      cleaner = Task.spawn(&clean_often, job)
+      try Test.eq(run_tasks(job, 6, &churn), 0)
+      removed = Task.await(cleaner)
+      try Test.assert(removed >= 0, "cleanup counts entries")
+      try Test.assert(Cache.bytes(cache) <= 20_000, "over the budget")
+      tick(now, 1_000)
+      _ = Cache.cleanup(cache)
       Test.eq(Cache.bytes(cache), 0)
     end,
   ])
