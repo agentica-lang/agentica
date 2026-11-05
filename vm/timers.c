@@ -202,6 +202,8 @@ bool agc_timers_run(agc_vm *vm) {
   uint64_t now = pending && pending != vm->task ? settle(vm) : 0;
   uint64_t due = atomic_load_explicit(&h->next_due, memory_order_relaxed);
   if (due == UINT64_MAX) return false;
+  /* At every turn boundary while a timer is armed: a deadline that is surely ahead costs no clock read. */
+  if (!now && agc_clock_before(due)) return false;
   if (!now) now = agc_clock_ms();
   if (now < due) return false;
   bool woke = false;

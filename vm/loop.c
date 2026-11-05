@@ -49,9 +49,11 @@ typedef struct agc_io_job job;
 /* The libuv steps a scheduler asks of the I/O thread (§16.4): start the pieces of a job, move its timer, close its
    timer, give back a reference, run the cancel half of a job its task gave up (DETACH) or whose deadline passed while
    detached (EXPIRE_CANCEL), end the wait of a job whose result the scheduler found itself (WAIT_DONE), and run a call
-   that has no job (CALL, agc_io_call). Cancel halves and waits run there because they stop pollers and streams. */
+   that has no job (CALL, agc_io_call). Cancel halves and waits run there because they stop pollers and streams. A
+   direct compute job (start_direct) asks two more: READY puts it on the ready list (its task was detached when its
+   work ended), and DEAD puts it on the dead list once another thread dropped its last reference. */
 typedef enum {
-  REQ_START, REQ_CLOSE_TIMER, REQ_RELEASE, REQ_DETACH, REQ_EXPIRE_CANCEL, REQ_WAIT_DONE, REQ_CALL
+  REQ_START, REQ_CLOSE_TIMER, REQ_RELEASE, REQ_DETACH, REQ_EXPIRE_CANCEL, REQ_WAIT_DONE, REQ_CALL, REQ_READY, REQ_DEAD
 } request_kind;
 
 /* What the trace line of a finished job needs, copied before the owner's reference goes: the job may be freed by the
@@ -106,6 +108,9 @@ struct agc_loop {
      list holds the reference that the ready list held. A leaf mutex protects it; it lives in this malloc block,
      which holds no GC pointer. */
   job *service, *service_tail;
+  /* Direct compute jobs whose work ended (compute_ended), for a scheduler (agc_io_service) to wake their task: the
+     list holds the wait piece's reference. Under service_lock too. */
+  job *finished, *finished_tail;
   uv_mutex_t service_lock;
   /* Jobs whose count reached zero, pushed by the holder that dropped the last reference. I/O role only: every
      reference is given back on the I/O thread (a scheduler posts a RELEASE), so the list needs no lock. */
@@ -124,8 +129,10 @@ struct agc_loop {
   uv_thread_t owner;
   /* agc_io_hand_off: the drain gives detached jobs to the schedulers. */
   bool hand_off;
-  /* The compute pool (vm/compute.c), made by the first compute job's START; I/O role only. */
-  agc_compute *compute;
+  /* The compute pool (vm/compute.c), made by agc_io_share or else by the first compute job's START. Set before the
+     schedulers start when the loop is shared; I/O role only. `direct` is the same pool when agc_io_share made it: set
+     before the schedulers start and cleared only after they have ended, so they read it to submit directly. */
+  agc_compute *compute, *direct;
 };
 
 /* A job is malloc memory with up to three libuv pieces (pool work or a wait on the loop, the one timer) and its
@@ -143,7 +150,7 @@ struct agc_io_job {
   void *data;
   agc_more_fn more;
   agc_loop *loop;
-  job *ready_next, *service_next;
+  job *ready_next, *service_next, *finished_next;
   /* A GC pointer in malloc memory, which the collector does not scan: the registry keeps the resource alive until
      sweep frees the job, so a job's resource must never be unregistered before that. */
   agc_resource *res;
@@ -152,8 +159,10 @@ struct agc_io_job {
   _Atomic uint64_t ended_ns;
   _Atomic int refs, outcome;
   _Atomic bool busy, detached, ended, start_failed, timer_fired, dropping, on_loop;
-  /* `compute`: the work goes to the compute pool, not the libuv pool (agc_io_compute); set before the START. */
-  bool timer_open, timer_live, queued, dead, flush, compute;
+  /* `compute`: the work goes to the compute pool, not the libuv pool (agc_io_compute); set before the START. `timed`:
+     the job was given a timeout, so it may have a timer to close. `direct`: a scheduler gave the work to the pool
+     itself (start_direct), and its end and its references bypass the I/O thread. All three are set before the start. */
+  bool timer_open, timer_live, queued, dead, flush, compute, timed, direct;
   /* I/O role only: the job has no task for the I/O role any more (started detached, or its DETACH request ran), so the
      drain may end it; until then a ready detached job waits for its DETACH, which reads `data`. */
   bool detach_seen;
@@ -490,14 +499,42 @@ static void run_compute(void *item) {
 
 static void compute_finished(void *item) { work_finished(&((job *)item)->work, 0); }
 
-/* The pool is made at its first job, with one thread per scheduler, and its threads start as the work needs them,
-   under pool_enter like the libuv pool's, so they keep the stop signals blocked. */
+/* The end of a direct compute job's work, on the pool thread under the pool's lock: the wait ends there (what end_wait
+   does, without the ready list, which is the I/O thread's), and the job goes on loop->finished with the wait piece's
+   reference for a scheduler, which a nudge wakes (end_finished). The wait piece is cleared and `detached` read by
+   end_finished in sequentially consistent order against agc_io_detach and detach_job, so a job whose task is detached
+   at that moment is put on the ready list by at least one of the two. The pool thread touches malloc memory, atomics
+   and the run queue, which lives as long as the runtime (as run_compute reads rt->over), and stores no GC pointer. */
+static void compute_ended(void *item) {
+  job *j = item;
+  if (!atomic_exchange(&j->busy, false)) return;
+  note_end(j);
+  (void)agc_job_settle(&j->outcome, AGC_JOB_DONE);
+  agc_loop *loop = j->loop;
+  uv_mutex_lock(&loop->service_lock);
+  j->finished_next = NULL;
+  if (loop->finished_tail)
+    loop->finished_tail->finished_next = j;
+  else
+    loop->finished = j;
+  loop->finished_tail = j;
+  uv_mutex_unlock(&loop->service_lock);
+  agc_runq_nudge(loop->vm->rt->runq);
+}
+
+/* One thread per scheduler, started as the work needs them. Loop's thread. */
+static bool open_compute(agc_loop *loop) {
+  if (loop->compute) return true;
+  int64_t n = loop->vm->rt->schedulers;
+  loop->compute =
+      agc_compute_open(&loop->uv, n < 1 ? 1u : n > 1024 ? 1024u : (uint32_t)n, compute_finished, compute_ended);
+  return loop->compute != NULL;
+}
+
+/* The pool is made at its first job unless agc_io_share made it, and its threads start under pool_enter like the
+   libuv pool's, so they keep the stop signals blocked. */
 static int submit_compute(agc_loop *loop, job *j) {
-  if (!loop->compute) {
-    int64_t n = loop->vm->rt->schedulers;
-    loop->compute = agc_compute_open(&loop->uv, n < 1 ? 1u : n > 1024 ? 1024u : (uint32_t)n, compute_finished);
-    if (!loop->compute) return -1;
-  }
+  if (!open_compute(loop)) return -1;
   pool_mask saved;
   pool_enter(&saved);
   bool queued = agc_compute_submit(loop->compute, run_compute, j);
@@ -621,6 +658,12 @@ static void handle_request(const agc_request *req) {
   case REQ_CALL:
     req->call(req->subject);
     break;
+  case REQ_READY:
+    mark_ready(j);
+    break;
+  case REQ_DEAD:
+    push_dead(j);
+    break;
   }
 }
 
@@ -656,14 +699,14 @@ static void sweep(agc_vm *vm) {
 }
 
 /* The inbox handler, on the loop's thread: the requests of every scheduler in posting order. A request that is not a
-   RELEASE carries a reference that the poster took, and the handler gives it back last. */
+   RELEASE or a DEAD carries a reference that the poster took, and the handler gives it back last. */
 static void run_inbox(void *owner, agc_request *list) {
   agc_loop *loop = owner;
   while (list) {
     agc_request *next = list->next;
     job *j = list->kind == REQ_CALL ? NULL : list->subject;
     handle_request(list);
-    if (j && list->kind != REQ_RELEASE) drop_ref(j);
+    if (j && list->kind != REQ_RELEASE && list->kind != REQ_DEAD) drop_ref(j);
     free(list);
     list = next;
   }
@@ -704,7 +747,7 @@ static void post(job *j, request_kind kind, int64_t arg) {
     handle_request(&req);
     return;
   }
-  if (kind != REQ_RELEASE) agc_job_ref(&j->refs);
+  if (kind != REQ_RELEASE && kind != REQ_DEAD) agc_job_ref(&j->refs);
   enqueue_request(loop, (agc_request){NULL, (int)kind, j, arg, NULL});
 }
 
@@ -717,9 +760,29 @@ static void call_on(agc_loop *loop, void (*fn)(void *data), void *data) {
   enqueue_request(loop, (agc_request){NULL, REQ_CALL, data, 0, fn});
 }
 
+/* A reference of a direct compute job given back off the I/O thread: only the last one is posted, as a DEAD. Such a
+   job has no timer, no cancel half and no wait on the loop, and the I/O thread takes a reference only while it handles
+   a request, which holds one, or a ready-list entry, which does: so no thread takes a reference from zero, and the
+   count reaching zero here means that nothing else names the job. The dead list and `drop` stay the I/O thread's. */
+static void drop_direct(job *j) {
+  if (agc_job_unref(&j->refs)) post(j, REQ_DEAD, 0);
+}
+
 /* Gives back a reference from any thread. A scheduler posts a RELEASE and the I/O thread drops it, so the count reaches
-   zero (and the job goes on the dead list) only on the I/O thread, where `drop` may call libuv. */
-static void release(job *j) { post(j, REQ_RELEASE, 0); }
+   zero (and the job goes on the dead list) only on the I/O thread, where `drop` may call libuv; a direct compute job
+   posts only its last one (drop_direct), which saves a wake of the I/O thread per call. */
+static void release(job *j) {
+  if (j->direct && !on_io_thread(j->loop)) {
+    drop_direct(j);
+    return;
+  }
+  post(j, REQ_RELEASE, 0);
+}
+
+/* The owner's request to close the timer, for a job that may have one. */
+static void close_timer_of(job *j) {
+  if (j->timed) post(j, REQ_CLOSE_TIMER, 0);
+}
 
 static void abandon_wait(job *j) {
   if (leave_wait(j)) release(j);
@@ -737,13 +800,14 @@ static agc_loop *new_loop(agc_vm *vm) {
   if (!loop) agc_out_of_memory();
   loop->ready = loop->ready_tail = NULL;
   loop->service = loop->service_tail = NULL;
+  loop->finished = loop->finished_tail = NULL;
   loop->dead = NULL;
   loop->bound_init = false;
   loop->vm = vm;
   loop->inbox = NULL;
   loop->shared = false;
   loop->hand_off = false;
-  loop->compute = NULL;
+  loop->compute = loop->direct = NULL;
   loop->waits = NULL;
   atomic_init(&loop->closed, false);
   loop->owner = uv_thread_self();
@@ -852,7 +916,7 @@ static void end_detached(agc_vm *vm, agc_resource *r) {
     if (!atomic_load(&j->dropping)) return;
   }
   atomic_store(&j->ended, true);
-  post(j, REQ_CLOSE_TIMER, 0);
+  close_timer_of(j);
   agc_value context = take_context(vm, r);
   void *data = j->data;
   j->data = NULL;
@@ -901,6 +965,17 @@ static bool hand_to_scheduler(agc_vm *vm, job *j) {
   return true;
 }
 
+/* Wakes the task of a job whose wait ended. Once the run is over no task is woken, whatever the job's kind (file,
+   socket, process, compute): it would take a value after main returned, in the turn that a scheduler may still run
+   before agc_runq_end, and a compute job that run_compute skipped has none. Its task stays parked with its job, as at
+   any end of the run. The pool thread that skipped the work read rt->over before it posted the end that put the job on
+   the ready list (or on loop->finished), so this load sees it. */
+static void wake_owner(agc_vm *vm, agc_resource *r) {
+  bool over = atomic_load_explicit(&vm->rt->over, memory_order_acquire);
+  agc_task *t = over ? NULL : atomic_exchange(&r->task, NULL);
+  if (t) agc_task_wake(vm, t, "job");
+}
+
 static void drain(agc_vm *vm) {
   agc_loop *loop = vm->rt->loop;
   size_t batch = 0;
@@ -914,14 +989,7 @@ static void drain(agc_vm *vm) {
     if (!atomic_load(&j->ended) && j->res->native == j) {
       agc_resource *r = j->res;
       if (!atomic_load(&j->detached)) {
-        /* Once the run is over no task is woken, whatever the job's kind (file, socket, process, compute): it would
-           take a value after main returned, in the turn that a scheduler may still run before agc_runq_end, and a
-           compute job that run_compute skipped has none. Its task stays parked with its job, as at any end of the
-           run. The pool thread that skipped the work read rt->over before it posted the end that put the job here,
-           so this load sees it. */
-        bool over = atomic_load_explicit(&vm->rt->over, memory_order_acquire);
-        agc_task *t = over ? NULL : atomic_exchange(&r->task, NULL);
-        if (t) agc_task_wake(vm, t, "job");
+        wake_owner(vm, r);
       } else if (j->detach_seen) {
         /* A job whose DETACH request has not run yet is left alone: that request puts it back on this list. */
         if (loop->hand_off) {
@@ -935,6 +1003,33 @@ static void drain(agc_vm *vm) {
   }
 }
 
+/* A scheduler wakes the tasks of the direct compute jobs whose work ended, as the drain does for the others: into its
+   own runnext slot first, so the task runs next on this core (wake_owner). A job
+   whose task was detached goes to the I/O thread's ready list instead (READY), where its detached end starts as
+   usual; detach_job may put it there too, which mark_ready makes one entry. The list's reference goes last. */
+static bool end_finished(agc_vm *vm, agc_loop *loop) {
+  bool ran = false;
+  for (;;) {
+    uv_mutex_lock(&loop->service_lock);
+    job *j = loop->finished;
+    if (j) {
+      loop->finished = j->finished_next;
+      if (!loop->finished) loop->finished_tail = NULL;
+      j->finished_next = NULL;
+    }
+    uv_mutex_unlock(&loop->service_lock);
+    if (!j) return ran;
+    ran = true;
+    if (!atomic_load(&j->ended) && j->res->native == j) {
+      if (!atomic_load(&j->detached))
+        wake_owner(vm, j->res);
+      else
+        post(j, REQ_READY, 0);
+    }
+    drop_direct(j);
+  }
+}
+
 /* A scheduler runs the work that the I/O role left for it: the end of each detached job, with rt->sync held like the
    other endings of a task. Jobs leave the list one at a time, so a `done` that raises (agc_fail ends the run) leaves
    the rest on the list, where close_all gives their counts back. The ready-list reference goes back first, by a
@@ -945,9 +1040,9 @@ static void drain(agc_vm *vm) {
 bool agc_io_service(agc_vm *vm) {
   agc_loop *loop = vm->rt->loop;
   if (!loop) return false;
+  bool ran = end_finished(vm, loop);
   agc_task *saved = vm->task;
   agc_task *scratch = NULL;
-  bool ran = false;
   vm->service_saved = saved;
   vm->servicing = true;
   for (;;) {
@@ -985,8 +1080,17 @@ void agc_io_service_reset(agc_vm *vm) {
   vm->service_saved = NULL;
 }
 
+/* Off once the schedulers have ended: the direct compute calls still running then end through the pool's inbox, as
+   the loop's own, since the end of the run waits for them on this loop and no scheduler takes loop->finished any more
+   (agc_io_service still empties it on this thread). */
 void agc_io_hand_off(agc_vm *vm, bool on) {
-  if (vm->rt->loop) vm->rt->loop->hand_off = on;
+  agc_loop *loop = vm->rt->loop;
+  if (!loop) return;
+  loop->hand_off = on;
+  if (!on && loop->direct) {
+    agc_compute_end_direct(loop->direct);
+    loop->direct = NULL;
+  }
 }
 
 void agc_io_wake(agc_vm *vm) {
@@ -1461,6 +1565,9 @@ bool agc_io_share(agc_vm *vm, bool keep) {
     loop->owner = uv_thread_self();
     loop->shared = true;
     loop->hand_off = true;
+    /* The compute pool exists before the schedulers, so they give it their compute calls themselves (start_direct). A
+       pool that cannot be made now is made by the first START, and those calls go through this thread. */
+    if (open_compute(loop)) loop->direct = loop->compute;
   }
   agc_inbox_keep(loop->inbox, keep);
   return true;
@@ -1469,6 +1576,33 @@ bool agc_io_share(agc_vm *vm, bool keep) {
 /* The libuv loop for code on the I/O thread (agc_loop_uv aborts on any other thread, since only the I/O thread may
    call libuv). */
 struct uv_loop_s *agc_io_uv(agc_vm *vm) { return agc_loop_uv(loop_of(vm)); }
+
+/* A compute job of a scheduler thread goes to the pool from that thread, with no START (docs/vm/16-architecture.md
+   §16.9, "Compute pool"): its wait piece's reference travels with the item, and compute_ended ends the wait on the
+   pool thread. The rest of a START has nothing to do for it: a compute job has no timer and no wait on the loop. The
+   builtin that starts it holds rt->sync, so the job waits in vm->direct for the end of the turn (agc_io_submit_direct);
+   the owner cannot end it before, since it ends a job only at its next turn or from that turn's end. */
+static bool start_direct(agc_vm *vm, agc_loop *loop, job *j) {
+  if (!j->compute || !loop->direct || on_io_thread(loop)) return false;
+  if (atomic_load_explicit(&loop->vm->rt->over, memory_order_acquire)) return false;
+  agc_io_submit_direct(vm);
+  j->direct = true;
+  vm->direct = j;
+  return true;
+}
+
+/* A job made once the run is over, or that the pool refuses, takes the START, which drops it or fails it as before.
+   Its `direct` mark goes first: nothing else has seen the job yet. */
+void agc_io_submit_direct(agc_vm *vm) {
+  job *j = vm->direct;
+  if (!j) return;
+  vm->direct = NULL;
+  if (!atomic_load_explicit(&vm->rt->over, memory_order_acquire) &&
+      agc_compute_submit_direct(j->loop->direct, run_compute, j))
+    return;
+  j->direct = false;
+  post(j, REQ_START, -1);
+}
 
 /* Returns the job without reading r->native after the START is posted: a detached job may be swept by then. */
 static job *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
@@ -1497,6 +1631,7 @@ static job *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value
   j->detach_seen = task == NULL;
   j->flush = (flags & AGC_JOB_FLUSH) != 0;
   j->compute = (flags & AGC_JOB_COMPUTE) != 0;
+  j->timed = timeout_ms >= 0;
   agc_resource *r = agc_register(vm, j, NULL);
   r->kind = AGC_RESOURCE_JOB;
   r->context = context;
@@ -1518,7 +1653,7 @@ static job *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value
     agc_sync_assert(vm);
     agc_as_handle(vm, context)->holder = r;
   }
-  post(j, REQ_START, timeout_ms);
+  if (!start_direct(vm, loop, j)) post(j, REQ_START, timeout_ms);
   return j;
 }
 
@@ -1660,6 +1795,8 @@ static bool stalled(agc_vm *vm) {
   uint64_t epoch;
   if (!agc_runq_quiet(rt->runq, &epoch)) return false;
   if (agc_inbox_run(loop->inbox) || loop->ready) return false;
+  /* A direct compute call keeps no handle alive: the pool counts them, and drops the count only after the nudge. */
+  if (loop->direct && agc_compute_direct_busy(loop->direct)) return false;
   if (agc_timers_strong(vm)) return false;
   agc_inbox_keep(loop->inbox, false);
   bool alive = uv_loop_alive(&loop->uv);
@@ -1707,6 +1844,35 @@ uint64_t agc_trace_now(void) {
 /* The clock of the schedulers: milliseconds of libuv's monotonic clock. It does not read the loop (uv_now is the
    loop's own cached time, and the loop belongs to the I/O thread), so any thread may call it. */
 uint64_t agc_clock_ms(void) { return agc_trace_now() / 1000000u; }
+
+/* CLOCK_MONOTONIC_COARSE is the clock of agc_clock_ms (libuv reads CLOCK_MONOTONIC) as of the last tick, read from the
+   vDSO without touching the clock source, which on a machine with no usable TSC (an HPET) is a system call of about a
+   microsecond. It is never ahead of that clock and lags it by at most its resolution, a tick; two ticks and a
+   millisecond of margin make "before" safe. The margin is read once (0: no coarse clock, every answer is false). */
+#if defined(__linux__)
+#ifndef CLOCK_MONOTONIC_COARSE
+#define CLOCK_MONOTONIC_COARSE 6
+#endif
+bool agc_clock_before(uint64_t due_ms) {
+  static _Atomic uint64_t margin_ms;
+  uint64_t margin = atomic_load_explicit(&margin_ms, memory_order_relaxed);
+  if (!margin) {
+    struct timespec res;
+    if (clock_getres(CLOCK_MONOTONIC_COARSE, &res) != 0) return false;
+    margin = 2 * ((uint64_t)res.tv_sec * 1000u + (uint64_t)res.tv_nsec / 1000000u) + 2;
+    atomic_store_explicit(&margin_ms, margin, memory_order_relaxed);
+  }
+  struct timespec ts;
+  if (clock_gettime(CLOCK_MONOTONIC_COARSE, &ts) != 0) return false;
+  uint64_t lower = (uint64_t)ts.tv_sec * 1000u + (uint64_t)ts.tv_nsec / 1000000u;
+  return lower + margin < due_ms;
+}
+#else
+bool agc_clock_before(uint64_t due_ms) {
+  (void)due_ms;
+  return false;
+}
+#endif
 
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms) {
   agc_sync_assert(vm);
@@ -1762,7 +1928,7 @@ agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
   r->task = NULL;
   job *j = r->native;
   atomic_store(&j->ended, true);
-  post(j, REQ_CLOSE_TIMER, 0);
+  close_timer_of(j);
   (void)agc_job_settle(&j->outcome, AGC_JOB_EXPIRED);
   agc_value context = take_context(vm, r);
   if (atomic_load(&j->start_failed)) {
@@ -1924,7 +2090,7 @@ bool agc_io_run_aside(agc_vm *vm, void (*fn)(void *data), void *data, uint64_t b
   aside_call *a = malloc(sizeof *a);
   if (!a) agc_out_of_memory();
   *a = (aside_call){fn, data, false};
-  agc_compute *pool = agc_compute_open(&loop->uv, 1, aside_finished);
+  agc_compute *pool = agc_compute_open(&loop->uv, 1, aside_finished, NULL);
   if (!pool) {
     free(a);
     return false;
@@ -2021,7 +2187,7 @@ static bool close_all(agc_vm *vm) {
      thread, and its job stays registered, so the close is not settled. */
   if (vm->rt->loop && vm->rt->loop->compute) {
     agc_compute_close(vm->rt->loop->compute);
-    vm->rt->loop->compute = NULL;
+    vm->rt->loop->compute = vm->rt->loop->direct = NULL;
   }
   agc_input_close(vm);
   agc_output_close(vm);
@@ -2101,6 +2267,8 @@ agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data) {
   agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
 }
 
+void agc_io_submit_direct(agc_vm *vm) { (void)vm; }
+
 bool agc_io_poll(agc_vm *vm, bool wait) {
   (void)vm;
   (void)wait;
@@ -2177,6 +2345,11 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
 }
 
 uint64_t agc_clock_ms(void) { return 0; }
+
+bool agc_clock_before(uint64_t due_ms) {
+  (void)due_ms;
+  return false;
+}
 
 agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
   (void)t;

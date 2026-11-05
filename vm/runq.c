@@ -15,19 +15,8 @@
 #define WAIT_SLICE_MS UINT64_C(3600000)
 /* The most CPU pauses between two looks of a spinning scheduler: the steps double up to it (agc_runq_spin). */
 #define SPIN_PAUSES_MAX 32u
-
-/* One CPU pause of a spinning scheduler: `pause` on x86 and `yield` on AArch64 and on ARMv6K and later (older ARM has
-   no such hint) tell the core that this is a busy wait (less power, the other hyperthread runs); elsewhere it is a
-   compiler barrier only. Every compiler the VM builds with
-   (GCC, Clang, llvm-mingw) takes these builtins and this asm. */
-#if defined(__x86_64__) || defined(__i386__)
-#define CPU_PAUSE() __builtin_ia32_pause()
-#elif defined(__aarch64__) || (defined(__arm__) && (__ARM_ARCH >= 7 || defined(__ARM_ARCH_6K__) || \
-                                                    defined(__ARM_ARCH_6KZ__)))
-#define CPU_PAUSE() __asm__ __volatile__("yield" ::: "memory")
-#else
-#define CPU_PAUSE() atomic_signal_fence(memory_order_seq_cst)
-#endif
+/* The pauses that agc_pauses_for times to learn how long one takes. */
+#define PAUSE_CALIBRATION 2048u
 
 /* GC memory (agc_runq_new): the list links tasks, and a head that malloc memory held would hide them from the
    collector (docs/vm/16-architecture.md §16.5, "GC rule"). `solo` is true while one thread uses the queue: it takes no
@@ -50,7 +39,10 @@ struct agc_runq {
   void (*on_idle)(void *data);
   void *on_idle_data;
   /* The spin of an idle scheduler before it waits (docs/vm/16-architecture.md §16.9, "Wakes between schedulers"). At
-     most `spin_max` schedulers spin at once, each for `spin_ns`; spin_max is 0 (no spin) until agc_runq_spin_setup.
+     most `spin_max` schedulers spin at once, each for `spin_pauses` CPU pauses, the count that lasts the budget on this
+     machine (agc_pauses_for times it once): the spin reads no clock, since a clock read can cost a system call (a
+     machine whose clock source is not the TSC), which would make each look slower than the pauses it waits for.
+     spin_max is 0 (no spin) until agc_runq_spin_setup.
      `spinning` counts them, and `work` says whether the shared queue holds a task: the spinners poll it, not the lock.
      A push reads `spinning` under the lock (sequentially consistent, like the spinner's increment and decrement) and
      skips the condvar signal when a scheduler spins. No wake is lost: a spinner that left before that read is seen as
@@ -58,7 +50,7 @@ struct agc_runq {
      the read), so its wait finds the task, and one that keeps spinning sees `work`. `signals` counts the signals that
      pushes sent (agc_runq_stats). */
   uint32_t spin_max;
-  uint64_t spin_ns;
+  uint64_t spin_pauses;
   _Atomic uint32_t spinning;
   _Atomic bool work;
   uint64_t signals;
@@ -239,11 +231,29 @@ agc_task *agc_runq_wait_until(agc_runq *q, uint64_t due_ms) {
   return leave_with(q, t, chain);
 }
 
-/* Sets the spin of idle schedulers: at most MAX of them spin at once, each for BUDGET_NS. Called before the scheduler
-   threads start; a queue that is never set up never spins (one scheduler, the C tests). */
+/* `calibrated` holds the nanoseconds that PAUSE_CALIBRATION pauses took, timed once by the first caller (a race times
+   it twice, and either result will do): a pause takes from a few to over a hundred cycles, by the CPU. */
+uint64_t agc_pauses_for(uint64_t ns) {
+  static _Atomic uint64_t calibrated;
+  uint64_t took = atomic_load_explicit(&calibrated, memory_order_relaxed);
+  if (!took) {
+    uint64_t start = uv_hrtime();
+    for (unsigned k = 0; k < PAUSE_CALIBRATION; k++) AGC_CPU_PAUSE();
+    took = uv_hrtime() - start;
+    if (!took) took = 1;
+    atomic_store_explicit(&calibrated, took, memory_order_relaxed);
+  }
+  return ns > UINT64_MAX / PAUSE_CALIBRATION ? ns / took * PAUSE_CALIBRATION : ns * PAUSE_CALIBRATION / took;
+}
+
+/* Sets the spin of idle schedulers: at most MAX of them spin at once, each for about BUDGET_NS, as a count of pauses
+   (at least one round of each step). Called before the scheduler threads start; a queue that is never set up never
+   spins (one scheduler, the C tests). */
 void agc_runq_spin_setup(agc_runq *q, uint32_t max, uint64_t budget_ns) {
   q->spin_max = max;
-  q->spin_ns = budget_ns;
+  uint64_t pauses = agc_pauses_for(budget_ns);
+  uint64_t least = (uint64_t)2 * SPIN_PAUSES_MAX;
+  q->spin_pauses = pauses < least ? least : pauses;
 }
 
 /* Joins the spinners if fewer than spin_max spin. */
@@ -264,18 +274,20 @@ static bool spin_found(agc_runq *q) {
 }
 
 /* The busy wait of an idle scheduler before it waits on the condvar: it polls `work` with growing runs of CPU pauses
-   (1, 2, 4, ... SPIN_PAUSES_MAX between two looks), never a system sleep, until a task shows up or spin_ns has passed.
+   (1, 2, 4, ... SPIN_PAUSES_MAX between two looks), never a system sleep, until a task shows up or spin_pauses have
+   passed.
    It leaves the spinners before it takes the lock, so a push from then on signals or is found by its wait. Its take
    starts the chained wake of take_waited: the pushes it absorbed sent no signal. NULL when it found no task (the
    caller waits, and that wait returns at once on a nudge or the end); also NULL at once when spinning is off or
    spin_max spin. */
 agc_task *agc_runq_spin(agc_runq *q) {
   if (q->solo || !join_spinners(q)) return NULL;
-  uint64_t start = uv_hrtime();
+  uint64_t spent = 0;
   unsigned pauses = 1;
   bool found;
-  while (!(found = spin_found(q)) && uv_hrtime() - start < q->spin_ns) {
-    for (unsigned k = 0; k < pauses; k++) CPU_PAUSE();
+  while (!(found = spin_found(q)) && spent < q->spin_pauses) {
+    for (unsigned k = 0; k < pauses; k++) AGC_CPU_PAUSE();
+    spent += pauses;
     if (pauses < SPIN_PAUSES_MAX) pauses *= 2;
   }
   atomic_fetch_sub_explicit(&q->spinning, 1, memory_order_seq_cst);
@@ -294,16 +306,19 @@ agc_runq_counts agc_runq_stats(agc_runq *q) {
 }
 
 /* Asks one scheduler to run the service work (agc_io_service). The flag is set under the lock and the signal comes
-   after the unlock; one waiter is enough, because the service takes the whole list. */
+   after the unlock; one waiter is enough, because the service takes the whole list. While a scheduler spins it sends
+   none, as a push does: the spinner sees the flag (spin_found), and one that stops spinning finds it in its wait. */
 void agc_runq_nudge(agc_runq *q) {
   if (q->solo) {
     atomic_store_explicit(&q->nudged, true, memory_order_relaxed);
     return;
   }
   uv_mutex_lock(&q->lock);
-  atomic_store_explicit(&q->nudged, true, memory_order_relaxed);
+  bool wake = atomic_load_explicit(&q->spinning, memory_order_seq_cst) == 0;
+  atomic_store_explicit(&q->nudged, true, memory_order_seq_cst);
+  if (wake) q->signals++;
   uv_mutex_unlock(&q->lock);
-  uv_cond_signal(&q->wake);
+  if (wake) uv_cond_signal(&q->wake);
 }
 
 bool agc_runq_nudged(const agc_runq *q) { return atomic_load_explicit(&q->nudged, memory_order_relaxed); }

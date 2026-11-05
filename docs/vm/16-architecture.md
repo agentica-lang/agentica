@@ -364,6 +364,21 @@ one exit path are as in §16.1 to §16.6. What differs:
   waits for is in §14.4 (steps 0 and 3), which look only at the native calls
   (`agc_io_compute_each` takes the kind). `agc_io_close` (harnesses, the front
   end) joins the idle threads and leaves a busy one to end by itself.
+  - At N > 1 a compute job skips the I/O thread. `agc_io_share` makes the pool
+    before the schedulers start. The builtin runs with `rt->sync` held, so its
+    job waits in `vm->direct`, and `run_task` gives it to the pool once the
+    turn is over (`agc_io_submit_direct`, no START). On the pool thread
+    `compute_ended` ends the wait (`busy`, then the outcome), puts the job on
+    `loop->finished` and nudges a scheduler. That scheduler wakes the task into
+    its runnext slot (`end_finished` in `agc_io_service`), or posts READY for a
+    detached job, whose end then goes the usual way. Its `drop_direct` and the
+    owner's release are atomic, and only the last reference is posted (DEAD).
+    The I/O thread still frees the job, so it is woken once per call, not three
+    times. A job without a timeout posts no CLOSE_TIMER. The stall check also
+    reads the pool's count of direct calls, since they keep no handle alive.
+    Once the schedulers have ended, `agc_io_hand_off(vm, false)` turns the
+    calls still running into the loop's own (`agc_compute_end_direct`), so the
+    end of the run waits for them on the loop as before.
 - **Services.** Service code makes its handles through `agc_loop_uv` (§15.1).
   The libuv part of its `done`, `expired`, cancel and `drop` halves, and the
   poller calls of builtins, run where the half runs. At N > 1 the steps of the
@@ -446,7 +461,9 @@ one exit path are as in §16.1 to §16.6. What differs:
   by at most one more turn than that of another timer, which also waits for a
   turn boundary to fire.
   The scheduler fires its due timers at its turn boundary and when its run queue
-  is empty (`agc_timers_run`), by waking the task like any waker. Every change
+  is empty (`agc_timers_run`), by waking the task like any waker. A deadline
+  that the coarse clock shows ahead costs no clock read (`agc_clock_before`:
+  Linux's `CLOCK_MONOTONIC_COARSE`, two ticks of margin). Every change
   to a heap is made with `rt->sync` held. So any scheduler can remove the entry
   at once: the task leaves the heap when it resumes (`resume`) or is cancelled
   (`unlink_task`), under the lock the fire takes. A fire never wakes a task that
@@ -534,8 +551,11 @@ one exit path are as in §16.1 to §16.6. What differs:
   - An idle scheduler spins before it waits on the condvar (`agc_runq_spin`). It
     polls the queue's atomic `work` flag, not the lock, with CPU pauses whose
     runs double up to 32 (`SPIN_PAUSES_MAX`), for `SPIN_BUDGET_US` (10 µs). It
-    never sleeps. At most half the schedulers (at least one) spin at once, and
-    none spin at N = 1. A push reads the count of spinners under the queue's
+    counts pauses and reads no clock: `agc_pauses_for` times the pause once,
+    since a clock read is a system call on a machine with no usable TSC. It
+    never sleeps. A nudge, like a push, sends no signal while one spins. At
+    most half the schedulers (at least one) spin at once, and none spin at
+    N = 1. A push reads the count of spinners under the queue's
     lock and skips the condvar signal while one spins. No wake is lost. A
     spinner leaves the count before it takes the lock for its wait, so it either
     sees `work`, finds the task in that wait, or left before the push read the
@@ -580,7 +600,10 @@ one exit path are as in §16.1 to §16.6. What differs:
   the turns, strings, numbers, JSON, lists and maps) runs in parallel. It is
   held across the libuv calls that a locked path makes inline at N = 1 (a job
   start, a close). At N > 1 those are requests to the I/O thread, and the lock
-  is not held while the scheduler waits for one. It is cheap to split later,
+  is not held while the scheduler waits for one. A thread that finds it taken
+  spins for about 10 µs (`SYNC_SPIN_NS`, in pauses) before it sleeps on the
+  mutex: the sections are short and many, and a futex sleep and wake cost more.
+  It is cheap to split later,
   when a measurement shows the contention (the `prints`, `ping-pong` and `files`
   benchmarks, with the locks on). The pieces:
   - What takes the lock is marked per builtin: `agc_builtin.shared`, a flag in

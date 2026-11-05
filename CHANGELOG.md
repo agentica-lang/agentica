@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Servers on several schedulers scale better: `compute def` calls skip the I/O
+  thread, and fewer wakes and clock reads are spent between threads.
+
 ## [0.24.1] - 2026-11-05
 
 ### Added
