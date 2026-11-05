@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.24.1] - 2026-11-05
+
 ### Added
 
 - `agentica test --jobs N` runs up to `N` test files at the same time (default
@@ -1050,7 +1052,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.24.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.24.1...HEAD
+[0.24.1]: https://github.com/agentica-lang/agentica/compare/0.24.0...0.24.1
 [0.24.0]: https://github.com/agentica-lang/agentica/compare/0.23.0...0.24.0
 [0.23.0]: https://github.com/agentica-lang/agentica/compare/0.22.0...0.23.0
 [0.22.0]: https://github.com/agentica-lang/agentica/compare/0.21.0...0.22.0
