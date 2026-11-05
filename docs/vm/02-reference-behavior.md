@@ -114,50 +114,27 @@ in a PR that rewrites the goldens.
   is an `error(...)` value that ends with the offset Python reports as the start
   of its Unicode error: a byte offset for a decode, a character index for an
   encode. They cost by size.
-- The `Digest` hashes (`md5`, `sha1`, `sha256`, `sha512` and their
-  `_hexdigest` forms) take a `Bytes`, hash it with OpenSSL's EVP digests
-  (`vm/digest_openssl.c`, behind `digest.h`) and return the digest as a
-  `Bytes` or as hex. Each charges `AGC_COST_SIZE` (§10.2.1) and runs without
-  the shared lock, as it reads only its argument. The `HMAC` builtins
-  (`sha256`, `sha512` and their `_hexdigest` forms) compute the MAC of the
-  data under the key with OpenSSL's `EVP_Q_mac` (`agc_hmac` in `digest.h`),
-  with the same cost and lock. `HMAC.secure_compare(a, b)` hashes each with
-  SHA-256 and compares the digests, and then the bytes when the digests match
-  and the lengths are equal, with `CRYPTO_memcmp` (`agc_secure_equal`), again
-  with the same cost and lock. The eight `Base64` and hex builtins in
-  `vm/crypto.c` (`Digest.hexencode`/`hexdecode`) are plain C, and all eight
-  charge `AGC_COST_SIZE`. Each of these builtins and
-  `SecureRandom.random_bytes` takes or gives `Bytes`, under the catalog key
-  `<name>.bytes`.
-- `Cipher.des_ede3_cbc_encrypt` and `_decrypt` and `CMAC.aes` and `des_ede3`
-  check the key, IV and block sizes first and give an error `Result`; then they
-  call `agc_des_ede3_cbc` (`EVP_CipherUpdate` in chunks of 1 GiB, padding off)
-  or `agc_cmac` (`EVP_Q_mac` with the `CMAC` MAC) in `vm/digest_openssl.c`,
-  which expand a two-key key to K1 K2 K1 and wipe that copy. A library failure
-  is `RUNTIME-INTERNAL` at the call. They charge `AGC_COST_SIZE` and run
-  without the shared lock, as the digests do.
-- `Cipher.aes_256_gcm_encrypt` and `_decrypt` check the key, IV and input
-  sizes first and give an error `Result`; then they call `agc_aes_256_gcm`
-  (`EVP_CipherUpdate` in chunks of 1 GiB for the data and the authenticated
-  data). Encrypting writes the tag after the ciphertext in the result. A
-  decrypt writes the plaintext before the final step checks the tag, so on a
-  wrong tag the adapter wipes it and the builtin gives an error `Result`.
-  `KDF.pbkdf2_hmac_sha256` and `KDF.scrypt` check their parameters first,
-  their work included (`PBKDF2_MAX_WORK` and `SCRYPT_MAX_WORK` in
-  `vm/crypto.c`: a started call cannot be stopped, and it holds a compute pool
-  thread), then park the task on a compute job (`kdf_io`, `agc_io_compute`;
-  refused with `RUNTIME-NATIVE-CALLBACK` inside a callback of native code) that
-  calls `EVP_KDF_derive` on malloc'd copies of the password and the salt
-  (`PBKDF2` with `pkcs5` set, so no SP 800-132 floors; `SCRYPT` with `maxmem`
-  at the same 1025 MiB cap). The `done` half copies the key into the result and
-  wipes the password and key copies. A library failure is `RUNTIME-INTERNAL` at
-  the call. All four run without the shared lock.
+- The `Digest`, `HMAC`, `Base64`/hex, `Cipher` and `CMAC` builtins take and give
+  `Bytes` (catalog key `<name>.bytes`), use OpenSSL's EVP API
+  (`vm/digest_openssl.c`, behind `digest.h`) and charge `AGC_COST_SIZE`
+  (§10.2.1). Those that read only their arguments run without the shared lock.
+  `HMAC.secure_compare` compares in constant time. The key, IV and input sizes
+  are checked first and give an error `Result`; a library failure is
+  `RUNTIME-INTERNAL` at the call. A two-key `des_ede3` key is expanded to K1 K2
+  K1 and the copy is wiped. An `aes_256_gcm` encrypt writes the tag after the
+  ciphertext; a decrypt wipes the plaintext when the tag is wrong.
+- `KDF.pbkdf2_hmac_sha256` and `KDF.scrypt` check their parameters first,
+  their work included (`PBKDF2_MAX_WORK`, `SCRYPT_MAX_WORK` in `vm/crypto.c`: a
+  started call cannot be stopped, and it holds a compute pool thread), then
+  park the task on a compute job (`agc_io_compute`; refused with
+  `RUNTIME-NATIVE-CALLBACK` inside a callback of native code). `PBKDF2` runs
+  with `pkcs5` set, so no SP 800-132 floors. Password and key copies are
+  wiped. The jobs run without the shared lock.
 - `SecureRandom.random_bytes(n)` and `hex(n)` check `0 <= n <= 1048576` (else
-  `RUNTIME-INVALID-COUNT` at the argument), draw with `RAND_bytes`
-  (`agc_secure_random` in `vm/digest_openssl.c`) and charge `AGC_COST_SIZE`;
-  `uuid` draws 16 bytes and sets the version and variant bits. A failed draw is
-  `RUNTIME-INTERNAL` at the call. They run without the shared lock: OpenSSL 3
-  keeps one generator per thread.
+  `RUNTIME-INVALID-COUNT` at the argument) and draw with `RAND_bytes`; `uuid`
+  draws 16 bytes and sets the version and variant bits. A failed draw is
+  `RUNTIME-INTERNAL`. They run without the shared lock: OpenSSL 3 keeps one
+  generator per thread.
 
 ### 2.4 Printing values
 
@@ -231,8 +208,7 @@ in a PR that rewrites the goldens.
   rounds to zero is `-0.0`. `-0` is the integer 0.
 - A repeated key keeps the last value. Objects sort by key bytes, stably.
 - The VM reads the tree with the yyjson reader (10) and copies it into `Json`
-  nodes. Numbers reach the VM as text. Check `strtod` on macOS and Windows (CI
-  builds them; not yet checked).
+  nodes. Numbers reach the VM as text.
 
 ### 2.7 Typed JSON
 
@@ -316,31 +292,20 @@ Every failure is an error value. The checks run in this order:
 - `File.read_text` refuses a file over 1 MiB by its size and decodes strictly.
   `File.read_line` strips LF or CRLF and fails after 1 MiB without a LF.
   `File.read_bytes` reads to `max_bytes` or EOF.
-- `File.sha256` streams a whole regular file through one private descriptor,
-  read from the start in fixed 64 KiB chunks with O(chunk) memory: no 1 MiB
-  cap, and the 32 digest bytes in `Digest.sha256` order. The `fstat` of the
-  descriptor decides regular; anything else is `filesystem: path does not
-  refer to a regular file`, without waiting on the loop. The job never takes
-  the `more` step, so a cancel or a timeout detaches it like the other
-  whole-file calls.
-- `File.chunks` reads a regular file through the reader of `File.foreach`,
-  with the `fstat` of the open descriptor deciding regular, and hands each
-  read on as one `Bytes` chunk of at most `size` bytes. A zlib step of a Lazy
-  run (`vm/lazy.c`) holds one zlib stream of the shared codec (no `gz*` calls),
-  registered and owned by the task that runs the terminal, and freed when the
-  run ends or at the task's end. Each pass gives a chunk of at most 64 KiB;
-  a decoder's output buffer is one byte past what `max_bytes` still allows,
-  so an overflow is found without handing on a byte past the cap. A bad
-  header, a refused wrapper and a short stream are `zlib: invalid compressed
-  data` or `zlib: truncated stream`; a second member or any trailing byte is
-  `zlib: trailing bytes after stream end`; a trailer mismatch is `zlib:
-  checksum mismatch`. The `Zlib` builtins, `__lazy_chunks`, `__lazy_zlib` and
-  `__lazy_write_bytes` take and give `Bytes`, under the catalog key
-  `<name>.bytes`.
+- `File.sha256` streams a whole regular file in 64 KiB chunks (no 1 MiB cap);
+  the `fstat` of the open descriptor decides regular, anything else is
+  `filesystem: path does not refer to a regular file`. A cancel or a timeout
+  detaches the job like the other whole-file calls.
+- `File.chunks` reads a regular file in `Bytes` chunks of at most `size`
+  bytes. A zlib step of a Lazy run (`vm/lazy.c`) holds one zlib stream owned by
+  the task that runs the terminal, freed when the run or the task ends. A
+  decoder's output buffer is one byte past what `max_bytes` still allows, so an
+  overflow is found without handing on a byte past the cap. The errors are
+  `zlib: invalid compressed data`, `zlib: truncated stream`, `zlib: trailing
+  bytes after stream end` (a second member or any trailing byte) and `zlib:
+  checksum mismatch`. The `Zlib` and `__lazy_*` builtins use `Bytes`.
 - `File.stat` of a missing path is an error without a kind. A directory's size
-  is
-  0. `modified_seconds` is the mtime; `mode` is `st_mode & 07777`; `user_id` and
-     `group_id` are `st_uid` and `st_gid`.
+  is 0. `modified_seconds` is the mtime; `mode` is `st_mode & 07777`.
 - `File.lstat` is `lstat`: a link has `kind` `"link"`, `size_bytes` as its text
   length, and its own mode, owner and mtime. Other paths give what `File.stat`
   gives.
@@ -348,37 +313,28 @@ Every failure is an error value. The checks run in this order:
   | O_NOFOLLOW` and mode 0600 (less where the umask clears bits). Any existing
   entry, a dangling link included, is an error.
 - `File.try_lock(handle, timeout_ms)` is `flock(LOCK_EX | LOCK_NB)` in a pool
-  job, after the handle's own lock wait. `ok(true)` means the lock is taken
-  (again on the same handle, too); `ok(false)` means another open file
-  description, here or in another process, holds it. Other failures are
-  `filesystem: cannot lock file`. The lock lasts until the handle closes
-  (`File.close`, the end of its task, the end of the run) or the process ends.
-  Descriptors are close-on-exec. A pipe, FIFO or device is `filesystem: only a
-  regular file can be locked` (`fstat` decides; `/dev/null` takes `flock` too).
-  `LOCK_NB` never blocks, so there is no `EINTR` loop. There is no unlock call
-  and no waiting lock.
+  job. `ok(true)` means the lock is taken (again on the same handle, too);
+  `ok(false)` means another open file description holds it. The lock lasts
+  until the handle closes or the process ends. A non-regular file is
+  `filesystem: only a regular file can be locked` (`fstat` decides). There is no
+  unlock call and no waiting lock.
 - `Dir.mkdir_private` is one `mkdir` with mode 0700 (less where the umask clears
   bits). It makes no parents; an existing path is an error (`filesystem:
   cannot make directory`).
 - `Path.remove(path, timeout_ms)` never follows a link and runs in a pool job.
   It calls `unlink` first: a file or symbolic link goes, and `ENOENT` is `ok()`.
-  Other `unlink` errors are reported, `ENOTDIR` for `file/child` included, so
-  `link/` never reports `ok()`. Only `EISDIR` starts the tree walk,
-  `agc_remove_tree` (`vm/tree.c`). The root is opened with `openat(O_NOFOLLOW |
-  O_DIRECTORY)`, and each entry is removed with `unlinkat` on its directory's
-  descriptor, so a link in the tree goes as a link and its target is never
-  touched. The walk keeps at most 128 open levels (`filesystem: directory tree
-  is deeper than 128 levels`). It rereads a directory while its last pass
-  removed something, since POSIX leaves entries after an unlinked one
-  unspecified. An `ENOENT` from `unlinkat` is not progress: a pass that removed
-  nothing ends the walk with `ENOTEMPTY`. `EINTR` is repeated. The walk crosses
-  mount points, as `rm -rf` does. A path whose last component (trailing slashes
-  ignored) is empty, `.` or `..` is refused before anything opens (`filesystem:
-  refusing to remove /, . or ..`), by the pure check `agc_tree_refused`. On
-  Windows an unsafe path is refused with `filesystem: refusing to remove an
-  unsafe Windows path`. Other failures are `filesystem: cannot remove path`,
-  with the path of the entry that failed, not the root. After a timeout the job
-  runs to its end (14.3).
+  Other `unlink` errors are reported (`ENOTDIR` for `file/child` included, so
+  `link/` never reports `ok()`). Only `EISDIR` starts the tree walk
+  (`agc_remove_tree`, `vm/tree.c`): `openat(O_NOFOLLOW | O_DIRECTORY)` on the
+  root and `unlinkat` on each directory's descriptor, so a link in the tree goes
+  as a link and its target is never touched. At most 128 open levels. A
+  directory is reread while its last pass removed something, since POSIX leaves
+  entries after an unlinked one unspecified; a pass that removed nothing ends
+  with `ENOTEMPTY`. The walk crosses mount points, as `rm -rf` does. A path
+  whose last component is empty, `.` or `..` is refused before anything opens
+  (`agc_tree_refused`); Windows refuses an unsafe path. A failure names the
+  entry that failed, not the root. After a timeout the job runs to its end
+  (14.3).
 - `Path.rename(from, to, timeout_ms)` is one `renameat2(AT_FDCWD, from,
   AT_FDCWD, to, RENAME_NOREPLACE)` in a pool job. It never replaces: an existing
   `to`, an empty directory included, is `EEXIST`. The call is atomic, so of
@@ -386,21 +342,17 @@ Every failure is an error value. The checks run in this order:
   a link. The error is `filesystem: cannot rename path`. Without
   `RENAME_NOREPLACE` the call answers `EINVAL`, which is reported; there is no
   check-first fallback, since that would race.
-- `File.replace(path, data, timeout_ms)` is one pool job. `uv_fs_realpath`
-  finds the target, which must be a regular file, so a link stays a link. The
-  data goes to a new file in the target's folder, `.agc-PID-N.tmp` (exclusive,
-  no link followed, mode 0600 while it is written, so a long file name cannot
-  make it too long and nobody else reads it). `fchmod` gives it the target's
-  mode `& 0777`, `fsync` flushes it, and `uv_fs_rename` moves it over the
-  target (`rename`; `MoveFileExW` with `MOVEFILE_REPLACE_EXISTING` on Windows,
-  which refuses a read-only target before anything is written). The folder is
-  then flushed on POSIX. A reader sees the old file or the new one, never
-  neither. A failure removes the new file; one that cannot be made is named in
-  the error. A killed process can leave the new file behind. At most 16 MiB of
-  data. It works by path, like `Path.rename`: a
-  folder of the path swapped between the `realpath` and the rename by someone
-  with write access to its parent is not defended. After a timeout the job runs
-  to its end (14.3).
+- `File.replace(path, data, timeout_ms)` is one pool job (at most 16 MiB). The
+  target is found with `uv_fs_realpath` and must be a regular file, so a link
+  stays a link. The data goes to `.agc-PID-N.tmp` in the target's folder
+  (exclusive, no link followed, mode 0600 while written), then `fchmod` to the
+  target's mode, `fsync`, and a rename over the target (`MoveFileExW` on
+  Windows, which refuses a read-only target before anything is written); the
+  folder is then flushed on POSIX. A reader sees the old file or the new one,
+  never neither. A failure removes the new file; a killed process can leave it
+  behind. It works by path, like `Path.rename`: a folder of the path swapped
+  between the `realpath` and the rename by someone with write access to its
+  parent is not defended. After a timeout the job runs to its end (14.3).
 - `Dir.list` drops `.` and `..`, decodes names with U+FFFD and sorts them by
   code point. `Dir.mkdir` creates missing parents with mode 0777; an existing
   directory or file is not an error.
@@ -409,14 +361,11 @@ Every failure is an error value. The checks run in this order:
   result ends in `/` when the input did, or ended in `.` or `..`.
 - `Path.real` is `uv_fs_realpath` in a pool job with no deadline. The path must
   exist; a link loop, too many links or a non-directory in the middle fail
-  (`filesystem: cannot resolve path`). An empty or NUL path gives the
-  `filesystem: invalid path` error. A relative path starts at the working
-  directory, and the result decodes per byte, as `Dir.list` names do. macOS
-  fails an absolute form of 1024 bytes or more. On Windows `.` and `..` are
-  dropped before a link is followed, a name under a file gives ENOENT, `/`
-  takes the working directory's drive, and an absolute form of 260 characters
-  or more fails unless `LongPathsEnabled` is 1 (the binary's manifest declares
-  `longPathAware`).
+  (`filesystem: cannot resolve path`). An empty or NUL path gives
+  `filesystem: invalid path`. A relative path starts at the working directory,
+  and the result decodes per byte. macOS fails an absolute form of 1024 bytes
+  or more; on Windows `.` and `..` are dropped before a link is followed and an
+  absolute form of 260 characters or more fails unless `LongPathsEnabled` is 1.
 - After a timeout on an active handle operation the handle is closed: later
   operations fail with "file handle is closed", and `File.close` gives `ok()`.
 - A timed-out read on a FIFO or device ends at the timeout (10.2.2);
