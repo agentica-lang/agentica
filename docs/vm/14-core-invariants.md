@@ -8,7 +8,8 @@ PR against 14.1 to 14.5 and the entry rule of 14.6. A PR that breaks one either
 changes the rule here first, with the reason, or does not merge.
 
 The mechanisms are in §10.2.1 and §10.2.2 (`10-io-scheduler.md`), §10.4
-(`10-io-processes.md`), §10.7.2 (`10-io-http.md`) and the [task rules][task-rules].
+(`10-io-processes.md`), §10.7.2 (`10-io-http.md`) and the [task
+rules][task-rules].
 
 ### 14.1 Waiting
 
@@ -172,11 +173,11 @@ flush. **When `main` ends, the program ends.** The steps are:
    call still holds (after a stop signal or at the deadline) and never skips
    past it, so an older resource that a held one points into (a database under
    its statement) never goes while C still uses the newer one. The frees run on
-   a thread of their own, so a `free` that hangs holds the exit at most until the
-   deadline. A resource that a held call returns during the wait is never freed.
-   A stop signal ends the wait. Step 2 and this step share one deadline, the
-   flush limit from the start of step 2 (`rt->flush_by`); what is not freed by
-   then is left to the exit, and the warning line of the flush limit says so.
+   a thread of their own, so a `free` that hangs holds the exit at most until
+   the deadline. A resource that a held call returns during the wait is never
+   freed. A stop signal ends the wait. Step 2 and this step share one deadline,
+   the flush limit from the start of step 2 (`rt->flush_by`); what is not freed
+   by then is left to the exit, and the warning line of the flush limit says so.
    With a limit of 0 nothing is freed. A failure (the loop cannot start) prints
    the flush failure line instead. The end of `main` frees what it owns as any
    task's end does, because a `free` may write data out (`fclose`) that `_exit`
@@ -270,10 +271,10 @@ closed and takes it off its owner, and the end of the last such call runs the
 uses it. A resource closed while held holds what it comes from in turn until its
 free. A closed callback is freed once every fast native call whose C called it
 while its code existed has returned: C may call it again until then (it gives
-zero), and libffi's frames of its run are on that call's stack. A compute call is
-not counted (its pool thread does not hold `rt->sync`), so its C must not call a
-closed callback. The end of the run frees what is still open (§14.4, step 3).
-There are no GC finalizers.
+zero), and libffi's frames of its run are on that call's stack. A compute call
+is not counted (its pool thread does not hold `rt->sync`), so its C must not
+call a closed callback. The end of the run frees what is still open (§14.4, step
+3). There are no GC finalizers.
 
 A channel is the one handle made unowned. `Channel.new` makes no registry entry.
 The first `Task.spawn_owning` of it (any task may do it) registers an entry with

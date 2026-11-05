@@ -248,8 +248,8 @@ Details that code and tests rely on:
 - `MAP` puts its `c <= 255` pairs in order with the rule of `Map.put`: a
   repeated key keeps its first position and takes the last value. A key that is
   not Int or String (only in a hand-made file) is `RUNTIME-INTERNAL`.
-- A nullary `ENUM` returns the variant's shared value. `IS_VARIANT` compares the global variant id, which
-  is unique per enum declaration.
+- A nullary `ENUM` returns the variant's shared value. `IS_VARIANT` compares the
+  global variant id, which is unique per enum declaration.
 - `FIELD` and `PAYLOAD` read item `c` of the value's own `n`. Past it is
   `RUNTIME-INTERNAL`.
 - `STRUCT_WITH`: the receiver must be the struct type that update entry `c`

@@ -166,14 +166,14 @@ driver of `agentica test`, for the runner and the programs under test.
   the driver sends no second signal of its own, so its flush is not cut short
   (10.2.2). Last, the process flushes and raises the signal again with its
   default action, so the shell sees it.
-- `agentica test` (`docs/bdd.md`): the BDD driver (`compiler/bdd/bdd_driver.agc`)
-  compiles the test files to a private run directory and starts the runner with
-  `agentica run --driver-pid PID --embedded runner -- CONFIG`, and the runner
-  starts one VM per scenario or test file the same way. A front end that reads
-  the `std/` sources from a folder (`--stdlib`, the first binary of the
-  bootstrap) compiles the runner and the step program into the run directory
-  instead. A front end that stops with an error (a bug in the driver) ends the
-  process with status 2, never the 1 of a failed test run.
+- `agentica test` (`docs/bdd.md`): the BDD driver
+  (`compiler/bdd/bdd_driver.agc`) compiles the test files to a private run
+  directory and starts the runner with `agentica run --driver-pid PID --embedded
+  runner -- CONFIG`, and the runner starts one VM per scenario or test file the
+  same way. A front end that reads the `std/` sources from a folder (`--stdlib`,
+  the first binary of the bootstrap) compiles the runner and the step program
+  into the run directory instead. A front end that stops with an error (a bug in
+  the driver) ends the process with status 2, never the 1 of a failed test run.
 
 **The single binary.** `make` links `dist/agentica`: the VM objects,
 `vm/agentica.c` as its `main`, and the front end with the `std/` sources as data

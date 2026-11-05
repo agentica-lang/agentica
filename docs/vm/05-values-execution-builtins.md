@@ -17,12 +17,14 @@ does not make obvious:
   the first 32 bytes in hex. No JSON form (the encoder fails with
   `RUNTIME-INTERNAL`) and no bytecode constant holds one.
 - **List.** Opaque: `struct agc_list` lives in `vm/list.c` and the private
-  `vm/list_impl.h`, and every other file uses the API of `value.h` (§17.4, [17-lists.md](17-lists.md)). Only a builder writes a list, and only before it returns it. It
-  is a persistent vector (a 32-way trie with an inline tail) and a list of all
-  Ints or all Floats keeps 8 raw bytes per item ([§17.12](17-lists.md#1712-unboxed-numeric-leaves)); the builder picks the kind from the
-  values, so a mixed list from hostile bytecode is simply boxed. `append`, `set`
-  and `get` are near constant time; `take`, `drop`, `reverse` and a `concat`
-  with a long right list stay O(n) (§17.2).
+  `vm/list_impl.h`, and every other file uses the API of `value.h` (§17.4,
+  [17-lists.md](17-lists.md)). Only a builder writes a list, and only before it
+  returns it. It is a persistent vector (a 32-way trie with an inline tail) and
+  a list of all Ints or all Floats keeps 8 raw bytes per item
+  ([§17.12](17-lists.md#1712-unboxed-numeric-leaves)); the builder picks the
+  kind from the values, so a mixed list from hostile bytecode is simply boxed.
+  `append`, `set` and `get` are near constant time; `take`, `drop`, `reverse`
+  and a `concat` with a long right list stay O(n) (§17.2).
 - **Map.** A persistent 32-way HAMT (`vm/map.c`) plus a persistent list of keys,
   newest first, which gives the order. A put copies only its path. A delete is
   O(log32 n) amortized along one line of versions: it marks the key's cell dead
@@ -241,13 +243,13 @@ returns.
   them and not across compiled code. The builtin's registers stay in the
   frame's register file during the call, so the collector sees them.
 - **Code.** Each instruction has fixed code, emitted in one pass over the
-  bytecode; the register conventions are in the headers of
-  `vm/jit/emit_x64.c` and `vm/jit/emit_a64.c`. On arm64 the thread that runs
-  compiled code first runs `isb` (`agc_jit_sync`), as the code may come from
-  another thread. On Linux each seal runs membarrier's `SYNC_CORE`, registered
-  by the launch before any other thread starts, so a native call branches
-  without `isb`; where that fails (an old kernel, seccomp) and on macOS, a native
-  call runs `isb` first (`agc_jit_use_sync`).
+  bytecode; the register conventions are in the headers of `vm/jit/emit_x64.c`
+  and `vm/jit/emit_a64.c`. On arm64 the thread that runs compiled code first
+  runs `isb` (`agc_jit_sync`), as the code may come from another thread. On
+  Linux each seal runs membarrier's `SYNC_CORE`, registered by the launch before
+  any other thread starts, so a native call branches without `isb`; where that
+  fails (an old kernel, seccomp) and on macOS, a native call runs `isb` first
+  (`agc_jit_use_sync`).
 - **Code memory.** At most 64 MiB per run (`AGC_JIT_CODE_CAP`), reserved in
   chunks that double from 1 MiB. Code is written read-write, then sealed
   read-execute (`mprotect`, `VirtualProtect` on Windows): no page is writable

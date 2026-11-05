@@ -91,14 +91,14 @@ reads no `openssl.cnf`, so both builds behave the same.
     (OpenSSL trusts a self-signed certificate in the store); a copy with the
     subject and public key of a self-signed anchor already in the store (OpenSSL
     looks issuers up by name and the store order is not stable); one whose EKU
-    extension excludes server authentication, on every system (OpenSSL would take
-    a store copy first, and a valid intermediate's sibling with the same subject
-    and key would fail a chain the server sends correctly). One whose Crypt32 EKU
-    property alone excludes server authentication is added rejected, so a server
-    that sends it still fails with `VERIFY_UNTRUSTED`; it also shadows same-key
-    siblings, which is taken as the administrator's intent. A root that Windows
-    would download on demand is not in the store until Windows fetched it;
-    `SSL_CERT_FILE` or `ca_file` covers that case.
+    extension excludes server authentication, on every system (OpenSSL would
+    take a store copy first, and a valid intermediate's sibling with the same
+    subject and key would fail a chain the server sends correctly). One whose
+    Crypt32 EKU property alone excludes server authentication is added rejected,
+    so a server that sends it still fails with `VERIFY_UNTRUSTED`; it also
+    shadows same-key siblings, which is taken as the administrator's intent. A
+    root that Windows would download on demand is not in the store until Windows
+    fetched it; `SSL_CERT_FILE` or `ca_file` covers that case.
 - **Verification (security rule).** The client always verifies the peer; there
   is no verify-none path. An IP-literal host is checked against IP SANs and
   sends no SNI. Any other host gets SNI and hostname verification, with no
@@ -118,13 +118,13 @@ reads no `openssl.cnf`, so both builds behave the same.
   HTTP/1.1, so `HttpWire.service`, `HttpWire.connect_context`,
   `HttpWire.upgrade_context` and `HttpWire.server` halt with
   `RUNTIME-TLS-CONTEXT-ALPN` on any other list.
-- **CONNECT tunnels (std-only).** std/http reaches an `https://` target through a
-  proxy with a TCP socket that a CONNECT made a pipe, and starts TLS on it with
-  `TLS.upgrade`'s machinery: `HttpWire.upgrade_context(socket, context, host,
-  timeout_ms)` for a client `TlsContext` (plus the ALPN check above), and
+- **CONNECT tunnels (std-only).** std/http reaches an `https://` target through
+  a proxy with a TCP socket that a CONNECT made a pipe, and starts TLS on it
+  with `TLS.upgrade`'s machinery: `HttpWire.upgrade_context(socket, context,
+  host, timeout_ms)` for a client `TlsContext` (plus the ALPN check above), and
   `HttpWire.upgrade_tls(client, socket, host, timeout_ms)` for the client's
-  shared system-trust context of `HttpWire.connect_tls` (the upgraded net takes a
-  count on it, an error when the client gave it back).
+  shared system-trust context of `HttpWire.connect_tls` (the upgraded net takes
+  a count on it, an error when the client gave it back).
 - **Data path.** A TLS socket is the TCP socket of 10.3.1 with a session.
   Decrypted bytes go into the socket's input buffer, so `read_line`,
   `recv_bytes`, the 1 MiB limits, the locks and the timeouts are the TCP ones.
@@ -171,8 +171,8 @@ texts.
   `close_listener`.
 - **Ownership.** The native state is freed when its users (the resource and each
   request) and its callbacks (a DNS lookup, one close callback per link) are all
-  done, so no callback sees freed memory. It is registered before any libuv work,
-  so the end of the run finds every handle.
+  done, so no callback sees freed memory. It is registered before any libuv
+  work, so the end of the run finds every handle.
 - **Connect.** The timeout, port (1..65535) and host (no NUL) are checked. The
   host resolves (`AF_UNSPEC`, `SOCK_STREAM`), and each address is tried in order
   until one connects. One timer covers the lookup and every try. On timeout the
@@ -238,8 +238,8 @@ texts.
     the connections reported and not taken.
   - *Bind.* libuv sets `SO_REUSEADDR` on Unix listeners and nothing on Windows,
     where that option would let another socket take a bound port, and
-    `SO_EXCLUSIVEADDRUSE` would refuse a port with connections in `TIME_WAIT`. So
-    on Windows a listener on a specific address can bind a port that another
+    `SO_EXCLUSIVEADDRUSE` would refuse a port with connections in `TIME_WAIT`.
+    So on Windows a listener on a specific address can bind a port that another
     program of the same user holds on the wildcard address, where Linux refuses
     it; two listeners on the same address conflict on every system.
   - *Send buffers and refusal.* How many bytes the kernel takes before a send

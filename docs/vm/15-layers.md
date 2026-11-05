@@ -1,7 +1,8 @@
 ## 15. VM layers
 
 **Status:** built (row 7.2.1b; checklist in
-[`07-vm.md`](../roadmap/07-vm.md#7l-vm-layers)). It follows [§16](16-architecture.md). The rest of 7l is #998.
+[`07-vm.md`](../roadmap/07-vm.md#7l-vm-layers)). It follows
+[§16](16-architecture.md). The rest of 7l is #998.
 
 The C VM has three layers (core, services, adapters) with one-way dependencies,
 a driver that wires them, one port between the services and the core, one header
@@ -185,11 +186,11 @@ file, the unused `static inline` in `trace.h` fails under `-Werror` with clang).
   shares them (§6.4).
 - **`services.h`**: what the services share (the stream kit, the child channel,
   the exports of `files.c`, `tree.c` and `process.c` that others call).
-- **`list_impl.h`** (private to the core): `struct agc_list`, the trie node type,
-  and the `static inline` fast paths `list_len`, `list_get` and `list_at`. Only
-  `list.c`, `interp.c` and `vm/tests/list_test.c` include it: `interp.c` runs
-  `LIST_LEN` and `LIST_GET` once per item of a `for` loop, so a loop over up to
-  32 items makes no call per item. Every other file keeps the opaque API.
+- **`list_impl.h`** (private to the core): `struct agc_list`, the trie node
+  type, and the `static inline` fast paths `list_len`, `list_get` and `list_at`.
+  Only `list.c`, `interp.c` and `vm/tests/list_test.c` include it: `interp.c`
+  runs `LIST_LEN` and `LIST_GET` once per item of a `for` loop, so a loop over
+  up to 32 items makes no call per item. Every other file keeps the opaque API.
 
 `net.h` and `http_fields.h` include `services.h`; `net.h` also includes `tls.h`.
 `tls.h`, `http_parse.h` and `trace.h` include nothing of ours.

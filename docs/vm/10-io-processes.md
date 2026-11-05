@@ -30,21 +30,22 @@
   wait of a captured child ends at once. `exited` records 128 plus the signal
   that was asked for: 137 for the `SIGKILL` of a plain child, 143 for the
   `SIGTERM` of a captured one (`tests/test_process_windows.py` reads the pair
-  from the `proc` trace); the pair holds only when the stop reached a live child,
-  since after an `ESRCH` the real exit code is recorded. Unless libuv cannot
-  assign its job object (a Windows version without nested jobs), every child it
-  starts is in one job that kills its members when the VM that made it ends. That
-  job has `JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK`, so only the direct children are
-  in it, not their subprocesses: the direct children of a VM that is killed die
-  with it, and a child that is itself a VM stops its own children the same way. A
-  grandchild that a VM started never reads the end of its channel from the death
-  of its parent there: the parent's job ends it first. A parent that is no libuv
-  process, or that spawns with `UV_PROCESS_DETACHED`, leaves a child that reads it
-  (`vm/tests/process_test.c`). `Process.close` and the end of a run still stop
-  only the direct child. Stopping a child that has already ended, before its exit
-  callback ran, is not a failure on any system (`UV_ESRCH` is read as stopped); on
-  POSIX it means someone else reaped the child (`SIGCHLD` set to `SIG_IGN`, or its
-  own reaper), and then `Process.close` waits up to `REAP_MS`.
+  from the `proc` trace); the pair holds only when the stop reached a live
+  child, since after an `ESRCH` the real exit code is recorded. Unless libuv
+  cannot assign its job object (a Windows version without nested jobs), every
+  child it starts is in one job that kills its members when the VM that made it
+  ends. That job has `JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK`, so only the direct
+  children are in it, not their subprocesses: the direct children of a VM that
+  is killed die with it, and a child that is itself a VM stops its own children
+  the same way. A grandchild that a VM started never reads the end of its
+  channel from the death of its parent there: the parent's job ends it first. A
+  parent that is no libuv process, or that spawns with `UV_PROCESS_DETACHED`,
+  leaves a child that reads it (`vm/tests/process_test.c`). `Process.close` and
+  the end of a run still stop only the direct child. Stopping a child that has
+  already ended, before its exit callback ran, is not a failure on any system
+  (`UV_ESRCH` is read as stopped); on POSIX it means someone else reaped the
+  child (`SIGCHLD` set to `SIG_IGN`, or its own reaper), and then
+  `Process.close` waits up to `REAP_MS`.
 - Windows arguments: libuv quotes each argument with the rules of the C runtime
   (`CommandLineToArgvW`), so every word arrives unchanged. The whole command
   line, counting the quotes that libuv adds, may hold 32767 characters; a longer
@@ -178,17 +179,17 @@ pair; Windows uses a pipe per direction (below).
   `AGENTICA_CHANNEL` is always removed, `UV_USE_IO_URING` is removed as before
   (§10.2.2), and only `spawn_channel` adds `AGENTICA_CHANNEL=3` (`3,4` on
   Windows). So a parent that spawns without the pipe never passes an inherited
-  marker on, and a grandchild sees neither the marker nor descriptor 3 unless its
-  own parent opened a channel for it. `System.env` hides the same entries from the
-  program (`own_env` in `vm/process.c` decides for both). The `env` Map of a spawn
-  adds to that copy, replacing a variable of the same name (ignoring case on
-  Windows, where two names that differ only in case are an error); it cannot name
-  an entry the VM owns, which is an error and not a silent drop. The natives of
-  each spawn have two arities, with and without `env`: the shorter one is for the
-  bytecode of `stage0.agcb`. `AGENTICA_VM_METRICS` and `AGENTICA_VM_METRICS_FILE`
-  are also removed from a child's environment (`metrics_env`), so a child VM or a
-  BDD runner never fights for the metrics port or file; `System.env` still shows
-  them to the program.
+  marker on, and a grandchild sees neither the marker nor descriptor 3 unless
+  its own parent opened a channel for it. `System.env` hides the same entries
+  from the program (`own_env` in `vm/process.c` decides for both). The `env` Map
+  of a spawn adds to that copy, replacing a variable of the same name (ignoring
+  case on Windows, where two names that differ only in case are an error); it
+  cannot name an entry the VM owns, which is an error and not a silent drop. The
+  natives of each spawn have two arities, with and without `env`: the shorter
+  one is for the bytecode of `stage0.agcb`. `AGENTICA_VM_METRICS` and
+  `AGENTICA_VM_METRICS_FILE` are also removed from a child's environment
+  (`metrics_env`), so a child VM or a BDD runner never fights for the metrics
+  port or file; `System.env` still shows them to the program.
 - **Child start.** `agc_parent_take` runs in `agentica.c` before the program
   does. The variable must be exactly the value of this system (`3`, or `3,4` on
   Windows): a VM never guesses from another form. If `AGENTICA_CHANNEL` is `3`
@@ -241,11 +242,11 @@ pair; Windows uses a pipe per direction (below).
   text once that line has been read. That is the whole ordering rule between the
   two streams: a child that flushes its stdout before it sends a channel record
   (the VM does, in `Test.run` and in `BDD`) gets that output attributed to that
-  record. It returns `error("process: output exceeds 1048576 bytes")` once stdout
-  or stderr was cut (more than 1 MiB unread), and
-  `error("process: output is not captured")` on a `spawn` handle. Bytes that end
-  in the middle of a UTF-8 character (up to three) stay in the buffer for the
-  next call, unless the stream has ended or failed.
+  record. It returns `error("process: output exceeds 1048576 bytes")` once
+  stdout or stderr was cut (more than 1 MiB unread), and `error("process: output
+  is not captured")` on a `spawn` handle. Bytes that end in the middle of a
+  UTF-8 character (up to three) stay in the buffer for the next call, unless the
+  stream has ended or failed.
 - **Close.** The channel handle closes with the process (`shut`), after the
   pipes. A pending channel read or write wakes with
   `process: channel is closed`.
@@ -254,15 +255,15 @@ pair; Windows uses a pipe per direction (below).
   or any other task is `RUNTIME-TEST-RUN`. After the name checks, a call with no
   channel under `--agentica-test list|run` (`agc_parent_open`) is
   `RUNTIME-TEST-RUN` too. In run mode, an index line that is not a plain index
-  naming a test, or that cannot be read as a UTF-8 line, is a `RUNTIME-BDD-INFRA`
-  fail record ("invalid test index") and exit 1. It flushes stdout (`agc_drain`)
-  before each record, then sends the record as one JSON line with
-  `agc_parent_send`. The core has no protocol mode: stdout is an ordinary stream
-  and stdin is the program's. Nothing keeps a test from calling the child-side
-  builtins, which can lose or add a line (accepted, as in the grammar's test
-  rules); the only guard is that a second request in a direction that already has
-  one pending gets `error("process: the channel is in use")`, so two requests
-  never share a buffer.
+  naming a test, or that cannot be read as a UTF-8 line, is a
+  `RUNTIME-BDD-INFRA` fail record ("invalid test index") and exit 1. It flushes
+  stdout (`agc_drain`) before each record, then sends the record as one JSON
+  line with `agc_parent_send`. The core has no protocol mode: stdout is an
+  ordinary stream and stdin is the program's. Nothing keeps a test from calling
+  the child-side builtins, which can lose or add a line (accepted, as in the
+  grammar's test rules); the only guard is that a second request in a direction
+  that already has one pending gets `error("process: the channel is in use")`,
+  so two requests never share a buffer.
 
 ### 10.5 Limits the C runtime keeps
 

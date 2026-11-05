@@ -212,61 +212,42 @@ in a PR that rewrites the goldens.
 
 ### 2.7 Typed JSON
 
+The user-facing rules (which fields are required, the `JsonField` and
+`Optional` forms, the enum object, the schema shape) are in
+`site/content/library/text-and-data/json.md`. The VM side:
+
 - `JSON.decode(s, T)` parses `s` like `JSON.parse`, then walks `T` in field
-  order and stops at the first problem. A `Json` source skips the parse and is
-  walked the same way. Every field is required except a `JsonField` or an
-  `Optional` one; extra keys are ignored. A decoded map is built in sorted key
-  order.
+  order and stops at the first problem. A `Json` source skips the parse. A
+  decoded map is built in sorted key order.
 - A `JsonField[T]` field (type kind 7) is `Absent` when its key is missing and
-  `Null` for JSON `null`. Otherwise the value must have the top kind of `T`
-  (`object` for a struct or map, `array` for a list), else the error is the
-  `<what>` of `T` with ` or null` after it; then `T` is decoded inside a frame
-  that adds no path step, so an inner error keeps its own path and text. The
-  encoders (`JSON.encode`, `JSON.from`) leave out the key of an `Absent` struct
-  field, write `null` for `Null` and the payload for `Value`; they know the
+  `Null` for JSON `null`; the encoders leave out the key of an `Absent` struct
+  field, write `null` for `Null` and the payload for `Value`. They know the
   variants by the ids of the `JsonField` enum, which the loader finds and checks
   (Absent, Null, Value with arities 0, 0, 1).
-- An `Optional[T]` (type kind 8) may be any type of the table, not only a
-  field: `none` for JSON `null` or for the missing key of a struct field, else
-  `some` of `T`, decoded as for a `JsonField` (the ` or null` error, a frame
-  with no path step). An `Optional` `T` makes its own kind check. The encoders
-  write `none` as `null` and `some(x)` as `x`, at any depth and for the root,
-  so `some(none)` is `null`. The loader finds the builtin `Optional` enum by
-  its name and shape (None, Some with arities 0, 1); an enum named `Optional`
-  of another shape, from an older file, is an ordinary enum.
-- An enum (type kind 9) is the object `{"tag": name, "values": [...]}`. The
+- An `Optional[T]` (type kind 8) may be any type of the table, not only a field.
+  The encoders write `none` as `null` and `some(x)` as `x`, at any depth and for
+  the root, so `some(none)` is `null`. The loader finds the builtin `Optional`
+  enum by its name and shape (None, Some with arities 0, 1); an enum named
+  `Optional` of another shape, from an older file, is an ordinary enum.
+- An enum (type kind 9) is the object `{"tag": name, "values": [...]}`; the
   encoders write both keys, `tag` first, for any enum value that is not an
-  `Optional` or a `JsonField` (at the root, in a list, a struct and so on); the
-  `values` are the payloads in order. `JSON.decode` finds the variant by `tag`
-  in the enum's variants, takes `values` as an array of exactly its arity (a
-  variant with no payload may leave it out, and it is then the shared value),
-  and decodes each item as the variant's payload type. Its checks run in this
-  order, each an error at the object's path: the value is an `object`; `tag` is
-  there (`tag: expected required field`), a `String` and the name of a variant
-  (`tag: expected one of A, B`); `values` is there for a variant with payloads,
-  an `array`, and has `array of N items`. A payload error has the path
-  `<object>.values[i]` and then its own path. The error "expected object" of a
-  `JsonField`, `Optional` or the root has the ` or null` text where it applies.
+  `Optional` or a `JsonField`. `JSON.decode` checks, in this order, each an
+  error at the object's path: the value is an `object`; `tag` is there (`tag:
+  expected required field`), a `String` and the name of a variant (`tag:
+  expected one of A, B`); `values` is there for a variant with payloads, an
+  `array`, and has `array of N items`. A payload error has the path
+  `<object>.values[i]` and then its own path. A variant with no payload may
+  leave `values` out, and it is then the shared value.
 - Errors are values `"<path>: expected <what>"`. The path is `$`, `a.b` for
   fields, `a[3]` for list items and `a["k"]` for map keys. `<what>` is `object`,
   `array`, `required field`, `signed 64-bit Int` (a JSON float, or an integer
   outside int64), `finite Float` (a big integer that rounds to infinity fails),
-  `Bool` or `String`.
-- `JSON.schema(T)` is `{type, properties, required}`, plus `$defs` when the
-  fields reach a struct. `required` leaves out the `JsonField` and `Optional`
-  fields and is left out itself when it would be empty. A `JsonField[T]` field
-  and an `Optional[T]` are `{"anyOf": [<T>, {"type": "null"}]}`. Each struct
-  reached appears once in `$defs` under its linked name (`@2::Point` for an
-  imported one). A struct field is `{"$ref": "#/$defs/<name>"}`, with `~`
-  written `~0` and `/` written `~1`. Int is `{"type": "integer", "minimum":
-  -2^63, "maximum": 2^63-1}`. The schema of an enum is `{"oneOf": [...]}` with
-  one object for each variant: `tag` is `{"enum": ["Name"]}` and `values` an
-  array with `minItems` and `maxItems` equal to the payload count and, when
-  there is a payload, `prefixItems` with one schema each; a variant with no
-  payload has `{"type": "array", "maxItems": 0}` and `required` is `["tag"]`
-  (`["tag", "values"]` otherwise). An enum reached from the target appears once
-  in `$defs` like a struct and is referenced the same way; an enum target is its
-  own `oneOf` with the `$defs` beside it.
+  `Bool` or `String`, with ` or null` after it where a `JsonField` or
+  `Optional` applies.
+- `JSON.schema(T)` writes each struct and enum reached once in `$defs` under its
+  linked name (`@2::Point` for an imported one), referenced by `{"$ref":
+  "#/$defs/<name>"}` with `~` written `~0` and `/` written `~1`. Int is
+  `{"type": "integer", "minimum": -2^63, "maximum": 2^63-1}`.
 - The VM walks the JSON tree and the type table with an explicit stack and
   builds the error path only on failure. Schema uses a queue. Neither recurses,
   so recursive structs and deep values are safe.

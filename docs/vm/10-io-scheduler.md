@@ -5,12 +5,10 @@ section says how the scheduler and the loop keep them.
 
 - **Target.** N scheduler threads, one global run queue and one I/O thread that
   runs the only libuv loop (§16; the rules per thread are in 10.2.3). With
-  `--schedulers 1` the scheduler and the loop share one thread.
-- **Tasks are VM stacks.** A blocking builtin starts a libuv request, parks its
-  task, and the scheduler runs another (10.2.1). Only the loop's thread calls
-  `uv_run`. libuv callbacks only copy results and mark tasks ready. TLS crypto
-  runs on the I/O thread, beside the socket state (§16.2).
-  Output order across tasks is not defined.
+  `--schedulers 1` the scheduler and the loop share one thread. A blocking
+  builtin starts a libuv request, parks its task, and the scheduler runs another
+  (10.2.1). libuv callbacks only copy results and mark tasks ready. Output order
+  across tasks is not defined.
 - **Output on the loop, blocking files.** Stdout and stderr are written by the
   loop (10.2.2), and so is the forwarded stderr of a child process. Only the
   fallbacks of §14.1 keep a blocking write. The VM never sets the thread pool
@@ -57,17 +55,14 @@ section says how the scheduler and the loop keep them.
   next instruction if its turn is spent. File builtins charge nothing: their
   work is I/O, at most 1 MiB per call.
 - **Test switches** (tests only; `rg AGENTICA_VM_TEST_ vm tests mk` lists them).
-  `AGENTICA_VM_TEST_NO_TURN_COST=1` skips the turn-cost charge. It changes only
-  when tasks switch, never output, step counts or diagnostics, so
-  `make vm-latency` can show that the latency test fails without the rule.
+  `AGENTICA_VM_TEST_NO_TURN_COST=1` skips the turn-cost charge, so `make
+  vm-latency` can show that the latency test fails without the rule.
 - **Fairness with I/O.** After each turn the scheduler calls
   `uv_run(UV_RUN_NOWAIT)`, so ready I/O and timers wake their tasks while others
-  compute. Tasks woken during a `NOWAIT` go behind the queued ones. With N=1 the
+  compute; tasks woken during it go behind the queued ones. With N=1 the
   scheduler blocks in `uv_run(UV_RUN_ONCE)` only when its queue is empty. A
   ready event waits at most for the turns queued ahead of it, each about one
-  budget plus the last builtin call of that turn. A parked task waits on I/O, a
-  timer, another live task (a timed await also has a timer), or a channel with a
-  timer.
+  budget plus the last builtin call of that turn.
 - **Quotas.**
   - `--max-steps` is one global budget shared by all tasks (`steps_left`, 6.1),
     and turn costs are never charged to it. With one task, a runaway program
@@ -95,21 +90,21 @@ section says how the scheduler and the loop keep them.
   costs one turn-cost unit per hop. It stops at a task with a timeout
   (`await_deadline` is set while it waits), since that task ends by itself.
 - **Await with a timeout (17c, `docs/future/27-iteration-and-concurrency.md`
-  §27.3).** `Task.await(task, timeout_ms)` returns `Await[T]` (`Await.Done(value)`
-  or `Await.TimedOut`); `Task.await_result` has the same second arity for a
-  `Result` target. `timeout_ms` of 0 or less is `RUNTIME-INVALID-DURATION` at
-  that argument, checked first. A target that has settled (done, and not closing
-  files) gives `Await.Done`, also when the timer and the target's end wake the
-  caller together. Otherwise the deadline is stored in the task
-  (`await_deadline`, set at the first call), the task joins the target's
-  waiters, and a task timer is armed (§16.9 "Timers"). The timed form runs no
-  cycle check, since it cannot wait forever: a task that awaits its own handle
-  with a timeout gets `Await.TimedOut`. The first of two wakes wins: the
-  target's end wakes the waiters and `resume` disarms the timer, or the timer's
-  retry leaves the waiters, clears `awaiting` and the deadline, and returns
-  `Await.TimedOut`. A wake before the deadline, with the target unsettled, waits
-  for the time left. After a timeout the target is untouched, and a later crash
-  or cancel of it does not reach the caller.
+  §27.3).** `Task.await(task, timeout_ms)` returns `Await[T]`
+  (`Await.Done(value)` or `Await.TimedOut`); `Task.await_result` has the same
+  second arity for a `Result` target. `timeout_ms` of 0 or less is
+  `RUNTIME-INVALID-DURATION` at that argument, checked first. A target that has
+  settled (done, and not closing files) gives `Await.Done`, also when the timer
+  and the target's end wake the caller together. Otherwise the deadline is
+  stored in the task (`await_deadline`, set at the first call), the task joins
+  the target's waiters, and a task timer is armed (§16.9 "Timers"). The timed
+  form runs no cycle check, since it cannot wait forever: a task that awaits its
+  own handle with a timeout gets `Await.TimedOut`. The first of two wakes wins:
+  the target's end wakes the waiters and `resume` disarms the timer, or the
+  timer's retry leaves the waiters, clears `awaiting` and the deadline, and
+  returns `Await.TimedOut`. A wake before the deadline, with the target
+  unsettled, waits for the time left. After a timeout the target is untouched,
+  and a later crash or cancel of it does not reach the caller.
 - **Ending with `main`.** When `main` returns, ready and parked tasks never run
   again, and the exit path (§14.4) does not wait for their jobs. A
   `System.exit`, a failure in `main`, `RUNTIME-STEP-LIMIT` or `RUNTIME-INTERNAL`
@@ -172,23 +167,23 @@ section says how the scheduler and the loop keep them.
   item. All items have the same timeout and start in input order, so their
   deadlines grow along the running list and one timer of the caller, for the
   oldest deadline, is enough. The step function runs when the caller wakes: it
-  moves ended items into their slots (a crashed item becomes
-  `error("task crashed: ...")`), expires the oldest item past its deadline
-  (`error("task: timed out")`, and `agc_task_cancel` stops it and its
-  descendants), starts items up to `limit`, and ends with the list once every
-  slot is set. An item reports its end through a hook (`end`, `end_data`) that
-  `finish_task` calls for a return, a crash and a cancel; the hook ignores an
-  item that already timed out. An item cancelled alone (through its handle from
-  `Task.current`) settles as `error("task: cancelled")`. When the cancel is that
-  of the caller or of an ancestor, the walk cancels the items first, and the
-  hook wakes the caller; the same walk then ends the caller like any parked task,
-  and a step it may still run writes slots nobody reads. An item with a file
-  close pending is not settled: the hook waits, and `agc_task_close_done` calls
-  it when the last close ends. If the deadline comes first, the item settles as
-  timed out without waiting for the close, and the hook, when the close ends,
-  finds a settled item and does nothing. An item that ends after its deadline,
-  but before the caller runs, keeps its result. At N>1 the hook runs on the
-  item's scheduler, under `rt->sync` (§16.9, "One coarse lock").
+  moves ended items into their slots (a crashed item becomes `error("task
+  crashed: ...")`), expires the oldest item past its deadline (`error("task:
+  timed out")`, and `agc_task_cancel` stops it and its descendants), starts
+  items up to `limit`, and ends with the list once every slot is set. An item
+  reports its end through a hook (`end`, `end_data`) that `finish_task` calls
+  for a return, a crash and a cancel; the hook ignores an item that already
+  timed out. An item cancelled alone (through its handle from `Task.current`)
+  settles as `error("task: cancelled")`. When the cancel is that of the caller
+  or of an ancestor, the walk cancels the items first, and the hook wakes the
+  caller; the same walk then ends the caller like any parked task, and a step it
+  may still run writes slots nobody reads. An item with a file close pending is
+  not settled: the hook waits, and `agc_task_close_done` calls it when the last
+  close ends. If the deadline comes first, the item settles as timed out without
+  waiting for the close, and the hook, when the close ends, finds a settled item
+  and does nothing. An item that ends after its deadline, but before the caller
+  runs, keeps its result. At N>1 the hook runs on the item's scheduler, under
+  `rt->sync` (§16.9, "One coarse lock").
 - **Stall check (N=1).** If the queue is empty, no libuv handle is alive, no
   timer of a task is armed (§16.9, "Timers"), and `main` is not done, the VM
   fails with `RUNTIME-INTERNAL` ("every task is waiting and nothing can wake
@@ -243,10 +238,10 @@ section says how the scheduler and the loop keep them.
   pollable, its `more` step keeps the same job and task waiting on the loop (a
   pool kind with a `cancel` half must have a `more` step, which `start_job`
   checks). A poller error is reported by repeating the step, so the call gets
-  the real error (`EPIPE` for a reader that left). `read_text` of a pipe, or of a
-  regular file that reports size 0 (`/proc`, `/sys`), reads to EOF, at most
-  1 MiB. `File.each_line` reads one job per read, of at most `buffer_bytes` into
-  a buffer made once, and between reads runs the block for every complete line
+  the real error (`EPIPE` for a reader that left). `read_text` of a pipe, or of
+  a regular file that reports size 0 (`/proc`, `/sys`), reads to EOF, at most 1
+  MiB. `File.each_line` reads one job per read, of at most `buffer_bytes` into a
+  buffer made once, and between reads runs the block for every complete line
   already buffered. A timed-out read closes the handle. On Windows no `File`
   call waits on the loop: `probe` refuses a named pipe or a device with
   `ENOTSUP`, and the call closes it (§14.1).
@@ -291,29 +286,28 @@ section says how the scheduler and the loop keep them.
   no blocked write. A CPU-bound task delays the stop by at most one turn.
 - **Per-handle lock.** A `FileHandle` has a `holder` (the job in flight), a
   `next_owner` task, and a FIFO of waiting tasks, all in GC memory. Every handle
-  builtin (`read_bytes`, `read_line`, `write`, `write_bytes`, `flush`, `close`)
-  checks its arguments and timeout first, then takes the lock, and only then
-  checks that the handle is open and has the right mode. A task that cannot take
-  the lock parks with retry on a timer at its deadline, which covers both the
-  lock wait and the operation. Release is a FIFO hand-off. The head waiter
+  builtin checks its arguments and timeout first, then takes the lock, and only
+  then checks that the handle is open and has the right mode. A task that cannot
+  take the lock parks with retry on a timer at its deadline, which covers both
+  the lock wait and the operation. Release is a FIFO hand-off: the head waiter
   becomes `next_owner` and is the only one woken, so the releasing task cannot
-  take the handle back in the same turn. A cancelled `next_owner` passes
+  take the handle back in the same turn, and a cancelled `next_owner` passes
   ownership on. So `close` waits for the operation in flight, two readers take
   turns, and buffered writes keep their order. On an operation timeout the stuck
   operation keeps the state, the handle is closed, and the next owner gets `file
   handle is closed`. A closing handle that a job still holds makes callers wait
-  for the lock as for any other handle. Once no job holds it, they get the
+  for the lock as for any other handle; once no job holds it, they get the
   closed error.
 - **Channel waits (17b, `vm/channel.c`).** A channel is a GC object: a ring
   buffer, the capacity, a closed flag, and two FIFOs of waiting receivers and
   senders linked through `wait_next`. The ring starts with at most 8 slots and
   doubles up to the capacity (one turn-cost unit per slot copied), so
-  `Channel.new(1048576)` allocates little. A call that must wait parks with retry
-  on a task timer whose clock starts late (`agc_task_park_within`, §16.9
+  `Channel.new(1048576)` allocates little. A call that must wait parks with
+  retry on a task timer whose clock starts late (`agc_task_park_within`, §16.9
   "Timers"). There is no job, so no `io` trace line; the `sched` trace shows
   `timer_arm` when the clock starts and `timer_fire`. A waiter wakes only with a
-  reservation, by a close or by its timer, so a retry with neither has timed out.
-  A timeout of 0 tries once and never parks.
+  reservation, by a close or by its timer, so a retry with neither has timed
+  out. A timeout of 0 tries once and never parks.
   - **Reservations.** A value that arrives while receivers wait is not put in
     the ring. The head receiver is popped, the value is stored in the task
     (`channel.value`), and the task is woken. This is a direct hand-off, so no
@@ -344,21 +338,21 @@ section says how the scheduler and the loop keep them.
     together stay true.
   - **An owner.** `Task.spawn_owning` can give a channel to the task it spawns
     (`agc_channel_claim`); §14.5 has the rules. Mid-FIFO removal is O(n), as for
-    the lock FIFO. A waiter whose timer fired before any wake still takes a value
-    that reached the ring before it re-ran, instead of failing at once.
+    the lock FIFO. A waiter whose timer fired before any wake still takes a
+    value that reached the ring before it re-ran, instead of failing at once.
 - **Detached jobs (20b).** When its task is cancelled, a job is detached. It has
-  no task, it is never abandoned with a close, and it runs to its own end or
-  deadline, keeping the handle's lock. Its `done` half runs and the result is
-  dropped, not charged to the current task. Its lock passes to the head waiter.
-  A handle that the dropped result would have handed out is closed. The
-  `expired` half never runs on a detached job, so it never closes a handle a
-  task holds. A kind may set a `cancel` half, which ends the job early and
-  returns true. A pool kind may have one only with a `more` step, and it is
-  called only once the job waits on the loop (§14.3), since a pool thread may
-  still use the data. `HttpWire.accept` and `HttpWire.wait` use it to leave at
-  once. For TCP and process kinds at the deadline, a read, accept or wait leaves
-  its handle open, a connect closes the socket it was opening, and a send waits
-  for its write callback. A listen has no deadline.
+  no task, is never abandoned with a close, and runs to its own end or deadline,
+  keeping the handle's lock. Its `done` half runs and the result is dropped, not
+  charged to the current task, and the lock passes to the head waiter. A handle
+  that the dropped result would have handed out is closed. The `expired` half
+  never runs on a detached job, so it never closes a handle a task holds. A kind
+  may set a `cancel` half, which ends the job early and returns true. A pool
+  kind may have one only with a `more` step, and it is called only once the job
+  waits on the loop (§14.3), since a pool thread may still use the data.
+  `HttpWire.accept` and `HttpWire.wait` use it to leave at once. For TCP and
+  process kinds at the deadline, a read, accept or wait leaves its handle open,
+  a connect closes the socket it was opening, and a send waits for its write
+  callback.
 - **External jobs.** A kind with `external` set has no `work` half. A libuv
   callback on the loop thread completes it, which puts the job on the ready
   list. A second call does nothing.
@@ -381,9 +375,9 @@ section says how the scheduler and the loop keep them.
   EOF), and anything else with `_read` in binary mode. The handle keeps the loop
   alive only while a read is out. A cancelled reader leaves the read in flight,
   as on Unix, and its bytes or EOF go to the next reader. At the end of the run
-  the read is cancelled where Windows can (`CancelSynchronousIo`, a pipe); a read
-  that cannot be cancelled ends with the process, or, in an in-process harness,
-  when input comes, and then touches nothing of the closed loop. Other
+  the read is cancelled where Windows can (`CancelSynchronousIo`, a pipe); a
+  read that cannot be cancelled ends with the process, or, in an in-process
+  harness, when input comes, and then touches nothing of the closed loop. Other
   unsupported hosts keep a blocking read on the interpreter thread.
 - **stdout and stderr (row 7.2.1f, `vm/output.c`).** Each stream has one output
   buffer, a `malloc`'d ring of 64 KiB (`AGC_OUTPUT_BUFFER`), and one FIFO of
@@ -396,17 +390,16 @@ section says how the scheduler and the loop keep them.
   the head waiter wakes when its whole text fits, and the retry finds its slot.
   `agc_output_waiting` hides that protocol from the builtins. A print longer
   than the buffer holds the stream and copies in pieces, so prints never
-  interleave, and nothing else the VM writes lands inside one. A print or a
-  flush inside a native callback cannot park (C waits on the thread's stack):
-  with no writer ahead it joins the FIFO as its head and runs the loop for the
-  writes in flight (`callback_turn`, `agc_io_pause`), and fires the timers of
-  its scheduler on each pass (`agc_task_nested_boundary`); behind a writer it
-  fails with `RUNTIME-NATIVE-CALLBACK`. A print has no
-  `timeout_ms`. Its wait is not a stall, since the writer is alive on the loop
-  (10.2.1). A cancelled waiter leaves the FIFO (`agc_output_leave`, §14.3), and
-  text it already copied is written whole. `IO.flush` returns when the data
-  reached the pipe or file, and fails when the stream failed (a reader that
-  left). The loop thread is the only writer of a loop stream.
+  interleave. A print or a flush inside a native callback cannot park (C waits
+  on the thread's stack): with no writer ahead it joins the FIFO as its head and
+  runs the loop for the writes in flight (`callback_turn`, `agc_io_pause`),
+  firing the timers of its scheduler on each pass; behind a writer it fails with
+  `RUNTIME-NATIVE-CALLBACK`. A print has no `timeout_ms`, and its wait is not a
+  stall, since the writer is alive on the loop. A cancelled waiter leaves the
+  FIFO (`agc_output_leave`, §14.3), and text it already copied is written whole.
+  `IO.flush` returns when the data reached the pipe or file, and fails when the
+  stream failed (a reader that left). The loop thread is the only writer of a
+  loop stream.
   - **How a stream is written.** `agc_output_open` (in `main`, after
     `agc_input_open`) picks the way. A pipe, FIFO or terminal is reopened
     through `/proc/self/fd/1` or `/proc/self/fd/2` (`agc_fd_reopen`, shared with
@@ -416,8 +409,8 @@ section says how the scheduler and the loop keep them.
     `send(MSG_DONTWAIT | MSG_NOSIGNAL)`. Both are written when the poller says
     the descriptor is writable; on macOS each write is first guarded by
     `poll(POLLOUT)` and cut to `PIPE_BUF` (a socket: `SO_SNDLOWAT`), because
-    `send(MSG_DONTWAIT)` alone stalled the loop on such a socket. The poller runs
-    one `external` detached job per writable event; its request holds the
+    `send(MSG_DONTWAIT)` alone stalled the loop on such a socket. The poller
+    runs one `external` detached job per writable event; its request holds the
     stream's index, not a pointer. A regular file, a block device, or a device
     that epoll refuses with `EPERM` (`/dev/null`, `/dev/full`), is drained by a
     pool job on the descriptor the process was given, since a reopen would reset
@@ -433,23 +426,23 @@ section says how the scheduler and the loop keep them.
     can write to) also goes to a pool job. Stdout and stderr in this mode hold
     one pool thread each, so with the default pool of 4 they leave 2 threads for
     files, DNS and processes. Windows resets a socket when its last handle
-    closes, and the reader loses what it has not read. So just before the exit, a
-    socket given as stdout or stderr gets `shutdown(SD_SEND)`
+    closes, and the reader loses what it has not read. So just before the exit,
+    a socket given as stdout or stderr gets `shutdown(SD_SEND)`
     (`agc_output_end`), but only when no write of it is in flight, when this
-    process holds every handle to it (`CompareObjectHandles`, Windows 10 1607 and
-    later), and, if it is also stdin, when no read of stdin is in flight. A
+    process holds every handle to it (`CompareObjectHandles`, Windows 10 1607
+    and later), and, if it is also stdin, when no read of stdin is in flight. A
     socket that is not overlapped serializes its I/O, so when it is both stdin
     and stdout, a blocked read stalls the writes of stdout, and that output is
-    lost after `--flush-timeout`. Where Unix makes one non-blocking write (a stop
-    signal, a final notice), Windows waits for the request up to 200 ms, shared
-    with the other final writes of the exit (`settle`).
+    lost after `--flush-timeout`. Where Unix makes one non-blocking write (a
+    stop signal, a final notice), Windows waits for the request up to 200 ms,
+    shared with the other final writes of the exit (`settle`).
   - **Descriptor guard.** A `File` path that names the reopened descriptor
     (above 2) through `/proc/self/fd` or `/proc/thread-self/fd` on Linux, or
     through `/dev/fd` elsewhere, is refused with the not-a-regular-file error
-    (`names_output_fd` in `vm/files.c`). The guard compares directories by
-    device and inode. Other `/proc/<pid>/task/<tid>/fd` paths reach the same
-    pipe as `/dev/stdout` does, and they stay open, as `/dev/stdout`,
-    `/dev/stderr`, `/proc/self/fd/1` and `/proc/self/fd/2` do (§2.8).
+    (`names_output_fd` in `vm/files.c`, comparing directories by device and
+    inode). Other `/proc/<pid>/task/<tid>/fd` paths reach the same pipe as
+    `/dev/stdout` does, and they stay open, as `/dev/stdout`, `/dev/stderr`,
+    `/proc/self/fd/1` and `/proc/self/fd/2` do (§2.8).
   - **Write errors.** A write error (`EPIPE`, `EIO`, `ENOSPC`) is final for the
     stream. The buffered data and the queued notices are dropped, the waiters
     wake, and the print that notices it fails with `RUNTIME-INTERNAL` (`cannot
@@ -470,15 +463,16 @@ section says how the scheduler and the loop keep them.
     of at most 1 MiB (a notice past that is dropped, so a stuck stderr cannot
     make the VM grow), which moves into the buffer ahead of the waiting writers,
     never between the pieces of a print that holds the stream. The driver
-    diagnostic of a failed run is a kept notice (`AGC_NOTICE_KEPT`), which the
-    1 MiB limit never drops; it is queued after the blocking streams are flushed
-    and before the end-of-run wait, inside a `setjmp` of `vm->fail`, so the flush
-    limit covers it. The flush warnings and the `RUNTIME-INTERNAL` write-error
-    diagnostic are final: `end_run` writes them without blocking, and what a
-    stuck pipe will not take is dropped, so a stuck stderr cannot hold the exit.
-    The flush-timeout warning is known only at the deadline, so it comes after
-    the diagnostic. If a pool job still writes the stream when the flush limit
-    runs out, a final notice is skipped, since a second write could block.
+    diagnostic of a failed run is a kept notice (`AGC_NOTICE_KEPT`), which the 1
+    MiB limit never drops; it is queued after the blocking streams are flushed
+    and before the end-of-run wait, inside a `setjmp` of `vm->fail`, so the
+    flush limit covers it. The flush warnings and the `RUNTIME-INTERNAL`
+    write-error diagnostic are final: `end_run` writes them without blocking,
+    and what a stuck pipe will not take is dropped, so a stuck stderr cannot
+    hold the exit. The flush-timeout warning is known only at the deadline, so
+    it comes after the diagnostic. If a pool job still writes the stream when
+    the flush limit runs out, a final notice is skipped, since a second write
+    could block.
   - **End of run and stop.** At the end of the run, stdout and stderr drain
     within the flush limit (§14.4). No task runs any more, so a cut print is
     abandoned with the pieces it copied. `agc_output_busy` moves the queued
@@ -493,10 +487,10 @@ section says how the scheduler and the loop keep them.
     arrival order with prints: a child that writes without end holds back
     `IO.warn` or `IO.flush` by at most what was queued when it came (the 64 KiB
     bound plus one read chunk). When more than 64 KiB wait, the child's pipe is
-    no longer read (`uv_read_stop`) until the queue is down to 32 KiB, so a stuck
-    stderr stops the child, not the loop. A failed stderr drops these bytes, and
-    fails the run only when program or VM text was lost with them. A full stdout
-    pipe stalls only the tasks that print.
+    no longer read (`uv_read_stop`) until the queue is down to 32 KiB, so a
+    stuck stderr stops the child, not the loop. A failed stderr drops these
+    bytes, and fails the run only when program or VM text was lost with them. A
+    full stdout pipe stalls only the tasks that print.
   - **Tests:** `tests/test_vm_stdout.py` (peer `tests/fixtures/stdout-peer.py`),
     `tests/test_vm_stop.py` and `vm/tests/output_test.c`.
 

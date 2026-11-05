@@ -12,16 +12,16 @@ flat array, the trie behind it, and the unboxed leaves of Int and Float lists
 on every `List.append` (numbers: `docs/vm-benchmarks.md`, "Lists (roadmap 8d)").
 
 **Unchanged.** The `List` API and its meaning: no language change, builtin,
-opcode or `.agcb` change, and the same output, diagnostic codes, spans (`list_index`
-keeps `span + 2`), step counts and goldens (§17.5). No program can see a
-mutation: lists stay immutable values (§17.6).
+opcode or `.agcb` change, and the same output, diagnostic codes, spans
+(`list_index` keeps `span + 2`), step counts and goldens (§17.5). No program can
+see a mutation: lists stay immutable values (§17.6).
 
 **Non-goals.**
 - No transients and no in-place `push` on an unshared list (§17.6).
 - No relaxed (RRB) nodes. `reverse`, `sort`, `Map.keys`, a `drop` that does not
   start at a multiple of 32 and a `concat` with a large right side stay O(n);
-  `take`, an aligned `drop` and `concat` share leaves (§17.11). `Queue[T]` (#988)
-  is the answer for FIFO use.
+  `take`, an aligned `drop` and `concat` share leaves (§17.11). `Queue[T]`
+  (#988) is the answer for FIFO use.
 - No empty list of its own: `[]` and the builtins that return nothing give the
   runtime's one shared empty list (`docs/future/34-shared-small-values.md`
   §34.6).
@@ -53,10 +53,10 @@ HAMT (`HAMT_BITS 5`, `vm/map.c`). `struct agc_list` and the node types live in
   boundary).
 - **Allocation.** The list object, branches and leaves come from `agc_alloc`
   (`GC_MALLOC`, zeroed, scanned): they hold GC pointers or `agc_value`s (§5.3).
-  Never `agc_alloc_atomic` for them; atomic stays for temporary arrays and, since
-  §17.12, for the leaves of numeric lists. Under `AGC_NO_GC` (the ASan build)
-  `agc_alloc` is `calloc`, kept until `agc_release_all`, so a test that makes
-  many versions holds all of them.
+  Never `agc_alloc_atomic` for them; atomic stays for temporary arrays and,
+  since §17.12, for the leaves of numeric lists. Under `AGC_NO_GC` (the ASan
+  build) `agc_alloc` is `calloc`, kept until `agc_release_all`, so a test that
+  makes many versions holds all of them.
 - **Why the tail is inline.** A push allocates one object, not a header plus a
   tail. The price is that a `set` in the trie also copies the tail (at most 512
   bytes). Pushes dominate real programs.
@@ -114,8 +114,8 @@ the stepper protocol. A new builtin that returns a list uses a sized builder.
 ### 17.4 The C API
 
 In `vm/value.h`, next to the map functions (`rg 'agc_list_' vm/value.h`),
-implemented in `vm/list.c`. `list.c` is core, like `map.c` (§15.1): it calls only
-`agc_alloc` and the size helpers, and takes no `agc_vm`.
+implemented in `vm/list.c`. `list.c` is core, like `map.c` (§15.1): it calls
+only `agc_alloc` and the size helpers, and takes no `agc_vm`.
 
 - `agc_list_get` and `agc_list_set` need `i < len`. The caller checks and fails
   with the program's diagnostic, as `LIST_GET` and `list_index` do; a bad index
@@ -132,10 +132,10 @@ implemented in `vm/list.c`. `list.c` is core, like `map.c` (§15.1): it calls on
 ### 17.5 Turn costs and step counts
 
 **Step counts do not change.** Steps are charged by `STEP` instructions, which
-the lowerer emits. The list natives charge `agc_charge`, which adds to the task's
-turn cost; `apply_cost` lowers only `turn_left`, never `steps_left` (§10.2.1:
-"Turn costs never touch it"). The goldens are the gate: a diff in an `.expected`
-from a list change is a bug.
+the lowerer emits. The list natives charge `agc_charge`, which adds to the
+task's turn cost; `apply_cost` lowers only `turn_left`, never `steps_left`
+(§10.2.1: "Turn costs never touch it"). The goldens are the gate: a diff in an
+`.expected` from a list change is a bug.
 
 **Turn costs.** `AGC_COST_SIZE` charges one unit per item copied or scanned, for
 the arguments before the call and the result after. "Constant work charges
@@ -160,9 +160,9 @@ vm-latency`, run alone, must still pass its 250 ms limit.
 - **No transients.** A builder lives in one C frame or in a task-private object
   (`agc_native`, a parse, decode or walk frame) that no value refers to until
   `finish`. A task cancelled halfway leaves a builder as garbage. An in-place
-  `push` on a list proven unshared is excluded: §10.2.3 requires such a change to
-  be proven unshared or made atomic, and the persistent `append` is fast enough
-  (§17.8). If that gate fails, the answer is a new design, not a patch.
+  `push` on a list proven unshared is excluded: §10.2.3 requires such a change
+  to be proven unshared or made atomic, and the persistent `append` is fast
+  enough (§17.8). If that gate fails, the answer is a new design, not a patch.
 - **Entry rule (§14.6).** `list.c` adds no subsystem and no way to wait, time
   out, cancel, end or own a handle, and has no mutable global.
 - **Sharing between versions is invisible.** Lists have no object identity (`==`
@@ -204,8 +204,8 @@ vm-latency`, run alone, must still pass its 250 ms limit.
 ### 17.10 Decisions
 
 Decided on 2026-10-14: `append`, `set` and a small `concat` cost 0 turn units
-(§17.5); `list-build` is the gate of the 8d benchmark claim; `take`, `drop` and a
-large `concat` stay O(n) with no RRB (§17.11 says what shares leaves).
+(§17.5); `list-build` is the gate of the 8d benchmark claim; `take`, `drop` and
+a large `concat` stay O(n) with no RRB (§17.11 says what shares leaves).
 
 ### 17.11 Bulk operations after the trie
 
@@ -241,12 +241,12 @@ Timing each operation on a million items against the flat array and CPython
 
 Step 3 of roadmap item 8d (`docs/future/38-value-representation.md` §38.6, item
 1). The owner decided on 2026-10-15 that the VM decides the kind, not the front
-end: the static types already say that a `List[Int]` holds only Ints, so the list
-code looks at the values it is given. Passing the checker's element type would
-need a new operand or builtin argument, a loader change, and a type for every
-list that C code makes (JSON, `String.split`, `Map.keys`, byte lists). The front
-end, the lowering, the bytecode format and the loader do not change, and `Int`
-stays 64 bits.
+end: the static types already say that a `List[Int]` holds only Ints, so the
+list code looks at the values it is given. Passing the checker's element type
+would need a new operand or builtin argument, a loader change, and a type for
+every list that C code makes (JSON, `String.split`, `Map.keys`, byte lists). The
+front end, the lowering, the bytecode format and the loader do not change, and
+`Int` stays 64 bits.
 
 **Kind.** A list has a kind, a `uint32_t` after `shift` that fits in the padding
 (the header stays 24 bytes):

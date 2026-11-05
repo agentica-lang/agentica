@@ -34,8 +34,8 @@ in this model; §16.6 maps each to the component that enforces it.
   bound, and the `KDF` derivations: at most one thread per scheduler, FIFO,
   apart from the libuv pool (§16.9). Its threads never touch GC memory.
 - **Handles and their owner tasks:** a socket, listener, pipe, terminal, process
-  or poller is a libuv handle on the I/O loop for its whole life. The task that
-  opened it owns it (§14.5). A regular file is not a handle on the loop: pool
+  or poller is a libuv handle on the I/O loop for its whole life, owned by the
+  task that opened it (§14.5). A regular file is not a handle on the loop: pool
   jobs use it as a descriptor.
 - **Jobs:** a task's pending operation: `malloc` memory with raw bytes and up to
   three libuv pieces (pool work, the one timer, a wait on the loop), owned by a
@@ -65,11 +65,10 @@ in this model; §16.6 maps each to the component that enforces it.
 ### 16.2 Threads
 
 - **One scheduler per logical core.** The default and the flag are in §10.2.3.
-- **The main thread starts the VM, then becomes the I/O thread.** Start-up (the
-  GC, the environment, the hash keys, the locale, the program load) and the
-  start of the scheduler threads come first. Then the main thread runs the only
-  libuv loop (timers, sockets, pipes, FIFOs, terminals, pollers). It also owns
-  the run's life cycle: the stop signals and the one exit path (§14.4).
+- **The main thread starts the VM, then becomes the I/O thread.** Start-up and
+  the start of the scheduler threads come first. Then the main thread runs the
+  only libuv loop and owns the run's life cycle: the stop signals and the one
+  exit path (§14.4).
 - **Only the I/O thread touches libuv.** The one call other threads make is
   `uv_async_send` on the inbox's handle, which libuv allows from any thread.
   Every step that calls libuv is a request to the I/O thread (§16.4). The pool
@@ -94,12 +93,10 @@ in the task (run queue) or in the request entry (inbox). A task push allocates
 nothing; a request push allocates its entry. A push is O(1) at the tail and a
 pop is O(1) at the head.
 
-The run queue is `vm/runq.c`: `agc_runq_push`, `agc_runq_wait` (the pop that
-waits) and `agc_runq_end`, with a `uv_cond_t`. A push signals the condvar after
-the unlock. The inbox (`vm/inbox.c`) has `agc_inbox_post` and `agc_inbox_run`,
-which takes the whole list. A solo queue never waits: `agc_runq_wait` returns
-NULL when it is empty. After the end, `agc_runq_wait` returns NULL even if tasks
-are left: the run is over. The rules:
+The run queue is `vm/runq.c` (a `uv_cond_t`; a push signals it after the
+unlock) and the inbox is `vm/inbox.c` (`agc_inbox_run` takes the whole list). A
+solo queue never waits: `agc_runq_wait` returns NULL when it is empty, and after
+the end it returns NULL even if tasks are left: the run is over. The rules:
 
 - **Wake after publish.** The producer prepares the entry outside the lock,
   links it under the lock, unlocks, and only then wakes the recipient. The lock
@@ -225,26 +222,22 @@ ready again. The woken task always comes back through the run queue. Each wait
 kind has a usual waker, but a wait can also end by its timeout or by a cancel,
 so a task can have two wakers at once.
 
-- **Pool job** (a regular file, DNS, TLS setup loads): woken by the I/O thread
-  in `after_work` (outcome, push). Also ended by the job's timer or a cancel.
-  The job is on the loop, and the task sits in no list.
-- **Loop job** (socket, pipe, FIFO, terminal, poller, a child's exit): woken by
-  the I/O thread when it calls `ready` (outcome, push). Also ended by the job's
-  timer or a cancel. No list.
+- **Pool job** (a regular file, DNS, TLS setup loads) and **loop job** (socket,
+  pipe, FIFO, terminal, poller, a child's exit): woken by the I/O thread
+  (outcome, push), in `after_work` or when it calls `ready`. Also ended by the
+  job's timer or a cancel. The task sits in no list.
 - **Timer** (`Task.sleep`, a deadline): woken by the owner scheduler in
   `agc_timers_run`. Also ended by a cancel. No list.
 - **Handle lock FIFO:** woken by the scheduler that ends the holder's job
-  (hand-on, push). Also ended by the lock wait's deadline (a timer of the task,
-  §16.9) or by a cancel. The list is the handle's FIFO, under `rt->sync`
-  (§16.9).
+  (hand-on, push). Also ended by the lock wait's deadline (a task timer, §16.9)
+  or by a cancel. The list is the handle's FIFO, under `rt->sync`.
 - **`Task.await`:** woken by the scheduler that ends the target task (push).
   Also ended by a cancel of the awaiter. The list is the target's awaiters,
   under that task's lock (§10.2.3).
 - **Stdin read that another task already started:** woken by the scheduler that
-  ends that read's job (push). Also ended by a cancel. The list is the input's
-  FIFO, under `rt->sync`.
+  ends that read's job. The list is the input's FIFO, under `rt->sync`.
 - **Channel** (`send` or `recv`, 17b): woken by the scheduler of the task that
-  sends, receives or closes (push). Also ended by the deadline (a timer) or by a
+  sends, receives or closes. Also ended by the deadline (a timer) or by a
   cancel. The list is the channel's waiter lists, under `rt->sync`.
 
 **The first to set the outcome wins** (§16.5). Two wakers can race, for example
@@ -307,13 +300,9 @@ talking to each other.
   `vm/process.c`, `uv_run` under a timer) until libuv's exit callbacks have
   reaped the children. `Process.close` does not wait on the loop thread. It
   parks its task on a job with a timer.
-- **One lock on the run queue** is shared by every scheduler and the I/O thread.
-  Measure it (§16.3).
-- **One I/O thread** may become the limit at a high rate of sockets. §16.10 is
-  the next step.
-- **A wake crosses threads.** An I/O result goes through a push and a condvar
-  signal before a scheduler runs the task. With `--schedulers 1` there is no
-  hop. Measure the latency.
+- **One lock on the run queue and one I/O thread** may become limits (§16.3,
+  §16.10). A wake crosses threads (a push and a condvar signal before a
+  scheduler runs the task); with `--schedulers 1` there is no hop.
 
 ### 16.9 As built
 
@@ -355,8 +344,8 @@ one exit path are as in §16.1 to §16.6. What differs:
   still in the queue skips its `work`; a running one drops the result once the
   call returns. What the end of the run waits for is in §14.4 (steps 0 and 3).
   - At N > 1 a compute job skips the I/O thread. The builtin runs with
-    `rt->sync` held, so its job waits in `vm->direct`, and `run_task` gives it to
-    the pool once the turn is over (`agc_io_submit_direct`, no START). On the
+    `rt->sync` held, so its job waits in `vm->direct`, and `run_task` gives it
+    to the pool once the turn is over (`agc_io_submit_direct`, no START). On the
     pool thread `compute_ended` ends the wait, puts the job on `loop->finished`
     and nudges a scheduler, which wakes the task into its runnext slot
     (`end_finished` in `agc_io_service`) or posts READY for a detached job. Only
@@ -514,28 +503,29 @@ one exit path are as in §16.1 to §16.6. What differs:
     the condvar signal while one spins. No wake is lost: a spinner leaves the
     count before it takes the lock for its wait, so it either sees `work`, finds
     the task in that wait, or left before the push read the count, which then
-    signals. A spinner may see several pushes that sent no signal, so the wake is
-    chained: a scheduler that leaves a spin or a wait with a task, while more
+    signals. A spinner may see several pushes that sent no signal, so the wake
+    is chained: a scheduler that leaves a spin or a wait with a task, while more
     tasks are queued, signals one more waiter. Spinners do not count as idle for
     the stall check; only the condvar wait does.
   - A task whose turn ends ready (a yield, or a wake during its own turn) goes
     back to the queue with `agc_runq_push_own` when its scheduler's slot is
-    empty, so that scheduler pops next. If the queue was empty, the push sends no
-    signal and does not set `work`: the task stays on that core. With a plain
+    empty, so that scheduler pops next. If the queue was empty, the push sends
+    no signal and does not set `work`: the task stays on that core. With a plain
     push, one CPU-bound task would wake an idle scheduler at every turn and move
     between cores. A timer or a service end at that turn boundary may fill the
-    slot after the push, and the slot's task may hold the thread for long. So the
-    scheduler marks the push (`agc_vm.own_pending`), and when its next pick takes
-    the slot while the mark is set, it sends the skipped wake (`agc_runq_kick`).
+    slot after the push, and the slot's task may hold the thread for long. So
+    the scheduler marks the push (`agc_vm.own_pending`), and when its next pick
+    takes the slot while the mark is set, it sends the skipped wake
+    (`agc_runq_kick`).
 - **A cancel is a claim.** `cancel_one` (`vm/task.c`) sets the target's atomic
   cancel flag, and then the state says who ends the task. Exactly one party
   does. A task on a turn (RUNNING, PARKING or WOKEN) is left to its scheduler,
   which reads the flag at the end of the turn and again after it publishes
   PARKED (`agc_task_end_turn`). Only the canceller's own task gets `vm->yield`;
-  another scheduler's task stops within one turn (§10.2.3). A READY task is taken
-  out of the queue and ended; if it is not in the queue (a waker set READY and
-  has not pushed, or a scheduler has popped it), `agc_task_next` ends it when it
-  pops it. A PARKED task is claimed by a CAS from PARKED to READY
+  another scheduler's task stops within one turn (§10.2.3). A READY task is
+  taken out of the queue and ended; if it is not in the queue (a waker set READY
+  and has not pushed, or a scheduler has popped it), `agc_task_next` ends it
+  when it pops it. A PARKED task is claimed by a CAS from PARKED to READY
   (`agc_task_claim`), the same race as a waker's, and the winner ends it. The
   ending (`end_cancelled`) walks the task's lists with `rt->sync` held.
 - **One coarse lock, not per-channel locks.** `rt->sync` (`vm/sync.c`, an
@@ -566,23 +556,24 @@ one exit path are as in §16.1 to §16.6. What differs:
     interpreter takes the lock around the steps of a stepper, and `run_half`
     (`vm/loop.c`) around the halves of a job whose kind says `locked`
     (`agc_io_kind.locked`). The end of a task takes it in `agc_task_end_turn`
-    and `agc_task_next`. The output builtins are not marked: a stream has its own
-    lock, taken inside `vm/output.c`.
-  - The lock nests. A scheduler counts its depth (`vm->sync_depth`) and takes and
-    drops the mutex at the outer level, so a cancel that wakes a task that ends a
-    `Task.map` item does not lock itself. `agc_sync_reset` drops it after an
-    `agc_fail` jumped out of a locked builtin.
+    and `agc_task_next`. The output builtins are not marked: a stream has its
+    own lock, taken inside `vm/output.c`.
+  - The lock nests. A scheduler counts its depth (`vm->sync_depth`) and takes
+    and drops the mutex at the outer level, so a cancel that wakes a task that
+    ends a `Task.map` item does not lock itself. `agc_sync_reset` drops it after
+    an `agc_fail` jumped out of a locked builtin.
   - Each stream has a lock (the base's, when two streams share one buffer). A
     print takes it for the copy into the ring or the join of the FIFO, and drops
     it before it returns, parks or fails; `agc_sync_reset` also drops a stream
-    lock that a failure left. The lock order is `rt->sync`, then a stream's lock,
-    then the I/O inbox's and the run queue's. No lock is held across a park.
+    lock that a failure left. The lock order is `rt->sync`, then a stream's
+    lock, then the I/O inbox's and the run queue's. No lock is held across a
+    park.
   - Both are solo until `agc_share`, which runs before a second thread exists
     (when the VM starts N > 1 schedulers, for the C tests, and for
     `AGENTICA_VM_TEST_SHARED=1`, a test-only switch that runs a program on one
-    scheduler with every lock on; `make test-shared` runs the binary test modules
-    that way). In that mode the lock placement is checked, not only exercised:
-    `agc_lock_drop` aborts when the caller is not the owner, and
+    scheduler with every lock on; `make test-shared` runs the binary test
+    modules that way). In that mode the lock placement is checked, not only
+    exercised: `agc_lock_drop` aborts when the caller is not the owner, and
     `agc_sync_assert` fails the run with `RUNTIME-INTERNAL` when a mutator of a
     shared list runs without the lock (`rg agc_sync_assert vm/`). Not yet under
     the lock: the profiling counters. A socket or a child needs no lock, since
@@ -621,16 +612,16 @@ Decided and built, with the rule that holds:
 - **The resource registry and the wait lists** (§16.9). One registry is shared
   under its own leaf lock, and the I/O thread goes from a job's id to the task
   through it (§16.5). The alternative, a registry owned by the I/O thread, would
-  make every free by a scheduler a request too. The handle's lock FIFO, the stdin
-  waiters, the awaiters list and the channels' waiter lists are all under
-  `rt->sync`; the alternatives were a short lock for each list, or FIFOs owned by
-  the I/O thread. A lock hand-on and a channel wake race the waiter's deadline (a
-  timer of the task, §16.9); both wakers run under `rt->sync`, and the state CAS
-  picks one. A losing lock hand-on must offer the lock to the next waiter. A
-  losing channel wake passes the value or slot on (§10.2.2).
-- **stdout and stderr on the loop** (§10.2.2). An OS lock cannot be held across a
-  park, so each stream has a short lock around its buffer and FIFO and a single
-  writer on the loop (§16.8).
+  make every free by a scheduler a request too. The handle's lock FIFO, the
+  stdin waiters, the awaiters list and the channels' waiter lists are all under
+  `rt->sync`; the alternatives were a short lock for each list, or FIFOs owned
+  by the I/O thread. A lock hand-on and a channel wake race the waiter's
+  deadline (a timer of the task, §16.9); both wakers run under `rt->sync`, and
+  the state CAS picks one. A losing lock hand-on must offer the lock to the next
+  waiter. A losing channel wake passes the value or slot on (§10.2.2).
+- **stdout and stderr on the loop** (§10.2.2). An OS lock cannot be held across
+  a park, so each stream has a short lock around its buffer and FIFO and a
+  single writer on the loop (§16.8).
 - **Read buffers and request slots** (built for sockets; §16.9). The I/O thread
   owns a connection's `agc_conn.in` and its request slots (a process's too); a
   read request gets its line or bytes as a `malloc`'d copy cut on the I/O
@@ -646,8 +637,8 @@ Open:
 - **The blocking fallback at the end of the run.** What stays open is the
   blocking fallback (one scheduler only, §16.9, "`--schedulers N`"). A scheduler
   can be blocked in a stdout write that holds the stream lock (a full pipe),
-  while the I/O thread's flush of that stream waits for the same lock. The second
-  stop signal is one way out (the write gets `EINTR`, §14.4), but a process
-  signal may not be delivered to that thread. Another is `pthread_kill` on the
-  schedulers. Whether the flush takes the lock with a limit is open. Streams on
-  the loop do not have this problem (§10.2.2).
+  while the I/O thread's flush of that stream waits for the same lock. The
+  second stop signal is one way out (the write gets `EINTR`, §14.4), but a
+  process signal may not be delivered to that thread. Another is `pthread_kill`
+  on the schedulers. Whether the flush takes the lock with a limit is open.
+  Streams on the loop do not have this problem (§10.2.2).
