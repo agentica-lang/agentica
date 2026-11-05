@@ -83,15 +83,13 @@ callbacks only set flags and queue the task. Only `vm/loop.c`,
 
 ## Files (`vm/files.c` and its adapters)
 
-- `vm/process_os.h`, `vm/process_posix.c`, `vm/process_windows.c`: the command
-  search rules of `Process.spawn`: what counts as a path, the PATH split and
-  quotes, the `.exe`/`.com` allowlist (no PATHEXT), and the names refused (a
-  trailing dot or space, or a `:` that is not a drive). The read of a child's
-  stdout beside libuv for `Process.read_available` is POSIX only.
-- `vm/duplex_os.h`, `vm/duplex_posix.c`, `vm/duplex_windows.c`: the ends of a
-  child channel (how the parent makes them, the `AGENTICA_CHANNEL` value each
-  system understands, how a child takes the inherited descriptors). `duplex.c`
-  keeps framing, limits, locks and timeouts.
+- Platform adapters (`vm/process_os.h`, `vm/duplex_os.h`, each with `*_posix.c`
+  and `*_windows.c`) own the command search rules of `Process.spawn` (what
+  counts as a path, the PATH split and quotes, the `.exe`/`.com` allowlist with
+  no PATHEXT, the names refused) and the ends of a child channel (the
+  `AGENTICA_CHANNEL` value each system understands). `duplex.c` keeps framing,
+  limits, locks and timeouts. The read of a child's stdout beside libuv for
+  `Process.read_available` is POSIX only.
 - `vm/files.c`: the `File`, `Dir` and `Path` builtins (`agc_file_builtins`,
   shared with Windows; `docs/vm/02-reference-behavior.md` §2.8). `vm/file_io.c`
   is the synchronous libuv filesystem adapter, with no VM state, run in pool
@@ -129,49 +127,30 @@ callbacks only set flags and queue the task. Only `vm/loop.c`,
   `/proc/self/fd` or `/proc/thread-self/fd` by device and inode. A child can
   still open `/proc/<VM pid>/fd/N`: the check covers the program's own file
   calls only. `owns_st` marks the request that frees the file state.
-- BDD driver builtins (pool jobs):
-    - `File.open(path, "create_private")` (`OP_OPEN_CREATE`) opens with
-    `O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW` and mode 0600, then takes the
-    write path.
-    - `File.try_lock` (`OP_TRY_LOCK`) is `flock(LOCK_EX | LOCK_NB)` after the
-    handle's own lock wait. A poller handle (pipe, FIFO) is refused at once; a
-    device that `fstat` reports as not a regular file is `FS_NOT_LOCKABLE`.
-    Results are `ok(true)` or `ok(false)`.
-    - `Path.remove` (`OP_REMOVE`) unlinks, repeating on `EINTR`; a missing path
-    is success. `EISDIR` calls `agc_remove_tree`, whose refusals map to
-    `FS_TREE_DEEP` and `FS_REFUSED`. A failure inside the tree reports that
-    entry's path.
-    - `Path.rename` (`OP_RENAME`) never replaces: `renameat2` with
-    `RENAME_NOREPLACE` (macOS `renameatx_np` with `RENAME_EXCL`), `MoveFileExW`
-    with no flags on Windows. There is no cross-volume copy fallback. The error
-    is `FS_RENAME` with both paths.
-    - `Path.real` (`OP_REAL`) calls `agc_fs_realpath` on the pool thread, with
-    no deadline. A failure is `FS_RESOLVE`; the result decodes lossily (one
-    U+FFFD per bad byte).
-    - `File.lstat` shares `work_stat` with `OP_STAT`; `Dir.mkdir_private` is one
-    `mkdir(0700)`.
+- BDD driver builtins (`File.open(path, "create_private")`, `File.try_lock`,
+  `Path.remove`, `Path.rename`, `Path.real`, `File.lstat`, `Dir.mkdir_private`)
+  are pool jobs with the rules of `docs/vm/02-reference-behavior.md` §2.8. Keep
+  their order of checks: the handle's own lock wait first, and a poller handle
+  (pipe, FIFO) is refused by `File.try_lock` at once. `Path.rename` never
+  replaces and has no cross-volume fallback. `Path.remove` repeats on `EINTR`, a
+  missing path is success, and `EISDIR` calls `agc_remove_tree`.
 - `File.each_line` and `File.foreach` share `agc_line_reader` (`agc_lines_new`,
   `agc_lines_next`, `agc_lines_stop` in `services.h`), a state machine that a
   stepper drives one line at a time (`lines_step`; for `foreach`, the terminal
   of `vm/lazy.c`, which takes `rt->sync` only around `agc_lines_next`). It reads
-  one `OP_READ_BLOCK` at a time into a buffer of `buffer_bytes + 1` bytes, made
-  once; each read is clamped to `buffer_bytes`, and the spare byte tells a last
-  line of exactly `buffer_bytes` from a longer one. `scan_line` (shared with
-  `read_line`) finds a terminator within the first `buffer_bytes` pending bytes
-  and strips one `\r`. A last line without a newline is returned at EOF. More
-  than `buffer_bytes` pending with no terminator fails with
-  `filesystem: line exceeds buffer_bytes`. Text is checked with
-  `agc_utf8_chars`. Check order: buffer range, then timeout, then the path
-  contract. A block error is the result, and the file closes with `OP_CLOSE`
-  first; every path that opened the file passes CLOSE before END.
-- The io trace logs `file_open handle=N` and `file_close handle=N` when the
-  registry forgets a handle; a timed-out close can log twice, and a handle open
-  at run end logs no close.
-- `Lazy.write_lines` writes through `agc_line_writer`: `OP_OPEN_WRITE`, then
-  each line and its LF into a handle buffer of `CHUNK` (64 KiB, not
-  `WRITE_BUFFER`), a full buffer going out as one `OP_WRITE`, then
-  `close_handle`. A line over `LIMIT` is an error. The handle is private, so no
-  handle lock is taken.
+  one `OP_READ_BLOCK` at a time into a buffer of `buffer_bytes + 1` bytes; each
+  read is clamped to `buffer_bytes`, and the spare byte tells a last line of
+  exactly `buffer_bytes` from a longer one. `scan_line` (shared with
+  `read_line`) strips one `\r`; a last line without a newline is returned at
+  EOF; more than `buffer_bytes` pending with no terminator fails with
+  `filesystem: line exceeds buffer_bytes`. Check order: buffer range, then
+  timeout, then the path contract. A block error is the result, and the file
+  closes with `OP_CLOSE` first; every path that opened the file passes CLOSE
+  before END.
+- `Lazy.write_lines` writes through `agc_line_writer`: each line and its LF go
+  into a handle buffer of `CHUNK` (64 KiB, not `WRITE_BUFFER`), a full buffer
+  going out as one `OP_WRITE`. A line over `LIMIT` is an error. The handle is
+  private, so no handle lock is taken.
 
 ## Input (`vm/input.c`)
 
@@ -264,21 +243,15 @@ callbacks only set flags and queue the task. Only `vm/loop.c`,
 - Windows locks use non-blocking `LockFileEx` over the whole file, so other
   handles cannot read or write the locked range either (unlike advisory
   `flock`). `file_state.locked` makes repeat calls on the same handle succeed.
-  Only `ERROR_LOCK_VIOLATION` becomes `EAGAIN`; access denied and other failures
-  stay errors.
+  Only `ERROR_LOCK_VIOLATION` becomes `EAGAIN`.
 - Windows `Path.remove` traverses by handle with no-follow, and validates the
   raw path before normalizing it. Destructive tests need the scratch harness.
-  Windows special file streams remain separate work.
-- Private creates and directories use a protected owner-only DACL. A private
-  handoff checks the owner, DACL, regular type and single link on the opened
-  handle before it marks that handle for deletion; a failed check preserves the
-  file. The native handoff deletion tests run only when `CI` is set, in
-  test-owned directories.
-- Filesystem adapter files and headers go in the explicit lists of
-  `vm/tools/check-layers.sh`. `file_io.h` stays forbidden to core files,
-  adapters stay independent of VM values, and `make vm-layers` (with its
-  planted-violation self-tests) runs before pushing changes to these boundaries.
+- A private handoff checks the owner, DACL, regular type and single link on the
+  opened handle before it marks that handle for deletion; a failed check
+  preserves the file (`docs/vm/08-loader-and-cli.md`). The native handoff
+  deletion tests run only when `CI` is set, in test-owned directories.
+- Filesystem adapter files and headers go in the lists of
+  `vm/tools/check-layers.sh`; run `make vm-layers` before pushing a change to
+  these boundaries.
 - `System.env` lookup (`vm/system.c`) keeps empty values, rejects NUL and `=`,
   and hides the private channel marker (case-insensitively on Windows).
-- Bytecode file reads are opened by `file_io.c` and consumed in `launch.c`;
-  `agentica.c` has no native file APIs.

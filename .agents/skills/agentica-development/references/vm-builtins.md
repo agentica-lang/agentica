@@ -143,13 +143,12 @@ must never crash or change the run):
 - `profile` is not an event category: `agc_profile_start` and
   `agc_profile_report` (`vm/profile.c`) own its counters, `interp.c` counts
   through the `profile_*` hooks (out of line and cold, and only in the copy of
-  `turn_loop` that has `profiling` true), and a new hook goes in the same
-  way, so the plain copy keeps its code. The per-instruction opcode and pair
-  counts (`profile_op`) are inline under `if (profiling)` instead, since a call
-  per instruction would slow the profiled run. Hooks in the one loop had made
-  `calls` 26% and `arithmetic` 14% slower. Measure a change of the
-  loop on more than one link layout (`docs/vm-benchmarks.md`): the same code
-  moves by 10 % with the order of the objects.
+  `turn_loop` that has `profiling` true), and a new hook goes in the same way,
+  so the plain copy keeps its code. The per-instruction opcode and pair counts
+  (`profile_op`) are inline under `if (profiling)` instead, since a call per
+  instruction would slow the profiled run. Measure a change of the loop on more
+  than one link layout (`docs/vm-benchmarks.md`): the same code moves by 10 %
+  with the order of the objects.
 - `Profile.measure` with the profile on is a
   stepper (`agc_profile_measure_step`, which `frame_code` recognizes); its
   `measures` list on the task is checked against the frames

@@ -20,51 +20,26 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   `make vm-tsan-run`, `make test-multicore-modules` (TCP, TLS, HTTP, process and
   BDD modules; `AGENTICA_VM_TEST_MODULE_SCHEDULERS`), and
   `vm/tests/threads_test.c` in C.
-- Task states are `_Atomic agc_task_state`: READY (in the run queue), RUNNING,
-  PARKING, PARKED, WOKEN, DONE. A waker CASes PARKED to READY and pushes it; a
-  PARKING task becomes WOKEN and is queued by nobody. A builtin that waits calls
-  `agc_task_parking` before it registers anything (a waiter list, a FIFO, or a
-  job, which `agc_io_start_then` does), then `agc_task_park(vm, retry)`.
-  `agc_task_unpark` undoes the mark when the builtin does not wait after all.
-- `agc_task_end_turn` (called by `agc_vm_run`) traces, reads the cancel flag,
-  then commits the park (PARKING to PARKED). A CAS that finds WOKEN queues the
-  task instead. After a commit the cancel flag is read once more; if it is set,
-  the task is claimed (`agc_task_claim`, PARKED to READY) and ended.
-  `agc_task_next` pops the next task, drops a DONE one, and ends a cancelled one
-  that a canceller could not take out of the queue. `agc_clock_ms` is the
-  deadline clock; it does not read the loop.
-- The run queue (`vm/runq.c`) is a FIFO through `agc_task.next` and one mutex,
-  in GC memory (`agc_runtime.runq`). It is solo (no lock, never waits) until
-  `agc_runq_share`, which runs before a second thread touches it. An idle
-  scheduler blocks in `agc_runq_wait` until a task is queued, or NULL after
-  `agc_runq_end`. A nudge (`agc_runq_nudge`) ends one wait with NULL, and the
-  scheduler then calls `agc_io_service`. An idle scheduler spins first
-  (`agc_runq_spin`, at N > 1), and a push skips the signal while one spins. A
-  task whose turn ends ready goes back with `agc_runq_push_own` (`requeue`).
-  Into an empty queue that push sends no signal, since its own scheduler pops it
-  next, so a lone task stays on one core. If that scheduler takes its `runnext`
-  slot first, the wake is sent then (`agc_runq_kick`). A task woken by another
-  scheduler goes to its `runnext` slot (`agc_vm.runnext`, taken first by
-  `agc_task_next`, `RUNNEXT_LIMIT`; §16.9, "Wakes between schedulers"). The
-  queue counts its idle schedulers for the I/O thread's stall check
-  (`agc_runq_quiet`).
-- Locks (`vm/sync.c`): `agc_lock` is solo until `agc_share`, and has an owner
-  token that aborts a drop by a thread that does not hold it. `rt->sync` is the
-  one coarse lock for the task tree, waiter lists, channels, `Task.map` groups,
+- The wake protocol (task states READY, RUNNING, PARKING, PARKED, WOKEN, DONE;
+  the run queue and `runnext`; a cancel as a claim; the one `rt->sync` lock and
+  its nesting) is `docs/vm/16-architecture.md` §16.9. Read it before changing
+  `vm/task.c`, `vm/runq.c` or `vm/sync.c`. Rules for builtin code:
+- A builtin that waits calls `agc_task_parking` before it registers anything (a
+  waiter list, a FIFO, or a job, which `agc_io_start_then` does), then
+  `agc_task_park(vm, retry)`. `agc_task_unpark` undoes the mark when the builtin
+  does not wait after all.
+- `rt->sync` covers the task tree, waiter lists, channels, `Task.map` groups,
   the logger table, stdin and the FIFOs. Each output stream has its own lock.
-  `agc_sync_take` and `agc_sync_drop` nest per scheduler (`vm->sync_depth`);
-  `agc_sync_reset` undoes them after `agc_fail`. The interpreter takes the lock
-  around each builtin whose row has `shared` set, a stepper step, the halves of
-  a job whose kind says `locked`, and each end of a task. Never hold it across a
-  park or a turn. Lock order: sync, then a stream's lock, then the inbox's and
-  the run queue's.
+  The interpreter takes `rt->sync` around each builtin whose row has `shared`
+  set, a stepper step, the halves of a job whose kind says `locked`, and each
+  end of a task. Never hold it across a park or a turn. Lock order: sync, then a
+  stream's lock, then the inbox's and the run queue's. `agc_sync_take` and
+  `agc_sync_drop` nest per scheduler; `agc_sync_reset` undoes them after
+  `agc_fail`.
 - `agc_sync_assert` fails the run when a shared VM reaches a checked mutator
-  without the lock (the list is in `docs/vm/16-architecture.md` §16.9: the task
-  tree, a channel's waiter queues, the logger table, a handle's waiters, holder
-  and `next_owner`, stdin's waiters). `agc_task_next` fails if a turn ended with
-  the lock held. `agc_share` turns all of this on. `AGENTICA_VM_TEST_SHARED=1`
-  does it for a whole run on one scheduler (`make test-shared` runs the binary
-  modules that way; `tests/test_vm_shared.py` covers the rarer paths).
+  without the lock; `agc_share` turns it on. `AGENTICA_VM_TEST_SHARED=1` does it
+  for a whole run on one scheduler (`make test-shared` runs the binary modules
+  that way; `tests/test_vm_shared.py` covers the rarer paths).
 - A new builtin that touches shared state sets `shared` to true in its row.
   `vm/tests/sync_test.c` checks that the task, `Task.map`, channel, logger,
   process, duplex, TCP and HTTP rows are marked, that no String, number or JSON
@@ -100,14 +75,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 - Each task has a `parent` and a `children` list. A task that ends hands its
   running children to its parent.
-- `agc_task_cancel` cancels a task and its descendants, children first. It sets
-  `cancelled`, then the one party that ends the task acts by the state: it takes
-  a READY task out of the run queue, or claims a PARKED one, detaches the job,
-  leaves the lock, await and stdin FIFOs, and ends it.
-- A task on a turn only gets `cancelled`; its own scheduler ends it at the end
-  of the turn. Only the canceller's own task gets `vm->yield`, so it stops after
-  the current builtin. A task spawned during that turn starts cancelled
-  (`spawn_child` reads the parent's flag under `rt->sync`).
+- `agc_task_cancel` cancels a task and its descendants, children first (the
+  claim protocol is §16.9). A task spawned during the canceller's turn starts
+  cancelled (`spawn_child` reads the parent's flag under `rt->sync`).
 - `Task.cancel` (`builtin_cancel`, `shared`) walks the tree through
   `cancel_tree`. It never waits. A caller that cancels itself or an ancestor
   stops after the call (`yield`). The `task-cancel-*` fixtures run at N = 1 and
@@ -202,17 +172,15 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Channels (`vm/channel.c`)
 
-- `agc_channel` is a GC object with a ring (8 slots at first, doubling to its
-  capacity, one turn-cost unit per slot copied). Each slot holds the value and
-  its send sequence number, so a value handed back by a cancelled receiver goes
-  back in its place and FIFO holds. Two FIFOs of waiting tasks (`wait_next`) and
-  counters for reserved values and slots.
+The ring, the reservations and the FIFOs of waiters are
+`docs/vm/10-io-scheduler.md` ("Channel waits"). Rules for the code:
+
 - A call that must wait parks with retry on the task's own timer
   (`agc_task_park_within`; no job, so no I/O trace line). A retry is recognised
   by `channel.channel == c`. A waiter is woken only by a reservation, a close or
   its timer, so a retry with neither has timed out.
 - A value for a waiting receiver is reserved in the receiver task
-  (`channel.value`). A freed slot is reserved for the head sender
+  (`channel.value`); a freed slot is reserved for the head sender
   (`channel.reserved`, via `offer_slot`). The pops skip tasks that are no longer
   parked (their timer won), and a woken waiter with a reservation does not
   search the FIFO again. `agc_channel_leave` (from `unlink_task`) removes a
@@ -230,16 +198,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 - Tag `AGC_T_ATS`, service layer; the rules are in
   `site/content/library/concurrency/ats.md`. A table is an `_Atomic` pointer to
   an immutable `state` (two persistent AVL trees over the same entries, by key
-  and by insertion number, plus the size). A writer builds the next state from
-  the one it loaded and installs it with a strong CAS, building again if another
-  writer won.
-- No row is `shared`: a call takes neither `rt->sync` nor a lock. A failure (an
-  `add` overflow, a wrong tag from forged bytecode) happens before the CAS, so
-  the table keeps its state. Keys compare Int before String. Tree depth is
-  bounded by the AVL height (at most 96 levels).
-- `vm/tests/ats_test.c` races threads on one table (in `VM_TSAN_TESTS`);
-  `tests/test_vm_ats.py` checks one table against a Python dict, with many tasks
-  at `--schedulers 4`.
+  and by insertion number, plus the size); a writer builds the next state and
+  installs it with a strong CAS, building again if another writer won.
+- No row is `shared`: a call takes neither `rt->sync` nor a lock. A failure
+  happens before the CAS, so the table keeps its state. `vm/tests/ats_test.c`
+  races threads on one table (in `VM_TSAN_TESTS`).
 
 ## Test builtins (`vm/testing.c`)
 
@@ -277,13 +240,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 - `make vm-latency` runs `tests/test_vm_latency.py` alone (`PY_ALONE` in
   `mk/test.mk`; CI runs it right after `make test`). On one scheduler, a
   sleeping task and a stdin reader must wake within 250 ms beside CPU, sort and
-  concat tasks. They must not do so with `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1`
-  (stdout and stderr stay on the blocking `FILE` fallback, so
-  `tests/test_vm_stdout.py` can test that path on Linux) or with
-  `AGENTICA_VM_TEST_NO_TURN_COST=1` (skips turn costs,
-  `docs/vm/10-io-scheduler.md` §10.2.1). A task reading a `FileHandle` in a loop
-  must let `main` close it, and the run must end. Every read from the VM has a
-  60-second timeout. The test skips when `AGENTICA_VM_BINARY` names another
+  concat tasks, and must not with `AGENTICA_VM_TEST_BLOCKING_OUTPUT=1` (stdout
+  and stderr on the blocking `FILE` fallback) or
+  `AGENTICA_VM_TEST_NO_TURN_COST=1` (no turn costs, `docs/vm/10-io-scheduler.md`
+  §10.2.1). A task reading a `FileHandle` in a loop must let `main` close it,
+  and the run must end. The test skips when `AGENTICA_VM_BINARY` names another
   binary.
 - The `task-*` fixtures keep tasks from running side by side wherever the
   step-limit span matters, since with several runnable tasks the span depends on
