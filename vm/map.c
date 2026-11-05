@@ -1,10 +1,9 @@
 /*
- * Maps in C: the persistent 32-way HAMT behind Map and Set, hashed with
- * SipHash-1-3 keyed by vm->rt->hash_key, with agc_map_put, get and delete (and
- * their _hash variants for tests), agc_map_add_hash (put that leaves a member
- * alone, for Set), agc_map_keys in insertion order, agc_set_subset and the
- * pair walk of == (agc_map_pairs). The order is a key list, newest first, where
- * a delete leaves a dead cell instead of copying the list. Core layer.
+ * Maps in C: the persistent 32-way HAMT behind Map and Set, hashed with SipHash-1-3 keyed by vm->rt->hash_key (an Int
+ * key with a keyed bijection), with agc_map_put, get and delete (and their _hash variants for tests), agc_map_add_hash
+ * (put that leaves a member alone, for Set), agc_map_keys in insertion order, agc_set_subset and the pair walk of ==
+ * (agc_map_pairs). The order is a key list, newest first, where a delete leaves a dead cell instead of copying the
+ * list. Core layer.
  * Design: docs/vm/05-values-execution-builtins.md §5.1.
  */
 #include "core.h"
@@ -78,13 +77,23 @@ static uint64_t siphash13(const uint64_t key[2], uint64_t domain, const uint8_t 
   return v0 ^ v1 ^ v2 ^ v3;
 }
 
+/* The hash of an Int key: the key XORed with the run's hash key, then the finalizer of MurmurHash3 (fmix64). Only the
+   key before the mix matters: an XOR after it would rename the slots of every node in the same way, and the table
+   would keep its shape, so there is none. Every step is a bijection of 64-bit words, so two different Ints never
+   share a hash. The table only chains keys with the same full hash (a collision node), so no choice of Int keys,
+   even one that knows the key, makes a lookup scan: the worst it can do is put keys at the last level, 13 nodes down
+   (HAMT_HASH_BITS / HAMT_BITS + 1). SipHash stays for String and Bytes keys, whose full hashes can collide. */
+static uint64_t int_hash(uint64_t key, uint64_t x) {
+  x ^= key;
+  x ^= x >> 33;
+  x *= 0xff51afd7ed558ccdULL;
+  x ^= x >> 33;
+  x *= 0xc4ceb9fe1a85ec53ULL;
+  return x ^ (x >> 33);
+}
+
 uint64_t agc_key_hash(agc_vm *vm, agc_value key) {
-  if (agc_is(key, AGC_T_INT)) {
-    uint64_t x = (uint64_t)agc_as_int(vm, key);
-    uint8_t bytes[8];
-    for (unsigned k = 0; k < 8; k++) bytes[k] = (uint8_t)(x >> (8 * k));
-    return siphash13(vm->rt->hash_key, (uint64_t)key.tag, bytes, sizeof bytes);
-  }
+  if (agc_is(key, AGC_T_INT)) return int_hash(vm->rt->hash_key[0], (uint64_t)agc_as_int(vm, key));
   /* The tag is the domain, so a String and a Bytes of the same bytes hash apart. */
   if (agc_is(key, AGC_T_BYTES)) {
     const agc_bytes *b = agc_as_bytes(vm, key);
@@ -129,7 +138,21 @@ static agc_hamt *copy_node(const agc_hamt *node) {
 
 static uint32_t slot_of(uint64_t hash, unsigned shift) { return (uint32_t)(hash >> shift) & 31u; }
 
-static uint32_t index_of(uint32_t bitmap, uint32_t bit) { return (uint32_t)__builtin_popcount(bitmap & (bit - 1)); }
+/* The set bits of X. Baseline x86-64 has no POPCNT, so __builtin_popcount there is a call into libgcc's
+   __popcountdi2 (2.7% of maze-bfs); the bit count below is branch-free and inline. A build for a CPU with POPCNT
+   (-mpopcnt, -march=native) and arm64 (cnt) keep the instruction. */
+static inline uint32_t bit_count(uint32_t x) {
+#if defined(__x86_64__) && !defined(__POPCNT__)
+  x -= (x >> 1) & 0x55555555u;
+  x = (x & 0x33333333u) + ((x >> 2) & 0x33333333u);
+  x = (x + (x >> 4)) & 0x0f0f0f0fu;
+  return (x * 0x01010101u) >> 24;
+#else
+  return (uint32_t)__builtin_popcount(x);
+#endif
+}
+
+static uint32_t index_of(uint32_t bitmap, uint32_t bit) { return bit_count(bitmap & (bit - 1)); }
 
 /* Copies the n items of src to dst with *add inserted at index at, or, when add
    is NULL, with the item at index at left out. */
@@ -148,7 +171,7 @@ static void splice_at(void *dst, const void *src, size_t n, size_t size, size_t 
 /* Copies one array of a node whose map goes from old_map to new_map, which
    differ at most in bit: the item of that slot comes in (add) or goes out. */
 static void splice(void *dst, const void *src, uint32_t old_map, uint32_t new_map, uint32_t bit, size_t size, const void *add) {
-  size_t n = (size_t)__builtin_popcount(old_map);
+  size_t n = bit_count(old_map);
   if (old_map == new_map) memcpy(dst, src, n * size);
   else splice_at(dst, src, n, size, index_of(old_map, bit), new_map & bit ? add : NULL);
 }
@@ -156,7 +179,7 @@ static void splice(void *dst, const void *src, uint32_t old_map, uint32_t new_ma
 /* node with the slot bit changed: the maps become datamap and nodemap, and leaf
    or child fills the slot when it comes in. */
 static agc_hamt *reshape(const agc_hamt *node, uint32_t bit, uint32_t datamap, uint32_t nodemap, const hamt_leaf *leaf, agc_hamt *child) {
-  agc_hamt *copy = new_node(datamap, nodemap, (uint32_t)__builtin_popcount(datamap), (uint32_t)__builtin_popcount(nodemap));
+  agc_hamt *copy = new_node(datamap, nodemap, bit_count(datamap), bit_count(nodemap));
   splice(copy->leaf, node->leaf, node->datamap, datamap, bit, sizeof(hamt_leaf), leaf);
   splice(kids_mut(copy), kids(node), node->nodemap, nodemap, bit, sizeof(agc_hamt *), &child);
   return copy;

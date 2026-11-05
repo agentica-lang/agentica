@@ -1,7 +1,8 @@
 /*
  * The JIT's code memory on Linux and macOS (docs/vm/05-values-execution-builtins.md §6.4, "Code memory"): anonymous
  * pages reserved without access, opened read-write, then sealed read-execute with mprotect, so no page is ever writable
- * and executable at once. The Windows side is mem_windows.c. Core layer.
+ * and executable at once; and the perf map that names the code for perf. The Windows side is mem_windows.c. Core
+ * layer.
  */
 #ifndef _WIN32
 #ifdef __APPLE__
@@ -11,7 +12,10 @@
 #endif
 #include "jit.h"
 
+#include <fcntl.h>
+#include <stdio.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #if defined(__aarch64__) && defined(__linux__)
 #include <sys/syscall.h>
@@ -43,6 +47,33 @@ bool agc_jit_mem_seal(void *pages, size_t size) {
 }
 
 void agc_jit_mem_unmap(void *pages, size_t size) { munmap(pages, size); }
+
+/* /tmp is shared and a PID is easy to guess: O_NOFOLLOW refuses a symbolic link planted at the name, O_NONBLOCK keeps a
+   FIFO there from blocking the start of the run (with no reader the open fails), and anything but a regular file of
+   this user with one link (a hard link could name one of the user's own files) is closed again. A new file is
+   owner-only, as perf wants the map to belong to the user who runs it. FRESH empties a map that an earlier process with
+   the same PID left, so perf reads no stale lines. */
+int agc_jit_mem_perf_open(bool fresh) {
+  char path[48];
+  snprintf(path, sizeof path, "/tmp/perf-%ld.map", (long)getpid());
+  int fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0600);
+  struct stat st;
+  if (fd >= 0 && (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_uid != geteuid() || st.st_nlink != 1)) {
+    close(fd);
+    return -1;
+  }
+  if (fd >= 0 && fresh && st.st_size > 0 && ftruncate(fd, 0) != 0) {
+    close(fd);
+    return -1;
+  }
+  return fd;
+}
+
+/* A short write leaves a cut line, which perf skips; the run goes on either way. */
+void agc_jit_mem_perf_write(int fd, const char *line, size_t len) {
+  ssize_t written = write(fd, line, len);
+  (void)written;
+}
 
 #if defined(__aarch64__) && defined(__linux__)
 /* Set once by agc_jit_mem_sync_register, before any other thread exists, and only read after: the threads started

@@ -1284,6 +1284,26 @@ def test_compiled_code_calls_compiled_functions_natively(tmp_path):
     assert transitions < (30000 if jit_host() else 1), transitions
 
 
+def test_perf_map_names_each_compiled_function_only_when_asked(tmp_path):
+    bytecode = compile_text(NATIVE.replace('  puts(total)\n', '  puts(total)\n  puts(System.pid())\n'), "perf",
+                            tmp_path)
+    for wanted in ("1", None):
+        result = run_vm(bytecode, "--jit", "always", env=vm_environment({"AGENTICA_PERF_MAP": wanted}))
+        assert result.code == 0, result.stderr
+        perf_map = Path(f"/tmp/perf-{result.stdout.splitlines()[1]}.map")
+        try:
+            lines = perf_map.read_text(encoding="utf-8").splitlines() if perf_map.exists() else []
+        finally:
+            perf_map.unlink(missing_ok=True)
+        if wanted is None or not jit_host() or sys.platform == "win32":
+            assert lines == [], lines
+            continue
+        # `START SIZE agentica:NAME`, in hex, one line per function, as perf reads /tmp/perf-PID.map.
+        entries = {line.split()[2]: (int(line.split()[0], 16), int(line.split()[1], 16)) for line in lines}
+        assert len(lines) == 3 and sorted(entries) == ["agentica:down", "agentica:fib", "agentica:main"], lines
+        assert all(start > 0 and size > 0 for start, size in entries.values()), lines
+
+
 @pytest.mark.parametrize("case", sorted(NATIVE_FAILURES))
 def test_a_failure_in_a_natively_called_function_matches_the_interpreter(tmp_path, case):
     code, statement = NATIVE_FAILURES[case]

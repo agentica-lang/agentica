@@ -34,6 +34,18 @@ bool agc_jit_mem_sync_registered(void) { return false; }
 
 bool agc_jit_mem_sync_cores(void) { return false; }
 
+/* perf is a Linux tool: no map. */
+int agc_jit_mem_perf_open(bool fresh) {
+  (void)fresh;
+  return -1;
+}
+
+void agc_jit_mem_perf_write(int fd, const char *line, size_t len) {
+  (void)fd;
+  (void)line;
+  (void)len;
+}
+
 void agc_jit_mem_unmap(void *pages, size_t size) {
   (void)size;
   VirtualFree(pages, 0, MEM_RELEASE);
