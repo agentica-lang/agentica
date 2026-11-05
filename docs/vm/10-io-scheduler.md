@@ -94,9 +94,8 @@ section says how the scheduler and the loop keep them.
   not park. A task that awaits its own handle is the shortest cycle. The walk
   costs one turn-cost unit per hop. It stops at a task with a timeout
   (`await_deadline` is set while it waits), since that task ends by itself.
-- **Await with a timeout (17c, `docs/future/27-iteration-and-concurrency.md`
-  §27.3).** `Task.await(task, timeout_ms)` returns `Await[T]`
-  (`Await.Done(value)` or `Await.TimedOut`). `Task.await_result` has the same
+- **Await with a timeout (17c).** `Task.await(task, timeout_ms)` returns
+  `Await[T]` (`Await.Done(value)` or `Await.TimedOut`). `Task.await_result` has the same
   second arity for a `Result` target. `timeout_ms` of 0 or less is
   `RUNTIME-INVALID-DURATION` at that argument, checked first. A target that has
   settled (done, and not closing files) gives `Await.Done` with the plain
@@ -414,8 +413,7 @@ section says how the scheduler and the loop keep them.
   Otherwise the task keeps a pointer to the text in its `output` slot
   (`agc_output_wait`; the GC scans task memory, so a big print is not copied
   twice) and parks in the FIFO. A later writer does not jump the queue. This is
-  the parking pattern of `docs/future/27-iteration-and-concurrency.md` §27.2:
-  the head waiter wakes when its whole text fits, and the retry finds its slot.
+  the parking pattern of channels: the head waiter wakes when its whole text fits, and the retry finds its slot.
   `agc_output_waiting` hides that protocol from the builtins. A print longer
   than the buffer holds the stream and copies in pieces, so prints never
   interleave, and nothing else the VM writes lands inside one. A print or a

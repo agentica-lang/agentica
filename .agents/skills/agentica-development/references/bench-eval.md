@@ -22,7 +22,7 @@ bench`; `AGENTICA_JIT=off` in the environment sets the JIT mode of every run
 list representation, in both modes:
 160,000 pushes (`--size 8`) take under 1 s, doubling n costs less than 2.5 times
 the time, and no other benchmark slows by more than 2%; `small-values` (the
-shared small values of §34: one-character and empty Strings, empty Lists, Maps
+shared small values (`docs/vm/05-values-execution-builtins.md` §5.4): one-character and empty Strings, empty Lists, Maps
 and Sets) is the guard for a change near those paths; `list-bulk` (`repeat`,
 `to_a`, `reverse`, `take`, `drop`, `concat`, `join`, `String.split` and `sort`
 of 60,000 to 500,000 items) guards bulk builds, which must stay within 1.3

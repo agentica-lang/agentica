@@ -1,8 +1,7 @@
 ## 15. VM layers
 
-**Status:** built (row 7.2.1b; checklist in
-[`07-vm.md`](../roadmap/07-vm.md#7l-vm-layers)). It follows the architecture
-note [§16](16-architecture.md).
+**Status:** built; the rest of the layers is issue #998. It follows the
+architecture note [§16](16-architecture.md).
 
 The C VM has three layers (core, services, adapters) with one-way dependencies,
 a driver that wires them, one port between the services and the core, one header

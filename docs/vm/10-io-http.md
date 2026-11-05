@@ -60,16 +60,15 @@ after the limit check.
 
 HTTP is split between the C builtin module `HttpWire` and the Agentica module
 `std/http.agc`, which programs import as `HTTP`. The API, options, limits and
-answers are in `site/content/library/io-and-system/network.md`. Client
-streaming is planned in `docs/future/30-hybrid-http.md`.
+answers are in `site/content/library/io-and-system/network.md`.
 Both halves build and run on Linux, macOS and Windows: the C side works on
 libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
 
 - **C (`HttpWire`)** is VM-only and std-only. It keeps the byte-level,
   security-critical and shared parts: the parser and decoder (10.6), the bytes
   of the error answers and of the response head, the client's
-  pool and its `SSL_CTX` (one per client, until `TlsContext`,
-  `docs/future/29-tls-context.md`), and the server's slots, task group and
+  pool and its `SSL_CTX` (one per client, or the program's `TlsContext`), and
+  the server's slots, task group and
   `close_server`. The server's parsing functions hold no state: each takes the
   bytes read so far and returns a record.
 - **`std/http`** keeps the rest: options, URL parsing, request building, the
@@ -105,7 +104,7 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
 - **The app returns its answer**, `Fn[HttpRequest, RequestBody, Result[Answer]]`
   (a `Handler`, `Fn[HttpRequest, Result[HttpResponse]]`, under `HTTP.app`).
   An `error` becomes a 500 (10.7.3). The returned `Result` is used, so
-  `CHECK-UNUSED-RESULT` applies (`docs/future/26-strict-diagnostics.md`).
+  `CHECK-UNUSED-RESULT` applies.
 - **Response framing** is always `Content-Length`, never chunked, never
   trailers. `HEAD` gets the head and no body, with the `Content-Length` of the
   body it would have sent. 204 and 304 get no body and no `Content-Length`, and

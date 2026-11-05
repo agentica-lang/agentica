@@ -9,7 +9,7 @@ bytecode) and the `std/` sources inside. The build starts from the checked-in
 
 ```text
 VERSION             the version, one line (read by the Makefile)
-compiler/           the front end in Agentica (§18), one folder per context
+compiler/           the front end in Agentica, one folder per context
                     (`ls compiler/`): app (CLI, pipeline), io (the only I/O of
                     the stages), packages (manifest, lock, cache), catalog
                     (builtins, prelude), analysis (queries shared by the CLI
@@ -26,16 +26,17 @@ tests/              pytest: test_<area>.py; test_spec_<area>.py are the language
                     rules through the CLI; fixtures/ (goldens, Node/Python peers)
 examples/           small programs per feature (README.md lists them)
 docs/               grammar/ (the language definition, index: docs/grammar.md),
-                    vm/ (VM design); future/ and roadmap/ are frozen history
-                    (2026-11-03), not where plans live: see GitHub issues
+                    vm/ (VM design), future/ (the design decisions of planned
+                    features and what was decided against; plans live in GitHub
+                    issues)
 site/content/       Hugo documentation site
 benchmarks/         make bench programs and Python twins
 .agents/skills/     agent skills; also documentation-pruning (shrinking docs)
 ```
 
-Each of `docs/grammar/`, `docs/future/`, `docs/roadmap/` and `docs/vm/` has a
-`README.md` index; files keep their section and phase numbers (`§10.4`,
-phase 13).
+`docs/grammar.md` indexes `docs/grammar/`, and `docs/vm/` and `docs/future/`
+have a `README.md` index; files keep their section numbers (`§10.4`), so gaps
+stay.
 
 ## Commands
 
@@ -141,8 +142,9 @@ phase 13).
 - Planned and pending work lives in GitHub issues of `agentica-lang/agentica`
   (kind label, `area:*` label, a milestone per release). A PR that finishes one
   says `Closes #N` and updates the development skill when it changes how to
-  work. Do not edit `docs/roadmap/` or `docs/future/` (frozen on 2026-11-03)
-  except to fix a broken link, and never add files there.
+  work. Plans live in GitHub issues and shipped work in `CHANGELOG.md` and the
+  merged PR: `docs/future/` keeps only the decisions of a planned feature whose
+  issue points there, and a PR that lands the feature deletes its section.
 - When the language changes, update `docs/grammar/`, the site page and the
   programming skill together. When a builtin or a `std/` module changes,
   update its page in `site/content/library/`, the only home of the library

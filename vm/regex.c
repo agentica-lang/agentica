@@ -1,5 +1,5 @@
 /*
- * RegexEngine.search, the matcher of std/regex (docs/future/48-regex.md §48.3, 48c): a Pike VM over the code points
+ * RegexEngine.search, the matcher of std/regex: a Pike VM over the code points
  * of a String, run as a stepper (port.h) so that a long search yields between turns and meets --max-steps. std/regex
  * parses and compiles the pattern; this file runs the compiled program and checks it first, as any caller could pass
  * any lists. Service layer.

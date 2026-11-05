@@ -291,7 +291,7 @@ registration first (`check_register.agc`), then bodies.
 ## Compiler prelude implementation
 
 A prelude method is a builtin written in Agentica
-(`docs/future/25-ruby-typed-idioms.md` 25.6). Its catalog row has `Rule.Prelude`
+(`stdlib/prelude/`). Its catalog row has `Rule.Prelude`
 and an empty implementation key. `prelude_data.agc` says which file and function
 run it: `plain`, `limited` (for a variable only some types may take) or `chosen`
 (one function per type of the variable). The body is a `def` in
@@ -375,7 +375,7 @@ except that a builtin with no effects whose result is unused is
 `CHECK-UNUSED-VALUE`: the `Test` assertions carry the effect `test`, so they are
 not that error (they still return a `Result`, so a dropped one is
 `CHECK-UNUSED-RESULT`). `Test.eq` uses the rule `TestEq`: both arguments have
-one data type (the types with `to_s`, the §25.4 equality set plus `Json`).
+one data type (the types with `to_s`, the types with value equality plus `Json`).
 `TestCase` is opaque and `Test` is reserved.
 
 - Every implementation key must be in `VM_BUILTINS` of

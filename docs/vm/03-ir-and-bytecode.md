@@ -463,8 +463,7 @@ The emitter merges adjacent `step`s with no label between them into one
 variant ids are 16-bit operands too, so more than 65535 of either is
 `BYTECODE-LIMIT`. Any change to charge points is allowed if every loop and
 recursion still charges at least one step per round, so a runaway program still
-stops with `RUNTIME-STEP-LIMIT`. The optimization items are in
-`docs/roadmap/07-vm.md`.
+stops with `RUNTIME-STEP-LIMIT`. The optimization items are in issue #1001.
 
 ### 4.5 Builtin imports
 

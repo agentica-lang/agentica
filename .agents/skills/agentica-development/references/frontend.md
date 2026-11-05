@@ -20,17 +20,21 @@ diagnostic: `Lexer.lex` returns `Diag.Outcome`, and other stages may use
   are passed in, never read inside. A new environment variable gets a `--name=V`
   flag in `link.agc`, `check.agc`, `lower.agc` and `bytecode.agc`, and a value
   in the hermetic test environment.
-- Packages (`packages/`, §45): rules in `docs/grammar/05b-modules.md`. Docs
-  (`docs/`, §32.5): `agentica doc` links a module only when it has re-exports
+- Packages (`packages/`): rules in `docs/grammar/05b-modules.md`. Docs
+  (`docs/`): `agentica doc` links a module only when it has re-exports
   (`docs/doc_origins.agc`); tests in `tests/test_spec_doc.py`.
-- Query (`query/`, §39): `outline`, `type-at`, `symbol`, `refs`
+- Query (`query/`): `outline`, `type-at`, `symbol`, `refs`
   (`app/cli_query.agc`). `type-at` and `refs` link and check
   (`analysis/front.agc` `query_file`; a missing `main` is not `CHECK-MAIN`);
   `symbol` links only. A local comes from `locals.agc` and `Checked.bound`, kept
   apart from `Checked.types` so lowering never sees it. The tree has no span for
   a name inside a call or a pattern, so `written` reads the dotted name from the
   text. Tests: `tests/test_spec_{outline,type_at,symbol,refs}.py`.
-- Analysis (`analysis/`, §39, `std/analysis`): `analysis.agc` is the one
+- Formatter (`format/`): a syntax change updates the printer in the same PR. A
+  node without a layout rule makes `fmt` refuse the file (`FMT-INTERNAL`); it
+  never guesses. Heredocs are printed byte for byte and force a broken call.
+  Goldens: `tests/fixtures/frontend/format/`.
+- Analysis (`analysis/`, `std/analysis`): `analysis.agc` is the one
   implementation of `check`, `outline`, `type-at`, `symbol` and `refs`, called
   by `app/` and `stdlib/analysis.agc`. It returns the plain structs of
   `model.agc` (no enum; `""` and empty lists for absent values), which `query/`

@@ -430,6 +430,6 @@ bool agc_text_checked(agc_vm *vm, agc_value v, agc_string **text) {
   return true;
 }
 
-/* The inspect form, except that a Json at any depth is its canonical text
-   (docs/future/36-unit-tests.md §36.3), for Test.eq's expected and actual. */
+/* The inspect form, except that a Json at any depth is its canonical text,
+   for Test.eq's expected and actual. */
 agc_string *agc_test_text(agc_vm *vm, agc_value v) { return debug_text(vm, v, true, NULL); }

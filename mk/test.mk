@@ -6,8 +6,7 @@
   docker-test-image windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions test-jit-off
 
 # Tests live in tests/test_<area>.py and run through pytest; unittest.TestCase modules remain supported.
-# TESTS names modules, or directories that hold them (the default is tests/). Design: references/ci.md,
-# docs/future/18-front-end-language.md §18.7.
+# TESTS names modules, or directories that hold them (the default is tests/). Design: references/ci.md.
 # Fast Python tests:           make test [TESTS="tests/test_vm_bits.py ..."]
 # Test groups:                 make tests KIND=fast|files|slow|all [DOCKER=1|WINE=1]
 # More or fewer workers:       make test JOBS=8
@@ -150,7 +149,7 @@ eval-references:
 vm-latency: $(PRODUCT)
 	@$(MAKE) --no-print-directory test-py TESTS=tests/test_vm_latency.py
 
-# The timing cases of Task.map (docs/future/27-iteration-and-concurrency.md 27.1), alone for the same reason
+# The timing cases of Task.map alone for the same reason
 vm-task-map: $(PRODUCT)
 	@$(MAKE) --no-print-directory test-py TESTS=tests/test_vm_task_map.py
 
@@ -217,8 +216,7 @@ test-bdd: $(if $(filter true,$(GITHUB_ACTIONS)),$(PRODUCT))
 smoke: $(PRODUCT)
 	tests/smoke.sh
 
-# The layout of compiler/ and stdlib/: `agentica fmt --check` lists every file that the formatter would change
-# (docs/future/47-formatter.md).
+# The layout of compiler/ and stdlib/: `agentica fmt --check` lists every file that the formatter would change.
 fmt-check: $(PRODUCT)
 	$(PRODUCT) fmt --check compiler stdlib
 

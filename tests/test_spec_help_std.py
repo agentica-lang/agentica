@@ -1,5 +1,5 @@
 """`agentica help std/MODULE[.NAME]` through the product CLI: the exports of a standard module, or one export, with
-their `##` docs (docs/future/32-doc-comments.md, 32.6). The cases read the JSON form and assert fields, codes and exit
+their `##` docs. The cases read the JSON form and assert fields, codes and exit
 codes, never message text; one case reads the text form."""
 import json
 

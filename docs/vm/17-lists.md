@@ -1,15 +1,14 @@
 ## 17. Faster lists: a persistent vector behind `List`
 
-**Status:** built (roadmap item 8d,
-[`08-data-structures.md`](../roadmap/08-data-structures.md)): the API over the
-flat array, the trie behind it, and the unboxed leaves of Int and Float lists
-(§17.12). The code is `vm/list.c` and `vm/list_impl.h`.
+**Status:** built: the API over the flat array, the trie behind it, and the
+unboxed leaves of Int and Float lists (§17.12). The code is `vm/list.c` and
+`vm/list_impl.h`.
 
 ### 17.1 Goal and non-goals
 
 **Goal.** `xs = xs.push(x)` in a loop costs O(n) in total, and `xs[i]`,
 `List.at` and `List.set` cost O(log32 n). The flat array copied the whole list
-on every `List.append` (numbers: `docs/vm-benchmarks.md`, "Lists (roadmap 8d)").
+on every `List.append` (numbers: `docs/vm-benchmarks.md`, "Lists").
 
 **Unchanged.** The `List` API and its meaning: no language change, builtin,
 opcode or `.agcb` change. Output, diagnostic codes and spans (`list_index`
@@ -24,11 +23,11 @@ immutable values (§17.6).
   `take`, an aligned `drop` and `concat` share leaves (§17.11).
 - No empty list of its own: `[]` and the builtins that return nothing give the
   runtime's one shared empty list
-  ([§34.6](../future/34-shared-small-values.md#346-as-built)).
+  ([§5.4](05-values-execution-builtins.md#54-shared-small-values)).
 - No cursor opcode for `for` (§17.3).
 
 Unboxed `List[Int]` and `List[Float]` leaves are the first step of
-[§38.6](../future/38-value-representation.md), built as §17.12. Every site goes
+[§5.5](05-values-execution-builtins.md#55-why-a-value-is-16-bytes), built as §17.12. Every site goes
 through the API of §17.4, so that step changed `vm/list.c` and little else. The
 VM decides the kind of a list from its values; the front end passes nothing.
 
@@ -71,7 +70,7 @@ kinds, §17.12).
   items). The branches add 1.6% to memory.
 - **Builders** are the only code that writes to a list, and only before it is
   returned (the rule of
-  [§34.3](../future/34-shared-small-values.md#343-why-it-is-safe)).
+  [§5.4](05-values-execution-builtins.md#54-shared-small-values)).
   `agc_list_builder_sized(&b, n)` allocates the final list object and, for n >
   32, the whole trie at once: one array per branch level, then one array of the
   `tail_off(n)` items. The leaves are 32-item slices of that array, so a build
@@ -83,11 +82,10 @@ kinds, §17.12).
   place is safe. A later `set` copies the leaf it changes, so the array lives as
   long as a list shares one of its leaves. Bulk copies fill the builder a leaf
   at a time with `memcpy`.
-- **Unknown count.** `filter`, and `Task.map` (`vm/task_map.c`,
-  [§27.1](../future/27-iteration-and-concurrency.md#271-taskmap), results arrive
-  out of order), fill a flat staging array and call `agc_list_from_array(items,
-  n)` at the end, so the result is right-sized
-  ([§34.6](../future/34-shared-small-values.md#346-as-built)).
+- **Unknown count.** `filter`, and `Task.map` (`vm/task_map.c`, results arrive
+  out of order), fill a flat staging array and call
+  `agc_list_from_array(items, n)` at the end, so the result is right-sized
+  ([§5.4](05-values-execution-builtins.md#54-shared-small-values)).
 
 ### 17.3 Operations
 
@@ -289,7 +287,7 @@ Timing each operation on a million items against the flat array and CPython
   charge `n * ceil(log2 n)` is unchanged.
 - **Split.** `split` returns the runtime's shared one-character Strings
   (`rt->chars`, made at start-up) for a one-byte ASCII piece. Strings have no
-  identity ([§34.3](../future/34-shared-small-values.md#343-why-it-is-safe)), so
+  identity ([§5.4](05-values-execution-builtins.md#54-shared-small-values)), so
   a program cannot tell. A million-character `split("")` allocates no String.
 - **Inline paths.** `agc_list_builder_push` and `agc_list_cursor_next` are
   inline in `value.h`, with `agc_list_builder_more` and `agc_list_cursor_fill`
@@ -301,9 +299,10 @@ Timing each operation on a million items against the flat array and CPython
 
 ### 17.12 Unboxed numeric leaves
 
-Step 3 of roadmap item 8d ([§38.6](../future/38-value-representation.md), item
-1). The owner decided on 2026-10-15 that the VM decides the kind, not the front
-end. The earlier plan had the checker's element type reach the VM. That needs a
+Step 3 of the faster lists
+([§5.5](05-values-execution-builtins.md#55-why-a-value-is-16-bytes)). The owner
+decided on 2026-10-15 that the VM decides the kind, not the front end. The
+earlier plan had the checker's element type reach the VM. That needs a
 new operand or builtin argument, a loader change, and a type for every list that
 C code makes (JSON, `String.split`, `Map.keys`, byte lists). The static types
 already say that a `List[Int]` holds only Ints, so the list code looks at the
@@ -387,8 +386,7 @@ unchanged.
 items is 24 + 8k bytes. A builder is 48 bytes: the list, the write pointers, the
 count and the kind. Step counts, turn costs (one unit per item) and the `.agcb`
 format do not change. The numbers are in
-[`docs/vm-benchmarks.md`](../vm-benchmarks.md), "Unboxed numeric leaves (roadmap
-8d step 3)".
+[`docs/vm-benchmarks.md`](../vm-benchmarks.md), "Unboxed numeric leaves".
 
 **Left as it was.** `filter` still stages `agc_value`s before `from_array` packs
 the result. Registers, calls, structs, maps and Json values stay `agc_value`.

@@ -1,6 +1,5 @@
-"""`agentica type-at` through the product CLI: the type and the definition at a position of a checked program
-(docs/future/39-semantic-cli.md, 39.3 to 39.7). The cases read the JSON form and assert the type, the kind, the spans,
-the codes and the exit codes, never message text; one case reads the text form."""
+"""`agentica type-at` through the product CLI: the type and the definition at a position of a checked program. The cases read the JSON form and assert the type, the kind,
+the spans, the codes and the exit codes, never message text; one case reads the text form."""
 import json
 import os
 

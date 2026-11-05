@@ -1,4 +1,4 @@
-"""`agentica add` and `agentica update`: the lock writer and the manifest writer (docs/future/45-packages.md, 45c).
+"""`agentica add` and `agentica update`: the lock writer and the manifest writer.
 
 The remote of every case is a bare git repository in a temporary folder behind a throwaway HOME (tests/package_support.py,
 `Remotes`), so nothing touches the network. The lock the commands write is compared byte for byte with the one the Python

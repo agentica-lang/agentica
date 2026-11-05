@@ -1,5 +1,5 @@
 """`agentica refs` through the product CLI: the references to a name, or to the name at a position, in a checked program
-linked from FILE and the PATH... of the command (docs/future/39-semantic-cli.md, 39.3 to 39.7). The cases read the JSON
+linked from FILE and the PATH... of the command. The cases read the JSON
 form and assert kinds, spans, files, functions, the codes and the exit codes, never message text; one case reads the
 text form."""
 import json

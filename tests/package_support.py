@@ -1,7 +1,7 @@
-"""Packages for the tests of the manager (docs/future/45-packages.md, phases 45a to 45c).
+"""Packages for the tests of the manager.
 
-`Workspace` fills the deps/ folder of the project by hand (a build reads packages only from there); `Remotes` makes git repositories that `agentica install`, `add` and
-`update` fetch from. `package_hash` is the hash rule of docs/grammar/05b-modules.md written again with hashlib and
+`Workspace` fills the deps/ folder of the project by hand (a build reads packages only from there); `Remotes` makes
+git repositories that `agentica install`, `add` and `update` fetch from. `package_hash` is the hash rule of docs/grammar/05b-modules.md written again with hashlib and
 os.walk, as a second implementation to check the Agentica one against.
 """
 import hashlib
@@ -160,8 +160,8 @@ class Workspace:
 
 
 class Remotes:
-    """Bare git repositories in a temporary folder that stand in for `https://example.test/` (docs/future/45-packages.md,
-    45.11). The HOME of the process has a .gitconfig whose `url.<base>.insteadOf` sends that host to the folder, so the
+    """Bare git repositories in a temporary folder that stand in for `https://example.test/`.
+    The HOME of the process has a .gitconfig whose `url.<base>.insteadOf` sends that host to the folder, so the
     manifest and the lock keep the https URL and no test reaches the network, and no real git config is read."""
 
     HOST = "https://example.test/"

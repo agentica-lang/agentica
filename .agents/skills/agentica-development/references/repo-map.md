@@ -14,22 +14,22 @@ This map names a file only when it carries a contract or a placement rule.
 ```text
 Makefile, mk/     # the root has the defaults and `help`; one mk/*.mk per area; the include order matters
 bootstrap/        # stage0.agcb: a checked-in stage2 the build starts from (references/ci.md)
-compiler/         # the front end (§18.3): one folder per context; a new file goes in the folder of its context; imports across folders are relative (`../syntax/types`); agentica.toml holds [style] (119 columns)
+compiler/         # the front end: one folder per context; a new file goes in the folder of its context; imports across folders are relative (`../syntax/types`); agentica.toml holds [style] (119 columns)
   front_end.agc   # the front end of the single binary (make's stages build it)
   app/            # the command line (cli*.agc), the pipeline (pipeline.agc: shared by the CLI and the BDD driver), front_end_cli.agc (`--version V [--stdlib DIR] [--self PATH] -- WORDS`); `test` calls the BDD driver in process, which starts `settings.self_path run ...`, so a later `run` word is a usage error
-  analysis/       # the semantic queries, once (§39): analysis.agc for the CLI and std/analysis; front.agc reads, links and checks for run, compile, test and the queries
+  analysis/       # the semantic queries, once: analysis.agc for the CLI and std/analysis; front.agc reads, links and checks for run, compile, test and the queries
   io/             # the adapter to the machine: the only stage code that reads files and the environment (host.agc builds the Workspace); package fetch and deps/, bytecode and check caches (cache_files.agc: their shared safe-file rules), stdin buffer
   syntax/         # source text, UTF-8 rules (source_file.agc), lexer, parser, AST, types.agc (the Type enum), suggest.agc (did_you_mean), unicode_table.agc (hand-edited, Unicode 17.0)
   modules/        # the linker: workspace.agc (the port of the stages to the machine), modules.agc (load), resolve_import.agc (std/, pkg/, relative; std/internal/ is for std only), link_env.agc (Env, Settings), overlay.agc (buffers), test_main.agc (the `main` of a test file with `test_*` functions)
-  packages/       # §45: manifest, lock, workspace members, cache, hash and native libraries (native_library.agc); no I/O
+  packages/       # manifest, lock, workspace members, cache, hash and native libraries (native_library.agc); no I/O
   check/          # the checker; check_tables.agc (method tables and foreign-name helps, hand-edited); defaults.agc (shared with lowering); check_prelude.agc and prelude_files.agc (stages.md)
   catalog/        # the builtin catalog (imports only syntax/): builtins_data.agc (rows, hand-edited), prelude_data.agc (by hand), catalog_json.agc (`help --json`)
   lower/          # the IR and lowering; lower_tables.agc holds VM_BUILTINS
   bytecode/       # the writer; bytecode_tables.agc holds the format and OPCODES (same order as agc_opcode in vm/value.h)
   diagnostics/    # Diagnostic, Outcome, the packed Problem, and the plain, AI and JSON forms
-  docs/           # `agentica doc` (§32.5; imports syntax/, diagnostics/ and modules/, the last only to link a file with re-exports)
-  query/          # outline, type-at, refs, symbol (§39)
-  format/         # `agentica fmt` (§47): comments.agc attaches the plain comments of Lexer.lex_with_comments to the tree (attach.agc prints that, refreeze stage `format`); layout.agc builds the document of doc.agc's printer; format.agc formats and checks its own output; fmt.agc prints it (refreeze stage `fmt`); goldens in tests/fixtures/frontend/format/
+  docs/           # `agentica doc` (imports syntax/, diagnostics/ and modules/, the last only to link a file with re-exports)
+  query/          # outline, type-at, refs, symbol
+  format/         # `agentica fmt`: comments.agc attaches the plain comments of Lexer.lex_with_comments to the tree (attach.agc prints that, refreeze stage `format`); layout.agc builds the document of doc.agc's printer; format.agc formats and checks its own output; fmt.agc prints it (refreeze stage `fmt`); goldens in tests/fixtures/frontend/format/
   lint/           # `agentica lint` (#970): rules.agc (the LINT- codes), rule_*.agc (one file per kind of node), lint.agc (the one walk of the tree); pure, parse only; the CLI side is app/cli_lint.agc
   bdd/            # the `agentica test` driver (references/bdd.md)
   embedded/       # runner.agc and steps.agc: not stage inputs; compiled with stage2 and embedded in the binary

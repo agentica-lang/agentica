@@ -89,7 +89,7 @@ static _Noreturn void raise_failure(agc_vm *vm) {
   unwind(vm);
 }
 
-/* A frame of the run of prelude frames (docs/future/25-ruby-typed-idioms.md §25.6): a function with the prelude flag,
+/* A frame of the run of prelude frames: a function with the prelude flag,
    or a native frame (List.map and the like running a block) that a prelude frame called, which is transparent to the
    rule. Natives never sit on natives, since a native calls its callback through a frame of its own. */
 static bool in_prelude_run(const agc_program *p, const agc_task *t, uint32_t at) {
@@ -1453,7 +1453,7 @@ reload:
       case AGC_OP_GLOBAL:
       op_global: {
         /* The loader checked bx against global_count. A zeroed slot has tag AGC_T_VOID, and no module constant
-           has type Void (docs/future/44-module-constants.md §44.5), so it means "never set": only a hand-made
+           has type Void, so it means "never set": only a hand-made
            file reads one (or a slot it unset with GLOBAL_SET of a Void). */
         agc_value g = p->globals[bx];
         if (g.tag == AGC_T_VOID)

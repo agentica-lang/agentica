@@ -1,6 +1,6 @@
 /*
- * Lazy[T]: an immutable recipe of a source and steps, run one item at a time by a terminal
- * (docs/future/27-iteration-and-concurrency.md §27.4). The prelude (stdlib/prelude/lazy.agc) gives the typed names;
+ * Lazy[T]: an immutable recipe of a source and steps, run one item at a time by a terminal.
+ * The prelude (stdlib/prelude/lazy.agc) gives the typed names;
  * the builtins here are prelude-only. Nodes never change after they are made, so a Lazy can be shared by tasks on
  * any scheduler and run more than once: each terminal call has its own run state, and its callbacks run on the task
  * that called it. The I/O sources (File.foreach, File.chunks, ch.lazy) open or read only inside a terminal; their

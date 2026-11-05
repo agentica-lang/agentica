@@ -1,4 +1,4 @@
-"""`agentica fmt` through the product CLI (docs/future/47-formatter.md, 47.2): write mode, `--check`, `-` for standard
+"""`agentica fmt` through the product CLI: write mode, `--check`, `-` for standard
 input, `--tree`, the `[style]` of the nearest agentica.toml and the exit codes. The cases assert exit statuses, the
 files, the listed paths and diagnostic codes, never message text."""
 import json

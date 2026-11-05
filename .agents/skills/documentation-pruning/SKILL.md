@@ -64,7 +64,7 @@ starting point; the repository's own lifecycle rules (§1) override it.
 | Built, language | Rules to the grammar; delete the spec; keep the index row as a gap; no renumbering |
 | Built, runtime/VM | Design and rationale to the runtime docs; delete the spec file |
 | Built, user-facing | Site page (add it if missing, same PR) and the programming skill; internal copy deleted |
-| Built, roadmap row | Frozen: leave it |
+| Built, plan row or section | Delete it; the CHANGELOG and the merged PR hold the record |
 | Pending, planned | **One home**: its GitHub issue; every other location holds only a pointer |
 | Pending, idea only | One row in the ideas index |
 | Decided against | One index line linking the rationale; no file |
@@ -79,11 +79,10 @@ decision.
 **Agentica map (verify before use):** `docs/grammar/` is the current language
 contract (the site renders it; one line per paragraph); the builtin library
 reference lives only in `site/content/library/`. `docs/vm/` is the VM
-design. `docs/future/` and `docs/roadmap/` are frozen history (2026-11-03):
-do not prune or edit them; their section and phase numbers stay for the code
-and tests that cite them. Pending work lives in GitHub issues. Built VM records
-that still sit in `docs/future/` (for example small-value sharing, value
-representation, JIT, SIMD) stay there. `docs/bdd.md` is the contract for BDD.
+design. Pending work lives in GitHub issues; `docs/future/` keeps only the
+decisions of planned features whose issue points there, and what was decided
+against (its README lists the files). Shipped work is in `CHANGELOG.md` and the
+merged PR. `docs/bdd.md` is the contract for BDD.
 Site pages are the user-facing home of built features.
 
 ## 3. Identify waste
@@ -112,12 +111,11 @@ implemented" needs evidence, not memory:
 - the construct appears in the current contract (grammar, library reference,
   or VM docs), with its rules;
 - spec or behavior tests exercise it (`tests/test_spec_*.py` and peers);
-- the frozen roadmap row or index says complete, with the phase date;
+- a closed issue with its milestone;
 - a CHANGELOG entry exists; when cheap, the binary demonstrates it
   (`dist/agentica check`).
 
-Grammar plus tests gives high confidence; only a frozen roadmap tick gives
-medium. If intent and implementation conflict without a clear superseding
+Grammar plus tests gives high confidence; only a closed issue gives medium. If intent and implementation conflict without a clear superseding
 authority, mark it unresolved; do not silently rewrite it. Similar topics
 alone do not prove duplication.
 

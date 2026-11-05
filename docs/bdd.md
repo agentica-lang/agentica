@@ -344,7 +344,7 @@ then no scenario runs.
   `SIGTERM`, then `SIGKILL` after one second. An interrupted run (Ctrl-C,
   `SIGTERM`) stops its children, but its temporary directory may stay until the
   next `agentica test` removes it, because the VM does not unwind (until
-  signals, §46; `docs/future/18-front-end-language.md` §18.4). On Linux the
+  signals, issue #991). On Linux the
   runner also ends, and stops its children, when
   the driver is killed with `SIGKILL` (see
   [`vm/10-io-processes.md`](vm/10-io-processes.md) §10.4).

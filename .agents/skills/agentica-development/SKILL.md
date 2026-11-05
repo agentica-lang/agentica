@@ -10,7 +10,7 @@ description: >-
   documentation site, benchmarks and copy-paste check. Use when working in the
   agentica repository on compiler/, vm/, tests/, site/, the Makefile or CI.
   Don't use for writing Agentica programs (agentica-programming), for the
-  grammar or roadmap documents alone, or for other C projects.
+  grammar documents alone, or for other C projects.
 ---
 
 # Agentica development
@@ -22,7 +22,7 @@ needs.
 
 - The rules of `AGENTS.md` apply. Read the GitHub issue of the work first
   (`gh issue view N -R agentica-lang/agentica`) and build only what it asks;
-  `docs/roadmap/` and `docs/future/` are frozen history.
+  `docs/future/` keeps the designs that issues point to.
 - One way per thing, and it is the Ruby form (name, method form, syntax). A
   different Agentica name is only the internal builtin name, with the Ruby
   name as its alias (`method_aliases` in `check_tables.agc`); every

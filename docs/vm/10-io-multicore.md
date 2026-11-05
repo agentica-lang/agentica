@@ -163,7 +163,7 @@ that still apply.
   process, also in the single binary, whose two runtimes share the result.
 - **Values are immutable**, so tasks on different schedulers share them without
   locks or copies (§16.7). Any in-place mutation inside the VM (caches, updates
-  in place when a value is known to be unique, the faster lists of roadmap 8d)
+  in place when a value is known to be unique, the faster lists of §17)
   must be proven unshared or made atomic. Future mutable structures must use
   locks and atomics. The `ATS` tables (the grammar's "Shared tables") are
   built so: a table is one atomic pointer to an immutable state of persistent

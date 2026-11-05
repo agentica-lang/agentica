@@ -43,7 +43,7 @@ DIAGNOSTICS = [
     ("unterminated string after an interpolation", 'x = "#{n}', "LEX-UNTERMINATED-STRING", (1, 5), None),
     ("unfinished string", '"unfinished', "LEX-UNTERMINATED-STRING", None, None),
     ("invalid escape", r'"bad\q"', "LEX-INVALID-ESCAPE", None, None),
-    # Heredocs (§25.10): the opener `<<~NAME` is the span of the errors about the whole heredoc.
+    # Heredocs: the opener `<<~NAME` is the span of the errors about the whole heredoc.
     ("heredoc without an end line", "x = <<~A\n  one\n  two\n", "LEX-UNTERMINATED-HEREDOC", (1, 5, 1, 9), True),
     ("heredoc opener at the end of the file", "x = <<~A", "LEX-UNTERMINATED-HEREDOC", (1, 5, 1, 9), None),
     ("heredoc end line with trailing text", "x = <<~A\n  one\n  two\nA b\n", "LEX-UNTERMINATED-HEREDOC", (1, 5, 1, 9), None),

@@ -39,15 +39,11 @@
 
 ### 12.2 PR plan
 
-All items are done (`docs/roadmap/07-vm.md` is the frozen checklist); git
-history keeps the PR list.
+All items are done; git history keeps the PR list.
 
 ### 12.3 Plan for HTTP and TlsContext
 
-Status and remaining gates:
-[`docs/future/30-hybrid-http.md`](../future/30-hybrid-http.md) (§30, row 7.4)
-and [`docs/future/29-tls-context.md`](../future/29-tls-context.md) (§29.9, row
-7.4). Testing follows §12.1: timing-free goldens, timeout tests in
+Built. Testing follows §12.1: timing-free goldens, timeout tests in
 `tests/test_vm_http.py`, and standard-library-only peers.
 
 ## 13. Open questions

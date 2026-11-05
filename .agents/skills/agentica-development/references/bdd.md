@@ -35,7 +35,7 @@ or the site).
   unlocked new dir; links and dirs without `lock` are left alone. Windows: the
   sweep closes the lock before removing the dir. It is removed at the end of
   every run that ends normally; a stop signal does not unwind the VM, so a
-  later run sweeps it (§18.4).
+  later run sweeps it.
 - The driver writes the `std/` sources into the run dir, discovers features
   (`bdd_discover.agc`), compiles the step program and tests (`bdd_compile.agc`,
   0600 `.agcb` files), writes `config.jsonl` and runs the runner as a captured

@@ -181,7 +181,7 @@ rules those comments do not carry.
 - Shared values: `LIST` and `MAP` with no items return `rt->empty_list` and
   `rt->empty_map`. The runtime also holds `rt->empty_set`, `rt->empty_string`
   and `rt->chars[128]`, all made by `agc_vm_init`
-  (`docs/future/34-shared-small-values.md` §34.6 lists the paths). Nothing
+  (`docs/vm/05-values-execution-builtins.md` §5.4 lists them). Nothing
   writes a list or map after it is returned, so the sharing cannot be seen. New
   code writes only objects from `agc_new_*`, and only before they are returned;
   a path with nothing to return gives the shared value; never compare or key

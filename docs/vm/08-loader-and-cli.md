@@ -222,7 +222,7 @@ byte of a file with a type table, an Updates section or Globals.
 `dist/agentica`: the VM objects, `vm/agentica.c` as its `main`, and the front
 end with the `std/` sources as data (`vm/embedded.h`, written by
 `vm/tools/gen-embedded.sh`). It is the only program of the product
-(docs/future/18-front-end-language.md, §18.2 and §18.8). `make` links a first
+(the development skill's `references/ci.md` has the bootstrap rules). `make` links a first
 copy with `bootstrap/stage0.agcb` in place of the front end
 (build/vm/<mode>/bootstrap/agentica, never shipped) to compile the stages.
 

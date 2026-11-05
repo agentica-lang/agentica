@@ -17,7 +17,7 @@ A new check gets a target first (in `.PHONY`, with a one-line comment), then a
 step that calls it.
 
 - `all` (the default goal) builds `dist/agentica`
-  (`docs/future/18-front-end-language.md` §18.2). A first binary
+  (self-hosted: each stage is compiled by the previous one). A first binary
   (`build/vm/<mode>/bootstrap/agentica`, never shipped) is linked with
   `bootstrap/stage0.agcb` and the `std/` sources. It compiles `stage1`; `stage1`
   compiles `stage2`; `stage2` compiles `stage3`; make stops unless
@@ -118,7 +118,7 @@ release.
   check that the diff is only that file, run `make` again (it must build from
   the new file), and commit it.
 - (b) It cannot (a syntax or builtin that `compiler/` itself uses, or a new
-  bytecode format): split the change in two PRs (§18.2). The first adds the
+  bytecode format): split the change in two PRs. The first adds the
   feature without using it in `compiler/` and refreshes stage0; the second uses
   it. To rename a builtin that `compiler/` calls, the first PR keeps the old
   name as a catalog row whose key is the new one, plus the old C key for the

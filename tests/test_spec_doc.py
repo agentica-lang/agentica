@@ -1,6 +1,5 @@
-"""`agentica doc` through the product CLI: the exported API of one module with its `##` docs
-(docs/future/32-doc-comments.md, 32.5). The cases read the JSON form and assert fields, spans and exit codes, never
-message text; one case reads the Markdown form."""
+"""`agentica doc` through the product CLI: the exported API of one module with its `##` docs. The cases read the JSON form and assert fields, spans and exit codes,
+never message text; one case reads the Markdown form."""
 import json
 
 from tests.agentica_test import cli, run, vm_environment
