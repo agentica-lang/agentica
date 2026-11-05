@@ -133,7 +133,7 @@ BDD.then_stdout_includes(ctx, expected) / then_stderr_includes(ctx, expected)
   `AGENTICA_VM_METRICS_FILE`, `UV_USE_IO_URING`) is `RUNTIME-BDD-CONTEXT`; on
   Windows `Path` and `PATH` are one name, so the second replaces the first,
   but `Ä` and `ä` make `BDD.given_program` fail (`RUNTIME-BDD-IO`).
-- - `BDD.read_line(ctx, timeout_ms)` returns the program's next output line as a
+- `BDD.read_line(ctx, timeout_ms)` returns the program's next output line as a
   `Result[String]` (an error at the end of the output or a timeout). A timeout
   stops the program: later reads, sends and exit checks fail with
   `RUNTIME-BDD-IO`, so it must be its last use.

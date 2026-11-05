@@ -145,7 +145,7 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   `windows`), its `file` is not in the package, a downloaded archive holds no
   file for its `member`, or the download is not a plain or gzipped TAR or a ZIP.
   The key path is in the report (`native.NAME.linux.file`).
-- - `PKG-FETCH`, `PKG-TAG-MOVED`, `PKG-PATH-COLLISION`, `PKG-MANIFEST-MISSING`:
+- `PKG-FETCH`, `PKG-TAG-MOVED`, `PKG-PATH-COLLISION`, `PKG-MANIFEST-MISSING`:
   `agentica install` failed: git failed or the tag or commit does not exist, a
   copied path is unsafe, a file is over 1 MiB (16 MiB in all) or the cache is
   not writable (git's message is in the help); the tag now points to another
@@ -179,7 +179,7 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   Int|`).
 - `CHECK-LOOP-CONTROL`: `break` or `next` outside a `while`/`for` body, or
   inside a block.
-- - `CHECK-UNUSED-VARIABLE`, `CHECK-UNREACHABLE-CODE`,
+- `CHECK-UNUSED-VARIABLE`, `CHECK-UNREACHABLE-CODE`,
   `CHECK-CAPTURED-ASSIGNMENT`: a name never read (`_x` or `_` keeps it), a
   statement that can never run, a block that assigns an outer variable (use
   `for` or `reduce`). See `language-statements-expressions.md`.
@@ -212,7 +212,7 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   `IO.eof?()` first, or use `IO.gets`, which gives an error Result.
 - `RUNTIME-INVALID-DURATION`: a negative `Task.sleep` duration or `Channel`
   timeout, a `Task.await` or `Task.map` `timeout_ms` of 0 or less.
-- - `RUNTIME-TASK-CANCELLED`, `RUNTIME-TASK-CRASHED`: `Task.await` on a task the
+- `RUNTIME-TASK-CANCELLED`, `RUNTIME-TASK-CRASHED`: `Task.await` on a task the
   VM cancelled or that crashed, when `R` is not a `Result`, at the await (the
   message is the crash text). A task can hold a cancelled child's handle by
   receiving it over a channel. `RUNTIME-TASK-CRASHED` is also a BDD step or test

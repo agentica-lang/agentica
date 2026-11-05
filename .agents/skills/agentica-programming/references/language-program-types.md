@@ -40,7 +40,7 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
 - The root file needs exactly one `def main() -> Void` with no parameters to run
   or compile (`CHECK-MAIN`); `check` accepts a file without one. Only `main`
   runs.
-- - Blocks end with `end`; `#` starts a comment. A newline ends a statement.
+- Blocks end with `end`; `#` starts a comment. A newline ends a statement.
   Inside `(...)`, `[...]` and `{...}` an expression may span lines (trailing
   commas allowed); wrap a long expression in parentheses to split it.
 - A line starting with `.name` continues the line before it, also after `do ...
@@ -149,7 +149,7 @@ end
   follows the rules of a parameter default below, except a struct built with no
   arguments (`C()`), and has no order rule. `JSON.decode` still needs every
   key.
-- - A generic struct, `struct Box[T]`, is written with all its arguments in a
+- A generic struct, `struct Box[T]`, is written with all its arguments in a
   type (`Box[Int]`, `M.Box[Int]`); a bare `Box` or a wrong count is
   `CHECK-UNKNOWN-TYPE`. A construction infers them from the field values, left
   to right, and from the expected type (annotation, parameter, field, return

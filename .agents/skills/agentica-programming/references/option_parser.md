@@ -50,7 +50,7 @@ Options(file: OP.string(p, "file"), port: OP.int(p, "port"),
   names the option. A wrong specification (duplicate name, bad default, an `Arg`
   of kind `Flag`, a short name that is a digit, `-` or `=`) is an error of
   `parse` too.
-- - `--help` or `-h`: `parse` returns an error for which `OP.help?` is true; the
+- `--help` or `-h`: `parse` returns an error for which `OP.help?` is true; the
   text is `OP.usage(parser)` (set `metavar` for the value name). Print an error
   you handle yourself with `OP.message(error)`. `OP.run!(load())` prints the
   help and exits 0, or prints any other error to stderr and exits 2, or returns
