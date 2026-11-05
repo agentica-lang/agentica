@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `std/cache`: a bounded cache of strings on top of `ATS`, shared by tasks, with
+  `fetch`, `get`, `put`, `delete` and `clear`.
+
 ## [0.24.2] - 2026-11-05
 
 ### Changed

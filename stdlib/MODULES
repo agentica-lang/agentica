@@ -4,6 +4,7 @@ bdd.agc
 bdd/gherkin.agc
 bdd/match.agc
 bdd/tags.agc
+cache.agc
 binary.agc
 cookie.agc
 eag.agc
