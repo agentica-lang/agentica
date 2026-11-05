@@ -188,7 +188,11 @@ export RECORDS: List[Model.Record] = [
     fields: [
       Model.Named(name: "task_id", type: Types.Type.Int),
       Model.Named(name: "reason", type: Types.Type.Enum("TaskExit", [])),
-      Model.Named(name: "error", type: Types.Type.String),
+      Model.Named(name: "code", type: Types.Type.String),
+      Model.Named(name: "message", type: Types.Type.String),
+      Model.Named(name: "file", type: Types.Type.String),
+      Model.Named(name: "line", type: Types.Type.Int),
+      Model.Named(name: "column", type: Types.Type.Int),
     ],
   ),
   # vm/tls_context.c reads these fields by position: keep them in step.

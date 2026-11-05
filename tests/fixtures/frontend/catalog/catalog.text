@@ -932,7 +932,7 @@ record HttpWire.Response status: Int, headers: List(Struct(Header)), length: Int
 record LogEvent level: Enum(LogLevel, []), message: String, fields: Map(String, String), time_ms: Int, task: Int
 record ProcessOutput stdout: String, stderr: String, truncated: Bool
 record StructMember name: String, type: String
-record TaskDown task_id: Int, reason: Enum(TaskExit, []), error: String
+record TaskDown task_id: Int, reason: Enum(TaskExit, []), code: String, message: String, file: String, line: Int, column: Int
 record TlsClientOptions ca_file: String = "", cert_file: String = "", key_file: String = "", alpn: List(String) = []
 record TlsServerOptions cert_file: String, key_file: String, alpn: List(String) = []
 enum Await parameters=["T"] variants=Done(Var(T)) | TimedOut

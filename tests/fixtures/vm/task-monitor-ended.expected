@@ -1,13 +1,13 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 120,
+  "steps": 122,
   "stdout": [
     "ok(2)",
     "ended: TaskExit.Ok",
     "first monitor: TaskExit.Crashed",
     "second monitor: TaskExit.Crashed",
-    "again: TaskExit.Crashed, true",
+    "again: TaskExit.Crashed, RUNTIME-DIVISION-BY-ZERO, 3:16",
     "false",
     ""
   ],

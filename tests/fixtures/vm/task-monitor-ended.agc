@@ -22,6 +22,6 @@ def main() -> Void
   show(second, "second monitor")
   Task.monitor(crashed, first) do |down| down end
   down = first.recv(5000).unwrap!
-  puts("again: #{down.reason}, #{down.error.starts_with?("task crashed: RUNTIME-DIVISION-BY-ZERO")}")
+  puts("again: #{down.reason}, #{down.code}, #{down.line}:#{down.column}")
   puts(Task.await(crashed).ok?)
 end

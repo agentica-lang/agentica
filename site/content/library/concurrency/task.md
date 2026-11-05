@@ -380,7 +380,7 @@ Task.monitor(task: Task[R], channel: Channel[M], wrap: Fn[TaskDown, M]) -> Void
 
 When `task` ends for any reason (it returns, crashes or is cancelled), the runtime sends `wrap(TaskDown(...))` into `channel` once. There is no `select`, so the channel is usually the caller's one channel of an enum, with a variant for the notice: `Task.monitor(task, inbox) do |down| Msg.Down(down) end`.
 
-- `TaskDown` is a builtin record: `task_id: Int` (the `task.id` of the task), `reason: TaskExit` and `error: String`. `TaskExit` is a builtin enum: `TaskExit.Ok`, `TaskExit.Crashed` or `TaskExit.Cancelled`, read as `Task.await` reads the end (a crash first, then a cancel). For a crash, `error` is the text an await of a `Result` task gives, `task crashed: CODE at FILE:LINE:COLUMN: MESSAGE`; otherwise it is `""`. Both names are reserved.
+- `TaskDown` is a builtin record: `task_id: Int` (the `task.id` of the task), `reason: TaskExit`, then the diagnostic of a crash: `code: String` (the stable code, such as `RUNTIME-DIVISION-BY-ZERO`, to match on), `message: String`, and `file: String`, `line: Int` and `column: Int` where the error was raised. For `TaskExit.Ok` and `TaskExit.Cancelled` the strings are `""` and the numbers `0`. `TaskExit` is a builtin enum: `TaskExit.Ok`, `TaskExit.Crashed` or `TaskExit.Cancelled`, read as `Task.await` reads the end (a crash first, then a cancel). Both names are reserved.
 - A task that has ended already gets its notice at once, and a task may have several monitors, each with its own notice. A monitor cannot be removed.
 - The send never waits and never fails: when the channel is closed or full at that moment, the notice is dropped without an error. Give the channel room for every notice it may get.
 - A crash whose notice goes into the channel counts as observed, like an await of it, so it does not make the run exit 1.
@@ -428,7 +428,7 @@ def main() -> Void
         job = running[down.task_id]
         running = running.delete(down.task_id)
         if down.reason == TaskExit.Crashed
-          puts("restart job #{job.id}")
+          puts("restart job #{job.id} after #{down.code}")
           running = start(job.with(attempt: job.attempt + 1), inbox, running)
         end
     end
@@ -439,7 +439,7 @@ end
 ```
 
 ```output
-restart job 2
+restart job 2 after RUNTIME-DIVISION-BY-ZERO
 ["job 1: 10", "job 2: 20", "job 3: 30"]
 ```
 

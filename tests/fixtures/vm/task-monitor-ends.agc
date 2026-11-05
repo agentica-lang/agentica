@@ -15,7 +15,10 @@ end
 def watch(task: Task[Int], inbox: Channel[Msg]) -> Void
   Task.monitor(task, inbox) do |down| Msg.Down(down) end
   case inbox.recv(5000).unwrap!
-    Msg.Down(down) -> puts("#{down.reason} same id: #{down.task_id == task.id} error: #{down.error.inspect}")
+    Msg.Down(down) ->
+      puts("#{down.reason} same id: #{down.task_id == task.id}")
+      puts("  #{down.code.inspect} #{down.message.inspect} #{down.file.ends_with?("task-monitor-ends.agc")}")
+      puts("  #{down.line}:#{down.column}")
   end
 end
 

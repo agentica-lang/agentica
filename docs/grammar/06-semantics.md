@@ -38,8 +38,9 @@ programs are valid and how they run.
 - `TaskExit`: Builtin enum of how a task ended: `TaskExit.Ok`,
   `TaskExit.Crashed` and `TaskExit.Cancelled`
 - `TaskDown`: Builtin record that `Task.monitor` sends when a task ends:
-  `task_id: Int`, `reason: TaskExit` and `error: String`; it is not
-  JSON-decodable
+  `task_id: Int`, `reason: TaskExit`, and the diagnostic of a crash, `code:
+  String`, `message: String`, `file: String`, `line: Int` and `column: Int`; it
+  is not JSON-decodable
 - `Channel[T]`: Opaque bounded queue of `T` values that tasks send into and
   receive from
 - `Enum[T, ...]`: User-declared nominal sum type

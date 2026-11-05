@@ -40,7 +40,7 @@ def main() -> Void
         running = running.delete(down.task_id)
         case down.reason
           TaskExit.Crashed ->
-            puts("job #{job.id} crashed on attempt #{job.attempt}, restarting")
+            puts("job #{job.id} crashed on attempt #{job.attempt} with #{down.code}, restarting")
             running = start(job.with(attempt: job.attempt + 1), inbox, running)
           _ -> running = running
         end

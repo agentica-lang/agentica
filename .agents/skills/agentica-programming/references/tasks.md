@@ -135,8 +135,9 @@ crashes or is cancelled), at once for a task that has ended; several monitors
 of one task each get one, and none can be removed. Use the consumer's one
 channel of an enum (there is no `select`). `TaskDown` is a builtin record:
 `task_id: Int` (equal to `task.id`), `reason: TaskExit` (`TaskExit.Ok`,
-`TaskExit.Crashed` or `TaskExit.Cancelled`) and `error: String` (the
-`task crashed: ...` text of an await for a crash, else `""`). The send never
+`TaskExit.Crashed` or `TaskExit.Cancelled`), and for a crash its diagnostic:
+`code` (the stable `RUNTIME-` code, to match on), `message`, `file`, `line`
+and `column` (`""` and `0` otherwise). The send never
 waits or fails: a closed or full channel drops the notice, so give it room. A
 crash whose notice went in counts as observed. `wrap` runs in a task of its
 own (a crash there loses the notice). A coordinator keeps

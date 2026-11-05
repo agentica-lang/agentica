@@ -1,9 +1,9 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 357,
+  "steps": 359,
   "stdout": [
-    "job 2 crashed on attempt 1, restarting",
+    "job 2 crashed on attempt 1 with RUNTIME-INDEX-OUT-OF-RANGE, restarting",
     "[\"job 1 gave 10\", \"job 2 gave 20\", \"job 3 gave 30\"]",
     ""
   ],

@@ -272,15 +272,27 @@ static agc_task *service_root(void) {
   return root;
 }
 
-/* The notice of a settled task: TaskDown(task_id, reason, error), with the reason read as Task.await reads it (a crash
-   first, then a cancel) and the crash text of Task.await_result as the error ("" unless it crashed). */
+/* The notice of a settled task: TaskDown(task_id, reason, code, message, file, line, column), with the reason read as
+   Task.await reads it (a crash first, then a cancel). For a crash the rest is its diagnostic: the stable code, the
+   message and where the error was raised, the parts of the crash text of Task.await_result; otherwise "" and 0. */
 static agc_value monitor_down(agc_vm *vm, const agc_task *t) {
   const agc_runtime *rt = vm->rt;
   uint32_t reason = t->crashed ? rt->exit_crashed : t->cancelled ? rt->exit_cancelled : rt->exit_ok;
-  agc_struct *s = agc_new_struct(rt->down_struct, 3);
+  agc_struct *s = agc_new_struct(rt->down_struct, 7);
+  agc_value empty = agc_string_value(agc_make_string("", 0, 0));
   s->fields[0] = agc_int((int64_t)t->id);
   s->fields[1] = agc_enum_value(rt->program->variants[reason].shared);
-  s->fields[2] = agc_string_value(t->crashed ? t->crash : agc_make_string("", 0, 0));
+  s->fields[2] = s->fields[3] = s->fields[4] = empty;
+  s->fields[5] = s->fields[6] = agc_int(0);
+  if (t->crashed) {
+    const agc_span *span = &rt->program->spans[t->crash_span];
+    size_t code = strlen(t->crash_code);
+    s->fields[2] = agc_string_value(agc_make_string(t->crash_code, code, code));
+    s->fields[3] = agc_string_value(t->crash_message);
+    s->fields[4] = agc_string_value(rt->program->sources[span->source].name);
+    s->fields[5] = agc_int((int64_t)span->start_line);
+    s->fields[6] = agc_int((int64_t)span->start_column);
+  }
   return agc_struct_value(s);
 }
 
@@ -1439,8 +1451,8 @@ static agc_value builtin_unobserved_crash(agc_vm *vm, agc_value *args, uint32_t 
 static void down_types(agc_vm *vm) {
   agc_runtime *rt = vm->rt;
   if (rt->down_found) return;
-  static const char *const fields[] = {"task_id", "reason", "error"};
-  rt->down_struct = agc_builtin_struct(vm, "TaskDown", fields, 3);
+  static const char *const fields[] = {"task_id", "reason", "code", "message", "file", "line", "column"};
+  rt->down_struct = agc_builtin_struct(vm, "TaskDown", fields, 7);
   rt->exit_ok = agc_builtin_variant(vm, "TaskExit", "Ok", 0);
   rt->exit_crashed = agc_builtin_variant(vm, "TaskExit", "Crashed", 0);
   rt->exit_cancelled = agc_builtin_variant(vm, "TaskExit", "Cancelled", 0);
