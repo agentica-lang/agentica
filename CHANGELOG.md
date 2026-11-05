@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `ATS[Bytes, V]`: a shared table takes `Bytes` keys, as a `Map` does.
+
 ## [0.24.3] - 2026-11-05
 
 ### Added

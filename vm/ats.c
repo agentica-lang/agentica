@@ -76,20 +76,35 @@ static const node *balance(const node *left, const node *right, entry e) {
   return make(left, right, e);
 }
 
-/* Keys are Int or String. Typed code never mixes them in one table; forged bytecode may, so Ints sort before Strings
-   and every comparison stays defined. */
+/* The order of two byte strings: by the first byte that differs (unsigned), then the shorter first. */
+static int compare_spans(const void *a, size_t a_len, const void *b, size_t b_len) {
+  size_t n = a_len < b_len ? a_len : b_len;
+  int c = n ? memcmp(a, b, n) : 0;
+  if (c) return c < 0 ? -1 : 1;
+  return (a_len > b_len) - (a_len < b_len);
+}
+
+/* The rank of a key's tag: key_arg lets only these three in. */
+static int key_rank(agc_value key) {
+  if (agc_is(key, AGC_T_INT)) return 0;
+  return agc_is(key, AGC_T_STRING) ? 1 : 2;
+}
+
+/* Keys are Int, String or Bytes. Typed code never mixes them in one table; forged bytecode may, so keys of different
+   tags sort by tag (Int, String, Bytes) and are never equal, and every comparison stays defined. */
 static int compare_keys(agc_vm *vm, agc_value a, agc_value b) {
-  bool a_int = agc_is(a, AGC_T_INT), b_int = agc_is(b, AGC_T_INT);
-  if (a_int != b_int) return a_int ? -1 : 1;
-  if (a_int) {
+  int a_rank = key_rank(a), b_rank = key_rank(b);
+  if (a_rank != b_rank) return a_rank < b_rank ? -1 : 1;
+  if (a_rank == 0) {
     int64_t x = agc_as_int(vm, a), y = agc_as_int(vm, b);
     return (x > y) - (x < y);
   }
-  const agc_string *s = agc_as_string(vm, a), *t = agc_as_string(vm, b);
-  size_t n = s->bytes < t->bytes ? s->bytes : t->bytes;
-  int c = n ? memcmp(s->data, t->data, n) : 0;
-  if (c) return c < 0 ? -1 : 1;
-  return (s->bytes > t->bytes) - (s->bytes < t->bytes);
+  if (a_rank == 1) {
+    const agc_string *s = agc_as_string(vm, a), *t = agc_as_string(vm, b);
+    return compare_spans(s->data, s->bytes, t->data, t->bytes);
+  }
+  const agc_bytes *x = agc_as_bytes(vm, a), *y = agc_as_bytes(vm, b);
+  return compare_spans(x->data, x->len, y->data, y->len);
 }
 
 static int order(agc_vm *vm, bool by_seq, entry probe, const node *n) {
@@ -142,9 +157,11 @@ static table *table_arg(agc_vm *vm, agc_value v, uint32_t span) {
   return t;
 }
 
-/* A key is an Int or a String; a String key costs its bytes, as in a Map lookup. */
+/* A key is an Int, a String or a Bytes (another tag is RUNTIME-INTERNAL); a String or Bytes key costs its bytes, as
+   in a Map lookup. */
 static agc_value key_arg(agc_vm *vm, agc_value key) {
-  if (!agc_is(key, AGC_T_INT)) agc_charge(vm, agc_as_string(vm, key)->bytes / AGC_COST_BYTES);
+  if (agc_is(key, AGC_T_BYTES)) agc_charge(vm, agc_as_bytes(vm, key)->len / AGC_COST_BYTES);
+  else if (!agc_is(key, AGC_T_INT)) agc_charge(vm, agc_as_string(vm, key)->bytes / AGC_COST_BYTES);
   return key;
 }
 
@@ -324,7 +341,7 @@ bool agc_ats_valid(agc_vm *vm, agc_value v) {
 }
 
 /* No row is shared or a leaf: a call takes no lock (the atomic pointer orders the writers), and a call charges for
-   String keys and snapshots. */
+   String and Bytes keys and snapshots. */
 const agc_builtin agc_ats_builtins[] = {
   {"ATS.new", 0, builtin_new, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"ATS.put", 3, builtin_put, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},

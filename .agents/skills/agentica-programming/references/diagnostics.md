@@ -110,9 +110,8 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
 - `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`,
   `CHECK-UNREACHABLE-CASE-ARM`: a pattern that does not fit the value; a `case`
   missing variants or `_`; an arm already covered.
-- `CHECK-MAP-KEY-TYPE`, `CHECK-SET-ELEMENT-TYPE`: a map key or `Set` element
-  that is not `Int`, `String` or `Bytes`; an `ATS` key that is not `Int` or
-  `String`.
+- `CHECK-MAP-KEY-TYPE`, `CHECK-SET-ELEMENT-TYPE`: a `Map` or `ATS` key or a
+  `Set` element that is not `Int`, `String` or `Bytes`.
 - `CHECK-ATS-VALUE`: an `ATS[K, V]` whose `V` is `Nil`, a type parameter, or
   holds a `Fn`, `Task`, `Channel`, handle or table anywhere inside.
 - `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`, `CHECK-IMPORT-CYCLE`,

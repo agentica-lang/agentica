@@ -685,9 +685,9 @@ language fixes:
 - `==` and `!=` compare length and bytes. They are not constant time: compare a
   MAC or a token with `HMAC.secure_compare`. A `Bytes` never equals a `String`
   with the same bytes (`CHECK-TYPE-MISMATCH`). There is no ordering (`<`).
-- A `Bytes` is a `Map` key or a `Set` item, and a field, a list item or a map
-  value. It is not an `ATS` key (`CHECK-MAP-KEY-TYPE`). It is not
-  JSON-encodable or decodable (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`).
+- A `Bytes` is a `Map` key, an `ATS` key or a `Set` item, and a field, a list
+  item or a map value. It is not JSON-encodable or decodable
+  (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`).
 - `Bytes` is a reserved type name (`CHECK-REDEFINED-NAME`). `String` has no
   index (`CHECK-NOT-INDEXABLE`); `s.bytes[i]` reads a byte.
 

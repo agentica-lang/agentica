@@ -71,9 +71,9 @@ section for the area you are changing.
 ## Bytes
 
 - `Type.Bytes` is its own variant (a reserved type name), not an `Opaque`. It
-  is a Map key or Set item (`key_type?`) but not an `ATS` key (`resolve_ats`),
-  and not JSON (`CHECK-NOT-ENCODABLE`; `bytes_inside?` picks the Base64 help).
-  `each` and `empty?` are prelude rows (`stdlib/prelude/bytes.agc`).
+  is a Map, ATS or Set key (`key_type?`), and not JSON (`CHECK-NOT-ENCODABLE`;
+  `bytes_inside?` picks the Base64 help). `each` and `empty?` are prelude rows
+  (`stdlib/prelude/bytes.agc`).
 - The VM's `eq`, `ne`, `concat`, `list-get` and `list-len` do not take a Bytes,
   so lowering calls builtins: `a + b` is `Bytes.plus`, `==` is `Bytes.equal`
   (`!=` adds `not`), `b[i]` and the element read of `for` are `Bytes.at`, and

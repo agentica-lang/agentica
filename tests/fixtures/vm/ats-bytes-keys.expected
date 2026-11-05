@@ -1,0 +1,23 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 253,
+  "stdout": [
+    "6",
+    "[<Bytes 2 6162>, <Bytes 1 61>, <Bytes 0>, <Bytes 2 0000>, <Bytes 1 ff>, <Bytes 2 6100>]",
+    "[false, true, false, false]",
+    "ok(3)",
+    "error(\"key <Bytes 1 00> is not in the table\")",
+    "true",
+    "false",
+    "42",
+    "-3",
+    "false",
+    "{<Bytes 2 6162>: 10, <Bytes 0>: 3, <Bytes 2 0000>: 4, <Bytes 1 ff>: 5, <Bytes 2 6100>: 6, <Bytes 1 00>: 7, <Bytes 2 0061>: -3, <Bytes 1 61>: 8}",
+    "[6, 3, 8]",
+    "[\"6162\", \"\", \"0000\", \"ff\", \"6100\", \"00\", \"0061\", \"61\"]",
+    "ok(10)",
+    ""
+  ],
+  "stderr": []
+}
