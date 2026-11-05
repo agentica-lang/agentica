@@ -8,91 +8,48 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-11-05
+
 ### Added
 
-- `agentica lint [PATH...] [--json] [--strict]` suggests changes from the
-  style guide with `LINT-` codes (a String grown by `+` in a loop, a Bool
-  compared with `true`, a one-step pipe, a private `##` doc, an `if` chain on
-  one value, and more). A suggestion is not an error: it exits 0, and
+- `agentica lint` suggests style changes with `LINT-` codes; it exits 0, and
   `--strict` exits 1 for CI.
-- `std/bdd`: the steps `stdout includes:` and `stderr includes:` (and
-  `BDD.then_stdout_includes`, `BDD.then_stderr_includes`) check a substring
-  of the output after the program exits. The BDD page shows how a scenario
-  runs a peer program with `Process.spawn_captured` and `BDD.keep`.
-- `std/option_parser`: `min` and `max` on an `Int` `Opt` or `Arg`
-  (`min: some(1)`), refused as any bad value is (exit 2) and shown in the help.
-  A number too big for an `Int` says it does not fit one.
-- `s * n` repeats a String, as Ruby's `String#*` (`"ab" * 3` is `"ababab"`); a
-  negative count or a result over 256 MiB is `RUNTIME-INVALID-COUNT`.
-- A `==` or `!=` refused because a struct field has no equality
-  (`CHECK-TYPE-MISMATCH`) also marks that field in its declaration (a note,
-  when the struct is in the same file).
-- `JSON.encode`, `JSON.from`, `JSON.decode`, `JSON.schema` and `JSON.codec`
-  take user enums, written as `{"tag": "Rect", "values": [1.0, 2.0]}`. Only
-  non-generic enums can be decoded.
+- `std/bdd`: the steps `stdout includes:` and `stderr includes:`.
+- `std/option_parser`: `min` and `max` on an `Int` option or argument.
+- `s * n` repeats a String, as Ruby's `String#*`.
+- A `==` refused because a struct field has no equality also marks that field.
+- `JSON.encode`, `from`, `decode`, `schema` and `codec` take user enums.
 
 ### Changed
 
-- **Breaking:** `agentica test`: a `*_test.agc` file may have no `main`; its
-  top-level `test_*` functions are its tests, named after the function
-  (`test_parses_port` is `parses port`). A test file with both `main` and
-  `test_*` functions is `CHECK-TEST-MAIN`; also new: `CHECK-TEST-SIGNATURE`
-  and `CHECK-TEST-NAME`.
-- **Breaking:** the help of `std/option_parser` writes its notes in square
-  brackets (`[default: 8080]`, `[choices: a, b]`, `[min: 0]`) and shows the
-  choices as the value name (`--stats on|off`).
-- **Breaking:** an import alias that its file never uses is an error
-  (`CHECK-UNUSED-IMPORT`, at the alias); remove the import. An alias written
-  without its member (`u: User`) is `CHECK-IMPORT-NAME`. The query commands
-  (`type-at`, `refs`, `symbol`) do not report it in the file they are asked
-  about.
-- **Breaking:** a statement after `return`, `break` or `next`, or after an `if`
-  or `case` whose every branch ends in one, is an error
-  (`CHECK-UNREACHABLE-CODE`); remove it or move it before. The query commands
-  report it too.
-- **Breaking:** `xs.min_by` and `xs.max_by` give an `Optional` (`none` for an
-  empty list), as `min` and `max` do, not a `Result`; `unwrap!` and
-  `unwrap_or` still work, `ok?` becomes `some?`.
-- **Breaking:** a variable, `for` variable, block parameter or `case` pattern
-  name that is never read is an error (`CHECK-UNUSED-VARIABLE`), unless its name
-  starts with `_` (`_count`); write `_` for a loop variable, a block parameter
-  or a pattern slot. A function parameter is never reported, and `count += 1`
-  alone is no read. The query commands (`type-at`, `refs`, `symbol`) do not
-  report it in the file they are asked about.
-- **Breaking:** a `Result` that is dropped, from any call (yours, a builtin,
-  `Task.await`; `Result[Void]` too), is an error (`CHECK-UNUSED-RESULT`). Use
-  `try`, a `case` or `.unwrap!`, or write `_ = f()` to drop it on purpose. A
-  pure builtin that gives a `Result` (`s.to_i`) is this error instead of
-  `CHECK-UNUSED-VALUE`.
+- **Breaking:** an unused import alias is an error (`CHECK-UNUSED-IMPORT`).
+- **Breaking:** an unused variable, block parameter or pattern name is an error
+  (`CHECK-UNUSED-VARIABLE`); name it `_` or `_name`.
+- **Breaking:** a dropped `Result` is an error (`CHECK-UNUSED-RESULT`); write
+  `_ = f()` to drop it on purpose.
+- **Breaking:** a statement after `return`, `break` or `next` is an error
+  (`CHECK-UNREACHABLE-CODE`).
+- **Breaking:** a `*_test.agc` file may have top-level `test_*` functions
+  instead of `main`, but not both (`CHECK-TEST-MAIN`).
+- **Breaking:** `std/option_parser` help shows its notes in brackets
+  (`[default: 8080]`).
+- **Breaking:** `xs.min_by` and `xs.max_by` give an `Optional`, not a `Result`.
 
 ### Fixed
 
-- In a `Scenario Outline`, a `<...>` that is not an `Examples` column and holds
-  `=`, a quote or `/` (HTML such as `<input type="checkbox">`) stays as written;
-  any other unknown `<...>`, such as a mistyped column, is still
-  `PARSE-GHERKIN-PARAMETER`.
+- A `Scenario Outline` keeps an unknown `<...>` that looks like HTML as written.
 - `KDF.scrypt` and `KDF.pbkdf2_hmac_sha256` run on the compute pool, so other
-  tasks keep running while a key is derived.
-- A queued KDF call of a cancelled task is skipped.
-- No queued KDF call starts once `main` has returned.
-- **Breaking:** a KDF call inside a native callback is `RUNTIME-NATIVE-CALLBACK`.
-- A file, process, socket, stdin, HTTP server or `Native.wait_*` call inside a
-  native callback no longer leaks memory when it fails with
+  tasks keep running.
+- **Breaking:** a KDF call inside a native callback is
   `RUNTIME-NATIVE-CALLBACK`.
-- With one scheduler, a `Process.parent_send` that a native callback starts and
-  that is refused while its line is still being written no longer corrupts the
-  channel or crashes the program: a later send gives
-  `error("process: the channel is in use")` until that line is out.
-- On Windows a spawn `env` map with two names that differ only in the case of a
-  letter outside ASCII (`Ä`, `ä`) is now an error, as for ASCII letters.
-- A `compute def` call on a resource also keeps the resources that the call
-  which made it took (a `Stmt` keeps its `Handle`), less one that another of
-  them comes from (`next(ctx, x)` keeps only `x` when `x` comes from `ctx`:
-  close `x` before `ctx`): `Native.close` of the `Handle` during the call frees
-  it when the call returns, not while C uses it.
-- A native callback closed while a fast native call whose C called it is still
-  in C stays callable (it gives zero) until that call returns; before, its code
-  could be freed while C still used it.
+- Failed I/O calls inside a native callback no longer leak memory.
+- A refused `Process.parent_send` from a native callback no longer corrupts the
+  channel.
+- On Windows, spawn `env` names that differ only in non-ASCII case are an error.
+- `Native.close` of a resource that a running `compute def` call uses, directly
+  or through the resource it came from, frees it when the call returns.
+- A native callback closed while a fast native call still uses it stays callable
+  until that call returns.
 
 ## [0.23.0] - 2026-11-03
 
@@ -1082,7 +1039,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.23.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.24.0...HEAD
+[0.24.0]: https://github.com/agentica-lang/agentica/compare/0.23.0...0.24.0
 [0.23.0]: https://github.com/agentica-lang/agentica/compare/0.22.0...0.23.0
 [0.22.0]: https://github.com/agentica-lang/agentica/compare/0.21.0...0.22.0
 [0.21.0]: https://github.com/agentica-lang/agentica/compare/0.20.0...0.21.0
