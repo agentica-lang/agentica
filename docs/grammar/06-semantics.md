@@ -187,8 +187,7 @@ the middle of a run, a read would need a branch, and tasks could race on the
 first read. Calls of user functions in an initializer. An Elixir-style `@name`
 attribute or a `const` keyword, since the capitals already mark a constant. A
 constant in a `case` pattern: patterns are literals and variants. Folding
-literal arithmetic. One line holding both import forms. A static data form for
-the initializers is a later option, only if start-up numbers ask for it.
+literal arithmetic. One line holding both import forms.
 
 ### Regex literals
 
@@ -533,14 +532,9 @@ when one is not (`Box[Fn[Int, Int]]`). `JSON.decode` and `JSON.schema` reject a
 generic instance anywhere in the target (a field `b: Box[Int]`, or an alias of
 one) with `CHECK-NOT-DECODABLE`, because the schema is keyed by the bare struct
 name and `Box[Int]` and `Box[String]` would share it; a bare generic struct as
-the target is `CHECK-UNKNOWN-TYPE`. `JsonField[T]` is allowed only as the type
-of a struct field, and it counts after substitution: in `Box[JsonField[Int]]`
-the field `value: T` is a direct `JsonField` field, so `JSON.encode` and
-`JSON.from` treat it as `value: JsonField[Int]`. A `JsonField` argument that
-lands anywhere else (`items: List[T]`, `f: JsonField[T]`, or inside a list as
-in `Box[List[JsonField[Int]]]`) is `CHECK-JSON-FIELD-PLACE`. In
-`Box[Box[JsonField[Int]]]` it is direct in the inner `Box`, so it is allowed. A
-C struct of an `extern` block takes no type parameters
+the target is `CHECK-UNKNOWN-TYPE`. A type argument counts after substitution
+for `JsonField` too (rules in `06b-builtins.md`, "Optional and nullable
+fields"). A C struct of an `extern` block takes no type parameters
 (`PARSE-UNEXPECTED-TOKEN` at the `[`). Type parameters exist only in the
 checker: the VM sees a struct of its field names and order, as before.
 
@@ -665,76 +659,35 @@ constraints on type parameters, type arguments written at a call, generic
 ### Ranges
 
 `a..b` includes `b`; `a...b` excludes it, as in Ruby. A `Range` is a small
-immutable value (start, end and kind); it never holds a list.
-
-```ruby
-for i in 0...3 do
-  puts(i)
-end
-```
+immutable value (start, end and kind); it never holds a list. Its functions
+are in the
+[`Range` page](../../site/content/library/data-structures/range.md).
 
 - `for x in range` yields each `Int` in order. An end before the start is empty,
   and there is no reverse iteration. Iterating up to the largest `Int` does not
-  overflow. Each iteration costs one step plus its body. The range is evaluated
-  once.
-- `Int.times`, `upto` and `downto` (`n.times(f)`, `a.upto(b, f)`, `a.downto(b,
-  f)`) return `Void`. A negative literal receiver needs parentheses: `(-5).times
-  do ... end`; `-5.times do ... end` is `-(5.times ...)`, a `CHECK-VOID-VALUE`.
-- `Range` functions are in
-  [`library/data-structures/range.md`](../../site/content/library/data-structures/range.md).
-  `Range.size` is `RUNTIME-INTEGER-OVERFLOW` when the count does not fit in
-  `Int`, and `Range.to_a` above 1048576 values is `RUNTIME-INVALID-COUNT`.
-  `first` and `last` of an empty range are `error("the range is empty")`; unlike
-  Ruby, `(1...5).last` is `ok(4)`.
-- Ranges print as `1..5`. They are not JSON-encodable and cannot be `Map` keys.
-  Ranges of `String` or `Float`, and `step`, are not supported.
+  overflow. The range is evaluated once.
+- `Int.times`, `upto` and `downto` return `Void`. A negative literal receiver
+  needs parentheses: `(-5).times do ... end`; `-5.times do ... end` is
+  `-(5.times ...)`, a `CHECK-VOID-VALUE`.
+- Ranges are not JSON-encodable and cannot be `Map` keys. Ranges of `String` or
+  `Float`, and `step`, are not supported.
 
 ### Bytes
 
-`Bytes` is an immutable string of bytes, stored one byte for each item (a
-`List[Int]` takes eight). It holds data that is not text: digests, file
-contents, wire formats. There is no literal; write `"PK".bytes` (the UTF-8
-bytes of a `String`), `Digest.hexdecode(text)` or `Bytes.from_list([80, 75])`.
-A byte is read as an `Int` in `0..255`.
+`Bytes` is an immutable string of bytes, one byte for each item, read as an
+`Int` in `0..255`. It holds data that is not text. There is no literal: write
+`"PK".bytes`, `Digest.hexdecode(text)` or `Bytes.from_list([80, 75])`. The
+methods, the encodings, the costs and the errors are in the
+[`Bytes` page](../../site/content/library/data-structures/bytes.md). The
+language fixes:
 
-```ruby
-data = "héllo".bytes
-puts(data.length)        # 6
-puts(data[0])            # 104
-puts(data == "héllo".bytes)
-for byte in data
-  puts(byte)
-end
-```
-
-- `s.bytes` gives the UTF-8 bytes of a `String`. `Bytes.from_list(list)` takes a
-  `List[Int]` and gives a `Result[Bytes]`: the error names the first item
-  outside `0..255` and its index. `b.to_a` gives the `List[Int]` back, the way
-  to `map`, `select` and the other `List` methods; `Bytes` has none of them.
-- `b.length` and `b.size`, `b.empty?`, `b.at(i)` and `b[i]` (`Int`),
-  `b.slice(start, length)`, `b.take(n)`, `b.drop(n)` and `b.each` are the other
-  methods. `at`, `[i]` and `slice` halt outside the bounds
-  (`RUNTIME-INDEX-OUT-OF-RANGE`); `take` and `drop` clamp to the length like
-  the `List` ones (`RUNTIME-INVALID-COUNT` for a negative count). `slice`,
-  `take` and `drop` copy; a view would keep a large parent alive.
-- `b.decode(encoding)` gives a `Result[String]` and `s.encode(encoding)` a
-  `Result[Bytes]`, for UTF-8, UTF-16, UTF-32, ASCII, Latin-1, ISO-8859-15 and
-  Windows-1252; an invalid input, a character the encoding cannot hold or an
-  unknown name is an error (site page Bytes, "decode").
-- `a + b` joins two `Bytes`; `Bytes.concat(parts)` joins a `List[Bytes]` in one
-  copy. `+` in a loop copies everything on each pass and takes quadratic time,
-  so join many parts with `Bytes.concat`. To build bytes one at a time, build a
-  `List[Int]` and call `Bytes.from_list` once.
+- `for byte in b` visits the bytes in order.
 - `==` and `!=` compare length and bytes. They are not constant time: compare a
   MAC or a token with `HMAC.secure_compare`. A `Bytes` never equals a `String`
   with the same bytes (`CHECK-TYPE-MISMATCH`). There is no ordering (`<`).
 - A `Bytes` is a `Map` key or a `Set` item, and a field, a list item or a map
   value. It is not an `ATS` key (`CHECK-MAP-KEY-TYPE`). It is not
-  JSON-encodable or decodable (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`):
-  write it as text first, with `Base64.strict_encode64`.
-- `"#{b}"` and `b.to_s` give `<Bytes 3>`; `b.inspect`, `Test.eq` messages and
-  the text of a `Bytes` inside a list or map give `<Bytes 3 616263>`: the length
-  and the first 32 bytes in hex, then `...` if there are more.
+  JSON-encodable or decodable (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`).
 - `Bytes` is a reserved type name (`CHECK-REDEFINED-NAME`). `String` has no
   index (`CHECK-NOT-INDEXABLE`); `s.bytes[i]` reads a byte.
 
@@ -765,7 +718,8 @@ more = Map.put(stock, "kiwi", 7)
 
 `Set[T]` has one type argument, `Int`, `String` or `Bytes`, like a `Map` key:
 any other element type is `CHECK-SET-ELEMENT-TYPE`. A set holds each value once
-and keeps the order of first insertion.
+and keeps the order of first insertion. Its functions are in the
+[`Set` page](../../site/content/library/data-structures/set.md).
 
 ```ruby
 seen: Set[String] = Set.new([])
@@ -773,26 +727,14 @@ seen = seen.add("a").add("b").add("a")
 puts(seen)
 ```
 
-- `Set.new(items)` takes a `List[T]` and drops repeated items; the first one
-  keeps its place. `Set.new([])` needs an expected type, like `[]` and `{}`:
+- `Set.new([])` needs an expected type, like `[]` and `{}`:
   `CHECK-EMPTY-SET-TYPE`.
-- Sets are immutable. `Set.add` and `Set.delete` return a new set and leave the
-  input unchanged; adding a member or deleting a missing element gives an equal
-  set. An element deleted and added again goes to the end.
-- `Set.include?`, `Set.size` and `Set.empty?` read the set. `Set.to_a` gives the
-  elements in order. `Set.union(a, b)` gives the elements of `a`, then those of
-  `b` that `a` lacks; `Set.intersection` and `Set.difference` keep the order of
-  `a`; `Set.subset?(a, b)` is true when every element of `a` is in `b`.
+- Sets are immutable: `Set.add` and `Set.delete` return a new set.
 - `for x in set` visits the elements in order. The set is read once before the
   loop, so assigning the variable in the body does not change the loop.
-- Sets print as `Set[1, 2]` (strings in their `inspect` form). `==` and
-  `Test.eq` compare two sets in any order; there is no index
+- `==` and `Test.eq` compare two sets in any order; there is no index
   (`CHECK-NOT-INDEXABLE`). A set is not JSON-encodable (`CHECK-NOT-ENCODABLE`)
   and cannot be a `Map` key, but it may be a field, a list item or a map value.
-- Functions are in
-  [`library/data-structures/set.md`](../../site/content/library/data-structures/set.md).
-  `Set.include?` and `Set.add` take effectively constant time; `Set.to_a` and
-  the set operations are O(n).
 
 ### Result and propagation
 

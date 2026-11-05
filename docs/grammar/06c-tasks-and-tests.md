@@ -7,48 +7,27 @@ its timing, cancellation and crash behaviour, and its runtime errors are in the
 language and the checker:
 
 - A `Task[R]` has no constructor, equality, fields, indexing or JSON encoding.
-  `Task.spawn(&f)` starts a function of no parameter and `Task.spawn(&f, x)` one
-  of one parameter. A block is a function too (`Task.spawn do ... end`), and
   `Task.spawn(&f) do ... end` is `CHECK-BLOCK-TARGET`.
 - A handle (a file, a socket, a listener, a process or a `std/http` server)
   belongs to the task that opened it, and it is closed when that task ends, in
   any way. `Task.spawn_owning(&f, handle)` is the one way to hand a handle over;
-  its argument must be a handle type, a resource of native code (section 6d), a
-  `C.Pointer` or a `Channel[T]`, or a struct, enum, `List[T]`, `Map[K, V]` or
-  `Result[T]` whose type holds one of them, or the checker gives
-  `CHECK-NOT-A-HANDLE`.
+  an argument that holds no handle is `CHECK-NOT-A-HANDLE`.
 - A runtime error in a task other than `main` is a crash that ends only that
-  task. `Task.await` of a crashed task returns `error(text)` when the result
-  type is a `Result`, and halts with `RUNTIME-TASK-CRASHED` otherwise; the same
-  holds for a cancelled task (`error("task: cancelled")`,
-  `RUNTIME-TASK-CANCELLED`).
-- `Task.cancel(task)` takes a `Task[R]` or a `TaskRef`; any other argument type
-  is `CHECK-TYPE-MISMATCH` at the argument.
-- `Task.await(task, timeout_ms)` returns `Await[T]`, a builtin generic enum with
-  the variants `Await.Done(value)` and `Await.TimedOut` (no payload, written
-  without parentheses). `Await` is reserved: a struct, enum, type parameter or
-  import alias with that name is `CHECK-REDEFINED-NAME`. It is matched with
-  `case` and checked for exhaustiveness like a user enum. `try` does not apply
-  to it (`CHECK-TYPE-MISMATCH` at the call). For a `Task[Void]` the payload is
-  matched as `Await.Done(_)`; a named binding there is `CHECK-VOID-TYPE`.
+  task. `Task.await` of a crashed or cancelled task returns `error(text)` when
+  the result type is a `Result`, and halts with `RUNTIME-TASK-CRASHED` or
+  `RUNTIME-TASK-CANCELLED` otherwise.
+- `Await[T]` (`Await.Done(value)` and `Await.TimedOut`, written without
+  parentheses), `TaskRef`, `TaskDown` and `TaskExit` are reserved: a struct,
+  enum, type parameter or import alias with one of these names is
+  `CHECK-REDEFINED-NAME`. `Await` is matched with `case` and checked for
+  exhaustiveness like a user enum, and `try` does not apply to it. For a
+  `Task[Void]` the payload is matched as `Await.Done(_)`; a named binding there
+  is `CHECK-VOID-TYPE`.
 - `Task.map(items, limit, timeout_ms) do |item| ... end` is always written
   `Task.map(...)`, not as a method, so `xs.map` stays the sequential
-  `List.map`. The block gives a `Result[R]`; `try` works in it. `R` comes from
-  the expected type of the call, else from the first `ok(...)` the block gives,
-  so a block that gives only `error(...)` needs the annotation
-  (`CHECK-RESULT-TYPE` otherwise). A block whose last expression is not a
-  `Result` is `CHECK-TYPE-MISMATCH`, and an empty list needs a type
-  (`CHECK-EMPTY-LIST-TYPE`). The result is a `List[Result[R]]`, one `Result` per
-  item in the order of `items`.
-- `Task.monitor(task, channel, wrap)` takes a `Task[R]`, a `Channel[M]` and a
-  block or function of type `Fn[TaskDown, M]`, so the notice has the type the
-  channel carries; another type is `CHECK-TYPE-MISMATCH` at that argument.
-  `TaskDown` (a builtin record) and `TaskExit` (a builtin enum, matched like a
-  user enum) are reserved. `Task.current` is a `TaskRef`, a reserved opaque
-  type, as the result type of the running task is not known where it is called:
-  `Task.monitor`, `Task.cancel` and `id` take it, and `Task.await` of it is
-  `CHECK-TYPE-MISMATCH` at the argument. `task.id` is the one method of a task
-  or a `TaskRef`, an `Int`.
+  `List.map`. The block gives a `Result[R]`, and `try` works in it.
+- Argument types of `Task.cancel` and `Task.monitor`, and the reserved opaque
+  `TaskRef` of `Task.current`, are in the `Task` page.
 - A BDD step handler must finish its tasks before it returns
   (`RUNTIME-BDD-PENDING-TASKS`). See [`bdd.md`](../bdd.md).
 
@@ -92,11 +71,6 @@ the [`Test` page](../../site/content/library/testing/test.md).
   still `CHECK-MAIN`, and in a file of any other name `test_*` functions are
   ordinary functions.
 
-- `Test.eq` compares by value. Both arguments must have one data type: `Int`,
-  `Float`, `Bool`, `String`, `Nil`, `Range`, `Json`, or lists, maps, sets,
-  Results, structs and enums of them (`Result[Void]` too). Other types, such as
-  `Fn`, `Task`, handles and `TestCase`, are `CHECK-TYPE-MISMATCH`.
-
 ### `agentica test`
 
 `agentica test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR]
@@ -110,5 +84,4 @@ rules, timeouts, output limits, seeds, runner protocol and step catalog are in
 Not planned: an assertion that stops the test by itself (Agentica has no
 exceptions; `try` is the one way to stop early); running tests in the runner's
 own VM; a child VM per test (a task per test is enough); and `describe`, `setup`
-and tags (a helper function does what `setup` does). Doctests, running the
-fenced `agentica` examples of `std/` docs, are an option to evaluate later.
+and tags (a helper function does what `setup` does).

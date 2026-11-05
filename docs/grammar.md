@@ -2,7 +2,7 @@
 
 Implemented language behavior is defined by the Agentica front end and C VM.
 This index links to the grammar files, which keep global section numbers and
-headings; proposals live in [`future/`](future/README.md). The site displays
+headings; planned work lives in GitHub issues. The site displays
 these files in order as one page.
 
 - **§1:** [Overview](grammar/01-overview.md#1-what-we-want-to-validate)

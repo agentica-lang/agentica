@@ -261,8 +261,7 @@ that holds it.
 ### EAG templates
 
 EAG ("Embedded AGentica") is Agentica's ERB. A heredoc named `EAG`, `<<~EAG`,
-is a template: a `String` built from its text and its tags. Roadmap row 7.13,
-[`51-templates.md`](../future/51-templates.md).
+is a template: a `String` built from its text and its tags.
 
 ```agentica
 import EAG from "std/eag"
