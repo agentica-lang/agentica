@@ -15,6 +15,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <sys/mman.h>
+#include <sys/stat.h>
 #include <unistd.h>
 #if defined(__aarch64__) && defined(__linux__)
 #include <sys/syscall.h>
@@ -47,12 +48,19 @@ bool agc_jit_mem_seal(void *pages, size_t size) {
 
 void agc_jit_mem_unmap(void *pages, size_t size) { munmap(pages, size); }
 
-/* O_NOFOLLOW: /tmp is shared, so a link planted at the name is refused instead of followed. Owner-only, as perf
-   wants the map to belong to the user who runs it. */
+/* /tmp is shared and a PID is easy to guess: O_NOFOLLOW refuses a link planted at the name, and a file that another
+   user made there (which would receive the code's addresses) or that is not a regular file is closed again. A new
+   file is owner-only, as perf wants the map to belong to the user who runs it. */
 int agc_jit_mem_perf_open(void) {
   char path[48];
   snprintf(path, sizeof path, "/tmp/perf-%ld.map", (long)getpid());
-  return open(path, O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW | O_CLOEXEC, 0600);
+  int fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW | O_CLOEXEC, 0600);
+  struct stat st;
+  if (fd >= 0 && (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_uid != geteuid())) {
+    close(fd);
+    return -1;
+  }
+  return fd;
 }
 
 /* A short write leaves a cut line, which perf skips; the run goes on either way. */

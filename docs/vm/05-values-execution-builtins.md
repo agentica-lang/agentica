@@ -57,8 +57,9 @@ so zeroed registers are valid values.
     SipHash-1-3. An Int key is XORed with the key, mixed with MurmurHash3's
     finalizer and XORed again: a bijection, so two Ints never share a hash, and
     since only keys with the same full hash share a node, no set of Int keys
-    makes a lookup scan (the worst is 13 levels). The key is seeded once per run from OS entropy (`getrandom`, then `/dev/urandom`;
-    `rand_s` on Windows), independent of `--seed`. Tests and the fuzzer use
+    makes a lookup scan (the worst is 13 levels). The key is seeded once per
+    run from OS entropy (`getrandom`, then `/dev/urandom`; `rand_s` on
+    Windows), independent of `--seed`. Tests and the fuzzer use
     the fixed default key. Iteration order never depends on the hash.
     `Map.delete` copies the path to the key and returns the same map for a
     missing key.
@@ -381,11 +382,13 @@ returns.
   of the run, and the functions not yet compiled stay interpreted. A function
   whose cost alone exceeds the budget stays interpreted.
   `AGENTICA_VM_TEST_JIT_BUDGET=N` gives a test a smaller budget (`vm/launch.c`).
-- **Perf map.** With `AGENTICA_PERF_MAP=1` (Linux and macOS), each function
+- **Perf map.** With `AGENTICA_PERF_MAP=1` (any POSIX host; Linux `perf`
+  reads it), each function
   is added to `/tmp/perf-PID.map` when its code is published, as
   `START SIZE agentica:NAME` in hex, so `perf report` names compiled code
   instead of showing `[JIT]` addresses. The file is opened to append, with
-  `O_NOFOLLOW`, and stays after the run. Off by default.
+  `O_NOFOLLOW`, and used only when it is a regular file of the user who runs
+  the VM. It stays after the run. Off by default.
 - **Why.**
   - A function without a loop runs each instruction once per entry. The entry,
     the exit and the `RETURN` cost more than the few instructions they save.

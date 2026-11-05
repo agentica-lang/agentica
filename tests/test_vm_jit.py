@@ -1300,7 +1300,7 @@ def test_perf_map_names_each_compiled_function_only_when_asked(tmp_path):
             continue
         # `START SIZE agentica:NAME`, in hex, one line per function, as perf reads /tmp/perf-PID.map.
         entries = {line.split()[2]: (int(line.split()[0], 16), int(line.split()[1], 16)) for line in lines}
-        assert sorted(entries) == ["agentica:down", "agentica:fib", "agentica:main"], lines
+        assert len(lines) == 3 and sorted(entries) == ["agentica:down", "agentica:fib", "agentica:main"], lines
         assert all(start > 0 and size > 0 for start, size in entries.values()), lines
 
 
