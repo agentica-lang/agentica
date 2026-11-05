@@ -289,6 +289,7 @@ def later_rule_name(rule: Model.Rule) -> String
     Model.Rule.TaskAwait -> return "TaskAwait"
     Model.Rule.TaskAwaitTimeout -> return "TaskAwaitTimeout"
     Model.Rule.TaskMap -> return "TaskMap"
+    Model.Rule.TaskMonitor -> return "TaskMonitor"
     Model.Rule.TaskSpawn -> return "TaskSpawn"
     Model.Rule.TaskSpawnOwning -> return "TaskSpawnOwning"
     Model.Rule.TaskTarget -> return "TaskTarget"

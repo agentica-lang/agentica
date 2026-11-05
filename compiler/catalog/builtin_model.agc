@@ -73,6 +73,7 @@ export enum Rule
   TaskAwait
   TaskAwaitTimeout
   TaskMap
+  TaskMonitor
   TaskSpawn
   TaskSpawnOwning
   TaskTarget

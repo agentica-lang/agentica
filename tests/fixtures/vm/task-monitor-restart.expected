@@ -1,0 +1,14 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 359,
+  "stdout": [
+    "job 2 crashed on attempt 1 with RUNTIME-INDEX-OUT-OF-RANGE, restarting",
+    "[\"job 1 gave 10\", \"job 2 gave 20\", \"job 3 gave 30\"]",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-INDEX-OUT-OF-RANGE\",\"file\":\"@fixtures/vm/task-monitor-restart.agc\",\"message\":\"index 2 is outside a list of length 1\",\"range\":{\"end\":{\"column\":29,\"line\":15},\"start\":{\"column\":23,\"line\":15}},\"spawned_at\":{\"column\":10,\"file\":\"@fixtures/vm/task-monitor-restart.agc\",\"line\":22},\"stack\":[{\"column\":23,\"file\":\"@fixtures/vm/task-monitor-restart.agc\",\"function\":\"work\",\"line\":15},{\"column\":24,\"file\":\"@fixtures/vm/task-monitor-restart.agc\",\"function\":\"block\",\"line\":22}],\"task\":true}",
+    ""
+  ]
+}

@@ -31,9 +31,20 @@ export def channel_argument(cx: State.Cx, st: State.St, site: State.Site) -> Res
   return shaped(cx, st, site, T.Type.Unknown, "Channel", T.Type.Channel(T.Type.Var("T")))
 end
 
-## Argument 0 as a Task[R].
+## Argument 0 as a Task[R], or the TaskRef of Task.current, which the builtins of this argument take too (Task.cancel,
+## Task.monitor, id); only an await needs the result type.
 export def task_argument(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
-  return shaped(cx, st, site, T.Type.Unknown, "Task", T.Type.Task(T.Type.Var("R")))
+  out = try State.expr(cx, st, site.args[0], T.Type.Unknown)
+  if !T.is?(out.type, "Task") and !task_ref?(out.type)
+    return error(State.mismatch(cx, out.st, T.Type.Task(T.Type.Var("R")), out.type, Ast.expr_span(site.args[0])))
+  end
+
+  return ok(out)
+end
+
+## True for the TaskRef of Task.current.
+export def task_ref?(type: T.Type) -> Bool
+  return T.is?(type, "Opaque") and T.name(type) == "TaskRef"
 end
 
 ## Argument 0 as a Result[T].

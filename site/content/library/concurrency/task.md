@@ -1,7 +1,7 @@
 ---
 title: Task
 weight: 1
-description: Start, await (with or without a timeout), pause, cancel and count lightweight tasks, map a block over a list with bounded concurrency, hand a handle to a task, and find their crashes.
+description: Start, await (with or without a timeout), pause, cancel, monitor and count lightweight tasks, map a block over a list with bounded concurrency, hand a handle to a task, and find their crashes.
 ---
 
 Tasks run functions at the same time. See the tour page [Tasks](/tour/tasks/).
@@ -221,7 +221,7 @@ end
 
 About 200 ms, not 400: a sliding window of two, not batches. Items start in input order.
 
-- An item's `error(...)` does not stop the others. A runtime error (`RUNTIME-DIVISION-BY-ZERO`) crashes only that item: its slot is `error("task crashed: ...")`, the crash counts as observed, and the others go on.
+- An item's `error(...)` does not stop the others. A runtime error (`RUNTIME-DIVISION-BY-ZERO`) crashes only that item: its slot is `error("task crashed: ...")`, the crash counts as observed, and the others go on. An item cancelled on its own (through its `Task.current`) gives `error("task: cancelled")` at once.
 - The call waits for every item, and the items are children of the caller. To use results as they come, send them over a [Channel](/library/concurrency/channel/).
 - An empty list needs a type like any empty list (`CHECK-EMPTY-LIST-TYPE`). The effect is `concurrency`, like `Task.spawn`.
 
@@ -342,7 +342,7 @@ Task.cancel(task: Task[R]) -> Void
 
 Stops a task you no longer need, and every task it started. It does not wait: the task is marked and the call returns.
 
-- A task is cancelled by `Task.cancel`, by a crash of one of its ancestors, by the timeout of its `Task.map` item and by `HTTP.close_server` (the handler tasks). `main` cannot be cancelled: no handle reaches it. A wrong argument type is `CHECK-TYPE-MISMATCH` at the argument.
+- A task is cancelled by `Task.cancel`, by a crash of one of its ancestors, by the timeout of its `Task.map` item and by `HTTP.close_server` (the handler tasks). It also takes the `TaskRef` of [Task.current](#taskcurrent). `main` cannot be cancelled: a cancel of its `Task.current` does nothing. A wrong argument type is `CHECK-TYPE-MISMATCH` at the argument.
 - A sleep, a channel wait, an await or an I/O wait ends at once; a task busy in a loop on another scheduler stops at the end of its current turn, so it may end as cancelled even though it reached its return.
 - Its handles close as when any task ends, so a channel it owns (from `Task.spawn_owning`) is closed and its receivers get `error("channel: closed")`.
 - Awaiting it gives `error("task: cancelled")` for a `Result` task, and otherwise stops the program with `RUNTIME-TASK-CANCELLED`.
@@ -370,6 +370,118 @@ end
 
 ```output
 error("task: cancelled")
+```
+
+## Task.monitor
+
+```signature
+Task.monitor(task: Task[R], channel: Channel[M], wrap: Fn[TaskDown, M]) -> Void
+```
+
+When `task` ends for any reason (it returns, crashes or is cancelled), the runtime sends `wrap(TaskDown(...))` into `channel` once. There is no `select`, so the channel is usually the caller's one channel of an enum, with a variant for the notice: `Task.monitor(task, inbox) do |down| Msg.Down(down) end`.
+
+- `TaskDown` is a builtin record: `task_id: Int` (the `task.id` of the task), `reason: TaskExit`, then the diagnostic of a crash: `code: String` (the stable code, such as `RUNTIME-DIVISION-BY-ZERO`, to match on), `message: String`, and `file: String`, `line: Int` and `column: Int` where the error was raised. For `TaskExit.Ok` and `TaskExit.Cancelled` the strings are `""` and the numbers `0`. `TaskExit` is a builtin enum: `TaskExit.Ok`, `TaskExit.Crashed` or `TaskExit.Cancelled`, read as `Task.await` reads the end (a crash first, then a cancel). Both names are reserved.
+- A task that has ended already gets its notice at once, and a task may have several monitors, each with its own notice. A monitor cannot be removed.
+- The send never waits and never fails: when the channel is closed or full at that moment, the notice is dropped without an error. Give the channel room for every notice it may get.
+- A crash whose notice goes into the channel counts as observed, like an await of it, so it does not make the run exit 1. It counts once the notice is in the channel, even if nobody ever receives it.
+- `task` may also be the `TaskRef` of [Task.current](#taskcurrent).
+- The notice comes as soon as the ended task has closed what it owns, as for `Task.await`. `wrap` runs in a task of its own, outside the caller's tree, so a cancel never reaches it; keep it to building the message. A runtime error in `wrap` is a crash of that task, and the notice is lost.
+
+A coordinator that restarts a worker that crashed:
+
+```agentica
+struct Job
+  id: Int
+  attempt: Int
+end
+
+enum Msg
+  Done(Int, Int)
+  Down(TaskDown)
+end
+
+def work(job: Job, inbox: Channel[Msg]) -> Void
+  if job.attempt == 1 and job.id == 2
+    puts("never #{10 / (job.id - 2)}")
+  end
+
+  _ = inbox.send(Msg.Done(job.id, job.id * 10), 1000)
+end
+
+def start(job: Job, inbox: Channel[Msg], running: Map[Int, Job]) -> Map[Int, Job]
+  task = Task.spawn do work(job, inbox) end
+  Task.monitor(task, inbox) do |down| Msg.Down(down) end
+  return running.put(task.id, job)
+end
+
+def main() -> Void
+  inbox: Channel[Msg] = Channel.new(16)
+  running: Map[Int, Job] = {}
+  for id in 1..3
+    running = start(Job(id: id, attempt: 1), inbox, running)
+  end
+
+  results: List[String] = []
+  while running.size > 0
+    case inbox.recv(5000).unwrap!
+      Msg.Done(id, value) -> results = results.push("job #{id}: #{value}")
+      Msg.Down(down) ->
+        job = running[down.task_id]
+        running = running.delete(down.task_id)
+        if down.reason == TaskExit.Crashed
+          puts("restart job #{job.id} after #{down.code}")
+          running = start(job.with(attempt: job.attempt + 1), inbox, running)
+        end
+    end
+  end
+
+  puts(results.sort)
+end
+```
+
+```output
+restart job 2 after RUNTIME-DIVISION-BY-ZERO
+["job 1: 10", "job 2: 20", "job 3: 30"]
+```
+
+The crash of the first attempt still goes to stderr when it happens.
+
+## Task.current
+
+```signature
+Task.current() -> TaskRef
+task.id() -> Int
+```
+
+`Task.current` gives the running task as a `TaskRef`, so that another task can monitor it. `TaskRef` is a builtin type, reserved, for a task whose result type is not known where the call is: `Task.monitor`, `Task.cancel` and `id` take it, and an await of it is `CHECK-TYPE-MISMATCH` at the argument (it has no result to give; monitor it to learn when it ends). It prints as `<Task>` and has no equality. `task.id` gives the number that identifies a task in the run, for a `Task[R]` or a `TaskRef`: the `task_id` of its `TaskDown`.
+
+A child monitors the task that started it:
+
+```agentica
+def watch(parent: TaskRef, report: Channel[String]) -> Void
+  downs: Channel[TaskDown] = Channel.new(1)
+  Task.monitor(parent, downs) do |down| down end
+  down = downs.recv(5000).unwrap!
+  _ = report.send("parent ended: #{down.reason}", 1000)
+end
+
+def parent(report: Channel[String]) -> Int
+  me = Task.current
+  _child = Task.spawn do watch(me, report) end
+  return 7
+end
+
+def main() -> Void
+  report: Channel[String] = Channel.new(1)
+  task = Task.spawn(&parent, report)
+  puts(Task.await(task))
+  puts(report.recv(5000).unwrap!)
+end
+```
+
+```output
+7
+parent ended: TaskExit.Ok
 ```
 
 ## Task.pending_count
@@ -444,6 +556,6 @@ true
 
 Some errors end the whole run, whichever task raises them: a runtime error in `main`, `RUNTIME-STEP-LIMIT`, an internal VM error, and `System.exit` in any task. The first of these wins.
 
-A crash is observed when an await returns its error or halts, or when `Test.run` reports it. If `main` returns with a crash never observed, the run exits 1 and prints one line on stderr: `2 task crashes were not observed; first: task crashed: ...` (with `--json`, `{"unobserved_crashes":2,"first":"task crashed: ..."}`).
+A crash is observed when an await returns its error or halts, when its [monitor](#taskmonitor)'s notice goes into the channel, or when `Test.run` reports it. If `main` returns with a crash never observed, the run exits 1 and prints one line on stderr: `2 task crashes were not observed; first: task crashed: ...` (with `--json`, `{"unobserved_crashes":2,"first":"task crashed: ..."}`).
 
 Returning from `main` ends the run, and pending tasks never run again. At the end of any run the VM flushes and closes open files and waits for the buffered output of stdout and stderr to reach the pipe or file (bounded by the flush limit, 30 seconds by default, `--flush-timeout`), frees what native code still owns within the same limit, closes sockets and listeners, and stops and reaps the child processes it started. Standard streams stay open.

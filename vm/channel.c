@@ -310,6 +310,13 @@ bool agc_channel_abandoned(agc_vm *vm, const agc_channel *c) {
   return c->abandoned;
 }
 
+/* A send that never waits, for the notice of a monitor (vm/task.c): the value goes to a waiting receiver or into a free
+   slot, as Channel.send would put it; false, and nothing sent, when the channel is closed or full. */
+bool agc_channel_offer(agc_vm *vm, agc_channel *c, agc_value v) {
+  agc_sync_assert(vm);
+  return !c->closed && deliver(vm, c, v, false);
+}
+
 void agc_channel_leave(agc_vm *vm, agc_task *t) {
   agc_sync_assert(vm);
   const agc_channel_wait w = t->channel;

@@ -64,6 +64,7 @@ Show
 TaskAwait
 TaskAwaitTimeout
 TaskMap
+TaskMonitor
 TaskSpawn
 TaskSpawnOwning
 TaskTarget

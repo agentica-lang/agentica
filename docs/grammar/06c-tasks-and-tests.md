@@ -22,8 +22,8 @@ language and the checker:
   type is a `Result`, and halts with `RUNTIME-TASK-CRASHED` otherwise; the same
   holds for a cancelled task (`error("task: cancelled")`,
   `RUNTIME-TASK-CANCELLED`).
-- `Task.cancel(task)` takes a `Task[R]`; any other argument type is
-  `CHECK-TYPE-MISMATCH` at the argument.
+- `Task.cancel(task)` takes a `Task[R]` or a `TaskRef`; any other argument type
+  is `CHECK-TYPE-MISMATCH` at the argument.
 - `Task.await(task, timeout_ms)` returns `Await[T]`, a builtin generic enum with
   the variants `Await.Done(value)` and `Await.TimedOut` (no payload, written
   without parentheses). `Await` is reserved: a struct, enum, type parameter or
@@ -40,6 +40,15 @@ language and the checker:
   `Result` is `CHECK-TYPE-MISMATCH`, and an empty list needs a type
   (`CHECK-EMPTY-LIST-TYPE`). The result is a `List[Result[R]]`, one `Result` per
   item in the order of `items`.
+- `Task.monitor(task, channel, wrap)` takes a `Task[R]`, a `Channel[M]` and a
+  block or function of type `Fn[TaskDown, M]`, so the notice has the type the
+  channel carries; another type is `CHECK-TYPE-MISMATCH` at that argument.
+  `TaskDown` (a builtin record) and `TaskExit` (a builtin enum, matched like a
+  user enum) are reserved. `Task.current` is a `TaskRef`, a reserved opaque
+  type, as the result type of the running task is not known where it is called:
+  `Task.monitor`, `Task.cancel` and `id` take it, and `Task.await` of it is
+  `CHECK-TYPE-MISMATCH` at the argument. `task.id` is the one method of a task
+  or a `TaskRef`, an `Int`.
 - A BDD step handler must finish its tasks before it returns
   (`RUNTIME-BDD-PENDING-TASKS`). See [`bdd.md`](../bdd.md).
 
