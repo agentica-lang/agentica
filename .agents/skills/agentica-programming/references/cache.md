@@ -24,24 +24,18 @@ Cache.bytes(cache: Cache.Store) -> Int
   Put the version in the key (`"msg:#{id}:#{updated_at}"`) instead of deleting.
 - `Cache.memory`: an entry costs key + value + 64 bytes. Each of two live
   generations holds half of `max_bytes` (and of `max_entries`); the oldest
-  generation is dropped whole when the young one is full. `get` stores nothing, so
-  an entry leaves 1 to 2 rotations after its write however often it is read
-  (a popular key is recomputed about once every two rotations). An entry whose
-  cost is over `max_bytes / 2` is returned by `fetch` and not stored; `put` of
-  one also removes the old value. `put` is a removal then a store, not atomic:
-  a reader may see a miss between, and a `put` with no room is dropped after
-  the old value went. `clear` may drop concurrent puts the same way.
+  generation is dropped whole when the young one is full. `get` stores nothing,
+  so an entry leaves 1 to 2 rotations after its write however often it is read.
+  An entry whose cost is over `max_bytes / 2` is returned by `fetch` and not
+  stored; `put` of one also removes the old value. `put` is a removal then a
+  store, not atomic: a reader may see a miss between.
 - `ttl_ms`: an entry is never read more than that long after its write (a
   read does not renew it). `get` drops an expired entry; `cleanup` removes all
   expired entries and returns how many (run it in a task: `while true`,
   `Cache.cleanup`, `Task.sleep(5_000)`). Generations also turn by time, but
   only on writes: with no puts, expired entries stay in memory until read or
-  `cleanup`; with puts they are gone by about 1.5 ttl, and a generation drop may
-  remove an entry earlier, no sooner than about ttl/2. `clock` is for tests.
-- `bytes` is exact when no call runs (delete, replace, expiry and `cleanup` give
-  bytes back) and never above `max_bytes`. A task cancelled between reserving
-  and storing leaves its reservation counted until its generation drops. A drop
-  deletes entries one by one: one `put` waits (about 5 us an entry).
+  `cleanup`. `clock` is for tests.
+- `bytes` is never above `max_bytes`.
 - Another implementation returns a `Cache.Store` with the same seven
   functions: an expired entry is a miss, a too-big `put` drops the old value,
   `cleanup` gives 0 without a ttl, `bytes` counts as `max_bytes`. A block is a

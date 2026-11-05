@@ -20,17 +20,15 @@ Binary.read_frame_length(data: Bytes, offset: Int, max: Int) -> Result[Int]
 
 - `_be` is big-endian (network order), `_le` little-endian; `u8` and `i8` have
   no suffix. Signed types use two's complement. `offset` is zero-based.
-- A reader never halts: every problem is an `error(...)`, and its only cause is
-  an `offset` outside the data. A writer that can fail (a value outside its
-  type) returns a `Result`; `write_i64_*`, `write_f32_*` and `write_f64_*`
-  return a plain `Bytes`, so `try` on them is a check error.
+- A reader never halts: an `offset` outside the data is an `error(...)`. A
+  writer that can fail (a value outside its type) returns a `Result`;
+  `write_i64_*`, `write_f32_*` and `write_f64_*` return a plain `Bytes`, so
+  `try` on them is a check error.
 - `u64` is `0 .. 9223372036854775807`: `read_u64_*` errors on a top bit set and
   `write_u64_*` rejects a negative value. For all 64 bits (hashes, IDs) use
   `read_i64_*` and `write_i64_*`, which read and write the same bytes.
-- Floats: `write_f64_*` writes `Float.to_bits`, `write_f32_*` writes
-  `Float.to_bits32` (it rounds). Every NaN is written as the canonical NaN, so a
-  NaN with another payload reads and writes back canonical. `-0.0`, infinities
-  and subnormals are exact.
+- Floats: `write_f32_*` rounds; every NaN is written as the canonical NaN.
+  `-0.0`, infinities and subnormals are exact.
 - Join writer results with `Bytes.concat(parts)`, one copy for any number of
   parts; a loop of `out = out + part` copies the output each time and is O(n²).
   Build `parts` with `map`: `values.map do |v| Binary.write_i64_be(v) end`.
@@ -39,17 +37,12 @@ Binary.read_frame_length(data: Bytes, offset: Int, max: Int) -> Result[Int]
   `max` (and for a negative `max`), so a program rejects a hostile length before
   it reads the body; then it reads that many bytes itself (`TCP.recv_bytes` and
   `Process.read_bytes` may return fewer).
-- Errors, in this order (the first that applies): `frame limit -1 is negative`;
-  `u32 at offset 10 is outside bytes of length 12` (offset below 0 or above
-  `size - n`, any `Int`); `u64 at offset 0 does not fit in Int`;
-  `value 70000 does not fit in u16`; `payload of 4294967296 bytes does not fit
-  in a u32 length`; `frame length 70000 is above the limit 65536`.
 - No mutable buffers: writers return new `Bytes`, which the program joins.
 
 ## Bit operations
 
 ```text
-Int.bit_and(a: Int, b: Int) -> Int                       # 64-bit two's complement; never fails
+Int.bit_and(a: Int, b: Int) -> Int                       # 64-bit two's complement
 Int.bit_or(a: Int, b: Int) -> Int
 Int.bit_xor(a: Int, b: Int) -> Int
 Int.bit_not(a: Int) -> Int                               # -1 - a
@@ -70,26 +63,22 @@ Float.from_bits32(bits: Int) -> Float                    # exact; bits outside 0
 ## Text bytes and hashing
 
 - `String.from_bytes` decodes strictly. A byte read can split a UTF-8 character,
-  so decode complete sequences only and switch to text reads only at character
-  boundaries. `s.bytes` encodes text for `File.write_bytes`, `TCP.send_bytes`
-  and the like.
+  so decode complete sequences only. `s.bytes` encodes text for
+  `File.write_bytes`, `TCP.send_bytes` and the like.
 - `Digest.md5`, `sha1`, `sha256` and `sha512(data: Bytes) -> Bytes` hash
   bytes with OpenSSL and return the 16, 20, 32 or 64 digest bytes; each
   `_hexdigest` form (`Digest.sha256_hexdigest(data) -> String`) returns them
   as lowercase hex, as Ruby's `Digest::SHA256.hexdigest`. Hash text with
   `Digest.sha256("abc".bytes)`. MD5 and SHA-1 are for formats that need them
-  (ETags, git), not for security; a FIPS-only system OpenSSL lacks them, and
-  the call halts (`RUNTIME-INTERNAL`). The time grows with the data. `Crypto`
-  is a reserved type name.
+  (ETags, git), not for security. `Crypto` is a reserved type name.
 - `HMAC.sha256(key: Bytes, data: Bytes) -> Bytes` and `HMAC.sha512(key, data)`
-  return the 32 or 64 bytes of the HMAC (RFC 2104, Ruby's
-  `OpenSSL::HMAC.digest`); `HMAC.sha256_hexdigest(key, data) -> String` and
-  `sha512_hexdigest` return them as lowercase hex. Any key length works, empty
-  included. `HMAC` is a reserved type name.
+  return the 32 or 64 bytes of the HMAC;
+  `HMAC.sha256_hexdigest(key, data) -> String` and `sha512_hexdigest` return
+  them as lowercase hex. Any key length works. `HMAC` is a reserved type
+  name.
 - `HMAC.secure_compare(a: Bytes, b: Bytes) -> Bool` compares bytes in constant
-  time (Ruby's `OpenSSL.secure_compare`): check a received MAC, signature or
-  token with it, never with `==`, which is not constant time. Other lengths
-  give `false`.
+  time: check a received MAC, signature or token with it, never with `==`.
+  Other lengths give `false`.
 - Triple DES CBC and CMAC are for payment formats (PIN blocks, key check
   values, ISO 8583 MACs), not for new designs. Each gives an `error(...)` for a
   wrong key, IV or data size, never partial output:
@@ -121,16 +110,12 @@ KDF.scrypt(password: Bytes, salt: Bytes, n: Int, r: Int, p: Int, length: Int) ->
   16-byte tag appended; decrypting takes that form and gives an `error(...)`
   when the key, IV, data or `auth_data` do not match the tag, never partial
   plaintext. `auth_data` is authenticated, not encrypted.
-- KDF: `iterations` at least 1, `length` 1 to 1048576, and
-  `iterations * ceil(length / 32)` at most 50000000; scrypt's `n` is a power
-  of 2, `r * p * (n + 16)` at most 2^25 and its native memory,
-  128 * r * (n + p + 2) bytes, at most 1025 MiB (about 1 GiB per call). Other
-  values give an `error(...)`. OWASP's password storage cheat sheet
-  advises 600000 iterations for PBKDF2-HMAC-SHA256, and scrypt with
+- KDF: `length` 1 to 1048576, scrypt's `n` a power of 2; values past the
+  limits (iterations, scrypt memory about 1 GiB per call) give an `error(...)`.
+  OWASP advises 600000 iterations for PBKDF2-HMAC-SHA256, and scrypt with
   `n = 131072, r = 8, p = 1`. A call runs on the compute pool: its task waits
-  and the other tasks keep running (not allowed inside a native callback).
-  Compare a derived key with `HMAC.secure_compare`. `KDF` is a reserved type
-  name.
+  and the other tasks keep running. Compare a derived key with
+  `HMAC.secure_compare`. `KDF` is a reserved type name.
 
 ```text
 Base64.strict_encode64(data: Bytes) -> String     # padded, one line
@@ -161,6 +146,5 @@ SecureRandom.uuid() -> String                         # version 4, 36 chars
 
 - Use `SecureRandom` for keys, salts, tokens and IDs: `Random` is seeded and
   `--seed` repeats it, so it is not for secrets.
-- `n` outside 0..1048576 halts (`RUNTIME-INVALID-COUNT`); a failed draw halts
-  (`RUNTIME-INTERNAL`). The calls have the `random` effect label, so a module
-  constant cannot call them. `SecureRandom` is a reserved type name.
+- `n` outside 0..1048576 halts (`RUNTIME-INVALID-COUNT`). A module constant
+  cannot call them. `SecureRandom` is a reserved type name.
