@@ -8,8 +8,8 @@ behind them.
 ### Build
 
 - `make` compiles `vm/*.c` with `-std=c11 -O2 -Wall -Wextra -Werror` and the
-  hardening flags (PIE with full RELRO on Linux), and links `dist/agentica`
-  (§18.2). The warning flags apply to our own `vm/*.c` only. Each mode compiles
+  hardening flags (PIE with full RELRO on Linux), and links `dist/agentica`.
+  The warning flags apply to our own `vm/*.c` only. Each mode compiles
   into `build/vm/<mode>/obj/`, and `build/vm/flags` holds the compile and link
   line, so switching between a normal and a sanitizer build relinks.
 - `AGENTICA_GC`, `AGENTICA_OPENSSL` and `AGENTICA_ZLIB` pick `system` (the

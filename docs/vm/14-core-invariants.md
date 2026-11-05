@@ -152,7 +152,7 @@ called from `unlink_task`), and the next writer is woken if its text now fits.
 seconds by default, set with
 `--flush-timeout MS` or the environment variable `AGENTICA_FLUSH_TIMEOUT_MS`
 (the flag wins), with no way to turn it off. The owner decided this on
-2026-10-13 (row 7.2.1d). At exit, stdout and stderr count as part of the file
+2026-10-13. At exit, stdout and stderr count as part of the file
 flush. **When `main` ends, the program ends.** The steps are:
 
 0. start no queued compute job any more, a KDF derivation included

@@ -1,6 +1,6 @@
 ## 16. VM architecture
 
-**Status:** decided by the owner on 2026-10-13 (row 7.2.1c). This is the one
+**Status:** decided by the owner on 2026-10-13. This is the one
 picture of the threads, the queues and who owns what. The VM runs one scheduler
 per logical core by default; with N = 1 the scheduler and the loop share one
 thread (§16.9).

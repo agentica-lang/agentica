@@ -202,7 +202,7 @@ vm-latency`, run alone, must still pass its 250 ms limit.
 ### 17.10 Decisions
 
 Decided on 2026-10-14: `append`, `set` and a small `concat` cost 0 turn units
-(§17.5); `list-build` is the gate of the 8d benchmark claim; `take`, `drop` and
+(§17.5); `list-build` is the gate of the list benchmark claim; `take`, `drop` and
 a large `concat` stay O(n) with no RRB (§17.11 says what shares leaves).
 
 ### 17.11 Bulk operations after the trie

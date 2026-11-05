@@ -378,7 +378,7 @@ section says how the scheduler and the loop keep them.
   read that cannot be cancelled ends with the process, or, in an in-process
   harness, when input comes, and then touches nothing of the closed loop. Other
   unsupported hosts keep a blocking read on the interpreter thread.
-- **stdout and stderr (row 7.2.1f, `vm/output.c`).** Each stream has one output
+- **stdout and stderr (`vm/output.c`).** Each stream has one output
   buffer, a `malloc`'d ring of 64 KiB (`AGC_OUTPUT_BUFFER`), and one FIFO of
   waiting writers. `puts`, `print`, `IO.inspect` and `IO.warn` copy their whole
   text into the buffer and return at once when it fits and no writer waits.
