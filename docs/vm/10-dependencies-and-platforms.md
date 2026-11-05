@@ -84,6 +84,15 @@ architecture, a library outside that list or missing hardening.
     OpenSSL 3.0 or newer dynamically, so a fresh checkout does not spend minutes
     building OpenSSL. Only the OpenSSL adapter files (`vm/tls_openssl.c`,
     `vm/digest_openssl.c`, `vm/tls_trust*.c`) include OpenSSL headers (10.3).
+    A feature that only 3.5 has (Argon2id, `OSSL_set_max_threads`) is not
+    always there: adding one means raising `OSSL_MIN` of `mk/vm.mk` and the
+    `#error` in `vm/tls_openssl.c` to 3.5, or checking at run time on system
+    builds and returning an error `Result` that names the missing feature. An
+    algorithm that a system build leaves out (a FIPS-only OpenSSL has no MD5,
+    SHA-1 or scrypt) stops the call with `RUNTIME-INTERNAL`. The crypto API
+    has no low-level primitives (no raw block ciphers, no ECB, no
+    unauthenticated modes); the one exception is Triple DES CBC with CMAC, for
+    payment formats.
 
 **License rule.** Vendored or statically linked third-party code must be MIT,
 BSD, ISC, zlib, Apache-2.0 or similarly permissive. No copyleft. Its license

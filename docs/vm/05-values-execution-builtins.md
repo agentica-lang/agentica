@@ -152,6 +152,68 @@ so zeroed registers are valid values.
   environment still wins: 3 gives back libgc's default, and 1 is faster still
   for more memory.
 
+### 5.4 Shared small values
+
+`agc_runtime` (`vm/port.h`) holds objects that `agc_vm_init` makes once and the
+builtins return every time a program computes them: `empty_list`, `empty_map`
+and `empty_set` (the Map and the Set are one `agc_map` under two tags),
+`empty_string` and the 128 one-character ASCII Strings (`chars[128]`).
+`agc_small_string` (`vm/value.c`) returns the shared String for no bytes or one
+ASCII byte, else a new one; the other paths read the table directly. Callers:
+`rg agc_small_string vm/`. Numbers: `docs/vm-benchmarks.md`.
+
+Why it is safe:
+
+- **Immutable.** Only objects from `agc_new_*` are written, and only before they
+  are returned. `List.append` and `List.set` copy, then write into the copy, so
+  `list_slice` must keep returning a fresh list. Any future update in place
+  (transients, §10.2.3 of `docs/vm/10-io-multicore.md`) must treat the shared
+  objects as never unique.
+- **No identity.** `==` compares Strings by bytes and does not apply to lists
+  or maps; there is no object id and printing shows no addresses, so sharing
+  cannot change output.
+- **GC and threads.** The table is a GC object reachable from every scheduler,
+  and strings are atomic. The runtime is read-only after start-up, so
+  schedulers read the table with no lock.
+
+Every shared path keeps the turn cost it had, since the cost rule reads sizes
+and not objects. Left out after a measurement: `CONCAT` with an empty side
+returning the other String (no real program gains), `filter` and `map` with
+nothing to return (one small list per call; the edit moved a loop by +12% in
+one link layout, and layouts differ by that much without any edit), and the
+strings of `agc_utf8_decode`, HTTP bodies and `Dir.list`.
+
+### 5.5 Why a value is 16 bytes
+
+A value is a `uint32_t` tag and an 8-byte union: 12 bytes of data and 4 of
+padding, passed in two registers by the SysV x86-64 ABI. `Int` and `Float`
+never allocate, and `Int` is 64-bit with overflow a runtime error. Boehm is
+conservative and compiled with `ALL_INTERIOR_POINTERS`, and it reads heap
+objects, stack and roots only at 8-byte aligned offsets. Alternatives weighed:
+
+- **Packed struct (12 or 9 bytes): rejected.** Boehm reads only aligned words,
+  so in an array of 12-byte values every second payload is invisible and a live
+  object would be freed. Also unaligned loads, no atomic access, and a struct
+  with unaligned fields is class MEMORY in the SysV ABI, so calls get worse.
+- **NaN-boxing (8 bytes).** A 64-bit `Int` does not fit in the free bits, so
+  large Ints need heap boxes or the language must narrow `Int`.
+- **Low-bit pointer tagging (8 bytes).** Works with Boehm, but Ints become 62
+  or 63 bits (a language change) and Floats need heap boxes.
+- **Struct of arrays (9 bytes).** A 1-byte tag array beside the 8-byte payloads
+  keeps alignment, but every container manages two arrays and rebuilds an
+  `agc_value` on every read.
+
+The direction, if memory or speed ever asks (issue #396): use the static types,
+which make most tags redundant. Unboxed `List[Int]` and `List[Float]` are built
+(`docs/vm/17-lists.md` §17.12). Typed registers belong to the JIT (§6.4).
+Compact struct fields would store an `Int`, `Float` or `Bool` field in 8 bytes
+with no tag and a pointer field as a bare aligned pointer, and a read rebuilds
+the `agc_value` from the static type. `Int` stays 64-bit, pointers stay aligned
+and visible to the GC, and `agc_value` stays the general form in registers,
+calls and generic code. Measure first (the server benchmark and the
+cross-language benchmarks, wall time and peak RSS): change the value layout
+only if value size, and not lists or dispatch, is the limit.
+
 ## 6. Execution
 
 ### 6.1 Stack, call depth and steps

@@ -1,116 +1,37 @@
 ## 25. Ruby typed idioms
 
-**Status:** built (the grammar and the programming skill are the contract):
-25.1 (default parameter values), 25.2 (re-exports), 25.3 (struct update
-`with`), 25.6 (the compiler prelude and the Enumerable methods), 25.10
-(heredocs), 25.12.1 (`case` guards and nested patterns) and 25.14 (the pipe
-operator `|>`). Planned, one PR per item (row 7.6 of the [roadmap
-order](../roadmap/README.md)): 25.4 (value equality, 15d), 25.5 (standalone
-lambdas, 15e) and 25.9 (`File.open` with a block, 15i), after phase 16 (section
-26), and 25.11 (`format`, 15k). Part B (25.12) lists ideas to evaluate later,
-Part C (25.13) what was decided against. Decided by the user on 2026-10-12.
-Done when: site examples run on the VM and evaluation confirms agents use the
-forms with the same diagnostic quality as the forms they replace.
+Decisions behind the Ruby forms of the language. Built forms live in the
+grammar and the programming skill; planned ones live in their issue, with the
+spec below: standalone lambdas (§25.5, #979) and `format` (§25.11, #982).
 
 Agentica is "Ruby with types" for LLM agents. Accept a form when it is real Ruby
 (or a typed version of it) or makes Agentica consistent with itself, keeping
 static checking and immutable values. A form from another language is not
 accepted: its hint names the Agentica form. A newly accepted form is checked
-with a second model in an evaluation round. Three limits do not move: no OOP (no
-classes, inheritance or user methods on user types), no user generics, and
-immutable values.
+with a second model in an evaluation round. Two limits do not move: no OOP (no
+classes, inheritance or user methods on user types) and immutable values.
 
 **Principle: one way to do each thing.** Strictness wins, so agents are precise.
 A Ruby form is added only when it does not create a second way to write
 something the language already has; otherwise the parser or the checker gives a
-diagnostic whose help shows the canonical form. The same principle is why there
-are no warnings: a diagnostic is an error or it does not exist
-([section 26](26-strict-diagnostics.md#26-strict-diagnostics)).
+diagnostic whose help shows the canonical form.
 
-The test: a form fails when it only renames or negates an existing call, its
-callback, or a statement (an alias, `reject` for `filter` with `!`, `unless` for
-`if !`), or re-spells one call or statement. A method passes when the
-composition it replaces needs a loop, several calls, or a seed value or typed
-accumulator the caller would otherwise choose. So `sum`, `find`,
+**Principle: no warnings.** A diagnostic is an error or it does not exist
+(`docs/grammar/07-diagnostics.md`). A warning means "wrong, but allowed", a
+second accepted way; agents ignore warnings; and each stage returns its output
+or exactly one diagnostic. A new check is an error with a stable code, and only
+when the case is almost always a mistake and the fix is local and mechanical.
+Nothing turns a check off: the discard `_` and a name that starts with `_` are
+the one way to drop a value or keep a name on purpose. Deprecation warnings may
+be considered only after 1.0.
+
+The test for a method or form: it fails when it only renames or negates an
+existing call, its callback, or a statement (an alias, `reject` for `filter`
+with `!`, `unless` for `if !`), or re-spells one call or statement. A method
+passes when the composition it replaces needs a loop, several calls, or a seed
+value or typed accumulator the caller would otherwise choose. So `sum`, `find`,
 `each_with_index`, `flat_map` and `Map.each` pass; `reject` and the `Range`
-Enumerable methods (each is `to_a` and then one `List` call) fail. By the same
-test `unless`, statement modifiers, `loop do`, keyword arguments and new method
-aliases are in Part C.
-
-**How an item lands.** Each remaining item changes the front end (`compiler/`)
-and runs on the VM; most are sugar that lowering turns into code the VM already
-runs. A real program or an evaluation round must ask for it first.
-
-### 25.4 Value equality for data
-
-Like Ruby's `Data`, two values of the same struct type are equal when their
-fields are equal. The compiler provides it; it is not user operator overloading.
-
-```agentica
-a = User(name: "Ana", age: 30)
-b = User(name: "Ana", age: 30)
-puts(a == b)                    # true
-puts(a.with(age: 31) != b)      # true
-```
-
-**Which types have equality.** Today `==` and `!=` work on primitive values and
-ranges ("Operators" in `grammar.md`). With this item a type has equality when it
-is:
-
-- `Int`, `Float`, `Bool`, `String`, `Nil` or `Range`, as today;
-- `Void` as a payload: a `Result[Void]` success has no value to compare, so
-  `ok() == ok()` is true;
-- a struct whose field types all have equality, or an enum whose payload types
-  all have equality: same type, and the fields (or the variant and its payloads)
-  equal one by one, in declared order;
-- `List[T]`, `Map[K, V]` or `Result[T]` whose element types have equality: lists
-  of the same length with equal elements in order; maps with the same keys and
-  equal values, in any order (as Ruby's `Hash#==`); Results with the same tag
-  and equal payloads (`error` compares the message).
-
-A struct may hold itself through a list or an enum (`children: List[Node]`). The
-checker decides equality for each group of mutually recursive types together (a
-strongly connected component): every type in the group has equality only if no
-type in it has a field without equality, so the answer does not depend on check
-order, and a result computed under an open assumption is never cached. A
-generic enum's equality depends on its type arguments (`Option[Int]` has it,
-`Option[Fn[Int, Int]]` does not). `List.member?` (a prelude method) takes any
-element type that has equality.
-
-Lists, maps and Results are in this item because a struct with a
-`tags: List[String]` field is common. `Json`, `Fn`, `Task` and handles have no
-equality.
-
-**Checker rules:** both sides must have the same type, and that type must have
-equality; otherwise `CHECK-TYPE-MISMATCH`, as today for structs. When a struct
-has no equality because of one field, the message names the field and a
-secondary span marks its declaration:
-`User has no equality: field "on_save" is Fn[User, Void]`. No new code is
-needed; the rule is the one that exists, made wider. A `Float` field follows
-IEEE 754, so a value that holds a NaN is not equal to itself, like the NaN.
-
-**An operand that needs an expected type.** When one side is a form whose type
-comes from context (`[]`, `{}`, `error(...)`, a nullary variant of a generic
-enum such as `Option.None`), the other side's type is its expected type:
-`r == error("not found")` checks `error(...)` as `r`'s `Result[T]`, and
-`opt == Option.None` as `opt`'s `Option[T]`. When neither side gives a type
-(`error("a") == error("b")`, `[] == []`), the existing diagnostics apply
-(`CHECK-RESULT-TYPE`, `CHECK-EMPTY-LIST-TYPE`, `CHECK-ENUM-TYPE-INFERENCE`).
-
-**One way to test for empty.** There is no `empty?`, so the canonical test is
-`xs.size == 0` (and `m.size == 0`). `xs == []`, `m == {}`, `[] == xs`, `{} == m`
-and their `!=` forms (the literal on either side) are `CHECK-TYPE-MISMATCH` with
-a help that shows `xs.size == 0` (or `xs.size != 0`). `s == ""` stays valid,
-since `String` equality already exists.
-
-**VM:** `EQ` and `NE` compare structs, enums, lists, maps and Results by value
-with an explicit stack (no C recursion) and charge a turn cost
-(`docs/vm/10-io-scheduler.md` §10.2.1). The checker rules out `Fn` and handles;
-as a backstop `EQ` raises `RUNTIME-INTERNAL` on one (a crafted `.agcb`). The
-wider meaning bumps the bytecode format version. Rejected: one generated
-equality function per type (the VM knows the shape of every value) and an
-`EQ_DEEP` opcode (the front end and the VM ship together). `case` patterns are
-unchanged; `agc_equal` (`vm/equal.c`) already exists for `Test.eq`.
+Enumerable methods (each is `to_a` and then one `List` call) fail.
 
 ### 25.5 Standalone lambdas
 
@@ -139,109 +60,24 @@ reserved word.
   body, as for `map`. As for `map`, `try` needs a known result type, so it works
   only with an expected `Fn` (the second example).
 - A lambda cannot call itself (it has no name); recursion uses `def`.
-- The strict rules of [section
-  26](26-strict-diagnostics.md#26-strict-diagnostics) hold inside a lambda as in
-  a block: an unused parameter or local is `CHECK-UNUSED-VARIABLE` (a `_` name
-  opts out), a statement after `return` is `CHECK-UNREACHABLE-CODE`, and a
-  dropped `Result` is `CHECK-UNUSED-RESULT`.
+- The strict rules hold inside a lambda as in a block: an unused parameter or
+  local is `CHECK-UNUSED-VARIABLE`, a statement after `return` is
+  `CHECK-UNREACHABLE-CODE`, and a dropped `Result` is `CHECK-UNUSED-RESULT`.
 - **One way:** a `lambda` literal written directly as the last argument of a
-  call that accepts a trailing block (a named call, a builtin or method call, or
-  a call through an import alias) whose last parameter is an `Fn` is a second
-  way to write a trailing block. It does not apply to `.call(...)`, which cannot
-  take a block, so `g.call(1, lambda do |x: Int| x end)` is valid. Example:
-  `xs.map(lambda do |x: Int| x * 2 end)` is `CHECK-BLOCK-TARGET` (the code about
-  where a block goes; no new code) with a help that shows
-  `xs.map do |x| x * 2 end`. Lambdas stay valid wherever a trailing block cannot
-  go: assigned to a variable, a struct field, a list or map element, a non-last
-  argument, or a return value.
+  call that accepts a trailing block, whose last parameter is an `Fn`, is a
+  second way to write a trailing block. It does not apply to `.call(...)`, which
+  cannot take a block, so `g.call(1, lambda do |x: Int| x end)` is valid.
+  `xs.map(lambda do |x: Int| x * 2 end)` is `CHECK-BLOCK-TARGET` with a help
+  that shows `xs.map do |x| x * 2 end`. Lambdas stay valid wherever a trailing
+  block cannot go: assigned to a variable, a struct field, a list or map
+  element, a non-last argument, or a return value.
 - Not accepted, each with a help that shows `lambda do |x: Int| ... end`:
-  `->(x) { ... }`, `lambda { |x| ... }`, `proc do ... end`, `Proc.new`. The
-  existing hint for `fn(x: Int) ...`, `lambda do ... end` and a `do` block with
-  no call loses `lambda do`; `fn(x: Int)` and a `do` block with no call get a
-  help that shows `lambda do |x: Int| ... end`.
+  `->(x) { ... }`, `lambda { |x| ... }`, `proc do ... end`, `Proc.new`, and
+  `fn(x: Int) ...`.
 
-**Lowering:** the same closure as a block passed to a call; no VM change.
-
-Once lambdas land, the `getter`/`putter` helpers of [section
-15.1](15-adapters-and-json-inspection.md#151-calling-fn-fields-without-call)
-are replaced by `lambda`.
-
-### 25.9 `File.open` with a block
-
-Ruby's `File.open(path) do |f| ... end` closes the file when the block ends.
-This is the real use of Ruby's `ensure`, and here it replaces it.
-
-**One way:** the block form is the canonical way to read or write a file through
-a handle, and the programming skill and the site teach it. Manual `File.open`
-and `File.close` stay only for a handle that lives beyond one block, such as one
-shared with tasks. The whole-file helpers (`File.read_text`, `File.write_text`)
-stay for reading or writing a whole file at once.
-
-```agentica
-def read_lines(path: String) -> Result[List[String]]
-  return File.open(path, "read", 1000) do |f|
-    lines: List[String] = []
-    while !(try File.eof?(f, 1000))
-      lines = lines.push(try File.read_line(f, 1000))
-    end
-    ok(lines)
-  end
-end
-```
-
-**`File.eof?`** comes with this item: `File.eof?(handle: FileHandle, timeout_ms:
-Int) -> Result[Bool]` (unlike `IO.eof?`, so the loop needs `try`). It peeks at
-the next byte, with the timeout and handle-lock rules of the other `File` stream
-functions, and errors for a handle that is closed or not open for reading. It is
-a builtin under exception 1 of the std-first rule (it touches the OS). Without
-it a loop must tell the end of the file from invalid UTF-8 by the error text of
-`File.read_line`.
-
-**API:** one more arity of the existing builtin (the catalog already has arity
-overloads, `Map.get`):
-
-```text
-File.open(path: String, mode: String, timeout_ms: Int) -> Result[FileHandle]                    # today
-File.open(path: String, mode: String, timeout_ms: Int, f: Fn[FileHandle, Result[T]]) -> Result[T]
-```
-
-**Rules:**
-
-- If the open fails, the block does not run and the call returns that error.
-- Otherwise the block runs with the handle, and then the handle is closed with
-  `File.close(handle, timeout_ms)`, whether the block returned `ok` or `error`
-  (an early `return error(...)` and a failed `try` included). If the block
-  returned `ok(v)`, the call returns `ok(v)`, or the close error if the close
-  fails (it flushes writes, so its error matters). If the block returned an
-  error, the call returns that error, and a close error is dropped.
-- A runtime diagnostic inside the block ends the task (the whole run only in
-  `main`); the handle, owned by the task, is closed by the crash, or by the
-  run's end in `main`, as today. A handle that leaves the block (returned inside
-  the Result or captured by a lambda) is closed; using it gives the error
-  `Result` of a closed handle, as today.
-- The block's result must be `Result[T]`. `T` comes from the expected type of
-  the call if there is one, or else from the body. Unlike `map`, `try` works in
-  this block even when `T` is inferred: the outer type is always `Result`, so
-  the checker knows what `try` returns from it. This is the small checker rule
-  that `Task.map` ([section 27.1](27-iteration-and-concurrency.md#271-taskmap))
-  already added for builtins whose block result is `Result[T]` with `T`
-  inferred; this item reuses it. `try` in a block with a fixed `Result` type
-  already works (`Test.test`, `File.each_line`).
-- The strict rules of [section
-  26](26-strict-diagnostics.md#26-strict-diagnostics) hold in the block: an
-  unused handle parameter is `CHECK-UNUSED-VARIABLE` (`do |_|`), a statement
-  after `return` is `CHECK-UNREACHABLE-CODE`, and a dropped `Result` inside it
-  (`File.write_text(...)` without `try`) is `CHECK-UNUSED-RESULT`. The lowered
-  `File.close` is not user code, so it is never reported.
-- The same shape fits other handles that need a close: `TCP.connect`,
-  `TLS.connect` and `Process.spawn` (where the close kills and reaps the
-  process). Each is its own small item, added when a program needs it.
-
-**Lowering:** the call expands into the existing `File.open`, a call to the
-block's closure, `File.close` and the branches above; the only VM change is
-`File.eof?`. It is a lowering, not a `std/` function, since that would have to
-be generic in `T`. A test checks the four outcomes (block `ok` or `error`,
-close `ok` or `error`).
+**Lowering:** the same closure as a block passed to a call; no VM change. The
+`getter`/`putter` helpers that adapters need today, because a block can only be
+the last argument of a call, go away.
 
 ### 25.11 `format`
 
@@ -249,30 +85,16 @@ close `ok` or `error`).
 puts(format("%-8s|%6.2f|%03d|%x", "apple", 2.5, 7, 255))   # apple   |  2.50|007|ff
 ```
 
-**Spec.** `format(fmt, args...)` returns a `String`, like Ruby's
-`Kernel#format`. A conversion is `%[flags][width][.precision]type`:
+`format(fmt, args...)` returns a `String`, like Ruby's `Kernel#format`. A
+conversion is `%[flags][width][.precision]type`:
 
-- **Type:** `d`
-  - **Argument:** `Int`
-  - **Text:** decimal
-
-- **Type:** `x`
-  - **Argument:** `Int`
-  - **Text:** lowercase hex; a negative number is `-` and the hex of its
-    magnitude (`-ff`, as in Python; Ruby writes `..f01`)
-
-- **Type:** `f`
-  - **Argument:** `Float`
-  - **Text:** fixed point, 6 digits after the point unless `.precision` says
-    otherwise; `NaN`, `Inf` and `-Inf` as in Ruby
-
-- **Type:** `s`
-  - **Argument:** any value with `to_s`
-  - **Text:** its `to_s`, as `puts` writes it
-
-- **Type:** `%%`
-  - **Argument:** none
-  - **Text:** a `%`
+- `d`: an `Int`, in decimal.
+- `x`: an `Int`, in lowercase hex; a negative number is `-` and the hex of its
+  magnitude (`-ff`, as in Python; Ruby writes `..f01`).
+- `f`: a `Float`, fixed point with 6 digits after the point unless `.precision`
+  says otherwise; `NaN`, `Inf` and `-Inf` as in Ruby.
+- `s`: any value with `to_s`, as `puts` writes it.
+- `%%`: a `%`.
 
 Flags: `0` pads numbers with zeros after the sign (`%05d` of `-42` is `-0042`);
 `-` pads on the right with spaces. With both (`%-05d`), `0` is ignored, as in C
@@ -282,109 +104,66 @@ only for `f`. An `Int` for `%f` is not converted (`n.to_f`, as everywhere).
 
 **One way:** `format` is only for width, precision, flags or hex, and `"#{x}"`
 interpolation stays the way to put values in text. A format string whose
-conversions are all bare `%s` or `%d` (no flags, width or precision), or that
-has no conversion at all (`%%` alone counts as none: `format("%%")` gets a help
-that shows the string literal `"%"`), is `CHECK-FORMAT-SPEC` with a help that
-shows the interpolated string (`format("%s is %d", name, age)` gives
-`"#{name} is #{age}"`). `format("%.2f", x)` is the one public way to write a
-fixed number of digits.
+conversions are all bare `%s` or `%d`, or that has no conversion at all, is
+`CHECK-FORMAT-SPEC` with a help that shows the interpolated string.
+`format("%.2f", x)` is the one public way to write a fixed number of digits;
+`x.to_fixed(2)` and `x.round(2).to_s` get `CHECK-UNKNOWN-METHOD` with a help
+that shows it.
 
 **The format string must be a literal, checked at compile time.** The
-alternative was a run-time format string returning `Result[String]`. The literal
-is chosen: the checker then knows the arguments and their types, so a mistake
-is a compile error with a span inside the string, the result is a plain
-`String`, and nearly all real format strings are literals. A program that needs
-a format chosen at run time picks between literals.
+alternative was a run-time format string returning `Result[String]`. The checker
+then knows the arguments and their types, so a mistake is a compile error with a
+span inside the string, the result is a plain `String`, and nearly all real
+format strings are literals. A program that needs a format chosen at run time
+picks between literals.
 
 **Checker rules:**
 
-- `format` has a catalog entry in `compiler/catalog/builtins_data.agc` marked
-  "checker-handled, variadic": the number of arguments depends on the literal,
-  so the checker checks the call itself. The entry is needed because the linker
-  keeps a call name unchanged only when `builtin-ref` finds it (otherwise it
-  adds the module prefix `@N::`); it also covers the name reservation and
+- `format` is checker-handled and variadic: a catalog entry in
+  `compiler/catalog/builtins_data.agc` covers the name reservation and
   `agentica help format`. Only the function name is reserved: a user `def
-  format` is `CHECK-REDEFINED-NAME` (breaking, accepted before 1.0); variables,
-  parameters and fields named `format` stay valid.
+  format` is `CHECK-REDEFINED-NAME` (breaking); variables, parameters and fields
+  named `format` stay valid.
 - The first argument must be a plain one-line string literal, without `#{...}`
-  and not a heredoc: `CHECK-FORMAT-LITERAL`, with a help to use interpolation.
+  and not a heredoc: `CHECK-FORMAT-LITERAL`.
 - A bad conversion (unknown type or flag, a trailing `%`, `precision` on `d`,
   `x` or `s`, `0` on `s`, a width or precision out of range) is
   `CHECK-FORMAT-SPEC` at the conversion's span inside the literal.
 - A wrong number of arguments is `CHECK-ARITY`; an argument of the wrong type (a
-  `%s` argument without `to_s`, such as an `Fn`, a task or a handle, included)
-  is `CHECK-TYPE-MISMATCH` at the argument, with a secondary span at its
-  conversion.
+  `%s` argument without `to_s` included) is `CHECK-TYPE-MISMATCH` at the
+  argument, with a secondary span at its conversion.
 - `sprintf(...)`, `"%d" % x` and `String.format(...)` get a help that shows
   `format(...)`.
-- `agentica help format` (and `--json`, with arity "2 or more") shows an entry
-  like a builtin's: the form `format(fmt: String literal, args...) -> String`,
-  the conversions and flags, and an example.
 
 **Where the code lives.** Padding, decimal and hex text are Agentica code in the
 compiler prelude (`stdlib/prelude/format.agc`); lowering turns each call into a
 concatenation of the literal parts and one prelude call per conversion, so no
-format string is parsed at run time (a `%s` argument gets its `to_s` at the call
-site, as interpolation does). One part is a builtin: the prelude-only
+format string is parsed at run time. One part is a builtin: the prelude-only
 `__float_fixed(x: Float, digits: Int) -> String` (digits 0 to 50, otherwise
 `RUNTIME-INVALID-COUNT`), because correct decimal rounding of a binary `Float`
 needs exact arithmetic (the VM calls `snprintf` with `%.*f`). Outside prelude
-modules it is `CHECK-UNKNOWN-NAME`, so `format("%.2f", x)` stays the one public
-way; `x.to_fixed(2)` and `x.round(2).to_s` get `CHECK-UNKNOWN-METHOD` with a
-help that shows it. The smallest `Int` is a special case for `%d` with zero
-padding and for `%x`.
+modules it is `CHECK-UNKNOWN-NAME`.
 
 ### 25.12 To evaluate later (Part B)
 
-These may help, but each needs more design, a real program that asks for it, or
-another feature first. None is planned; each needs its own spec before a phase
-takes it, and each must also pass the one-way principle (top of this section)
-before it is planned.
+None is planned. Each needs its own spec, a real program that asks for it, and
+must pass the one-way principle first.
 
-#### 25.12.4 `then` and `tap`
-
-**What:** `x.then do |v| ... end` and `x.tap do |v| ... end`. **Why:** pipelines
-in Ruby style. **Why not now:** they are methods on every type with a generic
-result, which the method rule (methods come from the receiver type's module)
-does not have. **Open questions:** a builtin rule for "any type" methods, as
-`to_s` and `inspect` have.
-
-#### 25.12.5 Safe navigation `&.`
-
-**What:** `user&.address&.city`. **Why:** short code for optional values. **Why
-not now:** `nil` is not a value of every type, so there is nothing to navigate;
-it would work on the builtin `Optional[T]`. **Open questions:** whether a `T?`
-spelling comes at all, and how `&.` relates to `Optional[T]` and to `JsonField`
-(grammar, JSON).
-
-#### 25.12.6 Destructuring
-
-**What:** `a, b = pair`, block parameters `|(k, v)|`, multiple return values.
-**Why:** `partition`, `zip` and `Map` iteration read better. **Decided:** there
-are no tuples in the language (owner, 2026-10-20): Ruby has none either and uses
-arrays. A struct carries grouped values of different types (a builtin struct
-where a builtin needs one, such as a future `Lazy.Step`, §27.4), and a list
-carries values of one type. **Open question:** whether lists can be
-destructured with a length check.
-
-#### 25.12.7 Lazy enumerators and generators
-
-**What:** `(1..).lazy.select { ... }.first(3)`, `Enumerator.new`. **Why:**
-streams of unknown length without building lists. **Now in [section
-27](27-iteration-and-concurrency.md#27-iteration-and-concurrent-collections):**
-`File.each_line` reads a big file line by line in bounded memory (§27.4, step
-1), and `Lazy[T]` is built over lists, ranges, `Lazy.produce`, `File.foreach`
-and `ch.lazy` (§27.4, step 2: `xs.lazy.filter do ... end.first(3)`); generators
-with `yield` (`Enumerator.new`, fibers, an external `next`) are decided against
-(§27.5), since a task that sends into a channel (§27.2) is the producer.
-
-#### 25.12.8 Declarative hygienic macros
-
-**What:** pattern-based macros like Rust's `macro_rules!`. **Why:** only if real
-cases appear that blocks, functions and the items above do not cover. **Why not
-now:** no such case is known. **Rules if it ever comes:** expansion before the
-checker, hygienic names, spans at the call site so diagnostics point at user
-code, and never procedural macros (25.13).
+- **`then` and `tap`** (`x.then do |v| ... end`): methods on every type with a
+  generic result, which the method rule (methods come from the receiver type's
+  module) does not have. Needs a builtin rule for "any type" methods, as `to_s`
+  and `inspect` have.
+- **Safe navigation `&.`** (`user&.address&.city`): `nil` is not a value of
+  every type, so there is nothing to navigate; it would work on `Optional[T]`.
+  Open: whether a `T?` spelling comes at all, and how `&.` relates to
+  `Optional[T]` and to `JsonField`.
+- **Destructuring** (`a, b = pair`, block parameters `|(k, v)|`, multiple return
+  values). Tuples are issue #986. Open: whether lists can be destructured with
+  a length check.
+- **Declarative hygienic macros** (`macro_rules!`-style): only if real cases
+  appear that blocks, functions and the items above do not cover. If it ever
+  comes: expansion before the checker, hygienic names, spans at the call site,
+  and never procedural macros.
 
 ### 25.13 Decided against (Part C)
 
@@ -394,78 +173,79 @@ one exists.
 - **Runtime metaprogramming:** `define_method`, `class_eval`, `instance_eval`,
   `method_missing`, `send`/`public_send`: the checker must know every call; use
   a `Map[String, Fn[...]]` to dispatch by name.
-- **`respond_to?`:** already not planned (15.5): the answer is known at compile
-  time.
-- **Reflection:** `instance_variable_get`/`set`, listing methods: it breaks
-  static checking and makes the VM keep names at run time; `JSON.from` shows a
-  value's fields. Listing the fields of a struct type is `Type.members`
-  (`docs/grammar/06-semantics.md`, "Structs and lists").
-- **`eval` and `binding`:** no code from strings at run time; the checker would
-  not see it.
+- **`respond_to?`, reflection and structural interfaces** (Go-style: a type fits
+  because it has the right methods): user types have no methods, and the checker
+  knows every field and method of a value, so the answer is constant; a run-time
+  check would only hide a type error. Reflection (`instance_variable_get`,
+  building a value from a type name, calling a function by a name in a string)
+  breaks static checking and makes the VM keep names and types at run time; use
+  `JSON.from` to see a value's fields. Listing the fields of a struct type is
+  `Type.members` (`docs/grammar/06-semantics.md`).
+- **`eval` and `binding`:** no code from strings at run time.
 - **Monkey patching and refinements:** builtin types and modules are fixed;
   write a function.
-- **Hooks** (`included`, `inherited`, `method_added`): there are no classes or
-  mixins to hook.
-- **Mixins** (`include`, `extend`, `Comparable`) and metatable-style methods
-  (the former §7) are not planned: user types have no methods; a struct of `Fn`
-  fields and wrapper functions compose behavior while retaining static checking.
-  The §7 proposal's method-attachment syntax adds no need beyond that
-  pattern. For chaining user functions, use `|>` (in the grammar).
-- **Duck typing:** a struct of `Fn` fields is the interface, checked by name
-  (15.1).
-- **Symbols:** `String` keys and enums cover them.
-- **`freeze` and `dup`:** every value is already immutable.
+- **Hooks** (`included`, `inherited`, `method_added`), **mixins** (`include`,
+  `extend`, `Comparable`), metatable-style methods and **duck typing:** there
+  are no classes or user methods. A struct of `Fn` fields is the interface,
+  checked by name, and wrapper functions compose behavior (below). For chaining
+  user functions, use `|>`.
+- **Symbols:** `String` keys and enums cover them. **`freeze` and `dup`:** every
+  value is already immutable.
 - **`yield`:** the block is a named `Fn` parameter, called with `.call`.
-- **Generators and fibers** (`Enumerator.new`, `Fiber`): decided against in
-  [section 27.5](27-iteration-and-concurrency.md#275-decided-against); a
-  producer task that sends into a `Channel` is the generator.
+- **Generators and fibers** (`Enumerator.new`, `Fiber`): see
+  `27-iteration-and-concurrency.md`; a producer task that sends into a
+  `Channel` is the generator.
 - **`{ |x| ... }` brace blocks:** they re-spell `do |x| ... end`, and `{` is
   already the map literal.
-- **Keyword arguments** (was 25.12.2): `connect("a", port: 8080)` would be a
-  second way to pass an argument that can already be passed by position. Calls
-  stay positional; `with` and struct construction stay the only places
-  with named arguments.
-- **`loop do ... end`** (was 25.12.3): `while true ... end` already does it, and
-  `break` cannot leave a block, so it would be a statement that looks like a
-  block. Section 11's help stays.
-- **`unless`** (was 25.7): a second way to write `if !c`. `unless` is not a
-  reserved word, so `unless c` is a name followed by more tokens. The parser
-  picks the help when a statement starts with the name `unless` and more of the
-  expression follows on that line: `PARSE-UNEXPECTED-TOKEN` with a help that
-  shows `if !c ... end`. A variable named `unless` on its own still works, and
-  `unless.foo` keeps today's diagnostic for that name.
-- **Statement modifiers** (was 25.8): `return x if c`, `break if c`,
-  `puts(x) if v` are a second way to write `if`. Section 11's rejection stays as
-  it is, with its existing help (`if x`, then the statement on its own line,
-  then `end`).
+- **Keyword arguments:** `connect("a", port: 8080)` would be a second way to
+  pass an argument that can already be passed by position. Calls stay
+  positional; `with` and struct construction stay the only places with named
+  arguments.
+- **`loop do ... end`:** `while true ... end` already does it, and `break`
+  cannot leave a block, so it would be a statement that looks like a block.
+- **`unless` and statement modifiers** (`return x if c`, `puts(x) if v`): second
+  ways to write `if`. The parser gives `PARSE-UNEXPECTED-TOKEN` with a help that
+  shows `if !c ... end`, or `if x`, the statement on its own line, then `end`.
 - **New method aliases** (`select`, `collect`, `detect`, `inject`) and **second
   ways** (`reject`, the `Range` Enumerable methods, the block form of
-  `each_slice`): see the compiler prelude; each gets `CHECK-UNKNOWN-METHOD` (or
-  `CHECK-BLOCK-TARGET`) with the canonical form.
+  `each_slice`): each gets `CHECK-UNKNOWN-METHOD` (or `CHECK-BLOCK-TARGET`) with
+  the canonical form.
 - **`*args` and `**opts` splats:** a `List` or a struct parameter, and
-  defaults.
-- **`%w[...]`:** a list literal.
+  defaults. **`%w[...]`:** a list literal.
 - **`raise`/`rescue`/`ensure`:** errors are `Result` values with `try`;
-  `File.open` with a block (25.9) covers `ensure`.
+  `File.open` with a block covers `ensure`.
 - **User operator overloading, and overloading by argument type or by arity:**
   it breaks the inference of blocks and of empty literals (`[]`, `{}`) from the
-  expected parameter type, makes diagnostics worse (which overload did you
-  mean), and needs name mangling in the VM and the linker; defaults cover
-  arity. Struct equality (25.4) is provided by the compiler, not by the user.
+  expected parameter type, makes diagnostics worse, and needs name mangling in
+  the VM and the linker; defaults cover arity. Struct equality is provided by
+  the compiler, not by the user.
+- **Structural unions** (`Int | String`): they need flow-sensitive narrowing and
+  duplicate the exhaustiveness work of enums; sum types come from enums.
 - **General and procedural macros:** agents write worse code in custom DSLs,
-  diagnostics land in expanded code, and they need a new stage; blocks,
-  functions and the compiler's equality (25.4) cover the use cases, and where a
-  builtin needs to know where it was called, the compiler can pass it its call
-  span.
+  diagnostics land in expanded code, and they need a new stage.
+- **Checks that are not diagnostics:** dead stores (they need a flow analysis),
+  unused function parameters (signatures are fixed by callers and adapters),
+  unused private functions, types, fields and variants (a whole-file analysis; a
+  library may keep a helper on purpose), a rule on a dropped `Task[Result[...]]`
+  (it would reject fire-and-forget), and style lints in the checker (naming,
+  line length, layout; `agentica lint` is the home of suggestions).
+- **Tooling and library:** rename and refactor commands (agents edit files well;
+  `refs` gives the places); a package registry, private registries, publishing
+  commands, signatures, branches or version ranges, and semver (a pin is a tag
+  or a commit, one name has one source, and two majors use two names); a
+  template read at run time (it needs `eval`); raw string literals for regex;
+  an Elixir-style `@doc` attribute and YARD-style `@param` tags.
 
 **Composition instead of inheritance.** To "inherit" behavior:
 
-1. The interface is a struct of `Fn` fields ([section
-15.1](15-adapters-and-json-inspection.md#151-calling-fn-fields-without-call)),
-   for example `Storage` with `get` and `put`.
+1. The interface is a struct of `Fn` fields, for example `Storage` with `get`
+   and `put`; `s.put(a, b)` calls a field.
 2. A wrapper (decorator) function takes a base value and returns a new one with
-   some fields replaced, keeping the others:
-   `def logged(base: Storage) -> Storage` returns `base.with(get: ...)`,
-   where the new `get` logs and then calls `base.get`.
+   some fields replaced, keeping the others: `def logged(base: Storage) ->
+   Storage` returns `base.with(get: ...)`, where the new `get` logs and then
+   calls `base.get`.
 3. A facade module passes on names from other modules with re-exports
    (`docs/grammar/05b-modules.md`), like Elixir's `defdelegate`.
+
+An adapter or facade that builds a path from a name must check it with an
+allow-list first: not empty, only ASCII letters, digits, `-` and `_`.
