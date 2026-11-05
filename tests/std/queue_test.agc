@@ -24,6 +24,6 @@ def main() -> Void
       longer = Queue.push(q, "b")
       try Test.eq(Queue.size(q), 1)
       Test.eq(Queue.size(longer), 2)
-    end,
+    end
   ])
 end

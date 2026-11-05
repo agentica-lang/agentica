@@ -9,7 +9,9 @@ def reset() -> Void
 end
 
 def collect(events: Channel[LogEvent]) -> Result[Void]
-  attached = Logger.attach("collect", LogLevel.Debug) do |event| _ = events.send(event, 0) end
+  attached = Logger.attach("collect", LogLevel.Debug) do |event|
+    _ = events.send(event, 0)
+  end
   return attached
 end
 
@@ -54,12 +56,8 @@ def main() -> Void
       Logger.debug("d2")
       Logger.info("i")
       _ = Logger.attach("warn", LogLevel.Warning) do |event|
-        _ = events.send(
-          LogEvent(level: event.level, message: "warn " + event.message, fields: event.fields, time_ms: 0, task: 0),
-          0,
-        )
+        _ = events.send(LogEvent(level: event.level, message: "warn " + event.message, fields: event.fields, time_ms: 0, task: 0), 0)
       end
-
       Logger.info("i2")
       Logger.err("e")
       Logger.set_level(LogLevel.Error)
@@ -105,8 +103,9 @@ def main() -> Void
         _ = events.send(event, 0)
         _ = Logger.detach("second")
       end
-
-      _ = Logger.attach("second", LogLevel.Info) do |event| _ = events.send(event, 0) end
+      _ = Logger.attach("second", LogLevel.Info) do |event|
+        _ = events.send(event, 0)
+      end
       Logger.info("one")
       Logger.info("two")
       seen = drain(events)
@@ -131,6 +130,6 @@ def main() -> Void
       try Test.eq(Logger.time_text(253402300799999), "9999-12-31T23:59:59.999Z")
       try Test.assert(Logger.time_text(0 - 9223372036854775807 - 1).ends_with?("Z"), "Int.min does not overflow")
       Test.assert(Logger.time_text(9223372036854775807).ends_with?("Z"), "Int.max does not overflow")
-    end,
+    end
   ])
 end
