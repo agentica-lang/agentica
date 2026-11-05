@@ -23,10 +23,9 @@ rules live in `AGENTS.md` and `agentica-development`.
   then `git submodule update --init`. Never edit or switch branches in the
   main checkout or in other agents' worktrees; read-only `git` and `gh`
   commands are fine.
-- A PR holds its own contracts: tests, docs, the site page and skill for a
-  language change, a `CHANGELOG.md` entry for a user-visible change; never
-  defer them to a later PR in a stack. When a PR touches docs, authors and
-  critics apply `documentation-writing`.
+- A PR holds its own contracts (tests, docs, site page, skill, `CHANGELOG.md`
+  entry; `AGENTS.md`); never defer them to a later PR in a stack. When a PR
+  touches docs, authors and critics apply `documentation-writing`.
 - Wrap every build, test or program in a memory cap:
   `systemd-run --user --scope -q -p MemoryMax=<2G..8G> -p MemorySwapMax=0 --
   <cmd>` (6G-8G for VM builds and sanitizers). Repeat this in agent prompts.
@@ -63,8 +62,6 @@ rules live in `AGENTS.md` and `agentica-development`.
   shell, other agents' runs, and the self-hosted runners.
 - Commits: a summary line, then short bullets; no attribution lines. Never
   rebase or force-push; merge `origin/master` into the branch.
-- No plans under `docs/` (`AGENTS.md`); an agent's own steps go in a local,
-  untracked file.
 
 ## 2. Review
 
@@ -134,11 +131,10 @@ Invoke the `pr-reviewer-new` skill (via the Skill tool) and follow it to review 
   `git worktree remove --force`. Retarget any open PR based on the branch
   (`gh pr edit N --base master`) before deleting the branch locally and on
   origin.
-- Planning lives in GitHub issues, not in `docs/roadmap/` (frozen). A
-  follow-up becomes an issue with a kind label, an `area:*` label and the
-  milestone of its target release, and goes into the "Agentica Roadmap" project
-  of the `agentica-lang` organization (project 1) as Todo; set In Progress when
-  work starts. The PR that finishes it says `Closes #N`.
+- A follow-up becomes a GitHub issue (`AGENTS.md`: kind label, `area:*`
+  label, milestone) and goes into the "Agentica Roadmap" project of the
+  `agentica-lang` organization (project 1) as Todo; set In Progress when work
+  starts.
 
 ## Gotchas
 
