@@ -10,15 +10,19 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `ATS[Bytes, V]`: a shared table takes `Bytes` keys, as a `Map` does.
+
+## [0.24.3] - 2026-11-05
+
+### Added
+
 - `AGENTICA_PERF_MAP=1` writes `/tmp/perf-PID.map`, so Linux `perf` names the
   functions the JIT compiled.
 - `Task.monitor(task, channel, wrap)` sends a `TaskDown` notice when a task
   ends; `Task.current` and `task.id` name the running task.
-- `std/cache`: a contract for caches of strings that tasks share (`Cache.Store`, a
-  struct of functions) with `fetch`, `get`, `put`, `put_new`, `delete`, `clear`,
-  `cleanup` and `bytes`, and `Cache.memory`, a bounded one on top of `ATS` with a
-  byte budget, `max_entries` and a time to live.
-- `ATS[Bytes, V]`: a shared table takes `Bytes` keys, as a `Map` does.
+- `std/cache`: a `Cache.Store` contract for caches shared by tasks, and
+  `Cache.memory`, a bounded cache with a byte budget, `max_entries` and a time
+  to live.
 
 ### Changed
 
@@ -1077,7 +1081,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.24.2...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.24.3...HEAD
+[0.24.3]: https://github.com/agentica-lang/agentica/compare/0.24.2...0.24.3
 [0.24.2]: https://github.com/agentica-lang/agentica/compare/0.24.1...0.24.2
 [0.24.1]: https://github.com/agentica-lang/agentica/compare/0.24.0...0.24.1
 [0.24.0]: https://github.com/agentica-lang/agentica/compare/0.23.0...0.24.0
