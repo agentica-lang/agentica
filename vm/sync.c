@@ -66,9 +66,25 @@ bool agc_lock_held(const agc_lock *l) {
   return !l->solo && atomic_load_explicit(&l->owner, memory_order_relaxed) == self();
 }
 
+/* A thread that finds the lock taken spins for it a little before it sleeps on the mutex: rt->sync is held for short
+   sections (a builtin, an ending), many times per request, and a sleep and a wake cost two system calls and the
+   scheduler's run-queue locks, more than such a section. It tries again only when the owner token is clear. */
 void agc_lock_take_shared(agc_lock *l) {
   if (agc_lock_held(l)) misuse(l, "took a lock it already holds");
-  uv_mutex_lock(l->mutex);
+  if (uv_mutex_trylock(l->mutex) != 0) {
+    bool taken = false;
+    uint64_t spent = 0;
+    unsigned pauses = 1;
+    while (spent < l->spin) {
+      spent += pauses;
+      pauses = agc_spin_step(pauses);
+      if (atomic_load_explicit(&l->owner, memory_order_relaxed) == 0 && uv_mutex_trylock(l->mutex) == 0) {
+        taken = true;
+        break;
+      }
+    }
+    if (!taken) uv_mutex_lock(l->mutex);
+  }
   atomic_store_explicit(&l->owner, self(), memory_order_relaxed);
 }
 
@@ -112,9 +128,15 @@ void agc_sync_reset(agc_vm *vm) {
   agc_lock_drop_shared(vm->rt->sync);
 }
 
+/* How long a thread spins for rt->sync before it sleeps (agc_lock_take_shared): about a scheduler's idle spin
+   (SPIN_BUDGET_US in vm/task.c). On a Campfire room page at 4 schedulers 2 µs gave most of the gain, and
+   5 to 50 µs the same within noise. */
+#define SYNC_SPIN_NS UINT64_C(10000)
+
 /* Turns every lock on. The caller runs it before it starts a second scheduler or the I/O thread. */
 void agc_share(agc_vm *vm) {
   agc_runtime *rt = vm->rt;
+  rt->sync->spin = agc_pauses_for(SYNC_SPIN_NS);
   agc_runq_share(rt->runq);
   agc_lock_share(rt->sync);
   agc_lock_share(rt->out.lock);

@@ -3,12 +3,16 @@
  * def`, or a KDF derivation of vm/crypto.c), apart from the libuv pool, which takes only bounded work
  * (docs/vm/14-core-invariants.md §14.1). At most one thread per scheduler, started on demand; items run in the order
  * they came. A thread never touches GC memory, and an item that ends goes back to the loop's thread through the
- * pool's own inbox. Core layer. Design: docs/vm/16-architecture.md §16.9, "Compute pool".
+ * pool's own inbox, or, for an item that a scheduler gave directly (agc_compute_submit_direct), to the pool's `ended`
+ * callback on the pool thread. Core layer. Design: docs/vm/16-architecture.md §16.9, "Compute pool".
  */
 #include "core.h"
 
 #include <stdlib.h>
 #include <uv.h>
+
+/* The `kind` of a queue entry that a scheduler submitted (agc_compute_submit_direct); 0 is a loop's item. */
+#define DIRECT 1
 
 typedef struct {
   agc_compute *pool;
@@ -20,7 +24,8 @@ typedef struct {
 /* malloc memory, no GC pointer. `lock` guards the queue, the counts, the workers' flags and `closed`; `queued` is the
    length of the queue, `idle` the threads waiting for an item; `refs` counts the loop's hold and one per started
    thread, and the last one out frees the pool. `running` (items given and not yet
-   finished) belongs to the loop's thread, which alone may ref or unref the inbox's handle. */
+   finished) belongs to the loop's thread, which alone may ref or unref the inbox's handle. `direct` counts the direct
+   items given and not yet ended (any thread), which the loop's thread reads for its stall check instead. */
 struct agc_compute {
   uv_mutex_t lock;
   uv_cond_t wake;
@@ -31,7 +36,9 @@ struct agc_compute {
   bool closed;
   agc_inbox *done;
   void (*finished)(void *item);
+  void (*ended)(void *item);
   uint64_t running;
+  _Atomic uint64_t direct;
 };
 
 static void destroy(agc_compute *pool) {
@@ -68,10 +75,20 @@ static void serve(void *arg) {
     item->call(item->subject);
     uv_mutex_lock(&pool->lock);
     w->busy = false;
-    if (pool->closed)
+    if (item->kind == DIRECT && pool->ended) {
+      /* Under the lock, like the post: once the close has set `closed`, nobody takes the end any more. The count
+         drops after `ended` has published the end, so a stall check never sees neither. */
+      if (!pool->closed) pool->ended(item->subject);
       free(item);
-    else
+      atomic_fetch_sub_explicit(&pool->direct, 1, memory_order_seq_cst);
+    } else if (pool->closed) {
+      if (item->kind == DIRECT) atomic_fetch_sub_explicit(&pool->direct, 1, memory_order_seq_cst);
+      free(item);
+    } else {
+      /* A direct item after agc_compute_end_direct ends as the loop's own (its count already moved to `running`). */
+      if (item->kind == DIRECT) atomic_fetch_sub_explicit(&pool->direct, 1, memory_order_seq_cst);
       agc_inbox_post(pool->done, item);
+    }
   }
   bool last = let_go(pool);
   uv_mutex_unlock(&pool->lock);
@@ -92,7 +109,8 @@ static void deliver(void *owner, agc_request *list) {
   agc_inbox_keep(pool->done, pool->running > 0);
 }
 
-agc_compute *agc_compute_open(struct uv_loop_s *loop, uint32_t size, void (*finished)(void *item)) {
+agc_compute *agc_compute_open(struct uv_loop_s *loop, uint32_t size, void (*finished)(void *item),
+                              void (*ended)(void *item)) {
   agc_compute *pool = calloc(1, sizeof *pool);
   if (!pool) agc_out_of_memory();
   pool->size = size ? size : 1;
@@ -100,6 +118,7 @@ agc_compute *agc_compute_open(struct uv_loop_s *loop, uint32_t size, void (*fini
   if (!pool->workers) agc_out_of_memory();
   pool->threads = agc_threads_new(pool->size);
   pool->finished = finished;
+  pool->ended = ended;
   pool->refs = 1;
   if (uv_mutex_init(&pool->lock) != 0) {
     agc_threads_free(pool->threads);
@@ -123,11 +142,10 @@ agc_compute *agc_compute_open(struct uv_loop_s *loop, uint32_t size, void (*fini
   return pool;
 }
 
-bool agc_compute_submit(agc_compute *pool, void (*work)(void *item), void *item) {
-  agc_request *entry = malloc(sizeof *entry);
-  if (!entry) agc_out_of_memory();
-  *entry = (agc_request){NULL, 0, item, 0, work};
-  uv_mutex_lock(&pool->lock);
+/* Queues ENTRY and starts a thread when it needs one, under the lock (held at the call, dropped by the caller on
+   success, which then calls wake_one). False, with the lock dropped and ENTRY freed, when no thread exists and none can
+   start. */
+static bool enqueue(agc_compute *pool, agc_request *entry) {
   if (pool->last)
     pool->last->next = entry;
   else
@@ -151,10 +169,69 @@ bool agc_compute_submit(agc_compute *pool, void (*work)(void *item), void *item)
     free(entry);
     return false;
   }
-  uv_cond_signal(&pool->wake);
+  return true;
+}
+
+/* After the unlock, so the thread it wakes does not wait for the lock at once. Only a thread that waits needs it: a
+   busy one takes the item when it comes back for the next. */
+static void wake_one(agc_compute *pool, bool waiting) {
+  if (waiting) uv_cond_signal(&pool->wake);
+}
+
+static agc_request *new_entry(int kind, void (*work)(void *item), void *item) {
+  agc_request *entry = malloc(sizeof *entry);
+  if (!entry) agc_out_of_memory();
+  *entry = (agc_request){NULL, kind, item, 0, work};
+  return entry;
+}
+
+bool agc_compute_submit(agc_compute *pool, void (*work)(void *item), void *item) {
+  agc_request *entry = new_entry(0, work, item);
+  uv_mutex_lock(&pool->lock);
+  if (!enqueue(pool, entry)) return false;
+  bool waiting = pool->idle > 0;
   uv_mutex_unlock(&pool->lock);
+  wake_one(pool, waiting);
   if (pool->running++ == 0) agc_inbox_keep(pool->done, true);
   return true;
+}
+
+/* Any thread: the item does not go back through the loop's thread, so it touches neither `running` nor the inbox. The
+   count goes up under the lock, before the item is queued, so it is never below the items a thread may still end, and
+   agc_compute_end_direct counts exactly the items it turns over. */
+bool agc_compute_submit_direct(agc_compute *pool, void (*work)(void *item), void *item) {
+  agc_request *entry = new_entry(DIRECT, work, item);
+  uv_mutex_lock(&pool->lock);
+  if (!pool->ended) {
+    uv_mutex_unlock(&pool->lock);
+    free(entry);
+    return false;
+  }
+  atomic_fetch_add_explicit(&pool->direct, 1, memory_order_seq_cst);
+  if (!enqueue(pool, entry)) {
+    atomic_fetch_sub_explicit(&pool->direct, 1, memory_order_seq_cst);
+    return false;
+  }
+  bool waiting = pool->idle > 0;
+  uv_mutex_unlock(&pool->lock);
+  wake_one(pool, waiting);
+  return true;
+}
+
+/* Under the lock, so each direct item still queued or running is counted here exactly when serve has not ended it
+   yet: those now go through the inbox, which keeps the loop alive until the last one is back (the end of the run
+   waits for a call that still holds a resource by running the loop). */
+void agc_compute_end_direct(agc_compute *pool) {
+  uv_mutex_lock(&pool->lock);
+  pool->ended = NULL;
+  uint64_t left = atomic_load_explicit(&pool->direct, memory_order_seq_cst);
+  uv_mutex_unlock(&pool->lock);
+  if (left && pool->running == 0) agc_inbox_keep(pool->done, true);
+  pool->running += left;
+}
+
+bool agc_compute_direct_busy(agc_compute *pool) {
+  return atomic_load_explicit(&pool->direct, memory_order_seq_cst) != 0;
 }
 
 void agc_compute_close(agc_compute *pool) {

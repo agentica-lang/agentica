@@ -625,10 +625,33 @@ struct agc_vm {
      on every system and not only as a crash on Windows x64. A callback of native code and an I/O pause clear it while
      they run, as they clear jit_catch. */
   bool in_code;
+  /* A compute job that this scheduler's turn started, for agc_io_submit_direct to give to the pool once the turn is
+     over: the builtin that starts it runs with rt->sync held, and the submit may wake a pool thread. */
+  struct agc_io_job *direct;
 };
 
 /* The one test of a profile hook: false at compile time when the trace points are compiled out (make TRACE=0). */
 #define AGC_PROFILE_ON(vm) (AGC_TRACE_BUILD && __builtin_expect((vm)->profile != NULL, 0))
+
+/* One CPU pause of a busy wait: `pause` on x86 and `yield` on AArch64 and on ARMv6K and later (older ARM has no such
+   hint) tell the core that this is a busy wait (less power, the other hyperthread runs); elsewhere it is a compiler
+   barrier only. Every compiler the VM builds with (GCC, Clang, llvm-mingw) takes these builtins and this asm. */
+#if defined(__x86_64__) || defined(__i386__)
+#define AGC_CPU_PAUSE() __builtin_ia32_pause()
+#elif defined(__aarch64__) || (defined(__arm__) && (__ARM_ARCH >= 7 || defined(__ARM_ARCH_6K__) || \
+                                                    defined(__ARM_ARCH_6KZ__)))
+#define AGC_CPU_PAUSE() __asm__ __volatile__("yield" ::: "memory")
+#else
+#define AGC_CPU_PAUSE() atomic_signal_fence(memory_order_seq_cst)
+#endif
+
+/* One step of a busy wait that backs off: PAUSES pauses, and the count for the next step, doubled up to 32 between two
+   looks. A spinner starts at 1 and adds each step's count to what it spent (agc_runq_spin, agc_lock_take_shared). */
+#define AGC_SPIN_PAUSES_MAX 32u
+static inline unsigned agc_spin_step(unsigned pauses) {
+  for (unsigned k = 0; k < pauses; k++) AGC_CPU_PAUSE();
+  return pauses < AGC_SPIN_PAUSES_MAX ? pauses * 2 : pauses;
+}
 
 /* A lock that costs one flag test until the VM is shared (agc_share) and is a mutex after it. Once shared, a thread that
    takes a lock it holds, or drops one it does not hold, ends the process with a message instead of deadlocking (or, on
@@ -640,6 +663,8 @@ struct agc_lock {
   bool solo;
   _Atomic uintptr_t owner;
   void *mutex;
+  /* The pauses a thread spins for the lock before it sleeps on the mutex (agc_lock_take_shared), set by agc_share. */
+  uint64_t spin;
 };
 
 agc_lock *agc_lock_new(const char *name);
@@ -798,6 +823,9 @@ agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc
    bounded work (docs/vm/14-core-invariants.md §14.1). The task parks; there is no deadline, and like any pool work the
    call runs to its end, so a cancel only detaches the job and its result is dropped (a queued one skips its work). */
 agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data);
+/* Gives the pool the compute job that this scheduler's turn started, if any (vm->direct); run_task calls it once the
+   turn is over and rt->sync is free. */
+void agc_io_submit_direct(agc_vm *vm);
 #if !defined(_WIN32)
 void agc_io_block_stop(sigset_t *saved);
 #endif

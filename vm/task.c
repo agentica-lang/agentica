@@ -797,6 +797,8 @@ static bool run_task(agc_vm *vm, agc_task *t) {
   agc_turn_result r = AGC_TURN_DONE;
   bool ran = run_turn(vm, t, &r);
   t->steps += agc_turn_finish(vm);
+  /* The compute call that the turn started goes to the pool now that rt->sync is free (agc_io_compute). */
+  if (vm->direct) agc_io_submit_direct(vm);
   return agc_task_end_turn(vm, t, r, ran);
 }
 
