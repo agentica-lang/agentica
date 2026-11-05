@@ -127,16 +127,11 @@ in the file, and two out parameters of one name, are `CHECK-REDEFINED-NAME`.
 
 The C name of an extern function is its `def` name, or the string after the
 result (`-> C.Int32 = "fcntl"`), so one C function can be declared in several
-shapes. The string is a plain literal of letters, digits and `_` that does not
-start with a digit (`PARSE-EXTERN-SYMBOL` at the string). `...` among the
-parameters declares a variadic C function: the parameters after it are its
-variadic arguments, each with the C type the call passes, and they may be none.
-It comes after one C parameter at least, not counting a `C.Function`
-(`PARSE-EXTERN-VARIADIC-FIXED` at the `...`), at most once in a function, and
-only in an extern block (`PARSE-EXTERN-VARIADIC` at the `...`). A variadic
-parameter is not an out parameter, not `C.Bool`, `C.Int8`, `C.Int16`, `C.UInt8`
-or `C.UInt16`, which C promotes to `int`, and not `C.Float`, which C promotes to
-`double` (`PARSE-EXTERN-VARIADIC-TYPE`); the 64 parameters count both parts.
+shapes (`PARSE-EXTERN-SYMBOL` at a string that is not a plain name). `...` among
+the parameters declares a variadic C function: the parameters after it are its
+variadic arguments, each with the C type the call passes. The rules and the
+codes of a bad one (`PARSE-EXTERN-VARIADIC*`) are in the
+[`Types and resources` page](../../site/content/library/io-and-system/native/types.md#variadic-functions-and-c-names).
 
 A `C.Function` parameter is the address of a C function, a `C.Pointer` for the
 checker. As the first parameter it makes the `def` a call through a function

@@ -959,7 +959,6 @@ Up to 0.21.0, each kind of route had its own server form. Each old form and its 
 | `HTTP.upgrade_only(handler).call(request)` | `HTTP.app(handler).call(request, body)` |
 | the `_tls` form of each | `HTTP.serve_tls(host, port, tls, app, options)` |
 
-- `HTTP.StreamHandler`, `HTTP.UploadHandler` and `HTTP.UpgradeHandler` are gone: an app is an `HTTP.App`, and a route that takes the request whole is an `HTTP.Handler`.
 - `listen_stream` and `listen_websocket` read the body before the handler ran. An app that answers a stream or an upgrade before it read a body that is still coming closes the connection after it (an upgrade is then a `500`); call `HTTP.read_all` first where a request has a body, and answer its error with `HTTP.body_refusal`.
 - A WebSocket handshake reaches the app on every `serve` server; the `listen` forms other than `listen_websocket` answered it `501`. A route that does not upgrade answers it as any other request.
 

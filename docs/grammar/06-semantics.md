@@ -751,14 +751,13 @@ puts(seen)
   `ok(x)` checks; a block with only `error(...)` still needs the annotation.
   Container inference uses the first element, so `[ok(1), error("bad")]` infers
   and the reverse order needs an annotation.
-- `Result.unwrap!` passes `Result[T]` to its operand. On an error it halts with
-  `RUNTIME-UNWRAP-ERROR`, the stored message, at the call. `Result.unwrap_or`
-  evaluates both arguments, left to right, even on success.
-- `Result.ok?` and `Result.message` need a known Result type. A success's
-  message is `""`. `ok(false)` and `ok(nil)` are successes. An error value never
-  prints a diagnostic or changes the exit code. Non-bang String conversions
-  return an error for bad text or overflow; other runtime failures are never
-  turned into Results.
+- The functions are in the
+  [`Result` page](../../site/content/library/errors/result.md).
+  `Result.unwrap!` on an error halts with `RUNTIME-UNWRAP-ERROR` at the call.
+  `Result.ok?` and `Result.message` need a known Result type. `ok(false)` and
+  `ok(nil)` are successes. An error value never prints a diagnostic or changes
+  the exit code. Non-bang String conversions return an error for bad text or
+  overflow; other runtime failures are never turned into Results.
 - `try` has unary precedence. It evaluates one `Result[T]` operand once: on
   success it gives `T`; on error it returns the error from the current function.
   Only a function that returns `Result[...]` may use it (`CHECK-TRY-CONTEXT`
@@ -790,11 +789,9 @@ end
 - `some(1)` infers `Optional[Int]`. `none` needs an expected Optional type, as
   `error(...)` needs a Result type (`CHECK-OPTIONAL-TYPE` otherwise), and a
   block of unknown result type takes it from its `some(...)` values.
-- `o.unwrap_or(default)` gives the item or the default, and evaluates both.
-  `o.unwrap!` gives the item; on `none` it halts with `RUNTIME-UNWRAP-NONE` at
-  the receiver. `o.map do |x| ... end` gives `some` of the block's value, or
-  `none` without calling the block. `o.some?` and `o.none?` test the variant.
-  `o.to_result(message)` gives `ok(item)` or `error(message)`, for `try`.
+- The functions are in the
+  [`Optional` page](../../site/content/library/data-structures/optional.md).
+  `o.unwrap!` on `none` halts with `RUNTIME-UNWRAP-NONE` at the receiver.
 - An Optional prints as `some(1)` or `none`. `none` may be the default of a
   parameter or field (`port: Optional[Int] = none`).
 - In JSON, `none` is `null` and `some(x)` is `x`; decode reads `null` or a
