@@ -639,3 +639,19 @@ import Sqlite from "pkg/sqlite/db"
   pinned by a `ref` it is `pkg/<name>@<first 12 digits of the commit>/...`. So
   the bytes do not depend on the folder of the project. Diagnostics inside a
   package name the real file in `deps/`.
+
+**Decided against (packages).**
+
+- Semver and a major-version rule, and a `v2` path segment (it clashes with
+  folders in the repository): one name has one source, and two majors can be
+  used under two names.
+- `dev_dependencies`: there is one list of dependencies.
+- `owner/repo/mod` as the import form (it clashes with local folders and needs
+  an ambiguity rule) and `./` for relative imports: the form is
+  `pkg/<name>/<module>`.
+- Hashing only at install: every build hashes each package it loads, so a
+  changed file of `deps/` is caught.
+- A `files` list in the manifest: only `.agc` files and the files of `native/`
+  are used and hashed.
+- A `Json` value or typed decoding for `Toml.parse`: the result is the enum
+  `Toml.Value`, which keeps the types of TOML and works with `case`.

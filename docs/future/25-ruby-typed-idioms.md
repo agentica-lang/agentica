@@ -235,6 +235,9 @@ one exists.
   or a commit, one name has one source, and two majors use two names); a
   template read at run time (it needs `eval`); raw string literals for regex;
   an Elixir-style `@doc` attribute and YARD-style `@param` tags.
+- **A musl (Alpine) build and the VM as a shared library:** the musl build stays
+  apart from the glibc release, and loading the VM as a shared library through
+  the FFI was rejected (two garbage collectors, clashes over `exit` and stdio).
 
 **Composition instead of inheritance.** To "inherit" behavior:
 

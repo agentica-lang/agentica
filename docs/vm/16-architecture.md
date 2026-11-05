@@ -281,7 +281,7 @@ Threads in one VM share immutable values without copying. There are no per-task
 heaps and no message copies (§10.2.3). The one table a run writes into the
 loaded program is the Globals table of the module constants (§10.2.3, "The
 Globals table"). Between VMs, the only sharing is by OS processes, and it is
-explicit: `Process.spawn` and the planned fd 3 channel of 25c, like Erlang nodes
+explicit: `Process.spawn` and the child channel (§10.4), like Erlang nodes
 talking to each other.
 
 ### 16.8 Risks and notes

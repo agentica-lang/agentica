@@ -29,7 +29,7 @@ language and the checker:
 - Argument types of `Task.cancel` and `Task.monitor`, and the reserved opaque
   `TaskRef` of `Task.current`, are in the `Task` page.
 - A BDD step handler must finish its tasks before it returns
-  (`RUNTIME-BDD-PENDING-TASKS`). See [`bdd.md`](../bdd.md).
+  (`RUNTIME-BDD-PENDING-TASKS`). See [`bdd.md`](https://github.com/agentica-lang/agentica/blob/master/docs/bdd.md).
 
 ### Channels
 
@@ -79,7 +79,7 @@ one report, and its exit code is the verdict. BDD is the standard module `std/bd
 Agentica, and `BDD` is not reserved. A `BDD.` call without `import BDD from
 "std/bdd"` is `CHECK-UNKNOWN-NAME`, with the import as its help. The discovery
 rules, timeouts, output limits, seeds, runner protocol and step catalog are in
-[`bdd.md`](../bdd.md).
+[`bdd.md`](https://github.com/agentica-lang/agentica/blob/master/docs/bdd.md).
 
 Not planned: an assertion that stops the test by itself (Agentica has no
 exceptions; `try` is the one way to stop early); running tests in the runner's

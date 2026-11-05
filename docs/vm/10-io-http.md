@@ -50,7 +50,7 @@ section are fixed by the hostile-case tests (10.7.4).
   `tests/test_vm_http.py`, sent by Python raw-socket peers
   (`tests/fixtures/http-peer.py`, `tests/fixtures/http-server-peer.py`).
 
-#### 10.6.1 As built (20a)
+#### 10.6.1 As built
 
 A response head with status 100 to 199 is returned without framing, and the
 caller counts the interim responses. A `Content-Length` body is reserved whole

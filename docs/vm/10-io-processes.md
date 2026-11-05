@@ -110,7 +110,7 @@ systems get none.
   children; the VM does not patch libuv. `Process.spawn` checks its timeout but
   does not apply it to the lookup and start.
 
-**Captured processes (21a).** `Process.spawn_captured` and
+**Captured processes.** `Process.spawn_captured` and
 `Process.output` (specified in
 `site/content/library/io-and-system/process.md`) share the code above.
 
@@ -137,7 +137,7 @@ systems get none.
   in milliseconds. A failed `SIGTERM` in `Process.close` is
   `RUNTIME-PROCESS-CLOSE`.
 
-**As built (25c, the child channel).** Descriptors separate from stdin, stdout
+**As built (the child channel).** Descriptors separate from stdin, stdout
 and stderr (a socket pair, or on Windows two pipes) carry the protocol of
 `agentica test` and of BDD children, so a test or a step program owns its own
 stdin and stdout. The builtins are in `vm/process.c`; the child side and the

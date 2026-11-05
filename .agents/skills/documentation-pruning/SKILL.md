@@ -55,8 +55,7 @@ starting point; the repository's own lifecycle rules (§1) override it.
 | Built, runtime/VM | Design and rationale to the runtime docs; delete the spec file |
 | Built, user-facing | Site page (add it if missing, same PR) and the programming skill; internal copy deleted |
 | Built, plan row or section | Delete it; the CHANGELOG and the merged PR hold the record |
-| Pending, planned | **One home**: its GitHub issue; every other location holds only a pointer |
-| Pending, idea only | One row in the ideas index |
+| Pending, planned | **One home**: its GitHub issue. A plan's decisions may stay in `docs/future/` when the issue points there; every other location holds only a pointer |
 | Decided against | One index line linking the rationale; no file |
 
 **Plan documents keep decisions, not recipes.** A plan file holds what was

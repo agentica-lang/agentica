@@ -147,7 +147,7 @@ runner stops and asks you to rebuild it.
 
 ### The typed Python arm
 
-The `typed-python` arm is the Python side of the comparison of phase 6c. The
+The `typed-python` arm is the Python side of the typed-Python comparison. The
 agent writes `solution.py` with type annotations and gets `mypy` on its `PATH`,
 like the Agentica arms get `agentica check`. The prompt gives the command,
 `mypy --strict solution.py`, and says not to silence it with `# type: ignore` or
@@ -199,7 +199,7 @@ by weakening its options.
   fails the checker for the same reasons the Agentica start fails
   `agentica check`.
 - The untyped `python` arm stays for comparison with the early rounds. It is not
-  part of the pilot of phase 6c. Its workspace no longer gets the Agentica
+  part of the typed-Python pilot. Its workspace no longer gets the Agentica
   binaries.
 
 ### Query-command counts

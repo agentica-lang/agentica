@@ -22,8 +22,8 @@ layout before blaming list code):
 - `list-build` is the gate of the list representation, in both JIT modes:
   160,000 pushes (`--size 8`) take under 1 s, doubling n costs less than 2.5
   times the time, and no other benchmark slows by more than 2%.
-- `small-values` guards the shared small values (`docs/vm/05-values-execution-builtins.md`
-  §5.4); `list-bulk` guards bulk
+- `small-values` guards the shared small values
+  (`docs/vm/05-values-execution-builtins.md` §5.4); `list-bulk` guards bulk
   builds, which must stay within 1.3 times the flat array.
 - `channel-pingpong` and `print-lines` guard the cost of the shared-state locks;
   run them again with `AGENTICA_VM_TEST_SHARED=1` to see the cost with the locks

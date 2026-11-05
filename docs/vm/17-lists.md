@@ -22,13 +22,15 @@ see a mutation: lists stay immutable values (§17.6).
   `take`, an aligned `drop` and `concat` share leaves (§17.11). `Queue[T]`
   (#988) is the answer for FIFO use.
 - No empty list of its own: `[]` and the builtins that return nothing give the
-  runtime's one shared empty list ([§5.4](05-values-execution-builtins.md#54-shared-small-values)).
+  runtime's one shared empty list
+  ([§5.4](05-values-execution-builtins.md#54-shared-small-values)).
 - No cursor opcode for `for`: `for x in xs` is `LIST_LEN` once and `LIST_GET`
   per item, O(n log32 n).
 
-Unboxed `List[Int]` and `List[Float]` leaves are the first step of [§5.5](05-values-execution-builtins.md#55-why-a-value-is-16-bytes), built
-as §17.12. Every site goes through the API of §17.4, so the VM decides the kind
-of a list from its values and the front end passes nothing.
+Unboxed `List[Int]` and `List[Float]` leaves are the first step of
+[§5.5](05-values-execution-builtins.md#55-why-a-value-is-16-bytes), built as
+§17.12. Every site goes through the API of §17.4, so the VM decides the kind of
+a list from its values and the front end passes nothing.
 
 ### 17.2 Representation
 
@@ -65,7 +67,8 @@ HAMT (`HAMT_BITS 5`, `vm/map.c`). `struct agc_list` and the node types live in
   path. The work of `append` and `set` is bounded: one tail of at most 32 items
   and one path of at most 12 nodes.
 - **Builders** are the only code that writes to a list, and only before it is
-  returned (the rule of [§5.4](05-values-execution-builtins.md#54-shared-small-values)).
+  returned (the rule of
+  [§5.4](05-values-execution-builtins.md#54-shared-small-values)).
   `agc_list_builder_sized(&b, n)` allocates the final list object and, for n >
   32, the whole trie at once: one array per branch level, then one array of the
   `tail_off(n)` items. The leaves are 32-item slices of that array, so a build
@@ -78,9 +81,10 @@ HAMT (`HAMT_BITS 5`, `vm/map.c`). `struct agc_list` and the node types live in
   long as a list shares one of its leaves.
 - **Unknown count.** `filter`, and `Task.map` (results arrive out of order),
   fill a flat staging array and call `agc_list_from_array(items, n)` at the end,
-  so the result is right-sized ([§5.4](05-values-execution-builtins.md#54-shared-small-values)). A chunked staging area for `filter`
-  gained 4% when it keeps half of the items and lost 3% when it keeps all, so it
-  stays flat.
+  so the result is right-sized
+  ([§5.4](05-values-execution-builtins.md#54-shared-small-values)). A chunked
+  staging area for `filter` gained 4% when it keeps half of the items and lost
+  3% when it keeps all, so it stays flat.
 
 ### 17.3 Operations
 
@@ -202,8 +206,8 @@ vm-latency`, run alone, must still pass its 250 ms limit.
 ### 17.10 Decisions
 
 Decided on 2026-10-14: `append`, `set` and a small `concat` cost 0 turn units
-(§17.5); `list-build` is the gate of the list benchmark claim; `take`, `drop` and
-a large `concat` stay O(n) with no RRB (§17.11 says what shares leaves).
+(§17.5); `list-build` is the gate of the list benchmark claim; `take`, `drop`
+and a large `concat` stay O(n) with no RRB (§17.11 says what shares leaves).
 
 ### 17.11 Bulk operations after the trie
 
@@ -228,8 +232,9 @@ Timing each operation on a million items against the flat array and CPython
   stays stable). Otherwise a bottom-up merge. O(n log n) plus O(n) temporary
   memory.
 - **Split.** `split` returns the runtime's shared one-character Strings
-  (`rt->chars`) for a one-byte ASCII piece. Strings have no identity ([§5.4](05-values-execution-builtins.md#54-shared-small-values)),
-  so a program cannot tell. A million-character `split("")` allocates no String.
+  (`rt->chars`) for a one-byte ASCII piece. Strings have no identity
+  ([§5.4](05-values-execution-builtins.md#54-shared-small-values)), so a program
+  cannot tell. A million-character `split("")` allocates no String.
 - **Inline paths.** `agc_list_builder_push` and `agc_list_cursor_next` are
   inline in `value.h`, with `agc_list_builder_more` and `agc_list_cursor_fill`
   as the slow paths, so `map`, `join`, `Range.to_a` and the JSON builders do not
@@ -237,13 +242,15 @@ Timing each operation on a million items against the flat array and CPython
 
 ### 17.12 Unboxed numeric leaves
 
-Step 3 of the faster lists ([§5.5](05-values-execution-builtins.md#55-why-a-value-is-16-bytes)). The owner decided on 2026-10-15 that the
-VM decides the kind, not the front end: the static types already say that a
-`List[Int]` holds only Ints, so the list code looks at the values it is given.
-Passing the checker's element type would need a new operand or builtin argument,
-a loader change, and a type for every list that C code makes (JSON,
-`String.split`, `Map.keys`, byte lists). The front end, the lowering, the
-bytecode format and the loader do not change, and `Int` stays 64 bits.
+Step 3 of the faster lists
+([§5.5](05-values-execution-builtins.md#55-why-a-value-is-16-bytes)). The owner
+decided on 2026-10-15 that the VM decides the kind, not the front end: the
+static types already say that a `List[Int]` holds only Ints, so the list code
+looks at the values it is given. Passing the checker's element type would need a
+new operand or builtin argument, a loader change, and a type for every list that
+C code makes (JSON, `String.split`, `Map.keys`, byte lists). The front end, the
+lowering, the bytecode format and the loader do not change, and `Int` stays 64
+bits.
 
 **Kind.** A list has a kind, a `uint32_t` after `shift` that fits in the padding
 (the header stays 24 bytes):

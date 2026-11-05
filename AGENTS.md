@@ -143,8 +143,9 @@ stay.
   (kind label, `area:*` label, a milestone per release). A PR that finishes one
   says `Closes #N` and updates the development skill when it changes how to
   work. Plans live in GitHub issues and shipped work in `CHANGELOG.md` and the
-  merged PR: `docs/future/` keeps only the decisions of a planned feature whose
-  issue points there, and a PR that lands the feature deletes its section.
+  merged PR: a new plan goes in its GitHub issue, not in `docs/future/`, which
+  keeps only the decisions of a planned feature whose issue points there; a PR
+  that lands the feature deletes its section.
 - When the language changes, update `docs/grammar/`, the site page and the
   programming skill together. When a builtin or a `std/` module changes,
   update its page in `site/content/library/`, the only home of the library

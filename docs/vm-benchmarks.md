@@ -171,7 +171,7 @@ parts, 262,144 `std/binary` reads, a 4 MiB file write and read; `make bench
 BENCH_ARGS="--only bytes"`): 0.442 s from source and 0.428 s on bytecode with
 30 MB, against 0.381 s and 28 MB in CPython.
 
-## Sets (8b)
+## Sets
 
 `Set[T]` is a map with nil values (`vm/map.c`), so it shares the HAMT, and a
 member of a set costs the same as a key of a map: 466 to 526 ns for a lookup
@@ -230,7 +230,7 @@ The third row deletes again and again from one map at the rebuild threshold,
 so every delete rebuilds the key list; the rebuild is one pass over integers
 and one block.
 
-## Struct update (15c)
+## Struct update
 
 `value.with(f: x)` lowers to one `STRUCT_WITH` instruction (a `memcpy` of the
 fields and one store per changed field, charged by size as `CONCAT` is). The
@@ -346,11 +346,12 @@ python3 benchmarks/http_bench.py                                          # 4000
 python3 benchmarks/http_bench.py --requests 8000 --rounds 2 --retries 0   # a quick check of the script
 ```
 
-Results are not recorded yet. They need an idle-machine run, and the script marks any round that ran on a busy machine. The
-results include connection count, server, requests per second, min-to-max
-latency, p50 and p99 latency, server CPU and maximum client CPU.
+Results are not recorded yet. They need an idle-machine run, and the script
+marks any round that ran on a busy machine. The results include connection
+count, server, requests per second, min-to-max latency, p50 and p99 latency,
+server CPU and maximum client CPU.
 
-## Front end (post-bootstrap row 3)
+## Front end
 
 With the `exe` runner, `benchmarks/run.py` also times the front end inside
 `dist/agentica`: `check` of `examples/hello.agc`, of
@@ -387,7 +388,7 @@ The profile then showed the lexer at 51% of the steps of `check
 compiler/front_end.agc` (76.5 M steps), and the loader at 15 to 16 ms of every
 command: the lexer came first, then the loader.
 
-### Speed pass, VM start-up (row 8.3)
+### Speed pass, VM start-up
 
 Every command that runs the front end first loads the carried `stage2` (3.8 MB,
 about 1,400 functions and 90,000 spans), and the loader checks all of it: a
@@ -487,9 +488,9 @@ under load:
   `TAIL_CALL`, `RETURN`, a failing `TRY` and a builtin that pushes a native
   frame (`docs/vm/05-values-execution-builtins.md` §6.1). `frame->pc` is still
   written before each instruction, for traces, parks and yields.
-- **The empty List and Map are shared** (`agc_vm_init`), the first part of the shared small values:
-  a call with a `{}` argument went from 70 ns to 15 ns over the loop, and a
-  disabled `Logger.debug` from 393 to 148 ms per million.
+- **The empty List and Map are shared** (`agc_vm_init`), the first part of the
+  shared small values: a call with a `{}` argument went from 70 ns to 15 ns over
+  the loop, and a disabled `Logger.debug` from 393 to 148 ms per million.
 
 A `SIGPROF` sample of the front-end checks after this pass: the turn loop 41% to
 52% (a third of it the dispatch), the collector 21% to 26%, the loader about 10%
@@ -512,8 +513,9 @@ goldens are the same.
 The micro loops of each path allocate 25% to 98% fewer bytes and take 0.61 to
 0.95 of the time: Boehm already takes small atomic objects from a free list, so
 time falls less than bytes. `benchmarks/programs/small-values.agc`, the median
-over seven padded layouts: 0.1448 s on master, 0.1111 s here (0.77; the gate is 10%). The other programs stay within 0.92 to 1.08 (layout noise), and
-the front end is neutral (it allocates 0.15% less).
+over seven padded layouts: 0.1448 s on master, 0.1111 s here (0.77; the gate is
+10%). The other programs stay within 0.92 to 1.08 (layout noise), and the front
+end is neutral (it allocates 0.15% less).
 
 Tried and dropped: `CONCAT` with an empty side returning the other String
 (a branch in the hottest opcode, for a case real programs do not hit);

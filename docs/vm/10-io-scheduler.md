@@ -90,8 +90,8 @@ section says how the scheduler and the loop keep them.
   costs one turn-cost unit per hop. It stops at a task with a timeout
   (`await_deadline` is set while it waits), since that task ends by itself.
 - **Await with a timeout (17c).** `Task.await(task, timeout_ms)` returns
-  `Await[T]` (`Await.Done(value)` or `Await.TimedOut`); `Task.await_result` has the same
-  second arity for a `Result` target. `timeout_ms` of 0 or less is
+  `Await[T]` (`Await.Done(value)` or `Await.TimedOut`); `Task.await_result` has
+  the same second arity for a `Result` target. `timeout_ms` of 0 or less is
   `RUNTIME-INVALID-DURATION` at that argument, checked first. A target that has
   settled (done, and not closing files) gives `Await.Done`, also when the timer
   and the target's end wake the caller together. Otherwise the deadline is
@@ -108,7 +108,7 @@ section says how the scheduler and the loop keep them.
   again, and the exit path (§14.4) does not wait for their jobs. A
   `System.exit`, a failure in `main`, `RUNTIME-STEP-LIMIT` or `RUNTIME-INTERNAL`
   in any task end the run at once.
-- **Crashes (phase 24, [task rules][task-rules]).** A failure in a task crashes
+- **Crashes ([task rules][task-rules]).** A failure in a task crashes
   that task, unless it is a failure in `main` or one of the two codes above,
   which end the run. The text `task crashed: CODE at FILE:LINE:COLUMN: MESSAGE`
   joins the run's unobserved crashes. Crashes of `hidden` tasks (the HTTP
@@ -122,7 +122,7 @@ section says how the scheduler and the loop keep them.
   `error("task: cancelled")`. Either marks the crash observed. If `main` returns
   with a crash that no await observed, the run prints one summary line and exits
   with code 1.
-- **Owners (phase 24, 24b).** The rule, the one close path and the one hand-off
+- **Owners.** The rule, the one close path and the one hand-off
   are in §14.5. What each kind does at the close: a socket, listener or TLS
   socket is disowned. A process closes with `shut`, which only signals (§10.4
   Close), never with the release that kills every child. A file closes by an
@@ -378,16 +378,16 @@ section says how the scheduler and the loop keep them.
   read that cannot be cancelled ends with the process, or, in an in-process
   harness, when input comes, and then touches nothing of the closed loop. Other
   unsupported hosts keep a blocking read on the interpreter thread.
-- **stdout and stderr (`vm/output.c`).** Each stream has one output
-  buffer, a `malloc`'d ring of 64 KiB (`AGC_OUTPUT_BUFFER`), and one FIFO of
-  waiting writers. `puts`, `print`, `IO.inspect` and `IO.warn` copy their whole
-  text into the buffer and return at once when it fits and no writer waits.
-  Otherwise the task keeps a pointer to the text in its `output` slot
-  (`agc_output_wait`; the GC scans task memory, so a big print is not copied
-  twice) and parks in the FIFO. A later writer does not jump the queue. This is
-  the parking pattern of channels: the head waiter wakes when its whole text fits, and the retry finds its slot.
-  `agc_output_waiting` hides that protocol from the builtins. A print longer
-  than the buffer holds the stream and copies in pieces, so prints never
+- **stdout and stderr (`vm/output.c`).** Each stream has one output buffer, a
+  `malloc`'d ring of 64 KiB (`AGC_OUTPUT_BUFFER`), and one FIFO of waiting
+  writers. `puts`, `print`, `IO.inspect` and `IO.warn` copy their whole text
+  into the buffer and return at once when it fits and no writer waits. Otherwise
+  the task keeps a pointer to the text in its `output` slot (`agc_output_wait`;
+  the GC scans task memory, so a big print is not copied twice) and parks in the
+  FIFO. A later writer does not jump the queue. This is the parking pattern of
+  channels: the head waiter wakes when its whole text fits, and the retry finds
+  its slot. `agc_output_waiting` hides that protocol from the builtins. A print
+  longer than the buffer holds the stream and copies in pieces, so prints never
   interleave. A print or a flush inside a native callback cannot park (C waits
   on the thread's stack): with no writer ahead it joins the FIFO as its head and
   runs the loop for the writes in flight (`callback_turn`, `agc_io_pause`),

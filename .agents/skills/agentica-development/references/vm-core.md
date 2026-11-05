@@ -219,9 +219,9 @@ Core layer; the design (modes, native calls, exits, helper contract) is
   128 bytes with the same instructions cost `--jit off` up to 12% (`make
   layout-check` fails on it; `references/ci.md`).
 - arm64: a code slot is read with `ldar`; a native call runs `isb` before it
-  branches unless each seal runs membarrier `SYNC_CORE` (Linux; `agc_launch_init`
-  registers it before `agc_init` starts threads). macOS seals with plain
-  `mprotect`, so the binary must not have the hardened runtime
+  branches unless each seal runs membarrier `SYNC_CORE` (Linux;
+  `agc_launch_init` registers it before `agc_init` starts threads). macOS seals
+  with plain `mprotect`, so the binary must not have the hardened runtime
   (`tools/release-check.sh` checks it).
 
 ## Launch, front end and trace
