@@ -1,7 +1,8 @@
 /*
  * The JIT's code memory on Linux and macOS (docs/vm/05-values-execution-builtins.md §6.4, "Code memory"): anonymous
  * pages reserved without access, opened read-write, then sealed read-execute with mprotect, so no page is ever writable
- * and executable at once. The Windows side is mem_windows.c. Core layer.
+ * and executable at once; and the perf map that names the code for perf. The Windows side is mem_windows.c. Core
+ * layer.
  */
 #ifndef _WIN32
 #ifdef __APPLE__
@@ -11,6 +12,8 @@
 #endif
 #include "jit.h"
 
+#include <fcntl.h>
+#include <stdio.h>
 #include <sys/mman.h>
 #include <unistd.h>
 #if defined(__aarch64__) && defined(__linux__)
@@ -43,6 +46,20 @@ bool agc_jit_mem_seal(void *pages, size_t size) {
 }
 
 void agc_jit_mem_unmap(void *pages, size_t size) { munmap(pages, size); }
+
+/* O_NOFOLLOW: /tmp is shared, so a link planted at the name is refused instead of followed. Owner-only, as perf
+   wants the map to belong to the user who runs it. */
+int agc_jit_mem_perf_open(void) {
+  char path[48];
+  snprintf(path, sizeof path, "/tmp/perf-%ld.map", (long)getpid());
+  return open(path, O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW | O_CLOEXEC, 0600);
+}
+
+/* A short write leaves a cut line, which perf skips; the run goes on either way. */
+void agc_jit_mem_perf_write(int fd, const char *line, size_t len) {
+  ssize_t written = write(fd, line, len);
+  (void)written;
+}
 
 #if defined(__aarch64__) && defined(__linux__)
 /* Set once by agc_jit_mem_sync_register, before any other thread exists, and only read after: the threads started

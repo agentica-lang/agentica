@@ -7,6 +7,7 @@
 #include "jit.h"
 
 #include <inttypes.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -658,6 +659,21 @@ static void batch_add(struct agc_jit_batch *b, uint32_t function, const uint8_t 
   b->sizes[b->count++] = (uint32_t)size;
 }
 
+/* The perf map line of F's code at CODE, SIZE bytes: `START SIZE agentica:NAME`, both numbers in hex. The name comes
+   from the bytecode, so it is cut to fit and a control byte becomes `?`: a newline would start a line of its own. */
+static void perf_map_line(const agc_jit *jit, const agc_function *f, agc_jit_code code, size_t size) {
+  char line[192];
+  int head = snprintf(line, sizeof line, "%" PRIxPTR " %zx agentica:", (uintptr_t)code, size);
+  if (head < 0 || (size_t)head >= sizeof line) return;
+  size_t len = (size_t)head, room = sizeof line - 1 - len, n = f->name->bytes < room ? f->name->bytes : room;
+  for (size_t k = 0; k < n; k++) {
+    unsigned char c = (unsigned char)f->name->data[k];
+    line[len++] = c < 0x20 || c == 0x7f ? '?' : (char)c;
+  }
+  line[len++] = '\n';
+  agc_jit_mem_perf_write(jit->perf_map, line, len);
+}
+
 /* FUNCTION's code at CODE, SIZE bytes, published, or FUNCTION kept interpreted when CODE is NULL. */
 static void publish(agc_jit *jit, uint32_t function, agc_jit_code code, size_t size) {
   const agc_function *f = &jit->program->functions[function];
@@ -671,6 +687,7 @@ static void publish(agc_jit *jit, uint32_t function, agc_jit_code code, size_t s
   /* From now on the reload tests a function compiled for native calls, and run_compiled enters it only to resume a
      frame, or at its first instruction when a native frame sits below (a block call). */
   if (agc_jit_native_only(jit, function)) atomic_store_explicit(&jit->skip[function], false, memory_order_relaxed);
+  if (jit->perf_map >= 0) perf_map_line(jit, f, code, size);
   AGC_TRACE(jit->trace, AGC_TRACE_JIT, "compile function=%.*s instructions=%" PRIu32 " bytes=%zu",
             agc_trace_len(f->name->bytes), f->name->data, f->count, size);
 }
@@ -889,6 +906,7 @@ agc_jit *agc_jit_new(const agc_program *program, agc_jit_mode mode, const agc_tr
   jit->page = agc_jit_mem_page();
   jit->cap = AGC_JIT_CODE_CAP;
   jit->seal = agc_jit_mem_seal;
+  jit->perf_map = -1;
   agc_jit_use_sync(jit, agc_jit_mem_sync_registered, agc_jit_mem_sync_cores);
   jit->chunk = jit->chunk_used = 0;
   jit->hot_entries = AGC_JIT_THRESHOLD;

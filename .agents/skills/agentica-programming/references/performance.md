@@ -120,6 +120,10 @@ AGENTICA_VM_TRACE=profile AGENTICA_PROFILE_FORMAT=folded \
 flamegraph.pl app.folded > app.svg
 ```
 
+CPU time on Linux: `AGENTICA_PERF_MAP=1 perf record -g agentica app.agc`
+writes `/tmp/perf-PID.map`, so `perf report` names the compiled functions
+(`agentica:NAME`).
+
 - Frames: `name@FILE:LINE` for a function, `block@FILE:LINE:COL` for a block,
   the builtin's name for a native loop or callback (`Int.times`, `List.map`),
   `measure:LABEL` for a `Profile.measure`.

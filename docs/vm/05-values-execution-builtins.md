@@ -53,8 +53,11 @@ so zeroed registers are valid values.
     the list is rebuilt without dead cells (O(n)) once they outnumber the live
     ones. Printing, `keys` and `values` walk the key list oldest first and skip
     dead cells by insertion number, with no key lookup. Keys are Int, String or
-    Bytes, compared by tag and value. They are hashed with SipHash-1-3. The key
-    is seeded once per run from OS entropy (`getrandom`, then `/dev/urandom`;
+    Bytes, compared by tag and value. String and Bytes keys are hashed with
+    SipHash-1-3. An Int key is XORed with the key, mixed with MurmurHash3's
+    finalizer and XORed again: a bijection, so two Ints never share a hash, and
+    since only keys with the same full hash share a node, no set of Int keys
+    makes a lookup scan (the worst is 13 levels). The key is seeded once per run from OS entropy (`getrandom`, then `/dev/urandom`;
     `rand_s` on Windows), independent of `--seed`. Tests and the fuzzer use
     the fixed default key. Iteration order never depends on the hash.
     `Map.delete` copies the path to the key and returns the same map for a
@@ -142,6 +145,11 @@ so zeroed registers are valid values.
   `GC_MALLOC_ATOMIC` in the GC-debug build.
 - Roots (runtime, schedulers, program, tasks) live in GC objects reachable from
   the runtime struct, never in mutable static storage (10.2.3).
+- Heap growth: `agc_init` sets the free-space divisor to 2 (libgc's default is
+  3), so more is allocated between collections. The front end's self-compile
+  ran 10% faster with 13% more peak memory. `GC_FREE_SPACE_DIVISOR` in the
+  environment still wins: 3 gives back libgc's default, and 1 is faster still
+  for more memory.
 
 ## 6. Execution
 
@@ -373,6 +381,11 @@ returns.
   of the run, and the functions not yet compiled stay interpreted. A function
   whose cost alone exceeds the budget stays interpreted.
   `AGENTICA_VM_TEST_JIT_BUDGET=N` gives a test a smaller budget (`vm/launch.c`).
+- **Perf map.** With `AGENTICA_PERF_MAP=1` (Linux and macOS), each function
+  is added to `/tmp/perf-PID.map` when its code is published, as
+  `START SIZE agentica:NAME` in hex, so `perf report` names compiled code
+  instead of showing `[JIT]` addresses. The file is opened to append, with
+  `O_NOFOLLOW`, and stays after the run. Off by default.
 - **Why.**
   - A function without a loop runs each instruction once per entry. The entry,
     the exit and the `RETURN` cost more than the few instructions they save.

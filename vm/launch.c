@@ -696,6 +696,9 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
   const char *budget = getenv("AGENTICA_VM_TEST_JIT_BUDGET");
   int64_t units = 0;
   if (rt->jit && budget && parse_count(budget, &units)) rt->jit->budget = (uint64_t)units;
+  /* AGENTICA_PERF_MAP=1 names each compiled function in /tmp/perf-PID.map, so `perf report` shows the names. */
+  const char *perf_map = getenv("AGENTICA_PERF_MAP");
+  if (rt->jit && perf_map && strcmp(perf_map, "1") == 0) rt->jit->perf_map = agc_jit_mem_perf_open();
   seed_map_hash(vm);
   agc_files_init(vm);
   const char *no_turn_cost = getenv("AGENTICA_VM_TEST_NO_TURN_COST");

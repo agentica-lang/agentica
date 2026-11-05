@@ -26,6 +26,8 @@ const char *__asan_default_options(void) { return "detect_leaks=0:allocator_may_
 
 #ifdef AGC_NO_GC
 #define BLOCK_COST ((size_t)64)
+#else
+#define FREE_SPACE_DIVISOR 2
 #endif
 
 static const char oom_line[] = "agentica: out of memory\n";
@@ -85,6 +87,11 @@ void agc_init(void) {
   if (GC_is_init_called()) return;
   own_signal_table();
   GC_set_all_interior_pointers(1);
+  /* libgc lets about twice the live bytes / divisor be allocated between two collections, so a lower divisor collects
+     less often and keeps a bigger heap. With its default, 3, libgc took about half of the self-compile's time; 2 made
+     it 10% faster for 13% more peak memory (docs/vm/05-values-execution-builtins.md §5.3). Set before GC_INIT, which
+     reads GC_FREE_SPACE_DIVISOR from the environment, so a value set there still wins. */
+  GC_set_free_space_divisor(FREE_SPACE_DIVISOR);
   GC_INIT();
   GC_set_oom_fn(on_gc_oom);
   GC_set_abort_func(on_gc_abort);

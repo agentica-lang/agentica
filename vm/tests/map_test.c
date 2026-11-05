@@ -1,12 +1,13 @@
 /*
- * The HAMT: 20,000 keys, order, replacement, persistence, full hash
- * collisions, add that leaves a member alone (and the Set text), delete down to
- * an empty map, dead key cells (put back, subset, churn), and deep nesting.
+ * The HAMT: 20,000 keys, order, replacement, persistence, full hash collisions, Int keys that never share a hash, add
+ * that leaves a member alone (and the Set text), delete down to an empty map, dead key cells (put back, subset,
+ * churn), and deep nesting.
  */
 #include "../core.h"
 
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static agc_vm vm;
@@ -21,6 +22,11 @@ static int64_t get_hashed(const agc_map *m, uint64_t hash, int64_t key) {
   agc_value v;
   assert(agc_map_get_hash(&vm, m, hash, agc_int(key), &v));
   return agc_as_int(&vm, v);
+}
+
+static int by_value(const void *a, const void *b) {
+  uint64_t x = *(const uint64_t *)a, y = *(const uint64_t *)b;
+  return x < y ? -1 : x > y;
 }
 
 static agc_value text(const char *s) { return agc_string_value(agc_make_string(s, strlen(s), strlen(s))); }
@@ -136,6 +142,21 @@ int main(void) {
   for (int64_t k = 0; k < 40; k++) assert(get_hashed(collide, same, k) == (k == 5 ? -5 : k * 10));
   assert(!agc_map_get_hash(&vm, collide, same, agc_int(40), &missing));
   assert(!agc_map_get_hash(&vm, collide, same ^ (1ULL << 63), agc_int(1), &missing));
+
+  /* Int keys hash by a bijection: Ints that differ only in their high bits, or by sign, never share a full hash, so
+     they never meet in a collision node, however they were chosen. */
+  enum { SPREAD = 4096 };
+  uint64_t hashes[2 * SPREAD];
+  size_t hashed = 0;
+  agc_map *spread = agc_new_map();
+  for (int64_t k = 0; k < SPREAD; k++) {
+    hashes[hashed++] = agc_key_hash(&vm, agc_int(k << 40));
+    hashes[hashed++] = agc_key_hash(&vm, agc_int(-k - 1));
+    spread = agc_map_put(&vm, agc_map_put(&vm, spread, agc_int(k << 40), agc_int(k)), agc_int(-k - 1), agc_int(-k));
+  }
+  qsort(hashes, hashed, sizeof hashes[0], by_value);
+  for (size_t k = 1; k < hashed; k++) assert(hashes[k - 1] != hashes[k]);
+  for (int64_t k = 0; k < SPREAD; k++) assert(get_int(spread, agc_int(k << 40)) == k && get_int(spread, agc_int(-k - 1)) == -k);
 
   /* agc_map_add_hash returns the map itself for a member, at any depth and in a collision node, and adds like put otherwise. */
   agc_value nothing = agc_nil();

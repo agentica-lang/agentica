@@ -115,8 +115,10 @@ typedef agc_jit_exit (*agc_jit_code)(agc_vm *vm, agc_value *R, const agc_value *
    (jit.c). `sample_bits` is the log2 of the sampling interval of agc_jit_turn, `sample_misses` the sampled turns in a
    row before which no entry was counted, and `counted` is set by an entry that `on` counted since the last sampled
    turn. `seal` is agc_jit_mem_seal, which a C test replaces with one that fails, and `sync_cores` is
-   agc_jit_mem_sync_cores when the process registered for it, else NULL (agc_jit_use_sync). They come last, so the
-   fields the interpreter reads keep their offsets. */
+   agc_jit_mem_sync_cores when the process registered for it, else NULL (agc_jit_use_sync). `perf_map` is the
+   descriptor of the perf map (agc_jit_mem_perf_open) that publish appends a line to for each function, or -1 (the
+   default; the driver opens it for AGENTICA_PERF_MAP=1). They come last, so the fields the interpreter reads keep
+   their offsets. */
 typedef struct agc_jit {
   _Atomic bool *skip;
   _Atomic(agc_jit_code) *code;
@@ -145,6 +147,7 @@ typedef struct agc_jit {
   _Atomic bool counted;
   bool (*seal)(void *pages, size_t size);
   bool (*sync_cores)(void);
+  int perf_map;
 } agc_jit;
 
 /* The JIT of a run, or NULL for AGC_JIT_OFF, on a host without an emitter and when MODE compiles no function of
@@ -510,6 +513,11 @@ void *agc_jit_mem_reserve(size_t size);
 bool agc_jit_mem_open(void *pages, size_t size);
 bool agc_jit_mem_seal(void *pages, size_t size);
 void agc_jit_mem_unmap(void *pages, size_t size);
+/* The perf map of the process, /tmp/perf-PID.map, where `perf report` finds the names of code in anonymous pages:
+   perf_open opens it to append (both runtimes of one process write to it) and returns its descriptor, or -1 when it
+   cannot, and on Windows; perf_write appends one whole line, as one write. */
+int agc_jit_mem_perf_open(void);
+void agc_jit_mem_perf_write(int fd, const char *line, size_t len);
 /* Linux arm64 only (nothing, or false, elsewhere): sync_register registers the process for membarrier's SYNC_CORE
    command, once, while the process has one thread (agc_launch_init calls it before agc_init); sync_registered says
    whether that worked; sync_cores runs the command, so that every thread of the process passes a context

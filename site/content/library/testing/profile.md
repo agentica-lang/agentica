@@ -169,6 +169,15 @@ main@app.agc:25;Int.times;block@app.agc:40:11 1000
 - The file keeps up to 1,048,576 distinct stacks (and 256 MiB of frames). Past that, the weight of each new stack goes to one `[truncated]` line at the end, and an `agc-trace folded profile full` line follows it.
 - Use `AGENTICA_VM_TRACE_FILE`: on stderr, the lines mix with what the program writes there. With `agentica FILE.agc`, the file holds the program's stacks only; `agentica check FILE.agc` writes the front end's.
 
+## Linux perf
+
+The profile counts steps. To see where the CPU time goes, run the program under Linux `perf` with `AGENTICA_PERF_MAP=1`: the JIT then writes `/tmp/perf-PID.map`, one line for each function it compiles, and `perf report` shows those functions by name (`agentica:NAME`) instead of bare `[JIT]` addresses. The map is off by default and costs nothing when off; the file stays after the run, so remove it when you are done.
+
+```text
+AGENTICA_PERF_MAP=1 perf record -g agentica app.agc
+perf report
+```
+
 ## Performance notes
 
 - With the profile off, `Profile.steps` is one builtin call; leave `Profile.measure` and `Profile.steps` in the code.
