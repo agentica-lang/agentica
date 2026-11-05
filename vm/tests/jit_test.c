@@ -2,7 +2,7 @@
  * The JIT (vm/jit/): the x86-64 bytes of known instructions, compiled functions run directly (results, steps, exits,
  * failures, native calls, calls of function values, tail calls, direct builtins, map reads, lists, closures, globals,
  * structs, enums, `try`), block calls that start their block again in place, sealed code memory packed up to its cap,
- * the compile budget's stop, one copy made by racing threads, and the `on` decision.
+ * the compile budget's stop, one copy made by racing threads, the `on` decision, and what the perf map refuses.
  */
 #include "../jit/jit.h"
 #include "test_program.h"
@@ -15,6 +15,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <uv.h>
+#ifndef _WIN32
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 
 #define MAX_CODE 32
 
@@ -1881,6 +1885,53 @@ static void settle_is_linear(void) {
 }
 #endif
 
+#ifndef _WIN32
+/* The bytes of the file at PATH (at most 63), as a string. */
+static void file_text(const char *path, char *text) {
+  FILE *f = fopen(path, "rb");
+  assert(f);
+  size_t n = fread(text, 1, 63, f);
+  text[n] = 0;
+  fclose(f);
+}
+
+/* The perf map refuses what another user can plant at its guessable name: a FIFO (the open must not wait for a
+   reader) and a hard link to one of the user's own files (which must stay as it was). A map that an earlier process
+   with the same PID left is emptied by the first open of the process only. */
+static void perf_map_open(void) {
+  char map[48], target[64], text[64];
+  snprintf(map, sizeof map, "/tmp/perf-%ld.map", (long)getpid());
+  snprintf(target, sizeof target, "/tmp/agc-perf-target-%ld", (long)getpid());
+  unlink(map);
+  assert(mkfifo(map, 0600) == 0);
+  assert(agc_jit_mem_perf_open(true) == -1);
+  assert(unlink(map) == 0);
+
+  FILE *f = fopen(target, "wb");
+  assert(f && fputs("keep\n", f) >= 0 && fclose(f) == 0);
+  assert(link(target, map) == 0);
+  assert(agc_jit_mem_perf_open(true) == -1);
+  assert(unlink(map) == 0);
+  file_text(target, text);
+  assert(strcmp(text, "keep\n") == 0);
+  assert(unlink(target) == 0);
+
+  f = fopen(map, "wb");
+  assert(f && fputs("stale\n", f) >= 0 && fclose(f) == 0);
+  int fd = agc_jit_mem_perf_open(true);
+  assert(fd >= 0);
+  agc_jit_mem_perf_write(fd, "a\n", 2);
+  assert(close(fd) == 0);
+  fd = agc_jit_mem_perf_open(false);
+  assert(fd >= 0);
+  agc_jit_mem_perf_write(fd, "b\n", 2);
+  assert(close(fd) == 0);
+  file_text(map, text);
+  assert(strcmp(text, "a\nb\n") == 0);
+  assert(unlink(map) == 0);
+}
+#endif
+
 int main(void) {
   /* As agc_launch_init does, while the process has one thread: on Linux arm64 the tests below then compile with
      membarrier and without the isb of a native call. */
@@ -1890,6 +1941,9 @@ int main(void) {
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
 #if CODE_MEMORY_TEST
   code_memory();
+#endif
+#ifndef _WIN32
+  perf_map_open();
 #endif
 #if AGC_JIT_HOST
   arena();

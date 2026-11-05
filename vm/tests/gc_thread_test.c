@@ -1,15 +1,19 @@
 /*
  * Boehm with threads (docs/vm/10-io-multicore.md §10.2.3, "GC"): threads that libuv starts register with the
- * collector, allocate, and are scanned and stopped by collections that any of them starts. Each thread keeps its
- * list head only in a local variable, so a collector that missed its stack would free live nodes, and the check of the
- * list afterwards would fail. The sanitizer build has no collector; there the test only runs the threads.
+ * collector, allocate, and are scanned and stopped by collections that any of them starts. Each thread keeps its list
+ * head only in a local variable, so a collector that missed its stack would free live nodes, and the list check after
+ * would fail; and agc_init's heap growth divisor. The sanitizer build has no collector: there only the threads run.
  */
 #include "../value.h"
 
 #include <assert.h>
 #include <stdatomic.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <uv.h>
+#if !defined(_WIN32) && !defined(AGC_NO_GC)
+#include <gc.h>
+#endif
 #if defined(_WIN32) && !defined(AGC_NO_GC)
 #define GC_THREADS
 #include <gc.h>
@@ -145,6 +149,10 @@ static void collect_beside_a_held_heap(void) {
 
 int main(void) {
   agc_init();
+#ifndef AGC_NO_GC
+  /* agc_init grows the heap with divisor 2 (vm/value.c) unless the environment names another. */
+  if (!getenv("GC_FREE_SPACE_DIVISOR")) assert(GC_get_free_space_divisor() == 2);
+#endif
   agc_gc_allow_threads();
 #if defined(_WIN32) && !defined(AGC_NO_GC)
   collect_beside_a_held_heap();

@@ -54,8 +54,8 @@ so zeroed registers are valid values.
     ones. Printing, `keys` and `values` walk the key list oldest first and skip
     dead cells by insertion number, with no key lookup. Keys are Int, String or
     Bytes, compared by tag and value. String and Bytes keys are hashed with
-    SipHash-1-3. An Int key is XORed with the key, mixed with MurmurHash3's
-    finalizer and XORed again: a bijection, so two Ints never share a hash, and
+    SipHash-1-3. An Int key is XORed with the key and mixed with
+    MurmurHash3's finalizer: a bijection, so two Ints never share a hash, and
     since only keys with the same full hash share a node, no set of Int keys
     makes a lookup scan (the worst is 13 levels). The key is seeded once per
     run from OS entropy (`getrandom`, then `/dev/urandom`; `rand_s` on
@@ -385,10 +385,11 @@ returns.
 - **Perf map.** With `AGENTICA_PERF_MAP=1` (any POSIX host; Linux `perf` reads
   it), each function is added to `/tmp/perf-PID.map` when its code is
   published, as `START SIZE agentica:NAME` in hex, so `perf report` names
-  compiled code instead of showing `[JIT]` addresses. The file is opened to append, with
-  `O_NOFOLLOW` and `O_NONBLOCK`, and used only when it is a regular file of
-  the user who runs the VM with one link. It stays after the run, and a later
-  process with the same PID appends to it. Off by default.
+  compiled code instead of showing `[JIT]` addresses. The file is opened to
+  append, with `O_NOFOLLOW` and `O_NONBLOCK`, and used only when it is a
+  regular file of the user who runs the VM with one link. The first open of a
+  process empties a map that an earlier process with the same PID left; the
+  file stays after the run. Off by default.
 - **Why.**
   - A function without a loop runs each instruction once per entry. The entry,
     the exit and the `RETURN` cost more than the few instructions they save.

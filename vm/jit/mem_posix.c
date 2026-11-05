@@ -51,13 +51,18 @@ void agc_jit_mem_unmap(void *pages, size_t size) { munmap(pages, size); }
 /* /tmp is shared and a PID is easy to guess: O_NOFOLLOW refuses a symbolic link planted at the name, O_NONBLOCK keeps a
    FIFO there from blocking the start of the run (with no reader the open fails), and anything but a regular file of
    this user with one link (a hard link could name one of the user's own files) is closed again. A new file is
-   owner-only, as perf wants the map to belong to the user who runs it. */
-int agc_jit_mem_perf_open(void) {
+   owner-only, as perf wants the map to belong to the user who runs it. FRESH empties a map that an earlier process with
+   the same PID left, so perf reads no stale lines. */
+int agc_jit_mem_perf_open(bool fresh) {
   char path[48];
   snprintf(path, sizeof path, "/tmp/perf-%ld.map", (long)getpid());
   int fd = open(path, O_WRONLY | O_CREAT | O_APPEND | O_NOFOLLOW | O_NONBLOCK | O_CLOEXEC, 0600);
   struct stat st;
   if (fd >= 0 && (fstat(fd, &st) != 0 || !S_ISREG(st.st_mode) || st.st_uid != geteuid() || st.st_nlink != 1)) {
+    close(fd);
+    return -1;
+  }
+  if (fd >= 0 && fresh && st.st_size > 0 && ftruncate(fd, 0) != 0) {
     close(fd);
     return -1;
   }

@@ -188,7 +188,7 @@ The first line is the declaration. Each other line is a use, with its kind (`cal
 
 A flag wins over its environment variable.
 
-Two variables have no flag. `GC_FREE_SPACE_DIVISOR` sets how fast the memory collector lets the heap grow: the VM uses 2, a lower number runs faster with more memory, and 3 is the collector's own default. `AGENTICA_PERF_MAP=1` names compiled functions for Linux `perf` (see [Profile](/library/testing/profile/#linux-perf)).
+Two variables have no flag. `GC_FREE_SPACE_DIVISOR` sets how fast the memory collector lets the heap grow: the VM uses 2, which runs faster than the collector's own default, 3, for about 13% more peak memory on a large heap; `GC_FREE_SPACE_DIVISOR=3` gives that memory back, and 1 runs faster still for more memory. `AGENTICA_PERF_MAP=1` names compiled functions for Linux `perf` (see [Profile](/library/testing/profile/#linux-perf)).
 
 ## Bytecode cache
 

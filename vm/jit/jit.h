@@ -514,9 +514,11 @@ bool agc_jit_mem_open(void *pages, size_t size);
 bool agc_jit_mem_seal(void *pages, size_t size);
 void agc_jit_mem_unmap(void *pages, size_t size);
 /* The perf map of the process, /tmp/perf-PID.map, where `perf report` finds the names of code in anonymous pages:
-   perf_open opens it to append (both runtimes of one process write to it) and returns its descriptor, or -1 when it
-   cannot, and on Windows; perf_write appends one whole line, as one write. */
-int agc_jit_mem_perf_open(void);
+   perf_open opens it to append and returns its descriptor, or -1 when it cannot, when the name holds anything but a
+   regular file of this user with one link, and on Windows; FRESH (the first open of the process: both runtimes of
+   one process write to it) empties what an earlier process with the same PID left. perf_write appends one whole
+   line, as one write. */
+int agc_jit_mem_perf_open(bool fresh);
 void agc_jit_mem_perf_write(int fd, const char *line, size_t len);
 /* Linux arm64 only (nothing, or false, elsewhere): sync_register registers the process for membarrier's SYNC_CORE
    command, once, while the process has one thread (agc_launch_init calls it before agc_init); sync_registered says

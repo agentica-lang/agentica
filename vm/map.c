@@ -77,23 +77,23 @@ static uint64_t siphash13(const uint64_t key[2], uint64_t domain, const uint8_t 
   return v0 ^ v1 ^ v2 ^ v3;
 }
 
-/* The hash of an Int key: the key XORed with the run's hash key, then the finalizer of MurmurHash3 (fmix64), and a
-   second XOR. Every step is a bijection of 64-bit words, so two different Ints never share a hash. The table only
+/* The hash of an Int key: the key XORed with the run's hash key, then the finalizer of MurmurHash3 (fmix64). Only the
+   key before the mix matters: an XOR after it would rename the slots of every node in the same way, and the table
+   would keep its shape, so there is none. Every step is a bijection of 64-bit words, so two different Ints never share a hash. The table only
    chains keys with the same full hash (a collision node), so no choice of Int keys, even one that knows the key,
    makes a lookup scan: the worst it can do is put keys at the last level, 13 nodes down
    (HAMT_HASH_BITS / HAMT_BITS + 1). SipHash stays for String and Bytes keys, whose full hashes can collide. */
-static uint64_t int_hash(const uint64_t key[2], uint64_t x) {
-  x ^= key[0];
+static uint64_t int_hash(uint64_t key, uint64_t x) {
+  x ^= key;
   x ^= x >> 33;
   x *= 0xff51afd7ed558ccdULL;
   x ^= x >> 33;
   x *= 0xc4ceb9fe1a85ec53ULL;
-  x ^= x >> 33;
-  return x ^ key[1];
+  return x ^ (x >> 33);
 }
 
 uint64_t agc_key_hash(agc_vm *vm, agc_value key) {
-  if (agc_is(key, AGC_T_INT)) return int_hash(vm->rt->hash_key, (uint64_t)agc_as_int(vm, key));
+  if (agc_is(key, AGC_T_INT)) return int_hash(vm->rt->hash_key[0], (uint64_t)agc_as_int(vm, key));
   /* The tag is the domain, so a String and a Bytes of the same bytes hash apart. */
   if (agc_is(key, AGC_T_BYTES)) {
     const agc_bytes *b = agc_as_bytes(vm, key);
