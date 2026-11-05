@@ -250,6 +250,7 @@ static agc_task *make_child(agc_vm *vm, agc_task *parent, agc_value fn, const ag
   agc_task *child = agc_new_task(vm);
   child->input_seen = vm->rt->in.eof_seq;
   child->service = parent->service;
+  child->weak_timers = parent->weak_timers;
   child->test = child->service ? NULL : vm->task->test;
   /* Counted as done from the start, so Task.pending_count (made - done) never sees it; finish_task skips it. */
   if (child->service) atomic_fetch_add_explicit(&vm->rt->tasks_done, 1, memory_order_relaxed);
@@ -261,8 +262,8 @@ static agc_task *make_child(agc_vm *vm, agc_task *parent, agc_value fn, const ag
 
 /* A service root: a node like agc_task_group that never runs, but it has no parent, so no task's crash, cancel or end
    reaches it, and Test.test finds no leftover under the caller. Its descendants are service tasks: Task.pending_count
-   leaves them out, they are in no test, and their timers do not keep a stalled run waiting (idle_wait). They end by
-   themselves or with the run. */
+   leaves them out and they are in no test. They end by themselves or with the run. Their timers keep a stalled run
+   waiting unless the caller sets `weak_timers` on the root (agc_task_service). */
 static agc_task *service_root(void) {
   agc_task *root = agc_alloc(sizeof(agc_task));
   root->group = true;
@@ -791,8 +792,9 @@ bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
 
 /* The wait of a scheduler whose run queue is empty. With no timer it is agc_io_poll(vm, true), and a loop with nothing
    alive means a stall. With a timer the loop runs once until the nearest deadline at most, alive or not, unless every
-   armed timer is a service task's: those only end idle waits that no other task depends on, so the run still stalls
-   when the loop has nothing alive. A pending channel wait starts its clock first, so it bounds the wait. */
+   armed timer is weak (`weak_timers`, an HttpClient's tasks): those only end idle waits that no other task depends on,
+   so the run still stalls when the loop has nothing alive. A pending channel wait starts its clock first, so it bounds
+   the wait. */
 static bool idle_wait(agc_vm *vm) {
   agc_timers_settle(vm);
   uint64_t due = agc_timers_next_due(vm);
@@ -1087,6 +1089,7 @@ agc_task *agc_task_group(agc_vm *vm) {
   g->result = agc_void();
   /* A group inside a service tree is a service task too, so the tasks spawned in it are (agc_task_spawn_in). */
   g->service = vm->task->service;
+  g->weak_timers = vm->task->weak_timers;
   g->test = vm->task->test;
   adopt(vm, vm->task, g);
   return g;
@@ -1281,6 +1284,7 @@ agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_
 agc_task *agc_task_service(agc_vm *vm, agc_value fn, agc_value handle, agc_value arg, uint32_t span) {
   agc_resource *r = claim(vm, handle, span);
   agc_task *root = service_root();
+  root->weak_timers = true;
   agc_task *child = make_child(vm, root, fn, &arg, 1, span);
   agc_random_seed(&child->random, child->id);
   return start_child(vm, root, child, &r, 1);
@@ -1424,8 +1428,8 @@ static agc_value builtin_sleep(agc_vm *vm, agc_value *args, uint32_t span) {
 
 /* Task.cancel: marks the task and its descendants cancelled and returns at once; it never waits. A task that has
    ended, or was cancelled, is left as it is. A task may cancel itself or an ancestor (it is then a descendant of the
-   root and is cancelled too): cancel_one sets `yield` for the caller's own task, so it stops after this call. No
-   handle reaches main (a program gets handles only from spawns), and the walk refuses it anyway. */
+   root and is cancelled too): cancel_one sets `yield` for the caller's own task, so it stops after this call. main's
+   own handle (Task.current) is refused by the walk, so main is never cancelled. */
 static agc_value builtin_cancel(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   cancel_tree(vm, agc_as_task(vm, args[0]), "call", NULL);

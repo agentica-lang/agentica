@@ -60,14 +60,15 @@ static void running_remove(map_group *g, map_item *it) {
 }
 
 /* The end hook of an item task (finish_task calls it for a return, a crash and a cancel). An item that already ran out
-   of time is settled and the hook has nothing to do. An item that is cancelled otherwise was reached by the cancel of
-   its caller (items are the caller's children, so only a cancel of the caller or an ancestor gets to them): its slot
-   is never written and the caller, which is about to end, is not woken. An item that still has files to close is not
-   settled, as for Task.await (state DONE and no close pending): it puts the hook back, and agc_task_close_done calls it
-   again when the last close ends. */
+   of time is settled and the hook has nothing to do. Any other end, a cancel included, settles the item and wakes the
+   caller: an item can be cancelled alone, by itself or by another task that got its handle (Task.current), and its
+   slot is then error("task: cancelled"). When the cancel is that of the caller or an ancestor, the walk ends the items
+   before the caller (children first), so the hook cannot tell; the caller it wakes is ended by the same walk and never
+   collects. An item that still has files to close is not settled, as for Task.await (state DONE and no close
+   pending): it puts the hook back, and agc_task_close_done calls it again when the last close ends. */
 static void item_ended(agc_vm *vm, agc_task *t) {
   map_item *it = t->end_data;
-  if (!it->running || t->cancelled) {
+  if (!it->running) {
     t->end_data = NULL;
     return;
   }
@@ -86,12 +87,14 @@ static void item_ended(agc_vm *vm, agc_task *t) {
   agc_task_wake(vm, g->caller, "map");
 }
 
-/* A crashed item is observed here, so its crash is not reported as unobserved; the caller reads it as a value. */
+/* A crashed item is observed here, so its crash is not reported as unobserved; the caller reads it as a value. A
+   cancelled one gives what Task.await of a cancelled Result task gives. */
 static agc_value item_result(agc_vm *vm, const map_group *g, agc_task *t) {
   if (t->crashed) {
     agc_task_observe(vm, t);
     return agc_result_value(false, agc_string_value(t->crash));
   }
+  if (t->cancelled) return agc_error_value("task: cancelled");
   if (!agc_is(t->result, AGC_T_RESULT))
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: a Task.map block did not give a Result", g->span);
   return t->result;

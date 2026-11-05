@@ -187,9 +187,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   input order.
 - An item reports through the task's end hook (`end`, `end_data`, called by
   `finish_task` for a return, a crash or a cancel). `item_ended` ignores an item
-  that already timed out and one that is `cancelled` (its caller is gone).
-  Otherwise it moves the item to the ended list and wakes the caller. A crash is
-  observed, and its slot becomes `error(t->crash)`. A non-`Result` result is
+  that already timed out. Otherwise it moves the item to the ended list and
+  wakes the caller, also for a cancel: an item can be cancelled alone through
+  its `Task.current` handle, and its slot is `error("task: cancelled")`. A
+  cancel of the caller's tree ends the items first; the woken caller is ended by
+  the same walk and never collects. A crash is observed, and its slot becomes
+  `error(t->crash)`. A non-`Result` result is
   `RUNTIME-INTERNAL`. An item that ends after its deadline but before the caller
   runs keeps its result.
 - An item with a file close pending (`closing`) is not settled, as in

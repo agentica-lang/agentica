@@ -1,6 +1,6 @@
 # Task.current gives the handle of the running task, so a child can monitor its parent: the child learns when the
 # parent ends, here after the parent has returned.
-def watch_parent(parent: Task[Void], report: Channel[String]) -> Void
+def watch_parent(parent: TaskRef, report: Channel[String]) -> Void
   downs: Channel[TaskDown] = Channel.new(1)
   Task.monitor(parent, downs) do |down| down end
   down = downs.recv(5000).unwrap!

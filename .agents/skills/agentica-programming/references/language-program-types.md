@@ -90,7 +90,8 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
 - `Json`: opaque; use `JSON` functions. `Fn[A, ..., R]`: a block or `&name`, the
   last type is the return; `Fn[Void]` takes no arguments.
 - Opaque, with no constructor or `==`: `Process` (`<Process>`), `Lazy[T]`
-  (`lazy.md`), `Task[R]`, `Channel[T]`, `ATS[K, V]` (`tasks.md`), `Socket`,
+  (`lazy.md`), `Task[R]`, `TaskRef`, `Channel[T]`, `ATS[K, V]` (`tasks.md`),
+  `Socket`,
   `Listener`, `HttpClient`, `HttpServer`, `JSON.Codec[T]` (`JSON.codec(User)`,
   no printing or inspect; `json.md`).
 - Builtin enums, reserved: `Await[T]` (`Await.Done(value)`, `Await.TimedOut`;

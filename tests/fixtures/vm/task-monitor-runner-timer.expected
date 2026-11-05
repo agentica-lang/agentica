@@ -1,0 +1,11 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 48,
+  "stdout": [
+    "5",
+    "true",
+    ""
+  ],
+  "stderr": []
+}

@@ -258,9 +258,11 @@ export ENUMS: List[Model.EnumDef] = [
 ## The handle types a task can be given with Task.spawn_owning.
 export HANDLE_TYPES: List[String] = ["Socket", "Listener", "HttpServer", "FileHandle", "Process"]
 
-## The builtin types with no structure: handles, TestCase, TlsContext and C.Pointer (a C pointer of native code).
+## The builtin types with no structure: handles, TestCase, TlsContext, C.Pointer (a C pointer of native code) and
+## TaskRef (the running task, from Task.current).
 export OPAQUE_TYPES: List[String] = [
   "Socket", "Listener", "HttpClient", "HttpServer", "FileHandle", "Process", "TestCase", "TlsContext", "C.Pointer",
+  "TaskRef",
 ]
 
 ## The type names no declaration or import alias may take.
@@ -326,6 +328,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "Task",
   "TaskDown",
   "TaskExit",
+  "TaskRef",
   "Test",
   "TestCase",
   "Time",
@@ -4967,8 +4970,8 @@ ROWS_50: List[Model.Builtin] = [
     implementation: "Task.cancel",
     effects: ["concurrency"],
     description: (
-      "Cancel a task and its descendants without waiting: each runs at most the rest of its current turn and " +
-      "closes what it owns; does nothing for a task that has ended; VM only."
+      "Cancel a task (or TaskRef) and its descendants without waiting: each runs at most the rest of its current " +
+      "turn and closes what it owns; does nothing for a task that has ended; VM only."
     ),
     alternatives: [],
   ),
@@ -6449,13 +6452,13 @@ ROWS_68: List[Model.Builtin] = [
   Model.Builtin(
     name: "Task.current",
     parameters: [],
-    result: Types.Type.Task(Types.Type.Void),
+    result: Types.Type.Opaque("TaskRef"),
     rule: Model.Rule.Plain,
     implementation: "Task.current",
     effects: ["concurrency"],
     description: (
-      "Return the handle of the running task, typed Task[Void] since its result type is not known here; " +
-      "another task can monitor it; VM only."
+      "Return the running task as a TaskRef, which Task.monitor, Task.cancel and id take but no await, since its " +
+      "result type is not known here; VM only."
     ),
     alternatives: [],
   ),
@@ -6466,7 +6469,7 @@ ROWS_68: List[Model.Builtin] = [
     rule: Model.Rule.TaskTarget,
     implementation: "Task.id",
     effects: [],
-    description: "Return the number that identifies the task in this run, the task_id of its TaskDown.",
+    description: "Return the number that identifies the task (or TaskRef) in this run, the task_id of its TaskDown.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -6481,8 +6484,8 @@ ROWS_68: List[Model.Builtin] = [
     implementation: "Task.monitor",
     effects: ["concurrency"],
     description: (
-      "When the task ends (returns, crashes or is cancelled), send wrap(TaskDown) into the channel once, without " +
-      "waiting; at once for a task that has ended; dropped when the channel is closed or full; VM only."
+      "When the task (or TaskRef) ends (returns, crashes or is cancelled), send wrap(TaskDown) into the channel " +
+      "once, without waiting; at once for a task that has ended; dropped when the channel is closed or full; VM only."
     ),
     alternatives: [],
   ),

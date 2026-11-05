@@ -121,8 +121,8 @@ program #220 0:1:1-1398:57:1
       body: expr-stmt #122 782:36:3-814:37:1
         value: call #121 782:36:3-813:36:34 name="puts" piped=false type=Void
           arg: binary #120 787:36:8-812:36:33 op=plus op-span=803:36:24-804:36:25 type=Int
-            left: field-access #117 787:36:8-802:36:23 name="id" type=Int resolved=call("Task.id", Task(Void))
-              target: call #116 787:36:8-799:36:20 name="Task.current" piped=false type=Task(Void)
+            left: field-access #117 787:36:8-802:36:23 name="id" type=Int resolved=call("Task.id", Opaque(TaskRef))
+              target: call #116 787:36:8-799:36:20 name="Task.current" piped=false type=Opaque(TaskRef)
             right: field-access #119 805:36:26-812:36:33 name="id" type=Int resolved=call("Task.id", Task(Int))
               target: name-ref #118 805:36:26-809:36:30 name="task" type=Task(Int)
       body: binding #129 816:37:3-870:38:1 name="measured"

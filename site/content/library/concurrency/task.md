@@ -221,7 +221,7 @@ end
 
 About 200 ms, not 400: a sliding window of two, not batches. Items start in input order.
 
-- An item's `error(...)` does not stop the others. A runtime error (`RUNTIME-DIVISION-BY-ZERO`) crashes only that item: its slot is `error("task crashed: ...")`, the crash counts as observed, and the others go on.
+- An item's `error(...)` does not stop the others. A runtime error (`RUNTIME-DIVISION-BY-ZERO`) crashes only that item: its slot is `error("task crashed: ...")`, the crash counts as observed, and the others go on. An item cancelled on its own (through its `Task.current`) gives `error("task: cancelled")` at once.
 - The call waits for every item, and the items are children of the caller. To use results as they come, send them over a [Channel](/library/concurrency/channel/).
 - An empty list needs a type like any empty list (`CHECK-EMPTY-LIST-TYPE`). The effect is `concurrency`, like `Task.spawn`.
 
@@ -342,7 +342,7 @@ Task.cancel(task: Task[R]) -> Void
 
 Stops a task you no longer need, and every task it started. It does not wait: the task is marked and the call returns.
 
-- A task is cancelled by `Task.cancel`, by a crash of one of its ancestors, by the timeout of its `Task.map` item and by `HTTP.close_server` (the handler tasks). `main` cannot be cancelled: no handle reaches it. A wrong argument type is `CHECK-TYPE-MISMATCH` at the argument.
+- A task is cancelled by `Task.cancel`, by a crash of one of its ancestors, by the timeout of its `Task.map` item and by `HTTP.close_server` (the handler tasks). It also takes the `TaskRef` of [Task.current](#taskcurrent). `main` cannot be cancelled: a cancel of its `Task.current` does nothing. A wrong argument type is `CHECK-TYPE-MISMATCH` at the argument.
 - A sleep, a channel wait, an await or an I/O wait ends at once; a task busy in a loop on another scheduler stops at the end of its current turn, so it may end as cancelled even though it reached its return.
 - Its handles close as when any task ends, so a channel it owns (from `Task.spawn_owning`) is closed and its receivers get `error("channel: closed")`.
 - Awaiting it gives `error("task: cancelled")` for a `Result` task, and otherwise stops the program with `RUNTIME-TASK-CANCELLED`.
@@ -383,7 +383,8 @@ When `task` ends for any reason (it returns, crashes or is cancelled), the runti
 - `TaskDown` is a builtin record: `task_id: Int` (the `task.id` of the task), `reason: TaskExit`, then the diagnostic of a crash: `code: String` (the stable code, such as `RUNTIME-DIVISION-BY-ZERO`, to match on), `message: String`, and `file: String`, `line: Int` and `column: Int` where the error was raised. For `TaskExit.Ok` and `TaskExit.Cancelled` the strings are `""` and the numbers `0`. `TaskExit` is a builtin enum: `TaskExit.Ok`, `TaskExit.Crashed` or `TaskExit.Cancelled`, read as `Task.await` reads the end (a crash first, then a cancel). Both names are reserved.
 - A task that has ended already gets its notice at once, and a task may have several monitors, each with its own notice. A monitor cannot be removed.
 - The send never waits and never fails: when the channel is closed or full at that moment, the notice is dropped without an error. Give the channel room for every notice it may get.
-- A crash whose notice goes into the channel counts as observed, like an await of it, so it does not make the run exit 1.
+- A crash whose notice goes into the channel counts as observed, like an await of it, so it does not make the run exit 1. It counts once the notice is in the channel, even if nobody ever receives it.
+- `task` may also be the `TaskRef` of [Task.current](#taskcurrent).
 - The notice comes as soon as the ended task has closed what it owns, as for `Task.await`. `wrap` runs in a task of its own, outside the caller's tree, so a cancel never reaches it; keep it to building the message. A runtime error in `wrap` is a crash of that task, and the notice is lost.
 
 A coordinator that restarts a worker that crashed:
@@ -448,16 +449,16 @@ The crash of the first attempt still goes to stderr when it happens.
 ## Task.current
 
 ```signature
-Task.current() -> Task[Void]
-Task.id(task: Task[R]) -> Int
+Task.current() -> TaskRef
+task.id() -> Int
 ```
 
-`Task.current` gives the handle of the running task, so that another task can monitor it. Its type is `Task[Void]`, since the result type of the running task is not known where the call is: the handle can be monitored, cancelled or awaited as a statement, but an await of it gives no value (`CHECK-VOID-VALUE`). `task.id`, a method, gives the number that identifies a task in the run, the `task_id` of its `TaskDown`.
+`Task.current` gives the running task as a `TaskRef`, so that another task can monitor it. `TaskRef` is a builtin type, reserved, for a task whose result type is not known where the call is: `Task.monitor`, `Task.cancel` and `id` take it, and an await of it is `CHECK-TYPE-MISMATCH` at the argument (it has no result to give; monitor it to learn when it ends). It prints as `<Task>` and has no equality. `task.id` gives the number that identifies a task in the run, for a `Task[R]` or a `TaskRef`: the `task_id` of its `TaskDown`.
 
 A child monitors the task that started it:
 
 ```agentica
-def watch(parent: Task[Void], report: Channel[String]) -> Void
+def watch(parent: TaskRef, report: Channel[String]) -> Void
   downs: Channel[TaskDown] = Channel.new(1)
   Task.monitor(parent, downs) do |down| down end
   down = downs.recv(5000).unwrap!

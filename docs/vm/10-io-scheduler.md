@@ -188,11 +188,12 @@ section says how the scheduler and the loop keep them.
   descendants), starts items up to `limit`, and ends with the list once every
   slot is set. An item reports its end through a hook (`end`, `end_data`), which
   `finish_task` calls for a return, a crash and a cancel. The hook ignores an
-  item that already timed out. An item cancelled by someone else can only be
-  cancelled through its caller. The caller, a stepper parked on the group's
-  timer, is then cancelled like any parked task (its timer is disarmed): it
-  cancels its children first, never runs the step function again, and so starts
-  nothing and writes no slot. An item with a file close pending is not settled:
+  item that already timed out. An item cancelled alone (through its handle from
+  `Task.current`) settles as `error("task: cancelled")`. When the cancel is that
+  of the caller, a stepper parked on the group's timer, or of an ancestor, the
+  walk cancels the items first, and the hook wakes the caller; the same walk then
+  ends the caller like any parked task (its timer is disarmed), so it never runs
+  the step function again, starts nothing and writes no slot. An item with a file close pending is not settled:
   the hook waits, and `agc_task_close_done` calls it when the last close ends.
   If the deadline comes first, the item settles as timed out without waiting
   for the close (`expire` marks its crash, if any, as observed), and the hook,

@@ -12,7 +12,7 @@ Task.cancel(task: Task[R]) -> Void
 Task.pending_count() -> Int
 Task.unobserved_crash() -> Result[String]
 Task.monitor(task: Task[R], channel: Channel[M], wrap: Fn[TaskDown, M]) -> Void
-Task.current() -> Task[Void]
+Task.current() -> TaskRef
 task.id -> Int
 ```
 
@@ -139,13 +139,14 @@ channel of an enum (there is no `select`). `TaskDown` is a builtin record:
 `code` (the stable `RUNTIME-` code, to match on), `message`, `file`, `line`
 and `column` (`""` and `0` otherwise). The send never
 waits or fails: a closed or full channel drops the notice, so give it room. A
-crash whose notice went in counts as observed. `wrap` runs in a task of its
-own (a crash there loses the notice). A coordinator keeps
+crash whose notice went in counts as observed, received or not. `wrap` runs in
+a task of its own (a crash there loses the notice). A coordinator keeps
 `Map[Int, Job]` by `task.id` and starts a job again on `TaskExit.Crashed`.
 
-`Task.current` is the handle of the running task, typed `Task[Void]` (its
-result type is unknown there): a child can monitor its parent with it. An await
-of it gives no value (`CHECK-VOID-VALUE` when assigned).
+`Task.current` is the running task as a `TaskRef` (reserved; its result type is
+unknown there): `Task.monitor`, `Task.cancel` and `.id` take it, so a child can
+monitor its parent, but `Task.await` of it is `CHECK-TYPE-MISMATCH`. A
+`Task.map` item that cancels itself gives `error("task: cancelled")`.
 
 ## Task.map
 

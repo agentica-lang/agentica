@@ -1212,7 +1212,7 @@
       "help": true
     }
   ],
-  "Task.monitor takes a task, a channel and a wrap that gives the channel's type; Task.current is a Task[Void]": [
+  "Task.monitor takes a task, a channel and a wrap that gives the channel's type; Task.current is a TaskRef": [
     {
       "program": [
         "enum Msg",
@@ -1234,7 +1234,9 @@
         "  Task.monitor(Task.current, inbox, &wrap)",
         "  downs: Channel[TaskDown] = Channel.new(1)",
         "  Task.monitor(task, downs) do |down| down end",
-        "  _id: Int = task.id + Task.id(Task.current)",
+        "  me: TaskRef = Task.current",
+        "  _id: Int = task.id + me.id",
+        "  Task.monitor(me, downs) do |down| down end",
         "  case downs.recv(1).unwrap!.reason",
         "    TaskExit.Ok -> puts(\"ok\")",
         "    TaskExit.Crashed -> puts(\"crashed\")",
@@ -1405,15 +1407,44 @@
         "def main() -> Void",
         "  inbox: Channel[Msg] = Channel.new(4)",
         "  task = Task.spawn do 1 end",
-        "  _result = Task.await(Task.current)",
+        "  Task.await(Task.current)",
         "  _ = inbox.recv(1)",
         "end",
         "",
         ""
       ],
-      "code": "CHECK-VOID-VALUE",
-      "start": [16, 13],
-      "covers": "Task.await(Task.current)"
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [16, 14],
+      "covers": "Task.current",
+      "help": true
+    },
+    {
+      "program": [
+        "enum Msg",
+        "  Down(TaskDown)",
+        "end",
+        "",
+        "def wrap(down: TaskDown) -> Msg",
+        "  return Msg.Down(down)",
+        "end",
+        "",
+        "def wrong(n: Int) -> Msg",
+        "  return Msg.Down(TaskDown(task_id: n, reason: TaskExit.Ok, code: \"\", message: \"\", file: \"\", line: 0, column: 0))",
+        "end",
+        "",
+        "def main() -> Void",
+        "  inbox: Channel[Msg] = Channel.new(4)",
+        "  task = Task.spawn do 1 end",
+        "  _ = Task.await(Task.current, 10)",
+        "  _ = inbox.recv(1)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [16, 18],
+      "covers": "Task.current",
+      "help": true
     },
     {
       "program": [

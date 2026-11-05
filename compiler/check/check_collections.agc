@@ -387,12 +387,23 @@ end
 def check_await(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   target = try State.expr(cx, st, site.args[0], T.task_of(site.expected))
   if !T.is?(target.type, "Task")
-    return error(
-      State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", "Task.await requires a task", Ast.expr_span(site.args[0])),
-    )
+    return error(not_awaitable(cx, target, site))
   end
 
   return ok(State.Out(st: target.st, type: T.item(target.type)))
+end
+
+# CHECK-TYPE-MISMATCH of an await of something that is not a Task[R]; the TaskRef of Task.current has no result type to
+# give, and its help names the way to wait for its end.
+def not_awaitable(cx: State.Cx, target: State.Out, site: State.Site) -> String
+  span = Ast.expr_span(site.args[0])
+  if Args.task_ref?(target.type)
+    message = "Task.await requires a Task[R], found TaskRef"
+    help = "a TaskRef from Task.current has no result to await; to learn when it ends, use Task.monitor"
+    return State.fail_help(cx, target.st, "CHECK-TYPE-MISMATCH", message, span, help)
+  end
+
+  return State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", "Task.await requires a task", span)
 end
 
 # Task.await with a timeout gives Await[R]: Await.Done(value) or Await.TimedOut.
@@ -404,9 +415,7 @@ def check_await_timeout(cx: State.Cx, st: State.St, site: State.Site) -> Result[
 
   target = try State.expr(cx, st, site.args[0], context)
   if !T.is?(target.type, "Task")
-    return error(
-      State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", "Task.await requires a task", Ast.expr_span(site.args[0])),
-    )
+    return error(not_awaitable(cx, target, site))
   end
 
   timeout = try State.expr(cx, target.st, site.args[1], T.Type.Int)

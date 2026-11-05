@@ -25,6 +25,8 @@ programs are valid and how they run.
 - `Fn[A, ..., R]`: Function value; the last type is its return, the others are
   its parameters
 - `Task[R]`: Opaque lightweight task with one result type
+- `TaskRef`: Opaque running task from `Task.current`, with no result type: it
+  can be monitored, cancelled and identified, not awaited
 - `Await[T]`: Builtin enum of a timed `Task.await`: `Await.Done(value)` or
   `Await.TimedOut`; matched with `case` like a user enum
 - `LogLevel`: Builtin enum of `std/logger`: `LogLevel.Debug`, `LogLevel.Info`,

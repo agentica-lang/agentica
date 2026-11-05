@@ -10,6 +10,11 @@ import State from "check_state"
 ## The kind of a receiver, or "" when its type has no methods in the catalog.
 export def receiver_kind(type: T.Type) -> String
   word = T.tag(type)
+  if word == "Opaque" and T.name(type) == "TaskRef"
+    # The running task (Task.current) has the methods of a task.
+    return "Task"
+  end
+
   if (
     word == "String" or
     word == "List" or

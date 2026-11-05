@@ -393,8 +393,8 @@ typedef struct {
      malloc'd ids, of which `started` are running. `over` is set by the first agc_run_over, or at one scheduler by
      agc_launch_settle: the run is over and rt->outcome holds its end. `entry_done` opens the run queue to the other
      schedulers once the entry has written the Globals table. `timers_armed` counts the armed task timers of every
-     heap, for the stall check, and `timers_weak` how many of them belong to service tasks, which the stall check does
-     not wait for (agc_task_service). */
+     heap, for the stall check, and `timers_weak` how many of them belong to tasks with `weak_timers`, which the stall
+     check does not wait for (agc_task_service). */
   int64_t schedulers;
   struct agc_vm **scheds;
   void *threads;
@@ -534,6 +534,9 @@ struct agc_task {
   agc_nested_stack **nested;
   /* The monitors of this task (Task.monitor), newest first, fired and cleared when it settles. */
   agc_monitor *monitors;
+  /* The timers of this task do not keep a stalled run waiting: a task of an HttpClient's tree (agc_task_service) and
+     its descendants. The task of a monitor's wrap is a service task without it, since a program may wait for it. */
+  bool weak_timers;
 };
 
 /* Where agc_fail and agc_exit jump while compiled code calls a builtin (agc_jit_call_builtin, vm/jit/jit.c), so that
