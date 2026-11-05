@@ -1,0 +1,18 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 120,
+  "stdout": [
+    "ok(2)",
+    "ended: TaskExit.Ok",
+    "first monitor: TaskExit.Crashed",
+    "second monitor: TaskExit.Crashed",
+    "again: TaskExit.Crashed, true",
+    "false",
+    ""
+  ],
+  "stderr": [
+    "{\"code\":\"RUNTIME-DIVISION-BY-ZERO\",\"file\":\"@fixtures/vm/task-monitor-ended.agc\",\"message\":\"division by zero\",\"range\":{\"end\":{\"column\":17,\"line\":3},\"start\":{\"column\":16,\"line\":3}},\"spawned_at\":{\"column\":13,\"file\":\"@fixtures/vm/task-monitor-ended.agc\",\"line\":18},\"stack\":[{\"column\":16,\"file\":\"@fixtures/vm/task-monitor-ended.agc\",\"function\":\"divide\",\"line\":3}],\"task\":true}",
+    ""
+  ]
+}

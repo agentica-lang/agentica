@@ -408,6 +408,10 @@ typedef struct {
   uint64_t hash_key[2], seed;
   uint32_t await_done, await_timed_out;
   bool await_found;
+  /* The TaskDown struct and the TaskExit variants of a monitor's notice, found by the first Task.monitor (under
+     rt->sync), so that the end of a task never looks them up and cannot fail. */
+  uint32_t down_struct, exit_ok, exit_crashed, exit_cancelled;
+  bool down_found;
   _Atomic int64_t steps_left;
   _Atomic uint64_t next_task_id;
   agc_log_registry log;
@@ -458,6 +462,17 @@ typedef struct agc_timers {
   _Atomic uint64_t next_due;
   _Atomic(struct agc_task *) pending;
 } agc_timers;
+
+/* A Task.monitor registration on its task (`monitors`, changed under rt->sync). When the task settles, the runtime
+   runs wrap(TaskDown) in a service task of its own and offers the result to channel without waiting (monitor_fire in
+   vm/task.c); `span` is the call, the spawn site of that task. */
+typedef struct agc_monitor {
+  struct agc_monitor *next;
+  struct agc_task *target;
+  agc_channel *channel;
+  agc_value wrap;
+  uint32_t span;
+} agc_monitor;
 
 struct agc_task {
   uint64_t id;
@@ -517,6 +532,8 @@ struct agc_task {
   uint32_t callbacks;
   const agc_frame_segment *below;
   agc_nested_stack **nested;
+  /* The monitors of this task (Task.monitor), newest first, fired and cleared when it settles. */
+  agc_monitor *monitors;
 };
 
 /* Where agc_fail and agc_exit jump while compiled code calls a builtin (agc_jit_call_builtin, vm/jit/jit.c), so that

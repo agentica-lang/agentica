@@ -40,6 +40,13 @@ language and the checker:
   `Result` is `CHECK-TYPE-MISMATCH`, and an empty list needs a type
   (`CHECK-EMPTY-LIST-TYPE`). The result is a `List[Result[R]]`, one `Result` per
   item in the order of `items`.
+- `Task.monitor(task, channel, wrap)` takes a `Task[R]`, a `Channel[M]` and a
+  block or function of type `Fn[TaskDown, M]`, so the notice has the type the
+  channel carries; another type is `CHECK-TYPE-MISMATCH` at that argument.
+  `TaskDown` (a builtin record) and `TaskExit` (a builtin enum, matched like a
+  user enum) are reserved. `Task.current` is a `Task[Void]`, as the result type
+  of the running task is not known where it is called, so assigning an await of
+  it is `CHECK-VOID-VALUE`. `task.id` is the one method of a task, an `Int`.
 - A BDD step handler must finish its tasks before it returns
   (`RUNTIME-BDD-PENDING-TASKS`). See [`bdd.md`](../bdd.md).
 

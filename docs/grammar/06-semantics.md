@@ -35,6 +35,11 @@ programs are valid and how they run.
   Int` and `task: Int`; it is not JSON-decodable
 - `StructMember`: Builtin record of `Type.members`: `name: String` and `type:
   String`, the field name and its type written as source
+- `TaskExit`: Builtin enum of how a task ended: `TaskExit.Ok`,
+  `TaskExit.Crashed` and `TaskExit.Cancelled`
+- `TaskDown`: Builtin record that `Task.monitor` sends when a task ends:
+  `task_id: Int`, `reason: TaskExit` and `error: String`; it is not
+  JSON-decodable
 - `Channel[T]`: Opaque bounded queue of `T` values that tasks send into and
   receive from
 - `Enum[T, ...]`: User-declared nominal sum type

@@ -111,6 +111,11 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   order = checked.constants.concat(hoisted.map do |entry: LocatedConst| entry.constant.name end)
   mentioned = mentioned_in(checked.types, scanned.covered, watched)
   used = Set.new(scanned.written.concat(mentioned).concat(Builtins.default_enums().to_a))
+  if used.include?("TaskDown")
+    # The VM builds the reason of a TaskDown, so the enum is in the table even when no expression names it.
+    used = used.add("TaskExit")
+  end
+
   none_records = Builtins.none_default_records()
   if used.to_a.any? do |name: String| none_records.include?(name) end
     # A record whose left-out field defaults to `none` builds an Optional that no expression names.

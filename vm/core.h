@@ -318,6 +318,7 @@ void agc_hand_over(agc_resource *r, agc_task *to);
 void agc_close_owned(agc_vm *vm, agc_task *t);
 void agc_handle_leave(agc_vm *vm, agc_task *t);
 void agc_channel_leave(agc_vm *vm, agc_task *t);
+bool agc_channel_offer(agc_vm *vm, agc_channel *c, agc_value v);
 agc_resource *agc_channel_claim(agc_vm *vm, agc_channel *c);
 /* Runs the loop once, for at most MS milliseconds (NOWAIT when MS is zero or a job is ready), and hands the finished
    jobs to the scheduler. With ALIVE_REQUIRED a loop with nothing alive is not run and the call returns false, so the

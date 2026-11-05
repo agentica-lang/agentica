@@ -64,6 +64,7 @@ export def method_aliases() -> Map[String, String]
     "String.to_i": "String.to_int",
     "String.to_i!": "String.to_int!",
     "String.to_s": "self",
+    "Task.id": "Task.id",
   }
 end
 

@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `Task.monitor(task, channel, wrap)` sends a `TaskDown` notice when a task
+  ends; `Task.current` and `task.id` name the running task.
+
 ## [0.24.1] - 2026-11-05
 
 ### Added

@@ -248,7 +248,10 @@ TLS.connect Plain
 TLS.listen Plain
 Task.await TaskAwait
 Task.cancel TaskTarget
+Task.current Plain
+Task.id TaskTarget
 Task.map TaskMap
+Task.monitor TaskMonitor
 Task.pending_count Plain
 Task.sleep Plain
 Task.spawn TaskSpawn

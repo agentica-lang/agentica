@@ -133,6 +133,14 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   the top of its holder chain hold instead. `settle` gives the count back, so a
   crashed or cancelled task is observed only after its cancelled descendants
   have closed their handles.
+- Monitors (`Task.monitor`, `shared`): an `agc_monitor` on the target's
+  `monitors` list, fired by `settle` (so after the target's file closes, as an
+  await sees it) or at once for a settled target. `monitor_fire` runs
+  `wrap(TaskDown)` in a service task (`service_root`, no parent, so no cancel
+  reaches it) whose end hook `monitor_sent` offers the result with
+  `agc_channel_offer` (never waits; dropped when closed or full) and observes a
+  crashed target. The builtin checks the wrap and finds `TaskDown` and
+  `TaskExit` (`down_types`), so a task's end cannot fail on them.
 - Spawns: `make_child` and `start_child` set the random stream and a test's
   `test` mark before another scheduler can run the child, and the child inherits
   its parent's `test` (`agc_task_spawn_seeded`). `agc_task_observe` marks a

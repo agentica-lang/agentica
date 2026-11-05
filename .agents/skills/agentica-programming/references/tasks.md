@@ -11,6 +11,9 @@ Task.sleep(milliseconds: Int) -> Void
 Task.cancel(task: Task[R]) -> Void
 Task.pending_count() -> Int
 Task.unobserved_crash() -> Result[String]
+Task.monitor(task: Task[R], channel: Channel[M], wrap: Fn[TaskDown, M]) -> Void
+Task.current() -> Task[Void]
+task.id -> Int
 ```
 
 Start tasks before awaiting them to overlap I/O. A task calls a named function
@@ -123,6 +126,25 @@ or its `Task.map` item times out. `Task.await` on a cancelled task returns
 `error("task: cancelled")` when `R` is a `Result`, else halts with
 `RUNTIME-TASK-CANCELLED` at the await: give a task you may cancel a `Result`
 return type when something awaits it.
+
+## Monitors
+
+`Task.monitor(task, inbox) do |down| Msg.Down(down) end` sends
+`wrap(TaskDown(...))` into the channel once when the task ends (returns,
+crashes or is cancelled), at once for a task that has ended; several monitors
+of one task each get one, and none can be removed. Use the consumer's one
+channel of an enum (there is no `select`). `TaskDown` is a builtin record:
+`task_id: Int` (equal to `task.id`), `reason: TaskExit` (`TaskExit.Ok`,
+`TaskExit.Crashed` or `TaskExit.Cancelled`) and `error: String` (the
+`task crashed: ...` text of an await for a crash, else `""`). The send never
+waits or fails: a closed or full channel drops the notice, so give it room. A
+crash whose notice went in counts as observed. `wrap` runs in a task of its
+own (a crash there loses the notice). A coordinator keeps
+`Map[Int, Job]` by `task.id` and starts a job again on `TaskExit.Crashed`.
+
+`Task.current` is the handle of the running task, typed `Task[Void]` (its
+result type is unknown there): a child can monitor its parent with it. An await
+of it gives no value (`CHECK-VOID-VALUE` when assigned).
 
 ## Task.map
 

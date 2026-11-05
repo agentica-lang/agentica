@@ -22,6 +22,7 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
     Model.Rule.TaskAwait -> return check_await(cx, st, site)
     Model.Rule.TaskAwaitTimeout -> return check_await_timeout(cx, st, site)
     Model.Rule.TaskMap -> return check_task_map(cx, st, site)
+    Model.Rule.TaskMonitor -> return check_monitor(cx, st, site)
     Model.Rule.TaskTarget -> return check_target(cx, st, site, &Args.task_argument)
     Model.Rule.AtsNew -> return check_ats_new(cx, st, site)
     Model.Rule.AtsCall -> return check_ats_call(cx, st, site)
@@ -410,6 +411,21 @@ def check_await_timeout(cx: State.Cx, st: State.St, site: State.Site) -> Result[
 
   timeout = try State.expr(cx, target.st, site.args[1], T.Type.Int)
   return ok(State.Out(st: timeout.st, type: T.Type.Enum("Await", [T.item(target.type)])))
+end
+
+# Task.monitor(task, channel, wrap): a task of any result, a Channel[M], and a block or function that takes the
+# TaskDown and gives the M the channel carries.
+def check_monitor(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  target = try Args.task_argument(cx, st, site)
+  channel = try State.expr(cx, target.st, site.args[1], T.Type.Unknown)
+  if !T.is?(channel.type, "Channel")
+    shape = T.Type.Channel(T.Type.Var("M"))
+    return error(State.mismatch(cx, channel.st, shape, channel.type, Ast.expr_span(site.args[1])))
+  end
+
+  wrap = T.Type.Fn([T.Type.Struct("TaskDown", [])], T.item(channel.type))
+  checked = try State.expr(cx, channel.st, site.args[2], wrap)
+  return ok(State.Out(st: checked.st, type: T.Type.Void))
 end
 
 # Task.map(items, limit, timeout_ms, f): the callback is a block (which gets the item type from the list) or a function
