@@ -35,86 +35,71 @@ index 5 is outside a list of length 3
     main at nested.agc:11:8
 ```
 
-Each line is a function and the place it runs; a block is `block`.
-`(after a tail call)` marks a frame whose callers a tail call removed;
-`walk at tree.agc:9:12 (9998 times)` is one line for a recursion. The 15
-innermost and 5 outermost lines show, with `... 312 frames not shown ...`
-between. A task ends with `task spawned at file:line:column`. `--json` adds
-`stack` (objects with `column`, `file`, `function`, `line`, and `repeat` or
-`tail`), `stack_omitted` and, for a task, `spawned_at`; `RUNTIME-STEP-LIMIT`,
-`RUNTIME-STACK-OVERFLOW` and a task's crash line (`"task":true`) carry it too.
+Each line is a function and its call place (a block is `block`);
+`(after a tail call)` marks a frame whose callers a tail call removed, and a
+recursion is one line with `(9998 times)`. Only the 15 innermost and 5 outermost
+lines show. A task's stack ends with `task spawned at file:line:column`.
+`--json` adds `stack`, `stack_omitted` and, for a task, `spawned_at`.
 
 - `LEX-UNEXPECTED-CHAR`, `LEX-UNTERMINATED-STRING`, `LEX-INVALID-ESCAPE`,
   `LEX-UNCLOSED-DELIMITER`, `LEX-UNMATCHED-DELIMITER`: bad character, string or
   bracket. A `;`, a `'` or backtick, a `}` with no `{`, or an unclosed `{` gets
   a help naming the Agentica form (newline, double quotes, `end`).
-- `LEX-UNTERMINATED-HEREDOC`, `LEX-HEREDOC-INDENT`, `LEX-HEREDOC-ONE-LINE`: a
-  heredoc with no end line (the span is the opener), a tab in the leading
-  whitespace of a body or end line (the span is the tab), or fewer than two text
-  lines. A malformed opener (`<<NAME`, `<<-NAME`, `<<~'NAME'`, `<<~name`) is
-  `LEX-UNEXPECTED-CHAR`; `xs << x` is `PARSE-UNEXPECTED-TOKEN`.
+- `LEX-UNTERMINATED-HEREDOC`, `LEX-HEREDOC-INDENT`, `LEX-HEREDOC-ONE-LINE`:
+  heredoc rules in `language-statements-expressions.md`. A malformed opener
+  (`<<NAME`, `<<-NAME`, `<<~'NAME'`, `<<~name`) is `LEX-UNEXPECTED-CHAR`;
+  `xs << x` is `PARSE-UNEXPECTED-TOKEN`.
 - `LEX-INVALID-UTF8`: a source file (the one you run or an import) holds bytes
   that are not UTF-8; the span is the first bad byte.
-- `LEX-INVALID-NUMBER`: a `_` in a number that is not between two digits (`1_`,
-  `1__0`, `1_.5`, `1._5`).
+- `LEX-INVALID-NUMBER`: a `_` not between two digits (`1_`, `1__0`, `1._5`), or
+  a bad digit in a `0x`, `0b` or `0o` literal.
 - `LEX-UNTERMINATED-REGEX`, `LEX-REGEX-INTERPOLATION`, `LEX-REGEX-FLAG`: a regex
-  literal with no closing `/` on its line (a `/` inside `[...]` ends it, so
-  write `\/`; a line that starts with `/ 2` is one), with `#{` in the body, or
-  with a flag other than `i` and `m` or a repeated one.
-- `PARSE-UNEXPECTED-TOKEN`: the parser expected something else. A `{` after
-  `def ... -> T`, `if`, `elsif`, `else`, `while`, `for`, `case` or `do |x|` says
-  blocks have no braces; `//` or `/*` says comments start with `#`;
-  `value.with()` and `value.with(31)` say to name each field.
+  literal with no closing `/` on its line (a `/` inside `[...]` ends it: write
+  `\/`), with `#{` in the body, or with a flag other than `i` and `m` or a
+  repeated one.
+- `PARSE-UNEXPECTED-TOKEN`: the parser expected something else. The help says
+  when you wrote braces for a block, `//` or `/*` for a comment, or
+  `value.with()` / `value.with(31)` (name each field).
 - `PARSE-UNCLOSED-BLOCK`: a `def`, `if`, `case`, loop or `do` block with no
   `end` before the end of the file (the span is the end of the file: look for
   the block never closed). A block left open before the next `def` is
   `PARSE-UNEXPECTED-TOKEN` at that `def`.
 - `PARSE-MISSING-BLANK-LINE`: no blank line between the `end` of a declaration
-  and the next one (a `##` doc block belongs to the next declaration: the blank
-  line goes before it).
+  and the next one (a `##` doc block goes after the blank line).
 - `PARSE-DETACHED-DOC`: a `##` block not directly above a `def`, `struct`,
-  `enum`, field or variant (a blank line, a `#` comment, an `import` or the end
-  of the file follows it, or it stands in a function body or inside brackets).
+  `enum`, field or variant.
 - `PARSE-TOP-LEVEL-STATEMENT`: a statement outside a function, or an extra `end`
   (a stray `else` or `elsif` has no `if`).
-- `PARSE-TOO-DEEP`: more than 1,000 levels of nesting (parentheses, brackets,
-  blocks, statements, prefix operators, type arguments); chains of operators or
-  `.` suffixes count as levels too.
+- `PARSE-TOO-DEEP`: more than 1,000 levels of nesting; each operator of a chain
+  or `.` suffix counts a level.
 - `PARSE-INVALID-ASSIGNMENT-TARGET`: assignment to an index or field, or to a
   constant inside a function.
 - `PARSE-CONSTANT-NAME`: a top-level `Name = ...` whose name is not capitals,
   digits and `_` of two or more characters.
 - `PARSE-PIPE-TARGET`: the right side of `|>` is not a call written with
-  parentheses (a bare name, field, index, `f(1).g`, `(U.f)`, `U.f do ... end`).
-  The call may follow `try` and take a trailing block; `a + 1 |> f()` is
-  `f(a + 1)`.
+  parentheses (a bare name, field, index, `f(1).g`, `U.f do ... end`).
 - `CHECK-TYPE-MISMATCH`: a value, operand, condition, argument or return has the
   wrong type; also printing or interpolating a function, task or handle. Int
   with Float needs `n.to_f` or `x.to_i!`; String with a number `s.to_i!` or
   `n.to_s`; `<` orders only numbers.
 - `CHECK-UNKNOWN-NAME`, `CHECK-UNKNOWN-TYPE`, `CHECK-UNKNOWN-FIELD`: a name,
   type or field that does not exist (`continue` says `next`, `Map.new` says to
-  annotate `{}`); also a field `value.with(...)` names but the struct lacks.
+  annotate `{}`).
 - `CHECK-REDEFINED-NAME`, `CHECK-SHADOWED-NAME`, `CHECK-ANNOTATION-ON-EXISTING`:
   duplicate declaration, shadowing, an annotation on an existing name; an `Fn`
   field named `with` (`value.with(...)` is the struct update).
 - `CHECK-DEFAULT-ORDER`, `CHECK-DEFAULT-VALUE`: a parameter without a default
   after one with a default (only a last `Fn` parameter may); a default that is
-  not a constant (a literal, `true`, `false`, `nil`, `none`, `[]`, `{}` or a
-  payload-less enum variant).
-- `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE`: an empty `[]` or `{}` with no
-  expected type.
-- `CHECK-RESULT-TYPE`: an `error(...)` without an expected Result type.
-- `CHECK-OPTIONAL-TYPE`: a `none` without an expected Optional type.
-- `CHECK-EXPECTED-TYPE`: `Channel.new(n)` or `ATS.new()` with no expected type.
+  not a constant (`language-program-types.md`).
+- `CHECK-EMPTY-LIST-TYPE`, `CHECK-EMPTY-MAP-TYPE`, `CHECK-EMPTY-SET-TYPE`,
+  `CHECK-RESULT-TYPE`, `CHECK-OPTIONAL-TYPE`, `CHECK-EXPECTED-TYPE`: `[]`, `{}`,
+  `Set.new([])`, `error(...)`, `none`, `Channel.new(n)` or `ATS.new()` with no
+  expected type: annotate the variable.
 - `CHECK-TRY-CONTEXT`: `try` in a function or block not returning a Result (a
   `Lazy` method block accepts any `try`: its failure ends the pipeline).
 - `CHECK-MAIN`: no `main` (for a run or `compile`; `check` needs none), or a
   `main` with parameters or a result other than `Void`.
-- `CHECK-TEST-SIGNATURE`, `CHECK-TEST-NAME`, `CHECK-TEST-MAIN`: in a
-  `*_test.agc` file, a `test_*` function that takes parameters or does not
-  return `Result[Void]` (written so); one named just `test_`; `main` beside
-  `test_*` functions (`testing.md`).
+- `CHECK-TEST-SIGNATURE`, `CHECK-TEST-NAME`, `CHECK-TEST-MAIN`: `testing.md`.
 - `CHECK-NOT-INDEXABLE`, `CHECK-NOT-A-LIST`: an index on a non-list/map (a
   String uses `s.at(i)` or `s.slice(start, length)`); `for` over something that
   is not a list, set or range.
@@ -125,22 +110,16 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
 - `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`,
   `CHECK-UNREACHABLE-CASE-ARM`: a pattern that does not fit the value; a `case`
   missing variants or `_`; an arm already covered.
-- `CHECK-MAP-KEY-TYPE`: a map key that is not `Int`, `String` or `Bytes`; an
-  `ATS` key that is not `Int` or `String`.
+- `CHECK-MAP-KEY-TYPE`, `CHECK-SET-ELEMENT-TYPE`: a map key or `Set` element
+  that is not `Int`, `String` or `Bytes`; an `ATS` key that is not `Int` or
+  `String`.
 - `CHECK-ATS-VALUE`: an `ATS[K, V]` whose `V` is `Nil`, a type parameter, or
   holds a `Fn`, `Task`, `Channel`, handle or table anywhere inside.
-- `CHECK-SET-ELEMENT-TYPE`, `CHECK-EMPTY-SET-TYPE`: a `Set` element type that is
-  not `Int`, `String` or `Bytes`; `Set.new([])` with no expected type.
 - `CHECK-IMPORT-IO`, `CHECK-IMPORT-PATH`, `CHECK-IMPORT-CYCLE`,
-  `CHECK-IMPORT-NAME`: a missing or unreadable import; an invalid path (with
-  `.agc` or another extension too); a cycle; an unknown or private imported
-  name. A private struct cannot be built or updated with `.with` from another
-  module. `Mod.NAME` reads an exported constant; a private or unknown name is
-  `CHECK-IMPORT-NAME`, and `Mod.NAME()` or `x: Mod.NAME` is
-  `CHECK-TYPE-MISMATCH` (`modules.md`).
-- `CHECK-UNUSED-IMPORT`: an import alias the file never uses (`Mod.` is never
-  written); remove the import line. An alias with no member (`u: User`) is
-  `CHECK-IMPORT-NAME`.
+  `CHECK-IMPORT-NAME`, `CHECK-IMPORT-RENAME`, `CHECK-UNUSED-IMPORT`: a missing
+  or unreadable import; an invalid path (no `.agc`); a cycle; an unknown or
+  private imported name (also an alias with no member, `u: User`); a rename
+  that breaks the case rule; an alias never used. See `modules.md`.
 - `CHECK-IMPORT-PACKAGE`: a package declared in `agentica.toml` is not in
   `deps/` (run `agentica install`), or a package file imports a `pkg/` name its
   own `agentica.toml` does not declare.
@@ -150,106 +129,78 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
   the project and its packages (conflict). The report names the file and a key
   path such as `dependencies.sqlite.git` (`key_path` in `--json`), or a line and
   column for a TOML syntax error; a missing or unreadable file has only its
-  name. The manifests of all locked packages in `deps/` are checked before any
-  file loads, imported or not.
+  name.
 - `QUERY-USAGE`, `QUERY-NOT-FOUND`, `QUERY-AMBIGUOUS-NAME` and
   `QUERY-NO-EXPRESSION`: a bad question to a query command, exit 2
   (`queries.md`).
 - `PKG-HASH-MISMATCH`, `PKG-SYMLINK`: the `.agc` files of a package in
-  `deps/<name>/` or the cache (or just fetched by `install`) are not the ones
-  the lock hashes (edited, added or missing), or one is a symbolic link or
-  submodule, or the package's `agentica.toml` is not a regular file. Run
-  `agentica install` again for `deps/`; for the cache, remove the package's
-  folder (`~/.cache/agentica/pkg`, under `$XDG_CACHE_HOME` when set;
+  `deps/<name>/` or the cache are not the ones the lock hashes (edited, added or
+  missing), or one is a symbolic link or submodule. Run `agentica install` again
+  for `deps/`; for the cache, remove the package's folder
+  (`~/.cache/agentica/pkg`, under `$XDG_CACHE_HOME` when set;
   `%LOCALAPPDATA%\agentica\cache\pkg` on Windows) and run it: a cached folder
-  is never overwritten. `deps/` itself as a link is `PKG-SYMLINK` for `install`.
-- `PKG-NATIVE-PLATFORM`, `PKG-NATIVE-MISSING`, `PKG-NATIVE-ARCHIVE`: a file of a
-  package opens a library that its `agentica.toml` declares under
-  `[native.NAME]`, but the table has no entry for this system (key
-  `native.NAME`: add `linux`, `macos` or `windows`); or its `file` is not in the
-  package (key `native.NAME.linux.file`), or a downloaded archive holds no file
-  for its `member` (`PKG-NATIVE-MISSING`); or the download is not a plain or
-  gzipped TAR or a ZIP, or its `member` cannot be read (a link, a duplicate, a
-  late entry) (`PKG-NATIVE-ARCHIVE`, key `native.NAME.PLATFORM.member`). The
-  file is the package's `agentica.toml`.
-- `PKG-FETCH`, `PKG-TAG-MOVED`, `PKG-PATH-COLLISION`, `PKG-MANIFEST-MISSING`:
-  `agentica install` failed: git did not start or failed, the tag or commit does
-  not exist, a copied path is unsafe, a file is over 1 MiB (16 MiB in all) or
-  the cache cannot be written (`PKG-FETCH`, git's message in the help); the tag
-  now points to another commit than `agentica.lock` (the lock is not changed);
-  two package paths differ only in case; no `agentica.toml` was found. The
-  report names the file and the key path of the entry, such as `package[0].tag`.
+  is never overwritten.
+- `PKG-NATIVE-PLATFORM`, `PKG-NATIVE-MISSING`, `PKG-NATIVE-ARCHIVE`: a package's
+  `[native.NAME]` table has no entry for this system (add `linux`, `macos` or
+  `windows`), its `file` is not in the package, a downloaded archive holds no
+  file for its `member`, or the download is not a plain or gzipped TAR or a ZIP.
+  The key path is in the report (`native.NAME.linux.file`).
+- - `PKG-FETCH`, `PKG-TAG-MOVED`, `PKG-PATH-COLLISION`, `PKG-MANIFEST-MISSING`:
+  `agentica install` failed: git failed or the tag or commit does not exist, a
+  copied path is unsafe, a file is over 1 MiB (16 MiB in all) or the cache is
+  not writable (git's message is in the help); the tag now points to another
+  commit than `agentica.lock` (the lock is not changed); two package paths
+  differ only in case; no `agentica.toml`.
 - `PKG-DEPENDENCY-EXISTS`, `PKG-DEPENDENCY-UNKNOWN`, `PKG-MANIFEST-EDIT`,
   `PKG-WRITE`: `agentica add` or `update` stopped before it wrote anything
   (except `PKG-WRITE`): the name is a dependency already (change its pin in
-  `agentica.toml`, then `update NAME`); `update NAME` names no dependency of the
-  manifest; the manifest has a layout the one-line edit cannot handle (write the
-  line by hand); or `agentica.lock` or `agentica.toml` cannot be written. Fetch
-  errors of a new pin are the codes of `install`, at `dependencies.<name>.git`
-  (or `.tag`, `.ref`). Writing `deps/` gives `PKG-WRITE` too, at the file
-  it cannot write.
-- `CHECK-IMPORT-RENAME`: `import {A as b}` where the new name breaks the case
-  rule of what it renames (struct or enum capitalized, function lowercase,
-  constant a constant name).
-- `CHECK-CONSTANT-EXPRESSION`: a constant uses a call of your own function,
-  `&f`, a block outside a builtin call, `while`, or a builtin with effects.
-- `CHECK-CONSTANT-TYPE`: a constant expression whose type is not data
-  (`Channel`, `Task`, `ATS`, `Fn`, handles, `Void`).
+  `agentica.toml`, then `update NAME`); `update NAME` names no dependency; the
+  manifest layout cannot take the one-line edit (write the line by hand); or a
+  file cannot be written (`deps/` too).
+- `CHECK-CONSTANT-EXPRESSION`, `CHECK-CONSTANT-TYPE`: a constant that is not a
+  constant expression, or whose type is not data (`language-program-types.md`).
 - `CHECK-DECL-ORDER`: a declaration out of the file order (imports, constants,
   `struct`/`enum`/aliases, `export def`, `def`).
-- `CHECK-NOT-DECODABLE`: a `JSON.decode`/`schema`/`codec` target that is not a
-  struct or enum or has unsupported field or payload types.
-- `CHECK-NOT-ENCODABLE`: `JSON.encode` of a type with unsupported nested values
-  (a `Result`, a builtin enum) or Int-keyed maps.
-- `CHECK-JSON-FIELD-PLACE`: a `JsonField` in a JSON target or argument that is
-  not the direct type of a struct field (a list item, a map value, an
-  `Optional` item, an enum payload, a nested `JsonField`, or the whole
-  `JSON.encode` argument).
+- `CHECK-NOT-DECODABLE`, `CHECK-NOT-ENCODABLE`, `CHECK-JSON-FIELD-PLACE`: a JSON
+  target or value with unsupported types; a `JsonField` that is not the direct
+  type of a struct field (`json.md`).
 - `CHECK-PIPE-METHOD`: `x |> String.upcase()`: a builtin with a method form for
   the left value is written with `.` (`x.upcase`).
 - `CHECK-UNKNOWN-METHOD`: a method not defined for the receiver's type, a method
   call on a struct, or `.with(...)` on a non-struct. Common foreign names get
   the real one (`s.chars` says `s.split("")`, `to_string` says `to_s`).
 - `CHECK-UNUSED-VALUE`: the result of a builtin without effects is ignored
-  (`xs.push(1)` alone), or of a struct update (`user.with(age: 31)` alone).
+  (`xs.push(1)` alone), or of a struct update.
 - `CHECK-UNUSED-RESULT`: a `Result` is dropped, as a statement or the last
-  statement of a `Void` block, from any call: yours, a builtin
-  (`File.close`, `Channel.send`, `"3".to_i`), `Task.await`, `.call`
-  (`Result[Void]` too). Use `try` where it is allowed, a `case` on `ok(_)` and
-  `error(message)`, or `.unwrap!`; `_ = f(...)` drops it on purpose.
-  `IO.inspect(r)` is exempt, and `Task.spawn(&f)` is not a Result.
+  statement of a `Void` block, from any call (`Result[Void]` too). Use `try`
+  where it is allowed, a `case`, or `.unwrap!`; `_ = f(...)` drops it on
+  purpose. `IO.inspect(r)` is exempt, and `Task.spawn(&f)` is not a Result.
 - `CHECK-BLOCK-TYPE`: a block parameter has no type from the call (`do |x:
   Int|`).
 - `CHECK-LOOP-CONTROL`: `break` or `next` outside a `while`/`for` body, or
   inside a block.
-- `CHECK-UNUSED-VARIABLE`: a variable, `for` variable, block parameter or
-  pattern name that is never read (not a function parameter); name it `_x`, or
-  write `_` (`for _ in`, `|_, i|`, `error(_)`), or remove it.
-- `CHECK-UNREACHABLE-CODE`: a statement after `return`, `break`, `next` or an
-  `if`/`case` that ends on every path; remove it or move it before.
-- `CHECK-CAPTURED-ASSIGNMENT`: a block assigns to an outer variable (use a `for`
-  loop or `reduce`; for `xs.each do |w|` the help shows the loop).
+- - `CHECK-UNUSED-VARIABLE`, `CHECK-UNREACHABLE-CODE`,
+  `CHECK-CAPTURED-ASSIGNMENT`: a name never read (`_x` or `_` keeps it), a
+  statement that can never run, a block that assigns an outer variable (use
+  `for` or `reduce`). See `language-statements-expressions.md`.
 - `CHECK-NOT-A-HANDLE`: `Task.spawn_owning` with an argument that is not a
-  `FileHandle`, `Socket`, `Listener`, `Process`, `HttpServer`, `Channel[T]`,
-  resource or owned buffer, nor a struct, enum, `List`, `Map` or `Result` that
-  holds one.
+  handle, `Channel[T]`, resource or owned buffer, nor a struct, enum, `List`,
+  `Map` or `Result` holding one.
 - `CHECK-TOO-DEEP`: more than 1,000 levels of expressions and statements, or
   more than 1,000 type references in an expanded alias.
 - `RUNTIME-DIVISION-BY-ZERO`, `RUNTIME-INTEGER-OVERFLOW`: arithmetic failure
   (also an `ATS.add` past the 64-bit range, which leaves the table unchanged,
   and `abs`, `pow`, `gcd`, `floor`, `ceil` or `round` past the Int range).
-- `RUNTIME-INVALID-COUNT`: `List.repeat` count outside 0..1048576, or a negative
-  `List.take`/`drop` count; `Channel.new` capacity outside 1..1048576; a
-  `Task.map` `limit` outside 1..1024; a negative
-  `Int.shift_left`/`shift_right`/`shift_right_unsigned` count or `n.pow`
-  exponent; a `SecureRandom.random_bytes`/`hex` count outside 0..1048576.
+- `RUNTIME-INVALID-COUNT`: a count or limit outside its range: `List.repeat`
+  0..1048576, a negative `take`/`drop`, shift or `pow` count, `Channel.new`
+  capacity 1..1048576, `Task.map` `limit` 1..1024, a `SecureRandom` count
+  0..1048576.
 - `RUNTIME-INVALID-RANGE`: `Random.int` or `clamp` with min > max (or a NaN
   bound of `x.clamp`).
-- `RUNTIME-INVALID-NUMBER`: `s.to_i!`/`to_f!` on bad text,
-  `x.to_i!`, `floor`, `ceil` or `round` on a Float that is NaN or infinity,
-  `Math.sqrt` of a negative number, `Float.from_bits32` outside
-  0..4294967295, a `Digest` hash, `HMAC`, `Base64` or `Digest.hexencode`
-  item outside 0..255.
+- `RUNTIME-INVALID-NUMBER`: `s.to_i!`/`to_f!` on bad text, `x.to_i!`, `floor`,
+  `ceil` or `round` on NaN or infinity, `Math.sqrt` of a negative number,
+  `Float.from_bits32` outside 0..4294967295, a byte item outside 0..255 in a
+  `Digest`, `HMAC` or `Base64` call.
 - `RUNTIME-INVALID-CHARACTER`: `String.code` without exactly one character, or
   `String.from_code` outside Unicode scalar values.
 - `RUNTIME-STEP-LIMIT`: the execution step budget is exhausted; the stack shows
@@ -259,35 +210,22 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
   free.
 - `RUNTIME-END-OF-INPUT`: `IO.gets!` (or `gets!`) at the end of input; test
   `IO.eof?()` first, or use `IO.gets`, which gives an error Result.
-- `RUNTIME-INVALID-DURATION`: a negative `Task.sleep` duration, a negative
-  `Channel.send`/`recv` timeout, a `Task.await(task, timeout_ms)` or `Task.map`
-  `timeout_ms` of 0 or less.
-- `RUNTIME-TASK-CANCELLED`: `Task.await` on a task the VM cancelled, when `R` is
-  not a `Result`, at the await. A task can hold a cancelled child's handle by
-  receiving it over a channel (for example from a `Task.map` item that timed
-  out).
+- `RUNTIME-INVALID-DURATION`: a negative `Task.sleep` duration or `Channel`
+  timeout, a `Task.await` or `Task.map` `timeout_ms` of 0 or less.
+- - `RUNTIME-TASK-CANCELLED`, `RUNTIME-TASK-CRASHED`: `Task.await` on a task the
+  VM cancelled or that crashed, when `R` is not a `Result`, at the await (the
+  message is the crash text). A task can hold a cancelled child's handle by
+  receiving it over a channel. `RUNTIME-TASK-CRASHED` is also a BDD step or test
+  whose task crashed unawaited.
 - `RUNTIME-TASK-AWAIT-CYCLE`: `Task.await` of a task that is waiting for the
   caller, directly or through other awaits, at the await.
 - `RUNTIME-HANDLE-NOT-OWNED`: `Task.spawn_owning` of a handle the calling task
   does not own, one already handed over, a closed one (a closed channel too), or
   a view of a buffer (`Native.offset`), at the handle argument.
-- `RUNTIME-TASK-CRASHED`: `Task.await` on a crashed task when `R` is not a
-  `Result`, at the await; the message is the crash text. Also a BDD step or test
-  whose task crashed unawaited.
-- `RUNTIME-TEST-ASSERTION`: a failed `Test.eq`, `Test.ok?`, `Test.error?` or
-  `Test.assert` in a test, at the assertion.
-- `RUNTIME-TEST-RUN`: `Test.run` called in a task other than `main`'s own (a
-  test, or a task you spawned). Also a call with the `agentica test` arguments
-  but no parent channel, and, under `agentica test`, a test file whose `main`
-  returns without calling `Test.run` (a `*_test.agc` helper: rename it).
-- `RUNTIME-TEST-TIMEOUT`: under `agentica test`, a test ran longer than 30
-  seconds; the rest of its file is not executed.
-- `PARSE-EXTERN-*`, `CHECK-NATIVE-LOAD` and `RUNTIME-NATIVE-*` (`C.Int` or a
-  library name with `/`, a closed resource, NULL, out of bounds, `--deny-native`
-  at load with exit 2): each is named in the rule it breaks in `native.md`.
+- `RUNTIME-TEST-*`: `testing.md`. `PARSE-GHERKIN-*`, `CHECK-BDD-*` and
+  `RUNTIME-BDD-*`: `bdd.md`.
+- `PARSE-EXTERN-*`, `CHECK-NATIVE-LOAD` and `RUNTIME-NATIVE-*`: each is named in
+  the rule it breaks in `native.md`.
 
 `LOWER-UNSUPPORTED`: the VM cannot run this form; an interpreter bug to
 report.
-
-BDD runs (`agentica test`) have their own `PARSE-GHERKIN-*`, `CHECK-BDD-*` and
-`RUNTIME-BDD-*` codes: `bdd.md`.

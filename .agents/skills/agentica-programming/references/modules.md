@@ -11,12 +11,10 @@ part with a dot such as `"models.rb"`): a module file name has no dot except
 - Every file, imported ones included, keeps the order: `import`s, constants,
   `struct` and `enum`, `export def`, private `def`. An imported file out of
   order is `CHECK-DECL-ORDER`, located in that file.
-- Canonical paths identify files and each file is linked once. A cycle is
-  `CHECK-IMPORT-CYCLE`; a missing or unreadable import `CHECK-IMPORT-IO`; an
-  invalid path `CHECK-IMPORT-PATH`; each is reported at the import.
-- An import alias that the file never uses is `CHECK-UNUSED-IMPORT` at the
-  alias: remove the import. A use is any `Alias.name` (call, `&Alias.f`, type,
-  construction, pattern, constant) or a re-export; a regex literal uses the
+- Each file is linked once. A cycle is `CHECK-IMPORT-CYCLE`; a missing or
+  unreadable import `CHECK-IMPORT-IO`; an invalid path `CHECK-IMPORT-PATH`.
+- An import alias that the file never uses is `CHECK-UNUSED-IMPORT`: remove
+  the import. A use is any `Alias.name` or a re-export; a regex literal uses the
   `std/regex` import and a `<<~EAG` template the `std/eag` one. An alias with no
   member (`u: User`) is `CHECK-IMPORT-NAME`. Unused names of `import {a, b}` are
   fine.
@@ -55,14 +53,12 @@ the enum. A bare function still needs parentheses.
 
 - An entry may rename: `import {greet as hello, User as Account} from
   "models"`. The new name keeps the case rule of what it names (a struct or enum
-  capitalized, a function lowercase), else `CHECK-IMPORT-RENAME` at the new
-  name. The original name is not bound by a rename.
-  `{greet as hello, greet as hi}` is allowed.
-- The list may span lines, end with a comma, and may not be empty. `from` and
-  `as` are not reserved: `{as}` imports a function called `as`.
+  capitalized, a function lowercase), else `CHECK-IMPORT-RENAME`. The original
+  name is not bound by a rename.
+- The list may span lines, end with a comma, and may not be empty.
 - One line does one thing: `import Models, {User} from "models"` is a parse
-  error; write two lines (two lines with one path load the file once). A module
-  imported only by names has no alias, so `Models.` is unavailable for it.
+  error; write two lines (the file loads once). A module imported only by names
+  has no alias, so `Models.` is unavailable for it.
 - An imported name joins the file's names. It cannot equal a declaration, an
   alias, another imported name (the same name twice too), a builtin function
   (`puts`, `ok`) or a reserved type (`Int`, `JSON`, `HttpWire`):
@@ -70,8 +66,6 @@ the enum. A bare function still needs parentheses.
 - A name the module does not export, or keeps private, is `CHECK-IMPORT-NAME` at
   the name in the braces, with a `did you mean` help; it is reported at the
   import, before any use.
-- A module imported by names counts as imported for `value.with(...)`: the file
-  may update every exported struct of it.
 
 ## Constants
 
@@ -88,10 +82,8 @@ files that the program can reach are built before `main`.
 
 ## Running
 
-Only the root file's `def main() -> Void` runs; imported `main` functions never
-run. Imported calls and tasks share the program's execution budget and resource
-ownership. There are no wildcard imports, package registry, mutable module
-state, nested module blocks or receiver attachment.
+Only the root file's `main` runs; imported `main` functions never run. There are
+no wildcard imports, mutable module state or nested module blocks.
 
 ## Standard library and external libraries
 
@@ -112,18 +104,11 @@ system roots. Empty `AGENTICA_PATH` entries are ignored; a relative entry gives
 wins, and a read or syntax error in it does not fall back to another root.
 
 Library paths use forward slashes and reject empty, `.`, `..`, backslash and
-colon components. An external target must stay inside its root after symlink
-resolution. These rules apply to namespaced imports only; ordinary relative
-imports are not a filesystem sandbox. A missing module is `CHECK-IMPORT-IO` at
-the import. Embedded-module diagnostics name their source (`std/queue.agc`).
-Embedded modules may use relative paths within their stdlib directory; external
-modules may use ordinary relative imports for their dependencies.
+colon components, and must stay inside their root after symlink resolution. A
+missing module is `CHECK-IMPORT-IO` at the import.
 
-`Std.source(path: String) -> Result[String]` returns the source of a std/ module
-embedded in this binary, by its path in `stdlib/` (`"queue.agc"`,
-`"prelude/list.agc"`), or an error. `FrontEnd.hand_off` and
-`FrontEnd.std_source` are for the compiler's own front end: any other program
-halts with `RUNTIME-FRONT-END-ONLY`.
+`Std.source(path: String) -> Result[String]` returns the source of an embedded
+std/ module by its path in `stdlib/` (`"queue.agc"`), or an error.
 
 ## Packages (`agentica.toml`)
 
@@ -151,49 +136,35 @@ import Sqlite from "pkg/sqlite/db"
 - A dependency is a local name and a table with `git`
   (`https://host/owner/repo`) and exactly one of `tag` or `ref` (a commit). A
   name starts with a lowercase letter, then lowercase letters, digits, `_` and
-  `-`, at most 64 characters (the optional top-level `name` follows the same
-  rule). Only git sources exist; a `path`, a branch or a version range is
-  `PKG-MANIFEST-INVALID`.
-- `[style] max_line_width = N` (an integer of 1 or more) makes a line of more
-  than N characters (comments too) `CHECK-LINE-TOO-LONG`, in the same files
-  as the rule below; `agentica fmt` lays out in N columns (default 119).
-- `[style] blank_line_after_end = true` (boolean, default false; else
-  `PKG-MANIFEST-INVALID`) makes a line with only `end` need an empty line
-  after it, in the files below the manifest's folder that have no manifest of
-  their own nearer (not `std/`, packages, `agc_libs/` or any `pkg/` library,
-  even one inside the folder): `CHECK-BLANK-LINE-AFTER-END` at the `end`. The
-  next line may start with `end`, `else`, `elsif`, `)`, `]`, `}` or `.name`; a
-  comment line is not an empty line; the end of the file needs none.
+  `-`, at most 64 characters. Only git sources exist; a `path`, a branch or a
+  version range is `PKG-MANIFEST-INVALID`.
+- `[style] max_line_width = N` makes a line of more than N characters (comments
+  too) `CHECK-LINE-TOO-LONG`; `agentica fmt` lays out in N columns (default
+  119). `[style] blank_line_after_end = true` (default false) makes a line with
+  only `end` need an empty line after it (`CHECK-BLANK-LINE-AFTER-END`). Both
+  apply to the files below the manifest's folder that have no manifest nearer,
+  not to `std/`, packages, `agc_libs/` or `pkg/` libraries. After `end` the next
+  line may start with `end`, `else`, `elsif`, `)`, `]`, `}` or `.name`.
 - `subdir = "postgres"` makes the package a folder of the repository (several
   packages in one repository, prefixed tags such as `postgres-0.1.0`): plain
-  folder names joined by `/`, at most 128 characters, no `..`, no leading `/`,
-  no hidden folder, no `agc_libs`, else `PKG-MANIFEST-INVALID` at
-  `dependencies.<name>.subdir`. The folder holds the package's `agentica.toml`;
-  relative imports cannot leave it; the lock keeps `subdir` and the hash covers
-  only that folder. Another folder of the same repository is a dependency like
-  any other.
-- A repository of packages can be a workspace (like npm): its root
-  `agentica.toml` has `[workspace]` with `repository = "<git URL>"` and
-  `members = ["sqlite", "postgres"]` (folders written like a `subdir`, each
-  with its own `agentica.toml`); a bad table is `PKG-MANIFEST-INVALID` at
-  `workspace.<key>` or `workspace.members[n]`. A project that is the root or
-  a member (found by going up to the nearest manifest with the table; a table
-  that does not list the project is ignored for it; a package of `deps/` is
-  never in a workspace) reads a dependency whose `git` is the
-  `repository` and whose `subdir` is a member from that member's folder: no
-  fetch, no copy to `deps/`, no hash, so an edit is seen at once. Its manifest
-  entry stays normal (`git`, `tag`, `subdir`); its lock entry has
-  `workspace = true` and no `commit` or `hash`. Outside the repository, and
-  for a package of the cache or `deps/`, the table is ignored and the
-  dependency is fetched. A lock that disagrees with the workspace is
-  `PKG-LOCK-STALE`.
+  folder names joined by `/`, no `..`, no leading `/`, no hidden folder, no
+  `agc_libs`, else `PKG-MANIFEST-INVALID`. The folder holds the package's
+  `agentica.toml`; relative imports cannot leave it; the hash covers only that
+  folder.
+- A repository of packages can be a workspace: its root `agentica.toml` has
+  `[workspace]` with `repository = "<git URL>"` and `members = ["sqlite",
+  "postgres"]` (folders written like a `subdir`, each with its own
+  `agentica.toml`). A project that is the root or a member reads a dependency
+  whose `git` is the `repository` and whose `subdir` is a member from that
+  member's folder: no fetch, no copy to `deps/`, no hash, so an edit is seen at
+  once. Its manifest entry stays normal; its lock entry has `workspace = true`
+  and no `commit` or `hash`. Elsewhere the table is ignored. A lock that
+  disagrees with the workspace is `PKG-LOCK-STALE`.
 - `pkg/<name>/<module path>` (no `.agc`) imports a module of a declared package.
-  A declared name comes before the `pkg/` library folders (`agc_libs/` too); an
-  undeclared name is the search above. The files of a package come only from
-  `deps/<name>/` beside `agentica.toml`, never from the cache (a workspace
-  member comes from its folder).
-- A file of a package imports only the names of its own `agentica.toml`, and its
-  own modules by relative paths inside the package.
+  A declared name comes before the `pkg/` library folders; an undeclared name
+  is the search above. The files of a package come only from `deps/<name>/`
+  beside `agentica.toml`, never from the cache. A package file imports only the
+  names of its own `agentica.toml`, and its own modules by relative paths.
 - A manifest with dependencies needs `agentica.lock` beside it. Only the
   project's lock is read. It lists every package of the build, direct or not,
   once per name:
@@ -209,57 +180,40 @@ import Sqlite from "pkg/sqlite/db"
   hash = "sha256:<64 lowercase hex digits>"
   ```
 
-  `tag` or `ref` is copied from the manifest. A `ref` must be the start of the
-  `commit`. A missing lock is `PKG-LOCK-MISSING`. A dependency the lock lacks is
-  `PKG-LOCK-STALE`, in the manifest of the project or of a package. A dependency
-  with another repository or pin than the lock is `PKG-LOCK-STALE` in the
-  project manifest and `PKG-SOURCE-CONFLICT` in a package manifest. A bad lock
-  (a `version` other than 1, a name twice, a bad value) is `PKG-LOCK-INVALID`; a
-  bad manifest `PKG-MANIFEST-INVALID`. Both name a file and a key path.
-- `agentica install` (no arguments; the project of the working folder) fills a
-  download cache with the system `git`, writes `deps/` from it and never writes
-  the lock. A package already cached with the locked hash is not fetched, so a
-  full cache needs no git and no network. It fails with `PKG-TAG-MOVED` (the tag
-  is another commit than the lock), `PKG-HASH-MISMATCH` (the files are not the
-  locked ones), `PKG-SYMLINK`, `PKG-PATH-COLLISION` (two paths differing only in
-  case), `PKG-FETCH` (git failed, no such tag or commit, cache not writable) and
-  `PKG-MANIFEST-MISSING` (no `agentica.toml`). Each names `agentica.lock` and
-  the entry's key, such as `package[0].tag`.
+  `tag` or `ref` is copied from the manifest. A missing lock is
+  `PKG-LOCK-MISSING`; a dependency the lock lacks, or with another repository or
+  pin, is `PKG-LOCK-STALE` (`PKG-SOURCE-CONFLICT` in a package manifest); a bad
+  lock or manifest is `PKG-LOCK-INVALID` or `PKG-MANIFEST-INVALID`, naming a
+  file and a key path.
+- `agentica install` fills a download cache with the system `git`, writes
+  `deps/` from it and never writes the lock. A package already cached with the
+  locked hash is not fetched, so a full cache needs no git and no network.
+  Failures are the `PKG-` codes of `diagnostics.md`, each with the lock entry's
+  key path (`package[0].tag`).
 - `add` and `update` run `git` as `install` does and write `agentica.lock`
-  (every package of the build, sorted by name, and no other). `add` puts one
-  line in `[dependencies]` of `agentica.toml` and changes no other byte; a name
-  that is a dependency already is `PKG-DEPENDENCY-EXISTS`, and a layout the edit
-  cannot handle (`dependencies = {}`) is `PKG-MANIFEST-EDIT`: write the line by
-  hand. `update` with no name fetches every tag again (a moved tag is the new
-  commit); with a name, that dependency only (not a dependency:
-  `PKG-DEPENDENCY-UNKNOWN`). It also makes a missing or stale lock right. A
-  commit pin never moves. A bad name, URL, tag or commit on the command line is
-  a usage error (exit 2). A lock that cannot be written, or a manifest that
-  changed during the fetch, is `PKG-WRITE`. Nothing is written when a step
-  before the lock fails; if only the manifest write fails, run `agentica update`
-  to make the lock match it again. Both then refresh `deps/` and remove the
-  folder of a package the lock dropped.
+  (every package of the build, sorted by name). `add` puts one line in
+  `[dependencies]` and changes no other byte of `agentica.toml`. `update` with
+  no name fetches every tag again; with a name, that dependency only; it also
+  makes a missing or stale lock right. A commit pin never moves. A bad name,
+  URL, tag or commit on the command line is a usage error (exit 2). Nothing is
+  written when a step before the lock fails; if only the manifest write fails,
+  run `agentica update`. Both then refresh `deps/`.
 - `deps/<name>/` holds the `.agc` files and the `agentica.toml` of each locked
-  package that is not a workspace member, direct or not, flat. `install`
-  replaces a folder that is not a real folder or whose `.agc` files differ from
-  the lock (run it again to restore an edited file) and leaves every other entry
-  of `deps/` alone. The tool writes no `.gitignore` there: commit `deps/` or
-  ignore it. `deps/` as a symbolic link is `PKG-SYMLINK`; a failed write is
-  `PKG-WRITE` (after `add` or `update` saved the lock, run `agentica install` to
-  write the locked packages into `deps/`). `test` and `symbol` walks skip the
-  `deps/` of a project; `agc_libs/` stays for local libraries.
+  package that is not a workspace member, flat. `install` replaces a folder
+  whose `.agc` files differ from the lock and leaves every other entry of
+  `deps/` alone. The tool writes no `.gitignore` there: commit `deps/` or ignore
+  it. `test` and `symbol` walks skip the `deps/` of a project; `agc_libs/` stays
+  for local libraries.
 - A build hashes a package (its `deps/` folder) the first time an import loads
   it; a difference is `PKG-HASH-MISMATCH`, and a symbolic link named `*.agc`,
   `native` or in `native/` is `PKG-SYMLINK`.
 - A package declares native libraries in its own `agentica.toml`, one table
   `[native.NAME]` each, with an inline table for each of `linux`, `macos` and
   `windows` that has exactly one of `file = "native/path"` (shipped in the
-  package, at most 1 MiB, hashed with it; a macOS file is a universal binary),
-  `system = "libname"` (a name the system loader looks up, or an absolute
-  path; a list `["libpq.5.dylib", "/opt/homebrew/lib/libpq.5.dylib"]` gives
-  candidates, and the first existing absolute path wins, else the first
-  name), or `{ url, sha256, member }` (a pinned TAR or ZIP download, fetched
-  for the host; the format is detected from file magic, never the URL):
+  package, at most 1 MiB, hashed with it), `system = "libname"` (a name the
+  system loader looks up, or an absolute path; a list gives candidates, the
+  first existing absolute path wins, else the first name), or `{ url, sha256,
+  member }` (a pinned TAR or ZIP download):
 
   ```toml
   [native.sqlite3]
@@ -268,14 +222,11 @@ import Sqlite from "pkg/sqlite/db"
   ```
 
   In the package's files, `extern "sqlite3"` then means the entry of the
-  running system: a `file` is opened by its absolute path in `deps/`, never
-  searched. A bad table is `PKG-MANIFEST-INVALID` at its key path; no entry for
-  the system is `PKG-NATIVE-PLATFORM` (key `native.NAME`) and a missing file
-  `PKG-NATIVE-MISSING` (key `native.NAME.linux.file`), both where a file of the
-  package uses the name. `--deny-native` and `--sandbox` refuse such a program.
-  The project's own `[native]` works for its own files (paths relative to the
-  project, no hash). `agentica compile` bakes the absolute library path into the
-  `.agcb`, and `run -- file.agcb` loads what is there without a hash check.
+  running system. A bad table is `PKG-MANIFEST-INVALID`; no entry for the system
+  is `PKG-NATIVE-PLATFORM` and a missing file `PKG-NATIVE-MISSING`.
+  `--deny-native` and `--sandbox` refuse such a program. The project's own
+  `[native]` works for its own files (paths relative to the project, no hash).
+  `agentica compile` bakes the absolute library path into the `.agcb`.
 
 ## String queue (`std/queue`)
 

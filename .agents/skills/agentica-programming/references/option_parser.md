@@ -38,26 +38,20 @@ Options(file: OP.string(p, "file"), port: OP.int(p, "port"),
   or with `min` above `max`, they are a wrong specification.
 - On/off: no Bool kind; use `Opt(name: "stats", choices: ["on", "off"],
   default: "off")` and `OP.string(p, "stats") == "on"`. A Flag takes no value.
-- Words: `--port 3000`, `--port=3000`, `-p 3000`, `-p3000`, `-p=3000`, joined
-  short flags `-vq`, `--` ends the options. As in argparse, the next word is a
-  value only if it does not start with `-`, or is `-` or a negative number
-  (`-1`, `-2.5`); else `option --port needs a value`. `--name=--x` and `-n--x`
-  give the literal. A negative number is also an argument.
+- Words: `--port 3000`, `--port=3000`, `-p 3000`, `-p3000`, joined short flags
+  `-vq`, `--` ends the options. As in argparse, the next word is a value only if
+  it does not start with `-`, or is `-` or a negative number; `--name=--x` gives
+  the literal.
 - Plain getters (`string`, `int`, `float`, `flag`) are for arguments, flags and
   options with a default; `optional_*` for the rest (`none` when not given). A
   getter with an undeclared name, the wrong kind, or a plain getter on a value
   that may be absent halts with `RUNTIME-UNWRAP-ERROR` (a bug of the program).
-- Every `parse` error is `"tool: message"` plus the line `Try 'tool --help' for
-  more information`, and names the option (`unknown option --x`, `option --port
-  needs a value`, `invalid value for --port: 'x' is not an Int`, `... is not one
-  of a, b`, `missing argument <file>`, `unexpected argument 'g'`). A wrong
-  specification (duplicate name, bad default, an `Arg` of kind `Flag`, a short
-  name that is a digit, `-` or `=`) is an error of `parse` too.
-- `--help` or `-h`: `parse` returns an error for which `OP.help?` is true; the
-  text is `OP.usage(parser)`: value name `a|b` for choices,
-  else the name in capitals (set `metavar` for `DIR`); notes are
-  `[default: X] [min: 0, max: 9]`. Print an error you handle yourself with
-  `OP.message(error)` (it leaves out the marker line of a help request).
-  `OP.run!(load())` prints the help and exits 0, or
-  prints any other error to stderr and exits 2, or returns the value; call it
-  in `main`.
+- Every `parse` error is `"tool: message"` plus a `Try 'tool --help'` line, and
+  names the option. A wrong specification (duplicate name, bad default, an `Arg`
+  of kind `Flag`, a short name that is a digit, `-` or `=`) is an error of
+  `parse` too.
+- - `--help` or `-h`: `parse` returns an error for which `OP.help?` is true; the
+  text is `OP.usage(parser)` (set `metavar` for the value name). Print an error
+  you handle yourself with `OP.message(error)`. `OP.run!(load())` prints the
+  help and exits 0, or prints any other error to stderr and exits 2, or returns
+  the value; call it in `main`.
