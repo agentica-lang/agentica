@@ -261,8 +261,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Breaking:** `TLS.connect`, `TLS.listen`, the `HTTP.listen_*_tls` forms and
   `HttpClientOptions` (`tls` replaces `ca_file`) take a `TlsContext` in place
-  of PEM paths. The network page's "Moving to contexts" lists each old form
-  and its new one.
+  of PEM paths: build one with `TLS.client_context` or `TLS.server_context`.
 - **Breaking:** `HttpClientOptions` holds a `TlsContext` (`tls`), so
   `JSON.schema`, `JSON.decode` and `JSON.encode` refuse it. `TlsClientOptions`,
   `TlsContext` and `TlsServerOptions` are reserved type names.

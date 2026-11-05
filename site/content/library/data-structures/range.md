@@ -49,7 +49,7 @@ false
 Range.size(range: Range) -> Int
 ```
 
-The number of values. A count that does not fit in `Int`, as for `(0..9223372036854775807).size`, stops the program.
+The number of values. A count that does not fit in `Int`, as for `(0..9223372036854775807).size`, stops the program with `RUNTIME-INTEGER-OVERFLOW`.
 
 ```agentica
 def main() -> Void
@@ -71,7 +71,7 @@ end
 Range.to_a(range: Range) -> List[Int]
 ```
 
-The values as a list, in order. A range with more than 1048576 values stops the program.
+The values as a list, in order. A range with more than 1048576 values stops the program with `RUNTIME-INVALID-COUNT`.
 
 ```agentica
 def main() -> Void
