@@ -63,7 +63,8 @@ Notes on the choices:
   operating-system side of `output.c`, one file per family. `output.c` has no
   `#ifdef` for an OS. `poll_posix.c` and `poll_windows.c` are core in the same
   way: the operating-system side of the copy that a `Native.wait_*` poller of
-  `loop.c` polls.
+  `loop.c` polls; so are `clock_posix.c` and `clock_windows.c`, the coarse clock
+  of `timers.c`.
 - **`stream.c` is a service.** It is the kit the stream services share; only
   `duplex.c`, `process.c` and `tcp.c` use it.
 - **`duplex.c` is a service (25c).** It owns the child channel: one

@@ -13,8 +13,6 @@
 
 /* The longest single condvar wait of agc_runq_wait_until. */
 #define WAIT_SLICE_MS UINT64_C(3600000)
-/* The most CPU pauses between two looks of a spinning scheduler: the steps double up to it (agc_runq_spin). */
-#define SPIN_PAUSES_MAX 32u
 /* The pauses that agc_pauses_for times to learn how long one takes. */
 #define PAUSE_CALIBRATION 2048u
 
@@ -252,7 +250,7 @@ uint64_t agc_pauses_for(uint64_t ns) {
 void agc_runq_spin_setup(agc_runq *q, uint32_t max, uint64_t budget_ns) {
   q->spin_max = max;
   uint64_t pauses = agc_pauses_for(budget_ns);
-  uint64_t least = (uint64_t)2 * SPIN_PAUSES_MAX;
+  uint64_t least = (uint64_t)2 * AGC_SPIN_PAUSES_MAX;
   q->spin_pauses = pauses < least ? least : pauses;
 }
 
@@ -274,7 +272,7 @@ static bool spin_found(agc_runq *q) {
 }
 
 /* The busy wait of an idle scheduler before it waits on the condvar: it polls `work` with growing runs of CPU pauses
-   (1, 2, 4, ... SPIN_PAUSES_MAX between two looks), never a system sleep, until a task shows up or spin_pauses have
+   (1, 2, 4, ... AGC_SPIN_PAUSES_MAX between two looks), never a system sleep, until a task shows up or spin_pauses have
    passed.
    It leaves the spinners before it takes the lock, so a push from then on signals or is found by its wait. Its take
    starts the chained wake of take_waited: the pushes it absorbed sent no signal. NULL when it found no task (the
@@ -286,9 +284,8 @@ agc_task *agc_runq_spin(agc_runq *q) {
   unsigned pauses = 1;
   bool found;
   while (!(found = spin_found(q)) && spent < q->spin_pauses) {
-    for (unsigned k = 0; k < pauses; k++) AGC_CPU_PAUSE();
     spent += pauses;
-    if (pauses < SPIN_PAUSES_MAX) pauses *= 2;
+    pauses = agc_spin_step(pauses);
   }
   atomic_fetch_sub_explicit(&q->spinning, 1, memory_order_seq_cst);
   if (!found) return NULL;

@@ -1,7 +1,7 @@
 /*
  * A job on the loop (docs/vm/16-architecture.md §16.5): the timer against the completion in both orders, a cancel, and
  * the requests that a second thread sends through the inbox (a queued START, a queued finish, the `more` path, close
- * and poll). The pool work is held by a semaphore, so the test and not the clock decides which event comes first.
+ * and poll), and the compute calls of a scheduler thread that bypass the I/O thread (the direct path). The pool work is held by a semaphore, so the test and not the clock decides which event comes first.
  */
 #include "../core.h"
 #include "io_harness.h"
@@ -704,6 +704,105 @@ static void detach_on_thread(void *arg) {
   agc_io_detach(&vm, to_detach);
 }
 
+/* A scheduler's compute call takes the direct path (start_direct): the job waits in vm->direct until the turn ends,
+   and agc_io_submit_direct gives it to the pool, as run_task does. */
+static void start_direct_on_thread(void *arg) {
+  agc_task *task = vm.task;
+  running();
+  agc_io_compute(&vm, &compute_io, arg);
+  park(task);
+  assert(vm.direct != NULL);
+  agc_io_submit_direct(&vm);
+  assert(vm.direct == NULL);
+}
+
+/* The pool thread ended the wait (compute_ended) and nudged the schedulers; the loop was not run. */
+static void wait_for_direct_end(gate *g) {
+  uv_sem_post(&g->go);
+  while (!agc_runq_nudged(vm.rt->runq)) {}
+  assert(agc_runq_take_nudge(vm.rt->runq));
+}
+
+/* The registry is empty: every reference of the jobs went back and the jobs were freed. */
+static void assert_registry_empty(void) {
+  agc_resource *probe = agc_register(&vm, NULL, NULL);
+  assert(probe->slot == 0);
+  agc_unregister(&vm, probe);
+}
+
+/* A compute call from a scheduler thread after agc_io_share bypasses the I/O thread: the pool thread ends the wait, a
+   scheduler wakes the task (end_finished) and the task ends the job on its thread, where the last reference is posted
+   as a DEAD. The loop is run only after the task has its result. */
+static void test_direct_compute_wakes_on_a_scheduler(void) {
+  assert(agc_io_share(&vm, false));
+  agc_task *task = vm.task;
+  gate *g = new_gate();
+  on_thread(start_direct_on_thread, g);
+  uv_sem_wait(&g->entered);
+  wait_for_direct_end(g);
+  assert(task->state == AGC_TASK_PARKED);
+  on_thread(service_on_thread, NULL);
+  assert(task->state == AGC_TASK_READY && agc_runq_pop(vm.rt->runq) == task);
+  finishing f = {task, 0};
+  on_thread(finish_on_thread, &f);
+  assert(f.result == 7 && finished_calls == 1);
+  pump_until_idle();
+  settle_loop();
+  assert(dropped == 0);
+  assert_registry_empty();
+  finished_calls = 0;
+}
+
+/* The task of a direct compute call is cancelled while the work runs, and the DETACH is still in the inbox when the
+   pool thread ends the wait: the scheduler finds the job detached and posts READY, detach_job lists it too, and it is
+   listed once (a job behind it would be cut off by a second link). Its detached end runs once on a scheduler, and
+   every reference goes back. */
+static void test_direct_compute_cancelled_while_working(void) {
+  assert(agc_io_share(&vm, false));
+  agc_task *task = vm.task;
+  gate *g = new_gate();
+  on_thread(start_direct_on_thread, g);
+  uv_sem_wait(&g->entered);
+  to_detach = task;
+  on_thread(detach_on_thread, NULL);
+  wait_for_direct_end(g);
+  on_thread(service_on_thread, NULL);
+  assert(task->state == AGC_TASK_PARKED && !task->parked && finished_calls == 0);
+  wait_for_hand_over();
+  swift_done_calls = 0;
+  int *data = calloc(1, sizeof *data);
+  assert(data);
+  on_thread(start_detached, data);
+  wait_for_hand_over();
+  on_thread(service_on_thread, NULL);
+  assert(finished_calls == 1 && swift_done_calls == 1);
+  pump_until_idle();
+  settle_loop();
+  assert(dropped == 0);
+  assert_registry_empty();
+  finished_calls = swift_done_calls = 0;
+  task->state = AGC_TASK_RUNNING;
+}
+
+/* The schedulers end (agc_io_hand_off off) while a direct compute call runs: its end comes back through the pool's
+   inbox as the loop's own, so the loop, which the end of the run waits on, wakes the task. */
+static void test_direct_compute_handed_to_the_loop(void) {
+  assert(agc_io_share(&vm, false));
+  agc_task *task = vm.task;
+  gate *g = new_gate();
+  on_thread(start_direct_on_thread, g);
+  uv_sem_wait(&g->entered);
+  agc_io_hand_off(&vm, false);
+  uv_sem_post(&g->go);
+  wait_woken(task);
+  assert(!agc_runq_nudged(vm.rt->runq));
+  assert(take(task) == 7);
+  settle_loop();
+  assert(dropped == 0 && finished_calls == 1);
+  assert_registry_empty();
+  finished_calls = 0;
+}
+
 /* Runs inside uv_run: a scheduler detaches the job after this pass's requests ran and before its drain. */
 static void detach_during_run(uv_timer_t *timer) {
   on_thread(detach_on_thread, NULL);
@@ -996,6 +1095,9 @@ int main(void) {
   test_detached_ends_on_a_scheduler();
   test_task_start_after_the_run_is_over();
   test_job_ready_twice_is_listed_once();
+  test_direct_compute_wakes_on_a_scheduler();
+  test_direct_compute_cancelled_while_working();
+  test_direct_compute_handed_to_the_loop();
   test_detach_from_a_scheduler_while_ready();
   test_expire_cancel_from_a_scheduler();
   test_raising_done_on_a_scheduler();

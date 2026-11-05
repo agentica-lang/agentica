@@ -339,9 +339,10 @@ bool agc_io_run_for(agc_vm *vm, uint64_t ms, bool alive_required);
    millisecond while the other schedulers end the jobs (agc_io_service). */
 void agc_io_pause(agc_vm *vm, uint64_t ms);
 uint64_t agc_clock_ms(void);
-/* True when agc_clock_ms has surely not reached DUE_MS, from a clock that costs no system call (Linux's coarse
-   monotonic clock, which lags agc_clock_ms by at most a tick); false means "read agc_clock_ms". */
-bool agc_clock_before(uint64_t due_ms);
+/* The OS side of a clock that costs no system call (vm/clock_posix.c, vm/clock_windows.c): Linux's coarse monotonic
+   clock, which is never ahead of agc_clock_ms and lags it by at most its tick. Fills NOW_MS and TICK_MS (its
+   resolution); false where the system has no such clock. */
+bool agc_coarse_clock_ms(uint64_t *now_ms, uint64_t *tick_ms);
 
 /* Timers (vm/timers.c). A task that waits for a deadline marks itself PARKING (agc_task_parking), registers its other
  * waits, and calls agc_task_park_until; the deadline is an agc_clock_ms value. All of these run with rt->sync held,

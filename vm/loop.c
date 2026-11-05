@@ -1845,35 +1845,6 @@ uint64_t agc_trace_now(void) {
    loop's own cached time, and the loop belongs to the I/O thread), so any thread may call it. */
 uint64_t agc_clock_ms(void) { return agc_trace_now() / 1000000u; }
 
-/* CLOCK_MONOTONIC_COARSE is the clock of agc_clock_ms (libuv reads CLOCK_MONOTONIC) as of the last tick, read from the
-   vDSO without touching the clock source, which on a machine with no usable TSC (an HPET) is a system call of about a
-   microsecond. It is never ahead of that clock and lags it by at most its resolution, a tick; two ticks and a
-   millisecond of margin make "before" safe. The margin is read once (0: no coarse clock, every answer is false). */
-#if defined(__linux__)
-#ifndef CLOCK_MONOTONIC_COARSE
-#define CLOCK_MONOTONIC_COARSE 6
-#endif
-bool agc_clock_before(uint64_t due_ms) {
-  static _Atomic uint64_t margin_ms;
-  uint64_t margin = atomic_load_explicit(&margin_ms, memory_order_relaxed);
-  if (!margin) {
-    struct timespec res;
-    if (clock_getres(CLOCK_MONOTONIC_COARSE, &res) != 0) return false;
-    margin = 2 * ((uint64_t)res.tv_sec * 1000u + (uint64_t)res.tv_nsec / 1000000u) + 2;
-    atomic_store_explicit(&margin_ms, margin, memory_order_relaxed);
-  }
-  struct timespec ts;
-  if (clock_gettime(CLOCK_MONOTONIC_COARSE, &ts) != 0) return false;
-  uint64_t lower = (uint64_t)ts.tv_sec * 1000u + (uint64_t)ts.tv_nsec / 1000000u;
-  return lower + margin < due_ms;
-}
-#else
-bool agc_clock_before(uint64_t due_ms) {
-  (void)due_ms;
-  return false;
-}
-#endif
-
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms) {
   agc_sync_assert(vm);
   agc_task *t = vm->task;
@@ -2345,11 +2316,6 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
 }
 
 uint64_t agc_clock_ms(void) { return 0; }
-
-bool agc_clock_before(uint64_t due_ms) {
-  (void)due_ms;
-  return false;
-}
 
 agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
   (void)t;

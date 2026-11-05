@@ -628,6 +628,14 @@ struct agc_vm {
 #define AGC_CPU_PAUSE() atomic_signal_fence(memory_order_seq_cst)
 #endif
 
+/* One step of a busy wait that backs off: PAUSES pauses, and the count for the next step, doubled up to 32 between two
+   looks. A spinner starts at 1 and adds each step's count to what it spent (agc_runq_spin, agc_lock_take_shared). */
+#define AGC_SPIN_PAUSES_MAX 32u
+static inline unsigned agc_spin_step(unsigned pauses) {
+  for (unsigned k = 0; k < pauses; k++) AGC_CPU_PAUSE();
+  return pauses < AGC_SPIN_PAUSES_MAX ? pauses * 2 : pauses;
+}
+
 /* A lock that costs one flag test until the VM is shared (agc_share) and is a mutex after it. Once shared, a thread that
    takes a lock it holds, or drops one it does not hold, ends the process with a message instead of deadlocking (or, on
    Windows, silently re-entering): `owner` is a per-thread token, zero when free. The mutex is a uv_mutex_t made in

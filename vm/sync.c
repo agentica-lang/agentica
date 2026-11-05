@@ -76,9 +76,8 @@ void agc_lock_take_shared(agc_lock *l) {
     uint64_t spent = 0;
     unsigned pauses = 1;
     while (spent < l->spin) {
-      for (unsigned k = 0; k < pauses; k++) AGC_CPU_PAUSE();
       spent += pauses;
-      if (pauses < 32) pauses *= 2;
+      pauses = agc_spin_step(pauses);
       if (atomic_load_explicit(&l->owner, memory_order_relaxed) == 0 && uv_mutex_trylock(l->mutex) == 0) {
         taken = true;
         break;

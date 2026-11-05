@@ -195,6 +195,17 @@ static uint64_t settle(agc_vm *vm) {
 
 void agc_timers_settle(agc_vm *vm) { (void)settle(vm); }
 
+/* Answers "the deadline is ahead" from the coarse clock (agc_coarse_clock_ms), which costs no read of the clock
+   source: on a machine with no usable TSC (an HPET) that read is a system call of about a microsecond. The coarse clock
+   is never ahead of agc_clock_ms and lags it by at most its resolution, a tick; two ticks plus 2 ms of margin make
+   "before" safe. */
+static bool clock_before(uint64_t due_ms) {
+  uint64_t now, tick;
+  if (!agc_coarse_clock_ms(&now, &tick)) return false;
+  uint64_t margin = 2 * tick + 2;
+  return now + margin < due_ms;
+}
+
 bool agc_timers_run(agc_vm *vm) {
   agc_timers *h = &vm->timers;
   /* The task that just ran parked in its own turn: its peer has not run yet, so its clock waits one more turn. */
@@ -203,7 +214,7 @@ bool agc_timers_run(agc_vm *vm) {
   uint64_t due = atomic_load_explicit(&h->next_due, memory_order_relaxed);
   if (due == UINT64_MAX) return false;
   /* At every turn boundary while a timer is armed: a deadline that is surely ahead costs no clock read. */
-  if (!now && agc_clock_before(due)) return false;
+  if (!now && clock_before(due)) return false;
   if (!now) now = agc_clock_ms();
   if (now < due) return false;
   bool woke = false;

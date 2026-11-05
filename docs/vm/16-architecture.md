@@ -462,8 +462,9 @@ one exit path are as in §16.1 to §16.6. What differs:
   turn boundary to fire.
   The scheduler fires its due timers at its turn boundary and when its run queue
   is empty (`agc_timers_run`), by waking the task like any waker. A deadline
-  that the coarse clock shows ahead costs no clock read (`agc_clock_before`:
-  Linux's `CLOCK_MONOTONIC_COARSE`, two ticks of margin). Every change
+  that the coarse clock shows ahead costs no clock read (`clock_before`, over
+  Linux's `CLOCK_MONOTONIC_COARSE` in `clock_posix.c`, with two ticks plus 2 ms
+  of margin). Every change
   to a heap is made with `rt->sync` held. So any scheduler can remove the entry
   at once: the task leaves the heap when it resumes (`resume`) or is cancelled
   (`unlink_task`), under the lock the fire takes. A fire never wakes a task that
@@ -550,19 +551,19 @@ one exit path are as in §16.1 to §16.6. What differs:
     a popped task. At the end of the run it is left like the queued tasks.
   - An idle scheduler spins before it waits on the condvar (`agc_runq_spin`). It
     polls the queue's atomic `work` flag, not the lock, with CPU pauses whose
-    runs double up to 32 (`SPIN_PAUSES_MAX`), for `SPIN_BUDGET_US` (10 µs). It
+    runs double up to 32 (`agc_spin_step`), for `SPIN_BUDGET_US` (10 µs). It
     counts pauses and reads no clock: `agc_pauses_for` times the pause once,
     since a clock read is a system call on a machine with no usable TSC. It
-    never sleeps. A nudge, like a push, sends no signal while one spins. At
-    most half the schedulers (at least one) spin at once, and none spin at
-    N = 1. A push reads the count of spinners under the queue's
-    lock and skips the condvar signal while one spins. No wake is lost. A
-    spinner leaves the count before it takes the lock for its wait, so it either
-    sees `work`, finds the task in that wait, or left before the push read the
-    count, which then signals. A spinner may see several pushes that sent no
-    signal, so the wake is chained: a scheduler that leaves a spin or a wait
-    with a task, while more tasks are queued, signals one more waiter. Spinners
-    do not count as idle for the stall check. Only the condvar wait does.
+    never sleeps. A nudge, like a push, sends no signal while one spins. At most
+    half the schedulers (at least one) spin at once, and none spin at N = 1. A
+    push reads the count of spinners under the queue's lock and skips the
+    condvar signal while one spins. No wake is lost. A spinner leaves the count
+    before it takes the lock for its wait, so it either sees `work`, finds the
+    task in that wait, or left before the push read the count, which then
+    signals. A spinner may see several pushes that sent no signal, so the wake
+    is chained: a scheduler that leaves a spin or a wait with a task, while more
+    tasks are queued, signals one more waiter. Spinners do not count as idle for
+    the stall check. Only the condvar wait does.
   - A task whose turn ends ready (a yield, or a wake during its own turn) goes
     back to the queue with `agc_runq_push_own` when its scheduler's slot is
     empty, so that scheduler pops next. If the queue was empty, the push sends
@@ -603,9 +604,8 @@ one exit path are as in §16.1 to §16.6. What differs:
   is not held while the scheduler waits for one. A thread that finds it taken
   spins for about 10 µs (`SYNC_SPIN_NS`, in pauses) before it sleeps on the
   mutex: the sections are short and many, and a futex sleep and wake cost more.
-  It is cheap to split later,
-  when a measurement shows the contention (the `prints`, `ping-pong` and `files`
-  benchmarks, with the locks on). The pieces:
+  It is cheap to split later, when a measurement shows the contention (the
+  `prints`, `ping-pong` and `files` benchmarks, with the locks on). The pieces:
   - What takes the lock is marked per builtin: `agc_builtin.shared`, a flag in
     each row of the builtin tables, so a new row must say `true` or `false`.
     `call_builtin` (`vm/interp.c`) takes `rt->sync` around a row marked shared.

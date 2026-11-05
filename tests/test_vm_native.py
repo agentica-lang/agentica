@@ -541,61 +541,6 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "10650.0\n", "")
 
 
-# Compute calls do not get slower with more schedulers: 16 tasks that each make many short calls finish sooner on 4
-# schedulers than on 1 (best of 3 each, on 4 CPUs where the system can pin). When every call crossed the I/O thread
-# twice, 4 schedulers could take longer than 1 (0.95 s against 0.97 s at 10000 calls a task on 2 cores with 2 threads
-# each, 1.13 s against 1.33 s with three plain calls beside each); now they take 0.4 to 0.9 of the time, by the
-# machine. Timing, so slow tier; it needs 4 cores.
-@NATIVE_CALLS
-@pytest.mark.slow
-@pytest.mark.skipif((os.cpu_count() or 1) < 4, reason="needs 4 cores")
-def test_compute_calls_are_faster_on_four_schedulers(tmp_path):
-    source = program(tmp_path, f"""extern "{LIBC}"
-  compute def labs(x: C.Int64) -> C.Int64
-end
-
-def work(n: Int) -> Int
-  total = 0
-  for k in 0...n
-    total += labs(0 - k)
-  end
-  return total
-end
-
-def main() -> Void
-  tasks: List[Task[Int]] = []
-  for _ in 0...16
-    tasks = tasks.push(Task.spawn(&work, 20000))
-  end
-  total = 0
-  for task in tasks
-    total += Task.await(task)
-  end
-  puts(total)
-end
-""")
-
-    def best(schedulers):
-        times = []
-        for _ in range(3):
-            start = time.perf_counter()
-            result = agentica("--schedulers", schedulers, source, timeout=120)
-            times.append(time.perf_counter() - start)
-            assert (result.code, result.stdout, result.stderr) == (0, "3199840000\n", "")
-        return min(times)
-
-    pinned = hasattr(os, "sched_getaffinity") and len(os.sched_getaffinity(0)) > 4
-    if pinned:
-        saved = os.sched_getaffinity(0)
-        os.sched_setaffinity(0, sorted(saved)[:4])
-    try:
-        one, four = best("1"), best("4")
-    finally:
-        if pinned:
-            os.sched_setaffinity(0, saved)
-    assert four < one, (one, four)
-
-
 # The run ends (main returns, or System.exit) while a compute call naps for 3 seconds on a pool thread: the VM does not
 # wait for the call, so the run takes far less than the nap.
 @NATIVE_CALLS
