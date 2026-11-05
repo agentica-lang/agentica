@@ -1,5 +1,6 @@
 /* ATS tables (vm/ats.c): order and snapshots with the AVL invariants of both trees, keys of mixed tags as forged
-   bytecode may pass them, an add that overflows and leaves the table unchanged, the run check, and threads that update one table at once with exact totals (also under TSan). */
+   bytecode may pass them, an add that overflows and leaves the table unchanged, the run check, and threads that
+   update one table at once with exact totals (also under TSan). */
 #include "../core.h"
 #include "../services.h"
 #include "io_harness.h"
