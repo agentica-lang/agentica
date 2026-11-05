@@ -18,21 +18,19 @@
   a path and is not searched in `PATH`. `agc_proc_name_ok` checks the command as
   given and rejects a name that ends in a dot or a space, or in `.cmd` or
   `.bat`, any `:` that is not the drive letter of `C:\` or `C:/`, and the
-  `\\?\` and `\\.\` prefixes (so `C:foo.exe` and `x.exe:stream` are refused).
-  The allowlist applies to the last component of the resolved path. The working
-  directory is not searched before `PATH`, but a relative `PATH` entry such as
-  `.` resolves against it, as on POSIX. `PATHEXT` is not read: `.bat` and `.cmd`
-  need `cmd.exe`, an implicit shell, so they never run, and a planted
-  `x.cmd.exe` cannot answer a request for `x.cmd`. A program that wants a shell
-  starts `cmd.exe` by name. No device-name check (`CON`, `NUL`) is made: such a
-  name is a file that does not run, or an error from `uv_spawn`.
+  `\\?\` and `\\.\` prefixes (so `C:foo.exe` and `x.exe:stream` are
+  refused). The allowlist applies to the last component of the resolved path.
+  `PATHEXT` is not read: `.bat` and `.cmd` need `cmd.exe`, an implicit shell, so
+  they never run, and a planted `x.cmd.exe` cannot answer a request for `x.cmd`.
+  A program that wants a shell starts `cmd.exe` by name. No device-name check
+  (`CON`, `NUL`) is made: such a name is a file that does not run, or an error
+  from `uv_spawn`.
 - Windows stops: there is no `SIGTERM`. libuv ends a child with
   `TerminateProcess` for `SIGTERM`, `SIGKILL` and `SIGINT` alike, so the grace
   wait of a captured child ends at once. `exited` records 128 plus the signal
   that was asked for: 137 for the `SIGKILL` of a plain child, 143 for the
   `SIGTERM` of a captured one (`tests/test_process_windows.py` reads the pair
-  from the `proc` trace). The program cannot read that status, because the
-  handle is closed by then; and the pair holds only when the stop reached a live
+  from the `proc` trace); the pair holds only when the stop reached a live
   child, since after an `ESRCH` the real exit code is recorded. Unless libuv
   cannot assign its job object (a Windows version without nested jobs), every
   child it starts is in one job that kills its members when the VM that made it
@@ -45,7 +43,7 @@
   leaves a child that reads it (`vm/tests/process_test.c`). `Process.close` and
   the end of a run still stop only the direct child. Stopping a child that has
   already ended, before its exit callback ran, is not a failure on any system
-  (`UV_ESRCH` is read as stopped). On POSIX it means someone else reaped the
+  (`UV_ESRCH` is read as stopped); on POSIX it means someone else reaped the
   child (`SIGCHLD` set to `SIG_IGN`, or its own reaper), and then
   `Process.close` waits up to `REAP_MS`.
 - Windows arguments: libuv quotes each argument with the rules of the C runtime
@@ -107,16 +105,10 @@ systems get none.
   above ends it first). On a break, `agentica` waits 2 seconds, sends
   `SIGTERM`, and kills the VM 2 seconds later
   (`docs/vm/08-loader-and-cli.md`).
-- **Behavior notes.**
-  - A file that exists but cannot be executed (no execute permission, a bad
-    format) is an error `Result` from `Process.spawn`.
-  - A `read_line` or `read_bytes` pending in another task when the process is
-    closed returns `process: process is closed`.
-  - libuv resets signals 1 to 31 to their default in the child, so a signal the
-    VM inherited as ignored (`nohup`) is not ignored in its children. The VM
-    does not patch libuv.
-  - `Process.spawn` checks its timeout but does not apply it to the lookup and
-    start.
+- **Behavior notes.** libuv resets signals 1 to 31 to their default in the
+  child, so a signal the VM inherited as ignored (`nohup`) is not ignored in its
+  children; the VM does not patch libuv. `Process.spawn` checks its timeout but
+  does not apply it to the lookup and start.
 
 **Captured processes (21a).** `Process.spawn_captured` and
 `Process.output` (specified in
@@ -189,18 +181,15 @@ pair; Windows uses a pipe per direction (below).
   Windows). So a parent that spawns without the pipe never passes an inherited
   marker on, and a grandchild sees neither the marker nor descriptor 3 unless
   its own parent opened a channel for it. `System.env` hides the same entries
-  from the program (`own_env` in `vm/process.c` decides for both). The `env`
-  Map of a spawn adds to that copy, replacing a variable of the same name
-  (ignoring case on Windows as the system does, with `CompareStringOrdinal`,
-  where two names that differ only in case are an error); it cannot name an
-  entry the VM owns, which is an error and not a silent drop. The natives of
-  each spawn have two arities, with and without `env`: the shorter one is for
-  the bytecode of `stage0.agcb`. `AGENTICA_VM_METRICS` and
+  from the program (`own_env` in `vm/process.c` decides for both). The `env` Map
+  of a spawn adds to that copy, replacing a variable of the same name (ignoring
+  case on Windows, where two names that differ only in case are an error); it
+  cannot name an entry the VM owns, which is an error and not a silent drop. The
+  natives of each spawn have two arities, with and without `env`: the shorter
+  one is for the bytecode of `stage0.agcb`. `AGENTICA_VM_METRICS` and
   `AGENTICA_VM_METRICS_FILE` are also removed from a child's environment
-  (`metrics_env`, matched by the whole name), so a child VM or a BDD runner
-  never fights for the metrics port or file
-  (`docs/future/28-vm-metrics.md` §28.5); `System.env` still shows them to the
-  program.
+  (`metrics_env`), so a child VM or a BDD runner never fights for the metrics
+  port or file; `System.env` still shows them to the program.
 - **Child start.** `agc_parent_take` runs in `agentica.c` before the program
   does. The variable must be exactly the value of this system (`3`, or `3,4` on
   Windows): a VM never guesses from another form. If `AGENTICA_CHANNEL` is `3`
@@ -254,31 +243,27 @@ pair; Windows uses a pipe per direction (below).
   two streams: a child that flushes its stdout before it sends a channel record
   (the VM does, in `Test.run` and in `BDD`) gets that output attributed to that
   record. It returns `error("process: output exceeds 1048576 bytes")` once
-  stdout or stderr was cut (more than 1 MiB unread, as above), and
-  `error("process: output is not captured")` on a `spawn` handle. A cut that
-  happens between two calls is how the runner finds a test that printed more
-  than 1 MiB. Bytes that end in the middle of a UTF-8 character (up to three)
-  stay in the buffer for the next call, unless the stream has ended or failed,
-  so a character is never split between two calls.
+  stdout or stderr was cut (more than 1 MiB unread), and `error("process: output
+  is not captured")` on a `spawn` handle. Bytes that end in the middle of a
+  UTF-8 character (up to three) stay in the buffer for the next call, unless the
+  stream has ended or failed.
 - **Close.** The channel handle closes with the process (`shut`), after the
   pipes. A pending channel read or write wakes with
   `process: channel is closed`.
 - **`Test.run` and the BDD children** use the child side. `Test.run` must be
   called from `main`'s own task (`vm->task == vm->rt->main`): a call from a test
-  or any other task is `RUNTIME-TEST-RUN`, "call Test.run from main, outside
-  every test". After the name checks, a call with no channel under
-  `--agentica-test list|run` (`agc_parent_open`) is `RUNTIME-TEST-RUN` too. In
-  run mode, an index line that is not a plain index naming a test, or that
-  cannot be read as a UTF-8 line (`AGC_INPUT_FAILED`), is a `RUNTIME-BDD-INFRA`
-  fail record ("invalid test index") and exit 1. It flushes stdout (`agc_drain`)
-  before each record, then sends the record as one JSON line with
-  `agc_parent_send`. The core has no protocol mode: stdout is an ordinary stream
-  and stdin is the program's. The two child-side builtins are for runner code.
-  Nothing keeps a test from calling them, which can lose or add a line
-  (accepted, as in the grammar's test rules); the only guard is that
-  a second request in a direction that already has one pending gets
-  `error("process: the channel is in use")`, so two requests never share a
-  buffer.
+  or any other task is `RUNTIME-TEST-RUN`. After the name checks, a call with no
+  channel under `--agentica-test list|run` (`agc_parent_open`) is
+  `RUNTIME-TEST-RUN` too. In run mode, an index line that is not a plain index
+  naming a test, or that cannot be read as a UTF-8 line, is a
+  `RUNTIME-BDD-INFRA` fail record ("invalid test index") and exit 1. It flushes
+  stdout (`agc_drain`) before each record, then sends the record as one JSON
+  line with `agc_parent_send`. The core has no protocol mode: stdout is an
+  ordinary stream and stdin is the program's. Nothing keeps a test from calling
+  the child-side builtins, which can lose or add a line (accepted, as in the
+  grammar's test rules); the only guard is that a second request in a direction
+  that already has one pending gets `error("process: the channel is in use")`,
+  so two requests never share a buffer.
 
 ### 10.5 Limits the C runtime keeps
 

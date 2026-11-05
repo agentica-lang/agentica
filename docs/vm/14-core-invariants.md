@@ -7,10 +7,9 @@ their head. The rule is **one way for each job**. A reviewer checks every core
 PR against 14.1 to 14.5 and the entry rule of 14.6. A PR that breaks one either
 changes the rule here first, with the reason, or does not merge.
 
-The mechanisms are in §10.2.1 and §10.2.2
-([`10-io-scheduler.md`](10-io-scheduler.md)), §10.4
-([`10-io-processes.md`](10-io-processes.md)), §10.7.2
-([`10-io-http.md`](10-io-http.md)) and [task rules][task-rules].
+The mechanisms are in §10.2.1 and §10.2.2 (`10-io-scheduler.md`), §10.4
+(`10-io-processes.md`), §10.7.2 (`10-io-http.md`) and the [task
+rules][task-rules].
 
 ### 14.1 Waiting
 
@@ -32,36 +31,31 @@ joins the pool, and the pool would wait for a FIFO that never writes.
 - **Pipes, FIFOs, terminals, sockets and other character devices that can wait**
   are non-blocking on the loop (`uv_pipe_t`, `uv_tcp_t` or a poll handle,
   `agc_poller` in `vm/loop.c`), never a pool job: a pool thread that waits
-  forever cannot be cancelled or joined. They are sockets (`vm/tcp.c`), process
-  pipes (`vm/process.c`), stdin (`vm/input.c`), stdout and stderr
-  (`vm/output.c`), the `File` calls (`vm/files.c`) and the waits of
-  `Native.wait_readable` and `wait_writable` on a descriptor of native code
-  (`vm/ffi.c`), which poll a new open or a duplicate of the descriptor (on
-  Windows, of the socket) that the poller owns (`agc_poller_open_copy`): the
-  job's timer is the timeout, its `cancel` half stops the poll, and its end
-  closes that descriptor.
+  forever cannot be cancelled or joined. That covers sockets, process pipes,
+  stdin, stdout and stderr, the `File` calls and the waits of
+  `Native.wait_readable` and `wait_writable`, which poll a duplicate of the
+  descriptor that the poller owns (`agc_poller_open_copy`): the job's timer is
+  the timeout, its `cancel` half stops the poll, and its end closes the copy.
 - A descriptor picks one of the two by what it is, never by how it was named.
   `vm/files.c` opens with `O_NONBLOCK`, then `fstat` (regular files, block
   devices and directories go to the pool) and an `epoll_ctl` probe. Only `EPERM`
   from the probe means "never waits" (`/dev/null`, `/dev/zero`), and those go to
   the pool and are set blocking. Any other probe error, or a poll handle that
   cannot be made, is the call's error, never a silent fall back to the pool.
-  Whole-file calls (`read_text`, `write_text`) are in §10.2.2.
 - **Native compute calls** (`compute def`) run on the compute pool, VM threads
   apart from the libuv pool (§16.9, "Compute pool"). Such a call may run without
   bound and cannot be stopped once started (a cancel skips a queued one), so it
-  never takes a libuv pool thread. What the end of the run does with compute
-  calls is in §14.4 (steps 0 and 3). The key derivations of `KDF` run there
-  too, as jobs of their own kind (`kdf_io` in `vm/crypto.c`, work capped before
-  the job starts): a cancel skips a queued one and drops the key of a running
-  one, and §14.4 neither stops nor waits for them.
+  never takes a libuv pool thread. The key derivations of `KDF` run there too,
+  as jobs of their own kind (work capped before the job starts): a cancel skips
+  a queued one and drops the key of a running one. What the end of the run does
+  with compute calls is in §14.4 (steps 0 and 3).
 
 Known exceptions (the mechanisms are in §10.2.2):
 
 - **Windows `File` calls.** `probe` and `path_string` in `vm/files.c` refuse a
-  named pipe or a device at once, so no `File` call waits on a stream.
-  `path_string` refuses the `\\.\`, `\\?\` and `//./` spellings. The waiting
-  streams reach the VM as sockets, process pipes and the standard streams.
+  named pipe or a device (and the `\\.\`, `\\?\` and `//./` spellings) at
+  once, so no `File` call waits on a stream. The waiting streams reach the VM as
+  sockets, process pipes and the standard streams.
 - **Windows stdin.** One blocking `_read` on a thread of the VM's own reads
   every stdin kind, and the task waits on the loop for that job; a cancelled
   reader detaches the job. A portability exception, not a pattern for other I/O
@@ -76,22 +70,19 @@ Known exceptions (the mechanisms are in §10.2.2):
   returns.
 - **stdout and stderr fallbacks.** A stream keeps the blocking `fwrite` of its
   `FILE *` only when the loop cannot take it: the reopen or the `dup` fails, the
-  descriptor is not open for writing (a closed stdout that `main` refilled with
-  `/dev/null`), it is another descriptor type, or the build is not Linux, macOS
-  or Windows. A full pipe then stalls every task, the final `fflush` is not
-  bounded by the flush limit, and a stop signal interrupts the write (`EINTR`;
-  the handler has no `SA_RESTART`) and ends the run (§14.4). Otherwise a child's
-  stderr goes through the same buffer (`agc_output_forward`). In the fallback it
-  takes the blocking `fwrite` on the I/O thread, under the stream's lock
-  (§10.2.3, Output). The final C stdio flush is in §14.4, step 4.
+  descriptor is not open for writing, it is another descriptor type, or the
+  build is not Linux, macOS or Windows. A full pipe then stalls every task, the
+  final `fflush` is not bounded by the flush limit, and a stop signal interrupts
+  the write (`EINTR`) and ends the run (§14.4). A child's stderr goes through
+  the same buffer (`agc_output_forward`); in the fallback it takes the blocking
+  `fwrite` on the I/O thread, under the stream's lock (§10.2.3, Output).
 - **Release flush of a file handle.** When a file job is dropped before its pool
   work ran (its timeout, a cancel, or the flush limit), or a handle is released
   at the end of the run (`release_handles`), `release_state` in `vm/files.c`
   writes what the handle buffers with one blocking write on the loop thread.
   Only a regular file or a device that never waits is written so, which bounds
-  the write. The write is at most 4 KiB (`WRITE_BUFFER`) for a `File.open`
-  handle, and at most 64 KiB (`CHUNK`) for the `Lazy.write_lines` handle
-  (`vm/lazy.c`).
+  the write: at most 4 KiB (`WRITE_BUFFER`) for a `File.open` handle and 64 KiB
+  (`CHUNK`) for the `Lazy.write_lines` handle.
 
 ### 14.2 Timeouts
 
@@ -120,44 +111,40 @@ new one needs a reason here.
 **Rule.** One way: `agc_task_cancel` (§10.2.1, Cancellation). It knows every
 place a task can park (§14.1) and takes the task out of each one. A new kind of
 wait adds its case to `agc_task_cancel` and to `vm/tests/task_cancel_test.c` in
-the same PR. A crash (cancellation), `Test.run`'s leftovers (a test's tasks) and
-the public `Task.cancel` cancel through it. Nothing else cancels a wait. A
-timer, a job's completion and a crash also unlink a task, but they end a wait;
-they do not cancel one. `unlink_task` takes a cancelled task out of every wait,
-its timer included (`agc_timers_disarm`).
+the same PR. A crash (cancellation), `Test.run`'s leftovers and the public
+`Task.cancel` cancel through it. Nothing else cancels a wait. A timer, a job's
+completion and a crash also unlink a task, but they end a wait; they do not
+cancel one. `unlink_task` takes a cancelled task out of every wait, its timer
+included (`agc_timers_disarm`).
 
 A task cancelled from another scheduler finishes its turn first (§10.2.3), after
 the cancel walk over its descendants. A task it spawns in that turn starts
 cancelled: the spawn reads the flag of the parent (or of the task that owns the
 groups above it) under `rt->sync`, which the walk holds too, and ends the child
 before it runs (`spawn_child` in `vm/task.c`). A handle handed to the child is
-moved first, so the child's end closes it. Cancel reaches every descendant. An
-end hook set after the spawn (`Task.map`'s items, `HttpWire.spawn`) may not run
-for such a child, which may have ended already; a handed file's close can delay
-that end through `closing`. Its caller is cancelled too, so nothing waits for
-the hook. A turn that fails with a diagnostic that is not fatal in a task
-already cancelled (such as `Task.await` of that child) ends the task as
-cancelled, not as a crash: a flag set during the turn wins.
+moved first, so the child's end closes it. An end hook set after the spawn
+(`Task.map`'s items, `HttpWire.spawn`) may not run for such a child; its caller
+is cancelled too, so nothing waits for the hook. A turn that fails with a
+diagnostic that is not fatal in a task already cancelled (such as `Task.await`
+of that child) ends the task as cancelled, not as a crash: a flag set during the
+turn wins.
 
 A cancelled job is detached (`agc_io_detach`). A loop job is stopped by its
 `cancel` half. A wait that has taken nothing yet leaves its queue at once, on
 the I/O thread: a `TCP.accept` leaves the listener's queue and a read leaves the
 reader slot (`request_cancel` in `vm/tcp.c`), as an HTTP server's waiter does
 (`waiter_cancel`). The next connection then goes to a live accept, and the bytes
-stay in the input for the next read, whose reader lock the job's end hands on. A
-wait that has taken something keeps its result: its `done` half runs and the
-result is dropped, so a served accept's socket is closed. A pool job runs to its
-end, which §14.1 keeps bounded except for its explicit stdin exceptions. A
-compute call that has started runs to its end too, without bound, and its
-result is dropped; one still queued is skipped. A pool job that goes on to wait
-on the loop (`agc_io_start_then`, a whole-file call on a FIFO) is cancelled
-only in that loop phase: `cancellable` in `vm/loop.c` calls the `cancel` half only for a job with no `work`, or one past
-it (`on_loop`). A pool kind with a `cancel` half that starts with no `more` step
-is `RUNTIME-INTERNAL` when it starts (`start_job`), never later in a cancel.
-`vm/tests/task_cancel_test.c` covers both phases. A task parked in the FIFO of
-stdout or stderr leaves it (`agc_output_leave`, called from `unlink_task`), and
-the next writer is woken if its text now fits; the test cancels the head of a
-full buffer's FIFO.
+stay in the input for the next read. A wait that has taken something keeps its
+result: its `done` half runs and the result is dropped, so a served accept's
+socket is closed. A pool job runs to its end, which §14.1 keeps bounded except
+for its explicit stdin exceptions. A compute call that has started runs to its
+end too, without bound, and its result is dropped; one still queued is skipped.
+A pool job that goes on to wait on the loop (`agc_io_start_then`, a whole-file
+call on a FIFO) is cancelled only in that loop phase (`cancellable` in
+`vm/loop.c`). A pool kind with a `cancel` half that starts with no `more` step
+is `RUNTIME-INTERNAL` when it starts (`start_job`), never later in a cancel. A
+task parked in the FIFO of stdout or stderr leaves it (`agc_output_leave`,
+called from `unlink_task`), and the next writer is woken if its text now fits.
 
 ### 14.4 Ending
 
@@ -179,35 +166,32 @@ flush. **When `main` ends, the program ends.** The steps are:
    while its pool work had not ended, since that work holds bytes the program
    wrote;
 3. free what native code still owns (`agc_ffi_end` in `vm/ffi.c`). First wait
-   for the running compute calls (started, not finished) that hold a resource or
-   owned buffer still open; calls that hold nothing, or only what is freed
-   already, are not waited for. Then free every resource and owned buffer still
-   open, whatever task owns it, in one pass, newest first (the reverse of
-   opening), as a task's end does. The pass stops at the first resource that a
-   running call still holds (after a stop signal or at the deadline) and never
-   skips past it, so an older resource that a held one points into (a database
-   under its statement) never goes while C still uses the newer one. The frees
-   run on a thread of their own, so a `free` that hangs holds the exit at most
-   until the deadline below. A resource that a held call returns during the wait
-   is never freed (its `done` half does not run). A stop signal, before or
-   during the wait, ends the wait, and the pass stops as above. Step 2 and this
-   step share one deadline, the flush limit from the start of step 2
-   (`rt->flush_by`); what is not freed by then is left to the exit, and the
-   warning line of the flush limit says so. With a limit of 0 nothing is freed.
-   A failure (the loop cannot start) prints the flush failure line instead. The
-   end of `main` frees what it owns as any task's end does, because a `free` may
-   write data out (`fclose`) that `_exit` would lose. It comes after the files
-   so that output the program wrote first goes out first;
+   for the running compute calls that hold a resource or owned buffer still
+   open; calls that hold nothing are not waited for. Then free every resource
+   and owned buffer still open, whatever task owns it, in one pass, newest first
+   (the reverse of opening). The pass stops at the first resource that a running
+   call still holds (after a stop signal or at the deadline) and never skips
+   past it, so an older resource that a held one points into (a database under
+   its statement) never goes while C still uses the newer one. The frees run on
+   a thread of their own, so a `free` that hangs holds the exit at most until
+   the deadline. A resource that a held call returns during the wait is never
+   freed. A stop signal ends the wait. Step 2 and this step share one deadline,
+   the flush limit from the start of step 2 (`rt->flush_by`); what is not freed
+   by then is left to the exit, and the warning line of the flush limit says so.
+   With a limit of 0 nothing is freed. A failure (the loop cannot start) prints
+   the flush failure line instead. The end of `main` frees what it owns as any
+   task's end does, because a `free` may write data out (`fclose`) that `_exit`
+   would lose. It comes after the files so that output the program wrote first
+   goes out first;
 4. exit: `_exit`, and `TerminateProcess` of the process itself on Windows
    (`agc_exit_now`). A compute call may still run there and hold a lock, such
    as a C stream's, and neither runs `atexit` handlers, the C streams' flush
    or the DLLs' detach code, which could wait for it. Each final flush of the
-   C streams stdout and stderr (`agc_stdio_flush`) skips a stream whose lock
-   another thread holds, so its buffered native bytes may be lost. Linux and
-   macOS try the lock (`ftrylockfile`). Windows has no try-lock: a thread of
-   its own takes the lock and flushes, and the run waits at most 100 ms for it
-   to get the lock. Once a flush holds the lock, `fflush` can still block on
-   the descriptor.
+   C streams (`agc_stdio_flush`) skips a stream whose lock another thread holds,
+   so its buffered native bytes may be lost. Linux and macOS try the lock
+   (`ftrylockfile`); Windows has no try-lock, so a thread of its own takes the
+   lock and flushes, and the run waits at most 100 ms for it. Once a flush holds
+   the lock, `fflush` can still block on the descriptor.
 
 Nothing else is joined or drained: no task is awaited, no pool job other than
 the file flush and the compute calls of step 3 is waited for, no socket is read
@@ -237,33 +221,31 @@ either. Both leave children running.
 
 ### 14.5 Handles
 
-**Rule (phase 24, 24b).** A handle (file, socket, listener, process, `std/http`
-server, resource of native code) belongs to the task that opened it. A
-`Channel` has no opener: it is unowned until `Task.spawn_owning` hands it to a
-task, which then owns it like any other handle. If that task ends, in any way
-(return, crash, cancel), without closing it, the handle is closed. There is one close path: `finish_task`
-(`vm/task.c`) ends every task and closes the handles it still owns through
-`agc_close_owned`. Handing a handle to another task is always explicit, through
-one hand-off form, `Task.spawn_owning` ([handle ownership][task-rules]). It
-gives a handle the caller owns to the task it spawns, in the same call.
-`HttpWire.spawn` (20c, §10.7.2) is the same hand-off into the server's task
-group, through the one port function `agc_task_spawn_owning`; it has no group
-registration of its own. Ownership decides who closes a handle, not who may use
-it. Other tasks still use a shared handle (handle ownership, "Shared handles"),
-and `HttpClient` stays exempt (handle ownership). An `ATS` table (the grammar's
-"Shared tables") is exempt too. It is not an OS resource, so no task owns it,
-and a task's end never closes it.
+**Rule.** A handle (file, socket, listener, process, `std/http` server,
+resource of native code) belongs to the task that opened it. A `Channel` has no
+opener: it is unowned until `Task.spawn_owning` hands it to a task, which then
+owns it like any other handle. If the owner ends, in any way (return, crash,
+cancel), without closing the handle, the handle is closed. There is one close
+path: `finish_task` (`vm/task.c`) ends every task and closes the handles it
+still owns through `agc_close_owned`. Handing a handle to another task is
+always explicit, through one hand-off form, `Task.spawn_owning` ([handle
+ownership][task-rules]), which gives a handle the caller owns to the task it
+spawns, in the same call. `HttpWire.spawn` (§10.7.2) is the same hand-off into
+the server's task group, through the one port function `agc_task_spawn_owning`.
+Ownership decides who closes a handle, not who may use it: other tasks still
+use a shared handle, and `HttpClient` stays exempt. An `ATS` table is exempt
+too: it is not an OS resource, so no task owns it.
 
-The owner is a field of the resource (`agc_own` in `vm/loop.c`), and
-each task keeps the list of the handles it owns, so a task's end costs the
-number of its handles, not the size of the registry. `Task.spawn` moves nothing,
-and nothing goes back to the parent when a task returns, so a handle that a
-helper returns through `Task.await` is closed when the helper ends. Cancelled
-tasks close their handles too: those parked in a stepper (`File.each_line`), a
-handler that `close_server` cancels, the leftovers of `Test.run`, and an
-`HttpServer` whose owner is cancelled, which frees its port. A closed handle
-leaves its owner's list (`agc_unregister`). A regular file's close is a pool job
-that the ending task's awaiters wait for (§10.2.1, Owners).
+The owner is a field of the resource (`agc_own` in `vm/loop.c`), and each task
+keeps the list of the handles it owns, so a task's end costs the number of its
+handles, not the size of the registry. `Task.spawn` moves nothing, and nothing
+goes back to the parent when a task returns, so a handle that a helper returns
+through `Task.await` is closed when the helper ends. Cancelled tasks close their
+handles too (those parked in a stepper, a handler that `close_server` cancels,
+the leftovers of `Test.run`, an `HttpServer` whose owner is cancelled, which
+frees its port). A closed handle leaves its owner's list (`agc_unregister`). A
+regular file's close is a pool job that the ending task's awaiters wait for
+(§10.2.1, Owners).
 
 When the end of a task is observed (its `Task.await` returns, or `Task.map`
 takes its result into a slot), the handles it owned, and those of the
@@ -273,13 +255,12 @@ reaches the I/O thread before any step the observer posts. A timed-out item is
 not observed this way: its slot is written at its deadline, before it or its
 descendants close anything. A cancelled descendant still on a turn on another
 scheduler holds the task that the cancel reached it through until that turn ends
-(`hold` in `vm/task.c`, a count in `closing`). One that an earlier cancel holds
-already is counted through the top of its holder chain. `HttpWire.server` takes
-the listener off its owner's list, so ending the owner closes both, and a
-hand-off moves both. `Task.spawn_owning` fails with `RUNTIME-HANDLE-NOT-OWNED`
-at the handle argument when the caller does not own a handle of its argument (a
-struct, enum, List, Map or Result may hold several) or it is closed, before it
-makes a task and before any handle of the argument moves (all or none).
+(`hold` in `vm/task.c`, a count in `closing`). `HttpWire.server` takes the
+listener off its owner's list, so ending the owner closes both, and a hand-off
+moves both. `Task.spawn_owning` fails with `RUNTIME-HANDLE-NOT-OWNED` at the
+handle argument when the caller does not own a handle of its argument (a struct,
+enum, List, Map or Result may hold several) or it is closed, before it makes a
+task and before any handle of the argument moves (all or none).
 
 A resource of native code (`vm/ffi.c`) closes by running its C `free` once, on
 `Native.close` or at its owner's end. A `compute def` call holds its resource
@@ -288,11 +269,8 @@ call that made it: a statement's database): a close meanwhile marks the resource
 closed and takes it off its owner, and the end of the last such call runs the
 `free` on a scheduler, so C never sees the pointer freed while a pool thread
 uses it. A resource closed while held holds what it comes from in turn until its
-free, so the hold goes further up only through closed resources. A walk up
-passes freed links and points each one it passed at where it ended, so a call
-costs about the same whatever the chain above, also after a long chain is closed
-at once. A closed callback is freed once every fast native call whose C called
-it while its code existed has returned: C may call it again until then (it gives
+free. A closed callback is freed once every fast native call whose C called it
+while its code existed has returned: C may call it again until then (it gives
 zero), and libffi's frames of its run are on that call's stack. A compute call
 is not counted (its pool thread does not hold `rt->sync`), so its C must not
 call a closed callback. The end of the run frees what is still open (§14.4, step
@@ -325,20 +303,17 @@ the caller. A channel never handed over is closed only by `Channel.close`.
   §14.5: how it waits, times out, is cancelled, ends and owns its handles. If it
   needs a second way for any of them, it does not go in.
 
-Planned work to re-check with this rule before it starts:
+Plans to re-check with this rule before they start:
 
-- **Item:** The rest of the VM layers (issue #998; the first part is §15)
-  - **Question:** Does each layer replace code, or only add a boundary?
-
-- **Item:** VM metrics (issue #992, `docs/future/28-vm-metrics.md`)
-  - **Question:** It adds a metrics thread and hooks in the core. Could a dump
-    at exit, or an outside reader of the VM's state, do the job? The memory
-    diagnosis adds one add on the allocation path while nobody asks: it must
-    pass the overhead check or change rule 4 of the design first.
-
-- **Item:** K I/O threads, local run queues with work stealing (§16.10)
-  - **Question:** Only if measurements ask. Does the model of §16 stop being
-    enough, and does the change keep one way to wake a task and one place for
-    each handle?
+- **VM layers, rest (#998; the first part is §15):** does each layer replace
+  code, or only add a boundary?
+- **VM metrics (#992, `docs/future/28-vm-metrics.md`):** it adds a metrics
+  thread and hooks in the core. Could a dump at exit, or an outside reader of
+  the VM's state, do the job? The memory diagnosis adds one add on the
+  allocation path while nobody asks: it must pass the overhead check or change
+  rule 4 of the design first.
+- **K I/O threads, local run queues with work stealing (§16.10):** only if
+  measurements ask. Does the model of §16 stop being enough, and does the
+  change keep one way to wake a task and one place for each handle?
 
 [task-rules]: ../../site/content/library/concurrency/task.md

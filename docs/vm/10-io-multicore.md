@@ -1,8 +1,7 @@
 #### 10.2.3 Multicore: threads and the rules per thread
 
 The multicore model (threads, queues and ownership) is in §16
-([`16-architecture.md`](16-architecture.md)); this section keeps the rules
-that still apply.
+(`16-architecture.md`); this section keeps the rules that apply.
 
 - **Schedulers.** `N` defaults to `uv_available_parallelism()` (respects CPU
   affinity); `--schedulers N` or the variable `AGENTICA_SCHEDULERS` sets it (the
@@ -42,12 +41,12 @@ that still apply.
   In `vm/task.c`, `agc_task_parking` marks the task PARKING before the builtin
   registers anything (`agc_io_start_then` marks before the job exists), and
   `agc_task_unpark` takes it back to RUNNING when the wait turns out to be
-  unneeded; `agc_task_park` only says that the turn ends in a wait (the end of
-  the turn is in §16.9, "Atomic task states"). A task that parked on a job has
-  `parked` set, and `resume` takes the job's result and writes it to `park_reg`
-  whichever way the task got there, so for the job path the waker never writes
-  the register and WOKEN needs only the yield; a retry park runs the builtin
-  again. The re-check of the wait condition belongs to each builtin.
+  unneeded; `agc_task_park` only says that the turn ends in a wait (§16.9,
+  "Atomic task states"). A task that parked on a job has `parked` set, and
+  `resume` takes the job's result and writes it to `park_reg` whichever way the
+  task got there, so for the job path the waker never writes the register; a
+  retry park runs the builtin again. The re-check of the wait condition belongs
+  to each builtin.
 - **Channels (17b).** A channel's waiter lists change under `rt->sync`, the one
   coarse lock (§16.9), never held across a park. Ring growth copies the slots
   under the lock: an accepted exception, bounded by the capacity and charged as
@@ -59,42 +58,31 @@ that still apply.
   so two tasks that close a cycle at the same time cannot both miss it: the
   second to take the lock sees the first's field.
 - **State split.** `agc_runtime` (shared), `struct agc_vm` (the scheduler) and
-  `agc_task` hold what §16.9, "The context split", lists. With N=1 there are
-  these deviations: the `fail` jmp_buf is per scheduler (the only `setjmp` is
-  the scheduler's own), and the stream locks and `rt->sync` are solo (they take
-  nothing) until `agc_share`, since one thread runs the VM (§16.9). With N>1 the
-  fields go as follows (§16):
-  - Runtime, read-only after start-up: `program` (with its constants, except
-    the Globals table, which the entry writes before `main`, see "The Globals
-    table" below), `args`, `cwd` (raw bytes, read by `agc_files_init`),
-    `no_files`, and the config.
-    Shared under rules: the atomic `steps_left` (10.2.1, Quotas), `outcome` (set
-    once by a CAS, 6.2), `out` and `err` (one lock per stream, see Output) and
-    `sync`, the one lock of the task tree, the channels and the other shared
-    state (§16.9).
-    Stdin (`in`, an `agc_input`) is a handle on the I/O loop (see I/O
-    ownership).
-  - Shared: the global run queue (§16.3).
-  - The `std/logger` registry (`log` in the runtime, built in `vm/logger.c`,
-    the grammar's logging section): the global level, the lowest handler
-    rank and an array of (name, rank, handler) in the GC heap, reached only by
-    the ten `LogRegistry` builtins. It is the language's one piece of global
-    mutable state and is a field of the runtime, not a `static`. With N>1 it
-    needs a lock: `rt->sync`, the one coarse lock (§16.9), taken
-    around each `LogRegistry` builtin that writes or reads the array (its
-    rows are marked `shared`). The level, the lowest rank and the floor (the
-    higher of the two) are atomics that the writers change under the lock, so
-    `level`, `lowest` and `floor` are leaf rows that read one each without it.
-    `install_default` is one native call, so the check for level -1 and the
-    writes cannot interleave with another task.
-  - I/O thread: the loop, the inbox (§16.4) and the resource registry. As
-    built, the registry has its own leaf lock for register and unregister
-    (§16.9).
-  - Per scheduler: the turn counter and the running task's context (`task`,
-    `fail`).
-  - Per task: the registers and frames, `random` (7.4), the `fail` jmp_buf
-    target (armed on the thread that runs the turn), the string cursor cache,
-    and `parked`, the request the task waits on, which it sets while PARKING.
+  `agc_task` hold what §16.9, "The context split", lists. With N=1 the `fail`
+  jmp_buf is per scheduler (the only `setjmp` is the scheduler's own), and the
+  stream locks and `rt->sync` are solo until `agc_share` (§16.9). With N>1:
+  - The runtime is read-only after start-up (`program` with its constants,
+    except the Globals table below; `args`; `cwd`; `no_files`; the config),
+    except the shared fields under rules: the atomic `steps_left` (10.2.1,
+    Quotas), `outcome` (set once by a CAS, 6.2), `out` and `err` (one lock per
+    stream, see Output) and `sync`, the one lock of the task tree, the channels
+    and the other shared state (§16.9). Stdin (`in`) is a handle on the I/O
+    loop.
+  - The `std/logger` registry (`log` in the runtime, `vm/logger.c`) holds the
+    global level, the lowest handler rank and an array of (name, rank, handler)
+    in the GC heap, reached only by the `LogRegistry` builtins. It is the
+    language's one piece of global mutable state and is a field of the runtime,
+    not a `static`. With N>1 `rt->sync` guards each `LogRegistry` builtin that
+    writes or reads the array (its rows are marked `shared`). The level, the
+    lowest rank and the floor are atomics that the writers change under the
+    lock, so `level`, `lowest` and `floor` are leaf rows that read one each
+    without it. `install_default` is one native call, so the check for level -1
+    and the writes cannot interleave with another task.
+  - The I/O thread owns the loop, the inbox (§16.4) and the resource registry
+    (which has its own leaf lock, §16.9).
+  - Per scheduler: the turn counter and the running task's context. Per task:
+    the registers and frames, `random` (7.4), the `fail` jmp_buf target (armed
+    on the thread that runs the turn), the string cursor cache, and `parked`.
   - A runtime diagnostic or `System.exit` on any scheduler ends the run (6.2):
     the schedulers stop and the exit path (§14.4) runs on the I/O thread after
     it has joined them (§16.9, "Threads").
@@ -123,13 +111,12 @@ that still apply.
   `agc_gc_thread_leave`; the main thread calls `agc_gc_allow_threads` once after
   `agc_init`, which also starts the mark threads (never with N=1). The libuv
   pool threads and the Windows stdin reader stay unregistered on purpose: they
-  touch only `malloc` memory. The runtime struct is GC memory (`agc_vm_init`
-  allocates it), reached from the `agc_vm` that stays on the main thread's stack
-  for the whole run. Where GC pointers may live is in §16.5, "GC rule".
-  Collections stop the world; that cost is accepted. Boehm stops threads with
-  signals installed with `SA_RESTART`. The VM's syscall paths retry on `EINTR`,
-  and libuv signal handling (`uv_signal_t`) must never take Boehm's suspend and
-  restart signals.
+  touch only `malloc` memory. The runtime struct is GC memory, reached from the
+  `agc_vm` that stays on the main thread's stack for the whole run. Where GC
+  pointers may live is in §16.5, "GC rule". Collections stop the world; that
+  cost is accepted. Boehm stops threads with signals installed with
+  `SA_RESTART`. The VM's syscall paths retry on `EINTR`, and libuv signal
+  handling (`uv_signal_t`) must never take Boehm's suspend and restart signals.
   On Windows Boehm stops threads with `SuspendThread`, so a stopped thread may
   hold the `malloc` heap lock, and the collecting thread must not `malloc` until
   the world restarts. Its mark phase calls `signal(SIGSEGV, ...)`, and the UCRT
@@ -171,19 +158,17 @@ that still apply.
   compare-and-swap, retrying when another write won (`vm/ats.c`). A table call
   takes no lock and does not yield.
 - **The Globals table** (module constants, the grammar's `Module constants`
-  section) is the one place a loaded program is written
-  (`agc_program.globals`).
+  section) is the one place a loaded program is written (`agc_program.globals`).
   The loader lets only the entry function write it, in code with no backward
-  jump, and refuses any call or closure of the entry in a file with slots. So
-  each `GLOBAL_SET` runs at most once, in the main task, before it tail-calls
+  jump, and refuses any call or closure of the entry in a file with slots (§8).
+  So each `GLOBAL_SET` runs at most once, in the main task, before it tail-calls
   `main`, and then the table is only read: it needs no lock and no atomic once
   the other schedulers start. The entry of a front-end file runs only pure
   builtins, so it spawns no task. A hand-made entry could spawn a task before
   its last write, so a run with N>1 starts no second scheduler until the entry
   has handed over to `main` (its first `TAIL_CALL` or `RETURN`; §16.9,
   "Threads"). A slot is a 16-byte value, so per-slot ordering would not stop a
-  torn read. At N=1 tasks interleave on one thread and
-  nothing is racy.
+  torn read.
 - **Order of work.** The task fixtures run as a stress test with `--schedulers
   4`, under TSan when available (§16.9, "TSan covers the shared code"). ASan and
   TSan, both without GC, cover memory errors and races in the scheduler code.

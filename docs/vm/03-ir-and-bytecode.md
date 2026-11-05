@@ -6,181 +6,85 @@ Each stage returns data or one diagnostic.
 ### 3.1 Types from the checker
 
 The checker records the type of every expression in a table. The lowerer needs
-it for field indexes (which depend on the struct type),
-for `LIST_GET` or `MAP_GET`, for typed arithmetic and for unary minus. Each
-typed op still checks its tags at run time (4.2).
+it for field indexes, for `LIST_GET` or `MAP_GET`, for typed arithmetic and for
+unary minus. Each typed op still checks its tags at run time (4.2).
 
 ### 3.2 Structures
 
-The IR is data, defined in `compiler/lower/ir.agc`: `Program` (sources,
-structs, enums, functions, entry, globals, span), `Function` (name, params,
-captures, slots, body, span), `Instr` (op, args, imm, name, spans), `StructDef`
-(linked name, field names in declaration order, field types) and `EnumDef`.
+The IR is data, defined in `compiler/lower/ir.agc`; `--dump-ir` prints it.
 
-- `body` is a flat list of `Instr`; a label is an `Instr` with op `label` and
-  one argument, the label id. `--dump-ir` prints it.
+- `body` is a flat list of `Instr`; a label is an `Instr` with op `label`.
 - Slots are the VM registers, numbered per function: parameters `0..p-1`,
   captures `p..p+c-1`, then locals and temporaries. Temporaries follow a stack
   discipline, so a call's arguments are the highest live slots (4.3).
-- A `StructDef` holds its field types only when every field is decodable
-  (`decodable`). Only `JSON.decode` and `JSON.schema` read them.
+- A `StructDef` holds its field types only when every field is decodable.
+  Only `JSON.decode` and `JSON.schema` read them.
 - Each instruction has a list of spans: the span its diagnostic uses (operator
   for arithmetic, index expression for indexing, call span for calls). A merged
   `step` and `call-builtin` have several (4.1).
 
 ### 3.3 Lowering rules
 
-- **Form:** Statements, expressions
-  - **Lowering:** `step` with the node span, then the node's code.
+`compiler/lower/` has the rule of each form. The ones with a reason that the
+code does not show:
 
-- **Form:** Literals, names
-  - **Lowering:** `const` for a literal. A local is read from its slot. Only
-    call windows need `move`.
-
-- **Form:** `-` over literal 2^63
-  - **Lowering:** `step`, `step`, `const INT64_MIN`.
-
-- **Form:** `and` / `or`
-  - **Lowering:** Left side into the target, `jump-if-false` / `jump-if-true`
-    past the right side.
-
-- **Form:** Arithmetic, ordering
-  - **Lowering:** Typed ops. `a > b` is `lt b a`, `a >= b` is `le b a` (NaN
-    stays false).
-
-- **Form:** `if` / `elsif` / `else`
-  - **Lowering:** Conditional jumps over each branch.
-
-- **Form:** `while`
-  - **Lowering:** Head label, condition (starts with its `step`),
-    `jump-if-false` to the exit, body, `jump` to the head. `next` jumps to the
-    head, `break` to the exit.
-
-- **Form:** `for x in a..b`, `a...b`
-  - **Lowering:** No `Range` value. The counter `i` starts at `a`, `last` is
-    `b`. The test `le-i` (`lt-i` for `...`) runs before the body. For `...`,
-    `last` is `b - 1` (`sub-i`, after the nonempty test; b is above a, so no
-    overflow). The loop top is a `step` with the `for` span, one per iteration.
-    After the body (the target of `next`) the loop compares `i` with `last` and
-    only then adds 1, so a range ending at the largest Int never overflows.
-
-- **Form:** `for x in r` (a `Range` value)
-  - **Lowering:** `range-bounds` once into the counter, `last` and non-empty
-    flag, then the same loop. Assigning `r` in the body does not change the
-    loop.
-
-- **Form:** `a..b`, `a...b` as a value
-  - **Lowering:** `step`, then `range dst w kind` (kind 0 for `..`, 1 for
-    `...`).
-
-- **Form:** `for x in s` (a `Set` value)
-  - **Lowering:** `call-builtin Set.to_a` on the hidden slot, then the loop of
-    `for x in xs` over the list. The set is read once, so assigning `s` in the
-    body does not change the loop.
-
-- **Form:** `for x in xs`
-  - **Lowering:** The iterable goes into a hidden slot (a `move`, even for a
-    local, since the body may assign it). Hidden index, length and one. The body
-    starts with the `step` of its first statement, then `list-get`. The backward
-    jump lands on a `STEP`. `next` jumps to the increment, `break` past the
-    test. An empty body charges nothing.
-
-- **Form:** Functions
-  - **Lowering:** One IR function each. Falling off the end returns Void.
-
-- **Form:** Calls
-  - **Lowering:** A builtin gives `call-builtin` (including the higher-order
-    `List` functions, 4.3). A user function gives `call`, or `tail-call` when it
-    is the value of a `return`.
-
-- **Form:** Structs, enums
-  - **Lowering:** `step` (construct span), fields evaluated in written order
-    straight into their declared slots, then `struct`. An enum constructor is
-    `step`, payload, `enum` with the global variant id; a nullary variant is
-    `enum dst dst v`. Field access is `step`, target, `field` with the declared
-    index.
-
-- **Form:** Struct update `v.with(f: x)`
-  - **Lowering:** `step` (the update span), a window with the receiver in its
-    first slot and the new values after it, in the order of the struct's fields
-    (each value is evaluated in written order into its slot), then `struct-with
-    dst window s fields`: one instruction copies the receiver and overwrites
-    those fields. The receiver is evaluated once, before the values.
-
-- **Form:** Lists, maps
-  - **Lowering:** `list` / `map` from consecutive slots (a map's key before its
-    value). A literal longer than 255 elements is built in chunks joined with
-    `List.concat`; a longer map literal is extended with `Map.put`. Literals
-    need at most 256 slots (list) or 511 (map) beside their elements. An empty
-    literal is `list dst dst 0` or `map dst dst 0`.
-
-- **Form:** Indexing
-  - **Lowering:** `list-get` or `map-get` by the target's checked type, after a
-    `step` for the index node. `RUNTIME-INDEX-OUT-OF-RANGE` and
-    `RUNTIME-KEY-NOT-FOUND` point at the index expression's span.
-
-- **Form:** `case`
-  - **Lowering:** The scrutinee is evaluated once. Each arm has a test (`const`
-    + `same` for literals, `is-variant`, `is-ok`), `jump-if-false` to the next
-    arm, payload into arm slots (`_` skipped), then the body. Patterns charge no
-    steps. `_` has no test. An Int literal outside 64 bits can never match, so
-    its test is a plain `jump`. A Result pattern tests `is-ok`, and its binding
-    reads `result-value` (the value or the message).
-
-- **Form:** `try`
-  - **Lowering:** `step` (the `try` span), the operand, then `try dst src`: on
-    an error, return that Result from the function (the block, inside a block).
-    `return try f(...)` is not a tail call. A `try` that the checker found in
-    the block of a `Lazy` method (`Checked.step_tries`) is `try-step dst src`
-    instead.
-
-- **Form:** `ok`, `error`, `Result.*`
-  - **Lowering:** Builtin calls. `Result.Ok(x)` and `Result.Err(m)` are `ok` and
-    `error` calls after parsing.
-
-- **Form:** Interpolation
-  - **Lowering:** `step`, then the first part into the target and each later
-    part into the next slot, then `concat`. An expression part that is not a
-    String is followed by `to-text`. String parts charge no step.
-
-- **Form:** `.inspect`, `.to_s`
-  - **Lowering:** `inspect`. `.to_s` follows the checker's resolution: the
-    receiver for String, `String.from_int` or `String.from_float` for Int and
-    Float, a one-part interpolation otherwise.
-
-- **Form:** `JSON.decode(s, T)`, `JSON.schema(T)`
-  - **Lowering:** The type argument is charged one step and lowers to a String
-    constant with the struct's linked name (`@2::User` when imported). The
-    builtin finds the struct by that name in the Types section. A target that is
-    not decodable is rejected by the checker (`CHECK-NOT-DECODABLE`).
-
-- **Form:** `&name`
-  - **Lowering:** `step`, then `closure dst fn` with no captures.
-
-- **Form:** `f.call(...)`
-  - **Lowering:** `step` (invoke span), the target into the window base, the
-    arguments after it, then `call-value base n`.
-
-- **Form:** Blocks
-  - **Lowering:** `step` (block span), then closure conversion (3.4).
-
-- **Form:** `return`
-  - **Lowering:** The value, or a Void constant. Inside a block it leaves the
-    block. A direct call to a user function (local or imported) ends in
-    `tail-call` instead of `call`, wherever the `return` is: in branches, `case`
-    arms and loop bodies. Builtin calls, calls inside a larger expression
-    (`return 1 + f(n)`) and `return try f(...)` are not tail calls.
-
-- **Form:** Assignment to an existing local
-  - **Lowering:** Value into a temporary, then `move`. Lowering straight into
-    the local would let `x = y and x` read the new `x`. A new local is lowered
-    straight into its slot.
+- Every statement and expression is a `step` with its node span, then its code.
+  Patterns, `if` branches and the string parts of an interpolation charge none.
+- `a > b` is `lt b a` and `a >= b` is `le b a`; NaN stays false.
+- `-` over the literal 2^63 is `const INT64_MIN` (two `step`s, as for any unary
+  minus).
+- `for x in a..b` builds no `Range`: a counter and a `last`, with the test
+  before the body. `...` uses `last = b - 1`. The loop compares `i` with `last`
+  and only then adds 1, so a range ending at the largest Int never overflows.
+  The loop top is a `step` with the `for` span, one per iteration. `for x in r`
+  (a `Range` value) and `for x in s` (a `Set`, through `Set.to_a`) read the
+  iterable once, so assigning it in the body does not change the loop.
+- `for x in xs` moves the iterable into a hidden slot (a `move`, even for a
+  local, since the body may assign it), with a hidden index and length. The
+  backward jump lands on a `STEP`; an empty body charges nothing.
+- A builtin call is `call-builtin` (the higher-order `List` functions too, 4.3).
+  A user function is `call`, or `tail-call` when it is the direct value of a
+  `return` wherever that is (branches, `case` arms, loop bodies). Builtin
+  calls, `return 1 + f(n)` and `return try f(...)` are not tail calls. Tail
+  calls carry the same `step`s as calls, so step counts do not change.
+- Struct fields are evaluated in written order straight into their declared
+  slots. `v.with(f: x)` evaluates the receiver once, before the values, into a
+  window followed by the new values in field order; one `struct-with`
+  instruction copies the receiver and overwrites those fields.
+- A list literal longer than 255 elements is built in chunks joined with
+  `List.concat`; a longer map literal is extended with `Map.put`. A literal
+  needs at most 256 slots (list) or 511 (map) beside its elements. A list
+  literal nested `d` levels deep needs about `d` registers, so nesting beyond
+  about 65,000 levels is `BYTECODE-LIMIT`; lowering stays linear in the depth.
+- `case` evaluates the scrutinee once. Each arm tests (`const` + `same` for
+  literals, `is-variant`, `is-ok`), jumps to the next arm on failure, then binds
+  the payload (`_` skipped). An Int literal outside 64 bits can never match, so
+  its test is a plain `jump`. A Result binding reads `result-value` (the value
+  or the message).
+- `try` is `try dst src`: on an error, return that Result from the function (the
+  block, inside a block). A `try` that the checker found in the block of a
+  `Lazy` method (`Checked.step_tries`) is `try-step dst src`.
+- `Result.Ok(x)` and `Result.Err(m)` are `ok` and `error` calls after parsing.
+- An interpolation is the first part into the target and each later part into
+  the next slot, then `concat`; a part that is not a String is followed by
+  `to-text`. `.to_s` follows the checker's resolution: the receiver for String,
+  `String.from_int` or `String.from_float` for Int and Float, a one-part
+  interpolation otherwise.
+- `JSON.decode(s, T)` and `JSON.schema(T)`: the type argument is charged one
+  step and lowers to a String constant with the struct's linked name
+  (`@2::User` when imported); the builtin finds the struct by that name in the
+  Types section. The checker rejects a target that is not decodable
+  (`CHECK-NOT-DECODABLE`).
+- Assignment to an existing local goes through a temporary, then `move`:
+  lowering straight into the local would let `x = y and x` read the new `x`. A
+  new local is lowered straight into its slot.
+- `RUNTIME-INDEX-OUT-OF-RANGE` and `RUNTIME-KEY-NOT-FOUND` point at the index
+  expression's span.
 
 The builtin record types (`FileInfo`, `Header`, `HttpRequest`, `HttpResponse`,
 `HttpClientOptions`, `HttpServerOptions`, `ProcessOutput`, `LogEvent`,
 `StructMember`) join the struct table only when the program names them or a
-checked type mentions them. Then they lower like user structs
-(`compiler/lower/lower_program.agc`).
+checked type mentions them. Then they lower like user structs.
 
 ### 3.4 Closure conversion
 
@@ -203,38 +107,22 @@ checked type mentions them. Then they lower like user structs
 
 ### 3.5 Lowering diagnostics
 
-The lowerer and the emitter never raise. Their codes have their own prefixes, so
-they cannot clash with the language codes.
+The lowerer and the emitter never raise. Their codes have their own prefixes,
+so they cannot clash with the language codes.
 
-- **Code:** `LOWER-UNSUPPORTED`
-  - **Raised by:** `compiler/lower/lowering.agc`
-  - **Meaning:** A form or a type the lowerer does not handle yet (`vm_type?` in
-    `compiler/lower/lower_state.agc`). The span is the first such node.
-
-- **Code:** `LOWER-INTERNAL`
-  - **Raised by:** `compiler/lower/lowering.agc`
-  - **Meaning:** A failed internal assumption inside the lowerer (a bug), at the
-    program span.
-
-- **Code:** `BYTECODE-LIMIT`
-  - **Raised by:** `compiler/bytecode/bytecode_writer.agc`
-  - **Meaning:** A function needs more than 65535 registers, or the program has
-    more than 65535 structs or variants (4.4).
-
-- **Code:** `BYTECODE-INTERNAL`
-  - **Raised by:** `compiler/bytecode/bytecode_writer.agc`
-  - **Meaning:** An impossible IR reaches the writer (a bug), at the program
-    span.
-
-A builtin call lowers only when its implementation key is in `VM_BUILTINS`
-(`compiler/lower/lower_tables.agc`). A builtin outside that list is
-`LOWER-UNSUPPORTED` at the
-call span. Today the list covers every catalog key.
+- `LOWER-UNSUPPORTED`: a form or a type the lowerer does not handle yet
+  (`vm_type?` in `compiler/lower/lower_state.agc`), at the first such node's
+  span. A builtin call lowers only when its implementation key is in
+  `VM_BUILTINS` (`compiler/lower/lower_tables.agc`); that list covers every
+  catalog key.
+- `LOWER-INTERNAL`: a failed internal assumption in the lowerer (a bug), at the
+  program span.
+- `BYTECODE-LIMIT`: a function needs more than 65535 registers, or the program
+  has more than 65535 structs or variants (4.4).
+- `BYTECODE-INTERNAL`: an impossible IR reaches the writer (a bug), at the
+  program span.
 
 `agentica compile` and `--dump-ir` print them like other diagnostics and exit 1.
-A list literal nested `d` levels deep needs about `d` registers, so nesting
-beyond about 65,000 levels in one literal is `BYTECODE-LIMIT`. Lowering stays
-linear in the depth.
 
 ## 4. Bytecode
 
@@ -329,29 +217,24 @@ behavior.
 There are 53 opcodes. Everything else, including `ok`, `error`, `puts` and every
 module function, is a builtin. Opcode numbers are positions in one list shared
 by `OPCODES` in `compiler/bytecode/bytecode_tables.agc` and `agc_opcode` in
-`vm/value.h`. New opcodes are appended at the end. An appended opcode does not
-bump the format version, and an older VM rejects it as unknown.
+`vm/value.h`. New opcodes are appended at the end; that does not bump the
+format version, and an older VM rejects the opcode as unknown.
 
-Fused STEP: after it has checked a file, the loader rewrites each `STEP` whose
+Fused opcodes. After it has checked a file, the loader rewrites a `STEP` whose
 next instruction is `MOVE`, `CONST`, `FIELD`, `LIST_GET`, `IS_VARIANT`,
 `GLOBAL`, `ADD_I`, `SUB_I`, `MUL_I`, `LT_I` or `RETURN` into a fused opcode
 (`agc_fused_opcode` in `vm/value.h`, numbered from `AGC_OP_COUNT`) and leaves
 the next instruction in place. The fused opcode is that `STEP` (same charge,
-same stop and span, same yield, before the next instruction runs), then the
-next instruction without a second dispatch. A jump to the next instruction, or
-a resume after the yield, runs it alone. Steps and stop points do not change,
-and no file holds a fused opcode: the loader rejects one as unknown. The
-profile (`docs/vm/08-loader-and-cli.md` §9) runs every fused `STEP` as a plain
-`STEP`, so its counts are those of the file's opcodes.
-
-Fused CONST: before it fuses the `STEP`s, the loader also rewrites each `CONST`
-whose next instruction is `ADD_I`, `SUB_I`, `MUL_I`, `DIV_I`, `MOD_I`, `LT_I`,
-`LE_I`, `EQ` or `NE` (`i + 1`, `n % 2 == 0`, `i < 10`). The fused opcode still
-writes the constant's register, since a later instruction may read it, then
-runs the next instruction without a second dispatch, with that instruction's
-checks, error and span. A `STEP` before a fused `CONST` gets a fused form of its
-own, so the three run in one dispatch. As with `STEP`, the next instruction
-stays in place, and the profile runs a fused `CONST` as a plain `CONST`.
+stop, span and yield, before the next instruction runs), then the next
+instruction without a second dispatch. A jump to the next instruction, or a
+resume after the yield, runs it alone. Before it fuses the `STEP`s, the loader
+also fuses a `CONST` whose next instruction is `ADD_I`, `SUB_I`, `MUL_I`,
+`DIV_I`, `MOD_I`, `LT_I`, `LE_I`, `EQ` or `NE`; it still writes the constant's
+register, since a later instruction may read it, and the next instruction keeps
+its checks, error and span. A `STEP` before a fused `CONST` gets a fused form of
+its own. Steps and stop points do not change, no file holds a fused opcode (the
+loader rejects one as unknown), and the profile (§9) runs fused opcodes as the
+plain ones, so its counts are those of the file's opcodes.
 
 Details that code and tests rely on:
 
@@ -361,37 +244,32 @@ Details that code and tests rely on:
   never reach `EQ` or `SAME`.
 - `SAME` is false when the tags differ. Float compares by `eqv?`, so `-0.0` does
   not match `0.0` and NaN matches NaN.
-- `LIST` copies its window into a new immutable list. `LIST_GET` checks
-  `0 <= i < len` on the int64 before using it.
+- `LIST_GET` checks `0 <= i < len` on the int64 before using it.
 - `MAP` puts its `c <= 255` pairs in order with the rule of `Map.put`: a
   repeated key keeps its first position and takes the last value. A key that is
   not Int or String (only in a hand-made file) is `RUNTIME-INTERNAL`.
-- `STRUCT` and `ENUM` take their sizes from the tables. A nullary `ENUM` returns
-  the variant's shared value. `IS_VARIANT` compares the global variant id, which
-  is unique per enum declaration.
+- A nullary `ENUM` returns the variant's shared value. `IS_VARIANT` compares the
+  global variant id, which is unique per enum declaration.
 - `FIELD` and `PAYLOAD` read item `c` of the value's own `n`. Past it is
   `RUNTIME-INTERNAL`.
-- `STRUCT_WITH` allocates one struct of the receiver's size and copies the
-  receiver into it, then writes the updated fields. The receiver must be the
-  struct type that update entry `c` names, with the field count of that type's
-  table entry (a hand-made file may put another value there); anything else is
-  `RUNTIME-INTERNAL` (5.2). The loader has checked every field index of the
-  entry against the struct's field count, so the writes need no bounds test.
-  Unlike `STRUCT`, the copy is linear in the field count, so the instruction
+- `STRUCT_WITH`: the receiver must be the struct type that update entry `c`
+  names, with the field count of that type's table entry (a hand-made file may
+  put another value there); anything else is `RUNTIME-INTERNAL` (5.2). The
+  loader has checked every field index of the entry, so the writes need no
+  bounds test. The copy is linear in the field count, so the instruction
   charges `n * sizeof(agc_value)` bytes of cost, like `CONCAT`.
-- `GLOBAL` and `GLOBAL_SET` index the Globals table. The loader has checked
-  that `bx` is below the slot count, so the interpreter does not check it again,
-  as for `CONST`. A slot starts as zeroed memory, which is tag 0, `AGC_T_VOID`.
-  No module constant has type `Void`, so tag 0 means "never set", and `GLOBAL`
-  of such a slot is `RUNTIME-INTERNAL` (only a hand-made file can do it, or a
-  `GLOBAL_SET` of a `Void`, which unsets the slot again). Neither instruction
-  charges cost beyond the `STEP`s of the function that holds it, as `MOVE` and
-  `CONST` do. `GLOBAL_SET` is the only instruction that writes to the loaded
-  program. The loader allows it only in the entry function, which has no
-  backward jump (4.6) and cannot be called when the table is not empty, so each
-  `GLOBAL_SET` runs at most once, in the main task, before the entry hands over
-  to `main`. `10-io-multicore.md` §10.2.3 and `16-architecture.md` §16.7 say
-  why that makes the table safe to share.
+- `GLOBAL` and `GLOBAL_SET` index the Globals table; the loader has checked
+  `bx` against the slot count. A slot starts as zeroed memory, which is tag 0,
+  `AGC_T_VOID`. No module constant has type `Void`, so tag 0 means "never set",
+  and `GLOBAL` of such a slot is `RUNTIME-INTERNAL` (only a hand-made file can
+  do it, or a `GLOBAL_SET` of a `Void`, which unsets the slot again). Neither
+  instruction charges cost beyond the `STEP`s of its function. `GLOBAL_SET` is
+  the only instruction that writes to the loaded program. The loader allows it
+  only in the entry function, which has no backward jump (4.6) and cannot be
+  called when the table is not empty, so each `GLOBAL_SET` runs at most once, in
+  the main task, before the entry hands over to `main`. `10-io-multicore.md`
+  §10.2.3 and `16-architecture.md` §16.7 say why that makes the table safe to
+  share.
 - An error in `TRY` returns from the frame like `RETURN`. An error in a `TRY` of
   the entry function is `RUNTIME-INTERNAL` (the checker allows `try` only in
   functions that return Result).
@@ -421,32 +299,27 @@ Details that code and tests rely on:
   then sorts.
 - `File.each_line` is a resumable builtin that also parks between callbacks (a
   stepper). `CALL_BUILTIN` runs the builtin function, which checks its arguments
-  and installs a step function on the task; then the interpreter pushes a native
+  and installs a step function on the task; the interpreter then pushes a native
   frame. Each time that frame runs, the step function says what comes next: call
-  the block with a String, park the task while a read or the final close runs,
-  or end with the Result. What a callback or a woken job produced is given back
-  to the step function, so no C code calls the interpreter, and the task can
-  block inside the callback, like the `List` builtins. A native frame on top of
-  the call stack is resumed at the start of the task's next turn. Each block
-  call costs one step, charged as for the other native frames, and the turn
-  cost of the bytes read.
+  the block with a String, park the task while a read or the close runs, or end
+  with the Result. No C code calls the interpreter. A native frame on top of the
+  call stack is resumed at the start of the task's next turn. Each block call
+  costs one step and the turn cost of the bytes read.
 - The terminals of `Lazy` (`to_a`, `each`, `reduce`, `find`; `vm/lazy.c`) are
-  steppers too, with no block of their own: each call names its function
-  (`AGC_STEP_CALL` with `fn`, `AGC_STEP_CALL2` for two arguments). Each item
-  that enters the first stage costs one step (`agc_step_turn`); each stage it
-  passes without a callback, and each item `to_a` keeps, charges one unit of
-  turn cost, an `each_cons` window its size, and a terminal's start the depth
-  of the recipe (`agc_charge`). When the step count or the turn cost
-  (`agc_turn_charge`) ends the turn, the step returns `AGC_STEP_YIELD`: the
-  native frame stays on the stack and runs again at the task's next turn. So
-  `--max-steps`, the turns of other tasks and a cancel reach a pipeline that
-  calls no block. These steps run without `rt->sync` (`agc_stepper.unlocked`):
-  they touch only the run of the calling task. Over `File.foreach` or
-  `ch.lazy` they take it only around the line reader of `File.each_line` and
+  steppers with no block of their own: each call names its function
+  (`AGC_STEP_CALL`, `AGC_STEP_CALL2`). Each item that enters the first stage
+  costs one step (`agc_step_turn`); each stage it passes without a callback, and
+  each item `to_a` keeps, charges one unit of turn cost, an `each_cons` window
+  its size, and a terminal's start the depth of the recipe (`agc_charge`). When
+  the step count or the turn cost ends the turn, the step returns
+  `AGC_STEP_YIELD`: the native frame stays on the stack and runs again at the
+  task's next turn, so `--max-steps`, other tasks and a cancel reach a pipeline
+  that calls no block. These steps run without `rt->sync`
+  (`agc_stepper.unlocked`): they touch only the run of the calling task. Over
+  `File.foreach` or `ch.lazy` they take it only around the line reader and
   `agc_channel_receive`, which may park inside that section; the step then
   returns `AGC_STEP_WAIT` with the lock dropped, and the file is closed before
-  every `AGC_STEP_END`. `write_lines` is a terminal with a line writer
-  (`agc_writer_next` in `vm/files.c`): it opens its file before the first item,
+  every `AGC_STEP_END`. `write_lines` opens its file before the first item and
   parks on each write job and on the close, under the same lock rule. A
   callback that returns through a failed `TRY_STEP` sets `escaped` on the
   stepper; the terminal clears it and ends with that error.
@@ -463,7 +336,7 @@ The emitter merges adjacent `step`s with no label between them into one
 variant ids are 16-bit operands too, so more than 65535 of either is
 `BYTECODE-LIMIT`. Any change to charge points is allowed if every loop and
 recursion still charges at least one step per round, so a runaway program still
-stops with `RUNTIME-STEP-LIMIT`. The optimization items are in issue #1001.
+stops with `RUNTIME-STEP-LIMIT`.
 
 ### 4.5 Builtin imports
 
@@ -561,38 +434,30 @@ header and the entry.
     enum. Fewer than 4 bytes after the Entry are trailing bytes.
 
 - The Sources section embeds the full source texts, so the VM prints diagnostics
-  without reading files. A linked program has one entry per file a span points
-  into: the entry file first, then the others in the order the lowerer meets
-  them. Each keeps the name the front end gave it (`std/` modules by their
-  `std/...` key), so a diagnostic in imported code names that file.
+  without reading files. Each span's file keeps the name the front end gave it
+  (`std/` modules by their `std/...` key).
 - Only struct and enum entries can make cycles in the Types section, and they
   go through the decodable struct records and the Decodable enums section.
   `compiler/bytecode/bytecode_types.agc` interns each distinct type once,
-  children first. A program without a JSON type
-  argument writes two zero counts.
-- The Globals section holds only a count because a slot has no bytes of its
-  own to read. The loader allocates the slots as zeroed memory inside the
-  program, so the collector scans them like constants. It rejects a count above
-  65,535 (the bytes left in the file cannot bound it, so the cap does) and
-  charges the array to the load budget. The entry rules of 8 apply only to a
+  children first. A program without a JSON type argument writes two zero
+  counts.
+- The Globals section holds only a count: the loader allocates the slots as
+  zeroed memory inside the program, so the collector scans them like constants.
+  It rejects a count above 65,535 (the bytes left in the file cannot bound it)
+  and charges the array to the load budget. The entry rules of 8 apply only to a
   file with a count above zero: a file with no slots has a plain `main` as
   entry, and a program may call `main()`.
-- The VM accepts only its own format version and Agentica version (8). Any
-  change to the layout or to an opcode's meaning bumps the format version
-  (version 6 added the prelude flag of each function, 4.7). Versions 7 and 8 are
-  reserved by the designs of §42 and §41. Opcode 52 (`TRY_STEP`) did not bump
-  it: an older VM rejects the file as an unknown opcode. Type kinds 7
-  (`JsonField`), 8 (`Optional`) and 9 (`Enum`, with its last section) did not
-  either: the layout of an entry is unchanged, and an older VM rejects the file
-  as an unknown type kind. Constant kind 7 (Bytes) did not either, for the same
-  reason: an older VM rejects the file as an unknown constant kind. A call
-  `JSON.decode(<Json>, T)` needs no new kind, so an older VM loads such a file
-  and the call fails at run time with a wrong value type.
+- The VM accepts only its own format version and Agentica version. Any change to
+  the layout or to an opcode's meaning bumps the format version. A new opcode,
+  type kind or constant kind does not: an older VM rejects the file as unknown.
+  A call `JSON.decode(<Json>, T)` needs no new kind, so an older VM loads such a
+  file and the call fails at run time with a wrong value type. Versions 7 and 8
+  are reserved by `docs/future/42-sized-numeric-types.md` and
+  `docs/future/41-dates-and-times.md`.
 - The C loader is the only reader of this format and has no compatibility
-  shims, with one transitional exception: the loader still reads format 5,
-  which has no prelude flag (`AGC_FORMAT_PREVIOUS`). It was kept while
-  `bootstrap/stage0.agcb` wrote format 5; the checked-in stage0 now writes
-  format 6, so a later change can remove it.
+  shims, with one exception: it still reads format 5, which has no prelude flag
+  (`AGC_FORMAT_PREVIOUS`). The checked-in `bootstrap/stage0.agcb` writes format
+  6, so a later change can remove it.
 
 ### 4.7 The prelude
 
