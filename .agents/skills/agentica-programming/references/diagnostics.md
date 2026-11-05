@@ -125,8 +125,8 @@ between. A task ends with `task spawned at file:line:column`. `--json` adds
 - `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`,
   `CHECK-UNREACHABLE-CASE-ARM`: a pattern that does not fit the value; a `case`
   missing variants or `_`; an arm already covered.
-- `CHECK-MAP-KEY-TYPE`: a map key that is not `Int`, `String` or `Bytes`; an
-  `ATS` key that is not `Int` or `String`.
+- `CHECK-MAP-KEY-TYPE`: a `Map` or `ATS` key that is not `Int`, `String` or
+  `Bytes`.
 - `CHECK-ATS-VALUE`: an `ATS[K, V]` whose `V` is `Nil`, a type parameter, or
   holds a `Fn`, `Task`, `Channel`, handle or table anywhere inside.
 - `CHECK-SET-ELEMENT-TYPE`, `CHECK-EMPTY-SET-TYPE`: a `Set` element type that is

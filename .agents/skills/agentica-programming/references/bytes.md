@@ -42,8 +42,7 @@ s.encode(encoding) -> Result[Bytes]
 - `==` and `!=` compare length and bytes. They are not constant time: compare
   MACs and tokens with `HMAC.secure_compare`. There is no `<`, and `b == "s"`
   is `CHECK-TYPE-MISMATCH`.
-- A `Bytes` is a `Map` key or a `Set` item. It is not an `ATS` key
-  (`CHECK-MAP-KEY-TYPE`).
+- A `Bytes` is a `Map` key, an `ATS` key or a `Set` item.
 - `"#{b}"` is `<Bytes 3>`; `b.inspect` is `<Bytes 3 616263>` (the first 32 bytes
   in hex).
 - Not JSON: `JSON.encode(b)` is `CHECK-NOT-ENCODABLE`, and a `Bytes` field of a

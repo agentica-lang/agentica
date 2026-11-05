@@ -18,6 +18,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   struct of functions) with `fetch`, `get`, `put`, `put_new`, `delete`, `clear`,
   `cleanup` and `bytes`, and `Cache.memory`, a bounded one on top of `ATS` with a
   byte budget, `max_entries` and a time to live.
+- `ATS[Bytes, V]`: a shared table takes `Bytes` keys, as a `Map` does.
 
 ### Changed
 

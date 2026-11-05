@@ -1,5 +1,5 @@
 """The Bytes type through the product CLI: where it may be written, its operators, and the rules that keep it out of
-ATS keys, JSON and generic equality. A case is `(program, code, covered text)`: the code of the diagnostic and the
+JSON and generic equality. A case is `(program, code, covered text)`: the code of the diagnostic and the
 source text its range covers; a program that must check clean has no code.
 """
 
@@ -56,6 +56,22 @@ CLEAN = [
         None,
         None,
     ),
+    # An ATS key takes Bytes as a Map key does, and to_map gives a Map[Bytes, V].
+    (
+        "struct Cache\n  table: ATS[Bytes, List[Bytes]]\nend\n\n"
+        + MAIN
+        + "  t: ATS[Bytes, Int] = ATS.new()\n"
+        '  t.put("a".bytes, 1)\n'
+        '  n: Int = t.add("a".bytes, 2) + t.get("a".bytes).unwrap_or(0)\n'
+        '  e: Bool = t.put_new("b".bytes, 3) and t.has_key?("b".bytes)\n'
+        '  t.delete("b".bytes)\n'
+        "  keys: List[Bytes] = t.keys\n"
+        "  m: Map[Bytes, Int] = t.to_map\n"
+        "  c = Cache(table: ATS.new())\n"
+        "  puts(\"#{n} #{e} #{keys.size} #{m.size} #{c.table.size}\")\nend\n",
+        None,
+        None,
+    ),
 ]
 
 REFUSED = [
@@ -64,8 +80,15 @@ REFUSED = [
     ("enum Bytes\n  A\nend\n\n" + MAIN + "end\n", "CHECK-REDEFINED-NAME", "enum Bytes\n  A\nend\n"),
     ("type Bytes = List[Int]\n\n" + MAIN + "end\n", "CHECK-REDEFINED-NAME", "Bytes"),
     ('import Bytes from "other"\n\n' + MAIN + "end\n", "CHECK-REDEFINED-NAME", 'import Bytes from "other"\n'),
-    # An ATS hashes Int and String keys only.
-    (MAIN + "  t: ATS[Bytes, Int] = ATS.new()\nend\n", "CHECK-MAP-KEY-TYPE", "Bytes"),
+    # A Bytes table takes Bytes keys only, and other key types stay refused.
+    (MAIN + '  t: ATS[Bytes, Int] = ATS.new()\n  t.put("a", 1)\nend\n', "CHECK-TYPE-MISMATCH", '"a"'),
+    (
+        MAIN + "  t: ATS[Bytes, Int] = ATS.new()\n  m: Map[String, Int] = t.to_map\nend\n",
+        "CHECK-TYPE-MISMATCH",
+        "t.to_map",
+    ),
+    (MAIN + "  t: ATS[Float, Int] = ATS.new()\nend\n", "CHECK-MAP-KEY-TYPE", "Float"),
+    (MAIN + "  t: ATS[List[Bytes], Int] = ATS.new()\nend\n", "CHECK-MAP-KEY-TYPE", "List[Bytes]"),
     # JSON has no byte type.
     (MAIN + '  puts(JSON.encode("a".bytes))\nend\n', "CHECK-NOT-ENCODABLE", '"a".bytes'),
     (MAIN + "  m: Map[Bytes, Int] = {}\n  puts(JSON.encode(m))\nend\n", "CHECK-NOT-ENCODABLE", "m"),

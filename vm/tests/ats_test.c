@@ -1,5 +1,5 @@
-/* ATS tables (vm/ats.c): order and snapshots with the AVL invariants of both trees, an add that overflows and leaves
-   the table unchanged, the run check, and threads that update one table at once with exact totals (also under TSan). */
+/* ATS tables (vm/ats.c): order and snapshots with the AVL invariants of both trees, keys of mixed tags as forged
+   bytecode may pass them, an add that overflows and leaves the table unchanged, the run check, and threads that update one table at once with exact totals (also under TSan). */
 #include "../core.h"
 #include "../services.h"
 #include "io_harness.h"
@@ -110,6 +110,30 @@ static void test_random_changes(void) {
   assert(agc_ats_valid(&vm, t) && size_of(t) == count);
 }
 
+static agc_value raw(const char *s, size_t n) { return agc_bytes_value(agc_make_bytes((const uint8_t *)s, n)); }
+
+/* Typed code keeps one key type per table; forged bytecode may mix them. An Int, a String and a Bytes of the same
+   bytes are three keys, sorted by tag; Bytes keys sort by byte, then the shorter first; another tag is
+   RUNTIME-INTERNAL and leaves the table as it was. */
+static void test_mixed_keys(void) {
+  agc_value t = call("ATS.new", 0, NULL);
+  put(t, raw("a\0", 2), 1);
+  put(t, text("a"), 2);
+  put(t, raw("a", 1), 3);
+  put(t, agc_int(97), 4);
+  put(t, raw("", 0), 5);
+  put(t, raw("a\0", 2), 6);
+  assert(size_of(t) == 5 && agc_ats_valid(&vm, t));
+  assert(get_int(t, text("a")) == 2 && get_int(t, raw("a", 1)) == 3 && get_int(t, agc_int(97)) == 4);
+  assert(get_int(t, raw("", 0)) == 5 && get_int(t, raw("a\0", 2)) == 6);
+  agc_value del[2] = {t, raw("a", 1)};
+  (void)call("ATS.delete", 2, del);
+  assert(size_of(t) == 4 && get_int(t, text("a")) == 2 && agc_ats_valid(&vm, t));
+  agc_value wrong[3] = {t, agc_bool(true), agc_int(0)};
+  fails("ATS.put", 3, wrong, "RUNTIME-INTERNAL");
+  assert(size_of(t) == 4);
+}
+
 static void test_overflow_keeps_the_value(void) {
   agc_value t = call("ATS.new", 0, NULL);
   put(t, text("max"), INT64_MAX);
@@ -186,6 +210,7 @@ int main(void) {
   if (!vm.task) vm.task = agc_new_task(&vm);
   test_order();
   test_random_changes();
+  test_mixed_keys();
   test_overflow_keeps_the_value();
   test_other_run();
   test_threads();

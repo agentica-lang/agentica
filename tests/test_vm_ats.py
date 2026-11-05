@@ -1,7 +1,7 @@
 """ATS shared tables on the VM: the semantics of one table against an independent Python model
-(tests/fixtures/ats-peer.py), many tasks on four schedulers updating one table with exact results, a table that BDD
-steps capture from main and that starts fresh in each scenario, and, in the slow tier, tables made and dropped in a
-loop whose heap stays bounded.
+(tests/fixtures/ats-peer.py) with String and with Bytes keys, many tasks on four schedulers updating one table with
+exact results, a table that BDD steps capture from main and that starts fresh in each scenario, and, in the slow tier,
+tables made and dropped in a loop whose heap stays bounded.
 """
 import json
 import random
@@ -12,28 +12,35 @@ import pytest
 from tests.agentica_test import FIXTURES, PYTHON, cli, compile_text, run, run_vm, vm_environment
 
 KEYS = ["a", "b", "c", "d", "e", "f"]
+# Bytes keys as hex: the empty key, keys with 0 bytes inside, and keys that are prefixes of others.
+BYTES_KEYS = ["", "00", "0000", "0061", "61", "6100", "6162", "ff"]
 
 HELPERS = """\
-def show_get(t: ATS[String, Int], k: String) -> Void
+def show_get(t: ATS[{type}, Int], label: String, k: {type}) -> Void
   found = t.get(k)
   if found.ok?
-    puts("get #{k} #{found.unwrap!}")
+    puts("get #{{label}} #{{found.unwrap!}}")
   else
-    puts("get #{k} missing")
+    puts("get #{{label}} missing")
   end
+end
+
+def key(hex: String) -> Bytes
+  return Digest.hexdecode(hex).unwrap!
 end
 
 """
 
+# {k} is the key as the peer prints it, {key} the expression of the key in the program.
 STATEMENTS = {
-    "put": 't.put("{k}", {v})',
-    "put_new": 'puts("put_new {k} #{{t.put_new("{k}", {v})}}")',
-    "delete": 't.delete("{k}")',
-    "add": 'puts("add {k} #{{t.add("{k}", {v})}}")',
-    "get": 'show_get(t, "{k}")',
-    "has_key": 'puts("has_key {k} #{{t.has_key?("{k}")}}")',
+    "put": "t.put({key}, {v})",
+    "put_new": 'puts("put_new {k} #{{t.put_new({key}, {v})}}")',
+    "delete": "t.delete({key})",
+    "add": 'puts("add {k} #{{t.add({key}, {v})}}")',
+    "get": 'show_get(t, "{k}", {key})',
+    "has_key": 'puts("has_key {k} #{{t.has_key?({key})}}")',
     "size": 'puts("size #{{t.size}}")',
-    "keys": 'puts("keys #{{t.keys.join(",")}}")',
+    "keys": 'puts("keys #{{{keys}.join(",")}}")',
     "to_map": 'puts("to_map #{{t.to_map}}")',
 }
 
@@ -136,23 +143,32 @@ end
 """
 
 
-def operations(seed, count):
+def operations(seed, count, keys):
     rng = random.Random(seed)
     names = list(STATEMENTS)
-    return [[rng.choice(names), rng.choice(KEYS), rng.randint(-50, 50)] for _ in range(count)]
+    return [[rng.choice(names), rng.choice(keys), rng.randint(-50, 50)] for _ in range(count)]
 
 
-def program(ops):
-    lines = ["  " + STATEMENTS[name].format(k=key, v=value) for name, key, value in ops]
-    return HELPERS + "def main() -> Void\n  t: ATS[String, Int] = ATS.new()\n" + "\n".join(lines) + "\nend\n"
+def program(ops, key_type):
+    if key_type == "Bytes":
+        key, keys = 'key("{k}")', "t.keys.map do |k| Digest.hexencode(k) end"
+    else:
+        key, keys = '"{k}"', "t.keys"
+    lines = []
+    for name, k, value in ops:
+        template = STATEMENTS[name].replace("{key}", key).replace("{keys}", keys)
+        lines.append("  " + template.format(k=k, v=value))
+    head = HELPERS.format(type=key_type) + "def main() -> Void\n  t: ATS[%s, Int] = ATS.new()\n" % key_type
+    return head + "\n".join(lines) + "\nend\n"
 
 
-def test_one_table_does_what_a_python_dict_does(tmp_path):
-    ops = operations(17, 600)
-    bytecode = compile_text(program(ops), "ats_ops", tmp_path)
+@pytest.mark.parametrize(("key_type", "keys", "flags"), [("String", KEYS, []), ("Bytes", BYTES_KEYS, ["--bytes"])])
+def test_one_table_does_what_a_python_dict_does(tmp_path, key_type, keys, flags):
+    ops = operations(17, 600, keys)
+    bytecode = compile_text(program(ops, key_type), "ats_ops", tmp_path)
     vm = run_vm(bytecode, "--schedulers", "1", env=vm_environment())
     assert vm.code == 0, vm.stderr
-    peer = run([PYTHON, FIXTURES / "ats-peer.py"], stdin=json.dumps(ops).encode("utf-8"))
+    peer = run([PYTHON, FIXTURES / "ats-peer.py", *flags], stdin=json.dumps(ops).encode("utf-8"))
     assert peer.code == 0, peer.stderr
     assert vm.stdout.splitlines() == peer.stdout.splitlines()
     assert any(line.startswith("keys ") and len(line) > 9 for line in peer.stdout.splitlines())

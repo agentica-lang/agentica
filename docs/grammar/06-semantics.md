@@ -728,10 +728,10 @@ end
 - `==` and `!=` compare length and bytes. They are not constant time: compare a
   MAC or a token with `HMAC.secure_compare`. A `Bytes` never equals a `String`
   with the same bytes (`CHECK-TYPE-MISMATCH`). There is no ordering (`<`).
-- A `Bytes` is a `Map` key or a `Set` item, and a field, a list item or a map
-  value. It is not an `ATS` key (`CHECK-MAP-KEY-TYPE`). It is not
-  JSON-encodable or decodable (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`):
-  write it as text first, with `Base64.strict_encode64`.
+- A `Bytes` is a `Map` key, an `ATS` key or a `Set` item, and a field, a list
+  item or a map value. It is not JSON-encodable or decodable
+  (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`): write it as text first, with
+  `Base64.strict_encode64`.
 - `"#{b}"` and `b.to_s` give `<Bytes 3>`; `b.inspect`, `Test.eq` messages and
   the text of a `Bytes` inside a list or map give `<Bytes 3 616263>`: the length
   and the first 32 bytes in hex, then `...` if there are more.

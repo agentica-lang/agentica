@@ -784,16 +784,10 @@ def resolve_map(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[Resol
   return ok(Types.Type.Map(key, try resolve_expanded(cx, st, args[1], false)))
 end
 
-# ATS[K, V]: the key as a Map key but never Bytes (the table hashes Int and String keys only), and a value that
+# ATS[K, V]: the key as a Map key (Int, String or Bytes; CHECK-MAP-KEY-TYPE otherwise), and a value that
 # ats_value? accepts (CHECK-ATS-VALUE on the value type).
 def resolve_ats(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[ResolvedType]
   map = try resolve_map(cx, st, args)
-  if Types.is?(Types.key(map), "Bytes")
-    return error(
-      State.fail(cx, st, "CHECK-MAP-KEY-TYPE", "an ATS key must be Int or String, found Bytes", args[0].span),
-    )
-  end
-
   value = Types.value(map)
   if !ats_value?(cx, value)
     return error(ats_value_failure(cx, st, value, args[1].span))

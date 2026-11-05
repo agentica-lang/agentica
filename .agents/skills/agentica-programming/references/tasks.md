@@ -362,8 +362,9 @@ ATS.to_map(table: ATS[K, V]) -> Map[K, V]                # first-insertion order
 An `ATS[K, V]` is one mutable table that tasks share through a handle: passing
 it shares it, never copies it. All but `new` are methods: `hits.add("home",
 1)`. `hits: ATS[String, Int] = ATS.new()`, else `CHECK-EXPECTED-TYPE`. Keys are
-`Int` or `String` (`CHECK-MAP-KEY-TYPE`); `V` is data with no `Fn`, `Task`,
-`Channel`, handle or table anywhere inside, and not `Nil` (`CHECK-ATS-VALUE`).
+`Int`, `String` or `Bytes` (`CHECK-MAP-KEY-TYPE`); `V` is data with no `Fn`,
+`Task`, `Channel`, handle or table anywhere inside, and not `Nil`
+(`CHECK-ATS-VALUE`).
 A table may be a struct field or a `Task.spawn` argument; no task owns it, the
 GC frees it, and there is no size limit or expiry. No `==`, text or JSON;
 inspect prints `<ATS>`; use `to_map` to see it.

@@ -76,9 +76,9 @@ section for the area you are changing.
 ## Bytes
 
 - `Type.Bytes` is its own variant (a reserved type name), not an `Opaque`: it
-  has `==`, keys, `to_s` and `inspect`. It is a Map key or Set item
-  (`key_type?`) but not an `ATS` key (`resolve_ats`), and not JSON
-  (`CHECK-NOT-ENCODABLE`; `bytes_inside?` picks the Base64 help). Its method
+  has `==`, keys, `to_s` and `inspect`. It is a Map, ATS or Set key
+  (`key_type?`), and not JSON (`CHECK-NOT-ENCODABLE`; `bytes_inside?` picks
+  the Base64 help). Its method
   module is `Bytes`; `b.size` is the synonym of `b.length`; `each` and `empty?`
   are prelude rows (`stdlib/prelude/bytes.agc`).
 - The VM's `eq`, `ne`, `concat`, `list-get` and `list-len` do not take a Bytes,
