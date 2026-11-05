@@ -124,8 +124,8 @@ def clean_often(job: Job) -> Int
   return removed
 end
 
-# Readers that get "hot" in batches until `stop` is set; each get of an old entry copies it forward. The step budget is
-# shared by all tasks, so they stop after a fixed number of batches as well.
+# Readers that get "hot" in batches until `stop` is set. The step budget is shared by all tasks, so they stop after a
+# fixed number of batches as well.
 def read_hot(race: Race) -> Int
   seen = 0
   for _ in 1..1_500
@@ -231,16 +231,6 @@ def main() -> Void
       try Test.eq(Cache.get(cache, "k0"), none)
       Test.eq(Cache.get(cache, "k199"), some(value_of("k199")))
     end,
-    Test.test("a key that is read stays through the rotations") do
-      cache = Cache.memory(4_000)
-      Cache.put(cache, "hot", "kept")
-      for n in 0...200
-        key = "k#{n}"
-        Cache.put(cache, key, value_of(key))
-        try Test.eq(Cache.get(cache, "hot"), some("kept"))
-      end
-      Test.eq(Cache.get(cache, "k0"), none)
-    end,
     Test.test("a value over half the budget is returned and not stored, and drops the old value of its key") do
       cache = Cache.memory(1_000)
       big = "x" * 600
@@ -337,7 +327,7 @@ def main() -> Void
       present = (0...keys).to_a.select do |n| Cache.get(cache, "k#{n}").unwrap_or("") != "" end
       Test.eq(Cache.bytes(cache), present.map do |n| entry_cost("k#{n}") end.sum)
     end,
-    Test.test("readers copying forward never bring back a deleted key or an older value") do
+    Test.test("readers that get a key while it is put and deleted never see a deleted key or an older value") do
       stop: ATS[Int, Int] = ATS.new()
       stop.put(0, 0)
       race = Race(cache: Cache.memory(2_000), stop: stop)

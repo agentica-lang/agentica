@@ -74,7 +74,7 @@ Cache.clear(cache: Cache.Store) -> Void
 
 `get` gives `some(value)` or `none`; an expired entry is a miss. `put` stores a value and replaces one already there; it is a removal followed by a store, not one atomic step, so a reader may see a miss in between, and a `put` that finds no room or loses the key to another `put` is dropped after the old value is gone. `put_new` stores only when the key has no live value and gives `true` when it stored. `delete` ignores an absent key. `clear` removes every entry; a `put` that runs at the same moment may survive it, or be dropped (the old value of its key is gone either way).
 
-A delete or a clear is not ordered against a `fetch` or `put` of the same key that is in flight: a block that started before the delete may store its value after it. A `get` that has started before a delete may return the value, but a `get` that starts after the delete returns does not see it, except for a task that the system has stopped in the middle of a copy (see [Eviction](#eviction)).
+A delete or a clear is not ordered against a `fetch` or `put` of the same key that is in flight: a block that started before the delete may store its value after it. A `get` that starts after a delete has returned does not see the value, unless a `put` of that key that began earlier was stopped for a whole rotation and lands after it (see [Eviction](#eviction)).
 
 ```agentica
 import Cache from "std/cache"
@@ -116,7 +116,7 @@ With `ttl_ms`, an entry is never read more than that long after it was written, 
 Cache.cleanup(cache: Cache.Store) -> Int
 ```
 
-`cleanup` removes every entry past its time to live and gives how many it removed (a key that was read from the old generation and copied forward is two entries until both expire). It is safe from any task at any time, next to `get` and `put`, and keeps the byte count exact. Without `ttl_ms` it removes nothing. To sweep every few seconds, run it in a task of its own:
+`cleanup` removes every entry past its time to live and gives how many it removed. It is safe from any task at any time, next to `get` and `put`, and keeps the byte count exact. Without `ttl_ms` it removes nothing. To sweep every few seconds, run it in a task of its own:
 
 ```agentica {mode="check"}
 import Cache from "std/cache"
@@ -159,9 +159,9 @@ none
 
 ## Eviction
 
-`Cache.memory` keeps three `ATS` tables, called generations. New entries go to the young generation. When an entry does not fit in it, the young generation becomes the old one, the generation before it is dropped whole, and an empty one starts. `get` looks in the young generation and then in the old one; a key found in the old one is copied into the young one, so the keys that are read stay and the keys that are not read are dropped after one to two generations. It is the policy of a generational cache, a cheap approximation of least recently used.
+`Cache.memory` keeps three `ATS` tables, called generations. New entries go to the young generation. When an entry does not fit in it, the young generation becomes the old one, the generation before it is dropped whole, and an empty one starts. `get` looks in the young generation and then in the old one, and stores nothing: only `put` and `fetch` do (it only removes an expired entry). An entry therefore leaves one to two rotations after it was written, however often it is read, and a popular key is recomputed by the next `fetch` once about every two rotations. It is a cheap approximation of first in, first out by generation, with no write on a read, which is what keeps `get` fast and free of races with `delete`.
 
-Each live generation holds at most half of `max_bytes` and of `max_entries` (at least one entry), so the cache holds between half and all of them; the size of an entry (key, value and the 64 bytes) is compared with `max_bytes / 2`. A read that copies an old entry forward never turns a generation: when the young one is full it returns the value and skips the copy. On a skewed workload (20,000 keys of 1 KB, the popular ones asked far more often, a budget of 10% of the keys) it kept 65% of the requests as hits. A simulation of the same requests with the whole budget gives 69% for exact LRU and 60% for emptying the whole cache when it is full.
+Each live generation holds at most half of `max_bytes` and of `max_entries` (at least one entry), so the cache holds between half and all of them; the size of an entry (key, value and the 64 bytes) is compared with `max_bytes / 2`. On a skewed workload (20,000 keys of 1 KB, the popular ones asked far more often, a budget of 10% of the keys) it kept 63% of the requests as hits (37% at a flatter skew). A simulation of the same requests with the whole budget gives 69% and 45% for exact LRU, and 60% and 34% for emptying the whole cache when it is full.
 
 Dropping a generation deletes its entries one by one (the table of `ATS` has no `clear`), which takes about 5 µs an entry: the one task whose put starts it waits, for example 150 ms for 30,000 entries, and the other tasks go on. A put that finds a drop under way in another task, and no room, is dropped: a cache may forget an entry.
 
@@ -169,7 +169,7 @@ Dropping a generation deletes its entries one by one (the table of `ATS` has no 
 
 Every entry has an id and its size is recorded under that id. A task that removes an entry (`delete`, a replacing `put`, an expired read, `cleanup`) first adds minus its size to the id with `ATS.add`; only the task whose add makes 0 gives the bytes back, so two tasks that remove the same entry cannot subtract twice and none is lost. A task reserves the size of a new entry with `ATS.add` before it stores it and takes back its own reservation when the entry is not stored. The byte count of a generation goes away with the generation.
 
-A task that was stopped for two drops and then writes to a table that has been reused takes its own entry out again, and a read never returns such an entry. A copy that a read made forward is valid only while the entry it was copied from is still in the old generation and the young generation has not turned; a delete takes the old entry first, so a copy that lands after it is never seen. A task cancelled between reserving the bytes of an entry and storing it leaves its reservation counted until that generation is dropped. A drop beats its heart as it empties the table; one whose task did not beat for two seconds (it was cancelled) is taken over by one other task, chosen with `ATS.add`, and only the current generation can be dropped.
+A task that was stopped for two drops and then writes to a table that has been reused takes its own entry out again when it wakes. Until then, the entry is readable in that table and uncounted, and if the task is cancelled in between, it stays until that table is dropped: that stale window is a stall that spans a rotation, not a single read. A task cancelled between reserving the bytes of an entry and storing it leaves its reservation counted until that generation is dropped. A drop beats its heart as it empties the table; one whose task did not beat for two seconds (it was cancelled) is taken over by one other task, chosen with `ATS.add`, and only the current generation can be dropped.
 
 ## Writing another cache
 

@@ -24,8 +24,9 @@ Cache.bytes(cache: Cache.Store) -> Int
   Put the version in the key (`"msg:#{id}:#{updated_at}"`) instead of deleting.
 - `Cache.memory`: an entry costs key + value + 64 bytes. Each of two live
   generations holds half of `max_bytes` (and of `max_entries`); the oldest
-  generation is dropped whole when the young one is full, and a `get` copies a
-  hit from the old one forward (never turning a generation). An entry whose
+  generation is dropped whole when the young one is full. `get` stores nothing, so
+  an entry leaves 1 to 2 rotations after its write however often it is read
+  (a popular key is recomputed about once every two rotations). An entry whose
   cost is over `max_bytes / 2` is returned by `fetch` and not stored; `put` of
   one also removes the old value. `put` is a removal then a store, not atomic:
   a reader may see a miss between, and a `put` with no room is dropped after

@@ -5,9 +5,9 @@
 ## of this module (`get`, `put`, `fetch` and the rest) work on any of them.
 ##
 ## `memory` keeps three tables and treats them as generations. New entries go to the young generation; when it is full
-## the cache moves on to the next one and the oldest is dropped whole. A read that finds a key in the previous
-## generation copies it forward, so keys that are read stay. Every entry carries an id, and whoever removes it must win
-## that id with `ATS.add` first, so its bytes are given back exactly once however the removals race.
+## the cache moves on to the next one and the oldest is dropped whole. A read writes only to remove an expired entry.
+## Every entry carries an id, and whoever removes it must win that id with `ATS.add` first, so its bytes are given back
+## exactly once however the removals race.
 
 # Generation g lives in tables[g % SLOTS]: the young one is g, the old one g - 1, and the slot of g - 2 is dead until
 # the next rotation empties and reuses it.
@@ -16,8 +16,6 @@ SLOTS = 3
 ENTRY_OVERHEAD = 64
 # A task that holds a rotation for longer than this is taken to have died (cancelled or crashed): another may redo it.
 ROTATION_LEASE_MS = 2_000
-# The most that a removal waits for the task that is taking out the same entry, in yields and then in milliseconds.
-TAKE_WAITS = 60
 # A rotation shows it is alive after this many deletes.
 BEAT_EVERY = 1024
 
@@ -52,7 +50,6 @@ struct Entry
   at: Int
   id: Int
   gen: Int
-  src: Int
 end
 
 struct Memory
@@ -249,70 +246,43 @@ end
 def lookup(state: Memory, key: String) -> Optional[String]
   g = current(state)
   at = now(state)
-  young = slot(state, g).get(key)
-  if young.ok?
-    entry = young.unwrap!
-    if entry.gen == g and not expired?(state, entry, at) and not orphan?(state, key, entry, g)
-      return some(entry.value)
-    end
+  for gen in [g, g - 1]
+    found = slot(state, gen).get(key)
+    if found.ok?
+      entry = found.unwrap!
+      if not expired?(state, entry, at)
+        return some(entry.value)
+      end
 
-    _ = remove_entry(state, key, entry)
-    if entry.gen == g
+      _ = remove_entry(state, key, entry)
       return none
     end
   end
 
-  old = slot(state, g - 1).get(key)
-  if not old.ok?
-    return none
-  end
-
-  entry = old.unwrap!
-  if entry.gen != g - 1 or expired?(state, entry, at)
-    _ = remove_entry(state, key, entry)
-    return none
-  end
-
-  # The copy keeps the age of the entry, so a read does not make a value live longer.
-  _ = insert(state, key, entry.value, entry.at, some(entry))
-  return some(entry.value)
-end
-
-# A copy that a read made from the old generation is valid while the entry it was made from is still in the old one. A
-# removal of the key takes the old entry first, so a copy that lands after the removal is never seen: it is a miss, and
-# the read that finds it takes it out. Once a rotation has turned the copy old it stands on its own.
-def orphan?(state: Memory, key: String, entry: Entry, g: Int) -> Bool
-  if entry.src == 0 or entry.gen != g
-    return false
-  end
-
-  found = slot(state, g - 1).get(key)
-  return not (found.ok? and found.unwrap!.id == entry.src)
+  return none
 end
 
 def write_new(state: Memory, key: String, value: String) -> Bool
   case lookup(state, key)
     some(_) -> return false
-    none -> return insert(state, key, value, now(state), none)
+    none -> return insert(state, key, value)
   end
 end
 
 def write(state: Memory, key: String, value: String) -> Void
   remove(state, key)
-  if insert(state, key, value, now(state), none)
+  if insert(state, key, value)
     return
   end
 
   # The key may have been taken by a task that wrote it between the removal and the insert; the later write wins.
   remove(state, key)
-  _ = insert(state, key, value, now(state), none)
+  _ = insert(state, key, value)
 end
 
 def remove(state: Memory, key: String) -> Void
   g = current(state)
-  # The old generation goes first: a copy-forward that is racing with this removal then either sees the old entry gone
-  # and takes its copy back out, or has put its copy in the young generation before this reaches it.
-  for gen in [g - 1, g]
+  for gen in [g, g - 1]
     found = slot(state, gen).get(key)
     if found.ok?
       _ = remove_entry(state, key, found.unwrap!)
@@ -321,31 +291,21 @@ def remove(state: Memory, key: String) -> Void
 end
 
 # Stores a new entry in the young generation unless the key is taken. Returns whether it did. Space is reserved first
-# and given back by the same task when the entry is not stored. `source` is the old-generation entry that a read is
-# copying forward: that copy never rotates (a read does not drop a generation), and it is taken back out when the
-# source is gone, or the generation moved, by the time it is in, because a removal of the key may have passed it by.
-def insert(state: Memory, key: String, value: String, at: Int, source: Optional[Entry]) -> Bool
+# and given back by the same task when the entry is not stored.
+def insert(state: Memory, key: String, value: String) -> Bool
   size = cost(key, value)
   if size > state.byte_limit
     return false
   end
 
-  if not source.some?
-    turn_if_due(state)
-  end
-
-  g = reserve(state, size, not source.some?)
+  turn_if_due(state)
+  g = reserve(state, size)
   if g < 0
     return false
   end
 
   id = state.ids.add(0, 1)
-  src = 0
-  if source.some?
-    src = source.unwrap!.id
-  end
-
-  entry = Entry(value: value, at: at, id: id, gen: g, src: src)
+  entry = Entry(value: value, at: now(state), id: id, gen: g)
   live = live_in(state, g)
   live.put(id, size)
   if not slot(state, g).put_new(key, entry)
@@ -354,24 +314,16 @@ def insert(state: Memory, key: String, value: String, at: Int, source: Optional[
     return false
   end
 
-  # A task that stalled for two rotations wrote into a table the cache has reused, where its entry is not counted. It
-  # removes the entry itself. A task that reads the generation as at most one behind is safe: the rotation that empties
-  # its table starts only after the next one is published, which is after this read.
-  if current(state) - g >= 2 or (source.some? and not copy_valid?(state, key, g, source.unwrap!))
-    _ = remove_entry(state, key, entry)
+  # A task that stalled for two rotations wrote into a table the cache has reused, where its entry is not counted and
+  # its id was wiped, so it just takes the entry out. A task that read the generation as at most one behind is
+  # safe: the
+  # rotation that empties its table starts only after the next one is published, which is after this read.
+  if current(state) - g >= 2
+    live.delete(id)
+    take_out(state, key, entry)
   end
 
   return true
-end
-
-# A copy is good when the generation it went into is still the young one and the entry it was copied from is still in
-# the old one. A copy that is one generation late would go into the old generation, where nothing checks it.
-def copy_valid?(state: Memory, key: String, g: Int, source: Entry) -> Bool
-  if current(state) != g
-    return false
-  end
-
-  return still_in?(state, key, source)
 end
 
 # Takes an entry that was read out of its table. The task whose add of the entry's size to its id makes 0 is the only
@@ -380,27 +332,9 @@ end
 def remove_entry(state: Memory, key: String, entry: Entry) -> Bool
   size = cost(key, entry.value)
   live = live_in(state, entry.gen)
-  if entry.gen <= current(state) - 2
-    # An entry of a generation that is gone: a task that stalled wrote it after its table was emptied and reused, so
-    # neither its id nor its bytes are counted any more. It only has to go.
-    live.delete(entry.id)
-    take_out(state, key, entry)
-    return false
-  end
-
   won = live.add(entry.id, -size) == 0
   live.delete(entry.id)
   if not won
-    # Another task has the entry and is about to take it out; a delete that returns before that would leave the key
-    # readable. The wait is short and has an end, in case that task was cancelled.
-    for n in 1..TAKE_WAITS
-      if not still_in?(state, key, entry)
-        break
-      end
-
-      Task.sleep(min_of(n / 10, 1))
-    end
-
     return false
   end
 
@@ -409,19 +343,14 @@ def remove_entry(state: Memory, key: String, entry: Entry) -> Bool
   return true
 end
 
-def still_in?(state: Memory, key: String, entry: Entry) -> Bool
-  found = slot(state, entry.gen).get(key)
-  return found.ok? and found.unwrap!.id == entry.id
-end
-
 def take_out(state: Memory, key: String, entry: Entry) -> Void
-  if still_in?(state, key, entry)
-    slot(state, entry.gen).delete(key)
+  table = slot(state, entry.gen)
+  found = table.get(key)
+  if found.ok? and found.unwrap!.id == entry.id
+    table.delete(key)
   end
 end
 
-# Reserves one entry of `size` bytes in generation g. The size is checked before it is added, so the count passes the
-# limit only when tasks reserve at the same instant, and the task that finds it over takes its reservation back.
 def fits?(state: Memory, g: Int, size: Int) -> Bool
   if state.stored.get(g).unwrap_or(0) + size > state.byte_limit
     return false
@@ -442,22 +371,23 @@ def fits?(state: Memory, g: Int, size: Int) -> Bool
 end
 
 def give_back(state: Memory, g: Int, size: Int) -> Void
+  # The counts of a generation that is two behind are gone, and an add would make a key for it that nothing deletes.
+  if g <= current(state) - 2
+    return
+  end
+
   state.stored.add(g, -size)
   if state.entry_limit > 0
     state.counted.add(g, -1)
   end
 end
 
-# Returns the generation that now holds `size` more bytes, or -1 when there is no room. A full generation rotates once
-# when `may_rotate`; a task that finds another rotation going gives up, since a cache may drop an entry.
-def reserve(state: Memory, size: Int, may_rotate: Bool) -> Int
+# Returns the generation that now holds `size` more bytes, or -1 when there is no room. A full generation rotates once;
+# a task that finds another rotation going gives up, since a cache may drop an entry.
+def reserve(state: Memory, size: Int) -> Int
   g = current(state)
   if fits?(state, g, size)
     return g
-  end
-
-  if not may_rotate
-    return -1
   end
 
   _ = rotate(state, g)
@@ -490,7 +420,10 @@ def rotate(state: Memory, g: Int) -> Bool
     return false
   end
 
-  empty_slot(state, g + 1, g)
+  if not empty_slot(state, g + 1, g, token)
+    return false
+  end
+
   # Keys of long dead generations: nothing reads them, and they would pile up.
   for table in [state.started, state.rotations, state.beats, state.stored, state.counted]
     table.delete(g - 3)
@@ -510,27 +443,39 @@ def rotate(state: Memory, g: Int) -> Bool
 end
 
 # Empties the table and the ids of the slot of generation `dead`, beating the heart of the rotation from g as it goes.
-def empty_slot(state: Memory, dead: Int, g: Int) -> Void
+# Returns false, stopping at once, when the rotation was taken over: the new owner empties the table, and this task
+# must not delete from it after the new owner has published.
+def empty_slot(state: Memory, dead: Int, g: Int, token: Int) -> Bool
   table = slot(state, dead)
   count = 0
   for key in table.keys
     table.delete(key)
     count += 1
-    beat_often(state, g, count)
+    if count % BEAT_EVERY == 0 and not beat(state, g, token)
+      return false
+    end
   end
 
   live = live_in(state, dead)
   for id in live.keys
     live.delete(id)
     count += 1
-    beat_often(state, g, count)
+    if count % BEAT_EVERY == 0 and not beat(state, g, token)
+      return false
+    end
   end
+
+  return true
 end
 
-def beat_often(state: Memory, g: Int, count: Int) -> Void
-  if count % BEAT_EVERY == 0
-    state.beats.put(g, Time.monotonic_ms)
+# Shows that the owner of the rotation from g is alive. Returns false when it is no longer the owner.
+def beat(state: Memory, g: Int, token: Int) -> Bool
+  if state.rotations.get(g).unwrap_or(0) != token
+    return false
   end
+
+  state.beats.put(g, Time.monotonic_ms)
+  return true
 end
 
 # The right to rotate from generation g, as a token, or 0. Only the rotation from the current generation can
