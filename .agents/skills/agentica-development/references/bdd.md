@@ -22,13 +22,12 @@ or the site).
   (`deny`) to every child of the user's code. The runner runs without them.
   Under `--deny-fs`, `std/bdd` cannot stat a program under test. A front end
   that stops on a runtime error (a driver bug) exits 2 with the error on
-  stderr, never the 1 of a failed run. Without `--self` `test` says so, exit 2.
+  stderr, never the 1 of a failed run.
 - Tests that need a fake runner run the front end as an ordinary program with
   `--self` naming a script that fakes the runner when asked for `runner.agcb`
   and runs the real binary otherwise (`front_end_command` in
   `tests/agentica_test.py`, `fake_binary` in `tests/test_bdd.py`; on Windows a
   copy of `node.exe`, since the VM starts only `.exe` and `.com` files there).
-  A missing binary is the `cannot find agentica at PATH` infrastructure report.
 - `bdd_rundir.agc` makes the run dir (rules: `docs/bdd.md`, "Isolation and
   process lifetime"): private 0700, locked with `lock` for the whole run, then
   renamed with `Path.rename` (never replaces), so the sweep never sees an
@@ -39,18 +38,16 @@ or the site).
 - The driver writes the `std/` sources into the run dir, discovers features
   (`bdd_discover.agc`), compiles the step program and tests (`bdd_compile.agc`,
   0600 `.agcb` files), writes `config.jsonl` and runs the runner as a captured
-  child (`bdd_runner.agc`; the child environment has no metrics variables, a
-  rule of every `Process.spawn*`). Compiled tests and `--steps` files use the
-  bytecode cache (`io/bytecode_cache.agc`; `--no-cache` turns it off), not the
-  driver's own runner and steps.
+  child (`bdd_runner.agc`). Compiled tests and `--steps` files use the bytecode
+  cache (`io/bytecode_cache.agc`; `--no-cache` turns it off), not the driver's
+  own runner and steps.
 - Discovery is in the driver because `File.stat` follows links: `File.lstat`
   sees links, folder links are skipped, and an unreadable folder or entry, a
   broken `.feature` link or a name with U+FFFD (what `Dir.list` leaves for
   non-UTF-8 bytes) is a `RUNTIME-BDD-INFRA` entry for that path. `*_test.agc`
   files are found in the same walk (entry `kind`: `tests`, `feature`, `""`);
   default paths `specs/` and `test/` (a missing default is skipped; nothing
-  found is `CHECK-BDD-EMPTY`). A `--only` that matches no name adds a
-  `CHECK-BDD-EMPTY` file error.
+  found, or a `--only` that matches no name, is `CHECK-BDD-EMPTY`).
 - Test functions (#983): `compile_test` compiles with `Settings.test_file`
   true (`check` sets it for a `*_test.agc` name; nothing else does), and
   `modules/test_main.agc` adds the `main` of a root file with `test_*`
@@ -59,17 +56,17 @@ or the site).
   (`test PATH`). The runner and protocol do not change.
 - Without `--steps`, `default_steps` takes the nearest `steps.agc` from each
   path that holds a feature up to the working directory (two different files
-  are a usage report). Steps are listed only when there is a feature; a broken
-  step program is one `steps` file error and the test files still run.
+  are a usage report). A broken step program is one `steps` file error and the
+  test files still run.
 - Embedded programs: the runner (`compiler/embedded/runner.agc`) and the
-  default steps (`steps.agc`: `BDD.run([])`) are compiled at build time and
-  carried by the binary (`vm/embedded.h`, `EMBEDDED_PROGRAMS` in the `make`
-  rule). The driver uses them when the provider of `std/` is `Embedded`; an
-  empty `steps_bytecode` in the config means the default steps (`--embedded
-  steps`). With a folder provider (fake-runner tests) it compiles both into the
-  run dir. The first bootstrap binary carries none and has the stage0 driver
-  (its `run --embedded` exits 2); `tests/test_bdd.py` runs both and checks that
-  the root texts (constants in `bdd_driver.agc`) equal the files.
+  default steps (`steps.agc`) are compiled at build time and carried by the
+  binary (`EMBEDDED_PROGRAMS` in `mk/bootstrap.mk`). The driver uses them when
+  the provider of `std/` is `Embedded`; an empty `steps_bytecode` in the config
+  means the default steps (`--embedded steps`). With a folder provider
+  (fake-runner tests) it compiles both into the run dir. The first bootstrap
+  binary carries none and has the stage0 driver (its `run --embedded` exits 2);
+  `tests/test_bdd.py` checks that the root texts (constants in `bdd_driver.agc`)
+  equal the files.
 - **Config compatibility:** the runner decodes the config with `JSON.decode`,
   which has no optional fields, so a field the driver does not write fails
   (`expected required field`) and the stage0 driver must still work. Never add
@@ -86,22 +83,19 @@ or the site).
   `RUNTIME-BDD-USAGE`. `--jobs N` (more than 1) is one more line after it, a
   JSON integer (a missing line is 1; with no `--tags` the tags line is an empty
   string).
-- The runner's stdin is closed at once. The seed is `--seed` or one drawn with
-  `Random.int`, passed to every child and to the report; usage and
-  infrastructure reports carry `--seed` when given.
+- The seed is `--seed` or one drawn with `Random.int`, passed to every child and
+  to the report.
 - `Process.spawn_captured` keeps 1 MiB per stream and a big report is larger,
   so the runner writes it to `report.txt` of the run dir (`report_path` in the
   config) and the driver prints that file. A runner exit of 0, 1 or 2 with an
-  empty stderr and a report file is the answer; anything else, or more than
-  one `--steps`, is a one-file `RUNTIME-BDD-INFRA` or `USAGE` report
-  (`bdd_report.agc`).
+  empty stderr and a report file is the answer; anything else is a one-file
+  `RUNTIME-BDD-INFRA` or `USAGE` report (`bdd_report.agc`).
 
 ## Runner (`stdlib/test/runner.agc`)
 
 - Reads the config, lists the steps with one child that has a channel
-  (`--agentica-bdd list`, read to its end with `Child.read_records`; output
-  over the cap while listing closes the child: `RUNTIME-BDD-OUTPUT-LIMIT`),
-  compiles the patterns, reads each `.feature` (over 1 MiB: `RUNTIME-BDD-IO`),
+  (`--agentica-bdd list`; output over the cap while listing closes the child:
+  `RUNTIME-BDD-OUTPUT-LIMIT`), compiles the patterns, reads each `.feature`,
   and runs every resolved scenario in its own child VM (`--agentica-bdd
   scenario`, `--max-steps` 1,000,000 per step plus one, 30 s deadline), then
   prints `Report.json` or `Report.text` and exits with `Report.exit_code`.
@@ -117,13 +111,11 @@ or the site).
   error. `skip` (`BDD.skip`: the child sends it and exits 0) ends the scenario
   as `Verdict.Skipped(reason)`: that step `Skipped`, later ones `NotExecuted`.
   A failed `channel_send` fails the step at once (`send exceeds` is
-  `RUNTIME-BDD-IO`, else `read_failure`). `read_failure` (and `failure` in
-  `units`) treat the messages `Child.gone?` names (end of input, closed
-  channel or stdin, `could not write to the stream`) as a dead child, so its
-  fail record or stderr diagnostic is shown. A `fail` after the last step is
-  the scenario's error (`await_exit` reads to the end after `channel_close`).
-  A child that dies prints its diagnostic on stderr with `--json`; the runner
-  reads the last line with `Report.from_json`, else `PREMATURE-EXIT`.
+  `RUNTIME-BDD-IO`, else `read_failure`, which treats the messages `Child.gone?`
+  names as a dead child so its fail record or stderr diagnostic is shown). A
+  `fail` after the last step is the scenario's error. A child that dies prints
+  its diagnostic on stderr with `--json`; the runner reads the last line with
+  `Report.from_json`, else `PREMATURE-EXIT`.
 
 ## Unit tests (`stdlib/test/units.agc`; protocol: `docs/bdd.md`)
 
@@ -135,11 +127,10 @@ or the site).
   file's `output`), the `--only` filter, then one run child (`--max-steps`
   1,000,000 x (tests + 1)) that gets one index per test with
   `Process.channel_send`. Tests are walked through a `Map[Int, UnitTest]`.
-- `await_test` reads the record with `Process.channel_read_line`, then the
-  printed stdout with `Process.read_available` (the child flushes before it
-  sends the record, so the order is fixed); the last 64 Ki characters
-  (`Child.printed`) go to `output` for a failed test; a timed-out test keeps
-  what was read. The deadline is `test_timeout_ms` (`RUNTIME-TEST-TIMEOUT`).
+- `await_test` reads the record, then the printed stdout with
+  `Process.read_available` (the child flushes before it sends the record, so the
+  order is fixed); the last 64 Ki characters go to `output` for a failed test.
+  The deadline is `test_timeout_ms` (`RUNTIME-TEST-TIMEOUT`).
 - `process: output exceeds` comes from either cap (stdout over 1 MiB unread
   since the last record, or stderr over 1 MiB), so `overflow` closes the
   channel and waits for `Process.output` for `Child.brief` (at most 2 s). If
@@ -154,15 +145,11 @@ or the site).
   `RUNTIME-BDD-PREMATURE-EXIT`) or the output limit stops the child; the rest
   are `NotExecuted`. After the last test it closes stdin and waits: exit 1 with
   the unobserved summary is a `RUNTIME-TASK-CRASHED` file error.
-- `std/test/child` holds what both runners share (`Records`, `read_records`,
-  `record_of`, `event_of`, `gone?`, `printed`, `tail`, `stderr_diagnostic`,
-  `stderr_text`, ...); read it for the list.
-- A crash record carries the stack: `Test.test` bodies that crash send `stack`,
-  `stack_omitted` and `spawned_at` in the `fail` record; `record_error` in
-  `units.agc` keeps them as the error's `original` (`Child.diagnostic_of`), so
-  `--json` writes them and `Report.text` prints them (`stack_text` in
-  `report.agc`). Assertion, returned-error, pending-task and unobserved-crash
-  failures have no stack.
+- `std/test/child` holds what both runners share.
+- A crash record carries the stack (`stack`, `stack_omitted`, `spawned_at` in
+  the `fail` record); `record_error` in `units.agc` keeps them as the error's
+  `original`, so `--json` writes them and `Report.text` prints them. Assertion,
+  returned-error, pending-task and unobserved-crash failures have no stack.
 
 ## `std/bdd` and its helpers
 
@@ -193,10 +180,9 @@ or the site).
   helper takes `ctx` so it can run the hooks; `abort` is for the failures
   before a context exists.
 - `std/bdd/gherkin`: the English Gherkin subset with stable codes and the first
-  error; `parse` returns `Outcome.Done(Feature)` or `Failed(Diagnostic)`; a
-  `Span` is file, line and columns, no offset. Table rows and `<name>`
-  substitution split and join once; building the lists with `push` per line is
-  still quadratic in the line count.
+  error; a `Span` is file, line and columns, no offset. Table rows and `<name>`
+  substitution split and join once; a `push` per line is quadratic in the line
+  count.
 - `std/bdd/match` compiles and matches step patterns by hand (no regex).
   `compile` returns the first problem (`RUNTIME-BDD-DUPLICATE`,
   `RUNTIME-BDD-PATTERN`, at the `where` span the caller gives). `captures` is a
@@ -217,12 +203,9 @@ or the site).
   inspect form). `exit_code` is 0 when a scenario ran and nothing failed, 2 for
   `RUNTIME-BDD-INFRA` or `RUNTIME-BDD-USAGE`, else 1. Lists are built with
   `List.map` and joined once.
-- Codes: `RUNTIME-BDD-*`, `CHECK-BDD-*`, `PARSE-GHERKIN-*` (`docs/bdd.md`,
-  "Diagnostics").
-- Tests: `tests/test_bdd.py` (step program, isolation, registration, usage),
-  `tests/test_bdd_integration.py` (programs under test, limits, seed,
-  cleanup), both through the CLI as a child process; `tests/test_unit_test.py`
-  with `tests/fixtures/unit/` (the timeout case is slow: the 30 s deadline has
-  no flag); the `bdd-*`, `test-report-*` and `test-child` goldens; `tests/std/`.
-  `make test-bdd` builds the CLI and runs `tests/bdd/specs` with
-  `tests/bdd/handlers.agc`; CI runs it too.
+- Codes: `docs/bdd.md`, "Diagnostics".
+- Tests: `tests/test_bdd.py`, `tests/test_bdd_integration.py` (both through the
+  CLI), `tests/test_unit_test.py` with `tests/fixtures/unit/` (the timeout case
+  is slow: the 30 s deadline has no flag), the `bdd-*`, `test-report-*` and
+  `test-child` goldens, `tests/std/`; `make test-bdd` runs `tests/bdd/specs`
+  with `tests/bdd/handlers.agc`.

@@ -9,12 +9,11 @@ renaming a token, AST node, or diagnostic code. The goldens in
 
 - A span end is exclusive; offsets count code points; lines and columns are
   1-based.
-- Every stage takes the previous stage's data and returns the next data or one
-  diagnostic. It stops at the first error and never prints. A failed internal
-  assumption is a `*-INTERNAL` diagnostic, never a crash.
+- A failed internal assumption is a `*-INTERNAL` diagnostic, never a crash
+  (stage contract: `AGENTS.md`).
 - The diagnostic forms (`compiler/diagnostics/diagnostic_{plain,ai,json}.agc`)
-  render one header, message, marks, labels and help from the same data;
-  `vm/diag.c` prints the same forms for runtime errors.
+  render from the same data; `vm/diag.c` prints the same forms for runtime
+  errors.
 
 ## Source and tokens
 
@@ -72,45 +71,34 @@ diagnostics keep their original code and span.
 `lex: String -> Outcome[List[Token]]`. One pass over the source:
 
 - CRLF normalizes to one newline; a lone carriage return is
-  `LEX-UNEXPECTED-CHAR`.
-- `NL` is suppressed inside `()`, `[]` and `{}`; each LF or CRLF outside them
-  emits one NL, blank and comment lines included. A final `NL` is synthesized
-  before `EOF`.
+  `LEX-UNEXPECTED-CHAR`. `NL` is suppressed inside `()`, `[]` and `{}`; a final
+  `NL` is synthesized before `EOF`.
 - A line whose first non-blank characters are `##` starts a doc block: the lexer
   looks back over blanks to the line break and reads the consecutive doc lines
   into one `DOC` token (`###` keeps its third `#`). A `##` after code is a plain
   comment. A bare carriage return after a doc line is still
   `LEX-UNEXPECTED-CHAR`. A `DOC` inside brackets is emitted; the parser rejects
   it there.
-- A lowercase name may end in `?` or `!` regardless of whitespace before `(`;
-  `!` followed by `=` stays an operator, so `a!=b` is `a != b`. The parser
-  rejects suffixes on bindings, parameters and fields. `try` is a keyword.
-- Number literals read digits and `_` in both parts and drop the `_`s from the
-  value. An `e`/`E`, with an optional sign and digits after digits or a
-  fraction, makes a Float (`1e5`, `1.5e-3`; `1.e5` is a call).
-  `LEX-INVALID-NUMBER` (a trailing `_`, a `__`, or a `_` next to the dot) spans
-  the literal as written. A `.` followed by a digit or `_` continues a number,
-  so `1_000.times` and `1_000..2_000` are not Floats. The text conversions
+- A lowercase name may end in `?` or `!`; `!` followed by `=` stays an operator,
+  so `a!=b` is `a != b`. The parser rejects suffixes on bindings, parameters and
+  fields.
+- Number literals drop the `_`s from the value; `LEX-INVALID-NUMBER` spans the
+  literal as written. A `.` followed by a digit or `_` continues a number, so
+  `1_000.times` and `1_000..2_000` are not Floats. The text conversions
   (`String.to_int`, JSON) reject `_`.
 - Heredoc `<<~NAME` yields the string tokens at the opener's place, all with the
-  span of `<<~NAME`. `scan_heredoc` reads the body from the next line (or from
-  the `Resume` of an earlier heredoc on the same line) and removes the common
-  indentation. `#{...}` pieces in a body are lexed by the main loop itself
-  (`lex_from`, with `stop_depth` set so the matching `}` ends the run) and keep
-  their real positions. The main loop jumps over the bodies at the opener's line
-  break (`resume`). No token or node field marks a heredoc: `Base.heredoc?`
-  reads the opener text for the `case` pattern and the `import` path. Spans
-  inside a body lie after the spans of the nodes that hold them.
+  span of `<<~NAME`; `#{...}` pieces in a body are lexed by the main loop
+  (`lex_from`, `stop_depth`) and keep their real positions, so spans inside a
+  body lie after the spans of the nodes that hold them. No token or node field
+  marks a heredoc: `Base.heredoc?` reads the opener text for the `case` pattern
+  and the `import` path.
 - A `/` starts a `regex` token (`scan_regex`) unless the token before it is in
-  `ENDS_EXPRESSION` (an operand end), or the `/` is part of `//`, `/*` or `*/`.
-  The parser builds `RegexLit` with its `call`, the post-order nodes of
-  `<compile>((?flags)body).unwrap!` whose name is "" until the linker
-  (`rewrite_regex`) fills in std/regex's `compile` for a file that imports it.
-  The checker (`check/check_regex.agc`) runs std/regex on the pattern.
-  `check_const` orders std/regex's constants first, since a literal in a
-  constant calls `compile`. Lowering makes each literal of a function body a
-  constant `regex#<id>` (`lower_scan.regex_constant`, `hoisted_regexes`), and
-  `kept_names` follows the calls of kept constants to a fixed point.
+  `ENDS_EXPRESSION`, or the `/` is part of `//`, `/*` or `*/`. The parser builds
+  `RegexLit` with its `call` (`<compile>((?flags)body).unwrap!`, name "" until
+  the linker, `rewrite_regex`, fills in std/regex's `compile` for a file that
+  imports it); the checker (`check/check_regex.agc`) runs std/regex on the
+  pattern, `check_const` orders std/regex's constants first, and lowering makes
+  each literal a constant `regex#<id>` (`hoisted_regexes`).
 
 ## Syntax tree (`compiler/syntax/ast.agc`)
 
@@ -142,8 +130,6 @@ show:
   `name(...)`, `Alias.name(...)` or `Result.Ok(...)` call that is not already
   piped, else `PARSE-PIPE-TARGET`. Every pass that rebuilds a `Call` (the
   linker, the `do` block) must pass `piped` along.
-- Equality and comparison take a single optional operator: `a < b < c` is
-  `PARSE-CHAINED-COMPARISON`, while `a < b == c < d` is valid.
 - Nesting: `enter` counts each statement, expression, prefix operator and type;
   each link of a binary chain, pipe or postfix suffix adds one (`deepen`). Past
   `nesting_limit` (1000) it is `PARSE-TOO-DEEP`. This bounds the parser's calls,
@@ -152,22 +138,17 @@ show:
 - The checker's limit (`check_state.agc`, 1000) counts each expression and
   statement, so it bounds the tree depth: `CHECK-TOO-DEEP`. Alias expansion
   stops after 1,000 type references. The checker needs up to 5 VM frames per
-  level (3 for `if`, calls and method chains; 6 per nested block), about 5,000
-  of the VM's 10,000 at the limit.
-- `type` starts an alias only at the top level. `case`, `while` and `for`
-  headers take an optional `do`. A case arm body is a NL and a block, or one
-  simple statement on the arrow line followed by more statements. A qualified
-  function name without `(` is a `Call` with no arguments.
-- `import` has two forms, `import Alias from "path"` and
-  `import {a, B as C} from "path"`. A string right after `import` is
-  `PARSE-UNEXPECTED-TOKEN` (the help shows the first form). `from` and `as` stay
-  usable as names. Module nodes must pass through the linker before `check`.
+  level, about 5,000 of the VM's 10,000 at the limit.
+- A case arm body is a NL and a block, or one simple statement on the arrow line
+  followed by more statements. A qualified function name without `(` is a
+  `Call` with no arguments.
+- `from` and `as` stay usable as names. Module nodes must pass through the
+  linker before `check`.
 - `.with(` (exactly `with`, then `(`) makes a `StructUpdate` with named
   arguments only, at least one; `value.with` without `(` is a field access.
 - A statement that starts with `name` is a binding when the next token is `=` or
-  `:`, else an expression. Stray `NL` tokens are skipped at the top level and
-  between statements (see "Lexer gotcha: stray NL tokens" in
-  `references/frontend.md`).
+  `:`, else an expression. For stray `NL` tokens see "Lexer gotcha: stray NL
+  tokens" in `references/frontend.md`.
 - Doc blocks: a `DOC` attaches to the next declaration, field or variant only
   when its `next` is `code` and one `NL` precedes the member's first token; the
   text goes under the member's span. A top-level `blank`-followed block before
@@ -188,50 +169,40 @@ name.
   `HttpWire` is also left out of `help`, its JSON and every "did you mean".
 - The linked program carries the root's `docs` and module doc; nothing after the
   parser reads them.
-- `link_programs` (the query commands) links several roots into one program:
-  `load_roots` shares one walk, every module gets an `@N::` prefix, and a root
-  whose load or rewrite fails is dropped whole (`Linker.Left`), so the others
-  still link.
+- `link_programs` (the query commands) links several roots into one program; a
+  root whose load or rewrite fails is dropped whole (`Linker.Left`), so the
+  others still link.
 - `import {a, B as C}` names live in a per-file `named` table (`bind_names`),
   filled once the module is loaded, since the checks need its exports. Per
-  entry, in order: `CHECK-IMPORT-NAME` at the original name (unknown or
-  private); `CHECK-IMPORT-RENAME` at the local name (a type name must start with
-  a capital, a function name must not); `CHECK-REDEFINED-NAME` at the local name
-  against the file's declarations, aliases, other named imports, builtin
-  functions and reserved type names. A dotless name found in the table resolves
-  to the export, with the same kind check as `Alias.name`. The rewrite turns
-  `Color.Red` and `Color.Red(x)` into an enum value when `Color` is an enum in
-  the table. The `visible` list of `.with` also takes its targets.
-- `export Alias.name` is `Ast.Decl.Reexport`. `finish` in `modules.agc` binds it
-  (`bind_reexports`) after the file's imports: `CHECK-IMPORT-NAME` at the alias
-  or name, `CHECK-REDEFINED-NAME` at the name. `Module.reexports` keeps the
-  original module key and name (a chain is already followed). Every linked name
-  taken from an export comes from `Modules.linked_name`, never `prefix + name`.
-  The declaration is not copied; nothing reaches the checker or lowering.
-- `import_use.agc` runs after the rewrite of each file (`rewrite_module`):
-  `CHECK-UNUSED-IMPORT` at the alias of the first import whose alias no written
-  name starts with (a regex literal or `<<~EAG` template uses the import of
-  `std/regex` or `std/eag`), and `CHECK-IMPORT-NAME` for an alias written
-  without a member. `Settings.unused_imports` is off for the query commands
-  (`for_query` in `analysis/analysis.agc`): the unused rule is skipped for the
-  root file only (`rewrite_module` gets the roots), so an imported file stays
-  strict and still enters the check cache; `CHECK-IMPORT-NAME` runs always. It
+  entry, in order: `CHECK-IMPORT-NAME` at the original name;
+  `CHECK-IMPORT-RENAME` at the local name; `CHECK-REDEFINED-NAME` at the local
+  name. A dotless name found in the table resolves to the export, with the same
+  kind check as `Alias.name`. The rewrite turns `Color.Red` and `Color.Red(x)`
+  into an enum value when `Color` is an enum in the table. The `visible` list of
+  `.with` also takes its targets.
+- `export Alias.name` is `Ast.Decl.Reexport`, bound by `bind_reexports` after
+  the file's imports. `Module.reexports` keeps the original module key and name
+  (a chain is already followed). Every linked name taken from an export comes
+  from `Modules.linked_name`, never `prefix + name`. Nothing reaches the checker
+  or lowering.
+- `import_use.agc` runs after the rewrite of each file: `CHECK-UNUSED-IMPORT`
+  (a regex literal or `<<~EAG` template uses the import of `std/regex` or
+  `std/eag`) and `CHECK-IMPORT-NAME` for an alias written without a member.
+  `Settings.unused_imports` is off for the query commands, for the root file
+  only, so an imported file stays strict and still enters the check cache. It
   reads the parser's tree, so a file read from a check cache stub
-  (`Module.stubbed`) is skipped, and a file with a call `Alias.f` whose head
-  names nothing is left to `CHECK-UNKNOWN-NAME`.
+  (`Module.stubbed`) is skipped.
 
 ## Checker (`compiler/check/checker.agc` and the `check_*.agc` files)
 
 `check(linked, settings) -> Checking.Done(Checked) | Failed(Problem)`:
 registration first (`check_register.agc`), then bodies.
 
-- Enum names register before struct fields resolve; struct names before field
-  resolution; enum payload templates after all struct names; function signatures
-  last. This allows forward references and generic enum payloads.
+- Enum names register before struct fields resolve; enum payload templates after
+  all struct names; function signatures last. This allows forward references and
+  generic enum payloads.
 - Catalogued builtin function names cannot be redefined. `ok` and `error` are
   also reserved for locals, parameters, loop variables and fields.
-- Types are the `Type` enum of `compiler/syntax/types.agc` (type variables exist
-  only during payload registration).
 - A piped builtin call whose first parameter's type has a method form is
   `CHECK-PIPE-METHOD` at the call span, after the call's own checks. The help
   text is cut from the source.
@@ -240,34 +211,23 @@ registration first (`check_register.agc`), then bodies.
   functions (`check_rules.agc`, `check_list.agc`, `check_collections.agc`,
   `check_args.agc`). Lowering reads the same entry's implementation key and
   trusts checked arity.
-- String operations count Unicode characters. Non-bang numeric conversions
-  return Result; bang forms keep `RUNTIME-INVALID-NUMBER` and
-  `RUNTIME-INTEGER-OVERFLOW`.
 - Expected types must reach builtin calls for contextual ok/error and
   unwrap/default. An untyped error is `CHECK-RESULT-TYPE`; `Channel.new` or
   `ATS.new` with no expected type is `CHECK-EXPECTED-TYPE`.
 - `CHECK-UNUSED-VARIABLE` (`check_variables.agc`): `State.introduce_local`
   watches a variable, `for` variable, block parameter or pattern name (a
-  function parameter uses `introduce` and is never watched) in `St.locals`,
-  keyed by the offset of its span; `check_name` reads it (`State.read`), except
-  while its own assignment is checked (`St.assigning`, `check_assignment`).
-  `Variables.check` runs at the end of `check_function_body` and of each
-  constant, reports the unused name that starts first, and skips a file of
-  `Cx.lenient`: the roots of a query (`Settings.unused` false, the flag of the
-  unused import). `json_needs` makes its own run with the file lenient.
-- `CHECK-UNREACHABLE-CODE`: `check_block` and `block_statements`
-  (`check_stmt.agc`) fail at the statement after one that `Flow.ends?`
-  (`check_flow.agc`: return, break, next, an if with else or a case whose every
-  branch ends). It runs after each statement, so errors before the terminator
-  come first and the dead statement is not checked. Query commands keep it
-  strict. `block_returns?` looks only at the last statement because of it.
-- `try` needs a Result-returning function and a Result operand. Its payload may
-  differ from the success type, and it does not guarantee a return. It also
-  works in a block whose expected `Fn` has a fixed `Result` type (`Test.test`,
-  `File.each_line`). There the last expression is a completion value, so a Void
-  or non-Result one is `CHECK-TYPE-MISMATCH`, not `CHECK-VOID-VALUE`. Every such
-  mismatch gets the help `give a Result with ok() or error("message")`
-  (`ok(...)` when `T` is not Void).
+  function parameter is never watched); `Variables.check` runs at the end of
+  `check_function_body` and of each constant and skips a file of `Cx.lenient`:
+  the roots of a query (`Settings.unused` false, the flag of the unused import).
+- `CHECK-UNREACHABLE-CODE`: `check_block` fails at the statement after one that
+  `Flow.ends?` (`check_flow.agc`), after each statement, so errors before the
+  terminator come first and the dead statement is not checked. Query commands
+  keep it strict.
+- `try` also works in a block whose expected `Fn` has a fixed `Result` type
+  (`Test.test`, `File.each_line`). There the last expression is a completion
+  value, so a Void or non-Result one is `CHECK-TYPE-MISMATCH`, not
+  `CHECK-VOID-VALUE`. Every such mismatch gets the help `give a Result with ok()
+  or error("message")` (`ok(...)` when `T` is not Void).
 - A block with an inferred `Result[T]` (`Task.map`, `File.open` blocks) gets its
   expected type from the call rule (`check_task_map` in
   `check_collections.agc`), else `Result[Unknown]`, which becomes the
@@ -278,10 +238,8 @@ registration first (`check_register.agc`), then bodies.
   `ok(...)`, then checks it again as annotated. With no `ok(...)` at all it
   stays `CHECK-RESULT-TYPE` (annotate the variable). This holds for every block
   of unknown result (`map`, `Native.memory_pointer`).
-- Scopes are a stack of maps `name -> (type, immutable?)`; the `for` variable is
-  immutable. A plain binding to a visible name is an update and keeps its type;
-  an annotated one is `CHECK-ANNOTATION-ON-EXISTING`; a fresh name that is
-  already visible is `CHECK-SHADOWED-NAME`.
+- A plain binding to a visible name is an update and keeps its type; an
+  annotated one is `CHECK-ANNOTATION-ON-EXISTING`.
 - `Checked` holds the type of each expression and block by node id (the literal
   2^63 under unary minus is never recorded; lowering handles it by rule), what
   each method call or field access resolved to, and the linked names of module
@@ -345,7 +303,6 @@ into its slot; an assignment to an existing local goes through a temporary and
 - Builtin records the VM finds by name (`agc_builtin_struct`, e.g. `FileInfo`,
   `HttpResponse`) are appended to the program's structs when a checked type
   mentions them, with the records they need (`HttpResponse` needs `Header`).
-- `lower_text.agc` prints the IR (`--dump-ir`).
 
 ## Bytecode writer implementation
 
@@ -355,8 +312,8 @@ constant pool, builtin imports (name and arity) and the span table (span 0 is
 the program span; multi-span instructions take consecutive entries). The format
 is `docs/vm/03-ir-and-bytecode.md` 4.6; the C loader is its only reader.
 
-- `tests/test_frontend_bytecode.py` compares the writer with the frozen bytes of
-  the original writer, and its `OPCODES` with `agc_opcode` in `vm/value.h`.
+- `tests/test_frontend_bytecode.py` compares `OPCODES` with `agc_opcode` in
+  `vm/value.h`.
 - The header version is the `VERSION` file, an input of the writer (`Settings`
   in `compiler/modules/link_env.agc`), never a constant. The format version is
   `FORMAT_VERSION` in `bytecode_tables.agc`.
@@ -394,17 +351,15 @@ one data type (the types with `to_s`, the §25.4 equality set plus `Json`).
 
 `run(settings, words, hand_off) -> exit status`. `agentica help` and
 `tests/fixtures/cli/forms.json` (`tests/test_cli_forms.py`) freeze the forms;
-read them, not this list.
+read them, not a list. `hand_off` calls `FrontEnd.hand_off`, so an ordinary run
+stays in the binary's process.
 
 - A diagnostic prints in the plain form on stderr with exit 1; a missing file or
   bad usage exits 2. A `QUERY-` problem exits 2 (`reject` takes the status).
-- `compile FILE -o OUT` is accepted only as the first argument with exactly that
-  shape, and cannot combine with `--dump` or `--dump-ir`.
 - Options of other commands precede the command or file, so program args stay
-  intact; `help` and `test` accept trailing style options. `--max-steps` reaches
-  only the VM. The `--deny-*` flags and `--sandbox` go to the VM as typed
-  (`Options.deny`); `test` passes them to the driver (`references/bdd.md`).
-- The command files are `cli_*.agc`; `doc` and the query commands read their
-  words by hand (`query/query_options.agc`). `--stdin FILE`
-  (`type-at --stdin FILE:LINE:COL`, likewise `refs` and `check`) goes through
-  `with_buffer` in `cli.agc`.
+  intact. `--max-steps` reaches only the VM. The `--deny-*` flags and
+  `--sandbox` go to the VM as typed (`Options.deny`); `test` passes them to the
+  driver (`references/bdd.md`).
+- `doc` and the query commands read their words by hand
+  (`query/query_options.agc`). `--stdin FILE` goes through `with_buffer` in
+  `cli.agc`.
