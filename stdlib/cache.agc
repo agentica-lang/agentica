@@ -315,9 +315,8 @@ def insert(state: Memory, key: String, value: String) -> Bool
   end
 
   # A task that stalled for two rotations wrote into a table the cache has reused, where its entry is not counted and
-  # its id was wiped, so it just takes the entry out. A task that read the generation as at most one behind is
-  # safe: the
-  # rotation that empties its table starts only after the next one is published, which is after this read.
+  # its id was wiped, so it just takes the entry out. A task that read the generation as at most one behind is safe:
+  # the rotation that empties its table starts only after the next one is published, which is after this read.
   if current(state) - g >= 2
     live.delete(id)
     take_out(state, key, entry)
@@ -415,6 +414,7 @@ end
 # Moves from generation g to g + 1 when this task wins the right to: it empties the table that g + 1 reuses, which no
 # reader looks at, then publishes. Returns whether this task published.
 def rotate(state: Memory, g: Int) -> Bool
+  before = state.rotations.get(g).unwrap_or(0)
   token = claim(state, g)
   if token == 0
     return false
@@ -436,6 +436,8 @@ def rotate(state: Memory, g: Int) -> Bool
   # A task whose rotation was taken over, because it stood still for the whole lease, finds it is no longer the owner.
   if current(state) == g and state.rotations.get(g).unwrap_or(0) == token
     state.generation.put(0, g + 1)
+    # A takeover is over once the generation moved: no one can claim this rotation again, so the arbiter can go.
+    state.deaths.delete(before)
     return true
   end
 
@@ -446,6 +448,10 @@ end
 # Returns false, stopping at once, when the rotation was taken over: the new owner empties the table, and this task
 # must not delete from it after the new owner has published.
 def empty_slot(state: Memory, dead: Int, g: Int, token: Int) -> Bool
+  if current(state) != g
+    return false
+  end
+
   table = slot(state, dead)
   count = 0
   for key in table.keys
@@ -468,9 +474,10 @@ def empty_slot(state: Memory, dead: Int, g: Int, token: Int) -> Bool
   return true
 end
 
-# Shows that the owner of the rotation from g is alive. Returns false when it is no longer the owner.
+# Shows that the owner of the rotation from g is alive. Returns false when it is no longer the owner or the generation
+# has moved on, since the table it is emptying is then in use.
 def beat(state: Memory, g: Int, token: Int) -> Bool
-  if state.rotations.get(g).unwrap_or(0) != token
+  if current(state) != g or state.rotations.get(g).unwrap_or(0) != token
     return false
   end
 
@@ -478,10 +485,9 @@ def beat(state: Memory, g: Int, token: Int) -> Bool
   return true
 end
 
-# The right to rotate from generation g, as a token, or 0. Only the rotation from the current generation can
-# be started.
-# The owner beats while it works; a rotation whose owner has not beaten for the lease is taken over by the one task
-# that wins `deaths.add` on its token, so two tasks never take over the same dead owner.
+# The right to rotate from generation g, as a token, or 0. Only the rotation from the current generation can be
+# started. The owner beats while it works; a rotation whose owner has not beaten for the lease is taken over by the one
+# task that wins `deaths.add` on its token, so two tasks never take over the same dead owner.
 def claim(state: Memory, g: Int) -> Int
   if current(state) != g
     return 0
@@ -496,6 +502,11 @@ def claim(state: Memory, g: Int) -> Int
 
   owner = state.rotations.get(g).unwrap_or(0)
   if owner > 0 and at - state.beats.get(g).unwrap_or(at) > ROTATION_LEASE_MS and state.deaths.add(owner, 1) == 1
+    # The dead owner may have finished while this task decided; nothing has been taken from it yet, so just leave.
+    if current(state) != g
+      return 0
+    end
+
     state.beats.put(g, at)
     state.rotations.put(g, token)
     return token
