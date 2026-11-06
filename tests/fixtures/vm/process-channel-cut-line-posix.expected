@@ -1,0 +1,17 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 137,
+  "stdout": [
+    "ok 5",
+    "error(\"process: end of input\")",
+    "error process: line cut off",
+    "error(\"process: end of input\")",
+    "error process: line cut off",
+    "error(\"process: end of input\")",
+    "error process: line cut off",
+    "error(\"process: end of input\")",
+    ""
+  ],
+  "stderr": []
+}

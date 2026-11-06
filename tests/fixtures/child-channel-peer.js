@@ -45,6 +45,15 @@ async function serve(vm, bytecode) {
   return finish(peer, started, { replies });
 }
 
+// A last line with no LF, then the end of input: the child must not read it as a line.
+async function cut(vm, bytecode) {
+  const peer = launch([vm, "run", "--", bytecode, "cut"]);
+  const started = Date.now();
+  await peer.send("abc");
+  await peer.endInput();
+  return finish(peer, started);
+}
+
 function held(vm, bytecode, mode, options) {
   const peer = launch([vm, "run", "--", bytecode, mode], options);
   return finish(peer, Date.now());
@@ -75,6 +84,7 @@ async function drive(vm, bytecode) {
   const answer = {};
   if (WINDOWS) answer.pinned = await pinned(vm, bytecode);
   answer.serve = await serve(vm, bytecode);
+  answer.cut = await cut(vm, bytecode);
   answer.idle = await held(vm, bytecode, "idle");
   answer.bare = await held(vm, bytecode, "bare", { marker: null });
   // The marker of the other system and no descriptor behind it.
