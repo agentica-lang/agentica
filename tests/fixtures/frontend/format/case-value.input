@@ -1,0 +1,32 @@
+def label(n: Int) -> String
+  # the label
+  text = case n  # head
+    # before the arm
+    1 -> "one" # trailing
+    2 ->
+      base = "t"
+      base + "wo"
+    _ ->   "many"
+  end
+  total = 0
+  total += case n
+    1 -> 10
+    _ -> 20
+  end
+  return case text
+      "one" -> "1"
+    _ ->  "x"
+  end
+end
+
+def main() -> Void
+  puts(label(1))
+  xs = [1, 2].map do |n|
+    # in the block
+    case n
+      1 -> "a"
+      _ -> "b"
+    end
+  end
+  puts(xs)
+end

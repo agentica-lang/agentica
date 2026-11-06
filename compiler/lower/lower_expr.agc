@@ -98,6 +98,9 @@ export def lower_expression(
     Ast.Expr.BlockLit(node) ->
       try typed(cx, expr, known)
       return lower_block_lit(cx, fx, node, want)
+    Ast.Expr.Case(node) ->
+      try typed(cx, expr, known)
+      return cx.case_value.call(cx, fx, node, want)
   end
 end
 

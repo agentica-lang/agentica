@@ -295,9 +295,10 @@ statement        = simple_statement, NL
                  | for_statement ;
 
 simple_statement = binding | compound_binding | return_statement | loop_control | expression ;
-binding          = NAME, [ ":", type ], "=", expression ;
-compound_binding = NAME, ( "+=" | "-=" | "*=" | "/=" | "%=" ), expression ;
-return_statement = "return", [ expression ] ;
+binding          = NAME, [ ":", type ], "=", value ;
+compound_binding = NAME, ( "+=" | "-=" | "*=" | "/=" | "%=" ), value ;
+return_statement = "return", [ value ] ;
+value            = expression | case_expression ;
 loop_control     = "break" | "next" ;
 
 if_statement     = "if", expression, NL, block,
@@ -306,8 +307,9 @@ if_statement     = "if", expression, NL, block,
 while_statement  = "while", expression, [ "do" ], NL, block, "end", NL ;
 for_statement    = "for", NAME, "in", expression, [ "do" ], NL,
                    block, "end", NL ;
-case_statement   = "case", expression, [ "do" ], NL,
-                   match_arm, { match_arm }, "end", NL ;
+case_statement   = case_expression, NL ;
+case_expression  = "case", expression, [ "do" ], NL,
+                   match_arm, { match_arm }, "end" ;
 match_arm        = pattern, [ "if", expression ], "->",
                    ( NL, block | simple_statement, NL, block ) ;
 pattern          = "_" | literal | "-", INTEGER | "-", FLOAT
@@ -321,9 +323,12 @@ pattern_slot     = NAME | "_" | literal | "-", INTEGER | "-", FLOAT
                  | variant_pattern ;
 ```
 
-Assignments, `if`, `while` and `for` are statements, not expressions. `x += e`
-(also `-=`, `*=`, `/=`, `%=`) means `x = x op e`, with the same checks as the
-long form.
+Assignments, `if`, `while` and `for` are statements, not expressions. A `case`
+is a statement too; it gives a value only where the grammar above says `value`
+(the right side of an assignment, after `return`) and as the last line of a
+block, and is `PARSE-UNEXPECTED-TOKEN` anywhere else (`puts(case ...)`,
+`1 + case ...`). `x += e` (also `-=`, `*=`, `/=`, `%=`) means `x = x op e`, with
+the same checks as the long form.
 
 `break` leaves the innermost `while` or `for`; `next` skips to its next
 iteration. Both are `CHECK-LOOP-CONTROL` outside a loop of the same function or

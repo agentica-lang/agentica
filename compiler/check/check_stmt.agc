@@ -13,16 +13,33 @@ import Unused from "check_unused"
 import Variables from "check_variables"
 
 # What the arms of a case have covered so far: the variants named, the literals seen, and whether a wildcard arm came.
+# A case that gives a value (`valued`) also carries the type its arms must have, which is the expected type or else the
+# type of the first arm, and whether an arm may end with a Void expression (`completion`, the last line of a block).
 struct Arms
   covered: List[String]
   literals: List[Ast.LitValue]
   wildcard: Bool
+  valued: Bool
+  completion: Bool
+  type: T.Type
 end
 
 # The arm after checking: the state and what the arms cover now.
 struct ArmDone
   st: State.St
   arms: Arms
+end
+
+# An arm body checked: the state, and in a case that gives a value the type of its last expression.
+struct Body
+  st: State.St
+  type: T.Type
+end
+
+# A case checked: the state and, for a case that gives a value, the type of its arms.
+struct CaseDone
+  st: State.St
+  type: T.Type
 end
 
 ## Checks a function: its body with the parameters in scope, then that every path returns a value when the result is
@@ -95,6 +112,14 @@ export def check_block_in(
   end
 
   return check_block_run(cx, st, block, known_params, known_result, each_receiver, step)
+end
+
+## Checks a case that gives a value (the right side of an assignment, or after `return`): every arm ends with an
+## expression, all of one type, which is `expected` when it is known (CHECK-TYPE-MISMATCH at the arm's expression
+## otherwise). Exhaustiveness is the rule of a statement.
+export def check_case_value(cx: State.Cx, st: State.St, node: Ast.CaseStmt, expected: T.Type) -> Result[State.Out]
+  done = try case_arms(cx, st, node, valued_arms(expected, false))
+  return ok(State.Out(st: done.st, type: done.type))
 end
 
 # Fails at statements[index + 1] when statements[index], already checked, never falls through to it.
@@ -500,11 +525,21 @@ def in_loop(cx: State.Cx, st: State.St, body: List[Ast.Stmt]) -> Result[State.St
 end
 
 def check_case(cx: State.Cx, st: State.St, node: Ast.CaseStmt) -> Result[State.St]
+  start = Arms(covered: [], literals: [], wildcard: false, valued: false, completion: false, type: T.Type.Unknown)
+  done = try case_arms(cx, st, node, start)
+  return ok(done.st)
+end
+
+def valued_arms(type: T.Type, completion: Bool) -> Arms
+  return Arms(covered: [], literals: [], wildcard: false, valued: true, completion: completion, type: type)
+end
+
+def case_arms(cx: State.Cx, st: State.St, node: Ast.CaseStmt, start: Arms) -> Result[CaseDone]
   value = try State.expr(cx, st, node.value, T.Type.Unknown)
   value_type = value.type
   names = variant_names(cx, value_type)
   current = value.st
-  arms = Arms(covered: [], literals: [], wildcard: false)
+  arms = start
   for arm in node.arms
     if arms.wildcard or (names.ok? and all_covered?(names.unwrap!, arms.covered))
       return error(State.fail(cx, current, "CHECK-UNREACHABLE-CASE-ARM", "case arm is unreachable", arm.span))
@@ -519,15 +554,15 @@ def check_case(cx: State.Cx, st: State.St, node: Ast.CaseStmt) -> Result[State.S
     try check_exhaustive(cx, current, node, value_type, names, arms)
   end
 
-  return ok(current)
+  return ok(CaseDone(st: current, type: arms.type))
 end
 
 # A guarded arm covers nothing: it may fail at run time, so it adds no variant, no literal and no catch-all to `arms`.
 def check_arm(cx: State.Cx, st: State.St, arm: Ast.CaseArm, value_type: T.Type, arms: Arms) -> Result[ArmDone]
   case arm.pattern
     Ast.Pattern.Wildcard(_) ->
-      body = try arm_body(cx, st, arm)
-      return ok(ArmDone(st: body, arms: arms.with(wildcard: arms.wildcard or !guarded?(arm))))
+      body = try arm_body(cx, st, arm, arms)
+      return ok(ArmDone(st: body.st, arms: arms.with(wildcard: arms.wildcard or !guarded?(arm), type: body.type)))
     Ast.Pattern.Literal(pattern) -> return check_literal_arm(cx, st, arm, pattern, value_type, arms)
     Ast.Pattern.Variant(pattern) -> return check_variant_arm(cx, st, arm, pattern, value_type, arms)
   end
@@ -546,12 +581,13 @@ def check_literal_arm(
     return error(State.fail(cx, st, "CHECK-UNREACHABLE-CASE-ARM", "duplicate literal case arm", arm.span))
   end
 
-  body = try arm_body(cx, st, arm)
+  body = try arm_body(cx, st, arm, arms)
+  seen = arms.with(type: body.type)
   if guarded?(arm)
-    return ok(ArmDone(st: body, arms: arms))
+    return ok(ArmDone(st: body.st, arms: seen))
   end
 
-  return ok(ArmDone(st: body, arms: arms.with(literals: arms.literals.push(pattern.value))))
+  return ok(ArmDone(st: body.st, arms: seen.with(literals: arms.literals.push(pattern.value))))
 end
 
 # A literal pattern needs a primitive value of its own type (CHECK-PATTERN-TYPE), at the top of an arm or nested.
@@ -591,13 +627,15 @@ def check_variant_arm(
 
   types = payload.unwrap!
   bound = try bind_pattern(cx, State.enter(st), pattern, types)
-  body = try check_arm_body(cx, bound, arm)
+  body = try check_arm_body(cx, bound, arm, arms)
+  left = State.leave(body.st, st)
+  seen = arms.with(type: body.type)
   # Only an arm that cannot fail covers its variant: no guard, and nothing but names and _ in the payload.
   if guarded?(arm) or !irrefutable?(pattern)
-    return ok(ArmDone(st: State.leave(body, st), arms: arms))
+    return ok(ArmDone(st: left, arms: seen))
   end
 
-  return ok(ArmDone(st: State.leave(body, st), arms: arms.with(covered: arms.covered.push(pattern.variant_name))))
+  return ok(ArmDone(st: left, arms: seen.with(covered: arms.covered.push(pattern.variant_name))))
 end
 
 def guarded?(arm: Ast.CaseArm) -> Bool
@@ -681,7 +719,7 @@ def check_nested(cx: State.Cx, st: State.St, inner: Ast.Pattern, type: T.Type) -
 end
 
 # The guard, a Bool that may read the names of the pattern, then the body, in the scope of the arm that `bound` opened.
-def check_arm_body(cx: State.Cx, bound: State.St, arm: Ast.CaseArm) -> Result[State.St]
+def check_arm_body(cx: State.Cx, bound: State.St, arm: Ast.CaseArm, arms: Arms) -> Result[Body]
   current = bound
   case arm.guard
     some(condition) ->
@@ -690,12 +728,57 @@ def check_arm_body(cx: State.Cx, bound: State.St, arm: Ast.CaseArm) -> Result[St
     none -> current = bound
   end
 
-  return check_block(cx, current, arm.body)
+  if arms.valued
+    return check_arm_value(cx, current, arm, arms)
+  end
+
+  done = try check_block(cx, current, arm.body)
+  return ok(Body(st: done, type: arms.type))
 end
 
-def arm_body(cx: State.Cx, st: State.St, arm: Ast.CaseArm) -> Result[State.St]
-  inner = try check_arm_body(cx, State.enter(st), arm)
-  return ok(State.leave(inner, st))
+# The body of an arm of a case that gives a value: the statements before the last, then the last expression, which is
+# checked against the type of the case. CHECK-CASE-ARM-VALUE when the arm does not end with an expression.
+def check_arm_value(cx: State.Cx, st: State.St, arm: Ast.CaseArm, arms: Arms) -> Result[Body]
+  last = arm.body.size - 1
+  if last < 0
+    return error(arm_without_value(cx, st, arm.span))
+  end
+
+  current = st
+  index = 0
+  while index < last
+    current = try check_statement(cx, current, arm.body[index])
+    try check_reachable(cx, current, arm.body, index)
+    index += 1
+  end
+
+  case arm.body[last]
+    Ast.Stmt.Expression(node) ->
+      out = try State.expr_completion_if(cx, current, node.value, arms.type, arms.completion)
+      type = arms.type
+      if T.unknown?(type)
+        type = out.type
+      end
+
+      return ok(Body(st: out.st, type: type))
+    _ -> return error(arm_without_value(cx, current, statement_span(arm.body[last])))
+  end
+end
+
+def arm_without_value(cx: State.Cx, st: State.St, span: Source.Span) -> String
+  return State.fail_help(
+    cx,
+    st,
+    "CHECK-CASE-ARM-VALUE",
+    "this arm must end with an expression, which is its value",
+    span,
+    "a case that gives a value ends every arm with the expression it gives; compute the value in a name first",
+  )
+end
+
+def arm_body(cx: State.Cx, st: State.St, arm: Ast.CaseArm, arms: Arms) -> Result[Body]
+  inner = try check_arm_body(cx, State.enter(st), arm, arms)
+  return ok(Body(st: State.leave(inner.st, st), type: inner.type))
 end
 
 # The payload types of a variant pattern: Ok and Err of a Result, Some and None of an Optional, or the variant of the
@@ -1003,9 +1086,51 @@ def block_statements(cx: State.Cx, st: State.St, statements: List[Ast.Stmt]) -> 
   final = statements[statements.size - 1]
   case final
     Ast.Stmt.Expression(node) -> return final_expression(cx, current, node.value)
+    Ast.Stmt.Case(node) -> return final_case(cx, current, node)
     _ ->
       done = try check_statement(cx, current, final)
       return ok(State.Out(st: done, type: T.Type.Unknown))
+  end
+end
+
+# A case on the last line of a block gives the block's value when the block is to give one (its result is not Void) and
+# every arm ends with an expression; otherwise it is a statement, as anywhere else. The type is recorded for the node,
+# which is how lowering tells the two apart.
+def final_case(cx: State.Cx, st: State.St, node: Ast.CaseStmt) -> Result[State.Out]
+  start = T.Type.Unknown
+  completion = true
+  gives_result = false
+  case st.result
+    State.Slot.Known(expected) ->
+      start = expected
+      completion = T.is?(expected, "Result")
+    State.Slot.InferResult ->
+      completion = false
+      gives_result = true
+    State.Slot.Infer -> completion = true
+  end
+
+  if T.is?(start, "Void") or !node.arms.all? do |arm: Ast.CaseArm| ends_with_expression?(arm.body) end
+    done = try check_statement(cx, st, Ast.Stmt.Case(node))
+    return ok(State.Out(st: done, type: T.Type.Unknown))
+  end
+
+  done = try case_arms(cx, st, node, valued_arms(start, completion))
+  if gives_result
+    try require_result(cx, done.st, done.type, node.span)
+  end
+
+  return ok(State.Out(st: State.record_type(done.st, node.id, done.type), type: done.type))
+end
+
+def ends_with_expression?(body: List[Ast.Stmt]) -> Bool
+  if body.size == 0
+    return false
+  end
+
+  case body[body.size - 1]
+    Ast.Stmt.Expression(_) -> return true
+    _ -> return false
   end
 end
 

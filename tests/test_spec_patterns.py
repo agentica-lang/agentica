@@ -1,4 +1,4 @@
-"""`case` guards (`pattern if condition ->`) and nested patterns, through the product CLI.
+"""`case` guards (`pattern if condition ->`), nested patterns and `case` as a value, through the product CLI.
 
 Each case writes a program (one file, or several for the import-alias rules) and runs `--json check FILE`, or runs it.
 A rejected program is asserted by its diagnostic code and the source text its range covers; a good one checks clean or
@@ -26,6 +26,12 @@ def case_of(arms, scrutinee="Shape.Dot"):
     """A program whose main() is `case SCRUTINEE` over the arm lines (each indented by four spaces)."""
     lines = "".join("    " + arm + "\n" for arm in arms)
     return main_with("  shape = " + scrutinee + "\n  case shape\n" + lines + "  end\n")
+
+
+def case_value_of(arms):
+    """A program whose main() assigns `case shape` over the arm lines (each indented by four spaces)."""
+    lines = "".join("    " + arm + "\n" for arm in arms)
+    return main_with("  shape = Shape.Dot\n  x = case shape\n" + lines + "  end\n  puts(x)\n")
 
 
 # (title, program, code, text the range covers): code None means the program checks clean.
@@ -128,10 +134,61 @@ SINGLE_FILE = [
     ("an arm after a guarded arm of a case that is the body of an arm",
      main_with("  n = 3\n  case n\n    1 ->\n      case n\n        _ if n > 5 -> puts(0)\n"
                "        _ -> puts(1)\n      end\n    _ -> puts(2)\n  end\n"), None, None),
+    # A case that gives a value: after `=`, `+=` or `return`, and as the last line of a block.
+    ("a case gives the value of an assignment, an annotated assignment and a compound assignment",
+     main_with("  n = 3\n  a = case n\n    3 ->\n      base = n * 2\n      base + 1\n    _ -> 0\n  end\n"
+               "  b: Int = case n\n    _ -> a\n  end\n  b += case a\n    7 -> 1\n    _ -> 2\n  end\n  puts(b)\n"),
+     None, None),
+    ("a case gives the value of a return, over an enum, with a payload name in an arm",
+     main_with("  puts(size(Shape.Dot))\n", ENUMS + 'def size(shape: Shape) -> Int\n  return case shape\n'
+               '    Shape.Circle(r) -> r\n    Shape.Pair(a, b) -> a + b\n    _ -> 0\n  end\nend\n\n'), None, None),
+    ("a case on the last line of a block gives the value of the block",
+     main_with("  names = [Shape.Dot, Shape.Circle(1)].map do |shape|\n    case shape\n      Shape.Dot -> \"dot\"\n"
+               "      _ -> \"other\"\n    end\n  end\n  puts(names)\n"), None, None),
+    ("a case on the last line of a block with no value stays a statement, whatever its arms end with",
+     main_with("  [1, 2].each do |n|\n    case n\n      1 -> puts(\"a\")\n      _ -> puts(2)\n    end\n  end\n"),
+     None, None),
+    ("the arms of a case that gives a value have one type, reported at the arm's last expression",
+     main_with("  x = case 1\n    1 -> \"a\"\n    _ ->\n      puts(\"other\")\n      2\n  end\n  puts(x)\n"),
+     "CHECK-TYPE-MISMATCH", "2"),
+    ("the arms agree with the annotation of the assignment",
+     main_with("  x: Int = case 1\n    1 -> \"a\"\n    _ -> 2\n  end\n  puts(x)\n"), "CHECK-TYPE-MISMATCH", '"a"'),
+    ("the arms agree with the result of the function after return",
+     'def f(n: Int) -> String\n  return case n\n    1 -> "a"\n    _ -> n\n  end\nend\n\n'
+     + main_with("  puts(f(1))\n", ""), "CHECK-TYPE-MISMATCH", "n"),
+    ("the arms of a case on the last line of a block have one type",
+     main_with("  xs = [1, 2].map do |n|\n    case n\n      1 -> \"a\"\n      _ -> 2\n    end\n  end\n  puts(xs)\n"),
+     "CHECK-TYPE-MISMATCH", "2"),
+    ("a case that gives a value must be exhaustive",
+     case_value_of(["Shape.Dot -> 1", "Shape.Circle(_) -> 2"]), "CHECK-NON-EXHAUSTIVE-CASE", Starts("case shape")),
+    ("an arm of a case that gives a value ends with an expression",
+     case_value_of(["Shape.Dot -> 1", "_ ->\n      y = 2"]), "CHECK-CASE-ARM-VALUE", Starts("y = 2")),
+    ("an arm of a case that gives a value is not empty",
+     case_value_of(["Shape.Dot -> 1", "_ ->"]), "CHECK-CASE-ARM-VALUE", Starts("_ ->")),
+    ("a case is still not an expression as an argument",
+     main_with("  puts(case 1\n    _ -> 2\n  end)\n"), "PARSE-UNEXPECTED-TOKEN", "case"),
+    ("a case is still not an operand",
+     main_with("  x = 1 + case 1\n    _ -> 2\n  end\n  puts(x)\n"), "PARSE-UNEXPECTED-TOKEN", "case"),
 ]
 
 # (title, program, expected lines): the program runs and prints these.
 RUNS = [
+    ("a case gives a value after =, += and return, and as the last line of a block",
+     ENUMS + 'def label(shape: Shape) -> String\n  return case shape\n    Shape.Circle(r) if r > 100 -> "big"\n'
+     '    Shape.Circle(_) -> "circle"\n    Shape.Pair(a, b) ->\n      sum = a + b\n      "pair #{sum}"\n'
+     '    _ -> "other"\n  end\nend\n\n'
+     + main_with("  r: Result[Int] = Result.Err(\"boom\")\n  text = case r\n    ok(n) -> \"ok #{n}\"\n"
+                 "    error(m) -> \"failed: #{m}\"\n  end\n  puts(text)\n  total = 1\n  total += case text\n"
+                 "    \"x\" -> 10\n    _ -> 20\n  end\n  puts(total)\n"
+                 "  shapes = [Shape.Circle(500), Shape.Circle(1), Shape.Pair(1, 2), Shape.Dot]\n"
+                 "  puts(shapes.map do |shape| label(shape) end)\n"
+                 "  puts(shapes.map do |shape|\n    case shape\n      Shape.Circle(radius) -> radius\n      _ -> 0\n    end\n  end)\n",
+                 ""),
+     ["failed: boom", "21", '["big", "circle", "pair 3", "other"]', "[500, 1, 0, 0]"]),
+    ("only the arm that matches computes its value",
+     'def noisy(n: Int) -> Int\n  puts("noisy #{n}")\n  return n\nend\n\n'
+     + main_with("  x = case 2\n    1 -> noisy(1)\n    2 -> noisy(2)\n    _ -> noisy(3)\n  end\n  puts(x)\n", ""),
+     ["noisy 2", "2"]),
     ("guards pick the first arm that matches and whose condition is true",
      main_with("  items = [Shape.Circle(0), Shape.Circle(7), Shape.Circle(200), Shape.Pair(3, 3), Shape.Pair(1, 2),\n"
                "           Shape.Dot]\n"

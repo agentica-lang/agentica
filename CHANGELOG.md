@@ -8,6 +8,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- A `case` gives a value on the right side of an assignment, after `return` and
+  as the last line of a block (`text = case r ... end`); each arm ends with an
+  expression, all of one type, and a mismatch or an arm that ends with another
+  statement is a diagnostic (`CHECK-CASE-ARM-VALUE`).
+
 ### Fixed
 
 - `agentica lint` no longer hides a `+` chain or a single pipe that sits first

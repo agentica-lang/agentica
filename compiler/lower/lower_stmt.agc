@@ -20,7 +20,8 @@ end
 
 ## Lowers a function. fx is fresh (Lowering.fresh) for the file of the function; the parameters take the first
 ## registers and the captured names of a block the ones after them. A block gives its last expression statement as its
-## value; any other function ends with a Void return.
+## value, or its last case when the checker made that case a value (it recorded a type for it); any other function ends
+## with a Void return.
 export def lower_function(
   cx: Lowering.Cx,
   fx: Lowering.Fx,
@@ -45,12 +46,19 @@ export def lower_function(
   end
 
   last = statements.size - 1
+  valued = final_case(cx, statements)
   if block and last >= 0 and final_expression?(statements[last])
     fx = try lower_block(cx, fx, statements.take(last))
     final = final_value(statements[last])
     final_span = statement_span(statements[last])
     fx = Lowering.step(fx, final_span)
     out = try Expr.lower_expression(cx, fx, final, -1, true, false)
+    fx = Lowering.emit_at(out.fx, "return", [out.slot], final_span)
+  elsif block and last >= 0 and valued.some?
+    fx = try lower_block(cx, fx, statements.take(last))
+    final_span = statement_span(statements[last])
+    fx = Lowering.step(fx, final_span)
+    out = try lower_case_value(cx, fx, valued.unwrap!, -1)
     fx = Lowering.emit_at(out.fx, "return", [out.slot], final_span)
   else
     fx = try lower_block(cx, fx, statements)
@@ -88,6 +96,17 @@ export def lower_block_function(
   inner = Lowering.fresh(cx.index, fx.blocks, index + 1)
   built = try lower_function(cx, inner, name, params, captured, node.body, node.span, true)
   return ok(fx.with(blocks: built.fx.blocks.put(index, built.function), block_count: built.fx.block_count))
+end
+
+## Lowers a case that gives a value (Cx.case_value): each arm computes its last expression into the register `want`, or
+## into a new one when want is -1. The checker made the case exhaustive, so some arm without a guard always runs and
+## the register is always set.
+export def lower_case_value(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt, want: Int) -> Result[Lowering.Out]
+  target = Lowering.target(fx, want)
+  fx = target.fx
+  entry = fx.next
+  done = try lower_arms(cx, fx, node, target.slot)
+  return ok(Lowering.Out(fx: done.with(next: entry), slot: target.slot))
 end
 
 # The statements in order.
@@ -424,6 +443,13 @@ end
 # scope of its own, jumps to the next arm when its guard is false, and jumps to the end after its body (except the last
 # arm).
 def lower_case(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt, saved: Int) -> Result[Lowering.Fx]
+  done = try lower_arms(cx, fx, node, -1)
+  return ok(done.with(next: saved))
+end
+
+# The arms of a case. target is the register that holds the case's value, or -1 for a case that is a statement. The
+# registers are not released: the caller sets `next`.
+def lower_arms(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt, target: Int) -> Result[Lowering.Fx]
   scrutinee = try Expr.lower_expression(cx, fx, node.value, -1, false, false)
   fx = Lowering.new_label(scrutinee.fx)
   end_label = fx.labels - 1
@@ -438,7 +464,7 @@ def lower_case(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt, saved: Int)
     before = fx
     fx = try bind_payload(cx, fx, arm.pattern, value)
     fx = try lower_guard(cx, fx, arm.guard, skip)
-    fx = try lower_block(cx, fx, arm.body)
+    fx = try lower_arm_body(cx, fx, arm.body, target)
     fx = leave(fx, before)
     if index < node.arms.size
       fx = Lowering.emit_at(fx, "jump", [end_label], node.span)
@@ -448,7 +474,27 @@ def lower_case(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt, saved: Int)
     index += 1
   end
 
-  return ok(Lowering.place(fx, end_label).with(next: saved))
+  return ok(Lowering.place(fx, end_label))
+end
+
+# The body of an arm. In a case that gives a value (target is a register) the last statement is an expression, which
+# is computed into the target.
+def lower_arm_body(cx: Lowering.Cx, fx: Lowering.Fx, body: List[Ast.Stmt], target: Int) -> Result[Lowering.Fx]
+  if target < 0
+    return lower_block(cx, fx, body)
+  end
+
+  last = body.size - 1
+  fx = try lower_block(cx, fx, body.take(last))
+  span = statement_span(body[last])
+  fx = Lowering.step(fx, span)
+  out = try Expr.lower_expression(cx, fx, final_value(body[last]), target, true, false)
+  fx = out.fx
+  if out.slot != target
+    fx = Lowering.emit_at(fx, "move", [target, out.slot], span)
+  end
+
+  return ok(fx)
 end
 
 # The instructions that jump to skip when the value in the register does not match the pattern: the tag of a variant,
@@ -622,6 +668,23 @@ def final_expression?(statement: Ast.Stmt) -> Bool
   case statement
     Ast.Stmt.Expression(_) -> return true
     _ -> return false
+  end
+end
+
+# The case on the last line of a block when the checker made it a value: it recorded the type of the case.
+def final_case(cx: Lowering.Cx, statements: List[Ast.Stmt]) -> Optional[Ast.CaseStmt]
+  if statements.size == 0
+    return none
+  end
+
+  case statements[statements.size - 1]
+    Ast.Stmt.Case(node) ->
+      if Types.unknown?(cx.types[node.id])
+        return none
+      end
+
+      return some(node)
+    _ -> return none
   end
 end
 

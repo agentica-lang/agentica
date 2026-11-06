@@ -122,6 +122,70 @@ other: Event.Key("q")
 other: Event.Quit
 ```
 
+## A case that gives a value
+
+A `case` gives a value in three places: the right side of an assignment, after `return`, and the last line of a block. Everywhere else it is a statement, so `puts(case ...)` and `1 + case ...` are errors.
+
+Each arm ends with an expression, which is the value of the arm. An arm may have more lines before it.
+
+```agentica
+enum Kind
+  Big
+  Small
+end
+
+def label(kind: Kind) -> String
+  return case kind
+    Kind.Big -> "big"
+    Kind.Small -> "small"
+  end
+end
+
+def main() -> Void
+  r: Result[Int] = ok(3)
+  text = case r
+    ok(n) -> "got #{n}"
+    error(message) -> "failed: #{message}"
+  end
+  puts(text)
+
+  size = case text
+    "got 3" ->
+      base = 2
+      base + 1
+    _ -> 0
+  end
+  puts(size)
+
+  puts(label(Kind.Small))
+  puts([Kind.Big, Kind.Small].map do |kind|
+    case kind
+      Kind.Big -> 1
+      Kind.Small -> 2
+    end
+  end)
+end
+```
+
+```output
+got 3
+3
+small
+[1, 2]
+```
+
+All the arms have one type, and the case must cover every variant, or end with `_`. A mismatch is `CHECK-TYPE-MISMATCH` at the last expression of the arm:
+
+```agentica {expect="CHECK-TYPE-MISMATCH"}
+def main() -> Void
+  text = case 1
+    1 -> "one"
+    _ -> 2
+  end
+  puts(text)
+end
+```
+
 ## Generic enums
 
 An enum can take a type parameter. For a value that may be missing, use the built-in [Optional](/library/data-structures/optional/), not your own enum.

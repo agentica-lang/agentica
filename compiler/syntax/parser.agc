@@ -177,6 +177,13 @@ struct GuardAt
   ids: Int
 end
 
+# A case with its arms, up to and with its end. The node takes the id after the arms; ids is the next free one.
+struct CaseAt
+  node: Ast.CaseStmt
+  pos: Int
+  ids: Int
+end
+
 # The parameters, whether each is an `out` parameter of an extern function, the number of parameters before the `...`
 # of a variadic extern function (-1 without one) and the position of that `...`, the next position and the next free
 # id.
@@ -1570,7 +1577,7 @@ def parse_return(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   next_id = ids
   value: Optional[Ast.Expr] = none
   if !statement_end?(e, cursor)
-    parsed = try parse_expression(e, cursor, ids)
+    parsed = try parse_value(e, cursor, ids)
     value = some(parsed.node)
     cursor = parsed.pos
     next_id = parsed.ids
@@ -1609,7 +1616,7 @@ def parse_binding(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   end
 
   assign = try Base.expect(e, cursor, "assign", "\"=\"", false)
-  value = try parse_expression(e, assign, next_id)
+  value = try parse_value(e, assign, next_id)
   stop = try expect_statement_end(e, value.pos, "a newline after the statement")
   node = Ast.Stmt.Binding(
     Ast.Binding(
@@ -1632,7 +1639,7 @@ def parse_compound(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   try Base.expect(e, pos, "name", "a name", false)
   operator = e.tokens[pos + 1]
   target = Ast.Expr.Name(Ast.NameRef(id: ids, name: e.tokens[pos].lexeme, span: e.tokens[pos].span))
-  value = try parse_expression(e, pos + 2, ids + 1)
+  value = try parse_value(e, pos + 2, ids + 1)
   stop = try expect_statement_end(e, value.pos, "a newline after the statement")
   span = Base.span_from(e, pos, stop)
   combined = Ast.Expr.Binary(
@@ -1972,7 +1979,7 @@ def parse_guard(e: Base.Env, pos: Int, ids: Int) -> Result[GuardAt]
   return ok(GuardAt(node: some(condition.node), pos: condition.pos, ids: condition.ids))
 end
 
-def parse_case(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
+def parse_case_node(e: Base.Env, pos: Int, ids: Int) -> Result[CaseAt]
   value = try parse_expression(Base.with_blocks(e, false), pos + 1, ids)
   cursor = value.pos
   if e.tokens[cursor].kind == "do"
@@ -2016,12 +2023,27 @@ def parse_case(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   end
 
   close = try expect_end(e, cursor)
-  stop = try expect_statement_end(e, close, "a newline after end")
-  return stmt_at(
-    Ast.Stmt.Case(Ast.CaseStmt(id: next_id, value: value.node, arms: arms, span: Base.span_from(e, pos, stop))),
-    stop,
-    next_id,
+  node = Ast.CaseStmt(id: next_id, value: value.node, arms: arms, span: Base.span_from(e, pos, close))
+  return ok(CaseAt(node: node, pos: close, ids: next_id + 1))
+end
+
+def parse_case(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
+  parsed = try parse_case_node(e, pos, ids)
+  stop = try expect_statement_end(e, parsed.pos, "a newline after end")
+  return ok(
+    Base.StmtAt(node: Ast.Stmt.Case(parsed.node.with(span: Base.span_from(e, pos, stop))), pos: stop, ids: parsed.ids),
   )
+end
+
+# The value of an assignment or a return: a case, which gives a value here, or an expression. A case is not an
+# expression anywhere else, so parse_expression still refuses the word.
+def parse_value(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
+  if e.tokens[pos].kind != "case"
+    return parse_expression(e, pos, ids)
+  end
+
+  parsed = try parse_case_node(e, pos, ids)
+  return ok(Base.ExprAt(node: Ast.Expr.Case(parsed.node), pos: parsed.pos, ids: parsed.ids))
 end
 
 # The parameters of a def up to ")". extern is true in an extern block, where `out NAME: type` marks an out parameter

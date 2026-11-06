@@ -107,6 +107,8 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   `CHECK-ENUM-TYPE-INFERENCE`: unknown enum variant; named arguments to a
   variant; a generic enum or struct type not known from payloads, field values
   or context.
+- `CHECK-CASE-ARM-VALUE`: an arm of a `case` that gives a value ends with a
+  statement, or has no body; end it with the expression it gives.
 - `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`,
   `CHECK-UNREACHABLE-CASE-ARM`: a pattern that does not fit the value; a `case`
   missing variants or `_`; an arm already covered.

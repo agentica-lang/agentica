@@ -223,6 +223,12 @@ section for the area you are changing.
   depth 0, so it needs its NL); the arm lookahead needs the pattern followed by
   `->`, or by `if` and a guard that reaches a `->` on the same line (iterative,
   so a deep pattern costs no stack).
+- A `case` that gives a value is `Expr.Case(CaseStmt)`, parsed by `parse_value`
+  after `=`, `+=` and `return` only. A `case` on the last line of a block stays
+  a `Stmt.Case`: the checker (`final_case`) makes it a value when every arm ends
+  with an expression and the block's result is not `Void`, and records its type
+  by node id, which is how lowering (`final_case`) tells the two apart. Lowering
+  reaches a value `case` through `Cx.case_value`.
 
 ## Enums and pattern matching
 

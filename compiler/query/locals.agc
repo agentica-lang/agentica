@@ -568,6 +568,7 @@ def visit_expression(ask: Query, target: Local, expr: Ast.Expr, scope: Map[Strin
     Ast.Expr.BlockLit(node) ->
       inner = bind_parameters(ask, block_parameters_of(ask, node.params), scope).scope
       return below([Pending(step: Step.Block(node.body), scope: inner)])
+    Ast.Expr.Case(node) -> return below(case_parts(ask, node, scope))
     _ -> return below(Walk.children(Walk.Node.Expr(expr)).map do |child: Walk.Node| child_step(child, scope) end)
   end
 end
@@ -596,6 +597,7 @@ def into_expression(ask: Query, expr: Ast.Expr, scope: Map[String, Local]) -> Mo
 
       return stop(scope)
     Ast.Expr.BlockLit(node) -> return into_block(ask, node, scope)
+    Ast.Expr.Case(node) -> return into_case(ask, node, scope)
     _ -> return into_child(ask, expr, scope)
   end
 end

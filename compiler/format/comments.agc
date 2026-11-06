@@ -200,6 +200,7 @@ export def expr_kind(expr: Ast.Expr) -> String
     Ast.Expr.ConstRef(_) -> return "ConstRef"
     Ast.Expr.RegexLit(_) -> return "RegexLit"
     Ast.Expr.EagLit(_) -> return "EagLit"
+    Ast.Expr.Case(_) -> return "CaseStmt"
   end
 end
 
@@ -657,9 +658,13 @@ def stmt_children(stmt: Ast.Stmt) -> List[Part]
     Ast.Stmt.If(node) -> return if_children(node)
     Ast.Stmt.While(node) -> return [Part.Expr(node.condition)].concat(stmts(node.body))
     Ast.Stmt.For(node) -> return [Part.Expr(node.iterable)].concat(stmts(node.body))
-    Ast.Stmt.Case(node) -> return [Part.Expr(node.value)].concat(node.arms.map do |arm: Ast.CaseArm| Part.Arm(arm) end)
+    Ast.Stmt.Case(node) -> return case_parts(node)
     Ast.Stmt.Control(_) -> return []
   end
+end
+
+def case_parts(node: Ast.CaseStmt) -> List[Part]
+  return [Part.Expr(node.value)].concat(node.arms.map do |arm: Ast.CaseArm| Part.Arm(arm) end)
 end
 
 # The branches, then the statements of the `else` body, which has no node of its own.
@@ -708,6 +713,7 @@ def expr_children(expr: Ast.Expr) -> List[Part]
     Ast.Expr.Unary(node) -> return [Part.Expr(node.operand)]
     Ast.Expr.Binary(node) -> return [Part.Expr(node.left), Part.Expr(node.right)]
     Ast.Expr.Typed(node) -> return [Part.Expr(node.target)]
+    Ast.Expr.Case(node) -> return case_parts(node)
     _ -> return []
   end
 end
