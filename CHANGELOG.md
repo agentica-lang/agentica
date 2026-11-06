@@ -8,19 +8,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.25.1] - 2026-11-06
+
 ### Added
 
 - `override = true` and `path = "../folder"` in a dependency of the root
-  `agentica.toml`: the root's source wins for that name everywhere in the tree
-  (no `PKG-SOURCE-CONFLICT`), and a `path` is read in place with no fetch.
-  Packages cannot use either (`PKG-ROOT-ONLY`). `install`, `add` and `update`
-  print an `overridden NAME@VERSION` line for each overridden package.
-- `{pid}` in `AGENTICA_VM_TRACE_FILE` is replaced by the process id, so each
-  process of a test run writes its own trace or profile file.
-- `agentica test --timing` adds the time of the run, of each file and of the 5
-  slowest scenarios before the totals. The `--json` report now always has
-  `duration_ms` (an additive field, with or without `--timing`) on the report,
-  as the wall time of the run, and on each file.
+  `agentica.toml`; packages cannot use either (`PKG-ROOT-ONLY`).
+- `{pid}` in `AGENTICA_VM_TRACE_FILE` is replaced by the process id.
+- `agentica test --timing` shows the time of the run, of each file and of the 5
+  slowest scenarios; the `--json` report has `duration_ms`.
 
 ## [0.25.0] - 2026-11-06
 
@@ -1144,7 +1140,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.25.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.25.1...HEAD
+[0.25.1]: https://github.com/agentica-lang/agentica/compare/0.25.0...0.25.1
 [0.25.0]: https://github.com/agentica-lang/agentica/compare/0.24.4...0.25.0
 [0.24.4]: https://github.com/agentica-lang/agentica/compare/0.24.3...0.24.4
 [0.24.3]: https://github.com/agentica-lang/agentica/compare/0.24.2...0.24.3
