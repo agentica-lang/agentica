@@ -415,15 +415,15 @@ static bool trace_file_name(const char *path, char *out, size_t cap) {
 void agc_launch_trace(agc_launch *launch) {
   const char *names = getenv("AGENTICA_VM_TRACE");
   const char *path = getenv("AGENTICA_VM_TRACE_FILE");
-  char expanded[4096];
-  bool named = path && *path;
-  bool fits = !named || trace_file_name(path, expanded, sizeof expanded);
   int fd = 2;
-  if (AGC_TRACE_BUILD && names && *names && named) {
+  if (AGC_TRACE_BUILD && names && *names && path && *path) {
+    char expanded[4096];
+    bool fits = trace_file_name(path, expanded, sizeof expanded);
     fd = fits ? open(expanded, TRACE_OPEN, TRACE_MODE) : -1;
     if (fd >= 0) fd = private_trace_fd(fd);
     if (fd < 0) {
-      agc_trace_message(2, "cannot open", path, strlen(path), false);
+      const char *shown = fits ? expanded : path;
+      agc_trace_message(2, "cannot open", shown, strlen(shown), false);
       names = NULL;
       fd = 2;
     }

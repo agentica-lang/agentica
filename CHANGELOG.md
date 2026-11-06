@@ -12,9 +12,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `{pid}` in `AGENTICA_VM_TRACE_FILE` is replaced by the process id, so each
   process of a test run writes its own trace or profile file.
-- `agentica test --timing` adds the time of each file and the 5 slowest
-  scenarios before the totals; the `--json` report has `duration_ms` on the
-  report and on each file.
+- `agentica test --timing` adds the time of the run, of each file and of the 5
+  slowest scenarios before the totals. The `--json` report now always has
+  `duration_ms` (an additive field, with or without `--timing`) on the report,
+  as the wall time of the run, and on each file.
 - `Native.function?("NAME", "symbol")` tells whether a native library exports a
   function, so a program can fall back before calling one that the library
   lacks.

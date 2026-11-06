@@ -273,8 +273,9 @@ stages.
   there; if the file cannot be opened, tracing is off). Each `{pid}` of the
   file name is replaced by the process id (`trace_file_name` in
   `vm/launch.c`), so the processes of a test run, which share one
-  environment, write one file each; a name over 4096 bytes after that cannot
-  be opened. `make TRACE=0` compiles
+  environment, write one file each; a name of 4096 bytes or more after that
+  cannot be opened (4095 is the most that fits). The file is opened in append
+  mode, so a reused pid appends to the old file. `make TRACE=0` compiles
   the trace points out, and `--version` then says `trace off`.
 - The trace file is opened with `O_NONBLOCK` and `O_NOFOLLOW`, and only a
   regular file owned by the VM's user is taken, so start-up never blocks on a

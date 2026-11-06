@@ -217,6 +217,9 @@ def test_the_pid_of_a_trace_file_name_is_the_process_id_so_each_process_writes_i
 
 
 def test_agentica_test_with_a_pid_pattern_writes_a_trace_file_for_each_process_of_the_run(tmp_path, traced_vm):
+    version = subprocess.run([*cli(), "--version"], stdout=subprocess.PIPE, timeout=WAIT_SECONDS).stdout
+    if b"trace off" in version:
+        pytest.skip("the CLI was built with TRACE=0")
     suite = tmp_path / "suite"
     suite.mkdir()
     (suite / "one_test.agc").write_text('def test_one() -> Result[Void]\n  return Test.assert(true, "x")\nend\n')

@@ -154,7 +154,7 @@ AGENTICA_VM_TRACE=profile AGENTICA_PROFILE_FORMAT=folded AGENTICA_VM_TRACE_FILE=
 ls /tmp/suite-*.folded
 ```
 
-Every `{pid}` of the name is replaced (the name keeps one `{pid}` or none), and the pattern works for every trace category and for the report as well as for folded stacks. A name that does not fit in 4096 bytes after the replacement cannot be opened, and tracing is off, as for any other file that cannot be opened. `agentica test --timing` shows which files and scenarios are slow, so you know which of the files to read.
+Every `{pid}` in the name is replaced, however many there are, and the pattern works for every trace category and for the report as well as for folded stacks. A name that is 4096 bytes or longer after the replacement cannot be opened, and tracing is off, as for any other file that cannot be opened. The file is opened in append mode, so a process that reuses a pid appends to the old file: use an empty directory for each run. [`agentica test --timing`](/cli/) shows which files and scenarios are slow, so you know which of the files to read.
 
 ## Flame graphs
 

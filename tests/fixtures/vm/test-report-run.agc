@@ -122,7 +122,7 @@ def main() -> Void
     run_file(patterns, "/specs/b.feature", "Scenario: first\n  Given a number 1\n"),
     run_file(patterns, "/specs/c.feature", "Feature: Empty\n"),
   ]
-  puts(Report.json(files, 7))
+  puts(Report.json(files, 7, 0))
   puts(Report.text(files, false, 7))
   puts(Report.text(files, true, 7))
   puts("exit #{Report.exit_code(files)}")

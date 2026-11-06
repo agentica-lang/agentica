@@ -95,13 +95,16 @@ export def main() -> Void
   if not config.seeded
     seed = Random.int(0, 2147483647)
   end
+  started = Time.monotonic_ms()
   files = selected(seeded(config, seed), tags, jobs, read.map do |entry| entry.unwrap! end)
+  # Wall time, not the sum of the file times: with `--jobs` the files overlap.
+  wall_ms = Time.monotonic_ms() - started
   text = Report.text(files, config.style == "ai", seed)
   if timing and config.style != "json"
-    text = Report.timed_text(files, config.style == "ai", seed)
+    text = Report.timed_text(files, config.style == "ai", seed, wall_ms)
   end
   if config.style == "json"
-    text = JSON.encode(Report.json(files, seed))
+    text = JSON.encode(Report.json(files, seed, wall_ms))
   end
   saved = save_report(config.report_path, text)
   if not saved.ok?

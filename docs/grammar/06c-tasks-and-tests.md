@@ -74,7 +74,7 @@ the [`Test` page](../../site/content/library/testing/test.md).
 ### `agentica test`
 
 `agentica test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR]
-[--jobs N] [--timing]` runs `.feature` specifications and `*_test.agc` unit test files in
+[--jobs N]` runs `.feature` specifications and `*_test.agc` unit test files in
 one report, and its exit code is the verdict. BDD is the standard module `std/bdd`, written in
 Agentica, and `BDD` is not reserved. A `BDD.` call without `import BDD from
 "std/bdd"` is `CHECK-UNKNOWN-NAME`, with the import as its help. The discovery
