@@ -20,20 +20,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `Int` arms is a `Task[Int]`, not a `Task[Void]`, and arms of two different
   non-`Void` types are `CHECK-TYPE-MISMATCH`, even when another arm is `Void`.
   A case with one type of value and a `Void` arm is unchanged.
-
-### Fixed
-
-- `agentica lint` no longer hides a `+` chain or a single pipe that sits first
-  in a chain of the other kind (`("n=" + n.to_s) |> f()`, `(a |> f()) + "x"`),
-  and the help of `LINT-IF-CHAIN` without an `else` asks for a `_` arm.
-
-## [0.24.4] - 2026-11-06
-
-### Added
-
-- The documentation site has a version selector: one site per release and
-  `/dev/`.
-- `ATS[Bytes, V]`: a shared table takes `Bytes` keys, as a `Map` does.
 - `Native.mutex()` and `lock.synchronize do ... end` guard the calls of a
   native library that is not thread-safe; a waiting task parks.
 
@@ -48,10 +34,21 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `agentica lint` no longer hides a `+` chain or a single pipe that sits first
+  in a chain of the other kind (`("n=" + n.to_s) |> f()`, `(a |> f()) + "x"`),
+  and the help of `LINT-IF-CHAIN` without an `else` asks for a `_` arm.
 - A `compute def` whose C calls a handler callback closed during the call fails
   with `RUNTIME-NATIVE-CALLBACK` instead of crashing.
 - A cancelled task whose `compute def` call found no pool thread gives back its
   `Native.Mutex`.
+
+## [0.24.4] - 2026-11-06
+
+### Added
+
+- The documentation site has a version selector: one site per release and
+  `/dev/`.
+- `ATS[Bytes, V]`: a shared table takes `Bytes` keys, as a `Map` does.
 
 ## [0.24.3] - 2026-11-05
 
