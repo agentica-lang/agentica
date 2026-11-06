@@ -18,7 +18,12 @@
   outline-offset: 2px;
 }
 
-/* Above the header: the banner of an old version and, on a phone, the selector. */
+/* The selector replaces the header's version badge (set by selector.js). */
+.has-version-select .site-header .version {
+  display: none !important;
+}
+
+/* Under the header: the banner of an old version and, on a phone, the selector. */
 .version-bar {
   display: flex;
   flex-wrap: wrap;

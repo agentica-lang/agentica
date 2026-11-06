@@ -1,9 +1,9 @@
 """The multi-version site: tools/site_versions.py builds each release tag, caches it by commit sha and assembles one folder.
 
 The real Hugo build runs in `make site-versions` and pages.yml. This test runs the whole assembly on a small git
-repository whose `make site` writes two pages: the tags that become versions (and the ones that do not), a tag that
-fails to build left out, the latest release served at the root, the selector tag added to every page once, and a second
-run that builds only what is not in the cache.
+repository whose `make site` writes two pages: the tags that become versions (and the ones that do not), the tag with
+no site left out, a tag that fails (or no tag built at all) failing the run, the latest release served at the root, the
+selector tags added to every page once and to nothing else, and a second run that builds only what is not cached.
 """
 import importlib.util
 import json
@@ -25,6 +25,7 @@ MAKEFILE = (
     "\tprintf '<html><head></head><body>%s %s</body></html>' '$(HUGO_FLAGS)' \"$$(cat VERSION)\""
     " > site/public/library/index.html\n"
     "\tprintf '<html><head></head><body>%s</body></html>' '$(HUGO_FLAGS)' > site/public/index.html\n"
+    "\tprintf 'see <head></head> /agentica/' > site/public/llms.txt\n"
 )
 
 
@@ -61,17 +62,17 @@ def repo(tmp_path, monkeypatch):
     repo = tmp_path / "repo"
     (repo / "site" / "versions").mkdir(parents=True)
     (repo / ".github" / "workflows").mkdir(parents=True)
+    (repo / "Makefile").write_text(MAKEFILE)
+    git(repo, "init", "-q")
+    release(repo, "0.1.0", "0.1.0")  # before the site existed: no site/hugo.toml, no pages.yml
     (repo / "site" / "hugo.toml").write_text("")
     for name in tool.SELECTOR_FILES:
         shutil.copy(ROOT / "site" / "versions" / name, repo / "site" / "versions" / name)
     pins = "HUGO_VERSION: 1.0.0\n  HUGO_SHA256: a\n  DART_SASS_VERSION: 1.0.0\n  DART_SASS_SHA256: b\n"
     (repo / ".github" / "workflows" / "pages.yml").write_text("env:\n  " + pins)
-    (repo / "Makefile").write_text(MAKEFILE)
-    git(repo, "init", "-q")
     release(repo, "0.9.0", "0.9.0")
     release(repo, "0.10.0-beta.1", "0.10.0-beta.1")
     release(repo, "0.10.0", "0.10.0")
-    release(repo, "0.10.1", "0.10.1", fail=True)
     release(repo, "0.11.0", "0.11.0")
     release(repo, "0.12.0", "bootstrap-racket")
     monkeypatch.setattr(tool, "ROOT", repo)
@@ -80,19 +81,26 @@ def repo(tmp_path, monkeypatch):
 
 
 def build(tmp_path, monkeypatch):
-    """Run the build; returns the output folder and how many `make site` runs it made so far."""
+    """Run the CLI; returns its exit code, the output folder and how many `make site` runs there were so far."""
     runs = tmp_path / "runs"
     monkeypatch.setenv("RUNS", str(runs))
-    args = tool.argparse.Namespace(
-        out=str(tmp_path / "out"), cache=str(tmp_path / "cache"), tools=str(tmp_path / "tools"),
-        base_url="https://example.org/docs",
-    )
-    assert tool.build(args) == 0
-    return tmp_path / "out", runs.read_text().count("run")
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "summary.md"))
+    code = tool.main([
+        "build", "--out", str(tmp_path / "out"), "--cache", str(tmp_path / "cache"),
+        "--tools", str(tmp_path / "tools"), "--base-url", "https://example.org/docs",
+    ])
+    return code, tmp_path / "out", runs.read_text().count("run") if runs.exists() else 0
 
 
-def test_one_folder_per_release_with_the_latest_at_the_root(repo, tmp_path, monkeypatch, capsys):
-    out, _ = build(tmp_path, monkeypatch)
+def test_pins_come_from_the_real_workflow():
+    pinned = tool.pins((ROOT / ".github" / "workflows" / "pages.yml").read_text())
+    assert pinned["HUGO_VERSION"].count(".") == 2 and pinned["DART_SASS_VERSION"].count(".") == 2
+    assert len(pinned["HUGO_SHA256"]) == 64 and len(pinned["DART_SASS_SHA256"]) == 64
+
+
+def test_one_folder_per_release_with_the_latest_at_the_root(repo, tmp_path, monkeypatch):
+    code, out, _ = build(tmp_path, monkeypatch)
+    assert code == 0
     assert json.loads((out / "versions.json").read_text()) == [
         {"version": "0.11.0", "path": "0.11.0/", "latest": True},
         {"version": "0.10.0", "path": "0.10.0/"},
@@ -103,17 +111,38 @@ def test_one_folder_per_release_with_the_latest_at_the_root(repo, tmp_path, monk
     assert "--baseURL https://example.org/docs/0.9.0/ 0.9.0" in (out / "0.9.0" / "library" / "index.html").read_text()
     assert "--baseURL https://example.org/docs/ 0.11.0" in (out / "library" / "index.html").read_text()
     assert "--baseURL https://example.org/docs/dev/" in (out / "dev" / "index.html").read_text()
-    assert not (out / "0.10.1").exists() and not (out / "0.10.0-beta.1").exists()
-    assert "left out: 0.10.1" in capsys.readouterr().out
-    assert (out / "_versions" / "selector.js").exists()
+    assert not (out / "0.1.0").exists() and not (out / "0.10.0-beta.1").exists()
+    assert "`0.1.0`" in (tmp_path / "summary.md").read_text()
+    assert (out / "_versions" / "selector.js").exists() and (out / "_versions" / "selector.css").exists()
 
 
-def test_every_page_loads_the_selector_once_and_the_cache_skips_builds(repo, tmp_path, monkeypatch):
-    out, first = build(tmp_path, monkeypatch)
-    tag = '<script src="/docs/_versions/selector.js" defer></script>'
+def test_every_html_page_loads_the_selector_once_and_the_cache_skips_builds(repo, tmp_path, monkeypatch):
+    code, out, first = build(tmp_path, monkeypatch)
+    tags = (
+        '<link rel="stylesheet" href="/docs/_versions/selector.css">'
+        '<script src="/docs/_versions/selector.js" defer></script>'
+    )
     pages = list(out.rglob("*.html"))
-    assert pages and all(page.read_text().count(tag) == 1 for page in pages)
-    # 0.9.0, 0.10.0 and 0.11.0 (versioned and at the root) and dev; the failing 0.10.1 stops before it records a run.
+    assert pages and all(page.read_text().count(tags) == 1 for page in pages)
+    # Other files are not touched, even when they look like a page.
+    assert (out / "llms.txt").read_text() == "see <head></head> /agentica/"
+    # 0.9.0, 0.10.0 and 0.11.0 (versioned and at the root) and dev; 0.1.0 has no site and never runs make.
     assert first == 5
-    _, total = build(tmp_path, monkeypatch)
-    assert total - first == 1  # only dev builds again: the working tree is never cached
+    code, out, total = build(tmp_path, monkeypatch)
+    assert code == 0 and total - first == 1  # only dev builds again: the working tree is never cached
+    assert all(page.read_text().count(tags) == 1 for page in out.rglob("*.html"))
+
+
+def test_a_tag_that_fails_fails_the_run(repo, tmp_path, monkeypatch, capsys):
+    release(repo, "0.11.1", "0.11.1", fail=True)
+    release(repo, "0.12.0")
+    code, _, _ = build(tmp_path, monkeypatch)
+    assert code == 1
+    assert "FAIL 0.11.1" in capsys.readouterr().out
+    assert "Failed: `0.11.1`" in (tmp_path / "summary.md").read_text()
+
+
+def test_a_run_with_no_version_fails(repo, tmp_path, monkeypatch):
+    monkeypatch.setattr(tool, "final_tags", lambda: ["0.1.0"])
+    code, _, _ = build(tmp_path, monkeypatch)
+    assert code == 1

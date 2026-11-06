@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """Build the documentation site of every release into one folder (pages.yml; `make site-versions`).
 
-    site_versions.py build [--out DIR] [--cache DIR] [--base-url URL] [--dev-ref REF] [--tools DIR]
+    site_versions.py build [--out DIR] [--cache DIR] [--base-url URL] [--tools DIR]
 
 The output is one site per final release (`X.Y.Z` tags, no pre-releases) under `VERSION/`, the development site under
 `dev/`, the latest release again at the root, `versions.json` and `_versions/selector.{js,css}` (site/versions/).
 
 Each tag is built from its own tree with `make site`, using the Hugo and Dart Sass versions that tag pins in its
-`.github/workflows/pages.yml`. A tag that does not build is left out and named in the summary. The output of a tag is
-cached by its commit sha (and the base URL, which Hugo bakes into every link), so a run builds only `dev` and the
-tags it has not seen. The selector is not part of a cached build: the assembly adds one `<script>` tag to every page,
-so a build from the cache loads the current selector.
+`.github/workflows/pages.yml`. Only a tag whose tree has no site (no `site/hugo.toml`, no pins) is left out. Any other
+failure (a download, `npm ci`, a timeout, a Hugo error) is tried once more and then fails the run, so a blip never
+drops a release from the deploy; so does a run in which no tag built. The output of a tag is cached by its commit sha
+(and the base URL, which Hugo bakes into every link), so a run builds only `dev` and the tags it has not seen. The
+selector is not part of a cached build: the assembly adds its `<link>` and `<script>` tags to every page, so a build
+from the cache loads the current selector.
 
 Python's standard library only.
 """
@@ -41,7 +43,11 @@ SASS_URL = "https://github.com/sass/dart-sass/releases/download/{v}/dart-sass-{v
 
 
 class BuildError(Exception):
-    """One version failed to build; the others still ship."""
+    """A version failed to build."""
+
+
+class NoSite(BuildError):
+    """The tree has no site to build (an old tag): the only failure that leaves a tag out instead of failing the run."""
 
 
 def run(args, **kwargs):
@@ -59,7 +65,7 @@ def pins(workflow: str) -> dict[str, str]:
     found = dict(PIN.findall(workflow))
     missing = {"HUGO_VERSION", "HUGO_SHA256", "DART_SASS_VERSION", "DART_SASS_SHA256"} - found.keys()
     if missing:
-        raise BuildError("pages.yml does not pin " + ", ".join(sorted(missing)))
+        raise NoSite("pages.yml does not pin " + ", ".join(sorted(missing)))
     return found
 
 
@@ -72,17 +78,21 @@ def with_slash(url: str) -> str:
     return url if url.endswith("/") else url + "/"
 
 
-def script_tag(root_path: str) -> str:
-    return '<script src="%s_versions/selector.js" defer></script>' % root_path
+def selector_tags(root_path: str) -> str:
+    """The two tags every page gets: the stylesheet first, so the selector is styled when it appears."""
+    return (
+        '<link rel="stylesheet" href="%s_versions/selector.css">'
+        '<script src="%s_versions/selector.js" defer></script>' % (root_path, root_path)
+    )
 
 
 def inject_selector(site: Path, root_path: str) -> int:
-    """Add the selector's script tag before `</head>` of every page that lacks one; returns the pages changed."""
-    tag = script_tag(root_path)
+    """Add the selector's tags before `</head>` of every HTML page that lacks exactly them; returns the pages changed."""
+    tag = selector_tags(root_path)
     changed = 0
     for page in site.rglob("*.html"):
         text = page.read_text(encoding="utf-8")
-        if "_versions/selector.js" in text or "</head>" not in text:
+        if tag in text or "</head>" not in text:
             continue
         page.write_text(text.replace("</head>", tag + "</head>", 1), encoding="utf-8")
         changed += 1
@@ -122,7 +132,8 @@ def _version_of(command: list[str], pattern: str, env: dict[str, str] | None = N
 def _hugo_dir(pinned: dict[str, str], tools: Path) -> Path:
     version = pinned["HUGO_VERSION"]
     on_path = shutil.which("hugo")
-    if on_path and _version_of(["hugo", "version"], r"hugo v(\d+\.\d+\.\d+)") == version:
+    # The pinned archive is the extended edition: a hugo on PATH counts only when it is that edition too.
+    if on_path and _version_of(["hugo", "version"], r"hugo v(\d+\.\d+\.\d+)(?=\S*\+extended)") == version:
         return Path(on_path).parent
     folder = tools / ("hugo-" + version)
     if not (folder / "hugo").exists():
@@ -219,10 +230,33 @@ def build_ref(ref: str, base_url: str, cache: Path, tools: Path, logs: Path, lab
     return done, False
 
 
+def build_tag(tag: str, base_url: str, cache: Path, tools: Path, logs: Path, label: str = "") -> tuple[Path, bool]:
+    """build_ref of a tag, tried a second time after a failure that is not NoSite (a blip of the network)."""
+    label = label or tag
+    try:
+        return build_ref(tag, base_url, cache, tools, logs, label)
+    except NoSite:
+        raise
+    except (BuildError, OSError) as err:
+        print("retry %-8s %s" % (label, err), flush=True)
+        return build_ref(tag, base_url, cache, tools, logs, label)
+
+
+def write_summary(built: dict, skipped: dict, failed: dict) -> None:
+    """The versions, the tags left out and the tags that failed, to the job summary of GitHub Actions when set."""
+    lines = ["## Site versions", "", "Built: " + (", ".join(built) or "none") + ", dev", ""]
+    for title, tags in (("Left out", skipped), ("Failed", failed)):
+        lines += ["%s: %s" % (title, ", ".join("`%s` (%s)" % kv for kv in tags.items()) or "none"), ""]
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if path:
+        with open(path, "a", encoding="utf-8") as out:
+            out.write("\n".join(lines))
+
+
 def _build_tree(tree: Path, base_url: str, tools: Path, log: Path) -> Path:
     workflow = tree / ".github" / "workflows" / "pages.yml"
     if not (tree / "site" / "hugo.toml").exists() or not workflow.exists():
-        raise BuildError("the tree has no site (site/hugo.toml, pages.yml)")
+        raise NoSite("the tree has no site (site/hugo.toml, pages.yml)")
     return make_site(tree, base_url, tool_env(workflow.read_text(), tools), log)
 
 
@@ -255,28 +289,37 @@ def build(args: argparse.Namespace) -> int:
 
     built: dict[str, Path] = {}
     skipped: dict[str, str] = {}
+    failed: dict[str, str] = {}
     cached = 0
     for tag in final_tags():
         try:
-            folder, hit = build_ref(tag, root_url + tag + "/", cache, tools, logs, tag)
-        except (BuildError, OSError) as err:
+            folder, hit = build_tag(tag, root_url + tag + "/", cache, tools, logs)
+        except NoSite as err:
             skipped[tag] = str(err)
             print("skip %-8s %s" % (tag, err), flush=True)
+            continue
+        except (BuildError, OSError) as err:
+            failed[tag] = str(err)
+            print("FAIL %-8s %s" % (tag, err), flush=True)
             continue
         built[tag] = folder
         cached += hit
         print("%-5s %-8s" % ("cache" if hit else "built", tag), flush=True)
 
+    # A release missing from the deploy (the root would fall back to an older one) is worse than no deploy.
+    if failed or not built:
+        write_summary(built, skipped, failed)
+        raise BuildError("no version was built" if not built and not failed else "failed: " + ", ".join(failed))
+
     # dev is the working tree: master in pages.yml, which only runs from master (or a pull request).
     dev_folder = _build_tree(ROOT, root_url + "dev/", tools, logs / "dev.log")
     print("built dev", flush=True)
 
-    if built:
-        latest = next(iter(built))
-        root_folder, hit = build_ref(latest, root_url, cache, tools, logs, latest + "-root")
-        copy_site(root_folder, out)
-        for tag, folder in built.items():
-            copy_site(folder, out / tag)
+    latest = next(iter(built))
+    root_folder, _ = build_tag(latest, root_url, cache, tools, logs, latest + "-root")
+    copy_site(root_folder, out)
+    for tag, folder in built.items():
+        copy_site(folder, out / tag)
     copy_site(dev_folder, out / "dev")
 
     selector = out / "_versions"
@@ -289,7 +332,8 @@ def build(args: argparse.Namespace) -> int:
     seconds = time.monotonic() - started
     print("\nversions: %s, dev" % ", ".join(built))
     print("left out: " + (", ".join("%s (%s)" % kv for kv in skipped.items()) or "none"))
-    print("pages with the selector tag: %d; from the cache: %d of %d tags" % (pages, cached, len(built)))
+    write_summary(built, skipped, failed)
+    print("pages with the selector tags: %d; from the cache: %d of %d tags" % (pages, cached, len(built)))
     print("time: %.1f s; size: %.1f MB (%s)" % (seconds, folder_size(out) / 1e6, out))
     return 0
 

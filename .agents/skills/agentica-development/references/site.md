@@ -117,17 +117,20 @@ that runs: `master`) and the latest release again at the root.
 
 - Each `X.Y.Z` tag is built from its own tree with its own `make site`, using
   the Hugo and Dart Sass pinned in that tag's `pages.yml` (keep the four `env`
-  names of the `build` job). A tag that fails, or has no site (`0.1.0`), is
-  left out and named in the summary. Pre-releases and `bootstrap-racket` are
-  not versions.
+  names of the `build` job). Only a tree with no site (`0.1.0`) is left out,
+  and the job summary names it. Any other failure of a tag is tried once more
+  and then fails the run, as does a run in which no tag built: a release must
+  not vanish from a deploy. Pre-releases and `bootstrap-racket` are not
+  versions.
 - The output of a tag is cached by commit sha and base URL (Hugo bakes the
   base URL into every link, so the root copy of the latest release is a
   second build). `dev` is never cached. Locally the cache is in
-  `build/site-versions/cache`; in CI `actions/cache` keeps it, and its key
-  changes only with a new tag or a change of the script.
+  `build/site-versions/cache`; in CI `actions/cache` restores the newest entry
+  and each run saves its own, also after a failed build.
 - The selector and the banner (`site/versions/selector.{js,css}`) are not part
-  of a build. The assembly copies them to `/_versions/` and adds one
-  `<script>` tag to every page, so a cached old build loads the current ones;
+  of a build. The assembly copies them to `/_versions/` and adds their
+  `<link>` and `<script>` tags to every HTML page, so a cached old build loads
+  the current ones;
   they read `/versions.json`, which the assembly writes. A fix to them applies
   to every version at the next deploy. They use only the `.site-header`, its
   `.version` link and the tokens of `_tokens.scss`, which every release has.

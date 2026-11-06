@@ -7,11 +7,7 @@
   if (!script || !window.fetch || !window.URL) return;
   var root = new URL("../", script.src);
 
-  var css = document.createElement("link");
-  css.rel = "stylesheet";
-  css.href = new URL("selector.css", script.src).href;
-  document.head.appendChild(css);
-
+  // selector.css is linked by the same deploy step that adds this script, so the page is styled when it runs.
   fetch(new URL("versions.json", root).href)
     .then(function (response) { return response.json(); })
     .then(start)
@@ -57,8 +53,9 @@
       go(versions.filter(function (v) { return v.version === select.value; })[0]);
     });
 
-    // A strip above the header: the banner of an old version, and on a phone the selector, which has no room in the
-    // header there (the search box and the buttons need it).
+    // A strip under the header: the banner of an old version, and on a phone the selector, which has no room in the
+    // header there (the search box and the buttons need it). Under it, not above: the skip links are the first
+    // children of the header and must stay the first tab stops.
     var bar = document.createElement("div");
     bar.className = "version-bar";
     if (current !== latest) {
@@ -88,14 +85,19 @@
     function place() {
       if (header && !phone.matches) {
         header.insertBefore(select, badge || null);
-        if (badge) badge.hidden = true;
       } else {
         bar.appendChild(select);
       }
-      if (!bar.parentNode) document.body.insertBefore(bar, document.body.firstChild);
+      if (!bar.parentNode) {
+        if (header) header.parentNode.insertBefore(bar, header.nextSibling);
+        else document.body.insertBefore(bar, document.body.firstChild);
+      }
       bar.hidden = !bar.children.length;
     }
 
+    // The selector shows the version, so the header's own badge goes (selector.css; some releases show it again on a
+    // phone, so the `hidden` attribute would lose to their CSS).
+    document.documentElement.classList.add("has-version-select");
     place();
     if (phone.addEventListener) phone.addEventListener("change", place);
   }
