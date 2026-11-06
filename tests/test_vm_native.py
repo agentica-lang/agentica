@@ -777,7 +777,7 @@ end
 # with the shared state's locks on or off: more schedulers would need threads of their own after the limit.
 @NATIVE_CALLS
 @pytest.mark.skipif(not TARGET_OS.startswith("linux") or os.geteuid() == 0,
-                    reason="RLIMIT_NPROC limits threads on Linux, and not for root")
+                    reason="host-only: RLIMIT_NPROC limits the threads of a process on Linux only, and not for root")
 @pytest.mark.parametrize("shared", ["0", "1"])
 def test_a_cancelled_compute_call_that_never_started_gives_its_mutex_back(tmp_path, peer, shared):
     text = """extern "%s"
