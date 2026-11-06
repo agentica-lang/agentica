@@ -279,6 +279,16 @@ members = ["sqlite", "postgres"]
 
 In a project that is the root or a member, a dependency whose `git` is the `repository` and whose `subdir` is a member is read from the member's folder: it is not fetched, not copied to `deps/`, and an edit there is seen by the next build. A project outside the repository resolves it through the cache and `deps/` as usual.
 
+The root `agentica.toml` can also point a dependency at a folder on your machine, with `path`, relative to the manifest or absolute, and can force one source for a name everywhere in the tree, with `override = true`:
+
+```toml
+[dependencies]
+channels = { git = "https://github.com/owner/channels", tag = "v1" }
+bond = { git = "https://github.com/owner/bond", tag = "0.8.0", override = true }
+```
+
+A `path` dependency (`bond = { path = "../bond" }`) is not fetched, not cached and not copied to `deps/`: the build reads the folder, so an edit there is seen by the next build. The folder needs an `agentica.toml`, and the lock records the `path` with no commit and no hash. Without `override`, two sources for one name anywhere in the tree are `PKG-SOURCE-CONFLICT`. With it, the root's source wins for every package that asks for that name (here `channels` may ask for another `bond` tag), and `install`, `add` and `update` print an `overridden` line for each such package. `override = true` works with `path`, to try a local copy of a transitive dependency. Both keys are for the root project only: in the `agentica.toml` of a package they are `PKG-ROOT-ONLY`, since a package must be publishable.
+
 A package can use a native library from its `extern` blocks (see [Native code](/library/io-and-system/native/)). Its `agentica.toml` names the library for each system it exists on (`linux`, `macos` or `windows`), as a `file` in the package's `native/` folder, as a `system` name that the system loader looks up (or an absolute path, or a list of them), or as a download pinned per system in `[[native-artifact]]`:
 
 ```toml

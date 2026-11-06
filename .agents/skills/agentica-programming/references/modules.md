@@ -136,8 +136,8 @@ import Sqlite from "pkg/sqlite/db"
 - A dependency is a local name and a table with `git`
   (`https://host/owner/repo`) and exactly one of `tag` or `ref` (a commit). A
   name starts with a lowercase letter, then lowercase letters, digits, `_` and
-  `-`, at most 64 characters. Only git sources exist; a `path`, a branch or a
-  version range is `PKG-MANIFEST-INVALID`.
+  `-`, at most 64 characters. A branch or a version range is
+  `PKG-MANIFEST-INVALID`.
 - `[style] max_line_width = N` makes a line of more than N characters (comments
   too) `CHECK-LINE-TOO-LONG`; `agentica fmt` lays out in N columns (default
   119). `[style] blank_line_after_end = true` (default false) makes a line with
@@ -160,6 +160,15 @@ import Sqlite from "pkg/sqlite/db"
   once. Its manifest entry stays normal; its lock entry has `workspace = true`
   and no `commit` or `hash`. Elsewhere the table is ignored. A lock that
   disagrees with the workspace is `PKG-LOCK-STALE`.
+- Only the root `agentica.toml` may write `path = "../sqlite"` (a folder with
+  an `agentica.toml`, relative to the manifest or absolute; no git keys with it)
+  and `override = true` (this source wins for the name over every package that
+  asks for another; with a `path` too). A `path` is read in place like a
+  workspace member: no fetch, no `deps/`, no hash; its lock entry has `name` and
+  `path`. An override is `override = true` in the lock entry. In a package's
+  manifest either key is `PKG-ROOT-ONLY`. Without `override`, a name with two
+  sources in the tree is `PKG-SOURCE-CONFLICT`. `install`, `add` and `update`
+  print one `overridden NAME@VERSION` line for each overridden package.
 - `pkg/<name>/<module path>` (no `.agc`) imports a module of a declared package.
   A declared name comes before the `pkg/` library folders; an undeclared name
   is the search above. The files of a package come only from `deps/<name>/`

@@ -2,10 +2,12 @@
 ## flat: the name, the git source (the URL and, when the package is a folder of the repository, its subdir) and its pin
 ## (a tag or a ref), the exact commit and the hash of its .agc files. A package that is a member of the workspace of
 ## the project (members.agc) has `workspace = true` in place of the commit and the hash: it is read from its folder,
-## so it has neither. A failure is PKG-LOCK-INVALID, with the file and the key path (toml_read.agc). This reads one
-## file; project.agc checks it against the manifest, and package_import.agc against the manifest of each package it
-## loads. `encode` is the writer (docs/future/45-packages.md, 45.9): the file is the tool's own, so it is written
-## whole.
+## so it has neither; so is a package that is a local `path` of the root project's manifest, which has the `path` in
+## place of the git source. `override = true` marks a package whose source the root project imposes on the whole tree
+## (the packages that ask for another source of that name are not compared). A failure is PKG-LOCK-INVALID, with the
+## file and the key path (toml_read.agc). This reads one file; project.agc checks it against the manifest, and
+## package_import.agc against the manifest of each package it loads. `encode` is the writer
+## (docs/future/45-packages.md, 45.9): the file is the tool's own, so it is written whole.
 
 import Workspace from "../modules/workspace"
 import GitSource from "git_source"
@@ -15,7 +17,8 @@ import Reader from "toml_read"
 
 # The keys of the lock, of a [[package]] table and of a [[native-artifact]] table.
 TOP_KEYS = ["version", "package", "native-artifact"]
-PACKAGE_KEYS = ["name", "git", "subdir", "tag", "ref", "commit", "hash", "workspace"]
+PACKAGE_KEYS = ["name", "git", "subdir", "tag", "ref", "commit", "hash", "workspace", "path", "override"]
+GIT_KEYS = ["git", "subdir", "tag", "ref", "commit", "hash", "workspace"]
 ARTIFACT_KEYS = ["package", "library", "system", "url", "sha256", "member"]
 
 LOCK_FORMAT = 1
@@ -24,13 +27,15 @@ HASH_LENGTH = 71
 HEX = Set.new("0123456789abcdef".split(""))
 
 ## One locked package. commit is the full git commit; hash is `sha256:` and 64 hex digits. A workspace member (member
-## is true) has "" for both: its files are the ones in the member's folder.
+## is true) and a package of a `path` (source.path is not "") have "" for both: their files are the ones in the
+## folder. override is true when the root manifest overrides the name.
 export struct Locked
   name: String
   source: GitSource.Source
   commit: String
   hash: String
   member: Bool
+  override: Bool
 end
 
 ## One locked native artifact: the lock key of the package ("" for the project root), the library and the
@@ -130,6 +135,12 @@ export def encode(packages: List[Locked], artifacts: List[Artifact]) -> String
   return Toml.encode(root).unwrap!
 end
 
+## Whether the files of the package are read in place, with no fetch, no cache and no hash: a workspace member or a
+## `path`.
+export def in_place?(locked: Locked) -> Bool
+  return locked.member or GitSource.local?(locked.source)
+end
+
 ## The locked package with this name, or an error.
 export def find(lock: Lock, name: String) -> Result[Locked]
   for locked in lock.packages
@@ -159,12 +170,29 @@ export def label(locked: Locked) -> String
     return "#{locked.name}@workspace"
   end
 
+  if GitSource.local?(locked.source)
+    return "#{locked.name}@path"
+  end
+
   return "#{locked.name}@#{GitSource.version_label(locked.source, locked.commit)}"
 end
 
 # The keys of a package, in the order of 05b: name, git, subdir (when there is one), tag or ref, then commit and hash,
-# or `workspace = true` for a member.
+# or `workspace = true` for a member; name and path for a local folder. `override = true` is last.
 def package_table(locked: Locked) -> Toml.Value
+  keys = package_keys(locked)
+  if locked.override
+    keys = keys.put("override", Toml.Value.Bool(true))
+  end
+
+  return Toml.Value.Table(keys)
+end
+
+def package_keys(locked: Locked) -> Map[String, Toml.Value]
+  if GitSource.local?(locked.source)
+    return {"name": Toml.Value.Str(locked.name), "path": Toml.Value.Str(locked.source.path)}
+  end
+
   pin = Toml.Value.Str(locked.source.ref)
   pin_key = "ref"
   if locked.source.tag != ""
@@ -179,10 +207,10 @@ def package_table(locked: Locked) -> Toml.Value
 
   keys = keys.put(pin_key, pin)
   if locked.member
-    return Toml.Value.Table(keys.put("workspace", Toml.Value.Bool(true)))
+    return keys.put("workspace", Toml.Value.Bool(true))
   end
 
-  return Toml.Value.Table(keys.put("commit", Toml.Value.Str(locked.commit)).put("hash", Toml.Value.Str(locked.hash)))
+  return keys.put("commit", Toml.Value.Str(locked.commit)).put("hash", Toml.Value.Str(locked.hash))
 end
 
 # The sort key of a native artifact row: one alias on one system of one package.
@@ -267,6 +295,8 @@ def package_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Resu
   required = ["name", "git", "commit", "hash"]
   if entries.has_key?("workspace")
     required = ["name", "git"]
+  elsif entries.has_key?("path")
+    required = ["name", "path"]
   end
 
   for key in required
@@ -281,9 +311,14 @@ def package_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Resu
     return error(Reader.fail_help(reading, Reader.child(path, "name"), "not a package name", problem))
   end
 
+  override = try override_of(reading, entries, path)
+  if entries.has_key?("path")
+    return path_of(reading, entries, path, name, override)
+  end
+
   source = try source_of(reading, entries, path)
   if entries.has_key?("workspace")
-    return member_of(reading, entries, path, name, source)
+    return member_of(reading, entries, path, name, source, override)
   end
 
   commit = try text_of(reading, entries, path, "commit")
@@ -301,7 +336,7 @@ def package_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Resu
     return error(Reader.fail(reading, Reader.child(path, "hash"), "a hash is sha256: and 64 lowercase hex digits"))
   end
 
-  return ok(Locked(name: name, source: source, commit: commit, hash: hash, member: false))
+  return ok(Locked(name: name, source: source, commit: commit, hash: hash, member: false, override: override))
 end
 
 # A workspace member: `workspace = true`, a subdir (the member's folder) and neither a commit nor a hash.
@@ -311,6 +346,7 @@ def member_of(
   path: String,
   name: String,
   source: GitSource.Source,
+  override: Bool,
 ) -> Result[Locked]
   here = Reader.child(path, "workspace")
   flag = try Reader.boolean(reading, entries["workspace"], here)
@@ -328,7 +364,48 @@ def member_of(
     end
   end
 
-  return ok(Locked(name: name, source: source, commit: "", hash: "", member: true))
+  return ok(Locked(name: name, source: source, commit: "", hash: "", member: true, override: override))
+end
+
+# A package that is a local folder: `path` and neither a git source nor a commit and a hash.
+def path_of(
+  reading: Reader.Reading,
+  entries: Map[String, Toml.Value],
+  path: String,
+  name: String,
+  override: Bool,
+) -> Result[Locked]
+  for key in GIT_KEYS
+    if entries.has_key?(key)
+      message = "a package of a path has no git source, commit or hash"
+      return error(Reader.fail(reading, Reader.child(path, key), message))
+    end
+  end
+
+  folder = try text_of(reading, entries, path, "path")
+  problem = GitSource.path_problem(folder)
+  if problem != ""
+    return error(Reader.fail_help(reading, Reader.child(path, "path"), "not a path", problem))
+  end
+
+  source = GitSource.Source(git: "", subdir: "", tag: "", ref: "", path: folder)
+  return ok(Locked(name: name, source: source, commit: "", hash: "", member: false, override: override))
+end
+
+# `override = true`, or false when the key is left out.
+def override_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: String) -> Result[Bool]
+  if !entries.has_key?("override")
+    return ok(false)
+  end
+
+  here = Reader.child(path, "override")
+  flag = try Reader.boolean(reading, entries["override"], here)
+  if !flag
+    help = "leave the key out for a package that is not overridden"
+    return error(Reader.fail_help(reading, here, "override is true", help))
+  end
+
+  return ok(true)
 end
 
 def source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: String) -> Result[GitSource.Source]
@@ -358,7 +435,7 @@ def source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: S
       return error(Reader.fail_help(reading, Reader.child(path, "tag"), "not a tag", problem))
     end
 
-    return ok(GitSource.Source(git: git, subdir: subdir, tag: tag, ref: ""))
+    return ok(GitSource.Source(git: git, subdir: subdir, tag: tag, ref: "", path: ""))
   end
 
   ref = try text_of(reading, entries, path, "ref")
@@ -367,7 +444,7 @@ def source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: S
     return error(Reader.fail_help(reading, Reader.child(path, "ref"), "not a ref", problem))
   end
 
-  return ok(GitSource.Source(git: git, subdir: subdir, tag: "", ref: ref))
+  return ok(GitSource.Source(git: git, subdir: subdir, tag: "", ref: ref, path: ""))
 end
 
 def text_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: String, key: String) -> Result[String]

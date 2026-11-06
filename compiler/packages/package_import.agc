@@ -3,9 +3,9 @@
 ## package for a file of a package. The files come only from `deps/<name>/` beside the manifest of the project, where
 ## `agentica install` wrote them (io/package_deps.agc); the global package cache is a download cache and a build never
 ## reads it. The first time a build loads a package, the hash of its .agc files must be the hash in the lock; a folder
-## that differs is an error. A package that the lock marks as a member of the workspace of the project (members.agc) is
-## the exception: its files are read from the member's folder, with no hash, so an edit there is seen at once. Before
-## any file is loaded, the manifests of the locked packages that are in deps/ are checked against the lock
+## that differs is an error. A package that the lock marks as a member of the workspace of the project (members.agc) or
+## as a `path` is the exception: its files are read from its folder, with no hash, so an edit there is seen at once.
+## Before any file is loaded, the manifests of the locked packages that are in deps/ are checked against the lock
 ## (check_manifests). A name that the importing manifest does not declare is a library of the pkg/ roots
 ## (resolve_import.agc) for a file of the project; a file of a package may import only what its own manifest declares.
 
@@ -333,10 +333,10 @@ export def check_folders(workspace: Workspace.Workspace, scope: Scope, folders: 
 end
 
 ## The folder of a locked package, `deps/<name>` beside the manifest of the project, or the folder of the workspace
-## member.
+## member or of the `path` (scope.deps is beside the manifest, so its folder is the project's).
 export def folder_of(scope: Scope, locked: Lock.Locked) -> String
-  if locked.member
-    return Members.folder_of(scope.members, locked.source)
+  if Lock.in_place?(locked)
+    return Project.folder_of(Paths.directory_of(scope.deps), scope.members, locked)
   end
 
   return Paths.join(scope.deps, locked.name)
@@ -374,20 +374,20 @@ def load(workspace: Workspace.Workspace, scope: Scope, locked: Lock.Locked, site
   folder = folder_of(scope, locked)
   real = workspace.real_path.call(folder)
   if !real.ok? or !workspace.directory_exists.call(real.unwrap!)
-    if locked.member
-      return error(missing(site, "the folder #{folder} of #{locked.name} does not exist", "restore the member folder"))
+    if Lock.in_place?(locked)
+      return error(missing(site, "the folder #{folder} of #{locked.name} does not exist", "restore the folder"))
     end
 
     message = "#{locked.name} is not in #{scope.deps}"
     return error(missing(site, message, "run agentica install to write the packages of the lock to #{scope.deps}"))
   end
 
-  if !locked.member
+  if !Lock.in_place?(locked)
     try verify(workspace, locked, real.unwrap!, folder, site)
   end
 
   names = try names_of(workspace, scope, locked, real.unwrap!, site)
-  native = try natives_of(workspace, scope, real.unwrap!, locked.member, locked.name)
+  native = try natives_of(workspace, scope, real.unwrap!, Lock.in_place?(locked), locked.name)
   return ok(
     Opened(
       root: real.unwrap!,

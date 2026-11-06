@@ -131,6 +131,9 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   path such as `dependencies.sqlite.git` (`key_path` in `--json`), or a line and
   column for a TOML syntax error; a missing or unreadable file has only its
   name.
+- `PKG-ROOT-ONLY`: `override = true` or a `path` in the `agentica.toml` of a
+  package; only the root project's manifest may say them (the key path is
+  `dependencies.<name>.override` or `.path`).
 - `QUERY-USAGE`, `QUERY-NOT-FOUND`, `QUERY-AMBIGUOUS-NAME` and
   `QUERY-NO-EXPRESSION`: a bad question to a query command, exit 2
   (`queries.md`).

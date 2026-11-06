@@ -47,8 +47,8 @@ end
 ## Writes the locked packages into `deps`, the deps/ folder of the project, in the order given, and then removes the
 ## folders of the `dropped` names that are not among them. `packages` are in the order of `lock_file`, whose entries
 ## the failures about a package name. Every package must be in the cache already (`install`, `add` and `update` fill
-## it), except a workspace member, which has no folder in deps/: its entry is skipped, and a folder of deps/ that the
-## name has is removed like that of a dropped package.
+## it), except a workspace member or a `path` package, which has no folder in deps/: its entry is skipped, and a
+## folder of deps/ that the name has is removed like that of a dropped package.
 export def sync(
   settings: Env.Settings,
   lock_file: String,
@@ -62,7 +62,7 @@ export def sync(
     cache = try PackageFetch.cache_for(settings.env, lock_file, packages)
     for index in 0...packages.size
       locked = packages[index]
-      if locked.member
+      if Lock.in_place?(locked)
         next
       end
 
@@ -77,9 +77,9 @@ export def sync(
     end
   end
 
-  fetched = packages.filter do |locked| !locked.member end
+  fetched = packages.filter do |locked| !Lock.in_place?(locked) end
   kept = Set.new(fetched.map do |locked| locked.name end)
-  members = packages.filter do |locked| locked.member end
+  members = packages.filter do |locked| Lock.in_place?(locked) end
   gone = dropped.concat(members.map do |locked| locked.name end)
   for name in gone
     if !kept.include?(name)
