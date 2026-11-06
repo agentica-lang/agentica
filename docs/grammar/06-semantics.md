@@ -369,13 +369,18 @@ A `case` gives a value in three places, and is a statement everywhere else:
 
 Each arm of such a case ends with an expression, which is the value of the arm;
 lines may come before it (`CHECK-CASE-ARM-VALUE` when an arm ends with another
-statement or has no body). All arms have one type, which is the type the context
-expects when it has one: `CHECK-TYPE-MISMATCH`, at the last expression of the
-arm that differs. The case must be exhaustive by the rules above. A nested
-`case` as the last line of an arm is a statement, so it does not end the arm
-with a value. On the last line of a block the case stays a statement when the
-block's result is `Void` (the block of `each`) or when an arm ends with another
-statement.
+statement, such as `return`, `next`, `break` or a nested `case`, or has no
+body). All arms have one type, which is the annotation of the assignment or the
+type the context expects when it has one, else the type of the first arm:
+`CHECK-TYPE-MISMATCH`, at the last expression of the arm that differs. So write
+`x: Result[Int] = case ...` when the first arm is `error(...)`, `[]` or `none`.
+The case must be exhaustive by the rules above.
+
+On the last line of a block the case stays a statement when the block's result
+is `Void` (the block of `each`) or when an arm ends with another statement. When
+the block's result is not known from its context (the block of `Task.spawn`),
+a case that has a `Void` arm next to an arm with a value is a statement and the
+block gives no value; otherwise it gives the value.
 
 Exhaustiveness and reachability are conservative, and no deeper analysis is
 done. An arm covers its variant only when it has no guard and every slot is a

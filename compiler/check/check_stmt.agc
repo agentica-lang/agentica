@@ -2,6 +2,7 @@
 ## that imports this one.
 
 import Model from "../catalog/builtin_model"
+import Failure from "../diagnostics/problem"
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import T from "../syntax/types"
@@ -1095,11 +1096,14 @@ end
 
 # A case on the last line of a block gives the block's value when the block is to give one (its result is not Void) and
 # every arm ends with an expression; otherwise it is a statement, as anywhere else. The type is recorded for the node,
-# which is how lowering tells the two apart.
+# which is how lowering tells the two apart. When the result is not known yet (Slot.Infer, as in Task.spawn) a case
+# with a Void arm next to an arm with a value stays a statement and the block stays Void, as it was before a case could
+# give a value; the case is a value when no arm is Void, and then the arms must agree (CHECK-TYPE-MISMATCH).
 def final_case(cx: State.Cx, st: State.St, node: Ast.CaseStmt) -> Result[State.Out]
   start = T.Type.Unknown
   completion = true
   gives_result = false
+  inferred = false
   case st.result
     State.Slot.Known(expected) ->
       start = expected
@@ -1107,20 +1111,43 @@ def final_case(cx: State.Cx, st: State.St, node: Ast.CaseStmt) -> Result[State.O
     State.Slot.InferResult ->
       completion = false
       gives_result = true
-    State.Slot.Infer -> completion = true
+    State.Slot.Infer -> inferred = true
   end
 
   if T.is?(start, "Void") or !node.arms.all? do |arm: Ast.CaseArm| ends_with_expression?(arm.body) end
-    done = try check_statement(cx, st, Ast.Stmt.Case(node))
-    return ok(State.Out(st: done, type: T.Type.Unknown))
+    return final_statement(cx, st, node)
   end
 
-  done = try case_arms(cx, st, node, valued_arms(start, completion))
-  if gives_result
-    try require_result(cx, done.st, done.type, node.span)
-  end
+  checked = case_arms(cx, st, node, valued_arms(start, completion))
+  case checked
+    ok(done) ->
+      if inferred and T.is?(done.type, "Void")
+        return final_statement(cx, st, node)
+      end
 
-  return ok(State.Out(st: State.record_type(done.st, node.id, done.type), type: done.type))
+      if gives_result
+        try require_result(cx, done.st, done.type, node.span)
+      end
+
+      return ok(State.Out(st: State.record_type(done.st, node.id, done.type), type: done.type))
+    error(problem) ->
+      if inferred and void_mismatch?(problem)
+        return final_statement(cx, st, node)
+      end
+
+      return error(problem)
+  end
+end
+
+# Whether the problem is a CHECK-TYPE-MISMATCH between Void and another type: one arm of a case gives no value.
+def void_mismatch?(problem: String) -> Bool
+  found = Failure.unpack(problem)
+  return found.code == "CHECK-TYPE-MISMATCH" and (found.expected == "Void" or found.actual == "Void")
+end
+
+def final_statement(cx: State.Cx, st: State.St, node: Ast.CaseStmt) -> Result[State.Out]
+  done = try check_statement(cx, st, Ast.Stmt.Case(node))
+  return ok(State.Out(st: done, type: T.Type.Unknown))
 end
 
 def ends_with_expression?(body: List[Ast.Stmt]) -> Bool

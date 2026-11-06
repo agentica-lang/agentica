@@ -156,6 +156,18 @@ SINGLE_FILE = [
     ("the arms agree with the result of the function after return",
      'def f(n: Int) -> String\n  return case n\n    1 -> "a"\n    _ -> n\n  end\nend\n\n'
      + main_with("  puts(f(1))\n", ""), "CHECK-TYPE-MISMATCH", "n"),
+    ("a case that ends a block of unknown result stays a statement when an arm is Void",
+     main_with("  n = 1\n  t = Task.spawn do\n    case n\n      1 -> puts(\"a\")\n      _ -> compute()\n    end\n  end\n"
+               "  Task.await(t)\n  u = Task.spawn do\n    case n\n      1 -> compute()\n      _ -> puts(\"a\")\n    end\n"
+               "  end\n  Task.await(u)\n", "def compute() -> Int\n  return 5\nend\n\n"), None, None),
+    ("a case that ends a block of unknown result gives its value when the arms agree",
+     main_with("  n = 1\n  t = Task.spawn do\n    case n\n      1 -> compute()\n      _ -> 2\n    end\n  end\n"
+               "  ints: List[Task[Int]] = [t]\n  puts(ints.size)\n", "def compute() -> Int\n  return 5\nend\n\n"),
+     None, None),
+    ("a block of unknown result with a case of Int arms is a Task[Int], not a Task[Void]",
+     main_with("  n = 1\n  t = Task.spawn do\n    case n\n      1 -> compute()\n      _ -> 2\n    end\n  end\n"
+               "  voids: List[Task[Void]] = [t]\n  puts(voids.size)\n", "def compute() -> Int\n  return 5\nend\n\n"),
+     "CHECK-TYPE-MISMATCH", "t"),
     ("the arms of a case on the last line of a block have one type",
      main_with("  xs = [1, 2].map do |n|\n    case n\n      1 -> \"a\"\n      _ -> 2\n    end\n  end\n  puts(xs)\n"),
      "CHECK-TYPE-MISMATCH", "2"),

@@ -178,7 +178,7 @@ small
 [1, 2]
 ```
 
-All the arms have one type, and the case must cover every variant, or end with `_`. A mismatch is `CHECK-TYPE-MISMATCH` at the last expression of the arm:
+All the arms have one type, and the case must cover every variant, or end with `_`. The type is the annotation of the assignment, else the type of the first arm, so write `x: Result[Int] = case ...` when the first arm is `error(...)`, `[]` or `none`. An arm that ends with `return`, `next` or `break` has no value (`CHECK-CASE-ARM-VALUE`). A mismatch is `CHECK-TYPE-MISMATCH` at the last expression of the arm:
 
 ```agentica {expect="CHECK-TYPE-MISMATCH"}
 def main() -> Void

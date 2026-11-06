@@ -14,6 +14,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   as the last line of a block (`text = case r ... end`); each arm ends with an
   expression, all of one type, and a mismatch or an arm that ends with another
   statement is a diagnostic (`CHECK-CASE-ARM-VALUE`).
+- **Breaking:** a `case` on the last line of a block whose result type is not
+  known from its context, such as the block of `Task.spawn`, now gives the
+  block's value when no arm is `Void`, so `Task.spawn do case ... end end` with
+  `Int` arms is a `Task[Int]`, not a `Task[Void]`, and arms of two different
+  types are `CHECK-TYPE-MISMATCH`. A case with a `Void` arm next to an arm with
+  a value is unchanged.
 
 ### Fixed
 

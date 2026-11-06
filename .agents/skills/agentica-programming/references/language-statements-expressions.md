@@ -32,8 +32,13 @@ expressions and operators. Builtin methods and `to_s`: `builtins.md`.
   (`text = case r ... end`, `x: T = case ...`, `x += case ...`), after `return`,
   and the last line of a block (`xs.map do |x| case x ... end end`). Each arm
   ends with an expression, its value, after any other lines; all arms have one
-  type (`CHECK-TYPE-MISMATCH` at the arm's last expression) and the case is
-  exhaustive. An arm that ends with another statement is `CHECK-CASE-ARM-VALUE`.
+  type (`CHECK-TYPE-MISMATCH` at the arm's last expression): the annotation, else
+  the first arm's, so write `x: Result[Int] = case ...` when the first arm is
+  `error(...)`, `[]` or `none`. The case is exhaustive. An arm that ends with
+  another statement (`return`, `next`, `break`, a nested `case`) is
+  `CHECK-CASE-ARM-VALUE`. In a block whose result is not known (`Task.spawn`)
+  a last-line case with a `Void` arm next to an arm with a value is a
+  statement, and the block gives no value.
   Elsewhere (`puts(case ...)`, `1 + case ...`) it is `PARSE-UNEXPECTED-TOKEN`.
 - Patterns are primitive literals, `_`, `ok(...)`, `error(...)`, or qualified
   enum variants with one slot per payload. A slot is a name, `_`, a literal
