@@ -3,8 +3,8 @@
 ## A resolved type. Opaque holds the name of a handle or other builtin type with no structure (Socket, Process,
 ## TestCase, C.Pointer), or the linked name of a resource of an extern block. Struct and Enum hold the linked name and
 ## carry their type arguments (none for a plain struct or enum). Var is a type variable of a builtin signature, a
-## generic struct or a generic enum. Fn lists the parameters, then the result. Codec is JSON.Codec[T], the JSON codec
-## of a struct (JSON.codec). Optional is Optional[T], a value that is some(x) or none. Unknown is no type: the expected
+## generic struct or a generic enum. Fn lists the parameters, then the result. Codec is Codec[T], the codec of a
+## struct or enum (T.codec). Optional is Optional[T], a value that is some(x) or none. Unknown is no type: the expected
 ## type when none is known (Unknown), and the type of a literal the lexer could not classify.
 export enum Type
   Int
@@ -310,7 +310,7 @@ export def to_text_as(type: Type, written: Map[String, String]) -> String
     Type.Task(item) -> return "Task[#{to_text_as(item, written)}]"
     Type.Channel(item) -> return "Channel[#{to_text_as(item, written)}]"
     Type.Lazy(item) -> return "Lazy[#{to_text_as(item, written)}]"
-    Type.Codec(item) -> return "JSON.Codec[#{to_text_as(item, written)}]"
+    Type.Codec(item) -> return "Codec[#{to_text_as(item, written)}]"
     Type.List(item) -> return "List[#{to_text_as(item, written)}]"
     Type.Set(item) -> return "Set[#{to_text_as(item, written)}]"
     Type.Map(key, value) -> return "Map[#{to_text_as(key, written)}, #{to_text_as(value, written)}]"

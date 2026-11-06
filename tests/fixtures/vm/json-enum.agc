@@ -50,7 +50,7 @@ def to_json[T](value: T) -> String
   return JSON.encode(value)
 end
 
-def body_as[T](codec: JSON.Codec[T], text: String) -> Result[T]
+def body_as[T](codec: Codec[T], text: String) -> Result[T]
   return codec.decode(text)
 end
 
@@ -93,8 +93,8 @@ def main() -> Void
   puts(JSON.decode("{\"tag\":\"Empty\"}", Shape))
   puts(JSON.decode("{\"tag\":\"Empty\",\"values\":[],\"extra\":1}", Shape))
   puts(JSON.decode("{\"values\":[1.0],\"tag\":\"Circle\"}", Shape))
-  puts(body_as(JSON.codec(Shape), "{\"tag\":\"Circle\",\"values\":[3]}"))
-  puts(JSON.codec(Shape).encode(Shape.Rect(1.0, 2.0)))
+  puts(body_as(Shape.codec, "{\"tag\":\"Circle\",\"values\":[3]}"))
+  puts(Shape.codec.encode(Shape.Rect(1.0, 2.0)))
 
   puts(JSON.decode("[]", Shape))
   puts(JSON.decode("{}", Shape))

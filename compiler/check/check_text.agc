@@ -103,6 +103,7 @@ def resolved_text(resolved: State.Resolved) -> String
     State.Resolved.Inspect(type) -> return "inspect(#{T.debug_text(type)})"
     State.Resolved.Call(name, type) -> return "call(#{Text.quote(name)}, #{T.debug_text(type)})"
     State.Resolved.Members(fields) -> return members_text(fields)
+    State.Resolved.Codec(name, fields) -> return "codec(#{Text.quote(name)}, #{members_text(fields)})"
     State.Resolved.FieldCall -> return "field-call"
   end
 end

@@ -25,6 +25,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** `User.codec` replaces `JSON.codec(User)`, and the type is
+  `Codec[T]` instead of `JSON.Codec[T]`; both old names are removed, with a hint
+  to the new ones. A codec also has `codec.members`, the fields of the type as
+  `User.members` gives them (empty for an enum), so generic code needs no JSON
+  to read them. `Codec` is now a reserved type name.
 - **Breaking:** `def` calls of an `extern` block on different schedulers run at
   the same time, as `compute def` calls do; guard a library that is not
   thread-safe with a `Native.Mutex`.

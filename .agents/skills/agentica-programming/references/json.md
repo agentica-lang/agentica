@@ -10,11 +10,12 @@ JSON.kind(value: Json) -> String
 JSON.schema(type: T) -> Json
 JSON.decode(s: String, type: T) -> Result[T]
 JSON.decode(json: Json, type: T) -> Result[T]
-JSON.codec(type: T) -> JSON.Codec[T]
+T.codec -> Codec[T]
 codec.decode(s: String) -> Result[T]
 codec.decode(json: Json) -> Result[T]
 codec.encode(value: T) -> String
 codec.from(value: T) -> Json
+codec.members -> List[StructMember]
 JSON.parse(s: String) -> Result[Json]
 JSON.encode(value: T) -> String
 JSON.get(j: Json, key: String) -> Result[Json]
@@ -33,7 +34,7 @@ JSON.list(j: Json) -> Result[List[Json]]
 
 ## Schema and decoding
 
-- `JSON.schema(User)`, `JSON.decode(text, User)` and `JSON.codec(User)` take a
+- `JSON.schema(User)`, `JSON.decode(text, User)` and `User.codec` take a
   named struct type, not a value (bare type names are valid only there). A
   schema is a `Json` value, not text.
 - `JSON.decode` takes JSON text or a `Json` value (`JSON.decode(item, User)` for
@@ -41,8 +42,8 @@ JSON.list(j: Json) -> Result[List[Json]]
 - Decoded fields may be Int, Float, Bool, String, lists, String-keyed maps,
   nested or recursive structs and enums, and `Optional` and `JsonField` of
   those; other types, an instance of a generic struct or enum included, are
-  `CHECK-NOT-DECODABLE`. `JSON.decode(text, Shape)`, `schema` and `codec` take
-  an enum name too.
+  `CHECK-NOT-DECODABLE`. `JSON.decode(text, Shape)`, `schema` and `Shape.codec`
+  take an enum name too.
 - An enum is a tagged object, `{"tag":"Rect","values":[1.0,2.0]}`: the variant
   name and its payloads in order. Encode writes both keys (a variant with no
   payload writes `"values":[]`); decode accepts a missing `values` for such a
@@ -61,23 +62,25 @@ A generic function may `JSON.encode(x)` or `JSON.from(x)` a value of type `T`
 the type bound to `T` is encodable (`CHECK-NOT-ENCODABLE` at that argument, for
 an `Fn`, `Bytes` or `Task`), and a generic caller that passes its `T` on carries
 the check. `JSON.decode(text, T)` stays `CHECK-NOT-DECODABLE`: take a
-`JSON.Codec[T]` parameter; the caller passes `JSON.codec(User)`. `codec.decode`,
+`Codec[T]` parameter; the caller passes `User.codec`. `codec.decode`,
 `encode` and `from` behave as `JSON.decode`, `JSON.encode` and `JSON.from` for
-that struct. A codec is like an `Fn` value: a parameter, field or list item, but
-no printing, `==`, constant or `ATS` value.
+that type, and `codec.members` is `T.members` (empty for an enum). A codec is
+like an `Fn` value: a parameter, field or list item, but no printing, `==`,
+constant or `ATS` value. `Codec` is a reserved type name; `JSON.codec(T)` and
+`JSON.Codec[T]` do not exist.
 
 ```ruby
 struct User
   name: String
 end
 
-def body_as[T](body: String, codec: JSON.Codec[T]) -> Result[T]
+def body_as[T](body: String, codec: Codec[T]) -> Result[T]
   return codec.decode(body)
 end
 
 def main() -> Void
-  user = body_as("{\"name\": \"Ana\"}", JSON.codec(User)).unwrap!
-  puts(JSON.codec(User).encode(user))
+  user = body_as("{\"name\": \"Ana\"}", User.codec).unwrap!
+  puts(User.codec.encode(user))
 end
 ```
 

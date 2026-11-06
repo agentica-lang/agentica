@@ -39,7 +39,7 @@ def main() -> Void
   puts(JSON.decode("{}", Drawing))
   puts(JSON.decode("{}", Tree))
   puts(JSON.schema(Shape))
-  puts(JSON.codec(Tree).encode(tree))
+  puts(Tree.codec.encode(tree))
 end
 """,
         None,

@@ -3,14 +3,13 @@
 `receiver.name(args)` calls a builtin whose first parameter has the receiver's
 type. The checker picks the module from the static type (`String`, `Bytes`,
 `List`, `Map`, `Set`, `Float`, `Result`, `Range`, `Int`, `Json` through `JSON`,
-and `JSON.Codec[T]` through `JSON.Codec`); there is no dynamic dispatch.
+and `Codec[T]` through `Codec`); there is no dynamic dispatch.
 `s.strip` is `String.trim(s)`, but `"a".from_int` is not a method. The methods
-of a codec have no function form: `JSON.Codec.decode(c, s)` is
-`CHECK-UNKNOWN-NAME`. Without parentheses, `receiver.name` on a non-struct value
+of a codec have no function form. Without parentheses, `receiver.name` on a non-struct value
 is a method without arguments (`s.length`, `r.ok?`). On a struct, `.name` is a
-field. Structs and enums have no methods. The one form on a struct type is
-`Type.members`, the list of its fields (`docs/grammar/06-semantics.md`, "Structs
-and lists").
+field. Structs and enums have no methods. The forms on a type name are
+`Type.members`, the list of the fields of a struct (`docs/grammar/06-semantics.md`,
+"Structs and lists"), and `Type.codec`, its codec (JSON, below).
 
 Ruby aliases are the module functions named in the library pages: `strip`,
 `include?`, `start_with?`, `end_with?`, `push`, `join`, `select`, `key?`,
@@ -76,9 +75,9 @@ text they read and write are in the
 [`JSON` page](../../site/content/library/text-and-data/json.md). The rules that
 the checker enforces:
 
-- `JSON.decode(source, T)`, `JSON.schema(T)` and `JSON.codec(T)` take a named
-  struct or enum type, not a value; bare type names are valid only for these
-  three. Fields and payloads may be Int, Float, Bool, String, lists, String-keyed
+- `JSON.decode(source, T)` and `JSON.schema(T)` take a named struct or enum
+  type, not a value, and so does `T.codec`; bare type names are valid only for
+  these. Fields and payloads may be Int, Float, Bool, String, lists, String-keyed
   maps, nested or recursive structs and enums, and `Optional` of those (and
   `JsonField`, for a struct field); any other nested type, a generic struct or
   enum instance included, is `CHECK-NOT-DECODABLE`.
@@ -93,12 +92,16 @@ the checker enforces:
   is the variant name and `values` the payloads in order. The page has the
   errors and the schema (a `oneOf`). A `JsonField` in a payload is
   `CHECK-JSON-FIELD-PLACE`.
-- `JSON.codec(T)` takes the targets of `decode`, with its diagnostics, and
-  returns a `JSON.Codec[T]`: the JSON of `T` as a value, for generic code, which
-  cannot call `decode` on its type parameter. A codec follows the
-  rules of an `Fn` value: it may be a parameter, a struct field or a list item,
-  and it has no `to_s`, `inspect` or equality and is no constant or `ATS` value.
-  `IO.inspect` of a type that holds a codec is `CHECK-TYPE-MISMATCH`.
+- `T.codec` takes the targets of `decode`, with its diagnostics (a value is
+  `CHECK-UNKNOWN-METHOD`), and gives a `Codec[T]`: the JSON of `T` and its
+  members as a value, for generic code, which cannot call `decode` on its type
+  parameter. `codec.decode`, `codec.encode` and `codec.from` are the JSON
+  functions of `T`, and `codec.members` is the `List[StructMember]` of
+  `T.members` (empty for an enum). `Codec` is a reserved type name. A codec
+  follows the rules of an `Fn` value: it may be a parameter, a struct field or a
+  list item, and it has no `to_s`, `inspect` or equality and is no constant or
+  `ATS` value. `IO.inspect` of a type that holds a codec is
+  `CHECK-TYPE-MISMATCH`. `JSON.codec(T)` and `JSON.Codec[T]` no longer exist.
 
 #### Optional values in JSON
 
@@ -113,7 +116,7 @@ and `JSON.from`. `none` is `null`, `some(x)` is `x`, and a missing key of an
   `JsonField[Optional[T]]` is `CHECK-NOT-ENCODABLE` or `CHECK-NOT-DECODABLE`:
   use `Optional[T]` when a missing key and `null` mean the same, and
   `JsonField[T]` when they differ.
-- `JSON.decode`, `JSON.schema` and `JSON.codec` take a struct or enum name, so
+- `JSON.decode`, `JSON.schema` and `T.codec` take a struct or enum name, so
   a top-level `Optional` is decoded as a field of a struct.
 
 #### Optional and nullable fields (`JsonField`)

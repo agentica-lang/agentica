@@ -167,6 +167,7 @@ def type_help(word: String) -> Optional[String]
     "Task",
     "Channel",
     "Lazy",
+    "Codec",
     "ATS",
     "Range",
     "Bytes",
@@ -226,9 +227,9 @@ def rule_name(rule: Model.Rule) -> String
     Model.Rule.ChannelTarget -> return "ChannelTarget"
     Model.Rule.CodecDecode -> return "CodecDecode"
     Model.Rule.CodecEncode -> return "CodecEncode"
+    Model.Rule.CodecMembers -> return "CodecMembers"
     Model.Rule.Error -> return "Error"
     Model.Rule.Identity -> return "Identity"
-    Model.Rule.JsonCodec -> return "JsonCodec"
     Model.Rule.JsonDecode -> return "JsonDecode"
     Model.Rule.JsonEncode -> return "JsonEncode"
     Model.Rule.JsonFrom -> return "JsonFrom"

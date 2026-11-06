@@ -178,6 +178,14 @@ export RECORDS: List[Model.Record] = [
       Model.Named(name: "truncated", type: Types.Type.Bool),
     ],
   ),
+  # Lowering builds it for T.codec (Data.lower_codec): the linked name of the type, then the fields of T.members.
+  Model.Record(
+    name: "Codec.Info",
+    fields: [
+      Model.Named(name: "name", type: Types.Type.String),
+      Model.Named(name: "members", type: Types.Type.List(Types.Type.Struct("StructMember", []))),
+    ],
+  ),
   Model.Record(
     name: "StructMember",
     fields: [Model.Named(name: "name", type: Types.Type.String), Model.Named(name: "type", type: Types.Type.String)],
@@ -275,6 +283,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "CMAC",
   "Channel",
   "Cipher",
+  "Codec",
   "Crypto",
   "Digest",
   "Dir",
@@ -1629,17 +1638,7 @@ ROWS_17: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "JSON.codec",
-    parameters: [Model.Named(name: "type", type: Types.Type.Var("T"))],
-    result: Types.Type.Codec(Types.Type.Var("T")),
-    rule: Model.Rule.JsonCodec,
-    implementation: "JSON.codec",
-    effects: [],
-    description: "The JSON codec of a named struct, a value that generic code takes to encode and decode it.",
-    alternatives: [],
-  ),
-  Model.Builtin(
-    name: "JSON.Codec.decode",
+    name: "Codec.decode",
     parameters: [
       Model.Named(name: "codec", type: Types.Type.Codec(Types.Type.Var("T"))),
       Model.Named(name: "s", type: Types.Type.String),
@@ -1651,7 +1650,7 @@ ROWS_17: List[Model.Builtin] = [
     description: "Decode JSON text into the codec's struct, as JSON.decode does.",
     alternatives: [
       Model.Builtin(
-        name: "JSON.Codec.decode",
+        name: "Codec.decode",
         parameters: [
           Model.Named(name: "codec", type: Types.Type.Codec(Types.Type.Var("T"))),
           Model.Named(name: "json", type: Types.Type.Json),
@@ -1666,7 +1665,7 @@ ROWS_17: List[Model.Builtin] = [
     ],
   ),
   Model.Builtin(
-    name: "JSON.Codec.encode",
+    name: "Codec.encode",
     parameters: [
       Model.Named(name: "codec", type: Types.Type.Codec(Types.Type.Var("T"))),
       Model.Named(name: "value", type: Types.Type.Var("T")),
@@ -1679,7 +1678,7 @@ ROWS_17: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "JSON.Codec.from",
+    name: "Codec.from",
     parameters: [
       Model.Named(name: "codec", type: Types.Type.Codec(Types.Type.Var("T"))),
       Model.Named(name: "value", type: Types.Type.Var("T")),
@@ -1689,6 +1688,16 @@ ROWS_17: List[Model.Builtin] = [
     implementation: "JSON.from",
     effects: [],
     description: "Convert a value of the codec's struct to a Json value, as JSON.from does.",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Codec.members",
+    parameters: [Model.Named(name: "codec", type: Types.Type.Codec(Types.Type.Var("T")))],
+    result: Types.Type.List(Types.Type.Struct("StructMember", [])),
+    rule: Model.Rule.CodecMembers,
+    implementation: "Codec.members",
+    effects: [],
+    description: "The fields of the codec's struct, as T.members gives them; empty for an enum.",
     alternatives: [],
   ),
   Model.Builtin(

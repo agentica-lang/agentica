@@ -154,7 +154,7 @@ end
 def main() -> Void
   age: Optional[Int] = none
   user = JSON.decode("{}", User).unwrap!
-  codec = JSON.codec(User)
+  codec = User.codec
   puts("#{JSON.encode(user)} #{JSON.from(user)} #{JSON.encode(age)} #{JSON.schema(User)} #{codec.encode(user)}")
 end
 """,

@@ -195,7 +195,7 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
       site(cx, span),
       "CHECK-IMPORT-NAME",
       "unknown module alias",
-      Failure.hint(alias_help(alias, hint)),
+      Failure.hint(alias_help(alias, member, hint)),
     ),
   )
 end
@@ -210,15 +210,10 @@ def std_record?(alias: String, member: String, want: Want) -> Bool
 end
 
 # A builtin type with a module name, which any file may name: C.Pointer, the type of a C pointer (the extern blocks of
-# native code), Native.Mutex, the lock of a native library, and JSON.Codec, the JSON codec of a struct.
+# native code) and Native.Mutex, the lock of a native library.
 def builtin_type?(alias: String, member: String, want: Want) -> Bool
   case want
-    Want.Type ->
-      return (
-        (alias == "C" and member == "Pointer") or
-        (alias == "Native" and member == "Mutex") or
-        (alias == "JSON" and member == "Codec")
-      )
+    Want.Type -> return (alias == "C" and member == "Pointer") or (alias == "Native" and member == "Mutex")
     _ -> return false
   end
 end
@@ -241,8 +236,10 @@ def std_only_failure(cx: Context, alias: String, member: String, span: Source.Sp
   )
 end
 
-def alias_help(alias: String, hint: Bool) -> String
-  if alias == "BDD"
+def alias_help(alias: String, member: String, hint: Bool) -> String
+  if alias == "JSON" and member == "Codec"
+    return "the codec type is Codec[T], and the codec of a type is T.codec"
+  elsif alias == "BDD"
     return "import BDD from \"std/bdd\""
   elsif alias == "HTTP"
     return "import HTTP from \"std/http\""
