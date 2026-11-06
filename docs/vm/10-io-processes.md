@@ -173,8 +173,9 @@ pair; Windows uses a pipe per direction (below).
   worker thread: a child stuck in a large `parent_send` waits until the parent
   reads or closes the channel, as a child does with a full stdout pipe.
 - **Lines.** The stream is text lines in both directions, as in the other
-  `Process` streams: `\n` ends a line, a trailing `\r` is removed, a last line
-  without `\n` is a line, and invalid UTF-8 is an error.
+  `Process` streams: `\n` ends a line, a trailing `\r` is removed, and invalid
+  UTF-8 is an error. Unlike the other streams, a last line without `\n` is no
+  line: it gives `error("process: line cut off")`.
 - **Environment.** Every spawn builds the child's environment from the VM's own:
   `AGENTICA_CHANNEL` is always removed, `UV_USE_IO_URING` is removed as before
   (§10.2.2), and only `spawn_channel` adds `AGENTICA_CHANNEL=3` (`3,4` on
@@ -220,7 +221,10 @@ pair; Windows uses a pipe per direction (below).
   parent can still call `read_available`, `output`, `wait` and `close`. Later
   channel calls return `error("process: channel is closed")`, on the child side
   too. At the end of the child's output `channel_read_line` returns
-  `error("process: end of input")` (a reset peer counts as the end); a line over
+  `error("process: end of input")` (a reset peer counts as the end); a last
+  line that ends without its LF (the child exited or died in the middle of a
+  line) is not a line: it is dropped and `channel_read_line` returns
+  `error("process: line cut off")`, then the end of input; a line over
   1 MiB closes the channel; `channel_send` takes at most 1 MiB. A cut of stdout
   or stderr (more than 1 MiB unread, as in Reading) also wakes a pending
   `channel_read_line`, and makes every later one that finds no complete line

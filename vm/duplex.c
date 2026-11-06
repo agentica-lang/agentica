@@ -64,6 +64,9 @@ static const char closed_text[] = "process: channel is closed";
 static const char busy_text[] = "process: the channel is in use";
 static const char too_long[] = "process: line exceeds 1048576 bytes";
 static const char at_end[] = "process: end of input";
+/* The peer ended in the middle of a line. A line is complete only with its LF, so this is not an `ok` line and not a
+   clean end of input. */
+static const char cut_off[] = "process: line cut off";
 
 static agc_value ok_void(void) { return agc_result_value(true, agc_void()); }
 
@@ -150,7 +153,10 @@ static bool finish(request *q) {
     if (d->overflow && !agc_inbuf_ready(&d->in, true, 0)) {
       q->overflow = d->overflow;
     } else {
-      agc_inbuf_cut_line(&d->in, &q->cut);
+      if (agc_inbuf_drop_unterminated(&d->in))
+        q->cut = (agc_inbuf_cut){AGC_CUT_PARTIAL, 0, NULL, 0};
+      else
+        agc_inbuf_cut_line(&d->in, &q->cut);
       over = q->cut.status == AGC_CUT_OVER;
     }
   }
@@ -282,6 +288,7 @@ static void drop_request(void *data) {
 }
 
 static agc_value take_line(agc_vm *vm, agc_duplex *d) {
+  if (agc_inbuf_drop_unterminated(&d->in)) return agc_error_value(cut_off);
   bool over;
   agc_value line = agc_inbuf_line(vm, &d->in, too_long, at_end, &over);
   if (over) agc_duplex_shut(d);
@@ -306,6 +313,11 @@ static void keep_retry(agc_duplex *d, request *q) {
   d->got_busy = q->busy;
 }
 
+static agc_value cut_value(agc_vm *vm, const agc_inbuf_cut *cut) {
+  if (cut->status == AGC_CUT_PARTIAL) return agc_error_value(cut_off);
+  return agc_inbuf_cut_line_value(vm, cut, too_long, at_end);
+}
+
 static agc_value posted_result(agc_vm *vm, agc_duplex *d, request *q) {
   if (q->retry) {
     keep_retry(d, q);
@@ -319,7 +331,7 @@ static agc_value posted_result(agc_vm *vm, agc_duplex *d, request *q) {
     agc_charge(vm, q->count);
     return agc_stream_written(vm, q->write_status);
   }
-  agc_value result = q->overflow ? agc_error_value(q->overflow) : agc_inbuf_cut_line_value(vm, &q->cut, too_long, at_end);
+  agc_value result = q->overflow ? agc_error_value(q->overflow) : cut_value(vm, &q->cut);
   agc_charge(vm, agc_value_units(result));
   return result;
 }
@@ -586,7 +598,7 @@ static agc_input_status parent_line_posted(agc_vm *vm, agc_duplex *d, agc_string
   } else if (!d->got_busy && cut.status == AGC_CUT_END) {
     status = AGC_INPUT_EOF;
   } else if (!d->got_busy) {
-    const agc_result *r = agc_as_result(vm, agc_inbuf_cut_line_value(vm, &cut, too_long, at_end));
+    const agc_result *r = agc_as_result(vm, cut_value(vm, &cut));
     if (r->ok) {
       *line = agc_as_string(vm, r->value);
       status = AGC_INPUT_OK;

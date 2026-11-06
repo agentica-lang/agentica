@@ -3743,12 +3743,17 @@ LOAD_ONLY = """def main() -> Void
   puts(Native.load("%s").ok?)
 end
 """ % LIBM
+FUNCTION_ONLY = """def main() -> Void
+  puts("started")
+  puts(Native.function?("%s", "cos"))
+end
+""" % LIBM
 
 
-# A wait needs a descriptor of native code and changes it (non-blocking mode), and Native.load opens a library, so
-# --deny-native refuses a program that does either, with no extern block, at load; other systems refuse it at load too.
+# A wait needs a descriptor of native code and changes it (non-blocking mode), and Native.load and Native.function?
+# open a library, so --deny-native refuses a program that does any of them, with no extern block, at load; other systems refuse it at load too.
 @pytest.mark.parametrize("flag", ["--deny-native", "--sandbox"])
-@pytest.mark.parametrize("text", [WAIT_ONLY, LOAD_ONLY], ids=["wait", "load"])
+@pytest.mark.parametrize("text", [WAIT_ONLY, LOAD_ONLY, FUNCTION_ONLY], ids=["wait", "load", "function"])
 def test_a_program_that_waits_or_loads_is_native_code(tmp_path, flag, text):
     result = agentica("--json", flag, program(tmp_path, text))
     assert result.stdout == ""
@@ -3817,6 +3822,8 @@ LOAD_PEER = """extern "peer"
 end
 
 def main() -> Void
+  puts([Native.function?("peer", "peer_add"), Native.function?("peer", "no_such_function_xyz"),
+        Native.function?("peer", ""), Native.function?("libnot_there_at_all.so", "peer_add")])
   case Native.load("libnot_there_at_all.so")
     ok(_) -> puts("loaded")
     error(_) -> puts("missing")
@@ -3831,7 +3838,9 @@ end
 
 # Native.load opens a library before its first call: a missing one is an error that the program handles, and a present
 # one stays open for the extern functions. Its literal means what extern "peer" means: the project's [native.peer]
-# names the file of this system.
+# names the file of this system. Native.function?(library, name) asks that library, with the same literal, whether it
+# exports a function, before any load: a missing function or library is false, and the block's own function is only
+# bound at its call.
 @NATIVE_CALLS
 def test_native_load_opens_a_library_or_gives_an_error(tmp_path, peer):
     here = "windows" if WINDOWS else "macos" if MACOS else "linux"
@@ -3841,7 +3850,8 @@ def test_native_load_opens_a_library_or_gives_an_error(tmp_path, peer):
     manifest = 'name = "app"\n\n[native.peer]\n%s = { file = "native/%s/%s" }\n' % (here, here, peer.name)
     (tmp_path / "agentica.toml").write_text(manifest, encoding="utf-8")
     result = agentica(program(tmp_path, LOAD_PEER, "main.agc"), cwd=tmp_path)
-    assert (result.code, result.stdout, result.stderr) == (0, "missing\n42\n", "")
+    assert (result.code, result.stdout, result.stderr) == (
+        0, "[true, false, false, false]\nmissing\n42\n", "")
 
 
 EXTERN_FIRST = """def main() -> Void

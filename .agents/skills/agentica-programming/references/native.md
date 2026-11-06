@@ -37,6 +37,13 @@ end
   (`try Native.load("pq")`). The argument is a string literal (else
   `CHECK-NATIVE-LOAD`). A missing function is still `RUNTIME-NATIVE-LOAD` at its
   call.
+- `Native.function?("NAME", "symbol") -> Bool` asks whether the library opens
+  and exports the function, so a program can pick a fallback before calling a
+  declared function that the library may lack (`NAME` as for `Native.load`; the
+  symbol is any String). `true` means an `extern def` with that C name would
+  bind (Linux and macOS also find dependencies' and data symbols; Windows only
+  the DLL's own exports). A missing library or function, or a symbol over 4096
+  bytes, is `false`; nothing stays open.
 - An integer argument takes the bits of its type read as signed or unsigned,
   as `put_int32` does (`C.Int32` -2^31 to 2^32 - 1, `C.UInt8` -128 to 255), and
   C gets the low bits; outside is `RUNTIME-INTEGER-OVERFLOW`. Unsigned results

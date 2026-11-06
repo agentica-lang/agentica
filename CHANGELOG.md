@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `Native.function?("NAME", "symbol")` tells whether a native library exports a
+  function, so a program can fall back before calling one that the library
+  lacks.
 - A `case` gives a value on the right side of an assignment, after `return` and
   as the last line of a block (`text = case r ... end`); each arm ends with an
   expression, all of one type, and a mismatch or an arm that ends with another
@@ -34,6 +37,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `Process.channel_read_line` and `Process.parent_read_line` give
+  `error("process: line cut off")` for a last line that has no line ending
+  (the other side exited or died in the middle of it), where they gave the
+  part as `ok(line)`.
 - `agentica lint` no longer hides a `+` chain or a single pipe that sits first
   in a chain of the other kind (`("n=" + n.to_s) |> f()`, `(a |> f()) + "x"`),
   and the help of `LINT-IF-CHAIN` without an `else` asks for a `_` arm.
@@ -45,6 +52,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   function of a resource such as SQLite's `xDestroy`, at a task's end or with
   `Native.close`) gets zero instead of crashing: the code of a callback is made
   once per function and callback type and kept for the run.
+- `agentica fmt` counts the trailing comma of a filled list, so it no longer
+  writes a line one column over `max_line_width` (`CHECK-LINE-TOO-LONG`).
 
 ## [0.24.4] - 2026-11-06
 

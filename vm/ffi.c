@@ -2602,6 +2602,29 @@ static agc_value builtin_native_load(agc_vm *vm, agc_value *args, uint32_t span)
   return agc_result_value(false, agc_string_value(loader_text(error)));
 }
 
+/* Native.function?(library, name): whether the library that the front end resolved (as for Native.load) exports the
+   function NAME, so a program can pick a fallback before it calls one that a block declares and the library lacks
+   (that call is RUNTIME-NATIVE-LOAD). False when the library does not open or NAME is empty, holds a NUL or is longer
+   than FUNCTION_NAME_MAX bytes (no symbol is: the lookup would cost far more than the fixed charge). Nothing stays open
+   that was not open before. Refused at load like any Native.* builtin (agc_ffi_refusal). */
+#define FUNCTION_NAME_MAX 4096
+static agc_value builtin_native_function(agc_vm *vm, agc_value *args, uint32_t span) {
+  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
+  /* Both strings are read before the first copy: agc_as_string fails on bad bytecode, and a copy would leak. */
+  const agc_string *library_text = agc_as_string(vm, args[0]);
+  const agc_string *name_text = agc_as_string(vm, args[1]);
+  bool found = false;
+  if (name_text->bytes <= FUNCTION_NAME_MAX) {
+    char *library = agc_cstr(library_text);
+    char *name = agc_cstr(name_text);
+    found = library && *library && name && *name && agc_ffi_has_function(library, name);
+    free(library);
+    free(name);
+  }
+  agc_charge(vm, FFI_CALL_COST);
+  return agc_bool(found);
+}
+
 /* Keeps the failure CODE and MESSAGE of a callback whose value cannot go back to C, for the native call to raise once C
    has returned: nothing can jump out while C's frames are on the stack. */
 static void site_fail(native_site *site, const char *code, const char *message) {
@@ -2867,6 +2890,7 @@ const agc_builtin agc_ffi_builtins[] = {
   {"Native.wait_readable", 2, builtin_wait_readable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"Native.wait_writable", 2, builtin_wait_writable, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"Native.load", 1, builtin_native_load, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"Native.function?", 2, builtin_native_function, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"Native.callback", 2, builtin_native_callback, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
 };
 

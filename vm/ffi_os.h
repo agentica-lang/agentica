@@ -90,6 +90,10 @@ bool agc_ffi_layout(agc_c_struct *s);
    cannot call native code. */
 bool agc_ffi_open(const char *library, char *error, size_t size);
 
+/* Whether LIBRARY opens and exports SYMBOL (Native.function?). Nothing stays open that was not open before; false for
+   a library that does not open, a missing function or a build that cannot call native code. */
+bool agc_ffi_has_function(const char *library, const char *symbol);
+
 /* Frees a prepared call that no run uses (the free function of a resource was not found), and gives back its hold on
    the library. */
 void agc_ffi_discard(agc_ffi_call *call);
