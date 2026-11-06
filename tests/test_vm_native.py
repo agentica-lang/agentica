@@ -660,16 +660,13 @@ def test_a_callback_closed_while_a_compute_call_holds_it_stays_until_c_returns(t
     assert codes == ["RUNTIME-NATIVE-CALLBACK", "RUNTIME-TASK-CRASHED"]
 
 
-# A closed callback that waits for a long fast call on one scheduler costs the fast calls of the others nothing: they
-# read only their own count of waiting closures (c_waits), so they keep running while a third scheduler frees a
-# resource with rt->sync held (peer_slow_free). Before, each of them took rt->sync after C and stood still there.
-@NATIVE_CALLS
-def test_fast_calls_skip_the_vm_lock_while_a_closed_callback_waits_for_another_scheduler(tmp_path, peer):
-    text = """extern "%s"
+# A handler that peer_fire reads and calls MS later from a KIND call (`def` or `compute def`), and a resource whose
+# free is slow (peer_slow_free).
+SLOW_HANDLER = """extern "{library}"
   callback Step(x: C.Int32) -> C.Int32
   resource Slow, free: peer_slow_free
   def peer_set_handler(fn: Optional[Step]) -> Void
-  def peer_fire(ms: C.Int32) -> C.Int32
+  {kind} peer_fire(ms: C.Int32) -> C.Int32
   def peer_fire_loaded() -> C.Int32
   def peer_slow_open(ms: C.Int32) -> Slow
   def peer_freeing() -> C.Int32
@@ -680,10 +677,38 @@ def step(x: Int) -> Int
 end
 
 def fire() -> Int
-  return peer_fire(2000)
+  return peer_fire({ms})
 end
 
-def count() -> Int
+"""
+
+
+# The end of the run gives back an open callback's closure as a close does: main returns while a compute call is in C
+# with the handler it read, and the slow free of an open resource keeps the end busy past the time C calls it. C then
+# reaches the callback, which refuses on the pool thread, and not freed code (a crash, before).
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_the_end_of_the_run_keeps_a_callback_that_a_compute_call_may_call(tmp_path, peer, schedulers):
+    text = SLOW_HANDLER.format(library=literal(peer), kind="compute def", ms=300) + """def main() -> Void
+  _slow = peer_slow_open(1000).unwrap!
+  a = Native.callback(Step, &step)
+  peer_set_handler(some(a))
+  _fired = Task.spawn(&fire)
+  while peer_fire_loaded() == 0
+  end
+  puts("main returns")
+end
+"""
+    result = agentica("--schedulers", schedulers, program(tmp_path, text), timeout=scaled(60))
+    assert (result.code, result.stdout, result.stderr) == (0, "main returns\n", "")
+
+
+# A closed callback that waits for a long fast call on one scheduler costs the fast calls of the others nothing: they
+# read only their own count of waiting closures (c_waits), so they keep running while a third scheduler frees a
+# resource with rt->sync held (peer_slow_free). Before, each of them took rt->sync after C and stood still there.
+@NATIVE_CALLS
+def test_fast_calls_skip_the_vm_lock_while_a_closed_callback_waits_for_another_scheduler(tmp_path, peer):
+    text = SLOW_HANDLER.format(library=literal(peer), kind="def", ms=2000) + """def count() -> Int
   while peer_freeing() == 0
   end
   n = 0
@@ -711,7 +736,7 @@ def main() -> Void
   puts(counters.map do |counter| Task.await(counter) end)
   puts(Task.await(fired))
 end
-""" % literal(peer)
+"""
     result = agentica("--schedulers", "4", program(tmp_path, text), timeout=scaled(60))
     assert (result.code, result.stderr) == (0, ""), result.stderr
     counts, fired = result.stdout.split("\n")[:2]

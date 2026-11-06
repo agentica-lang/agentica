@@ -61,11 +61,12 @@ typedef struct {
   size_t count, cap;
 } held_set;
 
-/* The frees of one step of agc_ffi_end, copied out of GC memory for the thread that makes them, in order. */
+/* The frees of one step of agc_ffi_end, copied out of GC memory for the thread that makes them, in order. A
+   callback is never one of them (retire_callbacks). */
 typedef struct {
   agc_ffi_call *free;
   void *at, *pointer;
-  bool buffer, by_ref, callback;
+  bool buffer, by_ref;
 } end_free;
 
 typedef struct {
@@ -992,8 +993,9 @@ static void reap_closures(agc_vm *vm) {
    (c_waits) is raised before its c_seq is read, both seq_cst, and a call that leaves C moves its c_seq before it reads
    that count (leave_c): so either this close sees the call's C as over, or that call sees the closure retired and
    frees it once it may. A compute pool thread is read the same way, its seq moved by the pool around each work
-   (vm/compute.c); it never frees: the end of the compute call does (compute_done), and a work of another kind (a KDF)
-   leaves its closures to the next free of some other call. A thread that enters C after its read was not in C at the
+   (vm/compute.c); it never frees: a closure that waits only for pool threads is freed at the next retire_closure, the
+   next end of a compute call (compute_done) or agc_ffi_end, whichever comes first once they have left C (after a
+   KDF work, which ends without compute_done, that is the next of the others): bounded, not a leak. A thread that enters C after its read was not in C at the
    close, so it cannot have read the pointer before. Under rt->sync. */
 static void retire_closure(agc_vm *vm, agc_c_resource *res) {
   uint32_t scheds = (uint32_t)sched_count(vm), threads = agc_io_compute_threads(vm);
@@ -1230,7 +1232,7 @@ static void make_end_frees(void *data) {
   end_frees *batch = data;
   for (size_t k = 0; k < batch->count; k++) {
     end_free *f = &batch->items[k];
-    free_native(f->buffer, f->callback, f->free, f->at, f->by_ref, &f->pointer);
+    free_native(f->buffer, false, f->free, f->at, f->by_ref, &f->pointer);
   }
 }
 
@@ -1313,7 +1315,7 @@ static bool end_step(agc_vm *vm, agc_resource **items, size_t count, bool *skipp
        mind. */
     res->closed = res->freed = true;
     batch->items[batch->count++] =
-        (end_free){res->free, res->free_at, res->pointer, res->buffer, res->by_ref, res->callback != NULL};
+        (end_free){res->free, res->free_at, res->pointer, res->buffer, res->by_ref};
   }
   free(busy.items);
   if (!batch->count) {
@@ -1325,6 +1327,22 @@ static bool end_step(agc_vm *vm, agc_resource **items, size_t count, bool *skipp
   return done;
 }
 
+/* Gives back the closure of each callback of ITEMS that is still open as a close does (retire_closure), not in a
+   batch of end_step: a compute call still in C may have read a handler's pointer, and a held resource does not show
+   it (a stored handler is no argument). Each is marked freed, so neither end_step nor release_handles frees it, and
+   its closure stays to the exit while a pool thread that was in C at this point has not left it. */
+static void retire_callbacks(agc_vm *vm, agc_resource **items, size_t count) {
+  for (size_t k = 0; k < count; k++) {
+    agc_resource *r = items[k];
+    if (r->release != release_resource || !r->native) continue;
+    agc_c_resource *res = r->native;
+    if (!res->callback || res->freed) continue;
+    res->closed = res->freed = true;
+    res->pointer = NULL;
+    retire_closure(vm, res);
+  }
+}
+
 bool agc_ffi_end(agc_vm *vm, int (*stop_signal)(void)) {
   /* agc_io_flush_files, which runs first, set the deadline. */
   uint64_t by = vm->rt->flush_by;
@@ -1333,6 +1351,8 @@ bool agc_ffi_end(agc_vm *vm, int (*stop_signal)(void)) {
   size_t count;
   agc_resource **items = agc_registry_copy(vm, &count);
   if (!count) return true;
+  /* Before the wait, so the compute calls that end during it free the closures that waited only for them. */
+  retire_callbacks(vm, items, count);
   qsort(items, count, sizeof *items, newest_first);
   /* One pass, newest first, as at a task's end, after the running calls that hold a resource have returned: an older
      resource that a held one points into (a database under its statement) is never freed while C still uses it. */
@@ -2844,8 +2864,9 @@ static void callback_result(native_site *site, agc_c_type type, agc_value v, agc
    gives zero (closed, or after a failure), so a close meanwhile, by the callback or by another task, leaves the free
    to the end of the last native call whose C called it: libffi's frames of the run are on the stack until C returns,
    and C may call it again until then. A callback that C stored and calls later (a handler) may be closed in between,
-   with no count; its closure, and this data, stay until every fast call that was in C at the close has returned
-   (retire_closure), so C reaches this code and gets zero. A scheduler that holds rt->sync here (no native call does)
+   with no count; its closure, and this data, stay until every native call that was in C at the close has returned,
+   on a scheduler or a compute pool thread (retire_closure), so C reaches this code and gets zero (a pool thread
+   refuses it first). A scheduler that holds rt->sync here (no native call does)
    could not run Agentica code, whose builtins take it as at the top of a turn, so C gets zero then. */
 static void callback_entry(void *data, const agc_c_value *args, agc_c_value *result) {
   const callback_data *cb = data;
