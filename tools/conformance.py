@@ -122,7 +122,7 @@ AREAS = {
             "tests/test_spec_package_add.py", "tests/test_spec_package_fetch.py",
             "tests/test_spec_package_native_artifact.py", "tests/test_spec_package_subdir.py",
             "tests/test_spec_package_deps.py", "tests/test_spec_package_native.py", "tests/test_spec_package_native_download.py",
-            "tests/test_spec_package_workspace.py", "tests/test_spec_packages.py",
+            "tests/test_spec_package_override.py", "tests/test_spec_package_workspace.py", "tests/test_spec_packages.py",
             "tests/test_spec_parser.py", "tests/test_spec_style.py",
             "tests/test_spec_patterns.py", "tests/test_spec_extern.py", "tests/test_spec_generic_structs.py",
             "tests/test_spec_generics.py", "tests/test_spec_bytes.py", "tests/test_spec_optional.py",
