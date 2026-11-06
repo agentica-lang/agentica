@@ -16,6 +16,11 @@ def serve() -> Void
   done("bye", Process.parent_send("bye\n", 5000))
 end
 
+def cut() -> Void
+  show("first", Process.parent_read_line(5000))
+  show("second", Process.parent_read_line(5000))
+end
+
 def idle() -> Void
   show("first", Process.parent_read_line(300))
   show("second", Process.parent_read_line(300))
@@ -126,6 +131,8 @@ def main() -> Void
   mode = args[0]
   if mode == "serve"
     serve()
+  elsif mode == "cut"
+    cut()
   elsif mode == "idle"
     idle()
   elsif mode == "bare"

@@ -109,7 +109,8 @@ remove that variable from the child's environment even if your program
 inherited it.
 
 - `channel_read_line` reads like `read_line` (at most 1 MiB, LF or CRLF removed,
-  strict UTF-8, `error("process: end of input")` at the end). `channel_send`
+  strict UTF-8, `error("process: end of input")` at the end; unlike `read_line`, a
+  last line cut off with no LF is `error("process: line cut off")`). `channel_send`
   sends at most 1048576 bytes as they are (add your own `"\n"`).
   `channel_close` closes only the sending side, so the child reads the end of
   its input while you can still read; it is idempotent, also after the child

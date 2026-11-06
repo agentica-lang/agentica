@@ -306,6 +306,8 @@ static agc_value builtin_run(agc_vm *vm, agc_value *args, uint32_t span) {
       agc_input_status status = agc_parent_line(vm, &r->line);
       if (status == AGC_INPUT_WAIT) return agc_void();
       if (status == AGC_INPUT_FAILED) {
+        /* A test index cut off by the parent's end (no LF, "process: line cut off") fails here too: an infra error
+           is the honest answer, and it happens only when the parent died in the middle of the line. */
         if (!agc_parent_open(vm)) agc_exit(vm, 1);
         r->record = fail_line(vm, "RUNTIME-BDD-INFRA", lit("invalid test index"), span, NULL, NULL);
         r->after = AFTER_EXIT;

@@ -199,6 +199,13 @@ void agc_inbuf_take(agc_inbuf *b, size_t n) {
   b->scanned = b->scanned > n ? b->scanned - n : 0;
 }
 
+bool agc_inbuf_drop_unterminated(agc_inbuf *b) {
+  size_t have = agc_inbuf_pending(b);
+  if (!b->eof || b->error || have == 0 || have > LIMIT || find_lf(b)) return false;
+  agc_inbuf_take(b, have);
+  return true;
+}
+
 /* The n bytes at data as the read's value: a new Bytes, or the empty one. */
 static agc_value read_value(const uint8_t *data, size_t n) { return agc_bytes_value(agc_make_bytes(data, n)); }
 

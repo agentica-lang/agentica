@@ -194,7 +194,7 @@ Process.channel_send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
 Process.channel_close(p: Process, timeout_ms: Int) -> Result[Void]
 ```
 
-- `channel_read_line` reads one line (at most 1 MiB, ending removed), as `Process.read_line` does. At the end it gives `error("process: end of input")`. If standard output or error was cut (see `Process.read_available`) and no complete line is there, it gives `error("process: output exceeds 1048576 bytes")` at once, so a program that prints forever is noticed without the timeout.
+- `channel_read_line` reads one line (at most 1 MiB, ending removed), as `Process.read_line` does. At the end it gives `error("process: end of input")`; a last line that the program's exit cut off, with no line ending, is not returned as a line: it gives `error("process: line cut off")`. If standard output or error was cut (see `Process.read_available`) and no complete line is there, it gives `error("process: output exceeds 1048576 bytes")` at once, so a program that prints forever is noticed without the timeout.
 - `channel_send` sends at most 1048576 bytes exactly as given: add your own `"\n"`.
 - `channel_close` closes only the sending side: the program reads end of input, and you can still read what it sends. Closing twice, or after exit, is fine.
 - A timeout in `channel_read_line` or `channel_send` closes the channel, not the program. Later calls give `error("process: channel is closed")`.

@@ -50,6 +50,9 @@ def test_child_side_lines_partial_lines_eof_timeouts_and_no_channel(bytecode, no
     assert answer["serve"]["replies"] == ["echo:one\n", "echo:two\n", "echo:\n", 300006, "echo:café\n", "bye\n", ""]
     assert answer["serve"]["stdout"] == lines("sent: ok()", "sent: ok()", "sent: ok()", "sent: ok()", "sent: ok()",
                                               "ended: process: end of input", "bye: ok()")
+    assert answer["cut"]["exit"] == 0
+    assert answer["cut"]["stdout"] == lines('first: error("process: line cut off")',
+                                            'second: error("process: end of input")')
     assert answer["idle"]["stdout"] == lines('first: error("process: operation timed out")',
                                              'second: error("process: channel is closed")',
                                              'send: error("process: channel is closed")')
@@ -59,7 +62,7 @@ def test_child_side_lines_partial_lines_eof_timeouts_and_no_channel(bytecode, no
                  'zero: error("process: timeout must be positive milliseconds")')
     for name in ("bare", "bare_marker_only", "bare_marker_pair_only"):
         assert answer[name]["stdout"] == bare, name
-    for name in ("serve", "idle", "bare", "bare_marker_only", "bare_marker_pair_only"):
+    for name in ("serve", "cut", "idle", "bare", "bare_marker_only", "bare_marker_pair_only"):
         assert answer[name]["exit"] == 0, (name, answer[name]["stderr"])
     if os.name == "nt":
         # Descriptors 3 and 4 that are a file are no channel (the POSIX forms: test_vm_child_channel_posix.py).
