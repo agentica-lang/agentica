@@ -41,6 +41,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   with `RUNTIME-NATIVE-CALLBACK` instead of crashing.
 - A cancelled task whose `compute def` call found no pool thread gives back its
   `Native.Mutex`.
+- `agentica fmt` counts the trailing comma of a filled list, so it no longer
+  writes a line one column over `max_line_width` (`CHECK-LINE-TOO-LONG`).
 
 ## [0.24.4] - 2026-11-06
 
