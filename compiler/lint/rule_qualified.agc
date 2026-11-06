@@ -145,7 +145,8 @@ end
 def pattern_mentions(pattern: Ast.Pattern) -> List[Mention]
   case pattern
     Ast.Pattern.Variant(variant) -> return qualified(variant.enum_name, variant.span)
-    _ -> return []
+    Ast.Pattern.Wildcard(_) -> return []
+    Ast.Pattern.Literal(_) -> return []
   end
 end
 
@@ -161,7 +162,8 @@ def nested_patterns(pattern: Ast.Pattern) -> List[Ast.Pattern]
         end
       end
 
-    _ -> inner = inner
+    Ast.Pattern.Wildcard(_) -> inner = inner
+    Ast.Pattern.Literal(_) -> inner = inner
   end
 
   return inner

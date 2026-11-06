@@ -10,9 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- `agentica lint` reports `LINT-SINGLE-PIPE` and `LINT-TO-S-CONCAT` for a chain
-  that sits first in a chain of the other kind (`(a + n.to_s) |> f()`), and the
-  help of `LINT-IF-CHAIN` without an `else` asks for a `_` arm.
+- `agentica lint` no longer hides a `+` chain or a single pipe that sits first
+  in a chain of the other kind (`("n=" + n.to_s) |> f()`, `(a |> f()) + "x"`),
+  and the help of `LINT-IF-CHAIN` without an `else` asks for a `_` arm.
 
 ## [0.24.4] - 2026-11-06
 
