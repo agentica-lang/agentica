@@ -502,19 +502,23 @@ static an_term api_list(an_env *env, const an_term *items, size_t n) {
 }
 
 /* The builder's state goes through memcpy both ways, so C's opaque words are never read as another type. */
+/* The array is charged as it grows, by the slots each step adds, so a module that never calls an_list_end pays too,
+   and list_end charges nothing more. */
 static void api_list_begin(an_env *env, an_list_builder *b, size_t hint) {
-  (void)env;
   list_build build = {NULL, 0, hint < HINT_MAX ? hint : HINT_MAX};
-  if (build.cap) build.items = agc_alloc(build.cap * sizeof(agc_value));
+  if (build.cap) {
+    agc_charge_bytes(env->vm, build.cap * sizeof(agc_value));
+    build.items = agc_alloc(build.cap * sizeof(agc_value));
+  }
   memcpy(b, &build, sizeof build);
 }
 
 static void api_list_push(an_env *env, an_list_builder *b, an_term item) {
-  (void)env;
   list_build build;
   memcpy(&build, b, sizeof build);
   if (build.n == build.cap) {
     size_t cap = build.cap ? agc_size_mul(build.cap, 2) : 8;
+    agc_charge_bytes(env->vm, agc_size_mul(cap - build.cap, sizeof(agc_value)));
     agc_value *items = agc_alloc(agc_size_mul(cap, sizeof(agc_value)));
     if (build.n) memcpy(items, build.items, build.n * sizeof(agc_value));
     build.items = items;
@@ -526,8 +530,8 @@ static void api_list_push(an_env *env, an_list_builder *b, an_term item) {
 
 static an_term api_list_end(an_env *env, an_list_builder *b) {
   list_build build;
+  (void)env;
   memcpy(&build, b, sizeof build);
-  agc_charge_bytes(env->vm, agc_size_mul(build.n, sizeof(agc_value)));
   return term_of(agc_list_value(agc_list_from_array(build.items, build.n)));
 }
 

@@ -10,6 +10,7 @@
 #include <assert.h>
 #include <setjmp.h>
 #include <stdatomic.h>
+#include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #ifndef _WIN32
@@ -195,7 +196,10 @@ static const char *count_load(void) {
 static const an_function bad_rows[] = {{"add", "(Int, Int) -> Int", NULL, AN_SHORT}};
 static const an_module v_major = {2, 0, sizeof(an_module), "v", NULL, functions, 1};
 static const an_module v_minor = {1, AN_API_MINOR + 1, sizeof(an_module), "v", NULL, functions, 1};
-static const an_module v_size = {1, 0, 8, "v", NULL, functions, 1};
+/* The size of an an_module of API 1.0, as vm/native_module.c checks it: one byte less is refused. */
+#define SIZE_1_0 (offsetof(an_module, function_count) + sizeof(uint32_t))
+static const an_module v_size = {1, 0, SIZE_1_0 - 1, "v", NULL, functions, 1};
+static const an_module v_size_1_0 = {1, 0, SIZE_1_0, "v", NULL, functions, 1};
 static const an_module v_rows = {1, 0, sizeof(an_module), "v", NULL, bad_rows, 1};
 static const an_module v_refuses = {1, 0, sizeof(an_module), "v", refuse_load, functions, 1};
 static const an_module v_counts = {1, 0, sizeof(an_module), "v", count_load, functions,
@@ -217,6 +221,10 @@ static const an_module *init_minor(const an_api *api) {
 static const an_module *init_size(const an_api *api) {
   (void)api;
   return &v_size;
+}
+static const an_module *init_size_1_0(const an_api *api) {
+  (void)api;
+  return &v_size_1_0;
 }
 static const an_module *init_rows(const an_api *api) {
   (void)api;
@@ -250,6 +258,8 @@ static void test_versions(void) {
   fails("module (Int, Int) -> Int add v_none", two, 2, "RUNTIME-NATIVE-LOAD");
   fails("module (Int, Int) -> Int crunch v_refuses", two, 2, "RUNTIME-NATIVE-LOAD");
   assert(inits == 1 && loads == 1);
+  agc_native_register(&vm, "v_size_1_0", init_size_1_0);
+  assert(agc_as_int(&vm, call("module (Int, Int) -> Int add v_size_1_0", two, 2)) == 3);
   agc_native_register(&vm, "v_counts", init_counts);
   assert(agc_as_int(&vm, call("module (Int, Int) -> Int add v_counts", two, 2)) == 3);
   agc_value seven = agc_int(7);

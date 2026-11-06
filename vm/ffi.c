@@ -180,9 +180,9 @@ enum { CALL_QUEUED, CALL_RUNNING, CALL_FINISHED, CALL_ABANDONED };
 /* The native call that runs on this thread now (current_site), which a callback that C makes runs in. A fast call sets
    it around its C call and puts back the one it found, so a call that a callback makes nests. A compute call sets one
    with no `vm` on its pool thread, where no callback can run: a callback there only sets `refused`, and C gets zero. A
-   thread that C started has none, and C gets zero there too, and so does a free function of a resource, which gets a
-   site with no `vm` (free_pointer): it may run inside a callback or a cancel walk, with rt->sync let go and the task's
-   state half changed. Once a callback has failed (`failed`) every later one of the call gives zero at once, and the
+   thread that C started has none, and C gets zero there too, and so does a free function of a resource or a native
+   module's function, which run with refused_site (agc_ffi_refusing_callbacks): a free function may run inside a
+   callback or a cancel walk, with rt->sync let go and the task's state half changed. Once a callback has failed (`failed`) every later one of the call gives zero at once, and the
    call raises the failure when C returns: the outcome that the callback's run kept (`kept`, in GC memory, made only
    then), or CODE and MESSAGE when its value could not go back to C. A run that stopped for a cancel or the end of the
    run keeps an outcome of kind AGC_DONE, and the call then gives Void and ends the turn. `ran` is set once a callback
@@ -197,6 +197,17 @@ typedef struct native_site {
 } native_site;
 
 static _Thread_local native_site *current_site; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+/* The site with no `vm` that refuses every callback. It lives as long as the thread, so a current_site left on it by a
+   longjmp out of agc_ffi_refusing_callbacks (agc_task_run_nested does not put current_site back) still refuses and
+   never points at a dead frame. Only its `refused` is ever written, and nothing reads it. */
+static _Thread_local native_site refused_site; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+/* A free function to run with callbacks refused (free_pointer): the function at AT, or CALL's when AT is NULL. */
+typedef struct {
+  agc_ffi_call *call;
+  void *at;
+  agc_c_value arg;
+} free_run;
 
 /* What C runs when it calls a callback: one per pair of a callback type and a function (Native.callback), made at the
    first Native.callback of the pair and kept for the whole run, so its code (the closure) is never freed and C may
@@ -926,16 +937,19 @@ static ffi_entry *call_entry(agc_vm *vm, agc_value signature, bool layout, uint3
   return e;
 }
 
+static void run_free(void *arg) {
+  free_run *run = arg;
+  agc_c_value unused;
+  agc_ffi_invoke(run->call, run->at, &run->arg, &unused);
+}
+
 /* Runs FREE_CALL on the pointer in SLOT unless it is NULL: the function at AT, or the prepared one when AT is NULL. A
-   void free(void *) gets the pointer; a void free(void **) (BY_REF, free_ref:) gets SLOT, where C may write NULL. */
+   void free(void *) gets the pointer; a void free(void **) (BY_REF, free_ref:) gets SLOT, where C may write NULL. A
+   callback that the free function calls (SQLite's xDestroy) runs nothing and gives zero. */
 static void free_pointer(agc_ffi_call *free_call, void *at, bool by_ref, void **slot) {
   if (!*slot) return;
-  agc_c_value arg = {.p = by_ref ? (void *)slot : *slot}, unused;
-  /* A callback that the free function calls (SQLite's xDestroy) runs nothing and gives zero (native_site). */
-  native_site refusing = {.outer = current_site};
-  current_site = &refusing;
-  agc_ffi_invoke(free_call, at, &arg, &unused);
-  current_site = refusing.outer;
+  free_run run = {free_call, at, {.p = by_ref ? (void *)slot : *slot}};
+  agc_ffi_refusing_callbacks(run_free, &run);
 }
 
 /* Frees the pointer in SLOT: an owned buffer (BUFFER) is malloc'd memory, and a resource goes to FREE_CALL as in
@@ -1262,13 +1276,13 @@ bool agc_ffi_end(agc_vm *vm, int (*stop_signal)(void)) {
 
 char *agc_ffi_text_copy(const char *data, size_t len) { return text_copy(data, len); }
 
-/* The fuzz driver's allocation limit may jump out of RUN and leave the refusing site set on this thread; no_files
-   makes no callback that could read it, and agc_ffi_forget clears it after the input. */
+/* A longjmp out of RUN leaves current_site on refused_site, which outlives every frame, so a later callback on this
+   thread is refused rather than reading dead stack; agc_ffi_forget clears it after a fuzz input. */
 void agc_ffi_refusing_callbacks(void (*run)(void *arg), void *arg) {
-  native_site refusing = {.outer = current_site};
-  current_site = &refusing;
+  native_site *outer = current_site;
+  current_site = &refused_site;
   run(arg);
-  current_site = refusing.outer;
+  current_site = outer;
 }
 
 void agc_ffi_forget(agc_vm *vm) {
