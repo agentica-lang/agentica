@@ -80,6 +80,7 @@ help:
 	  'make stage0              refresh bootstrap/stage0.agcb after the fixed point holds' \
 	  'make windows-docker-check  the Windows cross build and tests, in Docker with Wine' \
 	  'make site                build the documentation site' \
+	  'make site-versions       build the site of every release and dev, as Pages deploys it' \
 	  'make clean               remove dist/, build/ and the site output' \
 	  '' \
 	  'The rules are in mk/*.mk, one file per area (the list is above the includes in the Makefile).' \

@@ -1,0 +1,56 @@
+/* The tokens come from the page's own theme (site/assets/scss/_tokens.scss); the fallbacks are for releases without one. */
+.version-select {
+  flex-shrink: 0;
+  max-width: 9rem;
+  height: 2.1rem;
+  padding: 0 0.4rem;
+  border: 1px solid var(--border, #d8dee4);
+  border-radius: var(--radius, 6px);
+  background: var(--code-bg, #f6f8fa);
+  color: var(--fg, #1f2328);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.version-select:focus-visible {
+  outline: var(--focus-ring, 2px solid #0b5cad);
+  outline-offset: 2px;
+}
+
+/* Above the header: the banner of an old version and, on a phone, the selector. */
+.version-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem 0.75rem;
+  padding: 0.5rem var(--gutter, 1rem);
+  border-bottom: 1px solid var(--border, #d8dee4);
+  background: var(--mark-bg, #fdf1f1);
+  color: var(--fg, #1f2328);
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* Only the selector, on a phone: not a warning. */
+.version-bar:not([role]) {
+  background: var(--bg, #fff);
+}
+
+.version-bar[hidden] {
+  display: none;
+}
+
+.version-bar a {
+  color: var(--link, #0b5cad);
+  font-weight: 600;
+}
+
+/* A touch target of 44px, like the menu button. */
+@media (max-width: 30rem) {
+  .version-select {
+    height: var(--target, 2.75rem);
+    max-width: 100%;
+  }
+}
