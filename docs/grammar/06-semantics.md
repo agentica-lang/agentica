@@ -379,8 +379,10 @@ The case must be exhaustive by the rules above.
 On the last line of a block the case stays a statement when the block's result
 is `Void` (the block of `each`) or when an arm ends with another statement. When
 the block's result is not known from its context (the block of `Task.spawn`),
-a case that has a `Void` arm next to an arm with a value is a statement and the
-block gives no value; otherwise it gives the value.
+a case whose arms are `Void` or of one other type, with at least one `Void`, is
+a statement and the block gives no value; otherwise it gives the value. Arms of
+two different non-`Void` types are `CHECK-TYPE-MISMATCH`, even when another arm
+is `Void`.
 
 Exhaustiveness and reachability are conservative, and no deeper analysis is
 done. An arm covers its variant only when it has no guard and every slot is a

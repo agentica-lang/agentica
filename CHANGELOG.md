@@ -18,8 +18,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   known from its context, such as the block of `Task.spawn`, now gives the
   block's value when no arm is `Void`, so `Task.spawn do case ... end end` with
   `Int` arms is a `Task[Int]`, not a `Task[Void]`, and arms of two different
-  types are `CHECK-TYPE-MISMATCH`. A case with a `Void` arm next to an arm with
-  a value is unchanged.
+  non-`Void` types are `CHECK-TYPE-MISMATCH`, even when another arm is `Void`.
+  A case with one type of value and a `Void` arm is unchanged.
 
 ### Fixed
 

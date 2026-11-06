@@ -160,6 +160,9 @@ SINGLE_FILE = [
      main_with("  n = 1\n  t = Task.spawn do\n    case n\n      1 -> puts(\"a\")\n      _ -> compute()\n    end\n  end\n"
                "  Task.await(t)\n  u = Task.spawn do\n    case n\n      1 -> compute()\n      _ -> puts(\"a\")\n    end\n"
                "  end\n  Task.await(u)\n", "def compute() -> Int\n  return 5\nend\n\n"), None, None),
+    ("arms of two non-Void types of a case that ends a block of unknown result mismatch, even beside a Void arm",
+     main_with("  n = 1\n  t = Task.spawn do\n    case n\n      1 -> 1\n      2 -> \"s\"\n      _ -> puts(\"z\")\n"
+               "    end\n  end\n  Task.await(t)\n"), "CHECK-TYPE-MISMATCH", '"s"'),
     ("a case that ends a block of unknown result gives its value when the arms agree",
      main_with("  n = 1\n  t = Task.spawn do\n    case n\n      1 -> compute()\n      _ -> 2\n    end\n  end\n"
                "  ints: List[Task[Int]] = [t]\n  puts(ints.size)\n", "def compute() -> Int\n  return 5\nend\n\n"),

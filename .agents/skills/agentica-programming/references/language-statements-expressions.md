@@ -37,8 +37,10 @@ expressions and operators. Builtin methods and `to_s`: `builtins.md`.
   `error(...)`, `[]` or `none`. The case is exhaustive. An arm that ends with
   another statement (`return`, `next`, `break`, a nested `case`) is
   `CHECK-CASE-ARM-VALUE`. In a block whose result is not known (`Task.spawn`)
-  a last-line case with a `Void` arm next to an arm with a value is a
-  statement, and the block gives no value.
+  a last-line case whose arms are `Void` or of one other type, with at least
+  one `Void`, is a statement and the block gives no value; arms of two
+  different non-`Void` types are `CHECK-TYPE-MISMATCH`, even beside a `Void`
+  arm.
   Elsewhere (`puts(case ...)`, `1 + case ...`) it is `PARSE-UNEXPECTED-TOKEN`.
 - Patterns are primitive literals, `_`, `ok(...)`, `error(...)`, or qualified
   enum variants with one slot per payload. A slot is a name, `_`, a literal
