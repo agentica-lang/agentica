@@ -474,10 +474,10 @@ import Sqlite from "pkg/sqlite/db"
   answer is `fetched NAME@VERSION`, `in the cache NAME@VERSION`, for a
   workspace member `in the workspace NAME@workspace` or, for a `path`,
   `in place NAME@path` for each package, then `overridden NAME@VERSION` for
-  each overridden package; with no package but host artifacts ready, `1 native artifact ready` (or `N
-  native artifacts ready`); else `nothing to install`. The command starts
-  git even under
-  `--deny-run`, which only limits programs.
+  each overridden package; with no package but host artifacts ready,
+  `1 native artifact ready` (or `N native artifacts ready`); else `nothing to
+  install`. The command starts git even under `--deny-run`, which only limits
+  programs.
 - `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, and `--subdir DIR`) and
   `agentica update [NAME]` write the lock; they are the only commands that do.
   Both work on the project of the working folder (no manifest is
