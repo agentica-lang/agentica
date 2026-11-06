@@ -1,6 +1,6 @@
-# The documentation site (Hugo): site, site-serve, site-sass and the highlighter's npm install.
+# The documentation site (Hugo): site, site-serve, site-sass, the highlighter's npm install and site-versions (every release).
 
-.PHONY: site site-serve site-sass
+.PHONY: site site-serve site-sass site-versions
 
 DART_SASS ?= $(HOME)/.local/opt/dart-sass
 
@@ -21,3 +21,10 @@ site: site-sass site/highlight/node_modules
 
 site-serve: site-sass
 	hugo server --source site
+
+# One site per release plus dev, as pages.yml deploys it (tools/site_versions.py); serve the output with
+# `python3 -m http.server 8000 -d build/site-versions/public`. SITE_BASE_URL is where the root is served.
+SITE_BASE_URL ?= http://localhost:8000/
+
+site-versions:
+	$(PYTHON) -I tools/site_versions.py build --base-url $(SITE_BASE_URL)
