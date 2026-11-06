@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 136,
+  "steps": 222,
   "stdout": [
     "User(name: \"a\", age: 1)",
     "{\"name\":\"a\",\"age\":1}",
@@ -11,6 +11,10 @@
     "age: expected required field",
     "name: expected String",
     "JSON.parse: invalid JSON",
+    "[\"name: String\", \"age: Int\"]",
+    "true",
+    "[]",
+    "ok(Mode.Off)",
     "receiver",
     "argument",
     "ok(User(name: \"c\", age: 3))",

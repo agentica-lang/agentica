@@ -1,56 +1,61 @@
-program #54 0:1:1-466:21:1
+program #58 0:1:1-477:22:1
   module "json-codec.agc"
     declaration: struct-decl #4 0:1:1-50:5:1 name="Reading"
       field: field-decl #1 17:2:3-31:3:1 name="label"
         type: type-ref #0 24:2:10-30:2:16 name="String"
       field: field-decl #3 33:3:3-46:4:1 name="value"
         type: type-ref #2 40:3:10-45:3:15 name="Float"
-    declaration: function-decl #16 51:6:1-147:9:1 name="read_as" type-parameters=["T"]
-      param: param #7 66:6:16-86:6:36 name="codec"
-        type: type-ref #6 73:6:23-86:6:36 name="JSON.Codec"
-          arg: type-ref #5 84:6:34-85:6:35 name="T"
-      param: param #9 88:6:38-100:6:50 name="text"
-        type: type-ref #8 94:6:44-100:6:50 name="String"
-      result: type-ref #11 105:6:55-114:6:64 name="Result"
-        arg: type-ref #10 112:6:62-113:6:63 name="T"
-      body: return-stmt #15 117:7:3-143:8:1
-        value: method-call #14 124:7:10-142:7:28 name="decode" type=Result(Var(T)) resolved=call("JSON.Codec.decode", Codec(Var(T)))
-          target: name-ref #12 124:7:10-129:7:15 name="codec" type=Codec(Var(T))
-          arg: name-ref #13 137:7:23-141:7:27 name="text" type=String
-    declaration: function-decl #27 148:10:1-239:13:1 name="write_as" type-parameters=["T"]
-      param: param #19 164:10:17-184:10:37 name="codec"
-        type: type-ref #18 171:10:24-184:10:37 name="JSON.Codec"
-          arg: type-ref #17 182:10:35-183:10:36 name="T"
-      param: param #21 186:10:39-194:10:47 name="value"
-        type: type-ref #20 193:10:46-194:10:47 name="T"
-      result: type-ref #22 199:10:52-205:10:58 name="String"
-      body: return-stmt #26 208:11:3-235:12:1
-        value: method-call #25 215:11:10-234:11:29 name="encode" type=String resolved=call("JSON.Codec.encode", Codec(Var(T)))
-          target: name-ref #23 215:11:10-220:11:15 name="codec" type=Codec(Var(T))
-          arg: name-ref #24 228:11:23-233:11:28 name="value" type=Var(T)
-    declaration: function-decl #53 240:14:1-466:21:1 name="main"
-      result: type-ref #28 254:14:15-258:14:19 name="Void"
-      body: binding #31 261:15:3-289:16:1 name="codec"
-        value: call #30 269:15:11-288:15:30 name="JSON.codec" piped=false type=Codec(Struct(Reading))
-          arg: type-expression #29 280:15:22-287:15:29 name="Reading"
-      body: binding #36 291:16:3-359:17:1 name="reading"
-        value: field-access #35 301:16:13-358:16:70 name="unwrap!" type=Struct(Reading) resolved=call("Result.unwrap!", Result(Struct(Reading)))
-          target: call #34 301:16:13-350:16:62 name="read_as" piped=false type=Result(Struct(Reading))
-            arg: name-ref #32 309:16:21-314:16:26 name="codec" type=Codec(Struct(Reading))
-            arg: literal #33 316:16:28-349:16:61 value=string:"{\"label\":\"t\",\"value\":1.5}" type=String
-      body: expr-stmt #41 361:17:3-392:18:1
-        value: call #40 361:17:3-391:17:33 name="puts" piped=false type=Void
-          arg: call #39 366:17:8-390:17:32 name="write_as" piped=false type=String
-            arg: name-ref #37 375:17:17-380:17:22 name="codec" type=Codec(Struct(Reading))
-            arg: name-ref #38 382:17:24-389:17:31 name="reading" type=Struct(Reading)
-      body: binding #45 394:18:3-421:19:1 name="tree"
-        value: method-call #44 401:18:10-420:18:29 name="from" type=Json resolved=call("JSON.Codec.from", Codec(Struct(Reading)))
-          target: name-ref #42 401:18:10-406:18:15 name="codec" type=Codec(Struct(Reading))
-          arg: name-ref #43 412:18:21-419:18:28 name="reading" type=Struct(Reading)
-      body: expr-stmt #52 423:19:3-462:20:1
-        value: call #51 423:19:3-461:19:41 name="puts" piped=false type=Void
-          arg: field-access #50 428:19:8-460:19:40 name="label" type=String
-            target: field-access #49 428:19:8-454:19:34 name="unwrap!" type=Struct(Reading) resolved=call("Result.unwrap!", Result(Struct(Reading)))
-              target: method-call #48 428:19:8-446:19:26 name="decode" type=Result(Struct(Reading)) resolved=call("JSON.Codec.decode", Codec(Struct(Reading)))
-                target: name-ref #46 428:19:8-433:19:13 name="codec" type=Codec(Struct(Reading))
-                arg: name-ref #47 441:19:21-445:19:25 name="tree" type=Json
+    declaration: function-decl #16 51:6:1-142:9:1 name="read_as" type-parameters=["T"]
+      param: param #7 66:6:16-81:6:31 name="codec"
+        type: type-ref #6 73:6:23-81:6:31 name="Codec"
+          arg: type-ref #5 79:6:29-80:6:30 name="T"
+      param: param #9 83:6:33-95:6:45 name="text"
+        type: type-ref #8 89:6:39-95:6:45 name="String"
+      result: type-ref #11 100:6:50-109:6:59 name="Result"
+        arg: type-ref #10 107:6:57-108:6:58 name="T"
+      body: return-stmt #15 112:7:3-138:8:1
+        value: method-call #14 119:7:10-137:7:28 name="decode" type=Result(Var(T)) resolved=call("Codec.decode", Codec(Var(T)))
+          target: name-ref #12 119:7:10-124:7:15 name="codec" type=Codec(Var(T))
+          arg: name-ref #13 132:7:23-136:7:27 name="text" type=String
+    declaration: function-decl #27 143:10:1-229:13:1 name="write_as" type-parameters=["T"]
+      param: param #19 159:10:17-174:10:32 name="codec"
+        type: type-ref #18 166:10:24-174:10:32 name="Codec"
+          arg: type-ref #17 172:10:30-173:10:31 name="T"
+      param: param #21 176:10:34-184:10:42 name="value"
+        type: type-ref #20 183:10:41-184:10:42 name="T"
+      result: type-ref #22 189:10:47-195:10:53 name="String"
+      body: return-stmt #26 198:11:3-225:12:1
+        value: method-call #25 205:11:10-224:11:29 name="encode" type=String resolved=call("Codec.encode", Codec(Var(T)))
+          target: name-ref #23 205:11:10-210:11:15 name="codec" type=Codec(Var(T))
+          arg: name-ref #24 218:11:23-223:11:28 name="value" type=Var(T)
+    declaration: function-decl #57 230:14:1-477:22:1 name="main"
+      result: type-ref #28 244:14:15-248:14:19 name="Void"
+      body: binding #30 251:15:3-273:16:1 name="codec"
+        value: field-access #29 259:15:11-272:15:24 name="codec" type=Codec(Struct(Reading)) resolved=codec("Reading", members(label, value))
+          target: type-expression #88 259:15:11-266:15:18 name="Reading"
+      body: binding #35 275:16:3-343:17:1 name="reading"
+        value: field-access #34 285:16:13-342:16:70 name="unwrap!" type=Struct(Reading) resolved=call("Result.unwrap!", Result(Struct(Reading)))
+          target: call #33 285:16:13-334:16:62 name="read_as" piped=false type=Result(Struct(Reading))
+            arg: name-ref #31 293:16:21-298:16:26 name="codec" type=Codec(Struct(Reading))
+            arg: literal #32 300:16:28-333:16:61 value=string:"{\"label\":\"t\",\"value\":1.5}" type=String
+      body: expr-stmt #40 345:17:3-376:18:1
+        value: call #39 345:17:3-375:17:33 name="puts" piped=false type=Void
+          arg: call #38 350:17:8-374:17:32 name="write_as" piped=false type=String
+            arg: name-ref #36 359:17:17-364:17:22 name="codec" type=Codec(Struct(Reading))
+            arg: name-ref #37 366:17:24-373:17:31 name="reading" type=Struct(Reading)
+      body: binding #44 378:18:3-405:19:1 name="tree"
+        value: method-call #43 385:18:10-404:18:29 name="from" type=Json resolved=call("Codec.from", Codec(Struct(Reading)))
+          target: name-ref #41 385:18:10-390:18:15 name="codec" type=Codec(Struct(Reading))
+          arg: name-ref #42 396:18:21-403:18:28 name="reading" type=Struct(Reading)
+      body: expr-stmt #51 407:19:3-446:20:1
+        value: call #50 407:19:3-445:19:41 name="puts" piped=false type=Void
+          arg: field-access #49 412:19:8-444:19:40 name="label" type=String
+            target: field-access #48 412:19:8-438:19:34 name="unwrap!" type=Struct(Reading) resolved=call("Result.unwrap!", Result(Struct(Reading)))
+              target: method-call #47 412:19:8-430:19:26 name="decode" type=Result(Struct(Reading)) resolved=call("Codec.decode", Codec(Struct(Reading)))
+                target: name-ref #45 412:19:8-417:19:13 name="codec" type=Codec(Struct(Reading))
+                arg: name-ref #46 425:19:21-429:19:25 name="tree" type=Json
+      body: expr-stmt #56 448:20:3-473:21:1
+        value: call #55 448:20:3-472:20:27 name="puts" piped=false type=Void
+          arg: field-access #54 453:20:8-471:20:26 name="size" type=Int resolved=call("List.size", List(Struct(StructMember)))
+            target: field-access #53 453:20:8-466:20:21 name="members" type=List(Struct(StructMember)) resolved=call("Codec.members", Codec(Struct(Reading)))
+              target: name-ref #52 453:20:8-458:20:13 name="codec" type=Codec(Struct(Reading))

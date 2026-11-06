@@ -340,8 +340,8 @@ CODEC_RULES = {
                    header="struct Holder\n  codec: Codec[User]\nend\n\n"), None, None),
     "T.codec of a struct that cannot be decoded": (with_codec("b = Bad.codec"), "CHECK-NOT-DECODABLE", "Bad"),
     "codec of a value is no type": (
-        with_codec('u = User(name: "a")', "b = u.codec"), "CHECK-UNKNOWN-METHOD", "u.codec"),
-    "T.codec of a type variable": (body("c = T.codec"), "CHECK-NOT-DECODABLE", "T"),
+        with_codec('u = User(name: "a")', "b = u.codec"), "CHECK-UNKNOWN-FIELD", "u.codec"),
+    "T.codec of a type variable": (body("c = T.codec"), "CHECK-UNKNOWN-NAME", "T.codec"),
     "the codec of an enum has members": (
         with_codec("e = Color.codec", "m: List[StructMember] = e.members", "puts(m.size)",
                    header="enum Color\n  Red\n  Green\nend\n\n"), None, None),
@@ -365,9 +365,10 @@ CODEC_RULES = {
         with_codec("puts(JSON.encode(Holder(codec: c)))", header="struct Holder\n  codec: Codec[User]\nend\n\n"),
         "CHECK-NOT-ENCODABLE", "Holder(codec: c)"),
     "Codec needs its type argument": (with_codec("d: Codec = c"), "CHECK-UNKNOWN-TYPE", "Codec"),
-    "JSON.Codec is removed": (with_codec("d: JSON.Codec[User] = c"), "CHECK-IMPORT-NAME", "JSON.Codec"),
+    "JSON.Codec is removed": (with_codec("d: JSON.Codec[User] = c"), "CHECK-IMPORT-NAME", "JSON.Codec[User]"),
     "JSON.codec is removed": (with_codec("d = JSON.codec(User)"), "CHECK-UNKNOWN-NAME", "JSON.codec(User)"),
-    "a struct cannot be named Codec": ("struct Codec\n  n: Int\nend\n\n" + main("puts(1)"), "CHECK-REDEFINED-NAME", "Codec"),
+    "a struct cannot be named Codec": (
+        "struct Codec\n  n: Int\nend\n\n" + main("puts(1)"), "CHECK-REDEFINED-NAME", None),
     "a codec cannot be inspected": (with_codec("IO.inspect(c)"), "CHECK-TYPE-MISMATCH", "c"),
     "a struct that holds a codec cannot be inspected": (
         with_codec("IO.inspect(Holder(codec: c))", header="struct Holder\n  codec: Codec[User]\nend\n\n"),
@@ -375,8 +376,8 @@ CODEC_RULES = {
     "IO.inspect of a function field that takes a codec stays valid": (
         with_codec("IO.inspect(Hold(f: &body_as))",
                    header="struct Hold\n  f: Fn[String, Codec[User], Result[User]]\nend\n\n"), None, None),
-    "the methods of a codec have no function form": (
-        with_codec('r = Codec.decode(c, "{}")'), "CHECK-IMPORT-NAME", "Codec"),
+    "a codec method is also the builtin function, as String.trim is": (
+        with_codec('puts(Codec.decode(c, "{}").ok?)', "puts(Codec.members(c).size)"), None, None),
 }
 
 

@@ -17,4 +17,5 @@ def main() -> Void
   puts(write_as(codec, reading))
   tree = codec.from(reading)
   puts(codec.decode(tree).unwrap!.label)
+  puts(codec.members.size)
 end
