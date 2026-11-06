@@ -51,6 +51,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   with `RUNTIME-NATIVE-CALLBACK` instead of crashing.
 - A cancelled task whose `compute def` call found no pool thread gives back its
   `Native.Mutex`.
+- A callback that C calls after its close (a handler it stored, or the free
+  function of a resource such as SQLite's `xDestroy`, at a task's end or with
+  `Native.close`) gets zero instead of crashing: the code of a callback is made
+  once per function and callback type and kept for the run.
 - `agentica fmt` counts the trailing comma of a filled list, so it no longer
   writes a line one column over `max_line_width` (`CHECK-LINE-TOO-LONG`).
 

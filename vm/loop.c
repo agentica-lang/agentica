@@ -2060,19 +2060,6 @@ void agc_io_compute_each(agc_vm *vm, const agc_io_kind *kind, void (*fn)(void *d
   }
 }
 
-/* Once made, the pool stays until agc_io_close, and its size never changes. */
-uint32_t agc_io_compute_threads(agc_vm *vm) {
-  agc_compute *pool = vm->rt->loop ? vm->rt->loop->compute : NULL;
-  return pool ? agc_compute_size(pool) : 0;
-}
-
-bool agc_io_compute_seq(agc_vm *vm, uint32_t k, uint64_t *seq) {
-  agc_compute *pool = vm->rt->loop ? vm->rt->loop->compute : NULL;
-  if (!pool) return false;
-  *seq = agc_compute_seq(pool, k);
-  return true;
-}
-
 bool agc_io_wait_for(agc_vm *vm, bool (*ready)(agc_vm *vm, void *arg), void *arg, uint64_t by) {
   while (!ready(vm, arg)) {
     uint64_t now = agc_clock_ms();
@@ -2396,18 +2383,6 @@ void agc_io_compute_each(agc_vm *vm, const agc_io_kind *kind, void (*fn)(void *d
   (void)kind;
   (void)fn;
   (void)arg;
-}
-
-uint32_t agc_io_compute_threads(agc_vm *vm) {
-  (void)vm;
-  return 0;
-}
-
-bool agc_io_compute_seq(agc_vm *vm, uint32_t k, uint64_t *seq) {
-  (void)vm;
-  (void)k;
-  (void)seq;
-  return false;
 }
 
 bool agc_io_wait_for(agc_vm *vm, bool (*ready)(agc_vm *vm, void *arg), void *arg, uint64_t by) {

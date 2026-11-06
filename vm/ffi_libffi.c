@@ -492,7 +492,6 @@ static bool code_make(agc_ffi_closure *c) {
   return false;
 }
 
-static void code_free(agc_ffi_closure *c) { ffi_closure_free(c->closure); }
 #else
 /* Elsewhere the closure is laid out on a page of its own, mapped read-write, where ffi_prep_closure_loc writes the
    trampoline (which finds the closure at its own address), then sealed read-execute before C can call it: never
@@ -553,7 +552,6 @@ static bool code_make(agc_ffi_closure *c) {
   return false;
 }
 
-static void code_free(agc_ffi_closure *c) { page_unmap(c->closure, c->mapped); }
 #endif
 
 agc_ffi_closure *agc_ffi_closure_new(agc_c_type result, const agc_c_type *params, uint32_t count,
@@ -587,8 +585,4 @@ agc_ffi_closure *agc_ffi_closure_new(agc_c_type result, const agc_c_type *params
 
 void *agc_ffi_closure_code(const agc_ffi_closure *closure) { return closure->code; }
 
-void agc_ffi_closure_free(agc_ffi_closure *closure) {
-  code_free(closure);
-  free(closure);
-}
 #endif
