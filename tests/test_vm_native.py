@@ -637,8 +637,8 @@ end
 
 
 # C read a stored handler, and another scheduler closes that callback before C calls it: the closure stays until the
-# call has left C (retire_closure), so C reaches the closed callback, which gives 0, and not the next callback's code
-# in the freed closure.
+# call has left C, so C reaches the closed callback, which gives 0, and not the next callback's code in a freed
+# closure (on master; the code of a callback is never freed now, and gives 0 while no handle of it is open).
 @NATIVE_CALLS
 @pytest.mark.parametrize("schedulers", ["2", "4"])
 def test_a_callback_closed_while_another_schedulers_c_holds_it_stays_until_c_returns(tmp_path, peer, schedulers):
@@ -704,16 +704,18 @@ end
 
 
 # A Hook whose free function calls the callback that C stored, and the callback's function, which must never run.
-# peer_store_fn stores it with no Hook in the call; peer_hook_store gets both, as SQLite's create_collation_v2 gets the
-# database and the callback. %s is the library.
+# peer_store_fn stores it; peer_ctor_new gets it as a constructor argument, as lua_newstate or g_hash_table_new_full
+# do. %s is the library.
 HOOK_PROGRAM = """extern "%s"
   resource Hook, free: peer_hook_free
+  resource Ctor, free: peer_ctor_free
   callback Step(x: C.Int32) -> C.Int32
   def peer_hook_open() -> Hook
   def peer_store_fn(fn: Step) -> Void
-  def peer_hook_store(hook: Hook, fn: Step) -> Void
   def peer_hook_after(hook: Hook, fn: Step) -> C.Int32
   def peer_hook_result() -> C.Int32
+  def peer_ctor_new(destroy: Step) -> Ctor
+  def peer_call_stored_then(fn: Step) -> C.Int32
   def peer_bump() -> Void
   def peer_bumps() -> C.Int32
   def peer_flag() -> C.Int32
@@ -722,6 +724,10 @@ end
 
 def destroy(x: Int) -> Int
   puts("destroy ran")
+  return x
+end
+
+def other(x: Int) -> Int
   return x
 end
 
@@ -744,71 +750,61 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "main returns\n", "")
 
 
-# At a task's end the callbacks close after the other resources: the free of a Hook calls the callback that C stored
-# (peer_store_fn), which closed first when it was made after the Hook (SQLite's sqlite3_open, then
-# create_collation_v2) and had no closure left. C gets zero and the function does not run. "hook hook cb" has two
-# Hooks. The order "cb hook" never crashed: the callback is the oldest and closes last anyway.
-@NATIVE_CALLS
-@pytest.mark.parametrize("schedulers", ["1", "4"])
-@pytest.mark.parametrize("order", ["hook cb", "cb hook", "hook hook cb"])
-def test_a_task_end_closes_a_callback_after_the_resources_that_call_it(tmp_path, peer, schedulers, order):
-    lines = []
-    for step in order.split():
-        if step == "cb":
-            lines.append("  a = Native.callback(Step, &destroy)\n  peer_store_fn(a)\n")
-        else:
-            lines.append("  _h%d = peer_hook_open().unwrap!\n" % len(lines))
-    text = HOOK_PROGRAM % literal(peer) + """def owner() -> Int
-%s  return 1
+# The code of a callback is made once for a function and a callback type and lives for the run, so a free function
+# that calls a callback that C stored (SQLite's xDestroy, a lua_newstate allocator, a g_hash_table destroy) never
+# reaches freed code, whatever the order of the closes: C gets zero and the function does not run. Before, the closure
+# was freed at the close, and the free of a Hook made earlier (or stored in a Hook of another task) crashed.
+# "hook cb" makes the Hook first and "cb hook" the callback first; each is closed in the order the case says.
+CLOSE_CASES = {
+    "task end hook cb": """def owner() -> Int
+  _h = peer_hook_open().unwrap!
+  a = Native.callback(Step, &destroy)
+  peer_store_fn(a)
+  return 1
 end
-
-def main() -> Void
-  Task.await(Task.spawn(&owner))
-  puts(peer_hook_result())
-  puts("main returns")
+""",
+    "task end cb hook": """def owner() -> Int
+  a = Native.callback(Step, &destroy)
+  peer_store_fn(a)
+  _h = peer_hook_open().unwrap!
+  return 1
 end
-""" % "".join(lines)
-    result = agentica("--schedulers", schedulers, program(tmp_path, text), timeout=scaled(60))
-    assert (result.code, result.stdout, result.stderr) == (0, "0\nmain returns\n", "")
-
-
-# A call that passes a callback with a Hook links them (peer_hook_store): the callback closed first, with Native.close
-# or at its task's end, keeps its closure until each Hook it was passed with is freed, whoever owns them. The Hook's
-# free calls it and gets zero. "hook hook cb" stores it in two Hooks and closes them one after the other; "handoff"
-# gives the Hook to a task that outlives the owner (the callback closes at the owner's end, the Hook at the worker's);
-# "gap" closes the Hook while another task's call has it pinned, then the callback: the Hook is closed but not freed
-# until that call returns. Before, the closure was freed at the callback's close (a crash).
-STORE_CASES = {
-    "hook cb": """def owner() -> Int
+""",
+    "task end two hooks": """def owner() -> Int
+  _h0 = peer_hook_open().unwrap!
+  _h1 = peer_hook_open().unwrap!
+  a = Native.callback(Step, &destroy)
+  peer_store_fn(a)
+  return 1
+end
+""",
+    "close cb then hook": """def owner() -> Int
   h = peer_hook_open().unwrap!
   a = Native.callback(Step, &destroy)
-  peer_hook_store(h, a)
+  peer_store_fn(a)
   Native.close(a)
   Native.close(h)
   return 1
 end
 """,
-    "cb hook": """def owner() -> Int
+    "close cb then hook, cb first made": """def owner() -> Int
   a = Native.callback(Step, &destroy)
+  peer_store_fn(a)
   h = peer_hook_open().unwrap!
-  peer_hook_store(h, a)
   Native.close(a)
   Native.close(h)
   return 1
 end
 """,
-    "hook hook cb": """def owner() -> Int
-  h0 = peer_hook_open().unwrap!
-  h1 = peer_hook_open().unwrap!
+    "constructor": """def owner() -> Int
   a = Native.callback(Step, &destroy)
-  peer_hook_store(h0, a)
-  peer_hook_store(h1, a)
+  o = peer_ctor_new(a).unwrap!
   Native.close(a)
-  Native.close(h1)
-  Native.close(h0)
+  Native.close(o)
   return 1
 end
 """,
+    # The Hook goes to a task that outlives the owner: the callback closes at the owner's end, the Hook at the worker's.
     "handoff": """def work(h: Hook) -> Int
   Task.sleep(50)
   return 1
@@ -817,7 +813,7 @@ end
 def setup() -> Task[Int]
   h = peer_hook_open().unwrap!
   a = Native.callback(Step, &destroy)
-  peer_hook_store(h, a)
+  peer_store_fn(a)
   return Task.spawn_owning(&work, h)
 end
 
@@ -825,20 +821,31 @@ def owner() -> Int
   return Task.await(Task.await(Task.spawn(&setup)))
 end
 """,
-    "gap": """def waits(x: Int) -> Int
-  peer_bump()
-  _turns = 0
-  while peer_flag() == 0
-    _turns = _turns + 1
-  end
+    "constructor handoff": """def work(o: Ctor) -> Int
+  Task.sleep(50)
+  return 1
+end
 
-  return x
+def setup() -> Task[Int]
+  a = Native.callback(Step, &destroy)
+  o = peer_ctor_new(a).unwrap!
+  return Task.spawn_owning(&work, o)
 end
 
 def owner() -> Int
+  return Task.await(Task.await(Task.spawn(&setup)))
+end
+""",
+}
+
+# Another task's call has the Hook pinned while C runs (it waits for a flag, two callbacks deep): the Hook is closed
+# but not freed until that call returns, and the callback it calls is closed first ("gap") or when the owner ends
+# ("gap at end"). Both need a second scheduler to run the pinning call.
+GAP_CASES = {
+    "gap": """def owner() -> Int
   h = peer_hook_open().unwrap!
   a = Native.callback(Step, &destroy)
-  peer_hook_store(h, a)
+  peer_store_fn(a)
   user = Task.spawn do peer_hook_after(h, Native.callback(Step, &waits)) end
   while peer_bumps() == 0
     Task.sleep(1)
@@ -851,29 +858,81 @@ def owner() -> Int
   return 1
 end
 """,
+    "gap at end": """def start() -> Task[Int]
+  h = peer_hook_open().unwrap!
+  a = Native.callback(Step, &destroy)
+  peer_store_fn(a)
+  user = Task.spawn do peer_hook_after(h, Native.callback(Step, &waits)) end
+  while peer_bumps() == 0
+    Task.sleep(1)
+  end
+
+  return user
+end
+
+def owner() -> Int
+  user = Task.await(Task.spawn(&start))
+  peer_set_flag()
+  return Task.await(user)
+end
+""",
 }
+WAITS = """def waits(x: Int) -> Int
+  peer_bump()
+  _turns = 0
+  while peer_flag() == 0
+    _turns = _turns + 1
+  end
 
+  return x
+end
 
-@NATIVE_CALLS
-@pytest.mark.parametrize("schedulers", ["1", "4"])
-@pytest.mark.parametrize("case", list(STORE_CASES))
-def test_a_closed_callback_waits_for_the_free_of_the_resources_it_was_passed_with(tmp_path, peer, schedulers, case):
-    text = HOOK_PROGRAM % literal(peer) + STORE_CASES[case] + """
+"""
+CLOSE_MAIN = """
 def main() -> Void
   Task.await(Task.spawn(&owner))
   puts(peer_hook_result())
   puts("main returns")
 end
 """
-    if case == "gap" and schedulers == "1":
-        pytest.skip("the gap needs a second scheduler to run the pinning call")
+
+
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+@pytest.mark.parametrize("case", list(CLOSE_CASES) + list(GAP_CASES))
+def test_a_free_that_calls_a_closed_callback_reaches_its_code_and_gets_zero(tmp_path, peer, schedulers, case):
+    if case in GAP_CASES and schedulers == "1":
+        pytest.skip("the pinning call needs a second scheduler")
+    body = CLOSE_CASES.get(case) or WAITS + GAP_CASES[case]
+    text = HOOK_PROGRAM % literal(peer) + body + CLOSE_MAIN
     result = agentica("--schedulers", schedulers, program(tmp_path, text), timeout=scaled(60))
     assert (result.code, result.stdout, result.stderr) == (0, "0\nmain returns\n", "")
 
 
-# A closure goes back once nothing can call it, so a loop of callbacks stays small: a Hook that is open and unrelated
-# (no call passed it with a callback) holds none of them, and a callback linked to Hooks that are freed goes back with
-# the last one. Before, the first kept every closure until the Hook was freed (a growth of about 6 KB per cycle).
+# C calls a callback after every handle of it is closed: it gets zero and the function does not run. A handle of the
+# same function and type made meanwhile opens the code again (the function takes no captures and runs in the task of the
+# call, so which handle it is does not matter). "other" is a function of its own, so its code is another one.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_the_code_of_a_callback_gives_zero_while_no_handle_of_it_is_open(tmp_path, peer, schedulers):
+    text = HOOK_PROGRAM % literal(peer) + """def main() -> Void
+  a = Native.callback(Step, &destroy)
+  twin = Native.callback(Step, &destroy)
+  peer_store_fn(a)
+  Native.close(a)
+  puts(peer_call_stored_then(Native.callback(Step, &other)))
+  Native.close(twin)
+  puts(peer_call_stored_then(Native.callback(Step, &other)))
+  puts(peer_call_stored_then(Native.callback(Step, &destroy)))
+end
+"""
+    result = agentica("--schedulers", schedulers, program(tmp_path, text), timeout=scaled(60))
+    assert (result.code, result.stdout, result.stderr) == (0, "destroy ran\n12\n2\ndestroy ran\ndestroy ran\n12\n", "")
+
+
+# A per-call callback passed with a long-lived Hook costs nothing that lasts: the code is one for the function, so
+# 30000 callbacks made, passed with the Hook and closed leave the memory where it was (before, each one kept a closure of
+# about 6 KB until the Hook was freed, and the closures of a closed one were freed one by one).
 MEMORY_LOOP = """def inc(x: Int) -> Int
   return x + 1
 end
@@ -890,66 +949,26 @@ def rss_kb() -> Int
 end
 
 def main() -> Void
-%s  before = rss_kb()
+  h = peer_hook_open().unwrap!
+  before = rss_kb()
   for _k in 1..30000
     cb = Native.callback(Step, &inc)
-%s    Native.close(cb)
-%s  end
-  puts((rss_kb() - before) < 40000)
+    _ = peer_hook_after(h, cb)
+    Native.close(cb)
+  end
+
+  puts((rss_kb() - before) < 20000)
+  Native.close(h)
 end
 """
 
 
 @NATIVE_CALLS
 @pytest.mark.skipif(not TARGET_OS.startswith("linux"), reason="reads /proc/self/status")
-@pytest.mark.parametrize("parts", [
-    ("  _keep = peer_hook_open().unwrap!\n", "", ""),
-    ("", "    h = peer_hook_open().unwrap!\n    peer_hook_store(h, cb)\n", "    Native.close(h)\n"),
-], ids=["unrelated hook", "linked hook"])
-def test_closed_callbacks_are_given_back_while_a_hook_is_open_or_after_its_free(tmp_path, peer, parts):
-    text = HOOK_PROGRAM % literal(peer) + MEMORY_LOOP % parts
+def test_per_call_callbacks_passed_with_a_long_lived_resource_keep_no_memory(tmp_path, peer):
+    text = HOOK_PROGRAM % literal(peer) + MEMORY_LOOP
     result = agentica(program(tmp_path, text), timeout=scaled(120))
     assert (result.code, result.stdout, result.stderr) == (0, "true\n", ""), result.stderr
-
-
-# A closed callback that waits for a long fast call on one scheduler costs the fast calls of the others nothing: they
-# read only their own count of waiting closures (c_waits), so they keep running while a third scheduler frees a
-# resource with rt->sync held (peer_slow_free). Before, each of them took rt->sync after C and stood still there.
-@NATIVE_CALLS
-def test_fast_calls_skip_the_vm_lock_while_a_closed_callback_waits_for_another_scheduler(tmp_path, peer):
-    text = SLOW_HANDLER.format(library=literal(peer), kind="def", ms=2000) + """def count() -> Int
-  while peer_freeing() == 0
-  end
-  n = 0
-  while peer_freeing() == 1
-    n += 1
-  end
-  return n
-end
-
-def main() -> Void
-  a = Native.callback(Step, &step)
-  peer_set_handler(some(a))
-  fired = Task.spawn(&fire)
-  while peer_fire_loaded() == 0
-  end
-  peer_set_handler(none)
-  Native.close(a)
-  counters: List[Task[Int]] = []
-  for _ in 1..3
-    counters = counters.push(Task.spawn(&count))
-  end
-  slow = peer_slow_open(500).unwrap!
-  Task.sleep(50)
-  Native.close(slow)
-  puts(counters.map do |counter| Task.await(counter) end)
-  puts(Task.await(fired))
-end
-"""
-    result = agentica("--schedulers", "4", program(tmp_path, text), timeout=scaled(60))
-    assert (result.code, result.stderr) == (0, ""), result.stderr
-    counts, fired = result.stdout.split("\n")[:2]
-    assert max(json.loads(counts)) >= 100 and fired == "0", result.stdout
 
 
 # A compute call that finds no pool thread to run it (peer_no_threads), in a task that holds a Native.Mutex and is

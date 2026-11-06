@@ -242,8 +242,9 @@ end
   `&` whose types are the Agentica ones (`C.Int32` is `Int`), else
   `CHECK-TYPE-MISMATCH`; an `Fn` value or an extern `def` is
   `CHECK-NATIVE-CALLBACK` and a block is refused (context goes through C's
-  `void *` user data). `cb` is a resource (`Native.close`; C must not call it
-  after). A callback is never a result or `out`; a parameter
+  `void *` user data). `cb` is a resource (`Native.close`; C that calls it
+  after gets zero, so a free function may still call a stored one). A
+  callback is never a result or `out`; a parameter
   `cmp: Optional[Name]` takes `none` for NULL. `fn` runs in the calling task
   while C waits: no wait inside it (`Task.sleep`, channels, a `compute def`, a
   print behind another task's print): `RUNTIME-NATIVE-CALLBACK`; a print into

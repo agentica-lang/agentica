@@ -274,29 +274,21 @@ close sets `closed` and then reads `calls`, both sequentially consistent), and
 the last unpin of a closed resource runs the `free`; a call whose resources it
 cannot pin (a closed one, one that comes from two or more, or a call that makes
 resources) holds them under `rt->sync` as a compute call does. A resource closed
-while held holds what it comes from in turn until its free. A closed callback is
-freed once every fast native call whose C called it while its code existed has
-returned: C may call it again until then (it gives zero), and libffi's frames of
-its run are on that call's stack. Its closure is given back later still, once
-every native call that was in C at the free has returned (`retire_closure`:
-each scheduler's `c_seq` is odd while its thread is in C, and so is each compute
-pool thread's seq while it runs a work), since C may have read the pointer of a
-handler it stored before the close and call it after: it then reaches the closed
-callback, which gives zero (on a pool thread it refuses, and the compute call
-fails with `RUNTIME-NATIVE-CALLBACK`). It also waits for the free of each
-resource that a native call passed with it (`link_callbacks`, `links` of the
-resource, under `rt->sync`, also when the resource is closed but held by a
-call), since C may have stored the callback there and the free may call it
-(SQLite's `xDestroy`); the free of the last such resource gives the closure
-back (`free_resource`). A task's end closes its callbacks after its other resources
-(`agc_close_owned`, `closes_last`), which covers a callback that C stored
-through a call that got no resource. Each scheduler counts the closures that
-wait for it (`c_waits`), so only a call that one waits for takes `rt->sync` at
-its end; a compute call's end on a scheduler frees those that waited for its
-thread. The end of the run frees what is still open (§14.4, step 3), but for
-the closures of callbacks: it only marks those closed, since a compute call
-still in C or a free function of the end may call one (it gives zero), and the
-exit follows. There are no GC finalizers.
+while held holds what it comes from in turn until its free. A callback handle
+(`Native.callback`) is a resource that no free function runs for: the code C
+calls (the libffi closure and its data) is one per pair of a function and a
+callback type, made at the first handle of the pair and never freed
+(`callback_data`, listed in `agc_runtime.ffi_callbacks`), so C may call it from
+any thread at any time, also after every handle is closed, with no use after
+free. Each handle counts in `open` of its pair (atomic) and a close drops it at
+once, held by a call or not; while `open` is 0 the code gives zero and runs
+nothing (a free function, a thread of C's own and the compute pool give zero or
+refuse as before: `callback_entry`). With another handle of the pair open it
+runs, which is harmless: the function takes no captures and runs in the task
+that made the native call. The memory is bounded by the number of distinct
+callback functions and types of the program. The end of the run frees what is
+still open (§14.4, step 3), but for the callbacks: they have nothing to free.
+There are no GC finalizers.
 
 A channel is the one handle made unowned. `Channel.new` makes no registry entry.
 The first `Task.spawn_owning` of it (any task may do it) registers an entry with

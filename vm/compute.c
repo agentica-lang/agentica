@@ -19,9 +19,6 @@ typedef struct {
   /* Under the pool's lock: the thread runs an item now. `join`: it was idle when the pool closed, so the close joins
      it. */
   bool busy, join;
-  /* Odd while the thread runs an item's work, moved on (sequentially consistent) before and after each one, and read
-     by any thread (agc_compute_seq); 0 until the thread starts. */
-  _Atomic uint64_t seq;
 } worker;
 
 /* malloc memory, no GC pointer. `lock` guards the queue, the counts, the workers' flags and `closed`; `queued` is the
@@ -75,10 +72,7 @@ static void serve(void *arg) {
     pool->queued--;
     w->busy = true;
     uv_mutex_unlock(&pool->lock);
-    /* The seq is even again before the item's end goes anywhere, so whoever takes that end sees the work over. */
-    atomic_fetch_add(&w->seq, 1);
     item->call(item->subject);
-    atomic_fetch_add(&w->seq, 1);
     uv_mutex_lock(&pool->lock);
     w->busy = false;
     if (item->kind == DIRECT && pool->ended) {
@@ -162,7 +156,6 @@ static bool enqueue(agc_compute *pool, agc_request *entry) {
      the lock, so a burst of items still finds threads to start. The pool grows to its size under load and no further. */
   if (pool->queued > pool->idle && pool->started < pool->size) {
     uint32_t k = pool->started;
-    /* Field by field: `seq` may be read by another thread at any time (agc_compute_seq), and is 0 here already. */
     pool->workers[k].pool = pool;
     pool->workers[k].busy = pool->workers[k].join = false;
     if (agc_thread_start(pool->threads, k, serve, &pool->workers[k])) {
@@ -238,10 +231,8 @@ void agc_compute_end_direct(agc_compute *pool) {
   pool->running += left;
 }
 
-uint32_t agc_compute_size(const agc_compute *pool) { return pool->size; }
 
 /* The workers are allocated with the pool and never move, so any thread may read one while the pool lives. */
-uint64_t agc_compute_seq(agc_compute *pool, uint32_t k) { return atomic_load(&pool->workers[k].seq); }
 
 bool agc_compute_direct_busy(agc_compute *pool) {
   return atomic_load_explicit(&pool->direct, memory_order_seq_cst) != 0;

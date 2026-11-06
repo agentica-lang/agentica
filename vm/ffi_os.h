@@ -115,10 +115,7 @@ typedef void (*agc_ffi_handler)(void *data, const agc_c_value *args, agc_c_value
 agc_ffi_closure *agc_ffi_closure_new(agc_c_type result, const agc_c_type *params, uint32_t count,
                                      agc_ffi_handler handler, void *data, char *error, size_t size);
 
-/* The address that C calls. */
+/* The address that C calls. A closure is never freed: C may call it at any time until the process ends. */
 void *agc_ffi_closure_code(const agc_ffi_closure *closure);
-
-/* Frees the closure and the memory of its code: C must not call it any more. Any thread may call it. */
-void agc_ffi_closure_free(agc_ffi_closure *closure);
 
 #endif

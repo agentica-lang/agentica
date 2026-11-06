@@ -312,25 +312,10 @@ void agc_hand_over(agc_resource *r, agc_task *to) {
   owned_add(to, r);
 }
 
-/* Closes what T owns, newest first, but the resources that close last (callbacks) after all the others: a callback made
-   after the resource C stored it in would close first, and its closure would be gone when that resource's free calls
-   it. A resource waiting its turn is off the list and chained by `owned_next`. */
 void agc_close_owned(agc_vm *vm, agc_task *t) {
-  agc_resource *last = NULL, **tail = &last;
   while (t->owned) {
     agc_resource *r = t->owned;
     owned_remove(r);
-    if (r->closes_last) {
-      *tail = r;
-      tail = &r->owned_next;
-      continue;
-    }
-    r->close(vm, r, t);
-  }
-  while (last) {
-    agc_resource *r = last;
-    last = r->owned_next;
-    r->owned_next = NULL;
     r->close(vm, r, t);
   }
 }
@@ -2075,19 +2060,6 @@ void agc_io_compute_each(agc_vm *vm, const agc_io_kind *kind, void (*fn)(void *d
   }
 }
 
-/* Once made, the pool stays until agc_io_close, and its size never changes. */
-uint32_t agc_io_compute_threads(agc_vm *vm) {
-  agc_compute *pool = vm->rt->loop ? vm->rt->loop->compute : NULL;
-  return pool ? agc_compute_size(pool) : 0;
-}
-
-bool agc_io_compute_seq(agc_vm *vm, uint32_t k, uint64_t *seq) {
-  agc_compute *pool = vm->rt->loop ? vm->rt->loop->compute : NULL;
-  if (!pool) return false;
-  *seq = agc_compute_seq(pool, k);
-  return true;
-}
-
 bool agc_io_wait_for(agc_vm *vm, bool (*ready)(agc_vm *vm, void *arg), void *arg, uint64_t by) {
   while (!ready(vm, arg)) {
     uint64_t now = agc_clock_ms();
@@ -2411,18 +2383,6 @@ void agc_io_compute_each(agc_vm *vm, const agc_io_kind *kind, void (*fn)(void *d
   (void)kind;
   (void)fn;
   (void)arg;
-}
-
-uint32_t agc_io_compute_threads(agc_vm *vm) {
-  (void)vm;
-  return 0;
-}
-
-bool agc_io_compute_seq(agc_vm *vm, uint32_t k, uint64_t *seq) {
-  (void)vm;
-  (void)k;
-  (void)seq;
-  return false;
 }
 
 bool agc_io_wait_for(agc_vm *vm, bool (*ready)(agc_vm *vm, void *arg), void *arg, uint64_t by) {
