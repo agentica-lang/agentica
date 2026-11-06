@@ -29,7 +29,8 @@ typedef struct {
 /* A read cut out of an agc_inbuf by the thread that owns the buffer, so that another thread builds its value later
    (vm/tcp.c: the I/O thread cuts, the done half builds). `data` is malloc'd; the statuses are a line or bytes, a line
    longer than the limit, a read error, and the end of input. PARTIAL is only made by agc_inbuf_drop_unterminated's
-   callers (the child channel): a final line that the end of input cut off, with no data kept. */
+   callers (the child channel): a final line that the end of input cut off, with no data kept. Their value is made by
+   the caller (duplex.c cut_value): agc_inbuf_cut_line_value must never see it. */
 typedef enum { AGC_CUT_DATA, AGC_CUT_OVER, AGC_CUT_FAILED, AGC_CUT_END, AGC_CUT_PARTIAL } agc_cut_status;
 
 typedef struct {

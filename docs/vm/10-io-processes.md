@@ -173,8 +173,9 @@ pair; Windows uses a pipe per direction (below).
   worker thread: a child stuck in a large `parent_send` waits until the parent
   reads or closes the channel, as a child does with a full stdout pipe.
 - **Lines.** The stream is text lines in both directions, as in the other
-  `Process` streams: `\n` ends a line, a trailing `\r` is removed, a last line
-  without `\n` is a line, and invalid UTF-8 is an error.
+  `Process` streams: `\n` ends a line, a trailing `\r` is removed, and invalid
+  UTF-8 is an error. Unlike the other streams, a last line without `\n` is no
+  line: it gives `error("process: line cut off")`.
 - **Environment.** Every spawn builds the child's environment from the VM's own:
   `AGENTICA_CHANNEL` is always removed, `UV_USE_IO_URING` is removed as before
   (§10.2.2), and only `spawn_channel` adds `AGENTICA_CHANNEL=3` (`3,4` on
