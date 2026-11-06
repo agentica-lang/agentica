@@ -3880,7 +3880,7 @@ end
 
 
 @NATIVE_CALLS
-@pytest.mark.skipif(WINDOWS, reason="holder.c and holdlog.c are POSIX libraries")
+@host_only(WINDOWS, "holder.c and holdlog.c are POSIX libraries: a DLL would need a DllMain for the constructor and destructor")
 def test_native_load_holds_a_library_that_another_holder_has_open(tmp_path, tmp_path_factory):
     holder = literal(shared_library(tmp_path_factory, "holder", *([] if MACOS else ["-ldl"])))
     library = literal(shared_library(tmp_path_factory, "holdlog"))
