@@ -51,6 +51,11 @@ export def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
         next
       end
 
+      if Lock.in_place?(locked)
+        lines = lines.push("in place #{label}")
+        next
+      end
+
       place = PackageFetch.Place(file: lock.file, entry: Reader.item("package", index))
       filled = try PackageFetch.fill(settings.workspace, cache, place, locked)
       case filled
@@ -61,6 +66,7 @@ export def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
   end
 
   hosted = try fill_artifacts(settings, lock)
+  lines = lines.concat(overridden_lines(lock.packages, {}))
   if lines.size == 0
     if hosted == 0
       return ok("nothing to install\n")
@@ -74,6 +80,27 @@ export def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
   end
 
   return ok("#{lines.join("\n")}\n")
+end
+
+## One line for each overridden package, by name: `overridden NAME@VERSION`, and when `asked` has the packages that
+## asked for another source of the name (`add` and `update` know them), `(another source asked by A, B)`.
+export def overridden_lines(packages: List[Lock.Locked], asked: Map[String, List[String]]) -> List[String]
+  lines: List[String] = []
+  ordered = packages.sort_by do |item| item.name end
+  for locked in ordered
+    if !locked.override
+      next
+    end
+
+    line = "overridden #{Lock.label(locked)}"
+    if asked.has_key?(locked.name)
+      line = "#{line} (another source asked by #{asked[locked.name].join(", ")})"
+    end
+
+    lines = lines.push(line)
+  end
+
+  return lines
 end
 
 # The downloaded native artifacts of this host in the lock, verified from the cache alone afterwards: the archive is
@@ -141,7 +168,7 @@ def check_cache(settings: Env.Settings, lock: Lock.Lock, scope: PackageImport.Sc
   cache = try PackageFetch.cache_for(settings.env, lock.file, lock.packages)
   folders: Map[String, String] = {}
   for locked in lock.packages
-    if locked.member
+    if Lock.in_place?(locked)
       folders = folders.put(locked.name, PackageImport.folder_of(scope, locked))
     else
       folders = folders.put(locked.name, PackageCache.folder(cache, locked.source, locked.commit))

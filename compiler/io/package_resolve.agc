@@ -7,6 +7,10 @@
 ## of the workspace of the project (packages/members.agc): it is locked as a member and never fetched, and its manifest
 ## is read from the member's folder. The files of every other settled package are in the cache when this returns,
 ## because the manifest of a package is read from there.
+##
+## A dependency of the project's own manifest may be a `path` (a folder read in place, as a member is: never fetched,
+## so it needs no cache) and may say `override = true`: its source then wins for that name everywhere, so a package
+## that asks for another source of the name is not a conflict. The ones that did are reported (`Resolved.asked`).
 
 import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
@@ -16,6 +20,7 @@ import Lock from "../packages/lock"
 import Manifest from "../packages/manifest"
 import Members from "../packages/members"
 import PackageCache from "../packages/package_cache"
+import Project from "../packages/project"
 import Reader from "../packages/toml_read"
 import Engine from "native_artifact"
 import NativeArtifact from "../packages/native_artifact"
@@ -32,11 +37,21 @@ export struct Refresh
   name: String
 end
 
-# A package some manifest asks for, and the file of that manifest (the project's, or the cached one of a package).
+# A package some manifest asks for, the file of that manifest (the project's, or the cached one of a package), the
+# package it belongs to ("" for the project's) and whether it says `override = true` (only the project's can).
 struct Wanted
   name: String
   source: GitSource.Source
   asked_in: String
+  by: String
+  override: Bool
+end
+
+## What `resolve` found: every package of the build, and for each overridden name the packages that asked for another
+## source of it (a name that no package contested is not in `asked`).
+export struct Resolved
+  packages: List[Lock.Locked]
+  asked: Map[String, List[String]]
 end
 
 # One downloaded row with where it was declared, for fetching HOST rows with a manifest file/key context.
@@ -55,35 +70,49 @@ export def resolve(
   members: Members.Members,
   old: Lock.Lock,
   refresh: Refresh,
-) -> Result[List[Lock.Locked]]
-  # Only a package that is fetched needs the cache, so a manifest of workspace members alone works with no HOME.
+) -> Result[Resolved]
+  # Only a package that is fetched needs the cache, so a manifest of workspace members and paths alone works with no
+  # HOME.
   cache = ""
+  dir = Paths.directory_of(manifest.file)
   queue = manifest.dependencies.map do |dependency|
-    Wanted(name: dependency.name, source: dependency.source, asked_in: manifest.file)
+    Wanted(
+      name: dependency.name,
+      source: dependency.source,
+      asked_in: manifest.file,
+      by: "",
+      override: dependency.override,
+    )
   end
 
   found: Map[String, Lock.Locked] = {}
+  asked: Map[String, List[String]] = {}
   at = 0
   # A name is settled once, so the queue grows only by the dependencies of a name seen for the first time.
   while at < queue.size
     wanted = queue[at]
     at += 1
     if found.has_key?(wanted.name)
-      try agree(found[wanted.name], wanted)
+      if found[wanted.name].override
+        asked = note_asked(asked, found[wanted.name], wanted)
+      else
+        try agree(found[wanted.name], wanted)
+      end
+
       next
     end
 
-    if cache == "" and !Members.member?(members, wanted.source)
+    if cache == "" and !in_place?(members, wanted.source)
       cache = try PackageFetch.cache_root(settings.env, old.file)
     end
 
     locked = try settle(settings, cache, members, old, refresh, wanted)
     found = found.put(wanted.name, locked)
-    more = try asked_by(settings, cache, members, locked)
+    more = try asked_by(settings, cache, dir, members, locked)
     queue = queue.concat(more)
   end
 
-  return ok(found.values)
+  return ok(Resolved(packages: found.values, asked: asked))
 end
 
 ## The native artifacts of `manifest` and every package of `packages`: one row per alias on every system the
@@ -97,13 +126,14 @@ export def resolve_artifacts(
   found: Map[String, Found_artifact] = {}
   found = collect_manifest(manifest, "", found)
   cache = ""
-  if packages.any? do |locked| !locked.member end
+  if packages.any? do |locked| !Lock.in_place?(locked) end
     cache = try PackageFetch.cache_root(settings.env, manifest.file)
   end
 
+  dir = Paths.directory_of(manifest.file)
   for locked in packages
-    folder = Members.folder_of(members, locked.source)
-    if !locked.member
+    folder = Project.folder_of(dir, members, locked)
+    if !Lock.in_place?(locked)
       folder = PackageCache.folder(cache, locked.source, locked.commit)
     end
 
@@ -138,6 +168,25 @@ export def resolve_artifacts(
   end
 
   return ok(found.values.map do |entry: Found_artifact| entry.artifact end)
+end
+
+# A package that is read in place and never fetched: a `path`, or a member of the workspace.
+def in_place?(members: Members.Members, source: GitSource.Source) -> Bool
+  return GitSource.local?(source) or Members.member?(members, source)
+end
+
+# Records that the package `wanted.by` asked for a source of an overridden name other than the one that won.
+def note_asked(asked: Map[String, List[String]], winner: Lock.Locked, wanted: Wanted) -> Map[String, List[String]]
+  if GitSource.same?(winner.source, wanted.source)
+    return asked
+  end
+
+  names: List[String] = []
+  if asked.has_key?(wanted.name)
+    names = asked[wanted.name]
+  end
+
+  return asked.put(wanted.name, names.push(wanted.by))
 end
 
 # Every downloaded row of `manifest` (lock key `package_name`), in `found` by (package, library, system).
@@ -183,12 +232,13 @@ def agree(locked: Lock.Locked, wanted: Wanted) -> Result[Void]
 
   asked = GitSource.describe(wanted.source)
   message = "#{wanted.name} is #{asked}, but another package has it at #{GitSource.describe(locked.source)}"
-  help = Failure.hint("one name stands for one source in a build: make the manifests agree")
+  help = Failure.hint(Project.CONFLICT_HELP)
   path = Reader.child("dependencies", wanted.name)
   return error(Failure.fail_key(wanted.asked_in, path, "PKG-SOURCE-CONFLICT", message, help))
 end
 
-# A member of the workspace is locked as one, with no fetch. Else keeps the locked entry when it is the same source and
+# A `path` and a member of the workspace are locked as such, with no fetch. Else keeps the locked entry when it is the
+# same source and
 # nobody asked to move it (an entry locked as a member, but not a member any more, is fetched), else fetches the pin.
 def settle(
   settings: Env.Settings,
@@ -198,8 +248,30 @@ def settle(
   refresh: Refresh,
   wanted: Wanted,
 ) -> Result[Lock.Locked]
+  if GitSource.local?(wanted.source)
+    return ok(
+      Lock.Locked(
+        name: wanted.name,
+        source: wanted.source,
+        commit: "",
+        hash: "",
+        member: false,
+        override: wanted.override,
+      ),
+    )
+  end
+
   if Members.member?(members, wanted.source)
-    return ok(Lock.Locked(name: wanted.name, source: wanted.source, commit: "", hash: "", member: true))
+    return ok(
+      Lock.Locked(
+        name: wanted.name,
+        source: wanted.source,
+        commit: "",
+        hash: "",
+        member: true,
+        override: wanted.override,
+      ),
+    )
   end
 
   for index in 0...old.packages.size
@@ -208,28 +280,30 @@ def settle(
     if same and !locked.member and !moves?(refresh, wanted)
       place = PackageFetch.Place(file: old.file, entry: Reader.item("package", index))
       try PackageFetch.fill(settings.workspace, cache, place, locked)
-      return ok(locked)
+      return ok(locked.with(override: wanted.override))
     end
   end
 
   place = PackageFetch.Place(file: wanted.asked_in, entry: Reader.child("dependencies", wanted.name))
-  return PackageFetch.resolve(settings.workspace, cache, place, wanted.name, wanted.source)
+  fetched = try PackageFetch.resolve(settings.workspace, cache, place, wanted.name, wanted.source)
+  return ok(fetched.with(override: wanted.override))
 end
 
 def moves?(refresh: Refresh, wanted: Wanted) -> Bool
   return wanted.source.tag != "" and (refresh.all or refresh.name == wanted.name)
 end
 
-# The dependencies in the manifest of a package that is in the cache (or in the folder of a member); none when it has
-# no manifest.
+# The dependencies in the manifest of a package that is in the cache (or in the folder of a member or a path); none
+# when it has no manifest. `dir` is the folder of the project's manifest. A package may not say `path` or `override`.
 def asked_by(
   settings: Env.Settings,
   cache: String,
+  dir: String,
   members: Members.Members,
   locked: Lock.Locked,
 ) -> Result[List[Wanted]]
-  folder = Members.folder_of(members, locked.source)
-  if !locked.member
+  folder = Project.folder_of(dir, members, locked)
+  if !Lock.in_place?(locked)
     folder = PackageCache.folder(cache, locked.source, locked.commit)
   end
 
@@ -239,9 +313,10 @@ def asked_by(
   end
 
   manifest = try Manifest.read(settings.workspace, file)
+  try Manifest.require_package(manifest)
   return ok(
     manifest.dependencies.map do |dependency|
-      Wanted(name: dependency.name, source: dependency.source, asked_in: file)
+      Wanted(name: dependency.name, source: dependency.source, asked_in: file, by: locked.name, override: false)
     end,
   )
 end

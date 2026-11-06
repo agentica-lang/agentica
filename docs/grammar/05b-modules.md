@@ -272,9 +272,10 @@ import Sqlite from "pkg/sqlite/db"
   `con` or `nul`), and exactly one of `tag` (1 to 128 letters, digits and the
   characters `.`, `_`, `+` and `-`; no `/`, and not starting with `.` or `-`) or
   `ref` (7 to 64 lowercase hex digits of a commit), and optionally `subdir`
-  (next item). Only git sources exist: a `path`, a branch, a version range or
-  another key is `PKG-MANIFEST-INVALID`, at the key path
-  (`dependencies.sqlite.path`).
+  (next item), or a `path` instead of all of those (the item after the next).
+  A branch, a version range or another key is `PKG-MANIFEST-INVALID`, at the
+  key path (`dependencies.sqlite.branch`). `override = true` is the only other
+  key (the item on `override`).
 - `subdir` says that the package is a folder of the repository, not the
   repository itself, so one repository can hold many packages. It is a relative
   path of plain folder names joined by `/` (`"postgres"`, `"libs/sql"`). Each
@@ -290,6 +291,37 @@ import Sqlite from "pkg/sqlite/db"
   that needs another folder of its own repository declares it like any other
   dependency (the same `git`, its own `subdir` and pin). Versions use prefixed
   tags (`postgres-0.1.0`).
+- `path = "../sqlite"` is a dependency on a folder of this machine, as in Mix:
+  relative to the folder of the manifest, or absolute; not empty, with no
+  control character, at most 1024 characters. It excludes `git`, `tag`, `ref`
+  and `subdir` (`PKG-MANIFEST-INVALID` at `dependencies.<name>`), and the
+  folder must hold an `agentica.toml` (else `PKG-MANIFEST-INVALID` at
+  `dependencies.<name>.path`, as for a workspace member). Like a workspace
+  member it is neither fetched, cached nor copied to `deps/`: the build reads
+  the files from the folder, with no hash check, so an edit there is seen by
+  the next build, and the `agentica.toml` of the folder declares its
+  dependencies as for any package. Its lock entry has `name` and `path` as
+  written, and no `git`, `commit` or `hash` (any of them is `PKG-LOCK-INVALID`).
+  Its answer is `in place NAME@path` from `install` and `added NAME@path` from
+  `add` and `update`. A package can be published, so a `path` is allowed only in
+  the manifest of the root project: in the manifest of a package (fetched, or a
+  workspace member) it is `PKG-ROOT-ONLY` at `dependencies.<name>.path`.
+- `override = true` in a dependency of the root manifest makes its source win
+  for that name everywhere in the tree, with any of the sources above (a `path`
+  too, to try a local copy of a transitive dependency). A package that asks for
+  another source of the name is not a `PKG-SOURCE-CONFLICT`, and the source it
+  asks for is never fetched or compared; the files of the name are the root's,
+  for the project and for every package. Only the root manifest may say it: in
+  the manifest of a package it is `PKG-ROOT-ONLY` at
+  `dependencies.<name>.override`, and `false` is the same as leaving it out. The
+  lock entry has `override = true` after its other keys; the root manifest and
+  the lock must agree (`PKG-LOCK-STALE` at the manifest), and the lock key must
+  be `true` (else `PKG-LOCK-INVALID` at `package[n].override`). `install`,
+  `add` and `update` end their answer with one line for each overridden
+  package, `overridden NAME@VERSION`, and `add` and `update` add
+  `(another source asked by A, B)` when packages asked for another source.
+  `PKG-SOURCE-CONFLICT` has a help that suggests `override = true` in the
+  root manifest.
 - A repository of packages can be a workspace, like an npm workspace. Its root
   `agentica.toml` has a `[workspace]` table with `repository`, the `git` URL of
   the repository (the rules of a dependency's `git`), and `members`, a
@@ -355,17 +387,19 @@ import Sqlite from "pkg/sqlite/db"
   each name (a name twice is `PKG-LOCK-INVALID`): `name`, `git`, `subdir` (only
   when the dependency has one), `tag` or `ref` (as in the manifest), `commit`
   (40 or 64 lowercase hex digits; it starts with the `ref`) and `hash`
-  (`sha256:` and 64 lowercase hex digits), or `workspace = true` for a member
-  of the workspace of the project. A bad lock is `PKG-LOCK-INVALID`, a
-  bad `subdir` too, at `package[n].subdir`; a lock with no `subdir` reads as
-  before. Every dependency of the manifest must be in the lock with the same
+  (`sha256:` and 64 lowercase hex digits), `workspace = true` for a member
+  of the workspace of the project, or `path` in place of the git source for a
+  `path` dependency, then `override = true` for an overridden name. A bad lock
+  is `PKG-LOCK-INVALID`, a bad `subdir` too, at `package[n].subdir`; a lock
+  with no `subdir` reads as before. Every dependency of the manifest must be in the lock with the same
   `git` (with or without a `.git` at the end), the same `subdir` (or none) and
   the same `tag` or `ref`, or the lock is `PKG-LOCK-STALE`. The same check runs
   on the manifest of every locked package that is in `deps/`: a name the lock
   lacks is `PKG-LOCK-STALE`, and a name with another source than the lock is
   `PKG-SOURCE-CONFLICT`; both are reported at `dependencies.<name>` of that
   manifest. One name with two different sources anywhere in the
-  tree (the project and a package, or two packages) is `PKG-SOURCE-CONFLICT`;
+  tree (the project and a package, or two packages) is `PKG-SOURCE-CONFLICT`,
+  unless the project overrides the name (the item on `override`);
   the source is the `git`, the `subdir` and the pin; there are no versions to
   compare and no ranges to solve. Both checks run once for every command that
   loads code, before any file is read, so a conflict is reported whether or not

@@ -1,9 +1,12 @@
 ## The manifest agentica.toml (docs/grammar/05b-modules.md): the project's own name, its direct dependencies, the
 ## native libraries of a package ([native]) and the [style] rules. A dependency is a local name and a git source:
 ## `sqlite = { git = "https://host/owner/repo", tag = "v1.2.0" }`, with exactly one of `tag` and `ref`, and an optional
-## `subdir`: the folder of the repository that is the package. A failure is PKG-MANIFEST-INVALID, with the file and the
-## key path (toml_read.agc). The `[workspace]` table is known here but read by members.agc, and only for the project's
-## manifest: the manifest of a package skips it. `[native]` is the other way round: only a package's is used.
+## `subdir`: the folder of the repository that is the package. The root project's manifest may also write
+## `name = { path = "../x" }` (a folder on this machine, read in place) and `override = true` (its source wins over any
+## other source of the name in the tree); `require_package` refuses both in the manifest of a package. A failure is
+## PKG-MANIFEST-INVALID, with the file and the key path (toml_read.agc). The `[workspace]` table is known here but read
+## by members.agc, and only for the project's manifest: the manifest of a package skips it. `[native]` is the other way
+## round: only a package's is used.
 
 import Workspace from "../modules/workspace"
 import Paths from "../modules/import_path"
@@ -16,7 +19,8 @@ import Reader from "toml_read"
 # The keys the manifest knows, and those of [style] and of a dependency.
 TOP_KEYS = ["name", "dependencies", "native", "style", "workspace"]
 STYLE_KEYS = ["max_line_width", "blank_line_after_end"]
-DEPENDENCY_KEYS = ["git", "tag", "ref", "subdir"]
+DEPENDENCY_KEYS = ["git", "tag", "ref", "subdir", "path", "override"]
+GIT_KEYS = ["git", "tag", "ref", "subdir"]
 PLACE_KEYS = ["file", "system", "url", "sha256", "member"]
 # The systems a native library can be named for. The key is the whole system: a macOS file is a universal binary.
 SYSTEMS = Set.new(["linux", "macos", "windows"])
@@ -27,10 +31,12 @@ MAX_SYSTEM_PATH = 1024
 # The most candidates a `system` list holds: each one is looked up on disk when the library is used.
 MAX_CANDIDATES = 16
 
-## A direct dependency: the local name (the segment after `pkg/` in an import) and where it comes from.
+## A direct dependency: the local name (the segment after `pkg/` in an import) and where it comes from. override is
+## true when the manifest says `override = true`.
 export struct Dependency
   name: String
   source: GitSource.Source
+  override: Bool
 end
 
 ## Where a native library is on one system: `file`, a path inside the package's native/ folder, `system`, one or more
@@ -98,6 +104,27 @@ export def parse(file: String, text: String) -> Result[Manifest]
   )
 end
 
+## Refuses what only the root project's manifest may say, in the manifest of a package (fetched, or a workspace member
+## read in place): a `path` dependency, which cannot be published, and `override = true`, which the packages of a tree
+## cannot impose on each other. A failure is PKG-ROOT-ONLY at `dependencies.<name>.path` or `.override`.
+export def require_package(manifest: Manifest) -> Result[Void]
+  reading = Reader.Reading(file: manifest.file, code: "PKG-ROOT-ONLY")
+  for dependency in manifest.dependencies
+    here = Reader.child("dependencies", dependency.name)
+    if GitSource.local?(dependency.source)
+      help = "a package is published, so it names git sources; the root project can name a path"
+      return error(Reader.fail_help(reading, Reader.child(here, "path"), "only the root project has a path", help))
+    end
+
+    if dependency.override
+      help = "write override = true in the agentica.toml of the root project"
+      return error(Reader.fail_help(reading, Reader.child(here, "override"), "only the root project overrides", help))
+    end
+  end
+
+  return ok()
+end
+
 ## The dependency with this name, or an error.
 export def find(manifest: Manifest, name: String) -> Result[Dependency]
   for dependency in manifest.dependencies
@@ -158,20 +185,56 @@ def dependencies_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> R
       return error(Reader.fail_help(reading, path, "not a package name", problem))
     end
 
-    source = try source_of(reading, entries[name], path)
-    found = found.push(Dependency(name: name, source: source))
+    dependency = try dependency_of(reading, name, entries[name], path)
+    found = found.push(dependency)
   end
 
   return ok(found)
 end
 
-# One dependency: `git`, exactly one of `tag` and `ref`, and an optional `subdir`; any other key, such as a path or a
-# branch, is refused.
-def source_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Result[GitSource.Source]
+# One dependency: a git source (`git`, exactly one of `tag` and `ref`, and an optional `subdir`) or a `path`, and an
+# optional `override`; any other key, such as a branch, is refused.
+def dependency_of(reading: Reader.Reading, name: String, value: Toml.Value, path: String) -> Result[Dependency]
   entries = try Reader.table(reading, value, path)
   try Reader.known_keys(reading, entries, DEPENDENCY_KEYS, path)
+  override = false
+  if entries.has_key?("override")
+    override = try Reader.boolean(reading, entries["override"], Reader.child(path, "override"))
+  end
+
+  if entries.has_key?("path")
+    source = try path_source_of(reading, entries, path)
+    return ok(Dependency(name: name, source: source, override: override))
+  end
+
+  source = try git_source_of(reading, entries, path)
+  return ok(Dependency(name: name, source: source, override: override))
+end
+
+# A dependency that is a folder on this machine: `path` and nothing of a git source.
+def path_source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: String) -> Result[GitSource.Source]
+  for key in GIT_KEYS
+    if entries.has_key?(key)
+      help = "write a path alone, or git with a tag or a ref"
+      return error(Reader.fail_help(reading, path, "a dependency has a git source or a path", help))
+    end
+  end
+
+  here = Reader.child(path, "path")
+  folder = try Reader.text(reading, entries["path"], here)
+  problem = GitSource.path_problem(folder)
+  if problem != ""
+    return error(Reader.fail_help(reading, here, "not a path", problem))
+  end
+
+  return ok(GitSource.Source(git: "", subdir: "", tag: "", ref: "", path: folder))
+end
+
+# A dependency that is a git source.
+def git_source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: String) -> Result[GitSource.Source]
   if !entries.has_key?("git")
-    return error(Reader.fail_help(reading, path, "missing key git", "only git sources exist: git = \"https://...\""))
+    help = "write git = \"https://...\" with a tag or a ref, or path = \"../folder\""
+    return error(Reader.fail_help(reading, path, "missing key git", help))
   end
 
   git = try Reader.text(reading, entries["git"], Reader.child(path, "git"))
@@ -209,7 +272,7 @@ def source_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Resul
     end
   end
 
-  return ok(GitSource.Source(git: git, subdir: subdir, tag: tag, ref: ref))
+  return ok(GitSource.Source(git: git, subdir: subdir, tag: tag, ref: ref, path: ""))
 end
 
 # [native.NAME]: for each library a table of systems, each with `file` or `system`.

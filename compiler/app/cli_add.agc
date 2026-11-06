@@ -20,6 +20,7 @@ import ManifestEdit from "../packages/manifest_edit"
 import PackageImport from "../packages/package_import"
 import Project from "../packages/project"
 import Reader from "../packages/toml_read"
+import CliInstall from "cli_install"
 import CliProject from "cli_project"
 import Reply from "cli_reply"
 import Texts from "cli_text"
@@ -111,7 +112,8 @@ def request_of(words: List[String]) -> Result[Request]
     return error("agentica: #{problem}\n")
   end
 
-  return ok(Request(name: words[0], source: GitSource.Source(git: words[1], subdir: subdir, tag: tag, ref: ref)))
+  source = GitSource.Source(git: words[1], subdir: subdir, tag: tag, ref: ref, path: "")
+  return ok(Request(name: words[0], source: source))
 end
 
 # The value of an option, "" when it was not given.
@@ -143,13 +145,14 @@ def add_in(settings: Env.Settings, found: Project.Found, request: Request) -> Re
   edited = ManifestEdit.add_dependency(text, request.name, request.source)
   manifest = try added_manifest(found.manifest, edited, request)
   refresh = PackageResolve.Refresh(all: false, name: "")
-  packages = try PackageResolve.resolve(settings, manifest, found.members, found.lock, refresh)
+  resolved = try PackageResolve.resolve(settings, manifest, found.members, found.lock, refresh)
+  packages = resolved.packages
   artifacts = try PackageResolve.resolve_artifacts(settings, manifest, found.members, packages)
   try unchanged(settings, file, text)
   try save(settings, found.lock.file, Lock.encode(packages, artifacts), "")
   try save(settings, file, edited, LOCK_WRITTEN)
   try refresh_deps(settings, found, packages)
-  return ok(report(found.lock, packages, request.name))
+  return ok(report(found.lock, resolved, request.name))
 end
 
 # The fetch takes a while, and the edit is of the text read before it: a manifest changed meanwhile is not overwritten.
@@ -203,7 +206,8 @@ def update_found(settings: Env.Settings, found: Project.Found, name: String) -> 
   end
 
   refresh = PackageResolve.Refresh(all: name == "", name: name)
-  packages = try PackageResolve.resolve(settings, manifest, found.members, found.lock, refresh)
+  resolved = try PackageResolve.resolve(settings, manifest, found.members, found.lock, refresh)
+  packages = resolved.packages
   artifacts = try PackageResolve.resolve_artifacts(settings, manifest, found.members, packages)
   # A project with no dependency, no download and no lock stays as it is: nothing asks for a lock.
   if packages.size > 0 or artifacts.size > 0 or settings.workspace.file_exists.call(found.lock.file)
@@ -211,7 +215,7 @@ def update_found(settings: Env.Settings, found: Project.Found, name: String) -> 
   end
 
   try refresh_deps(settings, found, packages)
-  return ok(report(found.lock, packages, ""))
+  return ok(report(found.lock, resolved, ""))
 end
 
 # Writes the packages of the new lock to deps/ and removes those the old lock had and the new one lacks. Only a project
@@ -241,10 +245,11 @@ def save(settings: Env.Settings, file: String, text: String, later: String) -> R
   return ok()
 end
 
-# What changed in the lock, one line each in the order of the new lock: added, updated (another commit or pin),
-# removed. Nothing changed is said once. `added` is the name `add` was asked for, which is always said to be added,
-# even when the lock had it already as a dependency of a package.
-def report(old: Lock.Lock, packages: List[Lock.Locked], added: String) -> String
+# What changed in the lock, one line each in the order of the new lock: added, updated (another commit, pin or
+# override), removed. Nothing changed is said once. `added` is the name `add` was asked for, which is always said to be
+# added, even when the lock had it already as a dependency of a package. Then one line for each overridden package.
+def report(old: Lock.Lock, resolved: PackageResolve.Resolved, added: String) -> String
+  packages = resolved.packages
   lines: List[String] = []
   ordered = packages.sort_by do |item| item.name end
   for locked in ordered
@@ -257,6 +262,8 @@ def report(old: Lock.Lock, packages: List[Lock.Locked], added: String) -> String
     if !before.ok? or locked.name == added
       lines = lines.push("added #{label}")
     elsif before.unwrap!.commit != locked.commit or before.unwrap!.member != locked.member
+      lines = lines.push("updated #{label}")
+    elsif before.unwrap!.override != locked.override
       lines = lines.push("updated #{label}")
     elsif !GitSource.same?(before.unwrap!.source, locked.source)
       lines = lines.push("updated #{label}")
@@ -271,8 +278,9 @@ def report(old: Lock.Lock, packages: List[Lock.Locked], added: String) -> String
   end
 
   if lines.size == 0
-    return "nothing to update\n"
+    lines = ["nothing to update"]
   end
 
+  lines = lines.concat(CliInstall.overridden_lines(packages, resolved.asked))
   return "#{lines.join("\n")}\n"
 end

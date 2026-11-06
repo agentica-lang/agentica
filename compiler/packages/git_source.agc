@@ -1,5 +1,6 @@
-## Where a package comes from (docs/grammar/05b-modules.md): a git URL and one pin, a tag or a commit (`ref`). The
-## manifest and the lock both write it, and the build compares the two. The rules of the three parts are here, so that
+## Where a package comes from (docs/grammar/05b-modules.md): a git URL and one pin, a tag or a commit (`ref`), or a
+## local folder (`path`, only in the manifest of the root project). The manifest and the lock both write it, and the
+## build compares the two. The rules of the three parts are here, so that
 ## a rule changes in one place. Every check returns "" when the text is fine, else a reason for the diagnostic.
 
 # The characters of each part. A name is `[a-z][a-z0-9_-]*`; a host is lowercase because host names ignore case; an
@@ -22,17 +23,19 @@ MAX_TAG = 128
 MIN_REF = 7
 MAX_REF = 64
 MAX_SUBDIR = 128
+MAX_PATH = 1024
 HTTPS = "https://"
 # The first characters of a commit in the stored name of a file of a package that is pinned by a ref.
 SHORT_COMMIT = 12
 
-## A git source: the URL as written, exactly one of tag and ref ("" for the other), and the folder of the repository
-## that is the package ("" for the repository itself).
+## A source: a git URL as written, exactly one of tag and ref ("" for the other), and the folder of the repository
+## that is the package ("" for the repository itself); or a local folder, `path` as written, with every other field "".
 export struct Source
   git: String
   subdir: String
   tag: String
   ref: String
+  path: String
 end
 
 ## Why text is not the local name of a package, or "". The name is the segment after `pkg/` in an import, so it is
@@ -139,6 +142,22 @@ export def subdir_problem(subdir: String) -> String
   return ""
 end
 
+## Why text is not the `path` of a dependency, or "". It is the folder of a package on this machine, relative to the
+## folder of the root manifest or absolute: not empty, with no control character, at most 1024 characters.
+export def path_problem(path: String) -> String
+  has_control = path.split("").any? do |char: String| String.code(char) < 32 or String.code(char) == 127 end
+  if path.length == 0 or path.length > MAX_PATH or has_control
+    return "a path is a folder of 1 to #{MAX_PATH} characters, with no control character"
+  end
+
+  return ""
+end
+
+## Whether the source is a local folder, read in place.
+export def local?(source: Source) -> Bool
+  return source.path != ""
+end
+
 ## Why text is not a ref, or "". A ref is a commit: 7 to 64 lowercase hex digits (a prefix of the commit, or all of
 ## it).
 export def ref_problem(ref: String) -> String
@@ -169,10 +188,11 @@ export def identity(url: String) -> String
   return url
 end
 
-## Whether two sources are the same: the same repository, the same folder of it and the same pin.
+## Whether two sources are the same: the same repository, the same folder of it and the same pin, or the same path as
+## written.
 export def same?(left: Source, right: Source) -> Bool
   same_place = identity(left.git) == identity(right.git) and left.subdir == right.subdir
-  return same_place and left.tag == right.tag and left.ref == right.ref
+  return same_place and left.tag == right.tag and left.ref == right.ref and left.path == right.path
 end
 
 ## The pin as written: the tag, or the ref.
@@ -202,6 +222,10 @@ end
 
 ## The source as the text of a message: the URL, the folder when there is one, and the pin.
 export def describe(source: Source) -> String
+  if source.path != ""
+    return "the path #{source.path}"
+  end
+
   place = source.git
   if source.subdir != ""
     place = "#{source.git} (folder #{source.subdir})"

@@ -10,6 +10,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `override = true` and `path = "../folder"` in a dependency of the root
+  `agentica.toml`: the root's source wins for that name everywhere in the tree
+  (no `PKG-SOURCE-CONFLICT`), and a `path` is read in place with no fetch.
+  Packages cannot use either (`PKG-ROOT-ONLY`).
+
 - `{pid}` in `AGENTICA_VM_TRACE_FILE` is replaced by the process id, so each
   process of a test run writes its own trace or profile file.
 - `agentica test --timing` adds the time of the run, of each file and of the 5

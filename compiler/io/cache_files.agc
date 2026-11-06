@@ -7,7 +7,7 @@
 import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
 import Workspace from "../modules/workspace"
-import Members from "../packages/members"
+import Lock from "../packages/lock"
 import Project from "../packages/project"
 import RandomName from "random_name"
 
@@ -255,17 +255,18 @@ def inputs_digest(settings: Env.Settings, project: Project.Project) -> Result[St
 end
 
 # The workspace of the project (packages/members.agc): the manifest that holds the table, and the manifest of each
-# member the lock names, which decide the packages a build reads from the members' folders. The .agc files of a member
-# are sources of the entry like any other.
+# member the lock names, which decide the packages a build reads from the members' folders; the manifest of each `path`
+# package likewise. The .agc files of a member or a path are sources of the entry like any other.
 def workspace_parts(workspace: Workspace.Workspace, found: Project.Found) -> List[String]
-  if found.members.root == ""
-    return []
+  parts: List[String] = []
+  if found.members.root != ""
+    manifest = Paths.join(found.members.root, MANIFEST_FILE)
+    parts = ["workspace #{found.members.root} #{file_digest(workspace, manifest)}"]
   end
 
-  parts = ["workspace #{found.members.root} #{file_digest(workspace, Paths.join(found.members.root, MANIFEST_FILE))}"]
   for locked in found.lock.packages
-    if locked.member
-      folder = Members.folder_of(found.members, locked.source)
+    if Lock.in_place?(locked)
+      folder = Project.folder_of(found.dir, found.members, locked)
       parts = parts.push("member #{folder} #{file_digest(workspace, Paths.join(folder, MANIFEST_FILE))}")
     end
   end

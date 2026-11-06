@@ -16,6 +16,11 @@ import Members from "members"
 ## The names of the two files, beside each other in the folder of the project.
 export MANIFEST_FILE = "agentica.toml"
 LOCK_FILE = "agentica.lock"
+## The help of PKG-SOURCE-CONFLICT, here and where `add` and `update` find the conflict (io/package_resolve.agc).
+export CONFLICT_HELP = (
+  "one name stands for one source in a build: make the manifests agree, " +
+  "or write override = true on the dependency in the agentica.toml of the root project"
+)
 
 ## A manifest, the folder that holds it, the lock that goes with it (empty when the manifest declares no dependency)
 ## and the workspace of the project (members.agc; none when the project is in no workspace).
@@ -41,6 +46,7 @@ export def find(workspace: Workspace.Workspace, root_dir: String) -> Result[Proj
   end
 
   manifest = try Manifest.read(workspace, Paths.join(dir, MANIFEST_FILE))
+  try check_paths(workspace, dir, manifest)
   members = try Members.find(workspace, dir)
   empty = Lock.Lock(file: Paths.join(dir, LOCK_FILE), packages: [], artifacts: [])
   if manifest.dependencies.size == 0 and !Manifest.has_downloaded(manifest)
@@ -84,6 +90,7 @@ export def find_to_write(workspace: Workspace.Workspace, root_dir: String) -> Re
   end
 
   manifest = try Manifest.read(workspace, Paths.join(dir, MANIFEST_FILE))
+  try check_paths(workspace, dir, manifest)
   members = try Members.find(workspace, dir)
   lock = Lock.Lock(file: Paths.join(dir, LOCK_FILE), packages: [], artifacts: [])
   if workspace.file_exists.call(lock.file)
@@ -110,17 +117,63 @@ export def library_dir(project: Project, root_dir: String) -> String
   end
 end
 
+## The folder of a package that is read in place: the folder of the workspace member, or the `path` of the root
+## manifest in `dir`, which is the folder of that manifest (a relative path starts there).
+export def folder_of(dir: String, members: Members.Members, locked: Lock.Locked) -> String
+  if locked.member
+    return Members.folder_of(members, locked.source)
+  end
+
+  return path_folder(dir, locked.source.path)
+end
+
+## The folder that a `path` names, for the root manifest in `dir`.
+export def path_folder(dir: String, path: String) -> String
+  if Paths.rooted?(path)
+    return path
+  end
+
+  return Paths.join(dir, path)
+end
+
+## Checks that each `path` dependency of the root manifest names a folder with an agentica.toml, as a workspace member
+## must have one. A failure is PKG-MANIFEST-INVALID at `dependencies.<name>.path`.
+export def check_paths(workspace: Workspace.Workspace, dir: String, manifest: Manifest.Manifest) -> Result[Void]
+  for dependency in manifest.dependencies
+    if !GitSource.local?(dependency.source)
+      next
+    end
+
+    folder = path_folder(dir, dependency.source.path)
+    if !workspace.file_exists.call(Paths.join(folder, MANIFEST_FILE))
+      message = "#{dependency.name} is the folder #{dependency.source.path}, which has no #{MANIFEST_FILE}"
+      help = Failure.hint("a path names the folder of a package, with its #{MANIFEST_FILE}")
+      key = "dependencies.#{dependency.name}.path"
+      return error(Failure.fail_key(manifest.file, key, "PKG-MANIFEST-INVALID", message, help))
+    end
+  end
+
+  return ok()
+end
+
 ## Checks the dependencies of a manifest against the lock: each must be in the lock, with the same source and pin. A
 ## missing one is PKG-LOCK-STALE. One with another source is PKG-LOCK-STALE for the manifest of the project (the lock
 ## is out of date) and PKG-SOURCE-CONFLICT for the manifest of a package, `of_package` (one name cannot stand for two
 ## sources in one build). A dependency that is a member of the workspace `members` must be locked as a member, and any
-## other as a fetched package: the same two codes. The failure names the manifest and `dependencies.<name>`.
+## other as a fetched package: the same two codes. The root manifest and the lock must agree on `override`. A package
+## manifest is checked by `Manifest.require_package` first (PKG-ROOT-ONLY), and a name that the lock marks as
+## overridden keeps the source of the root, so the source a package asks for is not compared. The failure names the
+## manifest and `dependencies.<name>`.
 export def check_dependencies(
   lock: Lock.Lock,
   manifest: Manifest.Manifest,
   members: Members.Members,
   of_package: Bool,
 ) -> Result[Void]
+  if of_package
+    try Manifest.require_package(manifest)
+  end
+
   for dependency in manifest.dependencies
     path = "dependencies.#{dependency.name}"
     found = Lock.find(lock, dependency.name)
@@ -129,6 +182,19 @@ export def check_dependencies(
     end
 
     locked = found.unwrap!
+    if of_package and locked.override
+      next
+    end
+
+    if !of_package and dependency.override != locked.override
+      message = "#{dependency.name} is overridden in #{MANIFEST_FILE}, but not in #{LOCK_FILE}"
+      if locked.override
+        message = "#{dependency.name} is not overridden in #{MANIFEST_FILE}, but #{LOCK_FILE} has it overridden"
+      end
+
+      return error(stale(manifest.file, path, message))
+    end
+
     if !GitSource.same?(dependency.source, locked.source)
       wanted = GitSource.describe(dependency.source)
       message = "#{dependency.name} is #{wanted}, but #{LOCK_FILE} has #{GitSource.describe(locked.source)}"
@@ -201,11 +267,5 @@ def stale(file: String, path: String, message: String) -> String
 end
 
 def conflict(file: String, path: String, message: String) -> String
-  return Failure.fail_key(
-    file,
-    path,
-    "PKG-SOURCE-CONFLICT",
-    message,
-    Failure.hint("one name stands for one source in a build: make the manifests agree"),
-  )
+  return Failure.fail_key(file, path, "PKG-SOURCE-CONFLICT", message, Failure.hint(CONFLICT_HELP))
 end

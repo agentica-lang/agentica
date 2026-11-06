@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from tests.agentica_test import WINDOWS, cli, host_only, run, unreadable, vm_environment
-from tests.package_support import COMMIT, Workspace, dependency, package_hash
+from tests.package_support import COMMIT, Workspace, dependency, inline_table, package_hash
 
 # No AGENTICA_PATH roots and no user data folder, so only what a case builds resolves; deps/ is each case's own.
 HERMETIC = {"AGENTICA_PATH": "", "XDG_DATA_HOME": "/nonexistent-agentica-xdg",
@@ -166,7 +166,10 @@ MANIFEST_CASES = [
     ("a dependency name that starts with a digit", deps('"1x" = { %s, tag = "v1" }' % SOURCE), "dependencies.1x"),
     ("a dependency that is a string", deps('sqlite = "1.0.0"'), "dependencies.sqlite"),
     ("a dependency with no git", deps('sqlite = { tag = "v1" }'), "dependencies.sqlite"),
-    ("a source that is a path", deps('sqlite = { path = "../x" }'), "dependencies.sqlite.path"),
+    ("a path to a folder with no agentica.toml", deps('sqlite = { path = "../x" }'), "dependencies.sqlite.path"),
+    ("a path with a git source", deps('sqlite = { path = "../x", %s, tag = "v1" }' % SOURCE), "dependencies.sqlite"),
+    ("an override that is not a boolean", deps('sqlite = { %s, tag = "v1", override = "yes" }' % SOURCE),
+     "dependencies.sqlite.override"),
     ("a branch", deps('sqlite = { %s, branch = "main" }' % SOURCE), "dependencies.sqlite.branch"),
     ("a version range", deps('sqlite = { %s, version = "^1" }' % SOURCE), "dependencies.sqlite.version"),
     ("neither a tag nor a ref", deps('sqlite = { %s }' % SOURCE), "dependencies.sqlite"),
@@ -283,6 +286,8 @@ LOCK_CASES = [
     ("a name that is not a package name", set_field("name", "Greeter"), "package[0].name"),
     ("a package locked twice", set_field("name", "tools"), "package[1].name"),
     ("a key the lock does not know", set_field("requires", []), "package[0].requires"),
+    ("an override that is false", set_field("override", False), "package[0].override"),
+    ("a package of a path with a commit", set_field("path", "../x"), "package[0].git"),
 ]
 
 
@@ -338,6 +343,22 @@ def test_one_name_with_two_sources_in_the_tree_is_a_conflict(ws):
     # The manifest of a package is checked like the project's: an unknown key is PKG-MANIFEST-INVALID in its file.
     manifest.write_text('colour = "red"\n', encoding="utf-8")
     assert_at_key(check(ws), "PKG-MANIFEST-INVALID", manifest, "colour")
+
+
+def test_an_override_of_the_project_ends_the_conflict_and_a_package_cannot_override_or_name_a_path(ws):
+    manifest = ws.deps / "greeter" / "agentica.toml"
+    manifest.write_text('[dependencies]\ntools = { git = "%s", tag = "v9.9.9" }\n' % TOOLS_GIT, encoding="utf-8")
+    # The project's tools, locked as overridden, wins over the tag that greeter asks for.
+    (ws.project / "agentica.toml").write_text(
+        '[dependencies]\ngreeter = %s\ntools = { git = "%s", ref = "bbbbbbb", override = true }\n' % (
+            inline_table(GREETER), TOOLS_GIT), encoding="utf-8")
+    ws.write_lock(set_field("override", True, "tools"))
+    assert check(ws) is None
+    # Only the project's manifest may say it: a package that does is refused where it says it.
+    for line, key in [('tools = { git = "%s", ref = "bbbbbbb", override = true }' % TOOLS_GIT, "override"),
+                      ('tools = { path = "../tools" }', "path")]:
+        manifest.write_text("[dependencies]\n%s\n" % line, encoding="utf-8")
+        assert_at_key(check(ws), "PKG-ROOT-ONLY", manifest, "dependencies.tools." + key)
 
 
 def test_the_project_and_a_package_may_declare_one_name_with_the_same_source(ws):
