@@ -57,19 +57,20 @@ end
 def nearest(origins: List[Origin], before: Int) -> Optional[Origin]
   best: Optional[Origin] = none
   for origin in origins
-    if origin.offset < before
-      case best
-        some(held) ->
-          if held.offset < origin.offset
-            best = some(origin)
-          end
-
-        none -> best = some(origin)
-      end
+    if origin.offset < before and closer?(best, origin)
+      best = some(origin)
     end
   end
 
   return best
+end
+
+# Whether `origin` is later than `best`, or there is no `best` yet.
+def closer?(best: Optional[Origin], origin: Origin) -> Bool
+  case best
+    some(held) -> return held.offset < origin.offset
+    none -> return true
+  end
 end
 
 # Whether `inner` starts with all of `outer` and has more loops.
@@ -85,10 +86,19 @@ def branches(file: String, node: Ast.IfStmt) -> List[Problems.Problem]
   end
 
   if on_one_value?(node)
-    found = found.push(Rules.at(file, Rules.IF_CHAIN, Ast.expr_span(first)))
+    found = found.push(Rules.at(file, if_chain(node), Ast.expr_span(first)))
   end
 
   return found
+end
+
+# Without an `else`, the `case` needs a `_` arm for every other value: say so.
+def if_chain(node: Ast.IfStmt) -> Rules.Rule
+  if node.else_body.some?
+    return Rules.IF_CHAIN
+  end
+
+  return Rules.IF_CHAIN.with(help: "use `case value` with one arm for each literal and add a `_` arm for the rest")
 end
 
 def negated?(condition: Ast.Expr) -> Bool

@@ -128,7 +128,7 @@ def children(item: Item) -> List[Item]
   looped = path_below(item)
   out: List[Item] = []
   for kid in Walk.children(item.node)
-    out = out.push(Item(node: kid, path: looped, chained: out.size == 0 and first_is_chained?(item)))
+    out = out.push(Item(node: kid, path: looped, chained: out.size == 0 and continues?(item, kid)))
   end
 
   return out
@@ -151,14 +151,45 @@ def path_below(item: Item) -> List[Int]
   end
 end
 
-# Whether the first child of the item is the first operand of a chain that the item continues: the value a pipe passes
-# on, the left side of a `+`, or the same for a `try` that wraps the chain.
-def first_is_chained?(item: Item) -> Bool
+# Whether `first`, the first child of the item, is the first operand of a chain that the item continues: the value a
+# pipe passes on, or the left side of a `+`. Only a child of the same chain counts: in `(a + b.to_s) |> f()` and in
+# `a |> f() + "x"` the child is a chain of the other kind, which nobody has judged yet. A `try` that wraps a pipe is
+# part of it when the `try` is; a `+` does not look through a `try` (Shape.plus_operands), so the `+` inside is its own
+# chain.
+def continues?(item: Item, first: Walk.Node) -> Bool
+  kind = chain_kind(item.node)
+  if kind == "" or kind != chain_kind(first)
+    return false
+  end
+
   case item.node
-    Walk.Node.Expr(Ast.Expr.Call(node)) -> return node.piped
-    Walk.Node.Expr(Ast.Expr.Binary(node)) -> return node.op == "plus"
     Walk.Node.Expr(Ast.Expr.Try(_)) -> return item.chained
-    _ -> return false
+    _ -> return true
+  end
+end
+
+# "pipe" for a piped call, "plus" for a `+`, "pipe" for a `try` around a piped call, and "" for anything else.
+def chain_kind(node: Walk.Node) -> String
+  case node
+    Walk.Node.Expr(Ast.Expr.Call(call)) ->
+      if call.piped
+        return "pipe"
+      end
+
+      return ""
+    Walk.Node.Expr(Ast.Expr.Binary(binary)) ->
+      if binary.op == "plus"
+        return "plus"
+      end
+
+      return ""
+    Walk.Node.Expr(Ast.Expr.Try(wrapper)) ->
+      if chain_kind(Walk.Node.Expr(wrapper.operand)) == "pipe"
+        return "pipe"
+      end
+
+      return ""
+    _ -> return ""
   end
 end
 

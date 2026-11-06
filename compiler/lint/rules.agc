@@ -62,11 +62,6 @@ export REPEATED_NAME = Rule(
   help: "import the type by name",
 )
 
-## Every rule, in the order the site page lists them.
-export ALL = [
-  STRING_APPEND, BOOL_COMPARE, SINGLE_PIPE, TO_S_CONCAT, IF_CHAIN, NEGATED_ELSE, PRIVATE_DOC, REPEATED_NAME,
-]
-
 ## One rule: its code, what it says and how to write it instead. The message and the help may be replaced (`with`) by a
 ## rule that names the code it found.
 export struct Rule

@@ -1,10 +1,12 @@
 """The release archives: tools/release.py packs, verifies and collects exactly the five expected packages.
 
 The real binaries and the extracted-package smoke run in release.yml (they need each system's tools). This test covers
-what runs anywhere: a package holds the expected files once each, and `collect` refuses a missing, an extra or a
-duplicated archive. The signature check of tools/release-check.sh runs against stand-ins of the macOS tools.
+what runs anywhere: a package holds the expected files once each, `collect` refuses a missing, an extra or a
+duplicated archive, and the programs that `smoke` runs still pass `check` (a language change that breaks one fails in
+its own PR, not at tag time). The signature check of tools/release-check.sh runs against stand-ins of the macOS tools.
 """
 import importlib.util
+import json
 import os
 import subprocess
 import tarfile
@@ -12,7 +14,7 @@ import zipfile
 
 import pytest
 
-from tests.agentica_test import ROOT
+from tests.agentica_test import ROOT, cli, run, vm_environment
 
 
 def load_release():
@@ -23,6 +25,13 @@ def load_release():
 
 
 release = load_release()
+
+# The programs of `release.py smoke` are the module constants that define a `main`. BAD is the one meant to fail.
+SMOKE_PROGRAMS = {
+    name: source
+    for name, source in vars(release).items()
+    if name.isupper() and isinstance(source, str) and "def main" in source and name != "BAD"
+}
 
 
 @pytest.fixture
@@ -170,3 +179,16 @@ def test_release_check_refuses_the_hardened_runtime(tmp_path, flags, passes):
     # Every case gets as far as the signature: the stand-ins pass the checks before it.
     assert "signature:" in proc.stdout, proc.stderr
     assert (proc.returncode == 0) == passes, proc.stderr
+
+
+def test_the_smoke_programs_are_all_found():
+    assert set(SMOKE_PROGRAMS) >= {"HELLO", "STD", "UNIT", "STEPS", "FILES", "PROCESS", "TCP", "JIT_LOOP", "HTTP_LOOP"}
+
+
+@pytest.mark.parametrize("name", sorted(SMOKE_PROGRAMS))
+def test_each_smoke_program_checks_clean(tmp_path, name):
+    """release.yml runs these against the packaged binary only at tag time (CHECK-UNUSED-IMPORT broke STD once)."""
+    (tmp_path / "smoke.agc").write_text(SMOKE_PROGRAMS[name], encoding="utf-8")
+    result = run(cli() + ["--json", "check", "smoke.agc"], env=vm_environment(), cwd=tmp_path)
+    assert (result.code, result.stderr) == (0, ""), result.stdout
+    assert json.loads(result.stdout) == {"ok": True}
