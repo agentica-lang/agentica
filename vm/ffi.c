@@ -611,7 +611,6 @@ static ffi_entry *module_entry(agc_vm *vm, const agc_string *text, size_t start,
   if (!e) agc_out_of_memory();
   e->module = fn;
   e->inputs = agc_native_arity(fn);
-  e->compute = compute;
   return e;
 }
 
@@ -1261,7 +1260,19 @@ bool agc_ffi_end(agc_vm *vm, int (*stop_signal)(void)) {
   return done && (!skipped || stop_signal());
 }
 
+char *agc_ffi_text_copy(const char *data, size_t len) { return text_copy(data, len); }
+
+/* The fuzz driver's allocation limit may jump out of RUN and leave the refusing site set on this thread; no_files
+   makes no callback that could read it, and agc_ffi_forget clears it after the input. */
+void agc_ffi_refusing_callbacks(void (*run)(void *arg), void *arg) {
+  native_site refusing = {.outer = current_site};
+  current_site = &refusing;
+  run(arg);
+  current_site = refusing.outer;
+}
+
 void agc_ffi_forget(agc_vm *vm) {
+  current_site = NULL;
   agc_runtime *rt = vm->rt;
   /* The fuzz driver's allocation limit may stop agc_vm_init before the runtime is set. */
   if (!rt) return;

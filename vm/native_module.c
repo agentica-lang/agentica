@@ -10,6 +10,7 @@
 #include "services.h"
 
 #include <stdarg.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +26,12 @@
 #define REPLACEMENT "\xEF\xBF\xBD"
 #define FAILED "RUNTIME-NATIVE-ERROR"
 #define NO_OPTIONAL "no Optional enum"
+/* The size of an an_module of API 1.0, the fields up to function_count: a module of a later minor version is larger,
+   and the fields after these are read only when its size covers them. */
+#define MODULE_SIZE_1_0 (offsetof(an_module, function_count) + sizeof(uint32_t))
+/* About what one Map entry takes, its leaf in the table and its cell in the key list (vm/map.c), so that a Map built
+   from Int keys is charged like a List of its pairs. */
+#define MAP_ENTRY_BYTES (3 * sizeof(agc_value) + sizeof(agc_keys))
 
 /* The kinds of type a signature names; KINDS has their names and how many type arguments each takes. */
 typedef enum { K_INT, K_FLOAT, K_BOOL, K_STRING, K_BYTES, K_VOID, K_LIST, K_MAP, K_OPTIONAL, K_RESULT } type_kind;
@@ -40,17 +47,26 @@ struct agc_native_fn {
   uint8_t params[AGC_FFI_MAX_PARAMS];
 };
 
-/* A module of the run (agc_runtime.native_modules), in malloc memory, under rt->sync: a carried one has INIT, an
-   opened one is found by NAME (the library of the signature). The first bind loads it; LOADED then holds the module,
-   or ERROR the message of every later bind, so a module that failed is not loaded again. */
+/* A module of the run (agc_runtime.native_modules), in malloc memory, under rt->sync, found by NAME (the library of
+   the signature). A carried one has INIT from the start; an opened one gets it from its library at the first bind.
+   That bind loads it: MODULE then holds the module, or ERROR the message of every later bind, so a module that failed
+   is not loaded again. */
 typedef struct agc_native_library {
   struct agc_native_library *next;
   char *name;
   agc_native_init init;
   const an_module *module;
   char *error;
-  bool tried;
+  bool tried, carried;
 } native_library;
+
+/* One call of a module's function, which agc_ffi_refusing_callbacks runs. */
+typedef struct {
+  const agc_native_fn *fn;
+  an_env *env;
+  const an_term *argv;
+  an_term result;
+} module_call;
 
 /* The env of one call: the table first, as an_api_of reads it. CODE and MESSAGE are the call's first failure. */
 struct an_env {
@@ -100,14 +116,6 @@ static an_term term_of(agc_value v) {
   an_term t;
   memcpy(&t, &v, sizeof t);
   return t;
-}
-
-static char *text_copy(const char *data, size_t len) {
-  char *s = malloc(len + 1);
-  if (!s) agc_out_of_memory();
-  memcpy(s, data, len);
-  s[len] = '\0';
-  return s;
 }
 
 static agc_string *decoded(const char *text, size_t len) {
@@ -189,21 +197,24 @@ static bool parse_canon(const char **at, const char *end, agc_native_fn *fn) {
   return result >= 0;
 }
 
-static native_library *library_new(agc_runtime *rt, const char *name, size_t len, agc_native_init init) {
+static native_library *library_new(agc_vm *vm, const char *name, size_t len, agc_native_init init) {
+  agc_runtime *rt = vm->rt;
+  agc_sync_assert(vm);
   native_library *lib = calloc(1, sizeof *lib);
   if (!lib) agc_out_of_memory();
-  lib->name = text_copy(name, len);
+  lib->name = agc_ffi_text_copy(name, len);
   lib->init = init;
+  lib->carried = init != NULL;
   lib->next = rt->native_modules;
   rt->native_modules = lib;
   return lib;
 }
 
 /* What is wrong with the module M that an init gave, as a message in ERROR (SIZE bytes), or NULL. Only the fields of
-   API 1.0 are read, which every module of major version 1 has (SIZE says how many it has). */
+   API 1.0 are read, which every module of major version 1 has (MODULE_SIZE_1_0). */
 static const char *module_problem(const an_module *m, char *error, size_t size) {
   if (!m) return "agentica_native_init returned no module";
-  if (m->major != AN_API_MAJOR || m->minor > AN_API_MINOR || m->size < sizeof(an_module)) {
+  if (m->major != AN_API_MAJOR || m->minor > AN_API_MINOR || m->size < MODULE_SIZE_1_0) {
     snprintf(error, size, "the module was built for native API %u.%u, and this VM has %u.%u", (unsigned)m->major,
              (unsigned)m->minor, (unsigned)AN_API_MAJOR, (unsigned)AN_API_MINOR);
     return error;
@@ -221,17 +232,23 @@ static const char *module_problem(const an_module *m, char *error, size_t size) 
 }
 
 /* Loads LIB: its init (the export of its library, or the one it was registered with), the checks of the module and
-   its load function. NULL, or the message of the failure (malloc'd). */
-static char *library_load(native_library *lib) {
+   its load function. NULL, or the message of the failure (malloc'd). One module named two ways ("libx.so" and its
+   path) has one init, so the module that another entry of FIRST, the list of the run, loaded is taken as it is: init
+   and load run once. */
+static char *library_load(native_library *lib, const native_library *first) {
   char error[512];
-  agc_native_init init = lib->init;
-  if (!init) {
+  if (!lib->init) {
     void *entry = agc_ffi_symbol(lib->name, "agentica_native_init", error, sizeof error);
-    if (!entry) return text_copy(error, strlen(error));
+    if (!entry) return agc_ffi_text_copy(error, strlen(error));
     /* POSIX and Windows give a function's address as an object pointer. */
-    memcpy(&init, &entry, sizeof init);
+    memcpy(&lib->init, &entry, sizeof lib->init);
   }
-  const an_module *m = init(&API);
+  for (const native_library *other = first; other; other = other->next) {
+    if (other == lib || !other->tried || other->init != lib->init) continue;
+    lib->module = other->module;
+    return other->error ? agc_ffi_text_copy(other->error, strlen(other->error)) : NULL;
+  }
+  const an_module *m = lib->init(&API);
   const char *problem = module_problem(m, error, sizeof error);
   if (!problem && m->load) {
     const char *refused = m->load();
@@ -240,7 +257,7 @@ static char *library_load(native_library *lib) {
       problem = error;
     }
   }
-  if (problem) return text_copy(problem, strlen(problem));
+  if (problem) return agc_ffi_text_copy(problem, strlen(problem));
   lib->module = m;
   return NULL;
 }
@@ -248,16 +265,17 @@ static char *library_load(native_library *lib) {
 /* The module of the library NAME (LEN bytes), loaded at its first bind. Under rt->sync (vm/ffi.c, find_entry). */
 static const native_library *module_of(agc_vm *vm, const char *name, size_t len, uint32_t span) {
   agc_runtime *rt = vm->rt;
+  agc_sync_assert(vm);
   native_library *lib = rt->native_modules;
   while (lib && (strlen(lib->name) != len || memcmp(lib->name, name, len) != 0)) lib = lib->next;
   if (!lib) {
     /* The fuzz driver opens no library: only the modules that the binary carries run there. */
     if (rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
-    lib = library_new(rt, name, len, NULL);
+    lib = library_new(vm, name, len, NULL);
   }
   if (!lib->tried) {
     lib->tried = true;
-    lib->error = library_load(lib);
+    lib->error = library_load(lib, rt->native_modules);
   }
   if (lib->error) fail_with(vm, "RUNTIME-NATIVE-LOAD", span, "native module %s: %s", lib->name, lib->error);
   return lib;
@@ -271,8 +289,8 @@ agc_native_fn *agc_native_bind(agc_vm *vm, const char *text, size_t len, bool di
   agc_native_fn parsed = {0};
   if (!parse_canon(&at, end, &parsed)) bad_signature(vm, span);
   size_t canon_len = (size_t)(at - text);
-  const char *symbol = at + 1;
   if (!skip(&at, end, " ")) bad_signature(vm, span);
+  const char *symbol = at;
   while (at < end && *at != ' ') at++;
   size_t symbol_len = (size_t)(at - symbol);
   if (symbol_len == 0 || !skip(&at, end, " ")) bad_signature(vm, span);
@@ -301,7 +319,7 @@ agc_native_fn *agc_native_bind(agc_vm *vm, const char *text, size_t len, bool di
   if (!fn) agc_out_of_memory();
   *fn = parsed;
   fn->row = row;
-  fn->carried = lib->init != NULL;
+  fn->carried = lib->carried;
   return fn;
 }
 
@@ -309,8 +327,10 @@ uint32_t agc_native_arity(const agc_native_fn *fn) { return fn->arity; }
 
 void agc_native_unbind(agc_native_fn *fn) { free(fn); }
 
-void agc_native_register(agc_runtime *rt, const char *library, agc_native_init init) {
-  (void)library_new(rt, library, strlen(library), init);
+void agc_native_register(agc_vm *vm, const char *library, agc_native_init init) {
+  agc_sync_take(vm);
+  (void)library_new(vm, library, strlen(library), init);
+  agc_sync_drop(vm);
 }
 
 void agc_native_forget(agc_runtime *rt) {
@@ -336,6 +356,12 @@ static bool outer_matches(agc_vm *vm, uint8_t kind, agc_value v) {
   return kind != K_OPTIONAL || optional_variant(vm->rt->program, agc_as_enum(vm, v)->variant, &some);
 }
 
+/* The module's function, with the callbacks of extern blocks refused: a short call never calls back into Agentica. */
+static void run_module(void *arg) {
+  module_call *call = arg;
+  call->result = call->fn->row->fn(call->env, (int)call->fn->arity, call->argv);
+}
+
 /* One short call of FN with ARGS (its arity of values, which vm/ffi.c checked), on this scheduler without rt->sync:
    the module must be thread-safe (agentica_native.h). Each argument has the outer type of its parameter before C
    sees it, and the result after; a failure that the env holds fails the call once C has returned, so no longjmp
@@ -355,7 +381,9 @@ agc_value agc_native_call(agc_vm *vm, const agc_native_fn *fn, const agc_list *a
   }
   agc_charge(vm, CALL_COST);
   an_env env = {&API, vm, fn, NULL, NULL};
-  agc_value v = value_of(fn->row->fn(&env, (int)fn->arity, argv));
+  module_call made = {fn, &env, argv, {{0, 0}}};
+  agc_ffi_refusing_callbacks(run_module, &made);
+  agc_value v = value_of(made.result);
   if (env.code) agc_fail_text(vm, env.code, env.message, span);
   if (!outer_matches(vm, fn->result, v))
     fail_with(vm, FAILED, span, "%s returned a value that is not of its result type", fn->row->name);
@@ -482,13 +510,13 @@ static void api_list_begin(an_env *env, an_list_builder *b, size_t hint) {
 }
 
 static void api_list_push(an_env *env, an_list_builder *b, an_term item) {
+  (void)env;
   list_build build;
   memcpy(&build, b, sizeof build);
   if (build.n == build.cap) {
     size_t cap = build.cap ? agc_size_mul(build.cap, 2) : 8;
     agc_value *items = agc_alloc(agc_size_mul(cap, sizeof(agc_value)));
     if (build.n) memcpy(items, build.items, build.n * sizeof(agc_value));
-    agc_charge_bytes(env->vm, build.n * sizeof(agc_value));
     build.items = items;
     build.cap = cap;
   }
@@ -531,6 +559,7 @@ static bool map_key(agc_value key) {
 }
 
 static an_term api_map_from(an_env *env, const an_term *keys, const an_term *values, size_t n) {
+  agc_charge_bytes(env->vm, agc_size_mul(n, MAP_ENTRY_BYTES));
   agc_map *m = agc_new_map();
   for (size_t k = 0; k < n; k++) {
     agc_value key = value_of(keys[k]);
@@ -544,6 +573,7 @@ static an_term api_map_put(an_env *env, an_term map, an_term key, an_term value)
   agc_value m = value_of(map), k = value_of(key);
   if (!agc_is(m, AGC_T_MAP)) return env_refuse(env, "an_map_put got a value that is not a Map");
   if (!map_key(k)) return env_refuse(env, "a Map key is an Int, a String or a Bytes");
+  agc_charge_bytes(env->vm, MAP_ENTRY_BYTES);
   return term_of(agc_map_value(agc_map_put(env->vm, agc_as_map(env->vm, m), k, value_of(value))));
 }
 
@@ -619,11 +649,13 @@ static bool api_get_result(an_env *env, an_term t, bool *ok, an_term *value) {
   return true;
 }
 
-static an_term api_raise(an_env *env, const char *message) { return env_refuse(env, message); }
+static an_term api_raise(an_env *env, const char *message) {
+  return env_refuse(env, message ? message : "an_raise got no message");
+}
 
 static an_term api_badarg(an_env *env, int index) {
   char text[64];
-  int n = snprintf(text, sizeof text, "argument %d is not valid", index + 1);
+  int n = snprintf(text, sizeof text, "argument %lld is not valid", (long long)index + 1);
   return env_fail(env, FAILED, text, (size_t)n);
 }
 

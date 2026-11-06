@@ -73,7 +73,8 @@ static an_term row(an_env *env, int argc, const an_term *argv) {
   (void)argc;
   if (!an_get_int(env, argv[0], &n)) return an_badarg(env, 0);
   an_term keys[3] = {an_string(env, "id", 2), an_string(env, "double", 6), an_string(env, "square", 6)};
-  an_term values[3] = {an_int(env, n), an_int(env, 2 * n), an_int(env, n * n)};
+  uint64_t u = (uint64_t)n;
+  an_term values[3] = {an_int(env, n), an_int(env, (int64_t)(2 * u)), an_int(env, (int64_t)(u * u))};
   return an_map_from(env, keys, values, 3);
 }
 
@@ -161,6 +162,39 @@ static an_term truthy(an_env *env, int argc, const an_term *argv) {
   return an_float(env, b ? x * 2 : -x);
 }
 
+/* The first items of a List[Int], at most 8, copied through an array. */
+static an_term head(an_env *env, int argc, const an_term *argv) {
+  an_list_cursor c;
+  an_term items[8];
+  size_t n = 0;
+  (void)argc;
+  if (!an_list_cursor_begin(env, argv[0], &c, NULL)) return an_badarg(env, 0);
+  while (n < 8 && an_list_next(env, &c, &items[n])) n++;
+  return an_list(env, items, n);
+}
+
+/* The bytes copied, and empty bytes from an_bytes_fill. */
+static an_term copy(an_env *env, int argc, const an_term *argv) {
+  const uint8_t *data;
+  size_t len;
+  (void)argc;
+  if (!an_get_bytes(env, argv[0], &data, &len)) return an_badarg(env, 0);
+  return an_bytes(env, data, len);
+}
+
+static an_term empty(an_env *env, int argc, const an_term *argv) {
+  uint8_t *data;
+  (void)argc;
+  (void)argv;
+  return an_bytes_fill(env, 0, &data);
+}
+
+static an_term nothing(an_env *env, int argc, const an_term *argv) {
+  (void)argc;
+  (void)argv;
+  return an_void(env);
+}
+
 /* Module bugs that the VM reports: text that is not UTF-8, a Map key that is no key, a result of the wrong type. */
 static an_term bad_text(an_env *env, int argc, const an_term *argv) {
   (void)argc;
@@ -195,6 +229,10 @@ static const an_function functions[] = {
   {"parse", "(String) -> Result[Int]", parse, AN_SHORT},
   {"unwrap", "(Result[Int]) -> Int", unwrap, AN_SHORT},
   {"truthy?", "(Bool, Float) -> Float", truthy, AN_SHORT},
+  {"head", "(List[Int]) -> List[Int]", head, AN_SHORT},
+  {"copy", "(Bytes) -> Bytes", copy, AN_SHORT},
+  {"empty", "() -> Bytes", empty, AN_SHORT},
+  {"nothing", "() -> Void", nothing, AN_SHORT},
   {"bad_text", "() -> String", bad_text, AN_SHORT},
   {"bad_key", "() -> Map[String, Int]", bad_key, AN_SHORT},
   {"lie", "() -> Int", lie, AN_SHORT},

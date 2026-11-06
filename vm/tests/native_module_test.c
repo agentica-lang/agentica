@@ -1,6 +1,6 @@
 /* Native modules (vm/native_module.c) through Native.call: each kind of value both ways, the failures the env holds,
    binding (missing function, other signature or mode, bad bytecode), version and load refusals, a carried module under
-   no_files, the same module opened as a shared library, and short calls on several threads (make vm-tsan). */
+   no_files, the same module opened as a shared library, and short calls and a first load on several threads. */
 #include "../core.h"
 #include "../services.h"
 #include "io_harness.h"
@@ -9,6 +9,7 @@
 
 #include <assert.h>
 #include <setjmp.h>
+#include <stdatomic.h>
 #include <stdlib.h>
 #include <string.h>
 #ifndef _WIN32
@@ -39,6 +40,7 @@ static agc_vm vm;
 static agc_variant_def variants[2];
 static agc_program program;
 static int inits, loads;
+static atomic_int racy_inits, racy_loads, ready;
 
 static agc_value text(const char *s) { return agc_string_value(agc_make_string(s, strlen(s), strlen(s))); }
 
@@ -121,6 +123,15 @@ static void test_values(void) {
   fails("module (Result[Int]) -> Int unwrap demo", &refused, 1, "RUNTIME-NATIVE-ERROR");
   agc_value flags[2] = {agc_bool(true), agc_float(1.25)};
   assert(agc_as_float(&vm, call("module (Bool, Float) -> Float truthy? demo", flags, 2)) == 2.5);
+  flags[0] = agc_bool(false);
+  assert(agc_as_float(&vm, call("module (Bool, Float) -> Float truthy? demo", flags, 2)) == -1.25);
+  const agc_list *head = agc_as_list(&vm, call("module (List[Int]) -> List[Int] head demo", &list, 1));
+  assert(agc_list_len(head) == 4 && agc_as_int(&vm, agc_list_get(head, 3)) == -10);
+  back = agc_bytes_data(&vm, call("module (Bytes) -> Bytes copy demo", &bytes, 1), &len);
+  assert(len == 3 && back[0] == 1 && back[2] == 3);
+  (void)agc_bytes_data(&vm, call("module () -> Bytes empty demo", NULL, 0), &len);
+  assert(len == 0);
+  assert(agc_is(call("module () -> Void nothing demo", NULL, 0), AGC_T_VOID));
 }
 
 /* What the env holds fails the call after C returns; what the bytecode gets wrong fails before C runs. */
@@ -231,7 +242,7 @@ static void test_versions(void) {
   agc_value two[2] = {agc_int(1), agc_int(2)};
   char signature[96];
   for (size_t k = 0; k < sizeof refused / sizeof refused[0]; k++) {
-    agc_native_register(vm.rt, refused[k].name, refused[k].init);
+    agc_native_register(&vm, refused[k].name, refused[k].init);
     snprintf(signature, sizeof signature, "module (Int, Int) -> Int add %s", refused[k].name);
     fails(signature, two, 2, "RUNTIME-NATIVE-LOAD");
   }
@@ -239,10 +250,14 @@ static void test_versions(void) {
   fails("module (Int, Int) -> Int add v_none", two, 2, "RUNTIME-NATIVE-LOAD");
   fails("module (Int, Int) -> Int crunch v_refuses", two, 2, "RUNTIME-NATIVE-LOAD");
   assert(inits == 1 && loads == 1);
-  agc_native_register(vm.rt, "v_counts", init_counts);
+  agc_native_register(&vm, "v_counts", init_counts);
   assert(agc_as_int(&vm, call("module (Int, Int) -> Int add v_counts", two, 2)) == 3);
   agc_value seven = agc_int(7);
   (void)call("module (Int) -> List[Int] range v_counts", &seven, 1);
+  assert(inits == 2 && loads == 2);
+  /* The same init under another name is the same module: it is not loaded again. */
+  agc_native_register(&vm, "v_counts_again", init_counts);
+  assert(agc_as_int(&vm, call("module (Int, Int) -> Int add v_counts_again", two, 2)) == 3);
   assert(inits == 2 && loads == 2);
 }
 
@@ -293,9 +308,28 @@ static void test_shared_library(const char *argv0) {
 #endif
 }
 
+static const char *racy_load(void) {
+  atomic_fetch_add(&racy_loads, 1);
+  return NULL;
+}
+
+static const an_module racy = {1, 0, sizeof(an_module), "racy", racy_load, functions, 1};
+
+static const an_module *init_racy(const an_api *api) {
+  (void)api;
+  atomic_fetch_add(&racy_inits, 1);
+  return &racy;
+}
+
+/* Each thread starts with the first call of the racy module, all at once, then calls the demo. */
 static void work(void *arg) {
   worker *w = arg;
   assert(agc_gc_thread_enter());
+  atomic_fetch_add(&ready, 1);
+  while (atomic_load(&ready) < THREADS) {
+  }
+  agc_value one[2] = {agc_int(1), agc_int(1)};
+  assert(agc_as_int(&w->vm, call_on(&w->vm, "module (Int, Int) -> Int add racy", one, 2)) == 2);
   for (int k = 0; k < ROUNDS; k++) {
     agc_value two[2] = {agc_int(k), agc_int(1)};
     w->total += agc_as_int(&w->vm, call_on(&w->vm, "module (Int, Int) -> Int add demo", two, 2));
@@ -307,7 +341,7 @@ static void work(void *arg) {
 }
 
 /* Short calls run on several schedulers at once without rt->sync: each thread is a scheduler with its own task and
-   memo, and they share the run's cache and modules. */
+   memo, and they share the run's cache and modules. A module that they all bind at once loads once. */
 static void test_threads(void) {
   worker workers[THREADS];
   uv_thread_t threads[THREADS];
@@ -317,12 +351,14 @@ static void test_threads(void) {
     workers[k].vm.task = agc_new_task(&vm);
     workers[k].total = 0;
   }
+  agc_native_register(&vm, "racy", init_racy);
   agc_share(&vm);
   for (int k = 0; k < THREADS; k++) assert(uv_thread_create(&threads[k], work, &workers[k]) == 0);
   for (int k = 0; k < THREADS; k++) {
     assert(uv_thread_join(&threads[k]) == 0);
     assert(workers[k].total == (int64_t)ROUNDS * (ROUNDS + 1) / 2);
   }
+  assert(atomic_load(&racy_inits) == 1 && atomic_load(&racy_loads) == 1);
 }
 
 int main(int argc, char **argv) {
@@ -333,7 +369,7 @@ int main(int argc, char **argv) {
   program.variant_count = 2;
   program.optional = 0;
   vm.rt->program = &program;
-  agc_native_register(vm.rt, "demo", agentica_native_init);
+  agc_native_register(&vm, "demo", agentica_native_init);
   test_values();
   test_failures();
   test_binding();

@@ -12,6 +12,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* The API this header describes. The VM loads a module of the same major version and a minor version up to its own:
    an_api and an_module only grow at their end, which is a minor bump. */
 #define AN_API_MAJOR 1
@@ -52,7 +56,8 @@ typedef an_term (*an_fn)(an_env *env, int argc, const an_term *argv);
 
 /* The mode of a function (an_function.flags). A short function runs on the calling scheduler, at the same time as
    the calls of other schedulers, so it must be thread-safe; it may allocate and build large results, but never block,
-   sleep, wait on I/O, call back into Agentica or run longer than about 100 microseconds. A dirty function (a compute
+   sleep, wait on I/O, call back into Agentica (a callback of an extern block that it starts runs nothing and gives
+   zero) or run longer than about 100 microseconds. A dirty function (a compute
    def) runs on the compute pool; this VM does not run them yet. */
 enum { AN_SHORT = 0, AN_DIRTY = 1 };
 
@@ -68,8 +73,9 @@ typedef struct {
 } an_function;
 
 /* What agentica_native_init returns, in static memory. MAJOR, MINOR and SIZE are the API the module was built for
-   (AN_API_MAJOR, AN_API_MINOR, sizeof(an_module)); LOAD runs once, right after agentica_native_init, and returns
-   NULL, or a message that refuses the module (RUNTIME-NATIVE-LOAD). Fields are only ever added at the end. */
+   (AN_API_MAJOR, AN_API_MINOR, sizeof(an_module)): fields are only ever added at the end, so SIZE tells the VM which
+   ones a module has. LOAD runs once, right after agentica_native_init, and returns NULL, or a message that refuses
+   the module (RUNTIME-NATIVE-LOAD). */
 typedef struct an_module {
   uint32_t major, minor, size;
   const char *name;
@@ -216,5 +222,9 @@ static inline bool an_get_result(an_env *env, an_term t, bool *ok, an_term *valu
    can `return an_raise(env, "...")`. */
 static inline an_term an_raise(an_env *env, const char *message) { return an_api_of(env)->raise(env, message); }
 static inline an_term an_badarg(an_env *env, int index) { return an_api_of(env)->badarg(env, index); }
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

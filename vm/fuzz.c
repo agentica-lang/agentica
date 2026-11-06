@@ -116,7 +116,7 @@ int agc_fuzz_one(const uint8_t *data, size_t len, int jit_mode, FILE *out, FILE 
   vm->rt->deny_env = true;
   // Nor use the network: its waits are outside --max-steps and depend on the host.
   vm->rt->deny_net = true;
-  agc_native_register(vm->rt, "agentica_fuzz", fuzz_init);
+  agc_native_register(vm, "agentica_fuzz", fuzz_init);
   // The code memory of the JIT outlives agc_release_all: the libFuzzer entry point unmaps it (vm/fuzz_libfuzzer.c).
   if (jit_mode != AGC_JIT_OFF) vm->rt->jit = agc_jit_new(program, (agc_jit_mode)jit_mode, &vm->rt->trace);
   /* A mutant's 10,000 steps seldom reach the thresholds of `on`, so here a function with a loop compiles at its second
