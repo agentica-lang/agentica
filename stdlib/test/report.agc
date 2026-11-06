@@ -1,5 +1,8 @@
 ## Results of `agentica test`, and the text and JSON reports built from them.
 
+# How many scenarios the timing lists, the slowest first.
+SLOWEST = 5
+
 ## A place in a file: the line, the column and the end column.
 export struct Span
   file: String
@@ -77,6 +80,12 @@ export struct FileResult
   scenarios: List[ScenarioResult]
   verdict: Verdict
   output: String
+end
+
+# A scenario with the name of its file, as the report shows it.
+struct Timed
+  label: String
+  item: ScenarioResult
 end
 
 struct Totals
@@ -161,8 +170,9 @@ export def exit_code(files: List[FileResult]) -> Int
   return totals(files).exit_code
 end
 
-## Builds the `--json` report of `files` and the `seed` as a JSON object.
-export def json(files: List[FileResult], seed: Int) -> Json
+## Builds the `--json` report of `files` and the `seed` as a JSON object. `wall_ms` is the time the run took, which
+## is less than the sum of the file times when files run in parallel (`--jobs`).
+export def json(files: List[FileResult], seed: Int, wall_ms: Int) -> Json
   sums = totals(files)
   fields: Map[String, Json] = {
     "ok": JSON.from(sums.exit_code == 0),
@@ -173,6 +183,7 @@ export def json(files: List[FileResult], seed: Int) -> Json
     "seed": JSON.from(seed),
     "file_errors": JSON.from(sums.file_errors),
     "exit_code": JSON.from(sums.exit_code),
+    "duration_ms": JSON.from(wall_ms),
     "files": JSON.array(files.map do |file| file_json(file) end),
   }
 
@@ -181,8 +192,21 @@ end
 
 ## Builds the plain text report, or the `--ai` text when `ai` is true. It has no final newline.
 export def text(files: List[FileResult], ai: Bool, seed: Int) -> String
+  return report_text(files, ai, seed, false, 0)
+end
+
+## Like `text`, with the time of the run (`wall_ms`, as in `json`), of each file and of the slowest scenarios
+## (`agentica test --timing`) before the totals.
+export def timed_text(files: List[FileResult], ai: Bool, seed: Int, wall_ms: Int) -> String
+  return report_text(files, ai, seed, true, wall_ms)
+end
+
+def report_text(files: List[FileResult], ai: Bool, seed: Int, timing: Bool, wall_ms: Int) -> String
   sums = totals(files)
   chunks = files.map do |file| file_text(file, ai) end
+  if timing
+    chunks = chunks.push(timing_text(files, wall_ms))
+  end
   last = (
     "#{sums.passed} passed, #{sums.failed} failed, #{sums.skipped} skipped, #{sums.not_executed} not executed, " +
     "#{sums.file_errors} file errors"
@@ -192,6 +216,51 @@ export def text(files: List[FileResult], ai: Bool, seed: Int) -> String
     last = "#{last}, seed #{seed}"
   end
   return chunks.filter do |chunk| chunk != "" end.push(last).join("\n")
+end
+
+# The time of a file: the durations of its scenarios, which run one after another.
+def file_ms(file: FileResult) -> Int
+  return file.scenarios.reduce(0) do |n, item| n + item.duration_ms end
+end
+
+# The time of the run, then one line for each file with the sum of the times of its scenarios in milliseconds, then the
+# slowest scenarios, as `agentica test --timing` prints them. A file with no scenario (a file error) shows no line.
+def timing_text(files: List[FileResult], wall_ms: Int) -> String
+  ran = files.filter do |file| file.scenarios.size > 0 end
+  lines = ["timing: #{wall_ms} ms"]
+  timed: List[Timed] = []
+  for file in ran
+    label = file_label(file)
+    lines = lines.push("  #{file_ms(file)} ms of scenarios #{label} (#{count_text(file.scenarios.size)})")
+    timed = timed.concat(file.scenarios.map do |item| Timed(label: label, item: item) end)
+  end
+
+  slowest = timed.sort_by do |entry| 0 - entry.item.duration_ms end.take(SLOWEST)
+  if slowest.size > 0
+    lines = lines.push("slowest scenarios:")
+  end
+
+  for entry in slowest
+    lines = lines.push("  #{entry.item.duration_ms} ms #{entry.label} / #{entry.item.name}")
+  end
+
+  return lines.join("\n")
+end
+
+def file_label(file: FileResult) -> String
+  if file.kind == "tests"
+    return file.path
+  end
+
+  return file.feature
+end
+
+def count_text(count: Int) -> String
+  if count == 1
+    return "1 scenario"
+  end
+
+  return "#{count} scenarios"
 end
 
 def totals(files: List[FileResult]) -> Totals
@@ -258,6 +327,7 @@ def file_json(file: FileResult) -> Json
     "feature": JSON.from(file.feature),
     "kind": JSON.from(file.kind),
     "status": JSON.from(state),
+    "duration_ms": JSON.from(file_ms(file)),
     "scenarios": JSON.array(file.scenarios.map do |item| scenario_json(item) end),
     "error": verdict_json(file.verdict),
     "output": JSON.from(file.output),
@@ -372,10 +442,7 @@ def file_text(file: FileResult, ai: Bool) -> String
     Verdict.Skipped(_) -> head = []
     Verdict.NotExecuted -> head = []
   end
-  label = file.feature
-  if file.kind == "tests"
-    label = file.path
-  end
+  label = file_label(file)
   lines = file.scenarios.map do |item| scenario_text(label, item, ai) end
   return head.concat(lines).join("\n")
 end

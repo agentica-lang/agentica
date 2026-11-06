@@ -175,7 +175,8 @@ def prepare_and_run(
     report_path: "#{directory}/report.txt",
   )
 
-  try write_text("#{directory}/config.jsonl", Runner.config_text(config, entries, options.tags, options.jobs))
+  lines = Runner.config_text(config, entries, options.tags, options.jobs, options.timing)
+  try write_text("#{directory}/config.jsonl", lines)
   ran = Runner.run(options, runner, "#{directory}/config.jsonl", config.report_path)
   case ran
     Runner.Ran.Reported(code, text) -> return ok(Report.Ending(code: code, text: "#{text}\n"))

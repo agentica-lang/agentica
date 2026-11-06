@@ -145,6 +145,17 @@ The report ends with what the VM ran, for work on the VM itself: an `events` lin
 
 A run keeps up to 4096 labels. Every label after that counts in one `[overflow]` section (the frame `measure[overflow]` in folded stacks), so a label built from data, such as `"item #{i}"`, cannot grow the profile without bound.
 
+## One file for each process
+
+A test run starts many VMs (the front end, the runner, each test file, the program under test), and they all get the same environment, so they all append to one `AGENTICA_VM_TRACE_FILE`. Write `{pid}` in the file name and each process replaces it with its own process id, so each writes a file of its own:
+
+```text
+AGENTICA_VM_TRACE=profile AGENTICA_PROFILE_FORMAT=folded AGENTICA_VM_TRACE_FILE=/tmp/suite-{pid}.folded agentica test
+ls /tmp/suite-*.folded
+```
+
+Every `{pid}` in the name is replaced, however many there are, and the pattern works for every trace category and for the report as well as for folded stacks. A name that is 4096 bytes or longer after the replacement cannot be opened, and tracing is off, as for any other file that cannot be opened. The file is opened in append mode, so a process that reuses a pid appends to the old file: use an empty directory for each run. [`agentica test --timing`](/cli/) shows which files and scenarios are slow, so you know which of the files to read.
+
 ## Flame graphs
 
 Add `AGENTICA_PROFILE_FORMAT=folded` to the profile to get folded stacks instead of the report: one line per distinct stack, the frames from the outermost in, separated by `;`, then a space and the weight in steps. flamegraph.pl, inferno and speedscope read this format.

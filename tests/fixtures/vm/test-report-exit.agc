@@ -51,14 +51,14 @@ def main() -> Void
   show("pass and skip", [feature([passing, skipped])])
   show("skip and failure", [feature([skipped, scenario("fails", Report.Verdict.Fail(problem("RUNTIME-BDD-TIMEOUT")))])])
   puts(Report.text([feature([skipped])], false, 7))
-  puts(Report.json([feature([skipped])], 7))
+  puts(Report.json([feature([skipped])], 7, 0))
   show("usage", [Report.file_error("<arguments>", "", problem("RUNTIME-BDD-USAGE"))])
   show("infra scenario", [feature([scenario("crashes", Report.Verdict.Fail(problem("RUNTIME-BDD-INFRA")))])])
   checked = Report.from_json(front_end())
   if checked.ok?
     files = [Report.file_error("/specs/steps.agc", "steps", checked.unwrap!), feature([passing])]
     show("front end", files)
-    puts(Report.json(files, 7))
+    puts(Report.json(files, 7, 0))
     puts(Report.text([Report.file_error("/specs/steps.agc", "steps", Report.with_actual(checked.unwrap!, "ignored"))], true, 7))
   end
   puts(Report.from_json("{\"code\":\"X\"}").message)
@@ -68,7 +68,7 @@ def main() -> Void
   files = [feature([scenario(odd, Report.Verdict.Fail(multi))])]
   show("escapes", files)
   puts(Report.text(files, false, 7))
-  puts(Report.json(files, 7))
+  puts(Report.json(files, 7, 0))
   failed = Report.Error(code: "RUNTIME-TEST-ASSERTION", message: "values are not equal", span: at(9), end_line: 9,
                         expected: Report.Detail.Known("2"), actual: Report.Detail.Known("3"), original: JSON.null())
   units = [unit("adds", Report.Verdict.Pass, ""), unit("fails", Report.Verdict.Fail(failed), "line one\nline two"),
@@ -76,7 +76,7 @@ def main() -> Void
   tests = [Report.FileResult(path: "/test/x_test.agc", feature: "", kind: "tests", scenarios: units, verdict: Report.Verdict.Pass, output: "")]
   show("tests", tests)
   puts(Report.text(tests, false, 7))
-  puts(Report.json(tests, 7))
+  puts(Report.json(tests, 7, 0))
   show("tests pass", [Report.FileResult(path: "/test/x_test.agc", feature: "", kind: "tests", scenarios: [units[0]],
                                         verdict: Report.Verdict.Pass, output: "")])
 end

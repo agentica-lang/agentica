@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import FIXTURES, compile_agc, scaled, vm_command, vm_environment
+from tests.agentica_test import FIXTURES, cli, compile_agc, scaled, vm_command, vm_environment
 
 pytestmark = pytest.mark.skipif(not sys.platform.startswith("linux"), reason="VM trace tests: Linux only")
 
@@ -200,6 +200,37 @@ def test_a_trace_file_that_cannot_be_opened_writes_one_line_and_traces_nothing(t
     assert line_end >= 0
     assert err[max(0, line_end):] == plain[2]
     assert re.search(rb'^agc-trace cannot open "?[^\n]*/missing/trace"?\n$', err[:max(0, line_end)])
+
+
+def test_the_pid_of_a_trace_file_name_is_the_process_id_so_each_process_writes_its_own_file(tmp_path, traced_vm):
+    vm = traced_vm[0]
+    bytecode = compile_fixture(VM_FIXTURES / "task-fail.agc", tmp_path)
+    pattern = tmp_path / "trace-{pid}-{pid}.log"
+    env = {"AGENTICA_VM_TRACE": "loader", "AGENTICA_VM_TRACE_FILE": pattern}
+    assert run_vm(vm, bytecode, env) == run_vm(vm, bytecode, env)
+    names = sorted(entry.name for entry in tmp_path.glob("trace-*"))
+    assert len(names) == 2 and not (tmp_path / "trace-{pid}-{pid}.log").exists()
+    for name in names:
+        found = re.fullmatch(r"trace-(\d+)-(\d+)\.log", name)
+        assert found and found.group(1) == found.group(2)
+        assert trace_lines(tmp_path / name)
+
+
+def test_agentica_test_with_a_pid_pattern_writes_a_trace_file_for_each_process_of_the_run(tmp_path, traced_vm):
+    version = subprocess.run([*cli(), "--version"], stdout=subprocess.PIPE, timeout=WAIT_SECONDS).stdout
+    if b"trace off" in version:
+        pytest.skip("the CLI was built with TRACE=0")
+    suite = tmp_path / "suite"
+    suite.mkdir()
+    (suite / "one_test.agc").write_text('def test_one() -> Result[Void]\n  return Test.assert(true, "x")\nend\n')
+    traces = tmp_path / "traces"
+    traces.mkdir()
+    env = {"AGENTICA_VM_TRACE": "loader", "AGENTICA_VM_TRACE_FILE": traces / "run-{pid}.log",
+           "TMPDIR": str(tmp_path)}
+    status, out, err = vm_run([*cli(), "test", suite / "one_test.agc"], vm_environment(env))
+    assert status == 0, err
+    # The binary, the runner and the test file each ran a VM; the runner and the test child are not the first process.
+    assert len(list(traces.glob("run-*.log"))) >= 3
 
 
 def test_an_allocation_heavy_run_writes_gc_collect_lines(tmp_path, traced_vm):

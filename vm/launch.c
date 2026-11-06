@@ -22,6 +22,7 @@
 #include <fcntl.h>
 #include <inttypes.h>
 #include <signal.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -386,15 +387,43 @@ static uint64_t profile_every(int fd) {
   return (uint64_t)every;
 }
 
+/* The trace file name with every "{pid}" replaced by this process's id: the children of a test run (the front end, the
+   runner, each scenario child) share one environment, so a pattern gives each its own file. False when the name does
+   not fit in `cap` bytes. */
+static bool trace_file_name(const char *path, char *out, size_t cap) {
+  char pid[24];
+  snprintf(pid, sizeof pid, "%lu", (unsigned long)uv_os_getpid());
+  size_t used = 0, pid_size = strlen(pid);
+  for (const char *at = path; *at;) {
+    const char *piece = at;
+    size_t size = 1;
+    if (strncmp(at, "{pid}", 5) == 0) {
+      piece = pid;
+      size = pid_size;
+      at += 5;
+    } else {
+      at++;
+    }
+    if (used + size >= cap) return false;
+    memcpy(out + used, piece, size);
+    used += size;
+  }
+  out[used] = '\0';
+  return true;
+}
+
 void agc_launch_trace(agc_launch *launch) {
   const char *names = getenv("AGENTICA_VM_TRACE");
   const char *path = getenv("AGENTICA_VM_TRACE_FILE");
   int fd = 2;
   if (AGC_TRACE_BUILD && names && *names && path && *path) {
-    fd = open(path, TRACE_OPEN, TRACE_MODE);
+    char expanded[4096];
+    bool fits = trace_file_name(path, expanded, sizeof expanded);
+    fd = fits ? open(expanded, TRACE_OPEN, TRACE_MODE) : -1;
     if (fd >= 0) fd = private_trace_fd(fd);
     if (fd < 0) {
-      agc_trace_message(2, "cannot open", path, strlen(path), false);
+      const char *shown = fits ? expanded : path;
+      agc_trace_message(2, "cannot open", shown, strlen(shown), false);
       names = NULL;
       fd = 2;
     }

@@ -8,6 +8,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `{pid}` in `AGENTICA_VM_TRACE_FILE` is replaced by the process id, so each
+  process of a test run writes its own trace or profile file.
+- `agentica test --timing` adds the time of the run, of each file and of the 5
+  slowest scenarios before the totals. The `--json` report now always has
+  `duration_ms` (an additive field, with or without `--timing`) on the report,
+  as the wall time of the run, and on each file.
+
 ## [0.25.0] - 2026-11-06
 
 ### Added

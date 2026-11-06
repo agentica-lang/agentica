@@ -214,9 +214,10 @@ Two variables have no flag. `GC_FREE_SPACE_DIVISOR` sets how fast the memory col
 agentica test                                    # test/ and specs/
 agentica test test/ports_test.agc --only port    # only tests whose name has "port"
 agentica test --jobs 4                           # up to 4 files at once
+agentica test --timing                           # and the time of each file and the slowest scenarios
 ```
 
-Runs `*_test.agc` files ([Test](/library/testing/test/)) and `.feature` specs ([BDD](/library/testing/bdd/)). `--jobs N` (1 to 1024, default 1) runs up to `N` files at the same time; the report keeps the order of the files. Files that share a port, a path or a database need `--jobs 1`, and a high `N` makes per-test timeouts likelier under CPU load.
+Runs `*_test.agc` files ([Test](/library/testing/test/)) and `.feature` specs ([BDD](/library/testing/bdd/)). `--jobs N` (1 to 1024, default 1) runs up to `N` files at the same time; the report keeps the order of the files. Files that share a port, a path or a database need `--jobs 1`, and a high `N` makes per-test timeouts likelier under CPU load. `--timing` adds, before the totals, the time of the run (wall time, less than the files add up to with `--jobs`), one line for each file with the sum of its scenarios' times and its scenario count, and the 5 slowest scenarios, in milliseconds; it changes nothing in `--json`. The `--json` report always has `duration_ms` (an additive field, whatever the flags): on the report the wall time of the run, on each file the sum of its scenarios' times, and on each scenario its own.
 
 ## Editor support
 
