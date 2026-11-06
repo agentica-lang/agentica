@@ -703,6 +703,34 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "main returns\n", "")
 
 
+# The end of the run closes an open callback but keeps its closure: the free of a Hook that main left open calls the
+# callback that C stored, made before the Hook or after it (SQLite's sqlite3_open, then create_collation_v2). C gets
+# zero and the function does not run; before, the closure was freed first (or, made first, freed with it).
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+@pytest.mark.parametrize("hook_first", [False, True])
+def test_the_end_of_the_run_keeps_a_callback_that_a_free_calls(tmp_path, peer, schedulers, hook_first):
+    make = ["  a = Native.callback(Step, &destroy)\n  peer_store_fn(a)\n", "  _h = peer_hook_open().unwrap!\n"]
+    text = """extern "%s"
+  resource Hook, free: peer_hook_free
+  callback Step(x: C.Int32) -> C.Int32
+  def peer_hook_open() -> Hook
+  def peer_store_fn(fn: Step) -> Void
+end
+
+def destroy(x: Int) -> Int
+  puts("destroy ran")
+  return x
+end
+
+def main() -> Void
+%s  puts("main returns")
+end
+""" % (literal(peer), "".join(reversed(make) if hook_first else make))
+    result = agentica("--schedulers", schedulers, program(tmp_path, text), timeout=scaled(60))
+    assert (result.code, result.stdout, result.stderr) == (0, "main returns\n", "")
+
+
 # A closed callback that waits for a long fast call on one scheduler costs the fast calls of the others nothing: they
 # read only their own count of waiting closures (c_waits), so they keep running while a third scheduler frees a
 # resource with rt->sync held (peer_slow_free). Before, each of them took rt->sync after C and stood still there.

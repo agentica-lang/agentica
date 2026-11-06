@@ -286,8 +286,10 @@ callback, which gives zero (on a pool thread it refuses, and the compute call
 fails with `RUNTIME-NATIVE-CALLBACK`). Each scheduler counts the closures that
 wait for it (`c_waits`), so only a call that one waits for takes `rt->sync` at
 its end; a compute call's end on a scheduler frees those that waited for its
-thread. The end of the run frees what is still open (§14.4, step 3), but for a
-closure that a compute call still in C may reach. There are no GC finalizers.
+thread. The end of the run frees what is still open (§14.4, step 3), but for
+the closures of callbacks: it only marks those closed, since a compute call
+still in C or a free function of the end may call one (it gives zero), and the
+exit follows. There are no GC finalizers.
 
 A channel is the one handle made unowned. `Channel.new` makes no registry entry.
 The first `Task.spawn_owning` of it (any task may do it) registers an entry with
