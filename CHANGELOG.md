@@ -49,6 +49,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `Native.load` keeps a hold of its own on the library, so a library that
+  another task was opening for `Native.function?` at the same moment no longer
+  unloads when that probe closes it.
 - `Process.channel_read_line` and `Process.parent_read_line` give
   `error("process: line cut off")` for a last line that has no line ending
   (the other side exited or died in the middle of it), where they gave the

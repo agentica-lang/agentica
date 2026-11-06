@@ -85,10 +85,14 @@ agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_typ
    code or libffi refuses the struct. */
 bool agc_ffi_layout(agc_c_struct *s);
 
-/* Opens LIBRARY as agc_ffi_prepare does and keeps it open until the process ends, so the calls prepared later find it
-   loaded (Native.load). False with the loader's message in ERROR (SIZE bytes) when it cannot be opened or the build
-   cannot call native code. */
-bool agc_ffi_open(const char *library, char *error, size_t size);
+/* Opens LIBRARY as agc_ffi_prepare does and returns its hold (Native.load): one reference that the loader counts, so the
+   library stays loaded until the hold is released. The same library gives the same pointer each time, so the caller can
+   tell a hold it has already from a new one. NULL with the loader's message in ERROR (SIZE bytes) when it cannot be
+   opened or the build cannot call native code. */
+void *agc_ffi_open(const char *library, char *error, size_t size);
+
+/* Gives back a hold of agc_ffi_open: the library unloads when no other hold of it is left. */
+void agc_ffi_release(void *hold);
 
 /* Whether LIBRARY opens and exports SYMBOL (Native.function?). Nothing stays open that was not open before; false for
    a library that does not open, a missing function or a build that cannot call native code. */
