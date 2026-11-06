@@ -7,12 +7,14 @@ The output is one site per final release (`X.Y.Z` tags, no pre-releases) under `
 `dev/`, the latest release again at the root, `versions.json` and `_versions/selector.{js,css}` (site/versions/).
 
 Each tag is built from its own tree with `make site`, using the Hugo and Dart Sass versions that tag pins in its
-`.github/workflows/pages.yml`. Only a tag whose tree has no site (no `site/hugo.toml`, no pins) is left out. Any other
-failure (a download, `npm ci`, a timeout, a Hugo error) is tried once more and then fails the run, so a blip never
-drops a release from the deploy; so does a run in which no tag built. The output of a tag is cached by its commit sha
-(and the base URL, which Hugo bakes into every link), so a run builds only `dev` and the tags it has not seen. The
-selector is not part of a cached build: the assembly adds its `<link>` and `<script>` tags to every page, so a build
-from the cache loads the current selector.
+`.github/workflows/pages.yml`. Only a tag whose tree has no site (no `site/hugo.toml`, no pins) and that is older than
+every built tag is left out. Any other failure (a download, `npm ci`, a timeout, a Hugo error, a no-site tag newer than
+a built one) is tried once more and then fails the run, so a release never drops silently from the deploy; so does a run
+in which no tag built. The output of a tag is cached by its commit sha (and the base URL, which Hugo bakes into every
+link), so a run builds only `dev` and the tags it has not seen; the cache folder is pruned to the current builds. With
+GITHUB_OUTPUT set, `fresh=true` tells the workflow that something new is worth saving. The selector is not part of a
+cached build: the assembly adds its `<link>` and `<script>` tags to every page, so a build from the cache loads the
+current selector.
 
 Python's standard library only.
 """
@@ -57,7 +59,11 @@ def run(args, **kwargs):
 def final_tags() -> list[str]:
     """The `X.Y.Z` tags, newest first. Pre-releases (`-beta.N`) and other tags (`bootstrap-racket`) are left out."""
     names = run(["git", "-C", str(ROOT), "tag", "--list"], capture_output=True).stdout.split()
-    return sorted((n for n in names if FINAL_TAG.match(n)), key=lambda n: tuple(map(int, n.split("."))), reverse=True)
+    return sorted((n for n in names if FINAL_TAG.match(n)), key=version_key, reverse=True)
+
+
+def version_key(tag: str) -> tuple[int, ...]:
+    return tuple(map(int, tag.split(".")))
 
 
 def pins(workflow: str) -> dict[str, str]:
@@ -210,10 +216,30 @@ def sha_of(ref: str) -> str:
     return run(["git", "-C", str(ROOT), "rev-parse", ref + "^{commit}"], capture_output=True).stdout.strip()
 
 
+def cache_key(ref: str, base_url: str) -> str:
+    """The cache folder name of a commit built for a base URL."""
+    return "%s-%s" % (sha_of(ref), hashlib.sha256(with_slash(base_url).encode()).hexdigest()[:8])
+
+
+def prune(cache: Path, keep: set[str]) -> None:
+    """Remove every cache entry that is not a current build (an old tag's, an old base URL's, a half-copied one)."""
+    for entry in cache.iterdir() if cache.exists() else ():
+        if entry.name not in keep:
+            shutil.rmtree(entry, ignore_errors=True)
+
+
+def write_outputs(fresh: list[str]) -> None:
+    """`fresh=true` to the step outputs of GitHub Actions when set and something was built, not read from the cache."""
+    path = os.environ.get("GITHUB_OUTPUT")
+    if path:
+        with open(path, "a", encoding="utf-8") as out:
+            out.write("fresh=%s\n" % ("true" if fresh else "false"))
+
+
 def build_ref(ref: str, base_url: str, cache: Path, tools: Path, logs: Path, label: str) -> tuple[Path, bool]:
     """The built site of a commit, from the cache when its sha and base URL were built before; (folder, cached)."""
     sha = sha_of(ref)
-    key = "%s-%s" % (sha, hashlib.sha256(with_slash(base_url).encode()).hexdigest()[:8])
+    key = cache_key(ref, base_url)
     done = cache / key
     if done.exists():
         return done, True
@@ -290,8 +316,9 @@ def build(args: argparse.Namespace) -> int:
     built: dict[str, Path] = {}
     skipped: dict[str, str] = {}
     failed: dict[str, str] = {}
-    cached = 0
-    for tag in final_tags():
+    fresh: list[str] = []
+    tags = final_tags()
+    for tag in tags:
         try:
             folder, hit = build_tag(tag, root_url + tag + "/", cache, tools, logs)
         except NoSite as err:
@@ -303,12 +330,27 @@ def build(args: argparse.Namespace) -> int:
             print("FAIL %-8s %s" % (tag, err), flush=True)
             continue
         built[tag] = folder
-        cached += hit
+        if not hit:
+            fresh.append(tag)
         print("%-5s %-8s" % ("cache" if hit else "built", tag), flush=True)
+
+    # Only the tags older than every built tag can be "no site" (the releases before the site existed). A newer one
+    # is a tree this script misreads (a pages.yml that no longer has the pins), and must not drop out of the deploy.
+    if built:
+        oldest = min(map(version_key, built))
+        for tag in [t for t in skipped if version_key(t) > oldest]:
+            failed[tag] = skipped.pop(tag) + " (newer than a built tag)"
+            print("FAIL %-8s %s" % (tag, failed[tag]), flush=True)
+
+    keep = {cache_key(t, root_url + t + "/") for t in tags if t in built}
+    if built:
+        keep.add(cache_key(next(iter(built)), root_url))
+    prune(cache, keep)
 
     # A release missing from the deploy (the root would fall back to an older one) is worse than no deploy.
     if failed or not built:
         write_summary(built, skipped, failed)
+        write_outputs(fresh)
         raise BuildError("no version was built" if not built and not failed else "failed: " + ", ".join(failed))
 
     # dev is the working tree: master in pages.yml, which only runs from master (or a pull request).
@@ -316,7 +358,10 @@ def build(args: argparse.Namespace) -> int:
     print("built dev", flush=True)
 
     latest = next(iter(built))
-    root_folder, _ = build_tag(latest, root_url, cache, tools, logs, latest + "-root")
+    root_folder, root_hit = build_tag(latest, root_url, cache, tools, logs, latest + "-root")
+    if not root_hit:
+        fresh.append("root")
+    write_outputs(fresh)
     copy_site(root_folder, out)
     for tag, folder in built.items():
         copy_site(folder, out / tag)
@@ -333,7 +378,7 @@ def build(args: argparse.Namespace) -> int:
     print("\nversions: %s, dev" % ", ".join(built))
     print("left out: " + (", ".join("%s (%s)" % kv for kv in skipped.items()) or "none"))
     write_summary(built, skipped, failed)
-    print("pages with the selector tags: %d; from the cache: %d of %d tags" % (pages, cached, len(built)))
+    print("pages with the selector tags: %d; from the cache: %d of %d tags" % (pages, len(built) - len([f for f in fresh if f != "root"]), len(built)))
     print("time: %.1f s; size: %.1f MB (%s)" % (seconds, folder_size(out) / 1e6, out))
     return 0
 

@@ -55,18 +55,20 @@ jobs:
       - id: pages
         uses: actions/configure-pages@v6
       # The cache holds the output of each tag by commit sha and base URL (a sha never changes, so an entry is never
-      # wrong). Each run restores the newest entry of the script's version and saves its own, also after a failed
-      # build, so the tags that did build are not built again; Hugo and Dart Sass come from the pins of each tag's
-      # pages.yml, which tools/site_versions.py downloads and checks.
+      # wrong). Each run restores the newest entry of the script's version. Only a run that is not a pull request and
+      # built something new saves one (also after a failed build, so the tags that did build are kept); the script
+      # prunes the folder to the current builds first. Hugo and Dart Sass come from the pins of each tag's pages.yml,
+      # which tools/site_versions.py downloads and checks.
       - uses: actions/cache/restore@v5
         with:
           path: build/site-versions/cache
           key: site-versions-${{ hashFiles('tools/site_versions.py') }}-${{ github.run_id }}
           restore-keys: |
             site-versions-${{ hashFiles('tools/site_versions.py') }}-
-      - run: python3 -I tools/site_versions.py build --base-url "${{ steps.pages.outputs.base_url }}/"
+      - id: build
+        run: python3 -I tools/site_versions.py build --base-url "${{ steps.pages.outputs.base_url }}/"
       - uses: actions/cache/save@v5
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event_name != 'pull_request' && steps.build.outputs.fresh == 'true' }}
         with:
           path: build/site-versions/cache
           key: site-versions-${{ hashFiles('tools/site_versions.py') }}-${{ github.run_id }}

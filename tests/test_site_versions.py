@@ -20,6 +20,7 @@ MAKEFILE = (
     ".PHONY: site\n"
     "site:\n"
     "\t@test ! -e FAIL\n"
+    "\t@if [ -e FLAKY ] && [ ! -e $(ONCE) ]; then touch $(ONCE); exit 1; fi\n"
     "\t@echo run >> $(RUNS)\n"
     "\tmkdir -p site/public/library\n"
     "\tprintf '<html><head></head><body>%s %s</body></html>' '$(HUGO_FLAGS)' \"$$(cat VERSION)\""
@@ -44,13 +45,15 @@ def git(repo, *args):
     subprocess.run(["git", *identity, "-C", str(repo), *args], check=True, capture_output=True)
 
 
-def release(repo, version, tag=None, fail=False):
+def release(repo, version, tag=None, fail=False, flaky=False):
+    """Commit a version; `fail` makes its `make site` fail always, `flaky` only the first time."""
     (repo / "VERSION").write_text(version + "\n")
-    marker = repo / "FAIL"
-    if fail:
-        marker.write_text("")
-    elif marker.exists():
-        marker.unlink()
+    for name, on in (("FAIL", fail), ("FLAKY", flaky)):
+        marker = repo / name
+        if on:
+            marker.write_text("")
+        elif marker.exists():
+            marker.unlink()
     git(repo, "add", "-A")
     git(repo, "commit", "-q", "-m", version)
     if tag:
@@ -84,7 +87,10 @@ def build(tmp_path, monkeypatch):
     """Run the CLI; returns its exit code, the output folder and how many `make site` runs there were so far."""
     runs = tmp_path / "runs"
     monkeypatch.setenv("RUNS", str(runs))
+    monkeypatch.setenv("ONCE", str(tmp_path / "once"))
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "summary.md"))
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "output"))
+    (tmp_path / "output").unlink(missing_ok=True)
     code = tool.main([
         "build", "--out", str(tmp_path / "out"), "--cache", str(tmp_path / "cache"),
         "--tools", str(tmp_path / "tools"), "--base-url", "https://example.org/docs",
@@ -140,6 +146,38 @@ def test_a_tag_that_fails_fails_the_run(repo, tmp_path, monkeypatch, capsys):
     assert code == 1
     assert "FAIL 0.11.1" in capsys.readouterr().out
     assert "Failed: `0.11.1`" in (tmp_path / "summary.md").read_text()
+
+
+def test_a_tag_that_fails_once_is_retried_and_built(repo, tmp_path, monkeypatch, capsys):
+    release(repo, "0.11.1", "0.11.1", flaky=True)
+    release(repo, "0.12.0")
+    code, out, _ = build(tmp_path, monkeypatch)
+    assert code == 0
+    assert "retry 0.11.1" in capsys.readouterr().out
+    assert json.loads((out / "versions.json").read_text())[0] == {"version": "0.11.1", "path": "0.11.1/", "latest": True}
+
+
+def test_a_tag_without_a_site_newer_than_a_built_tag_fails_the_run(repo, tmp_path, monkeypatch, capsys):
+    config = repo / "site" / "hugo.toml"
+    config.unlink()  # a tree the script reads as "no site", though a newer release than 0.11.0 has one
+    release(repo, "0.11.1", "0.11.1")
+    config.write_text("")
+    release(repo, "0.12.0")
+    code, _, _ = build(tmp_path, monkeypatch)
+    assert code == 1
+    assert "FAIL 0.11.1" in capsys.readouterr().out
+
+
+def test_the_cache_keeps_only_current_builds_and_says_when_something_is_new(repo, tmp_path, monkeypatch):
+    build(tmp_path, monkeypatch)
+    assert (tmp_path / "output").read_text() == "fresh=true\n"
+    stray = tmp_path / "cache" / "old-tag-entry"
+    stray.mkdir()
+    # 0.9.0, 0.10.0, 0.11.0 and the root copy of 0.11.0, and the stray one.
+    assert len(list((tmp_path / "cache").iterdir())) == 5
+    build(tmp_path, monkeypatch)
+    assert (tmp_path / "output").read_text() == "fresh=false\n"
+    assert not stray.exists() and len(list((tmp_path / "cache").iterdir())) == 4
 
 
 def test_a_run_with_no_version_fails(repo, tmp_path, monkeypatch):
