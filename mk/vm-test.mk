@@ -17,6 +17,15 @@ $(VM_BUILD)/%-test$(EXE): $(OSSL_DEP) $(GC_DEP) $(VM_OBJS) $(VM_OBJ)/fuzz.o $(VM
 $(VM_BUILD)/windows_remove-test$(EXE): $(OSSL_DEP) $(GC_DEP) $(filter-out $(VM_OBJ)/file_windows.o,$(VM_OBJS)) $(VM_OBJ)/fuzz.o $(VM_OBJ)/tests/windows_remove_test.o $(VM_LINK_LIBS) $(VM_STAMP)
 	$(VM_LINK)
 
+# The native module that native_module-test opens as a shared library, next to it: tests/fixtures/native/module_demo.c
+# built like a module of a package, with no symbol of the VM to link against (-z defs on Linux finds any).
+NATIVE_DEMO := $(VM_BUILD)/$(if $(filter Windows_NT,$(VM_OS)),module_demo.dll,$(if $(filter Darwin,$(shell uname -s)),libmodule_demo.dylib,libmodule_demo.so))
+NATIVE_DEMO_FLAGS := $(if $(filter Windows_NT,$(VM_OS)),-shared,$(if $(filter Darwin,$(shell uname -s)),-dynamiclib,-shared -fPIC -Wl,-z,defs))
+$(NATIVE_DEMO): tests/fixtures/native/module_demo.c vm/agentica_native.h
+	@mkdir -p $(dir $@)
+	$(CC) -std=c11 -O1 -fvisibility=hidden $(NATIVE_DEMO_FLAGS) -o $@ $<
+$(VM_BUILD)/native_module-test$(EXE): $(NATIVE_DEMO)
+
 VM_TESTS_NORMAL := $(filter-out $(VM_BUILD)/tree-test$(EXE) $(VM_BUILD)/files_private-test$(EXE) $(VM_BUILD)/windows_remove-test$(EXE),$(VM_TESTS))
 
 vm-test: $(VM_TESTS)
@@ -27,7 +36,7 @@ vm-test: $(VM_TESTS)
 # locks, a timer fired against a wake and a function compiled by several threads at once. The VM is built without
 # libgc (AGC_NO_GC), so the collector's own signals are out of the picture; the whole run is checked, so a race fails
 # it.
-VM_TSAN_TESTS := inbox compute outcome runq task_wake job sync output timers threads net process_threads jit zlib ats
+VM_TSAN_TESTS := inbox compute outcome runq task_wake job sync output timers threads net process_threads jit zlib ats native_module
 # vm/tools/tsan.supp: the calls from the system libcrypto, whose own locking TSan cannot see (TLS setup on pool threads).
 VM_TSAN_OPTIONS := halt_on_error=1 suppressions=$(CURDIR)/vm/tools/tsan.supp
 vm-tsan:

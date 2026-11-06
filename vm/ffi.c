@@ -28,6 +28,9 @@
 /* The word in front of the signature of a compute def (compiler/lower/lower_native.agc). */
 #define COMPUTE_PREFIX "compute "
 #define COMPUTE_PREFIX_LEN (sizeof COMPUTE_PREFIX - 1)
+/* The word, after any "compute ", of the signature of a function of a native module (vm/native_module.c). */
+#define MODULE_PREFIX "module "
+#define MODULE_PREFIX_LEN (sizeof MODULE_PREFIX - 1)
 /* The most signatures one run prepares. A program has one per extern function; only hand-made bytecode can build
    more, so the cap bounds the table without limiting a real program. */
 #define FFI_MAX_CALLS 65536
@@ -98,7 +101,8 @@ typedef struct {
    multiple of 16), then gives the result's buffer. `holds` counts what a compute call may hold: one per C parameter,
    then one per C.Pointer field of each struct argument, in order. A `layout` entry is no signature but the layout code
    of one struct ("{N:CODES}") for Native.size_of, get_struct and put_struct: only `result_struct` is set, laid out
-   without a call. */
+   without a call. A function of a native module has only `module` (bound by agc_native_bind), `inputs` and
+   `compute`. */
 typedef struct {
   char *key;
   size_t key_len;
@@ -118,6 +122,7 @@ typedef struct {
   agc_ffi_call *free;
   char *resource, *symbol;
   made_kind *made;
+  agc_native_fn *module;
 } ffi_entry;
 
 /* What the resources that one call makes come from (agc_c_resource.up): the one resource or owned buffer that the call
@@ -590,6 +595,26 @@ static bool layouts_fit(const agc_c_struct *result_struct, agc_c_struct *const *
   return fit;
 }
 
+/* Where the text after "module " starts in a signature of DATA (LEN bytes), after any "compute " (*COMPUTE), or 0
+   when it is no signature of a native module. */
+static size_t module_start(const char *data, size_t len, bool *compute) {
+  *compute = len >= COMPUTE_PREFIX_LEN && memcmp(data, COMPUTE_PREFIX, COMPUTE_PREFIX_LEN) == 0;
+  size_t at = *compute ? COMPUTE_PREFIX_LEN : 0;
+  if (len - at < MODULE_PREFIX_LEN || memcmp(data + at, MODULE_PREFIX, MODULE_PREFIX_LEN) != 0) return 0;
+  return at + MODULE_PREFIX_LEN;
+}
+
+/* The entry of a function of a native module: the text after "module " of its signature, bound by the module. */
+static ffi_entry *module_entry(agc_vm *vm, const agc_string *text, size_t start, bool compute, uint32_t span) {
+  agc_native_fn *fn = agc_native_bind(vm, text->data + start, text->bytes - start, compute, span);
+  ffi_entry *e = calloc(1, sizeof(ffi_entry));
+  if (!e) agc_out_of_memory();
+  e->module = fn;
+  e->inputs = agc_native_arity(fn);
+  e->compute = compute;
+  return e;
+}
+
 /* "CODES SYMBOL LIBRARY": the result code, then one code per parameter (a capital for an out parameter), a space, the C
    name, a space, and the library (which may hold spaces), with "compute " in front for a compute def. A variadic
    function has a "." among the codes where its variadic part starts, after one C parameter at least; the codes after it
@@ -603,11 +628,14 @@ static bool layouts_fit(const agc_c_struct *result_struct, agc_c_struct *const *
    struct passed or returned by value is one code "{N:CODES}": N is its index in the program's struct table and CODES
    has one code per field, in the struct's field order, an integer code, d, f, b, p or a nested struct; it is never an
    out parameter or after the ".". The front end writes it (compiler/lower/lower_native.agc); the bytecode may hold
-   anything, so every part is checked here. */
+   anything, so every part is checked here. A signature whose word after any "compute " is "module " is a function of
+   a native module instead, which vm/native_module.c binds. */
 static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t span) {
   const char *at = text->data;
   size_t left = text->bytes;
-  bool compute = left >= COMPUTE_PREFIX_LEN && memcmp(at, COMPUTE_PREFIX, COMPUTE_PREFIX_LEN) == 0;
+  bool compute;
+  size_t module = module_start(at, left, &compute);
+  if (module) return module_entry(vm, text, module, compute, span);
   if (compute) {
     at += COMPUTE_PREFIX_LEN;
     left -= COMPUTE_PREFIX_LEN;
@@ -1231,6 +1259,29 @@ bool agc_ffi_end(agc_vm *vm, int (*stop_signal)(void)) {
   bool done = end_step(vm, items, count, &skipped, by);
   /* After a stop signal what a running call holds is left on purpose: no timeout to report. */
   return done && (!skipped || stop_signal());
+}
+
+void agc_ffi_forget(agc_vm *vm) {
+  agc_runtime *rt = vm->rt;
+  /* The fuzz driver's allocation limit may stop agc_vm_init before the runtime is set. */
+  if (!rt) return;
+  agc_ffi_cache *c = rt->ffi;
+  for (size_t k = 0; c && k < c->size; k++) {
+    ffi_entry *e = c->slots[k];
+    /* A prepared call is never freed (C may still run it); no_files makes none. */
+    if (!e || e->call) continue;
+    if (e->module) agc_native_unbind(e->module);
+    if (e->result_struct) struct_free(e->result_struct);
+    free(e->key);
+    free(e);
+  }
+  if (c) {
+    free(c->slots);
+    free(c->holds);
+    free(c);
+  }
+  rt->ffi = NULL;
+  agc_native_forget(rt);
 }
 
 /* A resource NAME around POINTER, freed by FREE_CALL (at the address FREE_AT unless NULL; with the address of the
@@ -1915,12 +1966,17 @@ static void release_for_call(agc_vm *vm, const ffi_entry *e, call_holds *h) {
    one (sqlite3_column_text). Not a shared row: the compute half and each of those sections take rt->sync
    themselves. */
 static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span) {
-  /* The fuzzer runs hand-made bytecode with no_files: it must open no library. */
-  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
+  /* The fuzzer runs hand-made bytecode with no_files: it must open no library. A function of a native module is
+     checked by the module half, since the modules that the binary carries run there. */
+  const agc_string *signature = agc_as_string(vm, args[0]);
+  bool compute;
+  if (vm->rt->no_files && !module_start(signature->data, signature->bytes, &compute))
+    agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
   ffi_entry *e = call_entry(vm, args[0], false, span);
   const agc_list *values = agc_as_list(vm, args[1]);
   if (agc_list_len(values) != e->inputs)
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: wrong number of native arguments", span);
+  if (e->module) return agc_native_call(vm, e->module, values, span);
   void *fn = e->by_pointer ? function_at(vm, agc_list_get(values, 0), span) : NULL;
   void *free_at = e->free_input >= 0 ? function_at(vm, agc_list_get(values, (size_t)e->free_input), span) : NULL;
   for (uint32_t k = 0; k < e->count; k++) {

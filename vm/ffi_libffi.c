@@ -299,6 +299,14 @@ bool agc_ffi_has_function(const char *library, const char *symbol) {
   return found;
 }
 
+void *agc_ffi_symbol(const char *library, const char *symbol, char *error, size_t size) {
+  void *lib = library_open(library, error, size);
+  if (!lib) return NULL;
+  void *found = library_symbol(lib, library, symbol, error, size);
+  if (!found) library_close(lib);
+  return found;
+}
+
 agc_ffi_call *agc_ffi_prepare(const char *library, const char *symbol, agc_c_type result, const agc_c_type *params,
                               uint32_t count, uint32_t fixed, agc_c_struct *result_struct,
                               agc_c_struct *const *structs, char *error, size_t size) {

@@ -8,10 +8,10 @@ for tool in rg nm; do command -v "$tool" >/dev/null || { bad "$tool is not insta
 obj="$(cd "${1:?usage: check-layers.sh OBJECT_DIR}" && pwd)"
 cd "$(dirname "$0")/.."
 core="value.c map.c list.c equal.c text.c unicode_data.c json_value.c interp.c task.c runq.c inbox.c compute.c sync.c timers.c task_map.c channel.c mutex.c loop.c input.c output.c stdio_posix.c stdio_windows.c poll_posix.c poll_windows.c clock_posix.c clock_windows.c random.c loader.c builtins.c diag.c trace.c profile.c jit/jit.c jit/emit_x64.c jit/emit_a64.c jit/mem_posix.c jit/mem_windows.c"
-services="strings.c bytes.c text_codec.c numbers.c crypto.c json.c json_typed.c files.c zlib.c tree.c stream.c lazy.c ats.c duplex.c process.c system.c tcp.c http_fields.c http_service.c http_server.c http_wire.c tls_context.c logger.c regex.c testing.c front_end.c ffi.c"
+services="strings.c bytes.c text_codec.c numbers.c crypto.c json.c json_typed.c files.c zlib.c tree.c stream.c lazy.c ats.c duplex.c process.c system.c tcp.c http_fields.c http_service.c http_server.c http_wire.c tls_context.c logger.c regex.c testing.c front_end.c ffi.c native_module.c"
 adapters="tls_openssl.c tls_trust.c tls_trust_posix.c tls_trust_darwin.c tls_trust_windows.c digest_openssl.c zlib_codec.c http_pico.c http_body.c file_io.c file_windows.c process_posix.c process_windows.c duplex_posix.c duplex_windows.c system_posix.c system_windows.c net_posix.c net_windows.c ffi_libffi.c ffi_none.c"
 driver="launch.c agentica.c builtin_tables.c fuzz.c fuzz_libfuzzer.c"
-headers="value.h port.h core.h services.h net.h http_fields.h tls.h tls_trust.h digest.h zlib_codec.h http_parse.h trace.h list_impl.h launch.h embedded.h file_io.h process_os.h duplex_os.h system_os.h net_os.h ffi_os.h jit/jit.h"
+headers="value.h port.h core.h services.h net.h http_fields.h tls.h tls_trust.h digest.h zlib_codec.h http_parse.h trace.h list_impl.h launch.h embedded.h file_io.h process_os.h duplex_os.h system_os.h net_os.h ffi_os.h agentica_native.h jit/jit.h"
 memory="agc_alloc agc_alloc_atomic agc_size_add agc_size_mul agc_out_of_memory"
 inc='^\s*#\s*include\s*["<](\.\.?/)?'
 found() { s=0; rg "$@" || s=$?; [ "$s" -le 1 ] || { bad "rg failed: $*"; return 1; }; [ "$s" -eq 0 ]; }
@@ -54,6 +54,7 @@ chain duplex_os.h
 chain system_os.h
 chain net_os.h
 chain ffi_os.h
+chain agentica_native.h
 # The JIT is core (docs/vm/05-values-execution-builtins.md §6.4): jit.h is its one header, and it includes only core.h.
 chain jit/jit.h ../core.h
 for f in jit/*.c; do chain "$f" jit.h; done

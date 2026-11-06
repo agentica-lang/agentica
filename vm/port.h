@@ -361,6 +361,9 @@ typedef struct {
   agc_front_end *front_end;
   /* The prepared native calls of the run (vm/ffi.c), made at the first call of each extern function; NULL before. */
   struct agc_ffi_cache *ffi;
+  /* The native modules of the run (vm/native_module.c): those the binary carries, then each one loaded; malloc'd,
+     under rt->sync. */
+  struct agc_native_library *native_modules;
   /* The callbacks of the run, one per function and C types, whose closures are made once and never freed
      (vm/ffi.c, callback_data). GC memory, under rt->sync. */
   struct agc_ffi_callback *ffi_callbacks;

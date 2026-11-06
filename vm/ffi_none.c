@@ -45,6 +45,13 @@ bool agc_ffi_has_function(const char *library, const char *symbol) {
   return false;
 }
 
+void *agc_ffi_symbol(const char *library, const char *symbol, char *error, size_t size) {
+  (void)library;
+  (void)symbol;
+  snprintf(error, size, "native calls are not supported on this system yet");
+  return NULL;
+}
+
 void agc_ffi_discard(agc_ffi_call *call) { (void)call; }
 
 void agc_ffi_invoke(agc_ffi_call *call, void *fn, agc_c_value *args, agc_c_value *result) {

@@ -29,6 +29,11 @@ layout before blaming list code):
   run them again with `AGENTICA_VM_TEST_SHARED=1` to see the cost with the locks
   on. `deadline-pingpong` and `sleepers` time the timed parks (`--size 8`).
 
+`make bench-native` (`benchmarks/native/run.py`) times one native call, a
+short call of a native module against an extern `def`, a `compute def` and a
+plain call, in ns per call with the loop included; it builds
+`tests/fixtures/native/module_demo.c` with the system compiler.
+
 A new program needs `def scale() -> Int` returning 1 (the script rewrites it for
 `--size`), a deterministic checksum line, and a Python twin that takes the size
 as `argv[1]`. The HTTP sanity check is apart: `python3

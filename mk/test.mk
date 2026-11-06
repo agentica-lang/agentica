@@ -2,7 +2,7 @@
 # conformance, goldens, smoke, fmt-check, check-compiler, benchmarks, jscpd (dup-check) and the Ubuntu test container. The C tests are in mk/vm-test.mk.
 
 .PHONY: test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-cli conformance conformance-report \
-  test-bdd smoke fmt-check check-compiler goldens bench eval-references vm-latency vm-task-map test-distribution vm-golden-check dup-check dup-baseline \
+  test-bdd smoke fmt-check check-compiler goldens bench bench-native eval-references vm-latency vm-task-map test-distribution vm-golden-check dup-check dup-baseline \
   docker-test-image windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions test-jit-off
 
 # Tests live in tests/test_<area>.py and run through pytest; unittest.TestCase modules remain supported.
@@ -141,6 +141,10 @@ test-jit-off: $(PRODUCT) $(if $(filter true,$(GITHUB_ACTIONS)),vm-test-binaries)
 # Speed check (docs/vm-benchmarks.md): make bench BENCH_ARGS="--runs 3 --size 2"
 bench: $(PRODUCT)
 	python3 benchmarks/run.py $(BENCH_ARGS)
+
+# The cost of one native call, module, extern def and compute def (benchmarks/native/run.py): BENCH_ARGS="--runs 9"
+bench-native: $(PRODUCT)
+	python3 benchmarks/native/run.py $(BENCH_ARGS)
 
 eval-references:
 	python3 tests/eval/run.py --check-references --jobs 8
