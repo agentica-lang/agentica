@@ -3,13 +3,14 @@
 `receiver.name(args)` calls a builtin whose first parameter has the receiver's
 type. The checker picks the module from the static type (`String`, `Bytes`,
 `List`, `Map`, `Set`, `Float`, `Result`, `Range`, `Int`, `Json` through `JSON`,
-and `Codec[T]` through `Codec`); there is no dynamic dispatch.
-`s.strip` is `String.trim(s)`, but `"a".from_int` is not a method. The methods
-of a codec have no function form. Without parentheses, `receiver.name` on a non-struct value
-is a method without arguments (`s.length`, `r.ok?`). On a struct, `.name` is a
-field. Structs and enums have no methods. The forms on a type name are
-`Type.members`, the list of the fields of a struct (`docs/grammar/06-semantics.md`,
-"Structs and lists"), and `Type.codec`, its codec (JSON, below).
+and `Codec[T]` through `Codec`); there is no dynamic dispatch. `s.strip` is
+`String.trim(s)`, but `"a".from_int` is not a method. The methods of a codec are
+also functions, `Codec.decode(c, s)`, as `String.upcase` is. Without
+parentheses, `receiver.name` on a non-struct value is a method without arguments
+(`s.length`, `r.ok?`). On a struct, `.name` is a field. Structs and enums have
+no methods. The forms on a type name are `Type.members`, the list of the fields
+of a struct (`docs/grammar/06-semantics.md`, "Structs and lists"), and
+`Type.codec`, its codec (JSON, below).
 
 Ruby aliases are the module functions named in the library pages: `strip`,
 `include?`, `start_with?`, `end_with?`, `push`, `join`, `select`, `key?`,
@@ -97,7 +98,8 @@ the checker enforces:
   members as a value, for generic code, which cannot call `decode` on its type
   parameter. `codec.decode`, `codec.encode` and `codec.from` are the JSON
   functions of `T`, and `codec.members` is the `List[StructMember]` of
-  `T.members` (empty for an enum). `Codec` is a reserved type name. A codec
+  `T.members` (empty for an enum). `Codec` is reserved as a type name and as
+  an import alias (`import Codec from "x"` is `CHECK-REDEFINED-NAME`). A codec
   follows the rules of an `Fn` value: it may be a parameter, a struct field or a
   list item, and it has no `to_s`, `inspect` or equality and is no constant or
   `ATS` value. `IO.inspect` of a type that holds a codec is

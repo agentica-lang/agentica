@@ -66,7 +66,7 @@ the check. `JSON.decode(text, T)` stays `CHECK-NOT-DECODABLE`: take a
 `encode` and `from` behave as `JSON.decode`, `JSON.encode` and `JSON.from` for
 that type, and `codec.members` is `T.members` (empty for an enum). A codec is
 like an `Fn` value: a parameter, field or list item, but no printing, `==`,
-constant or `ATS` value. `Codec` is a reserved type name; `JSON.codec(T)` and
+constant or `ATS` value. `Codec` is reserved (type name and import alias); `JSON.codec(T)` and
 `JSON.Codec[T]` do not exist.
 
 ```ruby

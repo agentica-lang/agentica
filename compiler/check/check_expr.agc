@@ -204,7 +204,7 @@ def check_type_name(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[St
       cx,
       st,
       "CHECK-TYPE-MISMATCH",
-      "a type name is only valid as a JSON type argument",
+      "a type name is only valid as a JSON type argument or before .members or .codec",
       node.span,
       Help.foreign(cx.help, node.name),
     ),

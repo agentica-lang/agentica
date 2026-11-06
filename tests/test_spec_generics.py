@@ -9,7 +9,7 @@ import time
 import pytest
 
 from tests.agentica_test import scaled
-from tests.spec_support import assert_rule
+from tests.spec_support import assert_rule, covered
 
 FIRST_OR = (
     "def first_or[T](xs: List[T], fallback: T) -> T\n"
@@ -456,6 +456,14 @@ def test_a_struct_with_every_nil_shape_of_its_arguments_checks_fast(agentica_che
 def test_codec_rules(agentica_check, name):
     program, code, text = CODEC_RULES[name]
     assert_rule(agentica_check(program), program, code, text)
+
+
+def test_codec_is_reserved_as_an_import_alias(agentica_check):
+    program = 'import Codec from "m"\n\n' + main("puts(1)")
+    found = agentica_check({"m.agc": "export def f() -> Int\n  return 1\nend\n", "main.agc": program})
+    assert found["code"] == "CHECK-REDEFINED-NAME"
+    assert covered(program, found["range"]).startswith('import Codec from "m"')
+    assert "choose another alias" in found["help"]
 
 
 def test_a_codec_crosses_modules(agentica_check):

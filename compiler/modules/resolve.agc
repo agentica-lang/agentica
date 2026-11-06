@@ -190,13 +190,13 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
     return ok("#{alias}.#{member}")
   end
 
+  message = "unknown module alias"
+  if alias == "JSON" and member == "Codec"
+    message = "JSON.Codec no longer exists"
+  end
+
   return error(
-    Failure.fail_at(
-      site(cx, span),
-      "CHECK-IMPORT-NAME",
-      "unknown module alias",
-      Failure.hint(alias_help(alias, member, hint)),
-    ),
+    Failure.fail_at(site(cx, span), "CHECK-IMPORT-NAME", message, Failure.hint(alias_help(alias, member, hint))),
   )
 end
 
