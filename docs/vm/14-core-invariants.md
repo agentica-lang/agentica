@@ -282,9 +282,11 @@ every fast call that was in C on some scheduler at the free has returned
 (`retire_closure`: each scheduler's `c_seq` is odd while its thread is in C),
 since C may have read the pointer of a handler it stored before the close and
 call it after: it then reaches the closed callback, which gives zero. A compute
-call is not counted (its pool thread runs no callback), so its C must not call a
-closed callback. The end of the run frees what is still open (§14.4, step 3).
-There are no GC finalizers.
+call is not counted, in `callers` or in a `c_seq`: its pool thread does enter a
+callback's closure (`callback_entry` runs and refuses it), so a compute call
+whose C calls a callback closed during the call may jump into freed code. Its C
+must not call a closed callback. The end of the run frees what is still open
+(§14.4, step 3). There are no GC finalizers.
 
 A channel is the one handle made unowned. `Channel.new` makes no registry entry.
 The first `Task.spawn_owning` of it (any task may do it) registers an entry with

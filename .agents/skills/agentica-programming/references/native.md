@@ -103,21 +103,23 @@ end
   NULL")`); the resource is owned by the calling task. `Native.close(db)` frees
   once (a second close does nothing); a call with a closed resource is
   `RUNTIME-NATIVE-CLOSED`. The owner's end frees what it did not close;
-  `Task.spawn_owning(&f, db)` hands it on. A `compute def` call keeps its
-  resource until it returns (a close or cancel meanwhile defers the free), and
-  what it comes from (a statement keeps its database). The end of the run frees
-  every resource and buffer still open (any task's), newest first, after waiting
-  for running calls that hold one; the wait and the frees share the
-  `--flush-timeout` limit (0 frees nothing), and what is slower is left with one
-  stderr warning. Any task may pass a resource or buffer to C (no owner check);
-  only the owner's end frees it, and `Native.close`/`free` by any task closes it
-  for all. Two tasks inside C on one object race, as in C. A free that blocks
-  (`mysql_close`) runs on the scheduler and stalls other tasks. A parent handed
-  to another task may be freed before its children: close the children first, or
-  keep them in one task. A function that returns a borrowed pointer must be `->
-  C.Pointer`, or it is freed twice. A `def` of the free function in the block is
-  `PARSE-EXTERN-FREE` (per block: never declare it in another). Resources and
-  `C.Pointer` do not convert; no `to_s` or JSON; inspects as `<Db>`.
+  `Task.spawn_owning(&f, db)` hands it on. A running call (`def` or `compute
+  def`) keeps its resource until it returns (a close, or a cancel of a `compute
+  def`, meanwhile defers the free), and what it comes from, one level up only (a
+  statement keeps its database, a row of the statement does not): close children
+  before parents. The end of the run frees every resource and buffer still open
+  (any task's), newest first, after waiting for running calls that hold one; the
+  wait and the frees share the `--flush-timeout` limit (0 frees nothing), and
+  what is slower is left with one stderr warning. Any task may pass a resource
+  or buffer to C (no owner check); only the owner's end frees it, and
+  `Native.close`/`free` by any task closes it for all. Two tasks inside C on one
+  object race, as in C. A free that blocks (`mysql_close`) runs on the scheduler
+  and stalls other tasks. A parent handed to another task may be freed before
+  its children: close the children first, or keep them in one task. A function
+  that returns a borrowed pointer must be `-> C.Pointer`, or it is freed twice.
+  A `def` of the free function in the block is `PARSE-EXTERN-FREE` (per block:
+  never declare it in another). Resources and `C.Pointer` do not convert; no
+  `to_s` or JSON; inspects as `<Db>`.
   ~~~ruby
   extern "libc.so.6"
     resource Stream, free: fclose
