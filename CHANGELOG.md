@@ -8,10 +8,18 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `agentica lint` no longer hides a `+` chain or a single pipe that sits first
+  in a chain of the other kind (`("n=" + n.to_s) |> f()`, `(a |> f()) + "x"`),
+  and the help of `LINT-IF-CHAIN` without an `else` asks for a `_` arm.
+
+## [0.24.4] - 2026-11-06
+
 ### Added
 
-- The documentation site has a version selector: one site per release
-  (`/0.24.3/`, ...) and `/dev/`, with the latest release at the root.
+- The documentation site has a version selector: one site per release and
+  `/dev/`.
 - `ATS[Bytes, V]`: a shared table takes `Bytes` keys, as a `Map` does.
 - `Native.mutex()` and `lock.synchronize do ... end` guard the calls of a
   native library that is not thread-safe; a waiting task parks.
@@ -1101,7 +1109,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.24.3...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.24.4...HEAD
+[0.24.4]: https://github.com/agentica-lang/agentica/compare/0.24.3...0.24.4
 [0.24.3]: https://github.com/agentica-lang/agentica/compare/0.24.2...0.24.3
 [0.24.2]: https://github.com/agentica-lang/agentica/compare/0.24.1...0.24.2
 [0.24.1]: https://github.com/agentica-lang/agentica/compare/0.24.0...0.24.1

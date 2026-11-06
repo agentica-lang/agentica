@@ -83,14 +83,26 @@ def help(name: String, imports: List[Ast.ImportDecl]) -> String
   end
 
   for item in imports
-    for imported in item.names
-      if item.path == path and imported.name == local
-        return "`#{imported.local}` is already imported from \"#{path}\": write it in place of `#{name}`"
+    if item.path == path
+      case bound_as(item, local)
+        some(bound) -> return "`#{bound}` is already imported from \"#{path}\": write it in place of `#{name}`"
+        none -> path = path
       end
     end
   end
 
   return "import it by name: `import {#{local}} from \"#{path}\"` (`as V` gives a shorter name)"
+end
+
+# The name that `import {name}` of the declaration binds, `none` when it does not import `name`.
+def bound_as(item: Ast.ImportDecl, name: String) -> Optional[String]
+  for imported in item.names
+    if imported.name == name
+      return some(imported.local)
+    end
+  end
+
+  return none
 end
 
 def of_expr(expr: Ast.Expr) -> List[Mention]
@@ -120,23 +132,39 @@ def of_stmt(stmt: Ast.Stmt) -> List[Mention]
       while at < work.size
         current = work[at]
         at += 1
-        case current
-          Ast.Pattern.Variant(variant) ->
-            found = found.concat(qualified(variant.enum_name, variant.span))
-            for slot in variant.slots
-              case slot
-                Ast.Slot.Nested(inner) -> work = work.push(inner)
-                Ast.Slot.Bind(_, _) -> work = work
-                Ast.Slot.Skip -> work = work
-              end
-            end
-
-          Ast.Pattern.Wildcard(_) -> found = found
-          Ast.Pattern.Literal(_) -> found = found
-        end
+        found = found.concat(pattern_mentions(current))
+        work = work.concat(nested_patterns(current))
       end
 
       return found
     _ -> return []
   end
+end
+
+# The qualified name that the pattern itself writes: a variant, and nothing else.
+def pattern_mentions(pattern: Ast.Pattern) -> List[Mention]
+  case pattern
+    Ast.Pattern.Variant(variant) -> return qualified(variant.enum_name, variant.span)
+    Ast.Pattern.Wildcard(_) -> return []
+    Ast.Pattern.Literal(_) -> return []
+  end
+end
+
+# The patterns inside the slots of a variant pattern.
+def nested_patterns(pattern: Ast.Pattern) -> List[Ast.Pattern]
+  inner: List[Ast.Pattern] = []
+  case pattern
+    Ast.Pattern.Variant(variant) ->
+      for slot in variant.slots
+        case slot
+          Ast.Slot.Nested(nested) -> inner = inner.push(nested)
+          _ -> inner = inner
+        end
+      end
+
+    Ast.Pattern.Wildcard(_) -> inner = inner
+    Ast.Pattern.Literal(_) -> inner = inner
+  end
+
+  return inner
 end
