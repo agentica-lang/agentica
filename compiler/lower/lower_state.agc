@@ -232,7 +232,7 @@ export def vm_type?(cx: Cx, type: Types.Type) -> Bool
     Types.Type.Task(item) -> return Types.is?(item, "Void") or vm_type?(cx, item)
     Types.Type.Channel(item) -> return vm_type?(cx, item)
     Types.Type.Lazy(item) -> return vm_type?(cx, item)
-    # A codec is the name of its struct at run time (JSON.codec).
+    # A codec is a Codec.Info record at run time (T.codec).
     Types.Type.Codec(_) -> return true
     Types.Type.Struct(name, _) -> return cx.user_types.get(name, "") == "Struct"
     Types.Type.Enum(name, _) -> return cx.user_types.get(name, "") == "Enum"

@@ -16,9 +16,9 @@ export enum Rule
   ChannelTarget
   CodecDecode
   CodecEncode
+  CodecMembers
   Error
   Identity
-  JsonCodec
   JsonDecode
   JsonEncode
   JsonFrom

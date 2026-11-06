@@ -58,6 +58,11 @@ export def ensure_printable(cx: State.Cx, st: State.St, type: T.Type, span: Sour
   return ok(true)
 end
 
+## Type.codec: the codec of the struct or enum named by the type name, which must be a type JSON.decode takes.
+export def check_codec_of(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[T.Type]
+  return ok(T.Type.Codec(try json_target(cx, st, node)))
+end
+
 # CHECK-ARITY: no form of the builtin takes this many arguments. The note is the signature of every form. A call
 # written in method form (the receiver is the first argument, a Typed node) names the Ruby method and counts the
 # arguments after the receiver: `s.include?` expects 1, not 2.
@@ -211,9 +216,9 @@ def check_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -
     Model.Rule.JsonSchema -> return check_json_type(cx, st, site, false)
     Model.Rule.JsonEncode -> return check_json_encode(cx, st, site, false)
     Model.Rule.JsonFrom -> return check_json_encode(cx, st, site, true)
-    Model.Rule.JsonCodec -> return check_json_codec(cx, st, site)
     Model.Rule.CodecDecode -> return check_codec_decode(cx, st, site)
     Model.Rule.CodecEncode -> return check_codec_encode(cx, st, site)
+    Model.Rule.CodecMembers -> return check_codec_members(cx, st, site)
     Model.Rule.TestEq -> return check_test_eq(cx, st, site)
     Model.Rule.Prelude -> return PreludeCalls.check_prelude_call(cx, st, site)
     _ -> return check_result_rule(cx, st, site, rule)
@@ -248,8 +253,9 @@ def check_show(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out
   return ok(State.Out(st: out.st, type: T.Type.Void))
 end
 
-# IO.inspect: any value, except one whose type holds a JSON.Codec, which has no inspect (a codec is its struct's name
-# at run time, and would print as that String). A T of a generic body is not looked into: it may still be a codec.
+# IO.inspect: any value, except one whose type holds a Codec, which has no inspect (a codec is a record of the name
+# and the members of its type at run time, and has no text of its own). A T of a generic body is not looked into: it
+# may still be a codec.
 def check_identity(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   out = try State.expr(cx, st, site.args[0], site.expected)
   if Collections.holds_codec?(cx, out.type)
@@ -258,7 +264,7 @@ def check_identity(cx: State.Cx, st: State.St, site: State.Site) -> Result[State
         cx,
         out.st,
         "CHECK-TYPE-MISMATCH",
-        "#{T.to_text(out.type)} cannot be inspected: a JSON.Codec has no inspect",
+        "#{T.to_text(out.type)} cannot be inspected: a Codec has no inspect",
         Ast.expr_span(site.args[0]),
         "inspect the values the codec reads or writes instead",
       ),
@@ -358,19 +364,18 @@ def check_json_type(cx: State.Cx, st: State.St, site: State.Site, decode: Bool) 
   return ok(State.Out(st: current, type: T.Type.Json))
 end
 
-# JSON.codec(Type): the codec of the struct or enum, with the type argument JSON.decode takes.
-def check_json_codec(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
-  type = try json_type(cx, st, site.args[0])
-  return ok(State.Out(st: st, type: T.Type.Codec(type)))
-end
-
 # codec.decode(source): JSON.decode into the struct of the codec, from JSON text or a Json value. The receiver of a
-# codec method is a JSON.Codec: the rows are reached only as methods of one, since the parser has no function form of
-# a name with two dots (check_method gives the help for JSON.Codec.decode(...)).
+# codec method is a Codec: the rows are reached only as methods of one.
 def check_codec_decode(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   codec = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   current = try check_decode_source(cx, codec.st, site.args[1])
   return ok(State.Out(st: current, type: T.Type.Result(T.item(codec.type))))
+end
+
+# codec.members: the fields of the struct of the codec, as T.members gives them.
+def check_codec_members(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  codec = try State.expr(cx, st, site.args[0], T.Type.Unknown)
+  return ok(State.Out(st: codec.st, type: site.selected.result))
 end
 
 # codec.encode(value) and codec.from(value): a value of the struct of the codec, which can be written as JSON because

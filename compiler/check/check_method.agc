@@ -10,11 +10,11 @@ import Calls from "check_call"
 import Help from "check_help"
 import Names from "check_names"
 import State from "check_state"
+import Rules from "check_rules"
 import CheckTypes from "check_types"
 
 ## Checks target.name(args).
 export def check_method(cx: State.Cx, st: State.St, node: Ast.MethodCall, expected: T.Type) -> Result[State.Out]
-  try codec_function(cx, st, node.target, node.name, node.span)
   target = try State.expr(cx, st, node.target, T.Type.Unknown)
   if node.name == "each" and foreach_call?(node.target)
     return error(
@@ -69,12 +69,13 @@ export def check_field_access(cx: State.Cx, st: State.St, node: Ast.FieldAccess,
     Ast.Expr.TypeName(type_name) ->
       if node.name == "members"
         return check_members(cx, st, node, type_name)
+      elsif node.name == "codec"
+        return check_codec(cx, st, node, type_name)
       end
 
     _ -> st = st
   end
 
-  try codec_function(cx, st, node.target, node.name, node.span)
   target = try State.expr(cx, st, node.target, T.Type.Unknown)
   if field_target?(cx, target.type, node.name)
     return check_struct_field(cx, target.st, node, target.type)
@@ -104,30 +105,6 @@ end
 def check_field_call(cx: State.Cx, st: State.St, node: Ast.MethodCall, field: Model.Named) -> Result[State.Out]
   called = try apply_function(cx, st, field.type, node.args, node.span)
   return ok(State.Out(st: State.record_resolved(called.st, node.id, State.Resolved.FieldCall), type: called.type))
-end
-
-# JSON.Codec.decode(codec, text) and the other methods of a codec written as functions: CHECK-UNKNOWN-NAME, since they
-# are methods only (a name with two dots has no function form). Any other target passes.
-def codec_function(cx: State.Cx, st: State.St, target: Ast.Expr, name: String, span: Source.Span) -> Result[Bool]
-  case target
-    Ast.Expr.TypeName(type_name) ->
-      if type_name.name == "JSON.Codec"
-        return error(
-          State.fail_help(
-            cx,
-            st,
-            "CHECK-UNKNOWN-NAME",
-            "JSON.Codec.#{name} is no function: decode, encode and from are methods of a codec",
-            span,
-            "call it on a codec value: codec.#{name}(...)",
-          ),
-        )
-      end
-
-    _ -> return ok(true)
-  end
-
-  return ok(true)
 end
 
 # Type.members: the fields of a struct type, in declaration order, as a List[StructMember]. Lowering builds the list
@@ -166,6 +143,22 @@ def check_members(cx: State.Cx, st: State.St, node: Ast.FieldAccess, type_name: 
       "members lists the fields of a struct type; #{display} is not a struct",
     ),
   )
+end
+
+# Type.codec: the codec of a struct or enum JSON.decode takes, a Codec[T]. Lowering builds the codec from the name and
+# the fields recorded here (none for an enum): the members of the codec are the ones Type.members gives. A type that
+# cannot be decoded is CHECK-NOT-DECODABLE, as for JSON.decode.
+def check_codec(cx: State.Cx, st: State.St, node: Ast.FieldAccess, type_name: Ast.TypeName) -> Result[State.Out]
+  type = try Rules.check_codec_of(cx, st, type_name)
+  name = T.name(T.item(type))
+  fields = cx.structs.get(name)
+  members: List[Model.Named] = []
+  if fields.some?
+    members = fields.unwrap!
+  end
+
+  resolved = State.record_resolved(st, node.id, State.Resolved.Codec(name, members))
+  return ok(State.Out(st: resolved, type: type))
 end
 
 # A struct is read by field unless the name is to_s or inspect and the struct has no such field.

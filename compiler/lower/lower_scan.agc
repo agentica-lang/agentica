@@ -101,7 +101,13 @@ def walked_children(node: AstWalk.Node) -> List[AstWalk.Node]
       case expr
         Ast.Expr.FieldAccess(access) ->
           case access.target
-            Ast.Expr.TypeName(_) -> return []
+            Ast.Expr.TypeName(_) ->
+              # Type.codec reads the type at run time, so its name counts as a type used as a value.
+              if access.name == "codec"
+                return AstWalk.children(node)
+              end
+
+              return []
             _ -> return AstWalk.children(node)
           end
 

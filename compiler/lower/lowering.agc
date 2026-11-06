@@ -502,7 +502,7 @@ def names_in(type: Types.Type, watched: Set[String], found: Set[String]) -> Set[
     Types.Type.Task(item) -> return names_in(item, watched, found)
     Types.Type.Channel(item) -> return names_in(item, watched, found)
     Types.Type.Lazy(item) -> return names_in(item, watched, found)
-    Types.Type.Codec(item) -> return names_in(item, watched, found)
+    Types.Type.Codec(item) -> return names_in(item, watched, only("Codec.Info", watched, found))
     Types.Type.Map(key, value) -> return names_in(value, watched, names_in(key, watched, found))
     Types.Type.ATS(key, value) -> return names_in(value, watched, names_in(key, watched, found))
     Types.Type.Fn(params, result) -> return names_in(result, watched, names_in_all(params, watched, found))

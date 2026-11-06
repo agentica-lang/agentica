@@ -703,7 +703,7 @@ def resolve_expanded(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool)
     return ok(Types.Type.Channel(try resolve_expanded(cx, st, args[0], false)))
   elsif name == "Lazy" and args.size == 1
     return ok(Types.Type.Lazy(try resolve_expanded(cx, st, args[0], false)))
-  elsif name == "JSON.Codec" and args.size == 1
+  elsif name == "Codec" and args.size == 1
     return ok(Types.Type.Codec(try resolve_expanded(cx, st, args[0], false)))
   elsif name == "Fn"
     return resolve_function(cx, st, args)
@@ -896,6 +896,7 @@ def shared_type_names(cx: State.Cx) -> List[String]
     "Task",
     "Channel",
     "Lazy",
+    "Codec",
     "ATS",
     "Range",
     "Bytes",

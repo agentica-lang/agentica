@@ -112,6 +112,32 @@ export def lower_members(
   return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
 end
 
+## Type.codec: a Codec.Info record of the linked name of the type and the list Type.members gives for its fields. The
+## `struct` instruction reads the name and the members from the two registers after its own.
+export def lower_codec(
+  cx: State.Cx,
+  fx: State.Fx,
+  name: String,
+  fields: List[Model.Named],
+  span: Source.Span,
+  want: Int,
+) -> Result[State.Out]
+  fx = State.step(fx, span)
+  saved = fx.next
+  fx = State.alloc(State.alloc(State.alloc(fx)))
+  base = fx.next - 3
+  fx = State.emit_const(fx, base + 1, Ir.Imm.Text(name), span)
+  members = try lower_members(cx, fx.with(next: base + 3), fields, span, base + 2)
+  fx = State.emit_at(members.fx, "struct", [base, base + 1, cx.structs["Codec.Info"].index], span)
+  dst = base
+  if want >= 0
+    fx = State.emit_at(fx, "move", [want, base], span)
+    dst = want
+  end
+
+  return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
+end
+
 ## A map literal: key and value registers one after the other. One `map` instruction gathers at most MAX_CHUNK entries;
 ## the rest are added with Map.put.
 export def lower_map(cx: State.Cx, fx: State.Fx, node: Ast.MapLit, want: Int) -> Result[State.Out]

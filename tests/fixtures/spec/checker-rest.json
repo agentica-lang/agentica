@@ -10666,7 +10666,7 @@
       ],
       "code": "CHECK-REDEFINED-NAME",
       "start": [1, 1],
-      "help": false
+      "help": true
     },
     {
       "program": [

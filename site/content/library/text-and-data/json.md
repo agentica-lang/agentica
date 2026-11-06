@@ -116,14 +116,16 @@ end
 ["x","y"]
 ```
 
-## JSON.codec
+## T.codec
+
+`User.codec` (on the type, without parentheses, as `User.members`) is the `Codec[User]` of a struct or enum that `JSON.decode` takes.
 
 ```signature
-JSON.codec(type: T) -> JSON.Codec[T]
 codec.decode(s: String) -> Result[T]
 codec.decode(json: Json) -> Result[T]
 codec.encode(value: T) -> String
 codec.from(value: T) -> Json
+codec.members() -> List[StructMember]
 ```
 
 A generic function may call `JSON.encode` and `JSON.from` on a value of its type parameter `T` (or of `List[T]`, `Map[String, T]`, `Optional[T]`, or a generic struct or enum of `T`): each call of the function then checks that the type it binds to `T` can be written as JSON, and a call with an `Fn`, a `Bytes` or a `Task` is `CHECK-NOT-ENCODABLE` at that argument. A generic function that passes its `T` on carries the same check to its own callers.
@@ -144,7 +146,7 @@ end
 {"ok":true}
 ```
 
-`JSON.decode` needs the type at run time, so a generic function cannot call it on `T`. It takes a `JSON.Codec[T]` instead, and the caller passes `JSON.codec(User)`, which takes the struct and enum names that `JSON.decode` takes. `decode`, `encode` and `from` work as `JSON.decode`, `JSON.encode` and `JSON.from` do for that struct: `codec.encode(x)` and `codec.from(x)` take an `x` of type `T`.
+`JSON.decode` needs the type at run time, so a generic function cannot call it on `T`. It takes a `Codec[T]` instead, and the caller passes `User.codec`, on the struct and enum names that `JSON.decode` takes. `decode`, `encode` and `from` work as `JSON.decode`, `JSON.encode` and `JSON.from` do for that type: `codec.encode(x)` and `codec.from(x)` take an `x` of type `T`. `codec.members` is the list that [`User.members`](/tour/structs/#list-the-fields) gives, empty for an enum, so generic code that needs the fields of a type needs no JSON.
 
 ```agentica
 struct User
@@ -152,17 +154,17 @@ struct User
   age: Int
 end
 
-def body_as[T](body: String, codec: JSON.Codec[T]) -> Result[T]
+def body_as[T](body: String, codec: Codec[T]) -> Result[T]
   return codec.decode(body)
 end
 
-def show[T](codec: JSON.Codec[T], value: T) -> String
+def show[T](codec: Codec[T], value: T) -> String
   return codec.encode(value)
 end
 
 def main() -> Void
-  user = body_as("{\"name\": \"Ana\", \"age\": 25}", JSON.codec(User)).unwrap!
-  puts(show(JSON.codec(User), user))
+  user = body_as("{\"name\": \"Ana\", \"age\": 25}", User.codec).unwrap!
+  puts(show(User.codec, user))
 end
 ```
 
@@ -170,11 +172,11 @@ end
 {"name":"Ana","age":25}
 ```
 
-A codec can be a parameter, a struct field or a list item, as a function value can. Like a function value, it cannot be printed or compared, and it cannot be a constant or an `ATS` value. `IO.inspect` refuses a value that holds a codec (`CHECK-TYPE-MISMATCH`; in a generic body, `IO.inspect(x)` of a `T` that is a codec prints the struct's name as a `String`), and `decode`, `encode` and `from` are written only as methods: `JSON.Codec.decode(c, text)` is `CHECK-UNKNOWN-NAME`.
+A codec can be a parameter, a struct field or a list item, as a function value can. Like a function value, it cannot be printed or compared, and it cannot be a constant or an `ATS` value. `IO.inspect` refuses a value that holds a codec (`CHECK-TYPE-MISMATCH`; in a generic body, `IO.inspect(x)` of a `T` that is a codec prints the record of its name and members). `Codec` is reserved, as a type name and as an import alias (`import Codec from "..."` is `CHECK-REDEFINED-NAME`; pick another alias). `JSON.codec(User)` and `JSON.Codec[T]` were replaced by `User.codec` and `Codec[T]`.
 
 ## Optional values
 
-An [`Optional[T]`](/library/data-structures/optional/) is JSON's `null` or a `T`: `none` writes `null` and `some(x)` writes `x`. `JSON.decode` reads `null` as `none`, and a missing key of an `Optional` field too; any other value is decoded as `T` and gives `some(...)`, with the error texts of `JsonField` (`age: expected signed 64-bit Int or null`, `tags[0]: expected String or null`). It works for a field, a list item, a map value, an `Optional` item and the whole value of `JSON.encode` and `JSON.from`; `JSON.decode`, `JSON.schema` and `JSON.codec` take a struct name, so a top-level `Optional` is decoded as a field of a struct. A `none` field keeps its key when encoded. `JSON.schema` writes an `Optional` field as `{"anyOf": [<schema of T>, {"type": "null"}]}`. `JSON.schema` leaves an `Optional` field out of `required` and allows `null`.
+An [`Optional[T]`](/library/data-structures/optional/) is JSON's `null` or a `T`: `none` writes `null` and `some(x)` writes `x`. `JSON.decode` reads `null` as `none`, and a missing key of an `Optional` field too; any other value is decoded as `T` and gives `some(...)`, with the error texts of `JsonField` (`age: expected signed 64-bit Int or null`, `tags[0]: expected String or null`). It works for a field, a list item, a map value, an `Optional` item and the whole value of `JSON.encode` and `JSON.from`; `JSON.decode`, `JSON.schema` and `T.codec` take a struct name, so a top-level `Optional` is decoded as a field of a struct. A `none` field keeps its key when encoded. `JSON.schema` writes an `Optional` field as `{"anyOf": [<schema of T>, {"type": "null"}]}`. `JSON.schema` leaves an `Optional` field out of `required` and allows `null`.
 
 ```agentica
 struct Server

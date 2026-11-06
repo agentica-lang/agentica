@@ -248,6 +248,8 @@ def main() -> Void
 end
 ```
 
+`Type.codec` is next to it: the [codec](/library/text-and-data/json/#tcodec) of a struct or enum that JSON can read, a `Codec[T]` with the same `members` plus `decode`, `encode` and `from`. It is how generic code gets the fields and the JSON of a type it cannot name.
+
 ## Type parameters
 
 A struct can take type parameters after its name, as an enum does. The type argument comes from the values you give:
