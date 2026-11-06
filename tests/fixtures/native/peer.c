@@ -21,6 +21,7 @@
 #include <dirent.h>
 #include <fcntl.h>
 #include <pthread.h>
+#include <sys/resource.h>
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
@@ -984,6 +985,22 @@ int32_t peer_fire(int32_t ms) {
 }
 int32_t peer_fire_loaded(void) { return atomic_load(&fire_loaded); }
 
+/* A resource whose free is slow, MS milliseconds, and says so while it runs (peer_freeing): the VM frees a resource
+   with its lock held, so a call that needs that lock waits for the whole free. */
+static atomic_int freeing;
+void *peer_slow_open(int32_t ms) {
+  int32_t *r = malloc(sizeof *r);
+  if (r) *r = ms;
+  return r;
+}
+void peer_slow_free(void *p) {
+  atomic_store(&freeing, 1);
+  sleep_ms(*(int32_t *)p);
+  free(p);
+  atomic_store(&freeing, 2);
+}
+int32_t peer_freeing(void) { return atomic_load(&freeing); }
+
 /* A slow call that counts itself while it runs (peer_active), for a lock that must stay taken until C returns. */
 static atomic_int active;
 int32_t peer_slow(int32_t ms) {
@@ -1031,3 +1048,16 @@ int32_t peer_call_on_thread(peer_int_fn fn, int32_t x) {
   return c.got;
 }
 #endif
+
+/* Lowers the soft limit of processes to 1, so this process can start no thread from here on (Linux counts threads as
+   processes; root is not held to the limit): a compute call then finds no pool thread to run it. 0 when set. */
+int32_t peer_no_threads(void) {
+#ifdef __linux__
+  struct rlimit limit;
+  if (getrlimit(RLIMIT_NPROC, &limit) != 0) return -1;
+  limit.rlim_cur = 1;
+  return setrlimit(RLIMIT_NPROC, &limit) == 0 ? 0 : -1;
+#else
+  return -1;
+#endif
+}

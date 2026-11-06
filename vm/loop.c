@@ -130,9 +130,11 @@ struct agc_loop {
   /* agc_io_hand_off: the drain gives detached jobs to the schedulers. */
   bool hand_off;
   /* The compute pool (vm/compute.c), made by agc_io_share or else by the first compute job's START. Set before the
-     schedulers start when the loop is shared; I/O role only. `direct` is the same pool when agc_io_share made it: set
+     schedulers start when the loop is shared; I/O role only, but atomic, as a scheduler reads it to see the pool's
+     threads (agc_io_compute_pool) while a START may make it. `direct` is the same pool when agc_io_share made it: set
      before the schedulers start and cleared only after they have ended, so they read it to submit directly. */
-  agc_compute *compute, *direct;
+  agc_compute *_Atomic compute;
+  agc_compute *direct;
 };
 
 /* A job is malloc memory with up to three libuv pieces (pool work or a wait on the loop, the one timer) and its
@@ -581,7 +583,8 @@ static void close_timer(job *j) {
    so a START that reads it clear runs before any of them. The wait piece was never started: give its count back.
    A uv_queue_work that fails is known only here, on the I/O thread, after the task was parked: the outcome becomes
    EXPIRED with `start_failed` set, the task then fails in agc_io_finish ("cannot queue pool work"), and a detached
-   job drops its data in end_detached (with a trace line, since nobody else would hear of it). A wait on the loop
+   job drops its data in end_detached, or a compute job ends there through `done` (with a trace line, since nobody
+   else would hear of it). A wait on the loop
    (no pool work) with a `more` step starts its wait here, before the timer is armed, so the deadline always finds
    the wait started and `pause` can stop it; posted as a second request, the wait could start after the deadline.
    Once the run is over no task's job starts: agc_io_goodbye and the end's flushes run what is left in the inbox, and a
@@ -920,10 +923,12 @@ static void discard(agc_vm *vm, agc_value result) {
    task. The owner's reference goes at the end, as the task's does in agc_io_finish,
    but before `done` runs when `done` is called: a `done` that raises must not leak the job. It runs where the ready
    list is drained while one thread plays both roles, and on a scheduler (agc_io_service) once the loop is shared
-   (docs/vm/16-architecture.md §16.9). */
+   (docs/vm/16-architecture.md §16.9). A compute job whose work could not start ends through `done` too, as one whose
+   work was skipped does (run_compute): that half knows the work did not run, and it gives back what the job holds
+   (vm/ffi.c: the resources and the Native.Mutex lease of a compute call, which `drop` cannot reach off rt->sync). */
 static void end_detached(agc_vm *vm, agc_resource *r) {
   job *j = r->native;
-  if (atomic_load(&j->start_failed)) atomic_store(&j->dropping, true);
+  if (atomic_load(&j->start_failed) && !j->compute) atomic_store(&j->dropping, true);
   if (!atomic_load(&j->dropping) && atomic_load(&j->busy)) {
     if (!atomic_load(&j->timer_fired) || !cancellable(j)) return;
     /* The cancel half runs on the I/O thread: at once while one thread plays both roles, else later, and then the job
@@ -2055,6 +2060,19 @@ void agc_io_compute_each(agc_vm *vm, const agc_io_kind *kind, void (*fn)(void *d
   }
 }
 
+/* Once made, the pool stays until agc_io_close, and its size never changes. */
+uint32_t agc_io_compute_threads(agc_vm *vm) {
+  agc_compute *pool = vm->rt->loop ? vm->rt->loop->compute : NULL;
+  return pool ? agc_compute_size(pool) : 0;
+}
+
+bool agc_io_compute_seq(agc_vm *vm, uint32_t k, uint64_t *seq) {
+  agc_compute *pool = vm->rt->loop ? vm->rt->loop->compute : NULL;
+  if (!pool) return false;
+  *seq = agc_compute_seq(pool, k);
+  return true;
+}
+
 bool agc_io_wait_for(agc_vm *vm, bool (*ready)(agc_vm *vm, void *arg), void *arg, uint64_t by) {
   while (!ready(vm, arg)) {
     uint64_t now = agc_clock_ms();
@@ -2378,6 +2396,18 @@ void agc_io_compute_each(agc_vm *vm, const agc_io_kind *kind, void (*fn)(void *d
   (void)kind;
   (void)fn;
   (void)arg;
+}
+
+uint32_t agc_io_compute_threads(agc_vm *vm) {
+  (void)vm;
+  return 0;
+}
+
+bool agc_io_compute_seq(agc_vm *vm, uint32_t k, uint64_t *seq) {
+  (void)vm;
+  (void)k;
+  (void)seq;
+  return false;
 }
 
 bool agc_io_wait_for(agc_vm *vm, bool (*ready)(agc_vm *vm, void *arg), void *arg, uint64_t by) {
