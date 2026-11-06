@@ -204,7 +204,9 @@ static _Thread_local native_site *current_site; // NOLINT(cppcoreguidelines-avoi
    whose C called it, while its code existed, and has not returned yet (native_site.ran), on any scheduler: a closed
    callback is freed only once it is 0 and no call holds it (`jobs`), so no call's C can still reach its code.
    `listed_by` is the id of the last call that listed it (native_site.id), so a call that C keeps calling it from finds
-   it listed without a search. Both change under rt->sync. */
+   it listed without a search. `owner` is the task that owned the callback when it was closed (NULL if none) and
+   `next_waiting` chains it on the resource that its closure waits for (agc_c_resource.waiting). All change under
+   rt->sync. */
 typedef struct {
   agc_c_resource *res;
   agc_value fn;
@@ -212,6 +214,8 @@ typedef struct {
   agc_c_type params[AGC_FFI_MAX_PARAMS];
   uint32_t count, callers;
   uint64_t listed_by;
+  agc_task *owner;
+  agc_c_resource *next_waiting;
 } callback_data;
 
 /* The free functions of a signature, in the library: the result's (index 0 when the result is a resource), then each
@@ -1026,6 +1030,44 @@ static void retire_closure(agc_vm *vm, agc_c_resource *res) {
   reap_closures(vm);
 }
 
+/* The end of the run (release_handles) and the dropped result of a cancelled compute call (discard in vm/loop.c): the
+   free runs unless a compute call still holds the resource, which the end of the run does not wait for. Neither needs
+   rt->sync: discard drops a resource that compute_done made a moment before, which no other task has seen (at more
+   than one scheduler it runs inside agc_io_service, which holds the lock anyway), and at the end of the run only one
+   thread is left. */
+static void release_resource(void *native) {
+  agc_c_resource *res = native;
+  if (!res->freed && !res->jobs) call_free(res);
+}
+
+/* A resource of OWNER, a task, that is still open and whose free function may call a callback that C stored (SQLite's
+   xDestroy), or NULL. A resource closed already has left its owner, so it is not found here: its free is a call's end
+   away, and only a callback closed in that gap is not covered. */
+static agc_c_resource *open_free_of(const agc_task *owner) {
+  if (!owner) return NULL;
+  for (const agc_resource *r = owner->owned; r; r = r->owned_next) {
+    agc_c_resource *c = r->release == release_resource ? r->native : NULL;
+    if (c && !c->callback && !c->buffer && !c->freed) return c;
+  }
+  return NULL;
+}
+
+/* Gives back the closure of the closed callback RES once no resource of its owner that is open now can call it. Such a
+   resource's free may call the callback that C stored in it (a task's end frees its resources newest first, and the
+   callback may be newer than the resource it was stored in; Native.close may come first too): it gets zero from the
+   closed callback, so the closure only has to exist until that free has run. RES waits on one such resource, and the
+   free of that resource asks again (free_resource), until none is left. Under rt->sync. */
+static void retire_when_freed(agc_vm *vm, agc_c_resource *res) {
+  callback_data *cb = res->callback;
+  agc_c_resource *blocker = open_free_of(cb->owner);
+  if (!blocker) {
+    retire_closure(vm, res);
+    return;
+  }
+  cb->next_waiting = blocker->waiting;
+  blocker->waiting = res;
+}
+
 /* A fast call's C starts on VM's thread (the outermost one: a callback's own calls are inside it). */
 static void enter_c(agc_vm *vm) {
   if (vm->c_depth++ == 0) atomic_fetch_add(&vm->c_seq, 1);
@@ -1043,14 +1085,25 @@ static void leave_c(agc_vm *vm) {
 }
 
 /* Frees the resource and drops its registry entry; under rt->sync, with no call holding or pinning it. A callback's
-   closure goes to retire_closure, since a fast call on another scheduler may be in C with its pointer. */
+   closure goes to retire_closure, since a fast call on another scheduler may be in C with its pointer, once no open
+   resource of its owner can call it (retire_when_freed); the callbacks that waited for this resource go on after its
+   free has run. */
 static void free_resource(agc_vm *vm, agc_c_resource *res) {
   if (res->callback) {
     res->closed = res->freed = true;
     res->pointer = NULL;
-    retire_closure(vm, res);
+    retire_when_freed(vm, res);
   } else {
     call_free(res);
+    agc_c_resource *waiting = res->waiting;
+    res->waiting = NULL;
+    while (waiting) {
+      callback_data *cb = waiting->callback;
+      agc_c_resource *next = cb->next_waiting;
+      cb->next_waiting = NULL;
+      retire_when_freed(vm, waiting);
+      waiting = next;
+    }
   }
   res->state->native = NULL;
   agc_unregister(vm, res->state);
@@ -1203,11 +1256,13 @@ static void unpin_all(agc_vm *vm, agc_c_resource *const *pinned, size_t n) {
 /* Native.close and the end of the owning task (§14.5): the resource is closed and leaves its owner at once, and is
    freed now, or by the end of the last call that holds it (release_held) or, for a callback, that ran it
    (release_ran). Until then it holds what it comes from in turn (`carries`), for those calls: so a database closed
-   while a call runs on a statement made from a closed connection waits too. A closed resource is left alone. */
-static void close_resource(agc_vm *vm, agc_c_resource *res) {
+   while a call runs on a statement made from a closed connection waits too. A closed resource is left alone. OWNER is
+   the task that owned it, which a callback keeps for retire_when_freed. */
+static void close_with_owner(agc_vm *vm, agc_c_resource *res, agc_task *owner) {
   agc_sync_assert(vm);
   if (res->closed) return;
   res->closed = true;
+  if (res->callback) ((callback_data *)res->callback)->owner = owner;
   agc_disown(res->state);
   if (unreached(res)) {
     free_resource(vm, res);
@@ -1217,20 +1272,13 @@ static void close_resource(agc_vm *vm, agc_c_resource *res) {
   hold_parents(res);
 }
 
-static void close_owned(agc_vm *vm, agc_resource *r, agc_task *ender) {
-  (void)ender;
-  close_resource(vm, r->native);
+static void close_resource(agc_vm *vm, agc_c_resource *res) {
+  /* A closed resource may have no registry entry (a NULL out), so its owner is read only for an open one. */
+  if (!res->closed) close_with_owner(vm, res, res->state->owner);
 }
 
-/* The end of the run (release_handles) and the dropped result of a cancelled compute call (discard in vm/loop.c): the
-   free runs unless a compute call still holds the resource, which the end of the run does not wait for. Neither needs
-   rt->sync: discard drops a resource that compute_done made a moment before, which no other task has seen (at more
-   than one scheduler it runs inside agc_io_service, which holds the lock anyway), and at the end of the run only one
-   thread is left. */
-static void release_resource(void *native) {
-  agc_c_resource *res = native;
-  if (!res->freed && !res->jobs) call_free(res);
-}
+/* The end of the owning task: R has left ENDER's list already, which is its owner still. */
+static void close_owned(agc_vm *vm, agc_resource *r, agc_task *ender) { close_with_owner(vm, r->native, ender); }
 
 static void make_end_frees(void *data) {
   end_frees *batch = data;

@@ -325,9 +325,12 @@ struct agc_ffi_call;
    read, so a chain keeps no freed links. `seen` marks a resource while a call's arguments are sorted out
    (agc_ffi_cache.walk). NULL, 0 and false for the others. Changes under rt->sync, except `calls`: the fast calls
    (`def`, not compute) that use it now, pinned without the lock, as `jobs` holds for the others; a close leaves the
-   free to the last of them. They read `up`, `ups` and `closed` without the lock too, so those four are atomic. */
+   free to the last of them. They read `up`, `ups` and `closed` without the lock too, so those four are atomic.
+   `waiting` lists the closed callbacks whose closure is kept until this resource is freed, since its free function may
+   call one (vm/ffi.c, retire_when_freed); under rt->sync. */
 typedef struct agc_c_resource {
   struct agc_c_resource *parent;
+  struct agc_c_resource *waiting;
   _Atomic(struct agc_c_resource *) up;
   _Atomic(struct agc_c_resource **) ups;
   size_t up_count;

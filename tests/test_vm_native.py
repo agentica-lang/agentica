@@ -703,6 +703,23 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "main returns\n", "")
 
 
+# A Hook whose free function calls the callback that C stored (peer_store_fn), and the callback's function, which must
+# never run. The first %s is the library, the second more declarations of the extern block.
+HOOK_PROGRAM = """extern "%s"
+  resource Hook, free: peer_hook_free
+  callback Step(x: C.Int32) -> C.Int32
+  def peer_hook_open() -> Hook
+  def peer_store_fn(fn: Step) -> Void
+%send
+
+def destroy(x: Int) -> Int
+  puts("destroy ran")
+  return x
+end
+
+"""
+
+
 # The end of the run closes an open callback but keeps its closure: the free of a Hook that main left open calls the
 # callback that C stored, made before the Hook or after it (SQLite's sqlite3_open, then create_collation_v2). C gets
 # zero and the function does not run; before, the closure was freed first (or, made first, freed with it).
@@ -711,24 +728,45 @@ end
 @pytest.mark.parametrize("hook_first", [False, True])
 def test_the_end_of_the_run_keeps_a_callback_that_a_free_calls(tmp_path, peer, schedulers, hook_first):
     make = ["  a = Native.callback(Step, &destroy)\n  peer_store_fn(a)\n", "  _h = peer_hook_open().unwrap!\n"]
-    text = """extern "%s"
-  resource Hook, free: peer_hook_free
-  callback Step(x: C.Int32) -> C.Int32
-  def peer_hook_open() -> Hook
-  def peer_store_fn(fn: Step) -> Void
+    text = HOOK_PROGRAM % (literal(peer), "") + """def main() -> Void
+%s  puts("main returns")
 end
+""" % "".join(reversed(make) if hook_first else make)
+    result = agentica("--schedulers", schedulers, program(tmp_path, text), timeout=scaled(60))
+    assert (result.code, result.stdout, result.stderr) == (0, "main returns\n", "")
 
-def destroy(x: Int) -> Int
-  puts("destroy ran")
-  return x
+
+# A callback closed before a resource of its owner whose free calls it keeps its closure until that resource is freed:
+# a task's end closes newest first, so a callback made after the Hook (SQLite's sqlite3_open, then
+# create_collation_v2) closed first, and an explicit Native.close(cb) may come first in either order of making. The
+# free of the Hook calls the callback that C stored: C gets zero and the function does not run; before, the closure
+# was freed by then (a crash). "hook cb" makes the Hook first, "hook hook cb" two of them (the callback waits for
+# each in turn). The task-end case of "cb hook" never crashed: the callback is the oldest and closes last.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+@pytest.mark.parametrize("close", ["task end", "Native.close"])
+@pytest.mark.parametrize("order", ["hook cb", "cb hook", "hook hook cb"])
+def test_a_closed_callback_waits_for_the_free_of_a_resource_that_calls_it(tmp_path, peer, schedulers, close, order):
+    lines, hooks = [], []
+    for step in order.split():
+        if step == "cb":
+            lines.append("  a = Native.callback(Step, &destroy)\n  peer_store_fn(a)\n")
+        else:
+            hooks.append("_h%d" % len(hooks))
+            lines.append("  %s = peer_hook_open().unwrap!\n" % hooks[-1])
+    ends = "  Native.close(a)\n" + "".join("  Native.close(%s)\n" % h for h in hooks)
+    text = HOOK_PROGRAM % (literal(peer), "  def peer_hook_result() -> C.Int32\n") + """def owner() -> Int
+%s%s  return 1
 end
 
 def main() -> Void
-%s  puts("main returns")
+  Task.await(Task.spawn(&owner))
+  puts(peer_hook_result())
+  puts("main returns")
 end
-""" % (literal(peer), "".join(reversed(make) if hook_first else make))
+""" % ("".join(lines), ends if close == "Native.close" else "")
     result = agentica("--schedulers", schedulers, program(tmp_path, text), timeout=scaled(60))
-    assert (result.code, result.stdout, result.stderr) == (0, "main returns\n", "")
+    assert (result.code, result.stdout, result.stderr) == (0, "0\nmain returns\n", "")
 
 
 # A closed callback that waits for a long fast call on one scheduler costs the fast calls of the others nothing: they
