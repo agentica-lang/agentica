@@ -312,10 +312,25 @@ void agc_hand_over(agc_resource *r, agc_task *to) {
   owned_add(to, r);
 }
 
+/* Closes what T owns, newest first, but the resources that close last (callbacks) after all the others: a callback made
+   after the resource C stored it in would close first, and its closure would be gone when that resource's free calls
+   it. A resource waiting its turn is off the list and chained by `owned_next`. */
 void agc_close_owned(agc_vm *vm, agc_task *t) {
+  agc_resource *last = NULL, **tail = &last;
   while (t->owned) {
     agc_resource *r = t->owned;
     owned_remove(r);
+    if (r->closes_last) {
+      *tail = r;
+      tail = &r->owned_next;
+      continue;
+    }
+    r->close(vm, r, t);
+  }
+  while (last) {
+    agc_resource *r = last;
+    last = r->owned_next;
+    r->owned_next = NULL;
     r->close(vm, r, t);
   }
 }

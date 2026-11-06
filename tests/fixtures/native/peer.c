@@ -948,6 +948,18 @@ static peer_int_fn stored_fn;
 static int32_t hook_result = -1;
 
 void peer_store_fn(peer_int_fn fn) { stored_fn = fn; }
+/* As SQLite's create_collation_v2(db, ..., fn, xDestroy): the call gets the resource and the callback together, and the
+   resource's free calls the callback. HOOK is only the resource that the VM links the callback to. */
+void peer_hook_store(void *hook, peer_int_fn fn) {
+  (void)hook;
+  stored_fn = fn;
+}
+/* A call that runs FN twice and gets a Hook, so the Hook is pinned while C runs. */
+int32_t peer_hook_after(void *hook, peer_int_fn fn) {
+  (void)hook;
+  int32_t a = fn(1);
+  return a * 10 + fn(2);
+}
 void *peer_hook_open(void) { return malloc(1); }
 void peer_hook_free(void *p) {
   hook_result = stored_fn ? stored_fn(7) : -2;

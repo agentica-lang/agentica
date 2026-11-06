@@ -42,8 +42,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A cancelled task whose `compute def` call found no pool thread gives back its
   `Native.Mutex`.
 - A callback closed before a resource whose free function calls it (SQLite's
-  `xDestroy`), at a task's end or with `Native.close`, no longer crashes: its
-  code stays until that resource is freed.
+  `xDestroy`) no longer crashes when the native call that gave C the callback
+  also got the resource (its code stays until that resource is freed), or when
+  both belong to a task that ends (its callbacks close after its resources).
 
 ## [0.24.4] - 2026-11-06
 

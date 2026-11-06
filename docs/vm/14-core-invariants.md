@@ -284,10 +284,13 @@ pool thread's seq while it runs a work), since C may have read the pointer of a
 handler it stored before the close and call it after: it then reaches the closed
 callback, which gives zero (on a pool thread it refuses, and the compute call
 fails with `RUNTIME-NATIVE-CALLBACK`). It also waits for the free of each
-resource that its owner still holds open (`retire_when_freed`), since such a
-free may call a callback that C stored (SQLite's `xDestroy`): a task's end
-closes newest first, so a callback made after the resource closes first, and a
-`Native.close` may come in any order. Each scheduler counts the closures that
+resource that a native call passed with it (`link_callbacks`, `links` of the
+resource, under `rt->sync`, also when the resource is closed but held by a
+call), since C may have stored the callback there and the free may call it
+(SQLite's `xDestroy`); the free of the last such resource gives the closure
+back (`free_resource`). A task's end closes its callbacks after its other resources
+(`agc_close_owned`, `closes_last`), which covers a callback that C stored
+through a call that got no resource. Each scheduler counts the closures that
 wait for it (`c_waits`), so only a call that one waits for takes `rt->sync` at
 its end; a compute call's end on a scheduler frees those that waited for its
 thread. The end of the run frees what is still open (§14.4, step 3), but for

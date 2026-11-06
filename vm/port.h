@@ -37,7 +37,9 @@ struct agc_resource {
   agc_task *owner, *ender;
   agc_resource *owned_prev, *owned_next;
   agc_close_fn close;
-  bool closing, pool_close, keep_detached;
+  /* Closed after the other resources of the task that ends (agc_close_owned): a callback, whose closure the free
+     function of an older resource may still call (vm/ffi.c). */
+  bool closing, pool_close, keep_detached, closes_last;
 };
 
 typedef void (*agc_end_fn)(agc_vm *vm, agc_task *t);
