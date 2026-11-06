@@ -2583,31 +2583,25 @@ static agc_value builtin_wait_writable(agc_vm *vm, agc_value *args, uint32_t spa
   return native_wait_on(vm, args, span, true);
 }
 
-/* Keeps HOLD, a hold of a library from agc_ffi_open, for the process, or gives it back when the run holds that library
-   already: one hold per library, however many loads, and a few libraries a run. False when the list cannot grow (the
-   hold is given back). Under rt->sync, so two loads of one library see each other: the loader's own count is no
-   proof of a hold (a probe's open and close of the same library can drop the last reference between a check and its
-   return), which is why a load keeps a hold of its own. */
-static bool keep_hold(agc_vm *vm, void *hold) {
+/* Keeps HOLD, a hold of a library from agc_ffi_open, for the process, unless the run holds that library already: one
+   hold per library, however many loads, and a few libraries a run. Returns the hold the caller gives back
+   (agc_ffi_release) once it has dropped rt->sync, which is HOLD for a library held already and NULL when HOLD is
+   kept: the loader's close may run a destructor, which does not belong under the lock. Under rt->sync, so two loads of
+   one library see each other: the loader's own count is no proof of a hold (a probe's open and close of the same
+   library can drop the last reference between a check and its return), which is why a load keeps a hold of its own. */
+static void *keep_hold(agc_vm *vm, void *hold) {
   agc_ffi_cache *c = ffi_cache(vm);
-  for (size_t k = 0; k < c->holds_used; k++) {
-    if (c->holds[k] == hold) {
-      agc_ffi_release(hold);
-      return true;
-    }
-  }
+  for (size_t k = 0; k < c->holds_used; k++)
+    if (c->holds[k] == hold) return hold;
   if (c->holds_used == c->holds_cap) {
     size_t cap = c->holds_cap ? c->holds_cap * 2 : 8;
-    void **holds = realloc(c->holds, cap * sizeof(void *));
-    if (!holds) {
-      agc_ffi_release(hold);
-      return false;
-    }
+    void **holds = realloc(c->holds, agc_size_mul(cap, sizeof(void *)));
+    if (!holds) agc_out_of_memory();
     c->holds = holds;
     c->holds_cap = cap;
   }
   c->holds[c->holds_used++] = hold;
-  return true;
+  return NULL;
 }
 
 /* Native.load(library): opens the library that the front end resolved like the one of an extern block, so a program
@@ -2627,9 +2621,10 @@ static agc_value builtin_native_load(agc_vm *vm, agc_value *args, uint32_t span)
     void *hold = agc_ffi_open(library, error + prefix, sizeof error - prefix);
     if (hold) {
       agc_sync_take(vm);
-      opened = keep_hold(vm, hold);
+      void *extra = keep_hold(vm, hold);
       agc_sync_drop(vm);
-      if (!opened) snprintf(error + prefix, sizeof error - prefix, "cannot open %s: out of memory", library);
+      if (extra) agc_ffi_release(extra);
+      opened = true;
     }
   }
   free(library);
