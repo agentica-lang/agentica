@@ -370,6 +370,36 @@ static void test_load(void) {
   vm.rt->no_files = false;
 }
 
+/* Native.function?: a function the library exports is true; a missing function, a library that does not open, and an
+   empty name or one with a NUL (hand-made bytecode) are false; under no_files it asks nothing. */
+static void test_function(void) {
+  agc_value args[2] = {text(LIBM), text("cos")};
+  assert(agc_as_bool(&vm, call_row("Native.function?", 2, args)) == AGC_FFI_BUILT);
+  args[1] = text("no_such_function_here");
+  assert(!agc_as_bool(&vm, call_row("Native.function?", 2, args)));
+  args[1] = text("");
+  assert(!agc_as_bool(&vm, call_row("Native.function?", 2, args)));
+  args[1] = agc_string_value(agc_make_string("c\0s", 3, 3));
+  assert(!agc_as_bool(&vm, call_row("Native.function?", 2, args)));
+  args[0] = text("libnot_there_at_all.so");
+  args[1] = text("cos");
+  assert(!agc_as_bool(&vm, call_row("Native.function?", 2, args)));
+  /* A name over the cap is false without a lookup; at the cap the lookup runs. */
+  char *long_name = malloc(5000);
+  assert(long_name);
+  memset(long_name, 'a', 5000);
+  args[0] = text(LIBM);
+  args[1] = agc_string_value(agc_make_string(long_name, 5000, 5000));
+  assert(!agc_as_bool(&vm, call_row("Native.function?", 2, args)));
+  args[1] = agc_string_value(agc_make_string(long_name, 4096, 4096));
+  assert(!agc_as_bool(&vm, call_row("Native.function?", 2, args)));
+  free(long_name);
+  vm.rt->no_files = true;
+  args[0] = text(LIBM);
+  read_fails("Native.function?", 2, args, "RUNTIME-NATIVE-DENIED");
+  vm.rt->no_files = false;
+}
+
 /* An owned buffer: typed writes and reads at byte offsets, unaligned too, the bounds of its size and of a view, a
    free that runs once and leaves every later use RUNTIME-NATIVE-CLOSED, of its views too; the same reads at a C
    pointer, which has no size but refuses
@@ -625,6 +655,7 @@ int main(void) {
   test_reads();
   test_buffers();
   test_load();
+  test_function();
   test_pointers();
   test_structs();
   test_refusal();

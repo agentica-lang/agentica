@@ -37,6 +37,12 @@ bool agc_ffi_open(const char *library, char *error, size_t size) {
   return false;
 }
 
+bool agc_ffi_has_function(const char *library, const char *symbol) {
+  (void)library;
+  (void)symbol;
+  return false;
+}
+
 void agc_ffi_discard(agc_ffi_call *call) { (void)call; }
 
 void agc_ffi_invoke(agc_ffi_call *call, void *fn, agc_c_value *args, agc_c_value *result) {

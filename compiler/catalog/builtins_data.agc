@@ -3338,6 +3338,23 @@ ROWS_28: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "Native.function?",
+    parameters: [
+      Model.Named(name: "library", type: Types.Type.String),
+      Model.Named(name: "name", type: Types.Type.String),
+    ],
+    result: Types.Type.Bool,
+    rule: Model.Rule.Plain,
+    implementation: "Native.function?",
+    effects: ["native"],
+    description: (
+      "Whether the library that extern \"library\" names (a string literal, CHECK-NATIVE-LOAD otherwise) opens and " +
+      "exports the function name, so a program can fall back before it calls one that the library lacks. Refused by " +
+      "--deny-native."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "Native.memory_pointer",
     parameters: [Model.Named(name: "size", type: Types.Type.Int)],
     result: Types.Type.Opaque("C.Pointer"),

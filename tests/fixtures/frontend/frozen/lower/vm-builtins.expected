@@ -197,6 +197,7 @@ Native.close
 Native.closed?
 Native.free
 Native.from_string
+Native.function?
 Native.get_array_of_float32
 Native.get_array_of_float64
 Native.get_array_of_int32
