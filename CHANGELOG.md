@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `Native.function?("NAME", "symbol")` tells whether a native library exports a
+  function, so a program can fall back before calling one that the library
+  lacks.
 - A `case` gives a value on the right side of an assignment, after `return` and
   as the last line of a block (`text = case r ... end`); each arm ends with an
   expression, all of one type, and a mismatch or an arm that ends with another
