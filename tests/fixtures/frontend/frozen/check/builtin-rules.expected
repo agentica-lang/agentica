@@ -19,6 +19,10 @@ Channel.closed? ChannelTarget
 Channel.new ChannelNew
 Channel.recv ChannelRecv
 Channel.send ChannelSend
+Codec.decode CodecDecode
+Codec.encode CodecEncode
+Codec.from CodecEncode
+Codec.members CodecMembers
 Digest.hexdecode Plain
 Digest.hexencode Plain
 Digest.md5 Plain
@@ -84,13 +88,9 @@ Int.shift_right Plain
 Int.shift_right_unsigned Plain
 Int.times Plain
 Int.upto Plain
-JSON.Codec.decode CodecDecode
-JSON.Codec.encode CodecEncode
-JSON.Codec.from CodecEncode
 JSON.array Plain
 JSON.at Plain
 JSON.bool Plain
-JSON.codec JsonCodec
 JSON.decode JsonDecode
 JSON.encode JsonEncode
 JSON.float Plain

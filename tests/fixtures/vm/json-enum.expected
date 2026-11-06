@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 328,
+  "steps": 330,
   "stdout": [
     "{\"tag\":\"Circle\",\"values\":[2.0]} true",
     "{\"tag\":\"Rect\",\"values\":[1.5,-3.0]} true",

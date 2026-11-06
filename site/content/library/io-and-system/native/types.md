@@ -307,7 +307,7 @@ end
 - When the function fails or exits, C gets zero from it, and zero from the later callbacks of that native call, which do not run; the native call then fails or exits the same way once C returns.
 - A callback that C calls from a thread of its own, or from the free function of a resource (SQLite's `xDestroy` when `sqlite3_close_v2` runs), runs nothing and gives zero. A `compute def` runs on the compute pool, where a callback gives zero too, and that call then fails with `RUNTIME-NATIVE-CALLBACK`.
 - A callback that runs long stops when its task is cancelled or the run ends: C gets zero, and the task ends after the native call. Callbacks nest at most 128 deep; the next one is `RUNTIME-STACK-OVERFLOW`.
-- C must not call a callback after `Native.close` or the end of the task that owns it: its code is freed. Only a native call that was in C at the close may still call it: a `def` gets zero, and a `compute def` gets zero and fails with `RUNTIME-NATIVE-CALLBACK`. The code is freed once every such call has returned.
+- After `Native.close`, or the end of the task that owns the callback, C may still call it (a handler it stored, a free function such as SQLite's `xDestroy`): it gets zero and the function does not run, whatever the order of the closes. The code C calls is made once for each function and callback type and kept until the run ends, so the memory is bounded by the number of distinct callback functions, not by the callbacks made; while another callback of the same function and type is open, a call of the old code runs the function, which is harmless since it takes no captures. In a `compute def` the call gives zero too and fails with `RUNTIME-NATIVE-CALLBACK`.
 
 ## C structs
 

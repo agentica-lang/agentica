@@ -49,6 +49,6 @@ def main() -> Void
   puts("#{JSON.encode(present)} #{JSON.encode(missing)} #{JSON.encode([present, missing])}")
   puts(JSON.from(missing).null?)
   puts(JSON.schema(Address))
-  codec = JSON.codec(Address)
+  codec = Address.codec
   puts(codec.decode("{\"city\":\"y\"}"))
 end

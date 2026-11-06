@@ -1,10 +1,13 @@
 ## The tables of the lowering that are plain data: the builtins the VM implements, the operator instructions, and the
 ## builtin structs the VM can build. tests/test_frontend_lower.py compares VM_BUILTINS with a frozen copy.
 
-## The builtins that lowering writes with no builtin of their own (lower_codec): JSON.codec, whose implementation is no
-## builtin of the VM, and the methods of a codec, which call JSON.decode, JSON.encode and JSON.from with other
-## arguments than theirs.
-export CODEC_BUILTINS = Set.new(["JSON.codec", "JSON.Codec.decode", "JSON.Codec.encode", "JSON.Codec.from"])
+## The builtins that lowering writes with no builtin of their own (lower_codec): the methods of a codec, which call
+## JSON.decode, JSON.encode and JSON.from with other arguments than theirs, or read a field of the codec record.
+export CODEC_BUILTINS = Set.new(["Codec.decode", "Codec.encode", "Codec.from", "Codec.members"])
+
+## The fields of the Codec.Info record that T.codec builds (builtins_data.agc), by position.
+export CODEC_NAME = 0
+export CODEC_MEMBERS = 1
 
 ## The `implementation` names of the builtins the VM has. A call of any other builtin is LOWER-UNSUPPORTED.
 export VM_BUILTINS = Set.new([
@@ -103,7 +106,7 @@ export NATIVE_LAYOUTS = Set.new(["Native.size_of", "Native.get_struct", "Native.
 export BUILTIN_STRUCTS = [
   "FileInfo", "Header", "HttpRequest", "HttpResponse", "HttpClientOptions", "HttpServerOptions", "ProcessOutput",
   "LogEvent", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Reply", "HttpWire.Job", "HttpWire.Response", "StructMember",
-  "TlsClientOptions", "TlsServerOptions", "TaskDown",
+  "Codec.Info", "TlsClientOptions", "TlsServerOptions", "TaskDown",
 ]
 
 ## The builtin structs that another one has a field of: using the key also puts these in the table.
@@ -113,6 +116,7 @@ export STRUCT_NEEDS: Map[String, List[String]] = {
   "HttpWire.Head": ["Header"],
   "HttpWire.Job": ["HttpResponse", "Header"],
   "HttpWire.Response": ["Header"],
+  "Codec.Info": ["StructMember"],
 }
 
 ## The most items one `list` instruction gathers and the most entries one `map` instruction gathers; larger literals

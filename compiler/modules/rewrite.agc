@@ -338,8 +338,9 @@ def rewrite_call(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
   end
 
   plain = node.args.size == 0 and !node.parenthesized and !node.piped
-  if parts.size == 2 and parts[1] == "members" and plain and Resolve.declared_type?(cx, parts[0])
-    return rewrite_members(cx, node, parts[0])
+  type_member = parts.size == 2 and (parts[1] == "members" or parts[1] == "codec")
+  if type_member and plain and Resolve.declared_type?(cx, parts[0])
+    return rewrite_members(cx, node, parts[0], parts[1])
   end
 
   name = try Resolve.resolve(cx, node.name, Resolve.Want.Function, node.span, false)
@@ -355,11 +356,11 @@ def rewrite_call(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
   return ok(Ast.Expr.Call(node.with(name: name, args: args)))
 end
 
-# Type.members, written without parentheses and not piped, on a type of this file or one it imports by name is a
-# field access on the type name, as for a type behind an alias (`Alias.Type.members`), which has no parenthesized form
-# either. The checker decides whether the type is a struct. The type name takes an id past the ids of the program, like
-# the receiver of a constant.
-def rewrite_members(cx: Resolve.Context, node: Ast.Call, written: String) -> Result[Ast.Expr]
+# Type.members and Type.codec, written without parentheses and not piped, on a type of this file or one it imports by
+# name is a field access on the type name, as for a type behind an alias (`Alias.Type.members`), which has no
+# parenthesized form either. The checker decides whether the type is a struct (or, for codec, can be decoded). The type
+# name takes an id past the ids of the program, like the receiver of a constant.
+def rewrite_members(cx: Resolve.Context, node: Ast.Call, written: String, member: String) -> Result[Ast.Expr]
   linked = try Resolve.resolve(cx, written, Resolve.Want.Type, node.span, false)
   start = node.span.start
   size = written.length
@@ -368,10 +369,10 @@ def rewrite_members(cx: Resolve.Context, node: Ast.Call, written: String) -> Res
     Ast.TypeName(id: cx.ids + node.id, name: linked, span: Source.Span(start: start, stop: stop)),
   )
 
-  name_span = member_span(cx, node, size, "members")
+  name_span = member_span(cx, node, size, member)
   return ok(
     Ast.Expr.FieldAccess(
-      Ast.FieldAccess(id: node.id, target: receiver, name: "members", name_span: name_span, span: node.span),
+      Ast.FieldAccess(id: node.id, target: receiver, name: member, name_span: name_span, span: node.span),
     ),
   )
 end

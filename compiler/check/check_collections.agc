@@ -42,8 +42,8 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
   end
 end
 
-## True for a type that holds a JSON.Codec somewhere, walked as holds_handle? walks: IO.inspect refuses it, since a
-## codec is the name of its struct at run time and would print as that String.
+## True for a type that holds a Codec somewhere, walked as holds_handle? walks: IO.inspect refuses it, since a codec
+## has no text of its own.
 export def holds_codec?(cx: State.Cx, type: T.Type) -> Bool
   return holds?(cx, type) do |part: T.Type| T.is?(part, "Codec") end
 end

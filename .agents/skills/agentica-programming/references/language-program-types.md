@@ -87,7 +87,7 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
   last type is the return; `Fn[Void]` takes no arguments.
 - Opaque, with no constructor or `==`: `Process`, `Lazy[T]` (`lazy.md`),
   `Task[R]`, `TaskRef`, `Channel[T]`, `ATS[K, V]` (`tasks.md`), `Socket`,
-  `Listener`, `HttpClient`, `HttpServer`, `JSON.Codec[T]` (`json.md`).
+  `Listener`, `HttpClient`, `HttpServer`, `Codec[T]` (`json.md`).
 - Builtin enums, reserved: `Await[T]` (`Await.Done(value)`, `Await.TimedOut`;
   `tasks.md`), `JsonField[T]` (`Absent`, `Null`, `Value(x)`; `json.md`),
   `LogLevel` (`Debug`, `Info`, `Warning`, `Error`; `logger.md`) and `TaskExit`
@@ -180,6 +180,7 @@ end
 - `User.members` (on the type, not a value) is a `List[StructMember]` of the
   fields in declaration order (`name: String`, `type: String` as source with
   aliases expanded). A field called `members` is still read as `user.members`.
+- `User.codec` is the `Codec[T]` of a struct or enum JSON can read (`json.md`).
 - A parameter may have a default: `def connect(host: String = "localhost", port:
   Int = 8080)`. A call omits trailing defaulted parameters (`connect("db")`).
   The default is a constant: an Int, Float or String literal (a minus before a

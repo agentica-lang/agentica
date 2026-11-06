@@ -69,14 +69,16 @@ end
 
 ## What a method call, or a field access that names a method, resolved to: the receiver stays as it is (Self, for to_s
 ## on a String), it is printed (Text, to_s) or inspected (Inspect), or it is the first argument of the builtin Call.
-## Each holds the type of the receiver. Members is Type.members on a struct type: the fields of the struct. FieldCall
-## is `receiver.name(args)` where name is an Fn field of the struct: the call of the function the field holds.
+## Each holds the type of the receiver. Members is Type.members on a struct type: the fields of the struct. Codec is
+## Type.codec: the linked name of the type and its fields (none for an enum). FieldCall is `receiver.name(args)` where
+## name is an Fn field of the struct: the call of the function the field holds.
 export enum Resolved
   Self(Types.Type)
   Text(Types.Type)
   Inspect(Types.Type)
   Call(String, Types.Type)
   Members(List[Model.Named])
+  Codec(String, List[Model.Named])
   FieldCall
 end
 

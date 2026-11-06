@@ -19,7 +19,8 @@ import Data from "lower_data"
 import Scans from "lower_scan"
 import Lowering from "lower_state"
 import {
-  CODEC_BUILTINS, FLOAT_OPS, INT_MIN, INT_MIN_DIGITS, INT_OPS, NATIVE_LAYOUTS, STRING_OPS, VM_BUILTINS,
+  CODEC_BUILTINS, CODEC_MEMBERS, CODEC_NAME, FLOAT_OPS, INT_MIN, INT_MIN_DIGITS, INT_OPS, NATIVE_LAYOUTS, STRING_OPS,
+  VM_BUILTINS,
 } from "lower_tables"
 
 ## Lowers an expression into the register want (-1: any). void allows a Void value (a statement, a completion); known
@@ -227,10 +228,11 @@ export def lower_call(
   return ok(Lowering.Out(fx: fx.with(next: base + 1), slot: base))
 end
 
-# JSON.codec and the methods of a codec. A codec is the name of its struct at run time, the type argument of
-# JSON.decode: JSON.codec(Person) is that name, decode is JSON.decode of the source and the codec, and encode and from
-# are their JSON builtin of the value alone (the struct of a value names itself). The receiver is computed first, as
-# the first argument of any call is, into the register after the one the builtin takes first.
+# The methods of a codec. A codec is a Codec.Info record at run time (Type.codec, Data.lower_codec): its name is the
+# type argument of JSON.decode and its members are what Type.members gives. decode is JSON.decode of the source and
+# the name, encode and from are their JSON builtin of the value alone (the struct of a value names itself), and members
+# is the field of the record. The receiver is computed first, as the first argument of any call is, into the register
+# after the one the builtin takes first.
 def lower_codec(
   cx: Lowering.Cx,
   fx: Lowering.Fx,
@@ -248,7 +250,7 @@ def lower_codec(
 
   span = node.span
   saved = fx.next
-  out = try codec_value(cx, fx, node, key, want)
+  out = try codec_value(cx, fx, node, key)
   fx = out.fx
   base = out.slot
   if tail
@@ -306,10 +308,14 @@ def lower_optional(
   return ok(out)
 end
 
-# The value of a lower_codec call, in want when the type name of JSON.codec is the value, else in a new register.
-def codec_value(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, key: String, want: Int) -> Result[Lowering.Out]
-  if node.name == "JSON.codec"
-    return lower_expression(cx, fx, node.args[0], want, false, false)
+# The value of a lower_codec call, in a new register: a method of a codec, whose receiver is the first argument.
+def codec_value(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, key: String) -> Result[Lowering.Out]
+  if node.name == "Codec.members"
+    fx = Lowering.alloc(Lowering.step(fx, node.span))
+    base = fx.next - 1
+    codec = try lower_expression(cx, fx, node.args[0], base, false, false)
+    fx = Lowering.emit_at(codec.fx, "field", [base, base, CODEC_MEMBERS], node.span)
+    return ok(Lowering.Out(fx: fx, slot: base))
   end
 
   fx = Lowering.alloc(Lowering.alloc(Lowering.step(fx, node.span)))
@@ -318,12 +324,14 @@ def codec_value(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, key: String, w
   value = try lower_expression(cx, codec.fx, node.args[1], base, false, false)
   spans = [node.span, Ast.expr_span(node.args[1])]
   count = 1
+  fx = value.fx
   if key == "JSON.decode"
     spans = spans.push(Ast.expr_span(node.args[0]))
     count = 2
+    fx = Lowering.emit_at(fx, "field", [base + 1, base + 1, CODEC_NAME], node.span)
   end
 
-  return ok(Lowering.Out(fx: Lowering.emit_builtin(value.fx, base, key, count, spans), slot: base))
+  return ok(Lowering.Out(fx: Lowering.emit_builtin(fx, base, key, count, spans), slot: base))
 end
 
 # The value of parameter param of a call: the argument that fills it, or its default value. A function with defaults
@@ -972,6 +980,7 @@ def lower_resolved(
     State.Resolved.Text(type) -> return lower_text(cx, fx, receiver, type, span, want)
     State.Resolved.Inspect(type) -> return lower_inspect(cx, fx, receiver, type, span, want)
     State.Resolved.Members(fields) -> return Data.lower_members(cx, fx, fields, span, want)
+    State.Resolved.Codec(name, fields) -> return Data.lower_codec(cx, fx, name, fields, span, want)
     State.Resolved.FieldCall ->
       return error(Lowering.internal(cx, "a field call is lowered with its method call", span))
     State.Resolved.Call(name, type) ->

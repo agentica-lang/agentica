@@ -557,7 +557,12 @@ def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impo
       RESERVED.include?(alias)
     )
   )
-    return error(Failure.fail_at(site, "CHECK-REDEFINED-NAME", "duplicate or reserved import alias", Diag.Help.NoHelp))
+    help = Diag.Help.NoHelp
+    if RESERVED.include?(alias)
+      help = Failure.hint("#{alias} is a builtin type name, so it is no import alias; choose another alias")
+    end
+
+    return error(Failure.fail_at(site, "CHECK-REDEFINED-NAME", "duplicate or reserved import alias", help))
   end
 
   file = try Paths.module_file(decl, site)
