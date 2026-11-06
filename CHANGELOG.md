@@ -8,61 +8,50 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-11-06
+
 ### Added
 
+- `User.codec` is the `Codec[User]` of a struct or enum, with `decode`,
+  `encode`, `from` and `members`; generic code takes a `Codec[T]`.
 - `Native.function?("NAME", "symbol")` tells whether a native library exports a
-  function, so a program can fall back before calling one that the library
-  lacks.
+  function.
+- `Native.mutex()` and `lock.synchronize do ... end` guard the calls of a native
+  library that is not thread-safe.
 - A `case` gives a value on the right side of an assignment, after `return` and
-  as the last line of a block (`text = case r ... end`); each arm ends with an
-  expression, all of one type, and a mismatch or an arm that ends with another
-  statement is a diagnostic (`CHECK-CASE-ARM-VALUE`).
-- **Breaking:** a `case` on the last line of a block whose result type is not
-  known from its context, such as the block of `Task.spawn`, now gives the
-  block's value when no arm is `Void`, so `Task.spawn do case ... end end` with
-  `Int` arms is a `Task[Int]`, not a `Task[Void]`, and arms of two different
-  non-`Void` types are `CHECK-TYPE-MISMATCH`, even when another arm is `Void`.
-  A case with one type of value and a `Void` arm is unchanged.
-- `Native.mutex()` and `lock.synchronize do ... end` guard the calls of a
-  native library that is not thread-safe; a waiting task parks.
+  as the last line of a block (`CHECK-CASE-ARM-VALUE`).
 
 ### Changed
 
-- **Breaking:** `User.codec` replaces `JSON.codec(User)`, and the type is
-  `Codec[T]` instead of `JSON.Codec[T]`; both old names are removed, with a hint
-  to the new ones. A codec also has `codec.members`, the fields of the type as
-  `User.members` gives them (empty for an enum), so generic code needs no JSON
-  to read them. `Codec` is now reserved, as a type name
-  and as an import alias.
+- **Breaking:** `User.codec` replaces `JSON.codec(User)` and `Codec[T]` replaces
+  `JSON.Codec[T]`; `Codec` is now reserved, as a type name and as an import
+  alias.
+- **Breaking:** a `case` on the last line of a block whose result type is not
+  known, such as the block of `Task.spawn`, gives the block's value when no arm
+  is `Void`: `Task[Int]` and not `Task[Void]`, and arms of two non-`Void` types
+  are `CHECK-TYPE-MISMATCH`.
 - **Breaking:** `def` calls of an `extern` block on different schedulers run at
   the same time, as `compute def` calls do; guard a library that is not
   thread-safe with a `Native.Mutex`.
 - Native calls are faster: a call site's prepared call is kept per scheduler.
 - `Time.monotonic_ms` is cheaper on Linux and may lag the exact time by up to
-  one kernel tick (at most 10 ms); it still never goes back.
+  one kernel tick (at most 10 ms).
 
 ### Fixed
 
-- `Native.load` keeps a hold of its own on the library, so a library that
-  another task was opening for `Native.function?` at the same moment no longer
-  unloads when that probe closes it.
+- `Native.load` keeps a hold of its own on the library, so a concurrent
+  `Native.function?` probe can no longer unload it.
 - `Process.channel_read_line` and `Process.parent_read_line` give
-  `error("process: line cut off")` for a last line that has no line ending
-  (the other side exited or died in the middle of it), where they gave the
-  part as `ok(line)`.
+  `error("process: line cut off")` for a last line with no line ending.
 - `agentica lint` no longer hides a `+` chain or a single pipe that sits first
-  in a chain of the other kind (`("n=" + n.to_s) |> f()`, `(a |> f()) + "x"`),
-  and the help of `LINT-IF-CHAIN` without an `else` asks for a `_` arm.
-- A `compute def` whose C calls a handler callback closed during the call fails
-  with `RUNTIME-NATIVE-CALLBACK` instead of crashing.
+  in a chain of the other kind.
+- A callback that C calls after its close gets zero instead of crashing, and a
+  `compute def` whose C calls a closed handler callback fails with
+  `RUNTIME-NATIVE-CALLBACK`.
 - A cancelled task whose `compute def` call found no pool thread gives back its
   `Native.Mutex`.
-- A callback that C calls after its close (a handler it stored, or the free
-  function of a resource such as SQLite's `xDestroy`, at a task's end or with
-  `Native.close`) gets zero instead of crashing: the code of a callback is made
-  once per function and callback type and kept for the run.
-- `agentica fmt` counts the trailing comma of a filled list, so it no longer
-  writes a line one column over `max_line_width` (`CHECK-LINE-TOO-LONG`).
+- `agentica fmt` counts the trailing comma of a filled list
+  (`CHECK-LINE-TOO-LONG`).
 
 ## [0.24.4] - 2026-11-06
 
@@ -1141,7 +1130,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.24.4...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.25.0...HEAD
+[0.25.0]: https://github.com/agentica-lang/agentica/compare/0.24.4...0.25.0
 [0.24.4]: https://github.com/agentica-lang/agentica/compare/0.24.3...0.24.4
 [0.24.3]: https://github.com/agentica-lang/agentica/compare/0.24.2...0.24.3
 [0.24.2]: https://github.com/agentica-lang/agentica/compare/0.24.1...0.24.2
