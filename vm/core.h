@@ -173,7 +173,9 @@ void agc_inbox_wake(agc_inbox *in);
  * on the pool thread, under the pool's lock, unless the pool is closed by then; such items do not keep the loop
  * alive, and direct_busy says whether any is queued or running (false from submit_direct when ENDED is NULL).
  * end_direct (LOOP's thread, once no other thread submits) turns the direct items still queued or running into the
- * loop's own: they end with FINISHED and keep the loop alive, and submit_direct refuses from then on. */
+ * loop's own: they end with FINISHED and keep the loop alive, and submit_direct refuses from then on. seq(K), on any
+ * thread before the close, is thread K's count (K below size) of the works it began and ended, odd while one runs, so
+ * a caller can wait for the works running at some moment (vm/ffi.c, retire_closure). */
 typedef struct agc_compute agc_compute;
 agc_compute *agc_compute_open(struct uv_loop_s *loop, uint32_t size, void (*finished)(void *item),
                               void (*ended)(void *item));
@@ -181,6 +183,8 @@ bool agc_compute_submit(agc_compute *pool, void (*work)(void *item), void *item)
 bool agc_compute_submit_direct(agc_compute *pool, void (*work)(void *item), void *item);
 void agc_compute_end_direct(agc_compute *pool);
 bool agc_compute_direct_busy(agc_compute *pool);
+uint32_t agc_compute_size(const agc_compute *pool);
+uint64_t agc_compute_seq(agc_compute *pool, uint32_t k);
 void agc_compute_close(agc_compute *pool);
 
 /* The outcome of a job and its reference count (docs/vm/16-architecture.md §16.5, rules 2 to 4). The outcome starts as

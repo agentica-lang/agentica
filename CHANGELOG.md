@@ -25,6 +25,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `Time.monotonic_ms` is cheaper on Linux and may lag the exact time by up to
   one kernel tick (at most 10 ms); it still never goes back.
 
+### Fixed
+
+- A `compute def` whose C calls a handler callback closed during the call fails
+  with `RUNTIME-NATIVE-CALLBACK` instead of crashing.
+- A cancelled task whose `compute def` call found no pool thread gives back its
+  `Native.Mutex`.
+
 ## [0.24.3] - 2026-11-05
 
 ### Added

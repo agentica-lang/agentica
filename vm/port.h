@@ -361,11 +361,10 @@ typedef struct {
   agc_front_end *front_end;
   /* The prepared native calls of the run (vm/ffi.c), made at the first call of each extern function; NULL before. */
   struct agc_ffi_cache *ffi;
-  /* The callback closures that a close gave back while a fast native call of some scheduler was in C, which may still
-     call them (vm/ffi.c, retire_closure): freed once every such call has returned. GC memory, under rt->sync;
-     `ffi_retired_count` is read without the lock by each call that leaves C. */
+  /* The callback closures that a close gave back while a native call of some scheduler or compute pool thread was in
+     C, which may still call them (vm/ffi.c, retire_closure): freed once every such call has returned. GC memory,
+     under rt->sync. */
   struct agc_ffi_retired *ffi_retired;
-  _Atomic uint32_t ffi_retired_count;
   /* The leases of Native.Mutex locks that running compute calls hold (vm/mutex.c, agc_mutex_lease), so the collector
      sees them from the malloc'd call; under rt->sync. */
   struct agc_mutex_lease *mutex_leases;
@@ -647,8 +646,11 @@ struct agc_vm {
   struct agc_ffi_memo *ffi_memo;
   /* Odd while this scheduler's thread is in the C of a fast native call (`c_depth` counts the nested ones, of the
      callbacks C runs, on this thread only), so a close on another scheduler can tell which calls may still use a
-     callback's closure (vm/ffi.c, retire_closure). */
+     callback's closure (vm/ffi.c, retire_closure). `c_waits` counts the retired closures that wait for this
+     scheduler's call to leave C, which only that call's end reads, so a call on another scheduler never takes
+     rt->sync for them. */
   _Atomic uint64_t c_seq;
+  _Atomic uint32_t c_waits;
   uint32_t c_depth;
 };
 
@@ -746,6 +748,11 @@ agc_resource **agc_registry_copy(agc_vm *vm, size_t *count);
    thread of its own and waits for it until BY: true when it ended; else the thread is left to the exit, with DATA,
    and FN may still run. */
 void agc_io_compute_each(agc_vm *vm, const agc_io_kind *kind, void (*fn)(void *data, void *arg), void *arg);
+/* The threads of the run's compute pool, for a wait on the works that run at some moment (vm/ffi.c, retire_closure);
+   any thread. compute_threads is how many it may have (0 while there is no pool). compute_seq puts thread K's count of
+   the works it began and ended, odd while one runs, in *SEQ; false once the pool is closed (agc_io_close). */
+uint32_t agc_io_compute_threads(agc_vm *vm);
+bool agc_io_compute_seq(agc_vm *vm, uint32_t k, uint64_t *seq);
 bool agc_io_wait_for(agc_vm *vm, bool (*ready)(agc_vm *vm, void *arg), void *arg, uint64_t by);
 bool agc_io_run_aside(agc_vm *vm, void (*fn)(void *data), void *data, uint64_t by);
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms);

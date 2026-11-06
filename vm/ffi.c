@@ -293,15 +293,17 @@ typedef struct agc_ffi_memo {
   ffi_entry *entries[MEMO_SETS][2];
 } agc_ffi_memo;
 
-/* A callback closure given back while a fast call of some scheduler was in C (agc_runtime.ffi_retired). C may have
-   read the callback's pointer before the close (a handler it stored) and call it once it gets there, so the closure is
-   freed only once each scheduler that was in C then has left C (its c_seq moved on); `keep` holds the callback's data,
-   which the closure's code reads. SEQS has one entry per scheduler: its c_seq at the close when odd, or 0. */
+/* A callback closure given back while a native call of some scheduler or compute pool thread was in C
+   (agc_runtime.ffi_retired). C may have read the callback's pointer before the close (a handler it stored) and call it
+   once it gets there, so the closure is freed only once each thread that was in C then has left C (its seq moved on);
+   `keep` holds the callback's data, which the closure's code reads. SEQS has one entry per scheduler, then one per
+   thread of the compute pool (`threads`, 0 when the run had no pool at the close): that thread's seq at the close
+   when odd, or 0 once it no longer waits for it. A scheduler's nonzero entry counts in its c_waits. */
 typedef struct agc_ffi_retired {
   struct agc_ffi_retired *next;
   agc_ffi_closure *closure;
   callback_data *keep;
-  size_t count;
+  uint32_t scheds, threads;
   uint64_t seqs[];
 } agc_ffi_retired;
 
@@ -946,42 +948,75 @@ static void call_free(agc_c_resource *res) {
 static size_t sched_count(const agc_vm *vm) { return vm->rt->scheds ? (size_t)vm->rt->schedulers : 1; }
 static agc_vm *sched_at(agc_vm *vm, size_t k) { return vm->rt->scheds ? vm->rt->scheds[k] : vm; }
 
+/* Whether R still waits for one of its threads, clearing the entry of each thread whose call has left C (and its
+   scheduler's count). Every entry is visited, so a scheduler's count drops as soon as it may. A pool that is gone
+   (only at the very end) counts as still running: its detached threads may be in C, and the exit follows. */
+static bool still_waits(agc_vm *vm, agc_ffi_retired *r) {
+  bool waits = false;
+  for (uint32_t k = 0; k < r->scheds; k++) {
+    if (!r->seqs[k]) continue;
+    agc_vm *s = sched_at(vm, k);
+    if (atomic_load(&s->c_seq) == r->seqs[k]) {
+      waits = true;
+      continue;
+    }
+    r->seqs[k] = 0;
+    atomic_fetch_sub(&s->c_waits, 1);
+  }
+  for (uint32_t k = 0; k < r->threads; k++) {
+    uint64_t *seq = &r->seqs[r->scheds + k], now;
+    if (!*seq) continue;
+    if (!agc_io_compute_seq(vm, k, &now) || now == *seq)
+      waits = true;
+    else
+      *seq = 0;
+  }
+  return waits;
+}
+
 /* Frees each retired closure that no call that was in C at its close still runs. Under rt->sync, or alone at the end
    of the run. */
 static void reap_closures(agc_vm *vm) {
-  agc_runtime *rt = vm->rt;
-  for (agc_ffi_retired **at = &rt->ffi_retired; *at;) {
+  for (agc_ffi_retired **at = &vm->rt->ffi_retired; *at;) {
     agc_ffi_retired *r = *at;
-    bool waits = false;
-    for (size_t k = 0; k < r->count && !waits; k++)
-      waits = r->seqs[k] && atomic_load(&sched_at(vm, k)->c_seq) == r->seqs[k];
-    if (waits) {
+    if (still_waits(vm, r)) {
       at = &r->next;
       continue;
     }
     agc_ffi_closure_free(r->closure);
     *at = r->next;
-    atomic_fetch_sub(&rt->ffi_retired_count, 1);
   }
 }
 
-/* Gives back the closure of the closed callback RES (free_resource). The count is raised before the schedulers' c_seq
-   are read, both seq_cst, and a call that leaves C moves its c_seq before it reads the count (leave_c): so either
-   this close sees a call's C as over, or that call sees the closure retired and frees it once it may. Under
-   rt->sync. */
+/* Gives back the closure of the closed callback RES (free_resource). For each scheduler the count of what waits for it
+   (c_waits) is raised before its c_seq is read, both seq_cst, and a call that leaves C moves its c_seq before it reads
+   that count (leave_c): so either this close sees the call's C as over, or that call sees the closure retired and
+   frees it once it may. A compute pool thread is read the same way, its seq moved by the pool around each work
+   (vm/compute.c); it never frees: the end of the compute call does (compute_done), and a work of another kind (a KDF)
+   leaves its closures to the next free of some other call. A thread that enters C after its read was not in C at the
+   close, so it cannot have read the pointer before. Under rt->sync. */
 static void retire_closure(agc_vm *vm, agc_c_resource *res) {
-  size_t n = sched_count(vm);
+  uint32_t scheds = (uint32_t)sched_count(vm), threads = agc_io_compute_threads(vm);
+  size_t n = agc_size_add(scheds, threads);
   agc_ffi_retired *r = agc_alloc(agc_size_add(sizeof *r, agc_size_mul(n, sizeof(uint64_t))));
   r->closure = res->free_at;
   r->keep = res->callback;
-  r->count = n;
+  r->scheds = scheds;
+  r->threads = threads;
+  for (uint32_t k = 0; k < scheds; k++) {
+    agc_vm *s = sched_at(vm, k);
+    atomic_fetch_add(&s->c_waits, 1);
+    uint64_t seq = atomic_load(&s->c_seq);
+    r->seqs[k] = seq & 1 ? seq : 0;
+    if (!r->seqs[k]) atomic_fetch_sub(&s->c_waits, 1);
+  }
+  for (uint32_t k = 0; k < threads; k++) {
+    uint64_t seq = 0;
+    (void)agc_io_compute_seq(vm, k, &seq);
+    r->seqs[scheds + k] = seq & 1 ? seq : 0;
+  }
   r->next = vm->rt->ffi_retired;
   vm->rt->ffi_retired = r;
-  atomic_fetch_add(&vm->rt->ffi_retired_count, 1);
-  for (size_t k = 0; k < n; k++) {
-    uint64_t seq = atomic_load(&sched_at(vm, k)->c_seq);
-    r->seqs[k] = seq & 1 ? seq : 0;
-  }
   reap_closures(vm);
 }
 
@@ -990,11 +1025,12 @@ static void enter_c(agc_vm *vm) {
   if (vm->c_depth++ == 0) atomic_fetch_add(&vm->c_seq, 1);
 }
 
-/* A fast call's C has returned; the outermost one frees the closures that only waited for it (retire_closure). */
+/* A fast call's C has returned; the outermost one frees the closures that waited for it (retire_closure). Only its
+   own count is read, so a closure that waits for a call on another scheduler costs this one nothing. */
 static void leave_c(agc_vm *vm) {
   if (--vm->c_depth) return;
   atomic_fetch_add(&vm->c_seq, 1);
-  if (!atomic_load(&vm->rt->ffi_retired_count)) return;
+  if (!atomic_load(&vm->c_waits)) return;
   agc_sync_take(vm);
   reap_closures(vm);
   agc_sync_drop(vm);
@@ -1292,7 +1328,7 @@ static bool end_step(agc_vm *vm, agc_resource **items, size_t count, bool *skipp
 bool agc_ffi_end(agc_vm *vm, int (*stop_signal)(void)) {
   /* agc_io_flush_files, which runs first, set the deadline. */
   uint64_t by = vm->rt->flush_by;
-  /* The schedulers have joined, so no fast call is in C. */
+  /* The schedulers have joined, so no fast call is in C; a closure that waits for a compute call still in C stays. */
   reap_closures(vm);
   size_t count;
   agc_resource **items = agc_registry_copy(vm, &count);
@@ -1865,10 +1901,11 @@ static void compute_work(void *data) {
    the result becomes a value there. For a cancelled task it runs too and the value is dropped (the detached end of the
    job), a resource result with it; a call whose work was skipped (cancelled while it waited) has no result, so it
    gives Void, which the detached end drops. A call skipped because the run was over (run_compute in vm/loop.c, or
-   ABANDONED) has none either, and its task is never woken (drain in vm/loop.c), so no task takes that Void. A job
-   dropped without this half (its pool work could not start, or the run is over) keeps its holds and its lease: the
-   task fails, and a resource that the job held is never freed, a leak and never a use after free, and a mutex of the
-   lease stays taken. */
+   ABANDONED) has none either, and its task is never woken (drain in vm/loop.c), so no task takes that Void. A call
+   whose pool work could not start runs this half too when its task was cancelled (end_detached), so a waiter of the
+   lease's mutex gets it; one whose task still waits fails it with RUNTIME-INTERNAL, which ends the run. A job dropped
+   without this half once the run is over keeps its holds and its lease: a resource that it held is never freed, a
+   leak and never a use after free, and no task takes the mutex any more. */
 static agc_value compute_done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   compute_call *c = data;
@@ -1877,6 +1914,8 @@ static agc_value compute_done(agc_vm *vm, void *data, agc_value context) {
   made_from from = c->ran && makes_resources(e) ? origins(vm, e, c->held) : (made_from){NULL, NULL, 0};
   release_held(vm, e, c->held);
   agc_mutex_unlease(vm, c->lease);
+  /* The pool thread's seq moved on before this end came (vm/compute.c), so a closure that waited for this call goes. */
+  if (vm->rt->ffi_retired) reap_closures(vm);
   agc_value v = agc_void();
   /* A call with out parameters gives a List, which the detached end (discard in vm/loop.c) does not look into, so its
      resources are freed here when nobody takes the value. Invariant (the one agc_own relies on too): `done` runs with

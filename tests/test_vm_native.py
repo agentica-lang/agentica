@@ -647,6 +647,109 @@ def test_a_callback_closed_while_another_schedulers_c_holds_it_stays_until_c_ret
     assert (result.code, result.stdout, result.stderr) == (0, "fire gave 0\n", "")
 
 
+# The same handler, read by a compute call: the pool thread counts as a scheduler does (agc_compute_seq), so its C
+# reaches the closed callback, which refuses to run there (RUNTIME-NATIVE-CALLBACK), and not freed code (a crash).
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_callback_closed_while_a_compute_call_holds_it_stays_until_c_returns(tmp_path, peer, schedulers):
+    text = HANDLER_EXTERN.replace("LIBRARY", literal(peer)).replace("  def peer_fire(", "  compute def peer_fire(")
+    text = text.replace("  b = Native.callback(Other, &other)\n", "").replace("  Native.close(b)\n", "")
+    result = agentica("--json", "--schedulers", schedulers, program(tmp_path, text), timeout=scaled(60))
+    assert result.code == 1, result.stderr
+    codes = [json.loads(line)["code"] for line in result.stderr.strip().split("\n")]
+    assert codes == ["RUNTIME-NATIVE-CALLBACK", "RUNTIME-TASK-CRASHED"]
+
+
+# A closed callback that waits for a long fast call on one scheduler costs the fast calls of the others nothing: they
+# read only their own count of waiting closures (c_waits), so they keep running while a third scheduler frees a
+# resource with rt->sync held (peer_slow_free). Before, each of them took rt->sync after C and stood still there.
+@NATIVE_CALLS
+def test_fast_calls_skip_the_vm_lock_while_a_closed_callback_waits_for_another_scheduler(tmp_path, peer):
+    text = """extern "%s"
+  callback Step(x: C.Int32) -> C.Int32
+  resource Slow, free: peer_slow_free
+  def peer_set_handler(fn: Optional[Step]) -> Void
+  def peer_fire(ms: C.Int32) -> C.Int32
+  def peer_fire_loaded() -> C.Int32
+  def peer_slow_open(ms: C.Int32) -> Slow
+  def peer_freeing() -> C.Int32
+end
+
+def step(x: Int) -> Int
+  return x * 10
+end
+
+def fire() -> Int
+  return peer_fire(2000)
+end
+
+def count() -> Int
+  while peer_freeing() == 0
+  end
+  n = 0
+  while peer_freeing() == 1
+    n += 1
+  end
+  return n
+end
+
+def main() -> Void
+  a = Native.callback(Step, &step)
+  peer_set_handler(some(a))
+  fired = Task.spawn(&fire)
+  while peer_fire_loaded() == 0
+  end
+  peer_set_handler(none)
+  Native.close(a)
+  counters: List[Task[Int]] = []
+  for _ in 1..3
+    counters = counters.push(Task.spawn(&count))
+  end
+  slow = peer_slow_open(500).unwrap!
+  Task.sleep(50)
+  Native.close(slow)
+  puts(counters.map do |counter| Task.await(counter) end)
+  puts(Task.await(fired))
+end
+""" % literal(peer)
+    result = agentica("--schedulers", "4", program(tmp_path, text), timeout=scaled(60))
+    assert (result.code, result.stderr) == (0, ""), result.stderr
+    counts, fired = result.stdout.split("\n")[:2]
+    assert max(json.loads(counts)) >= 100 and fired == "0", result.stdout
+
+
+# A compute call that finds no pool thread to run it (peer_no_threads), in a task that holds a Native.Mutex and is
+# cancelled before it takes the failure: the job ends through its done half (end_detached), which gives the lease back,
+# so the next task gets the mutex. Before, the lease stayed and the waiter parked until the stall check. One scheduler,
+# with the shared state's locks on or off: more schedulers would need threads of their own after the limit.
+@NATIVE_CALLS
+@pytest.mark.skipif(not TARGET_OS.startswith("linux") or os.geteuid() == 0,
+                    reason="RLIMIT_NPROC limits threads on Linux, and not for root")
+@pytest.mark.parametrize("shared", ["0", "1"])
+def test_a_cancelled_compute_call_that_never_started_gives_its_mutex_back(tmp_path, peer, shared):
+    text = """extern "%s"
+  compute def peer_slow(ms: C.Int32) -> C.Int32
+  def peer_no_threads() -> C.Int32
+end
+
+def hold(lock: Native.Mutex) -> Int
+  return lock.synchronize do peer_slow(10) end
+end
+
+def main() -> Void
+  lock = Native.mutex()
+  puts(peer_no_threads())
+  holder = Task.spawn(&hold, lock)
+  Task.sleep(0)
+  Task.cancel(holder)
+  puts(lock.synchronize do 3 end)
+end
+""" % literal(peer)
+    result = agentica("--schedulers", "1", program(tmp_path, text), env={"AGENTICA_VM_TEST_SHARED": shared},
+                      timeout=scaled(60))
+    assert (result.code, result.stdout, result.stderr) == (0, "0\n3\n", "")
+
+
 PIN_EXTERN = """extern "{library}"
   resource Res, free: peer_res_free
   resource Child, free: peer_child_free
