@@ -238,8 +238,8 @@ def agree(locked: Lock.Locked, wanted: Wanted) -> Result[Void]
 end
 
 # A `path` and a member of the workspace are locked as such, with no fetch. Else keeps the locked entry when it is the
-# same source and
-# nobody asked to move it (an entry locked as a member, but not a member any more, is fetched), else fetches the pin.
+# same source and nobody asked to move it (an entry locked as a member, but not a member any more, is fetched), else
+# fetches the pin.
 def settle(
   settings: Env.Settings,
   cache: String,

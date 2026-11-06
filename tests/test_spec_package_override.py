@@ -6,10 +6,13 @@ The remotes are bare git repositories behind a throwaway HOME (tests/package_sup
 the network. Cases assert codes and key paths, never message text (AGENTS.md); the help of PKG-SOURCE-CONFLICT is the
 one exception, because naming `override = true` is what that help is for.
 """
+import json
+
 import pytest
 
-from tests.package_support import (assert_at_key, build, command, git, no_git_path, plain, problem_of,  # noqa: F401
-                                    remotes, ws)
+from tests.agentica_test import cli, run
+from tests.package_support import (assert_at_key, build, command, environment, git, no_git_path, plain,  # noqa: F401
+                                    problem_of, remotes, ws)
 
 BOND = "owner/bond"
 CHANNELS = "owner/channels"
@@ -117,6 +120,29 @@ def test_a_path_is_read_in_place_with_no_fetch_no_cache_and_no_hash(ws, remotes)
     (bond / "bond.agc").write_text(bond_module("local"), encoding="utf-8")
     ran = plain(ws, remotes, str(ws.project / "main.agc"), PATH=no_git)
     assert (ran.code, ran.stdout) == (0, "bond local\n"), ran.stderr
+    # The lock keeps the path as written: another spelling of the same folder is stale, and a folder that lost its
+    # manifest is a bad path.
+    manifest = ws.project / "agentica.toml"
+    written = manifest.read_text(encoding="utf-8")
+    manifest.write_text(written.replace('"../bond"', '"../bond/"'), encoding="utf-8")
+    assert_at_key(problem_of(ws, remotes), "PKG-LOCK-STALE", manifest, "dependencies.bond")
+    manifest.write_text(written, encoding="utf-8")
+    (bond / "agentica.toml").unlink()
+    assert_at_key(problem_of(ws, remotes), "PKG-MANIFEST-INVALID", manifest, "dependencies.bond.path")
+
+
+def test_a_workspace_member_is_a_package_and_cannot_name_a_path(ws, remotes):
+    repo = ws.base / "repo"
+    url = remotes.url("owner/packages")
+    (repo / "lib").mkdir(parents=True)
+    (repo / "agentica.toml").write_text(
+        '[workspace]\nrepository = "%s"\nmembers = ["lib"]\n\n[dependencies]\n'
+        'lib = { git = "%s", tag = "lib-1", subdir = "lib" }\n' % (url, url), encoding="utf-8")
+    member = repo / "lib" / "agentica.toml"
+    member.write_text('name = "lib"\n\n[dependencies]\nbond = { path = "../bond" }\n', encoding="utf-8")
+    result = run(cli() + ["--json", "update"], cwd=repo, env=environment(ws, remotes))
+    assert result.code == 1, result.stderr
+    assert_at_key(json.loads(result.stderr), "PKG-ROOT-ONLY", member, "dependencies.bond.path")
 
 
 def test_a_path_override_replaces_a_transitive_git_dependency_and_the_lock_round_trips(ws, remotes):

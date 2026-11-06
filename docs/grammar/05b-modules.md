@@ -391,9 +391,10 @@ import Sqlite from "pkg/sqlite/db"
   of the workspace of the project, or `path` in place of the git source for a
   `path` dependency, then `override = true` for an overridden name. A bad lock
   is `PKG-LOCK-INVALID`, a bad `subdir` too, at `package[n].subdir`; a lock
-  with no `subdir` reads as before. Every dependency of the manifest must be in the lock with the same
-  `git` (with or without a `.git` at the end), the same `subdir` (or none) and
-  the same `tag` or `ref`, or the lock is `PKG-LOCK-STALE`. The same check runs
+  with no `subdir` reads as before. Every dependency of the manifest must be
+  in the lock with the same `git` (with or without a `.git` at the end), the
+  same `subdir` (or none) and the same `tag` or `ref`, or the same `path`, and
+  the same `override`, or the lock is `PKG-LOCK-STALE`. The same check runs
   on the manifest of every locked package that is in `deps/`: a name the lock
   lacks is `PKG-LOCK-STALE`, and a name with another source than the lock is
   `PKG-SOURCE-CONFLICT`; both are reported at `dependencies.<name>` of that
@@ -470,9 +471,10 @@ import Sqlite from "pkg/sqlite/db"
   failure in the middle of the copy (a full disk, say) leaves `deps/` partly
   updated: each package folder is either the old one or the new one, and
   `agentica install` finishes the rest. The
-  answer is `fetched NAME@VERSION`, `in the cache NAME@VERSION` or, for a
-  workspace member, `in the workspace NAME@workspace` for each package; with
-  no package but host artifacts ready, `1 native artifact ready` (or `N
+  answer is `fetched NAME@VERSION`, `in the cache NAME@VERSION`, for a
+  workspace member `in the workspace NAME@workspace` or, for a `path`,
+  `in place NAME@path` for each package, then `overridden NAME@VERSION` for
+  each overridden package; with no package but host artifacts ready, `1 native artifact ready` (or `N
   native artifacts ready`); else `nothing to install`. The command starts
   git even under
   `--deny-run`, which only limits programs.

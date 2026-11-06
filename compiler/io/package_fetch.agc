@@ -72,8 +72,7 @@ export def cache_root(env: Env.Env, file: String) -> Result[String]
 end
 
 ## Like `cache_root`, for the packages of a lock: a lock of workspace members and paths alone fetches nothing and
-## needs no cache,
-## so it gives "" for it and fails only when a package has to be fetched.
+## needs no cache, so it gives "" for it and fails only when a package has to be fetched.
 export def cache_for(env: Env.Env, file: String, packages: List[Lock.Locked]) -> Result[String]
   if packages.all? do |locked| Lock.in_place?(locked) end
     return ok("")
