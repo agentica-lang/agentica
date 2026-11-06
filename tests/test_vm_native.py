@@ -897,12 +897,11 @@ end
 """
 
 
+# The gap cases need a second scheduler for the call that pins the resource, so they run at 4 only.
 @NATIVE_CALLS
-@pytest.mark.parametrize("schedulers", ["1", "4"])
-@pytest.mark.parametrize("case", list(CLOSE_CASES) + list(GAP_CASES))
-def test_a_free_that_calls_a_closed_callback_reaches_its_code_and_gets_zero(tmp_path, peer, schedulers, case):
-    if case in GAP_CASES and schedulers == "1":
-        pytest.skip("the pinning call needs a second scheduler")
+@pytest.mark.parametrize("case, schedulers", [(c, n) for c in CLOSE_CASES for n in ("1", "4")] +
+                         [(c, "4") for c in GAP_CASES])
+def test_a_free_that_calls_a_closed_callback_reaches_its_code_and_gets_zero(tmp_path, peer, case, schedulers):
     body = CLOSE_CASES.get(case) or WAITS + GAP_CASES[case]
     text = HOOK_PROGRAM % literal(peer) + body + CLOSE_MAIN
     result = agentica("--schedulers", schedulers, program(tmp_path, text), timeout=scaled(60))
