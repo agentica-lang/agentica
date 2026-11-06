@@ -118,13 +118,14 @@ end
 
 ## T.codec
 
+`User.codec` (on the type, without parentheses, as `User.members`) is the `Codec[User]` of a struct or enum that `JSON.decode` takes.
+
 ```signature
-T.codec -> Codec[T]
 codec.decode(s: String) -> Result[T]
 codec.decode(json: Json) -> Result[T]
 codec.encode(value: T) -> String
 codec.from(value: T) -> Json
-codec.members -> List[StructMember]
+codec.members() -> List[StructMember]
 ```
 
 A generic function may call `JSON.encode` and `JSON.from` on a value of its type parameter `T` (or of `List[T]`, `Map[String, T]`, `Optional[T]`, or a generic struct or enum of `T`): each call of the function then checks that the type it binds to `T` can be written as JSON, and a call with an `Fn`, a `Bytes` or a `Task` is `CHECK-NOT-ENCODABLE` at that argument. A generic function that passes its `T` on carries the same check to its own callers.
