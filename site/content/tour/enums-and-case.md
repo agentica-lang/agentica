@@ -147,6 +147,7 @@ def main() -> Void
     ok(n) -> "got #{n}"
     error(message) -> "failed: #{message}"
   end
+
   puts(text)
 
   size = case text
@@ -155,15 +156,18 @@ def main() -> Void
       base + 1
     _ -> 0
   end
+
   puts(size)
 
   puts(label(Kind.Small))
-  puts([Kind.Big, Kind.Small].map do |kind|
+  numbers = [Kind.Big, Kind.Small].map do |kind|
     case kind
       Kind.Big -> 1
       Kind.Small -> 2
     end
-  end)
+  end
+
+  puts(numbers)
 end
 ```
 
@@ -182,6 +186,7 @@ def main() -> Void
     1 -> "one"
     _ -> 2
   end
+
   puts(text)
 end
 ```

@@ -17,15 +17,18 @@ def main() -> Void
       base + 1
     _ -> 0
   end
+
   size += case "a"
     "a" -> 1
     _ -> 2
   end
+
   names = [Kind.Big, Kind.Small].map do |kind|
     case kind
       Kind.Big -> "B"
       Kind.Small -> "S"
     end
   end
+
   puts("#{size} #{names} #{label(Kind.Big)}")
 end

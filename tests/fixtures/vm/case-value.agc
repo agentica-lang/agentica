@@ -24,6 +24,7 @@ def main() -> Void
     ok(n) -> "got #{n}"
     error(message) -> "failed: #{message}"
   end
+
   puts(text)
 
   size = case text
@@ -32,10 +33,12 @@ def main() -> Void
       base + 1
     _ -> noisy(0)
   end
+
   size += case size
     3 -> 10
     _ -> 20
   end
+
   puts(size)
 
   for kind in [Kind.Big, Kind.Small, Kind.Sized(4), Kind.Sized(40)]
@@ -49,6 +52,7 @@ def main() -> Void
       _ -> 0
     end
   end
+
   puts(names)
 
   steps = [1, 2, 3].map do |n|
@@ -58,5 +62,6 @@ def main() -> Void
       _ -> "other #{doubled}"
     end
   end
+
   puts(steps)
 end
