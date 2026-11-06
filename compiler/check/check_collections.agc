@@ -8,6 +8,7 @@ import Source from "../syntax/source"
 import T from "../syntax/types"
 import Args from "check_args"
 import Lists from "check_list"
+import RubyForm from "ruby_form"
 import State from "check_state"
 import Stmt from "check_stmt"
 import CheckTypes from "check_types"
@@ -35,6 +36,7 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
       first = site.selected.parameters[0].type
       return check_block_value(cx, st, site, first, [T.Type.Opaque("C.Pointer")])
     Model.Rule.NativeStruct -> return check_native_struct(cx, st, site)
+    Model.Rule.NativeSynchronize -> return check_block_value(cx, st, site, T.Type.Opaque("Native.Mutex"), [])
     Model.Rule.NativeCallback -> return check_native_callback(cx, st, site)
     _ -> return check_map_rule(cx, st, site, rule)
   end
@@ -630,7 +632,7 @@ def check_block_value(
             cx,
             checked.st,
             "CHECK-TYPE-MISMATCH",
-            "#{site.selected.name} requires a block or a function #{block_parameters(params)}",
+            "#{RubyForm.shown(site.selected.name)} requires a block or a function #{block_parameters(params)}",
             Ast.expr_span(callback),
           ),
         )

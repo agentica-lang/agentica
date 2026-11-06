@@ -425,6 +425,13 @@ agc_value agc_ats_value(void *table) {
   return v;
 }
 
+agc_value agc_mutex_value(void *mutex) {
+  agc_value v;
+  v.tag = AGC_T_MUTEX;
+  v.as.p = mutex;
+  return v;
+}
+
 agc_value agc_c_pointer_value(void *pointer) {
   agc_value v;
   v.tag = AGC_T_C_POINTER;
@@ -586,6 +593,11 @@ const void *agc_as_lazy(agc_vm *vm, agc_value v) {
 
 void *agc_as_ats(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_ATS) agc_wrong_tag(vm);
+  return v.as.p;
+}
+
+void *agc_as_mutex(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_MUTEX) agc_wrong_tag(vm);
   return v.as.p;
 }
 

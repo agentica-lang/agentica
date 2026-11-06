@@ -12,6 +12,18 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `ATS[Bytes, V]`: a shared table takes `Bytes` keys, as a `Map` does.
 
+- `Native.mutex()` and `lock.synchronize do ... end` guard the calls of a
+  native library that is not thread-safe; a waiting task parks.
+
+### Changed
+
+- **Breaking:** `def` calls of an `extern` block on different schedulers run at
+  the same time, as `compute def` calls do; guard a library that is not
+  thread-safe with a `Native.Mutex`.
+- Native calls are faster: a call site's prepared call is kept per scheduler.
+- `Time.monotonic_ms` is cheaper on Linux and may lag the exact time by up to
+  one kernel tick (at most 10 ms); it still never goes back.
+
 ## [0.24.3] - 2026-11-05
 
 ### Added

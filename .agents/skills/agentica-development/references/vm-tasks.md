@@ -32,10 +32,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   the logger table, stdin and the FIFOs. Each output stream has its own lock.
   The interpreter takes `rt->sync` around each builtin whose row has `shared`
   set, a stepper step, the halves of a job whose kind says `locked`, and each
-  end of a task. Never hold it across a park or a turn. Lock order: sync, then a
-  stream's lock, then the inbox's and the run queue's. `agc_sync_take` and
-  `agc_sync_drop` nest per scheduler; `agc_sync_reset` undoes them after
-  `agc_fail`.
+  end of a task. `Native.call` runs C without it and pins its resources
+  (`vm/ffi.c`); a program guards a library that is not thread-safe with a
+  `Native.Mutex` (`vm/mutex.c`, a stepper whose waiters park in a FIFO). Never
+  hold it across a park or a turn. Lock order: sync, then a stream's lock, then
+  the inbox's and the run queue's. `agc_sync_take` and `agc_sync_drop` nest per
+  scheduler; `agc_sync_reset` undoes them after `agc_fail`.
 - `agc_sync_assert` fails the run when a shared VM reaches a checked mutator
   without the lock; `agc_share` turns it on. `AGENTICA_VM_TEST_SHARED=1` does it
   for a whole run on one scheduler (`make test-shared` runs the binary modules

@@ -52,6 +52,7 @@ export enum Rule
   NativeClosed
   NativeMemoryBlock
   NativeStruct
+  NativeSynchronize
   Ok
   OkVoid
   OptionalNone

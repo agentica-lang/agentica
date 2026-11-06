@@ -23,7 +23,7 @@ export def method_key(name: String) -> String
     return ""
   end
 
-  kind = Types.tag(entry.unwrap!.parameters[0].type)
+  kind = parameter_kind(entry.unwrap!.parameters[0].type)
   module = Tables.method_modules().get(kind)
   if module.none? or !name.starts_with?("#{module.unwrap!}.")
     return ""
@@ -36,6 +36,16 @@ export def method_key(name: String) -> String
   end
 
   return key
+end
+
+## The receiver kind of a builtin whose first parameter has this type: its tag (`String`, `List`, ...), but Mutex for
+## Native.Mutex, the one opaque type with methods.
+export def parameter_kind(type: Types.Type) -> String
+  if Types.is?(type, "Opaque") and Types.name(type) == "Native.Mutex"
+    return "Mutex"
+  end
+
+  return Types.tag(type)
 end
 
 ## The method name of the Ruby form of the builtin `name` (`strip` for `String.trim`), or "".

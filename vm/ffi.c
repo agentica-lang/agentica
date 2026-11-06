@@ -47,6 +47,8 @@
 /* The bytes a struct argument takes in the memory of a call: each starts at a multiple of 16, which no C struct of a
    signature needs more than. */
 #define STRUCT_ROUND(size) (((size) + 15) & ~(size_t)15)
+/* The most pins of one fast call (pin_all): each held resource and the one resource it comes from. */
+#define PIN_MAX (2 * AGC_FFI_MAX_PARAMS)
 
 /* How agc_ffi_end tells a stop signal (agc_io_stop_signal, which the driver passes): nonzero once one came. */
 typedef struct {
@@ -266,19 +268,38 @@ typedef struct {
 
 /* The prepared calls of the run, by signature string, and the struct layouts of Native.size_of, get_struct and
    put_struct, by layout code, in malloc memory (no GC pointers): open addressing over a
-   power-of-two table, kept at most half full. Native.call is a shared builtin, so in a shared VM it runs with
-   rt->sync held and the table needs no lock of its own. Entries live until the process ends, like the libraries.
-   `callbacks` is set once the run has made a callback: from then on a fast call holds its resources, as a compute
-   call does, since a callback lets rt->sync go while it runs, and it, or another task, may close them while C uses
-   them. It changes under rt->sync, as Native.callback is a shared builtin too. `walk` numbers the walks up from held
-   resources (agc_c_resource.seen) and `sites` the native calls that list a callback (native_site.id), under
-   rt->sync. */
+   power-of-two table, kept at most half full. find_entry runs with rt->sync held (call_entry takes it on a miss of
+   the scheduler's memo), so the table needs no lock of its own. Entries live until the process ends, like the
+   libraries. `walk` numbers the walks up from held resources (agc_c_resource.seen) and `sites` the native calls that
+   list a callback (native_site.id), under rt->sync. */
 typedef struct agc_ffi_cache {
   ffi_entry **slots;
   size_t size, used;
-  bool callbacks;
   uint64_t walk, sites;
 } agc_ffi_cache;
+
+/* The memo of one scheduler (agc_vm.ffi_memo): the entry of each signature String it looked up last, direct-mapped by
+   the String's address, so a call site, whose signature is one constant of the program, finds its prepared call with
+   no hash of the text and no lock. A hit compares the address alone, which is sound because the memo keeps the String
+   alive (GC memory, reachable from the scheduler), and a String never changes: no other text can come to live at that
+   address while the slot names it. Hand-made bytecode that builds signatures at run time only misses more. The
+   entries are malloc'd and never freed (agc_ffi_cache), so a slot never points at a freed one. */
+#define MEMO_SLOTS 64
+typedef struct agc_ffi_memo {
+  const agc_string *keys[MEMO_SLOTS];
+  ffi_entry *entries[MEMO_SLOTS];
+} agc_ffi_memo;
+
+/* What a fast call holds while C runs, and how. PINNED (n entries) are pinned without rt->sync (pin_all): each held
+   resource and the one it comes from. A call that makes resources, or whose resources the pins do not cover (one
+   closed, or that comes from two or more), holds them under rt->sync instead (`locked`, hold): HELD has its e->holds
+   entries then, on the stack unless struct fields make it longer. */
+typedef struct {
+  agc_c_resource *stack_held[AGC_FFI_MAX_PARAMS], **held;
+  agc_c_resource *pinned[PIN_MAX];
+  size_t n;
+  bool locked;
+} call_holds;
 
 static const size_t ITEM_WIDTHS[] = {1, 2, 4, 8, 1, 2, 4, sizeof(float), sizeof(double), sizeof(void *)};
 /* The kind of a compute call, defined after its halves: the end of the run walks only the jobs of this kind
@@ -841,6 +862,29 @@ static ffi_entry *find_entry(agc_vm *vm, const agc_string *text, bool layout, ui
   return e;
 }
 
+/* The entry of the signature or layout code SIGNATURE (a String; with LAYOUT a layout entry) through the scheduler's
+   memo; a miss looks it up in the cache of the run under rt->sync and fills the slot. An entry of the other kind is
+   bad bytecode, as in find_entry. */
+static ffi_entry *call_entry(agc_vm *vm, agc_value signature, bool layout, uint32_t span) {
+  const agc_string *text = agc_as_string(vm, signature);
+  agc_ffi_memo *memo = vm->ffi_memo;
+  if (!memo) memo = vm->ffi_memo = agc_alloc(sizeof *memo);
+  /* Fibonacci hashing of the address above its alignment bits; MEMO_SLOTS is 2^6. */
+  size_t at = (size_t)(((uint64_t)((uintptr_t)text >> 3) * UINT64_C(0x9E3779B97F4A7C15)) >> 58);
+  ffi_entry *e;
+  if (memo->keys[at] == text) {
+    e = memo->entries[at];
+    if (e->layout != layout) bad_signature(vm, span);
+    return e;
+  }
+  agc_sync_take(vm);
+  e = find_entry(vm, text, layout, span);
+  agc_sync_drop(vm);
+  memo->keys[at] = text;
+  memo->entries[at] = e;
+  return e;
+}
+
 /* Runs FREE_CALL on the pointer in SLOT unless it is NULL: the function at AT, or the prepared one when AT is NULL. A
    void free(void *) gets the pointer; a void free(void **) (BY_REF, free_ref:) gets SLOT, where C may write NULL. */
 static void free_pointer(agc_ffi_call *free_call, void *at, bool by_ref, void **slot) {
@@ -872,7 +916,7 @@ static void call_free(agc_c_resource *res) {
   free_native(res->buffer, res->callback != NULL, res->free, res->free_at, res->by_ref, &res->pointer);
 }
 
-/* Frees the resource and drops its registry entry; under rt->sync, with no compute call holding it. */
+/* Frees the resource and drops its registry entry; under rt->sync, with no call holding or pinning it. */
 static void free_resource(agc_vm *vm, agc_c_resource *res) {
   call_free(res);
   res->state->native = NULL;
@@ -903,38 +947,39 @@ static void list_free(res_list *l) {
 }
 
 static size_t up_count(const agc_c_resource *res) { return res->ups ? res->up_count : res->up != NULL; }
-static agc_c_resource **up_slot(agc_c_resource *res, size_t j) { return res->ups ? &res->ups[j] : &res->up; }
+static agc_c_resource *up_at(const agc_c_resource *res, size_t j) { return res->ups ? res->ups[j] : res->up; }
 
-/* What the link at SLOT stands for: a resource that is open, a freed one with two or more parents, or NULL. A freed
-   one with one parent or none is passed over, and SLOT moves to what it pointed at, so later reads skip it in one
-   step and a chain of resources each closed once used (x = next(x)) keeps only its open links. Moving past a freed
-   resource keeps every open one above it in reach. Each freed one passed over is moved to the same end too (path
-   compression), so a chain closed in one batch is walked once, not once per resource below it: with y made from
+/* What a link to FIRST stands for: a resource that is open, a freed one with two or more parents, or NULL. A freed
+   one with one parent or none is passed over, and the caller moves the link to what it gives, so later reads skip it
+   in one step and a chain of resources each closed once used (x = next(x)) keeps only its open links. Moving past a
+   freed resource keeps every open one above it in reach. Each freed one passed over is moved to the same end too
+   (path compression), so a chain closed in one batch is walked once, not once per resource below it: with y made from
    each x of the chain, a call on every y would otherwise walk the whole freed chain above it. A freed resource holds
    nothing, so moving its link changes no hold. */
-static agc_c_resource *settle(agc_c_resource **slot) {
-  agc_c_resource *top = *slot;
+static agc_c_resource *settle(agc_c_resource *first) {
+  agc_c_resource *top = first;
   while (top && top->freed && !top->ups) top = top->up;
-  for (agc_c_resource *res = *slot, *next; res != top; res = next) {
+  for (agc_c_resource *res = first, *next; res != top; res = next) {
     next = res->up;
     res->up = top;
   }
-  *slot = top;
   return top;
 }
 
 /* Settles every link of RES. A sole link that ends at a freed resource with two or more parents takes those over
    (the array is shared, and settling it is right for both), so a chain made by next(ctx, x) skips its freed links
-   too. */
+   too. `ups` is set before `up` is cleared: a fast call reads them without rt->sync, `up` first (pin_all), so it finds
+   the freed parent or the array, never neither. */
 static void settle_links(agc_c_resource *res) {
   if (!res->ups) {
-    agc_c_resource *p = settle(&res->up);
+    agc_c_resource *p = settle(res->up);
+    if (p != res->up) res->up = p;
     if (!p || !p->freed) return;
-    res->ups = p->ups;
     res->up_count = p->up_count;
+    res->ups = p->ups;
     res->up = NULL;
   }
-  for (size_t j = 0; j < res->up_count; j++) (void)settle(&res->ups[j]);
+  for (size_t j = 0; j < res->up_count; j++) res->ups[j] = settle(res->ups[j]);
 }
 
 /* Counts one hold in each open resource that RES comes from. The links are settled first, and a link that holds is
@@ -942,7 +987,7 @@ static void settle_links(agc_c_resource *res) {
 static void hold_parents(agc_c_resource *res) {
   settle_links(res);
   for (size_t j = 0, n = up_count(res); j < n; j++) {
-    agc_c_resource *p = *up_slot(res, j);
+    agc_c_resource *p = up_at(res, j);
     if (p && !p->freed) p->jobs++;
   }
 }
@@ -951,24 +996,75 @@ static void hold_parents(agc_c_resource *res) {
 static void push_parents(agc_c_resource *res, res_list *todo) {
   settle_links(res);
   for (size_t j = 0, n = up_count(res); j < n; j++) {
-    agc_c_resource *p = *up_slot(res, j);
+    agc_c_resource *p = up_at(res, j);
     if (p && !p->freed) list_push(todo, p);
   }
 }
 
-/* Whether no native call can reach RES any more: none holds it, and for a callback none that ran it is still in C
-   (callback_data.callers). */
+/* Whether no native call can reach RES any more: none holds it or pins it (`calls`, read seq_cst after a close
+   stores `closed`: see pin_one), and for a callback none that ran it is still in C (callback_data.callers). */
 static bool unreached(const agc_c_resource *res) {
-  return !res->jobs && (!res->callback || !((const callback_data *)res->callback)->callers);
+  return !res->jobs && !atomic_load(&res->calls) &&
+         (!res->callback || !((const callback_data *)res->callback)->callers);
 }
 
-/* Drops one hold of RES. The last one frees it if it was closed meanwhile, unless a callback that a native call still
-   in C has run (then the end of that call frees it: release_ran), and one that carried holds for what it comes from
-   (close_resource) pushes them on TODO. */
-static void drop_hold(agc_vm *vm, agc_c_resource *res, res_list *todo) {
-  if (--res->jobs || !res->closed || res->freed || !unreached(res)) return;
+/* Frees RES if it was closed and nothing reaches it any more, unless a callback that a native call still in C has run
+   (then the end of that call frees it: release_ran); one that carried holds for what it comes from (close_resource)
+   pushes them on TODO. Under rt->sync. */
+static void free_if_unreached(agc_vm *vm, agc_c_resource *res, res_list *todo) {
+  if (!res->closed || res->freed || !unreached(res)) return;
   free_resource(vm, res);
   if (res->carries) push_parents(res, todo);
+}
+
+/* Drops one hold of RES; the last one frees it if it was closed meanwhile (free_if_unreached). */
+static void drop_hold(agc_vm *vm, agc_c_resource *res, res_list *todo) {
+  if (--res->jobs) return;
+  free_if_unreached(vm, res, todo);
+}
+
+/* Pins RES for a fast call that holds no rt->sync, and lists it in PINNED (*N) for unpin_all: true when it is open,
+   and then nothing frees it until the unpin. The pin is a seq_cst add to `calls` before a seq_cst read of `closed`;
+   close_resource stores `closed` before it reads `calls` (unreached). So either the close sees the pin and leaves the
+   free to the last unpin, or the pin sees the close and the call does not use the pointer. */
+static bool pin_one(agc_c_resource *res, agc_c_resource **pinned, size_t *n) {
+  atomic_fetch_add(&res->calls, 1);
+  pinned[(*n)++] = res;
+  return !res->closed;
+}
+
+/* Pins each resource of HELD (HOLDS entries, NULL ones skipped) and the open resource it comes from, as hold and
+   hold_parents count them, without rt->sync. False when one is closed, or comes from two or more resources (`ups`),
+   which the locked path sorts out; what was pinned so far is in PINNED for the caller to undo. A link moves only past
+   a freed resource (settle), so once its target is pinned open it stays; `up` is read before `ups`, the reverse of
+   the order settle_links writes them in. */
+static bool pin_all(agc_c_resource *const *held, uint32_t holds, agc_c_resource **pinned, size_t *n) {
+  for (uint32_t k = 0; k < holds; k++) {
+    agc_c_resource *res = held[k];
+    if (!res) continue;
+    if (!pin_one(res, pinned, n)) return false;
+    agc_c_resource *up = res->up;
+    if (res->ups) return false;
+    if (up && !pin_one(up, pinned, n)) return false;
+  }
+  return true;
+}
+
+/* Undoes the N pins of PINNED. A resource closed while pinned was left to its last call (close_resource found `calls`
+   set): the unpin that drops the last pin and then reads `closed` set frees it under rt->sync, as drop_hold does for
+   a held one; free_if_unreached decides, so a free that the close or another unpin made is not made twice. */
+static void unpin_all(agc_vm *vm, agc_c_resource *const *pinned, size_t n) {
+  bool closed = false;
+  for (size_t k = 0; k < n; k++)
+    if (atomic_fetch_sub(&pinned[k]->calls, 1) == 1 && pinned[k]->closed) closed = true;
+  if (!closed) return;
+  agc_sync_take(vm);
+  res_list todo;
+  list_init(&todo);
+  for (size_t k = 0; k < n; k++) free_if_unreached(vm, pinned[k], &todo);
+  while (todo.count) drop_hold(vm, todo.items[--todo.count], &todo);
+  list_free(&todo);
+  agc_sync_drop(vm);
 }
 
 /* Native.close and the end of the owning task (§14.5): the resource is closed and leaves its owner at once, and is
@@ -1226,7 +1322,7 @@ static made_from origins(agc_vm *vm, const ffi_entry *e, agc_c_resource *const *
   for (size_t k = 0; k < distinct.count; k++) {
     agc_c_resource *res = distinct.items[k];
     for (size_t j = 0, n = up_count(res); j < n; j++) {
-      agc_c_resource *p = *up_slot(res, j);
+      agc_c_resource *p = up_at(res, j);
       if (p && p->seen == walk) p->seen = parent;
     }
   }
@@ -1486,8 +1582,8 @@ static void free_bytes(const ffi_entry *e, uint8_t **bytes) {
 }
 
 /* Copies the C.Bytes arguments of a call into BYTES (NULL for the other parameters); the caller has checked that
-   each is a Bytes. A long copy takes long, so it runs with rt->sync dropped (a shared builtin is called with it taken
-   once), and the lock is taken again before anything shared is read. The turn is charged by size. */
+   each is a Bytes. A long copy takes long, so it runs with rt->sync dropped (compute_start takes it once; a fast call
+   holds none here), and the lock is taken again before anything shared is read. The turn is charged by size. */
 static void copy_byte_arguments(agc_vm *vm, const ffi_entry *e, const agc_list *values, uint8_t **bytes) {
   bool any = false;
   for (uint32_t k = 0; k < e->count; k++) {
@@ -1739,16 +1835,111 @@ static void find_held(agc_vm *vm, const ffi_entry *e, const agc_list *values, ag
   }
 }
 
+/* The compute half of Native.call: the call runs on the compute pool while the task waits (agc_io_compute). It runs
+   with rt->sync held, which the resources and the job's start need, but for the copies of the C.Bytes arguments
+   (copy_byte_arguments). The resources are checked open before and after those copies, so none closes before the
+   job holds them. Nothing between the other copies and the start of the job, which then owns them, can fail. */
+static agc_value compute_start(agc_vm *vm, const ffi_entry *e, const agc_list *values, void *fn, void *free_at,
+                               uint32_t span) {
+  agc_sync_take(vm);
+  agc_task_check_park(vm, "a callback of native code cannot wait for a compute call", span);
+  check_open(vm, e, values, NULL, span);
+  uint8_t *bytes[AGC_FFI_MAX_PARAMS];
+  copy_byte_arguments(vm, e, values, bytes);
+  check_open(vm, e, values, bytes, span);
+  agc_charge(vm, FFI_CALL_COST);
+  /* The struct arguments are copied in proportion to their size. */
+  agc_charge_bytes(vm, e->struct_bytes);
+  /* in, then the slots, then held, then the structs at a multiple of 16: one block (malloc aligns it for any C
+     object). */
+  size_t in_size = agc_size_mul(agc_size_mul(e->count, 2), sizeof(agc_c_value));
+  size_t held_size = agc_size_mul(e->holds, sizeof(agc_c_resource *));
+  size_t structs_at = STRUCT_ROUND(agc_size_add(agc_size_add(sizeof(compute_call), in_size), held_size));
+  compute_call *c = malloc(agc_size_add(structs_at, e->struct_bytes));
+  if (!c) agc_out_of_memory();
+  c->entry = e;
+  c->fn = fn;
+  c->free_at = free_at;
+  c->slots = c->in + e->count;
+  c->held = (agc_c_resource **)(void *)(c->slots + e->count);
+  c->structs = (uint8_t *)c + structs_at;
+  c->ran = false;
+  atomic_init(&c->phase, CALL_QUEUED);
+  memset(&c->out, 0, sizeof c->out);
+  memset(c->structs, 0, e->struct_bytes);
+  c->span = span;
+  c->refused = false;
+  size_t used = 0;
+  for (uint32_t k = 0; k < e->count; k++) {
+    memset(&c->slots[k], 0, sizeof c->slots[k]);
+    if (e->out[k]) {
+      c->in[k].p = &c->slots[k];
+      continue;
+    }
+    uint8_t *memory = e->structs[k] ? c->structs + used : NULL;
+    c->in[k] = entry_argument(vm, e, values, k, bytes[k], memory);
+    if (e->structs[k]) used += STRUCT_ROUND(e->structs[k]->size);
+  }
+  find_held(vm, e, values, c->held);
+  hold(e, c->held);
+  if (e->result_struct) c->out.p = c->structs + used;
+  agc_io_compute(vm, &compute_io, c);
+  agc_sync_drop(vm);
+  return agc_void();
+}
+
+/* Holds the resources of a fast call (call_holds). The pins come first; when they do not cover the call, they are
+   undone and the call takes rt->sync: the resources are checked open (a closed one fails the call, after its BYTES
+   are freed) and held as a compute call holds them, and the lock is let go before C runs. */
+static void hold_for_call(agc_vm *vm, const ffi_entry *e, const agc_list *values, uint8_t **bytes, call_holds *h,
+                          uint32_t span) {
+  h->held = h->stack_held;
+  h->n = 0;
+  h->locked = makes_resources(e) || e->holds > AGC_FFI_MAX_PARAMS;
+  if (!h->locked) {
+    find_held(vm, e, values, h->held);
+    h->locked = !pin_all(h->held, e->holds, h->pinned, &h->n);
+    if (h->locked) {
+      unpin_all(vm, h->pinned, h->n);
+      h->n = 0;
+    }
+  }
+  if (!h->locked) return;
+  agc_sync_take(vm);
+  check_open(vm, e, values, bytes, span);
+  if (e->holds > AGC_FFI_MAX_PARAMS) {
+    h->held = malloc(agc_size_mul(e->holds, sizeof *h->held));
+    if (!h->held) agc_out_of_memory();
+  }
+  find_held(vm, e, values, h->held);
+  hold(e, h->held);
+  agc_sync_drop(vm);
+}
+
+/* Lets go of what hold_for_call held: the pins, or under rt->sync (which the caller holds then) the holds. */
+static void release_for_call(agc_vm *vm, const ffi_entry *e, call_holds *h) {
+  if (!h->locked) {
+    unpin_all(vm, h->pinned, h->n);
+    return;
+  }
+  release_held(vm, e, h->held);
+  if (h->held != h->stack_held) free(h->held);
+}
+
 /* Native.call(signature, arguments): one call of an extern function, on the scheduler, or for a compute def on the
-   compute pool while the task waits. The arguments are a List with one value per parameter, of the Agentica type the
-   checker gave it. Every argument is checked before the first copy is made; then the C.Bytes arguments are copied,
-   with rt->sync dropped (copy_byte_arguments), and the resources are checked open with the lock taken again, so none
-   closes before the call. Nothing between the other copies and their free (or the start of the compute job, which
-   then owns them) can fail. A shared builtin: it runs with rt->sync held, which the resources need. */
+   compute pool while the task waits (compute_start). The arguments are a List with one value per parameter, of the
+   Agentica type the checker gave it. Every argument is checked before the first copy is made. A fast call runs C
+   without rt->sync, so calls on several schedulers run at once (a library that is not thread-safe takes a
+   Native.Mutex): it holds its resources first (hold_for_call), so a close by another task, or by a callback, leaves
+   the free to the end of the call, and takes the lock after C returns only for what needs it: a callback that C ran
+   (release_ran), the resources the call makes (origins, make_resource), the holds of a locked call, and a free that
+   a close left to it. Its value is made while the resources are still held, since a C.String result may point into
+   one (sqlite3_column_text). Not a shared row: the compute half and each of those sections take rt->sync
+   themselves. */
 static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span) {
   /* The fuzzer runs hand-made bytecode with no_files: it must open no library. */
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
-  ffi_entry *e = find_entry(vm, agc_as_string(vm, args[0]), false, span);
+  ffi_entry *e = call_entry(vm, args[0], false, span);
   const agc_list *values = agc_as_list(vm, args[1]);
   if (agc_list_len(values) != e->inputs)
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: wrong number of native arguments", span);
@@ -1760,51 +1951,14 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
     else if (!e->out[k])
       check_argument(vm, e->params[k], e->structs[k], agc_list_get(values, e->arg[k]), span);
   }
-  if (e->compute) agc_task_check_park(vm, "a callback of native code cannot wait for a compute call", span);
-  check_open(vm, e, values, NULL, span);
+  if (e->compute) return compute_start(vm, e, values, fn, free_at, span);
   uint8_t *bytes[AGC_FFI_MAX_PARAMS];
   copy_byte_arguments(vm, e, values, bytes);
-  check_open(vm, e, values, bytes, span);
+  call_holds h;
+  hold_for_call(vm, e, values, bytes, &h, span);
   agc_charge(vm, FFI_CALL_COST);
   /* The struct arguments are copied in proportion to their size. */
   agc_charge_bytes(vm, e->struct_bytes);
-  if (e->compute) {
-    /* in, then the slots, then held, then the structs at a multiple of 16: one block (malloc aligns it for any C
-       object). */
-    size_t in_size = agc_size_mul(agc_size_mul(e->count, 2), sizeof(agc_c_value));
-    size_t held_size = agc_size_mul(e->holds, sizeof(agc_c_resource *));
-    size_t structs_at = STRUCT_ROUND(agc_size_add(agc_size_add(sizeof(compute_call), in_size), held_size));
-    compute_call *c = malloc(agc_size_add(structs_at, e->struct_bytes));
-    if (!c) agc_out_of_memory();
-    c->entry = e;
-    c->fn = fn;
-    c->free_at = free_at;
-    c->slots = c->in + e->count;
-    c->held = (agc_c_resource **)(void *)(c->slots + e->count);
-    c->structs = (uint8_t *)c + structs_at;
-    c->ran = false;
-    atomic_init(&c->phase, CALL_QUEUED);
-    memset(&c->out, 0, sizeof c->out);
-    memset(c->structs, 0, e->struct_bytes);
-    c->span = span;
-    c->refused = false;
-    size_t used = 0;
-    for (uint32_t k = 0; k < e->count; k++) {
-      memset(&c->slots[k], 0, sizeof c->slots[k]);
-      if (e->out[k]) {
-        c->in[k].p = &c->slots[k];
-        continue;
-      }
-      uint8_t *memory = e->structs[k] ? c->structs + used : NULL;
-      c->in[k] = entry_argument(vm, e, values, k, bytes[k], memory);
-      if (e->structs[k]) used += STRUCT_ROUND(e->structs[k]->size);
-    }
-    find_held(vm, e, values, c->held);
-    hold(e, c->held);
-    if (e->result_struct) c->out.p = c->structs + used;
-    agc_io_compute(vm, &compute_io, c);
-    return agc_void();
-  }
   agc_c_value in[AGC_FFI_MAX_PARAMS], slots[AGC_FFI_MAX_PARAMS];
   /* The memory of the struct arguments and of a struct result; zeroed, so padding bytes hold no old data. */
   uint8_t *structs = e->struct_bytes ? calloc(1, e->struct_bytes) : NULL;
@@ -1822,47 +1976,33 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
   }
   agc_c_value out = {0};
   if (e->result_struct) out.p = structs + used;
-  /* What the call holds once the run has callbacks, and what the resources it makes come from: on the stack, unless
-     struct fields make it longer. */
-  agc_ffi_cache *c = vm->rt->ffi;
-  /* Read once: a callback that makes a callback sets c->callbacks during the call. */
-  bool holding = c->callbacks, makes = makes_resources(e);
-  agc_c_resource *stack_held[AGC_FFI_MAX_PARAMS], **held = NULL;
-  if (e->holds && (holding || makes)) {
-    held = stack_held;
-    if (e->holds > AGC_FFI_MAX_PARAMS) {
-      held = malloc(agc_size_mul(e->holds, sizeof *held));
-      if (!held) agc_out_of_memory();
-    }
-    find_held(vm, e, values, held);
-    if (holding) hold(e, held);
-  }
   native_site site = {.vm = vm, .span = span, .outer = current_site};
   current_site = &site;
   agc_ffi_invoke(e->call, fn, in, &out);
   current_site = site.outer;
-  made_from from = {NULL, NULL, 0};
-  if (held) {
-    /* Before the release, as in compute_done. The values of the arguments keep what HELD points at alive. */
-    if (makes && !site.failed) from = origins(vm, e, held);
-    if (holding) release_held(vm, e, held);
-    if (held != stack_held) free(held);
-  }
+  free_copies(e, in);
+  bool locked = h.locked || site.ran;
+  if (locked) agc_sync_take(vm);
   if (site.ran) {
     release_ran(vm, &site);
     agc_task_clear_nested(vm->task);
   }
-  free_copies(e, in);
   if (site.failed) {
     /* The call fails as the callback did, or stops with it: what it made is freed and no value is made. */
     drop_made(e, &out, slots, free_at);
     free(structs);
+    release_for_call(vm, e, &h);
+    if (locked) agc_sync_drop(vm);
     if (site.code) agc_fail(vm, site.code, site.message, span);
     if (site.kept->kind == AGC_DONE) return agc_void();
     agc_raise(vm, site.kept);
   }
+  /* Before the release, as in compute_done. The values of the arguments keep what HELD points at alive. */
+  made_from from = h.locked && makes_resources(e) ? origins(vm, e, h.held) : (made_from){NULL, NULL, 0};
   agc_value v = call_value(vm, e, &out, slots, free_at, &from);
   free(structs);
+  release_for_call(vm, e, &h);
+  if (locked) agc_sync_drop(vm);
   return v;
 }
 
@@ -2238,7 +2378,7 @@ static agc_value builtin_put_string(agc_vm *vm, agc_value *args, uint32_t span) 
 /* The layout of the C struct that the layout code TEXT names ("{N:CODES}", compiler/lower/lower_native.agc), laid out
    as a struct argument is. The struct rows are shared: the cache is read and grown under rt->sync. */
 static const agc_c_struct *struct_layout(agc_vm *vm, agc_value text, uint32_t span) {
-  return find_entry(vm, agc_as_string(vm, text), true, span)->result_struct;
+  return call_entry(vm, text, true, span)->result_struct;
 }
 
 /* Native.size_of(Struct), Ruby ffi's Struct.size: the bytes of the C struct, its tail padding included, so element k
@@ -2562,11 +2702,12 @@ static void callback_result(native_site *site, agc_c_type type, agc_value v, agc
 
 /* What C runs when it calls a callback (agc_ffi_handler): the function runs in the task of the native call on this
    thread (native_site), and its value goes back to C. C gets zero when no call can run it, the callback is closed or
-   one of the call's callbacks has failed already. The native call holds rt->sync here (a shared builtin), which the
-   run lets go and takes again. The call counts in the callback's `callers` (site_ran) first, also when the callback
+   one of the call's callbacks has failed already. A fast call runs C without rt->sync, and the callback takes it for
+   its own bookkeeping only: the call counts in the callback's `callers` (site_ran) first, also when the callback
    gives zero (closed, or after a failure), so a close meanwhile, by the callback or by another task, leaves the free
    to the end of the last native call whose C called it: libffi's frames of the run are on the stack until C returns,
-   and C may call it again until then. The native call holds rt->sync here even when the run cannot let it go. */
+   and C may call it again until then. A scheduler that holds rt->sync here (no native call does) could not run Agentica
+   code, whose builtins take it as at the top of a turn, so C gets zero then. */
 static void callback_entry(void *data, const agc_c_value *args, agc_c_value *result) {
   const callback_data *cb = data;
   native_site *site = current_site;
@@ -2577,10 +2718,12 @@ static void callback_entry(void *data, const agc_c_value *args, agc_c_value *res
   }
   agc_vm *vm = site->vm;
   agc_c_resource *res = cb->res;
+  bool locked = vm->rt->shared && vm->sync_depth != 0;
+  agc_sync_take(vm);
   site_ran(vm, site, res);
-  if (site->failed) return;
-  /* The run lets rt->sync go, which only the native call's own hold may be (a shared VM holds it once there). */
-  if ((vm->rt->shared && vm->sync_depth != 1) || res->closed) return;
+  bool closed = res->closed;
+  agc_sync_drop(vm);
+  if (site->failed || locked || closed) return;
   agc_value values[AGC_FFI_MAX_PARAMS];
   for (uint32_t k = 0; k < cb->count; k++) values[k] = callback_argument(cb->params[k], &args[k]);
   agc_value got;
@@ -2651,7 +2794,6 @@ static agc_value builtin_native_callback(agc_vm *vm, agc_value *args, uint32_t s
   res->name = name;
   res->state = agc_register(vm, res, release_resource);
   agc_own(vm, res->state, close_owned);
-  ffi_cache(vm)->callbacks = true;
   agc_charge(vm, FFI_CALL_COST);
   return agc_c_resource_value(res);
 }
@@ -2673,7 +2815,7 @@ const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **
 }
 
 const agc_builtin agc_ffi_builtins[] = {
-  {AGC_NATIVE_CALL, 2, builtin_native_call, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {AGC_NATIVE_CALL, 2, builtin_native_call, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Native.close", 1, builtin_native_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Native.null", 0, builtin_native_null, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"Native.null?", 1, builtin_native_null_p, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},

@@ -15,6 +15,7 @@ export def method_modules() -> Map[String, String]
     "Lazy": "Lazy",
     "List": "List",
     "Map": "Map",
+    "Mutex": "Native.Mutex",
     "Optional": "Optional",
     "Range": "Range",
     "Result": "Result",

@@ -159,9 +159,16 @@ end
     return ok(opened.db)
   end
   ~~~
-- A `def` call blocks timers, I/O and other tasks until it returns: keep such
-  calls short. Native code must retry on `EINTR` (GC signals cut sleeps and
-  polls short).
+- A `def` call holds its scheduler until it returns: keep such calls short.
+  Native code must retry on `EINTR` (GC signals cut sleeps and polls short).
+- Native calls (`def` and `compute def`) of tasks on different schedulers run
+  at the same time. Guard a library that is not thread-safe with a lock:
+  `lock = Native.mutex()` (a `Native.Mutex`), then
+  `lock.synchronize do ... end` runs the block with it held and returns the
+  block's value. A waiter parks (FIFO); the task's end, crash or cancel gives it
+  back; a nested `synchronize` by the holder is `RUNTIME-NATIVE-MUTEX`. A mutex
+  is no data (no `==`, no `to_s`, no constant): make it in the open function and
+  keep it next to the handle.
 - `[export] compute def f(...) -> T` runs the call on the VM's compute pool (one
   thread per scheduler) while the task waits and other tasks run; for long
   calls. Same plain result. No timeout, and `--max-steps` cannot end it; for a

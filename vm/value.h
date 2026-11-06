@@ -38,7 +38,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_COST_BYTES 64
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY, AGC_T_C_POINTER, AGC_T_C_RESOURCE, AGC_T_ATS, AGC_T_BYTES, AGC_T_TLS_CONTEXT
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY, AGC_T_C_POINTER, AGC_T_C_RESOURCE, AGC_T_ATS, AGC_T_BYTES, AGC_T_TLS_CONTEXT, AGC_T_MUTEX
 } agc_tag;
 
 typedef struct {
@@ -299,10 +299,11 @@ struct agc_ffi_call;
 
 /* A resource of native code (vm/ffi.c): the non-NULL C pointer that an extern function declared `-> Name` returned, the
    prepared call of the free function of its block, its name as declared (IO.inspect prints it) and its registry entry,
-   whose native is this struct and which holds the owner task (§14.5). `jobs` counts the compute calls that use it now,
-   directly or through a resource that comes from it (`up`), and the closed resources that come from it whose free waits
-   for such a call (`carries`). A close marks it `closed` and takes it off its owner; the free runs then, or at the end
-   of the last of those calls, so C never sees the pointer freed while a pool thread uses it. An owned buffer
+   whose native is this struct and which holds the owner task (§14.5). `jobs` counts the compute calls that use it now
+   (and the fast calls that hold it under rt->sync), directly or through a resource that comes from it (`up`), and
+   the closed resources that come from it whose free waits for such a call (`carries`). A close marks it `closed` and
+   takes it off its owner; the free runs then, or at the end of the last of those calls, so C never sees the pointer
+   freed while another thread uses it. An owned buffer
    (Native.memory_pointer or Native.from_string) is one too, with `buffer` set: `pointer` is its malloc'd memory of
    `size` bytes, freed with free(), and `free` is NULL; the program sees it as a C.Pointer. A resource declared
    `free: C.Function` has its own free function at `free_at`, the address that the call which made it got (`free` is
@@ -322,11 +323,13 @@ struct agc_ffi_call;
    turn until its free, so a close of one of them during a compute call on the resource frees it at the end of that
    call. A link that points at a freed resource with at most one parent of its own is moved to that parent when it is
    read, so a chain keeps no freed links. `seen` marks a resource while a call's arguments are sorted out
-   (agc_ffi_cache.walk). NULL, 0 and false for the others. Changes under rt->sync. */
+   (agc_ffi_cache.walk). NULL, 0 and false for the others. Changes under rt->sync, except `calls`: the fast calls
+   (`def`, not compute) that use it now, pinned without the lock, as `jobs` holds for the others; a close leaves the
+   free to the last of them. They read `up`, `ups` and `closed` without the lock too, so those four are atomic. */
 typedef struct agc_c_resource {
   struct agc_c_resource *parent;
-  struct agc_c_resource *up;
-  struct agc_c_resource **ups;
+  _Atomic(struct agc_c_resource *) up;
+  _Atomic(struct agc_c_resource **) ups;
   size_t up_count;
   uint64_t seen;
   bool carries;
@@ -338,7 +341,9 @@ typedef struct agc_c_resource {
   const char *name;
   size_t size;
   uint32_t jobs;
-  bool closed, freed, buffer, by_ref;
+  _Atomic uint32_t calls;
+  _Atomic bool closed;
+  bool freed, buffer, by_ref;
 } agc_c_resource;
 
 typedef struct {
@@ -549,6 +554,8 @@ agc_value agc_channel_value(agc_channel *c);
 agc_value agc_lazy_value(const void *node);
 /* A shared table (vm/ats.c): a mutable handle that the VM never looks inside outside that file. */
 agc_value agc_ats_value(void *table);
+/* A Native.Mutex (vm/mutex.c, which alone knows its struct). */
+agc_value agc_mutex_value(void *mutex);
 /* A C.Pointer of native code (vm/ffi.c), which may be NULL, and a resource. */
 agc_value agc_c_pointer_value(void *pointer);
 agc_value agc_c_resource_value(agc_c_resource *r);
@@ -564,6 +571,7 @@ agc_http_server *agc_as_http_server(agc_vm *vm, agc_value v);
 agc_channel *agc_as_channel(agc_vm *vm, agc_value v);
 const void *agc_as_lazy(agc_vm *vm, agc_value v);
 void *agc_as_ats(agc_vm *vm, agc_value v);
+void *agc_as_mutex(agc_vm *vm, agc_value v);
 void *agc_as_c_pointer(agc_vm *vm, agc_value v);
 agc_c_resource *agc_as_c_resource(agc_vm *vm, agc_value v);
 /* The constructors and checked accessors of the common value types are inline: the interpreter and the builtins

@@ -163,7 +163,7 @@ true
 Time.monotonic_ms() -> Int
 ```
 
-Milliseconds from an unknown start. The value never goes back. Use it to measure how long something takes.
+Milliseconds from an unknown start. The value never goes back. Use it to measure how long something takes. On Linux it comes from the kernel's coarse clock, which is cheap to read and lags the exact time by up to one kernel tick (at most 10 ms), but it is never behind an earlier `Time.monotonic_ns` or a `Task.sleep` that ended: after `Task.sleep(ms)` it has gone on by at least `ms`. Use `Time.monotonic_ns` for spans of a few milliseconds.
 
 ```agentica
 def main() -> Void

@@ -210,10 +210,15 @@ def std_record?(alias: String, member: String, want: Want) -> Bool
 end
 
 # A builtin type with a module name, which any file may name: C.Pointer, the type of a C pointer (the extern blocks of
-# native code), and JSON.Codec, the JSON codec of a struct.
+# native code), Native.Mutex, the lock of a native library, and JSON.Codec, the JSON codec of a struct.
 def builtin_type?(alias: String, member: String, want: Want) -> Bool
   case want
-    Want.Type -> return (alias == "C" and member == "Pointer") or (alias == "JSON" and member == "Codec")
+    Want.Type ->
+      return (
+        (alias == "C" and member == "Pointer") or
+        (alias == "Native" and member == "Mutex") or
+        (alias == "JSON" and member == "Codec")
+      )
     _ -> return false
   end
 end

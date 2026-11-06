@@ -268,6 +268,7 @@ def later_rule_name(rule: Model.Rule) -> String
     Model.Rule.NativeClosed -> return "NativeClosed"
     Model.Rule.NativeMemoryBlock -> return "NativeMemoryBlock"
     Model.Rule.NativeStruct -> return "NativeStruct"
+    Model.Rule.NativeSynchronize -> return "NativeSynchronize"
     Model.Rule.Ok -> return "Ok"
     Model.Rule.OkVoid -> return "OkVoid"
     Model.Rule.OptionalNone -> return "OptionalNone"

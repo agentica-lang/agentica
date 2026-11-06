@@ -425,6 +425,131 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "1600\n", "")
 
 
+MEET_EXTERN = """extern "{library}"
+  def peer_meet(limit_ms: C.Int32) -> C.Int32
+  def peer_racy_add(n: C.Int32) -> C.Int32
+  compute def peer_racy_add_compute(n: C.Int32) -> C.Int32 = "peer_racy_add"
+  def peer_racy() -> C.Int32
+end
+
+def meet(lock: Optional[Native.Mutex]) -> Int
+  if lock.some?
+    return lock.unwrap!.synchronize do peer_meet(LIMIT) end
+  end
+  return peer_meet(LIMIT)
+end
+
+def main() -> Void
+  lock: Optional[Native.Mutex] = LOCK
+  a = Task.spawn(&meet, lock)
+  b = Task.spawn(&meet, lock)
+  puts(Task.await(a) + Task.await(b))
+end
+"""
+
+
+# Fast calls hold no VM lock: two calls on two schedulers are in C at once and meet (2). Under one Native.Mutex the
+# second call waits for the first, which never meets it (1); a scheduler runs one call at a time (1).
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers, lock, limit, met", [
+    ("2", "none", 20_000, "2"),
+    ("2", "some(Native.mutex())", 300, "1"),
+    ("1", "none", 300, "1"),
+])
+def test_fast_calls_run_at_once_unless_a_mutex_holds_them(tmp_path, peer, schedulers, lock, limit, met):
+    text = MEET_EXTERN.format(library=literal(peer)).replace("LOCK", lock).replace("LIMIT", str(limit))
+    result = agentica("--schedulers", schedulers, program(tmp_path, text), timeout=scaled(60))
+    assert (result.code, result.stdout, result.stderr) == (0, met + "\n", "")
+
+
+# A library that is not thread-safe (peer_racy_add loses an update when two calls overlap) stays right under a
+# Native.Mutex, from fast and compute calls of four tasks on four schedulers.
+@NATIVE_CALLS
+def test_a_mutex_serializes_a_library_that_is_not_thread_safe(tmp_path, peer):
+    main = """def add(lock: Native.Mutex) -> Int
+  for k in 1..50
+    lock.synchronize do
+      if k % 2 == 0
+        peer_racy_add(1)
+      else
+        peer_racy_add_compute(1)
+      end
+    end
+  end
+  return 0
+end
+
+def main() -> Void
+  lock = Native.mutex()
+  tasks: List[Task[Int]] = []
+  for _ in 1..4
+    tasks = tasks.push(Task.spawn(&add, lock))
+  end
+  for task in tasks
+    Task.await(task)
+  end
+  puts(peer_racy())
+end
+"""
+    text = MEET_EXTERN.format(library=literal(peer)).split("def meet")[0] + main
+    result = agentica("--schedulers", "4", program(tmp_path, text), timeout=scaled(60))
+    assert (result.code, result.stdout, result.stderr) == (0, "200\n", "")
+
+
+MUTEX_PROGRAM = """def crash_inside(lock: Native.Mutex) -> Result[Int]
+  v = lock.synchronize do
+    xs = [1]
+    xs[5]
+  end
+  return ok(v)
+end
+
+def hold(lock: Native.Mutex) -> Int
+  return lock.synchronize do
+    Task.sleep(60_000)
+    1
+  end
+end
+
+def take(lock: Native.Mutex) -> Int
+  return lock.synchronize do 2 end
+end
+
+def main() -> Void
+  lock = Native.mutex()
+  IO.inspect(lock)
+  puts(Task.await(Task.spawn(&crash_inside, lock)).ok?)
+  puts(lock.synchronize do 3 end)
+  holder = Task.spawn(&hold, lock)
+  Task.sleep(20)
+  first = Task.spawn(&take, lock)
+  second = Task.spawn(&take, lock)
+  Task.sleep(20)
+  Task.cancel(first)
+  Task.cancel(holder)
+  puts(Task.await(second))
+  value = lock.synchronize do
+    "ok: #{Native.mutex().synchronize do 4 end}"
+  end
+  puts(value)
+  lock.synchronize do
+    lock.synchronize do 5 end
+  end
+end
+"""
+
+
+# A crash inside the block and a cancel of the holder give the mutex back; a cancelled waiter leaves the queue, and
+# the next waiter gets it; the block's value is the call's; a task that holds the mutex already stops at the inner
+# synchronize with RUNTIME-NATIVE-MUTEX.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_mutex_is_given_back_at_the_end_of_its_block_or_its_task(tmp_path, schedulers):
+    result = agentica("--json", "--schedulers", schedulers, program(tmp_path, MUTEX_PROGRAM), timeout=scaled(60))
+    assert diagnostic(result, 1) == ("RUNTIME-NATIVE-MUTEX", (38, 5))
+    assert result.stdout.split("\n") == ["<Native.Mutex>", "false", "3", "2", "ok: 4", ""]
+
+
 # A compute call is cancelled only once it has started: a call cancelled while it still waits for a pool thread never
 # runs (run_compute in vm/loop.c), so a test that needs the call to run waits for it (#780). CALLS is the total of
 # peer_wait_flag starts in the program, not a count from now, so a later wait names the calls before it too. The

@@ -48,6 +48,8 @@ extern const agc_builtin agc_task_map_builtins[];
 extern const size_t agc_task_map_builtin_count;
 extern const agc_builtin agc_channel_builtins[];
 extern const size_t agc_channel_builtin_count;
+extern const agc_builtin agc_mutex_builtins[];
+extern const size_t agc_mutex_builtin_count;
 extern const agc_builtin_table agc_builtin_tables[];
 extern const size_t agc_builtin_table_count;
 const agc_builtin *agc_find_builtin(const uint8_t *name, size_t len, uint32_t arity);
@@ -329,6 +331,10 @@ void agc_hand_over(agc_resource *r, agc_task *to);
 void agc_close_owned(agc_vm *vm, agc_task *t);
 void agc_handle_leave(agc_vm *vm, agc_task *t);
 void agc_channel_leave(agc_vm *vm, agc_task *t);
+/* Native.Mutex (vm/mutex.c): a cancelled task leaves the mutex it waits for, and an ending task gives back the
+   mutexes it holds. Under rt->sync. */
+void agc_mutex_leave(agc_vm *vm, agc_task *t);
+void agc_mutex_release_held(agc_vm *vm, agc_task *t);
 bool agc_channel_offer(agc_vm *vm, agc_channel *c, agc_value v);
 agc_resource *agc_channel_claim(agc_vm *vm, agc_channel *c);
 /* Runs the loop once, for at most MS milliseconds (NOWAIT when MS is zero or a job is ready), and hands the finished

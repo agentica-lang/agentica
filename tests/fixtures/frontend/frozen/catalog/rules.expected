@@ -42,6 +42,7 @@ NativeClose
 NativeClosed
 NativeMemoryBlock
 NativeStruct
+NativeSynchronize
 Ok
 OkVoid
 OptionalNone

@@ -15,6 +15,10 @@ export def receiver_kind(type: T.Type) -> String
     return "Task"
   end
 
+  if RubyForm.parameter_kind(type) == "Mutex"
+    return "Mutex"
+  end
+
   if (
     word == "String" or
     word == "List" or
@@ -133,7 +137,11 @@ def catalog_method(cx: State.Cx, kind: String, name: String) -> String
   end
 
   entry = ENTRIES.get("#{module.unwrap!}.#{name}")
-  if entry.some? and entry.unwrap!.parameters.size > 0 and T.tag(entry.unwrap!.parameters[0].type) == kind
+  if entry.none? or entry.unwrap!.parameters.size == 0
+    return ""
+  end
+
+  if RubyForm.parameter_kind(entry.unwrap!.parameters[0].type) == kind
     return entry.unwrap!.name
   end
 

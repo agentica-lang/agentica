@@ -26,7 +26,8 @@
 #include <unistd.h>
 #endif
 
-static char shout[64];
+/* Per thread: fast calls on several schedulers run at once. */
+static _Thread_local char shout[64];
 static int32_t bumps;
 static atomic_int flag, returned, waiting, naps, stalled;
 
@@ -57,6 +58,30 @@ const char *peer_upper(const char *s) {
   shout[k] = '\0';
   return shout;
 }
+
+/* Whether two fast calls run in C at once, which only calls without a VM lock can: each call arrives, then waits up to
+   LIMIT_MS for a second arrival; 1 when there was one, 0 when not. Under a Native.Mutex the first call never meets
+   the second, which arrives only after it returned. */
+static atomic_int arrived;
+int32_t peer_meet(int32_t limit_ms) {
+  atomic_fetch_add(&arrived, 1);
+  for (int32_t t = 0; t < limit_ms; t++) {
+    if (atomic_load(&arrived) >= 2) return 1;
+    sleep_ms(1);
+  }
+  return atomic_load(&arrived) >= 2;
+}
+
+/* A counter that is not thread-safe, as a library built without locks is: two calls at once read the same value
+   and one update is lost. peer_racy reads it. */
+static volatile int32_t racy;
+int32_t peer_racy_add(int32_t n) {
+  int32_t seen = racy;
+  for (volatile int32_t k = 0; k < 20000; k++) {}
+  racy = seen + n;
+  return racy;
+}
+int32_t peer_racy(void) { return racy; }
 
 /* More integer and floating arguments than the registers hold, so some go on the stack. */
 int64_t peer_sum9(int32_t a, int32_t b, int32_t c, int32_t d, int32_t e, int32_t f, int32_t g, int32_t h, int64_t i) {

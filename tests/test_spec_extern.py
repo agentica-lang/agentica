@@ -996,3 +996,35 @@ def test_a_callback_takes_at_most_64_parameters(tmp_path):
     start = len("  callback F(%s, " % params) + 1
     assert at(problem_of(check(source(tmp_path, over)))) == (
         "PARSE-EXTERN-ARITY", (2, start), (2, start + len("extra: C.Int32")))
+
+
+MUTEX = """def wrap(m: Native.Mutex) -> Native.Mutex
+  return m
+end
+
+def main() -> Void
+  lock = wrap(Native.mutex())
+%s
+end
+"""
+
+
+# Native.mutex() makes a Native.Mutex, a type any file may name; lock.synchronize runs a block of no parameters and
+# gives its value. A mutex is no data: it has no ==, no to_s and is no constant.
+@pytest.mark.parametrize("body, code, start, stop", [
+    ("  n: Int = lock.synchronize do 1 end\n  puts(n)", None, None, None),
+    ("  s: String = lock.synchronize do 1 end\n  puts(s)", "CHECK-TYPE-MISMATCH", (7, 35), (7, 36)),
+    ("  puts(lock.synchronize(3))", "CHECK-TYPE-MISMATCH", (7, 25), (7, 26)),
+    ("  lock.synchronize do |x| puts(x) end", "CHECK-ARITY", (7, 20), (7, 38)),
+    ("  lock.lock", "CHECK-UNKNOWN-METHOD", (7, 3), (7, 12)),
+    ("  puts(lock == lock)", "CHECK-TYPE-MISMATCH", (7, 13), (7, 15)),
+    ("  puts(lock)", "CHECK-TYPE-MISMATCH", (7, 8), (7, 12)),
+    ("  Native.mutex(1)", "CHECK-ARITY", (7, 3), (7, 18)),
+])
+def test_native_mutex_synchronizes_a_block(tmp_path, body, code, start, stop):
+    assert_checks(check(source(tmp_path, MUTEX % body)), code, start, stop)
+
+
+def test_a_native_mutex_is_no_constant(tmp_path):
+    text = "LOCK = Native.mutex()\n\ndef main() -> Void\n  LOCK.synchronize do puts(1) end\nend\n"
+    assert_checks(check(source(tmp_path, text)), "CHECK-CONSTANT-EXPRESSION", (1, 8), (1, 22))

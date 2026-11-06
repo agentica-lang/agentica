@@ -268,13 +268,18 @@ arguments until the call returns, and what each comes from (the resources of the
 call that made it: a statement's database): a close meanwhile marks the resource
 closed and takes it off its owner, and the end of the last such call runs the
 `free` on a scheduler, so C never sees the pointer freed while a pool thread
-uses it. A resource closed while held holds what it comes from in turn until its
-free. A closed callback is freed once every fast native call whose C called it
-while its code existed has returned: C may call it again until then (it gives
-zero), and libffi's frames of its run are on that call's stack. A compute call
-is not counted (its pool thread does not hold `rt->sync`), so its C must not
-call a closed callback. The end of the run frees what is still open (§14.4, step
-3). There are no GC finalizers.
+uses it. A `def` call pins its resource arguments and their single parent
+without `rt->sync` (`calls`: the pin adds to it and then reads `closed`, the
+close sets `closed` and then reads `calls`, both sequentially consistent), and
+the last unpin of a closed resource runs the `free`; a call whose resources it
+cannot pin (a closed one, one that comes from two or more, or a call that makes
+resources) holds them under `rt->sync` as a compute call does. A resource closed
+while held holds what it comes from in turn until its free. A closed callback is
+freed once every fast native call whose C called it while its code existed has
+returned: C may call it again until then (it gives zero), and libffi's frames of
+its run are on that call's stack. A compute call is not counted (its pool thread
+runs no callback), so its C must not call a closed callback. The end of the run
+frees what is still open (§14.4, step 3). There are no GC finalizers.
 
 A channel is the one handle made unowned. `Channel.new` makes no registry entry.
 The first `Task.spawn_owning` of it (any task may do it) registers an entry with

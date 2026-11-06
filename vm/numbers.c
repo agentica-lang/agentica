@@ -272,8 +272,13 @@ static void read_monotonic(agc_vm *vm, uint32_t span, int64_t *seconds, int64_t 
 #endif
 }
 
+/* The coarse clock where the system has one (agc_clock_coarse_ms: Linux), which costs no read of the clock source, a
+   system call of about a microsecond on a machine whose clock source is an HPET; it lags by at most a tick (10 ms).
+   Elsewhere the exact clock. */
 static agc_value builtin_monotonic_ms(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
+  uint64_t coarse;
+  if (agc_clock_coarse_ms(&coarse)) return agc_int((int64_t)coarse);
   int64_t seconds, nanoseconds;
   read_monotonic(vm, span, &seconds, &nanoseconds);
   return agc_int(floor_ms(seconds, nanoseconds));
@@ -286,6 +291,8 @@ static agc_value builtin_monotonic_ns(agc_vm *vm, agc_value *args, uint32_t span
   /* An Int holds about 292 years of nanoseconds from the clock's origin; the checks keep a wrong clock from being UB. */
   if (__builtin_mul_overflow(seconds, INT64_C(1000000000), &total) || __builtin_add_overflow(total, nanoseconds, &total))
     agc_fail(vm, "RUNTIME-INTERNAL", "the clock is out of range", span);
+  /* A Time.monotonic_ms after it is never behind it. */
+  agc_clock_note_ms((uint64_t)(total / 1000000));
   return agc_int(total);
 }
 
