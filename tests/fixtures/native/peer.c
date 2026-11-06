@@ -948,6 +948,27 @@ static peer_int_fn stored_fn;
 static int32_t hook_result = -1;
 
 void peer_store_fn(peer_int_fn fn) { stored_fn = fn; }
+/* A call that runs FN twice and gets a Hook, so the Hook is pinned while C runs. */
+int32_t peer_hook_after(void *hook, peer_int_fn fn) {
+  (void)hook;
+  int32_t a = fn(1);
+  return a * 10 + fn(2);
+}
+/* As lua_newstate(alloc) or g_hash_table_new_full(..., destroy): the constructor gets the callback, and the free of the
+   object calls it, keeping what it gave in hook_result. */
+typedef struct {
+  peer_int_fn destroy;
+} peer_ctor;
+void *peer_ctor_new(peer_int_fn destroy) {
+  peer_ctor *o = malloc(sizeof *o);
+  if (o) o->destroy = destroy;
+  return o;
+}
+void peer_ctor_free(void *p) {
+  peer_ctor *o = p;
+  hook_result = o->destroy ? o->destroy(7) : -2;
+  free(o);
+}
 void *peer_hook_open(void) { return malloc(1); }
 void peer_hook_free(void *p) {
   hook_result = stored_fn ? stored_fn(7) : -2;

@@ -68,5 +68,4 @@ void *agc_ffi_closure_code(const agc_ffi_closure *closure) {
   return NULL;
 }
 
-void agc_ffi_closure_free(agc_ffi_closure *closure) { (void)closure; }
 #endif
