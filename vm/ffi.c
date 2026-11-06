@@ -274,11 +274,14 @@ typedef struct {
    power-of-two table, kept at most half full. find_entry runs with rt->sync held (call_entry takes it on a miss of
    the scheduler's memo), so the table needs no lock of its own. Entries live until the process ends, like the
    libraries. `walk` numbers the walks up from held resources (agc_c_resource.seen) and `sites` the native calls that
-   list a callback (native_site.id), under rt->sync. */
+   list a callback (native_site.id), under rt->sync. `holds` are the libraries that Native.load keeps open, one hold
+   each (keep_hold), under rt->sync. */
 typedef struct agc_ffi_cache {
   ffi_entry **slots;
   size_t size, used;
   uint64_t walk, sites;
+  void **holds;
+  size_t holds_used, holds_cap;
 } agc_ffi_cache;
 
 /* The memo of one scheduler (agc_vm.ffi_memo): the entry of each signature String it looked up lately, in 64 sets of
@@ -2782,10 +2785,37 @@ static agc_value builtin_wait_writable(agc_vm *vm, agc_value *args, uint32_t spa
   return native_wait_on(vm, args, span, true);
 }
 
+/* Keeps HOLD, a hold of a library from agc_ffi_open, for the process, or gives it back when the run holds that library
+   already: one hold per library, however many loads, and a few libraries a run. False when the list cannot grow (the
+   hold is given back). Under rt->sync, so two loads of one library see each other: the loader's own count is no
+   proof of a hold (a probe's open and close of the same library can drop the last reference between a check and its
+   return), which is why a load keeps a hold of its own. */
+static bool keep_hold(agc_vm *vm, void *hold) {
+  agc_ffi_cache *c = ffi_cache(vm);
+  for (size_t k = 0; k < c->holds_used; k++) {
+    if (c->holds[k] == hold) {
+      agc_ffi_release(hold);
+      return true;
+    }
+  }
+  if (c->holds_used == c->holds_cap) {
+    size_t cap = c->holds_cap ? c->holds_cap * 2 : 8;
+    void **holds = realloc(c->holds, cap * sizeof(void *));
+    if (!holds) {
+      agc_ffi_release(hold);
+      return false;
+    }
+    c->holds = holds;
+    c->holds_cap = cap;
+  }
+  c->holds[c->holds_used++] = hold;
+  return true;
+}
+
 /* Native.load(library): opens the library that the front end resolved like the one of an extern block, so a program
-   can handle a missing one (error with the loader's text) before its first call. The library stays open
-   (agc_ffi_open), and the calls prepared later find it loaded; a missing function is still RUNTIME-NATIVE-LOAD at its
-   call. Refused at load like any Native.* builtin (agc_ffi_refusal). */
+   can handle a missing one (error with the loader's text) before its first call. The library stays open: the run
+   keeps one hold of it (keep_hold), and the calls prepared later find it loaded; a missing function is still
+   RUNTIME-NATIVE-LOAD at its call. Refused at load like any Native.* builtin (agc_ffi_refusal). */
 static agc_value builtin_native_load(agc_vm *vm, agc_value *args, uint32_t span) {
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
   char *library = agc_cstr(agc_as_string(vm, args[0]));
@@ -2796,7 +2826,13 @@ static agc_value builtin_native_load(agc_vm *vm, agc_value *args, uint32_t span)
   if (!library || !*library) {
     snprintf(error + prefix, sizeof error - prefix, "cannot open the library: its name is empty or holds a NUL");
   } else {
-    opened = agc_ffi_open(library, error + prefix, sizeof error - prefix);
+    void *hold = agc_ffi_open(library, error + prefix, sizeof error - prefix);
+    if (hold) {
+      agc_sync_take(vm);
+      opened = keep_hold(vm, hold);
+      agc_sync_drop(vm);
+      if (!opened) snprintf(error + prefix, sizeof error - prefix, "cannot open %s: out of memory", library);
+    }
   }
   free(library);
   agc_charge(vm, FFI_CALL_COST);

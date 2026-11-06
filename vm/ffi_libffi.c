@@ -8,7 +8,7 @@
  */
 #ifdef AGC_FFI
 #ifdef __APPLE__
-/* RTLD_NOLOAD and MAP_ANON are outside POSIX. */
+/* MAP_ANON is outside POSIX. */
 #define _DARWIN_C_SOURCE
 #elif !defined(_WIN32)
 /* MAP_ANON is outside POSIX. */
@@ -230,13 +230,6 @@ static void *library_symbol(void *lib, const char *library, const char *symbol, 
 
 /* LoadLibraryExW counts references like dlopen: freeing drops only this one. */
 static void library_close(void *lib) { (void)FreeLibrary((HMODULE)lib); }
-
-/* Not asked on Windows: each Native.load of a loaded DLL adds a hold to its 32-bit count, which only billions of loads
-   in one run could wrap. */
-static bool library_loaded(const char *library) {
-  (void)library;
-  return false;
-}
 #else
 #ifdef __APPLE__
 /* dyld looks a bare name up in DYLD_LIBRARY_PATH, then in /usr/lib (on disk or in the dyld shared cache, where the
@@ -289,24 +282,13 @@ static void *library_symbol(void *lib, const char *library, const char *symbol, 
 
 /* dlopen counts references: closing drops only this one, so a failing call repeated in a loop leaks nothing. */
 static void library_close(void *lib) { dlclose(lib); }
-
-/* True when LIBRARY is loaded already: RTLD_NOLOAD finds it without loading it, and the hold it takes is given back. */
-static bool library_loaded(const char *library) {
-  char buf[PATH_BUF], error[1];
-  const char *path = loader_path(library, buf, error, sizeof error);
-  void *lib = path ? dlopen(path, RTLD_NOW | RTLD_LOCAL | RTLD_NOLOAD) : NULL;
-  if (lib) dlclose(lib);
-  return lib != NULL;
-}
 #endif
 
 bool agc_ffi_supported(void) { return true; }
 
-/* A library that is loaded already keeps the holds it has (a prepared call's or an earlier load's), so a load repeated in
-   a loop adds none; another one keeps the hold it takes here until the process ends. */
-bool agc_ffi_open(const char *library, char *error, size_t size) {
-  return library_loaded(library) || library_open(library, error, size) != NULL;
-}
+void *agc_ffi_open(const char *library, char *error, size_t size) { return library_open(library, error, size); }
+
+void agc_ffi_release(void *hold) { library_close(hold); }
 
 bool agc_ffi_has_function(const char *library, const char *symbol) {
   /* The loader's messages are not wanted: a size of 0 makes no text. */

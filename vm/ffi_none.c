@@ -31,11 +31,13 @@ bool agc_ffi_layout(agc_c_struct *s) {
   return false;
 }
 
-bool agc_ffi_open(const char *library, char *error, size_t size) {
+void *agc_ffi_open(const char *library, char *error, size_t size) {
   (void)library;
   snprintf(error, size, "native calls are not supported on this system yet");
-  return false;
+  return NULL;
 }
+
+void agc_ffi_release(void *hold) { (void)hold; }
 
 bool agc_ffi_has_function(const char *library, const char *symbol) {
   (void)library;
