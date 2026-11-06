@@ -61,8 +61,8 @@ end
 ```
 
 The rules (the C types and the codes of a bad one, the library string and
-`Native.load`, resources, callbacks, `--deny-native`, the systems that run
-native code) are in those pages. The language fixes these:
+`Native.load`, `Native.function?`, resources, callbacks, `--deny-native`, the
+systems that run native code) are in those pages. The language fixes these:
 
 - `C.UInt64` and `C.ULong` do not exist (`PARSE-EXTERN-TYPE`): declare a
   `uint64_t` or `size_t` as `C.Int64` and an `unsigned long` as `C.Long`.

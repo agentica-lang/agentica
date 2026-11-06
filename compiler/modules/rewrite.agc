@@ -345,7 +345,11 @@ def rewrite_call(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
   name = try Resolve.resolve(cx, node.name, Resolve.Want.Function, node.span, false)
   args = try rewrite_exprs(cx, node.args)
   if name == "Native.load" and args.size == 1
-    args = [try native_load_library(cx, args[0])]
+    args = [try native_load_library(cx, args[0], name)]
+  end
+
+  if name == "Native.function?" and args.size == 2
+    args = [try native_load_library(cx, args[0], name), args[1]]
   end
 
   return ok(Ast.Expr.Call(node.with(name: name, args: args)))
@@ -372,10 +376,11 @@ def rewrite_members(cx: Resolve.Context, node: Ast.Call, written: String) -> Res
   )
 end
 
-# The library of Native.load is a string literal that means what it means in `extern "NAME"`: a name or an absolute
-# path, which the manifest's [native.NAME] turns into the file or the system name of this system (rewrite_native).
-# Anything else is CHECK-NATIVE-LOAD at the argument. A call with another number of arguments is left to the checker.
-def native_load_library(cx: Resolve.Context, arg: Ast.Expr) -> Result[Ast.Expr]
+# The library of Native.load and Native.function? (CALLER) is a string literal that means what it means in
+# `extern "NAME"`: a name or an absolute path, which the manifest's [native.NAME] turns into the file or the system
+# name of this system (rewrite_native). Anything else is CHECK-NATIVE-LOAD at the argument. A call with another number
+# of arguments is left to the checker.
+def native_load_library(cx: Resolve.Context, arg: Ast.Expr, caller: String) -> Result[Ast.Expr]
   case arg
     Ast.Expr.Literal(node) ->
       case node.value
@@ -386,16 +391,16 @@ def native_load_library(cx: Resolve.Context, arg: Ast.Expr) -> Result[Ast.Expr]
           end
 
           return ok(Ast.Expr.Literal(node.with(value: Ast.LitValue.Text(try native_target(cx, library)))))
-        _ -> return error(literal_required(cx, arg))
+        _ -> return error(literal_required(cx, arg, caller))
       end
 
-    _ -> return error(literal_required(cx, arg))
+    _ -> return error(literal_required(cx, arg, caller))
   end
 end
 
-def literal_required(cx: Resolve.Context, arg: Ast.Expr) -> String
-  help = "write the library as a \"...\" string, such as Native.load(\"libm.so.6\")"
-  return native_load_failure(cx, arg, "the library of Native.load is a string literal", help)
+def literal_required(cx: Resolve.Context, arg: Ast.Expr, caller: String) -> String
+  help = "write the library as a \"...\" string, such as \"libm.so.6\""
+  return native_load_failure(cx, arg, "the library of #{caller} is a string literal", help)
 end
 
 def native_load_failure(cx: Resolve.Context, arg: Ast.Expr, message: String, help: String) -> String
