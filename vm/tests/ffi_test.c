@@ -384,6 +384,16 @@ static void test_function(void) {
   args[0] = text("libnot_there_at_all.so");
   args[1] = text("cos");
   assert(!agc_as_bool(&vm, call_row("Native.function?", 2, args)));
+  /* A name over the cap is false without a lookup; at the cap the lookup runs. */
+  char *long_name = malloc(5000);
+  assert(long_name);
+  memset(long_name, 'a', 5000);
+  args[0] = text(LIBM);
+  args[1] = agc_string_value(agc_make_string(long_name, 5000, 5000));
+  assert(!agc_as_bool(&vm, call_row("Native.function?", 2, args)));
+  args[1] = agc_string_value(agc_make_string(long_name, 4096, 4096));
+  assert(!agc_as_bool(&vm, call_row("Native.function?", 2, args)));
+  free(long_name);
   vm.rt->no_files = true;
   args[0] = text(LIBM);
   read_fails("Native.function?", 2, args, "RUNTIME-NATIVE-DENIED");

@@ -309,10 +309,10 @@ bool agc_ffi_open(const char *library, char *error, size_t size) {
 }
 
 bool agc_ffi_has_function(const char *library, const char *symbol) {
-  char error[256];
-  void *lib = library_open(library, error, sizeof error);
+  /* The loader's messages are not wanted: a size of 0 makes no text. */
+  void *lib = library_open(library, NULL, 0);
   if (!lib) return false;
-  bool found = library_symbol(lib, library, symbol, error, sizeof error) != NULL;
+  bool found = library_symbol(lib, library, symbol, NULL, 0) != NULL;
   library_close(lib);
   return found;
 }
