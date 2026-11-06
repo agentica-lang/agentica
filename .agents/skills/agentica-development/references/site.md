@@ -109,11 +109,43 @@ agentica-db's docs sites are in their repositories, with their own checks.
 A function signature (`Name.fn(a: T) -> R`) goes in a `signature` fence, not
 `text` or `agentica`: the test skips it and the site colors it.
 
+## Versions
+
+Pages serves one site per final release (`/0.24.3/`, ...), `/dev/` (the tree
+that runs: `master`) and the latest release again at the root.
+`tools/site_versions.py` (`make site-versions`) builds them all:
+
+- Each `X.Y.Z` tag is built from its own tree with its own `make site`, using
+  the Hugo and Dart Sass pinned in that tag's `pages.yml` (keep the four `env`
+  names of the `build` job). Only a tree with no site (`0.1.0`) that is older
+  than every built tag is left out, and the job summary names it. Any other
+  failure of a tag (or a no-site tag newer than a built one) is tried once more
+  and then fails the run, as does a run in which no tag built: a release must
+  not vanish from a deploy. Pre-releases and `bootstrap-racket` are not
+  versions.
+- The output of a tag is cached by commit sha and base URL (Hugo bakes the
+  base URL into every link, so the root copy of the latest release is a
+  second build). `dev` is never cached. Locally the cache is in
+  `build/site-versions/cache`, pruned to the current builds each run; in CI
+  `actions/cache` restores the newest entry, and a run that is not a pull
+  request saves one only when it built something new.
+- The selector and the banner (`site/versions/selector.{js,css}`) are not part
+  of a build. The assembly copies them to `/_versions/` and adds their
+  `<link>` and `<script>` tags to every HTML page, so a cached old build loads
+  the current ones;
+  they read `/versions.json`, which the assembly writes. A fix to them applies
+  to every version at the next deploy. They use only the `.site-header`, its
+  `.version` link and the tokens of `_tokens.scss`, which every release has.
+- `make site-versions` writes `build/site-versions/public`; serve it with
+  `python3 -m http.server 8000 -d build/site-versions/public`.
+
+A new release shows up in the next run of `pages.yml`.
+
 ## Deploy
 
-`.github/workflows/pages.yml` runs `make site` on pull requests and `master`
-pushes that touch the site or its sources; only a `master` push deploys it to
-GitHub Pages.
+`.github/workflows/pages.yml` builds all versions on pull requests and
+`master` pushes that touch the site or its sources, and on a manual run; only
+a `master` push or a manual run from `master` deploys it to GitHub Pages.
 
 Never cancel a Pages run while its `deploy-pages` step runs: GitHub keeps that
 Pages deployment "in progress", every later deploy fails with "due to in

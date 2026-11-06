@@ -108,8 +108,9 @@ site by hand:
 gh workflow run pages.yml --ref master
 ```
 
-Then check that the site's Install section shows the new version and its
-release link opens the release.
+This run also adds the new release to the version selector (it builds every
+tag). Then check that the selector lists it, that the Install section shows the
+new version and its release link opens the release.
 
 ## 5. Post-release checks
 

@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- The documentation site has a version selector: one site per release
+  (`/0.24.3/`, ...) and `/dev/`, with the latest release at the root.
 - `ATS[Bytes, V]`: a shared table takes `Bytes` keys, as a `Map` does.
 
 - `Native.mutex()` and `lock.synchronize do ... end` guard the calls of a
