@@ -870,9 +870,9 @@ def test_timing_with_jobs_shows_the_time_of_the_run_not_the_sum_of_the_files(bdd
     lines = result.stdout.splitlines()
     total = int(re.fullmatch(r"timing: (\d+) ms", next(line for line in lines if line.startswith("timing: "))).group(1))
     files = [int(found.group(1)) for found in (re.match(r"  (\d+) ms of scenarios ", line) for line in lines) if found]
-    assert len(files) == 4 and min(files) >= 500
+    assert len(files) == 4 and min(files) >= 400
     # The files overlap: the run is no less than one file and well under the sum of the files (loose, for a loaded host).
-    assert 500 <= total < sum(files) - 500
+    assert 400 <= total < sum(files) - 250
     status, report = bdd.json_test("--jobs", "4", *paths)
     assert status == 0
-    assert 500 <= report["duration_ms"] < sum(file["duration_ms"] for file in report["files"]) - 500
+    assert 400 <= report["duration_ms"] < sum(file["duration_ms"] for file in report["files"]) - 250

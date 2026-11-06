@@ -74,10 +74,11 @@ the [`Test` page](../../site/content/library/testing/test.md).
 ### `agentica test`
 
 `agentica test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR]
-[--jobs N]` runs `.feature` specifications and `*_test.agc` unit test files in
-one report, and its exit code is the verdict. BDD is the standard module `std/bdd`, written in
-Agentica, and `BDD` is not reserved. A `BDD.` call without `import BDD from
-"std/bdd"` is `CHECK-UNKNOWN-NAME`, with the import as its help. The discovery
+[--jobs N] [--timing]` runs `.feature` specifications and `*_test.agc` unit
+test files in one report, and its exit code is the verdict. BDD is the standard
+module `std/bdd`, written in Agentica, and `BDD` is not reserved. A `BDD.` call
+without `import BDD from "std/bdd"` is `CHECK-UNKNOWN-NAME`, with the import as
+its help. The discovery
 rules, timeouts, output limits, seeds, runner protocol and step catalog are in
 [`bdd.md`](https://github.com/agentica-lang/agentica/blob/master/docs/bdd.md).
 
