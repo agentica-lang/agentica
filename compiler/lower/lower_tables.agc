@@ -67,14 +67,14 @@ export VM_BUILTINS = Set.new([
   "Native.put_pointer", "Native.put_string", "Native.get_array_of_int32", "Native.get_array_of_int64",
   "Native.get_array_of_float32", "Native.get_array_of_float64", "Native.put_array_of_int32",
   "Native.put_array_of_int64", "Native.put_array_of_float32", "Native.put_array_of_float64", "Native.get_string",
-  "Native.get_bytes.bytes", "Native.put_bytes.bytes", "Native.mutex", "Native.Mutex.synchronize", "__fail_arg",
-  "__lazy_channel", "__lazy_chunk_while", "__lazy_count", "__lazy_each", "__lazy_file", "__lazy_find",
-  "__lazy_flat_map", "__lazy_group", "__lazy_list", "__lazy_map", "__lazy_produce", "__lazy_range", "__lazy_reduce",
-  "__lazy_test", "__lazy_to_a", "__lazy_with_index", "__lazy_write_lines", "__lazy_chunks.bytes", "__lazy_zlib.bytes",
-  "__lazy_write_bytes.bytes", "Bytes.from_list", "Bytes.to_a", "Bytes.length", "Bytes.at", "Bytes.slice", "Bytes.take",
-  "Bytes.drop", "Bytes.equal", "Bytes.plus", "Bytes.concat", "String.bytes", "Optional.equal", "Value.equal",
-  "Bytes.decode", "String.encode", "Int.abs", "Int.pow", "Int.gcd", "Int.clamp", "Float.abs", "Float.floor",
-  "Float.ceil", "Float.round", "Float.clamp", "Math.sqrt", "String.multiply", "Task.current", "Task.id", "Task.monitor",
+  "Native.get_bytes.bytes", "Native.put_bytes.bytes", "__fail_arg", "__lazy_channel", "__lazy_chunk_while",
+  "__lazy_count", "__lazy_each", "__lazy_file", "__lazy_find", "__lazy_flat_map", "__lazy_group", "__lazy_list",
+  "__lazy_map", "__lazy_produce", "__lazy_range", "__lazy_reduce", "__lazy_test", "__lazy_to_a", "__lazy_with_index",
+  "__lazy_write_lines", "__lazy_chunks.bytes", "__lazy_zlib.bytes", "__lazy_write_bytes.bytes", "Bytes.from_list",
+  "Bytes.to_a", "Bytes.length", "Bytes.at", "Bytes.slice", "Bytes.take", "Bytes.drop", "Bytes.equal", "Bytes.plus",
+  "Bytes.concat", "String.bytes", "Optional.equal", "Value.equal", "Bytes.decode", "String.encode", "Native.mutex",
+  "Native.Mutex.synchronize", "Int.abs", "Int.pow", "Int.gcd", "Int.clamp", "Float.abs", "Float.floor", "Float.ceil",
+  "Float.round", "Float.clamp", "Math.sqrt", "String.multiply", "Task.current", "Task.id", "Task.monitor",
 ])
 
 ## The instruction of an operator on two Ints, by the token kind of the operator. `>` and `>=` use the instruction of
