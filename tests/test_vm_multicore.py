@@ -1499,6 +1499,7 @@ end
 def stable(report):
     """The report without what changes from run to run: the durations and the seed."""
     for entry in report["files"]:
+        entry.pop("duration_ms", None)
         for scenario in entry["scenarios"]:
             scenario.pop("duration_ms", None)
     report.pop("duration_ms", None)
