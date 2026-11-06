@@ -231,9 +231,6 @@ void agc_compute_end_direct(agc_compute *pool) {
   pool->running += left;
 }
 
-
-/* The workers are allocated with the pool and never move, so any thread may read one while the pool lives. */
-
 bool agc_compute_direct_busy(agc_compute *pool) {
   return atomic_load_explicit(&pool->direct, memory_order_seq_cst) != 0;
 }

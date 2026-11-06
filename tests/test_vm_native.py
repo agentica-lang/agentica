@@ -930,47 +930,6 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "destroy ran\n12\n2\ndestroy ran\ndestroy ran\n12\n", "")
 
 
-# A per-call callback passed with a long-lived Hook costs nothing that lasts: the code is one for the function, so
-# 30000 callbacks made, passed with the Hook and closed leave the memory where it was (before, each one kept a closure of
-# about 6 KB until the Hook was freed, and the closures of a closed one were freed one by one).
-MEMORY_LOOP = """def inc(x: Int) -> Int
-  return x + 1
-end
-
-def rss_kb() -> Int
-  text = File.read_text("/proc/self/status").unwrap!
-  for row in text.split("\\n")
-    if row.start_with?("VmRSS:")
-      return row.replace("VmRSS:", "").replace("kB", "").strip().to_i!()
-    end
-  end
-
-  return 0
-end
-
-def main() -> Void
-  h = peer_hook_open().unwrap!
-  before = rss_kb()
-  for _k in 1..30000
-    cb = Native.callback(Step, &inc)
-    _ = peer_hook_after(h, cb)
-    Native.close(cb)
-  end
-
-  puts((rss_kb() - before) < 20000)
-  Native.close(h)
-end
-"""
-
-
-@NATIVE_CALLS
-@pytest.mark.skipif(not TARGET_OS.startswith("linux"), reason="reads /proc/self/status")
-def test_per_call_callbacks_passed_with_a_long_lived_resource_keep_no_memory(tmp_path, peer):
-    text = HOOK_PROGRAM % literal(peer) + MEMORY_LOOP
-    result = agentica(program(tmp_path, text), timeout=scaled(120))
-    assert (result.code, result.stdout, result.stderr) == (0, "true\n", ""), result.stderr
-
-
 # A compute call that finds no pool thread to run it (peer_no_threads), in a task that holds a Native.Mutex and is
 # cancelled before it takes the failure: the job ends through its done half (end_detached), which gives the lease back,
 # so the next task gets the mutex. Before, the lease stayed and the waiter parked until the stall check. One scheduler,

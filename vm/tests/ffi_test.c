@@ -1,7 +1,7 @@
 /* Native.call against hand-made signatures (every bad shape fails with a code, never a crash), the argument checks,
    the cache, a resource freed once by Native.close, out parameters, compute calls cancelled with one, calls and frees
    through C function pointers, structs by value, the memory reads, owned buffers with typed reads and writes (bounds, NULL, freed,
-   no_files), Native.load, and agc_ffi_refusal at load. Native calls run only in a build with libffi. */
+   no_files), Native.load, Native.callback, and agc_ffi_refusal at load. Native calls run only in a build with libffi. */
 #include "../core.h"
 #include "../services.h"
 #include "io_harness.h"
@@ -615,6 +615,63 @@ static void test_structs(void) {
   vm.rt->program = NULL;
 }
 
+/* A function value of the program FUNCTION with N captured values (all zero). */
+static agc_value function_value(uint32_t function, uint32_t n) {
+  agc_fn *f = agc_alloc(sizeof *f + n * sizeof(agc_value));
+  f->function = function;
+  f->n = n;
+  memset(f->captured, 0, n * sizeof(agc_value));
+  return agc_fn_value(f);
+}
+
+static void callback_fails(agc_value fn, const char *code) {
+  agc_value args[2] = {text("ii step"), fn};
+  if (setjmp(vm.fail) == 0) {
+    (void)row("Native.callback", 2)(&vm, args, 0);
+    assert(!"the callback was made");
+  }
+  assert(strcmp(vm.outcome->code, code) == 0);
+}
+
+/* Native.callback checks the function it is given against the signature: only a named function that takes the
+   parameters and captures nothing makes a callback, so hand-made bytecode cannot share one code between two values
+   (a function that captures, even one that declares its captures) or run one that reads past its arguments. The run
+   keeps one callback for each pair of function and C types, up to a cap (FFI_MAX_CALLBACKS in vm/ffi.c). */
+static void test_callbacks(void) {
+  enum { CAP = 4096 };
+  agc_function *functions = calloc(CAP + 3, sizeof *functions);
+  assert(functions);
+  functions[0].params = 1;
+  functions[1].params = 1;
+  functions[1].captures = 1;
+  functions[2].params = 2;
+  for (size_t k = 3; k < CAP + 3; k++) functions[k].params = 1;
+  agc_program p;
+  memset(&p, 0, sizeof p);
+  p.functions = functions;
+  p.function_count = CAP + 3;
+  const agc_program *saved = vm.rt->program;
+  vm.rt->program = &p;
+  callback_fails(function_value(1, 1), "RUNTIME-INTERNAL");
+  callback_fails(function_value(2, 0), "RUNTIME-INTERNAL");
+  callback_fails(function_value(CAP + 3, 0), "RUNTIME-INTERNAL");
+#ifdef AGC_FFI
+  agc_value args[2] = {text("ii step"), function_value(0, 0)};
+  agc_c_resource *first = agc_as_c_resource(&vm, row("Native.callback", 2)(&vm, args, 0));
+  assert(first->pointer);
+  assert(agc_as_c_resource(&vm, row("Native.callback", 2)(&vm, args, 0))->pointer == first->pointer);
+  for (uint32_t k = 3; k < CAP + 2; k++) {
+    args[1] = function_value(k, 0);
+    (void)row("Native.callback", 2)(&vm, args, 0);
+  }
+  /* The run has CAP callbacks now (function 0 and 3 to CAP + 1): the next pair is refused, a known one is not. */
+  callback_fails(function_value(CAP + 2, 0), "RUNTIME-NATIVE-CALLBACK");
+  args[1] = function_value(0, 0);
+  assert(agc_as_c_resource(&vm, row("Native.callback", 2)(&vm, args, 0))->pointer == first->pointer);
+#endif
+  vm.rt->program = saved;
+}
+
 int main(void) {
   agc_test_io_vm(&vm);
   test_bad_signatures();
@@ -625,6 +682,7 @@ int main(void) {
   test_reads();
   test_buffers();
   test_load();
+  test_callbacks();
   test_pointers();
   test_structs();
   test_refusal();

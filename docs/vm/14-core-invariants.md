@@ -286,7 +286,9 @@ nothing (a free function, a thread of C's own and the compute pool give zero or
 refuse as before: `callback_entry`). With another handle of the pair open it
 runs, which is harmless: the function takes no captures and runs in the task
 that made the native call. The memory is bounded by the number of distinct
-callback functions and types of the program. The end of the run frees what is
+callback functions and types of the program (the front end's bytecode names each
+once), and for hand-made bytecode by a cap of 4096 pairs, past which
+`Native.callback` fails with `RUNTIME-NATIVE-CALLBACK`. The end of the run frees what is
 still open (§14.4, step 3), but for the callbacks: they have nothing to free.
 There are no GC finalizers.
 

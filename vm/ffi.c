@@ -198,8 +198,8 @@ static _Thread_local native_site *current_site; // NOLINT(cppcoreguidelines-avoi
    call it at any time, from any thread, without a use after free. In GC memory, listed in agc_runtime.ffi_callbacks
    (the closure's data pointer is invisible to the collector). `open` counts the handles of the pair that are open: C
    gets zero from the code while none is (callback_entry), whichever thread calls it. The handles are resources
-   (agc_c_resource.callback); closing one changes `open` only (close_resource). The list and `open` change under rt->sync; `open` is
-   atomic since callback_entry reads it with no lock. */
+   (agc_c_resource.callback); closing one changes `open` only (close_resource). The list and `open` change under rt->sync;
+   `open` is atomic since callback_entry reads it with no lock. The list is capped (FFI_MAX_CALLBACKS). */
 typedef struct agc_ffi_callback {
   struct agc_ffi_callback *next;
   agc_value fn;
@@ -2722,14 +2722,25 @@ static bool callback_type(agc_c_type type, bool result) {
   }
 }
 
+/* The most callbacks (pairs of function and C types) a run makes: each keeps a closure of about 6 KB until the run
+   ends. The front end's bytecode makes at most one for each callback function and type that the program names, so only
+   hand-made bytecode, which can build the pairs from runtime signatures, reaches it. */
+#define FFI_MAX_CALLBACKS 4096
+
 /* The callback of the pair (function, C types) that the signature of Native.callback names, made now when the run has
-   none: its closure and data stay for the run (callback_data). Under rt->sync. NULL with ERROR set when libffi refuses
-   the closure. */
+   none: its closure and data stay for the run (callback_data). Under rt->sync, which also keeps the list from changing
+   during the search. NULL with ERROR set when libffi refuses the closure or the run has FFI_MAX_CALLBACKS of them. */
 static callback_data *callback_of(agc_vm *vm, const callback_data *want, char *error, size_t size) {
-  for (callback_data *cb = vm->rt->ffi_callbacks; cb; cb = cb->next) {
+  agc_sync_assert(vm);
+  size_t made = 0;
+  for (callback_data *cb = vm->rt->ffi_callbacks; cb; cb = cb->next, made++) {
     if (cb->function == want->function && cb->result == want->result && cb->count == want->count &&
         memcmp(cb->params, want->params, want->count * sizeof(agc_c_type)) == 0)
       return cb;
+  }
+  if (made >= FFI_MAX_CALLBACKS) {
+    snprintf(error, size, "too many callbacks in one run");
+    return NULL;
   }
   callback_data *cb = agc_alloc(sizeof *cb);
   cb->fn = want->fn;
