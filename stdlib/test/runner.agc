@@ -85,6 +85,7 @@ export def main() -> Void
   read = (0...config.count).to_a.map do |_| JSON.decode(File.read_line(handle, 5000).unwrap_or(""), Entry) end
   tags = read_tags(handle)
   jobs = read_jobs(handle)
+  timing = read_timing(handle)
   _ = File.close(handle, 5000)
   if read.any? do |entry| not entry.ok? end
     IO.warn("invalid BDD runner configuration: a feature entry does not decode")
@@ -96,6 +97,9 @@ export def main() -> Void
   end
   files = selected(seeded(config, seed), tags, jobs, read.map do |entry| entry.unwrap! end)
   text = Report.text(files, config.style == "ai", seed)
+  if timing and config.style != "json"
+    text = Report.timed_text(files, config.style == "ai", seed)
+  end
   if config.style == "json"
     text = JSON.encode(Report.json(files, seed))
   end
@@ -163,6 +167,16 @@ def read_jobs(handle: FileHandle) -> Int
   end
 
   return parsed.unwrap!
+end
+
+# The `--timing` line, after the jobs line: a JSON boolean. A missing or unusable line is no timing.
+def read_timing(handle: FileHandle) -> Bool
+  line = File.read_line(handle, 5000)
+  if !line.ok?
+    return false
+  end
+
+  return JSON.bool(JSON.parse(line.unwrap!).unwrap_or(JSON.null())).unwrap_or(false)
 end
 
 # The report of the run. A `--tags` expression that cannot be read or is bad is a usage error and nothing runs (the

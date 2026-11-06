@@ -20,7 +20,7 @@ make test-bdd
 `agentica test` builds and installs nothing.
 
 ```text
-agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR] [--jobs N]
+agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR] [--jobs N] [--timing]
 ```
 
 - **Discovery.** With no paths, `specs/` and `test/` are searched; a missing
@@ -64,6 +64,13 @@ agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [-
   order whatever `N` is. The step program is listed once, before any file runs.
   Files that share a port, a path or a database need `--jobs 1`, and a high `N`
   makes per-test timeouts likelier under CPU load.
+- **`--timing`** adds a `timing:` block to the text and `--ai` reports, before
+  the summary line: the total, one line for each file with its scenario count
+  and the sum of the durations of its scenarios, then `slowest scenarios:` with
+  the 5 slowest. The driver tells the runner on a last line of the
+  configuration file (a JSON boolean, after the `--jobs` line). The JSON
+  report has `duration_ms` on the report and on each file whatever the flags
+  are (each scenario had it already), so `--timing` changes nothing there.
 - **Seed.** Every run has one: `--seed N`, or one the runner draws. It reaches
   every step program, test file and program under test. A failing run's text
   report shows it on the summary line, so `--seed N` replays the run. The JSON

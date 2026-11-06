@@ -270,7 +270,11 @@ stages.
 - `AGENTICA_VM_TRACE` lists the categories to trace: `sched`, `io`, `proc`,
   `tls`, `loader`, `gc` and `jit`. Trace lines go to stderr, or to
   `AGENTICA_VM_TRACE_FILE` when set (an `unknown category` warning follows them
-  there; if the file cannot be opened, tracing is off). `make TRACE=0` compiles
+  there; if the file cannot be opened, tracing is off). Each `{pid}` of the
+  file name is replaced by the process id (`trace_file_name` in
+  `vm/launch.c`), so the processes of a test run, which share one
+  environment, write one file each; a name over 4096 bytes after that cannot
+  be opened. `make TRACE=0` compiles
   the trace points out, and `--version` then says `trace off`.
 - The trace file is opened with `O_NONBLOCK` and `O_NOFOLLOW`, and only a
   regular file owned by the VM's user is taken, so start-up never blocks on a

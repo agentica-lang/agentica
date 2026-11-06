@@ -823,3 +823,38 @@ def test_jobs_run_the_files_at_the_same_time_and_the_report_keeps_the_order_of_t
     status, report = bdd.json_test(directory, "--steps", steps, "--jobs", "2", "--tags", "@meet")
     assert status == 0
     assert [(item["name"], item["status"]) for item in report_cases(report)] == [("a", "passed"), ("b", "passed")]
+
+
+SLEEPS = 'def test_sleeps() -> Result[Void]\n  Task.sleep(150)\n  return Test.assert(true, "x")\nend\n'
+QUICK = 'def test_quick() -> Result[Void]\n  return Test.assert(true, "x")\nend\n'
+
+
+def test_timing_adds_the_time_of_each_file_and_the_slowest_scenarios_and_json_always_has_it(bdd):
+    directory = bdd.suite({"slow_test.agc": SLEEPS, "quick_test.agc": QUICK})
+    slow, quick = (directory / "slow_test.agc").as_posix(), (directory / "quick_test.agc").as_posix()
+    plain = bdd.agentica_test(slow, quick)
+    assert (plain.code, plain.stderr) == (0, "")
+    assert "timing:" not in plain.stdout
+    for style in ([], ["--ai"]):
+        result = bdd.agentica_test(*style, "--timing", slow, quick)
+        assert (result.code, result.stderr) == (0, "")
+        lines = result.stdout.splitlines()
+        # The report, then the timing block, then the totals line.
+        assert lines[-1] == "2 passed, 0 failed, 0 skipped, 0 not executed, 0 file errors"
+        block = lines[lines.index(next(line for line in lines if line.startswith("timing: "))):-1]
+        total = int(re.fullmatch(r"timing: (\d+) ms", block[0]).group(1))
+        files = [re.fullmatch(r"  (\d+) ms (\S+) \((1 scenario)\)", line) for line in block[1:3]]
+        # The files are in the order of discovery: sorted by path.
+        assert [found.group(2) for found in files] == [quick, slow]
+        assert int(files[1].group(1)) >= 150 and total >= 150
+        assert block[3] == "slowest scenarios:"
+        first = re.fullmatch(r"  (\d+) ms (\S+) / sleeps", block[4])
+        assert first and first.group(2) == slow and int(first.group(1)) >= 150
+        assert re.fullmatch(r"  \d+ ms %s / quick" % re.escape(quick), block[5])
+    # --timing changes nothing in the JSON report, which has the durations either way.
+    status, report = bdd.json_test("--timing", slow, quick)
+    assert status == 0
+    assert max(file["duration_ms"] for file in report["files"]) >= 150
+    assert report["duration_ms"] == sum(file["duration_ms"] for file in report["files"])
+    status, report = bdd.json_test(slow, quick)
+    assert max(file["duration_ms"] for file in report["files"]) >= 150

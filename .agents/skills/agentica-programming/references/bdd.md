@@ -186,7 +186,9 @@ BDD.then_stdout_includes(ctx, expected) / then_stderr_includes(ctx, expected)
   `RUNTIME-BDD-USAGE`) runs up to `N` files at once, never the scenarios of
   one file; the report keeps the file order. Files that share a port, a path
   or a database need `--jobs 1`; a high `N` makes per-test timeouts likelier
-  under CPU load. Without `--seed N` every child shares
+  under CPU load. `--timing` adds the time of each file and the 5 slowest
+  scenarios before the totals; `--json` has `duration_ms` on the report and
+  each file and scenario. Without `--seed N` every child shares
   the seed the runner drew (`testing.md`). A `*_test.agc` file in `specs/` is a
   test file: a helper with that name fails with `RUNTIME-TEST-RUN`. Use port 0
   and fresh temporary directories, not fixed names.
