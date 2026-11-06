@@ -153,8 +153,9 @@ end
 
 # Whether `first`, the first child of the item, is the first operand of a chain that the item continues: the value a
 # pipe passes on, or the left side of a `+`. Only a child of the same chain counts: in `(a + b.to_s) |> f()` and in
-# `a |> f() + "x"` the child is a chain of the other kind, which nobody has judged yet. A `try` that wraps a chain is
-# part of it when the `try` is.
+# `a |> f() + "x"` the child is a chain of the other kind, which nobody has judged yet. A `try` that wraps a pipe is
+# part of it when the `try` is; a `+` does not look through a `try` (Shape.plus_operands), so the `+` inside is its own
+# chain.
 def continues?(item: Item, first: Walk.Node) -> Bool
   kind = chain_kind(item.node)
   if kind == "" or kind != chain_kind(first)
@@ -167,7 +168,7 @@ def continues?(item: Item, first: Walk.Node) -> Bool
   end
 end
 
-# "pipe" for a piped call, "plus" for a `+`, the kind of the operand for a `try`, and "" for anything else.
+# "pipe" for a piped call, "plus" for a `+`, "pipe" for a `try` around a piped call, and "" for anything else.
 def chain_kind(node: Walk.Node) -> String
   case node
     Walk.Node.Expr(Ast.Expr.Call(call)) ->
@@ -182,7 +183,12 @@ def chain_kind(node: Walk.Node) -> String
       end
 
       return ""
-    Walk.Node.Expr(Ast.Expr.Try(wrapper)) -> return chain_kind(Walk.Node.Expr(wrapper.operand))
+    Walk.Node.Expr(Ast.Expr.Try(wrapper)) ->
+      if chain_kind(Walk.Node.Expr(wrapper.operand)) == "pipe"
+        return "pipe"
+      end
+
+      return ""
     _ -> return ""
   end
 end

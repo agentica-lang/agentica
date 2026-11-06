@@ -304,11 +304,12 @@ def test_a_plus_chain_is_judged_once_and_a_nested_one_on_its_own(tmp_path):
     source = (
         "def f(n: Int, m: Int) -> String\n"
         '  one = "a=" + n.to_s + "!" + ("b=" + m.to_s)\n'
-        "  return one\n"
+        '  two = (try ("c=" + m.to_s)) + "?"\n'
+        "  return one + two\n"
         "end\n"
     )
     found = suggested(tmp_path / "nested.agc", source)
-    assert found == {"LINT-TO-S-CONCAT": [where(source, '"a="'), where(source, '"b="')]}
+    assert found == {"LINT-TO-S-CONCAT": [where(source, '"a="'), where(source, '"b="'), where(source, '"c="')]}
 
 
 def test_a_chain_of_the_other_kind_is_not_hidden_by_the_chain_around_it(tmp_path):
