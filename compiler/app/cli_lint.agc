@@ -42,19 +42,6 @@ export def entry(file: String, text: String) -> Entry
   end
 end
 
-## The number of suggestions in all the entries.
-export def suggestions(entries: List[Entry]) -> Int
-  total = 0
-  for entry in entries
-    case entry
-      Entry.Suggested(_, found) -> total += found.size
-      _ -> total = total
-    end
-  end
-
-  return total
-end
-
 ## The exit status of a run: 2 when a file could not be read, else 1 when a file did not parse, else 1 with `strict`
 ## and any suggestion, else 0.
 export def status(entries: List[Entry], strict: Bool) -> Int
@@ -169,6 +156,19 @@ def clean?(entry: Entry) -> Bool
     Entry.Clean(_) -> return true
     _ -> return false
   end
+end
+
+# The number of suggestions in all the entries.
+def suggestions(entries: List[Entry]) -> Int
+  total = 0
+  for entry in entries
+    case entry
+      Entry.Suggested(_, found) -> total += found.size
+      _ -> total = total
+    end
+  end
+
+  return total
 end
 
 def suggestions_count(total: Int) -> String

@@ -102,6 +102,14 @@ def near_misses(flag: Bool, done: Bool, text: String) -> Int
     total = "a"
   end
 
+  if not flag
+    total = "a"
+  elsif done
+    total = "c"
+  else
+    total = "b"
+  end
+
   if flag == done
     total = "b"
   end
@@ -240,12 +248,95 @@ GROWN = "def f(text: String) -> String\n{body}\n  return text\nend\n"
         ("set_again_in_the_body", '  s = ""\n  for i in 0...3\n    s = ""\n    s = s + text\n  end', None),
         ("bound_after_the_loop", '  for i in 0...3\n    s = s + "x"\n  end\n  s = ""', None),
         ("a_parameter", '  for i in 0...3\n    text += "x"\n  end', 'text += "x"'),
+        ("a_while_loop", '  s = ""\n  while s.size < 3\n    s = s + text\n  end', "s = s + text"),
+        ("a_block_starts_again", '  s = ""\n  for i in 0...3\n    text.each do |c: String|\n      s = s + c\n    end\n  end', None),
     ],
 )
 def test_a_string_grows_in_a_loop_only_when_it_was_set_outside_that_loop(tmp_path, name, body, grown):
     source = GROWN.format(body=body)
     expected = {"LINT-STRING-APPEND-IN-LOOP": [where(source, grown)]} if grown else {}
     assert suggested(tmp_path / f"{name}.agc", source) == expected
+
+
+PRIVATE_DOCS = '''## A doc on a private struct.
+struct Point
+  x: Int
+end
+
+## A doc on a private enum.
+enum Mode
+  On
+  Off
+end
+
+## A doc on an exported function, struct and enum.
+export def shown() -> Int
+  return 1
+end
+
+## A doc on an exported struct.
+export struct Pair
+  x: Int
+end
+
+## A doc on an exported enum.
+export enum Side
+  Left
+  Right
+end
+
+extern "demo"
+  struct DemoPair
+    x: C.Int32
+  end
+  ## A doc on a C function.
+  def demo_make(x: C.Int32) -> DemoPair
+end
+'''
+
+
+def test_a_doc_is_private_only_on_a_function_struct_or_enum_that_is_not_exported_or_extern(tmp_path):
+    found = suggested(tmp_path / "docs.agc", PRIVATE_DOCS)
+    assert found == {"LINT-PRIVATE-DOC": [where(PRIVATE_DOCS, "Point"), where(PRIVATE_DOCS, "Mode")]}
+
+
+def test_a_plus_chain_is_judged_once_and_a_nested_one_on_its_own(tmp_path):
+    source = (
+        "def f(n: Int, m: Int) -> String\n"
+        '  one = "a=" + n.to_s + "!" + ("b=" + m.to_s)\n'
+        "  return one\n"
+        "end\n"
+    )
+    found = suggested(tmp_path / "nested.agc", source)
+    assert found == {"LINT-TO-S-CONCAT": [where(source, '"a="'), where(source, '"b="')]}
+
+
+def test_a_chain_of_the_other_kind_is_not_hidden_by_the_chain_around_it(tmp_path):
+    source = (
+        "def f(n: Int, a: String) -> String\n"
+        '  one = ("n=" + n.to_s + "!") |> shout()\n'
+        '  two = (a |> shout()) + "x"\n'
+        "  return one + two\n"
+        "end\n"
+    )
+    found = suggested(tmp_path / "other.agc", source)
+    assert found == {
+        "LINT-TO-S-CONCAT": [where(source, '"n="')],
+        "LINT-SINGLE-PIPE": [where(source, "shout()", nth=1), where(source, "shout()", nth=2)],
+    }
+
+
+def test_the_if_chain_help_asks_for_an_underscore_arm_only_without_an_else(tmp_path):
+    def help_of(tail):
+        source = "def f(n: Int) -> Int\n  if n == 1\n    return 1\n  elsif n == 2\n    return 2\n" + tail + "  return 0\nend\n"
+        path = tmp_path / f"chain{len(tail)}.agc"
+        path.write_text(source, encoding="utf-8")
+        found = report(lint_json(path.name, cwd=tmp_path), 0)["files"][0]["suggestions"]
+        return [suggestion["help"] for suggestion in found if suggestion["code"] == "LINT-IF-CHAIN"]
+
+    without = help_of("  elsif n == 3\n    return 3\n  end\n")
+    with_else = help_of("  else\n    return 3\n  end\n")
+    assert len(without) == len(with_else) == 1 and "`_` arm" in without[0] and "`_` arm" not in with_else[0]
 
 
 def test_a_file_that_does_not_parse_is_a_diagnostic_and_the_others_still_lint(tmp_path):

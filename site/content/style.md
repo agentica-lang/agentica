@@ -594,6 +594,8 @@ def main() -> Void
 end
 ```
 
+A `String` that grows by `+` in a loop is copied on every pass, so the loop is quadratic: `push` the pieces on a `List` and `join` them once after the loop.
+
 Use a `List` for order, a `Set` for membership, a `Map` for lookup by key, and a struct for a record with known fields.
 
 ## Check your code
