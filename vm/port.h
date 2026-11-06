@@ -361,6 +361,14 @@ typedef struct {
   agc_front_end *front_end;
   /* The prepared native calls of the run (vm/ffi.c), made at the first call of each extern function; NULL before. */
   struct agc_ffi_cache *ffi;
+  /* The callback closures that a close gave back while a fast native call of some scheduler was in C, which may still
+     call them (vm/ffi.c, retire_closure): freed once every such call has returned. GC memory, under rt->sync;
+     `ffi_retired_count` is read without the lock by each call that leaves C. */
+  struct agc_ffi_retired *ffi_retired;
+  _Atomic uint32_t ffi_retired_count;
+  /* The leases of Native.Mutex locks that running compute calls hold (vm/mutex.c, agc_mutex_lease), so the collector
+     sees them from the malloc'd call; under rt->sync. */
+  struct agc_mutex_lease *mutex_leases;
   /* The std/ sources that the binary carries (Std.source, FrontEnd.std_source); NULL and 0 in a runtime without them,
      such as the C tests. Set before the run starts and never written again, over constant data of the binary, so every
      scheduler reads them without a lock. */
@@ -637,6 +645,11 @@ struct agc_vm {
   /* The prepared calls of the native call sites that this scheduler ran (vm/ffi.c, call_entry), by the address of
      their signature String; GC memory, made at the first native call. Only this scheduler's thread touches it. */
   struct agc_ffi_memo *ffi_memo;
+  /* Odd while this scheduler's thread is in the C of a fast native call (`c_depth` counts the nested ones, of the
+     callbacks C runs, on this thread only), so a close on another scheduler can tell which calls may still use a
+     callback's closure (vm/ffi.c, retire_closure). */
+  _Atomic uint64_t c_seq;
+  uint32_t c_depth;
 };
 
 /* The one test of a profile hook: false at compile time when the trace points are compiled out (make TRACE=0). */
@@ -753,6 +766,13 @@ agc_recv_status agc_channel_receive(agc_vm *vm, agc_channel *c, int64_t timeout_
    clock (CLOCK_MONOTONIC on Linux). */
 bool agc_clock_coarse_ms(uint64_t *now_ms);
 void agc_clock_note_ms(uint64_t ms);
+
+/* A compute call keeps the Native.Mutex locks of its task taken until it ends, even if the task ends first (a
+   cancel), since its C still runs (vm/mutex.c). agc_mutex_lease takes a lease on each lock that the running task
+   holds, or gives NULL when it holds none; agc_mutex_unlease (NULL does nothing) gives it back, and a lock that its
+   holder gave back meanwhile goes to its next waiter. Both under rt->sync. */
+struct agc_mutex_lease *agc_mutex_lease(agc_vm *vm);
+void agc_mutex_unlease(agc_vm *vm, struct agc_mutex_lease *lease);
 
 void agc_task_wake(agc_vm *vm, agc_task *t, const char *by);
 bool agc_task_waiting(const agc_task *t);

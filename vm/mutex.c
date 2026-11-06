@@ -13,10 +13,20 @@
    it until `next` runs and takes it, or leaves the wait (a cancel), which passes it on, so the lock goes to the
    waiters in order. `waiters` is the FIFO of the other parked tasks (agc_task.wait_next), each with its `mutex_wait`
    set to the mutex. The holder lists the mutexes it holds through `held_next` (agc_task.mutexes), newest first, so its
-   end, a crash or a cancel included, gives them back. */
+   end, a crash or a cancel included, gives them back. `leases` counts the compute calls of the holder that keep it
+   taken (agc_mutex_lease): a cancelled holder ends while its C still runs, and the mutex goes on only once the last
+   such call is done. */
 struct agc_mutex {
   agc_task *holder, *next, *waiters, *waiters_tail;
   struct agc_mutex *held_next;
+  uint32_t leases;
+};
+
+/* The mutexes that one compute call keeps taken, linked in agc_runtime.mutex_leases while it runs. */
+struct agc_mutex_lease {
+  struct agc_mutex_lease *next, *prev;
+  size_t count;
+  struct agc_mutex *mutexes[];
 };
 
 /* The state of one synchronize call (a stepper): the mutex, the call's span and whether the block runs. */
@@ -47,7 +57,7 @@ static void release(agc_vm *vm, agc_task *t, struct agc_mutex *m) {
   }
   m->held_next = NULL;
   m->holder = NULL;
-  hand_on(vm, m);
+  if (!m->leases) hand_on(vm, m);
 }
 
 /* The first step takes the mutex, or parks the task in its FIFO until a release gives it the lock, and then calls the
@@ -66,7 +76,7 @@ static agc_step sync_step(agc_vm *vm, agc_stepper *self, agc_value last) {
   }
   if (m->holder == t)
     agc_fail(vm, "RUNTIME-NATIVE-MUTEX", "this task holds the mutex already: synchronize does not nest", b->span);
-  if (m->holder || (m->next && m->next != t)) {
+  if (m->holder || m->leases || (m->next && m->next != t)) {
     /* A callback of native code fails here, before the task joins the FIFO. */
     agc_task_parking(vm);
     if (t->mutex_wait != m) {
@@ -111,7 +121,43 @@ void agc_mutex_leave(agc_vm *vm, agc_task *t) {
   agc_task_remove(&m->waiters, &m->waiters_tail, t);
   if (m->next != t) return;
   m->next = NULL;
-  if (!m->holder) hand_on(vm, m);
+  if (!m->holder && !m->leases) hand_on(vm, m);
+}
+
+struct agc_mutex_lease *agc_mutex_lease(agc_vm *vm) {
+  agc_sync_assert(vm);
+  agc_task *t = vm->task;
+  if (!t || !t->mutexes) return NULL;
+  size_t n = 0;
+  for (struct agc_mutex *m = t->mutexes; m; m = m->held_next) n++;
+  struct agc_mutex_lease *lease =
+      agc_alloc(agc_size_add(sizeof *lease, agc_size_mul(n, sizeof(struct agc_mutex *))));
+  lease->count = n;
+  n = 0;
+  for (struct agc_mutex *m = t->mutexes; m; m = m->held_next) {
+    m->leases++;
+    lease->mutexes[n++] = m;
+  }
+  agc_runtime *rt = vm->rt;
+  lease->next = rt->mutex_leases;
+  if (rt->mutex_leases) rt->mutex_leases->prev = lease;
+  rt->mutex_leases = lease;
+  return lease;
+}
+
+void agc_mutex_unlease(agc_vm *vm, struct agc_mutex_lease *lease) {
+  if (!lease) return;
+  agc_sync_assert(vm);
+  agc_runtime *rt = vm->rt;
+  if (lease->prev)
+    lease->prev->next = lease->next;
+  else
+    rt->mutex_leases = lease->next;
+  if (lease->next) lease->next->prev = lease->prev;
+  for (size_t k = 0; k < lease->count; k++) {
+    struct agc_mutex *m = lease->mutexes[k];
+    if (--m->leases == 0 && !m->holder && !m->next) hand_on(vm, m);
+  }
 }
 
 /* The end of T (finish_task): every mutex it still holds goes to its next waiter. Under rt->sync. */

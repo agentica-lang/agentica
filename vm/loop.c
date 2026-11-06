@@ -545,6 +545,9 @@ static int submit_compute(agc_loop *loop, job *j) {
 /* The deadline of the job's work or wait has passed: the job has timed out. */
 static void timer_fired(uv_timer_t *timer) {
   job *j = timer_job((uv_handle_t *)timer);
+  /* The loop's time, which reached the deadline (timer_length), raises the floor of Time.monotonic_ms before the task
+     wakes, so the wait it measures is never shorter than its timeout. */
+  agc_clock_note_ms(uv_now(timer->loop));
   atomic_store(&j->timer_fired, true);
   /* The wait stops here, before EXPIRED is published, so `expired` never runs beside one of its callbacks. Only while
      the job still waits for its task: its data is then the job's (the task frees it only after an outcome, and a

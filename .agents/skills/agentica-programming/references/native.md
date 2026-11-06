@@ -166,7 +166,8 @@ end
   `lock = Native.mutex()` (a `Native.Mutex`), then
   `lock.synchronize do ... end` runs the block with it held and returns the
   block's value. A waiter parks (FIFO); the task's end, crash or cancel gives it
-  back; a nested `synchronize` by the holder is `RUNTIME-NATIVE-MUTEX`. A mutex
+  back (a running `compute def` of the block keeps it until C returns); a nested
+  `synchronize` by the holder is `RUNTIME-NATIVE-MUTEX`. A mutex
   is no data (no `==`, no `to_s`, no constant): make it in the open function and
   keep it next to the handle.
 - `[export] compute def f(...) -> T` runs the call on the VM's compute pool (one

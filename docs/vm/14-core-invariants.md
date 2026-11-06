@@ -277,9 +277,14 @@ resources) holds them under `rt->sync` as a compute call does. A resource closed
 while held holds what it comes from in turn until its free. A closed callback is
 freed once every fast native call whose C called it while its code existed has
 returned: C may call it again until then (it gives zero), and libffi's frames of
-its run are on that call's stack. A compute call is not counted (its pool thread
-runs no callback), so its C must not call a closed callback. The end of the run
-frees what is still open (§14.4, step 3). There are no GC finalizers.
+its run are on that call's stack. Its closure is given back later still, once
+every fast call that was in C on some scheduler at the free has returned
+(`retire_closure`: each scheduler's `c_seq` is odd while its thread is in C),
+since C may have read the pointer of a handler it stored before the close and
+call it after: it then reaches the closed callback, which gives zero. A compute
+call is not counted (its pool thread runs no callback), so its C must not call a
+closed callback. The end of the run frees what is still open (§14.4, step 3).
+There are no GC finalizers.
 
 A channel is the one handle made unowned. `Channel.new` makes no registry entry.
 The first `Task.spawn_owning` of it (any task may do it) registers an entry with

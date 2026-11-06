@@ -150,10 +150,12 @@ typedef struct {
    function of the resources it makes of a `free: C.Function` kind (else NULL). `held` has `holds` entries, the owned
    buffers in the C.Pointer fields of struct arguments after those of the parameters. `structs` (at a multiple of 16
    in the block) holds the struct arguments, copied on the scheduler, then the buffer of a struct result, which `out.p`
-   points at. */
+   points at. `lease` keeps the Native.Mutex locks that the task held at the start taken until `done` (agc_mutex_lease),
+   even when the task is cancelled meanwhile, since C still runs. */
 typedef struct {
   const ffi_entry *entry;
   void *fn, *free_at;
+  struct agc_mutex_lease *lease;
   agc_c_value *slots;
   agc_c_resource **held;
   uint8_t *structs;
@@ -278,17 +280,30 @@ typedef struct agc_ffi_cache {
   uint64_t walk, sites;
 } agc_ffi_cache;
 
-/* The memo of one scheduler (agc_vm.ffi_memo): the entry of each signature String it looked up last, direct-mapped by
-   the String's address, so a call site, whose signature is one constant of the program, finds its prepared call with
-   no hash of the text and no lock. A hit compares the address alone, which is sound because the memo keeps the String
-   alive (GC memory, reachable from the scheduler), and a String never changes: no other text can come to live at that
-   address while the slot names it. Hand-made bytecode that builds signatures at run time only misses more. The
-   entries are malloc'd and never freed (agc_ffi_cache), so a slot never points at a freed one. */
-#define MEMO_SLOTS 64
+/* The memo of one scheduler (agc_vm.ffi_memo): the entry of each signature String it looked up lately, in 64 sets of
+   two by the String's address, the one used last first, so a call site, whose signature is one constant of the
+   program, finds its prepared call with no hash of the text and no lock, and two hot signatures that share a set do
+   not push each other out. A hit compares the address alone, which is sound because the memo keeps the String alive
+   (GC memory, reachable from the scheduler), and a String never changes: no other text can come to live at that
+   address while a slot names it. Hand-made bytecode that builds signatures at run time only misses more. The entries
+   are malloc'd and never freed (agc_ffi_cache), so a slot never points at a freed one. */
+#define MEMO_SETS 64
 typedef struct agc_ffi_memo {
-  const agc_string *keys[MEMO_SLOTS];
-  ffi_entry *entries[MEMO_SLOTS];
+  const agc_string *keys[MEMO_SETS][2];
+  ffi_entry *entries[MEMO_SETS][2];
 } agc_ffi_memo;
+
+/* A callback closure given back while a fast call of some scheduler was in C (agc_runtime.ffi_retired). C may have
+   read the callback's pointer before the close (a handler it stored) and call it once it gets there, so the closure is
+   freed only once each scheduler that was in C then has left C (its c_seq moved on); `keep` holds the callback's data,
+   which the closure's code reads. SEQS has one entry per scheduler: its c_seq at the close when odd, or 0. */
+typedef struct agc_ffi_retired {
+  struct agc_ffi_retired *next;
+  agc_ffi_closure *closure;
+  callback_data *keep;
+  size_t count;
+  uint64_t seqs[];
+} agc_ffi_retired;
 
 /* What a fast call holds while C runs, and how. PINNED (n entries) are pinned without rt->sync (pin_all): each held
    resource and the one it comes from. A call that makes resources, or whose resources the pins do not cover (one
@@ -869,19 +884,30 @@ static ffi_entry *call_entry(agc_vm *vm, agc_value signature, bool layout, uint3
   const agc_string *text = agc_as_string(vm, signature);
   agc_ffi_memo *memo = vm->ffi_memo;
   if (!memo) memo = vm->ffi_memo = agc_alloc(sizeof *memo);
-  /* Fibonacci hashing of the address above its alignment bits; MEMO_SLOTS is 2^6. */
+  /* Fibonacci hashing of the address above its alignment bits; MEMO_SETS is 2^6. */
   size_t at = (size_t)(((uint64_t)((uintptr_t)text >> 3) * UINT64_C(0x9E3779B97F4A7C15)) >> 58);
+  const agc_string **keys = memo->keys[at];
+  ffi_entry **entries = memo->entries[at];
   ffi_entry *e;
-  if (memo->keys[at] == text) {
-    e = memo->entries[at];
-    if (e->layout != layout) bad_signature(vm, span);
+  if (keys[0] == text) {
+    e = entries[0];
+  } else if (keys[1] == text) {
+    e = entries[1];
+    keys[1] = keys[0];
+    entries[1] = entries[0];
+    keys[0] = text;
+    entries[0] = e;
+  } else {
+    agc_sync_take(vm);
+    e = find_entry(vm, text, layout, span);
+    agc_sync_drop(vm);
+    keys[1] = keys[0];
+    entries[1] = entries[0];
+    keys[0] = text;
+    entries[0] = e;
     return e;
   }
-  agc_sync_take(vm);
-  e = find_entry(vm, text, layout, span);
-  agc_sync_drop(vm);
-  memo->keys[at] = text;
-  memo->entries[at] = e;
+  if (e->layout != layout) bad_signature(vm, span);
   return e;
 }
 
@@ -916,9 +942,74 @@ static void call_free(agc_c_resource *res) {
   free_native(res->buffer, res->callback != NULL, res->free, res->free_at, res->by_ref, &res->pointer);
 }
 
-/* Frees the resource and drops its registry entry; under rt->sync, with no call holding or pinning it. */
+/* The schedulers whose fast calls run C: rt->scheds once there are threads, else VM alone (one scheduler). */
+static size_t sched_count(const agc_vm *vm) { return vm->rt->scheds ? (size_t)vm->rt->schedulers : 1; }
+static agc_vm *sched_at(agc_vm *vm, size_t k) { return vm->rt->scheds ? vm->rt->scheds[k] : vm; }
+
+/* Frees each retired closure that no call that was in C at its close still runs. Under rt->sync, or alone at the end
+   of the run. */
+static void reap_closures(agc_vm *vm) {
+  agc_runtime *rt = vm->rt;
+  for (agc_ffi_retired **at = &rt->ffi_retired; *at;) {
+    agc_ffi_retired *r = *at;
+    bool waits = false;
+    for (size_t k = 0; k < r->count && !waits; k++)
+      waits = r->seqs[k] && atomic_load(&sched_at(vm, k)->c_seq) == r->seqs[k];
+    if (waits) {
+      at = &r->next;
+      continue;
+    }
+    agc_ffi_closure_free(r->closure);
+    *at = r->next;
+    atomic_fetch_sub(&rt->ffi_retired_count, 1);
+  }
+}
+
+/* Gives back the closure of the closed callback RES (free_resource). The count is raised before the schedulers' c_seq
+   are read, both seq_cst, and a call that leaves C moves its c_seq before it reads the count (leave_c): so either
+   this close sees a call's C as over, or that call sees the closure retired and frees it once it may. Under
+   rt->sync. */
+static void retire_closure(agc_vm *vm, agc_c_resource *res) {
+  size_t n = sched_count(vm);
+  agc_ffi_retired *r = agc_alloc(agc_size_add(sizeof *r, agc_size_mul(n, sizeof(uint64_t))));
+  r->closure = res->free_at;
+  r->keep = res->callback;
+  r->count = n;
+  r->next = vm->rt->ffi_retired;
+  vm->rt->ffi_retired = r;
+  atomic_fetch_add(&vm->rt->ffi_retired_count, 1);
+  for (size_t k = 0; k < n; k++) {
+    uint64_t seq = atomic_load(&sched_at(vm, k)->c_seq);
+    r->seqs[k] = seq & 1 ? seq : 0;
+  }
+  reap_closures(vm);
+}
+
+/* A fast call's C starts on VM's thread (the outermost one: a callback's own calls are inside it). */
+static void enter_c(agc_vm *vm) {
+  if (vm->c_depth++ == 0) atomic_fetch_add(&vm->c_seq, 1);
+}
+
+/* A fast call's C has returned; the outermost one frees the closures that only waited for it (retire_closure). */
+static void leave_c(agc_vm *vm) {
+  if (--vm->c_depth) return;
+  atomic_fetch_add(&vm->c_seq, 1);
+  if (!atomic_load(&vm->rt->ffi_retired_count)) return;
+  agc_sync_take(vm);
+  reap_closures(vm);
+  agc_sync_drop(vm);
+}
+
+/* Frees the resource and drops its registry entry; under rt->sync, with no call holding or pinning it. A callback's
+   closure goes to retire_closure, since a fast call on another scheduler may be in C with its pointer. */
 static void free_resource(agc_vm *vm, agc_c_resource *res) {
-  call_free(res);
+  if (res->callback) {
+    res->closed = res->freed = true;
+    res->pointer = NULL;
+    retire_closure(vm, res);
+  } else {
+    call_free(res);
+  }
   res->state->native = NULL;
   agc_unregister(vm, res->state);
 }
@@ -1201,6 +1292,8 @@ static bool end_step(agc_vm *vm, agc_resource **items, size_t count, bool *skipp
 bool agc_ffi_end(agc_vm *vm, int (*stop_signal)(void)) {
   /* agc_io_flush_files, which runs first, set the deadline. */
   uint64_t by = vm->rt->flush_by;
+  /* The schedulers have joined, so no fast call is in C. */
+  reap_closures(vm);
   size_t count;
   agc_resource **items = agc_registry_copy(vm, &count);
   if (!count) return true;
@@ -1773,8 +1866,9 @@ static void compute_work(void *data) {
    job), a resource result with it; a call whose work was skipped (cancelled while it waited) has no result, so it
    gives Void, which the detached end drops. A call skipped because the run was over (run_compute in vm/loop.c, or
    ABANDONED) has none either, and its task is never woken (drain in vm/loop.c), so no task takes that Void. A job
-   dropped without this half (its pool work could not start, or the run is over) keeps its holds: the task fails, and
-   a resource that the job held is never freed, a leak and never a use after free. */
+   dropped without this half (its pool work could not start, or the run is over) keeps its holds and its lease: the
+   task fails, and a resource that the job held is never freed, a leak and never a use after free, and a mutex of the
+   lease stays taken. */
 static agc_value compute_done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   compute_call *c = data;
@@ -1782,6 +1876,7 @@ static agc_value compute_done(agc_vm *vm, void *data, agc_value context) {
   /* Before the release, which may free and unregister a held resource that nothing else keeps alive. */
   made_from from = c->ran && makes_resources(e) ? origins(vm, e, c->held) : (made_from){NULL, NULL, 0};
   release_held(vm, e, c->held);
+  agc_mutex_unlease(vm, c->lease);
   agc_value v = agc_void();
   /* A call with out parameters gives a List, which the detached end (discard in vm/loop.c) does not look into, so its
      resources are freed here when nobody takes the value. Invariant (the one agc_own relies on too): `done` runs with
@@ -1869,6 +1964,7 @@ static agc_value compute_start(agc_vm *vm, const ffi_entry *e, const agc_list *v
   memset(c->structs, 0, e->struct_bytes);
   c->span = span;
   c->refused = false;
+  c->lease = agc_mutex_lease(vm);
   size_t used = 0;
   for (uint32_t k = 0; k < e->count; k++) {
     memset(&c->slots[k], 0, sizeof c->slots[k]);
@@ -1978,7 +2074,9 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
   if (e->result_struct) out.p = structs + used;
   native_site site = {.vm = vm, .span = span, .outer = current_site};
   current_site = &site;
+  enter_c(vm);
   agc_ffi_invoke(e->call, fn, in, &out);
+  leave_c(vm);
   current_site = site.outer;
   free_copies(e, in);
   bool locked = h.locked || site.ran;
@@ -2706,8 +2804,10 @@ static void callback_result(native_site *site, agc_c_type type, agc_value v, agc
    its own bookkeeping only: the call counts in the callback's `callers` (site_ran) first, also when the callback
    gives zero (closed, or after a failure), so a close meanwhile, by the callback or by another task, leaves the free
    to the end of the last native call whose C called it: libffi's frames of the run are on the stack until C returns,
-   and C may call it again until then. A scheduler that holds rt->sync here (no native call does) could not run Agentica
-   code, whose builtins take it as at the top of a turn, so C gets zero then. */
+   and C may call it again until then. A callback that C stored and calls later (a handler) may be closed in between,
+   with no count; its closure, and this data, stay until every fast call that was in C at the close has returned
+   (retire_closure), so C reaches this code and gets zero. A scheduler that holds rt->sync here (no native call does)
+   could not run Agentica code, whose builtins take it as at the top of a turn, so C gets zero then. */
 static void callback_entry(void *data, const agc_c_value *args, agc_c_value *result) {
   const callback_data *cb = data;
   native_site *site = current_site;

@@ -971,6 +971,29 @@ int32_t peer_call_stored_around(peer_int_fn fn) {
   return a * 100 + b * 10 + stored_fn(3);
 }
 
+/* A handler that a thread-safe library keeps and calls later (an atomic pointer): peer_fire reads it, says so
+   (peer_fire_loaded), waits MS and then calls it with 7, so a close of the callback in between is one C cannot see. */
+static _Atomic(peer_int_fn) handler;
+static atomic_int fire_loaded;
+void peer_set_handler(peer_int_fn fn) { atomic_store(&handler, fn); }
+int32_t peer_fire(int32_t ms) {
+  peer_int_fn fn = atomic_load(&handler);
+  atomic_store(&fire_loaded, 1);
+  sleep_ms(ms);
+  return fn ? fn(7) : -1;
+}
+int32_t peer_fire_loaded(void) { return atomic_load(&fire_loaded); }
+
+/* A slow call that counts itself while it runs (peer_active), for a lock that must stay taken until C returns. */
+static atomic_int active;
+int32_t peer_slow(int32_t ms) {
+  atomic_fetch_add(&active, 1);
+  sleep_ms(ms);
+  atomic_fetch_sub(&active, 1);
+  return ms;
+}
+int32_t peer_active(void) { return atomic_load(&active); }
+
 int32_t peer_flag(void) { return atomic_load(&flag); }
 
 typedef struct {

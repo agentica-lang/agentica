@@ -550,6 +550,172 @@ def test_a_mutex_is_given_back_at_the_end_of_its_block_or_its_task(tmp_path, sch
     assert result.stdout.split("\n") == ["<Native.Mutex>", "false", "3", "2", "ok: 4", ""]
 
 
+# A woken waiter that is cancelled before it runs passes the mutex on to the next one (agc_mutex_leave): at one
+# scheduler `first` is woken by the release and cancelled before its turn.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_woken_waiter_cancelled_before_it_runs_passes_the_mutex_on(tmp_path, schedulers):
+    text = """def take(lock: Native.Mutex) -> Int
+  return lock.synchronize do 2 end
+end
+
+def main() -> Void
+  lock = Native.mutex()
+  first = Task.spawn(&take, lock)
+  second = Task.spawn(&take, lock)
+  lock.synchronize do Task.sleep(50) end
+  Task.cancel(first)
+  puts(Task.await(second))
+  puts(lock.synchronize do 3 end)
+end
+"""
+    result = agentica("--schedulers", schedulers, program(tmp_path, text), timeout=scaled(60))
+    assert (result.code, result.stdout, result.stderr) == (0, "2\n3\n", "")
+
+
+# A cancelled holder whose compute call is still in C keeps the mutex until C returns: the next holder never sees the
+# call running (peer_active), at one scheduler and at four.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_a_mutex_stays_taken_until_a_cancelled_holders_compute_call_returns(tmp_path, peer, schedulers):
+    text = """extern "%s"
+  compute def peer_slow(ms: C.Int32) -> C.Int32
+  def peer_active() -> C.Int32
+end
+
+def hold(lock: Native.Mutex) -> Int
+  return lock.synchronize do peer_slow(500) end
+end
+
+def main() -> Void
+  lock = Native.mutex()
+  holder = Task.spawn(&hold, lock)
+  while peer_active() == 0
+    Task.sleep(1)
+  end
+  Task.cancel(holder)
+  puts(lock.synchronize do peer_active() end)
+end
+""" % literal(peer)
+    result = agentica("--schedulers", schedulers, program(tmp_path, text), timeout=scaled(60))
+    assert (result.code, result.stdout, result.stderr) == (0, "0\n", "")
+
+
+HANDLER_EXTERN = """extern "LIBRARY"
+  callback Step(x: C.Int32) -> C.Int32
+  callback Other(s: C.String) -> C.Int32
+  def peer_set_handler(fn: Optional[Step]) -> Void
+  def peer_fire(ms: C.Int32) -> C.Int32
+  def peer_fire_loaded() -> C.Int32
+end
+
+def step(x: Int) -> Int
+  return x * 10
+end
+
+def other(s: String) -> Int
+  return s.length
+end
+
+def fire() -> Int
+  return peer_fire(300)
+end
+
+def main() -> Void
+  a = Native.callback(Step, &step)
+  peer_set_handler(some(a))
+  fired = Task.spawn(&fire)
+  while peer_fire_loaded() == 0
+  end
+  peer_set_handler(none)
+  Native.close(a)
+  b = Native.callback(Other, &other)
+  puts("fire gave #{Task.await(fired)}")
+  Native.close(b)
+end
+"""
+
+
+# C read a stored handler, and another scheduler closes that callback before C calls it: the closure stays until the
+# call has left C (retire_closure), so C reaches the closed callback, which gives 0, and not the next callback's code
+# in the freed closure.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["2", "4"])
+def test_a_callback_closed_while_another_schedulers_c_holds_it_stays_until_c_returns(tmp_path, peer, schedulers):
+    text = HANDLER_EXTERN.replace("LIBRARY", literal(peer))
+    result = agentica("--schedulers", schedulers, program(tmp_path, text), timeout=scaled(60))
+    assert (result.code, result.stdout, result.stderr) == (0, "fire gave 0\n", "")
+
+
+PIN_EXTERN = """extern "{library}"
+  resource Res, free: peer_res_free
+  resource Child, free: peer_child_free
+  def peer_res_open(value: C.Int32) -> Res
+  def peer_child_open(res: Res) -> Child
+  def peer_child_next(ctx: Res, child: Child) -> Child
+  def peer_child_hold(child: Child, limit_ms: C.Int32) -> C.Int32
+  def peer_child_touch(child: Child) -> C.Int32
+  def peer_res_holding() -> C.Int32
+  def peer_res_frees() -> C.Int32
+  def peer_child_frees() -> C.Int32
+  def peer_res_busy_frees() -> C.Int32
+end
+
+def use(child: Child) -> Int
+  return peer_child_hold(child, 2)
+end
+
+# Closes RES and CHILD while a fast call of another task is in C on CHILD, which reads RES.
+def race(child: Child, res: Res) -> Void
+  seen = peer_res_holding()
+  user = Task.spawn(&use, child)
+  while peer_res_holding() == seen
+  end
+  Native.close(res)
+  Native.close(child)
+  Task.await(user)
+end
+
+def counts() -> List[Int]
+  return [peer_res_frees(), peer_child_frees(), peer_res_busy_frees()]
+end
+
+def main() -> Void
+  for k in 1..200
+    res = peer_res_open(k).unwrap!
+    race(peer_child_open(res).unwrap!, res)
+  end
+  puts(counts())
+  for k in 1..50
+    res = peer_res_open(k).unwrap!
+    other = peer_res_open(k).unwrap!
+    first = peer_child_open(other).unwrap!
+    race(peer_child_next(res, first).unwrap!, res)
+    Native.close(first)
+    Native.close(other)
+  end
+  puts(counts())
+  res = peer_res_open(1).unwrap!
+  child = peer_child_open(res).unwrap!
+  Native.close(res)
+  puts(peer_child_touch(child))
+  Native.close(child)
+  puts(counts())
+end
+"""
+
+
+# A fast call pins its resource and the one it comes from without the VM lock; closes from another scheduler while C
+# runs leave the frees to the last unpin, never while C reads them (no busy free). A resource made from two unrelated
+# ones (`ups`: res and a child of other) and one whose parent is closed take the locked path.
+@NATIVE_CALLS
+def test_closes_during_fast_calls_free_after_the_call(tmp_path, peer):
+    text = PIN_EXTERN.format(library=literal(peer))
+    result = agentica("--schedulers", "4", program(tmp_path, text), timeout=scaled(120))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.split("\n") == ["[200, 200, 0]", "[300, 300, 0]", "1", "[301, 301, 0]", ""]
+
+
 # A compute call is cancelled only once it has started: a call cancelled while it still waits for a pool thread never
 # runs (run_compute in vm/loop.c), so a test that needs the call to run waits for it (#780). CALLS is the total of
 # peer_wait_flag starts in the program, not a count from now, so a later wait names the calls before it too. The
