@@ -29,7 +29,7 @@ IO.flush() -> Void                      # stdout only
 System.args() -> List[String]           # the ARGS after the file
 System.exit(code: Int) -> Void
 Time.now_ms() -> Int                    # wall clock, Unix ms; may jump
-Time.monotonic_ms() -> Int              # never goes backward; use for durations
+Time.monotonic_ms() -> Int              # never goes backward; may lag up to 10 ms (Linux)
 Time.monotonic_ns() -> Int              # nanoseconds; same origin as monotonic_ms
 Random.int(min: Int, max: Int) -> Int   # both ends inclusive; min > max halts (RUNTIME-INVALID-RANGE)
 Random.float() -> Float                 # 0.0 up to, not including, 1.0

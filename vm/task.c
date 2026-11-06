@@ -388,6 +388,7 @@ static void finish_task(agc_vm *vm, agc_task *t) {
   agc_sync_assert(vm);
   t->left_children = t->children != NULL;
   agc_close_owned(vm, t);
+  agc_mutex_release_held(vm, t);
   atomic_store_explicit(&t->state, AGC_TASK_DONE, memory_order_release);
   t->regs = NULL;
   t->reg_capacity = 0;
@@ -419,6 +420,7 @@ static void unlink_task(agc_vm *vm, agc_task *t) {
   agc_timers_disarm(vm, t);
   if (t->lock_wait) agc_handle_leave(vm, t);
   if (t->channel.channel) agc_channel_leave(vm, t);
+  if (t->mutex_wait) agc_mutex_leave(vm, t);
   if (t->output.out) agc_output_leave(vm, t);
   if (t->awaiting) agc_task_remove(&t->awaiting->waiters, &t->awaiting->waiters_tail, t);
   t->awaiting = NULL;

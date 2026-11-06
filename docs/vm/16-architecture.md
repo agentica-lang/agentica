@@ -558,6 +558,14 @@ one exit path are as in §16.1 to §16.6. What differs:
     (`agc_io_kind.locked`). The end of a task takes it in `agc_task_end_turn`
     and `agc_task_next`. The output builtins are not marked: a stream has its
     own lock, taken inside `vm/output.c`.
+    `Native.call` (a `def` call) is not marked either: C runs without the lock,
+    so calls on several schedulers run at once. It takes `rt->sync` only for its
+    bookkeeping: a site's first call, the holds of a call that makes resources
+    or whose arguments it cannot pin, a callback's count, and a free after the
+    call. Its resources are pinned without the lock (`calls` in
+    `agc_c_resource`, `vm/ffi.c`). A library that is not thread-safe is the
+    program's to guard, with a `Native.Mutex` (`vm/mutex.c`), whose waiters
+    park.
   - The lock nests. A scheduler counts its depth (`vm->sync_depth`) and takes
     and drops the mutex at the outer level, so a cancel that wakes a task that
     ends a `Task.map` item does not lock itself. `agc_sync_reset` drops it after

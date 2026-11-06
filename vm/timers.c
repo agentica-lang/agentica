@@ -234,3 +234,31 @@ bool agc_timers_run(agc_vm *vm) {
 uint64_t agc_timers_next_due(const agc_vm *vm) {
   return atomic_load_explicit(&vm->timers.next_due, memory_order_relaxed);
 }
+
+/* The latest exact read of the monotonic clock in this process, in ms: agc_clock_ms and Time.monotonic_ns raise it,
+   and only agc_clock_coarse_ms reads it, where libuv's clock and Time.monotonic_ns are both CLOCK_MONOTONIC, the
+   clock that the coarse one follows (Linux). It is the process's, as the clock is. Relaxed: a reader that must see a
+   raise (the task that a timer woke, after the read that fired it) is ordered after it by the wake. */
+static _Atomic uint64_t *clock_floor(void) {
+  static _Atomic uint64_t floor_ms;
+  return &floor_ms;
+}
+
+void agc_clock_note_ms(uint64_t ms) {
+  _Atomic uint64_t *floor = clock_floor();
+  uint64_t seen = atomic_load_explicit(floor, memory_order_relaxed);
+  while (seen < ms &&
+         !atomic_compare_exchange_weak_explicit(floor, &seen, ms, memory_order_relaxed, memory_order_relaxed)) {
+  }
+}
+
+/* The coarse clock is used only where its tick is this short, the bound on how far Time.monotonic_ms lags. */
+#define COARSE_TICK_MAX_MS 10
+
+bool agc_clock_coarse_ms(uint64_t *now_ms) {
+  uint64_t now, tick;
+  if (!agc_coarse_clock_ms(&now, &tick) || tick > COARSE_TICK_MAX_MS) return false;
+  uint64_t floor = atomic_load_explicit(clock_floor(), memory_order_relaxed);
+  *now_ms = now > floor ? now : floor;
+  return true;
+}

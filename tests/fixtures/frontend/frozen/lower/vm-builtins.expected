@@ -190,6 +190,7 @@ Map.put
 Map.size
 Map.values
 Math.sqrt
+Native.Mutex.synchronize
 Native.address
 Native.callback
 Native.close
@@ -215,6 +216,7 @@ Native.get_uint32
 Native.get_uint8
 Native.load
 Native.memory_pointer
+Native.mutex
 Native.null
 Native.null?
 Native.offset

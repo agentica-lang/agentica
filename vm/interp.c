@@ -2121,8 +2121,8 @@ NESTED bool agc_task_run_nested(agc_vm *vm, agc_value fn, const agc_value *args,
   barrier->tail = false;
   barrier->native = &ns->native;
 
-  /* Native.call is a shared builtin: rt->sync is let go while the callback runs, so other schedulers go on, and the
-     callback's own builtins take it as at the top of a turn. */
+  /* A native call runs C without rt->sync, so it is not held here; were it held, it would be let go while the callback
+     runs, so other schedulers go on, and the callback's own builtins take it as at the top of a turn. */
   if (sync_depth) {
     vm->sync_depth = 0;
     agc_lock_drop_shared(vm->rt->sync);

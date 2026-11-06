@@ -45,7 +45,21 @@ The rest of the section has its own pages:
 
 ## Running
 
-- A `def` call blocks timers, I/O and other tasks until it returns, so keep such calls short, and use [`compute def`](/library/io-and-system/native/compute/) for the long ones. `--max-steps` cannot stop a call in the middle.
+- A `def` call holds the scheduler that runs it until it returns, so keep such calls short, and use [`compute def`](/library/io-and-system/native/compute/) for the long ones. `--max-steps` cannot stop a call in the middle.
+- Tasks on different schedulers (`--schedulers`) make their native calls at the same time, `def` and `compute def` alike, so two calls may be inside one library at once. A library that is not thread-safe needs a lock around its calls: `Native.mutex()` makes a `Native.Mutex`, and `lock.synchronize do ... end` runs the block with it held and gives the block's value. A task that waits for the lock parks, and the other tasks go on; waiters get it in the order they came. The end of the task, a crash or a cancel included, gives it back, but a `compute def` call that the block started keeps it taken until C returns. A task that holds it already and calls `synchronize` again fails with `RUNTIME-NATIVE-MUTEX`. A `Native.Mutex` is no data: it has no `==`, no `to_s`, and is no constant, so a package makes one in its open function and keeps it with its handle.
+
+```agentica {mode="check"}
+extern "libm.so.6"
+  def cos(x: C.Double) -> C.Double
+end
+
+def main() -> Void
+  lock = Native.mutex()
+  value = lock.synchronize do cos(0.0) end
+  puts(value)
+end
+```
+
 - Native code must retry calls cut short by `EINTR`: GC signals can interrupt sleeps and polls.
 - A `RUNTIME-NATIVE-*` or `RUNTIME-INTEGER-OVERFLOW` error of an extern call has its primary span on the `extern def` line; the call site is in the stack.
 - Native code is allowed by default and can start programs itself. `agentica --deny-native file.agc` (or any `--deny-*` flag) refuses a program that declares any extern function or calls a `Native.*` builtin before anything runs (`RUNTIME-NATIVE-DENIED`, exit 2). Under `agentica test`, such a test file is a file error with that code.

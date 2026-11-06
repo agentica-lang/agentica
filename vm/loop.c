@@ -545,6 +545,9 @@ static int submit_compute(agc_loop *loop, job *j) {
 /* The deadline of the job's work or wait has passed: the job has timed out. */
 static void timer_fired(uv_timer_t *timer) {
   job *j = timer_job((uv_handle_t *)timer);
+  /* The loop's time, which reached the deadline (timer_length), raises the floor of Time.monotonic_ms before the task
+     wakes, so the wait it measures is never shorter than its timeout. */
+  agc_clock_note_ms(uv_now(timer->loop));
   atomic_store(&j->timer_fired, true);
   /* The wait stops here, before EXPIRED is published, so `expired` never runs beside one of its callbacks. Only while
      the job still waits for its task: its data is then the job's (the task frees it only after an outcome, and a
@@ -586,6 +589,20 @@ static void close_timer(job *j) {
    truncates a file. `detach_seen` is clear only on a task's job before its DETACH runs, which comes after the START;
    output and flush jobs have no task and still start. The skipped job is `dropping`, so a detached end drops its data
    instead of running `done` on work that never ran. */
+/* The length to give a job's timer of TIMEOUT_MS. libuv counts it from the loop's time, as of its last update: the
+   poll that delivered this START at N > 1, or the scheduler's last run of the loop at N = 1, where the request runs
+   inline and the time may be far behind. A timer counted from a stale time fires early, so the time is updated here,
+   unless the coarse clock (agc_coarse_clock_ms, which reads no clock source: on an HPET that read is a system call of
+   about a microsecond) is not past it: then the loop's time is at most a tick and a ms behind, and the timer gets that
+   on top, so it may fire that late but never early. A timeout of 0 is due at the next timer run whatever the time. */
+static uint64_t timer_length(agc_loop *loop, int64_t timeout_ms) {
+  if (timeout_ms == 0) return 0;
+  uint64_t coarse, tick;
+  if (agc_coarse_clock_ms(&coarse, &tick) && coarse <= uv_now(&loop->uv)) return (uint64_t)timeout_ms + tick + 1;
+  uv_update_time(&loop->uv);
+  return (uint64_t)timeout_ms;
+}
+
 static void start_pieces(job *j, int64_t timeout_ms) {
   agc_loop *loop = j->loop;
   bool late = !j->detach_seen && atomic_load_explicit(&loop->vm->rt->over, memory_order_acquire);
@@ -596,9 +613,8 @@ static void start_pieces(job *j, int64_t timeout_ms) {
   }
   if (!j->kind->work && j->more) (void)j->more(j->data, (agc_io_job *)j);
   if (timeout_ms >= 0) {
-    uv_update_time(&loop->uv);
     uv_timer_init(&loop->uv, &j->timer);
-    uv_timer_start(&j->timer, timer_fired, (uint64_t)timeout_ms, 0);
+    uv_timer_start(&j->timer, timer_fired, timer_length(loop, timeout_ms), 0);
     j->timer_open = j->timer_live = true;
   }
   if (j->kind->work && (j->compute ? submit_compute(loop, j) : queue_work(loop, j)) != 0) {
@@ -1842,8 +1858,14 @@ uint64_t agc_trace_now(void) {
 }
 
 /* The clock of the schedulers: milliseconds of libuv's monotonic clock. It does not read the loop (uv_now is the
-   loop's own cached time, and the loop belongs to the I/O thread), so any thread may call it. */
-uint64_t agc_clock_ms(void) { return agc_trace_now() / 1000000u; }
+   loop's own cached time, and the loop belongs to the I/O thread), so any thread may call it. Each read raises the
+   floor of the coarse clock (agc_clock_coarse_ms), so a Time.monotonic_ms after it, a timer's wake included, is never
+   behind it. */
+uint64_t agc_clock_ms(void) {
+  uint64_t ms = agc_trace_now() / 1000000u;
+  agc_clock_note_ms(ms);
+  return ms;
+}
 
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms) {
   agc_sync_assert(vm);
