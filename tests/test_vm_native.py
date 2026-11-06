@@ -3853,6 +3853,42 @@ def test_native_load_opens_a_library_or_gives_an_error(tmp_path, peer):
         0, "[true, false, false, false]\nmissing\n42\n", "")
 
 
+# Native.load promises that the library stays open, and the loader counts holds: a library that another holder has
+# open must still be held by the load itself, or it unloads when that holder gives its hold back (a probe of
+# Native.function? opens and closes a library for its check, on another scheduler, while a load of it runs). Here
+# holder.c opens holdlog.c's library and calls the program back before it closes it, and the callback loads the
+# library. The constructor and destructor of holdlog.c make and remove hold.log, so the file says whether the library
+# is loaded: it must exist after the holder is gone.
+HOLD_LOAD = """extern "%s"
+  callback Step(x: C.Int32) -> C.Int32
+  def holder_around(path: C.String, fn: Step) -> C.Int32
+end
+
+def load(x: Int) -> Int
+  puts(Native.load("%s").ok?)
+  puts(Native.function?("%s", "hold_probe"))
+  return x + 41
+end
+
+def main() -> Void
+  step = Native.callback(Step, &load)
+  puts(holder_around("%s", step))
+  Native.close(step)
+  puts(File.stat("hold.log").ok?)
+end
+"""
+
+
+@NATIVE_CALLS
+@host_only(WINDOWS, "holder.c and holdlog.c are POSIX libraries: a DLL would need a DllMain for the constructor and destructor")
+def test_native_load_holds_a_library_that_another_holder_has_open(tmp_path, tmp_path_factory):
+    holder = literal(shared_library(tmp_path_factory, "holder", *([] if MACOS else ["-ldl"])))
+    library = literal(shared_library(tmp_path_factory, "holdlog"))
+    text = HOLD_LOAD % (holder, library, library, library)
+    result = agentica(program(tmp_path, text), cwd=tmp_path)
+    assert (result.code, result.stdout, result.stderr) == (0, "true\ntrue\n42\ntrue\n", "")
+
+
 EXTERN_FIRST = """def main() -> Void
   puts("started")
   puts(abs(-1))
