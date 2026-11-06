@@ -163,7 +163,8 @@ def push_all(stack: List[Command], indent: Int, flat: Bool, parts: List[Doc]) ->
 end
 
 # One step of a fill: its first item flat if it fits, then its first separator flat if the item after it fits too,
-# then the rest of the fill.
+# then the rest of the fill. The last item of a fill is followed by what is on the stack (the trailing comma of a
+# broken list), so its fit counts that text up to the next line break; the items before it carry their own comma.
 def fill(stack: List[Command], indent: Int, flat: Bool, parts: List[Doc], room: Int) -> List[Command]
   if parts.size == 0
     return stack
@@ -171,18 +172,24 @@ def fill(stack: List[Command], indent: Int, flat: Bool, parts: List[Doc], room: 
 
   item = parts[0]
   item_flat = false
-  if fits(Command(indent: indent, flat: true, doc: item), [], room)
-    item_flat = true
+  if parts.size == 1
+    item_flat = fits(Command(indent: indent, flat: true, doc: item), stack, room)
+    return stack.push(Command(indent: indent, flat: item_flat, doc: item))
   end
 
-  if parts.size == 1
-    return stack.push(Command(indent: indent, flat: item_flat, doc: item))
+  if fits(Command(indent: indent, flat: true, doc: item), [], room)
+    item_flat = true
   end
 
   separator_flat = false
   if parts.size >= 3
     pair = Doc.Concat([item, parts[1], parts[2]])
-    if fits(Command(indent: indent, flat: true, doc: pair), [], room)
+    after: List[Command] = []
+    if parts.size == 3
+      after = stack
+    end
+
+    if fits(Command(indent: indent, flat: true, doc: pair), after, room)
       separator_flat = true
     end
   end

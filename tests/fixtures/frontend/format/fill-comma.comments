@@ -1,0 +1,4 @@
+1:1 leading ConstDecl 4:1 "# The last item of a filled line counts its trailing comma."
+3:1 leading ConstDecl 4:1 "# Line of 120 columns with the comma: the last item moves down."
+6:1 leading ConstDecl 7:1 "# Line of exactly 119 columns with the comma: it stays."
+9:1 leading ConstDecl 10:1 "# Line of 118 columns with the comma."

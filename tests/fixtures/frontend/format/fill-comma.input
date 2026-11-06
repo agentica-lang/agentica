@@ -1,0 +1,10 @@
+# The last item of a filled line counts its trailing comma.
+
+# Line of 120 columns with the comma: the last item moves down.
+OVER = ["aaaaaaaaaa", "aaaaaaaaaa", "aaaaaaaaaa", "aaaaaaaaaa", "aaaaaaaaaa", "aaaaaaaaaa", "aaaaaaaaaa", "bbbbbbbbbbbbbbbbb"]
+
+# Line of exactly 119 columns with the comma: it stays.
+EXACT = ["aaaaaaaaaa", "aaaaaaaaaa", "aaaaaaaaaa", "aaaaaaaaaa", "aaaaaaaaaa", "aaaaaaaaaa", "aaaaaaaaaa", "bbbbbbbbbbbbbbbb"]
+
+# Line of 118 columns with the comma.
+UNDER = ["aaaaaaaaaa", "aaaaaaaaaa", "aaaaaaaaaa", "aaaaaaaaaa", "aaaaaaaaaa", "aaaaaaaaaa", "aaaaaaaaaa", "bbbbbbbbbbbbbbb"]
