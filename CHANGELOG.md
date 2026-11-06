@@ -34,6 +34,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `Process.channel_read_line` and `Process.parent_read_line` give
+  `error("process: line cut off")` for a last line that has no line ending
+  (the other side exited or died in the middle of it), where they gave the
+  part as `ok(line)`.
 - `agentica lint` no longer hides a `+` chain or a single pipe that sits first
   in a chain of the other kind (`("n=" + n.to_s) |> f()`, `(a |> f()) + "x"`),
   and the help of `LINT-IF-CHAIN` without an `else` asks for a `_` arm.

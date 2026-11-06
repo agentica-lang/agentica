@@ -28,8 +28,9 @@ typedef struct {
 
 /* A read cut out of an agc_inbuf by the thread that owns the buffer, so that another thread builds its value later
    (vm/tcp.c: the I/O thread cuts, the done half builds). `data` is malloc'd; the statuses are a line or bytes, a line
-   longer than the limit, a read error, and the end of input. */
-typedef enum { AGC_CUT_DATA, AGC_CUT_OVER, AGC_CUT_FAILED, AGC_CUT_END } agc_cut_status;
+   longer than the limit, a read error, and the end of input. PARTIAL is only made by agc_inbuf_drop_unterminated's
+   callers (the child channel): a final line that the end of input cut off, with no data kept. */
+typedef enum { AGC_CUT_DATA, AGC_CUT_OVER, AGC_CUT_FAILED, AGC_CUT_END, AGC_CUT_PARTIAL } agc_cut_status;
 
 typedef struct {
   agc_cut_status status;
@@ -145,6 +146,9 @@ const uint8_t *agc_stream_bytes(agc_vm *vm, agc_value arg, size_t limit, size_t 
 /* A byte read's value is a Bytes. */
 agc_value agc_inbuf_bytes(agc_vm *vm, agc_inbuf *b, size_t count);
 void agc_inbuf_take(agc_inbuf *b, size_t n);
+/* For a protocol whose every record ends in LF (the child channel): at the end of input, drops a final line that has no
+   LF (at most the line limit; a longer one is `over`, a read error is reported as such) and says so. */
+bool agc_inbuf_drop_unterminated(agc_inbuf *b);
 void agc_inbuf_cut_line(agc_inbuf *b, agc_inbuf_cut *cut);
 void agc_inbuf_cut_bytes(agc_inbuf *b, size_t count, agc_inbuf_cut *cut);
 agc_value agc_inbuf_cut_line_value(agc_vm *vm, const agc_inbuf_cut *cut, const char *too_long, const char *at_end);
