@@ -1,0 +1,1 @@
+ERROR CHECK-TYPE-MISMATCH 59:4:10-60:4:11 "expected String, found Int" "convert it with n.to_s" expected="String" actual="Int" signature="main() -> Void" file="err-case-value-mismatch.agc"

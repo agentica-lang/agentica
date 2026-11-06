@@ -317,16 +317,19 @@ def walk(scan: Scan, roots: List[Walk.Node]) -> List[Site]
   return out
 end
 
+def case_sites(scan: Scan, node: Ast.CaseStmt) -> List[Site]
+  out: List[Site] = []
+  for arm in node.arms
+    out = out.concat(pattern_sites(scan, arm.pattern))
+  end
+
+  return out
+end
+
 def statement_sites(scan: Scan, stmt: Ast.Stmt) -> List[Site]
   case stmt
     Ast.Stmt.Binding(node) -> return optional_type_sites(scan, node.type, [])
-    Ast.Stmt.Case(node) ->
-      out: List[Site] = []
-      for arm in node.arms
-        out = out.concat(pattern_sites(scan, arm.pattern))
-      end
-
-      return out
+    Ast.Stmt.Case(node) -> return case_sites(scan, node)
     _ -> return []
   end
 end
@@ -368,6 +371,7 @@ def expression_sites(scan: Scan, expr: Ast.Expr) -> List[Site]
       end
 
       return out
+    Ast.Expr.Case(node) -> return case_sites(scan, node)
     _ -> return []
   end
 end

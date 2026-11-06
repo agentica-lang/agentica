@@ -123,6 +123,7 @@ def see_expr(found: Scan, expr: Ast.Expr, watched: Set[String]) -> Scan
       return found.with(written: written, type_names: found.type_names.push(node.name))
     Ast.Expr.EnumConstructor(node) -> return found.with(written: named(found.written, node.enum_name, watched))
     Ast.Expr.BlockLit(node) -> return found.with(written: block_types(found.written, node, watched))
+    Ast.Expr.Case(node) -> return found.with(written: arm_names(found.written, node.arms, watched))
     Ast.Expr.ListLit(node) ->
       if node.elements.size > 0
         return found.with(covered: found.covered.push(node.id))

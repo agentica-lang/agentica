@@ -110,6 +110,7 @@ def of_expr(expr: Ast.Expr) -> List[Mention]
     Ast.Expr.EnumConstructor(node) -> return qualified(node.enum_name, node.span)
     Ast.Expr.Construct(node) -> return qualified(node.type_name, node.span)
     Ast.Expr.TypeName(node) -> return qualified(node.name, node.span)
+    Ast.Expr.Case(node) -> return case_mentions(node)
     _ -> return []
   end
 end
@@ -125,20 +126,23 @@ end
 # The patterns of a `case` and the patterns nested in them, walked with a worklist.
 def of_stmt(stmt: Ast.Stmt) -> List[Mention]
   case stmt
-    Ast.Stmt.Case(node) ->
-      work: List[Ast.Pattern] = node.arms.map do |arm: Ast.CaseArm| arm.pattern end
-      found: List[Mention] = []
-      at = 0
-      while at < work.size
-        current = work[at]
-        at += 1
-        found = found.concat(pattern_mentions(current))
-        work = work.concat(nested_patterns(current))
-      end
-
-      return found
+    Ast.Stmt.Case(node) -> return case_mentions(node)
     _ -> return []
   end
+end
+
+def case_mentions(node: Ast.CaseStmt) -> List[Mention]
+  work: List[Ast.Pattern] = node.arms.map do |arm: Ast.CaseArm| arm.pattern end
+  found: List[Mention] = []
+  at = 0
+  while at < work.size
+    current = work[at]
+    at += 1
+    found = found.concat(pattern_mentions(current))
+    work = work.concat(nested_patterns(current))
+  end
+
+  return found
 end
 
 # The qualified name that the pattern itself writes: a variant, and nothing else.

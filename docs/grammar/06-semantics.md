@@ -231,9 +231,9 @@ operate on `Result[Void]`. The timed `Task.await(task, timeout_ms)` on a
   ordinary functions. A parameter may have a default value (below).
 - A function with a non-`Void` return type must return on every reachable path.
   A loop does not guarantee a return.
-- The last expression does not return implicitly. `case` is a statement; a
-  non-`Void` function may end with an exhaustive `case` only when every arm
-  returns.
+- The last expression does not return implicitly. A `case` as the last
+  statement of a function is a statement; a non-`Void` function may end with an
+  exhaustive `case` only when every arm returns.
 - `return` without a value completes a `Void` function. A `Nil` function uses
   `return nil`.
 - An executable declares exactly one `main() -> Void` with no parameters and no
@@ -359,6 +359,30 @@ catch-all is the last arm when it has no guard, and duplicate or unreachable
 arms are rejected. The codes are `CHECK-ENUM-TYPE-INFERENCE`,
 `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE` and
 `CHECK-UNREACHABLE-CASE-ARM`.
+
+A `case` gives a value in three places, and is a statement everywhere else:
+
+- the right side of an assignment, `text = case r ... end`, also with an
+  annotation (`x: T = case ...`) or `+=` and the like;
+- after `return`, `return case s ... end`;
+- the last line of a block, `items.map do |item| case item ... end end`.
+
+Each arm of such a case ends with an expression, which is the value of the arm;
+lines may come before it (`CHECK-CASE-ARM-VALUE` when an arm ends with another
+statement, such as `return`, `next`, `break` or a nested `case`, or has no
+body). All arms have one type, which is the annotation of the assignment or the
+type the context expects when it has one, else the type of the first arm:
+`CHECK-TYPE-MISMATCH`, at the last expression of the arm that differs. So write
+`x: Result[Int] = case ...` when the first arm is `error(...)`, `[]` or `none`.
+The case must be exhaustive by the rules above.
+
+On the last line of a block the case stays a statement when the block's result
+is `Void` (the block of `each`) or when an arm ends with another statement. When
+the block's result is not known from its context (the block of `Task.spawn`),
+a case whose arms are `Void` or of one other type, with at least one `Void`, is
+a statement and the block gives no value; otherwise it gives the value. Arms of
+two different non-`Void` types are `CHECK-TYPE-MISMATCH`, even when another arm
+is `Void`.
 
 Exhaustiveness and reachability are conservative, and no deeper analysis is
 done. An arm covers its variant only when it has no guard and every slot is a

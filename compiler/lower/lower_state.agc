@@ -55,8 +55,9 @@ end
 ## fills the functions that have default values, by name; field_fills the structs that have fields with a default, by
 ## name; reads what a constant read becomes. file
 ## is the file of the function being lowered and index its position in the sources. expression lowers an expression,
-## and block lowers a block as a function: the cycles between expressions, statements and blocks go through these two
-## fields, because a module cannot import one that imports it.
+## lowers an expression, block lowers a block as a function, and case_value lowers a case that gives a value: the
+## cycles between expressions, statements and blocks go through these fields, because a module cannot import one that
+## imports it.
 export struct Cx
   types: List[Types.Type]
   resolved: Map[Int, State.Resolved]
@@ -75,6 +76,7 @@ export struct Cx
   index: Int
   expression: Fn[Cx, Fx, Ast.Expr, Int, Bool, Bool, Result[Out]]
   block: Fn[Cx, Fx, Ast.BlockLit, List[String], Result[Fx]]
+  case_value: Fn[Cx, Fx, Ast.CaseStmt, Int, Result[Out]]
 end
 
 ## What changes while a function is lowered: the code so far (in order), the next free register and the highest one

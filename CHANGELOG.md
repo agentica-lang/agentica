@@ -8,6 +8,19 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- A `case` gives a value on the right side of an assignment, after `return` and
+  as the last line of a block (`text = case r ... end`); each arm ends with an
+  expression, all of one type, and a mismatch or an arm that ends with another
+  statement is a diagnostic (`CHECK-CASE-ARM-VALUE`).
+- **Breaking:** a `case` on the last line of a block whose result type is not
+  known from its context, such as the block of `Task.spawn`, now gives the
+  block's value when no arm is `Void`, so `Task.spawn do case ... end end` with
+  `Int` arms is a `Task[Int]`, not a `Task[Void]`, and arms of two different
+  non-`Void` types are `CHECK-TYPE-MISMATCH`, even when another arm is `Void`.
+  A case with one type of value and a `Void` arm is unchanged.
+
 ### Fixed
 
 - `agentica lint` no longer hides a `+` chain or a single pipe that sits first

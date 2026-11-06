@@ -463,6 +463,7 @@ def print_container_expr(out: List[String], at: Margin, role: String, expr: Ast.
     Ast.Expr.EagLit(node) ->
       lines = out.push(head(at, role, "eag-lit", node.id, node.span, ""))
       return print_expr(lines, child, "call", node.call)
+    Ast.Expr.Case(node) -> return print_case(out, at, role, "case-expr", node)
     # print_expr handles every other variant before it calls this one.
     _ -> return out
   end
@@ -562,15 +563,18 @@ def print_stmt(out: List[String], at: Margin, role: String, stmt: Ast.Stmt) -> L
       lines = print_expr(lines, child, "iterable", node.iterable)
       return print_stmts(lines, child, "body", node.body)
     Ast.Stmt.Control(node) -> return out.push(head(at, role, "loop-control", node.id, node.span, " kind=#{node.kind}"))
-    Ast.Stmt.Case(node) ->
-      lines = out.push(head(at, role, "case-stmt", node.id, node.span, ""))
-      lines = print_expr(lines, child, "value", node.value)
-      for arm in node.arms
-        lines = print_arm(lines, child, arm)
-      end
-
-      return lines
+    Ast.Stmt.Case(node) -> return print_case(out, at, role, "case-stmt", node)
   end
+end
+
+def print_case(out: List[String], at: Margin, role: String, kind: String, node: Ast.CaseStmt) -> List[String]
+  lines = out.push(head(at, role, kind, node.id, node.span, ""))
+  lines = print_expr(lines, deeper(at), "value", node.value)
+  for arm in node.arms
+    lines = print_arm(lines, deeper(at), arm)
+  end
+
+  return lines
 end
 
 def print_param(out: List[String], at: Margin, param: Ast.Param) -> List[String]

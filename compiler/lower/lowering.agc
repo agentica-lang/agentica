@@ -168,6 +168,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     index: 0,
     expression: &Expr.lower_expression,
     block: &Stmt.lower_block_function,
+    case_value: &Stmt.lower_case_value,
   )
 
   table_size = functions.size + plan.kept.size

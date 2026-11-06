@@ -200,7 +200,7 @@ def rewrite_stmt(cx: Resolve.Context, stmt: Ast.Stmt) -> Result[Ast.Stmt]
       body = try rewrite_stmts(cx, node.body)
       return ok(Ast.Stmt.For(node.with(iterable: iterable, body: body)))
     Ast.Stmt.Control(_) -> return ok(stmt)
-    Ast.Stmt.Case(node) -> return rewrite_case(cx, node)
+    Ast.Stmt.Case(node) -> return ok(Ast.Stmt.Case(try rewrite_case(cx, node)))
   end
 end
 
@@ -221,7 +221,7 @@ def rewrite_if(cx: Resolve.Context, node: Ast.IfStmt) -> Result[Ast.Stmt]
   return ok(Ast.Stmt.If(node.with(branches: branches, else_body: else_body)))
 end
 
-def rewrite_case(cx: Resolve.Context, node: Ast.CaseStmt) -> Result[Ast.Stmt]
+def rewrite_case(cx: Resolve.Context, node: Ast.CaseStmt) -> Result[Ast.CaseStmt]
   value = try rewrite_expr(cx, node.value)
   arms: List[Ast.CaseArm] = []
   for arm in node.arms
@@ -231,7 +231,7 @@ def rewrite_case(cx: Resolve.Context, node: Ast.CaseStmt) -> Result[Ast.Stmt]
     arms = arms.push(arm.with(pattern: pattern, guard: guard, body: body))
   end
 
-  return ok(Ast.Stmt.Case(node.with(value: value, arms: arms)))
+  return ok(node.with(value: value, arms: arms))
 end
 
 # A variant pattern names its enum, and so does each variant nested in its slots.
@@ -293,6 +293,7 @@ def rewrite_expr(cx: Resolve.Context, expr: Ast.Expr) -> Result[Ast.Expr]
     Ast.Expr.Construct(node) -> return rewrite_construct(cx, node)
     Ast.Expr.RegexLit(node) -> return ok(Ast.Expr.RegexLit(rewrite_regex(cx, node)))
     Ast.Expr.EagLit(node) -> return rewrite_eag(cx, node)
+    Ast.Expr.Case(node) -> return ok(Ast.Expr.Case(try rewrite_case(cx, node)))
     _ -> return rewrite_compound(cx, expr)
   end
 end

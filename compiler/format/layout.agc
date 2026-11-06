@@ -825,6 +825,7 @@ def bare(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
     Ast.Expr.Interpolation(node) -> return lone(literal(c, node.span), node.span, c, bracketed)
     Ast.Expr.EagLit(node) -> return lone(literal(c, node.span), node.span, c, bracketed)
     Ast.Expr.BlockLit(node) -> return block_doc(c, node)
+    Ast.Expr.Case(node) -> return case_doc(c, node)
     Ast.Expr.Try(node) ->
       if piped?(node.operand)
         return pipe_doc(c, expr, bracketed, false)

@@ -1,0 +1,119 @@
+program 0:1:1-32:1 entry=1 globals=0
+source 0 "case-value.agc" chars=450
+enum "Kind" v0="Big"/0 v1="Small"/0
+fn0 "label" params=1 captures=0 slots=3 @ 0:6:1-12:1
+    step @ 0:7:3-11:1
+    step @ 0:7:15-7:19
+    is-variant r2 r0 v0 @ 0:8:5-8:13
+    jump-if-false r2 L1 @ 0:8:5-8:13
+    step @ 0:8:17-9:1
+    step @ 0:8:17-8:22
+    const r1 "big" @ 0:8:17-8:22
+    jump L0 @ 0:7:10-10:6
+  L1:
+    is-variant r2 r0 v1 @ 0:9:5-9:15
+    jump-if-false r2 L2 @ 0:9:5-9:15
+    step @ 0:9:19-10:1
+    step @ 0:9:19-9:26
+    const r1 "small" @ 0:9:19-9:26
+  L2:
+  L0:
+    return r1 @ 0:7:3-11:1
+    const r1 void @ 0:6:1-12:1
+    return r1 @ 0:6:1-12:1
+fn1 "main" params=0 captures=0 slots=5 entry @ 0:13:1-32:1
+    step @ 0:14:3-20:1
+    step @ 0:14:15-14:16
+    const r1 int:3 @ 0:14:15-14:16
+    const r2 int:3 @ 0:15:5-15:6
+    same r2 r1 r2 @ 0:15:5-15:6
+    jump-if-false r2 L1 @ 0:15:5-15:6
+    step @ 0:16:7-17:1
+    step @ 0:16:14-16:15
+    const r2 int:4 @ 0:16:14-16:15
+    step @ 0:17:7-18:1
+    step @ 0:17:7-17:15
+    step @ 0:17:7-17:11
+    step @ 0:17:14-17:15
+    const r3 int:1 @ 0:17:14-17:15
+    add-i r0 r2 r3 @ 0:17:12-17:13
+    jump L0 @ 0:14:10-19:6
+  L1:
+    step @ 0:18:10-19:1
+    step @ 0:18:10-18:11
+    const r0 int:0 @ 0:18:10-18:11
+  L2:
+  L0:
+    step @ 0:20:3-24:1
+    step @ 0:20:3-24:1
+    step @ 0:20:3-20:7
+    step @ 0:20:16-20:19
+    const r3 "a" @ 0:20:16-20:19
+    const r4 "a" @ 0:21:5-21:8
+    same r4 r3 r4 @ 0:21:5-21:8
+    jump-if-false r4 L4 @ 0:21:5-21:8
+    step @ 0:21:12-22:1
+    step @ 0:21:12-21:13
+    const r2 int:1 @ 0:21:12-21:13
+    jump L3 @ 0:20:11-23:6
+  L4:
+    step @ 0:22:10-23:1
+    step @ 0:22:10-22:11
+    const r2 int:2 @ 0:22:10-22:11
+  L5:
+  L3:
+    add-i r1 r0 r2 @ 0:20:8-20:10
+    move r0 r1 @ 0:20:3-24:1
+    step @ 0:24:3-30:1
+    step @ 0:24:11-29:6
+    step @ 0:24:11-24:33
+    step @ 0:24:12-24:20
+    enum r3 r3 v0 @ 0:24:12-24:20
+    step @ 0:24:22-24:32
+    enum r4 r4 v1 @ 0:24:22-24:32
+    list r2 r3 2 @ 0:24:11-24:33
+    step @ 0:24:38-29:6
+    closure r3 fn2 @ 0:24:38-29:6
+    call-builtin r2 "List.map" 2 @ 0:24:11-29:6 0:24:11-24:33 0:24:38-29:6
+    move r1 r2 @ 0:24:11-29:6
+    step @ 0:30:3-31:1
+    step @ 0:30:3-30:46
+    step @ 0:30:8-30:45
+    step @ 0:30:11-30:15
+    move r2 r0 @ 0:30:11-30:15
+    to-text r2 r2 @ 0:30:8-30:45
+    const r3 " " @ 0:30:8-30:45
+    concat r2 r2 r3 @ 0:30:8-30:45
+    step @ 0:30:19-30:24
+    move r3 r1 @ 0:30:19-30:24
+    to-text r3 r3 @ 0:30:8-30:45
+    concat r2 r2 r3 @ 0:30:8-30:45
+    const r3 " " @ 0:30:8-30:45
+    concat r2 r2 r3 @ 0:30:8-30:45
+    step @ 0:30:28-30:43
+    step @ 0:30:34-30:42
+    enum r4 r4 v0 @ 0:30:34-30:42
+    call r4 fn0 @ 0:30:28-30:43
+    move r3 r4 @ 0:30:28-30:43
+    concat r2 r2 r3 @ 0:30:8-30:45
+    call-builtin r2 "puts" 1 @ 0:30:3-30:46 0:30:8-30:45
+    const r2 void @ 0:13:1-32:1
+    return r2 @ 0:13:1-32:1
+fn2 "block@case-value.agc:24:38" params=1 captures=0 slots=3 @ 0:24:38-29:6
+    step @ 0:25:5-29:1
+    step @ 0:25:10-25:14
+    is-variant r2 r0 v0 @ 0:26:7-26:15
+    jump-if-false r2 L1 @ 0:26:7-26:15
+    step @ 0:26:19-27:1
+    step @ 0:26:19-26:22
+    const r1 "B" @ 0:26:19-26:22
+    jump L0 @ 0:25:5-29:1
+  L1:
+    is-variant r2 r0 v1 @ 0:27:7-27:17
+    jump-if-false r2 L2 @ 0:27:7-27:17
+    step @ 0:27:21-28:1
+    step @ 0:27:21-27:24
+    const r1 "S" @ 0:27:21-27:24
+  L2:
+  L0:
+    return r1 @ 0:25:5-29:1

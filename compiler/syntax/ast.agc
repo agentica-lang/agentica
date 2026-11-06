@@ -347,7 +347,8 @@ export struct LoopControl
   span: Source.Span
 end
 
-## case value ... end with its arms.
+## case value ... end with its arms. A statement, or an expression (`Expr.Case`) on the right side of an assignment or
+## after `return`: each arm of a case that gives a value ends with an expression, which is the arm's value.
 export struct CaseStmt
   id: Int
   value: Expr
@@ -428,6 +429,7 @@ export enum Expr
   ConstRef(ConstRef)
   RegexLit(RegexLit)
   EagLit(EagLit)
+  Case(CaseStmt)
 end
 
 ## A number, string, true, false or nil.
@@ -691,6 +693,7 @@ export def expr_id(expr: Expr) -> Int
     Expr.ConstRef(node) -> return node.id
     Expr.RegexLit(node) -> return node.id
     Expr.EagLit(node) -> return node.id
+    Expr.Case(node) -> return node.id
   end
 end
 
@@ -720,6 +723,7 @@ export def expr_span(expr: Expr) -> Source.Span
     Expr.ConstRef(node) -> return node.span
     Expr.RegexLit(node) -> return node.span
     Expr.EagLit(node) -> return node.span
+    Expr.Case(node) -> return node.span
   end
 end
 

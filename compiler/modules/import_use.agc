@@ -344,6 +344,7 @@ def of_expr(found: List[Written], expr: Ast.Expr, parameters: List[String]) -> L
       end
 
       return out
+    Ast.Expr.Case(node) -> return of_case(found, node)
     _ -> return found
   end
 end
@@ -364,15 +365,18 @@ end
 def of_stmt(found: List[Written], stmt: Ast.Stmt, parameters: List[String]) -> List[Written]
   case stmt
     Ast.Stmt.Binding(node) -> return of_optional_type(found, node.type, parameters)
-    Ast.Stmt.Case(node) ->
-      out = found
-      for arm in node.arms
-        out = of_pattern(out, arm.pattern)
-      end
-
-      return out
+    Ast.Stmt.Case(node) -> return of_case(found, node)
     _ -> return found
   end
+end
+
+def of_case(found: List[Written], node: Ast.CaseStmt) -> List[Written]
+  out = found
+  for arm in node.arms
+    out = of_pattern(out, arm.pattern)
+  end
+
+  return out
 end
 
 # The enum of a variant pattern and of each variant nested in its slots.

@@ -28,6 +28,20 @@ expressions and operators. Builtin methods and `to_s`: `builtins.md`.
 - `case value` ... `end` is a statement. Arms are `pattern -> block`; a short
   arm may hold one simple statement on the arrow line (`1 -> puts("one")`). A
   `do` after the value is optional. Arm bindings are local to their arm.
+- A `case` gives a value in three places: the right side of an assignment
+  (`text = case r ... end`, `x: T = case ...`, `x += case ...`), after `return`,
+  and the last line of a block (`xs.map do |x| case x ... end end`). Each arm
+  ends with an expression, its value, after any other lines; all arms have one
+  type (`CHECK-TYPE-MISMATCH` at the arm's last expression): the annotation, else
+  the first arm's, so write `x: Result[Int] = case ...` when the first arm is
+  `error(...)`, `[]` or `none`. The case is exhaustive. An arm that ends with
+  another statement (`return`, `next`, `break`, a nested `case`) is
+  `CHECK-CASE-ARM-VALUE`. In a block whose result is not known (`Task.spawn`)
+  a last-line case whose arms are `Void` or of one other type, with at least
+  one `Void`, is a statement and the block gives no value; arms of two
+  different non-`Void` types are `CHECK-TYPE-MISMATCH`, even beside a `Void`
+  arm.
+  Elsewhere (`puts(case ...)`, `1 + case ...`) it is `PARSE-UNEXPECTED-TOKEN`.
 - Patterns are primitive literals, `_`, `ok(...)`, `error(...)`, or qualified
   enum variants with one slot per payload. A slot is a name, `_`, a literal
   (`-1` too) or a variant pattern, to any depth. A name appears once per arm

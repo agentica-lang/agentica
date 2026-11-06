@@ -1,0 +1,1 @@
+ERROR CHECK-CASE-ARM-VALUE 84:6:7-94:7:1 "this arm must end with an expression, which is its value" "a case that gives a value ends every arm with the expression it gives; compute the value in a name first" signature="main() -> Void" file="err-case-arm-value.agc"

@@ -85,6 +85,7 @@ def expr_children(expr: Ast.Expr) -> List[Node]
     Ast.Expr.Binary(node) -> return [Node.Expr(node.left), Node.Expr(node.right)]
     Ast.Expr.Typed(node) -> return [Node.Expr(node.target)]
     Ast.Expr.EagLit(node) -> return [Node.Expr(node.call)]
+    Ast.Expr.Case(node) -> return case_children(node)
     _ -> return []
   end
 end
