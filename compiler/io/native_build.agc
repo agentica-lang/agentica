@@ -9,19 +9,23 @@
 ##
 ## The output is content-addressed in the package cache: `<cache>/native-build/<key>/libNAME.so` (`.dylib`,
 ## `NAME.dll`), where the key is the SHA-256 of the files of native/, the table, the compiler words, the first lines of
-## `--version` and `-dumpmachine`, and the header. Nothing is written into the package. An entry is made in a new
+## `--version` and `-dumpmachine`, the header, and the variables that move the compiler's search (CPATH,
+## C_INCLUDE_PATH, CPLUS_INCLUDE_PATH, LIBRARY_PATH). System headers, installed libraries and the rest of the
+## environment are not in the key; neither is a file outside native/. The files of native/ are hashed again after the
+## compile, and a change during it stores nothing. Nothing is written into the package. An entry is made in a new
 ## private folder beside the others, with the library, its `include/` and a receipt (the SHA-256 of the library), then
 ## renamed into place in one no-replace step, so a reader never sees half an entry and two builds of one key keep the
-## first. The library is code the run loads, so the `native-build` folder and an entry are used only when they are
-## this user's and writable by no one else (cache_files.agc, private_kind; on Windows only their kind is checked), the
+## first. The library is code the run loads, so the `native-build` folder and an entry are used only when they are this
+## user's and writable by no one else (cache_files.agc, private_kind; on Windows only their kind is checked), the
 ## library is a regular file in the entry, and the receipt matches: anything else is PKG-NATIVE-BUILD, never a silent
-## rebuild over it.
+## rebuild over it. Temporary folders that a run left (it died during a build) are removed once an hour old.
 ##
 ## A compiler that cannot start, fails or leaves no library is PKG-NATIVE-BUILD at the manifest and
 ## `native.NAME.build`. The plain builder prints the compiler's standard error as it is, and `built native NAME: PATH`
-## after a build, on stderr; the quiet one (for `--json` and `--ai`) prints nothing and puts the end of the compiler's
-## standard error in the message instead. This is front-end I/O, so the --deny-* flags (which are for the program) do
-## not reach it.
+## after a build, on stderr; the quiet one (for `--json` and `--ai`) prints nothing and puts the start of the
+## compiler's standard error in the message instead. A builder keeps what it built or failed for the rest of the run
+## (an ATS table), so a module that many files use is built, and reported, once. app/ gives no builder to a run under
+## --deny-native, --deny-run or --sandbox, which could not open the module anyway.
 
 import Diag from "../diagnostics/diagnostic"
 import Paths from "../modules/import_path"
@@ -43,8 +47,13 @@ QUERY_TIMEOUT_MS = 30_000
 BUILD_TIMEOUT_MS = 600_000
 FILE_TIMEOUT_MS = 30_000
 TEMP_TRIES = 5
-# The most characters of the compiler's standard error that a quiet failure keeps (its end, where the error is).
+TEMP_MARK = ".tmp-"
+STALE_TEMP_SECONDS = 3600
+# The most characters of the compiler's standard error that a quiet failure keeps (its start, where the first error
+# is).
 MAX_SHOWN = 8000
+# The variables that change which headers and libraries the compiler finds; their values are in the key.
+SEARCH_VARIABLES = ["CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "LIBRARY_PATH"]
 
 # What one run of the compiler gave.
 struct Ran
@@ -53,21 +62,44 @@ struct Ran
   stderr: String
 end
 
-## Builds the request, or finds it built, printing on stderr what the compiler says and the path of a new build.
-export def build(request: Workspace.BuildRequest) -> Workspace.Built
-  return outcome(attempt(request, true))
+## A builder for one run: it builds a request, or finds it built, the first time it is asked, and gives the same
+## answer for the same library afterwards. `noted` prints on stderr what the compiler says and the path of a new build;
+## without it (`--json`, `--ai`) nothing is printed, so stderr holds the diagnostic alone.
+export def builder(noted: Bool) -> Fn[Workspace.BuildRequest, Workspace.Built]
+  memo: ATS[String, String] = ATS.new()
+  return builder_of() do |request: Workspace.BuildRequest| remembered(memo, request, noted) end
 end
 
-## The same, printing nothing: for `--json` and `--ai`, whose stderr holds the diagnostic alone.
-export def build_quiet(request: Workspace.BuildRequest) -> Workspace.Built
-  return outcome(attempt(request, false))
+# The identity of a function value: a block can only be written as the block of a call.
+def builder_of(f: Fn[Workspace.BuildRequest, Workspace.Built]) -> Fn[Workspace.BuildRequest, Workspace.Built]
+  return f
 end
 
-def outcome(found: Result[String]) -> Workspace.Built
-  case found
-    ok(path) -> return Workspace.Built.Library(path)
-    error(packed) -> return Workspace.Built.Failed(packed)
+# The answer kept for the library (`L` and its path, or `F` and the packed failure), else a build.
+def remembered(memo: ATS[String, String], request: Workspace.BuildRequest, noted: Bool) -> Workspace.Built
+  name = [request.file, request.key, request.root, request.system].join("\n")
+  kept = ATS.get(memo, name)
+  if kept.ok?
+    return answer(kept.unwrap!)
   end
+
+  text = ""
+  case attempt(request, noted)
+    ok(path) -> text = "L#{path}"
+    error(packed) -> text = "F#{packed}"
+  end
+
+  ATS.put(memo, name, text)
+  return answer(text)
+end
+
+def answer(text: String) -> Workspace.Built
+  rest = text.slice(1, text.length - 1)
+  if text.starts_with?("L")
+    return Workspace.Built.Library(rest)
+  end
+
+  return Workspace.Built.Failed(rest)
 end
 
 def attempt(request: Workspace.BuildRequest, noted: Bool) -> Result[String]
@@ -80,23 +112,58 @@ def attempt(request: Workspace.BuildRequest, noted: Bool) -> Result[String]
   target = try first_line(request, compiler, "-dumpmachine")
   header = try header_text(request)
   digests = try file_digests(request)
-  key = [
+  lines = [
     NativeBuild.key_text(request, digests),
     "compiler #{compiler.join(" ")}",
     "version #{version}",
     "target #{target}",
     "header #{Digest.sha256_hexdigest(header.bytes)}",
-  ].join("\n")
+  ]
+
+  key = lines.concat(search_lines()).join("\n")
 
   base = Paths.join(request.cache_root, BUILD_FOLDER)
   user = try private_base(request, base)
+  sweep(base)
   entry = Paths.join(base, Digest.sha256_hexdigest(key.bytes))
   name = NativeBuild.output_name(request.library, request.system)
   if File.lstat(entry, FILE_TIMEOUT_MS).ok?
     return verified(request, entry, name, user)
   end
 
-  return compile(request, compiler, header, base, entry, name, user, noted)
+  return compile(request, compiler, header, base, entry, name, user, noted, digests)
+end
+
+# One line of the key for each search variable that is set.
+def search_lines() -> List[String]
+  lines: List[String] = []
+  for variable in SEARCH_VARIABLES
+    value = System.env(variable)
+    if value.ok?
+      lines = lines.push("env #{variable}=#{value.unwrap!}")
+    end
+  end
+
+  return lines
+end
+
+# Removes the temporary folders of builds that died, once they are an hour old.
+def sweep(base: String) -> Void
+  names = Dir.list(base, FILE_TIMEOUT_MS)
+  if !names.ok?
+    return
+  end
+
+  now = Time.now_ms() / 1000
+  for name in names.unwrap!
+    if name.starts_with?(TEMP_MARK)
+      path = Paths.join(base, name)
+      info = File.lstat(path, FILE_TIMEOUT_MS)
+      if info.ok? and info.unwrap!.kind == "directory" and now - info.unwrap!.modified_seconds > STALE_TEMP_SECONDS
+        _ = Path.remove(path, FILE_TIMEOUT_MS)
+      end
+    end
+  end
 end
 
 # The words of CC, else the system's compiler.
@@ -134,7 +201,12 @@ def run(request: Workspace.BuildRequest, compiler: List[String], arguments: List
   spawned = Process.spawn_captured(compiler[0], words, request.root, START_TIMEOUT_MS)
   if !spawned.ok?
     message = "cannot start the C compiler #{compiler[0]}: #{spawned.message}"
-    return error(fail(request, message, "install a C compiler, or set CC to one"))
+    help = "install a C compiler, or set CC to one"
+    if compiler.size > 1
+      help = "CC is split at spaces, with no quoting: name a compiler whose path has no space, then its arguments"
+    end
+
+    return error(fail(request, message, help))
   end
 
   child = spawned.unwrap!
@@ -226,9 +298,10 @@ def compile(
   name: String,
   user: Int,
   noted: Bool,
+  digests: List[String],
 ) -> Result[String]
   temporary = try make_temp(request, base)
-  made = compile_in(request, compiler, header, temporary, name, noted)
+  made = compile_in(request, compiler, header, temporary, name, noted, digests)
   if !made.ok?
     _ = Path.remove(temporary, FILE_TIMEOUT_MS)
     return error(made.message)
@@ -255,6 +328,7 @@ def compile_in(
   folder: String,
   name: String,
   noted: Bool,
+  digests: List[String],
 ) -> Result[Void]
   include = Paths.join(folder, INCLUDE_FOLDER)
   if !Dir.mkdir_private(include, FILE_TIMEOUT_MS).ok?
@@ -283,6 +357,12 @@ def compile_in(
     end
 
     return error(fail(request, message, "fix the C sources, or set CC to another compiler"))
+  end
+
+  # A file that changed while the compiler read it is not the one the key names: store nothing.
+  after = try file_digests(request)
+  if after != digests
+    return error(fail(request, "a file of native/ changed during the build", "run again to build the new files"))
   end
 
   receipt = CacheFiles.write_private(Paths.join(folder, RECEIPT), Digest.hexencode(digest.unwrap!).bytes)

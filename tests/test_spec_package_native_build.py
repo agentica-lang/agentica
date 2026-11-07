@@ -195,3 +195,119 @@ def test_install_builds_the_module_of_a_path_dependency_and_a_run_finds_it_built
     compiled = agentica(ws, "compile", str(ws.project / "main.agc"), "-o", str(ws.base / "main.agcb"))
     assert (compiled.code, compiled.stderr) == (0, "")
     assert agentica(ws, "run", "--", str(ws.base / "main.agcb")).stdout == "42\n"
+
+
+@host_only(WINDOWS, "a symbolic link needs a privilege on Windows")
+@pytest.mark.parametrize("hidden", [False, True], ids=["a linked native folder", "a hidden link"])
+def test_a_linked_native_folder_or_a_hidden_link_in_it_is_refused(ws, tmp_path, hidden):
+    project(ws)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "offset.h").write_text("#define OFFSET 0\n", encoding="utf-8")
+    if hidden:
+        (ws.project / "native" / ".offset.h").symlink_to(outside / "offset.h")
+    else:
+        (ws.project / "native" / "adder.c").rename(outside / "adder.c")
+        (ws.project / "native" / "offset.h").unlink()
+        (ws.project / "native").rmdir()
+        (ws.project / "native").symlink_to(outside, target_is_directory=True)
+    found = problem(agentica(ws, "--json", "check", str(ws.project / "main.agc")))
+    assert_at_key(found, "PKG-NATIVE-BUILD", ws.project / "agentica.toml", "native.adder.build")
+
+
+def test_a_windows_device_name_is_not_a_library_name_to_build(ws):
+    project(ws, table='[native.con]\nbuild = { sources = ["native/adder.c"] }\n')
+    found = problem(agentica(ws, "--json", "check", str(ws.project / "main.agc")))
+    assert_at_key(found, "PKG-MANIFEST-INVALID", ws.project / "agentica.toml", "native.con")
+
+
+def test_a_library_no_file_uses_never_builds(ws):
+    project(ws)
+    (ws.project / "main.agc").write_text('def main() -> Void\n  puts(1)\nend\n', encoding="utf-8")
+    ran = agentica(ws, str(ws.project / "main.agc"), **no_compiler(ws))
+    assert (ran.code, ran.stdout, ran.stderr) == (0, "1\n", "")
+    assert builds(ws) == []
+
+
+@NATIVE_CALLS
+@pytest.mark.parametrize("flag", ["--deny-native", "--deny-run", "--sandbox"])
+def test_a_run_that_may_not_open_native_code_never_builds(ws, flag):
+    project(ws)
+    denied = agentica(ws, "--json", flag, str(ws.project / "main.agc"), **no_compiler(ws))
+    assert (denied.code, json.loads(denied.stderr)["code"]) == (2, "RUNTIME-NATIVE-DENIED"), denied.stderr
+    assert builds(ws) == []
+
+
+def test_a_lock_row_that_says_member_outside_its_workspace_never_builds(ws):
+    module_folder(ws.base / "repo" / "adder", name="adder")
+    url = "https://example.test/owner/repo"
+    (ws.project / "agentica.toml").write_text(
+        'name = "app"\n\n[dependencies]\nadder = { git = "%s", tag = "v1", subdir = "adder" }\n' % url,
+        encoding="utf-8")
+    (ws.project / "agentica.lock").write_text(
+        'version = 1\n\n[[package]]\nname = "adder"\ngit = "%s"\nsubdir = "adder"\ntag = "v1"\nworkspace = true\n'
+        % url, encoding="utf-8")
+    (ws.project / "main.agc").write_text(MAIN.replace('"adder"', '"pkg/adder/adder"', 1), encoding="utf-8")
+    found = problem(agentica(ws, "--json", str(ws.project / "main.agc"), **no_compiler(ws)))
+    assert_at_key(found, "PKG-LOCK-STALE", ws.project / "agentica.toml", "dependencies.adder")
+    assert builds(ws) == []
+
+
+@NATIVE_CALLS
+def test_a_workspace_member_builds_in_place(ws, tmp_path):
+    tool("cc")
+    repo = tmp_path / "repo"
+    url = "https://example.test/owner/repo"
+    repo.mkdir()
+    (repo / "agentica.toml").write_text('[workspace]\nrepository = "%s"\nmembers = ["adder", "app"]\n' % url,
+                                        encoding="utf-8")
+    module_folder(repo / "adder", name="adder")
+    app = repo / "app"
+    app.mkdir()
+    (app / "agentica.toml").write_text(
+        'name = "app"\n\n[dependencies]\nadder = { git = "%s", tag = "adder-1", subdir = "adder" }\n' % url,
+        encoding="utf-8")
+    (app / "main.agc").write_text(MAIN.replace('"adder"', '"pkg/adder/adder"', 1), encoding="utf-8")
+    updated = agentica(ws, "--json", "update", folder=app)
+    assert updated.code == 0, updated.stderr
+    ran = agentica(ws, str(app / "main.agc"), folder=app)
+    assert (ran.code, ran.stdout) == (0, "42\n"), ran.stderr
+    assert BUILT.fullmatch(ran.stderr) and len(builds(ws)) == 1
+
+
+@NATIVE_CALLS
+def test_agentica_test_builds_the_module_a_test_file_uses(ws):
+    tool("cc")
+    project(ws)
+    (ws.project / "test").mkdir()
+    (ws.project / "test" / "adder_test.agc").write_text(
+        'import Adder from "../adder"\n\ndef main() -> Void\n'
+        '  Test.run([Test.test("adds") do Test.eq(Adder.add(40, 2), 42) end])\nend\n', encoding="utf-8")
+    tested = agentica(ws, "test")
+    assert tested.code == 0, tested.stdout + tested.stderr
+    assert BUILT.search(tested.stderr) and len(builds(ws)) == 1
+
+
+@NATIVE_CALLS
+def test_another_define_or_compiler_is_another_entry_and_a_tampered_entry_is_pkg_native_build(ws):
+    compiler = tool("cc")
+    project(ws)
+    main = str(ws.project / "main.agc")
+    assert agentica(ws, "--no-cache", main).stdout == "42\n"
+    (ws.project / "agentica.toml").write_text('name = "app"\n\n' + TABLE.replace("SCALE=1", "SCALE=2"),
+                                              encoding="utf-8")
+    assert agentica(ws, "--no-cache", main).stdout == "82\n"
+    assert agentica(ws, "--no-cache", main, CC=compiler).stdout == "82\n"
+    entries = builds(ws)
+    assert len(entries) == 3
+    # The entry of this table and CC: its library, then its receipt, changed after the build.
+    newest = max((ws.pkg_root / "native-build" / name for name in entries), key=lambda path: path.stat().st_mtime_ns)
+    library = next(path for path in newest.iterdir() if path.name.startswith(("libadder", "adder")))
+    built = library.read_bytes()
+    library.write_bytes(built + b"\0")
+    found = problem(agentica(ws, "--json", "--no-cache", main, CC=compiler))
+    assert_at_key(found, "PKG-NATIVE-BUILD", ws.project / "agentica.toml", "native.adder.build")
+    library.write_bytes(built)
+    (newest / "receipt").write_text("0" * 64 + "\n", encoding="utf-8")
+    found = problem(agentica(ws, "--json", "--no-cache", main, CC=compiler))
+    assert_at_key(found, "PKG-NATIVE-BUILD", ws.project / "agentica.toml", "native.adder.build")

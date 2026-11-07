@@ -313,6 +313,11 @@ def natives_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result
       places = places.push(try place_of(reading, system, systems[system], here))
     end
 
+    if build.some? and GitSource.device_name?(name)
+      help = "a library that builds is a file NAME.dll on Windows: pick another name than con, nul, com1 and the like"
+      return error(Reader.fail_help(reading, path, "not a library name", help))
+    end
+
     found = found.push(NativeLibrary(name: name, places: places, build: build))
   end
 

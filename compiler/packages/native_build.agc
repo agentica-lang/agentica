@@ -118,8 +118,7 @@ end
 ## The arguments of the compiler, after its own words: the flags every build gets, those of the system, the output, the
 ## sources (absolute paths in the package) and the libraries. `include` is the folder that holds agentica_native.h.
 ## A module links nothing of `agentica` (the VM passes it a table), so an undefined symbol is an error at link time on
-## Linux (`-z defs`) and macOS (the default of its linker, which warns that `-undefined error` is deprecated); on Linux
-## a module finds a library beside it ($ORIGIN, not a shell variable: no shell runs).
+## Linux (`-z defs`) and macOS (the default of its linker, which warns that `-undefined error` is deprecated).
 export def arguments(request: Workspace.BuildRequest, include: String, output: String) -> List[String]
   found = ["-std=c11", "-O2", "-fvisibility=hidden", "-I#{include}"]
   found = found.concat(request.defines.map do |define: String| "-D#{define}" end)
@@ -129,7 +128,7 @@ export def arguments(request: Workspace.BuildRequest, include: String, output: S
     install_name = "-Wl,-install_name,@rpath/#{output_name(request.library, "macos")}"
     found = found.concat(["-dynamiclib", install_name])
   else
-    found = found.concat(["-fPIC", "-shared", "-Wl,-z,defs", "-Wl,-rpath,$ORIGIN"])
+    found = found.concat(["-fPIC", "-shared", "-Wl,-z,defs"])
   end
 
   found = found.concat(["-o", output])
@@ -152,8 +151,10 @@ export def key_text(request: Workspace.BuildRequest, digests: List[String]) -> S
   return lines.join("\n")
 end
 
-## The files of native/ below `root` (relative paths, in bytewise order), with the junk names the package hash leaves
-## out (dotfiles, Thumbs.db, desktop.ini) left out here too. Only that folder is walked, with an explicit stack.
+## Every file of native/ below `root` (relative paths, in bytewise order), hidden ones included, since a source may
+## include any of them. Only that folder is walked, with an explicit stack, and never through a link: native/ itself
+## must be a real folder (a link or a file in its place, in any case of the name, is refused), and a link, a pipe or a
+## device anywhere in it is refused. A package with no native/ has no files.
 export def native_files(
   workspace: Workspace.Workspace,
   root: String,
@@ -161,7 +162,22 @@ export def native_files(
   key: String,
 ) -> Result[List[String]]
   found: List[String] = []
-  if !workspace.directory_exists.call(Paths.join(root, NATIVE_FOLDER))
+  top = workspace.list_folder.call(root)
+  if !top.ok?
+    return error(refused(file, key, "cannot list the package folder: #{top.message}"))
+  end
+
+  present = false
+  for entry in top.unwrap!
+    if PackageHash.fold(entry.name) == NATIVE_FOLDER
+      case entry.kind
+        Workspace.EntryKind.Directory -> present = present or entry.name == NATIVE_FOLDER
+        _ -> return error(refused(file, key, "#{entry.name} is not a folder of the package"))
+      end
+    end
+  end
+
+  if !present
     return ok(found)
   end
 
@@ -176,10 +192,6 @@ export def native_files(
 
     for entry in entries.unwrap!
       path = Paths.join(folder, entry.name)
-      if PackageHash.native_junk?(entry.name)
-        next
-      end
-
       case entry.kind
         Workspace.EntryKind.Directory -> pending = pending.push(path)
         Workspace.EntryKind.File -> found = found.push(path)
