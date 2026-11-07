@@ -60,7 +60,7 @@ export VM_BUILTINS = Set.new([
   "Digest.sha512_hexdigest.bytes", "HMAC.sha256.bytes", "HMAC.sha256_hexdigest.bytes", "HMAC.sha512.bytes",
   "HMAC.sha512_hexdigest.bytes", "SecureRandom.random_bytes.bytes", "HMAC.secure_compare.bytes",
   "Cipher.des_ede3_cbc_encrypt", "Cipher.des_ede3_cbc_decrypt", "CMAC.aes", "CMAC.des_ede3",
-  "Cipher.aes_256_gcm_encrypt", "Cipher.aes_256_gcm_decrypt", "KDF.pbkdf2_hmac_sha256", "KDF.scrypt",
+  "Cipher.aes_256_gcm_encrypt", "Cipher.aes_256_gcm_decrypt", "KDF.pbkdf2_hmac_sha256", "KDF.scrypt", "Random.seed",
   "Native.wait_readable", "Native.wait_writable", "Native.load", "Native.function?", "Native.callback", "Native.close",
   "Native.closed?", "Native.null", "Native.null?", "Native.pointer", "Native.address", "Native.offset",
   "Native.memory_pointer", "Native.from_string", "Native.size_of", "Native.get_struct", "Native.put_struct",
