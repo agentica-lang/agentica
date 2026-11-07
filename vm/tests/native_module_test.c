@@ -18,6 +18,9 @@
 #ifndef _WIN32
 #include <unistd.h>
 #endif
+#ifdef __linux__
+#include <sys/resource.h>
+#endif
 
 #define THREADS 4
 #define ROUNDS 2000
@@ -216,6 +219,9 @@ static const an_module v_twins = {1, 1, sizeof(an_module), "v", NULL, functions,
 static const an_resource_type twin_resources[] = {{"Db", 8, NULL}, {"Db", 16, NULL}};
 static const an_module v_twin_resources = {1, 2, sizeof(an_module), "v", NULL, functions, 1, NULL, 0, twin_resources,
                                            AN_COUNT(twin_resources)};
+static const an_resource_type point_resources[] = {{"Point", 8, NULL}};
+static const an_module v_type_and_resource = {1, 2, sizeof(an_module), "v", NULL, functions, 1, types, AN_COUNT(types),
+                                              point_resources, AN_COUNT(point_resources)};
 static const an_module v_counts = {1, 0, sizeof(an_module), "v", count_load, functions, AN_COUNT(functions), NULL,
                                    0, NULL, 0};
 
@@ -252,6 +258,10 @@ static const an_module *init_twin_resources(const an_api *api) {
   (void)api;
   return &v_twin_resources;
 }
+static const an_module *init_type_and_resource(const an_api *api) {
+  (void)api;
+  return &v_type_and_resource;
+}
 static const an_module *init_refuses(const an_api *api) {
   (void)api;
   return &v_refuses;
@@ -269,7 +279,8 @@ static void test_versions(void) {
     agc_native_init init;
   } refused[] = {{"v_none", init_none},   {"v_major", init_major}, {"v_minor", init_minor},
                  {"v_size", init_size},   {"v_rows", init_rows},   {"v_twins", init_twins},
-                 {"v_twin_resources", init_twin_resources}, {"v_refuses", init_refuses}};
+                 {"v_twin_resources", init_twin_resources}, {"v_type_and_resource", init_type_and_resource},
+                 {"v_refuses", init_refuses}};
   agc_value two[2] = {agc_int(1), agc_int(2)};
   char signature[96];
   for (size_t k = 0; k < sizeof refused / sizeof refused[0]; k++) {
@@ -563,6 +574,43 @@ static void test_close_during_a_dirty_call(void) {
   close_while_waiting(true);
 }
 
+#ifdef __linux__
+static void no_work(void *arg) { (void)arg; }
+#endif
+
+/* A dirty call whose work cannot start (the pool has no thread yet and none starts: RLIMIT_NPROC at 0) fails its task
+   with RUNTIME-INTERNAL once its done half gave back the hold on its counter, which a close then frees at once. Runs
+   before any other dirty call; only on Linux, and only where the limit stops threads (not for root). */
+static void test_a_dirty_call_that_cannot_start(void) {
+#ifdef __linux__
+  struct rlimit saved, none;
+  if (getrlimit(RLIMIT_NPROC, &saved) != 0) return;
+  none = saved;
+  none.rlim_cur = 0;
+  if (setrlimit(RLIMIT_NPROC, &none) != 0) return;
+  uv_thread_t probe;
+  if (uv_thread_create(&probe, no_work, NULL) == 0) {
+    (void)uv_thread_join(&probe);
+    assert(setrlimit(RLIMIT_NPROC, &saved) == 0);
+    return;
+  }
+  agc_value c = make_counter_value(4);
+  agc_c_resource *res = counter_of(c);
+  park("compute module " COUNTER "(Counter) -> Int wait_gate demo", &c, 1);
+  agc_test_wait_woken(&vm, vm.task);
+  assert(setrlimit(RLIMIT_NPROC, &saved) == 0);
+  if (setjmp(vm.turn) == 0) {
+    (void)finish();
+    assert(!"the call that could not start did not fail");
+  }
+  vm.in_turn = false;
+  assert(strcmp(vm.outcome->code, "RUNTIME-INTERNAL") == 0 && res->jobs == 0);
+  int before = atomic_load(&free_count);
+  native_close(c);
+  assert(res->freed && atomic_load(&free_count) == before + 1);
+#endif
+}
+
 /* MODULE_MAX_TYPES rows, Point among them, found by the binary search; one row more refuses the module. */
 #define TYPE_CAP 65536
 static an_type *big_types;
@@ -604,14 +652,49 @@ static void test_type_cap(void) {
 
 static int never_stopped(void) { return 0; }
 
-/* The end of the run frees the live resources once, newest first. */
+/* The end of the run frees the live resources once, newest first, and before them the counters that a dirty call
+   made for a task that is still parked when the run ends (its value is never taken). The loop's close later drops
+   that job: ASan would see a second free. */
 static void test_end_of_run(void) {
   int before = atomic_load(&free_count);
   for (int64_t id = 11; id <= 13; id++) (void)make_counter_value(id);
+  agc_value two = agc_int(2);
+  park("compute module " COUNTER "(Int) -> List[Counter] counters demo", &two, 1);
+  agc_test_wait_woken(&vm, vm.task);
   agc_io_flush_files(&vm);
   assert(agc_ffi_end(&vm, never_stopped));
-  assert(atomic_load(&free_count) == before + 3);
-  for (int k = 0; k < 3; k++) assert(atomic_load(&freed_ids[before + k]) == 13 - k);
+  assert(atomic_load(&free_count) == before + 5);
+  const int64_t order[5] = {1, 2, 13, 12, 11};
+  for (int k = 0; k < 5; k++) assert(atomic_load(&freed_ids[before + k]) == order[k]);
+}
+
+/* A dirty call walks and looks up String keys (of more bytes than AGC_COST_BYTES, so a lookup would charge) on the
+   pool thread with no charge: the task that vm.task names meanwhile, a sentinel, pays nothing. The bytes it read are
+   charged to the task that takes the value. */
+static void test_dirty_calls_charge_on_the_scheduler(void) {
+  agc_value off = agc_bool(false);
+  (void)call("module (Bool) -> Void gate demo", &off, 1);
+  char key[300];
+  memset(key, 'k', sizeof key - 1);
+  key[sizeof key - 1] = '\0';
+  agc_map *m = agc_map_put(&vm, agc_new_map(), text(key), agc_int(20));
+  key[0] = 'j';
+  agc_value map = agc_map_value(agc_map_put(&vm, m, text(key), agc_int(1)));
+  agc_task *task = vm.task, *sentinel = agc_new_task(&vm);
+  park("compute module (Map[String, Int]) -> Int gated_sum demo", &map, 1);
+  while (!atomic_load(&gate_was_entered)) {
+  }
+  vm.task = sentinel;
+  int64_t cost = sentinel->turn_cost;
+  /* Opened here, not by a short call, which would charge the sentinel. */
+  atomic_store(&gate_is_open, true);
+  while (!atomic_load(&gate_was_left)) {
+  }
+  assert(sentinel->turn_cost == cost);
+  vm.task = task;
+  int64_t paid = task->turn_cost;
+  assert(agc_as_int(&vm, take()) == 42);
+  assert(task->turn_cost > paid);
 }
 
 /* The fuzz driver's no_files: a carried module runs, a library is never opened. */
@@ -750,7 +833,9 @@ int main(int argc, char **argv) {
   test_binding();
   test_versions();
   test_types();
+  test_a_dirty_call_that_cannot_start();
   test_dirty();
+  test_dirty_calls_charge_on_the_scheduler();
   test_resources();
   test_close_during_a_dirty_call();
   test_type_cap();

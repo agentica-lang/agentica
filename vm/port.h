@@ -17,8 +17,8 @@
 #include "value.h"
 
 /* The sanitizer, TSan and GC-stress builds check after each call of a builtin marked leaf that it kept the rule of
-   agc_builtin.leaf, and abort if not (vm/interp.c), and check each short call of a native module (vm/native_module.c:
-   its time and the whole of its result); the release build trusts both. */
+   agc_builtin.leaf, and abort if not (vm/interp.c), and check each call of a native module (vm/native_module.c: the
+   whole of its result, short or dirty, and the time of a short one); the release build trusts both. */
 #if defined(AGC_NO_GC) || defined(AGC_GC_STRESS)
 #define AGC_LEAF_CHECK 1
 #else
@@ -647,7 +647,7 @@ struct agc_vm {
   /* Set only while compiled code runs a builtin (agc_jit_call_builtin): a failure or an exit jumps there first. */
   agc_catch_buf *jit_catch;
   jmp_buf fail, turn;
-  /* Set while run_compiled runs compiled code, in the builds of AGC_LEAF_CHECK only (vm/core.h): a failure or an exit
+  /* Set while run_compiled runs compiled code, in the builds of AGC_LEAF_CHECK only (vm/port.h): a failure or an exit
      with no jit_catch would longjmp across it, which unwind aborts on, so a helper that fails where it must not shows
      on every system and not only as a crash on Windows x64. A callback of native code and an I/O pause clear it while
      they run, as they clear jit_catch. */

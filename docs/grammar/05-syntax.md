@@ -199,8 +199,8 @@ resource of the module's resource table, which frees it. A `callback` or
 is a comma after a resource's name (the module frees it, so it has no `free:`);
 a `C.` type anywhere in a type is `PARSE-EXTERN-TYPE` at it; a default is
 `PARSE-EXTERN-DEFAULT` and a 65th parameter `PARSE-EXTERN-ARITY`. For the rest
-of the language each is a `def`, as in an extern block, and takes the place of a
-`def` in the declaration order.
+of the language each function is a `def`, as in an extern block, and each
+member, a resource too, takes the place of a `def` in the declaration order.
 `module` is a word only between `extern` and the string.
 
 An import is one of two forms. `import Util from "util"` gives the file the

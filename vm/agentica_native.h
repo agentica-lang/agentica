@@ -92,9 +92,11 @@ typedef struct {
 } an_type;
 
 /* A resource of the module (API 1.2), a `resource NAME` line of the block: STATE is SIZE bytes of zeroed C memory that
-   an_resource_new gives and that FREE (or NULL) frees, once: at Native.close, at the end of the task that owns it, at
-   the end of the last call that holds it when it was closed meanwhile, or at the end of the run. FREE gets only the
-   state (no env, no values), on a thread of the VM, and the VM frees the memory after it. The index of the row is the
+   an_resource_new gives (SIZE 0 gives a valid pointer to no bytes) and that FREE (or NULL) frees, once: at
+   Native.close, at the end of the task that owns it, at the end of the last call that holds it when it was closed
+   meanwhile, or at the end of the run. FREE gets only the state (no env, no values), on a thread of the VM, and the
+   VM frees the memory after it. FREE may run at the same time as calls of the module on other threads (never one
+   that holds this resource), so what it shares with them must be thread-safe. The index of the row is the
    TYPE of an_resource_new and an_get_resource. Two rows of one name refuse the module (RUNTIME-NATIVE-LOAD). The state
    holds C data only, never a term: a per-connection cache of prepared statements lives there, and FREE of the
    connection finalizes them. */
@@ -172,7 +174,7 @@ typedef const an_module *(*an_init)(const an_api *api);
 
 /* Defines agentica_native_init for a module NAME with the function table FUNCTIONS and LOAD (or NULL); AN_MODULE_TYPES
    adds the type table TYPES; AN_MODULE_TABLES takes each table with its count (NULL, 0 for one the module does not
-   have). The tables of the first two are arrays. */
+   have). AN_MODULE and AN_MODULE_TYPES count their tables with AN_COUNT, so each must be an array, not a pointer. */
 #define AN_MODULE(NAME, FUNCTIONS, LOAD) AN_MODULE_TABLES(NAME, FUNCTIONS, AN_COUNT(FUNCTIONS), NULL, 0, NULL, 0, LOAD)
 #define AN_MODULE_TYPES(NAME, FUNCTIONS, TYPES, LOAD) \
   AN_MODULE_TABLES(NAME, FUNCTIONS, AN_COUNT(FUNCTIONS), TYPES, AN_COUNT(TYPES), NULL, 0, LOAD)
@@ -292,7 +294,8 @@ static inline bool an_get_payload(an_env *env, an_term t, uint32_t type, uint32_
 
 /* Resources of the module's resource table (an_resource_type), which the function's signature reaches.
    an_resource_new makes one of row TYPE, owned by the calling task, sets *OUT to it and gives its zeroed state; it
-   gives NULL, and fails the call, for a type that the signature does not reach. an_get_resource gives the state of a
+   gives NULL, sets *OUT to Void and fails the call for a type that the signature does not reach, and gives NULL and
+   fails the call when OUT is NULL. an_get_resource gives the state of a
    resource of row TYPE that is an argument of the call (the VM holds each one open for the call, so it is never freed
    while C runs; a close meanwhile frees it after the call); false for another term, a resource that the call made
    included (its state is the pointer that an_resource_new gave). */

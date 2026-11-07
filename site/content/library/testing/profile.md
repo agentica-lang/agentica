@@ -141,6 +141,8 @@ agc-trace +0.004015 profile section calls=2 steps=2228 us=31 gc_ms=0 name=inner
 
 `agentica FILE.agc` prints two reports, the front end's and then the program's; the sections are in the program's.
 
+A program that calls a [native module](/library/io-and-system/native/modules/) also gets one `native` row per module function that ran, such as `native calls=2 us=48 mode=dirty name=crunch module=demo`: its calls, the microseconds spent in C, and whether it is a short or a dirty function.
+
 The report ends with what the VM ran, for work on the VM itself: an `events` line (instructions, frame reloads and how builtin calls went), an `op` row for each opcode with its share of the instructions, and the 20 most common `pair` rows of two opcodes run one after the other.
 
 A run keeps up to 4096 labels. Every label after that counts in one `[overflow]` section (the frame `measure[overflow]` in folded stacks), so a label built from data, such as `"item #{i}"`, cannot grow the profile without bound.

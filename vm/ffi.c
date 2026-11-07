@@ -78,6 +78,12 @@ typedef struct {
   end_free items[];
 } end_frees;
 
+/* The frees of the resource states that finished dirty calls staged for a task that never took their value. */
+typedef struct {
+  end_frees *batch;
+  size_t cap;
+} staged_frees;
+
 /* A resource kind that a call makes: the prepared call of its free function (void free(void *)) and its name. A kind
    declared `free: C.Function` (by_pointer) frees through the address that the call got: its call has no symbol. A
    kind declared `free_ref:` (by_ref) gives its free function the address of the pointer instead. */
@@ -1297,6 +1303,35 @@ static bool end_step(agc_vm *vm, agc_resource **items, size_t count, bool *skipp
   return done;
 }
 
+static void add_staged_free(const void *row, void *state, void *arg) {
+  staged_frees *f = arg;
+  if (!f->batch || f->batch->count == f->cap) {
+    bool first = !f->batch;
+    f->cap = first ? 8 : agc_size_mul(f->cap, 2);
+    f->batch = realloc(f->batch, agc_size_add(sizeof *f->batch, agc_size_mul(f->cap, sizeof(end_free))));
+    if (!f->batch) agc_out_of_memory();
+    if (first) f->batch->count = 0;
+  }
+  f->batch->items[f->batch->count++] = (end_free){NULL, NULL, state, row, false, false};
+}
+
+static void add_finished_states(void *data, void *arg) {
+  const module_job *j = data;
+  if (atomic_load(&j->phase) == CALL_FINISHED) agc_native_dirty_states(j->call, add_staged_free, arg);
+}
+
+/* The module's free of each state that a finished dirty call staged and no task took, on a thread apart within BY,
+   as end_step frees: a resource is freed once, also when its task was still parked at the end of the run. The
+   states leave their calls before the frees start, so a later end of the job does not free them again. */
+static bool staged_step(agc_vm *vm, uint64_t by) {
+  staged_frees f = {NULL, 0};
+  agc_io_compute_each(vm, &module_io, add_finished_states, &f);
+  if (!f.batch) return true;
+  bool done = agc_io_run_aside(vm, make_end_frees, f.batch, by);
+  if (done) free(f.batch);
+  return done;
+}
+
 bool agc_ffi_end(agc_vm *vm, int (*stop_signal)(void)) {
   /* agc_io_flush_files, which runs first, set the deadline. */
   uint64_t by = vm->rt->flush_by;
@@ -1305,11 +1340,12 @@ bool agc_ffi_end(agc_vm *vm, int (*stop_signal)(void)) {
   if (!count) return true;
   qsort(items, count, sizeof *items, newest_first);
   /* One pass, newest first, as at a task's end, after the running calls that hold a resource have returned: an older
-     resource that a held one points into (a database under its statement) is never freed while C still uses it. */
+     resource that a held one points into (a database under its statement) is never freed while C still uses it. The
+     states that finished dirty calls staged are the newest of all. */
   stop_check stop = {stop_signal};
   (void)agc_io_wait_for(vm, holds_released, &stop, by);
   bool skipped = false;
-  bool done = end_step(vm, items, count, &skipped, by);
+  bool done = staged_step(vm, by) && end_step(vm, items, count, &skipped, by);
   /* After a stop signal what a running call holds is left on purpose: no timeout to report. */
   return done && (!skipped || stop_signal());
 }
@@ -2093,10 +2129,10 @@ static agc_value module_call(agc_vm *vm, const ffi_entry *e, agc_value list, uin
     module_job *j = calloc(1, sizeof *j);
     if (!j) agc_out_of_memory();
     atomic_init(&j->phase, CALL_QUEUED);
-    j->call = agc_native_dirty_new(vm, e->module, argv);
     j->holds = holds;
     j->span = span;
     memcpy(j->held, held, holds * sizeof *held);
+    j->call = agc_native_dirty_new(vm, e->module, argv, j->held, holds);
     hold(j->held, holds);
     j->lease = agc_mutex_lease(vm);
     agc_io_compute(vm, &module_io, j, list);

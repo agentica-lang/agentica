@@ -162,14 +162,14 @@ typedef struct arena_chunk {
    arguments (ARGV, GC values that the job's context keeps alive, immutable, and never moved by the collector) and
    what they reach, and each constructor stages a node (NODES, COUNT of them) in malloc memory, its data in the arena
    (CHUNKS). VM is the scheduler that started it, whose runtime's program the pool thread reads. HELD are the resource
-   arguments, which vm/ffi.c holds. CODE and MESSAGE (malloc'd, MESSAGE_LEN bytes) are its first failure, RESULT what
+   arguments (HOLDS of them), in the job of vm/ffi.c, which holds them and outlives the call. CODE and MESSAGE (malloc'd, MESSAGE_LEN bytes) are its first failure, RESULT what
    the function returned, RAN set once it has, NS how long it took when PROFILE; BYTES is what the staged values are
    charged when they are built. */
 struct agc_native_dirty {
   agc_vm *vm;
   agc_native_fn *fn;
   agc_value argv[AGC_FFI_MAX_PARAMS];
-  agc_c_resource *held[AGC_FFI_MAX_PARAMS];
+  agc_c_resource *const *held;
   uint32_t holds;
   an_term result;
   const char *code;
@@ -208,10 +208,11 @@ typedef struct {
   size_t n, cap;
 } list_build;
 
-/* What an an_map_cursor holds: the map and its keys in insertion order, taken when the walk starts. */
+/* What an an_map_cursor holds: the map and its keys in insertion order, taken when the walk starts, and in a dirty
+   call their values too (VALUES, else NULL: a short call looks each one up). */
 typedef struct {
   const agc_map *map;
-  agc_value *keys;
+  agc_value *keys, *values;
   size_t at, n;
 } map_walk;
 
@@ -405,8 +406,8 @@ static bool shape_fits(const agc_program *p, const type_block *b) {
 }
 
 /* Reads the type blocks at the start of a signature, at *AT before END: each in range, fitting the program, and of a
-   name no other block has. At most MODULE_MAX_TYPES, as each must be a type or a resource of the module, whose names
-   differ. Read once, then sorted, so reading and finding blocks takes O(B log B); check_blocks then finds each block
+   name no other block has. At most MODULE_MAX_TYPES + MODULE_MAX_RESOURCES, the most rows of distinct names that a
+   module can have: each block must name one, so more could never bind. Read once, then sorted, so reading and finding blocks takes O(B log B); check_blocks then finds each block
    in the module's sorted rows (row_named), so a bind takes O(B log N) under rt->sync. Bad bytecode fails. */
 static block_list read_blocks(agc_vm *vm, const char **at, const char *end, uint32_t span) {
   const agc_program *p = vm->rt->program;
@@ -414,7 +415,8 @@ static block_list read_blocks(agc_vm *vm, const char **at, const char *end, uint
   type_block b;
   const char *start = *at;
   while (*at < end && **at == '{') {
-    if (!p || list.count == MODULE_MAX_TYPES || !next_block(p, at, end, &b)) bad_signature(vm, span);
+    if (!p || list.count == MODULE_MAX_TYPES + MODULE_MAX_RESOURCES || !next_block(p, at, end, &b))
+      bad_signature(vm, span);
     list.count++;
   }
   if (list.count == 0) return list;
@@ -597,7 +599,8 @@ static const char *module_problem(const an_module *m, char *error, size_t size) 
   return NULL;
 }
 
-/* Sorts the rows of LIB's module (sort_rows): NULL, or the message of two rows of one name in ERROR. */
+/* Sorts the rows of LIB's module (sort_rows): NULL, or in ERROR the message of two rows of one name, in one table or
+   a type and a resource (one merge of the two sorted indexes): a signature names both kinds by their bare names. */
 static const char *index_module(native_library *lib, char *error, size_t size) {
   const an_type *types;
   const an_resource_type *resources;
@@ -605,7 +608,21 @@ static const char *index_module(native_library *lib, char *error, size_t size) {
   uint32_t resource_count = module_resources(lib->module, &resources);
   const char *problem = sort_rows(types, type_count, sizeof *types, "type", &lib->type_index, error, size);
   if (problem) return problem;
-  return sort_rows(resources, resource_count, sizeof *resources, "resource", &lib->resource_index, error, size);
+  problem = sort_rows(resources, resource_count, sizeof *resources, "resource", &lib->resource_index, error, size);
+  if (problem) return problem;
+  for (uint32_t t = 0, r = 0; t < type_count && r < resource_count;) {
+    int c = strcmp(*lib->type_index[t], *lib->resource_index[r]);
+    if (c == 0) {
+      snprintf(error, size, "the module has a type and a resource named %.64s", *lib->type_index[t]);
+      return error;
+    }
+    if (c < 0) {
+      t++;
+    } else {
+      r++;
+    }
+  }
+  return NULL;
 }
 
 /* Loads LIB: its init (the export of its library, or the one it was registered with), the checks of the module, its
@@ -1170,15 +1187,23 @@ static agc_value build_node(agc_vm *vm, agc_native_dirty *d, staged *s, const ag
   }
 }
 
-/* Frees the state of each resource node of D that has no value: the module's free function, on this scheduler. */
-static void drop_staged(agc_native_dirty *d) {
+void agc_native_dirty_states(agc_native_dirty *d, void (*take)(const void *row, void *state, void *arg), void *arg) {
   for (size_t k = 0; k < d->count; k++) {
     staged *s = &d->nodes[k];
     if (s->kind != N_RESOURCE || !s->data) continue;
-    agc_native_free_state(&d->fn->resource_rows[s->id], s->data);
+    void *state = s->data;
     s->data = NULL;
+    take(&d->fn->resource_rows[s->id], state, arg);
   }
 }
+
+static void free_state_now(const void *row, void *state, void *arg) {
+  (void)arg;
+  agc_native_free_state(row, state);
+}
+
+/* Frees the state of each resource node of D that has no value: the module's free function, on this scheduler. */
+static void drop_staged(agc_native_dirty *d) { agc_native_dirty_states(d, free_state_now, NULL); }
 
 /* The value of D's result: each node that it reaches is built, in index order, so the nodes below one are built
    first; the others are not, and the state of a resource among them is freed. BUILT is GC memory, so a value built
@@ -1205,15 +1230,16 @@ static agc_value build(agc_vm *vm, agc_native_dirty *d) {
   return resolved(d, built, result);
 }
 
-agc_native_dirty *agc_native_dirty_new(agc_vm *vm, agc_native_fn *fn, const agc_value *argv) {
+agc_native_dirty *agc_native_dirty_new(agc_vm *vm, agc_native_fn *fn, const agc_value *argv,
+                                       agc_c_resource *const *held, uint32_t holds) {
   agc_native_dirty *d = calloc(1, sizeof *d);
   if (!d) agc_out_of_memory();
   d->vm = vm;
   d->fn = fn;
   d->profile = vm->profile != NULL;
   memcpy(d->argv, argv, fn->arity * sizeof *argv);
-  for (uint32_t k = 0; k < fn->hold_count; k++) d->held[k] = agc_as_c_resource(vm, argv[fn->holds[k]]);
-  d->holds = fn->hold_count;
+  d->held = held;
+  d->holds = holds;
   agc_charge(vm, CALL_COST);
   return d;
 }
@@ -1553,32 +1579,40 @@ static an_term api_map_put(an_env *env, an_term map, an_term key, an_term value)
   return term_of(agc_map_value(agc_map_put(env->vm, agc_as_map(env->vm, m), k, value_of(value))));
 }
 
+/* A dirty call looks up with no charge (agc_map_find): the pool thread must not touch the scheduler's task. What the
+   lookup reads is charged with the result. */
 static bool api_map_get(an_env *env, an_term map, an_term key, an_term *value) {
   agc_value m = value_of(map), k = value_of(key), found;
   if (!agc_is(m, AGC_T_MAP) || (!agc_is(k, AGC_T_INT) && !agc_is(k, AGC_T_STRING) && !agc_is(k, AGC_T_BYTES)))
     return false;
-  if (!agc_map_get(env->vm, agc_as_map(env->vm, m), k, &found)) return false;
+  const agc_map *table = agc_as_map(env->vm, m);
+  agc_native_dirty *d = env->dirty;
+  bool hit = d ? agc_map_find(env->vm->rt->hash_key, table, k, &found, &d->bytes)
+               : agc_map_get(env->vm, table, k, &found);
+  if (!hit) return false;
   *value = term_of(found);
   return true;
 }
 
-/* A dirty call takes the keys into its arena without making GC memory (agc_map_keys_into). */
+/* A dirty call takes the keys and values into its arena, with no GC memory and no charge (agc_map_entries_into). */
 static bool api_map_cursor(an_env *env, an_term map, an_map_cursor *c, size_t *len) {
   agc_value v = value_of(map);
   if (!agc_is(v, AGC_T_MAP)) return false;
   const agc_map *m = agc_as_map(env->vm, v);
-  charge_items(env, m->size);
-  agc_value *keys = NULL;
-  if (m->size && env->dirty) {
-    keys = new_items(env, m->size);
-    if (!agc_map_keys_into(m, keys)) {
+  agc_native_dirty *d = env->dirty;
+  charge_items(env, d ? agc_size_mul(m->size, 2) : m->size);
+  agc_value *keys = NULL, *values = NULL;
+  if (m->size && d) {
+    keys = new_items(env, agc_size_mul(m->size, 2));
+    values = keys + m->size;
+    if (!agc_map_entries_into(env->vm->rt->hash_key, m, keys, values, &d->bytes)) {
       (void)env_refuse(env, "a Map's key list does not match its table");
       return false;
     }
   } else if (m->size) {
     keys = agc_map_keys(env->vm, m, 0);
   }
-  map_walk walk = {m, keys, 0, m->size};
+  map_walk walk = {m, keys, values, 0, m->size};
   memcpy(c, &walk, sizeof walk);
   if (len) *len = m->size;
   return true;
@@ -1589,7 +1623,11 @@ static bool api_map_next(an_env *env, an_map_cursor *c, an_term *key, an_term *v
   map_walk walk;
   memcpy(&walk, c, sizeof walk);
   agc_value found;
-  if (walk.at == walk.n || !agc_map_get(env->vm, walk.map, walk.keys[walk.at], &found)) return false;
+  if (walk.at == walk.n) return false;
+  if (walk.values)
+    found = walk.values[walk.at];
+  else if (!agc_map_get(env->vm, walk.map, walk.keys[walk.at], &found))
+    return false;
   *key = term_of(walk.keys[walk.at++]);
   *value = term_of(found);
   memcpy(c, &walk, sizeof walk);

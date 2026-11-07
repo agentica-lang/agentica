@@ -1930,8 +1930,14 @@ agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
   (void)agc_job_settle(&j->outcome, AGC_JOB_EXPIRED);
   agc_value context = take_context(vm, r);
   if (atomic_load(&j->start_failed)) {
-    close_pending(vm, context);
+    /* A compute job ends through `done`, which knows that the work did not run, as in end_detached: it gives back
+       what the job holds (resources, a Native.Mutex lease), which `drop` cannot reach off rt->sync. */
+    void *data = j->compute ? j->data : NULL;
+    if (data) j->data = NULL;
+    const agc_io_kind *kind = j->kind;
     release(j);
+    if (data) (void)run_half(vm, kind, true, data, context);
+    close_pending(vm, context);
     agc_fail(vm, "RUNTIME-INTERNAL", "cannot queue pool work", 0);
   }
   job_trace trace = trace_of(r, j);

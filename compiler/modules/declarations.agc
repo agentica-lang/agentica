@@ -194,7 +194,8 @@ end
 ## CHECK-DECL-ORDER, in file, for the first declaration that comes after a later group. The groups are: imports and
 ## re-exports, then constants, then struct, enum, type alias and resource (exported or not), then export def, then def.
 ## The span is of the declaration out of place; the help names the group it belongs to. The functions of an extern
-## block that declares a resource are in the group of the types, with the resource. The record of an extern function
+## block that declares a resource are in the group of the types, with the resource; a resource of an extern module
+## block is in the group of a def (exported or not), with the block's functions. The record of an extern function
 ## with out parameters (Ast.StructDecl.record_of) goes with its function, so it has no group. This is a style rule with
 ## no meaning for evaluation.
 export def check_order(file: String, declarations: List[Ast.Decl]) -> Result[Void]
@@ -224,6 +225,8 @@ export def check_order(file: String, declarations: List[Ast.Decl]) -> Result[Voi
   return ok()
 end
 
+# A resource of an extern module block takes the place of a def, as its functions do, so the block ranks as one unit
+# with the functions; a resource of an extern block ranks with the types.
 def rank(decl: Ast.Decl) -> Int
   case decl
     Ast.Decl.Import(_) -> return 0
@@ -232,19 +235,27 @@ def rank(decl: Ast.Decl) -> Int
     Ast.Decl.Struct(_) -> return 2
     Ast.Decl.Enum(_) -> return 2
     Ast.Decl.TypeAlias(_) -> return 2
-    Ast.Decl.Resource(_) -> return 2
+    Ast.Decl.Resource(node) -> return resource_rank(node, 4)
     Ast.Decl.Export(node) ->
       case node.declaration
         Ast.Decl.Struct(_) -> return 2
         Ast.Decl.Enum(_) -> return 2
         Ast.Decl.TypeAlias(_) -> return 2
-        Ast.Decl.Resource(_) -> return 2
+        Ast.Decl.Resource(inner) -> return resource_rank(inner, 3)
         Ast.Decl.Function(inner) -> return function_rank(inner, 3)
         _ -> return 3
       end
 
     Ast.Decl.Function(node) -> return function_rank(node, 4)
   end
+end
+
+def resource_rank(resource: Ast.ResourceDecl, plain: Int) -> Int
+  if resource.module != ""
+    return plain
+  end
+
+  return 2
 end
 
 # A function takes the rank of its kind (3 exported, 4 private), except one of an extern block that declares a

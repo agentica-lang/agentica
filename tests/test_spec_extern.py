@@ -1174,6 +1174,11 @@ MODULE_RESOURCES = """struct Holder
   db: Db
 end
 
+enum Slot
+  Empty
+  Full(Db)
+end
+
 extern "/opt/libc.so"
   resource CFile, free: fclose
 end
@@ -1190,17 +1195,21 @@ end
 
 
 # A resource of the module block crosses as a whole parameter type, and in a result anywhere but in a user type. A
-# resource nested in a parameter, in a struct, of an extern block or of another module block is CHECK-NATIVE-TYPE.
+# resource nested in a parameter, in a struct or enum, of an extern block or of another module block is
+# CHECK-NATIVE-TYPE.
 @pytest.mark.parametrize("signature, code, start, stop", [
     ("def f(db: Db) -> Db", None, None, None),
     ("compute def f(n: Int) -> Result[List[Db]]", None, None, None),
     ("def f(n: Int) -> Map[String, Optional[Db]]", None, None, None),
-    ("def f(d: List[Db]) -> Int", "CHECK-NATIVE-TYPE", (15, 12), (15, 20)),
-    ("def f(d: Optional[Db]) -> Int", "CHECK-NATIVE-TYPE", (15, 12), (15, 24)),
-    ("def f(h: Holder) -> Int", "CHECK-NATIVE-TYPE", (15, 12), (15, 18)),
-    ("def f(n: Int) -> List[Holder]", "CHECK-NATIVE-TYPE", (15, 20), (15, 32)),
-    ("def f(file: CFile) -> Int", "CHECK-NATIVE-TYPE", (15, 15), (15, 20)),
-    ("def f(n: Int) -> Conn", "CHECK-NATIVE-TYPE", (15, 20), (15, 24)),
+    ("def f(d: List[Db]) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 20)),
+    ("def f(d: Optional[Db]) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 24)),
+    ("def f(h: Holder) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 18)),
+    ("def f(n: Int) -> List[Holder]", "CHECK-NATIVE-TYPE", (20, 20), (20, 32)),
+    ("def f(s: Slot) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 16)),
+    ("def f(n: Int) -> Slot", "CHECK-NATIVE-TYPE", (20, 20), (20, 24)),
+    ("def f(r: Result[Db]) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 22)),
+    ("def f(file: CFile) -> Int", "CHECK-NATIVE-TYPE", (20, 15), (20, 20)),
+    ("def f(n: Int) -> Conn", "CHECK-NATIVE-TYPE", (20, 20), (20, 24)),
 ])
 def test_a_resource_of_the_module_block_crosses_whole(tmp_path, signature, code, start, stop):
     result = check(source(tmp_path, MODULE_RESOURCES % signature))
@@ -1216,3 +1225,14 @@ def test_a_resource_and_a_struct_of_one_bare_name_cannot_cross_to_one_module(tmp
     text = ('import A from "./a"\n\nextern module "demo"\n  resource Db\n  def f(db: Db) -> A.Db\nend\n\n'
             'def main() -> Void\nend\n')
     assert at(problem_of(check(source(tmp_path, text)))) == ("CHECK-NATIVE-TYPE", (5, 20), (5, 24))
+
+
+# A resource line of a module block takes the place of a def, as the block's functions do: the block may follow the
+# functions of the file, and an exported resource an exported def.
+@pytest.mark.parametrize("before, block", [
+    ("def helper() -> Int\n  return 1\nend\n", "  resource Db\n  def open() -> Db"),
+    ("export def helper() -> Int\n  return 1\nend\n", "  export resource Db\n  export def open() -> Db"),
+])
+def test_a_module_block_with_a_resource_takes_the_place_of_a_def(tmp_path, before, block):
+    text = '%s\nextern module "demo"\n%s\nend\n\ndef main() -> Void\nend\n' % (before, block)
+    assert_checks(check(source(tmp_path, text)), None, None, None)

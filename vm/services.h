@@ -292,11 +292,15 @@ uint32_t agc_native_arguments(agc_vm *vm, const agc_native_fn *fn, const agc_lis
                               agc_c_resource **held, uint32_t span);
 agc_native_outcome agc_native_call(agc_vm *vm, agc_native_fn *fn, const agc_value *argv, agc_c_resource *const *held,
                                    uint32_t holds);
-agc_native_dirty *agc_native_dirty_new(agc_vm *vm, agc_native_fn *fn, const agc_value *argv);
+agc_native_dirty *agc_native_dirty_new(agc_vm *vm, agc_native_fn *fn, const agc_value *argv,
+                                       agc_c_resource *const *held, uint32_t holds);
 void agc_native_dirty_run(agc_native_dirty *d);
 agc_native_outcome agc_native_dirty_done(agc_vm *vm, agc_native_dirty *d, bool take);
 void agc_native_dirty_free(agc_native_dirty *d);
 void agc_native_free_state(const void *row, void *state);
+/* Hands TAKE each resource state that D staged and that has no value yet, with its row, and forgets it: D frees it no
+   more. */
+void agc_native_dirty_states(agc_native_dirty *d, void (*take)(const void *row, void *state, void *arg), void *arg);
 /* A resource of a native module (vm/ffi.c) around STATE, freed by agc_native_free_state with ROW, coming from the
    resources that the call which makes it holds (HELD, HOLDS entries), and owned by the calling task. Takes rt->sync. */
 agc_value agc_ffi_module_resource(agc_vm *vm, const void *row, const char *name, void *state,

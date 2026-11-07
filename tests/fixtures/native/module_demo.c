@@ -320,8 +320,9 @@ typedef struct {
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 static atomic_int free_count, free_trace;
 static atomic_llong freed_ids[64];
-/* The gate of counter_wait: ENTERED once a call waits, OPEN lets it go. */
-static atomic_bool gate_was_entered, gate_is_open;
+/* The gate of wait_gate and gated_sum: ENTERED once a call waits, OPEN lets it go, LEFT once gated_sum is done
+   with the map. */
+static atomic_bool gate_was_entered, gate_is_open, gate_was_left;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 static void counter_free(void *state) {
@@ -332,7 +333,7 @@ static void counter_free(void *state) {
 }
 
 static an_term new_counter(an_env *env, int64_t id) {
-  an_term t;
+  an_term t = an_void(env);
   demo_counter *c = an_resource_new(env, COUNTER_RESOURCE, &t);
   if (c) c->id = id;
   return t;
@@ -353,16 +354,22 @@ static an_term bump(an_env *env, int argc, const an_term *argv) {
   return an_int(env, ++c->count);
 }
 
-/* A dirty call that waits for the gate (at most 10 seconds), then gives the id of its counter, read after the wait:
-   the VM holds the counter for the call, whatever closes it meanwhile. */
-static an_term wait_gate(an_env *env, int argc, const an_term *argv) {
-  demo_counter *c;
-  (void)argc;
-  if (!an_get_resource(env, argv[0], COUNTER_RESOURCE, (void **)&c)) return an_badarg(env, 0);
+/* Waits on a pool thread until the gate opens. A busy wait: the C library has no portable sleep, and the test that
+   opens the gate does it within milliseconds; the 10 seconds only keep a broken test from hanging. */
+static void wait_for_gate(void) {
   atomic_store(&gate_was_entered, true);
   time_t start = time(NULL);
   while (!atomic_load(&gate_is_open) && time(NULL) - start < 10) {
   }
+}
+
+/* A dirty call that waits for the gate, then gives the id of its counter, read after the wait: the VM holds the
+   counter for the call, whatever closes it meanwhile. */
+static an_term wait_gate(an_env *env, int argc, const an_term *argv) {
+  demo_counter *c;
+  (void)argc;
+  if (!an_get_resource(env, argv[0], COUNTER_RESOURCE, (void **)&c)) return an_badarg(env, 0);
+  wait_for_gate();
   return an_int(env, c->id);
 }
 
@@ -382,12 +389,34 @@ static an_term gate_entered(an_env *env, int argc, const an_term *argv) {
   return an_bool(env, atomic_load(&gate_was_entered));
 }
 
-/* gate(true) lets counter_wait go; gate(false) closes the gate for the next call. */
+/* The sum of the values of a Map[String, Int] after the gate, each read twice, by the walk and by a lookup of its
+   key: a dirty walk and lookup of String keys, which the test times against the gate. */
+static an_term gated_sum(an_env *env, int argc, const an_term *argv) {
+  an_map_cursor c;
+  an_term key, value, found;
+  uint64_t total = 0;
+  (void)argc;
+  wait_for_gate();
+  if (!an_map_cursor_begin(env, argv[0], &c, NULL)) return an_badarg(env, 0);
+  while (an_map_next(env, &c, &key, &value)) {
+    int64_t a, b;
+    if (!an_map_get(env, argv[0], key, &found) || !an_get_int(env, value, &a) || !an_get_int(env, found, &b))
+      return an_badarg(env, 0);
+    total += (uint64_t)a + (uint64_t)b;
+  }
+  atomic_store(&gate_was_left, true);
+  return an_int(env, (int64_t)total);
+}
+
+/* gate(true) lets wait_gate and gated_sum go; gate(false) closes the gate for the next call. */
 static an_term gate(an_env *env, int argc, const an_term *argv) {
   bool on;
   (void)argc;
   if (!an_get_bool(env, argv[0], &on)) return an_badarg(env, 0);
-  if (!on) atomic_store(&gate_was_entered, false);
+  if (!on) {
+    atomic_store(&gate_was_entered, false);
+    atomic_store(&gate_was_left, false);
+  }
   atomic_store(&gate_is_open, on);
   return an_void(env);
 }
@@ -454,6 +483,7 @@ static const an_function functions[] = {
   {"counter", "(Int) -> Counter", make_counter, AN_SHORT},
   {"bump", "(Counter) -> Int", bump, AN_SHORT},
   {"wait_gate", "(Counter) -> Int", wait_gate, AN_DIRTY},
+  {"gated_sum", "(Map[String, Int]) -> Int", gated_sum, AN_DIRTY},
   {"counters", "(Int) -> List[Counter]", counters, AN_DIRTY},
   {"gate_entered?", "() -> Bool", gate_entered, AN_SHORT},
   {"gate", "(Bool) -> Void", gate, AN_SHORT},

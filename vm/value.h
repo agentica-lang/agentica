@@ -397,7 +397,7 @@ typedef struct {
      goes on without the generic tail; compiled code calls it below a native call (agc_jit_call_leaf). A leaf may take
      rt->sync and drop it before it returns to read shared state (Native.closed?). A leaf row is never shared, has
      AGC_NATIVE_NONE and AGC_COST_NONE (vm/tests/sync_test.c checks the tables), and the sanitizer and GC-stress builds
-     abort when a leaf call breaks the rule (AGC_LEAF_CHECK in vm/core.h). When unsure, leave a row unmarked. A row
+     abort when a leaf call breaks the rule (AGC_LEAF_CHECK in vm/port.h). When unsure, leave a row unmarked. A row
      in plain_leaves (vm/jit/jit.c) must never agc_fail once its checks there pass. */
   bool leaf;
   /* A call that compiled code makes itself (agc_jit_call_builtin, vm/jit/jit.c), without leaving for the interpreter:
@@ -802,6 +802,13 @@ agc_value *agc_map_keys(agc_vm *vm, const agc_map *m, uint32_t span);
 /* agc_map_keys into KEYS (M->size slots) with no GC memory made, for a thread that must not make any; false when the
    key list does not match the table, which a valid map never does. */
 bool agc_map_keys_into(const agc_map *m, agc_value *keys);
+/* agc_map_get with no charge and no GC memory, for a thread that must not touch a task (a dirty native call): HASH_KEY
+   is the run's (agc_runtime.hash_key), and *BYTES grows by what the lookup reads, for the caller to charge later. */
+bool agc_map_find(const uint64_t hash_key[2], const agc_map *m, agc_value key, agc_value *value, size_t *bytes);
+/* The keys of M in its order into KEYS and their values into VALUES (M->size slots each), as agc_map_find gives them;
+   false when the map does not match itself, which a valid one never does. */
+bool agc_map_entries_into(const uint64_t hash_key[2], const agc_map *m, agc_value *keys, agc_value *values,
+                          size_t *bytes);
 void agc_map_each_value(const agc_map *m, void (*visit)(agc_value value, void *data), void *data);
 bool agc_map_any_value(const agc_map *m, agc_value *out);
 bool agc_set_subset(agc_vm *vm, const agc_map *a, const agc_map *b);

@@ -92,22 +92,43 @@ static uint64_t int_hash(uint64_t key, uint64_t x) {
   return x ^ (x >> 33);
 }
 
-uint64_t agc_key_hash(agc_vm *vm, agc_value key) {
-  if (agc_is(key, AGC_T_INT)) return int_hash(vm->rt->hash_key[0], (uint64_t)agc_as_int(vm, key));
-  /* The tag is the domain, so a String and a Bytes of the same bytes hash apart. */
+/* The bytes of a String or Bytes key, which its hash and a comparison read. */
+static size_t key_bytes(agc_value key, const uint8_t **data) {
   if (agc_is(key, AGC_T_BYTES)) {
-    const agc_bytes *b = agc_as_bytes(vm, key);
-    agc_charge_bytes(vm, b->len);
-    return siphash13(vm->rt->hash_key, (uint64_t)key.tag, b->data, b->len);
+    const agc_bytes *b = key.as.p;
+    *data = b->data;
+    return b->len;
   }
-  const agc_string *s = agc_as_string(vm, key);
-  agc_charge_bytes(vm, s->bytes);
-  return siphash13(vm->rt->hash_key, (uint64_t)key.tag, (const uint8_t *)s->data, s->bytes);
+  const agc_string *s = key.as.p;
+  *data = (const uint8_t *)s->data;
+  return s->bytes;
 }
 
+/* The tag is the domain, so a String and a Bytes of the same bytes hash apart. */
+static uint64_t plain_hash(const uint64_t hash_key[2], agc_value key) {
+  if (agc_is(key, AGC_T_INT)) return int_hash(hash_key[0], (uint64_t)key.as.i);
+  const uint8_t *data;
+  size_t len = key_bytes(key, &data);
+  return siphash13(hash_key, (uint64_t)key.tag, data, len);
+}
+
+uint64_t agc_key_hash(agc_vm *vm, agc_value key) {
+  if (agc_is(key, AGC_T_INT)) return int_hash(vm->rt->hash_key[0], (uint64_t)agc_as_int(vm, key));
+  if (!agc_is(key, AGC_T_BYTES)) (void)agc_as_string(vm, key);
+  const uint8_t *data;
+  agc_charge_bytes(vm, key_bytes(key, &data));
+  return plain_hash(vm->rt->hash_key, key);
+}
+
+/* VM NULL compares with no charge (agc_map_find). */
 static inline bool key_equal(agc_vm *vm, agc_value a, agc_value b) {
   if (a.tag != b.tag) return false;
-  if (agc_is(a, AGC_T_INT)) return agc_as_int(vm, a) == agc_as_int(vm, b);
+  if (agc_is(a, AGC_T_INT)) return a.as.i == b.as.i;
+  if (!vm) {
+    const uint8_t *x, *y;
+    size_t n = key_bytes(a, &x);
+    return n == key_bytes(b, &y) && (n == 0 || memcmp(x, y, n) == 0);
+  }
   if (agc_is(a, AGC_T_STRING)) return agc_same_string(vm, agc_as_string(vm, a), agc_as_string(vm, b));
   return agc_same_bytes(vm, agc_as_bytes(vm, a), agc_as_bytes(vm, b));
 }
@@ -390,6 +411,14 @@ bool agc_map_get(agc_vm *vm, const agc_map *m, agc_value key, agc_value *value) 
   return agc_map_get_hash(vm, m, agc_key_hash(vm, key), key, value);
 }
 
+bool agc_map_find(const uint64_t hash_key[2], const agc_map *m, agc_value key, agc_value *value, size_t *bytes) {
+  const uint8_t *data;
+  if (!agc_is(key, AGC_T_INT)) *bytes = agc_size_add(*bytes, key_bytes(key, &data));
+  const hamt_leaf *leaf = find(NULL, m->table, plain_hash(hash_key, key), key);
+  if (leaf) *value = leaf->value;
+  return leaf != NULL;
+}
+
 agc_value *agc_map_keys(agc_vm *vm, const agc_map *m, uint32_t span) {
   agc_value *keys = agc_alloc(agc_size_mul(m->size, sizeof(agc_value)));
   size_t k = m->size;
@@ -416,6 +445,14 @@ bool agc_map_keys_into(const agc_map *m, agc_value *keys) {
     free(dead.seqs);
   }
   return k == 0;
+}
+
+bool agc_map_entries_into(const uint64_t hash_key[2], const agc_map *m, agc_value *keys, agc_value *values,
+                          size_t *bytes) {
+  if (!agc_map_keys_into(m, keys)) return false;
+  for (size_t k = 0; k < m->size; k++)
+    if (!agc_map_find(hash_key, m, keys[k], &values[k], bytes)) return false;
+  return true;
 }
 
 /* Calls VISIT with every value of M, in table order, with no hash and no charge. A path from the root has at most
