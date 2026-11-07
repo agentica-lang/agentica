@@ -17,6 +17,7 @@
 ## of Ast.Callback (the result's first) and the callback's name without its module prefix, which the VM shows for the
 ## resource.
 
+import NativeShape from "../check/native_shape"
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import Types from "../syntax/types"
@@ -122,13 +123,11 @@ export def struct_layout(cx: Lowering.Cx, name: String, structs: Map[String, Ast
 end
 
 # The signature of a function of a native module, after any "compute ": "module TYPES(PARAMS) -> RESULT NAME LIBRARY".
-# PARAMS and RESULT are the canonical Agentica types, the text of the types the checker recorded for the written ones
-# (check_native.agc: aliases expanded, user types by their bare names), which the module's table must have byte for
-# byte. TYPES has one {S<index>=SHAPE} or {E<index>=SHAPE} for each struct or enum that crosses, in the order the walk
-# meets them: its index in the table of structs or enums, and its shape, which the module's type of that name must
-# have too: "name: Type, ..." for a struct, "Variant | Variant(Type, ...)" for an enum, from the recorded types of
-# its fields and payloads; and one {R=Name} for each resource, which the module's resource table must have. NAME is
-# the def's name and LIBRARY the module's name as written (it may hold spaces, so it is last).
+# PARAMS and RESULT, and the shape of each user type, come from NativeShape.of_function, which std/analysis lists for
+# code generators too: the module's table must have them byte for byte. TYPES has one {S<index>=SHAPE} or
+# {E<index>=SHAPE} for each struct or enum that crosses, in the order the walk meets them: its index in the table of
+# structs or enums, and its shape; and one {R=Name} for each resource, which the module's resource table must have.
+# NAME is the def's name and LIBRARY the module's name as written (it may hold spaces, so it is last).
 def module_signature(
   cx: Lowering.Cx,
   function: Ast.FunctionDecl,
@@ -136,90 +135,24 @@ def module_signature(
   structs: Map[String, Ast.StructDecl],
   enums: Map[String, Ast.EnumDecl],
 ) -> Result[String]
-  span = function.span
-  params: List[String] = []
-  pending: List[Types.Type] = []
-  for param in function.params
-    type = try recorded(cx, param.type, span)
-    params = params.push(Types.to_text(type))
-    pending = pending.push(type)
+  found = NativeShape.of_function(cx.types, function, structs, enums)
+  if !found.ok?
+    return error(Lowering.internal(cx, found.message, function.span))
   end
 
-  result = try recorded(cx, function.result, span)
-  pending = pending.push(result)
+  signature = found.unwrap!
   blocks: List[String] = []
-  seen: Set[String] = Set.new([])
-  at = 0
-  while at < pending.size
-    type = pending[at]
-    at += 1
-    name = Types.name(type)
-    if seen.include?(name)
-      next
-    end
-
-    if Types.is?(type, "Struct")
-      seen = seen.add(name)
-      fields: List[String] = []
-      for field in structs[name].fields
-        field_type = try recorded(cx, field.type, span)
-        fields = fields.push("#{field.name}: #{Types.to_text(field_type)}")
-        pending = pending.push(field_type)
-      end
-
-      blocks = blocks.push("{S#{cx.structs[name].index}=#{fields.join(", ")}}")
-    elsif Types.is?(type, "Enum")
-      seen = seen.add(name)
-      variants: List[String] = []
-      for variant in enums[name].variants
-        payload: List[String] = []
-        for ref in variant.payload_types
-          payload_type = try recorded(cx, ref, span)
-          payload = payload.push(Types.to_text(payload_type))
-          pending = pending.push(payload_type)
-        end
-
-        if payload.size == 0
-          variants = variants.push(variant.name)
-        else
-          variants = variants.push("#{variant.name}(#{payload.join(", ")})")
-        end
-      end
-
-      blocks = blocks.push("{E#{cx.enums[name]}=#{variants.join(" | ")}}")
-    elsif Types.is?(type, "Opaque")
-      # The checker lets only a resource of the module block through as an opaque type.
-      seen = seen.add(name)
-      blocks = blocks.push("{R=#{Types.display_name(name)}}")
+  for crossing in signature.crossings
+    if crossing.tag == NativeShape.STRUCT
+      blocks = blocks.push("{S#{cx.structs[crossing.name].index}=#{crossing.shape}}")
+    elsif crossing.tag == NativeShape.ENUM
+      blocks = blocks.push("{E#{cx.enums[crossing.name]}=#{crossing.shape}}")
     else
-      pending = pending.concat(inner_types(type))
+      blocks = blocks.push("{R=#{Types.display_name(crossing.name)}}")
     end
   end
 
-  canon = "(#{params.join(", ")}) -> #{Types.to_text(result)}"
-  return ok("module #{blocks.join("")}#{canon} #{native.symbol} #{native.library}")
-end
-
-# The type the checker recorded for a written type of a native module function, or LOWER-INTERNAL when it has none.
-def recorded(cx: Lowering.Cx, ref: Ast.TypeRef, span: Source.Span) -> Result[Types.Type]
-  if ref.id < 0 or ref.id >= cx.types.size or Types.unknown?(cx.types[ref.id])
-    return error(Lowering.internal(cx, "the checker recorded no type for #{ref.name}", span))
-  end
-
-  return ok(cx.types[ref.id])
-end
-
-# The types inside a List, Optional, Result or Map, which crossing types are besides the scalars and user types.
-def inner_types(type: Types.Type) -> List[Types.Type]
-  if Types.is?(type, "Map")
-    return [Types.key(type), Types.value(type)]
-  end
-
-  if Types.is?(type, "List") or Types.is?(type, "Optional") or Types.is?(type, "Result")
-    return [Types.item(type)]
-  end
-
-  return []
+  return ok("module #{blocks.join("")}#{signature.text} #{native.symbol} #{native.library}")
 end
 
 # Whether the function has out parameters: one of the codes is a capital (no other code holds one).
