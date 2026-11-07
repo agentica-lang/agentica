@@ -37,6 +37,7 @@ import Problems from "../diagnostics/problem"
 import Format from "../format/format"
 import BytecodeCache from "../io/bytecode_cache"
 import CheckCache from "../io/check_cache"
+import NativeBuild from "../io/native_build"
 import SaveFile from "../io/save_file"
 import SourceReader from "../io/source_reader"
 import StdinBuffer from "../io/stdin_buffer"
@@ -45,6 +46,7 @@ import Lowering from "../lower/lowering"
 import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
 import Resolve from "../modules/resolve_import"
+import Workspace from "../modules/workspace"
 import QueryFiles from "../query/query_files"
 import QueryOptions from "../query/query_options"
 import QueryPosition from "../query/query_position"
@@ -102,7 +104,7 @@ def dispatch(session: Session) -> Int
   end
 
   if first == "test"
-    return test(session, words.drop(1))
+    return test(building(session), words.drop(1))
   elsif first == "help"
     return help(session, words)
   elsif first == "doc"
@@ -112,7 +114,7 @@ def dispatch(session: Session) -> Int
   elsif first == "lint"
     return lint(session, words.drop(1))
   elsif first == "install"
-    return install(session, words.drop(1))
+    return install(building(session), words.drop(1))
   elsif first == "add"
     return answered(session, Add.add(session.settings, session.options.style, words.drop(1)), "")
   elsif first == "update"
@@ -147,7 +149,21 @@ def dispatch(session: Session) -> Int
     return emit(Reply.failed(2, Texts.usage_text()))
   end
 
-  return program(session, first, rest)
+  return program(building(session), first, rest)
+end
+
+# The session whose workspace builds the native modules of the packages read in place from their C sources
+# (io/native_build.agc): a run, `compile`, `test` and `install` do, so the program they run or write opens the library;
+# `check`, the queries and the other commands never start a compiler. With `--json` or `--ai` the builder prints
+# nothing, so stderr holds only the diagnostic.
+def building(session: Session) -> Session
+  builder: Fn[Workspace.BuildRequest, Workspace.Built] = &NativeBuild.build
+  if session.options.style != "plain"
+    builder = &NativeBuild.build_quiet
+  end
+
+  workspace = session.settings.workspace.with(native_build: builder)
+  return session.with(settings: session.settings.with(workspace: workspace))
 end
 
 # `help`: the builtins from the catalog, or a module of `std/` as `doc` reads it.

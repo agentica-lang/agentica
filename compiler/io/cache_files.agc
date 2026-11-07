@@ -235,11 +235,17 @@ export def digest(data: Bytes) -> String
 end
 
 # What, besides the files an import reads, changes what a build makes of the root: the environment that places
-# libraries and packages, and the project (the manifest the build finds and its lock).
+# libraries and packages, the C compiler a native module builds with (CC, io/native_build.agc), and the project (the
+# manifest the build finds and its lock).
 def inputs_digest(settings: Env.Settings, project: Project.Project) -> Result[String]
   workspace = settings.workspace
   env = settings.env
   parts = ["env #{env.agentica_path}|#{env.xdg_data_home}|#{env.xdg_cache_home}|#{env.home}|#{env.local_app_data}"]
+  compiler = System.env("CC")
+  if compiler.ok?
+    parts = parts.push("cc #{compiler.unwrap!}")
+  end
+
   case project
     Project.Project.Bare -> parts = parts.push("project -")
     Project.Project.Declared(manifest) ->
