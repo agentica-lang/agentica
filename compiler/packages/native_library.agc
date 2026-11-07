@@ -6,7 +6,9 @@
 ## Homebrew one on macOS) is found by its path. The choice is made here, from the machine, and never written to the
 ## manifest or the lock, which stay the same on every machine. Only the entry of this system is looked at, and only
 ## when a file of the package uses the library, so a package works on the systems it names and is refused on the
-## others where it is used. This does no I/O of its own: it asks the Workspace.
+## others where it is used. A package read in place (the project, a workspace member, a `path` dependency) with a
+## `build` table builds the library from its C sources instead (native_build.agc), whatever its system entries say; a
+## fetched package never builds. This does no I/O of its own: it asks the Workspace.
 
 import Paths from "../modules/import_path"
 import Failure from "../modules/link_failure"
@@ -14,14 +16,17 @@ import Workspace from "../modules/workspace"
 import Lock from "lock"
 import Manifest from "manifest"
 import NativeArtifact from "native_artifact"
+import NativeBuild from "native_build"
 import PackageHash from "package_hash"
 import Reader from "toml_read"
 
 ## What `extern "name"` means in a file of the package: the absolute path of a file of the package, a name for the
-## system loader, or the packed failure to report when the file uses it.
+## system loader, a module to build from its C sources when a file first uses it (the linker asks the Workspace then,
+## build_target), or the packed failure to report when the file uses it.
 export enum Target
   File(String)
   System(String)
+  Build(Workspace.BuildRequest)
   Unusable(String)
 end
 
@@ -29,9 +34,12 @@ end
 ## cache must watch because the program opens it, and the absolute candidates of a `system` list (probed), whose
 ## presence the choice depended on: the cache notes whether each exists, not what it holds. watched, for a package, is
 ## the folder itself (the cache digests the names of its native/ files, so an added file is seen), every file of
-## native/ (a library may load others), and the manifest when the package hash covers it. For the project it is only
-## the declared files for this system: its manifest is in the cache key already, and its folder is not walked. watched
-## is empty when there is nothing to open.
+## native/ (a library may load others), and the manifest when the package hash covers it. For the project it is the
+## declared files for this system. A package read in place that builds a module (the project too) also watches its
+## folder and every file of native/ as the build walks it (NativeBuild.native_files: hidden ones too), so an edit or a
+## new file there is a miss; the project's manifest is in the cache key already. watched is empty when there is
+## nothing to open. A built library is not known here (it is built when a file uses it); the bytecode cache watches the
+## ones the program names.
 export struct Found
   targets: Map[String, Target]
   watched: List[String]
@@ -40,7 +48,8 @@ end
 
 ## The libraries a manifest declares, for the system `os` ("linux", "macos" or "windows"). `root` is the real folder of
 ## the package (or of the project), which holds the files. `package` is false for the project, whose files are not
-## hashed; `member` is true for a workspace member, whose are not either. `package_name` is the lock key of the
+## hashed; `member` is true for a workspace member or a `path` dependency, whose are not either: those and the project
+## are read in place, so they build what has a `build` table. `package_name` is the lock key of the
 ## package ("" for the project root), `lock` the lock to match downloaded rows against, and `cache_root` the
 ## package cache root ("" when no place was given): downloaded rows are verified from the cache alone and become
 ## a file path, never fetched.
@@ -55,16 +64,22 @@ export def resolve(
   lock: Lock.Lock,
   cache_root: String,
 ) -> Found
+  buildable = !package or member
   targets: Map[String, Target] = {}
   for library in manifest.natives
-    target = target_of(workspace, manifest, library, root, os, package_name, lock, cache_root)
+    target = target_of(workspace, manifest, library, root, os, package_name, lock, cache_root, buildable)
     targets = targets.put(library.name, target)
   end
 
   probed = probes(manifest, os)
+  inputs: List[String] = []
+  if targets.values.any? do |target: Target| build?(target) end
+    inputs = [root].concat(build_inputs(workspace, root))
+  end
+
   if !package
     extra = downloaded_watched(manifest, lock, package_name, os, cache_root, targets)
-    return Found(targets: targets, watched: files(targets).concat(extra), probed: probed)
+    return Found(targets: targets, watched: files(targets).concat(inputs).concat(extra), probed: probed)
   end
 
   names = PackageHash.native_files(workspace, root)
@@ -79,7 +94,49 @@ export def resolve(
   end
 
   extra = downloaded_watched(manifest, lock, package_name, os, cache_root, targets)
-  return Found(targets: targets, watched: watched.concat(extra), probed: probed)
+  return Found(targets: targets, watched: watched.concat(inputs).concat(extra), probed: probed)
+end
+
+## What a Build target means once a file uses it: native/ is walked (a missing source or a link there is the packed
+## failure, even for `check`), then the library the Workspace built (or found built), the name as written when the
+## command does not build (`check`: the program is not run), or the packed failure.
+export def build_target(workspace: Workspace.Workspace, request: Workspace.BuildRequest, name: String) -> Target
+  listed = NativeBuild.listed(workspace, request)
+  if !listed.ok?
+    return Target.Unusable(listed.message)
+  end
+
+  case workspace.native_build.call(listed.unwrap!)
+    Workspace.Built.Library(path) -> return Target.File(path)
+    Workspace.Built.Skipped -> return Target.System(name)
+    Workspace.Built.Failed(packed) -> return Target.Unusable(packed)
+  end
+end
+
+## Builds every library of the manifest that has a `build` table, for `agentica install` (a run builds while it
+## links): `root` is the real folder of the project or of a package read in place. The failure of the first build that
+## fails is packed at the manifest and its key.
+export def build_all(
+  workspace: Workspace.Workspace,
+  manifest: Manifest.Manifest,
+  root: String,
+  os: String,
+  cache_root: String,
+) -> Result[Void]
+  for library in manifest.natives
+    case library.build
+      some(build) ->
+        request = NativeBuild.request(library.name, build, root, os, manifest.file, cache_root)
+        case build_target(workspace, request, library.name)
+          Target.Unusable(packed) -> return error(packed)
+          _ -> next
+        end
+
+      none -> next
+    end
+  end
+
+  return ok()
 end
 
 # The absolute candidates of the `system` lists of this system. A list of one is not a choice, so it is not probed.
@@ -122,6 +179,7 @@ def files(targets: Map[String, Target]) -> List[String]
     case targets[name]
       Target.File(path) -> found = found.push(path)
       Target.System(_) -> next
+      Target.Build(_) -> next
       Target.Unusable(_) -> next
     end
   end
@@ -138,7 +196,13 @@ def target_of(
   package_name: String,
   lock: Lock.Lock,
   cache_root: String,
+  buildable: Bool,
 ) -> Target
+  if buildable and library.build.some?
+    request = NativeBuild.request(library.name, library.build.unwrap!, root, os, manifest.file, cache_root)
+    return Target.Build(request)
+  end
+
   here = Reader.child("native", library.name)
   for place in library.places
     if place.system != os
@@ -168,6 +232,23 @@ def target_of(
   message = "the library #{library.name} is not declared for #{os}"
   help = "add [#{here}.#{os}] to the manifest of the package"
   return Target.Unusable(Failure.fail_key(manifest.file, here, "PKG-NATIVE-PLATFORM", message, Failure.hint(help)))
+end
+
+def build?(target: Target) -> Bool
+  case target
+    Target.Build(_) -> return true
+    _ -> return false
+  end
+end
+
+# The files of native/ as the build walks them, which the build key covers: an edit to a source or a header it includes
+# makes the bytecode cache miss, and the build runs again. A walk that fails fails the build when a file uses the
+# library: none here.
+def build_inputs(workspace: Workspace.Workspace, root: String) -> List[String]
+  case NativeBuild.native_files(workspace, root, "", "")
+    ok(paths) -> return paths.map do |path: String| Paths.join(root, path) end
+    error(_) -> return []
+  end
 end
 
 # The downloaded row on this system: the lock row it matches, verified from the cache alone. A lock the manifest

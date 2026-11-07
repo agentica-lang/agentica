@@ -300,6 +300,15 @@ windows = { file = "native/windows/sqlite3.dll" }
 
 A `system` list gives candidates in order of preference, as bare names or absolute paths: `macos = { system = ["libpq.5.dylib", "/opt/homebrew/opt/libpq/lib/libpq.5.dylib"] }`. The first absolute path that is a file wins, else the first bare name, else the first path. In the files of that package, `extern "sqlite3"` means the entry of the system the program runs on. A package with no entry for your system is `PKG-NATIVE-PLATFORM` where a file uses the library.
 
+A [native module](/library/io-and-system/native/modules/) can instead be built from its C sources in `native/`, with a `build` table. The project, a workspace member and a `path` dependency build it; a fetched package never does and uses its system entry:
+
+```toml
+[native.stats]
+build = { sources = ["native/stats.c"], defines = ["NDEBUG"], libs = ["m"] }
+```
+
+A run, `compile`, `test` and `install` run your C compiler (`cc`, `gcc` on Windows, or the words of `CC`, split at spaces with no quoting) on the C of `native/`, for the project, its workspace members and its `path` dependencies only. A run builds a library when a file first uses it, into the package cache, and prints `built native stats: PATH` on stderr; `check` never builds, and neither does a command under any `--deny-*` flag or `--sandbox`: the run is refused (`RUNTIME-NATIVE-DENIED`) and `compile` is `PKG-NATIVE-BUILD`. The manifest gives only sources in `native/`, defines and library names: it names no compiler and no flag. The cache key covers the files of `native/` (hidden ones too), the table, the compiler and its version, and `CPATH`, `C_INCLUDE_PATH`, `CPLUS_INCLUDE_PATH` and `LIBRARY_PATH`. Keep your own headers under `native/`: system headers, installed libraries and the rest of the environment are not in the key, so to build again after they change, remove the entry or change a file under `native/`. The bytecode cache sees an edit or a new file in `native/`. A failed build is `PKG-NATIVE-BUILD`.
+
 The optional `[style]` table of `agentica.toml` applies to the files below its folder that have no nearer `agentica.toml`. Libraries are not checked. With `max_line_width = N`, a line of more than N characters makes `agentica check` report `CHECK-LINE-TOO-LONG`; `agentica fmt` lays out in N columns (119 without the key). With `blank_line_after_end = true`, a line that holds only `end` needs an empty line after it, or `agentica check` reports `CHECK-BLANK-LINE-AFTER-END`; the next line may instead start with `end`, `else`, `elsif`, `)`, `]`, `}` or `.name`.
 
 A manifest that declares dependencies needs an `agentica.lock` beside it. The lock holds the exact commit and a hash of the `.agc` files of every package, direct or not. A build never downloads anything: it reads each package from `deps/<name>/` next to `agentica.toml` and checks its hash when an import first loads it. A package that `deps/` lacks is `CHECK-IMPORT-PACKAGE`, and the help says to run `agentica install`. Commit `deps/` or ignore it as you like.

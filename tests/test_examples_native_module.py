@@ -1,14 +1,16 @@
-"""examples/native_module through the CLI: build stats.c and run the example file.
+"""examples/native_module through the CLI: the run builds native/stats.c and calls the module.
 
-The example runs from a fresh project folder with a copy of the real file and agentica.toml and the freshly built
-module where the manifest points, as tests/test_examples_ffi.py does for the extern blocks. A module opens its
-library as an extern block does, so it runs where native calls do (NATIVE_CALLS).
+The example runs from a copy of its folder, with the package cache in a temporary folder, as a user runs it: the
+`build` table of its agentica.toml has the system C compiler (`cc`, `gcc` on Windows; CC is unset) build the module on
+the first run, and `check` needs no build. A module opens its library as an extern block does, so it runs where native
+calls do (NATIVE_CALLS). The Platforms workflow runs this module on every system, so the build flags of each one are
+tested there.
 """
+import re
 import shutil
 
-from tests.agentica_test import ROOT, cli, run, vm_environment
-from tests.test_examples_ffi import HERE
-from tests.test_vm_native import NATIVE_CALLS, library_name, shared_library
+from tests.agentica_test import ROOT, WINDOWS, cli, run, tool, vm_environment
+from tests.test_vm_native import NATIVE_CALLS
 
 EXAMPLE = ROOT / "examples" / "native_module"
 OUTPUT = """some(Summary(count: 3, min: 2.0, max: 9.0, mean: 5.0))
@@ -20,14 +22,14 @@ error("a row has another number of cells")
 
 
 @NATIVE_CALLS
-def test_the_example_calls_its_module_for_a_struct_and_typed_rows(tmp_path, tmp_path_factory):
-    native = tmp_path / "native" / HERE
-    native.mkdir(parents=True)
-    built = shared_library(tmp_path_factory, "stats", "-std=c11", source=EXAMPLE / "stats.c")
-    shutil.copy(built, native / library_name("stats"))
-    shutil.copy(EXAMPLE / "agentica.toml", tmp_path / "agentica.toml")
-    path = shutil.copy(EXAMPLE / "stats.agc", tmp_path / "stats.agc")
-    checked = run(cli() + ["check", str(path)], cwd=tmp_path, env=vm_environment())
+def test_the_example_builds_its_module_and_calls_it_for_a_struct_and_typed_rows(tmp_path):
+    tool("gcc" if WINDOWS else "cc")
+    folder = shutil.copytree(EXAMPLE, tmp_path / "example", ignore=shutil.ignore_patterns("_build"))
+    cache = {"LOCALAPPDATA": tmp_path / "cache"} if WINDOWS else {"XDG_CACHE_HOME": tmp_path / "cache"}
+    env = vm_environment({**cache, "CC": None})
+    path = folder / "stats.agc"
+    checked = run(cli() + ["check", str(path)], cwd=folder, env=env)
     assert (checked.code, checked.stdout, checked.stderr) == (0, "check ok\n", "")
-    result = run(cli() + [str(path)], cwd=tmp_path, env=vm_environment())
-    assert (result.code, result.stdout, result.stderr) == (0, OUTPUT, "")
+    result = run(cli() + [str(path)], cwd=folder, env=env)
+    assert (result.code, result.stdout) == (0, OUTPUT), result.stderr
+    assert re.fullmatch(r"built native stats: .+\n", result.stderr), result.stderr

@@ -53,6 +53,12 @@ export def name_problem(name: String) -> String
   return ""
 end
 
+## Whether a name is a Windows device name (`con`, `nul`, `com1` and the others, in any case, with or without an
+## extension), which cannot name a file there.
+export def device_name?(name: String) -> Bool
+  return WINDOWS_DEVICES.include?(name.split(".")[0].downcase)
+end
+
 ## Why text is not the git URL of a package, or "". It is `https://host/owner/repo` or `https://host/owner/repo.git`:
 ## https only, a lowercase host with no port and no user name, and exactly an owner and a repository.
 export def git_problem(url: String) -> String

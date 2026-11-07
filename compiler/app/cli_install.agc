@@ -7,14 +7,19 @@
 ## against the lock, as a build checks it, and only then are the files written to deps/ (io/package_deps.agc), so a
 ## cache or a manifest that fails those checks writes nothing there. A folder of deps/ that the lock does not name is
 ## left as it is. A package the lock marks as a member of the workspace of the project is neither fetched nor written
-## to deps/: the build reads it from the member's folder, and its manifest is checked there.
+## to deps/: the build reads it from the member's folder, and its manifest is checked there. Last, the native modules
+## of the project and of the packages it reads in place (members and `path` dependencies) are built from their C
+## sources (`[native.NAME] build`, io/native_build.agc), so the first run finds them built.
 
 import NativeArtifact from "../packages/native_artifact"
 import Engine from "../io/native_artifact"
 import PackageDeps from "../io/package_deps"
 import PackageFetch from "../io/package_fetch"
+import Paths from "../modules/import_path"
 import Env from "../modules/link_env"
 import Lock from "../packages/lock"
+import Manifest from "../packages/manifest"
+import NativeLibrary from "../packages/native_library"
 import PackageCache from "../packages/package_cache"
 import PackageImport from "../packages/package_import"
 import Project from "../packages/project"
@@ -155,8 +160,36 @@ def install(settings: Env.Settings, dir: String) -> Result[String]
       scope = PackageImport.scope_of(project)
       try check_cache(settings, found.lock, scope)
       try PackageDeps.sync(settings, found.lock.file, scope.deps, found.lock.packages, [])
+      try build_natives(settings, found, scope)
       return ok(lines)
   end
+end
+
+# Builds the native modules of the project and of each package of the lock read in place. A folder or a manifest that
+# is not there is left for the build that loads the package, which reports it.
+def build_natives(settings: Env.Settings, found: Project.Found, scope: PackageImport.Scope) -> Result[Void]
+  workspace = settings.workspace
+  cache = PackageCache.root(settings.env)
+  os = settings.env.os
+  try NativeLibrary.build_all(workspace, found.manifest, found.dir, os, cache)
+  for locked in found.lock.packages
+    if !Lock.in_place?(locked)
+      next
+    end
+
+    real = workspace.real_path.call(PackageImport.folder_of(scope, locked))
+    if !real.ok?
+      next
+    end
+
+    file = Paths.join(real.unwrap!, Project.MANIFEST_FILE)
+    if workspace.file_exists.call(file)
+      manifest = try Manifest.read(workspace, file)
+      try NativeLibrary.build_all(workspace, manifest, real.unwrap!, os, cache)
+    end
+  end
+
+  return ok()
 end
 
 # The manifests of the packages in the cache, checked against the lock before anything is written to deps/.
