@@ -155,7 +155,8 @@ def test_a_tag_that_fails_once_is_retried_and_built(repo, tmp_path, monkeypatch,
     code, out, _ = build(tmp_path, monkeypatch)
     assert code == 0
     assert "retry 0.11.1" in capsys.readouterr().out
-    assert json.loads((out / "versions.json").read_text())[1] == {"version": "0.11.1", "path": "0.11.1/", "latest": True}
+    data = json.loads((out / "versions.json").read_text())
+    assert next(e for e in data if e.get("latest")) == {"version": "0.11.1", "path": "0.11.1/", "latest": True}
 
 
 def test_a_tag_without_a_site_newer_than_a_built_tag_fails_the_run(repo, tmp_path, monkeypatch, capsys):
