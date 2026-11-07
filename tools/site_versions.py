@@ -106,12 +106,14 @@ def inject_selector(site: Path, root_path: str) -> int:
 
 
 def versions_json(built: list[str], dev: bool) -> list[dict]:
-    """Newest first, the first release marked `latest`; `dev` last. The selector reads this file from the root."""
+    """The order of the selector: `dev` first, then the releases newest first, the first release marked `latest`.
+
+    The selector keeps the file's order and finds the latest release by the `latest` flag, not by position."""
     entries = [{"version": v, "path": v + "/"} for v in built]
     if entries:
         entries[0]["latest"] = True
     if dev:
-        entries.append({"version": "dev", "path": "dev/"})
+        entries.insert(0, {"version": "dev", "path": "dev/"})
     return entries
 
 
