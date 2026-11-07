@@ -54,8 +54,7 @@ end
 - `[native.NAME] build = { sources = ["native/stats.c"], defines = [...],
   libs = ["m"] }` in `agentica.toml` builds the module with the system C
   compiler (`CC`, else `cc`; `gcc` on Windows) on a run, `compile`, `test` or
-  `install` of the project, a workspace member or a `path` dependency (never
-  `check`, never a fetched package), into the package cache, printing
+  `install` (never `check`), into the package cache, printing
   `built native NAME: PATH`. Sources are `.c` files in `native/`; defines are
   `NAME[=VALUE]`; libs are names for `-l`. A bad item is
   `PKG-MANIFEST-INVALID` at its key path, a missing source
@@ -66,4 +65,6 @@ end
   headers under `native/`: the cache key does not cover system headers,
   installed libraries or the environment beyond `CPATH`, `C_INCLUDE_PATH`,
   `CPLUS_INCLUDE_PATH` and `LIBRARY_PATH`; to rebuild, remove the entry or
-  change a file under `native/`.
+  change a file under `native/`. A fetched package builds too, from `deps/`,
+  only while its folder has the hash of its lock row (`PKG-HASH-MISMATCH`
+  otherwise; a hidden file in its `native/` is `PKG-NATIVE-BUILD`).

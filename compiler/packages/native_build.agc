@@ -1,8 +1,14 @@
-## Source builds of native modules (docs/grammar/05b-modules.md): the `build` key of `[native.NAME]`, which a package
-## read in place (the root project, a workspace member, a `path` dependency) compiles with the system C compiler. A
-## fetched package never builds: it uses its system entry. This holds the pure parts: the checks of the table, the
-## request the machine gets (io/native_build.agc runs the compiler), the compiler arguments of each system and the text
-## the build key covers.
+## Source builds of native modules (docs/grammar/05b-modules.md): the `build` key of `[native.NAME]`, which the system
+## C compiler compiles for the root project, a workspace member, a `path` dependency and a fetched package whose
+## content the lock pins. This holds the pure parts: the checks of the table, the request the machine gets
+## (io/native_build.agc runs the compiler), the pin check of a fetched package, the compiler arguments of each system
+## and the text the build key covers.
+##
+## A fetched package is built from its folder of deps/ only when the folder still has the hash its lock row pins (the
+## check a build does when it loads the package, done again here, since `install` builds without loading) and every
+## file of native/ that the build reads is one that hash covers: a hidden file there is not, so it is refused. What is
+## built is then the code of the locked commit, which the lock lets the user review; the compiler and the flags stay
+## the user's. The hash is in the request (`pinned`), so a later prebuilt library can be matched to it.
 ##
 ## What a manifest can put on the command line is closed: the sources are files of the package's native/ folder (plain
 ## folder names, as a `subdir`, ending in `.c`, and found as regular files when the folder is walked, never through a
@@ -65,8 +71,9 @@ export def parse(reading: Reader.Reading, value: Toml.Value, path: String) -> Re
   return ok(Build(sources: sources, defines: defines, libs: libs))
 end
 
-## The request for the build of `library` from the package folder `root` (a real path), for the system `os`. Its
-## files are not listed yet: `listed` does that when a file first uses the library, so an unused one costs nothing.
+## The request for the build of `library` from the package folder `root` (a real path), for the system `os`. `pinned`
+## is the locked hash of a fetched package, "" for one read in place. Its files are not listed yet: `listed` does that
+## when a file first uses the library, so an unused one costs nothing.
 export def request(
   library: String,
   build: Build,
@@ -74,6 +81,7 @@ export def request(
   os: String,
   file: String,
   cache_root: String,
+  pinned: String,
 ) -> Workspace.BuildRequest
   return Workspace.BuildRequest(
     cache_root: cache_root,
@@ -82,6 +90,7 @@ export def request(
     file: file,
     key: Reader.child(Reader.child("native", library), "build"),
     root: root,
+    pinned: pinned,
     sources: build.sources,
     defines: build.defines,
     libs: build.libs,
@@ -91,9 +100,11 @@ end
 
 ## The request with the files of its native/ folder, every source among them. A source that is not is
 ## PKG-NATIVE-MISSING at its item (`native.NAME.build.sources[0]`); a link, a pipe or a device in native/, or more than
-## 4096 files or 1024 folders, is PKG-NATIVE-BUILD at `native.NAME.build`.
+## 4096 files or 1024 folders, is PKG-NATIVE-BUILD at `native.NAME.build`. For a fetched package, a file the hash does
+## not cover is PKG-NATIVE-BUILD there too, and a folder that no longer has the locked hash is PKG-HASH-MISMATCH.
 export def listed(workspace: Workspace.Workspace, request: Workspace.BuildRequest) -> Result[Workspace.BuildRequest]
   files = try native_files(workspace, request.root, request.file, request.key)
+  try check_pinned(workspace, request, files)
   for index in 0...request.sources.size
     source = request.sources[index]
     if !files.any? do |found: String| found == source end
@@ -213,6 +224,36 @@ export def native_files(
   end
 
   return ok(found.sort)
+end
+
+# The pin check of a fetched package (request.pinned is its locked hash); a package read in place has no pin.
+def check_pinned(workspace: Workspace.Workspace, request: Workspace.BuildRequest, files: List[String]) -> Result[Void]
+  if request.pinned == ""
+    return ok()
+  end
+
+  covered = PackageHash.native_files(workspace, request.root)
+  for file in files
+    if !covered.any? do |path: String| path == file end
+      return error(refused(request.file, request.key, "#{file} is not covered by the hash of the package"))
+    end
+  end
+
+  if hash_text(PackageHash.hash_folder(workspace, request.root)) == request.pinned
+    return ok()
+  end
+
+  message = "the files of the package are not the ones agentica.lock pins, so its module is not built"
+  help = Failure.hint("run agentica install to put the locked files back")
+  return error(Failure.fail_key(request.file, request.key, "PKG-HASH-MISMATCH", message, help))
+end
+
+# The hash, or "" for a folder that cannot be hashed (a link or a file that cannot be read): no pin matches it.
+def hash_text(hashed: PackageHash.Hashed) -> String
+  case hashed
+    PackageHash.Hashed.Hash(hash) -> return hash
+    _ -> return ""
+  end
 end
 
 def refused(file: String, key: String, message: String) -> String

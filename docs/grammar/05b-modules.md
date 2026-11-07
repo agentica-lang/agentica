@@ -670,9 +670,15 @@ import Sqlite from "pkg/sqlite/db"
     files are not hashed. A workspace member is read from its folder with no
     hash, as its `.agc` files are.
   - `build` is the one key of `[native.NAME]` that is not a system: the C
-    sources of a native module (`extern module`), which a package read in
-    place (the project, a workspace member, a `path` dependency) builds
-    instead of using its system entry. A fetched package never builds.
+    sources of a native module (`extern module`), which the project, a
+    workspace member, a `path` dependency and a fetched package build instead
+    of using their system entry. A fetched package builds from its folder of
+    `deps/` only when that folder has the hash its lock row pins, checked when
+    the package is loaded (`PKG-HASH-MISMATCH`) and again just before the
+    build (`PKG-HASH-MISMATCH` at `native.NAME.build`); a file of its
+    `native/` that the hash does not cover (a hidden one) is
+    `PKG-NATIVE-BUILD` there. So the code that is built is the code of the
+    locked commit.
     ```toml
     [native.stats]
     build = { sources = ["native/stats.c"], defines = ["NDEBUG"], libs = ["m"] }
@@ -690,8 +696,7 @@ import Sqlite from "pkg/sqlite/db"
     pipe or a device in it, or more than 4096 files or 1024 folders, is
     `PKG-NATIVE-BUILD` at `native.NAME.build`.
   - A run, `compile`, `test` and `install` run the user's C compiler on the
-    C of `native/`, and only for the project, its workspace members and its
-    `path` dependencies; `check` and the queries never do. Under any
+    C of `native/`; `check` and the queries never do. Under any
     `--deny-*` flag or `--sandbox`, in front of `test` or after it, the VM
     refuses native code, so no compiler starts: a run or a test file that
     uses the library is `RUNTIME-NATIVE-DENIED` (the bytecode cache keeps

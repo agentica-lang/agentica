@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- A fetched package pinned in `agentica.lock` builds its native module from
+  its `[native.NAME] build` table, as the project and `path` dependencies do.
+
 ## [0.26.0] - 2026-11-07
 
 ### Added

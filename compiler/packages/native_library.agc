@@ -6,9 +6,10 @@
 ## Homebrew one on macOS) is found by its path. The choice is made here, from the machine, and never written to the
 ## manifest or the lock, which stay the same on every machine. Only the entry of this system is looked at, and only
 ## when a file of the package uses the library, so a package works on the systems it names and is refused on the
-## others where it is used. A package read in place (the project, a workspace member, a `path` dependency) with a
-## `build` table builds the library from its C sources instead (native_build.agc), whatever its system entries say; a
-## fetched package never builds. This does no I/O of its own: it asks the Workspace.
+## others where it is used. A package with a `build` table builds the library from its C sources instead
+## (native_build.agc), whatever its system entries say, when it is read in place (the project, a workspace member, a
+## `path` dependency) or fetched and pinned by its lock row (its hash, checked again before the build). This does no
+## I/O of its own: it asks the Workspace.
 
 import Paths from "../modules/import_path"
 import Failure from "../modules/link_failure"
@@ -37,7 +38,8 @@ end
 ## native/ (a library may load others), and the manifest when the package hash covers it. For the project it is the
 ## declared files for this system. A package read in place that builds a module (the project too) also watches its
 ## folder and every file of native/ as the build walks it (NativeBuild.native_files: hidden ones too), so an edit or a
-## new file there is a miss; the project's manifest is in the cache key already. watched is empty when there is
+## new file there is a miss; the project's manifest is in the cache key already. A fetched package that builds watches
+## the same. watched is empty when there is
 ## nothing to open. A built library is not known here (it is built when a file uses it); the bytecode cache watches the
 ## ones the program names.
 export struct Found
@@ -49,7 +51,9 @@ end
 ## The libraries a manifest declares, for the system `os` ("linux", "macos" or "windows"). `root` is the real folder of
 ## the package (or of the project), which holds the files. `package` is false for the project, whose files are not
 ## hashed; `member` is true for a workspace member or a `path` dependency, whose are not either: those and the project
-## are read in place, so they build what has a `build` table. `package_name` is the lock key of the
+## are read in place, so they build what has a `build` table. `pinned` is the locked hash of a fetched package whose
+## folder the caller checked against it ("" otherwise): such a package builds too, and the build checks the hash again.
+## `package_name` is the lock key of the
 ## package ("" for the project root), `lock` the lock to match downloaded rows against, and `cache_root` the
 ## package cache root ("" when no place was given): downloaded rows are verified from the cache alone and become
 ## a file path, never fetched.
@@ -60,14 +64,15 @@ export def resolve(
   os: String,
   package: Bool,
   member: Bool,
+  pinned: String,
   package_name: String,
   lock: Lock.Lock,
   cache_root: String,
 ) -> Found
-  buildable = !package or member
+  buildable = !package or member or pinned != ""
   targets: Map[String, Target] = {}
   for library in manifest.natives
-    target = target_of(workspace, manifest, library, root, os, package_name, lock, cache_root, buildable)
+    target = target_of(workspace, manifest, library, root, os, package_name, lock, cache_root, buildable, pinned)
     targets = targets.put(library.name, target)
   end
 
@@ -114,19 +119,20 @@ export def build_target(workspace: Workspace.Workspace, request: Workspace.Build
 end
 
 ## Builds every library of the manifest that has a `build` table, for `agentica install` (a run builds while it
-## links): `root` is the real folder of the project or of a package read in place. The failure of the first build that
-## fails is packed at the manifest and its key.
+## links): `root` is the real folder of the project or of a package, and `pinned` the locked hash of a fetched package
+## ("" for one read in place). The failure of the first build that fails is packed at the manifest and its key.
 export def build_all(
   workspace: Workspace.Workspace,
   manifest: Manifest.Manifest,
   root: String,
   os: String,
   cache_root: String,
+  pinned: String,
 ) -> Result[Void]
   for library in manifest.natives
     case library.build
       some(build) ->
-        request = NativeBuild.request(library.name, build, root, os, manifest.file, cache_root)
+        request = NativeBuild.request(library.name, build, root, os, manifest.file, cache_root, pinned)
         case build_target(workspace, request, library.name)
           Target.Unusable(packed) -> return error(packed)
           _ -> next
@@ -197,9 +203,10 @@ def target_of(
   lock: Lock.Lock,
   cache_root: String,
   buildable: Bool,
+  pinned: String,
 ) -> Target
   if buildable and library.build.some?
-    request = NativeBuild.request(library.name, library.build.unwrap!, root, os, manifest.file, cache_root)
+    request = NativeBuild.request(library.name, library.build.unwrap!, root, os, manifest.file, cache_root, pinned)
     return Target.Build(request)
   end
 

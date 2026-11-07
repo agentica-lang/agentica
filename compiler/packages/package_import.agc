@@ -158,6 +158,7 @@ export def with_project_natives(workspace: Workspace.Workspace, scope: Scope, pr
         false,
         false,
         "",
+        "",
         scope.lock,
         scope.native_root,
       )
@@ -342,6 +343,16 @@ export def folder_of(scope: Scope, locked: Lock.Locked) -> String
   return Paths.join(scope.deps, locked.name)
 end
 
+## The hash that pins the content of a fetched package, which its folder must have before it builds a native module
+## (NativeBuild.listed checks it again): the locked hash, "" for a package read in place.
+export def pinned_hash(locked: Lock.Locked) -> String
+  if Lock.in_place?(locked)
+    return ""
+  end
+
+  return locked.hash
+end
+
 # The name of a package file in the program and in the .agcb: it does not depend on the cache folder of the machine.
 def stored_name(label: String, inner: String) -> String
   return "pkg/#{label}/#{inner}"
@@ -382,12 +393,13 @@ def load(workspace: Workspace.Workspace, scope: Scope, locked: Lock.Locked, site
     return error(missing(site, message, "run agentica install to write the packages of the lock to #{scope.deps}"))
   end
 
+  # The hash check pins a fetched package: only then may it build its native modules (pinned_hash).
   if !Lock.in_place?(locked)
     try verify(workspace, locked, real.unwrap!, folder, site)
   end
 
   names = try names_of(workspace, scope, locked, real.unwrap!, site)
-  native = try natives_of(workspace, scope, real.unwrap!, Lock.in_place?(locked), locked.name)
+  native = try natives_of(workspace, scope, real.unwrap!, locked)
   return ok(
     Opened(
       root: real.unwrap!,
@@ -494,13 +506,13 @@ def declared_names(
 end
 
 # What the `[native]` table of the manifest of the package means on this system. A package with no manifest has none.
-# Downloaded rows are verified from `scope.native_root` against `scope.lock` (the lock key is `package_name`).
+# Downloaded rows are verified from `scope.native_root` against `scope.lock` (the lock key is the package's name). The
+# folder of a fetched package was checked against its locked hash, so it builds what has a `build` table.
 def natives_of(
   workspace: Workspace.Workspace,
   scope: Scope,
   root: String,
-  member: Bool,
-  package_name: String,
+  locked: Lock.Locked,
 ) -> Result[NativeLibrary.Found]
   case shape_of(workspace, root)
     Shape.Regular ->
@@ -511,8 +523,9 @@ def natives_of(
         root,
         scope.os,
         true,
-        member,
-        package_name,
+        Lock.in_place?(locked),
+        pinned_hash(locked),
+        locked.name,
         scope.lock,
         scope.native_root,
       )
