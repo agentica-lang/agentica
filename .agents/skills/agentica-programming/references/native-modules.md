@@ -65,6 +65,7 @@ end
   headers under `native/`: the cache key does not cover system headers,
   installed libraries or the environment beyond `CPATH`, `C_INCLUDE_PATH`,
   `CPLUS_INCLUDE_PATH` and `LIBRARY_PATH`; to rebuild, remove the entry or
-  change a file under `native/`. A fetched package builds too, from `deps/`,
-  only while its folder has the hash of its lock row (`PKG-HASH-MISMATCH`
-  otherwise; a hidden file in its `native/` is `PKG-NATIVE-BUILD`).
+  change a file under `native/`. A fetched package builds too, on first use
+  only (`install` does not build it): from a private copy of the `native/`
+  files its locked hash covers (`PKG-HASH-MISMATCH` if `deps/` differs), so
+  dotfiles are left out and a header outside `native/` is not found.

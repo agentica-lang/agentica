@@ -44,8 +44,10 @@ end
 ## cache root, the library and the system, the manifest file and the key path of its `build` table (where failures
 ## point), the real folder of the package, the sources (paths in its native/ folder, as written), the checked `defines`
 ## and `libs`, and every file of native/ (relative paths, in bytewise order), whose bytes the build key covers.
-## `pinned` is the hash that agentica.lock pins for a fetched package ("" for a package read in place): its folder must
-## still have that hash when the build is listed (packages/native_build.agc, listed).
+## `pinned` is the hash that agentica.lock pins for a fetched package ("" for a package read in place). For such a
+## package `files` are only the files of native/ that the hash covers and `contents` holds their bytes, read once and
+## checked against the pin (packages/native_build.agc, listed): the machine builds from a private copy of those bytes,
+## never from the package folder. `contents` is empty for a package read in place.
 export struct BuildRequest
   cache_root: String
   library: String
@@ -58,6 +60,7 @@ export struct BuildRequest
   defines: List[String]
   libs: List[String]
   files: List[String]
+  contents: List[Bytes]
 end
 
 ## What the machine did with a BuildRequest: the absolute path of the built library, nothing (a command that never

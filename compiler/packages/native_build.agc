@@ -4,11 +4,14 @@
 ## (io/native_build.agc runs the compiler), the pin check of a fetched package, the compiler arguments of each system
 ## and the text the build key covers.
 ##
-## A fetched package is built from its folder of deps/ only when the folder still has the hash its lock row pins (the
-## check a build does when it loads the package, done again here, since `install` builds without loading) and every
-## file of native/ that the build reads is one that hash covers: a hidden file there is not, so it is refused. What is
-## built is then the code of the locked commit, which the lock lets the user review; the compiler and the flags stay
-## the user's. The hash is in the request (`pinned`), so a later prebuilt library can be matched to it.
+## A fetched package is never compiled in its folder of deps/. When a file first uses its library, every file its hash
+## covers is read once (`listed`) and the bytes are checked against the hash of its lock row; the machine then writes
+## the files of native/ among them into a private folder of the build and compiles that copy. So what is compiled is
+## the code of the locked commit, which the lock lets the user review: a file of native/ that the hash leaves out (a
+## dotfile, Thumbs.db) is not copied, a file outside native/ (`#include "../x.h"`) is not there, and a change in deps/
+## after the check does not reach the compiler. The compiler and the flags stay the user's. The load of the package
+## hashed the folder already, so a link reads the files twice; the second read is what the copy is made of. The hash
+## is in the request (`pinned`), so a later prebuilt library can be matched to it.
 ##
 ## What a manifest can put on the command line is closed: the sources are files of the package's native/ folder (plain
 ## folder names, as a `subdir`, ending in `.c`, and found as regular files when the folder is walked, never through a
@@ -43,6 +46,10 @@ DEFINE_REST = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01234
 WORD_CHARACTERS = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_.+-".split(""))
 # The first line of the build key; change it when the key or the flags change, so no old build is reused.
 KEY_FORMAT = "agentica-native-build-1"
+# The helps of a native/ that a build cannot read safely.
+UNLISTED = "make the folder readable by this user"
+LINKED = "put the file itself in native/, not a link to it"
+SPECIAL = "remove the pipe, socket or device from native/"
 
 ## The `build` table of a library: the sources (paths in native/, as written), the defines (`NAME` or `NAME=VALUE`)
 ## and the libraries to link (`m` for `-lm`), in the order of the file.
@@ -50,6 +57,12 @@ export struct Build
   sources: List[String]
   defines: List[String]
   libs: List[String]
+end
+
+# The files of native/ that a fetched package builds from and their checked bytes, at the same index.
+struct Pinned
+  files: List[String]
+  contents: List[Bytes]
 end
 
 ## Reads `build = { sources = [...], defines = [...], libs = [...] }` at `path` (`native.NAME.build`). `sources` is
@@ -95,16 +108,22 @@ export def request(
     defines: build.defines,
     libs: build.libs,
     files: [],
+    contents: [],
   )
 end
 
 ## The request with the files of its native/ folder, every source among them. A source that is not is
 ## PKG-NATIVE-MISSING at its item (`native.NAME.build.sources[0]`); a link, a pipe or a device in native/, or more than
-## 4096 files or 1024 folders, is PKG-NATIVE-BUILD at `native.NAME.build`. For a fetched package, a file the hash does
-## not cover is PKG-NATIVE-BUILD there too, and a folder that no longer has the locked hash is PKG-HASH-MISMATCH.
+## 4096 files or 1024 folders, is PKG-NATIVE-BUILD at `native.NAME.build`. A fetched package (`pinned`) has instead
+## the files of native/ that its hash covers, with their bytes (pinned_files): a package that cannot be read is
+## PKG-NATIVE-BUILD there, and one whose bytes are not the locked ones is PKG-HASH-MISMATCH.
 export def listed(workspace: Workspace.Workspace, request: Workspace.BuildRequest) -> Result[Workspace.BuildRequest]
-  files = try native_files(workspace, request.root, request.file, request.key)
-  try check_pinned(workspace, request, files)
+  pinned = try pinned_files(workspace, request)
+  files = pinned.files
+  if request.pinned == ""
+    files = try native_files(workspace, request.root, request.file, request.key)
+  end
+
   for index in 0...request.sources.size
     source = request.sources[index]
     if !files.any? do |found: String| found == source end
@@ -115,7 +134,7 @@ export def listed(workspace: Workspace.Workspace, request: Workspace.BuildReques
     end
   end
 
-  return ok(request.with(files: files))
+  return ok(request.with(files: files, contents: pinned.contents))
 end
 
 ## The file name of the built library of `name` on `system`, as the VM opens it.
@@ -178,7 +197,7 @@ export def native_files(
   found: List[String] = []
   top = workspace.list_folder.call(root)
   if !top.ok?
-    return error(refused(file, key, "cannot list the package folder: #{top.message}"))
+    return error(refused(file, key, "cannot list the package folder: #{top.message}", UNLISTED))
   end
 
   present = false
@@ -186,7 +205,7 @@ export def native_files(
     if PackageHash.fold(entry.name) == NATIVE_FOLDER
       case entry.kind
         Workspace.EntryKind.Directory -> present = present or entry.name == NATIVE_FOLDER
-        _ -> return error(refused(file, key, "#{entry.name} is not a folder of the package"))
+        _ -> return error(refused(file, key, "#{entry.name} is not a folder of the package", "make native a folder"))
       end
     end
   end
@@ -202,7 +221,7 @@ export def native_files(
     pending = pending.take(pending.size - 1)
     entries = workspace.list_folder.call(Paths.join(root, folder))
     if !entries.ok?
-      return error(refused(file, key, "cannot list #{folder}: #{entries.message}"))
+      return error(refused(file, key, "cannot list #{folder}: #{entries.message}", UNLISTED))
     end
 
     for entry in entries.unwrap!
@@ -213,12 +232,13 @@ export def native_files(
           folders += 1
 
         Workspace.EntryKind.File -> found = found.push(path)
-        Workspace.EntryKind.Link -> return error(refused(file, key, "#{path} is a symbolic link"))
-        Workspace.EntryKind.Other -> return error(refused(file, key, "#{path} is not a regular file"))
+        Workspace.EntryKind.Link -> return error(refused(file, key, "#{path} is a symbolic link", LINKED))
+        Workspace.EntryKind.Other -> return error(refused(file, key, "#{path} is not a regular file", SPECIAL))
       end
 
       if found.size > MAX_FILES or folders > MAX_FOLDERS
-        return error(refused(file, key, "native/ holds more than #{MAX_FILES} files or #{MAX_FOLDERS} folders"))
+        message = "native/ holds more than #{MAX_FILES} files or #{MAX_FOLDERS} folders"
+        return error(refused(file, key, message, "keep fewer files in native/"))
       end
     end
   end
@@ -226,39 +246,60 @@ export def native_files(
   return ok(found.sort)
 end
 
-# The pin check of a fetched package (request.pinned is its locked hash); a package read in place has no pin.
-def check_pinned(workspace: Workspace.Workspace, request: Workspace.BuildRequest, files: List[String]) -> Result[Void]
+# The files of native/ that the hash of a fetched package covers and their bytes, once all the bytes the hash covers
+# are read and match the pin; none for a package read in place.
+def pinned_files(workspace: Workspace.Workspace, request: Workspace.BuildRequest) -> Result[Pinned]
+  empty = Pinned(files: [], contents: [])
   if request.pinned == ""
-    return ok()
+    return ok(empty)
   end
 
-  covered = PackageHash.native_files(workspace, request.root)
-  for file in files
-    if !covered.any? do |path: String| path == file end
-      return error(refused(request.file, request.key, "#{file} is not covered by the hash of the package"))
+  paths: List[String] = []
+  case PackageHash.covered_files(workspace, request.root)
+    PackageHash.Listing.Files(found) -> paths = found
+    PackageHash.Listing.Stopped(reason) -> return error(unreadable(request, reason))
+  end
+
+  contents: List[Bytes] = []
+  for path in paths
+    read = workspace.read_bytes.call(Paths.join(request.root, path))
+    if !read.ok?
+      return error(unreadable(request, PackageHash.Hashed.Unreadable("#{path}: #{read.message}")))
+    end
+
+    contents = contents.push(read.unwrap!)
+  end
+
+  if PackageHash.stream_hash(paths, contents) != request.pinned
+    message = "the files of the package are not the ones agentica.lock pins, so its module is not built"
+    help = Failure.hint("run agentica install to put the locked files back")
+    return error(Failure.fail_key(request.file, request.key, "PKG-HASH-MISMATCH", message, help))
+  end
+
+  found = empty
+  for index in 0...paths.size
+    if PackageHash.native_path?(paths[index])
+      found = found.with(files: found.files.push(paths[index]), contents: found.contents.push(contents[index]))
     end
   end
 
-  if hash_text(PackageHash.hash_folder(workspace, request.root)) == request.pinned
-    return ok()
-  end
-
-  message = "the files of the package are not the ones agentica.lock pins, so its module is not built"
-  help = Failure.hint("run agentica install to put the locked files back")
-  return error(Failure.fail_key(request.file, request.key, "PKG-HASH-MISMATCH", message, help))
+  return ok(found)
 end
 
-# The hash, or "" for a folder that cannot be hashed (a link or a file that cannot be read): no pin matches it.
-def hash_text(hashed: PackageHash.Hashed) -> String
-  case hashed
-    PackageHash.Hashed.Hash(hash) -> return hash
-    _ -> return ""
+# A fetched package whose covered files cannot be listed or read.
+def unreadable(request: Workspace.BuildRequest, reason: PackageHash.Hashed) -> String
+  message = ""
+  case reason
+    PackageHash.Hashed.Link(path) -> message = "#{path} in the package is a symbolic link"
+    PackageHash.Hashed.Unreadable(why) -> message = "cannot read the package: #{why}"
+    PackageHash.Hashed.Hash(_) -> message = "cannot read the package"
   end
+
+  return refused(request.file, request.key, message, "run agentica install to put the locked files back")
 end
 
-def refused(file: String, key: String, message: String) -> String
-  help = Failure.hint("native/ of a package that builds holds only regular files and folders")
-  return Failure.fail_key(file, key, "PKG-NATIVE-BUILD", message, help)
+def refused(file: String, key: String, message: String, help: String) -> String
+  return Failure.fail_key(file, key, "PKG-NATIVE-BUILD", message, Failure.hint(help))
 end
 
 # The strings of the optional list `name` of the table: at most `limit`, each one passing `problem` ("" when fine).

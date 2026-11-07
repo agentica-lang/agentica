@@ -82,10 +82,10 @@ def path_dependency(ws, source=ADDER_C):
     (ws.project / "main.agc").write_text(MAIN.replace('"adder"', '"pkg/adder/adder"', 1), encoding="utf-8")
 
 
-def fetched(ws, remotes):
+def fetched(ws, remotes, source=ADDER_C):
     """A project whose main file uses the adder module of a git dependency, published to a local bare repository and
     pinned in the lock by its commit and hash. It gives the folder of the package in deps/, as the build sees it."""
-    files = {"agentica.toml": 'name = "adder"\n\n' + TABLE, "adder.agc": ADDER_AGC, "native/adder.c": ADDER_C,
+    files = {"agentica.toml": 'name = "adder"\n\n' + TABLE, "adder.agc": ADDER_AGC, "native/adder.c": source,
              "native/offset.h": "#define OFFSET 0\n"}
     commit = remotes.publish("owner/adder", files, tag="v1.0.0")
     lock_entry(ws, remotes, "owner/adder", files, commit, tag="v1.0.0")
@@ -157,25 +157,49 @@ def test_a_link_in_native_is_refused_so_a_build_reads_only_the_package(ws, tmp_p
 
 
 @NATIVE_CALLS
-def test_install_builds_the_module_of_a_git_dependency_pinned_in_the_lock_and_a_run_uses_that_build(ws, remotes):
+def test_a_git_dependency_pinned_in_the_lock_builds_on_first_use_from_its_locked_files(ws, remotes):
     tool("cc")
     folder = fetched(ws, remotes)
     installed = agentica(ws, "install", **remotes.environment)
-    assert installed.code == 0, installed.stderr
-    built = BUILT.fullmatch(installed.stderr)
-    assert built and Path(built.group(1)).parent.parent == ws.pkg_root / "native-build", installed.stderr
-    # The run finds the build in the cache (no new entry, no `built` line), and then the program in the bytecode cache.
+    assert (installed.code, installed.stderr) == (0, "")
+    # A file of native/ that the hash leaves out (a dotfile) is not copied into the build, so it changes nothing.
+    (folder / "native" / ".DS_Store").write_bytes(b"junk")
+    before = files_of(folder)
     main = str(ws.project / "main.agc")
-    for _ in range(2):
-        ran = agentica(ws, main, **remotes.environment)
-        assert (ran.code, ran.stdout, ran.stderr) == (0, "42\n", "")
+    ran = agentica(ws, main, **remotes.environment)
+    assert (ran.code, ran.stdout) == (0, "42\n"), ran.stderr
+    built = BUILT.fullmatch(ran.stderr)
+    assert built and Path(built.group(1)).parent.parent == ws.pkg_root / "native-build", ran.stderr
+    assert sorted(path.name for path in Path(built.group(1)).parent.iterdir()) == sorted(
+        ["include", Path(built.group(1)).name, "receipt"])
+    # The build compiles a private copy: nothing is written into deps/.
+    assert files_of(folder) == before
+    # The next runs take the program from the bytecode cache, then (with no cache) the build from the build cache.
+    for words in ([], ["--no-cache"]):
+        again = agentica(ws, *words, main, **remotes.environment)
+        assert (again.code, again.stdout, again.stderr) == (0, "42\n", "")
     assert len(builds(ws)) == 1 and bytecode_entries(ws)
-    # A file of native/ that the hash does not cover (a hidden one) is not pinned: the bytecode cache sees it, and the
-    # module is not built.
-    (folder / "native" / ".extra.h").write_text("#define EXTRA 1\n", encoding="utf-8")
-    found = problem(agentica(ws, "--json", main, **remotes.environment))
+
+
+@NATIVE_CALLS
+def test_a_fetched_package_builds_only_the_files_of_native_so_an_include_from_outside_is_not_found(ws, remotes):
+    tool("cc")
+    folder = fetched(ws, remotes, source=ADDER_C.replace('"offset.h"', '"../offset.h"'))
+    assert agentica(ws, "--json", "install", **remotes.environment).code == 0
+    # The hash covers no header at the root, so this one is not the locked package's and the build never sees it.
+    (folder / "offset.h").write_text("#define OFFSET 0\n", encoding="utf-8")
+    found = problem(agentica(ws, "--json", str(ws.project / "main.agc"), **remotes.environment))
     assert_at_key(found, "PKG-NATIVE-BUILD", folder / "agentica.toml", "native.adder.build")
-    assert len(builds(ws)) == 1
+    assert builds(ws) == []
+
+
+def test_install_of_a_fetched_native_dependency_needs_no_compiler_and_a_run_that_uses_it_builds(ws, remotes):
+    folder = fetched(ws, remotes)
+    installed = agentica(ws, "--json", "install", **remotes.environment, **no_compiler(ws))
+    assert (installed.code, installed.stdout, installed.stderr) == (0, '{"ok":true}\n', ""), installed.stderr
+    assert builds(ws) == []
+    found = problem(agentica(ws, "--json", str(ws.project / "main.agc"), **remotes.environment, **no_compiler(ws)))
+    assert_at_key(found, "PKG-NATIVE-BUILD", folder / "agentica.toml", "native.adder.build")
 
 
 def test_a_fetched_package_whose_copy_differs_from_the_lock_never_builds(ws, remotes):

@@ -119,20 +119,20 @@ export def build_target(workspace: Workspace.Workspace, request: Workspace.Build
 end
 
 ## Builds every library of the manifest that has a `build` table, for `agentica install` (a run builds while it
-## links): `root` is the real folder of the project or of a package, and `pinned` the locked hash of a fetched package
-## ("" for one read in place). The failure of the first build that fails is packed at the manifest and its key.
+## links): `root` is the real folder of the project or of a package read in place. A fetched package is not built
+## there: its module builds when a file first uses it, so installing it needs no compiler. The failure of the first
+## build that fails is packed at the manifest and its key.
 export def build_all(
   workspace: Workspace.Workspace,
   manifest: Manifest.Manifest,
   root: String,
   os: String,
   cache_root: String,
-  pinned: String,
 ) -> Result[Void]
   for library in manifest.natives
     case library.build
       some(build) ->
-        request = NativeBuild.request(library.name, build, root, os, manifest.file, cache_root, pinned)
+        request = NativeBuild.request(library.name, build, root, os, manifest.file, cache_root, "")
         case build_target(workspace, request, library.name)
           Target.Unusable(packed) -> return error(packed)
           _ -> next

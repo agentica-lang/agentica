@@ -44,16 +44,37 @@ end
 
 ## Hashes the package folder.
 export def hash_folder(workspace: Workspace.Workspace, root: String) -> Hashed
-  case list_files(workspace, root)
+  case covered_files(workspace, root)
     Listing.Stopped(reason) -> return reason
+    Listing.Files(paths) -> return hash_files(workspace, root, paths)
+  end
+end
+
+## Every file the hash of the package folder covers, in the order of the stream: its .agc files, the files of its
+## native/ and, when the hash covers it, its agentica.toml.
+export def covered_files(workspace: Workspace.Workspace, root: String) -> Listing
+  case list_files(workspace, root)
+    Listing.Stopped(reason) -> return Listing.Stopped(reason)
     Listing.Files(paths) ->
       covered = paths
       if manifest_hashed?(workspace, root, paths)
         covered = covered.push(MANIFEST_FILE)
       end
 
-      return hash_files(workspace, root, covered.sort)
+      return Listing.Files(covered.sort)
   end
+end
+
+## The hash of files already read: `paths` in the order of covered_files and the bytes of each, at the same index.
+export def stream_hash(paths: List[String], contents: List[Bytes]) -> String
+  # The pieces are joined once at the end: appending each file to the stream would copy the whole stream once for
+  # each file.
+  pieces: List[Bytes] = []
+  for index in 0...paths.size
+    pieces = pieces.concat([header(paths[index], contents[index].size), contents[index]])
+  end
+
+  return "sha256:#{Digest.sha256_hexdigest(Bytes.concat(pieces))}"
 end
 
 ## Whether the hash of the package folder covers its agentica.toml: the file is a regular file at the root and the
@@ -199,19 +220,17 @@ def regular?(kind: Workspace.EntryKind) -> Bool
 end
 
 def hash_files(workspace: Workspace.Workspace, root: String, paths: List[String]) -> Hashed
-  # The pieces are joined once at the end: appending each file to the stream would copy the whole stream once for
-  # each file.
-  pieces: List[Bytes] = []
+  contents: List[Bytes] = []
   for path in paths
     read = workspace.read_bytes.call(Paths.join(root, path))
     if !read.ok?
       return Hashed.Unreadable(read.message)
     end
 
-    pieces = pieces.concat([header(path, read.unwrap!.size), read.unwrap!])
+    contents = contents.push(read.unwrap!)
   end
 
-  return Hashed.Hash("sha256:#{Digest.sha256_hexdigest(Bytes.concat(pieces))}")
+  return Hashed.Hash(stream_hash(paths, contents))
 end
 
 # Joins with one "/". An empty side gives the other one, so the root folder is listed as "<root>", never "<root>/".

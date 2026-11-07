@@ -672,13 +672,15 @@ import Sqlite from "pkg/sqlite/db"
   - `build` is the one key of `[native.NAME]` that is not a system: the C
     sources of a native module (`extern module`), which the project, a
     workspace member, a `path` dependency and a fetched package build instead
-    of using their system entry. A fetched package builds from its folder of
-    `deps/` only when that folder has the hash its lock row pins, checked when
-    the package is loaded (`PKG-HASH-MISMATCH`) and again just before the
-    build (`PKG-HASH-MISMATCH` at `native.NAME.build`); a file of its
-    `native/` that the hash does not cover (a hidden one) is
-    `PKG-NATIVE-BUILD` there. So the code that is built is the code of the
-    locked commit.
+    of using their system entry. A fetched package is never compiled in
+    `deps/`: when a file first uses the library, the files its hash covers are
+    read once and checked against the hash of its lock row
+    (`PKG-HASH-MISMATCH` at `native.NAME.build`), and the files of `native/`
+    among them are copied into a private build folder and compiled there. So
+    the code that is built is the code of the locked commit: a file the hash
+    leaves out (a dotfile, `Thumbs.db`) is not copied, and a header outside
+    `native/` is not found. `check` never builds, but a copy that differs
+    from the lock is still `PKG-HASH-MISMATCH` when the package is loaded.
     ```toml
     [native.stats]
     build = { sources = ["native/stats.c"], defines = ["NDEBUG"], libs = ["m"] }
@@ -703,7 +705,9 @@ import Sqlite from "pkg/sqlite/db"
     such programs apart, so a hit and a miss agree), and `compile`, whose
     output may run without the flag, is `PKG-NATIVE-BUILD`. A run, `compile`
     and `test` build a library when a file of the program first uses it, so
-    a library that no file uses is never built; `install` builds them all.
+    a library that no file uses is never built; `install` builds them all
+    for the project, its members and its `path` dependencies, and none of a
+    fetched package, so installing one needs no C compiler.
     The compiler is the words of `CC` (split at spaces, with no quoting), else
     `cc` (`gcc` on Windows), started with an argument list and no shell, in
     the package folder. Every build gets `-std=c11 -O2 -fvisibility=hidden`,

@@ -5,7 +5,10 @@
 ## the MSYS2 UCRT64 toolchain the VM is built with). The manifest names no compiler and no flag: its sources, defines
 ## and libraries become the arguments of NativeBuild.arguments, passed as a list to Process.spawn_captured, which runs
 ## no shell, with the package folder as the working folder. agentica_native.h comes from this binary (it carries the
-## header of its own VM), so a module always builds against the API that loads it.
+## header of its own VM), so a module always builds against the API that loads it. A fetched package (`pinned`) is
+## compiled from a copy instead: the bytes the request carries (checked against its lock row by the core) are written
+## to `package/` in the private folder of the build, which is the working folder and holds the sources, and the copy
+## is removed before the entry is put in place.
 ##
 ## The output is content-addressed in the package cache: `<cache>/native-build/<key>/libNAME.so` (`.dylib`,
 ## `NAME.dll`), where the key is the SHA-256 of the files of native/, the table, the compiler words, the first lines of
@@ -37,6 +40,8 @@ import CacheFiles from "cache_files"
 # The folder of the package cache that holds the builds, and the names inside an entry.
 BUILD_FOLDER = "native-build"
 INCLUDE_FOLDER = "include"
+# The folder of the private build folder that holds the copy of a fetched package.
+COPY_FOLDER = "package"
 RECEIPT = "receipt"
 # The std/ source name of the header the binary carries (vm/tools/gen-embedded.sh), and its file name.
 HEADER = "internal/native/agentica_native.h"
@@ -122,7 +127,7 @@ def attempt(request: Workspace.BuildRequest, noted: Bool) -> Result[String]
   version = try first_line(request, compiler, "--version")
   target = try first_line(request, compiler, "-dumpmachine")
   header = try header_text(request)
-  digests = try file_digests(request)
+  digests = try key_digests(request)
   lines = [
     NativeBuild.key_text(request, digests),
     "compiler #{compiler.join(" ")}",
@@ -247,7 +252,16 @@ def header_text(request: Workspace.BuildRequest) -> Result[String]
   end
 end
 
-# The SHA-256 of each file of native/, in the order of the request.
+# The SHA-256 of each file of native/, in the order of the request: of the bytes it carries for a fetched package.
+def key_digests(request: Workspace.BuildRequest) -> Result[List[String]]
+  if request.pinned != ""
+    return ok(request.contents.map do |bytes: Bytes| Digest.sha256_hexdigest(bytes) end)
+  end
+
+  return file_digests(request)
+end
+
+# The SHA-256 of each file of native/ in the package folder, in the order of the request.
 def file_digests(request: Workspace.BuildRequest) -> Result[List[String]]
   found: List[String] = []
   for file in request.files
@@ -353,7 +367,8 @@ def compile_in(
   end
 
   output = Paths.join(folder, name)
-  ran = try run(request, compiler, NativeBuild.arguments(request, include, output), BUILD_TIMEOUT_MS)
+  source = try source_of(request, folder)
+  ran = try run(source, compiler, NativeBuild.arguments(source, include, output), BUILD_TIMEOUT_MS)
   if noted and ran.stderr != ""
     IO.warn(without_line_end(ran.stderr))
   end
@@ -372,9 +387,13 @@ def compile_in(
     return error(fail(request, message, "fix the C sources, or set CC to another compiler"))
   end
 
-  # A file that changed while the compiler read it is not the one the key names: store nothing.
-  after = try file_digests(request)
-  if after != digests
+  # A file that changed while the compiler read it is not the one the key names: store nothing. The copy of a fetched
+  # package is private, and it is not part of the entry.
+  if request.pinned != ""
+    if !Path.remove(source.root, FILE_TIMEOUT_MS).ok?
+      return error(fail(request, "cannot write the build cache", ""))
+    end
+  elsif try file_digests(request) != digests
     return error(fail(request, "a file of native/ changed during the build", "run again to build the new files"))
   end
 
@@ -384,6 +403,45 @@ def compile_in(
   end
 
   return ok()
+end
+
+# The request to compile: the one given for a package read in place; for a fetched package, the same with its root at
+# a private copy in `folder` of the files it carries.
+def source_of(request: Workspace.BuildRequest, folder: String) -> Result[Workspace.BuildRequest]
+  if request.pinned == ""
+    return ok(request)
+  end
+
+  root = Paths.join(folder, COPY_FOLDER)
+  for made in [root].concat(copy_folders(request.files).map do |inner: String| Paths.join(root, inner) end)
+    if !Dir.mkdir_private(made, FILE_TIMEOUT_MS).ok?
+      return error(fail(request, "cannot write the build cache", ""))
+    end
+  end
+
+  for index in 0...request.files.size
+    if !CacheFiles.write_private(Paths.join(root, request.files[index]), request.contents[index]).ok?
+      return error(fail(request, "cannot write the copy of #{request.files[index]} in the build cache", ""))
+    end
+  end
+
+  return ok(request.with(root: root))
+end
+
+# The folders that hold `files` (relative paths joined by "/"), each once, a folder before those inside it.
+def copy_folders(files: List[String]) -> List[String]
+  found: List[String] = []
+  for file in files
+    parts = file.split("/")
+    for depth in 1...parts.size
+      folder = parts.take(depth).join("/")
+      if !found.any? do |seen: String| seen == folder end
+        found = found.push(folder)
+      end
+    end
+  end
+
+  return found
 end
 
 # The start of the compiler's standard error, where its first error is, in at most MAX_SHOWN characters.
