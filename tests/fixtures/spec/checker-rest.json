@@ -11864,6 +11864,89 @@
       "start": [1, 1]
     }
   ],
+  "RSA.public_encrypt_oaep takes a PEM String and data Bytes and gives a Result[Bytes]; it has the random effect, so a constant cannot call it; RSA is a reserved name": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  pem = \"-----BEGIN PUBLIC KEY-----\\n\"",
+        "  sealed: Result[Bytes] = RSA.public_encrypt_oaep(pem, \"secret\".bytes)",
+        "  puts(sealed.ok?)",
+        "end"
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  sealed = RSA.public_encrypt_oaep(\"pem\".bytes, \"secret\".bytes)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 36],
+      "covers": "\"pem\".bytes",
+      "expected": "String",
+      "actual": "Bytes"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  sealed = RSA.public_encrypt_oaep(\"pem\", \"secret\")",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 43],
+      "covers": "\"secret\"",
+      "expected": "Bytes",
+      "actual": "String"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  sealed = RSA.public_encrypt_oaep(\"pem\")",
+        "end"
+      ],
+      "code": "CHECK-ARITY",
+      "start": [2, 12],
+      "covers": "RSA.public_encrypt_oaep(\"pem\")"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  sealed: Bytes = RSA.public_encrypt_oaep(\"pem\", \"secret\".bytes)",
+        "end"
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [2, 19],
+      "covers": "RSA.public_encrypt_oaep(\"pem\", \"secret\".bytes)",
+      "expected": "Bytes",
+      "actual": "Result[Bytes]"
+    },
+    {
+      "program": [
+        "SEALED = RSA.public_encrypt_oaep(\"pem\", \"secret\".bytes)",
+        "",
+        "def main() -> Void",
+        "  puts(SEALED.ok?)",
+        "end"
+      ],
+      "code": "CHECK-CONSTANT-EXPRESSION",
+      "start": [1, 10],
+      "covers": "RSA.public_encrypt_oaep(\"pem\", \"secret\".bytes)"
+    },
+    {
+      "program": [
+        "struct RSA",
+        "  bits: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end"
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
+    }
+  ],
   "Base64 and Digest.hexencode take a Bytes and give a String; the decodes give a Bytes, the strict ones in a Result; Base64 and Digest are reserved names": [
     {
       "program": [

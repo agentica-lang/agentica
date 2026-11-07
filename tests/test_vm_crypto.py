@@ -25,7 +25,9 @@ known-answer vectors and the error Results are the VM fixtures triple-des-cbc an
 tests/fixtures/kdf-peer.agc derives keys with KDF.pbkdf2_hmac_sha256 and KDF.scrypt, checked
 against hashlib. tests/fixtures/gcm-peer.agc seals with Cipher.aes_256_gcm_encrypt and opens
 what tests/fixtures/gcm-peer.js (Node's crypto) sealed. Their vectors and errors are the VM
-fixtures kdf and aes-256-gcm.
+fixtures kdf and aes-256-gcm. tests/fixtures/rsa-peer.agc encrypts with RSA.public_encrypt_oaep
+and tests/fixtures/rsa-peer.js (Node's crypto) decrypts with the private key of
+tests/fixtures/rsa/; the errors are the VM fixture rsa-oaep.
 """
 import base64
 import binascii
@@ -419,3 +421,31 @@ def test_aes_256_gcm_matches_a_node_peer(tmp_path, node):
     for case, got in zip(cases, json.loads(result.stdout), strict=True):
         sizes = (len(case["aad"]) // 2, len(case["data"]) // 2)
         assert (got["sealed"], got["opened"]) == (case["sealed"], case["data"]), sizes
+
+
+# RSA-OAEP with both public forms of the fixture key, a 2048-bit key made once with
+#   openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out private.pem
+#   openssl pkey -in private.pem -pubout -out public.pem
+#   openssl rsa -in private.pem -RSAPublicKey_out -out public-pkcs1.pem
+# on data from empty to the most the key takes (256 - 42 bytes). The ciphertext is random, so the check is that Node's
+# crypto (tests/fixtures/rsa-peer.js) decrypts it with the private key, and that two encryptions of the same data
+# differ.
+RSA_SIZES = [0, 1, 20, 32, 100, 213, 214]
+
+
+def test_rsa_oaep_decrypts_in_a_node_peer(tmp_path, node):
+    rng = random.Random(1176)
+    keys = FIXTURES / "rsa"
+    pems = [(keys / name).read_text(encoding="ascii") for name in ("public.pem", "public-pkcs1.pem")]
+    cases = [{"pem": pem, "data": rng.randbytes(size).hex()} for pem in pems for size in RSA_SIZES]
+    cases.append(dict(cases[-1]))
+    peer = compile_agc(FIXTURES / "rsa-peer.agc", tmp_path / "rsa-peer.agcb")
+    result = run_vm(peer, stdin=json.dumps({"cases": cases}))
+    assert result.code == 0, result.stderr
+    sealed = json.loads(result.stdout)
+    assert all(len(s) == 2 * 256 for s in sealed)
+    assert sealed[-1] != sealed[-2]
+    private = (keys / "private.pem").read_text(encoding="ascii")
+    opened = run([node, FIXTURES / "rsa-peer.js"], stdin=json.dumps({"key": private, "sealed": sealed}))
+    assert opened.code == 0, opened.stderr
+    assert json.loads(opened.stdout) == [case["data"] for case in cases]

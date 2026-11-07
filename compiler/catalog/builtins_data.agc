@@ -7,8 +7,8 @@ import Model from "builtin_model"
 
 ## Every builtin, sorted by name; the Zlib rows, the ATS rows, the Base64 and hex rows, the digest rows, the HMAC rows,
 ## the SecureRandom rows, the HMAC.secure_compare row, the Bytes rows, the Cipher and CMAC rows, the AES-GCM and KDF
-## rows, the Optional rows, the text codec rows, the task monitor rows and then the Native.Mutex rows are appended
-## last, in contract order, so the positions of the existing rows never shift.
+## rows, the Optional rows, the text codec rows, the task monitor rows, the Native.Mutex rows and then the RSA row are
+## appended last, in contract order, so the positions of the existing rows never shift.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
 BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
 BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
@@ -22,7 +22,7 @@ BUILTIN_GROUP_10 = ROWS_46.concat(ROWS_47.concat(ROWS_48.concat(ROWS_49.concat(R
 BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(ROWS_55))))
 BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58.concat(ROWS_59.concat(ROWS_60))))
 BUILTIN_GROUP_13 = ROWS_61.concat(ROWS_62.concat(ROWS_63.concat(ROWS_64.concat(ROWS_65))))
-BUILTIN_GROUP_14 = ROWS_66.concat(ROWS_67.concat(ROWS_68.concat(ROWS_69)))
+BUILTIN_GROUP_14 = ROWS_66.concat(ROWS_67.concat(ROWS_68.concat(ROWS_69.concat(ROWS_70))))
 BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
 BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
 BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
@@ -321,6 +321,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "Process",
   "ProcessOutput",
   "Profile",
+  "RSA",
   "Random",
   "Range",
   "RegexEngine",
@@ -6558,6 +6559,24 @@ ROWS_69: List[Model.Builtin] = [
     description: (
       "Run the block with the mutex held and return its value; a task that waits for it parks, so other tasks " +
       "run; a task that holds it already is RUNTIME-NATIVE-MUTEX."
+    ),
+    alternatives: [],
+  ),
+]
+
+## The RSA row; appended last so the positions of the existing rows never shift.
+ROWS_70: List[Model.Builtin] = [
+  Model.Builtin(
+    name: "RSA.public_encrypt_oaep",
+    parameters: [Model.Named(name: "pem", type: Types.Type.String), Model.Named(name: "data", type: Types.Type.Bytes)],
+    result: Types.Type.Result(Types.Type.Bytes),
+    rule: Model.Rule.Plain,
+    implementation: "RSA.public_encrypt_oaep",
+    effects: ["random"],
+    description: (
+      "Encrypt data (bytes) with the RSA public key in pem (PUBLIC KEY or RSA PUBLIC KEY) and OAEP padding with " +
+      "SHA-1; at most the key size less 42 bytes; a bad PEM, a key that is not RSA or data too long is an error; " +
+      "VM only."
     ),
     alternatives: [],
   ),

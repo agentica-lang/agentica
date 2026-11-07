@@ -239,6 +239,41 @@ def test_gcm_and_kdf_in_eight_tasks_on_four_schedulers_match_one_task(tmp_path):
     assert (result.code, result.stdout, result.stderr) == (0, "true\n" * 8, "")
 
 
+# RSA.public_encrypt_oaep runs without the shared lock (vm/crypto.c), so eight tasks decode the fixture key of
+# tests/fixtures/rsa/ (on stdin) and encrypt with it at once, which fills OpenSSL's decoder and key caches from several
+# schedulers (vm/tools/tsan.supp names the wrapper). The ciphertexts are random: each has the key's 256 bytes and no
+# two are the same.
+RSA_TASKS = """\
+def work(pem: String, seed: Int) -> Result[List[String]]
+  data = try Bytes.from_list([seed, seed + 1, seed + 2])
+  sealed = (1..20).to_a.map do |_: Int|
+    Digest.hexencode(RSA.public_encrypt_oaep(pem, data).unwrap!)
+  end
+  return ok(sealed)
+end
+
+def main() -> Void
+  pem = IO.read()
+  results = Task.map((1..8).to_a, 8, 30000) do |seed: Int|
+    work(pem, seed)
+  end
+  all = results.flat_map do |r: Result[List[String]]|
+    r.unwrap!
+  end
+  sized = all.all? do |h: String|
+    h.size == 512
+  end
+  puts("#{all.size} #{all.uniq.size} #{sized}")
+end
+"""
+
+
+def test_rsa_oaep_in_eight_tasks_on_four_schedulers(tmp_path):
+    pem = (FIXTURES / "rsa" / "public.pem").read_text(encoding="ascii")
+    result = vm(program(tmp_path, "rsa", RSA_TASKS), stdin=pem)
+    assert (result.code, result.stdout, result.stderr) == (0, "160 160 true\n", "")
+
+
 # SecureRandom runs without the shared lock (vm/crypto.c; OpenSSL 3 keeps one generator per thread), so eight tasks
 # draw at once. 64 KiB of bytes and a uuid from each task repeat with negligible chance (2 ** -122 per uuid pair).
 SECURE_RANDOM_TASKS = """\

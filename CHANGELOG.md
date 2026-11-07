@@ -8,6 +8,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `RSA.public_encrypt_oaep(pem, data)` encrypts with an RSA public key in PEM
+  and OAEP padding (SHA-1), as MySQL's `caching_sha2_password` needs.
+
+### Changed
+
+- **Breaking:** `RSA` is a reserved type name.
+
 ## [0.26.1] - 2026-11-07
 
 ### Added

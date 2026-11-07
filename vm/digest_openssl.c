@@ -1,6 +1,7 @@
 /*
  * The digest adapter over OpenSSL's EVP interface (digests, HMAC, Triple DES
- * CBC, AES-256-GCM, CMAC, PBKDF2 and scrypt), RAND_bytes, CRYPTO_memcmp and
+ * CBC, AES-256-GCM, CMAC, PBKDF2, scrypt and RSA-OAEP with a PEM public key,
+ * read by OSSL_DECODER), RAND_bytes, CRYPTO_memcmp and
  * OPENSSL_cleanse, the same library that tls_openssl.c links (system OpenSSL 3
  * or the vendored one). Adapter layer, behind digest.h. Design:
  * docs/vm/15-layers.md §15.1.
@@ -8,12 +9,15 @@
 #include "digest.h"
 
 #include <openssl/core_names.h>
+#include <openssl/bn.h>
 #include <openssl/crypto.h>
+#include <openssl/decoder.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/kdf.h>
 #include <openssl/params.h>
 #include <openssl/rand.h>
+#include <openssl/rsa.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
@@ -328,6 +332,91 @@ bool agc_scrypt(const unsigned char *password, size_t password_n, const unsigned
     OSSL_PARAM_construct_end(),
   };
   return kdf_derive(OSSL_KDF_NAME_SCRYPT, params, out, out_n);
+}
+
+/* The PEM passphrase callback of the key decoder: it gives none, so an encrypted PEM fails instead of OpenSSL asking
+   for a passphrase on the terminal. */
+static int no_passphrase(char *buf, int size, int rwflag, void *u) {
+  (void)buf, (void)size, (void)rwflag, (void)u;
+  return -1;
+}
+
+/* The public key of the first PEM block in the n bytes at pem, or NULL. Only public key structures are decoded
+   (EVP_PKEY_PUBLIC_KEY): SubjectPublicKeyInfo, whatever its algorithm, and PKCS#1 RSAPublicKey. A private key or a
+   certificate decodes to nothing. */
+static EVP_PKEY *public_key_from_pem(const char *pem, size_t n) {
+  EVP_PKEY *pkey = NULL;
+  OSSL_DECODER_CTX *ctx =
+    OSSL_DECODER_CTX_new_for_pkey(&pkey, "PEM", NULL, NULL, EVP_PKEY_PUBLIC_KEY, NULL, NULL);
+  const unsigned char *at = (const unsigned char *)pem;
+  size_t left = n;
+  if (!ctx || OSSL_DECODER_CTX_set_pem_password_cb(ctx, no_passphrase, NULL) != 1 ||
+      OSSL_DECODER_from_data(ctx, &at, &left) != 1) {
+    /* A failed decode leaves pkey NULL, but free it anyway in case a decoder set it before failing. */
+    EVP_PKEY_free(pkey);
+    pkey = NULL;
+  }
+  OSSL_DECODER_CTX_free(ctx);
+  return pkey;
+}
+
+/* The most bits of a public exponent: OpenSSL's own cap for moduli above 3072 bits (OPENSSL_RSA_MAX_PUBEXP_BITS).
+   Below that size OpenSSL takes any exponent under the modulus, and a 3071-bit exponent makes one encryption cost
+   about as much as a private-key operation; real keys use 65537. */
+#define RSA_MAX_EXPONENT_BITS 64
+
+/* Checks the RSA key's numbers before any work: an odd modulus (Montgomery multiplication needs one, and OpenSSL's
+   public operation fails on an even one) and an odd exponent from 3 to RSA_MAX_EXPONENT_BITS bits, which also keeps
+   it under the modulus of at least 43 bytes. AGC_RSA_DONE when the key is usable, AGC_RSA_BAD_KEY when it is not,
+   AGC_RSA_FAILED when OpenSSL cannot give the numbers. */
+static agc_rsa_status rsa_key_numbers(const EVP_PKEY *pkey) {
+  BIGNUM *n = NULL, *e = NULL;
+  agc_rsa_status status = AGC_RSA_FAILED;
+  if (EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_RSA_N, &n) == 1 &&
+      EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_RSA_E, &e) == 1) {
+    bool usable = BN_is_odd(n) && BN_is_odd(e) && !BN_is_one(e) && BN_num_bits(e) <= RSA_MAX_EXPONENT_BITS;
+    status = usable ? AGC_RSA_DONE : AGC_RSA_BAD_KEY;
+  }
+  BN_free(n);
+  BN_free(e);
+  return status;
+}
+
+agc_rsa_status agc_rsa_oaep_encrypt(const char *pem, size_t pem_n, const unsigned char *data, size_t n,
+                                    unsigned char out[AGC_RSA_MAX_BYTES], size_t *len) {
+  static const unsigned char none = 0;
+  *len = 0;
+  /* The decoder reads the text through a memory BIO, which takes an int length. */
+  if (pem_n == 0 || pem_n > INT_MAX || !digest_ready()) return AGC_RSA_BAD_PEM;
+  EVP_PKEY *pkey = public_key_from_pem(pem, pem_n);
+  agc_rsa_status status = !pkey ? AGC_RSA_BAD_PEM : EVP_PKEY_is_a(pkey, "RSA") ? AGC_RSA_DONE : AGC_RSA_NOT_RSA;
+  /* The key's size, the modulus in bytes, is the ciphertext's size. A key too small for the padding, or larger than
+     OpenSSL encrypts with, is refused before any work, and out is never written past AGC_RSA_MAX_BYTES. */
+  int size = status == AGC_RSA_DONE ? EVP_PKEY_get_size(pkey) : 0;
+  if (status == AGC_RSA_DONE && (size <= AGC_RSA_OAEP_OVERHEAD || size > AGC_RSA_MAX_BYTES)) status = AGC_RSA_BAD_KEY;
+  if (status == AGC_RSA_DONE) status = rsa_key_numbers(pkey);
+  if (status == AGC_RSA_DONE && n > (size_t)size - AGC_RSA_OAEP_OVERHEAD) {
+    *len = (size_t)size - AGC_RSA_OAEP_OVERHEAD;
+    status = AGC_RSA_TOO_LONG;
+  }
+  EVP_PKEY_CTX *ctx = status == AGC_RSA_DONE ? EVP_PKEY_CTX_new_from_pkey(NULL, pkey, NULL) : NULL;
+  if (status == AGC_RSA_DONE) {
+    /* SHA-1 for both the label hash and MGF1 is OpenSSL's default for OAEP; it is set here so that never moves. The
+       checks above cover every key OpenSSL's public operation refuses (size, modulus parity, exponent size), so a
+       failure here is the library's own: no memory, or no random OAEP seed. */
+    size_t got = AGC_RSA_MAX_BYTES;
+    bool done = ctx && EVP_PKEY_encrypt_init(ctx) == 1 &&
+                EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_OAEP_PADDING) == 1 &&
+                EVP_PKEY_CTX_set_rsa_oaep_md(ctx, EVP_sha1()) == 1 &&
+                EVP_PKEY_CTX_set_rsa_mgf1_md(ctx, EVP_sha1()) == 1 &&
+                EVP_PKEY_encrypt(ctx, out, &got, n ? data : &none, n) == 1 && got == (size_t)size;
+    if (done) *len = got;
+    else status = AGC_RSA_FAILED;
+  }
+  EVP_PKEY_CTX_free(ctx);
+  EVP_PKEY_free(pkey);
+  ERR_clear_error();
+  return status;
 }
 
 void agc_wipe(void *data, size_t n) {

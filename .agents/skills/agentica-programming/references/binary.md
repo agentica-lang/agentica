@@ -116,6 +116,18 @@ KDF.scrypt(password: Bytes, salt: Bytes, n: Int, r: Int, p: Int, length: Int) ->
   `n = 131072, r = 8, p = 1`. A call runs on the compute pool: its task waits
   and the other tasks keep running. Compare a derived key with
   `HMAC.secure_compare`. `KDF` is a reserved type name.
+- RSA-OAEP (OAEP with SHA-1, as MySQL's `caching_sha2_password` wants)
+  encrypts with an RSA public key in PEM (`BEGIN PUBLIC KEY` or `BEGIN RSA
+  PUBLIC KEY`):
+
+```text
+RSA.public_encrypt_oaep(pem: String, data: Bytes) -> Result[Bytes]
+```
+
+- The result has the key's size and differs on every call. `data` takes at
+  most the key's size less 42 bytes (214 for 2048 bits). A bad PEM, a key that
+  is not RSA or data too long is an `error(...)`. It has the `random` effect
+  label. `RSA` is a reserved type name.
 
 ```text
 Base64.strict_encode64(data: Bytes) -> String     # padded, one line

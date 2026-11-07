@@ -78,7 +78,7 @@ export VM_BUILTINS = Set.new([
   "Bytes.drop", "Bytes.equal", "Bytes.plus", "Bytes.concat", "String.bytes", "Optional.equal", "Value.equal",
   "Bytes.decode", "String.encode", "Native.mutex", "Native.Mutex.synchronize", "Int.abs", "Int.pow", "Int.gcd",
   "Int.clamp", "Float.abs", "Float.floor", "Float.ceil", "Float.round", "Float.clamp", "Math.sqrt", "String.multiply",
-  "Task.current", "Task.id", "Task.monitor",
+  "Task.current", "Task.id", "Task.monitor", "RSA.public_encrypt_oaep",
 ])
 
 ## The instruction of an operator on two Ints, by the token kind of the operator. `>` and `>=` use the instruction of
