@@ -40,7 +40,7 @@ end
 - The table names the C function and its types, so a `callback` or `struct` line, a `free:` after a resource, an `out` parameter, a `...` and a C name after `=` are `PARSE-EXTERN-MODULE`, and a `C.` type is `PARSE-EXTERN-TYPE`.
 - A `def` is a short call. A `compute def` is a dirty call: it runs on the compute pool while the task waits, as a `compute def` of an `extern` block does, and may block. A task cancelled during one does not stop it: the call runs to its end and its result is dropped.
 - A resource is a handle to C state that the module keeps, such as a connection. It belongs to the task that made it. The module's free function frees it once: at `Native.close`, at the end of that task, or at the end of the run, newest first. A call that holds it as an argument keeps it alive until the call returns, whatever closes it meanwhile. `Native.closed?` tells whether it is closed, and a call with a closed one fails with `RUNTIME-NATIVE-CLOSED`.
-- `--deny-native` and `--sandbox` refuse a program with a module block before it runs (`RUNTIME-NATIVE-DENIED`, exit 2).
+- Any `--deny-*` flag or `--sandbox` refuses a program with a module block before it runs (`RUNTIME-NATIVE-DENIED`, exit 2), with or without a cached program, and nothing is built: a `build` table starts no compiler, and `agentica compile` under such a flag refuses the module (`PKG-NATIVE-BUILD`).
 
 ## Binding
 

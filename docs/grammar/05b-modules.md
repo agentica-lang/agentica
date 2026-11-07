@@ -691,11 +691,12 @@ import Sqlite from "pkg/sqlite/db"
     `PKG-NATIVE-BUILD` at `native.NAME.build`.
   - A run, `compile`, `test` and `install` run the user's C compiler on the
     C of `native/`, and only for the project, its workspace members and its
-    `path` dependencies; `check` and the queries never do. Under
-    `--deny-native`, `--deny-run` or `--sandbox` no compiler starts and a
-    library to build that a file uses is `PKG-NATIVE-BUILD` (the program
-    could not open it), so no program names a module that was not built. A
-    run, `compile`
+    `path` dependencies; `check` and the queries never do. Under any
+    `--deny-*` flag or `--sandbox`, in front of `test` or after it, the VM
+    refuses native code, so no compiler starts: a run or a test file that
+    uses the library is `RUNTIME-NATIVE-DENIED` (the bytecode cache keeps
+    such programs apart, so a hit and a miss agree), and `compile`, whose
+    output may run without the flag, is `PKG-NATIVE-BUILD`. A run, `compile`
     and `test` build a library when a file of the program first uses it, so
     a library that no file uses is never built; `install` builds them all.
     The compiler is the words of `CC` (split at spaces, with no quoting), else

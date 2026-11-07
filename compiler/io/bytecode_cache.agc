@@ -268,6 +268,13 @@ def entry_for(settings: Env.Settings, root: String) -> Result[Entry]
     named = root
   end
 
+  # Under a --deny-* flag no module is built (Settings.native_denied), so the program names a library to build by its
+  # bare name, which the VM refuses with the rest of the native code: it has an entry of its own, never a plain run's.
+  if settings.native_denied
+    root = "denied #{root}"
+    named = root
+  end
+
   key = [FORMAT, "version #{settings.version}", site.binary, root, site.inputs].join("\n")
   folder = Paths.join(site.build, BYTECODE_FOLDER)
   name = "#{Paths.last_part(real)}-#{CacheFiles.digest(named.bytes).slice(0, 16)}.agcb"

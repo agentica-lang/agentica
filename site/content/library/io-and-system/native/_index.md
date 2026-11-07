@@ -72,4 +72,4 @@ end
 
 - Native code must retry calls cut short by `EINTR`: GC signals can interrupt sleeps and polls.
 - A `RUNTIME-NATIVE-*` or `RUNTIME-INTEGER-OVERFLOW` error of an extern call has its primary span on the `extern def` line; the call site is in the stack.
-- Native code is allowed by default and can start programs itself. `agentica --deny-native file.agc` (or any `--deny-*` flag) refuses a program that declares any extern function or calls a `Native.*` builtin before anything runs (`RUNTIME-NATIVE-DENIED`, exit 2). Under `agentica test`, such a test file is a file error with that code.
+- Native code is allowed by default and can start programs itself. `agentica --deny-native file.agc` (or any `--deny-*` flag) refuses a program that declares any extern function or calls a `Native.*` builtin before anything runs (`RUNTIME-NATIVE-DENIED`, exit 2). Under `agentica test`, such a test file is a file error with that code. Under these flags a [native module](/library/io-and-system/native/modules/) with a `build` table is not built, and `agentica compile` refuses it (`PKG-NATIVE-BUILD`).

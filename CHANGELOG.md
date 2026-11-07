@@ -19,6 +19,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   compiler on the C of `native/` of the project, its workspace members and its
   `path` dependencies (`PKG-NATIVE-BUILD`); `check` never builds, and neither
   does a fetched package. The release archives ship `include/agentica_native.h`.
+- Under any `--deny-*` flag or `--sandbox` no native module is built: the run
+  is `RUNTIME-NATIVE-DENIED`, and `compile` refuses it (`PKG-NATIVE-BUILD`).
 
 ### Changed
 

@@ -243,20 +243,40 @@ def test_a_library_no_file_uses_never_builds(ws):
 
 
 @NATIVE_CALLS
-@pytest.mark.parametrize("flag", ["--deny-native", "--deny-run", "--sandbox"])
-def test_a_run_that_may_not_open_native_code_never_builds_and_leaves_no_cached_program(ws, flag):
+@pytest.mark.parametrize("flag", ["--deny-native", "--deny-run", "--deny-fs", "--sandbox"])
+def test_under_a_deny_flag_nothing_builds_and_a_run_is_refused_alike_on_a_cache_hit_and_a_miss(ws, flag):
     tool("cc")
     project(ws)
     main = str(ws.project / "main.agc")
-    found = problem(agentica(ws, "--json", flag, main, **no_compiler(ws)))
-    assert_at_key(found, "PKG-NATIVE-BUILD", ws.project / "agentica.toml", "native.adder.build")
+    ran = agentica(ws, main)
+    assert (ran.code, ran.stdout) == (0, "42\n") and BUILT.fullmatch(ran.stderr), ran.stderr
+    # The CC cannot start, so a build would fail: the miss and then the hit of the refused run are the VM's refusal.
+    for _ in range(2):
+        denied = agentica(ws, "--json", flag, main, **no_compiler(ws))
+        assert (denied.code, json.loads(denied.stderr)["code"]) == (2, "RUNTIME-NATIVE-DENIED"), denied.stderr
+    assert len(builds(ws)) == 1 and len(bytecode_entries(ws)) == 2
+    # `compile` writes a program that may run without the flag, so it refuses the module instead.
     found = problem(agentica(ws, "--json", flag, "compile", main, "-o", str(ws.base / "main.agcb")))
     assert_at_key(found, "PKG-NATIVE-BUILD", ws.project / "agentica.toml", "native.adder.build")
-    assert builds(ws) == [] and not (ws.base / "main.agcb").exists()
-    # The bytecode cache is on: the refused run stored no program that a plain run could take.
-    ran = agentica(ws, main)
-    assert (ran.code, ran.stdout) == (0, "42\n"), ran.stderr
-    assert BUILT.fullmatch(ran.stderr)
+    assert not (ws.base / "main.agcb").exists()
+    # The refused runs kept their programs apart: a plain run takes its own, with the built library.
+    assert agentica(ws, main).stdout == "42\n"
+
+
+@NATIVE_CALLS
+@pytest.mark.parametrize("words", [["--deny-native", "--json", "test"], ["--json", "test", "--deny-run"]],
+                         ids=["in front of test", "after test"])
+def test_test_under_a_deny_flag_builds_nothing_and_the_test_file_is_refused(ws, words):
+    project(ws)
+    (ws.project / "test").mkdir()
+    (ws.project / "test" / "adder_test.agc").write_text(
+        'import Adder from "../adder"\n\ndef main() -> Void\n'
+        '  Test.run([Test.test("adds") do Test.eq(Adder.add(40, 2), 42) end])\nend\n', encoding="utf-8")
+    tested = agentica(ws, *words, **no_compiler(ws))
+    assert (tested.code, tested.stderr) == (1, ""), tested.stdout
+    report = json.loads(tested.stdout)
+    assert [entry["error"]["code"] for entry in report["files"]] == ["RUNTIME-NATIVE-DENIED"]
+    assert builds(ws) == []
 
 
 def test_a_lock_row_that_says_member_outside_its_workspace_never_builds(ws):

@@ -61,9 +61,9 @@ end
   `PKG-MANIFEST-INVALID` at its key path, a missing source
   `PKG-NATIVE-MISSING`, a failed build `PKG-NATIVE-BUILD` at
   `native.NAME.build`. A run builds a library when a file first uses it;
-  under `--deny-native`, `--deny-run` or `--sandbox` that is
-  `PKG-NATIVE-BUILD`, with no compiler started. Keep your own headers
-  under `native/`: the cache key does not cover system headers, installed
-  libraries or the environment beyond `CPATH`, `C_INCLUDE_PATH`,
+  under any `--deny-*` flag or `--sandbox` nothing builds: the run is
+  `RUNTIME-NATIVE-DENIED`, `compile` is `PKG-NATIVE-BUILD`. Keep your own
+  headers under `native/`: the cache key does not cover system headers,
+  installed libraries or the environment beyond `CPATH`, `C_INCLUDE_PATH`,
   `CPLUS_INCLUDE_PATH` and `LIBRARY_PATH`; to rebuild, remove the entry or
   change a file under `native/`.
