@@ -3,6 +3,7 @@ analysis/cache.agc
 analysis/convert.agc
 analysis/front.agc
 analysis/model.agc
+analysis/native_modules.agc
 analysis/partial.agc
 analysis/session.agc
 catalog/builtin_model.agc
@@ -36,6 +37,7 @@ check/check_unused.agc
 check/check_variables.agc
 check/checker.agc
 check/defaults.agc
+check/native_shape.agc
 check/prelude_files.agc
 check/ruby_form.agc
 diagnostics/diagnostic.agc
@@ -80,6 +82,7 @@ packages/toml_read.agc
 query/at.agc
 query/definitions.agc
 query/locals.agc
+query/native_modules_json.agc
 query/outline.agc
 query/outline_json.agc
 query/partial_at.agc

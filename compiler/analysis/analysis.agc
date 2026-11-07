@@ -25,6 +25,7 @@ import Cache from "cache"
 import Convert from "convert"
 import Front from "front"
 import Model from "model"
+import NativeModules from "native_modules"
 import Partial from "partial"
 
 ## What `check` found: the program links and checks, the file cannot be read, or the first problem.
@@ -60,6 +61,13 @@ end
 ## The matches of a `symbol` query, or why there is none.
 export enum Found
   Done(Model.Symbols)
+  Rejected(Problems.Problem)
+end
+
+## The `extern module` blocks of a file, the file cannot be read, or the first problem.
+export enum Natived
+  Done(Model.NativeModules)
+  Unreadable
   Rejected(Problems.Problem)
 end
 
@@ -116,6 +124,26 @@ export def outline(settings: Env.Settings, file: String, buffered: Bool) -> Outl
         Diag.Outcome.Failed(problem) -> return Outlined.Rejected(Front.stage_problem(file, problem))
         Diag.Outcome.Done(found) ->
           return Outlined.Done(Convert.outline(QueryFiles.display(settings, file, buffered), found))
+      end
+  end
+end
+
+## The `extern module "NAME"` blocks of the file at `path` (never a `std/` module), linked and checked with what it
+## imports and without requiring `main`, described for a code generator: native_modules.agc. `cache` only saves work.
+export def native_modules(cache: Cache.Cache, settings: Env.Settings, path: String) -> Natived
+  settings = for_query(settings)
+  case Front.read_root(settings.workspace, path)
+    Front.Root.Unreadable(_) -> return Natived.Unreadable
+    Front.Root.Invalid(problem) -> return Natived.Rejected(problem)
+    Front.Root.Readable ->
+      case Front.query_cached(cache, path, settings)
+        Front.Outcome.Rejected(problem) -> return Natived.Rejected(problem)
+        Front.Outcome.Done(front) ->
+          name = QueryFiles.display(settings, path, true)
+          case NativeModules.of_program(name, front.linked, front.checked)
+            Diag.Outcome.Failed(problem) -> return Natived.Rejected(Front.stage_problem(path, problem))
+            Diag.Outcome.Done(found) -> return Natived.Done(found)
+          end
       end
   end
 end

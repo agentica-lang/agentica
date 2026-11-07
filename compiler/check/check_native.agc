@@ -8,7 +8,7 @@
 ## the functions of one block, since the module knows its types by that name. The checker records the type that each
 ## written type stands for, by the node id of the type, for the parameters and results of these functions and for the
 ## fields and payloads of the user types that cross: the lowering writes the canonical signature and the shape of each
-## user type from them (lower_native.agc).
+## user type from them (native_shape.agc, which lower_native.agc and `std/analysis` both call).
 
 import {ENUMS} from "../catalog/builtins"
 import Linker from "../modules/linker"

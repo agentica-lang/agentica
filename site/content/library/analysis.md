@@ -21,11 +21,13 @@ Analysis.type_at_partial(session: Analysis.Session, path: String, line: Int, col
 Analysis.symbol(session: Analysis.Session, name: String, paths: List[String]) -> Result[Analysis.Symbols]
 Analysis.refs(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Analysis.Refs]
 Analysis.refs_partial(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Analysis.Refs]
+Analysis.native_modules(session: Analysis.Session, path: String) -> Result[Analysis.NativeModules]
 Analysis.diagnostic(message: String) -> Result[Analysis.Diagnostic]
 Analysis.outline_json(found: Analysis.Outline) -> Json
 Analysis.type_at_json(found: Analysis.TypeAt) -> Json
 Analysis.symbols_json(found: Analysis.Symbols) -> Json
 Analysis.refs_json(found: Analysis.Refs) -> Json
+Analysis.native_modules_json(found: Analysis.NativeModules) -> Json
 Analysis.diagnostic_json(found: Analysis.Diagnostic) -> Json
 ```
 
@@ -83,9 +85,23 @@ A file is named as on the command line: by its canonical path, relative to the w
 - `Analysis.refs` gives the declaration of the name at the position and every reference to it, as `agentica refs` does. It links and checks the file as `type_at` does, and sees the file and what it imports; a file that only imports it is not seen. `Refs.definition` is empty for a builtin, which `Refs.builtin` names (`""` for anything else). A `Reference` is the `range` of the name in its `file`.
 - `Analysis.type_at_partial` and `Analysis.refs_partial` are `type_at` and `refs` with `--partial`: when some functions do not check, they answer from the others, with `partial` true and the failures in `diagnostics`; a declaration, `main` or constant that does not check, or a field or builtin for `refs_partial`, is still the first problem as an error. `TypeAt.type` is `""` for a name inside a function that did not check, and in such a function a position the link cannot name gives the first problem as the error.
 
+## Native modules
+
+`Analysis.native_modules(session, path)` describes the `extern module "NAME"` blocks of a file for a tool that generates code for a [native module](/library/io-and-system/native/modules/), such as a C header, without its own parser or type rules. The file is linked and checked as for `type_at`, and needs no `main`. It has no command line form; `native_modules_json` gives the JSON of the answer, with `command` `native-modules`.
+
+A `NativeModules` has the `blocks` of the file, in source order, two blocks of one library being one. A `NativeBlock` has:
+
+- `library`, the `NAME` as written, and the `range` of its declarations;
+- `functions`, each with its `name` as written (`empty?`), its `mode` (`short` for a `def`, `dirty` for a `compute def`), `parameters` (`name` and canonical `type`), `result`, `signature`, `exported`, `doc` and `range`, and `types`, the names of the structs, enums and resources it reaches;
+- `resources`, the `resource Name` lines, with `exported`, `doc` and `range`;
+- `types`, the structs and enums that cross, each with its `kind` (`struct` or `enum`), its bare `name`, its `members` (fields or variants, with their canonical `types`) and its `shape`;
+- `api_major` and `api_minor`, the least version of the C API (`AN_API_MAJOR` and `AN_API_MINOR` of `agentica_native.h`) that has what the block uses: 1.0 for scalars and collections, 1.1 when a struct or enum crosses, 1.2 for a resource.
+
+A `signature` is the text the module's function table must have, `(List[Float]) -> Optional[Summary]`, and a `shape` the text its type table must have, `count: Int, mean: Float` or `Empty | Number(Float) | Text(String)`. They are written by the code that the compiler binds a call with, so they are the bytes the loader compares. A `shape` is the text after `=` in the `{S<index>=...}` or `{E<index>=...}` that the compiler writes, whose `<index>` is the type's place in the program and is not part of the answer.
+
 ## Errors
 
-`outline`, `type_at`, `type_at_partial`, `symbol`, `refs` and `refs_partial` return a `Result` whose error message is the diagnostic as one JSON object, the `--json` form, so `try` works. `Analysis.diagnostic` reads it back into an `Analysis.Diagnostic`. The codes are those of the command line: `LEX-`, `PARSE-`, `CHECK-` and `PKG-`; `QUERY-NO-EXPRESSION` for a position on no expression; `QUERY-NOT-FOUND` for a `symbol` name that nothing declares; and `QUERY-USAGE` for a file that cannot be read, a position below line 1 or column 1, or a `symbol` with an empty name or a path that names no `*.agc` file. For `outline`, `type_at` and `refs` the diagnostic names the file; for `symbol` its `file` is `<arguments>`, as on the command line. Unlike the command line, `QUERY-USAGE` has no usage `help` line; `QUERY-NOT-FOUND` keeps its `help` (the files not searched).
+`outline`, `type_at`, `type_at_partial`, `symbol`, `refs`, `refs_partial` and `native_modules` return a `Result` whose error message is the diagnostic as one JSON object, the `--json` form, so `try` works. `Analysis.diagnostic` reads it back into an `Analysis.Diagnostic`. The codes are those of the command line: `LEX-`, `PARSE-`, `CHECK-` and `PKG-`; `QUERY-NO-EXPRESSION` for a position on no expression; `QUERY-NOT-FOUND` for a `symbol` name that nothing declares; and `QUERY-USAGE` for a file that cannot be read, a position below line 1 or column 1, or a `symbol` with an empty name or a path that names no `*.agc` file. For `outline`, `type_at` and `refs` the diagnostic names the file; for `symbol` its `file` is `<arguments>`, as on the command line. Unlike the command line, `QUERY-USAGE` has no usage `help` line; `QUERY-NOT-FOUND` keeps its `help` (the files not searched).
 
 ```agentica {mode="check"}
 import Analysis from "std/analysis"

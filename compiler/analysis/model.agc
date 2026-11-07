@@ -190,3 +190,79 @@ export struct Refs
   partial: Bool
   diagnostics: List[Diagnostics.Diagnostic]
 end
+
+## One parameter of a function of a native module: its name and its canonical type, the text the module's function
+## table has ("List[Float]", aliases expanded, user types by their bare names).
+export struct NativeParameter
+  name: String
+  type: String
+end
+
+## One function of an `extern module` block, named as the block writes it (`empty?` included). `mode` is `short` for a
+## `def` and `dirty` for a `compute def`. `signature` is the canonical text of the module's function table,
+## "(List[Float]) -> Optional[Summary]", and `types` the bare names of the structs, enums and resources it reaches,
+## which the block's `types` and `resources` describe. `doc` is the whole `##` text ("" for none), `range` the whole
+## declaration, `export` included, and `name_range` the name alone.
+export struct NativeFunction
+  name: String
+  name_range: Diagnostics.Region
+  mode: String
+  exported: Bool
+  doc: String
+  range: Diagnostics.Region
+  parameters: List[NativeParameter]
+  result: String
+  signature: String
+  types: List[String]
+end
+
+## One `resource Name` line of an `extern module` block, with the same fields as a function.
+export struct NativeResource
+  name: String
+  name_range: Diagnostics.Region
+  exported: Bool
+  doc: String
+  range: Diagnostics.Region
+end
+
+## One field of a struct that crosses, or one variant of an enum: its name and its canonical types (a field has one, a
+## variant its payload).
+export struct NativeMember
+  name: String
+  types: List[String]
+end
+
+## A struct or enum of the program that crosses to the module. `kind` is `struct` or `enum`, `name` its bare name,
+## `members` its fields or variants in declared order, and `shape` the exact text that the loader compares with the
+## module's type table ("count: Int, mean: Float", "Empty | Number(Float) | Text(String)"), the one the lowering writes
+## after `=` in the `{S<index>=...}` or `{E<index>=...}` of a signature. (The index is the place of the type in the
+## program's tables, which a generator does not need.)
+export struct NativeType
+  kind: String
+  name: String
+  members: List[NativeMember]
+  shape: String
+end
+
+## One `extern module "NAME"` block. `library` is the NAME as written, and `range` runs from the first to the last
+## declaration of the block (the syntax tree keeps no place for the NAME). Blocks of one NAME are one block. `types`
+## are the structs and enums that cross in its functions, each once, in the order the first function that reaches them
+## meets them. `api_major` and `api_minor` are the least version of the C API (AN_API_MAJOR, AN_API_MINOR of
+## vm/agentica_native.h) that has what the block needs: 1.0 for functions of scalars and collections, 1.1 when a
+## struct or enum crosses, 1.2 for a resource.
+export struct NativeBlock
+  library: String
+  range: Diagnostics.Region
+  api_major: Int
+  api_minor: Int
+  functions: List[NativeFunction]
+  resources: List[NativeResource]
+  types: List[NativeType]
+end
+
+## The answer of `native_modules`: the `extern module` blocks of a file, in source order.
+export struct NativeModules
+  version: Int
+  file: String
+  blocks: List[NativeBlock]
+end
