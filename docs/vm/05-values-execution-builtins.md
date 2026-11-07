@@ -460,5 +460,5 @@ service and the server) build and run on Linux, macOS and Windows, so
   entropy as the map hash key. If every source fails, it uses the wall clock.
   Either way it keeps the low 31 bits, so the seed is in the range of `--seed`:
   `Random.seed` returns it (`rt->seed`, one per run), and `--seed` with that
-  number replays the run.
+  number gives the same random numbers.
   `agc_vm_init` seeds with 0, so the C tests and the fuzzer are deterministic.

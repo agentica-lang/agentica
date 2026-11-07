@@ -4108,7 +4108,7 @@ ROWS_35: List[Model.Builtin] = [
     effects: ["random"],
     description: (
       "The seed of the run, 0..2147483647: the one --seed gave, or the one drawn from the system when there is " +
-      "none; the same in every task, so --seed with it replays the run."
+      "none; the same in every task, so --seed with it gives the same random numbers."
     ),
     alternatives: [],
   ),

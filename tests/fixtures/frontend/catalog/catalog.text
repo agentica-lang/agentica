@@ -546,7 +546,7 @@ builtin Random.float forms=1
 builtin Random.int forms=1
   Random.int(min: Int, max: Int) -> Int shape=(Int, Int) -> Int rule=Plain impl="Random.int" effects=["random"] desc="Pick a uniform Int in min..max inclusive; min > max halts."
 builtin Random.seed forms=1
-  Random.seed() -> Int shape=() -> Int rule=Plain impl="Random.seed" effects=["random"] desc="The seed of the run, 0..2147483647: the one --seed gave, or the one drawn from the system when there is none; the same in every task, so --seed with it replays the run."
+  Random.seed() -> Int shape=() -> Int rule=Plain impl="Random.seed" effects=["random"] desc="The seed of the run, 0..2147483647: the one --seed gave, or the one drawn from the system when there is none; the same in every task, so --seed with it gives the same random numbers."
 builtin Range.each forms=1
   Range.each(range: Range, f: Fn[Int, Void]) -> Void shape=(Range, Fn([Int], Void)) -> Void rule=Plain impl="Range.each" effects=[] desc="Call f on each value in order; returns nothing."
 builtin Range.first forms=1

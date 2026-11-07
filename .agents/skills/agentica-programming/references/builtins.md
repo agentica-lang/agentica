@@ -41,8 +41,8 @@ Random.seed() -> Int                    # the run's seed (0..2147483647), the sa
   `IO.eof?` consumes nothing. Reads have no timeout; step budgets do not
   interrupt blocking input.
 - `Random` is seeded from the OS unless `--seed N` is given; not for secrets:
-  use `SecureRandom` (`binary.md`). `--seed` with the number `Random.seed`
-  gave replays the run.
+  use `SecureRandom` (`binary.md`). Passing the number from `Random.seed`
+  back with `--seed` gives the same random numbers.
 
 ## Int, Float
 

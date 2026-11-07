@@ -94,7 +94,7 @@ static bool os_entropy(uint8_t *out, size_t len) { return urandom_entropy(out, l
 #endif
 
 /* The largest seed --seed takes. A seed drawn from the system is kept in the same range, so the number that
-   Random.seed gives can be passed back with --seed to replay the run. */
+   Random.seed gives can be passed back with --seed to get the same random numbers. */
 #define SEED_MAX UINT64_C(2147483647)
 
 static uint64_t entropy_seed(void) {

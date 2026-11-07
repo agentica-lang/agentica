@@ -31,7 +31,7 @@ static agc_value builtin_random_float(agc_vm *vm, agc_value *args, uint32_t span
 }
 
 /* Random.seed: the seed of the run (rt->seed, set once before the run starts and never written after), not of the
-   task: every task gives the same number, which --seed takes back to replay the run. */
+   task: every task gives the same number, which --seed takes back to get the same random numbers. */
 static agc_value builtin_random_seed(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   (void)span;
