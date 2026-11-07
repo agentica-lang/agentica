@@ -1,6 +1,7 @@
 /* A native module (vm/agentica_native.h, #1149) for the tests and the benchmark: vm/tests/native_module_test.c
-   compiles it in as a module the binary carries and opens it as a shared library (mk/vm-test.mk builds it), and
-   benchmarks/native/run.py calls `add`. It links nothing but the C library: every VM call goes through the env. */
+   compiles it in as a module the binary carries and opens it as a shared library (mk/vm-test.mk builds it),
+   tests/test_vm_native_module.py builds it and calls it from extern module blocks, and benchmarks/native/run.py calls
+   `add` and `points`. It links nothing but the C library: every VM call goes through the env. */
 /* The header next to the VM's sources, so this file builds with no -I (a module of a package gets the header of the
    binary it runs in). */
 #include "../../../vm/agentica_native.h"
@@ -215,6 +216,100 @@ static an_term lie(an_env *env, int argc, const an_term *argv) {
   return an_string(env, "not an Int", 10);
 }
 
+/* The rows of the type table. */
+enum { POINT_TYPE, SHAPE_TYPE };
+enum { SHAPE_DOT, SHAPE_CIRCLE, SHAPE_RECT };
+
+/* Point(x: y, y: x). */
+static an_term flip(an_env *env, int argc, const an_term *argv) {
+  an_term fields[2];
+  (void)argc;
+  if (!an_get_field(env, argv[0], POINT_TYPE, 1, &fields[0]) || !an_get_field(env, argv[0], POINT_TYPE, 0, &fields[1]))
+    return an_badarg(env, 0);
+  return an_struct(env, POINT_TYPE, fields);
+}
+
+static bool get_xy(an_env *env, an_term point, int64_t *x, int64_t *y) {
+  an_term t;
+  return an_get_field(env, point, POINT_TYPE, 0, &t) && an_get_int(env, t, x) &&
+         an_get_field(env, point, POINT_TYPE, 1, &t) && an_get_int(env, t, y);
+}
+
+/* 0 for a Dot, r * r for a Circle(r), and the area between the corners of a Rect. */
+static an_term area(an_env *env, int argc, const an_term *argv) {
+  uint32_t variant;
+  an_term first, second;
+  int64_t r, x0, y0, x1, y1;
+  (void)argc;
+  if (!an_get_variant(env, argv[0], SHAPE_TYPE, &variant)) return an_badarg(env, 0);
+  if (variant == SHAPE_DOT) return an_int(env, 0);
+  if (!an_get_payload(env, argv[0], SHAPE_TYPE, 0, &first)) return an_badarg(env, 0);
+  if (variant == SHAPE_CIRCLE)
+    return an_get_int(env, first, &r) ? an_int(env, (int64_t)((uint64_t)r * (uint64_t)r)) : an_badarg(env, 0);
+  if (!an_get_payload(env, argv[0], SHAPE_TYPE, 1, &second) || !get_xy(env, first, &x0, &y0) ||
+      !get_xy(env, second, &x1, &y1))
+    return an_badarg(env, 0);
+  return an_int(env, (int64_t)(((uint64_t)x1 - (uint64_t)x0) * ((uint64_t)y1 - (uint64_t)y0)));
+}
+
+/* Circle(n) for n > 0, else Dot; Rect from (0, 0) to (n, n) when it is a Circle already. */
+static an_term grow(an_env *env, int argc, const an_term *argv) {
+  uint32_t variant;
+  int64_t n;
+  (void)argc;
+  if (!an_get_variant(env, argv[0], SHAPE_TYPE, &variant)) return an_badarg(env, 0);
+  if (!an_get_int(env, argv[1], &n)) return an_badarg(env, 1);
+  if (n <= 0) return an_enum(env, SHAPE_TYPE, SHAPE_DOT, NULL);
+  if (variant != SHAPE_CIRCLE) return an_enum(env, SHAPE_TYPE, SHAPE_CIRCLE, &argv[1]);
+  an_term origin[2] = {an_int(env, 0), an_int(env, 0)}, corner[2] = {argv[1], argv[1]};
+  an_term corners[2] = {an_struct(env, POINT_TYPE, origin), an_struct(env, POINT_TYPE, corner)};
+  return an_enum(env, SHAPE_TYPE, SHAPE_RECT, corners);
+}
+
+/* [Point(x: 0, y: 0), Point(x: 1, y: 2), ...], n of them, at most a million. */
+static an_term points(an_env *env, int argc, const an_term *argv) {
+  int64_t n;
+  an_list_builder b;
+  (void)argc;
+  if (!an_get_int(env, argv[0], &n) || n < 0 || n > 1000000) return an_badarg(env, 0);
+  an_list_begin(env, &b, (size_t)n);
+  for (int64_t k = 0; k < n; k++) {
+    an_term fields[2] = {an_int(env, k), an_int(env, (int64_t)(2 * (uint64_t)k))};
+    an_list_push(env, &b, an_struct(env, POINT_TYPE, fields));
+  }
+  return an_list_end(env, &b);
+}
+
+/* A type index that the table does not have: the call fails. */
+static an_term bad_type(an_env *env, int argc, const an_term *argv) {
+  an_term fields[2];
+  (void)argc;
+  fields[0] = fields[1] = argv[0];
+  return an_struct(env, SHAPE_TYPE + 1, fields);
+}
+
+/* demo_keep keeps a C function pointer that an extern block passes (a callback), and call_kept calls it from inside a
+   short call, where the VM refuses callbacks: the callback runs nothing and gives 0. demo_call_kept calls it from an
+   extern call, where it runs. */
+static int (*kept)(int); // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+AN_EXPORT void demo_keep(int (*f)(int));
+AN_EXPORT void demo_keep(int (*f)(int)) { kept = f; }
+AN_EXPORT int demo_call_kept(int n);
+AN_EXPORT int demo_call_kept(int n) { return kept ? kept(n) : -1; }
+
+static an_term call_kept(an_env *env, int argc, const an_term *argv) {
+  int64_t n;
+  (void)argc;
+  if (!an_get_int(env, argv[0], &n)) return an_badarg(env, 0);
+  return an_int(env, demo_call_kept((int)n));
+}
+
+static const an_type types[] = {
+  {"Point", AN_STRUCT, "x: Int, y: Int"},
+  {"Shape", AN_ENUM, "Dot | Circle(Int) | Rect(Point, Point)"},
+};
+
 static const an_function functions[] = {
   {"add", "(Int, Int) -> Int", add, AN_SHORT},
   {"upcase", "(String) -> String", upcase, AN_SHORT},
@@ -237,6 +332,12 @@ static const an_function functions[] = {
   {"bad_key", "() -> Map[String, Int]", bad_key, AN_SHORT},
   {"lie", "() -> Int", lie, AN_SHORT},
   {"crunch", "(Int, Int) -> Int", add, AN_DIRTY},
+  {"flip", "(Point) -> Point", flip, AN_SHORT},
+  {"area", "(Shape) -> Int", area, AN_SHORT},
+  {"grow", "(Shape, Int) -> Shape", grow, AN_SHORT},
+  {"points", "(Int) -> List[Point]", points, AN_SHORT},
+  {"bad_type", "(Int) -> Point", bad_type, AN_SHORT},
+  {"call_kept", "(Int) -> Int", call_kept, AN_SHORT},
 };
 
-AN_MODULE("module_demo", functions, NULL)
+AN_MODULE_TYPES("module_demo", functions, types, NULL)

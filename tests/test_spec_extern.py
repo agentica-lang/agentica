@@ -1040,3 +1040,130 @@ def test_native_mutex_synchronizes_a_block(tmp_path, body, code, start, stop):
 def test_a_native_mutex_is_no_constant(tmp_path):
     text = "LOCK = Native.mutex()\n\ndef main() -> Void\n  LOCK.synchronize do puts(1) end\nend\n"
     assert_checks(check(source(tmp_path, text)), "CHECK-CONSTANT-EXPRESSION", (1, 8), (1, 22))
+
+
+MODULE_VALID = """type Id = Int
+
+struct Point
+  x: Id
+  y: Int
+end
+
+enum Value
+  Null
+  Num(Int)
+  At(Point)
+end
+
+extern module "sqlite_native"
+  ## Opens the database.
+  export def open(path: String, flags: Int) -> Result[Int]
+  compute def query(db: Int, params: List[Value]) -> Result[List[Map[String, Value]]]
+  def autocommit?(db: Int) -> Bool
+  def close!(db: Int) -> Void
+  def first(points: List[Point]) -> Optional[Point]
+end
+
+def main() -> Void
+  db = open("x", 0).unwrap_or(0)
+  puts(query(db, [Value.Num(1), Value.At(Point(x: 1, y: 2))]).ok?)
+  puts(autocommit?(db))
+  close!(db)
+  puts(first([]).none?)
+end
+"""
+
+
+# An `extern module "NAME"` block declares functions of a native module's table: Ruby names with ? and !, Agentica
+# types (aliases, structs and enums of the program), and compute def for a dirty function.
+def test_an_extern_module_block_declares_functions_with_agentica_types(tmp_path):
+    assert_checks(check(source(tmp_path, MODULE_VALID)), None, None, None)
+
+
+# The module's table gives the C function and its types, so what an extern block says of C is refused in a module block.
+@pytest.mark.parametrize("member, code, start, stop", [
+    ("resource Db", "PARSE-EXTERN-MODULE", (2, 3), (2, 11)),
+    ("callback Visit(n: C.Int32) -> Void", "PARSE-EXTERN-MODULE", (2, 3), (2, 11)),
+    ("struct Pair\n    x: Int\n  end", "PARSE-EXTERN-MODULE", (2, 3), (2, 9)),
+    ("def f(out n: Int) -> Int", "PARSE-EXTERN-MODULE", (2, 9), (2, 19)),
+    ("def f(n: Int, ...) -> Int", "PARSE-EXTERN-MODULE", (2, 17), (2, 20)),
+    ('def f(n: Int) -> Int = "g"', "PARSE-EXTERN-MODULE", (2, 24), (2, 25)),
+    ("def f(p: C.Pointer) -> Int", "PARSE-EXTERN-TYPE", (2, 12), (2, 21)),
+    ("def f(n: Int) -> List[C.Int32]", "PARSE-EXTERN-TYPE", (2, 25), (2, 32)),
+    ("def f(n: Int = 1) -> Int", "PARSE-EXTERN-DEFAULT", (2, 9), (2, 19)),
+])
+def test_a_module_block_refuses_what_only_c_has(tmp_path, member, code, start, stop):
+    text = 'extern module "demo"\n  %s\nend\n' % member
+    assert at(problem_of(check(source(tmp_path, text)))) == (code, start, stop)
+
+
+NATIVE_TYPES = """struct Box[T]
+  value: T
+end
+
+struct Holder
+  task: Task[Int]
+end
+
+enum Job
+  Idle
+  Waiting(Task[Int])
+end
+
+enum Tree
+  Leaf
+  Node(List[Tree], Optional[Tree])
+end
+
+extern module "demo"
+  %s
+end
+
+def main() -> Void
+end
+"""
+
+
+# Only Agentica values cross: a type that is not one, a generic struct, a builtin enum, a Set, or a struct or enum of
+# the program whose field or payload does not cross is CHECK-NATIVE-TYPE at the type of the signature. A Map key that
+# would not cross is no Map key at all (CHECK-MAP-KEY-TYPE).
+@pytest.mark.parametrize("signature, code, start, stop", [
+    ("def f(t: Task[Int]) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 21)),
+    ("def f(b: Box[Int]) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 20)),
+    ("def f(h: Holder) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 18)),
+    ("def f(j: List[Job]) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 21)),
+    ("def f(s: Set[Int]) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 20)),
+    ("def f(n: Int) -> LogLevel", "CHECK-NATIVE-TYPE", (20, 20), (20, 28)),
+    ("def f(n: Int) -> Fn[Int, Int]", "CHECK-NATIVE-TYPE", (20, 20), (20, 32)),
+    ("def f(m: Map[Float, Int]) -> Int", "CHECK-MAP-KEY-TYPE", (20, 16), (20, 21)),
+])
+def test_only_agentica_values_cross_to_a_native_module(tmp_path, signature, code, start, stop):
+    problem = problem_of(check(source(tmp_path, NATIVE_TYPES % signature)))
+    assert at(problem) == (code, start, stop)
+
+
+# A recursive type crosses: the checker and the lowering walk each user type once.
+def test_a_recursive_type_crosses_to_a_native_module(tmp_path):
+    path = source(tmp_path, NATIVE_TYPES % "def f(tree: Tree) -> List[Tree]")
+    assert_checks(check(path), None, None, None)
+    assert run(cli() + ["compile", path, "-o", str(tmp_path / "tree.agcb")]).code == 0
+
+
+def test_a_module_function_takes_at_most_64_parameters(tmp_path):
+    params = ", ".join("p%d: Int" % k for k in range(64))
+    ok = 'extern module "demo"\n  def f(%s) -> Int\nend\n' % params
+    assert check(source(tmp_path, ok)).code == 0
+    over = 'extern module "demo"\n  def f(%s, extra: Int) -> Int\nend\n' % params
+    start = len("  def f(%s, " % params) + 1
+    assert at(problem_of(check(source(tmp_path, over)))) == (
+        "PARSE-EXTERN-ARITY", (2, start), (2, start + len("extra: Int")))
+
+
+# The module knows its types by their bare names: two types of one name in the functions of a block are refused at
+# the second.
+def test_two_types_of_one_bare_name_cannot_cross_to_one_module(tmp_path):
+    source(tmp_path, "export struct Row\n  id: Int\nend\n", "a.agc")
+    source(tmp_path, "export struct Row\n  name: String\nend\n", "b.agc")
+    text = ('import A from "./a"\nimport B from "./b"\n\nextern module "demo"\n  def f(row: A.Row) -> Int\n'
+            '  def g(row: B.Row) -> Int\nend\n\ndef main() -> Void\nend\n')
+    assert at(problem_of(check(source(tmp_path, text)))) == ("CHECK-NATIVE-TYPE", (6, 14), (6, 19))

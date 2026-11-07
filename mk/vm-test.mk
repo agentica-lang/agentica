@@ -113,6 +113,8 @@ FUZZ_CORPUS = mkdir -p $(LIBFUZZ_DIR)/seeds && printf '%s\n' $(FUZZ_SEEDS) | xar
 # string once per step), so a timeout can also be a slow input to triage. Fork mode saves a corpus or seed input that
 # fails its first pass and goes on without counting it, so the run also fails when crashes/ got a new crash, leak,
 # timeout or oom file (not a slow-unit one: an input slower than 10 s but under LIBFUZZ_TIMEOUT is no failure).
+# First the native_module seed must run to its end through the driver (AGC_FUZZ_SHOW, vm/fuzz_libfuzzer.c): a seed
+# whose module call fails to bind would leave the module's getters and constructors unfuzzed.
 LIBFUZZ_TIME ?= 60
 LIBFUZZ_TIMEOUT ?= 10
 LIBFUZZ_JOBS ?= 1
@@ -121,6 +123,8 @@ LIBFUZZ_FLAGS ?=
 vm-libfuzz-run: dist/agentica$(EXE)
 	$(FUZZ_CORPUS)
 	$(MAKE) vm-libfuzz
+	AGC_FUZZ_SHOW=1 $(LIBFUZZ_DIR)/agentica-vm-libfuzz $(LIBFUZZ_DIR)/seeds/native_module.agcb 2>&1 | \
+	  grep -q 'end kind=0 exit=0' || { echo "vm-libfuzz-run: the native_module seed does not run to its end"; exit 1; }
 	@mkdir -p $(LIBFUZZ_DIR)/corpus $(LIBFUZZ_DIR)/crashes $(LIBFUZZ_DIR)/tmp
 	touch $(LIBFUZZ_DIR)/tmp/started; status=0; \
 	ASAN_OPTIONS=detect_leaks=1:allocator_may_return_null=1 TMPDIR=$(CURDIR)/$(LIBFUZZ_DIR)/tmp \
@@ -166,7 +170,7 @@ sweep-full: vm-diff-build
 
 # The test modules that run against the built binary (make test-py runs them; the ASan job runs them on the sanitizer
 # binary). They need dist/agentica, which make builds first; without it a module skips locally and fails in CI.
-VM_PY_TESTS = $(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_single_binary.py tests/test_std_analysis.py tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_os.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_websocket.py tests/test_vm_http_proxy.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_child_channel_posix.py tests/test_vm_channel.py tests/test_vm_trace.py tests/test_vm_multicore.py tests/test_vm_native.py tests/test_vm_jit.py
+VM_PY_TESTS = $(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_single_binary.py tests/test_std_analysis.py tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_os.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_websocket.py tests/test_vm_http_proxy.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_child_channel_posix.py tests/test_vm_channel.py tests/test_vm_trace.py tests/test_vm_multicore.py tests/test_vm_native.py tests/test_vm_native_module.py tests/test_vm_jit.py
 SANITIZE_JOBS ?= 4
 
 # The same modules with the shared-state locks on at one scheduler (AGENTICA_VM_TEST_SHARED=1, test-only; the module

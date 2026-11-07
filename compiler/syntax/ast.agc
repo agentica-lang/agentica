@@ -151,6 +151,9 @@ end
 ## in order. A function with out parameters has none of them in its params: it returns its record
 ## (StructDecl.record_of), with the C result first. with_types is true when the block of the function declares a
 ## resource or a struct, which puts all its functions with the types in the declaration order.
+## module is true for a function of an `extern module "NAME"` block, a function of a native module's table: library is
+## then the module's NAME as written, symbol the def's name (`?` and `!` included), and codes, resource, free and outs
+## are empty; its parameter and result types stay the Agentica types as written.
 export struct Native
   library: String
   symbol: String
@@ -160,6 +163,7 @@ export struct Native
   free: String
   outs: List[NativeResource]
   with_types: Bool
+  module: Bool
 end
 
 ## A resource that an out parameter of an extern function gives: its name as written and the C name of its free

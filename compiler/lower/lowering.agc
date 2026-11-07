@@ -145,6 +145,14 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     struct_decls = struct_decls.put(entry.decl.name, entry.decl)
   end
 
+  enum_decls: Map[String, Ast.EnumDecl] = {}
+  for decl in decls
+    case decl
+      Ast.Decl.Enum(node) -> enum_decls = enum_decls.put(node.name, node)
+      _ -> next
+    end
+  end
+
   values: Map[String, Ast.Expr] = {}
   for entry in constants
     values = values.put(entry.constant.name, entry.constant.value)
@@ -155,6 +163,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     resolved: checked.resolved,
     user_types: tables.user_types,
     structs: tables.infos,
+    enums: tables.enum_index,
     variants: tables.variants,
     json_types: tables.json_types,
     layouts: {},
@@ -196,7 +205,8 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     function = entry.function
     case function.native
       some(native) ->
-        lowered = try Native.lower(cx.with(file: entry.file), function, native, struct_decls, index_of[entry.file])
+        here = cx.with(file: entry.file)
+        lowered = try Native.lower(here, function, native, struct_decls, enum_decls, index_of[entry.file])
         table = table.with(functions: table.functions.push(lowered))
       none ->
         table = try add_function(

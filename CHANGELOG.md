@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `extern module "NAME"` calls C written for Agentica, with Agentica types.
+
 ## [0.25.1] - 2026-11-06
 
 ### Added

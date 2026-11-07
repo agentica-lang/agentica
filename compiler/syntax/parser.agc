@@ -113,6 +113,11 @@ VARIADIC_HELP = (
   "resource, and not an out parameter; pass a C.Bool or an integer narrower than an int there as C.Int32 and a " +
   "C.Float as C.Double"
 )
+# The types of a function of a native module (CHECK-NATIVE-TYPE in the checker).
+MODULE_TYPES_HELP = (
+  "write an Agentica type: Int, Float, Bool, String, Bytes, Void as the result, a List, Map, Optional or Result of " +
+  "them, or a struct or enum of the program"
+)
 # The most parameters an extern function takes (AGC_FFI_MAX_PARAMS in vm/ffi_os.h).
 EXTERN_MAX_PARAMS = 64
 # The codes of the C types of a callback: what C passes in and the Agentica function returns must cross by value, so a
@@ -232,8 +237,8 @@ end
 
 # What the members of an extern block see of the block: its library, the free function of each resource declared so
 # far, by name, the layout code of each struct declared so far, by name, the callbacks declared so far, the C names of
-# the functions declared so far, and whether the block declares a resource, a callback or a struct anywhere
-# (Ast.Native.with_types).
+# the functions declared so far, whether the block declares a resource, a callback or a struct anywhere
+# (Ast.Native.with_types), and whether it is an `extern module "NAME"` block (Ast.Native.module).
 struct ExternBlock
   library: String
   resources: Map[String, String]
@@ -241,6 +246,7 @@ struct ExternBlock
   callbacks: Set[String]
   symbols: Set[String]
   with_types: Bool
+  module: Bool
 end
 
 struct StructAt
@@ -2226,9 +2232,16 @@ end
 # extern "library" NL, then [##doc] [export] members, then end. A member is [compute] def, a function with no body
 # (Ast.Native), so the later stages see ordinary functions, resource Name, free: c_name, or struct Name ... end, a C
 # struct passed by value. A resource or a struct names a type that the members below it may use; no def of the block
-# may be the free function of a resource, which the VM alone calls.
+# may be the free function of a resource, which the VM alone calls. `extern module "NAME"` declares functions of a
+# native module instead (parse_module_member). module is a plain name: it is a word only between extern and the
+# string.
 def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
+  module = module_word?(e, pos + 1)
   library = pos + 1
+  if module
+    library = pos + 2
+  end
+
   if Base.kind_at(e, library) == "string" and Base.heredoc?(e.tokens[library])
     return error(
       Base.unexpected_help(
@@ -2272,7 +2285,8 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
     structs: {},
     callbacks: Set.new([]),
     symbols: Set.new([]),
-    with_types: declares_types?(e, cursor),
+    with_types: !module and declares_types?(e, cursor),
+    module: module,
   )
 
   nodes: List[Ast.Decl] = []
@@ -2290,7 +2304,7 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
         at += 1
       end
 
-      taken_member = try parse_extern_member(e, at, next_id, taken.doc, block)
+      taken_member = try extern_member(e, at, next_id, taken.doc, block)
       member = taken_member.decl
       block = taken_member.block
       node = member.node
@@ -2338,6 +2352,16 @@ def declares_types?(e: Base.Env, pos: Int) -> Bool
 end
 
 # One member of an extern block at pos (after its doc and export), and the block with it.
+def extern_member(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], block: ExternBlock) -> Result[MemberAt]
+  if block.module
+    member = try parse_module_member(e, pos, ids, doc, block)
+    return ok(MemberAt(decl: member, block: block, records: []))
+  end
+
+  return parse_extern_member(e, pos, ids, doc, block)
+end
+
+# One member of an extern block that is not a module block at pos (after its doc and export), and the block with it.
 def parse_extern_member(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], block: ExternBlock) -> Result[MemberAt]
   if resource_start?(e, pos)
     member = try parse_resource(e, pos, ids, doc, block)
@@ -3028,6 +3052,7 @@ def parse_extern_function(
           free: free,
           outs: outs,
           with_types: block.with_types,
+          module: false,
         ),
       ),
       span: span,
@@ -3040,6 +3065,170 @@ def parse_extern_function(
   end
 
   return ok(ExternAt(decl: decl, symbol: symbol, records: records))
+end
+
+# One member of an `extern module "NAME"` block at pos (after its doc and export): only [compute] def. A resource, a
+# callback or a struct is PARSE-EXTERN-MODULE at its first word: the types that cross are the program's own.
+def parse_module_member(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], block: ExternBlock) -> Result[DeclAt]
+  if resource_start?(e, pos) or callback_start?(e, pos) or e.tokens[pos].kind == "struct"
+    return error(
+      Base.bail(
+        e,
+        pos,
+        "PARSE-EXTERN-MODULE",
+        "an extern module block declares only def and compute def",
+        Base.hint("declare the structs and enums that cross outside the block, as plain declarations"),
+      ),
+    )
+  end
+
+  at = pos
+  if compute_start?(e, at)
+    at += 1
+  end
+
+  if e.tokens[at].kind != "def"
+    return error(Base.found(e, at, "def, compute def or end in an extern module block"))
+  end
+
+  return parse_module_function(e, pos, at, ids, doc, block)
+end
+
+# [compute] def name(params) -> Type NL in an extern module block at pos (start is compute or def): a function of the
+# module's table, named as the table names it (`?` and `!` included), with the Agentica types as written; the checker
+# says which cross (CHECK-NATIVE-TYPE). The table gives the C function, so an out parameter, a `...` and a C name
+# after `=` are PARSE-EXTERN-MODULE, a C type anywhere in a type is PARSE-EXTERN-TYPE, a default is
+# PARSE-EXTERN-DEFAULT and a 65th parameter PARSE-EXTERN-ARITY, as in an extern block.
+def parse_module_function(
+  e: Base.Env,
+  start: Int,
+  pos: Int,
+  ids: Int,
+  doc: Optional[String],
+  block: ExternBlock,
+) -> Result[DeclAt]
+  after_name = try Base.expect(e, pos + 1, "name", "a function name", true)
+  after_open = try Base.expect(e, after_name, "left-paren", "\"(\"", false)
+  params = try parse_parameters(e, after_open, ids, true)
+  after_params = try Base.expect(e, params.pos, "right-paren", "\")\"", false)
+  after_arrow = try Base.expect(e, after_params, "arrow", "\"->\"", false)
+  result = try Base.parse_type(e, after_arrow, params.ids)
+  if e.tokens[result.pos].kind == "assign"
+    return error(
+      Base.bail(
+        e,
+        result.pos,
+        "PARSE-EXTERN-MODULE",
+        "a function of a native module has no C name",
+        Base.hint("the module's table names its functions as the def does: write the def without = \"symbol\""),
+      ),
+    )
+  end
+
+  stop = try expect_statement_end(e, result.pos, "a newline after the function")
+  if params.fixed >= 0
+    return error(
+      Base.bail(
+        e,
+        params.mark,
+        "PARSE-EXTERN-MODULE",
+        "a function of a native module has no variadic part",
+        Base.hint("take the values in a List"),
+      ),
+    )
+  end
+
+  if params.nodes.size > EXTERN_MAX_PARAMS
+    return error(
+      Base.bail_span(
+        "PARSE-EXTERN-ARITY",
+        "a function of a native module takes at most #{EXTERN_MAX_PARAMS} parameters",
+        params.nodes[EXTERN_MAX_PARAMS].span,
+        Base.hint("pass the values in fewer parameters"),
+      ),
+    )
+  end
+
+  index = 0
+  for param in params.nodes
+    if params.outs[index]
+      return error(
+        Base.bail_span(
+          "PARSE-EXTERN-MODULE",
+          "a function of a native module has no out parameters",
+          param.span,
+          Base.hint("return the values in a struct"),
+        ),
+      )
+    end
+
+    if param.default.some?
+      return error(
+        Base.bail_span(
+          "PARSE-EXTERN-DEFAULT",
+          "the parameter \"#{param.name}\" of a native module function has a default value",
+          param.span,
+          Base.hint("write the parameter without = value"),
+        ),
+      )
+    end
+
+    try agentica_type(param.type)
+    index += 1
+  end
+
+  try agentica_type(result.node)
+  name = e.tokens[pos + 1].lexeme
+  native = Ast.Native(
+    library: block.library,
+    symbol: name,
+    codes: "",
+    compute: start != pos,
+    resource: "",
+    free: "",
+    outs: [],
+    with_types: false,
+    module: true,
+  )
+
+  node = Ast.Decl.Function(
+    Ast.FunctionDecl(
+      id: result.ids,
+      name: name,
+      name_span: e.tokens[pos + 1].span,
+      type_parameters: [],
+      type_parameter_spans: [],
+      params: params.nodes,
+      result: result.node,
+      body: [],
+      doc: doc,
+      native: some(native),
+      span: Base.span_from(e, start, stop),
+    ),
+  )
+
+  return decl_at(node, stop, result.ids)
+end
+
+# PARSE-EXTERN-TYPE at a C type anywhere in a type of a native module function: a module takes and returns Agentica
+# values. The parser's nesting limit bounds the depth.
+def agentica_type(ref: Ast.TypeRef) -> Result[Void]
+  if ref.name.starts_with?("C.")
+    return error(
+      Base.bail_span(
+        "PARSE-EXTERN-TYPE",
+        "#{ref.name} is a C type, and a native module takes and returns Agentica values",
+        ref.span,
+        Base.hint(MODULE_TYPES_HELP),
+      ),
+    )
+  end
+
+  for arg in ref.args
+    try agentica_type(arg)
+  end
+
+  return ok()
 end
 
 # PARSE-EXTERN-FUNCTION at the type of a C.Function parameter that is neither the function to call nor a free function.
@@ -3760,9 +3949,21 @@ end
 
 # `extern` is a plain name: it starts a block only at the top level and before a string.
 def extern_start?(e: Base.Env, at: Int) -> Bool
-  next = Base.kind_at(e, at + 1)
+  string = at + 1
+  if module_word?(e, string)
+    string += 1
+  end
+
+  next = Base.kind_at(e, string)
   library = next == "string" or next == "interp-start"
   return e.tokens[at].kind == "name" and e.tokens[at].lexeme == "extern" and library
+end
+
+# Whether the token at pos is the word module of `extern module "NAME"`: the name module before a string.
+def module_word?(e: Base.Env, pos: Int) -> Bool
+  next = Base.kind_at(e, pos + 1)
+  string = next == "string" or next == "interp-start"
+  return Base.kind_at(e, pos) == "name" and e.tokens[pos].lexeme == "module" and string
 end
 
 # The position of the interp-end token that closes the interpolated string starting at start (nested strings

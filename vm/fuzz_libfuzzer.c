@@ -12,9 +12,11 @@
 #include "core.h"
 #include "jit/jit.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+
 #ifdef AGC_FUZZ_JIT_WRAP
 #include <stdatomic.h>
-#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #endif
@@ -230,6 +232,12 @@ static void differential(const uint8_t *data, size_t size) {
 #endif
 
 int LLVMFuzzerTestOneInput(const uint8_t *data, size_t size) {
+  /* With AGC_FUZZ_SHOW set, one run in the interpreter with the program's output on stdout and stderr, which end with
+     the kind and exit of the run: what make vm-libfuzz-run reads to check that a seed runs to its end. */
+  if (getenv("AGC_FUZZ_SHOW")) {
+    agc_fuzz_one(data, size, AGC_JIT_OFF, stdout, stderr);
+    return 0;
+  }
   // The return value of agc_fuzz_one (accepted, refused, over the limit) is not a failure; a crash or a difference is.
 #ifdef AGC_FUZZ_JIT_WRAP
   /* Without an emitter (AGC_JIT_HOST 0) a JIT run would only run the interpreter again: nothing to compare, so

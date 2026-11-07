@@ -1,0 +1,8 @@
+# The native module of the example, built from stats.c (see README.md). Paths are relative to this folder; build the
+# one for your system first. No downloads and no lock file: a project manifest with no dependencies needs neither.
+name = "native-module-example"
+
+[native.stats]
+linux = { file = "native/linux/libstats.so" }
+macos = { file = "native/macos/libstats.dylib" }
+windows = { file = "native/windows/stats.dll" }
