@@ -8,25 +8,28 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-11-07
+
 ### Added
 
 - `extern module "NAME"` calls C written for Agentica, with Agentica types.
 - A `compute def` of an `extern module` block runs on the compute pool.
 - `resource Name` in an `extern module` block: a handle that the module frees.
 - The profile has a `native` row per native module function.
-- `Random.seed` gives the seed of the run, so `--seed` with it gives the same random numbers.
-- `[native.NAME] build = { sources = [...] }` in `agentica.toml` builds a native
-  module from its C sources: a run, `compile`, `test` or `install` runs your C
-  compiler on the C of `native/` of the project, its workspace members and its
-  `path` dependencies (`PKG-NATIVE-BUILD`); `check` never builds, and neither
-  does a fetched package. The release archives ship `include/agentica_native.h`.
-- Under any `--deny-*` flag or `--sandbox` no native module is built: the run
-  is `RUNTIME-NATIVE-DENIED`, and `compile` refuses it (`PKG-NATIVE-BUILD`).
+- `[native.NAME] build = { sources = [...] }` in `agentica.toml` builds a
+  native module from its C sources (`PKG-NATIVE-BUILD`); a run, `compile`,
+  `test` or `install` runs your C compiler, `check` never builds, and neither
+  does a fetched package. The release archives ship
+  `include/agentica_native.h`.
+- `Random.seed` gives the seed of the run, so `--seed` with it gives the same
+  random numbers.
 
 ### Changed
 
+- Under any `--deny-*` flag or `--sandbox` no native module is built: the run
+  is `RUNTIME-NATIVE-DENIED`, and `compile` refuses it (`PKG-NATIVE-BUILD`).
 - The version selector of the documentation site lists `dev` first, and on a
-  phone it sits inside the menu instead of in a strip under the header.
+  phone it sits inside the menu.
 
 ## [0.25.1] - 2026-11-06
 
@@ -1160,7 +1163,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.25.1...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.26.0...HEAD
+[0.26.0]: https://github.com/agentica-lang/agentica/compare/0.25.1...0.26.0
 [0.25.1]: https://github.com/agentica-lang/agentica/compare/0.25.0...0.25.1
 [0.25.0]: https://github.com/agentica-lang/agentica/compare/0.24.4...0.25.0
 [0.24.4]: https://github.com/agentica-lang/agentica/compare/0.24.3...0.24.4
