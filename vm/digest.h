@@ -1,12 +1,11 @@
 /*
- * The digest adapter interface: one-shot hashes and HMACs of a byte buffer, for
- * the Digest and HMAC builtins (crypto.c), an incremental SHA-256 for the File
- * hash (files.c), which streams a whole file in fixed chunks, secure random
- * bytes for SecureRandom, a constant-time compare for HMAC.secure_compare,
- * Triple DES CBC, AES-256-GCM and CMAC for the Cipher and CMAC builtins, and
- * PBKDF2 and scrypt for the KDF builtins (crypto.c), and the wipe of a secret.
- * The OpenSSL code is in digest_openssl.c. Adapter header. Design:
- * docs/vm/15-layers.md §15.1.
+ * The digest adapter interface: one-shot hashes and HMACs for the Digest and
+ * HMAC builtins (crypto.c), an incremental SHA-256 for the File hash
+ * (files.c), secure random bytes for SecureRandom, a constant-time compare,
+ * Triple DES CBC, AES-256-GCM and CMAC (Cipher, CMAC), PBKDF2 and scrypt (KDF),
+ * RSA-OAEP with a PEM public key (RSA), and the wipe of a secret. The OpenSSL
+ * code is in digest_openssl.c. Adapter header. Design: docs/vm/15-layers.md
+ * §15.1.
  */
 #ifndef AGC_DIGEST_H
 #define AGC_DIGEST_H
@@ -115,6 +114,34 @@ bool agc_pbkdf2_hmac_sha256(const unsigned char *password, size_t password_n, co
    or when the library fails; out is then wiped. password and salt may be NULL when their length is 0. */
 bool agc_scrypt(const unsigned char *password, size_t password_n, const unsigned char *salt, size_t salt_n, uint64_t n,
                 uint64_t r, uint64_t p, uint64_t max_memory, unsigned char *out, size_t out_n);
+
+/* The longest RSA modulus OpenSSL encrypts with (OPENSSL_RSA_MAX_MODULUS_BITS, 16384 bits), in bytes: the most bytes
+   an RSA ciphertext has. */
+#define AGC_RSA_MAX_BYTES 2048
+/* RSA-OAEP with SHA-1 (RFC 8017 §7.1) takes at most the key size less 42 bytes: two SHA-1 digests and two bytes. */
+#define AGC_RSA_OAEP_OVERHEAD 42
+
+/* The end of an RSA encryption: done, a text that holds no PEM public key, a public key that is not RSA, data longer
+   than the key takes, a key that cannot encrypt (too small or too large, an even modulus, an even exponent or one of
+   1 or above 64 bits), or a library failure (no memory, no random OAEP seed). */
+typedef enum {
+  AGC_RSA_DONE,
+  AGC_RSA_BAD_PEM,
+  AGC_RSA_NOT_RSA,
+  AGC_RSA_TOO_LONG,
+  AGC_RSA_BAD_KEY,
+  AGC_RSA_FAILED
+} agc_rsa_status;
+
+/* Encrypts the n bytes at data with the RSA public key in the pem_n bytes of PEM text at pem (SubjectPublicKeyInfo
+   "PUBLIC KEY" or PKCS#1 "RSA PUBLIC KEY"; the first PEM block is read) with OAEP padding, SHA-1 and MGF1-SHA-1
+   (OpenSSL's RSA_PKCS1_OAEP_PADDING), into out, and sets *len to the ciphertext's length, the key's size. Every key
+   check runs before the encryption, so the work is bounded: a modulus of at most 16384 bits and an exponent of at
+   most 64. For AGC_RSA_TOO_LONG *len is the most data bytes the key takes; for the other errors it is 0. A private
+   key, a certificate or an encrypted PEM is AGC_RSA_BAD_PEM: no passphrase is ever asked for. pem_n is at most
+   INT_MAX (else AGC_RSA_BAD_PEM), and data may be NULL when n is 0. Every OpenSSL object is freed before it returns. */
+agc_rsa_status agc_rsa_oaep_encrypt(const char *pem, size_t pem_n, const unsigned char *data, size_t n,
+                                    unsigned char out[AGC_RSA_MAX_BYTES], size_t *len);
 
 /* Overwrites the n bytes at data with zeros in a way the compiler cannot drop, for a copy of a secret (a KDF's
    password or key) before it is freed. data may be NULL when n is 0. */

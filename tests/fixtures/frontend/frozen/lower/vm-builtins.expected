@@ -265,6 +265,7 @@ Process.spawn_channel
 Process.wait
 Profile.measure
 Profile.steps
+RSA.public_encrypt_oaep
 Random.float
 Random.int
 Random.seed

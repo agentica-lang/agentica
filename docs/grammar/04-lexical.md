@@ -79,10 +79,10 @@ aliases or module names (`RESERVED_TYPE_NAMES` in
 `HttpServerOptions`, `HttpWire`, `IO`, `Int`, `JSON`, `Json`, `JsonField`,
 `KDF`, `Lazy`, `List`, `Listener`, `LogEvent`, `LogLevel`, `LogRegistry`, `Map`,
 `Math`, `Nil`, `Optional`, `Path`, `Process`, `ProcessOutput`, `Profile`,
-`Random`, `Range`, `RegexEngine`, `Result`, `SecureRandom`, `Set`, `Socket`,
-`Std`, `String`, `StructMember`, `System`, `TCP`, `TLS`, `Task`, `TaskDown`,
-`TaskExit`, `TaskRef`, `Test`, `TestCase`, `Time`, `TlsClientOptions`,
-`TlsContext`, `TlsServerOptions`, `Void` and `Zlib`.
+`RSA`, `Random`, `Range`, `RegexEngine`, `Result`, `SecureRandom`, `Set`,
+`Socket`, `Std`, `String`, `StructMember`, `System`, `TCP`, `TLS`, `Task`,
+`TaskDown`, `TaskExit`, `TaskRef`, `Test`, `TestCase`, `Time`,
+`TlsClientOptions`, `TlsContext`, `TlsServerOptions`, `Void` and `Zlib`.
 `HTTP` is not reserved: it is the usual alias of `std/http`. `ok`, `error`,
 `some` and `none` are names, but cannot be declared as functions, variables,
 parameters, loop variables or fields (`CHECK-REDEFINED-NAME`). The same holds
