@@ -1,6 +1,7 @@
 // The version selector and the old-version banner. Every page of every version loads this one file from the root
 // of the site (the deploy adds the <script> tag, tools/site_versions.py), so a cached old build gets the current one.
-// It uses only what all releases share: `.site-header`, its `.version` link and the tokens of _tokens.scss.
+// It uses only what all releases share: `.site-header`, its `.version` link, the menu button (`.nav-toggle`, whose
+// aria-controls names the menu, `#sidebar`) and the tokens of _tokens.scss.
 (function () {
   "use strict";
   var script = document.currentScript;
@@ -53,9 +54,9 @@
       go(versions.filter(function (v) { return v.version === select.value; })[0]);
     });
 
-    // A strip under the header: the banner of an old version, and on a phone the selector, which has no room in the
-    // header there (the search box and the buttons need it). Under it, not above: the skip links are the first
-    // children of the header and must stay the first tab stops.
+    // A strip under the header, for the banner of an old version. The selector sits in it only when it fits nowhere else
+    // (see place()). Under the header, not above: the skip links are the first children of the header and must stay
+    // the first tab stops.
     var bar = document.createElement("div");
     bar.className = "version-bar";
     if (current !== latest) {
@@ -82,8 +83,21 @@
     var badge = header && header.querySelector(".version");
     var phone = window.matchMedia("(max-width: 30rem)");
 
+    // The menu the button opens, when the button shows: a phone has no room for the selector in the header (the search
+    // box and the buttons need it). Every release has the button and its menu; one where the button is hidden has no
+    // drawer, and the selector goes to the strip.
+    function menu() {
+      var toggle = header && header.querySelector(".nav-toggle");
+      var target = toggle && document.getElementById(toggle.getAttribute("aria-controls"));
+      return target && toggle.getClientRects().length ? target : null;
+    }
+
     function place() {
-      if (header && !phone.matches) {
+      var drawer = phone.matches ? menu() : null;
+      select.classList.toggle("in-menu", !!drawer);
+      if (drawer) {
+        drawer.insertBefore(select, drawer.firstChild);
+      } else if (header && !phone.matches) {
         header.insertBefore(select, badge || null);
       } else {
         bar.appendChild(select);
@@ -100,5 +114,7 @@
     document.documentElement.classList.add("has-version-select");
     place();
     if (phone.addEventListener) phone.addEventListener("change", place);
+    // Back to this page from another version: the browser may restore the page with the old selection.
+    window.addEventListener("pageshow", function () { select.value = current.version; });
   }
 })();
