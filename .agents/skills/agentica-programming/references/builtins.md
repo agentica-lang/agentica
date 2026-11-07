@@ -33,6 +33,7 @@ Time.monotonic_ms() -> Int              # never goes backward; may lag up to 10 
 Time.monotonic_ns() -> Int              # nanoseconds; same origin as monotonic_ms
 Random.int(min: Int, max: Int) -> Int   # both ends inclusive; min > max halts (RUNTIME-INVALID-RANGE)
 Random.float() -> Float                 # 0.0 up to, not including, 1.0
+Random.seed() -> Int                    # the run's seed (0..2147483647), the same in every task
 ```
 
 - `IO.read_bytes`, `System.env`, `System.os`, `System.pid`: `processes.md`.
@@ -40,7 +41,8 @@ Random.float() -> Float                 # 0.0 up to, not including, 1.0
   `IO.eof?` consumes nothing. Reads have no timeout; step budgets do not
   interrupt blocking input.
 - `Random` is seeded from the OS unless `--seed N` is given; not for secrets:
-  use `SecureRandom` (`binary.md`).
+  use `SecureRandom` (`binary.md`). Passing the number from `Random.seed`
+  back with `--seed` gives the same random numbers.
 
 ## Int, Float
 

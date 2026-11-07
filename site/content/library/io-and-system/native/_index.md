@@ -35,6 +35,14 @@ The rest of the section has its own pages:
 - Use [Wrapping a C library](/library/io-and-system/native/wrapping/) to hide the C habits of a library behind a normal API and ship it in a package.
 - Use [Native modules](/library/io-and-system/native/modules/) for C code written for Agentica: it takes and returns Agentica values, a whole result in one call.
 
+## Which one
+
+`extern "LIB"` and `extern module` do different jobs:
+
+- `extern "LIB"` binds an existing C library as it is: you write no C, the library only needs to be installed, and it fits a few calls with scalar or pointer arguments.
+- `extern module` is C written for Agentica: you compile a small C file against `agentica_native.h`, and one call takes and returns Agentica values (lists, maps, structs, resources). It fits hot paths and whole results: in `make bench-native` (`benchmarks/native/run.py`, Linux x86-64), a List of 1000 structs took about 65 µs from one module call and about 562 µs from 1000 extern calls with a push each.
+- Both together is common: a module that wraps a C library, such as SQLite, and gives the program Agentica values.
+
 ## The block
 
 - The library is a plain string: a name without `/` (`"libm.so.6"`), which the system looks up, or an absolute path (`"/opt/tool/libtool.so"`). Anything else is `PARSE-EXTERN-LIBRARY`. The working directory is never searched. On Windows a name (`"ucrtbase.dll"`) is looked up next to `agentica.exe` and in the system folder, not in `PATH`; write an absolute path with escaped backslashes (`"C:\\libs\\x.dll"`), and the DLLs it needs are searched in its folder and the default folders, never in `PATH` (a MinGW DLL that needs `libgcc_s_seh-1.dll` must have it next to it); a relative path there (`"lib\\x.dll"`, `"C:x.dll"`) is `RUNTIME-NATIVE-LOAD`. On macOS a name (`"libsqlite3.dylib"`) is looked up as `/usr/lib/NAME` (and in `DYLD_LIBRARY_PATH`), which finds the system libraries in the dyld shared cache (libc and libm are `"libSystem.B.dylib"`); any other library takes its absolute path (`"/opt/homebrew/lib/libpq.dylib"`; a package can list [candidates](/tour/modules/) in its manifest). macOS drops `DYLD_*` variables when a protected program such as `/usr/bin/env` or `/bin/sh` starts agentica, so `DYLD_LIBRARY_PATH` does not pass through a shebang line or a shell script.
@@ -64,4 +72,4 @@ end
 
 - Native code must retry calls cut short by `EINTR`: GC signals can interrupt sleeps and polls.
 - A `RUNTIME-NATIVE-*` or `RUNTIME-INTEGER-OVERFLOW` error of an extern call has its primary span on the `extern def` line; the call site is in the stack.
-- Native code is allowed by default and can start programs itself. `agentica --deny-native file.agc` (or any `--deny-*` flag) refuses a program that declares any extern function or calls a `Native.*` builtin before anything runs (`RUNTIME-NATIVE-DENIED`, exit 2). Under `agentica test`, such a test file is a file error with that code.
+- Native code is allowed by default and can start programs itself. `agentica --deny-native file.agc` (or any `--deny-*` flag) refuses a program that declares any extern function or calls a `Native.*` builtin before anything runs (`RUNTIME-NATIVE-DENIED`, exit 2). Under `agentica test`, such a test file is a file error with that code. Under these flags a [native module](/library/io-and-system/native/modules/) with a `build` table is not built, and `agentica compile` refuses it (`PKG-NATIVE-BUILD`).

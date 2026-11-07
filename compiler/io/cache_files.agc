@@ -20,6 +20,9 @@ BUILD_VARIABLE = "AGENTICA_BUILD_DIR"
 export IO_TIMEOUT_MS = 10_000
 export PIECE = 1_048_576
 
+# The variables that change what the build of a native module makes (io/native_build.agc).
+COMPILER_VARIABLES = ["CC", "CPATH", "C_INCLUDE_PATH", "CPLUS_INCLUDE_PATH", "LIBRARY_PATH"]
+
 # The files that decide which package or library an import reads, next to the manifest.
 MANIFEST_FILE = "agentica.toml"
 PROJECT_FILES = [MANIFEST_FILE, "agentica.lock"]
@@ -235,11 +238,19 @@ export def digest(data: Bytes) -> String
 end
 
 # What, besides the files an import reads, changes what a build makes of the root: the environment that places
-# libraries and packages, and the project (the manifest the build finds and its lock).
+# libraries and packages, the C compiler a native module builds with and its search variables (CC, CPATH and the
+# others of io/native_build.agc), and the project (the manifest the build finds and its lock).
 def inputs_digest(settings: Env.Settings, project: Project.Project) -> Result[String]
   workspace = settings.workspace
   env = settings.env
   parts = ["env #{env.agentica_path}|#{env.xdg_data_home}|#{env.xdg_cache_home}|#{env.home}|#{env.local_app_data}"]
+  for name in COMPILER_VARIABLES
+    value = System.env(name)
+    if value.ok?
+      parts = parts.push("#{name} #{value.unwrap!}")
+    end
+  end
+
   case project
     Project.Project.Bare -> parts = parts.push("project -")
     Project.Project.Declared(manifest) ->

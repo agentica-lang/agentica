@@ -12,6 +12,12 @@ extern "libm.so.6"
 end
 ~~~
 
+- Which one: `extern "LIB"` binds an existing C library as it is (no C to
+  write, the library only needs to be installed; a few calls with scalar or
+  pointer arguments). `extern module` (`native-modules.md`) is C written for
+  Agentica, compiled against `agentica_native.h`: one call takes and returns
+  lists, maps, structs and resources, for hot paths and whole results. A
+  module that wraps a C library (SQLite) is common.
 - Types: the integers `C.Int8`, `C.Int16`, `C.Int32`, `C.Int64`, `C.UInt8`,
   `C.UInt16`, `C.UInt32` and `C.Long` (C `long`: 32 bits on Windows, 64
   elsewhere), each an `Int`; `C.Double` (`Float`), `C.Float` (32-bit `float`, a

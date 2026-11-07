@@ -29,8 +29,7 @@
 
 /* Per thread: fast calls on several schedulers run at once. */
 static _Thread_local char shout[64];
-static int32_t bumps;
-static atomic_int flag, returned, waiting, naps, stalled;
+static atomic_int bumps, flag, returned, waiting, naps, stalled;
 
 /* Sleeps MS milliseconds. */
 static void sleep_ms(int32_t ms) {
@@ -47,8 +46,10 @@ int64_t peer_mul64(int64_t a, int64_t b) { return a * b; }
 double peer_scale(double x, double k) { return x * k; }
 bool peer_not(bool b) { return !b; }
 int64_t peer_len(const char *s) { return (int64_t)strlen(s); }
-void peer_bump(void) { bumps++; }
-int32_t peer_bumps(void) { return bumps; }
+/* Atomic: two tasks may bump at once, since a fast call runs in C with no VM lock, and a lost bump would leave a
+   program that waits for a count spinning forever. */
+void peer_bump(void) { atomic_fetch_add(&bumps, 1); }
+int32_t peer_bumps(void) { return atomic_load(&bumps); }
 const char *peer_null(void) { return NULL; }
 const char *peer_bad_utf8(void) { return "a\xff" "b"; }
 

@@ -51,3 +51,19 @@ end
   makes one and gives its zeroed state, `an_get_resource` gives the state of a
   resource argument. A dirty function's getters give `false` for terms it
   made.
+- `[native.NAME] build = { sources = ["native/stats.c"], defines = [...],
+  libs = ["m"] }` in `agentica.toml` builds the module with the system C
+  compiler (`CC`, else `cc`; `gcc` on Windows) on a run, `compile`, `test` or
+  `install` of the project, a workspace member or a `path` dependency (never
+  `check`, never a fetched package), into the package cache, printing
+  `built native NAME: PATH`. Sources are `.c` files in `native/`; defines are
+  `NAME[=VALUE]`; libs are names for `-l`. A bad item is
+  `PKG-MANIFEST-INVALID` at its key path, a missing source
+  `PKG-NATIVE-MISSING`, a failed build `PKG-NATIVE-BUILD` at
+  `native.NAME.build`. A run builds a library when a file first uses it;
+  under any `--deny-*` flag or `--sandbox` nothing builds: the run is
+  `RUNTIME-NATIVE-DENIED`, `compile` is `PKG-NATIVE-BUILD`. Keep your own
+  headers under `native/`: the cache key does not cover system headers,
+  installed libraries or the environment beyond `CPATH`, `C_INCLUDE_PATH`,
+  `CPLUS_INCLUDE_PATH` and `LIBRARY_PATH`; to rebuild, remove the entry or
+  change a file under `native/`.

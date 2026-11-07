@@ -48,7 +48,7 @@ Run an example with `dist/agentica examples/<name>.agc`. The
   serving and prints its port.
 - [`queue.agc`](queue.agc): the embedded `std/queue` library.
 - [`ffi/`](ffi/README.md): calling C through `extern` blocks: plain calls, structs/resources/buffers, and a table of function pointers (build `ffi/demo.c` first).
-- [`native_module/`](native_module/README.md): a native module written against the VM's C API, called through an `extern module` block: a struct and CSV rows of typed cells, each in one call (build `native_module/stats.c` first).
+- [`native_module/`](native_module/README.md): a native module written against the VM's C API, called through an `extern module` block: a struct and CSV rows of typed cells, each in one call (the first run builds `native_module/native/stats.c`).
 - [`json-modules.agc`](json-modules.agc): a program split across files (it
   imports [`modules/json-tools.agc`](modules/json-tools.agc)).
 - [`mcp/stdio.agc`](mcp/stdio.agc): a minimal MCP stdio server.

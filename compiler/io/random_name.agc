@@ -6,10 +6,9 @@ IO_TIMEOUT_MS = 10_000
 DIGITS = "0123456789abcdef"
 
 ## A random name of 32 hex digits. Elsewhere it is 16 bytes of /dev/urandom, so it cannot be guessed (Random.int has a
-## 31-bit seed when the program is run with --seed). Windows has no such file: the name is 8 bytes of Random.int, 4 of
-## the clock and the process id, which is enough there because `Dir.mkdir_private` and the `create_private` mode fail
-## on a name that is taken and make something that only its owner can use, so a guessed name costs a retry and gives
-## no access.
+## 31-bit seed). Windows has no such file: the name is 8 bytes of Random.int, 4 of the clock and the process id, which
+## is enough there because `Dir.mkdir_private` and the `create_private` mode fail on a name that is taken and make
+## something that only its owner can use, so a guessed name costs a retry and gives no access.
 export def hex() -> Result[String]
   if System.os() == "windows"
     return ok(hex_of(process_bytes()))

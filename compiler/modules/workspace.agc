@@ -40,6 +40,31 @@ export struct NativeRequest
   member: String
 end
 
+## One native module the core asks the machine to build from its C sources (packages/native_build.agc): the package
+## cache root, the library and the system, the manifest file and the key path of its `build` table (where failures
+## point), the real folder of the package, the sources (paths in its native/ folder, as written), the checked `defines`
+## and `libs`, and every file of native/ (relative paths, in bytewise order), whose bytes the build key covers.
+export struct BuildRequest
+  cache_root: String
+  library: String
+  system: String
+  file: String
+  key: String
+  root: String
+  sources: List[String]
+  defines: List[String]
+  libs: List[String]
+  files: List[String]
+end
+
+## What the machine did with a BuildRequest: the absolute path of the built library, nothing (a command that never
+## builds, such as `check`: the program is not run), or a packed PKG- failure at the request's file and key.
+export enum Built
+  Library(String)
+  Skipped
+  Failed(String)
+end
+
 ## The cache of checked modules (modules/check_cache.agc) as the core sees it. `on` says whether there is one; `read`
 ## gives the text of the entry kept for a module, by the key of its file (a path, or the `std/` name), and `write`
 ## replaces that entry and says whether it could. An entry is untrusted data: the core validates what it reads and
@@ -65,7 +90,14 @@ export struct Workspace
   list_folder: Fn[String, Result[List[Entry]]]
   read_bytes: Fn[String, Result[Bytes]]
   native_artifact: Fn[NativeRequest, Result[String]]
+  native_build: Fn[BuildRequest, Built]
   check_cache: CheckCache
+end
+
+## The builder of a workspace that never builds: every request is Skipped. It is the default, so only the commands
+## that run or write a program (app/) turn source builds on.
+export def no_build(request: BuildRequest) -> Built
+  return Built.Skipped
 end
 
 ## The cache that holds nothing: the default of every workspace, so a stage that does not ask for the cache never sees
