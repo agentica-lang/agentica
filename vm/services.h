@@ -261,8 +261,8 @@ void agc_ffi_forget(agc_vm *vm);
 char *agc_ffi_text_copy(const char *data, size_t len);
 /* Runs RUN(ARG) with the callbacks of extern blocks that C starts on this thread refused, as a free function runs:
    they give C zero and run nothing. The call of a native module runs this way. RUN may jump out (the fuzz driver's
-   allocation limit, a failed check of vm/map.c); the thread is then left refusing callbacks until the next native
-   call puts its own site, which is safe, and agc_ffi_forget clears it. */
+   allocation limit, a failed check of vm/map.c); the thread then stays refusing, outside its own native calls (a fast
+   call and compute_work put back the refusing site they found), until agc_ffi_forget clears it. */
 void agc_ffi_refusing_callbacks(void (*run)(void *arg), void *arg);
 /* Native modules (vm/native_module.c, vm/agentica_native.h). A bound function lives in vm/ffi.c's cache of the run:
    bind makes it from the text after "module " of a Native.call signature (DIRTY for "compute module "), failing with

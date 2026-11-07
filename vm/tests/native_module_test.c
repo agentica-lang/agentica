@@ -8,6 +8,7 @@
 #include "../../tests/fixtures/native/module_demo.c"
 
 #include <assert.h>
+#include <limits.h>
 #include <setjmp.h>
 #include <stdatomic.h>
 #include <stddef.h>
@@ -198,6 +199,9 @@ static const an_module v_major = {2, 0, sizeof(an_module), "v", NULL, functions,
 static const an_module v_minor = {1, AN_API_MINOR + 1, sizeof(an_module), "v", NULL, functions, 1};
 /* The size of an an_module of API 1.0, as vm/native_module.c checks it: one byte less is refused. */
 #define SIZE_1_0 (offsetof(an_module, function_count) + sizeof(uint32_t))
+#if UINTPTR_MAX == UINT64_MAX && ULONG_MAX == UINT64_MAX
+_Static_assert(SIZE_1_0 == 44, "the 1.0 an_module layout on LP64");
+#endif
 static const an_module v_size = {1, 0, SIZE_1_0 - 1, "v", NULL, functions, 1};
 static const an_module v_size_1_0 = {1, 0, SIZE_1_0, "v", NULL, functions, 1};
 static const an_module v_rows = {1, 0, sizeof(an_module), "v", NULL, bad_rows, 1};

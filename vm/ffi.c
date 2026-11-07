@@ -182,11 +182,12 @@ enum { CALL_QUEUED, CALL_RUNNING, CALL_FINISHED, CALL_ABANDONED };
    with no `vm` on its pool thread, where no callback can run: a callback there only sets `refused`, and C gets zero. A
    thread that C started has none, and C gets zero there too, and so does a free function of a resource or a native
    module's function, which run with refused_site (agc_ffi_refusing_callbacks): a free function may run inside a
-   callback or a cancel walk, with rt->sync let go and the task's state half changed. Once a callback has failed (`failed`) every later one of the call gives zero at once, and the
-   call raises the failure when C returns: the outcome that the callback's run kept (`kept`, in GC memory, made only
-   then), or CODE and MESSAGE when its value could not go back to C. A run that stopped for a cancel or the end of the
-   run keeps an outcome of kind AGC_DONE, and the call then gives Void and ends the turn. `ran` is set once a callback
-   has run in the call (its nested run is cleared when C returns). */
+   callback or a cancel walk, with rt->sync let go and the task's state half changed. Once a callback has failed
+   (`failed`) every later one of the call gives zero at once, and the call raises the failure when C returns: the
+   outcome that the callback's run kept (`kept`, in GC memory, made only then), or CODE and MESSAGE when its value could
+   not go back to C. A run that stopped for a cancel or the end of the run keeps an outcome of kind AGC_DONE, and the
+   call then gives Void and ends the turn. `ran` is set once a callback has run in the call (its nested run is cleared
+   when C returns). */
 typedef struct native_site {
   agc_vm *vm;
   uint32_t span;

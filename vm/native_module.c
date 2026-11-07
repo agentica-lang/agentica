@@ -501,9 +501,9 @@ static an_term api_list(an_env *env, const an_term *items, size_t n) {
   return term_of(agc_list_value(agc_list_builder_finish(&b)));
 }
 
-/* The builder's state goes through memcpy both ways, so C's opaque words are never read as another type. */
-/* The array is charged as it grows, by the slots each step adds, so a module that never calls an_list_end pays too,
-   and list_end charges nothing more. */
+/* The builder's state goes through memcpy both ways, so C's opaque words are never read as another type. The array
+   is charged as it grows, by the slots each step adds, so a module that never calls an_list_end pays too, and
+   list_end charges nothing more. */
 static void api_list_begin(an_env *env, an_list_builder *b, size_t hint) {
   list_build build = {NULL, 0, hint < HINT_MAX ? hint : HINT_MAX};
   if (build.cap) {
