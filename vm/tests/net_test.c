@@ -314,7 +314,12 @@ static void release_config(void *config) { agc_tls_config_free(config); }
    scheduler finds the job busy and posts its cancel; the I/O thread runs `cancel` (the request leaves its slot and the
    socket is shut, no resource touched), the job comes back dropping and a scheduler ends it with `drop`, which runs on
    the I/O thread. The owner's end then closes the socket resource, and the peer reads the end of input. With STD the
-   connect is std/http's name for it, HttpWire.connect_context. */
+   connect is std/http's name for it, HttpWire.connect_context.
+   The case waits out the deadline after the cancel, so the deadline is kept short, but the connect must reach the peer
+   before it passes: the host is resolved on the libuv pool first, which a loaded runner can hold back, and a deadline
+   that passes first ends the connect before it dials, which left the wait below spinning until the alarm (#1174). So
+   the deadline leaves room for that, the wait sleeps in poll() instead of spinning, which leaves the core to the pool
+   thread, and a task woken before the peer has its connection fails the case at once. */
 static void test_cancelled_tls_connect_past_its_deadline(bool std) {
   assert(agc_io_share(&vm, false));
   agc_runq_share(vm.rt->runq);
@@ -325,11 +330,13 @@ static void test_cancelled_tls_connect_past_its_deadline(bool std) {
   assert(config);
   agc_value tls = agc_tls_context_value(config, release_config, false);
   calling dial = call(std ? "HttpWire.connect_context" : "TLS.connect", 4, text("127.0.0.1"), agc_int(port), tls,
-                      agc_int(1000));
+                      agc_int(3000));
   assert(start(&dial));
-  /* The loop runs the connect until the peer has the connection; the deadline is far enough off. */
   struct pollfd p = {silent, POLLIN, 0};
-  while (poll(&p, 1, 0) == 0) (void)agc_io_poll(&vm, false);
+  while (poll(&p, 1, 10) == 0) {
+    assert(vm.task->state == AGC_TASK_PARKED);
+    (void)agc_io_poll(&vm, false);
+  }
   int peer = accept(silent, NULL, NULL);
   assert(peer >= 0);
   on_thread(detach_task, NULL);
@@ -420,18 +427,18 @@ int main(void) {
 #if defined(__linux__) || defined(__APPLE__)
   agc_test_deadline(120);
   agc_test_io_vm(&vm);
-  test_close_queued_behind_a_read();
-  test_deadline_before_the_bytes();
-  test_bytes_before_the_deadline();
-  test_cancelled_accept_leaves_the_queue();
-  test_served_accept_of_a_cancelled_task();
-  test_cancelled_read_leaves_the_reader_slot();
-  test_cancelled_tls_connect_past_its_deadline(false);
-  test_cancelled_tls_connect_past_its_deadline(true);
-  test_byte_keys();
-  test_upgrade_tls_on_a_dropped_client();
-  test_upgrade_context_names_its_context_argument();
-  test_upgrade_tls_builds_the_shared_context_then_handshakes();
+  AGC_TEST_RUN(test_close_queued_behind_a_read());
+  AGC_TEST_RUN(test_deadline_before_the_bytes());
+  AGC_TEST_RUN(test_bytes_before_the_deadline());
+  AGC_TEST_RUN(test_cancelled_accept_leaves_the_queue());
+  AGC_TEST_RUN(test_served_accept_of_a_cancelled_task());
+  AGC_TEST_RUN(test_cancelled_read_leaves_the_reader_slot());
+  AGC_TEST_RUN(test_cancelled_tls_connect_past_its_deadline(false));
+  AGC_TEST_RUN(test_cancelled_tls_connect_past_its_deadline(true));
+  AGC_TEST_RUN(test_byte_keys());
+  AGC_TEST_RUN(test_upgrade_tls_on_a_dropped_client());
+  AGC_TEST_RUN(test_upgrade_context_names_its_context_argument());
+  AGC_TEST_RUN(test_upgrade_tls_builds_the_shared_context_then_handshakes());
 #endif
   puts("net tests passed");
   return 0;
