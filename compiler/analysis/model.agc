@@ -201,8 +201,10 @@ end
 ## One function of an `extern module` block, named as the block writes it (`empty?` included). `mode` is `short` for a
 ## `def` and `dirty` for a `compute def`. `signature` is the canonical text of the module's function table,
 ## "(List[Float]) -> Optional[Summary]". `types_in` and `types_out` are the bare names of the structs, enums and
-## resources that the parameters and that the result reach, through the fields and payloads too, each once, in the
-## order they are met; the block's `types` and `resources` describe them. A type in `types_out` only is made by the
+## resources that the parameters and that the result reach, through the fields and payloads too, each once; the
+## block's `types` and `resources` describe them. Each list is in the order of its own walk, which is not a
+## subsequence of the block's `types` order: for a parameter `A{b: B}`, `B{c: C}` and a result `C` the block lists
+## A, C, B but `types_in` is A, B, C, so do not merge them by position. A type in `types_out` only is made by the
 ## module and never read, and one in `types_in` only is read and never made. `doc` is the whole `##` text ("" for
 ## none), `range` the whole declaration, `export` included, and `name_range` the name alone.
 export struct NativeFunction

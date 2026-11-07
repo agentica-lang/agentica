@@ -45,8 +45,10 @@ end
 ## List[Int]", the form the module's function table has) and the types it reaches, each once, in the order the walk
 ## meets them (the parameters first, then the result, each type before the types of its fields and payloads).
 ## `from_params` and `from_result` are the linked names of the crossings reached from the parameters alone and from the
-## result alone, in the same order, through the fields and payloads too: a type that only the result reaches is made
-## by the module and never read, and one that only a parameter reaches is read and never made.
+## result alone, through the fields and payloads too: a type that only the result reaches is made by the module and
+## never read, and one that only a parameter reaches is read and never made. Each list is in the order of its own
+## walk, which is not a subsequence of `crossings`: for a parameter `A{b: B}`, `B{c: C}` and a result `C`, `crossings`
+## is [A, C, B] and `from_params` is [A, B, C]. Do not merge them by position.
 export struct Signature
   params: List[String]
   result: String
