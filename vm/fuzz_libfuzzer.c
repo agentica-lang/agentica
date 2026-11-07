@@ -12,9 +12,11 @@
 #include "core.h"
 #include "jit/jit.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+
 #ifdef AGC_FUZZ_JIT_WRAP
 #include <stdatomic.h>
-#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #endif
