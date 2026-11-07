@@ -1320,9 +1320,10 @@ static void add_finished_states(void *data, void *arg) {
   if (atomic_load(&j->phase) == CALL_FINISHED) agc_native_dirty_states(j->call, add_staged_free, arg);
 }
 
-/* The module's free of each state that a finished dirty call staged and no task took, on a thread apart within BY,
-   as end_step frees: a resource is freed once, also when its task was still parked at the end of the run. The
-   states leave their calls before the frees start, so a later end of the job does not free them again. */
+/* The module's free of each state that a finished dirty call staged and no task took (newest first within a call), on
+   a thread apart within BY, as end_step frees: a resource is freed once, also when its task was still parked at the
+   end of the run. The states leave their calls before the frees start, so a later end of the job does not free them
+   again. */
 static bool staged_step(agc_vm *vm, uint64_t by) {
   staged_frees f = {NULL, 0};
   agc_io_compute_each(vm, &module_io, add_finished_states, &f);

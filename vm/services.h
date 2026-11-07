@@ -298,8 +298,8 @@ void agc_native_dirty_run(agc_native_dirty *d);
 agc_native_outcome agc_native_dirty_done(agc_vm *vm, agc_native_dirty *d, bool take);
 void agc_native_dirty_free(agc_native_dirty *d);
 void agc_native_free_state(const void *row, void *state);
-/* Hands TAKE each resource state that D staged and that has no value yet, with its row, and forgets it: D frees it no
-   more. */
+/* Hands TAKE each resource state that D staged and that has no value yet, with its row, newest first (a later state
+   may point into an earlier one, as built values are freed), and forgets it: D frees it no more. */
 void agc_native_dirty_states(agc_native_dirty *d, void (*take)(const void *row, void *state, void *arg), void *arg);
 /* A resource of a native module (vm/ffi.c) around STATE, freed by agc_native_free_state with ROW, coming from the
    resources that the call which makes it holds (HELD, HOLDS entries), and owned by the calling task. Takes rt->sync. */

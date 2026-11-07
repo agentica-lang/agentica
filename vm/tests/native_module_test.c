@@ -531,6 +531,18 @@ static void test_resources(void) {
   native_close(fresh);
 }
 
+/* Busy-waits until the pool thread sets FLAG (within milliseconds); after 10 seconds the test fails instead of
+   hanging. */
+static void wait_for_flag(atomic_bool *flag) {
+  time_t start = time(NULL);
+  while (!atomic_load(flag)) {
+    if (time(NULL) - start >= 10) {
+      fputs("the pool thread never set the flag\n", stderr);
+      abort();
+    }
+  }
+}
+
 /* A dirty call holds its counter: ANOTHER task's close (or the end of the cancelled task that owns it, when CANCEL)
    meanwhile leaves it to the end of the call, which frees it once. A cancelled call's result is dropped. */
 static void close_while_waiting(bool cancel) {
@@ -543,8 +555,7 @@ static void close_while_waiting(bool cancel) {
   agc_c_resource *res = counter_of(c);
   int before = atomic_load(&free_count);
   park("compute module " COUNTER "(Counter) -> Int wait_gate demo", &c, 1);
-  while (!atomic_load(&gate_was_entered)) {
-  }
+  wait_for_flag(&gate_was_entered);
   agc_task *task = vm.task;
   if (cancel) {
     agc_io_detach(&vm, task);
@@ -664,7 +675,7 @@ static void test_end_of_run(void) {
   agc_io_flush_files(&vm);
   assert(agc_ffi_end(&vm, never_stopped));
   assert(atomic_load(&free_count) == before + 5);
-  const int64_t order[5] = {1, 2, 13, 12, 11};
+  const int64_t order[5] = {2, 1, 13, 12, 11};
   for (int k = 0; k < 5; k++) assert(atomic_load(&freed_ids[before + k]) == order[k]);
 }
 
@@ -682,14 +693,12 @@ static void test_dirty_calls_charge_on_the_scheduler(void) {
   agc_value map = agc_map_value(agc_map_put(&vm, m, text(key), agc_int(1)));
   agc_task *task = vm.task, *sentinel = agc_new_task(&vm);
   park("compute module (Map[String, Int]) -> Int gated_sum demo", &map, 1);
-  while (!atomic_load(&gate_was_entered)) {
-  }
+  wait_for_flag(&gate_was_entered);
   vm.task = sentinel;
   int64_t cost = sentinel->turn_cost;
   /* Opened here, not by a short call, which would charge the sentinel. */
   atomic_store(&gate_is_open, true);
-  while (!atomic_load(&gate_was_left)) {
-  }
+  wait_for_flag(&gate_was_left);
   assert(sentinel->turn_cost == cost);
   vm.task = task;
   int64_t paid = task->turn_cost;

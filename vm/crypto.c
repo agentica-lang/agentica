@@ -39,7 +39,7 @@ typedef struct {
   uint8_t *password, *salt, *key;
   size_t password_n, salt_n, key_n;
   uint32_t span;
-  bool derived;
+  bool ran, derived;
 } kdf_job;
 
 /* The message of a failed hash, by agc_digest_kind. */
@@ -567,16 +567,18 @@ static void kdf_free(kdf_job *k) {
 static void kdf_work(void *data) {
   kdf_job *k = data;
   k->derived = kdf_compute(&k->kdf, k->password, k->password_n, k->salt, k->salt_n, k->key, k->key_n);
+  k->ran = true;
 }
 
 /* On the scheduler that resumes the task, or between turns for a cancelled task, whose value is dropped (its work was
    skipped if it was still queued, so `derived` is false). A library failure fails the task (RUNTIME-INTERNAL), as when
    the call ran on the scheduler; a dropped value has no task to fail, so it gives Void. vm->in_turn tells the two
-   apart, as compute_done in vm/ffi.c does. */
+   apart, as compute_done in vm/ffi.c does. Work that never ran (the pool could not queue it) gives Void too: the
+   caller, agc_io_finish, then fails the task with its own message. */
 static agc_value kdf_done(agc_vm *vm, void *data, agc_value context) {
   (void)context;
   kdf_job *k = data;
-  bool scrypt = k->kdf.scrypt, derived = k->derived;
+  bool scrypt = k->kdf.scrypt, ran = k->ran, derived = k->derived;
   uint32_t span = k->span;
   agc_value result = agc_void();
   if (derived) {
@@ -585,7 +587,7 @@ static agc_value kdf_done(agc_vm *vm, void *data, agc_value context) {
     result = agc_result_value(true, agc_bytes_value(out));
   }
   kdf_free(k);
-  if (!derived && vm->in_turn)
+  if (ran && !derived && vm->in_turn)
     agc_fail(vm, "RUNTIME-INTERNAL", scrypt ? "scrypt is not available" : "PBKDF2 is not available", span);
   return result;
 }

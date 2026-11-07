@@ -162,9 +162,9 @@ typedef struct arena_chunk {
    arguments (ARGV, GC values that the job's context keeps alive, immutable, and never moved by the collector) and
    what they reach, and each constructor stages a node (NODES, COUNT of them) in malloc memory, its data in the arena
    (CHUNKS). VM is the scheduler that started it, whose runtime's program the pool thread reads. HELD are the resource
-   arguments (HOLDS of them), in the job of vm/ffi.c, which holds them and outlives the call. CODE and MESSAGE (malloc'd, MESSAGE_LEN bytes) are its first failure, RESULT what
-   the function returned, RAN set once it has, NS how long it took when PROFILE; BYTES is what the staged values are
-   charged when they are built. */
+   arguments (HOLDS of them), in the job of vm/ffi.c, which holds them and outlives the call. CODE and MESSAGE
+   (malloc'd, MESSAGE_LEN bytes) are its first failure, RESULT what the function returned, RAN set once it has, NS how
+   long it took when PROFILE; BYTES is what the staged values are charged when they are built. */
 struct agc_native_dirty {
   agc_vm *vm;
   agc_native_fn *fn;
@@ -407,8 +407,9 @@ static bool shape_fits(const agc_program *p, const type_block *b) {
 
 /* Reads the type blocks at the start of a signature, at *AT before END: each in range, fitting the program, and of a
    name no other block has. At most MODULE_MAX_TYPES + MODULE_MAX_RESOURCES, the most rows of distinct names that a
-   module can have: each block must name one, so more could never bind. Read once, then sorted, so reading and finding blocks takes O(B log B); check_blocks then finds each block
-   in the module's sorted rows (row_named), so a bind takes O(B log N) under rt->sync. Bad bytecode fails. */
+   module can have: each block must name one, so more could never bind. Read once, then sorted, so reading and
+   finding blocks takes O(B log B); check_blocks then finds each block in the module's sorted rows (row_named), so a
+   bind takes O(B log N) under rt->sync. Bad bytecode fails. */
 static block_list read_blocks(agc_vm *vm, const char **at, const char *end, uint32_t span) {
   const agc_program *p = vm->rt->program;
   block_list list = {NULL, 0};
@@ -1188,7 +1189,7 @@ static agc_value build_node(agc_vm *vm, agc_native_dirty *d, staged *s, const ag
 }
 
 void agc_native_dirty_states(agc_native_dirty *d, void (*take)(const void *row, void *state, void *arg), void *arg) {
-  for (size_t k = 0; k < d->count; k++) {
+  for (size_t k = d->count; k-- > 0;) {
     staged *s = &d->nodes[k];
     if (s->kind != N_RESOURCE || !s->data) continue;
     void *state = s->data;
@@ -1206,7 +1207,7 @@ static void free_state_now(const void *row, void *state, void *arg) {
 static void drop_staged(agc_native_dirty *d) { agc_native_dirty_states(d, free_state_now, NULL); }
 
 /* The value of D's result: each node that it reaches is built, in index order, so the nodes below one are built
-   first; the others are not, and the state of a resource among them is freed. BUILT is GC memory, so a value built
+   first; the others are not, and the state of a resource among them is freed, newest first. BUILT is GC memory, so a value built
    stays reachable through the next allocations. */
 static agc_value build(agc_vm *vm, agc_native_dirty *d) {
   agc_value result = value_of(d->result);

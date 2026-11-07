@@ -300,8 +300,9 @@ end
   may be an alias of such a struct; another type, or a value for the type name:
   `CHECK-TYPE-MISMATCH`.
 - Functions count as `def`s for the declaration order, resources and structs
-  as types; a block with a resource or a struct counts as types as a whole. A
-  wrong signature is undefined behavior in C: copy it from the C header.
+  as types; a block with a resource or a struct counts as types as a whole. In
+  an `extern module` block, a resource counts as a `def` instead. A wrong
+  signature is undefined behavior in C: copy it from the C header.
 
 ## Wrapping a library
 
@@ -315,7 +316,8 @@ Keep the `extern` layer private and give the user a normal API; guide:
 - A block with a resource or a struct sits with the types, above every function
   of the file, and its `def`s do not count as functions for `CHECK-DECL-ORDER`.
   `export resource` so callers can name the type, keep the `def`s private. A
-  block with neither: put it at the end of the file.
+  block with neither: put it at the end of the file. An `extern module` block
+  is all `def`s, its resources included: put it with the functions.
 - A `String` with a NUL stops the program at the C call
   (`RUNTIME-INVALID-CHARACTER`): check inputs first, or pass
   `Native.from_string(s)` and `s.bytesize` when C takes a length.
