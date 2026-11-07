@@ -14,6 +14,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A `compute def` of an `extern module` block runs on the compute pool.
 - `resource Name` in an `extern module` block: a handle that the module frees.
 - The profile has a `native` row per native module function.
+- `Analysis.native_modules` in `std/analysis` describes the `extern module` blocks of a file for code generators.
 
 ### Changed
 

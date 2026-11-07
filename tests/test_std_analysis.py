@@ -4,6 +4,7 @@ fixtures/analysis/driver.agc) that calls the library, and the CLI with `--json` 
 streams. The driver is compiled once for the module (it compiles the core of the front end with it); each case is a run
 of its bytecode. That cost bounds the breadth: a few questions of the spec tests of each command stand for them."""
 import json
+import re
 import shutil
 from pathlib import Path
 
@@ -34,6 +35,54 @@ NON_ASCII = 'def main() -> Void\n  puts(\u00f1and\u00fa)\nend\n'
 FRESH = "export def fresh(n: Int) -> Int\n  return n\nend\n"
 TWICE_TWICE = 'import Util from "util"\n\ndef run() -> Int\n  return Util.twice(2) + Util.twice(3)\nend\n'
 OPTIONS = "struct Options\n  name: String\n  retries: Int = 3\nend\n"
+# The blocks of a native module (#1156): a struct, an enum, an alias, a resource and a `compute def`, in two blocks of
+# one library and one of another, with the declaration order the checker asks for (the exports first).
+NATIVE = """## A summary.
+struct Summary
+  count: Int
+  mean: Float
+end
+
+enum Cell
+  Empty
+  Number(Float)
+  Text(String)
+end
+
+struct Pair
+  first: Cell
+  second: Cell
+end
+
+type Rows = List[Map[String, Cell]]
+
+extern module "stats"
+  ## The count and mean of the values; none for no values.
+  export def summary(values: List[Float]) -> Optional[Summary]
+  ## A pool of connections.
+  export resource Pool
+  def rows(text: String) -> Result[Rows]
+  def empty?(text: String) -> Bool
+  resource Db
+  compute def open(path: String) -> Result[Db]
+  def count(db: Db, cell: Cell) -> Int
+end
+
+extern module "other"
+  def twice(n: Int) -> Int
+end
+
+extern module "stats"
+  def again(summary: Summary) -> Summary
+end
+
+extern module "pure"
+  def pair(value: Pair) -> Int
+end
+
+def main() -> Void
+end
+"""
 MISSING_IMPORT = 'import Nowhere from "nowhere"\n\ndef main() -> Void\n  puts("x")\nend\n'
 
 
@@ -730,3 +779,134 @@ def test_a_refreshed_session_gives_the_partial_answers_of_one_with_no_cache_also
         again = library(driver, partial_project, *broken, partial, "app.agc", line, column)
         assert again == partial_cli(partial_project, command, "app.agc", line, column, stdin=APP)
         assert json.loads(again[0])["partial"] is True
+
+
+def native_blocks(driver, project, path="natives.agc"):
+    """The blocks of the answer of `native_modules` for `path`, by library."""
+    out, err = library(driver, project, "native-modules", path)
+    assert err == ""
+    answer = json.loads(out)
+    assert (answer["version"], answer["command"], answer["file"]) == (1, "native-modules", path)
+    return answer, {block["library"]: block for block in answer["blocks"]}
+
+
+def test_native_modules_lists_the_functions_resources_and_types_of_each_block(driver, project):
+    write_files(project, {"natives.agc": NATIVE})
+    answer, blocks = native_blocks(driver, project)
+    assert [block["library"] for block in answer["blocks"]] == ["stats", "other", "pure"]
+    stats, other, pure = blocks["stats"], blocks["other"], blocks["pure"]
+    assert [function["name"] for function in stats["functions"]] == ["summary", "rows", "empty?", "open", "count", "again"]
+    summary = stats["functions"][0]
+    assert (summary["mode"], summary["exported"], summary["doc"]) == (
+        "short", True, "The count and mean of the values; none for no values.")
+    assert summary["parameters"] == [{"name": "values", "type": "List[Float]"}]
+    assert (summary["result"], summary["signature"], summary["types_in"], summary["types_out"]) == (
+        "Optional[Summary]", "(List[Float]) -> Optional[Summary]", [], ["Summary"])
+    rows = stats["functions"][1]
+    # The alias is expanded, and the enum is reached through the collections.
+    assert (rows["signature"], rows["types_in"], rows["types_out"], rows["exported"], rows["doc"]) == (
+        "(String) -> Result[List[Map[String, Cell]]]", [], ["Cell"], False, None)
+    opening, count = stats["functions"][3], stats["functions"][4]
+    assert (opening["mode"], opening["signature"], opening["types_in"], opening["types_out"]) == (
+        "dirty", "(String) -> Result[Db]", [], ["Db"])
+    assert (count["signature"], count["types_in"], count["types_out"]) == ("(Db, Cell) -> Int", ["Db", "Cell"], [])
+    # A type is read and made when both sides reach it, and a parameter's struct reaches the enum of its fields.
+    again = stats["functions"][5]
+    assert (again["types_in"], again["types_out"]) == (["Summary"], ["Summary"])
+    pair = pure["functions"][0]
+    assert (pair["types_in"], pair["types_out"]) == (["Pair", "Cell"], [])
+    assert [(resource["name"], resource["exported"], resource["doc"]) for resource in stats["resources"]] == [
+        ("Pool", True, "A pool of connections."), ("Db", False, None)]
+    # The types come once, in the order the functions meet them.
+    assert [(item["kind"], item["name"], item["shape"]) for item in stats["types"]] == [
+        ("struct", "Summary", "count: Int, mean: Float"), ("enum", "Cell", "Empty | Number(Float) | Text(String)")]
+    assert stats["types"][1]["members"] == [
+        {"name": "Empty", "types": []}, {"name": "Number", "types": ["Float"]}, {"name": "Text", "types": ["String"]}]
+    assert stats["types"][0]["members"] == [
+        {"name": "count", "types": ["Int"]}, {"name": "mean", "types": ["Float"]}]
+    # The API: 1.2 for a resource, 1.1 for types alone, 1.0 for scalars alone. The second "stats" block joined the first.
+    assert (stats["api"], pure["api"], other["api"]) == (
+        {"major": 1, "minor": 2}, {"major": 1, "minor": 1}, {"major": 1, "minor": 0})
+    assert [(item["name"], item["shape"]) for item in pure["types"]] == [
+        ("Pair", "first: Cell, second: Cell"), ("Cell", "Empty | Number(Float) | Text(String)")]
+    assert (other["types"], other["resources"]) == ([], [])
+    # Places count from 1 and name the file of the answer.
+    assert summary["name_span"]["file"] == "natives.agc"
+    assert summary["name_span"]["range"]["start"] == {"line": 22, "column": 14}
+    # A block range runs from its first declaration to the end of its last one (the start of the next line), without
+    # `extern module` and `end`; the second "stats" block is inside it, so it covers the block of "other".
+    assert (stats["span"]["range"]["start"]["line"], stats["span"]["range"]["end"]["line"]) == (22, 38)
+    assert (other["span"]["range"]["start"]["line"], other["span"]["range"]["end"]["line"]) == (33, 34)
+
+
+def test_native_modules_gives_the_diagnostic_of_a_file_that_does_not_check_or_cannot_be_read(driver, project):
+    write_files(project, {"natives.agc": NATIVE.replace("List[Float]", "Task[Int]")})
+    out, err = library(driver, project, "native-modules", "natives.agc")
+    assert (out, json.loads(err)["code"]) == ("", "CHECK-NATIVE-TYPE")
+    out, err = library(driver, project, "native-modules", "absent.agc")
+    assert (out, json.loads(err)["code"]) == ("", "QUERY-USAGE")
+
+
+def test_native_modules_names_the_types_of_an_imported_file_by_their_bare_names(driver, project):
+    shapes = "export struct Point\n  x: Int\n  y: Int\nend\n"
+    block = 'import Shapes from "shapes"\n\nextern module "demo"\n  def flip(point: Shapes.Point) -> Shapes.Point\nend\n'
+    write_files(project, {"shapes.agc": shapes, "natives.agc": block})
+    _answer, blocks = native_blocks(driver, project)
+    function = blocks["demo"]["functions"][0]
+    assert (function["signature"], function["types_in"], function["types_out"]) == (
+        "(Point) -> Point", ["Point"], ["Point"])
+    assert [(item["name"], item["shape"]) for item in blocks["demo"]["types"]] == [("Point", "x: Int, y: Int")]
+
+
+def test_a_file_with_no_native_module_has_no_blocks(driver, project):
+    answer, _blocks = native_blocks(driver, project, "util.agc")
+    assert answer["blocks"] == []
+
+
+def compiled_signatures(project):
+    """The signature strings that `compile` writes for the native module calls of `natives.agc`."""
+    out = project / "natives.agcb"
+    result = run(cli() + ["compile", "natives.agc", "-o", str(out)], cwd=project, env=vm_environment())
+    assert (result.code, result.stderr) == (0, "")
+    return [text.decode() for text in re.findall(rb"(?:compute )?module [{(][^\x00-\x1f]*", out.read_bytes())]
+
+
+def test_every_shape_and_signature_of_the_query_is_what_the_lowering_writes(driver, project):
+    """The VM compares these strings byte for byte, so a generator's must be the compiler's: each function's signature
+    is the text the lowering writes for it, "module {S<index>=SHAPE}...(PARAMS) -> RESULT NAME LIBRARY", the index
+    being the place of the type in the program's tables."""
+    write_files(project, {"natives.agc": NATIVE})
+    _answer, blocks = native_blocks(driver, project)
+    written = compiled_signatures(project)
+    assert len(written) == 8
+    for library, block in blocks.items():
+        types = {item["name"]: item for item in block["types"]}
+        resources = {item["name"] for item in block["resources"]}
+        for function in block["functions"]:
+            # The blocks of the signature are the types of the parameters and the result, in the lowering's order.
+            wanted = []
+            for name in {*function["types_in"], *function["types_out"]}:
+                if name in resources:
+                    wanted.append(("R", name))
+                else:
+                    item = types[name]
+                    wanted.append(("S" if item["kind"] == "struct" else "E", item["shape"]))
+            tail = " %s %s" % (function["name"], library)
+            kind = "compute " if function["mode"] == "dirty" else ""
+            matching = [text for text in written if text.startswith(kind + "module ") and text.endswith(function["signature"] + tail)]
+            assert len(matching) == 1, (function["name"], written)
+            found = re.findall(r"\{([SER])\d*=([^}]*)\}", matching[0])
+            assert sorted(found) == sorted(wanted), function["name"]
+            assert matching[0].count("{") == len(wanted)
+
+
+def test_the_api_versions_of_a_block_are_those_of_the_native_header():
+    """The least minor version of each feature is a constant of the compiler: the header's version is the highest."""
+    header = (ROOT / "vm" / "agentica_native.h").read_text(encoding="utf-8")
+    shape = (ROOT / "compiler" / "check" / "native_shape.agc").read_text(encoding="utf-8")
+    major, minor = (int(re.search(r"#define AN_API_%s (\d+)" % name, header).group(1)) for name in ("MAJOR", "MINOR"))
+    constants = {name: int(value) for name, value in re.findall(r"^export (API_\w+) = (\d+)$", shape, re.M)}
+    assert (constants["API_MAJOR"], constants["API_MINOR_RESOURCES"]) == (major, minor)
+    # The comment of the header says which minor version added what.
+    assert constants["API_MINOR_TYPES"] == int(re.search(r"enums\s+(?:\*\s+)?\(1\.(\d)\)", header).group(1))
+    assert constants["API_MINOR_RESOURCES"] == int(re.search(r"resources\s+(?:\*\s+)?\(1\.(\d)\)", header).group(1))

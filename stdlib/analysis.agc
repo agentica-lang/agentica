@@ -9,10 +9,15 @@
 ## and `Analysis.refs_json` give byte for byte what `agentica --json outline`, `type-at`, `symbol` and `refs` print,
 ## and `Analysis.diagnostic_json` what `--json check` prints on stderr.
 ##
-## `outline`, `type_at`, `type_at_partial`, `symbol`, `refs` and `refs_partial` return a `Result`: its error message is
-## the diagnostic as one JSON object, the form of `--json`, and `Analysis.diagnostic` reads it back, so `try` works.
-## The codes are those of the command line (`LEX-`, `PARSE-`, `CHECK-`, `PKG-`, and `QUERY-USAGE` for a file that
-## cannot be read or a position below line 1 or column 1, `QUERY-NO-EXPRESSION`, `QUERY-NOT-FOUND`).
+## `native_modules` answers a question of code generators that has no command: the `extern module` blocks of a file,
+## with the signatures and type shapes that the compiler binds a native module's calls with. Its JSON form is
+## `Analysis.native_modules_json`.
+##
+## `outline`, `type_at`, `type_at_partial`, `symbol`, `refs`, `refs_partial` and `native_modules` return a `Result`:
+## its error message is the diagnostic as one JSON object, the form of `--json`, and `Analysis.diagnostic` reads it
+## back, so `try` works. The codes are those of the command line (`LEX-`, `PARSE-`, `CHECK-`, `PKG-`, and
+## `QUERY-USAGE` for a file that cannot be read or a position below line 1 or column 1, `QUERY-NO-EXPRESSION`,
+## `QUERY-NOT-FOUND`).
 ##
 ## The compiler is part of the program that imports this module (as the private `std/internal/compiler`), so a program
 ## that imports it pays the compile time of the compiler's core once. The checker and the catalog of builtins are the
@@ -46,6 +51,7 @@ import DiagnosticRead from "std/internal/compiler/diagnostics/diagnostic_read"
 import Env from "std/internal/compiler/modules/link_env"
 import Host from "std/internal/compiler/io/host"
 import Model from "std/internal/compiler/analysis/model"
+import NativeModulesJson from "std/internal/compiler/query/native_modules_json"
 import Overlay from "std/internal/compiler/modules/overlay"
 import OutlineJson from "std/internal/compiler/query/outline_json"
 import Problems from "std/internal/compiler/diagnostics/problem"
@@ -108,6 +114,27 @@ export type Skipped = Model.Skipped
 
 ## The answer of `symbol`.
 export type Symbols = Model.Symbols
+
+## One parameter of a function of an `extern module` block.
+export type NativeParameter = Model.NativeParameter
+
+## One function of an `extern module` block.
+export type NativeFunction = Model.NativeFunction
+
+## One `resource` line of an `extern module` block.
+export type NativeResource = Model.NativeResource
+
+## One field of a struct or variant of an enum that crosses to a native module.
+export type NativeMember = Model.NativeMember
+
+## A struct or enum that crosses to a native module.
+export type NativeType = Model.NativeType
+
+## One `extern module` block.
+export type NativeBlock = Model.NativeBlock
+
+## The answer of `native_modules`.
+export type NativeModules = Model.NativeModules
 
 ## One use of a declaration.
 export type Reference = Model.Reference
@@ -266,6 +293,23 @@ export def symbol(session: Session, name: String, paths: List[String]) -> Result
   end
 end
 
+## Returns the `extern module "NAME"` blocks of the file `path`, for a tool that generates code for a native module
+## (the C header, the codecs). The file is linked and checked with what it imports and needs no `main`, as for
+## `type_at`. Each block gives its `library` as written, its functions (`short` for a `def`, `dirty` for a
+## `compute def`, with the parameters, the result and the `signature` the module's function table must have), its
+## `resources`, the structs and enums that cross (`types`, each with the `shape` the module's type table must have)
+## and the `api_major` and `api_minor` of the C API it needs. The signatures and shapes are written by the code that
+## the compiler binds a call with, so they are the bytes the loader compares. An unreadable or wrong file is an error,
+## as for `type_at`.
+export def native_modules(session: Session, path: String) -> Result[NativeModules]
+  settings = Sessions.asking(session.internal)
+  case Core.native_modules(session.internal.cache, settings, path)
+    Core.Natived.Done(found) -> return ok(found)
+    Core.Natived.Unreadable -> return error(failure(Core.unreadable(path)))
+    Core.Natived.Rejected(problem) -> return error(failure(Core.named(settings, problem, path)))
+  end
+end
+
 ## Returns the declaration of the name at the position `line`, `column` (from 1, in characters) of the file `path` and
 ## every reference to it, as `agentica refs` answers: in that file, linked and checked as for `type_at`, and in what it
 ## imports; a file that only imports it is not seen. A position that names nothing is `QUERY-NO-EXPRESSION`. An unused
@@ -301,7 +345,7 @@ export def refs_partial(session: Session, path: String, line: Int, column: Int) 
 end
 
 ## Reads back the diagnostic that is the message of an error of `outline`, `type_at`, `type_at_partial`, `symbol`,
-## `refs` or `refs_partial`.
+## `refs`, `refs_partial` or `native_modules`.
 export def diagnostic(message: String) -> Result[Diagnostic]
   return DiagnosticRead.read(message)
 end
@@ -324,6 +368,11 @@ end
 ## Returns the JSON that `agentica --json refs` prints, without its final line feed.
 export def refs_json(found: Refs) -> Json
   return RefsJson.json(found)
+end
+
+## Returns the JSON of the answer of `native_modules`, without its final line feed.
+export def native_modules_json(found: NativeModules) -> Json
+  return NativeModulesJson.json(found)
 end
 
 ## Returns the JSON that `agentica --json check` prints on stderr for a problem.
