@@ -130,6 +130,12 @@ in a PR that rewrites the goldens.
   `RUNTIME-NATIVE-CALLBACK` inside a callback of native code). `PBKDF2` runs
   with `pkcs5` set, so no SP 800-132 floors. Password and key copies are
   wiped. The jobs run without the shared lock.
+- `RSA.public_encrypt_oaep` reads the first PEM block of at most 64 KiB with
+  `OSSL_DECODER` (public key structures only, no passphrase callback), takes
+  only an `RSA` key of 43 to 2048 bytes (OpenSSL's 16384-bit cap) and data of
+  at most its size less 42, and encrypts with OAEP SHA-1 into a stack buffer.
+  Every refusal, OpenSSL's included, is an error `Result`. It runs without the
+  shared lock.
 - `SecureRandom.random_bytes(n)` and `hex(n)` check `0 <= n <= 1048576` (else
   `RUNTIME-INVALID-COUNT` at the argument) and draw with `RAND_bytes`; `uuid`
   draws 16 bytes and sets the version and variant bits. A failed draw is

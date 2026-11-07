@@ -16,7 +16,7 @@ description: Work with text and numbers, search and replace text with regular ex
 - Use [MIME](/library/text-and-data/mime/) (`std/mime`) to find the media type of a file from its name, and to tell which types are text.
 - Use [UTC](/library/text-and-data/utc/) (`std/utc`) to turn Unix milliseconds into the date and time in UTC and into RFC 3339 text.
 - Use [URI](/library/text-and-data/uri/) (`std/uri`) to percent-encode and decode URL components and to read and write query strings.
-- Use [Digest, HMAC and SecureRandom](/library/text-and-data/crypto/) to hash a list of bytes with MD5, SHA-1, SHA-256 or SHA-512, to sign it with HMAC-SHA256 or HMAC-SHA512, to compare MACs in constant time, to encrypt with AES-256-GCM, to hash passwords with PBKDF2 and scrypt, to encrypt and MAC payment data with Triple DES and CMAC, and to draw secure random bytes, hex and UUIDs.
+- Use [Digest, HMAC and SecureRandom](/library/text-and-data/crypto/) to hash a list of bytes with MD5, SHA-1, SHA-256 or SHA-512, to sign it with HMAC-SHA256 or HMAC-SHA512, to compare MACs in constant time, to encrypt with AES-256-GCM, to hash passwords with PBKDF2 and scrypt, to encrypt and MAC payment data with Triple DES and CMAC, to encrypt with an RSA public key, and to draw secure random bytes, hex and UUIDs.
 - Use [Zlib](/library/text-and-data/zlib/) to compress bytes, files and streams with DEFLATE, zlib and gzip.
 - Use [Base64 and hex](/library/text-and-data/base64/) to write bytes as text and read them back.
 

@@ -1,8 +1,8 @@
 /*
- * The Bytes value: equality, the Map key hash, the text forms, the JSON refusal,
- * the shared empty value, every builtin with good and bad arguments, bounds, the
- * size overflow guard, values that live through a collection, the crypto builtins
- * (vm/crypto.c) and GCM's wipe, String.from_bytes and FrontEnd.hand_off on Bytes.
+ * The Bytes value: equality, Map keys, text forms, the JSON refusal, the shared
+ * empty value, every builtin with good and bad arguments, bounds, the size
+ * guard, collection, the crypto builtins (vm/crypto.c), GCM's wipe, RSA-OAEP,
+ * and String.from_bytes and FrontEnd.hand_off on Bytes.
  */
 #include "../core.h"
 #include "../digest.h"
@@ -10,8 +10,10 @@
 #include "builtin_test.h"
 
 #include <assert.h>
+#include <limits.h>
 #include <setjmp.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #ifndef _WIN32
 #include <sys/wait.h>
@@ -460,6 +462,91 @@ static void test_gcm_wipes_a_wrong_tag(void) {
   assert(agc_aes_256_gcm(false, key, iv, NULL, 0, NULL, 0, NULL, tag) == AGC_AEAD_BAD_TAG);
 }
 
+/* RSA-OAEP through the adapter: the fixture key of tests/fixtures/rsa/ in both public PEM forms gives the key's 256
+   bytes, a new random seed each time, and takes 0 to 214 bytes (256 - 42). Every other input is an error status, not
+   a crash: no PEM, a key that is not RSA, a private key, a length past INT_MAX (refused before it is read), a key too
+   small for the padding. The builtin refuses a text over 64 KiB. tests/test_vm_crypto.py has a Node peer decrypt the
+   ciphertexts, and the VM fixture rsa-oaep covers the keys that only OpenSSL refuses. */
+static void test_rsa_oaep(void) {
+  static const char spki[] =
+    "-----BEGIN PUBLIC KEY-----\n"
+    "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAs1ZCN9Wxre/bu7dwEeju\n"
+    "bBLygVJkUck+jMQuh8glJPrdzdDsmANl87e/f2/AC2+hmGVaXDCQhORyMBqRT0NW\n"
+    "NhdqwGviyW+lp3h6494ioX3HPTXyoauDWT4Ur2CKaetLO0iH/54vGQGyKGsKxCdD\n"
+    "kGV6hiftn3LKzq3rQ2k4lPEbam2V4SppaSG/d7iR/l4qVzKbPbIa3QqK75JI+PbI\n"
+    "rj5O9zKgeWS1VCVLMjp5GmUH3blNqbMo4bqm8uEBwD0R4/XgksAyV/xwDn/YUGm5\n"
+    "Ge3bi1fuS5ec3N0d6Nym9ueD1PV/s8luy+YYpBxw6d1o5fN/rA+crcKQf4xyquRS\n"
+    "kQIDAQAB\n"
+    "-----END PUBLIC KEY-----\n";
+  static const char pkcs1[] =
+    "-----BEGIN RSA PUBLIC KEY-----\n"
+    "MIIBCgKCAQEAs1ZCN9Wxre/bu7dwEejubBLygVJkUck+jMQuh8glJPrdzdDsmANl\n"
+    "87e/f2/AC2+hmGVaXDCQhORyMBqRT0NWNhdqwGviyW+lp3h6494ioX3HPTXyoauD\n"
+    "WT4Ur2CKaetLO0iH/54vGQGyKGsKxCdDkGV6hiftn3LKzq3rQ2k4lPEbam2V4Spp\n"
+    "aSG/d7iR/l4qVzKbPbIa3QqK75JI+PbIrj5O9zKgeWS1VCVLMjp5GmUH3blNqbMo\n"
+    "4bqm8uEBwD0R4/XgksAyV/xwDn/YUGm5Ge3bi1fuS5ec3N0d6Nym9ueD1PV/s8lu\n"
+    "y+YYpBxw6d1o5fN/rA+crcKQf4xyquRSkQIDAQAB\n"
+    "-----END RSA PUBLIC KEY-----\n";
+  static const char ec[] = "-----BEGIN PUBLIC KEY-----\n"
+                           "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE8jYY7B3cBYRjm9JF+IwdZzSlAkB2\n"
+                           "n+Wp2aTddxxDUnM7mgQ6btekhuBpxfVQ+5IW/C6Kf7Jx95klnHC4+kGPIg==\n"
+                           "-----END PUBLIC KEY-----\n";
+  static const char ec_private[] = "-----BEGIN PRIVATE KEY-----\n"
+                                   "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg87Ngr4zVVZKIIi1z\n"
+                                   "qEFFjiyoPZ+IZao3MjyGjf50f1mhRANCAATyNhjsHdwFhGOb0kX4jB1nNKUCQHaf\n"
+                                   "5anZpN13HENSczuaBDpu16SG4GnF9VD7khb8Lop/snH3mSWccLj6QY8i\n"
+                                   "-----END PRIVATE KEY-----\n";
+  /* n = 2^255 + 1, e = 65537: 32 bytes, fewer than the padding's 42. */
+  static const char small[] = "-----BEGIN RSA PUBLIC KEY-----\n"
+                              "MCgCIQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQIDAQAB\n"
+                              "-----END RSA PUBLIC KEY-----\n";
+  /* A 1024-bit n and e = n + 2: the decoder takes it, the public operation refuses it. */
+  static const char above[] = "-----BEGIN RSA PUBLIC KEY-----\n"
+                              "MIIBCAKBgQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
+                              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAN6tvu8AAAAAAAAAAAAA\n"
+                              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQKBgQCAAAAA\n"
+                              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
+                              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAN6tvu8AAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
+                              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAw==\n"
+                              "-----END RSA PUBLIC KEY-----\n";
+  unsigned char data[215], first[AGC_RSA_MAX_BYTES], out[AGC_RSA_MAX_BYTES];
+  memset(data, 0x5a, sizeof data);
+  size_t len = 0;
+  assert(agc_rsa_oaep_encrypt(spki, strlen(spki), data, 20, first, &len) == AGC_RSA_DONE && len == 256);
+  assert(agc_rsa_oaep_encrypt(spki, strlen(spki), data, 20, out, &len) == AGC_RSA_DONE && len == 256);
+  assert(memcmp(first, out, len) != 0);
+  assert(agc_rsa_oaep_encrypt(pkcs1, strlen(pkcs1), data, 20, out, &len) == AGC_RSA_DONE && len == 256);
+  assert(agc_rsa_oaep_encrypt(spki, strlen(spki), NULL, 0, out, &len) == AGC_RSA_DONE && len == 256);
+  assert(agc_rsa_oaep_encrypt(spki, strlen(spki), data, 214, out, &len) == AGC_RSA_DONE && len == 256);
+  assert(agc_rsa_oaep_encrypt(spki, strlen(spki), data, 215, out, &len) == AGC_RSA_TOO_LONG && len == 214);
+  assert(agc_rsa_oaep_encrypt(pkcs1, strlen(pkcs1), data, SIZE_MAX, out, &len) == AGC_RSA_TOO_LONG && len == 214);
+  assert(agc_rsa_oaep_encrypt(ec, strlen(ec), data, 20, out, &len) == AGC_RSA_NOT_RSA && len == 0);
+  assert(agc_rsa_oaep_encrypt(ec_private, strlen(ec_private), data, 20, out, &len) == AGC_RSA_BAD_PEM);
+  assert(agc_rsa_oaep_encrypt("", 0, data, 20, out, &len) == AGC_RSA_BAD_PEM);
+  assert(agc_rsa_oaep_encrypt(spki, 200, data, 20, out, &len) == AGC_RSA_BAD_PEM);
+  assert(agc_rsa_oaep_encrypt(spki, (size_t)INT_MAX + 1, data, 20, out, &len) == AGC_RSA_BAD_PEM);
+  assert(agc_rsa_oaep_encrypt(small, strlen(small), NULL, 0, out, &len) == AGC_RSA_BAD_KEY && len == 0);
+  assert(agc_rsa_oaep_encrypt(above, strlen(above), data, 20, out, &len) == AGC_RSA_BAD_KEY && len == 0);
+  agc_value args[2] = {text(spki), raw((const char *)data, 214)};
+  const agc_result *sealed = agc_as_result(&vm, call("RSA.public_encrypt_oaep", 2, args));
+  assert(sealed->ok && agc_as_bytes(&vm, sealed->value)->len == 256);
+  args[1] = raw((const char *)data, 215);
+  assert(!agc_as_result(&vm, call("RSA.public_encrypt_oaep", 2, args))->ok);
+  /* A text one byte over the cap is refused before the decoder reads it, whatever it holds. */
+  char *padded = malloc(65537);
+  assert(padded);
+  memset(padded, '\n', 65537 - strlen(spki));
+  memcpy(padded + 65537 - strlen(spki), spki, strlen(spki));
+  args[0] = agc_string_value(agc_make_string(padded, 65537, 65537));
+  args[1] = raw("", 0);
+  assert(!agc_as_result(&vm, call("RSA.public_encrypt_oaep", 2, args))->ok);
+  args[0] = agc_string_value(agc_make_string(padded + 1, 65536, 65536));
+  assert(agc_as_result(&vm, call("RSA.public_encrypt_oaep", 2, args))->ok);
+  free(padded);
+  agc_value swapped[2] = {raw("pem", 3), raw("", 0)};
+  fails("RSA.public_encrypt_oaep", 2, swapped, "RUNTIME-INTERNAL");
+}
+
 /* A key longer than the digest's block is hashed first (vm/digest_openssl.c): RFC 4231 test cases 6 and 7 use a
    131-byte key. A key exactly at the block size (64 for SHA-256, 128 for SHA-512) is used as it is; those answers come
    from Python's hmac. */
@@ -671,6 +758,7 @@ int main(void) {
   test_crypto_keys();
   test_gcm_and_kdf_keys();
   test_gcm_wipes_a_wrong_tag();
+  test_rsa_oaep();
   test_hmac_long_keys();
   test_string_keys();
   test_hand_off_keys();

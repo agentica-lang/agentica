@@ -1,7 +1,7 @@
 ---
 title: Digest, HMAC and SecureRandom
 weight: 6
-description: The Digest builtins, which hash bytes with MD5, SHA-1, SHA-256 and SHA-512, the HMAC builtins, which sign bytes with a key and compare MACs in constant time, AES-256-GCM encryption, PBKDF2 and scrypt password hashing, Triple DES CBC and CMAC for payment formats, and SecureRandom, which draws secure random bytes, hex and UUIDs.
+description: The Digest builtins, which hash bytes with MD5, SHA-1, SHA-256 and SHA-512, the HMAC builtins, which sign bytes with a key and compare MACs in constant time, AES-256-GCM encryption, PBKDF2 and scrypt password hashing, Triple DES CBC and CMAC for payment formats, RSA-OAEP encryption with a public key, and SecureRandom, which draws secure random bytes, hex and UUIDs.
 ---
 
 The VM computes these builtins with OpenSSL, the library it already uses for TLS; nothing is written in Agentica. The names and forms follow Ruby:
@@ -11,6 +11,7 @@ The VM computes these builtins with OpenSSL, the library it already uses for TLS
 - `Cipher`: AES-256-GCM, as `OpenSSL::Cipher.new("aes-256-gcm")`.
 - `KDF`: the password hashes, as `OpenSSL::KDF`.
 - Triple DES CBC and `CMAC`, for payment formats.
+- `RSA`: encryption with an RSA public key, as `OpenSSL::PKey::RSA`.
 - `SecureRandom`: the secure random draws.
 
 ## Digests
@@ -257,6 +258,49 @@ false
 - A key, IV or data of another size gives an `error`, before any work: there is never partial output.
 - The time grows with the data, and they need no effect label.
 - `Cipher` and `CMAC` are reserved type names.
+
+## RSA-OAEP
+
+```signature
+RSA.public_encrypt_oaep(pem: String, data: Bytes) -> Result[Bytes]
+```
+
+`RSA.public_encrypt_oaep` encrypts `data` with the RSA public key in `pem` and OAEP padding with SHA-1 and MGF1-SHA-1, as Ruby's `OpenSSL::PKey::RSA.new(pem).public_encrypt(data, OpenSSL::PKey::RSA::PKCS1_OAEP_PADDING)` does. Only the owner of the private key can decrypt the result. MySQL's `caching_sha2_password` and `sha256_password` use it to send a password to the server without TLS. `pem` holds the key as `-----BEGIN PUBLIC KEY-----` (SubjectPublicKeyInfo, what `openssl pkey -pubout` writes) or as `-----BEGIN RSA PUBLIC KEY-----` (PKCS#1); only its first PEM block is read. The result has the size of the key, 256 bytes for a 2048-bit key, and differs on every call, since OAEP draws a random seed each time.
+
+```agentica
+PEM = (
+  "-----BEGIN PUBLIC KEY-----\n" +
+  "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAs1ZCN9Wxre/bu7dwEeju\n" +
+  "bBLygVJkUck+jMQuh8glJPrdzdDsmANl87e/f2/AC2+hmGVaXDCQhORyMBqRT0NW\n" +
+  "NhdqwGviyW+lp3h6494ioX3HPTXyoauDWT4Ur2CKaetLO0iH/54vGQGyKGsKxCdD\n" +
+  "kGV6hiftn3LKzq3rQ2k4lPEbam2V4SppaSG/d7iR/l4qVzKbPbIa3QqK75JI+PbI\n" +
+  "rj5O9zKgeWS1VCVLMjp5GmUH3blNqbMo4bqm8uEBwD0R4/XgksAyV/xwDn/YUGm5\n" +
+  "Ge3bi1fuS5ec3N0d6Nym9ueD1PV/s8luy+YYpBxw6d1o5fN/rA+crcKQf4xyquRS\n" +
+  "kQIDAQAB\n" +
+  "-----END PUBLIC KEY-----\n"
+)
+
+def main() -> Void
+  sealed = RSA.public_encrypt_oaep(PEM, "secret password".bytes).unwrap!
+  puts(sealed.size)
+  puts(sealed == RSA.public_encrypt_oaep(PEM, "secret password".bytes).unwrap!)
+  puts(RSA.public_encrypt_oaep(PEM, SecureRandom.random_bytes(215)).ok?)
+  puts(RSA.public_encrypt_oaep("not a key", "x".bytes).ok?)
+end
+```
+
+```output
+256
+false
+false
+false
+```
+
+- `data` has at most the key's size less 42 bytes: 214 for a 2048-bit key, 470 for a 4096-bit key. To send more, encrypt it with [AES-256-GCM](#aes-256-gcm) under a random key and encrypt that key with RSA.
+- A `pem` with no PEM public key (a private key and a certificate included), over 65536 bytes, a key that is not RSA (EC or RSA-PSS), data too long for the key, or a key that cannot encrypt (42 bytes or less, more than 16384 bits, or a bad exponent) gives an `error`.
+- It only encrypts: no private keys, signatures, other paddings or key generation.
+- The work is one public-key operation, and it needs the `random` effect label, as `SecureRandom` does, so a module constant cannot call it.
+- `RSA` is a reserved type name.
 
 ## SecureRandom
 
