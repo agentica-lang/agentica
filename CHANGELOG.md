@@ -8,6 +8,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- A `resource` in an `extern module` whose library comes from a `[native.NAME]` table is no longer refused with `CHECK-NATIVE-TYPE`.
+
 ### Added
 
 - `extern module "NAME"` calls C written for Agentica, with Agentica types.
