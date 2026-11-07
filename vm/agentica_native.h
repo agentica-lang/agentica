@@ -79,8 +79,8 @@ enum { AN_STRUCT = 0, AN_ENUM = 1 };
    SHAPE its fields or variants in declared order, with their canonical types: "id: Int, tags: List[String]" for a
    struct, "Null | Int(Int) | Pair(Int, Point)" for an enum. The VM binds a function only when the program declares
    every user type of its signature (nested ones too) with the same name, kind and shape, byte for byte. The index of
-   the row in the module's table is the TYPE that an_struct, an_get_field, an_enum and an_get_variant take; fields and
-   variants count from 0 in declared order. */
+   the row in the module's table is the TYPE that an_struct, an_get_field, an_enum, an_get_variant and an_get_payload
+   take; fields, variants and payloads count from 0 in declared order. The names of the table differ. */
 typedef struct {
   const char *name;
   int kind;
@@ -138,7 +138,8 @@ typedef struct an_api {
   an_term (*make_struct)(an_env *env, uint32_t type, const an_term *fields);
   bool (*get_field)(an_env *env, an_term t, uint32_t type, uint32_t field, an_term *out);
   an_term (*make_enum)(an_env *env, uint32_t type, uint32_t variant, const an_term *payload);
-  bool (*get_variant)(an_env *env, an_term t, uint32_t type, uint32_t *variant, const an_term **payload);
+  bool (*get_variant)(an_env *env, an_term t, uint32_t type, uint32_t *variant);
+  bool (*get_payload)(an_env *env, an_term t, uint32_t type, uint32_t k, an_term *out);
 } an_api;
 
 /* The one export of a module: the VM calls it once per run (a process runs one program), at the first call, with the
@@ -248,8 +249,8 @@ static inline bool an_get_result(an_env *env, an_term t, bool *ok, an_term *valu
 /* Structs and enums of the module's type table (an_type). an_struct takes one term per field, in declared order;
    an_enum takes the variant's payload (NULL for a variant without one). A TYPE that is not a row of the table, or
    whose type the function's signature does not reach, a field or variant out of range, or a missing payload fails the
-   call. The getters return false for a term of another type; an_get_variant gives the payload as an array that lasts
-   for the call (NULL for a variant without one). */
+   call. The getters return false for a term of another type, or a field or payload out of range: an_get_variant gives
+   the variant, an_get_payload its payload K. They allocate nothing. */
 static inline an_term an_struct(an_env *env, uint32_t type, const an_term *fields) {
   return an_api_of(env)->make_struct(env, type, fields);
 }
@@ -259,9 +260,11 @@ static inline bool an_get_field(an_env *env, an_term t, uint32_t type, uint32_t 
 static inline an_term an_enum(an_env *env, uint32_t type, uint32_t variant, const an_term *payload) {
   return an_api_of(env)->make_enum(env, type, variant, payload);
 }
-static inline bool an_get_variant(an_env *env, an_term t, uint32_t type, uint32_t *variant,
-                                  const an_term **payload) {
-  return an_api_of(env)->get_variant(env, t, type, variant, payload);
+static inline bool an_get_variant(an_env *env, an_term t, uint32_t type, uint32_t *variant) {
+  return an_api_of(env)->get_variant(env, t, type, variant);
+}
+static inline bool an_get_payload(an_env *env, an_term t, uint32_t type, uint32_t k, an_term *out) {
+  return an_api_of(env)->get_payload(env, t, type, k, out);
 }
 
 /* Failures: the call fails with RUNTIME-NATIVE-ERROR once the function returns, with MESSAGE (copied now; NUL

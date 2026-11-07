@@ -142,12 +142,18 @@ def check_ref(cx: State.Cx, walk: Walk, ref: Ast.TypeRef, result: Bool, written:
       current = reached.walk
       pending = pending.concat(reached.types)
     else
+      # A nested type is named with the type of the signature that holds it.
+      where = ""
+      if item != type
+        where = " (in #{T.to_text(type)})"
+      end
+
       return error(
         State.fail_help(
           cx,
           current.st,
           "CHECK-NATIVE-TYPE",
-          "#{T.to_text(item)} does not cross to a native module",
+          "#{T.to_text(item)} does not cross to a native module#{where}",
           ref.span,
           CROSSING_HELP,
         ),

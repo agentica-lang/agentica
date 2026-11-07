@@ -41,10 +41,10 @@ typedef struct {
 
 static agc_vm vm;
 /* Optional's None and Some, then the variants of enum Shape (Dot, Circle(Int), Rect(Point, Point)). */
-static agc_variant_def variants[5];
-static agc_struct_def structs[1];
-static agc_enum_def enums[1];
-static agc_string *point_fields[2];
+static agc_variant_def variants[9];
+static agc_struct_def structs[2];
+static agc_enum_def enums[3];
+static agc_string *point_fields[3];
 static agc_program program;
 static int inits, loads;
 static atomic_int racy_inits, racy_loads, ready;
@@ -211,6 +211,8 @@ static const an_module v_size = {1, 0, SIZE_1_0 - 1, "v", NULL, functions, 1, NU
 static const an_module v_size_1_0 = {1, 0, SIZE_1_0, "v", NULL, functions, 1, NULL, 0};
 static const an_module v_rows = {1, 0, sizeof(an_module), "v", NULL, bad_rows, 1, NULL, 0};
 static const an_module v_refuses = {1, 0, sizeof(an_module), "v", refuse_load, functions, 1, NULL, 0};
+static const an_type twin_types[] = {{"Point", AN_STRUCT, "x: Int, y: Int"}, {"Point", AN_STRUCT, "x: Int"}};
+static const an_module v_twins = {1, 1, sizeof(an_module), "v", NULL, functions, 1, twin_types, AN_COUNT(twin_types)};
 static const an_module v_counts = {1, 0, sizeof(an_module), "v", count_load, functions, AN_COUNT(functions), NULL, 0};
 
 static const an_module *init_none(const an_api *api) {
@@ -238,6 +240,10 @@ static const an_module *init_rows(const an_api *api) {
   (void)api;
   return &v_rows;
 }
+static const an_module *init_twins(const an_api *api) {
+  (void)api;
+  return &v_twins;
+}
 static const an_module *init_refuses(const an_api *api) {
   (void)api;
   return &v_refuses;
@@ -254,7 +260,8 @@ static void test_versions(void) {
     const char *name;
     agc_native_init init;
   } refused[] = {{"v_none", init_none},   {"v_major", init_major}, {"v_minor", init_minor},
-                 {"v_size", init_size},   {"v_rows", init_rows},   {"v_refuses", init_refuses}};
+                 {"v_size", init_size},   {"v_rows", init_rows},   {"v_twins", init_twins},
+                 {"v_refuses", init_refuses}};
   agc_value two[2] = {agc_int(1), agc_int(2)};
   char signature[96];
   for (size_t k = 0; k < sizeof refused / sizeof refused[0]; k++) {
@@ -334,7 +341,7 @@ static void test_types(void) {
   for (size_t k = 0; k < sizeof refused / sizeof refused[0]; k++) fails(refused[k], &p, 1, "RUNTIME-NATIVE-SIGNATURE");
   /* Without the block of Point the getters of the module refuse a Point inside the Rect. */
   fails("module " SHAPE_BLOCK "(Shape) -> Int area demo", &shape, 1, "RUNTIME-NATIVE-ERROR");
-  const char *bad[] = {"module (Point) -> Point flip demo", "module {S1=x: Int, y: Int}(Point) -> Point flip demo",
+  const char *bad[] = {"module (Point) -> Point flip demo", "module {S2=x: Int, y: Int}(Point) -> Point flip demo",
                        "module {S0=y: Int, x: Int}(Point) -> Point flip demo",
                        "module {S0=x: Int}(Point) -> Point flip demo",
                        "module {S0=x: Int, y: Int, z: Int}(Point) -> Point flip demo",
@@ -351,6 +358,20 @@ static void test_types(void) {
                        "module {E0=Dot | Circle(Int) | Rect(Point)}(Shape) -> Int area demo",
                        "module {E0=Dot | Circle(Int)}(Shape) -> Int area demo"};
   for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) fails(bad[k], &p, 1, "RUNTIME-INTERNAL");
+  /* A name of the program with a separator in it would read the module's shape as other fields or variants: the Point
+     of S1 has the one field "x: Int, y", and the Shapes of E1 and E2 have Dot and a variant "Circle(Int) | Rect..." of
+     no or two payloads, which area and grow would index by the module's counts. With arguments of those types, only
+     the bind refuses them. */
+  agc_struct *split = agc_new_struct(1, 1);
+  split->fields[0] = agc_int(1);
+  agc_value split_point = agc_struct_value(split);
+  agc_value split_dots[2] = {agc_enum_value(variants[5].shared), agc_enum_value(variants[7].shared)};
+  agc_value split_grow[2] = {split_dots[1], agc_int(3)};
+  fails("module {S1=x: Int, y: Int}(Point) -> Point flip demo", &split_point, 1, "RUNTIME-INTERNAL");
+  fails("module {E1=Dot | Circle(Int) | Rect(Point, Point)}" POINT_BLOCK "(Shape) -> Int area demo", &split_dots[0], 1,
+        "RUNTIME-INTERNAL");
+  fails("module {E2=Dot | Circle(Int) | Rect(Point, Point)}" POINT_BLOCK "(Shape, Int) -> Shape grow demo", split_grow,
+        2, "RUNTIME-INTERNAL");
   /* A struct of another type, and an enum of another enum's variant, are bad arguments. */
   agc_struct *other = agc_new_struct(1, 0);
   agc_value wrong[2] = {agc_struct_value(other), agc_enum_value(agc_new_enum(1, 1))};
@@ -461,23 +482,30 @@ static void test_threads(void) {
 int main(int argc, char **argv) {
   (void)argc;
   agc_test_io_vm(&vm);
-  const char *names[] = {"None", "Some", "Dot", "Circle", "Rect"};
-  const uint32_t arities[] = {0, 1, 0, 1, 2};
-  for (uint32_t k = 0; k < 5; k++) {
+  /* Shape twice more with a variant name that the loader takes but the front end never writes, so that the shape of
+     the Shape of the module reads as two variants of other payload counts (test_types). */
+  const char *names[] = {"None", "Some", "Dot", "Circle", "Rect", "Dot", "Circle(Int) | Rect(Point, Point)", "Dot",
+                         "Circle(Int) | Rect"};
+  const uint32_t arities[] = {0, 1, 0, 1, 2, 0, 0, 0, 2};
+  for (uint32_t k = 0; k < 9; k++) {
     variants[k].name = agc_make_string(names[k], strlen(names[k]), strlen(names[k]));
     variants[k].arity = arities[k];
     variants[k].shared = arities[k] ? NULL : agc_new_enum(k, 0);
   }
   point_fields[0] = agc_make_string("x", 1, 1);
   point_fields[1] = agc_make_string("y", 1, 1);
+  point_fields[2] = agc_make_string("x: Int, y", 9, 9);
   structs[0] = (agc_struct_def){agc_make_string("Point", 5, 5), 2, point_fields, NULL, NULL};
+  structs[1] = (agc_struct_def){agc_make_string("Point", 5, 5), 1, &point_fields[2], NULL, NULL};
   enums[0] = (agc_enum_def){agc_make_string("Shape", 5, 5), 2, 3, NULL, NULL};
+  enums[1] = (agc_enum_def){agc_make_string("Shape", 5, 5), 5, 2, NULL, NULL};
+  enums[2] = (agc_enum_def){agc_make_string("Shape", 5, 5), 7, 2, NULL, NULL};
   program.variants = variants;
-  program.variant_count = 5;
+  program.variant_count = 9;
   program.structs = structs;
-  program.struct_count = 1;
+  program.struct_count = 2;
   program.enums = enums;
-  program.enum_count = 1;
+  program.enum_count = 3;
   program.optional = 0;
   vm.rt->program = &program;
   agc_native_register(&vm, "demo", agentica_native_init);

@@ -17,8 +17,8 @@
 
 #define ALLOC_LIMIT ((size_t)256 << 20)
 
-/* The rows of the type table of the fuzz module: a struct Pair and an enum Tag. */
-enum { PAIR, TAG };
+/* The rows of the type table of the fuzz module: a struct Pair and the enums Tag and Count. */
+enum { PAIR, TAG, COUNT };
 
 static FILE *sink; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
@@ -85,12 +85,34 @@ static an_term fuzz_swap(an_env *env, int argc, const an_term *argv) {
 /* Text(text) for Empty, and Empty for a Text. */
 static an_term fuzz_retag(an_env *env, int argc, const an_term *argv) {
   uint32_t variant;
-  const an_term *payload;
   (void)argc;
-  if (!an_get_variant(env, argv[0], TAG, &variant, &payload)) return an_badarg(env, 0);
+  if (!an_get_variant(env, argv[0], TAG, &variant)) return an_badarg(env, 0);
   if (variant != 0) return an_enum(env, TAG, 0, NULL);
   an_term text = an_string(env, "empty", 5);
   return an_enum(env, TAG, 1, &text);
+}
+
+/* One(0) for Empty, Two(n, n) for One(n) and One(a + b) for Two(a, b). It reads each payload by the module's own
+   counts and builds each variant from an array of exactly its size, so a bind that let a program of other counts
+   through would read past one of them, which ASan reports. */
+static an_term fuzz_step(an_env *env, int argc, const an_term *argv) {
+  uint32_t variant;
+  an_term first, second;
+  int64_t a, b;
+  (void)argc;
+  if (!an_get_variant(env, argv[0], COUNT, &variant)) return an_badarg(env, 0);
+  if (variant == 0) {
+    an_term one[1] = {an_int(env, 0)};
+    return an_enum(env, COUNT, 1, one);
+  }
+  if (!an_get_payload(env, argv[0], COUNT, 0, &first) || !an_get_int(env, first, &a)) return an_badarg(env, 0);
+  if (variant == 1) {
+    an_term two[2] = {first, first};
+    return an_enum(env, COUNT, 2, two);
+  }
+  if (!an_get_payload(env, argv[0], COUNT, 1, &second) || !an_get_int(env, second, &b)) return an_badarg(env, 0);
+  an_term one[1] = {an_int(env, (int64_t)((uint64_t)a + (uint64_t)b))};
+  return an_enum(env, COUNT, 1, one);
 }
 
 static const an_function fuzz_functions[] = {
@@ -99,11 +121,13 @@ static const an_function fuzz_functions[] = {
   {"bytes", "(Optional[Bytes]) -> Optional[Bytes]", fuzz_bytes, AN_SHORT},
   {"swap", "(Pair) -> Pair", fuzz_swap, AN_SHORT},
   {"retag", "(Tag) -> Tag", fuzz_retag, AN_SHORT},
+  {"step", "(Count) -> Count", fuzz_step, AN_SHORT},
 };
 
 static const an_type fuzz_types[] = {
   {"Pair", AN_STRUCT, "left: Int, right: Int"},
   {"Tag", AN_ENUM, "Empty | Text(String)"},
+  {"Count", AN_ENUM, "Empty | One(Int) | Two(Int, Int)"},
 };
 
 static const an_module fuzz_module = {AN_API_MAJOR, AN_API_MINOR, sizeof(an_module), "agentica_fuzz", NULL,

@@ -11,6 +11,7 @@ enum { CELL_EMPTY, CELL_NUMBER, CELL_TEXT };
 
 /* The most columns of a CSV text. */
 #define MAX_COLUMNS 32
+#define ROW_ERROR "a row has another number of cells"
 
 /* Summary(count, min, max, mean) of the values, or none for no values. */
 static an_term summary(an_env *env, int argc, const an_term *argv) {
@@ -31,7 +32,9 @@ static an_term summary(an_env *env, int argc, const an_term *argv) {
   return an_some(env, an_struct(env, SUMMARY, fields));
 }
 
-/* Empty for no text, a Number when the whole text is a number, else its Text. */
+/* Empty for no text, a Number when the whole text is a number, else its Text. A number is what strtod reads: leading
+   spaces, a hex number, inf and nan too, with the decimal point of the C locale, which a program that never calls
+   setlocale keeps at "." */
 static an_term cell(an_env *env, const char *text, size_t len) {
   char number[64], *end;
   if (len == 0) return an_enum(env, CELL, CELL_EMPTY, NULL);
@@ -64,7 +67,7 @@ static an_term rows(an_env *env, int argc, const an_term *argv) {
     for (const char *field = at;;) {
       const char *comma = memchr(field, ',', (size_t)(stop - field));
       const char *cut = comma ? comma : stop;
-      if (n == MAX_COLUMNS) return an_error(env, "too many columns", 16);
+      if (n == MAX_COLUMNS) return an_error(env, "too many columns", sizeof "too many columns" - 1);
       if (line == 0)
         names[n++] = an_string(env, field, (size_t)(cut - field));
       else
@@ -75,7 +78,7 @@ static an_term rows(an_env *env, int argc, const an_term *argv) {
     if (line == 0)
       columns = n;
     else if (n != columns)
-      return an_error(env, "a row has another number of cells", 33);
+      return an_error(env, ROW_ERROR, sizeof ROW_ERROR - 1);
     else
       an_list_push(env, &b, an_map_from(env, names, cells, n));
     at = stop < end ? stop + 1 : end;

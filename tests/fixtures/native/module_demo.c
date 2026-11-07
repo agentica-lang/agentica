@@ -238,24 +238,26 @@ static bool get_xy(an_env *env, an_term point, int64_t *x, int64_t *y) {
 /* 0 for a Dot, r * r for a Circle(r), and the area between the corners of a Rect. */
 static an_term area(an_env *env, int argc, const an_term *argv) {
   uint32_t variant;
-  const an_term *payload;
+  an_term first, second;
   int64_t r, x0, y0, x1, y1;
   (void)argc;
-  if (!an_get_variant(env, argv[0], SHAPE_TYPE, &variant, &payload)) return an_badarg(env, 0);
+  if (!an_get_variant(env, argv[0], SHAPE_TYPE, &variant)) return an_badarg(env, 0);
   if (variant == SHAPE_DOT) return an_int(env, 0);
+  if (!an_get_payload(env, argv[0], SHAPE_TYPE, 0, &first)) return an_badarg(env, 0);
   if (variant == SHAPE_CIRCLE)
-    return an_get_int(env, payload[0], &r) ? an_int(env, (int64_t)((uint64_t)r * (uint64_t)r)) : an_badarg(env, 0);
-  if (!get_xy(env, payload[0], &x0, &y0) || !get_xy(env, payload[1], &x1, &y1)) return an_badarg(env, 0);
+    return an_get_int(env, first, &r) ? an_int(env, (int64_t)((uint64_t)r * (uint64_t)r)) : an_badarg(env, 0);
+  if (!an_get_payload(env, argv[0], SHAPE_TYPE, 1, &second) || !get_xy(env, first, &x0, &y0) ||
+      !get_xy(env, second, &x1, &y1))
+    return an_badarg(env, 0);
   return an_int(env, (int64_t)(((uint64_t)x1 - (uint64_t)x0) * ((uint64_t)y1 - (uint64_t)y0)));
 }
 
 /* Circle(n) for n > 0, else Dot; Rect from (0, 0) to (n, n) when it is a Circle already. */
 static an_term grow(an_env *env, int argc, const an_term *argv) {
   uint32_t variant;
-  const an_term *payload;
   int64_t n;
   (void)argc;
-  if (!an_get_variant(env, argv[0], SHAPE_TYPE, &variant, &payload)) return an_badarg(env, 0);
+  if (!an_get_variant(env, argv[0], SHAPE_TYPE, &variant)) return an_badarg(env, 0);
   if (!an_get_int(env, argv[1], &n)) return an_badarg(env, 1);
   if (n <= 0) return an_enum(env, SHAPE_TYPE, SHAPE_DOT, NULL);
   if (variant != SHAPE_CIRCLE) return an_enum(env, SHAPE_TYPE, SHAPE_CIRCLE, &argv[1]);

@@ -1105,6 +1105,16 @@ struct Holder
   task: Task[Int]
 end
 
+enum Job
+  Idle
+  Waiting(Task[Int])
+end
+
+enum Tree
+  Leaf
+  Node(List[Tree], Optional[Tree])
+end
+
 extern module "demo"
   %s
 end
@@ -1114,18 +1124,39 @@ end
 """
 
 
-# Only Agentica values cross: a type that is not one, a generic struct, a builtin enum, or a struct of the program
-# whose field does not cross is CHECK-NATIVE-TYPE at the type of the signature.
-@pytest.mark.parametrize("signature, start, stop", [
-    ("def f(t: Task[Int]) -> Int", (10, 12), (10, 21)),
-    ("def f(b: Box[Int]) -> Int", (10, 12), (10, 20)),
-    ("def f(h: Holder) -> Int", (10, 12), (10, 18)),
-    ("def f(n: Int) -> LogLevel", (10, 20), (10, 28)),
-    ("def f(n: Int) -> Fn[Int, Int]", (10, 20), (10, 32)),
+# Only Agentica values cross: a type that is not one, a generic struct, a builtin enum, a Set, or a struct or enum of
+# the program whose field or payload does not cross is CHECK-NATIVE-TYPE at the type of the signature. A Map key that
+# would not cross is no Map key at all (CHECK-MAP-KEY-TYPE).
+@pytest.mark.parametrize("signature, code, start, stop", [
+    ("def f(t: Task[Int]) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 21)),
+    ("def f(b: Box[Int]) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 20)),
+    ("def f(h: Holder) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 18)),
+    ("def f(j: List[Job]) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 21)),
+    ("def f(s: Set[Int]) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 20)),
+    ("def f(n: Int) -> LogLevel", "CHECK-NATIVE-TYPE", (20, 20), (20, 28)),
+    ("def f(n: Int) -> Fn[Int, Int]", "CHECK-NATIVE-TYPE", (20, 20), (20, 32)),
+    ("def f(m: Map[Float, Int]) -> Int", "CHECK-MAP-KEY-TYPE", (20, 16), (20, 21)),
 ])
-def test_only_agentica_values_cross_to_a_native_module(tmp_path, signature, start, stop):
+def test_only_agentica_values_cross_to_a_native_module(tmp_path, signature, code, start, stop):
     problem = problem_of(check(source(tmp_path, NATIVE_TYPES % signature)))
-    assert at(problem) == ("CHECK-NATIVE-TYPE", start, stop)
+    assert at(problem) == (code, start, stop)
+
+
+# A recursive type crosses: the checker and the lowering walk each user type once.
+def test_a_recursive_type_crosses_to_a_native_module(tmp_path):
+    path = source(tmp_path, NATIVE_TYPES % "def f(tree: Tree) -> List[Tree]")
+    assert_checks(check(path), None, None, None)
+    assert run(cli() + ["compile", path, "-o", str(tmp_path / "tree.agcb")]).code == 0
+
+
+def test_a_module_function_takes_at_most_64_parameters(tmp_path):
+    params = ", ".join("p%d: Int" % k for k in range(64))
+    ok = 'extern module "demo"\n  def f(%s) -> Int\nend\n' % params
+    assert check(source(tmp_path, ok)).code == 0
+    over = 'extern module "demo"\n  def f(%s, extra: Int) -> Int\nend\n' % params
+    start = len("  def f(%s, " % params) + 1
+    assert at(problem_of(check(source(tmp_path, over)))) == (
+        "PARSE-EXTERN-ARITY", (2, start), (2, start + len("extra: Int")))
 
 
 # The module knows its types by their bare names: two types of one name in the functions of a block are refused at

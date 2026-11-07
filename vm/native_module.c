@@ -1,6 +1,6 @@
 /*
- * Native modules (vm/agentica_native.h, #1149): agc_native_bind binds a "module CANON SYMBOL LIBRARY" signature of
- * Native.call to a row of a module's function table, loading the module at its first use (agentica_native_init in
+ * Native modules (vm/agentica_native.h, #1149): agc_native_bind binds a "module TYPES CANON SYMBOL LIBRARY" signature
+ * of Native.call to a row of a module's function table, loading the module at its first use (agentica_native_init in
  * a shared library, ffi_os.h, or a module the binary carries, agc_native_register); agc_native_call makes a short
  * call on the scheduler; and the an_api table is the VM half of the C API. vm/ffi.c keeps the bound functions in its
  * cache of the run. Service layer.
@@ -72,10 +72,11 @@ typedef struct {
   size_t shape_len;
 } type_block;
 
-/* The type blocks of a signature, from START to END, which read_blocks checked, and the program they index. */
+/* The type blocks of a signature, which read_blocks checked, sorted by name for find_block. ITEMS is GC memory, which
+   a bind that fails leaves to the collector. */
 typedef struct {
-  const agc_program *program;
-  const char *start, *end;
+  type_block *items;
+  uint32_t count;
 } block_list;
 
 /* A module of the run (agc_runtime.native_modules), in malloc memory, under rt->sync, found by NAME (the library of
@@ -211,11 +212,34 @@ static bool next_block(const agc_program *p, const char **at, const char *end, t
   return true;
 }
 
-/* The block of LIST whose type is named TEXT (LEN bytes). */
+/* The order of names A (ALEN bytes) and B: by their bytes, then the shorter first. */
+static int name_order(const char *a, size_t alen, const char *b, size_t blen) {
+  int c = memcmp(a, b, alen < blen ? alen : blen);
+  return c ? c : (alen > blen) - (alen < blen);
+}
+
+static int block_order(const void *a, const void *b) {
+  const agc_string *x = ((const type_block *)a)->name, *y = ((const type_block *)b)->name;
+  return name_order(x->data, x->bytes, y->data, y->bytes);
+}
+
+/* The block of LIST whose type is named TEXT (LEN bytes), by binary search. */
 static bool find_block(const block_list *list, const char *text, size_t len, type_block *found) {
-  const char *at = list->start;
-  while (at < list->end && next_block(list->program, &at, list->end, found))
-    if (found->name->bytes == len && memcmp(found->name->data, text, len) == 0) return true;
+  size_t low = 0, high = list->count;
+  while (low < high) {
+    size_t mid = low + (high - low) / 2;
+    const agc_string *name = list->items[mid].name;
+    int c = name_order(text, len, name->data, name->bytes);
+    if (c == 0) {
+      *found = list->items[mid];
+      return true;
+    }
+    if (c < 0) {
+      high = mid;
+    } else {
+      low = mid + 1;
+    }
+  }
   return false;
 }
 
@@ -238,6 +262,18 @@ static bool skip_type(const char **at, const char *end) {
   return *at > start && depth == 0;
 }
 
+/* Whether NAME is one the front end writes: an identifier, and for a field one that may end in ? or !. The loader takes
+   any UTF-8 name, and one holding a separator of a shape (" | ", "(", ", ", ": ") would read one shape as other fields
+   or variants than the program has, with other payload counts than the module's. */
+static bool shape_name(const agc_string *name, bool field) {
+  size_t n = name->bytes;
+  if (field && n && (name->data[n - 1] == '?' || name->data[n - 1] == '!')) n--;
+  if (n == 0) return false;
+  for (size_t k = 0; k < n; k++)
+    if (!name_char(name->data[k])) return false;
+  return true;
+}
+
 /* Whether the shape of B lists the fields of its struct, or the variants of its enum, as program P declares them: the
    same names in the same order, and the same number of payload types for each variant. So the module's tables, which
    the shape must equal, index what the program builds. */
@@ -246,15 +282,15 @@ static bool shape_fits(const agc_program *p, const type_block *b) {
   if (!b->is_enum) {
     const agc_struct_def *def = &p->structs[b->index];
     for (uint32_t k = 0; k < def->count; k++)
-      if ((k && !skip(&at, end, ", ")) || !skip_name(&at, end, def->fields[k]) || !skip(&at, end, ": ") ||
-          !skip_type(&at, end))
+      if ((k && !skip(&at, end, ", ")) || !shape_name(def->fields[k], true) || !skip_name(&at, end, def->fields[k]) ||
+          !skip(&at, end, ": ") || !skip_type(&at, end))
         return false;
     return at == end;
   }
   const agc_enum_def *def = &p->enums[b->index];
   for (uint32_t k = 0; k < def->count; k++) {
     const agc_variant_def *v = &p->variants[def->first + k];
-    if ((k && !skip(&at, end, " | ")) || !skip_name(&at, end, v->name)) return false;
+    if ((k && !skip(&at, end, " | ")) || !shape_name(v->name, false) || !skip_name(&at, end, v->name)) return false;
     for (uint32_t n = 0; n < v->arity; n++)
       if (!skip(&at, end, n ? ", " : "(") || !skip_type(&at, end)) return false;
     if (v->arity && !skip(&at, end, ")")) return false;
@@ -263,17 +299,26 @@ static bool shape_fits(const agc_program *p, const type_block *b) {
 }
 
 /* Reads the type blocks at the start of a signature, at *AT before END: each in range, fitting the program, and of a
-   name no earlier block has. Bad bytecode fails. */
+   name no other block has. At most MODULE_MAX_TYPES, as each must be a type of the module, whose names differ. Read
+   once, then sorted, so a bind takes O(B log B) under rt->sync. Bad bytecode fails. */
 static block_list read_blocks(agc_vm *vm, const char **at, const char *end, uint32_t span) {
   const agc_program *p = vm->rt->program;
-  block_list list = {p, *at, *at};
+  block_list list = {NULL, 0};
+  type_block b;
+  const char *start = *at;
   while (*at < end && **at == '{') {
-    type_block b, other;
-    if (!p || !next_block(p, at, end, &b) || !shape_fits(p, &b) ||
-        find_block(&list, b.name->data, b.name->bytes, &other))
-      bad_signature(vm, span);
-    list.end = *at;
+    if (!p || list.count == MODULE_MAX_TYPES || !next_block(p, at, end, &b)) bad_signature(vm, span);
+    list.count++;
   }
+  if (list.count == 0) return list;
+  list.items = agc_alloc(agc_size_mul(list.count, sizeof *list.items));
+  for (uint32_t k = 0; k < list.count; k++) {
+    (void)next_block(p, &start, end, &list.items[k]);
+    if (!shape_fits(p, &list.items[k])) bad_signature(vm, span);
+  }
+  qsort(list.items, list.count, sizeof *list.items, block_order);
+  for (uint32_t k = 1; k < list.count; k++)
+    if (block_order(&list.items[k - 1], &list.items[k]) == 0) bad_signature(vm, span);
   return list;
 }
 
@@ -350,6 +395,28 @@ static uint32_t module_types(const an_module *m, const an_type **rows) {
   return m->size >= MODULE_SIZE_1_1 ? m->type_count : 0;
 }
 
+static int row_order(const void *a, const void *b) {
+  return strcmp((*(const an_type *const *)a)->name, (*(const an_type *const *)b)->name);
+}
+
+/* A message in ERROR (SIZE bytes) when two of the COUNT rows of a type table have one name, which would make the type
+   that a signature names by it ambiguous; else NULL. Sorted copy of the rows, so a load takes O(N log N). */
+static const char *twin_type(const an_type *types, uint32_t count, char *error, size_t size) {
+  if (count < 2) return NULL;
+  const an_type **sorted = malloc(agc_size_mul(count, sizeof *sorted));
+  if (!sorted) agc_out_of_memory();
+  for (uint32_t k = 0; k < count; k++) sorted[k] = &types[k];
+  qsort(sorted, count, sizeof *sorted, row_order);
+  const char *problem = NULL;
+  for (uint32_t k = 1; k < count && !problem; k++)
+    if (strcmp(sorted[k - 1]->name, sorted[k]->name) == 0) {
+      snprintf(error, size, "the module's type table has two types named %.64s", sorted[k]->name);
+      problem = error;
+    }
+  free(sorted);
+  return problem;
+}
+
 /* What is wrong with the module M that an init gave, as a message in ERROR (SIZE bytes), or NULL. Only the fields of
    API 1.0 are read, which every module of major version 1 has (MODULE_SIZE_1_0), and the type table when SIZE covers
    it. */
@@ -378,7 +445,7 @@ static const char *module_problem(const an_module *m, char *error, size_t size) 
       return error;
     }
   }
-  return NULL;
+  return twin_type(types, type_count, error, size);
 }
 
 /* Loads LIB: its init (the export of its library, or the one it was registered with), the checks of the module and
@@ -443,8 +510,8 @@ static const an_type *type_row(const an_type *rows, uint32_t count, const agc_st
 static void check_types(agc_vm *vm, const native_library *lib, const block_list *blocks, uint32_t span) {
   const an_type *rows;
   uint32_t count = module_types(lib->module, &rows);
-  type_block b;
-  for (const char *at = blocks->start; at < blocks->end && next_block(blocks->program, &at, blocks->end, &b);) {
+  for (uint32_t k = 0; k < blocks->count; k++) {
+    const type_block b = blocks->items[k];
     const an_type *row = type_row(rows, count, b.name);
     int name_len = (int)b.name->bytes;
     if (!row)
@@ -466,9 +533,8 @@ static uint32_t *bound_types(const block_list *blocks, const an_type *rows, uint
   uint32_t *types = malloc(agc_size_mul(count, sizeof *types));
   if (!types) agc_out_of_memory();
   for (uint32_t k = 0; k < count; k++) types[k] = UNBOUND;
-  type_block b;
-  for (const char *at = blocks->start; at < blocks->end && next_block(blocks->program, &at, blocks->end, &b);)
-    types[type_row(rows, count, b.name) - rows] = b.index;
+  for (uint32_t k = 0; k < blocks->count; k++)
+    types[type_row(rows, count, blocks->items[k].name) - rows] = blocks->items[k].index;
   return types;
 }
 
@@ -926,23 +992,30 @@ static an_term api_enum(an_env *env, uint32_t type, uint32_t variant, const an_t
   return term_of(agc_enum_value(e));
 }
 
-/* The payload is copied into GC memory as terms, so C reads it as the type it has; the copy lives as long as C holds
-   it (rule 1 of an_term). */
-static bool api_get_variant(an_env *env, an_term t, uint32_t type, uint32_t *variant, const an_term **payload) {
-  uint32_t id = bound_type(env->fn, type, AN_ENUM), at;
+/* The enum value of T when it is of row TYPE, with in *AT its variant's position in the enum. Allocates nothing, so a
+   getter may run where GC memory may not be made. */
+static const agc_enum *enum_of(an_env *env, an_term t, uint32_t type, uint32_t *at) {
+  uint32_t id = bound_type(env->fn, type, AN_ENUM);
   agc_value v = value_of(t);
-  if (id == UNBOUND || !agc_is(v, AGC_T_ENUM)) return false;
+  if (id == UNBOUND || !agc_is(v, AGC_T_ENUM)) return NULL;
   const agc_program *p = env->vm->rt->program;
   const agc_enum *e = agc_as_enum(env->vm, v);
-  if (!enum_variant(p, id, e->variant, &at) || e->n != p->variants[e->variant].arity) return false;
-  an_term *items = NULL;
-  if (e->n) {
-    agc_charge_bytes(env->vm, agc_size_mul(e->n, sizeof *items));
-    items = agc_alloc(agc_size_mul(e->n, sizeof *items));
-    for (uint32_t k = 0; k < e->n; k++) items[k] = term_of(e->payload[k]);
-  }
+  if (!enum_variant(p, id, e->variant, at) || e->n != p->variants[e->variant].arity) return NULL;
+  return e;
+}
+
+static bool api_get_variant(an_env *env, an_term t, uint32_t type, uint32_t *variant) {
+  uint32_t at;
+  if (!enum_of(env, t, type, &at)) return false;
   *variant = at;
-  *payload = items;
+  return true;
+}
+
+static bool api_get_payload(an_env *env, an_term t, uint32_t type, uint32_t k, an_term *out) {
+  uint32_t at;
+  const agc_enum *e = enum_of(env, t, type, &at);
+  if (!e || k >= e->n) return false;
+  *out = term_of(e->payload[k]);
   return true;
 }
 
@@ -953,5 +1026,5 @@ static const an_api API = {
   api_list_end,     api_list_cursor,  api_list_next,    api_map_from,     api_map_put,      api_map_get,
   api_map_cursor,   api_map_next,     api_none,         api_some,         api_get_optional, api_ok,
   api_error,        api_get_result,   api_raise,        api_badarg,       api_struct,       api_get_field,
-  api_enum,         api_get_variant,
+  api_enum,         api_get_variant,  api_get_payload,
 };

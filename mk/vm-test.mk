@@ -113,6 +113,8 @@ FUZZ_CORPUS = mkdir -p $(LIBFUZZ_DIR)/seeds && printf '%s\n' $(FUZZ_SEEDS) | xar
 # string once per step), so a timeout can also be a slow input to triage. Fork mode saves a corpus or seed input that
 # fails its first pass and goes on without counting it, so the run also fails when crashes/ got a new crash, leak,
 # timeout or oom file (not a slow-unit one: an input slower than 10 s but under LIBFUZZ_TIMEOUT is no failure).
+# First the native_module seed must run to its end through the driver (AGC_FUZZ_SHOW, vm/fuzz_libfuzzer.c): a seed
+# whose module call fails to bind would leave the module's getters and constructors unfuzzed.
 LIBFUZZ_TIME ?= 60
 LIBFUZZ_TIMEOUT ?= 10
 LIBFUZZ_JOBS ?= 1
@@ -121,6 +123,8 @@ LIBFUZZ_FLAGS ?=
 vm-libfuzz-run: dist/agentica$(EXE)
 	$(FUZZ_CORPUS)
 	$(MAKE) vm-libfuzz
+	AGC_FUZZ_SHOW=1 $(LIBFUZZ_DIR)/agentica-vm-libfuzz $(LIBFUZZ_DIR)/seeds/native_module.agcb 2>&1 | \
+	  grep -q 'end kind=0 exit=0' || { echo "vm-libfuzz-run: the native_module seed does not run to its end"; exit 1; }
 	@mkdir -p $(LIBFUZZ_DIR)/corpus $(LIBFUZZ_DIR)/crashes $(LIBFUZZ_DIR)/tmp
 	touch $(LIBFUZZ_DIR)/tmp/started; status=0; \
 	ASAN_OPTIONS=detect_leaks=1:allocator_may_return_null=1 TMPDIR=$(CURDIR)/$(LIBFUZZ_DIR)/tmp \

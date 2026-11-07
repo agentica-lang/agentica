@@ -109,6 +109,20 @@ def test_each_kind_of_value_crosses_a_module_call(tmp_path, demo):
         "[Point(x: 0, y: 0), Point(x: 1, y: 2), Point(x: 2, y: 4)]", ""])
 
 
+# The structs and enums of an imported file cross too: the module knows them by their bare names.
+@NATIVE_CALLS
+def test_the_types_of_an_imported_file_cross(tmp_path, demo):
+    shapes = ("export struct Point\n  x: Int\n  y: Int\nend\n\n"
+              "export enum Shape\n  Dot\n  Circle(Int)\n  Rect(Point, Point)\nend\n")
+    program(tmp_path, shapes, "shapes.agc")
+    text = ('import {Point, Shape} from "shapes"\n\nextern module "%s"\n  def flip(point: Point) -> Point\n'
+            '  def grow(shape: Shape, n: Int) -> Shape\nend\n\ndef main() -> Void\n  puts(flip(Point(x: 1, y: 2)))\n'
+            '  puts(grow(Shape.Circle(2), 3))\nend\n') % literal(demo)
+    result = agentica("--json", program(tmp_path, text))
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout == "Point(x: 2, y: 1)\nShape.Rect(Point(x: 0, y: 0), Point(x: 3, y: 3))\n"
+
+
 # A short call never calls back into Agentica: the callback that the module starts runs nothing and gives 0, while
 # the same callback started from an extern call runs.
 @NATIVE_CALLS

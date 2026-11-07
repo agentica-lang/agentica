@@ -1,6 +1,7 @@
 """The cost of one native call (#1149): a short call of a native module against an extern `def` (libffi), a
-`compute def` and a plain Agentica call, and 1000 structs built by one module call against 1000 extern calls, in ns per
-call with the loop included, through dist/agentica.
+`compute def` and a plain Agentica call, in ns per call with the loop included, and a List of 1000 Point structs built
+by one module call against one built in Agentica with an extern call and a push per Point, in ns per List, through
+dist/agentica.
 
 `make bench-native` (or `python3 benchmarks/native/run.py --runs 5`) builds tests/fixtures/native/module_demo.c with
 the system C compiler and times one program per case, `--runs` times, printing the median. The program declares the
@@ -64,14 +65,14 @@ def main() -> Void
 end
 """
 
-# name, calls, the call in the loop.
+# name, what one turn of the loop does, turns, the code of the turn.
 CASES = [
-    ("plain Agentica call", 1_000_000, "plain_add(i, 1)"),
-    ("short native call", 1_000_000, "add(i, 1)"),
-    ("extern def (labs)", 1_000_000, "labs(0 - i)"),
-    ("compute def (llabs)", 20_000, "llabs(0 - i)"),
-    ("1000 structs, 1 module call", 2_000, "points(1000).size"),
-    ("1000 structs, 1000 extern calls", 2_000, "extern_points(1000)"),
+    ("plain Agentica call", "call", 1_000_000, "plain_add(i, 1)"),
+    ("short native call", "call", 1_000_000, "add(i, 1)"),
+    ("extern def (labs)", "call", 1_000_000, "labs(0 - i)"),
+    ("compute def (llabs)", "call", 20_000, "llabs(0 - i)"),
+    ("List of 1000 Points, 1 module call", "List", 2_000, "points(1000).size"),
+    ("List of 1000 Points, extern + push", "List", 2_000, "extern_points(1000)"),
 ]
 
 
@@ -84,7 +85,7 @@ def build_module(folder):
 
 
 def program(folder, case, module):
-    _, count, call = case
+    _, _, count, call = case
     source = folder / "bench.agc"
     text = PROGRAM.format(libc=LIBC, module=str(module).replace("\\", "\\\\"), count=count, call=call)
     source.write_text(text)
@@ -106,8 +107,8 @@ def main():
             for _ in range(args.runs):
                 out = subprocess.run([str(EXE), "run", "--", str(compiled)], check=True, capture_output=True, text=True)
                 samples.append(int(out.stdout.split()[0]))
-            print("%-32s %9d ns per call (median of %d, %d calls)" % (case[0], statistics.median(samples), args.runs,
-                                                                      case[1]))
+            print("%-36s %9d ns per %s (median of %d, %d turns)" % (case[0], statistics.median(samples), case[1],
+                                                                     args.runs, case[2]))
 
 
 if __name__ == "__main__":

@@ -21,8 +21,9 @@ end
 - `NAME` is a library as in an `extern` block (a name, an absolute path, or
   the package's `[native.NAME]`).
 - Names are the module table's, `?` and `!` allowed. Only `def` and
-  `compute def` lines; `resource`, `callback`, `struct`, `out`, `...` and
-  `= "symbol"` are `PARSE-EXTERN-MODULE`; a `C.` type is `PARSE-EXTERN-TYPE`.
+  `compute def` lines; `callback`, `struct`, `out`, `...` and `= "symbol"` are
+  `PARSE-EXTERN-MODULE`, and `resource` too (not yet supported); a `C.` type
+  is `PARSE-EXTERN-TYPE`.
 - Types that cross: `Int`, `Float`, `Bool`, `String`, `Bytes`, `Void` (result),
   `List`, `Optional`, `Result` of them, `Map` with `Int`, `String` or `Bytes`
   keys, and non-generic structs and enums of the program whose fields cross.
