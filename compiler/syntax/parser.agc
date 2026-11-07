@@ -411,50 +411,45 @@ end
 
 # x |> f(a) becomes the call f(x, a), keeping the id and span of the call written on the right, so the ids stay in
 # post-order: x was parsed first and has smaller ids. A try on the right wraps the call. Only a call written with
-# parentheses and not piped yet is a target; `none` gives PARSE-PIPE-TARGET.
+# parentheses and not piped yet is a target; `none` gives PARSE-PIPE-TARGET. Family.Member.fn(a), which reads as a
+# method call on the type name Family.Member, becomes the call Family.Member.fn(x, a); the linker judges the name.
 def pipe_insert(left: Ast.Expr, node: Ast.Expr) -> Optional[Ast.Expr]
+  case node
+    Ast.Expr.Try(wrapper) ->
+      case piped_call(left, wrapper.operand)
+        some(inserted) -> return some(Ast.Expr.Try(Ast.TryExpr(id: wrapper.id, operand: inserted, span: wrapper.span)))
+        none -> return none
+      end
+
+    _ -> return piped_call(left, node)
+  end
+end
+
+def piped_call(left: Ast.Expr, node: Ast.Expr) -> Optional[Ast.Expr]
   case node
     Ast.Expr.Call(call) ->
       if call.piped or !call.parenthesized
         return none
       end
 
-      return some(
-        Ast.Expr.Call(
-          Ast.Call(
-            id: call.id,
-            name: call.name,
-            args: List.concat([left], call.args),
-            piped: true,
-            parenthesized: false,
-            span: call.span,
-          ),
-        ),
-      )
-    Ast.Expr.Try(wrapper) ->
-      case wrapper.operand
-        Ast.Expr.Call(call) ->
-          if call.piped or !call.parenthesized
+      return some(pipe_node(call.id, call.name, List.concat([left], call.args), call.span))
+    Ast.Expr.MethodCall(call) ->
+      case call.target
+        Ast.Expr.TypeName(type_name) ->
+          if type_name.name.split(".").size != 2
             return none
           end
 
-          inserted = Ast.Expr.Call(
-            Ast.Call(
-              id: call.id,
-              name: call.name,
-              args: List.concat([left], call.args),
-              piped: true,
-              parenthesized: false,
-              span: call.span,
-            ),
-          )
-
-          return some(Ast.Expr.Try(Ast.TryExpr(id: wrapper.id, operand: inserted, span: wrapper.span)))
+          return some(pipe_node(call.id, "#{type_name.name}.#{call.name}", List.concat([left], call.args), call.span))
         _ -> return none
       end
 
     _ -> return none
   end
+end
+
+def pipe_node(id: Int, name: String, args: List[Ast.Expr], span: Source.Span) -> Ast.Expr
+  return Ast.Expr.Call(Ast.Call(id: id, name: name, args: args, piped: true, parenthesized: false, span: span))
 end
 
 def chained_message(level: Int) -> String

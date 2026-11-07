@@ -21,7 +21,7 @@ struct Out
 end
 
 def hex(text: String) -> Bytes
-  return Digest.hexdecode(text).unwrap!
+  return OpenSSL.Digest.hexdecode(text).unwrap!
 end
 
 def main() -> Void
@@ -30,8 +30,8 @@ def main() -> Void
     password = hex(c.password)
     salt = hex(c.salt)
     Out(
-      pbkdf2: Digest.hexencode(KDF.pbkdf2_hmac_sha256(password, salt, c.iterations, c.length).unwrap!),
-      scrypt: Digest.hexencode(KDF.scrypt(password, salt, c.n, c.r, c.p, c.length).unwrap!),
+      pbkdf2: OpenSSL.Digest.hexencode(OpenSSL.KDF.pbkdf2_hmac_sha256(password, salt, c.iterations, c.length).unwrap!),
+      scrypt: OpenSSL.Digest.hexencode(OpenSSL.KDF.scrypt(password, salt, c.n, c.r, c.p, c.length).unwrap!),
     )
   end
   puts(JSON.encode(outs))

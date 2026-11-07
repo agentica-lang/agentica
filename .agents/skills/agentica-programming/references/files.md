@@ -54,8 +54,8 @@ also reads, and `each_line` and `foreach` default `buffer_bytes` to 65536.
   limited to 1 MiB. `read_bytes` takes 1..1048576 bytes and returns empty bytes
   at EOF; `write_bytes` takes at most 1048576 bytes (`bytes.md`).
 - `File.sha256` hashes a whole regular file with SHA-256 and returns the 32
-  digest bytes as a `Bytes`, as `Digest.sha256` does (`Digest.hexencode` for
-  hex). It has no 1 MiB cap; a missing path, a directory, a FIFO, pipe or device
+  digest bytes as a `Bytes`, as `OpenSSL.Digest.sha256` does
+  (`OpenSSL.Digest.hexencode` for hex). It has no 1 MiB cap; a missing path, a directory, a FIFO, pipe or device
   is an error. No snapshot: hash a temporary file, then `Path.rename` it into
   place.
 - `read_line` removes LF or CRLF and accepts a final unterminated line. EOF

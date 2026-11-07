@@ -4070,7 +4070,7 @@ def spins(x: Int) -> Int
 end
 
 def derives(x: Int) -> Int
-  key = KDF.pbkdf2_hmac_sha256("pw".bytes, "salt".bytes, 1, 32)
+  key = OpenSSL.KDF.pbkdf2_hmac_sha256("pw".bytes, "salt".bytes, 1, 32)
   return x + key.unwrap!.length
 end
 

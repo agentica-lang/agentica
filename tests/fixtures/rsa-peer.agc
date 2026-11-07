@@ -14,7 +14,7 @@ end
 def main() -> Void
   cases = JSON.decode(IO.read(), Cases).unwrap!.cases
   sealed = cases.map do |c: Case|
-    Digest.hexencode(RSA.public_encrypt_oaep(c.pem, Digest.hexdecode(c.data).unwrap!).unwrap!)
+    OpenSSL.Digest.hexencode(OpenSSL.RSA.public_encrypt_oaep(c.pem, OpenSSL.Digest.hexdecode(c.data).unwrap!).unwrap!)
   end
   puts(JSON.encode(sealed))
 end

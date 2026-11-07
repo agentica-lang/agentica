@@ -7,6 +7,7 @@
 ## fit in the limit of 10,000 calls (the parser's nesting limit bounds the calls it makes, not the depth of the tree;
 ## see ast.agc).
 
+import Builtins from "../catalog/builtins"
 import {ENUMS} from "../catalog/builtins"
 import NativeLibrary from "../packages/native_library"
 import Ast from "../syntax/ast"
@@ -516,8 +517,17 @@ def rewrite_compound(cx: Resolve.Context, expr: Ast.Expr) -> Result[Ast.Expr]
       return ok(Ast.Expr.Update(node.with(target: target, args: args, visible: some(cx.visible))))
     Ast.Expr.ListLit(node) -> return ok(Ast.Expr.ListLit(node.with(elements: try rewrite_exprs(cx, node.elements))))
     Ast.Expr.MapLit(node) -> return rewrite_map(cx, node)
-    Ast.Expr.FieldAccess(node) -> return ok(Ast.Expr.FieldAccess(node.with(target: try rewrite_expr(cx, node.target))))
+    Ast.Expr.FieldAccess(node) ->
+      if family_member(cx, node.target) != ""
+        return member_call(cx, node.target, node.id, node.name, [], false, node.span)
+      end
+
+      return ok(Ast.Expr.FieldAccess(node.with(target: try rewrite_expr(cx, node.target))))
     Ast.Expr.MethodCall(node) ->
+      if family_member(cx, node.target) != ""
+        return member_call(cx, node.target, node.id, node.name, node.args, true, node.span)
+      end
+
       target = try rewrite_expr(cx, node.target)
       args = try rewrite_exprs(cx, node.args)
       return ok(Ast.Expr.MethodCall(node.with(target: target, args: args)))
@@ -535,6 +545,41 @@ def rewrite_compound(cx: Resolve.Context, expr: Ast.Expr) -> Result[Ast.Expr]
       return ok(Ast.Expr.Binary(node.with(left: left, right: right)))
     _ -> return ok(expr)
   end
+end
+
+# The name Family.Member when the target is a member of a builtin family that is no type (OpenSSL.Digest), or "": the
+# parser reads Family.Member.fn(args) as a method call on that name, which is the call of the builtin
+# Family.Member.fn. A name that is no member of the family counts too, so the call reports it
+# (Resolve.member_function).
+def family_member(cx: Resolve.Context, target: Ast.Expr) -> String
+  case target
+    Ast.Expr.TypeName(node) ->
+      parts = node.name.split(".")
+      if parts.size == 2 and Resolve.family?(cx, parts[0]) and !Builtins.member_type?(parts[0], parts[1])
+        return node.name
+      end
+
+      return ""
+    _ -> return ""
+  end
+end
+
+# Family.Member.fn(args), or Family.Member.fn with no parentheses: the call of the builtin Family.Member.fn, with the
+# id and span of the method call or field access it was read as. A member the family lacks is reported at the written
+# Family.Member.
+def member_call(
+  cx: Resolve.Context,
+  target: Ast.Expr,
+  id: Int,
+  method: String,
+  args: List[Ast.Expr],
+  parenthesized: Bool,
+  span: Source.Span,
+) -> Result[Ast.Expr]
+  name = "#{family_member(cx, target)}.#{method}"
+  try Resolve.resolve(cx, name, Resolve.Want.Function, Ast.expr_span(target), false)
+  call = Ast.Call(id: id, name: name, args: args, piped: false, parenthesized: parenthesized, span: span)
+  return rewrite_call(cx, call)
 end
 
 def rewrite_map(cx: Resolve.Context, node: Ast.MapLit) -> Result[Ast.Expr]

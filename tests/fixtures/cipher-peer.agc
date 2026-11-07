@@ -22,7 +22,7 @@ struct Out
 end
 
 def hex(text: String) -> Bytes
-  return Digest.hexdecode(text).unwrap!
+  return OpenSSL.Digest.hexdecode(text).unwrap!
 end
 
 def main() -> Void
@@ -33,10 +33,10 @@ def main() -> Void
     blocks = hex(c.blocks)
     data = hex(c.data)
     Out(
-      encrypt: Digest.hexencode(Cipher.des_ede3_cbc_encrypt(des_key, iv, blocks).unwrap!),
-      decrypt: Digest.hexencode(Cipher.des_ede3_cbc_decrypt(des_key, iv, blocks).unwrap!),
-      cmac_aes: Digest.hexencode(CMAC.aes(hex(c.aes_key), data).unwrap!),
-      cmac_des_ede3: Digest.hexencode(CMAC.des_ede3(des_key, data).unwrap!),
+      encrypt: OpenSSL.Digest.hexencode(OpenSSL.Cipher.des_ede3_cbc_encrypt(des_key, iv, blocks).unwrap!),
+      decrypt: OpenSSL.Digest.hexencode(OpenSSL.Cipher.des_ede3_cbc_decrypt(des_key, iv, blocks).unwrap!),
+      cmac_aes: OpenSSL.Digest.hexencode(OpenSSL.CMAC.aes(hex(c.aes_key), data).unwrap!),
+      cmac_des_ede3: OpenSSL.Digest.hexencode(OpenSSL.CMAC.des_ede3(des_key, data).unwrap!),
     )
   end
   puts(JSON.encode(outs))

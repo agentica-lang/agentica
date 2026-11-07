@@ -1,4 +1,4 @@
-# KDF.scrypt and KDF.pbkdf2_hmac_sha256 run on the compute pool: the deriving
+# OpenSSL.KDF.scrypt and OpenSSL.KDF.pbkdf2_hmac_sha256 run on the compute pool: the deriving
 # task parks, and the other task of its scheduler keeps running. The deriving
 # task logs "start" before the call and "done" after it; main logs "tick", lets
 # the other task run (Task.sleep(0)) and logs "tick" again. Each key takes about
@@ -23,7 +23,7 @@ def race(label: String, derive: Fn[Result[Bytes]]) -> Void
   _ = log.send("tick", 0)
   Task.sleep(0)
   _ = log.send("tick", 0)
-  key = Digest.hexencode(Task.await(task).unwrap!)
+  key = OpenSSL.Digest.hexencode(Task.await(task).unwrap!)
   words = [log.recv(0).unwrap!, log.recv(0).unwrap!, log.recv(0).unwrap!, log.recv(0).unwrap!]
   puts("#{label}: #{words.join(" ")} #{key}")
 end
@@ -32,7 +32,7 @@ def cancel_one() -> Void
   started: Channel[Bool] = Channel.new(1)
   task = Task.spawn do
     _ = started.send(true, 0)
-    KDF.scrypt("password".bytes, "NaCl".bytes, 1024, 8, 1, 32)
+    OpenSSL.KDF.scrypt("password".bytes, "NaCl".bytes, 1024, 8, 1, 32)
   end
   _ = started.recv(60000)
   Task.cancel(task)
@@ -43,22 +43,22 @@ def cancel_queued() -> Void
   started: Channel[Bool] = Channel.new(1)
   ahead = Task.spawn do
     _ = started.send(true, 0)
-    KDF.scrypt("password".bytes, "NaCl".bytes, 16384, 8, 1, 32)
+    OpenSSL.KDF.scrypt("password".bytes, "NaCl".bytes, 16384, 8, 1, 32)
   end
   _ = started.recv(60000)
   queued = Task.spawn do
     _ = started.send(true, 0)
-    KDF.pbkdf2_hmac_sha256("password".bytes, "NaCl".bytes, 1, 32)
+    OpenSSL.KDF.pbkdf2_hmac_sha256("password".bytes, "NaCl".bytes, 1, 32)
   end
   _ = started.recv(60000)
   Task.cancel(queued)
   puts("queued: #{Task.await(queued)}")
-  puts("ahead: #{Digest.hexencode(Task.await(ahead).unwrap!)}")
+  puts("ahead: #{OpenSSL.Digest.hexencode(Task.await(ahead).unwrap!)}")
 end
 
 def main() -> Void
-  race("scrypt") do KDF.scrypt("password".bytes, "NaCl".bytes, 16384, 8, 1, 32) end
+  race("scrypt") do OpenSSL.KDF.scrypt("password".bytes, "NaCl".bytes, 16384, 8, 1, 32) end
   cancel_one()
   cancel_queued()
-  race("pbkdf2") do KDF.pbkdf2_hmac_sha256("password".bytes, "NaCl".bytes, 150000, 32) end
+  race("pbkdf2") do OpenSSL.KDF.pbkdf2_hmac_sha256("password".bytes, "NaCl".bytes, 150000, 32) end
 end

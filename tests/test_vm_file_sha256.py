@@ -70,7 +70,7 @@ def test_sha256_matches_digest_sha256_on_the_same_bytes(tmp_path):
         '  handle = File.open(System.args()[0], "read", 30000).unwrap!\n'
         "  bytes = File.read_bytes(handle, 1048576, 30000).unwrap!\n"
         "  _ = File.close(handle, 30000)\n"
-        "  puts(from_fs == Digest.sha256(bytes))\n"
+        "  puts(from_fs == OpenSSL.Digest.sha256(bytes))\n"
         "end\n",
         encoding="utf-8",
     )
@@ -157,7 +157,7 @@ def test_sha256_runs_beside_other_tasks_and_each_hash_is_right(tmp_path):
     source = tmp_path / "fair.agc"
     source.write_text(
         "def hash_it(path: String) -> String\n"
-        "  return Digest.hexencode(File.sha256(path, 30000).unwrap!)\n"
+        "  return OpenSSL.Digest.hexencode(File.sha256(path, 30000).unwrap!)\n"
         "end\n"
         "\n"
         "def main() -> Void\n"

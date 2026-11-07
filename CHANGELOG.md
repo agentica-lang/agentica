@@ -10,12 +10,19 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `RSA.public_encrypt_oaep(pem, data)` encrypts with an RSA public key in PEM
-  and OAEP padding (SHA-1), as MySQL's `caching_sha2_password` needs.
+- `OpenSSL.RSA.public_encrypt_oaep(pem, data)` encrypts with an RSA public key
+  in PEM and OAEP padding (SHA-1), as MySQL's `caching_sha2_password` needs.
+- Builtin families: `Family.Member.fn(...)` calls a builtin of a family, and a
+  member the family lacks is `CHECK-UNKNOWN-NAME` with the list of members.
 
 ### Changed
 
-- **Breaking:** `RSA` is a reserved type name.
+- **Breaking:** the crypto builtins are the `OpenSSL` family: `Digest`, `HMAC`,
+  `Cipher`, `CMAC`, `KDF` and `SecureRandom` are `OpenSSL.Digest`,
+  `OpenSSL.HMAC`, `OpenSSL.Cipher`, `OpenSSL.CMAC`, `OpenSSL.KDF` and
+  `OpenSSL.Random`. An old name is `CHECK-UNKNOWN-NAME` with the new one in the
+  help. `OpenSSL` is reserved; `Cipher`, `HMAC`, `KDF`, `CMAC`, `SecureRandom`
+  and `Crypto` are free names.
 
 ## [0.26.1] - 2026-11-07
 

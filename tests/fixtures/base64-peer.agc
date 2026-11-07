@@ -32,7 +32,7 @@ def main() -> Void
     data = Bytes.from_list(items).unwrap!
     [
       Base64.encode64(data), Base64.strict_encode64(data), Base64.urlsafe_encode64(data),
-      Base64.urlsafe_encode64(data, false), Digest.hexencode(data),
+      Base64.urlsafe_encode64(data, false), OpenSSL.Digest.hexencode(data),
     ]
   end
   decoded = cases.texts.map do |text: String|
@@ -40,7 +40,7 @@ def main() -> Void
       lenient: Base64.decode64(text).to_a,
       strict: field(Base64.strict_decode64(text)),
       urlsafe: field(Base64.urlsafe_decode64(text)),
-      hex: field(Digest.hexdecode(text)),
+      hex: field(OpenSSL.Digest.hexdecode(text)),
     )
   end
   puts(JSON.encode(Answers(encoded: encoded, decoded: decoded)))

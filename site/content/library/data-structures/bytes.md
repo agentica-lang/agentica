@@ -6,7 +6,7 @@ description: Bytes, a compact immutable byte string, and the methods that read, 
 
 `Bytes` holds data that is not text: digests, file contents, wire formats. It stores one byte for each item, where a `List[Int]` of the same data takes eight. A byte is read as an `Int` from 0 to 255. `Bytes` is immutable, like every value: a method gives a new value. `Bytes` is a reserved name, so a struct, an enum or an import alias cannot be called `Bytes`.
 
-There is no literal. Make a value with `s.bytes` (the UTF-8 bytes of a `String`), [`Digest.hexdecode`](/library/text-and-data/base64/#hex) or `Bytes.from_list`. `"text".bytes` on a string literal without interpolation is a constant, made once when the program loads, so writing it inside a loop costs nothing more than a named constant. Binary data that is not UTF-8 text comes from `Bytes.from_list` or `Digest.hexdecode`.
+There is no literal. Make a value with `s.bytes` (the UTF-8 bytes of a `String`), [`OpenSSL.Digest.hexdecode`](/library/text-and-data/base64/#hex) or `Bytes.from_list`. `"text".bytes` on a string literal without interpolation is a constant, made once when the program loads, so writing it inside a loop costs nothing more than a named constant. Binary data that is not UTF-8 text comes from `Bytes.from_list` or `OpenSSL.Digest.hexdecode`.
 
 ```agentica
 def main() -> Void
@@ -23,7 +23,7 @@ end
 [104, 195, 169, 108, 108, 111]
 ```
 
-Two `Bytes` are equal when they have the same length and the same bytes. `==` is not constant time, so compare a MAC or a token with [`HMAC.secure_compare`](/library/text-and-data/crypto/). A `Bytes` never equals a `String`. There is no `<`. A `Bytes` can be a `Map` key, an `ATS` key or a `Set` item, so a cache can be keyed by a digest. It is not JSON: `JSON.encode` and `JSON.decode` refuse it with `CHECK-NOT-ENCODABLE` and `CHECK-NOT-DECODABLE`; write it as text first with `Base64.strict_encode64`. `List.uniq`, `tally` and `group_by` take `Int` or `String` keys only, so for a `Bytes` use a `Set[Bytes]` or a `Map[Bytes, _]`.
+Two `Bytes` are equal when they have the same length and the same bytes. `==` is not constant time, so compare a MAC or a token with [`OpenSSL.HMAC.secure_compare`](/library/text-and-data/crypto/). A `Bytes` never equals a `String`. There is no `<`. A `Bytes` can be a `Map` key, an `ATS` key or a `Set` item, so a cache can be keyed by a digest. It is not JSON: `JSON.encode` and `JSON.decode` refuse it with `CHECK-NOT-ENCODABLE` and `CHECK-NOT-DECODABLE`; write it as text first with `Base64.strict_encode64`. `List.uniq`, `tally` and `group_by` take `Int` or `String` keys only, so for a `Bytes` use a `Set[Bytes]` or a `Map[Bytes, _]`.
 
 ```agentica
 def main() -> Void

@@ -118,28 +118,28 @@ in a PR that rewrites the goldens.
   `Bytes` (catalog key `<name>.bytes`), use OpenSSL's EVP API
   (`vm/digest_openssl.c`, behind `digest.h`) and charge `AGC_COST_SIZE`
   (§10.2.1). Those that read only their arguments run without the shared lock.
-  `HMAC.secure_compare` compares in constant time. The key, IV and input sizes
-  are checked first and give an error `Result`; a library failure is
+  `OpenSSL.HMAC.secure_compare` compares in constant time. The key, IV and input
+  sizes are checked first and give an error `Result`; a library failure is
   `RUNTIME-INTERNAL` at the call. A two-key `des_ede3` key is expanded to K1 K2
   K1 and the copy is wiped. An `aes_256_gcm` encrypt writes the tag after the
   ciphertext; a decrypt wipes the plaintext when the tag is wrong.
-- `KDF.pbkdf2_hmac_sha256` and `KDF.scrypt` check their parameters first,
-  their work included (`PBKDF2_MAX_WORK`, `SCRYPT_MAX_WORK` in `vm/crypto.c`: a
-  started call cannot be stopped, and it holds a compute pool thread), then
-  park the task on a compute job (`agc_io_compute`; refused with
+- `OpenSSL.KDF.pbkdf2_hmac_sha256` and `OpenSSL.KDF.scrypt` check their
+  parameters first, their work included (`PBKDF2_MAX_WORK`, `SCRYPT_MAX_WORK` in
+  `vm/crypto.c`: a started call cannot be stopped, and it holds a compute pool
+  thread), then park the task on a compute job (`agc_io_compute`; refused with
   `RUNTIME-NATIVE-CALLBACK` inside a callback of native code). `PBKDF2` runs
-  with `pkcs5` set, so no SP 800-132 floors. Password and key copies are
-  wiped. The jobs run without the shared lock.
-- `RSA.public_encrypt_oaep` reads the first PEM block of at most 64 KiB with
-  `OSSL_DECODER` (public key structures only, no passphrase callback), takes
-  only an `RSA` key of 43 to 2048 bytes (OpenSSL's 16384-bit cap) with an odd
-  modulus and an odd exponent from 3 to 64 bits (OpenSSL takes any exponent
+  with `pkcs5` set, so no SP 800-132 floors. Password and key copies are wiped.
+  The jobs run without the shared lock.
+- `OpenSSL.RSA.public_encrypt_oaep` reads the first PEM block of at most 64 KiB
+  with `OSSL_DECODER` (public key structures only, no passphrase callback),
+  takes only an `RSA` key of 43 to 2048 bytes (OpenSSL's 16384-bit cap) with an
+  odd modulus and an odd exponent from 3 to 64 bits (OpenSSL takes any exponent
   below a modulus of 3072 bits or less, which costs a private-key operation),
   and data of at most its size less 42, and encrypts with OAEP SHA-1 into a
   stack buffer. A refused input or key is an error `Result`; a failure of the
   encryption after those checks (memory, the seed draw) is `RUNTIME-INTERNAL`.
   It runs without the shared lock.
-- `SecureRandom.random_bytes(n)` and `hex(n)` check `0 <= n <= 1048576` (else
+- `OpenSSL.Random.random_bytes(n)` and `hex(n)` check `0 <= n <= 1048576` (else
   `RUNTIME-INVALID-COUNT` at the argument) and draw with `RAND_bytes`; `uuid`
   draws 16 bytes and sets the version and variant bits. A failed draw is
   `RUNTIME-INTERNAL`. They run without the shared lock: OpenSSL 3 keeps one

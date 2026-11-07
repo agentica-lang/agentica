@@ -145,7 +145,7 @@ error("value -1 does not fit in u64")
 [127, 255, 255, 255, 255, 255, 255, 255]
 ```
 
-Writers return new values and no buffer is ever changed. Offset writers into an existing `Bytes` are not part of the module. Half floats (f16) and varints (LEB128) are not supported; hex and Base64 are the `Digest` and `Base64` builtins. The bit operations and the `Float` bit conversions are `Int` and `Float` builtins, because in Agentica each one is a 64-bit loop or an exact scaling by powers of two with special cases for `-0.0`, NaN and subnormals.
+Writers return new values and no buffer is ever changed. Offset writers into an existing `Bytes` are not part of the module. Half floats (f16) and varints (LEB128) are not supported; hex and Base64 are the `OpenSSL.Digest` and `Base64` builtins. The bit operations and the `Float` bit conversions are `Int` and `Float` builtins, because in Agentica each one is a 64-bit loop or an exact scaling by powers of two with special cases for `-0.0`, NaN and subnormals.
 
 ## Joining
 

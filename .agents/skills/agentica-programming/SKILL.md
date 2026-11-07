@@ -77,7 +77,7 @@ Read only what the task needs.
 | `testing.md` | unit tests (`Test`, `*_test.agc`) |
 | `bdd.md` | `.feature` specs and step programs |
 | `performance.md` | slow code, `Profile`, step costs |
-| `binary.md` | bit operations, `Digest` hashes, `HMAC`, `Cipher` (AES-GCM, Triple DES), `CMAC`, password hashing (`KDF`), `RSA`, `Base64`, hex, `SecureRandom`, `std/binary` |
+| `binary.md` | bit operations, the `OpenSSL` family (`Digest` hashes, `HMAC`, `Cipher` for AES-GCM and Triple DES, `CMAC`, password hashing with `KDF`, `RSA`, secure `Random`), `Base64`, hex, `std/binary` |
 | `logger.md` | `std/logger` |
 | `toml.md` | `std/toml` |
 | `uri.md` | `std/uri` (percent-encoding, query strings) |

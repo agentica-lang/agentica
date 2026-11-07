@@ -5,10 +5,11 @@ takes eight). Use it for data that is not text. An item reads as an `Int` in
 `0..255`. `Bytes` is a reserved name (`CHECK-REDEFINED-NAME` for a struct, enum
 or import alias).
 
-There is no literal: write `"PK".bytes`, `Digest.hexdecode("504b0304").unwrap!`
-or `Bytes.from_list([80, 75, 3, 4]).unwrap!`. `"text".bytes` on a literal
-without interpolation is a constant made once at load, so it needs no module
-constant to stay cheap in a loop.
+There is no literal: write `"PK".bytes`,
+`OpenSSL.Digest.hexdecode("504b0304").unwrap!` or
+`Bytes.from_list([80, 75, 3, 4]).unwrap!`. `"text".bytes` on a literal without
+interpolation is a constant made once at load, so it needs no module constant
+to stay cheap in a loop.
 
 ```text
 s.bytes -> Bytes                          # UTF-8 bytes of a String
@@ -37,8 +38,8 @@ s.encode(encoding) -> Result[Bytes]
   and `String.from_bytes`.
 
 - `==` and `!=` compare length and bytes. They are not constant time: compare
-  MACs and tokens with `HMAC.secure_compare`. There is no `<`, and `b == "s"`
-  is `CHECK-TYPE-MISMATCH`.
+  MACs and tokens with `OpenSSL.HMAC.secure_compare`. There is no `<`, and
+  `b == "s"` is `CHECK-TYPE-MISMATCH`.
 - A `Bytes` is a `Map` key, an `ATS` key or a `Set` item.
 - Not JSON: `JSON.encode(b)` is `CHECK-NOT-ENCODABLE`, and a `Bytes` field of a
   decode target is `CHECK-NOT-DECODABLE`. Write it as Base64 text first.

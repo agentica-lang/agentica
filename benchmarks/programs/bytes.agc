@@ -62,13 +62,13 @@ def file_round_trip(data: Bytes, path: String) -> String
   end
   File.close(input).unwrap!
   Path.remove(path).unwrap!
-  return Digest.sha256_hexdigest(Bytes.concat(parts))
+  return OpenSSL.Digest.sha256_hexdigest(Bytes.concat(parts))
 end
 
 def main() -> Void
   mib = 4 * scale()
   data = Bytes.concat(List.repeat(block(), 16 * mib))
-  digest = Digest.sha256_hexdigest(data)
+  digest = OpenSSL.Digest.sha256_hexdigest(data)
   same = zlib_round_trip(data)
   sum = binary_sum(data, 1048576 * scale())
   directory = System.env("TMPDIR").unwrap_or("/tmp")

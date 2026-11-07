@@ -15,9 +15,9 @@ def main() -> Void
   for word in vectors
     data = word.bytes
     strict = Base64.strict_encode64(data)
-    hex = Digest.hexencode(data)
+    hex = OpenSSL.Digest.hexencode(data)
     back = text(Base64.strict_decode64(strict).unwrap!)
-    upper = Digest.hexdecode(hex.upcase).unwrap! == data
+    upper = OpenSSL.Digest.hexdecode(hex.upcase).unwrap! == data
     puts("#{word.inspect} #{strict} #{Base64.encode64(data).inspect} #{hex} #{back == word} #{upper}")
   end
   puts(Base64.encode64(bytes(List.repeat(0, 45))).inspect)
@@ -42,6 +42,6 @@ def main() -> Void
     puts("urlsafe #{url.inspect} #{Base64.urlsafe_decode64(url)}")
   end
   for hex in ["", "abc", "0x00", "zz", "é", "00 ", "FFfe"]
-    puts("hex #{hex.inspect} #{Digest.hexdecode(hex)}")
+    puts("hex #{hex.inspect} #{OpenSSL.Digest.hexdecode(hex)}")
   end
 end

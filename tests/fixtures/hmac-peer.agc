@@ -24,10 +24,10 @@ def main() -> Void
     key = Bytes.from_list(c.key).unwrap!
     data = Bytes.from_list(c.data).unwrap!
     Macs(
-      sha256: HMAC.sha256(key, data).to_a,
-      sha256_hex: HMAC.sha256_hexdigest(key, data),
-      sha512: HMAC.sha512(key, data).to_a,
-      sha512_hex: HMAC.sha512_hexdigest(key, data),
+      sha256: OpenSSL.HMAC.sha256(key, data).to_a,
+      sha256_hex: OpenSSL.HMAC.sha256_hexdigest(key, data),
+      sha512: OpenSSL.HMAC.sha512(key, data).to_a,
+      sha512_hex: OpenSSL.HMAC.sha512_hexdigest(key, data),
     )
   end
   puts(JSON.encode(macs))
