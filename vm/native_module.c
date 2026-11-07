@@ -300,7 +300,9 @@ static bool shape_fits(const agc_program *p, const type_block *b) {
 
 /* Reads the type blocks at the start of a signature, at *AT before END: each in range, fitting the program, and of a
    name no other block has. At most MODULE_MAX_TYPES, as each must be a type of the module, whose names differ. Read
-   once, then sorted, so a bind takes O(B log B) under rt->sync. Bad bytecode fails. */
+   once, then sorted, so reading and finding blocks takes O(B log B); check_types and bound_types then look each block
+   up in the module's N rows with type_row, a linear scan, so a bind takes O(B * N) under rt->sync. Bad bytecode
+   fails. */
 static block_list read_blocks(agc_vm *vm, const char **at, const char *end, uint32_t span) {
   const agc_program *p = vm->rt->program;
   block_list list = {NULL, 0};
@@ -312,6 +314,8 @@ static block_list read_blocks(agc_vm *vm, const char **at, const char *end, uint
   }
   if (list.count == 0) return list;
   list.items = agc_alloc(agc_size_mul(list.count, sizeof *list.items));
+  /* The second pass reads the same bytes as the first, which accepted each block: the signature and the program
+     do not change during a bind. */
   for (uint32_t k = 0; k < list.count; k++) {
     (void)next_block(p, &start, end, &list.items[k]);
     if (!shape_fits(p, &list.items[k])) bad_signature(vm, span);

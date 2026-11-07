@@ -80,7 +80,8 @@ enum { AN_STRUCT = 0, AN_ENUM = 1 };
    struct, "Null | Int(Int) | Pair(Int, Point)" for an enum. The VM binds a function only when the program declares
    every user type of its signature (nested ones too) with the same name, kind and shape, byte for byte. The index of
    the row in the module's table is the TYPE that an_struct, an_get_field, an_enum, an_get_variant and an_get_payload
-   take; fields, variants and payloads count from 0 in declared order. The names of the table differ. */
+   take; fields, variants and payloads count from 0 in declared order. Two rows of one name refuse the module
+   (RUNTIME-NATIVE-LOAD). */
 typedef struct {
   const char *name;
   int kind;
