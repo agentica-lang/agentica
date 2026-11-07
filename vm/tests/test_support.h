@@ -7,15 +7,41 @@
 #include <string.h>
 #ifndef _WIN32
 #include <sched.h>
+#include <signal.h>
 #include <unistd.h>
 #else
 #include <uv.h>
 #endif
 
+/* The case that AGC_TEST_RUN started last, which the deadline names when it fires. */
+static const char *volatile agc_test_current_case;
+
+/* Runs one case of a test binary under its name: `AGC_TEST_RUN(test_x(true))`. */
+#define AGC_TEST_RUN(call) (agc_test_current_case = #call, (call))
+
 /* A broken park or wake path leaves a test waiting for ever instead of failing it. The deadline ends the process with
-   SIGALRM's default action, so `make vm-test` fails. Windows has no alarm; its job has the time limit of the CI step. */
+   SIGALRM's default action, so `make vm-test` fails. Before that it writes the case that was running (AGC_TEST_RUN) to
+   stderr, with write() alone, as a signal handler may. Windows has no alarm; its job has the time limit of the CI
+   step. */
 #ifndef _WIN32
-static inline void agc_test_deadline(unsigned seconds) { alarm(seconds); }
+static inline void agc_test_on_deadline(int sig) {
+  static const char head[] = "deadline passed in ";
+  const char *name = agc_test_current_case;
+  if (name) {
+    size_t n = 0;
+    while (name[n]) n++;
+    (void)!write(2, head, sizeof head - 1);
+    (void)!write(2, name, n);
+    (void)!write(2, "\n", 1);
+  }
+  signal(sig, SIG_DFL);
+  raise(sig);
+}
+
+static inline void agc_test_deadline(unsigned seconds) {
+  signal(SIGALRM, agc_test_on_deadline);
+  alarm(seconds);
+}
 #else
 static inline void agc_test_deadline(unsigned seconds) { (void)seconds; }
 #endif
