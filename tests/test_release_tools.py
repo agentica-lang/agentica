@@ -56,6 +56,9 @@ def test_each_package_holds_the_expected_files_once(archives):
         assert names == sorted(f"{top}/{member}" for member in release.expected_members(platform))
     assert "bin/agentica.exe" in release.expected_members("windows-x86_64")
     assert "bin/agentica" in release.expected_members("macos-arm64")
+    with tarfile.open(packed["linux-x86_64"]) as archive:
+        header = archive.extractfile(f"{release.package_name('linux-x86_64')}/include/agentica_native.h").read()
+    assert header == (ROOT / "vm" / "agentica_native.h").read_bytes()
 
 
 def with_member(source, target, info):

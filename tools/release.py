@@ -38,6 +38,10 @@ PLATFORMS = {
     "macos-arm64": ("tar.gz", "agentica"),
 }
 
+# The C API of native modules (vm/agentica_native.h), for package CI that builds the published libraries of a module
+# against the release it targets; the binary carries the same header for the builds it runs itself.
+NATIVE_HEADER = "include/agentica_native.h"
+
 # Every binary is static in these libraries, so every archive ships the same licenses.
 LICENSE_FILES = (
     "licenses/bdwgc/NOTICE", "licenses/libuv/LICENSE", "licenses/libuv/LICENSE-extra", "licenses/yyjson/LICENSE",
@@ -69,7 +73,7 @@ def archive_name(platform: str, ver: str | None = None) -> str:
 
 def expected_members(platform: str) -> list[str]:
     """The files of an archive, as paths below its top folder."""
-    return sorted(["LICENSE", "NOTICE", f"bin/{PLATFORMS[platform][1]}", *LICENSE_FILES])
+    return sorted(["LICENSE", "NOTICE", f"bin/{PLATFORMS[platform][1]}", NATIVE_HEADER, *LICENSE_FILES])
 
 
 def license_text(name: str) -> bytes:
@@ -164,6 +168,7 @@ def package(platform: str, binary: Path, out: Path) -> Path:
         (f"{top}/LICENSE", (ROOT / "LICENSE").read_bytes(), 0o644),
         (f"{top}/NOTICE", (ROOT / "NOTICE").read_bytes(), 0o644),
         (f"{top}/bin/{PLATFORMS[platform][1]}", binary.read_bytes(), 0o755),
+        (f"{top}/{NATIVE_HEADER}", (ROOT / "vm" / "agentica_native.h").read_bytes(), 0o644),
         *[(f"{top}/{name}", license_text(name), 0o644) for name in LICENSE_FILES],
     ]
     members.sort()

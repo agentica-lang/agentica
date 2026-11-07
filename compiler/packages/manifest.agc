@@ -12,6 +12,7 @@ import Workspace from "../modules/workspace"
 import Paths from "../modules/import_path"
 import GitSource from "git_source"
 import NativeArtifact from "native_artifact"
+import NativeBuild from "native_build"
 import PackageHash from "package_hash"
 import Toml from "std/toml"
 import Reader from "toml_read"
@@ -26,6 +27,8 @@ PLACE_KEYS = ["file", "system", "url", "sha256", "member"]
 SYSTEMS = Set.new(["linux", "macos", "windows"])
 # The folder of a package that holds its native files (package_hash.agc hashes them with the .agc files).
 NATIVE_FOLDER = "native"
+# The key of [native.NAME] that is not a system: the C sources of the library (native_build.agc).
+BUILD_KEY = "build"
 MAX_SYSTEM_NAME = 128
 MAX_SYSTEM_PATH = 1024
 # The most candidates a `system` list holds: each one is looked up on disk when the library is used.
@@ -53,10 +56,12 @@ export struct Place
   member: String
 end
 
-## A native library of a package: the name its `extern "name"` uses, and where it is on each system it names.
+## A native library of a package: the name its `extern "name"` uses, where it is on each system it names, and the
+## `build` table that compiles it from the package's C sources (native_build.agc), if any.
 export struct NativeLibrary
   name: String
   places: List[Place]
+  build: Optional[NativeBuild.Build]
 end
 
 ## A read manifest. name is "" when the file has none; max_line_width is 0 when it sets no limit;
@@ -275,7 +280,8 @@ def git_source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], pat
   return ok(GitSource.Source(git: git, subdir: subdir, tag: tag, ref: ref, path: ""))
 end
 
-# [native.NAME]: for each library a table of systems, each with `file` or `system`.
+# [native.NAME]: for each library a table of systems, each with `file`, `system` or a download, and an optional
+# `build`.
 def natives_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[List[NativeLibrary]]
   found: List[NativeLibrary] = []
   if !root.has_key?("native")
@@ -292,16 +298,27 @@ def natives_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result
 
     systems = try Reader.table(reading, entries[name], path)
     places: List[Place] = []
+    build: Optional[NativeBuild.Build] = none
     for system in systems.keys
       here = Reader.child(path, system)
+      if system == BUILD_KEY
+        build = some(try NativeBuild.parse(reading, systems[system], here))
+        next
+      end
+
       if !SYSTEMS.include?(system)
-        return error(Reader.fail_help(reading, here, "not a system", "write linux, macos or windows"))
+        return error(Reader.fail_help(reading, here, "not a system", "write linux, macos, windows or build"))
       end
 
       places = places.push(try place_of(reading, system, systems[system], here))
     end
 
-    found = found.push(NativeLibrary(name: name, places: places))
+    if build.some? and GitSource.device_name?(name)
+      help = "a library that builds is a file NAME.dll on Windows: pick another name than con, nul, com1 and the like"
+      return error(Reader.fail_help(reading, path, "not a library name", help))
+    end
+
+    found = found.push(NativeLibrary(name: name, places: places, build: build))
   end
 
   return ok(found)

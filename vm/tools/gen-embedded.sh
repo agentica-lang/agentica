@@ -1,12 +1,14 @@
 #!/bin/sh
 # Writes the assembly file that puts the front end, the std/ sources and two programs of `agentica test` into the single
 # binary (docs/vm/08-loader-and-cli.md).
-# usage: gen-embedded.sh FRONT_END.agcb STDLIB_DIR MODULES_FILE [RUNNER.agcb STEPS.agcb [CORE_FILE COMPILER_DIR]] >
-#        embedded.s
+# usage: gen-embedded.sh FRONT_END.agcb STDLIB_DIR MODULES_FILE [RUNNER.agcb STEPS.agcb [CORE_FILE COMPILER_DIR
+#        [NATIVE_HEADER]]] > embedded.s
 # The runner and the default step program are optional: without them (the first binary of the bootstrap, which cannot
 # compile them yet) their length is 0 and `agentica test` compiles them as it did before.
 # The core file lists files of COMPILER_DIR (the pure core of the front end, which std/analysis compiles into the user's
 # program): each one is carried as the std/ source internal/compiler/<name>, so a program reads it with Std.source.
+# The native header (vm/agentica_native.h) is carried as the std/ source internal/native/agentica_native.h, which the
+# build of a native module writes out (compiler/io/native_build.agc); no import can name it, since it is not .agc.
 # The files are named relative to the directory the assembler runs in (the repository root). The index uses only
 # differences between labels of one section, which the assembler turns into constants, so the binary needs no relocations
 # for it. The layout is the one that vm/embedded.h describes.
@@ -22,13 +24,15 @@ runner="${4:-}"
 steps="${5:-}"
 core="${6:-}"
 compiler="${7:-}"
-for f in "$front_end" "$stdlib" "$modules" "$runner" "$steps" "$core" "$compiler"; do
+header="${8:-}"
+for f in "$front_end" "$stdlib" "$modules" "$runner" "$steps" "$core" "$compiler" "$header"; do
   case "$f" in
     *[!A-Za-z0-9_./-]*) echo "gen-embedded: $f is not a plain path" >&2; exit 1 ;;
   esac
 done
 [ -z "$runner" ] && [ -n "$steps" ] && { echo "gen-embedded: a step program needs a runner" >&2; exit 1; }
 [ -n "$core" ] && [ -z "$compiler" ] && { echo "gen-embedded: a core file needs the compiler folder" >&2; exit 1; }
+[ -n "$header" ] && [ ! -f "$header" ] && { echo "gen-embedded: $header is missing" >&2; exit 1; }
 digest() {
   if command -v sha256sum >/dev/null 2>&1; then
     sha256sum "$1" | cut -d ' ' -f 1
@@ -55,6 +59,7 @@ for name in $core_names; do
 done
 count=0
 for name in $names $core_names; do count=$((count + 1)); done
+[ -n "$header" ] && count=$((count + 1))
 format="${AGENTICA_OBJECT_FORMAT:-$(uname -s)}"
 prefix=
 case "$format" in
@@ -93,6 +98,11 @@ for name in $core_names; do
   printf '.Ltext%d:\n\t.incbin "%s/%s"\n.Ltext%d_end:\n' "$k" "$compiler" "$name" "$k"
   k=$((k + 1))
 done
+if [ -n "$header" ]; then
+  printf '.Lpath%d:\n\t.asciz "internal/native/agentica_native.h"\n' "$k"
+  printf '/* sha256 %s %s */\n' "$(digest "$header")" "$header"
+  printf '.Ltext%d:\n\t.incbin "%s"\n.Ltext%d_end:\n' "$k" "$header" "$k"
+fi
 if [ "$format" = elf ]; then printf '\t.size agc_embedded_data, . - agc_embedded_data\n\n'; fi
 printf '\t.balign 8\n'
 printf '\t.globl %sagc_embedded_index\n' "$prefix"
@@ -103,7 +113,7 @@ printf '\t.quad .Lrunner - %sagc_embedded_data\n\t.quad .Lrunner_end - .Lrunner\
 printf '\t.quad .Lsteps - %sagc_embedded_data\n\t.quad .Lsteps_end - .Lsteps\n' "$prefix"
 printf '\t.quad %d\n' "$count"
 k=0
-for name in $names $core_names; do
+for name in $names $core_names ${header:+header}; do
   printf '\t.quad .Lpath%d - %sagc_embedded_data\n\t.quad .Ltext%d - %sagc_embedded_data\n\t.quad .Ltext%d_end - .Ltext%d\n' "$k" "$prefix" "$k" "$prefix" "$k" "$k"
   k=$((k + 1))
 done

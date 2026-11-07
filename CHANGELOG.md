@@ -14,6 +14,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A `compute def` of an `extern module` block runs on the compute pool.
 - `resource Name` in an `extern module` block: a handle that the module frees.
 - The profile has a `native` row per native module function.
+- `[native.NAME] build = { sources = [...] }` in `agentica.toml` builds a native
+  module from its C sources: a run, `compile`, `test` or `install` runs your C
+  compiler on the C of `native/` of the project, its workspace members and its
+  `path` dependencies (`PKG-NATIVE-BUILD`); `check` never builds, and neither
+  does a fetched package. The release archives ship `include/agentica_native.h`.
 
 ### Changed
 

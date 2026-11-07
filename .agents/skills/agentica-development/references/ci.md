@@ -246,9 +246,10 @@ the examples.
   replaces glibc's. On Linux arm64 `__clear_cache` was such a helper, so
   `vm/jit/mem_posix.c` defines it; release-check fails when `__stack_chk_fail`
   is not glibc's.
-- `tools/release.py package` writes the archive with `LICENSE`, `NOTICE` and
+- `tools/release.py package` writes the archive with `LICENSE`, `NOTICE`,
   `licenses/` (`LICENSE_FILES`; a new third-party library adds its license
-  there). The archive is reproducible; the binary is not.
+  there) and `include/agentica_native.h`. The archive is reproducible; the
+  binary is not.
 - `tools/release.py smoke` (`python -I`) runs the extracted binary from a path
   with spaces and non-ASCII letters, with a system-only `PATH`. TLS is covered
   by the OpenSSL version line only.

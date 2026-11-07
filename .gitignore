@@ -12,4 +12,3 @@ site/highlight/node_modules/
 .hugo_build.lock
 examples/ffi/native/
 examples/ffi/duckdb/native/
-examples/native_module/native/
