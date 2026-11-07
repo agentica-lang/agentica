@@ -107,11 +107,12 @@ def test_pins_come_from_the_real_workflow():
 def test_one_folder_per_release_with_the_latest_at_the_root(repo, tmp_path, monkeypatch):
     code, out, _ = build(tmp_path, monkeypatch)
     assert code == 0
+    # dev is first in the selector; the latest release stays the one marked (and selected at the root).
     assert json.loads((out / "versions.json").read_text()) == [
+        {"version": "dev", "path": "dev/"},
         {"version": "0.11.0", "path": "0.11.0/", "latest": True},
         {"version": "0.10.0", "path": "0.10.0/"},
         {"version": "0.9.0", "path": "0.9.0/"},
-        {"version": "dev", "path": "dev/"},
     ]
     # Each build bakes in its own base URL; the root is the latest release under the root URL.
     assert "--baseURL https://example.org/docs/0.9.0/ 0.9.0" in (out / "0.9.0" / "library" / "index.html").read_text()
@@ -154,7 +155,7 @@ def test_a_tag_that_fails_once_is_retried_and_built(repo, tmp_path, monkeypatch,
     code, out, _ = build(tmp_path, monkeypatch)
     assert code == 0
     assert "retry 0.11.1" in capsys.readouterr().out
-    assert json.loads((out / "versions.json").read_text())[0] == {"version": "0.11.1", "path": "0.11.1/", "latest": True}
+    assert json.loads((out / "versions.json").read_text())[1] == {"version": "0.11.1", "path": "0.11.1/", "latest": True}
 
 
 def test_a_tag_without_a_site_newer_than_a_built_tag_fails_the_run(repo, tmp_path, monkeypatch, capsys):
