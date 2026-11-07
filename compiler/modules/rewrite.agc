@@ -48,10 +48,21 @@ def rewrite_decl(cx: Resolve.Context, decl: Ast.Decl) -> Result[Ast.Decl]
     Ast.Decl.TypeAlias(node) ->
       target = try rewrite_payload(cx, node.type_parameters, node.target)
       return ok(Ast.Decl.TypeAlias(node.with(name: Resolve.identity(cx, node.name), target: target)))
-    Ast.Decl.Resource(node) -> return ok(Ast.Decl.Resource(node.with(name: Resolve.identity(cx, node.name))))
+    Ast.Decl.Resource(node) -> return rewrite_resource(cx, node)
     Ast.Decl.Constant(node) -> return rewrite_constant(cx, node)
     _ -> return ok(decl)
   end
+end
+
+# A resource of a module block names its library as the block's functions do, so the checker and the VM find that the
+# two belong to one module (an extern block's resource has no library: `module` is empty).
+def rewrite_resource(cx: Resolve.Context, node: Ast.ResourceDecl) -> Result[Ast.Decl]
+  module = node.module
+  if module != ""
+    module = try native_target(cx, module)
+  end
+
+  return ok(Ast.Decl.Resource(node.with(name: Resolve.identity(cx, node.name), module: module)))
 end
 
 # The type parameters of a generic function stay as written in its signature and its body (annotations, block
