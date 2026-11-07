@@ -14,7 +14,7 @@ The VM computes these builtins with OpenSSL, the library it already uses for TLS
 - `OpenSSL.RSA`: encryption with an RSA public key, as `OpenSSL::PKey::RSA`.
 - `OpenSSL.Random`: the secure random draws, as Ruby's `SecureRandom`.
 
-`OpenSSL` is the one reserved name of the family: `Digest`, `Cipher` or `Random` stay free for a type or an import alias of the program. A member the family lacks, such as `OpenSSL.Ciphr`, is `CHECK-UNKNOWN-NAME`, and its help lists the members.
+`OpenSSL` is the one reserved name of the family: `Cipher` or `HMAC` stay free for a type or an import alias of the program. A member the family lacks, such as `OpenSSL.Ciphr`, is `CHECK-UNKNOWN-NAME`, and its help lists the members.
 
 ```agentica {expect="CHECK-UNKNOWN-NAME"}
 def main() -> Void
