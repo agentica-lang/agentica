@@ -76,7 +76,8 @@ Source: `_tokens.scss`, `_layout.scss`, `_header.scss`, `_content.scss`.
   the tree column. `--content-width` (50rem) caps text and pager. `--header`
   (3.25rem) is the sticky bar. The drawer is `min(20rem, 85vw)` wide.
 - Breakpoint: `$narrow` is 50rem, from `params.narrow` in `site/hugo.toml`. Sass
-  and `nav.js` read it. A second one, 30rem, hides the header version.
+  and `nav.js` read it. A second one, 30rem, hides the header version and
+  moves the version selector (`site/versions/`) into the menu.
 - `--target` (2.75rem) is the touch size. The pager links use it at every
   width. At 50rem and below, the menu button, the theme button, the search box
   and the tree use it too. `--nav-row` is set on `.sidebar`: 2rem, and
