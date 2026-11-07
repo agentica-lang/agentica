@@ -8,16 +8,19 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.26.1] - 2026-11-07
+
 ### Added
 
-- A fetched package pinned in `agentica.lock` builds its native module from
-  its `[native.NAME] build` table when a file first uses it; `install` does
-  not build it.
-- `Analysis.native_modules` in `std/analysis` describes the `extern module` blocks of a file for code generators.
+- A fetched package pinned in `agentica.lock` builds its native module when a
+  file first uses it; `install` does not build it.
+- `Analysis.native_modules` in `std/analysis` describes the `extern module`
+  blocks of a file.
 
 ### Fixed
 
-- A `resource` in an `extern module` whose library comes from a `[native.NAME]` table is no longer refused with `CHECK-NATIVE-TYPE`.
+- A `resource` in an `extern module` whose library comes from a
+  `[native.NAME]` table is no longer refused with `CHECK-NATIVE-TYPE`.
 
 ## [0.26.0] - 2026-11-07
 
@@ -1174,7 +1177,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.26.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.26.1...HEAD
+[0.26.1]: https://github.com/agentica-lang/agentica/compare/0.26.0...0.26.1
 [0.26.0]: https://github.com/agentica-lang/agentica/compare/0.25.1...0.26.0
 [0.25.1]: https://github.com/agentica-lang/agentica/compare/0.25.0...0.25.1
 [0.25.0]: https://github.com/agentica-lang/agentica/compare/0.24.4...0.25.0
