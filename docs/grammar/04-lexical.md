@@ -73,8 +73,8 @@ variables, functions and struct fields.
 Reserved builtin names cannot be declared as functions, types, variables, import
 aliases or module names (`RESERVED_TYPE_NAMES` in
 `compiler/catalog/builtins_data.agc`): `ATS`, `Await`, `Base64`, `Bool`,
-`Bytes`, `Channel`, `Codec`, `Digest`, `Dir`, `File`, `FileHandle`, `FileInfo`,
-`Float`, `Fn`, `Header`, `HttpClient`, `HttpClientOptions`, `HttpRequest`,
+`Bytes`, `Channel`, `Codec`, `Dir`, `File`, `FileHandle`, `FileInfo`, `Float`,
+`Fn`, `Header`, `HttpClient`, `HttpClientOptions`, `HttpRequest`,
 `HttpResponse`, `HttpServer`, `HttpServerOptions`, `HttpWire`, `IO`, `Int`,
 `JSON`, `Json`, `JsonField`, `Lazy`, `List`, `Listener`, `LogEvent`, `LogLevel`,
 `LogRegistry`, `Map`, `Math`, `Nil`, `OpenSSL`, `Optional`, `Path`, `Process`,
@@ -85,7 +85,7 @@ aliases or module names (`RESERVED_TYPE_NAMES` in
 builtin family reserves only its own name: its members are written
 `Family.Member`, such as `OpenSSL.Cipher`, and its functions `Family.Member.fn`,
 such as `OpenSSL.Cipher.aes_256_gcm_encrypt` (§6, "Minimal builtin functions"),
-so `Cipher` or `HMAC` inside a family reserve nothing.
+so `Cipher` or `Digest` inside a family reserve nothing.
 `HTTP` is not reserved: it is the usual alias of `std/http`. `ok`, `error`,
 `some` and `none` are names, but cannot be declared as functions, variables,
 parameters, loop variables or fields (`CHECK-REDEFINED-NAME`). The same holds

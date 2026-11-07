@@ -234,7 +234,7 @@ export def sweep(folder: String) -> Void
 end
 
 export def digest(data: Bytes) -> String
-  return Digest.sha256_hexdigest(data)
+  return OpenSSL.Digest.sha256_hexdigest(data)
 end
 
 # What, besides the files an import reads, changes what a build makes of the root: the environment that places

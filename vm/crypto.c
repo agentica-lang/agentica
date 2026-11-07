@@ -821,11 +821,6 @@ const agc_builtin agc_crypto_builtins[] = {
   {"OpenSSL.KDF.scrypt", 6, builtin_scrypt, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"OpenSSL.RSA.public_encrypt_oaep", 2, builtin_rsa_public_encrypt_oaep, AGC_NATIVE_NONE, AGC_COST_SIZE, false,
    false, false},
-  /* The keys before the OpenSSL family (#1182) that the stage0 of the base branch imports; they go with the old
-     Digest rows of the catalog once compiler/ and std/http call OpenSSL.Digest. */
-  {"Digest.hexencode.bytes", 1, builtin_hexencode, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"Digest.sha1.bytes", 1, builtin_sha1, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"Digest.sha256_hexdigest.bytes", 1, builtin_sha256_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
 };
 
 const size_t agc_crypto_builtin_count = sizeof agc_crypto_builtins / sizeof agc_crypto_builtins[0];

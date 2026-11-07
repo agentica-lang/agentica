@@ -127,7 +127,7 @@ end
 ## The hex SHA-256 of the canonical member UTF-8 bytes: the key of its cache object. The hex of the pathname would
 ## leak the member spelling into folder names and vary in length; the digest is fixed width and opaque.
 export def member_digest_hex(canonical: String) -> String
-  return Digest.sha256_hexdigest(canonical.bytes)
+  return OpenSSL.Digest.sha256_hexdigest(canonical.bytes)
 end
 
 ## The folder that holds the native artifacts: `<root>/native`, beside the package folders, never inside one, so the

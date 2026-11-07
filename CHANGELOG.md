@@ -21,8 +21,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `Cipher`, `CMAC`, `KDF` and `SecureRandom` are `OpenSSL.Digest`,
   `OpenSSL.HMAC`, `OpenSSL.Cipher`, `OpenSSL.CMAC`, `OpenSSL.KDF` and
   `OpenSSL.Random`. An old name is `CHECK-UNKNOWN-NAME` with the new one in the
-  help. `OpenSSL` is reserved; `Cipher`, `HMAC`, `KDF`, `CMAC`, `SecureRandom`
-  and `Crypto` are free names.
+  help. `OpenSSL` is reserved; `Digest`, `Cipher`, `HMAC`, `KDF`, `CMAC`,
+  `SecureRandom` and `Crypto` are free names.
 
 ## [0.26.1] - 2026-11-07
 

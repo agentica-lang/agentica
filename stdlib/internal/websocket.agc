@@ -85,7 +85,7 @@ end
 ## The `Sec-WebSocket-Accept` for a `Sec-WebSocket-Key` (RFC 6455 4.2.2): the base64 of the SHA-1 of the key and
 ## the GUID.
 export def accept_key(key: String) -> String
-  return Base64.strict_encode64(Digest.sha1("#{key}#{GUID}".bytes))
+  return Base64.strict_encode64(OpenSSL.Digest.sha1("#{key}#{GUID}".bytes))
 end
 
 ## A Sec-WebSocket-Accept is the base64 of a SHA-1 digest of 20 bytes: what `accept_key` makes.

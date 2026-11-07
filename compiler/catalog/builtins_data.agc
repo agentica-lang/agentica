@@ -283,7 +283,6 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "Bytes",
   "Channel",
   "Codec",
-  "Digest",
   "Dir",
   "File",
   "FileHandle",
@@ -6565,10 +6564,7 @@ ROWS_69: List[Model.Builtin] = [
   ),
 ]
 
-## The RSA row, then the three old Digest names that compiler/ and the std/ modules it imports (std/http's websocket)
-## still call: the stage0 they are built from knows no other. They share the implementation of their OpenSSL.Digest row
-## and go once those files call OpenSSL.Digest (#1182). Appended last so the positions of the existing rows never
-## shift.
+## The RSA row; appended last so the positions of the existing rows never shift.
 ROWS_70: List[Model.Builtin] = [
   Model.Builtin(
     name: "OpenSSL.RSA.public_encrypt_oaep",
@@ -6582,36 +6578,6 @@ ROWS_70: List[Model.Builtin] = [
       "SHA-1; at most the key size less 42 bytes; a bad PEM, a key that is not RSA or data too long is an error; " +
       "VM only."
     ),
-    alternatives: [],
-  ),
-  Model.Builtin(
-    name: "Digest.hexencode",
-    parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
-    result: Types.Type.String,
-    rule: Model.Rule.Plain,
-    implementation: "OpenSSL.Digest.hexencode.bytes",
-    effects: [],
-    description: "The old name of OpenSSL.Digest.hexencode, which replaces it; VM only.",
-    alternatives: [],
-  ),
-  Model.Builtin(
-    name: "Digest.sha1",
-    parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
-    result: Types.Type.Bytes,
-    rule: Model.Rule.Plain,
-    implementation: "OpenSSL.Digest.sha1.bytes",
-    effects: [],
-    description: "The old name of OpenSSL.Digest.sha1, which replaces it; VM only.",
-    alternatives: [],
-  ),
-  Model.Builtin(
-    name: "Digest.sha256_hexdigest",
-    parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
-    result: Types.Type.String,
-    rule: Model.Rule.Plain,
-    implementation: "OpenSSL.Digest.sha256_hexdigest.bytes",
-    effects: [],
-    description: "The old name of OpenSSL.Digest.sha256_hexdigest, which replaces it; VM only.",
     alternatives: [],
   ),
 ]

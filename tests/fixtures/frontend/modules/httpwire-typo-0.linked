@@ -1261,7 +1261,7 @@ program #6 0:1:1-76:6:1
               left: name-ref #1281 39385:851:6-39392:851:13 name="charset"
               right: literal #1282 39396:851:17-39398:851:19 value=string:""
             right: method-call #1288 39402:851:23-39451:851:72 name="include?"
-              target: const-ref #15156 39402:851:23-39415:851:36 name="@2::UTF8_CHARSETS"
+              target: const-ref #15157 39402:851:23-39415:851:36 name="@2::UTF8_CHARSETS"
               arg: method-call #1287 39425:851:46-39450:851:71 name="replace"
                 target: name-ref #1284 39425:851:46-39432:851:53 name="charset"
                 arg: literal #1285 39441:851:62-39444:851:65 value=string:"_"
@@ -11290,843 +11290,843 @@ program #6 0:1:1-76:6:1
         payload: type-ref #86 2906:81:13-2912:81:19 name="String"
       variant: enum-variant #89 2916:82:3-2933:83:1 name="Invalid"
         payload: type-ref #88 2924:82:11-2931:82:18 name="@3::Problem"
-    declaration: function-decl #102 3071:87:8-3181:90:1 name="@3::accept_key"
+    declaration: function-decl #103 3071:87:8-3189:90:1 name="@3::accept_key"
       param: param #93 3086:87:23-3097:87:34 name="key"
         type: type-ref #92 3091:87:28-3097:87:34 name="String"
       result: type-ref #94 3102:87:39-3108:87:45 name="String"
-      body: return-stmt #101 3111:88:3-3177:89:1
-        value: call #100 3118:88:10-3176:88:68 name="Base64.strict_encode64" piped=false
-          arg: call #99 3141:88:33-3175:88:67 name="Digest.sha1" piped=false
-            arg: field-access #98 3153:88:45-3174:88:66 name="bytes"
-              target: interpolation #97 3153:88:45-3168:88:60
-                part: name-ref #95 3156:88:48-3159:88:51 name="key"
-                part: const-ref #96 3162:88:54-3166:88:58 name="@3::GUID"
-    declaration: function-decl #121 3285:92:8-3453:98:1 name="@3::valid_accept?"
-      param: param #105 3303:92:26-3317:92:40 name="accept"
-        type: type-ref #104 3311:92:34-3317:92:40 name="String"
-      result: type-ref #106 3322:92:45-3326:92:49 name="Bool"
-      body: case-stmt #120 3329:93:3-3449:97:1
-        value: call #108 3334:93:8-3364:93:38 name="Base64.strict_decode64" piped=false
-          arg: name-ref #107 3357:93:31-3363:93:37 name="accept"
-        arm: case-arm #115 3369:94:5-3414:95:1
-          pattern: variant-pattern #109 3369:94:5-3377:94:13 enum="Result" variant="Ok" bindings=["data"]
-          body: return-stmt #114 3381:94:17-3414:95:1
-            value: binary #113 3388:94:24-3413:94:49 op=equal op-span=3398:94:34-3400:94:36
-              left: field-access #111 3388:94:24-3397:94:33 name="size"
-                target: name-ref #110 3388:94:24-3392:94:28 name="data"
-              right: const-ref #112 3401:94:37-3413:94:49 name="@3::ACCEPT_BYTES"
-        arm: case-arm #119 3418:95:5-3443:96:1
-          pattern: variant-pattern #116 3418:95:5-3426:95:13 enum="Result" variant="Err" bindings=[-]
-          body: return-stmt #118 3430:95:17-3443:96:1
-            value: literal #117 3437:95:24-3442:95:29 value=bool:false
-    declaration: function-decl #138 3632:101:8-3771:110:1 name="@3::token?"
-      param: param #124 3643:101:19-3655:101:31 name="name"
-        type: type-ref #123 3649:101:25-3655:101:31 name="String"
-      result: type-ref #125 3660:101:36-3664:101:40 name="Bool"
-      body: for-stmt #135 3667:102:3-3752:107:1 variable="byte"
-        iterable: field-access #127 3679:102:15-3689:102:25 name="bytes"
-          target: name-ref #126 3679:102:15-3683:102:19 name="name"
-        body: if-stmt #134 3694:103:5-3746:106:1
-          branch: if-branch #133 3694:103:5-3738:105:1
-            condition: unary #130 3697:103:8-3718:103:29 op=not op-span=3697:103:8-3700:103:11
-              operand: call #129 3701:103:12-3718:103:29 name="@3::token_byte?" piped=false
-                arg: name-ref #128 3713:103:24-3717:103:28 name="byte"
-            body: return-stmt #132 3725:104:7-3738:105:1
-              value: literal #131 3732:104:14-3737:104:19 value=bool:false
-      body: return-stmt #137 3755:108:3-3767:109:1
-        value: literal #136 3762:108:10-3766:108:14 value=bool:true
-    declaration: function-decl #157 3836:112:8-3992:118:1 name="@3::valid_key?"
-      param: param #141 3851:112:23-3862:112:34 name="key"
-        type: type-ref #140 3856:112:28-3862:112:34 name="String"
-      result: type-ref #142 3867:112:39-3871:112:43 name="Bool"
-      body: case-stmt #156 3874:113:3-3988:117:1
-        value: call #144 3879:113:8-3906:113:35 name="Base64.strict_decode64" piped=false
-          arg: name-ref #143 3902:113:31-3905:113:34 name="key"
-        arm: case-arm #151 3911:114:5-3953:115:1
-          pattern: variant-pattern #145 3911:114:5-3919:114:13 enum="Result" variant="Ok" bindings=["data"]
-          body: return-stmt #150 3923:114:17-3953:115:1
-            value: binary #149 3930:114:24-3952:114:46 op=equal op-span=3940:114:34-3942:114:36
-              left: field-access #147 3930:114:24-3939:114:33 name="size"
-                target: name-ref #146 3930:114:24-3934:114:28 name="data"
-              right: const-ref #148 3943:114:37-3952:114:46 name="@3::KEY_BYTES"
-        arm: case-arm #155 3957:115:5-3982:116:1
-          pattern: variant-pattern #152 3957:115:5-3965:115:13 enum="Result" variant="Err" bindings=[-]
-          body: return-stmt #154 3969:115:17-3982:116:1
-            value: literal #153 3976:115:24-3981:115:29 value=bool:false
-    declaration: function-decl #179 4116:120:8-4288:129:1 name="@3::has_token?"
-      param: param #160 4131:120:23-4144:120:36 name="value"
-        type: type-ref #159 4138:120:30-4144:120:36 name="String"
-      param: param #162 4146:120:38-4159:120:51 name="token"
-        type: type-ref #161 4153:120:45-4159:120:51 name="String"
-      result: type-ref #163 4164:120:56-4168:120:60 name="Bool"
-      body: for-stmt #176 4171:121:3-4268:126:1 variable="part"
-        iterable: method-call #166 4183:121:15-4199:121:31 name="split"
-          target: name-ref #164 4183:121:15-4188:121:20 name="value"
-          arg: literal #165 4195:121:27-4198:121:30 value=string:","
-        body: if-stmt #175 4204:122:5-4262:125:1
-          branch: if-branch #174 4204:122:5-4254:124:1
-            condition: binary #171 4207:122:8-4235:122:36 op=equal op-span=4227:122:28-4229:122:30
-              left: field-access #169 4207:122:8-4226:122:27 name="downcase"
-                target: field-access #168 4207:122:8-4217:122:18 name="strip"
-                  target: name-ref #167 4207:122:8-4211:122:12 name="part"
-              right: name-ref #170 4230:122:31-4235:122:36 name="token"
-            body: return-stmt #173 4242:123:7-4254:124:1
-              value: literal #172 4249:123:14-4253:123:18 value=bool:true
-      body: return-stmt #178 4271:127:3-4284:128:1
-        value: literal #177 4278:127:10-4283:127:15 value=bool:false
-    declaration: function-decl #218 4364:131:8-4609:143:1 name="@3::head_of"
-      param: param #182 4376:131:20-4386:131:30 name="two"
-        type: type-ref #181 4381:131:25-4386:131:30 name="Bytes"
-      result: type-ref #183 4391:131:35-4395:131:39 name="@3::Head"
-      body: binding #187 4398:132:3-4416:133:1 name="first"
-        value: method-call #186 4406:132:11-4415:132:20 name="at"
-          target: name-ref #184 4406:132:11-4409:132:14 name="two"
-          arg: literal #185 4413:132:18-4414:132:19 value=int:0
-      body: binding #191 4418:133:3-4437:134:1 name="second"
-        value: method-call #190 4427:133:12-4436:133:21 name="at"
-          target: name-ref #188 4427:133:12-4430:133:15 name="two"
-          arg: literal #189 4434:133:19-4435:133:20 value=int:1
-      body: return-stmt #217 4439:134:3-4605:142:1
-        value: construct #216 4446:134:10-4604:141:4 type="@3::Head"
-          arg: named-arg #195 4456:135:5-4473:135:22 name="fin"
-            value: binary #194 4461:135:10-4473:135:22 op=greater-equal op-span=4467:135:16-4469:135:18
-              left: name-ref #192 4461:135:10-4466:135:15 name="first"
-              right: literal #193 4470:135:19-4473:135:22 value=int:128
-          arg: named-arg #199 4479:136:5-4497:136:23 name="opcode"
-            value: binary #198 4487:136:13-4497:136:23 op=modulo op-span=4493:136:19-4494:136:20
-              left: name-ref #196 4487:136:13-4492:136:18 name="first"
-              right: literal #197 4495:136:21-4497:136:23 value=int:16
-          arg: named-arg #203 4503:137:5-4524:137:26 name="masked"
-            value: binary #202 4511:137:13-4524:137:26 op=greater-equal op-span=4518:137:20-4520:137:22
-              left: name-ref #200 4511:137:13-4517:137:19 name="second"
-              right: literal #201 4521:137:23-4524:137:26 value=int:128
-          arg: named-arg #209 4530:138:5-4556:138:31 name="reserved"
-            value: binary #208 4540:138:15-4556:138:31 op=modulo op-span=4553:138:28-4554:138:29
-              left: binary #206 4541:138:16-4551:138:26 op=divide op-span=4547:138:22-4548:138:23
-                left: name-ref #204 4541:138:16-4546:138:21 name="first"
-                right: literal #205 4549:138:24-4551:138:26 value=int:16
-              right: literal #207 4555:138:30-4556:138:31 value=int:8
-          arg: named-arg #213 4562:139:5-4582:139:25 name="length"
-            value: binary #212 4570:139:13-4582:139:25 op=modulo op-span=4577:139:20-4578:139:21
-              left: name-ref #210 4570:139:13-4576:139:19 name="second"
-              right: literal #211 4579:139:22-4582:139:25 value=int:128
-          arg: named-arg #215 4588:140:5-4599:140:16 name="key"
-            value: const-ref #214 4593:140:10-4599:140:16 name="@3::NO_KEY"
-    declaration: function-decl #251 4735:145:8-4938:161:1 name="@3::tail_size"
-      param: param #221 4749:145:22-4759:145:32 name="head"
-        type: type-ref #220 4755:145:28-4759:145:32 name="@3::Head"
-      result: type-ref #222 4764:145:37-4767:145:40 name="Int"
-      body: binding #224 4770:146:3-4779:147:1 name="size"
-        value: literal #223 4777:146:10-4778:146:11 value=int:0
-      body: if-stmt #232 4781:147:3-4822:150:1
-        branch: if-branch #231 4781:147:3-4816:149:1
-          condition: binary #228 4784:147:6-4802:147:24 op=equal op-span=4796:147:18-4798:147:20
-            left: field-access #226 4784:147:6-4795:147:17 name="length"
-              target: name-ref #225 4784:147:6-4788:147:10 name="head"
-            right: literal #227 4799:147:21-4802:147:24 value=int:126
-          body: binding #230 4807:148:5-4816:149:1 name="size"
-            value: literal #229 4814:148:12-4815:148:13 value=int:2
-      body: if-stmt #240 4825:151:3-4866:154:1
-        branch: if-branch #239 4825:151:3-4860:153:1
-          condition: binary #236 4828:151:6-4846:151:24 op=equal op-span=4840:151:18-4842:151:20
-            left: field-access #234 4828:151:6-4839:151:17 name="length"
-              target: name-ref #233 4828:151:6-4832:151:10 name="head"
-            right: literal #235 4843:151:21-4846:151:24 value=int:127
-          body: binding #238 4851:152:5-4860:153:1 name="size"
-            value: literal #237 4858:152:12-4859:152:13 value=int:8
-      body: if-stmt #248 4869:155:3-4919:158:1
-        branch: if-branch #247 4869:155:3-4913:157:1
-          condition: field-access #242 4872:155:6-4883:155:17 name="masked"
-            target: name-ref #241 4872:155:6-4876:155:10 name="head"
-          body: binding #246 4888:156:5-4913:157:1 name="size"
-            value: binary #245 4895:156:12-4912:156:29 op=plus op-span=4900:156:17-4901:156:18
-              left: name-ref #243 4895:156:12-4899:156:16 name="size"
-              right: const-ref #244 4902:156:19-4912:156:29 name="@3::MASK_BYTES"
-      body: return-stmt #250 4922:159:3-4934:160:1
-        value: name-ref #249 4929:159:10-4933:159:14 name="size"
-    declaration: function-decl #320 5019:163:8-5532:190:1 name="@3::complete"
-      param: param #254 5032:163:21-5042:163:31 name="head"
-        type: type-ref #253 5038:163:27-5042:163:31 name="@3::Head"
-      param: param #256 5044:163:33-5055:163:44 name="tail"
-        type: type-ref #255 5050:163:39-5055:163:44 name="Bytes"
-      result: type-ref #257 5060:163:49-5064:163:53 name="@3::Head"
-      body: binding #260 5067:164:3-5088:165:1 name="length"
-        value: field-access #259 5076:164:12-5087:164:23 name="length"
-          target: name-ref #258 5076:164:12-5080:164:16 name="head"
-      body: binding #262 5090:165:3-5099:166:1 name="used"
-        value: literal #261 5097:165:10-5098:165:11 value=int:0
-      body: if-stmt #275 5101:166:3-5191:170:1
-        branch: if-branch #274 5101:166:3-5185:169:1
-          condition: binary #266 5104:166:6-5122:166:24 op=equal op-span=5116:166:18-5118:166:20
-            left: field-access #264 5104:166:6-5115:166:17 name="length"
-              target: name-ref #263 5104:166:6-5108:166:10 name="head"
-            right: literal #265 5119:166:21-5122:166:24 value=int:126
-          body: binding #271 5127:167:5-5172:168:1 name="length"
-            value: field-access #270 5136:167:14-5171:167:49 name="unwrap!"
-              target: call #269 5136:167:14-5163:167:41 name="@4::read_u16_be" piped=false
-                arg: name-ref #267 5155:167:33-5159:167:37 name="tail"
-                arg: literal #268 5161:167:39-5162:167:40 value=int:0
-          body: binding #273 5176:168:5-5185:169:1 name="used"
-            value: literal #272 5183:168:12-5184:168:13 value=int:2
-      body: if-stmt #290 5194:171:3-5298:175:1
-        branch: if-branch #289 5194:171:3-5292:174:1
-          condition: binary #279 5197:171:6-5215:171:24 op=equal op-span=5209:171:18-5211:171:20
-            left: field-access #277 5197:171:6-5208:171:17 name="length"
-              target: name-ref #276 5197:171:6-5201:171:10 name="head"
-            right: literal #278 5212:171:21-5215:171:24 value=int:127
-          body: binding #286 5220:172:5-5279:173:1 name="length"
-            value: call #285 5229:172:14-5278:172:63 name="Result.unwrap_or" piped=false
-              arg: call #282 5246:172:31-5273:172:58 name="@4::read_u64_be" piped=false
-                arg: name-ref #280 5265:172:50-5269:172:54 name="tail"
-                arg: literal #281 5271:172:56-5272:172:57 value=int:0
-              arg: unary #284 5275:172:60-5277:172:62 op=minus op-span=5275:172:60-5276:172:61
-                operand: literal #283 5276:172:61-5277:172:62 value=int:1
-          body: binding #288 5283:173:5-5292:174:1 name="used"
-            value: literal #287 5290:173:12-5291:173:13 value=int:8
-      body: binding #292 5301:176:3-5314:177:1 name="key"
-        value: const-ref #291 5307:176:9-5313:176:15 name="@3::NO_KEY"
-      body: if-stmt #301 5316:177:3-5376:180:1
-        branch: if-branch #300 5316:177:3-5370:179:1
-          condition: field-access #294 5319:177:6-5330:177:17 name="masked"
-            target: name-ref #293 5319:177:6-5323:177:10 name="head"
-          body: binding #299 5335:178:5-5370:179:1 name="key"
-            value: method-call #298 5341:178:11-5369:178:39 name="slice"
-              target: name-ref #295 5341:178:11-5345:178:15 name="tail"
-              arg: name-ref #296 5352:178:22-5356:178:26 name="used"
-              arg: const-ref #297 5358:178:28-5368:178:38 name="@3::MASK_BYTES"
-      body: return-stmt #319 5379:181:3-5528:189:1
-        value: construct #318 5386:181:10-5527:188:4 type="@3::Head"
-          arg: named-arg #304 5396:182:5-5409:182:18 name="fin"
-            value: field-access #303 5401:182:10-5409:182:18 name="fin"
-              target: name-ref #302 5401:182:10-5405:182:14 name="head"
-          arg: named-arg #307 5415:183:5-5434:183:24 name="opcode"
-            value: field-access #306 5423:183:13-5434:183:24 name="opcode"
-              target: name-ref #305 5423:183:13-5427:183:17 name="head"
-          arg: named-arg #310 5440:184:5-5459:184:24 name="masked"
-            value: field-access #309 5448:184:13-5459:184:24 name="masked"
-              target: name-ref #308 5448:184:13-5452:184:17 name="head"
-          arg: named-arg #313 5465:185:5-5488:185:28 name="reserved"
-            value: field-access #312 5475:185:15-5488:185:28 name="reserved"
-              target: name-ref #311 5475:185:15-5479:185:19 name="head"
-          arg: named-arg #315 5494:186:5-5508:186:19 name="length"
-            value: name-ref #314 5502:186:13-5508:186:19 name="length"
-          arg: named-arg #317 5514:187:5-5522:187:13 name="key"
-            value: name-ref #316 5519:187:10-5522:187:13 name="key"
-    declaration: function-decl #374 5617:192:8-6091:211:1 name="@3::check_head"
-      param: param #323 5632:192:23-5642:192:33 name="head"
-        type: type-ref #322 5638:192:29-5642:192:33 name="@3::Head"
-      result: type-ref #325 5647:192:38-5664:192:55 name="Optional"
-        arg: type-ref #324 5656:192:47-5663:192:54 name="@3::Problem"
-      body: if-stmt #338 5667:193:3-5775:196:1
-        branch: if-branch #337 5667:193:3-5769:195:1
-          condition: binary #329 5670:193:6-5688:193:24 op=not-equal op-span=5684:193:20-5686:193:22
-            left: field-access #327 5670:193:6-5683:193:19 name="reserved"
-              target: name-ref #326 5670:193:6-5674:193:10 name="head"
-            right: literal #328 5687:193:23-5688:193:24 value=int:0
-          body: return-stmt #336 5693:194:5-5769:195:1
-            value: call #335 5700:194:12-5768:194:80 name="some" piped=false
-              arg: construct #334 5705:194:17-5767:194:79 type="@3::Problem"
-                arg: named-arg #331 5713:194:25-5733:194:45 name="code"
-                  value: const-ref #330 5719:194:31-5733:194:45 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #333 5735:194:47-5766:194:78 name="reason"
-                  value: literal #332 5743:194:55-5766:194:78 value=string:"reserved bits are set"
-      body: if-stmt #350 5778:197:3-5891:200:1
-        branch: if-branch #349 5778:197:3-5885:199:1
-          condition: unary #341 5781:197:6-5796:197:21 op=not op-span=5781:197:6-5784:197:9
-            operand: field-access #340 5785:197:10-5796:197:21 name="masked"
-              target: name-ref #339 5785:197:10-5789:197:14 name="head"
-          body: return-stmt #348 5801:198:5-5885:199:1
-            value: call #347 5808:198:12-5884:198:88 name="some" piped=false
-              arg: construct #346 5813:198:17-5883:198:87 type="@3::Problem"
-                arg: named-arg #343 5821:198:25-5841:198:45 name="code"
-                  value: const-ref #342 5827:198:31-5841:198:45 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #345 5843:198:47-5882:198:86 name="reason"
-                  value: literal #344 5851:198:55-5882:198:86 value=string:"a client frame must be masked"
-      body: if-stmt #363 5894:201:3-6007:204:1
-        branch: if-branch #362 5894:201:3-6001:203:1
-          condition: unary #354 5897:201:6-5927:201:36 op=not op-span=5897:201:6-5900:201:9
-            operand: call #353 5901:201:10-5927:201:36 name="@3::known_opcode?" piped=false
-              arg: field-access #352 5915:201:24-5926:201:35 name="opcode"
-                target: name-ref #351 5915:201:24-5919:201:28 name="head"
-          body: return-stmt #361 5932:202:5-6001:203:1
-            value: call #360 5939:202:12-6000:202:73 name="some" piped=false
-              arg: construct #359 5944:202:17-5999:202:72 type="@3::Problem"
-                arg: named-arg #356 5952:202:25-5972:202:45 name="code"
-                  value: const-ref #355 5958:202:31-5972:202:45 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #358 5974:202:47-5998:202:71 name="reason"
-                  value: literal #357 5982:202:55-5998:202:71 value=string:"unknown opcode"
-      body: if-stmt #371 6010:205:3-6072:208:1
-        branch: if-branch #370 6010:205:3-6066:207:1
-          condition: call #366 6013:205:6-6034:205:27 name="@3::control?" piped=false
-            arg: field-access #365 6022:205:15-6033:205:26 name="opcode"
-              target: name-ref #364 6022:205:15-6026:205:19 name="head"
-          body: return-stmt #369 6039:206:5-6066:207:1
-            value: call #368 6046:206:12-6065:206:31 name="@3::check_control" piped=false
-              arg: name-ref #367 6060:206:26-6064:206:30 name="head"
-      body: return-stmt #373 6075:209:3-6087:210:1
-        value: call #372 6082:209:10-6086:209:14 name="none" piped=false
-    declaration: function-decl #419 6321:214:8-6657:225:1 name="@3::check_length"
-      param: param #377 6338:214:25-6348:214:35 name="head"
-        type: type-ref #376 6344:214:31-6348:214:35 name="@3::Head"
-      param: param #379 6350:214:37-6358:214:45 name="max"
-        type: type-ref #378 6355:214:42-6358:214:45 name="Int"
-      param: param #381 6360:214:47-6369:214:56 name="held"
-        type: type-ref #380 6366:214:53-6369:214:56 name="Int"
-      result: type-ref #383 6374:214:61-6391:214:78 name="Optional"
-        arg: type-ref #382 6383:214:70-6390:214:77 name="@3::Problem"
-      body: if-stmt #396 6394:215:3-6498:218:1
-        branch: if-branch #395 6394:215:3-6492:217:1
-          condition: binary #387 6397:215:6-6412:215:21 op=less op-span=6409:215:18-6410:215:19
-            left: field-access #385 6397:215:6-6408:215:17 name="length"
-              target: name-ref #384 6397:215:6-6401:215:10 name="head"
-            right: literal #386 6411:215:20-6412:215:21 value=int:0
-          body: return-stmt #394 6417:216:5-6492:217:1
-            value: call #393 6424:216:12-6491:216:79 name="some" piped=false
-              arg: construct #392 6429:216:17-6490:216:78 type="@3::Problem"
-                arg: named-arg #389 6437:216:25-6457:216:45 name="code"
-                  value: const-ref #388 6443:216:31-6457:216:45 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #391 6459:216:47-6489:216:77 name="reason"
-                  value: literal #390 6467:216:55-6489:216:77 value=string:"invalid frame length"
-      body: if-stmt #416 6501:219:3-6638:222:1
-        branch: if-branch #415 6501:219:3-6632:221:1
-          condition: binary #407 6504:219:6-6558:219:60 op=and op-span=6530:219:32-6533:219:35
-            left: unary #400 6504:219:6-6529:219:31 op=not op-span=6504:219:6-6507:219:9
-              operand: call #399 6508:219:10-6529:219:31 name="@3::control?" piped=false
-                arg: field-access #398 6517:219:19-6528:219:30 name="opcode"
-                  target: name-ref #397 6517:219:19-6521:219:23 name="head"
-            right: binary #406 6534:219:36-6558:219:60 op=greater op-span=6553:219:55-6554:219:56
-              left: binary #404 6534:219:36-6552:219:54 op=plus op-span=6539:219:41-6540:219:42
-                left: name-ref #401 6534:219:36-6538:219:40 name="held"
-                right: field-access #403 6541:219:43-6552:219:54 name="length"
-                  target: name-ref #402 6541:219:43-6545:219:47 name="head"
-              right: name-ref #405 6555:219:57-6558:219:60 name="max"
-          body: return-stmt #414 6563:220:5-6632:221:1
-            value: call #413 6570:220:12-6631:220:73 name="some" piped=false
-              arg: construct #412 6575:220:17-6630:220:72 type="@3::Problem"
-                arg: named-arg #409 6583:220:25-6602:220:44 name="code"
-                  value: const-ref #408 6589:220:31-6602:220:44 name="@3::CLOSE_TOO_BIG"
-                arg: named-arg #411 6604:220:46-6629:220:71 name="reason"
-                  value: literal #410 6612:220:54-6629:220:71 value=string:"message too big"
-      body: return-stmt #418 6641:223:3-6653:224:1
-        value: call #417 6648:223:10-6652:223:14 name="none" piped=false
-    declaration: function-decl #428 6728:227:8-6791:230:1 name="@3::control?"
-      param: param #422 6741:227:21-6752:227:32 name="opcode"
-        type: type-ref #421 6749:227:29-6752:227:32 name="Int"
-      result: type-ref #423 6757:227:37-6761:227:41 name="Bool"
-      body: return-stmt #427 6764:228:3-6787:229:1
-        value: binary #426 6771:228:10-6786:228:25 op=greater-equal op-span=6778:228:17-6780:228:19
-          left: name-ref #424 6771:228:10-6777:228:16 name="opcode"
-          right: const-ref #425 6781:228:20-6786:228:25 name="@3::CLOSE"
-    declaration: function-decl #437 6829:232:8-6890:235:1 name="@3::close?"
-      param: param #431 6840:232:19-6851:232:30 name="opcode"
-        type: type-ref #430 6848:232:27-6851:232:30 name="Int"
-      result: type-ref #432 6856:232:35-6860:232:39 name="Bool"
-      body: return-stmt #436 6863:233:3-6886:234:1
-        value: binary #435 6870:233:10-6885:233:25 op=equal op-span=6877:233:17-6879:233:19
-          left: name-ref #433 6870:233:10-6876:233:16 name="opcode"
-          right: const-ref #434 6880:233:20-6885:233:25 name="@3::CLOSE"
-    declaration: function-decl #446 6927:237:8-6986:240:1 name="@3::ping?"
-      param: param #440 6937:237:18-6948:237:29 name="opcode"
-        type: type-ref #439 6945:237:26-6948:237:29 name="Int"
-      result: type-ref #441 6953:237:34-6957:237:38 name="Bool"
-      body: return-stmt #445 6960:238:3-6982:239:1
-        value: binary #444 6967:238:10-6981:238:24 op=equal op-span=6974:238:17-6976:238:19
-          left: name-ref #442 6967:238:10-6973:238:16 name="opcode"
-          right: const-ref #443 6977:238:20-6981:238:24 name="@3::PING"
-    declaration: function-decl #488 7112:242:8-7398:257:1 name="@3::unmask"
-      param: param #449 7123:242:19-7134:242:30 name="data"
-        type: type-ref #448 7129:242:25-7134:242:30 name="Bytes"
-      param: param #451 7136:242:32-7146:242:42 name="key"
-        type: type-ref #450 7141:242:37-7146:242:42 name="Bytes"
-      result: type-ref #452 7151:242:47-7156:242:52 name="Bytes"
-      body: if-stmt #458 7159:243:3-7195:246:1
-        branch: if-branch #457 7159:243:3-7189:245:1
-          condition: field-access #454 7162:243:6-7172:243:16 name="empty?"
-            target: name-ref #453 7162:243:6-7165:243:9 name="key"
-          body: return-stmt #456 7177:244:5-7189:245:1
-            value: name-ref #455 7184:244:12-7188:244:16 name="data"
-      body: binding #461 7198:247:3-7211:248:1 name="k"
-        value: field-access #460 7202:247:7-7210:247:15 name="to_a"
-          target: name-ref #459 7202:247:7-7205:247:10 name="key"
-      body: binding #465 7213:248:3-7233:249:1 name="out"
-        type: type-ref #463 7218:248:8-7227:248:17 name="List"
-          arg: type-ref #462 7223:248:13-7226:248:16 name="Int"
-        value: list-lit #464 7230:248:20-7232:248:22
-      body: binding #467 7235:249:3-7245:250:1 name="place"
-        value: literal #466 7243:249:11-7244:249:12 value=int:0
-      body: for-stmt #483 7247:250:3-7355:254:1 variable="byte"
-        iterable: name-ref #468 7259:250:15-7263:250:19 name="data"
-        body: binding #476 7268:251:5-7312:252:1 name="out"
-          value: method-call #475 7274:251:11-7311:251:48 name="push"
-            target: name-ref #469 7274:251:11-7277:251:14 name="out"
-            arg: call #474 7283:251:20-7310:251:47 name="Int.bit_xor" piped=false
-              arg: name-ref #470 7295:251:32-7299:251:36 name="byte"
-              arg: index-access #473 7301:251:38-7309:251:46
-                target: name-ref #471 7301:251:38-7302:251:39 name="k"
-                index: name-ref #472 7303:251:40-7308:251:45 name="place"
-        body: binding #482 7316:252:5-7349:253:1 name="place"
-          value: binary #481 7324:252:13-7348:252:37 op=modulo op-span=7336:252:25-7337:252:26
-            left: binary #479 7325:252:14-7334:252:23 op=plus op-span=7331:252:20-7332:252:21
-              left: name-ref #477 7325:252:14-7330:252:19 name="place"
-              right: literal #478 7333:252:22-7334:252:23 value=int:1
-            right: const-ref #480 7338:252:27-7348:252:37 name="@3::MASK_BYTES"
-      body: return-stmt #487 7358:255:3-7394:256:1
-        value: field-access #486 7365:255:10-7393:255:38 name="unwrap!"
-          target: call #485 7365:255:10-7385:255:30 name="Bytes.from_list" piped=false
-            arg: name-ref #484 7381:255:26-7384:255:29 name="out"
-    declaration: function-decl #501 7456:259:8-7556:262:1 name="@3::new_assembly"
-      result: type-ref #490 7478:259:30-7486:259:38 name="@3::Assembly"
-      body: return-stmt #500 7489:260:3-7552:261:1
-        value: construct #499 7496:260:10-7551:260:65 type="@3::Assembly"
-          arg: named-arg #492 7505:260:19-7516:260:30 name="text"
-            value: literal #491 7511:260:25-7516:260:30 value=bool:false
-          arg: named-arg #494 7518:260:32-7529:260:43 name="open"
-            value: literal #493 7524:260:38-7529:260:43 value=bool:false
-          arg: named-arg #496 7531:260:45-7540:260:54 name="parts"
-            value: list-lit #495 7538:260:52-7540:260:54
-          arg: named-arg #498 7542:260:56-7550:260:64 name="total"
-            value: literal #497 7549:260:63-7550:260:64 value=int:0
-    declaration: function-decl #601 7877:266:8-8710:293:1 name="@3::take"
-      param: param #504 7886:266:17-7904:266:35 name="assembly"
-        type: type-ref #503 7896:266:27-7904:266:35 name="@3::Assembly"
-      param: param #506 7906:266:37-7916:266:47 name="head"
-        type: type-ref #505 7912:266:43-7916:266:47 name="@3::Head"
-      param: param #508 7918:266:49-7932:266:63 name="payload"
-        type: type-ref #507 7927:266:58-7932:266:63 name="Bytes"
-      param: param #510 7934:266:65-7942:266:73 name="max"
-        type: type-ref #509 7939:266:70-7942:266:73 name="Int"
-      result: type-ref #511 7947:266:78-7952:266:83 name="@3::Taken"
-      body: binding #516 7955:267:3-7996:268:1 name="continuing"
-        value: binary #515 7968:267:16-7995:267:43 op=equal op-span=7980:267:28-7982:267:30
-          left: field-access #513 7968:267:16-7979:267:27 name="opcode"
-            target: name-ref #512 7968:267:16-7972:267:20 name="head"
-          right: const-ref #514 7983:267:31-7995:267:43 name="@3::CONTINUATION"
-      body: if-stmt #530 7998:268:3-8137:271:1
-        branch: if-branch #529 7998:268:3-8131:270:1
-          condition: binary #521 8001:268:6-8033:268:38 op=and op-span=8012:268:17-8015:268:20
-            left: name-ref #517 8001:268:6-8011:268:16 name="continuing"
-            right: unary #520 8016:268:21-8033:268:38 op=not op-span=8016:268:21-8019:268:24
-              operand: field-access #519 8020:268:25-8033:268:38 name="open"
-                target: name-ref #518 8020:268:25-8028:268:33 name="assembly"
-          body: return-stmt #528 8038:269:5-8131:270:1
-            value: enum-constructor #527 8045:269:12-8130:269:97 enum="@3::Taken" variant="Broken"
-              arg: construct #526 8058:269:25-8129:269:96 type="@3::Problem"
-                arg: named-arg #523 8066:269:33-8086:269:53 name="code"
-                  value: const-ref #522 8072:269:39-8086:269:53 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #525 8088:269:55-8128:269:95 name="reason"
-                  value: literal #524 8096:269:63-8128:269:95 value=string:"a continuation with no message"
-      body: if-stmt #544 8140:272:3-8286:275:1
-        branch: if-branch #543 8140:272:3-8280:274:1
-          condition: binary #535 8143:272:6-8175:272:38 op=and op-span=8158:272:21-8161:272:24
-            left: unary #532 8143:272:6-8157:272:20 op=not op-span=8143:272:6-8146:272:9
-              operand: name-ref #531 8147:272:10-8157:272:20 name="continuing"
-            right: field-access #534 8162:272:25-8175:272:38 name="open"
-              target: name-ref #533 8162:272:25-8170:272:33 name="assembly"
-          body: return-stmt #542 8180:273:5-8280:274:1
-            value: enum-constructor #541 8187:273:12-8279:273:104 enum="@3::Taken" variant="Broken"
-              arg: construct #540 8200:273:25-8278:273:103 type="@3::Problem"
-                arg: named-arg #537 8208:273:33-8228:273:53 name="code"
-                  value: const-ref #536 8214:273:39-8228:273:53 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #539 8230:273:55-8277:273:102 name="reason"
-                  value: literal #538 8238:273:63-8277:273:102 value=string:"a new message inside a fragmented one"
-      body: binding #547 8289:276:3-8310:277:1 name="text"
-        value: field-access #546 8296:276:10-8309:276:23 name="text"
-          target: name-ref #545 8296:276:10-8304:276:18 name="assembly"
-      body: if-stmt #556 8312:277:3-8367:280:1
-        branch: if-branch #555 8312:277:3-8361:279:1
-          condition: unary #549 8315:277:6-8329:277:20 op=not op-span=8315:277:6-8318:277:9
-            operand: name-ref #548 8319:277:10-8329:277:20 name="continuing"
-          body: binding #554 8334:278:5-8361:279:1 name="text"
-            value: binary #553 8341:278:12-8360:278:31 op=equal op-span=8353:278:24-8355:278:26
-              left: field-access #551 8341:278:12-8352:278:23 name="opcode"
-                target: name-ref #550 8341:278:12-8345:278:16 name="head"
-              right: const-ref #552 8356:278:27-8360:278:31 name="@3::TEXT"
-      body: binding #562 8370:281:3-8408:282:1 name="total"
-        value: binary #561 8378:281:11-8407:281:40 op=plus op-span=8393:281:26-8394:281:27
-          left: field-access #558 8378:281:11-8392:281:25 name="total"
-            target: name-ref #557 8378:281:11-8386:281:19 name="assembly"
-          right: field-access #560 8395:281:28-8407:281:40 name="size"
-            target: name-ref #559 8395:281:28-8402:281:35 name="payload"
-      body: if-stmt #574 8410:282:3-8512:285:1
-        branch: if-branch #573 8410:282:3-8506:284:1
-          condition: binary #565 8413:282:6-8424:282:17 op=greater op-span=8419:282:12-8420:282:13
-            left: name-ref #563 8413:282:6-8418:282:11 name="total"
-            right: name-ref #564 8421:282:14-8424:282:17 name="max"
-          body: return-stmt #572 8429:283:5-8506:284:1
-            value: enum-constructor #571 8436:283:12-8505:283:81 enum="@3::Taken" variant="Broken"
-              arg: construct #570 8449:283:25-8504:283:80 type="@3::Problem"
-                arg: named-arg #567 8457:283:33-8476:283:52 name="code"
-                  value: const-ref #566 8463:283:39-8476:283:52 name="@3::CLOSE_TOO_BIG"
-                arg: named-arg #569 8478:283:54-8503:283:79 name="reason"
-                  value: literal #568 8486:283:62-8503:283:79 value=string:"message too big"
-      body: binding #579 8515:286:3-8552:287:1 name="parts"
-        value: method-call #578 8523:286:11-8551:286:39 name="push"
-          target: field-access #576 8523:286:11-8537:286:25 name="parts"
-            target: name-ref #575 8523:286:11-8531:286:19 name="assembly"
-          arg: name-ref #577 8543:286:31-8550:286:38 name="payload"
-      body: if-stmt #595 8554:287:3-8660:290:1
-        branch: if-branch #594 8554:287:3-8654:289:1
-          condition: unary #582 8557:287:6-8569:287:18 op=not op-span=8557:287:6-8560:287:9
-            operand: field-access #581 8561:287:10-8569:287:18 name="fin"
-              target: name-ref #580 8561:287:10-8565:287:14 name="head"
-          body: return-stmt #593 8574:288:5-8654:289:1
-            value: enum-constructor #592 8581:288:12-8653:288:84 enum="@3::Taken" variant="More"
-              arg: construct #591 8592:288:23-8652:288:83 type="@3::Assembly"
-                arg: named-arg #584 8601:288:32-8611:288:42 name="text"
-                  value: name-ref #583 8607:288:38-8611:288:42 name="text"
-                arg: named-arg #586 8613:288:44-8623:288:54 name="open"
-                  value: literal #585 8619:288:50-8623:288:54 value=bool:true
-                arg: named-arg #588 8625:288:56-8637:288:68 name="parts"
-                  value: name-ref #587 8632:288:63-8637:288:68 name="parts"
-                arg: named-arg #590 8639:288:70-8651:288:82 name="total"
-                  value: name-ref #589 8646:288:77-8651:288:82 name="total"
-      body: return-stmt #600 8663:291:3-8706:292:1
-        value: call #599 8670:291:10-8705:291:45 name="@3::finished" piped=false
-          arg: name-ref #596 8679:291:19-8683:291:23 name="text"
-          arg: call #598 8685:291:25-8704:291:44 name="Bytes.concat" piped=false
-            arg: name-ref #597 8698:291:38-8703:291:43 name="parts"
-    declaration: function-decl #664 8941:296:8-9567:315:1 name="@3::parse_close"
-      param: param #604 8957:296:24-8971:296:38 name="payload"
-        type: type-ref #603 8966:296:33-8971:296:38 name="Bytes"
-      result: type-ref #605 8976:296:43-8983:296:50 name="@3::Closing"
-      body: if-stmt #613 8986:297:3-9052:300:1
-        branch: if-branch #612 8986:297:3-9046:299:1
-          condition: field-access #607 8989:297:6-9003:297:20 name="empty?"
-            target: name-ref #606 8989:297:6-8996:297:13 name="payload"
-          body: return-stmt #611 9008:298:5-9046:299:1
-            value: enum-constructor #610 9015:298:12-9045:298:42 enum="@3::Closing" variant="Peer"
-              arg: const-ref #608 9028:298:25-9040:298:37 name="@3::CLOSE_NORMAL"
-              arg: literal #609 9042:298:39-9044:298:41 value=string:""
-      body: if-stmt #626 9055:301:3-9179:304:1
-        branch: if-branch #625 9055:301:3-9173:303:1
-          condition: binary #617 9058:301:6-9075:301:23 op=equal op-span=9071:301:19-9073:301:21
-            left: field-access #615 9058:301:6-9070:301:18 name="size"
-              target: name-ref #614 9058:301:6-9065:301:13 name="payload"
-            right: literal #616 9074:301:22-9075:301:23 value=int:1
-          body: return-stmt #624 9080:302:5-9173:303:1
-            value: enum-constructor #623 9087:302:12-9172:302:97 enum="@3::Closing" variant="Invalid"
-              arg: construct #622 9103:302:28-9171:302:96 type="@3::Problem"
-                arg: named-arg #619 9111:302:36-9131:302:56 name="code"
-                  value: const-ref #618 9117:302:42-9131:302:56 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #621 9133:302:58-9170:302:95 name="reason"
-                  value: literal #620 9141:302:66-9170:302:95 value=string:"a close frame with one byte"
-      body: binding #631 9182:305:3-9228:306:1 name="code"
-        value: field-access #630 9189:305:10-9227:305:48 name="unwrap!"
-          target: call #629 9189:305:10-9219:305:40 name="@4::read_u16_be" piped=false
-            arg: name-ref #627 9208:305:29-9215:305:36 name="payload"
-            arg: literal #628 9217:305:38-9218:305:39 value=int:0
-      body: if-stmt #643 9230:306:3-9349:309:1
-        branch: if-branch #642 9230:306:3-9343:308:1
-          condition: unary #634 9233:306:6-9254:306:27 op=not op-span=9233:306:6-9236:306:9
-            operand: call #633 9237:306:10-9254:306:27 name="@3::valid_code?" piped=false
-              arg: name-ref #632 9249:306:22-9253:306:26 name="code"
-          body: return-stmt #641 9259:307:5-9343:308:1
-            value: enum-constructor #640 9266:307:12-9342:307:88 enum="@3::Closing" variant="Invalid"
-              arg: construct #639 9282:307:28-9341:307:87 type="@3::Problem"
-                arg: named-arg #636 9290:307:36-9310:307:56 name="code"
-                  value: const-ref #635 9296:307:42-9310:307:56 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #638 9312:307:58-9340:307:86 name="reason"
-                  value: literal #637 9320:307:66-9340:307:86 value=string:"invalid close code"
-      body: case-stmt #663 9352:310:3-9563:314:1
-        value: call #647 9357:310:8-9391:310:42 name="String.from_bytes" piped=false
-          arg: method-call #646 9375:310:26-9390:310:41 name="drop"
-            target: name-ref #644 9375:310:26-9382:310:33 name="payload"
-            arg: literal #645 9388:310:39-9389:310:40 value=int:2
-        arm: case-arm #653 9396:311:5-9444:312:1
-          pattern: variant-pattern #648 9396:311:5-9406:311:15 enum="Result" variant="Ok" bindings=["reason"]
-          body: return-stmt #652 9410:311:19-9444:312:1
-            value: enum-constructor #651 9417:311:26-9443:311:52 enum="@3::Closing" variant="Peer"
-              arg: name-ref #649 9430:311:39-9434:311:43 name="code"
-              arg: name-ref #650 9436:311:45-9442:311:51 name="reason"
-        arm: case-arm #662 9448:312:5-9557:313:1
-          pattern: variant-pattern #654 9448:312:5-9456:312:13 enum="Result" variant="Err" bindings=[-]
-          body: return-stmt #661 9460:312:17-9557:313:1
-            value: enum-constructor #660 9467:312:24-9556:312:113 enum="@3::Closing" variant="Invalid"
-              arg: construct #659 9483:312:40-9555:312:112 type="@3::Problem"
-                arg: named-arg #656 9491:312:48-9511:312:68 name="code"
-                  value: const-ref #655 9497:312:54-9511:312:68 name="@3::CLOSE_BAD_DATA"
-                arg: named-arg #658 9513:312:70-9554:312:111 name="reason"
-                  value: literal #657 9521:312:78-9554:312:111 value=string:"close reason is not valid UTF-8"
-    declaration: function-decl #723 9688:317:8-10139:330:1 name="@3::frame"
-      param: param #667 9698:317:18-9709:317:29 name="opcode"
-        type: type-ref #666 9706:317:26-9709:317:29 name="Int"
-      param: param #669 9711:317:31-9725:317:45 name="payload"
-        type: type-ref #668 9720:317:40-9725:317:45 name="Bytes"
-      result: type-ref #670 9730:317:50-9735:317:55 name="Bytes"
-      body: binding #673 9738:318:3-9758:319:1 name="size"
-        value: field-access #672 9745:318:10-9757:318:22 name="size"
-          target: name-ref #671 9745:318:10-9752:318:17 name="payload"
-      body: binding #680 9760:319:3-9807:320:1 name="head"
-        value: field-access #679 9767:319:10-9806:319:49 name="unwrap!"
-          target: call #678 9767:319:10-9798:319:41 name="Bytes.from_list" piped=false
-            arg: list-lit #677 9783:319:26-9797:319:40
-              element: binary #676 9784:319:27-9796:319:39 op=plus op-span=9788:319:31-9789:319:32
-                left: literal #674 9784:319:27-9787:319:30 value=int:128
-                right: name-ref #675 9790:319:33-9796:319:39 name="opcode"
-      body: if-stmt #694 9809:320:3-9903:323:1
-        branch: if-branch #693 9809:320:3-9897:322:1
-          condition: binary #683 9812:320:6-9822:320:16 op=less op-span=9817:320:11-9818:320:12
-            left: name-ref #681 9812:320:6-9816:320:10 name="size"
-            right: literal #682 9819:320:13-9822:320:16 value=int:126
-          body: return-stmt #692 9827:321:5-9897:322:1
-            value: call #691 9834:321:12-9896:321:74 name="Bytes.concat" piped=false
-              arg: list-lit #690 9847:321:25-9895:321:73
-                element: name-ref #684 9848:321:26-9852:321:30 name="head"
-                element: field-access #688 9854:321:32-9885:321:63 name="unwrap!"
-                  target: call #687 9854:321:32-9877:321:55 name="Bytes.from_list" piped=false
-                    arg: list-lit #686 9870:321:48-9876:321:54
-                      element: name-ref #685 9871:321:49-9875:321:53 name="size"
-                element: name-ref #689 9887:321:65-9894:321:72 name="payload"
-      body: if-stmt #711 9906:324:3-10036:327:1
-        branch: if-branch #710 9906:324:3-10030:326:1
-          condition: binary #697 9909:324:6-9921:324:18 op=less op-span=9914:324:11-9915:324:12
-            left: name-ref #695 9909:324:6-9913:324:10 name="size"
-            right: literal #696 9916:324:13-9921:324:18 value=int:65536
-          body: return-stmt #709 9926:325:5-10030:326:1
-            value: call #708 9933:325:12-10029:325:108 name="Bytes.concat" piped=false
-              arg: list-lit #707 9946:325:25-10028:325:107
-                element: name-ref #698 9947:325:26-9951:325:30 name="head"
-                element: field-access #702 9953:325:32-9983:325:62 name="unwrap!"
-                  target: call #701 9953:325:32-9975:325:54 name="Bytes.from_list" piped=false
-                    arg: list-lit #700 9969:325:48-9974:325:53
-                      element: literal #699 9970:325:49-9973:325:52 value=int:126
-                element: field-access #705 9985:325:64-10018:325:97 name="unwrap!"
-                  target: call #704 9985:325:64-10010:325:89 name="@4::write_u16_be" piped=false
-                    arg: name-ref #703 10005:325:84-10009:325:88 name="size"
-                element: name-ref #706 10020:325:99-10027:325:106 name="payload"
-      body: return-stmt #722 10039:328:3-10135:329:1
-        value: call #721 10046:328:10-10134:328:98 name="Bytes.concat" piped=false
-          arg: list-lit #720 10059:328:23-10133:328:97
-            element: name-ref #712 10060:328:24-10064:328:28 name="head"
-            element: field-access #716 10066:328:30-10096:328:60 name="unwrap!"
-              target: call #715 10066:328:30-10088:328:52 name="Bytes.from_list" piped=false
-                arg: list-lit #714 10082:328:46-10087:328:51
-                  element: literal #713 10083:328:47-10086:328:50 value=int:127
-            element: call #718 10098:328:62-10123:328:87 name="@4::write_i64_be" piped=false
-              arg: name-ref #717 10118:328:82-10122:328:86 name="size"
-            element: name-ref #719 10125:328:89-10132:328:96 name="payload"
-    declaration: function-decl #733 10182:332:8-10257:335:1 name="@3::text_frame"
-      param: param #726 10197:332:23-10209:332:35 name="text"
-        type: type-ref #725 10203:332:29-10209:332:35 name="String"
-      result: type-ref #727 10214:332:40-10219:332:45 name="Bytes"
-      body: return-stmt #732 10222:333:3-10253:334:1
-        value: call #731 10229:333:10-10252:333:33 name="@3::frame" piped=false
-          arg: const-ref #728 10235:333:16-10239:333:20 name="@3::TEXT"
-          arg: field-access #730 10241:333:22-10251:333:32 name="bytes"
-            target: name-ref #729 10241:333:22-10245:333:26 name="text"
-    declaration: function-decl #742 10302:337:8-10374:340:1 name="@3::binary_frame"
-      param: param #736 10319:337:25-10330:337:36 name="data"
-        type: type-ref #735 10325:337:31-10330:337:36 name="Bytes"
-      result: type-ref #737 10335:337:41-10340:337:46 name="Bytes"
-      body: return-stmt #741 10343:338:3-10370:339:1
-        value: call #740 10350:338:10-10369:338:29 name="@3::frame" piped=false
-          arg: const-ref #738 10356:338:16-10362:338:22 name="@3::BINARY"
-          arg: name-ref #739 10364:338:24-10368:338:28 name="data"
-    declaration: function-decl #751 10417:342:8-10485:345:1 name="@3::ping_frame"
-      param: param #745 10432:342:23-10443:342:34 name="data"
-        type: type-ref #744 10438:342:29-10443:342:34 name="Bytes"
-      result: type-ref #746 10448:342:39-10453:342:44 name="Bytes"
-      body: return-stmt #750 10456:343:3-10481:344:1
-        value: call #749 10463:343:10-10480:343:27 name="@3::frame" piped=false
-          arg: const-ref #747 10469:343:16-10473:343:20 name="@3::PING"
-          arg: name-ref #748 10475:343:22-10479:343:26 name="data"
-    declaration: function-decl #760 10528:347:8-10596:350:1 name="@3::pong_frame"
-      param: param #754 10543:347:23-10554:347:34 name="data"
-        type: type-ref #753 10549:347:29-10554:347:34 name="Bytes"
-      result: type-ref #755 10559:347:39-10564:347:44 name="Bytes"
-      body: return-stmt #759 10567:348:3-10592:349:1
-        value: call #758 10574:348:10-10591:348:27 name="@3::frame" piped=false
-          arg: const-ref #756 10580:348:16-10584:348:20 name="@3::PONG"
-          arg: name-ref #757 10586:348:22-10590:348:26 name="data"
-    declaration: function-decl #777 10699:352:8-10850:355:1 name="@3::close_frame"
-      param: param #763 10715:352:24-10724:352:33 name="code"
-        type: type-ref #762 10721:352:30-10724:352:33 name="Int"
-      param: param #765 10726:352:35-10740:352:49 name="reason"
-        type: type-ref #764 10734:352:43-10740:352:49 name="String"
-      result: type-ref #766 10745:352:54-10750:352:59 name="Bytes"
-      body: return-stmt #776 10753:353:3-10846:354:1
-        value: call #775 10760:353:10-10845:353:95 name="@3::frame" piped=false
-          arg: const-ref #767 10766:353:16-10771:353:21 name="@3::CLOSE"
-          arg: call #774 10773:353:23-10844:353:94 name="Bytes.concat" piped=false
-            arg: list-lit #773 10786:353:36-10843:353:93
-              element: field-access #770 10787:353:37-10820:353:70 name="unwrap!"
-                target: call #769 10787:353:37-10812:353:62 name="@4::write_u16_be" piped=false
-                  arg: name-ref #768 10807:353:57-10811:353:61 name="code"
-              element: call #772 10822:353:72-10842:353:92 name="@3::short_reason" piped=false
-                arg: name-ref #771 10835:353:85-10841:353:91 name="reason"
-    declaration: function-decl #813 10957:357:8-11144:364:1 name="@3::valid_code?"
-      param: param #780 10973:357:24-10982:357:33 name="code"
-        type: type-ref #779 10979:357:30-10982:357:33 name="Int"
-      result: type-ref #781 10987:357:38-10991:357:42 name="Bool"
-      body: if-stmt #792 10994:358:3-11049:361:1
-        branch: if-branch #791 10994:358:3-11043:360:1
-          condition: binary #788 10997:358:6-11026:358:35 op=and op-span=11010:358:19-11013:358:22
-            left: binary #784 10997:358:6-11009:358:18 op=greater-equal op-span=11002:358:11-11004:358:13
-              left: name-ref #782 10997:358:6-11001:358:10 name="code"
-              right: literal #783 11005:358:14-11009:358:18 value=int:3000
-            right: binary #787 11014:358:23-11026:358:35 op=less-equal op-span=11019:358:28-11021:358:30
-              left: name-ref #785 11014:358:23-11018:358:27 name="code"
-              right: literal #786 11022:358:31-11026:358:35 value=int:4999
-          body: return-stmt #790 11031:359:5-11043:360:1
-            value: literal #789 11038:359:12-11042:359:16 value=bool:true
-      body: return-stmt #812 11052:362:3-11140:363:1
-        value: binary #811 11059:362:10-11139:362:90 op=and op-span=11123:362:74-11126:362:77
-          left: binary #807 11059:362:10-11122:362:73 op=and op-span=11106:362:57-11109:362:60
-            left: binary #803 11059:362:10-11105:362:56 op=and op-span=11089:362:40-11092:362:43
-              left: binary #799 11059:362:10-11088:362:39 op=and op-span=11072:362:23-11075:362:26
-                left: binary #795 11059:362:10-11071:362:22 op=greater-equal op-span=11064:362:15-11066:362:17
-                  left: name-ref #793 11059:362:10-11063:362:14 name="code"
-                  right: literal #794 11067:362:18-11071:362:22 value=int:1000
-                right: binary #798 11076:362:27-11088:362:39 op=less-equal op-span=11081:362:32-11083:362:34
-                  left: name-ref #796 11076:362:27-11080:362:31 name="code"
-                  right: literal #797 11084:362:35-11088:362:39 value=int:1014
-              right: binary #802 11093:362:44-11105:362:56 op=not-equal op-span=11098:362:49-11100:362:51
-                left: name-ref #800 11093:362:44-11097:362:48 name="code"
-                right: literal #801 11101:362:52-11105:362:56 value=int:1004
-            right: binary #806 11110:362:61-11122:362:73 op=not-equal op-span=11115:362:66-11117:362:68
-              left: name-ref #804 11110:362:61-11114:362:65 name="code"
-              right: literal #805 11118:362:69-11122:362:73 value=int:1005
-          right: binary #810 11127:362:78-11139:362:90 op=not-equal op-span=11132:362:83-11134:362:85
-            left: name-ref #808 11127:362:78-11131:362:82 name="code"
-            right: literal #809 11135:362:86-11139:362:90 value=int:1006
-    declaration: function-decl #830 11145:365:1-11254:368:1 name="@3::known_opcode?"
-      param: param #816 11163:365:19-11174:365:30 name="opcode"
-        type: type-ref #815 11171:365:27-11174:365:30 name="Int"
-      result: type-ref #817 11179:365:35-11183:365:39 name="Bool"
-      body: return-stmt #829 11186:366:3-11250:367:1
-        value: binary #828 11193:366:10-11249:366:66 op=or op-span=11210:366:27-11212:366:29
-          left: binary #820 11193:366:10-11209:366:26 op=less-equal op-span=11200:366:17-11202:366:19
-            left: name-ref #818 11193:366:10-11199:366:16 name="opcode"
-            right: const-ref #819 11203:366:20-11209:366:26 name="@3::BINARY"
-          right: binary #827 11214:366:31-11248:366:65 op=and op-span=11230:366:47-11233:366:50
-            left: binary #823 11214:366:31-11229:366:46 op=greater-equal op-span=11221:366:38-11223:366:40
-              left: name-ref #821 11214:366:31-11220:366:37 name="opcode"
-              right: const-ref #822 11224:366:41-11229:366:46 name="@3::CLOSE"
-            right: binary #826 11234:366:51-11248:366:65 op=less-equal op-span=11241:366:58-11243:366:60
-              left: name-ref #824 11234:366:51-11240:366:57 name="opcode"
-              right: const-ref #825 11244:366:61-11248:366:65 name="@3::PONG"
-    declaration: function-decl #862 11369:370:1-11693:381:1 name="@3::check_control"
-      param: param #832 11387:370:19-11397:370:29 name="head"
-        type: type-ref #831 11393:370:25-11397:370:29 name="@3::Head"
-      result: type-ref #834 11402:370:34-11419:370:51 name="Optional"
-        arg: type-ref #833 11411:370:43-11418:370:50 name="@3::Problem"
-      body: if-stmt #846 11422:371:3-11539:374:1
-        branch: if-branch #845 11422:371:3-11533:373:1
-          condition: unary #837 11425:371:6-11437:371:18 op=not op-span=11425:371:6-11428:371:9
-            operand: field-access #836 11429:371:10-11437:371:18 name="fin"
-              target: name-ref #835 11429:371:10-11433:371:14 name="head"
-          body: return-stmt #844 11442:372:5-11533:373:1
-            value: call #843 11449:372:12-11532:372:95 name="some" piped=false
-              arg: construct #842 11454:372:17-11531:372:94 type="@3::Problem"
-                arg: named-arg #839 11462:372:25-11482:372:45 name="code"
-                  value: const-ref #838 11468:372:31-11482:372:45 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #841 11484:372:47-11530:372:93 name="reason"
-                  value: literal #840 11492:372:55-11530:372:93 value=string:"a control frame cannot be fragmented"
-      body: if-stmt #859 11542:375:3-11674:378:1
-        branch: if-branch #858 11542:375:3-11668:377:1
-          condition: binary #850 11545:375:6-11572:375:33 op=greater op-span=11557:375:18-11558:375:19
-            left: field-access #848 11545:375:6-11556:375:17 name="length"
-              target: name-ref #847 11545:375:6-11549:375:10 name="head"
-            right: const-ref #849 11559:375:20-11572:375:33 name="@3::CONTROL_BYTES"
-          body: return-stmt #857 11577:376:5-11668:377:1
-            value: call #856 11584:376:12-11667:376:95 name="some" piped=false
-              arg: construct #855 11589:376:17-11666:376:94 type="@3::Problem"
-                arg: named-arg #852 11597:376:25-11617:376:45 name="code"
-                  value: const-ref #851 11603:376:31-11617:376:45 name="@3::CLOSE_PROTOCOL"
-                arg: named-arg #854 11619:376:47-11665:376:93 name="reason"
-                  value: literal #853 11627:376:55-11665:376:93 value=string:"a control frame is at most 125 bytes"
-      body: return-stmt #861 11677:379:3-11689:380:1
-        value: call #860 11684:379:10-11688:379:14 name="none" piped=false
-    declaration: function-decl #887 11694:382:1-11921:389:1 name="@3::finished"
-      param: param #864 11707:382:14-11717:382:24 name="text"
-        type: type-ref #863 11713:382:20-11717:382:24 name="Bool"
-      param: param #866 11719:382:26-11730:382:37 name="data"
-        type: type-ref #865 11725:382:32-11730:382:37 name="Bytes"
-      result: type-ref #867 11735:382:42-11740:382:47 name="@3::Taken"
-      body: if-stmt #881 11743:383:3-11867:386:1
-        branch: if-branch #880 11743:383:3-11861:385:1
-          condition: binary #872 11746:383:6-11770:383:30 op=and op-span=11751:383:11-11754:383:14
-            left: name-ref #868 11746:383:6-11750:383:10 name="text"
-            right: unary #871 11755:383:15-11770:383:30 op=not op-span=11755:383:15-11758:383:18
-              operand: call #870 11759:383:19-11770:383:30 name="@3::utf8?" piped=false
-                arg: name-ref #869 11765:383:25-11769:383:29 name="data"
-          body: return-stmt #879 11775:384:5-11861:385:1
-            value: enum-constructor #878 11782:384:12-11860:384:90 enum="@3::Taken" variant="Broken"
-              arg: construct #877 11795:384:25-11859:384:89 type="@3::Problem"
-                arg: named-arg #874 11803:384:33-11823:384:53 name="code"
-                  value: const-ref #873 11809:384:39-11823:384:53 name="@3::CLOSE_BAD_DATA"
-                arg: named-arg #876 11825:384:55-11858:384:88 name="reason"
-                  value: literal #875 11833:384:63-11858:384:88 value=string:"text is not valid UTF-8"
-      body: return-stmt #886 11870:387:3-11917:388:1
-        value: enum-constructor #885 11877:387:10-11916:387:49 enum="@3::Taken" variant="Whole"
-          arg: name-ref #882 11889:387:22-11893:387:26 name="text"
-          arg: name-ref #883 11895:387:28-11899:387:32 name="data"
-          arg: call #884 11901:387:34-11915:387:48 name="@3::new_assembly" piped=false
-    declaration: function-decl #922 11991:391:1-12235:404:1 name="@3::short_reason"
-      param: param #889 12008:391:18-12022:391:32 name="reason"
-        type: type-ref #888 12016:391:26-12022:391:32 name="String"
-      result: type-ref #890 12027:391:37-12032:391:42 name="Bytes"
-      body: binding #893 12035:392:3-12055:393:1 name="data"
-        value: field-access #892 12042:392:10-12054:392:22 name="bytes"
-          target: name-ref #891 12042:392:10-12048:392:16 name="reason"
-      body: if-stmt #901 12057:393:3-12108:396:1
-        branch: if-branch #900 12057:393:3-12102:395:1
-          condition: binary #897 12060:393:6-12085:393:31 op=less-equal op-span=12070:393:16-12072:393:18
-            left: field-access #895 12060:393:6-12069:393:15 name="size"
-              target: name-ref #894 12060:393:6-12064:393:10 name="data"
-            right: const-ref #896 12073:393:19-12085:393:31 name="@3::REASON_BYTES"
-          body: return-stmt #899 12090:394:5-12102:395:1
-            value: name-ref #898 12097:394:12-12101:394:16 name="data"
-      body: binding #903 12111:397:3-12131:398:1 name="size"
-        value: const-ref #902 12118:397:10-12130:397:22 name="@3::REASON_BYTES"
-      body: while-stmt #917 12133:398:3-12205:401:1
-        condition: binary #912 12139:398:9-12178:398:48 op=and op-span=12148:398:18-12151:398:21
-          left: binary #906 12139:398:9-12147:398:17 op=greater op-span=12144:398:14-12145:398:15
-            left: name-ref #904 12139:398:9-12143:398:13 name="size"
-            right: literal #905 12146:398:16-12147:398:17 value=int:0
-          right: unary #911 12152:398:22-12178:398:48 op=not op-span=12152:398:22-12155:398:25
-            operand: call #910 12156:398:26-12178:398:48 name="@3::utf8?" piped=false
-              arg: method-call #909 12162:398:32-12177:398:47 name="take"
-                target: name-ref #907 12162:398:32-12166:398:36 name="data"
-                arg: name-ref #908 12172:398:42-12176:398:46 name="size"
-        body: binding #916 12183:399:5-12199:400:1 name="size"
-          value: binary #915 12190:399:12-12198:399:20 op=minus op-span=12195:399:17-12196:399:18
-            left: name-ref #913 12190:399:12-12194:399:16 name="size"
-            right: literal #914 12197:399:19-12198:399:20 value=int:1
-      body: return-stmt #921 12208:402:3-12231:403:1
-        value: method-call #920 12215:402:10-12230:402:25 name="take"
-          target: name-ref #918 12215:402:10-12219:402:14 name="data"
-          arg: name-ref #919 12225:402:20-12229:402:24 name="size"
-    declaration: function-decl #937 12236:405:1-12362:411:1 name="@3::utf8?"
-      param: param #924 12246:405:11-12257:405:22 name="data"
-        type: type-ref #923 12252:405:17-12257:405:22 name="Bytes"
-      result: type-ref #925 12262:405:27-12266:405:31 name="Bool"
-      body: case-stmt #936 12269:406:3-12358:410:1
-        value: call #927 12274:406:8-12297:406:31 name="String.from_bytes" piped=false
-          arg: name-ref #926 12292:406:26-12296:406:30 name="data"
-        arm: case-arm #931 12302:407:5-12323:408:1
-          pattern: variant-pattern #928 12302:407:5-12307:407:10 enum="Result" variant="Ok" bindings=[-]
-          body: return-stmt #930 12311:407:14-12323:408:1
-            value: literal #929 12318:407:21-12322:407:25 value=bool:true
-        arm: case-arm #935 12327:408:5-12352:409:1
-          pattern: variant-pattern #932 12327:408:5-12335:408:13 enum="Result" variant="Err" bindings=[-]
-          body: return-stmt #934 12339:408:17-12352:409:1
-            value: literal #933 12346:408:24-12351:408:29 value=bool:false
-    declaration: function-decl #952 12363:412:1-12502:421:1 name="@3::token_byte?"
-      param: param #939 12379:412:17-12388:412:26 name="byte"
-        type: type-ref #938 12385:412:23-12388:412:26 name="Int"
-      result: type-ref #940 12393:412:31-12397:412:35 name="Bool"
-      body: for-stmt #949 12400:413:3-12482:418:1 variable="allowed"
-        iterable: const-ref #941 12415:413:18-12426:413:29 name="@3::TOKEN_BYTES"
-        body: if-stmt #948 12431:414:5-12476:417:1
-          branch: if-branch #947 12431:414:5-12468:416:1
-            condition: binary #944 12434:414:8-12449:414:23 op=equal op-span=12442:414:16-12444:414:18
-              left: name-ref #942 12434:414:8-12441:414:15 name="allowed"
-              right: name-ref #943 12445:414:19-12449:414:23 name="byte"
-            body: return-stmt #946 12456:415:7-12468:416:1
-              value: literal #945 12463:415:14-12467:415:18 value=bool:true
-      body: return-stmt #951 12485:419:3-12498:420:1
-        value: literal #950 12492:419:10-12497:419:15 value=bool:false
+      body: return-stmt #102 3111:88:3-3185:89:1
+        value: call #101 3118:88:10-3184:88:76 name="Base64.strict_encode64" piped=false
+          arg: call #100 3141:88:33-3183:88:75 name="OpenSSL.Digest.sha1" piped=false
+            arg: field-access #99 3161:88:53-3182:88:74 name="bytes"
+              target: interpolation #98 3161:88:53-3176:88:68
+                part: name-ref #96 3164:88:56-3167:88:59 name="key"
+                part: const-ref #97 3170:88:62-3174:88:66 name="@3::GUID"
+    declaration: function-decl #122 3293:92:8-3461:98:1 name="@3::valid_accept?"
+      param: param #106 3311:92:26-3325:92:40 name="accept"
+        type: type-ref #105 3319:92:34-3325:92:40 name="String"
+      result: type-ref #107 3330:92:45-3334:92:49 name="Bool"
+      body: case-stmt #121 3337:93:3-3457:97:1
+        value: call #109 3342:93:8-3372:93:38 name="Base64.strict_decode64" piped=false
+          arg: name-ref #108 3365:93:31-3371:93:37 name="accept"
+        arm: case-arm #116 3377:94:5-3422:95:1
+          pattern: variant-pattern #110 3377:94:5-3385:94:13 enum="Result" variant="Ok" bindings=["data"]
+          body: return-stmt #115 3389:94:17-3422:95:1
+            value: binary #114 3396:94:24-3421:94:49 op=equal op-span=3406:94:34-3408:94:36
+              left: field-access #112 3396:94:24-3405:94:33 name="size"
+                target: name-ref #111 3396:94:24-3400:94:28 name="data"
+              right: const-ref #113 3409:94:37-3421:94:49 name="@3::ACCEPT_BYTES"
+        arm: case-arm #120 3426:95:5-3451:96:1
+          pattern: variant-pattern #117 3426:95:5-3434:95:13 enum="Result" variant="Err" bindings=[-]
+          body: return-stmt #119 3438:95:17-3451:96:1
+            value: literal #118 3445:95:24-3450:95:29 value=bool:false
+    declaration: function-decl #139 3640:101:8-3779:110:1 name="@3::token?"
+      param: param #125 3651:101:19-3663:101:31 name="name"
+        type: type-ref #124 3657:101:25-3663:101:31 name="String"
+      result: type-ref #126 3668:101:36-3672:101:40 name="Bool"
+      body: for-stmt #136 3675:102:3-3760:107:1 variable="byte"
+        iterable: field-access #128 3687:102:15-3697:102:25 name="bytes"
+          target: name-ref #127 3687:102:15-3691:102:19 name="name"
+        body: if-stmt #135 3702:103:5-3754:106:1
+          branch: if-branch #134 3702:103:5-3746:105:1
+            condition: unary #131 3705:103:8-3726:103:29 op=not op-span=3705:103:8-3708:103:11
+              operand: call #130 3709:103:12-3726:103:29 name="@3::token_byte?" piped=false
+                arg: name-ref #129 3721:103:24-3725:103:28 name="byte"
+            body: return-stmt #133 3733:104:7-3746:105:1
+              value: literal #132 3740:104:14-3745:104:19 value=bool:false
+      body: return-stmt #138 3763:108:3-3775:109:1
+        value: literal #137 3770:108:10-3774:108:14 value=bool:true
+    declaration: function-decl #158 3844:112:8-4000:118:1 name="@3::valid_key?"
+      param: param #142 3859:112:23-3870:112:34 name="key"
+        type: type-ref #141 3864:112:28-3870:112:34 name="String"
+      result: type-ref #143 3875:112:39-3879:112:43 name="Bool"
+      body: case-stmt #157 3882:113:3-3996:117:1
+        value: call #145 3887:113:8-3914:113:35 name="Base64.strict_decode64" piped=false
+          arg: name-ref #144 3910:113:31-3913:113:34 name="key"
+        arm: case-arm #152 3919:114:5-3961:115:1
+          pattern: variant-pattern #146 3919:114:5-3927:114:13 enum="Result" variant="Ok" bindings=["data"]
+          body: return-stmt #151 3931:114:17-3961:115:1
+            value: binary #150 3938:114:24-3960:114:46 op=equal op-span=3948:114:34-3950:114:36
+              left: field-access #148 3938:114:24-3947:114:33 name="size"
+                target: name-ref #147 3938:114:24-3942:114:28 name="data"
+              right: const-ref #149 3951:114:37-3960:114:46 name="@3::KEY_BYTES"
+        arm: case-arm #156 3965:115:5-3990:116:1
+          pattern: variant-pattern #153 3965:115:5-3973:115:13 enum="Result" variant="Err" bindings=[-]
+          body: return-stmt #155 3977:115:17-3990:116:1
+            value: literal #154 3984:115:24-3989:115:29 value=bool:false
+    declaration: function-decl #180 4124:120:8-4296:129:1 name="@3::has_token?"
+      param: param #161 4139:120:23-4152:120:36 name="value"
+        type: type-ref #160 4146:120:30-4152:120:36 name="String"
+      param: param #163 4154:120:38-4167:120:51 name="token"
+        type: type-ref #162 4161:120:45-4167:120:51 name="String"
+      result: type-ref #164 4172:120:56-4176:120:60 name="Bool"
+      body: for-stmt #177 4179:121:3-4276:126:1 variable="part"
+        iterable: method-call #167 4191:121:15-4207:121:31 name="split"
+          target: name-ref #165 4191:121:15-4196:121:20 name="value"
+          arg: literal #166 4203:121:27-4206:121:30 value=string:","
+        body: if-stmt #176 4212:122:5-4270:125:1
+          branch: if-branch #175 4212:122:5-4262:124:1
+            condition: binary #172 4215:122:8-4243:122:36 op=equal op-span=4235:122:28-4237:122:30
+              left: field-access #170 4215:122:8-4234:122:27 name="downcase"
+                target: field-access #169 4215:122:8-4225:122:18 name="strip"
+                  target: name-ref #168 4215:122:8-4219:122:12 name="part"
+              right: name-ref #171 4238:122:31-4243:122:36 name="token"
+            body: return-stmt #174 4250:123:7-4262:124:1
+              value: literal #173 4257:123:14-4261:123:18 value=bool:true
+      body: return-stmt #179 4279:127:3-4292:128:1
+        value: literal #178 4286:127:10-4291:127:15 value=bool:false
+    declaration: function-decl #219 4372:131:8-4617:143:1 name="@3::head_of"
+      param: param #183 4384:131:20-4394:131:30 name="two"
+        type: type-ref #182 4389:131:25-4394:131:30 name="Bytes"
+      result: type-ref #184 4399:131:35-4403:131:39 name="@3::Head"
+      body: binding #188 4406:132:3-4424:133:1 name="first"
+        value: method-call #187 4414:132:11-4423:132:20 name="at"
+          target: name-ref #185 4414:132:11-4417:132:14 name="two"
+          arg: literal #186 4421:132:18-4422:132:19 value=int:0
+      body: binding #192 4426:133:3-4445:134:1 name="second"
+        value: method-call #191 4435:133:12-4444:133:21 name="at"
+          target: name-ref #189 4435:133:12-4438:133:15 name="two"
+          arg: literal #190 4442:133:19-4443:133:20 value=int:1
+      body: return-stmt #218 4447:134:3-4613:142:1
+        value: construct #217 4454:134:10-4612:141:4 type="@3::Head"
+          arg: named-arg #196 4464:135:5-4481:135:22 name="fin"
+            value: binary #195 4469:135:10-4481:135:22 op=greater-equal op-span=4475:135:16-4477:135:18
+              left: name-ref #193 4469:135:10-4474:135:15 name="first"
+              right: literal #194 4478:135:19-4481:135:22 value=int:128
+          arg: named-arg #200 4487:136:5-4505:136:23 name="opcode"
+            value: binary #199 4495:136:13-4505:136:23 op=modulo op-span=4501:136:19-4502:136:20
+              left: name-ref #197 4495:136:13-4500:136:18 name="first"
+              right: literal #198 4503:136:21-4505:136:23 value=int:16
+          arg: named-arg #204 4511:137:5-4532:137:26 name="masked"
+            value: binary #203 4519:137:13-4532:137:26 op=greater-equal op-span=4526:137:20-4528:137:22
+              left: name-ref #201 4519:137:13-4525:137:19 name="second"
+              right: literal #202 4529:137:23-4532:137:26 value=int:128
+          arg: named-arg #210 4538:138:5-4564:138:31 name="reserved"
+            value: binary #209 4548:138:15-4564:138:31 op=modulo op-span=4561:138:28-4562:138:29
+              left: binary #207 4549:138:16-4559:138:26 op=divide op-span=4555:138:22-4556:138:23
+                left: name-ref #205 4549:138:16-4554:138:21 name="first"
+                right: literal #206 4557:138:24-4559:138:26 value=int:16
+              right: literal #208 4563:138:30-4564:138:31 value=int:8
+          arg: named-arg #214 4570:139:5-4590:139:25 name="length"
+            value: binary #213 4578:139:13-4590:139:25 op=modulo op-span=4585:139:20-4586:139:21
+              left: name-ref #211 4578:139:13-4584:139:19 name="second"
+              right: literal #212 4587:139:22-4590:139:25 value=int:128
+          arg: named-arg #216 4596:140:5-4607:140:16 name="key"
+            value: const-ref #215 4601:140:10-4607:140:16 name="@3::NO_KEY"
+    declaration: function-decl #252 4743:145:8-4946:161:1 name="@3::tail_size"
+      param: param #222 4757:145:22-4767:145:32 name="head"
+        type: type-ref #221 4763:145:28-4767:145:32 name="@3::Head"
+      result: type-ref #223 4772:145:37-4775:145:40 name="Int"
+      body: binding #225 4778:146:3-4787:147:1 name="size"
+        value: literal #224 4785:146:10-4786:146:11 value=int:0
+      body: if-stmt #233 4789:147:3-4830:150:1
+        branch: if-branch #232 4789:147:3-4824:149:1
+          condition: binary #229 4792:147:6-4810:147:24 op=equal op-span=4804:147:18-4806:147:20
+            left: field-access #227 4792:147:6-4803:147:17 name="length"
+              target: name-ref #226 4792:147:6-4796:147:10 name="head"
+            right: literal #228 4807:147:21-4810:147:24 value=int:126
+          body: binding #231 4815:148:5-4824:149:1 name="size"
+            value: literal #230 4822:148:12-4823:148:13 value=int:2
+      body: if-stmt #241 4833:151:3-4874:154:1
+        branch: if-branch #240 4833:151:3-4868:153:1
+          condition: binary #237 4836:151:6-4854:151:24 op=equal op-span=4848:151:18-4850:151:20
+            left: field-access #235 4836:151:6-4847:151:17 name="length"
+              target: name-ref #234 4836:151:6-4840:151:10 name="head"
+            right: literal #236 4851:151:21-4854:151:24 value=int:127
+          body: binding #239 4859:152:5-4868:153:1 name="size"
+            value: literal #238 4866:152:12-4867:152:13 value=int:8
+      body: if-stmt #249 4877:155:3-4927:158:1
+        branch: if-branch #248 4877:155:3-4921:157:1
+          condition: field-access #243 4880:155:6-4891:155:17 name="masked"
+            target: name-ref #242 4880:155:6-4884:155:10 name="head"
+          body: binding #247 4896:156:5-4921:157:1 name="size"
+            value: binary #246 4903:156:12-4920:156:29 op=plus op-span=4908:156:17-4909:156:18
+              left: name-ref #244 4903:156:12-4907:156:16 name="size"
+              right: const-ref #245 4910:156:19-4920:156:29 name="@3::MASK_BYTES"
+      body: return-stmt #251 4930:159:3-4942:160:1
+        value: name-ref #250 4937:159:10-4941:159:14 name="size"
+    declaration: function-decl #321 5027:163:8-5540:190:1 name="@3::complete"
+      param: param #255 5040:163:21-5050:163:31 name="head"
+        type: type-ref #254 5046:163:27-5050:163:31 name="@3::Head"
+      param: param #257 5052:163:33-5063:163:44 name="tail"
+        type: type-ref #256 5058:163:39-5063:163:44 name="Bytes"
+      result: type-ref #258 5068:163:49-5072:163:53 name="@3::Head"
+      body: binding #261 5075:164:3-5096:165:1 name="length"
+        value: field-access #260 5084:164:12-5095:164:23 name="length"
+          target: name-ref #259 5084:164:12-5088:164:16 name="head"
+      body: binding #263 5098:165:3-5107:166:1 name="used"
+        value: literal #262 5105:165:10-5106:165:11 value=int:0
+      body: if-stmt #276 5109:166:3-5199:170:1
+        branch: if-branch #275 5109:166:3-5193:169:1
+          condition: binary #267 5112:166:6-5130:166:24 op=equal op-span=5124:166:18-5126:166:20
+            left: field-access #265 5112:166:6-5123:166:17 name="length"
+              target: name-ref #264 5112:166:6-5116:166:10 name="head"
+            right: literal #266 5127:166:21-5130:166:24 value=int:126
+          body: binding #272 5135:167:5-5180:168:1 name="length"
+            value: field-access #271 5144:167:14-5179:167:49 name="unwrap!"
+              target: call #270 5144:167:14-5171:167:41 name="@4::read_u16_be" piped=false
+                arg: name-ref #268 5163:167:33-5167:167:37 name="tail"
+                arg: literal #269 5169:167:39-5170:167:40 value=int:0
+          body: binding #274 5184:168:5-5193:169:1 name="used"
+            value: literal #273 5191:168:12-5192:168:13 value=int:2
+      body: if-stmt #291 5202:171:3-5306:175:1
+        branch: if-branch #290 5202:171:3-5300:174:1
+          condition: binary #280 5205:171:6-5223:171:24 op=equal op-span=5217:171:18-5219:171:20
+            left: field-access #278 5205:171:6-5216:171:17 name="length"
+              target: name-ref #277 5205:171:6-5209:171:10 name="head"
+            right: literal #279 5220:171:21-5223:171:24 value=int:127
+          body: binding #287 5228:172:5-5287:173:1 name="length"
+            value: call #286 5237:172:14-5286:172:63 name="Result.unwrap_or" piped=false
+              arg: call #283 5254:172:31-5281:172:58 name="@4::read_u64_be" piped=false
+                arg: name-ref #281 5273:172:50-5277:172:54 name="tail"
+                arg: literal #282 5279:172:56-5280:172:57 value=int:0
+              arg: unary #285 5283:172:60-5285:172:62 op=minus op-span=5283:172:60-5284:172:61
+                operand: literal #284 5284:172:61-5285:172:62 value=int:1
+          body: binding #289 5291:173:5-5300:174:1 name="used"
+            value: literal #288 5298:173:12-5299:173:13 value=int:8
+      body: binding #293 5309:176:3-5322:177:1 name="key"
+        value: const-ref #292 5315:176:9-5321:176:15 name="@3::NO_KEY"
+      body: if-stmt #302 5324:177:3-5384:180:1
+        branch: if-branch #301 5324:177:3-5378:179:1
+          condition: field-access #295 5327:177:6-5338:177:17 name="masked"
+            target: name-ref #294 5327:177:6-5331:177:10 name="head"
+          body: binding #300 5343:178:5-5378:179:1 name="key"
+            value: method-call #299 5349:178:11-5377:178:39 name="slice"
+              target: name-ref #296 5349:178:11-5353:178:15 name="tail"
+              arg: name-ref #297 5360:178:22-5364:178:26 name="used"
+              arg: const-ref #298 5366:178:28-5376:178:38 name="@3::MASK_BYTES"
+      body: return-stmt #320 5387:181:3-5536:189:1
+        value: construct #319 5394:181:10-5535:188:4 type="@3::Head"
+          arg: named-arg #305 5404:182:5-5417:182:18 name="fin"
+            value: field-access #304 5409:182:10-5417:182:18 name="fin"
+              target: name-ref #303 5409:182:10-5413:182:14 name="head"
+          arg: named-arg #308 5423:183:5-5442:183:24 name="opcode"
+            value: field-access #307 5431:183:13-5442:183:24 name="opcode"
+              target: name-ref #306 5431:183:13-5435:183:17 name="head"
+          arg: named-arg #311 5448:184:5-5467:184:24 name="masked"
+            value: field-access #310 5456:184:13-5467:184:24 name="masked"
+              target: name-ref #309 5456:184:13-5460:184:17 name="head"
+          arg: named-arg #314 5473:185:5-5496:185:28 name="reserved"
+            value: field-access #313 5483:185:15-5496:185:28 name="reserved"
+              target: name-ref #312 5483:185:15-5487:185:19 name="head"
+          arg: named-arg #316 5502:186:5-5516:186:19 name="length"
+            value: name-ref #315 5510:186:13-5516:186:19 name="length"
+          arg: named-arg #318 5522:187:5-5530:187:13 name="key"
+            value: name-ref #317 5527:187:10-5530:187:13 name="key"
+    declaration: function-decl #375 5625:192:8-6099:211:1 name="@3::check_head"
+      param: param #324 5640:192:23-5650:192:33 name="head"
+        type: type-ref #323 5646:192:29-5650:192:33 name="@3::Head"
+      result: type-ref #326 5655:192:38-5672:192:55 name="Optional"
+        arg: type-ref #325 5664:192:47-5671:192:54 name="@3::Problem"
+      body: if-stmt #339 5675:193:3-5783:196:1
+        branch: if-branch #338 5675:193:3-5777:195:1
+          condition: binary #330 5678:193:6-5696:193:24 op=not-equal op-span=5692:193:20-5694:193:22
+            left: field-access #328 5678:193:6-5691:193:19 name="reserved"
+              target: name-ref #327 5678:193:6-5682:193:10 name="head"
+            right: literal #329 5695:193:23-5696:193:24 value=int:0
+          body: return-stmt #337 5701:194:5-5777:195:1
+            value: call #336 5708:194:12-5776:194:80 name="some" piped=false
+              arg: construct #335 5713:194:17-5775:194:79 type="@3::Problem"
+                arg: named-arg #332 5721:194:25-5741:194:45 name="code"
+                  value: const-ref #331 5727:194:31-5741:194:45 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #334 5743:194:47-5774:194:78 name="reason"
+                  value: literal #333 5751:194:55-5774:194:78 value=string:"reserved bits are set"
+      body: if-stmt #351 5786:197:3-5899:200:1
+        branch: if-branch #350 5786:197:3-5893:199:1
+          condition: unary #342 5789:197:6-5804:197:21 op=not op-span=5789:197:6-5792:197:9
+            operand: field-access #341 5793:197:10-5804:197:21 name="masked"
+              target: name-ref #340 5793:197:10-5797:197:14 name="head"
+          body: return-stmt #349 5809:198:5-5893:199:1
+            value: call #348 5816:198:12-5892:198:88 name="some" piped=false
+              arg: construct #347 5821:198:17-5891:198:87 type="@3::Problem"
+                arg: named-arg #344 5829:198:25-5849:198:45 name="code"
+                  value: const-ref #343 5835:198:31-5849:198:45 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #346 5851:198:47-5890:198:86 name="reason"
+                  value: literal #345 5859:198:55-5890:198:86 value=string:"a client frame must be masked"
+      body: if-stmt #364 5902:201:3-6015:204:1
+        branch: if-branch #363 5902:201:3-6009:203:1
+          condition: unary #355 5905:201:6-5935:201:36 op=not op-span=5905:201:6-5908:201:9
+            operand: call #354 5909:201:10-5935:201:36 name="@3::known_opcode?" piped=false
+              arg: field-access #353 5923:201:24-5934:201:35 name="opcode"
+                target: name-ref #352 5923:201:24-5927:201:28 name="head"
+          body: return-stmt #362 5940:202:5-6009:203:1
+            value: call #361 5947:202:12-6008:202:73 name="some" piped=false
+              arg: construct #360 5952:202:17-6007:202:72 type="@3::Problem"
+                arg: named-arg #357 5960:202:25-5980:202:45 name="code"
+                  value: const-ref #356 5966:202:31-5980:202:45 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #359 5982:202:47-6006:202:71 name="reason"
+                  value: literal #358 5990:202:55-6006:202:71 value=string:"unknown opcode"
+      body: if-stmt #372 6018:205:3-6080:208:1
+        branch: if-branch #371 6018:205:3-6074:207:1
+          condition: call #367 6021:205:6-6042:205:27 name="@3::control?" piped=false
+            arg: field-access #366 6030:205:15-6041:205:26 name="opcode"
+              target: name-ref #365 6030:205:15-6034:205:19 name="head"
+          body: return-stmt #370 6047:206:5-6074:207:1
+            value: call #369 6054:206:12-6073:206:31 name="@3::check_control" piped=false
+              arg: name-ref #368 6068:206:26-6072:206:30 name="head"
+      body: return-stmt #374 6083:209:3-6095:210:1
+        value: call #373 6090:209:10-6094:209:14 name="none" piped=false
+    declaration: function-decl #420 6329:214:8-6665:225:1 name="@3::check_length"
+      param: param #378 6346:214:25-6356:214:35 name="head"
+        type: type-ref #377 6352:214:31-6356:214:35 name="@3::Head"
+      param: param #380 6358:214:37-6366:214:45 name="max"
+        type: type-ref #379 6363:214:42-6366:214:45 name="Int"
+      param: param #382 6368:214:47-6377:214:56 name="held"
+        type: type-ref #381 6374:214:53-6377:214:56 name="Int"
+      result: type-ref #384 6382:214:61-6399:214:78 name="Optional"
+        arg: type-ref #383 6391:214:70-6398:214:77 name="@3::Problem"
+      body: if-stmt #397 6402:215:3-6506:218:1
+        branch: if-branch #396 6402:215:3-6500:217:1
+          condition: binary #388 6405:215:6-6420:215:21 op=less op-span=6417:215:18-6418:215:19
+            left: field-access #386 6405:215:6-6416:215:17 name="length"
+              target: name-ref #385 6405:215:6-6409:215:10 name="head"
+            right: literal #387 6419:215:20-6420:215:21 value=int:0
+          body: return-stmt #395 6425:216:5-6500:217:1
+            value: call #394 6432:216:12-6499:216:79 name="some" piped=false
+              arg: construct #393 6437:216:17-6498:216:78 type="@3::Problem"
+                arg: named-arg #390 6445:216:25-6465:216:45 name="code"
+                  value: const-ref #389 6451:216:31-6465:216:45 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #392 6467:216:47-6497:216:77 name="reason"
+                  value: literal #391 6475:216:55-6497:216:77 value=string:"invalid frame length"
+      body: if-stmt #417 6509:219:3-6646:222:1
+        branch: if-branch #416 6509:219:3-6640:221:1
+          condition: binary #408 6512:219:6-6566:219:60 op=and op-span=6538:219:32-6541:219:35
+            left: unary #401 6512:219:6-6537:219:31 op=not op-span=6512:219:6-6515:219:9
+              operand: call #400 6516:219:10-6537:219:31 name="@3::control?" piped=false
+                arg: field-access #399 6525:219:19-6536:219:30 name="opcode"
+                  target: name-ref #398 6525:219:19-6529:219:23 name="head"
+            right: binary #407 6542:219:36-6566:219:60 op=greater op-span=6561:219:55-6562:219:56
+              left: binary #405 6542:219:36-6560:219:54 op=plus op-span=6547:219:41-6548:219:42
+                left: name-ref #402 6542:219:36-6546:219:40 name="held"
+                right: field-access #404 6549:219:43-6560:219:54 name="length"
+                  target: name-ref #403 6549:219:43-6553:219:47 name="head"
+              right: name-ref #406 6563:219:57-6566:219:60 name="max"
+          body: return-stmt #415 6571:220:5-6640:221:1
+            value: call #414 6578:220:12-6639:220:73 name="some" piped=false
+              arg: construct #413 6583:220:17-6638:220:72 type="@3::Problem"
+                arg: named-arg #410 6591:220:25-6610:220:44 name="code"
+                  value: const-ref #409 6597:220:31-6610:220:44 name="@3::CLOSE_TOO_BIG"
+                arg: named-arg #412 6612:220:46-6637:220:71 name="reason"
+                  value: literal #411 6620:220:54-6637:220:71 value=string:"message too big"
+      body: return-stmt #419 6649:223:3-6661:224:1
+        value: call #418 6656:223:10-6660:223:14 name="none" piped=false
+    declaration: function-decl #429 6736:227:8-6799:230:1 name="@3::control?"
+      param: param #423 6749:227:21-6760:227:32 name="opcode"
+        type: type-ref #422 6757:227:29-6760:227:32 name="Int"
+      result: type-ref #424 6765:227:37-6769:227:41 name="Bool"
+      body: return-stmt #428 6772:228:3-6795:229:1
+        value: binary #427 6779:228:10-6794:228:25 op=greater-equal op-span=6786:228:17-6788:228:19
+          left: name-ref #425 6779:228:10-6785:228:16 name="opcode"
+          right: const-ref #426 6789:228:20-6794:228:25 name="@3::CLOSE"
+    declaration: function-decl #438 6837:232:8-6898:235:1 name="@3::close?"
+      param: param #432 6848:232:19-6859:232:30 name="opcode"
+        type: type-ref #431 6856:232:27-6859:232:30 name="Int"
+      result: type-ref #433 6864:232:35-6868:232:39 name="Bool"
+      body: return-stmt #437 6871:233:3-6894:234:1
+        value: binary #436 6878:233:10-6893:233:25 op=equal op-span=6885:233:17-6887:233:19
+          left: name-ref #434 6878:233:10-6884:233:16 name="opcode"
+          right: const-ref #435 6888:233:20-6893:233:25 name="@3::CLOSE"
+    declaration: function-decl #447 6935:237:8-6994:240:1 name="@3::ping?"
+      param: param #441 6945:237:18-6956:237:29 name="opcode"
+        type: type-ref #440 6953:237:26-6956:237:29 name="Int"
+      result: type-ref #442 6961:237:34-6965:237:38 name="Bool"
+      body: return-stmt #446 6968:238:3-6990:239:1
+        value: binary #445 6975:238:10-6989:238:24 op=equal op-span=6982:238:17-6984:238:19
+          left: name-ref #443 6975:238:10-6981:238:16 name="opcode"
+          right: const-ref #444 6985:238:20-6989:238:24 name="@3::PING"
+    declaration: function-decl #489 7120:242:8-7406:257:1 name="@3::unmask"
+      param: param #450 7131:242:19-7142:242:30 name="data"
+        type: type-ref #449 7137:242:25-7142:242:30 name="Bytes"
+      param: param #452 7144:242:32-7154:242:42 name="key"
+        type: type-ref #451 7149:242:37-7154:242:42 name="Bytes"
+      result: type-ref #453 7159:242:47-7164:242:52 name="Bytes"
+      body: if-stmt #459 7167:243:3-7203:246:1
+        branch: if-branch #458 7167:243:3-7197:245:1
+          condition: field-access #455 7170:243:6-7180:243:16 name="empty?"
+            target: name-ref #454 7170:243:6-7173:243:9 name="key"
+          body: return-stmt #457 7185:244:5-7197:245:1
+            value: name-ref #456 7192:244:12-7196:244:16 name="data"
+      body: binding #462 7206:247:3-7219:248:1 name="k"
+        value: field-access #461 7210:247:7-7218:247:15 name="to_a"
+          target: name-ref #460 7210:247:7-7213:247:10 name="key"
+      body: binding #466 7221:248:3-7241:249:1 name="out"
+        type: type-ref #464 7226:248:8-7235:248:17 name="List"
+          arg: type-ref #463 7231:248:13-7234:248:16 name="Int"
+        value: list-lit #465 7238:248:20-7240:248:22
+      body: binding #468 7243:249:3-7253:250:1 name="place"
+        value: literal #467 7251:249:11-7252:249:12 value=int:0
+      body: for-stmt #484 7255:250:3-7363:254:1 variable="byte"
+        iterable: name-ref #469 7267:250:15-7271:250:19 name="data"
+        body: binding #477 7276:251:5-7320:252:1 name="out"
+          value: method-call #476 7282:251:11-7319:251:48 name="push"
+            target: name-ref #470 7282:251:11-7285:251:14 name="out"
+            arg: call #475 7291:251:20-7318:251:47 name="Int.bit_xor" piped=false
+              arg: name-ref #471 7303:251:32-7307:251:36 name="byte"
+              arg: index-access #474 7309:251:38-7317:251:46
+                target: name-ref #472 7309:251:38-7310:251:39 name="k"
+                index: name-ref #473 7311:251:40-7316:251:45 name="place"
+        body: binding #483 7324:252:5-7357:253:1 name="place"
+          value: binary #482 7332:252:13-7356:252:37 op=modulo op-span=7344:252:25-7345:252:26
+            left: binary #480 7333:252:14-7342:252:23 op=plus op-span=7339:252:20-7340:252:21
+              left: name-ref #478 7333:252:14-7338:252:19 name="place"
+              right: literal #479 7341:252:22-7342:252:23 value=int:1
+            right: const-ref #481 7346:252:27-7356:252:37 name="@3::MASK_BYTES"
+      body: return-stmt #488 7366:255:3-7402:256:1
+        value: field-access #487 7373:255:10-7401:255:38 name="unwrap!"
+          target: call #486 7373:255:10-7393:255:30 name="Bytes.from_list" piped=false
+            arg: name-ref #485 7389:255:26-7392:255:29 name="out"
+    declaration: function-decl #502 7464:259:8-7564:262:1 name="@3::new_assembly"
+      result: type-ref #491 7486:259:30-7494:259:38 name="@3::Assembly"
+      body: return-stmt #501 7497:260:3-7560:261:1
+        value: construct #500 7504:260:10-7559:260:65 type="@3::Assembly"
+          arg: named-arg #493 7513:260:19-7524:260:30 name="text"
+            value: literal #492 7519:260:25-7524:260:30 value=bool:false
+          arg: named-arg #495 7526:260:32-7537:260:43 name="open"
+            value: literal #494 7532:260:38-7537:260:43 value=bool:false
+          arg: named-arg #497 7539:260:45-7548:260:54 name="parts"
+            value: list-lit #496 7546:260:52-7548:260:54
+          arg: named-arg #499 7550:260:56-7558:260:64 name="total"
+            value: literal #498 7557:260:63-7558:260:64 value=int:0
+    declaration: function-decl #602 7885:266:8-8718:293:1 name="@3::take"
+      param: param #505 7894:266:17-7912:266:35 name="assembly"
+        type: type-ref #504 7904:266:27-7912:266:35 name="@3::Assembly"
+      param: param #507 7914:266:37-7924:266:47 name="head"
+        type: type-ref #506 7920:266:43-7924:266:47 name="@3::Head"
+      param: param #509 7926:266:49-7940:266:63 name="payload"
+        type: type-ref #508 7935:266:58-7940:266:63 name="Bytes"
+      param: param #511 7942:266:65-7950:266:73 name="max"
+        type: type-ref #510 7947:266:70-7950:266:73 name="Int"
+      result: type-ref #512 7955:266:78-7960:266:83 name="@3::Taken"
+      body: binding #517 7963:267:3-8004:268:1 name="continuing"
+        value: binary #516 7976:267:16-8003:267:43 op=equal op-span=7988:267:28-7990:267:30
+          left: field-access #514 7976:267:16-7987:267:27 name="opcode"
+            target: name-ref #513 7976:267:16-7980:267:20 name="head"
+          right: const-ref #515 7991:267:31-8003:267:43 name="@3::CONTINUATION"
+      body: if-stmt #531 8006:268:3-8145:271:1
+        branch: if-branch #530 8006:268:3-8139:270:1
+          condition: binary #522 8009:268:6-8041:268:38 op=and op-span=8020:268:17-8023:268:20
+            left: name-ref #518 8009:268:6-8019:268:16 name="continuing"
+            right: unary #521 8024:268:21-8041:268:38 op=not op-span=8024:268:21-8027:268:24
+              operand: field-access #520 8028:268:25-8041:268:38 name="open"
+                target: name-ref #519 8028:268:25-8036:268:33 name="assembly"
+          body: return-stmt #529 8046:269:5-8139:270:1
+            value: enum-constructor #528 8053:269:12-8138:269:97 enum="@3::Taken" variant="Broken"
+              arg: construct #527 8066:269:25-8137:269:96 type="@3::Problem"
+                arg: named-arg #524 8074:269:33-8094:269:53 name="code"
+                  value: const-ref #523 8080:269:39-8094:269:53 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #526 8096:269:55-8136:269:95 name="reason"
+                  value: literal #525 8104:269:63-8136:269:95 value=string:"a continuation with no message"
+      body: if-stmt #545 8148:272:3-8294:275:1
+        branch: if-branch #544 8148:272:3-8288:274:1
+          condition: binary #536 8151:272:6-8183:272:38 op=and op-span=8166:272:21-8169:272:24
+            left: unary #533 8151:272:6-8165:272:20 op=not op-span=8151:272:6-8154:272:9
+              operand: name-ref #532 8155:272:10-8165:272:20 name="continuing"
+            right: field-access #535 8170:272:25-8183:272:38 name="open"
+              target: name-ref #534 8170:272:25-8178:272:33 name="assembly"
+          body: return-stmt #543 8188:273:5-8288:274:1
+            value: enum-constructor #542 8195:273:12-8287:273:104 enum="@3::Taken" variant="Broken"
+              arg: construct #541 8208:273:25-8286:273:103 type="@3::Problem"
+                arg: named-arg #538 8216:273:33-8236:273:53 name="code"
+                  value: const-ref #537 8222:273:39-8236:273:53 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #540 8238:273:55-8285:273:102 name="reason"
+                  value: literal #539 8246:273:63-8285:273:102 value=string:"a new message inside a fragmented one"
+      body: binding #548 8297:276:3-8318:277:1 name="text"
+        value: field-access #547 8304:276:10-8317:276:23 name="text"
+          target: name-ref #546 8304:276:10-8312:276:18 name="assembly"
+      body: if-stmt #557 8320:277:3-8375:280:1
+        branch: if-branch #556 8320:277:3-8369:279:1
+          condition: unary #550 8323:277:6-8337:277:20 op=not op-span=8323:277:6-8326:277:9
+            operand: name-ref #549 8327:277:10-8337:277:20 name="continuing"
+          body: binding #555 8342:278:5-8369:279:1 name="text"
+            value: binary #554 8349:278:12-8368:278:31 op=equal op-span=8361:278:24-8363:278:26
+              left: field-access #552 8349:278:12-8360:278:23 name="opcode"
+                target: name-ref #551 8349:278:12-8353:278:16 name="head"
+              right: const-ref #553 8364:278:27-8368:278:31 name="@3::TEXT"
+      body: binding #563 8378:281:3-8416:282:1 name="total"
+        value: binary #562 8386:281:11-8415:281:40 op=plus op-span=8401:281:26-8402:281:27
+          left: field-access #559 8386:281:11-8400:281:25 name="total"
+            target: name-ref #558 8386:281:11-8394:281:19 name="assembly"
+          right: field-access #561 8403:281:28-8415:281:40 name="size"
+            target: name-ref #560 8403:281:28-8410:281:35 name="payload"
+      body: if-stmt #575 8418:282:3-8520:285:1
+        branch: if-branch #574 8418:282:3-8514:284:1
+          condition: binary #566 8421:282:6-8432:282:17 op=greater op-span=8427:282:12-8428:282:13
+            left: name-ref #564 8421:282:6-8426:282:11 name="total"
+            right: name-ref #565 8429:282:14-8432:282:17 name="max"
+          body: return-stmt #573 8437:283:5-8514:284:1
+            value: enum-constructor #572 8444:283:12-8513:283:81 enum="@3::Taken" variant="Broken"
+              arg: construct #571 8457:283:25-8512:283:80 type="@3::Problem"
+                arg: named-arg #568 8465:283:33-8484:283:52 name="code"
+                  value: const-ref #567 8471:283:39-8484:283:52 name="@3::CLOSE_TOO_BIG"
+                arg: named-arg #570 8486:283:54-8511:283:79 name="reason"
+                  value: literal #569 8494:283:62-8511:283:79 value=string:"message too big"
+      body: binding #580 8523:286:3-8560:287:1 name="parts"
+        value: method-call #579 8531:286:11-8559:286:39 name="push"
+          target: field-access #577 8531:286:11-8545:286:25 name="parts"
+            target: name-ref #576 8531:286:11-8539:286:19 name="assembly"
+          arg: name-ref #578 8551:286:31-8558:286:38 name="payload"
+      body: if-stmt #596 8562:287:3-8668:290:1
+        branch: if-branch #595 8562:287:3-8662:289:1
+          condition: unary #583 8565:287:6-8577:287:18 op=not op-span=8565:287:6-8568:287:9
+            operand: field-access #582 8569:287:10-8577:287:18 name="fin"
+              target: name-ref #581 8569:287:10-8573:287:14 name="head"
+          body: return-stmt #594 8582:288:5-8662:289:1
+            value: enum-constructor #593 8589:288:12-8661:288:84 enum="@3::Taken" variant="More"
+              arg: construct #592 8600:288:23-8660:288:83 type="@3::Assembly"
+                arg: named-arg #585 8609:288:32-8619:288:42 name="text"
+                  value: name-ref #584 8615:288:38-8619:288:42 name="text"
+                arg: named-arg #587 8621:288:44-8631:288:54 name="open"
+                  value: literal #586 8627:288:50-8631:288:54 value=bool:true
+                arg: named-arg #589 8633:288:56-8645:288:68 name="parts"
+                  value: name-ref #588 8640:288:63-8645:288:68 name="parts"
+                arg: named-arg #591 8647:288:70-8659:288:82 name="total"
+                  value: name-ref #590 8654:288:77-8659:288:82 name="total"
+      body: return-stmt #601 8671:291:3-8714:292:1
+        value: call #600 8678:291:10-8713:291:45 name="@3::finished" piped=false
+          arg: name-ref #597 8687:291:19-8691:291:23 name="text"
+          arg: call #599 8693:291:25-8712:291:44 name="Bytes.concat" piped=false
+            arg: name-ref #598 8706:291:38-8711:291:43 name="parts"
+    declaration: function-decl #665 8949:296:8-9575:315:1 name="@3::parse_close"
+      param: param #605 8965:296:24-8979:296:38 name="payload"
+        type: type-ref #604 8974:296:33-8979:296:38 name="Bytes"
+      result: type-ref #606 8984:296:43-8991:296:50 name="@3::Closing"
+      body: if-stmt #614 8994:297:3-9060:300:1
+        branch: if-branch #613 8994:297:3-9054:299:1
+          condition: field-access #608 8997:297:6-9011:297:20 name="empty?"
+            target: name-ref #607 8997:297:6-9004:297:13 name="payload"
+          body: return-stmt #612 9016:298:5-9054:299:1
+            value: enum-constructor #611 9023:298:12-9053:298:42 enum="@3::Closing" variant="Peer"
+              arg: const-ref #609 9036:298:25-9048:298:37 name="@3::CLOSE_NORMAL"
+              arg: literal #610 9050:298:39-9052:298:41 value=string:""
+      body: if-stmt #627 9063:301:3-9187:304:1
+        branch: if-branch #626 9063:301:3-9181:303:1
+          condition: binary #618 9066:301:6-9083:301:23 op=equal op-span=9079:301:19-9081:301:21
+            left: field-access #616 9066:301:6-9078:301:18 name="size"
+              target: name-ref #615 9066:301:6-9073:301:13 name="payload"
+            right: literal #617 9082:301:22-9083:301:23 value=int:1
+          body: return-stmt #625 9088:302:5-9181:303:1
+            value: enum-constructor #624 9095:302:12-9180:302:97 enum="@3::Closing" variant="Invalid"
+              arg: construct #623 9111:302:28-9179:302:96 type="@3::Problem"
+                arg: named-arg #620 9119:302:36-9139:302:56 name="code"
+                  value: const-ref #619 9125:302:42-9139:302:56 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #622 9141:302:58-9178:302:95 name="reason"
+                  value: literal #621 9149:302:66-9178:302:95 value=string:"a close frame with one byte"
+      body: binding #632 9190:305:3-9236:306:1 name="code"
+        value: field-access #631 9197:305:10-9235:305:48 name="unwrap!"
+          target: call #630 9197:305:10-9227:305:40 name="@4::read_u16_be" piped=false
+            arg: name-ref #628 9216:305:29-9223:305:36 name="payload"
+            arg: literal #629 9225:305:38-9226:305:39 value=int:0
+      body: if-stmt #644 9238:306:3-9357:309:1
+        branch: if-branch #643 9238:306:3-9351:308:1
+          condition: unary #635 9241:306:6-9262:306:27 op=not op-span=9241:306:6-9244:306:9
+            operand: call #634 9245:306:10-9262:306:27 name="@3::valid_code?" piped=false
+              arg: name-ref #633 9257:306:22-9261:306:26 name="code"
+          body: return-stmt #642 9267:307:5-9351:308:1
+            value: enum-constructor #641 9274:307:12-9350:307:88 enum="@3::Closing" variant="Invalid"
+              arg: construct #640 9290:307:28-9349:307:87 type="@3::Problem"
+                arg: named-arg #637 9298:307:36-9318:307:56 name="code"
+                  value: const-ref #636 9304:307:42-9318:307:56 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #639 9320:307:58-9348:307:86 name="reason"
+                  value: literal #638 9328:307:66-9348:307:86 value=string:"invalid close code"
+      body: case-stmt #664 9360:310:3-9571:314:1
+        value: call #648 9365:310:8-9399:310:42 name="String.from_bytes" piped=false
+          arg: method-call #647 9383:310:26-9398:310:41 name="drop"
+            target: name-ref #645 9383:310:26-9390:310:33 name="payload"
+            arg: literal #646 9396:310:39-9397:310:40 value=int:2
+        arm: case-arm #654 9404:311:5-9452:312:1
+          pattern: variant-pattern #649 9404:311:5-9414:311:15 enum="Result" variant="Ok" bindings=["reason"]
+          body: return-stmt #653 9418:311:19-9452:312:1
+            value: enum-constructor #652 9425:311:26-9451:311:52 enum="@3::Closing" variant="Peer"
+              arg: name-ref #650 9438:311:39-9442:311:43 name="code"
+              arg: name-ref #651 9444:311:45-9450:311:51 name="reason"
+        arm: case-arm #663 9456:312:5-9565:313:1
+          pattern: variant-pattern #655 9456:312:5-9464:312:13 enum="Result" variant="Err" bindings=[-]
+          body: return-stmt #662 9468:312:17-9565:313:1
+            value: enum-constructor #661 9475:312:24-9564:312:113 enum="@3::Closing" variant="Invalid"
+              arg: construct #660 9491:312:40-9563:312:112 type="@3::Problem"
+                arg: named-arg #657 9499:312:48-9519:312:68 name="code"
+                  value: const-ref #656 9505:312:54-9519:312:68 name="@3::CLOSE_BAD_DATA"
+                arg: named-arg #659 9521:312:70-9562:312:111 name="reason"
+                  value: literal #658 9529:312:78-9562:312:111 value=string:"close reason is not valid UTF-8"
+    declaration: function-decl #724 9696:317:8-10147:330:1 name="@3::frame"
+      param: param #668 9706:317:18-9717:317:29 name="opcode"
+        type: type-ref #667 9714:317:26-9717:317:29 name="Int"
+      param: param #670 9719:317:31-9733:317:45 name="payload"
+        type: type-ref #669 9728:317:40-9733:317:45 name="Bytes"
+      result: type-ref #671 9738:317:50-9743:317:55 name="Bytes"
+      body: binding #674 9746:318:3-9766:319:1 name="size"
+        value: field-access #673 9753:318:10-9765:318:22 name="size"
+          target: name-ref #672 9753:318:10-9760:318:17 name="payload"
+      body: binding #681 9768:319:3-9815:320:1 name="head"
+        value: field-access #680 9775:319:10-9814:319:49 name="unwrap!"
+          target: call #679 9775:319:10-9806:319:41 name="Bytes.from_list" piped=false
+            arg: list-lit #678 9791:319:26-9805:319:40
+              element: binary #677 9792:319:27-9804:319:39 op=plus op-span=9796:319:31-9797:319:32
+                left: literal #675 9792:319:27-9795:319:30 value=int:128
+                right: name-ref #676 9798:319:33-9804:319:39 name="opcode"
+      body: if-stmt #695 9817:320:3-9911:323:1
+        branch: if-branch #694 9817:320:3-9905:322:1
+          condition: binary #684 9820:320:6-9830:320:16 op=less op-span=9825:320:11-9826:320:12
+            left: name-ref #682 9820:320:6-9824:320:10 name="size"
+            right: literal #683 9827:320:13-9830:320:16 value=int:126
+          body: return-stmt #693 9835:321:5-9905:322:1
+            value: call #692 9842:321:12-9904:321:74 name="Bytes.concat" piped=false
+              arg: list-lit #691 9855:321:25-9903:321:73
+                element: name-ref #685 9856:321:26-9860:321:30 name="head"
+                element: field-access #689 9862:321:32-9893:321:63 name="unwrap!"
+                  target: call #688 9862:321:32-9885:321:55 name="Bytes.from_list" piped=false
+                    arg: list-lit #687 9878:321:48-9884:321:54
+                      element: name-ref #686 9879:321:49-9883:321:53 name="size"
+                element: name-ref #690 9895:321:65-9902:321:72 name="payload"
+      body: if-stmt #712 9914:324:3-10044:327:1
+        branch: if-branch #711 9914:324:3-10038:326:1
+          condition: binary #698 9917:324:6-9929:324:18 op=less op-span=9922:324:11-9923:324:12
+            left: name-ref #696 9917:324:6-9921:324:10 name="size"
+            right: literal #697 9924:324:13-9929:324:18 value=int:65536
+          body: return-stmt #710 9934:325:5-10038:326:1
+            value: call #709 9941:325:12-10037:325:108 name="Bytes.concat" piped=false
+              arg: list-lit #708 9954:325:25-10036:325:107
+                element: name-ref #699 9955:325:26-9959:325:30 name="head"
+                element: field-access #703 9961:325:32-9991:325:62 name="unwrap!"
+                  target: call #702 9961:325:32-9983:325:54 name="Bytes.from_list" piped=false
+                    arg: list-lit #701 9977:325:48-9982:325:53
+                      element: literal #700 9978:325:49-9981:325:52 value=int:126
+                element: field-access #706 9993:325:64-10026:325:97 name="unwrap!"
+                  target: call #705 9993:325:64-10018:325:89 name="@4::write_u16_be" piped=false
+                    arg: name-ref #704 10013:325:84-10017:325:88 name="size"
+                element: name-ref #707 10028:325:99-10035:325:106 name="payload"
+      body: return-stmt #723 10047:328:3-10143:329:1
+        value: call #722 10054:328:10-10142:328:98 name="Bytes.concat" piped=false
+          arg: list-lit #721 10067:328:23-10141:328:97
+            element: name-ref #713 10068:328:24-10072:328:28 name="head"
+            element: field-access #717 10074:328:30-10104:328:60 name="unwrap!"
+              target: call #716 10074:328:30-10096:328:52 name="Bytes.from_list" piped=false
+                arg: list-lit #715 10090:328:46-10095:328:51
+                  element: literal #714 10091:328:47-10094:328:50 value=int:127
+            element: call #719 10106:328:62-10131:328:87 name="@4::write_i64_be" piped=false
+              arg: name-ref #718 10126:328:82-10130:328:86 name="size"
+            element: name-ref #720 10133:328:89-10140:328:96 name="payload"
+    declaration: function-decl #734 10190:332:8-10265:335:1 name="@3::text_frame"
+      param: param #727 10205:332:23-10217:332:35 name="text"
+        type: type-ref #726 10211:332:29-10217:332:35 name="String"
+      result: type-ref #728 10222:332:40-10227:332:45 name="Bytes"
+      body: return-stmt #733 10230:333:3-10261:334:1
+        value: call #732 10237:333:10-10260:333:33 name="@3::frame" piped=false
+          arg: const-ref #729 10243:333:16-10247:333:20 name="@3::TEXT"
+          arg: field-access #731 10249:333:22-10259:333:32 name="bytes"
+            target: name-ref #730 10249:333:22-10253:333:26 name="text"
+    declaration: function-decl #743 10310:337:8-10382:340:1 name="@3::binary_frame"
+      param: param #737 10327:337:25-10338:337:36 name="data"
+        type: type-ref #736 10333:337:31-10338:337:36 name="Bytes"
+      result: type-ref #738 10343:337:41-10348:337:46 name="Bytes"
+      body: return-stmt #742 10351:338:3-10378:339:1
+        value: call #741 10358:338:10-10377:338:29 name="@3::frame" piped=false
+          arg: const-ref #739 10364:338:16-10370:338:22 name="@3::BINARY"
+          arg: name-ref #740 10372:338:24-10376:338:28 name="data"
+    declaration: function-decl #752 10425:342:8-10493:345:1 name="@3::ping_frame"
+      param: param #746 10440:342:23-10451:342:34 name="data"
+        type: type-ref #745 10446:342:29-10451:342:34 name="Bytes"
+      result: type-ref #747 10456:342:39-10461:342:44 name="Bytes"
+      body: return-stmt #751 10464:343:3-10489:344:1
+        value: call #750 10471:343:10-10488:343:27 name="@3::frame" piped=false
+          arg: const-ref #748 10477:343:16-10481:343:20 name="@3::PING"
+          arg: name-ref #749 10483:343:22-10487:343:26 name="data"
+    declaration: function-decl #761 10536:347:8-10604:350:1 name="@3::pong_frame"
+      param: param #755 10551:347:23-10562:347:34 name="data"
+        type: type-ref #754 10557:347:29-10562:347:34 name="Bytes"
+      result: type-ref #756 10567:347:39-10572:347:44 name="Bytes"
+      body: return-stmt #760 10575:348:3-10600:349:1
+        value: call #759 10582:348:10-10599:348:27 name="@3::frame" piped=false
+          arg: const-ref #757 10588:348:16-10592:348:20 name="@3::PONG"
+          arg: name-ref #758 10594:348:22-10598:348:26 name="data"
+    declaration: function-decl #778 10707:352:8-10858:355:1 name="@3::close_frame"
+      param: param #764 10723:352:24-10732:352:33 name="code"
+        type: type-ref #763 10729:352:30-10732:352:33 name="Int"
+      param: param #766 10734:352:35-10748:352:49 name="reason"
+        type: type-ref #765 10742:352:43-10748:352:49 name="String"
+      result: type-ref #767 10753:352:54-10758:352:59 name="Bytes"
+      body: return-stmt #777 10761:353:3-10854:354:1
+        value: call #776 10768:353:10-10853:353:95 name="@3::frame" piped=false
+          arg: const-ref #768 10774:353:16-10779:353:21 name="@3::CLOSE"
+          arg: call #775 10781:353:23-10852:353:94 name="Bytes.concat" piped=false
+            arg: list-lit #774 10794:353:36-10851:353:93
+              element: field-access #771 10795:353:37-10828:353:70 name="unwrap!"
+                target: call #770 10795:353:37-10820:353:62 name="@4::write_u16_be" piped=false
+                  arg: name-ref #769 10815:353:57-10819:353:61 name="code"
+              element: call #773 10830:353:72-10850:353:92 name="@3::short_reason" piped=false
+                arg: name-ref #772 10843:353:85-10849:353:91 name="reason"
+    declaration: function-decl #814 10965:357:8-11152:364:1 name="@3::valid_code?"
+      param: param #781 10981:357:24-10990:357:33 name="code"
+        type: type-ref #780 10987:357:30-10990:357:33 name="Int"
+      result: type-ref #782 10995:357:38-10999:357:42 name="Bool"
+      body: if-stmt #793 11002:358:3-11057:361:1
+        branch: if-branch #792 11002:358:3-11051:360:1
+          condition: binary #789 11005:358:6-11034:358:35 op=and op-span=11018:358:19-11021:358:22
+            left: binary #785 11005:358:6-11017:358:18 op=greater-equal op-span=11010:358:11-11012:358:13
+              left: name-ref #783 11005:358:6-11009:358:10 name="code"
+              right: literal #784 11013:358:14-11017:358:18 value=int:3000
+            right: binary #788 11022:358:23-11034:358:35 op=less-equal op-span=11027:358:28-11029:358:30
+              left: name-ref #786 11022:358:23-11026:358:27 name="code"
+              right: literal #787 11030:358:31-11034:358:35 value=int:4999
+          body: return-stmt #791 11039:359:5-11051:360:1
+            value: literal #790 11046:359:12-11050:359:16 value=bool:true
+      body: return-stmt #813 11060:362:3-11148:363:1
+        value: binary #812 11067:362:10-11147:362:90 op=and op-span=11131:362:74-11134:362:77
+          left: binary #808 11067:362:10-11130:362:73 op=and op-span=11114:362:57-11117:362:60
+            left: binary #804 11067:362:10-11113:362:56 op=and op-span=11097:362:40-11100:362:43
+              left: binary #800 11067:362:10-11096:362:39 op=and op-span=11080:362:23-11083:362:26
+                left: binary #796 11067:362:10-11079:362:22 op=greater-equal op-span=11072:362:15-11074:362:17
+                  left: name-ref #794 11067:362:10-11071:362:14 name="code"
+                  right: literal #795 11075:362:18-11079:362:22 value=int:1000
+                right: binary #799 11084:362:27-11096:362:39 op=less-equal op-span=11089:362:32-11091:362:34
+                  left: name-ref #797 11084:362:27-11088:362:31 name="code"
+                  right: literal #798 11092:362:35-11096:362:39 value=int:1014
+              right: binary #803 11101:362:44-11113:362:56 op=not-equal op-span=11106:362:49-11108:362:51
+                left: name-ref #801 11101:362:44-11105:362:48 name="code"
+                right: literal #802 11109:362:52-11113:362:56 value=int:1004
+            right: binary #807 11118:362:61-11130:362:73 op=not-equal op-span=11123:362:66-11125:362:68
+              left: name-ref #805 11118:362:61-11122:362:65 name="code"
+              right: literal #806 11126:362:69-11130:362:73 value=int:1005
+          right: binary #811 11135:362:78-11147:362:90 op=not-equal op-span=11140:362:83-11142:362:85
+            left: name-ref #809 11135:362:78-11139:362:82 name="code"
+            right: literal #810 11143:362:86-11147:362:90 value=int:1006
+    declaration: function-decl #831 11153:365:1-11262:368:1 name="@3::known_opcode?"
+      param: param #817 11171:365:19-11182:365:30 name="opcode"
+        type: type-ref #816 11179:365:27-11182:365:30 name="Int"
+      result: type-ref #818 11187:365:35-11191:365:39 name="Bool"
+      body: return-stmt #830 11194:366:3-11258:367:1
+        value: binary #829 11201:366:10-11257:366:66 op=or op-span=11218:366:27-11220:366:29
+          left: binary #821 11201:366:10-11217:366:26 op=less-equal op-span=11208:366:17-11210:366:19
+            left: name-ref #819 11201:366:10-11207:366:16 name="opcode"
+            right: const-ref #820 11211:366:20-11217:366:26 name="@3::BINARY"
+          right: binary #828 11222:366:31-11256:366:65 op=and op-span=11238:366:47-11241:366:50
+            left: binary #824 11222:366:31-11237:366:46 op=greater-equal op-span=11229:366:38-11231:366:40
+              left: name-ref #822 11222:366:31-11228:366:37 name="opcode"
+              right: const-ref #823 11232:366:41-11237:366:46 name="@3::CLOSE"
+            right: binary #827 11242:366:51-11256:366:65 op=less-equal op-span=11249:366:58-11251:366:60
+              left: name-ref #825 11242:366:51-11248:366:57 name="opcode"
+              right: const-ref #826 11252:366:61-11256:366:65 name="@3::PONG"
+    declaration: function-decl #863 11377:370:1-11701:381:1 name="@3::check_control"
+      param: param #833 11395:370:19-11405:370:29 name="head"
+        type: type-ref #832 11401:370:25-11405:370:29 name="@3::Head"
+      result: type-ref #835 11410:370:34-11427:370:51 name="Optional"
+        arg: type-ref #834 11419:370:43-11426:370:50 name="@3::Problem"
+      body: if-stmt #847 11430:371:3-11547:374:1
+        branch: if-branch #846 11430:371:3-11541:373:1
+          condition: unary #838 11433:371:6-11445:371:18 op=not op-span=11433:371:6-11436:371:9
+            operand: field-access #837 11437:371:10-11445:371:18 name="fin"
+              target: name-ref #836 11437:371:10-11441:371:14 name="head"
+          body: return-stmt #845 11450:372:5-11541:373:1
+            value: call #844 11457:372:12-11540:372:95 name="some" piped=false
+              arg: construct #843 11462:372:17-11539:372:94 type="@3::Problem"
+                arg: named-arg #840 11470:372:25-11490:372:45 name="code"
+                  value: const-ref #839 11476:372:31-11490:372:45 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #842 11492:372:47-11538:372:93 name="reason"
+                  value: literal #841 11500:372:55-11538:372:93 value=string:"a control frame cannot be fragmented"
+      body: if-stmt #860 11550:375:3-11682:378:1
+        branch: if-branch #859 11550:375:3-11676:377:1
+          condition: binary #851 11553:375:6-11580:375:33 op=greater op-span=11565:375:18-11566:375:19
+            left: field-access #849 11553:375:6-11564:375:17 name="length"
+              target: name-ref #848 11553:375:6-11557:375:10 name="head"
+            right: const-ref #850 11567:375:20-11580:375:33 name="@3::CONTROL_BYTES"
+          body: return-stmt #858 11585:376:5-11676:377:1
+            value: call #857 11592:376:12-11675:376:95 name="some" piped=false
+              arg: construct #856 11597:376:17-11674:376:94 type="@3::Problem"
+                arg: named-arg #853 11605:376:25-11625:376:45 name="code"
+                  value: const-ref #852 11611:376:31-11625:376:45 name="@3::CLOSE_PROTOCOL"
+                arg: named-arg #855 11627:376:47-11673:376:93 name="reason"
+                  value: literal #854 11635:376:55-11673:376:93 value=string:"a control frame is at most 125 bytes"
+      body: return-stmt #862 11685:379:3-11697:380:1
+        value: call #861 11692:379:10-11696:379:14 name="none" piped=false
+    declaration: function-decl #888 11702:382:1-11929:389:1 name="@3::finished"
+      param: param #865 11715:382:14-11725:382:24 name="text"
+        type: type-ref #864 11721:382:20-11725:382:24 name="Bool"
+      param: param #867 11727:382:26-11738:382:37 name="data"
+        type: type-ref #866 11733:382:32-11738:382:37 name="Bytes"
+      result: type-ref #868 11743:382:42-11748:382:47 name="@3::Taken"
+      body: if-stmt #882 11751:383:3-11875:386:1
+        branch: if-branch #881 11751:383:3-11869:385:1
+          condition: binary #873 11754:383:6-11778:383:30 op=and op-span=11759:383:11-11762:383:14
+            left: name-ref #869 11754:383:6-11758:383:10 name="text"
+            right: unary #872 11763:383:15-11778:383:30 op=not op-span=11763:383:15-11766:383:18
+              operand: call #871 11767:383:19-11778:383:30 name="@3::utf8?" piped=false
+                arg: name-ref #870 11773:383:25-11777:383:29 name="data"
+          body: return-stmt #880 11783:384:5-11869:385:1
+            value: enum-constructor #879 11790:384:12-11868:384:90 enum="@3::Taken" variant="Broken"
+              arg: construct #878 11803:384:25-11867:384:89 type="@3::Problem"
+                arg: named-arg #875 11811:384:33-11831:384:53 name="code"
+                  value: const-ref #874 11817:384:39-11831:384:53 name="@3::CLOSE_BAD_DATA"
+                arg: named-arg #877 11833:384:55-11866:384:88 name="reason"
+                  value: literal #876 11841:384:63-11866:384:88 value=string:"text is not valid UTF-8"
+      body: return-stmt #887 11878:387:3-11925:388:1
+        value: enum-constructor #886 11885:387:10-11924:387:49 enum="@3::Taken" variant="Whole"
+          arg: name-ref #883 11897:387:22-11901:387:26 name="text"
+          arg: name-ref #884 11903:387:28-11907:387:32 name="data"
+          arg: call #885 11909:387:34-11923:387:48 name="@3::new_assembly" piped=false
+    declaration: function-decl #923 11999:391:1-12243:404:1 name="@3::short_reason"
+      param: param #890 12016:391:18-12030:391:32 name="reason"
+        type: type-ref #889 12024:391:26-12030:391:32 name="String"
+      result: type-ref #891 12035:391:37-12040:391:42 name="Bytes"
+      body: binding #894 12043:392:3-12063:393:1 name="data"
+        value: field-access #893 12050:392:10-12062:392:22 name="bytes"
+          target: name-ref #892 12050:392:10-12056:392:16 name="reason"
+      body: if-stmt #902 12065:393:3-12116:396:1
+        branch: if-branch #901 12065:393:3-12110:395:1
+          condition: binary #898 12068:393:6-12093:393:31 op=less-equal op-span=12078:393:16-12080:393:18
+            left: field-access #896 12068:393:6-12077:393:15 name="size"
+              target: name-ref #895 12068:393:6-12072:393:10 name="data"
+            right: const-ref #897 12081:393:19-12093:393:31 name="@3::REASON_BYTES"
+          body: return-stmt #900 12098:394:5-12110:395:1
+            value: name-ref #899 12105:394:12-12109:394:16 name="data"
+      body: binding #904 12119:397:3-12139:398:1 name="size"
+        value: const-ref #903 12126:397:10-12138:397:22 name="@3::REASON_BYTES"
+      body: while-stmt #918 12141:398:3-12213:401:1
+        condition: binary #913 12147:398:9-12186:398:48 op=and op-span=12156:398:18-12159:398:21
+          left: binary #907 12147:398:9-12155:398:17 op=greater op-span=12152:398:14-12153:398:15
+            left: name-ref #905 12147:398:9-12151:398:13 name="size"
+            right: literal #906 12154:398:16-12155:398:17 value=int:0
+          right: unary #912 12160:398:22-12186:398:48 op=not op-span=12160:398:22-12163:398:25
+            operand: call #911 12164:398:26-12186:398:48 name="@3::utf8?" piped=false
+              arg: method-call #910 12170:398:32-12185:398:47 name="take"
+                target: name-ref #908 12170:398:32-12174:398:36 name="data"
+                arg: name-ref #909 12180:398:42-12184:398:46 name="size"
+        body: binding #917 12191:399:5-12207:400:1 name="size"
+          value: binary #916 12198:399:12-12206:399:20 op=minus op-span=12203:399:17-12204:399:18
+            left: name-ref #914 12198:399:12-12202:399:16 name="size"
+            right: literal #915 12205:399:19-12206:399:20 value=int:1
+      body: return-stmt #922 12216:402:3-12239:403:1
+        value: method-call #921 12223:402:10-12238:402:25 name="take"
+          target: name-ref #919 12223:402:10-12227:402:14 name="data"
+          arg: name-ref #920 12233:402:20-12237:402:24 name="size"
+    declaration: function-decl #938 12244:405:1-12370:411:1 name="@3::utf8?"
+      param: param #925 12254:405:11-12265:405:22 name="data"
+        type: type-ref #924 12260:405:17-12265:405:22 name="Bytes"
+      result: type-ref #926 12270:405:27-12274:405:31 name="Bool"
+      body: case-stmt #937 12277:406:3-12366:410:1
+        value: call #928 12282:406:8-12305:406:31 name="String.from_bytes" piped=false
+          arg: name-ref #927 12300:406:26-12304:406:30 name="data"
+        arm: case-arm #932 12310:407:5-12331:408:1
+          pattern: variant-pattern #929 12310:407:5-12315:407:10 enum="Result" variant="Ok" bindings=[-]
+          body: return-stmt #931 12319:407:14-12331:408:1
+            value: literal #930 12326:407:21-12330:407:25 value=bool:true
+        arm: case-arm #936 12335:408:5-12360:409:1
+          pattern: variant-pattern #933 12335:408:5-12343:408:13 enum="Result" variant="Err" bindings=[-]
+          body: return-stmt #935 12347:408:17-12360:409:1
+            value: literal #934 12354:408:24-12359:408:29 value=bool:false
+    declaration: function-decl #953 12371:412:1-12510:421:1 name="@3::token_byte?"
+      param: param #940 12387:412:17-12396:412:26 name="byte"
+        type: type-ref #939 12393:412:23-12396:412:26 name="Int"
+      result: type-ref #941 12401:412:31-12405:412:35 name="Bool"
+      body: for-stmt #950 12408:413:3-12490:418:1 variable="allowed"
+        iterable: const-ref #942 12423:413:18-12434:413:29 name="@3::TOKEN_BYTES"
+        body: if-stmt #949 12439:414:5-12484:417:1
+          branch: if-branch #948 12439:414:5-12476:416:1
+            condition: binary #945 12442:414:8-12457:414:23 op=equal op-span=12450:414:16-12452:414:18
+              left: name-ref #943 12442:414:8-12449:414:15 name="allowed"
+              right: name-ref #944 12453:414:19-12457:414:23 name="byte"
+            body: return-stmt #947 12464:415:7-12476:416:1
+              value: literal #946 12471:415:14-12475:415:18 value=bool:true
+      body: return-stmt #952 12493:419:3-12506:420:1
+        value: literal #951 12500:419:10-12505:419:15 value=bool:false
   module "std/binary.agc"
     declaration: function-decl #11 779:11:8-871:14:1 name="@4::read_u8"
       param: param #1 791:11:20-802:11:31 name="data"
@@ -13555,7 +13555,7 @@ program #6 0:1:1-76:6:1
                   arg: name-ref #165 4134:85:24-4135:85:25 name="s"
           branch: if-branch #176 4151:87:5-4205:89:1
             condition: method-call #171 4157:87:11-4177:87:31 name="include?"
-              target: const-ref #14039 4157:87:11-4162:87:16 name="@5::PLAIN"
+              target: const-ref #14040 4157:87:11-4162:87:16 name="@5::PLAIN"
               arg: name-ref #170 4172:87:26-4176:87:30 name="byte"
             body: binding #175 4184:88:7-4205:89:1 name="out"
               value: method-call #174 4190:88:13-4204:88:27 name="push"
