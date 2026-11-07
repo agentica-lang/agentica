@@ -23,7 +23,16 @@
   display: none !important;
 }
 
-/* Under the header: the banner of an old version and, on a phone, the selector. */
+/* In the menu (a phone; selector.js): the first row of the list, as wide as the drawer. */
+.version-select.in-menu {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  margin: 0 0 0.75rem;
+}
+
+/* Under the header: the banner of an old version and, when the menu is not there, the selector. */
 .version-bar {
   display: flex;
   flex-wrap: wrap;
@@ -38,7 +47,7 @@
   text-align: center;
 }
 
-/* Only the selector, on a phone: not a warning. */
+/* Only the selector, with no banner: not a warning. */
 .version-bar:not([role]) {
   background: var(--bg, #fff);
 }
@@ -57,5 +66,7 @@
   .version-select {
     height: var(--target, 2.75rem);
     max-width: 100%;
+    /* 16px: iOS Safari zooms the page when it focuses a smaller field. */
+    font-size: 1rem;
   }
 }

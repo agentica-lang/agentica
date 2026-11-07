@@ -17,7 +17,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- The version selector of the documentation site lists `dev` first.
+- The version selector of the documentation site lists `dev` first, and on a
+  phone it sits inside the menu instead of in a strip under the header.
 
 ## [0.25.1] - 2026-11-06
 
