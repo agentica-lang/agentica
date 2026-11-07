@@ -20,9 +20,10 @@ Analysis.type_at_partial(session, path: String, line: Int, column: Int) -> Resul
 Analysis.symbol(session, name: String, paths: List[String]) -> Result[Analysis.Symbols]
 Analysis.refs(session, path: String, line: Int, column: Int) -> Result[Analysis.Refs]
 Analysis.refs_partial(session, path: String, line: Int, column: Int) -> Result[Analysis.Refs]
+Analysis.native_modules(session, path: String) -> Result[Analysis.NativeModules]
 Analysis.diagnostic(message: String) -> Result[Analysis.Diagnostic]
 Analysis.outline_json(found) -> Json     # also type_at_json, symbols_json, refs_json,
-                                         # diagnostic_json
+                                         # native_modules_json, diagnostic_json
 ```
 
 - Files come from the disk of the working folder, except those with a buffer
@@ -67,11 +68,19 @@ Analysis.outline_json(found) -> Json     # also type_at_json, symbols_json, refs
   `diagnostics`); a declaration that fails is still the error. In a failed
   function `TypeAt.type` is `""`, and a position the link cannot name is the
   first problem, as an error.
-- `outline`, `type_at`, `type_at_partial`, `symbol`, `refs` and `refs_partial`
-  return an error whose message is one JSON diagnostic (the `--json` object);
-  `Analysis.diagnostic(message)` reads it, so `try` works. Codes are the command
-  line's, and `QUERY-USAGE` also covers a position below line 1 or column 1 and
-  an empty `symbol` name.
+- `native_modules` lists the `extern module` blocks of a file for a code
+  generator (no command line form): per `NativeBlock` the `library`, `functions`
+  (`mode` `short` or `dirty`, `parameters`, `result`, `signature`, and
+  `types_in`/`types_out`, the types the parameters and the result reach),
+  `resources`, the `types` that cross (`kind`, bare `name`, `members`, `shape`)
+  and `api_major`/`api_minor`. `signature` and `shape` are the exact texts the
+  loader compares with the module's tables. A block `range` covers its
+  declarations only, and two blocks of one library are one.
+- `outline`, `type_at`, `type_at_partial`, `symbol`, `refs`, `refs_partial` and
+  `native_modules` return an error whose message is one JSON diagnostic (the
+  `--json` object); `Analysis.diagnostic(message)` reads it, so `try` works.
+  Codes are the command line's, and `QUERY-USAGE` also covers a position below
+  line 1 or column 1 and an empty `symbol` name.
 - Cost: the compiler's pure core is compiled into the program, so a run from
   source pays seconds. For a tool that runs often: `agentica compile tool.agc -o
   tool.agcb`, then `agentica run -- tool.agcb`.
