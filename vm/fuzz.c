@@ -131,7 +131,8 @@ static const an_type fuzz_types[] = {
 };
 
 static const an_module fuzz_module = {AN_API_MAJOR, AN_API_MINOR, sizeof(an_module), "agentica_fuzz", NULL,
-                                      fuzz_functions, AN_COUNT(fuzz_functions), fuzz_types, AN_COUNT(fuzz_types)};
+                                      fuzz_functions, AN_COUNT(fuzz_functions), fuzz_types, AN_COUNT(fuzz_types),
+                                      NULL, 0};
 
 static const an_module *fuzz_init(const an_api *api) {
   (void)api;

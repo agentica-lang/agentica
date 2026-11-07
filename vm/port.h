@@ -16,6 +16,15 @@
 
 #include "value.h"
 
+/* The sanitizer, TSan and GC-stress builds check after each call of a builtin marked leaf that it kept the rule of
+   agc_builtin.leaf, and abort if not (vm/interp.c), and check each call of a native module (vm/native_module.c: the
+   whole of its result, short or dirty, and the time of a short one); the release build trusts both. */
+#if defined(AGC_NO_GC) || defined(AGC_GC_STRESS)
+#define AGC_LEAF_CHECK 1
+#else
+#define AGC_LEAF_CHECK 0
+#endif
+
 typedef void (*agc_release_fn)(void *native);
 typedef void (*agc_close_fn)(agc_vm *vm, agc_resource *r, agc_task *ender);
 
@@ -587,6 +596,9 @@ typedef struct {
      on one scheduler (agc_launch_supported), so these plain counters need no lock. */
   uint64_t *ops, *pairs;
   uint64_t reloads, builtin_leaf, builtin_tail, builtin_native;
+  /* Writes the lines of the functions of native modules (vm/native_module.c), set by the first bind of one; NULL
+     before. */
+  void (*report_native)(const agc_vm *vm);
 } agc_profile;
 
 struct agc_vm {
@@ -635,7 +647,7 @@ struct agc_vm {
   /* Set only while compiled code runs a builtin (agc_jit_call_builtin): a failure or an exit jumps there first. */
   agc_catch_buf *jit_catch;
   jmp_buf fail, turn;
-  /* Set while run_compiled runs compiled code, in the builds of AGC_LEAF_CHECK only (vm/core.h): a failure or an exit
+  /* Set while run_compiled runs compiled code, in the builds of AGC_LEAF_CHECK only (vm/port.h): a failure or an exit
      with no jit_catch would longjmp across it, which unwind aborts on, so a helper that fails where it must not shows
      on every system and not only as a crash on Windows x64. A callback of native code and an I/O pause clear it while
      they run, as they clear jit_catch. */
@@ -855,8 +867,10 @@ agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc
 /* agc_io_start for a native call that may run without bound (a `compute def`) or a key derivation (the KDF jobs of
    vm/crypto.c): the kind's `work` runs on the compute pool (vm/compute.c), never on the libuv pool, which takes only
    bounded work (docs/vm/14-core-invariants.md §14.1). The task parks; there is no deadline, and like any pool work the
-   call runs to its end, so a cancel only detaches the job and its result is dropped (a queued one skips its work). */
-agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data);
+   call runs to its end, so a cancel only detaches the job and its result is dropped (a queued one skips its work).
+   CONTEXT is the job's context: the registry keeps it alive until the job ends, also after a cancel detached it, so
+   the work may read the GC values it reaches (a dirty call of a native module reads its arguments there). */
+agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context);
 /* Gives the pool the compute job that this scheduler's turn started, if any (vm->direct); run_task calls it once the
    turn is over and rt->sync is free. */
 void agc_io_submit_direct(agc_vm *vm);

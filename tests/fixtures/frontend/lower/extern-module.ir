@@ -1,75 +1,106 @@
-program 0:1:1-27:1 entry=5 globals=0
-source 0 "extern-module.agc" chars=469
+program 0:1:1-32:1 entry=7 globals=0
+source 0 "extern-module.agc" chars=629
 struct s0 "Point" ["x","y"]
 enum "Shape" v0="Dot"/0 v1="Circle"/1 v2="Rect"/2
 enum "Optional" v3="None"/0 v4="Some"/1
-fn0 "add" params=2 captures=0 slots=4 @ 0:15:3-16:1
-    step @ 0:15:3-16:1
-    const r2 "module (Int, Int) -> Int add /opt/lib/module demo.so" @ 0:15:3-16:1
-    list r3 r0 2 @ 0:15:3-16:1
-    call-builtin r2 "Native.call" 2 @ 0:15:3-16:1 0:15:3-16:1 0:15:3-16:1
-    return r2 @ 0:15:3-16:1
-fn1 "area" params=1 captures=0 slots=3 @ 0:16:3-17:1
+fn0 "add" params=2 captures=0 slots=4 @ 0:16:3-17:1
     step @ 0:16:3-17:1
-    const r1 "module {E0=Dot | Circle(Int) | Rect(Point, Point)}{S0=x: Int, y: Int}(Shape) -> Int area /opt/lib/module demo.so" @ 0:16:3-17:1
-    list r2 r0 1 @ 0:16:3-17:1
-    call-builtin r1 "Native.call" 2 @ 0:16:3-17:1 0:16:3-17:1 0:16:3-17:1
-    return r1 @ 0:16:3-17:1
-fn2 "points" params=2 captures=0 slots=4 @ 0:17:3-18:1
+    const r2 "module (Int, Int) -> Int add /opt/lib/module demo.so" @ 0:16:3-17:1
+    list r3 r0 2 @ 0:16:3-17:1
+    call-builtin r2 "Native.call" 2 @ 0:16:3-17:1 0:16:3-17:1 0:16:3-17:1
+    return r2 @ 0:16:3-17:1
+fn1 "area" params=1 captures=0 slots=3 @ 0:17:3-18:1
     step @ 0:17:3-18:1
-    const r2 "module {S0=x: Int, y: Int}(Int, Map[String, List[Optional[Point]]]) -> Result[List[Point]] points /opt/lib/module demo.so" @ 0:17:3-18:1
-    list r3 r0 2 @ 0:17:3-18:1
-    call-builtin r2 "Native.call" 2 @ 0:17:3-18:1 0:17:3-18:1 0:17:3-18:1
-    return r2 @ 0:17:3-18:1
-fn3 "nothing?" params=0 captures=0 slots=2 @ 0:18:3-19:1
+    const r1 "module {E0=Dot | Circle(Int) | Rect(Point, Point)}{S0=x: Int, y: Int}(Shape) -> Int area /opt/lib/module demo.so" @ 0:17:3-18:1
+    list r2 r0 1 @ 0:17:3-18:1
+    call-builtin r1 "Native.call" 2 @ 0:17:3-18:1 0:17:3-18:1 0:17:3-18:1
+    return r1 @ 0:17:3-18:1
+fn2 "points" params=2 captures=0 slots=4 @ 0:18:3-19:1
     step @ 0:18:3-19:1
-    const r0 "module () -> Void nothing? /opt/lib/module demo.so" @ 0:18:3-19:1
-    list r1 r0 0 @ 0:18:3-19:1
-    call-builtin r0 "Native.call" 2 @ 0:18:3-19:1 0:18:3-19:1 0:18:3-19:1
-    return r0 @ 0:18:3-19:1
-fn4 "crunch" params=1 captures=0 slots=3 @ 0:19:3-20:1
+    const r2 "module {S0=x: Int, y: Int}(Int, Map[String, List[Optional[Point]]]) -> Result[List[Point]] points /opt/lib/module demo.so" @ 0:18:3-19:1
+    list r3 r0 2 @ 0:18:3-19:1
+    call-builtin r2 "Native.call" 2 @ 0:18:3-19:1 0:18:3-19:1 0:18:3-19:1
+    return r2 @ 0:18:3-19:1
+fn3 "nothing?" params=0 captures=0 slots=2 @ 0:19:3-20:1
     step @ 0:19:3-20:1
-    const r1 "compute module (Int) -> Int crunch /opt/lib/module demo.so" @ 0:19:3-20:1
-    list r2 r0 1 @ 0:19:3-20:1
-    call-builtin r1 "Native.call" 2 @ 0:19:3-20:1 0:19:3-20:1 0:19:3-20:1
-    return r1 @ 0:19:3-20:1
-fn5 "main" params=0 captures=0 slots=4 entry @ 0:22:1-27:1
-    step @ 0:23:3-24:1
-    step @ 0:23:3-23:48
-    step @ 0:23:8-23:47
-    step @ 0:23:8-23:35
-    step @ 0:23:8-23:17
-    step @ 0:23:12-23:13
-    const r2 int:1 @ 0:23:12-23:13
-    step @ 0:23:15-23:16
-    const r3 int:2 @ 0:23:15-23:16
-    call r2 fn0 @ 0:23:8-23:17
-    step @ 0:23:20-23:35
-    step @ 0:23:25-23:34
-    enum r3 r3 v0 @ 0:23:25-23:34
-    call r3 fn1 @ 0:23:20-23:35
-    add-i r1 r2 r3 @ 0:23:18-23:19
-    step @ 0:23:38-23:47
-    step @ 0:23:45-23:46
-    const r2 int:3 @ 0:23:45-23:46
-    call r2 fn4 @ 0:23:38-23:47
-    add-i r0 r1 r2 @ 0:23:36-23:37
-    call-builtin r0 "puts" 1 @ 0:23:3-23:48 0:23:8-23:47
-    step @ 0:24:3-25:1
-    step @ 0:24:3-24:26
-    step @ 0:24:8-24:25
-    step @ 0:24:8-24:21
-    step @ 0:24:15-24:16
-    const r2 int:2 @ 0:24:15-24:16
-    step @ 0:24:18-24:20
-    map r3 r3 0 @ 0:24:18-24:20
-    call r2 fn2 @ 0:24:8-24:21
-    move r1 r2 @ 0:24:8-24:21
-    call-builtin r1 "Result.ok?" 1 @ 0:24:8-24:25 0:24:8-24:21
-    move r0 r1 @ 0:24:8-24:25
-    call-builtin r0 "puts" 1 @ 0:24:3-24:26 0:24:8-24:25
-    step @ 0:25:3-26:1
-    step @ 0:25:3-25:13
-    call r0 fn3 @ 0:25:3-25:13
-    const r0 void @ 0:22:1-27:1
-    return r0 @ 0:22:1-27:1
+    const r0 "module () -> Void nothing? /opt/lib/module demo.so" @ 0:19:3-20:1
+    list r1 r0 0 @ 0:19:3-20:1
+    call-builtin r0 "Native.call" 2 @ 0:19:3-20:1 0:19:3-20:1 0:19:3-20:1
+    return r0 @ 0:19:3-20:1
+fn4 "crunch" params=1 captures=0 slots=3 @ 0:20:3-21:1
+    step @ 0:20:3-21:1
+    const r1 "compute module (Int) -> Int crunch /opt/lib/module demo.so" @ 0:20:3-21:1
+    list r2 r0 1 @ 0:20:3-21:1
+    call-builtin r1 "Native.call" 2 @ 0:20:3-21:1 0:20:3-21:1 0:20:3-21:1
+    return r1 @ 0:20:3-21:1
+fn5 "counter" params=1 captures=0 slots=3 @ 0:21:3-22:1
+    step @ 0:21:3-22:1
+    const r1 "module {R=Counter}(Int) -> Counter counter /opt/lib/module demo.so" @ 0:21:3-22:1
+    list r2 r0 1 @ 0:21:3-22:1
+    call-builtin r1 "Native.call" 2 @ 0:21:3-22:1 0:21:3-22:1 0:21:3-22:1
+    return r1 @ 0:21:3-22:1
+fn6 "counters" params=1 captures=0 slots=3 @ 0:22:3-23:1
+    step @ 0:22:3-23:1
+    const r1 "compute module {R=Counter}(Int) -> Result[List[Counter]] counters /opt/lib/module demo.so" @ 0:22:3-23:1
+    list r2 r0 1 @ 0:22:3-23:1
+    call-builtin r1 "Native.call" 2 @ 0:22:3-23:1 0:22:3-23:1 0:22:3-23:1
+    return r1 @ 0:22:3-23:1
+fn7 "main" params=0 captures=0 slots=4 entry @ 0:25:1-32:1
+    step @ 0:26:3-27:1
+    step @ 0:26:3-26:48
+    step @ 0:26:8-26:47
+    step @ 0:26:8-26:35
+    step @ 0:26:8-26:17
+    step @ 0:26:12-26:13
+    const r2 int:1 @ 0:26:12-26:13
+    step @ 0:26:15-26:16
+    const r3 int:2 @ 0:26:15-26:16
+    call r2 fn0 @ 0:26:8-26:17
+    step @ 0:26:20-26:35
+    step @ 0:26:25-26:34
+    enum r3 r3 v0 @ 0:26:25-26:34
+    call r3 fn1 @ 0:26:20-26:35
+    add-i r1 r2 r3 @ 0:26:18-26:19
+    step @ 0:26:38-26:47
+    step @ 0:26:45-26:46
+    const r2 int:3 @ 0:26:45-26:46
+    call r2 fn4 @ 0:26:38-26:47
+    add-i r0 r1 r2 @ 0:26:36-26:37
+    call-builtin r0 "puts" 1 @ 0:26:3-26:48 0:26:8-26:47
+    step @ 0:27:3-28:1
+    step @ 0:27:3-27:26
+    step @ 0:27:8-27:25
+    step @ 0:27:8-27:21
+    step @ 0:27:15-27:16
+    const r2 int:2 @ 0:27:15-27:16
+    step @ 0:27:18-27:20
+    map r3 r3 0 @ 0:27:18-27:20
+    call r2 fn2 @ 0:27:8-27:21
+    move r1 r2 @ 0:27:8-27:21
+    call-builtin r1 "Result.ok?" 1 @ 0:27:8-27:25 0:27:8-27:21
+    move r0 r1 @ 0:27:8-27:25
+    call-builtin r0 "puts" 1 @ 0:27:3-27:26 0:27:8-27:25
+    step @ 0:28:3-29:1
+    step @ 0:28:3-28:13
+    call r0 fn3 @ 0:28:3-28:13
+    step @ 0:29:3-30:1
+    step @ 0:29:3-29:27
+    step @ 0:29:16-29:26
+    step @ 0:29:24-29:25
+    const r1 int:1 @ 0:29:24-29:25
+    call r1 fn5 @ 0:29:16-29:26
+    move r0 r1 @ 0:29:16-29:26
+    call-builtin r0 "Native.close" 1 @ 0:29:3-29:27 0:29:16-29:26
+    step @ 0:30:3-31:1
+    step @ 0:30:3-30:24
+    step @ 0:30:8-30:23
+    step @ 0:30:8-30:19
+    step @ 0:30:17-30:18
+    const r2 int:2 @ 0:30:17-30:18
+    call r2 fn6 @ 0:30:8-30:19
+    move r1 r2 @ 0:30:8-30:19
+    call-builtin r1 "Result.ok?" 1 @ 0:30:8-30:23 0:30:8-30:19
+    move r0 r1 @ 0:30:8-30:23
+    call-builtin r0 "puts" 1 @ 0:30:3-30:24 0:30:8-30:23
+    const r0 void @ 0:25:1-32:1
+    return r0 @ 0:25:1-32:1

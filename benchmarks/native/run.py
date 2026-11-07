@@ -1,11 +1,12 @@
 """The cost of one native call (#1149): a short call of a native module against an extern `def` (libffi), a
-`compute def` and a plain Agentica call, in ns per call with the loop included, and a List of 1000 Point structs built
-by one module call against one built in Agentica with an extern call and a push per Point, in ns per List, through
-dist/agentica.
+dirty call of a module (its `compute def`) against an extern `compute def`, and a plain Agentica call, in ns per call
+with the loop included, and a List of 1000 Point structs built by one module call (short or dirty) against one built
+in Agentica with an extern call and a push per Point, in ns per List, through dist/agentica.
 
 `make bench-native` (or `python3 benchmarks/native/run.py --runs 5`) builds tests/fixtures/native/module_demo.c with
 the system C compiler and times one program per case, `--runs` times, printing the median. The program declares the
-module's `add` and `points` in an `extern module` block and libc's `labs` and `llabs` in an extern block.
+module's `add`, `points`, `crunch` and `dirty_points` in an `extern module` block and libc's `labs` and `llabs` in an
+extern block.
 """
 import argparse
 import os
@@ -34,6 +35,8 @@ end
 extern module "{module}"
   def add(a: Int, b: Int) -> Int
   def points(n: Int) -> List[Point]
+  compute def crunch(a: Int, b: Int) -> Int
+  compute def dirty_points(n: Int) -> List[Point]
 end
 
 def plain_add(a: Int, b: Int) -> Int
@@ -71,7 +74,9 @@ CASES = [
     ("short native call", "call", 1_000_000, "add(i, 1)"),
     ("extern def (labs)", "call", 1_000_000, "labs(0 - i)"),
     ("compute def (llabs)", "call", 20_000, "llabs(0 - i)"),
+    ("dirty module call (crunch)", "call", 20_000, "crunch(i, 1)"),
     ("List of 1000 Points, 1 module call", "List", 2_000, "points(1000).size"),
+    ("List of 1000 Points, 1 dirty call", "List", 2_000, "dirty_points(1000).size"),
     ("List of 1000 Points, extern + push", "List", 2_000, "extern_points(1000)"),
 ]
 

@@ -127,8 +127,8 @@ end
 # byte. TYPES has one {S<index>=SHAPE} or {E<index>=SHAPE} for each struct or enum that crosses, in the order the walk
 # meets them: its index in the table of structs or enums, and its shape, which the module's type of that name must
 # have too: "name: Type, ..." for a struct, "Variant | Variant(Type, ...)" for an enum, from the recorded types of
-# its fields and payloads. NAME is the def's name and LIBRARY the module's name as written (it may hold spaces, so it
-# is last).
+# its fields and payloads; and one {R=Name} for each resource, which the module's resource table must have. NAME is
+# the def's name and LIBRARY the module's name as written (it may hold spaces, so it is last).
 def module_signature(
   cx: Lowering.Cx,
   function: Ast.FunctionDecl,
@@ -187,6 +187,10 @@ def module_signature(
       end
 
       blocks = blocks.push("{E#{cx.enums[name]}=#{variants.join(" | ")}}")
+    elsif Types.is?(type, "Opaque")
+      # The checker lets only a resource of the module block through as an opaque type.
+      seen = seen.add(name)
+      blocks = blocks.push("{R=#{Types.display_name(name)}}")
     else
       pending = pending.concat(inner_types(type))
     end

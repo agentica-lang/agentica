@@ -1,7 +1,7 @@
-/* Native modules (vm/native_module.c) through Native.call: each kind of value both ways, the program's structs and
-   enums, the failures the env holds, binding (missing function, other signature, mode or type, bad bytecode), version
-   and load refusals, a carried module under no_files, the same module opened as a shared library, and short calls and
-   a first load on several threads. */
+/* Native modules (vm/native_module.c) through Native.call: each kind of value both ways, structs and enums, the
+   failures the env holds, binding and bad bytecode, version and load refusals, dirty calls, resources (a close and a
+   cancel during a dirty call, the end of the run), the type table at its cap, no_files, the module as a shared
+   library, and short calls and a first load on several threads. */
 #include "../core.h"
 #include "../services.h"
 #include "io_harness.h"
@@ -17,6 +17,9 @@
 #include <string.h>
 #ifndef _WIN32
 #include <unistd.h>
+#endif
+#ifdef __linux__
+#include <sys/resource.h>
 #endif
 
 #define THREADS 4
@@ -162,7 +165,6 @@ static void test_binding(void) {
   fails("module (Int, Float) -> Int add demo", two, 2, "RUNTIME-NATIVE-SIGNATURE");
   fails("module (Int, Int) -> Int crunch demo", two, 2, "RUNTIME-NATIVE-SIGNATURE");
   fails("compute module (Int, Int) -> Int add demo", two, 2, "RUNTIME-NATIVE-SIGNATURE");
-  fails("compute module (Int, Int) -> Int crunch demo", two, 2, "RUNTIME-NATIVE-SIGNATURE");
   const char *bad[] = {"module ", "module (Int, Int) -> Int add", "module (Int, Int) -> Int  demo",
                        "module (Int,Int) -> Int add demo", "module (Int, Int)->Int add demo",
                        "module (Void) -> Int add demo", "module (List[Int) -> Int add demo",
@@ -200,20 +202,28 @@ static const char *count_load(void) {
 }
 
 static const an_function bad_rows[] = {{"add", "(Int, Int) -> Int", NULL, AN_SHORT}};
-static const an_module v_major = {2, 0, sizeof(an_module), "v", NULL, functions, 1, NULL, 0};
-static const an_module v_minor = {1, AN_API_MINOR + 1, sizeof(an_module), "v", NULL, functions, 1, NULL, 0};
+static const an_module v_major = {2, 0, sizeof(an_module), "v", NULL, functions, 1, NULL, 0, NULL, 0};
+static const an_module v_minor = {1, AN_API_MINOR + 1, sizeof(an_module), "v", NULL, functions, 1, NULL, 0, NULL, 0};
 /* The size of an an_module of API 1.0, as vm/native_module.c checks it: one byte less is refused. */
 #define SIZE_1_0 (offsetof(an_module, function_count) + sizeof(uint32_t))
 #if UINTPTR_MAX == UINT64_MAX && ULONG_MAX == UINT64_MAX
 _Static_assert(SIZE_1_0 == 44, "the 1.0 an_module layout on LP64");
 #endif
-static const an_module v_size = {1, 0, SIZE_1_0 - 1, "v", NULL, functions, 1, NULL, 0};
-static const an_module v_size_1_0 = {1, 0, SIZE_1_0, "v", NULL, functions, 1, NULL, 0};
-static const an_module v_rows = {1, 0, sizeof(an_module), "v", NULL, bad_rows, 1, NULL, 0};
-static const an_module v_refuses = {1, 0, sizeof(an_module), "v", refuse_load, functions, 1, NULL, 0};
+static const an_module v_size = {1, 0, SIZE_1_0 - 1, "v", NULL, functions, 1, NULL, 0, NULL, 0};
+static const an_module v_size_1_0 = {1, 0, SIZE_1_0, "v", NULL, functions, 1, NULL, 0, NULL, 0};
+static const an_module v_rows = {1, 0, sizeof(an_module), "v", NULL, bad_rows, 1, NULL, 0, NULL, 0};
+static const an_module v_refuses = {1, 0, sizeof(an_module), "v", refuse_load, functions, 1, NULL, 0, NULL, 0};
 static const an_type twin_types[] = {{"Point", AN_STRUCT, "x: Int, y: Int"}, {"Point", AN_STRUCT, "x: Int"}};
-static const an_module v_twins = {1, 1, sizeof(an_module), "v", NULL, functions, 1, twin_types, AN_COUNT(twin_types)};
-static const an_module v_counts = {1, 0, sizeof(an_module), "v", count_load, functions, AN_COUNT(functions), NULL, 0};
+static const an_module v_twins = {1, 1, sizeof(an_module), "v", NULL, functions, 1, twin_types, AN_COUNT(twin_types),
+                                  NULL, 0};
+static const an_resource_type twin_resources[] = {{"Db", 8, NULL}, {"Db", 16, NULL}};
+static const an_module v_twin_resources = {1, 2, sizeof(an_module), "v", NULL, functions, 1, NULL, 0, twin_resources,
+                                           AN_COUNT(twin_resources)};
+static const an_resource_type point_resources[] = {{"Point", 8, NULL}};
+static const an_module v_type_and_resource = {1, 2, sizeof(an_module), "v", NULL, functions, 1, types, AN_COUNT(types),
+                                              point_resources, AN_COUNT(point_resources)};
+static const an_module v_counts = {1, 0, sizeof(an_module), "v", count_load, functions, AN_COUNT(functions), NULL,
+                                   0, NULL, 0};
 
 static const an_module *init_none(const an_api *api) {
   (void)api;
@@ -244,6 +254,14 @@ static const an_module *init_twins(const an_api *api) {
   (void)api;
   return &v_twins;
 }
+static const an_module *init_twin_resources(const an_api *api) {
+  (void)api;
+  return &v_twin_resources;
+}
+static const an_module *init_type_and_resource(const an_api *api) {
+  (void)api;
+  return &v_type_and_resource;
+}
 static const an_module *init_refuses(const an_api *api) {
   (void)api;
   return &v_refuses;
@@ -261,6 +279,7 @@ static void test_versions(void) {
     agc_native_init init;
   } refused[] = {{"v_none", init_none},   {"v_major", init_major}, {"v_minor", init_minor},
                  {"v_size", init_size},   {"v_rows", init_rows},   {"v_twins", init_twins},
+                 {"v_twin_resources", init_twin_resources}, {"v_type_and_resource", init_type_and_resource},
                  {"v_refuses", init_refuses}};
   agc_value two[2] = {agc_int(1), agc_int(2)};
   char signature[96];
@@ -287,7 +306,7 @@ static void test_versions(void) {
 }
 
 static const an_module v_types_1_0 = {1, 0, SIZE_1_0, "v", NULL, functions, AN_COUNT(functions), types,
-                                     AN_COUNT(types)};
+                                     AN_COUNT(types), NULL, 0};
 
 static const an_module *init_types_1_0(const an_api *api) {
   (void)api;
@@ -379,6 +398,314 @@ static void test_types(void) {
   fails("module " SHAPE_BLOCK POINT_BLOCK "(Shape) -> Int area demo", &wrong[1], 1, "RUNTIME-INTERNAL");
 }
 
+/* The task parks on a dirty call, as a builtin leaves it. */
+static void park(const char *signature, const agc_value *items, size_t n) {
+  agc_task *task = vm.task;
+  atomic_store(&task->state, AGC_TASK_RUNNING);
+  (void)call(signature, items, n);
+  assert(task->parked && task->parking);
+  task->parking = false;
+  assert(agc_task_commit_park(task));
+}
+
+/* The task, woken, takes the value of its dirty call in its turn, as resume does. */
+static agc_value finish(void) {
+  atomic_store(&vm.task->state, AGC_TASK_RUNNING);
+  vm.in_turn = true;
+  agc_value v = agc_io_finish(&vm, vm.task);
+  vm.in_turn = false;
+  return v;
+}
+
+static agc_value take(void) {
+  agc_test_wait_woken(&vm, vm.task);
+  return finish();
+}
+
+static agc_value dirty(const char *signature, const agc_value *items, size_t n) {
+  park(signature, items, n);
+  return take();
+}
+
+static void dirty_fails(const char *signature, const agc_value *items, size_t n, const char *code) {
+  park(signature, items, n);
+  agc_test_wait_woken(&vm, vm.task);
+  /* In the task's turn a failure jumps to vm.turn. */
+  if (setjmp(vm.turn) == 0) {
+    (void)finish();
+    assert(!"the dirty call did not fail");
+  }
+  vm.in_turn = false;
+  assert(strcmp(vm.outcome->code, code) == 0);
+}
+
+#define COUNTER "{R=Counter}"
+
+static agc_c_resource *counter_of(agc_value v) { return agc_as_c_resource(&vm, v); }
+
+static agc_value make_counter_value(int64_t id) {
+  agc_value n = agc_int(id);
+  return call("module " COUNTER "(Int) -> Counter counter demo", &n, 1);
+}
+
+static agc_value native_close(agc_value v) { return agc_ffi_builtins[1].fn(&vm, &v, 0); }
+
+/* Each kind of value made apart on the pool and built in the task's turn, a failure raised there, and resources made
+   by a dirty call. */
+static void test_dirty(void) {
+  agc_value two[2] = {agc_int(40), agc_int(2)};
+  assert(agc_as_int(&vm, dirty("compute module (Int, Int) -> Int crunch demo", two, 2)) == 42);
+  agc_value word = text("caf\xc3\xa9 ok");
+  assert(same_text(dirty("compute module (String) -> String dirty_upcase demo", &word, 1), "CAF\xc3\xa9 OK"));
+  agc_value seven = agc_int(7), found;
+  const agc_map *row = agc_as_map(&vm, dirty("compute module (Int) -> Map[String, Int] dirty_row demo", &seven, 1));
+  assert(row->size == 3 && agc_map_get(&vm, row, text("square"), &found) && agc_as_int(&vm, found) == 49);
+  agc_value map = pair_map();
+  const agc_list *pairs =
+      agc_as_list(&vm, dirty("compute module (Map[String, Int]) -> List[String] dirty_pairs demo", &map, 1));
+  assert(agc_list_len(pairs) == 2 && same_text(agc_list_get(pairs, 0), "b=2"));
+  agc_value ask[2] = {map, text("a")};
+  agc_value hit = dirty("compute module (Map[String, Int], String) -> Optional[Int] dirty_lookup demo", ask, 2);
+  assert(agc_as_enum(&vm, hit)->variant == 1 && agc_as_int(&vm, agc_as_enum(&vm, hit)->payload[0]) == 1);
+  agc_value letters = text("12x");
+  agc_value refused = dirty("compute module (String) -> Result[Int] dirty_parse demo", &letters, 1);
+  assert(!agc_as_result(&vm, refused)->ok && same_text(agc_as_result(&vm, refused)->value, "not a number"));
+  dirty_fails("compute module (Result[Int]) -> Int dirty_unwrap demo", &refused, 1, "RUNTIME-NATIVE-ERROR");
+
+  dirty_fails("compute module () -> String dirty_bad_text demo", NULL, 0, "RUNTIME-NATIVE-ERROR");
+  agc_enum *circle = agc_new_enum(3, 1);
+  circle->payload[0] = agc_int(2);
+  agc_value grown[2] = {agc_enum_value(circle), agc_int(3)};
+  const agc_enum *square = agc_as_enum(
+      &vm, dirty("compute module {E0=Dot | Circle(Int) | Rect(Point, Point)}{S0=x: Int, y: Int}(Shape, Int) -> Shape "
+                 "dirty_grow demo",
+                 grown, 2));
+  assert(square->variant == 4 && field(square->payload[1], 0) == 3);
+  agc_value three = agc_int(3);
+  const agc_list *list =
+      agc_as_list(&vm, dirty("compute module {S0=x: Int, y: Int}(Int) -> List[Point] dirty_points demo", &three, 1));
+  assert(agc_list_len(list) == 3 && field(agc_list_get(list, 2), 1) == 4);
+  int before = atomic_load(&free_count);
+  const char *counters_demo = "compute module " COUNTER "(Int) -> List[Counter] counters demo";
+  const agc_list *made = agc_as_list(&vm, dirty(counters_demo, &three, 1));
+  assert(agc_list_len(made) == 3);
+  for (uint32_t k = 0; k < 3; k++) {
+    agc_c_resource *res = counter_of(agc_list_get(made, k));
+    assert(!res->closed && res->pointer && ((demo_counter *)res->pointer)->id == k + 1);
+    native_close(agc_list_get(made, k));
+  }
+  assert(atomic_load(&free_count) == before + 3);
+  /* The task is cancelled after the job ran: what it made is dropped, its counters freed. */
+  park(counters_demo, &three, 1);
+  agc_test_wait_woken(&vm, vm.task);
+  agc_io_detach(&vm, vm.task);
+  while (atomic_load(&free_count) < before + 6) assert(agc_io_poll(&vm, true));
+  atomic_store(&vm.task->state, AGC_TASK_RUNNING);
+  assert(atomic_load(&free_count) == before + 6);
+}
+
+/* A resource through short calls: made, held for a call, closed once; and the blocks of a resource that the bytecode
+   or the module gets wrong. */
+static void test_resources(void) {
+  agc_value c = make_counter_value(5);
+  agc_c_resource *res = counter_of(c);
+  assert(!res->closed && strcmp(res->name, "Counter") == 0);
+  const char *bump_demo = "module " COUNTER "(Counter) -> Int bump demo";
+  assert(agc_as_int(&vm, call(bump_demo, &c, 1)) == 1 && agc_as_int(&vm, call(bump_demo, &c, 1)) == 2);
+  int before = atomic_load(&free_count);
+  native_close(c);
+  native_close(c);
+  assert(res->freed && atomic_load(&free_count) == before + 1);
+  fails(bump_demo, &c, 1, "RUNTIME-NATIVE-CLOSED");
+  agc_value p = point(1, 2);
+  fails(bump_demo, &p, 1, "RUNTIME-INTERNAL");
+  agc_value fresh = make_counter_value(6);
+  fails("module {R=Nope}(Nope) -> Int bump demo", &fresh, 1, "RUNTIME-NATIVE-SIGNATURE");
+  fails("module {R=Point}(Point) -> Point flip demo", &fresh, 1, "RUNTIME-NATIVE-SIGNATURE");
+  fails("module " COUNTER POINT_BLOCK "(Point) -> Int bump demo", &fresh, 1, "RUNTIME-NATIVE-SIGNATURE");
+  const char *bad[] = {"module (Counter) -> Int bump demo", "module {R=}(Counter) -> Int bump demo",
+                       "module {R=Counter(Counter) -> Int bump demo", "module {R=Count er}(Counter) -> Int bump demo",
+                       "module " COUNTER COUNTER "(Counter) -> Int bump demo",
+                       "module " COUNTER "(Counter[Int]) -> Int bump demo"};
+  for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) fails(bad[k], &fresh, 1, "RUNTIME-INTERNAL");
+  native_close(fresh);
+}
+
+/* Busy-waits until the pool thread sets FLAG (within milliseconds); after 10 seconds the test fails instead of
+   hanging. */
+static void wait_for_flag(atomic_bool *flag) {
+  time_t start = time(NULL);
+  while (!atomic_load(flag)) {
+    if (time(NULL) - start >= 10) {
+      fputs("the pool thread never set the flag\n", stderr);
+      abort();
+    }
+  }
+}
+
+/* A dirty call holds its counter: ANOTHER task's close (or the end of the cancelled task that owns it, when CANCEL)
+   meanwhile leaves it to the end of the call, which frees it once. A cancelled call's result is dropped. */
+static void close_while_waiting(bool cancel) {
+  agc_value off = agc_bool(false);
+  (void)call("module (Bool) -> Void gate demo", &off, 1);
+  /* Made in the task's turn, so the task owns it. */
+  vm.in_turn = true;
+  agc_value c = make_counter_value(cancel ? 8 : 9);
+  vm.in_turn = false;
+  agc_c_resource *res = counter_of(c);
+  int before = atomic_load(&free_count);
+  park("compute module " COUNTER "(Counter) -> Int wait_gate demo", &c, 1);
+  wait_for_flag(&gate_was_entered);
+  agc_task *task = vm.task;
+  if (cancel) {
+    agc_io_detach(&vm, task);
+    agc_close_owned(&vm, task);
+  } else {
+    vm.task = agc_new_task(&vm);
+    native_close(c);
+    vm.task = task;
+  }
+  assert(res->closed && !res->freed && atomic_load(&free_count) == before);
+  agc_value on = agc_bool(true);
+  (void)call("module (Bool) -> Void gate demo", &on, 1);
+  if (cancel) {
+    while (!res->freed) assert(agc_io_poll(&vm, true));
+    atomic_store(&task->state, AGC_TASK_RUNNING);
+  } else {
+    /* The id was read after the close: the state was still there. */
+    assert(agc_as_int(&vm, take()) == 9);
+  }
+  assert(res->freed && atomic_load(&free_count) == before + 1);
+  native_close(c);
+  assert(atomic_load(&free_count) == before + 1);
+}
+
+static void test_close_during_a_dirty_call(void) {
+  close_while_waiting(false);
+  close_while_waiting(true);
+}
+
+#ifdef __linux__
+static void no_work(void *arg) { (void)arg; }
+#endif
+
+/* A dirty call whose work cannot start (the pool has no thread yet and none starts: RLIMIT_NPROC at 0) fails its task
+   with RUNTIME-INTERNAL once its done half gave back the hold on its counter, which a close then frees at once. Runs
+   before any other dirty call; only on Linux, and only where the limit stops threads (not for root). */
+static void test_a_dirty_call_that_cannot_start(void) {
+#ifdef __linux__
+  struct rlimit saved, none;
+  if (getrlimit(RLIMIT_NPROC, &saved) != 0) return;
+  none = saved;
+  none.rlim_cur = 0;
+  if (setrlimit(RLIMIT_NPROC, &none) != 0) return;
+  uv_thread_t probe;
+  if (uv_thread_create(&probe, no_work, NULL) == 0) {
+    (void)uv_thread_join(&probe);
+    assert(setrlimit(RLIMIT_NPROC, &saved) == 0);
+    return;
+  }
+  agc_value c = make_counter_value(4);
+  agc_c_resource *res = counter_of(c);
+  park("compute module " COUNTER "(Counter) -> Int wait_gate demo", &c, 1);
+  agc_test_wait_woken(&vm, vm.task);
+  assert(setrlimit(RLIMIT_NPROC, &saved) == 0);
+  if (setjmp(vm.turn) == 0) {
+    (void)finish();
+    assert(!"the call that could not start did not fail");
+  }
+  vm.in_turn = false;
+  assert(strcmp(vm.outcome->code, "RUNTIME-INTERNAL") == 0 && res->jobs == 0);
+  int before = atomic_load(&free_count);
+  native_close(c);
+  assert(res->freed && atomic_load(&free_count) == before + 1);
+#endif
+}
+
+/* MODULE_MAX_TYPES rows, Point among them, found by the binary search; one row more refuses the module. */
+#define TYPE_CAP 65536
+static an_type *big_types;
+static an_module big_module, too_big_module;
+
+static const an_module *init_big(const an_api *api) {
+  (void)api;
+  return &big_module;
+}
+
+static const an_module *init_too_big(const an_api *api) {
+  (void)api;
+  return &too_big_module;
+}
+
+static void test_type_cap(void) {
+  big_types = calloc(TYPE_CAP + 1, sizeof *big_types);
+  char *names = malloc((size_t)(TYPE_CAP + 1) * 8);
+  assert(big_types && names);
+  for (uint32_t k = 0; k <= TYPE_CAP; k++) {
+    char *name = names + (size_t)k * 8;
+    snprintf(name, 8, "T%05u", (unsigned)k);
+    big_types[k] = (an_type){name, AN_STRUCT, "x: Int"};
+  }
+  /* Point and Shape at the indexes that the demo's functions use. */
+  big_types[POINT_TYPE] = types[POINT_TYPE];
+  big_types[SHAPE_TYPE] = types[SHAPE_TYPE];
+  big_module = (an_module){1, 1, sizeof(an_module), "big", NULL, functions, AN_COUNT(functions), big_types, TYPE_CAP,
+                             NULL, 0};
+  too_big_module = big_module;
+  too_big_module.type_count = TYPE_CAP + 1;
+  agc_native_register(&vm, "big", init_big);
+  agc_native_register(&vm, "too_big", init_too_big);
+  agc_value p = point(1, 2);
+  agc_value flipped = call("module " POINT_BLOCK "(Point) -> Point flip big", &p, 1);
+  assert(field(flipped, 0) == 2 && field(flipped, 1) == 1);
+  fails("module " POINT_BLOCK "(Point) -> Point flip too_big", &p, 1, "RUNTIME-NATIVE-LOAD");
+}
+
+static int never_stopped(void) { return 0; }
+
+/* The end of the run frees the live resources once, newest first, and before them the counters that a dirty call
+   made for a task that is still parked when the run ends (its value is never taken). The loop's close later drops
+   that job: ASan would see a second free. */
+static void test_end_of_run(void) {
+  int before = atomic_load(&free_count);
+  for (int64_t id = 11; id <= 13; id++) (void)make_counter_value(id);
+  agc_value two = agc_int(2);
+  park("compute module " COUNTER "(Int) -> List[Counter] counters demo", &two, 1);
+  agc_test_wait_woken(&vm, vm.task);
+  agc_io_flush_files(&vm);
+  assert(agc_ffi_end(&vm, never_stopped));
+  assert(atomic_load(&free_count) == before + 5);
+  const int64_t order[5] = {2, 1, 13, 12, 11};
+  for (int k = 0; k < 5; k++) assert(atomic_load(&freed_ids[before + k]) == order[k]);
+}
+
+/* A dirty call walks and looks up String keys (of more bytes than AGC_COST_BYTES, so a lookup would charge) on the
+   pool thread with no charge: the task that vm.task names meanwhile, a sentinel, pays nothing. The bytes it read are
+   charged to the task that takes the value. */
+static void test_dirty_calls_charge_on_the_scheduler(void) {
+  agc_value off = agc_bool(false);
+  (void)call("module (Bool) -> Void gate demo", &off, 1);
+  char key[300];
+  memset(key, 'k', sizeof key - 1);
+  key[sizeof key - 1] = '\0';
+  agc_map *m = agc_map_put(&vm, agc_new_map(), text(key), agc_int(20));
+  key[0] = 'j';
+  agc_value map = agc_map_value(agc_map_put(&vm, m, text(key), agc_int(1)));
+  agc_task *task = vm.task, *sentinel = agc_new_task(&vm);
+  park("compute module (Map[String, Int]) -> Int gated_sum demo", &map, 1);
+  wait_for_flag(&gate_was_entered);
+  vm.task = sentinel;
+  int64_t cost = sentinel->turn_cost;
+  /* Opened here, not by a short call, which would charge the sentinel. */
+  atomic_store(&gate_is_open, true);
+  wait_for_flag(&gate_was_left);
+  assert(sentinel->turn_cost == cost);
+  vm.task = task;
+  int64_t paid = task->turn_cost;
+  assert(agc_as_int(&vm, take()) == 42);
+  assert(task->turn_cost > paid);
+}
+
 /* The fuzz driver's no_files: a carried module runs, a library is never opened. */
 static void test_no_files(void) {
   agc_value two[2] = {agc_int(1), agc_int(2)};
@@ -386,6 +713,7 @@ static void test_no_files(void) {
   assert(agc_as_int(&vm, call("module (Int, Int) -> Int add demo", two, 2)) == 3);
   fails("module (Int, Int) -> Int add /no/such/libmodule.so", two, 2, "RUNTIME-NATIVE-DENIED");
   fails("ll labs " LIBM, two, 1, "RUNTIME-NATIVE-DENIED");
+  fails("compute module (Int, Int) -> Int crunch demo", two, 2, "RUNTIME-NATIVE-DENIED");
   vm.rt->no_files = false;
 }
 
@@ -431,7 +759,7 @@ static const char *racy_load(void) {
   return NULL;
 }
 
-static const an_module racy = {1, 0, sizeof(an_module), "racy", racy_load, functions, 1, NULL, 0};
+static const an_module racy = {1, 0, sizeof(an_module), "racy", racy_load, functions, 1, NULL, 0, NULL, 0};
 
 static const an_module *init_racy(const an_api *api) {
   (void)api;
@@ -514,8 +842,16 @@ int main(int argc, char **argv) {
   test_binding();
   test_versions();
   test_types();
+  test_a_dirty_call_that_cannot_start();
+  test_dirty();
+  test_dirty_calls_charge_on_the_scheduler();
+  test_resources();
+  test_close_during_a_dirty_call();
+  test_type_cap();
   test_no_files();
   test_shared_library(argv[0]);
   test_threads();
+  test_end_of_run();
+  agc_test_settle_loop(&vm);
   return 0;
 }

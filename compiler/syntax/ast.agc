@@ -243,7 +243,9 @@ end
 ## value has its own free function, a C function pointer that the call which makes it takes. by_ref is true for
 ## `free_ref: db_close`, a free function that takes the address of the pointer (void f(T **)). A callback of the block
 ## (`callback Compare(a: C.Int32) -> C.Int32`) is a resource too, made by Native.callback and freed by the VM: free
-## is "" and callback holds its C function type; it is `none` for every other resource.
+## is "" and callback holds its C function type; it is `none` for every other resource. A resource of an
+## `extern module "NAME"` block (`resource Db`) has module NAME, the library as written, and free "": the module's
+## resource table frees it; module is "" for every other resource.
 export struct ResourceDecl
   id: Int
   name: String
@@ -251,6 +253,7 @@ export struct ResourceDecl
   free: String
   by_ref: Bool
   callback: Optional[Callback]
+  module: String
   doc: Optional[String]
   span: Source.Span
 end

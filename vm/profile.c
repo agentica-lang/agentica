@@ -587,6 +587,7 @@ void agc_profile_report(agc_vm *vm) {
     AGC_TRACE(tr, AGC_TRACE_PROFILE, "builtin calls=%" PRIu64 " us=%" PRIu64 " name=%.*s", profile->builtin_calls[id],
               profile->builtin_ns[id] / 1000u, agc_trace_len(shown_name_len(name)), name);
   }
+  if (profile->report_native) profile->report_native(vm);
   report_sections(tr, profile->sections);
   report_loop(tr, profile);
 }

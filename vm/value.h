@@ -323,7 +323,9 @@ struct agc_ffi_call;
    turn until its free, so a close of one of them during a compute call on the resource frees it at the end of that
    call. A link that points at a freed resource with at most one parent of its own is moved to that parent when it is
    read, so a chain keeps no freed links. `seen` marks a resource while a call's arguments are sorted out
-   (agc_ffi_cache.walk). NULL, 0 and false for the others. Changes under rt->sync, except `calls`: the fast calls
+   (agc_ffi_cache.walk). A resource of a native module (vm/native_module.c) has `row` set to its row of the module's
+   resource table (an_resource_type): `pointer` is its malloc'd state, which agc_native_free_state frees, and `free`
+   is NULL. NULL, 0 and false for the others. Changes under rt->sync, except `calls`: the fast calls
    (`def`, not compute) that use it now, pinned without the lock, as `jobs` holds for the others; a close leaves the
    free to the last of them. They read `up`, `ups` and `closed` without the lock too, so those four are atomic. */
 typedef struct agc_c_resource {
@@ -338,6 +340,7 @@ typedef struct agc_c_resource {
   struct agc_ffi_call *free;
   void *free_at;
   void *callback;
+  const void *row;
   const char *name;
   size_t size;
   uint32_t jobs;
@@ -394,7 +397,7 @@ typedef struct {
      goes on without the generic tail; compiled code calls it below a native call (agc_jit_call_leaf). A leaf may take
      rt->sync and drop it before it returns to read shared state (Native.closed?). A leaf row is never shared, has
      AGC_NATIVE_NONE and AGC_COST_NONE (vm/tests/sync_test.c checks the tables), and the sanitizer and GC-stress builds
-     abort when a leaf call breaks the rule (AGC_LEAF_CHECK in vm/core.h). When unsure, leave a row unmarked. A row
+     abort when a leaf call breaks the rule (AGC_LEAF_CHECK in vm/port.h). When unsure, leave a row unmarked. A row
      in plain_leaves (vm/jit/jit.c) must never agc_fail once its checks there pass. */
   bool leaf;
   /* A call that compiled code makes itself (agc_jit_call_builtin, vm/jit/jit.c), without leaving for the interpreter:
@@ -523,7 +526,7 @@ void *agc_alloc(size_t size);
 void *agc_alloc_atomic(size_t size);
 size_t agc_size_add(size_t a, size_t b);
 size_t agc_size_mul(size_t a, size_t b);
-void agc_out_of_memory(void);
+_Noreturn void agc_out_of_memory(void);
 unsigned agc_gc_version(void);
 void agc_gc_allow_threads(void);
 bool agc_gc_thread_enter(void);
@@ -796,6 +799,16 @@ agc_map *agc_map_add_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value
 bool agc_map_get(agc_vm *vm, const agc_map *m, agc_value key, agc_value *value);
 bool agc_map_get_hash(agc_vm *vm, const agc_map *m, uint64_t hash, agc_value key, agc_value *value);
 agc_value *agc_map_keys(agc_vm *vm, const agc_map *m, uint32_t span);
+/* agc_map_keys into KEYS (M->size slots) with no GC memory made, for a thread that must not make any; false when the
+   key list does not match the table, which a valid map never does. */
+bool agc_map_keys_into(const agc_map *m, agc_value *keys);
+/* agc_map_get with no charge and no GC memory, for a thread that must not touch a task (a dirty native call): HASH_KEY
+   is the run's (agc_runtime.hash_key), and *BYTES grows by what the lookup reads, for the caller to charge later. */
+bool agc_map_find(const uint64_t hash_key[2], const agc_map *m, agc_value key, agc_value *value, size_t *bytes);
+/* The keys of M in its order into KEYS and their values into VALUES (M->size slots each), as agc_map_find gives them;
+   false when the map does not match itself, which a valid one never does. */
+bool agc_map_entries_into(const uint64_t hash_key[2], const agc_map *m, agc_value *keys, agc_value *values,
+                          size_t *bytes);
 void agc_map_each_value(const agc_map *m, void (*visit)(agc_value value, void *data), void *data);
 bool agc_map_any_value(const agc_map *m, agc_value *out);
 bool agc_set_subset(agc_vm *vm, const agc_map *a, const agc_map *b);

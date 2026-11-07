@@ -1701,11 +1701,11 @@ agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc
   return start_job(vm, kind, data, context, -1, NULL, NULL, flags);
 }
 
-agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data) {
-  if (!kind->work || kind->external || kind->cancel)
+agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context) {
+  if (!kind->work || kind->external || kind->cancel || agc_is(context, AGC_T_HANDLE))
     agc_fail(vm, "RUNTIME-INTERNAL", "a compute job needs pool work and nothing else", 0);
   agc_task_parking(vm);
-  job *j = start_job(vm, kind, data, agc_void(), -1, vm->task, NULL, AGC_JOB_COMPUTE);
+  job *j = start_job(vm, kind, data, context, -1, vm->task, NULL, AGC_JOB_COMPUTE);
   agc_task_park(vm, false);
   return j;
 }
@@ -1930,8 +1930,14 @@ agc_value agc_io_finish(agc_vm *vm, agc_task *t) {
   (void)agc_job_settle(&j->outcome, AGC_JOB_EXPIRED);
   agc_value context = take_context(vm, r);
   if (atomic_load(&j->start_failed)) {
-    close_pending(vm, context);
+    /* A compute job ends through `done`, which knows that the work did not run, as in end_detached: it gives back
+       what the job holds (resources, a Native.Mutex lease), which `drop` cannot reach off rt->sync. */
+    void *data = j->compute ? j->data : NULL;
+    if (data) j->data = NULL;
+    const agc_io_kind *kind = j->kind;
     release(j);
+    if (data) (void)run_half(vm, kind, true, data, context);
+    close_pending(vm, context);
     agc_fail(vm, "RUNTIME-INTERNAL", "cannot queue pool work", 0);
   }
   job_trace trace = trace_of(r, j);
@@ -2259,9 +2265,10 @@ agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc
   agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
 }
 
-agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data) {
+agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context) {
   (void)kind;
   (void)data;
+  (void)context;
   agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
 }
 

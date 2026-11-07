@@ -2475,6 +2475,7 @@ def parse_resource(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], block
       free: free,
       by_ref: by_ref,
       callback: none,
+      module: "",
       doc: doc,
       span: Base.span_from(e, pos, stop),
     ),
@@ -2541,6 +2542,7 @@ def parse_resource_by_pointer(e: Base.Env, pos: Int, ids: Int, doc: Optional[Str
       free: FUNCTION_TYPE,
       by_ref: false,
       callback: none,
+      module: "",
       doc: doc,
       span: Base.span_from(e, pos, stop),
     ),
@@ -2632,6 +2634,7 @@ def parse_callback(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> Re
       free: "",
       by_ref: false,
       callback: some(Ast.Callback(params: typed, result: returned.type, codes: codes.join(""))),
+      module: "",
       doc: doc,
       span: Base.span_from(e, pos, stop),
     ),
@@ -3067,16 +3070,20 @@ def parse_extern_function(
   return ok(ExternAt(decl: decl, symbol: symbol, records: records))
 end
 
-# One member of an `extern module "NAME"` block at pos (after its doc and export): only [compute] def. A resource, a
+# One member of an `extern module "NAME"` block at pos (after its doc and export): a resource or a [compute] def. A
 # callback or a struct is PARSE-EXTERN-MODULE at its first word: the types that cross are the program's own.
 def parse_module_member(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], block: ExternBlock) -> Result[DeclAt]
-  if resource_start?(e, pos) or callback_start?(e, pos) or e.tokens[pos].kind == "struct"
+  if resource_start?(e, pos)
+    return parse_module_resource(e, pos, ids, doc, block)
+  end
+
+  if callback_start?(e, pos) or e.tokens[pos].kind == "struct"
     return error(
       Base.bail(
         e,
         pos,
         "PARSE-EXTERN-MODULE",
-        "an extern module block declares only def and compute def",
+        "an extern module block declares only resource, def and compute def",
         Base.hint("declare the structs and enums that cross outside the block, as plain declarations"),
       ),
     )
@@ -3092,6 +3099,40 @@ def parse_module_member(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], 
   end
 
   return parse_module_function(e, pos, at, ids, doc, block)
+end
+
+# resource Name NL in an extern module block at pos (the word resource): a type of the module's resource table, which
+# frees its values itself, so a free function after a comma is PARSE-EXTERN-MODULE.
+def parse_module_resource(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], block: ExternBlock) -> Result[DeclAt]
+  after_name = try Base.expect(e, pos + 1, "type-name", "a resource name", false)
+  if Base.kind_at(e, after_name) == "comma"
+    return error(
+      Base.bail(
+        e,
+        after_name,
+        "PARSE-EXTERN-MODULE",
+        "a resource of a native module has no free function",
+        Base.hint("the module's resource table frees its values: write resource #{e.tokens[pos + 1].lexeme}"),
+      ),
+    )
+  end
+
+  stop = try expect_statement_end(e, after_name, "a newline after the resource")
+  node = Ast.Decl.Resource(
+    Ast.ResourceDecl(
+      id: ids,
+      name: e.tokens[pos + 1].lexeme,
+      name_span: e.tokens[pos + 1].span,
+      free: "",
+      by_ref: false,
+      callback: none,
+      module: block.library,
+      doc: doc,
+      span: Base.span_from(e, pos, stop),
+    ),
+  )
+
+  return decl_at(node, stop, ids)
 end
 
 # [compute] def name(params) -> Type NL in an extern module block at pos (start is compute or def): a function of the

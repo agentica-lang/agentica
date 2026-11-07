@@ -1,6 +1,9 @@
 extern module "sqlite_native"
+  ## A connection.
+  export resource Db
   ## Opens the database.
   export def open(path: String, flags: Int) -> Result[Int]
   compute def query(db: Int, sql: String, params: List[Value]) -> Result[List[Row]]
   def autocommit?(db: Int) -> Bool
+  def connect(path: String) -> Result[Db]
 end

@@ -290,6 +290,14 @@ callback functions and types of the program (the front end's bytecode names each
 once), and for hand-made bytecode by a cap of 4096 pairs, past which
 `Native.callback` fails with `RUNTIME-NATIVE-CALLBACK`. The end of the run frees what is
 still open (§14.4, step 3), but for the callbacks: they have nothing to free.
+A resource of a native module (`resource Name` in an `extern module` block) is
+the same `agc_c_resource` with the row of the module's resource table: its free
+is the module's free function on its state, then `free` of the state, under the
+same rules (owner, holds, pins, the end of the run). A dirty call holds its
+resource arguments as a `compute def` call does, and a resource it makes is
+registered when the `done` half builds the result, owned by the task that takes
+it; a dropped result frees what it made, and the end of the run frees what a
+finished call made for a task that never took it, before the registry.
 There are no GC finalizers.
 
 A channel is the one handle made unowned. `Channel.new` makes no registry entry.

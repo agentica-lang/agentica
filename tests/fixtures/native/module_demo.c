@@ -1,13 +1,16 @@
 /* A native module (vm/agentica_native.h, #1149) for the tests and the benchmark: vm/tests/native_module_test.c
    compiles it in as a module the binary carries and opens it as a shared library (mk/vm-test.mk builds it),
    tests/test_vm_native_module.py builds it and calls it from extern module blocks, and benchmarks/native/run.py calls
-   `add` and `points`. It links nothing but the C library: every VM call goes through the env. */
+   `add`, `points` and `crunch`. It links nothing but the C library: every VM call goes through the env. */
 /* The header next to the VM's sources, so this file builds with no -I (a module of a package gets the header of the
    binary it runs in). */
 #include "../../../vm/agentica_native.h"
 
+#include <stdatomic.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 static an_term add(an_env *env, int argc, const an_term *argv) {
   int64_t a, b;
@@ -305,6 +308,136 @@ static an_term call_kept(an_env *env, int argc, const an_term *argv) {
   return an_int(env, demo_call_kept((int)n));
 }
 
+/* The resource table: a Counter has an id and a count. Its free counts the frees, keeps the ids in the order freed
+   (FREED_IDS, at most 64) and, once trace_frees ran, writes "freed N" to stderr, so a test sees what the end of a
+   task or of the run freed, and that nothing is freed twice. */
+enum { COUNTER_RESOURCE };
+
+typedef struct {
+  int64_t id, count;
+} demo_counter;
+
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
+static atomic_int free_count, free_trace;
+static atomic_llong freed_ids[64];
+/* The gate of wait_gate and gated_sum: ENTERED once a call waits, OPEN lets it go, LEFT once gated_sum is done
+   with the map. */
+static atomic_bool gate_was_entered, gate_is_open, gate_was_left;
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
+
+static void counter_free(void *state) {
+  const demo_counter *c = state;
+  int at = atomic_fetch_add(&free_count, 1);
+  if (at < 64) atomic_store(&freed_ids[at], c->id);
+  if (atomic_load(&free_trace)) fprintf(stderr, "freed %lld\n", (long long)c->id);
+}
+
+static an_term new_counter(an_env *env, int64_t id) {
+  an_term t = an_void(env);
+  demo_counter *c = an_resource_new(env, COUNTER_RESOURCE, &t);
+  if (c) c->id = id;
+  return t;
+}
+
+static an_term make_counter(an_env *env, int argc, const an_term *argv) {
+  int64_t id;
+  (void)argc;
+  if (!an_get_int(env, argv[0], &id)) return an_badarg(env, 0);
+  return new_counter(env, id);
+}
+
+/* The count after one more. */
+static an_term bump(an_env *env, int argc, const an_term *argv) {
+  demo_counter *c;
+  (void)argc;
+  if (!an_get_resource(env, argv[0], COUNTER_RESOURCE, (void **)&c)) return an_badarg(env, 0);
+  return an_int(env, ++c->count);
+}
+
+/* Waits on a pool thread until the gate opens. A busy wait: the C library has no portable sleep, and the test that
+   opens the gate does it within milliseconds; the 10 seconds only keep a broken test from hanging. */
+static void wait_for_gate(void) {
+  atomic_store(&gate_was_entered, true);
+  time_t start = time(NULL);
+  while (!atomic_load(&gate_is_open) && time(NULL) - start < 10) {
+  }
+}
+
+/* A dirty call that waits for the gate, then gives the id of its counter, read after the wait: the VM holds the
+   counter for the call, whatever closes it meanwhile. */
+static an_term wait_gate(an_env *env, int argc, const an_term *argv) {
+  demo_counter *c;
+  (void)argc;
+  if (!an_get_resource(env, argv[0], COUNTER_RESOURCE, (void **)&c)) return an_badarg(env, 0);
+  wait_for_gate();
+  return an_int(env, c->id);
+}
+
+/* N counters with ids 1 to N (at most 8) made in a dirty call, in a List. */
+static an_term counters(an_env *env, int argc, const an_term *argv) {
+  int64_t n;
+  an_term items[8];
+  (void)argc;
+  if (!an_get_int(env, argv[0], &n) || n < 0 || n > 8) return an_badarg(env, 0);
+  for (int64_t k = 0; k < n; k++) items[k] = new_counter(env, k + 1);
+  return an_list(env, items, (size_t)n);
+}
+
+static an_term gate_entered(an_env *env, int argc, const an_term *argv) {
+  (void)argc;
+  (void)argv;
+  return an_bool(env, atomic_load(&gate_was_entered));
+}
+
+/* The sum of the values of a Map[String, Int] after the gate, each read twice, by the walk and by a lookup of its
+   key: a dirty walk and lookup of String keys, which the test times against the gate. */
+static an_term gated_sum(an_env *env, int argc, const an_term *argv) {
+  an_map_cursor c;
+  an_term key, value, found;
+  uint64_t total = 0;
+  (void)argc;
+  wait_for_gate();
+  if (!an_map_cursor_begin(env, argv[0], &c, NULL)) return an_badarg(env, 0);
+  while (an_map_next(env, &c, &key, &value)) {
+    int64_t a, b;
+    if (!an_map_get(env, argv[0], key, &found) || !an_get_int(env, value, &a) || !an_get_int(env, found, &b))
+      return an_badarg(env, 0);
+    total += (uint64_t)a + (uint64_t)b;
+  }
+  atomic_store(&gate_was_left, true);
+  return an_int(env, (int64_t)total);
+}
+
+/* gate(true) lets wait_gate and gated_sum go; gate(false) closes the gate for the next call. */
+static an_term gate(an_env *env, int argc, const an_term *argv) {
+  bool on;
+  (void)argc;
+  if (!an_get_bool(env, argv[0], &on)) return an_badarg(env, 0);
+  if (!on) {
+    atomic_store(&gate_was_entered, false);
+    atomic_store(&gate_was_left, false);
+  }
+  atomic_store(&gate_is_open, on);
+  return an_void(env);
+}
+
+static an_term free_total(an_env *env, int argc, const an_term *argv) {
+  (void)argc;
+  (void)argv;
+  return an_int(env, atomic_load(&free_count));
+}
+
+static an_term trace_frees(an_env *env, int argc, const an_term *argv) {
+  (void)argc;
+  (void)argv;
+  atomic_store(&free_trace, 1);
+  return an_void(env);
+}
+
+static const an_resource_type resources[] = {
+  {"Counter", sizeof(demo_counter), counter_free},
+};
+
 static const an_type types[] = {
   {"Point", AN_STRUCT, "x: Int, y: Int"},
   {"Shape", AN_ENUM, "Dot | Circle(Int) | Rect(Point, Point)"},
@@ -338,6 +471,25 @@ static const an_function functions[] = {
   {"points", "(Int) -> List[Point]", points, AN_SHORT},
   {"bad_type", "(Int) -> Point", bad_type, AN_SHORT},
   {"call_kept", "(Int) -> Int", call_kept, AN_SHORT},
+  {"dirty_upcase", "(String) -> String", upcase, AN_DIRTY},
+  {"dirty_row", "(Int) -> Map[String, Int]", row, AN_DIRTY},
+  {"dirty_pairs", "(Map[String, Int]) -> List[String]", pairs, AN_DIRTY},
+  {"dirty_lookup", "(Map[String, Int], String) -> Optional[Int]", lookup, AN_DIRTY},
+  {"dirty_parse", "(String) -> Result[Int]", parse, AN_DIRTY},
+  {"dirty_unwrap", "(Result[Int]) -> Int", unwrap, AN_DIRTY},
+  {"dirty_grow", "(Shape, Int) -> Shape", grow, AN_DIRTY},
+  {"dirty_points", "(Int) -> List[Point]", points, AN_DIRTY},
+  {"dirty_bad_text", "() -> String", bad_text, AN_DIRTY},
+  {"counter", "(Int) -> Counter", make_counter, AN_SHORT},
+  {"bump", "(Counter) -> Int", bump, AN_SHORT},
+  {"wait_gate", "(Counter) -> Int", wait_gate, AN_DIRTY},
+  {"gated_sum", "(Map[String, Int]) -> Int", gated_sum, AN_DIRTY},
+  {"counters", "(Int) -> List[Counter]", counters, AN_DIRTY},
+  {"gate_entered?", "() -> Bool", gate_entered, AN_SHORT},
+  {"gate", "(Bool) -> Void", gate, AN_SHORT},
+  {"freed", "() -> Int", free_total, AN_SHORT},
+  {"trace_frees", "() -> Void", trace_frees, AN_SHORT},
 };
 
-AN_MODULE_TYPES("module_demo", functions, types, NULL)
+AN_MODULE_TABLES("module_demo", functions, AN_COUNT(functions), types, AN_COUNT(types), resources, AN_COUNT(resources),
+                 NULL)

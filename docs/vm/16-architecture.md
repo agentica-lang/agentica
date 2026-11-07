@@ -32,7 +32,9 @@ in this model; §16.6 maps each to the component that enforces it.
   files (§14.1). Its threads never touch GC memory.
 - **Compute pool:** the native calls of `compute def`, which may run without
   bound, and the `KDF` derivations: at most one thread per scheduler, FIFO,
-  apart from the libuv pool (§16.9). Its threads never touch GC memory.
+  apart from the libuv pool (§16.9). Its threads never allocate GC memory; a
+  dirty call of a native module reads its arguments in place, GC memory that
+  the job keeps reachable and that nothing changes.
 - **Handles and their owner tasks:** a socket, listener, pipe, terminal, process
   or poller is a libuv handle on the I/O loop for its whole life, owned by the
   task that opened it (§14.5). A regular file is not a handle on the loop: pool
@@ -337,7 +339,13 @@ one exit path are as in §16.1 to §16.6. What differs:
   pool instead of the libuv pool. The pool is made at the first such START with
   at most N threads, started when an item finds none free, with the stop signals
   blocked. The arguments are copied on the scheduler and the result is built by
-  the `done` half on the scheduler that resumes the task. An item that ends goes
+  the `done` half on the scheduler that resumes the task. A dirty call of a
+  native module (`vm/native_module.c`) is the exception: the job's context is
+  the List of its arguments, a GC root until the job ends, detached or not, so
+  C reads them in place; what C makes is staged in `malloc` memory (nodes, and
+  their bytes in an arena) and built into values by the `done` half, outside
+  `rt->sync`, or dropped, with the states of the resources it made freed, when
+  no task takes it. An item that ends goes
   back to the loop's thread through the pool's own inbox, which exists at N = 1
   too and keeps the loop alive only while items run. So a compute job is a pool
   job: no deadline, no cancel half, and a cancel detaches it. A detached item

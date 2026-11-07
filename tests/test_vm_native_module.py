@@ -5,6 +5,8 @@ nothing of the VM (-Wl,-z,defs proves it on Linux). Each case runs a program who
 module's table; outputs are written out here, and failures assert the code and the line, never the message
 (AGENTS.md). A module opens its library through the loader of the extern blocks, so it runs where they do.
 """
+import re
+
 import pytest
 
 from tests.agentica_test import TARGET_OS
@@ -179,3 +181,124 @@ def test_deny_native_refuses_a_module_block_before_it_runs(tmp_path, demo, flag)
     result = run_main(tmp_path, demo, '  puts("start")\n  puts(add(1, 2))\n', "", ADD, flag)
     assert (result.code, result.stdout) == (2, "")
     assert diagnostic(result, 2)[0] == "RUNTIME-NATIVE-DENIED"
+
+
+DIRTY = """extern module "LIBRARY"
+  resource Counter
+  compute def crunch(a: Int, b: Int) -> Int
+  compute def dirty_upcase(text: String) -> String
+  compute def dirty_row(n: Int) -> Map[String, Int]
+  compute def dirty_grow(shape: Shape, n: Int) -> Shape
+  compute def dirty_points(n: Int) -> List[Point]
+  compute def dirty_parse(text: String) -> Result[Int]
+  compute def dirty_unwrap(result: Result[Int]) -> Int
+  compute def wait_gate(counter: Counter) -> Int
+  compute def counters(n: Int) -> List[Counter]
+  def counter(id: Int) -> Counter
+  def bump(counter: Counter) -> Int
+  def gate_entered?() -> Bool
+  def gate(on: Bool) -> Void
+  def freed() -> Int
+  def trace_frees() -> Void
+end
+
+def wait_for(counter: Counter) -> Int
+  return wait_gate(counter)
+end
+
+def wait_for_new(id: Int) -> Int
+  return wait_gate(counter(id))
+end
+
+def until_entered() -> Void
+  while !gate_entered?()
+    Task.sleep(1)
+  end
+end
+
+"""
+
+
+# A compute def of a module runs on the compute pool: its values are built once it returns. A resource of the module
+# block is made, held for each call and freed once, at Native.close.
+@NATIVE_CALLS
+def test_dirty_calls_and_resources_of_a_module(tmp_path, demo):
+    body = """  puts(crunch(40, 2))
+  puts(dirty_upcase("abc"))
+  puts(dirty_row(7)["square"])
+  puts(dirty_grow(Shape.Circle(2), 3))
+  puts(dirty_points(2))
+  puts(dirty_parse("12x"))
+  one = counter(1)
+  puts(bump(one))
+  puts(bump(one))
+  Native.close(one)
+  puts(Native.closed?(one))
+  puts(counters(2).map do |item: Counter| bump(item) end)
+  puts(freed())
+"""
+    result = run_main(tmp_path, demo, body, TYPES, DIRTY)
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout == "\n".join([
+        "42", "ABC", "49", "Shape.Rect(Point(x: 0, y: 0), Point(x: 3, y: 3))", "[Point(x: 0, y: 0), Point(x: 1, y: 2)]",
+        'error("not a number")', "1", "2", "true", "[1, 1]", "1", ""])
+
+
+@NATIVE_CALLS
+@pytest.mark.parametrize("body, name, code", [
+    ('  puts(dirty_unwrap(error("no")))\n', "compute def dirty_unwrap(", "RUNTIME-NATIVE-ERROR"),
+    ("  one = counter(1)\n  Native.close(one)\n  puts(bump(one))\n", "  def bump(", "RUNTIME-NATIVE-CLOSED"),
+    ("  one = counter(1)\n  Native.close(one)\n  puts(wait_gate(one))\n", "compute def wait_gate(",
+     "RUNTIME-NATIVE-CLOSED"),
+])
+def test_a_failed_dirty_call_or_a_closed_resource_stops_the_run_at_the_def_line(tmp_path, demo, body, name, code):
+    result = run_main(tmp_path, demo, body, TYPES, DIRTY)
+    assert diagnostic(result, 1) == (code, (line_of(TYPES + DIRTY, name), 3))
+
+
+# A dirty call holds its counter: a close by another task, or the end of the cancelled task that owns it, leaves the
+# free to the end of the call, which C still runs to its end (it reads the counter after the close). Each counter is
+# freed once, and the end of the run frees the live ones, newest first.
+@NATIVE_CALLS
+def test_a_resource_held_by_a_dirty_call_is_freed_once_after_it(tmp_path, demo):
+    body = """  trace_frees()
+  shared = counter(9)
+  waiting = Task.spawn(&wait_for, shared)
+  until_entered()
+  Native.close(shared)
+  puts("closed #{Native.closed?(shared)} freed #{freed()}")
+  gate(true)
+  puts(Task.await(waiting))
+  puts("freed #{freed()}")
+  gate(false)
+  cancelled = Task.spawn(&wait_for_new, 7)
+  until_entered()
+  Task.cancel(cancelled)
+  puts("freed #{freed()}")
+  gate(true)
+  while freed() < 2
+    Task.sleep(1)
+  end
+  kept = [counter(1), counter(2), counter(3)]
+  puts(kept.size)
+"""
+    result = run_main(tmp_path, demo, body, TYPES, DIRTY)
+    assert (result.code, result.stdout) == (0, "closed true freed 0\n9\nfreed 1\nfreed 1\n3\n")
+    assert result.stderr == "freed 9\nfreed 7\nfreed 3\nfreed 2\nfreed 1\n"
+
+
+# The profile (AGENTICA_VM_TRACE=profile) has a line per function of a module that ran: its calls, the time in C and
+# the mode.
+@NATIVE_CALLS
+def test_the_profile_counts_the_calls_of_each_module_function(tmp_path, demo):
+    if "trace off" in agentica("--version").stdout:
+        pytest.skip("the VM was built with TRACE=0")
+    trace = tmp_path / "profile.trace"
+    text = (TYPES + DIRTY).replace("LIBRARY", literal(demo))
+    text += "def main() -> Void\n  puts(crunch(1, 2) + crunch(3, 4))\n  puts(bump(counter(1)))\nend\n"
+    result = agentica("--schedulers", "1", program(tmp_path, text),
+                      env={"AGENTICA_VM_TRACE": "profile", "AGENTICA_VM_TRACE_FILE": str(trace)})
+    assert (result.code, result.stdout) == (0, "10\n1\n")
+    lines = [line for line in trace.read_text().splitlines() if "native calls=" in line]
+    found = sorted(re.sub(r".*native calls=(\d+) us=\d+ (mode=\w+ name=\S+).*", r"\1 \2", line) for line in lines)
+    assert found == ["1 mode=short name=bump", "1 mode=short name=counter", "2 mode=dirty name=crunch"]

@@ -79,12 +79,16 @@ systems that run native code) are in those pages. The language fixes these:
   `Float`, `Bool`, `String`, `Bytes`, `Void` as the result, a `List`,
   `Optional` or `Result` of these, a `Map` with `Int`, `String` or `Bytes` keys,
   and the structs and enums of the program that are not generic, whose fields
-  and payloads cross too. Any other type, or two such types of one bare name in
-  one block, is `CHECK-NATIVE-TYPE` at the type in the signature.
+  and payloads cross too. A resource of the block crosses as the whole type of
+  a parameter, and anywhere in a result but in a field or payload. Any other
+  type, or two such types or resources of one bare name in one block, is
+  `CHECK-NATIVE-TYPE` at the type in the signature.
 - The first call of a module function loads the module and binds the function
   by name: the module's table must have the same canonical signature (aliases
   expanded, user types by their bare names), the same mode (`def` short,
   `compute def` dirty) and each user type with the same fields or variants, else
   `RUNTIME-NATIVE-SIGNATURE`; a module that does not load is
-  `RUNTIME-NATIVE-LOAD`. This VM runs short functions only: a `compute def` of
-  a module is `RUNTIME-NATIVE-SIGNATURE`.
+  `RUNTIME-NATIVE-LOAD`. A `compute def` of a module runs on the compute pool
+  as one of an extern block does. A resource of a module is a resource as
+  above: owned by the task that made it, held by each call that takes it, and
+  freed once by the module's free function.
