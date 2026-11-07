@@ -23,13 +23,14 @@ export OPTIONAL = Ir.EnumDef(
 )
 
 ## The tables, and what the lowering looks up in them. user_types maps each name in the tables to "Struct" or "Enum",
-## structs gives the index and the fields of a struct by name, variants the id of "Enum.Variant", and json_types the
-## structs and enums JSON.decode may build.
+## structs gives the index and the fields of a struct by name, enum_index the index of an enum by name, variants the id
+## of "Enum.Variant", and json_types the structs and enums JSON.decode may build.
 export struct Tables
   structs: List[Ir.StructDef]
   enums: List[Ir.EnumDef]
   user_types: Map[String, String]
   infos: Map[String, State.StructInfo]
+  enum_index: Map[String, Int]
   variants: Map[String, Int]
   json_types: Set[String]
 end
@@ -131,9 +132,11 @@ def index(structs: List[Ir.StructDef], enums: List[Ir.EnumDef]) -> Tables
   end
 
   variants: Map[String, Int] = {}
+  enum_index: Map[String, Int] = {}
   id = 0
   for entry in enums
     user_types = user_types.put(entry.name, "Enum")
+    enum_index = enum_index.put(entry.name, enum_index.size)
     if entry.decodable
       json_types = json_types.add(entry.name)
     end
@@ -149,6 +152,7 @@ def index(structs: List[Ir.StructDef], enums: List[Ir.EnumDef]) -> Tables
     enums: enums,
     user_types: user_types,
     infos: infos,
+    enum_index: enum_index,
     variants: variants,
     json_types: json_types,
   )

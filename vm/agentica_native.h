@@ -1,9 +1,9 @@
 /*
  * The C API of native modules (#1149): a shared library that exports agentica_native_init and calls the VM only
  * through the table of function pointers (an_api) that every call's env carries, so it links nothing from the
- * agentica binary. Values are opaque terms, read through checked getters. Version 1.0: short calls of scalars,
- * String, Bytes, List, Map, Optional and Result. The VM half is vm/native_module.c; this header is the contract,
- * and it includes nothing of the VM.
+ * agentica binary. Values are opaque terms, read through checked getters. Version 1.1: short calls of scalars,
+ * String, Bytes, List, Map, Optional, Result and the program's structs and enums (1.0 had no structs and enums). The
+ * VM half is vm/native_module.c; this header is the contract, and it includes nothing of the VM.
  */
 #ifndef AGENTICA_NATIVE_H
 #define AGENTICA_NATIVE_H
@@ -19,7 +19,7 @@ extern "C" {
 /* The API this header describes. The VM loads a module of the same major version and a minor version up to its own:
    an_api and an_module only grow at their end, which is a minor bump. */
 #define AN_API_MAJOR 1
-#define AN_API_MINOR 0
+#define AN_API_MINOR 1
 
 #if defined(_WIN32)
 #define AN_EXPORT __declspec(dllexport)
@@ -72,16 +72,33 @@ typedef struct {
   unsigned flags;
 } an_function;
 
+/* The kind of a type of a module (an_type.kind). */
+enum { AN_STRUCT = 0, AN_ENUM = 1 };
+
+/* A struct or enum of the program that the module's functions take or return (API 1.1). NAME is its bare name and
+   SHAPE its fields or variants in declared order, with their canonical types: "id: Int, tags: List[String]" for a
+   struct, "Null | Int(Int) | Pair(Int, Point)" for an enum. The VM binds a function only when the program declares
+   every user type of its signature (nested ones too) with the same name, kind and shape, byte for byte. The index of
+   the row in the module's table is the TYPE that an_struct, an_get_field, an_enum and an_get_variant take; fields and
+   variants count from 0 in declared order. */
+typedef struct {
+  const char *name;
+  int kind;
+  const char *shape;
+} an_type;
+
 /* What agentica_native_init returns, in static memory. MAJOR, MINOR and SIZE are the API the module was built for
    (AN_API_MAJOR, AN_API_MINOR, sizeof(an_module)): fields are only ever added at the end, so SIZE tells the VM which
-   ones a module has. LOAD runs once, right after agentica_native_init, and returns NULL, or a message that refuses
-   the module (RUNTIME-NATIVE-LOAD). */
+   ones a module has (a 1.0 module ends at function_count). LOAD runs once, right after agentica_native_init, and
+   returns NULL, or a message that refuses the module (RUNTIME-NATIVE-LOAD). */
 typedef struct an_module {
   uint32_t major, minor, size;
   const char *name;
   const char *(*load)(void);
   const an_function *functions;
   uint32_t function_count;
+  const an_type *types;
+  uint32_t type_count;
 } an_module;
 
 /* The table of the VM's functions; each wrapper below calls one. Fields are only ever added at its end. */
@@ -118,20 +135,31 @@ typedef struct an_api {
   bool (*get_result)(an_env *env, an_term t, bool *ok, an_term *value);
   an_term (*raise)(an_env *env, const char *message);
   an_term (*badarg)(an_env *env, int index);
+  an_term (*make_struct)(an_env *env, uint32_t type, const an_term *fields);
+  bool (*get_field)(an_env *env, an_term t, uint32_t type, uint32_t field, an_term *out);
+  an_term (*make_enum)(an_env *env, uint32_t type, uint32_t variant, const an_term *payload);
+  bool (*get_variant)(an_env *env, an_term t, uint32_t type, uint32_t *variant, const an_term **payload);
 } an_api;
 
 /* The one export of a module: the VM calls it once per run (a process runs one program), at the first call, with the
    table it will pass in every env (API->minor says which fields it has). */
 typedef const an_module *(*an_init)(const an_api *api);
 
-/* Defines agentica_native_init for a module NAME with the function table FUNCTIONS (an array) and LOAD (or NULL). */
-#define AN_MODULE(NAME, FUNCTIONS, LOAD)                                                                     \
-  AN_EXPORT const an_module *agentica_native_init(const an_api *api);                                        \
-  AN_EXPORT const an_module *agentica_native_init(const an_api *api) {                                       \
-    static const an_module an_module_value = {AN_API_MAJOR, AN_API_MINOR, sizeof(an_module), NAME, LOAD,     \
-                                              FUNCTIONS, (uint32_t)(sizeof(FUNCTIONS) / sizeof(FUNCTIONS[0]))}; \
-    (void)api;                                                                                               \
-    return &an_module_value;                                                                                 \
+/* The number of rows of a table that is an array. */
+#define AN_COUNT(TABLE) ((uint32_t)(sizeof(TABLE) / sizeof((TABLE)[0])))
+
+/* Defines agentica_native_init for a module NAME with the function table FUNCTIONS and LOAD (or NULL); AN_MODULE_TYPES
+   adds the type table TYPES. Both tables are arrays. */
+#define AN_MODULE(NAME, FUNCTIONS, LOAD) AN_MODULE_TABLES_(NAME, FUNCTIONS, AN_COUNT(FUNCTIONS), NULL, 0, LOAD)
+#define AN_MODULE_TYPES(NAME, FUNCTIONS, TYPES, LOAD) \
+  AN_MODULE_TABLES_(NAME, FUNCTIONS, AN_COUNT(FUNCTIONS), TYPES, AN_COUNT(TYPES), LOAD)
+#define AN_MODULE_TABLES_(NAME, FUNCTIONS, FUNCTION_COUNT, TYPES, TYPE_COUNT, LOAD)                       \
+  AN_EXPORT const an_module *agentica_native_init(const an_api *api);                                    \
+  AN_EXPORT const an_module *agentica_native_init(const an_api *api) {                                   \
+    static const an_module an_module_value = {AN_API_MAJOR, AN_API_MINOR, sizeof(an_module), NAME, LOAD, \
+                                              FUNCTIONS, FUNCTION_COUNT, TYPES, TYPE_COUNT};               \
+    (void)api;                                                                                           \
+    return &an_module_value;                                                                             \
   }
 
 /* The table of the call: the VM's env starts with a pointer to it. */
@@ -215,6 +243,25 @@ static inline an_term an_error(an_env *env, const char *message, size_t len) {
 }
 static inline bool an_get_result(an_env *env, an_term t, bool *ok, an_term *value) {
   return an_api_of(env)->get_result(env, t, ok, value);
+}
+
+/* Structs and enums of the module's type table (an_type). an_struct takes one term per field, in declared order;
+   an_enum takes the variant's payload (NULL for a variant without one). A TYPE that is not a row of the table, or
+   whose type the function's signature does not reach, a field or variant out of range, or a missing payload fails the
+   call. The getters return false for a term of another type; an_get_variant gives the payload as an array that lasts
+   for the call (NULL for a variant without one). */
+static inline an_term an_struct(an_env *env, uint32_t type, const an_term *fields) {
+  return an_api_of(env)->make_struct(env, type, fields);
+}
+static inline bool an_get_field(an_env *env, an_term t, uint32_t type, uint32_t field, an_term *out) {
+  return an_api_of(env)->get_field(env, t, type, field, out);
+}
+static inline an_term an_enum(an_env *env, uint32_t type, uint32_t variant, const an_term *payload) {
+  return an_api_of(env)->make_enum(env, type, variant, payload);
+}
+static inline bool an_get_variant(an_env *env, an_term t, uint32_t type, uint32_t *variant,
+                                  const an_term **payload) {
+  return an_api_of(env)->get_variant(env, t, type, variant, payload);
 }
 
 /* Failures: the call fails with RUNTIME-NATIVE-ERROR once the function returns, with MESSAGE (copied now; NUL

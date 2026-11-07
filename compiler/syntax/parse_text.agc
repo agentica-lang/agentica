@@ -214,8 +214,8 @@ def doc_attr(doc: Optional[String]) -> String
 end
 
 # The library and the C type codes of an extern function, its C name when it is not the def's name, compute=true for
-# a compute def, the resource and its free function for one that returns a resource, and each out resource with its
-# free function; nothing for an ordinary function.
+# a compute def, module=true for a function of a native module, the resource and its free function for one that returns
+# a resource, and each out resource with its free function; nothing for an ordinary function.
 def native_attr(name: String, native: Optional[Ast.Native]) -> String
   case native
     some(link) ->
@@ -226,6 +226,10 @@ def native_attr(name: String, native: Optional[Ast.Native]) -> String
 
       if link.compute
         extra += " compute=true"
+      end
+
+      if link.module
+        extra += " module=true"
       end
 
       if link.free != ""

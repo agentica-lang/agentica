@@ -1740,14 +1740,19 @@ def heredoc_name(opener: String) -> String
   return opener.slice(3, at - 3)
 end
 
-# The `extern` blocks: from a top-level `extern` followed by a string to the first line that is `end` at the left
-# margin.
+# The `extern` blocks: from a top-level `extern` followed by a string, or by the word module and a string, to the first
+# line that is `end` at the left margin.
 def extern_blocks(lines: List[String], tokens: List[Tokens.Token]) -> List[Extern]
   blocks: List[Extern] = []
   at = 0
   while at + 1 < tokens.size
     token = tokens[at]
-    next = tokens[at + 1].kind
+    string = at + 1
+    if tokens[string].kind == "name" and tokens[string].lexeme == "module" and string + 1 < tokens.size
+      string += 1
+    end
+
+    next = tokens[string].kind
     library = next == "string" or next == "interp-start"
     if token.kind == "name" and token.lexeme == "extern" and token.span.start.column == 1 and library
       first = token.span.start.line

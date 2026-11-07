@@ -31,7 +31,8 @@ layout before blaming list code):
 
 `make bench-native` (`benchmarks/native/run.py`) times one native call, a
 short call of a native module against an extern `def`, a `compute def` and a
-plain call, in ns per call with the loop included; it builds
+plain call, and 1000 structs from one module call against 1000 extern calls, in
+ns per call with the loop included; it builds
 `tests/fixtures/native/module_demo.c` with the system compiler.
 
 A new program needs `def scale() -> Int` returning 1 (the script rewrites it for

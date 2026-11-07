@@ -119,13 +119,16 @@ The design (trie, unboxed Int and Float leaves, builders, costs) is
   (`vm/compute.c`, `agc_io_compute` in `vm/loop.c`), and the task parks.
 - `native_module.c`: a signature whose word after any `compute ` is `module `
   is a function of a native module (`vm/agentica_native.h`, #1149):
-  `"module CANON SYMBOL LIBRARY"`, CANON the canonical Agentica type
-  (`(Int, String) -> List[Int]`). `agc_native_bind` loads the module
+  `"module TYPES CANON SYMBOL LIBRARY"`, CANON the canonical Agentica type
+  (`(Int, String) -> List[Int]`) and TYPES a `{S<index>=SHAPE}` or
+  `{E<index>=SHAPE}` per struct or enum it reaches (`lower_native.agc`), each
+  checked against the program's table. `agc_native_bind` loads the module
   (`agentica_native_init` through `agc_ffi_symbol`, or one registered with
   `agc_native_register`: the C tests and the fuzz driver, the only modules a
-  `no_files` run calls) and checks name, signature and mode against its table;
-  `agc_native_call` makes a short call on the scheduler without `rt->sync`, and
-  a failure the env holds fails it once C returns. `make bench-native` times it.
+  `no_files` run calls) and checks name, signature, mode and types against its
+  tables; `agc_native_call` makes a short call on the scheduler without
+  `rt->sync`, and a failure the env holds fails it once C returns.
+  `make bench-native` times it.
 - Resources that extern functions return are `agc_c_resource` (`vm/value.h`): a
   registry entry owned like a handle, freed by `Native.close` or the owner's
   end. A compute call holds its resource arguments in `jobs`; the last one runs

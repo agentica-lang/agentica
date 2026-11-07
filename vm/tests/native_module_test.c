@@ -1,6 +1,7 @@
-/* Native modules (vm/native_module.c) through Native.call: each kind of value both ways, the failures the env holds,
-   binding (missing function, other signature or mode, bad bytecode), version and load refusals, a carried module under
-   no_files, the same module opened as a shared library, and short calls and a first load on several threads. */
+/* Native modules (vm/native_module.c) through Native.call: each kind of value both ways, the program's structs and
+   enums, the failures the env holds, binding (missing function, other signature, mode or type, bad bytecode), version
+   and load refusals, a carried module under no_files, the same module opened as a shared library, and short calls and
+   a first load on several threads. */
 #include "../core.h"
 #include "../services.h"
 #include "io_harness.h"
@@ -39,7 +40,11 @@ typedef struct {
 } worker;
 
 static agc_vm vm;
-static agc_variant_def variants[2];
+/* Optional's None and Some, then the variants of enum Shape (Dot, Circle(Int), Rect(Point, Point)). */
+static agc_variant_def variants[5];
+static agc_struct_def structs[1];
+static agc_enum_def enums[1];
+static agc_string *point_fields[2];
 static agc_program program;
 static int inits, loads;
 static atomic_int racy_inits, racy_loads, ready;
@@ -195,19 +200,18 @@ static const char *count_load(void) {
 }
 
 static const an_function bad_rows[] = {{"add", "(Int, Int) -> Int", NULL, AN_SHORT}};
-static const an_module v_major = {2, 0, sizeof(an_module), "v", NULL, functions, 1};
-static const an_module v_minor = {1, AN_API_MINOR + 1, sizeof(an_module), "v", NULL, functions, 1};
+static const an_module v_major = {2, 0, sizeof(an_module), "v", NULL, functions, 1, NULL, 0};
+static const an_module v_minor = {1, AN_API_MINOR + 1, sizeof(an_module), "v", NULL, functions, 1, NULL, 0};
 /* The size of an an_module of API 1.0, as vm/native_module.c checks it: one byte less is refused. */
 #define SIZE_1_0 (offsetof(an_module, function_count) + sizeof(uint32_t))
 #if UINTPTR_MAX == UINT64_MAX && ULONG_MAX == UINT64_MAX
 _Static_assert(SIZE_1_0 == 44, "the 1.0 an_module layout on LP64");
 #endif
-static const an_module v_size = {1, 0, SIZE_1_0 - 1, "v", NULL, functions, 1};
-static const an_module v_size_1_0 = {1, 0, SIZE_1_0, "v", NULL, functions, 1};
-static const an_module v_rows = {1, 0, sizeof(an_module), "v", NULL, bad_rows, 1};
-static const an_module v_refuses = {1, 0, sizeof(an_module), "v", refuse_load, functions, 1};
-static const an_module v_counts = {1, 0, sizeof(an_module), "v", count_load, functions,
-                                   sizeof functions / sizeof functions[0]};
+static const an_module v_size = {1, 0, SIZE_1_0 - 1, "v", NULL, functions, 1, NULL, 0};
+static const an_module v_size_1_0 = {1, 0, SIZE_1_0, "v", NULL, functions, 1, NULL, 0};
+static const an_module v_rows = {1, 0, sizeof(an_module), "v", NULL, bad_rows, 1, NULL, 0};
+static const an_module v_refuses = {1, 0, sizeof(an_module), "v", refuse_load, functions, 1, NULL, 0};
+static const an_module v_counts = {1, 0, sizeof(an_module), "v", count_load, functions, AN_COUNT(functions), NULL, 0};
 
 static const an_module *init_none(const an_api *api) {
   (void)api;
@@ -275,6 +279,82 @@ static void test_versions(void) {
   assert(inits == 2 && loads == 2);
 }
 
+static const an_module v_types_1_0 = {1, 0, SIZE_1_0, "v", NULL, functions, AN_COUNT(functions), types,
+                                     AN_COUNT(types)};
+
+static const an_module *init_types_1_0(const an_api *api) {
+  (void)api;
+  return &v_types_1_0;
+}
+
+#define POINT "{S0=x: Int, y: Int}"
+#define SHAPE "{E0=Dot | Circle(Int) | Rect(Point, Point)}"
+
+static agc_value point(int64_t x, int64_t y) {
+  agc_struct *s = agc_new_struct(0, 2);
+  s->fields[0] = agc_int(x);
+  s->fields[1] = agc_int(y);
+  return agc_struct_value(s);
+}
+
+static int64_t field(agc_value v, uint32_t k) { return agc_as_int(&vm, agc_as_struct(&vm, v)->fields[k]); }
+
+/* Structs and enums through the type blocks of a signature: both ways, nested in a List and an enum; a block or a type
+   that the bytecode gets wrong is bad bytecode, one that the module declares otherwise is RUNTIME-NATIVE-SIGNATURE. */
+static void test_types(void) {
+  agc_value p = point(1, 2);
+  agc_value flipped = call("module " POINT "(Point) -> Point flip demo", &p, 1);
+  assert(field(flipped, 0) == 2 && field(flipped, 1) == 1);
+  agc_enum *rect = agc_new_enum(4, 2);
+  rect->payload[0] = point(1, 1);
+  rect->payload[1] = point(3, 4);
+  agc_value shape = agc_enum_value(rect);
+  assert(agc_as_int(&vm, call("module " SHAPE POINT "(Shape) -> Int area demo", &shape, 1)) == 6);
+  agc_value grown[2] = {shape, agc_int(3)};
+  const agc_enum *circle = agc_as_enum(&vm, call("module " SHAPE POINT "(Shape, Int) -> Shape grow demo", grown, 2));
+  assert(circle->variant == 3 && agc_as_int(&vm, circle->payload[0]) == 3);
+  grown[0] = agc_enum_value((agc_enum *)circle);
+  const agc_enum *square = agc_as_enum(&vm, call("module " SHAPE POINT "(Shape, Int) -> Shape grow demo", grown, 2));
+  assert(square->variant == 4 && field(square->payload[1], 0) == 3);
+  grown[1] = agc_int(0);
+  assert(agc_as_enum(&vm, call("module " SHAPE POINT "(Shape, Int) -> Shape grow demo", grown, 2)) ==
+         variants[2].shared);
+  agc_value three = agc_int(3);
+  const agc_list *list = agc_as_list(&vm, call("module " POINT "(Int) -> List[Point] points demo", &three, 1));
+  assert(agc_list_len(list) == 3 && field(agc_list_get(list, 2), 1) == 4);
+  fails("module " POINT "(Int) -> Point bad_type demo", &three, 1, "RUNTIME-NATIVE-ERROR");
+  /* A 1.0 module has no type table, even with one past its size. */
+  agc_native_register(&vm, "v_types_1_0", init_types_1_0);
+  const char *refused[] = {"module {S0=x: Int, y: Float}(Point) -> Point flip demo",
+                           "module {E0=Dot | Circle(Float) | Rect(Point, Point)}" POINT "(Shape) -> Int area demo",
+                           "module " POINT "(Point) -> Point flip v_types_1_0"};
+  for (size_t k = 0; k < sizeof refused / sizeof refused[0]; k++) fails(refused[k], &p, 1, "RUNTIME-NATIVE-SIGNATURE");
+  /* Without the block of Point the getters of the module refuse a Point inside the Rect. */
+  fails("module " SHAPE "(Shape) -> Int area demo", &shape, 1, "RUNTIME-NATIVE-ERROR");
+  const char *bad[] = {"module (Point) -> Point flip demo", "module {S1=x: Int, y: Int}(Point) -> Point flip demo",
+                       "module {S0=y: Int, x: Int}(Point) -> Point flip demo",
+                       "module {S0=x: Int}(Point) -> Point flip demo",
+                       "module {S0=x: Int, y: Int, z: Int}(Point) -> Point flip demo",
+                       "module {S0=x: Int], y: Int}(Point) -> Point flip demo",
+                       "module {S0=x: , y: Int}(Point) -> Point flip demo",
+                       "module {S0=x: Int, y: Int(Point) -> Point flip demo",
+                       "module {E0=x: Int, y: Int}(Point) -> Point flip demo",
+                       "module {X0=x: Int, y: Int}(Point) -> Point flip demo",
+                       "module {S=x: Int, y: Int}(Point) -> Point flip demo",
+                       "module {S99999999999=x: Int, y: Int}(Point) -> Point flip demo",
+                       "module " POINT POINT "(Point) -> Point flip demo",
+                       "module " POINT "(Point[Int]) -> Point flip demo",
+                       "module {E0=Dot | Circle | Rect(Point, Point)}(Shape) -> Int area demo",
+                       "module {E0=Dot | Circle(Int) | Rect(Point)}(Shape) -> Int area demo",
+                       "module {E0=Dot | Circle(Int)}(Shape) -> Int area demo"};
+  for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) fails(bad[k], &p, 1, "RUNTIME-INTERNAL");
+  /* A struct of another type, and an enum of another enum's variant, are bad arguments. */
+  agc_struct *other = agc_new_struct(1, 0);
+  agc_value wrong[2] = {agc_struct_value(other), agc_enum_value(agc_new_enum(1, 1))};
+  fails("module " POINT "(Point) -> Point flip demo", &wrong[0], 1, "RUNTIME-INTERNAL");
+  fails("module " SHAPE POINT "(Shape) -> Int area demo", &wrong[1], 1, "RUNTIME-INTERNAL");
+}
+
 /* The fuzz driver's no_files: a carried module runs, a library is never opened. */
 static void test_no_files(void) {
   agc_value two[2] = {agc_int(1), agc_int(2)};
@@ -327,7 +407,7 @@ static const char *racy_load(void) {
   return NULL;
 }
 
-static const an_module racy = {1, 0, sizeof(an_module), "racy", racy_load, functions, 1};
+static const an_module racy = {1, 0, sizeof(an_module), "racy", racy_load, functions, 1, NULL, 0};
 
 static const an_module *init_racy(const an_api *api) {
   (void)api;
@@ -378,9 +458,23 @@ static void test_threads(void) {
 int main(int argc, char **argv) {
   (void)argc;
   agc_test_io_vm(&vm);
-  variants[0].shared = agc_new_enum(0, 0);
+  const char *names[] = {"None", "Some", "Dot", "Circle", "Rect"};
+  const uint32_t arities[] = {0, 1, 0, 1, 2};
+  for (uint32_t k = 0; k < 5; k++) {
+    variants[k].name = agc_make_string(names[k], strlen(names[k]), strlen(names[k]));
+    variants[k].arity = arities[k];
+    variants[k].shared = arities[k] ? NULL : agc_new_enum(k, 0);
+  }
+  point_fields[0] = agc_make_string("x", 1, 1);
+  point_fields[1] = agc_make_string("y", 1, 1);
+  structs[0] = (agc_struct_def){agc_make_string("Point", 5, 5), 2, point_fields, NULL, NULL};
+  enums[0] = (agc_enum_def){agc_make_string("Shape", 5, 5), 2, 3, NULL, NULL};
   program.variants = variants;
-  program.variant_count = 2;
+  program.variant_count = 5;
+  program.structs = structs;
+  program.struct_count = 1;
+  program.enums = enums;
+  program.enum_count = 1;
   program.optional = 0;
   vm.rt->program = &program;
   agc_native_register(&vm, "demo", agentica_native_init);
@@ -388,6 +482,7 @@ int main(int argc, char **argv) {
   test_failures();
   test_binding();
   test_versions();
+  test_types();
   test_no_files();
   test_shared_library(argv[0]);
   test_threads();

@@ -1,0 +1,2 @@
+1:1 leading FunctionDecl 4:4 "# A native module block is copied as written, like an extern block."
+5:38 trailing FunctionDecl 5:3 "# dirty"

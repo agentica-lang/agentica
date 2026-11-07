@@ -1,0 +1,24 @@
+program #23 0:1:1-237:7:1
+  declaration: export-decl #7 57:3:3-114:4:1 doc="Opens the database."
+    declaration: function-decl #6 64:3:10-114:4:1 name="open" doc="Opens the database." library="sqlite_native" codes="" module=true
+      param: param #1 73:3:19-85:3:31 name="path"
+        type: type-ref #0 79:3:25-85:3:31 name="String"
+      param: param #3 87:3:33-97:3:43 name="flags"
+        type: type-ref #2 94:3:40-97:3:43 name="Int"
+      result: type-ref #5 102:3:48-113:3:59 name="Result"
+        arg: type-ref #4 109:3:55-112:3:58 name="Int"
+  declaration: function-decl #18 116:4:3-198:5:1 name="query" library="sqlite_native" codes="" compute=true module=true
+    param: param #9 134:4:21-141:4:28 name="db"
+      type: type-ref #8 138:4:25-141:4:28 name="Int"
+    param: param #11 143:4:30-154:4:41 name="sql"
+      type: type-ref #10 148:4:35-154:4:41 name="String"
+    param: param #14 156:4:43-175:4:62 name="params"
+      type: type-ref #13 164:4:51-175:4:62 name="List"
+        arg: type-ref #12 169:4:56-174:4:61 name="Value"
+    result: type-ref #17 180:4:67-197:4:84 name="Result"
+      arg: type-ref #16 187:4:74-196:4:83 name="List"
+        arg: type-ref #15 192:4:79-195:4:82 name="Row"
+  declaration: function-decl #22 200:5:3-233:6:1 name="autocommit?" library="sqlite_native" codes="" module=true
+    param: param #20 216:5:19-223:5:26 name="db"
+      type: type-ref #19 220:5:23-223:5:26 name="Int"
+    result: type-ref #21 228:5:31-232:5:35 name="Bool"

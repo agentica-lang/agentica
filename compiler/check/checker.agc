@@ -14,6 +14,7 @@ import Constants from "check_const"
 import DefaultChecks from "check_defaults"
 import Expr from "check_expr"
 import Help from "check_help"
+import Natives from "check_native"
 import Register from "check_register"
 import State from "check_state"
 import Statements from "check_stmt"
@@ -284,6 +285,7 @@ def run(
     end
   end
 
+  st = try Natives.check_all(cx, st, linked.modules, taken.clean)
   cx = cx.with(json_needs: json_needs(cx, st, linked.modules))
   problems: List[Failure.Problem] = []
   failed: List[String] = []

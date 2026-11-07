@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `extern module "NAME"` declares the functions of a native module, C code
+  written against `agentica_native.h`, with Agentica types: lists, maps,
+  optionals, results and the program's structs and enums cross in one call.
+
 ## [0.25.1] - 2026-11-06
 
 ### Added

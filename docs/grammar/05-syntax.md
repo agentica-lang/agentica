@@ -23,7 +23,9 @@ function_decl    = "def", NAME, [ type_parameters ], "(", [ parameters ], ")",
 parameters       = parameter, { ",", parameter }, [ "," ] ;
 parameter        = NAME, ":", type, [ "=", expression ] ;
 
-extern_decl      = "extern", STRING, NL, { extern_member }, "end", NL ;
+extern_decl      = "extern", STRING, NL, { extern_member }, "end", NL
+                 | "extern", "module", STRING, NL, { module_member }, "end",
+                   NL ;
 extern_member    = [ DOC, NL ], [ "export" ],
                    ( extern_function | resource_decl | callback_decl
                    | c_struct_decl ) ;
@@ -44,6 +46,8 @@ c_field          = [ DOC, NL ], NAME, ":", ( c_field_type | TYPE_NAME ),
                    [ "=", expression ], NL ;
 c_field_type     = "C", ".", ( "Int32" | "Int64" | "Double" | "Float" | "Bool"
                    | "Pointer" ) ;
+module_member    = [ DOC, NL ], [ "export" ], [ "compute" ], "def", NAME,
+                   "(", [ parameters ], ")", "->", type, NL ;
 
 struct_decl      = "struct", TYPE_NAME, [ type_parameters ], NL,
                    { field_decl }, "end", NL ;
@@ -182,6 +186,19 @@ language it is an ordinary struct whose fields have the Agentica types (`Int`,
 and `export`. Like a resource, a `def` of the block may use it after its
 declaration (`PARSE-EXTERN-TYPE` before), as a parameter or a result; an out
 struct is `PARSE-EXTERN-OUT` and a variadic one `PARSE-EXTERN-VARIADIC-TYPE`.
+
+`extern module "NAME"` declares the functions of a native module, C code
+written against the VM's C API (section 6d). `NAME` follows the library rule
+above, `[native.NAME]` of a package included. Each member is a `def` or
+`compute def` with no body, named as the module's table names it (`?` and `!`
+allowed), with Agentica types; the checker says which cross
+(`CHECK-NATIVE-TYPE`, section 6d). A `resource`, `callback` or `struct` line,
+an out parameter, a `...` and a C name after `=` are `PARSE-EXTERN-MODULE` at
+the word, the parameter, the `...` or the `=`; a `C.` type anywhere in a type
+is `PARSE-EXTERN-TYPE` at it; a default is `PARSE-EXTERN-DEFAULT` and a 65th
+parameter `PARSE-EXTERN-ARITY`. For the rest of the language each is a `def`, as
+in an extern block, and takes the place of a `def` in the declaration order.
+`module` is a word only between `extern` and the string.
 
 An import is one of two forms. `import Util from "util"` gives the file the
 alias `Util`. `import {area, Square as Sq} from "shapes"` brings exported names

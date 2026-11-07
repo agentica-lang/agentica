@@ -10,6 +10,9 @@
 ## struct table after its {: "{N:CODES}", so the VM reads and makes the record itself (nested structs too); the parser
 ## wrote the field codes in the record's field order.
 ##
+## A function of an `extern module "NAME"` block calls a function of a native module (vm/native_module.c) with
+## "module TYPES(PARAMS) -> RESULT NAME LIBRARY" (module_signature), "compute " in front for a compute def.
+##
 ## Native.callback(Name, &function) gets the signature of its callback as its first argument: "CODES NAME", the codes
 ## of Ast.Callback (the result's first) and the callback's name without its module prefix, which the VM shows for the
 ## resource.
@@ -25,13 +28,14 @@ NATIVE_CALL = "Native.call"
 MAX_PARAMS = 64
 
 ## The function that calls the C function, or LOWER-UNSUPPORTED when it has more parameters than the VM takes. structs
-## are the program's struct declarations by name, and index is the index of the function's file in the program's
-## sources.
+## and enums are the program's struct and enum declarations by name, and index is the index of the function's file in
+## the program's sources.
 export def lower(
   cx: Lowering.Cx,
   function: Ast.FunctionDecl,
   native: Ast.Native,
   structs: Map[String, Ast.StructDecl],
+  enums: Map[String, Ast.EnumDecl],
   index: Int,
 ) -> Result[Ir.Function]
   span = function.span
@@ -40,22 +44,29 @@ export def lower(
     return error(Lowering.unsupported(cx, "extern functions with more than #{MAX_PARAMS} parameters", span))
   end
 
-  codes = try indexed_codes(cx, function, native, structs)
   kind = ""
   if native.compute
     kind = "compute "
   end
 
-  words = [native.symbol]
-  if native.free != ""
-    words = words.concat([native.free, native.resource])
+  signature = ""
+  if native.module
+    text = try module_signature(cx, function, native, structs, enums)
+    signature = kind + text
+  else
+    codes = try indexed_codes(cx, function, native, structs)
+    words = [native.symbol]
+    if native.free != ""
+      words = words.concat([native.free, native.resource])
+    end
+
+    for out in native.outs
+      words = words.concat([out.free, out.name])
+    end
+
+    signature = "#{kind}#{codes} #{words.join(" ")} #{native.library}"
   end
 
-  for out in native.outs
-    words = words.concat([out.free, out.name])
-  end
-
-  signature = "#{kind}#{codes} #{words.join(" ")} #{native.library}"
   body = [
     Ir.instr("step", [], index, [span]),
     Ir.Instr(op: "const", args: [count], imm: Ir.Imm.Text(signature), name: "", file: index, spans: [span]),
@@ -108,6 +119,103 @@ end
 export def struct_layout(cx: Lowering.Cx, name: String, structs: Map[String, Ast.StructDecl]) -> Result[String]
   decl = structs[name]
   return indexed(cx, decl.layout, nested_structs(name, structs), name, decl.span)
+end
+
+# The signature of a function of a native module, after any "compute ": "module TYPES(PARAMS) -> RESULT NAME LIBRARY".
+# PARAMS and RESULT are the canonical Agentica types, the text of the types the checker recorded for the written ones
+# (check_native.agc: aliases expanded, user types by their bare names), which the module's table must have byte for
+# byte. TYPES has one {S<index>=SHAPE} or {E<index>=SHAPE} for each struct or enum that crosses, in the order the walk
+# meets them: its index in the table of structs or enums, and its shape, which the module's type of that name must
+# have too: "name: Type, ..." for a struct, "Variant | Variant(Type, ...)" for an enum, from the recorded types of
+# its fields and payloads. NAME is the def's name and LIBRARY the module's name as written (it may hold spaces, so it
+# is last).
+def module_signature(
+  cx: Lowering.Cx,
+  function: Ast.FunctionDecl,
+  native: Ast.Native,
+  structs: Map[String, Ast.StructDecl],
+  enums: Map[String, Ast.EnumDecl],
+) -> Result[String]
+  span = function.span
+  params: List[String] = []
+  pending: List[Types.Type] = []
+  for param in function.params
+    type = try recorded(cx, param.type, span)
+    params = params.push(Types.to_text(type))
+    pending = pending.push(type)
+  end
+
+  result = try recorded(cx, function.result, span)
+  pending = pending.push(result)
+  blocks: List[String] = []
+  seen: Set[String] = Set.new([])
+  at = 0
+  while at < pending.size
+    type = pending[at]
+    at += 1
+    name = Types.name(type)
+    if seen.include?(name)
+      next
+    end
+
+    if Types.is?(type, "Struct")
+      seen = seen.add(name)
+      fields: List[String] = []
+      for field in structs[name].fields
+        field_type = try recorded(cx, field.type, span)
+        fields = fields.push("#{field.name}: #{Types.to_text(field_type)}")
+        pending = pending.push(field_type)
+      end
+
+      blocks = blocks.push("{S#{cx.structs[name].index}=#{fields.join(", ")}}")
+    elsif Types.is?(type, "Enum")
+      seen = seen.add(name)
+      variants: List[String] = []
+      for variant in enums[name].variants
+        payload: List[String] = []
+        for ref in variant.payload_types
+          payload_type = try recorded(cx, ref, span)
+          payload = payload.push(Types.to_text(payload_type))
+          pending = pending.push(payload_type)
+        end
+
+        if payload.size == 0
+          variants = variants.push(variant.name)
+        else
+          variants = variants.push("#{variant.name}(#{payload.join(", ")})")
+        end
+      end
+
+      blocks = blocks.push("{E#{cx.enums[name]}=#{variants.join(" | ")}}")
+    else
+      pending = pending.concat(inner_types(type))
+    end
+  end
+
+  canon = "(#{params.join(", ")}) -> #{Types.to_text(result)}"
+  return ok("module #{blocks.join("")}#{canon} #{native.symbol} #{native.library}")
+end
+
+# The type the checker recorded for a written type of a native module function, or LOWER-INTERNAL when it has none.
+def recorded(cx: Lowering.Cx, ref: Ast.TypeRef, span: Source.Span) -> Result[Types.Type]
+  if ref.id < 0 or ref.id >= cx.types.size or Types.unknown?(cx.types[ref.id])
+    return error(Lowering.internal(cx, "the checker recorded no type for #{ref.name}", span))
+  end
+
+  return ok(cx.types[ref.id])
+end
+
+# The types inside a List, Optional, Result or Map, which crossing types are besides the scalars and user types.
+def inner_types(type: Types.Type) -> List[Types.Type]
+  if Types.is?(type, "Map")
+    return [Types.key(type), Types.value(type)]
+  end
+
+  if Types.is?(type, "List") or Types.is?(type, "Optional") or Types.is?(type, "Result")
+    return [Types.item(type)]
+  end
+
+  return []
 end
 
 # Whether the function has out parameters: one of the codes is a capital (no other code holds one).

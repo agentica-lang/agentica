@@ -1,0 +1,10 @@
+# A native module block is copied as written, like an extern block.
+extern module "demo"
+  ## The sum.
+   def   add(a:Int, b: Int)->Int
+  compute def crunch?(n: Int) -> Int # dirty
+end
+
+def main() -> Void
+  puts(add(1, 2))
+end

@@ -17,6 +17,9 @@
 
 #define ALLOC_LIMIT ((size_t)256 << 20)
 
+/* The rows of the type table of the fuzz module: a struct Pair and an enum Tag. */
+enum { PAIR, TAG };
+
 static FILE *sink; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 /* The native module that a mutant may call ("module ... agentica_fuzz"), the one module a run with no_files has: its
@@ -70,14 +73,41 @@ static an_term fuzz_bytes(an_env *env, int argc, const an_term *argv) {
   return an_some(env, an_bytes(env, data, len));
 }
 
+/* The Pair with its fields swapped. */
+static an_term fuzz_swap(an_env *env, int argc, const an_term *argv) {
+  an_term fields[2];
+  (void)argc;
+  if (!an_get_field(env, argv[0], PAIR, 1, &fields[0]) || !an_get_field(env, argv[0], PAIR, 0, &fields[1]))
+    return an_badarg(env, 0);
+  return an_struct(env, PAIR, fields);
+}
+
+/* Text(text) for Empty, and Empty for a Text. */
+static an_term fuzz_retag(an_env *env, int argc, const an_term *argv) {
+  uint32_t variant;
+  const an_term *payload;
+  (void)argc;
+  if (!an_get_variant(env, argv[0], TAG, &variant, &payload)) return an_badarg(env, 0);
+  if (variant != 0) return an_enum(env, TAG, 0, NULL);
+  an_term text = an_string(env, "empty", 5);
+  return an_enum(env, TAG, 1, &text);
+}
+
 static const an_function fuzz_functions[] = {
   {"lengths", "(List[String]) -> List[Int]", fuzz_lengths, AN_SHORT},
   {"keys", "(Map[String, Int], Map[String, Int]) -> Result[List[List[String]]]", fuzz_keys, AN_SHORT},
   {"bytes", "(Optional[Bytes]) -> Optional[Bytes]", fuzz_bytes, AN_SHORT},
+  {"swap", "(Pair) -> Pair", fuzz_swap, AN_SHORT},
+  {"retag", "(Tag) -> Tag", fuzz_retag, AN_SHORT},
+};
+
+static const an_type fuzz_types[] = {
+  {"Pair", AN_STRUCT, "left: Int, right: Int"},
+  {"Tag", AN_ENUM, "Empty | Text(String)"},
 };
 
 static const an_module fuzz_module = {AN_API_MAJOR, AN_API_MINOR, sizeof(an_module), "agentica_fuzz", NULL,
-                                      fuzz_functions, sizeof fuzz_functions / sizeof fuzz_functions[0]};
+                                      fuzz_functions, AN_COUNT(fuzz_functions), fuzz_types, AN_COUNT(fuzz_types)};
 
 static const an_module *fuzz_init(const an_api *api) {
   (void)api;
