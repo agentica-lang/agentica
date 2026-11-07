@@ -533,6 +533,30 @@ def test_the_environment_and_the_version_flag_are_read_before_a_front_end_runs(t
 
 
 HELLO = ROOT / "examples" / "hello.agc"
+START_HEAP = re.compile(r"^Grow heap to ([0-9]+) KiB after 0 bytes allocated$", re.M)
+
+
+def test_the_heap_starts_at_32_mib_and_the_environment_sets_it(tmp_path):
+    """The collector's heap starts at 32 MiB; AGENTICA_GC_HEAP sets another size (0 for libgc's own start), libgc's
+    GC_INITIAL_HEAP_SIZE wins over it, and a bad size is a start error (status 2) with nothing on stdout. libgc's
+    GC_PRINT_STATS log names each growth of the heap; the start is the largest before anything is allocated."""
+    program = compile_agc(HELLO, tmp_path / "hello.agcb")
+    starts = {}
+    for floor, initial in ((None, None), ("48M", None), ("0", None), ("48M", "8M")):
+        env = vm_environment({"GC_PRINT_STATS": "1", "AGENTICA_GC_HEAP": floor, "GC_INITIAL_HEAP_SIZE": initial})
+        got = run_vm(program, env=env, timeout=scaled(10))
+        assert (got.code, got.stdout) == (0, "hello\n")
+        starts[(floor, initial)] = max((int(kib) for kib in START_HEAP.findall(got.stderr)), default=None)
+    if starts[(None, None)] is None:
+        pytest.skip("this libgc does not log heap growth")
+    assert starts == {(None, None): 32 * 1024, ("48M", None): 48 * 1024, ("0", None): starts[("0", None)],
+                      ("48M", "8M"): 8 * 1024}
+    assert starts[("0", None)] < 1024
+    for size in ("x", "32X", "-1", "2048G", "99999999999999999999"):
+        refused = run_vm(program, env=vm_environment({"AGENTICA_GC_HEAP": size}), timeout=scaled(10))
+        assert (refused.code, refused.stdout, "AGENTICA_GC_HEAP needs a size" in refused.stderr) == (2, "", True)
+
+
 SCHEDULERS_RANGE = "needs an integer from 1 to 1024"
 RAN_ON = re.compile(r"^agc-trace \S+ sched run schedulers=([0-9]+)$", re.M)
 

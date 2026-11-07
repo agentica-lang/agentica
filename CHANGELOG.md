@@ -8,6 +8,18 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `AGENTICA_GC_HEAP` sets the size the collector's heap starts at (`32M` by
+  default, `0` for libgc's own start).
+
+### Changed
+
+- The collector's heap starts at 32 MB, so a busy program collects less often:
+  more speed for a few more MB of memory.
+- `String#slice` and `String#at` on non-ASCII text are faster: a slice to the
+  end does not walk the text, and runs of ASCII are crossed 8 bytes at a time.
+
 ## [0.26.1] - 2026-11-07
 
 ### Added

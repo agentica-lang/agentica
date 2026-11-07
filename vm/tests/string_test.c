@@ -310,6 +310,34 @@ int main(void) {
     if (k % 97 == 0) assert(agc_utf8_offset(&vm, other, 3) == 4);
   }
   free(built);
+  /* Runs of ASCII long enough for the word-at-a-time skip, both ways, with multi-byte characters at word edges. */
+  char *runs = malloc(count * 12 + 1);
+  assert(runs);
+  bytes = 0;
+  for (size_t k = 0; k < count;) {
+    seed = seed * 1103515245u + 12345u;
+    size_t run = (seed >> 16) % 24;
+    for (size_t r = 0; r < run && k < count; r++, k++) {
+      offsets[k] = bytes;
+      runs[bytes++] = 'a';
+    }
+    if (k == count) break;
+    const char *p = pieces[1 + (seed >> 8) % 3];
+    offsets[k++] = bytes;
+    memcpy(runs + bytes, p, strlen(p));
+    bytes += strlen(p);
+  }
+  offsets[count] = bytes;
+  runs[bytes] = '\0';
+  agc_string *ascii_runs = text(runs);
+  assert(ascii_runs->chars == count);
+  for (size_t k = 0; k < 20000; k++) {
+    seed = seed * 1103515245u + 12345u;
+    size_t index = k % 2 == 0 ? (seed >> 8) % (count + 1) : count - (k * 13) % (count + 1);
+    assert(agc_utf8_offset(&vm, ascii_runs, index) == offsets[index]);
+    if (k % 89 == 0) vm.task->cursor = NULL;
+  }
+  free(runs);
   size_t n = 4096;
   char *accents = malloc(2 * n + 1);
   assert(accents);
