@@ -92,9 +92,17 @@ def native_target(cx: Resolve.Context, library: String) -> Result[String]
     return ok(library)
   end
 
-  case natives[library]
+  return target_text(cx, library, natives[library])
+end
+
+# A module with a `build` table is built here, when a file first uses it, so a program that never names it never
+# starts the compiler; the Workspace keeps what it built for the rest of the run.
+def target_text(cx: Resolve.Context, library: String, target: NativeLibrary.Target) -> Result[String]
+  case target
     NativeLibrary.Target.File(path) -> return ok(path)
     NativeLibrary.Target.System(name) -> return ok(name)
+    NativeLibrary.Target.Build(request) ->
+      return target_text(cx, library, NativeLibrary.build_target(cx.settings.workspace, request, library))
     NativeLibrary.Target.Unusable(failure) -> return error(failure)
   end
 end

@@ -109,6 +109,7 @@ def in_memory(files: Map[String, String]) -> Workspace.Workspace
     list_folder: lister() do |path: String| entries(files, path) end,
     read_bytes: byter() do |path: String| bytes_of(files, path) end,
     native_artifact: nativer() do |_request: Workspace.NativeRequest| error("no native artifact in this workspace") end,
+    native_build: &Workspace.no_build,
     check_cache: Workspace.no_check_cache(),
   )
 end

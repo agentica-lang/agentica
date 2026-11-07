@@ -37,6 +37,7 @@ import Problems from "../diagnostics/problem"
 import Format from "../format/format"
 import BytecodeCache from "../io/bytecode_cache"
 import CheckCache from "../io/check_cache"
+import NativeBuild from "../io/native_build"
 import SaveFile from "../io/save_file"
 import SourceReader from "../io/source_reader"
 import StdinBuffer from "../io/stdin_buffer"
@@ -45,6 +46,7 @@ import Lowering from "../lower/lowering"
 import Env from "../modules/link_env"
 import Failure from "../modules/link_failure"
 import Resolve from "../modules/resolve_import"
+import Workspace from "../modules/workspace"
 import QueryFiles from "../query/query_files"
 import QueryOptions from "../query/query_options"
 import QueryPosition from "../query/query_position"
@@ -112,7 +114,7 @@ def dispatch(session: Session) -> Int
   elsif first == "lint"
     return lint(session, words.drop(1))
   elsif first == "install"
-    return install(session, words.drop(1))
+    return install(building(session, "install"), words.drop(1))
   elsif first == "add"
     return answered(session, Add.add(session.settings, session.options.style, words.drop(1)), "")
   elsif first == "update"
@@ -147,7 +149,36 @@ def dispatch(session: Session) -> Int
     return emit(Reply.failed(2, Texts.usage_text()))
   end
 
-  return program(session, first, rest)
+  return program(building(session, first), first, rest)
+end
+
+# The session whose workspace builds the native modules of the packages read in place from their C sources
+# (io/native_build.agc): a run, `compile`, `test` and `install` do, so the program they run or write opens the library;
+# `check`, the queries and the other commands never start a compiler.
+def building(session: Session, verb: String) -> Session
+  settings = builder_settings(session.settings, session.options.deny, session.options.style, verb)
+  return session.with(settings: settings)
+end
+
+# The settings with the builder of `verb`. Under any --deny-* flag or --sandbox the VM refuses native code, so nothing
+# is built: `compile`, whose output may later run without the flag, refuses the module (PKG-NATIVE-BUILD); a run,
+# `test` and `install` build nothing, and the program names the library by its bare name, which the VM refuses with
+# the rest of the native code (RUNTIME-NATIVE-DENIED, on a bytecode cache hit as on a miss: the cache keeps such
+# programs apart, Settings.native_denied). With `--json` or `--ai` the builder prints nothing, so stderr holds only
+# the diagnostic.
+def builder_settings(settings: Env.Settings, deny: List[String], style: String, verb: String) -> Env.Settings
+  if deny.size == 0
+    builder: Fn[Workspace.BuildRequest, Workspace.Built] = NativeBuild.builder(style == "plain")
+    return settings.with(workspace: settings.workspace.with(native_build: builder))
+  end
+
+  denied = settings.with(native_denied: true)
+  if verb == "compile"
+    refusing: Fn[Workspace.BuildRequest, Workspace.Built] = NativeBuild.refusing(deny[0])
+    return denied.with(workspace: settings.workspace.with(native_build: refusing))
+  end
+
+  return denied
 end
 
 # `help`: the builtins from the catalog, or a module of `std/` as `doc` reads it.
@@ -862,7 +893,11 @@ def test(session: Session, words: List[String]) -> Int
     Opts.Parsed.Broken(message) ->
       return emit(Reply.failed(2, "agentica: the test driver was started wrongly: #{message}\n"))
     Opts.Parsed.Usage(message, shown) -> return finish(Report.usage(message, shown))
-    Opts.Parsed.Ready(ready) -> return finish(Driver.run(ready, session.settings))
+    Opts.Parsed.Ready(ready) ->
+      # The --deny-* flags after `test` are the driver's (ready.deny holds those in front of it too), and so is the
+      # style: the builder follows them, as for `agentica --deny-native test`.
+      settings = builder_settings(session.settings, ready.deny, ready.style, "test")
+      return finish(Driver.run(ready, settings))
   end
 end
 

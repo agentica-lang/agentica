@@ -35,6 +35,8 @@ end
 ## when it is false, and then for the root files only (the imported files keep the rule): an editor adds an import, or
 ## a name, before it writes the first use. test_file says that the root file is a test file (`agentica test` and
 ## `agentica check` decide by its name): when it has no `main`, its `test_*` functions are its tests (test_main.agc).
+## native_denied says that a --deny-* flag is on, so the VM refuses native code: no module is built, and the bytecode
+## cache keeps the programs of such runs apart.
 export struct Settings
   std: StdProvider
   embedded_bdd: Bool
@@ -44,6 +46,7 @@ export struct Settings
   self_path: String
   unused: Bool
   test_file: Bool
+  native_denied: Bool
 end
 
 ## Settings for a stdlib/ folder and an environment. The version is "": a program that writes .agcb files sets it
@@ -58,6 +61,7 @@ export def settings(workspace: Workspace.Workspace, stdlib: String, env: Env) ->
     self_path: "",
     unused: true,
     test_file: false,
+    native_denied: false,
   )
 end
 
@@ -73,5 +77,6 @@ export def embedded_settings(workspace: Workspace.Workspace, env: Env, version: 
     self_path: "",
     unused: true,
     test_file: false,
+    native_denied: false,
   )
 end

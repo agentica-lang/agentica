@@ -45,7 +45,10 @@ import Env from "../modules/link_env"
 import Linker from "../modules/linker"
 import Resolve from "../modules/resolve_import"
 import Workspace from "../modules/workspace"
+import NativeBuild from "../packages/native_build"
+import PackageCache from "../packages/package_cache"
 import PackageHash from "../packages/package_hash"
+import Ast from "../syntax/ast"
 import CacheFiles from "cache_files"
 import RandomName from "random_name"
 
@@ -151,7 +154,7 @@ export def store(plan: Plan, settings: Env.Settings, modules: List[Linker.Linked
       end
 
       lines = sources.map do |module: Linker.LinkedModule| source_line(module) end
-      libraries = library_lines(settings.workspace, sources)
+      libraries = library_lines(settings.workspace, sources, built_libraries(settings, sources))
       if !libraries.ok?
         return false
       end
@@ -171,8 +174,12 @@ end
 # files, so a change or an added file makes the entry miss and the build (which hashes the package against the lock)
 # runs again. A path that a `system` list of candidates chose by (module.probed) is not read: it gets the line of an
 # import place, so the entry misses when the library appears, goes away or leads elsewhere, and the pick is made again.
-def library_lines(workspace: Workspace.Workspace, modules: List[Linker.LinkedModule]) -> Result[List[String]]
-  paths: List[String] = []
+def library_lines(
+  workspace: Workspace.Workspace,
+  modules: List[Linker.LinkedModule],
+  built: List[String],
+) -> Result[List[String]]
+  paths = built
   probed: List[String] = []
   for module in modules
     paths = paths.concat(module.watched)
@@ -200,9 +207,47 @@ def library_lines(workspace: Workspace.Workspace, modules: List[Linker.LinkedMod
   return ok(lines)
 end
 
-# The digest of the names of the native/ files of a package folder.
+# The libraries of the build cache (io/native_build.agc) that the extern functions of the program name: a removed or
+# changed build makes the entry miss, so the module is built again.
+def built_libraries(settings: Env.Settings, modules: List[Linker.LinkedModule]) -> List[String]
+  base = Paths.join(PackageCache.root(settings.env), "native-build/")
+  found: List[String] = []
+  if base == "native-build/"
+    return found
+  end
+
+  for module in modules
+    for decl in module.declarations
+      case decl
+        Ast.Decl.Function(node) ->
+          case node.native
+            some(native) ->
+              if native.library.starts_with?(base)
+                found = found.push(native.library)
+              end
+
+            none -> next
+          end
+
+        _ -> next
+      end
+    end
+  end
+
+  return found
+end
+
+# The digest of the names of the native/ files of a package folder: those the package hash covers, and those the walk
+# of a build reads (hidden ones too; a refused walk is its failure), so a new file of either kind is a miss.
 def names_digest(workspace: Workspace.Workspace, root: String) -> String
-  return CacheFiles.digest(PackageHash.native_files(workspace, root).join("\n").bytes)
+  hashed = PackageHash.native_files(workspace, root).join("\n")
+  walked = ""
+  case NativeBuild.native_files(workspace, root, "", "")
+    ok(paths) -> walked = paths.join("\n")
+    error(packed) -> walked = "refused #{packed}"
+  end
+
+  return CacheFiles.digest("#{hashed}\n\n#{walked}".bytes)
 end
 
 # The place of the entry and the key it must match. The inputs are read now, before the compile, so a file that changes
@@ -220,6 +265,13 @@ def entry_for(settings: Env.Settings, root: String) -> Result[Entry]
   named = real
   if settings.test_file
     root = "test #{real}"
+    named = root
+  end
+
+  # Under a --deny-* flag no module is built (Settings.native_denied), so the program names a library to build by its
+  # bare name, which the VM refuses with the rest of the native code: it has an entry of its own, never a plain run's.
+  if settings.native_denied
+    root = "denied #{root}"
     named = root
   end
 

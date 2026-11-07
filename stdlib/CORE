@@ -71,6 +71,7 @@ packages/lock.agc
 packages/manifest.agc
 packages/members.agc
 packages/native_artifact.agc
+packages/native_build.agc
 packages/native_library.agc
 packages/package_cache.agc
 packages/package_hash.agc

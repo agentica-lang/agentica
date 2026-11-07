@@ -1,6 +1,7 @@
 /* The native module of examples/native_module: `summary` gives a struct in an Optional, and `rows` reads a small CSV
-   text into typed rows in one call. Build it as README.md says. It includes the header next to the VM's sources. */
-#include "../../vm/agentica_native.h"
+   text into typed rows in one call. agentica builds it from the `build` table of agentica.toml, with the header of
+   its own VM on the include path. */
+#include "agentica_native.h"
 
 #include <stdlib.h>
 #include <string.h>

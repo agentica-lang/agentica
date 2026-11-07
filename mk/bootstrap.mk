@@ -94,16 +94,17 @@ $(EMBEDDED_STAMP): FORCE
 	@printf '%s\n' '$(EMBEDDED_FORMAT)' > $@.new; if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
 
 # The front end and the std/ sources go into the binary through a generated assembly file with .incbin (not through ccache,
-# which cannot see the files that .incbin reads).
-$(VM_BUILD)/embedded.s: vm/tools/gen-embedded.sh stdlib/MODULES stdlib/CORE $(STAGE_DIR)/stage2.agcb $(EMBEDDED_PROGRAMS) $(STD_FILES) $(CORE_FILES) $(EMBEDDED_STAMP)
+# which cannot see the files that .incbin reads). The binary also carries vm/agentica_native.h, which the build of a
+# native module writes out (compiler/io/native_build.agc).
+$(VM_BUILD)/embedded.s: vm/tools/gen-embedded.sh stdlib/MODULES stdlib/CORE $(STAGE_DIR)/stage2.agcb $(EMBEDDED_PROGRAMS) $(STD_FILES) $(CORE_FILES) vm/agentica_native.h $(EMBEDDED_STAMP)
 	@mkdir -p $(VM_BUILD)
-	AGENTICA_OBJECT_FORMAT=$(EMBEDDED_FORMAT) sh vm/tools/gen-embedded.sh $(STAGE_DIR)/stage2.agcb stdlib stdlib/MODULES $(EMBEDDED_PROGRAMS) stdlib/CORE compiler > $@
+	AGENTICA_OBJECT_FORMAT=$(EMBEDDED_FORMAT) sh vm/tools/gen-embedded.sh $(STAGE_DIR)/stage2.agcb stdlib stdlib/MODULES $(EMBEDDED_PROGRAMS) stdlib/CORE compiler vm/agentica_native.h > $@
 
 $(VM_BUILD)/bootstrap/embedded.s: vm/tools/gen-embedded.sh stdlib/MODULES $(STAGE0) $(STD_FILES) $(EMBEDDED_STAMP)
 	@mkdir -p $(VM_BUILD)/bootstrap
 	AGENTICA_OBJECT_FORMAT=$(EMBEDDED_FORMAT) sh vm/tools/gen-embedded.sh $(STAGE0) stdlib stdlib/MODULES > $@
 
-$(VM_OBJ)/embedded.o: $(VM_BUILD)/embedded.s $(VM_OBJ_STAMP) $(STAGE_DIR)/stage2.agcb $(EMBEDDED_PROGRAMS) $(STD_FILES) $(CORE_FILES)
+$(VM_OBJ)/embedded.o: $(VM_BUILD)/embedded.s $(VM_OBJ_STAMP) $(STAGE_DIR)/stage2.agcb $(EMBEDDED_PROGRAMS) $(STD_FILES) $(CORE_FILES) vm/agentica_native.h
 	@mkdir -p $(VM_OBJ)
 	$(VM_CC) -x assembler -c $< -o $@
 

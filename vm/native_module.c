@@ -1207,8 +1207,8 @@ static void free_state_now(const void *row, void *state, void *arg) {
 static void drop_staged(agc_native_dirty *d) { agc_native_dirty_states(d, free_state_now, NULL); }
 
 /* The value of D's result: each node that it reaches is built, in index order, so the nodes below one are built
-   first; the others are not, and the state of a resource among them is freed, newest first. BUILT is GC memory, so a value built
-   stays reachable through the next allocations. */
+   first; the others are not, and the state of a resource among them is freed, newest first. BUILT is GC memory, so a
+   value built stays reachable through the next allocations. */
 static agc_value build(agc_vm *vm, agc_native_dirty *d) {
   agc_value result = value_of(d->result);
   size_t at;

@@ -669,6 +669,68 @@ import Sqlite from "pkg/sqlite/db"
     package author's tests run with the package as the project). The project's
     files are not hashed. A workspace member is read from its folder with no
     hash, as its `.agc` files are.
+  - `build` is the one key of `[native.NAME]` that is not a system: the C
+    sources of a native module (`extern module`), which a package read in
+    place (the project, a workspace member, a `path` dependency) builds
+    instead of using its system entry. A fetched package never builds.
+    ```toml
+    [native.stats]
+    build = { sources = ["native/stats.c"], defines = ["NDEBUG"], libs = ["m"] }
+    ```
+    `sources` (1 to 256) are `.c` files in `native/`, as a `file` is;
+    `defines` (at most 64) are `NAME` or `NAME=VALUE`, a C name and a value of
+    letters, digits and `_ . + -`; `libs` (at most 32) are names for `-l`, of
+    the same letters, not starting with `-`. Anything else is
+    `PKG-MANIFEST-INVALID` at the key path of the item
+    (`native.stats.build.defines[0]`), and so is a Windows device name (`con`,
+    `nul`, `com1`) as the name of a library to build (at `native.NAME`). A
+    source that is not a regular file of `native/` is `PKG-NATIVE-MISSING` at
+    its item. Every entry of `native/` is read, hidden ones included, when a
+    file first uses the library; a `native` that is not a folder, a link, a
+    pipe or a device in it, or more than 4096 files or 1024 folders, is
+    `PKG-NATIVE-BUILD` at `native.NAME.build`.
+  - A run, `compile`, `test` and `install` run the user's C compiler on the
+    C of `native/`, and only for the project, its workspace members and its
+    `path` dependencies; `check` and the queries never do. Under any
+    `--deny-*` flag or `--sandbox`, in front of `test` or after it, the VM
+    refuses native code, so no compiler starts: a run or a test file that
+    uses the library is `RUNTIME-NATIVE-DENIED` (the bytecode cache keeps
+    such programs apart, so a hit and a miss agree), and `compile`, whose
+    output may run without the flag, is `PKG-NATIVE-BUILD`. A run, `compile`
+    and `test` build a library when a file of the program first uses it, so
+    a library that no file uses is never built; `install` builds them all.
+    The compiler is the words of `CC` (split at spaces, with no quoting), else
+    `cc` (`gcc` on Windows), started with an argument list and no shell, in
+    the package folder. Every build gets `-std=c11 -O2 -fvisibility=hidden`,
+    the folder of the `agentica_native.h` that the binary carries, the defines
+    (`-DNAME=VALUE`, one argument each) and the system's flags: Linux
+    `-fPIC -shared -Wl,-z,defs`, macOS `-dynamiclib` with the install name
+    `@rpath/libNAME.dylib` (the host architecture only; an undefined symbol
+    is a link error there by default), Windows `-shared -static-libgcc`; then
+    the sources and the `-l` libraries. The manifest names no compiler and no
+    other flag.
+  - The library goes to `<package cache>/native-build/<key>/libNAME.so`
+    (`.dylib`, `NAME.dll`), never into the package. The key is the SHA-256 of
+    the files of `native/`, the table, the compiler words, the first lines of
+    its `--version` and `-dumpmachine`, the header, and `CPATH`,
+    `C_INCLUDE_PATH`, `CPLUS_INCLUDE_PATH` and `LIBRARY_PATH`. Headers of your
+    own must live under `native/`: system headers, installed libraries and
+    the rest of the environment are not part of the key, so to build again
+    after they change, remove the entry or change a file under `native/`. The
+    files of `native/` are hashed again after the compile, and a change during
+    it stores nothing (`PKG-NATIVE-BUILD`). The entry is made in a private
+    folder and renamed into place with its receipt (the SHA-256 of the
+    library); an entry or a `native-build` folder that is not private to the
+    user, or a library that is not the one its receipt names, is
+    `PKG-NATIVE-BUILD`, and so is a compiler that cannot start, fails or makes
+    no library. Its standard error is printed as it is (the start of it in the
+    message with `--json` and `--ai`), and a new build prints
+    `built native NAME: PATH` on stderr. The bytecode cache of
+    `agentica FILE.agc` watches, for each package that builds, every file of
+    `native/` and its names (hidden ones too), the built libraries, `CC` and
+    the four search variables, so an edit or a new file in `native/` builds
+    again. A compiler replaced at the same path is seen only when the program
+    is compiled again.
 - The stored name of a package file in the `.agcb` file is
   `pkg/<name>@<tag>/path/in/package.agc`, such as `pkg/sqlite@v1.2.0/db.agc`
   (the path is from the package folder, without the `subdir`); for a package

@@ -16,7 +16,7 @@ bootstrap/        # stage0.agcb (references/ci.md)
 compiler/         # the front end: one folder per context; a new file goes in the folder of its context; imports across folders are relative (`../syntax/types`); agentica.toml holds [style] (119 columns)
   app/            # the command line (cli*.agc), the pipeline (pipeline.agc: shared by the CLI and the BDD driver), front_end_cli.agc; `test` calls the BDD driver in process, which starts `settings.self_path run ...`, so a later `run` word is a usage error
   analysis/       # the semantic queries, once: analysis.agc for the CLI and std/analysis; front.agc reads, links and checks for run, compile, test and the queries
-  io/             # the adapter to the machine: the only stage code that reads files and the environment (host.agc builds the Workspace); package fetch and deps/, bytecode and check caches (cache_files.agc: their shared safe-file rules), stdin buffer
+  io/             # the adapter to the machine: the only stage code that reads files and the environment (host.agc builds the Workspace); package fetch and deps/, native artifacts and builds (native_build.agc runs the C compiler), bytecode and check caches (cache_files.agc: their shared safe-file rules), stdin buffer
   syntax/         # lexer, parser, AST, types.agc (the Type enum), suggest.agc (did_you_mean), unicode_table.agc (hand-edited)
   modules/        # the linker: workspace.agc (the port of the stages to the machine), resolve_import.agc (std/, pkg/, relative; std/internal/ is for std only), link_env.agc (Env, Settings), test_main.agc (the `main` of a test file with `test_*` functions)
   packages/       # manifest, lock, workspace members, cache, hash and native libraries (native_library.agc); no I/O

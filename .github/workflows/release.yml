@@ -6,6 +6,8 @@ name: Release
 #   windows-x86_64  windows-2025      MSYS2 UCRT64 GCC                           .zip
 #   macos-x86_64    macos-15-intel    Apple clang, MACOSX_DEPLOYMENT_TARGET      .tar.gz
 #   macos-arm64     macos-latest      Apple clang, MACOSX_DEPLOYMENT_TARGET      .tar.gz
+# Each holds bin/, include/agentica_native.h (the C API of native modules), LICENSE, NOTICE and licenses/
+# (tools/release.py).
 # A tag push publishes them with SHA256SUMS once all five build and pass the tests of their extracted package; a manual
 # run (workflow_dispatch) only uploads the same files as artifacts.
 on:

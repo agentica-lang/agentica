@@ -235,7 +235,9 @@ import Sqlite from "pkg/sqlite/db"
   is `PKG-NATIVE-PLATFORM` and a missing file `PKG-NATIVE-MISSING`.
   `--deny-native` and `--sandbox` refuse such a program. The project's own
   `[native]` works for its own files (paths relative to the project, no hash).
-  `agentica compile` bakes the absolute library path into the `.agcb`.
+  `agentica compile` bakes the absolute library path into the `.agcb`. A
+  `build` key builds a native module from C sources instead
+  (`native-modules.md`).
 
 ## String queue (`std/queue`)
 
