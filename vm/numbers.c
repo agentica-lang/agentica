@@ -30,6 +30,14 @@ static agc_value builtin_random_float(agc_vm *vm, agc_value *args, uint32_t span
   return agc_float(agc_random_float(&vm->task->random));
 }
 
+/* Random.seed: the seed of the run (rt->seed, set once before the run starts and never written after), not of the
+   task: every task gives the same number, which --seed takes back to replay the run. */
+static agc_value builtin_random_seed(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)args;
+  (void)span;
+  return agc_int((int64_t)vm->rt->seed);
+}
+
 static agc_value builtin_float_from_int(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return agc_float((double)agc_as_int(vm, args[0]));
@@ -316,6 +324,7 @@ const agc_builtin agc_number_builtins[] = {
   {"Time.monotonic_ns", 0, builtin_monotonic_ns, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Random.int", 2, builtin_random_int, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Random.float", 0, builtin_random_float, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
+  {"Random.seed", 0, builtin_random_seed, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Int.abs", 1, builtin_int_abs, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Int.pow", 2, builtin_int_pow, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
   {"Int.gcd", 2, builtin_int_gcd, AGC_NATIVE_NONE, AGC_COST_NONE, false, true, false},
