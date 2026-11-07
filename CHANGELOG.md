@@ -13,6 +13,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A fetched package pinned in `agentica.lock` builds its native module from
   its `[native.NAME] build` table, as the project and `path` dependencies do.
 
+### Fixed
+
+- A `resource` in an `extern module` whose library comes from a `[native.NAME]` table is no longer refused with `CHECK-NATIVE-TYPE`.
+
 ## [0.26.0] - 2026-11-07
 
 ### Added

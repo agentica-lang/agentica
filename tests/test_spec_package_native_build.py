@@ -257,6 +257,63 @@ def test_install_builds_the_module_of_a_path_dependency_and_a_run_finds_it_built
     assert agentica(ws, "run", "--", str(ws.base / "main.agcb")).stdout == "42\n"
 
 
+BOXES_C = """#include "agentica_native.h"
+
+typedef struct {
+  int64_t n;
+} box;
+
+static an_term make(an_env *env, int argc, const an_term *argv) {
+  an_term out;
+  int64_t n;
+  (void)argc;
+  if (!an_get_int(env, argv[0], &n)) return an_badarg(env, 0);
+  box *b = an_resource_new(env, 0, &out);
+  if (b) b->n = n;
+  return out;
+}
+
+static an_term get(an_env *env, int argc, const an_term *argv) {
+  box *b;
+  (void)argc;
+  if (!an_get_resource(env, argv[0], 0, (void **)&b)) return an_badarg(env, 0);
+  return an_int(env, b->n);
+}
+
+static const an_resource_type resources[] = {{"Box", sizeof(box), NULL}};
+static const an_function functions[] = {
+  {"make", "(Int) -> Box", make, AN_SHORT},
+  {"get", "(Box) -> Int", get, AN_SHORT},
+};
+
+AN_MODULE_TABLES("boxes", functions, AN_COUNT(functions), NULL, 0, resources, AN_COUNT(resources), NULL)
+"""
+BOXES_AGC = """extern module "boxes"
+  resource Box
+  def make(n: Int) -> Box
+  def get(box: Box) -> Int
+end
+
+def main() -> Void
+  puts(get(make(7)))
+end
+"""
+
+
+@NATIVE_CALLS
+def test_a_resource_of_a_module_that_the_manifest_names_crosses_to_its_functions(ws):
+    # The block's library is the [native.NAME] of the manifest, which the linker turns into the built file: the
+    # resource names that library too, so the checker and the VM find that the two belong to one module.
+    tool("cc")
+    (ws.project / "native").mkdir()
+    (ws.project / "native" / "boxes.c").write_text(BOXES_C, encoding="utf-8")
+    table = '[native.boxes]\nbuild = { sources = ["native/boxes.c"] }\n'
+    (ws.project / "agentica.toml").write_text('name = "app"\n\n' + table, encoding="utf-8")
+    (ws.project / "main.agc").write_text(BOXES_AGC, encoding="utf-8")
+    ran = agentica(ws, str(ws.project / "main.agc"))
+    assert (ran.code, ran.stdout) == (0, "7\n"), ran.stderr
+
+
 @host_only(WINDOWS, "a symbolic link needs a privilege on Windows")
 @pytest.mark.parametrize("hidden", [False, True], ids=["a linked native folder", "a hidden link"])
 def test_a_linked_native_folder_or_a_hidden_link_in_it_is_refused(ws, tmp_path, hidden):
