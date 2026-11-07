@@ -25,6 +25,11 @@ NATIVE_FOLDER = "native"
 MANIFEST_FILE = "agentica.toml"
 # Files that a file manager adds to a folder: not part of the package, so they are not hashed or copied.
 NATIVE_JUNK = Set.new(["thumbs.db", "desktop.ini"])
+## The most a file of a package may hold, and all its files together: a fetch copies no more (package_tree.agc), and
+## the build of a fetched package reads no more (native_build.agc). The VM keeps at most 1 MiB of the output of a child
+## that was not read yet (site/content/library/io-and-system/process.md), and a file is a list of bytes in memory.
+export MAX_FILE_BYTES = 1_048_576
+export MAX_TOTAL_BYTES = 16_777_216
 # The separator of the fields of a file's header in the hashed stream. A string literal has no escape for it.
 NUL = String.from_code(0)
 

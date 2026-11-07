@@ -84,8 +84,9 @@ end
 
 ## What the core asks of the machine. Each function takes a path as the front end got it and never raises: a failure
 ## is data (`Read.Unreadable`, a `Result` error, `false`). `list_folder` gives the entries of a folder in no
-## particular order, and `read_bytes` the whole content of a file, for the hash of a package. A path given to the
-## Workspace never ends with a separator, except a filesystem root.
+## particular order, and `read_bytes` the whole content of a file, for the hash of a package; `read_prefix` gives at
+## most the first `limit` bytes of a file (all of it when it is shorter), so a caller can bound what it reads. A path
+## given to the Workspace never ends with a separator, except a filesystem root.
 export struct Workspace
   read_text: Fn[String, SourceFile.Read]
   file_exists: Fn[String, Bool]
@@ -95,6 +96,7 @@ export struct Workspace
   std_source: Fn[String, Result[String]]
   list_folder: Fn[String, Result[List[Entry]]]
   read_bytes: Fn[String, Result[Bytes]]
+  read_prefix: Fn[String, Int, Result[Bytes]]
   native_artifact: Fn[NativeRequest, Result[String]]
   native_build: Fn[BuildRequest, Built]
   check_cache: CheckCache

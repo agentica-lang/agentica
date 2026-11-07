@@ -44,6 +44,10 @@ def no_bytes(path: String) -> Result[Bytes]
   return error("no such file")
 end
 
+def no_prefix(path: String, limit: Int) -> Result[Bytes]
+  return error("no such file")
+end
+
 def no_native(request: Workspace.NativeRequest) -> Result[String]
   return error("no native artifact in this workspace")
 end
@@ -58,6 +62,7 @@ def main() -> Void
     std_source: &nothing,
     list_folder: &no_folder,
     read_bytes: &no_bytes,
+    read_prefix: &no_prefix,
     native_artifact: &no_native,
     native_build: &Workspace.no_build,
     check_cache: Workspace.no_check_cache(),

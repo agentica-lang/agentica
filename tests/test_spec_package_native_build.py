@@ -36,6 +36,8 @@ AN_MODULE("adder", functions, NULL)
 ADDER_AGC = 'extern module "adder"\n  export def add(a: Int, b: Int) -> Int\nend\n'
 MAIN = 'import Adder from "adder"\n\ndef main() -> Void\n  puts(Adder.add(40, 2))\nend\n'
 TABLE = '[native.adder]\nbuild = { sources = ["native/adder.c"], defines = ["SCALE=1"] }\n'
+# The adder with a header in a folder of native/.
+NESTED_C = ADDER_C.replace('#include "offset.h"\n', '#include "offset.h"\n#include "sub/scale.h"\n')
 BUILT = re.compile(r"built native adder: (.+)\n")
 
 
@@ -82,11 +84,12 @@ def path_dependency(ws, source=ADDER_C):
     (ws.project / "main.agc").write_text(MAIN.replace('"adder"', '"pkg/adder/adder"', 1), encoding="utf-8")
 
 
-def fetched(ws, remotes, source=ADDER_C):
+def fetched(ws, remotes, source=NESTED_C):
     """A project whose main file uses the adder module of a git dependency, published to a local bare repository and
-    pinned in the lock by its commit and hash. It gives the folder of the package in deps/, as the build sees it."""
+    pinned in the lock by its commit and hash; a header is in a folder of native/, so the copy of a build has one. It
+    gives the folder of the package in deps/, as the build sees it."""
     files = {"agentica.toml": 'name = "adder"\n\n' + TABLE, "adder.agc": ADDER_AGC, "native/adder.c": source,
-             "native/offset.h": "#define OFFSET 0\n"}
+             "native/offset.h": "#define OFFSET 0\n", "native/sub/scale.h": "#define SCALE_TOO 1\n"}
     commit = remotes.publish("owner/adder", files, tag="v1.0.0")
     lock_entry(ws, remotes, "owner/adder", files, commit, tag="v1.0.0")
     ws.write_manifest({"adder": dependency(remotes.url("owner/adder"), tag="v1.0.0")})
@@ -184,7 +187,7 @@ def test_a_git_dependency_pinned_in_the_lock_builds_on_first_use_from_its_locked
 @NATIVE_CALLS
 def test_a_fetched_package_builds_only_the_files_of_native_so_an_include_from_outside_is_not_found(ws, remotes):
     tool("cc")
-    folder = fetched(ws, remotes, source=ADDER_C.replace('"offset.h"', '"../offset.h"'))
+    folder = fetched(ws, remotes, source=NESTED_C.replace('"offset.h"', '"../offset.h"'))
     assert agentica(ws, "--json", "install", **remotes.environment).code == 0
     # The hash covers no header at the root, so this one is not the locked package's and the build never sees it.
     (folder / "offset.h").write_text("#define OFFSET 0\n", encoding="utf-8")

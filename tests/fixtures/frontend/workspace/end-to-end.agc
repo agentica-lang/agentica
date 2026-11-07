@@ -108,6 +108,7 @@ def in_memory(files: Map[String, String]) -> Workspace.Workspace
     std_source: resolver() do |name: String| std_module(name) end,
     list_folder: lister() do |path: String| entries(files, path) end,
     read_bytes: byter() do |path: String| bytes_of(files, path) end,
+    read_prefix: prefixer() do |path: String, limit: Int| prefix_of(files, path, limit) end,
     native_artifact: nativer() do |_request: Workspace.NativeRequest| error("no native artifact in this workspace") end,
     native_build: &Workspace.no_build,
     check_cache: Workspace.no_check_cache(),
@@ -135,6 +136,10 @@ def byter(f: Fn[String, Result[Bytes]]) -> Fn[String, Result[Bytes]]
   return f
 end
 
+def prefixer(f: Fn[String, Int, Result[Bytes]]) -> Fn[String, Int, Result[Bytes]]
+  return f
+end
+
 def nativer(f: Fn[Workspace.NativeRequest, Result[String]]) -> Fn[Workspace.NativeRequest, Result[String]]
   return f
 end
@@ -144,6 +149,11 @@ def read_file(files: Map[String, String], path: String) -> SourceFile.Read
     return SourceFile.Read.Text(files[path])
   end
   return SourceFile.Read.Unreadable("no such file")
+end
+
+def prefix_of(files: Map[String, String], path: String, limit: Int) -> Result[Bytes]
+  bytes = try bytes_of(files, path)
+  return ok(bytes.take(limit))
 end
 
 def bytes_of(files: Map[String, String], path: String) -> Result[Bytes]

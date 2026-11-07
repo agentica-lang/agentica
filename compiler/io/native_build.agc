@@ -369,8 +369,9 @@ def compile_in(
   output = Paths.join(folder, name)
   source = try source_of(request, folder)
   ran = try run(source, compiler, NativeBuild.arguments(source, include, output), BUILD_TIMEOUT_MS)
-  if noted and ran.stderr != ""
-    IO.warn(without_line_end(ran.stderr))
+  said = in_package(ran.stderr, source.root, request.root)
+  if noted and said != ""
+    IO.warn(without_line_end(said))
   end
 
   digest = File.sha256(output, FILE_TIMEOUT_MS)
@@ -380,8 +381,8 @@ def compile_in(
       message = "the C compiler made no library"
     end
 
-    if !noted and ran.stderr != ""
-      message = "#{message}:\n#{shown(ran.stderr)}"
+    if !noted and said != ""
+      message = "#{message}:\n#{shown(said)}"
     end
 
     return error(fail(request, message, "fix the C sources, or set CC to another compiler"))
@@ -442,6 +443,16 @@ def copy_folders(files: List[String]) -> List[String]
   end
 
   return found
+end
+
+# What the compiler said, with the folder of the private copy of a fetched package named by the package folder it was
+# copied from, so `native/x.c:3:1: error` points at a file the user can open (the copy is removed after the build).
+def in_package(text: String, copy: String, root: String) -> String
+  if copy == root
+    return text
+  end
+
+  return text.replace(copy, root)
 end
 
 # The start of the compiler's standard error, where its first error is, in at most MAX_SHOWN characters.

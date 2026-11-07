@@ -693,10 +693,13 @@ import Sqlite from "pkg/sqlite/db"
     (`native.stats.build.defines[0]`), and so is a Windows device name (`con`,
     `nul`, `com1`) as the name of a library to build (at `native.NAME`). A
     source that is not a regular file of `native/` is `PKG-NATIVE-MISSING` at
-    its item. Every entry of `native/` is read, hidden ones included, when a
-    file first uses the library; a `native` that is not a folder, a link, a
-    pipe or a device in it, or more than 4096 files or 1024 folders, is
-    `PKG-NATIVE-BUILD` at `native.NAME.build`.
+    its item. For a package read in place, every entry of `native/` is read,
+    hidden ones included, when a file first uses the library; a `native` that
+    is not a folder, a link, a pipe or a device in it, or more than 4096 files
+    or 1024 folders, is `PKG-NATIVE-BUILD` at `native.NAME.build`. A fetched
+    package reads only the files its hash covers, within the limits of a
+    fetch (1 MiB a file, 16 MiB in all; more is `PKG-NATIVE-BUILD` there), so
+    its hidden files are in neither the copy nor the key.
   - A run, `compile`, `test` and `install` run the user's C compiler on the
     C of `native/`; `check` and the queries never do. Under any
     `--deny-*` flag or `--sandbox`, in front of `test` or after it, the VM

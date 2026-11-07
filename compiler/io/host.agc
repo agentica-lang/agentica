@@ -24,6 +24,7 @@ export def workspace_with(std_source: Fn[String, Result[String]]) -> Workspace.W
     std_source: std_source,
     list_folder: &list_folder,
     read_bytes: &read_bytes,
+    read_prefix: &read_prefix,
     native_artifact: &no_native,
     native_build: &Workspace.no_build,
     check_cache: Workspace.no_check_cache(),
@@ -102,6 +103,11 @@ end
 
 # The whole file, read in chunks of 256 KiB (File.read_bytes gives at most 1 MiB a call).
 def read_bytes(path: String) -> Result[Bytes]
+  return read_prefix(path, -1)
+end
+
+# At most the first `limit` bytes of the file (no limit when it is negative), read in chunks of 256 KiB.
+def read_prefix(path: String, limit: Int) -> Result[Bytes]
   opened = File.open(path, "read", STAT_TIMEOUT_MS)
   if !opened.ok?
     return error(opened.message)
@@ -109,15 +115,27 @@ def read_bytes(path: String) -> Result[Bytes]
 
   handle = opened.unwrap!
   parts: List[Bytes] = []
+  size = 0
   finished = false
   while !finished
-    got = File.read_bytes(handle, CHUNK_BYTES, STAT_TIMEOUT_MS)
+    wanted = CHUNK_BYTES
+    if limit >= 0 and limit - size < wanted
+      wanted = limit - size
+    end
+
+    if wanted == 0
+      finished = true
+      next
+    end
+
+    got = File.read_bytes(handle, wanted, STAT_TIMEOUT_MS)
     if !got.ok?
       _ = File.close(handle, STAT_TIMEOUT_MS)
       return error(got.message)
     end
 
     finished = got.unwrap!.empty?
+    size += got.unwrap!.size
     parts = parts.push(got.unwrap!)
   end
 

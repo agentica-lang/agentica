@@ -260,11 +260,21 @@ def pinned_files(workspace: Workspace.Workspace, request: Workspace.BuildRequest
     PackageHash.Listing.Stopped(reason) -> return error(unreadable(request, reason))
   end
 
+  # A fetch copies no file over PackageHash.MAX_FILE_BYTES, nor more than PackageHash.MAX_TOTAL_BYTES in all: a
+  # folder of deps/ that holds more was changed, and is read no further than one byte past the limit.
   contents: List[Bytes] = []
+  total = 0
   for path in paths
-    read = workspace.read_bytes.call(Paths.join(request.root, path))
+    read = workspace.read_prefix.call(Paths.join(request.root, path), PackageHash.MAX_FILE_BYTES + 1)
     if !read.ok?
       return error(unreadable(request, PackageHash.Hashed.Unreadable("#{path}: #{read.message}")))
+    end
+
+    total += read.unwrap!.size
+    if read.unwrap!.size > PackageHash.MAX_FILE_BYTES or total > PackageHash.MAX_TOTAL_BYTES
+      limits = "#{PackageHash.MAX_FILE_BYTES} bytes a file and #{PackageHash.MAX_TOTAL_BYTES} in all"
+      message = "the files of the package are over the limits of a fetched package (#{limits}), at #{path}"
+      return error(refused(request.file, request.key, message, "run agentica install to put the locked files back"))
     end
 
     contents = contents.push(read.unwrap!)
