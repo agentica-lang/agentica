@@ -46,7 +46,7 @@ s.encode(encoding) -> Result[Bytes]
 - `slice`, `take` and `drop` copy. `+` in a loop is quadratic: collect the parts
   in a list and call `Bytes.concat` once. To build bytes one at a time, build a
   `List[Int]` and call `Bytes.from_list` once.
-- `Digest`, `HMAC`, `Cipher`, `Base64`, `Zlib`, the `*_bytes` calls of `IO`,
+- The `OpenSSL` family, `Base64`, `Zlib`, the `*_bytes` calls of `IO`,
   `File`, `TCP` and `Process`, and `std/binary` take and return `Bytes`. The
   `Native` array builtins use `List[Int]` or `List[Float]`, not bytes.
 - `List.uniq`, `tally` and `group_by` take `Int` or `String` keys only: use a
