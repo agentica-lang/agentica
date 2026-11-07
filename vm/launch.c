@@ -93,16 +93,20 @@ static bool os_entropy(uint8_t *out, size_t len) {
 static bool os_entropy(uint8_t *out, size_t len) { return urandom_entropy(out, len); }
 #endif
 
+/* The largest seed --seed takes. A seed drawn from the system is kept in the same range, so the number that
+   Random.seed gives can be passed back with --seed to get the same random numbers. */
+#define SEED_MAX UINT64_C(2147483647)
+
 static uint64_t entropy_seed(void) {
   uint8_t bytes[8];
   if (!os_entropy(bytes, sizeof bytes)) {
     struct timespec ts = {0};
     if (timespec_get(&ts, TIME_UTC) != TIME_UTC) return 0;
-    return (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
+    return ((uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec) & SEED_MAX;
   }
   uint64_t seed = 0;
   for (unsigned k = 0; k < 8; k++) seed |= (uint64_t)bytes[k] << (8 * k);
-  return seed;
+  return seed & SEED_MAX;
 }
 
 static void seed_map_hash(agc_vm *vm) {
@@ -501,7 +505,7 @@ static bool parse_seed(const char *text, uint32_t *seed) {
   for (const char *c = text; *c; c++) {
     if (*c < '0' || *c > '9') return false;
     value = value * 10 + (uint64_t)(*c - '0');
-    if (value > 2147483647u) return false;
+    if (value > SEED_MAX) return false;
   }
   *seed = (uint32_t)value;
   return true;

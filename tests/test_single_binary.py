@@ -29,6 +29,17 @@ EXIT_THREE = 'def main() -> Void\n  puts("before")\n  System.exit(3)\nend\n'
 TYPE_ERROR = 'def main() -> Void\n  x: Int = "a"\n  puts(x)\nend\n'
 LOOP = "def main() -> Void\n  _i = 0\n  while true\n    _i += 1\n  end\nend\n"
 RANDOM = "def main() -> Void\n  puts(Random.int(0, 1000000))\nend\n"
+# Prints the seed of the run, the seed a spawned task sees, and then a draw.
+SEED = (
+    "def main() -> Void\n"
+    "  puts(Random.seed)\n"
+    "  child = Task.spawn do\n"
+    "    Random.seed\n"
+    "  end\n"
+    "  puts(Task.await(child))\n"
+    "  puts(Random.int(0, 1000000))\n"
+    "end\n"
+)
 STDIN_AND_ARGS = (
     'def main() -> Void\n  puts("args #{System.args()}")\n  puts("line #{IO.gets()}")\n  System.exit(3)\nend\n')
 SPAWN_CALL = (
@@ -273,6 +284,18 @@ def test_the_vm_options_apply_to_the_program_only(tmp_path):
     assert agentica("spawn.agc", cwd=directory).stdout == "spawned\n"
     denied = agentica("--deny-run", "spawn.agc", cwd=directory)
     assert (denied.code, denied.stdout.startswith(DENIED)) == (0, True), denied
+
+
+def test_random_seed_is_the_seed_of_the_run_and_replays_it(tmp_path):
+    """Random.seed is the --seed of the run in every task; without --seed it is the seed drawn from the system, in the
+    range of --seed, so passing it back gives the same numbers."""
+    directory = make_suite(tmp_path, {"seed.agc": SEED})
+    seeded = agentica("--seed", "42", "seed.agc", cwd=directory)
+    assert (seeded.code, seeded.stdout.split("\n")[:2]) == (0, ["42", "42"]), seeded
+    drawn = agentica("seed.agc", cwd=directory)
+    seed, child, draw = drawn.stdout.split()
+    assert drawn.code == 0 and seed == child and 0 <= int(seed) <= 2147483647, drawn
+    assert agentica("--seed", seed, "seed.agc", cwd=directory).stdout == drawn.stdout
 
 
 @pytest.mark.parametrize("flag", [None, "--deny-net", "--deny-fs", "--deny-env", "--deny-run", "--sandbox"])

@@ -267,6 +267,7 @@ Profile.measure
 Profile.steps
 Random.float
 Random.int
+Random.seed
 Range.each
 Range.first
 Range.include?

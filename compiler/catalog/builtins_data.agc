@@ -4100,6 +4100,19 @@ ROWS_35: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "Random.seed",
+    parameters: [],
+    result: Types.Type.Int,
+    rule: Model.Rule.Plain,
+    implementation: "Random.seed",
+    effects: ["random"],
+    description: (
+      "The seed of the run, 0..2147483647: the one --seed gave, or the one drawn from the system when there is " +
+      "none; the same in every task, so --seed with it gives the same random numbers."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "Range.each",
     parameters: [
       Model.Named(name: "range", type: Types.Type.Range),

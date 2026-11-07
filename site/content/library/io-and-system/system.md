@@ -237,6 +237,25 @@ end
 true
 ```
 
+## Random.seed
+
+```signature
+Random.seed() -> Int
+```
+
+The seed of the run, from `0` to `2147483647`: the `N` of `--seed N`, or the one drawn from the operating system when there is no `--seed`. Every task gives the same number. Print it when something fails, then run again with `--seed` and that number to get the same random numbers.
+
+```agentica
+def main() -> Void
+  seed = Random.seed
+  puts(seed >= 0 and seed <= 2147483647)
+end
+```
+
+```output
+true
+```
+
 Each run gives other numbers. Run with `agentica --seed 42 file.agc` to get the same numbers every time (`N` is `0 .. 2147483647`, otherwise the exit status is 2). Without `--seed`, the generator is seeded from the operating system.
 
 - Each task has its own generator. It is split from its parent when the task is spawned, so each task repeats its own numbers: the main task starts from the seed, and each spawn takes one draw from its parent. Timers, I/O and more than one scheduler can still change how tasks interleave, so a run of several tasks as a whole is not repeatable.

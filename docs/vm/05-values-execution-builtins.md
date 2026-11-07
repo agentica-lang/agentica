@@ -458,4 +458,7 @@ service and the server) build and run on Linux, macOS and Windows, so
 - `--seed N` takes 0 to 2147483647 on `agentica run`, and `agentica --seed N`
   passes it through. Without a seed the VM takes 8 bytes from the same OS
   entropy as the map hash key. If every source fails, it uses the wall clock.
+  Either way it keeps the low 31 bits, so the seed is in the range of `--seed`:
+  `Random.seed` returns it (`rt->seed`, one per run), and `--seed` with that
+  number gives the same random numbers.
   `agc_vm_init` seeds with 0, so the C tests and the fuzzer are deterministic.
