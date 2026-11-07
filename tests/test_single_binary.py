@@ -542,6 +542,8 @@ def test_the_heap_starts_at_32_mib_and_the_environment_sets_it(tmp_path):
     """The collector's heap starts at 32 MiB; AGENTICA_GC_HEAP sets another size (0 for libgc's own start), and libgc's
     GC_INITIAL_HEAP_SIZE wins over it. libgc's GC_PRINT_STATS log names each growth of the heap; the start is the
     largest before anything is allocated."""
+    if "no libgc" in run([*vm_command(), "--version"], env=vm_environment(), timeout=scaled(10)).stdout:
+        pytest.skip("the VM was built without libgc (the sanitizer build)")
     program = compile_agc(HELLO, tmp_path / "hello.agcb")
     starts = {}
     for floor, initial in ((None, None), ("48M", None), ("0", None), ("48M", "8M")):
