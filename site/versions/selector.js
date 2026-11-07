@@ -31,8 +31,15 @@
       return new URL((v.latest ? "" : v.path) + page, root).href + location.hash;
     }
 
-    // The same page in another version when it exists there, else that version's home page.
+    // The menu button, in every release (see menu() below).
+    var header = document.querySelector(".site-header");
+    var toggle = header && header.querySelector(".nav-toggle");
+
+    // The same page in another version when it exists there, else that version's home page. An open menu is closed
+    // first, with the button's own click, so that a page restored from the back-forward cache is not left with the
+    // menu open and the page behind it inert.
     function go(v) {
+      if (toggle && toggle.getAttribute("aria-expanded") === "true") toggle.click();
       var target = url(v);
       fetch(target.split("#")[0], { method: "HEAD" })
         .then(function (response) { return response.ok ? target : home(v); })
@@ -79,7 +86,6 @@
       bar.appendChild(note);
     }
 
-    var header = document.querySelector(".site-header");
     var badge = header && header.querySelector(".version");
     var phone = window.matchMedia("(max-width: 30rem)");
 
@@ -87,13 +93,14 @@
     // box and the buttons need it). Every release has the button and its menu; one where the button is hidden has no
     // drawer, and the selector goes to the strip.
     function menu() {
-      var toggle = header && header.querySelector(".nav-toggle");
       var target = toggle && document.getElementById(toggle.getAttribute("aria-controls"));
       return target && toggle.getClientRects().length ? target : null;
     }
 
     function place() {
       var drawer = phone.matches ? menu() : null;
+      // Moving a node drops its focus; a reader who is using the selector while the window is resized keeps it.
+      var focused = document.activeElement === select;
       select.classList.toggle("in-menu", !!drawer);
       if (drawer) {
         drawer.insertBefore(select, drawer.firstChild);
@@ -107,6 +114,7 @@
         else document.body.insertBefore(bar, document.body.firstChild);
       }
       bar.hidden = !bar.children.length;
+      if (focused) select.focus();
     }
 
     // The selector shows the version, so the header's own badge goes (selector.css; some releases show it again on a
