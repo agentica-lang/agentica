@@ -184,6 +184,10 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
         attrs += " by_ref=true"
       end
 
+      if node.module != ""
+        attrs += " module=#{Text.quote(node.module)}"
+      end
+
       case node.callback
         some(callback) ->
           attrs = "#{name_attr(node.name)} codes=#{Text.quote(callback.codes)}#{doc_attr(node.doc)}"

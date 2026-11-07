@@ -1,12 +1,14 @@
 ## The functions of the `extern module "NAME"` blocks (#1149): the types that cross between the program and the C code
 ## of a native module. A type crosses when it is Int, Float, Bool, String or Bytes, Void where the language allows it,
 ## a List, Optional or Result of a crossing type, a Map with Int, String or Bytes keys and crossing values, or a struct
-## or enum of the program that is not generic and whose fields or payloads cross. Anything else is CHECK-NATIVE-TYPE at
-## the type in the signature, and so is a second user type of the same bare name in the functions of one block, since
-## the module knows its types by that name. The checker records the type that each written type stands for, by the node
-## id of the type, for the parameters and results of these functions and for the fields and payloads of the user types
-## that cross: the lowering writes the canonical signature and the shape of each user type from them
-## (lower_native.agc).
+## or enum of the program that is not generic and whose fields or payloads cross. A resource of the block crosses as a
+## whole parameter type, and anywhere in a result but in the fields or payloads of a user type: the module reads only
+## the resources that the call holds, and the shape of a user type names no resource. Anything else is
+## CHECK-NATIVE-TYPE at the type in the signature, and so is a second user type or resource of the same bare name in
+## the functions of one block, since the module knows its types by that name. The checker records the type that each
+## written type stands for, by the node id of the type, for the parameters and results of these functions and for the
+## fields and payloads of the user types that cross: the lowering writes the canonical signature and the shape of each
+## user type from them (lower_native.agc).
 
 import {ENUMS} from "../catalog/builtins"
 import Linker from "../modules/linker"
@@ -25,10 +27,22 @@ CROSSING_HELP = (
   "Result of them, a Map with Int, String or Bytes keys, and the structs and enums of the program that are not generic"
 )
 
+RESOURCE_HELP = (
+  "a resource of the module block crosses as a whole parameter type, and in a result outside the fields of a struct " +
+  "or the payloads of an enum"
+)
+
 # The types written in the fields of a struct or the payloads of an enum, in order, and the file that declares it.
 struct Written
   file: String
   refs: List[Ast.TypeRef]
+end
+
+# What check_ref needs besides the walk: the written types of the user types, and the library of each resource of a
+# module block, by linked name.
+struct Program
+  written: Map[String, Written]
+  owners: Map[String, String]
 end
 
 # The walk over the functions of one block: the checker state with the recorded types, the user types already walked,
@@ -54,7 +68,7 @@ export def check_all(
   modules: List[Linker.LinkedModule],
   clean: Set[String],
 ) -> Result[State.St]
-  written = written_types(modules)
+  program = Program(written: written_types(modules), owners: resource_owners(modules))
   current = st
   for module in modules
     if clean.include?(module.key)
@@ -71,7 +85,7 @@ export def check_all(
             some(native) if native.module ->
               unseen: Set[String] = Set.new([])
               walk = blocks.get(native.library, Walk(st: current, seen: unseen, named: {})).with(st: current)
-              walk = try check_function(here, walk, node, written)
+              walk = try check_function(here, walk, node, native.library, program)
               blocks = blocks.put(native.library, walk)
               current = walk.st
             _ -> next
@@ -83,6 +97,21 @@ export def check_all(
   end
 
   return ok(current)
+end
+
+# The library of each resource of an extern module block, by linked name.
+def resource_owners(modules: List[Linker.LinkedModule]) -> Map[String, String]
+  found: Map[String, String] = {}
+  for module in modules
+    for decl in module.declarations
+      case decl
+        Ast.Decl.Resource(node) if node.module != "" -> found = found.put(node.name, node.module)
+        _ -> next
+      end
+    end
+  end
+
+  return found
 end
 
 # The field types of each struct and the payload types of each enum of the program, by linked name.
@@ -109,21 +138,32 @@ def written_types(modules: List[Linker.LinkedModule]) -> Map[String, Written]
   return found
 end
 
-def check_function(cx: State.Cx, walk: Walk, node: Ast.FunctionDecl, written: Map[String, Written]) -> Result[Walk]
+def check_function(cx: State.Cx, walk: Walk, node: Ast.FunctionDecl, library: String, program: Program) -> Result[Walk]
   current = walk
   for param in node.params
-    current = try check_ref(cx, current, param.type, false, written)
+    current = try check_ref(cx, current, param.type, false, library, program)
   end
 
-  return check_ref(cx, current, node.result, true, written)
+  return check_ref(cx, current, node.result, true, library, program)
 end
 
 # The walk with the type written at ref resolved, recorded at its id and checked, together with the user types it
-# reaches, which are walked from a list rather than by recursion, so a recursive type ends.
-def check_ref(cx: State.Cx, walk: Walk, ref: Ast.TypeRef, result: Bool, written: Map[String, Written]) -> Result[Walk]
+# reaches, which are walked from a list rather than by recursion, so a recursive type ends. A resource of the block
+# (library) crosses where RESOURCE_HELP says: the type of a parameter itself, or in a result before any user type.
+def check_ref(
+  cx: State.Cx,
+  walk: Walk,
+  ref: Ast.TypeRef,
+  result: Bool,
+  library: String,
+  program: Program,
+) -> Result[Walk]
   type = try Types.resolve_type(cx, walk.st, ref, result)
   current = walk.with(st: State.record_type(walk.st, ref.id, type))
   pending = [type]
+  # The types after position fields of pending are in the fields or payloads of user types: only Map and the
+  # wrappers come before the first user type, and each adds one type, so nothing else is pending when it is met.
+  fields = -1
   at = 0
   while at < pending.size
     item = pending[at]
@@ -133,12 +173,31 @@ def check_ref(cx: State.Cx, walk: Walk, ref: Ast.TypeRef, result: Bool, written:
       next
     end
 
-    if WRAPPERS.include?(tag)
+    if tag == "Opaque" and program.owners.get(T.name(item), "") == library
+      if (!result and item != type) or (fields >= 0 and at > fields)
+        return error(
+          State.fail_help(
+            cx,
+            current.st,
+            "CHECK-NATIVE-TYPE",
+            "the resource #{T.to_text(item)} does not cross to a native module in #{T.to_text(type)}",
+            ref.span,
+            RESOURCE_HELP,
+          ),
+        )
+      end
+
+      current = try bare_name(cx, current, ref, T.name(item))
+    elsif WRAPPERS.include?(tag)
       pending = pending.push(T.item(item))
     elsif tag == "Map" and KEYS.include?(T.tag(T.key(item)))
       pending = pending.push(T.value(item))
     elsif user_type?(cx, item)
-      reached = try user_type(cx, current, ref, T.name(item), written)
+      if fields < 0
+        fields = pending.size
+      end
+
+      reached = try user_type(cx, current, ref, T.name(item), program.written)
       current = reached.walk
       pending = pending.concat(reached.types)
     else
@@ -191,8 +250,24 @@ def user_type(
     return ok(Reached(walk: walk, types: []))
   end
 
+  st = walk.st
+  types: List[T.Type] = []
+  declared = written[name]
+  for field in declared.refs
+    type = try Types.resolve_type(cx.with(file: declared.file), st, field, false)
+    st = State.record_type(st, field.id, type)
+    types = types.push(type)
+  end
+
+  crossed = try bare_name(cx, walk.with(st: st, seen: walk.seen.add(name)), ref, name)
+  return ok(Reached(walk: crossed, types: types))
+end
+
+# The walk with the user type or resource NAME known by its bare name, or CHECK-NATIVE-TYPE at ref when another one
+# of the block has that bare name.
+def bare_name(cx: State.Cx, walk: Walk, ref: Ast.TypeRef, name: String) -> Result[Walk]
   bare = T.display_name(name)
-  if walk.named.has_key?(bare)
+  if walk.named.get(bare, name) != name
     return error(
       State.fail_help(
         cx,
@@ -205,15 +280,5 @@ def user_type(
     )
   end
 
-  st = walk.st
-  types: List[T.Type] = []
-  declared = written[name]
-  for field in declared.refs
-    type = try Types.resolve_type(cx.with(file: declared.file), st, field, false)
-    st = State.record_type(st, field.id, type)
-    types = types.push(type)
-  end
-
-  crossed = Walk(st: st, seen: walk.seen.add(name), named: walk.named.put(bare, name))
-  return ok(Reached(walk: crossed, types: types))
+  return ok(walk.with(named: walk.named.put(bare, name)))
 end

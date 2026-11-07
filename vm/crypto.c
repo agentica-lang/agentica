@@ -639,7 +639,7 @@ static agc_value kdf_value(agc_vm *vm, agc_value *args, size_t length_at, const 
   k->password_n = password_n;
   k->salt = kdf_copy(salt, salt_n);
   k->salt_n = salt_n;
-  agc_io_compute(vm, &kdf_io, k);
+  agc_io_compute(vm, &kdf_io, k, agc_void());
   return agc_void();
 }
 

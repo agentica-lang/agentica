@@ -1701,11 +1701,11 @@ agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc
   return start_job(vm, kind, data, context, -1, NULL, NULL, flags);
 }
 
-agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data) {
-  if (!kind->work || kind->external || kind->cancel)
+agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context) {
+  if (!kind->work || kind->external || kind->cancel || agc_is(context, AGC_T_HANDLE))
     agc_fail(vm, "RUNTIME-INTERNAL", "a compute job needs pool work and nothing else", 0);
   agc_task_parking(vm);
-  job *j = start_job(vm, kind, data, agc_void(), -1, vm->task, NULL, AGC_JOB_COMPUTE);
+  job *j = start_job(vm, kind, data, context, -1, vm->task, NULL, AGC_JOB_COMPUTE);
   agc_task_park(vm, false);
   return j;
 }
@@ -2259,9 +2259,10 @@ agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc
   agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
 }
 
-agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data) {
+agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context) {
   (void)kind;
   (void)data;
+  (void)context;
   agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
 }
 

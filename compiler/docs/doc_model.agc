@@ -299,6 +299,10 @@ def resource_item(node: Ast.ResourceDecl, doc: Optional[String], span: Source.Sp
   end
 
   signature = "resource #{node.name}, #{word}: #{node.free}"
+  if node.module != ""
+    signature = "resource #{node.name}"
+  end
+
   case node.callback
     some(callback) -> signature = Signature.callback_text(node.name, callback)
     none -> signature = signature

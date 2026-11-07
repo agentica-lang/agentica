@@ -192,13 +192,15 @@ written against the VM's C API (section 6d). `NAME` follows the library rule
 above, `[native.NAME]` of a package included. Each member is a `def` or
 `compute def` with no body, named as the module's table names it (`?` and `!`
 allowed), with Agentica types; the checker says which cross
-(`CHECK-NATIVE-TYPE`, section 6d). A `callback` or `struct` line, an out
-parameter, a `...` and a C name after `=` are `PARSE-EXTERN-MODULE` at the
-word, the parameter, the `...` or the `=`, and so is a `resource` line, which
-this version does not take yet; a `C.` type anywhere in a type
-is `PARSE-EXTERN-TYPE` at it; a default is `PARSE-EXTERN-DEFAULT` and a 65th
-parameter `PARSE-EXTERN-ARITY`. For the rest of the language each is a `def`, as
-in an extern block, and takes the place of a `def` in the declaration order.
+(`CHECK-NATIVE-TYPE`, section 6d). A member may also be `resource Name`, a
+resource of the module's resource table, which frees it. A `callback` or
+`struct` line, an out parameter, a `...` and a C name after `=` are
+`PARSE-EXTERN-MODULE` at the word, the parameter, the `...` or the `=`, and so
+is a comma after a resource's name (the module frees it, so it has no `free:`);
+a `C.` type anywhere in a type is `PARSE-EXTERN-TYPE` at it; a default is
+`PARSE-EXTERN-DEFAULT` and a 65th parameter `PARSE-EXTERN-ARITY`. For the rest
+of the language each is a `def`, as in an extern block, and takes the place of a
+`def` in the declaration order.
 `module` is a word only between `extern` and the string.
 
 An import is one of two forms. `import Util from "util"` gives the file the

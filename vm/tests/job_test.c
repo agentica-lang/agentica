@@ -229,7 +229,7 @@ static void test_completion_before_timer(void) {
 static agc_task *park_compute(gate *g) {
   agc_task *task = vm.task;
   running();
-  agc_io_compute(&vm, &compute_io, g);
+  agc_io_compute(&vm, &compute_io, g, agc_void());
   park(task);
   return task;
 }
@@ -709,7 +709,7 @@ static void detach_on_thread(void *arg) {
 static void start_direct_on_thread(void *arg) {
   agc_task *task = vm.task;
   running();
-  agc_io_compute(&vm, &compute_io, arg);
+  agc_io_compute(&vm, &compute_io, arg, agc_void());
   park(task);
   assert(vm.direct != NULL);
   agc_io_submit_direct(&vm);

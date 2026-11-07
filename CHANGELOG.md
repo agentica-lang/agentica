@@ -11,6 +11,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - `extern module "NAME"` calls C written for Agentica, with Agentica types.
+- `compute def` and `resource Name` in `extern module` blocks: dirty calls on the
+  compute pool, and module resources freed once by the module.
 
 ## [0.25.1] - 2026-11-06
 

@@ -127,7 +127,12 @@ The design (trie, unboxed Int and Float leaves, builders, costs) is
   `agc_native_register`: the C tests and the fuzz driver, the only modules a
   `no_files` run calls) and checks name, signature, mode and types against its
   tables; `agc_native_call` makes a short call on the scheduler without
-  `rt->sync`, and a failure the env holds fails it once C returns.
+  `rt->sync`, and a failure the env holds fails it once C returns. A dirty
+  call (`module_call` in `ffi.c`) parks on the compute pool with the argument
+  List as the job's context; C reads it in place and stages what it makes in
+  malloc (`agc_native_dirty_*`), which the done half builds or drops. A
+  `{R=NAME}` block names a resource of the module's table: an
+  `agc_c_resource` with `row` set, freed through `agc_native_free_state`.
   `make bench-native` times it.
 - Resources that extern functions return are `agc_c_resource` (`vm/value.h`): a
   registry entry owned like a handle, freed by `Native.close` or the owner's

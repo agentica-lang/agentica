@@ -266,16 +266,41 @@ char *agc_ffi_text_copy(const char *data, size_t len);
 void agc_ffi_refusing_callbacks(void (*run)(void *arg), void *arg);
 /* Native modules (vm/native_module.c, vm/agentica_native.h). A bound function lives in vm/ffi.c's cache of the run:
    bind makes it from the text after "module " of a Native.call signature (DIRTY for "compute module "), failing with
-   RUNTIME-NATIVE-LOAD, -SIGNATURE or -DENIED, under rt->sync; call makes one short call with ARGS, the List of its
-   arity of arguments. register adds a module that the binary carries, by its library name (the C tests and the fuzz
+   RUNTIME-NATIVE-LOAD, -SIGNATURE or -DENIED, under rt->sync. arguments checks ARGS, the List of its arity of
+   arguments, before C sees them (bad bytecode fails), copies them to ARGV and gives the resources among them in HELD,
+   their count the result. call makes one short call; vm/ffi.c holds HELD around it and raises what it failed with
+   (the outcome's CODE and MESSAGE) only after letting go, so call itself never jumps out once C ran. A dirty call
+   (dirty_new, under rt->sync, then dirty_run on a pool thread, then dirty_done on a scheduler) reads ARGV in place on
+   the pool thread: the caller keeps them alive until dirty_done (the job's context) and holds HELD. done builds the
+   value when TAKE (a task takes it), or frees what the call staged; free frees the call after done, or without it
+   when the job is dropped. free_state frees the state of a resource of a module with the free function of its ROW,
+   then the memory. register adds a module that the binary carries, by its library name (the C tests and the fuzz
    driver); forget frees the modules of the run. */
 typedef struct agc_native_fn agc_native_fn;
+typedef struct agc_native_dirty agc_native_dirty;
+typedef struct {
+  agc_value value;
+  const char *code;
+  agc_string *message;
+} agc_native_outcome;
 struct an_api;
 struct an_module;
 typedef const struct an_module *(*agc_native_init)(const struct an_api *api);
 agc_native_fn *agc_native_bind(agc_vm *vm, const char *text, size_t len, bool dirty, uint32_t span);
 uint32_t agc_native_arity(const agc_native_fn *fn);
-agc_value agc_native_call(agc_vm *vm, const agc_native_fn *fn, const agc_list *args, uint32_t span);
+uint32_t agc_native_arguments(agc_vm *vm, const agc_native_fn *fn, const agc_list *args, agc_value *argv,
+                              agc_c_resource **held, uint32_t span);
+agc_native_outcome agc_native_call(agc_vm *vm, agc_native_fn *fn, const agc_value *argv, agc_c_resource *const *held,
+                                   uint32_t holds);
+agc_native_dirty *agc_native_dirty_new(agc_vm *vm, agc_native_fn *fn, const agc_value *argv);
+void agc_native_dirty_run(agc_native_dirty *d);
+agc_native_outcome agc_native_dirty_done(agc_vm *vm, agc_native_dirty *d, bool take);
+void agc_native_dirty_free(agc_native_dirty *d);
+void agc_native_free_state(const void *row, void *state);
+/* A resource of a native module (vm/ffi.c) around STATE, freed by agc_native_free_state with ROW, coming from the
+   resources that the call which makes it holds (HELD, HOLDS entries), and owned by the calling task. Takes rt->sync. */
+agc_value agc_ffi_module_resource(agc_vm *vm, const void *row, const char *name, void *state,
+                                  agc_c_resource *const *held, uint32_t holds);
 void agc_native_unbind(agc_native_fn *fn);
 void agc_native_register(agc_vm *vm, const char *library, agc_native_init init);
 void agc_native_forget(agc_runtime *rt);

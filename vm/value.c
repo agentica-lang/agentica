@@ -39,7 +39,7 @@ static jmp_buf *on_limit; // NOLINT(cppcoreguidelines-avoid-non-const-global-var
 static bool over_limit; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 #endif
 
-void agc_out_of_memory(void) {
+_Noreturn void agc_out_of_memory(void) {
   ssize_t ignored = write(2, oom_line, sizeof oom_line - 1);
   (void)ignored;
 #ifdef AGC_FUZZ

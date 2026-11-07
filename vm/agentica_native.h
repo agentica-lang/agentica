@@ -1,9 +1,9 @@
 /*
  * The C API of native modules (#1149): a shared library that exports agentica_native_init and calls the VM only
  * through the table of function pointers (an_api) that every call's env carries, so it links nothing from the
- * agentica binary. Values are opaque terms, read through checked getters. Version 1.1: short calls of scalars,
- * String, Bytes, List, Map, Optional, Result and the program's structs and enums (1.0 had no structs and enums). The
- * VM half is vm/native_module.c; this header is the contract, and it includes nothing of the VM.
+ * agentica binary. Values are opaque terms, read through checked getters. Version 1.2: short and dirty calls of
+ * scalars, String, Bytes, List, Map, Optional, Result, the program's structs and enums (1.1) and the module's resources
+ * (1.2). The VM half is vm/native_module.c; this header is the contract, and it includes nothing of the VM.
  */
 #ifndef AGENTICA_NATIVE_H
 #define AGENTICA_NATIVE_H
@@ -19,7 +19,7 @@ extern "C" {
 /* The API this header describes. The VM loads a module of the same major version and a minor version up to its own:
    an_api and an_module only grow at their end, which is a minor bump. */
 #define AN_API_MAJOR 1
-#define AN_API_MINOR 1
+#define AN_API_MINOR 2
 
 #if defined(_WIN32)
 #define AN_EXPORT __declspec(dllexport)
@@ -57,8 +57,11 @@ typedef an_term (*an_fn)(an_env *env, int argc, const an_term *argv);
 /* The mode of a function (an_function.flags). A short function runs on the calling scheduler, at the same time as
    the calls of other schedulers, so it must be thread-safe; it may allocate and build large results, but never block,
    sleep, wait on I/O, call back into Agentica (a callback of an extern block that it starts runs nothing and gives
-   zero) or run longer than about 100 microseconds. A dirty function (a compute
-   def) runs on the compute pool; this VM does not run them yet. */
+   zero) or run longer than about 100 microseconds. A dirty function (a compute def) runs on the compute pool while its
+   task waits, and may block. Its arguments are the caller's values, read in place; what its constructors make is kept
+   apart and becomes values once it returns, so a getter gives false for a term that the call made: keep the C data of a
+   resource that the call makes in its state, which an_resource_new gives. A task cancelled during a dirty call does not
+   stop it: it runs to its end and its result is dropped. */
 enum { AN_SHORT = 0, AN_DIRTY = 1 };
 
 /* A row of the module's function table. NAME is the Agentica name (`autocommit?` included), SIGNATURE its canonical
@@ -88,10 +91,23 @@ typedef struct {
   const char *shape;
 } an_type;
 
+/* A resource of the module (API 1.2), a `resource NAME` line of the block: STATE is SIZE bytes of zeroed C memory that
+   an_resource_new gives and that FREE (or NULL) frees, once: at Native.close, at the end of the task that owns it, at
+   the end of the last call that holds it when it was closed meanwhile, or at the end of the run. FREE gets only the
+   state (no env, no values), on a thread of the VM, and the VM frees the memory after it. The index of the row is the
+   TYPE of an_resource_new and an_get_resource. Two rows of one name refuse the module (RUNTIME-NATIVE-LOAD). The state
+   holds C data only, never a term: a per-connection cache of prepared statements lives there, and FREE of the
+   connection finalizes them. */
+typedef struct {
+  const char *name;
+  size_t size;
+  void (*free)(void *state);
+} an_resource_type;
+
 /* What agentica_native_init returns, in static memory. MAJOR, MINOR and SIZE are the API the module was built for
    (AN_API_MAJOR, AN_API_MINOR, sizeof(an_module)): fields are only ever added at the end, so SIZE tells the VM which
-   ones a module has (a 1.0 module ends at function_count). LOAD runs once, right after agentica_native_init, and
-   returns NULL, or a message that refuses the module (RUNTIME-NATIVE-LOAD). */
+   ones a module has (a 1.0 module ends at function_count, a 1.1 one at type_count). LOAD runs once, right after
+   agentica_native_init, and returns NULL, or a message that refuses the module (RUNTIME-NATIVE-LOAD). */
 typedef struct an_module {
   uint32_t major, minor, size;
   const char *name;
@@ -100,6 +116,8 @@ typedef struct an_module {
   uint32_t function_count;
   const an_type *types;
   uint32_t type_count;
+  const an_resource_type *resources;
+  uint32_t resource_count;
 } an_module;
 
 /* The table of the VM's functions; each wrapper below calls one. Fields are only ever added at its end. */
@@ -141,6 +159,8 @@ typedef struct an_api {
   an_term (*make_enum)(an_env *env, uint32_t type, uint32_t variant, const an_term *payload);
   bool (*get_variant)(an_env *env, an_term t, uint32_t type, uint32_t *variant);
   bool (*get_payload)(an_env *env, an_term t, uint32_t type, uint32_t k, an_term *out);
+  void *(*resource_new)(an_env *env, uint32_t type, an_term *out);
+  bool (*get_resource)(an_env *env, an_term t, uint32_t type, void **state);
 } an_api;
 
 /* The one export of a module: the VM calls it once per run (a process runs one program), at the first call, with the
@@ -151,17 +171,19 @@ typedef const an_module *(*an_init)(const an_api *api);
 #define AN_COUNT(TABLE) ((uint32_t)(sizeof(TABLE) / sizeof((TABLE)[0])))
 
 /* Defines agentica_native_init for a module NAME with the function table FUNCTIONS and LOAD (or NULL); AN_MODULE_TYPES
-   adds the type table TYPES. Both tables are arrays. */
-#define AN_MODULE(NAME, FUNCTIONS, LOAD) AN_MODULE_TABLES_(NAME, FUNCTIONS, AN_COUNT(FUNCTIONS), NULL, 0, LOAD)
+   adds the type table TYPES; AN_MODULE_TABLES takes each table with its count (NULL, 0 for one the module does not
+   have). The tables of the first two are arrays. */
+#define AN_MODULE(NAME, FUNCTIONS, LOAD) AN_MODULE_TABLES(NAME, FUNCTIONS, AN_COUNT(FUNCTIONS), NULL, 0, NULL, 0, LOAD)
 #define AN_MODULE_TYPES(NAME, FUNCTIONS, TYPES, LOAD) \
-  AN_MODULE_TABLES_(NAME, FUNCTIONS, AN_COUNT(FUNCTIONS), TYPES, AN_COUNT(TYPES), LOAD)
-#define AN_MODULE_TABLES_(NAME, FUNCTIONS, FUNCTION_COUNT, TYPES, TYPE_COUNT, LOAD)                       \
-  AN_EXPORT const an_module *agentica_native_init(const an_api *api);                                    \
-  AN_EXPORT const an_module *agentica_native_init(const an_api *api) {                                   \
-    static const an_module an_module_value = {AN_API_MAJOR, AN_API_MINOR, sizeof(an_module), NAME, LOAD, \
-                                              FUNCTIONS, FUNCTION_COUNT, TYPES, TYPE_COUNT};               \
-    (void)api;                                                                                           \
-    return &an_module_value;                                                                             \
+  AN_MODULE_TABLES(NAME, FUNCTIONS, AN_COUNT(FUNCTIONS), TYPES, AN_COUNT(TYPES), NULL, 0, LOAD)
+#define AN_MODULE_TABLES(NAME, FUNCTIONS, FUNCTION_COUNT, TYPES, TYPE_COUNT, RESOURCES, RESOURCE_COUNT, LOAD) \
+  AN_EXPORT const an_module *agentica_native_init(const an_api *api);                                       \
+  AN_EXPORT const an_module *agentica_native_init(const an_api *api) {                                      \
+    static const an_module an_module_value = {AN_API_MAJOR,   AN_API_MINOR, sizeof(an_module), NAME,        \
+                                              LOAD,           FUNCTIONS,    FUNCTION_COUNT,    TYPES,       \
+                                              TYPE_COUNT,     RESOURCES,    RESOURCE_COUNT};                \
+    (void)api;                                                                                              \
+    return &an_module_value;                                                                                \
   }
 
 /* The table of the call: the VM's env starts with a pointer to it. */
@@ -266,6 +288,19 @@ static inline bool an_get_variant(an_env *env, an_term t, uint32_t type, uint32_
 }
 static inline bool an_get_payload(an_env *env, an_term t, uint32_t type, uint32_t k, an_term *out) {
   return an_api_of(env)->get_payload(env, t, type, k, out);
+}
+
+/* Resources of the module's resource table (an_resource_type), which the function's signature reaches.
+   an_resource_new makes one of row TYPE, owned by the calling task, sets *OUT to it and gives its zeroed state; it
+   gives NULL, and fails the call, for a type that the signature does not reach. an_get_resource gives the state of a
+   resource of row TYPE that is an argument of the call (the VM holds each one open for the call, so it is never freed
+   while C runs; a close meanwhile frees it after the call); false for another term, a resource that the call made
+   included (its state is the pointer that an_resource_new gave). */
+static inline void *an_resource_new(an_env *env, uint32_t type, an_term *out) {
+  return an_api_of(env)->resource_new(env, type, out);
+}
+static inline bool an_get_resource(an_env *env, an_term t, uint32_t type, void **state) {
+  return an_api_of(env)->get_resource(env, t, type, state);
 }
 
 /* Failures: the call fails with RUNTIME-NATIVE-ERROR once the function returns, with MESSAGE (copied now; NUL

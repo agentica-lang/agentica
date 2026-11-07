@@ -328,31 +328,44 @@ static int by_falling_seq(const void *a, const void *b) {
   return x < y ? 1 : x > y ? -1 : 0;
 }
 
-static void dead_begin(agc_vm *vm, const agc_map *m, agc_seq_set *set) {
+/* The set of M's dead seqs, its memory from ALLOC; false when the dropped list does not match the map, which a valid
+   map never does. */
+static bool dead_set(const agc_map *m, agc_seq_set *set, void *(*alloc)(size_t size)) {
   memset(set, 0, sizeof *set);
   set->lo = m->next_seq;
   set->hi = m->next_seq;
   for (const agc_seqs *d = m->dropped; d; d = d->next) {
-    if (set->n == m->dead || d->seq >= m->next_seq) agc_fail(vm, "RUNTIME-INTERNAL", "map dead keys do not match", 0);
+    if (set->n == m->dead || d->seq >= m->next_seq) return false;
     set->n++;
     if (d->seq < set->lo) set->lo = d->seq;
   }
-  if (set->n != m->dead) agc_fail(vm, "RUNTIME-INTERNAL", "map dead keys do not match", 0);
+  if (set->n != m->dead) return false;
   /* The bitmap takes no more words than an array of the seqs would. */
   if (set->hi - set->lo <= (uint64_t)set->n * 64) {
     size_t words = (size_t)((set->hi - set->lo) / 64 + 1);
-    set->bits = agc_alloc_atomic(agc_size_mul(words, sizeof(uint64_t)));
+    set->bits = alloc(agc_size_mul(words, sizeof(uint64_t)));
     memset(set->bits, 0, words * sizeof(uint64_t));
     for (const agc_seqs *d = m->dropped; d; d = d->next) {
       uint64_t at = d->seq - set->lo;
       set->bits[at / 64] |= (uint64_t)1 << (at % 64);
     }
-    return;
+    return true;
   }
-  set->seqs = agc_alloc_atomic(agc_size_mul(set->n, sizeof(uint64_t)));
+  set->seqs = alloc(agc_size_mul(set->n, sizeof(uint64_t)));
   size_t k = 0;
   for (const agc_seqs *d = m->dropped; d; d = d->next) set->seqs[k++] = d->seq;
   qsort(set->seqs, set->n, sizeof(uint64_t), by_falling_seq);
+  return true;
+}
+
+static void dead_begin(agc_vm *vm, const agc_map *m, agc_seq_set *set) {
+  if (!dead_set(m, set, agc_alloc_atomic)) agc_fail(vm, "RUNTIME-INTERNAL", "map dead keys do not match", 0);
+}
+
+static void *heap_alloc(size_t size) {
+  void *p = malloc(size ? size : 1);
+  if (!p) agc_out_of_memory();
+  return p;
 }
 
 /* Whether seq is in the set. Called with falling seqs, as the key list gives
@@ -390,6 +403,19 @@ agc_value *agc_map_keys(agc_vm *vm, const agc_map *m, uint32_t span) {
   }
   if (k != 0) agc_fail(vm, "RUNTIME-INTERNAL", "map key list does not match its table", span);
   return keys;
+}
+
+bool agc_map_keys_into(const agc_map *m, agc_value *keys) {
+  agc_seq_set dead;
+  if (m->dead && !dead_set(m, &dead, heap_alloc)) return false;
+  size_t k = m->size;
+  for (const agc_keys *cell = m->reversed; cell && k > 0; cell = cell->next)
+    if (m->dead == 0 || !seq_in(&dead, cell->seq)) keys[--k] = cell->key;
+  if (m->dead) {
+    free(dead.bits);
+    free(dead.seqs);
+  }
+  return k == 0;
 }
 
 /* Calls VISIT with every value of M, in table order, with no hash and no charge. A path from the root has at most

@@ -1080,9 +1080,10 @@ def test_an_extern_module_block_declares_functions_with_agentica_types(tmp_path)
     assert_checks(check(source(tmp_path, MODULE_VALID)), None, None, None)
 
 
-# The module's table gives the C function and its types, so what an extern block says of C is refused in a module block.
+# The module's table gives the C function and its types, so what an extern block says of C is refused in a module block:
+# a resource is a name alone, which the module's resource table frees.
 @pytest.mark.parametrize("member, code, start, stop", [
-    ("resource Db", "PARSE-EXTERN-MODULE", (2, 3), (2, 11)),
+    ("resource Db, free: db_close", "PARSE-EXTERN-MODULE", (2, 14), (2, 15)),
     ("callback Visit(n: C.Int32) -> Void", "PARSE-EXTERN-MODULE", (2, 3), (2, 11)),
     ("struct Pair\n    x: Int\n  end", "PARSE-EXTERN-MODULE", (2, 3), (2, 9)),
     ("def f(out n: Int) -> Int", "PARSE-EXTERN-MODULE", (2, 9), (2, 19)),
@@ -1167,3 +1168,51 @@ def test_two_types_of_one_bare_name_cannot_cross_to_one_module(tmp_path):
     text = ('import A from "./a"\nimport B from "./b"\n\nextern module "demo"\n  def f(row: A.Row) -> Int\n'
             '  def g(row: B.Row) -> Int\nend\n\ndef main() -> Void\nend\n')
     assert at(problem_of(check(source(tmp_path, text)))) == ("CHECK-NATIVE-TYPE", (6, 14), (6, 19))
+
+
+MODULE_RESOURCES = """struct Holder
+  db: Db
+end
+
+extern "/opt/libc.so"
+  resource CFile, free: fclose
+end
+
+extern module "other"
+  resource Conn
+end
+
+extern module "demo"
+  resource Db
+  %s
+end
+"""
+
+
+# A resource of the module block crosses as a whole parameter type, and in a result anywhere but in a user type. A
+# resource nested in a parameter, in a struct, of an extern block or of another module block is CHECK-NATIVE-TYPE.
+@pytest.mark.parametrize("signature, code, start, stop", [
+    ("def f(db: Db) -> Db", None, None, None),
+    ("compute def f(n: Int) -> Result[List[Db]]", None, None, None),
+    ("def f(n: Int) -> Map[String, Optional[Db]]", None, None, None),
+    ("def f(d: List[Db]) -> Int", "CHECK-NATIVE-TYPE", (15, 12), (15, 20)),
+    ("def f(d: Optional[Db]) -> Int", "CHECK-NATIVE-TYPE", (15, 12), (15, 24)),
+    ("def f(h: Holder) -> Int", "CHECK-NATIVE-TYPE", (15, 12), (15, 18)),
+    ("def f(n: Int) -> List[Holder]", "CHECK-NATIVE-TYPE", (15, 20), (15, 32)),
+    ("def f(file: CFile) -> Int", "CHECK-NATIVE-TYPE", (15, 15), (15, 20)),
+    ("def f(n: Int) -> Conn", "CHECK-NATIVE-TYPE", (15, 20), (15, 24)),
+])
+def test_a_resource_of_the_module_block_crosses_whole(tmp_path, signature, code, start, stop):
+    result = check(source(tmp_path, MODULE_RESOURCES % signature))
+    if code is None:
+        assert_checks(result, None, None, None)
+    else:
+        assert at(problem_of(result)) == (code, start, stop)
+
+
+# A resource counts in the bare names of a block: a struct of its name is refused at the second.
+def test_a_resource_and_a_struct_of_one_bare_name_cannot_cross_to_one_module(tmp_path):
+    source(tmp_path, "export struct Db\n  id: Int\nend\n", "a.agc")
+    text = ('import A from "./a"\n\nextern module "demo"\n  resource Db\n  def f(db: Db) -> A.Db\nend\n\n'
+            'def main() -> Void\nend\n')
+    assert at(problem_of(check(source(tmp_path, text)))) == ("CHECK-NATIVE-TYPE", (5, 20), (5, 24))

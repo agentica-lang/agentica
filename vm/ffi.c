@@ -69,6 +69,7 @@ typedef struct {
 typedef struct {
   agc_ffi_call *free;
   void *at, *pointer;
+  const void *row;
   bool buffer, by_ref;
 } end_free;
 
@@ -171,6 +172,19 @@ typedef struct {
   agc_c_value out;
   agc_c_value in[];
 } compute_call;
+
+/* One dirty call of a native module (a `compute def` of an `extern module` block), in malloc memory: the call itself
+   (vm/native_module.c, which keeps its arguments and stages what it makes), the resource arguments it holds (`jobs`)
+   until its end on a scheduler, and the Native.Mutex lease of its task, as a compute call keeps them. The job's
+   context is the List of the arguments, which the registry keeps alive until the job ends, so the pool thread reads
+   them in place. `phase` is a compute call's. */
+typedef struct {
+  agc_native_dirty *call;
+  struct agc_mutex_lease *lease;
+  uint32_t holds, span;
+  _Atomic int phase;
+  agc_c_resource *held[AGC_FFI_MAX_PARAMS];
+} module_job;
 
 /* The phase of a compute call: QUEUED until a pool thread takes it, then RUNNING while C runs and FINISHED after. The
    end of the run moves every queued call to ABANDONED (agc_ffi_stop_queued) and a pool thread then skips it: one CAS
@@ -325,6 +339,8 @@ static const size_t ITEM_WIDTHS[] = {1, 2, 4, 8, 1, 2, 4, sizeof(float), sizeof(
 /* The kind of a compute call, defined after its halves: the end of the run walks only the jobs of this kind
    (agc_io_compute_each), since the compute pool runs other kinds too (vm/crypto.c's KDF jobs). */
 static const agc_io_kind compute_io;
+/* The kind of a dirty call of a native module (module_job), which the end of the run walks too. */
+static const agc_io_kind module_io;
 
 static uint64_t text_hash(const char *data, size_t len) {
   uint64_t h = 1469598103934665603ULL;
@@ -622,6 +638,7 @@ static ffi_entry *module_entry(agc_vm *vm, const agc_string *text, size_t start,
   ffi_entry *e = calloc(1, sizeof(ffi_entry));
   if (!e) agc_out_of_memory();
   e->module = fn;
+  e->compute = compute;
   e->inputs = agc_native_arity(fn);
   return e;
 }
@@ -953,11 +970,13 @@ static void free_pointer(agc_ffi_call *free_call, void *at, bool by_ref, void **
   agc_ffi_refusing_callbacks(run_free, &run);
 }
 
-/* Frees the pointer in SLOT: an owned buffer (BUFFER) is malloc'd memory, and a resource goes to FREE_CALL as in
-   free_pointer. */
-static void free_native(bool buffer, agc_ffi_call *free_call, void *at, bool by_ref, void **slot) {
+/* Frees the pointer in SLOT: an owned buffer (BUFFER) is malloc'd memory, the state of a resource of a native module
+   goes to the free function of its ROW, and any other resource to FREE_CALL as in free_pointer. */
+static void free_native(bool buffer, const void *row, agc_ffi_call *free_call, void *at, bool by_ref, void **slot) {
   if (buffer)
     free(*slot);
+  else if (row)
+    agc_native_free_state(row, *slot);
   else
     free_pointer(free_call, at, by_ref, slot);
 }
@@ -969,7 +988,7 @@ static void call_free(agc_c_resource *res) {
     res->pointer = NULL;
     return;
   }
-  free_native(res->buffer, res->free, res->free_at, res->by_ref, &res->pointer);
+  free_native(res->buffer, res->row, res->free, res->free_at, res->by_ref, &res->pointer);
 }
 
 /* Frees the resource and drops its registry entry; under rt->sync, with no call holding or pinning it. */
@@ -1157,7 +1176,7 @@ static void make_end_frees(void *data) {
   end_frees *batch = data;
   for (size_t k = 0; k < batch->count; k++) {
     end_free *f = &batch->items[k];
-    free_native(f->buffer, f->free, f->at, f->by_ref, &f->pointer);
+    free_native(f->buffer, f->row, f->free, f->at, f->by_ref, &f->pointer);
   }
 }
 
@@ -1166,28 +1185,47 @@ static int newest_first(const void *a, const void *b) {
   return x < y ? 1 : x > y ? -1 : 0;
 }
 
-static void abandon_queued(void *data, void *arg) {
-  (void)arg;
-  compute_call *c = data;
+static void abandon(_Atomic int *phase) {
   int queued = CALL_QUEUED;
-  (void)atomic_compare_exchange_strong(&c->phase, &queued, CALL_ABANDONED);
+  (void)atomic_compare_exchange_strong(phase, &queued, CALL_ABANDONED);
 }
 
-void agc_ffi_stop_queued(agc_vm *vm) { agc_io_compute_each(vm, &compute_io, abandon_queued, NULL); }
+static void abandon_queued(void *data, void *arg) {
+  (void)arg;
+  abandon(&((compute_call *)data)->phase);
+}
+
+static void abandon_module(void *data, void *arg) {
+  (void)arg;
+  abandon(&((module_job *)data)->phase);
+}
+
+void agc_ffi_stop_queued(agc_vm *vm) {
+  agc_io_compute_each(vm, &compute_io, abandon_queued, NULL);
+  agc_io_compute_each(vm, &module_io, abandon_module, NULL);
+}
+
+static void held_set_add(held_set *set, const agc_c_resource *res) {
+  if (set->count == set->cap) {
+    set->cap = set->cap ? agc_size_mul(set->cap, 2) : 16;
+    set->items = realloc(set->items, agc_size_mul(set->cap, sizeof *set->items));
+    if (!set->items) agc_out_of_memory();
+  }
+  set->items[set->count++] = res;
+}
 
 static void add_running_holds(void *data, void *arg) {
   const compute_call *c = data;
   held_set *set = arg;
   if (atomic_load(&c->phase) != CALL_RUNNING) return;
-  for (uint32_t k = 0; k < c->entry->holds; k++) {
-    if (!c->held[k]) continue;
-    if (set->count == set->cap) {
-      set->cap = set->cap ? agc_size_mul(set->cap, 2) : 16;
-      set->items = realloc(set->items, agc_size_mul(set->cap, sizeof *set->items));
-      if (!set->items) agc_out_of_memory();
-    }
-    set->items[set->count++] = c->held[k];
-  }
+  for (uint32_t k = 0; k < c->entry->holds; k++)
+    if (c->held[k]) held_set_add(set, c->held[k]);
+}
+
+static void add_module_holds(void *data, void *arg) {
+  const module_job *j = data;
+  if (atomic_load(&j->phase) != CALL_RUNNING) return;
+  for (uint32_t k = 0; k < j->holds; k++) held_set_add(arg, j->held[k]);
 }
 
 /* What the compute calls that run now hold. A queued call never runs any more (agc_ffi_stop_queued) and a finished one
@@ -1195,6 +1233,7 @@ static void add_running_holds(void *data, void *arg) {
 static held_set running_holds(agc_vm *vm) {
   held_set set = {NULL, 0, 0};
   agc_io_compute_each(vm, &compute_io, add_running_holds, &set);
+  agc_io_compute_each(vm, &module_io, add_module_holds, &set);
   return set;
 }
 
@@ -1246,7 +1285,7 @@ static bool end_step(agc_vm *vm, agc_resource **items, size_t count, bool *skipp
        mind. */
     res->closed = res->freed = true;
     batch->items[batch->count++] =
-        (end_free){res->free, res->free_at, res->pointer, res->buffer, res->by_ref};
+        (end_free){res->free, res->free_at, res->pointer, res->row, res->buffer, res->by_ref};
   }
   free(busy.items);
   if (!batch->count) {
@@ -1357,10 +1396,10 @@ static agc_value resource_result(agc_vm *vm, const ffi_entry *e, void *pointer, 
 
 static uint64_t next_walk(agc_vm *vm) { return ++ffi_cache(vm)->walk; }
 
-/* Counts the call in the `jobs` of each resource of HELD (E->holds entries) and of each open resource that one comes
-   from (release_held undoes it): a fixed number of links per call, whatever the chain above. */
-static void hold(const ffi_entry *e, agc_c_resource *const *held) {
-  for (uint32_t k = 0; k < e->holds; k++) {
+/* Counts the call in the `jobs` of each resource of HELD (HOLDS entries, NULL ones skipped) and of each open resource
+   that one comes from (release_held undoes it): a fixed number of links per call, whatever the chain above. */
+static void hold(agc_c_resource *const *held, uint32_t holds) {
+  for (uint32_t k = 0; k < holds; k++) {
     if (!held[k]) continue;
     held[k]->jobs++;
     hold_parents(held[k]);
@@ -1371,13 +1410,13 @@ static void hold(const ffi_entry *e, agc_c_resource *const *held) {
    lets go of what it carried. The parents are listed before any free, while every held resource is still alive; the
    held ones are let go first, so a statement closed with its database during the call is freed first. No recursion:
    TODO holds the holds still to drop, each of an open resource. */
-static void release_held(agc_vm *vm, const ffi_entry *e, agc_c_resource **held) {
+static void release_held(agc_vm *vm, agc_c_resource *const *held, uint32_t holds) {
   agc_sync_assert(vm);
   res_list todo;
   list_init(&todo);
-  for (uint32_t k = 0; k < e->holds; k++)
+  for (uint32_t k = 0; k < holds; k++)
     if (held[k]) push_parents(held[k], &todo);
-  for (uint32_t k = 0; k < e->holds; k++)
+  for (uint32_t k = 0; k < holds; k++)
     if (held[k]) drop_hold(vm, held[k], &todo);
   while (todo.count) drop_hold(vm, todo.items[--todo.count], &todo);
   list_free(&todo);
@@ -1387,13 +1426,13 @@ static void release_held(agc_vm *vm, const ffi_entry *e, agc_c_resource **held) 
 static bool makes_resources(const ffi_entry *e) { return e->resource || e->made; }
 
 /* What the resources that a call makes come from: the distinct resources and owned buffers that it holds (HELD,
-   E->holds entries), less any that another of them comes from (next(ctx, x) gets x alone, since x comes from ctx).
+   HOLDS entries), less any that another of them comes from (next(ctx, x) gets x alone, since x comes from ctx).
    One, the common case, needs no allocation. The links of each are settled first, so the new resource never keeps a
    freed one alive. Under rt->sync, before the release of HELD, which keeps each one alive across the allocation. */
-static made_from origins(agc_vm *vm, const ffi_entry *e, agc_c_resource *const *held) {
+static made_from origins(agc_vm *vm, agc_c_resource *const *held, uint32_t holds) {
   agc_c_resource *only = NULL;
   bool more = false;
-  for (uint32_t k = 0; k < e->holds && !more; k++) {
+  for (uint32_t k = 0; k < holds && !more; k++) {
     if (!held[k] || held[k] == only) continue;
     more = only != NULL;
     if (!only) only = held[k];
@@ -1405,7 +1444,7 @@ static made_from origins(agc_vm *vm, const ffi_entry *e, agc_c_resource *const *
   res_list distinct;
   list_init(&distinct);
   uint64_t walk = next_walk(vm);
-  for (uint32_t k = 0; k < e->holds; k++) {
+  for (uint32_t k = 0; k < holds; k++) {
     agc_c_resource *res = held[k];
     if (!res || res->seen == walk) continue;
     res->seen = walk;
@@ -1833,8 +1872,8 @@ static agc_value compute_done(agc_vm *vm, void *data, agc_value context) {
   compute_call *c = data;
   const ffi_entry *e = c->entry;
   /* Before the release, which may free and unregister a held resource that nothing else keeps alive. */
-  made_from from = c->ran && makes_resources(e) ? origins(vm, e, c->held) : (made_from){NULL, NULL, 0};
-  release_held(vm, e, c->held);
+  made_from from = c->ran && makes_resources(e) ? origins(vm, c->held, e->holds) : (made_from){NULL, NULL, 0};
+  release_held(vm, c->held, e->holds);
   agc_mutex_unlease(vm, c->lease);
   agc_value v = agc_void();
   /* A call with out parameters gives a List, which the detached end (discard in vm/loop.c) does not look into, so its
@@ -1936,9 +1975,9 @@ static agc_value compute_start(agc_vm *vm, const ffi_entry *e, const agc_list *v
     if (e->structs[k]) used += STRUCT_ROUND(e->structs[k]->size);
   }
   find_held(vm, e, values, c->held);
-  hold(e, c->held);
+  hold(c->held, e->holds);
   if (e->result_struct) c->out.p = c->structs + used;
-  agc_io_compute(vm, &compute_io, c);
+  agc_io_compute(vm, &compute_io, c, agc_void());
   agc_sync_drop(vm);
   return agc_void();
 }
@@ -1967,7 +2006,7 @@ static void hold_for_call(agc_vm *vm, const ffi_entry *e, const agc_list *values
     if (!h->held) agc_out_of_memory();
   }
   find_held(vm, e, values, h->held);
-  hold(e, h->held);
+  hold(h->held, e->holds);
   agc_sync_drop(vm);
 }
 
@@ -1977,8 +2016,113 @@ static void release_for_call(agc_vm *vm, const ffi_entry *e, call_holds *h) {
     unpin_all(vm, h->pinned, h->n);
     return;
   }
-  release_held(vm, e, h->held);
+  release_held(vm, h->held, e->holds);
   if (h->held != h->stack_held) free(h->held);
+}
+
+agc_value agc_ffi_module_resource(agc_vm *vm, const void *row, const char *name, void *state,
+                                  agc_c_resource *const *held, uint32_t holds) {
+  agc_sync_take(vm);
+  made_from from = origins(vm, held, holds);
+  agc_value v = make_resource(vm, NULL, NULL, false, name, state, &from);
+  agc_as_c_resource(vm, v)->row = row;
+  agc_sync_drop(vm);
+  return v;
+}
+
+/* On a pool thread: the dirty call, unless the end of the run abandoned it first (one CAS decides, as in
+   compute_work). */
+static void module_work(void *data) {
+  module_job *j = data;
+  int queued = CALL_QUEUED;
+  if (!atomic_compare_exchange_strong(&j->phase, &queued, CALL_RUNNING)) return;
+  agc_native_dirty_run(j->call);
+  atomic_store(&j->phase, CALL_FINISHED);
+}
+
+static void module_free(void *data) {
+  module_job *j = data;
+  agc_native_dirty_free(j->call);
+  free(j);
+}
+
+/* On the scheduler that resumes the task, or for a cancelled one at the detached end of the job: the call's value is
+   built there from what it staged (only when a task takes it: vm->in_turn, as in compute_done), outside rt->sync,
+   which each resource it makes takes for a moment; a call that did not run, or whose value is dropped, frees what it
+   staged. Then the holds go, under rt->sync: a resource closed during the call (by another task, or by the end of its
+   cancelled owner) is freed by the last of them, now that C is done with it. A failure of the call is raised once
+   all of that is let go. */
+static agc_value module_done(agc_vm *vm, void *data, agc_value context) {
+  (void)context;
+  module_job *j = data;
+  bool ran = atomic_load(&j->phase) == CALL_FINISHED;
+  agc_native_outcome out = agc_native_dirty_done(vm, j->call, ran && vm->in_turn);
+  agc_sync_take(vm);
+  release_held(vm, j->held, j->holds);
+  agc_mutex_unlease(vm, j->lease);
+  agc_sync_drop(vm);
+  uint32_t span = j->span;
+  module_free(j);
+  if (out.code) agc_fail_text(vm, out.code, out.message, span);
+  return out.value;
+}
+
+/* The halves run without rt->sync (`locked` false), so a big result is built beside the other schedulers. */
+static const agc_io_kind module_io = {module_work, module_done, compute_expired, module_free, false, "native_module",
+                                      NULL, false, NULL};
+
+/* Fails the call when one of the HOLDS resources of HELD is closed; under rt->sync. */
+static void check_held_open(agc_vm *vm, agc_c_resource *const *held, uint32_t holds, uint32_t span) {
+  for (uint32_t k = 0; k < holds; k++)
+    if (held[k]->closed) agc_fail(vm, "RUNTIME-NATIVE-CLOSED", "a native call takes a resource that is closed", span);
+}
+
+/* A call of a function of a native module, with the List of its arguments. The module half checks every argument and
+   gives the resources among them (HELD). A dirty call holds them under rt->sync and parks its task on the compute pool,
+   with the List as the job's context (module_io). A short call pins them, or holds them under rt->sync when the pins
+   do not cover them (hold_for_call), runs on this scheduler, and lets go before it raises what the call failed with,
+   so a failure leaves no pin behind. */
+static agc_value module_call(agc_vm *vm, const ffi_entry *e, agc_value list, uint32_t span) {
+  agc_value argv[AGC_FFI_MAX_PARAMS];
+  agc_c_resource *held[AGC_FFI_MAX_PARAMS];
+  uint32_t holds = agc_native_arguments(vm, e->module, agc_as_list(vm, list), argv, held, span);
+  if (e->compute) {
+    agc_sync_take(vm);
+    agc_task_check_park(vm, "a callback of native code cannot wait for a compute call", span);
+    check_held_open(vm, held, holds, span);
+    module_job *j = calloc(1, sizeof *j);
+    if (!j) agc_out_of_memory();
+    atomic_init(&j->phase, CALL_QUEUED);
+    j->call = agc_native_dirty_new(vm, e->module, argv);
+    j->holds = holds;
+    j->span = span;
+    memcpy(j->held, held, holds * sizeof *held);
+    hold(j->held, holds);
+    j->lease = agc_mutex_lease(vm);
+    agc_io_compute(vm, &module_io, j, list);
+    agc_sync_drop(vm);
+    return agc_void();
+  }
+  agc_c_resource *pinned[PIN_MAX];
+  size_t n = 0;
+  bool locked = !pin_all(held, holds, pinned, &n);
+  if (locked) {
+    unpin_all(vm, pinned, n);
+    agc_sync_take(vm);
+    check_held_open(vm, held, holds, span);
+    hold(held, holds);
+    agc_sync_drop(vm);
+  }
+  agc_native_outcome out = agc_native_call(vm, e->module, argv, held, holds);
+  if (locked) {
+    agc_sync_take(vm);
+    release_held(vm, held, holds);
+    agc_sync_drop(vm);
+  } else {
+    unpin_all(vm, pinned, n);
+  }
+  if (out.code) agc_fail_text(vm, out.code, out.message, span);
+  return out.value;
 }
 
 /* Native.call(signature, arguments): one call of an extern function, on the scheduler, or for a compute def on the
@@ -2002,7 +2146,7 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
   const agc_list *values = agc_as_list(vm, args[1]);
   if (agc_list_len(values) != e->inputs)
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: wrong number of native arguments", span);
-  if (e->module) return agc_native_call(vm, e->module, values, span);
+  if (e->module) return module_call(vm, e, args[1], span);
   void *fn = e->by_pointer ? function_at(vm, agc_list_get(values, 0), span) : NULL;
   void *free_at = e->free_input >= 0 ? function_at(vm, agc_list_get(values, (size_t)e->free_input), span) : NULL;
   for (uint32_t k = 0; k < e->count; k++) {
@@ -2055,7 +2199,7 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
     agc_raise(vm, site.kept);
   }
   /* Before the release, as in compute_done. The values of the arguments keep what HELD points at alive. */
-  made_from from = h.locked && makes_resources(e) ? origins(vm, e, h.held) : (made_from){NULL, NULL, 0};
+  made_from from = h.locked && makes_resources(e) ? origins(vm, h.held, e->holds) : (made_from){NULL, NULL, 0};
   agc_value v = call_value(vm, e, &out, slots, free_at, &from);
   free(structs);
   release_for_call(vm, e, &h);
