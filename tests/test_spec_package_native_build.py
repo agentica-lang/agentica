@@ -1,8 +1,9 @@
 """Source builds of native modules (`[native.NAME] build`, docs/grammar/05b-modules.md), through the CLI.
 
-The project (or a `path` dependency) holds a small native module in its native/ folder, which a run, `compile`, `test`
-or `install` builds with the system C compiler into the package cache of a temporary folder; `check` never builds, and
-a fetched package never does either. The cases that only check or fail before the compiler runs need no compiler and
+The project (a `path` dependency, or a git dependency pinned in the lock) holds a small native module in its native/
+folder, which a run, `compile`, `test` or `install` builds with the system C compiler into the package cache of a
+temporary folder; `check` never builds. The git dependency is a bare repository in a temporary folder
+(tests/package_support.py, `Remotes`). The cases that only check or fail before the compiler runs need no compiler and
 run everywhere; the ones that build and call the module need one and native calls (NATIVE_CALLS). Cases assert codes
 and the file and key path, never message text (AGENTS.md).
 """
@@ -15,8 +16,7 @@ from pathlib import Path
 import pytest
 
 from tests.agentica_test import WINDOWS, cli, host_only, run, tool, vm_environment
-from tests.package_support import assert_at_key, ws  # noqa: F401
-from tests.test_spec_package_native import LIBM, SYSTEM_MAIN, SYSTEM_TABLE
+from tests.package_support import assert_at_key, dependency, git, lock_entry, remotes, ws  # noqa: F401
 from tests.test_vm_native import NATIVE_CALLS
 
 ADDER_C = """#include "agentica_native.h"
@@ -36,6 +36,8 @@ AN_MODULE("adder", functions, NULL)
 ADDER_AGC = 'extern module "adder"\n  export def add(a: Int, b: Int) -> Int\nend\n'
 MAIN = 'import Adder from "adder"\n\ndef main() -> Void\n  puts(Adder.add(40, 2))\nend\n'
 TABLE = '[native.adder]\nbuild = { sources = ["native/adder.c"], defines = ["SCALE=1"] }\n'
+# The adder with a header in a folder of native/.
+NESTED_C = ADDER_C.replace('#include "offset.h"\n', '#include "offset.h"\n#include "sub/scale.h"\n')
 BUILT = re.compile(r"built native adder: (.+)\n")
 
 
@@ -80,6 +82,20 @@ def path_dependency(ws, source=ADDER_C):
     (ws.project / "agentica.lock").write_text('version = 1\n\n[[package]]\nname = "adder"\npath = "../adder"\n',
                                               encoding="utf-8")
     (ws.project / "main.agc").write_text(MAIN.replace('"adder"', '"pkg/adder/adder"', 1), encoding="utf-8")
+
+
+def fetched(ws, remotes, source=NESTED_C):
+    """A project whose main file uses the adder module of a git dependency, published to a local bare repository and
+    pinned in the lock by its commit and hash; a header is in a folder of native/, so the copy of a build has one. It
+    gives the folder of the package in deps/, as the build sees it."""
+    files = {"agentica.toml": 'name = "adder"\n\n' + TABLE, "adder.agc": ADDER_AGC, "native/adder.c": source,
+             "native/offset.h": "#define OFFSET 0\n", "native/sub/scale.h": "#define SCALE_TOO 1\n"}
+    commit = remotes.publish("owner/adder", files, tag="v1.0.0")
+    lock_entry(ws, remotes, "owner/adder", files, commit, tag="v1.0.0")
+    ws.write_manifest({"adder": dependency(remotes.url("owner/adder"), tag="v1.0.0")})
+    ws.write_lock()
+    (ws.project / "main.agc").write_text(MAIN.replace('"adder"', '"pkg/adder/adder"', 1), encoding="utf-8")
+    return ws.deps.resolve() / "adder"
 
 
 def builds(ws):
@@ -144,17 +160,75 @@ def test_a_link_in_native_is_refused_so_a_build_reads_only_the_package(ws, tmp_p
 
 
 @NATIVE_CALLS
-def test_a_fetched_package_never_builds_and_uses_its_system_entry(ws):
-    table = SYSTEM_TABLE.replace("[native.cmath]\n", '[native.cmath]\nbuild = { sources = ["native/cmath.c"] }\n')
-    ws.add_package("pkgdemo", "https://example.test/owner/pkgdemo",
-                   {"math.agc": LIBM, "agentica.toml": 'name = "pkgdemo"\n\n' + table})
-    (ws.project / "agentica.toml").write_text(
-        'name = "app"\n\n[dependencies]\npkgdemo = { git = "https://example.test/owner/pkgdemo", tag = "v1.0.0" }\n',
-        encoding="utf-8")
-    ws.write_lock()
-    (ws.project / "main.agc").write_text(SYSTEM_MAIN, encoding="utf-8")
-    ran = agentica(ws, str(ws.project / "main.agc"), **no_compiler(ws))
-    assert (ran.code, ran.stdout, ran.stderr) == (0, "1.0\n", "")
+def test_a_git_dependency_pinned_in_the_lock_builds_on_first_use_from_its_locked_files(ws, remotes):
+    tool("cc")
+    folder = fetched(ws, remotes)
+    installed = agentica(ws, "install", **remotes.environment)
+    assert (installed.code, installed.stderr) == (0, "")
+    # A file of native/ that the hash leaves out (a dotfile) is not copied into the build, so it changes nothing.
+    (folder / "native" / ".DS_Store").write_bytes(b"junk")
+    before = files_of(folder)
+    main = str(ws.project / "main.agc")
+    ran = agentica(ws, main, **remotes.environment)
+    assert (ran.code, ran.stdout) == (0, "42\n"), ran.stderr
+    built = BUILT.fullmatch(ran.stderr)
+    assert built and Path(built.group(1)).parent.parent == ws.pkg_root / "native-build", ran.stderr
+    assert sorted(path.name for path in Path(built.group(1)).parent.iterdir()) == sorted(
+        ["include", Path(built.group(1)).name, "receipt"])
+    # The build compiles a private copy: nothing is written into deps/.
+    assert files_of(folder) == before
+    # The next runs take the program from the bytecode cache, then (with no cache) the build from the build cache.
+    for words in ([], ["--no-cache"]):
+        again = agentica(ws, *words, main, **remotes.environment)
+        assert (again.code, again.stdout, again.stderr) == (0, "42\n", "")
+    assert len(builds(ws)) == 1 and bytecode_entries(ws)
+
+
+@NATIVE_CALLS
+def test_a_fetched_package_builds_only_the_files_of_native_so_an_include_from_outside_is_not_found(ws, remotes):
+    tool("cc")
+    folder = fetched(ws, remotes, source=NESTED_C.replace('"offset.h"', '"../offset.h"'))
+    assert agentica(ws, "--json", "install", **remotes.environment).code == 0
+    # The hash covers no header at the root, so this one is not the locked package's and the build never sees it.
+    (folder / "offset.h").write_text("#define OFFSET 0\n", encoding="utf-8")
+    found = problem(agentica(ws, "--json", str(ws.project / "main.agc"), **remotes.environment))
+    assert_at_key(found, "PKG-NATIVE-BUILD", folder / "agentica.toml", "native.adder.build")
+    assert builds(ws) == []
+
+
+def test_install_of_a_fetched_native_dependency_needs_no_compiler_and_a_run_that_uses_it_builds(ws, remotes):
+    folder = fetched(ws, remotes)
+    installed = agentica(ws, "--json", "install", **remotes.environment, **no_compiler(ws))
+    assert (installed.code, installed.stdout, installed.stderr) == (0, '{"ok":true}\n', ""), installed.stderr
+    assert builds(ws) == []
+    found = problem(agentica(ws, "--json", str(ws.project / "main.agc"), **remotes.environment, **no_compiler(ws)))
+    assert_at_key(found, "PKG-NATIVE-BUILD", folder / "agentica.toml", "native.adder.build")
+
+
+def test_a_fetched_package_whose_copy_differs_from_the_lock_never_builds(ws, remotes):
+    folder = fetched(ws, remotes)
+    installed = agentica(ws, "--deny-native", "install", **remotes.environment)
+    assert installed.code == 0, installed.stderr
+    (folder / "native" / "offset.h").write_text("#define OFFSET 1\n", encoding="utf-8")
+    for words in (["check"], []):
+        found = problem(agentica(ws, "--json", *words, str(ws.project / "main.agc"), **remotes.environment,
+                                 **no_compiler(ws)))
+        assert found["code"] == "PKG-HASH-MISMATCH"
+    assert builds(ws) == []
+
+
+@NATIVE_CALLS
+@pytest.mark.parametrize("flag", ["--deny-native", "--sandbox"])
+def test_under_a_deny_flag_a_fetched_package_builds_nothing(ws, remotes, flag):
+    folder = fetched(ws, remotes)
+    main = str(ws.project / "main.agc")
+    environment = {**remotes.environment, **no_compiler(ws)}
+    installed = agentica(ws, "--json", flag, "install", **environment)
+    assert installed.code == 0, installed.stderr
+    denied = agentica(ws, "--json", flag, main, **environment)
+    assert (denied.code, json.loads(denied.stderr)["code"]) == (2, "RUNTIME-NATIVE-DENIED"), denied.stderr
+    found = problem(agentica(ws, "--json", flag, "compile", main, "-o", str(ws.base / "main.agcb"), **environment))
+    assert_at_key(found, "PKG-NATIVE-BUILD", folder / "agentica.toml", "native.adder.build")
     assert builds(ws) == []
 
 

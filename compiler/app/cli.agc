@@ -152,7 +152,7 @@ def dispatch(session: Session) -> Int
   return program(building(session, first), first, rest)
 end
 
-# The session whose workspace builds the native modules of the packages read in place from their C sources
+# The session whose workspace builds the native modules of the project and its packages from their C sources
 # (io/native_build.agc): a run, `compile`, `test` and `install` do, so the program they run or write opens the library;
 # `check`, the queries and the other commands never start a compiler.
 def building(session: Session, verb: String) -> Session

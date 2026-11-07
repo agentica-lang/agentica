@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A fetched package pinned in `agentica.lock` builds its native module from
+  its `[native.NAME] build` table when a file first uses it; `install` does
+  not build it.
 - `Analysis.native_modules` in `std/analysis` describes the `extern module` blocks of a file for code generators.
 
 ### Fixed

@@ -670,9 +670,17 @@ import Sqlite from "pkg/sqlite/db"
     files are not hashed. A workspace member is read from its folder with no
     hash, as its `.agc` files are.
   - `build` is the one key of `[native.NAME]` that is not a system: the C
-    sources of a native module (`extern module`), which a package read in
-    place (the project, a workspace member, a `path` dependency) builds
-    instead of using its system entry. A fetched package never builds.
+    sources of a native module (`extern module`), which the project, a
+    workspace member, a `path` dependency and a fetched package build instead
+    of using their system entry. A fetched package is never compiled in
+    `deps/`: when a file first uses the library, the files its hash covers are
+    read once and checked against the hash of its lock row
+    (`PKG-HASH-MISMATCH` at `native.NAME.build`), and the files of `native/`
+    among them are copied into a private build folder and compiled there. So
+    the code that is built is the code of the locked commit: a file the hash
+    leaves out (a dotfile, `Thumbs.db`) is not copied, and a header outside
+    `native/` is not found. `check` never builds, but a copy that differs
+    from the lock is still `PKG-HASH-MISMATCH` when the package is loaded.
     ```toml
     [native.stats]
     build = { sources = ["native/stats.c"], defines = ["NDEBUG"], libs = ["m"] }
@@ -685,20 +693,24 @@ import Sqlite from "pkg/sqlite/db"
     (`native.stats.build.defines[0]`), and so is a Windows device name (`con`,
     `nul`, `com1`) as the name of a library to build (at `native.NAME`). A
     source that is not a regular file of `native/` is `PKG-NATIVE-MISSING` at
-    its item. Every entry of `native/` is read, hidden ones included, when a
-    file first uses the library; a `native` that is not a folder, a link, a
-    pipe or a device in it, or more than 4096 files or 1024 folders, is
-    `PKG-NATIVE-BUILD` at `native.NAME.build`.
+    its item. For a package read in place, every entry of `native/` is read,
+    hidden ones included, when a file first uses the library; a `native` that
+    is not a folder, a link, a pipe or a device in it, or more than 4096 files
+    or 1024 folders, is `PKG-NATIVE-BUILD` at `native.NAME.build`. A fetched
+    package reads only the files its hash covers, within the limits of a
+    fetch (1 MiB a file, 16 MiB in all; more is `PKG-NATIVE-BUILD` there), so
+    its hidden files are in neither the copy nor the key.
   - A run, `compile`, `test` and `install` run the user's C compiler on the
-    C of `native/`, and only for the project, its workspace members and its
-    `path` dependencies; `check` and the queries never do. Under any
+    C of `native/`; `check` and the queries never do. Under any
     `--deny-*` flag or `--sandbox`, in front of `test` or after it, the VM
     refuses native code, so no compiler starts: a run or a test file that
     uses the library is `RUNTIME-NATIVE-DENIED` (the bytecode cache keeps
     such programs apart, so a hit and a miss agree), and `compile`, whose
     output may run without the flag, is `PKG-NATIVE-BUILD`. A run, `compile`
     and `test` build a library when a file of the program first uses it, so
-    a library that no file uses is never built; `install` builds them all.
+    a library that no file uses is never built; `install` builds them all
+    for the project, its members and its `path` dependencies, and none of a
+    fetched package, so installing one needs no C compiler.
     The compiler is the words of `CC` (split at spaces, with no quoting), else
     `cc` (`gcc` on Windows), started with an argument list and no shell, in
     the package folder. Every build gets `-std=c11 -O2 -fvisibility=hidden`,

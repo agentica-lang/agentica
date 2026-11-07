@@ -11,11 +11,9 @@ MANIFEST_FILE = "agentica.toml"
 # The end of a record of `git ls-tree -z`. A string literal has no escape for it.
 NUL = String.from_code(0)
 
-# The most a file of a package may hold, and all the copied files together. The VM keeps at most 1 MiB of the output
-# of a child that was not read yet (site/content/library/io-and-system/process.md), and a file is a list of bytes in
-# memory.
-MAX_FILE_BYTES = 1_048_576
-MAX_TOTAL_BYTES = 16_777_216
+# The most a file of a package may hold, and all the copied files together (PackageHash.MAX_FILE_BYTES).
+MAX_FILE_BYTES = PackageHash.MAX_FILE_BYTES
+MAX_TOTAL_BYTES = PackageHash.MAX_TOTAL_BYTES
 COLLISION_HELP = "rename one of them, so that the package works on a case-insensitive file system"
 
 # The modes of git that are not a regular file: a symbolic link and a gitlink (a submodule).

@@ -9,7 +9,9 @@
 ## left as it is. A package the lock marks as a member of the workspace of the project is neither fetched nor written
 ## to deps/: the build reads it from the member's folder, and its manifest is checked there. Last, the native modules
 ## of the project and of the packages it reads in place (members and `path` dependencies) are built from their C
-## sources (`[native.NAME] build`, io/native_build.agc), so the first run finds them built.
+## sources (`[native.NAME] build`, io/native_build.agc), so the first run finds them built. A fetched package is only
+## fetched and checked: its module builds when a file first uses it, so a project that never uses it needs no C
+## compiler.
 
 import NativeArtifact from "../packages/native_artifact"
 import Engine from "../io/native_artifact"
