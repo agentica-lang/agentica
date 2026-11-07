@@ -2,7 +2,7 @@
 # in both public PEM forms: the ciphertext has the key's 256 bytes and differs
 # on every call, and the data takes 0 to 214 bytes (256 - 42). Then the error
 # Results: no PEM, a key that is not RSA, a private key, data too long, a text
-# over 64 KiB, and RSA keys that OpenSSL refuses, made from DER here: a 256-bit
+# over 64 KiB, and RSA keys that cannot encrypt, made from DER here: a 256-bit
 # modulus (too small for the padding), an exponent above the modulus and a
 # modulus of 16400 bits (above OpenSSL's 16384). tests/test_vm_crypto.py has a
 # Node peer decrypt the ciphertexts.

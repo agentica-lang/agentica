@@ -9,6 +9,7 @@
 #include "digest.h"
 
 #include <openssl/core_names.h>
+#include <openssl/bn.h>
 #include <openssl/crypto.h>
 #include <openssl/decoder.h>
 #include <openssl/err.h>
@@ -359,6 +360,28 @@ static EVP_PKEY *public_key_from_pem(const char *pem, size_t n) {
   return pkey;
 }
 
+/* The most bits of a public exponent: OpenSSL's own cap for moduli above 3072 bits (OPENSSL_RSA_MAX_PUBEXP_BITS).
+   Below that size OpenSSL takes any exponent under the modulus, and a 3071-bit exponent makes one encryption cost
+   about as much as a private-key operation; real keys use 65537. */
+#define RSA_MAX_EXPONENT_BITS 64
+
+/* Checks the RSA key's numbers before any work: an odd modulus (Montgomery multiplication needs one, and OpenSSL's
+   public operation fails on an even one) and an odd exponent from 3 to RSA_MAX_EXPONENT_BITS bits, which also keeps
+   it under the modulus of at least 43 bytes. AGC_RSA_DONE when the key is usable, AGC_RSA_BAD_KEY when it is not,
+   AGC_RSA_FAILED when OpenSSL cannot give the numbers. */
+static agc_rsa_status rsa_key_numbers(const EVP_PKEY *pkey) {
+  BIGNUM *n = NULL, *e = NULL;
+  agc_rsa_status status = AGC_RSA_FAILED;
+  if (EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_RSA_N, &n) == 1 &&
+      EVP_PKEY_get_bn_param(pkey, OSSL_PKEY_PARAM_RSA_E, &e) == 1) {
+    bool usable = BN_is_odd(n) && BN_is_odd(e) && !BN_is_one(e) && BN_num_bits(e) <= RSA_MAX_EXPONENT_BITS;
+    status = usable ? AGC_RSA_DONE : AGC_RSA_BAD_KEY;
+  }
+  BN_free(n);
+  BN_free(e);
+  return status;
+}
+
 agc_rsa_status agc_rsa_oaep_encrypt(const char *pem, size_t pem_n, const unsigned char *data, size_t n,
                                     unsigned char out[AGC_RSA_MAX_BYTES], size_t *len) {
   static const unsigned char none = 0;
@@ -371,6 +394,7 @@ agc_rsa_status agc_rsa_oaep_encrypt(const char *pem, size_t pem_n, const unsigne
      OpenSSL encrypts with, is refused before any work, and out is never written past AGC_RSA_MAX_BYTES. */
   int size = status == AGC_RSA_DONE ? EVP_PKEY_get_size(pkey) : 0;
   if (status == AGC_RSA_DONE && (size <= AGC_RSA_OAEP_OVERHEAD || size > AGC_RSA_MAX_BYTES)) status = AGC_RSA_BAD_KEY;
+  if (status == AGC_RSA_DONE) status = rsa_key_numbers(pkey);
   if (status == AGC_RSA_DONE && n > (size_t)size - AGC_RSA_OAEP_OVERHEAD) {
     *len = (size_t)size - AGC_RSA_OAEP_OVERHEAD;
     status = AGC_RSA_TOO_LONG;
@@ -378,7 +402,8 @@ agc_rsa_status agc_rsa_oaep_encrypt(const char *pem, size_t pem_n, const unsigne
   EVP_PKEY_CTX *ctx = status == AGC_RSA_DONE ? EVP_PKEY_CTX_new_from_pkey(NULL, pkey, NULL) : NULL;
   if (status == AGC_RSA_DONE) {
     /* SHA-1 for both the label hash and MGF1 is OpenSSL's default for OAEP; it is set here so that never moves. The
-       public operation checks the key (its modulus and exponent), so a key it refuses fails here. */
+       checks above cover every key OpenSSL's public operation refuses (size, modulus parity, exponent size), so a
+       failure here is the library's own: no memory, or no random OAEP seed. */
     size_t got = AGC_RSA_MAX_BYTES;
     bool done = ctx && EVP_PKEY_encrypt_init(ctx) == 1 &&
                 EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_OAEP_PADDING) == 1 &&
@@ -386,7 +411,7 @@ agc_rsa_status agc_rsa_oaep_encrypt(const char *pem, size_t pem_n, const unsigne
                 EVP_PKEY_CTX_set_rsa_mgf1_md(ctx, EVP_sha1()) == 1 &&
                 EVP_PKEY_encrypt(ctx, out, &got, n ? data : &none, n) == 1 && got == (size_t)size;
     if (done) *len = got;
-    else status = AGC_RSA_BAD_KEY;
+    else status = AGC_RSA_FAILED;
   }
   EVP_PKEY_CTX_free(ctx);
   EVP_PKEY_free(pkey);

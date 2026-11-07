@@ -1,12 +1,11 @@
 /*
  * The crypto builtins (agc_crypto_builtins): the Digest hashes of bytes (MD5,
- * SHA-1, SHA-256, SHA-512, as bytes and as hex), their HMACs (RFC 2104) and
- * the constant-time HMAC.secure_compare, the SecureRandom draws, Triple DES
- * CBC and AES-256-GCM (Cipher), CMAC, PBKDF2 and scrypt (KDF, compute jobs),
- * RSA-OAEP with a PEM public key (RSA), and the Base64 and Digest.hexencode/hexdecode text forms of bytes in plain C. All
- * but the text forms come from the OpenSSL adapter (digest.h). Service layer.
- * Design: docs/vm/02-reference-behavior.md §2.3; Base64 and hex follow RFC 4648
- * and Ruby's Base64 module, SecureRandom.uuid RFC 9562 §5.4.
+ * SHA-1, SHA-256, SHA-512, as bytes and hex), HMACs (RFC 2104), the
+ * constant-time HMAC.secure_compare, SecureRandom, Triple DES CBC and
+ * AES-256-GCM (Cipher), CMAC, PBKDF2 and scrypt (KDF, compute jobs), RSA-OAEP
+ * (RSA), all from the OpenSSL adapter (digest.h), and the Base64 and hex text
+ * forms in plain C. Service layer. Design: docs/vm/02-reference-behavior.md
+ * §2.3; Base64 and hex follow RFC 4648 and Ruby, SecureRandom.uuid RFC 9562.
  */
 #include "services.h"
 #include "digest.h"
@@ -533,41 +532,45 @@ static agc_value builtin_aes_256_gcm_decrypt(agc_vm *vm, agc_value *args, uint32
    encrypts with, has under 3 KiB; the cap keeps a hostile text from feeding the decoder megabytes. */
 #define RSA_MAX_PEM_BYTES ((size_t)65536)
 
-/* Encrypts with RSA-OAEP into out (agc_rsa_oaep_encrypt), whose lengths the caller checked. One of the libcrypto
+/* Encrypts with RSA-OAEP into out (agc_rsa_oaep_encrypt), whose lengths the caller checked. A library failure after
+   the key checks (no memory, no random OAEP seed) stops the run, as for SecureRandom and Cipher. One of the libcrypto
    wrappers that vm/tools/tsan.supp names (see digest_compute). */
-static __attribute__((noinline)) agc_rsa_status rsa_compute(const char *pem, size_t pem_n, const uint8_t *data,
-                                                            size_t n, unsigned char out[AGC_RSA_MAX_BYTES],
-                                                            size_t *len) {
-  return agc_rsa_oaep_encrypt(pem, pem_n, data, n, out, len);
+static __attribute__((noinline)) agc_rsa_status rsa_compute(agc_vm *vm, const char *pem, size_t pem_n,
+                                                            const uint8_t *data, size_t n,
+                                                            unsigned char out[AGC_RSA_MAX_BYTES], size_t *len,
+                                                            uint32_t span) {
+  agc_rsa_status status = agc_rsa_oaep_encrypt(pem, pem_n, data, n, out, len);
+  if (status == AGC_RSA_FAILED) agc_fail(vm, "RUNTIME-INTERNAL", "RSA-OAEP is not available", span);
+  return status;
 }
 
 /* RSA.public_encrypt_oaep(pem, data): Ruby's OpenSSL::PKey::RSA.new(pem).public_encrypt(data, PKCS1_OAEP_PADDING),
    RSA-OAEP with SHA-1 and MGF1-SHA-1, the padding that MySQL's caching_sha2_password asks for. The key is the PEM of
    an RSA public key (SubjectPublicKeyInfo or PKCS#1). Each call draws a new random OAEP seed, so the ciphertext
    differs every time; only the private key's owner can read it. A text over RSA_MAX_PEM_BYTES or that holds no PEM
-   public key, a key that is not RSA, data longer than the key takes or a key OpenSSL refuses is an error Result.
-   The work is one public-key operation, bounded by the 16384-bit modulus cap; it runs without the shared lock, since
-   it reads only its arguments. */
+   public key, a key that is not RSA, data longer than the key takes or a key that cannot encrypt (agc_rsa_status) is
+   an error Result. The work is one public-key operation, bounded by the caps on the modulus (16384 bits) and the
+   exponent (64 bits); it runs without the shared lock, since it reads only its arguments. */
 static agc_value builtin_rsa_public_encrypt_oaep(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
   const agc_string *pem = agc_as_string(vm, args[0]);
   size_t n;
   const uint8_t *data = agc_bytes_data(vm, args[1], &n);
   if (pem->bytes > RSA_MAX_PEM_BYTES) return agc_error_value("RSA: the PEM text has more than 65536 bytes");
   unsigned char out[AGC_RSA_MAX_BYTES];
   size_t len = 0;
-  switch (rsa_compute(pem->data, pem->bytes, data, n, out, &len)) {
+  switch (rsa_compute(vm, pem->data, pem->bytes, data, n, out, &len, span)) {
     case AGC_RSA_DONE: return agc_result_value(true, byte_value(out, len));
     case AGC_RSA_BAD_PEM: return agc_error_value("RSA: the text holds no PEM public key");
     case AGC_RSA_NOT_RSA: return agc_error_value("RSA: the public key is not an RSA key");
     case AGC_RSA_TOO_LONG: {
       char message[96];
-      snprintf(message, sizeof message, "RSA-OAEP takes at most %zu bytes of data with this key", len);
+      snprintf(message, sizeof message, "RSA: the data takes at most %zu bytes with this key", len);
       return agc_error_value(message);
     }
-    case AGC_RSA_BAD_KEY: break;
+    case AGC_RSA_BAD_KEY:
+    case AGC_RSA_FAILED: break;
   }
-  return agc_error_value("RSA: OpenSSL refuses to encrypt with this key");
+  return agc_error_value("RSA: the key cannot encrypt");
 }
 
 /* The most bytes of a KDF password, salt or output: 1 MiB, the cap of the SecureRandom counts. Real ones are tens of

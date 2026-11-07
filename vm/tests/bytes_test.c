@@ -465,8 +465,9 @@ static void test_gcm_wipes_a_wrong_tag(void) {
 /* RSA-OAEP through the adapter: the fixture key of tests/fixtures/rsa/ in both public PEM forms gives the key's 256
    bytes, a new random seed each time, and takes 0 to 214 bytes (256 - 42). Every other input is an error status, not
    a crash: no PEM, a key that is not RSA, a private key, a length past INT_MAX (refused before it is read), a key too
-   small for the padding. The builtin refuses a text over 64 KiB. tests/test_vm_crypto.py has a Node peer decrypt the
-   ciphertexts, and the VM fixture rsa-oaep covers the keys that only OpenSSL refuses. */
+   small for the padding, an even modulus, an exponent of 1, past 64 bits or above the modulus (64 bits pass). The
+   builtin refuses a text over 64 KiB. tests/test_vm_crypto.py has a Node peer decrypt the ciphertexts, and the VM
+   fixture rsa-oaep covers a modulus past 16384 bits. */
 static void test_rsa_oaep(void) {
   static const char spki[] =
     "-----BEGIN PUBLIC KEY-----\n"
@@ -500,7 +501,7 @@ static void test_rsa_oaep(void) {
   static const char small[] = "-----BEGIN RSA PUBLIC KEY-----\n"
                               "MCgCIQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQIDAQAB\n"
                               "-----END RSA PUBLIC KEY-----\n";
-  /* A 1024-bit n and e = n + 2: the decoder takes it, the public operation refuses it. */
+  /* A 1024-bit n and e = n + 2. */
   static const char above[] = "-----BEGIN RSA PUBLIC KEY-----\n"
                               "MIIBCAKBgQCAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
                               "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAN6tvu8AAAAAAAAAAAAA\n"
@@ -508,6 +509,32 @@ static void test_rsa_oaep(void) {
                               "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
                               "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAN6tvu8AAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
                               "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAw==\n"
+                              "-----END RSA PUBLIC KEY-----\n";
+  /* A 1024-bit n and a 65-bit e: OpenSSL takes it, the 64-bit cap refuses it. */
+  static const char wide_e[] = "-----BEGIN RSA PUBLIC KEY-----\n"
+                               "MIGPAoGBAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
+                               "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
+                               "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAgkBAAAAAAAA\n"
+                               "AAE=\n"
+                               "-----END RSA PUBLIC KEY-----\n";
+  /* The same n and e = 2^64 - 1, the widest exponent taken. */
+  static const char max_e[] = "-----BEGIN RSA PUBLIC KEY-----\n"
+                              "MIGPAoGBAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
+                              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
+                              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAgkA////////\n"
+                              "//8=\n"
+                              "-----END RSA PUBLIC KEY-----\n";
+  /* An even modulus, which Montgomery multiplication cannot use. */
+  static const char even_n[] = "-----BEGIN RSA PUBLIC KEY-----\n"
+                               "MIGJAoGBAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
+                               "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
+                               "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAgMBAAE=\n"
+                               "-----END RSA PUBLIC KEY-----\n";
+  /* e = 1, which would leave the padded data as it is. */
+  static const char e_one[] = "-----BEGIN RSA PUBLIC KEY-----\n"
+                              "MIGHAoGBAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
+                              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\n"
+                              "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABAgEB\n"
                               "-----END RSA PUBLIC KEY-----\n";
   unsigned char data[215], first[AGC_RSA_MAX_BYTES], out[AGC_RSA_MAX_BYTES];
   memset(data, 0x5a, sizeof data);
@@ -527,6 +554,10 @@ static void test_rsa_oaep(void) {
   assert(agc_rsa_oaep_encrypt(spki, (size_t)INT_MAX + 1, data, 20, out, &len) == AGC_RSA_BAD_PEM);
   assert(agc_rsa_oaep_encrypt(small, strlen(small), NULL, 0, out, &len) == AGC_RSA_BAD_KEY && len == 0);
   assert(agc_rsa_oaep_encrypt(above, strlen(above), data, 20, out, &len) == AGC_RSA_BAD_KEY && len == 0);
+  assert(agc_rsa_oaep_encrypt(wide_e, strlen(wide_e), data, 20, out, &len) == AGC_RSA_BAD_KEY && len == 0);
+  assert(agc_rsa_oaep_encrypt(max_e, strlen(max_e), data, 20, out, &len) == AGC_RSA_DONE && len == 128);
+  assert(agc_rsa_oaep_encrypt(even_n, strlen(even_n), data, 20, out, &len) == AGC_RSA_BAD_KEY && len == 0);
+  assert(agc_rsa_oaep_encrypt(e_one, strlen(e_one), data, 20, out, &len) == AGC_RSA_BAD_KEY && len == 0);
   agc_value args[2] = {text(spki), raw((const char *)data, 214)};
   const agc_result *sealed = agc_as_result(&vm, call("RSA.public_encrypt_oaep", 2, args));
   assert(sealed->ok && agc_as_bytes(&vm, sealed->value)->len == 256);

@@ -297,9 +297,9 @@ false
 ```
 
 - `data` has at most the key's size less 42 bytes: 214 for a 2048-bit key, 470 for a 4096-bit key. To send more, encrypt it with [AES-256-GCM](#aes-256-gcm) under a random key and encrypt that key with RSA.
-- A `pem` with no PEM public key (a private key and a certificate included), over 65536 bytes, a key that is not RSA (EC or RSA-PSS), data too long for the key, or a key that cannot encrypt (42 bytes or less, more than 16384 bits, or a bad exponent) gives an `error`.
+- A `pem` with no PEM public key (a private key and a certificate included), over 65536 bytes, a key that is not RSA (EC or RSA-PSS), data too long for the key, or a key that cannot encrypt (42 bytes or less, more than 16384 bits, an even modulus, or an exponent that is even, 1 or longer than 64 bits) gives an `error`. A failure inside OpenSSL itself, such as no random bytes for the seed, stops the program with `RUNTIME-INTERNAL`.
 - It only encrypts: no private keys, signatures, other paddings or key generation.
-- The work is one public-key operation, and it needs the `random` effect label, as `SecureRandom` does, so a module constant cannot call it.
+- The work is one public-key operation, bounded by those limits, and it needs the `random` effect label, as `SecureRandom` does, so a module constant cannot call it.
 - `RSA` is a reserved type name.
 
 ## SecureRandom

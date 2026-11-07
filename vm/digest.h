@@ -122,15 +122,24 @@ bool agc_scrypt(const unsigned char *password, size_t password_n, const unsigned
 #define AGC_RSA_OAEP_OVERHEAD 42
 
 /* The end of an RSA encryption: done, a text that holds no PEM public key, a public key that is not RSA, data longer
-   than the key takes, or a key that OpenSSL refuses to encrypt with (too small, too large, a bad exponent). */
-typedef enum { AGC_RSA_DONE, AGC_RSA_BAD_PEM, AGC_RSA_NOT_RSA, AGC_RSA_TOO_LONG, AGC_RSA_BAD_KEY } agc_rsa_status;
+   than the key takes, a key that cannot encrypt (too small or too large, an even modulus, an even exponent or one of
+   1 or above 64 bits), or a library failure (no memory, no random OAEP seed). */
+typedef enum {
+  AGC_RSA_DONE,
+  AGC_RSA_BAD_PEM,
+  AGC_RSA_NOT_RSA,
+  AGC_RSA_TOO_LONG,
+  AGC_RSA_BAD_KEY,
+  AGC_RSA_FAILED
+} agc_rsa_status;
 
 /* Encrypts the n bytes at data with the RSA public key in the pem_n bytes of PEM text at pem (SubjectPublicKeyInfo
    "PUBLIC KEY" or PKCS#1 "RSA PUBLIC KEY"; the first PEM block is read) with OAEP padding, SHA-1 and MGF1-SHA-1
-   (OpenSSL's RSA_PKCS1_OAEP_PADDING), into out, and sets *len to the ciphertext's length, the key's size. For
-   AGC_RSA_TOO_LONG *len is the most data bytes the key takes; for the other errors it is 0. A private key, a
-   certificate or an encrypted PEM is AGC_RSA_BAD_PEM: no passphrase is ever asked for. pem_n is at most INT_MAX (else
-   AGC_RSA_BAD_PEM), and data may be NULL when n is 0. Every OpenSSL object is freed before it returns. */
+   (OpenSSL's RSA_PKCS1_OAEP_PADDING), into out, and sets *len to the ciphertext's length, the key's size. Every key
+   check runs before the encryption, so the work is bounded: a modulus of at most 16384 bits and an exponent of at
+   most 64. For AGC_RSA_TOO_LONG *len is the most data bytes the key takes; for the other errors it is 0. A private
+   key, a certificate or an encrypted PEM is AGC_RSA_BAD_PEM: no passphrase is ever asked for. pem_n is at most
+   INT_MAX (else AGC_RSA_BAD_PEM), and data may be NULL when n is 0. Every OpenSSL object is freed before it returns. */
 agc_rsa_status agc_rsa_oaep_encrypt(const char *pem, size_t pem_n, const unsigned char *data, size_t n,
                                     unsigned char out[AGC_RSA_MAX_BYTES], size_t *len);
 
