@@ -118,7 +118,8 @@ end
 ## The arguments of the compiler, after its own words: the flags every build gets, those of the system, the output, the
 ## sources (absolute paths in the package) and the libraries. `include` is the folder that holds agentica_native.h.
 ## A module links nothing of `agentica` (the VM passes it a table), so an undefined symbol is an error at link time on
-## Linux and macOS; on Linux a module finds a library beside it ($ORIGIN, not a shell variable: no shell runs).
+## Linux (`-z defs`) and macOS (the default of its linker, which warns that `-undefined error` is deprecated); on Linux
+## a module finds a library beside it ($ORIGIN, not a shell variable: no shell runs).
 export def arguments(request: Workspace.BuildRequest, include: String, output: String) -> List[String]
   found = ["-std=c11", "-O2", "-fvisibility=hidden", "-I#{include}"]
   found = found.concat(request.defines.map do |define: String| "-D#{define}" end)
@@ -126,7 +127,7 @@ export def arguments(request: Workspace.BuildRequest, include: String, output: S
     found = found.concat(["-shared", "-static-libgcc"])
   elsif request.system == "macos"
     install_name = "-Wl,-install_name,@rpath/#{output_name(request.library, "macos")}"
-    found = found.concat(["-dynamiclib", "-Wl,-undefined,error", install_name])
+    found = found.concat(["-dynamiclib", install_name])
   else
     found = found.concat(["-fPIC", "-shared", "-Wl,-z,defs", "-Wl,-rpath,$ORIGIN"])
   end

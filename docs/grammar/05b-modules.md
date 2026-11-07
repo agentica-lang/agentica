@@ -691,9 +691,9 @@ import Sqlite from "pkg/sqlite/db"
     package folder. Every build gets `-std=c11 -O2 -fvisibility=hidden`, the
     folder of the `agentica_native.h` that the binary carries, the defines
     (`-DNAME=VALUE`, one argument each) and the system's flags: Linux
-    `-fPIC -shared -Wl,-z,defs -Wl,-rpath,$ORIGIN`, macOS
-    `-dynamiclib -Wl,-undefined,error` with the install name
-    `@rpath/libNAME.dylib` (the host architecture only), Windows
+    `-fPIC -shared -Wl,-z,defs -Wl,-rpath,$ORIGIN`, macOS `-dynamiclib`
+    with the install name `@rpath/libNAME.dylib` (the host architecture
+    only; an undefined symbol is a link error there by default), Windows
     `-shared -static-libgcc`; then the sources and the `-l` libraries. The
     manifest names no compiler and no other flag.
   - The library goes to `<package cache>/native-build/<key>/libNAME.so`
