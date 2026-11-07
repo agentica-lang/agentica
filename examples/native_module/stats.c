@@ -7,7 +7,7 @@
 
 /* The rows of the type table, and the variants of Cell in declared order. */
 enum { SUMMARY, CELL };
-enum { EMPTY, NUMBER, TEXT };
+enum { CELL_EMPTY, CELL_NUMBER, CELL_TEXT };
 
 /* The most columns of a CSV text. */
 #define MAX_COLUMNS 32
@@ -34,16 +34,16 @@ static an_term summary(an_env *env, int argc, const an_term *argv) {
 /* Empty for no text, a Number when the whole text is a number, else its Text. */
 static an_term cell(an_env *env, const char *text, size_t len) {
   char number[64], *end;
-  if (len == 0) return an_enum(env, CELL, EMPTY, NULL);
+  if (len == 0) return an_enum(env, CELL, CELL_EMPTY, NULL);
   if (len < sizeof number) {
     memcpy(number, text, len);
     number[len] = '\0';
     double x = strtod(number, &end);
     an_term value = an_float(env, x);
-    if (end == number + len) return an_enum(env, CELL, NUMBER, &value);
+    if (end == number + len) return an_enum(env, CELL, CELL_NUMBER, &value);
   }
   an_term value = an_string(env, text, len);
-  return an_enum(env, CELL, TEXT, &value);
+  return an_enum(env, CELL, CELL_TEXT, &value);
 }
 
 /* The lines after the header, each a Map from the header's names to its cells; a line with another number of cells

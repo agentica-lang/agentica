@@ -217,22 +217,22 @@ static an_term lie(an_env *env, int argc, const an_term *argv) {
 }
 
 /* The rows of the type table. */
-enum { POINT, SHAPE };
-enum { DOT, CIRCLE, RECT };
+enum { POINT_TYPE, SHAPE_TYPE };
+enum { SHAPE_DOT, SHAPE_CIRCLE, SHAPE_RECT };
 
 /* Point(x: y, y: x). */
 static an_term flip(an_env *env, int argc, const an_term *argv) {
   an_term fields[2];
   (void)argc;
-  if (!an_get_field(env, argv[0], POINT, 1, &fields[0]) || !an_get_field(env, argv[0], POINT, 0, &fields[1]))
+  if (!an_get_field(env, argv[0], POINT_TYPE, 1, &fields[0]) || !an_get_field(env, argv[0], POINT_TYPE, 0, &fields[1]))
     return an_badarg(env, 0);
-  return an_struct(env, POINT, fields);
+  return an_struct(env, POINT_TYPE, fields);
 }
 
 static bool get_xy(an_env *env, an_term point, int64_t *x, int64_t *y) {
   an_term t;
-  return an_get_field(env, point, POINT, 0, &t) && an_get_int(env, t, x) && an_get_field(env, point, POINT, 1, &t) &&
-         an_get_int(env, t, y);
+  return an_get_field(env, point, POINT_TYPE, 0, &t) && an_get_int(env, t, x) &&
+         an_get_field(env, point, POINT_TYPE, 1, &t) && an_get_int(env, t, y);
 }
 
 /* 0 for a Dot, r * r for a Circle(r), and the area between the corners of a Rect. */
@@ -241,9 +241,9 @@ static an_term area(an_env *env, int argc, const an_term *argv) {
   const an_term *payload;
   int64_t r, x0, y0, x1, y1;
   (void)argc;
-  if (!an_get_variant(env, argv[0], SHAPE, &variant, &payload)) return an_badarg(env, 0);
-  if (variant == DOT) return an_int(env, 0);
-  if (variant == CIRCLE)
+  if (!an_get_variant(env, argv[0], SHAPE_TYPE, &variant, &payload)) return an_badarg(env, 0);
+  if (variant == SHAPE_DOT) return an_int(env, 0);
+  if (variant == SHAPE_CIRCLE)
     return an_get_int(env, payload[0], &r) ? an_int(env, (int64_t)((uint64_t)r * (uint64_t)r)) : an_badarg(env, 0);
   if (!get_xy(env, payload[0], &x0, &y0) || !get_xy(env, payload[1], &x1, &y1)) return an_badarg(env, 0);
   return an_int(env, (int64_t)(((uint64_t)x1 - (uint64_t)x0) * ((uint64_t)y1 - (uint64_t)y0)));
@@ -255,13 +255,13 @@ static an_term grow(an_env *env, int argc, const an_term *argv) {
   const an_term *payload;
   int64_t n;
   (void)argc;
-  if (!an_get_variant(env, argv[0], SHAPE, &variant, &payload)) return an_badarg(env, 0);
+  if (!an_get_variant(env, argv[0], SHAPE_TYPE, &variant, &payload)) return an_badarg(env, 0);
   if (!an_get_int(env, argv[1], &n)) return an_badarg(env, 1);
-  if (n <= 0) return an_enum(env, SHAPE, DOT, NULL);
-  if (variant != CIRCLE) return an_enum(env, SHAPE, CIRCLE, &argv[1]);
+  if (n <= 0) return an_enum(env, SHAPE_TYPE, SHAPE_DOT, NULL);
+  if (variant != SHAPE_CIRCLE) return an_enum(env, SHAPE_TYPE, SHAPE_CIRCLE, &argv[1]);
   an_term origin[2] = {an_int(env, 0), an_int(env, 0)}, corner[2] = {argv[1], argv[1]};
-  an_term corners[2] = {an_struct(env, POINT, origin), an_struct(env, POINT, corner)};
-  return an_enum(env, SHAPE, RECT, corners);
+  an_term corners[2] = {an_struct(env, POINT_TYPE, origin), an_struct(env, POINT_TYPE, corner)};
+  return an_enum(env, SHAPE_TYPE, SHAPE_RECT, corners);
 }
 
 /* [Point(x: 0, y: 0), Point(x: 1, y: 2), ...], n of them, at most a million. */
@@ -273,7 +273,7 @@ static an_term points(an_env *env, int argc, const an_term *argv) {
   an_list_begin(env, &b, (size_t)n);
   for (int64_t k = 0; k < n; k++) {
     an_term fields[2] = {an_int(env, k), an_int(env, (int64_t)(2 * (uint64_t)k))};
-    an_list_push(env, &b, an_struct(env, POINT, fields));
+    an_list_push(env, &b, an_struct(env, POINT_TYPE, fields));
   }
   return an_list_end(env, &b);
 }
@@ -283,7 +283,7 @@ static an_term bad_type(an_env *env, int argc, const an_term *argv) {
   an_term fields[2];
   (void)argc;
   fields[0] = fields[1] = argv[0];
-  return an_struct(env, SHAPE + 1, fields);
+  return an_struct(env, SHAPE_TYPE + 1, fields);
 }
 
 /* demo_keep keeps a C function pointer that an extern block passes (a callback), and call_kept calls it from inside a
