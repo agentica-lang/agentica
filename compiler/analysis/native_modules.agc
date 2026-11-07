@@ -140,7 +140,11 @@ def function_in(
   library: String,
   placed: Placed,
 ) -> Result[Found]
-  linked = program.functions.get(node.id, node)
+  if !program.functions.has_key?(node.id)
+    return error("the linked program has no function for #{node.name}")
+  end
+
+  linked = program.functions[node.id]
   made = NativeShape.of_function(program.types, linked, program.structs, program.enums)
   if !made.ok?
     return error(made.message)
@@ -154,24 +158,18 @@ def function_in(
     at += 1
   end
 
-  mode = "short"
-  case node.native
-    some(native) if native.compute -> mode = "dirty"
-    _ -> mode = mode
-  end
-
-  reached = signature.crossings.map do |crossing: NativeShape.Crossing| Types.display_name(crossing.name) end
   function = Model.NativeFunction(
     name: node.name,
     name_range: DiagnosticModel.range_of(node.name_span),
-    mode: mode,
+    mode: mode_of(node),
     exported: placed.exported,
     doc: doc_text(placed.doc),
     range: DiagnosticModel.range_of(placed.span),
     parameters: parameters,
     result: signature.result,
     signature: signature.text,
-    types: reached,
+    types_in: signature.from_params.map do |name: String| Types.display_name(name) end,
+    types_out: signature.from_result.map do |name: String| Types.display_name(name) end,
   )
 
   opened_block = opened(found, library, placed.span)
@@ -191,6 +189,14 @@ def function_in(
       types: found.types.put(library, known),
     ),
   )
+end
+
+# `dirty` for a `compute def`, which runs on the compute pool, else `short`.
+def mode_of(node: Ast.FunctionDecl) -> String
+  case node.native
+    some(native) if native.compute -> return "dirty"
+    _ -> return "short"
+  end
 end
 
 # A struct or enum that crosses as plain data.

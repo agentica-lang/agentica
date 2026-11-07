@@ -44,11 +44,16 @@ end
 ## The canonical signature of one function: the type of each parameter and of the result, `text` ("(Int, String) ->
 ## List[Int]", the form the module's function table has) and the types it reaches, each once, in the order the walk
 ## meets them (the parameters first, then the result, each type before the types of its fields and payloads).
+## `from_params` and `from_result` are the linked names of the crossings reached from the parameters alone and from the
+## result alone, in the same order, through the fields and payloads too: a type that only the result reaches is made
+## by the module and never read, and one that only a parameter reaches is read and never made.
 export struct Signature
   params: List[String]
   result: String
   text: String
   crossings: List[Crossing]
+  from_params: List[String]
+  from_result: List[String]
 end
 
 ## The signature of `function`, a function of a native module block. `types` are the types of the checker by node id,
@@ -61,15 +66,39 @@ export def of_function(
   enums: Map[String, Ast.EnumDecl],
 ) -> Result[Signature]
   params: List[String] = []
-  pending: List[Types.Type] = []
+  written: List[Types.Type] = []
   for param in function.params
     type = try recorded(types, param.type)
     params = params.push(Types.to_text(type))
-    pending = pending.push(type)
+    written = written.push(type)
   end
 
   result = try recorded(types, function.result)
-  pending = pending.push(result)
+  crossings = try reach(types, written.push(result), structs, enums)
+  inputs = try reach(types, written, structs, enums)
+  outputs = try reach(types, [result], structs, enums)
+  text = "(#{params.join(", ")}) -> #{Types.to_text(result)}"
+  return ok(
+    Signature(
+      params: params,
+      result: Types.to_text(result),
+      text: text,
+      crossings: crossings,
+      from_params: inputs.map do |crossing: Crossing| crossing.name end,
+      from_result: outputs.map do |crossing: Crossing| crossing.name end,
+    ),
+  )
+end
+
+# The crossings that the types `roots` reach, each once, in the order the walk meets them. The walk is a list, not a
+# recursion, so a recursive type ends.
+def reach(
+  types: List[Types.Type],
+  roots: List[Types.Type],
+  structs: Map[String, Ast.StructDecl],
+  enums: Map[String, Ast.EnumDecl],
+) -> Result[List[Crossing]]
+  pending = roots
   crossings: List[Crossing] = []
   seen: Set[String] = Set.new([])
   at = 0
@@ -117,8 +146,7 @@ export def of_function(
     end
   end
 
-  text = "(#{params.join(", ")}) -> #{Types.to_text(result)}"
-  return ok(Signature(params: params, result: Types.to_text(result), text: text, crossings: crossings))
+  return ok(crossings)
 end
 
 # A variant as the shape writes it: its name, then its payload in parentheses when it has one.

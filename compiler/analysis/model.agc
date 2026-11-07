@@ -200,9 +200,11 @@ end
 
 ## One function of an `extern module` block, named as the block writes it (`empty?` included). `mode` is `short` for a
 ## `def` and `dirty` for a `compute def`. `signature` is the canonical text of the module's function table,
-## "(List[Float]) -> Optional[Summary]", and `types` the bare names of the structs, enums and resources it reaches,
-## which the block's `types` and `resources` describe. `doc` is the whole `##` text ("" for none), `range` the whole
-## declaration, `export` included, and `name_range` the name alone.
+## "(List[Float]) -> Optional[Summary]". `types_in` and `types_out` are the bare names of the structs, enums and
+## resources that the parameters and that the result reach, through the fields and payloads too, each once, in the
+## order they are met; the block's `types` and `resources` describe them. A type in `types_out` only is made by the
+## module and never read, and one in `types_in` only is read and never made. `doc` is the whole `##` text ("" for
+## none), `range` the whole declaration, `export` included, and `name_range` the name alone.
 export struct NativeFunction
   name: String
   name_range: Diagnostics.Region
@@ -213,7 +215,8 @@ export struct NativeFunction
   parameters: List[NativeParameter]
   result: String
   signature: String
-  types: List[String]
+  types_in: List[String]
+  types_out: List[String]
 end
 
 ## One `resource Name` line of an `extern module` block, with the same fields as a function.
@@ -245,11 +248,12 @@ export struct NativeType
 end
 
 ## One `extern module "NAME"` block. `library` is the NAME as written, and `range` runs from the first to the last
-## declaration of the block (the syntax tree keeps no place for the NAME). Blocks of one NAME are one block. `types`
-## are the structs and enums that cross in its functions, each once, in the order the first function that reaches them
-## meets them. `api_major` and `api_minor` are the least version of the C API (AN_API_MAJOR, AN_API_MINOR of
-## vm/agentica_native.h) that has what the block needs: 1.0 for functions of scalars and collections, 1.1 when a
-## struct or enum crosses, 1.2 for a resource.
+## declaration of the block, without its `extern module` line and its `end` (the syntax tree keeps no place for the
+## NAME). Blocks of one NAME are one block, so its range may cover another block's declarations and two ranges may
+## overlap. `types` are the structs and enums that cross in its functions, each once, in the order the first function
+## that reaches them meets them. `api_major` and `api_minor` are the least version of the C API (AN_API_MAJOR and
+## AN_API_MINOR of vm/agentica_native.h) that has what the block needs: 1.0 for functions of scalars and collections,
+## 1.1 when a struct or enum crosses, 1.2 for a resource.
 export struct NativeBlock
   library: String
   range: Diagnostics.Region

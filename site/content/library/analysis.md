@@ -91,13 +91,13 @@ A file is named as on the command line: by its canonical path, relative to the w
 
 A `NativeModules` has the `blocks` of the file, in source order, two blocks of one library being one. A `NativeBlock` has:
 
-- `library`, the `NAME` as written, and the `range` of its declarations;
-- `functions`, each with its `name` as written (`empty?`), its `mode` (`short` for a `def`, `dirty` for a `compute def`), `parameters` (`name` and canonical `type`), `result`, `signature`, `exported`, `doc` and `range`, and `types`, the names of the structs, enums and resources it reaches;
+- `library`, the `NAME` as written, and the `range` of its declarations, from the first to the last, without the `extern module` line and the `end` (the syntax tree keeps no place for them). Blocks of one library are one block, so its range may cover the declarations of another block, and two ranges may overlap;
+- `functions`, each with its `name` as written (`empty?`), its `mode` (`short` for a `def`, `dirty` for a `compute def`), `parameters` (`name` and canonical `type`), `result`, `signature`, `exported`, `doc` and `range`, and `types_in` and `types_out`, the names of the structs, enums and resources that the parameters and that the result reach, through the fields and payloads too, each once, in the order they are met (a type in `types_out` only is made by the module and never read, and one in `types_in` only is read and never made);
 - `resources`, the `resource Name` lines, with `exported`, `doc` and `range`;
 - `types`, the structs and enums that cross, each with its `kind` (`struct` or `enum`), its bare `name`, its `members` (fields or variants, with their canonical `types`) and its `shape`;
 - `api_major` and `api_minor`, the least version of the C API (`AN_API_MAJOR` and `AN_API_MINOR` of `agentica_native.h`) that has what the block uses: 1.0 for scalars and collections, 1.1 when a struct or enum crosses, 1.2 for a resource.
 
-A `signature` is the text the module's function table must have, `(List[Float]) -> Optional[Summary]`, and a `shape` the text its type table must have, `count: Int, mean: Float` or `Empty | Number(Float) | Text(String)`. They are written by the code that the compiler binds a call with, so they are the bytes the loader compares. A `shape` is the text after `=` in the `{S<index>=...}` or `{E<index>=...}` that the compiler writes, whose `<index>` is the type's place in the program and is not part of the answer.
+A `doc` is `""` in the record when there is none, and null in the JSON. A `signature` is the text the module's function table must have, `(List[Float]) -> Optional[Summary]`, and a `shape` the text its type table must have, `count: Int, mean: Float` or `Empty | Number(Float) | Text(String)`. They are written by the code that the compiler binds a call with, so they are the bytes the loader compares. A `shape` is the text after `=` in the `{S<index>=...}` or `{E<index>=...}` that the compiler writes, whose `<index>` is the type's place in the program and is not part of the answer.
 
 ## Errors
 

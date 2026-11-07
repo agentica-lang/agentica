@@ -46,7 +46,8 @@ def function_json(file: String, function: Model.NativeFunction) -> Json
     "parameters": JSON.array(parameters),
     "result": JSON.from(function.result),
     "signature": JSON.from(function.signature),
-    "types": JSON.array(function.types.map do |name: String| JSON.from(name) end),
+    "types_in": JSON.array(function.types_in.map do |name: String| JSON.from(name) end),
+    "types_out": JSON.array(function.types_out.map do |name: String| JSON.from(name) end),
   })
 end
 

@@ -49,6 +49,11 @@ enum Cell
   Text(String)
 end
 
+struct Pair
+  first: Cell
+  second: Cell
+end
+
 type Rows = List[Map[String, Cell]]
 
 extern module "stats"
@@ -69,6 +74,10 @@ end
 
 extern module "stats"
   def again(summary: Summary) -> Summary
+end
+
+extern module "pure"
+  def pair(value: Pair) -> Int
 end
 
 def main() -> Void
@@ -784,23 +793,28 @@ def native_blocks(driver, project, path="natives.agc"):
 def test_native_modules_lists_the_functions_resources_and_types_of_each_block(driver, project):
     write_files(project, {"natives.agc": NATIVE})
     answer, blocks = native_blocks(driver, project)
-    assert [block["library"] for block in answer["blocks"]] == ["stats", "other"]
-    stats, other = blocks["stats"], blocks["other"]
+    assert [block["library"] for block in answer["blocks"]] == ["stats", "other", "pure"]
+    stats, other, pure = blocks["stats"], blocks["other"], blocks["pure"]
     assert [function["name"] for function in stats["functions"]] == ["summary", "rows", "empty?", "open", "count", "again"]
     summary = stats["functions"][0]
     assert (summary["mode"], summary["exported"], summary["doc"]) == (
         "short", True, "The count and mean of the values; none for no values.")
     assert summary["parameters"] == [{"name": "values", "type": "List[Float]"}]
-    assert (summary["result"], summary["signature"], summary["types"]) == (
-        "Optional[Summary]", "(List[Float]) -> Optional[Summary]", ["Summary"])
+    assert (summary["result"], summary["signature"], summary["types_in"], summary["types_out"]) == (
+        "Optional[Summary]", "(List[Float]) -> Optional[Summary]", [], ["Summary"])
     rows = stats["functions"][1]
     # The alias is expanded, and the enum is reached through the collections.
-    assert (rows["signature"], rows["types"], rows["exported"], rows["doc"]) == (
-        "(String) -> Result[List[Map[String, Cell]]]", ["Cell"], False, None)
+    assert (rows["signature"], rows["types_in"], rows["types_out"], rows["exported"], rows["doc"]) == (
+        "(String) -> Result[List[Map[String, Cell]]]", [], ["Cell"], False, None)
     opening, count = stats["functions"][3], stats["functions"][4]
-    assert (opening["mode"], opening["signature"], opening["types"]) == (
-        "dirty", "(String) -> Result[Db]", ["Db"])
-    assert (count["signature"], count["types"]) == ("(Db, Cell) -> Int", ["Db", "Cell"])
+    assert (opening["mode"], opening["signature"], opening["types_in"], opening["types_out"]) == (
+        "dirty", "(String) -> Result[Db]", [], ["Db"])
+    assert (count["signature"], count["types_in"], count["types_out"]) == ("(Db, Cell) -> Int", ["Db", "Cell"], [])
+    # A type is read and made when both sides reach it, and a parameter's struct reaches the enum of its fields.
+    again = stats["functions"][5]
+    assert (again["types_in"], again["types_out"]) == (["Summary"], ["Summary"])
+    pair = pure["functions"][0]
+    assert (pair["types_in"], pair["types_out"]) == (["Pair", "Cell"], [])
     assert [(resource["name"], resource["exported"], resource["doc"]) for resource in stats["resources"]] == [
         ("Pool", True, "A pool of connections."), ("Db", False, None)]
     # The types come once, in the order the functions meet them.
@@ -810,13 +824,19 @@ def test_native_modules_lists_the_functions_resources_and_types_of_each_block(dr
         {"name": "Empty", "types": []}, {"name": "Number", "types": ["Float"]}, {"name": "Text", "types": ["String"]}]
     assert stats["types"][0]["members"] == [
         {"name": "count", "types": ["Int"]}, {"name": "mean", "types": ["Float"]}]
-    # The API: 1.2 for a resource, 1.0 for scalars alone. The second block of "stats" joined the first.
-    assert (stats["api"], other["api"]) == ({"major": 1, "minor": 2}, {"major": 1, "minor": 0})
+    # The API: 1.2 for a resource, 1.1 for types alone, 1.0 for scalars alone. The second "stats" block joined the first.
+    assert (stats["api"], pure["api"], other["api"]) == (
+        {"major": 1, "minor": 2}, {"major": 1, "minor": 1}, {"major": 1, "minor": 0})
+    assert [(item["name"], item["shape"]) for item in pure["types"]] == [
+        ("Pair", "first: Cell, second: Cell"), ("Cell", "Empty | Number(Float) | Text(String)")]
     assert (other["types"], other["resources"]) == ([], [])
     # Places count from 1 and name the file of the answer.
     assert summary["name_span"]["file"] == "natives.agc"
-    assert summary["name_span"]["range"]["start"] == {"line": 17, "column": 14}
-    assert stats["span"]["range"]["start"]["line"] == 17
+    assert summary["name_span"]["range"]["start"] == {"line": 22, "column": 14}
+    # A block range runs from its first declaration to the end of its last one (the start of the next line), without
+    # `extern module` and `end`; the second "stats" block is inside it, so it covers the block of "other".
+    assert (stats["span"]["range"]["start"]["line"], stats["span"]["range"]["end"]["line"]) == (22, 38)
+    assert (other["span"]["range"]["start"]["line"], other["span"]["range"]["end"]["line"]) == (33, 34)
 
 
 def test_native_modules_gives_the_diagnostic_of_a_file_that_does_not_check_or_cannot_be_read(driver, project):
@@ -833,7 +853,8 @@ def test_native_modules_names_the_types_of_an_imported_file_by_their_bare_names(
     write_files(project, {"shapes.agc": shapes, "natives.agc": block})
     _answer, blocks = native_blocks(driver, project)
     function = blocks["demo"]["functions"][0]
-    assert (function["signature"], function["types"]) == ("(Point) -> Point", ["Point"])
+    assert (function["signature"], function["types_in"], function["types_out"]) == (
+        "(Point) -> Point", ["Point"], ["Point"])
     assert [(item["name"], item["shape"]) for item in blocks["demo"]["types"]] == [("Point", "x: Int, y: Int")]
 
 
@@ -857,21 +878,26 @@ def test_every_shape_and_signature_of_the_query_is_what_the_lowering_writes(driv
     write_files(project, {"natives.agc": NATIVE})
     _answer, blocks = native_blocks(driver, project)
     written = compiled_signatures(project)
-    assert len(written) == 7
+    assert len(written) == 8
     for library, block in blocks.items():
         types = {item["name"]: item for item in block["types"]}
         resources = {item["name"] for item in block["resources"]}
         for function in block["functions"]:
-            parts = []
-            for name in function["types"]:
+            # The blocks of the signature are the types of the parameters and the result, in the lowering's order.
+            wanted = []
+            for name in {*function["types_in"], *function["types_out"]}:
                 if name in resources:
-                    parts.append("{R=%s}" % re.escape(name))
+                    wanted.append(("R", name))
                 else:
                     item = types[name]
-                    parts.append("{%s\\d+=%s}" % ("S" if item["kind"] == "struct" else "E", re.escape(item["shape"])))
-            pattern = "module %s%s %s %s" % ("".join(parts), re.escape(function["signature"]), re.escape(function["name"]), library)
+                    wanted.append(("S" if item["kind"] == "struct" else "E", item["shape"]))
+            tail = " %s %s" % (function["name"], library)
             kind = "compute " if function["mode"] == "dirty" else ""
-            assert [text for text in written if re.fullmatch(kind + pattern, text)], (function["name"], written)
+            matching = [text for text in written if text.startswith(kind + "module ") and text.endswith(function["signature"] + tail)]
+            assert len(matching) == 1, (function["name"], written)
+            found = re.findall(r"\{([SER])\d*=([^}]*)\}", matching[0])
+            assert sorted(found) == sorted(wanted), function["name"]
+            assert matching[0].count("{") == len(wanted)
 
 
 def test_the_api_versions_of_a_block_are_those_of_the_native_header():
@@ -881,3 +907,6 @@ def test_the_api_versions_of_a_block_are_those_of_the_native_header():
     major, minor = (int(re.search(r"#define AN_API_%s (\d+)" % name, header).group(1)) for name in ("MAJOR", "MINOR"))
     constants = {name: int(value) for name, value in re.findall(r"^export (API_\w+) = (\d+)$", shape, re.M)}
     assert (constants["API_MAJOR"], constants["API_MINOR_RESOURCES"]) == (major, minor)
+    # The comment of the header says which minor version added what.
+    assert constants["API_MINOR_TYPES"] == int(re.search(r"enums\s+(?:\*\s+)?\(1\.(\d)\)", header).group(1))
+    assert constants["API_MINOR_RESOURCES"] == int(re.search(r"resources\s+(?:\*\s+)?\(1\.(\d)\)", header).group(1))
