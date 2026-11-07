@@ -253,6 +253,32 @@ const char *agc_ffi_refusal(const agc_program *program, bool deny, const char **
    exit. */
 void agc_ffi_stop_queued(agc_vm *vm);
 bool agc_ffi_end(agc_vm *vm, int (*stop_signal)(void));
+/* Frees the cache of the run (rt->ffi) and its native modules, and clears the thread's native call, for the fuzz
+   driver after each input: under no_files the cache holds only struct layouts and functions of carried modules,
+   which nothing uses once the run is over. */
+void agc_ffi_forget(agc_vm *vm);
+/* A malloc'd copy of the LEN bytes at DATA with a NUL after them (out of memory exits). */
+char *agc_ffi_text_copy(const char *data, size_t len);
+/* Runs RUN(ARG) with the callbacks of extern blocks that C starts on this thread refused, as a free function runs:
+   they give C zero and run nothing. The call of a native module runs this way. RUN may jump out (the fuzz driver's
+   allocation limit, a failed check of vm/map.c); the thread then stays refusing, outside its own native calls (a fast
+   call and compute_work put back the refusing site they found), until agc_ffi_forget clears it. */
+void agc_ffi_refusing_callbacks(void (*run)(void *arg), void *arg);
+/* Native modules (vm/native_module.c, vm/agentica_native.h). A bound function lives in vm/ffi.c's cache of the run:
+   bind makes it from the text after "module " of a Native.call signature (DIRTY for "compute module "), failing with
+   RUNTIME-NATIVE-LOAD, -SIGNATURE or -DENIED, under rt->sync; call makes one short call with ARGS, the List of its
+   arity of arguments. register adds a module that the binary carries, by its library name (the C tests and the fuzz
+   driver); forget frees the modules of the run. */
+typedef struct agc_native_fn agc_native_fn;
+struct an_api;
+struct an_module;
+typedef const struct an_module *(*agc_native_init)(const struct an_api *api);
+agc_native_fn *agc_native_bind(agc_vm *vm, const char *text, size_t len, bool dirty, uint32_t span);
+uint32_t agc_native_arity(const agc_native_fn *fn);
+agc_value agc_native_call(agc_vm *vm, const agc_native_fn *fn, const agc_list *args, uint32_t span);
+void agc_native_unbind(agc_native_fn *fn);
+void agc_native_register(agc_vm *vm, const char *library, agc_native_init init);
+void agc_native_forget(agc_runtime *rt);
 extern const agc_builtin agc_front_end_builtins[];
 extern const size_t agc_front_end_builtin_count;
 extern const agc_builtin agc_std_builtins[];

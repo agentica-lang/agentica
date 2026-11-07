@@ -98,6 +98,11 @@ void agc_ffi_release(void *hold);
    a library that does not open, a missing function or a build that cannot call native code. */
 bool agc_ffi_has_function(const char *library, const char *symbol);
 
+/* The address of SYMBOL in LIBRARY, opened as agc_ffi_prepare opens it, which then stays open until the process ends:
+   the entry point of a native module (vm/native_module.c). NULL with a message in ERROR (SIZE bytes) when the library
+   or the symbol is missing or the build cannot call native code; a library without the symbol is let go. */
+void *agc_ffi_symbol(const char *library, const char *symbol, char *error, size_t size);
+
 /* Frees a prepared call that no run uses (the free function of a resource was not found), and gives back its hold on
    the library. */
 void agc_ffi_discard(agc_ffi_call *call);

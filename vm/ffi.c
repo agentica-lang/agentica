@@ -28,6 +28,9 @@
 /* The word in front of the signature of a compute def (compiler/lower/lower_native.agc). */
 #define COMPUTE_PREFIX "compute "
 #define COMPUTE_PREFIX_LEN (sizeof COMPUTE_PREFIX - 1)
+/* The word, after any "compute ", of the signature of a function of a native module (vm/native_module.c). */
+#define MODULE_PREFIX "module "
+#define MODULE_PREFIX_LEN (sizeof MODULE_PREFIX - 1)
 /* The most signatures one run prepares. A program has one per extern function; only hand-made bytecode can build
    more, so the cap bounds the table without limiting a real program. */
 #define FFI_MAX_CALLS 65536
@@ -98,7 +101,8 @@ typedef struct {
    multiple of 16), then gives the result's buffer. `holds` counts what a compute call may hold: one per C parameter,
    then one per C.Pointer field of each struct argument, in order. A `layout` entry is no signature but the layout code
    of one struct ("{N:CODES}") for Native.size_of, get_struct and put_struct: only `result_struct` is set, laid out
-   without a call. */
+   without a call. A function of a native module has only `module` (bound by agc_native_bind), `inputs` and
+   `compute`. */
 typedef struct {
   char *key;
   size_t key_len;
@@ -118,6 +122,7 @@ typedef struct {
   agc_ffi_call *free;
   char *resource, *symbol;
   made_kind *made;
+  agc_native_fn *module;
 } ffi_entry;
 
 /* What the resources that one call makes come from (agc_c_resource.up): the one resource or owned buffer that the call
@@ -175,13 +180,14 @@ enum { CALL_QUEUED, CALL_RUNNING, CALL_FINISHED, CALL_ABANDONED };
 /* The native call that runs on this thread now (current_site), which a callback that C makes runs in. A fast call sets
    it around its C call and puts back the one it found, so a call that a callback makes nests. A compute call sets one
    with no `vm` on its pool thread, where no callback can run: a callback there only sets `refused`, and C gets zero. A
-   thread that C started has none, and C gets zero there too, and so does a free function of a resource, which gets a
-   site with no `vm` (free_pointer): it may run inside a callback or a cancel walk, with rt->sync let go and the task's
-   state half changed. Once a callback has failed (`failed`) every later one of the call gives zero at once, and the
-   call raises the failure when C returns: the outcome that the callback's run kept (`kept`, in GC memory, made only
-   then), or CODE and MESSAGE when its value could not go back to C. A run that stopped for a cancel or the end of the
-   run keeps an outcome of kind AGC_DONE, and the call then gives Void and ends the turn. `ran` is set once a callback
-   has run in the call (its nested run is cleared when C returns). */
+   thread that C started has none, and C gets zero there too, and so does a free function of a resource or a native
+   module's function, which run with refused_site (agc_ffi_refusing_callbacks): a free function may run inside a
+   callback or a cancel walk, with rt->sync let go and the task's state half changed. Once a callback has failed
+   (`failed`) every later one of the call gives zero at once, and the call raises the failure when C returns: the
+   outcome that the callback's run kept (`kept`, in GC memory, made only then), or CODE and MESSAGE when its value could
+   not go back to C. A run that stopped for a cancel or the end of the run keeps an outcome of kind AGC_DONE, and the
+   call then gives Void and ends the turn. `ran` is set once a callback has run in the call (its nested run is cleared
+   when C returns). */
 typedef struct native_site {
   agc_vm *vm;
   uint32_t span;
@@ -192,6 +198,17 @@ typedef struct native_site {
 } native_site;
 
 static _Thread_local native_site *current_site; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+/* The site with no `vm` that refuses every callback. It lives as long as the thread, so a current_site left on it by a
+   longjmp out of agc_ffi_refusing_callbacks (agc_task_run_nested does not put current_site back) still refuses and
+   never points at a dead frame. Only its `refused` is ever written, and nothing reads it. */
+static _Thread_local native_site refused_site; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+/* A free function to run with callbacks refused (free_pointer): the function at AT, or CALL's when AT is NULL. */
+typedef struct {
+  agc_ffi_call *call;
+  void *at;
+  agc_c_value arg;
+} free_run;
 
 /* What C runs when it calls a callback: one per pair of a callback type and a function (Native.callback), made at the
    first Native.callback of the pair and kept for the whole run, so its code (the closure) is never freed and C may
@@ -590,6 +607,25 @@ static bool layouts_fit(const agc_c_struct *result_struct, agc_c_struct *const *
   return fit;
 }
 
+/* Where the text after "module " starts in a signature of DATA (LEN bytes), after any "compute " (*COMPUTE), or 0
+   when it is no signature of a native module. */
+static size_t module_start(const char *data, size_t len, bool *compute) {
+  *compute = len >= COMPUTE_PREFIX_LEN && memcmp(data, COMPUTE_PREFIX, COMPUTE_PREFIX_LEN) == 0;
+  size_t at = *compute ? COMPUTE_PREFIX_LEN : 0;
+  if (len - at < MODULE_PREFIX_LEN || memcmp(data + at, MODULE_PREFIX, MODULE_PREFIX_LEN) != 0) return 0;
+  return at + MODULE_PREFIX_LEN;
+}
+
+/* The entry of a function of a native module: the text after "module " of its signature, bound by the module. */
+static ffi_entry *module_entry(agc_vm *vm, const agc_string *text, size_t start, bool compute, uint32_t span) {
+  agc_native_fn *fn = agc_native_bind(vm, text->data + start, text->bytes - start, compute, span);
+  ffi_entry *e = calloc(1, sizeof(ffi_entry));
+  if (!e) agc_out_of_memory();
+  e->module = fn;
+  e->inputs = agc_native_arity(fn);
+  return e;
+}
+
 /* "CODES SYMBOL LIBRARY": the result code, then one code per parameter (a capital for an out parameter), a space, the C
    name, a space, and the library (which may hold spaces), with "compute " in front for a compute def. A variadic
    function has a "." among the codes where its variadic part starts, after one C parameter at least; the codes after it
@@ -603,11 +639,14 @@ static bool layouts_fit(const agc_c_struct *result_struct, agc_c_struct *const *
    struct passed or returned by value is one code "{N:CODES}": N is its index in the program's struct table and CODES
    has one code per field, in the struct's field order, an integer code, d, f, b, p or a nested struct; it is never an
    out parameter or after the ".". The front end writes it (compiler/lower/lower_native.agc); the bytecode may hold
-   anything, so every part is checked here. */
+   anything, so every part is checked here. A signature whose word after any "compute " is "module " is a function of
+   a native module instead, which vm/native_module.c binds. */
 static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t span) {
   const char *at = text->data;
   size_t left = text->bytes;
-  bool compute = left >= COMPUTE_PREFIX_LEN && memcmp(at, COMPUTE_PREFIX, COMPUTE_PREFIX_LEN) == 0;
+  bool compute;
+  size_t module = module_start(at, left, &compute);
+  if (module) return module_entry(vm, text, module, compute, span);
   if (compute) {
     at += COMPUTE_PREFIX_LEN;
     left -= COMPUTE_PREFIX_LEN;
@@ -899,16 +938,19 @@ static ffi_entry *call_entry(agc_vm *vm, agc_value signature, bool layout, uint3
   return e;
 }
 
+static void run_free(void *arg) {
+  free_run *run = arg;
+  agc_c_value unused;
+  agc_ffi_invoke(run->call, run->at, &run->arg, &unused);
+}
+
 /* Runs FREE_CALL on the pointer in SLOT unless it is NULL: the function at AT, or the prepared one when AT is NULL. A
-   void free(void *) gets the pointer; a void free(void **) (BY_REF, free_ref:) gets SLOT, where C may write NULL. */
+   void free(void *) gets the pointer; a void free(void **) (BY_REF, free_ref:) gets SLOT, where C may write NULL. A
+   callback that the free function calls (SQLite's xDestroy) runs nothing and gives zero. */
 static void free_pointer(agc_ffi_call *free_call, void *at, bool by_ref, void **slot) {
   if (!*slot) return;
-  agc_c_value arg = {.p = by_ref ? (void *)slot : *slot}, unused;
-  /* A callback that the free function calls (SQLite's xDestroy) runs nothing and gives zero (native_site). */
-  native_site refusing = {.outer = current_site};
-  current_site = &refusing;
-  agc_ffi_invoke(free_call, at, &arg, &unused);
-  current_site = refusing.outer;
+  free_run run = {free_call, at, {.p = by_ref ? (void *)slot : *slot}};
+  agc_ffi_refusing_callbacks(run_free, &run);
 }
 
 /* Frees the pointer in SLOT: an owned buffer (BUFFER) is malloc'd memory, and a resource goes to FREE_CALL as in
@@ -1231,6 +1273,41 @@ bool agc_ffi_end(agc_vm *vm, int (*stop_signal)(void)) {
   bool done = end_step(vm, items, count, &skipped, by);
   /* After a stop signal what a running call holds is left on purpose: no timeout to report. */
   return done && (!skipped || stop_signal());
+}
+
+char *agc_ffi_text_copy(const char *data, size_t len) { return text_copy(data, len); }
+
+/* A longjmp out of RUN leaves current_site on refused_site, which outlives every frame, so a later callback on this
+   thread is refused rather than reading dead stack; agc_ffi_forget clears it after a fuzz input. */
+void agc_ffi_refusing_callbacks(void (*run)(void *arg), void *arg) {
+  native_site *outer = current_site;
+  current_site = &refused_site;
+  run(arg);
+  current_site = outer;
+}
+
+void agc_ffi_forget(agc_vm *vm) {
+  current_site = NULL;
+  agc_runtime *rt = vm->rt;
+  /* The fuzz driver's allocation limit may stop agc_vm_init before the runtime is set. */
+  if (!rt) return;
+  agc_ffi_cache *c = rt->ffi;
+  for (size_t k = 0; c && k < c->size; k++) {
+    ffi_entry *e = c->slots[k];
+    /* A prepared call is never freed (C may still run it); no_files makes none. */
+    if (!e || e->call) continue;
+    if (e->module) agc_native_unbind(e->module);
+    if (e->result_struct) struct_free(e->result_struct);
+    free(e->key);
+    free(e);
+  }
+  if (c) {
+    free(c->slots);
+    free(c->holds);
+    free(c);
+  }
+  rt->ffi = NULL;
+  agc_native_forget(rt);
 }
 
 /* A resource NAME around POINTER, freed by FREE_CALL (at the address FREE_AT unless NULL; with the address of the
@@ -1915,12 +1992,17 @@ static void release_for_call(agc_vm *vm, const ffi_entry *e, call_holds *h) {
    one (sqlite3_column_text). Not a shared row: the compute half and each of those sections take rt->sync
    themselves. */
 static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span) {
-  /* The fuzzer runs hand-made bytecode with no_files: it must open no library. */
-  if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
+  /* The fuzzer runs hand-made bytecode with no_files: it must open no library. A function of a native module is
+     checked by the module half, since the modules that the binary carries run there. */
+  const agc_string *signature = agc_as_string(vm, args[0]);
+  bool compute;
+  if (vm->rt->no_files && !module_start(signature->data, signature->bytes, &compute))
+    agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
   ffi_entry *e = call_entry(vm, args[0], false, span);
   const agc_list *values = agc_as_list(vm, args[1]);
   if (agc_list_len(values) != e->inputs)
     agc_fail(vm, "RUNTIME-INTERNAL", "invalid bytecode: wrong number of native arguments", span);
+  if (e->module) return agc_native_call(vm, e->module, values, span);
   void *fn = e->by_pointer ? function_at(vm, agc_list_get(values, 0), span) : NULL;
   void *free_at = e->free_input >= 0 ? function_at(vm, agc_list_get(values, (size_t)e->free_input), span) : NULL;
   for (uint32_t k = 0; k < e->count; k++) {
