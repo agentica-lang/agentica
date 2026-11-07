@@ -28,8 +28,9 @@ MAX_DEFINES = 64
 MAX_LIBS = 32
 MAX_NAME = 128
 MAX_VALUE = 256
-# The most files the walk of native/ takes; the build key reads each one.
+# The most files and folders the walk of native/ takes; the build key reads each file.
 MAX_FILES = 4096
+MAX_FOLDERS = 1024
 # The first letter of a define and the others; a value and a library name.
 DEFINE_FIRST = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_".split(""))
 DEFINE_REST = Set.new("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".split(""))
@@ -64,44 +65,46 @@ export def parse(reading: Reader.Reading, value: Toml.Value, path: String) -> Re
   return ok(Build(sources: sources, defines: defines, libs: libs))
 end
 
-## The request for the build of `library` from the package folder `root` (a real path), for the system `os`: the files
-## of its native/ folder are listed, and every source must be one of them. A source that is not is PKG-NATIVE-MISSING
-## at its item (`native.NAME.build.sources[0]`); a link, a pipe or a device in native/, or more than 4096 files, is
-## PKG-NATIVE-BUILD at `native.NAME.build`.
+## The request for the build of `library` from the package folder `root` (a real path), for the system `os`. Its
+## files are not listed yet: `listed` does that when a file first uses the library, so an unused one costs nothing.
 export def request(
-  workspace: Workspace.Workspace,
   library: String,
   build: Build,
   root: String,
   os: String,
   file: String,
   cache_root: String,
-) -> Result[Workspace.BuildRequest]
-  key = Reader.child(Reader.child("native", library), "build")
-  files = try native_files(workspace, root, file, key)
-  for index in 0...build.sources.size
-    source = build.sources[index]
+) -> Workspace.BuildRequest
+  return Workspace.BuildRequest(
+    cache_root: cache_root,
+    library: library,
+    system: os,
+    file: file,
+    key: Reader.child(Reader.child("native", library), "build"),
+    root: root,
+    sources: build.sources,
+    defines: build.defines,
+    libs: build.libs,
+    files: [],
+  )
+end
+
+## The request with the files of its native/ folder, every source among them. A source that is not is
+## PKG-NATIVE-MISSING at its item (`native.NAME.build.sources[0]`); a link, a pipe or a device in native/, or more than
+## 4096 files or 1024 folders, is PKG-NATIVE-BUILD at `native.NAME.build`.
+export def listed(workspace: Workspace.Workspace, request: Workspace.BuildRequest) -> Result[Workspace.BuildRequest]
+  files = try native_files(workspace, request.root, request.file, request.key)
+  for index in 0...request.sources.size
+    source = request.sources[index]
     if !files.any? do |found: String| found == source end
-      at = Reader.item(Reader.child(key, "sources"), index)
+      at = Reader.item(Reader.child(request.key, "sources"), index)
       message = "the source #{source} is not a file of the package"
-      return error(Failure.fail_key(file, at, "PKG-NATIVE-MISSING", message, Failure.hint("put the file in native/")))
+      help = Failure.hint("put the file in native/")
+      return error(Failure.fail_key(request.file, at, "PKG-NATIVE-MISSING", message, help))
     end
   end
 
-  return ok(
-    Workspace.BuildRequest(
-      cache_root: cache_root,
-      library: library,
-      system: os,
-      file: file,
-      key: key,
-      root: root,
-      sources: build.sources,
-      defines: build.defines,
-      libs: build.libs,
-      files: files,
-    ),
-  )
+  return ok(request.with(files: files))
 end
 
 ## The file name of the built library of `name` on `system`, as the VM opens it.
@@ -182,6 +185,7 @@ export def native_files(
   end
 
   pending = [NATIVE_FOLDER]
+  folders = 0
   while pending.size > 0
     folder = pending[pending.size - 1]
     pending = pending.take(pending.size - 1)
@@ -193,14 +197,17 @@ export def native_files(
     for entry in entries.unwrap!
       path = Paths.join(folder, entry.name)
       case entry.kind
-        Workspace.EntryKind.Directory -> pending = pending.push(path)
+        Workspace.EntryKind.Directory ->
+          pending = pending.push(path)
+          folders += 1
+
         Workspace.EntryKind.File -> found = found.push(path)
         Workspace.EntryKind.Link -> return error(refused(file, key, "#{path} is a symbolic link"))
         Workspace.EntryKind.Other -> return error(refused(file, key, "#{path} is not a regular file"))
       end
 
-      if found.size > MAX_FILES
-        return error(refused(file, key, "native/ holds more than #{MAX_FILES} files"))
+      if found.size > MAX_FILES or folders > MAX_FOLDERS
+        return error(refused(file, key, "native/ holds more than #{MAX_FILES} files or #{MAX_FOLDERS} folders"))
       end
     end
   end

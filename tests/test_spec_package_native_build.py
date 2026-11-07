@@ -7,7 +7,9 @@ run everywhere; the ones that build and call the module need one and native call
 and the file and key path, never message text (AGENTS.md).
 """
 import json
+import os
 import re
+import shutil
 from pathlib import Path
 
 import pytest
@@ -38,7 +40,13 @@ BUILT = re.compile(r"built native adder: (.+)\n")
 
 
 def environment(ws, **extra):
-    return vm_environment({"AGENTICA_PATH": "", **ws.cache_variables, **extra})
+    """The bytecode cache of the runs is on, in a folder of the case (bytecode_entries)."""
+    return vm_environment({"AGENTICA_PATH": "", "AGENTICA_BUILD_DIR": str(ws.base / "build"), **ws.cache_variables,
+                           **extra})
+
+
+def bytecode_entries(ws):
+    return [path for path in (ws.base / "build").rglob("*.agcb")]
 
 
 def agentica(ws, *words, folder=None, **extra):
@@ -62,6 +70,16 @@ def module_folder(folder, table=TABLE, name="app", source=ADDER_C):
 def project(ws, **options):
     module_folder(ws.project, **options)
     (ws.project / "main.agc").write_text(MAIN, encoding="utf-8")
+
+
+def path_dependency(ws, source=ADDER_C):
+    """A project whose main file uses the adder module of the `path` dependency ../adder, locked."""
+    module_folder(ws.base / "adder", name="adder", source=source)
+    (ws.project / "agentica.toml").write_text('name = "app"\n\n[dependencies]\nadder = { path = "../adder" }\n',
+                                              encoding="utf-8")
+    (ws.project / "agentica.lock").write_text('version = 1\n\n[[package]]\nname = "adder"\npath = "../adder"\n',
+                                              encoding="utf-8")
+    (ws.project / "main.agc").write_text(MAIN.replace('"adder"', '"pkg/adder/adder"', 1), encoding="utf-8")
 
 
 def builds(ws):
@@ -180,12 +198,7 @@ def test_a_failed_build_is_pkg_native_build_and_leaves_no_entry(ws):
 @NATIVE_CALLS
 def test_install_builds_the_module_of_a_path_dependency_and_a_run_finds_it_built(ws):
     tool("cc")
-    module_folder(ws.base / "adder", name="adder")
-    (ws.project / "agentica.toml").write_text('name = "app"\n\n[dependencies]\nadder = { path = "../adder" }\n',
-                                              encoding="utf-8")
-    (ws.project / "agentica.lock").write_text('version = 1\n\n[[package]]\nname = "adder"\npath = "../adder"\n',
-                                              encoding="utf-8")
-    (ws.project / "main.agc").write_text(MAIN.replace('"adder"', '"pkg/adder/adder"', 1), encoding="utf-8")
+    path_dependency(ws)
     installed = agentica(ws, "install")
     assert (installed.code, installed.stdout) == (0, "in place adder@path\n"), installed.stderr
     assert BUILT.fullmatch(installed.stderr), installed.stderr
@@ -231,11 +244,19 @@ def test_a_library_no_file_uses_never_builds(ws):
 
 @NATIVE_CALLS
 @pytest.mark.parametrize("flag", ["--deny-native", "--deny-run", "--sandbox"])
-def test_a_run_that_may_not_open_native_code_never_builds(ws, flag):
+def test_a_run_that_may_not_open_native_code_never_builds_and_leaves_no_cached_program(ws, flag):
+    tool("cc")
     project(ws)
-    denied = agentica(ws, "--json", flag, str(ws.project / "main.agc"), **no_compiler(ws))
-    assert (denied.code, json.loads(denied.stderr)["code"]) == (2, "RUNTIME-NATIVE-DENIED"), denied.stderr
-    assert builds(ws) == []
+    main = str(ws.project / "main.agc")
+    found = problem(agentica(ws, "--json", flag, main, **no_compiler(ws)))
+    assert_at_key(found, "PKG-NATIVE-BUILD", ws.project / "agentica.toml", "native.adder.build")
+    found = problem(agentica(ws, "--json", flag, "compile", main, "-o", str(ws.base / "main.agcb")))
+    assert_at_key(found, "PKG-NATIVE-BUILD", ws.project / "agentica.toml", "native.adder.build")
+    assert builds(ws) == [] and not (ws.base / "main.agcb").exists()
+    # The bytecode cache is on: the refused run stored no program that a plain run could take.
+    ran = agentica(ws, main)
+    assert (ran.code, ran.stdout) == (0, "42\n"), ran.stderr
+    assert BUILT.fullmatch(ran.stderr)
 
 
 def test_a_lock_row_that_says_member_outside_its_workspace_never_builds(ws):
@@ -311,3 +332,63 @@ def test_another_define_or_compiler_is_another_entry_and_a_tampered_entry_is_pkg
     (newest / "receipt").write_text("0" * 64 + "\n", encoding="utf-8")
     found = problem(agentica(ws, "--json", "--no-cache", main, CC=compiler))
     assert_at_key(found, "PKG-NATIVE-BUILD", ws.project / "agentica.toml", "native.adder.build")
+
+
+@host_only(WINDOWS, "a named pipe is a POSIX file")
+def test_a_pipe_in_native_is_refused(ws):
+    project(ws)
+    os.mkfifo(ws.project / "native" / "fifo")
+    found = problem(agentica(ws, "--json", "check", str(ws.project / "main.agc")))
+    assert_at_key(found, "PKG-NATIVE-BUILD", ws.project / "agentica.toml", "native.adder.build")
+
+
+@NATIVE_CALLS
+def test_with_the_bytecode_cache_a_new_file_a_changed_library_and_a_removed_entry_are_seen(ws):
+    tool("cc")
+    project(ws)
+    main = str(ws.project / "main.agc")
+    assert BUILT.fullmatch(agentica(ws, main).stderr)
+    assert agentica(ws, main).stderr == ""
+    assert bytecode_entries(ws), "no bytecode cache entry"
+    # A new file of native/ is in the key, so the cached program misses and the module is built again.
+    (ws.project / "native" / "notes.txt").write_text("new\n", encoding="utf-8")
+    added = agentica(ws, main)
+    assert (added.code, added.stdout) == (0, "42\n") and BUILT.fullmatch(added.stderr), added.stderr
+    assert agentica(ws, main).stderr == ""
+    entry = ws.pkg_root / "native-build" / BUILT.fullmatch(added.stderr).group(1).split("/")[-2]
+    library = Path(BUILT.fullmatch(added.stderr).group(1))
+    built = library.read_bytes()
+    library.write_bytes(built + b"\0")
+    found = problem(agentica(ws, "--json", main))
+    assert_at_key(found, "PKG-NATIVE-BUILD", ws.project / "agentica.toml", "native.adder.build")
+    library.unlink()
+    found = problem(agentica(ws, "--json", main))
+    assert_at_key(found, "PKG-NATIVE-BUILD", ws.project / "agentica.toml", "native.adder.build")
+    # Removing the entry, as the help says, builds it again.
+    shutil.rmtree(entry)
+    again = agentica(ws, main)
+    assert (again.code, again.stdout) == (0, "42\n") and BUILT.fullmatch(again.stderr), again.stderr
+
+
+@NATIVE_CALLS
+def test_with_the_bytecode_cache_an_edit_to_a_hidden_header_of_a_path_dependency_builds_again(ws):
+    tool("cc")
+    path_dependency(ws, source=ADDER_C.replace('"offset.h"', '".offset.h"'))
+    (ws.base / "adder" / "native" / ".offset.h").write_text("#define OFFSET 0\n", encoding="utf-8")
+    main = str(ws.project / "main.agc")
+    ran = agentica(ws, main)
+    assert (ran.code, ran.stdout) == (0, "42\n") and BUILT.fullmatch(ran.stderr), ran.stderr
+    assert agentica(ws, main).stderr == ""
+    (ws.base / "adder" / "native" / ".offset.h").write_text("#define OFFSET 1\n", encoding="utf-8")
+    edited = agentica(ws, main)
+    assert (edited.code, edited.stdout) == (0, "43\n") and BUILT.fullmatch(edited.stderr), edited.stderr
+
+
+@NATIVE_CALLS
+def test_compile_builds_the_module_a_file_uses_and_the_bytecode_opens_it(ws):
+    tool("cc")
+    project(ws)
+    compiled = agentica(ws, "compile", str(ws.project / "main.agc"), "-o", str(ws.base / "main.agcb"))
+    assert compiled.code == 0 and BUILT.fullmatch(compiled.stderr), compiled.stderr
+    ran = agentica(ws, "run", "--", str(ws.base / "main.agcb"))
+    assert (ran.code, ran.stdout, ran.stderr) == (0, "42\n", "")

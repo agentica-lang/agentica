@@ -24,8 +24,8 @@
 ## `native.NAME.build`. The plain builder prints the compiler's standard error as it is, and `built native NAME: PATH`
 ## after a build, on stderr; the quiet one (for `--json` and `--ai`) prints nothing and puts the start of the
 ## compiler's standard error in the message instead. A builder keeps what it built or failed for the rest of the run
-## (an ATS table), so a module that many files use is built, and reported, once. app/ gives no builder to a run under
-## --deny-native, --deny-run or --sandbox, which could not open the module anyway.
+## (an ATS table), so a module that many files use is built, and reported, once. A run under --deny-native,
+## --deny-run or --sandbox, which could not open the module anyway, gets the `refusing` builder instead.
 
 import Diag from "../diagnostics/diagnostic"
 import Paths from "../modules/import_path"
@@ -70,9 +70,20 @@ export def builder(noted: Bool) -> Fn[Workspace.BuildRequest, Workspace.Built]
   return builder_of() do |request: Workspace.BuildRequest| remembered(memo, request, noted) end
 end
 
+## The builder of a command under `flag` (--deny-native, --deny-run or --sandbox), which may not open native code: it
+## starts no compiler and fails at the build table, so nothing names a module that was not built.
+export def refusing(flag: String) -> Fn[Workspace.BuildRequest, Workspace.Built]
+  return builder_of() do |request: Workspace.BuildRequest| refused(request, flag) end
+end
+
 # The identity of a function value: a block can only be written as the block of a call.
 def builder_of(f: Fn[Workspace.BuildRequest, Workspace.Built]) -> Fn[Workspace.BuildRequest, Workspace.Built]
   return f
+end
+
+def refused(request: Workspace.BuildRequest, flag: String) -> Workspace.Built
+  message = "#{flag} refuses native code, so the module is not built"
+  return Workspace.Built.Failed(fail(request, message, "run without #{flag} to build and use the module"))
 end
 
 # The answer kept for the library (`L` and its path, or `F` and the packed failure), else a build.
@@ -147,7 +158,10 @@ def search_lines() -> List[String]
   return lines
 end
 
-# Removes the temporary folders of builds that died, once they are an hour old.
+# Removes the temporary folders of builds that died, once they are an hour old. A build is bounded by
+# BUILD_TIMEOUT_MS (ten minutes), so only a run suspended (SIGSTOP, a sleeping laptop) for over an hour in the
+# middle of
+# a build can lose its folder here; its rename then fails and the build is PKG-NATIVE-BUILD, never a half entry.
 def sweep(base: String) -> Void
   names = Dir.list(base, FILE_TIMEOUT_MS)
   if !names.ok?

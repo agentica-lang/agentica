@@ -35,9 +35,11 @@ end
 ## presence the choice depended on: the cache notes whether each exists, not what it holds. watched, for a package, is
 ## the folder itself (the cache digests the names of its native/ files, so an added file is seen), every file of
 ## native/ (a library may load others), and the manifest when the package hash covers it. For the project it is the
-## declared files for this system and, when it builds a module, the files of its native/ folder: its manifest is in the
-## cache key already, and its folder is not walked. watched is empty when there is nothing to open. A built library is
-## not known here (it is built when a file uses it); the bytecode cache watches the ones the program names.
+## declared files for this system. A package read in place that builds a module (the project too) also watches its
+## folder and every file of native/ as the build walks it (NativeBuild.native_files: hidden ones too), so an edit or a
+## new file there is a miss; the project's manifest is in the cache key already. watched is empty when there is
+## nothing to open. A built library is not known here (it is built when a file uses it); the bytecode cache watches the
+## ones the program names.
 export struct Found
   targets: Map[String, Target]
   watched: List[String]
@@ -70,13 +72,13 @@ export def resolve(
   end
 
   probed = probes(manifest, os)
+  inputs: List[String] = []
+  if targets.values.any? do |target: Target| build?(target) end
+    inputs = [root].concat(build_inputs(workspace, root))
+  end
+
   if !package
     extra = downloaded_watched(manifest, lock, package_name, os, cache_root, targets)
-    inputs: List[String] = []
-    if targets.values.any? do |target: Target| build?(target) end
-      inputs = build_inputs(workspace, root)
-    end
-
     return Found(targets: targets, watched: files(targets).concat(inputs).concat(extra), probed: probed)
   end
 
@@ -92,13 +94,19 @@ export def resolve(
   end
 
   extra = downloaded_watched(manifest, lock, package_name, os, cache_root, targets)
-  return Found(targets: targets, watched: watched.concat(extra), probed: probed)
+  return Found(targets: targets, watched: watched.concat(inputs).concat(extra), probed: probed)
 end
 
-## What a Build target means once a file uses it: the library the Workspace built (or found built), the name as
-## written when the command does not build (`check`: the program is not run), or the packed failure.
+## What a Build target means once a file uses it: native/ is walked (a missing source or a link there is the packed
+## failure, even for `check`), then the library the Workspace built (or found built), the name as written when the
+## command does not build (`check`: the program is not run), or the packed failure.
 export def build_target(workspace: Workspace.Workspace, request: Workspace.BuildRequest, name: String) -> Target
-  case workspace.native_build.call(request)
+  listed = NativeBuild.listed(workspace, request)
+  if !listed.ok?
+    return Target.Unusable(listed.message)
+  end
+
+  case workspace.native_build.call(listed.unwrap!)
     Workspace.Built.Library(path) -> return Target.File(path)
     Workspace.Built.Skipped -> return Target.System(name)
     Workspace.Built.Failed(packed) -> return Target.Unusable(packed)
@@ -118,7 +126,7 @@ export def build_all(
   for library in manifest.natives
     case library.build
       some(build) ->
-        request = try NativeBuild.request(workspace, library.name, build, root, os, manifest.file, cache_root)
+        request = NativeBuild.request(library.name, build, root, os, manifest.file, cache_root)
         case build_target(workspace, request, library.name)
           Target.Unusable(packed) -> return error(packed)
           _ -> next
@@ -191,10 +199,8 @@ def target_of(
   buildable: Bool,
 ) -> Target
   if buildable and library.build.some?
-    case NativeBuild.request(workspace, library.name, library.build.unwrap!, root, os, manifest.file, cache_root)
-      ok(request) -> return Target.Build(request)
-      error(packed) -> return Target.Unusable(packed)
-    end
+    request = NativeBuild.request(library.name, library.build.unwrap!, root, os, manifest.file, cache_root)
+    return Target.Build(request)
   end
 
   here = Reader.child("native", library.name)
@@ -235,8 +241,9 @@ def build?(target: Target) -> Bool
   end
 end
 
-# The files of the project's native/ folder, which a build key covers: an edit to a source or a header it includes
-# makes the bytecode cache miss, and the build runs again. A walk that fails failed the build already: none here.
+# The files of native/ as the build walks them, which the build key covers: an edit to a source or a header it includes
+# makes the bytecode cache miss, and the build runs again. A walk that fails fails the build when a file uses the
+# library: none here.
 def build_inputs(workspace: Workspace.Workspace, root: String) -> List[String]
   case NativeBuild.native_files(workspace, root, "", "")
     ok(paths) -> return paths.map do |path: String| Paths.join(root, path) end

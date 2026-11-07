@@ -45,6 +45,7 @@ import Env from "../modules/link_env"
 import Linker from "../modules/linker"
 import Resolve from "../modules/resolve_import"
 import Workspace from "../modules/workspace"
+import NativeBuild from "../packages/native_build"
 import PackageCache from "../packages/package_cache"
 import PackageHash from "../packages/package_hash"
 import Ast from "../syntax/ast"
@@ -236,9 +237,17 @@ def built_libraries(settings: Env.Settings, modules: List[Linker.LinkedModule]) 
   return found
 end
 
-# The digest of the names of the native/ files of a package folder.
+# The digest of the names of the native/ files of a package folder: those the package hash covers, and those the walk
+# of a build reads (hidden ones too; a refused walk is its failure), so a new file of either kind is a miss.
 def names_digest(workspace: Workspace.Workspace, root: String) -> String
-  return CacheFiles.digest(PackageHash.native_files(workspace, root).join("\n").bytes)
+  hashed = PackageHash.native_files(workspace, root).join("\n")
+  walked = ""
+  case NativeBuild.native_files(workspace, root, "", "")
+    ok(paths) -> walked = paths.join("\n")
+    error(packed) -> walked = "refused #{packed}"
+  end
+
+  return CacheFiles.digest("#{hashed}\n\n#{walked}".bytes)
 end
 
 # The place of the entry and the key it must match. The inputs are read now, before the compile, so a file that changes

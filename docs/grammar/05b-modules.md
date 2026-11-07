@@ -685,13 +685,17 @@ import Sqlite from "pkg/sqlite/db"
     (`native.stats.build.defines[0]`), and so is a Windows device name (`con`,
     `nul`, `com1`) as the name of a library to build (at `native.NAME`). A
     source that is not a regular file of `native/` is `PKG-NATIVE-MISSING` at
-    its item. Every entry of `native/` is read, hidden ones included, and a
-    `native` that is not a folder, or a link, a pipe or a device in it, is
+    its item. Every entry of `native/` is read, hidden ones included, when a
+    file first uses the library; a `native` that is not a folder, a link, a
+    pipe or a device in it, or more than 4096 files or 1024 folders, is
     `PKG-NATIVE-BUILD` at `native.NAME.build`.
   - A run, `compile`, `test` and `install` run the user's C compiler on the
     C of `native/`, and only for the project, its workspace members and its
-    `path` dependencies; `check`, the queries and a run under
-    `--deny-native`, `--deny-run` or `--sandbox` never do. A run, `compile`
+    `path` dependencies; `check` and the queries never do. Under
+    `--deny-native`, `--deny-run` or `--sandbox` no compiler starts and a
+    library to build that a file uses is `PKG-NATIVE-BUILD` (the program
+    could not open it), so no program names a module that was not built. A
+    run, `compile`
     and `test` build a library when a file of the program first uses it, so
     a library that no file uses is never built; `install` builds them all.
     The compiler is the words of `CC` (split at spaces, with no quoting), else
@@ -721,8 +725,11 @@ import Sqlite from "pkg/sqlite/db"
     no library. Its standard error is printed as it is (the start of it in the
     message with `--json` and `--ai`), and a new build prints
     `built native NAME: PATH` on stderr. The bytecode cache of
-    `agentica FILE.agc` watches the files of `native/`, the built libraries,
-    `CC` and the four search variables, so an edit builds again.
+    `agentica FILE.agc` watches, for each package that builds, every file of
+    `native/` and its names (hidden ones too), the built libraries, `CC` and
+    the four search variables, so an edit or a new file in `native/` builds
+    again. A compiler replaced at the same path is seen only when the program
+    is compiled again.
 - The stored name of a package file in the `.agcb` file is
   `pkg/<name>@<tag>/path/in/package.agc`, such as `pkg/sqlite@v1.2.0/db.agc`
   (the path is from the package folder, without the `subdir`); for a package

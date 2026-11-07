@@ -60,8 +60,9 @@ end
   `NAME[=VALUE]`; libs are names for `-l`. A bad item is
   `PKG-MANIFEST-INVALID` at its key path, a missing source
   `PKG-NATIVE-MISSING`, a failed build `PKG-NATIVE-BUILD` at
-  `native.NAME.build`. A run builds a library when a file first uses it, and
-  not under `--deny-native`, `--deny-run` or `--sandbox`. Keep your own headers
+  `native.NAME.build`. A run builds a library when a file first uses it;
+  under `--deny-native`, `--deny-run` or `--sandbox` that is
+  `PKG-NATIVE-BUILD`, with no compiler started. Keep your own headers
   under `native/`: the cache key does not cover system headers, installed
   libraries or the environment beyond `CPATH`, `C_INCLUDE_PATH`,
   `CPLUS_INCLUDE_PATH` and `LIBRARY_PATH`; to rebuild, remove the entry or

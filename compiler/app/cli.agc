@@ -155,15 +155,18 @@ end
 # The session whose workspace builds the native modules of the packages read in place from their C sources
 # (io/native_build.agc): a run, `compile`, `test` and `install` do, so the program they run or write opens the library;
 # `check`, the queries and the other commands never start a compiler, and neither does a command under --deny-native,
-# --deny-run or --sandbox (the VM refuses the module there anyway). With `--json` or `--ai` the builder prints nothing,
-# so stderr holds only the diagnostic.
+# --deny-run or --sandbox: its builder refuses the module (the VM would refuse it anyway), so no program, bytecode
+# cache entry or `compile` output names a module that was not built. With `--json` or `--ai` the builder prints
+# nothing, so stderr holds only the diagnostic.
 def building(session: Session) -> Session
   denied = ["--deny-native", "--deny-run", "--sandbox"]
-  if session.options.deny.any? do |flag: String| denied.include?(flag) end
-    return session
+  builder: Fn[Workspace.BuildRequest, Workspace.Built] = NativeBuild.builder(session.options.style == "plain")
+  for flag in session.options.deny
+    if denied.include?(flag)
+      builder = NativeBuild.refusing(flag)
+    end
   end
 
-  builder: Fn[Workspace.BuildRequest, Workspace.Built] = NativeBuild.builder(session.options.style == "plain")
   workspace = session.settings.workspace.with(native_build: builder)
   return session.with(settings: session.settings.with(workspace: workspace))
 end
