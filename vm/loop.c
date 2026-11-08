@@ -1913,7 +1913,9 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
     }
     if (!deadline) return AGC_LOCK_TAKEN;
     if (now >= deadline) return AGC_LOCK_TIMEOUT;
-    *timeout_ms = (int64_t)(deadline - now);
+    /* The longest timeout (INT64_MAX) left whole: its deadline has one more millisecond (agc_deadline_ms). */
+    uint64_t left = deadline - now;
+    *timeout_ms = left > (uint64_t)INT64_MAX ? INT64_MAX : (int64_t)left;
     return AGC_LOCK_TAKEN;
   }
   if (!deadline) {

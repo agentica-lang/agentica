@@ -248,6 +248,19 @@ static void race_against_wake(bool pending) {
   assert(uv_thread_join(&thread) == 0);
 }
 
+/* A task that takes a free handle after a wait gets what is left of its lock deadline as the timeout of its job. A
+   deadline more than INT64_MAX ms away (the longest timeout, taken in the millisecond it was set: agc_deadline_ms adds
+   one) leaves INT64_MAX, never a negative timeout, which would run the job untimed. */
+static void test_lock_deadline_left(void) {
+  agc_resource *handle = agc_alloc(sizeof(agc_resource));
+  agc_task *t = agc_new_task(&vm);
+  vm.task = t;
+  t->lock_deadline = UINT64_MAX;
+  int64_t timeout = 5;
+  assert(agc_handle_wait(&vm, handle, &timeout) == AGC_LOCK_TAKEN);
+  assert(timeout == INT64_MAX && !t->lock_deadline);
+}
+
 int main(void) {
   agc_test_deadline(300);
   agc_init();
@@ -256,6 +269,7 @@ int main(void) {
   test_order();
   test_disarm_and_future();
   test_pending();
+  test_lock_deadline_left();
   agc_share(&vm);
   race_against_wake(false);
   race_against_wake(true);
