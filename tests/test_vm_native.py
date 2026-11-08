@@ -703,6 +703,26 @@ end
     assert (result.code, result.stdout, result.stderr) == (0, "main returns\n", "")
 
 
+# Native.close of a resource with a slow free runs the free on the scheduler and returns after it: peer_freeing is 0
+# before, and 2 (the free finished) when the close returns. A second close does not free again (a double free of the
+# block would crash the run) and the end of the run does not either.
+@NATIVE_CALLS
+@pytest.mark.parametrize("schedulers", ["1", "4"])
+def test_native_close_returns_after_a_slow_free_ran_once(tmp_path, peer, schedulers):
+    text = SLOW_HANDLER.format(library=literal(peer), kind="def", ms=0) + """def main() -> Void
+  slow = peer_slow_open(100).unwrap!
+  puts(peer_freeing())
+  Native.close(slow)
+  puts(peer_freeing())
+  puts(Native.closed?(slow))
+  Native.close(slow)
+  puts(peer_freeing())
+end
+"""
+    result = agentica("--schedulers", schedulers, program(tmp_path, text), timeout=scaled(60))
+    assert (result.code, result.stdout, result.stderr) == (0, "0\n2\ntrue\n2\n", "")
+
+
 # A Hook whose free function calls the callback that C stored, and the callback's function, which must never run.
 # peer_store_fn stores it; peer_ctor_new gets it as a constructor argument, as lua_newstate or g_hash_table_new_full
 # do. %s is the library.
