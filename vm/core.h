@@ -342,9 +342,10 @@ void agc_io_pause(agc_vm *vm, uint64_t ms);
 uint64_t agc_clock_ms(void);
 /* The OS side of a clock that costs no system call (vm/clock_posix.c, vm/clock_windows.c): Linux's coarse monotonic
    clock, which is never ahead of agc_clock_ms. It steps once a tick, but a step can come late, so it lags by up to
-   about two ticks, and its lag swings by about a tick (an HPET host at HZ 250: lag 1.5-5.6 ms, swing 4.02 ms). Fills
-   NOW_MS and TICK_MS (its resolution, rounded up); false where the system has no such clock, its tick is over 10 ms, or
-   an exact read is cheap (no system call: a TSC or an arm64 counter through the vDSO), decided once per process. */
+   about two ticks, and its lag swings by about a tick (for example, an HPET host at HZ 250: lag 1.5-6.8 ms, swing
+   4.0-4.3 ms). Fills NOW_MS and TICK_MS (its resolution, rounded up); false where the system has no such clock, its
+   tick is over 10 ms, or an exact read is cheap (no system call: a TSC or an arm64 counter through the vDSO), decided
+   once per process. */
 bool agc_coarse_clock_ms(uint64_t *now_ms, uint64_t *tick_ms);
 /* The tick of the event loop's clock: agc_coarse_clock_ms's tick where it answers, as libuv's loop time is then the
    coarse clock (agc_uv_clock_getres), else 0, where it is CLOCK_MONOTONIC. */

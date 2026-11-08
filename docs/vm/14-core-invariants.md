@@ -97,8 +97,8 @@ Known exceptions (the mechanisms are in §10.2.2):
   counts whole milliseconds. On Linux, where an exact read is a system call
   (timed once per process: a clock source with no vDSO path, such as an HPET),
   it is the coarse monotonic clock (`agc_uv_clock_getres`,
-  `vm/clock_posix.c`), which costs no clock source read; libuv gets
-  `CLOCK_MONOTONIC` everywhere else. `timer_length` adds the clock's lag (a
+  `vm/clock_posix.c`), which costs no clock source read; on other Linux hosts
+  libuv gets `CLOCK_MONOTONIC`. `timer_length` adds the clock's lag (a
   millisecond, and with the coarse clock its tick and a millisecond more), so
   the timeout never ends early; with the coarse clock it may end up to about
   two ticks and 2 ms late.
