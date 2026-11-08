@@ -353,6 +353,13 @@ end
 
 def rewrite_call(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
   parts = node.name.split(".")
+  if node.piped and parts.size == 3 and !Resolve.family?(cx, parts[0])
+    # The parser makes x |> A.B.c() the piped call A.B.c without knowing the families (Parser.pipe_insert).
+    site = Failure.Site(file: cx.me.file, span: node.span)
+    help = Failure.hint(Parser.PIPE_TARGET_HINT)
+    return error(Failure.fail_at(site, Parser.PIPE_TARGET_CODE, Parser.PIPE_TARGET_MESSAGE, help))
+  end
+
   if parts.size == 2 and Resolve.constant_identity(cx, parts[0]) != ""
     return rewrite_constant_member(cx, node, Resolve.constant_identity(cx, parts[0]), parts[0].length, parts[1])
   end

@@ -123,6 +123,7 @@ PIPE_TARGETS = [
     ("1 |> (IO.gets)", (12, 21)),
     ("3 |> U.each2 do |y: Int| y end", (12, 37)),
     ("3 |> U.each2", (12, 19)),
+    ("a |> Color.Red.name()", (12, 28)),
 ]
 
 

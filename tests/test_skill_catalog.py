@@ -4,9 +4,9 @@ The site examples run in CI; the programming skill (.agents/skills/agentica-prog
 a builtin could leave it stale. This test reads every code block and every `code span` of the skill, takes each
 builtin name it writes (`Namespace.fn`, `Family.Member.fn` and `Family.Member`, with a capitalized namespace) and checks
 it against the catalog of the binary (`agentica help --json`, and `agentica help NAME` for the Ruby aliases such as
-`String.strip`). A namespace that is no builtin one must be declared or imported in the skill (`import HTTP from
-"std/http"`, `struct User`) or be in IGNORED_NAMESPACES; a name the skill shows on purpose as one that does not exist
-is in IGNORED_NAMES.
+`String.strip`). A namespace that is no builtin one must be declared, imported or set as a constant in the same file
+(`import HTTP from "std/http"`, `struct User`, `LIMIT = 10`) or be in IGNORED_NAMESPACES; a name the skill shows on
+purpose as one that does not exist is in IGNORED_NAMES.
 """
 import json
 import re
@@ -19,13 +19,21 @@ SKILL = ROOT / ".agents" / "skills" / "agentica-programming"
 # Namespaces of the examples that are neither builtins nor declared in a code block of the skill.
 IGNORED_NAMESPACES = {
     "Alias",  # Alias.f, the form of a call through an import alias
+    "CGI",  # Ruby's CGI.escape_html, shown as what the builtin replaces
     "Checked",  # fields of std/analysis results in prose
     "Enumerator",  # Ruby's Enumerator.new, shown as what to avoid
+    "FILE",  # a placeholder of a command line, FILE.agc
     "Hash",  # Ruby's Hash.new, shown as what to avoid
+    "NAME",  # a placeholder constant of a prose example, NAME.size
+    "OUT",  # a placeholder of a command line, OUT.agcb
+    "PID",  # a placeholder of a file name, PID.map
+    "Session",  # a field of the std/analysis Session in prose
     "Shape",  # a struct of a prose example (Shape.codec)
     "Struct",  # Ruby's Struct.new, and Type.size of a prose example
     "TypeAt",  # fields of std/analysis results in prose
     "Url",  # a module of a prose example
+    "User",  # a struct field in the output of agentica refs
+    "Util",  # an import alias of a prose example
     "Workspace",  # fields of std/analysis results in prose
 }
 
@@ -39,6 +47,8 @@ REFERENCE = re.compile(
     r"(?<![\w.:@&$])([A-Z][A-Za-z0-9]*)\.([A-Za-z_][A-Za-z0-9_]*[?!]?)(?:\.([A-Za-z_][A-Za-z0-9_]*[?!]?))?"
 )
 DECLARED = re.compile(r"\b(?:import|enum|struct|type|resource)\s+([A-Z][A-Za-z0-9]*)")
+# A module constant, NAME = ... or NAME: Type = ...
+CONSTANT = re.compile(r"^\s*([A-Z][A-Z0-9_]*)\s*(?::[^=\n]*)?=[^=]", re.M)
 
 
 @lru_cache(maxsize=None)
@@ -72,8 +82,6 @@ def stale_names(texts, declared=frozenset()):
             namespace, second, third = match.groups()
             if len(namespace) == 1 or namespace in declared or namespace in IGNORED_NAMESPACES:
                 continue
-            if namespace.isupper() and namespace not in namespaces:
-                continue  # a module constant, NAME.size
             if second[0].isupper():
                 # Family.Member or Family.Member.fn; another Type.Name is an enum variant or a type (LogLevel.Info,
                 # C.Pointer), which the checker owns.
@@ -94,13 +102,13 @@ def stale_names(texts, declared=frozenset()):
 def test_every_builtin_name_of_the_programming_skill_is_in_the_catalog():
     files = sorted(SKILL.rglob("*.md"))
     assert files
-    texts = {path: path.read_text(encoding="utf-8") for path in files}
-    declared = frozenset(name for text in texts.values() for name in DECLARED.findall(text))
-    stale = {
-        str(path.relative_to(ROOT)): names
-        for path, text in texts.items()
-        if (names := stale_names(code_of(text), declared))
-    }
+    stale = {}
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        # A file's own imports, types and constants; another file's do not count.
+        declared = frozenset(DECLARED.findall(text) + CONSTANT.findall(text))
+        if names := stale_names(code_of(text), declared):
+            stale[str(path.relative_to(ROOT))] = names
     assert stale == {}
 
 
@@ -110,13 +118,23 @@ def test_an_old_or_misspelled_builtin_name_is_stale():
             "Write `OpenSSL.Cipher.aes_256_gcm_encrypt(key, iv, data)`, `OpenSSL.Random.uuid` or `s.strip`.",
             "```agentica",
             "sealed = Cipher.aes_256_gcm_encrypt(key, iv, data)",
+            "tag = HMAC.sha256(key, data)",
+            "key = KDF.scrypt(password, salt, 16384, 8, 1, 32)",
+            "mac = CMAC.aes(key, data)",
+            "sealed_key = RSA.public_encrypt_oaep(pem, data)",
+            "id = SecureRandom.uuid",
             "mac = OpenSSL.Hmac.sha256(key, data)",
             "digest = OpenSSL.Digest.sha257(data)",
             "```",
         ]
     )
     assert stale_names(code_of(text)) == [
+        "CMAC.aes",
         "Cipher.aes_256_gcm_encrypt",
+        "HMAC.sha256",
+        "KDF.scrypt",
         "OpenSSL.Digest.sha257",
         "OpenSSL.Hmac",
+        "RSA.public_encrypt_oaep",
+        "SecureRandom.uuid",
     ]

@@ -2,11 +2,11 @@
  * The crypto builtins (agc_crypto_builtins), the OpenSSL family: the
  * OpenSSL.Digest hashes of bytes (MD5, SHA-1, SHA-256, SHA-512, as bytes and
  * hex), HMACs (RFC 2104), the constant-time OpenSSL.HMAC.secure_compare,
- * OpenSSL.Random, Triple DES CBC and AES-256-GCM (OpenSSL.Cipher), CMAC, PBKDF2
- * and scrypt (OpenSSL.KDF, compute jobs), RSA-OAEP (OpenSSL.RSA), all from the
- * OpenSSL adapter (digest.h), and the Base64 and hex text
- * forms in plain C. Service layer. Design: docs/vm/02-reference-behavior.md
- * §2.3; Base64 and hex follow RFC 4648 and Ruby, OpenSSL.Random.uuid RFC 9562.
+ * OpenSSL.Random, Triple DES CBC and AES-256-GCM (OpenSSL.Cipher), CMAC,
+ * PBKDF2 and scrypt (OpenSSL.KDF, compute jobs), RSA-OAEP (OpenSSL.RSA), all
+ * from the OpenSSL adapter (digest.h), and the Base64 and hex text forms in
+ * plain C. Service layer. Design: docs/vm/02-reference-behavior.md §2.3;
+ * Base64 and hex follow RFC 4648 and Ruby, OpenSSL.Random.uuid RFC 9562.
  */
 #include "services.h"
 #include "digest.h"
