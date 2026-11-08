@@ -348,7 +348,8 @@ Every failure is an error value. The checks run in this order:
   directory or file is not an error.
 - `Path.join` checks every part and refuses an absolute later part.
   `Path.resolve` drops `.`, pops `..` (never above `/`) and collapses `/`; the
-  result ends in `/` when the input did, or ended in `.` or `..`.
+  result ends in `/` only when the input did. `Path.cwd` has no trailing `/`
+  except at a root.
 - `Path.real` is `uv_fs_realpath` in a pool job with no deadline. The path must
   exist; a link loop, too many links or a non-directory in the middle fail
   (`filesystem: cannot resolve path`). An empty or NUL path gives

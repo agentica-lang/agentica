@@ -2250,11 +2250,30 @@ static agc_value builtin_real(agc_vm *vm, agc_value *args, uint32_t span) {
   return start(vm, o, agc_void(), NO_DEADLINE);
 }
 
+/* Whether the stored working folder (always ending in '/') is a root: "/"; on Windows also a drive root "X:/"
+   or a share root "//host/share/" (exactly two parts after "//"). */
+static bool cwd_root(const agc_string *cwd) {
+  size_t len = cwd->bytes;
+  if (len == 1) return true;
+#ifdef _WIN32
+  if (len == 3 && cwd->data[1] == ':') return true;
+  if (len < 6 || cwd->data[0] != '/' || cwd->data[1] != '/') return false;
+  const char *host_end = memchr(cwd->data + 2, '/', len - 2);
+  if (!host_end || host_end == cwd->data + 2) return false;
+  const char *share_end = memchr(host_end + 1, '/', (size_t)(cwd->data + len - (host_end + 1)));
+  return share_end == cwd->data + len - 1 && share_end > host_end + 1;
+#else
+  return false;
+#endif
+}
+
 static agc_value builtin_cwd(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
   const agc_string *cwd = cwd_of(vm);
-  return agc_result_value(true, agc_string_value(lossy(cwd->data, cwd->bytes)));
+  /* The stored form ends in '/' so that relative paths join onto it; the answer drops it except at a root. */
+  size_t len = cwd_root(cwd) ? cwd->bytes : cwd->bytes - 1;
+  return agc_result_value(true, agc_string_value(lossy(cwd->data, len)));
 }
 
 static bool collapse_leading(const text *t) {
@@ -2336,6 +2355,7 @@ static agc_value builtin_resolve(agc_vm *vm, agc_value *args, uint32_t span) {
   size_t *starts = agc_alloc_atomic(agc_size_mul(full.len, sizeof(size_t)));
   size_t *lens = agc_alloc_atomic(agc_size_mul(full.len, sizeof(size_t)));
   size_t depth = 0;
+  /* Only a trailing '/' of the input stays, as GetFullPathNameW keeps it on Windows; "." or ".." adds none. */
   bool dir_form = full.data[full.len - 1] == '/';
   for (size_t at = 0; at < full.len;) {
     if (full.data[at] == '/') {
@@ -2346,10 +2366,8 @@ static agc_value builtin_resolve(agc_vm *vm, agc_value *args, uint32_t span) {
     while (end < full.len && full.data[end] != '/') end++;
     const char *name = full.data + at;
     size_t len = end - at;
-    bool last = end == full.len;
     if (same_text(name, len, ".") || same_text(name, len, "..")) {
       if (len == 2 && depth > 0) depth--;
-      if (last) dir_form = true;
     } else {
       starts[depth] = at;
       lens[depth] = len;

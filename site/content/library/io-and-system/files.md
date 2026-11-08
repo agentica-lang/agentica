@@ -362,7 +362,7 @@ Path.cwd() -> Result[String]
 Path.resolve(path: String) -> Result[String]
 ```
 
-`cwd` gives the current directory. `resolve` makes an absolute path, without following links.
+`cwd` gives the current directory. `resolve` makes an absolute path, without following links. Neither ends in `/` except at a root; `resolve` keeps a trailing `/` only when the path ends in one.
 
 ## Path.real
 

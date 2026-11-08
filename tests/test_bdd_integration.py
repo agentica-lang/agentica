@@ -662,7 +662,7 @@ def test_programs_under_test_output_without_a_flush_wrong_output_the_output_limi
             'Then I receive the line "never" within ' + ms(5000) + ' milliseconds\n'
             + LITERAL_INPUT_SCENARIO
             + 'Scenario: working directory\nGiven the Agentica program "where.agc"\n'
-            'Then I receive the line "' + str(directory) + '/" within ' + ms(5000) + ' milliseconds\n'
+            'Then I receive the line "' + str(directory) + '" within ' + ms(5000) + ' milliseconds\n'
             'Scenario: later\nGiven the Agentica program "output.agc"\n'
             "Then the program exits with code 3 within " + ms(5000) + " milliseconds\n"
             "And stdout is:\n" + doc("actual\n") + "And stderr is:\n" + doc("warning\n")
