@@ -197,8 +197,8 @@ void agc_timers_settle(agc_vm *vm) { (void)settle(vm); }
 
 /* Answers "the deadline is ahead" from the coarse clock (agc_coarse_clock_ms), which costs no read of the clock
    source: on a machine with no usable TSC (an HPET) that read is a system call of about a microsecond. The coarse clock
-   is never ahead of agc_clock_ms and lags it by at most its resolution, a tick; two ticks plus 2 ms of margin make
-   "before" safe. */
+   is never ahead of agc_clock_ms and lags it by up to about two ticks (agc_coarse_clock_ms); two ticks plus 2 ms of
+   margin make "before" safe. */
 static bool clock_before(uint64_t due_ms) {
   uint64_t now, tick;
   if (!agc_coarse_clock_ms(&now, &tick)) return false;
@@ -235,10 +235,11 @@ uint64_t agc_timers_next_due(const agc_vm *vm) {
   return atomic_load_explicit(&vm->timers.next_due, memory_order_relaxed);
 }
 
-/* The latest exact read of the monotonic clock in this process, in ms: agc_clock_ms and Time.monotonic_ns raise it,
-   and only agc_clock_coarse_ms reads it, where libuv's clock and Time.monotonic_ns are both CLOCK_MONOTONIC, the
-   clock that the coarse one follows (Linux). It is the process's, as the clock is. Relaxed: a reader that must see a
-   raise (the task that a timer woke, after the read that fired it) is ordered after it by the wake. */
+/* The latest read of the monotonic clock in this process, in ms, never ahead of the exact clock: agc_clock_ms
+   (uv_hrtime) and Time.monotonic_ns raise it with exact reads of CLOCK_MONOTONIC, the clock that the coarse one
+   follows (Linux), and a job timer's fire with the loop's time, which is the coarse clock there. Only
+   agc_clock_coarse_ms reads it. It is the process's, as the clock is. Relaxed: a reader that must see a raise (the
+   task that a timer woke, after the read that fired it) is ordered after it by the wake. */
 static _Atomic uint64_t *clock_floor(void) {
   static _Atomic uint64_t floor_ms;
   return &floor_ms;
@@ -252,12 +253,9 @@ void agc_clock_note_ms(uint64_t ms) {
   }
 }
 
-/* The coarse clock is used only where its tick is this short, the bound on how far Time.monotonic_ms lags. */
-#define COARSE_TICK_MAX_MS 10
-
 bool agc_clock_coarse_ms(uint64_t *now_ms) {
   uint64_t now, tick;
-  if (!agc_coarse_clock_ms(&now, &tick) || tick > COARSE_TICK_MAX_MS) return false;
+  if (!agc_coarse_clock_ms(&now, &tick)) return false;
   uint64_t floor = atomic_load_explicit(clock_floor(), memory_order_relaxed);
   *now_ms = now > floor ? now : floor;
   return true;

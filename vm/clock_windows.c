@@ -11,4 +11,6 @@ bool agc_coarse_clock_ms(uint64_t *now_ms, uint64_t *tick_ms) {
   (void)tick_ms;
   return false;
 }
+
+uint64_t agc_loop_clock_tick_ms(void) { return 0; }
 #endif

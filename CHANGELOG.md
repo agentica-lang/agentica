@@ -39,6 +39,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   responses skip a hop; WebSocket connections of `std/http` send as before.
 - `String#slice` and `String#at` on non-ASCII text are faster: a slice to the
   end does not walk the text, and runs of ASCII are crossed 8 bytes at a time.
+- On a Linux host where reading the clock is a system call (an HPET clock
+  source), the event loop reads a cheaper clock, so a server makes fewer system
+  calls per request; there an I/O timeout, or a `Task.sleep` at one scheduler,
+  may end up to about two kernel ticks and 2 ms late.
+  `Time.monotonic_ms` reads the exact clock again on other Linux hosts.
+
+### Fixed
+
+- An I/O timeout never ends before its time; it could end up to 1 ms early.
 
 ## [0.26.1] - 2026-11-07
 

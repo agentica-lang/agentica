@@ -287,7 +287,7 @@ def app(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
 end
 
 def main() -> Void
-  options = HttpServerOptions(request_timeout_ms: 2000, idle_timeout_ms: 10000, max_connections: 16)
+  options = HttpServerOptions(request_timeout_ms: WRITE_MS, idle_timeout_ms: 10000, max_connections: 16)
   server = Result.unwrap!(HTTP.serve("127.0.0.1", 0, &app, options))
   certs = System.args()[0]
   secure = Result.unwrap!(HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, &app, options))
@@ -302,9 +302,17 @@ end
 """
 
 
+# The server's request_timeout_ms, which bounds each write: the 16 MB messages must reach the peer within it.
+WRITE_MS = scaled(2000)
+assert "WRITE_MS" in SERVER_PROGRAM
+# The receive buffer of a peer that reads a 16 MB message (Linux doubles it): small, as on macOS, so the write is
+# partial many times.
+SMALL_BUFFER = 65536
+
+
 def start_server(tmp_path, adopt, flags=()):
     source = tmp_path / "websocket-server.agc"
-    source.write_text(SERVER_PROGRAM, encoding="utf-8")
+    source.write_text(SERVER_PROGRAM.replace("WRITE_MS", str(WRITE_MS)), encoding="utf-8")
     vm = adopt(start_vm(compile_agc(source, tmp_path / "websocket-server.agcb"), CERTS, flags=flags, stdin=True))
     port, tls_port = vm.next_line().split()
     return vm, int(port), int(tls_port)
@@ -638,7 +646,7 @@ def test_a_close_of_the_session_queued_before_the_close_of_the_peer_is_our_close
     then closes without reading. The writer writes A and the close of the session, not B, and not an answer to the
     peer's close: the handshake is complete."""
     vm, port, _ = start_server(tmp_path, adopt, flags)
-    with Client(port, timeout=scaled(30)) as c:
+    with Client(port, timeout=scaled(30), receive_buffer=SMALL_BUFFER) as c:
         c.connect("/order")
         assert vm.next_line() == "queued"
         c.close_with(1000)
@@ -674,7 +682,7 @@ def test_everything_the_session_queued_before_the_close_of_the_peer_goes_out_bef
     """The writer is blocked in a write of 16 MB while the session queues "A", five messages of 100 KB and 300 of 1 KB
     (about 800 KB, many writes); the peer then closes without reading. All of it arrives, in order, then the answer."""
     vm, port, _ = start_server(tmp_path, adopt, flags)
-    with Client(port, timeout=scaled(30)) as c:
+    with Client(port, timeout=scaled(30), receive_buffer=SMALL_BUFFER) as c:
         c.connect("/pile")
         assert vm.next_line() == "queued"
         c.close_with(1001)

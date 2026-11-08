@@ -57,7 +57,7 @@ SWEEP_MODE = os.environ.get("AGENTICA_SWEEP", "")
 if SWEEP_MODE not in ("", "full", "sampled", "ends"):
     raise RuntimeError("AGENTICA_SWEEP must be full, sampled or ends, not %r" % SWEEP_MODE)
 SAMPLED_SWEEP = SWEEP_MODE == "sampled"
-# Fixtures whose every run is costly (1000 file rounds; three fixed sleeps): they get the `ends` sweep in every mode but
+# Fixtures whose every run is costly (1000 file rounds; fixed sleeps): they get the `ends` sweep in every mode but
 # full (the weekly sweep and the release), as the stop of a Task.map and of an HTTP client under --max-steps is swept by
 # task-map-steps and http-client; only the full sweep stops a Task.map item that holds a buffered file.
 ENDS_ONLY_FIXTURES = {"task-map-flushed.agc", "http-client-queue.agc", "http-server-stream.agc"}
