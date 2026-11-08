@@ -183,9 +183,17 @@ static agc_task *leave_with(agc_runq *q, agc_task *t, bool chain) {
   return t;
 }
 
-/* Under the lock: the caller is about to wait. */
+/* Under the lock: the caller is about to wait. The one that makes every scheduler idle wakes the I/O thread for the
+   stall check (on_idle, a uv_async_send) after the unlock, as a push signals (§16.3, "Wake after publish"), so no
+   other thread waits on the lock for that system call. The caller then takes the lock again and must test its wait
+   condition again before it waits: a push, a nudge or the end that falls in the gap signals no waiter, and that test
+   finds it. The idle count was published under the lock before the wake, so the I/O thread sees it; in the gap the
+   caller makes no work, so a stall check that counts it as waiting is still right. */
 static void enter_idle(agc_runq *q) {
-  if (++q->idle == q->count && q->on_idle) q->on_idle(q->on_idle_data);
+  if (++q->idle != q->count || !q->on_idle) return;
+  uv_mutex_unlock(&q->lock);
+  q->on_idle(q->on_idle_data);
+  uv_mutex_lock(&q->lock);
 }
 
 static void leave_idle(agc_runq *q) {
@@ -218,8 +226,12 @@ agc_task *agc_runq_wait_until(agc_runq *q, uint64_t due_ms) {
   while (must_wait(q)) {
     uint64_t now = agc_clock_ms();
     if (now >= due_ms) break;
-    if (!idle) enter_idle(q);
-    idle = true;
+    if (!idle) {
+      idle = true;
+      /* enter_idle may drop the lock: test the queue and the clock again before the wait. */
+      enter_idle(q);
+      continue;
+    }
     /* At most an hour per wait, so the nanoseconds never overflow; the loop waits again for the rest. */
     uint64_t left = due_ms - now < WAIT_SLICE_MS ? due_ms - now : WAIT_SLICE_MS;
     (void)uv_cond_timedwait(&q->wake, &q->lock, left * UINT64_C(1000000));
@@ -382,8 +394,8 @@ void agc_runq_drop_scheduler(agc_runq *q) {
   uv_mutex_unlock(&q->lock);
 }
 
-/* FN runs under the queue's lock, so it must take no lock of the VM: the I/O thread's wake (uv_async_send) takes none.
-   Set before the first scheduler thread starts. */
+/* FN runs without the queue's lock, on the scheduler that makes every scheduler idle, just before it waits
+   (enter_idle). Set before the first scheduler thread starts. */
 void agc_runq_on_idle(agc_runq *q, void (*fn)(void *data), void *data) {
   q->on_idle = fn;
   q->on_idle_data = data;

@@ -489,7 +489,9 @@ one exit path are as in §16.1 to §16.6. What differs:
   inbox's own, which is unref'd. The I/O thread then reads the epoch again
   (`agc_runq_still_quiet`). Only the I/O thread makes work in that state, so the
   run has stalled and ends with the `RUNTIME-INTERNAL` of N = 1. The last
-  scheduler to go idle wakes the I/O thread for the check (`agc_runq_on_idle`).
+  scheduler to go idle wakes the I/O thread for the check (`agc_runq_on_idle`),
+  after it drops the queue's lock (wake after publish); it then tests the queue
+  again under the lock before it waits.
 - **Wakes between schedulers.** The run queue stays one global FIFO, with no
   local queues, no stealing and no thread affinity. Three things keep a wake
   cheap (`vm/task.c`, `vm/runq.c`):
