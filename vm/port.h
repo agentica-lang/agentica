@@ -767,11 +767,12 @@ typedef enum { AGC_RECV_VALUE, AGC_RECV_CLOSED, AGC_RECV_TIMED_OUT, AGC_RECV_WAI
 agc_recv_status agc_channel_receive(agc_vm *vm, agc_channel *c, int64_t timeout_ms, agc_value *out);
 
 /* Time.monotonic_ms without a read of the clock source (vm/timers.c): where the system has a coarse monotonic clock
-   with a tick of at most 10 ms (Linux, agc_coarse_clock_ms), *NOW_MS is the coarse time or the latest exact read of
-   the monotonic clock in this process (agc_clock_ms, or a ms that agc_clock_note_ms got), whichever is later; false
-   elsewhere, where the caller reads the clock itself. So it never goes back, is never behind a read that came before
-   it, and lags the exact clock by at most a tick. agc_clock_note_ms takes an exact read in milliseconds of the same
-   clock (CLOCK_MONOTONIC on Linux). */
+   with a tick of at most 10 ms and an exact read is a system call (Linux, agc_coarse_clock_ms), *NOW_MS is the coarse
+   time or the latest exact read of the monotonic clock in this process (agc_clock_ms, or a ms that agc_clock_note_ms
+   got), whichever is later; false elsewhere, where the caller reads the clock itself. So it never goes back, is never
+   behind a read that came before it, and lags the exact clock by up to about two ticks. agc_clock_note_ms takes a read
+   in milliseconds of the same clock that is never ahead of it (an exact read of CLOCK_MONOTONIC on Linux, or the loop's
+   coarse time). */
 bool agc_clock_coarse_ms(uint64_t *now_ms);
 void agc_clock_note_ms(uint64_t ms);
 
