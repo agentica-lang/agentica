@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-11-08
+
 ### Added
 
 - `OpenSSL.RSA.public_encrypt_oaep(pem, data)` encrypts with an RSA public key
@@ -1255,7 +1257,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.26.2...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.27.0...HEAD
+[0.27.0]: https://github.com/agentica-lang/agentica/compare/0.26.2...0.27.0
 [0.26.2]: https://github.com/agentica-lang/agentica/compare/0.26.1...0.26.2
 [0.26.1]: https://github.com/agentica-lang/agentica/compare/0.26.0...0.26.1
 [0.26.0]: https://github.com/agentica-lang/agentica/compare/0.25.1...0.26.0
