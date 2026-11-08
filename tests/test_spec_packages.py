@@ -208,6 +208,8 @@ MANIFEST_CASES = [
     ("a tag of 129 characters", deps('sqlite = { %s, tag = "%s" }' % (SOURCE, "v" * 129)), "dependencies.sqlite.tag"),
     ("an unknown style key", '[style]\ncolour = 1\n', "style.colour"),
     ("a style width that is not positive", '[style]\nmax_line_width = 0\n', "style.max_line_width"),
+    ("a tool that is not a table", 'tool = 1\n', "tool"),
+    ("a tool table that holds a value", '[tool]\nx = 1\n', "tool.x"),
 ]
 
 
@@ -228,6 +230,17 @@ def test_every_good_form_of_a_dependency_is_accepted(ws):
     ws.write_lock()
     (ws.project / "plain.agc").write_text("def main() -> Void\nend\n", encoding="utf-8")
     assert check(ws, "plain.agc") is None
+
+
+def test_the_tool_table_is_for_other_tools_and_agentica_reads_nothing_in_it(ws):
+    # Whatever sits inside [tool.NAME] is the tool's own: arrays, nested tables and a key Agentica has no use for.
+    (ws.project / "agentica.toml").write_text(
+        'name = "x"\n[tool.cchecker.library]\nlibuv_callbacks_short = true\n'
+        '[tool.cchecker.roots]\nshort = ["f"]\n[tool.other]\n', encoding="utf-8")
+    (ws.project / "plain.agc").write_text('def main() -> Void\n  puts("ok")\nend\n', encoding="utf-8")
+    assert check(ws, "plain.agc") is None
+    ran = run(cli() + [str(ws.project / "plain.agc")], cwd=ws.base, env=environment(ws))
+    assert (ran.code, ran.stdout) == (0, "ok\n")
 
 
 def test_a_toml_syntax_error_in_the_manifest_has_a_line_and_column(ws):
