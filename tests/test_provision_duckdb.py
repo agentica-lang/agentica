@@ -6,7 +6,10 @@ No network, no C loads: each case builds a tiny .tar.gz in a tmp dir and calls
 import hashlib
 import importlib.util
 import io
+import json
 import tarfile
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
@@ -150,3 +153,131 @@ def test_linux_arm64_takes_its_own_asset_and_stages_under_linux(tmp_path, monkey
     target = tmp_path / "out" / "native" / "linux" / MEMBER
     assert capsys.readouterr().out.strip() == str(target.resolve())
     assert target.read_bytes() == LIB
+
+
+class Release:
+    """A local stand-in for github.com/duckdb release downloads and the release API, on port 0.
+
+    `script` maps a request path to a list of answers used in turn (the last one repeats): an int is a status with
+    no body, bytes are a 200 body. `seen` records (path, Accept, Authorization) per request."""
+
+    def __init__(self, script):
+        self.script = script
+        self.seen = []
+        release = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                release.seen.append((self.path, self.headers.get("Accept"), self.headers.get("Authorization")))
+                answers = release.script.get(self.path, [404])
+                answer = answers[min(len([s for s in release.seen if s[0] == self.path]) - 1, len(answers) - 1)]
+                body = answer if isinstance(answer, bytes) else b""
+                self.send_response(200 if isinstance(answer, bytes) else answer)
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, *args):
+                pass
+
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self.url = "http://127.0.0.1:%d" % self.server.server_port
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+    def count(self, path):
+        return len([seen for seen in self.seen if seen[0] == path])
+
+
+NAME = "duckdb-shared-libs-linux-amd64.tar.gz"
+DOWNLOAD = "/dl/" + NAME
+RELEASE_PATH = "/repos/duckdb/duckdb/releases/tags/" + provision.VERSION
+
+
+@pytest.fixture
+def served(monkeypatch):
+    """A Release factory that points the tool at it and records the pauses instead of sleeping."""
+    pauses = []
+    made = []
+    monkeypatch.setattr(provision, "pause", pauses.append)
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+
+    def serve(script, data):
+        release = Release(script)
+        made.append(release)
+        monkeypatch.setattr(provision, "BASE", release.url + "/dl")
+        monkeypatch.setattr(provision, "API", release.url)
+        monkeypatch.setitem(provision.ASSETS, "linux", (NAME, digest(data), MEMBER))
+        return release
+
+    yield serve, pauses
+    for release in made:
+        release.close()
+
+
+def provision_linux(tmp_path):
+    return provision.main(["--out", str(tmp_path / "out"), "--os", "linux"])
+
+
+def test_a_download_that_fails_twice_is_retried_with_a_growing_pause(tmp_path, served):
+    serve, pauses = served
+    data = archive((MEMBER, "file", LIB))
+    release = serve({DOWNLOAD: [503, 429, data]}, data)
+    assert provision_linux(tmp_path) == 0
+    assert (tmp_path / "out" / "native" / "linux" / MEMBER).read_bytes() == LIB
+    assert release.count(DOWNLOAD) == 3 and pauses == [5, 10]
+
+
+def test_a_download_that_keeps_failing_stops_after_five_tries(tmp_path, served):
+    serve, pauses = served
+    release = serve({DOWNLOAD: [503]}, b"")
+    with pytest.raises(SystemExit, match="cannot download"):
+        provision_linux(tmp_path)
+    assert release.count(DOWNLOAD) == 5 and pauses == [5, 10, 20, 40]
+
+
+def test_a_404_is_not_retried(tmp_path, served):
+    serve, pauses = served
+    release = serve({DOWNLOAD: [404]}, b"")
+    with pytest.raises(SystemExit, match="cannot download"):
+        provision_linux(tmp_path)
+    assert release.count(DOWNLOAD) == 1 and pauses == []
+
+
+def test_a_checksum_mismatch_is_not_retried(tmp_path, served):
+    serve, pauses = served
+    data = archive((MEMBER, "file", LIB))
+    release = serve({DOWNLOAD: [archive((MEMBER, "file", b"tampered"))]}, data)
+    with pytest.raises(SystemExit, match="is not the pinned"):
+        provision_linux(tmp_path)
+    assert release.count(DOWNLOAD) == 1 and pauses == []
+    assert not list((tmp_path / "out").rglob(MEMBER))
+
+
+def test_the_release_api_is_tried_first_with_the_token_and_octet_stream(tmp_path, served, monkeypatch):
+    serve, pauses = served
+    data = archive((MEMBER, "file", LIB))
+    listing = json.dumps({"assets": [{"id": 7, "name": "other.zip"}, {"id": 42, "name": NAME}]}).encode()
+    release = serve({RELEASE_PATH: [listing], "/repos/duckdb/duckdb/releases/assets/42": [data]}, data)
+    monkeypatch.setenv("GITHUB_TOKEN", "secret")
+    assert provision_linux(tmp_path) == 0
+    assert release.count(DOWNLOAD) == 0
+    assert release.seen[-1] == ("/repos/duckdb/duckdb/releases/assets/42", "application/octet-stream",
+                                "Bearer secret")
+
+
+def test_a_cached_archive_is_used_only_when_it_has_the_pinned_hash(tmp_path, served):
+    serve, pauses = served
+    data = archive((MEMBER, "file", LIB))
+    release = serve({DOWNLOAD: [data]}, data)
+    cache = tmp_path / "cache"
+    cache.mkdir()
+    (cache / NAME).write_bytes(b"stale")
+    args = ["--out", str(tmp_path / "out"), "--os", "linux", "--cache", str(cache)]
+    assert provision.main(args) == 0
+    assert release.count(DOWNLOAD) == 1 and (cache / NAME).read_bytes() == data
+    assert provision.main(args[:1] + [str(tmp_path / "out2")] + args[2:]) == 0
+    assert release.count(DOWNLOAD) == 1

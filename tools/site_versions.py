@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import http.client
 import json
 import os
 import re
@@ -31,11 +32,14 @@ import sys
 import tarfile
 import tempfile
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
+# The pauses between the tries of a download (5 tries): GitHub answers 5xx now and then.
+DOWNLOAD_BACKOFF = (5, 10, 20, 40)
 FINAL_TAG = re.compile(r"^\d+\.\d+\.\d+$")
 PIN = re.compile(r"^\s+(HUGO_VERSION|HUGO_SHA256|DART_SASS_VERSION|DART_SASS_SHA256):\s*(\S+)\s*$", re.MULTILINE)
 SELECTOR_FILES = ("selector.js", "selector.css")
@@ -172,14 +176,16 @@ def _download(url: str, sha256: str, folder: Path, strip: int) -> None:
     folder.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=folder.parent) as scratch:
         archive = Path(scratch) / "tool.tar.gz"
-        for attempt in range(5):
+        for attempt, delay in enumerate(DOWNLOAD_BACKOFF + (None,)):
             try:
                 urllib.request.urlretrieve(url, archive)
                 break
-            except OSError:
-                if attempt == 4:
+            except (OSError, http.client.HTTPException) as error:
+                # A 404 or another 4xx is an answer, not a fault; 5xx, 429 and dropped connections are tried again.
+                answer = error.code if isinstance(error, urllib.error.HTTPError) else 0
+                if delay is None or (400 <= answer < 500 and answer != 429):
                     raise
-                time.sleep(5)
+                time.sleep(delay)
         if hashlib.sha256(archive.read_bytes()).hexdigest() != sha256:
             raise BuildError("checksum mismatch for " + url)
         unpacked = Path(scratch) / "unpacked"

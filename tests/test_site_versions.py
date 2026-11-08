@@ -186,3 +186,30 @@ def test_a_run_with_no_version_fails(repo, tmp_path, monkeypatch):
     monkeypatch.setattr(tool, "final_tags", lambda: ["0.1.0"])
     code, _, _ = build(tmp_path, monkeypatch)
     assert code == 1
+
+
+def test_a_download_retries_5xx_with_a_growing_pause_and_never_a_404(tmp_path, monkeypatch):
+    import urllib.error
+    monkeypatch.setattr(tool.sys, "platform", "linux")
+    monkeypatch.setattr(tool.os, "uname", lambda: type("Uname", (), {"machine": "x86_64"})())
+    pauses = []
+    monkeypatch.setattr(tool.time, "sleep", pauses.append)
+    answers = [503, 429, "ok"]
+
+    def fetch(url, archive):
+        answer = answers.pop(0)
+        if answer == "ok":
+            open(archive, "wb").write(b"not a tar")
+            return
+        raise urllib.error.HTTPError(url, answer, "busy", {}, None)
+
+    monkeypatch.setattr(tool.urllib.request, "urlretrieve", fetch)
+    with pytest.raises(tool.BuildError, match="checksum mismatch"):
+        tool._download("https://example.invalid/x.tar.gz", "0" * 64, tmp_path / "out", strip=0)
+    assert pauses == [5, 10]
+
+    pauses.clear()
+    answers[:] = [404, "ok"]
+    with pytest.raises(urllib.error.HTTPError):
+        tool._download("https://example.invalid/x.tar.gz", "0" * 64, tmp_path / "out2", strip=0)
+    assert pauses == []
