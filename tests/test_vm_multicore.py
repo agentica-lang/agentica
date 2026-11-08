@@ -2011,6 +2011,146 @@ def test_a_close_from_another_scheduler_ends_parked_reads_and_sends(tmp_path, re
         assert (result.code, result.stdout) == (0, expected), result.stderr
 
 
+NET_ORDER = r"""struct Job
+  socket: Socket
+  id: Int
+  count: Int
+end
+
+# Sends `count` numbered lines; the padding varies so some sends fill the peer's small buffer and park.
+def writer(job: Job) -> Result[Int]
+  i = 0
+  while i < job.count
+    pad = "x" * ((i * 7919 + job.id * 104729) % 9000)
+    try TCP.send(job.socket, "#{job.id} #{i} #{pad}\n", 60000)
+    i = i + 1
+  end
+
+  return ok(job.count)
+end
+
+# Waits for the peer's "bye" (it has read every line), then closes the socket.
+def finish(socket: Socket) -> Result[Void]
+  line = try TCP.read_line(socket, 60000)
+  TCP.close(socket)
+  if line != "bye"
+    return error("unexpected #{line}")
+  end
+
+  return ok()
+end
+
+def main() -> Void
+  args = System.args()
+  sockets = args[0].to_i.unwrap!
+  tasks = args[1].to_i.unwrap!
+  count = args[2].to_i.unwrap!
+  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  puts(TCP.local_port(listener))
+  IO.flush()
+  accepted: List[Socket] = []
+  jobs: List[Task[Result[Int]]] = []
+  k = 0
+  while k < sockets
+    socket = TCP.accept(listener, 60000).unwrap!
+    accepted = accepted.push(socket)
+    id = 0
+    while id < tasks
+      jobs = jobs.push(Task.spawn(&writer, Job(socket: socket, id: id, count: count)))
+      id = id + 1
+    end
+
+    k = k + 1
+  end
+
+  sent = 0
+  for job in jobs
+    sent = sent + Task.await(job).unwrap!
+  end
+
+  for socket in accepted
+    finish(socket).unwrap!
+  end
+
+  puts("sent #{sent}")
+end
+"""
+
+
+def padding(task, seq):
+    return (seq * 7919 + task * 104729) % 9000
+
+
+def read_ordered_lines(port, tasks, count, problems):
+    """A slow reader with a small receive window: it checks that each task's lines come whole, once and in order. A
+    failure of the peer itself (a timeout) is a problem too, so the test names it."""
+    try:
+        read_lines_in_order(port, tasks, count, problems)
+    except Exception as failure:
+        problems.append(repr(failure))
+
+
+def read_lines_in_order(port, tasks, count, problems):
+    with socket.socket() as peer:
+        peer.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
+        peer.settimeout(60)
+        peer.connect(("127.0.0.1", port))
+        expected, pending, lines, reads = [0] * tasks, b"", 0, 0
+        while lines < tasks * count:
+            chunk = peer.recv(2048)
+            if not chunk:
+                problems.append("end of input after %d lines" % lines)
+                return
+            reads += 1
+            if reads % 16 == 0:
+                time.sleep(0.001)
+            pending += chunk
+            while b"\n" in pending:
+                line, _, pending = pending.partition(b"\n")
+                task, seq, pad = line.split(b" ")
+                task, seq = int(task), int(seq)
+                if seq != expected[task] or len(pad) != padding(task, seq) or pad.strip(b"x"):
+                    problems.append("task %d: line %d where %d was due" % (task, seq, expected[task]))
+                expected[task] = seq + 1
+                lines += 1
+        if pending:
+            problems.append("bytes after the last line")
+        peer.sendall(b"bye\n")
+        if peer.recv(1) != b"":
+            problems.append("no end of input after bye")
+
+
+@RACE
+def test_sends_of_many_tasks_on_many_sockets_keep_their_order_beside_a_slow_reader(tmp_path, repeats):
+    # 16 sockets, 4 tasks on each sending 60 numbered lines of up to 9000 bytes, on four schedulers. Most sends go out
+    # from the scheduler (the direct send, #1188); a peer with a 4 KiB receive window that pauses between reads makes
+    # some of them fill the kernel's buffer and hand the rest to the I/O thread. Each peer reads every line of each
+    # task once, whole and in order. A smoke test: it rarely hits the window where a second send could overtake the
+    # rest of a first (it passes without the writer lock's hold); the proof of that order is
+    # test_a_send_waits_for_a_direct_send_of_another_task in vm/tests/net_test.c.
+    bytecode = program(tmp_path, "net_order", NET_ORDER)
+    sockets, tasks, count = 16, 4, 60
+    for _ in range(repeats):
+        process = subprocess.Popen([*vm_command(), *FLAGS, "--", bytecode, str(sockets), str(tasks), str(count)],
+                                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   env=vm_environment(), text=True)
+        try:
+            port = int(process.stdout.readline())
+            problems = []
+            peers = [threading.Thread(target=read_ordered_lines, args=(port, tasks, count, problems))
+                     for _ in range(sockets)]
+            for peer in peers:
+                peer.start()
+            for peer in peers:
+                peer.join()
+            out, err = process.communicate(timeout=60)
+            assert (problems, process.returncode, out) == ([], 0, "sent %d\n" % (sockets * tasks * count)), err
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.wait()
+
+
 OWNER_CRASH = r"""def crash() -> Result[Int]
   zero = 0
   return ok(1 / zero)

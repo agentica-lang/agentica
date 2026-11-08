@@ -757,6 +757,11 @@ void agc_io_compute_each(agc_vm *vm, const agc_io_kind *kind, void (*fn)(void *d
 bool agc_io_wait_for(agc_vm *vm, bool (*ready)(agc_vm *vm, void *arg), void *arg, uint64_t by);
 bool agc_io_run_aside(agc_vm *vm, void (*fn)(void *data), void *data, uint64_t by);
 agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeout_ms);
+/* The task that took HANDLE (agc_handle_wait) holds it without a job while it works with rt->sync dropped (the direct
+   send of vm/tcp.c), so another task's wait parks; agc_handle_let_go ends the hold and hands HANDLE on, and a job that
+   takes HANDLE as its context takes the hold over. Both under rt->sync. */
+void agc_handle_hold(agc_vm *vm, agc_resource *handle);
+void agc_handle_let_go(agc_vm *vm, agc_resource *handle);
 bool agc_channel_abandoned(agc_vm *vm, const agc_channel *c);
 /* The failure text of a negative channel timeout (Channel.send, Channel.recv, ch.lazy). */
 #define AGC_CHANNEL_BAD_TIMEOUT "channel timeout must be nonnegative"

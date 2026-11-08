@@ -3,7 +3,8 @@
  * over libuv, with the TLS handshake and close_notify through tls.h and the
  * host's error numbers through net_os.h. Every `net` belongs to the I/O
  * thread; a builtin reaches it through a step posted there, and a done half
- * reads only what that thread copied into the request. Service layer.
+ * reads only what that thread copied into the request, except the direct send
+ * of a plain socket from a scheduler (direct_send). Service layer.
  * Design: docs/vm/10-io-tls.md §10.3 and §10.3.1, docs/vm/16-architecture.md §16.9.
  */
 #include "http_fields.h"
@@ -33,6 +34,10 @@ typedef enum { REQ_CONNECT, REQ_LISTEN, REQ_ACCEPT, REQ_LINE, REQ_BYTES, REQ_IDL
 
 /* Why TLS.upgrade did not start, in its TLS net's `error` (libuv errors are negative). */
 enum { UPGRADE_CLOSED = 0, UPGRADE_UNREAD = 1, UPGRADE_ENDED = 2, UPGRADE_SENDING = 3 };
+
+/* The bits of a net's `wstate` (direct_send): a scheduler sends on it now, it is shut, its close waits for that send,
+   and a direct send went out in part and its rest has not started on the I/O thread (begin_send clears it). */
+enum { W_DIRECT = 1u, W_SHUT = 2u, W_DEFERRED = 4u, W_PARTIAL = 8u };
 
 typedef agc_conn net;
 typedef struct tcp_link tcp_link;
@@ -123,6 +128,17 @@ struct agc_conn {
      socket connects or is accepted (read_peer), before the request that hands the socket to a program finishes, and
      never again, so a scheduler that holds the socket may read it. */
   char peer[PEER_TEXT];
+  /* The direct send (direct_send, #1188). `sock` is the OS socket of a connected link and `direct` says it is set:
+     both are written once on the I/O thread before a program holds the socket (keep_sock). After that only head_value
+     clears `direct`, for a WebSocket, and only direct_send reads it, both on a scheduler: under rt->sync in a shared
+     VM (agc_share runs before the I/O thread starts), and at sync_depth 0 on the one thread of a VM that is not
+     shared. `wstate` (W_*) is the one field both threads change, by atomic operations only. A scheduler sets W_DIRECT
+     for the time of its send, from 0 only, while it holds rt->sync and the socket's resource holds the net; shut_one
+     sets W_SHUT, and W_DEFERRED when it found W_DIRECT, and then leaves the close of the links to the scheduler's end
+     of the send (direct_over). So the descriptor is never closed, or reused, under a send. */
+  uintptr_t sock;
+  bool direct;
+  _Atomic unsigned wstate;
   agc_conn_watch watch;
   void *watcher;
 };
@@ -285,12 +301,21 @@ static agc_value idle_value(const request *q) {
   return agc_result_value(true, agc_bool(q->buffered == 0 && !q->ended));
 }
 
-/* The value of the head cut, built on a scheduler from the request alone. std/http matches on "could not read from
-   the stream" (a prefix) and "network: end of input" (READ_FAILED and END_OF_INPUT in stdlib/http.agc). */
-static agc_value head_value(agc_vm *vm, const request *q) {
+/* The value of the head cut, built on a scheduler from the request and the socket's net (q->n is not set by the read
+   at N = 1). std/http matches on "could not read from the stream" (a prefix) and "network: end of input" (READ_FAILED
+   and END_OF_INPUT in stdlib/http.agc). */
+static agc_value head_value(agc_vm *vm, net *n, const request *q) {
   if (q->cut.len && q->kind == REQ_RESPONSE)
     return agc_http_response_value(vm, q->cut.data, q->cut.len, q->head_only, q->limit, q->cut.error, q->buffered, q->ended);
-  if (q->cut.len) return agc_http_head_value(vm, q->cut.data, q->cut.len, q->limit, q->buffered);
+  if (q->cut.len) {
+    bool websocket;
+    agc_value head = agc_http_head_value(vm, q->cut.data, q->cut.len, q->limit, q->buffered, &websocket);
+    /* A WebSocket of std/http sends through the I/O thread for good: its writer joins the frames that queue while a
+       send waits there (#1191), and sent at once each frame would cost a wake and a system call of its own. At N > 1
+       this is a locked kind's done half, so rt->sync orders it with direct_send; at N = 1 nothing sends directly. */
+    if (websocket) n->direct = false;
+    return head;
+  }
   if (q->cut.error) return agc_system_error(vm, "could not read from the stream", q->cut.error);
   return agc_error_value("network: end of input");
 }
@@ -406,6 +431,32 @@ static void shared_leave(net *n) {
   n->callbacks--;
 }
 
+static void stop_reading(net *n) {
+  if (!n->reading) return;
+  uv_read_stop((uv_stream_t *)&n->conn->tcp);
+  n->reading = false;
+}
+
+/* Marks the write side shut, so no direct send starts after it; true when one is under way, whose end then closes the
+   links (W_DEFERRED). I/O thread only. */
+static bool shut_writes(net *n) {
+  unsigned s = atomic_load_explicit(&n->wstate, memory_order_acquire);
+  for (;;) {
+    unsigned next = s | W_SHUT | ((s & W_DIRECT) ? W_DEFERRED : 0u);
+    if (atomic_compare_exchange_weak_explicit(&n->wstate, &s, next, memory_order_acq_rel, memory_order_acquire))
+      return (s & W_DIRECT) != 0;
+  }
+}
+
+/* A direct send that a close found under way has ended (posted by direct_end): the close of the links that shut_one
+   left, and the count it took so the net outlived the send. */
+static void direct_over(void *data) {
+  net *n = data;
+  drop_links(n);
+  n->callbacks--;
+  settle(n);
+}
+
 static void shut_one(net *n, const char *why) {
   if (n->closed) return;
   goodbye(n);
@@ -414,7 +465,13 @@ static void shut_one(net *n, const char *why) {
   if (n->tls) AGC_TRACE(&n->trace, AGC_TRACE_TLS, "tls_close %s=%" PRIu64 " why=%s", kind_name(n), n->id, why);
   if (n->resolving) uv_cancel((uv_req_t *)&n->dns);
   if (n->setting_up) shared_leave(n);
-  drop_links(n);
+  if (shut_writes(n)) {
+    /* A scheduler sends on the descriptor now: it stays open, without reads, until direct_over. */
+    stop_reading(n);
+    n->callbacks++;
+  } else {
+    drop_links(n);
+  }
   n->reading = false;
   agc_inbuf_free(&n->in);
   notify(n, n->opener);
@@ -666,10 +723,12 @@ static void read_peer(net *n, const tcp_link *k) {
   if (rc) n->peer[0] = '\0';
 }
 
-static void stop_reading(net *n) {
-  if (!n->reading) return;
-  uv_read_stop((uv_stream_t *)&n->conn->tcp);
-  n->reading = false;
+/* Notes the OS socket of a connected link for direct_send. I/O thread only, before a program holds the net. */
+static void keep_sock(net *n, tcp_link *k) {
+  uv_os_fd_t fd;
+  if (uv_fileno((const uv_handle_t *)&k->tcp, &fd) != 0) return;
+  n->sock = (uintptr_t)fd;
+  n->direct = true;
 }
 
 static void handshake_failed(net *n, agc_tls_status status) {
@@ -881,6 +940,7 @@ static net *accept_link(net *l, tcp_link *k, int *rc) {
   c->conn = link;
   c->connected = true;
   read_peer(c, link);
+  keep_sock(c, link);
   c->parent = l->id;
   uv_tcp_nodelay(&link->tcp, 1);
   return c;
@@ -1044,6 +1104,7 @@ static void connected(uv_connect_t *req, int status) {
   if (status == 0) {
     n->connected = true;
     read_peer(n, k);
+    keep_sock(n, k);
     uv_tcp_nodelay(&k->tcp, 1);
     AGC_TRACE(&n->trace, AGC_TRACE_IO, "tcp_connected socket=%" PRIu64, n->id);
     if (n->secure) {
@@ -1188,7 +1249,7 @@ static agc_value take(agc_vm *vm, net *n, request *q) {
   if (q->kind == REQ_IDLE || heads(q->kind)) {
     if (q->kind == REQ_IDLE) cut_idle(n, q);
     else cut_head(n, q);
-    agc_value result = q->kind == REQ_IDLE ? idle_value(q) : head_value(vm, q);
+    agc_value result = q->kind == REQ_IDLE ? idle_value(q) : head_value(vm, n, q);
     agc_inbuf_cut_free(&q->cut);
     return result;
   }
@@ -1258,7 +1319,7 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
     else if (q->kind == REQ_IDLE)
       result = idle_value(q);
     else if (heads(q->kind))
-      result = head_value(vm, q);
+      result = head_value(vm, n, q);
     else if (q->kind == REQ_BYTES)
       result = agc_inbuf_cut_bytes_value(vm, &q->cut);
     else
@@ -1473,10 +1534,15 @@ static net *live(const agc_socket *sk) {
 
 /* Whether the plain net OLD can hand its connection to TLS.upgrade: -1 when it can, else why not. Bytes it read that
    nobody took would be the start of the TLS stream (STARTTLS forbids them), and a send still in flight writes from
-   the plain net's own request. A half-closed socket (HttpWire.close_write) has no write side left. I/O thread only. */
+   the plain net's own request or, for a direct send, from a scheduler. That send started before the upgrade took the
+   socket's resource, and no direct send starts after it (direct_send needs the resource), so a clear W_DIRECT stays
+   clear; W_PARTIAL keeps a message that went out in part, whose rest found the resource gone, from being followed by
+   a handshake. A half-closed socket (HttpWire.close_write) has no write side left. I/O thread only. */
 static int upgrade_refusal(const net *old) {
   if (!old || old->closed || !old->conn || old->half_closed) return UPGRADE_CLOSED;
-  if (old->writer || old->write_data) return UPGRADE_SENDING;
+  if (old->writer || old->write_data ||
+      (atomic_load_explicit(&old->wstate, memory_order_acquire) & (W_DIRECT | W_PARTIAL)))
+    return UPGRADE_SENDING;
   if (agc_inbuf_pending(&old->in)) return UPGRADE_UNREAD;
   if (old->in.eof || old->in.error) return UPGRADE_ENDED;
   return -1;
@@ -1807,12 +1873,59 @@ static bool begin_send(void *data, agc_io_job *job) {
   request *q = data;
   net *n = q->n;
   link_request(q, job);
+  /* The rest of a direct send has its writer slot now (upgrade_refusal). */
+  (void)atomic_fetch_and_explicit(&n->wstate, ~(unsigned)W_PARTIAL, memory_order_acq_rel);
   bool out = !n->closed && q->sends && send_now(n, q->data, q->len) != 1;
   /* send_now keeps its own copy of what it could not write (tls_queue, agc_stream_write). */
   free(q->data);
   q->data = NULL;
   if (n->closed || out) finish(q);
   return true;
+}
+
+/* A direct send's claim: from 0 only, so not on a shut socket nor beside another send. */
+static bool direct_begin(net *n) {
+  unsigned idle = 0;
+  return atomic_compare_exchange_strong_explicit(&n->wstate, &idle, W_DIRECT, memory_order_acq_rel,
+                                                 memory_order_relaxed);
+}
+
+/* The end of a direct send, its last access to the net: a send that went out in part says so (W_PARTIAL), and a close
+   that came meanwhile gets its links closed. */
+static void direct_end(net *n, bool partial) {
+  unsigned s = atomic_load_explicit(&n->wstate, memory_order_relaxed), next;
+  do {
+    next = (s & ~(unsigned)W_DIRECT) | (partial ? (unsigned)W_PARTIAL : 0u);
+  } while (!atomic_compare_exchange_weak_explicit(&n->wstate, &s, next, memory_order_acq_rel, memory_order_relaxed));
+  if (s & W_DEFERRED) agc_loop_call(n->io, direct_over, n);
+}
+
+/* The direct send (#1188): at N > 1 a send on a plain socket starts on the calling scheduler, so a send that the
+   kernel takes at once neither wakes the I/O thread nor arms a timer. The caller holds the socket's writer lock, so no
+   other send of the socket is under way and the bytes keep their order; what the kernel does not take goes to the I/O
+   thread as before. rt->sync is dropped across the system call (a profile of a busy server lost half its throughput
+   holding it there); the claim, taken while rt->sync and the resource hold the net, keeps the descriptor open. TLS
+   stays on the I/O thread, which owns the session that its reads and handshake also use.
+   The writer lock is free for others while no job holds it, so a send that claimed the socket holds it
+   (agc_handle_hold, *HOLDING set) until the caller lets it go or parks the rest, whose job takes the hold over: a send
+   of another task waits for it rather than overtake the rest of this one, also when the kernel took nothing.
+   The bytes the kernel took (0 when it took none, or when the send is the I/O thread's), or a negative libuv error.
+   *NP is looked up again once rt->sync was dropped, and is NULL when the socket was closed meanwhile. */
+static int64_t direct_send(agc_vm *vm, agc_socket *sk, net **np, const uint8_t *data, size_t len, bool *holding) {
+  net *n = *np;
+  *holding = false;
+  /* A native callback may not park (agc_task_check_wait), and the rest of a send would park holding the lock. */
+  if (!n->direct || n->secure || !len || vm->sync_depth > 1 || vm->task->callbacks || !direct_begin(n)) return 0;
+  agc_handle_hold(vm, sk->writer);
+  *holding = true;
+  /* 1 in a shared VM (TCP.send is a locked builtin); 0 in one that is not, which has no rt->sync to drop. */
+  bool held = vm->sync_depth == 1;
+  if (held) agc_sync_drop(vm);
+  int64_t sent = agc_net_send(n->sock, data, len);
+  direct_end(n, sent > 0 && (size_t)sent < len);
+  if (held) agc_sync_take(vm);
+  *np = live(sk);
+  return sent == UV_EAGAIN ? 0 : sent;
 }
 
 /* A send of len bytes at data, which args[1] (the text or the bytes) keeps alive. */
@@ -1829,6 +1942,25 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, const uint8_t *data
     int rc = send_now(n, data, len);
     if (rc < 0) return agc_system_error(vm, write_failed, agc_net_errno(rc));
     if (rc == 0) return ok_value(agc_void());
+  } else {
+    bool holding;
+    int64_t sent = direct_send(vm, sk, &n, data, len, &holding);
+    /* A held writer lock is let go only where the send ends here (whole, failed or closed); else the job of the rest
+       takes it over in park, with no hand-on between. A failed direct send leaves write_status alone (send_now
+       would store the error): HttpWire.close_write's shutdown after an EPIPE only fails in its callback
+       (write_side_shut ignores the status), so the close goes on as before. A whole one clears the error of an
+       earlier send, as send_now does: on a plain socket only the writer lock's holder writes write_status, and this
+       task holds the lock. It is stored only when set, so a send in the common case writes nothing that
+       agc_conn_half_close reads on the I/O thread. */
+    bool whole = sent > 0 && (size_t)sent == len;
+    if (sent < 0 || whole || !n) {
+      if (whole && n && n->write_status < 0) n->write_status = 0;
+      if (holding) agc_handle_let_go(vm, sk->writer);
+      if (sent < 0) return agc_system_error(vm, write_failed, agc_net_errno((int)sent));
+      return whole ? ok_value(agc_void()) : agc_error_value(socket_closed);
+    }
+    data += sent;
+    len -= (size_t)sent;
   }
   request *q = new_request(vm, n, REQ_SEND);
   q->count = (size_t)agc_value_units(args[1]);

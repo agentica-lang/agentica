@@ -143,8 +143,11 @@ static bool websocket_upgrade(const agc_http_head *head, size_t upgrades, agc_ht
    of docs/vm/10-io-http.md §10.7.3 in their order: the parse errors, Upgrade,
    Expect, then a Content-Length over the limit; a refused head has the answer's
    status and reason. A head still incomplete means the input ended or failed before its end.
-   buffered is the count of input bytes after the head. */
-agc_value agc_http_head_value(agc_vm *vm, const uint8_t *buf, size_t len, uint64_t limit, size_t buffered) {
+   buffered is the count of input bytes after the head. *websocket is set when the head is let through and asks for a
+   WebSocket upgrade. */
+agc_value agc_http_head_value(agc_vm *vm, const uint8_t *buf, size_t len, uint64_t limit, size_t buffered,
+                              bool *websocket) {
+  *websocket = false;
   agc_http_head head;
   size_t used;
   agc_http_error error;
@@ -175,6 +178,7 @@ agc_value agc_http_head_value(agc_vm *vm, const uint8_t *buf, size_t len, uint64
   h->fields[7] = agc_int((int64_t)(len - used + buffered));
   h->fields[8] = agc_int(0);
   h->fields[9] = ascii((const uint8_t *)"", 0);
+  *websocket = upgrades != 0;
   return agc_result_value(true, agc_struct_value(h));
 }
 

@@ -208,9 +208,19 @@ texts.
 - **Writes.** `send` writes the UTF-8 bytes of its String with no size limit, as
   the grammar says. `send_bytes` checks the 1 MiB limit first. `send_bytes`,
   `recv_bytes` and the HttpWire byte rows take and give `Bytes`, under the
-  catalog key `<name>.bytes`.
-  The bytes go out with `uv_try_write`, the rest with one `uv_write`, and the
-  task parks until the callback. `ok()` means every byte reached the kernel's
+  catalog key `<name>.bytes`. The bytes go out with `uv_try_write`, the rest
+  with one `uv_write`, and the task parks until the callback. With more than one
+  scheduler a send on a plain (not TLS) socket first calls `send()` on the
+  scheduler itself, without `rt->sync`, and parks with the rest only when the
+  kernel does not take it all (the direct send, `vm/tcp.c`): the send holds the
+  writer lock across the call (`agc_handle_hold`), so sends keep their order,
+  and a close that comes during the call waits for its end before the descriptor
+  is closed. TLS sends stay on the I/O thread, which owns the session, and so do
+  the sends of a socket whose request head `HttpWire.read_head` let through as a
+  WebSocket upgrade: the `std/http` writer joins the frames that queue while a
+  send waits. This follows the head, not the answer, so a kept connection whose
+  route did not upgrade also sends through the I/O thread for the rest of its
+  life, which costs speed only. `ok()` means every byte reached the kernel's
   send buffer. A failed write (`EPIPE`, `ECONNRESET`) returns `could not write
   to the stream` and leaves the socket open.
 - **Timeouts.** A timed-out read or write closes the socket. Waiting for the

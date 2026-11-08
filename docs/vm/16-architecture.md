@@ -230,9 +230,10 @@ so a task can have two wakers at once.
   job's timer or a cancel. The task sits in no list.
 - **Timer** (`Task.sleep`, a deadline): woken by the owner scheduler in
   `agc_timers_run`. Also ended by a cancel. No list.
-- **Handle lock FIFO:** woken by the scheduler that ends the holder's job
-  (hand-on, push). Also ended by the lock wait's deadline (a task timer, §16.9)
-  or by a cancel. The list is the handle's FIFO, under `rt->sync`.
+- **Handle lock FIFO:** woken by the scheduler that ends the holder's job or
+  direct send (hand-on, push). Also ended by the lock wait's deadline (a task
+  timer, §16.9) or by a cancel. The list is the handle's FIFO, under
+  `rt->sync`.
 - **`Task.await`:** woken by the scheduler that ends the target task (push).
   Also ended by a cancel of the awaiter. The list is the target's awaiters,
   under that task's lock (§10.2.3).
@@ -371,15 +372,19 @@ one exit path are as in §16.1 to §16.6. What differs:
   published, so `expired` never runs beside one of its callbacks. TCP, TLS,
   processes and the child channel are requests at every N: the I/O thread owns
   each connection's TLS session, buffers and request slots, and each child's
-  handles. A builtin posts its step as the START's `more` step
-  (`agc_io_start_then`) and parks; `finish` fills the request on the I/O thread,
-  and the `done` half reads only the request and then posts its `drop`. A
-  socket's `cancel` and `pause` touch only the request and the connection, never
-  a resource or a task. The builtins post under `rt->sync`, so their steps reach
-  the inbox in the order of the calls. At N = 1 the steps run inline, and a read
-  of buffered bytes or a send that goes out at once returns without a park
-  (`agc_io_here`). The HTTP server keeps its state on the I/O thread the same
-  way (§10.7.2). `agc_io_uv` and `agc_poller_open` abort off the I/O thread.
+  handles. One exception: at N > 1 a send on a plain socket calls `send()` on
+  its scheduler first, and only what the kernel does not take becomes a request
+  (§10.3.1; an atomic state on the connection keeps a close from closing the
+  descriptor under that call). A builtin posts its step as the START's `more`
+  step (`agc_io_start_then`) and parks; `finish` fills the request on the I/O
+  thread, and the `done` half reads only the request and then posts its `drop`.
+  A socket's `cancel` and `pause` touch only the request and the connection,
+  never a resource or a task. The builtins post under `rt->sync`, so their steps
+  reach the inbox in the order of the calls. At N = 1 the steps run inline, and
+  a read of buffered bytes or a send that goes out at once returns without a
+  park (`agc_io_here`). The HTTP server keeps its state on the I/O thread the
+  same way (§10.7.2). `agc_io_uv` and `agc_poller_open` abort off the I/O
+  thread.
 - **An outcome and a count, not flags.** The rules are in §16.5, rules 2 to 4.
   The outcome (PENDING, DONE, EXPIRED or CANCELLED) is set by CAS
   (`agc_job_settle`). A pool or loop completion sets DONE, the timer EXPIRED, a
@@ -593,8 +598,9 @@ one exit path are as in §16.1 to §16.6. What differs:
     `agc_sync_assert` fails the run with `RUNTIME-INTERNAL` when a mutator of a
     shared list runs without the lock (`rg agc_sync_assert vm/`). Not yet under
     the lock: the profiling counters. A socket or a child needs no lock, since
-    the I/O thread owns it. The owner of a stream's lock is the calling thread's
-    context, not the stream's own `vm`.
+    the I/O thread owns it (a direct send of a plain socket syncs with it by an
+    atomic state of its own, §10.3.1). The owner of a stream's lock is the
+    calling thread's context, not the stream's own `vm`.
 - **GC threads.** Boehm's thread support, the helpers in `vm/value.c` and who
   registers are in §10.2.3, GC.
 - **The exit path runs on the I/O thread** (`agc_launch_end`, `vm/launch.c`).

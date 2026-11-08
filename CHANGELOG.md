@@ -34,6 +34,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   several times faster, and a connection takes about 23% less memory. The pong
   of a ping goes out behind what the session queued, and a session that closes
   its own `outgoing` may get no pongs.
+- With more than one scheduler, a plain TCP send that the kernel takes at once
+  goes out from the task's own scheduler instead of the I/O thread, so HTTP
+  responses skip a hop; WebSocket connections of `std/http` send as before.
 - `String#slice` and `String#at` on non-ASCII text are faster: a slice to the
   end does not walk the text, and runs of ASCII are crossed 8 bytes at a time.
 - On a Linux host where reading the clock is a system call (an HPET clock
