@@ -381,7 +381,8 @@ end
   backpressure. A pong waits behind what is queued, and a session that closed
   its own `outgoing` may get no pongs. A session that stops draining `incoming`
   stops the server reading the socket (no pong, no close answer): keep
-  receiving, or end. `incoming` ends with
+  receiving, or end. A peer that stopped reading delays the `Close` until the
+  write in progress ends (at most `request_timeout_ms`). `incoming` ends with
   one `Close(code, reason)`, whatever ended the connection (code 1006: no close
   frame came). Receive until `Close`, or until the closed error.
 - Messages are whole (fragments joined, text UTF-8 checked); the server answers

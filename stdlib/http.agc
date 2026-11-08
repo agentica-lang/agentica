@@ -2541,7 +2541,7 @@ def run_session(
     incoming: incoming,
     outgoing: outgoing,
     control: control,
-    wake: Message.Close(-1, "wake #{Random.int(1, 1000000000)} #{Random.int(1, 1000000000)}"),
+    wake: Message.Close(-1, "wake #{OpenSSL.Random.hex(8)}"),
     options: limits,
     write_ms: write_ms,
     rest: rest,
@@ -2736,7 +2736,8 @@ def gather(wire: Wire, first: Message, flushing: Bool) -> Batch
 end
 
 # Whether a message is the wake that `tell_writer` queued (`wire.wake`, a close nobody else can build: its reason is
-# random for each connection). It is never written.
+# random for each connection, drawn from the system so that a seeded `Random` of the session is not shifted). It is
+# never written.
 def wake?(wire: Wire, message: Message) -> Bool
   case message
     Message.Close(code, reason) ->
