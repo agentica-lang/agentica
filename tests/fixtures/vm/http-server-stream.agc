@@ -103,12 +103,12 @@ def quiet(feed: Feed) -> Void
   end
 end
 
-# Pauses longer than the server's timeouts between pieces: a live stream is not cut.
+# A pause longer than the server's request_timeout_ms between two pieces: a live stream is not cut.
 def slow(feed: Feed) -> Void
-  for piece in ["a".bytes, "b".bytes, "c".bytes]
-    Task.sleep(700)
-    _ = feed.body.send(piece, 5000)
-  end
+  _ = feed.body.send("a".bytes, 5000)
+  Task.sleep(2100)
+  _ = feed.body.send("b".bytes, 5000)
+  _ = feed.body.send("c".bytes, 5000)
   finish(feed)
 end
 
@@ -224,7 +224,9 @@ end
 
 def main() -> Void
   hub = Hub(gate: Channel.new(1), said: Channel.new(4))
-  options = HttpServerOptions(request_timeout_ms: 400, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
+  # request_timeout_ms bounds the send of a whole piece: the one of 512 KiB waits for main to read it, which a slow
+  # machine with small socket buffers can take long to do.
+  options = HttpServerOptions(request_timeout_ms: 2000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
   server = HTTP.serve("127.0.0.1", 0, streamed(routes(hub)), options).unwrap!
   port = HTTP.local_port(server)
 
