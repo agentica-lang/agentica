@@ -30,8 +30,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `String#slice` and `String#at` on non-ASCII text are faster: a slice to the
   end does not walk the text, and runs of ASCII are crossed 8 bytes at a time.
 - The event loop reads a cheaper clock on Linux, so a server makes fewer clock
-  system calls per request; an I/O timeout may end up to one kernel tick (at
-  most 10 ms) late, never early.
+  system calls per request on a host whose clock source is an HPET; an I/O
+  timeout, or a `Task.sleep` at one scheduler, may end up to about two kernel
+  ticks late (at most about 20 ms), never early.
 
 ## [0.26.1] - 2026-11-07
 

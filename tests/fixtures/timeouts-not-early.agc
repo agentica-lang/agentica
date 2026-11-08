@@ -31,6 +31,7 @@ def network(listener: Listener, timeout_ms: Int) -> Int
   started = Time.monotonic_ns()
   bad = check("read", timeout_ms, 0, started, !TCP.recv_bytes(client, 16, timeout_ms).ok?)
   TCP.close(server)
+  TCP.close(client)
   started = Time.monotonic_ns()
   return bad + check("accept", timeout_ms, 0, started, !TCP.accept(listener, timeout_ms).ok?)
 end

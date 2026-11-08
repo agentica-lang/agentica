@@ -344,9 +344,12 @@ uint64_t agc_clock_ms(void);
    clock, which is never ahead of agc_clock_ms and lags it by at most its tick. Fills NOW_MS and TICK_MS (its
    resolution, rounded up); false where the system has no such clock or its tick is over 10 ms. */
 bool agc_coarse_clock_ms(uint64_t *now_ms, uint64_t *tick_ms);
+/* The tick of the event loop's clock: agc_coarse_clock_ms's tick where it answers, as libuv's loop time is then the
+   coarse clock (agc_uv_clock_getres), else 0. The loop time lags the exact time by up to that and a ms. */
+uint64_t agc_loop_clock_tick_ms(void);
 #ifdef __linux__
-/* libuv's clock_getres (vm/clock_posix.c): libuv's loop clock is the coarse one exactly when agc_coarse_clock_ms
-   answers, so a libuv timer started from it may fire a tick early unless the caller pads it. */
+/* libuv's clock_getres (vm/clock_posix.c), the only libuv coupling of the clock files: libuv's loop clock is the
+   coarse one exactly when agc_coarse_clock_ms answers. */
 int agc_uv_clock_getres(clockid_t id, struct timespec *res);
 #endif
 

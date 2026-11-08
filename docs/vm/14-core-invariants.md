@@ -97,7 +97,7 @@ Known exceptions (the mechanisms are in §10.2.2):
   counts whole milliseconds and, on Linux, is the coarse monotonic clock
   (`agc_uv_clock_getres`, `vm/clock_posix.c`), which costs no clock source
   read; `timer_length` adds its lag (a tick and a millisecond), so the timeout
-  may end that late but never early.
+  never ends early, and may end up to two ticks and a millisecond late.
 - **A wait with only a deadline is a task timer.** It arms the task's own timer
   in the scheduler's heap (`agc_task_park_until`, `vm/timers.c`). Such a wait
   has no I/O, so it needs no job, no registry slot and no request to the I/O

@@ -51,6 +51,11 @@ bool agc_coarse_clock_ms(uint64_t *now_ms, uint64_t *tick_ms) {
   return true;
 }
 
+uint64_t agc_loop_clock_tick_ms(void) {
+  uint64_t tick = tick_plus_two();
+  return tick == 1 ? 0 : tick - 2;
+}
+
 /* libuv's clock_getres (mk/vm.mk compiles the vendored libuv with -Dclock_getres=agc_uv_clock_getres on Linux). libuv
    reads it once, in uv__hrtime, to pick its fast clock, the one of the loop's time and timers: the coarse clock when
    its resolution is at most 1 ms, else CLOCK_MONOTONIC, which costs a system call per read on a host whose clock source
@@ -68,5 +73,7 @@ bool agc_coarse_clock_ms(uint64_t *now_ms, uint64_t *tick_ms) {
   (void)tick_ms;
   return false;
 }
+
+uint64_t agc_loop_clock_tick_ms(void) { return 0; }
 #endif
 #endif
