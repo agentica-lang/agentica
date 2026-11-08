@@ -173,8 +173,7 @@ def _sass_dir(pinned: dict[str, str], tools: Path) -> Path:
 
 def _retryable(error: BaseException) -> bool:
     """Whether a failed request may succeed when repeated: 5xx, 429, a timeout, a dropped connection, a body cut short.
-    Any other 4xx is an answer and a certificate that does not verify is no passing fault. (tools/provision_duckdb.py
-    classifies in the same way.)"""
+    Any other 4xx is an answer and a certificate that does not verify is no passing fault."""
     if isinstance(error, urllib.error.HTTPError):
         return error.code >= 500 or error.code == 429
     if isinstance(error, ssl.SSLCertVerificationError):

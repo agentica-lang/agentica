@@ -155,7 +155,6 @@ AREAS = {
             "tests/test_vm_crypto.py", "tests/test_vm_bytes.py", "tests/test_vm_text_codecs.py",
             "tests/test_vm_native.py", "tests/test_vm_native_module.py", "tests/test_examples_ffi.py",
             "tests/test_examples_native_module.py",
-            "tests/test_examples_ffi_duckdb.py", "tests/test_provision_duckdb.py",
         ],
     ),
     "files": (

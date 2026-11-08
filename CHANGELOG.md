@@ -42,6 +42,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   may end up to about two kernel ticks and 2 ms late.
   `Time.monotonic_ms` reads the exact clock again on other Linux hosts.
 
+### Removed
+
+- The DuckDB FFI example (`examples/ffi/duckdb/`) and its provisioning tool: it
+  moves to the `agentica-db` repository. `examples/ffi/demo.c` stays the FFI
+  example that needs no download.
+
 ### Fixed
 
 - An I/O timeout never ends before its time; it could end up to 1 ms early.
