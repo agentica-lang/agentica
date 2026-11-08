@@ -280,8 +280,8 @@ static void read_monotonic(agc_vm *vm, uint32_t span, int64_t *seconds, int64_t 
 #endif
 }
 
-/* The coarse clock where the system has one (agc_clock_coarse_ms: Linux), which costs no read of the clock source, a
-   system call of about a microsecond on a machine whose clock source is an HPET; it lags by at most a tick (10 ms).
+/* The coarse clock where the system has one and an exact read is a system call (agc_clock_coarse_ms: Linux with an
+   HPET clock source, where that read takes about a microsecond); it lags by up to about two ticks (about 20 ms).
    Elsewhere the exact clock. */
 static agc_value builtin_monotonic_ms(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;

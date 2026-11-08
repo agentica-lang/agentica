@@ -197,8 +197,8 @@ void agc_timers_settle(agc_vm *vm) { (void)settle(vm); }
 
 /* Answers "the deadline is ahead" from the coarse clock (agc_coarse_clock_ms), which costs no read of the clock
    source: on a machine with no usable TSC (an HPET) that read is a system call of about a microsecond. The coarse clock
-   is never ahead of agc_clock_ms and lags it by at most its resolution, a tick; two ticks plus 2 ms of margin make
-   "before" safe. */
+   is never ahead of agc_clock_ms and lags it by up to about two ticks (agc_coarse_clock_ms); two ticks plus 2 ms of
+   margin make "before" safe. */
 static bool clock_before(uint64_t due_ms) {
   uint64_t now, tick;
   if (!agc_coarse_clock_ms(&now, &tick)) return false;

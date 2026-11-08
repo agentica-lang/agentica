@@ -595,15 +595,17 @@ static void close_timer(job *j) {
 /* The length to give a job's timer of TIMEOUT_MS. libuv counts it from the loop's time, as of its last update: the
    poll that delivered this START at N > 1, or the scheduler's last run of the loop at N = 1, where the request runs
    inline and the time may be far behind. A timer counted from a stale time fires early, so the time is updated here.
-   The time is in whole ms, rounded down, so it lags the exact time by up to a ms; on Linux it is the coarse clock
-   (agc_uv_clock_getres), whose read costs no clock source (on an HPET that read is a system call of about a
-   microsecond), and lags by up to a tick more (agc_loop_clock_tick_ms). The timer gets that lag on top, so it never
-   fires early; it fires when the loop's time reaches its due time, up to another tick later. A timeout of 0 is due at
-   the next timer run whatever the time. */
+   The time is in whole ms, rounded down, so it lags the exact time by up to a ms: the timer gets a ms on top. Where
+   the loop's clock is the coarse one (agc_loop_clock_tick_ms, Linux where an exact read is a system call), whose read
+   costs no clock source, its lag at the start may be larger than at the fire by its swing, a tick and the delay of a
+   late step (agc_coarse_clock_ms): the timer gets the tick and a ms more. So it never fires early; with the coarse
+   clock it fires when the loop's time reaches its due time, up to about two ticks after the exact time does. A
+   timeout of 0 is due at the next timer run whatever the time. */
 static uint64_t timer_length(agc_loop *loop, int64_t timeout_ms) {
   if (timeout_ms == 0) return 0;
   uv_update_time(&loop->uv);
-  return (uint64_t)timeout_ms + agc_loop_clock_tick_ms() + 1;
+  uint64_t tick = agc_loop_clock_tick_ms();
+  return (uint64_t)timeout_ms + 1 + (tick ? tick + 1 : 0);
 }
 
 static void start_pieces(job *j, int64_t timeout_ms) {

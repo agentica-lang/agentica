@@ -7,6 +7,7 @@
 #ifndef _WIN32
 #include "core.h"
 
+#include <errno.h>
 #include <stdatomic.h>
 #include <stdlib.h>
 #include <time.h>
@@ -90,12 +91,18 @@ uint64_t agc_loop_clock_tick_ms(void) {
 
 /* libuv's clock_getres (mk/vm.mk compiles the vendored libuv with -Dclock_getres=agc_uv_clock_getres on Linux). libuv
    reads it once, in uv__hrtime, to pick its fast clock, the one of the loop's time and timers: the coarse clock when
-   its resolution is at most 1 ms, else CLOCK_MONOTONIC, which costs a system call per read on a host whose clock source
-   has no vDSO path (an HPET), twice per turn of the loop. Saying 1 ms whenever agc_coarse_clock_ms uses the clock makes
-   the loop's clock the coarse one exactly when that function answers, which is how the VM knows to pad its timers by a
-   tick (timer_length in vm/loop.c). uv_hrtime and Time.monotonic_ns keep CLOCK_MONOTONIC. */
+   the call succeeds with a resolution of at most 1 ms, else CLOCK_MONOTONIC, which costs a system call per read on a
+   host whose clock source has no vDSO path (an HPET), twice per turn of the loop. The answer decides both ways: 1 ms
+   when agc_coarse_clock_ms uses the coarse clock, and a failure when it does not, so that a kernel whose coarse clock
+   really has a 1 ms tick (HZ 1000) does not get it either. The loop's clock is then the coarse one exactly when that
+   function answers, which is how the VM knows to pad its timers by the coarse clock's lag (timer_length in vm/loop.c).
+   uv_hrtime and Time.monotonic_ns keep CLOCK_MONOTONIC. */
 int agc_uv_clock_getres(clockid_t id, struct timespec *res) {
-  if (id != CLOCK_MONOTONIC_COARSE || tick_plus_two() == 1) return clock_getres(id, res);
+  if (id != CLOCK_MONOTONIC_COARSE) return clock_getres(id, res);
+  if (tick_plus_two() == 1) {
+    errno = EINVAL;
+    return -1;
+  }
   *res = (struct timespec){.tv_sec = 0, .tv_nsec = 1000000};
   return 0;
 }
