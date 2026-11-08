@@ -703,7 +703,8 @@ def test_a_sleep_traces_its_timer_arm_and_fire_under_sched(tmp_path, traced_vm):
     fire = re.search(rb" sched timer_fire task=([0-9]+) late_ms=([0-9]+)$", fires[0])
     assert arm and fire, (arms, fires)
     assert arm.group(1) == fire.group(1)
-    assert int(arm.group(2)) <= 1
+    # The deadline counts one more millisecond than the sleep, so the wait never ends early (agc_deadline_ms).
+    assert int(arm.group(2)) <= 2
     assert lines.index(arms[0]) < lines.index(fires[0])
 
 
@@ -756,7 +757,7 @@ def test_a_channel_ping_pong_arms_no_timer_and_a_wait_nobody_ends_arms_one_and_f
     arm = re.search(rb" sched timer_arm task=([0-9]+) in_ms=([0-9]+)$", arms[0])
     fire = re.search(rb" sched timer_fire task=([0-9]+) late_ms=([0-9]+)$", fires[0])
     assert arm and fire and arm.group(1) == fire.group(1), (arms, fires)
-    assert int(arm.group(2)) <= 5
+    assert int(arm.group(2)) <= 6
 
 
 def test_task_cancel_traces_at_call_on_the_task_it_names_and_a_plain_line_on_a_descendant(tmp_path, traced_vm):

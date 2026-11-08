@@ -65,6 +65,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - An I/O timeout never ends before its time; it could end up to 1 ms early.
+- `Task.sleep`, a channel timeout and a `Task.await` or `Task.map` timeout
+  never end before their time; they could end up to 1 ms early.
 - Parallel first runs of a `[native]` module build it once and all succeed;
   before, they could fail with `PKG-NATIVE-BUILD` ("File exists").
 - `agentica test` no longer takes a `steps.agc` from above the working folder

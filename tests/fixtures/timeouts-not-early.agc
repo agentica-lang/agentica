@@ -1,7 +1,7 @@
 # Short timeouts, measured with Time.monotonic_ns, while a task keeps the scheduler turning: a busy loop runs its
 # timers often, so a timer counted from a lagging clock would fire early. A socket read or accept waits on the event
-# loop's timer and must never end before its timeout. Task.sleep and a channel receive wait on the scheduler's clock,
-# which counts whole milliseconds, so they may end up to 1 ms before it.
+# loop's timer, and Task.sleep and a channel receive on the scheduler's clock, which counts whole milliseconds: none
+# may end before its timeout.
 
 def spin(stop: Channel[Int]) -> Int
   turns = 0
@@ -12,13 +12,13 @@ def spin(stop: Channel[Int]) -> Int
   return turns
 end
 
-def check(name: String, timeout_ms: Int, allowed_ms: Int, started: Int, timed_out: Bool) -> Int
+def check(name: String, timeout_ms: Int, started: Int, timed_out: Bool) -> Int
   took = Time.monotonic_ns() - started
   if not timed_out
     puts("#{name} #{timeout_ms} ms did not time out")
     return 1
   end
-  if took < (timeout_ms - allowed_ms) * 1000000
+  if took < timeout_ms * 1000000
     puts("#{name} #{timeout_ms} ms ended after #{took} ns")
     return 1
   end
@@ -29,11 +29,11 @@ def network(listener: Listener, timeout_ms: Int) -> Int
   client = TCP.connect("127.0.0.1", TCP.local_port(listener), 5000).unwrap!
   server = TCP.accept(listener, 5000).unwrap!
   started = Time.monotonic_ns()
-  bad = check("read", timeout_ms, 0, started, !TCP.recv_bytes(client, 16, timeout_ms).ok?)
+  bad = check("read", timeout_ms, started, !TCP.recv_bytes(client, 16, timeout_ms).ok?)
   TCP.close(server)
   TCP.close(client)
   started = Time.monotonic_ns()
-  return bad + check("accept", timeout_ms, 0, started, !TCP.accept(listener, timeout_ms).ok?)
+  return bad + check("accept", timeout_ms, started, !TCP.accept(listener, timeout_ms).ok?)
 end
 
 def main() -> Void
@@ -48,10 +48,10 @@ def main() -> Void
         bad = bad + network(listener, timeout_ms)
       end
       started = Time.monotonic_ns()
-      bad = bad + check("recv", timeout_ms, 1, started, !Channel.recv(silent, timeout_ms).ok?)
+      bad = bad + check("recv", timeout_ms, started, !Channel.recv(silent, timeout_ms).ok?)
       started = Time.monotonic_ns()
       Task.sleep(timeout_ms)
-      bad = bad + check("sleep", timeout_ms, 1, started, true)
+      bad = bad + check("sleep", timeout_ms, started, true)
     end
   end
   Channel.send(stop, 1, 5000).unwrap!

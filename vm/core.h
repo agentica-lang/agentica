@@ -362,6 +362,11 @@ int agc_uv_clock_getres(clockid_t id, struct timespec *res);
  * except agc_timers_run and agc_timers_settle, which take it themselves, and agc_timers_next_due and
  * agc_timers_strong, which only read. */
 void agc_task_park_until(agc_vm *vm, uint64_t deadline_ms, bool retry);
+/* The deadline of a wait of MS milliseconds that starts at NOW, an agc_clock_ms value. That clock is the time rounded
+ * down to the millisecond, and a timer fires once the clock reaches its deadline, so NOW + MS could end the wait up to
+ * 1 ms early: the deadline counts one more millisecond, so the wait never ends early and is at most 1 ms late (#1195).
+ * A wait of 0 ms keeps NOW: it has no time to keep, and ends at the next turn boundary. */
+static inline uint64_t agc_deadline_ms(uint64_t now, uint64_t ms) { return ms ? now + ms + 1 : now; }
 /* The same, with retry, for a wait that another task usually ends soon: it reads no clock, and the deadline is
  * TIMEOUT_MS after the moment the scheduler starts the clock, at the end of its next turn or before it goes idle. */
 void agc_task_park_within(agc_vm *vm, int64_t timeout_ms);
