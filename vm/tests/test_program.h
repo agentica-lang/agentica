@@ -61,4 +61,11 @@ static inline uint32_t agc_test_constant(agc_program *p, agc_value *constants, i
   return k;
 }
 
+/* The field names of a hand-built struct, from FIELDS, N of them. */
+static inline agc_string **agc_test_field_names(const char *const *fields, size_t n) {
+  agc_string **names = agc_alloc(n * sizeof *names);
+  for (size_t k = 0; k < n; k++) names[k] = agc_make_string(fields[k], strlen(fields[k]), strlen(fields[k]));
+  return names;
+}
+
 #endif

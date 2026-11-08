@@ -2125,7 +2125,9 @@ def test_sends_of_many_tasks_on_many_sockets_keep_their_order_beside_a_slow_read
     # 16 sockets, 4 tasks on each sending 60 numbered lines of up to 9000 bytes, on four schedulers. Most sends go out
     # from the scheduler (the direct send, #1188); a peer with a 4 KiB receive window that pauses between reads makes
     # some of them fill the kernel's buffer and hand the rest to the I/O thread. Each peer reads every line of each
-    # task once, whole and in order.
+    # task once, whole and in order. A smoke test: it rarely hits the window where a second send could overtake the
+    # rest of a first (it passes without the writer lock's hold); the proof of that order is
+    # test_a_send_waits_for_a_direct_send_of_another_task in vm/tests/net_test.c.
     bytecode = program(tmp_path, "net_order", NET_ORDER)
     sockets, tasks, count = 16, 4, 60
     for _ in range(repeats):

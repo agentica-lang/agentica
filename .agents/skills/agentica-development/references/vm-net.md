@@ -34,13 +34,15 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   resource hold the net; `shut_one` defers the close of the links to
   `direct_over` while the claim is held. The send holds the writer lock without
   a job (`agc_handle_hold`), so another task's send waits instead of overtaking
-  the rest that a partial send parks with. A close or release
-  posts `release_step` through `agc_loop_call`. `finish` copies what the `done`
-  half needs into the request, and `request_done` reads only that and posts
-  `drop_request`. `users` changes only on the I/O thread (the first count,
-  `own`, excepted). The `net` fields `id` and `closed` are atomic for the
-  scheduler's checks. `cancel` (`request_cancel`) and `pause` (`stop_request`)
-  touch the request and the `net`, never the resource.
+  the rest that a partial send parks with. A WebSocket upgrade head clears
+  `direct` in `head_value`, so std/http's frames queue on the I/O thread
+  (#1191). A close or release posts `release_step` through `agc_loop_call`.
+  `finish` copies what the `done` half needs into the request, and
+  `request_done` reads only that and posts `drop_request`. `users` changes only
+  on the I/O thread (the first count, `own`, excepted). The `net` fields `id`
+  and `closed` are atomic for the scheduler's checks. `cancel`
+  (`request_cancel`) and `pause` (`stop_request`) touch the request and the
+  `net`, never the resource.
 - On a detach (a cancelled task), `request_cancel` takes an accept or a read
   that has taken nothing yet out of its slot at once; a finished one is left to
   its `done` half, and its result is dropped.

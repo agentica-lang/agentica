@@ -6,6 +6,7 @@
 #include "../core.h"
 #include "../tls.h"
 #include "io_harness.h"
+#include "test_program.h"
 #include "test_support.h"
 
 #include <assert.h>
@@ -404,10 +405,36 @@ static void call_locked(void *arg) {
   agc_sync_drop(l->ctx);
 }
 
+/* call_locked, then the park that a scheduler commits at the end of the task's turn, as agc_test_call_builtin does. */
+static void park_locked(void *arg) {
+  locked_call *l = arg;
+  call_locked(l);
+  if (!l->task->parked) return;
+  assert(l->task->parking);
+  l->task->parking = false;
+  assert(agc_task_commit_park(l->task));
+}
+
 static void send_first(void *arg) {
   assert(agc_gc_thread_enter());
   call_locked(arg);
   agc_gc_thread_leave();
+}
+
+static const char *const head_fields[] = {"method",          "target",   "path",   "headers", "length", "chunked",
+                                          "expect_continue", "buffered", "status", "reason"};
+static const char *const header_fields[] = {"name", "value"};
+
+/* The records that HttpWire.read_head builds, which a loaded program declares. */
+static void declare_head_records(void) {
+  static agc_struct_def structs[2];
+  static agc_program program;
+  structs[0] =
+      (agc_struct_def){agc_make_string("HttpWire.Head", 13, 13), 10, agc_test_field_names(head_fields, 10), NULL, NULL};
+  structs[1] = (agc_struct_def){agc_make_string("Header", 6, 6), 2, agc_test_field_names(header_fields, 2), NULL, NULL};
+  program.struct_count = 2;
+  program.structs = structs;
+  vm.rt->program = &program;
 }
 
 /* A send of a second task while the first is inside its direct send waits for the writer lock, which the direct send
@@ -486,6 +513,27 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   ok_of(behind.c.result);
   peer_reads(fd, "second\n", 7);
 #endif
+  /* A WebSocket upgrade head that HttpWire.read_head lets through: the socket's later sends park for the I/O thread
+     although the kernel has room, where test_a_send_goes_out_from_the_scheduler returns at once. */
+  const char *upgrade = "GET / HTTP/1.1\r\nHost: x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n\r\n";
+  assert(send(fd, upgrade, strlen(upgrade), 0) == (ssize_t)strlen(upgrade));
+  declare_head_records();
+  agc_value rest = agc_bytes_value(agc_make_bytes((const uint8_t *)"", 0));
+  /* A task of its own: the harness resumes a woken task without its scheduler, which would take a timer of its last
+     park. */
+  agc_task *upgraded = agc_new_task(&vm);
+  locked_call queued = {&vm, upgraded,
+                        agc_test_call_of(&vm, upgraded, "HttpWire.read_head.bytes", 4, socket_v, rest, agc_int(1024),
+                                         agc_int(60000))};
+  on_thread(park_locked, &queued);
+  agc_test_wait_woken(&vm, upgraded);
+  ok_of(take(&queued.c));
+  queued.c = agc_test_call_of(&vm, upgraded, "TCP.send", 3, socket_v, text("queued\n"), agc_int(60000), agc_void());
+  on_thread(park_locked, &queued);
+  assert(upgraded->parked != NULL);
+  agc_test_wait_woken(&vm, upgraded);
+  ok_of(take(&queued.c));
+  peer_reads(fd, "queued\n", 7);
   locked_call closing = {&vm, vm.task, call("TCP.close", 1, socket_v, agc_void(), agc_void(), agc_void())};
   on_thread(call_locked, &closing);
   closing.c = call("TCP.close_listener", 1, listener, agc_void(), agc_void(), agc_void());

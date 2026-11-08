@@ -129,7 +129,8 @@ struct agc_conn {
      never again, so a scheduler that holds the socket may read it. */
   char peer[PEER_TEXT];
   /* The direct send (direct_send, #1188). `sock` is the OS socket of a connected link and `direct` says it is set:
-     both are written once on the I/O thread before a program holds the socket (keep_sock). `wstate` (W_*) is the one
+     both are written once on the I/O thread before a program holds the socket (keep_sock). After that only head_value
+     clears `direct`, for a WebSocket, and only direct_send reads it, both under rt->sync. `wstate` (W_*) is the one
      field both threads change, by atomic operations only. A scheduler sets W_DIRECT for the time of its send, from 0
      only, while it holds rt->sync and the socket's resource holds the net; shut_one sets W_SHUT, and W_DEFERRED when
      it found W_DIRECT, and then leaves the close of the links to the scheduler's end of the send (direct_over). So the
@@ -299,12 +300,21 @@ static agc_value idle_value(const request *q) {
   return agc_result_value(true, agc_bool(q->buffered == 0 && !q->ended));
 }
 
-/* The value of the head cut, built on a scheduler from the request alone. std/http matches on "could not read from
-   the stream" (a prefix) and "network: end of input" (READ_FAILED and END_OF_INPUT in stdlib/http.agc). */
-static agc_value head_value(agc_vm *vm, const request *q) {
+/* The value of the head cut, built on a scheduler from the request and the socket's net (q->n is not set by the read
+   at N = 1). std/http matches on "could not read from the stream" (a prefix) and "network: end of input" (READ_FAILED
+   and END_OF_INPUT in stdlib/http.agc). */
+static agc_value head_value(agc_vm *vm, net *n, const request *q) {
   if (q->cut.len && q->kind == REQ_RESPONSE)
     return agc_http_response_value(vm, q->cut.data, q->cut.len, q->head_only, q->limit, q->cut.error, q->buffered, q->ended);
-  if (q->cut.len) return agc_http_head_value(vm, q->cut.data, q->cut.len, q->limit, q->buffered);
+  if (q->cut.len) {
+    bool websocket;
+    agc_value head = agc_http_head_value(vm, q->cut.data, q->cut.len, q->limit, q->buffered, &websocket);
+    /* A WebSocket of std/http sends through the I/O thread for good: its writer joins the frames that queue while a
+       send waits there (#1191), and sent at once each frame would cost a wake and a system call of its own. At N > 1
+       this is a locked kind's done half, so rt->sync orders it with direct_send; at N = 1 nothing sends directly. */
+    if (websocket) n->direct = false;
+    return head;
+  }
   if (q->cut.error) return agc_system_error(vm, "could not read from the stream", q->cut.error);
   return agc_error_value("network: end of input");
 }
@@ -1238,7 +1248,7 @@ static agc_value take(agc_vm *vm, net *n, request *q) {
   if (q->kind == REQ_IDLE || heads(q->kind)) {
     if (q->kind == REQ_IDLE) cut_idle(n, q);
     else cut_head(n, q);
-    agc_value result = q->kind == REQ_IDLE ? idle_value(q) : head_value(vm, q);
+    agc_value result = q->kind == REQ_IDLE ? idle_value(q) : head_value(vm, n, q);
     agc_inbuf_cut_free(&q->cut);
     return result;
   }
@@ -1308,7 +1318,7 @@ static agc_value request_done(agc_vm *vm, void *data, agc_value context) {
     else if (q->kind == REQ_IDLE)
       result = idle_value(q);
     else if (heads(q->kind))
-      result = head_value(vm, q);
+      result = head_value(vm, n, q);
     else if (q->kind == REQ_BYTES)
       result = agc_inbuf_cut_bytes_value(vm, &q->cut);
     else
@@ -1934,7 +1944,9 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, const uint8_t *data
     bool holding;
     int64_t sent = direct_send(vm, sk, &n, data, len, &holding);
     /* A held writer lock is let go only where the send ends here (whole, failed or closed); else the job of the rest
-       takes it over in park, with no hand-on between. */
+       takes it over in park, with no hand-on between. A failed direct send leaves write_status alone: the I/O thread
+       owns it and a plain send resets it, and HttpWire.close_write's shutdown after an EPIPE only fails in its
+       callback (write_side_shut ignores the status), so the close goes on as before. */
     if (sent < 0 || (sent && (size_t)sent == len) || !n) {
       if (holding) agc_handle_let_go(vm, sk->writer);
       if (sent < 0) return agc_system_error(vm, write_failed, agc_net_errno((int)sent));
