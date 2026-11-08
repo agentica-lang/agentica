@@ -244,6 +244,8 @@ callbacks only set flags and queue the task. Only `vm/loop.c`,
   handles cannot read or write the locked range either (unlike advisory
   `flock`). `file_state.locked` makes repeat calls on the same handle succeed.
   Only `ERROR_LOCK_VIOLATION` becomes `EAGAIN`.
+  An `"append"` handle opens with read access too (`agc_fs_open`), since
+  `LockFileEx` refuses a handle with only `FILE_APPEND_DATA`.
 - Windows `Path.remove` traverses by handle with no-follow, and validates the
   raw path before normalizing it. Destructive tests need the scratch harness.
 - A private handoff checks the owner, DACL, regular type and single link on the

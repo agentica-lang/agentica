@@ -72,6 +72,20 @@ def main() -> Void
 end
 """
 
+# The File.try_lock example of the library page, on a lock file that exists; the write shows the handle still appends.
+APPEND_LOCK_PROGRAM = """\
+def main() -> Void
+  path = System.args()[0]
+  file = File.open(path, "append", 1000).unwrap!
+  other = File.open(path, "append", 1000).unwrap!
+  IO.inspect(File.try_lock(file, 1000))
+  IO.inspect(File.try_lock(other, 1000))
+  IO.inspect(File.write(file, "tail", 1000).ok?)
+  IO.inspect(File.close(file, 1000).ok?)
+  IO.inspect(File.try_lock(other, 1000))
+end
+"""
+
 DEVICE_LOCK_PROGRAM = """\
 def main() -> Void
   device = Result.unwrap!(File.open("/dev/null", "read", 5000))
@@ -206,6 +220,13 @@ def test_try_lock_on_two_handles_of_one_file_is_released_by_close(root, work):
     assert lines == ["ok(true)", "ok(true)", "ok(false)", "true", "ok(true)", "false", "false"]
     if not WINDOWS:
         assert stat.S_IMODE((root / "lock").stat().st_mode) == 0o600
+
+def test_try_lock_takes_an_append_handle_of_an_existing_file(root, work):
+    path = root / "app.lock"
+    path.write_text("head ")
+    lines = run_program(root, work, APPEND_LOCK_PROGRAM, "append-lock", path)
+    assert lines == ["ok(true)", "ok(false)", "true", "true", "ok(true)"]
+    assert path.read_text() == "head tail"
 
 def test_try_lock_contends_across_processes_and_dies_with_its_holder(root, work, adopt):
     path = root / "lock"

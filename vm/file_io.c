@@ -54,6 +54,12 @@ int agc_fs_open(const char *path, unsigned flags) {
   if (flags & AGC_FS_PRIVATE) return agc_fs_private_create(path, false);
 #endif
   int native = flags & AGC_FS_WRITE ? UV_FS_O_WRONLY : UV_FS_O_RDONLY;
+#ifdef _WIN32
+  /* libuv maps a write-only append to FILE_APPEND_DATA alone, and LockFileEx (File.try_lock) refuses a handle without
+     read or write-data access. Read access fixes that; writes stay append-only, since libuv still drops
+     FILE_WRITE_DATA, and the VM never reads through an append handle. */
+  if (flags & AGC_FS_APPEND) native = UV_FS_O_RDWR;
+#endif
   if (flags & AGC_FS_CREATE) native |= UV_FS_O_CREAT;
   if (flags & AGC_FS_EXCLUSIVE) native |= UV_FS_O_EXCL | UV_FS_O_NOFOLLOW;
   if (flags & AGC_FS_APPEND) native |= UV_FS_O_APPEND;

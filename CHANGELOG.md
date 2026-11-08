@@ -76,6 +76,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   skip `_build/` too.
 - `Cache.bytes` of `std/cache` stays exact when a task stalls while the
   generations rotate; it could keep counting an entry that a removal dropped.
+- `File.try_lock` works on a handle opened with `"append"` on Windows; it
+  failed with "Operation not permitted".
 
 ## [0.26.2] - 2026-11-08
 
