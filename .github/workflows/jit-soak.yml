@@ -106,17 +106,9 @@ jobs:
           "$PYTHON" --version
           node --version
           "$PYTHON" tools/conformance.py host "$PLATFORM"
-      # The downloaded archive is kept per platform; the tool checks its pinned SHA-256 whether it comes from here or
-      # from the network (the tool file holds the version and the hashes, so a bump gets a new key).
-      - uses: actions/cache@v6
-        with:
-          path: ${{ runner.temp }}/duckdb-archive
-          key: duckdb-archive-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/provision_duckdb.py') }}
       - name: Provision the pinned DuckDB library (test-only; the tests never fetch)
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          lib="$("$PYTHON" tools/provision_duckdb.py --out "$RUNNER_TEMP/duckdb-native" --cache "$RUNNER_TEMP/duckdb-archive")"
+          lib="$("$PYTHON" tools/provision_duckdb.py --out "$RUNNER_TEMP/duckdb-native")"
           echo "DUCKDB_LIB=$lib" >> "$GITHUB_ENV"
       # The caches that platforms.yml saves on master; this workflow only restores them.
       - run: mkdir -p build && make -s vm-third-party-key > build/native-deps-key
