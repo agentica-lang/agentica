@@ -14,13 +14,13 @@ PLAIN = (
 AAD = "feedfacedeadbeeffeedfacedeadbeefabaddad2"
 
 def hex(text: String) -> Bytes
-  return Digest.hexdecode(text).unwrap!
+  return OpenSSL.Digest.hexdecode(text).unwrap!
 end
 
 def seal(label: String, key: String, iv: String, plain: Bytes, aad: String) -> Void
-  sealed = Cipher.aes_256_gcm_encrypt(hex(key), hex(iv), plain, hex(aad)).unwrap!
-  opened = Cipher.aes_256_gcm_decrypt(hex(key), hex(iv), sealed, hex(aad)).unwrap!
-  puts("#{label} #{Digest.hexencode(sealed)} #{opened == plain}")
+  sealed = OpenSSL.Cipher.aes_256_gcm_encrypt(hex(key), hex(iv), plain, hex(aad)).unwrap!
+  opened = OpenSSL.Cipher.aes_256_gcm_decrypt(hex(key), hex(iv), sealed, hex(aad)).unwrap!
+  puts("#{label} #{OpenSSL.Digest.hexencode(sealed)} #{opened == plain}")
 end
 
 # The bytes with the one at index flipped in its lowest bit.
@@ -33,7 +33,7 @@ def shape(label: String, r: Result[Bytes]) -> Void
 end
 
 def main() -> Void
-  zero_key = Digest.hexencode(Bytes.from_list(List.repeat(0, 32)).unwrap!)
+  zero_key = OpenSSL.Digest.hexencode(Bytes.from_list(List.repeat(0, 32)).unwrap!)
   zero_iv = "000000000000000000000000"
   seal("tc13", zero_key, zero_iv, "".bytes, "")
   seal("tc14", zero_key, zero_iv, Bytes.from_list(List.repeat(0, 16)).unwrap!, "")
@@ -43,22 +43,22 @@ def main() -> Void
   iv = hex(IV)
   plain = hex(PLAIN).take(60)
   aad = hex(AAD)
-  left_out = Cipher.aes_256_gcm_encrypt(key, iv, plain).unwrap!
-  puts("default #{left_out == Cipher.aes_256_gcm_encrypt(key, iv, plain, "".bytes).unwrap!}")
-  sealed = Cipher.aes_256_gcm_encrypt(key, iv, plain, aad).unwrap!
-  shape("tag flipped", Cipher.aes_256_gcm_decrypt(key, iv, flip(sealed, sealed.size - 1), aad))
-  shape("tag cut", Cipher.aes_256_gcm_decrypt(key, iv, sealed.take(sealed.size - 1), aad))
-  shape("ciphertext flipped", Cipher.aes_256_gcm_decrypt(key, iv, flip(sealed, 0), aad))
-  shape("auth_data flipped", Cipher.aes_256_gcm_decrypt(key, iv, sealed, flip(aad, 3)))
-  shape("auth_data left out", Cipher.aes_256_gcm_decrypt(key, iv, sealed))
-  shape("key flipped", Cipher.aes_256_gcm_decrypt(flip(key, 31), iv, sealed, aad))
-  shape("iv flipped", Cipher.aes_256_gcm_decrypt(key, flip(iv, 11), sealed, aad))
-  shape("key 31", Cipher.aes_256_gcm_encrypt(key.take(31), iv, plain))
-  shape("key 33", Cipher.aes_256_gcm_encrypt(key + key.take(1), iv, plain))
-  shape("key 16", Cipher.aes_256_gcm_decrypt(key.take(16), iv, sealed))
-  shape("iv 0", Cipher.aes_256_gcm_encrypt(key, "".bytes, plain))
-  shape("iv 11", Cipher.aes_256_gcm_encrypt(key, iv.take(11), plain))
-  shape("iv 16", Cipher.aes_256_gcm_decrypt(key, iv + iv.take(4), sealed))
-  shape("input 0", Cipher.aes_256_gcm_decrypt(key, iv, "".bytes))
-  shape("input 15", Cipher.aes_256_gcm_decrypt(key, iv, sealed.take(15)))
+  left_out = OpenSSL.Cipher.aes_256_gcm_encrypt(key, iv, plain).unwrap!
+  puts("default #{left_out == OpenSSL.Cipher.aes_256_gcm_encrypt(key, iv, plain, "".bytes).unwrap!}")
+  sealed = OpenSSL.Cipher.aes_256_gcm_encrypt(key, iv, plain, aad).unwrap!
+  shape("tag flipped", OpenSSL.Cipher.aes_256_gcm_decrypt(key, iv, flip(sealed, sealed.size - 1), aad))
+  shape("tag cut", OpenSSL.Cipher.aes_256_gcm_decrypt(key, iv, sealed.take(sealed.size - 1), aad))
+  shape("ciphertext flipped", OpenSSL.Cipher.aes_256_gcm_decrypt(key, iv, flip(sealed, 0), aad))
+  shape("auth_data flipped", OpenSSL.Cipher.aes_256_gcm_decrypt(key, iv, sealed, flip(aad, 3)))
+  shape("auth_data left out", OpenSSL.Cipher.aes_256_gcm_decrypt(key, iv, sealed))
+  shape("key flipped", OpenSSL.Cipher.aes_256_gcm_decrypt(flip(key, 31), iv, sealed, aad))
+  shape("iv flipped", OpenSSL.Cipher.aes_256_gcm_decrypt(key, flip(iv, 11), sealed, aad))
+  shape("key 31", OpenSSL.Cipher.aes_256_gcm_encrypt(key.take(31), iv, plain))
+  shape("key 33", OpenSSL.Cipher.aes_256_gcm_encrypt(key + key.take(1), iv, plain))
+  shape("key 16", OpenSSL.Cipher.aes_256_gcm_decrypt(key.take(16), iv, sealed))
+  shape("iv 0", OpenSSL.Cipher.aes_256_gcm_encrypt(key, "".bytes, plain))
+  shape("iv 11", OpenSSL.Cipher.aes_256_gcm_encrypt(key, iv.take(11), plain))
+  shape("iv 16", OpenSSL.Cipher.aes_256_gcm_decrypt(key, iv + iv.take(4), sealed))
+  shape("input 0", OpenSSL.Cipher.aes_256_gcm_decrypt(key, iv, "".bytes))
+  shape("input 15", OpenSSL.Cipher.aes_256_gcm_decrypt(key, iv, sealed.take(15)))
 end

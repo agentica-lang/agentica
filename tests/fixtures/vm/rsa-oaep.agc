@@ -1,4 +1,4 @@
-# RSA.public_encrypt_oaep with the 2048-bit fixture key of tests/fixtures/rsa/
+# OpenSSL.RSA.public_encrypt_oaep with the 2048-bit fixture key of tests/fixtures/rsa/
 # in both public PEM forms: the ciphertext has the key's 256 bytes and differs
 # on every call, and the data takes 0 to 214 bytes (256 - 42). Then the error
 # Results: no PEM, a key that is not RSA, a private key, data too long, a text
@@ -42,7 +42,7 @@ EC_PRIVATE = (
 )
 
 def hex(text: String) -> Bytes
-  return Digest.hexdecode(text).unwrap!
+  return OpenSSL.Digest.hexdecode(text).unwrap!
 end
 
 def zeros(n: Int) -> Bytes
@@ -64,27 +64,27 @@ end
 
 def main() -> Void
   data = "scrambled password".bytes
-  shape("spki", RSA.public_encrypt_oaep(SPKI, data))
-  shape("pkcs1", RSA.public_encrypt_oaep(PKCS1, data))
-  shape("empty data", RSA.public_encrypt_oaep(SPKI, "".bytes))
-  shape("214 bytes", RSA.public_encrypt_oaep(SPKI, zeros(214)))
-  shape("215 bytes", RSA.public_encrypt_oaep(SPKI, zeros(215)))
-  first = RSA.public_encrypt_oaep(SPKI, data).unwrap!
-  puts("fresh seed #{first != RSA.public_encrypt_oaep(SPKI, data).unwrap!}")
-  shape("no text", RSA.public_encrypt_oaep("", data))
-  shape("no pem", RSA.public_encrypt_oaep("MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAs1ZCN9Wxre", data))
-  shape("cut pem", RSA.public_encrypt_oaep(SPKI.slice(0, 200), data))
-  shape("ec key", RSA.public_encrypt_oaep(EC_PUBLIC, data))
-  shape("private key", RSA.public_encrypt_oaep(EC_PRIVATE, data))
-  shape("64 KiB text", RSA.public_encrypt_oaep(List.repeat(" ", 65537).join("") + SPKI, data))
+  shape("spki", OpenSSL.RSA.public_encrypt_oaep(SPKI, data))
+  shape("pkcs1", OpenSSL.RSA.public_encrypt_oaep(PKCS1, data))
+  shape("empty data", OpenSSL.RSA.public_encrypt_oaep(SPKI, "".bytes))
+  shape("214 bytes", OpenSSL.RSA.public_encrypt_oaep(SPKI, zeros(214)))
+  shape("215 bytes", OpenSSL.RSA.public_encrypt_oaep(SPKI, zeros(215)))
+  first = OpenSSL.RSA.public_encrypt_oaep(SPKI, data).unwrap!
+  puts("fresh seed #{first != OpenSSL.RSA.public_encrypt_oaep(SPKI, data).unwrap!}")
+  shape("no text", OpenSSL.RSA.public_encrypt_oaep("", data))
+  shape("no pem", OpenSSL.RSA.public_encrypt_oaep("MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAs1ZCN9Wxre", data))
+  shape("cut pem", OpenSSL.RSA.public_encrypt_oaep(SPKI.slice(0, 200), data))
+  shape("ec key", OpenSSL.RSA.public_encrypt_oaep(EC_PUBLIC, data))
+  shape("private key", OpenSSL.RSA.public_encrypt_oaep(EC_PRIVATE, data))
+  shape("64 KiB text", OpenSSL.RSA.public_encrypt_oaep(List.repeat(" ", 65537).join("") + SPKI, data))
   # n = 2^255 + 1 and e = 65537: 32 bytes, too few for the 42 of the padding.
   small = hex("302802210080") + zeros(30) + hex("01") + hex("0203010001")
-  shape("256-bit key", RSA.public_encrypt_oaep(pkcs1_pem(small), "".bytes))
+  shape("256-bit key", OpenSSL.RSA.public_encrypt_oaep(pkcs1_pem(small), "".bytes))
   # n = 2^1023 + 1 and e = n + 2.
   n = hex("0281810080") + zeros(126)
   above = hex("30820108") + n + hex("01") + n + hex("03")
-  shape("exponent above modulus", RSA.public_encrypt_oaep(pkcs1_pem(above), data))
+  shape("exponent above modulus", OpenSSL.RSA.public_encrypt_oaep(pkcs1_pem(above), data))
   # n = 2^16399 + 1 and e = 65537.
   big = hex("3082080c028208030080") + zeros(2048) + hex("01") + hex("0203010001")
-  shape("16400-bit key", RSA.public_encrypt_oaep(pkcs1_pem(big), data))
+  shape("16400-bit key", OpenSSL.RSA.public_encrypt_oaep(pkcs1_pem(big), data))
 end

@@ -451,8 +451,8 @@ static void out_name(out_buffer *out, const char *s, size_t n) {
 }
 
 /* The length of the name that the report shows for builtin key KEY: its catalog name. A byte row that moved to Bytes
-   (#805) kept its catalog name under the key "<name>.bytes" (Digest.sha256.bytes, __lazy_zlib.bytes), so the suffix
-   is dropped when the rest is a qualified name or a prelude key; String.bytes (s.bytes) is a name of its own. */
+   (#805) kept its catalog name under the key "<name>.bytes" (OpenSSL.Digest.sha256.bytes, __lazy_zlib.bytes), so the
+   suffix is dropped when the rest is a qualified name or a prelude key; String.bytes (s.bytes) is a name of its own. */
 static size_t shown_name_len(const char *key) {
   static const char suffix[] = ".bytes";
   size_t n = strlen(key), cut = sizeof suffix - 1;

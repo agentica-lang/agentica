@@ -7,6 +7,7 @@ import Model from "builtin_model"
 import {
   BUILTIN_ROWS,
   ENUMS as DATA_ENUMS,
+  FAMILIES as DATA_FAMILIES,
   HANDLE_TYPES,
   OPAQUE_TYPES as DATA_OPAQUE_TYPES,
   RECORDS as DATA_RECORDS,
@@ -19,6 +20,7 @@ EMPTY_BUILTINS: Map[String, Model.Builtin] = {}
 EMPTY_RECORDS: Map[String, List[Model.Named]] = {}
 EMPTY_ENUMS: Map[String, Model.EnumDef] = {}
 EMPTY_PRELUDE: Map[String, Model.PreludeRow] = {}
+EMPTY_FAMILIES: Map[String, List[String]] = {}
 
 export ENTRIES: Map[String, Model.Builtin] = BUILTIN_ROWS.reduce(EMPTY_BUILTINS) do |found, row|
   found.put(row.name, row)
@@ -33,6 +35,15 @@ export ENUMS: Map[String, Model.EnumDef] = DATA_ENUMS.reduce(EMPTY_ENUMS) do |fo
 end
 
 export OPAQUE_TYPES = Set.new(DATA_OPAQUE_TYPES)
+
+## The builtin types of a family (Family.Member): the records, enums and opaque types whose name starts with a family.
+FAMILY_TYPE_NAMES = RECORDS.keys
+  .concat(ENUMS.keys)
+  .concat(DATA_OPAQUE_TYPES)
+  .filter do |name: String| name.contains?(".") and DATA_FAMILIES.include?(name.split(".")[0]) end
+
+export FAMILY_TYPES = Set.new(FAMILY_TYPE_NAMES)
+
 export HANDLES = Set.new(HANDLE_TYPES)
 export RESERVED = Set.new(RESERVED_TYPE_NAMES)
 
@@ -48,11 +59,40 @@ export PUBLIC_NAMES = ENTRIES.keys.filter do |name|
   !STD_ONLY.has_key?(name.split(".")[0]) and !PRELUDE_ONLY.include?(name)
 end
 
-## The public builtins a call can name, for the did-you-mean of an unknown name. A name with two dots
-## (JSON.Codec.decode) is a method of a builtin type, written only on a value of it, so it is left out.
-export CALLABLE_NAMES = PUBLIC_NAMES.filter do |name| name.split(".").size < 3 end
+## The builtin families (builtins_data.agc), each with its members: Family.Member is a group of functions, the rows
+## named Family.Member.fn, or a builtin type of that name. Members are sorted by name.
+export FAMILY_MEMBERS: Map[String, List[String]] = DATA_FAMILIES.reduce(EMPTY_FAMILIES) do |found, family|
+  functions = ENTRIES.keys.filter do |name: String| name.starts_with?("#{family}.") and name.split(".").size == 3 end
+  types = FAMILY_TYPE_NAMES.filter do |name: String| name.starts_with?("#{family}.") end
+  found.put(family, functions.concat(types).map do |name: String| name.split(".")[1] end.uniq.sort)
+end
+
+## The public builtins a call can name, for the did-you-mean of an unknown name. Any other name with two dots
+## (Native.Mutex.synchronize) is a method of a builtin type, written only on a value of it, so it is left out; a
+## function of a family member (OpenSSL.Digest.sha256) stays.
+export CALLABLE_NAMES = PUBLIC_NAMES.filter do |name|
+  parts = name.split(".")
+  parts.size < 3 or (FAMILY_MEMBERS.has_key?(parts[0]) and !FAMILY_TYPES.include?("#{parts[0]}.#{parts[1]}"))
+end
 
 export BARE_NAMES = Set.new(ENTRIES.keys.filter do |name| !name.contains?(".") end)
+
+## True when the name is Family.Member.fn, a function of a member of a builtin family.
+export def member_function?(name: String) -> Bool
+  parts = name.split(".")
+  return parts.size == 3 and member?(parts[0], parts[1])
+end
+
+## True when the family has the member: Family.Member names a group of functions or a builtin type.
+export def member?(family: String, member: String) -> Bool
+  found = FAMILY_MEMBERS.get(family)
+  return found.some? and found.unwrap!.include?(member)
+end
+
+## True when Family.Member names a builtin type (a record, an enum or an opaque type) rather than a group of functions.
+export def member_type?(family: String, member: String) -> Bool
+  return FAMILY_TYPES.include?("#{family}.#{member}")
+end
 
 ## The builtin of that name, or none when there is none (builtin-ref without an arity).
 export def lookup(name: String) -> Optional[Model.Builtin]

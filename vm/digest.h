@@ -1,7 +1,7 @@
 /*
  * The digest adapter interface: one-shot hashes and HMACs for the Digest and
  * HMAC builtins (crypto.c), an incremental SHA-256 for the File hash
- * (files.c), secure random bytes for SecureRandom, a constant-time compare,
+ * (files.c), secure random bytes for OpenSSL.Random, a constant-time compare,
  * Triple DES CBC, AES-256-GCM and CMAC (Cipher, CMAC), PBKDF2 and scrypt (KDF),
  * RSA-OAEP with a PEM public key (RSA), and the wipe of a secret. The OpenSSL
  * code is in digest_openssl.c. Adapter header. Design: docs/vm/15-layers.md

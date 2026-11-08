@@ -21,7 +21,7 @@ struct Out
 end
 
 def hex(text: String) -> Bytes
-  return Digest.hexdecode(text).unwrap!
+  return OpenSSL.Digest.hexdecode(text).unwrap!
 end
 
 def main() -> Void
@@ -31,8 +31,8 @@ def main() -> Void
     iv = hex(c.iv)
     aad = hex(c.aad)
     Out(
-      sealed: Digest.hexencode(Cipher.aes_256_gcm_encrypt(key, iv, hex(c.data), aad).unwrap!),
-      opened: Digest.hexencode(Cipher.aes_256_gcm_decrypt(key, iv, hex(c.sealed), aad).unwrap!),
+      sealed: OpenSSL.Digest.hexencode(OpenSSL.Cipher.aes_256_gcm_encrypt(key, iv, hex(c.data), aad).unwrap!),
+      opened: OpenSSL.Digest.hexencode(OpenSSL.Cipher.aes_256_gcm_decrypt(key, iv, hex(c.sealed), aad).unwrap!),
     )
   end
   puts(JSON.encode(outs))

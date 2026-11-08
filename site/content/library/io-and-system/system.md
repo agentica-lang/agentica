@@ -259,4 +259,4 @@ true
 Each run gives other numbers. Run with `agentica --seed 42 file.agc` to get the same numbers every time (`N` is `0 .. 2147483647`, otherwise the exit status is 2). Without `--seed`, the generator is seeded from the operating system.
 
 - Each task has its own generator. It is split from its parent when the task is spawned, so each task repeats its own numbers: the main task starts from the seed, and each spawn takes one draw from its parent. Timers, I/O and more than one scheduler can still change how tasks interleave, so a run of several tasks as a whole is not repeatable.
-- Do not use `Random` for secrets: it is seeded, and `--seed` repeats it. Use [SecureRandom](/library/text-and-data/crypto/#securerandom) for keys, tokens and IDs.
+- Do not use `Random` for secrets: it is seeded, and `--seed` repeats it. Use [OpenSSL.Random](/library/text-and-data/crypto/#random) for keys, tokens and IDs.

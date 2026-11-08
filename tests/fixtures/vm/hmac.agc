@@ -3,17 +3,17 @@
 # and 7 use a 131-byte key, longer than both block sizes. tests/test_vm_crypto.py
 # checks generated keys and data against Python's hmac.
 def both(label: String, key: Bytes, data: Bytes) -> Void
-  puts("#{label} sha256 #{HMAC.sha256_hexdigest(key, data)}")
-  puts("#{label} sha512 #{HMAC.sha512_hexdigest(key, data)}")
+  puts("#{label} sha256 #{OpenSSL.HMAC.sha256_hexdigest(key, data)}")
+  puts("#{label} sha512 #{OpenSSL.HMAC.sha512_hexdigest(key, data)}")
 end
 
 # The byte form is the hex form decoded, with the MAC's size.
 def bytes_agree(key: Bytes, data: Bytes) -> Void
   same = (
-    Digest.hexencode(HMAC.sha256(key, data)) == HMAC.sha256_hexdigest(key, data) and
-    Digest.hexencode(HMAC.sha512(key, data)) == HMAC.sha512_hexdigest(key, data)
+    OpenSSL.Digest.hexencode(OpenSSL.HMAC.sha256(key, data)) == OpenSSL.HMAC.sha256_hexdigest(key, data) and
+    OpenSSL.Digest.hexencode(OpenSSL.HMAC.sha512(key, data)) == OpenSSL.HMAC.sha512_hexdigest(key, data)
   )
-  puts("bytes #{same} #{[HMAC.sha256(key, data).size, HMAC.sha512(key, data).size]}")
+  puts("bytes #{same} #{[OpenSSL.HMAC.sha256(key, data).size, OpenSSL.HMAC.sha512(key, data).size]}")
 end
 
 def repeat(byte: Int, n: Int) -> Bytes
@@ -26,8 +26,8 @@ def main() -> Void
   both("3", repeat(170, 20), repeat(221, 50))
   both("4", Bytes.from_list((1..25).to_a).unwrap!, repeat(205, 50))
   truncation = "Test With Truncation".bytes
-  puts("5 sha256 #{Digest.hexencode(HMAC.sha256(repeat(12, 20), truncation).take(16))}")
-  puts("5 sha512 #{Digest.hexencode(HMAC.sha512(repeat(12, 20), truncation).take(16))}")
+  puts("5 sha256 #{OpenSSL.Digest.hexencode(OpenSSL.HMAC.sha256(repeat(12, 20), truncation).take(16))}")
+  puts("5 sha512 #{OpenSSL.Digest.hexencode(OpenSSL.HMAC.sha512(repeat(12, 20), truncation).take(16))}")
   long_key = repeat(170, 131)
   both("6", long_key, "Test Using Larger Than Block-Size Key - Hash Key First".bytes)
   text = (

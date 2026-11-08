@@ -26,7 +26,7 @@ def show_get(t: ATS[{type}, Int], label: String, k: {type}) -> Void
 end
 
 def key(hex: String) -> Bytes
-  return Digest.hexdecode(hex).unwrap!
+  return OpenSSL.Digest.hexdecode(hex).unwrap!
 end
 
 """
@@ -151,7 +151,7 @@ def operations(seed, count, keys):
 
 def program(ops, key_type):
     if key_type == "Bytes":
-        key, keys = 'key("{k}")', "t.keys.map do |k| Digest.hexencode(k) end"
+        key, keys = 'key("{k}")', "t.keys.map do |k| OpenSSL.Digest.hexencode(k) end"
     else:
         key, keys = '"{k}"', "t.keys"
     lines = []

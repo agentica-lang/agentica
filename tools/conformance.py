@@ -229,6 +229,7 @@ EXCLUDED = {
     "tests/test_frontend_workspace.py": "the linker over an in-memory Workspace, the same on every system",
     "tests/test_frontend_wire.py": "the chunks of the bytecode writer, pure Agentica, the same on every system",
     "tests/test_stdlib_docs.py": "a check of the sources (docs on every export), the same on every system",
+    "tests/test_skill_catalog.py": "a check of the programming skill against the catalog, the same on every system",
     "tests/test_stdlib_modules.py": "a check of stdlib/MODULES and stdlib/CORE, the same on every system",
     "tests/test_style_line_width.py": "a check of the sources (line width of stdlib/), the same on every system",
     "tests/test_style_core_purity.py": "a check of the sources (the stage folders never call the machine), the same on every system",

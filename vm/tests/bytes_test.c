@@ -331,15 +331,15 @@ static void test_wrong_tags(void) {
    wrong tag (the type cannot give one; only hand-made bytecode can). */
 static void test_crypto_keys(void) {
   static const char *const one_data[] = {
-    "Digest.md5.bytes",      "Digest.md5_hexdigest.bytes",    "Digest.sha1.bytes",
-    "Digest.sha1_hexdigest.bytes", "Digest.sha256.bytes",     "Digest.sha256_hexdigest.bytes",
-    "Digest.sha512.bytes",   "Digest.sha512_hexdigest.bytes", "Base64.encode64.bytes",
-    "Base64.strict_encode64.bytes", "Digest.hexencode.bytes",
+    "OpenSSL.Digest.md5.bytes",      "OpenSSL.Digest.md5_hexdigest.bytes",    "OpenSSL.Digest.sha1.bytes",
+    "OpenSSL.Digest.sha1_hexdigest.bytes", "OpenSSL.Digest.sha256.bytes",     "OpenSSL.Digest.sha256_hexdigest.bytes",
+    "OpenSSL.Digest.sha512.bytes",   "OpenSSL.Digest.sha512_hexdigest.bytes", "Base64.encode64.bytes",
+    "Base64.strict_encode64.bytes", "OpenSSL.Digest.hexencode.bytes",
   };
-  static const char *const two_data[] = {"HMAC.sha256.bytes", "HMAC.sha256_hexdigest.bytes", "HMAC.sha512.bytes",
-                                         "HMAC.sha512_hexdigest.bytes", "HMAC.secure_compare.bytes",
-                                         "CMAC.aes", "CMAC.des_ede3"};
-  static const char *const three_data[] = {"Cipher.des_ede3_cbc_encrypt", "Cipher.des_ede3_cbc_decrypt"};
+  static const char *const two_data[] = {"OpenSSL.HMAC.sha256.bytes", "OpenSSL.HMAC.sha256_hexdigest.bytes", "OpenSSL.HMAC.sha512.bytes",
+                                         "OpenSSL.HMAC.sha512_hexdigest.bytes", "OpenSSL.HMAC.secure_compare.bytes",
+                                         "OpenSSL.CMAC.aes", "OpenSSL.CMAC.des_ede3"};
+  static const char *const three_data[] = {"OpenSSL.Cipher.des_ede3_cbc_encrypt", "OpenSSL.Cipher.des_ede3_cbc_decrypt"};
   agc_value datas[] = {raw("", 0), raw("hello\xff\x00", 7)};
   for (size_t d = 0; d < 2; d++) {
     for (size_t k = 0; k < sizeof one_data / sizeof one_data[0]; k++) (void)call(one_data[k], 1, &datas[d]);
@@ -353,31 +353,31 @@ static void test_crypto_keys(void) {
   /* Sizes that fit give ok, and a 0xFF and a NUL in the key are bytes like any other. */
   agc_value key = raw("hello\xff\x00!0123456789abcdef", 24), iv = raw("\x00\xff\x00\xff\x00\xff\x00\xff", 8);
   agc_value cipher_args[3] = {key, iv, raw("\xff\x00\xff\x00\xff\x00\xff\x00", 8)};
-  const agc_result *sealed = agc_as_result(&vm, call("Cipher.des_ede3_cbc_encrypt", 3, cipher_args));
+  const agc_result *sealed = agc_as_result(&vm, call("OpenSSL.Cipher.des_ede3_cbc_encrypt", 3, cipher_args));
   assert(sealed->ok && agc_as_bytes(&vm, sealed->value)->len == 8);
   agc_value cmac_args[2] = {key, datas[1]};
-  const agc_result *tag = agc_as_result(&vm, call("CMAC.des_ede3", 2, cmac_args));
+  const agc_result *tag = agc_as_result(&vm, call("OpenSSL.CMAC.des_ede3", 2, cmac_args));
   assert(tag->ok && agc_as_bytes(&vm, tag->value)->len == 8);
   agc_value hello = text("aGVsbG8=");
   const agc_result *decoded = agc_as_result(&vm, call("Base64.strict_decode64.bytes", 1, &hello));
   assert(decoded->ok && agc_as_bytes(&vm, decoded->value)->len == 5);
 
   agc_value count = agc_int(33);
-  assert(agc_as_bytes(&vm, call("SecureRandom.random_bytes.bytes", 1, &count))->len == 33);
+  assert(agc_as_bytes(&vm, call("OpenSSL.Random.random_bytes.bytes", 1, &count))->len == 33);
   count = agc_int(0);
-  assert(shared_empty(call("SecureRandom.random_bytes.bytes", 1, &count)));
+  assert(shared_empty(call("OpenSSL.Random.random_bytes.bytes", 1, &count)));
 
   agc_value list = call("Bytes.to_a", 1, &datas[1]), pair[2] = {datas[1], list};
-  fails("Digest.sha256.bytes", 1, &list, "RUNTIME-INTERNAL");
-  fails("Digest.hexencode.bytes", 1, &list, "RUNTIME-INTERNAL");
-  fails("HMAC.secure_compare.bytes", 2, pair, "RUNTIME-INTERNAL");
-  fails("CMAC.aes", 2, pair, "RUNTIME-INTERNAL");
+  fails("OpenSSL.Digest.sha256.bytes", 1, &list, "RUNTIME-INTERNAL");
+  fails("OpenSSL.Digest.hexencode.bytes", 1, &list, "RUNTIME-INTERNAL");
+  fails("OpenSSL.HMAC.secure_compare.bytes", 2, pair, "RUNTIME-INTERNAL");
+  fails("OpenSSL.CMAC.aes", 2, pair, "RUNTIME-INTERNAL");
   agc_value triple[3] = {key, list, datas[1]};
-  fails("Cipher.des_ede3_cbc_decrypt", 3, triple, "RUNTIME-INTERNAL");
+  fails("OpenSSL.Cipher.des_ede3_cbc_decrypt", 3, triple, "RUNTIME-INTERNAL");
   agc_value gcm_list[4] = {key, list, datas[1], datas[0]};
-  fails("Cipher.aes_256_gcm_encrypt", 4, gcm_list, "RUNTIME-INTERNAL");
+  fails("OpenSSL.Cipher.aes_256_gcm_encrypt", 4, gcm_list, "RUNTIME-INTERNAL");
   agc_value kdf_list[4] = {list, datas[1], agc_int(1), agc_int(16)};
-  fails("KDF.pbkdf2_hmac_sha256", 4, kdf_list, "RUNTIME-INTERNAL");
+  fails("OpenSSL.KDF.pbkdf2_hmac_sha256", 4, kdf_list, "RUNTIME-INTERNAL");
 }
 
 /* AES-256-GCM and the KDFs on empty Bytes and on Bytes with a NUL and a 0xFF: empty data and auth_data are valid,
@@ -390,57 +390,57 @@ static void test_gcm_and_kdf_keys(void) {
   memset(iv_text, 0, sizeof iv_text);
   agc_value key = raw(key_text, 32), iv = raw(iv_text, 12), empty = raw("", 0), odd = raw("hello\xff\x00", 7);
   agc_value args[4] = {key, iv, empty, empty};
-  const agc_result *sealed = agc_as_result(&vm, call("Cipher.aes_256_gcm_encrypt", 4, args));
+  const agc_result *sealed = agc_as_result(&vm, call("OpenSSL.Cipher.aes_256_gcm_encrypt", 4, args));
   assert(sealed->ok && agc_as_bytes(&vm, sealed->value)->len == AGC_GCM_TAG_BYTES);
   args[2] = sealed->value;
-  const agc_result *opened = agc_as_result(&vm, call("Cipher.aes_256_gcm_decrypt", 4, args));
+  const agc_result *opened = agc_as_result(&vm, call("OpenSSL.Cipher.aes_256_gcm_decrypt", 4, args));
   assert(opened->ok && shared_empty(opened->value));
   args[3] = odd;
-  assert(!agc_as_result(&vm, call("Cipher.aes_256_gcm_decrypt", 4, args))->ok);
+  assert(!agc_as_result(&vm, call("OpenSSL.Cipher.aes_256_gcm_decrypt", 4, args))->ok);
   args[2] = odd;
-  sealed = agc_as_result(&vm, call("Cipher.aes_256_gcm_encrypt", 4, args));
+  sealed = agc_as_result(&vm, call("OpenSSL.Cipher.aes_256_gcm_encrypt", 4, args));
   assert(sealed->ok && agc_as_bytes(&vm, sealed->value)->len == 7 + AGC_GCM_TAG_BYTES);
   args[2] = sealed->value;
-  opened = agc_as_result(&vm, call("Cipher.aes_256_gcm_decrypt", 4, args));
+  opened = agc_as_result(&vm, call("OpenSSL.Cipher.aes_256_gcm_decrypt", 4, args));
   assert(opened->ok);
   bytes_are(opened->value, "hello\xff\x00", 7);
   /* 15 bytes cannot hold the tag; a key or IV of another size fails before any work. */
   args[2] = raw(key_text, 15);
-  assert(!agc_as_result(&vm, call("Cipher.aes_256_gcm_decrypt", 4, args))->ok);
+  assert(!agc_as_result(&vm, call("OpenSSL.Cipher.aes_256_gcm_decrypt", 4, args))->ok);
   agc_value bad[4] = {raw(key_text, 31), iv, empty, empty};
-  assert(!agc_as_result(&vm, call("Cipher.aes_256_gcm_encrypt", 4, bad))->ok);
+  assert(!agc_as_result(&vm, call("OpenSSL.Cipher.aes_256_gcm_encrypt", 4, bad))->ok);
   bad[0] = key;
   bad[1] = raw(iv_text, 11);
-  assert(!agc_as_result(&vm, call("Cipher.aes_256_gcm_encrypt", 4, bad))->ok);
+  assert(!agc_as_result(&vm, call("OpenSSL.Cipher.aes_256_gcm_encrypt", 4, bad))->ok);
 
   agc_value kdf[4] = {odd, odd, agc_int(0), agc_int(1)};
-  assert(!agc_as_result(&vm, call("KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
+  assert(!agc_as_result(&vm, call("OpenSSL.KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
   kdf[2] = agc_int(2);
   kdf[3] = agc_int(0);
-  assert(!agc_as_result(&vm, call("KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
+  assert(!agc_as_result(&vm, call("OpenSSL.KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
   kdf[3] = agc_int(AGC_MAX_LIST_COUNT + 1);
-  assert(!agc_as_result(&vm, call("KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
+  assert(!agc_as_result(&vm, call("OpenSSL.KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
   /* The work cap: 25000001 iterations of two 32-byte blocks, and an iteration count whose product with the blocks
      overflows 64 bits, are refused before any work. */
   kdf[2] = agc_int(25000001);
   kdf[3] = agc_int(64);
-  assert(!agc_as_result(&vm, call("KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
+  assert(!agc_as_result(&vm, call("OpenSSL.KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
   kdf[2] = agc_int(INT64_MAX);
   kdf[3] = agc_int(AGC_MAX_LIST_COUNT);
-  assert(!agc_as_result(&vm, call("KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
+  assert(!agc_as_result(&vm, call("OpenSSL.KDF.pbkdf2_hmac_sha256", 4, kdf))->ok);
   agc_value scrypt[6] = {empty, empty, agc_int(15), agc_int(1), agc_int(1), agc_int(64)};
-  assert(!agc_as_result(&vm, call("KDF.scrypt", 6, scrypt))->ok);
+  assert(!agc_as_result(&vm, call("OpenSSL.KDF.scrypt", 6, scrypt))->ok);
   /* r = 1 needs n below 2^16, and r * p must stay below 2^30 (checked before the memory). */
   scrypt[2] = agc_int(65536);
-  assert(!agc_as_result(&vm, call("KDF.scrypt", 6, scrypt))->ok);
+  assert(!agc_as_result(&vm, call("OpenSSL.KDF.scrypt", 6, scrypt))->ok);
   scrypt[2] = agc_int(2);
   scrypt[3] = agc_int((int64_t)1 << 20);
   scrypt[4] = agc_int(1024);
-  assert(!agc_as_result(&vm, call("KDF.scrypt", 6, scrypt))->ok);
+  assert(!agc_as_result(&vm, call("OpenSSL.KDF.scrypt", 6, scrypt))->ok);
   /* A small n with a large p is still bounded work: r * p * (n + 16) above 2^25. */
   scrypt[3] = agc_int(1);
   scrypt[4] = agc_int(((int64_t)1 << 25) / 18 + 1);
-  assert(!agc_as_result(&vm, call("KDF.scrypt", 6, scrypt))->ok);
+  assert(!agc_as_result(&vm, call("OpenSSL.KDF.scrypt", 6, scrypt))->ok);
 }
 
 /* A GCM decrypt writes the plaintext before it checks the tag: on a wrong tag the adapter wipes it, so no part of it
@@ -559,10 +559,10 @@ static void test_rsa_oaep(void) {
   assert(agc_rsa_oaep_encrypt(even_n, strlen(even_n), data, 20, out, &len) == AGC_RSA_BAD_KEY && len == 0);
   assert(agc_rsa_oaep_encrypt(e_one, strlen(e_one), data, 20, out, &len) == AGC_RSA_BAD_KEY && len == 0);
   agc_value args[2] = {text(spki), raw((const char *)data, 214)};
-  const agc_result *sealed = agc_as_result(&vm, call("RSA.public_encrypt_oaep", 2, args));
+  const agc_result *sealed = agc_as_result(&vm, call("OpenSSL.RSA.public_encrypt_oaep", 2, args));
   assert(sealed->ok && agc_as_bytes(&vm, sealed->value)->len == 256);
   args[1] = raw((const char *)data, 215);
-  assert(!agc_as_result(&vm, call("RSA.public_encrypt_oaep", 2, args))->ok);
+  assert(!agc_as_result(&vm, call("OpenSSL.RSA.public_encrypt_oaep", 2, args))->ok);
   /* A text one byte over the cap is refused before the decoder reads it, whatever it holds. */
   char *padded = malloc(65537);
   assert(padded);
@@ -570,12 +570,12 @@ static void test_rsa_oaep(void) {
   memcpy(padded + 65537 - strlen(spki), spki, strlen(spki));
   args[0] = agc_string_value(agc_make_string(padded, 65537, 65537));
   args[1] = raw("", 0);
-  assert(!agc_as_result(&vm, call("RSA.public_encrypt_oaep", 2, args))->ok);
+  assert(!agc_as_result(&vm, call("OpenSSL.RSA.public_encrypt_oaep", 2, args))->ok);
   args[0] = agc_string_value(agc_make_string(padded + 1, 65536, 65536));
-  assert(agc_as_result(&vm, call("RSA.public_encrypt_oaep", 2, args))->ok);
+  assert(agc_as_result(&vm, call("OpenSSL.RSA.public_encrypt_oaep", 2, args))->ok);
   free(padded);
   agc_value swapped[2] = {raw("pem", 3), raw("", 0)};
-  fails("RSA.public_encrypt_oaep", 2, swapped, "RUNTIME-INTERNAL");
+  fails("OpenSSL.RSA.public_encrypt_oaep", 2, swapped, "RUNTIME-INTERNAL");
 }
 
 /* A key longer than the digest's block is hashed first (vm/digest_openssl.c): RFC 4231 test cases 6 and 7 use a
@@ -592,16 +592,16 @@ static void test_hmac_long_keys(void) {
     const char *name;
     const char *mac;
   } cases[] = {
-    {131, case6, "HMAC.sha256_hexdigest.bytes", "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"},
-    {131, case6, "HMAC.sha512_hexdigest.bytes",
+    {131, case6, "OpenSSL.HMAC.sha256_hexdigest.bytes", "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"},
+    {131, case6, "OpenSSL.HMAC.sha512_hexdigest.bytes",
      "80b24263c7c1a3ebb71493c1dd7be8b49b46d1f41b4aeec1121b013783f8f352"
      "6b56d037e05f2598bd0fd2215d6a1e5295e64f73f63f0aec8b915a985d786598"},
-    {131, case7, "HMAC.sha256_hexdigest.bytes", "9b09ffa71b942fcb27635fbcd5b0e944bfdc63644f0713938a7f51535c3a35e2"},
-    {131, case7, "HMAC.sha512_hexdigest.bytes",
+    {131, case7, "OpenSSL.HMAC.sha256_hexdigest.bytes", "9b09ffa71b942fcb27635fbcd5b0e944bfdc63644f0713938a7f51535c3a35e2"},
+    {131, case7, "OpenSSL.HMAC.sha512_hexdigest.bytes",
      "e37b6a775dc87dbaa4dfa9f96e5e3ffddebd71f8867289865df5a32d20cdc944"
      "b6022cac3c4982b10d5eeb55c3e4de15134676fb6de0446065c97440fa8c6a58"},
-    {64, hi, "HMAC.sha256_hexdigest.bytes", "ebef34e13d0a0fe04593d043bc7a865106db0604211d404c18206d862e5d7852"},
-    {128, hi, "HMAC.sha512_hexdigest.bytes",
+    {64, hi, "OpenSSL.HMAC.sha256_hexdigest.bytes", "ebef34e13d0a0fe04593d043bc7a865106db0604211d404c18206d862e5d7852"},
+    {128, hi, "OpenSSL.HMAC.sha512_hexdigest.bytes",
      "17eb09b3d3c0f3ac497c608347e1d5b5df5e4b062bfd56c191c8499f24a3a9d1"
      "c3dfb449d01f4c9ca316b6b8d6a6299bad883d0bffe11c88c60d7daed6feeb48"},
   };

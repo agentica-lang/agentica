@@ -149,13 +149,13 @@ def test_tasks_on_four_schedulers_give_the_exact_sum(tmp_path, repeats):
         assert (result.code, result.stdout, result.stderr) == (0, "%d\n" % expected_fan_out(), "")
 
 
-# Digest.sha256 runs without the shared lock (vm/crypto.c), so eight tasks hash 64 KiB each at once.
+# OpenSSL.Digest.sha256 runs without the shared lock (vm/crypto.c), so eight tasks hash 64 KiB each at once.
 SHA256_TASKS = """\
 def digest(seed: Int) -> Result[List[Int]]
   data = (0..65535).to_a.map do |i|
     (i * 31 + seed * 7 + i / 256) % 256
   end
-  return ok(Digest.sha256(try Bytes.from_list(data)).to_a)
+  return ok(OpenSSL.Digest.sha256(try Bytes.from_list(data)).to_a)
 end
 
 def main() -> Void
@@ -186,11 +186,11 @@ def work(seed: Int) -> Result[String]
   data = try Bytes.from_list(bytes)
   key = data.drop(8).take(24)
   iv = data.take(8)
-  sealed = try Cipher.des_ede3_cbc_encrypt(key, iv, data)
-  opened = try Cipher.des_ede3_cbc_decrypt(key.take(16), iv, try Cipher.des_ede3_cbc_encrypt(key.take(16), iv, data))
-  aes = try CMAC.aes(key.take(16), data)
-  tdes = try CMAC.des_ede3(key, data)
-  return ok("#{Digest.sha256_hexdigest(sealed)} #{opened == data} #{Digest.hexencode(aes + tdes)}")
+  sealed = try OpenSSL.Cipher.des_ede3_cbc_encrypt(key, iv, data)
+  opened = try OpenSSL.Cipher.des_ede3_cbc_decrypt(key.take(16), iv, try OpenSSL.Cipher.des_ede3_cbc_encrypt(key.take(16), iv, data))
+  aes = try OpenSSL.CMAC.aes(key.take(16), data)
+  tdes = try OpenSSL.CMAC.des_ede3(key, data)
+  return ok("#{OpenSSL.Digest.sha256_hexdigest(sealed)} #{opened == data} #{OpenSSL.Digest.hexencode(aes + tdes)}")
 end
 
 def main() -> Void
@@ -217,12 +217,12 @@ def work(seed: Int) -> Result[String]
     (i * 7 + seed * 3) % 256
   end
   data = try Bytes.from_list(bytes)
-  key = try KDF.pbkdf2_hmac_sha256(data.take(16), data.drop(16).take(16), 200, 32)
+  key = try OpenSSL.KDF.pbkdf2_hmac_sha256(data.take(16), data.drop(16).take(16), 200, 32)
   iv = data.take(12)
-  sealed = try Cipher.aes_256_gcm_encrypt(key, iv, data, data.take(seed))
-  opened = try Cipher.aes_256_gcm_decrypt(key, iv, sealed, data.take(seed))
-  scrypt = try KDF.scrypt(data.take(8), key, 256, 4, 2, 32)
-  return ok("#{Digest.sha256_hexdigest(sealed)} #{opened == data} #{Digest.hexencode(scrypt)}")
+  sealed = try OpenSSL.Cipher.aes_256_gcm_encrypt(key, iv, data, data.take(seed))
+  opened = try OpenSSL.Cipher.aes_256_gcm_decrypt(key, iv, sealed, data.take(seed))
+  scrypt = try OpenSSL.KDF.scrypt(data.take(8), key, 256, 4, 2, 32)
+  return ok("#{OpenSSL.Digest.sha256_hexdigest(sealed)} #{opened == data} #{OpenSSL.Digest.hexencode(scrypt)}")
 end
 
 def main() -> Void
@@ -239,7 +239,7 @@ def test_gcm_and_kdf_in_eight_tasks_on_four_schedulers_match_one_task(tmp_path):
     assert (result.code, result.stdout, result.stderr) == (0, "true\n" * 8, "")
 
 
-# RSA.public_encrypt_oaep runs without the shared lock (vm/crypto.c), so eight tasks decode the fixture key of
+# OpenSSL.RSA.public_encrypt_oaep runs without the shared lock (vm/crypto.c), so eight tasks decode the fixture key of
 # tests/fixtures/rsa/ (on stdin) and encrypt with it at once, which fills OpenSSL's decoder and key caches from several
 # schedulers (vm/tools/tsan.supp names the wrapper). The ciphertexts are random: each has the key's 256 bytes and no
 # two are the same.
@@ -247,7 +247,7 @@ RSA_TASKS = """\
 def work(pem: String, seed: Int) -> Result[List[String]]
   data = try Bytes.from_list([seed, seed + 1, seed + 2])
   sealed = (1..20).to_a.map do |_: Int|
-    Digest.hexencode(RSA.public_encrypt_oaep(pem, data).unwrap!)
+    OpenSSL.Digest.hexencode(OpenSSL.RSA.public_encrypt_oaep(pem, data).unwrap!)
   end
   return ok(sealed)
 end
@@ -278,8 +278,8 @@ def test_rsa_oaep_in_eight_tasks_on_four_schedulers(tmp_path):
 # draw at once. 64 KiB of bytes and a uuid from each task repeat with negligible chance (2 ** -122 per uuid pair).
 SECURE_RANDOM_TASKS = """\
 def draw(seed: Int) -> Result[String]
-  data = SecureRandom.random_bytes(65536)
-  return ok("#{Digest.hexencode(data)} #{SecureRandom.uuid}")
+  data = OpenSSL.Random.random_bytes(65536)
+  return ok("#{OpenSSL.Digest.hexencode(data)} #{OpenSSL.Random.uuid}")
 end
 
 def main() -> Void

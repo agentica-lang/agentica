@@ -1,12 +1,12 @@
 ---
 title: Base64 and hex
 weight: 8
-description: The Base64 and Digest builtins, which write bytes as base64 or hex text and read them back.
+description: The Base64 and OpenSSL.Digest builtins, which write bytes as base64 or hex text and read them back.
 ---
 
-`Base64` writes bytes as RFC 4648 base64 text and reads it back, in the forms of Ruby's `Base64` module and with the same results. `Digest.hexencode` writes hex digits as Ruby's does, and `Digest.hexdecode`, Agentica's own name for its inverse, reads them back. The VM computes them in plain C; nothing is written in Agentica.
+`Base64` writes bytes as RFC 4648 base64 text and reads it back, in the forms of Ruby's `Base64` module and with the same results. `OpenSSL.Digest.hexencode` writes hex digits as Ruby's does, and `OpenSSL.Digest.hexdecode`, Agentica's own name for its inverse, reads them back. The VM computes them in plain C; nothing is written in Agentica.
 
-They take and give [`Bytes`](/library/data-structures/bytes/), as `Digest.sha256` does. For text, encode its UTF-8 bytes from `s.bytes` and decode the bytes back with `String.from_bytes(b)`.
+They take and give [`Bytes`](/library/data-structures/bytes/), as `OpenSSL.Digest.sha256` does. For text, encode its UTF-8 bytes from `s.bytes` and decode the bytes back with `String.from_bytes(b)`.
 
 ## Base64
 
@@ -48,17 +48,17 @@ error("invalid base64")
 ## Hex
 
 ```signature
-Digest.hexencode(data: Bytes) -> String
-Digest.hexdecode(text: String) -> Result[Bytes]
+OpenSSL.Digest.hexencode(data: Bytes) -> String
+OpenSSL.Digest.hexdecode(text: String) -> Result[Bytes]
 ```
 
-`Digest.hexencode` gives two lowercase hex digits per byte. `Digest.hexdecode` takes an even number of hex digits in either case; an odd length or any other character, a space or `0x` included, is `error("invalid hex")`.
+`OpenSSL.Digest.hexencode` gives two lowercase hex digits per byte. `OpenSSL.Digest.hexdecode` takes an even number of hex digits in either case; an odd length or any other character, a space or `0x` included, is `error("invalid hex")`.
 
 ```agentica
 def main() -> Void
-  puts(Digest.hexencode(Digest.sha256("".bytes)).slice(0, 16))
-  puts(Digest.hexdecode("00FFa0").unwrap!.to_a)
-  puts(Digest.hexdecode("abc").ok?)
+  puts(OpenSSL.Digest.hexencode(OpenSSL.Digest.sha256("".bytes)).slice(0, 16))
+  puts(OpenSSL.Digest.hexdecode("00FFa0").unwrap!.to_a)
+  puts(OpenSSL.Digest.hexdecode("abc").ok?)
 end
 ```
 
@@ -69,4 +69,4 @@ false
 ```
 
 - The time grows with the input. None needs an effect label: they read nothing outside their argument.
-- `Base64` and `Digest` are reserved type names.
+- `Base64` is a reserved type name.

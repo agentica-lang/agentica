@@ -73,16 +73,19 @@ variables, functions and struct fields.
 Reserved builtin names cannot be declared as functions, types, variables, import
 aliases or module names (`RESERVED_TYPE_NAMES` in
 `compiler/catalog/builtins_data.agc`): `ATS`, `Await`, `Base64`, `Bool`,
-`Bytes`, `CMAC`, `Channel`, `Cipher`, `Crypto`, `Digest`, `Dir`, `File`,
-`FileHandle`, `FileInfo`, `Float`, `Fn`, `HMAC`, `Header`, `HttpClient`,
-`HttpClientOptions`, `HttpRequest`, `HttpResponse`, `HttpServer`,
-`HttpServerOptions`, `HttpWire`, `IO`, `Int`, `JSON`, `Json`, `JsonField`,
-`KDF`, `Lazy`, `List`, `Listener`, `LogEvent`, `LogLevel`, `LogRegistry`, `Map`,
-`Math`, `Nil`, `Optional`, `Path`, `Process`, `ProcessOutput`, `Profile`,
-`RSA`, `Random`, `Range`, `RegexEngine`, `Result`, `SecureRandom`, `Set`,
+`Bytes`, `Channel`, `Codec`, `Digest`, `Dir`, `File`, `FileHandle`, `FileInfo`,
+`Float`, `Fn`, `Header`, `HttpClient`, `HttpClientOptions`, `HttpRequest`,
+`HttpResponse`, `HttpServer`, `HttpServerOptions`, `HttpWire`, `IO`, `Int`,
+`JSON`, `Json`, `JsonField`, `Lazy`, `List`, `Listener`, `LogEvent`, `LogLevel`,
+`LogRegistry`, `Map`, `Math`, `Nil`, `OpenSSL`, `Optional`, `Path`, `Process`,
+`ProcessOutput`, `Profile`, `Random`, `Range`, `RegexEngine`, `Result`, `Set`,
 `Socket`, `Std`, `String`, `StructMember`, `System`, `TCP`, `TLS`, `Task`,
 `TaskDown`, `TaskExit`, `TaskRef`, `Test`, `TestCase`, `Time`,
-`TlsClientOptions`, `TlsContext`, `TlsServerOptions`, `Void` and `Zlib`.
+`TlsClientOptions`, `TlsContext`, `TlsServerOptions`, `Void` and `Zlib`. A
+builtin family reserves only its own name: its members are written
+`Family.Member`, such as `OpenSSL.Cipher`, and its functions `Family.Member.fn`,
+such as `OpenSSL.Cipher.aes_256_gcm_encrypt` (§6, "Minimal builtin functions"),
+so `Cipher` or `HMAC` inside a family reserve nothing.
 `HTTP` is not reserved: it is the usual alias of `std/http`. `ok`, `error`,
 `some` and `none` are names, but cannot be declared as functions, variables,
 parameters, loop variables or fields (`CHECK-REDEFINED-NAME`). The same holds

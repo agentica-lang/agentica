@@ -1,4 +1,4 @@
-"""The Digest hashes against Python's hashlib, the HMACs and HMAC.secure_compare
+"""The Digest hashes against Python's hashlib, the HMACs and OpenSSL.HMAC.secure_compare
 against Python's hmac, Base64 and hex against Python's base64 and binascii, the SecureRandom
 formats against Python's uuid and re, PBKDF2 and scrypt against Python's hashlib, and Triple
 DES CBC, CMAC and AES-256-GCM against Node peers, on every system.
@@ -18,14 +18,14 @@ as lists of Ints. SecureRandom gives new bytes on every run, so
 tests/fixtures/secure-random-peer.agc is checked on properties only: sizes, the
 byte range, the hex and uuid forms, and that draws differ. A bad count checks
 the code and the span of the diagnostic.
-tests/fixtures/cipher-peer.agc runs Cipher.des_ede3_cbc_encrypt and _decrypt, CMAC.aes and
-CMAC.des_ede3 on generated keys and data; Python's standard library has neither DES nor CMAC, so
+tests/fixtures/cipher-peer.agc runs OpenSSL.Cipher.des_ede3_cbc_encrypt and _decrypt, OpenSSL.CMAC.aes and
+OpenSSL.CMAC.des_ede3 on generated keys and data; Python's standard library has neither DES nor CMAC, so
 tests/fixtures/cipher-peer.js (Node's crypto, with CMAC written from RFC 4493) is the peer. The
 known-answer vectors and the error Results are the VM fixtures triple-des-cbc and cmac.
-tests/fixtures/kdf-peer.agc derives keys with KDF.pbkdf2_hmac_sha256 and KDF.scrypt, checked
-against hashlib. tests/fixtures/gcm-peer.agc seals with Cipher.aes_256_gcm_encrypt and opens
+tests/fixtures/kdf-peer.agc derives keys with OpenSSL.KDF.pbkdf2_hmac_sha256 and OpenSSL.KDF.scrypt, checked
+against hashlib. tests/fixtures/gcm-peer.agc seals with OpenSSL.Cipher.aes_256_gcm_encrypt and opens
 what tests/fixtures/gcm-peer.js (Node's crypto) sealed. Their vectors and errors are the VM
-fixtures kdf and aes-256-gcm. tests/fixtures/rsa-peer.agc encrypts with RSA.public_encrypt_oaep
+fixtures kdf and aes-256-gcm. tests/fixtures/rsa-peer.agc encrypts with OpenSSL.RSA.public_encrypt_oaep
 and tests/fixtures/rsa-peer.js (Node's crypto) decrypts with the private key of
 tests/fixtures/rsa/; the errors are the VM fixture rsa-oaep.
 """
@@ -303,7 +303,7 @@ def test_secure_random_differs_between_runs(secure_random_peer):
 
 
 # A count outside 0..1048576 halts at the argument.
-BAD_COUNTS = [(call, count) for call in ("SecureRandom.random_bytes", "SecureRandom.hex")
+BAD_COUNTS = [(call, count) for call in ("OpenSSL.Random.random_bytes", "OpenSSL.Random.hex")
               for count in ("-1", "1048577", "9223372036854775807")]
 
 
@@ -373,7 +373,7 @@ def main() -> Void
   tasks = (1..200).to_a.map do |_|
     Task.spawn do
       _ = started.send(true, 0)
-      KDF.scrypt("password".bytes, "NaCl".bytes, 4096, 8, 1, 32)
+      OpenSSL.KDF.scrypt("password".bytes, "NaCl".bytes, 4096, 8, 1, 32)
     end
   end
   tasks.each do |_| _ = started.recv(60000) end
