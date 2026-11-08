@@ -48,6 +48,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `Examples` is no longer `PARSE-GHERKIN-PARAMETER` (the code is gone); it
   stays as written, as in Cucumber, so `#include <stdio.h>` in a Doc String
   works. A misspelled column is now an undefined step.
+- **Breaking:** `Path.cwd` and `Path.resolve(".")` or `Path.resolve("x/..")`
+  no longer end in `/` (except at a root); `Path.resolve` keeps a trailing `/`
+  only when the path ends in one. Join with `Path.join`: code like
+  `cwd + "data.txt"` or `cwd.slice(0, cwd.length - 1)` breaks.
 
 ### Removed
 
@@ -58,8 +62,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - An I/O timeout never ends before its time; it could end up to 1 ms early.
-- `Path.cwd` and `Path.resolve(".")` give the folder with no trailing `/`
-  (except `/`); `Path.resolve` keeps a trailing `/` only when the path has one.
+- `agentica test` no longer takes a `steps.agc` from above the working folder
+  for a path below it; the search stops at the working folder, as documented.
 
 ## [0.26.2] - 2026-11-08
 

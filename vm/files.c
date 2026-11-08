@@ -2250,18 +2250,29 @@ static agc_value builtin_real(agc_vm *vm, agc_value *args, uint32_t span) {
   return start(vm, o, agc_void(), NO_DEADLINE);
 }
 
+/* Whether the stored working folder (always ending in '/') is a root: "/"; on Windows also a drive root "X:/"
+   or a share root "//host/share/" (exactly two parts after "//"). */
+static bool cwd_root(const agc_string *cwd) {
+  size_t len = cwd->bytes;
+  if (len == 1) return true;
+#ifdef _WIN32
+  if (len == 3 && cwd->data[1] == ':') return true;
+  if (len < 6 || cwd->data[0] != '/' || cwd->data[1] != '/') return false;
+  const char *host_end = memchr(cwd->data + 2, '/', len - 2);
+  if (!host_end || host_end == cwd->data + 2) return false;
+  const char *share_end = memchr(host_end + 1, '/', (size_t)(cwd->data + len - (host_end + 1)));
+  return share_end == cwd->data + len - 1 && share_end > host_end + 1;
+#else
+  return false;
+#endif
+}
+
 static agc_value builtin_cwd(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
   const agc_string *cwd = cwd_of(vm);
   /* The stored form ends in '/' so that relative paths join onto it; the answer drops it except at a root. */
-  size_t len = cwd->bytes;
-#ifdef _WIN32
-  bool root = len == 3 && cwd->data[1] == ':';
-#else
-  bool root = len == 1;
-#endif
-  if (!root) len--;
+  size_t len = cwd_root(cwd) ? cwd->bytes : cwd->bytes - 1;
   return agc_result_value(true, agc_string_value(lossy(cwd->data, len)));
 }
 
