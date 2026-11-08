@@ -233,6 +233,7 @@ EXCLUDED = {
     "tests/test_style_line_width.py": "a check of the sources (line width of stdlib/), the same on every system",
     "tests/test_style_core_purity.py": "a check of the sources (the stage folders never call the machine), the same on every system",
     "tests/test_vm_style.py": "a check of the C sources (style), the same on every system",
+    "tests/test_vm_compile_commands.py": "make compile-commands, a developer tool of the build, not the product",
     "tests/test_timeout_guard.py": "the time limit of the test harness itself",
     "tests/test_temp_roots.py": "the temporary roots of the test harness itself, not the product",
     "tests/test_vm_trace.py": "VM tracing, a developer tool of the Linux debug builds",
