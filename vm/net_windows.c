@@ -74,10 +74,12 @@ int64_t agc_net_send(uintptr_t sock, const uint8_t *data, size_t len) {
   while (sent < len) {
     size_t step = len - sent < SEND_CHUNK ? len - sent : SEND_CHUNK;
     int n = send((SOCKET)sock, (const char *)data + sent, (int)step, 0);
-    if (n != SOCKET_ERROR) {
+    if (n > 0) {
       sent += (size_t)n;
       continue;
     }
+    /* No byte taken for a non-empty send: stop, and the I/O thread sends the rest. */
+    if (n == 0) break;
     int err = WSAGetLastError();
     if (err == WSAEINTR) continue;
     if (sent) break;

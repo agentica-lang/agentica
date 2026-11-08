@@ -10,6 +10,8 @@ import json
 import os
 import re
 import socket
+import struct
+import sys
 import threading
 import time
 
@@ -220,12 +222,17 @@ end
 
 
 # The UCRT's errno values for libuv's socket errors on Windows (vm/net_windows.c); elsewhere the host's errno.
-WINDOWS_ERRNO = {"ECONNREFUSED": 107, "ECONNRESET": 108}
+WINDOWS_ERRNO = {"ECONNREFUSED": 107, "ECONNRESET": 108, "EPIPE": 32}
+
+
+def errno_number(name):
+    """The errno number the VM shows for an errno name on the target system."""
+    return WINDOWS_ERRNO[name] if TARGET_OS == "windows" else getattr(errno, name)
 
 
 def system_error(name):
     """The `system error:` text of the VM for an errno name: the host's number and its strerror text."""
-    code = WINDOWS_ERRNO[name] if TARGET_OS == "windows" else getattr(errno, name)
+    code = errno_number(name)
     return "system error: %s; errno=%d" % (os.strerror(code), code)
 
 
@@ -388,6 +395,53 @@ def test_two_tasks_writing_to_one_socket_take_the_writer_lock_in_fifo_order(tmp_
     # 16 MiB send into its buffers at once, so there too no writer waits.
     if not TEST_SCHEDULERS and TARGET_OS != "windows":
         assert " io lock_wait " in trace.read_text(), "a writer waited for the lock"
+
+
+RESET_SEND_PROGRAM = """\
+def main() -> Void
+  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  puts(TCP.local_port(listener))
+  IO.flush()
+  socket = TCP.accept(listener, 5000).unwrap!
+  puts("accepted")
+  IO.flush()
+  _ = IO.gets()
+  sent = TCP.send(socket, "x", 5000)
+  tries = 1
+  while sent.ok? && tries < 100
+    Task.sleep(10)
+    sent = TCP.send(socket, "x", 5000)
+    tries = tries + 1
+  end
+
+  IO.inspect(sent)
+  TCP.close(socket)
+  TCP.close_listener(listener)
+  puts("alive")
+end
+"""
+
+
+def test_a_direct_send_to_a_peer_that_reset_fails_with_a_write_error_and_the_program_goes_on(tmp_path, adopt):
+    """On four schedulers a send on a plain socket calls send() on the scheduler (the direct send, #1188). The Python
+    peer closes with SO_LINGER 0, so its kernel answers with RST; the send then fails with `could not write to the
+    stream` and ECONNRESET or EPIPE (a send may still go out if the RST has not arrived, so the program retries), and
+    the program goes on to its end."""
+    vm = adopt(start_vm(compile_text(RESET_SEND_PROGRAM, "reset_send", tmp_path), stdin=True,
+                        env={"AGENTICA_SCHEDULERS": "4"}))
+    port = int(vm.next_line())
+    with socket.create_connection(("127.0.0.1", port), timeout=scaled(10)) as peer:
+        assert vm.next_line() == "accepted"
+        linger = struct.pack("HH" if sys.platform == "win32" else "ii", 1, 0)
+        peer.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, linger)
+    go(vm)
+    failed = vm.next_line()
+    assert failed.startswith('error("could not write to the stream\\n'), failed
+    code = re.search(r"errno=(\d+)", failed)
+    assert code and int(code.group(1)) in {errno_number("ECONNRESET"), errno_number("EPIPE")}, failed
+    assert vm.next_line() == "alive"
+    vm.close_stdin()
+    assert vm.wait() == 0, vm.stderr_text()
 
 
 def test_main_returns_while_tasks_wait_on_sockets_and_the_peer_sees_every_socket_close(tmp_path, adopt, node):

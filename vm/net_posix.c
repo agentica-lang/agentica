@@ -26,10 +26,12 @@ int64_t agc_net_send(uintptr_t sock, const uint8_t *data, size_t len) {
   while (sent < len) {
     size_t step = len - sent < SEND_CHUNK ? len - sent : SEND_CHUNK;
     ssize_t n = send((int)sock, data + sent, step, MSG_NOSIGNAL);
-    if (n >= 0) {
+    if (n > 0) {
       sent += (size_t)n;
       continue;
     }
+    /* No byte taken for a non-empty send: stop, and the I/O thread sends the rest. */
+    if (n == 0) break;
     if (errno == EINTR) continue;
     if (sent) break;
     /* libuv's codes are the negated errno values here; EWOULDBLOCK is EAGAIN on Linux and macOS. */

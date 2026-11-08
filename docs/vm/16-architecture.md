@@ -231,8 +231,9 @@ so a task can have two wakers at once.
 - **Timer** (`Task.sleep`, a deadline): woken by the owner scheduler in
   `agc_timers_run`. Also ended by a cancel. No list.
 - **Handle lock FIFO:** woken by the scheduler that ends the holder's job or
-  direct send (hand-on, push). Also ended by the lock wait's deadline (a task timer, §16.9)
-  or by a cancel. The list is the handle's FIFO, under `rt->sync`.
+  direct send (hand-on, push). Also ended by the lock wait's deadline (a task
+  timer, §16.9) or by a cancel. The list is the handle's FIFO, under
+  `rt->sync`.
 - **`Task.await`:** woken by the scheduler that ends the target task (push).
   Also ended by a cancel of the awaiter. The list is the target's awaiters,
   under that task's lock (§10.2.3).
@@ -362,8 +363,8 @@ one exit path are as in §16.1 to §16.6. What differs:
     count of direct calls, since they keep no handle alive. Once the schedulers
     have ended, `agc_io_hand_off(vm, false)` turns the calls still running into
     the loop's own, so the end of the run waits for them on the loop.
-- **Services.** Service code makes its handles through `agc_loop_uv` (§15.1). At
-  N > 1 the steps of the standard streams and of polled files are requests
+- **Services.** Service code makes its handles through `agc_loop_uv` (§15.1).
+  At N > 1 the steps of the standard streams and of polled files are requests
   (`agc_io_call`), and the stdin poller is opened before the schedulers start,
   so stdin is watched from the start of the run, where N = 1 watches it at the
   first read. A wait with a deadline starts in the job's START, before its timer

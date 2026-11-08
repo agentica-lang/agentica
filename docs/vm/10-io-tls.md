@@ -218,9 +218,11 @@ texts.
   is closed. TLS sends stay on the I/O thread, which owns the session, and so do
   the sends of a socket whose request head `HttpWire.read_head` let through as a
   WebSocket upgrade: the `std/http` writer joins the frames that queue while a
-  send waits. `ok()` means every byte reached the kernel's send buffer. A failed
-  write (`EPIPE`, `ECONNRESET`) returns `could not write to the stream` and
-  leaves the socket open.
+  send waits. This follows the head, not the answer, so a kept connection whose
+  route did not upgrade also sends through the I/O thread for the rest of its
+  life, which costs speed only. `ok()` means every byte reached the kernel's
+  send buffer. A failed write (`EPIPE`, `ECONNRESET`) returns `could not write
+  to the stream` and leaves the socket open.
 - **Timeouts.** A timed-out read or write closes the socket. Waiting for the
   lock alone does not. A timed-out connect closes the half-open socket. After
   that, the next call returns `network: socket is closed` at once.

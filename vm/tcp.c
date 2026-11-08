@@ -130,11 +130,12 @@ struct agc_conn {
   char peer[PEER_TEXT];
   /* The direct send (direct_send, #1188). `sock` is the OS socket of a connected link and `direct` says it is set:
      both are written once on the I/O thread before a program holds the socket (keep_sock). After that only head_value
-     clears `direct`, for a WebSocket, and only direct_send reads it, both under rt->sync. `wstate` (W_*) is the one
-     field both threads change, by atomic operations only. A scheduler sets W_DIRECT for the time of its send, from 0
-     only, while it holds rt->sync and the socket's resource holds the net; shut_one sets W_SHUT, and W_DEFERRED when
-     it found W_DIRECT, and then leaves the close of the links to the scheduler's end of the send (direct_over). So the
-     descriptor is never closed, or reused, under a send. */
+     clears `direct`, for a WebSocket, and only direct_send reads it, both on a scheduler: under rt->sync in a shared
+     VM (agc_share runs before the I/O thread starts), and at sync_depth 0 on the one thread of a VM that is not
+     shared. `wstate` (W_*) is the one field both threads change, by atomic operations only. A scheduler sets W_DIRECT
+     for the time of its send, from 0 only, while it holds rt->sync and the socket's resource holds the net; shut_one
+     sets W_SHUT, and W_DEFERRED when it found W_DIRECT, and then leaves the close of the links to the scheduler's end
+     of the send (direct_over). So the descriptor is never closed, or reused, under a send. */
   uintptr_t sock;
   bool direct;
   _Atomic unsigned wstate;
@@ -1917,6 +1918,7 @@ static int64_t direct_send(agc_vm *vm, agc_socket *sk, net **np, const uint8_t *
   if (!n->direct || n->secure || !len || vm->sync_depth > 1 || vm->task->callbacks || !direct_begin(n)) return 0;
   agc_handle_hold(vm, sk->writer);
   *holding = true;
+  /* 1 in a shared VM (TCP.send is a locked builtin); 0 in one that is not, which has no rt->sync to drop. */
   bool held = vm->sync_depth == 1;
   if (held) agc_sync_drop(vm);
   int64_t sent = agc_net_send(n->sock, data, len);
@@ -1944,13 +1946,18 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, const uint8_t *data
     bool holding;
     int64_t sent = direct_send(vm, sk, &n, data, len, &holding);
     /* A held writer lock is let go only where the send ends here (whole, failed or closed); else the job of the rest
-       takes it over in park, with no hand-on between. A failed direct send leaves write_status alone: the I/O thread
-       owns it and a plain send resets it, and HttpWire.close_write's shutdown after an EPIPE only fails in its
-       callback (write_side_shut ignores the status), so the close goes on as before. */
-    if (sent < 0 || (sent && (size_t)sent == len) || !n) {
+       takes it over in park, with no hand-on between. A failed direct send leaves write_status alone (send_now
+       would store the error): HttpWire.close_write's shutdown after an EPIPE only fails in its callback
+       (write_side_shut ignores the status), so the close goes on as before. A whole one clears the error of an
+       earlier send, as send_now does: on a plain socket only the writer lock's holder writes write_status, and this
+       task holds the lock. It is stored only when set, so a send in the common case writes nothing that
+       agc_conn_half_close reads on the I/O thread. */
+    bool whole = sent > 0 && (size_t)sent == len;
+    if (sent < 0 || whole || !n) {
+      if (whole && n && n->write_status < 0) n->write_status = 0;
       if (holding) agc_handle_let_go(vm, sk->writer);
       if (sent < 0) return agc_system_error(vm, write_failed, agc_net_errno((int)sent));
-      return sent && (size_t)sent == len ? ok_value(agc_void()) : agc_error_value(socket_closed);
+      return whole ? ok_value(agc_void()) : agc_error_value(socket_closed);
     }
     data += sent;
     len -= (size_t)sent;

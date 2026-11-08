@@ -17,8 +17,9 @@ int agc_net_errno(int uv_error);
 
 /* Sends from DATA on the non-blocking socket SOCK (an fd, or a Windows SOCKET) until the kernel takes no more: the
    count it took, or a negative libuv error code when the first send failed (UV_EAGAIN: the send buffer is full). A
-   failure after some bytes returns their count; the next send meets it again. It calls no libuv function, so any
-   thread may call it (vm/tcp.c, direct_send). */
+   failure after some bytes returns their count; the next send meets it again. It touches no libuv handle or loop (on
+   Windows it only maps the error with uv_translate_sys_error, a pure function), so any thread may call it (vm/tcp.c,
+   direct_send). */
 int64_t agc_net_send(uintptr_t sock, const uint8_t *data, size_t len);
 
 #endif
