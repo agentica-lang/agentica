@@ -127,9 +127,13 @@ def test_a_package_import_runs_from_deps_and_stores_logical_paths(ws, tmp_path):
 
 
 def test_the_hash_covers_the_agc_files_only_and_matches_a_second_implementation(ws):
-    # Non-.agc files, a hidden folder and the agc_libs folder of the package are not hashed: adding them changes nothing.
+    # Non-.agc files, a hidden folder, _build/ at any depth and the agc_libs and deps folders at the root of the package
+    # are not hashed: adding them changes nothing.
     folder = ws.deps / "greeter"
     (folder / "README.md").write_text("not code", encoding="utf-8")
+    for junk in ["_build/bench/x.agc", "util/_build/x.agc", "deps/tools/x.agc"]:
+        (folder / junk).parent.mkdir(parents=True, exist_ok=True)
+        (folder / junk).write_text("junk", encoding="utf-8")
     (folder / ".git").mkdir()
     (folder / ".git" / "x.agc").write_text("junk", encoding="utf-8")
     (folder / "agc_libs").mkdir()
@@ -505,6 +509,8 @@ PACKAGE_IMPORT_CASES = [
     ("an import that leaves the package", 'import X from "../outside"\n', "CHECK-IMPORT-PATH"),
     ("an import of a hidden folder", 'import X from ".hidden/x"\n', "CHECK-IMPORT-PATH"),
     ("an import of agc_libs", 'import X from "agc_libs/x"\n', "CHECK-IMPORT-PATH"),
+    ("an import of _build", 'import X from "util/_build/x"\n', "CHECK-IMPORT-PATH"),
+    ("an import of deps", 'import X from "deps/x"\n', "CHECK-IMPORT-PATH"),
     ("a package it did not declare", 'import X from "pkg/other/x"\n', "CHECK-IMPORT-PACKAGE"),
     ("itself by name", 'import X from "pkg/greeter/util/shout"\n', "CHECK-IMPORT-PACKAGE"),
     ("a package of the project that it does not declare", 'import X from "pkg/greeter2/x"\n',
@@ -517,8 +523,8 @@ def test_a_package_file_may_import_only_inside_itself_and_what_its_manifest_decl
     # The package is built again with the added import, as another commit, and the lock is made for it.
     ws.locked = [entry for entry in ws.locked if entry["name"] != "greeter"]
     ws.add_package("greeter", GREETER_GIT, {"greet.agc": line + GREET, "util/shout.agc": SHOUT, ".hidden/x.agc": SHOUT,
-                                            "agc_libs/x.agc": SHOUT}, tag="v1.2.3", dependencies={"tools": TOOLS},
-                   commit="c" * 40)
+                                            "agc_libs/x.agc": SHOUT, "util/_build/x.agc": SHOUT, "deps/x.agc": SHOUT},
+                   tag="v1.2.3", dependencies={"tools": TOOLS}, commit="c" * 40)
     ws.write_lock()
     # The project declares greeter2 as well, and pkg/ libraries exist, so only the manifest of the package decides.
     ws.write_manifest({"greeter": GREETER})

@@ -259,15 +259,20 @@ TEST_FILE = 'def main() -> Void\n  Test.run([Test.test("t") do ok() end])\nend\n
 MODULE = 'export def mine() -> Int\n  return 1\nend\n'
 
 
-def test_the_walks_of_test_and_symbol_skip_the_deps_of_the_project(tmp_path):
+def test_the_walks_of_test_and_symbol_skip_the_deps_of_the_project_and_build(tmp_path):
     # Installed packages are not the tests or the modules of the project: `test .` and `symbol` with no path skip the
-    # deps/ beside agentica.toml, while a path that names a folder of deps/ reads it.
+    # deps/ beside agentica.toml, while a path that names a folder of deps/ reads it. _build/ (the caches, or a clone a
+    # program keeps there) is skipped at any depth.
     (tmp_path / "deps" / "tools").mkdir(parents=True)
     (tmp_path / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
     (tmp_path / "mine_test.agc").write_text(TEST_FILE, encoding="utf-8")
     (tmp_path / "mine.agc").write_text(MODULE, encoding="utf-8")
     (tmp_path / "deps" / "tools" / "bang_test.agc").write_text(TEST_FILE, encoding="utf-8")
     (tmp_path / "deps" / "tools" / "bang.agc").write_text(BANG, encoding="utf-8")
+    for folder in ["_build/bench", "src/_build"]:
+        (tmp_path / folder).mkdir(parents=True)
+        (tmp_path / folder / "bench_test.agc").write_text(TEST_FILE, encoding="utf-8")
+        (tmp_path / folder / "bang.agc").write_text(BANG, encoding="utf-8")
     ran = run(cli() + ["--json", "test", "."], cwd=tmp_path, env=vm_environment())
     assert ran.code == 0, ran.stderr
     assert [Path(item["path"]).name for item in json.loads(ran.stdout)["files"]] == ["mine_test.agc"]

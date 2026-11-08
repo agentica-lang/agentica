@@ -30,14 +30,15 @@ def package_hash(folder):
     Thumbs.db and desktop.ini) and the root agentica.toml when native holds a file that is not .agc or the manifest has
     a `native` table, in
     bytewise order of its path from `folder` (written with "/"), the path, a zero byte, the size in decimal, a zero byte
-    and the bytes. Hidden folders and the agc_libs folder at the root are left out. The `.agc` extension and the names
-    agc_libs and native are compared without regard to case."""
+    and the bytes. Hidden folders, _build at any depth and the agc_libs and deps folders at the root are left out. The
+    `.agc` extension and the names agc_libs, _build, deps and native are compared without regard to case."""
     folder = Path(folder)
     paths = []
     for directory, names, files in os.walk(folder):
         relative = Path(directory).relative_to(folder)
         root = str(relative) == "."
-        names[:] = [name for name in names if not name.startswith(".") and not (root and name.lower() == "agc_libs")]
+        names[:] = [name for name in names if not name.startswith(".") and name.lower() != "_build"
+                    and not (root and name.lower() in ("agc_libs", "deps"))]
         native = relative.parts[:1] and relative.parts[0].lower() == "native"
         junk = lambda name: name.startswith(".") or name.lower() in ("thumbs.db", "desktop.ini")  # noqa: E731
         paths += [(relative / name).as_posix() for name in files

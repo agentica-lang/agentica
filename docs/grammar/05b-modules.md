@@ -381,8 +381,8 @@ import Sqlite from "pkg/sqlite/db"
   name it did not declare is `CHECK-IMPORT-PACKAGE`, and the project cannot
   import the dependencies of a package unless it declares them too. A package
   file imports its own modules by relative paths that stay inside the package: a
-  `../` that leaves it, a hidden folder or `agc_libs/` of the package, are
-  `CHECK-IMPORT-PATH`.
+  `../` that leaves it, a hidden folder, `_build/`, `agc_libs/` or `deps/` of
+  the package, are `CHECK-IMPORT-PATH`.
 - A manifest that declares a dependency needs `agentica.lock` beside it
   (`PKG-LOCK-MISSING`). Only the lock of the project is read; the
   `agentica.lock` of a package never is. The lock is TOML: `version = 1` (a
@@ -588,10 +588,10 @@ import Sqlite from "pkg/sqlite/db"
   file, its path, a zero byte, its size in decimal, a zero byte and its bytes.
   The hash is `sha256:` and the SHA-256 of that stream in hex
   (`OpenSSL.Digest.sha256`).
-  Hidden folders (any depth), `agc_libs/` at the root and files that are not
-  `.agc` (outside `native/`) are left out (`.agc`, `agc_libs` and `native` are
-  compared without regard to case, so `x.AGC` is hashed and `AGC_LIBS/` is left
-  out on every system). The `agentica.toml` of a package is left out too, so it
+  Hidden folders and `_build/` (any depth), `agc_libs/` and `deps/` at the
+  root and files that are not `.agc` (outside `native/`) are left out (`.agc`,
+  `agc_libs`, `_build`, `deps` and `native` are compared without regard to
+  case, so `x.AGC` is hashed and `AGC_LIBS/` is left out on every system). The `agentica.toml` of a package is left out too, so it
   can only choose among the names of the lock, except when `native/` holds a
   file that is not `.agc` or the manifest has a top-level `[native]` table: it
   then decides

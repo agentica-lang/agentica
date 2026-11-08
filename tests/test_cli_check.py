@@ -73,7 +73,7 @@ def test_one_failure_among_many_does_not_stop_the_others(tmp_path):
     assert "bad.agc" in text.stderr and "syntax.agc" in text.stderr and text.stderr.rstrip().endswith("2 of 4 files")
 
 
-def test_a_folder_skips_hidden_folders_and_the_deps_of_a_project(tmp_path):
+def test_a_folder_skips_hidden_folders_build_and_the_deps_of_a_project(tmp_path):
     lay_out(tmp_path, {
         "agentica.toml": 'name = "demo"\n',
         "main.agc": PROGRAM,
@@ -83,6 +83,8 @@ def test_a_folder_skips_hidden_folders_and_the_deps_of_a_project(tmp_path):
         "deps/pkg/broken.agc": BROKEN_SYNTAX,
         ".hidden/broken.agc": BROKEN_SYNTAX,
         "src/.cache/broken.agc": BROKEN_SYNTAX,
+        "_build/bench/broken.agc": BROKEN_SYNTAX,
+        "src/_build/broken.agc": BROKEN_SYNTAX,
     })
     report = document(check_json(cwd=tmp_path), 0)
     assert sorted(verdicts(report)) == ["main.agc", "src/deep/more.agc", "src/lib.agc"]

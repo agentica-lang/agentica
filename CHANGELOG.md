@@ -54,6 +54,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - An I/O timeout never ends before its time; it could end up to 1 ms early.
+- The package hash skips `_build/` and the `deps/` at the root of a package, so
+  a big `_build/` no longer slows each start of a package with `[native]`, and
+  `check`, `fmt`, `lint` and `test` on a folder skip `_build/`. A package file
+  under them cannot be imported.
 
 ## [0.26.2] - 2026-11-08
 
