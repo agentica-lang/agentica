@@ -371,7 +371,11 @@ one exit path are as in §16.1 to §16.6. What differs:
   published, so `expired` never runs beside one of its callbacks. TCP, TLS,
   processes and the child channel are requests at every N: the I/O thread owns
   each connection's TLS session, buffers and request slots, and each child's
-  handles. A builtin posts its step as the START's `more` step
+  handles. One exception: at N > 1 a send on a plain socket calls `send()` on
+  its scheduler first, and only what the kernel does not take becomes a request
+  (§10.3.1; an atomic state on the connection keeps a close from closing the
+  descriptor under that call). A builtin posts its step as the START's `more`
+  step
   (`agc_io_start_then`) and parks; `finish` fills the request on the I/O thread,
   and the `done` half reads only the request and then posts its `drop`. A
   socket's `cancel` and `pause` touch only the request and the connection, never
@@ -593,7 +597,9 @@ one exit path are as in §16.1 to §16.6. What differs:
     `agc_sync_assert` fails the run with `RUNTIME-INTERNAL` when a mutator of a
     shared list runs without the lock (`rg agc_sync_assert vm/`). Not yet under
     the lock: the profiling counters. A socket or a child needs no lock, since
-    the I/O thread owns it. The owner of a stream's lock is the calling thread's
+    the I/O thread owns it (a direct send of a plain socket syncs with it by an
+    atomic state of its own, §10.3.1). The owner of a stream's lock is the
+    calling thread's
     context, not the stream's own `vm`.
 - **GC threads.** Boehm's thread support, the helpers in `vm/value.c` and who
   registers are in §10.2.3, GC.

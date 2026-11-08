@@ -348,6 +348,20 @@ void agc_handle_leave(agc_vm *vm, agc_task *t) {
   }
 }
 
+/* The hold names the handle itself as its holder: no job's resource is the handle, so take_context leaves it, and
+   held() reads only a job's holder. */
+void agc_handle_hold(agc_vm *vm, agc_resource *handle) {
+  agc_sync_assert(vm);
+  handle->holder = handle;
+}
+
+void agc_handle_let_go(agc_vm *vm, agc_resource *handle) {
+  agc_sync_assert(vm);
+  if (handle->holder != handle) return;
+  handle->holder = NULL;
+  hand_on(vm, handle);
+}
+
 void agc_unregister(agc_vm *vm, agc_resource *r) {
   owned_remove(r);
   agc_registry *reg = vm->rt->registry;

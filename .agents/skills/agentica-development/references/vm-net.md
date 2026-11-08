@@ -27,7 +27,14 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     errno values. A listener link counts reported connections (`backlog`),
     since Windows reports several before the first `uv_accept`.
 - Threads: every `net` belongs to the I/O thread (§16.9, "Services"). A builtin
-  parks with its `begin_*` step as the START's `more` step. A close or release
+  parks with its `begin_*` step as the START's `more` step. The exception is
+  `direct_send`: at N > 1 a plain socket's send calls `agc_net_send`
+  (`vm/net_os.h`) on the scheduler with `rt->sync` dropped, under the claim
+  `W_DIRECT` of the atomic `wstate`, taken only while `rt->sync` and the
+  resource hold the net; `shut_one` defers the close of the links to
+  `direct_over` while the claim is held. The send holds the writer lock without
+  a job (`agc_handle_hold`), so another task's send waits instead of overtaking
+  the rest that a partial send parks with. A close or release
   posts `release_step` through `agc_loop_call`. `finish` copies what the `done`
   half needs into the request, and `request_done` reads only that and posts
   `drop_request`. `users` changes only on the I/O thread (the first count,

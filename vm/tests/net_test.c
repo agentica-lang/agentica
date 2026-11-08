@@ -1,8 +1,7 @@
 /*
  * TCP and TLS builtins called on a scheduler thread while the test's thread is the I/O thread (§16.9), against a POSIX
- * peer, in orders set by the calls: a close behind a read's START, the deadline before and after the bytes, an accept
- * and a read cancelled before anything came, a served accept of a cancelled task, a cancelled TLS connect past its
- * deadline, and HttpWire.connect_tls on bad options. `make vm-tsan` runs it under TSan.
+ * peer: a close behind a read's START, deadlines before and after the bytes, cancelled accepts and reads, a cancelled
+ * TLS connect, HttpWire.connect_tls on bad options, and the direct send (a close beside it included). Under TSan too.
  */
 #include "../core.h"
 #include "../tls.h"
@@ -17,6 +16,7 @@
 
 #if defined(__linux__) || defined(__APPLE__)
 #include <arpa/inet.h>
+#include <fcntl.h>
 #include <netinet/in.h>
 #include <poll.h>
 #include <sys/socket.h>
@@ -33,6 +33,13 @@ static agc_value listener, socket_v;
 #define on_thread agc_test_on_thread
 
 typedef agc_test_call calling;
+
+/* A builtin call of TASK on the scheduler context CTX, for the cases that run with every lock on (agc_share). */
+typedef struct {
+  agc_vm *ctx;
+  agc_task *task;
+  calling c;
+} locked_call;
 
 static calling call(const char *name, uint32_t arity, agc_value a, agc_value b, agc_value c, agc_value d) {
   return agc_test_call_of(&vm, vm.task, name, arity, a, b, c, d);
@@ -222,6 +229,178 @@ static void test_byte_keys(void) {
   read_is(ok_of(step(call("TCP.recv_bytes.bytes", 3, socket_v, agc_int(4), agc_int(5000), agc_void()))), "", 0);
   assert(!agc_as_bool(&vm, ok_of(step(call("HttpWire.idle?", 2, socket_v, agc_int(5000), agc_void(), agc_void())))));
   close_pair(fd);
+}
+
+/* A String of LEN bytes whose byte k is 'a' + k % 23, so a lost, repeated or moved byte shows. */
+static agc_value pattern(size_t len) {
+  agc_string *s = agc_new_string(len, len);
+  for (size_t k = 0; k < len; k++) s->data[k] = (char)('a' + k % 23);
+  return agc_string_value(s);
+}
+
+/* Reads what the peer FD has now, without waiting, and checks it against the pattern from *AT on. */
+static void peer_drains(int fd, size_t *at) {
+  char buf[65536];
+  for (;;) {
+    ssize_t got = recv(fd, buf, sizeof buf, MSG_DONTWAIT);
+    if (got <= 0) return;
+    for (ssize_t k = 0; k < got; k++) assert(buf[k] == (char)('a' + (*at + (size_t)k) % 23));
+    *at += (size_t)got;
+  }
+}
+
+/* At N > 1 a send that the kernel takes at once goes out from the scheduler (#1188): the call returns without a park
+   and the peer reads the bytes while the loop does not run. */
+static void test_a_send_goes_out_from_the_scheduler(void) {
+  int fd = open_pair();
+  calling sending = call("TCP.send", 3, socket_v, text("direct\n"), agc_int(5000), agc_void());
+  assert(!start(&sending));
+  ok_of(sending.result);
+  peer_reads(fd, "direct\n", 7);
+  close_pair(fd);
+}
+
+/* A send larger than the kernel takes: the scheduler sends what fits, and the I/O thread the rest after it, so the
+   peer reads every byte once and in order, and the task wakes when the last one is out. */
+static void test_the_rest_of_a_direct_send_goes_to_the_io_thread(void) {
+  int fd = open_pair();
+  size_t len = (size_t)32 << 20, at = 0;
+  calling sending = call("TCP.send", 3, socket_v, pattern(len), agc_int(60000), agc_void());
+  assert(start(&sending));
+  while (vm.task->state == AGC_TASK_PARKED) {
+    (void)agc_io_poll(&vm, false);
+    peer_drains(fd, &at);
+  }
+  while (agc_runq_pop(vm.rt->runq)) {}
+  ok_of(take(&sending));
+  while (at < len) peer_drains(fd, &at);
+  assert(at == len);
+  close_pair(fd);
+}
+
+/* The VM's end of the connection whose peer is the descriptor PEER: the socket whose remote port is PEER's own. */
+static int vm_side(int peer) {
+  struct sockaddr_in mine, theirs;
+  socklen_t len = sizeof mine;
+  assert(getsockname(peer, (struct sockaddr *)&mine, &len) == 0);
+  for (int fd = 3; fd < 4096; fd++) {
+    len = sizeof theirs;
+    if (fd == peer || getpeername(fd, (struct sockaddr *)&theirs, &len) != 0 || theirs.sin_family != AF_INET) continue;
+    if (theirs.sin_port == mine.sin_port) return fd;
+  }
+  assert(!"the VM's socket was not found");
+  return -1;
+}
+
+static void set_blocking(int fd) {
+  int flags = fcntl(fd, F_GETFL);
+  assert(flags >= 0 && fcntl(fd, F_SETFL, flags & ~O_NONBLOCK) == 0);
+}
+
+/* The scheduler's half of the close case: a send larger than the loopback buffers, which blocks in the kernel, beside
+   the parked read. */
+static calling blocked_send;
+static atomic_bool blocked_send_over;
+
+static void send_beside(void *arg) {
+  (void)arg;
+  assert(agc_gc_thread_enter());
+  const agc_builtin *b = agc_find_builtin((const uint8_t *)"TCP.send", 8, 3);
+  blocked_send.result = b->fn(&vm, blocked_send.args, 0);
+  atomic_store(&blocked_send_over, true);
+  agc_gc_thread_leave();
+}
+
+/* A close that comes while a scheduler is inside its direct send: shut_one leaves the descriptor open, so it is never
+   closed (and reused) under the send, and the end of the send closes it. The VM's socket is made blocking so the send
+   waits in the kernel until the peer reads; a read with a deadline, parked first, shuts the socket on the I/O thread
+   meanwhile, and the descriptor is still open after it. The send still delivers every byte, then the descriptor is
+   closed, the peer reads the end of input, and the socket is closed for the next call. */
+static void test_a_close_waits_for_a_direct_send(void) {
+  int fd = open_pair();
+  int mine = vm_side(fd);
+  size_t len = (size_t)32 << 20, at = 0;
+  calling reading = call("TCP.read_line", 2, socket_v, agc_int(300), agc_void(), agc_void());
+  assert(start(&reading));
+  set_blocking(mine);
+  blocked_send = call("TCP.send", 3, socket_v, pattern(len), agc_int(60000), agc_void());
+  uv_thread_t sender;
+  assert(uv_thread_create(&sender, send_beside, NULL) == 0);
+  wait_woken();
+  /* The read's deadline shut the socket while the send still waited in the kernel, since the peer has read nothing. */
+  assert(!atomic_load(&blocked_send_over));
+  assert(fcntl(mine, F_GETFL) >= 0);
+  while (at < len) {
+    peer_drains(fd, &at);
+    (void)agc_io_poll(&vm, false);
+  }
+  assert(uv_thread_join(&sender) == 0);
+  ok_of(blocked_send.result);
+  /* The end of the send closed the descriptor (direct_over). */
+  wait_eof(fd);
+  assert(fcntl(mine, F_GETFL) < 0);
+  assert(error_is(take(&reading), "network: operation timed out"));
+  agc_value again = step(call("TCP.send", 3, socket_v, text("late\n"), agc_int(1000), agc_void()));
+  assert(error_is(again, "network: socket is closed"));
+  close_pair(fd);
+}
+
+/* Runs a locked_call: TASK on CTX, with rt->sync taken as the interpreter takes it for a shared row. */
+static void call_locked(void *arg) {
+  locked_call *l = arg;
+  l->ctx->task = l->task;
+  atomic_store(&l->task->state, AGC_TASK_RUNNING);
+  l->task->parking = false;
+  const agc_builtin *b = agc_find_builtin((const uint8_t *)l->c.name, strlen(l->c.name), l->c.arity);
+  agc_sync_take(l->ctx);
+  l->c.result = b->fn(l->ctx, l->c.args, 0);
+  agc_sync_drop(l->ctx);
+}
+
+static void send_first(void *arg) {
+  assert(agc_gc_thread_enter());
+  call_locked(arg);
+  agc_gc_thread_leave();
+}
+
+/* A send of a second task while the first is inside its direct send waits for the writer lock, which the direct send
+   holds although no job does: it posts nothing, so it cannot overtake the rest of the first send, and it goes out
+   when the first send ends, after its last byte. It runs last: it turns every lock on (agc_share) for good, and
+   calls the builtins with rt->sync as the schedulers do. */
+static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
+  int fd = open_pair();
+  int mine = vm_side(fd);
+  size_t len = (size_t)32 << 20, at = 0;
+  static agc_vm other;
+  agc_vm_init_context(&other, vm.rt);
+  agc_task *second = agc_new_task(&vm);
+  set_blocking(mine);
+  agc_share(&vm);
+  locked_call first = {&vm, vm.task, call("TCP.send", 3, socket_v, pattern(len), agc_int(60000), agc_void())};
+  uv_thread_t sender;
+  assert(uv_thread_create(&sender, send_first, &first) == 0);
+  struct pollfd p = {fd, POLLIN, 0};
+  assert(poll(&p, 1, 60000) == 1);
+  locked_call behind = {&other, second, call("TCP.send", 3, socket_v, text("behind\n"), agc_int(60000), agc_void())};
+  on_thread(call_locked, &behind);
+  assert(second->lock_wait == agc_as_socket(&vm, socket_v)->writer && second->parked == NULL);
+  while (at < len) {
+    peer_drains(fd, &at);
+    (void)agc_io_poll(&vm, false);
+  }
+  assert(uv_thread_join(&sender) == 0);
+  ok_of(first.c.result);
+  while (agc_runq_pop(vm.rt->runq)) {}
+  on_thread(call_locked, &behind);
+  ok_of(behind.c.result);
+  peer_reads(fd, "behind\n", 7);
+  locked_call closing = {&vm, vm.task, call("TCP.close", 1, socket_v, agc_void(), agc_void(), agc_void())};
+  on_thread(call_locked, &closing);
+  closing.c = call("TCP.close_listener", 1, listener, agc_void(), agc_void(), agc_void());
+  on_thread(call_locked, &closing);
+  close(fd);
+  agc_test_pump_until_idle(&vm);
+  agc_test_settle_loop(&vm);
 }
 
 static void service_on_thread(void *arg) {
@@ -436,9 +615,13 @@ int main(void) {
   AGC_TEST_RUN(test_cancelled_tls_connect_past_its_deadline(false));
   AGC_TEST_RUN(test_cancelled_tls_connect_past_its_deadline(true));
   AGC_TEST_RUN(test_byte_keys());
+  AGC_TEST_RUN(test_a_send_goes_out_from_the_scheduler());
+  AGC_TEST_RUN(test_the_rest_of_a_direct_send_goes_to_the_io_thread());
+  AGC_TEST_RUN(test_a_close_waits_for_a_direct_send());
   AGC_TEST_RUN(test_upgrade_tls_on_a_dropped_client());
   AGC_TEST_RUN(test_upgrade_context_names_its_context_argument());
   AGC_TEST_RUN(test_upgrade_tls_builds_the_shared_context_then_handshakes());
+  AGC_TEST_RUN(test_a_send_waits_for_a_direct_send_of_another_task());
 #endif
   puts("net tests passed");
   return 0;

@@ -3,13 +3,18 @@
  * errors to its own codes (UV__E* in uv/errno.h), which no CRT function
  * names, so each code src/win/error.c can return maps to the errno of the
  * UCRT when it has one (POSIX supplement values such as ECONNREFUSED 107),
- * whose strerror has a text for it. Adapter for net_os.h.
+ * whose strerror has a text for it; and the direct send with send() on the
+ * SOCKET, whose WSA error libuv translates. Adapter for net_os.h.
  */
 #include "net_os.h"
 
 #ifdef _WIN32
 #include <errno.h>
+#include <limits.h>
 #include <uv.h>
+
+/* send() takes an int length. */
+#define SEND_CHUNK ((size_t)INT_MAX)
 
 int agc_net_errno(int uv_error) {
   switch (uv_error) {
@@ -60,5 +65,24 @@ int agc_net_errno(int uv_error) {
        error. */
     default: return EIO;
   }
+}
+
+/* libuv made the socket non-blocking (FIONBIO), so a full send buffer is WSAEWOULDBLOCK, which uv_translate_sys_error
+   turns into UV_EAGAIN. That function only maps a number. */
+int64_t agc_net_send(uintptr_t sock, const uint8_t *data, size_t len) {
+  size_t sent = 0;
+  while (sent < len) {
+    size_t step = len - sent < SEND_CHUNK ? len - sent : SEND_CHUNK;
+    int n = send((SOCKET)sock, (const char *)data + sent, (int)step, 0);
+    if (n != SOCKET_ERROR) {
+      sent += (size_t)n;
+      continue;
+    }
+    int err = WSAGetLastError();
+    if (err == WSAEINTR) continue;
+    if (sent) break;
+    return uv_translate_sys_error(err);
+  }
+  return (int64_t)sent;
 }
 #endif
