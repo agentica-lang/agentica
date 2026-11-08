@@ -27,6 +27,7 @@ import json
 import os
 import re
 import shutil
+import ssl
 import subprocess
 import sys
 import tarfile
@@ -40,6 +41,7 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parents[1]
 # The pauses between the tries of a download (5 tries): GitHub answers 5xx now and then.
 DOWNLOAD_BACKOFF = (5, 10, 20, 40)
+REQUEST_TIMEOUT = 30
 FINAL_TAG = re.compile(r"^\d+\.\d+\.\d+$")
 PIN = re.compile(r"^\s+(HUGO_VERSION|HUGO_SHA256|DART_SASS_VERSION|DART_SASS_SHA256):\s*(\S+)\s*$", re.MULTILINE)
 SELECTOR_FILES = ("selector.js", "selector.css")
@@ -169,6 +171,28 @@ def _sass_dir(pinned: dict[str, str], tools: Path) -> Path:
     return folder
 
 
+def _retryable(error: BaseException) -> bool:
+    """Whether a failed request may succeed when repeated: 5xx, 429, a timeout, a dropped connection, a body cut short.
+    Any other 4xx is an answer and a certificate that does not verify is no passing fault. (tools/provision_duckdb.py
+    classifies in the same way.)"""
+    if isinstance(error, urllib.error.HTTPError):
+        return error.code >= 500 or error.code == 429
+    if isinstance(error, ssl.SSLCertVerificationError):
+        return False
+    if isinstance(error, urllib.error.URLError) and isinstance(error.reason, ssl.SSLCertVerificationError):
+        return False
+    return isinstance(error, (OSError, http.client.HTTPException))
+
+
+def _fetch(url: str, archive: Path) -> None:
+    """One try at url, into archive, with a timeout on every read; a body shorter than Content-Length is an error."""
+    with urllib.request.urlopen(url, timeout=REQUEST_TIMEOUT) as response, archive.open("wb") as out:
+        shutil.copyfileobj(response, out)
+        expected = response.headers.get("Content-Length")
+        if expected is not None and expected.isdigit() and int(expected) != out.tell():
+            raise http.client.IncompleteRead(b"", int(expected) - out.tell())
+
+
 def _download(url: str, sha256: str, folder: Path, strip: int) -> None:
     """Fetch a pinned archive, check its checksum and unpack it into folder (dropping `strip` leading path levels)."""
     if sys.platform != "linux" or os.uname().machine not in ("x86_64", "AMD64"):
@@ -178,12 +202,10 @@ def _download(url: str, sha256: str, folder: Path, strip: int) -> None:
         archive = Path(scratch) / "tool.tar.gz"
         for attempt, delay in enumerate(DOWNLOAD_BACKOFF + (None,)):
             try:
-                urllib.request.urlretrieve(url, archive)
+                _fetch(url, archive)
                 break
             except (OSError, http.client.HTTPException) as error:
-                # A 404 or another 4xx is an answer, not a fault; 5xx, 429 and dropped connections are tried again.
-                answer = error.code if isinstance(error, urllib.error.HTTPError) else 0
-                if delay is None or (400 <= answer < 500 and answer != 429):
+                if delay is None or not _retryable(error):
                     raise
                 time.sleep(delay)
         if hashlib.sha256(archive.read_bytes()).hexdigest() != sha256:

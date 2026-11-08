@@ -16,6 +16,7 @@ import hashlib
 import http.client
 import io
 import platform
+import ssl
 import sys
 import tarfile
 import time
@@ -25,6 +26,7 @@ from pathlib import Path
 
 VERSION = "v2.0.0"
 BASE = f"https://github.com/duckdb/duckdb/releases/download/{VERSION}"
+
 # asset key -> (asset name, archive sha256, shared library: the member in the
 # archive and the name staged under native/<os>/, one and the same). The key is
 # the os-key, with "-arm64" for Linux on ARM64; both Linux keys stage under
@@ -73,10 +75,15 @@ def this_system() -> str:
 
 
 def retryable(error: BaseException) -> bool:
-    """Whether a failed request may succeed when repeated: 5xx, 429, a timeout, a dropped or refused connection. A
-    404 or any other 4xx is an answer, not a fault, and is never repeated."""
+    """Whether a failed request may succeed when repeated: 5xx, 429, a timeout, a dropped or refused connection, a body
+    cut short. A 404 or any other 4xx is an answer, and a certificate that does not verify is not a passing fault:
+    neither is repeated. (tools/site_versions.py classifies in the same way.)"""
     if isinstance(error, urllib.error.HTTPError):
         return error.code >= 500 or error.code == 429
+    if isinstance(error, ssl.SSLCertVerificationError):
+        return False
+    if isinstance(error, urllib.error.URLError) and isinstance(error.reason, ssl.SSLCertVerificationError):
+        return False
     return isinstance(error, (OSError, http.client.HTTPException))
 
 
@@ -103,10 +110,15 @@ def fetch_once(url: str) -> bytes:
                 raise SystemExit("provision_duckdb.py: download past its deadline")
             chunk = response.read(1024 * 1024)
             if not chunk:
-                return body.getvalue()
+                break
             body.write(chunk)
             if body.tell() > MAX_COMPRESSED:
                 raise SystemExit(f"provision_duckdb.py: {url} is larger than 128MiB")
+        # A connection that drops early ends read() like a complete body; Content-Length says which it was.
+        expected = response.headers.get("Content-Length")
+        if expected is not None and expected.isdigit() and int(expected) != body.tell():
+            raise http.client.IncompleteRead(b"", int(expected) - body.tell())
+    return body.getvalue()
 
 
 def read_asset(asset: str | None, name: str) -> bytes:

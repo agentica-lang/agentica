@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import io
 import tarfile
+import socket
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -158,7 +159,7 @@ class Release:
     """A local stand-in for the github.com/duckdb release downloads, on port 0.
 
     `script` maps a request path to a list of answers used in turn (the last one repeats): an int is a status with
-    no body, bytes are a 200 body. `seen` records (path, Accept, Authorization) per request."""
+    no body, bytes are a 200 body. `seen` records the path of each request."""
 
     def __init__(self, script):
         self.script = script
@@ -167,9 +168,9 @@ class Release:
 
         class Handler(BaseHTTPRequestHandler):
             def do_GET(self):
-                release.seen.append((self.path, self.headers.get("Accept"), self.headers.get("Authorization")))
+                release.seen.append(self.path)
                 answers = release.script.get(self.path, [404])
-                answer = answers[min(len([s for s in release.seen if s[0] == self.path]) - 1, len(answers) - 1)]
+                answer = answers[min(release.count(self.path) - 1, len(answers) - 1)]
                 body = answer if isinstance(answer, bytes) else b""
                 self.send_response(200 if isinstance(answer, bytes) else answer)
                 self.send_header("Content-Length", str(len(body)))
@@ -188,7 +189,7 @@ class Release:
         self.server.server_close()
 
     def count(self, path):
-        return len([seen for seen in self.seen if seen[0] == path])
+        return self.seen.count(path)
 
 
 NAME = "duckdb-shared-libs-linux-amd64.tar.gz"
@@ -251,3 +252,47 @@ def test_a_checksum_mismatch_is_not_retried(tmp_path, served):
         provision_linux(tmp_path)
     assert release.count(DOWNLOAD) == 1 and pauses == []
     assert not list((tmp_path / "out").rglob(MEMBER))
+
+
+def test_a_body_cut_short_by_a_dropped_connection_is_retried(tmp_path, served, monkeypatch):
+    serve, pauses = served
+    data = archive((MEMBER, "file", LIB))
+    release = serve({DOWNLOAD: [data]}, data)
+    # A raw server: the first answer promises the whole archive and closes after 10 bytes; then it hands over to the
+    # normal one.
+    cut = socket.socket()
+    cut.bind(("127.0.0.1", 0))
+    cut.listen(1)
+
+    def cut_once():
+        connection, _ = cut.accept()
+        with connection:
+            connection.recv(4096)
+            connection.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: %d\r\n\r\n" % len(data) + data[:10])
+
+    threading.Thread(target=cut_once, daemon=True).start()
+    cut_url = "http://127.0.0.1:%d/dl" % cut.getsockname()[1]
+    real = provision.urllib.request.urlopen
+    urls = []
+
+    def route(request, timeout):
+        urls.append(request.full_url)
+        if len(urls) > 1:
+            request = provision.urllib.request.Request(release.url + "/dl/" + NAME)
+        return real(request, timeout=timeout)
+
+    monkeypatch.setattr(provision, "BASE", cut_url)
+    monkeypatch.setattr(provision.urllib.request, "urlopen", route)
+    try:
+        assert provision_linux(tmp_path) == 0
+    finally:
+        cut.close()
+    assert len(urls) == 2 and pauses == [5]
+
+
+def test_a_certificate_that_does_not_verify_is_not_retried():
+    import ssl
+    import urllib.error
+    refusal = urllib.error.URLError(ssl.SSLCertVerificationError("self signed"))
+    assert not provision.retryable(refusal)
+    assert provision.retryable(urllib.error.URLError(ConnectionResetError()))

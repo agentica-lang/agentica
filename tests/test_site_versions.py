@@ -188,25 +188,32 @@ def test_a_run_with_no_version_fails(repo, tmp_path, monkeypatch):
     assert code == 1
 
 
-def test_a_download_retries_5xx_with_a_growing_pause_and_never_a_404(tmp_path, monkeypatch):
+def test_a_download_retries_5xx_and_short_bodies_but_never_a_404(tmp_path, monkeypatch):
+    import io
     import urllib.error
     monkeypatch.setattr(tool.sys, "platform", "linux")
     monkeypatch.setattr(tool.os, "uname", lambda: type("Uname", (), {"machine": "x86_64"})())
     pauses = []
     monkeypatch.setattr(tool.time, "sleep", pauses.append)
-    answers = [503, 429, "ok"]
+    answers = [503, 429, "short", "ok"]
 
-    def fetch(url, archive):
+    class Response(io.BytesIO):
+        def __init__(self, body, length):
+            super().__init__(body)
+            self.headers = {"Content-Length": str(length)}
+
+    def urlopen(url, timeout):
         answer = answers.pop(0)
         if answer == "ok":
-            open(archive, "wb").write(b"not a tar")
-            return
+            return Response(b"not a tar", 9)
+        if answer == "short":
+            return Response(b"not", 9)
         raise urllib.error.HTTPError(url, answer, "busy", {}, None)
 
-    monkeypatch.setattr(tool.urllib.request, "urlretrieve", fetch)
+    monkeypatch.setattr(tool.urllib.request, "urlopen", urlopen)
     with pytest.raises(tool.BuildError, match="checksum mismatch"):
         tool._download("https://example.invalid/x.tar.gz", "0" * 64, tmp_path / "out", strip=0)
-    assert pauses == [5, 10]
+    assert pauses == [5, 10, 20]
 
     pauses.clear()
     answers[:] = [404, "ok"]
