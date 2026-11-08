@@ -21,6 +21,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** the hash of a package that has `.agc` files under `_build/` or a
+  root `deps/` changes (lock it again), and such files are no longer shipped or
+  importable (`CHECK-IMPORT-PATH`).
 - **Breaking:** the crypto builtins are the `OpenSSL` family: `Digest`, `HMAC`,
   `Cipher`, `CMAC`, `KDF` and `SecureRandom` are `OpenSSL.Digest`,
   `OpenSSL.HMAC`, `OpenSSL.Cipher`, `OpenSSL.CMAC`, `OpenSSL.KDF` and
@@ -54,10 +57,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - An I/O timeout never ends before its time; it could end up to 1 ms early.
-- The package hash skips `_build/` and the `deps/` at the root of a package, so
-  a big `_build/` no longer slows each start of a package with `[native]`, and
-  `check`, `fmt`, `lint` and `test` on a folder skip `_build/`. A package file
-  under them cannot be imported.
+- A big `_build/` no longer slows each start of a package with `[native]`: the
+  package hash skips it, and `check`, `fmt`, `lint` and `test` on a folder
+  skip `_build/` too.
 
 ## [0.26.2] - 2026-11-08
 

@@ -205,7 +205,8 @@ export def native_junk?(name: String) -> Bool
 end
 
 ## Whether a folder is left out of the hash, and cannot be imported: a hidden one or _build at any depth, or agc_libs
-## or deps at the root of the package (`top`).
+## or deps at the root of the package (`top`). The names are folded, as for agc_libs, because a case-insensitive file
+## system opens `_BUILD/x.agc` as `_build/x.agc`. The walks of a project (check, test) compare _build and deps exactly.
 export def skipped_folder?(name: String, top: Bool) -> Bool
   folded = fold(name)
   return name.starts_with?(".") or folded == BUILD_FOLDER or (top and (folded == LIBS_FOLDER or folded == DEPS_FOLDER))
@@ -216,10 +217,6 @@ export def libs_folder?(name: String) -> Bool
   return fold(name) == LIBS_FOLDER
 end
 
-## Whether a folder is deps, in any case.
-export def deps_folder?(name: String) -> Bool
-  return fold(name) == DEPS_FOLDER
-end
 
 ## The name without its case, for comparing it with a fixed name. Upper then lower case, so that a letter that has no
 ## lowercase form of its own (such as the long s, which a case-insensitive file system folds to S) is folded too.

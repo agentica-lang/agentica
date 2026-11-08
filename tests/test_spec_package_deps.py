@@ -26,7 +26,10 @@ ROOT_USER = hasattr(os, "geteuid") and os.geteuid() == 0
 
 GREETER = "owner/greeter"
 TOOLS = "owner/tools"
-TOOLS_FILES = {"bang.agc": BANG, "docs/notes.md": "not code", ".github/hidden.agc": "junk", "agc_libs/x.agc": "junk"}
+# The fetch drops what the hash leaves out: the hidden folder, agc_libs/, _build/ and the root deps/ (in any case);
+# a deps/ below the root is an ordinary folder of the package.
+TOOLS_FILES = {"bang.agc": BANG, "docs/notes.md": "not code", ".github/hidden.agc": "junk", "agc_libs/x.agc": "junk",
+               "_build/x.agc": "junk", "Deps/x.agc": "junk", "lib/deps/x.agc": "# kept\n"}
 GREETER_FILES = {"greet.agc": GREET, "util/more.agc": "# more\n"}
 
 
@@ -97,7 +100,7 @@ def test_install_writes_every_locked_package_flat_into_deps_and_a_build_runs_wit
     # the notes, the hidden folder or the package's own agc_libs/. The tool writes no .gitignore.
     assert sorted(os.listdir(deps)) == ["greeter", "tools"]
     assert cached_files(deps / "greeter") == ["agentica.toml", "greet.agc", "util/more.agc"]
-    assert cached_files(deps / "tools") == ["bang.agc"]
+    assert cached_files(deps / "tools") == ["bang.agc", "lib/deps/x.agc"]
     assert package_hash(deps / "greeter") == ws.locked[0]["hash"]
     # Folders and files have the ordinary mode, not the private one of the staging folder: another user reads them.
     umask = os.umask(0)
@@ -147,7 +150,7 @@ def test_install_again_puts_the_locked_files_back_replaces_a_link_and_leaves_oth
     os.symlink(outside, deps / "tools")
     assert install(ws, remotes)[1] is None
     assert not (deps / "tools").is_symlink()
-    assert cached_files(deps / "tools") == ["bang.agc"]
+    assert cached_files(deps / "tools") == ["bang.agc", "lib/deps/x.agc"]
     assert cached_files(outside) == ["keep.agc"]
     assert cached_files(deps / "gone") == ["old.agc"]
     assert (deps / "notes.txt").read_text(encoding="utf-8") == "keep\n"

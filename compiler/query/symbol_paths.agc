@@ -2,10 +2,10 @@
 ## each a file or a folder. A folder means every `*.agc` file under it, recursively, without hidden folders,
 ## `agc_libs/` and `_build/` folders and the `deps/` of a project (a folder beside an `agentica.toml`: the installed
 ## packages, not the project's own modules; name `deps/NAME` as a path to read one), in bytewise order of the path; a
-## link is never followed, so a file reached twice is not read twice. The names are compared without regard to case, as
-## the package hash does (package_hash.agc). The arguments keep their order, and a file named twice (by another
-## spelling too) comes once. The folders are read through the Workspace of the settings, so the query stays in the pure
-## core.
+## link is never followed, so a file reached twice is not read twice. `.agc` and `agc_libs` are compared without regard
+## to case, as the package hash does (package_hash.agc); `_build` and `deps` are exact, as in the walk of `test`. The
+## arguments keep their order, and a file named twice (by another spelling too) comes once. The folders are read
+## through the Workspace of the settings, so the query stays in the pure core.
 
 import Problems from "../diagnostics/problem"
 import Paths from "../modules/import_path"
@@ -16,8 +16,11 @@ import QueryOptions from "query_options"
 # The folder a query reads when the command line names none.
 DEFAULT_PATH = "."
 
-# The manifest of a project, whose folder holds the installed packages in deps/.
+# The manifest of a project, the folder beside it that holds its installed packages, and the folder of agentica's
+# caches (beside a manifest or a root file).
 MANIFEST_FILE = "agentica.toml"
+DEPS_FOLDER = "deps"
+BUILD_FOLDER = "_build"
 
 ## One file a query links: the path as it was typed or listed (a diagnostic names it so), and the canonical path that
 ## keys its module, so one file has one root whatever its spelling.
@@ -119,11 +122,12 @@ def walk(workspace: Workspace.Workspace, folder: String) -> Result[List[String]]
           end
 
         Workspace.EntryKind.Directory ->
-          # The package hash decides what a build loads, in any case of the names (hidden folders and _build/ at
-          # any depth). A nested agc_libs/ is left out too, as the query always did; deps/ only beside a manifest.
-          libs = PackageHash.libs_folder?(entry.name)
-          deps = project and PackageHash.deps_folder?(entry.name)
-          if !PackageHash.skipped_folder?(entry.name, false) and !libs and !deps
+          # Hidden folders, agc_libs/ (in any case, as the package hash compares it) and _build/ at any depth;
+          # deps/ only beside a manifest. _build and deps are this project's own folders, so their names are exact:
+          # only the hash of a package folds them, since it must cover what a build can load on any file system.
+          hidden = entry.name.starts_with?(".") or PackageHash.libs_folder?(entry.name)
+          own = entry.name == BUILD_FOLDER or (project and entry.name == DEPS_FOLDER)
+          if !hidden and !own
             pending = pending.push(path)
           end
 

@@ -141,14 +141,16 @@ def test_the_hash_covers_the_agc_files_only_and_matches_a_second_implementation(
     assert check(ws) is None
     # A package of many files, a name that is not ASCII and a file larger than the 256 KiB the hash reads at a time:
     # the lock holds the hash that Python computed, so the two implementations agree on it.
+    # A deps/ below the root is hashed and importable; _Build/ and Deps/ at the root are folded and left out.
     big = {"core.agc": ONE, "módulo/x.agc": "# é\n", "a.agc": "# a\n", "a/b.agc": "# b\n",
-           "big.agc": "# " + "x" * 300000 + "\n"}
+           "big.agc": "# " + "x" * 300000 + "\n", "lib/deps/x.agc": ONE, "_Build/z.agc": "junk", "Deps/y.agc": "junk"}
     big.update({"part%02d.agc" % number: "# %d\n" % number for number in range(40)})
     ws.add_package("big", "https://github.com/big/pack", big)
     ws.write_manifest({"greeter": GREETER, "big": dependency("https://github.com/big/pack", tag="v1.0.0")})
     ws.write_lock()
     (ws.project / "big.agc").write_text(
-        'import Core from "pkg/big/core"\n\ndef main() -> Void\n  puts(Core.one())\nend\n', encoding="utf-8")
+        'import Core from "pkg/big/core"\nimport X from "pkg/big/lib/deps/x"\n\n'
+        'def main() -> Void\n  puts(Core.one() + X.one())\nend\n', encoding="utf-8")
     assert check(ws, "big.agc") is None
     assert package_hash(ws.deps / "big").startswith("sha256:")
 
