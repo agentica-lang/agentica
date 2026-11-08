@@ -291,6 +291,9 @@ def test_parallel_first_runs_wait_for_one_build_and_all_succeed(ws):
     for ran in runs:
         assert (ran.code, ran.stdout) == (0, "42\n"), ran.stderr
     assert compiles(ws) == 1 and len(builds(ws)) == 1
+    # The lock file is private like the rest of the cache, so no other user can open it and hold its lock.
+    locks = list((ws.pkg_root / "native-build").glob("*.lock"))
+    assert len(locks) == 1 and locks[0].stat().st_mode & 0o077 == 0
 
 
 @NATIVE_CALLS
@@ -299,21 +302,37 @@ def test_a_build_killed_while_it_holds_the_lock_does_not_block_the_next_one(ws):
     project(ws)
     compiler = counting_cc(ws)
     marker = ws.base / "compiling"
-    hung = subprocess.Popen(cli() + ["--no-cache", str(ws.project / "main.agc")], cwd=ws.project,
-                            env=environment(ws, HANG=str(marker), **compiler), stdin=subprocess.DEVNULL,
-                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    words = cli() + ["--no-cache", str(ws.project / "main.agc")]
+    started = []
+
+    def start(**extra):
+        process = subprocess.Popen(words, cwd=ws.project, env=environment(ws, **compiler, **extra),
+                                   stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                   start_new_session=True)
+        started.append(process)
+        return process
+
     try:
+        hung = start(HANG=str(marker))
         deadline = time.monotonic() + 60
         while not marker.exists():
             assert hung.poll() is None and time.monotonic() < deadline
             time.sleep(0.05)
-    finally:
+        assert [path.suffix for path in (ws.pkg_root / "native-build").iterdir()].count(".lock") == 1
+        # While the hung build holds the lock, the next run waits for it.
+        waiter = start()
+        with pytest.raises(subprocess.TimeoutExpired):
+            waiter.wait(timeout=1)
         os.killpg(hung.pid, signal.SIGKILL)
         hung.wait()
-    started = time.monotonic()
-    ran = agentica(ws, "--no-cache", str(ws.project / "main.agc"), **compiler)
-    assert (ran.code, ran.stdout) == (0, "42\n"), ran.stderr
-    assert BUILT.fullmatch(ran.stderr) and time.monotonic() - started < 30
+        out, err = waiter.communicate(timeout=60)
+    finally:
+        for process in started:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
+    assert (waiter.returncode, out.decode()) == (0, "42\n"), err.decode()
+    assert BUILT.fullmatch(err.decode()) and compiles(ws) == 2
 
 
 @NATIVE_CALLS

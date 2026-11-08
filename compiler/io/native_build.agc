@@ -54,6 +54,8 @@ QUERY_TIMEOUT_MS = 30_000
 BUILD_TIMEOUT_MS = 600_000
 FILE_TIMEOUT_MS = 30_000
 LOCK_PAUSE_MS = 50
+# How long a run waits for the lock of a key: a whole build, then a minute more for its file work.
+LOCK_WAIT_MS = BUILD_TIMEOUT_MS + 60_000
 TEMP_TRIES = 5
 TEMP_MARK = ".tmp-"
 STALE_TEMP_SECONDS = 3600
@@ -150,7 +152,7 @@ def attempt(request: Workspace.BuildRequest, noted: Bool) -> Result[String]
     return verified(request, entry, name, user)
   end
 
-  lock = try locked(request, "#{entry}.lock")
+  lock = try locked(request, "#{entry}.lock", user)
   built = ok("")
   if File.lstat(entry, FILE_TIMEOUT_MS).ok?
     built = verified(request, entry, name, user)
@@ -164,15 +166,27 @@ end
 
 # The handle of the lock file of one key, locked: one build of a key runs at a time, and the others wait for it and
 # then find its entry. The lock ends when the handle closes or the process dies, so a killed build never leaves it
-# held. File.try_lock does not wait, so it is tried again every LOCK_PAUSE_MS for as long as a build may take.
-def locked(request: Workspace.BuildRequest, path: String) -> Result[FileHandle]
-  opened = File.open(path, "append", FILE_TIMEOUT_MS)
+# held. File.try_lock does not wait, so it is tried again every LOCK_PAUSE_MS for a little longer than a build may take
+# (LOCK_WAIT_MS), so a run that starts waiting just after a build began does not give up before that build ends. The
+# file is made private like the rest of the cache, or must already be (private_kind): another user that could open it
+# could hold its lock and stall every first build.
+def locked(request: Workspace.BuildRequest, path: String, user: Int) -> Result[FileHandle]
+  help = "remove the file #{path}"
+  opened = File.open(path, "create_private", FILE_TIMEOUT_MS)
   if !opened.ok?
-    return error(fail(request, "cannot open the lock file #{path}: #{opened.message}", ""))
+    opened = File.open(path, "append", FILE_TIMEOUT_MS)
+    if !opened.ok?
+      return error(fail(request, "cannot open the lock file #{path}: #{opened.message}", help))
+    end
+
+    if !CacheFiles.private_kind(path, "file", user).ok?
+      _ = File.close(opened.unwrap!, FILE_TIMEOUT_MS)
+      return error(fail(request, "the lock file #{path} is not private to this user", help))
+    end
   end
 
   handle = opened.unwrap!
-  deadline = Time.monotonic_ms() + BUILD_TIMEOUT_MS
+  deadline = Time.monotonic_ms() + LOCK_WAIT_MS
   while true
     taken = File.try_lock(handle, FILE_TIMEOUT_MS)
     if !taken.ok?
