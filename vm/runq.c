@@ -395,7 +395,8 @@ void agc_runq_drop_scheduler(agc_runq *q) {
 }
 
 /* FN runs without the queue's lock, on the scheduler that makes every scheduler idle, just before it waits
-   (enter_idle). Set before the first scheduler thread starts. */
+   (enter_idle). It may run on two schedulers at once (one still in FN when another goes idle last), so FN must be
+   thread-safe. Set before the first scheduler thread starts. */
 void agc_runq_on_idle(agc_runq *q, void (*fn)(void *data), void *data) {
   q->on_idle = fn;
   q->on_idle_data = data;
