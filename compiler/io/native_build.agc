@@ -18,10 +18,12 @@
 ## compile, and a change during it stores nothing. Nothing is written into the package. An entry is made in a new
 ## private folder beside the others, with the library, its `include/` and a receipt (the SHA-256 of the library), then
 ## renamed into place in one no-replace step, so a reader never sees half an entry and two builds of one key keep the
-## first. The library is code the run loads, so the `native-build` folder and an entry are used only when they are this
-## user's and writable by no one else (cache_files.agc, private_kind; on Windows only their kind is checked), the
-## library is a regular file in the entry, and the receipt matches: anything else is PKG-NATIVE-BUILD, never a silent
-## rebuild over it. Temporary folders that a run left (it died during a build) are removed once an hour old.
+## first. A run that finds no entry takes the lock of the key (`<key>.lock` beside it, File.try_lock) and looks again,
+## so parallel first runs build once and the others use that entry. The library is code the run loads, so the
+## `native-build` folder and an entry are used only when they are this user's and writable by no one else
+## (cache_files.agc, private_kind; on Windows only their kind is checked), the library is a regular file in the entry,
+## and the receipt matches: anything else is PKG-NATIVE-BUILD, never a silent rebuild over it. Temporary folders that
+## a run left (it died during a build) are removed once an hour old.
 ##
 ## A compiler that cannot start, fails or leaves no library is PKG-NATIVE-BUILD at the manifest and
 ## `native.NAME.build`. The plain builder prints the compiler's standard error as it is, and `built native NAME: PATH`
@@ -51,6 +53,7 @@ START_TIMEOUT_MS = 10_000
 QUERY_TIMEOUT_MS = 30_000
 BUILD_TIMEOUT_MS = 600_000
 FILE_TIMEOUT_MS = 30_000
+LOCK_PAUSE_MS = 50
 TEMP_TRIES = 5
 TEMP_MARK = ".tmp-"
 STALE_TEMP_SECONDS = 3600
@@ -147,7 +150,49 @@ def attempt(request: Workspace.BuildRequest, noted: Bool) -> Result[String]
     return verified(request, entry, name, user)
   end
 
-  return compile(request, compiler, header, base, entry, name, user, noted, digests)
+  lock = try locked(request, "#{entry}.lock")
+  built = ok("")
+  if File.lstat(entry, FILE_TIMEOUT_MS).ok?
+    built = verified(request, entry, name, user)
+  else
+    built = compile(request, compiler, header, base, entry, name, user, noted, digests)
+  end
+
+  _ = File.close(lock, FILE_TIMEOUT_MS)
+  return built
+end
+
+# The handle of the lock file of one key, locked: one build of a key runs at a time, and the others wait for it and
+# then find its entry. The lock ends when the handle closes or the process dies, so a killed build never leaves it
+# held. File.try_lock does not wait, so it is tried again every LOCK_PAUSE_MS for as long as a build may take.
+def locked(request: Workspace.BuildRequest, path: String) -> Result[FileHandle]
+  opened = File.open(path, "append", FILE_TIMEOUT_MS)
+  if !opened.ok?
+    return error(fail(request, "cannot open the lock file #{path}: #{opened.message}", ""))
+  end
+
+  handle = opened.unwrap!
+  deadline = Time.monotonic_ms() + BUILD_TIMEOUT_MS
+  while true
+    taken = File.try_lock(handle, FILE_TIMEOUT_MS)
+    if !taken.ok?
+      _ = File.close(handle, FILE_TIMEOUT_MS)
+      return error(fail(request, "cannot lock #{path}: #{taken.message}", ""))
+    end
+
+    if taken.unwrap!
+      return ok(handle)
+    end
+
+    if Time.monotonic_ms() > deadline
+      _ = File.close(handle, FILE_TIMEOUT_MS)
+      return error(fail(request, "another build of this module still holds #{path}", "run again when it ends"))
+    end
+
+    Task.sleep(LOCK_PAUSE_MS)
+  end
+
+  return error(fail(request, "cannot lock #{path}", ""))
 end
 
 # One line of the key for each search variable that is set.

@@ -11,6 +11,10 @@ import json
 import os
 import re
 import shutil
+import signal
+import subprocess
+import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -99,9 +103,9 @@ def fetched(ws, remotes, source=NESTED_C):
 
 
 def builds(ws):
-    """The entries of the build cache, temporary folders included."""
+    """The entries of the build cache, temporary folders included (the lock files of the keys are not entries)."""
     base = ws.pkg_root / "native-build"
-    return sorted(path.name for path in base.iterdir()) if base.exists() else []
+    return sorted(path.name for path in base.iterdir() if path.suffix != ".lock") if base.exists() else []
 
 
 def files_of(folder):
@@ -258,6 +262,58 @@ def test_a_run_builds_the_project_module_into_the_cache_and_builds_again_after_a
     assert BUILT.fullmatch(edited.stderr) and len(builds(ws)) == 2
     quiet = agentica(ws, "--json", "--no-cache", str(ws.project / "main.agc"))
     assert (quiet.code, quiet.stdout, quiet.stderr) == (0, "43\n", "")
+
+
+def counting_cc(ws):
+    """A CC that runs cc and adds a line to the file COMPILES for each compile (not for --version or -dumpmachine);
+    with HANG set it touches that file and hangs in the compile instead. The words of CC are in the key, so every run
+    with it builds under one key."""
+    script = ws.base / "cc.sh"
+    script.write_text('#!/bin/sh\ncase "$1" in --version|-dumpmachine) ;; *) echo >> "$COMPILES"\n'
+                      '  [ -n "$HANG" ] && touch "$HANG" && sleep 60 ;; esac\nexec %s "$@"\n' % tool("cc"),
+                      encoding="utf-8")
+    script.chmod(0o755)
+    return {"CC": str(script), "COMPILES": str(ws.base / "compiles")}
+
+
+def compiles(ws):
+    path = ws.base / "compiles"
+    return len(path.read_text(encoding="utf-8").splitlines()) if path.exists() else 0
+
+
+@NATIVE_CALLS
+@host_only(WINDOWS, "the compiler stand-in is a shell script")
+def test_parallel_first_runs_wait_for_one_build_and_all_succeed(ws):
+    project(ws)
+    compiler = counting_cc(ws)
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        runs = list(pool.map(lambda _: agentica(ws, "--no-cache", str(ws.project / "main.agc"), **compiler), range(4)))
+    for ran in runs:
+        assert (ran.code, ran.stdout) == (0, "42\n"), ran.stderr
+    assert compiles(ws) == 1 and len(builds(ws)) == 1
+
+
+@NATIVE_CALLS
+@host_only(WINDOWS, "the compiler stand-in is a shell script")
+def test_a_build_killed_while_it_holds_the_lock_does_not_block_the_next_one(ws):
+    project(ws)
+    compiler = counting_cc(ws)
+    marker = ws.base / "compiling"
+    hung = subprocess.Popen(cli() + ["--no-cache", str(ws.project / "main.agc")], cwd=ws.project,
+                            env=environment(ws, HANG=str(marker), **compiler), stdin=subprocess.DEVNULL,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    try:
+        deadline = time.monotonic() + 60
+        while not marker.exists():
+            assert hung.poll() is None and time.monotonic() < deadline
+            time.sleep(0.05)
+    finally:
+        os.killpg(hung.pid, signal.SIGKILL)
+        hung.wait()
+    started = time.monotonic()
+    ran = agentica(ws, "--no-cache", str(ws.project / "main.agc"), **compiler)
+    assert (ran.code, ran.stdout) == (0, "42\n"), ran.stderr
+    assert BUILT.fullmatch(ran.stderr) and time.monotonic() - started < 30
 
 
 @NATIVE_CALLS

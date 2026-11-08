@@ -61,6 +61,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - An I/O timeout never ends before its time; it could end up to 1 ms early.
+- Parallel first runs of a `[native]` module build it once and all succeed;
+  before, they could fail with `PKG-NATIVE-BUILD` ("File exists").
 - A big `_build/` no longer slows each start of a package with `[native]`: the
   package hash skips it, and `check`, `fmt`, `lint` and `test` on a folder
   skip `_build/` too.
