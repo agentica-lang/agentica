@@ -100,7 +100,10 @@ bool agc_gc_heap_parse(const char *text, size_t *bytes) {
   else if (*at == 'G' || *at == 'g') shift = 30;
   if (shift) at++;
   if (*at || value > (UINT64_C(1) << 40) >> shift) return false;
-  *bytes = (size_t)(value << shift);
+  /* A size_t of 32 bits cannot hold every size up to 1 TiB. */
+  size_t size = (size_t)(value << shift);
+  if ((uint64_t)size != value << shift) return false;
+  *bytes = size;
   return true;
 }
 
@@ -115,21 +118,23 @@ void agc_init(void) {
      reads GC_FREE_SPACE_DIVISOR from the environment, so a value set there still wins. */
   GC_set_free_space_divisor(FREE_SPACE_DIVISOR);
   GC_INIT();
+  GC_set_oom_fn(on_gc_oom);
+  GC_set_abort_func(on_gc_abort);
+  GC_set_warn_proc(GC_ignore_warn_proc);
   /* The heap floor. libgc collects once about (live bytes / divisor) were allocated, but it counts pointer-free
      bytes (strings) at a quarter, so a server whose heap is mostly text collected every 2 MB and stopped every
      thread for a third of the wall time. A heap that starts at 32 MB is only collected once its free space is used
-     up: Campfire's routes ran 12-36% faster (64 MB and more gave longer pauses). Pages of the heap that are never
-     allocated are never touched, so a small program does not pay for the floor. GC_INITIAL_HEAP_SIZE, libgc's own
-     variable, wins when it is set (GC_INIT has used it); AGENTICA_GC_HEAP sets the floor, and 0 turns it off. A bad
-     value keeps the default here: agc_launch_env reports it before anything runs. */
+     up: Campfire's routes ran 12-36% faster (64 MB and more gave longer pauses). The cost is memory: a program that
+     allocates a lot touches up to the whole floor before its first collection. GC_INITIAL_HEAP_SIZE, libgc's own
+     variable, wins when it is set, even to a value libgc refuses (GC_INIT has used it); AGENTICA_GC_HEAP sets the
+     floor, and 0 turns it off. A bad value keeps the default here: agc_launch_env reports it before anything runs.
+     After the warn proc, so a floor the system cannot give (64G) is skipped without libgc's warning: the heap then
+     grows as it would without one. */
   const char *initial = getenv("GC_INITIAL_HEAP_SIZE"), *floor_text = getenv("AGENTICA_GC_HEAP");
   size_t heap_floor = HEAP_FLOOR_DEFAULT;
   if (floor_text && *floor_text && !agc_gc_heap_parse(floor_text, &heap_floor)) heap_floor = HEAP_FLOOR_DEFAULT;
   size_t heap = GC_get_heap_size();
   if (!(initial && *initial) && heap_floor > heap) (void)GC_expand_hp(heap_floor - heap);
-  GC_set_oom_fn(on_gc_oom);
-  GC_set_abort_func(on_gc_abort);
-  GC_set_warn_proc(GC_ignore_warn_proc);
   /* Finalizers (only the TlsContext's) run when agc_gc_finalize_pending calls them, between turns, so OpenSSL is
      never entered from inside a collection or in the middle of a builtin. */
   GC_set_finalize_on_demand(1);

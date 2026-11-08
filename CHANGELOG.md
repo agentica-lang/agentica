@@ -19,7 +19,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Breaking:** `RSA` is a reserved type name.
 - The collector's heap starts at 32 MB, so a busy program collects less often:
-  more speed for a few more MB of memory.
+  faster, for up to about 32 MB more memory in a program that allocates a lot.
 - `String#slice` and `String#at` on non-ASCII text are faster: a slice to the
   end does not walk the text, and runs of ASCII are crossed 8 bytes at a time.
 
