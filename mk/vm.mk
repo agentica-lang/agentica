@@ -3,7 +3,7 @@
 # Included first: the variables here (VM_BUILD, VM_OBJ, OSSL_DEP, GC_DEP, ...) are read by the other files while make
 # parses them. EXE is set by the root Makefile and set again here.
 
-.PHONY: vm-openssl vm-openssl-key vm-third-party vm-third-party-key
+.PHONY: vm-openssl vm-openssl-key vm-third-party vm-third-party-key compile-commands
 
 # The C VM (docs/vm/11-build-ci-supply-chain.md section 11). On Linux libgc and OpenSSL are the system ones by default.
 # make                    dist/agentica, the binary (the bootstrap below builds it)
@@ -18,6 +18,7 @@
 # Compiles go through ccache when it is installed and its cache directory is writable (CCACHE= turns it off); CCACHE_BASEDIR is
 # the checkout and the -g modes map it to . in debug info (-fdebug-prefix-map), so worktrees share hits.
 # make TRACE=0            compile out the AGENTICA_VM_TRACE trace points
+# make compile-commands   write compile_commands.json, the compilation database of this mode (gitignored)
 # make vm-libfuzz         the libFuzzer target (LIBFUZZ=1 mode: build/vm/libfuzz/agentica-vm-libfuzz, clang only)
 # make vm-libfuzz-run     a bounded coverage-guided run from the compiled fixtures (see mk/vm-test.mk)
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests (sampled --max-steps sweep)
@@ -344,7 +345,8 @@ $(VM_OBJ_STAMP): FORCE
 	@mkdir -p $(VM_BUILD)
 	@{ echo '$(VM_CC) $(VM_CFLAGS) $(if $(VM_RES),$(WINDRES))'; $(VM_CC) --version 2>/dev/null | head -n 1; } > $@.new; if cmp -s $@.new $@; then rm -f $@.new; else mv $@.new $@; fi
 
-$(VM_OBJ)/tests/%.o: VM_OBJ_FLAGS := -U NDEBUG
+VM_TEST_FLAGS := -U NDEBUG
+$(VM_OBJ)/tests/%.o: VM_OBJ_FLAGS := $(VM_TEST_FLAGS)
 
 $(VM_OBJ)/tls_openssl.o $(VM_OBJ)/digest_openssl.o: $(OSSL_DEP)
 
@@ -359,6 +361,16 @@ $(VM_OBJ)/agentica-res.o: vm/agentica.rc vm/agentica.manifest $(VM_OBJ_STAMP)
 	$(WINDRES) -I vm -O coff vm/agentica.rc $@
 
 -include $(wildcard $(VM_OBJ)/*.d $(VM_OBJ)/jit/*.d $(VM_OBJ)/tests/*.d)
+
+# compile_commands.json (gitignored; COMPILE_COMMANDS names another file): the compile of each VM file in this mode,
+# the C tests included, for clangd, clang-tidy and analyzers. The generated headers and the system library checks come
+# first, as for an object.
+COMPILE_COMMANDS ?= compile_commands.json
+CC_DB_SRC := $(VM_SRC) vm/agentica.c vm/launch.c vm/fuzz.c $(wildcard vm/tests/*.c)
+compile-commands: $(FFI_HEADERS) | $(OSSL_DEP) $(GC_DEP) $(ZLIB_DEP) $(YY_DIR)/src/yyjson.c $(PICO_DIR)/picohttpparser.c $(UV_DIR)/src/uv-common.c
+	@sh vm/tools/compile-commands.sh '$(CURDIR)' $(VM_OBJ) '$(CC_DB_SRC)' '$(VM_TEST_FLAGS)' $(VM_CC) $(VM_CFLAGS) \
+	  > '$(COMPILE_COMMANDS).new' || { rm -f '$(COMPILE_COMMANDS).new'; exit 1; }
+	mv '$(COMPILE_COMMANDS).new' '$(COMPILE_COMMANDS)'
 
 $(VM_TP_STAMP): FORCE
 	@mkdir -p $(VM_BUILD)

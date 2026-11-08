@@ -791,6 +791,7 @@ void agc_mutex_unlease(agc_vm *vm, struct agc_mutex_lease *lease);
 void agc_task_wake(agc_vm *vm, agc_task *t, const char *by);
 bool agc_task_waiting(const agc_task *t);
 void agc_task_parking(agc_vm *vm);
+_Noreturn void agc_task_refuse_wait(agc_vm *vm);
 /* The first step of a builtin that parks on a job made from malloc'd copies (a compute call, a KDF call, a TLS
    context): what would fail the park fails here, before the copies exist, so none leaks. A callback of native code
    cannot park (RUNTIME-NATIVE-CALLBACK with MESSAGE at SPAN), and the loop is made, which fails when it cannot start. */

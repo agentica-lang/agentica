@@ -1613,12 +1613,11 @@ static agc_value start(agc_vm *vm, op *o, agc_value context, int64_t timeout) {
   }
   if (step(o)) return done(vm, o, context);
   /* The call must wait for the descriptor, which a callback of native code cannot: the op goes first, as done would
-     let it go (a close's state is flushed from its first unsent byte). agc_task_parking never returns inside a
-     callback, so nothing reads the op after the drop. */
+     let it go (a close's state is flushed from its first unsent byte). */
   if (vm->task->callbacks) {
     keep_unsent(o);
     drop(o);
-    agc_task_parking(vm);
+    agc_task_refuse_wait(vm);
   }
   agc_io_start_then(vm, &poll_io, o, context, timeout, begin_wait);
   return agc_void();
