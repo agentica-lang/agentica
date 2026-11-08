@@ -174,7 +174,8 @@ def locked(request: Workspace.BuildRequest, path: String, user: Int) -> Result[F
   help = "remove the file #{path}"
   opened = File.open(path, "create_private", FILE_TIMEOUT_MS)
   if !opened.ok?
-    opened = File.open(path, "append", FILE_TIMEOUT_MS)
+    # A read handle: on Windows LockFileEx refuses a handle opened only to append.
+    opened = File.open(path, "read", FILE_TIMEOUT_MS)
     if !opened.ok?
       return error(fail(request, "cannot open the lock file #{path}: #{opened.message}", help))
     end
