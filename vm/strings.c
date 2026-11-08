@@ -14,6 +14,7 @@
 #define SIGMA 0x3A3u
 #define SMALL_SIGMA 0x3C3u
 #define FINAL_SIGMA 0x3C2u
+#define ASCII_HIGH_BITS UINT64_C(0x8080808080808080)
 
 typedef agc_finder finder;
 
@@ -40,12 +41,37 @@ size_t agc_utf8_encode(uint32_t cp, char out[4]) {
   return 4;
 }
 
+/* Moves from character from_index (at byte offset) to character index. A word of eight bytes without the high bit is
+   eight ASCII characters, so a run of ASCII is crossed a word at a time; elsewhere a character is its lead byte and
+   the continuation bytes (10xxxxxx) after it, the same rule agc_utf8_count counts by. */
 static size_t walk(const agc_string *s, size_t index, size_t from_index, size_t offset) {
   const uint8_t *data = (const uint8_t *)s->data;
-  for (; from_index < index && offset < s->bytes; from_index++) agc_utf8_next(data, s->bytes, &offset);
-  for (; from_index > index && offset > 0; from_index--) {
+  uint64_t word;
+  while (from_index < index && offset < s->bytes) {
+    if (index - from_index >= sizeof word && s->bytes - offset >= sizeof word) {
+      memcpy(&word, data + offset, sizeof word);
+      if (!(word & ASCII_HIGH_BITS)) {
+        offset += sizeof word;
+        from_index += sizeof word;
+        continue;
+      }
+    }
+    do offset++;
+    while (offset < s->bytes && (data[offset] & 0xC0) == 0x80);
+    from_index++;
+  }
+  while (from_index > index && offset > 0) {
+    if (from_index - index >= sizeof word && offset >= sizeof word) {
+      memcpy(&word, data + offset - sizeof word, sizeof word);
+      if (!(word & ASCII_HIGH_BITS)) {
+        offset -= sizeof word;
+        from_index -= sizeof word;
+        continue;
+      }
+    }
     do offset--;
     while (offset > 0 && (data[offset] & 0xC0) == 0x80);
+    from_index--;
   }
   return offset;
 }
@@ -480,12 +506,10 @@ static agc_value builtin_slice(agc_vm *vm, agc_value *args, uint32_t span) {
     agc_fail_text(vm, "RUNTIME-INDEX-OUT-OF-RANGE", ascii(text), span);
   }
   if (length == 0) return agc_string_value(vm->rt->empty_string);
+  /* The end is found from the nearest known place: the start just remembered as the cursor, or the end of the string
+     (no walk at all for a slice that runs to the end). */
   size_t from = agc_utf8_offset(vm, s, (size_t)start);
-  size_t at = from + (size_t)length;
-  if (s->bytes != s->chars) {
-    at = walk(s, (size_t)start + (size_t)length, (size_t)start, from);
-    remember(vm, s, (size_t)start + (size_t)length, at);
-  }
+  size_t at = agc_utf8_offset(vm, s, (size_t)start + (size_t)length);
   return agc_string_value(agc_small_string(vm, s->data + from, at - from, (size_t)length));
 }
 

@@ -533,6 +533,42 @@ def test_the_environment_and_the_version_flag_are_read_before_a_front_end_runs(t
 
 
 HELLO = ROOT / "examples" / "hello.agc"
+START_HEAP = re.compile(r"^Grow heap to ([0-9]+) KiB after 0 bytes allocated$", re.M)
+
+
+def test_the_heap_starts_at_32_mib_and_the_environment_sets_it(tmp_path):
+    """The collector's heap starts at 32 MiB; AGENTICA_GC_HEAP sets another size (0 for libgc's own start), and libgc's
+    GC_INITIAL_HEAP_SIZE wins over it. libgc's GC_PRINT_STATS log names each growth of the heap; the start is the
+    largest before anything is allocated. On Windows libgc writes that log to a gc.log file or the debugger, not to
+    stderr, so there only the runs are checked (vm/tests/gc_thread_test.c checks the default heap on every system)."""
+    if "no libgc" in run([*vm_command(), "--version"], env=vm_environment(), timeout=scaled(10)).stdout:
+        pytest.skip("the VM was built without libgc (the sanitizer build)")
+    program = compile_agc(HELLO, tmp_path / "hello.agcb")
+    starts = {}
+    for floor, initial in ((None, None), ("48M", None), ("0", None), ("48M", "8M")):
+        env = vm_environment({"GC_PRINT_STATS": "1", "AGENTICA_GC_HEAP": floor, "GC_INITIAL_HEAP_SIZE": initial})
+        got = run_vm(program, env=env, timeout=scaled(10))
+        assert (got.code, got.stdout) == (0, "hello\n")
+        starts[(floor, initial)] = max((int(kib) for kib in START_HEAP.findall(got.stderr)), default=None)
+    if TARGET_OS == "windows":
+        return
+    assert starts == {(None, None): 32 * 1024, ("48M", None): 48 * 1024, ("0", None): starts[("0", None)],
+                      ("48M", "8M"): 8 * 1024}
+    assert starts[("0", None)] < 1024
+
+
+def test_a_bad_heap_size_is_a_start_error(tmp_path):
+    """AGENTICA_GC_HEAP takes bytes or a number with K, M or G, up to 1024G; anything else is a start error (status 2)
+    with nothing on stdout, and a good size runs."""
+    program = compile_agc(HELLO, tmp_path / "hello.agcb")
+    for size in ("x", "32X", "-1", "2048G", "99999999999999999999"):
+        refused = run_vm(program, env=vm_environment({"AGENTICA_GC_HEAP": size}), timeout=scaled(10))
+        assert (refused.code, refused.stdout, "AGENTICA_GC_HEAP needs a size" in refused.stderr) == (2, "", True)
+    for size in ("0", "48M", "65536"):
+        ran = run_vm(program, env=vm_environment({"AGENTICA_GC_HEAP": size}), timeout=scaled(10))
+        assert (ran.code, ran.stdout) == (0, "hello\n")
+
+
 SCHEDULERS_RANGE = "needs an integer from 1 to 1024"
 RAN_ON = re.compile(r"^agc-trace \S+ sched run schedulers=([0-9]+)$", re.M)
 

@@ -12,10 +12,16 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `RSA.public_encrypt_oaep(pem, data)` encrypts with an RSA public key in PEM
   and OAEP padding (SHA-1), as MySQL's `caching_sha2_password` needs.
+- `AGENTICA_GC_HEAP` sets the size the collector's heap starts at (`32M` by
+  default, `0` for libgc's own start).
 
 ### Changed
 
 - **Breaking:** `RSA` is a reserved type name.
+- The collector's heap starts at 32 MB, so a busy program collects less often:
+  faster, for up to about 32 MB more memory in a program that allocates a lot.
+- `String#slice` and `String#at` on non-ASCII text are faster: a slice to the
+  end does not walk the text, and runs of ASCII are crossed 8 bytes at a time.
 
 ## [0.26.1] - 2026-11-07
 

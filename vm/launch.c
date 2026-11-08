@@ -548,6 +548,14 @@ bool agc_launch_env(const char *name, agc_launch_options *options) {
     return false;
   }
   if (jit && *jit && !options->seen_jit) options->jit = (int)mode;
+  /* agc_init has read it already and kept the default for a bad value; this says so before anything runs. */
+  const char *heap = getenv("AGENTICA_GC_HEAP");
+  size_t bytes = 0;
+  if (heap && *heap && !agc_gc_heap_parse(heap, &bytes)) {
+    fprintf(stderr, "%s: AGENTICA_GC_HEAP needs a size in bytes, such as 33554432 or 32M (K, M or G), up to 1024G\n",
+            name);
+    return false;
+  }
   return true;
 }
 

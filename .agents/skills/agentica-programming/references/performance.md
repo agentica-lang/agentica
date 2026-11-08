@@ -117,7 +117,8 @@ writes `/tmp/perf-PID.map`, so `perf report` names the compiled functions
   `Set.new` stalls every other task. Keep big builds out of code others wait on.
 - `String.at` and `String.slice` count characters: O(1) on ASCII; on multi-byte
   text each call walks from the nearest of the start, the end or the last
-  position used (a forward scan is cheap, random access can cost O(n)).
+  position used, eight ASCII bytes at a time (a forward scan is cheap, random
+  access can cost O(n)).
 
 ## Enumerable methods
 

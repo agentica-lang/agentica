@@ -314,15 +314,18 @@ def test_a_10_mb_file_of_short_lines_streams_in_order_with_size_over_buffer_read
     size = data.stat().st_size
     assert size > 10000000
     trace = tmp_path / "trace.txt"
+    # Without the 32 MiB heap floor, which would hide a stream that keeps the file: libgc's own start grows the heap
+    # only for what stays live.
+    small_heap = {"AGENTICA_GC_HEAP": "0"}
     result = run_program(tmp_path, "stream", stream_program(), data,
-                         env={"AGENTICA_VM_TRACE": "io", "AGENTICA_VM_TRACE_FILE": trace})
+                         env={**small_heap, "AGENTICA_VM_TRACE": "io", "AGENTICA_VM_TRACE_FILE": trace})
     assert result.code == 0, result.stderr
     expected = data.read_text()
     assert result.stdout.startswith(expected), "every line, in order, once"
     rest = result.stdout[len(expected):]
     assert re.fullmatch(r"ok\(\)\n(VmHWM:\s+[0-9]+ kB\n)?", rest)
     if LINUX and collected():
-        baseline = run_program(tmp_path, "baseline", BASELINE_PROGRAM)
+        baseline = run_program(tmp_path, "baseline", BASELINE_PROGRAM, env=small_heap)
         assert baseline.code == 0, baseline.stderr
         growth = hwm_kib(rest) - hwm_kib(baseline.stdout)
         assert growth < size // 4096, "peak memory grew by %d kB while streaming %d bytes" % (growth, size)
