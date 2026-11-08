@@ -47,4 +47,9 @@ def main() -> Void
     "    #include <stdio.h>\n    /* <name> and <pthread.h> */\n    <\n    <>\n    \"\"\"\n" +
     "  Then rows:\n    | <br> | <name> |\n  Examples:\n    | name |\n    | x |\n"
   )
+  # Each row binds the columns of its own Examples block: <a> is replaced in the rows of the first block only.
+  show(
+    "Feature: blocks\nScenario Outline: s\n  Given <a> and <b>\n  Examples:\n    | a |\n    | 1 |\n    | 2 |\n" +
+    "  Examples:\n    | b |\n    | 3 |\n"
+  )
 end

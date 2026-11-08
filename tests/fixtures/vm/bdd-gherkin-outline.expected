@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 16708,
+  "steps": 20960,
   "stdout": [
     "feature \"streaming\" [\"@stream\"] sample.feature:2:1-19",
     "scenario \"value 1\" [\"@stream\", \"@case\", \"@examples\"] sample.feature:8:1-28 example sample.feature:21:1-10",
@@ -41,6 +41,16 @@
     "    doc \"#include <stdio.h>\\n/* x and <pthread.h> */\\n<\\n<>\"",
     "  Then \"rows:\" sample.feature:10:3-13",
     "    table [[\"<br>\", \"x\"]]",
+    "feature \"blocks\" [] sample.feature:1:1-16",
+    "scenario \"s (1)\" [] sample.feature:2:1-20 example sample.feature:6:1-10",
+    "  Given \"1 and <b>\" sample.feature:3:3-20",
+    "    no argument",
+    "scenario \"s (2)\" [] sample.feature:2:1-20 example sample.feature:7:1-10",
+    "  Given \"2 and <b>\" sample.feature:3:3-20",
+    "    no argument",
+    "scenario \"s (3)\" [] sample.feature:2:1-20 example sample.feature:10:1-10",
+    "  Given \"<a> and 3\" sample.feature:3:3-20",
+    "    no argument",
     ""
   ],
   "stderr": []

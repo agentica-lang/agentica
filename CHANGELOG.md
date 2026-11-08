@@ -44,6 +44,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   calls per request; there an I/O timeout, or a `Task.sleep` at one scheduler,
   may end up to about two kernel ticks and 2 ms late.
   `Time.monotonic_ms` reads the exact clock again on other Linux hosts.
+- **Breaking:** in a `Scenario Outline`, a `<name>` that is not a column of the
+  `Examples` is no longer `PARSE-GHERKIN-PARAMETER` (the code is gone); it
+  stays as written, as in Cucumber, so `#include <stdio.h>` in a Doc String
+  works. A misspelled column is now an undefined step.
 
 ### Removed
 
@@ -54,9 +58,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - An I/O timeout never ends before its time; it could end up to 1 ms early.
-- A `Scenario Outline` replaces only a `<name>` that is a column of its
-  `Examples`; any other `<...>` (`#include <stdio.h>` in a Doc String, HTML)
-  stays as written, as in Cucumber. `PARSE-GHERKIN-PARAMETER` is gone.
 
 ## [0.26.2] - 2026-11-08
 

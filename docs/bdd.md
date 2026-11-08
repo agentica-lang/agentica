@@ -148,8 +148,9 @@ feeds); a range runs to the end of the line.
   `\xNN`. Identical rows keep identical names; the JSON `example` field (the
   row's line) tells them apart. Only a column is replaced: any other `<...>`
   (`#include <stdio.h>`, HTML) stays as written, as in Cucumber, so a
-  misspelled column is not a parse error. Several `Examples` blocks add their rows in order, and a
-  row's tags are the Feature's, then the scenario's, then its `Examples`
+  misspelled column is not a parse error (the step is undefined, and its
+  message names the cause). Several `Examples` blocks add their rows in order,
+  and a row's tags are the Feature's, then the scenario's, then its `Examples`
   block's.
 - **Steps.** A step outside a Background or scenario, or after `Examples`, is
   `PARSE-GHERKIN-STEP`. `And` and `But` take the kind of the step before them in

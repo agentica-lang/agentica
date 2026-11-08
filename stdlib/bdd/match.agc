@@ -62,7 +62,7 @@ export def resolve(patterns: List[Pattern], step: Gherkin.Step) -> Gherkin.Outco
   end
   if hits == 0
     return Gherkin.Outcome.Failed(
-      Gherkin.Diagnostic(code: "CHECK-BDD-UNDEFINED", message: "no step definition matches", span: step.span),
+      Gherkin.Diagnostic(code: "CHECK-BDD-UNDEFINED", message: undefined_message(step.text), span: step.span),
     )
   end
   if hits > 1
@@ -80,6 +80,16 @@ export def captures(pattern: Pattern, text: String) -> Result[List[String]]
     return error("no match")
   end
   return walk(pattern.slots, 0, chars, pattern.head.size, [])
+end
+
+# An outline leaves a `<name>` that is not an Examples column as written, so a misspelled column ends here: the text
+# says so when the step still holds a `<...>`.
+def undefined_message(text: String) -> String
+  open = text.index_of("<")
+  if open.some? and text.slice(open.unwrap!, text.length - open.unwrap!).include?(">")
+    return "no step definition matches; if `<...>` is an Examples column, the table has no column of that name"
+  end
+  return "no step definition matches"
 end
 
 def failed(code: String, reason: String, text: String, where: Report.Span) -> Gherkin.Outcome[List[Pattern]]

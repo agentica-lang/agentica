@@ -275,7 +275,10 @@ def test_an_outline_replaces_only_the_columns_and_keeps_any_other_angle_text_as_
     # A misspelled column is not replaced: the step text is then undefined, not a parse error.
     status, report = bdd.json_test(joined(directory, "typo.feature"), "--steps", joined(directory, "steps.agc"))
     assert status == 1
-    assert [item["status"] for item in report_cases(report)] == ["failed"]
+    [case] = report_cases(report)
+    undefined = [step for step in case["steps"] if step["error"]]
+    assert [(step["error"]["code"], step["text"]) for step in undefined] == [
+        ("CHECK-BDD-UNDEFINED", '<input type="checkbox"> is row <idd> of <br>')]
 
 
 def test_a_crashing_handler_shows_its_stack_in_the_text_and_ai_reports(bdd):
