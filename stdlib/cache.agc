@@ -335,7 +335,8 @@ end
 
 # Takes an entry that was read out of its table. The task whose add of the entry's size to its id makes 0 is the only
 # one that gives the bytes back; the others find the entry already taken. An entry can be put in a table only while its
-# key is free, so the entry is still there when the winner takes it out. Returns whether this task took it.
+# key in that generation is free, so the entry is still there when the winner takes it out. Returns whether this task
+# took it.
 def remove_entry(state: Memory, entry: Entry) -> Bool
   size = cost(entry.key, entry.value)
   live = live_in(state, entry.gen)
