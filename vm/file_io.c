@@ -42,7 +42,8 @@ static void copy_info(agc_fs_info *to, const uv_stat_t *from) {
 
 int agc_fs_open(const char *path, unsigned flags) {
   unsigned changes = AGC_FS_CREATE | AGC_FS_EXCLUSIVE | AGC_FS_APPEND | AGC_FS_TRUNCATE | AGC_FS_PRIVATE;
-  if (!path || !*path || (flags & ~(changes | AGC_FS_WRITE)) ||
+  if (!path || !*path || (flags & ~(changes | AGC_FS_WRITE | AGC_FS_LOCKABLE)) ||
+      ((flags & AGC_FS_LOCKABLE) && !(flags & AGC_FS_APPEND)) ||
       ((flags & changes) && !(flags & AGC_FS_WRITE)) ||
       ((flags & AGC_FS_PRIVATE) && !(flags & AGC_FS_EXCLUSIVE)) ||
       ((flags & AGC_FS_EXCLUSIVE) && !(flags & AGC_FS_CREATE)) ||
@@ -54,6 +55,13 @@ int agc_fs_open(const char *path, unsigned flags) {
   if (flags & AGC_FS_PRIVATE) return agc_fs_private_create(path, false);
 #endif
   int native = flags & AGC_FS_WRITE ? UV_FS_O_WRONLY : UV_FS_O_RDONLY;
+#ifdef _WIN32
+  /* libuv maps a write-only append to FILE_APPEND_DATA alone, and LockFileEx (File.try_lock) refuses a handle without
+     read or write-data access. Read access fixes that; writes stay append-only, since libuv still drops
+     FILE_WRITE_DATA, and the VM never reads through an append handle. Only a handle that can be locked pays for it
+     (a write-only file, or a sharing violation with an opener that shares write but not read). */
+  if (flags & AGC_FS_LOCKABLE) native = UV_FS_O_RDWR;
+#endif
   if (flags & AGC_FS_CREATE) native |= UV_FS_O_CREAT;
   if (flags & AGC_FS_EXCLUSIVE) native |= UV_FS_O_EXCL | UV_FS_O_NOFOLLOW;
   if (flags & AGC_FS_APPEND) native |= UV_FS_O_APPEND;
