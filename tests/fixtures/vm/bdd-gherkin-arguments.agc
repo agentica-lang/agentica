@@ -16,7 +16,6 @@ def main() -> Void
   check("Feature: f\nScenario: s\n|a|")
   check("Feature: f\nScenario: s\n\"\"\"\n\"\"\"")
   check("Feature: f\nScenario Outline: s\nThen fine\nExamples:\n|\n|\n")
-  check("Feature: f\nScenario Outline: <missing>\nThen fine\nExamples:\n| x |\n| 1 |\n")
   check("Feature: f\nScenario Outline: s\nThen fine\n")
   check("Feature: f\nScenario: s\nWhen input:\n\"\"\"\nunfinished\n")
   check("Feature: f\nScenario: s\nGiven x\n| a \\q |\n")
@@ -26,5 +25,4 @@ def main() -> Void
   check("Feature: f\nScenario: s\nGiven x\nExamples:\n| a |\n| 1 |\n")
   check("Feature: f\nScenario Outline: s\nGiven x\nExamples:\n| a | a |\n| 1 | 2 |\n")
   check("Feature: f\nScenario Outline: s\nGiven x\nExamples:\n| a |\n")
-  check("Feature: f\nScenario Outline: s\nGiven <a>\nExamples:\n| a |\n| 1 |\nExamples:\n| b |\n| 2 |\n")
 end

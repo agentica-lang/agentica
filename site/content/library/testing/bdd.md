@@ -74,7 +74,7 @@ No code needed. `{string}` is text in double quotes, `{int}` a whole number.
 | `stdout is:` / `stderr is:` | after the program ends, compares the stdout that no line step has read yet, or all of stderr |
 | `stdout includes:` / `stderr includes:` | after the program ends, checks that the same text contains the Doc String as a substring |
 
-`Given`, `When`, `Then`, `And` and `But` match the same steps. `Background`, `Scenario Outline` with `Examples`, Doc Strings (`"""`) and Data Tables work. A `<...>` in an outline is replaced when it names an `Examples` column; any other `<...>` is `PARSE-GHERKIN-PARAMETER` unless it holds `=`, a quote or `/`, as `<input type="text">` and `<br/>` do, and then it stays as written (a bare tag such as `<br>` or `<p>` still fails: write `<br/>`, or put the tag in a column).
+`Given`, `When`, `Then`, `And` and `But` match the same steps. `Background`, `Scenario Outline` with `Examples`, Doc Strings (`"""`) and Data Tables work. A `<...>` in an outline is replaced when it names an `Examples` column; any other `<...>`, in a step or a Doc String, stays as written, as in Cucumber (`#include <stdio.h>` or HTML is fine). A misspelled column is not an error: the step text keeps its `<name>`, and the step fails as undefined if no pattern matches it.
 
 ## Environment and arguments
 
