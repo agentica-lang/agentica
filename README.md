@@ -1,8 +1,10 @@
 # Agentica
 
-Agentica is a small, statically typed language with Ruby-like syntax, checked
-before it runs. A front end written in Agentica compiles each program to
-bytecode, and a C VM runs it. Both are one binary, `agentica`.
+Agentica is Ruby with static types: Ruby-like syntax, every program checked
+before it runs, and values that never change in place. Tasks run in parallel on
+several cores, and it comes with HTTP, TLS and WebSockets, packages and C native
+modules. A front end written in Agentica compiles each program to bytecode, and
+a C VM runs it. Both are one binary, `agentica`.
 
 **[Read the documentation →](https://agentica-lang.github.io/agentica/)**
 

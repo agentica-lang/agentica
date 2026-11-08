@@ -4,7 +4,7 @@ weight: 8
 description: The main design decisions of Agentica and its bytecode VM, Aurora, and why each one was taken.
 ---
 
-Agentica is a small, statically typed language for AI agents. Its programs run on Aurora, a bytecode virtual machine written in C11.
+Agentica is a statically typed language with Ruby-like syntax, made for people and AI agents. Its programs run on Aurora, a bytecode virtual machine written in C11.
 
 ## Two parts: a front end in Agentica and a C VM
 
