@@ -400,12 +400,16 @@ Properties of the client that no test checks:
   checks UTF-8 and close codes, and sends whole messages to `incoming`; the
   pong of a ping goes through `outgoing`. The writer is the only task that
   writes the socket and the one that ends the connection: it reads `outgoing`
-  itself and writes every frame queued at that moment in one write (up to 64
-  KiB, a bigger frame goes whole), and it finishes when the handshake is done,
+  itself and writes the frames queued at that moment in one write (it stops
+  reading the queue once 64 KiB are reached; a bigger frame goes whole), and it
+  finishes when the handshake is done,
   on a failed write, or `close_ms` after our close frame. The reader leaves its
   last word (the answer to the peer's close, a protocol error, the loss of the
   peer) in a one-slot channel and rouses the writer with a message in
-  `outgoing`, since a task cannot wait on two channels. Every path ends with
+  `outgoing`, since a task cannot wait on two channels. That message marks the
+  place in the queue: what follows it is dropped, and the answer to the peer's
+  close goes out after what precedes it (unless that ends with a close of the
+  handler, which is then our close). Every path ends with
   one `Close` on `incoming`: the peer's, the code of the failure, or 1006. The
   pure part (the frame codec, the checks and the accept key) is
   `std/internal/websocket`; a read timeout closes the socket, so `idle_ms` is
