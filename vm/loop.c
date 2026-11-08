@@ -1918,7 +1918,7 @@ agc_lock_status agc_handle_wait(agc_vm *vm, agc_resource *handle, int64_t *timeo
   }
   if (!deadline) {
     now = agc_clock_ms();
-    deadline = t->lock_deadline = now + (uint64_t)*timeout_ms;
+    deadline = t->lock_deadline = agc_deadline_ms(now, (uint64_t)*timeout_ms);
   }
   unwait(vm, handle, t);
   if (now >= deadline) {

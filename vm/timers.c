@@ -107,7 +107,7 @@ static void start_pending(agc_vm *vm, uint64_t *now) {
     return;
   }
   if (!*now) *now = agc_clock_ms();
-  insert(vm, h, t, *now + t->timer.deadline);
+  insert(vm, h, t, agc_deadline_ms(*now, t->timer.deadline));
 }
 
 static void arm(agc_vm *vm, agc_task *t, uint64_t deadline) {

@@ -155,7 +155,7 @@ static void test_pending(void) {
   uint64_t before = agc_clock_ms();
   assert(!agc_timers_run(&vm));
   assert(!a->timer.pending && a->timer.heap == &vm.timers && !atomic_load(&vm.timers.pending));
-  assert(a->timer.deadline >= before + 60000 && a->timer.deadline <= agc_clock_ms() + 60000);
+  assert(a->timer.deadline >= before + 60001 && a->timer.deadline <= agc_clock_ms() + 60001);
   assert(vm.timers.count == 1 && agc_timers_next_due(&vm) == a->timer.deadline);
   agc_task *b = parked_within(&vm, 60000);
   agc_task *c = parked_within(&vm, 60000);

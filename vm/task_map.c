@@ -136,7 +136,7 @@ static void start(agc_vm *vm, map_group *g, uint64_t now) {
     map_item *it = agc_alloc(sizeof(map_item));
     it->group = g;
     it->index = g->next++;
-    it->deadline = now + (uint64_t)g->timeout;
+    it->deadline = agc_deadline_ms(now, (uint64_t)g->timeout);
     it->running = true;
     it->task = agc_task_spawn_seeded(vm, vm->task, g->fn, &arg, 1, g->span);
     /* A caller that is cancelled gets an item that started cancelled and may have ended already: the hook may not

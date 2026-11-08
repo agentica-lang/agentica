@@ -1388,7 +1388,7 @@ static agc_value await_timeout(agc_vm *vm, agc_value *args, uint32_t span, bool 
   /* The first call always parks, even for a wait of 0 ms (agc_timeout_length); a retry with the deadline passed is a
      timeout. 0 means "not set", so the stored deadline is made odd (at most 1 ms late), never 0. */
   if (!t->await_deadline)
-    t->await_deadline = (now + (uint64_t)agc_timeout_length(vm, timeout)) | 1;
+    t->await_deadline = agc_deadline_ms(now, (uint64_t)agc_timeout_length(vm, timeout)) | 1;
   else if (t->await_deadline <= now) {
     t->await_deadline = 0;
     return await_timed_out(vm);
@@ -1424,7 +1424,7 @@ static agc_value builtin_sleep(agc_vm *vm, agc_value *args, uint32_t span) {
     return agc_void();
   }
   agc_task_parking(vm);
-  agc_task_park_until(vm, agc_clock_ms() + (uint64_t)ms, false);
+  agc_task_park_until(vm, agc_deadline_ms(agc_clock_ms(), (uint64_t)ms), false);
   return agc_void();
 }
 

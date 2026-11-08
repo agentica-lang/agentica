@@ -105,7 +105,9 @@ Known exceptions (the mechanisms are in §10.2.2):
 - **A wait with only a deadline is a task timer.** It arms the task's own timer
   in the scheduler's heap (`agc_task_park_until`, `vm/timers.c`). Such a wait
   has no I/O, so it needs no job, no registry slot and no request to the I/O
-  thread. §16.9, "Timers", lists the waits that use it.
+  thread. §16.9, "Timers", lists the waits that use it. The scheduler's clock
+  counts whole milliseconds, rounded down, so a deadline (`agc_deadline_ms`)
+  counts one millisecond more than the timeout: the wait never ends early.
 
 No builtin starts its own timer for a timeout. A few timers are not
 job timeouts and stay: a captured child's grace period (§10.4), the `HttpClient`

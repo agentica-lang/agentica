@@ -65,6 +65,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Fixed
 
 - An I/O timeout never ends before its time; it could end up to 1 ms early.
+- `Task.sleep`, a channel timeout, a `Task.await` or `Task.map` timeout and a
+  handle lock's timeout never end before their time; they could end up to 1 ms
+  early.
 - `agentica test` no longer takes a `steps.agc` from above the working folder
   for a path below it; the search stops at the working folder, as documented.
 - A big `_build/` no longer slows each start of a package with `[native]`: the
