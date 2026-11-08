@@ -303,6 +303,9 @@ static void set_blocking(int fd, bool blocking) {
   assert(flags >= 0 && fcntl(fd, F_SETFL, blocking ? flags & ~O_NONBLOCK : flags | O_NONBLOCK) == 0);
 }
 
+/* The zero-byte case needs a send buffer that takes no byte. Only Linux fills it exactly: macOS counts mbufs and a
+   low-water mark, so a full buffer may still take a short send. */
+#ifdef __linux__
 /* Fills the send buffer of the non-blocking descriptor FD with 'z' bytes, down to one byte: their count. */
 static size_t fill_send_buffer(int fd) {
   static char junk[65536];
@@ -338,6 +341,7 @@ static void peer_reads_after_junk(int fd, size_t count, const char *tail) {
   assert(memcmp(got + count, tail, strlen(tail)) == 0);
   free(got);
 }
+#endif
 
 /* The scheduler's half of the close case: a send larger than the loopback buffers, which blocks in the kernel, beside
    the parked read. */
@@ -410,8 +414,8 @@ static void send_first(void *arg) {
    holds although no job does: it posts nothing, so it cannot overtake the rest of the first send, and it goes out
    when the first send ends, after its last byte. Then the same when the kernel takes no byte of the first send: its
    whole text parks on a job that takes the hold over, and the waiting task is not handed the lock between (it would
-   then send ahead, and two sends would share the socket's one libuv write). It runs last: it turns every lock on
-   (agc_share) for good, and calls the builtins with rt->sync as the schedulers do. */
+   then send ahead, and two sends would share the socket's one libuv write); Linux only. It runs last: it turns every
+   lock on (agc_share) for good, and calls the builtins with rt->sync as the schedulers do. */
 static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   int fd = open_pair();
   int mine = vm_side(fd);
@@ -419,7 +423,7 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   static agc_vm other;
   agc_vm_init_context(&other, vm.rt);
   /* A task for each case: the harness resumes a woken task without its scheduler, which would take its lock timer. */
-  agc_task *second = agc_new_task(&vm), *third = agc_new_task(&vm);
+  agc_task *second = agc_new_task(&vm);
   agc_resource *writer = agc_as_socket(&vm, socket_v)->writer;
   set_blocking(mine, true);
   agc_share(&vm);
@@ -442,8 +446,10 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   ok_of(behind.c.result);
   peer_reads(fd, "behind\n", 7);
 
+#ifdef __linux__
   /* A small send buffer of its own, filled until a pause frees no room: the peer's window is shut too, so no byte
      leaves it. */
+  agc_task *third = agc_new_task(&vm);
   int small = 4096;
   assert(setsockopt(mine, SOL_SOCKET, SO_SNDBUF, &small, sizeof small) == 0);
   set_blocking(mine, false);
@@ -477,6 +483,7 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   on_thread(call_locked, &behind);
   ok_of(behind.c.result);
   peer_reads(fd, "second\n", 7);
+#endif
   locked_call closing = {&vm, vm.task, call("TCP.close", 1, socket_v, agc_void(), agc_void(), agc_void())};
   on_thread(call_locked, &closing);
   closing.c = call("TCP.close_listener", 1, listener, agc_void(), agc_void(), agc_void());
