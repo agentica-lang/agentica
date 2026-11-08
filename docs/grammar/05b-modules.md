@@ -227,12 +227,15 @@ max_line_width = 119
 import Sqlite from "pkg/sqlite/db"
 ```
 
-- The manifest knows `name`, `[dependencies]`, `[native]`, `[style]` and
-  `[workspace]` (below). An unknown key at any level, a value of the wrong
-  form, or a TOML syntax error is `PKG-MANIFEST-INVALID`. `name` is optional
-  and follows the rule of a dependency name below. `max_line_width` is an
-  integer of 1 or more. `blank_line_after_end` is a boolean, false by default;
-  any other value is `PKG-MANIFEST-INVALID` at `style.blank_line_after_end`.
+- The manifest knows `name`, `[dependencies]`, `[native]`, `[style]`,
+  `[workspace]` (below) and `[tool]`, a table of tables (`[tool.NAME]`) that
+  other tools own: Agentica reads nothing inside them and checks only that
+  `tool` and each `tool.NAME` is a table. Outside `[tool]`, an unknown key at
+  any level, a value of the wrong form, or a TOML syntax error is
+  `PKG-MANIFEST-INVALID`, as is a `tool` that is not a table of tables. `name`
+  is optional and follows the rule of a dependency name below.
+  `max_line_width` is an integer of 1 or more. `blank_line_after_end` is a
+  boolean, false by default; any other value is `PKG-MANIFEST-INVALID` at `style.blank_line_after_end`.
 - With `max_line_width = N`, `agentica check` and every command that checks a
   program report a line of more than N characters (Unicode code points; a CR
   before the line feed does not count; comments count) as

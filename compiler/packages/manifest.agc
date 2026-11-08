@@ -6,7 +6,7 @@
 ## other source of the name in the tree); `require_package` refuses both in the manifest of a package. A failure is
 ## PKG-MANIFEST-INVALID, with the file and the key path (toml_read.agc). The `[workspace]` table is known here but read
 ## by members.agc, and only for the project's manifest: the manifest of a package skips it. `[native]` is the other way
-## round: only a package's is used.
+## round: only a package's is used. `[tool.NAME]` belongs to other tools: only its shape is checked.
 
 import Workspace from "../modules/workspace"
 import Paths from "../modules/import_path"
@@ -18,7 +18,7 @@ import Toml from "std/toml"
 import Reader from "toml_read"
 
 # The keys the manifest knows, and those of [style] and of a dependency.
-TOP_KEYS = ["name", "dependencies", "native", "style", "workspace"]
+TOP_KEYS = ["name", "dependencies", "native", "style", "workspace", "tool"]
 STYLE_KEYS = ["max_line_width", "blank_line_after_end"]
 DEPENDENCY_KEYS = ["git", "tag", "ref", "subdir", "path", "override"]
 GIT_KEYS = ["git", "tag", "ref", "subdir"]
@@ -97,6 +97,7 @@ export def parse(file: String, text: String) -> Result[Manifest]
   dependencies = try dependencies_of(reading, root)
   natives = try natives_of(reading, root)
   style = try style_of(reading, root)
+  try tool_of(reading, root)
   return ok(
     Manifest(
       file: file,
@@ -482,4 +483,19 @@ def style_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[S
   end
 
   return ok(style)
+end
+
+# [tool]: a table of tables, one per tool (`[tool.cchecker]`), as pyproject.toml has. Agentica reads nothing inside a
+# tool's table, so its keys and values are the tool's own; only the two outer levels are checked.
+def tool_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[Void]
+  if !root.has_key?("tool")
+    return ok()
+  end
+
+  tools = try Reader.table(reading, root["tool"], "tool")
+  for name in tools.keys
+    try Reader.table(reading, tools[name], Reader.child("tool", name))
+  end
+
+  return ok()
 end

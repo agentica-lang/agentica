@@ -145,6 +145,8 @@ import Sqlite from "pkg/sqlite/db"
   apply to the files below the manifest's folder that have no manifest nearer,
   not to `std/`, packages, `agc_libs/` or `pkg/` libraries. After `end` the next
   line may start with `end`, `else`, `elsif`, `)`, `]`, `}` or `.name`.
+- `[tool.NAME]` tables are for other tools and Agentica reads nothing inside
+  them; `tool` or `tool.NAME` that is not a table is `PKG-MANIFEST-INVALID`.
 - `subdir = "postgres"` makes the package a folder of the repository (several
   packages in one repository, prefixed tags such as `postgres-0.1.0`): plain
   folder names joined by `/`, no `..`, no leading `/`, no hidden folder, no

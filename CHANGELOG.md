@@ -8,6 +8,13 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.26.2] - 2026-11-08
+
+### Added
+
+- `agentica.toml` accepts a `[tool.NAME]` table for other tools; Agentica reads
+  nothing inside it.
+
 ## [0.26.1] - 2026-11-07
 
 ### Added
@@ -1177,7 +1184,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.26.1...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.26.2...HEAD
+[0.26.2]: https://github.com/agentica-lang/agentica/compare/0.26.1...0.26.2
 [0.26.1]: https://github.com/agentica-lang/agentica/compare/0.26.0...0.26.1
 [0.26.0]: https://github.com/agentica-lang/agentica/compare/0.25.1...0.26.0
 [0.25.1]: https://github.com/agentica-lang/agentica/compare/0.25.0...0.25.1
