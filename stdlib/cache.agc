@@ -46,6 +46,7 @@ export struct Options
 end
 
 struct Entry
+  key: String
   value: String
   at: Int
   id: Int
@@ -243,18 +244,25 @@ def cost(key: String, value: String) -> Int
   return ENTRY_OVERHEAD + key.bytesize + value.bytesize
 end
 
+# The key of an entry in its table. A remover reads an entry and then deletes its key, two calls apart; if the table
+# were reused in between under the bare key, the delete would drop the newer generation's entry and leave its bytes
+# counted. The generation in the key keeps the delete in the old generation.
+def slot_key(g: Int, key: String) -> String
+  return "#{g}:#{key}"
+end
+
 def lookup(state: Memory, key: String) -> Optional[String]
   g = current(state)
   at = now(state)
   for gen in [g, g - 1]
-    found = slot(state, gen).get(key)
+    found = slot(state, gen).get(slot_key(gen, key))
     if found.ok?
       entry = found.unwrap!
       if not expired?(state, entry, at)
         return some(entry.value)
       end
 
-      _ = remove_entry(state, key, entry)
+      _ = remove_entry(state, entry)
       return none
     end
   end
@@ -283,9 +291,9 @@ end
 def remove(state: Memory, key: String) -> Void
   g = current(state)
   for gen in [g, g - 1]
-    found = slot(state, gen).get(key)
+    found = slot(state, gen).get(slot_key(gen, key))
     if found.ok?
-      _ = remove_entry(state, key, found.unwrap!)
+      _ = remove_entry(state, found.unwrap!)
     end
   end
 end
@@ -305,10 +313,10 @@ def insert(state: Memory, key: String, value: String) -> Bool
   end
 
   id = state.ids.add(0, 1)
-  entry = Entry(value: value, at: now(state), id: id, gen: g)
+  entry = Entry(key: key, value: value, at: now(state), id: id, gen: g)
   live = live_in(state, g)
   live.put(id, size)
-  if not slot(state, g).put_new(key, entry)
+  if not slot(state, g).put_new(slot_key(g, key), entry)
     live.delete(id)
     give_back(state, g, size)
     return false
@@ -319,7 +327,7 @@ def insert(state: Memory, key: String, value: String) -> Bool
   # the rotation that empties its table starts only after the next one is published, which is after this read.
   if current(state) - g >= 2
     live.delete(id)
-    take_out(state, key, entry)
+    take_out(state, entry)
   end
 
   return true
@@ -327,9 +335,10 @@ end
 
 # Takes an entry that was read out of its table. The task whose add of the entry's size to its id makes 0 is the only
 # one that gives the bytes back; the others find the entry already taken. An entry can be put in a table only while its
-# key is free, so the entry is still there when the winner takes it out. Returns whether this task took it.
-def remove_entry(state: Memory, key: String, entry: Entry) -> Bool
-  size = cost(key, entry.value)
+# key in that generation is free, so the entry is still there when the winner takes it out. Returns whether this task
+# took it.
+def remove_entry(state: Memory, entry: Entry) -> Bool
+  size = cost(entry.key, entry.value)
   live = live_in(state, entry.gen)
   won = live.add(entry.id, -size) == 0
   live.delete(entry.id)
@@ -337,13 +346,14 @@ def remove_entry(state: Memory, key: String, entry: Entry) -> Bool
     return false
   end
 
-  take_out(state, key, entry)
+  take_out(state, entry)
   give_back(state, entry.gen, size)
   return true
 end
 
-def take_out(state: Memory, key: String, entry: Entry) -> Void
+def take_out(state: Memory, entry: Entry) -> Void
   table = slot(state, entry.gen)
+  key = slot_key(entry.gen, entry.key)
   found = table.get(key)
   if found.ok? and found.unwrap!.id == entry.id
     table.delete(key)
@@ -538,7 +548,7 @@ def sweep(state: Memory) -> Int
     table = slot(state, gen)
     for key in table.keys
       found = table.get(key)
-      if found.ok? and expired?(state, found.unwrap!, at) and remove_entry(state, key, found.unwrap!)
+      if found.ok? and expired?(state, found.unwrap!, at) and remove_entry(state, found.unwrap!)
         removed += 1
       end
     end
