@@ -337,7 +337,7 @@ def main() -> Void
     got = got + piece
   end
   puts(got == every + every)
-  puts(Digest.hexencode(got))
+  puts(OpenSSL.Digest.hexencode(got))
   IO.inspect(TCP.recv_bytes(socket, 1, 10000))
   TCP.close(socket)
   TCP.close_listener(listener)

@@ -9,19 +9,19 @@ MESSAGE = (
 )
 
 def hex(text: String) -> Bytes
-  return Digest.hexdecode(text).unwrap!
+  return OpenSSL.Digest.hexdecode(text).unwrap!
 end
 
 def aes(label: String, key: String) -> Void
   tags = [0, 16, 40, 64].map do |n: Int|
-    Digest.hexencode(CMAC.aes(hex(key), hex(MESSAGE).take(n)).unwrap!)
+    OpenSSL.Digest.hexencode(OpenSSL.CMAC.aes(hex(key), hex(MESSAGE).take(n)).unwrap!)
   end
   puts("#{label} #{tags.join(" ")}")
 end
 
 def des_ede3(label: String, key: String) -> Void
   tags = [0, 8, 20, 32].map do |n: Int|
-    Digest.hexencode(CMAC.des_ede3(hex(key), hex(MESSAGE).take(n)).unwrap!)
+    OpenSSL.Digest.hexencode(OpenSSL.CMAC.des_ede3(hex(key), hex(MESSAGE).take(n)).unwrap!)
   end
   puts("#{label} #{tags.join(" ")}")
 end
@@ -38,12 +38,12 @@ def main() -> Void
   des_ede3("tdea-2", "4cf15134a2850dd58a3d10ba80570d38")
   key = hex("603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4")
   data = "data".bytes
-  shape("aes key 0", CMAC.aes("".bytes, data))
-  shape("aes key 15", CMAC.aes(key.take(15), data))
-  shape("aes key 33", CMAC.aes(key + key.take(1), data))
-  shape("tdea key 8", CMAC.des_ede3(key.take(8), data))
-  shape("tdea key 32", CMAC.des_ede3(key, data))
+  shape("aes key 0", OpenSSL.CMAC.aes("".bytes, data))
+  shape("aes key 15", OpenSSL.CMAC.aes(key.take(15), data))
+  shape("aes key 33", OpenSSL.CMAC.aes(key + key.take(1), data))
+  shape("tdea key 8", OpenSSL.CMAC.des_ede3(key.take(8), data))
+  shape("tdea key 32", OpenSSL.CMAC.des_ede3(key, data))
   # A received tag is checked in constant time.
-  tag = CMAC.aes(key.take(16), data).unwrap!
-  puts("check #{HMAC.secure_compare(tag, CMAC.aes(key.take(16), data).unwrap!)}")
+  tag = OpenSSL.CMAC.aes(key.take(16), data).unwrap!
+  puts("check #{OpenSSL.HMAC.secure_compare(tag, OpenSSL.CMAC.aes(key.take(16), data).unwrap!)}")
 end

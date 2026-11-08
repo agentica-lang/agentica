@@ -197,14 +197,14 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   and `abs`, `pow`, `gcd`, `floor`, `ceil` or `round` past the Int range).
 - `RUNTIME-INVALID-COUNT`: a count or limit outside its range: `List.repeat`
   0..1048576, a negative `take`/`drop`, shift or `pow` count, `Channel.new`
-  capacity 1..1048576, `Task.map` `limit` 1..1024, a `SecureRandom` count
+  capacity 1..1048576, `Task.map` `limit` 1..1024, an `OpenSSL.Random` count
   0..1048576.
 - `RUNTIME-INVALID-RANGE`: `Random.int` or `clamp` with min > max (or a NaN
   bound of `x.clamp`).
 - `RUNTIME-INVALID-NUMBER`: `s.to_i!`/`to_f!` on bad text, `x.to_i!`, `floor`,
   `ceil` or `round` on NaN or infinity, `Math.sqrt` of a negative number,
-  `Float.from_bits32` outside 0..4294967295, a byte item outside 0..255 in a
-  `Digest`, `HMAC` or `Base64` call.
+  `Float.from_bits32` outside 0..4294967295, a byte item outside 0..255 in an
+  `OpenSSL.Digest`, `OpenSSL.HMAC` or `Base64` call.
 - `RUNTIME-INVALID-CHARACTER`: `String.code` without exactly one character, or
   `String.from_code` outside Unicode scalar values.
 - `RUNTIME-STEP-LIMIT`: the execution step budget is exhausted; the stack shows

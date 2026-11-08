@@ -20,13 +20,13 @@ end
 
 def main() -> Void
   for n in [0, 1, 16, 4096]
-    data = SecureRandom.random_bytes(n)
-    hex = SecureRandom.hex(n)
+    data = OpenSSL.Random.random_bytes(n)
+    hex = OpenSSL.Random.hex(n)
     puts("#{n} #{data.size} #{bytes?(data)} #{hex.size} #{hex?(hex)}")
   end
-  puts("default #{SecureRandom.random_bytes.size} #{SecureRandom.hex.size}")
-  puts(SecureRandom.random_bytes(16) != SecureRandom.random_bytes(16))
-  puts(SecureRandom.hex(16) != SecureRandom.hex(16))
-  first = SecureRandom.uuid
-  puts("#{uuid?(first)} #{uuid?(SecureRandom.uuid())} #{first != SecureRandom.uuid}")
+  puts("default #{OpenSSL.Random.random_bytes.size} #{OpenSSL.Random.hex.size}")
+  puts(OpenSSL.Random.random_bytes(16) != OpenSSL.Random.random_bytes(16))
+  puts(OpenSSL.Random.hex(16) != OpenSSL.Random.hex(16))
+  first = OpenSSL.Random.uuid
+  puts("#{uuid?(first)} #{uuid?(OpenSSL.Random.uuid())} #{first != OpenSSL.Random.uuid}")
 end

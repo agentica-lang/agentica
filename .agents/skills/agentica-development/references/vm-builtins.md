@@ -6,6 +6,16 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Add a C builtin
 
+0. Name it. A builtin of a family (`FAMILIES` in
+   `compiler/catalog/builtins_data.agc`) is a row named `Family.Member.fn`
+   (`OpenSSL.Cipher.aes_256_gcm_encrypt`), and its implementation key is that
+   name (plus `.bytes` for a byte row). A new member is only its rows, or a
+   type named `Family.Member` in `RECORDS`, `ENUMS` or `OPAQUE_TYPES`;
+   `FAMILY_MEMBERS` (`builtins.agc`) derives the members. The linker turns
+   `Family.Member.fn(...)` into a call of that row (`modules/resolve.agc`,
+   `rewrite.agc`). A new builtin never adds a name to `RESERVED_TYPE_NAMES`:
+   put it in a family or an existing namespace. A new family (one name in
+   `FAMILIES` and `RESERVED_TYPE_NAMES`) needs its own issue.
 1. `compiler/lower/lower_tables.agc`: add the key to `VM_BUILTINS` (a call of
    any other builtin is `LOWER-UNSUPPORTED`), and a builtin record the VM
    builds to `BUILTIN_STRUCTS` (`STRUCT_NEEDS` for the records it contains).
@@ -68,20 +78,21 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    (`AGC_COST_NONE` or `AGC_COST_SIZE`, `docs/vm/10-io-scheduler.md` §10.2.1,
    "Builtins"): a builtin whose work grows with its input takes `AGC_COST_SIZE`
    or charges `agc_charge` from inside; never touch `steps_left` for that. CPU
-   work with no wait (`Digest.sha256`, a sort) stays on the scheduler with that
-   cost; the libuv pool is for blocking calls. The last field, `leaf`, marks a
-   plain C call that never parks, starts a stepper or a block, charges turn cost
-   (a map lookup charges for a String key) or counts a step: `CALL_BUILTIN`
-   stores its result and skips the generic tail. A leaf row is not `shared`,
-   has `AGC_NATIVE_NONE` and `AGC_COST_NONE` (`vm/tests/sync_test.c`), and the
-   sanitizer and GC-stress builds abort on a leaf call that breaks the rule
-   (`AGC_LEAF_CHECK`). Read the function and what it calls before marking a
-   row; when unsure, leave it `false`. State goes in `vm->rt` (shared
-   runtime), `vm` (the scheduler) or `vm->task`. Check `vm->rt->no_files` first
-   in file builtins and in `TCP.connect` and `TCP.listen`, so the fuzzer never
-   touches the disk or the network, and then the `--deny-*` flag of the family
-   (`rt->deny_fs`, `deny_net`, `deny_env`, `deny_run`), returning its
-   `denied: --deny-X` error before anything is opened.
+   work with no wait (`OpenSSL.Digest.sha256`, a sort) stays on the scheduler
+   with that cost; the libuv pool is for blocking calls. The last field, `leaf`,
+   marks a plain C call that never parks, starts a stepper or a block, charges
+   turn cost (a map lookup charges for a String key) or counts a step:
+   `CALL_BUILTIN` stores its result and skips the generic tail. A leaf row is
+   not `shared`, has `AGC_NATIVE_NONE` and `AGC_COST_NONE`
+   (`vm/tests/sync_test.c`), and the sanitizer and GC-stress builds abort on a
+   leaf call that breaks the rule (`AGC_LEAF_CHECK`). Read the function and what
+   it calls before marking a row; when unsure, leave it `false`. State goes in
+   `vm->rt` (shared runtime), `vm` (the scheduler) or `vm->task`. Check
+   `vm->rt->no_files` first in file builtins and in `TCP.connect` and
+   `TCP.listen`, so the fuzzer never touches the disk or the network, and then
+   the `--deny-*` flag of the family (`rt->deny_fs`, `deny_net`, `deny_env`,
+   `deny_run`), returning its `denied: --deny-X` error before anything is
+   opened.
 
 Rules for the C code:
 

@@ -8,12 +8,12 @@ def main() -> Void
     chunk = IO.read_bytes(1048576).unwrap!
   end
   data = Bytes.concat(parts)
-  puts(Digest.md5(data).to_a)
-  puts(Digest.md5_hexdigest(data))
-  puts(Digest.sha1(data).to_a)
-  puts(Digest.sha1_hexdigest(data))
-  puts(Digest.sha256(data).to_a)
-  puts(Digest.sha256_hexdigest(data))
-  puts(Digest.sha512(data).to_a)
-  puts(Digest.sha512_hexdigest(data))
+  puts(OpenSSL.Digest.md5(data).to_a)
+  puts(OpenSSL.Digest.md5_hexdigest(data))
+  puts(OpenSSL.Digest.sha1(data).to_a)
+  puts(OpenSSL.Digest.sha1_hexdigest(data))
+  puts(OpenSSL.Digest.sha256(data).to_a)
+  puts(OpenSSL.Digest.sha256_hexdigest(data))
+  puts(OpenSSL.Digest.sha512(data).to_a)
+  puts(OpenSSL.Digest.sha512_hexdigest(data))
 end

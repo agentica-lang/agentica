@@ -12,6 +12,11 @@ import Base from "parse_base"
 import Source from "source"
 import Tokens from "token"
 
+## PARSE-PIPE-TARGET; the linker gives it too, for x |> Type.Name.fn() whose head is no builtin family (rewrite.agc).
+export PIPE_TARGET_CODE = "PARSE-PIPE-TARGET"
+export PIPE_TARGET_MESSAGE = "the right side of |> must be a call with parentheses, such as f() or Alias.f(a)"
+export PIPE_TARGET_HINT = "wrap the expression in parentheses and use . on the result, for example (x |> f()).unwrap!"
+
 LEVELS: Map[String, Int] = {
   "or": 1,
   "and": 2,
@@ -411,50 +416,47 @@ end
 
 # x |> f(a) becomes the call f(x, a), keeping the id and span of the call written on the right, so the ids stay in
 # post-order: x was parsed first and has smaller ids. A try on the right wraps the call. Only a call written with
-# parentheses and not piped yet is a target; `none` gives PARSE-PIPE-TARGET.
+# parentheses and not piped yet is a target; `none` gives PARSE-PIPE-TARGET. Family.Member.fn(a), which reads as a
+# method call on the type name Family.Member, becomes the call Family.Member.fn(x, a). The parser does not know the
+# builtin families, so the linker judges the name: one whose head is no family, such as Color.Red.name(), gets
+# PARSE-PIPE-TARGET there (rewrite.agc).
 def pipe_insert(left: Ast.Expr, node: Ast.Expr) -> Optional[Ast.Expr]
+  case node
+    Ast.Expr.Try(wrapper) ->
+      case piped_call(left, wrapper.operand)
+        some(inserted) -> return some(Ast.Expr.Try(Ast.TryExpr(id: wrapper.id, operand: inserted, span: wrapper.span)))
+        none -> return none
+      end
+
+    _ -> return piped_call(left, node)
+  end
+end
+
+def piped_call(left: Ast.Expr, node: Ast.Expr) -> Optional[Ast.Expr]
   case node
     Ast.Expr.Call(call) ->
       if call.piped or !call.parenthesized
         return none
       end
 
-      return some(
-        Ast.Expr.Call(
-          Ast.Call(
-            id: call.id,
-            name: call.name,
-            args: List.concat([left], call.args),
-            piped: true,
-            parenthesized: false,
-            span: call.span,
-          ),
-        ),
-      )
-    Ast.Expr.Try(wrapper) ->
-      case wrapper.operand
-        Ast.Expr.Call(call) ->
-          if call.piped or !call.parenthesized
+      return some(pipe_node(call.id, call.name, List.concat([left], call.args), call.span))
+    Ast.Expr.MethodCall(call) ->
+      case call.target
+        Ast.Expr.TypeName(type_name) ->
+          if type_name.name.split(".").size != 2
             return none
           end
 
-          inserted = Ast.Expr.Call(
-            Ast.Call(
-              id: call.id,
-              name: call.name,
-              args: List.concat([left], call.args),
-              piped: true,
-              parenthesized: false,
-              span: call.span,
-            ),
-          )
-
-          return some(Ast.Expr.Try(Ast.TryExpr(id: wrapper.id, operand: inserted, span: wrapper.span)))
+          return some(pipe_node(call.id, "#{type_name.name}.#{call.name}", List.concat([left], call.args), call.span))
         _ -> return none
       end
 
     _ -> return none
   end
+end
+
+def pipe_node(id: Int, name: String, args: List[Ast.Expr], span: Source.Span) -> Ast.Expr
+  return Ast.Expr.Call(Ast.Call(id: id, name: name, args: args, piped: true, parenthesized: false, span: span))
 end
 
 def chained_message(level: Int) -> String
@@ -509,10 +511,10 @@ def parse_climb(e: Base.Env, pos: Int, ids: Int, minimum: Int) -> Result[Base.Ex
         none ->
           return error(
             Base.bail_span(
-              "PARSE-PIPE-TARGET",
-              "the right side of |> must be a call with parentheses, such as f() or Alias.f(a)",
+              PIPE_TARGET_CODE,
+              PIPE_TARGET_MESSAGE,
               Base.span_from(e, right_start, right.pos),
-              Base.hint("wrap the expression in parentheses and use . on the result, for example (x |> f()).unwrap!"),
+              Base.hint(PIPE_TARGET_HINT),
             ),
           )
       end

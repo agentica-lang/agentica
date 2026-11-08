@@ -5,7 +5,8 @@
 ## name in the imported file, if that file exports it; a name that file re-exports is the name in the file that
 ## declares it.
 
-import {BARE_NAMES, ENUMS, RECORDS, RESERVED, STD_ONLY} from "../catalog/builtins"
+import Builtins from "../catalog/builtins"
+import {BARE_NAMES, ENUMS, ENTRIES, FAMILY_MEMBERS, RECORDS, RESERVED, STD_ONLY} from "../catalog/builtins"
 import Diag from "../diagnostics/diagnostic"
 import Base from "../syntax/parse_base"
 import Source from "../syntax/source"
@@ -44,6 +45,8 @@ export def resolve(cx: Context, name: String, want: Want, span: Source.Span, hin
   parts = name.split(".")
   if parts.size == 2
     return qualified(cx, parts[0], parts[1], want, span, hint)
+  elsif parts.size == 3 and family?(cx, parts[0])
+    return member_function(cx, parts, want, span)
   end
 
   if cx.me.named.has_key?(name)
@@ -55,6 +58,12 @@ export def resolve(cx: Context, name: String, want: Want, span: Source.Span, hin
   end
 
   return ok(cx.me.prefix + name)
+end
+
+## True when the name is a builtin family (OpenSSL) in this file: its members are written Family.Member. An import
+## alias of the same name wins, though a family name is reserved, so only std/ internals could take one.
+export def family?(cx: Context, name: String) -> Bool
+  return FAMILY_MEMBERS.has_key?(name) and !cx.me.aliases.has_key?(name)
 end
 
 ## True when the file declares an enum with this name.
@@ -186,6 +195,8 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
     return imported(cx, cx.modules[target], member, want, span)
   elsif STD_ONLY.has_key?(alias) and !Resolve.embedded?(cx.me.key)
     return error(std_only_failure(cx, alias, member, span))
+  elsif family?(cx, alias)
+    return family_member(cx, alias, member, want, span)
   elsif function_wanted?(want) or std_record?(alias, member, want) or builtin_type?(alias, member, want)
     return ok("#{alias}.#{member}")
   end
@@ -200,6 +211,77 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
   )
 end
 
+# Family.Member: a builtin type of the family where a type is wanted, or a function of the family itself
+# (Family.fn). A member that is a group of functions is no type or enum (CHECK-UNKNOWN-TYPE); a name that is no member
+# is CHECK-UNKNOWN-NAME with the members in the help.
+def family_member(cx: Context, family: String, member: String, want: Want, span: Source.Span) -> Result[String]
+  name = "#{family}.#{member}"
+  if function_wanted?(want) and (ENTRIES.has_key?(name) or Builtins.member?(family, member))
+    # A member called as a function is an unknown function for the checker, with the closest name.
+    return ok(name)
+  elsif type_wanted?(want) and Builtins.member_type?(family, member)
+    return ok(name)
+  elsif !function_wanted?(want) and Builtins.member?(family, member)
+    return error(not_a_type(cx, name, name, span))
+  end
+
+  return error(unknown_member(cx, family, member, span))
+end
+
+# Family.Member.fn: the builtin function of a member, which the checker judges (an unknown fn there is an unknown
+# function with the closest name). A member the family lacks is CHECK-UNKNOWN-NAME here.
+def member_function(cx: Context, parts: List[String], want: Want, span: Source.Span) -> Result[String]
+  if !Builtins.member?(parts[0], parts[1])
+    return error(unknown_member(cx, parts[0], parts[1], span))
+  end
+
+  name = parts.join(".")
+  if !function_wanted?(want)
+    return error(not_a_type(cx, name, "#{parts[0]}.#{parts[1]}", span))
+  end
+
+  return ok(name)
+end
+
+# CHECK-UNKNOWN-TYPE for a name of a family that is no type, where member is the group of functions it names.
+def not_a_type(cx: Context, name: String, member: String, span: Source.Span) -> String
+  help = "#{member} is a group of functions, such as #{first_function(member)}"
+  return Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-TYPE", "#{name} is not a type", Failure.hint(help))
+end
+
+# CHECK-UNKNOWN-NAME for Family.name when the family has no such member: the closest member, a member whose function
+# has the name (OpenSSL.sha256 is OpenSSL.Digest.sha256), and the list of the members.
+def unknown_member(cx: Context, family: String, member: String, span: Source.Span) -> String
+  members = FAMILY_MEMBERS[family]
+  help = "the members of #{family} are #{members.join(", ")}"
+  owners = members.filter do |owner: String| ENTRIES.has_key?("#{family}.#{owner}.#{member}") end
+  if owners.size > 0
+    help = "use #{family}.#{owners[0]}.#{member}; #{help}"
+  else
+    case Suggest.closest_among(member, [], members)
+      some(found) -> help = "did you mean \"#{family}.#{found}\"? #{help}"
+      none -> help = help
+    end
+  end
+
+  return Failure.fail_at(
+    site(cx, span),
+    "CHECK-UNKNOWN-NAME",
+    "#{family} has no member \"#{member}\"",
+    Failure.hint(help),
+  )
+end
+
+# The first function, by name, of a member that is a group of functions: an example for a help.
+def first_function(member: String) -> String
+  found = ENTRIES.keys.filter do |name: String| name.starts_with?("#{member}.") end
+  if found.size == 0
+    return "#{member}.fn"
+  end
+
+  return found.sort[0]
+end
+
 # A builtin record of a std-only module, such as HttpWire.Head: a type that only std/ can name, so it reserves no name
 # in user programs.
 def std_record?(alias: String, member: String, want: Want) -> Bool
@@ -209,11 +291,19 @@ def std_record?(alias: String, member: String, want: Want) -> Bool
   end
 end
 
-# A builtin type with a module name, which any file may name: C.Pointer, the type of a C pointer (the extern blocks of
-# native code) and Native.Mutex, the lock of a native library.
+# A builtin type with a module name that is no family, which any file may name: C.Pointer, the type of a C pointer (the
+# extern blocks of native code) and Native.Mutex, the lock of a native library. The types of a family are
+# family_member's.
 def builtin_type?(alias: String, member: String, want: Want) -> Bool
   case want
     Want.Type -> return (alias == "C" and member == "Pointer") or (alias == "Native" and member == "Mutex")
+    _ -> return false
+  end
+end
+
+def type_wanted?(want: Want) -> Bool
+  case want
+    Want.Type -> return true
     _ -> return false
   end
 end

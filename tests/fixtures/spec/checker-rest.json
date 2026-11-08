@@ -11360,16 +11360,16 @@
       "start": [1, 1]
     }
   ],
-  "The Digest hashes take a Bytes; the plain form gives a Bytes, the _hexdigest form a String; Crypto.sha256 is unknown with a help; Crypto stays a reserved name": [
+  "The Digest hashes take a Bytes; the plain form gives a Bytes, the _hexdigest form a String; Crypto.sha256 is unknown with a help; Crypto is a free name": [
     {
       "program": [
         "def main() -> Void",
-        "  digest: Bytes = Digest.sha256(\"abc\".bytes)",
-        "  empty = Digest.sha256(\"\".bytes)",
-        "  others: Bytes = Digest.md5(digest) + Digest.sha1(digest) + Digest.sha512(digest)",
-        "  hex: String = Digest.md5_hexdigest(empty) + Digest.sha1_hexdigest(empty) + Digest.sha256_hexdigest(empty)",
-        "  long: String = Digest.sha512_hexdigest(\"a\".bytes)",
-        "  same: Bool = digest == Digest.sha256(\"abc\".bytes)",
+        "  digest: Bytes = OpenSSL.Digest.sha256(\"abc\".bytes)",
+        "  empty = OpenSSL.Digest.sha256(\"\".bytes)",
+        "  others: Bytes = OpenSSL.Digest.md5(digest) + OpenSSL.Digest.sha1(digest) + OpenSSL.Digest.sha512(digest)",
+        "  hex: String = OpenSSL.Digest.md5_hexdigest(empty) + OpenSSL.Digest.sha1_hexdigest(empty) + OpenSSL.Digest.sha256_hexdigest(empty)",
+        "  long: String = OpenSSL.Digest.sha512_hexdigest(\"a\".bytes)",
+        "  same: Bool = digest == OpenSSL.Digest.sha256(\"abc\".bytes)",
         "  puts(digest.size + empty.size + others.size + hex.length + long.length)",
         "  puts(same)",
         "end"
@@ -11379,11 +11379,11 @@
     {
       "program": [
         "def main() -> Void",
-        "  d = Digest.sha256(\"abc\")",
+        "  d = OpenSSL.Digest.sha256(\"abc\")",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 21],
+      "start": [2, 29],
       "covers": "\"abc\"",
       "expected": "Bytes",
       "actual": "String"
@@ -11392,11 +11392,11 @@
       "program": [
         "def main() -> Void",
         "  items = [97, 98, 99]",
-        "  d = Digest.sha256(items)",
+        "  d = OpenSSL.Digest.sha256(items)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [3, 21],
+      "start": [3, 29],
       "covers": "items",
       "expected": "Bytes",
       "actual": "List[Int]"
@@ -11404,67 +11404,67 @@
     {
       "program": [
         "def main() -> Void",
-        "  d = Digest.sha256()",
+        "  d = OpenSSL.Digest.sha256()",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [2, 7],
-      "covers": "Digest.sha256()"
+      "covers": "OpenSSL.Digest.sha256()"
     },
     {
       "program": [
         "def main() -> Void",
-        "  d = Digest.sha256(\"a\".bytes, \"b\".bytes)",
+        "  d = OpenSSL.Digest.sha256(\"a\".bytes, \"b\".bytes)",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [2, 7],
-      "covers": "Digest.sha256(\"a\".bytes, \"b\".bytes)"
+      "covers": "OpenSSL.Digest.sha256(\"a\".bytes, \"b\".bytes)"
     },
     {
       "program": [
         "def main() -> Void",
-        "  s: String = Digest.sha256(\"a\".bytes)",
+        "  s: String = OpenSSL.Digest.sha256(\"a\".bytes)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 15],
-      "covers": "Digest.sha256(\"a\".bytes)",
+      "covers": "OpenSSL.Digest.sha256(\"a\".bytes)",
       "expected": "String",
       "actual": "Bytes"
     },
     {
       "program": [
         "def main() -> Void",
-        "  b: List[Int] = Digest.sha512(\"a\".bytes)",
+        "  b: List[Int] = OpenSSL.Digest.sha512(\"a\".bytes)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 18],
-      "covers": "Digest.sha512(\"a\".bytes)",
+      "covers": "OpenSSL.Digest.sha512(\"a\".bytes)",
       "expected": "List[Int]",
       "actual": "Bytes"
     },
     {
       "program": [
         "def main() -> Void",
-        "  b: Bytes = Digest.sha512_hexdigest(\"a\".bytes)",
+        "  b: Bytes = OpenSSL.Digest.sha512_hexdigest(\"a\".bytes)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 14],
-      "covers": "Digest.sha512_hexdigest(\"a\".bytes)",
+      "covers": "OpenSSL.Digest.sha512_hexdigest(\"a\".bytes)",
       "expected": "Bytes",
       "actual": "String"
     },
     {
       "program": [
         "def main() -> Void",
-        "  h = Digest.md5_hexdigest(\"abc\")",
+        "  h = OpenSSL.Digest.md5_hexdigest(\"abc\")",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 28],
+      "start": [2, 36],
       "covers": "\"abc\"",
       "expected": "Bytes",
       "actual": "String"
@@ -11490,18 +11490,17 @@
         "  puts(1)",
         "end"
       ],
-      "code": "CHECK-REDEFINED-NAME",
-      "start": [1, 1]
+      "code": null
     }
   ],
-  "The HMAC builtins take a key and data, both Bytes; the plain form gives a Bytes, the _hexdigest form a String; HMAC is a reserved name": [
+  "The HMAC builtins take a key and data, both Bytes; the plain form gives a Bytes, the _hexdigest form a String; HMAC is a free name": [
     {
       "program": [
         "def main() -> Void",
         "  key = \"key\".bytes",
-        "  mac: Bytes = HMAC.sha256(key, \"data\".bytes)",
-        "  empty = HMAC.sha512(\"\".bytes, \"\".bytes)",
-        "  hex: String = HMAC.sha256_hexdigest(key, mac) + HMAC.sha512_hexdigest(mac, key)",
+        "  mac: Bytes = OpenSSL.HMAC.sha256(key, \"data\".bytes)",
+        "  empty = OpenSSL.HMAC.sha512(\"\".bytes, \"\".bytes)",
+        "  hex: String = OpenSSL.HMAC.sha256_hexdigest(key, mac) + OpenSSL.HMAC.sha512_hexdigest(mac, key)",
         "  puts(mac.size + empty.size + hex.length)",
         "end"
       ],
@@ -11510,11 +11509,11 @@
     {
       "program": [
         "def main() -> Void",
-        "  m = HMAC.sha256(\"key\", \"data\".bytes)",
+        "  m = OpenSSL.HMAC.sha256(\"key\", \"data\".bytes)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 19],
+      "start": [2, 27],
       "covers": "\"key\"",
       "expected": "Bytes",
       "actual": "String"
@@ -11522,44 +11521,44 @@
     {
       "program": [
         "def main() -> Void",
-        "  m = HMAC.sha512_hexdigest(\"key\".bytes, [1])",
+        "  m = OpenSSL.HMAC.sha512_hexdigest(\"key\".bytes, [1])",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 42],
+      "start": [2, 50],
       "covers": "[1]"
     },
     {
       "program": [
         "def main() -> Void",
-        "  m = HMAC.sha256(\"key\".bytes)",
+        "  m = OpenSSL.HMAC.sha256(\"key\".bytes)",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [2, 7],
-      "covers": "HMAC.sha256(\"key\".bytes)"
+      "covers": "OpenSSL.HMAC.sha256(\"key\".bytes)"
     },
     {
       "program": [
         "def main() -> Void",
         "  k = \"k\".bytes",
-        "  m = HMAC.sha512(k, k, k)",
+        "  m = OpenSSL.HMAC.sha512(k, k, k)",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [3, 7],
-      "covers": "HMAC.sha512(k, k, k)"
+      "covers": "OpenSSL.HMAC.sha512(k, k, k)"
     },
     {
       "program": [
         "def main() -> Void",
         "  k = \"k\".bytes",
-        "  s: String = HMAC.sha512(k, k)",
+        "  s: String = OpenSSL.HMAC.sha512(k, k)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [3, 15],
-      "covers": "HMAC.sha512(k, k)",
+      "covers": "OpenSSL.HMAC.sha512(k, k)",
       "expected": "String",
       "actual": "Bytes"
     },
@@ -11567,12 +11566,12 @@
       "program": [
         "def main() -> Void",
         "  k = \"k\".bytes",
-        "  b: Bytes = HMAC.sha256_hexdigest(k, k)",
+        "  b: Bytes = OpenSSL.HMAC.sha256_hexdigest(k, k)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [3, 14],
-      "covers": "HMAC.sha256_hexdigest(k, k)",
+      "covers": "OpenSSL.HMAC.sha256_hexdigest(k, k)",
       "expected": "Bytes",
       "actual": "String"
     },
@@ -11586,18 +11585,17 @@
         "  puts(1)",
         "end"
       ],
-      "code": "CHECK-REDEFINED-NAME",
-      "start": [1, 1]
+      "code": null
     }
   ],
-  "HMAC.secure_compare takes two Bytes and gives a Bool": [
+  "OpenSSL.HMAC.secure_compare takes two Bytes and gives a Bool": [
     {
       "program": [
         "def main() -> Void",
         "  key = \"key\".bytes",
-        "  mac = HMAC.sha256(key, \"data\".bytes)",
-        "  same: Bool = HMAC.secure_compare(mac, HMAC.sha256(key, \"data\".bytes))",
-        "  puts(same and HMAC.secure_compare(\"\".bytes, \"\".bytes))",
+        "  mac = OpenSSL.HMAC.sha256(key, \"data\".bytes)",
+        "  same: Bool = OpenSSL.HMAC.secure_compare(mac, OpenSSL.HMAC.sha256(key, \"data\".bytes))",
+        "  puts(same and OpenSSL.HMAC.secure_compare(\"\".bytes, \"\".bytes))",
         "end"
       ],
       "code": null
@@ -11605,11 +11603,11 @@
     {
       "program": [
         "def main() -> Void",
-        "  same = HMAC.secure_compare(\"abc\", \"abc\".bytes)",
+        "  same = OpenSSL.HMAC.secure_compare(\"abc\", \"abc\".bytes)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 30],
+      "start": [2, 38],
       "covers": "\"abc\"",
       "expected": "Bytes",
       "actual": "String"
@@ -11617,47 +11615,47 @@
     {
       "program": [
         "def main() -> Void",
-        "  same = HMAC.secure_compare(\"abc\".bytes, [1])",
+        "  same = OpenSSL.HMAC.secure_compare(\"abc\".bytes, [1])",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 43],
+      "start": [2, 51],
       "covers": "[1]"
     },
     {
       "program": [
         "def main() -> Void",
-        "  same = HMAC.secure_compare(\"abc\".bytes)",
+        "  same = OpenSSL.HMAC.secure_compare(\"abc\".bytes)",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [2, 10],
-      "covers": "HMAC.secure_compare(\"abc\".bytes)"
+      "covers": "OpenSSL.HMAC.secure_compare(\"abc\".bytes)"
     },
     {
       "program": [
         "def main() -> Void",
         "  a = \"a\".bytes",
-        "  n: Int = HMAC.secure_compare(a, a)",
+        "  n: Int = OpenSSL.HMAC.secure_compare(a, a)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [3, 12],
-      "covers": "HMAC.secure_compare(a, a)",
+      "covers": "OpenSSL.HMAC.secure_compare(a, a)",
       "expected": "Int",
       "actual": "Bool"
     }
   ],
-  "Cipher.des_ede3_cbc_encrypt and _decrypt take a key, an iv and data, CMAC.aes and des_ede3 a key and data, all Bytes; each gives a Result[Bytes]; Cipher and CMAC are reserved names": [
+  "OpenSSL.Cipher.des_ede3_cbc_encrypt and _decrypt take a key, an iv and data, OpenSSL.CMAC.aes and des_ede3 a key and data, all Bytes; each gives a Result[Bytes]; Cipher and CMAC are free names": [
     {
       "program": [
         "def main() -> Void",
         "  key = \"0123456789abcdef\".bytes",
         "  iv = \"12345678\".bytes",
-        "  sealed: Result[Bytes] = Cipher.des_ede3_cbc_encrypt(key, iv, \"8 bytes!\".bytes)",
-        "  opened = Cipher.des_ede3_cbc_decrypt(key, iv, sealed.unwrap!)",
-        "  tag: Result[Bytes] = CMAC.aes(key, \"data\".bytes)",
-        "  short = CMAC.des_ede3(key, \"data\".bytes).unwrap!.take(4)",
+        "  sealed: Result[Bytes] = OpenSSL.Cipher.des_ede3_cbc_encrypt(key, iv, \"8 bytes!\".bytes)",
+        "  opened = OpenSSL.Cipher.des_ede3_cbc_decrypt(key, iv, sealed.unwrap!)",
+        "  tag: Result[Bytes] = OpenSSL.CMAC.aes(key, \"data\".bytes)",
+        "  short = OpenSSL.CMAC.des_ede3(key, \"data\".bytes).unwrap!.take(4)",
         "  puts(opened.ok? and tag.ok? and short.size == 4)",
         "end"
       ],
@@ -11667,11 +11665,11 @@
       "program": [
         "def main() -> Void",
         "  k = \"k\".bytes",
-        "  c = Cipher.des_ede3_cbc_encrypt(\"key\", k, k)",
+        "  c = OpenSSL.Cipher.des_ede3_cbc_encrypt(\"key\", k, k)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [3, 35],
+      "start": [3, 43],
       "covers": "\"key\"",
       "expected": "Bytes",
       "actual": "String"
@@ -11680,45 +11678,45 @@
       "program": [
         "def main() -> Void",
         "  k = \"k\".bytes",
-        "  t = CMAC.aes(k, [1])",
+        "  t = OpenSSL.CMAC.aes(k, [1])",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [3, 19],
+      "start": [3, 27],
       "covers": "[1]"
     },
     {
       "program": [
         "def main() -> Void",
         "  k = \"k\".bytes",
-        "  c = Cipher.des_ede3_cbc_decrypt(k, k)",
+        "  c = OpenSSL.Cipher.des_ede3_cbc_decrypt(k, k)",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [3, 7],
-      "covers": "Cipher.des_ede3_cbc_decrypt(k, k)"
+      "covers": "OpenSSL.Cipher.des_ede3_cbc_decrypt(k, k)"
     },
     {
       "program": [
         "def main() -> Void",
         "  k = \"k\".bytes",
-        "  t = CMAC.aes(k)",
+        "  t = OpenSSL.CMAC.aes(k)",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [3, 7],
-      "covers": "CMAC.aes(k)"
+      "covers": "OpenSSL.CMAC.aes(k)"
     },
     {
       "program": [
         "def main() -> Void",
         "  k = \"k\".bytes",
-        "  t: Bytes = CMAC.des_ede3(k, k)",
+        "  t: Bytes = OpenSSL.CMAC.des_ede3(k, k)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [3, 14],
-      "covers": "CMAC.des_ede3(k, k)",
+      "covers": "OpenSSL.CMAC.des_ede3(k, k)",
       "expected": "Bytes",
       "actual": "Result[Bytes]"
     },
@@ -11732,8 +11730,7 @@
         "  puts(1)",
         "end"
       ],
-      "code": "CHECK-REDEFINED-NAME",
-      "start": [1, 1]
+      "code": null
     },
     {
       "program": [
@@ -11745,21 +11742,20 @@
         "  puts(1)",
         "end"
       ],
-      "code": "CHECK-REDEFINED-NAME",
-      "start": [1, 1]
+      "code": null
     }
   ],
-  "Cipher.aes_256_gcm_encrypt and _decrypt take a key, an iv, data and an optional auth_data, KDF.pbkdf2_hmac_sha256 a password, a salt, iterations and a length, KDF.scrypt a password, a salt, n, r, p and a length; each gives a Result[Bytes]; KDF is a reserved name": [
+  "OpenSSL.Cipher.aes_256_gcm_encrypt and _decrypt take a key, an iv, data and an optional auth_data, OpenSSL.KDF.pbkdf2_hmac_sha256 a password, a salt, iterations and a length, OpenSSL.KDF.scrypt a password, a salt, n, r, p and a length; each gives a Result[Bytes]; KDF is a free name": [
     {
       "program": [
         "def main() -> Void",
         "  key = \"k\".bytes",
-        "  sealed: Result[Bytes] = Cipher.aes_256_gcm_encrypt(key, key, \"data\".bytes)",
-        "  framed = Cipher.aes_256_gcm_encrypt(key, key, \"data\".bytes, \"header\".bytes)",
-        "  opened: Result[Bytes] = Cipher.aes_256_gcm_decrypt(key, key, framed.unwrap!, \"header\".bytes)",
-        "  bare = Cipher.aes_256_gcm_decrypt(key, key, sealed.unwrap!)",
-        "  derived: Result[Bytes] = KDF.pbkdf2_hmac_sha256(\"pw\".bytes, \"salt\".bytes, 600000, 32)",
-        "  hard = KDF.scrypt(\"pw\".bytes, \"salt\".bytes, 16384, 8, 1, 32)",
+        "  sealed: Result[Bytes] = OpenSSL.Cipher.aes_256_gcm_encrypt(key, key, \"data\".bytes)",
+        "  framed = OpenSSL.Cipher.aes_256_gcm_encrypt(key, key, \"data\".bytes, \"header\".bytes)",
+        "  opened: Result[Bytes] = OpenSSL.Cipher.aes_256_gcm_decrypt(key, key, framed.unwrap!, \"header\".bytes)",
+        "  bare = OpenSSL.Cipher.aes_256_gcm_decrypt(key, key, sealed.unwrap!)",
+        "  derived: Result[Bytes] = OpenSSL.KDF.pbkdf2_hmac_sha256(\"pw\".bytes, \"salt\".bytes, 600000, 32)",
+        "  hard = OpenSSL.KDF.scrypt(\"pw\".bytes, \"salt\".bytes, 16384, 8, 1, 32)",
         "  puts(opened.ok? and bare.ok? and derived.ok? and hard.unwrap!.size == 32)",
         "end"
       ],
@@ -11769,11 +11765,11 @@
       "program": [
         "def main() -> Void",
         "  k = \"k\".bytes",
-        "  c = Cipher.aes_256_gcm_encrypt(k, k, k, \"aad\")",
+        "  c = OpenSSL.Cipher.aes_256_gcm_encrypt(k, k, k, \"aad\")",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [3, 43],
+      "start": [3, 51],
       "covers": "\"aad\"",
       "expected": "Bytes",
       "actual": "String"
@@ -11782,33 +11778,33 @@
       "program": [
         "def main() -> Void",
         "  k = \"k\".bytes",
-        "  c = Cipher.aes_256_gcm_decrypt(k, k)",
+        "  c = OpenSSL.Cipher.aes_256_gcm_decrypt(k, k)",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [3, 7],
-      "covers": "Cipher.aes_256_gcm_decrypt(k, k)"
+      "covers": "OpenSSL.Cipher.aes_256_gcm_decrypt(k, k)"
     },
     {
       "program": [
         "def main() -> Void",
         "  k = \"k\".bytes",
-        "  c = Cipher.aes_256_gcm_encrypt(k, k, k, k, k)",
+        "  c = OpenSSL.Cipher.aes_256_gcm_encrypt(k, k, k, k, k)",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [3, 7],
-      "covers": "Cipher.aes_256_gcm_encrypt(k, k, k, k, k)"
+      "covers": "OpenSSL.Cipher.aes_256_gcm_encrypt(k, k, k, k, k)"
     },
     {
       "program": [
         "def main() -> Void",
         "  k = \"k\".bytes",
-        "  d = KDF.pbkdf2_hmac_sha256(\"pw\", k, 1, 32)",
+        "  d = OpenSSL.KDF.pbkdf2_hmac_sha256(\"pw\", k, 1, 32)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [3, 30],
+      "start": [3, 38],
       "covers": "\"pw\"",
       "expected": "Bytes",
       "actual": "String"
@@ -11817,11 +11813,11 @@
       "program": [
         "def main() -> Void",
         "  k = \"k\".bytes",
-        "  d = KDF.pbkdf2_hmac_sha256(k, k, 1.5, 32)",
+        "  d = OpenSSL.KDF.pbkdf2_hmac_sha256(k, k, 1.5, 32)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [3, 36],
+      "start": [3, 44],
       "covers": "1.5",
       "expected": "Int",
       "actual": "Float"
@@ -11830,23 +11826,23 @@
       "program": [
         "def main() -> Void",
         "  k = \"k\".bytes",
-        "  d = KDF.scrypt(k, k, 16, 1, 32)",
+        "  d = OpenSSL.KDF.scrypt(k, k, 16, 1, 32)",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [3, 7],
-      "covers": "KDF.scrypt(k, k, 16, 1, 32)"
+      "covers": "OpenSSL.KDF.scrypt(k, k, 16, 1, 32)"
     },
     {
       "program": [
         "def main() -> Void",
         "  k = \"k\".bytes",
-        "  d: Bytes = KDF.scrypt(k, k, 16, 1, 1, 32)",
+        "  d: Bytes = OpenSSL.KDF.scrypt(k, k, 16, 1, 1, 32)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [3, 14],
-      "covers": "KDF.scrypt(k, k, 16, 1, 1, 32)",
+      "covers": "OpenSSL.KDF.scrypt(k, k, 16, 1, 1, 32)",
       "expected": "Bytes",
       "actual": "Result[Bytes]"
     },
@@ -11860,16 +11856,15 @@
         "  puts(1)",
         "end"
       ],
-      "code": "CHECK-REDEFINED-NAME",
-      "start": [1, 1]
+      "code": null
     }
   ],
-  "RSA.public_encrypt_oaep takes a PEM String and data Bytes and gives a Result[Bytes]; it has the random effect, so a constant cannot call it; RSA is a reserved name": [
+  "OpenSSL.RSA.public_encrypt_oaep takes a PEM String and data Bytes and gives a Result[Bytes]; it has the random effect, so a constant cannot call it; RSA is a free name": [
     {
       "program": [
         "def main() -> Void",
         "  pem = \"-----BEGIN PUBLIC KEY-----\\n\"",
-        "  sealed: Result[Bytes] = RSA.public_encrypt_oaep(pem, \"secret\".bytes)",
+        "  sealed: Result[Bytes] = OpenSSL.RSA.public_encrypt_oaep(pem, \"secret\".bytes)",
         "  puts(sealed.ok?)",
         "end"
       ],
@@ -11878,11 +11873,11 @@
     {
       "program": [
         "def main() -> Void",
-        "  sealed = RSA.public_encrypt_oaep(\"pem\".bytes, \"secret\".bytes)",
+        "  sealed = OpenSSL.RSA.public_encrypt_oaep(\"pem\".bytes, \"secret\".bytes)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 36],
+      "start": [2, 44],
       "covers": "\"pem\".bytes",
       "expected": "String",
       "actual": "Bytes"
@@ -11890,11 +11885,11 @@
     {
       "program": [
         "def main() -> Void",
-        "  sealed = RSA.public_encrypt_oaep(\"pem\", \"secret\")",
+        "  sealed = OpenSSL.RSA.public_encrypt_oaep(\"pem\", \"secret\")",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 43],
+      "start": [2, 51],
       "covers": "\"secret\"",
       "expected": "Bytes",
       "actual": "String"
@@ -11902,28 +11897,28 @@
     {
       "program": [
         "def main() -> Void",
-        "  sealed = RSA.public_encrypt_oaep(\"pem\")",
+        "  sealed = OpenSSL.RSA.public_encrypt_oaep(\"pem\")",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [2, 12],
-      "covers": "RSA.public_encrypt_oaep(\"pem\")"
+      "covers": "OpenSSL.RSA.public_encrypt_oaep(\"pem\")"
     },
     {
       "program": [
         "def main() -> Void",
-        "  sealed: Bytes = RSA.public_encrypt_oaep(\"pem\", \"secret\".bytes)",
+        "  sealed: Bytes = OpenSSL.RSA.public_encrypt_oaep(\"pem\", \"secret\".bytes)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 19],
-      "covers": "RSA.public_encrypt_oaep(\"pem\", \"secret\".bytes)",
+      "covers": "OpenSSL.RSA.public_encrypt_oaep(\"pem\", \"secret\".bytes)",
       "expected": "Bytes",
       "actual": "Result[Bytes]"
     },
     {
       "program": [
-        "SEALED = RSA.public_encrypt_oaep(\"pem\", \"secret\".bytes)",
+        "SEALED = OpenSSL.RSA.public_encrypt_oaep(\"pem\", \"secret\".bytes)",
         "",
         "def main() -> Void",
         "  puts(SEALED.ok?)",
@@ -11931,7 +11926,7 @@
       ],
       "code": "CHECK-CONSTANT-EXPRESSION",
       "start": [1, 10],
-      "covers": "RSA.public_encrypt_oaep(\"pem\", \"secret\".bytes)"
+      "covers": "OpenSSL.RSA.public_encrypt_oaep(\"pem\", \"secret\".bytes)"
     },
     {
       "program": [
@@ -11943,22 +11938,21 @@
         "  puts(1)",
         "end"
       ],
-      "code": "CHECK-REDEFINED-NAME",
-      "start": [1, 1]
+      "code": null
     }
   ],
-  "Base64 and Digest.hexencode take a Bytes and give a String; the decodes give a Bytes, the strict ones in a Result; Base64 and Digest are reserved names": [
+  "Base64 and OpenSSL.Digest.hexencode take a Bytes and give a String; the decodes give a Bytes, the strict ones in a Result; Base64 is a reserved name, Digest a free one": [
     {
       "program": [
         "def main() -> Void",
         "  text: String = Base64.strict_encode64(\"fo\".bytes)",
         "  lines: String = Base64.encode64(\"\".bytes)",
         "  url: String = Base64.urlsafe_encode64(\"a\".bytes, false) + Base64.urlsafe_encode64(\"a\".bytes)",
-        "  hex: String = Digest.hexencode(\"a\".bytes)",
+        "  hex: String = OpenSSL.Digest.hexencode(\"a\".bytes)",
         "  loose: Bytes = Base64.decode64(text)",
         "  bytes: Result[Bytes] = Base64.strict_decode64(text)",
         "  more: Result[Bytes] = Base64.urlsafe_decode64(url)",
-        "  back: Result[Bytes] = Digest.hexdecode(hex)",
+        "  back: Result[Bytes] = OpenSSL.Digest.hexdecode(hex)",
         "  puts(lines + hex + loose.size.to_s + bytes.ok?.to_s + more.ok?.to_s + back.ok?.to_s)",
         "end"
       ],
@@ -11979,11 +11973,11 @@
     {
       "program": [
         "def main() -> Void",
-        "  s = Digest.hexencode([255])",
+        "  s = OpenSSL.Digest.hexencode([255])",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 24],
+      "start": [2, 32],
       "covers": "[255]"
     },
     {
@@ -12025,12 +12019,12 @@
     {
       "program": [
         "def main() -> Void",
-        "  b: Bytes = Digest.hexdecode(\"00\")",
+        "  b: Bytes = OpenSSL.Digest.hexdecode(\"00\")",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 14],
-      "covers": "Digest.hexdecode(\"00\")",
+      "covers": "OpenSSL.Digest.hexdecode(\"00\")",
       "expected": "Bytes",
       "actual": "Result[Bytes]"
     },
@@ -12068,18 +12062,17 @@
         "  puts(1)",
         "end"
       ],
-      "code": "CHECK-REDEFINED-NAME",
-      "start": [1, 1]
+      "code": null
     }
   ],
-  "SecureRandom.random_bytes and hex take an optional Int count (16), uuid takes none; they draw at run time, so a constant cannot call them; SecureRandom is a reserved name": [
+  "OpenSSL.Random.random_bytes and hex take an optional Int count (16), uuid takes none; they draw at run time, so a constant cannot call them; SecureRandom is a free name": [
     {
       "program": [
         "def main() -> Void",
-        "  bytes: Bytes = SecureRandom.random_bytes(32)",
-        "  key: Bytes = SecureRandom.random_bytes",
-        "  token: String = SecureRandom.hex + SecureRandom.hex(8)",
-        "  id: String = SecureRandom.uuid + SecureRandom.uuid()",
+        "  bytes: Bytes = OpenSSL.Random.random_bytes(32)",
+        "  key: Bytes = OpenSSL.Random.random_bytes",
+        "  token: String = OpenSSL.Random.hex + OpenSSL.Random.hex(8)",
+        "  id: String = OpenSSL.Random.uuid + OpenSSL.Random.uuid()",
         "  puts(bytes.size + key.size + token.size + id.size)",
         "end"
       ],
@@ -12088,11 +12081,11 @@
     {
       "program": [
         "def main() -> Void",
-        "  b = SecureRandom.random_bytes(\"16\")",
+        "  b = OpenSSL.Random.random_bytes(\"16\")",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
-      "start": [2, 33],
+      "start": [2, 35],
       "covers": "\"16\"",
       "expected": "Int",
       "actual": "String"
@@ -12100,50 +12093,50 @@
     {
       "program": [
         "def main() -> Void",
-        "  b: List[Int] = SecureRandom.random_bytes(4)",
+        "  b: List[Int] = OpenSSL.Random.random_bytes(4)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 18],
-      "covers": "SecureRandom.random_bytes(4)",
+      "covers": "OpenSSL.Random.random_bytes(4)",
       "expected": "List[Int]",
       "actual": "Bytes"
     },
     {
       "program": [
         "def main() -> Void",
-        "  b: List[Int] = SecureRandom.hex(4)",
+        "  b: List[Int] = OpenSSL.Random.hex(4)",
         "end"
       ],
       "code": "CHECK-TYPE-MISMATCH",
       "start": [2, 18],
-      "covers": "SecureRandom.hex(4)",
+      "covers": "OpenSSL.Random.hex(4)",
       "expected": "List[Int]",
       "actual": "String"
     },
     {
       "program": [
         "def main() -> Void",
-        "  s = SecureRandom.uuid(4)",
+        "  s = OpenSSL.Random.uuid(4)",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [2, 7],
-      "covers": "SecureRandom.uuid(4)"
+      "covers": "OpenSSL.Random.uuid(4)"
     },
     {
       "program": [
         "def main() -> Void",
-        "  s = SecureRandom.hex(1, 2)",
+        "  s = OpenSSL.Random.hex(1, 2)",
         "end"
       ],
       "code": "CHECK-ARITY",
       "start": [2, 7],
-      "covers": "SecureRandom.hex(1, 2)"
+      "covers": "OpenSSL.Random.hex(1, 2)"
     },
     {
       "program": [
-        "TOKEN = SecureRandom.hex",
+        "TOKEN = OpenSSL.Random.hex",
         "",
         "def main() -> Void",
         "  puts(TOKEN)",
@@ -12151,7 +12144,7 @@
       ],
       "code": "CHECK-CONSTANT-EXPRESSION",
       "start": [1, 9],
-      "covers": "SecureRandom.hex",
+      "covers": "OpenSSL.Random.hex",
       "help": true
     },
     {
@@ -12164,8 +12157,7 @@
         "  puts(1)",
         "end"
       ],
-      "code": "CHECK-REDEFINED-NAME",
-      "start": [1, 1]
+      "code": null
     }
   ],
   "Std.source takes a path and gives a Result[String]; Std is a reserved type name": [
@@ -13976,6 +13968,148 @@
         ""
       ],
       "code": null
+    }
+  ],
+
+  "Family.Member.fn calls a builtin of a family, with or without parentheses and through |>; a member the family lacks, an unknown function of a member, a member written as a type and a module that moved into OpenSSL are errors with a help; OpenSSL is a reserved name": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  digest = OpenSSL.Digest.sha256(\"a\".bytes)",
+        "  token = OpenSSL.Random.uuid",
+        "  hex = \"a\".bytes |> OpenSSL.Digest.sha256_hexdigest()",
+        "  puts(digest.size + token.size + hex.length)",
+        "end"
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  d = OpenSSL.Digst.sha256(\"a\".bytes)",
+        "end"
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 7],
+      "covers": "OpenSSL.Digst",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  t = OpenSSL.Randm.uuid",
+        "end"
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 7],
+      "covers": "OpenSSL.Randm",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  d = \"a\".bytes |> OpenSSL.Digst.sha256()",
+        "end"
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 20],
+      "covers": "OpenSSL.Digst.sha256()",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  d = OpenSSL.Digest.sha257(\"a\".bytes)",
+        "end"
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 7],
+      "covers": "OpenSSL.Digest.sha257(\"a\".bytes)",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  d = OpenSSL.sha256(\"a\".bytes)",
+        "end"
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 7],
+      "covers": "OpenSSL.sha256(\"a\".bytes)",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  d: OpenSSL.Digest = OpenSSL.Digest.sha256(\"a\".bytes)",
+        "end"
+      ],
+      "code": "CHECK-UNKNOWN-TYPE",
+      "start": [2, 6],
+      "covers": "OpenSSL.Digest",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  k = \"k\".bytes",
+        "  c = Cipher.aes_256_gcm_encrypt(k, k, k)",
+        "end"
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [3, 7],
+      "covers": "Cipher.aes_256_gcm_encrypt(k, k, k)",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  t = SecureRandom.uuid",
+        "end"
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 7],
+      "covers": "SecureRandom.uuid",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(Digest.sha256_hexdigest(\"a\".bytes))",
+        "end"
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 8],
+      "covers": "Digest.sha256_hexdigest(\"a\".bytes)",
+      "help": true
+    },
+    {
+      "program": [
+        "struct Digest",
+        "  n: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(Digest.sha256_hexdigest(\"a\".bytes))",
+        "end"
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [6, 8],
+      "covers": "Digest.sha256_hexdigest(\"a\".bytes)",
+      "help": false
+    },
+    {
+      "program": [
+        "struct OpenSSL",
+        "  name: String",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(1)",
+        "end"
+      ],
+      "code": "CHECK-REDEFINED-NAME",
+      "start": [1, 1]
     }
   ]
 }

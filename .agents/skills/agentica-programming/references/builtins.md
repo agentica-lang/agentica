@@ -7,8 +7,11 @@ help NAME` prints a signature in method form (`s.strip()`); a Ruby or other name
 (`strip`, `value!`) prints the builtin it stands for, and a name with only a
 hint (`len`) prints it and exits 2, as does an unknown name. Builtin namespaces
 and type names are reserved: no declaration, local, parameter, field or import
-alias may use them. `ok`, `error`, `some` and `none` are calls, never declared
-names.
+alias may use them. A family reserves only its own name: its members are
+`Family.Member` and their functions `Family.Member.fn`
+(`OpenSSL.Digest.sha256(data)`, `OpenSSL.Random.uuid`); a member it lacks is
+`CHECK-UNKNOWN-NAME`, listing the members. `ok`, `error`, `some` and `none` are
+calls, never declared names.
 
 ## Output, input, system
 
@@ -41,7 +44,7 @@ Random.seed() -> Int                    # the run's seed (0..2147483647), the sa
   `IO.eof?` consumes nothing. Reads have no timeout; step budgets do not
   interrupt blocking input.
 - `Random` is seeded from the OS unless `--seed N` is given; not for secrets:
-  use `SecureRandom` (`binary.md`). Passing the number from `Random.seed`
+  use `OpenSSL.Random` (`binary.md`). Passing the number from `Random.seed`
   back with `--seed` gives the same random numbers.
 
 ## Int, Float

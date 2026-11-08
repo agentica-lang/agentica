@@ -303,10 +303,10 @@ signature. A default is resolved in the module that declares the function, so
 
 A builtin can have defaults by the same rules, in its catalog row:
 `Zlib.crc32(data, seed = 0)` takes 1 or 2 arguments, in call, method and pipe
-form alike. A builtin default may also be an empty `Bytes`, shown as
-`"".bytes` (`auth_data` of `Cipher.aes_256_gcm_encrypt`). The call site fills
-the arguments left out, so the VM always gets a full call; `CHECK-ARITY` names
-the range (`expects 1 to 2 argument(s)`). A builtin has no function value
+form alike. A builtin default may also be an empty `Bytes`, shown as `"".bytes`
+(`auth_data` of `OpenSSL.Cipher.aes_256_gcm_encrypt`). The call site fills the
+arguments left out, so the VM always gets a full call; `CHECK-ARITY` names the
+range (`expects 1 to 2 argument(s)`). A builtin has no function value
 (`&Zlib.crc32` is `CHECK-UNKNOWN-NAME`). A Lazy method row can have defaults
 too: `lz.deflate(level = 6, raw = false)`. `agentica help` shows the default
 (`seed: Int = 0`).
@@ -700,15 +700,15 @@ are in the
 
 `Bytes` is an immutable string of bytes, one byte for each item, read as an
 `Int` in `0..255`. It holds data that is not text. There is no literal: write
-`"PK".bytes`, `Digest.hexdecode(text)` or `Bytes.from_list([80, 75])`. The
-methods, the encodings, the costs and the errors are in the
-[`Bytes` page](../../site/content/library/data-structures/bytes.md). The
-language fixes:
+`"PK".bytes`, `OpenSSL.Digest.hexdecode(text)` or `Bytes.from_list([80, 75])`.
+The methods, the encodings, the costs and the errors are in the [`Bytes`
+page](../../site/content/library/data-structures/bytes.md). The language fixes:
 
 - `for byte in b` visits the bytes in order.
 - `==` and `!=` compare length and bytes. They are not constant time: compare a
-  MAC or a token with `HMAC.secure_compare`. A `Bytes` never equals a `String`
-  with the same bytes (`CHECK-TYPE-MISMATCH`). There is no ordering (`<`).
+  MAC or a token with `OpenSSL.HMAC.secure_compare`. A `Bytes` never equals a
+  `String` with the same bytes (`CHECK-TYPE-MISMATCH`). There is no ordering
+  (`<`).
 - A `Bytes` is a `Map` key, an `ATS` key or a `Set` item, and a field, a list
   item or a map value. It is not JSON-encodable or decodable
   (`CHECK-NOT-ENCODABLE`, `CHECK-NOT-DECODABLE`).

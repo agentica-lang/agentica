@@ -1,11 +1,12 @@
 /*
- * The crypto builtins (agc_crypto_builtins): the Digest hashes of bytes (MD5,
- * SHA-1, SHA-256, SHA-512, as bytes and hex), HMACs (RFC 2104), the
- * constant-time HMAC.secure_compare, SecureRandom, Triple DES CBC and
- * AES-256-GCM (Cipher), CMAC, PBKDF2 and scrypt (KDF, compute jobs), RSA-OAEP
- * (RSA), all from the OpenSSL adapter (digest.h), and the Base64 and hex text
- * forms in plain C. Service layer. Design: docs/vm/02-reference-behavior.md
- * §2.3; Base64 and hex follow RFC 4648 and Ruby, SecureRandom.uuid RFC 9562.
+ * The crypto builtins (agc_crypto_builtins), the OpenSSL family: the
+ * OpenSSL.Digest hashes of bytes (MD5, SHA-1, SHA-256, SHA-512, as bytes and
+ * hex), HMACs (RFC 2104), the constant-time OpenSSL.HMAC.secure_compare,
+ * OpenSSL.Random, Triple DES CBC and AES-256-GCM (OpenSSL.Cipher), CMAC,
+ * PBKDF2 and scrypt (OpenSSL.KDF, compute jobs), RSA-OAEP (OpenSSL.RSA), all
+ * from the OpenSSL adapter (digest.h), and the Base64 and hex text forms in
+ * plain C. Service layer. Design: docs/vm/02-reference-behavior.md §2.3;
+ * Base64 and hex follow RFC 4648 and Ruby, OpenSSL.Random.uuid RFC 9562.
  */
 #include "services.h"
 #include "digest.h"
@@ -240,8 +241,8 @@ static agc_value builtin_urlsafe_decode64(agc_vm *vm, agc_value *args, uint32_t 
   return agc_result_value(true, byte_value(out, got));
 }
 
-/* Digest.hexencode(data): two lowercase hex digits per byte, as Ruby's Digest.hexencode writes them. Digest.hexdecode
-   is Agentica's own inverse: Ruby has no named hex decoder. */
+/* OpenSSL.Digest.hexencode(data): two lowercase hex digits per byte, as Ruby's Digest.hexencode writes them.
+   OpenSSL.Digest.hexdecode is Agentica's own inverse: Ruby has no named hex decoder. */
 static agc_value hex_text(agc_vm *vm, const uint8_t *bytes, size_t n) {
   agc_string *text = ascii_string(vm, agc_size_mul(n, 2));
   for (size_t k = 0; k < n; k++) {
@@ -265,8 +266,8 @@ static int hex_value(uint8_t c) {
   return -1;
 }
 
-/* Digest.hexdecode(text): ok(bytes) of an even number of hex digits in either case, or error("invalid hex") for an
-   odd length or any other character (no spaces, no "0x"). */
+/* OpenSSL.Digest.hexdecode(text): ok(bytes) of an even number of hex digits in either case, or error("invalid hex") for
+   an odd length or any other character (no spaces, no "0x"). */
 static agc_value builtin_hexdecode(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   const agc_string *s = agc_as_string(vm, args[0]);
@@ -284,10 +285,10 @@ static agc_value builtin_hexdecode(agc_vm *vm, agc_value *args, uint32_t span) {
 
 /* The calls into libcrypto (digest_compute, hmac_compute, secure_draw, cipher_compute, cmac_compute, gcm_compute,
    kdf_compute and rsa_compute below) each have their own out-of-line function whose only callees are the adapter,
-   memset and agc_fail. vm/tools/tsan.supp names these eight and nothing else, so a TSan report about OpenSSL's fetch caches is
-   suppressed while a race in the VM code around them (such as reading a list another task holds) is still reported.
-   TSan unwinds by frame pointers, which libcrypto does not keep, so a report skips the adapter function and shows its
-   caller first: these must stay real frames (noinline, and not a tail call). */
+   memset and agc_fail. vm/tools/tsan.supp names these eight and nothing else, so a TSan report about OpenSSL's fetch
+   caches is suppressed while a race in the VM code around them (such as reading a list another task holds) is still
+   reported. TSan unwinds by frame pointers, which libcrypto does not keep, so a report skips the adapter function and
+   shows its caller first: these must stay real frames (noinline, and not a tail call). */
 static __attribute__((noinline)) size_t digest_compute(agc_vm *vm, agc_digest_kind kind, const uint8_t *bytes, size_t n,
                                                        unsigned char out[AGC_DIGEST_MAX_BYTES], uint32_t span) {
   size_t len = agc_digest(kind, bytes, n, out);
@@ -315,7 +316,7 @@ static agc_value digest_value(agc_vm *vm, agc_value *args, uint32_t span, agc_di
   return hex ? hex_text(vm, digest, len) : byte_value(digest, len);
 }
 
-/* HMAC.<kind>(key, data) and its _hexdigest form: the HMAC of the data under the key, as bytes (Ruby's
+/* OpenSSL.HMAC.<kind>(key, data) and its _hexdigest form: the HMAC of the data under the key, as bytes (Ruby's
    OpenSSL::HMAC.digest) or as lowercase hex (hexdigest). Cost and lock as digest_value. */
 static agc_value hmac_value(agc_vm *vm, agc_value *args, uint32_t span, agc_digest_kind kind, bool hex) {
   size_t key_n, n;
@@ -333,7 +334,7 @@ static __attribute__((noinline)) void secure_draw(agc_vm *vm, uint8_t *out, size
   if (!agc_secure_random(out, n)) agc_fail(vm, "RUNTIME-INTERNAL", "the secure random source failed", span);
 }
 
-/* SecureRandom.random_bytes(n) and hex(n) draw at most AGC_MAX_LIST_COUNT bytes (1 MiB), the bound of the other
+/* OpenSSL.Random.random_bytes(n) and hex(n) draw at most AGC_MAX_LIST_COUNT bytes (1 MiB), the bound of the other
    builtins that make a list from a count (List#*, Range#to_a, IO.read_bytes). Keys, salts and tokens are 16 to 64
    bytes; the bound makes a wrong count such as 10 ** 12 fail at the argument instead of asking for terabytes of
    memory. Ruby has no bound. */
@@ -343,18 +344,18 @@ static size_t secure_count(agc_vm *vm, agc_value arg, const char *bad_count, uin
   return (size_t)count;
 }
 
-/* n bytes drawn into a GC-atomic scratch block, for SecureRandom.hex, which copies them into its text. */
+/* n bytes drawn into a GC-atomic scratch block, for OpenSSL.Random.hex, which copies them into its text. */
 static const uint8_t *secure_scratch(agc_vm *vm, size_t n, uint32_t span) {
   uint8_t *out = agc_alloc_atomic(n ? n : 1);
   secure_draw(vm, out, n, span);
   return out;
 }
 
-/* SecureRandom.random_bytes(n): n bytes from OpenSSL's CSPRNG (RAND_bytes), unlike the seeded Random. The rows charge
+/* OpenSSL.Random.random_bytes(n): n bytes from OpenSSL's CSPRNG (RAND_bytes), unlike the seeded Random. The rows charge
    AGC_COST_SIZE, since the work grows with n (the result's items), and run without the shared lock: OpenSSL 3 keeps
    one generator per thread. */
 static agc_value builtin_random_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
-  size_t n = secure_count(vm, args[0], "SecureRandom.random_bytes needs n between 0 and 1048576", span);
+  size_t n = secure_count(vm, args[0], "OpenSSL.Random.random_bytes needs n between 0 and 1048576", span);
   if (n == 0) return agc_bytes_value(agc_empty_bytes());
   /* Drawn straight into the result, so no second copy of the secret stays behind in a dead block. */
   agc_bytes *b = agc_new_bytes(n);
@@ -362,13 +363,13 @@ static agc_value builtin_random_bytes(agc_vm *vm, agc_value *args, uint32_t span
   return agc_bytes_value(b);
 }
 
-/* SecureRandom.hex(n): n random bytes as 2n lowercase hex digits, as Ruby's. */
+/* OpenSSL.Random.hex(n): n random bytes as 2n lowercase hex digits, as Ruby's. */
 static agc_value builtin_random_hex(agc_vm *vm, agc_value *args, uint32_t span) {
-  size_t n = secure_count(vm, args[0], "SecureRandom.hex needs n between 0 and 1048576", span);
+  size_t n = secure_count(vm, args[0], "OpenSSL.Random.hex needs n between 0 and 1048576", span);
   return hex_text(vm, secure_scratch(vm, n, span), n);
 }
 
-/* SecureRandom.uuid: a version 4 UUID (RFC 9562 §5.4), 122 random bits in the lowercase 8-4-4-4-12 form. */
+/* OpenSSL.Random.uuid: a version 4 UUID (RFC 9562 §5.4), 122 random bits in the lowercase 8-4-4-4-12 form. */
 static agc_value builtin_random_uuid(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)args;
   uint8_t b[16];
@@ -385,13 +386,12 @@ static agc_value builtin_random_uuid(agc_vm *vm, agc_value *args, uint32_t span)
   return agc_string_value(text);
 }
 
-/* HMAC.secure_compare(a, b): Ruby's OpenSSL.secure_compare, for checking a received MAC or token against the expected
-   one. Like Ruby it compares the SHA-256 digests of the two values in constant time (CRYPTO_memcmp), so values of
-   other lengths give false in a time that depends on the lengths only, never on the bytes or on where they differ.
-   Equal digests then also need equal bytes, as Ruby's
-   `&& a == b` does, so a SHA-256 collision cannot pass; that second compare runs only when the digests match, so its
-   branch tells nothing the answer does not. The time grows with the lengths, which the row charges (AGC_COST_SIZE),
-   and the call runs without the shared lock, as HMAC does. */
+/* OpenSSL.HMAC.secure_compare(a, b): Ruby's OpenSSL.secure_compare, for checking a received MAC or token against the
+   expected one. Like Ruby it compares the SHA-256 digests of the two values in constant time (CRYPTO_memcmp), so values
+   of other lengths give false in a time that depends on the lengths only, never on the bytes or on where they differ.
+   Equal digests then also need equal bytes, as Ruby's `&& a == b` does, so a SHA-256 collision cannot pass; that second
+   compare runs only when the digests match, so its branch tells nothing the answer does not. The time grows with the
+   lengths, which the row charges (AGC_COST_SIZE), and the call runs without the shared lock, as HMAC does. */
 static agc_value builtin_secure_compare(agc_vm *vm, agc_value *args, uint32_t span) {
   size_t a_n, b_n;
   const uint8_t *a = agc_bytes_data(vm, args[0], &a_n);
@@ -426,9 +426,9 @@ static __attribute__((noinline)) size_t cmac_compute(agc_vm *vm, agc_cmac_cipher
   return len;
 }
 
-/* Cipher.des_ede3_cbc_encrypt(key, iv, data) and _decrypt: Triple DES (OpenSSL's des-ede3-cbc) with no padding, for
-   payment formats that need it, never for new designs. A key that is not 16 (two-key) or 24 bytes, an IV that is not
-   8 bytes or data that is not whole 8-byte blocks is an error Result, checked before any work, so there is never
+/* OpenSSL.Cipher.des_ede3_cbc_encrypt(key, iv, data) and _decrypt: Triple DES (OpenSSL's des-ede3-cbc) with no padding,
+   for payment formats that need it, never for new designs. A key that is not 16 (two-key) or 24 bytes, an IV that is
+   not 8 bytes or data that is not whole 8-byte blocks is an error Result, checked before any work, so there is never
    partial output; a caller pads the data as its scheme says. Cost and lock as digest_value. */
 static agc_value des_ede3_cbc_value(agc_vm *vm, agc_value *args, uint32_t span, bool encrypt) {
   size_t key_n, iv_n, n;
@@ -452,10 +452,10 @@ static agc_value builtin_des_ede3_cbc_decrypt(agc_vm *vm, agc_value *args, uint3
   return des_ede3_cbc_value(vm, args, span, false);
 }
 
-/* CMAC.aes(key, data) and CMAC.des_ede3(key, data): the full CMAC tag (NIST SP 800-38B) of the data, 16 bytes for AES
-   (the key size picks AES-128, -192 or -256) and 8 for Triple DES; a caller that needs a shorter MAC takes the first
-   bytes, and checks a received tag with HMAC.secure_compare. A wrong key length is an error Result. Cost and lock as
-   digest_value. */
+/* OpenSSL.CMAC.aes(key, data) and OpenSSL.CMAC.des_ede3(key, data): the full CMAC tag (NIST SP 800-38B) of the data, 16
+   bytes for AES (the key size picks AES-128, -192 or -256) and 8 for Triple DES; a caller that needs a shorter MAC
+   takes the first bytes, and checks a received tag with OpenSSL.HMAC.secure_compare. A wrong key length is an error
+   Result. Cost and lock as digest_value. */
 static agc_value cmac_value(agc_vm *vm, agc_value *args, uint32_t span, agc_cmac_cipher cipher) {
   size_t key_n, n;
   const uint8_t *key = agc_bytes_data(vm, args[0], &key_n);
@@ -488,7 +488,7 @@ static __attribute__((noinline)) bool gcm_compute(agc_vm *vm, bool encrypt, cons
   return status == AGC_AEAD_DONE;
 }
 
-/* Cipher.aes_256_gcm_encrypt(key, iv, data, auth_data) and _decrypt: AES-256-GCM (OpenSSL's aes-256-gcm), the
+/* OpenSSL.Cipher.aes_256_gcm_encrypt(key, iv, data, auth_data) and _decrypt: AES-256-GCM (OpenSSL's aes-256-gcm), the
    authenticated cipher. Encrypting gives the ciphertext with the 16-byte tag appended, the form Python's AESGCM, Go's
    Seal and WebCrypto give, so a caller cannot drop the tag; decrypting takes that form back and gives the plaintext
    only when the tag matches the key, IV, data and auth_data, else an error Result and never partial plaintext. A key
@@ -528,29 +528,26 @@ static agc_value builtin_aes_256_gcm_decrypt(agc_vm *vm, agc_value *args, uint32
   return aes_256_gcm_value(vm, args, span, false);
 }
 
-/* The longest PEM text RSA.public_encrypt_oaep reads: 64 KiB. The PEM of a 16384-bit key, the largest OpenSSL
+/* The longest PEM text OpenSSL.RSA.public_encrypt_oaep reads: 64 KiB. The PEM of a 16384-bit key, the largest OpenSSL
    encrypts with, has under 3 KiB; the cap keeps a hostile text from feeding the decoder megabytes. */
 #define RSA_MAX_PEM_BYTES ((size_t)65536)
 
-/* Encrypts with RSA-OAEP into out (agc_rsa_oaep_encrypt), whose lengths the caller checked. A library failure after
-   the key checks (no memory, no random OAEP seed) stops the run, as for SecureRandom and Cipher. One of the libcrypto
-   wrappers that vm/tools/tsan.supp names (see digest_compute). */
-static __attribute__((noinline)) agc_rsa_status rsa_compute(agc_vm *vm, const char *pem, size_t pem_n,
-                                                            const uint8_t *data, size_t n,
-                                                            unsigned char out[AGC_RSA_MAX_BYTES], size_t *len,
-                                                            uint32_t span) {
-  agc_rsa_status status = agc_rsa_oaep_encrypt(pem, pem_n, data, n, out, len);
-  if (status == AGC_RSA_FAILED) agc_fail(vm, "RUNTIME-INTERNAL", "RSA-OAEP is not available", span);
-  return status;
+/* Encrypts with RSA-OAEP into out (agc_rsa_oaep_encrypt), whose lengths the caller checked. One of the libcrypto
+   wrappers that vm/tools/tsan.supp names (see digest_compute); its only callee is the adapter, so the caller stops the
+   run on a library failure and the suppression covers no VM code. */
+static __attribute__((noinline)) agc_rsa_status rsa_compute(const char *pem, size_t pem_n, const uint8_t *data,
+                                                            size_t n, unsigned char out[AGC_RSA_MAX_BYTES],
+                                                            size_t *len) {
+  return agc_rsa_oaep_encrypt(pem, pem_n, data, n, out, len);
 }
 
-/* RSA.public_encrypt_oaep(pem, data): Ruby's OpenSSL::PKey::RSA.new(pem).public_encrypt(data, PKCS1_OAEP_PADDING),
-   RSA-OAEP with SHA-1 and MGF1-SHA-1, the padding that MySQL's caching_sha2_password asks for. The key is the PEM of
-   an RSA public key (SubjectPublicKeyInfo or PKCS#1). Each call draws a new random OAEP seed, so the ciphertext
-   differs every time; only the private key's owner can read it. A text over RSA_MAX_PEM_BYTES or that holds no PEM
-   public key, a key that is not RSA, data longer than the key takes or a key that cannot encrypt (agc_rsa_status) is
-   an error Result. The work is one public-key operation, bounded by the caps on the modulus (16384 bits) and the
-   exponent (64 bits); it runs without the shared lock, since it reads only its arguments. */
+/* OpenSSL.RSA.public_encrypt_oaep(pem, data): Ruby's OpenSSL::PKey::RSA.new(pem).public_encrypt(data,
+   PKCS1_OAEP_PADDING), RSA-OAEP with SHA-1 and MGF1-SHA-1, the padding that MySQL's caching_sha2_password asks for. The
+   key is the PEM of an RSA public key (SubjectPublicKeyInfo or PKCS#1). Each call draws a new random OAEP seed, so the
+   ciphertext differs every time; only the private key's owner can read it. A text over RSA_MAX_PEM_BYTES or that holds
+   no PEM public key, a key that is not RSA, data longer than the key takes or a key that cannot encrypt
+   (agc_rsa_status) is an error Result. The work is one public-key operation, bounded by the caps on the modulus (16384
+   bits) and the exponent (64 bits); it runs without the shared lock, since it reads only its arguments. */
 static agc_value builtin_rsa_public_encrypt_oaep(agc_vm *vm, agc_value *args, uint32_t span) {
   const agc_string *pem = agc_as_string(vm, args[0]);
   size_t n;
@@ -558,7 +555,11 @@ static agc_value builtin_rsa_public_encrypt_oaep(agc_vm *vm, agc_value *args, ui
   if (pem->bytes > RSA_MAX_PEM_BYTES) return agc_error_value("RSA: the PEM text has more than 65536 bytes");
   unsigned char out[AGC_RSA_MAX_BYTES];
   size_t len = 0;
-  switch (rsa_compute(vm, pem->data, pem->bytes, data, n, out, &len, span)) {
+  agc_rsa_status status = rsa_compute(pem->data, pem->bytes, data, n, out, &len);
+  /* A library failure after the key checks (no memory, no random OAEP seed) stops the run, as for OpenSSL.Random and
+     OpenSSL.Cipher. */
+  if (status == AGC_RSA_FAILED) agc_fail(vm, "RUNTIME-INTERNAL", "RSA-OAEP is not available", span);
+  switch (status) {
     case AGC_RSA_DONE: return agc_result_value(true, byte_value(out, len));
     case AGC_RSA_BAD_PEM: return agc_error_value("RSA: the text holds no PEM public key");
     case AGC_RSA_NOT_RSA: return agc_error_value("RSA: the public key is not an RSA key");
@@ -573,7 +574,7 @@ static agc_value builtin_rsa_public_encrypt_oaep(agc_vm *vm, agc_value *args, ui
   return agc_error_value("RSA: the key cannot encrypt");
 }
 
-/* The most bytes of a KDF password, salt or output: 1 MiB, the cap of the SecureRandom counts. Real ones are tens of
+/* The most bytes of a KDF password, salt or output: 1 MiB, the cap of the OpenSSL.Random counts. Real ones are tens of
    bytes, and it keeps the int lengths OpenSSL takes for the password and the salt far away. */
 #define KDF_MAX_BYTES ((size_t)AGC_MAX_LIST_COUNT)
 /* The most memory scrypt may take, 128 * r * (n + p + 2) bytes of native memory outside the GC: the default cap of
@@ -672,7 +673,7 @@ static agc_value kdf_value(agc_vm *vm, agc_value *args, size_t length_at, const 
   if (length < 1 || (uint64_t)length > KDF_MAX_BYTES) return agc_error_value("a KDF length is 1 to 1048576 bytes");
   uint64_t blocks = ((uint64_t)length + AGC_SHA256_BYTES - 1) / AGC_SHA256_BYTES, rounds;
   if (!kdf->scrypt && (__builtin_mul_overflow(kdf->iterations, blocks, &rounds) || rounds > PBKDF2_MAX_WORK))
-    return agc_error_value("KDF.pbkdf2_hmac_sha256 needs iterations * ceil(length / 32) of at most 50000000");
+    return agc_error_value("OpenSSL.KDF.pbkdf2_hmac_sha256 needs iterations * ceil(length / 32) of at most 50000000");
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "the thread pool is off in this run", span);
   agc_task_check_park(vm, "a callback of native code cannot wait for a KDF call", span);
   kdf_job *k = calloc(1, sizeof *k);
@@ -690,36 +691,37 @@ static agc_value kdf_value(agc_vm *vm, agc_value *args, size_t length_at, const 
   return agc_void();
 }
 
-/* KDF.pbkdf2_hmac_sha256(password, salt, iterations, length): PBKDF2 (RFC 8018 §5.2) with HMAC-SHA256, Ruby's
+/* OpenSSL.KDF.pbkdf2_hmac_sha256(password, salt, iterations, length): PBKDF2 (RFC 8018 §5.2) with HMAC-SHA256, Ruby's
    OpenSSL::KDF.pbkdf2_hmac with hash "SHA256". iterations below 1, a length outside 1..1048576 or more work than
    PBKDF2_MAX_WORK is an error Result. No shared lock, as digest_value. */
 static agc_value builtin_pbkdf2_hmac_sha256(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t iterations = agc_as_int(vm, args[2]);
-  if (iterations < 1) return agc_error_value("KDF.pbkdf2_hmac_sha256 needs at least 1 iteration");
+  if (iterations < 1) return agc_error_value("OpenSSL.KDF.pbkdf2_hmac_sha256 needs at least 1 iteration");
   kdf_params kdf = {.iterations = (uint64_t)iterations};
   return kdf_value(vm, args, 3, &kdf, span);
 }
 
-/* KDF.scrypt(password, salt, n, r, p, length): scrypt (RFC 7914), Ruby's OpenSSL::KDF.scrypt. n is a power of 2
+/* OpenSSL.KDF.scrypt(password, salt, n, r, p, length): scrypt (RFC 7914), Ruby's OpenSSL::KDF.scrypt. n is a power of 2
    above 1 and below 2^(16 * r), r and p are at least 1 with r * p below 2^30, r * p * (n + 16) is at most
    SCRYPT_MAX_WORK,
    and the memory 128 * r * (n + p + 2) is at most SCRYPT_MAX_MEMORY; anything else is an error Result, checked
    before any work. No shared lock, as digest_value. */
 static agc_value builtin_scrypt(agc_vm *vm, agc_value *args, uint32_t span) {
   int64_t n = agc_as_int(vm, args[2]), r = agc_as_int(vm, args[3]), p = agc_as_int(vm, args[4]);
-  if (n < 2 || (n & (n - 1)) != 0) return agc_error_value("KDF.scrypt needs n to be a power of 2 above 1");
-  if (r < 1 || p < 1) return agc_error_value("KDF.scrypt needs r and p of at least 1");
-  if (p > ((1 << 30) - 1) / r) return agc_error_value("KDF.scrypt needs r * p below 2^30");
+  if (n < 2 || (n & (n - 1)) != 0) return agc_error_value("OpenSSL.KDF.scrypt needs n to be a power of 2 above 1");
+  if (r < 1 || p < 1) return agc_error_value("OpenSSL.KDF.scrypt needs r and p of at least 1");
+  if (p > ((1 << 30) - 1) / r) return agc_error_value("OpenSSL.KDF.scrypt needs r * p below 2^30");
   /* RFC 7914 §2: n < 2^(128 * r / 8). Only r <= 3 can meet it, since n fits in 63 bits. */
-  if (r < 4 && (uint64_t)n >= (uint64_t)1 << (16 * r)) return agc_error_value("KDF.scrypt needs n below 2^(16 * r)");
+  if (r < 4 && (uint64_t)n >= (uint64_t)1 << (16 * r))
+    return agc_error_value("OpenSSL.KDF.scrypt needs n below 2^(16 * r)");
   uint64_t lanes, memory, rounds;
   /* r * p is below 2^30, so only the product with n + 16 can overflow. */
   if (__builtin_add_overflow((uint64_t)n, (uint64_t)16, &rounds) ||
       __builtin_mul_overflow(rounds, (uint64_t)r * (uint64_t)p, &rounds) || rounds > SCRYPT_MAX_WORK)
-    return agc_error_value("KDF.scrypt needs r * p * (n + 16) of at most 2^25");
+    return agc_error_value("OpenSSL.KDF.scrypt needs r * p * (n + 16) of at most 2^25");
   bool big = __builtin_add_overflow((uint64_t)n, (uint64_t)p + 2, &lanes) ||
              __builtin_mul_overflow(lanes, (uint64_t)r * 128, &memory) || memory > SCRYPT_MAX_MEMORY;
-  if (big) return agc_error_value("KDF.scrypt needs 128 * r * (n + p + 2) bytes of memory at most 1025 MiB");
+  if (big) return agc_error_value("OpenSSL.KDF.scrypt needs 128 * r * (n + p + 2) bytes of memory at most 1025 MiB");
   kdf_params kdf = {.scrypt = true, .n = (uint64_t)n, .r = (uint64_t)r, .p = (uint64_t)p};
   return kdf_value(vm, args, 5, &kdf, span);
 }
@@ -775,39 +777,50 @@ static agc_value builtin_hmac_sha512_hexdigest(agc_vm *vm, agc_value *args, uint
 }
 
 const agc_builtin agc_crypto_builtins[] = {
-  {"SecureRandom.hex", 1, builtin_random_hex, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"SecureRandom.uuid", 0, builtin_random_uuid, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
-  {"Digest.md5.bytes", 1, builtin_md5, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"Digest.md5_hexdigest.bytes", 1, builtin_md5_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"Digest.sha1.bytes", 1, builtin_sha1, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"Digest.sha1_hexdigest.bytes", 1, builtin_sha1_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"Digest.sha256.bytes", 1, builtin_sha256, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"Digest.sha256_hexdigest.bytes", 1, builtin_sha256_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"Digest.sha512.bytes", 1, builtin_sha512, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"Digest.sha512_hexdigest.bytes", 1, builtin_sha512_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"OpenSSL.Random.hex", 1, builtin_random_hex, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"OpenSSL.Random.uuid", 0, builtin_random_uuid, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
+  {"OpenSSL.Digest.md5.bytes", 1, builtin_md5, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"OpenSSL.Digest.md5_hexdigest.bytes", 1, builtin_md5_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"OpenSSL.Digest.sha1.bytes", 1, builtin_sha1, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"OpenSSL.Digest.sha1_hexdigest.bytes", 1, builtin_sha1_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false,
+   false},
+  {"OpenSSL.Digest.sha256.bytes", 1, builtin_sha256, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"OpenSSL.Digest.sha256_hexdigest.bytes", 1, builtin_sha256_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false,
+   false},
+  {"OpenSSL.Digest.sha512.bytes", 1, builtin_sha512, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"OpenSSL.Digest.sha512_hexdigest.bytes", 1, builtin_sha512_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false,
+   false},
   {"Base64.encode64.bytes", 1, builtin_encode64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Base64.strict_encode64.bytes", 1, builtin_strict_encode64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Base64.urlsafe_encode64.bytes", 2, builtin_urlsafe_encode64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Base64.decode64.bytes", 1, builtin_decode64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Base64.strict_decode64.bytes", 1, builtin_strict_decode64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
   {"Base64.urlsafe_decode64.bytes", 1, builtin_urlsafe_decode64, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"Digest.hexencode.bytes", 1, builtin_hexencode, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"Digest.hexdecode.bytes", 1, builtin_hexdecode, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"HMAC.sha256.bytes", 2, builtin_hmac_sha256, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"HMAC.sha256_hexdigest.bytes", 2, builtin_hmac_sha256_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"HMAC.sha512.bytes", 2, builtin_hmac_sha512, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"HMAC.sha512_hexdigest.bytes", 2, builtin_hmac_sha512_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"SecureRandom.random_bytes.bytes", 1, builtin_random_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"HMAC.secure_compare.bytes", 2, builtin_secure_compare, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"Cipher.des_ede3_cbc_encrypt", 3, builtin_des_ede3_cbc_encrypt, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"Cipher.des_ede3_cbc_decrypt", 3, builtin_des_ede3_cbc_decrypt, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"CMAC.aes", 2, builtin_cmac_aes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"CMAC.des_ede3", 2, builtin_cmac_des_ede3, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"Cipher.aes_256_gcm_encrypt", 4, builtin_aes_256_gcm_encrypt, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"Cipher.aes_256_gcm_decrypt", 4, builtin_aes_256_gcm_decrypt, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"KDF.pbkdf2_hmac_sha256", 4, builtin_pbkdf2_hmac_sha256, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"KDF.scrypt", 6, builtin_scrypt, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
-  {"RSA.public_encrypt_oaep", 2, builtin_rsa_public_encrypt_oaep, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"OpenSSL.Digest.hexencode.bytes", 1, builtin_hexencode, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"OpenSSL.Digest.hexdecode.bytes", 1, builtin_hexdecode, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"OpenSSL.HMAC.sha256.bytes", 2, builtin_hmac_sha256, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"OpenSSL.HMAC.sha256_hexdigest.bytes", 2, builtin_hmac_sha256_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false,
+   false, false},
+  {"OpenSSL.HMAC.sha512.bytes", 2, builtin_hmac_sha512, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"OpenSSL.HMAC.sha512_hexdigest.bytes", 2, builtin_hmac_sha512_hexdigest, AGC_NATIVE_NONE, AGC_COST_SIZE, false,
+   false, false},
+  {"OpenSSL.Random.random_bytes.bytes", 1, builtin_random_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"OpenSSL.HMAC.secure_compare.bytes", 2, builtin_secure_compare, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"OpenSSL.Cipher.des_ede3_cbc_encrypt", 3, builtin_des_ede3_cbc_encrypt, AGC_NATIVE_NONE, AGC_COST_SIZE, false,
+   false, false},
+  {"OpenSSL.Cipher.des_ede3_cbc_decrypt", 3, builtin_des_ede3_cbc_decrypt, AGC_NATIVE_NONE, AGC_COST_SIZE, false,
+   false, false},
+  {"OpenSSL.CMAC.aes", 2, builtin_cmac_aes, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"OpenSSL.CMAC.des_ede3", 2, builtin_cmac_des_ede3, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"OpenSSL.Cipher.aes_256_gcm_encrypt", 4, builtin_aes_256_gcm_encrypt, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false,
+   false},
+  {"OpenSSL.Cipher.aes_256_gcm_decrypt", 4, builtin_aes_256_gcm_decrypt, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false,
+   false},
+  {"OpenSSL.KDF.pbkdf2_hmac_sha256", 4, builtin_pbkdf2_hmac_sha256, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false,
+   false},
+  {"OpenSSL.KDF.scrypt", 6, builtin_scrypt, AGC_NATIVE_NONE, AGC_COST_SIZE, false, false, false},
+  {"OpenSSL.RSA.public_encrypt_oaep", 2, builtin_rsa_public_encrypt_oaep, AGC_NATIVE_NONE, AGC_COST_SIZE, false,
+   false, false},
 };
 
 const size_t agc_crypto_builtin_count = sizeof agc_crypto_builtins / sizeof agc_crypto_builtins[0];

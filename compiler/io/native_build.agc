@@ -133,7 +133,7 @@ def attempt(request: Workspace.BuildRequest, noted: Bool) -> Result[String]
     "compiler #{compiler.join(" ")}",
     "version #{version}",
     "target #{target}",
-    "header #{Digest.sha256_hexdigest(header.bytes)}",
+    "header #{OpenSSL.Digest.sha256_hexdigest(header.bytes)}",
   ]
 
   key = lines.concat(search_lines()).join("\n")
@@ -141,7 +141,7 @@ def attempt(request: Workspace.BuildRequest, noted: Bool) -> Result[String]
   base = Paths.join(request.cache_root, BUILD_FOLDER)
   user = try private_base(request, base)
   sweep(base)
-  entry = Paths.join(base, Digest.sha256_hexdigest(key.bytes))
+  entry = Paths.join(base, OpenSSL.Digest.sha256_hexdigest(key.bytes))
   name = NativeBuild.output_name(request.library, request.system)
   if File.lstat(entry, FILE_TIMEOUT_MS).ok?
     return verified(request, entry, name, user)
@@ -255,7 +255,7 @@ end
 # The SHA-256 of each file of native/, in the order of the request: of the bytes it carries for a fetched package.
 def key_digests(request: Workspace.BuildRequest) -> Result[List[String]]
   if request.pinned != ""
-    return ok(request.contents.map do |bytes: Bytes| Digest.sha256_hexdigest(bytes) end)
+    return ok(request.contents.map do |bytes: Bytes| OpenSSL.Digest.sha256_hexdigest(bytes) end)
   end
 
   return file_digests(request)
@@ -266,7 +266,7 @@ def file_digests(request: Workspace.BuildRequest) -> Result[List[String]]
   found: List[String] = []
   for file in request.files
     case File.sha256(Paths.join(request.root, file), FILE_TIMEOUT_MS)
-      ok(digest) -> found = found.push(Digest.hexencode(digest))
+      ok(digest) -> found = found.push(OpenSSL.Digest.hexencode(digest))
       error(message) -> return error(fail(request, "cannot read #{file}: #{message}", ""))
     end
   end
@@ -302,7 +302,7 @@ def verified(request: Workspace.BuildRequest, entry: String, name: String, user:
 
   receipt = File.read_text(Paths.join(entry, RECEIPT), FILE_TIMEOUT_MS)
   digest = File.sha256(library, FILE_TIMEOUT_MS)
-  if !receipt.ok? or !digest.ok? or receipt.unwrap!.strip != Digest.hexencode(digest.unwrap!)
+  if !receipt.ok? or !digest.ok? or receipt.unwrap!.strip != OpenSSL.Digest.hexencode(digest.unwrap!)
     return error(fail(request, "the build cache entry is not the one its receipt names", help))
   end
 
@@ -398,7 +398,7 @@ def compile_in(
     return error(fail(request, "a file of native/ changed during the build", "run again to build the new files"))
   end
 
-  receipt = CacheFiles.write_private(Paths.join(folder, RECEIPT), Digest.hexencode(digest.unwrap!).bytes)
+  receipt = CacheFiles.write_private(Paths.join(folder, RECEIPT), OpenSSL.Digest.hexencode(digest.unwrap!).bytes)
   if !receipt.ok?
     return error(fail(request, "cannot write the build cache", ""))
   end

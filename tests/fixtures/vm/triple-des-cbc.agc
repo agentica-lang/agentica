@@ -4,18 +4,18 @@
 # not whole 8-byte blocks. tests/test_vm_crypto.py checks random inputs
 # against a Node peer.
 def hex(text: String) -> Bytes
-  return Digest.hexdecode(text).unwrap!
+  return OpenSSL.Digest.hexdecode(text).unwrap!
 end
 
 def encrypt(label: String, key: String, iv: String, plain: String) -> Void
-  cipher = Cipher.des_ede3_cbc_encrypt(hex(key), hex(iv), hex(plain)).unwrap!
-  back = Cipher.des_ede3_cbc_decrypt(hex(key), hex(iv), cipher).unwrap!
-  puts("#{label} #{Digest.hexencode(cipher)} #{back == hex(plain)}")
+  cipher = OpenSSL.Cipher.des_ede3_cbc_encrypt(hex(key), hex(iv), hex(plain)).unwrap!
+  back = OpenSSL.Cipher.des_ede3_cbc_decrypt(hex(key), hex(iv), cipher).unwrap!
+  puts("#{label} #{OpenSSL.Digest.hexencode(cipher)} #{back == hex(plain)}")
 end
 
 def decrypt(label: String, key: String, iv: String, cipher: String) -> Void
-  plain = Cipher.des_ede3_cbc_decrypt(hex(key), hex(iv), hex(cipher)).unwrap!
-  puts("#{label} #{Digest.hexencode(plain)}")
+  plain = OpenSSL.Cipher.des_ede3_cbc_decrypt(hex(key), hex(iv), hex(cipher)).unwrap!
+  puts("#{label} #{OpenSSL.Digest.hexencode(plain)}")
 end
 
 def shape(label: String, r: Result[Bytes]) -> Void
@@ -51,17 +51,17 @@ def main() -> Void
   k1 = "160b70ad26e60e8a"
   k2 = "1adadcc240619ec2"
   data = "5ac6533b1de8edd31224a91f7361dc2b".bytes
-  two = Cipher.des_ede3_cbc_encrypt(hex(k1 + k2), hex("200e89b4097ef967"), data).unwrap!
-  three = Cipher.des_ede3_cbc_encrypt(hex(k1 + k2 + k1), hex("200e89b4097ef967"), data).unwrap!
+  two = OpenSSL.Cipher.des_ede3_cbc_encrypt(hex(k1 + k2), hex("200e89b4097ef967"), data).unwrap!
+  three = OpenSSL.Cipher.des_ede3_cbc_encrypt(hex(k1 + k2 + k1), hex("200e89b4097ef967"), data).unwrap!
   puts("two-key #{two == three}")
   key = hex("46133dcbf232b51964e0d95e83208f156732bf75b673abf1")
   iv = hex("34814c87f47fd59d")
-  empty = Cipher.des_ede3_cbc_encrypt(key, iv, "".bytes).unwrap!
+  empty = OpenSSL.Cipher.des_ede3_cbc_encrypt(key, iv, "".bytes).unwrap!
   puts("empty #{empty.size}")
-  shape("key 8", Cipher.des_ede3_cbc_encrypt(key.take(8), iv, "12345678".bytes))
-  shape("key 32", Cipher.des_ede3_cbc_decrypt(key + key.take(8), iv, "12345678".bytes))
-  shape("iv 7", Cipher.des_ede3_cbc_encrypt(key, iv.take(7), "12345678".bytes))
-  shape("iv 16", Cipher.des_ede3_cbc_decrypt(key, iv + iv, "12345678".bytes))
-  shape("data 7", Cipher.des_ede3_cbc_encrypt(key, iv, "1234567".bytes))
-  shape("data 9", Cipher.des_ede3_cbc_decrypt(key, iv, "123456789".bytes))
+  shape("key 8", OpenSSL.Cipher.des_ede3_cbc_encrypt(key.take(8), iv, "12345678".bytes))
+  shape("key 32", OpenSSL.Cipher.des_ede3_cbc_decrypt(key + key.take(8), iv, "12345678".bytes))
+  shape("iv 7", OpenSSL.Cipher.des_ede3_cbc_encrypt(key, iv.take(7), "12345678".bytes))
+  shape("iv 16", OpenSSL.Cipher.des_ede3_cbc_decrypt(key, iv + iv, "12345678".bytes))
+  shape("data 7", OpenSSL.Cipher.des_ede3_cbc_encrypt(key, iv, "1234567".bytes))
+  shape("data 9", OpenSSL.Cipher.des_ede3_cbc_decrypt(key, iv, "123456789".bytes))
 end

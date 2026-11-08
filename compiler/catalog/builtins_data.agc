@@ -6,9 +6,10 @@ import Types from "../syntax/types"
 import Model from "builtin_model"
 
 ## Every builtin, sorted by name; the Zlib rows, the ATS rows, the Base64 and hex rows, the digest rows, the HMAC rows,
-## the SecureRandom rows, the HMAC.secure_compare row, the Bytes rows, the Cipher and CMAC rows, the AES-GCM and KDF
-## rows, the Optional rows, the text codec rows, the task monitor rows, the Native.Mutex rows and then the RSA row are
-## appended last, in contract order, so the positions of the existing rows never shift.
+## the OpenSSL.Random rows, the OpenSSL.HMAC.secure_compare row, the Bytes rows, the Cipher and CMAC rows, the AES-GCM
+## and KDF rows, the Optional rows, the text codec rows, the task monitor rows, the Native.Mutex rows and then the RSA
+## row are appended last, in contract order, so the positions of the existing rows never shift. A builtin of a family
+## (FAMILIES) is named Family.Member.fn, such as OpenSSL.Cipher.aes_256_gcm_encrypt.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
 BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
 BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
@@ -280,19 +281,14 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "Base64",
   "Bool",
   "Bytes",
-  "CMAC",
   "Channel",
-  "Cipher",
   "Codec",
-  "Crypto",
-  "Digest",
   "Dir",
   "File",
   "FileHandle",
   "FileInfo",
   "Float",
   "Fn",
-  "HMAC",
   "Header",
   "HttpClient",
   "HttpClientOptions",
@@ -306,7 +302,6 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "JSON",
   "Json",
   "JsonField",
-  "KDF",
   "Lazy",
   "List",
   "Listener",
@@ -316,17 +311,16 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "Map",
   "Math",
   "Nil",
+  "OpenSSL",
   "Optional",
   "Path",
   "Process",
   "ProcessOutput",
   "Profile",
-  "RSA",
   "Random",
   "Range",
   "RegexEngine",
   "Result",
-  "SecureRandom",
   "Set",
   "Socket",
   "Std",
@@ -348,6 +342,12 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "Void",
   "Zlib",
 ]
+
+## The builtin families. Each reserves its one name (in RESERVED_TYPE_NAMES), and its members are written
+## Family.Member: a group of functions (the rows named Family.Member.fn) or a builtin type named Family.Member (a
+## record, an enum or an opaque type). A new member, or a new function of a member, only adds its rows or its type and
+## reserves no name.
+export FAMILIES: List[String] = ["OpenSSL"]
 
 ## The modules only std/ may call: each name with the std module that wraps it and the alias its help shows.
 export STD_ONLY_IMPORTS: Map[String, List[String]] = {
@@ -5867,11 +5867,11 @@ ROWS_58: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "Digest.hexdecode",
+    name: "OpenSSL.Digest.hexdecode",
     parameters: [Model.Named(name: "text", type: Types.Type.String)],
     result: Types.Type.Result(Types.Type.Bytes),
     rule: Model.Rule.Plain,
-    implementation: "Digest.hexdecode.bytes",
+    implementation: "OpenSSL.Digest.hexdecode.bytes",
     effects: [],
     description: (
       "Decode an even number of hex digits in either case to bytes, or an error for any other text; VM only."
@@ -5879,11 +5879,11 @@ ROWS_58: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "Digest.hexencode",
+    name: "OpenSSL.Digest.hexencode",
     parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
-    implementation: "Digest.hexencode.bytes",
+    implementation: "OpenSSL.Digest.hexencode.bytes",
     effects: [],
     description: "Encode bytes as two lowercase hex digits each; VM only.",
     alternatives: [],
@@ -5893,11 +5893,11 @@ ROWS_58: List[Model.Builtin] = [
 ## The digest rows; appended last so the positions of the existing rows never shift.
 ROWS_59: List[Model.Builtin] = [
   Model.Builtin(
-    name: "Digest.md5",
+    name: "OpenSSL.Digest.md5",
     parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
     result: Types.Type.Bytes,
     rule: Model.Rule.Plain,
-    implementation: "Digest.md5.bytes",
+    implementation: "OpenSSL.Digest.md5.bytes",
     effects: [],
     description: (
       "Hash bytes with MD5 and return the 16 bytes of the digest; for compatibility (ETags, old " +
@@ -5906,11 +5906,11 @@ ROWS_59: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "Digest.md5_hexdigest",
+    name: "OpenSSL.Digest.md5_hexdigest",
     parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
-    implementation: "Digest.md5_hexdigest.bytes",
+    implementation: "OpenSSL.Digest.md5_hexdigest.bytes",
     effects: [],
     description: (
       "Hash bytes with MD5 and return the digest as 32 lowercase hex digits; for compatibility " +
@@ -5919,11 +5919,11 @@ ROWS_59: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "Digest.sha1",
+    name: "OpenSSL.Digest.sha1",
     parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
     result: Types.Type.Bytes,
     rule: Model.Rule.Plain,
-    implementation: "Digest.sha1.bytes",
+    implementation: "OpenSSL.Digest.sha1.bytes",
     effects: [],
     description: (
       "Hash bytes with SHA-1 and return the 20 bytes of the digest; for compatibility (git, old " +
@@ -5932,11 +5932,11 @@ ROWS_59: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "Digest.sha1_hexdigest",
+    name: "OpenSSL.Digest.sha1_hexdigest",
     parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
-    implementation: "Digest.sha1_hexdigest.bytes",
+    implementation: "OpenSSL.Digest.sha1_hexdigest.bytes",
     effects: [],
     description: (
       "Hash bytes with SHA-1 and return the digest as 40 lowercase hex digits; for " +
@@ -5945,41 +5945,41 @@ ROWS_59: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "Digest.sha256",
+    name: "OpenSSL.Digest.sha256",
     parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
     result: Types.Type.Bytes,
     rule: Model.Rule.Plain,
-    implementation: "Digest.sha256.bytes",
+    implementation: "OpenSSL.Digest.sha256.bytes",
     effects: [],
     description: "Hash bytes with SHA-256 and return the 32 bytes of the digest; VM only.",
     alternatives: [],
   ),
   Model.Builtin(
-    name: "Digest.sha256_hexdigest",
+    name: "OpenSSL.Digest.sha256_hexdigest",
     parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
-    implementation: "Digest.sha256_hexdigest.bytes",
+    implementation: "OpenSSL.Digest.sha256_hexdigest.bytes",
     effects: [],
     description: "Hash bytes with SHA-256 and return the digest as 64 lowercase hex digits; VM only.",
     alternatives: [],
   ),
   Model.Builtin(
-    name: "Digest.sha512",
+    name: "OpenSSL.Digest.sha512",
     parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
     result: Types.Type.Bytes,
     rule: Model.Rule.Plain,
-    implementation: "Digest.sha512.bytes",
+    implementation: "OpenSSL.Digest.sha512.bytes",
     effects: [],
     description: "Hash bytes with SHA-512 and return the 64 bytes of the digest; VM only.",
     alternatives: [],
   ),
   Model.Builtin(
-    name: "Digest.sha512_hexdigest",
+    name: "OpenSSL.Digest.sha512_hexdigest",
     parameters: [Model.Named(name: "data", type: Types.Type.Bytes)],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
-    implementation: "Digest.sha512_hexdigest.bytes",
+    implementation: "OpenSSL.Digest.sha512_hexdigest.bytes",
     effects: [],
     description: "Hash bytes with SHA-512 and return the digest as 128 lowercase hex digits; VM only.",
     alternatives: [],
@@ -5989,11 +5989,11 @@ ROWS_59: List[Model.Builtin] = [
 ## The HMAC rows; appended last so the positions of the existing rows never shift.
 ROWS_60: List[Model.Builtin] = [
   Model.Builtin(
-    name: "HMAC.sha256",
+    name: "OpenSSL.HMAC.sha256",
     parameters: [Model.Named(name: "key", type: Types.Type.Bytes), Model.Named(name: "data", type: Types.Type.Bytes)],
     result: Types.Type.Bytes,
     rule: Model.Rule.Plain,
-    implementation: "HMAC.sha256.bytes",
+    implementation: "OpenSSL.HMAC.sha256.bytes",
     effects: [],
     description: (
       "HMAC-SHA256 (RFC 2104) of data (bytes) under a key of any length; returns the " +
@@ -6002,11 +6002,11 @@ ROWS_60: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "HMAC.sha256_hexdigest",
+    name: "OpenSSL.HMAC.sha256_hexdigest",
     parameters: [Model.Named(name: "key", type: Types.Type.Bytes), Model.Named(name: "data", type: Types.Type.Bytes)],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
-    implementation: "HMAC.sha256_hexdigest.bytes",
+    implementation: "OpenSSL.HMAC.sha256_hexdigest.bytes",
     effects: [],
     description: (
       "HMAC-SHA256 (RFC 2104) of data (bytes) under a key of any length; returns the " +
@@ -6015,11 +6015,11 @@ ROWS_60: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "HMAC.sha512",
+    name: "OpenSSL.HMAC.sha512",
     parameters: [Model.Named(name: "key", type: Types.Type.Bytes), Model.Named(name: "data", type: Types.Type.Bytes)],
     result: Types.Type.Bytes,
     rule: Model.Rule.Plain,
-    implementation: "HMAC.sha512.bytes",
+    implementation: "OpenSSL.HMAC.sha512.bytes",
     effects: [],
     description: (
       "HMAC-SHA512 (RFC 2104) of data (bytes) under a key of any length; returns the " +
@@ -6028,11 +6028,11 @@ ROWS_60: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "HMAC.sha512_hexdigest",
+    name: "OpenSSL.HMAC.sha512_hexdigest",
     parameters: [Model.Named(name: "key", type: Types.Type.Bytes), Model.Named(name: "data", type: Types.Type.Bytes)],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
-    implementation: "HMAC.sha512_hexdigest.bytes",
+    implementation: "OpenSSL.HMAC.sha512_hexdigest.bytes",
     effects: [],
     description: (
       "HMAC-SHA512 (RFC 2104) of data (bytes) under a key of any length; returns the " +
@@ -6042,14 +6042,14 @@ ROWS_60: List[Model.Builtin] = [
   ),
 ]
 
-## The SecureRandom rows; appended last so the positions of the existing rows never shift.
+## The OpenSSL.Random rows; appended last so the positions of the existing rows never shift.
 ROWS_61: List[Model.Builtin] = [
   Model.Builtin(
-    name: "SecureRandom.random_bytes",
+    name: "OpenSSL.Random.random_bytes",
     parameters: [Model.Named(name: "n", type: Types.Type.Int, default: Model.Default.Whole(16))],
     result: Types.Type.Bytes,
     rule: Model.Rule.Plain,
-    implementation: "SecureRandom.random_bytes.bytes",
+    implementation: "OpenSSL.Random.random_bytes.bytes",
     effects: ["random"],
     description: (
       "Draw n bytes (0..1048576, 16 by default) from the system's secure random source (OpenSSL RAND_bytes), " +
@@ -6058,11 +6058,11 @@ ROWS_61: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "SecureRandom.hex",
+    name: "OpenSSL.Random.hex",
     parameters: [Model.Named(name: "n", type: Types.Type.Int, default: Model.Default.Whole(16))],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
-    implementation: "SecureRandom.hex",
+    implementation: "OpenSSL.Random.hex",
     effects: ["random"],
     description: (
       "Draw n secure random bytes (0..1048576, 16 by default) and give them as 2n lowercase hex digits; VM only."
@@ -6070,25 +6070,25 @@ ROWS_61: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "SecureRandom.uuid",
+    name: "OpenSSL.Random.uuid",
     parameters: [],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
-    implementation: "SecureRandom.uuid",
+    implementation: "OpenSSL.Random.uuid",
     effects: ["random"],
     description: "Draw a random version 4 UUID (RFC 9562) as 36 lowercase characters; VM only.",
     alternatives: [],
   ),
 ]
 
-## The HMAC.secure_compare row; appended last so the positions of the existing rows never shift.
+## The OpenSSL.HMAC.secure_compare row; appended last so the positions of the existing rows never shift.
 ROWS_62: List[Model.Builtin] = [
   Model.Builtin(
-    name: "HMAC.secure_compare",
+    name: "OpenSSL.HMAC.secure_compare",
     parameters: [Model.Named(name: "a", type: Types.Type.Bytes), Model.Named(name: "b", type: Types.Type.Bytes)],
     result: Types.Type.Bool,
     rule: Model.Rule.Plain,
-    implementation: "HMAC.secure_compare.bytes",
+    implementation: "OpenSSL.HMAC.secure_compare.bytes",
     effects: [],
     description: (
       "Whether the bytes a and b are the same, in constant time: it compares their SHA-256 " +
@@ -6223,7 +6223,7 @@ ROWS_63: List[Model.Builtin] = [
 ## The Cipher and CMAC rows; appended last so the positions of the existing rows never shift.
 ROWS_64: List[Model.Builtin] = [
   Model.Builtin(
-    name: "Cipher.des_ede3_cbc_encrypt",
+    name: "OpenSSL.Cipher.des_ede3_cbc_encrypt",
     parameters: [
       Model.Named(name: "key", type: Types.Type.Bytes),
       Model.Named(name: "iv", type: Types.Type.Bytes),
@@ -6231,7 +6231,7 @@ ROWS_64: List[Model.Builtin] = [
     ],
     result: Types.Type.Result(Types.Type.Bytes),
     rule: Model.Rule.Plain,
-    implementation: "Cipher.des_ede3_cbc_encrypt",
+    implementation: "OpenSSL.Cipher.des_ede3_cbc_encrypt",
     effects: [],
     description: (
       "Encrypt data (bytes) with Triple DES in CBC mode and no padding, for payment formats, not new designs; " +
@@ -6240,7 +6240,7 @@ ROWS_64: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "Cipher.des_ede3_cbc_decrypt",
+    name: "OpenSSL.Cipher.des_ede3_cbc_decrypt",
     parameters: [
       Model.Named(name: "key", type: Types.Type.Bytes),
       Model.Named(name: "iv", type: Types.Type.Bytes),
@@ -6248,7 +6248,7 @@ ROWS_64: List[Model.Builtin] = [
     ],
     result: Types.Type.Result(Types.Type.Bytes),
     rule: Model.Rule.Plain,
-    implementation: "Cipher.des_ede3_cbc_decrypt",
+    implementation: "OpenSSL.Cipher.des_ede3_cbc_decrypt",
     effects: [],
     description: (
       "Decrypt data (bytes) with Triple DES in CBC mode and no padding, for payment formats, not new designs; " +
@@ -6257,11 +6257,11 @@ ROWS_64: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "CMAC.aes",
+    name: "OpenSSL.CMAC.aes",
     parameters: [Model.Named(name: "key", type: Types.Type.Bytes), Model.Named(name: "data", type: Types.Type.Bytes)],
     result: Types.Type.Result(Types.Type.Bytes),
     rule: Model.Rule.Plain,
-    implementation: "CMAC.aes",
+    implementation: "OpenSSL.CMAC.aes",
     effects: [],
     description: (
       "CMAC (NIST SP 800-38B, RFC 4493) of data (bytes) with AES-128, -192 or -256 by the key size " +
@@ -6270,11 +6270,11 @@ ROWS_64: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "CMAC.des_ede3",
+    name: "OpenSSL.CMAC.des_ede3",
     parameters: [Model.Named(name: "key", type: Types.Type.Bytes), Model.Named(name: "data", type: Types.Type.Bytes)],
     result: Types.Type.Result(Types.Type.Bytes),
     rule: Model.Rule.Plain,
-    implementation: "CMAC.des_ede3",
+    implementation: "OpenSSL.CMAC.des_ede3",
     effects: [],
     description: (
       "CMAC (NIST SP 800-38B) of data (bytes) with Triple DES, for payment formats; a key of 16 " +
@@ -6287,7 +6287,7 @@ ROWS_64: List[Model.Builtin] = [
 ## The AES-GCM and KDF rows; appended last so the positions of the existing rows never shift.
 ROWS_65: List[Model.Builtin] = [
   Model.Builtin(
-    name: "Cipher.aes_256_gcm_encrypt",
+    name: "OpenSSL.Cipher.aes_256_gcm_encrypt",
     parameters: [
       Model.Named(name: "key", type: Types.Type.Bytes),
       Model.Named(name: "iv", type: Types.Type.Bytes),
@@ -6296,7 +6296,7 @@ ROWS_65: List[Model.Builtin] = [
     ],
     result: Types.Type.Result(Types.Type.Bytes),
     rule: Model.Rule.Plain,
-    implementation: "Cipher.aes_256_gcm_encrypt",
+    implementation: "OpenSSL.Cipher.aes_256_gcm_encrypt",
     effects: [],
     description: (
       "Encrypt data (bytes) with AES-256-GCM: a 32-byte key, a 12-byte iv never reused under the key and " +
@@ -6305,7 +6305,7 @@ ROWS_65: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "Cipher.aes_256_gcm_decrypt",
+    name: "OpenSSL.Cipher.aes_256_gcm_decrypt",
     parameters: [
       Model.Named(name: "key", type: Types.Type.Bytes),
       Model.Named(name: "iv", type: Types.Type.Bytes),
@@ -6314,7 +6314,7 @@ ROWS_65: List[Model.Builtin] = [
     ],
     result: Types.Type.Result(Types.Type.Bytes),
     rule: Model.Rule.Plain,
-    implementation: "Cipher.aes_256_gcm_decrypt",
+    implementation: "OpenSSL.Cipher.aes_256_gcm_decrypt",
     effects: [],
     description: (
       "Decrypt AES-256-GCM data (the ciphertext with its 16-byte tag appended) under the same key, iv and " +
@@ -6323,7 +6323,7 @@ ROWS_65: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "KDF.pbkdf2_hmac_sha256",
+    name: "OpenSSL.KDF.pbkdf2_hmac_sha256",
     parameters: [
       Model.Named(name: "password", type: Types.Type.Bytes),
       Model.Named(name: "salt", type: Types.Type.Bytes),
@@ -6332,7 +6332,7 @@ ROWS_65: List[Model.Builtin] = [
     ],
     result: Types.Type.Result(Types.Type.Bytes),
     rule: Model.Rule.Plain,
-    implementation: "KDF.pbkdf2_hmac_sha256",
+    implementation: "OpenSSL.KDF.pbkdf2_hmac_sha256",
     effects: [],
     description: (
       "Derive length bytes (1 to 1048576) from a password and a salt with PBKDF2-HMAC-SHA256 (RFC 8018) and at " +
@@ -6342,7 +6342,7 @@ ROWS_65: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "KDF.scrypt",
+    name: "OpenSSL.KDF.scrypt",
     parameters: [
       Model.Named(name: "password", type: Types.Type.Bytes),
       Model.Named(name: "salt", type: Types.Type.Bytes),
@@ -6353,7 +6353,7 @@ ROWS_65: List[Model.Builtin] = [
     ],
     result: Types.Type.Result(Types.Type.Bytes),
     rule: Model.Rule.Plain,
-    implementation: "KDF.scrypt",
+    implementation: "OpenSSL.KDF.scrypt",
     effects: [],
     description: (
       "Derive length bytes (1 to 1048576) from a password and a salt with scrypt (RFC 7914): cost n, a power " +
@@ -6567,11 +6567,11 @@ ROWS_69: List[Model.Builtin] = [
 ## The RSA row; appended last so the positions of the existing rows never shift.
 ROWS_70: List[Model.Builtin] = [
   Model.Builtin(
-    name: "RSA.public_encrypt_oaep",
+    name: "OpenSSL.RSA.public_encrypt_oaep",
     parameters: [Model.Named(name: "pem", type: Types.Type.String), Model.Named(name: "data", type: Types.Type.Bytes)],
     result: Types.Type.Result(Types.Type.Bytes),
     rule: Model.Rule.Plain,
-    implementation: "RSA.public_encrypt_oaep",
+    implementation: "OpenSSL.RSA.public_encrypt_oaep",
     effects: ["random"],
     description: (
       "Encrypt data (bytes) with the RSA public key in pem (PUBLIC KEY or RSA PUBLIC KEY) and OAEP padding with " +

@@ -546,7 +546,7 @@
       ]
     },
     "builtin-types": {
-      "match": "\\b(ATS|Await|Base64|Bool|Bytes|CMAC|Channel|Cipher|Crypto|Digest|Dir|File|FileHandle|FileInfo|Float|Fn|HMAC|Header|HttpClient|HttpClientOptions|HttpRequest|HttpResponse|HttpServer|HttpServerOptions|HttpWire|IO|Int|JSON|Json|JsonField|KDF|Lazy|List|Listener|LogEvent|LogLevel|LogRegistry|Map|Math|Nil|Optional|Path|Process|ProcessOutput|Profile|Random|Range|RegexEngine|Result|SecureRandom|Set|Socket|Std|String|StructMember|System|TCP|TLS|Task|Test|TestCase|Time|TlsClientOptions|TlsContext|TlsServerOptions|Void|Zlib)\\b",
+      "match": "\\b(ATS|Await|Base64|Bool|Bytes|Channel|Codec|Dir|File|FileHandle|FileInfo|Float|Fn|Header|HttpClient|HttpClientOptions|HttpRequest|HttpResponse|HttpServer|HttpServerOptions|HttpWire|IO|Int|JSON|Json|JsonField|Lazy|List|Listener|LogEvent|LogLevel|LogRegistry|Map|Math|Nil|OpenSSL|Optional|Path|Process|ProcessOutput|Profile|Random|Range|RegexEngine|Result|Set|Socket|Std|String|StructMember|System|TCP|TLS|Task|TaskDown|TaskExit|TaskRef|Test|TestCase|Time|TlsClientOptions|TlsContext|TlsServerOptions|Void|Zlib)\\b",
       "name": "support.type.builtin.agentica"
     },
     "types": {

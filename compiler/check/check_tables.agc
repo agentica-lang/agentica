@@ -85,7 +85,7 @@ end
 export def foreign_names() -> Map[String, String]
   return {
     "Array.new": "use a list literal with a type: xs: List[Int] = []",
-    "Crypto.sha256": "use Digest.sha256(data), or Digest.sha256_hexdigest(data) for the hex text",
+    "Crypto.sha256": "use OpenSSL.Digest.sha256(data), or OpenSSL.Digest.sha256_hexdigest(data) for the hex text",
     "Enumerator.new": (
       "write the producer as a task that sends into a channel: ch: Channel[Int] = Channel.new(8), " +
       "Task.spawn(&produce, ch), then ch.recv(timeout_ms)"
@@ -169,6 +169,20 @@ export def foreign_names() -> Map[String, String]
     "read_line": "use gets, which returns Result[String]; gets! halts at the end of input",
     "readline": "use gets, which returns Result[String]; gets! halts at the end of input",
     "str": "use x.to_s, or interpolation: \"\#{x}\"",
+  }
+end
+
+## The builtin modules that moved into a family, with the member that holds their functions now: Digest.sha256 is
+## OpenSSL.Digest.sha256.
+export def moved_modules() -> Map[String, String]
+  return {
+    "CMAC": "OpenSSL.CMAC",
+    "Cipher": "OpenSSL.Cipher",
+    "Digest": "OpenSSL.Digest",
+    "HMAC": "OpenSSL.HMAC",
+    "KDF": "OpenSSL.KDF",
+    "RSA": "OpenSSL.RSA",
+    "SecureRandom": "OpenSSL.Random",
   }
 end
 

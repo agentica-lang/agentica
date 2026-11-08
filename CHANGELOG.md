@@ -10,8 +10,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `RSA.public_encrypt_oaep(pem, data)` encrypts with an RSA public key in PEM
-  and OAEP padding (SHA-1), as MySQL's `caching_sha2_password` needs.
+- `OpenSSL.RSA.public_encrypt_oaep(pem, data)` encrypts with an RSA public key
+  in PEM and OAEP padding (SHA-1), as MySQL's `caching_sha2_password` needs.
+- Builtin families: `Family.Member.fn(...)` calls a builtin of a family, and a
+  member the family lacks is `CHECK-UNKNOWN-NAME` with the list of members.
 - `AGENTICA_GC_HEAP` sets the size the collector's heap starts at (`32M` by
   default, `0` for libgc's own start).
 - `outgoing_queue` of `HTTP.WebSocketOptions` sets how many messages a
@@ -19,7 +21,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- **Breaking:** `RSA` is a reserved type name.
+- **Breaking:** the crypto builtins are the `OpenSSL` family: `Digest`, `HMAC`,
+  `Cipher`, `CMAC`, `KDF` and `SecureRandom` are `OpenSSL.Digest`,
+  `OpenSSL.HMAC`, `OpenSSL.Cipher`, `OpenSSL.CMAC`, `OpenSSL.KDF` and
+  `OpenSSL.Random`. An old name is `CHECK-UNKNOWN-NAME` with the new one in the
+  help. `OpenSSL` is reserved; `Digest`, `Cipher`, `HMAC`, `KDF`, `CMAC`,
+  `SecureRandom` and `Crypto` are free names.
 - The collector's heap starts at 32 MB, so a busy program collects less often:
   faster, for up to about 32 MB more memory in a program that allocates a lot.
 - A WebSocket of `std/http` writes the messages queued in `outgoing` in one

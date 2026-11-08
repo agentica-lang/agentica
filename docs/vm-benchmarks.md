@@ -156,7 +156,7 @@ the data; "op" is the operation alone (`Time.monotonic_ms`).
 
 | Case | List[Int] wall / op / RSS | Bytes wall / op / RSS |
 |---|---|---|
-| `Digest.sha256_hexdigest` of 64 MiB | 0.94 s / 366 ms / 644 MB | 0.14 s / 65 ms / 93 MB |
+| `OpenSSL.Digest.sha256_hexdigest` of 64 MiB | 0.94 s / 366 ms / 644 MB | 0.14 s / 65 ms / 93 MB |
 | 32 `Zlib.gzip` and `gunzip` of 512 KiB | 1.07 s / 1006 ms / 60 MB | 0.81 s / 757 ms / 29 MB |
 | 64 MiB through `File.write_bytes`, `read_bytes` | 1.13 s / 1023 ms / 188 MB | 0.28 s / 196 ms / 46 MB |
 | TCP echo of 16 MiB in 64 KiB sends | 0.69 s / 634 ms / 44 MB | 0.13 s / 70 ms / 29 MB |

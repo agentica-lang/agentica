@@ -2,6 +2,7 @@
 ## that depend only on types or names. A help is a String, and "" means there is none.
 
 import Model from "../catalog/builtin_model"
+import {ENTRIES} from "../catalog/builtins"
 import RubyForm from "ruby_form"
 import Suggest from "../syntax/suggest"
 import Types from "../syntax/types"
@@ -67,14 +68,31 @@ export def conversion(expected: Types.Type, actual: Types.Type) -> String
   return convert_help(expected, actual)
 end
 
-## The help for a name another language has but Agentica does not, or "".
+## The help for a name another language has but Agentica does not, or for a builtin that moved into a family, or "".
 export def foreign(tables: Tables, name: String) -> String
   found = tables.foreign_names.get(name)
   if found.some?
     return found.unwrap!
   end
 
-  return ""
+  return moved(name)
+end
+
+## The help for Module.fn of a builtin module that moved into a family (Digest.sha256 is OpenSSL.Digest.sha256), or
+## "".
+export def moved(name: String) -> String
+  parts = name.split(".")
+  member = Data.moved_modules().get(parts[0])
+  if parts.size != 2 or member.none?
+    return ""
+  end
+
+  written = "#{member.unwrap!}.#{parts[1]}"
+  if ENTRIES.has_key?(written)
+    return "#{parts[0]} is #{member.unwrap!} now: use #{written}"
+  end
+
+  return "#{parts[0]} is #{member.unwrap!} now: its functions are written #{member.unwrap!}.NAME"
 end
 
 ## The "did you mean" help for the closest of the candidates and the shared names, or "". A builtin that has a Ruby

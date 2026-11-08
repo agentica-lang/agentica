@@ -52,6 +52,16 @@ whose generic functions the checker treats specially: see
 [`Map`](../../site/content/library/data-structures/map.md) and
 [`Set`](../../site/content/library/data-structures/set.md).
 
+A builtin family groups builtins under one reserved name, as Ruby's
+`OpenSSL::Cipher` does: its members are written `Family.Member` and their
+functions `Family.Member.fn(args)`, two levels at most
+(`OpenSSL.Cipher.aes_256_gcm_encrypt(key, iv, data)`,
+`OpenSSL.Random.uuid`, `data |> OpenSSL.Digest.sha256()`). A member is a group
+of functions or a builtin type. A member the family lacks is
+`CHECK-UNKNOWN-NAME`, with the members in the help; a group of functions where
+a type is wanted is `CHECK-UNKNOWN-TYPE`. The one family today is `OpenSSL`
+(`Digest`, `HMAC`, `Cipher`, `CMAC`, `KDF`, `RSA`, `Random`).
+
 Callbacks (`List.map`, `select`, `reduce`, `each`, `any?`, `all?`, `sort_by`
 and the other methods that take a function) take a block, `&name` or a function
 variable. Parameter and return types must match exactly, and a `map` callback

@@ -34,6 +34,6 @@ def main() -> Void
   copy: Map[Bytes, Int] = t.to_map
   IO.inspect(copy)
   IO.inspect([copy[a_zero], copy[empty], copy.size])
-  IO.inspect(t.keys.map do |k| Digest.hexencode(k) end)
+  IO.inspect(t.keys.map do |k| OpenSSL.Digest.hexencode(k) end)
   IO.inspect(t.get("ab".bytes))
 end

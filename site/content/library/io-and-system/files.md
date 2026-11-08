@@ -82,12 +82,12 @@ end
 File.sha256(path: String, timeout_ms: Int = 30000) -> Result[Bytes]
 ```
 
-Hashes a whole file with SHA-256 and returns the 32 digest bytes as a [`Bytes`](/library/data-structures/bytes/), the same bytes `Digest.sha256` gives for the same content; `Digest.hexencode` writes them as hex. It streams the file in 64 KiB chunks, so a file far over the 1 MiB text cap still hashes.
+Hashes a whole file with SHA-256 and returns the 32 digest bytes as a [`Bytes`](/library/data-structures/bytes/), the same bytes `OpenSSL.Digest.sha256` gives for the same content; `OpenSSL.Digest.hexencode` writes them as hex. It streams the file in 64 KiB chunks, so a file far over the 1 MiB text cap still hashes.
 
 ```agentica {mode="check"}
 def main() -> Void
   case File.sha256("notes.txt", 1000)
-    ok(digest) -> puts(Digest.hexencode(digest))
+    ok(digest) -> puts(OpenSSL.Digest.hexencode(digest))
     error(message) -> IO.warn("cannot hash: #{message}")
   end
 end
