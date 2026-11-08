@@ -94,7 +94,9 @@ also reads, and `each_line` and `foreach` default `buffer_bytes` to 65536.
   directory, is an error and never replaced, so racing programs get one winner.
   Both paths must be on one file system.
 - `Path.join` uses host path rules. `Path.resolve` makes a lexical absolute path
-  without resolving symlinks. `Path.real` resolves every symlink like POSIX
+  without resolving symlinks. `Path.cwd` and `Path.resolve` give no trailing `/`
+  except at a root; `resolve` keeps one only when the path ends in `/`.
+  `Path.real` resolves every symlink like POSIX
   `realpath`: the path must exist, and it has no timeout argument. Windows
   fails on absolute paths of 260 characters or more unless `LongPathsEnabled`
   is 1.

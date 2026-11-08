@@ -505,10 +505,14 @@ def test_a_steps_agc_near_the_paths_is_the_step_program_unless_steps_names_anoth
     assert statuses("specs/a.feature", cwd=project)[:2] == (0, ["passed"])
     assert statuses(joined(project, "specs"), cwd=bare)[:2] == (0, ["passed", "passed"])
     assert statuses(joined(project, "specs/a.feature"), cwd=bare)[:2] == (0, ["passed"])
-    # The search stops at the working directory: steps.agc above it is not used.
-    status, cases, report = statuses(".", cwd=project / "specs" / "auth")
-    assert (status, cases) == (1, ["failed"])
-    assert code_of(report_cases(report)[0]) == "CHECK-BDD-UNDEFINED"
+    # The search stops at the working directory: steps.agc above it is not used, for the folder or a path below it.
+    outer = bdd.suite({"steps.agc": answer("true")})
+    (outer / "proj" / "specs").mkdir(parents=True)
+    (outer / "proj" / "specs" / "a.feature").write_text(feature, encoding="utf-8")
+    for path, cwd in ((".", project / "specs" / "auth"), ("specs/a.feature", outer / "proj")):
+        status, cases, report = statuses(path, cwd=cwd)
+        assert (status, cases) == (1, ["failed"])
+        assert code_of(report_cases(report)[0]) == "CHECK-BDD-UNDEFINED"
     # --steps wins.
     assert statuses("--steps", joined(project, "other.agc"), cwd=project)[:2] == (1, ["failed", "failed"])
     # No steps.agc: every step is undefined, as before.
