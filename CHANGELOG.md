@@ -29,6 +29,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   faster, for up to about 32 MB more memory in a program that allocates a lot.
 - `String#slice` and `String#at` on non-ASCII text are faster: a slice to the
   end does not walk the text, and runs of ASCII are crossed 8 bytes at a time.
+- The event loop reads a cheaper clock on Linux, so a server makes fewer clock
+  system calls per request; an I/O timeout may end up to one kernel tick (at
+  most 10 ms) late, never early.
 
 ## [0.26.1] - 2026-11-07
 

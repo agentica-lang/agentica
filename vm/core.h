@@ -9,6 +9,8 @@
 
 #include "port.h"
 
+#include <time.h>
+
 typedef struct {
   const agc_builtin *entries;
   const size_t *count;
@@ -340,8 +342,13 @@ void agc_io_pause(agc_vm *vm, uint64_t ms);
 uint64_t agc_clock_ms(void);
 /* The OS side of a clock that costs no system call (vm/clock_posix.c, vm/clock_windows.c): Linux's coarse monotonic
    clock, which is never ahead of agc_clock_ms and lags it by at most its tick. Fills NOW_MS and TICK_MS (its
-   resolution); false where the system has no such clock. */
+   resolution, rounded up); false where the system has no such clock or its tick is over 10 ms. */
 bool agc_coarse_clock_ms(uint64_t *now_ms, uint64_t *tick_ms);
+#ifdef __linux__
+/* libuv's clock_getres (vm/clock_posix.c): libuv's loop clock is the coarse one exactly when agc_coarse_clock_ms
+   answers, so a libuv timer started from it may fire a tick early unless the caller pads it. */
+int agc_uv_clock_getres(clockid_t id, struct timespec *res);
+#endif
 
 /* Timers (vm/timers.c). A task that waits for a deadline marks itself PARKING (agc_task_parking), registers its other
  * waits, and calls agc_task_park_until; the deadline is an agc_clock_ms value. All of these run with rt->sync held,

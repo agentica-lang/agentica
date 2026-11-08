@@ -115,6 +115,10 @@ ifeq ($(VM_OS),Windows_NT)
 UV_DEFS := -DWIN32_LEAN_AND_MEAN -D_WIN32_WINNT=0x0A00 -D_CRT_DECLARE_NONSTDC_NAMES=0
 else ifeq ($(shell uname -s),Darwin)
 UV_DEFS := -D_FILE_OFFSET_BITS=64 -D_LARGEFILE_SOURCE -D_DARWIN_UNLIMITED_SELECT=1 -D_DARWIN_USE_64_BIT_INODE=1
+else ifeq ($(shell uname -s),Linux)
+# libuv's loop clock is the coarse monotonic clock, which costs no clock source read (agc_uv_clock_getres in
+# vm/clock_posix.c); uv__hrtime is libuv's only clock_getres call.
+UV_DEFS += -Dclock_getres=agc_uv_clock_getres
 endif
 VM_WARN := -std=c11 -Wall -Wextra -Werror -D_POSIX_C_SOURCE=200809L -DAGC_VERSION='"$(AGC_VERSION)"' -I $(YY_DIR)/src $(YY_DEFS) -I $(UV_DIR)/include -I $(PICO_DIR)
 DEBUG_MAPS = -fdebug-prefix-map=$(CURDIR)=. $(if $(filter-out $(CURDIR),$(PWD)),$(if $(filter $(CURDIR),$(shell cd '$(PWD)' 2>/dev/null && pwd -P)),-fdebug-prefix-map=$(PWD)=.))

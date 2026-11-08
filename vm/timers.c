@@ -252,12 +252,9 @@ void agc_clock_note_ms(uint64_t ms) {
   }
 }
 
-/* The coarse clock is used only where its tick is this short, the bound on how far Time.monotonic_ms lags. */
-#define COARSE_TICK_MAX_MS 10
-
 bool agc_clock_coarse_ms(uint64_t *now_ms) {
   uint64_t now, tick;
-  if (!agc_coarse_clock_ms(&now, &tick) || tick > COARSE_TICK_MAX_MS) return false;
+  if (!agc_coarse_clock_ms(&now, &tick)) return false;
   uint64_t floor = atomic_load_explicit(clock_floor(), memory_order_relaxed);
   *now_ms = now > floor ? now : floor;
   return true;
