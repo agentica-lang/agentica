@@ -26,11 +26,19 @@ def mask(data, key):
 
 
 class Client:
-    def __init__(self, port, secure=None, timeout=10):
-        self.sock = socket.create_connection(("127.0.0.1", port), timeout=timeout)
+    def __init__(self, port, secure=None, timeout=10, receive_buffer=None):
+        """`receive_buffer` sets SO_RCVBUF before the connect, so the window is that small from the start: the server's
+        big writes then go out in many partial writes, as on macOS, whose socket buffers are small."""
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.settimeout(timeout)
+        if receive_buffer is not None:
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, receive_buffer)
+        self.sock.connect(("127.0.0.1", port))
         if secure is not None:
             self.sock = secure.wrap_socket(self.sock, server_hostname="localhost")
-        self.buffer = b""
+        # A bytearray, so that reading a big message is linear: joining bytes copies the whole buffer on every recv,
+        # which made a 16 MB message take seconds and the server's write deadline run out (#1206).
+        self.buffer = bytearray()
 
     def close(self):
         self.sock.close()
@@ -47,7 +55,8 @@ class Client:
             if not more:
                 raise EOFError("the connection closed")
             self.buffer += more
-        data, self.buffer = self.buffer[:count], self.buffer[count:]
+        data = bytes(self.buffer[:count])
+        del self.buffer[:count]
         return data
 
     def request(self, path="/", headers=None, method="GET", key=None, version="13", upgrade=True):
@@ -135,7 +144,8 @@ class Client:
         return struct.unpack(">H", payload[:2])[0], payload[2:].decode()
 
     def ended(self):
-        """True when the server closed the connection (a reset counts)."""
+        """True when the server closed the connection (a reset counts) and nothing read is left unparsed."""
+        assert not self.buffer, "bytes came after the last frame read"
         try:
             return self.sock.recv(1) == b""
         except (ConnectionError, ssl.SSLError):
