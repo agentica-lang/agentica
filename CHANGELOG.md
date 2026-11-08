@@ -18,6 +18,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   default, `0` for libgc's own start).
 - `outgoing_queue` of `HTTP.WebSocketOptions` sets how many messages a
   WebSocket's `outgoing` channel holds (default 8, as before).
+- `agentica.toml` accepts a `[tool.NAME]` table for other tools; Agentica reads
+  nothing inside it.
 
 ### Changed
 
