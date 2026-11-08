@@ -26,7 +26,10 @@ ROOT_USER = hasattr(os, "geteuid") and os.geteuid() == 0
 
 GREETER = "owner/greeter"
 TOOLS = "owner/tools"
-TOOLS_FILES = {"bang.agc": BANG, "docs/notes.md": "not code", ".github/hidden.agc": "junk", "agc_libs/x.agc": "junk"}
+# The fetch drops what the hash leaves out: the hidden folder, agc_libs/, _build/ and the root deps/ (in any case);
+# a deps/ below the root is an ordinary folder of the package.
+TOOLS_FILES = {"bang.agc": BANG, "docs/notes.md": "not code", ".github/hidden.agc": "junk", "agc_libs/x.agc": "junk",
+               "_build/x.agc": "junk", "Deps/x.agc": "junk", "lib/deps/x.agc": "# kept\n"}
 GREETER_FILES = {"greet.agc": GREET, "util/more.agc": "# more\n"}
 
 
@@ -97,7 +100,7 @@ def test_install_writes_every_locked_package_flat_into_deps_and_a_build_runs_wit
     # the notes, the hidden folder or the package's own agc_libs/. The tool writes no .gitignore.
     assert sorted(os.listdir(deps)) == ["greeter", "tools"]
     assert cached_files(deps / "greeter") == ["agentica.toml", "greet.agc", "util/more.agc"]
-    assert cached_files(deps / "tools") == ["bang.agc"]
+    assert cached_files(deps / "tools") == ["bang.agc", "lib/deps/x.agc"]
     assert package_hash(deps / "greeter") == ws.locked[0]["hash"]
     # Folders and files have the ordinary mode, not the private one of the staging folder: another user reads them.
     umask = os.umask(0)
@@ -147,7 +150,7 @@ def test_install_again_puts_the_locked_files_back_replaces_a_link_and_leaves_oth
     os.symlink(outside, deps / "tools")
     assert install(ws, remotes)[1] is None
     assert not (deps / "tools").is_symlink()
-    assert cached_files(deps / "tools") == ["bang.agc"]
+    assert cached_files(deps / "tools") == ["bang.agc", "lib/deps/x.agc"]
     assert cached_files(outside) == ["keep.agc"]
     assert cached_files(deps / "gone") == ["old.agc"]
     assert (deps / "notes.txt").read_text(encoding="utf-8") == "keep\n"
@@ -259,15 +262,20 @@ TEST_FILE = 'def main() -> Void\n  Test.run([Test.test("t") do ok() end])\nend\n
 MODULE = 'export def mine() -> Int\n  return 1\nend\n'
 
 
-def test_the_walks_of_test_and_symbol_skip_the_deps_of_the_project(tmp_path):
+def test_the_walks_of_test_and_symbol_skip_the_deps_of_the_project_and_build(tmp_path):
     # Installed packages are not the tests or the modules of the project: `test .` and `symbol` with no path skip the
-    # deps/ beside agentica.toml, while a path that names a folder of deps/ reads it.
+    # deps/ beside agentica.toml, while a path that names a folder of deps/ reads it. _build/ (the caches, or a clone a
+    # program keeps there) is skipped at any depth.
     (tmp_path / "deps" / "tools").mkdir(parents=True)
     (tmp_path / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
     (tmp_path / "mine_test.agc").write_text(TEST_FILE, encoding="utf-8")
     (tmp_path / "mine.agc").write_text(MODULE, encoding="utf-8")
     (tmp_path / "deps" / "tools" / "bang_test.agc").write_text(TEST_FILE, encoding="utf-8")
     (tmp_path / "deps" / "tools" / "bang.agc").write_text(BANG, encoding="utf-8")
+    for folder in ["_build/bench", "src/_build"]:
+        (tmp_path / folder).mkdir(parents=True)
+        (tmp_path / folder / "bench_test.agc").write_text(TEST_FILE, encoding="utf-8")
+        (tmp_path / folder / "bang.agc").write_text(BANG, encoding="utf-8")
     ran = run(cli() + ["--json", "test", "."], cwd=tmp_path, env=vm_environment())
     assert ran.code == 0, ran.stderr
     assert [Path(item["path"]).name for item in json.loads(ran.stdout)["files"]] == ["mine_test.agc"]

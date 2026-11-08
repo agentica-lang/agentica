@@ -381,8 +381,8 @@ import Sqlite from "pkg/sqlite/db"
   name it did not declare is `CHECK-IMPORT-PACKAGE`, and the project cannot
   import the dependencies of a package unless it declares them too. A package
   file imports its own modules by relative paths that stay inside the package: a
-  `../` that leaves it, a hidden folder or `agc_libs/` of the package, are
-  `CHECK-IMPORT-PATH`.
+  `../` that leaves it, a hidden folder, `_build/`, `agc_libs/` or `deps/` of
+  the package, are `CHECK-IMPORT-PATH`.
 - A manifest that declares a dependency needs `agentica.lock` beside it
   (`PKG-LOCK-MISSING`). Only the lock of the project is read; the
   `agentica.lock` of a package never is. The lock is TOML: `version = 1` (a
@@ -568,10 +568,12 @@ import Sqlite from "pkg/sqlite/db"
   commit `deps/` or ignore it. `deps/` itself must be a real folder: a symbolic
   link is `PKG-SYMLINK`, and a file or a write that fails is `PKG-WRITE` (the
   file and no key); nothing is written through a link. `agc_libs/` is not
-  touched: it stays for the libraries of the `pkg/` search. When `agentica test`
-  and `agentica symbol` walk a folder, they skip the `deps/` beside an
-  `agentica.toml`: installed packages are not the tests or modules of the
-  project (a path that names a folder of `deps/` reads it).
+  touched: it stays for the libraries of the `pkg/` search. When `agentica
+  test`, `check`, `fmt`, `lint` and `symbol` walk a folder, they skip the
+  `deps/` beside an `agentica.toml` (installed packages are not the tests or
+  modules of the project; a path that names a folder of `deps/` reads it) and
+  `_build/` at any depth, where agentica writes its caches. These two names are
+  exact.
 - A build reads `deps/<name>/` of a declared name and hashes it against the
   lock: one that differs (an edited file, an added `.agc` file, a missing one)
   is `PKG-HASH-MISMATCH` at the import, and nothing else is used instead; a
@@ -588,15 +590,15 @@ import Sqlite from "pkg/sqlite/db"
   file, its path, a zero byte, its size in decimal, a zero byte and its bytes.
   The hash is `sha256:` and the SHA-256 of that stream in hex
   (`OpenSSL.Digest.sha256`).
-  Hidden folders (any depth), `agc_libs/` at the root and files that are not
-  `.agc` (outside `native/`) are left out (`.agc`, `agc_libs` and `native` are
-  compared without regard to case, so `x.AGC` is hashed and `AGC_LIBS/` is left
-  out on every system). The `agentica.toml` of a package is left out too, so it
-  can only choose among the names of the lock, except when `native/` holds a
-  file that is not `.agc` or the manifest has a top-level `[native]` table: it
-  then decides
-  which file is opened, so it is added to the stream with the path
-  `agentica.toml`, and the hash of any other package is unchanged. The first
+  Hidden folders and `_build/` (any depth), `agc_libs/` and `deps/` at the
+  root and files that are not `.agc` (outside `native/`) are left out (`.agc`,
+  `agc_libs`, `_build`, `deps` and `native` are compared without regard to
+  case, so `x.AGC` is hashed and `AGC_LIBS/` is left out on every system). The
+  `agentica.toml` of a package is left out too, so it can only choose among the
+  names of the lock, except when `native/` holds a file that is not `.agc` or
+  the manifest has a top-level `[native]` table: it then decides which file is
+  opened, so it is added to the stream with the path `agentica.toml`, and the
+  hash of any other package is unchanged. The first
   time a build loads a package, it hashes the folder of `deps/` and compares
   the result with the lock (`PKG-HASH-MISMATCH`); a symbolic link named
   `*.agc`, a link named `native` at the root, or any link in `native/`, is

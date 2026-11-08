@@ -213,8 +213,10 @@ import Sqlite from "pkg/sqlite/db"
   package that is not a workspace member, flat. `install` replaces a folder
   whose `.agc` files differ from the lock and leaves every other entry of
   `deps/` alone. The tool writes no `.gitignore` there: commit `deps/` or ignore
-  it. `test` and `symbol` walks skip the `deps/` of a project; `agc_libs/` stays
-  for local libraries.
+  it. `test`, `check`, `fmt` and `symbol` walks skip the `deps/` of a project
+  and `_build/`; `agc_libs/` stays for local libraries.
+- The package hash leaves out hidden folders and `_build/` (any depth) and
+  `agc_libs/` and `deps/` at its root; a package cannot import a file there.
 - A build hashes a package (its `deps/` folder) the first time an import loads
   it; a difference is `PKG-HASH-MISMATCH`, and a symbolic link named `*.agc`,
   `native` or in `native/` is `PKG-SYMLINK`.

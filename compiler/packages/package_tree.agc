@@ -50,7 +50,8 @@ end
 
 ## Chooses the files to copy from the listing. A symbolic link or a gitlink named like a source file or the manifest is
 ## PKG-SYMLINK, two paths that differ only in case are PKG-PATH-COLLISION, and a path that could leave the folder is
-## PKG-FETCH. Hidden folders, `agc_libs/` at the root and files that are not `.agc` are left out, as in the hash.
+## PKG-FETCH. The folders the hash leaves out (PackageHash.skipped_folder?) and files that are not `.agc` are left
+## out, as in the hash.
 export def plan(listing: String) -> Plan
   chosen: List[Blob] = []
   total = 0
