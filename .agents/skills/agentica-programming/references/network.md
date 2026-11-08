@@ -190,7 +190,7 @@ HTTP.whole(data: Bytes) -> Channel[Bytes]
 HTTP.accept_websocket(request: HttpRequest, session: HTTP.WebSocketSession, options: HTTP.WebSocketOptions = HTTP.WebSocketOptions()) -> Result[HTTP.Upgrade]
 HTTP.WebSocket(incoming: Channel[HTTP.Message], outgoing: Channel[HTTP.Message], protocol: String)
 HTTP.Message: Text(String), Binary(Bytes), Ping(Bytes), Pong(Bytes), Close(Int, String)
-HTTP.WebSocketOptions(max_message_bytes: Int = 1048576, idle_ms: Int = 0, ping_ms: Int = 0, close_ms: Int = 5000, protocols: List[String] = [])
+HTTP.WebSocketOptions(max_message_bytes: Int = 1048576, idle_ms: Int = 0, ping_ms: Int = 0, close_ms: Int = 5000, protocols: List[String] = [], outgoing_queue: Int = 8)
 
 HttpRequest(method: String, target: String, path: String, headers: List[Header], body: Bytes,
             remote_addr: String = "")
@@ -376,9 +376,13 @@ end
 ```
 
 - The session `Fn[HTTP.WebSocket, Result[Void]]` runs in the connection's task.
-  `incoming` and `outgoing` hold 8 messages (backpressure), and a session that
-  stops draining `incoming` stops the server reading the socket (no pong, no
-  close answer): keep receiving, or end. `incoming` ends with
+  `incoming` holds 8 messages and `outgoing` holds `outgoing_queue` (8 by
+  default; the server writes what is queued in one write), both with
+  backpressure. A pong waits behind what is queued, and a session that closed
+  its own `outgoing` may get no pongs. A session that stops draining `incoming`
+  stops the server reading the socket (no pong, no close answer): keep
+  receiving, or end. A peer that stopped reading delays the `Close` until the
+  write in progress ends (at most `request_timeout_ms`). `incoming` ends with
   one `Close(code, reason)`, whatever ended the connection (code 1006: no close
   frame came). Receive until `Close`, or until the closed error.
 - Messages are whole (fragments joined, text UTF-8 checked); the server answers

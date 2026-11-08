@@ -393,19 +393,29 @@ Properties of the client that no test checks:
   here: the parser answers 505.
 - An `Upgrade` answer is a `Reply` (served as a whole answer, the connection
   kept) or an `Accept`. An `Accept` writes the 101 head by hand, then runs the
-  session in the connection task with three tasks around it. The reader is the
+  session in the connection task with two tasks around it. The reader is the
   only task that reads the socket: it checks each frame head before it reads the
   payload (masked, no reserved bits, known opcode, control frames whole and at
   most 125 bytes, the length against `max_message_bytes`), joins fragments,
-  checks UTF-8 and close codes, and sends whole messages to `incoming`. The
-  forwarder turns the handler's `outgoing` messages into frames for the writer.
-  The writer is the only task that writes the socket and the one that ends the
-  connection: it finishes when the handshake is done, on a failed write, or
-  `close_ms` after our close frame. Every path ends with one `Close` on
-  `incoming`: the peer's, the code of the failure, or 1006. The pure part (the
-  frame codec, the checks and the accept key) is `std/internal/websocket`; a
-  read timeout closes the socket, so `idle_ms` is the timeout of each read and
-  `ping_ms` is the timeout of the writer's wait.
+  checks UTF-8 and close codes, and sends whole messages to `incoming`; the pong
+  of a ping goes through `outgoing`. The writer is the only task that writes the
+  socket and the one that ends the connection: it reads `outgoing` itself and
+  writes the frames queued at that moment in one write (it stops reading the
+  queue once 64 KiB are reached; a bigger frame goes whole), and it finishes
+  when the handshake is done, on a failed write, or `close_ms` after our close
+  frame. The reader leaves its last word (the answer to the peer's close, a
+  protocol error, the loss of the peer) in a one-slot channel and rouses the
+  writer with a close message in `outgoing` that carries a token random for each
+  connection (a session cannot build it), since a task cannot wait on two
+  channels. That message marks the place in the queue: what follows it is
+  dropped, and the answer to the peer's close goes out after everything that
+  precedes it (unless that ends with a close of the handler, which is then our
+  close). The handler hears the peer's close once the writer finishes the write
+  in progress (a stuck peer: at most `request_timeout_ms`). Every path ends with
+  one `Close` on `incoming`: the peer's, the code of the failure, or 1006. The pure part (the frame codec, the checks and the
+  accept key) is `std/internal/websocket`; a read timeout closes the socket, so
+  `idle_ms` is the timeout of each read and `ping_ms` is the timeout of the
+  writer's wait.
 
 #### 10.7.3 Errors and status codes
 
