@@ -1321,11 +1321,11 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   }
   /* With several schedulers the spawn parks (start_request below), which a callback of native code cannot: the errors
      above still come back as a Result, and the launch is freed before the refusal, before the child exists. The loop
-     is made first, since agc_io_here reads it. agc_task_parking never returns inside a callback. */
+     is made first, since agc_io_here reads it. */
   (void)agc_io_loop(vm);
   if (vm->task->callbacks && !agc_io_here(vm)) {
     free_launch(l);
-    agc_task_parking(vm);
+    agc_task_refuse_wait(vm);
   }
   proc *p = calloc(1, sizeof(proc));
   if (!p) agc_out_of_memory();

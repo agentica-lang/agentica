@@ -73,6 +73,7 @@ tests/test_timeout_guard.py 5 0 0 0
 tests/test_unit_test.py 4 33 0 0
 tests/test_vm_ats.py 1 5 0 0
 tests/test_vm_child_channel.py 2 0 2 0
+tests/test_vm_compile_commands.py 9 0 0 0
 tests/test_vm_crypto.py 4 0 0 0
 tests/test_vm_diff_1.py 14 0 30 0
 tests/test_vm_diff_2.py 16 0 28 0

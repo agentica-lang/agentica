@@ -27,6 +27,7 @@ make vm-tsan / vm-tsan-run           # TSAN=1 build, no libgc: the threaded C te
 make goldens FIXTURES="name ..."     # rewrite tests/fixtures/vm/**/*.expected (all, or only those fixtures; an unknown name exits 2); review the diff
 make vm-golden-check FIXTURES="name ..."  # the CI golden check (3 formats, sweep, sidecars, stack files) for only those fixtures
 make vm-lint CLANG_TIDY=path         # clang-tidy 19+ over vm/*.c and vm/tests/*.c; any warning fails
+make compile-commands                # compile_commands.json (gitignored) with this mode's flags, for clangd and analyzers
 ```
 
 - CI runs `vm-sanitizers` only for the VM paths listed in the `changes` job

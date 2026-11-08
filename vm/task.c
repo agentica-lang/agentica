@@ -138,6 +138,14 @@ static uint32_t running_span(const agc_vm *vm, const agc_task *t) {
   return frame->pc > 0 && frame->pc <= fn->count ? fn->spans[frame->pc - 1] : 0;
 }
 
+/* The refusal of a wait inside a callback of native code, which agc_task_parking makes: C waits for the callback on
+   the scheduler's stack. A caller that has already seen vm->task->callbacks calls it directly, so a reader (and an
+   analyzer) sees that the code after it never runs. */
+_Noreturn void agc_task_refuse_wait(agc_vm *vm) {
+  agc_fail(vm, "RUNTIME-NATIVE-CALLBACK", "a callback of native code cannot wait: C waits for it to return",
+           running_span(vm, vm->task));
+}
+
 /* Starts a wait (§10.2.3): the running task becomes PARKING. It is called BEFORE the wait is registered (before the
    task joins a waiter list, posts a request or starts a job), then the code registers, looks at its condition and
    either parks (agc_task_park) or gives up (agc_task_unpark). From the mark on, a wake finds PARKING and sets WOKEN
@@ -149,9 +157,7 @@ static uint32_t running_span(const agc_vm *vm, const agc_task *t) {
 void agc_task_parking(agc_vm *vm) {
   agc_task *t = vm->task;
   /* Before anything is registered, so the failure leaves no wait behind. */
-  if (t->callbacks)
-    agc_fail(vm, "RUNTIME-NATIVE-CALLBACK", "a callback of native code cannot wait: C waits for it to return",
-             running_span(vm, t));
+  if (t->callbacks) agc_task_refuse_wait(vm);
   if (atomic_load_explicit(&t->state, memory_order_relaxed) == AGC_TASK_RUNNING)
     atomic_store_explicit(&t->state, AGC_TASK_PARKING, memory_order_release);
 }
@@ -161,9 +167,8 @@ void agc_task_check_park(agc_vm *vm, const char *message, uint32_t span) {
   (void)agc_io_loop(vm);
 }
 
-/* In a callback agc_task_parking fails, and never marks the task. */
 void agc_task_check_wait(agc_vm *vm) {
-  if (vm->task->callbacks) agc_task_parking(vm);
+  if (vm->task->callbacks) agc_task_refuse_wait(vm);
   (void)agc_io_loop(vm);
 }
 
