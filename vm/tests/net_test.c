@@ -9,9 +9,11 @@
 #include "test_support.h"
 
 #include <assert.h>
+#include <errno.h>
 #include <setjmp.h>
 #include <stdatomic.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #if defined(__linux__) || defined(__APPLE__)
@@ -20,6 +22,7 @@
 #include <netinet/in.h>
 #include <poll.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 #include <uv.h>
 
@@ -238,11 +241,14 @@ static agc_value pattern(size_t len) {
   return agc_string_value(s);
 }
 
-/* Reads what the peer FD has now, without waiting, and checks it against the pattern from *AT on. */
+/* Reads what the peer FD has now, without waiting (poll, since MSG_DONTWAIT is not POSIX), and checks it against the
+   pattern from *AT on. */
 static void peer_drains(int fd, size_t *at) {
   char buf[65536];
   for (;;) {
-    ssize_t got = recv(fd, buf, sizeof buf, MSG_DONTWAIT);
+    struct pollfd p = {fd, POLLIN, 0};
+    if (poll(&p, 1, 0) <= 0) return;
+    ssize_t got = recv(fd, buf, sizeof buf, 0);
     if (got <= 0) return;
     for (ssize_t k = 0; k < got; k++) assert(buf[k] == (char)('a' + (*at + (size_t)k) % 23));
     *at += (size_t)got;
@@ -292,9 +298,45 @@ static int vm_side(int peer) {
   return -1;
 }
 
-static void set_blocking(int fd) {
+static void set_blocking(int fd, bool blocking) {
   int flags = fcntl(fd, F_GETFL);
-  assert(flags >= 0 && fcntl(fd, F_SETFL, flags & ~O_NONBLOCK) == 0);
+  assert(flags >= 0 && fcntl(fd, F_SETFL, blocking ? flags & ~O_NONBLOCK : flags | O_NONBLOCK) == 0);
+}
+
+/* Fills the send buffer of the non-blocking descriptor FD with 'z' bytes, down to one byte: their count. */
+static size_t fill_send_buffer(int fd) {
+  static char junk[65536];
+  memset(junk, 'z', sizeof junk);
+  size_t sent = 0;
+  for (size_t size = sizeof junk; size;) {
+    ssize_t n = send(fd, junk, size, 0);
+    if (n >= 0) {
+      sent += (size_t)n;
+      continue;
+    }
+    assert(errno == EAGAIN || errno == EWOULDBLOCK);
+    size /= 2;
+  }
+  return sent;
+}
+
+/* The peer FD reads COUNT 'z' bytes and then TAIL, while the loop runs (the I/O thread writes what is left). */
+static void peer_reads_after_junk(int fd, size_t count, const char *tail) {
+  size_t want = count + strlen(tail), have = 0;
+  char *got = malloc(want);
+  assert(got);
+  while (have < want) {
+    struct pollfd p = {fd, POLLIN, 0};
+    if (poll(&p, 1, 0) > 0) {
+      ssize_t n = recv(fd, got + have, want - have, 0);
+      assert(n > 0);
+      have += (size_t)n;
+    }
+    (void)agc_io_poll(&vm, false);
+  }
+  for (size_t k = 0; k < count; k++) assert(got[k] == 'z');
+  assert(memcmp(got + count, tail, strlen(tail)) == 0);
+  free(got);
 }
 
 /* The scheduler's half of the close case: a send larger than the loopback buffers, which blocks in the kernel, beside
@@ -315,14 +357,15 @@ static void send_beside(void *arg) {
    closed (and reused) under the send, and the end of the send closes it. The VM's socket is made blocking so the send
    waits in the kernel until the peer reads; a read with a deadline, parked first, shuts the socket on the I/O thread
    meanwhile, and the descriptor is still open after it. The send still delivers every byte, then the descriptor is
-   closed, the peer reads the end of input, and the socket is closed for the next call. */
+   closed, the peer reads the end of input, and the socket is closed for the next call. The VM is not shared here, so
+   rt->sync is not dropped; the last case runs the locked path. */
 static void test_a_close_waits_for_a_direct_send(void) {
   int fd = open_pair();
   int mine = vm_side(fd);
   size_t len = (size_t)32 << 20, at = 0;
   calling reading = call("TCP.read_line", 2, socket_v, agc_int(300), agc_void(), agc_void());
   assert(start(&reading));
-  set_blocking(mine);
+  set_blocking(mine, true);
   blocked_send = call("TCP.send", 3, socket_v, pattern(len), agc_int(60000), agc_void());
   uv_thread_t sender;
   assert(uv_thread_create(&sender, send_beside, NULL) == 0);
@@ -365,16 +408,20 @@ static void send_first(void *arg) {
 
 /* A send of a second task while the first is inside its direct send waits for the writer lock, which the direct send
    holds although no job does: it posts nothing, so it cannot overtake the rest of the first send, and it goes out
-   when the first send ends, after its last byte. It runs last: it turns every lock on (agc_share) for good, and
-   calls the builtins with rt->sync as the schedulers do. */
+   when the first send ends, after its last byte. Then the same when the kernel takes no byte of the first send: its
+   whole text parks on a job that takes the hold over, and the waiting task is not handed the lock between (it would
+   then send ahead, and two sends would share the socket's one libuv write). It runs last: it turns every lock on
+   (agc_share) for good, and calls the builtins with rt->sync as the schedulers do. */
 static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   int fd = open_pair();
   int mine = vm_side(fd);
   size_t len = (size_t)32 << 20, at = 0;
   static agc_vm other;
   agc_vm_init_context(&other, vm.rt);
-  agc_task *second = agc_new_task(&vm);
-  set_blocking(mine);
+  /* A task for each case: the harness resumes a woken task without its scheduler, which would take its lock timer. */
+  agc_task *second = agc_new_task(&vm), *third = agc_new_task(&vm);
+  agc_resource *writer = agc_as_socket(&vm, socket_v)->writer;
+  set_blocking(mine, true);
   agc_share(&vm);
   locked_call first = {&vm, vm.task, call("TCP.send", 3, socket_v, pattern(len), agc_int(60000), agc_void())};
   uv_thread_t sender;
@@ -383,7 +430,7 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   assert(poll(&p, 1, 60000) == 1);
   locked_call behind = {&other, second, call("TCP.send", 3, socket_v, text("behind\n"), agc_int(60000), agc_void())};
   on_thread(call_locked, &behind);
-  assert(second->lock_wait == agc_as_socket(&vm, socket_v)->writer && second->parked == NULL);
+  assert(second->lock_wait == writer && second->parked == NULL);
   while (at < len) {
     peer_drains(fd, &at);
     (void)agc_io_poll(&vm, false);
@@ -394,6 +441,42 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   on_thread(call_locked, &behind);
   ok_of(behind.c.result);
   peer_reads(fd, "behind\n", 7);
+
+  /* A small send buffer of its own, filled until a pause frees no room: the peer's window is shut too, so no byte
+     leaves it. */
+  int small = 4096;
+  assert(setsockopt(mine, SOL_SOCKET, SO_SNDBUF, &small, sizeof small) == 0);
+  set_blocking(mine, false);
+  size_t junk = 0;
+  for (size_t more = 1; more;) {
+    more = fill_send_buffer(mine);
+    junk += more;
+    wait_ms(100);
+  }
+  set_blocking(mine, true);
+  struct timeval give_up = {1, 0};
+  assert(setsockopt(mine, SOL_SOCKET, SO_SNDTIMEO, &give_up, sizeof give_up) == 0);
+  first.c = call("TCP.send", 3, socket_v, text("first\n"), agc_int(60000), agc_void());
+  assert(uv_thread_create(&sender, send_first, &first) == 0);
+  /* The first send holds the lock: it is inside send(), which gives up after a second. */
+  for (bool held = false; !held;) {
+    agc_sync_take(&other);
+    held = writer->holder == writer;
+    agc_sync_drop(&other);
+  }
+  behind = (locked_call){&other, third, call("TCP.send", 3, socket_v, text("second\n"), agc_int(60000), agc_void())};
+  on_thread(call_locked, &behind);
+  assert(third->lock_wait == writer && third->parked == NULL);
+  assert(uv_thread_join(&sender) == 0);
+  assert(vm.task->parked != NULL && writer->holder == vm.task->parked && writer->next_owner == NULL);
+  set_blocking(mine, false);
+  peer_reads_after_junk(fd, junk, "first\n");
+  wait_woken();
+  ok_of(take(&first.c));
+  while (agc_runq_pop(vm.rt->runq)) {}
+  on_thread(call_locked, &behind);
+  ok_of(behind.c.result);
+  peer_reads(fd, "second\n", 7);
   locked_call closing = {&vm, vm.task, call("TCP.close", 1, socket_v, agc_void(), agc_void(), agc_void())};
   on_thread(call_locked, &closing);
   closing.c = call("TCP.close_listener", 1, listener, agc_void(), agc_void(), agc_void());

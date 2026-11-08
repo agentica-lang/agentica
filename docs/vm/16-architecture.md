@@ -230,8 +230,8 @@ so a task can have two wakers at once.
   job's timer or a cancel. The task sits in no list.
 - **Timer** (`Task.sleep`, a deadline): woken by the owner scheduler in
   `agc_timers_run`. Also ended by a cancel. No list.
-- **Handle lock FIFO:** woken by the scheduler that ends the holder's job
-  (hand-on, push). Also ended by the lock wait's deadline (a task timer, §16.9)
+- **Handle lock FIFO:** woken by the scheduler that ends the holder's job or
+  direct send (hand-on, push). Also ended by the lock wait's deadline (a task timer, §16.9)
   or by a cancel. The list is the handle's FIFO, under `rt->sync`.
 - **`Task.await`:** woken by the scheduler that ends the target task (push).
   Also ended by a cancel of the awaiter. The list is the target's awaiters,
@@ -362,8 +362,8 @@ one exit path are as in §16.1 to §16.6. What differs:
     count of direct calls, since they keep no handle alive. Once the schedulers
     have ended, `agc_io_hand_off(vm, false)` turns the calls still running into
     the loop's own, so the end of the run waits for them on the loop.
-- **Services.** Service code makes its handles through `agc_loop_uv` (§15.1).
-  At N > 1 the steps of the standard streams and of polled files are requests
+- **Services.** Service code makes its handles through `agc_loop_uv` (§15.1). At
+  N > 1 the steps of the standard streams and of polled files are requests
   (`agc_io_call`), and the stdin poller is opened before the schedulers start,
   so stdin is watched from the start of the run, where N = 1 watches it at the
   first read. A wait with a deadline starts in the job's START, before its timer
@@ -375,15 +375,15 @@ one exit path are as in §16.1 to §16.6. What differs:
   its scheduler first, and only what the kernel does not take becomes a request
   (§10.3.1; an atomic state on the connection keeps a close from closing the
   descriptor under that call). A builtin posts its step as the START's `more`
-  step
-  (`agc_io_start_then`) and parks; `finish` fills the request on the I/O thread,
-  and the `done` half reads only the request and then posts its `drop`. A
-  socket's `cancel` and `pause` touch only the request and the connection, never
-  a resource or a task. The builtins post under `rt->sync`, so their steps reach
-  the inbox in the order of the calls. At N = 1 the steps run inline, and a read
-  of buffered bytes or a send that goes out at once returns without a park
-  (`agc_io_here`). The HTTP server keeps its state on the I/O thread the same
-  way (§10.7.2). `agc_io_uv` and `agc_poller_open` abort off the I/O thread.
+  step (`agc_io_start_then`) and parks; `finish` fills the request on the I/O
+  thread, and the `done` half reads only the request and then posts its `drop`.
+  A socket's `cancel` and `pause` touch only the request and the connection,
+  never a resource or a task. The builtins post under `rt->sync`, so their steps
+  reach the inbox in the order of the calls. At N = 1 the steps run inline, and
+  a read of buffered bytes or a send that goes out at once returns without a
+  park (`agc_io_here`). The HTTP server keeps its state on the I/O thread the
+  same way (§10.7.2). `agc_io_uv` and `agc_poller_open` abort off the I/O
+  thread.
 - **An outcome and a count, not flags.** The rules are in §16.5, rules 2 to 4.
   The outcome (PENDING, DONE, EXPIRED or CANCELLED) is set by CAS
   (`agc_job_settle`). A pool or loop completion sets DONE, the timer EXPIRED, a
@@ -599,8 +599,7 @@ one exit path are as in §16.1 to §16.6. What differs:
     the lock: the profiling counters. A socket or a child needs no lock, since
     the I/O thread owns it (a direct send of a plain socket syncs with it by an
     atomic state of its own, §10.3.1). The owner of a stream's lock is the
-    calling thread's
-    context, not the stream's own `vm`.
+    calling thread's context, not the stream's own `vm`.
 - **GC threads.** Boehm's thread support, the helpers in `vm/value.c` and who
   registers are in §10.2.3, GC.
 - **The exit path runs on the I/O thread** (`agc_launch_end`, `vm/launch.c`).

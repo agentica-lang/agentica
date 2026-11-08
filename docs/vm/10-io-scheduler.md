@@ -283,20 +283,20 @@ section says how the scheduler and the loop keep them.
   as a second one. The handler has no `SA_RESTART`, so a blocking fallback write
   that nobody reads returns `EINTR` and is not retried; a stream on the loop has
   no blocked write. A CPU-bound task delays the stop by at most one turn.
-- **Per-handle lock.** A `FileHandle` has a `holder` (the job in flight), a
-  `next_owner` task, and a FIFO of waiting tasks, all in GC memory. Every handle
-  builtin checks its arguments and timeout first, then takes the lock, and only
-  then checks that the handle is open and has the right mode. A task that cannot
-  take the lock parks with retry on a timer at its deadline, which covers both
-  the lock wait and the operation. Release is a FIFO hand-off: the head waiter
-  becomes `next_owner` and is the only one woken, so the releasing task cannot
-  take the handle back in the same turn, and a cancelled `next_owner` passes
-  ownership on. So `close` waits for the operation in flight, two readers take
-  turns, and buffered writes keep their order. On an operation timeout the stuck
-  operation keeps the state, the handle is closed, and the next owner gets `file
-  handle is closed`. A closing handle that a job still holds makes callers wait
-  for the lock as for any other handle; once no job holds it, they get the
-  closed error.
+- **Per-handle lock.** A `FileHandle` has a `holder` (the job in flight, or a
+  socket's direct send, §10.3.1), a `next_owner` task, and a FIFO of waiting
+  tasks, all in GC memory. Every handle builtin checks its arguments and timeout
+  first, then takes the lock, and only then checks that the handle is open and
+  has the right mode. A task that cannot take the lock parks with retry on a
+  timer at its deadline, which covers both the lock wait and the operation.
+  Release is a FIFO hand-off: the head waiter becomes `next_owner` and is the
+  only one woken, so the releasing task cannot take the handle back in the same
+  turn, and a cancelled `next_owner` passes ownership on. So `close` waits for
+  the operation in flight, two readers take turns, and buffered writes keep
+  their order. On an operation timeout the stuck operation keeps the state, the
+  handle is closed, and the next owner gets `file handle is closed`. A closing
+  handle that a job still holds makes callers wait for the lock as for any other
+  handle; once no job holds it, they get the closed error.
 - **Channel waits (17b, `vm/channel.c`).** A channel is a GC object: a ring
   buffer, the capacity, a closed flag, and two FIFOs of waiting receivers and
   senders linked through `wait_next`. The ring starts with at most 8 slots and

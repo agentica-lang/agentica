@@ -35,9 +35,9 @@ typedef enum { REQ_CONNECT, REQ_LISTEN, REQ_ACCEPT, REQ_LINE, REQ_BYTES, REQ_IDL
 /* Why TLS.upgrade did not start, in its TLS net's `error` (libuv errors are negative). */
 enum { UPGRADE_CLOSED = 0, UPGRADE_UNREAD = 1, UPGRADE_ENDED = 2, UPGRADE_SENDING = 3 };
 
-/* The bits of a net's `wstate` (direct_send): a scheduler sends on it now, it is shut, and its close waits for that
-   send. */
-enum { W_DIRECT = 1u, W_SHUT = 2u, W_DEFERRED = 4u };
+/* The bits of a net's `wstate` (direct_send): a scheduler sends on it now, it is shut, its close waits for that send,
+   and a direct send went out in part and its rest has not started on the I/O thread (begin_send clears it). */
+enum { W_DIRECT = 1u, W_SHUT = 2u, W_DEFERRED = 4u, W_PARTIAL = 8u };
 
 typedef agc_conn net;
 typedef struct tcp_link tcp_link;
@@ -1525,10 +1525,12 @@ static net *live(const agc_socket *sk) {
    nobody took would be the start of the TLS stream (STARTTLS forbids them), and a send still in flight writes from
    the plain net's own request or, for a direct send, from a scheduler. That send started before the upgrade took the
    socket's resource, and no direct send starts after it (direct_send needs the resource), so a clear W_DIRECT stays
-   clear. A half-closed socket (HttpWire.close_write) has no write side left. I/O thread only. */
+   clear; W_PARTIAL keeps a message that went out in part, whose rest found the resource gone, from being followed by
+   a handshake. A half-closed socket (HttpWire.close_write) has no write side left. I/O thread only. */
 static int upgrade_refusal(const net *old) {
   if (!old || old->closed || !old->conn || old->half_closed) return UPGRADE_CLOSED;
-  if (old->writer || old->write_data || (atomic_load_explicit(&old->wstate, memory_order_acquire) & W_DIRECT))
+  if (old->writer || old->write_data ||
+      (atomic_load_explicit(&old->wstate, memory_order_acquire) & (W_DIRECT | W_PARTIAL)))
     return UPGRADE_SENDING;
   if (agc_inbuf_pending(&old->in)) return UPGRADE_UNREAD;
   if (old->in.eof || old->in.error) return UPGRADE_ENDED;
@@ -1860,6 +1862,8 @@ static bool begin_send(void *data, agc_io_job *job) {
   request *q = data;
   net *n = q->n;
   link_request(q, job);
+  /* The rest of a direct send has its writer slot now (upgrade_refusal). */
+  (void)atomic_fetch_and_explicit(&n->wstate, ~(unsigned)W_PARTIAL, memory_order_acq_rel);
   bool out = !n->closed && q->sends && send_now(n, q->data, q->len) != 1;
   /* send_now keeps its own copy of what it could not write (tls_queue, agc_stream_write). */
   free(q->data);
@@ -1875,9 +1879,13 @@ static bool direct_begin(net *n) {
                                                  memory_order_relaxed);
 }
 
-/* The end of a direct send, its last access to the net: a close that came meanwhile gets its links closed. */
-static void direct_end(net *n) {
-  unsigned s = atomic_fetch_and_explicit(&n->wstate, ~(unsigned)W_DIRECT, memory_order_acq_rel);
+/* The end of a direct send, its last access to the net: a send that went out in part says so (W_PARTIAL), and a close
+   that came meanwhile gets its links closed. */
+static void direct_end(net *n, bool partial) {
+  unsigned s = atomic_load_explicit(&n->wstate, memory_order_relaxed), next;
+  do {
+    next = (s & ~(unsigned)W_DIRECT) | (partial ? (unsigned)W_PARTIAL : 0u);
+  } while (!atomic_compare_exchange_weak_explicit(&n->wstate, &s, next, memory_order_acq_rel, memory_order_relaxed));
   if (s & W_DEFERRED) agc_loop_call(n->io, direct_over, n);
 }
 
@@ -1887,26 +1895,25 @@ static void direct_end(net *n) {
    thread as before. rt->sync is dropped across the system call (a profile of a busy server lost half its throughput
    holding it there); the claim, taken while rt->sync and the resource hold the net, keeps the descriptor open. TLS
    stays on the I/O thread, which owns the session that its reads and handshake also use.
-   The writer lock is free for others while no job holds it, so the send holds it (agc_handle_hold) until the caller
-   lets it go or parks the rest, whose job takes the hold over: a send of another task waits for it rather than
-   overtake the rest of this one.
-   The bytes the kernel took (0 when the send is the I/O thread's), or a negative libuv error. When it returns more
-   than 0, or the error, the caller holds the writer lock; *NP is looked up again, and is NULL when the socket was
-   closed meanwhile. */
-static int64_t direct_send(agc_vm *vm, agc_socket *sk, net **np, const uint8_t *data, size_t len) {
+   The writer lock is free for others while no job holds it, so a send that claimed the socket holds it
+   (agc_handle_hold, *HOLDING set) until the caller lets it go or parks the rest, whose job takes the hold over: a send
+   of another task waits for it rather than overtake the rest of this one, also when the kernel took nothing.
+   The bytes the kernel took (0 when it took none, or when the send is the I/O thread's), or a negative libuv error.
+   *NP is looked up again once rt->sync was dropped, and is NULL when the socket was closed meanwhile. */
+static int64_t direct_send(agc_vm *vm, agc_socket *sk, net **np, const uint8_t *data, size_t len, bool *holding) {
   net *n = *np;
+  *holding = false;
   /* A native callback may not park (agc_task_check_wait), and the rest of a send would park holding the lock. */
   if (!n->direct || n->secure || !len || vm->sync_depth > 1 || vm->task->callbacks || !direct_begin(n)) return 0;
   agc_handle_hold(vm, sk->writer);
+  *holding = true;
   bool held = vm->sync_depth == 1;
   if (held) agc_sync_drop(vm);
   int64_t sent = agc_net_send(n->sock, data, len);
-  direct_end(n);
+  direct_end(n, sent > 0 && (size_t)sent < len);
   if (held) agc_sync_take(vm);
   *np = live(sk);
-  if (sent == UV_EAGAIN) sent = 0;
-  if (!sent) agc_handle_let_go(vm, sk->writer);
-  return sent;
+  return sent == UV_EAGAIN ? 0 : sent;
 }
 
 /* A send of len bytes at data, which args[1] (the text or the bytes) keeps alive. */
@@ -1924,19 +1931,17 @@ static agc_value write_op(agc_vm *vm, const agc_value *args, const uint8_t *data
     if (rc < 0) return agc_system_error(vm, write_failed, agc_net_errno(rc));
     if (rc == 0) return ok_value(agc_void());
   } else {
-    int64_t sent = direct_send(vm, sk, &n, data, len);
-    if (sent) {
-      /* The writer lock is held: a whole send, an error or a close ends here; else the job of the rest takes it. */
-      if (sent < 0 || (size_t)sent == len || !n) {
-        agc_handle_let_go(vm, sk->writer);
-        if (sent < 0) return agc_system_error(vm, write_failed, agc_net_errno((int)sent));
-        return (size_t)sent == len ? ok_value(agc_void()) : agc_error_value(socket_closed);
-      }
-      data += sent;
-      len -= (size_t)sent;
-    } else if (!n) {
-      return agc_error_value(socket_closed);
+    bool holding;
+    int64_t sent = direct_send(vm, sk, &n, data, len, &holding);
+    /* A held writer lock is let go only where the send ends here (whole, failed or closed); else the job of the rest
+       takes it over in park, with no hand-on between. */
+    if (sent < 0 || (sent && (size_t)sent == len) || !n) {
+      if (holding) agc_handle_let_go(vm, sk->writer);
+      if (sent < 0) return agc_system_error(vm, write_failed, agc_net_errno((int)sent));
+      return sent && (size_t)sent == len ? ok_value(agc_void()) : agc_error_value(socket_closed);
     }
+    data += sent;
+    len -= (size_t)sent;
   }
   request *q = new_request(vm, n, REQ_SEND);
   q->count = (size_t)agc_value_units(args[1]);

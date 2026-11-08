@@ -300,6 +300,13 @@ it; a dropped result frees what it made, and the end of the run frees what a
 finished call made for a task that never took it, before the registry.
 There are no GC finalizers.
 
+A plain TCP socket at N > 1 has a second send path: the scheduler calls `send()`
+itself, with `rt->sync` dropped and the writer lock held without a job
+(`agc_handle_hold`), and only the rest goes to the I/O thread as a job that
+takes the hold over. A close during that call does not close the descriptor:
+the scheduler's claim (`wstate` in `vm/tcp.c`) defers it, and the scheduler
+posts the close (`direct_over`) when the call returns.
+
 A channel is the one handle made unowned. `Channel.new` makes no registry entry.
 The first `Task.spawn_owning` of it (any task may do it) registers an entry with
 no native object, whose close is the channel's own close (`vm/channel.c`), and

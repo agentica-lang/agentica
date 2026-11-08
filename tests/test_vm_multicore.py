@@ -2082,7 +2082,15 @@ def padding(task, seq):
 
 
 def read_ordered_lines(port, tasks, count, problems):
-    """A slow reader with a small receive window: it checks that each task's lines come whole, once and in order."""
+    """A slow reader with a small receive window: it checks that each task's lines come whole, once and in order. A
+    failure of the peer itself (a timeout) is a problem too, so the test names it."""
+    try:
+        read_lines_in_order(port, tasks, count, problems)
+    except Exception as failure:
+        problems.append(repr(failure))
+
+
+def read_lines_in_order(port, tasks, count, problems):
     with socket.socket() as peer:
         peer.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 4096)
         peer.settimeout(60)
