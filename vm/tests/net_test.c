@@ -448,10 +448,12 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
 
 #ifdef __linux__
   /* A small send buffer of its own, filled until a pause frees no room: the peer's window is shut too, so no byte
-     leaves it. */
+     leaves it. The peer's receive buffer is set as well, which stops Linux from growing it and opening the window
+     while the send waits. */
   agc_task *third = agc_new_task(&vm);
   int small = 4096;
   assert(setsockopt(mine, SOL_SOCKET, SO_SNDBUF, &small, sizeof small) == 0);
+  assert(setsockopt(fd, SOL_SOCKET, SO_RCVBUF, &small, sizeof small) == 0);
   set_blocking(mine, false);
   size_t junk = 0;
   for (size_t more = 1; more;) {
