@@ -8,5 +8,5 @@ def main() -> Void
   cwd = Result.unwrap!(Path.cwd())
   IO.inspect(cwd.ends_with?("/"))
   IO.inspect(Result.unwrap!(Path.resolve(".")) == cwd)
-  IO.inspect(Result.unwrap!(Path.resolve("x/../y")) == cwd + "y")
+  IO.inspect(Result.unwrap!(Path.resolve("x/../y")) == cwd + "/y")
 end
