@@ -14085,6 +14085,21 @@
     },
     {
       "program": [
+        "struct Digest",
+        "  n: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(Digest.sha256_hexdigest(\"a\".bytes))",
+        "end"
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [6, 8],
+      "covers": "Digest.sha256_hexdigest(\"a\".bytes)",
+      "help": false
+    },
+    {
+      "program": [
         "struct OpenSSL",
         "  name: String",
         "end",
