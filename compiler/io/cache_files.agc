@@ -130,7 +130,8 @@ export def own_user() -> Result[Int]
 end
 
 # A folder that exists must pass private_kind; one that does not is made with `Dir.mkdir_private`, one level only (the
-# folders above it are made with the default mode when they are missing). True when it was made now.
+# folders above it are made with the default mode when they are missing). True when it was made now. A folder that
+# another run made between the check and the mkdir is one that exists.
 export def private_folder(path: String, user: Int) -> Result[Bool]
   if File.lstat(path, IO_TIMEOUT_MS).ok?
     try private_kind(path, "directory", user)
@@ -142,7 +143,16 @@ export def private_folder(path: String, user: Int) -> Result[Bool]
     _ = Dir.mkdir(above, IO_TIMEOUT_MS)
   end
 
-  try Dir.mkdir_private(path, IO_TIMEOUT_MS)
+  made = Dir.mkdir_private(path, IO_TIMEOUT_MS)
+  if !made.ok?
+    if !File.lstat(path, IO_TIMEOUT_MS).ok?
+      return error(made.message)
+    end
+
+    try private_kind(path, "directory", user)
+    return ok(false)
+  end
+
   return ok(true)
 end
 
