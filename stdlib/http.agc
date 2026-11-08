@@ -80,8 +80,6 @@ HEX_DIGITS = "0123456789abcdef"
 WS_QUEUE = 8
 # The most bytes of queued frames the writer joins into one write. A frame that crosses it still goes whole.
 WS_BATCH_BYTES = 65536
-# The reason of the close message that rouses the writer (see `tell_writer`).
-WS_WAKE = "wake"
 # The most messages `outgoing` may hold: the most a channel holds.
 WS_MAX_QUEUE = 1048576
 WS_WAIT_MS = 86400000
@@ -177,14 +175,15 @@ struct Feeding
   rest: Channel[Bytes]
 end
 
-# What the tasks of a WebSocket share: the socket, the channels (`incoming` and `outgoing` are the handler's; the
-# reader leaves its last word for the writer in `control`, which holds one item), the options, the wait of a write and
-# the bytes read past the handshake.
+# What the tasks of a WebSocket share: the socket, the channels (`incoming` and `outgoing` are the handler's), the last
+# word of the reader (`control` holds one item, and `wake` rouses the writer), the options, the wait of a write and the
+# bytes read past the handshake.
 struct Wire
   socket: Socket
   incoming: Channel[Message]
   outgoing: Channel[Message]
   control: Channel[Control]
+  wake: Message
   options: WebSocketOptions
   write_ms: Int
   rest: Bytes
@@ -198,11 +197,12 @@ enum Control
   Gone
 end
 
-# What the writer joins from `outgoing` for one write: the frames in order (empty when it took nothing to write) and
-# whether the last one is our close frame.
+# What the writer joins from `outgoing` for one write: the frames in order (empty when it took nothing to write),
+# whether the last one is our close frame, and whether the gather met the wake of the reader.
 struct Batch
   data: Bytes
   closes: Bool
+  woken: Bool
 end
 
 # What reading one frame gave: the frame (its head, its unmasked payload and the bytes read past it), a problem with
@@ -2541,6 +2541,7 @@ def run_session(
     incoming: incoming,
     outgoing: outgoing,
     control: control,
+    wake: Message.Close(-1, "wake #{Random.int(1, 1000000000)} #{Random.int(1, 1000000000)}"),
     options: limits,
     write_ms: write_ms,
     rest: rest,
@@ -2638,11 +2639,12 @@ end
 # instead: the connection still ends by the peer. The peer's close is answered after what the handler queued before it.
 def write_frames(wire: Wire) -> Void
   closing = false
+  woken = false
   deadline = 0
   drained = false
   while true
     if not wire.control.empty?
-      end_by_control(wire, closing)
+      end_by_control(wire, closing, woken)
       return
     end
 
@@ -2654,7 +2656,7 @@ def write_frames(wire: Wire) -> Void
     if drained
       case wire.control.recv(writer_wait(wire.options, closing, deadline))
         ok(item) ->
-          obey(wire, item, closing)
+          obey(wire, item, closing, woken)
           return
         error(_) ->
           if not keep_waiting(wire, closing)
@@ -2672,6 +2674,7 @@ def write_frames(wire: Wire) -> Void
               return
             end
 
+            woken = woken or batch.woken
             if batch.closes
               closing = true
               deadline = Time.monotonic_ms() + wire.options.close_ms
@@ -2698,11 +2701,14 @@ def gather(wire: Wire, first: Message, flushing: Bool) -> Batch
   frames: List[Bytes] = []
   size = 0
   closes = false
+  woken = false
   message = first
   more = true
   while more
     more = false
-    if not wake?(message)
+    if wake?(wire, message)
+      woken = true
+    else
       frame = frame_of(message)
       frames = List.append(frames, frame)
       size = size + frame.size
@@ -2719,21 +2725,25 @@ def gather(wire: Wire, first: Message, flushing: Bool) -> Batch
   end
 
   if frames.empty?
-    return Batch(data: NO_BYTES, closes: false)
+    return Batch(data: NO_BYTES, closes: false, woken: woken)
   end
 
   if frames.size == 1
-    return Batch(data: frames[0], closes: closes)
+    return Batch(data: frames[0], closes: closes, woken: woken)
   end
 
-  return Batch(data: Bytes.concat(frames), closes: closes)
+  return Batch(data: Bytes.concat(frames), closes: closes, woken: woken)
 end
 
-# Whether a message is the wake of `tell_writer`: a close with code 0 and the reason `WS_WAKE`. It cannot depend on
-# `control`, which the writer may have emptied already. A session that sends exactly that is not sent.
-def wake?(message: Message) -> Bool
+# Whether a message is the wake that `tell_writer` queued (`wire.wake`, a close nobody else can build: its reason is
+# random for each connection). It is never written.
+def wake?(wire: Wire, message: Message) -> Bool
   case message
-    Message.Close(code, reason) -> return code == 0 and reason == WS_WAKE
+    Message.Close(code, reason) ->
+      case wire.wake
+        Message.Close(_, token) -> return code == -1 and reason == token
+        _ -> return false
+      end
     _ -> return false
   end
 end
@@ -2780,20 +2790,21 @@ def quiet_wait(options: WebSocketOptions) -> Int
   return WS_WAIT_MS
 end
 
-# The item that waits in `control` ends the connection.
-def end_by_control(wire: Wire, closing: Bool) -> Void
+# The item that waits in `control` ends the connection. `woken`: the writer already read the wake, so everything
+# queued before it was written.
+def end_by_control(wire: Wire, closing: Bool, woken: Bool) -> Void
   case wire.control.recv(0)
-    ok(item) -> obey(wire, item, closing)
+    ok(item) -> obey(wire, item, closing, woken)
     error(_) -> end_websocket(wire, false)
   end
 end
 
 # Ends the connection as the reader says. The close frame of an `Echo` or a `Fail` goes out unless ours already did.
-def obey(wire: Wire, item: Control, closing: Bool) -> Void
+def obey(wire: Wire, item: Control, closing: Bool, woken: Bool) -> Void
   case item
     Control.Echo(frame) ->
-      if closing
-        end_with(wire, frame, true)
+      if closing or woken
+        end_with(wire, frame, closing)
         return
       end
 
@@ -2806,16 +2817,27 @@ def obey(wire: Wire, item: Control, closing: Bool) -> Void
   end
 end
 
-# Writes what the handler queued before the peer's close arrived (one batch at most), so the answer comes after it.
-# True when that batch ended with a close frame of the handler: it is our close, and the answer is not sent.
+# Writes what the handler queued before the peer's close arrived, so the answer comes after it: everything up to the
+# wake, in batches. True when a batch ended with a close frame of the handler: it is our close, and the answer is not
+# sent. What the handler queued after the wake (an answer to the peer's close, say) is not written.
 def flush_queued(wire: Wire) -> Result[Bool]
-  case wire.outgoing.recv(0)
-    ok(first) ->
-      batch = gather(wire, first, true)
-      try write_batch(wire, batch)
-      return ok(batch.closes)
-    error(_) -> return ok(false)
+  while true
+    case wire.outgoing.recv(0)
+      ok(first) ->
+        batch = gather(wire, first, true)
+        try write_batch(wire, batch)
+        if batch.closes
+          return ok(true)
+        end
+
+        if batch.woken
+          return ok(false)
+        end
+      error(_) -> return ok(false)
+    end
   end
+
+  return ok(false)
 end
 
 # Sends the close frame of the reader unless ours is out already (`closing`), then ends the connection, lingering so
@@ -2940,12 +2962,13 @@ def last_word(wire: Wire, code: Int, reason: String) -> Void
   offer(wire.incoming, Message.Close(code, reason), wire.options.close_ms)
 end
 
-# The last word of the reader. The item goes first, so a writer that wakes finds it. The wake is a close message with
-# code 0 and the reason `WS_WAKE` that the writer never writes. It waits for room (at most `close_ms`), since the
-# writer stops at the wake and so drops what is queued behind it.
+# The last word of the reader. The item goes first, so a writer that wakes finds it. The wake (`wire.wake`) goes in
+# `outgoing` behind what the handler queued, and the writer stops at it: the messages before it go out ahead of the
+# answer, the ones after it are dropped. So it waits for room as long as the connection lives; it is the writer that
+# makes room, or closes `outgoing` when the connection ends.
 def tell_writer(wire: Wire, item: Control) -> Void
   offer(wire.control, item, 0)
-  offer(wire.outgoing, Message.Close(0, WS_WAKE), wire.options.close_ms)
+  _ = send_when_room(wire.outgoing, wire.wake)
 end
 
 # One frame: the head, its tail, then the payload unmasked. A frame that breaks a rule is `Bad` before its payload is

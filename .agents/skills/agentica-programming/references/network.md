@@ -379,7 +379,7 @@ end
   `incoming` holds 8 messages and `outgoing` holds `outgoing_queue` (8 by
   default; the server writes what is queued in one write), both with
   backpressure. A pong waits behind what is queued, and a session that closed
-  its own `outgoing` gets no pongs. A session that stops draining `incoming`
+  its own `outgoing` may get no pongs. A session that stops draining `incoming`
   stops the server reading the socket (no pong, no close answer): keep
   receiving, or end. `incoming` ends with
   one `Close(code, reason)`, whatever ended the connection (code 1006: no close
