@@ -28,7 +28,9 @@ typedef struct {
 
 enum {
   AGC_FS_READ = 0, AGC_FS_WRITE = 1, AGC_FS_CREATE = 2, AGC_FS_EXCLUSIVE = 4,
-  AGC_FS_APPEND = 8, AGC_FS_TRUNCATE = 16, AGC_FS_PRIVATE = 32
+  AGC_FS_APPEND = 8, AGC_FS_TRUNCATE = 16, AGC_FS_PRIVATE = 32,
+  /* With APPEND: the handle may be locked (File.try_lock). Windows then adds read access, which LockFileEx needs. */
+  AGC_FS_LOCKABLE = 64
 };
 
 int agc_fs_open(const char *path, unsigned flags);

@@ -638,7 +638,9 @@ static int open_for(op *o, bool reading, bool append) {
     fail_op(o, FS_IS_DIR, 0);
     return -1;
   }
-  int fd = agc_fs_open(o->path, AGC_FS_WRITE | AGC_FS_CREATE | (append ? AGC_FS_APPEND : AGC_FS_TRUNCATE));
+  /* Only File.open returns a handle that File.try_lock can take; File.append_text never needs the lockable open. */
+  unsigned lockable = o->kind == OP_OPEN_APPEND ? AGC_FS_LOCKABLE : 0;
+  int fd = agc_fs_open(o->path, AGC_FS_WRITE | AGC_FS_CREATE | (append ? AGC_FS_APPEND | lockable : AGC_FS_TRUNCATE));
   if (fd < 0) fail_op(o, errno == EISDIR ? FS_IS_DIR : FS_OPEN, errno);
   return checked(o, fd);
 }
