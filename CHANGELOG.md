@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `agentica.toml` accepts a `[tool.NAME]` table for other tools; Agentica reads
+  nothing inside it.
+
 ## [0.26.1] - 2026-11-07
 
 ### Added
