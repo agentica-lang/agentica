@@ -2,13 +2,12 @@
 
 import json
 import os
-import shutil
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
-from tests.agentica_test import ROOT
+from tests.agentica_test import ROOT, tool
 
 pytestmark = pytest.mark.skipif(os.name != "posix", reason="the build of the host runs make with a POSIX shell")
 
@@ -23,14 +22,13 @@ def syntax_check(clang, entry):
 
 
 def test_every_vm_file_compiles_from_the_database(tmp_path):
-    clang = shutil.which("clang")
-    if not clang:
-        pytest.skip("clang is not installed")
+    clang = tool("clang")
     out = tmp_path / "compile_commands.json"
-    subprocess.run(
+    made = subprocess.run(
         ["make", "--no-print-directory", "-s", "compile-commands", f"COMPILE_COMMANDS={out}"],
-        cwd=ROOT, check=True, stdin=subprocess.DEVNULL, capture_output=True,
+        cwd=ROOT, check=False, stdin=subprocess.DEVNULL, capture_output=True, text=True,
     )
+    assert made.returncode == 0, made.stderr
     entries = json.loads(out.read_text())
 
     # Every C file of vm/ but the libFuzzer driver, which only the LIBFUZZ=1 mode compiles.

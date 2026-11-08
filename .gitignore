@@ -11,4 +11,4 @@ site/resources/
 site/highlight/node_modules/
 .hugo_build.lock
 examples/ffi/native/
-compile_commands.json
+/compile_commands.json

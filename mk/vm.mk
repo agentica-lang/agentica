@@ -370,7 +370,7 @@ CC_DB_SRC := $(VM_SRC) vm/agentica.c vm/launch.c vm/fuzz.c $(wildcard vm/tests/*
 compile-commands: $(FFI_HEADERS) | $(OSSL_DEP) $(GC_DEP) $(ZLIB_DEP) $(YY_DIR)/src/yyjson.c $(PICO_DIR)/picohttpparser.c $(UV_DIR)/src/uv-common.c
 	@sh vm/tools/compile-commands.sh '$(CURDIR)' $(VM_OBJ) '$(CC_DB_SRC)' '$(VM_TEST_FLAGS)' $(VM_CC) $(VM_CFLAGS) \
 	  > '$(COMPILE_COMMANDS).new' || { rm -f '$(COMPILE_COMMANDS).new'; exit 1; }
-	mv '$(COMPILE_COMMANDS).new' '$(COMPILE_COMMANDS)'
+	@mv '$(COMPILE_COMMANDS).new' '$(COMPILE_COMMANDS)'
 
 $(VM_TP_STAMP): FORCE
 	@mkdir -p $(VM_BUILD)
