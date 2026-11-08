@@ -217,7 +217,6 @@ export def libs_folder?(name: String) -> Bool
   return fold(name) == LIBS_FOLDER
 end
 
-
 ## The name without its case, for comparing it with a fixed name. Upper then lower case, so that a letter that has no
 ## lowercase form of its own (such as the long s, which a case-insensitive file system folds to S) is folded too.
 export def fold(name: String) -> String
