@@ -1,8 +1,7 @@
 /*
- * The global run queue (docs/vm/16-architecture.md §16.3): FIFO order and removal, solo and shared by many threads
- * (every task comes out once); the blocking pop of an idle scheduler (a waiter gets the push before or after it waits,
- * agc_runq_end wakes every waiter); the spin of an idle scheduler (a push that a spinner takes sends no condvar
- * signal, and no push is lost when a spinner stops); and the push of a task whose turn ended.
+ * The global run queue (docs/vm/16-architecture.md §16.3): FIFO order and removal, solo and shared; the blocking pop
+ * (a push before or after the wait, the end wakes every waiter); the spin (a push a spinner takes sends no signal, none
+ * is lost when it stops); the push of a task whose turn ended; and the on-idle wake, sent without the queue's lock.
  */
 #include "../core.h"
 #include "test_support.h"
@@ -356,6 +355,62 @@ static void test_burst_wakes_every_waiter(uint32_t waiters, int rounds) {
   }
 }
 
+static agc_vm idled;
+static agc_task *idle_push;
+static uv_thread_t idle_prober;
+static _Atomic bool idle_quiet, idle_probed, idle_hook_ran, idle_hook_late;
+
+/* The probe of the I/O thread, started by the hook: the stall check's look at the queue, then a push. Both take the
+   queue's lock, so they finish while the hook runs only if the hook runs without that lock. */
+static void probe_idle(void *arg) {
+  (void)arg;
+  assert(agc_gc_thread_enter());
+  uint64_t epoch;
+  atomic_store(&idle_quiet, agc_runq_quiet(idled.rt->runq, &epoch));
+  agc_runq_push(idled.rt->runq, idle_push);
+  atomic_store(&idle_probed, true);
+  agc_gc_thread_leave();
+}
+
+/* The on-idle hook (the I/O thread's wake in a run): waits up to 5 s for the probe. */
+static void idle_hook(void *data) {
+  (void)data;
+  atomic_store(&idle_hook_ran, true);
+  assert(uv_thread_create(&idle_prober, probe_idle, NULL) == 0);
+  uint64_t due = agc_clock_ms() + 5000;
+  while (!atomic_load(&idle_probed)) {
+    if (agc_clock_ms() >= due) {
+      atomic_store(&idle_hook_late, true);
+      return;
+    }
+    uv_sleep(1);
+  }
+}
+
+/* The last scheduler to go idle wakes the I/O thread after it drops the queue's lock (#1216), so the stall check it
+   wakes can take the lock at once and sees every scheduler waiting. A push in that gap signals no waiter (none waits
+   yet), and the wait still takes it: it tests the queue again under the lock. TIMED uses agc_runq_wait_until, whose
+   wait would otherwise sleep until its deadline. A hook run under the lock makes the probe wait out the 5 s and fail. */
+static void test_idle_wake_without_lock(bool timed) {
+  agc_vm_init(&idled, NULL, stdout, stderr, INT64_MAX);
+  agc_runq *q = idled.rt->runq;
+  agc_runq_share(q);
+  agc_runq_add_scheduler(q);
+  agc_runq_on_idle(q, idle_hook, NULL);
+  idle_push = agc_new_task(&idled);
+  atomic_store(&idle_quiet, false);
+  atomic_store(&idle_probed, false);
+  atomic_store(&idle_hook_ran, false);
+  atomic_store(&idle_hook_late, false);
+  uint64_t due = agc_clock_ms() + 60000;
+  agc_task *t = timed ? agc_runq_wait_until(q, due) : agc_runq_wait(q);
+  assert(uv_thread_join(&idle_prober) == 0);
+  assert(atomic_load(&idle_hook_ran) && !atomic_load(&idle_hook_late) && atomic_load(&idle_quiet));
+  assert(t == idle_push && agc_clock_ms() < due);
+  uint64_t epoch;
+  assert(agc_runq_stats(q).idle == 0 && !agc_runq_quiet(q, &epoch) && agc_runq_pop(q) == NULL);
+}
+
 int main(void) {
   agc_test_deadline(300);
   agc_init();
@@ -373,6 +428,8 @@ int main(void) {
   test_push_own();
   test_burst_wakes_every_waiter(2, 300);
   test_burst_wakes_every_waiter(3, 300);
+  test_idle_wake_without_lock(false);
+  test_idle_wake_without_lock(true);
   puts("run queue tests passed");
   return 0;
 }
