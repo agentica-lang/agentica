@@ -144,7 +144,8 @@ class Client:
         return struct.unpack(">H", payload[:2])[0], payload[2:].decode()
 
     def ended(self):
-        """True when the server closed the connection (a reset counts)."""
+        """True when the server closed the connection (a reset counts) and nothing read is left unparsed."""
+        assert not self.buffer, "bytes came after the last frame read"
         try:
             return self.sock.recv(1) == b""
         except (ConnectionError, ssl.SSLError):
