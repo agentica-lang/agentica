@@ -515,6 +515,7 @@ typedef struct {
 } agc_gc_info;
 
 void agc_init(void);
+bool agc_gc_heap_parse(const char *text, size_t *bytes);
 void agc_release_all(void);
 void agc_set_alloc_limit(jmp_buf *target, size_t limit);
 #ifdef AGC_NO_GC

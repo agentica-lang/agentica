@@ -100,6 +100,11 @@ does not make obvious:
   ran 10% faster with 13% more peak memory. `GC_FREE_SPACE_DIVISOR` in the
   environment still wins: 3 gives back libgc's default, and 1 is faster still
   for more memory.
+- Heap floor: `agc_init` grows the heap to 32 MB (`AGENTICA_GC_HEAP`; libgc's
+  `GC_INITIAL_HEAP_SIZE` wins when set), and libgc collects only when that
+  space is used up. libgc counts pointer-free bytes at a quarter, so a server
+  whose heap is mostly text collected every 2 MB without it, with every thread
+  stopped (#1179).
 
 ### 5.4 Shared small values
 

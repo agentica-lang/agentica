@@ -2,7 +2,7 @@
  * Boehm with threads (docs/vm/10-io-multicore.md §10.2.3, "GC"): threads that libuv starts register with the
  * collector, allocate, and are scanned and stopped by collections that any of them starts. Each thread keeps its list
  * head only in a local variable, so a collector that missed its stack would free live nodes, and the list check after
- * would fail. Also: agc_init's heap growth divisor. The sanitizer build has no collector: there only threads run.
+ * would fail. Also: agc_init's heap divisor and floor. The sanitizer build has no collector: there only threads run.
  */
 #include "../value.h"
 
@@ -152,7 +152,17 @@ int main(void) {
 #ifndef AGC_NO_GC
   /* agc_init grows the heap with divisor 2 (vm/value.c) unless the environment names another. */
   if (!getenv("GC_FREE_SPACE_DIVISOR")) assert(GC_get_free_space_divisor() == 2);
+  /* It also starts the heap at 32 MB unless the environment sets a size. */
+  if (!getenv("GC_INITIAL_HEAP_SIZE") && !getenv("AGENTICA_GC_HEAP")) assert(GC_get_heap_size() >= (size_t)32 << 20);
 #endif
+  size_t bytes = 1;
+  assert(agc_gc_heap_parse("0", &bytes) && bytes == 0);
+  assert(agc_gc_heap_parse("33554432", &bytes) && bytes == (size_t)32 << 20);
+  assert(agc_gc_heap_parse("32M", &bytes) && bytes == (size_t)32 << 20);
+  assert(agc_gc_heap_parse("4k", &bytes) && bytes == 4096);
+  assert(agc_gc_heap_parse("1024G", &bytes) && bytes == (size_t)1 << 40);
+  static const char *bad[] = {"", "M", "-1", "1025G", "32X", "32MB", " 32M", "1099511627777", "99999999999999999999"};
+  for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) assert(!agc_gc_heap_parse(bad[k], &bytes));
   agc_gc_allow_threads();
 #if defined(_WIN32) && !defined(AGC_NO_GC)
   collect_beside_a_held_heap();

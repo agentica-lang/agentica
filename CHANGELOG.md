@@ -14,6 +14,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   in PEM and OAEP padding (SHA-1), as MySQL's `caching_sha2_password` needs.
 - Builtin families: `Family.Member.fn(...)` calls a builtin of a family, and a
   member the family lacks is `CHECK-UNKNOWN-NAME` with the list of members.
+- `AGENTICA_GC_HEAP` sets the size the collector's heap starts at (`32M` by
+  default, `0` for libgc's own start).
 
 ### Changed
 
@@ -23,6 +25,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `OpenSSL.Random`. An old name is `CHECK-UNKNOWN-NAME` with the new one in the
   help. `OpenSSL` is reserved; `Digest`, `Cipher`, `HMAC`, `KDF`, `CMAC`,
   `SecureRandom` and `Crypto` are free names.
+- The collector's heap starts at 32 MB, so a busy program collects less often:
+  faster, for up to about 32 MB more memory in a program that allocates a lot.
+- `String#slice` and `String#at` on non-ASCII text are faster: a slice to the
+  end does not walk the text, and runs of ASCII are crossed 8 bytes at a time.
 
 ## [0.26.1] - 2026-11-07
 
