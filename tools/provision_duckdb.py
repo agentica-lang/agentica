@@ -13,11 +13,14 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import http.client
 import io
 import platform
+import ssl
 import sys
 import tarfile
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -55,6 +58,9 @@ MAX_COMPRESSED = 128 * 1024 * 1024
 MAX_MEMBER = 1024 * 1024 * 1024
 REQUEST_TIMEOUT = 30
 DEADLINE = 600
+# A failed download is tried again after these pauses (5 tries): GitHub's release hosts answer 5xx now and then.
+BACKOFF = (5, 10, 20, 40)
+pause = time.sleep
 
 
 def this_system() -> str:
@@ -68,26 +74,61 @@ def this_system() -> str:
     raise SystemExit(f"provision_duckdb.py: unsupported system {sys.platform}")
 
 
-def read_asset(asset: str | None, name: str) -> bytes:
-    """The bytes of the pinned archive: a local file with --asset, else one download."""
-    if asset is not None:
-        return read_file_capped(asset)
-    url = f"{BASE}/{name}"
+def retryable(error: BaseException) -> bool:
+    """Whether a failed request may succeed when repeated: 5xx, 429, a timeout, a dropped or refused connection, a body
+    cut short. A 404 or any other 4xx is an answer, and a certificate that does not verify is not a passing fault:
+    neither is repeated. (tools/site_versions.py classifies in the same way.)"""
+    if isinstance(error, urllib.error.HTTPError):
+        return error.code >= 500 or error.code == 429
+    if isinstance(error, ssl.SSLCertVerificationError):
+        return False
+    if isinstance(error, urllib.error.URLError) and isinstance(error.reason, ssl.SSLCertVerificationError):
+        return False
+    return isinstance(error, (OSError, http.client.HTTPException))
+
+
+def fetch(url: str) -> bytes:
+    """One URL, with the caps and the deadline of a single try per attempt and BACKOFF between the attempts."""
+    for attempt in range(len(BACKOFF) + 1):
+        try:
+            return fetch_once(url)
+        except (OSError, http.client.HTTPException) as error:
+            if attempt == len(BACKOFF) or not retryable(error):
+                raise
+            print(f"provision_duckdb.py: {url}: {error}; retrying in {BACKOFF[attempt]}s", file=sys.stderr)
+            pause(BACKOFF[attempt])
+    raise AssertionError("unreachable")
+
+
+def fetch_once(url: str) -> bytes:
     body = io.BytesIO()
     started = time.monotonic()
     request = urllib.request.Request(url, headers={"User-Agent": "agentica-duckdb-example"})
+    with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as response:
+        while True:
+            if time.monotonic() - started > DEADLINE:
+                raise SystemExit("provision_duckdb.py: download past its deadline")
+            chunk = response.read(1024 * 1024)
+            if not chunk:
+                break
+            body.write(chunk)
+            if body.tell() > MAX_COMPRESSED:
+                raise SystemExit(f"provision_duckdb.py: {url} is larger than 128MiB")
+        # A connection that drops early ends read() like a complete body; Content-Length says which it was.
+        expected = response.headers.get("Content-Length")
+        if expected is not None and expected.isdigit() and int(expected) != body.tell():
+            raise http.client.IncompleteRead(b"", int(expected) - body.tell())
+    return body.getvalue()
+
+
+def read_asset(asset: str | None, name: str) -> bytes:
+    """The bytes of the pinned archive: a local file with --asset, else a download."""
+    if asset is not None:
+        return read_file_capped(asset)
+    url = f"{BASE}/{name}"
     try:
-        with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as response:
-            while True:
-                if time.monotonic() - started > DEADLINE:
-                    raise SystemExit("provision_duckdb.py: download past its deadline")
-                chunk = response.read(1024 * 1024)
-                if not chunk:
-                    return body.getvalue()
-                body.write(chunk)
-                if body.tell() > MAX_COMPRESSED:
-                    raise SystemExit(f"provision_duckdb.py: {url} is larger than 128MiB")
-    except OSError as error:
+        return fetch(url)
+    except (OSError, http.client.HTTPException) as error:
         raise SystemExit(f"provision_duckdb.py: cannot download {url}: {error}")
 
 
