@@ -35,7 +35,12 @@ def compile_fixture(source, tmp_path):
 
 
 def start(adopt, vm, bytecode, mode, no_turn_cost):
-    env = vm_environment({"AGENTICA_VM_TEST_NO_TURN_COST": "1" if no_turn_cost else None, "AGENTICA_SCHEDULERS": "1"})
+    # Without turn costs the check must fail by a clear margin. The 32 MiB heap floor makes the sort and the concat
+    # collect less and so stall the others for less (echo ~450 ms instead of ~550 ms, against a 250 ms limit), so that
+    # run keeps libgc's own small heap, as the margin was set with.
+    small_heap = "0" if no_turn_cost else None
+    env = vm_environment({"AGENTICA_VM_TEST_NO_TURN_COST": "1" if no_turn_cost else None, "AGENTICA_SCHEDULERS": "1",
+                          "AGENTICA_GC_HEAP": small_heap})
     return adopt(Child([*vm, "--", bytecode, mode], env=env, stdin=True))
 
 
