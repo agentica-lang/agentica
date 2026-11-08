@@ -1,7 +1,7 @@
 /*
  * The loop registry: slots after removals, a completed job, a timed-out job,
  * and agc_io_close, which frees the loop or refuses while a job is stuck. Also the stop-signal watch across
- * two VMs of one process, as the single binary runs them, and the loop's coarse clock on Linux.
+ * two VMs of one process, as the single binary runs them, and the loop's coarse clock on Linux (forced on here).
  */
 #ifdef __APPLE__
 #define _DARWIN_C_SOURCE
@@ -242,12 +242,12 @@ static void test_idle_wait_blocks_until_the_deadline(void) {
 #endif
 
 #ifdef __linux__
-/* Where agc_coarse_clock_ms answers, libuv's loop time is the coarse clock (agc_uv_clock_getres, through the -D of
-   mk/vm.mk), so it lies between two coarse reads around it. CLOCK_MONOTONIC would be ahead of the later read whenever
-   the coarse clock lags by a whole ms or more, which the ms sleeps reach within a few rounds. */
+/* With the coarse clock in use (main forces it), libuv's loop time is that clock (agc_uv_clock_getres, through the -D
+   of mk/vm.mk), so it lies between two coarse reads around it. CLOCK_MONOTONIC would be ahead of the later read
+   whenever the coarse clock lags by a whole ms or more, which the ms sleeps reach within a few rounds. */
 static void test_loop_time_is_the_coarse_clock(void) {
   uint64_t before, after, tick;
-  if (!agc_coarse_clock_ms(&before, &tick)) return;
+  assert(agc_coarse_clock_ms(&before, &tick));
   assert(agc_loop_clock_tick_ms() == tick);
   uv_loop_t loop;
   assert(uv_loop_init(&loop) == 0);
@@ -268,6 +268,10 @@ static int released;
 static void release_count(void *native) { (*(int *)native)++; }
 
 int main(void) {
+#ifdef __linux__
+  /* The clock is chosen once per process, before libuv's first read: the coarse one, whatever an exact read costs. */
+  assert(setenv("AGENTICA_VM_TEST_COARSE_CLOCK", "1", 1) == 0);
+#endif
   agc_init();
   agc_vm vm;
   agc_io_init();

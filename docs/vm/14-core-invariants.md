@@ -94,10 +94,13 @@ Known exceptions (the mechanisms are in §10.2.2):
   ends with the timeout error and the task wakes. The timer lives with the job
   because the START request that the job pays anyway starts it, and the job's
   outcome decides between the timeout and the completion. The loop's clock
-  counts whole milliseconds and, on Linux, is the coarse monotonic clock
-  (`agc_uv_clock_getres`, `vm/clock_posix.c`), which costs no clock source
-  read; `timer_length` adds its lag (a tick and a millisecond), so the timeout
-  never ends early, and may end up to two ticks and a millisecond late.
+  counts whole milliseconds. On Linux, where an exact read is a system call
+  (timed once per process: a clock source with no vDSO path, such as an HPET),
+  it is the coarse monotonic clock (`agc_uv_clock_getres`,
+  `vm/clock_posix.c`), which costs no clock source read. `timer_length` adds
+  its lag (a millisecond, and a tick with the coarse clock), so the timeout
+  never ends early; with the coarse clock it may end up to two ticks and a
+  millisecond late.
 - **A wait with only a deadline is a task timer.** It arms the task's own timer
   in the scheduler's heap (`agc_task_park_until`, `vm/timers.c`). Such a wait
   has no I/O, so it needs no job, no registry slot and no request to the I/O
