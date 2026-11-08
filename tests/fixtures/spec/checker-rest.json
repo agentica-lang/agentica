@@ -11941,7 +11941,7 @@
       "code": null
     }
   ],
-  "Base64 and OpenSSL.Digest.hexencode take a Bytes and give a String; the decodes give a Bytes, the strict ones in a Result; Base64 and Digest are reserved names": [
+  "Base64 and OpenSSL.Digest.hexencode take a Bytes and give a String; the decodes give a Bytes, the strict ones in a Result; Base64 is a reserved name, Digest a free one": [
     {
       "program": [
         "def main() -> Void",
@@ -12062,8 +12062,7 @@
         "  puts(1)",
         "end"
       ],
-      "code": "CHECK-REDEFINED-NAME",
-      "start": [1, 1]
+      "code": null
     }
   ],
   "OpenSSL.Random.random_bytes and hex take an optional Int count (16), uuid takes none; they draw at run time, so a constant cannot call them; SecureRandom is a free name": [
@@ -14072,6 +14071,32 @@
       "start": [2, 7],
       "covers": "SecureRandom.uuid",
       "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts(Digest.sha256_hexdigest(\"a\".bytes))",
+        "end"
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [2, 8],
+      "covers": "Digest.sha256_hexdigest(\"a\".bytes)",
+      "help": true
+    },
+    {
+      "program": [
+        "struct Digest",
+        "  n: Int",
+        "end",
+        "",
+        "def main() -> Void",
+        "  puts(Digest.sha256_hexdigest(\"a\".bytes))",
+        "end"
+      ],
+      "code": "CHECK-UNKNOWN-NAME",
+      "start": [6, 8],
+      "covers": "Digest.sha256_hexdigest(\"a\".bytes)",
+      "help": false
     },
     {
       "program": [

@@ -14,7 +14,7 @@
 ## way and simply cannot be imported.
 ##
 ## The folder is listed and read through the Workspace. The stream is built in memory (the pieces of the files are
-## collected and joined once) and hashed once with Digest.sha256, so the cost is the size of the .agc files.
+## collected and joined once) and hashed once with OpenSSL.Digest.sha256, so the cost is the size of the .agc files.
 
 import Paths from "../modules/import_path"
 import Workspace from "../modules/workspace"
@@ -79,7 +79,7 @@ export def stream_hash(paths: List[String], contents: List[Bytes]) -> String
     pieces = pieces.concat([header(paths[index], contents[index].size), contents[index]])
   end
 
-  return "sha256:#{Digest.sha256_hexdigest(Bytes.concat(pieces))}"
+  return "sha256:#{OpenSSL.Digest.sha256_hexdigest(Bytes.concat(pieces))}"
 end
 
 ## Whether the hash of the package folder covers its agentica.toml: the file is a regular file at the root and the
