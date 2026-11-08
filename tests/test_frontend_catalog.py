@@ -10,6 +10,7 @@ An accepted loss: compiler/catalog/builtins_data.agc was generated from the tabl
 compared it with a fresh generation. That file is 106 KB; the golden above prints the same data, so it is not frozen
 a second time. The data file is edited by hand now and this golden is refreshed with tools/refreeze.py.
 """
+import json
 import re
 import shutil
 
@@ -42,6 +43,14 @@ def test_the_rule_enum_has_the_rules_of_the_builtin_table():
     declared = re.search(r"^export enum Rule\n(.*?)\nend", text, flags=re.MULTILINE | re.DOTALL).group(1)
     names = sorted(line.strip() for line in declared.split("\n"))
     assert_golden("".join(name + "\n" for name in names), FROZEN / "catalog" / "rules.expected")
+
+
+def test_the_highlighter_colors_the_reserved_type_names_and_no_other():
+    data = (ROOT / "compiler" / "catalog" / "builtins_data.agc").read_text(encoding="utf-8")
+    reserved = re.search(r"^export RESERVED_TYPE_NAMES: List\[String\] = \[(.*?)^\]", data, flags=re.M | re.S).group(1)
+    grammar = json.loads((ROOT / "site" / "highlight" / "agentica.tmLanguage.json").read_text(encoding="utf-8"))
+    colored = re.fullmatch(r"\\b\((.*)\)\\b", grammar["repository"]["builtin-types"]["match"]).group(1)
+    assert sorted(colored.split("|")) == sorted(re.findall(r'"([^"]+)"', reserved))
 
 
 def test_every_builtin_implementation_is_one_the_vm_has():

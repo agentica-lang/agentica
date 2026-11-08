@@ -351,13 +351,42 @@ def rewrite_regex(cx: Resolve.Context, node: Ast.RegexLit) -> Ast.RegexLit
   end
 end
 
+# x |> A.B.c() whose head A is no builtin family: the parser makes it the piped call A.B.c without knowing the
+# families (Parser.pipe_insert), so the linker gives the parser's PARSE-PIPE-TARGET.
+def bad_pipe_target?(cx: Resolve.Context, node: Ast.Call) -> Bool
+  parts = node.name.split(".")
+  return node.piped and parts.size == 3 and !Resolve.family?(cx, parts[0])
+end
+
+# PARSE-PIPE-TARGET at the right side of |>, as the parser reports it.
+def pipe_target_failure(cx: Resolve.Context, span: Source.Span) -> String
+  site = Failure.Site(file: cx.me.file, span: span)
+  help = Failure.hint(Parser.PIPE_TARGET_HINT)
+  return Failure.fail_at(site, Parser.PIPE_TARGET_CODE, Parser.PIPE_TARGET_MESSAGE, help)
+end
+
+# x |> try A.B.c() of no family is reported with its try, as the parser reports x |> try f; a try before the whole
+# pipe starts before x and is not part of the right side.
+def rewrite_try(cx: Resolve.Context, node: Ast.TryExpr) -> Result[Ast.Expr]
+  if bad_piped_try?(cx, node)
+    return error(pipe_target_failure(cx, node.span))
+  end
+
+  return ok(Ast.Expr.Try(node.with(operand: try rewrite_expr(cx, node.operand))))
+end
+
+def bad_piped_try?(cx: Resolve.Context, node: Ast.TryExpr) -> Bool
+  case node.operand
+    Ast.Expr.Call(call) ->
+      return bad_pipe_target?(cx, call) and node.span.start.offset > Ast.expr_span(call.args[0]).stop.offset
+    _ -> return false
+  end
+end
+
 def rewrite_call(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
   parts = node.name.split(".")
-  if node.piped and parts.size == 3 and !Resolve.family?(cx, parts[0])
-    # The parser makes x |> A.B.c() the piped call A.B.c without knowing the families (Parser.pipe_insert).
-    site = Failure.Site(file: cx.me.file, span: node.span)
-    help = Failure.hint(Parser.PIPE_TARGET_HINT)
-    return error(Failure.fail_at(site, Parser.PIPE_TARGET_CODE, Parser.PIPE_TARGET_MESSAGE, help))
+  if bad_pipe_target?(cx, node)
+    return error(pipe_target_failure(cx, node.span))
   end
 
   if parts.size == 2 and Resolve.constant_identity(cx, parts[0]) != ""
@@ -544,7 +573,7 @@ def rewrite_compound(cx: Resolve.Context, expr: Ast.Expr) -> Result[Ast.Expr]
       target = try rewrite_expr(cx, node.target)
       index = try rewrite_expr(cx, node.index)
       return ok(Ast.Expr.Index(node.with(target: target, index: index)))
-    Ast.Expr.Try(node) -> return ok(Ast.Expr.Try(node.with(operand: try rewrite_expr(cx, node.operand))))
+    Ast.Expr.Try(node) -> return rewrite_try(cx, node)
     Ast.Expr.Unary(node) -> return ok(Ast.Expr.Unary(node.with(operand: try rewrite_expr(cx, node.operand))))
     Ast.Expr.Binary(node) ->
       left = try rewrite_expr(cx, node.left)
