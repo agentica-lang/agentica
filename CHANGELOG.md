@@ -16,6 +16,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   member the family lacks is `CHECK-UNKNOWN-NAME` with the list of members.
 - `AGENTICA_GC_HEAP` sets the size the collector's heap starts at (`32M` by
   default, `0` for libgc's own start).
+- `outgoing_queue` of `HTTP.WebSocketOptions` sets how many messages a
+  WebSocket's `outgoing` channel holds (default 8, as before).
 
 ### Changed
 
@@ -27,6 +29,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `SecureRandom` and `Crypto` are free names.
 - The collector's heap starts at 32 MB, so a busy program collects less often:
   faster, for up to about 32 MB more memory in a program that allocates a lot.
+- A WebSocket of `std/http` writes the messages queued in `outgoing` in one
+  socket write and has one task less per connection: fan-out to many sockets is
+  several times faster, and a connection takes about 23% less memory. The pong
+  of a ping goes out behind what the session queued, and a session that closes
+  its own `outgoing` may get no pongs.
 - `String#slice` and `String#at` on non-ASCII text are faster: a slice to the
   end does not walk the text, and runs of ASCII are crossed 8 bytes at a time.
 

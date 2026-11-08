@@ -5,7 +5,9 @@ would and read the close codes the server answers with. Everything is on 127.0.0
 """
 import ssl
 import struct
+import threading
 import time
+from collections import Counter
 
 import pytest
 
@@ -13,6 +15,7 @@ from tests.agentica_test import FIXTURES, compile_agc, scaled, start_vm
 from tests.fixtures.websocket_client import BINARY, CLOSE, CONTINUATION, PING, PONG, TEXT, Client
 
 CERTS = FIXTURES / "tls"
+SCHEDULERS = [(), ("--schedulers", "4")]
 
 SERVER_PROGRAM = """\
 import HTTP from "std/http"
@@ -76,6 +79,117 @@ def late(ws: HTTP.WebSocket) -> Result[Void]
   return echo(ws)
 end
 
+# Waits for any message of the peer.
+def await_go(ws: HTTP.WebSocket) -> Result[Void]
+  case ws.incoming.recv(10000)
+    ok(_) -> return ok()
+    error(message) -> return error(message)
+  end
+end
+
+# A burst of numbered texts with a ping now and then and a close at the end, sent faster than the writer takes them.
+# Half way it waits for the peer's "go", which the peer sends after a ping, so the pong is queued before the close.
+# What the handler sends after its close is dropped, and its sends do not fail.
+def burst(ws: HTTP.WebSocket) -> Result[Void]
+  i = 0
+  while i < 1000
+    if i == 500
+      try await_go(ws)
+    end
+
+    try ws.outgoing.send(HTTP.Message.Text("m#{i}"), 5000)
+    if i % 100 == 99
+      try ws.outgoing.send(HTTP.Message.Ping("p#{i}".bytes), 5000)
+    end
+    i = i + 1
+  end
+
+  try ws.outgoing.send(HTTP.Message.Close(4002, "done"), 5000)
+  _ = ws.outgoing.send(HTTP.Message.Text("after 1"), 5000)
+  _ = ws.outgoing.send(HTTP.Message.Binary("after 2".bytes), 5000)
+  return echo(ws)
+end
+
+# Queues 128 KiB messages without waiting, until the queue is full or 400 are in, and says how many it took: a peer that
+# does not read fills the socket, then the writer waits, then the queue fills.
+def fill(ws: HTTP.WebSocket) -> Result[Void]
+  padding = "x" * 131072
+  sent = 0
+  while sent < 400
+    case ws.outgoing.send(HTTP.Message.Binary("#{sent}:#{padding}".bytes), 0)
+      ok(_) -> sent = sent + 1
+      error(_) -> break
+    end
+  end
+
+  puts("accepted #{sent}")
+  IO.flush()
+  try ws.outgoing.send(HTTP.Message.Close(4003, "end"), 5000)
+  return echo(ws)
+end
+
+# Closes its own outgoing channel: the writer then waits for the peer's end alone.
+def shut(ws: HTTP.WebSocket) -> Result[Void]
+  ws.outgoing.close
+  return echo(ws)
+end
+
+# Queues a big message that fills the socket (the peer does not read), then A, a close of its own and B behind it.
+def order(ws: HTTP.WebSocket) -> Result[Void]
+  padding = "x" * 16000000
+  _ = ws.outgoing.send(HTTP.Message.Binary(padding.bytes), 0)
+  try ws.outgoing.send(HTTP.Message.Text("A"), 5000)
+  try ws.outgoing.send(HTTP.Message.Close(4000, "bye"), 5000)
+  try ws.outgoing.send(HTTP.Message.Text("B"), 5000)
+  puts("queued")
+  IO.flush()
+  return echo(ws)
+end
+
+# Queues, behind a write that blocks (the peer does not read), 16 MB, "A", five of 100 KB and 300 of 1 KB, then waits.
+def pile(ws: HTTP.WebSocket) -> Result[Void]
+  padding = "x" * 16000000
+  _ = ws.outgoing.send(HTTP.Message.Binary(padding.bytes), 0)
+  try ws.outgoing.send(HTTP.Message.Text("A"), 5000)
+  piece = ("p" * 100000).bytes
+  small = ("s" * 1000).bytes
+  i = 0
+  while i < 5
+    try ws.outgoing.send(HTTP.Message.Binary(piece), 5000)
+    i = i + 1
+  end
+
+  while i < 305
+    try ws.outgoing.send(HTTP.Message.Binary(small), 5000)
+    i = i + 1
+  end
+
+  puts("queued")
+  IO.flush()
+  return echo(ws)
+end
+
+# A close that a session can build and that looks like what the server keeps for itself: it is sent as any invalid code.
+def fakewake(ws: HTTP.WebSocket) -> Result[Void]
+  try ws.outgoing.send(HTTP.Message.Text("a"), 5000)
+  try ws.outgoing.send(HTTP.Message.Close(0, "wake"), 5000)
+  return echo(ws)
+end
+
+# Messages that cross the 64 KiB a write takes: small, one that crosses it, big, small, and sizes at the edge.
+def edge(ws: HTTP.WebSocket) -> Result[Void]
+  sizes = [100, 65400, 70000, 8, 65536, 65535, 9, 65530]
+  i = 0
+  while i < sizes.size
+    head = "e#{i}:"
+    try ws.outgoing.send(HTTP.Message.Binary((head + "x" * (sizes[i] - head.size)).bytes), 5000)
+    i = i + 1
+  end
+
+  try ws.outgoing.send(HTTP.Message.Close(4004, "edge"), 5000)
+  return echo(ws)
+end
+
 def failing(ws: HTTP.WebSocket) -> Result[Void]
   return error("the session failed")
 end
@@ -129,6 +243,42 @@ def route(request: HttpRequest) -> Result[HTTP.Upgrade]
     return HTTP.accept_websocket(request, &failing)
   end
 
+  if request.path == "/order"
+    return HTTP.accept_websocket(request, &order)
+  end
+
+  if request.path == "/pile"
+    return HTTP.accept_websocket(request, &pile, HTTP.WebSocketOptions(outgoing_queue: 400))
+  end
+
+  if request.path == "/fakewake"
+    return HTTP.accept_websocket(request, &fakewake)
+  end
+
+  if request.path == "/edge"
+    return HTTP.accept_websocket(request, &edge, HTTP.WebSocketOptions(outgoing_queue: 16))
+  end
+
+  if request.path == "/shut"
+    return HTTP.accept_websocket(request, &shut)
+  end
+
+  if request.path == "/burst"
+    return HTTP.accept_websocket(request, &burst, HTTP.WebSocketOptions(outgoing_queue: 256))
+  end
+
+  if request.path == "/fill-small"
+    return HTTP.accept_websocket(request, &fill, HTTP.WebSocketOptions(outgoing_queue: 2))
+  end
+
+  if request.path == "/fill-big"
+    return HTTP.accept_websocket(request, &fill, HTTP.WebSocketOptions(outgoing_queue: 1000))
+  end
+
+  if request.path == "/badqueue"
+    return HTTP.accept_websocket(request, &echo, HTTP.WebSocketOptions(outgoing_queue: 0))
+  end
+
   return ok(HTTP.Upgrade.Reply(try plain(request)))
 end
 
@@ -175,7 +325,7 @@ def finish(vm):
     assert vm.next_line() == "ok()"
 
 
-@pytest.mark.parametrize("flags", [(), ("--schedulers", "4")], ids=["one-scheduler", "four-schedulers"])
+@pytest.mark.parametrize("flags", SCHEDULERS, ids=["one-scheduler", "four-schedulers"])
 def test_messages_fragments_pings_and_both_close_handshakes_work_over_plain_and_tls_connections(tmp_path, adopt, flags):
     """Text and binary messages (with the 7-bit, 16-bit and 64-bit lengths, up to the 1 MiB cap), a message split in fragments inside a
     character with a ping between them, the pong of the server, a ping from the server, the subprotocol, a close that
@@ -218,6 +368,13 @@ def test_messages_fragments_pings_and_both_close_handshakes_work_over_plain_and_
         c.close_with(1012)
         assert c.close_frame() == (1012, "")
     assert vm.next_line() == "closed 1012 "
+    # A session that closed its own outgoing channel still has its close handshake answered.
+    with Client(port, timeout=scaled(10)) as c:
+        c.connect("/shut")
+        c.close_with(1001, "bye")
+        assert c.close_frame() == (1001, "")
+        assert c.ended()
+    assert vm.next_line() == "closed 1001 bye"
     # The subprotocol is the first of the server's list that the client offered.
     with Client(port, timeout=scaled(10)) as c:
         headers = c.connect("/protocol", {"Sec-WebSocket-Protocol": "other, superchat, chat"})
@@ -298,6 +455,9 @@ def test_requests_that_are_not_a_handshake_are_answered_and_never_upgraded(tmp_p
         assert c.request("/badoptions")[0] == 500
         assert c.ended()
     with Client(port, timeout=scaled(10)) as c:
+        assert c.request("/badqueue")[0] == 500
+        assert c.ended()
+    with Client(port, timeout=scaled(10)) as c:
         c.sock.sendall(b"GET /echo HTTP/1.1\r\nHost: x\r\nUpgrade: h2c\r\nConnection: Upgrade\r\n\r\n")
         assert c.response()[0] == 501
         assert c.ended()
@@ -338,7 +498,7 @@ def test_idle_peers_are_dropped_pings_keep_a_live_one_and_a_lost_or_silent_peer_
     with Client(port, timeout=scaled(10)) as c:
         c.connect("/echo")
     assert closing(vm) == ["closed 1006 connection lost"]
-    # The session speaks after 700 ms of silence, with pings every 150 ms: the forwarder and the writer wait and go on.
+    # The session speaks after 700 ms of silence, with pings every 150 ms: the writer waits and goes on.
     with Client(port, timeout=scaled(10)) as c:
         c.connect("/late")
         started = time.monotonic()
@@ -371,3 +531,176 @@ def test_idle_peers_are_dropped_pings_keep_a_live_one_and_a_lost_or_silent_peer_
     vm.close_stdin()
     assert vm.wait() == 0
     assert "http: websocket session error: the session failed" in vm.stderr_text()
+
+
+@pytest.mark.parametrize("flags", SCHEDULERS, ids=["one-scheduler", "four-schedulers"])
+def test_queued_messages_are_written_in_order_with_the_close_last_and_nothing_after_it(tmp_path, adopt, flags):
+    """A session that queues 1000 texts and pings faster than the writer takes them (a queue of 256, so the writer
+    joins them into writes) gets every frame at the peer in order, a ping of the peer is answered meanwhile, the
+    close frame is the last one, and what the session sends after its close is never written."""
+    vm, port, _ = start_server(tmp_path, adopt, flags)
+    with Client(port, timeout=scaled(20)) as c:
+        c.connect("/burst")
+        c.send(PING, b"early")
+        c.text("go")
+        texts, pings, pongs = [], [], []
+        while True:
+            opcode, payload = c.message()
+            if opcode == TEXT:
+                texts.append(payload.decode())
+            elif opcode == PING:
+                pings.append(payload.decode())
+            elif opcode == PONG:
+                pongs.append(payload)
+            else:
+                assert opcode == CLOSE
+                assert struct.unpack(">H", payload[:2])[0] == 4002 and payload[2:] == b"done"
+                break
+        assert texts == ["m%d" % i for i in range(1000)]
+        assert pings == ["p%d" % i for i in range(99, 1000, 100)]
+        assert pongs == [b"early"]
+        c.close_with(4002)
+        assert c.ended(), "no frame came after the close frame"
+    assert vm.next_line() == "closed 4002 "
+    finish(vm)
+
+
+@pytest.mark.parametrize("flags", SCHEDULERS, ids=["one-scheduler", "four-schedulers"])
+def test_the_outgoing_queue_size_is_an_option_and_a_full_queue_still_makes_the_sender_fail(tmp_path, adopt, flags):
+    """With outgoing_queue 2 a session that queues big messages meanwhile the peer does not read is refused once the
+    socket and the queue are full; with 1000 it queues all 400. Every message taken arrives whole and in order, and
+    the close comes after them."""
+    vm, port, _ = start_server(tmp_path, adopt, flags)
+    taken = {}
+    for path, limit in (("/fill-small", 400), ("/fill-big", 401)):
+        with Client(port, timeout=scaled(30)) as c:
+            c.connect(path)
+            line = vm.next_line()
+            assert line.startswith("accepted ")
+            taken[path] = int(line.split()[1])
+            assert 0 < taken[path] < limit
+            time.sleep(0.2)
+            for i in range(taken[path]):
+                opcode, payload = c.message()
+                assert opcode == BINARY and payload.startswith(b"%d:x" % i) and len(payload) == 131072 + len(b"%d:" % i)
+            assert c.close_frame() == (4003, "end")
+            c.close_with(4003)
+            assert c.ended()
+        assert vm.next_line() == "closed 4003 "
+    assert taken["/fill-small"] < 400, "a queue of 2 fills"
+    assert taken["/fill-big"] == 400, "a queue of 1000 does not"
+    finish(vm)
+
+
+@pytest.mark.parametrize("flags", SCHEDULERS, ids=["one-scheduler", "four-schedulers"])
+def test_the_close_frame_of_the_reader_is_not_overtaken_by_the_close_the_server_adds_when_the_session_returns(tmp_path, adopt, flags):
+    """The session of /echo returns the moment it hears the peer's close or a broken frame, while the writer sleeps or
+    reads the wake: the answer must still be the echo of the peer's code, or the code of the broken frame, never the 1000
+    the server adds for a session that returns. Eight clients at once, 2400 connections: it is a race between tasks."""
+    vm, port, _ = start_server(tmp_path, adopt, flags)
+    wrong = []
+
+    def worker(worker_id):
+        for round_ in range(100):
+            code = 4000 + worker_id
+            for act, expected in (
+                (lambda c: c.close_with(code), code),
+                (lambda c: c.text("x", masked=False), 1002),
+                (lambda c: c.send(TEXT, b"\xff\xfe"), 1007),
+            ):
+                try:
+                    with Client(port, timeout=scaled(20)) as c:
+                        c.connect("/echo")
+                        act(c)
+                        got = c.close_frame()[0]
+                        if got != expected:
+                            wrong.append((worker_id, round_, expected, got))
+                except Exception as error:
+                    wrong.append((worker_id, round_, expected, repr(error)))
+
+    threads = [threading.Thread(target=worker, args=(n,)) for n in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert wrong == []
+    codes = Counter()
+    for _ in range(2400):
+        codes[vm.next_line().split()[1]] += 1
+    assert codes["1002"] == codes["1007"] == 800
+    assert sum(codes["400%d" % n] for n in range(8)) == 800
+    finish(vm)
+
+
+@pytest.mark.parametrize("flags", SCHEDULERS, ids=["one-scheduler", "four-schedulers"])
+def test_a_close_of_the_session_queued_before_the_close_of_the_peer_is_our_close_and_nothing_follows_it(tmp_path, adopt, flags):
+    """The writer is blocked in a write of 16 MB while the session queues A, its own close (4000) and B; the peer
+    then closes without reading. The writer writes A and the close of the session, not B, and not an answer to the
+    peer's close: the handshake is complete."""
+    vm, port, _ = start_server(tmp_path, adopt, flags)
+    with Client(port, timeout=scaled(30)) as c:
+        c.connect("/order")
+        assert vm.next_line() == "queued"
+        c.close_with(1000)
+        time.sleep(0.5)
+        opcode, payload = c.message()
+        assert opcode == BINARY and len(payload) == 16000000
+        assert c.message() == (TEXT, b"A")
+        assert c.close_frame() == (4000, "bye")
+        assert c.ended(), "nothing came after the close frame of the session"
+    assert vm.next_line() == "closed 1000 "
+    finish(vm)
+
+
+def test_frames_that_cross_the_write_cap_arrive_whole_and_in_order(tmp_path, adopt):
+    """Binary messages of 100, 65400, 70000, 8, 65536, 65535, 9 and 65530 bytes, queued together: a write stops reading
+    the queue once 64 KiB are joined, and a frame past it goes whole. Each arrives with its own bytes, the close last."""
+    vm, port, _ = start_server(tmp_path, adopt)
+    with Client(port, timeout=scaled(20)) as c:
+        c.connect("/edge")
+        for i, size in enumerate((100, 65400, 70000, 8, 65536, 65535, 9, 65530)):
+            opcode, payload = c.message()
+            head = b"e%d:" % i
+            assert opcode == BINARY and payload == head + b"x" * (size - len(head)), i
+        assert c.close_frame() == (4004, "edge")
+        c.close_with(4004)
+        assert c.ended()
+    assert vm.next_line() == "closed 4004 "
+    finish(vm)
+
+
+@pytest.mark.parametrize("flags", SCHEDULERS, ids=["one-scheduler", "four-schedulers"])
+def test_everything_the_session_queued_before_the_close_of_the_peer_goes_out_before_the_answer(tmp_path, adopt, flags):
+    """The writer is blocked in a write of 16 MB while the session queues "A", five messages of 100 KB and 300 of 1 KB
+    (about 800 KB, many writes); the peer then closes without reading. All of it arrives, in order, then the answer."""
+    vm, port, _ = start_server(tmp_path, adopt, flags)
+    with Client(port, timeout=scaled(30)) as c:
+        c.connect("/pile")
+        assert vm.next_line() == "queued"
+        c.close_with(1001)
+        time.sleep(0.5)
+        opcode, payload = c.message()
+        assert opcode == BINARY and len(payload) == 16000000
+        assert c.message() == (TEXT, b"A")
+        for _ in range(5):
+            assert c.message() == (BINARY, b"p" * 100000)
+        for _ in range(300):
+            assert c.message() == (BINARY, b"s" * 1000)
+        assert c.close_frame() == (1001, "")
+        assert c.ended()
+    assert vm.next_line() == "closed 1001 "
+    finish(vm)
+
+
+def test_a_close_a_session_builds_that_looks_like_the_wake_of_the_server_is_sent_as_any_invalid_code(tmp_path, adopt):
+    """The server rouses its writer with a close message that a session cannot build: Close(0, "wake") is an invalid
+    code, so it goes out as 1011 like any other."""
+    vm, port, _ = start_server(tmp_path, adopt)
+    with Client(port, timeout=scaled(10)) as c:
+        c.connect("/fakewake")
+        assert c.message() == (TEXT, b"a")
+        assert c.close_frame() == (1011, "wake")
+        c.close_with(1011)
+        assert c.ended()
+    assert vm.next_line() == "closed 1011 "
+    finish(vm)
