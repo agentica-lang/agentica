@@ -313,7 +313,7 @@ The optional `[style]` table of `agentica.toml` applies to the files below its f
 
 The `[tool.NAME]` tables of `agentica.toml` are for other tools (a checker, a code generator) that keep their settings next to the package, as `pyproject.toml` does. Agentica reads nothing inside them; it only checks that `tool` is a table and that each `tool.NAME` is a table, or reports `PKG-MANIFEST-INVALID` at that key.
 
-A manifest that declares dependencies needs an `agentica.lock` beside it. The lock holds the exact commit and a hash of the `.agc` files of every package, direct or not. A build never downloads anything: it reads each package from `deps/<name>/` next to `agentica.toml` and checks its hash when an import first loads it. A package that `deps/` lacks is `CHECK-IMPORT-PACKAGE`, and the help says to run `agentica install`. Commit `deps/` or ignore it as you like.
+A manifest that declares dependencies needs an `agentica.lock` beside it. The lock holds the exact commit and a hash of the `.agc` files of every package, direct or not. A build never downloads anything: it reads each package from `deps/<name>/` next to `agentica.toml` and checks its hash when an import first loads it. The hash leaves out hidden folders and `_build/` at any depth and `agc_libs/` and `deps/` at the root of the package, and a file there cannot be imported from inside the package. A package that `deps/` lacks is `CHECK-IMPORT-PACKAGE`, and the help says to run `agentica install`. Commit `deps/` or ignore it as you like.
 
 Three commands keep `deps/` and the lock. All of them run the system `git`, so your git config, SSH keys and credential helpers apply.
 

@@ -4,14 +4,16 @@
 ## byte, its size in decimal, a zero byte and its bytes. The agentica.toml at the root joins them when native/ holds a
 ## file that is not .agc or the manifest has a [native] table, because the manifest then decides which file is opened;
 ## for any other package it is not hashed, so those hashes did not change. The hash is `sha256:` and the SHA-256 of
-## that stream in hex. Hidden folders (any depth) and agc_libs/ (at the root) are left out. A symbolic link named
-## *.agc, named native at the root or inside native/ is refused, as the fetch refuses it, and so is a FIFO, a socket
-## or a device under a name the hash covers; other links, and other files that are not .agc, are ignored.
+## that stream in hex. Hidden folders and _build/ (any depth) and agc_libs/ and deps/ (at the root) are left out:
+## _build/ holds what agentica writes (its caches, or a clone a program keeps there) and deps/ the installed packages,
+## so a big tree there is never walked on a start. A symbolic link named *.agc, named native at the root or inside
+## native/ is refused, as the fetch refuses it, and so is a FIFO, a socket or a device under a name the hash covers;
+## other links, and other files that are not .agc, are ignored.
 ##
-## The names `.agc` and `agc_libs` are compared without regard to case, so `x.AGC` is hashed and `AGC_LIBS/` is left
-## out on every system. A case-insensitive file system (macOS, Windows) can open `x.AGC` or `AGC_LIBS/y.agc` by the
-## lowercase name, and the hash must cover what a build can load; on Linux those files are hashed or left out the same
-## way and simply cannot be imported.
+## The names `.agc`, `agc_libs`, `_build` and `deps` are compared without regard to case, so `x.AGC` is hashed and
+## `AGC_LIBS/` is left out on every system. A case-insensitive file system (macOS, Windows) can open `x.AGC` or
+## `AGC_LIBS/y.agc` by the lowercase name, and the hash must cover what a build can load; on Linux those files are
+## hashed or left out the same way and simply cannot be imported.
 ##
 ## The folder is listed and read through the Workspace. The stream is built in memory (the pieces of the files are
 ## collected and joined once) and hashed once with OpenSSL.Digest.sha256, so the cost is the size of the .agc files.
@@ -23,6 +25,10 @@ import Toml from "std/toml"
 # The folder of a package that holds its native libraries, and the manifest at its root.
 NATIVE_FOLDER = "native"
 MANIFEST_FILE = "agentica.toml"
+# The folders left out at the root of a package (libraries, installed packages) and at any depth (agentica's caches).
+LIBS_FOLDER = "agc_libs"
+DEPS_FOLDER = "deps"
+BUILD_FOLDER = "_build"
 # Files that a file manager adds to a folder: not part of the package, so they are not hashed or copied.
 NATIVE_JUNK = Set.new(["thumbs.db", "desktop.ini"])
 ## The most a file of a package may hold, and all its files together: a fetch copies no more (package_tree.agc), and
@@ -198,10 +204,17 @@ export def native_junk?(name: String) -> Bool
   return name.starts_with?(".") or NATIVE_JUNK.include?(fold(name))
 end
 
-## Whether a folder is left out of the hash, and cannot be imported: a hidden one at any depth, or agc_libs at the root
-## of the package (`top`).
+## Whether a folder is left out of the hash, and cannot be imported: a hidden one or _build at any depth, or agc_libs
+## or deps at the root of the package (`top`). The names are folded, as for agc_libs, because a case-insensitive file
+## system opens `_BUILD/x.agc` as `_build/x.agc`. The walks of a project (check, test) compare _build and deps exactly.
 export def skipped_folder?(name: String, top: Bool) -> Bool
-  return name.starts_with?(".") or (top and fold(name) == "agc_libs")
+  folded = fold(name)
+  return name.starts_with?(".") or folded == BUILD_FOLDER or (top and (folded == LIBS_FOLDER or folded == DEPS_FOLDER))
+end
+
+## Whether a folder is agc_libs, in any case.
+export def libs_folder?(name: String) -> Bool
+  return fold(name) == LIBS_FOLDER
 end
 
 ## The name without its case, for comparing it with a fixed name. Upper then lower case, so that a letter that has no

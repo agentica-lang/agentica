@@ -11,8 +11,8 @@ the list of commands and flags.
   paths check every `.agc` file, print each failing file's first diagnostic and
   a count line, and exit 1 (2 if a file is unreadable); `--json` prints one
   object `{ok, checked, failed, files}`. A folder skips hidden folders,
-  `agc_libs/`, the `deps/` of a project and symbolic links to files, as `symbol`
-  does; `build/` is not skipped.
+  `agc_libs/`, `_build/`, the `deps/` of a project and symbolic links to files,
+  as `symbol` does; `build/` is not skipped.
 - `agentica fmt` formats in place; a file that does not parse is left as it is
   (exit 1). `[style]` of the nearest `agentica.toml` sets the width (default
   119) and `blank_line_after_end`. `agentica lint` suggests style changes

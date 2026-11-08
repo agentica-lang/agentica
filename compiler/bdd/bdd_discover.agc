@@ -7,6 +7,8 @@ import {IO_TIMEOUT} from "bdd_files"
 # The manifest of a project, and the folder beside it that holds its installed packages.
 MANIFEST_FILE = "agentica.toml"
 DEPS_FOLDER = "deps"
+# The folder of agentica's caches, beside a manifest or a root file (io/cache_files.agc), skipped at any depth.
+BUILD_FOLDER = "_build"
 
 ## One feature file or test file, or one problem of the search, as the runner reads it (stdlib/test/runner.agc,
 ## `Entry`): `problem` is "" for a file to run; `kind` is "tests", "feature" or "" (neither); `bytecode`, `source_root`
@@ -45,8 +47,8 @@ end
 ## The entries for the given paths: first the problems in the order they were met, then the files sorted by path, each
 ## once. A path is made absolute without following links. A folder is searched for the files whose names fit, in every
 ## folder below it, except the `deps/` of a project (a folder that holds an `agentica.toml`): those are packages
-## installed for the build, not tests of the project. A link to a folder is skipped. A path to a file is taken
-## whatever its name is.
+## installed for the build, not tests of the project, and `_build/` folders, which hold what agentica writes. A link
+## to a folder is skipped. A path to a file is taken whatever its name is.
 export def discover(given: List[String]) -> List[Entry]
   found = Found(problems: [], files: [])
   for text in given
@@ -117,7 +119,7 @@ def visit(path: String, name: String, project: Bool, found: Found) -> Found
   kind = info.unwrap!.kind
   if bad_name and (kind == "directory" or kind_of(name) != "")
     return problem(found, path, "the file name is not valid UTF-8")
-  elsif kind == "directory" and project and name == DEPS_FOLDER
+  elsif kind == "directory" and (name == BUILD_FOLDER or (project and name == DEPS_FOLDER))
     return found
   elsif kind == "directory"
     return walk(path, found)

@@ -209,6 +209,18 @@ def test_a_cached_build_sees_a_manifest_or_a_native_file_changed_in_a_package_wi
 
 
 @host_only(WINDOWS, "a symbolic link needs a privilege on Windows")
+def test_the_hash_of_a_package_with_a_native_table_does_not_walk_build_or_deps(ws):
+    # A [native] table makes every start hash the package. _build/ and deps/ are not walked: a link named *.agc in
+    # them would be PKG-SYMLINK if the walk listed it, and a large tree there would be read on every start.
+    declare(ws, {"math.agc": LIBM}, SYSTEM_TABLE)
+    (ws.project / "main.agc").write_text(SYSTEM_MAIN, encoding="utf-8")
+    for folder in ["_build/bench/deep", "deps/other"]:
+        (ws.deps / "pkgdemo" / folder).mkdir(parents=True)
+        (ws.deps / "pkgdemo" / folder / "link.agc").symlink_to("missing.agc")
+    assert check(ws) is None
+
+
+@host_only(WINDOWS, "a symbolic link needs a privilege on Windows")
 def test_a_link_named_native_is_a_symlink_error_in_the_build_and_in_the_fetch(ws, remotes, tmp_path):
     outside = tmp_path / "outside"
     outside.mkdir()

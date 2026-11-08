@@ -358,8 +358,8 @@ def stored_name(label: String, inner: String) -> String
   return "pkg/#{label}/#{inner}"
 end
 
-# The path of file from root, which is in it and in no hidden folder or agc_libs/ (those are not hashed, so not
-# importable). A file that is outside is CHECK-IMPORT-PATH.
+# The path of file from root, which is in it and in no folder the hash leaves out (hidden, _build/, agc_libs/, deps/:
+# not hashed, so not importable). A file that is outside is CHECK-IMPORT-PATH.
 def confined(root: String, file: String, site: Failure.Site) -> Result[String]
   if !Paths.inside?(root, file)
     return error(refuse(site, "an import cannot leave its package", "keep the path inside the package"))
@@ -369,7 +369,8 @@ def confined(root: String, file: String, site: Failure.Site) -> Result[String]
   folders = below.take(below.size - 1)
   hidden = folders.any? do |part| PackageHash.skipped_folder?(part, false) end
   if hidden or (folders.size > 0 and PackageHash.skipped_folder?(folders[0], true))
-    return error(refuse(site, "a hidden folder or agc_libs of a package cannot be imported", "move the module"))
+    message = "a hidden folder, _build, agc_libs or deps of a package cannot be imported"
+    return error(refuse(site, message, "move the module"))
   end
 
   return ok(below.join("/"))
