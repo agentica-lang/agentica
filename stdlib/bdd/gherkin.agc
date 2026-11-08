@@ -301,11 +301,7 @@ export def parse(file: String, text: String) -> Outcome[Feature]
     tags = feature_tags.concat(draft.tags)
     if draft.outline
       for row in draft.examples
-        expanded = expand_row(draft, steps, tags, row)
-        if not expanded.ok?
-          return fail("PARSE-GHERKIN-PARAMETER", "no value for <#{expanded.message}>", row.span)
-        end
-        scenarios = scenarios.push(expanded.unwrap!)
+        scenarios = scenarios.push(expand_row(draft, steps, tags, row))
       end
     else
       scenarios = scenarios.push(
@@ -599,23 +595,24 @@ def collect(results: List[Result[String]]) -> Result[List[String]]
   return ok(results.map do |result| result.unwrap! end)
 end
 
-def expand_row(draft: Draft, steps: List[Step], tags: List[String], row: ExampleRow) -> Result[Scenario]
-  shown = try substitute(draft.name, row.bindings)
+def expand_row(draft: Draft, steps: List[Step], tags: List[String], row: ExampleRow) -> Scenario
+  shown = substitute(draft.name, row.bindings)
   name = shown + row_suffix(draft.name, row)
-  expanded: List[Step] = []
-  for step in steps
-    text = try substitute(step.text, row.bindings)
-    argument = try substitute_argument(step.argument, row.bindings)
-    expanded = expanded.push(Step(kind: step.kind, text: text, argument: argument, span: step.span))
+  expanded = steps.map do |step|
+    Step(
+      kind: step.kind,
+      text: substitute(step.text, row.bindings),
+      argument: substitute_argument(step.argument, row.bindings),
+      span: step.span,
+    )
   end
-  return ok(
-    Scenario(
-      name: name,
-      steps: expanded,
-      tags: tags.concat(row.tags),
-      span: draft.span,
-      example: Report.Example.Row(row.span),
-    ),
+
+  return Scenario(
+    name: name,
+    steps: expanded,
+    tags: tags.concat(row.tags),
+    span: draft.span,
+    example: Report.Example.Row(row.span),
   )
 end
 
@@ -658,55 +655,35 @@ def flat_char(c: String) -> String
   return c
 end
 
-def substitute_argument(argument: Argument, bindings: Map[String, String]) -> Result[Argument]
+def substitute_argument(argument: Argument, bindings: Map[String, String]) -> Argument
   case argument
-    Argument.DocString(text) -> return ok(Argument.DocString(try substitute(text, bindings)))
+    Argument.DocString(text) -> return Argument.DocString(substitute(text, bindings))
     Argument.DataTable(rows) ->
-      replaced: List[List[String]] = []
-      for cells in rows
-        replaced = replaced.push(try collect(cells.map do |cell| substitute(cell, bindings) end))
-      end
-      return ok(Argument.DataTable(replaced))
-    Argument.NoArgument -> return ok(argument)
+      return Argument.DataTable(rows.map do |cells| cells.map do |cell| substitute(cell, bindings) end end)
+    Argument.NoArgument -> return argument
   end
 end
 
-# Replaces each <name> (no < or > inside) from the left; the error is the first unknown name. A <...> that is not
-# a column but holds =, a quote or / (HTML such as <input type="text"> or <br/>) stays as written.
-def substitute(text: String, bindings: Map[String, String]) -> Result[String]
+# Replaces each <name> (no < or > inside) that is a column of the Examples, from the left. Any other <...> stays as
+# written, as in Cucumber: a doc string may hold `#include <stdio.h>` or HTML. So a misspelled column in a step is
+# not an error here; the step then fails as undefined or ambiguous, with the text unreplaced.
+def substitute(text: String, bindings: Map[String, String]) -> String
   if not text.include?("<")
-    return ok(text)
+    return text
   end
   parts = text.split("<")
-  pieces = collect(parts.drop(1).map do |part| substitute_part(part, bindings) end)
-  if not pieces.ok?
-    return error(pieces.message)
-  end
-  return ok(parts[0] + pieces.unwrap!.join(""))
+  return parts[0] + parts.drop(1).map do |part| substitute_part(part, bindings) end.join("")
 end
 
-def substitute_part(part: String, bindings: Map[String, String]) -> Result[String]
+def substitute_part(part: String, bindings: Map[String, String]) -> String
   # unwrap_or(0) keeps both a "<" with no ">" and an empty "<>" literal.
   close = part.index_of(">").unwrap_or(0)
   if close == 0
-    return ok("<#{part}")
+    return "<#{part}"
   end
   name = part.slice(0, close)
   if not bindings.has_key?(name)
-    if markup?(name)
-      return ok("<#{part}")
-    end
-    return error(name)
+    return "<#{part}"
   end
-  return ok(bindings[name] + rest_of(part, close + 1))
-end
-
-# Examples accepts any nonempty header, so a column is found first; this only tells markup from a mistyped name.
-def markup?(name: String) -> Bool
-  for c in name.split("")
-    if "=\"'/".include?(c)
-      return true
-    end
-  end
-  return false
+  return bindings[name] + rest_of(part, close + 1)
 end

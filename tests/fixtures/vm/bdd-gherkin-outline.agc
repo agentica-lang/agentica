@@ -41,4 +41,10 @@ def main() -> Void
     "Example: first\r\n  When run\r\n    \"\"\"\r\n      kept\r\n    out\r\n\r\n    \"\"\"\r\n  But not <this>\r\n" +
     "@one @two\r\nScenario: second\r\n  Then done\r\n    | a\\nb | \\\\ |\r\n"
   )
+  # Only a column is replaced: any other <...> stays as written, in names, steps, doc strings and tables.
+  show(
+    "Feature: unknown\nScenario Outline: <name> <other>\n  When file <missing> and <name>:\n    \"\"\"c\n" +
+    "    #include <stdio.h>\n    /* <name> and <pthread.h> */\n    <\n    <>\n    \"\"\"\n" +
+    "  Then rows:\n    | <br> | <name> |\n  Examples:\n    | name |\n    | x |\n"
+  )
 end

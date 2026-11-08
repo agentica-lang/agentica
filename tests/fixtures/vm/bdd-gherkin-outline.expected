@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 12530,
+  "steps": 16708,
   "stdout": [
     "feature \"streaming\" [\"@stream\"] sample.feature:2:1-19",
     "scenario \"value 1\" [\"@stream\", \"@case\", \"@examples\"] sample.feature:8:1-28 example sample.feature:21:1-10",
@@ -35,6 +35,12 @@
     "    no argument",
     "  Then \"done\" sample.feature:16:3-12",
     "    table [[\"a\\nb\", \"\\\\\"]]",
+    "feature \"unknown\" [] sample.feature:1:1-17",
+    "scenario \"x <other>\" [] sample.feature:2:1-33 example sample.feature:14:1-10",
+    "  When \"file <missing> and x:\" sample.feature:3:3-34",
+    "    doc \"#include <stdio.h>\\n/* x and <pthread.h> */\\n<\\n<>\"",
+    "  Then \"rows:\" sample.feature:10:3-13",
+    "    table [[\"<br>\", \"x\"]]",
     ""
   ],
   "stderr": []

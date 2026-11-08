@@ -146,10 +146,9 @@ feeds); a range runs to the end of the line.
   `--only` (`Name (sqlite, 42)`; a name that shows every column gets nothing).
   An empty cell shows as `""` and a control character as `\n`, `\r`, `\t` or
   `\xNN`. Identical rows keep identical names; the JSON `example` field (the
-  row's line) tells them apart. A `<...>` that is not a column is
-  `PARSE-GHERKIN-PARAMETER`, unless it holds `=`, a quote or `/` (HTML such as
-  `<input type="text">` or `<br/>`), which stays as written; a bare `<br>` or
-  `<p>` still fails. Several `Examples` blocks add their rows in order, and a
+  row's line) tells them apart. Only a column is replaced: any other `<...>`
+  (`#include <stdio.h>`, HTML) stays as written, as in Cucumber, so a
+  misspelled column is not a parse error. Several `Examples` blocks add their rows in order, and a
   row's tags are the Feature's, then the scenario's, then its `Examples`
   block's.
 - **Steps.** A step outside a Background or scenario, or after `Examples`, is
@@ -563,7 +562,7 @@ builtin: see
 `agentica test` reports the first problem of each kind with a stable code:
 
 - **Code:** `PARSE-GHERKIN-*` (`HEADER`, `STEP`, `ARGUMENT`, `TABLE`,
-  `EXAMPLES`, `TAGS`, `EMPTY`, `PARAMETER`, `UNSUPPORTED`)
+  `EXAMPLES`, `TAGS`, `EMPTY`, `UNSUPPORTED`)
   - **Meaning:** The `.feature` file breaks the supported subset; the rule is in
     the Gherkin list above
 

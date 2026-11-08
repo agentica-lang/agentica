@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 25530,
+  "steps": 20037,
   "stdout": [
     "PARSE-GHERKIN-TABLE sample.feature:5:1-6",
     "PARSE-GHERKIN-TABLE sample.feature:4:1-16",
@@ -9,7 +9,6 @@
     "PARSE-GHERKIN-ARGUMENT sample.feature:3:1-4",
     "PARSE-GHERKIN-ARGUMENT sample.feature:4:1-4",
     "PARSE-GHERKIN-TABLE sample.feature:5:1-2",
-    "PARSE-GHERKIN-PARAMETER sample.feature:6:1-6",
     "PARSE-GHERKIN-EXAMPLES sample.feature:2:1-20",
     "PARSE-GHERKIN-ARGUMENT sample.feature:4:1-4",
     "PARSE-GHERKIN-TABLE sample.feature:4:1-9",
@@ -19,7 +18,6 @@
     "PARSE-GHERKIN-EXAMPLES sample.feature:4:1-10",
     "PARSE-GHERKIN-EXAMPLES sample.feature:4:1-10",
     "PARSE-GHERKIN-EXAMPLES sample.feature:4:1-10",
-    "PARSE-GHERKIN-PARAMETER sample.feature:9:1-6",
     ""
   ],
   "stderr": []

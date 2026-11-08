@@ -255,25 +255,27 @@ def test_a_failed_check_points_at_its_step_keyword_and_outline_rows_have_their_o
         "PARSE-GHERKIN-UNSUPPORTED", {"line": 3, "column": 1})
 
 
-def test_an_outline_keeps_html_that_is_not_a_column_and_still_rejects_a_misspelled_column(bdd):
+def test_an_outline_replaces_only_the_columns_and_keeps_any_other_angle_text_as_written(bdd):
     steps = steps_program(main_running(
-        'BDD.step("<input type=\\"checkbox\\" value=\\"x\\"> is row {int} of <br/>") do |ctx, args|\n'
-        '      BDD.assert(ctx, args[0] == "1" or args[0] == "2", "markup was changed")\n    end'))
-    row = '    Then <input type="checkbox" value="x"> is row <id> of <br/>\n'
+        'BDD.step("<input type=\\"checkbox\\"> is row {int} of <br>") do |ctx, args|\n'
+        '      BDD.assert(ctx, args[0] == "1" or args[0] == "2", "markup was changed")\n    end',
+        'BDD.step("the C file is:") do |ctx, _|\n'
+        '      BDD.assert(ctx, BDD.doc_string(ctx) == "#include <pthread.h>\\n/* 1 and <not_a_column> */\\n// row 1",'
+        ' "the doc string differs: " + BDD.doc_string(ctx))\n    end'))
+    row = '    Then <input type="checkbox"> is row <id> of <br>\n'
+    doc = '    Then the C file is:\n      """c\n      #include <pthread.h>\n      /* <id> and <not_a_column> */\n      // row <id>\n      """\n'
     directory = bdd.suite({
         "steps.agc": steps,
-        "html.feature": "Feature: Html\n\n  Scenario Outline: row <id>\n%s\n  Examples:\n    | id |\n    | 1 |\n    | 2 |\n" % row,
-        "spaced.feature": ("Feature: Spaced\n\n  Scenario Outline: row\n%s\n  Examples:\n    | first name | id |\n"
-                           "    | Ana | 1 |\n" % row.replace("<id>", "<first nam>")),
+        "outline.feature": ("Feature: Outline\n\n  Scenario Outline: row <id> of <other>\n%s%s\n  Examples:\n    | id |\n    | 1 |\n"
+                            % (row, doc)),
         "typo.feature": "Feature: Typo\n\n  Scenario Outline: row\n%s\n  Examples:\n    | id |\n    | 1 |\n" % row.replace("<id>", "<idd>")})
-    status, report = bdd.json_test(joined(directory, "html.feature"), "--steps", joined(directory, "steps.agc"))
+    status, report = bdd.json_test(joined(directory, "outline.feature"), "--steps", joined(directory, "steps.agc"))
     assert status == 0
-    assert [(item["name"], item["status"]) for item in report_cases(report)] == [
-        ("row 1", "passed"), ("row 2", "passed")]
-    for name in ("typo", "spaced"):
-        status, report = bdd.json_test(joined(directory, name + ".feature"), "--steps", joined(directory, "steps.agc"))
-        assert status == 1, name
-        assert file_error(report)["code"] == "PARSE-GHERKIN-PARAMETER", name
+    assert [(item["name"], item["status"]) for item in report_cases(report)] == [("row 1 of <other>", "passed")]
+    # A misspelled column is not replaced: the step text is then undefined, not a parse error.
+    status, report = bdd.json_test(joined(directory, "typo.feature"), "--steps", joined(directory, "steps.agc"))
+    assert status == 1
+    assert [item["status"] for item in report_cases(report)] == ["failed"]
 
 
 def test_a_crashing_handler_shows_its_stack_in_the_text_and_ai_reports(bdd):
