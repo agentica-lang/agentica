@@ -304,7 +304,9 @@ end
 
 # The server's request_timeout_ms, which bounds each write: the 16 MB messages must reach the peer within it.
 WRITE_MS = scaled(2000)
-# The receive buffer of a peer that reads a 16 MB message: small, as on macOS, so the write is partial many times.
+assert "WRITE_MS" in SERVER_PROGRAM
+# The receive buffer of a peer that reads a 16 MB message (Linux doubles it): small, as on macOS, so the write is
+# partial many times.
 SMALL_BUFFER = 65536
 
 
