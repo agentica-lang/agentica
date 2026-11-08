@@ -72,6 +72,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A big `_build/` no longer slows each start of a package with `[native]`: the
   package hash skips it, and `check`, `fmt`, `lint` and `test` on a folder
   skip `_build/` too.
+- `Cache.bytes` of `std/cache` stays exact when a task stalls while the
+  generations rotate; it could keep counting an entry that a removal dropped.
 
 ## [0.26.2] - 2026-11-08
 
