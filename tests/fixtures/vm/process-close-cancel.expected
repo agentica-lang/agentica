@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 63,
+  "steps": 65,
   "stdout": [
     "false",
     "ok(\"gone\")",
