@@ -1,7 +1,7 @@
 # The C tests and the checks of the VM: vm-test, TSan, GC stress, sanitizers, fuzz, multicore, the vendored-library
 # check, clang-tidy and the layer check. Their binaries use the build mode and the objects of mk/vm.mk.
 
-.PHONY: vm-test vm-test-binaries vm-tsan vm-tsan-run test-multicore test-multicore-modules vm-libfuzz vm-libfuzz-run vm-gc-stress vm-trace-off \
+.PHONY: vm-test vm-test-binaries vm-tsan vm-tsan-run vm-tsan-native test-multicore test-multicore-modules vm-libfuzz vm-libfuzz-run vm-gc-stress vm-trace-off \
   vm-diff-build vm-diff-test sweep-full test-shared vm-jit-test vm-sanitize-jit-test vm-gc-stress-jit vm-jit-self-compile vm-sanitize-build vm-sanitize-test vendored-check vendored-test \
   vm-layers layout-check
 
@@ -20,10 +20,16 @@ $(VM_BUILD)/windows_remove-test$(EXE): $(OSSL_DEP) $(GC_DEP) $(filter-out $(VM_O
 # The native module that native_module-test opens as a shared library, next to it: tests/fixtures/native/module_demo.c
 # built like a module of a package, with no symbol of the VM to link against (-z defs on Linux finds any).
 NATIVE_DEMO := $(VM_BUILD)/$(if $(filter Windows_NT,$(VM_OS)),module_demo.dll,$(if $(filter Darwin,$(shell uname -s)),libmodule_demo.dylib,libmodule_demo.so))
+# In the TSan mode the demo is built with TSan too and takes the runtime from the test, so it is linked without -z defs.
 NATIVE_DEMO_FLAGS := $(if $(filter Windows_NT,$(VM_OS)),-shared,$(if $(filter Darwin,$(shell uname -s)),-dynamiclib,-shared -fPIC -Wl,-z,defs))
+NATIVE_DEMO_CC := $(CC)
+ifeq ($(TSAN),1)
+NATIVE_DEMO_FLAGS := -shared -fPIC -g -fno-omit-frame-pointer -fsanitize=thread
+NATIVE_DEMO_CC := $(VM_CC)
+endif
 $(NATIVE_DEMO): tests/fixtures/native/module_demo.c vm/agentica_native.h
 	@mkdir -p $(dir $@)
-	$(CC) -std=c11 -O1 -fvisibility=hidden $(NATIVE_DEMO_FLAGS) -o $@ $<
+	$(NATIVE_DEMO_CC) -std=c11 -O1 -fvisibility=hidden $(NATIVE_DEMO_FLAGS) -o $@ $<
 $(VM_BUILD)/native_module-test$(EXE): $(NATIVE_DEMO)
 
 VM_TESTS_NORMAL := $(filter-out $(VM_BUILD)/tree-test$(EXE) $(VM_BUILD)/files_private-test$(EXE) $(VM_BUILD)/windows_remove-test$(EXE),$(VM_TESTS))
@@ -50,6 +56,7 @@ vm-tsan:
 # test`, `check`) go through TSan too, not through the ASan binary that SANITIZE=1 makes of dist/agentica.
 # Both also run the TCP, TLS, HTTP, process, BDD and native-call modules with every VM on four schedulers
 # (AGENTICA_VM_TEST_MODULE_SCHEDULERS, read by tests/agentica_test.py); test-multicore-modules runs only those.
+# vm-tsan-run leaves the native-call module to vm-tsan-native, which builds its peers with TSan.
 VM_MULTICORE_MODULES := tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_websocket.py tests/test_vm_http_proxy.py tests/test_process.py \
   tests/test_process_lifecycle.py tests/test_bdd.py tests/test_vm_native.py
 test-multicore: dist/agentica$(EXE)
@@ -59,10 +66,26 @@ test-multicore: dist/agentica$(EXE)
 test-multicore-modules: dist/agentica$(EXE)
 	@AGENTICA_VM_TEST_MODULE_SCHEDULERS=4 $(MAKE) --no-print-directory test-py TESTS="$(VM_MULTICORE_MODULES)"
 
+# The native and FFI modules on the TSan binary, on two and then four schedulers (#1169). tests/test_vm_native.py
+# builds its peers (tests/fixtures/native/*.c, the module demo, examples/ffi/demo.c) with -fsanitize=thread when the VM
+# under test is this binary, so a race in a peer's C or between the peer and the VM fails the run. The TSan control
+# (tsan_finalize_control.c) is a program of its own with its own TSAN_OPTIONS, and the finalization hook stays
+# uninstrumented. vm-tsan-run leaves these modules to this target.
+VM_TSAN_NATIVE_MODULES := tests/test_vm_native.py tests/test_vm_native_module.py tests/test_examples_ffi.py
+vm-tsan-native: dist/agentica$(EXE)
+	$(MAKE) build/vm/tsan/agentica$(EXE) TSAN=1 SANITIZE=0 GC_STRESS=0
+	for n in 2 4; do \
+	  echo "vm-tsan-native: $$n schedulers"; \
+	  AGENTICA_VM_BINARY=build/vm/tsan/agentica$(EXE) AGENTICA_TEST_EXECUTABLE=$(CURDIR)/build/vm/tsan/agentica$(EXE) \
+	    AGENTICA_REQUIRE_VM=1 TSAN_OPTIONS="$(VM_TSAN_OPTIONS)" AGENTICA_VM_TEST_MODULE_SCHEDULERS=$$n \
+	    $(MAKE) --no-print-directory test-py SHARD= TESTS="$(VM_TSAN_NATIVE_MODULES)" || exit 1; \
+	done
+
 # SHARD=I/N runs shard I of N of these modules (tools/shard_tests.py, the tsan column of tests/shard_weights.txt: the CI
 # shards), the two runs below together being one list. The inner make gets SHARD= so that it does not split its list again.
 TSAN_RUN_ALONE := tests/test_vm_multicore.py
-TSAN_RUN_PICKED = $(if $(SHARD),$(shell $(PYTHON) tools/shard_tests.py --weights tsan $(SHARD) $(TSAN_RUN_ALONE) $(VM_MULTICORE_MODULES)),$(TSAN_RUN_ALONE) $(VM_MULTICORE_MODULES))
+TSAN_RUN_MODULES := $(filter-out $(VM_TSAN_NATIVE_MODULES),$(VM_MULTICORE_MODULES))
+TSAN_RUN_PICKED = $(if $(SHARD),$(shell $(PYTHON) tools/shard_tests.py --weights tsan $(SHARD) $(TSAN_RUN_ALONE) $(TSAN_RUN_MODULES)),$(TSAN_RUN_ALONE) $(TSAN_RUN_MODULES))
 vm-tsan-run: dist/agentica$(EXE)
 	@: $(SHARD_CHECK)
 	@if [ -n "$(SHARD)" ] && [ -z "$(strip $(TSAN_RUN_PICKED))" ]; then \

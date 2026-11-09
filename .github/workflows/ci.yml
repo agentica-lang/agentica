@@ -117,10 +117,11 @@ jobs:
                   trace=true ;;
               esac
               case "$f" in
-                vm/*|Makefile|mk/*|.gitmodules|.clang-tidy|.github/workflows/ci.yml|.github/actions/*)
+                # tests/fixtures/native/: the C peers, which vm-tsan-native runs under TSan.
+                vm/*|tests/fixtures/native/*|Makefile|mk/*|.gitmodules|.clang-tidy|.github/workflows/ci.yml|.github/actions/*)
                   c=true ;;
               esac
-              # The same files plus the settings and the baseline of cchecker, which do not need the sanitizer half.
+              # vm/ and the build files plus the settings and the baseline of cchecker, which do not need the sanitizer half.
               case "$f" in
                 vm/*|Makefile|mk/*|.gitmodules|.clang-tidy|cchecker.toml|cchecker-baseline.json|.github/workflows/ci.yml|.github/actions/*)
                   cchecker=true ;;
@@ -605,6 +606,33 @@ jobs:
       - name: vm-tsan-run, tests/test_vm_multicore.py and the TCP, TLS, HTTP, process and BDD modules on four schedulers under ThreadSanitizer
         run: make vm-tsan-run SHARD=${{ matrix.shard }}/3
 
+  # vm-tsan-native: the native and FFI modules on two and then four schedulers under ThreadSanitizer, with their C peers
+  # built with TSan too, so a race in a peer (#1160) fails it. Like tsan-run, it links the TSan binary again.
+  tsan-native:
+    name: vm-tsan-native
+    needs: [changes, sanitizer-build, tsan-build]
+    if: ${{ needs.changes.outputs.c != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      AGENTICA_REQUIRE_VM: '1'
+      AGENTICA_SWEEP: sampled
+      SANITIZE: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: ./.github/actions/setup
+        with:
+          sanitizers: 'true'
+      - uses: ./.github/actions/use-build
+        with:
+          artifact: sanitizer-build
+          extra: tsan-build
+          targets: dist/agentica
+      - name: vm-tsan-native, the native-call, native-module and FFI modules with TSan-built peers on 2 and 4 schedulers
+        run: make vm-tsan-native
+
   vm-layers:
     needs: [changes, sanitizer-build]
     if: ${{ needs.changes.outputs.c != 'false' }}
@@ -653,7 +681,7 @@ jobs:
   # The check that branch protection names for the C half. It passes when C did not change (every job above is skipped then)
   # and fails when a job of the half failed or was cancelled.
   vm-sanitizers:
-    needs: [changes, sanitizer-build, tsan-build, lint-fuzz, sanitizer-tests, tsan-run, vm-layers, jit-arm64]
+    needs: [changes, sanitizer-build, tsan-build, lint-fuzz, sanitizer-tests, tsan-run, tsan-native, vm-layers, jit-arm64]
     if: ${{ always() && github.event_name != 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
