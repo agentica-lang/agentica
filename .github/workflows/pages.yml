@@ -47,11 +47,14 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # The docs theme (only this submodule: the VM's are not needed), with its history, so that
+      # tools/site_versions.py can unpack the theme commit that each tag pins.
+      - run: git submodule update --init site/themes/docs-theme
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: site/highlight/package-lock.json
+          cache-dependency-path: site/themes/docs-theme/highlight/package-lock.json
       - id: pages
         uses: actions/configure-pages@v6
       # The cache holds the output of each tag by commit sha and base URL (a sha never changes, so an entry is never

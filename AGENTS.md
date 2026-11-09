@@ -129,8 +129,8 @@ stay.
   `unittest.TestCase` modules (from `tests.agentica_test.TestCase`) are
   collected too. Node and Python peers (curl included) use the standard
   library only. Dependencies: the C submodules in `vm/third_party`, the
-  pinned jscpd in `tools/jscpd` and the site highlighter in `site/highlight`;
-  nothing else.
+  pinned jscpd in `tools/jscpd` and the docs theme (with the site
+  highlighter) in `site/themes/docs-theme`; nothing else.
 - A language rule is tested through the CLI, in `tests/test_spec_<area>.py`:
   `--json check FILE`, asserting the code and the span, never the message.
 - Network and process tests are hermetic: localhost, port 0, no external

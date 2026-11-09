@@ -1,6 +1,9 @@
 # Documentation site
 
-The site's design rules are in `site/DESIGN.md`.
+The look, the layouts, the outputs and the highlighter come from the docs
+theme, the submodule `site/themes/docs-theme` (agentica-lang/docs-theme). Its
+README says how it works and lists its params; its `DESIGN.md` has the design
+rules. A change of style is a docs-theme PR, then a submodule bump here.
 
 Read this before changing `site/`, a site page, or a builtin or language
 rule that a site page shows.
@@ -9,26 +12,25 @@ rule that a site page shows.
 
 - `make site` builds `site/public` (Hugo extended; the Hugo and Dart Sass
   versions are pinned in `pages.yml`; `mk/site.mk` says where `sass` must be).
-  Warnings fail the build. `make site-serve` serves it. Styles are SCSS partials
-  in `site/assets/scss/` (custom properties in `_tokens.scss`).
-- `make site` also needs Node: after Hugo, `site/highlight/highlight.mjs` colors
-  every `agentica` block with the TextMate grammar of agc-tmlanguage (copied to
-  `site/highlight/agentica.tmLanguage.json`; its `package.json` `grammar` field
-  is the source commit). `render-codeblock.html` wraps each block in
-  `div.agc-code` for it and fails the build on Hugo highlight options
-  (`linenos`, `hl_lines`); the script fails on a block of another shape, an
-  unknown HTML entity or a `CLASSES` entry that colors no token.
-  `make site-serve` skips the script. The same script colors the `signature`
-  blocks with a small tokenizer and fails on a line of another shape.
-- To update the grammar, copy `syntaxes/agentica.tmLanguage.json` from
-  agc-tmlanguage, set the `grammar` field to its commit and run `make site`.
+  It needs the theme (`git submodule update --init site/themes/docs-theme`).
+  Warnings fail the build. `make site-serve` serves it.
+- `make site` also needs Node: after Hugo, the theme's
+  `highlight/highlight.mjs --strict` colors every `agentica` and `signature`
+  block, and fails on a block of another shape or a color class that no token
+  matches.
+- The grammar is the theme's `highlight/agentica.tmLanguage.json`; it must
+  color exactly `RESERVED_TYPE_NAMES` (`tests/test_frontend_catalog.py`). A
+  change to that list needs a docs-theme PR and a submodule bump.
+- The site's own templates override the theme: `layouts/reference/list.html`
+  (the spec index) and `layouts/_shortcodes/release.md`. `site/hugo.toml` sets
+  the params and `_merge = "deep"`, which takes the theme's outputs.
 - The site shows the version of the `VERSION` file (header, footer, `llms.txt`,
   `llms-full.txt`, Getting started). `make site` passes it to Hugo as
-  `HUGO_PARAMS_VERSION`, and `_partials/version.html` fails a plain `hugo`
-  build without it. Never type the version in `site/`. The Getting started text
-  comes from the `release` shortcode (`layouts/_shortcodes/release.md`).
-- `/search.json` is built from `layouts/home.search.json` (never edit it by
-  hand).
+  `HUGO_PARAMS_VERSION`; the `release` shortcode (Getting started) fails a
+  plain `hugo` build without it. Never type the version in `site/`.
+- To take a newer theme: `git -C site/themes/docs-theme checkout <commit>`,
+  `git add site/themes/docs-theme`, `make site`. `tools/site_versions.py`
+  builds each tag with the theme commit that tag pins.
 
 ## Content
 

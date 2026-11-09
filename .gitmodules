@@ -20,3 +20,6 @@
 [submodule "vm/third_party/zlib"]
 	path = vm/third_party/zlib
 	url = https://github.com/madler/zlib.git
+[submodule "site/themes/docs-theme"]
+	path = site/themes/docs-theme
+	url = https://github.com/agentica-lang/docs-theme.git
