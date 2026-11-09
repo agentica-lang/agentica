@@ -30,8 +30,8 @@ check before it fails.
 
 ## 1. Version bump PR
 
-Make a worktree from `origin/master` (never switch the main checkout) on a
-branch such as `release/<version>`. Change only:
+Make a worktree from `origin/master` (a patch: §6; never switch the main
+checkout) on a branch such as `release/<version>`. Change only:
 
 1. `VERSION`: the new version, one line.
 2. `CHANGELOG.md`:
@@ -138,29 +138,40 @@ test is not patch material, since it does not change the binary.
   as a tag is.
 
   ```bash
-  git push origin X.Y.<Z-1>:refs/heads/release-X.Y   # if it does not exist
+  git fetch origin
+  # the tag is annotated, so push the commit it points to
+  git push origin 'X.Y.<Z-1>^{commit}:refs/heads/release-X.Y'
+  git fetch origin
   git worktree add -b release/X.Y.Z ../agentica-X.Y.Z origin/release-X.Y
   ```
 
-  Take each fix with `git cherry-pick -x`. Never merge master into this
+  Take each fix with `git cherry-pick -x`: the PR's own commits
+  (`git cherry-pick -x A^..B`), or its merge commit with `-m 1`. On a
+  CHANGELOG conflict, keep only that fix's line. Never merge master into this
   branch: in §1 and in `agentica-dev-workflow`, read `origin/release-X.Y`
   wherever they say `origin/master`.
 - **The PR:** that branch is the version bump PR, with base `release-X.Y`.
-  §1 items 1 to 3 apply as written: the stage0 refresh builds from the stage0
-  of `release-X.Y`, and CI and Platforms run on the PR as usual. Its body
-  lists each fix with its master PR. Tag its merge commit (§2), then write
-  the notes (§3).
+  §1 applies, with two changes. The CHANGELOG of the branch has an empty
+  `[Unreleased]`: write one line per fix there first. The compare link is
+  `X.Y.<Z-1>...X.Y.Z`. The stage0 refresh builds from the stage0 of
+  `release-X.Y`, and CI and Platforms run on the PR as usual. Its body lists
+  each fix with its master PR. Tag its merge commit (§2), then write the
+  notes (§3).
 - **Latest:** `release.yml` creates the release with no `--latest` flag. In
   `gh release list`, Latest must be the highest version; if not, run
   `gh release edit <highest> --latest`.
-- **Pages and checks:** for a patch of an older line, the Install section
-  keeps the newest release; check only that the version selector lists
-  `X.Y.Z` (§4) and that its release page has the archives (§5).
-- **Master:** forward-port in a small PR, CHANGELOG only. Add
-  `## [X.Y.Z] - <date>` in version order and its compare link. Move the
-  entries of the fixes out of `[Unreleased]`, unless a release already lists
-  them. Do not change `VERSION` or stage0 on master.
-- Delete `release/X.Y.Z` after the merge, and create the milestone
+- **Master:** forward-port in a small PR. Add `## [X.Y.Z] - <date>` in
+  version order and its compare link. Move the entries of the fixes out of
+  `[Unreleased]`, unless a release already lists them. When X.Y.Z is the
+  highest version, also set `VERSION` to it, so the site's Install section
+  shows it once `pages.yml` runs (§4). Leave stage0 alone: the next master
+  release refreshes it. For a patch of an older line, `VERSION` stays.
+- **Pages and checks:** after the master PR, follow §4 and §5. For a patch
+  of an older line, the Install section keeps the newest release; check only
+  that the version selector lists `X.Y.Z` and that its release page has the
+  archives.
+- After the tag, delete `release/X.Y.Z` and `release-X.Y` (the next patch
+  makes `release-X.Y` again from the last tag), and create the milestone
   `X.Y.<Z+1>`.
 
 ## Gotchas
