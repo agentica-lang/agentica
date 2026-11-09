@@ -476,12 +476,16 @@ def declared_names(decl: Ast.Decl, watched: Set[String]) -> List[String]
 end
 
 # The types the checker recorded at the type names used as a value: those of the JSON targets, an alias resolved and a
-# List or Map whole (CheckRules.check_json_type). A name with no type recorded (Type.members) is left out.
+# List or Map whole (check_json_type), and the struct or enum of a Type.codec. A name with no type recorded
+# (Type.members) is left out.
 def json_targets(types: List[Types.Type], ids: List[Int]) -> List[Types.Type]
   found: List[Types.Type] = []
   for id in ids
     if id < types.size and !Types.unknown?(types[id])
-      found = found.push(types[id])
+      case types[id]
+        Types.Type.Codec(item) -> found = found.push(item)
+        _ -> found = found.push(types[id])
+      end
     end
   end
 

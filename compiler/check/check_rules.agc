@@ -60,11 +60,12 @@ end
 
 ## Type.codec: the codec of the struct or enum named by the type name, which must be a type JSON.decode takes.
 export def check_codec_of(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[T.Type]
-  if node.args.size > 0
+  type = try json_target(cx, st, node)
+  if container?(type)
     return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", "codec requires a struct or enum name", node.span))
   end
 
-  return ok(T.Type.Codec(try json_target(cx, st, node)))
+  return ok(T.Type.Codec(type))
 end
 
 # CHECK-ARITY: no form of the builtin takes this many arguments. The note is the signature of every form. A call
@@ -404,16 +405,18 @@ def check_decode_source(cx: State.Cx, st: State.St, source: Ast.Expr) -> Result[
 end
 
 # The struct or enum a JSON type argument names, which must be a name whose fields or payloads can all be decoded. A
-# List[T] or Map[String, T] is a target of JSON.decode only: JSON.schema describes a named type.
+# List[T] or Map[String, T], written so or through an alias, is a target of JSON.decode only: JSON.schema describes a
+# named type.
 def json_type(cx: State.Cx, st: State.St, target: Ast.Expr, decode: Bool) -> Result[T.Type]
   case target
     Ast.Expr.TypeName(node) ->
-      if node.args.size > 0 and !decode
+      type = try json_target(cx, st, node)
+      if container?(type) and !decode
         message = "JSON.schema requires a struct or enum name"
         return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", message, node.span))
       end
 
-      return json_target(cx, st, node)
+      return ok(type)
     _ ->
       message = "JSON type argument requires a struct or enum name"
       return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", message, Ast.expr_span(target)))
@@ -433,8 +436,7 @@ def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[T.Type
   type = try CheckTypes.resolve_type(cx, st, ref, false)
   try json_field_place(cx, st, type, "decode target", node.span)
   named = T.is?(type, "Struct") or T.is?(type, "Enum")
-  container = node.args.size > 0 and (T.is?(type, "List") or T.is?(type, "Map"))
-  if !(named or container) or !CheckTypes.decodable?(cx, type)
+  if !(named or container?(type)) or !CheckTypes.decodable?(cx, type)
     return error(
       State.fail_maybe(
         cx,
@@ -448,6 +450,11 @@ def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[T.Type
   end
 
   return ok(type)
+end
+
+# True for a List or Map JSON target, which only JSON.decode takes.
+def container?(type: T.Type) -> Bool
+  return T.is?(type, "List") or T.is?(type, "Map")
 end
 
 # The help of a JSON builtin that refuses a type with a JsonField of an Optional or a Bytes inside, or "": JSON has no

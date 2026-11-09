@@ -126,6 +126,19 @@ def see_expr(found: Scan, expr: Ast.Expr, watched: Set[String]) -> Scan
     Ast.Expr.Call(node) ->
       return found.with(calls: found.calls.push(node.name), covered: wrapping(found.covered, node))
     Ast.Expr.FunctionRef(node) -> return found.with(calls: found.calls.push(node.name))
+    Ast.Expr.FieldAccess(node) ->
+      # Type.codec: its type, a Codec of the struct or enum, is recorded here, not at the type name, whose id the
+      # linker made past the program's.
+      case node.target
+        Ast.Expr.TypeName(_) ->
+          if node.name == "codec"
+            return found.with(type_ids: found.type_ids.push(node.id))
+          end
+
+        _ -> return found
+      end
+
+      return found
     Ast.Expr.TypeName(node) ->
       ref = Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span)
       written = found.written.concat(written_in(ref, watched))

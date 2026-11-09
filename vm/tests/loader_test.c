@@ -259,19 +259,24 @@ static bool loads(spec s, const char *reason) {
   return ok;
 }
 
+/* The structs of the test tables: P with the field x, and Q with `q_fields` of the fields a and b. */
+static void two_structs(buffer *t, uint32_t q_fields) {
+  static const char *const q_names[] = {"a", "b"};
+  u32(t, 2);
+  str(t, "P");
+  u32(t, 1);
+  str(t, "x");
+  str(t, "Q");
+  u32(t, q_fields);
+  for (uint32_t k = 0; k < q_fields; k++) str(t, q_names[k]);
+}
+
 static buffer make_tables(uint32_t arity) {
   buffer t;
   t.data = malloc(4096);
   assert(t.data);
   t.len = 0;
-  u32(&t, 2);
-  str(&t, "P");
-  u32(&t, 1);
-  str(&t, "x");
-  str(&t, "Q");
-  u32(&t, 2);
-  str(&t, "a");
-  str(&t, "b");
+  two_structs(&t, 2);
   u32(&t, 0);
   u32(&t, 0);
   u32(&t, 1);
@@ -535,14 +540,7 @@ static buffer type_tables(int which) {
   t.data = malloc(70000);
   assert(t.data);
   t.len = 0;
-  u32(&t, 2);
-  str(&t, "P");
-  u32(&t, 1);
-  str(&t, "x");
-  str(&t, "Q");
-  u32(&t, 2);
-  str(&t, "a");
-  str(&t, "b");
+  two_structs(&t, which == 25 ? 0 : 2);
   if (which == 7) {
     u32(&t, 65536);
     for (uint32_t k = 0; k < 65536; k++) u8(&t, 0);
@@ -569,9 +567,11 @@ static buffer type_tables(int which) {
     u32(&t, which == 4 ? 3 : 2);
   }
   u32(&t, 1);
-  str(&t, which == 11 ? "P" : which == 23 ? "List[@1::Q]" : "@1::Q");
-  u32(&t, 1);
-  u32(&t, 0);
+  str(&t, which == 11 ? "P" : which == 23 || which == 25 ? "List[@1::Q]" : "@1::Q");
+  if (which != 25) {
+    u32(&t, 1);
+    u32(&t, 0);
+  }
   if (which == 5) {
     u32(&t, 0);
     str(&t, "P");
@@ -581,7 +581,7 @@ static buffer type_tables(int which) {
      wrong shape (Value without its payload, a fourth variant, Null before Absent) or a second JsonField enum. 19: an
      Optional type (kind 8) and no enum; 20: with the Optional enum; 21: an enum named Optional of another shape (Some
      without its payload), which is not the builtin one; 22: two Optional enums. 23: a List target name (a `[`) on Q,
-     which has two fields; 24: one on P, which has one. */
+     which has two fields; 24: one on P, which has one; 25: one on a Q of no fields. */
   if (which < 14 || which == 19) {
     u32(&t, 0);
     return t;
@@ -2188,6 +2188,7 @@ int main(void) {
   assert(!loads_types(22, "duplicate Optional enum"));
   assert(!loads_types(23, "a List or Map JSON target needs one field"));
   assert(loads_types(24, NULL));
+  assert(!loads_types(25, "a List or Map JSON target needs one field"));
   buffer typed = type_tables(0);
   s = base();
   s.tables = &typed;

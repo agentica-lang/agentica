@@ -121,7 +121,7 @@ end
 
 ## The name of the struct that stands for a List[T] or Map[String, T] used as a JSON.decode target: the type with its
 ## linked names, such as List[app.Person]. A `[` keeps it apart from every struct a program declares, and the VM
-## decodes such a struct's one field in its place (docs/vm/03-bytecode-format.md).
+## decodes such a struct's one field in its place (docs/vm/03-ir-and-bytecode.md).
 export def json_list_name(type: Types.Type) -> String
   case type
     Types.Type.List(item) -> return "List[#{json_list_name(item)}]"

@@ -75,6 +75,24 @@ CASES = [
         "List[Raw]",
     ),
     (
+        "decode takes a List through an alias",
+        "type Rows = List[Raw]\n\n" + main_with('  rows: Result[List[Raw]] = JSON.decode("[]", Rows)\n  puts(rows.ok?)\n'),
+        None,
+        None,
+    ),
+    (
+        "schema refuses a List through an alias",
+        "type Rows = List[Raw]\n\n" + main_with("  puts(JSON.schema(Rows))\n"),
+        "CHECK-TYPE-MISMATCH",
+        "Rows",
+    ),
+    (
+        "codec refuses a List through an alias",
+        "type Rows = List[Raw]\n\n" + main_with("  puts(Rows.codec.members)\n"),
+        "CHECK-TYPE-MISMATCH",
+        "Rows",
+    ),
+    (
         "codec takes a named type only",
         main_with('  puts(List[Raw].codec.encode([]))\n'),
         "CHECK-TYPE-MISMATCH",
@@ -131,3 +149,20 @@ def test_an_alias_decodes_as_the_type_it_names_alone_and_as_an_item(tmp_path):
     result = run(cli() + [str(program)])
     assert result.code == 0, result.stderr
     assert result.stdout == 'Raw(file: "a.c", line: none)\n[Raw(file: "b.c", line: none)]\n'
+
+
+def test_aliases_of_a_list_and_of_an_enum_reach_their_types(tmp_path):
+    """An alias of a List decodes as the List, and the codec of an alias of an enum that nothing else names finds it."""
+    program = tmp_path / "program.agc"
+    program.write_text(
+        "struct Raw\n  file: String\nend\n\nenum Color\n  Red\n  Blue\nend\n\n"
+        "type Rows = List[Raw]\n\ntype Hue = Color\n\n"
+        "def main() -> Void\n"
+        '  puts(JSON.decode("[{\\"file\\": \\"a.c\\"}]", Rows).unwrap!)\n'
+        '  puts(Hue.codec.decode("{\\"tag\\": \\"Red\\"}").unwrap!)\n'
+        "end\n",
+        encoding="utf-8",
+    )
+    result = run(cli() + [str(program)])
+    assert result.code == 0, result.stderr
+    assert result.stdout == '[Raw(file: "a.c")]\nColor.Red\n'

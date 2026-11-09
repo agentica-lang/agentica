@@ -22,6 +22,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `JSON.decode`, `JSON.schema` and `T.codec` take a type alias of a struct or
+  enum; they failed with `LOWER-UNSUPPORTED` or at run time.
 - A header value with a Latin-1 character (`é`) is sent as its single byte and
   read back as the same text; it was accepted but made `std/http` answer an
   empty 500 or fail the request.
