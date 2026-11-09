@@ -352,3 +352,52 @@ def test_a_file_that_cannot_run_is_an_error_and_the_next_spawn_still_works(tmp_p
             % (agc_literal(bad), "  puts(Result.unwrap!(Process.read_line(Result.unwrap!(Process.spawn(%s, [%s, \"args\"], 5000)), 5000)))\nend\n\n"
                % (agc_literal(PYTHON), agc_literal(PY_PEER))))
     assert output(tmp_path, text) == "false\n[]\n"
+
+
+def streams_to(count, out, err, command=None, read="Process.read_line(p, 5000)"):
+    """Program text that starts the Python peer in streams mode with `out` and `err` (Agentica expressions) as the
+    files, then prints `read` and the exit code, or the error of the spawn."""
+    start = 'Process.spawn(%s, [%s, "streams", "%d"], 5000, {}, %s, %s)' % (
+        command or agc_literal(PYTHON), agc_literal(PY_PEER), count, out, err)
+    return ('def main() -> Void\n  started = %s\n  if !started.ok?\n    puts(started.message)\n    return\n  end\n'
+            '  p = started.unwrap!\n  IO.inspect(%s)\n  IO.inspect(Process.wait(p, 5000))\n'
+            '  Process.close(p)\nend\n\n' % (start, read))
+
+
+def test_out_and_err_send_the_streams_to_files_created_or_truncated(tmp_path):
+    out, err = tmp_path / "out.txt", tmp_path / "err.txt"
+    err.write_bytes(b"older and longer content\n")
+    count = 3 * 1048576  # past the 1 MiB that a pipe read or a captured stream keeps
+    text = streams_to(count, agc_literal(out), agc_literal(err))
+    assert output(tmp_path, text) == 'error("process: end of input")\nok(0)\n'
+    assert out.read_bytes() == b"o" * count
+    assert err.read_bytes() == b"err\n"
+    if TARGET_OS != "windows":
+        mask = os.umask(0)
+        os.umask(mask)
+        assert out.stat().st_mode & 0o777 == 0o666 & ~mask
+    # One file named twice, in two spellings, is one descriptor: the streams follow each other as with `> f 2>&1`.
+    both = tmp_path / "both.txt"
+    output(tmp_path, streams_to(4, agc_literal(both), agc_literal(os.path.join(str(tmp_path), ".", "both.txt"))))
+    assert both.read_bytes() == b"oooo" + b"err\n"
+    # Only err: stdout stays the pipe that the program reads.
+    err.unlink()
+    text = streams_to(4, '""', agc_literal(err), read="Process.read_bytes(p, 8, 5000)")
+    assert output(tmp_path, text) == "ok(<Bytes 4 6f6f6f6f>)\nok(0)\n"
+    assert err.read_bytes() == b"err\n"
+
+
+def test_an_out_or_err_file_that_cannot_be_opened_is_an_error_and_no_child_runs(tmp_path):
+    late = tmp_path / "late.txt"
+    for out, err, expected in [
+        (agc_literal(tmp_path), '""', "process: cannot open the out file"),
+        ('""', agc_literal(tmp_path / "no-such-dir" / "err.txt"), "process: cannot open the err file"),
+        ('"a" + String.from_code(0)', '""', "process: out and err cannot contain NUL"),
+    ]:
+        assert output(tmp_path, streams_to(1, out, err)).startswith(expected + "\n")
+    # A spawn refused for its command opens no file.
+    text = streams_to(1, agc_literal(late), '""', command='"agentica-no-such-command-7h"')
+    assert output(tmp_path, text) == "process: executable is unavailable\n"
+    assert not late.exists()
+    result = cli_run("--deny-fs", write(tmp_path, "program.agc", streams_to(1, agc_literal(late), '""')))
+    assert result.stdout == "denied: --deny-fs turns off file access\n" and not late.exists()

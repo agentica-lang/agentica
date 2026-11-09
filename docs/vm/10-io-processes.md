@@ -8,8 +8,10 @@
   directory, and a bare name is looked up in each `PATH` entry in order. Empty
   entries are skipped, and an explicit relative entry such as `.` resolves
   against the working directory. The VM never adds the working directory itself.
-  It passes the absolute path to `uv_spawn`. All three stdio streams are pipes.
-  `UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS` is never used.
+  It passes the absolute path to `uv_spawn`. All three stdio streams are pipes,
+  except that an `out` or `err` file of `Process.spawn` goes to the child in
+  place of that pipe's write end, which the VM closes, so its read end ends at
+  once. `UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS` is never used.
 - A child must not get `UV_USE_IO_URING=0` from the VM's own environment
   (§10.2.2), unless the user set it before the VM started.
 - Windows: allow only `.exe` and `.com` after resolution, case-insensitively

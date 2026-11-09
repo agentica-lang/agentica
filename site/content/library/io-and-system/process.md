@@ -17,7 +17,7 @@ agentica --deny-run tool.agc
 ## Process.spawn
 
 ```signature
-Process.spawn(command: String, args: List[String], timeout_ms: Int = 30000, env: Map[String, String] = {}) -> Result[Process]
+Process.spawn(command: String, args: List[String], timeout_ms: Int = 30000, env: Map[String, String] = {}, out: String = "", err: String = "") -> Result[Process]
 ```
 
 Starts a program with your program's environment, plus the variables of `env`.
@@ -27,6 +27,7 @@ Starts a program with your program's environment, plus the variables of `env`.
 - `env` sets variables for that program only, on top of a copy of your environment: a pair replaces the variable of the same name (Windows ignores case, also of letters like `Ä`, and a map with two names that differ only in case is an `error`), and an empty value is a value. Your own environment does not change, and a `PATH` in `env` does not change how the command is found: your `PATH` resolves it, and only the program sees the new one. An empty name, a name with `=`, or a NUL byte in a name or value is an `error`, and so are `AGENTICA_CHANNEL`, `AGENTICA_VM_METRICS`, `AGENTICA_VM_METRICS_FILE` and `UV_USE_IO_URING`, which the VM owns. `spawn_captured` and `spawn_channel` take `env` after `timeout_ms`.
 - A name not found, or one that names a directory, gives `error("process: executable is unavailable")`. A file that cannot run (no execute permission) is an error from `spawn`.
 - An empty command, or a NUL byte in the command or an argument, gives `error("process: command must be nonempty and arguments cannot contain NUL")`.
+- `out` and `err`, when not empty, are files that get the program's standard output and error, with no shell and without the 1 MiB limit of a read or a captured stream (Ruby's `spawn(cmd, out: path)`). Each is created or truncated, on Unix with mode 0666 less where the umask clears bits, as `File.write_text` and a shell's `>` make it; a file that exists keeps its mode. A relative path starts at the current folder. `out` and `err` naming one file share it, as `> file 2>&1` does. A stream sent to a file is not readable: `read_line` gives the end of output at once, and nothing is forwarded to your standard error. A file that cannot be opened (a folder, a missing parent folder, no permission) gives an error that starts with `process: cannot open the out file` (or `err`) and names the system error, and no program starts. A NUL byte gives `error("process: out and err cannot contain NUL")`, and `--deny-fs` turns them off.
 - Windows: only `.exe` and `.com` run (`PATHEXT` is not read; a suffixless name tries `.exe` first; use `cmd.exe` by name for a shell). These fail: a name ending in a dot, a space, `.cmd` or `.bat`; one starting with `\\?\` or `\\.\`; a `:` that is not a drive.
 
 ```agentica {mode="check"}
@@ -51,6 +52,19 @@ end
 
 ```text
 ok("hello")
+```
+
+```agentica {mode="check"}
+def main() -> Void
+  p = Process.spawn("sh", ["-c", "echo report; echo warning >&2"], 1000, {}, "out.txt", "err.txt").unwrap!
+  puts(Process.wait(p, 1000))
+  puts(File.read_text("out.txt"))
+end
+```
+
+```text
+ok(0)
+ok("report\n")
 ```
 
 ## Process.send and Process.send_bytes
@@ -128,7 +142,7 @@ Return from `main`, `System.exit`, a diagnostic, a task failure, step exhaustion
 
 For a `Process.spawn` program, the closing task waits up to one second for it to end; other tasks keep running.
 
-Its standard error goes to yours, unless started with `Process.spawn_captured`. It goes through your program's stderr buffer: while nobody reads your stderr, the child and `Process.wait` on it wait, and other tasks keep running.
+Its standard error goes to yours, unless started with `Process.spawn_captured` or an `err` file. It goes through your program's stderr buffer: while nobody reads your stderr, the child and `Process.wait` on it wait, and other tasks keep running.
 
 ## Process.spawn_captured
 

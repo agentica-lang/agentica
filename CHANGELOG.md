@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `Process.spawn(cmd, args, timeout_ms, env, out, err)` sends the child's
+  stdout and stderr to files, with no shell and no 1 MiB limit.
+
 ### Changed
 
 - `File.read_line` is much faster on a large file: a line already in the handle's

@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 154,
+  "steps": 168,
   "stdout": [
     "error(\"invalid UTF-8 at byte 0\")",
     "ok(\"valid\")",

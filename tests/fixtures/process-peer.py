@@ -1,7 +1,8 @@
 """A child for tests/test_process.py that reports what it was given, with the standard library only.
 
 Modes: args (argv as one JSON line), env (the AGENTICA_* and PROBE_* variables as JSON), cwd (the working directory),
-hold (prints its pid and waits; tests/test_process_lifecycle.py uses it).
+hold (prints its pid and waits; tests/test_process_lifecycle.py uses it), streams N (N bytes "o" on stdout, then
+"err\n" on stderr, as bytes).
 """
 import json
 import os
@@ -28,6 +29,11 @@ def main():
         print(os.getcwd(), flush=True)
     elif mode == "hold":
         hold()
+    elif mode == "streams":
+        sys.stdout.buffer.write(b"o" * int(sys.argv[2]))
+        sys.stdout.buffer.flush()
+        sys.stderr.buffer.write(b"err\n")
+        sys.stderr.buffer.flush()
     else:
         sys.exit(2)
 
