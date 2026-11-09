@@ -142,14 +142,16 @@ TLS_PROGRAM = """\
 def main() -> Void
   certs = System.args()[0]
   port = System.args()[2]
-  secure = Result.unwrap!(HTTP.client(options(5000, 1, 1000, certs + "/ca.pem")))
+  # The deadline of each call, scaled: a TLS handshake with the Python server can take seconds on a loaded runner.
+  limit = String.to_int!(System.args()[4])
+  secure = Result.unwrap!(HTTP.client(options(limit, 1, 1000, certs + "/ca.pem")))
   show(HTTP.get(secure, "https://localhost:#{port}/hello"))
   show(HTTP.get(secure, "https://LOCALHOST:#{port}/hello"))
   show(HTTP.post(secure, "https://127.0.0.1:#{port}/post", "over tls".bytes))
   show(HTTP.get(secure, "https://localhost:#{port}/notify"))
   show(HTTP.get(secure, "https://localhost:#{port}/close"))
   show(HTTP.get(secure, "http://localhost:#{port}/hello"))
-  show(HTTP.get(Result.unwrap!(HTTP.client(options(5000, 1, 1000, certs + "/self-signed.pem"))), "https://localhost:#{port}/hello"))
+  show(HTTP.get(Result.unwrap!(HTTP.client(options(limit, 1, 1000, certs + "/self-signed.pem"))), "https://localhost:#{port}/hello"))
   # A context reads its CA file when it is built, so a missing one fails there, before any client.
   puts(TLS.client_context(TlsClientOptions(ca_file: certs + "/missing.pem")).message.split("\\n")[0])
 end
@@ -275,16 +277,18 @@ end
 def main() -> Void
   certs = System.args()[0]
   port = System.args()[2]
+  # The deadline of each call, scaled: a TLS handshake with the Python server can take seconds on a loaded runner.
+  limit = String.to_int!(System.args()[4])
   origin = "https://localhost:#{port}"
-  conn = Result.unwrap!(HTTP.start(origin, options(5000, 1, 1000, certs + "/ca.pem")))
+  conn = Result.unwrap!(HTTP.start(origin, options(limit, 1, 1000, certs + "/ca.pem")))
   hello = Result.unwrap!(HTTP.send_request(conn, "GET", "/hello", "".bytes))
   puts("#{hello.status} #{decoded(Result.unwrap!(HTTP.read_body(conn)))}")
   puts(Result.unwrap!(HTTP.read_body(conn)).size)
   notify = Result.unwrap!(HTTP.send_request(conn, "GET", "/notify", "".bytes))
   puts("#{notify.status} #{decoded(Result.unwrap!(HTTP.read_body(conn)))} #{Result.unwrap!(HTTP.read_body(conn)).size}")
   puts(HTTP.send_request(conn, "GET", "/hello", "".bytes).ok?)
-  puts(why(HTTP.start(origin, options(5000, 1, 1000, certs + "/self-signed.pem"))))
-  puts(why(HTTP.start("http://localhost:#{port}", options(5000, 1, 1000, ""))))
+  puts(why(HTTP.start(origin, options(limit, 1, 1000, certs + "/self-signed.pem"))))
+  puts(why(HTTP.start("http://localhost:#{port}", options(limit, 1, 1000, ""))))
 end
 """
 
@@ -609,12 +613,12 @@ def main() -> Void
 end
 """
 
-# A streaming server: /ticks sends four pieces 500 ms apart, /endless sends until the client leaves and then tells /said,
-# and the timeouts are shorter than the pause, so a live stream that is only slow must not be cut.
+# A streaming server: /ticks sends four pieces TICK_MS (STREAM_TICK_MS) apart, /endless sends until the client leaves
+# and then tells /said, and the timeouts are shorter than the pause, so a live stream that is only slow must not be cut.
 STREAM_SERVER_PROGRAM = """\
 import HTTP from "std/http"
 
-TICK_MS = 500
+TICK_MS = @tick_ms
 
 struct Feed
   said: Channel[String]
@@ -806,6 +810,14 @@ def main() -> Void
 end
 """
 
+# The pause between the pieces of the stream server, scaled like the other deadlines: the peer times the pieces
+# against it, and a loaded runner stretches what a fixed pause leaves of a margin.
+STREAM_TICK_MS = scaled(500)
+
+
+def stream_server_program():
+    return STREAM_SERVER_PROGRAM.replace("@tick_ms", str(STREAM_TICK_MS))
+
 STREAM_PYTHON_LINES = [
     "plain 200 chunked None text/event-stream ['data: 1\\n\\n', 'data: 2\\n\\n', 'data: 3\\n\\n', 'data: 4\\n\\n']",
     "plain-timing apart",
@@ -928,7 +940,8 @@ def run_program(tmp_path, name, text, ports):
     source = tmp_path / (name + ".agc")
     source.write_text(PRELUDE + text, encoding="utf-8")
     bytecode = compile_agc(source, tmp_path / (name + ".agcb"))
-    # The fifth argument is the client deadline of RAW_PROGRAM: a call that a correct run must finish, so it is scaled.
+    # The fifth argument is the client deadline of RAW_PROGRAM, TLS_PROGRAM and CONNECTION_TLS_PROGRAM: a call that a
+    # correct run must finish, so it is scaled.
     args = [CERTS] + [ports[key] for key in ("plain", "tls", "raw")] + [str(scaled(5000))]
     result = run_vm(bytecode, env=vm_environment(), args=args)
     assert result.code == 0, result.stderr
@@ -1158,10 +1171,10 @@ def test_streaming_server_sends_each_chunk_when_it_is_ready_and_stops_the_produc
     later, also for a length of 0), whatever a producer sends after it (a piece that crosses it is a cut); a negative length and a length on a 204 are a
     500."""
     source = tmp_path / "stream-server.agc"
-    source.write_text(STREAM_SERVER_PROGRAM, encoding="utf-8")
+    source.write_text(stream_server_program(), encoding="utf-8")
     vm = adopt(start_vm(compile_agc(source, tmp_path / "stream-server.agcb"), CERTS, flags=flags, stdin=True))
     port, tls_port = vm.next_line().split()
-    peer = run([PYTHON, STREAM_PEER, port, tls_port, str(CERTS)], timeout=scaled(120))
+    peer = run([PYTHON, STREAM_PEER, port, tls_port, str(CERTS), str(STREAM_TICK_MS)], timeout=scaled(120))
     assert peer.code == 0, peer.stderr
     assert output_lines(peer.stdout) == STREAM_PYTHON_LINES
     # A body the stream route cannot read gets the answer HTTP.app gives, not a 500: over the 1024-byte limit, a bad
@@ -1188,7 +1201,7 @@ def test_streamed_response_sends_latin1_header_values_as_single_bytes(tmp_path, 
     """The head of a stream is rewritten (chunked, or its length) before it is turned into bytes: the value still goes
     out as one byte."""
     source = tmp_path / "stream-latin1.agc"
-    source.write_text(STREAM_SERVER_PROGRAM, encoding="utf-8")
+    source.write_text(stream_server_program(), encoding="utf-8")
     vm = adopt(start_vm(compile_agc(source, tmp_path / "stream-latin1.agcb"), CERTS, stdin=True))
     port, _ = vm.next_line().split()
     ask = b"GET %s HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"

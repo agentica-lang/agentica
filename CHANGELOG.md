@@ -10,8 +10,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `std/option_parser`: `OP.new(..., rest)` keeps the positional words after the
+  arguments, which `OP.rest` returns (as Ruby's `parse` does) and
+  `OP.after_dashes` splits at `--`.
 - `Process.spawn(cmd, args, timeout_ms, env, out, err)` sends the child's
   stdout and stderr to files, with no shell and no 1 MiB limit.
+- `pgroup: true`, the last parameter of `Process.spawn`, `spawn_captured` and
+  `spawn_channel`, starts the child in its own process group, and stopping it
+  while it runs stops the programs it started too (Linux and macOS).
 
 ### Changed
 
@@ -20,6 +26,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `Cache.memory` no longer leaks bytes, or moves back a generation, when a
+  rotation is taken over after a 2 s stall or a cancel of the task running it.
+  The lease now runs on the `clock` option, so a clock that stops keeps a
+  rotation from being taken over.
 - A header value with a Latin-1 character (`é`) is sent as its single byte and
   read back as the same text; it was accepted but made `std/http` answer an
   empty 500 or fail the request.
