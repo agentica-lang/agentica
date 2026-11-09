@@ -834,8 +834,11 @@ def test_jobs_run_the_files_at_the_same_time_and_the_report_keeps_the_order_of_t
     assert [(item["name"], item["status"]) for item in report_cases(report)] == [("a", "passed"), ("b", "passed")]
 
 
-SLEEPS = 'def test_sleeps() -> Result[Void]\n  Task.sleep(150)\n  return Test.assert(true, "x")\nend\n'
-QUICK = 'def test_quick() -> Result[Void]\n  return Test.assert(true, "x")\nend\n'
+# Each file starts with a test that does nothing: the time of a file's first test also counts the start of its child
+# VM, which a loaded host can stretch past 150 ms, so it lands on warm up and the order of sleeps and quick is real.
+WARM_UP = 'def test_warm_up() -> Result[Void]\n  return Test.assert(true, "x")\nend\n\n'
+SLEEPS = WARM_UP + 'def test_sleeps() -> Result[Void]\n  Task.sleep(150)\n  return Test.assert(true, "x")\nend\n'
+QUICK = WARM_UP + 'def test_quick() -> Result[Void]\n  return Test.assert(true, "x")\nend\n'
 
 
 def test_timing_adds_the_time_of_each_file_and_the_slowest_scenarios_and_json_always_has_it(bdd):
@@ -846,27 +849,31 @@ def test_timing_adds_the_time_of_each_file_and_the_slowest_scenarios_and_json_al
     assert "timing:" not in plain.stdout
     for style in ([], ["--ai"]):
         result = bdd.agentica_test(*style, "--timing", slow, quick)
-        assert (result.code, result.stderr) == (0, "")
+        shown = result.stdout
+        assert (result.code, result.stderr) == (0, ""), shown
         lines = result.stdout.splitlines()
         # The report, then the timing block, then the totals line.
-        assert lines[-1] == "2 passed, 0 failed, 0 skipped, 0 not executed, 0 file errors"
-        block = lines[lines.index(next(line for line in lines if line.startswith("timing: "))):-1]
+        assert lines[-1] == "4 passed, 0 failed, 0 skipped, 0 not executed, 0 file errors", shown
+        starts = [at for at, line in enumerate(lines) if line.startswith("timing: ")]
+        assert len(starts) == 1, shown
+        block = lines[starts[0]:-1]
         shown = "\n".join(block)
-        total = int(re.fullmatch(r"timing: (\d+) ms", block[0]).group(1))
-        files = [re.fullmatch(r"  (\d+) ms of scenarios (\S+) \((1 scenario)\)", line) for line in block[1:3]]
+        timing = re.fullmatch(r"timing: (\d+) ms", block[0])
+        assert timing and len(block) == 8 and block[3] == "slowest scenarios:", shown
+        files = [re.fullmatch(r"  (\d+) ms of scenarios (\S+) \(2 scenarios\)", line) for line in block[1:3]]
         # The files are in the order of discovery: sorted by path.
         assert [found and found.group(2) for found in files] == [quick, slow], shown
-        assert int(files[1].group(1)) >= 150 and total >= 150, shown
-        assert block[3] == "slowest scenarios:" and len(block) == 6, shown
-        # The slowest first. The time of the first test of a file also counts the start of the file's child VM, so on a
-        # loaded host the quick test can take as long as the one that sleeps: the order is checked, not who is first.
-        slowest = [re.fullmatch(r"  (\d+) ms (\S+) / (\w+)", line) for line in block[4:]]
+        assert int(files[1].group(1)) >= 150 and int(timing.group(1)) >= 150, shown
+        # The slowest first: sleeps before quick. A warm up may come anywhere, as its time is the child's start.
+        slowest = [re.fullmatch(r"  (\d+) ms (\S+) / (\w+(?: \w+)*)", line) for line in block[4:]]
         assert all(slowest), shown
         times = [int(found.group(1)) for found in slowest]
         assert times == sorted(times, reverse=True), shown
-        named = {found.group(3): (found.group(2), int(found.group(1))) for found in slowest}
-        assert named.keys() == {"sleeps", "quick"} and named["quick"][0] == quick, shown
-        assert named["sleeps"][0] == slow and named["sleeps"][1] >= 150, shown
+        listed = [(found.group(3), found.group(2)) for found in slowest]
+        expected = [("warm up", slow), ("warm up", quick), ("sleeps", slow), ("quick", quick)]
+        assert sorted(listed) == sorted(expected), shown
+        assert listed.index(("sleeps", slow)) < listed.index(("quick", quick)), shown
+        assert times[listed.index(("sleeps", slow))] >= 150, shown
     # --timing changes nothing in the JSON report (and prints no timing text there), which has the durations either way.
     status, report = bdd.json_test("--timing", slow, quick)
     assert status == 0
