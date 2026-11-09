@@ -98,9 +98,9 @@ none -> Optional[T]
 
 ## Design patterns
 
-No classes. Strategy: an `Fn` parameter (`&name` or a block). Factory: a
-function returning `Result[T]`. Builder: field defaults and `.with(...)`. State
-machine: an enum and `case`. Command: enum variants applied with `reduce`.
-Decorator: a function taking and returning an `Fn` of one type (a block can
-only follow a call, so return it from a helper `def wrap(f: Fn[A, B]) ->
-Fn[A, B]`). Observer: a struct holding a `List[Fn[...]]`, called with `map`.
+Strategy: an `Fn` parameter (`&name` or a block). Factory: a function
+returning `Result[T]`. Builder: field defaults and `.with(...)`. State machine:
+an enum and `case`. Command: enum variants applied with `reduce`. Decorator: a
+function taking and returning an `Fn` (`def wrap(f: Fn[A, B]) -> Fn[A, B]`
+returns the block). Observer: a struct holding a `List[Fn[...]]`, called with
+`map`.

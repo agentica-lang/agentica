@@ -1,10 +1,8 @@
 ---
 title: Patterns
-weight: 5
-description: The common design patterns and how each is written in Agentica.
+weight: 6
+description: The common design patterns written without classes, with structs, enums, functions and blocks.
 ---
-
-Agentica has no classes. These patterns use structs, enums, functions and blocks.
 
 ## Strategy
 
@@ -32,7 +30,7 @@ end
 
 ## Factory
 
-One function builds a value from a name and returns a `Result[T]`, so a bad name is an error.
+One function builds a value from a name and returns a `Result[T]`.
 
 ```agentica
 enum Shape
@@ -82,7 +80,7 @@ POST 3
 
 ## State machine
 
-An enum is the state and a `case` is the step. `reduce` runs a list of events.
+An enum is the state and a `case` is the step.
 
 ```agentica
 enum Door
@@ -90,24 +88,29 @@ enum Door
   Closed
 end
 
-def step(door: Door, event: String) -> Door
+enum Event
+  Push
+  Pull
+end
+
+def step(door: Door, event: Event) -> Door
   case door
     Door.Open ->
-      if event == "push"
-        return Door.Closed
+      case event
+        Event.Push -> return Door.Closed
+        _ -> return door
       end
 
     Door.Closed ->
-      if event == "pull"
-        return Door.Open
+      case event
+        Event.Pull -> return Door.Open
+        _ -> return door
       end
   end
-
-  return door
 end
 
 def main() -> Void
-  puts(["push", "push", "pull"].reduce(Door.Open) do |door, event| step(door, event) end)
+  puts([Event.Push, Event.Push, Event.Pull].reduce(Door.Open) do |state, event| step(state, event) end)
 end
 ```
 
@@ -117,7 +120,7 @@ Door.Open
 
 ## Command
 
-Actions are enum variants, which are data. One function applies them, and `reduce` replays a list of them.
+Actions are enum variants; one function applies them.
 
 ```agentica
 enum Command
@@ -143,7 +146,7 @@ end
 
 ## Decorator
 
-A function takes an `Fn` and returns a new `Fn` of the same type. `wrap` only returns its block, because a block can only follow a call.
+A function takes an `Fn` and returns a new one. A block can only follow a call, so `wrap` returns it.
 
 ```agentica
 def wrap(f: Fn[Int, Int]) -> Fn[Int, Int]
@@ -170,11 +173,19 @@ f(4) = 8
 
 ## Observer
 
-The subject is a struct that holds a list of `Fn`, and `map` calls each one.
+The subject holds a list of `Fn`.
 
 ```agentica
 struct Bus
   handlers: List[Fn[String, String]]
+end
+
+def subscribe(bus: Bus, handler: Fn[String, String]) -> Bus
+  return bus.with(handlers: bus.handlers.push(handler))
+end
+
+def publish(bus: Bus, message: String) -> List[String]
+  return bus.handlers.map do |handler| handler.call(message) end
 end
 
 def shout(text: String) -> String
@@ -182,8 +193,7 @@ def shout(text: String) -> String
 end
 
 def main() -> Void
-  bus = Bus(handlers: [&shout])
-  puts(bus.handlers.map do |handler| handler.call("hello") end)
+  puts(Bus(handlers: []) |> subscribe(&shout) |> publish("hello"))
 end
 ```
 
