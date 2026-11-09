@@ -297,6 +297,8 @@ def unpack_theme(sha: str, tree: Path) -> None:
     if entry[1] != "commit":
         raise BuildError("%s is not a submodule at %s" % (THEME, sha))
     commit, checkout = entry[2], ROOT / THEME
+    if not (checkout / ".git").exists():
+        raise BuildError("the docs theme is not checked out: git submodule update --init " + THEME)
     if subprocess.run(["git", "-C", str(checkout), "cat-file", "-e", commit + "^{commit}"], capture_output=True).returncode:
         run(["git", "-C", str(checkout), "fetch", "-q", "origin", commit])
     archive = subprocess.Popen(["git", "-C", str(checkout), "archive", "--format=tar", commit], stdout=subprocess.PIPE)

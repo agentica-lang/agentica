@@ -14,9 +14,18 @@ disableKinds = ["taxonomy", "term", "rss"]
   branch = "master"
   repoPublic = false
 
+[module.hugoVersion]
+  extended = true
+  min = "0.167.0"
+
+# A mount of the site replaces Hugo's default for its target root, so content and assets are listed with the grammar.
 [[module.mounts]]
   source = "content"
   target = "content"
+
+[[module.mounts]]
+  source = "assets"
+  target = "assets"
 
 [[module.mounts]]
   source = "../docs/grammar"

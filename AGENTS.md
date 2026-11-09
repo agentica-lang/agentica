@@ -29,7 +29,9 @@ docs/               grammar/ (the language definition, index: docs/grammar.md),
                     vm/ (VM design), future/ (the design decisions of planned
                     features and what was decided against; plans live in GitHub
                     issues)
-site/content/       Hugo documentation site
+site/               Hugo documentation site: content/, versions/ and the
+                    layouts/ overrides; the look and the layouts come from
+                    themes/docs-theme (a submodule)
 benchmarks/         make bench programs and Python twins
 .agents/skills/     agent skills; also documentation-pruning (shrinking docs)
 ```
