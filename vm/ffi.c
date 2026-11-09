@@ -1120,6 +1120,7 @@ static bool pin_one(agc_c_resource *res, agc_c_resource **pinned, size_t *n) {
    the order settle_links writes them in. */
 static bool pin_all(agc_c_resource *const *held, uint32_t holds, agc_c_resource **pinned, size_t *n) {
   for (uint32_t k = 0; k < holds; k++) {
+    // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-UNINITIALIZED-ASSIGN: every caller fills the first HOLDS entries
     agc_c_resource *res = held[k];
     if (!res) continue;
     if (!pin_one(res, pinned, n)) return false;
@@ -1440,6 +1441,7 @@ static uint64_t next_walk(agc_vm *vm) { return ++ffi_cache(vm)->walk; }
    that one comes from (release_held undoes it): a fixed number of links per call, whatever the chain above. */
 static void hold(agc_c_resource *const *held, uint32_t holds) {
   for (uint32_t k = 0; k < holds; k++) {
+    // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-UNINITIALIZED-BRANCH: every caller fills the first HOLDS entries
     if (!held[k]) continue;
     held[k]->jobs++;
     hold_parents(held[k]);
@@ -1826,6 +1828,7 @@ static agc_value out_value(agc_vm *vm, const ffi_entry *e, uint32_t k, const agc
     case AGC_C_POINTER: return agc_c_pointer_value(slot->p);
     case AGC_C_RESOURCE: {
       const made_kind *kind = &e->made[k];
+      // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-NULLDEREFERENCE: prepare allocates e->made for out resources
       return make_resource(vm, kind->free, free_target(kind->by_pointer, free_at), kind->by_ref, kind->name,
                            slot->p, from);
     }
@@ -1862,6 +1865,7 @@ static void drop_made(const ffi_entry *e, const agc_c_value *r, const agc_c_valu
     if (!e->out[k] || e->params[k] != AGC_C_RESOURCE) continue;
     const made_kind *kind = &e->made[k];
     void *pointer = slots[k].p;
+    // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-NULLDEREFERENCE: prepare allocates e->made for out resources
     free_pointer(kind->free, free_target(kind->by_pointer, free_at), kind->by_ref, &pointer);
   }
 }
@@ -2012,6 +2016,7 @@ static agc_value compute_start(agc_vm *vm, const ffi_entry *e, const agc_list *v
       continue;
     }
     uint8_t *memory = e->structs[k] ? c->structs + used : NULL;
+    // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-CALLANDMESSAGE: copy_byte_arguments NULLs every bytes[k] first
     c->in[k] = entry_argument(vm, e, values, k, bytes[k], memory);
     if (e->structs[k]) used += STRUCT_ROUND(e->structs[k]->size);
   }
@@ -2438,6 +2443,7 @@ static agc_value builtin_native_free(agc_vm *vm, agc_value *args, uint32_t span)
    negative count fails. The memory rows are not shared: a read at a C pointer runs beside the other schedulers. For an
    owned buffer this takes rt->sync (*LOCKED set), so no free comes between the check and the copy; the caller drops it
    after the copy (memory_done), and a failure in between leaves it to agc_sync_reset. */
+// cchecker: ignore CC-PATH-LOCK-NOT-RELEASED: takes rt->sync only for an owned buffer (*locked); memory_done drops it
 static uint8_t *memory_at(agc_vm *vm, agc_value p, memory_ask ask, uint32_t span, bool *locked) {
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-NATIVE-DENIED", "native calls are off in this run", span);
   agc_c_resource *res = buffer_of(vm, p);
@@ -2463,6 +2469,7 @@ static uint8_t *memory_at(agc_vm *vm, agc_value p, memory_ask ask, uint32_t span
 }
 
 /* Gives back rt->sync that memory_at took for an owned buffer, once the copy is made. */
+// cchecker: ignore CC-PATH-LOCK-NOT-HELD: drops rt->sync only when memory_at took it (LOCKED)
 static void memory_done(agc_vm *vm, bool locked) {
   if (locked) agc_sync_drop(vm);
 }
@@ -2555,6 +2562,7 @@ static agc_value get_one(agc_vm *vm, agc_value *args, uint32_t span, item_kind k
 }
 
 /* Native.put_KIND(pointer, offset, value): writes VALUE at OFFSET bytes past the pointer. */
+// cchecker: ignore CC-PATH-LOCK-NOT-RELEASED: memory_done drops rt->sync when LOCKED says it was taken
 static agc_value put_one(agc_vm *vm, agc_value *args, uint32_t span, item_kind kind) {
   memory_ask ask = {agc_as_int(vm, args[1]), 1, ITEM_WIDTHS[kind], span + 2, span + 2};
   bool locked;
@@ -2984,6 +2992,7 @@ static void callback_result(native_site *site, agc_c_type type, agc_value v, agc
         site_fail(site, "RUNTIME-NATIVE-CLOSED", "a callback returned an owned buffer that is closed");
         return;
       }
+      // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: res is the resource of a C resource value, never NULL
       out->p = res->pointer;
       return;
     }

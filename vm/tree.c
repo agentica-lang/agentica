@@ -38,20 +38,23 @@ static bool is_dots(const char *name) { return strcmp(name, ".") == 0 || strcmp(
 static int remove_at(int parent, const char *name, int flags) {
   int rc;
   do {
+    // cchecker: ignore CC-TIDY-CLANG-ANALYZER-UNIX-STDCLIBRARYFUNCTIONS: dirfd of an open DIR does not fail
     rc = unlinkat(parent, name, flags);
   } while (rc != 0 && errno == EINTR);
   return rc;
 }
 
+/* 0 with *DIR open, or an errno with *DIR NULL: a failure is never 0, so the caller never reads a NULL *DIR. */
 static int open_dir(int parent, const char *name, DIR **dir) {
+  *dir = NULL;
   int fd;
   do {
     fd = openat(parent, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
   } while (fd < 0 && errno == EINTR);
-  if (fd < 0) return errno;
+  if (fd < 0) return errno ? errno : EIO;
   *dir = fdopendir(fd);
   if (*dir) return 0;
-  int err = errno;
+  int err = errno ? errno : EIO;
   close(fd);
   return err;
 }

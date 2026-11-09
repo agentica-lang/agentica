@@ -180,17 +180,21 @@ proof). These are the rules they do not show.
 
 [cchecker](https://github.com/agentica-lang/cchecker) checks `vm/` for the
 project rules of C (a short path never blocks, a lock is released on every
-path, ownership) and runs `gcc -fanalyzer` and clang-tidy, on the
-`compile_commands.json` of `make compile-commands`. It is an Agentica program:
+path, ownership) and runs `gcc -fanalyzer` and clang-tidy, on a compile
+database of its own (`make cchecker-db`: that of `make compile-commands`
+without `vm/tests/`, so every run is a full run, which checks the names of the
+settings and reports a stale ignore of the rules). It is an Agentica program:
 `make cchecker` clones the tag pinned in `mk/vm-test.mk` (`CCHECKER_VERSION`,
 checked against `CCHECKER_COMMIT`; the release has no binary) into
 `build/cchecker/`, runs it with `dist/agentica`, and needs gcc 10+, clang and
-clang-tidy. `vm/tests/` is not checked. A full run takes 3 to 5 minutes. Its
-docs are in that clone (`docs/settings.md`, `docs/suppressions.md`).
+clang-tidy. A run takes 3 to 5 minutes. Its docs are in that clone
+(`docs/settings.md`, `docs/suppressions.md`).
 
-- `cchecker.toml` holds the settings (`[library]`, `[assume]`, later
-  `[roots]`); `cchecker-baseline.json` holds the accepted findings. It exits 1
-  on a finding the baseline lacks.
+- `cchecker.toml` holds the settings (`[library]`, `[roots]`, `[assume]`);
+  `cchecker-baseline.json` holds the accepted findings. It exits 1 on a
+  finding the baseline lacks. A function that runs on the loop's thread but is
+  only passed through a pointer (an `agc_loop_call` step) goes in `[roots]
+  short`.
 - The CI job `cchecker` runs when `vm/`, the build files, `.clang-tidy` or those
   two files change, and for now only reports (`continue-on-error`; no aggregate
   needs it). Remove that line to make it block: the step runs with pipefail, so
@@ -211,16 +215,19 @@ docs are in that clone (`docs/settings.md`, `docs/suppressions.md`).
   `// cchecker: ignore CODE: reason` next to the code; a function that makes
   many findings for the same reason gets an `[assume]` entry with its reason.
   Only a finding that stays goes into the baseline: `make
-  cchecker-update-baseline` (a full run) rewrites the file; the diff is the
-  review, and a PR says why each new entry is accepted.
+  cchecker-update-baseline` rewrites the file; the diff is the review, and a
+  PR says why each new entry is accepted.
 - Marks: `vm/cchecker.h` is a copy of `include/cchecker.h` of the pinned
   release; its macros are empty under gcc and only annotate under clang. Put
   `CC_OWNS` on a function that returns malloc memory and on the fields and
   parameters that own it; `CC_FREES` on the parameter of a function that frees
-  it; `CC_GC_ALLOC` on an allocator of the collector. Settings first
-  (`cchecker.toml`); a mark is for what they cannot say. A pointer put into a
-  returned array, or set through an out parameter, is not followed: ignore it
-  with the reason.
+  it; `CC_GC_ALLOC` on an allocator of the collector; `CC_ACQUIRES(lock)` or
+  `CC_RELEASES(lock)` on a function that takes a lock for its caller or drops
+  the caller's (`agc_lock_take`, `leave_with`). A function that takes or drops
+  a lock only on some paths (by a flag or a count) gets an ignore with the
+  reason. Settings first (`cchecker.toml`); a mark is for what they cannot
+  say. A pointer put into a returned array, or set through an out parameter,
+  is not followed: ignore it with the reason.
 - To move to a new release, change the version and the commit
   (`git ls-remote https://github.com/agentica-lang/cchecker 'X^{}' X`), copy
   its `include/cchecker.h` over `vm/cchecker.h`, run

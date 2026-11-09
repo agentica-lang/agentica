@@ -13,6 +13,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `File.read_line` reads a line that the handle's buffer already holds without an
   I/O job, about 100 times faster on a large file (900k lines: 44 s to 0.4 s).
 
+### Fixed
+
+- A header value with a Latin-1 character (`é`) is sent as its single byte and
+  read back as the same text; it was accepted but made `std/http` answer an
+  empty 500 or fail the request.
+
 ## [0.27.0] - 2026-11-08
 
 ### Added

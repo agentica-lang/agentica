@@ -327,6 +327,7 @@ agc_value agc_json_decode(agc_vm *vm, agc_value root, uint32_t root_kind, uint32
       v = frame_value(p, f);
     }
     for (;;) {
+      // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-CALLANDMESSAGE: *v is set unless tagged, which continues
       if (!depth) return agc_result_value(true, v);
       decode_frame *top = &stack[depth - 1];
       store_child(vm, top, v);

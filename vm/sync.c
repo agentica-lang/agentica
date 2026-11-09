@@ -118,6 +118,7 @@ _Noreturn void agc_sync_missing(agc_vm *vm) {
 }
 
 /* After a failure that jumped out of locked code: gives back rt->sync and the stream lock that the scheduler held. */
+// cchecker: ignore CC-PATH-LOCK-NOT-HELD: gives back the locks a failed call held, as sync_depth and stream_lock say
 void agc_sync_reset(agc_vm *vm) {
   if (vm->stream_lock) {
     agc_lock_drop(vm->stream_lock);

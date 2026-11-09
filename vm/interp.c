@@ -2077,6 +2077,7 @@ static NESTED void too_deep(agc_vm *vm, uint32_t span, agc_outcome *failed) {
   *vm->outcome = kept;
 }
 
+// cchecker: ignore CC-PATH-LOCK-NOT-HELD: drops what the caller and the callback hold, by sync_depth and stream_lock
 NESTED bool agc_task_run_nested(agc_vm *vm, agc_value fn, const agc_value *args, uint32_t argc, uint32_t span,
                                 agc_value *result, agc_outcome *failed) {
   agc_task *t = vm->task;

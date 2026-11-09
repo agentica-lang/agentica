@@ -161,6 +161,7 @@ static void put(text *t, const char *data, size_t len) {
     t->data = bigger;
     t->cap = cap;
   }
+  // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-NONNULLPARAMCHECKER: a NULL data has cap 0, so len > 0 grew it
   if (len) memcpy(t->data + t->len, data, len);
   t->len += len;
 }
@@ -853,6 +854,7 @@ static void work_mkdir(op *o) {
   size_t top = 0;
   while (top + 1 < n && !is_dir_prefix(o->path, chain[top + 1])) top++;
   for (size_t k = top + 1; k-- > 0;) {
+    // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-CALLANDMESSAGE: path_op refuses an empty path: chain[0] is set
     if (is_dir_prefix(o->path, chain[k])) continue;
     char saved = o->path[chain[k]];
     o->path[chain[k]] = '\0';
@@ -1158,7 +1160,7 @@ static line_scan scan_line(const file_state *st, size_t from, size_t window, siz
   size_t have = pending(st);
   const uint8_t *base = st->buf ? st->buf + st->start : NULL;
   if (window > have) window = have;
-  const uint8_t *lf = window > from ? memchr(base + from, '\n', window - from) : NULL;
+  const uint8_t *lf = window > from && base ? memchr(base + from, '\n', window - from) : NULL;
   if (lf) {
     size_t len = (size_t)(lf - base);
     return (line_scan){LINE_FOUND, len && base[len - 1] == '\r' ? len - 1 : len, len + 1, window};
@@ -1299,7 +1301,7 @@ static void step_read_bytes(op *o) {
 
 /* One non-blocking pass of a call on a polled descriptor, on the loop
    thread; false while it must wait for the descriptor. */
-static bool step(op *o) {
+CC_ASSUME_SHORT static bool step(op *o) {
   switch (o->kind) {
     case OP_READ_TEXT: step_read_text(o); break;
     case OP_READ_LINE: work_read_line(o); break;
