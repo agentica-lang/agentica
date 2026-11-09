@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- `File.read_line` is much faster on a large file: a line already in the handle's
+  buffer needs no I/O job.
+
 ### Fixed
 
 - A header value with a Latin-1 character (`é`) is sent as its single byte and

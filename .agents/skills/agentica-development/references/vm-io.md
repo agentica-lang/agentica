@@ -101,6 +101,9 @@ callbacks only set flags and queue the task. Only `vm/loop.c`,
 - A handle has a read buffer or a 4096-byte write buffer. An append goes in when
   it fits; otherwise the write stays pending with the new bytes. Flush, close
   and the end of run write it.
+- `File.read_line` returns a whole line that the read buffer already holds
+  with no job; only an incomplete line, a line over `LIMIT` and the end of the
+  file start the job (one `CHUNK` read fills the buffer for many lines).
 - The waiting rule. `probe` runs after an `O_NONBLOCK` open (`fstat` plus an
   `epoll_ctl` probe). Regular files, block devices, and devices epoll refuses
   with `EPERM` go to the pool, set blocking. Other probe errors, or a failed

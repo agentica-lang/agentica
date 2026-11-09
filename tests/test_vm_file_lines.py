@@ -250,6 +250,48 @@ def test_read_line_on_ordinary_files_decodes_strips_and_reports_end_of_file(tmp_
     assert lines[-1] == "true"
 
 
+COUNT_LINES_PROGRAM = """\
+def main() -> Void
+  file = Result.unwrap!(File.open(System.args()[0], "read", 5000))
+  count = 0
+  last = ""
+  while true
+    case File.read_line(file, 5000)
+      ok(line) ->
+        count += 1
+        last = line
+      error(message) ->
+        if message.starts_with?("filesystem: end of file")
+          break
+        end
+        puts("error #{count}")
+    end
+  end
+  puts("#{count} #{last}")
+  puts(File.read_bytes(file, 4, 5000).unwrap!.size)
+end
+"""
+
+
+def test_read_line_serves_lines_a_chunk_already_holds_with_a_job_per_chunk_not_per_line(tmp_path):
+    """30000 lines come from a few 64 KiB reads (one file job each, not one per line). The first chunk ends between
+    the CR and the LF of a line, a line after it is not UTF-8 (an error that consumes it), and every line is whole."""
+    body = b"".join(b"line %06d\r\n" % k for k in range(30000))
+    # 4 bytes of prefix put the 13-byte lines so that the byte at offset 65535 (the end of the first read) is a CR.
+    data = b"ab\r\n" + body[:13 * 10000] + b"\xff\n" + body[13 * 10000:]
+    assert data[65535:65536] == b"\r"
+    target = tmp_path / "case.txt"
+    target.write_bytes(data)
+    trace = tmp_path / "trace.txt"
+    result = run_program(tmp_path, "count", COUNT_LINES_PROGRAM, target,
+                         env={"AGENTICA_VM_TRACE": "io", "AGENTICA_VM_TRACE_FILE": trace})
+    assert result.code == 0, result.stderr
+    assert result.stdout.splitlines() == ["error 10001", "30001 line 029999", "0"], result.stdout
+    jobs = len(re.findall(r" io start job=[0-9]+ kind=file ", trace.read_text()))
+    # open, about one read per 64 KiB (7), the end of the file and the close; one job per line would be 30000.
+    assert jobs < 20, "%d jobs" % jobs
+
+
 @pytest.mark.parametrize("data,delivered,ends_ok", (
     (b"a\nb\n", ['"a"', '"b"'], True),
     (b"a\r\nb", ['"a"', '"b"'], True),

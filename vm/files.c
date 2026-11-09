@@ -1843,9 +1843,42 @@ static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) 
   return read_op(vm, args[0], OP_READ_BYTES, (size_t)count, agc_as_int(vm, args[2]));
 }
 
+/* The line of len bytes at the start of the buffer as a String, or the error of its bad UTF-8 in *out (false), and the
+   consume bytes (the line and its ending) are taken either way, and charged to the turn. Shared by File.read_line and
+   the line readers, so the decode, the error and the charge live once. */
+static bool decode_line(agc_vm *vm, file_state *st, size_t len, size_t consume, agc_value *out) {
+  const uint8_t *data = st->buf + st->start;
+  size_t chars;
+  agc_charge_bytes(vm, consume);
+  bool valid = agc_utf8_chars(data, len, &chars);
+  *out = valid ? agc_string_value(agc_small_string(vm, (const char *)data, len, chars)) : agc_utf8_error(data, len);
+  st->start += consume;
+  st->scan = 0;
+  return valid;
+}
+
+/* File.read_line: a line that the handle's buffer already holds (the last read took a CHUNK of the file) is returned
+   here, with no job and so no hop to the I/O thread. This is safe because a File handle's row is shared under
+   rt->sync, which the builtin holds (with several schedulers the scan, the check and the copy run under it, as
+   File.each_line's do), and blocked() having taken the lock means that no job holds the state: only a job of a call
+   holds the handle, and the buffer is read and moved by the job or by this code, never at the same time. Only a whole
+   line is taken here; an incomplete one, a line over LIMIT and the end of the file go to the job, which reads more
+   and builds the same errors. */
 static agc_value builtin_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
-  return read_op(vm, args[0], OP_READ_LINE, 0, agc_as_int(vm, args[1]));
+  int64_t timeout = agc_as_int(vm, args[1]);
+  agc_value failure;
+  if (blocked(vm, args[0], &timeout, &failure)) return failure;
+  file_state *st = usable(vm, args[0], true, &failure);
+  if (!st) return failure;
+  line_scan found = scan_line(st, 0, LIMIT + 1, LIMIT, false);
+  if (found.kind == LINE_FOUND) {
+    agc_value line;
+    bool valid = decode_line(vm, st, found.len, found.consume, &line);
+    return valid ? agc_result_value(true, line) : line;
+  }
+  op *o = call_op(vm, OP_READ_LINE, st);
+  return start(vm, o, args[0], timeout);
 }
 
 /* The buffered output, then `len` bytes of data and an LF when `newline`, in one write job. */
@@ -1935,16 +1968,12 @@ static file_state *lines_file(agc_vm *vm, const agc_line_reader *r) {
 }
 
 static bool lines_take(agc_vm *vm, agc_line_reader *r, file_state *st, size_t len, size_t consume, agc_value *line) {
-  const uint8_t *data = st->buf + st->start;
-  size_t chars;
-  agc_charge_bytes(vm, consume);
-  bool valid = agc_utf8_chars(data, len, &chars);
+  agc_value taken;
+  bool valid = decode_line(vm, st, len, consume, &taken);
   if (valid)
-    *line = agc_string_value(agc_small_string(vm, (const char *)data, len, chars));
+    *line = taken;
   else
-    r->outcome = agc_utf8_error(data, len);
-  st->start += consume;
-  st->scan = 0;
+    r->outcome = taken;
   return valid;
 }
 
