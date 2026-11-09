@@ -27,6 +27,13 @@ export SINGLE_PIPE = Rule(
   help: "a plain call, or the `.` form for a builtin: `shout(text)`, not `text |> shout()`",
 )
 
+## Three calls nested in first position are a pipe that starts with the innermost one.
+export NESTED_CALL = Rule(
+  code: "LINT-NESTED-CALL",
+  message: "three calls are nested in first position",
+  help: "a pipe that starts with the innermost call, one step per line: `(g(x) |> f() |> h())` for `h(f(g(x)))`",
+)
+
 ## Text is built with interpolation.
 export TO_S_CONCAT = Rule(
   code: "LINT-TO-S-CONCAT",

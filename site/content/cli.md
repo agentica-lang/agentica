@@ -69,6 +69,7 @@ lint: 1 suggestion in 1 of 12 files
 | `LINT-NEGATED-ELSE` | the positive case first, not `if not x` with an `else` |
 | `LINT-BOOL-COMPARE` | `if done`, not `if done == true` |
 | `LINT-SINGLE-PIPE` | a plain call, not `x \|> f()` with one step |
+| `LINT-NESTED-CALL` | a pipe for three calls nested in first position, `h(g(f(x)))`, when the two outer ones are the program's own functions |
 | `LINT-TO-S-CONCAT` | interpolation, not `"n=" + n.to_s` |
 | `LINT-STRING-APPEND-IN-LOOP` | `push` and one `join`, not `s = s + piece` in a `for` or `while` loop, which copies the text on every pass |
 

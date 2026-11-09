@@ -4,8 +4,8 @@
 ## and gives each node to them.
 ##
 ## The walk uses a worklist, as ast_walk.agc does, and tells each node two things the rules need from above: whether it
-## is below a loop of the same function body, and whether it is the first operand of a pipe or of a `+` chain (the
-## expression above it speaks for the whole chain).
+## is below a loop of the same function body, and whether it is the first operand of a pipe, of a `+` chain or of a
+## plain call (the expression above it speaks for the whole chain).
 
 import Diag from "../diagnostics/diagnostic"
 import Problems from "../diagnostics/problem"
@@ -152,10 +152,10 @@ def path_below(item: Item) -> List[Int]
 end
 
 # Whether `first`, the first child of the item, is the first operand of a chain that the item continues: the value a
-# pipe passes on, or the left side of a `+`. Only a child of the same chain counts: in `(a + b.to_s) |> f()` and in
-# `a |> f() + "x"` the child is a chain of the other kind, which nobody has judged yet. A `try` that wraps a pipe is
-# part of it when the `try` is; a `+` does not look through a `try` (Shape.plus_operands), so the `+` inside is its own
-# chain.
+# pipe passes on, the left side of a `+`, or the first argument of a plain call that is a plain call too (a nest).
+# Only a child of the same chain counts: in `(a + b.to_s) |> f()` and in `a |> f() + "x"` the child is a chain of the
+# other kind, which nobody has judged yet. A `try` that wraps a pipe is part of it when the `try` is; a `+` does not
+# look through a `try` (Shape.plus_operands), so the `+` inside is its own chain.
 def continues?(item: Item, first: Walk.Node) -> Bool
   kind = chain_kind(item.node)
   if kind == "" or kind != chain_kind(first)
@@ -168,7 +168,8 @@ def continues?(item: Item, first: Walk.Node) -> Bool
   end
 end
 
-# "pipe" for a piped call, "plus" for a `+`, "pipe" for a `try` around a piped call, and "" for anything else.
+# "pipe" for a piped call, "nest" for a plain one, "plus" for a `+`, "pipe" for a `try` around a piped call, and "" for
+# anything else.
 def chain_kind(node: Walk.Node) -> String
   case node
     Walk.Node.Expr(Ast.Expr.Call(call)) ->
@@ -176,7 +177,7 @@ def chain_kind(node: Walk.Node) -> String
         return "pipe"
       end
 
-      return ""
+      return "nest"
     Walk.Node.Expr(Ast.Expr.Binary(binary)) ->
       if binary.op == "plus"
         return "plus"
