@@ -1,17 +1,19 @@
 # OpenSSL.KDF.scrypt and OpenSSL.KDF.pbkdf2_hmac_sha256 run on the compute pool: the deriving
 # task parks, and the other task of its scheduler keeps running. The deriving
 # task logs "start" before the call and "done" after it; main logs "tick", lets
-# the other task run (Task.sleep(0)) and logs "tick" again. Each key takes about
-# 0.1 s, thousands of times what main needs. A call that held its scheduler
-# would end its turn with the key, so at one scheduler the log would read start,
-# tick, done, tick. A cancel ends the wait at once: a call that has started runs
-# to its end and its key is dropped, one that has not is skipped. At one
-# scheduler the pool has one thread, so the call of cancel_queued waits behind
-# the scrypt ahead of it and is always skipped, and the key ahead is right. At
-# four schedulers the pool has four threads, so that call starts at once and
-# each cancel races the end of its call: the two cancelled calls take hundreds
-# of times what the cancel needs (scrypt with p = 8, PBKDF2 with 5000000
-# iterations), so the cancel comes first. The keys match Python's hashlib.
+# the other task run (Task.sleep(0)) and logs "tick" again. Each key of race
+# takes about 0.1 s, thousands of times what main needs. A call that held its
+# scheduler would end its turn with the key, so at one scheduler the log would
+# read start, tick, done, tick. A cancel ends the wait at once: a call that has
+# started runs to its end and its key is dropped, one that has not is skipped.
+# At one scheduler the pool has one thread, so the call of cancel_queued waits
+# behind the scrypt ahead of it and is always skipped, and the key ahead is
+# right. At four schedulers the pool has four threads, so that call starts at
+# once, and a cancel cannot stop a call that runs: if the call ended first, the
+# task would give its key. So the two cancelled calls (scrypt with p = 8, PBKDF2
+# with 5000000 iterations) take a third of a second or more, and the cancel,
+# which needs only main to wake up, almost always comes first: a margin, not a
+# guarantee. The keys match Python's hashlib.
 def race(label: String, derive: Fn[Result[Bytes]]) -> Void
   log: Channel[String] = Channel.new(4)
   started: Channel[Bool] = Channel.new(1)
