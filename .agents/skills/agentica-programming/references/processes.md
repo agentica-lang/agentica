@@ -80,8 +80,11 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
   other operations on a closed handle fail. The end of the run also cleans up
   directly spawned children; descendant trees are outside the guarantee
   unless the child started with `pgroup: true` (last parameter of each spawn):
-  then it leads its own process group (a new session on POSIX, no controlling
-  terminal) and every stop signals the whole group. Windows ignores `pgroup`.
+  then it leads its own process group (a new session on POSIX: no controlling
+  terminal, so no `/dev/tty` prompt, and a SIGKILLed VM leaves the group) and a
+  stop while it runs signals the whole group, with SIGKILL after a SIGTERM's
+  grace even if the child already exited. Descendants of a child that exited on
+  its own are not stopped. Windows ignores `pgroup`.
 - Operational failures return String error Results; explicit cleanup failures
   are `RUNTIME-PROCESS-CLOSE`, at the call span.
 

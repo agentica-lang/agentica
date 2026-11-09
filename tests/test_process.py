@@ -9,12 +9,11 @@ import json
 import os
 import re
 import shutil
-import time
 
 import pytest
 
 from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, agc_literal, cli, host_only, kill_process, process_alive,
-                                 run, tool, vm_environment)
+                                 run, tool, vm_environment, wait_until)
 
 PEER = FIXTURES / "process-peer.js"
 PY_PEER = FIXTURES / "process-peer.py"
@@ -420,15 +419,29 @@ def test_closing_a_child_started_with_pgroup_stops_its_own_children(tmp_path, st
                 '  Process.close(p)\nend\n\n' % (start % (agc_literal(PYTHON), agc_literal(PY_PEER), group)))
         return output(tmp_path, text).strip()
 
-    def ends(pid):
-        deadline = time.monotonic() + 5
-        while process_alive(pid) and time.monotonic() < deadline:
-            time.sleep(0.05)
-        return not process_alive(pid)
-
     left = grandchild("false")
     try:
         assert process_alive(left)
     finally:
         kill_process(left)
-    assert ends(grandchild("true"))
+    pid = grandchild("true")
+    try:
+        assert wait_until(lambda: not process_alive(pid))
+    finally:
+        kill_process(pid)
+
+
+@host_only(TARGET_OS == "windows", "Windows has no process groups that a stop signals; pgroup stops the child alone")
+@pytest.mark.parametrize("ending", ["close", "end of run"])
+def test_a_pgroup_descendant_that_ignores_sigterm_gets_sigkill_after_the_grace(tmp_path, ending):
+    """A captured child gets SIGTERM and dies of it at once, but its grandchild ignores it: when the 1 s grace is over,
+    the group gets SIGKILL although its leader was already reaped."""
+    stop = "  Process.close(p)\n  Task.sleep(2000)\n" if ending == "close" else ""
+    text = ('def main() -> Void\n  p = Result.unwrap!(Process.spawn_captured(%s, [%s, "family", "stubborn"], ".", 5000,'
+            ' {}, true))\n  puts(Result.unwrap!(Process.read_line(p, 5000)))\n%send\n\n'
+            % (agc_literal(PYTHON), agc_literal(PY_PEER), stop))
+    pid = output(tmp_path, text).strip()
+    try:
+        assert wait_until(lambda: not process_alive(pid))
+    finally:
+        kill_process(pid)

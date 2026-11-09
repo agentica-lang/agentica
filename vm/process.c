@@ -322,9 +322,10 @@ static void finished(proc *p, int64_t status) {
    at the end of a run. */
 static int signal_child(proc *p, int sig) {
   /* The group's id is the child's pid: libuv's spawn returns after the child's setsid, so the group exists while the
-     child runs. A group that is gone (ESRCH) leaves the child alone to signal. */
-  int rc = p->group ? uv_kill(-p->process.pid, sig) : UV_ESRCH;
-  if (rc == UV_ESRCH) rc = uv_process_kill(&p->process, sig);
+     child runs. A group that is gone (ESRCH) leaves the child alone to signal, and only while it is unreaped: a reaped
+     pid may already be another process's. */
+  int rc = p->group && p->process.pid > 0 ? uv_kill(-p->process.pid, sig) : UV_ESRCH;
+  if (rc == UV_ESRCH && p->running) rc = uv_process_kill(&p->process, sig);
   if (rc == UV_ESRCH) rc = 0;
   AGC_TRACE(&p->trace, AGC_TRACE_PROC, "%s pid=%d group=%d rc=%d", sig == SIGKILL ? "kill" : "term",
             (int)p->process.pid, p->group ? 1 : 0, rc);
@@ -333,17 +334,28 @@ static int signal_child(proc *p, int sig) {
   return rc;
 }
 
+/* True while a group child's grace is still to end in a SIGKILL of the group: its leader may exit on the SIGTERM
+   while a descendant ignores it or takes longer. */
+static bool group_in_grace(const proc *p) { return p->group && p->stop == STOP_TERM; }
+
 /* A captured child's pipes close at once, but its uv_process_t stays open
-   until it exits, and its grace timer until it exits or got SIGKILL. */
+   until it exits, and its grace timer until it exits or got SIGKILL. The timer of a group child runs to its end even
+   after the exit, so grace_over can kill the group; the end of the run has no timer (close_children). */
 static void retire(proc *p) {
   if (!p->closed) return;
-  if (p->captured && (!p->running || p->stop == STOP_KILLED)) close_handle((uv_handle_t *)&p->grace, closed_grace);
+  bool timed = group_in_grace(p) && uv_is_active((uv_handle_t *)&p->grace);
+  if (p->captured && ((!p->running && !timed) || p->stop == STOP_KILLED))
+    close_handle((uv_handle_t *)&p->grace, closed_grace);
   if (!p->running) close_handle((uv_handle_t *)&p->process, closed_process);
 }
 
 static void grace_over(uv_timer_t *t) {
   proc *p = OWNER(t, grace);
-  if (p->running && p->stop == STOP_TERM) signal_child(p, SIGKILL);
+  /* A group gets its SIGKILL even when the leader was reaped during the grace: POSIX does not give the pid to a new
+     process while a group with that id exists, so -pid still names this group, or nothing (ESRCH). The risk left is
+     an empty group whose id a new group leader took within the grace. */
+  if ((p->running || p->group) && p->stop == STOP_TERM) signal_child(p, SIGKILL);
+  if (p->stop == STOP_TERM) p->stop = STOP_KILLED;
   retire(p);
 }
 
@@ -426,14 +438,21 @@ static void close_children(guard *g) {
   if (g->reaping) return;
   g->reaping = true;
   bool grace = false;
+  /* The groups that got SIGTERM: a leader reaped during the grace leaves the list, so the SIGKILL below goes to the
+     group by its remembered id (grace_over says why that id is safe). */
+  size_t groups = 0;
+  uv_pid_t *group_ids = calloc(g->running ? g->running : 1, sizeof *group_ids);
   for (proc *p = g->first; p; p = p->run_next) {
     if (p->running && p->captured && p->stop == STOP_NONE)
       signal_child(p, SIGTERM);
     else if (p->running && !p->captured && !p->closed)
       signal_child(p, SIGKILL);
+    if (group_ids && group_in_grace(p) && groups < g->running) group_ids[groups++] = p->process.pid;
     grace = grace || in_grace(p);
   }
   if (grace) await_exits(g, true);
+  for (size_t k = 0; k < groups; k++) uv_kill(-group_ids[k], SIGKILL);
+  free(group_ids);
   for (proc *p = g->first, *next = NULL; p; p = next) {
     next = p->run_next;
     if (p->captured && p->running && p->stop == STOP_TERM) signal_child(p, SIGKILL);
