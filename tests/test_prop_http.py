@@ -10,7 +10,8 @@ import pytest
 from tests.agentica_test import compile_agc, require, scaled, start_vm, timeout
 from tests.test_vm_http import read_after_close
 
-# make test falls back to the system pytest when Poetry is missing, and that one may lack Hypothesis.
+# make test falls back to the system pytest when Poetry is missing, and that one may lack Hypothesis: the module then
+# skips at import locally and fails in CI.
 require(find_spec("hypothesis") is not None, "hypothesis is required (poetry install --only test --no-root)")
 
 from hypothesis import example, given, strategies as st  # noqa: E402
@@ -89,7 +90,10 @@ class EchoVm:
         self.vm.process.stdin.write(b"%d %s\n" % (self.cases, body.hex().encode("ascii")))
         self.vm.process.stdin.flush()
         while True:
-            number, status, shown = self.vm.next_line(timeout=scaled(30)).split(" ", 2)
+            line = self.vm.next_line(timeout=scaled(30))
+            parts = line.split(" ", 2)
+            assert len(parts) == 3, "unexpected line from the VM: %r" % line
+            number, status, shown = parts
             if number == str(self.cases):
                 break
         if status == "error":
