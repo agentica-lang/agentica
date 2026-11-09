@@ -5,8 +5,8 @@ description: >-
   compare links, stage0 refresh), the annotated tag, the release workflow that
   publishes the five native archives, the hand-written release notes, the
   GitHub Pages rebuild and the post-release checks. Use when asked to make,
-  tag, publish or announce a release or beta (for example "release
-  0.5.0-beta.1"). Not for building or testing packages locally (release
+  tag, publish or announce a release, a beta or a patch release (for example
+  "release 0.5.0-beta.1"). Not for building or testing packages locally (release
   targets: references/ci.md of agentica-development).
 ---
 
@@ -26,6 +26,7 @@ check before it fails.
   the owner if unsure.
 - A tag containing `-` is published as a GitHub pre-release
   (`--prerelease` in the `publish` job).
+- A patch (`X.Y.Z`, Z > 0) is built from the last tag of its line: §6.
 
 ## 1. Version bump PR
 
@@ -123,25 +124,44 @@ new version and its release link opens the release.
 
 ## 6. Patch releases
 
-A patch `X.Y.Z` (Z > 0) holds bug fixes only: no feature, no breaking change.
-A fix for a flaky test is not patch material, since it does not change the
-binary.
+A patch `X.Y.Z` (Z > 0) holds bug fixes only: no feature and no breaking
+change, unless the owner approves a small compatible one. A fix for a flaky
+test is not patch material, since it does not change the binary.
 
-- When `X.Y.0` is published, create the milestone `X.Y.1`. A bug that users
-  see, or a regression of `X.Y`, gets the `bug` label and that milestone.
-- Cut the patch for a serious bug or a regression at once; otherwise when
-  about 3 to 5 fixes have merged.
+- **Milestones (owner's policy):** when `X.Y.0` is published, create the
+  milestone `X.Y.1`. A bug that users see, or a regression of `X.Y`, gets the
+  `bug` label and that milestone. Cut the patch at once for a serious bug or
+  a regression; otherwise when about 3 to 5 fixes have merged.
 - Each fix merges on master first, with a normal PR.
-- The patch is built from the last tag, not from master, which has unreleased
-  features. Create `release-X.Y` from the tag `X.Y.<Z-1>` if it does not exist
-  (pushing a new branch is outward-facing, as a tag is). Then take each fix
-  with `git cherry-pick -x`, on a branch `release/X.Y.Z` from `release-X.Y`.
-- That branch is the version bump PR (§1), with base `release-X.Y`. Its body
-  lists each fix with its master PR. Tag its merge commit (§2), then follow
-  §3 to §5.
-- Add the `[X.Y.Z]` section and its compare link to the CHANGELOG of master
-  too, in a small PR, so master keeps the history of every release.
-- Then create the milestone `X.Y.<Z+1>`.
+- **The branch:** the patch is built from the last tag of its line, not from
+  master, which has unreleased features. Pushing a branch is outward-facing,
+  as a tag is.
+
+  ```bash
+  git push origin X.Y.<Z-1>:refs/heads/release-X.Y   # if it does not exist
+  git worktree add -b release/X.Y.Z ../agentica-X.Y.Z origin/release-X.Y
+  ```
+
+  Take each fix with `git cherry-pick -x`. Never merge master into this
+  branch: in §1 and in `agentica-dev-workflow`, read `origin/release-X.Y`
+  wherever they say `origin/master`.
+- **The PR:** that branch is the version bump PR, with base `release-X.Y`.
+  §1 items 1 to 3 apply as written: the stage0 refresh builds from the stage0
+  of `release-X.Y`, and CI and Platforms run on the PR as usual. Its body
+  lists each fix with its master PR. Tag its merge commit (§2), then write
+  the notes (§3).
+- **Latest:** `release.yml` creates the release with no `--latest` flag. In
+  `gh release list`, Latest must be the highest version; if not, run
+  `gh release edit <highest> --latest`.
+- **Pages and checks:** for a patch of an older line, the Install section
+  keeps the newest release; check only that the version selector lists
+  `X.Y.Z` (§4) and that its release page has the archives (§5).
+- **Master:** forward-port in a small PR, CHANGELOG only. Add
+  `## [X.Y.Z] - <date>` in version order and its compare link. Move the
+  entries of the fixes out of `[Unreleased]`, unless a release already lists
+  them. Do not change `VERSION` or stage0 on master.
+- Delete `release/X.Y.Z` after the merge, and create the milestone
+  `X.Y.<Z+1>`.
 
 ## Gotchas
 
