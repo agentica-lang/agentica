@@ -12,6 +12,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `Process.spawn(cmd, args, timeout_ms, env, out, err)` sends the child's
   stdout and stderr to files, with no shell and no 1 MiB limit.
+- `HTTP.prepare(message)` frames a WebSocket message once, to send it on many
+  sockets with no copy for each.
+- **Breaking:** `HTTP.Message` has a new variant, `Prepared(Bytes)`; a `case`
+  on it with no `_` arm needs a `Prepared` arm.
 
 ### Changed
 

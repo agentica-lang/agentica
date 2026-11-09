@@ -38,6 +38,7 @@ def relay(ws: HTTP.WebSocket, message: HTTP.Message) -> Result[Bool]
       puts("closed #{code} #{reason}")
       IO.flush()
       return ok(false)
+    HTTP.Message.Prepared(_) -> return ok(true)
   end
 end
 
@@ -190,6 +191,24 @@ def edge(ws: HTTP.WebSocket) -> Result[Void]
   return echo(ws)
 end
 
+# Each text (a 7-bit, a 16-bit and a 64-bit length) and a binary as itself and then prepared, a ping that prepare
+# leaves as it is, one prepared message sent twice, and bytes that are no frame, which go out as a close with 1011.
+def prepared(ws: HTTP.WebSocket) -> Result[Void]
+  for text in ["hi", "é" * 100, "x" * 70000]
+    try ws.outgoing.send(HTTP.Message.Text(text), 5000)
+    try ws.outgoing.send(HTTP.prepare(HTTP.Message.Text(text)), 5000)
+  end
+
+  try ws.outgoing.send(HTTP.Message.Binary("bin".bytes), 5000)
+  try ws.outgoing.send(HTTP.prepare(HTTP.Message.Binary("bin".bytes)), 5000)
+  try ws.outgoing.send(HTTP.prepare(HTTP.Message.Ping("p".bytes)), 5000)
+  shared = HTTP.prepare(HTTP.Message.Text("shared"))
+  try ws.outgoing.send(shared, 5000)
+  try ws.outgoing.send(shared, 5000)
+  try ws.outgoing.send(HTTP.Message.Prepared("not a frame".bytes), 5000)
+  return echo(ws)
+end
+
 def failing(ws: HTTP.WebSocket) -> Result[Void]
   return error("the session failed")
 end
@@ -253,6 +272,10 @@ def route(request: HttpRequest) -> Result[HTTP.Upgrade]
 
   if request.path == "/fakewake"
     return HTTP.accept_websocket(request, &fakewake)
+  end
+
+  if request.path == "/prepared"
+    return HTTP.accept_websocket(request, &prepared)
   end
 
   if request.path == "/edge"
@@ -708,6 +731,41 @@ def test_a_close_a_session_builds_that_looks_like_the_wake_of_the_server_is_sent
         c.connect("/fakewake")
         assert c.message() == (TEXT, b"a")
         assert c.close_frame() == (1011, "wake")
+        c.close_with(1011)
+        assert c.ended()
+    assert vm.next_line() == "closed 1011 "
+    finish(vm)
+
+
+def raw_frame(c):
+    """The next frame of the server as its bytes on the wire, head included."""
+    head = c.read(2)
+    size = head[1]
+    extended = b""
+    if size == 126:
+        extended = c.read(2)
+        size = struct.unpack(">H", extended)[0]
+    elif size == 127:
+        extended = c.read(8)
+        size = struct.unpack(">Q", extended)[0]
+    return head + extended + c.read(size)
+
+
+def test_a_prepared_message_goes_out_as_the_same_frame_as_the_message_itself(tmp_path, adopt):
+    """HTTP.prepare frames a text or binary message once: the peer gets the bytes a Text or Binary gives, for each
+    length form, a ping passes through as it is, one prepared message can be sent again, and bytes that are no frame
+    go out as a close with 1011."""
+    vm, port, _ = start_server(tmp_path, adopt)
+    with Client(port, timeout=scaled(10)) as c:
+        c.connect("/prepared")
+        for _ in range(4):
+            plain = raw_frame(c)
+            assert raw_frame(c) == plain
+        assert plain == b"\x82\x03bin"
+        assert c.message() == (PING, b"p")
+        assert c.message() == (TEXT, b"shared")
+        assert c.message() == (TEXT, b"shared")
+        assert c.close_frame() == (1011, "")
         c.close_with(1011)
         assert c.ended()
     assert vm.next_line() == "closed 1011 "

@@ -388,13 +388,15 @@ end
 ## bytes. The server answers every ping it receives with a pong, and does not hand it to the handler. `Close` is the
 ## end: the code (1000 to 1003 and 1007 to 1014 are the registered codes, 3000 to 4999 are for programs) and a reason
 ## of at most 123 bytes. It is always the last message the handler receives, and when the connection ended with no
-## close frame (the peer left, a timeout) its code is 1006.
+## close frame (the peer left, a timeout) its code is 1006. `Prepared` is a text or binary message already framed by
+## `prepare`, to send one message on many sockets with no copy for each; the server never receives one.
 export enum Message
   Text(String)
   Binary(Bytes)
   Ping(Bytes)
   Pong(Bytes)
   Close(Int, String)
+  Prepared(Bytes)
 end
 
 ## An upgraded connection, for the session function of `accept_websocket`: messages from the peer arrive on `incoming`
@@ -925,6 +927,18 @@ export def accept_websocket(
   case handshake_problem(request)
     some(response) -> return ok(Upgrade.Reply(response))
     none -> return ok(accepted(request, session, options))
+  end
+end
+
+## Frames a `Text` or `Binary` message once, for a broadcast: the `Prepared` message it returns is sent on any
+## number of `outgoing` channels, and each writer sends its bytes as they are, where a `Text` would be copied into a
+## frame for every socket. The peer receives the same frame as for the message itself. Any other message is returned
+## as it is.
+export def prepare(message: Message) -> Message
+  case message
+    Message.Text(text) -> return Message.Prepared(WebSocketWire.text_frame(text))
+    Message.Binary(data) -> return Message.Prepared(WebSocketWire.binary_frame(data))
+    _ -> return message
   end
 end
 
@@ -2588,14 +2602,20 @@ def frame_of(message: Message) -> Bytes
     Message.Ping(data) -> return WebSocketWire.ping_frame(cut_control(data))
     Message.Pong(data) -> return WebSocketWire.pong_frame(cut_control(data))
     Message.Close(code, reason) -> return WebSocketWire.close_frame(sendable_code(code), reason)
+    Message.Prepared(frame) ->
+      if WebSocketWire.data_frame?(frame)
+        return frame
+      end
+
+      # Bytes that are no frame `prepare` makes are the handler's mistake, as a close code that cannot be sent is.
+      return WebSocketWire.close_frame(WebSocketWire.CLOSE_INTERNAL, "")
   end
 end
 
-def close_message?(message: Message) -> Bool
-  case message
-    Message.Close(_, _) -> return true
-    _ -> return false
-  end
+# Whether a frame `frame_of` made closes the connection: a close, or a `Prepared` it turned into one. The opcode is
+# read off the frame, so a message is checked once.
+def closing_frame?(frame: Bytes) -> Bool
+  return WebSocketWire.close?(frame.at(0) % 16)
 end
 
 def cut_control(data: Bytes) -> Bytes
@@ -2712,7 +2732,7 @@ def gather(wire: Wire, first: Message, flushing: Bool) -> Batch
       frame = frame_of(message)
       frames = List.append(frames, frame)
       size = size + frame.size
-      closes = close_message?(message)
+      closes = closing_frame?(frame)
       if not closes and size < WS_BATCH_BYTES and (flushing or wire.control.empty?)
         case wire.outgoing.recv(0)
           ok(next) ->
