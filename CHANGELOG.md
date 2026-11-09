@@ -20,6 +20,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `Cache.memory` no longer leaks bytes, or moves back a generation, when a
+  rotation is taken over after a 2 s stall or a cancel of the task running it.
+
 - A header value with a Latin-1 character (`é`) is sent as its single byte and
   read back as the same text; it was accepted but made `std/http` answer an
   empty 500 or fail the request.

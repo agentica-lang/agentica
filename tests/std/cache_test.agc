@@ -115,6 +115,26 @@ def churn(job: Job) -> Int
   return wrong
 end
 
+# The clock of the takeover test: key 0 of `now` is the time. Once key 1 is set, the second read moves the time past
+# the two-second lease of a rotation and has another task put the keys young1 to young5. The first read is the claim of
+# a rotation and the second its beat after 1024 deletes, so the rotation is taken over in its middle: the new owner
+# publishes, and the young keys go into the generation it published while the old owner is still emptying.
+def takeover_clock(now: ATS[Int, Int], holder: Channel[Cache.Store]) -> Int
+  if now.get(1).unwrap_or(0) == 1 and now.add(3, 1) == 2
+    now.put(2, 1)
+    tick(now, 3_000)
+    cache = holder.recv(0).unwrap!
+    _ = holder.send(cache, 0)
+    Task.await(Task.spawn do
+      for i in 1..5
+        _ = Cache.put_new(cache, "young#{i}", "v")
+      end
+    end)
+  end
+
+  return now.get(0).unwrap!
+end
+
 def clean_often(job: Job) -> Int
   removed = 0
   for _ in 1..150
@@ -344,6 +364,28 @@ def main() -> Void
       try Test.eq(run_tasks(job, 4, &churn), 0)
       try Test.assert(Cache.bytes(cache) <= 20_000, "over the budget")
       for n in 0...keys
+        Cache.delete(cache, "k#{n}")
+      end
+      Test.eq(Cache.bytes(cache), 0)
+    end,
+    Test.test("a rotation taken over in the middle leaves the entries of the new generation counted and removable") do
+      now = clock()
+      holder: Channel[Cache.Store] = Channel.new(1)
+      # 1030 entries a generation, so the rotation that drops the first one beats before it is done.
+      options = Cache.Options(max_entries: 2_060, clock: some(block0() do takeover_clock(now, holder) end))
+      cache = Cache.memory(10_000_000, options)
+      _ = holder.send(cache, 0)
+      for n in 0...3_090
+        _ = Cache.put_new(cache, "k#{n}", "v")
+      end
+      now.put(1, 1)
+      _ = Cache.put_new(cache, "last", "v")
+      try Test.eq(now.get(2), ok(1))
+      for key in ["last", "young1", "young2", "young3", "young4", "young5"]
+        try Test.eq(Cache.get(cache, key), some("v"))
+        Cache.delete(cache, key)
+      end
+      for n in 0...3_090
         Cache.delete(cache, "k#{n}")
       end
       Test.eq(Cache.bytes(cache), 0)

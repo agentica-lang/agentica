@@ -14,7 +14,8 @@
 SLOTS = 3
 # What an entry costs besides its key and value (the table node), so many tiny entries are bounded too.
 ENTRY_OVERHEAD = 64
-# A task that holds a rotation for longer than this is taken to have died (cancelled or crashed): another may redo it.
+# A task that holds a rotation for longer than this on the cache's clock is taken to have died (cancelled or
+# crashed): another may redo it.
 ROTATION_LEASE_MS = 2_000
 # A rotation shows it is alive after this many deletes.
 BEAT_EVERY = 1024
@@ -41,7 +42,8 @@ export struct Options
   max_entries: Int = 0
   ## The time to live of an entry in milliseconds, 0 for none.
   ttl_ms: Int = 0
-  ## The time in milliseconds, which only has to go forward; the default is the monotonic clock. A test gives a fake.
+  ## The time in milliseconds, which only has to go forward; the default is the monotonic clock. It times the entries
+  ## and the two-second lease of a rotation. A test gives a fake.
   clock: Optional[Fn[Int]] = none
 end
 
@@ -444,8 +446,11 @@ def rotate(state: Memory, g: Int) -> Bool
   end
 
   # A task whose rotation was taken over, because it stood still for the whole lease, finds it is no longer the owner.
+  # It can still pass this check just before the takeover and publish late, after the new owner did. So the publish
+  # adds one rather than putting g + 1, which could move the generation back: a late one skips a generation, whose
+  # slot then keeps entries that nothing reads or counts until a later rotation empties it.
   if current(state) == g and state.rotations.get(g).unwrap_or(0) == token
-    state.generation.put(0, g + 1)
+    _ = state.generation.add(0, 1)
     # A takeover is over once the generation moved: no one can claim this rotation again, so the arbiter can go.
     state.deaths.delete(before)
     return true
@@ -455,8 +460,11 @@ def rotate(state: Memory, g: Int) -> Bool
 end
 
 # Empties the table and the ids of the slot of generation `dead`, beating the heart of the rotation from g as it goes.
-# Returns false, stopping at once, when the rotation was taken over: the new owner empties the table, and this task
-# must not delete from it after the new owner has published.
+# Returns false, stopping, when the rotation was taken over: the new owner empties the table. Until this task sees
+# that, the new owner may have published and the slot may hold a young generation, so it deletes only what belongs to
+# a dead one: a key whose entry is two or more generations behind g (the key names its generation, so the entry read
+# is the one deleted), and an id below its token (ids and tokens share one counter, and every entry of a later
+# generation draws its id after that generation was published, which is after this rotation was claimed).
 def empty_slot(state: Memory, dead: Int, g: Int, token: Int) -> Bool
   if current(state) != g
     return false
@@ -465,7 +473,10 @@ def empty_slot(state: Memory, dead: Int, g: Int, token: Int) -> Bool
   table = slot(state, dead)
   count = 0
   for key in table.keys
-    table.delete(key)
+    found = table.get(key)
+    if found.ok? and found.unwrap!.gen <= g - 2
+      table.delete(key)
+    end
     count += 1
     if count % BEAT_EVERY == 0 and not beat(state, g, token)
       return false
@@ -474,7 +485,9 @@ def empty_slot(state: Memory, dead: Int, g: Int, token: Int) -> Bool
 
   live = live_in(state, dead)
   for id in live.keys
-    live.delete(id)
+    if id < token
+      live.delete(id)
+    end
     count += 1
     if count % BEAT_EVERY == 0 and not beat(state, g, token)
       return false
@@ -491,7 +504,7 @@ def beat(state: Memory, g: Int, token: Int) -> Bool
     return false
   end
 
-  state.beats.put(g, Time.monotonic_ms)
+  state.beats.put(g, state.clock.call())
   return true
 end
 
@@ -504,7 +517,7 @@ def claim(state: Memory, g: Int) -> Int
   end
 
   token = state.ids.add(0, 1)
-  at = Time.monotonic_ms
+  at = state.clock.call()
   if state.rotations.put_new(g, token)
     state.beats.put(g, at)
     return token
