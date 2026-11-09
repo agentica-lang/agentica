@@ -10,8 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- `File.read_line` reads a line that the handle's buffer already holds without an
-  I/O job, about 100 times faster on a large file (900k lines: 44 s to 0.4 s).
+- `File.read_line` is much faster on a large file: a line already in the handle's
+  buffer needs no I/O job.
 
 ### Fixed
 

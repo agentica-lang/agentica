@@ -2,8 +2,8 @@ def scale() -> Int
   return 1
 end
 
-# File.read_line over a file: a line that the handle's buffer holds costs no I/O job, so this measures the loop, not
-# one hop to the I/O thread per line.
+# File.write of 300000 lines, then File.read_line over them: a line that the handle's buffer holds costs no I/O job, so
+# the reads are a loop, not one hop to the I/O thread per line. The time is both phases; the writes are buffered.
 def main() -> Void
   lines = 300000 * scale()
   directory = System.env("TMPDIR").unwrap_or("/tmp")
