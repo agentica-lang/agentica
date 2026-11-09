@@ -43,6 +43,11 @@ TABLE = '[native.adder]\nbuild = { sources = ["native/adder.c"], defines = ["SCA
 # The adder with a header in a folder of native/.
 NESTED_C = ADDER_C.replace('#include "offset.h"\n', '#include "offset.h"\n#include "sub/scale.h"\n')
 BUILT = re.compile(r"built native adder: (.+)\n")
+OPTIONAL_TABLE = TABLE + "optional = true\n"
+# A program that uses the adder only when it opens, as one of a package with an optional module must.
+GUARDED_MAIN = ('import Adder from "adder"\n\ndef main() -> Void\n  if Native.load("adder").ok?\n'
+                '    puts(Adder.add(40, 2))\n  else\n    puts("without adder")\n  end\nend\n')
+NOT_BUILT = re.compile(r"warning: native module adder not built: [^\n]+; the package runs without it\n")
 
 
 def environment(ws, **extra):
@@ -342,6 +347,52 @@ def test_a_failed_build_is_pkg_native_build_and_leaves_no_entry(ws):
     found = problem(agentica(ws, "--json", str(ws.project / "main.agc")))
     assert_at_key(found, "PKG-NATIVE-BUILD", ws.project / "agentica.toml", "native.adder.build")
     assert builds(ws) == []
+
+
+@pytest.mark.parametrize("table", [
+    TABLE + 'optional = "yes"\n',
+    '[native.adder]\noptional = true\nlinux = { system = "libadder.so" }\n',
+], ids=["not a boolean", "no build table"])
+def test_optional_is_a_boolean_beside_a_build_table(ws, table):
+    project(ws, table=table)
+    found = problem(agentica(ws, "--json", "check", str(ws.project / "main.agc")))
+    assert_at_key(found, "PKG-MANIFEST-INVALID", ws.project / "agentica.toml", "native.adder.optional")
+
+
+@NATIVE_CALLS
+def test_an_optional_module_with_no_compiler_warns_once_a_run_and_the_program_runs_without_it(ws):
+    project(ws, table=OPTIONAL_TABLE)
+    (ws.project / "main.agc").write_text(GUARDED_MAIN, encoding="utf-8")
+    main = str(ws.project / "main.agc")
+    # Nothing is cached, so every run tries the build again and warns again, once for the two uses of the module.
+    for _ in range(2):
+        ran = agentica(ws, main, **no_compiler(ws))
+        assert (ran.code, ran.stdout) == (0, "without adder\n") and NOT_BUILT.fullmatch(ran.stderr), ran.stderr
+    assert builds(ws) == [] and bytecode_entries(ws) == []
+    quiet = agentica(ws, "--json", main, **no_compiler(ws))
+    assert (quiet.code, quiet.stdout, quiet.stderr) == (0, "without adder\n", "")
+    installed = agentica(ws, "install", **no_compiler(ws))
+    assert installed.code == 0 and NOT_BUILT.fullmatch(installed.stderr), installed.stderr
+    compiled = agentica(ws, "compile", main, "-o", str(ws.base / "main.agcb"), **no_compiler(ws))
+    assert compiled.code == 0 and NOT_BUILT.fullmatch(compiled.stderr), compiled.stderr
+    ran = agentica(ws, "run", "--", str(ws.base / "main.agcb"))
+    assert (ran.code, ran.stdout, ran.stderr) == (0, "without adder\n", "")
+    # A call of the module fails as for a missing library.
+    (ws.project / "main.agc").write_text(MAIN, encoding="utf-8")
+    assert problem(agentica(ws, "--json", main, **no_compiler(ws)))["code"] == "RUNTIME-NATIVE-LOAD"
+
+
+@NATIVE_CALLS
+def test_an_optional_module_that_does_not_compile_warns_and_builds_once_it_compiles(ws):
+    tool("cc")
+    project(ws, table=OPTIONAL_TABLE, source=ADDER_C + "int broken = ;\n")
+    (ws.project / "main.agc").write_text(GUARDED_MAIN, encoding="utf-8")
+    main = str(ws.project / "main.agc")
+    ran = agentica(ws, main)
+    assert (ran.code, ran.stdout) == (0, "without adder\n") and len(NOT_BUILT.findall(ran.stderr)) == 1, ran.stderr
+    (ws.project / "native" / "adder.c").write_text(ADDER_C, encoding="utf-8")
+    ran = agentica(ws, main)
+    assert (ran.code, ran.stdout) == (0, "42\n") and BUILT.fullmatch(ran.stderr), ran.stderr
 
 
 @NATIVE_CALLS

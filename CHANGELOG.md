@@ -12,6 +12,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `Process.spawn(cmd, args, timeout_ms, env, out, err)` sends the child's
   stdout and stderr to files, with no shell and no 1 MiB limit.
+- `optional = true` in `[native.NAME]` beside `build`: when the module cannot
+  be built, the program runs without it after a warning.
 
 ### Changed
 

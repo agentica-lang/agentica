@@ -71,3 +71,9 @@ end
   only (`install` does not build it): from a private copy of the `native/`
   files its locked hash covers (`PKG-HASH-MISMATCH` if `deps/` differs), so
   dotfiles are left out and a header outside `native/` is not found.
+- `optional = true` beside `build` (it needs `build`): a module that cannot
+  be built (no compiler, a compile error) prints `warning: native module NAME
+  not built: ...` once a run on stderr, and the program runs without it.
+  `Native.load("NAME")` then gives `error` and a call of the module is
+  `RUNTIME-NATIVE-LOAD`, so check `Native.load` before using the module and
+  fall back. A program that `compile` wrote then never opens the module.

@@ -750,6 +750,18 @@ import Sqlite from "pkg/sqlite/db"
     the four search variables, so an edit or a new file in `native/` builds
     again. A compiler replaced at the same path is seen only when the program
     is compiled again.
+  - `optional = true` beside `build` makes the module optional: when the
+    build fails (no compiler, a compile error, an unusable build cache), a
+    run, `compile`, `test` and `install` go on without it, and the plain
+    output prints `warning: native module NAME not built: REASON; the package
+    runs without it` on stderr once a run (`--json` and `--ai` print
+    nothing). `Native.load("NAME")` then gives `error` and a call of the
+    module is `RUNTIME-NATIVE-LOAD`. The bytecode cache stores no program
+    whose module block names it, so the next run tries the build again; a
+    program that `compile` wrote without it never opens it. A missing source,
+    a link in `native/`, a copy that differs from the lock and the `--deny-*`
+    flags fail as for a required module. `optional` without `build`, or not
+    a boolean, is `PKG-MANIFEST-INVALID` at `native.NAME.optional`.
 - The stored name of a package file in the `.agcb` file is
   `pkg/<name>@<tag>/path/in/package.agc`, such as `pkg/sqlite@v1.2.0/db.agc`
   (the path is from the package folder, without the `subdir`); for a package

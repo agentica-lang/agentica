@@ -26,10 +26,12 @@
 ## a run left (it died during a build) are removed once an hour old.
 ##
 ## A compiler that cannot start, fails or leaves no library is PKG-NATIVE-BUILD at the manifest and
-## `native.NAME.build`. The plain builder prints the compiler's standard error as it is, and `built native NAME: PATH`
-## after a build, on stderr; the quiet one (for `--json` and `--ai`) prints nothing and puts the start of the
-## compiler's standard error in the message instead. A builder keeps what it built or failed for the rest of the run
-## (an ATS table), so a module that many files use is built, and reported, once. Under a --deny-* flag or --sandbox,
+## `native.NAME.build`; for an optional module (`optional = true`) any failure of the builder is instead a warning on
+## stderr (the plain builder only) and Unbuilt, so the program runs without the module. The plain builder prints the
+## compiler's standard error as it is, and `built native NAME: PATH` after a build, on stderr; the quiet one (for
+## `--json` and `--ai`) prints nothing and puts the start of the compiler's standard error in the message instead. A
+## builder keeps what it built or failed for the rest of the run (an ATS table), so a module that many files use is
+## built, and reported, once. Under a --deny-* flag or --sandbox,
 ## where the VM refuses native code, nothing is built: `compile` gets the `refusing` builder, the others none (app/).
 
 import Diag from "../diagnostics/diagnostic"
@@ -96,7 +98,8 @@ def refused(request: Workspace.BuildRequest, flag: String) -> Workspace.Built
   return Workspace.Built.Failed(fail(request, message, "run without #{flag} to build and use the module"))
 end
 
-# The answer kept for the library (`L` and its path, or `F` and the packed failure), else a build.
+# The answer kept for the library (`L` and its path, `F` and the packed failure, or `U` and the reason an optional
+# module was not built), else a build. The warning of an optional module is printed here, so once a run.
 def remembered(memo: ATS[String, String], request: Workspace.BuildRequest, noted: Bool) -> Workspace.Built
   name = [request.file, request.key, request.root, request.system].join("\n")
   kept = ATS.get(memo, name)
@@ -107,7 +110,15 @@ def remembered(memo: ATS[String, String], request: Workspace.BuildRequest, noted
   text = ""
   case attempt(request, noted)
     ok(path) -> text = "L#{path}"
-    error(packed) -> text = "F#{packed}"
+    error(packed) ->
+      text = "F#{packed}"
+      if request.optional
+        reason = Failure.unpack_failure(packed).diagnostic.message
+        text = "U#{reason}"
+        if noted
+          IO.warn("warning: native module #{request.library} not built: #{reason}; the package runs without it")
+        end
+      end
   end
 
   ATS.put(memo, name, text)
@@ -118,6 +129,8 @@ def answer(text: String) -> Workspace.Built
   rest = text.slice(1, text.length - 1)
   if text.starts_with?("L")
     return Workspace.Built.Library(rest)
+  elsif text.starts_with?("U")
+    return Workspace.Built.Unbuilt(rest)
   end
 
   return Workspace.Built.Failed(rest)
