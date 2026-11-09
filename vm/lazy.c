@@ -325,7 +325,8 @@ static agc_writer_status lazy_write(agc_vm *vm, lazy_run *run, agc_value last, a
   return status;
 }
 
-/* The channel is taken from its value before the lock: nothing may jump out while the lock is held. */
+/* The channel is taken from its value before the lock only to keep cchecker quiet: a jump with rt->sync held is fine
+   (agc_sync_reset gives it back), which cchecker cannot know until jump_releases (agentica-lang/cchecker#68). */
 static agc_recv_status lazy_receive(agc_vm *vm, const lazy_node *source, agc_value *out) {
   agc_channel *channel = agc_as_channel(vm, source->value);
   agc_sync_take(vm);
