@@ -48,6 +48,8 @@ The first call of a function of the block opens the library, as an `extern` bloc
 
 ## The C side
 
+The [native-gen](https://agentica-lang.github.io/packages/native-gen/) package makes a C header from the block: typed prototypes, argument checks and the function and type tables. The C file then holds plain C functions. This section is the API under it.
+
 ```c
 #include "agentica_native.h"
 
