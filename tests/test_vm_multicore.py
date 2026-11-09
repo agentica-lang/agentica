@@ -29,9 +29,9 @@ try:
 except ImportError:
     fcntl = None
 
-from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, PYTHON, UNDER_WINE, WINDOWS, compile_text, host_only,
-                                 kill_process, process_alive, run, scaled, vm_command, vm_environment, wait_readable,
-                                 wait_until)
+from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, WINDOWS, cli, compile_agc,
+                                 compile_text, host_only, kill_process, process_alive, run, scaled, vm_command,
+                                 vm_environment, wait_readable, wait_until)
 from tests import vm_diff_support as diff
 
 SCHEDULERS = os.environ.get("AGENTICA_VM_TEST_SCHEDULER_COUNT", "4")
@@ -652,6 +652,47 @@ def test_system_exit_in_a_task_ends_a_run_whose_other_schedulers_spin(tmp_path, 
     for _ in range(repeats):
         result = vm(bytecode)
         assert (result.code, result.stdout, result.stderr) == (7, "bye\n", "")
+
+
+HELLO = """\
+def main() -> Void
+  puts("hi")
+end
+"""
+# What a run under a low address space limit may end with: its output, or one line naming the thread or memory it could
+# not get and exit status 70 (#1190: libuv's pool and the scheduler threads used to end with a bare SIGABRT).
+REFUSED = re.compile(r"agentica: (cannot start (a scheduler thread|the I/O thread pool)( \([^)]*\))?: .*"
+                     r"|out of memory)\n")
+OTHER_BUILD = bool(os.environ.get("AGENTICA_VM_BINARY") or os.environ.get("AGENTICA_TEST_EXECUTABLE"))
+
+
+@pytest.mark.skipif(not TARGET_OS.startswith("linux") or OTHER_BUILD,
+                    reason="host-only: ulimit -v of Linux; a sanitizer or GC stress build reserves more than the limits")
+def test_a_start_under_a_low_ulimit_v_ends_with_one_line_and_status_70(tmp_path):
+    # Each scheduler thread costs its stack and a malloc arena of glibc (64 MiB of address space), and the first file
+    # step of the front end starts libuv's pool of four threads: the low limits refuse one or the other, depending on
+    # the layout, and the last one refuses nothing. Below about 40 MB the dynamic loader fails first.
+    source = tmp_path / "hello.agc"
+    source.write_text(HELLO, encoding="utf-8")
+    bytecode = compile_agc(source, tmp_path / "hello.agcb")
+
+    def under(mb, words):
+        return run(["sh", "-c", 'ulimit -v "$1" && shift && exec "$@"', "sh", str(mb * 1024), *words],
+                   env=vm_environment({"AGENTICA_SCHEDULERS": SCHEDULERS}), timeout=scaled(60))
+
+    # A sanitizer build (ASan reserves terabytes of shadow memory) cannot start under any of these limits.
+    if "Sanitizer" in under(4096, [*vm_command(), "--", bytecode]).stderr:
+        pytest.skip("a sanitizer build reserves more address space than the limits")
+    refused = []
+    for mb in (90, 150, 250, 400, 4096):
+        for words in ([*cli(), str(source)], [*vm_command(), "--", bytecode]):
+            result = under(mb, words)
+            if (result.code, result.stdout, result.stderr) == (0, "hi\n", ""):
+                continue
+            assert mb < 4096 and result.code == 70 and result.stdout in ("", "hi\n"), (mb, words, result)
+            assert REFUSED.fullmatch(result.stderr), (mb, words, result)
+            refused.append(result.stderr)
+    assert any(line.startswith("agentica: cannot start") for line in refused), refused
 
 
 RALLIES = """\

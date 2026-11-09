@@ -381,16 +381,10 @@ bool agc_runq_remove(agc_runq *q, const agc_task *t) {
   return found;
 }
 
-/* A scheduler thread starts (or failed to start) using the queue. */
+/* A scheduler thread starts using the queue. */
 void agc_runq_add_scheduler(agc_runq *q) {
   uv_mutex_lock(&q->lock);
   q->count++;
-  uv_mutex_unlock(&q->lock);
-}
-
-void agc_runq_drop_scheduler(agc_runq *q) {
-  uv_mutex_lock(&q->lock);
-  q->count--;
   uv_mutex_unlock(&q->lock);
 }
 

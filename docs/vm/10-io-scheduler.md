@@ -226,7 +226,10 @@ section says how the scheduler and the loop keep them.
   default is 4, and the cap 1024. The pool runs the bounded work of §14.1, with
   opens and path calls. Blocking stdin is the exception: a failed Unix poller
   setup can keep one pool thread until input arrives (Stdin below). Windows
-  stdin never uses the pool.
+  stdin never uses the pool. libuv calls `abort()` when it cannot start the
+  pool, so on POSIX the first submit to libuv's pool catches `SIGABRT` and
+  ends the run with one line and status 70, as a scheduler thread that cannot
+  start does.
 - **We only wait where the loop can cancel** (§14.1). Files open with
   `O_CLOEXEC` and `O_NONBLOCK`, so opening a FIFO never waits for a peer. The
   pool job then sorts the path by what it is, never by name (§14.1). A pipe,

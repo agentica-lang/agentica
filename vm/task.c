@@ -15,6 +15,8 @@
    before it waits on the queue's condvar. */
 #define RUNNEXT_LIMIT 3u
 #define SPIN_BUDGET_US 10u
+/* What else a run that cannot start a scheduler thread can do (agc_thread_start_failed). */
+#define SCHEDULERS_FIX "set AGENTICA_SCHEDULERS=1"
 
 /* A set of pointers (open addressing, a power-of-two capacity, at most half full): the containers a walk has seen
    and the resources it has found. Values are immutable and may share parts, so without it a value made of shared
@@ -881,10 +883,8 @@ static void start_others(agc_vm *vm, void (*thread)(void *arg)) {
   atomic_store_explicit(&rt->entry_done, true, memory_order_release);
   for (int64_t k = 1; k < rt->schedulers; k++) {
     agc_runq_add_scheduler(rt->runq);
-    if (!agc_thread_start(rt->threads, (size_t)k, thread, rt->scheds[k])) {
-      agc_runq_drop_scheduler(rt->runq);
-      agc_fail(vm, "RUNTIME-INTERNAL", "cannot start a scheduler thread", 0);
-    }
+    int err = agc_thread_start(rt->threads, (size_t)k, thread, rt->scheds[k]);
+    if (err) agc_thread_start_failed("a scheduler thread", err, SCHEDULERS_FIX);
     atomic_fetch_add_explicit(&rt->started, 1, memory_order_release);
   }
 }
@@ -985,8 +985,8 @@ static agc_outcome run_threads(agc_vm *vm) {
   /* Counted before it starts: scheduler 0 adds the others to `started` at once, and a later store would hide them
      from the joins below. */
   atomic_store_explicit(&rt->started, 1, memory_order_release);
-  if (!agc_thread_start(rt->threads, 0, sched_main, rt->scheds[0]))
-    agc_internal_abort("cannot start a scheduler thread");
+  int err = agc_thread_start(rt->threads, 0, sched_main, rt->scheds[0]);
+  if (err) agc_thread_start_failed("a scheduler thread", err, SCHEDULERS_FIX);
   agc_io_serve(vm);
   /* Scheduler 0 first: it is the one that starts the others, so once it has ended `started` no longer grows. */
   agc_thread_join(rt->threads, 0);

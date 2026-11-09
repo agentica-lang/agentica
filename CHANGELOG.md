@@ -18,6 +18,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A header value with a Latin-1 character (`é`) is sent as its single byte and
   read back as the same text; it was accepted but made `std/http` answer an
   empty 500 or fail the request.
+- A run that cannot start a scheduler thread (a low `ulimit -v` or
+  `ulimit -u`) prints one line and exits with status 70; so does one that
+  cannot start the I/O thread pool, on Linux and macOS. They used to abort.
 
 ## [0.27.0] - 2026-11-08
 
