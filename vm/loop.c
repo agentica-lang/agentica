@@ -2318,29 +2318,29 @@ bool agc_io_init(void) { return false; }
 
 const char *agc_uv_version(void) { return NULL; }
 
+/* The job takes DATA (CC_OWNS in port.h), so a stub that starts no job frees it before it fails. */
+static _Noreturn void no_job(agc_vm *vm, const agc_io_kind *kind, CC_FREES void *data) {
+  if (data) kind->drop(data);
+  agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
+}
+
 agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
-  (void)kind;
-  (void)data;
   (void)context;
   (void)timeout_ms;
-  agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
+  no_job(vm, kind, data);
 }
 
 void agc_io_ready(agc_io_job *j) { (void)j; }
 
 agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, unsigned flags) {
-  (void)kind;
-  (void)data;
   (void)context;
   (void)flags;
-  agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
+  no_job(vm, kind, data);
 }
 
 agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context) {
-  (void)kind;
-  (void)data;
   (void)context;
-  agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
+  no_job(vm, kind, data);
 }
 
 void agc_io_submit_direct(agc_vm *vm) { (void)vm; }

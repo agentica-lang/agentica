@@ -907,14 +907,15 @@ bool agc_io_here(agc_vm *vm);
 #define AGC_JOB_QUIET 2u
 /* Internal to vm/loop.c: set by agc_io_compute, never passed to agc_io_detached. */
 #define AGC_JOB_COMPUTE 4u
-agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, unsigned flags);
+agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, CC_OWNS void *data, agc_value context,
+                             unsigned flags);
 /* agc_io_start for a native call that may run without bound (a `compute def`) or a key derivation (the KDF jobs of
    vm/crypto.c): the kind's `work` runs on the compute pool (vm/compute.c), never on the libuv pool, which takes only
    bounded work (docs/vm/14-core-invariants.md §14.1). The task parks; there is no deadline, and like any pool work the
    call runs to its end, so a cancel only detaches the job and its result is dropped (a queued one skips its work).
    CONTEXT is the job's context: the registry keeps it alive until the job ends, also after a cancel detached it, so
    the work may read the GC values it reaches (a dirty call of a native module reads its arguments there). */
-agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context);
+agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, CC_OWNS void *data, agc_value context);
 /* Gives the pool the compute job that this scheduler's turn started, if any (vm->direct); run_task calls it once the
    turn is over and rt->sync is free. */
 void agc_io_submit_direct(agc_vm *vm);
