@@ -221,9 +221,8 @@ def access_denied(path: str | Path, rights: str):
             icacls(path, "/remove:d", name)
 
 
-def processes_mentioning(text: str | Path) -> list[int]:
-    """The ids of the processes whose command line contains `text` (without regard to case or the direction of the
-    slashes), the Windows counterpart of reading /proc/<pid>/cmdline."""
+def process_commands() -> list[tuple[int, str]]:
+    """The id and the command line of every process (Win32_Process)."""
     system = Path(os.environ["SystemRoot"]) / "System32"
     listing = subprocess.run(
         [str(system / "WindowsPowerShell" / "v1.0" / "powershell.exe"), "-NoProfile", "-NonInteractive", "-Command",
@@ -231,17 +230,30 @@ def processes_mentioning(text: str | Path) -> list[int]:
          "Get-CimInstance Win32_Process | ForEach-Object { '{0}|{1}' -f $_.ProcessId, $_.CommandLine }"],
         capture_output=True, check=False, timeout=60)
     assert listing.returncode == 0, listing.stderr.decode(errors="replace")
-
-    def plain(value: str) -> str:
-        return value.lower().replace("/", "\\")
-
-    needle = plain(str(text))
-    found = []
+    commands = []
     for line in listing.stdout.decode("utf-8", errors="replace").splitlines():
         number, _, command = line.partition("|")
-        if number.strip().isdigit() and needle in plain(command):
-            found.append(int(number))
-    return found
+        if number.strip().isdigit():
+            commands.append((int(number), command))
+    return commands
+
+
+def plain_command(value: str) -> str:
+    """A command line or a path compared without regard to case or the direction of the slashes."""
+    return value.lower().replace("/", "\\")
+
+
+def processes_mentioning(text: str | Path) -> list[int]:
+    """The ids of the processes whose command line contains `text` (without regard to case or the direction of the
+    slashes), the Windows counterpart of reading /proc/<pid>/cmdline."""
+    needle = plain_command(str(text))
+    return [number for number, command in process_commands() if needle in plain_command(command)]
+
+
+def processes_of_agentica() -> str:
+    """The processes whose command line names agentica, one "pid command" line each, for an assertion message."""
+    return "\n".join("%d %s" % (number, command) for number, command in process_commands()
+                     if "agentica" in plain_command(command))
 
 
 @contextmanager

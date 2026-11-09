@@ -721,7 +721,10 @@ def test_killing_the_driver_stops_the_runner_the_scenario_vm_and_the_program_and
     if os.name == "nt":
         # The process list names the runner and the scenario VM by their run folder; without them in the list, the wait
         # for an empty list after the kill would prove nothing.
-        assert wait_until(lambda: processes_mentioning(temporary), scaled(20), 0.5)
+        from tests.windows_support import processes_of_agentica
+        assert wait_until(lambda: processes_mentioning(temporary), scaled(20), 0.5), (
+            "no process names %s; the folder holds %s; the processes of agentica:\n%s"
+            % (temporary, sorted(os.listdir(temporary)), processes_of_agentica()))
     # Only the driver dies, not its process group: the runner, the VM and the program must follow it.
     driver.process.kill()
     driver.process.wait(scaled(20))
