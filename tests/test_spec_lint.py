@@ -335,18 +335,31 @@ def test_a_chain_of_the_other_kind_is_not_hidden_by_the_chain_around_it(tmp_path
     }
 
 
-def test_a_nest_of_calls_is_judged_once_from_its_outer_call_and_a_nest_in_a_later_argument_on_its_own(tmp_path):
+def test_a_nest_of_calls_is_judged_once_from_its_outer_step_and_a_nest_in_a_later_argument_on_its_own(tmp_path):
+    """A step is a call of the file's own function or of a module it imports: a builtin around a nest breaks it, and
+    a method of a constant or of a module's constant is no step. A pipe of one step inside a nest is two suggestions,
+    one for each rule."""
     source = (
+        'import OP from "op"\n'
+        'import Mod from "mod"\n'
+        "\n"
         "def f(text: String) -> String\n"
         "  one = d(c(b(a(text))))\n"
         "  two = d(text, c(b(a(text))))\n"
         "  three = d(c(text |> b() |> a()))\n"
-        "  return one + two + three\n"
+        "  four = puts(d(c(b(text))))\n"
+        "  five = OP.a(OP.b(c(text)))\n"
+        "  six = Mod.LIMIT.concat(Mod.LIMIT.concat(c(text)))\n"
+        "  seven = d(c(text |> b()))\n"
+        "  return one\n"
         "end\n"
     )
     found = suggested(tmp_path / "nested_calls.agc", source)
-    nests = [where(source, "d(c("), where(source, "c(b(", nth=2), where(source, "d(c(text")]
-    assert found == {"LINT-NESTED-CALL": nests}
+    nests = ["d(c(b(a(", "c(b(a(text))))\n  three", "d(c(text |> b() |>", "d(c(b(text", "OP.a(", "d(c(text |> b()))"]
+    assert found == {
+        "LINT-NESTED-CALL": [where(source, needle) for needle in nests],
+        "LINT-SINGLE-PIPE": [where(source, "b()))")],
+    }
 
 
 def test_the_if_chain_help_asks_for_an_underscore_arm_only_without_an_else(tmp_path):
