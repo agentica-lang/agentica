@@ -1,1 +1,2 @@
+{{- if not site.Params.version }}{{ errorf "site.Params.version is not set: build with make site, which reads the VERSION file" }}{{ end -}}
 This is Agentica {{ partial "version.html" }}. [Release {{ partial "version.html" }}]({{ partial "release-url.html" }}) has the source archive of that version and the five prebuilt archives that the release workflow builds (Linux x86-64, Linux ARM64, Windows x86-64, macOS Intel and macOS Apple silicon), with a `SHA256SUMS` file. [All releases]({{ site.Params.repo }}/releases) lists the other versions.
