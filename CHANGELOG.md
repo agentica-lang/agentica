@@ -12,6 +12,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `Process.spawn(cmd, args, timeout_ms, env, out, err)` sends the child's
   stdout and stderr to files, with no shell and no 1 MiB limit.
+- `pgroup: true`, the last parameter of `Process.spawn`, `spawn_captured` and
+  `spawn_channel`, starts the child in its own process group, and stopping it
+  stops the programs it started too (Linux and macOS).
 
 ### Changed
 

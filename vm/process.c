@@ -65,7 +65,7 @@ struct launch {
   CC_OWNS char *cwd;
   size_t args;
   int files[2];
-  bool channel;
+  bool channel, group;
 };
 
 /* A request's slot and count on its child are taken by its START step (link_request), on the I/O thread. A request
@@ -117,7 +117,9 @@ struct proc {
   size_t users, handles;
   /* begun: the spawn has run, so the handles below are in some state; a child whose spawn never ran has none. */
   bool begun, linked, running, exited, err_done, in_closed, closed, reading;
-  bool captured, out_cut, err_cut, stop_failed;
+  /* group: the child leads its own process group (Process.spawn* with pgroup, where agc_proc_groups), and every
+     signal of a stop goes to the group. */
+  bool captured, out_cut, err_cut, stop_failed, group;
   stop_state stop;
   int write_status;
   int64_t status;
@@ -319,9 +321,13 @@ static void finished(proc *p, int64_t status) {
    comes while `running` is still true, the exit is awaited, for up to REAP_MS
    at the end of a run. */
 static int signal_child(proc *p, int sig) {
-  int rc = uv_process_kill(&p->process, sig);
+  /* The group's id is the child's pid: libuv's spawn returns after the child's setsid, so the group exists while the
+     child runs. A group that is gone (ESRCH) leaves the child alone to signal. */
+  int rc = p->group ? uv_kill(-p->process.pid, sig) : UV_ESRCH;
+  if (rc == UV_ESRCH) rc = uv_process_kill(&p->process, sig);
   if (rc == UV_ESRCH) rc = 0;
-  AGC_TRACE(&p->trace, AGC_TRACE_PROC, "%s pid=%d rc=%d", sig == SIGKILL ? "kill" : "term", (int)p->process.pid, rc);
+  AGC_TRACE(&p->trace, AGC_TRACE_PROC, "%s pid=%d group=%d rc=%d", sig == SIGKILL ? "kill" : "term",
+            (int)p->process.pid, p->group ? 1 : 0, rc);
   p->stop = sig == SIGTERM && !rc ? STOP_TERM : STOP_KILLED;
   p->stop_failed = rc != 0;
   return rc;
@@ -1134,6 +1140,10 @@ static int start_child(guard *g, proc *p, const launch *l) {
     options.cwd = l->cwd;
     options.stdio_count = 3 + link.child_count;
     options.stdio = stdio;
+    /* POSIX: libuv's DETACHED is setsid() in the child, a new session and process group led by the child. It is not
+       used on Windows, where it would also take the child out of libuv's job object (agc_proc_groups). */
+    p->group = l->group && agc_proc_groups();
+    if (p->group) options.flags |= UV_PROCESS_DETACHED;
     link_child(g, p);
     rc = uv_spawn(loop, &p->process, &options);
     p->handles = 1;
@@ -1330,7 +1340,7 @@ static bool begin_spawn(void *data, agc_io_job *job) {
    resolves before the child changes directory (§10.4). out and err (Process.spawn only; NULL or empty: the pipe) are
    files for the child's stdout and stderr, opened last, so a spawn refused for its other arguments touches no file. */
 static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string *dir, int64_t timeout, bool channel,
-                             const agc_map *env, const agc_string *out, const agc_string *err) {
+                             const agc_map *env, const agc_string *out, const agc_string *err, bool group) {
   if (vm->rt->deny_run) return agc_error_value("denied: --deny-run turns off starting programs");
   const agc_string *command = agc_as_string(vm, args[0]);
   const agc_list *list = agc_as_list(vm, args[1]);
@@ -1394,6 +1404,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   l->cwd = cwd;
   l->args = count;
   l->channel = channel;
+  l->group = group;
   if (!l->env) {
     AGC_TRACE(&vm->rt->trace, AGC_TRACE_PROC, "spawn_failed path=%s rc=%d", l->argv[0], UV_ENOMEM);
     free_launch(l);
@@ -1433,40 +1444,46 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   return agc_result_value(true, agc_process_value(pr));
 }
 
-/* Each spawn has two arities. The longer one (with `env`, and `out` and `err` for Process.spawn) is what the catalog
-   now lowers to; the shorter one stays for the bytecode of bootstrap/stage0.agcb, which was compiled before `env`
-   existed (remove it with the next refresh of stage0). */
+/* The longest arity of each spawn (with `pgroup` last) is what the catalog lowers to. Process.spawn_captured keeps the
+   arity before `pgroup`, which bootstrap/stage0.agcb and the front end it compiles call, and each spawn keeps the one
+   from before `env`, for older seeds (remove both with the next refresh of stage0). The C tests call the shortest. */
 static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false, NULL, NULL, NULL);
+  return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false, NULL, NULL, NULL, false);
 }
 
-static agc_value builtin_spawn_files(agc_vm *vm, agc_value *args, uint32_t span) {
+static agc_value builtin_spawn_group(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false, agc_as_map(vm, args[3]),
-                     agc_as_string(vm, args[4]), agc_as_string(vm, args[5]));
+                     agc_as_string(vm, args[4]), agc_as_string(vm, args[5]), agc_as_bool(vm, args[6]));
 }
 
 static agc_value builtin_spawn_captured(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, NULL, NULL, NULL);
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, NULL, NULL, NULL, false);
 }
 
 static agc_value builtin_spawn_captured_env(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, agc_as_map(vm, args[4]),
-                     NULL, NULL);
+                     NULL, NULL, false);
+}
+
+static agc_value builtin_spawn_captured_group(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, agc_as_map(vm, args[4]),
+                     NULL, NULL, agc_as_bool(vm, args[5]));
 }
 
 static agc_value builtin_spawn_channel(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, NULL, NULL, NULL);
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, NULL, NULL, NULL, false);
 }
 
-static agc_value builtin_spawn_channel_env(agc_vm *vm, agc_value *args, uint32_t span) {
+static agc_value builtin_spawn_channel_group(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, agc_as_map(vm, args[4]),
-                     NULL, NULL);
+                     NULL, NULL, agc_as_bool(vm, args[5]));
 }
 
 /* The child of a process value that is not closed. With several schedulers the I/O thread owns `closed`, so only the
@@ -1760,7 +1777,7 @@ static agc_value builtin_read_available(agc_vm *vm, agc_value *args, uint32_t sp
 
 const agc_builtin agc_process_builtins[] = {
   {"Process.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"Process.spawn", 6, builtin_spawn_files, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Process.spawn", 7, builtin_spawn_group, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.send_bytes.bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
@@ -1770,9 +1787,10 @@ const agc_builtin agc_process_builtins[] = {
   {"Process.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Process.spawn_captured", 4, builtin_spawn_captured, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.spawn_captured", 5, builtin_spawn_captured_env, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Process.spawn_captured", 6, builtin_spawn_captured_group, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.output", 2, builtin_output, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Process.spawn_channel", 4, builtin_spawn_channel, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"Process.spawn_channel", 5, builtin_spawn_channel_env, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Process.spawn_channel", 6, builtin_spawn_channel_group, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.channel_read_line", 2, builtin_channel_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.channel_send", 3, builtin_channel_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.channel_close", 2, builtin_channel_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},

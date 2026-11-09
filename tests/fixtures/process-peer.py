@@ -2,10 +2,11 @@
 
 Modes: args (argv as one JSON line), env (the AGENTICA_* and PROBE_* variables as JSON), cwd (the working directory),
 hold (prints its pid and waits; tests/test_process_lifecycle.py uses it), streams N (N bytes "o" on stdout, then
-"err\n" on stderr, as bytes).
+"err\n" on stderr, as bytes), family (starts a Python child that sleeps, prints its pid and waits).
 """
 import json
 import os
+import subprocess
 import sys
 import time
 
@@ -29,6 +30,10 @@ def main():
         print(os.getcwd(), flush=True)
     elif mode == "hold":
         hold()
+    elif mode == "family":
+        child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)"])
+        print(child.pid, flush=True)
+        child.wait()
     elif mode == "streams":
         sys.stdout.buffer.write(b"o" * int(sys.argv[2]))
         sys.stdout.buffer.flush()

@@ -9,10 +9,12 @@ import json
 import os
 import re
 import shutil
+import time
 
 import pytest
 
-from tests.agentica_test import FIXTURES, PYTHON, TARGET_OS, agc_literal, cli, run, tool, vm_environment
+from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, agc_literal, cli, host_only, kill_process, process_alive,
+                                 run, tool, vm_environment)
 
 PEER = FIXTURES / "process-peer.js"
 PY_PEER = FIXTURES / "process-peer.py"
@@ -403,3 +405,30 @@ def test_an_out_or_err_file_that_cannot_be_opened_is_an_error_and_no_child_runs(
     assert not late.exists()
     result = cli_run("--deny-fs", write(tmp_path, "program.agc", streams_to(1, agc_literal(late), '""')))
     assert result.stdout == "denied: --deny-fs turns off file access\n" and not late.exists()
+
+
+@host_only(TARGET_OS == "windows", "Windows has no process groups that a stop signals; pgroup stops the child alone")
+@pytest.mark.parametrize("start", ['Process.spawn(%s, [%s, "family"], 5000, {}, "", "", %s)',
+                                   'Process.spawn_captured(%s, [%s, "family"], ".", 5000, {}, %s)'],
+                         ids=["spawn", "captured"])
+def test_closing_a_child_started_with_pgroup_stops_its_own_children(tmp_path, start):
+    """The Python peer starts a grandchild and waits. With pgroup, close signals the child's whole process group
+    (SIGKILL for spawn, SIGTERM for spawn_captured), so the grandchild ends too; without it the grandchild outlives
+    the close."""
+    def grandchild(group):
+        text = ('def main() -> Void\n  p = Result.unwrap!(%s)\n  puts(Result.unwrap!(Process.read_line(p, 5000)))\n'
+                '  Process.close(p)\nend\n\n' % (start % (agc_literal(PYTHON), agc_literal(PY_PEER), group)))
+        return output(tmp_path, text).strip()
+
+    def ends(pid):
+        deadline = time.monotonic() + 5
+        while process_alive(pid) and time.monotonic() < deadline:
+            time.sleep(0.05)
+        return not process_alive(pid)
+
+    left = grandchild("false")
+    try:
+        assert process_alive(left)
+    finally:
+        kill_process(left)
+    assert ends(grandchild("true"))
