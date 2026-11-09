@@ -294,7 +294,9 @@ attempt uses its own `location`, since the action refuses a folder that exists.
   it on `master`; the PR `checks` job only restores it (a PR can restore only
   caches of its merge ref or `master`). On a miss, the vendored check skips.
 - The release sets `CCACHE=`, because PR jobs can write to a shared cache.
-- A `master` push runs no tests: only `dup-check` and `warm-third-party`.
+- A `master` push runs no PR checks: only `dup-check`, `warm-third-party` and
+  `coverage` (`make coverage`: the C tests and the goldens on a gcc coverage
+  build; the LCOV and HTML report of `vm/` is the artifact `vm-coverage`).
 
 ## Other workflows
 

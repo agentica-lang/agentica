@@ -81,6 +81,31 @@ jobs:
           cache-dependency-path: tools/jscpd/package-lock.json
       - run: make dup-check
 
+  # make coverage on each master push (#1234): line and function coverage of vm/ from the C tests and the goldens, as
+  # LCOV and HTML in the artifact `vm-coverage`. Not on pull requests; a failed test fails the job after the report.
+  coverage:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      AGENTICA_REQUIRE_VM: '1'
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: ./.github/actions/setup
+      - run: command -v genhtml || { sudo apt-get update && sudo apt-get install -y --no-install-recommends lcov; }
+      - run: make -j"$(nproc)"
+      - name: make coverage, the COVERAGE=1 build (gcc) and its C tests and goldens
+        run: make coverage
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: vm-coverage
+          path: build/coverage/
+          if-no-files-found: ignore
+          retention-days: 14
+
   # What changed decides whether the C half runs. HEAD is the merge commit on pull_request, so HEAD^1 is the base tip: this
   # diffs the whole PR, not just the tip commit.
   changes:

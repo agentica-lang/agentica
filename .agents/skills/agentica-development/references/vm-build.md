@@ -23,6 +23,7 @@ AGENTICA_VM_TRACE=all AGENTICA_VM_TRACE_FILE=./t.trace dist/agentica run -- prog
 AGENTICA_VM_TRACE=profile dist/agentica check compiler/front_end.agc   # step profile at the end; folded stacks and Profile.measure: agentica-programming, references/performance.md
 make vm-libfuzz-run LIBFUZZ_TIME=300 LIBFUZZ_JOBS=2   # coverage-guided run; failures in build/vm/libfuzz/crashes/ (docs/vm/11-build-ci-supply-chain.md, Fuzzing)
 make vm-gc-stress                    # GC_STRESS=1 (collect every 64 allocations), vm-test and the goldens
+make coverage [COVERAGE_CC=clang]    # COVERAGE=1 build, vm-test and the goldens (COVERAGE_TESTS): build/coverage/lcov.info and html/ (genhtml), vm/ without third_party and tests
 make vm-tsan / vm-tsan-run / vm-tsan-native   # TSAN=1 build, no libgc: the threaded C tests / tests/test_vm_multicore.py / the native modules with TSan-built peers
 make goldens FIXTURES="name ..."     # rewrite tests/fixtures/vm/**/*.expected (all, or only those fixtures; an unknown name exits 2); review the diff
 make vm-golden-check FIXTURES="name ..."  # the CI golden check (3 formats, sweep, sidecars, stack files) for only those fixtures

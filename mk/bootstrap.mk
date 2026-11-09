@@ -46,9 +46,9 @@ STAGE1_NEEDS := $(if $(filter $(BOOT),$(STAGE1_COMPILER)),$(BOOT))
 bootstrap-smoke: $(BOOT)
 	AGENTICA_VM_BINARY=$(BOOT) $(MAKE) --no-print-directory test-py TESTS="tests/test_platform_bootstrap.py"
 
-ifneq ($(filter 1,$(GC_STRESS) $(TSAN)),)
+ifneq ($(filter 1,$(GC_STRESS) $(TSAN) $(COVERAGE)),)
 $(STAGE_DIR)/stage2.agcb $(EMBEDDED_PROGRAMS):
-	@echo "$@ is missing: the GC stress and TSan builds link the front end of the release build; run make first" >&2; exit 1
+	@echo "$@ is missing: the GC stress, TSan and coverage builds link the front end of the release build; run make first" >&2; exit 1
 else
 $(STAGE_DIR)/stage1.agcb: $(STAGE_INPUTS) $(STAGE1_NEEDS)
 	@mkdir -p $(STAGE_DIR)

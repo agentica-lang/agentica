@@ -1,4 +1,4 @@
-# The C VM: sources, the build modes (release, SANITIZE, TSAN, GC_STRESS, TRACE), compile and link rules, ccache, the
+# The C VM: sources, the build modes (release, SANITIZE, TSAN, GC_STRESS, COVERAGE, TRACE), compile and link rules, ccache, the
 # third-party libraries (yyjson, picohttpparser, libuv) and the system or vendored libgc and OpenSSL, with their cache keys.
 # Included first: the variables here (VM_BUILD, VM_OBJ, OSSL_DEP, GC_DEP, ...) are read by the other files while make
 # parses them. EXE is set by the root Makefile and set again here.
@@ -26,6 +26,7 @@
 # make vm-libfuzz         the libFuzzer target (LIBFUZZ=1 mode: build/vm/libfuzz/agentica-vm-libfuzz, clang only)
 # make vm-libfuzz-run     a bounded coverage-guided run from the compiled fixtures (see mk/vm-test.mk)
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests (sampled --max-steps sweep)
+# make coverage           COVERAGE=1 build (gcc, or COVERAGE_CC=clang), the C tests and the goldens on it: build/coverage/lcov.info
 # make vm-lint            clang-tidy (19 or newer) over vm/*.c, vm/jit/*.c and vm/tests/*.c in the release, sanitizer and GC-stress configurations, files in parallel
 # make vm-layers          the layer check of docs/vm/15-layers.md: each header compiles alone, the include and link rules hold, planted violations fail (Linux only)
 # make layout-check       the layout of the --jit off hot loop (plain_turn) against BASE, default the merge base with origin/master (tools/layout_check.py; Linux x86-64, release mode)
@@ -173,6 +174,19 @@ VM_BUILD := build/vm/gcstress
 YY_CFLAGS := -O1 -g $(VM_PIC)
 OSSL_CFLAGS := -g
 DEBUG_MAP := $(DEBUG_MAPS)
+else ifeq ($(COVERAGE),1)
+# make coverage (mk/vm-test.mk): -O0, so each line keeps its own code. gcc's counters are updated atomically, since the
+# VM runs threads; COVERAGE_CC=clang uses its source-based coverage. AGC_COVERAGE writes the counters before the VM's
+# _exit (vm/launch.c). The vendored libraries are not instrumented, so they have no data.
+COVERAGE_CC ?= gcc
+VM_CC := $(COVERAGE_CC)
+COVERAGE_FLAGS := $(if $(findstring clang,$(notdir $(COVERAGE_CC))),-fprofile-instr-generate -fcoverage-mapping,--coverage -fprofile-update=atomic)
+VM_CFLAGS := $(VM_WARN) -O0 -g $(COVERAGE_FLAGS) -DAGC_COVERAGE $(VM_PIC)
+VM_LDFLAGS := $(VM_PIE) $(COVERAGE_FLAGS) $(VM_LIBS)
+GC_MODE := $(AGENTICA_GC)
+VM_BUILD := build/vm/coverage
+YY_CFLAGS := -O1 $(VM_PIC)
+OSSL_CFLAGS :=
 else
 VM_CC := $(CC)
 VM_CFLAGS := $(VM_WARN) -O2 -fstack-protector-strong -D_FORTIFY_SOURCE=2 $(VM_PIC)
@@ -278,6 +292,10 @@ TP_KEY = { echo '$(shell uname -s) $(shell uname -m) $(OS)'; \
   $(call SUBMODULE_KEY,$(YY_DIR)); $(call SUBMODULE_KEY,$(PICO_DIR)); $(call SUBMODULE_KEY,$(UV_DIR)); \
   $(if $(filter vendored,$(AGENTICA_ZLIB)),$(call SUBMODULE_KEY,$(ZLIB_DIR));) \
   $(if $(FFI_NAMES),$(call SUBMODULE_KEY,$(FFI_DIR));) }
+# A gcc coverage object names its .gcda file by an absolute path, which a cache hit from another checkout would carry over.
+ifeq ($(COVERAGE),1)
+CCACHE :=
+endif
 ifeq ($(origin CCACHE),undefined)
 CCACHE := $(shell c=$$(command -v ccache 2>/dev/null) || exit 0; d=$$($$c -k cache_dir 2>/dev/null) || d=$${CCACHE_DIR:-$$HOME/.ccache}; \
   while [ ! -d "$$d" ]; do d=$$(dirname "$$d"); done; [ -w "$$d" ] && echo $$c)
