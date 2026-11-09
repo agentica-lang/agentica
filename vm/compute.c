@@ -158,7 +158,7 @@ static bool enqueue(agc_compute *pool, agc_request *entry) {
     uint32_t k = pool->started;
     pool->workers[k].pool = pool;
     pool->workers[k].busy = pool->workers[k].join = false;
-    if (agc_thread_start(pool->threads, k, serve, &pool->workers[k])) {
+    if (agc_thread_start(pool->threads, k, serve, &pool->workers[k]) == 0) {
       pool->started++;
       pool->refs++;
     }

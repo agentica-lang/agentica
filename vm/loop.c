@@ -472,8 +472,46 @@ static void work_finished(uv_work_t *req, int status) {
    whichever it is, and take the signal mask of the thread that submits, so they keep the stop signals blocked and a
    stop signal is handled on the loop's thread only (unwatch_stop). Nothing to block on Windows. */
 #if !defined(_WIN32)
-static void pool_enter(pool_mask *saved) { agc_io_block_stop(saved); }
-static void pool_leave(const pool_mask *saved) { pthread_sigmask(SIG_SETMASK, saved, NULL); }
+/* libuv starts its pool at the first submit and calls abort() when it cannot (a thread or its 8 MiB stack refused, as
+   under a low ulimit -v), which would end the run with a bare SIGABRT. So the first submit catches SIGABRT and, on the
+   submitting thread, ends with agc_thread_start_failed's line instead; an abort on another thread meanwhile gets the
+   action it had. pool_state goes 0 (not started), 1 (one thread's first submit runs; only it touches abort_action), 2
+   (started): a second loop that submits meanwhile passes through as before. */
+#define POOL_IDLE 0
+#define POOL_STARTING 1
+#define POOL_STARTED 2
+static _Thread_local volatile sig_atomic_t starting_pool; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+static _Atomic int pool_state;                             // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+static struct sigaction abort_action;                      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+
+static void pool_start_aborted(int sig) {
+  if (starting_pool) agc_thread_start_failed("the I/O thread pool", 0);
+  /* Blocked while this handler runs, so it comes back with the old action once the handler returns. */
+  (void)sigaction(sig, &abort_action, NULL);
+  (void)raise(sig);
+}
+
+static void pool_enter(pool_mask *saved) {
+  agc_io_block_stop(saved);
+  int idle = POOL_IDLE;
+  if (atomic_load_explicit(&pool_state, memory_order_acquire) != POOL_IDLE ||
+      !atomic_compare_exchange_strong(&pool_state, &idle, POOL_STARTING))
+    return;
+  struct sigaction catch_abort;
+  memset(&catch_abort, 0, sizeof catch_abort);
+  catch_abort.sa_handler = pool_start_aborted;
+  sigemptyset(&catch_abort.sa_mask);
+  if (sigaction(SIGABRT, &catch_abort, &abort_action) == 0) starting_pool = 1;
+}
+
+static void pool_leave(const pool_mask *saved) {
+  if (starting_pool) {
+    starting_pool = 0;
+    (void)sigaction(SIGABRT, &abort_action, NULL);
+    atomic_store_explicit(&pool_state, POOL_STARTED, memory_order_release);
+  }
+  pthread_sigmask(SIG_SETMASK, saved, NULL);
+}
 #else
 static void pool_enter(pool_mask *saved) { *saved = 0; }
 static void pool_leave(const pool_mask *saved) { (void)saved; }

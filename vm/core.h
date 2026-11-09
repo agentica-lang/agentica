@@ -109,15 +109,18 @@ bool agc_runq_take_nudge(agc_runq *q);
  * that use it and those that wait in it, calls the on-idle hook when all of them wait, and answers whether all still do
  * with no work queued (agc_runq_quiet, then agc_runq_still_quiet with the epoch it gave). */
 void agc_runq_add_scheduler(agc_runq *q);
-void agc_runq_drop_scheduler(agc_runq *q);
 void agc_runq_on_idle(agc_runq *q, void (*fn)(void *data), void *data);
 bool agc_runq_quiet(agc_runq *q, uint64_t *epoch);
 bool agc_runq_still_quiet(agc_runq *q, uint64_t epoch);
 /* Scheduler threads, as libuv threads (vm/sync.c): an array of N ids, the start of one with its entry and argument
- * (false when the system refuses), and its join or detach (a thread that is never joined: a busy compute thread). */
+ * (0, or libuv's error when the system refuses), and its join or detach (a thread that is never joined: a busy compute
+ * thread). agc_thread_start_failed ends the process when a thread the run needs cannot start (a low ulimit -v or
+ * ulimit -u): one line on stderr, naming WHAT and libuv's ERR (0: none known), and exit status 70, as out of memory. It
+ * only writes and exits, so a signal handler may call it. */
 void *agc_threads_new(size_t n);
 void agc_threads_free(void *threads);
-bool agc_thread_start(void *threads, size_t k, void (*fn)(void *arg), void *arg);
+int agc_thread_start(void *threads, size_t k, void (*fn)(void *arg), void *arg);
+_Noreturn void agc_thread_start_failed(const char *what, int err);
 void agc_thread_join(void *threads, size_t k);
 void agc_thread_detach(void *threads, size_t k);
 /* The end of a run with several schedulers (vm/task.c): the first caller of agc_run_over records the end (the
