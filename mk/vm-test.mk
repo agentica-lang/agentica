@@ -288,12 +288,14 @@ vm-lint-gcstress:
 # It is an Agentica program, so dist/agentica runs it; it needs gcc 10+, clang and clang-tidy on PATH. The release has no
 # binary: the tag is cloned into build/cchecker/ and its commit must be the pinned one. The settings are cchecker.toml, the
 # accepted findings cchecker-baseline.json (references/ci.md of the development skill says how to change both). vm/tests/ is
-# test harness code and not checked. It exits 1 on a finding that is not in the baseline; the CI job reports it and does not
-# fail the build yet.
+# test harness code and not checked: cchecker reads a database of its own without it (CCHECKER_DB), so each run is a full
+# run, which checks the names of the settings and reports a stale ignore of the rules. It exits 1 on a finding that is not
+# in the baseline; the CI job reports it and does not fail the build yet.
 CCHECKER_VERSION := 0.1.0
 CCHECKER_COMMIT := bffe57d2498a3278c6228f19127507834389066e
 CCHECKER_DIR := build/cchecker/$(CCHECKER_VERSION)
 CCHECKER_FLAGS ?=
+CCHECKER_DB := build/cchecker/compile_commands.json
 
 .PHONY: cchecker cchecker-update-baseline
 
@@ -305,14 +307,21 @@ $(CCHECKER_DIR)/cchecker.agc:
 	mv $(CCHECKER_DIR).tmp $(CCHECKER_DIR)
 
 # Run from the root of the checkout: cchecker reads paths relative to the working directory.
-CCHECKER = $(RUN_PROGRAM) dist/agentica$(EXE) $(CCHECKER_DIR)/cchecker.agc -p $(COMPILE_COMMANDS) -c cchecker.toml -j $(JOBS) \
-  --exclude vm/tests --baseline cchecker-baseline.json $(CCHECKER_FLAGS)
+CCHECKER = $(RUN_PROGRAM) dist/agentica$(EXE) $(CCHECKER_DIR)/cchecker.agc -p $(CCHECKER_DB) -c cchecker.toml -j $(JOBS) \
+  --baseline cchecker-baseline.json $(CCHECKER_FLAGS)
 
-cchecker: $(PRODUCT) $(CCHECKER_DIR)/cchecker.agc compile-commands
+.PHONY: cchecker-db
+cchecker-db: $(CC_DB_DEPS)
+	@mkdir -p $(dir $(CCHECKER_DB))
+	@sh vm/tools/compile-commands.sh '$(CURDIR)' $(VM_OBJ) '$(filter-out vm/tests/%,$(CC_DB_SRC))' '' $(VM_CC) $(VM_CFLAGS) \
+	  > '$(CCHECKER_DB).new' || { rm -f '$(CCHECKER_DB).new'; exit 1; }
+	@mv '$(CCHECKER_DB).new' '$(CCHECKER_DB)'
+
+cchecker: $(PRODUCT) $(CCHECKER_DIR)/cchecker.agc cchecker-db
 	$(CCHECKER)
 
 # Accepts today's findings: rewrites the baseline (the diff is the review).
-cchecker-update-baseline: $(PRODUCT) $(CCHECKER_DIR)/cchecker.agc compile-commands
+cchecker-update-baseline: $(PRODUCT) $(CCHECKER_DIR)/cchecker.agc cchecker-db
 	$(CCHECKER) --update-baseline
 
 vm-layers: $(VM_OBJS) $(VM_OBJ)/agentica.o $(VM_OBJ)/launch.o

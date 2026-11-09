@@ -44,15 +44,17 @@ static int remove_at(int parent, const char *name, int flags) {
   return rc;
 }
 
+/* 0 with *DIR open, or an errno with *DIR NULL: a failure is never 0, so the caller never reads a NULL *DIR. */
 static int open_dir(int parent, const char *name, DIR **dir) {
+  *dir = NULL;
   int fd;
   do {
     fd = openat(parent, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC);
   } while (fd < 0 && errno == EINTR);
-  if (fd < 0) return errno;
+  if (fd < 0) return errno ? errno : EIO;
   *dir = fdopendir(fd);
   if (*dir) return 0;
-  int err = errno;
+  int err = errno ? errno : EIO;
   close(fd);
   return err;
 }
@@ -62,14 +64,12 @@ static const struct dirent *next_entry(DIR *dir) {
   const struct dirent *entry;
   do {
     errno = 0;
-    // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-NONNULLPARAMCHECKER: open_dir gives 0 only with *dir set
     entry = readdir(dir);
   } while (!entry && errno == EINTR);
   return entry;
 }
 
 static void close_levels(level *levels, size_t top) {
-  // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-NONNULLPARAMCHECKER: open_dir gives 0 only with *dir set
   for (size_t k = 0; k <= top; k++) closedir(levels[k].dir);
 }
 
@@ -111,7 +111,6 @@ static int walk(const char *root, level *levels, char **failed) {
     const struct dirent *entry = next_entry(at->dir);
     if (entry) {
       if (is_dots(entry->d_name)) continue;
-      // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-NONNULLPARAMCHECKER: open_dir gives 0 only with *dir set
       int dir_fd = dirfd(at->dir);
       /* unlinkat never follows a link, and Linux answers EISDIR for a directory. */
       if (remove_at(dir_fd, entry->d_name, 0) == 0) {
@@ -135,7 +134,7 @@ static int walk(const char *root, level *levels, char **failed) {
         rc = AGC_TREE_TOO_DEEP;
         break;
       }
-      DIR *child;
+      DIR *child = NULL;
       rc = open_dir(dir_fd, entry->d_name, &child);
       /* The entry became a link or a file, or went away, after unlinkat said directory: leave it. If something
          else in this directory was removed in this pass, the next pass meets the entry again; if not, the pass
@@ -150,14 +149,12 @@ static int walk(const char *root, level *levels, char **failed) {
       }
       size_t name_len = strlen(entry->d_name);
       if (name_len >= sizeof levels[top].name) {
-        // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-CALLANDMESSAGE: open_dir gives 0 only with *dir set
         closedir(child);
         culprit = entry->d_name;
         rc = ENAMETOOLONG;
         break;
       }
       top++;
-      // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-UNINITIALIZED-ASSIGN: open_dir gives 0 only with *dir set
       levels[top].dir = child;
       levels[top].removed = 0;
       memcpy(levels[top].name, entry->d_name, name_len + 1);
@@ -170,7 +167,6 @@ static int walk(const char *root, level *levels, char **failed) {
     int gone = remove_at(top ? dirfd(levels[top - 1].dir) : AT_FDCWD, top ? at->name : root, AT_REMOVEDIR);
     /* A directory that someone else removed is gone, which is what the walk wants, but it is not our progress. */
     if (gone == 0 || errno == ENOENT) {
-      // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-NONNULLPARAMCHECKER: open_dir gives 0 only with *dir set
       closedir(at->dir);
       if (top == 0) return 0;
       top--;

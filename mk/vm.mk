@@ -368,7 +368,9 @@ $(VM_OBJ)/agentica-res.o: vm/agentica.rc vm/agentica.manifest $(VM_OBJ_STAMP)
 # first, as for an object.
 COMPILE_COMMANDS ?= compile_commands.json
 CC_DB_SRC := $(VM_SRC) vm/agentica.c vm/launch.c vm/fuzz.c $(wildcard vm/tests/*.c)
-compile-commands: $(FFI_HEADERS) | $(OSSL_DEP) $(GC_DEP) $(ZLIB_DEP) $(YY_DIR)/src/yyjson.c $(PICO_DIR)/picohttpparser.c $(UV_DIR)/src/uv-common.c
+CC_DB_DEPS := $(FFI_HEADERS) | $(OSSL_DEP) $(GC_DEP) $(ZLIB_DEP) $(YY_DIR)/src/yyjson.c $(PICO_DIR)/picohttpparser.c \
+  $(UV_DIR)/src/uv-common.c
+compile-commands: $(CC_DB_DEPS)
 	@sh vm/tools/compile-commands.sh '$(CURDIR)' $(VM_OBJ) '$(CC_DB_SRC)' '$(VM_TEST_FLAGS)' $(VM_CC) $(VM_CFLAGS) \
 	  > '$(COMPILE_COMMANDS).new' || { rm -f '$(COMPILE_COMMANDS).new'; exit 1; }
 	@mv '$(COMPILE_COMMANDS).new' '$(COMPILE_COMMANDS)'

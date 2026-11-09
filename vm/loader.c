@@ -97,7 +97,7 @@ static agc_string *read_string(reader *r) {
   size_t chars;
   if (!agc_utf8_chars(bytes, len, &chars)) reject(r, "invalid UTF-8 text");
   agc_string *s = load_alloc(r, agc_size_add(sizeof(agc_string), len), true);
-  // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: load_alloc gives NULL only for size 0
+  // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: the size is at least sizeof(agc_string), never 0
   s->bytes = len;
   s->chars = chars;
   if (len) memcpy(s->data, bytes, len);
@@ -111,7 +111,7 @@ static const agc_bytes *read_bytes(reader *r) {
   const uint8_t *bytes = take(r, len);
   if (len == 0) return agc_empty_bytes();
   agc_bytes *b = load_alloc(r, agc_size_add(sizeof(agc_bytes), len), true);
-  // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: load_alloc gives NULL only for size 0
+  // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: the size is at least sizeof(agc_bytes), never 0
   b->len = len;
   memcpy(b->data, bytes, len);
   return b;

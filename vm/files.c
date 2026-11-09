@@ -1160,8 +1160,7 @@ static line_scan scan_line(const file_state *st, size_t from, size_t window, siz
   size_t have = pending(st);
   const uint8_t *base = st->buf ? st->buf + st->start : NULL;
   if (window > have) window = have;
-  // cchecker: ignore CC-GCC-ANALYZER-NULL-ARGUMENT, CC-TIDY-CLANG-ANALYZER-CORE-NONNULLPARAMCHECKER: NULL buf: nothing pending
-  const uint8_t *lf = window > from ? memchr(base + from, '\n', window - from) : NULL;
+  const uint8_t *lf = window > from && base ? memchr(base + from, '\n', window - from) : NULL;
   if (lf) {
     size_t len = (size_t)(lf - base);
     return (line_scan){LINE_FOUND, len && base[len - 1] == '\r' ? len - 1 : len, len + 1, window};
@@ -1302,7 +1301,7 @@ static void step_read_bytes(op *o) {
 
 /* One non-blocking pass of a call on a polled descriptor, on the loop
    thread; false while it must wait for the descriptor. */
-static bool step(op *o) {
+CC_ASSUME_SHORT static bool step(op *o) {
   switch (o->kind) {
     case OP_READ_TEXT: step_read_text(o); break;
     case OP_READ_LINE: work_read_line(o); break;

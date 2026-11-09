@@ -1120,7 +1120,7 @@ static bool pin_one(agc_c_resource *res, agc_c_resource **pinned, size_t *n) {
    the order settle_links writes them in. */
 static bool pin_all(agc_c_resource *const *held, uint32_t holds, agc_c_resource **pinned, size_t *n) {
   for (uint32_t k = 0; k < holds; k++) {
-    // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-UNINITIALIZED-ASSIGN: find_held fills all e->holds entries
+    // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-UNINITIALIZED-ASSIGN: every caller fills the first HOLDS entries
     agc_c_resource *res = held[k];
     if (!res) continue;
     if (!pin_one(res, pinned, n)) return false;
@@ -1441,7 +1441,7 @@ static uint64_t next_walk(agc_vm *vm) { return ++ffi_cache(vm)->walk; }
    that one comes from (release_held undoes it): a fixed number of links per call, whatever the chain above. */
 static void hold(agc_c_resource *const *held, uint32_t holds) {
   for (uint32_t k = 0; k < holds; k++) {
-    // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-UNINITIALIZED-BRANCH: find_held fills all e->holds entries
+    // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-UNINITIALIZED-BRANCH: every caller fills the first HOLDS entries
     if (!held[k]) continue;
     held[k]->jobs++;
     hold_parents(held[k]);
