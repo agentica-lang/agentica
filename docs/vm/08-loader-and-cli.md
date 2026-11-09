@@ -105,6 +105,17 @@ parser is `agc_launch_parse` (`vm/launch.c`).
   all names are capped at 64 MiB (past it, exit 2). The `.agcb` stores names
   relative to the folder of the entry file (4.6). DIR is not normalized: an
   imported file above the root prints as `DIR/../shared/x.agc`.
+- `--coverage FILE` counts, for each span of the program, the STEPs that ran
+  it (`vm/cover.c`): `set_counter` keeps `next_stop` at 0, as for the profile,
+  so every STEP takes `step_slow`, which adds one to the counter of each of its
+  spans, and the run is interpreted (the JIT is off). A run without the flag
+  pays one test in `set_counter` and one in `step_slow`, both off the fast
+  path of STEP. At the end (`agc_launch_settle`, after the files) the counts
+  go to FILE as LCOV: for each source that is not `std/`, the prelude or a
+  fetched package (`pkg/NAME@VERSION/`), `FN`/`FNDA` from each function's span
+  and its first STEP, and `DA` for each line that starts a span of a STEP,
+  with the highest count of its spans. A file that cannot be written is
+  `RUNTIME-INTERNAL` (exit 1). The front end's own run is never counted.
 - `--flush-timeout MS` (or `AGENTICA_FLUSH_TIMEOUT_MS`, read by the VM; the flag
   wins) sets the end-of-run wait for file close jobs and buffered output
   (10.2.2). `0` means no wait; above 86400000 is rejected. When the wait runs
@@ -220,10 +231,11 @@ stages.
   FILE` is for the build and the tests only and has the same standing as the
   binary itself. The options it may pass are exactly `--ai`, `--json`, the
   `--deny-*` flags, `--sandbox`, `--max-steps N`, `--seed N`,
-  `--flush-timeout MS`, `--schedulers N`, `--jit MODE` and `--source-root DIR`,
-  each once; no positional word, no `--version`. `--driver-pid` and
-  `--embedded` are refused (exit 2): only the process that started this one can
-  say so, and only `agentica run` starts an embedded program. The hand-off takes
+  `--flush-timeout MS`, `--schedulers N`, `--jit MODE`, `--source-root DIR`
+  and `--coverage FILE`, each once; no positional word, no `--version`.
+  `--driver-pid` and `--embedded` are refused (exit 2): only the process that
+  started this one can say so, and only `agentica run` starts an embedded
+  program. The hand-off takes
   at most 64 option words and 1,048,576 argument words
   (`AGC_FRONT_END_MAX_OPTIONS`, `AGC_FRONT_END_MAX_ARGUMENTS`). The file of
   `--front-end` is opened with `O_NONBLOCK` and must be a regular file of at

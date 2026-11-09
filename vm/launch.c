@@ -65,6 +65,15 @@ void __gcov_dump(void);
 #define PROFILE_SAMPLE 1000
 #define PROFILE_SAMPLE_MAX 1000000000
 
+/* The file of --coverage while the LCOV goes to it (agc_cover_lcov): the pieces gather in `data`, which is written
+   when it is full and at the end, and `failed` says that a write did not take all of it. */
+typedef struct {
+  int fd;
+  bool failed;
+  size_t used;
+  char data[65536];
+} cover_file;
+
 #ifndef _WIN32
 static bool urandom_entropy(uint8_t *out, size_t len) {
   int fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
@@ -196,6 +205,50 @@ static void announce_outcome(agc_vm *vm, const agc_outcome *outcome) {
   if (setjmp(vm->fail) == 0) print_outcome(vm, outcome, AGC_NOTICE_KEPT);
 }
 
+static void cover_flush(cover_file *file) {
+  size_t done = 0;
+  while (!file->failed && done < file->used) {
+    int64_t wrote = agc_fs_write(file->fd, file->data + done, file->used - done);
+    if (wrote <= 0) file->failed = true;
+    else done += (size_t)wrote;
+  }
+  file->used = 0;
+}
+
+static void cover_put(void *context, const char *text, size_t size) {
+  cover_file *file = context;
+  while (size > 0) {
+    if (file->used == sizeof file->data) cover_flush(file);
+    size_t room = sizeof file->data - file->used;
+    size_t part = size < room ? size : room;
+    memcpy(file->data + file->used, text, part);
+    file->used += part;
+    text += part;
+    size -= part;
+  }
+}
+
+/* Writes the LCOV of --coverage to its file, made or emptied first; false when it cannot be written. It runs after the
+   schedulers are joined, so the counts are final. */
+static bool write_coverage(agc_vm *vm) {
+  agc_runtime *rt = vm->rt;
+  if (!rt->cover) return true;
+  cover_file *file = malloc(sizeof *file);
+  if (!file) return false;
+  file->fd = agc_fs_open(rt->cover_path, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_TRUNCATE);
+  file->failed = file->fd < 0;
+  file->used = 0;
+  if (!file->failed) {
+    agc_fs_blocking(file->fd);
+    agc_cover_lcov(rt->cover, rt->program, cover_put, file);
+    cover_flush(file);
+    if (agc_fs_close(file->fd) != 0) file->failed = true;
+  }
+  bool ok = !file->failed;
+  free(file);
+  return ok;
+}
+
 /* agc_io_goodbye runs requests left in the inbox, and one may fail (sweep's "a job was freed while held"). vm->fail
    still points at the run's setjmp, whose frame has returned, so goodbye gets its own target. A failure becomes the
    outcome of a run that did not fail, else it is printed beside the run's own. */
@@ -228,6 +281,7 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   if (outcome->kind == AGC_FAILED) announce_outcome(vm, outcome);
   flush_files(vm);
   agc_files_close(vm);
+  bool covered = write_coverage(vm);
   bool freed = free_natives(vm);
   stdout_ok = stdout_ok && !agc_output_failed(&vm->rt->out);
   if (vm->rt->flush_expired || !freed) {
@@ -242,6 +296,8 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
       write_error = "cannot write to standard output";
     else if (agc_output_failed(&vm->rt->err))
       write_error = "cannot write to standard error";
+    else if (!covered)
+      write_error = "cannot write the coverage file";
   }
   if (write_error) {
     outcome->kind = AGC_FAILED;
@@ -668,6 +724,12 @@ agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int 
         return refuse(name, "--source-root needs a folder name in UTF-8");
       options->source_root = value;
       i += 2;
+    } else if (strcmp(arg, "--coverage") == 0) {
+      bool seen = options->coverage != NULL;
+      if (!once(name, &seen, arg)) return AGC_LAUNCH_BAD;
+      if (!value || !*value || strcmp(value, "--") == 0) return refuse(name, "--coverage needs a file name");
+      options->coverage = value;
+      i += 2;
     } else if (strcmp(arg, "--embedded") == 0) {
       bool seen = options->embedded != NULL;
       if (!once(name, &seen, arg)) return AGC_LAUNCH_BAD;
@@ -742,6 +804,13 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
   if (front_end) {
     const char *test_mode = getenv("AGENTICA_VM_TEST_FRONT_END_JIT");
     if (!test_mode || !agc_jit_mode_parse(test_mode, &mode)) mode = AGC_JIT_OFF;
+  }
+  /* --coverage counts in step_slow, which compiled code would skip: the program runs in the interpreter. It is the
+     user's program only, never the front end's run. */
+  if (options->coverage && !front_end) {
+    rt->cover = agc_cover_new(program);
+    rt->cover_path = options->coverage;
+    mode = AGC_JIT_OFF;
   }
   rt->jit = agc_jit_new(program, mode, &rt->trace);
   /* Test-only: AGENTICA_VM_TEST_JIT_BUDGET=N gives the JIT a compile budget of N units instead of AGC_JIT_BUDGET, so a

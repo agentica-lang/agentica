@@ -58,6 +58,7 @@ typedef struct agc_runq agc_runq;
 typedef struct agc_lock agc_lock;
 typedef struct agc_loop agc_loop;
 typedef struct agc_io_job agc_io_job;
+typedef struct agc_cover agc_cover;
 /* A job's step on the I/O thread: after the pool work of a pool job (true keeps the job waiting on the loop, and
    agc_io_ready ends it), or, for a wait on the loop, the start of that wait, before the deadline is armed (the result
    is not used). */
@@ -437,6 +438,10 @@ typedef struct {
   agc_outcome outcome;
   agc_input in;
   agc_file_ids inherited;
+  /* The counters of --coverage (vm/cover.c) and the file the LCOV goes to at the end (vm/launch.c), NULL without the
+     flag. Set before the run starts; step_slow adds to the counters from every scheduler. */
+  agc_cover *cover;
+  const char *cover_path;
 } agc_runtime;
 
 /* The life of a task (docs/vm/10-io-multicore.md §10.2.3, "Park and wake protocol"). READY: in the run queue, from a

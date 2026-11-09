@@ -8,7 +8,7 @@ USAGE = [
   [
     "usage: agentica [--version] [--dump] [--dump-ir] [--ai|--json] [--max-steps N] [--seed N] [--flush-timeout MS] ",
     "[--schedulers N] [--jit MODE] [--deny-run] [--deny-net] [--deny-fs] [--deny-env] [--deny-native] [--sandbox] ",
-    "[--no-cache] <source-file> [args...]",
+    "[--no-cache] [--coverage FILE] <source-file> [args...]",
   ].join(""),
   "       agentica [--ai|--json] check [PATH...]",
   "       agentica [--ai|--json] check --stdin <source-file>",
@@ -82,7 +82,7 @@ SUMMARY = [
   "  agentica run [OPTIONS] -- FILE.agcb [ARGS...]",
   "                                          run a compiled program; OPTIONS: --max-steps N, --seed N,",
   "                                          --flush-timeout MS, --schedulers N, --jit MODE, the --deny-* flags,",
-  "                                          --sandbox, --source-root DIR, --ai, --json",
+  "                                          --sandbox, --source-root DIR, --coverage FILE, --ai, --json",
   "  agentica doc PATH [--json]              exported API of a file or a std/ module, with its ## docs",
   "  agentica outline FILE [--json]          declarations of a file or a std/ module, private ones too, with docs",
   "                                          and spans; --stdin FILE reads the file from standard input",
@@ -154,6 +154,11 @@ OPTIONS = [
   [
     "     off, on or always: compile hot functions to machine code (on by default, x86-64 and arm64; ",
     "AGENTICA_JIT sets it too, the flag wins); always compiles each function at its first call",
+  ].join(""),
+  "  --coverage <file>",
+  [
+    "     write the LCOV of the lines that ran to FILE at the end of the run (std/ and fetched packages left out); ",
+    "the program runs with the JIT off",
   ].join(""),
   "  --dump",
   "     print the checked tree instead of running it",

@@ -15,6 +15,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `OP.after_dashes` splits at `--`.
 - `Process.spawn(cmd, args, timeout_ms, env, out, err)` sends the child's
   stdout and stderr to files, with no shell and no 1 MiB limit.
+- `agentica --coverage FILE` (and `agentica run --coverage FILE`) writes the
+  line coverage of the run as LCOV.
 
 ### Changed
 

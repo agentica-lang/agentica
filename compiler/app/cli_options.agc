@@ -13,7 +13,7 @@ import Texts from "cli_text"
 ONCE = {
   "--version": 0, "--deny-run": 0, "--deny-net": 0, "--deny-fs": 0, "--deny-env": 0, "--deny-native": 0,
   "--sandbox": 0, "--max-steps": 1, "--seed": 1, "--flush-timeout": 1, "--schedulers": 1, "--jit": 1, "--dump": 0,
-  "--dump-ir": 0, "--ai": 0, "--json": 0, "--no-cache": 0,
+  "--dump-ir": 0, "--ai": 0, "--json": 0, "--no-cache": 0, "--coverage": 1,
 }
 JIT_MODES: Set[String] = Set.new(["off", "on", "always"])
 DIGITS = "0123456789"
@@ -26,6 +26,7 @@ export struct Options
   flush_timeout: String
   schedulers: String
   jit: String
+  coverage: String
   deny: List[String]
   dump: Bool
   dump_ir: Bool
@@ -56,6 +57,7 @@ export def parse(arguments: List[String], version: String) -> Parsed
     flush_timeout: "",
     schedulers: "",
     jit: "",
+    coverage: "",
     deny: [],
     dump: false,
     dump_ir: false,
@@ -145,6 +147,7 @@ def apply(options: Options, word: String, value: String) -> Applied
     "--seed" -> return seed(options, value)
     "--schedulers" -> return schedulers(options, value)
     "--jit" -> return jit(options, value)
+    "--coverage" -> return coverage(options, value)
     _ -> return flush_timeout(options, value)
   end
 end
@@ -182,6 +185,15 @@ def jit(options: Options, value: String) -> Applied
   end
 
   return Applied.Changed(options.with(jit: value))
+end
+
+# The file that the run writes the LCOV of its lines to (vm/cover.c); the VM opens it, relative to the working folder.
+def coverage(options: Options, value: String) -> Applied
+  if value == ""
+    return Applied.Refused("--coverage needs a file name")
+  end
+
+  return Applied.Changed(options.with(coverage: value))
 end
 
 # The flag passes the text as it was typed (a leading zero stays).

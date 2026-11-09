@@ -26,6 +26,8 @@ typedef struct {
   agc_style style;
   const char *source_root;
   const char *embedded;
+  /* The file of --coverage, where the run writes the LCOV of its lines at the end (vm/cover.c); NULL without it. */
+  const char *coverage;
   size_t source_root_chars;
   bool seen_flush, seen_schedulers, chosen_schedulers, seen_seed, seen_driver, seen_jit, sandbox, deny_run,
       deny_net, deny_fs, deny_env, deny_native;
@@ -106,7 +108,8 @@ uint8_t *agc_launch_file(const char *path, bool driven, size_t *size);
 agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_launch_options *options,
                       agc_value args, agc_front_end *front_end);
 
-/* Ends a run: the children are stopped, output and files are flushed, a diagnostic is printed. It returns the exit
+/* Ends a run: the children are stopped, output and files are flushed, the LCOV of --coverage is written, a diagnostic
+ * is printed. It returns the exit
  * status without leaving the process; the hand-off from the front end to the program uses it to retire the front
  * end. *OUTCOME is rewritten when a write of standard output or error failed (and no stop signal ended the run): it
  * becomes AGC_FAILED with RUNTIME-INTERNAL and the message "cannot write to standard output" (or error), which is
