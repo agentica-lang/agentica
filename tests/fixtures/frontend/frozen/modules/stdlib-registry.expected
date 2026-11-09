@@ -25,6 +25,7 @@ std/prelude/string.agc
 std/queue.agc
 std/regex.agc
 std/test/child.agc
+std/test/coverage.agc
 std/test/report.agc
 std/test/runner.agc
 std/test/units.agc
