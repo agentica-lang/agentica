@@ -60,7 +60,7 @@ Read only what the task needs.
 | `language-running.md` | `agentica` flags, `compile` and `run` of bytecode, the cache, `--sandbox` |
 | `language-program-types.md` | file shape, constants, `def`, `struct`, `enum`, types, `Void`, defaults |
 | `language-statements-expressions.md` | `case`, loops, assignment, literals, heredocs, operators, pipes, foreign forms |
-| `language-blocks-results.md` | blocks and closures, `Fn` values, `Result`, `try`, `Optional` |
+| `language-blocks-results.md` | blocks and closures, `Fn` values, `Result`, `try`, `Optional`, design patterns |
 | `builtins.md` | IO, Int/Float, String, List, Map, Set, Range, Result, Optional, System, Time, Random, `to_s`; Ruby names |
 | `examples.md` | complete programs to start from |
 | `diagnostics.md` | meaning and fix of a diagnostic code, call stacks |
