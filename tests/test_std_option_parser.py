@@ -9,7 +9,7 @@ import io
 
 import pytest
 
-from tests.agentica_test import FIXTURES, compile_agc, run_vm
+from tests.agentica_test import FIXTURES, cli, compile_agc, run, run_vm
 
 FIXTURE = FIXTURES / "option_parser"
 
@@ -160,8 +160,9 @@ def rest(tmp_path_factory):
 
 
 def rest_peer_lines(args):
-    """argparse's intermixed parse with a `nargs="*"` argument gives the rest; the words of it after `--` are the
-    flags, the ones before the files."""
+    """argparse's intermixed parse with a `nargs="*"` argument gives the rest. argparse does not tell which words came
+    after `--`, so that half is written here by hand: the words of the rest that come after the first `--` are the
+    flags, and the words before them are the files."""
     parser = argparse.ArgumentParser(prog="check", add_help=False, allow_abbrev=False)
     parser.add_argument("src")
     parser.add_argument("files", nargs="*")
@@ -183,7 +184,9 @@ def rest_peer_lines(args):
     ["-v", "s", "--", "-x"],
     ["--", "s", "-x", "y"],
     ["s", "a.c", "-", "-5", "--"],
-], ids=lambda args: " ".join(args))
+    ["s", ""],
+    ["s", "--", "--"],
+], ids=lambda args: repr(args))
 def test_the_rest_of_the_words_and_those_after_dashes_match_argparse(rest, args):
     result = run_vm(rest, args=args)
     assert (result.code, result.stderr) == (0, "")
@@ -192,3 +195,27 @@ def test_the_rest_of_the_words_and_those_after_dashes_match_argparse(rest, args)
 
 def test_the_usage_line_names_the_rest(rest):
     assert run_vm(rest, args=["--help"]).stdout.splitlines()[0] == "Usage: check [options] <src> [FILE...]"
+
+
+@pytest.mark.parametrize("args,message", [
+    ([], "missing argument <src>"),
+    (["--"], "missing argument <src>"),
+    (["s", "a.c", "-x"], "unknown option -x"),
+])
+def test_a_parser_with_a_rest_still_wants_its_arguments_and_knows_its_options(rest, args, message):
+    result = run_vm(rest, args=args)
+    assert result.code == 2
+    assert result.stderr.splitlines() == [f"check: {message}", "Try 'check --help' for more information"]
+
+
+def test_a_rest_name_with_a_space_is_an_invalid_specification(tmp_path):
+    program = tmp_path / "spec.agc"
+    program.write_text(
+        'import OP from "std/option_parser"\n\n'
+        "def main() -> Void\n"
+        '  puts(OP.parse(OP.new("t", "", [], [], "MY FILE"), []).message)\n'
+        "end\n",
+        encoding="utf-8",
+    )
+    result = run(cli() + [str(program)])
+    assert (result.code, result.stdout) == (0, "t: invalid specification: 'MY FILE' is not a valid name for the rest\n")

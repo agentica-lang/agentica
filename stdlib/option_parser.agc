@@ -129,8 +129,8 @@ struct Step
 end
 
 ## Describes a program: its name, a one-line description and its arguments and options, each list in order. `rest`
-## names the positional words after the arguments (`FILE` shows `[FILE...]` in the usage line), which `parse` then
-## keeps for `rest` and `after_dashes` instead of refusing them; "" (the default) refuses them.
+## names the positional words after the arguments (`FILE` shows `[FILE...]` in the usage line; the help has no row for
+## it), which `parse` then keeps for `rest` and `after_dashes` instead of refusing them; "" (the default) refuses them.
 export def new(
   program: String,
   description: String = "",
@@ -357,11 +357,14 @@ def slots_unchecked(parser: Parser) -> List[Slot]
   return positionals.concat(options)
 end
 
-# The slots, once the specification is checked: names and short names are well formed, free and different, and
-# every default is valid for its kind and choices.
+# The slots, once the specification is checked: names and short names are well formed, free and different, every
+# default is valid for its kind and choices, and the name of the rest has no space or control character.
 def slots_of(parser: Parser) -> Result[List[Slot]]
   if parser.program.empty?
     return error("option_parser: invalid specification: the program name is empty")
+  end
+  if spaced?(parser.rest)
+    try bad_spec(parser, "'#{parser.rest}' is not a valid name for the rest")
   end
   slots = slots_unchecked(parser)
   names = Set.new(["help"])
@@ -579,8 +582,8 @@ def build(parser: Parser, slots: List[Slot], scan: Scan) -> Result[Parsed]
     values = values.put(positionals[index].name, scan.positionals[index])
   end
   rest = scan.positionals.drop(positionals.size)
-  dashed = scan.positionals.drop(wider(scan.before_dashes, positionals.size))
-  parsed = empty_parsed().with(rest: rest, after_dashes: dashed)
+  after_dashes = scan.positionals.drop(wider(scan.before_dashes, positionals.size))
+  parsed = empty_parsed().with(rest: rest, after_dashes: after_dashes)
   for slot in slots
     parsed = parsed.with(kinds: parsed.kinds.put(slot.name, slot.kind))
     if slot.flag

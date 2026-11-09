@@ -14,6 +14,7 @@ def main() -> Void
       Opt(name: "verbose", short: "v", kind: K.Flag, help: "more output"),
       Opt(name: "out", short: "o", help: "report"),
     ],
+    # rest: the name of the words past the arguments in the usage line.
     "FILE",
   )
 

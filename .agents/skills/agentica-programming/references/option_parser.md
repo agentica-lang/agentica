@@ -31,15 +31,17 @@ Options(file: OP.string(p, "file"), port: OP.int(p, "port"),
 ```
 
 - Arguments and options are two lists (a list holds one type). Arguments are
-  required, in order. A word past them is `unexpected argument`, unless `new`
-  gets `rest` (fifth, positional: `OP.new("check", "", [], opts, "FILE")`, usage
-  `[FILE...]`): then `OP.rest(p)` gives those words, after `--` included, and
-  `OP.after_dashes(p)` the last of them, those after `--` (`FILE... -- FLAGS`). `default` is a String converted by `kind`; `""` means
+  required, in order. `default` is a String converted by `kind`; `""` means
   none. A Flag has no default or choices. `choices` compare as text.
 - `min: some(1), max: some(65535)` limit an Int option or argument (and its
   default); a value outside is `invalid value for --port: '0' is below the
   minimum 1` (`does not fit an Int` for a number too big). On another kind,
   or with `min` above `max`, they are a wrong specification.
+- A word past the arguments is `unexpected argument`, unless `new` gets
+  `rest`, its fifth argument (positional), such as `"FILE"`, shown as
+  `[FILE...]` in the usage line. Then `OP.rest(p)` gives those words, after
+  `--` included, and `OP.after_dashes(p)` the last of them, those after `--`
+  (`FILE... -- FLAGS`).
 - On/off: no Bool kind; use `Opt(name: "stats", choices: ["on", "off"],
   default: "off")` and `OP.string(p, "stats") == "on"`. A Flag takes no value.
 - Words: `--port 3000`, `--port=3000`, `-p 3000`, `-p3000`, joined short flags

@@ -128,15 +128,18 @@ none
 false
 ```
 
+A getter called with a name that was not declared, with the getter of another kind, or on an option that may be absent (`OP.string` where `optional_string` is needed) is a bug of the program, not a mistake of its user. It halts with `RUNTIME-UNWRAP-ERROR`, whose message names the option and whose stack names the line of the call. It is not an `Optional` or a `Result`, so the getters stay plain.
+
 ## The rest of the words
 
-Every argument is required, and a word past the last one is an error (`unexpected argument 'g'`), unless `new` gets a fifth argument, `rest`: the name of those words in the usage line (`"FILE"` shows `[FILE...]`). `parse` then keeps them, and `OP.rest(p)` returns them in order, those after `--` included, as Ruby's `OptionParser#parse` returns the rest of `ARGV`. `OP.after_dashes(p)` returns the last words of `rest` that came after `--`, so a command such as `check FILE... -- FLAGS` splits them without looking at the words itself:
+Every argument is required, and a word past the last one is an error (`unexpected argument 'g'`), unless `new` gets a fifth argument, `rest`: the name of those words in the usage line (`"FILE"` shows `[FILE...]`; the rows of the help have none for it, and the name has no space or control character). `parse` then keeps them, and `OP.rest(p)` returns them in order, those after `--` included, as Ruby's `OptionParser#parse` returns the rest of `ARGV`. `OP.after_dashes(p)` returns the last words of `rest` that came after `--`, so a command such as `check FILE... -- FLAGS` splits them without looking at the words itself:
 
 ```agentica
 import OP from "std/option_parser"
 import {Opt, Kind as K} from "std/option_parser"
 
 def main() -> Void
+  # The fifth argument, "FILE", names the rest in the usage line.
   parser = OP.new("check", "", [], [Opt(name: "verbose", short: "v", kind: K.Flag)], "FILE")
   p = OP.parse(parser, ["a.c", "-v", "b.c", "--", "-Iinclude", "-DX=1"]).unwrap!
   rest = OP.rest(p)
@@ -152,8 +155,6 @@ end
 ["-Iinclude", "-DX=1"]
 Usage: check [options] [FILE...]
 ```
-
-A getter called with a name that was not declared, with the getter of another kind, or on an option that may be absent (`OP.string` where `optional_string` is needed) is a bug of the program, not a mistake of its user. It halts with `RUNTIME-UNWRAP-ERROR`, whose message names the option and whose stack names the line of the call. It is not an `Optional` or a `Result`, so the getters stay plain.
 
 ## Errors
 
