@@ -38,6 +38,7 @@ def relay(ws: HTTP.WebSocket, message: HTTP.Message) -> Result[Bool]
       puts("closed #{code} #{reason}")
       IO.flush()
       return ok(false)
+    HTTP.Message.Prepared(_) -> return ok(true)
   end
 end
 
@@ -190,6 +191,34 @@ def edge(ws: HTTP.WebSocket) -> Result[Void]
   return echo(ws)
 end
 
+# Each text (a 7-bit, a 16-bit and a 64-bit length) and a binary as itself and then prepared, a ping that prepare
+# leaves as it is, one prepared message sent twice, and bytes that are no frame, which go out as a close with 1011.
+def prepared(ws: HTTP.WebSocket) -> Result[Void]
+  for text in ["hi", "é" * 100, "x" * 70000]
+    try ws.outgoing.send(HTTP.Message.Text(text), 5000)
+    try ws.outgoing.send(HTTP.prepare(HTTP.Message.Text(text)), 5000)
+  end
+
+  try ws.outgoing.send(HTTP.Message.Binary("bin".bytes), 5000)
+  try ws.outgoing.send(HTTP.prepare(HTTP.Message.Binary("bin".bytes)), 5000)
+  try ws.outgoing.send(HTTP.prepare(HTTP.Message.Ping("p".bytes)), 5000)
+  shared = HTTP.prepare(HTTP.Message.Text("shared"))
+  try ws.outgoing.send(shared, 5000)
+  try ws.outgoing.send(shared, 5000)
+  try ws.outgoing.send(HTTP.Message.Prepared("not a frame".bytes), 5000)
+  return echo(ws)
+end
+
+# Sends the bytes of the peer's first binary message as a Prepared message, then echoes.
+def forge(ws: HTTP.WebSocket) -> Result[Void]
+  case try ws.incoming.recv(5000)
+    HTTP.Message.Binary(data) -> try ws.outgoing.send(HTTP.Message.Prepared(data), 5000)
+    _ -> return error("forge wants a binary message")
+  end
+
+  return echo(ws)
+end
+
 def failing(ws: HTTP.WebSocket) -> Result[Void]
   return error("the session failed")
 end
@@ -253,6 +282,14 @@ def route(request: HttpRequest) -> Result[HTTP.Upgrade]
 
   if request.path == "/fakewake"
     return HTTP.accept_websocket(request, &fakewake)
+  end
+
+  if request.path == "/prepared"
+    return HTTP.accept_websocket(request, &prepared, HTTP.WebSocketOptions(outgoing_queue: 32))
+  end
+
+  if request.path == "/forge"
+    return HTTP.accept_websocket(request, &forge)
   end
 
   if request.path == "/edge"
@@ -711,4 +748,87 @@ def test_a_close_a_session_builds_that_looks_like_the_wake_of_the_server_is_sent
         c.close_with(1011)
         assert c.ended()
     assert vm.next_line() == "closed 1011 "
+    finish(vm)
+
+
+def raw_frame(c):
+    """The next frame of the server as its bytes on the wire, head included."""
+    head = c.read(2)
+    size = head[1]
+    extended = b""
+    if size == 126:
+        extended = c.read(2)
+        size = struct.unpack(">H", extended)[0]
+    elif size == 127:
+        extended = c.read(8)
+        size = struct.unpack(">Q", extended)[0]
+    return head + extended + c.read(size)
+
+
+def test_a_prepared_message_goes_out_as_the_same_frame_as_the_message_itself(tmp_path, adopt):
+    """HTTP.prepare frames a text or binary message once: the peer gets the bytes a Text or Binary gives, for each
+    length form, a ping passes through as it is, one prepared message can be sent again, and bytes that are no frame
+    go out as a close with 1011. The session queues everything before the writer runs (outgoing_queue 32), so a
+    prepared frame can go out joined to the plain frames of the same batch."""
+    vm, port, _ = start_server(tmp_path, adopt)
+    long_head = b"\x81\x7f" + struct.pack(">Q", 70000)
+    expected = [b"\x81\x02hi", b"\x81\x7e\x00\xc8" + "é".encode() * 100, long_head + b"x" * 70000, b"\x82\x03bin"]
+    with Client(port, timeout=scaled(10)) as c:
+        c.connect("/prepared")
+        for frame in expected:
+            assert raw_frame(c) == frame
+            assert raw_frame(c) == frame
+        assert c.message() == (PING, b"p")
+        assert c.message() == (TEXT, b"shared")
+        assert c.message() == (TEXT, b"shared")
+        assert c.close_frame() == (1011, "")
+        c.close_with(1011)
+        assert c.ended()
+    assert vm.next_line() == "closed 1011 "
+    finish(vm)
+    assert "http: websocket Prepared message is not a frame of HTTP.prepare" in vm.stderr_text()
+
+
+HUGE_LENGTH = b"\x81\x7f\x7f\xff\xff\xff\xff\xff\xff\xfa"
+
+# Bytes a Prepared message may not carry: only a whole, unmasked text or binary frame in its shortest length form.
+NOT_FRAMES = {
+    "empty": b"",
+    "too short": b"\x81",
+    "payload short": b"\x81\x03hi",
+    "payload long": b"\x81\x02hi!",
+    "masked": b"\x81\x82\x00\x00\x00\x00hi",
+    "rsv1": b"\xc1\x02hi",
+    "ping": b"\x89\x01p",
+    "close": b"\x88\x02\x03\xe8",
+    "fragment": b"\x01\x02hi",
+    "continuation": b"\x80\x02hi",
+    "long 126 form": b"\x81\x7e\x00\x02hi",
+    "126 size not the payload's": b"\x81\x7e\x00\x80" + b"x" * 10,
+    "126 head cut": b"\x81\x7e\x00",
+    "127 head cut": b"\x81\x7f\x00\x00\x00",
+    "long 127 form": b"\x81\x7f" + struct.pack(">Q", 2) + b"hi",
+    "huge 127 length": HUGE_LENGTH + b"hi",
+}
+
+
+def test_a_prepared_message_that_is_not_a_frame_of_prepare_closes_with_1011(tmp_path, adopt):
+    """The writer checks the head of a Prepared message: each kind of bad bytes closes its connection with 1011 (a
+    length past the size of the bytes included), while a well-formed frame goes out as it is."""
+    vm, port, _ = start_server(tmp_path, adopt)
+    for name, data in NOT_FRAMES.items():
+        with Client(port, timeout=scaled(10)) as c:
+            c.connect("/forge")
+            c.binary(data)
+            assert c.close_frame() == (1011, ""), name
+            c.close_with(1011)
+            assert c.ended(), name
+        assert vm.next_line() == "closed 1011 ", name
+    with Client(port, timeout=scaled(10)) as c:
+        c.connect("/forge")
+        c.binary(b"\x81\x02ok")
+        assert c.message() == (TEXT, b"ok")
+        c.close_with(1000)
+        assert c.close_frame() == (1000, "")
+    assert vm.next_line() == "closed 1000 "
     finish(vm)
