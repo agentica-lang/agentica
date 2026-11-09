@@ -129,6 +129,8 @@ Invoke the `pr-reviewer-new` skill (via the Skill tool) and follow it to review 
   `gh pr merge N --merge`.
 - Then `gh pr list --state open --json number,mergeable,mergeStateStatus`:
   tell the author of any PR that now conflicts to merge `origin/master`.
+- A `CHANGELOG.md` conflict on GitHub: merge `origin/master` locally; the
+  union driver of `.gitattributes` keeps both sides, so check the order.
 - Stacks merge bottom-up; merge the updated lower branch into the next one.
 - After merge: check the worktree is clean with no unpushed commits, then
   `git worktree remove --force`. Retarget any open PR based on the branch

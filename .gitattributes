@@ -10,3 +10,5 @@ tests/fixtures/frontend/parser/*.input -text
 tests/fixtures/frontend/format/*.input -text
 tests/fixtures/toml/** -text
 tests/fixtures/toml-test/** -text
+# Open PRs all add lines under [Unreleased]: keep both sides when merging.
+CHANGELOG.md merge=union
