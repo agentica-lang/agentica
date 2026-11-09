@@ -283,6 +283,36 @@ vm-lint-sanitize:
 vm-lint-gcstress:
 	$(LINT) -I $(GC_DIR)/include -DGC_DEBUG -DAGC_GC_STRESS
 
+# cchecker (https://github.com/agentica-lang/cchecker): the project rules for C (blocking calls on short paths, locks on every
+# path, ownership, collector values) plus gcc -fanalyzer and clang-tidy, over the compile database of `make compile-commands`.
+# It is an Agentica program, so dist/agentica runs it; it needs gcc 10+, clang and clang-tidy on PATH. The release has no
+# binary: the tag's source archive is pinned by its sha256 and unpacked into build/cchecker/. The settings are cchecker.toml,
+# the accepted findings cchecker-baseline.json (references/ci.md of the development skill says how to change both). It exits 1
+# on a finding that is not in the baseline; the CI job reports it and does not fail the build yet.
+CCHECKER_VERSION := 0.1.0
+CCHECKER_SHA256 := d8709d718d14c41b0460b0a2dcf01e28a3ac3d737ce9750f1f8f654fe0d2fcb9
+CCHECKER_DIR := build/cchecker/$(CCHECKER_VERSION)
+CCHECKER_FLAGS ?=
+
+.PHONY: cchecker cchecker-update-baseline
+
+$(CCHECKER_DIR)/cchecker.agc:
+	@rm -rf $(CCHECKER_DIR) $(CCHECKER_DIR).tmp && mkdir -p $(CCHECKER_DIR).tmp
+	curl -fsSL --retry 3 -o $(CCHECKER_DIR).tmp/archive.tar.gz https://github.com/agentica-lang/cchecker/archive/refs/tags/$(CCHECKER_VERSION).tar.gz
+	echo "$(CCHECKER_SHA256)  $(CCHECKER_DIR).tmp/archive.tar.gz" | sha256sum -c -
+	mkdir $(CCHECKER_DIR) && tar -xzf $(CCHECKER_DIR).tmp/archive.tar.gz -C $(CCHECKER_DIR) --strip-components=1
+	rm -rf $(CCHECKER_DIR).tmp
+
+# Run from the root of the checkout: cchecker reads paths relative to the working directory.
+CCHECKER = $(RUN_PROGRAM) dist/agentica $(CCHECKER_DIR)/cchecker.agc -p $(COMPILE_COMMANDS) -c cchecker.toml -j $(JOBS) $(CCHECKER_FLAGS)
+
+cchecker: $(PRODUCT) $(CCHECKER_DIR)/cchecker.agc compile-commands
+	$(CCHECKER) --baseline cchecker-baseline.json
+
+# Accepts today's findings: rewrites the baseline (the diff is the review). A full run only.
+cchecker-update-baseline: $(PRODUCT) $(CCHECKER_DIR)/cchecker.agc compile-commands
+	$(CCHECKER) --baseline cchecker-baseline.json --update-baseline
+
 vm-layers: $(VM_OBJS) $(VM_OBJ)/agentica.o $(VM_OBJ)/launch.o
 	for h in vm/*.h vm/jit/*.h; do $(VM_CC) $(VM_CFLAGS) -fsyntax-only -x c -include $$h /dev/null || exit 1; done
 	sh vm/tools/check-layers.sh $(VM_OBJ)
