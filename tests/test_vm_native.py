@@ -75,6 +75,10 @@ def tsan_vm():
 # lost bump of #1160, then fails the run. Such a library takes the TSan runtime from the VM, so it loads only there,
 # and it is linked without -Wl,-z,defs, which would refuse the runtime's symbols.
 PEER_TSAN_FLAGS = ["-fsanitize=thread", "-g", "-fno-omit-frame-pointer"] if tsan_vm() else []
+# `make vm-tsan-native` sets AGENTICA_TSAN_PEERS=1: a run that would load peers built without TSan stops here.
+if os.environ.get("AGENTICA_TSAN_PEERS") == "1" and not PEER_TSAN_FLAGS:
+    raise RuntimeError("AGENTICA_TSAN_PEERS=1 needs AGENTICA_VM_BINARY and AGENTICA_TEST_EXECUTABLE to be "
+                       "build/vm/tsan/agentica on Linux, or the peers are built without TSan")
 
 
 def shared_library(tmp_path_factory, name, *flags, folder=None, source=None, sanitize=True):

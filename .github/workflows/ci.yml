@@ -117,8 +117,8 @@ jobs:
                   trace=true ;;
               esac
               case "$f" in
-                # tests/fixtures/native/: the C peers, which vm-tsan-native runs under TSan.
-                vm/*|tests/fixtures/native/*|Makefile|mk/*|.gitmodules|.clang-tidy|.github/workflows/ci.yml|.github/actions/*)
+                # tests/fixtures/native/ and examples/ffi/: the C peers, which vm-tsan-native runs under TSan.
+                vm/*|tests/fixtures/native/*|examples/ffi/*.c|Makefile|mk/*|.gitmodules|.clang-tidy|.github/workflows/ci.yml|.github/actions/*)
                   c=true ;;
               esac
               # vm/ and the build files plus the settings and the baseline of cchecker, which do not need the sanitizer half.
@@ -606,14 +606,18 @@ jobs:
       - name: vm-tsan-run, tests/test_vm_multicore.py and the TCP, TLS, HTTP, process and BDD modules on four schedulers under ThreadSanitizer
         run: make vm-tsan-run SHARD=${{ matrix.shard }}/3
 
-  # vm-tsan-native: the native and FFI modules on two and then four schedulers under ThreadSanitizer, with their C peers
-  # built with TSan too, so a race in a peer (#1160) fails it. Like tsan-run, it links the TSan binary again.
+  # vm-tsan-native: the native and FFI modules on two and on four schedulers (a job each) under ThreadSanitizer, with their C
+  # peers built with TSan too, so a race in a peer (#1160) fails it. Like tsan-run, it links the TSan binary again.
   tsan-native:
-    name: vm-tsan-native
+    name: vm-tsan-native (${{ matrix.schedulers }} schedulers)
     needs: [changes, sanitizer-build, tsan-build]
     if: ${{ needs.changes.outputs.c != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        schedulers: [2, 4]
     env:
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_SWEEP: sampled
@@ -630,8 +634,8 @@ jobs:
           artifact: sanitizer-build
           extra: tsan-build
           targets: dist/agentica
-      - name: vm-tsan-native, the native-call, native-module and FFI modules with TSan-built peers on 2 and 4 schedulers
-        run: make vm-tsan-native
+      - name: vm-tsan-native, the native-call, native-module and FFI modules with TSan-built peers
+        run: make vm-tsan-native TSAN_NATIVE_SCHEDULERS=${{ matrix.schedulers }}
 
   vm-layers:
     needs: [changes, sanitizer-build]

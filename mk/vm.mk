@@ -13,8 +13,9 @@
 # make TSAN=1             clang with TSan, no libgc (TSan and Boehm's stop-the-world do not mix): for make vm-tsan
 # make vm-tsan            the C tests of the code that threads share (inbox, outcome, run queue, wake, job) under TSan
 # make vm-tsan-run        the programs of tests/test_vm_multicore.py and the TCP, TLS and HTTP modules on
-#                         several schedulers, on a TSan binary
-# make vm-tsan-native     the native and FFI modules on 2 and 4 schedulers, on a TSan binary with TSan-built peers
+#                         several schedulers, on a TSan binary (not the native modules: vm-tsan-native)
+# make vm-tsan-native     the native and FFI modules on 2 and 4 schedulers (TSAN_NATIVE_SCHEDULERS), on a TSan
+#                         binary with TSan-built peers
 # Each mode compiles vm/*.c and vm/jit/*.c once into build/vm/<mode>/obj/ (-MMD header dependencies) and links every binary from it.
 # Compiles go through ccache when it is installed and its cache directory is writable (CCACHE= turns it off); CCACHE_BASEDIR is
 # the checkout and the -g modes map it to . in debug info (-fdebug-prefix-map), so worktrees share hits.

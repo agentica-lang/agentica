@@ -17,8 +17,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   since step counts, the `--max-steps` sweep and task order hold only there. A
   test whose output depends on task order pins `--schedulers 1` (the ORDER set
   of `tests/test_vm_multicore.py`). N = 4 runs: `make test-multicore`,
-  `make vm-tsan-run`, `make test-multicore-modules` (TCP, TLS, HTTP, process and
-  BDD modules; `AGENTICA_VM_TEST_MODULE_SCHEDULERS`), and
+  `make vm-tsan-run`, `make test-multicore-modules` (TCP, TLS, HTTP, process,
+  BDD and native-call modules; `AGENTICA_VM_TEST_MODULE_SCHEDULERS`),
+  `make vm-tsan-native` (the native modules under TSan, also at N = 2), and
   `vm/tests/threads_test.c` in C.
 - The wake protocol (task states READY, RUNNING, PARKING, PARKED, WOKEN, DONE;
   the run queue and `runnext`; a cancel as a claim; the one `rt->sync` lock and

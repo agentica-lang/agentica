@@ -54,9 +54,9 @@ vm-tsan:
 # binary (no libgc, the front end of the release build), so a race between schedulers or with the I/O thread fails it.
 # The module run also sets AGENTICA_TEST_EXECUTABLE to that binary, so the tests that run the command line (`agentica
 # test`, `check`) go through TSan too, not through the ASan binary that SANITIZE=1 makes of dist/agentica.
-# Both also run the TCP, TLS, HTTP, process, BDD and native-call modules with every VM on four schedulers
+# test-multicore also runs the TCP, TLS, HTTP, process, BDD and native-call modules with every VM on four schedulers
 # (AGENTICA_VM_TEST_MODULE_SCHEDULERS, read by tests/agentica_test.py); test-multicore-modules runs only those.
-# vm-tsan-run leaves the native-call module to vm-tsan-native, which builds its peers with TSan.
+# vm-tsan-run runs them too, except the native-call module, which vm-tsan-native runs with TSan-built peers.
 VM_MULTICORE_MODULES := tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_websocket.py tests/test_vm_http_proxy.py tests/test_process.py \
   tests/test_process_lifecycle.py tests/test_bdd.py tests/test_vm_native.py
 test-multicore: dist/agentica$(EXE)
@@ -70,14 +70,16 @@ test-multicore-modules: dist/agentica$(EXE)
 # builds its peers (tests/fixtures/native/*.c, the module demo, examples/ffi/demo.c) with -fsanitize=thread when the VM
 # under test is this binary, so a race in a peer's C or between the peer and the VM fails the run. The TSan control
 # (tsan_finalize_control.c) is a program of its own with its own TSAN_OPTIONS, and the finalization hook stays
-# uninstrumented. vm-tsan-run leaves these modules to this target.
+# uninstrumented. vm-tsan-run leaves these modules to this target. AGENTICA_TSAN_PEERS=1 makes tests/test_vm_native.py
+# fail at import if its peers would not be built with TSan. TSAN_NATIVE_SCHEDULERS=4 runs one count (a CI job each).
 VM_TSAN_NATIVE_MODULES := tests/test_vm_native.py tests/test_vm_native_module.py tests/test_examples_ffi.py
+TSAN_NATIVE_SCHEDULERS ?= 2 4
 vm-tsan-native: dist/agentica$(EXE)
 	$(MAKE) build/vm/tsan/agentica$(EXE) TSAN=1 SANITIZE=0 GC_STRESS=0
-	for n in 2 4; do \
+	for n in $(TSAN_NATIVE_SCHEDULERS); do \
 	  echo "vm-tsan-native: $$n schedulers"; \
 	  AGENTICA_VM_BINARY=build/vm/tsan/agentica$(EXE) AGENTICA_TEST_EXECUTABLE=$(CURDIR)/build/vm/tsan/agentica$(EXE) \
-	    AGENTICA_REQUIRE_VM=1 TSAN_OPTIONS="$(VM_TSAN_OPTIONS)" AGENTICA_VM_TEST_MODULE_SCHEDULERS=$$n \
+	    AGENTICA_REQUIRE_VM=1 AGENTICA_TSAN_PEERS=1 TSAN_OPTIONS="$(VM_TSAN_OPTIONS)" AGENTICA_VM_TEST_MODULE_SCHEDULERS=$$n \
 	    $(MAKE) --no-print-directory test-py SHARD= TESTS="$(VM_TSAN_NATIVE_MODULES)" || exit 1; \
 	done
 
