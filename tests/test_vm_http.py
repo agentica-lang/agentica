@@ -11,6 +11,7 @@ import json
 import os
 import socket
 import ssl
+import threading
 import time
 
 import pytest
@@ -473,6 +474,20 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
       big = big + big
     end
     return ok(HttpResponse(status: 200, headers: [], body: big.bytes))
+  end
+  if request.path == "/latin1"
+    sent = request.headers.detect do |h| h.name == "x-in" end
+    seen = ""
+    if sent.ok?
+      seen = sent.unwrap!.value
+    end
+    return ok(HttpResponse(status: 200, headers: [Header(name: "X-Out", value: "café " + seen)], body: "in #{seen} #{seen.length}".bytes))
+  end
+  if request.path == "/wide"
+    return ok(HttpResponse(status: 200, headers: [Header(name: "X-Out", value: "\u0100")], body: "".bytes))
+  end
+  if request.path == "/split"
+    return ok(HttpResponse(status: 200, headers: [Header(name: "X-Out", value: "a\\r\\nX-Evil: 1")], body: "".bytes))
   end
   # The body is Bytes: its text when it is UTF-8, else its byte values.
   shown = Result.unwrap_or(HTTP.text(request.body, request.headers), "bytes #{request.body.to_a}")
@@ -1241,6 +1256,73 @@ def read_answers(conn, count):
         answers.append((head.split(b" ")[1].decode(), got[:length[0]].decode()))
         got = got[length[0]:]
     return answers
+
+
+def test_server_writes_and_reads_latin1_header_values_as_single_bytes(tmp_path, adopt):
+    """A value with a Latin-1 character (obs-text) goes out as its one byte and comes back as the same text, whatever
+    the peer: a raw socket sees byte 0xE9, http.client reads the header as ISO-8859-1."""
+    vm, port = start_server(tmp_path, adopt)
+    request = b"GET /latin1 HTTP/1.1\r\nHost: x\r\nConnection: close\r\nX-In: na\xefve\r\n\r\n"
+    got = read_after_close(port, request)
+    head, _, body = got.partition(b"\r\n\r\n")
+    assert head.startswith(b"HTTP/1.1 200 "), got
+    assert b"\r\nX-Out: caf\xe9 na\xefve\r\n" in head + b"\r\n", got
+    assert body.decode("utf-8") == "in na\u00efve 5"
+    conn = http.client.HTTPConnection("127.0.0.1", int(port), timeout=scaled(10))
+    conn.request("GET", "/latin1", headers={"X-In": "\u00fcber"})
+    reply = conn.getresponse()
+    assert reply.getheader("X-Out") == "caf\u00e9 \u00fcber"
+    assert reply.read().decode("utf-8") == "in \u00fcber 4"
+    conn.close()
+    # Above U+00FF and control characters are refused: the handler's answer becomes a 500 with no header of it.
+    for path in (b"/wide", b"/split"):
+        got = read_after_close(port, b"GET " + path + b" HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+        assert got.startswith(b"HTTP/1.1 500 ") and b"X-Out" not in got and b"X-Evil" not in got, got
+    vm.close_stdin()
+    assert vm.wait() == 0, "the VM server finishes"
+
+
+LATIN1_CLIENT_PROGRAM = """\
+import HTTP from "std/http"
+
+def main() -> Void
+  options = HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 1024, tls: none)
+  client = Result.unwrap!(HTTP.client(options))
+  reply = Result.unwrap!(HTTP.request(client, "GET", "http://127.0.0.1:" + System.args()[0] + "/", "".bytes, [Header(name: "X-Name", value: "caf\u00e9")]))
+  back = reply.headers.detect do |h| h.name == "x-back" end.unwrap!.value
+  puts("#{back} #{back.length}")
+end
+"""
+
+
+def test_client_writes_and_reads_latin1_header_values_as_single_bytes(tmp_path):
+    listener = socket.create_server(("127.0.0.1", 0))
+    listener.settimeout(scaled(30))
+    seen = []
+
+    def serve():
+        conn, _ = listener.accept()
+        with conn:
+            conn.settimeout(scaled(30))
+            data = b""
+            while b"\r\n\r\n" not in data:
+                data += conn.recv(65536)
+            seen.append(data)
+            conn.sendall(b"HTTP/1.1 200 OK\r\nX-Back: na\xefve\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+
+    thread = threading.Thread(target=serve)
+    thread.start()
+    try:
+        source = tmp_path / "latin1-client.agc"
+        source.write_text(LATIN1_CLIENT_PROGRAM, encoding="utf-8")
+        result = run_vm(compile_agc(source, tmp_path / "latin1-client.agcb"), env=vm_environment(),
+                        args=[str(listener.getsockname()[1])])
+    finally:
+        thread.join(scaled(30))
+        listener.close()
+    assert result.code == 0, result.stderr
+    assert output_lines(result.stdout) == ["na\u00efve 5"]
+    assert b"\r\nX-Name: caf\xe9\r\n" in seen[0], seen
 
 
 @pytest.mark.parametrize("flags", [(), ("--schedulers", "4")], ids=["one-scheduler", "four-schedulers"])

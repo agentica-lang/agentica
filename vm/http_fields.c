@@ -28,12 +28,16 @@ void agc_http_put(agc_http_bytes *b, const void *data, size_t n) {
 
 void agc_http_put_text(agc_http_bytes *b, const char *text) { agc_http_put(b, text, strlen(text)); }
 
+/* A header value as the head holds it: a String head is UTF-8, so a Latin-1
+   character (U+0080..U+00FF, obs-text on the wire) stays its UTF-8 form here
+   and std/http sends the head as Latin-1, one byte per character. Control
+   characters and anything above U+00FF are refused. */
 static const char *put_value(agc_http_bytes *b, const agc_string *value) {
   for (size_t at = 0; at < value->bytes;) {
+    size_t start = at;
     uint32_t cp = agc_utf8_next((const uint8_t *)value->data, value->bytes, &at);
     if (cp > 255 || !agc_http_value_byte((uint8_t)cp)) return "header values must be Latin-1 text without control characters";
-    uint8_t ch = (uint8_t)cp;
-    agc_http_put(b, &ch, 1);
+    agc_http_put(b, value->data + start, at - start);
   }
   return NULL;
 }

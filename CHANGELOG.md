@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- A header value with a Latin-1 character (`é`) is sent as its single byte and
+  read back as the same text; it was accepted but made `std/http` answer an
+  empty 500 or fail the request.
+
 ## [0.27.0] - 2026-11-08
 
 ### Added
