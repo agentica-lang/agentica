@@ -93,6 +93,12 @@ CASES = [
         "Rows",
     ),
     (
+        "schema refuses a List before it looks at its item",
+        main_with("  puts(JSON.schema(List[Set[Int]]))\n"),
+        "CHECK-TYPE-MISMATCH",
+        "List[Set[Int]]",
+    ),
+    (
         "codec takes a named type only",
         main_with('  puts(List[Raw].codec.encode([]))\n'),
         "CHECK-TYPE-MISMATCH",

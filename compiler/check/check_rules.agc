@@ -60,12 +60,7 @@ end
 
 ## Type.codec: the codec of the struct or enum named by the type name, which must be a type JSON.decode takes.
 export def check_codec_of(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[T.Type]
-  type = try json_target(cx, st, node)
-  if container?(type)
-    return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", "codec requires a struct or enum name", node.span))
-  end
-
-  return ok(T.Type.Codec(type))
+  return ok(T.Type.Codec(try json_target(cx, st, node, "codec requires a struct or enum name")))
 end
 
 # CHECK-ARITY: no form of the builtin takes this many arguments. The note is the signature of every form. A call
@@ -410,13 +405,12 @@ end
 def json_type(cx: State.Cx, st: State.St, target: Ast.Expr, decode: Bool) -> Result[T.Type]
   case target
     Ast.Expr.TypeName(node) ->
-      type = try json_target(cx, st, node)
-      if container?(type) and !decode
-        message = "JSON.schema requires a struct or enum name"
-        return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", message, node.span))
+      refusal = ""
+      if !decode
+        refusal = "JSON.schema requires a struct or enum name"
       end
 
-      return ok(type)
+      return json_target(cx, st, node, refusal)
     _ ->
       message = "JSON type argument requires a struct or enum name"
       return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", message, Ast.expr_span(target)))
@@ -431,9 +425,15 @@ def decode_source_mismatch(cx: State.Cx, st: State.St, actual: T.Type, span: Sou
   return Failure.pack(base.with(expected: "String or Json", actual: found))
 end
 
-def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[T.Type]
+# The type a JSON target names. refusal is the CHECK-TYPE-MISMATCH message for a List or Map target, or "" when the
+# caller takes one (JSON.decode); it comes before the decodable check, so a List of anything is refused the same way.
+def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName, refusal: String) -> Result[T.Type]
   ref = Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span)
   type = try CheckTypes.resolve_type(cx, st, ref, false)
+  if container?(type) and refusal != ""
+    return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", refusal, node.span))
+  end
+
   try json_field_place(cx, st, type, "decode target", node.span)
   named = T.is?(type, "Struct") or T.is?(type, "Enum")
   if !(named or container?(type)) or !CheckTypes.decodable?(cx, type)

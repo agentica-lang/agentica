@@ -461,11 +461,13 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   set_blocking(mine, true);
   agc_share(&vm);
   locked_call first = {&vm, vm.task, call("TCP.send", 3, socket_v, pattern(len), agc_int(60000), agc_void())};
+  /* Every call is made before the sender starts: call() reads vm.task, which call_locked sets on the sender's
+     thread. */
+  locked_call behind = {&other, second, call("TCP.send", 3, socket_v, text("behind\n"), agc_int(60000), agc_void())};
   uv_thread_t sender;
   assert(uv_thread_create(&sender, send_first, &first) == 0);
   struct pollfd p = {fd, POLLIN, 0};
   assert(poll(&p, 1, 60000) == 1);
-  locked_call behind = {&other, second, call("TCP.send", 3, socket_v, text("behind\n"), agc_int(60000), agc_void())};
   on_thread(call_locked, &behind);
   assert(second->lock_wait == writer && second->parked == NULL);
   while (at < len) {
@@ -498,6 +500,7 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   struct timeval give_up = {1, 0};
   assert(setsockopt(mine, SOL_SOCKET, SO_SNDTIMEO, &give_up, sizeof give_up) == 0);
   first.c = call("TCP.send", 3, socket_v, text("first\n"), agc_int(60000), agc_void());
+  behind = (locked_call){&other, third, call("TCP.send", 3, socket_v, text("second\n"), agc_int(60000), agc_void())};
   assert(uv_thread_create(&sender, send_first, &first) == 0);
   /* The first send holds the lock: it is inside send(), which gives up after a second. */
   for (bool held = false; !held;) {
@@ -505,7 +508,6 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
     held = writer->holder == writer;
     agc_sync_drop(&other);
   }
-  behind = (locked_call){&other, third, call("TCP.send", 3, socket_v, text("second\n"), agc_int(60000), agc_void())};
   on_thread(call_locked, &behind);
   assert(third->lock_wait == writer && third->parked == NULL);
   assert(uv_thread_join(&sender) == 0);

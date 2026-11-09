@@ -5,10 +5,11 @@
 Ruby names. Written in Agentica; no Json.
 
 ```text
-OP.new(program: String, description: String = "", args: List[Arg] = [], opts: List[Opt] = []) -> Parser
+OP.new(program: String, description: String = "", args: List[Arg] = [], opts: List[Opt] = [], rest: String = "") -> Parser
 OP.parse(parser: Parser, args: List[String]) -> Result[Parsed]
 OP.string / int / float / flag (parsed: Parsed, name: String) -> String / Int / Float / Bool
 OP.optional_string / optional_int / optional_float (parsed: Parsed, name: String) -> Optional[T]
+OP.rest / after_dashes (parsed: Parsed) -> List[String]
 OP.run!(result: Result[T]) -> T
 OP.usage(parser: Parser) -> String
 OP.help?(message: String) -> Bool
@@ -36,6 +37,11 @@ Options(file: OP.string(p, "file"), port: OP.int(p, "port"),
   default); a value outside is `invalid value for --port: '0' is below the
   minimum 1` (`does not fit an Int` for a number too big). On another kind,
   or with `min` above `max`, they are a wrong specification.
+- A word past the arguments is `unexpected argument`, unless `new` gets
+  `rest`, its fifth argument (positional), such as `"FILE"`, shown as
+  `[FILE...]` in the usage line. Then `OP.rest(p)` gives those words, after
+  `--` included, and `OP.after_dashes(p)` the last of them, those after `--`
+  (`FILE... -- FLAGS`).
 - On/off: no Bool kind; use `Opt(name: "stats", choices: ["on", "off"],
   default: "off")` and `OP.string(p, "stats") == "on"`. A Flag takes no value.
 - Words: `--port 3000`, `--port=3000`, `-p 3000`, `-p3000`, joined short flags

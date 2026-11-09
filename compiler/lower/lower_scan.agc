@@ -7,11 +7,12 @@ import AstWalk from "../syntax/ast_walk"
 ## What a body mentions. consts are the linked names of the constants it reads and calls the names of the functions it
 ## calls or takes with `&`, in the order found. written are the watched type names it writes (a type, a type used as a
 ## value, an enum constructor, a pattern), type_names the linked names it uses as a value (JSON.decode(Person, ...)),
-## and type_ids the ids of those nodes, where the checker recorded the type of a JSON target (lowering.agc). covered
-## are the ids of some(x), ok(x) and [x, ...]: check_some, check_ok and check_list build their type, a List, Optional
-## or Result, around a type with the names of the type recorded at x's id, so lowering.agc's top_names reads only its
-## top. regexes are the regex literals of a function body: each one reads the constant regex_constant names, which
-## lowering.agc makes for it, so a literal is compiled once.
+## and type_ids the ids of those nodes, where the checker recorded the type of a JSON target, and of the Type.codec
+## field accesses, whose type is the Codec (lowering.agc json_targets). covered are the ids of some(x), ok(x) and
+## [x, ...]: check_some, check_ok and check_list build their type, a List, Optional or Result, around a type with the
+## names of the type recorded at x's id, so lowering.agc's top_names reads only its top. regexes are the regex literals
+## of a function body: each one reads the constant regex_constant names, which lowering.agc makes for it, so a literal
+## is compiled once.
 export struct Scan
   consts: List[String]
   calls: List[String]
