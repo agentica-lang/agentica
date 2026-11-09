@@ -97,7 +97,7 @@ struct agc_conn {
   uv_shutdown_t shutdown;
   tcp_link *conn;
   struct addrinfo *addrs, *next_addr;
-  char *host;
+  CC_OWNS char *host;
   int64_t port;
   _Atomic uint64_t id;
   uint64_t parent;
@@ -520,7 +520,7 @@ static void post_release(net *n, const char *why) {
    (on a scheduler), so it is a step. */
 static void release_net(void *native) { post_release(native, "exit"); }
 
-static net *make_net(const agc_trace *trace, agc_loop *io, char *host, int64_t port, bool listener) {
+static net *make_net(const agc_trace *trace, agc_loop *io, CC_OWNS char *host, int64_t port, bool listener) {
   net *n = calloc(1, sizeof(net));
   if (!n) agc_out_of_memory();
   n->trace = *trace;
@@ -531,7 +531,7 @@ static net *make_net(const agc_trace *trace, agc_loop *io, char *host, int64_t p
   return n;
 }
 
-static net *new_net(agc_vm *vm, char *host, int64_t port, bool listener) {
+static net *new_net(agc_vm *vm, CC_OWNS char *host, int64_t port, bool listener) {
   return make_net(&vm->rt->trace, agc_io_loop(vm), host, port, listener);
 }
 
@@ -1429,16 +1429,16 @@ static tls_shared *client_context(agc_vm *vm, agc_http_client *c) {
 /* Opens a client socket to NAME:PORT, which the net then owns. CONFIG is the TLS config with a count for the net
    (TLS.connect); CLIENT, when not NULL, is the HttpClient whose lazy context the net takes a count on
    (HttpWire.connect_tls). Neither: TCP. */
-static agc_value connect_net(agc_vm *vm, char *name, int64_t port, agc_tls_config *config, agc_http_client *client,
-                             int64_t timeout) {
+static agc_value connect_net(agc_vm *vm, CC_OWNS char *name, int64_t port, agc_tls_config *config,
+                             agc_http_client *client, int64_t timeout) {
   net *n = new_net(vm, name, port, false);
   n->secure = config || client;
   n->config = config;
   agc_socket *sk = new_socket(vm, n, true);
   /* The count is taken once the socket exists, so a failure in making it cannot lose one. */
   if (client) n->shared = client_context(vm, client);
-  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "tcp_connect socket=%" PRIu64 " host=%s port=%" PRId64, sk->state->id, name,
-            port);
+  AGC_TRACE(&vm->rt->trace, AGC_TRACE_IO, "tcp_connect socket=%" PRIu64 " host=%s port=%" PRId64, sk->state->id,
+            n->host, port);
   return start_open(vm, n, agc_socket_value(sk), timeout);
 }
 

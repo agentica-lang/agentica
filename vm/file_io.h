@@ -6,6 +6,7 @@
 #ifndef AGC_FILE_IO_H
 #define AGC_FILE_IO_H
 
+#include "cchecker.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -60,8 +61,8 @@ int agc_fs_rename_noreplace(const char *from, const char *to);
 int agc_fs_remove_tree(const char *path, char **failed);
 #endif
 int agc_fs_list(const char *path, char **names, size_t *size, size_t *count);
-char *agc_fs_cwd(void);
-char *agc_fs_realpath(const char *path);
+CC_OWNS char *agc_fs_cwd(void);
+CC_OWNS char *agc_fs_realpath(const char *path);
 #ifdef _WIN32
 void agc_fs_set_error(int result);
 int agc_fs_try_lock(int fd);

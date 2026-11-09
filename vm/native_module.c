@@ -121,7 +121,7 @@ typedef struct {
    module that failed is not loaded again. FNS are the functions bound from it. */
 typedef struct agc_native_library {
   struct agc_native_library *next;
-  char *name;
+  CC_OWNS char *name;
   agc_native_init init;
   const an_module *module;
   const char *const **type_index, *const **resource_index;

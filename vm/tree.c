@@ -72,7 +72,7 @@ static void close_levels(level *levels, size_t top) {
 
 /* The root, the names of levels 1..top, then `entry` unless it is NULL, joined with '/'. NULL when malloc fails:
    the error is then reported without the entry. */
-static char *entry_path(const char *root, const level *levels, size_t top, const char *entry) {
+static CC_OWNS char *entry_path(const char *root, const level *levels, size_t top, const char *entry) {
   size_t len = strlen(root) + (entry ? strlen(entry) + 1 : 0);
   for (size_t k = 1; k <= top; k++) len += strlen(levels[k].name) + 1;
   char *path = malloc(len + 1);
@@ -97,6 +97,7 @@ static char *entry_path(const char *root, const level *levels, size_t top, const
    a file system that lists a name it cannot remove: an ENOENT from unlinkat is not progress. On a failure inside
    the tree, *failed is the path of the entry (or of the directory) that failed. The root is removed by its path:
    rmdir only takes an empty directory, so a path swapped at this point costs nothing. */
+// cchecker: ignore CC-OWN-LEAK: *failed is an out parameter: the caller owns the path set there
 static int walk(const char *root, level *levels, char **failed) {
   int rc = open_dir(AT_FDCWD, root, &levels[0].dir);
   if (rc) return rc;

@@ -43,7 +43,8 @@ A new `vm/*.c` file goes in one of them.
   - **May use:** everything
 
 `vm/tests/*.c` may use everything. `trace.h` is shared by every layer but the
-adapters.
+adapters; `cchecker.h` (the marks of `make cchecker`, empty outside clang) by
+every layer.
 
 Notes on the choices:
 
@@ -170,11 +171,11 @@ forward-declared, in that header or one below it. `make vm-layers` compiles each
 `vm/*.h` on its own (`cc -fsyntax-only`, as `-include h /dev/null`: as a main
 file, the unused `static inline` in `trace.h` fails under `-Werror` with clang).
 
-- **`value.h`** (includes `trace.h`): values and their accessors, the opaque
-  `agc_list` API, the Json API, the program tables, opcodes, memory, UTF-8,
-  string, map and equality functions. The handle value structs (`agc_process`,
-  `agc_socket`, `agc_listener`, ...) live here because they are anonymous
-  typedefs, which cannot be forward-declared.
+- **`value.h`** (includes `cchecker.h` and `trace.h`): values and their
+  accessors, the opaque `agc_list` API, the Json API, the program tables,
+  opcodes, memory, UTF-8, string, map and equality functions. The handle value
+  structs (`agc_process`, `agc_socket`, `agc_listener`, ...) live here because
+  they are anonymous typedefs, which cannot be forward-declared.
 - **`port.h`**: the runtime structs, the stepper types (`agc_stepper` has one
   member, its `agc_step_fn`, which a service's state struct starts with),
   `agc_io_kind`, and the port functions of §15.2.
@@ -192,7 +193,8 @@ file, the unused `static inline` in `trace.h` fails under `-Werror` with clang).
   up to 32 items makes no call per item. Every other file keeps the opaque API.
 
 `net.h` and `http_fields.h` include `services.h`; `net.h` also includes `tls.h`.
-`tls.h`, `http_parse.h` and `trace.h` include nothing of ours.
+`tls.h`, `http_parse.h`, `trace.h` and `cchecker.h` include nothing of
+ours.
 
 ### 15.5 The layer check
 
@@ -219,7 +221,8 @@ and runs `vm/tools/check-layers.sh <object dir>` and its negative self-test,
 8. an adapter object's undefined `agc_` symbols are other than the memory
    functions of §15.1 and symbols of another adapter object;
 9. a header includes a header other than the one below it in the chain of
-   §15.4, or `tls.h`, `http_parse.h` or `trace.h` includes one of ours;
+   §15.4, or `tls.h`, `http_parse.h`, `trace.h` or `cchecker.h` includes one of
+   ours;
 10. `list_impl.h` is included from a file other than the three of §15.4.
 
 The link rules (7, 8) are the authority: a declaration that rule 6 misses still

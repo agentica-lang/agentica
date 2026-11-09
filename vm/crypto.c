@@ -37,7 +37,7 @@ typedef struct {
    them. */
 typedef struct {
   kdf_params kdf;
-  uint8_t *password, *salt, *key;
+  CC_OWNS uint8_t *password, *salt, *key;
   size_t password_n, salt_n, key_n;
   uint32_t span;
   bool ran, derived;
@@ -651,7 +651,7 @@ static agc_value kdf_expired(agc_vm *vm, void *data, agc_value context) {
 static const agc_io_kind kdf_io = {kdf_work, kdf_done, kdf_expired, kdf_drop, false, "kdf", NULL, false, NULL};
 
 /* A malloc'd copy of the n bytes at data (NULL for none). */
-static uint8_t *kdf_copy(const uint8_t *data, size_t n) {
+static CC_OWNS uint8_t *kdf_copy(const uint8_t *data, size_t n) {
   if (!n) return NULL;
   uint8_t *copy = malloc(n);
   if (!copy) agc_out_of_memory();

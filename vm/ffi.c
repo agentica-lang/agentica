@@ -89,7 +89,7 @@ typedef struct {
    kind declared `free_ref:` (by_ref) gives its free function the address of the pointer instead. */
 typedef struct {
   agc_ffi_call *free;
-  char *name;
+  CC_OWNS char *name;
   bool by_pointer, by_ref;
 } made_kind;
 
@@ -127,7 +127,7 @@ typedef struct {
   bool compute, by_pointer, free_by_pointer, free_by_ref, layout;
   int32_t free_input;
   agc_ffi_call *free;
-  char *resource, *symbol;
+  CC_OWNS char *resource, *symbol;
   made_kind *made;
   agc_native_fn *module;
 } ffi_entry;
@@ -484,7 +484,7 @@ static bool c_type_of(char code, bool result, agc_c_type *type, bool *out) {
 }
 
 /* A malloc'd NUL-terminated copy of LEN bytes. */
-static char *text_copy(const char *data, size_t len) {
+static CC_OWNS char *text_copy(const char *data, size_t len) {
   char *out = malloc(len + 1);
   if (!out) agc_out_of_memory();
   memcpy(out, data, len);
@@ -836,8 +836,11 @@ static ffi_entry *parse_signature(agc_vm *vm, const agc_string *text, uint32_t s
         e->made = calloc(count, sizeof(made_kind));
         if (!e->made) agc_out_of_memory();
       }
-      e->made[k] = (made_kind){frees.calls[kind], text_copy(frees.kinds[kind], frees.kind_lens[kind]),
-                               frees.by_pointer[kind], frees.by_ref[kind]};
+      made_kind *m = &e->made[k];
+      m->free = frees.calls[kind];
+      m->name = text_copy(frees.kinds[kind], frees.kind_lens[kind]);
+      m->by_pointer = frees.by_pointer[kind];
+      m->by_ref = frees.by_ref[kind];
       kind++;
     }
   }
@@ -1659,6 +1662,7 @@ static agc_value struct_value(const agc_c_struct *layout, const uint8_t *base) {
 /* The C value of a checked argument. A C.String is a malloc'd copy, which the caller frees after the call
    (free_copies); a C.Bytes is BYTES, its copy made before (copy_bytes), which free_copies frees too. A struct (LAYOUT)
    is copied into MEMORY, its place in the memory of the call, and C gets a pointer to it. */
+// cchecker: ignore CC-OWN-LEAK: the copy of a C.String goes out in the value, which free_copies frees after the call
 static agc_c_value c_argument(agc_vm *vm, agc_c_type type, const agc_c_struct *layout, agc_value v, uint8_t *bytes,
                               uint8_t *memory) {
   agc_c_value out = {0};

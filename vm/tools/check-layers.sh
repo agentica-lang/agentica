@@ -11,7 +11,7 @@ core="value.c map.c list.c equal.c text.c unicode_data.c json_value.c interp.c t
 services="strings.c bytes.c text_codec.c numbers.c crypto.c json.c json_typed.c files.c zlib.c tree.c stream.c lazy.c ats.c duplex.c process.c system.c tcp.c http_fields.c http_service.c http_server.c http_wire.c tls_context.c logger.c regex.c testing.c front_end.c ffi.c native_module.c"
 adapters="tls_openssl.c tls_trust.c tls_trust_posix.c tls_trust_darwin.c tls_trust_windows.c digest_openssl.c zlib_codec.c http_pico.c http_body.c file_io.c file_windows.c process_posix.c process_windows.c duplex_posix.c duplex_windows.c system_posix.c system_windows.c net_posix.c net_windows.c ffi_libffi.c ffi_none.c"
 driver="launch.c agentica.c builtin_tables.c fuzz.c fuzz_libfuzzer.c"
-headers="value.h port.h core.h services.h net.h http_fields.h tls.h tls_trust.h digest.h zlib_codec.h http_parse.h trace.h list_impl.h launch.h embedded.h file_io.h process_os.h duplex_os.h system_os.h net_os.h ffi_os.h agentica_native.h jit/jit.h"
+headers="value.h port.h core.h services.h net.h http_fields.h tls.h tls_trust.h digest.h zlib_codec.h http_parse.h trace.h list_impl.h launch.h embedded.h file_io.h process_os.h duplex_os.h system_os.h net_os.h ffi_os.h agentica_native.h cchecker.h jit/jit.h"
 memory="agc_alloc agc_alloc_atomic agc_size_add agc_size_mul agc_out_of_memory"
 inc='^\s*#\s*include\s*["<](\.\.?/)?'
 found() { s=0; rg "$@" || s=$?; [ "$s" -le 1 ] || { bad "rg failed: $*"; return 1; }; [ "$s" -eq 0 ]; }
@@ -33,7 +33,7 @@ for f in *.c *.h jit/*.c jit/*.h; do
 done
 for f in $core $services $adapters $driver $headers; do [ -f "$f" ] || bad "$f is listed but missing"; done
 
-chain value.h trace.h
+chain value.h cchecker.h trace.h
 chain list_impl.h value.h
 chain port.h value.h
 chain core.h port.h
@@ -46,9 +46,10 @@ chain digest.h
 chain zlib_codec.h
 chain http_parse.h
 chain trace.h
+chain cchecker.h
 chain launch.h port.h
 chain embedded.h
-chain file_io.h
+chain file_io.h cchecker.h
 chain process_os.h
 chain duplex_os.h
 chain system_os.h

@@ -4,7 +4,8 @@
 # The library knowledge, all on (the default), listed so a turned-off family shows in review. The roots of the rules are
 # inferred from it: a function passed to a libuv call that runs it on the loop thread (uv_read_start, uv_write,
 # uv_timer_start, uv_close, ...) is a short root, which must never reach a blocking call (docs/vm/14-core-invariants.md).
-# There is no [roots] table: marks (cchecker.h) come later, for the roots that inference does not find.
+# There is no [roots] table: the marks of vm/cchecker.h in the C are for ownership (CC_OWNS, CC_FREES, CC_GC_ALLOC); marks
+# for the roots that inference does not find come later.
 [library]
 libc_blocking = true
 pthread_blocking = true

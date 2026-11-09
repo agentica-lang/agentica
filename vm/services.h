@@ -113,7 +113,7 @@ typedef enum { AGC_WRITE_LINES, AGC_WRITE_BYTES } agc_writer_form;
 agc_line_writer *agc_writer_new(agc_vm *vm, agc_value path, int64_t timeout, agc_writer_form form, uint32_t span);
 agc_writer_status agc_writer_next(agc_vm *vm, agc_line_writer *w, agc_value last, agc_value line, agc_value *out);
 void agc_writer_stop(agc_line_writer *w, agc_value outcome);
-char *agc_host_path(agc_vm *vm, const agc_string *s);
+CC_OWNS char *agc_host_path(agc_vm *vm, const agc_string *s);
 agc_value agc_utf8_error(const uint8_t *data, size_t len);
 agc_value agc_system_error(agc_vm *vm, const char *what, int err);
 bool agc_tree_refused(const char *path);
@@ -210,7 +210,7 @@ extern const agc_builtin agc_ats_builtins[];
 extern const size_t agc_ats_builtin_count;
 /* True when both trees of the ATS table v are valid AVL trees holding its size (vm/ats.c; for the C test). */
 bool agc_ats_valid(agc_vm *vm, agc_value v);
-char *agc_system_env(const char *name);
+CC_OWNS char *agc_system_env(const char *name);
 /* Size of the buffers that hold an operating system name. */
 #define AGC_OS_NAME_MAX 64
 /* The System.os name for a uname sysname (NULL when there is none); see system.c. */
@@ -258,7 +258,7 @@ bool agc_ffi_end(agc_vm *vm, int (*stop_signal)(void));
    which nothing uses once the run is over. */
 void agc_ffi_forget(agc_vm *vm);
 /* A malloc'd copy of the LEN bytes at DATA with a NUL after them (out of memory exits). */
-char *agc_ffi_text_copy(const char *data, size_t len);
+CC_OWNS char *agc_ffi_text_copy(const char *data, size_t len);
 /* Runs RUN(ARG) with the callbacks of extern blocks that C starts on this thread refused, as a free function runs:
    they give C zero and run nothing. The call of a native module runs this way. RUN may jump out (the fuzz driver's
    allocation limit, a failed check of vm/map.c); the thread then stays refusing, outside its own native calls (a fast

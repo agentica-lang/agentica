@@ -13,6 +13,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "cchecker.h"
 #include "trace.h"
 
 /* The first four bytes of every .agcb file. */
@@ -523,8 +524,8 @@ void agc_set_alloc_limit(jmp_buf *target, size_t limit);
 bool agc_alloc_over_limit(void);
 void agc_alloc_limit_check(void);
 #endif
-void *agc_alloc(size_t size);
-void *agc_alloc_atomic(size_t size);
+CC_GC_ALLOC void *agc_alloc(size_t size);
+CC_GC_ALLOC void *agc_alloc_atomic(size_t size);
 size_t agc_size_add(size_t a, size_t b);
 size_t agc_size_mul(size_t a, size_t b);
 _Noreturn void agc_out_of_memory(void);
@@ -763,7 +764,7 @@ static inline agc_json *agc_as_json(agc_vm *vm, agc_value v) {
 
 static inline bool agc_is(agc_value v, agc_tag tag) { return v.tag == (uint32_t)tag; }
 
-char *agc_cstr(const agc_string *s);
+CC_OWNS char *agc_cstr(const agc_string *s);
 bool agc_range_bounds(const agc_range *r, int64_t *first, int64_t *last);
 
 size_t agc_float_text(double x, char out[AGC_SCALAR_TEXT]);
