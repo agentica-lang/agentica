@@ -68,13 +68,14 @@ bool agc_output_failed(const agc_output *out) {
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 /* The scheduler remembers the stream lock it holds (vm->stream_lock), so a failure that jumps out of the code that holds
-   it gives it back (agc_sync_reset). The streams' locks are never held together. */
-CC_ACQUIRES(l->mutex) static void stream_take(agc_vm *vm, agc_lock *l) {
+   it gives it back (agc_sync_reset): CC_JUMP_RELEASES on these two and on enter and take_turn, which wrap them. The
+   streams' locks are never held together. */
+CC_JUMP_RELEASES CC_ACQUIRES(l->mutex) static void stream_take(agc_vm *vm, agc_lock *l) {
   agc_lock_take(l);
   vm->stream_lock = l;
 }
 
-CC_RELEASES(l->mutex) static void stream_drop(agc_vm *vm, agc_lock *l) {
+CC_JUMP_RELEASES CC_RELEASES(l->mutex) static void stream_drop(agc_vm *vm, agc_lock *l) {
   vm->stream_lock = NULL;
   agc_lock_drop(l);
 }
@@ -506,7 +507,7 @@ static void callback_turn(agc_vm *vm, agc_output *out) {
 
 /* The start of a print or a flush, with the stream's lock taken: true when the task is not yet in the FIFO (it is a
    new writer; false when it comes back to the call it parked in). */
-CC_ACQUIRES(out->base->lock->mutex) static bool enter(agc_vm *vm, agc_output *out) {
+CC_JUMP_RELEASES CC_ACQUIRES(out->base->lock->mutex) static bool enter(agc_vm *vm, agc_output *out) {
   stream_take(vm, out->base->lock);
   bool new_writer = vm->task->output.out != out;
   if (new_writer && out->base->failed) fail_locked(vm, out);
@@ -516,7 +517,8 @@ CC_ACQUIRES(out->base->lock->mutex) static bool enter(agc_vm *vm, agc_output *ou
 /* The end of a print or a flush that waits its turn: marks the task PARKING before it links itself, looks at its wait
    once and drops the stream's lock. A new writer inside a native callback with no writer ahead waits in place
    (callback_turn) instead. */
-CC_RELEASES(out->base->lock->mutex) static bool take_turn(agc_vm *vm, agc_output *out, bool new_writer) {
+CC_JUMP_RELEASES CC_RELEASES(out->base->lock->mutex) static bool take_turn(agc_vm *vm, agc_output *out,
+                                                                               bool new_writer) {
   agc_output *s = out->base;
   if (new_writer && vm->task->callbacks && !s->waiters) {
     callback_turn(vm, out);

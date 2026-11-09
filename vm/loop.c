@@ -149,7 +149,8 @@ struct agc_io_job {
   uv_work_t work;
   uv_timer_t timer;
   const agc_io_kind *kind;
-  void *data;
+  /* The job's data, which kind->drop or kind->done frees: agc_io_start hands it to the job. */
+  CC_OWNS void *data;
   agc_more_fn more;
   agc_loop *loop;
   job *ready_next, *service_next, *finished_next;
@@ -1694,7 +1695,7 @@ void agc_io_submit_direct(agc_vm *vm) {
 }
 
 /* Returns the job without reading r->native after the START is posted: a detached job may be swept by then. */
-static job *start_job(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
+static job *start_job(agc_vm *vm, const agc_io_kind *kind, CC_OWNS void *data, agc_value context, int64_t timeout_ms,
                       const agc_task *task, agc_more_fn more, unsigned flags) {
   if (kind->work && kind->cancel && !more) agc_fail(vm, "RUNTIME-INTERNAL", "a pool job cannot have a cancel half", 0);
   /* A plain deadline is a task timer (vm/timers.c), not a job. */

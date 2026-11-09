@@ -33,7 +33,7 @@ typedef struct {
 
 static void release_config(void *config) { agc_tls_config_free(config); }
 
-static void free_build(build *b) {
+static void free_build(CC_FREES build *b) {
   agc_tls_config_free(b->config);
   free(b->ca);
   free(b->cert);
@@ -86,7 +86,7 @@ static agc_value expired(agc_vm *vm, void *data, agc_value context) {
   return agc_error_value("network: operation timed out");
 }
 
-static void drop(void *data) { free_build(data); }
+static void drop(CC_FREES void *data) { free_build(data); }
 
 static const agc_io_kind context_io = {work, done, expired, drop, false, "tls", NULL, false, NULL};
 
@@ -151,7 +151,7 @@ static agc_value start_build(agc_vm *vm, agc_value options, bool server, uint32_
   const char *refused = alpn_size(vm, alpn, &alpn_len);
   if (refused) return agc_error_value(refused);
   agc_task_check_park(vm, "a callback of native code cannot wait for a TLS context", span);
-  build *b = calloc(1, sizeof *b);
+  CC_OWNS build *b = calloc(1, sizeof *b);
   if (!b) agc_out_of_memory();
   b->server = server;
   bool copied = server ? path_of(field[0], &b->cert) && path_of(field[1], &b->key)

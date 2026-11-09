@@ -723,15 +723,17 @@ CC_RELEASES(l->mutex) static inline void agc_lock_drop(agc_lock *l) {
    failure that jumps out of the code that holds it is undone by the scheduler (agc_sync_reset). Lock order: sync, then a
    stream's lock, then the I/O inbox's and the run queue's. With one scheduler (before agc_share) these are a test of
    one flag. In a shared VM agc_sync_assert fails when a mutator of those lists runs without it. */
-CC_ACQUIRES(vm->rt->sync->mutex) void agc_sync_take_shared(agc_vm *vm);
-CC_RELEASES(vm->rt->sync->mutex) void agc_sync_drop_shared(agc_vm *vm);
+/* CC_JUMP_RELEASES on these four: vm->sync_depth records the lock, and the scheduler's catch of a failure gives it
+   back (agc_sync_reset). */
+CC_JUMP_RELEASES CC_ACQUIRES(vm->rt->sync->mutex) void agc_sync_take_shared(agc_vm *vm);
+CC_JUMP_RELEASES CC_RELEASES(vm->rt->sync->mutex) void agc_sync_drop_shared(agc_vm *vm);
 _Noreturn void agc_sync_missing(agc_vm *vm);
 
-CC_ACQUIRES(vm->rt->sync->mutex) static inline void agc_sync_take(agc_vm *vm) {
+CC_JUMP_RELEASES CC_ACQUIRES(vm->rt->sync->mutex) static inline void agc_sync_take(agc_vm *vm) {
   if (__builtin_expect(vm->rt->shared, 0)) agc_sync_take_shared(vm);
 }
 
-CC_RELEASES(vm->rt->sync->mutex) static inline void agc_sync_drop(agc_vm *vm) {
+CC_JUMP_RELEASES CC_RELEASES(vm->rt->sync->mutex) static inline void agc_sync_drop(agc_vm *vm) {
   if (__builtin_expect(vm->rt->shared, 0)) agc_sync_drop_shared(vm);
 }
 
@@ -848,7 +850,8 @@ bool agc_task_join(agc_vm *vm, agc_task *target);
 void agc_task_cancel(agc_vm *vm, agc_task *t);
 
 struct uv_loop_s *agc_io_uv(agc_vm *vm);
-agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms);
+agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, CC_OWNS void *data, agc_value context,
+                         int64_t timeout_ms);
 void agc_io_ready(agc_io_job *j);
 /* Runs FN(DATA) on the I/O thread: at once where the caller is that thread (always while one thread plays both roles),
    else as a request in its inbox, after every request the caller posted before. A libuv step of a service that has no
@@ -896,12 +899,12 @@ int agc_io_getaddrinfo(struct uv_loop_s *uv, struct uv_getaddrinfo_s *req,
                        void (*done)(struct uv_getaddrinfo_s *req, int status, struct addrinfo *res), const char *node,
                        const char *service, const struct addrinfo *hints);
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
-agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
-                              agc_more_fn more);
+agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, CC_OWNS void *data, agc_value context,
+                              int64_t timeout_ms, agc_more_fn more);
 /* agc_io_start_then with FLAGS: AGC_JOB_FLUSH makes the end of the run wait for the job's pool work, within the flush
    limit, even after its task gave it up (a timeout or a cancel), as for a detached flush. */
-agc_io_job *agc_io_start_flags(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
-                               agc_more_fn more, unsigned flags);
+agc_io_job *agc_io_start_flags(agc_vm *vm, const agc_io_kind *kind, CC_OWNS void *data, agc_value context,
+                               int64_t timeout_ms, agc_more_fn more, unsigned flags);
 #endif
 #if defined(__linux__) || defined(__APPLE__)
 int agc_fd_reopen(int fd, int access);
