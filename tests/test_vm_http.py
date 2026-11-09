@@ -15,7 +15,6 @@ import threading
 import time
 
 import pytest
-from hypothesis import given, strategies as st
 
 from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, Child, check_lines, compile_agc, compile_text, optional_tool,
                                  output_lines, run, run_vm, scaled, start_vm, vm_environment)
@@ -1375,108 +1374,6 @@ def test_client_writes_and_reads_latin1_header_values_as_single_bytes(tmp_path):
     assert result.code == 0, result.stderr
     assert output_lines(result.stdout) == ["na\u00efve 5"]
     assert b"\r\nX-Name: caf\xe9\r\n" in seen[0], seen
-
-
-HEADER_ECHO_PROGRAM = """\
-import HTTP from "std/http"
-
-# The request body, read as UTF-8, goes back as the value of X-Out.
-def handle(request: HttpRequest) -> Result[HttpResponse]
-  value = try String.from_bytes(request.body)
-  return ok(HttpResponse(status: 200, headers: [Header(name: "X-Out", value: value)], body: "".bytes))
-end
-
-def main() -> Void
-  options = HttpServerOptions(request_timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 4, max_body_bytes: 65536)
-  server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options).unwrap!
-  port = HTTP.local_port(server)
-  puts(port)
-  IO.flush()
-  client = HTTP.client(HttpClientOptions(timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 1, max_body_bytes: 65536, tls: none)).unwrap!
-  # Each line is the hex of one value; the answer is the status and the hex of the X-Out the client read, or "-".
-  while !IO.eof?
-    reply = HTTP.post(client, "http://127.0.0.1:#{port}/", OpenSSL.Digest.hexdecode(gets!).unwrap!).unwrap!
-    out = reply.headers.detect do |h| h.name == "x-out" end
-    shown = "-"
-    if out.ok?
-      shown = OpenSSL.Digest.hexencode(out.unwrap!.value.bytes)
-    end
-    puts("#{reply.status} #{shown}")
-    IO.flush()
-  end
-  HTTP.close_server(server)
-  IO.inspect(HTTP.wait(server))
-end
-"""
-
-# The longest value the server sends: the line "X-Out: <value>" is at most AGC_HTTP_MAX_LINE (8192) bytes on the wire.
-MAX_HEADER_VALUE = 8192 - len("X-Out: ")
-HEADER_CHARS = st.one_of(
-    st.characters(min_codepoint=0x20, max_codepoint=0x7E),
-    st.characters(min_codepoint=0x80, max_codepoint=0xFF),  # obs-text: one byte each on the wire
-    st.characters(max_codepoint=0x1F) | st.just("\x7f"),  # control characters; only tab is allowed
-    st.characters(min_codepoint=0x100, exclude_categories=("Cs",)),  # no surrogates: the body that carries it is UTF-8
-)
-HEADER_VALUES = st.one_of(
-    st.text(HEADER_CHARS, max_size=20),
-    # Around the line limit: one character (ASCII or Latin-1) repeated up to it, then a short tail.
-    st.builds(lambda fill, count, tail: fill * count + tail, st.sampled_from("aé"),
-              st.integers(MAX_HEADER_VALUE - 3, MAX_HEADER_VALUE), st.text(HEADER_CHARS, max_size=3)),
-)
-
-
-def sendable_header_value(value):
-    """RFC 9110 5.5 field-value within the line limit: Latin-1 with no control character but tab."""
-    return len(value) <= MAX_HEADER_VALUE and all(c == "\t" or " " <= c <= "\xff" and c != "\x7f" for c in value)
-
-
-@pytest.fixture(scope="module")
-def header_echo(tmp_path_factory):
-    """HEADER_ECHO_PROGRAM, started once for every example of the property: the VM and its port."""
-    directory = tmp_path_factory.mktemp("header-echo")
-    source = directory / "header-echo.agc"
-    source.write_text(HEADER_ECHO_PROGRAM, encoding="utf-8")
-    vm = start_vm(compile_agc(source, directory / "header-echo.agcb"), stdin=True)
-    try:
-        yield vm, int(vm.next_line())
-        vm.close_stdin()
-        assert vm.wait() == 0, "the VM server finishes"
-        assert vm.next_line() == "ok()"
-    finally:
-        vm.stop()
-
-
-@given(HEADER_VALUES)
-def test_server_sends_a_header_value_only_when_it_is_valid_and_both_clients_read_it_back(header_echo, value):
-    """Property (#1184): the server sends a value if and only if it is a valid field value, else it answers 500. A
-    value it sends is its Latin-1 bytes on the wire, and http.client and the VM client read back the same text, without
-    the spaces and tabs around it (RFC 9110 5.5; http.client keeps those at the end)."""
-    vm, port = header_echo
-    body = value.encode("utf-8")
-    sent = sendable_header_value(value)
-    got = read_after_close(port, b"POST / HTTP/1.1\r\nHost: x\r\nConnection: close\r\nContent-Length: %d\r\n\r\n%s"
-                           % (len(body), body))
-    head = got.partition(b"\r\n\r\n")[0] + b"\r\n"
-    if sent:
-        assert head.startswith(b"HTTP/1.1 200 ") and b"\r\nX-Out: " + value.encode("latin-1") + b"\r\n" in head, head
-    else:
-        assert head.startswith(b"HTTP/1.1 500 ") and b"X-Out" not in head, head
-    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=scaled(10))
-    try:
-        conn.request("POST", "/", body=body)
-        reply = conn.getresponse()
-        reply.read()
-        assert reply.status == (200 if sent else 500)
-        if sent:
-            assert reply.getheader("X-Out").rstrip(" \t") == value.strip(" \t")
-    finally:
-        conn.close()
-    vm.process.stdin.write(body.hex().encode("ascii") + b"\n")
-    vm.process.stdin.flush()
-    status, shown = vm.next_line().split(" ")
-    assert (status, shown != "-") == (("200", True) if sent else ("500", False))
-    if sent:
-        assert bytes.fromhex(shown).decode("utf-8") == value.strip(" \t")
 
 
 @pytest.mark.parametrize("flags", [(), ("--schedulers", "4")], ids=["one-scheduler", "four-schedulers"])

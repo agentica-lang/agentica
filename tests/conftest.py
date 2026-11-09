@@ -28,13 +28,13 @@ from tests.agentica_test import (
 from tests.temp_roots import assign_root
 
 try:
-    from hypothesis import is_hypothesis_test, settings as hypothesis_settings
-except ImportError:  # the Docker and Wine images run modules without properties on the system pytest
+    from hypothesis import settings as hypothesis_settings
+except ImportError:  # make test may fall back to the system pytest; a property module then skips (fails in CI)
     hypothesis_settings = None
 
 if hypothesis_settings is not None:
     # The fast tier replays the same few examples on every run (derandomize) and keeps no example database, so a run is
-    # stable and quick. The slow tier draws many from the seed that pytest_configure picks and the header prints. A
+    # stable and quick. The slow tier draws many from the seed that pytest_configure picks and the summary prints. A
     # failure prints the shrunk input and a @reproduce_failure line (print_blob). No deadline: a VM on a busy runner
     # can take a while for one example.
     hypothesis_settings.register_profile(
@@ -67,23 +67,15 @@ def pytest_configure(config):
         config.option.hypothesis_seed = str(random.randrange(2**32))
 
 
-def _seed_line(config):
-    """The seed of the slow tier's properties and how to replay it, or None."""
-    seed = config.getoption("hypothesis_seed", None) if hypothesis_settings is not None else None
-    if seed is None:
-        return None
-    return "hypothesis seed %s (replay: PYTEST_ADDOPTS=--hypothesis-seed=%s make test-slow TESTS=...)" % (seed, seed)
-
-
-def pytest_report_header(config):
-    return _seed_line(config)
+_property_collected = False
 
 
 def pytest_terminal_summary(terminalreporter, exitstatus, config):
-    """The seed again after a failure: -q leaves the header out."""
-    line = _seed_line(config)
-    if line and exitstatus != 0:
-        terminalreporter.write_line(line)
+    """The seed of the slow tier and how to replay it, when the run had a property."""
+    seed = config.getoption("hypothesis_seed", None) if hypothesis_settings is not None else None
+    if SLOW and _property_collected and seed is not None:
+        terminalreporter.write_line(
+            "hypothesis seed %s (replay: PYTEST_ADDOPTS=--hypothesis-seed=%s make test-slow TESTS=...)" % (seed, seed))
 
 
 @pytest.fixture
@@ -141,11 +133,13 @@ def pytest_sessionfinish(session, exitstatus):
 def pytest_collection_modifyitems(items):
     """Keep plain pytest functions in the same fast/slow tier as TestCase methods. A property (a Hypothesis test) runs
     in both, with the profile of the tier."""
+    global _property_collected
     for item in items:
         test_class = getattr(item, "cls", None)
         if test_class is not None and issubclass(test_class, TestCase):
             continue
-        if hypothesis_settings is not None and is_hypothesis_test(getattr(item, "obj", None)):
+        if getattr(getattr(item, "obj", None), "is_hypothesis_test", False):
+            _property_collected = True
             continue
         is_slow = item.get_closest_marker("slow") is not None
         if is_slow != SLOW:

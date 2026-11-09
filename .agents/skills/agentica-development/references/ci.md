@@ -37,9 +37,9 @@ release's `zig` install and `strip`). A new check gets a target first (in
   only if valid". It runs in both tiers: the fast tier replays the same few
   examples, the slow tier draws many from a seed it prints (`hypothesis seed
   N`). One VM serves every example of a run (a server, or a program that reads
-  cases from stdin), as in the header value property of
-  `tests/test_vm_http.py`. A failure prints the shrunk input and a
-  `@reproduce_failure` line to put on the test; a slow-tier seed replays with
+  cases from stdin), as in `tests/test_prop_http.py`. A failure prints the
+  shrunk input and a `@reproduce_failure` line to put on the test; a slow-tier
+  seed replays with
   `PYTEST_ADDOPTS=--hypothesis-seed=N make test-slow TESTS=...`.
 - Timeouts, three layers, all stretched by `AGENTICA_TEST_TIMEOUT_SCALE`
   (default 1; CI sets 4): one test (SIGALRM, 120 s, 900 s for `@slow`;
