@@ -13,9 +13,13 @@
 ## with the signatures and type shapes that the compiler binds a native module's calls with. Its JSON form is
 ## `Analysis.native_modules_json`.
 ##
-## `outline`, `type_at`, `type_at_partial`, `symbol`, `refs`, `refs_partial` and `native_modules` return a `Result`:
-## its error message is the diagnostic as one JSON object, the form of `--json`, and `Analysis.diagnostic` reads it
-## back, so `try` works. The codes are those of the command line (`LEX-`, `PARSE-`, `CHECK-`, `PKG-`, and
+## `bodies` (experimental) gives the functions of a file with their bodies as a typed tree, for a tool that translates
+## them (a prover). Its JSON form is `Analysis.bodies_json`. Until it is stable, its shape may change between releases
+## without notice; its `version` field exists for when it is.
+##
+## `outline`, `type_at`, `type_at_partial`, `symbol`, `refs`, `refs_partial`, `native_modules` and `bodies` return a
+## `Result`: its error message is the diagnostic as one JSON object, the form of `--json`, and `Analysis.diagnostic`
+## reads it back, so `try` works. The codes are those of the command line (`LEX-`, `PARSE-`, `CHECK-`, `PKG-`, and
 ## `QUERY-USAGE` for a file that cannot be read or a position below line 1 or column 1, `QUERY-NO-EXPRESSION`,
 ## `QUERY-NOT-FOUND`).
 ##
@@ -43,6 +47,7 @@
 ## about the file itself, and an edit of an imported module checks that module and those that import it. The answers
 ## are those of a check from the start.
 
+import BodiesJson from "std/internal/compiler/query/bodies_json"
 import Cache from "std/internal/compiler/analysis/cache"
 import Core from "std/internal/compiler/analysis/analysis"
 import DiagnosticJson from "std/internal/compiler/diagnostics/diagnostic_json"
@@ -138,6 +143,24 @@ export type NativeModules = Model.NativeModules
 
 ## One use of a declaration.
 export type Reference = Model.Reference
+
+## A resolved type of `bodies`.
+export type TypeShape = Model.TypeShape
+
+## One node of the typed tree of a body.
+export type Node = Model.Node
+
+## One parameter of a function of `bodies`.
+export type BodyParam = Model.BodyParam
+
+## A module of the linked program of `bodies`: the prefix of its linked names and its file.
+export type BodyModule = Model.BodyModule
+
+## One function of `bodies`.
+export type Body = Model.Body
+
+## The answer of `bodies`.
+export type Bodies = Model.Bodies
 
 ## The answer of `refs`.
 export type Refs = Model.Refs
@@ -310,6 +333,19 @@ export def native_modules(session: Session, path: String) -> Result[NativeModule
   end
 end
 
+## Returns the functions of the file `path` that have a body, private ones too, each with the resolved types of its
+## parameters and result and its body as a typed tree (`Node`), for a tool that translates them. The file is linked and
+## checked with what it imports and needs no `main`, as for `type_at`. Experimental: the shape may change between
+## releases without notice. An unreadable or wrong file is an error, as for `type_at`.
+export def bodies(session: Session, path: String) -> Result[Bodies]
+  settings = Sessions.asking(session.internal)
+  case Core.bodies(session.internal.cache, settings, path)
+    Core.Bodied.Done(found) -> return ok(found)
+    Core.Bodied.Unreadable -> return error(failure(Core.unreadable(path)))
+    Core.Bodied.Rejected(problem) -> return error(failure(Core.named(settings, problem, path)))
+  end
+end
+
 ## Returns the declaration of the name at the position `line`, `column` (from 1, in characters) of the file `path` and
 ## every reference to it, as `agentica refs` answers: in that file, linked and checked as for `type_at`, and in what it
 ## imports; a file that only imports it is not seen. A position that names nothing is `QUERY-NO-EXPRESSION`. An unused
@@ -345,7 +381,7 @@ export def refs_partial(session: Session, path: String, line: Int, column: Int) 
 end
 
 ## Reads back the diagnostic that is the message of an error of `outline`, `type_at`, `type_at_partial`, `symbol`,
-## `refs`, `refs_partial` or `native_modules`.
+## `refs`, `refs_partial`, `native_modules` or `bodies`.
 export def diagnostic(message: String) -> Result[Diagnostic]
   return DiagnosticRead.read(message)
 end
@@ -373,6 +409,11 @@ end
 ## Returns the JSON of the answer of `native_modules`, without its final line feed.
 export def native_modules_json(found: NativeModules) -> Json
   return NativeModulesJson.json(found)
+end
+
+## Returns the JSON of the answer of `bodies`, without its final line feed.
+export def bodies_json(found: Bodies) -> Json
+  return BodiesJson.json(found)
 end
 
 ## Returns the JSON that `agentica --json check` prints on stderr for a problem.

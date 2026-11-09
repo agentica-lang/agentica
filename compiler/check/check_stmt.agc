@@ -153,6 +153,10 @@ def check_function_body(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> R
     st.with(loops: 0, result: State.Slot.Known(signature.result), signature: signature_text(node, signature)),
   )
 
+  # Analysis.bodies reads the result type at the id of its annotation; it is in `bound`, not `types`, which holds the
+  # types of expressions.
+  here = State.record_bound(here, node.result.id, [signature.result])
+
   checked = try DefaultChecks.check_types(cx, here, node, signature.params)
   inner = State.enter(checked)
   index = 0

@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `std/analysis`: `Analysis.bodies(session, path)` gives the functions of a file
+  with their bodies as a typed tree, for proof tools. It is experimental: its
+  shape may change between releases without a breaking mark.
 - `xs.index(value)` gives the position of the first item `==` the value, and
   `xs.find_index do |x| ... end` of the first that passes the block, as an
   `Optional[Int]`.

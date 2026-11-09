@@ -140,6 +140,16 @@ export def prelude_form?(form: Model.Builtin) -> Bool
   end
 end
 
+## The builtin that `target[index]` runs for a target of that type: `Bytes.at`, or "" for a List or Map, which the VM
+## indexes with an instruction of its own. The lowering and `Analysis.bodies` both ask here.
+export def index_builtin(target: Types.Type) -> String
+  if Types.is?(target, "Bytes")
+    return "Bytes.at"
+  end
+
+  return ""
+end
+
 ## True when some parameter of the form has a default.
 export def defaulted?(form: Model.Builtin) -> Bool
   return first_default(form) < form.parameters.size

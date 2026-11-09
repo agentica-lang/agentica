@@ -29,8 +29,10 @@ import Prelude from "prelude_files"
 ## compiler prelude that the program calls (prelude_files.agc), checked with it: the lowering adds them to the files of
 ## the program. bodies is the prelude function each call of a prelude builtin runs, by id of the call. step_tries is
 ## the id of each `try` in the block of a Lazy method (State.St.step). bound is the types that each name binding
-## introduced, by node id (State.record_bound), for `agentica type-at`. constant_types is the type of each constant by
-## linked name (a later check of the same program takes them with the entries of the modules it does not check again).
+## introduced, by node id (State.record_bound), for `agentica type-at` and `Analysis.bodies`, and the result type of
+## each function at the id of its result annotation, for `Analysis.bodies`. constant_types is the type of each constant
+## by linked name (a later check of the same program takes them with the entries of the modules it does not check
+## again).
 export struct Checked
   types: List[T.Type]
   resolved: Map[Int, State.Resolved]

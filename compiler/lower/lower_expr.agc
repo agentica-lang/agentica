@@ -736,9 +736,10 @@ def lower_index(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.IndexAccess, want: I
   fx = Lowering.step(fx, node.span)
   saved = fx.next
   made = Lowering.target(fx, want)
-  if Types.is?(Lowering.static_type(cx, node.target), "Bytes")
+  builtin = Builtins.index_builtin(Lowering.static_type(cx, node.target))
+  if builtin != ""
     # Bytes.at halts at the index argument, as list-get does.
-    window = try bytes_call(cx, made.fx, "Bytes.at", node.target, node.index, node.span)
+    window = try bytes_call(cx, made.fx, builtin, node.target, node.index, node.span)
     fx = Lowering.emit_at(window.fx, "move", [made.slot, window.slot], node.span)
     return ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
   end
