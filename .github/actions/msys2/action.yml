@@ -28,7 +28,7 @@ runs:
         msystem: ${{ inputs.msystem }}
         path-type: ${{ inputs.path-type }}
         update: ${{ inputs.update }}
-        install: ${{ inputs.install }} no-such-package-for-the-retry-proof
+        install: ${{ inputs.install }}
     - if: ${{ steps.first.outcome == 'failure' }}
       shell: pwsh
       run: |
