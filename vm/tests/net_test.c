@@ -436,8 +436,10 @@ static void declare_head_records(void) {
   static agc_struct_def structs[2];
   static agc_program program;
   structs[0] =
-      (agc_struct_def){agc_make_string("HttpWire.Head", 13, 13), 10, agc_test_field_names(head_fields, 10), NULL, NULL, false};
-  structs[1] = (agc_struct_def){agc_make_string("Header", 6, 6), 2, agc_test_field_names(header_fields, 2), NULL, NULL, false};
+      (agc_struct_def){agc_make_string("HttpWire.Head", 13, 13), 10, false, agc_test_field_names(head_fields, 10),
+                       NULL, NULL};
+  structs[1] =
+      (agc_struct_def){agc_make_string("Header", 6, 6), 2, false, agc_test_field_names(header_fields, 2), NULL, NULL};
   program.struct_count = 2;
   program.structs = structs;
   vm.rt->program = &program;
