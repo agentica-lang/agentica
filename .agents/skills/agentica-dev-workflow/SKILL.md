@@ -20,9 +20,10 @@ rules live in `AGENTS.md` and `agentica-development`.
 
 - One branch and one PR per step, each in its own worktree:
   `git -C <repo> worktree add -b <branch> ../agentica-<topic> origin/master`,
-  then `git submodule update --init`. Never edit or switch branches in the
-  main checkout or in other agents' worktrees; read-only `git` and `gh`
-  commands are fine.
+  then `git submodule update --init` (a patch release starts from
+  `origin/release-X.Y`: `agentica-release` §6). Never edit or switch
+  branches in the main checkout or in other agents' worktrees; read-only
+  `git` and `gh` commands are fine.
 - A PR holds its own contracts (tests, docs, site page, skill, `CHANGELOG.md`
   entry; `AGENTS.md`); never defer them to a later PR in a stack. When a PR
   touches docs, authors and critics apply `documentation-writing`.
