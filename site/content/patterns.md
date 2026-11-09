@@ -96,6 +96,7 @@ def step(door: Door, event: String) -> Door
       if event == "push"
         return Door.Closed
       end
+
     Door.Closed ->
       if event == "pull"
         return Door.Open
