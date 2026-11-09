@@ -259,6 +259,11 @@ Skip rules, checked by the report:
   fails the report. A hosted-runner limit is said in the PR, not skipped
   silently.
 
+The Windows jobs set up MSYS2 with `.github/actions/msys2`, not
+`msys2/setup-msys2` directly: it runs that action up to three times (waiting
+60 s and 180 s) because the MSYS2 servers answer 504 now and then, and each
+attempt uses its own `location`, since the action refuses a folder that exists.
+
 ## Caches and `master` pushes
 
 - The vendored release-mode OpenSSL is cached with `actions/cache` (key:

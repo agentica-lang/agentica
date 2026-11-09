@@ -1,0 +1,59 @@
+name: Set up MSYS2 with retries
+description: >-
+  msys2/setup-msys2 has no retry input, and the MSYS2 servers answer HTTP 504 now and then. This runs it up to three
+  times (waiting 60 s, then 180 s, after a failure); the third attempt fails the job. The inputs are those of
+  setup-msys2 that the workflows use. Each attempt installs into its own folder: setup-msys2 creates its folder first
+  and refuses one that exists, so a second attempt in the folder of a failed one would fail at once.
+inputs:
+  msystem:
+    description: The MSYS2 environment
+    default: UCRT64
+  path-type:
+    description: How the Windows PATH is kept (setup-msys2 path-type)
+    default: inherit
+  update:
+    description: Update the MSYS2 base packages first
+    default: 'false'
+  install:
+    description: The packages to install, separated by spaces
+    required: true
+runs:
+  using: composite
+  steps:
+    # outcome is the result of a step before continue-on-error is applied (conclusion would say success).
+    - id: first
+      uses: msys2/setup-msys2@v2.33.0
+      continue-on-error: true
+      with:
+        msystem: ${{ inputs.msystem }}
+        path-type: ${{ inputs.path-type }}
+        update: ${{ inputs.update }}
+        install: ${{ inputs.install }}
+    - if: ${{ steps.first.outcome == 'failure' }}
+      shell: pwsh
+      run: |
+        Write-Host "::warning title=msys2::setup-msys2 failed; trying again in 60 s"
+        Start-Sleep -Seconds 60
+    - id: second
+      if: ${{ steps.first.outcome == 'failure' }}
+      uses: msys2/setup-msys2@v2.33.0
+      continue-on-error: true
+      with:
+        location: ${{ runner.temp }}\msys2-2
+        msystem: ${{ inputs.msystem }}
+        path-type: ${{ inputs.path-type }}
+        update: ${{ inputs.update }}
+        install: ${{ inputs.install }}
+    - if: ${{ steps.second.outcome == 'failure' }}
+      shell: pwsh
+      run: |
+        Write-Host "::warning title=msys2::setup-msys2 failed again; trying a last time in 180 s"
+        Start-Sleep -Seconds 180
+    - if: ${{ steps.second.outcome == 'failure' }}
+      uses: msys2/setup-msys2@v2.33.0
+      with:
+        location: ${{ runner.temp }}\msys2-3
+        msystem: ${{ inputs.msystem }}
+        path-type: ${{ inputs.path-type }}
+        update: ${{ inputs.update }}
+        install: ${{ inputs.install }}

@@ -39,8 +39,9 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
-# The pauses between the tries of a download (5 tries): GitHub answers 5xx now and then.
-DOWNLOAD_BACKOFF = (5, 10, 20, 40)
+# The pauses between the tries of a download (5 tries, 220 s in all): GitHub answers 5xx (504 too) for a minute or two
+# now and then.
+DOWNLOAD_BACKOFF = (10, 30, 60, 120)
 REQUEST_TIMEOUT = 30
 FINAL_TAG = re.compile(r"^\d+\.\d+\.\d+$")
 PIN = re.compile(r"^\s+(HUGO_VERSION|HUGO_SHA256|DART_SASS_VERSION|DART_SASS_SHA256):\s*(\S+)\s*$", re.MULTILINE)

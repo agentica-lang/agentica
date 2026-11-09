@@ -85,12 +85,9 @@ jobs:
       - run: poetry install --only test --no-root
         if: runner.os == 'Windows'
         shell: pwsh
-      - uses: msys2/setup-msys2@v2.33.0
+      - uses: ./.github/actions/msys2
         if: runner.os == 'Windows'
         with:
-          msystem: UCRT64
-          path-type: inherit
-          update: false
           install: make perl mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-ccache mingw-w64-ucrt-x86_64-openssl mingw-w64-ucrt-x86_64-pkgconf
       - name: Linux packages (system libgc and OpenSSL, ccache, libsqlite3-0), when the image lacks them
         if: runner.os == 'Linux'

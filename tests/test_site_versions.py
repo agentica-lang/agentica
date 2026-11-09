@@ -213,7 +213,7 @@ def test_a_download_retries_5xx_and_short_bodies_but_never_a_404(tmp_path, monke
     monkeypatch.setattr(tool.urllib.request, "urlopen", urlopen)
     with pytest.raises(tool.BuildError, match="checksum mismatch"):
         tool._download("https://example.invalid/x.tar.gz", "0" * 64, tmp_path / "out", strip=0)
-    assert pauses == [5, 10, 20]
+    assert pauses == [10, 30, 60]
 
     pauses.clear()
     answers[:] = [404, "ok"]
