@@ -92,15 +92,15 @@ bool agc_output_failed(const agc_output *out) {
 }
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
-/* The scheduler remembers the stream lock it holds (vm->stream_lock), so a failure that jumps out of the code that
-   holds it gives it back (agc_sync_reset): CC_JUMP_RELEASES on these two and on enter and take_turn, which wrap them.
-   The streams' locks are never held together. Taking it counts as short for the I/O thread (agc_output_forward, the
-   done half of a write): every holder keeps it for bounded work on the ring and the queue, with writes that never wait
-   (agc_stdio_try) or that go to the pool, and settle drops it before it runs the loop. The same lock object is held
-   across a blocking fwrite only by agc_write and agc_flush on a stream on its FILE. A stream goes to its FILE at
-   agc_output_close, at the end of the run, after the schedulers have ended: a done half that runs after it (drain_done)
-   and those writes are then on the one thread that closes, never at once. A child's chunk that a pool thread writes
-   takes the FILE's lock alone (agc_output_write_file). */
+/* The scheduler remembers the stream lock it holds (vm->stream_lock), so a failure that jumps out of the code that holds
+   it gives it back (agc_sync_reset). The streams' locks are never held together. Taking it counts as short for the I/O
+   thread (agc_output_forward, the done half of a write): every holder keeps it for bounded work on the ring and the
+   queue, with writes that never wait (agc_stdio_try) or that go to the pool, and settle drops it before it runs the
+   loop. The same lock object is held across a blocking fwrite only by agc_write and agc_flush on a stream on its FILE.
+   A stream goes to its FILE at agc_output_close, at the end of the run, after the schedulers have ended: a done half
+   that runs after it (drain_done) and those writes are then on the one thread that closes, never at once. A child's
+   chunk that a pool thread writes takes the FILE's lock alone (agc_output_write_file). CC_JUMP_RELEASES on these two
+   and on enter and take_turn, which wrap them: agc_sync_reset gives the lock back after a jump. */
 CC_JUMP_RELEASES CC_ACQUIRES(l->mutex) CC_ASSUME_SHORT static void stream_take(agc_vm *vm, agc_lock *l) {
   agc_lock_take(l);
   vm->stream_lock = l;
