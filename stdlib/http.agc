@@ -3322,6 +3322,8 @@ end
 
 # The bytes of an encoded head. The head is a String of characters up to U+00FF (a header value is Latin-1), so each
 # character is one byte on the wire and a value with `é` goes out as the single byte 0xE9, as HTTP/1.1 allows.
+# `unwrap!` cannot fail: encode_request and encode_response refuse any header value above U+00FF, and the rest of
+# the head (method, target, host, status line, names) is ASCII.
 def head_bytes(head: String) -> Bytes
   return head.encode("latin-1").unwrap!
 end

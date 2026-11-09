@@ -483,6 +483,14 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
     end
     return ok(HttpResponse(status: 200, headers: [Header(name: "X-Out", value: "café " + seen)], body: "in #{seen} #{seen.length}".bytes))
   end
+  if request.path == "/long"
+    # 5000 characters are 5000 bytes on the wire but 10000 in the UTF-8 head String: under the 8192 of a line.
+    big = "é"
+    while String.length(big) < 5000
+      big = big + big
+    end
+    return ok(HttpResponse(status: 200, headers: [Header(name: "X-Out", value: String.slice(big, 0, 5000))], body: "".bytes))
+  end
   if request.path == "/wide"
     return ok(HttpResponse(status: 200, headers: [Header(name: "X-Out", value: "\u0100")], body: "".bytes))
   end
@@ -708,6 +716,14 @@ def routes(said: Channel[String]) -> Fn[HttpRequest, Result[HTTP.StreamResponse]
     end
     if request.path == "/binary"
       return stream(feed, &binary)
+    end
+    if request.path == "/latin1-chunked"
+      Task.spawn(&three, feed)
+      return ok(HTTP.StreamResponse(status: 200, headers: [Header(name: "X-Out", value: "café")], body: feed.body))
+    end
+    if request.path == "/latin1-sized"
+      Task.spawn(&three, feed)
+      return ok(HTTP.StreamResponse(status: 200, headers: [Header(name: "X-Out", value: "café")], body: feed.body, length: some(3)))
     end
     if request.path == "/sized"
       return sized_stream(feed, &sized, 8)
@@ -1168,6 +1184,33 @@ def test_streaming_server_sends_each_chunk_when_it_is_ready_and_stops_the_produc
         "http: invalid response: a 204 or 304 response cannot have a body\n")
 
 
+def test_streamed_response_sends_latin1_header_values_as_single_bytes(tmp_path, adopt):
+    """The head of a stream is rewritten (chunked, or its length) before it is turned into bytes: the value still goes
+    out as one byte."""
+    source = tmp_path / "stream-latin1.agc"
+    source.write_text(STREAM_SERVER_PROGRAM, encoding="utf-8")
+    vm = adopt(start_vm(compile_agc(source, tmp_path / "stream-latin1.agcb"), CERTS, stdin=True))
+    port, _ = vm.next_line().split()
+    ask = b"GET %s HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n"
+
+    def read_stream(path):
+        # The write side stays open: a client that half-closes is one that left, and the producer is stopped.
+        with socket.create_connection(("127.0.0.1", int(port)), timeout=scaled(10)) as conn:
+            conn.sendall(ask % path)
+            got = b""
+            while chunk := conn.recv(65536):
+                got += chunk
+        return got
+
+    got = read_stream(b"/latin1-chunked")
+    assert got.startswith(b"HTTP/1.1 200 ") and b"\r\nX-Out: caf\xe9\r\n" in got, got
+    assert b"\r\nTransfer-Encoding: chunked\r\n" in got and got.endswith(b"3\r\nabc\r\n0\r\n\r\n"), got
+    got = read_stream(b"/latin1-sized")
+    assert b"\r\nX-Out: caf\xe9\r\n" in got and b"\r\nContent-Length: 3\r\n" in got and got.endswith(b"\r\n\r\nabc"), got
+    vm.close_stdin()
+    assert vm.wait() == 0, "the VM server finishes"
+
+
 def start_server(tmp_path, adopt):
     """Starts SERVER_PROGRAM; returns the VM child and its plain port."""
     source = tmp_path / "server.agc"
@@ -1274,6 +1317,9 @@ def test_server_writes_and_reads_latin1_header_values_as_single_bytes(tmp_path, 
     assert reply.getheader("X-Out") == "caf\u00e9 \u00fcber"
     assert reply.read().decode("utf-8") == "in \u00fcber 4"
     conn.close()
+    # The line limit counts wire bytes, as the parser does: 5000 Latin-1 characters are one byte each.
+    got = read_after_close(port, b"GET /long HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+    assert got.startswith(b"HTTP/1.1 200 ") and b"\r\nX-Out: " + b"\xe9" * 5000 + b"\r\n" in got, got[:200]
     # Above U+00FF and control characters are refused: the handler's answer becomes a 500 with no header of it.
     for path in (b"/wide", b"/split"):
         got = read_after_close(port, b"GET " + path + b" HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
@@ -1299,16 +1345,20 @@ def test_client_writes_and_reads_latin1_header_values_as_single_bytes(tmp_path):
     listener = socket.create_server(("127.0.0.1", 0))
     listener.settimeout(scaled(30))
     seen = []
+    failures = []
 
     def serve():
-        conn, _ = listener.accept()
-        with conn:
-            conn.settimeout(scaled(30))
-            data = b""
-            while b"\r\n\r\n" not in data:
-                data += conn.recv(65536)
-            seen.append(data)
-            conn.sendall(b"HTTP/1.1 200 OK\r\nX-Back: na\xefve\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+        try:
+            conn, _ = listener.accept()
+            with conn:
+                conn.settimeout(scaled(30))
+                data = b""
+                while b"\r\n\r\n" not in data:
+                    data += conn.recv(65536)
+                seen.append(data)
+                conn.sendall(b"HTTP/1.1 200 OK\r\nX-Back: na\xefve\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok")
+        except Exception as error:
+            failures.append(error)
 
     thread = threading.Thread(target=serve)
     thread.start()
@@ -1320,6 +1370,7 @@ def test_client_writes_and_reads_latin1_header_values_as_single_bytes(tmp_path):
     finally:
         thread.join(scaled(30))
         listener.close()
+    assert not failures, failures
     assert result.code == 0, result.stderr
     assert output_lines(result.stdout) == ["na\u00efve 5"]
     assert b"\r\nX-Name: caf\xe9\r\n" in seen[0], seen

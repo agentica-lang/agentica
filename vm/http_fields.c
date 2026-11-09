@@ -31,20 +31,24 @@ void agc_http_put_text(agc_http_bytes *b, const char *text) { agc_http_put(b, te
 /* A header value as the head holds it: a String head is UTF-8, so a Latin-1
    character (U+0080..U+00FF, obs-text on the wire) stays its UTF-8 form here
    and std/http sends the head as Latin-1, one byte per character. Control
-   characters and anything above U+00FF are refused. */
-static const char *put_value(agc_http_bytes *b, const agc_string *value) {
+   characters and anything above U+00FF are refused. *extra gets the bytes the
+   head holds beyond the wire (one per such character), so the callers measure
+   the line and the block as the parser does, on the wire. */
+static const char *put_value(agc_http_bytes *b, const agc_string *value, size_t *extra) {
+  *extra = 0;
   for (size_t at = 0; at < value->bytes;) {
     size_t start = at;
     uint32_t cp = agc_utf8_next((const uint8_t *)value->data, value->bytes, &at);
     if (cp > 255 || !agc_http_value_byte((uint8_t)cp)) return "header values must be Latin-1 text without control characters";
     agc_http_put(b, value->data + start, at - start);
+    *extra += at - start - 1;
   }
   return NULL;
 }
 
 const char *agc_http_put_headers(agc_vm *vm, agc_http_bytes *b, const agc_list *headers, const char *const *managed,
                                  size_t managed_count, const char *managed_reason, const char *skip, size_t *count) {
-  size_t block = b->len;
+  size_t block = b->len, block_extra = 0;
   agc_list_cursor cursor;
   agc_value item;
   agc_list_cursor_begin(&cursor, headers, 0);
@@ -61,13 +65,15 @@ const char *agc_http_put_headers(agc_vm *vm, agc_http_bytes *b, const agc_list *
     size_t start = b->len;
     agc_http_put(b, name->data, name->bytes);
     agc_http_put_text(b, ": ");
-    const char *bad = put_value(b, value);
+    size_t extra;
+    const char *bad = put_value(b, value, &extra);
     if (bad) return bad;
     agc_http_put_text(b, "\r\n");
-    if (b->len - start > AGC_HTTP_MAX_LINE + 2) return "a header line is too large";
+    block_extra += extra;
+    if (b->len - start - extra > AGC_HTTP_MAX_LINE + 2) return "a header line is too large";
     if (++*count > AGC_HTTP_MAX_HEADERS) return "too many headers";
   }
-  if (b->len - block > AGC_HTTP_MAX_BLOCK) return "headers are too large";
+  if (b->len - block - block_extra > AGC_HTTP_MAX_BLOCK) return "headers are too large";
   return NULL;
 }
 
