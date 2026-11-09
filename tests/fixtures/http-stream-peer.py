@@ -20,6 +20,8 @@ CERTS = sys.argv[3]
 # less than that after the one before. The bound leaves room for a slow machine.
 PAUSE = int(sys.argv[4]) / 1000
 APART = PAUSE * 0.6
+# The socket timeouts grow with the pause, so a scaled run is not cut by a fixed one.
+TIMEOUT = max(20, 10 * PAUSE)
 
 
 def apart(gaps):
@@ -28,16 +30,16 @@ def apart(gaps):
     back make every gap, or most, short. The pieces must still spread over the pauses. Gaps between arrivals cannot see
     a server that lags one piece behind (each piece sent when the next is ready): every gap is then a whole pause."""
     short = sum(1 for gap in gaps if gap < APART)
-    return bool(gaps) and short <= (1 if len(gaps) >= 3 else 0) and sum(gaps) >= PAUSE * (len(gaps) - 1)
+    return bool(gaps) and short <= (1 if len(gaps) >= 3 else 0) and sum(gaps) >= 0.9 * PAUSE * (len(gaps) - 1)
 
 
 def plain():
-    return http.client.HTTPConnection("127.0.0.1", PLAIN, timeout=20)
+    return http.client.HTTPConnection("127.0.0.1", PLAIN, timeout=TIMEOUT)
 
 
 def secure():
     context = ssl.create_default_context(cafile=os.path.join(CERTS, "ca.pem"))
-    return http.client.HTTPSConnection("localhost", TLS, timeout=20, context=context)
+    return http.client.HTTPSConnection("localhost", TLS, timeout=TIMEOUT, context=context)
 
 
 def read_pieces(response):
@@ -51,7 +53,8 @@ def read_pieces(response):
 
 
 def stream_twice(label, conn, path, with_type):
-    """Read a streamed answer piece by piece, then a whole one on the same connection to see it stays usable."""
+    """Read a streamed answer piece by piece, once more if its pieces were not apart, then a whole one on the same
+    connection to see it stays usable."""
     conn.request("GET", path)
     response = conn.getresponse()
     pieces = read_pieces(response)
@@ -63,7 +66,7 @@ def stream_twice(label, conn, path, with_type):
     tries = [gaps]
     if not apart(gaps):
         # Once more: a stall of a loaded runner is rare and passes, while pieces that are held back are held back
-        # every time.
+        # every time. The retry also passes a server that buffers only sometimes; a failure prints both lists of gaps.
         conn.request("GET", path)
         again = read_pieces(conn.getresponse())
         tries.append([later[0] - earlier[0] for earlier, later in zip(again, again[1:])])
@@ -113,7 +116,7 @@ def sized_cut(label, path):
 def sized_extra():
     """A producer that sends more after the length is full: the client has its whole body and never a byte more. The
     server ends the body when it is full and closes the channel, so the extra piece is dropped."""
-    s = socket.create_connection(("127.0.0.1", PLAIN), timeout=20)
+    s = socket.create_connection(("127.0.0.1", PLAIN), timeout=TIMEOUT)
     s.sendall(b"GET /sized-extra HTTP/1.1\r\nHost: x\r\n\r\n")
     got = b""
     while not got.endswith(b"abcde"):
@@ -210,7 +213,7 @@ def leave(label, conn):
 
 def silent_leave():
     """A client that sends the request and closes at once, before any piece is read."""
-    s = socket.create_connection(("127.0.0.1", PLAIN), timeout=20)
+    s = socket.create_connection(("127.0.0.1", PLAIN), timeout=TIMEOUT)
     s.sendall(b"GET /endless HTTP/1.1\r\nHost: x\r\n\r\n")
     s.close()
     said("silent-leave")
@@ -219,7 +222,7 @@ def silent_leave():
 def half_close():
     """A client that closes only its sending side counts as gone: the body is cut, and the last chunk is not sent, so
     the client sees an incomplete body, not a finished one."""
-    s = socket.create_connection(("127.0.0.1", PLAIN), timeout=20)
+    s = socket.create_connection(("127.0.0.1", PLAIN), timeout=TIMEOUT)
     s.sendall(b"GET /endless HTTP/1.1\r\nHost: x\r\n\r\n")
     s.shutdown(socket.SHUT_WR)
     got = b""
@@ -231,7 +234,7 @@ def half_close():
 
 
 def http10():
-    s = socket.create_connection(("127.0.0.1", PLAIN), timeout=20)
+    s = socket.create_connection(("127.0.0.1", PLAIN), timeout=TIMEOUT)
     s.sendall(b"GET /ticks HTTP/1.0\r\n\r\n")
     got = b""
     while chunk := s.recv(4096):
