@@ -44,6 +44,10 @@ bool agc_proc_env_case_blind(void);
    so nothing is read beside it. */
 bool agc_proc_drains(void);
 
+/* True where a child can start in its own process group and a stop signals the whole group (POSIX). Windows has no
+   process groups that a signal reaches: there a child started with `pgroup` is stopped alone. */
+bool agc_proc_groups(void);
+
 /* Returned by agc_proc_read_now when the pipe holds nothing now. */
 #define AGC_PROC_NOTHING INT64_MIN
 
