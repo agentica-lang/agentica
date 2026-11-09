@@ -48,6 +48,18 @@
 #define TRACE_MODE 0600
 #endif
 
+/* make coverage (AGC_COVERAGE): the counters are written by an exit handler, which the _exit of agc_launch_exit skips,
+   so the end of a run writes them first. */
+#if defined(AGC_COVERAGE) && defined(__clang__)
+int __llvm_profile_write_file(void);
+#define COVERAGE_WRITE() ((void)__llvm_profile_write_file())
+#elif defined(AGC_COVERAGE)
+void __gcov_dump(void);
+#define COVERAGE_WRITE() __gcov_dump()
+#else
+#define COVERAGE_WRITE() ((void)0)
+#endif
+
 /* Steps between two samples of the folded profile: a sample walks the stack, so one every 1000 steps keeps its cost to
    a few percent of a profiled run, and a run of a million steps still gets a thousand samples. */
 #define PROFILE_SAMPLE 1000
@@ -255,6 +267,7 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
 void agc_launch_exit(int code) {
 #if defined(__linux__) || defined(__APPLE__)
   sigset_t saved;
+  COVERAGE_WRITE();
   agc_io_block_stop(&saved);
   int sig = agc_io_stop_signal();
   /* The stop signals stay blocked from here, so no handler runs after the state was read; agc_io_die_by unblocks
