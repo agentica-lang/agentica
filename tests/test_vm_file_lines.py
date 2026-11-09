@@ -250,6 +250,38 @@ def test_read_line_on_ordinary_files_decodes_strips_and_reports_end_of_file(tmp_
     assert lines[-1] == "true"
 
 
+COUNT_LINES_PROGRAM = """\
+def main() -> Void
+  file = Result.unwrap!(File.open(System.args()[0], "read", 5000))
+  count = 0
+  last = ""
+  while true
+    case File.read_line(file, 5000)
+      ok(line) ->
+        count += 1
+        last = line
+      error(message) ->
+        if message.starts_with?("filesystem: end of file")
+          break
+        end
+        puts("error #{count}")
+    end
+  end
+  puts("#{count} #{last}")
+  puts(File.read_bytes(file, 4, 5000).unwrap!.size)
+end
+"""
+
+
+def test_read_line_serves_lines_a_chunk_already_holds_across_chunks_and_after_a_bad_line(tmp_path):
+    """Many lines come from one 64 KiB read (no job each), a line that spans two chunks is still whole, a line that is
+    not UTF-8 is an error that consumes it, and the bytes after the last line are none."""
+    body = b"".join(b"line %06d\r\n" % k for k in range(30000))
+    data = body[:100] + b"\xff\n" + body[100:]
+    lines = _ordinary_file_output(tmp_path, data, COUNT_LINES_PROGRAM, "count")
+    assert lines == ["error 7", "30000 line 029999", "0"], lines
+
+
 @pytest.mark.parametrize("data,delivered,ends_ok", (
     (b"a\nb\n", ['"a"', '"b"'], True),
     (b"a\r\nb", ['"a"', '"b"'], True),

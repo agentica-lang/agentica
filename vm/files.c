@@ -1841,9 +1841,32 @@ static agc_value builtin_read_bytes(agc_vm *vm, agc_value *args, uint32_t span) 
   return read_op(vm, args[0], OP_READ_BYTES, (size_t)count, agc_as_int(vm, args[2]));
 }
 
+/* File.read_line: a line that the handle's buffer already holds (the last read took a CHUNK of the file) is returned
+   here, with no job and so no hop to the I/O thread. Taking the handle's lock changes nothing without a job (the
+   lock is held by the job of a call), so a handle that another task is using is served in its turn by blocked(). Only
+   a whole line is taken here; an incomplete one, a line over LIMIT and the end of the file go to the job, which
+   reads more and builds the same errors. */
 static agc_value builtin_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
   if (fs_denied(vm, span)) return error_of(AGC_DENIED_FS);
-  return read_op(vm, args[0], OP_READ_LINE, 0, agc_as_int(vm, args[1]));
+  int64_t timeout = agc_as_int(vm, args[1]);
+  agc_value failure;
+  if (blocked(vm, args[0], &timeout, &failure)) return failure;
+  file_state *st = usable(vm, args[0], true, &failure);
+  if (!st) return failure;
+  line_scan found = scan_line(st, 0, LIMIT + 1, LIMIT, false);
+  if (found.kind == LINE_FOUND) {
+    const uint8_t *data = st->buf + st->start;
+    size_t chars;
+    agc_value result;
+    if (agc_utf8_chars(data, found.len, &chars))
+      result = agc_result_value(true, agc_string_value(agc_small_string(vm, (const char *)data, found.len, chars)));
+    else
+      result = agc_utf8_error(data, found.len);
+    st->start += found.consume;
+    return result;
+  }
+  op *o = call_op(vm, OP_READ_LINE, st);
+  return start(vm, o, args[0], timeout);
 }
 
 /* The buffered output, then `len` bytes of data and an LF when `newline`, in one write job. */
