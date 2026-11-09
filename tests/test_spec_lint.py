@@ -337,11 +337,12 @@ def test_a_chain_of_the_other_kind_is_not_hidden_by_the_chain_around_it(tmp_path
 
 def test_a_nest_of_calls_is_judged_once_from_its_outer_step_and_a_nest_in_a_later_argument_on_its_own(tmp_path):
     """A step is a call of the file's own function or of a module it imports: a builtin around a nest breaks it, and
-    a method of a constant or of a module's constant is no step. A pipe of one step inside a nest is two suggestions,
-    one for each rule."""
+    a method of a constant or of a module's constant, or a variant of an imported module, is no step. A pipe of one
+    step inside a nest is two suggestions, one for each rule."""
     source = (
         'import OP from "op"\n'
         'import Mod from "mod"\n'
+        'import Domain from "domain"\n'
         "\n"
         "def f(text: String) -> String\n"
         "  one = d(c(b(a(text))))\n"
@@ -351,6 +352,8 @@ def test_a_nest_of_calls_is_judged_once_from_its_outer_step_and_a_nest_in_a_late
         "  five = OP.a(OP.b(c(text)))\n"
         "  six = Mod.LIMIT.concat(Mod.LIMIT.concat(c(text)))\n"
         "  seven = d(c(text |> b()))\n"
+        "  eight = Domain.Some(Domain.Wrap(c(text)))\n"
+        "  nine = ROWS.concat(ROWS.concat(c(text)))\n"
         "  return one\n"
         "end\n"
     )

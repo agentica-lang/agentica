@@ -20,15 +20,21 @@ end
 
 ## Whether a pipe could pass the first argument of the call to its function: a plain call with arguments, to a
 ## function of the file or of a module it imports by alias (`f(x)`, `Paths.join(x, y)`), not a builtin (`puts`, `ok`,
-## `List.map`). Any other qualified name is a method of a constant, a type or a value (`ROWS.concat(x)`,
-## `Mod.LIMIT.concat(x)`), or a variant, and its first argument is not its receiver.
+## `List.map`), and not a variant (`Domain.Some(x)`: the member after the alias starts with a capital). Any other
+## qualified name is a method of a constant, a type or a value (`ROWS.concat(x)`, `Mod.LIMIT.concat(x)`), or a
+## variant, and its first argument is not its receiver.
 export def step?(node: Ast.Call, aliases: Set[String]) -> Bool
   if node.piped or node.args.size == 0 or ENTRIES.has_key?(node.name)
     return false
   end
 
   parts = node.name.split(".")
-  return parts.size == 1 or (parts.size == 2 and aliases.include?(parts[0]))
+  if parts.size == 2
+    member = parts[1]
+    return aliases.include?(parts[0]) and member.slice(0, 1) != member.slice(0, 1).upcase
+  end
+
+  return parts.size == 1
 end
 
 def binary(file: String, node: Ast.Binary, chained: Bool) -> List[Problems.Problem]
