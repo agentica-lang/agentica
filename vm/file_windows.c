@@ -421,7 +421,7 @@ done:
   return result;
 }
 
-int agc_fs_remove_tree(const char *path, char **failed) {
+int agc_fs_remove_tree(const char *path, CC_OWNS_OUT char **failed) {
   if (failed) *failed = NULL;
   wchar_t *wide = native_path(path);
   if (!wide) return errno;

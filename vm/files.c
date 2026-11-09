@@ -927,7 +927,11 @@ static void work_remove(op *o) {
   }
   char *failed;
   rc = agc_remove_tree(o->path, &failed);
-  if (rc == 0 || rc == ENOENT) return;
+  /* An entry inside the tree that went away (ENOENT below the root) still sets the path; the tree is gone anyway. */
+  if (rc == 0 || rc == ENOENT) {
+    free(failed);
+    return;
+  }
   if (rc == AGC_TREE_TOO_DEEP) {
     fail_op(o, FS_TREE_DEEP, 0);
   } else if (rc == AGC_TREE_REFUSED) {

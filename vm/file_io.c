@@ -183,7 +183,7 @@ static size_t folder_length(const char *path) {
   return cut;
 }
 
-int agc_fs_open_beside(const char *path, char **name) {
+int agc_fs_open_beside(const char *path, CC_OWNS_OUT char **name) {
   static atomic_uint counter;
   *name = NULL;
   if (!path || !*path) {

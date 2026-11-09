@@ -46,7 +46,7 @@ int agc_fs_unlink(const char *path);
 /* A new file in the folder of PATH, named .agc-<pid>-<n>.tmp, opened for writing (exclusive, no link followed) with
    mode 0600. *NAME is the malloc'd name, also on failure (the last name tried, for the error text; NULL only when the
    name could not be made); -1 with errno on failure. */
-int agc_fs_open_beside(const char *path, char **name);
+int agc_fs_open_beside(const char *path, CC_OWNS_OUT char **name);
 int agc_fs_fsync(int fd);
 /* Flushes the folder of PATH to the disk, so a rename in it lasts; best effort, nothing on Windows. */
 void agc_fs_sync_folder(const char *path);
@@ -58,7 +58,7 @@ int agc_fs_replace(const char *from, const char *to);
 #define AGC_FS_REMOVE_TOO_DEEP (-1)
 #define AGC_FS_REMOVE_REFUSED (-2)
 int agc_fs_rename_noreplace(const char *from, const char *to);
-int agc_fs_remove_tree(const char *path, char **failed);
+int agc_fs_remove_tree(const char *path, CC_OWNS_OUT char **failed);
 #endif
 int agc_fs_list(const char *path, char **names, size_t *size, size_t *count);
 CC_OWNS char *agc_fs_cwd(void);
