@@ -121,6 +121,28 @@ new version and its release link opens the release.
 - CI and Pages on master are green.
 - Report the release URL, the archives, the notes and anything skipped.
 
+## 6. Patch releases
+
+A patch `X.Y.Z` (Z > 0) holds bug fixes only: no feature, no breaking change.
+A fix for a flaky test is not patch material, since it does not change the
+binary.
+
+- When `X.Y.0` is published, create the milestone `X.Y.1`. A bug that users
+  see, or a regression of `X.Y`, gets the `bug` label and that milestone.
+- Cut the patch for a serious bug or a regression at once; otherwise when
+  about 3 to 5 fixes have merged.
+- Each fix merges on master first, with a normal PR.
+- The patch is built from the last tag, not from master, which has unreleased
+  features. Create `release-X.Y` from the tag `X.Y.<Z-1>` if it does not exist
+  (pushing a new branch is outward-facing, as a tag is). Then take each fix
+  with `git cherry-pick -x`, on a branch `release/X.Y.Z` from `release-X.Y`.
+- That branch is the version bump PR (§1), with base `release-X.Y`. Its body
+  lists each fix with its master PR. Tag its merge commit (§2), then follow
+  §3 to §5.
+- Add the `[X.Y.Z]` section and its compare link to the CHANGELOG of master
+  too, in a small PR, so master keeps the history of every release.
+- Then create the milestone `X.Y.<Z+1>`.
+
 ## Gotchas
 
 - Signing and notarization (Apple Developer ID, Windows Authenticode) are
