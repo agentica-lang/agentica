@@ -389,7 +389,7 @@ end
 ## end: the code (1000 to 1003 and 1007 to 1014 are the registered codes, 3000 to 4999 are for programs) and a reason
 ## of at most 123 bytes. It is always the last message the handler receives, and when the connection ended with no
 ## close frame (the peer left, a timeout) its code is 1006. `Prepared` is a text or binary message already framed by
-## `prepare`, to send one message on many sockets with no copy for each; the server never receives one.
+## `prepare`, to send one message on many sockets framed once, not once per socket; the server never receives one.
 export enum Message
   Text(String)
   Binary(Bytes)
@@ -931,9 +931,9 @@ export def accept_websocket(
 end
 
 ## Frames a `Text` or `Binary` message once, for a broadcast: the `Prepared` message it returns is sent on any
-## number of `outgoing` channels, and each writer sends its bytes as they are, where a `Text` would be copied into a
-## frame for every socket. The peer receives the same frame as for the message itself. Any other message is returned
-## as it is.
+## number of `outgoing` channels, and each writer sends its bytes as they are, where a `Text` would be framed again
+## for every socket. The peer receives the same frame as for the message itself. Any other message is returned as it
+## is.
 export def prepare(message: Message) -> Message
   case message
     Message.Text(text) -> return Message.Prepared(WebSocketWire.text_frame(text))
@@ -2608,6 +2608,7 @@ def frame_of(message: Message) -> Bytes
       end
 
       # Bytes that are no frame `prepare` makes are the handler's mistake, as a close code that cannot be sent is.
+      IO.warn("http: websocket Prepared message is not a frame of HTTP.prepare: closing with 1011")
       return WebSocketWire.close_frame(WebSocketWire.CLOSE_INTERNAL, "")
   end
 end

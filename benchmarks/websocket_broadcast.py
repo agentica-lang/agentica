@@ -3,13 +3,16 @@
 garbage collector's time and the steps of the server from its profile report, and the time the clients took.
 
 Run by hand on an idle machine: python3 benchmarks/websocket_broadcast.py [--subscribers 1000] [--messages 100].
-The clients are plain sockets of this script (the standard library only); they read the frames and count them.
+The clients are plain sockets of this script (the standard library only); they read the frames and count them. Each
+subscriber is a descriptor in both processes, so the script raises its soft limit of open files (the server inherits
+it); where the hard limit is lower than the subscribers need, raise it first (ulimit -Hn).
 """
 
 import argparse
 import base64
 import os
 import re
+import resource
 import selectors
 import socket
 import subprocess
@@ -22,13 +25,14 @@ ROOT = Path(__file__).resolve().parent.parent
 VM = ROOT / "dist" / "agentica"
 
 # Every session waits for its peer's "go", then sends the same message COUNT times: PLAIN, a Message.Text, or
-# PREPARED, the frame HTTP.prepare(PLAIN) gives, written out because a constant cannot call a function. The constants
-# are shared by all sessions, as a broadcast shares its message.
+# PREPARED, the frame HTTP.prepare(PLAIN) gives, written out because a constant cannot call a function (main checks
+# that it is that frame). The constants are shared by all sessions, as a broadcast shares its message.
 SERVER = """import HTTP from "std/http"
 
 TEXT = "x" * 1000
 PLAIN = HTTP.Message.Text(TEXT)
-PREPARED = HTTP.Message.Prepared(Bytes.concat([Bytes.from_list([129, 126, 3, 232]).unwrap!, TEXT.bytes]))
+FRAME = Bytes.concat([Bytes.from_list([129, 126, 3, 232]).unwrap!, TEXT.bytes])
+PREPARED = HTTP.Message.Prepared(FRAME)
 COUNT = MESSAGES
 
 def send_all(ws: HTTP.WebSocket, message: HTTP.Message) -> Result[Void]
@@ -66,6 +70,11 @@ def app(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
 end
 
 def main() -> Void
+  if HTTP.prepare(PLAIN) != PREPARED
+    IO.warn("PREPARED is not the frame HTTP.prepare gives")
+    System.exit(1)
+  end
+
   subscribers = System.args()[0].to_i!
   options = HttpServerOptions(max_connections: subscribers + 16, idle_timeout_ms: 600000, request_timeout_ms: 600000)
   server = HTTP.serve("127.0.0.1", 0, &app, options).unwrap!
@@ -151,6 +160,16 @@ def run(program, mode, subscribers, messages):
           f"gc_ms={fields['gc_ms']} collections={fields['collections']} steps={fields['steps']}")
 
 
+def raise_open_files(wanted):
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    if soft == resource.RLIM_INFINITY or soft >= wanted:
+        return
+    top = wanted if hard == resource.RLIM_INFINITY else min(wanted, hard)
+    resource.setrlimit(resource.RLIMIT_NOFILE, (top, hard))
+    if top < wanted:
+        sys.exit(f"{wanted} open files are needed and the hard limit is {hard}: raise it (ulimit -Hn)")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--subscribers", type=int, default=1000)
@@ -158,6 +177,7 @@ def main():
     options = parser.parse_args()
     if not VM.exists():
         sys.exit("build dist/agentica first (make)")
+    raise_open_files(options.subscribers * 2 + 64)
     with tempfile.TemporaryDirectory() as folder:
         program = Path(folder) / "broadcast.agc"
         program.write_text(SERVER.replace("MESSAGES", str(options.messages)), encoding="utf-8")

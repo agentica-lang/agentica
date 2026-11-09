@@ -348,17 +348,17 @@ export def data_frame?(frame: Bytes) -> Bool
 
   length = frame.at(1)
   if length < 126
-    return frame.size == 2 + length
+    return frame.size - 2 == length
   end
 
   if length == 126
     size = Binary.read_u16_be(frame, 2).unwrap_or(0)
-    return size >= 126 and frame.size == 4 + size
+    return size >= 126 and frame.size - 4 == size
   end
 
   if length == 127
     size = Binary.read_i64_be(frame, 2).unwrap_or(-1)
-    return size >= 65536 and frame.size == 10 + size
+    return size >= 65536 and frame.size - 10 == size
   end
 
   return false
