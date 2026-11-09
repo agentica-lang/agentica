@@ -355,6 +355,10 @@ end
 
 # A bare type name that is a type parameter in an expression (`T`) is no alias.
 def typed_name(found: List[Written], node: Ast.TypeName, parameters: List[String]) -> List[Written]
+  if node.args.size > 0
+    return of_type(found, Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span), parameters)
+  end
+
   if !node.name.contains?(".") and parameters.include?(node.name)
     return found
   end

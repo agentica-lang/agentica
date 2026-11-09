@@ -1247,7 +1247,7 @@ def parse_qualified_member(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprA
     # Alias.NAME.x on an exported constant, or Enum.Variant.x: the postfix loop reads the field or method; the linker
     # decides what A.B is. A type-name after the dot is a variant (Alias.Enum.Variant).
     return expr_at(
-      Ast.Expr.TypeName(Ast.TypeName(id: ids, name: qualified, span: Base.span_from(e, pos, cursor))),
+      Ast.Expr.TypeName(Ast.TypeName(id: ids, name: qualified, args: [], span: Base.span_from(e, pos, cursor))),
       cursor,
       ids,
     )
@@ -1292,7 +1292,7 @@ def parse_qualified_member(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprA
   end
 
   return expr_at(
-    Ast.Expr.TypeName(Ast.TypeName(id: ids, name: qualified, span: Base.span_from(e, pos, cursor))),
+    Ast.Expr.TypeName(Ast.TypeName(id: ids, name: qualified, args: [], span: Base.span_from(e, pos, cursor))),
     cursor,
     ids,
   )
@@ -1351,6 +1351,7 @@ end
 def parse_construct(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   name = e.tokens[pos]
   after = pos + 1
+  bare = Ast.Expr.TypeName(Ast.TypeName(id: ids, name: name.lexeme, args: [], span: name.span))
   if e.tokens[after].kind == "left-paren"
     named = try parse_named_arguments(e, after + 1, ids)
     close = try Base.expect(e, named.pos, "right-paren", "\")\"", false)
@@ -1359,7 +1360,7 @@ def parse_construct(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
 
   if e.tokens[after].kind == "dot"
     if updates_constant?(e, name, after)
-      return expr_at(Ast.Expr.TypeName(Ast.TypeName(id: ids, name: name.lexeme, span: name.span)), after, ids)
+      return expr_at(bare, after, ids)
     end
 
     if e.tokens[after + 1].kind == "type-name"
@@ -1369,7 +1370,15 @@ def parse_construct(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     return parse_module_call(e, pos, ids)
   end
 
-  return expr_at(Ast.Expr.TypeName(Ast.TypeName(id: ids, name: name.lexeme, span: name.span)), after, ids)
+  if e.tokens[after].kind == "left-bracket" and (name.lexeme == "List" or name.lexeme == "Map")
+    # List[T] and Map[K, V] are no values, so the bracket holds their type arguments (a JSON.decode target), never an
+    # index.
+    type = try Base.parse_type(e, pos, ids)
+    node = Ast.TypeName(id: type.node.id, name: name.lexeme, args: type.node.args, span: type.node.span)
+    return ok(Base.ExprAt(node: Ast.Expr.TypeName(node), pos: type.pos, ids: type.ids))
+  end
+
+  return expr_at(bare, after, ids)
 end
 
 # A call keeps parenthesized: |> accepts only calls that were written with parentheses.

@@ -88,10 +88,12 @@ the checker enforces:
 
 - `JSON.decode(source, T)` and `JSON.schema(T)` take a named struct or enum
   type, not a value, and so does `T.codec`; bare type names are valid only for
-  these. Fields and payloads may be Int, Float, Bool, String, lists, String-keyed
-  maps, nested or recursive structs and enums, and `Optional` of those (and
-  `JsonField`, for a struct field); any other nested type, a generic struct or
-  enum instance included, is `CHECK-NOT-DECODABLE`.
+  these. `JSON.decode` also takes `List[T]` and `Map[String, T]` of such a
+  type (or of a field type below); `schema` and `codec` refuse them
+  (`CHECK-TYPE-MISMATCH`). Fields and payloads may be Int, Float, Bool,
+  String, lists, String-keyed maps, nested or recursive structs and enums, and
+  `Optional` of those (and `JsonField`, for a struct field); any other nested
+  type, a generic struct or enum instance included, is `CHECK-NOT-DECODABLE`.
 - `JSON.encode` and `JSON.from` accept Int, Float, Bool, String, Nil (as
   `null`), Json, lists, String-keyed maps, `Optional`, structs and user enums of
   those, whose struct fields may also be `JsonField`. An instance of a generic

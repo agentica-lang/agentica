@@ -48,7 +48,7 @@ JSON.decode(s: String, type: T) -> Result[T]
 JSON.decode(json: Json, type: T) -> Result[T]
 ```
 
-Reads JSON into a struct or an [enum](#enums). The first argument is JSON text or a `Json` value, the second the type's name: a named struct or enum type, not a value. A bare type name is valid only for `decode`, `schema` and `codec`. Fields may be `Int`, `Float`, `Bool`, `String`, lists, `String`-keyed maps, nested or recursive structs and enums, and `Optional` and `JsonField` of those; any other nested type, a generic struct or enum instance included, is `CHECK-NOT-DECODABLE`. Malformed JSON, missing fields, wrong types, `Int` overflow and non-finite numbers give an error Result with a field or index path. Extra keys are ignored. A JSON integer may decode as a `Float`; a decimal or an exponent never decodes as an `Int`. Decoded maps are in sorted key order. A `Json` value is read as it is, with the same rules and errors as its text, so there is no need to write it out with `JSON.encode` first.
+Reads JSON into a struct or an [enum](#enums), or into a `List[T]` or `Map[String, T]` of such a type. The first argument is JSON text or a `Json` value, the second the type: a named struct or enum type, or `List[T]` or `Map[String, T]` written as a type, not a value. A bare type is valid only for `decode`, `schema` and `codec`, and `schema` and `codec` take only a named type. Fields may be `Int`, `Float`, `Bool`, `String`, lists, `String`-keyed maps, nested or recursive structs and enums, and `Optional` and `JsonField` of those; any other nested type, a generic struct or enum instance included, is `CHECK-NOT-DECODABLE`. Malformed JSON, missing fields, wrong types, `Int` overflow and non-finite numbers give an error Result with a field or index path. Extra keys are ignored. A JSON integer may decode as a `Float`; a decimal or an exponent never decodes as an `Int`. Decoded maps are in sorted key order. A `Json` value is read as it is, with the same rules and errors as its text, so there is no need to write it out with `JSON.encode` first.
 
 ```agentica
 struct User
@@ -90,6 +90,26 @@ end
 ```output
 ok(Point(x: 1, y: 2))
 error("y: expected required field")
+```
+
+A top-level JSON array or object of items decodes in one call. An error path starts at the index or key:
+
+```agentica
+struct Point
+  x: Int
+  y: Int
+end
+
+def main() -> Void
+  points = JSON.decode("[{\"x\": 1, \"y\": 2}, {\"x\": 3, \"y\": 4}]", List[Point]).unwrap!
+  puts(points)
+  puts(JSON.decode("{\"a\": {\"x\": 5}}", Map[String, Point]))
+end
+```
+
+```output
+[Point(x: 1, y: 2), Point(x: 3, y: 4)]
+error("[\"a\"].y: expected required field")
 ```
 
 ## JSON.schema

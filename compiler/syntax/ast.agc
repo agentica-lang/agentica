@@ -626,10 +626,12 @@ export struct Binary
   span: Source.Span
 end
 
-## A type name in expression position: Foo or Mod.Foo.
+## A type name in expression position: Foo or Mod.Foo, or List[T] and Map[K, V] as a JSON.decode target, whose type
+## arguments are in args (empty for any other name).
 export struct TypeName
   id: Int
   name: String
+  args: List[TypeRef]
   span: Source.Span
 end
 
