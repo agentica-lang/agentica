@@ -960,12 +960,13 @@ static CC_OWNS char *candidate(agc_vm *vm, const char *dir, size_t dir_len, cons
   memcpy(joined->data, dir, dir_len);
   joined->data[dir_len] = '/';
   memcpy(joined->data + dir_len + 1, name->data, name->bytes);
-  return agc_host_path(vm, joined);
+  return agc_host_path_try(vm, joined);
 }
 
-/* Takes the malloc'd path; returns it, or a copy with a suffix added, when a
+/* Takes the malloc'd path (NULL for none); returns it, or a copy with a suffix added, when a
    file that may run is there (process_os.h), else NULL. */
 static CC_OWNS char *executable(CC_OWNS char *path) {
+  if (!path) return NULL;
   if (agc_proc_suffix_ok(path)) {
     if (runnable(path)) return path;
     free(path);
@@ -990,7 +991,8 @@ static CC_OWNS char *executable(CC_OWNS char *path) {
 
 static CC_OWNS char *resolve(agc_vm *vm, const agc_string *command) {
   if (!agc_proc_name_ok(command->data, command->bytes)) return NULL;
-  if (agc_proc_is_path(command->data, command->bytes)) return executable(agc_host_path(vm, command));
+  if (agc_proc_is_path(command->data, command->bytes)) return executable(agc_host_path_try(vm, command));
+  /* candidate never raises (agc_host_path_try), so the loop cannot jump out with SEARCH held. */
   char *search = agc_system_env("PATH");
   char *found = NULL;
   const char *at = search, *dir;
@@ -1227,9 +1229,10 @@ static const char *env_problem(agc_vm *vm, const agc_map *env, const env_pair **
 static CC_OWNS char *child_dir(agc_vm *vm, const agc_string *dir, bool *found) {
   *found = true;
   if (!dir || (dir->bytes == 1 && dir->data[0] == '.')) return NULL;
-  char *path = agc_host_path(vm, dir);
+  /* No raise here: spawn_child holds the resolved command. */
+  char *path = agc_host_path_try(vm, dir);
   agc_fs_info info;
-  *found = agc_fs_stat(path, &info, true) == 0 && AGC_FS_ISDIR(info.mode);
+  *found = path && agc_fs_stat(path, &info, true) == 0 && AGC_FS_ISDIR(info.mode);
   return path;
 }
 

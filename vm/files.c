@@ -305,7 +305,7 @@ static const agc_string *cwd_of(agc_vm *vm) {
   return vm->rt->cwd;
 }
 
-char *agc_host_path(agc_vm *vm, const agc_string *s) {
+char *agc_host_path_try(agc_vm *vm, const agc_string *s) {
 #ifdef _WIN32
   (void)vm;
   char *given = agc_cstr(s);
@@ -323,10 +323,16 @@ char *agc_host_path(agc_vm *vm, const agc_string *s) {
       put(&t, from->data + k, 1);
     }
   }
-  char *path = agc_cstr(agc_make_string(t.data, t.len, 0));
-  if (!path) agc_fail(vm, "RUNTIME-INTERNAL", "a path contains NUL", 0);
-  return path;
+  return agc_cstr(agc_make_string(t.data, t.len, 0));
 #endif
+}
+
+char *agc_host_path(agc_vm *vm, const agc_string *s) {
+  char *path = agc_host_path_try(vm, s);
+#ifndef _WIN32
+  if (!path) agc_fail(vm, "RUNTIME-INTERNAL", "a path contains NUL", 0);
+#endif
+  return path;
 }
 
 static op *new_op(agc_vm *vm, op_kind kind) {

@@ -64,8 +64,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   `net.alpn`, for `TLS.alpn`.
 - `vm/tls_context.c`: `TLS.client_context`/`TLS.server_context` build a
   `TlsContext` (a refcounted `agc_tls_config`, freed by a GC finalizer run on
-  demand) in one pool job; `agc_tls_context_take` checks the role
-  (`RUNTIME-TLS-CONTEXT-ROLE`) and takes a count.
+  demand) in one pool job; `agc_tls_context_check` checks the role
+  (`RUNTIME-TLS-CONTEXT-ROLE`) before the host's name is copied, and the socket
+  or listener takes a count with `agc_tls_config_ref`.
 - A TLS socket or listener is the same `net` with `secure` set. `TLS.connect`
   and `TLS.listen` take a context's config and connect or listen as TCP does.
   The read callback feeds ciphertext to the session, runs the handshake, and
