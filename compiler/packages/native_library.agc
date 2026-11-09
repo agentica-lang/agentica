@@ -104,7 +104,8 @@ end
 
 ## What a Build target means once a file uses it: native/ is walked (a missing source or a link there is the packed
 ## failure, even for `check`), then the library the Workspace built (or found built), the name as written when the
-## command does not build (`check`: the program is not run), or the packed failure.
+## command does not build (`check`: the program is not run), the packed failure, or, for an optional module that could
+## not be built, a library that does not open (NativeBuild.unbuilt_path).
 export def build_target(workspace: Workspace.Workspace, request: Workspace.BuildRequest, name: String) -> Target
   listed = NativeBuild.listed(workspace, request)
   if !listed.ok?
@@ -115,6 +116,7 @@ export def build_target(workspace: Workspace.Workspace, request: Workspace.Build
     Workspace.Built.Library(path) -> return Target.File(path)
     Workspace.Built.Skipped -> return Target.System(name)
     Workspace.Built.Failed(packed) -> return Target.Unusable(packed)
+    Workspace.Built.Unbuilt(_) -> return Target.File(NativeBuild.unbuilt_path(request))
   end
 end
 
@@ -132,7 +134,7 @@ export def build_all(
   for library in manifest.natives
     case library.build
       some(build) ->
-        request = NativeBuild.request(library.name, build, root, os, manifest.file, cache_root, "")
+        request = NativeBuild.request(library.name, build, root, os, manifest.file, cache_root, "", library.optional)
         case build_target(workspace, request, library.name)
           Target.Unusable(packed) -> return error(packed)
           _ -> next
@@ -206,7 +208,8 @@ def target_of(
   pinned: String,
 ) -> Target
   if buildable and library.build.some?
-    request = NativeBuild.request(library.name, library.build.unwrap!, root, os, manifest.file, cache_root, pinned)
+    build = library.build.unwrap!
+    request = NativeBuild.request(library.name, build, root, os, manifest.file, cache_root, pinned, library.optional)
     return Target.Build(request)
   end
 

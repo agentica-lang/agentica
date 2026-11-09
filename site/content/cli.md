@@ -45,7 +45,7 @@ expected Int, found String
 
 - Exit code `1`: the program has an error. Exit code `2`: a bad command or an unreadable file.
 - Codes start with `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-` or `LINT-` (the suggestions of [`lint`](#suggest-style-changes)). A runtime error also prints the call stack. See [Diagnostics](/reference/diagnostics/).
-- `--ai` and `--json` print the same error for tools: `{"code":"CHECK-TYPE-MISMATCH","file":"bad.agc","range":{...},...}`.
+- `--ai` and `--json` print the same error for tools: `{"code":"CHECK-TYPE-MISMATCH","file":"bad.agc","range":{...},...}`. A warning, which is not an error (`PKG-NATIVE-UNBUILT`), is a JSON object with `"warning": true`, or an `--ai` block that starts with `warning`.
 
 ## Suggest style changes
 
@@ -69,6 +69,7 @@ lint: 1 suggestion in 1 of 12 files
 | `LINT-NEGATED-ELSE` | the positive case first, not `if not x` with an `else` |
 | `LINT-BOOL-COMPARE` | `if done`, not `if done == true` |
 | `LINT-SINGLE-PIPE` | a plain call, not `x \|> f()` with one step |
+| `LINT-NESTED-CALL` | a pipe for three calls nested in first position, `h(g(f(x)))`, when the two outer ones are functions of the file or of a module it imports, not builtins; a `try` stays on its step (`\|> try h()`) |
 | `LINT-TO-S-CONCAT` | interpolation, not `"n=" + n.to_s` |
 | `LINT-STRING-APPEND-IN-LOOP` | `push` and one `join`, not `s = s + piece` in a `for` or `while` loop, which copies the text on every pass |
 
