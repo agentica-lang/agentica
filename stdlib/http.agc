@@ -668,7 +668,7 @@ export def download(
   end
 
   socket = try connect_download(pool, via, deadline)
-  case TCP.send(socket, head, try time_left(socket, deadline))
+  case TCP.send_bytes(socket, head_bytes(head), try time_left(socket, deadline))
     ok(_) -> return finish_download(socket, path, options, deadline, denied)
     error(message) ->
       TCP.close(socket)
@@ -1696,7 +1696,7 @@ end
 # The head sent, the body after it, and the response head read (a HEAD request has no body in its answer).
 def sent_request(conn: Connection, head: String, head_only: Bool, body: Bytes) -> Result[HttpWire.Response]
   deadline = Time.monotonic_ms() + conn.options.timeout_ms
-  try TCP.send(conn.socket, head, try time_left(conn.socket, deadline))
+  try TCP.send_bytes(conn.socket, head_bytes(head), try time_left(conn.socket, deadline))
   at = 0
   while at < body.size
     piece = body.slice(at, smaller(SEND_BYTES, body.size - at))
@@ -1914,7 +1914,7 @@ def uploaded(
   # A failure to write is not the end: a server that refused the upload (a 413) answers and closes, and its answer is
   # waiting in the input. It is returned when it can be read; else the failure is.
   failed = ""
-  case TCP.send(conn.socket, stream_head(head, length), timeout)
+  case TCP.send_bytes(conn.socket, head_bytes(stream_head(head, length)), timeout)
     ok(_) -> failed = try upload_pieces(conn.socket, body, length, timeout)
     error(message) -> failed = "http: #{message}"
   end
@@ -3270,9 +3270,9 @@ def send_whole(socket: Socket, incoming: Incoming, reply: HttpWire.Reply, data: 
   head = String.replace(reply.head, "\r\nContent-Length: 0\r\n", "\r\nContent-Length: #{data.size}\r\n")
   sent = ok()
   if incoming.request.method == "HEAD" or data.empty?
-    sent = TCP.send(socket, head, timeout)
+    sent = TCP.send_bytes(socket, head_bytes(head), timeout)
   else
-    sent = send_all(socket, head.bytes + data, timeout)
+    sent = send_all(socket, head_bytes(head) + data, timeout)
   end
   if not Result.ok?(sent)
     return Sent(keep: false, rest: NO_BYTES)
@@ -3320,6 +3320,14 @@ def take_ready(body: Channel[Bytes]) -> Ready
   return Ready(pieces: pieces, ended: ended)
 end
 
+# The bytes of an encoded head. The head is a String of characters up to U+00FF (a header value is Latin-1), so each
+# character is one byte on the wire and a value with `é` goes out as the single byte 0xE9, as HTTP/1.1 allows.
+# `unwrap!` cannot fail: encode_request and encode_response refuse any header value above U+00FF, and the rest of
+# the head (method, target, host, status line, names) is ASCII.
+def head_bytes(head: String) -> Bytes
+  return head.encode("latin-1").unwrap!
+end
+
 # The encoded head says Content-Length: 0 (the body there is empty): a stream with no known length says chunked, and
 # one with a length says it.
 def stream_head(head: String, length: Int) -> String
@@ -3345,7 +3353,7 @@ def stream_out(
   options: HttpServerOptions,
 ) -> Sent
   timeout = options.request_timeout_ms
-  if not Result.ok?(TCP.send(socket, stream_head(reply.head, length), timeout))
+  if not Result.ok?(TCP.send_bytes(socket, head_bytes(stream_head(reply.head, length)), timeout))
     body.close
     return Sent(keep: false, rest: NO_BYTES)
   end
@@ -3588,9 +3596,9 @@ def send_response(
     body = NO_BYTES
   end
   if body.size <= SMALL_BODY
-    try send_all(socket, reply.head.bytes + body, timeout)
+    try send_all(socket, head_bytes(reply.head) + body, timeout)
   else
-    try TCP.send(socket, reply.head, timeout)
+    try TCP.send_bytes(socket, head_bytes(reply.head), timeout)
     try send_all(socket, body, try time_left(socket, deadline))
   end
   if reply.closes
@@ -3922,7 +3930,7 @@ def exchange(answer: Pending, reused: Bool) -> Attempt
     return Attempt(answer: error(TIMED_OUT), kept: false, retry: false)
   end
   if job.body.size <= SMALL_BODY
-    sent = send_all(socket, job.head.bytes + job.body, left)
+    sent = send_all(socket, head_bytes(job.head) + job.body, left)
     return finish_exchange(answer, read_response(answer), sent, reused)
   end
   writer = Task.spawn(&write_request, answer)
@@ -3949,7 +3957,7 @@ def write_request(answer: Pending) -> Result[Void]
   if left <= 0
     return error(TIMED_OUT)
   end
-  return send_all(answer.socket, answer.job.head.bytes + answer.job.body, left)
+  return send_all(answer.socket, head_bytes(answer.job.head) + answer.job.body, left)
 end
 
 # A failure before any byte of the response (the end of input, a read or a write error) is retried on a reused

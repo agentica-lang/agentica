@@ -231,7 +231,9 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   or a response nobody asked for, and the next call must not read them; an
   input that has already ended (`ended`: the end of input, a TCP FIN under TLS,
   or a read error) would fail the next call. Header names are lowercased and
-  values are Latin-1.
+  values are Latin-1: `encode_request` and `encode_response` keep a value's
+  characters (up to U+00FF, no control characters) in the head String, and
+  std/http sends the head as Latin-1, one byte per character (obs-text).
 - **Over TLS, a close-delimited body must end with `close_notify`.** tcp.c
   records whether the TLS layer closed before the TCP FIN, and `clean_eof?`
   reads it after the end of input. A bare FIN gives `http: truncated HTTP body`.
