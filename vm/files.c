@@ -73,11 +73,11 @@ typedef struct {
 typedef struct {
   op_kind kind;
   const agc_runtime *rt;
-  char *path, *to;
+  CC_OWNS char *path, *to;
   file_state *st;
-  uint8_t *in;
+  CC_OWNS uint8_t *in;
   size_t in_len;
-  uint8_t *out;
+  CC_OWNS uint8_t *out;
   size_t out_len, out_cap, count, fail_at;
   fs_status status;
   int err, fd;
@@ -874,8 +874,8 @@ static void work_real(op *o) {
     fail_op(o, FS_RESOLVE, errno);
     return;
   }
-  o->out = (uint8_t *)resolved;
   o->out_len = strlen(resolved);
+  o->out = (uint8_t *)resolved;
 }
 
 /* Exactly one directory, owner only: an existing path is the caller's error, never a success. */

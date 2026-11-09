@@ -60,8 +60,8 @@ typedef struct {
 /* What a spawn hands to the I/O thread: malloc'd strings, no VM values. */
 struct launch {
   guard *g;
-  char **argv, **env;
-  char *cwd;
+  CC_OWNS char **argv, **env;
+  CC_OWNS char *cwd;
   size_t args;
   bool channel;
 };
@@ -952,7 +952,7 @@ static bool runnable(const char *path) {
   return agc_fs_stat(path, &info, true) == 0 && !AGC_FS_ISDIR(info.mode);
 }
 
-static char *candidate(agc_vm *vm, const char *dir, size_t dir_len, const agc_string *name) {
+static CC_OWNS char *candidate(agc_vm *vm, const char *dir, size_t dir_len, const agc_string *name) {
   size_t len = agc_size_add(agc_size_add(dir_len, 1), name->bytes);
   agc_string *joined = agc_new_string(len, 0);
   memcpy(joined->data, dir, dir_len);
@@ -963,7 +963,7 @@ static char *candidate(agc_vm *vm, const char *dir, size_t dir_len, const agc_st
 
 /* Takes the malloc'd path; returns it, or a copy with a suffix added, when a
    file that may run is there (process_os.h), else NULL. */
-static char *executable(char *path) {
+static CC_OWNS char *executable(CC_OWNS char *path) {
   if (agc_proc_suffix_ok(path)) {
     if (runnable(path)) return path;
     free(path);
@@ -986,7 +986,7 @@ static char *executable(char *path) {
   return NULL;
 }
 
-static char *resolve(agc_vm *vm, const agc_string *command) {
+static CC_OWNS char *resolve(agc_vm *vm, const agc_string *command) {
   if (!agc_proc_name_ok(command->data, command->bytes)) return NULL;
   if (agc_proc_is_path(command->data, command->bytes)) return executable(agc_host_path(vm, command));
   char *search = agc_system_env("PATH");
@@ -998,8 +998,9 @@ static char *resolve(agc_vm *vm, const agc_string *command) {
   return found;
 }
 
-static char **child_args(agc_vm *vm, char *path, const agc_list *list) {
-  char **argv = calloc(agc_size_add(agc_list_len(list), 2), sizeof(char *));
+// cchecker: ignore CC-OWN-LEAK: path and each copy go into the array that is returned
+static CC_OWNS char **child_args(agc_vm *vm, CC_OWNS char *path, const agc_list *list) {
+  CC_OWNS char **argv = calloc(agc_size_add(agc_list_len(list), 2), sizeof(char *));
   if (!argv) agc_out_of_memory();
   argv[0] = path;
   agc_list_cursor cursor;
@@ -1032,7 +1033,7 @@ static bool metrics_env(const char *name) {
 }
 
 /* "NAME=VALUE" in malloc memory. */
-static char *env_entry(const char *name, size_t name_size, const char *value, size_t value_size) {
+static CC_OWNS char *env_entry(const char *name, size_t name_size, const char *value, size_t value_size) {
   char *entry = malloc(agc_size_add(agc_size_add(name_size, value_size), 2));
   if (!entry) agc_out_of_memory();
   memcpy(entry, name, name_size);
@@ -1053,11 +1054,12 @@ static bool env_overridden(const char *host_name, const env_pair *pairs, size_t 
 /* The environment of a child: the VM's own, minus the entries the VM owns and the names of `pairs` (the `env` map as
    env_problem checked it), plus those pairs; `channel` is the value of AGENTICA_CHANNEL when the child gets a channel.
    Nothing here can fail but the allocation, so no malloc'd entry is lost to an agc_fail. */
-static char **child_env(bool drop_uring, const char *channel, const env_pair *pairs, size_t added) {
+// cchecker: ignore CC-OWN-LEAK: each entry goes into the array that is returned
+static CC_OWNS char **child_env(bool drop_uring, const char *channel, const env_pair *pairs, size_t added) {
   uv_env_item_t *host = NULL;
   int count = 0;
   if (uv_os_environ(&host, &count) != 0) return NULL;
-  char **env = calloc(agc_size_add(agc_size_add((size_t)count, added), 2), sizeof(char *));
+  CC_OWNS char **env = calloc(agc_size_add(agc_size_add((size_t)count, added), 2), sizeof(char *));
   if (!env) { uv_os_free_environ(host, count); agc_out_of_memory(); }
   size_t kept = 0;
   for (int k = 0; k < count; k++) {
@@ -1224,7 +1226,7 @@ static const char *env_problem(agc_vm *vm, const agc_map *env, const env_pair **
   return NULL;
 }
 
-static char *child_dir(agc_vm *vm, const agc_string *dir, bool *found) {
+static CC_OWNS char *child_dir(agc_vm *vm, const agc_string *dir, bool *found) {
   *found = true;
   if (!dir || (dir->bytes == 1 && dir->data[0] == '.')) return NULL;
   char *path = agc_host_path(vm, dir);
@@ -1315,7 +1317,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   l->args = agc_list_len(list);
   l->channel = channel;
   if (!l->env) {
-    AGC_TRACE(&vm->rt->trace, AGC_TRACE_PROC, "spawn_failed path=%s rc=%d", path, UV_ENOMEM);
+    AGC_TRACE(&vm->rt->trace, AGC_TRACE_PROC, "spawn_failed path=%s rc=%d", l->argv[0], UV_ENOMEM);
     free_launch(l);
     return agc_system_error(vm, "process: cannot run the executable", agc_net_errno(UV_ENOMEM));
   }
