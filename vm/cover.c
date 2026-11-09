@@ -1,9 +1,10 @@
 /*
  * Line coverage of a run (`agentica --coverage PATH FILE.agc`): a counter for each span of the program, to which
- * step_slow (vm/interp.c) adds one for each span of a STEP that runs, and the LCOV text of the counts, which the driver
- * writes at the end of the run (vm/launch.c). A STEP stands for the statements and expressions that the front end
- * marked with a step, so the lines that start one of its spans are the lines that can be covered. The counters are
- * atomic: every scheduler adds to them, and the end reads them once the schedulers are joined.
+ * profile_steps (vm/interp.c) adds one for each span of a STEP that runs, and the LCOV text of the counts, which the
+ * driver writes at the end of the run (vm/launch.c). A --coverage run has a profile on every scheduler
+ * (agc_profile.cover), so every STEP takes step_slow. The lines that start a span of a STEP are the lines that can be
+ * covered. The counters are atomic: every scheduler adds to them, and the end reads them once the schedulers are
+ * joined. Names are written as they are: a file name with a line feed breaks LCOV text, as with any LCOV writer.
  * Core layer.
  */
 #include "core.h"
@@ -35,36 +36,21 @@ agc_cover *agc_cover_new(const agc_program *program) {
   return cover;
 }
 
-void agc_cover_hit(agc_cover *cover, uint32_t span, int64_t n) {
-  for (int64_t k = 0; k < n && (uint64_t)span + (uint64_t)k < cover->spans; k++)
-    atomic_fetch_add_explicit(&cover->hits[span + (uint32_t)k], 1, memory_order_relaxed);
-}
-
 /* A STEP, alone or fused with the instruction after it (the loader's fuse_steps); its `a` is the number of spans. */
 static bool is_step(uint16_t op) {
   return op == AGC_OP_STEP || (op >= AGC_OP_COUNT && op <= AGC_FUSED_STEP_CONST_NE);
 }
 
-static bool starts_with(const agc_string *text, const char *prefix) {
-  size_t size = strlen(prefix);
-  return text->bytes >= size && memcmp(text->data, prefix, size) == 0;
-}
-
-/* The files that are not the program's own: std/, the prelude and fetched packages (`pkg/NAME@VERSION/...`). A
-   package that the project reads in place, a workspace member (`pkg/NAME@workspace/`) or a path dependency
-   (`pkg/NAME@path/`), is the project's code, so it is counted. */
-static bool left_out(const agc_string *name) {
-  if (starts_with(name, "std/") || starts_with(name, "<prelude>/")) return true;
-  if (!starts_with(name, "pkg/")) return false;
-  const char *label = name->data + 4;
-  const char *end = memchr(label, '/', name->bytes - 4);
-  size_t size = end ? (size_t)(end - label) : name->bytes - 4;
-  static const char *const in_place[] = {"@workspace", "@path"};
-  for (size_t k = 0; k < sizeof in_place / sizeof in_place[0]; k++) {
-    size_t tail = strlen(in_place[k]);
-    if (size > tail && memcmp(label + size - tail, in_place[k], tail) == 0) return false;
-  }
-  return true;
+/* step_slow calls profile_steps for a STEP of the turn loop, which leaves the frame's pc after it, and for the steps
+   that builtins and native loops count, where the instruction before the pc is a call or the frame is native. So the
+   STEP before the pc, with N as its `a`, is the one that ran. */
+void agc_cover_step(agc_cover *cover, const agc_function *f, uint32_t pc, int64_t n) {
+  if (pc == 0 || pc > f->count) return;
+  agc_instr in = f->code[pc - 1];
+  if (!is_step(in.op) || in.a != n) return;
+  uint32_t span = f->spans[pc - 1];
+  for (int64_t k = 0; k < n && (uint64_t)span + (uint64_t)k < cover->spans; k++)
+    atomic_fetch_add_explicit(&cover->hits[span + (uint32_t)k], 1, memory_order_relaxed);
 }
 
 static void put(writer *w, const char *text, size_t size) { w->emit(w->context, text, size); }
@@ -176,7 +162,7 @@ static void count_lines(writer *w, const agc_cover *cover, const agc_program *p)
 void agc_cover_lcov(const agc_cover *cover, const agc_program *p, agc_cover_emit emit, void *context) {
   writer w = {emit, context, agc_alloc(agc_size_mul((size_t)p->source_count + 1, sizeof(uint64_t *)))};
   for (uint32_t k = 0; k < p->source_count; k++) {
-    if (left_out(p->sources[k].name)) {
+    if (p->sources[k].library) {
       w.lines[k] = NULL;
       continue;
     }

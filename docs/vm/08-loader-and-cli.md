@@ -106,16 +106,23 @@ parser is `agc_launch_parse` (`vm/launch.c`).
   relative to the folder of the entry file (4.6). DIR is not normalized: an
   imported file above the root prints as `DIR/../shared/x.agc`.
 - `--coverage FILE` counts, for each span of the program, the STEPs that ran
-  it (`vm/cover.c`): `set_counter` keeps `next_stop` at 0, as for the profile,
-  so every STEP takes `step_slow`, which adds one to the counter of each of its
-  spans, and the run is interpreted (the JIT is off). A run without the flag
-  pays one test in `set_counter` and one in `step_slow`, both off the fast
-  path of STEP. At the end (`agc_launch_settle`, after the files) the counts
-  go to FILE as LCOV: for each source that is not `std/`, the prelude or a
-  fetched package (`pkg/NAME@VERSION/`), `FN`/`FNDA` from each function's span
-  and its first STEP, and `DA` for each line that starts a span of a STEP,
-  with the highest count of its spans. A file that cannot be written is
-  `RUNTIME-INTERNAL` (exit 1). The front end's own run is never counted.
+  it (`vm/cover.c`). Every scheduler gets a profile that writes no report
+  (`agc_profile.cover`), so the run is interpreted by the profiling copy of
+  the turn loop (the JIT is off), where every STEP takes `step_slow`, and its
+  `profile_steps` hook adds one to the counter of each span of the STEP
+  before the frame's pc. The other copies and the hot path are unchanged: a
+  copy of the loop of its own changed the register allocation of
+  `plain_turn`. The steps that builtins and native loops count are not
+  counted. A build without trace points (`make TRACE=0`) refuses the flag. At the end
+  (`agc_launch_settle`, after the files) the counts go to a new file beside
+  FILE, which then replaces it, as LCOV: for each source that the loader did
+  not mark `library` (`std/`, the prelude, a fetched package
+  `pkg/NAME@VERSION/`, judged by the stored name before `--source-root`
+  joins it), `FN`/`FNDA` from each function's span and its first STEP, and
+  `DA` for each line that starts a span of a STEP, with the highest count of
+  its spans. An old FILE is removed when the run starts. A file that cannot be
+  written is `RUNTIME-INTERNAL` (exit 1), or a notice after the failure of a
+  run that failed. The front end's own run is never counted.
 - `--flush-timeout MS` (or `AGENTICA_FLUSH_TIMEOUT_MS`, read by the VM; the flag
   wins) sets the end-of-run wait for file close jobs and buffered output
   (10.2.2). `0` means no wait; above 86400000 is rejected. When the wait runs

@@ -439,7 +439,7 @@ typedef struct {
   agc_input in;
   agc_file_ids inherited;
   /* The counters of --coverage (vm/cover.c) and the file the LCOV goes to at the end (vm/launch.c), NULL without the
-     flag. Set before the run starts; step_slow adds to the counters from every scheduler. */
+     flag. Set before the run starts; every scheduler adds to the counters through its profile (agc_profile.cover). */
   agc_cover *cover;
   const char *cover_path;
 } agc_runtime;
@@ -604,6 +604,12 @@ typedef struct {
   /* Writes the lines of the functions of native modules (vm/native_module.c), set by the first bind of one; NULL
      before. */
   void (*report_native)(const agc_vm *vm);
+  /* The counters of --coverage (vm/cover.c), NULL without it: profile_steps (vm/interp.c) adds the STEPs to them. A run
+     with --coverage has a profile on every scheduler, so the profiling copy of the turn loop runs and every STEP takes
+     step_slow, which leaves the other copies as they are. `report` is false for a profile made for --coverage alone:
+     it writes no report and counts nothing that schedulers share (AGC_PROFILE_REPORTS). */
+  agc_cover *cover;
+  bool report;
 } agc_profile;
 
 struct agc_vm {
@@ -667,6 +673,8 @@ struct agc_vm {
 
 /* The one test of a profile hook: false at compile time when the trace points are compiled out (make TRACE=0). */
 #define AGC_PROFILE_ON(vm) (AGC_TRACE_BUILD && __builtin_expect((vm)->profile != NULL, 0))
+/* A profile that writes a report (AGENTICA_VM_TRACE=profile, one scheduler), not the one of --coverage alone. */
+#define AGC_PROFILE_REPORTS(vm) (AGC_PROFILE_ON(vm) && (vm)->profile->report)
 
 /* One CPU pause of a busy wait: `pause` on x86 and `yield` on AArch64 and on ARMv6K and later (older ARM has no such
    hint) tell the core that this is a busy wait (less power, the other hyperthread runs); elsewhere it is a compiler

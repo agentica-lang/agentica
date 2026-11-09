@@ -1,5 +1,5 @@
-# The program of tests/test_cli_coverage.py: a branch that never runs, a function that is never called, a block, a
-# file it imports (counted) and a std/ module (left out).
+# The program of tests/test_cli_coverage.py: a branch that never runs, a function that is never called, blocks that
+# builtins call (each, times, a range, map), a file it imports (counted) and a std/ module (left out).
 import Queue from "std/queue"
 import Helper from "helper"
 
@@ -25,5 +25,21 @@ def main() -> Void
     puts(y)
   end
 
+  3.times do |k|
+    m = k * 10
+    puts(m)
+  end
+
+  (1..3).each do |k|
+    m = k + 10
+    puts(m)
+  end
+
+  doubled = [1, 2, 3, 4].map do |x|
+    y = x + 1
+    y * 2
+  end
+
+  puts(doubled.length)
   puts(Queue.size(Queue.push(Queue.new(), "a")))
 end

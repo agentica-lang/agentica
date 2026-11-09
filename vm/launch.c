@@ -228,25 +228,42 @@ static void cover_put(void *context, const char *text, size_t size) {
   }
 }
 
-/* Writes the LCOV of --coverage to its file, made or emptied first; false when it cannot be written. It runs after the
-   schedulers are joined, so the counts are final. */
+/* Writes the LCOV of --coverage to a new file beside its target, then puts it in the target's place, so a reader never
+   sees half a report; false when it cannot be written. It runs after the schedulers are joined, so the counts are
+   final. */
 static bool write_coverage(agc_vm *vm) {
   agc_runtime *rt = vm->rt;
   if (!rt->cover) return true;
   cover_file *file = malloc(sizeof *file);
-  if (!file) return false;
-  file->fd = agc_fs_open(rt->cover_path, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_TRUNCATE);
-  file->failed = file->fd < 0;
-  file->used = 0;
-  if (!file->failed) {
-    agc_fs_blocking(file->fd);
+  char *fresh = NULL;
+  int fd = file ? agc_fs_open_beside(rt->cover_path, &fresh) : -1;
+  bool ok = fd >= 0;
+  if (ok) {
+    file->fd = fd;
+    file->failed = false;
+    file->used = 0;
     agc_cover_lcov(rt->cover, rt->program, cover_put, file);
     cover_flush(file);
-    if (agc_fs_close(file->fd) != 0) file->failed = true;
+    ok = !file->failed && agc_fs_fchmod(fd, 0644) == 0;
+    ok = agc_fs_close(fd) == 0 && ok;
+    ok = ok && agc_fs_replace(fresh, rt->cover_path) == 0;
+    if (!ok) agc_fs_unlink(fresh);
   }
-  bool ok = !file->failed;
+  free(fresh);
   free(file);
   return ok;
+}
+
+/* The notice of a run that failed, or was stopped, and could not write its coverage file either: the failure is the
+   run's own, so this one is a line of its own. */
+static void coverage_notice(agc_vm *vm) {
+  agc_notice notice;
+  FILE *err = agc_notice_begin(&vm->rt->err, &notice);
+  if (vm->rt->style == AGC_STYLE_JSON)
+    fputs("{\"warning\":\"cannot write the coverage file\"}\n", err);
+  else
+    fputs("agentica: cannot write the coverage file\n", err);
+  agc_notice_end(vm, &notice, AGC_NOTICE_FINAL);
 }
 
 /* agc_io_goodbye runs requests left in the inbox, and one may fail (sweep's "a job was freed while held"). vm->fail
@@ -298,6 +315,8 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
       write_error = "cannot write to standard error";
     else if (!covered)
       write_error = "cannot write the coverage file";
+  } else if (!covered) {
+    coverage_notice(vm);
   }
   if (write_error) {
     outcome->kind = AGC_FAILED;
@@ -728,6 +747,8 @@ agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int 
       bool seen = options->coverage != NULL;
       if (!once(name, &seen, arg)) return AGC_LAUNCH_BAD;
       if (!value || !*value || strcmp(value, "--") == 0) return refuse(name, "--coverage needs a file name");
+      /* The counts come through the profile's hook, which a build without trace points (make TRACE=0) leaves out. */
+      if (!AGC_TRACE_BUILD) return refuse(name, "--coverage needs a build with trace points");
       options->coverage = value;
       i += 2;
     } else if (strcmp(arg, "--embedded") == 0) {
@@ -805,12 +826,14 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
     const char *test_mode = getenv("AGENTICA_VM_TEST_FRONT_END_JIT");
     if (!test_mode || !agc_jit_mode_parse(test_mode, &mode)) mode = AGC_JIT_OFF;
   }
-  /* --coverage counts in step_slow, which compiled code would skip: the program runs in the interpreter. It is the
-     user's program only, never the front end's run. */
+  /* --coverage counts the interpreter's STEPs through the profile (agc_profile.cover), which compiled code does not
+     run: the program runs in the interpreter. It is the user's program only, never the front end's run. A report of an earlier run is removed
+     now, so a run that ends without writing one leaves none. */
   if (options->coverage && !front_end) {
     rt->cover = agc_cover_new(program);
     rt->cover_path = options->coverage;
     mode = AGC_JIT_OFF;
+    agc_fs_unlink(options->coverage);
   }
   rt->jit = agc_jit_new(program, mode, &rt->trace);
   /* Test-only: AGENTICA_VM_TEST_JIT_BUDGET=N gives the JIT a compile budget of N units instead of AGC_JIT_BUDGET, so a

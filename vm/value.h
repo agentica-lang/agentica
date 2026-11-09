@@ -236,6 +236,9 @@ typedef struct {
   uint32_t lines;
   uint32_t *line_start;
   uint32_t *line_chars;
+  /* Not the program's own code: std/, the prelude or a fetched package. The loader sets it from the stored name, which
+     agc_program_set_source_root may join to a folder later; --coverage leaves these out (vm/cover.c). */
+  bool library;
 } agc_source;
 
 typedef struct agc_vm agc_vm;

@@ -650,6 +650,29 @@ static void note_native_function(agc_program *p) {
   }
 }
 
+static bool named_under(const agc_string *name, const char *prefix) {
+  size_t size = strlen(prefix);
+  return name->bytes >= size && memcmp(name->data, prefix, size) == 0;
+}
+
+/* A source that is not the program's own code (agc_source.library), by the name the front end stored: std/, the
+   prelude and fetched packages (`pkg/NAME@VERSION/...`). A package that the project reads in place, a workspace member
+   (`pkg/NAME@workspace/`) or a path dependency (`pkg/NAME@path/`), is the project's code. The name alone tells them
+   apart, so a fetched package pinned to a tag named `path` or `workspace` counts as the project's too. */
+static bool library_source(const agc_string *name) {
+  if (named_under(name, "std/") || named_under(name, "<prelude>/")) return true;
+  if (!named_under(name, "pkg/")) return false;
+  const char *label = name->data + 4;
+  const char *end = memchr(label, '/', name->bytes - 4);
+  size_t size = end ? (size_t)(end - label) : name->bytes - 4;
+  static const char *const in_place[] = {"@workspace", "@path"};
+  for (size_t k = 0; k < sizeof in_place / sizeof in_place[0]; k++) {
+    size_t tail = strlen(in_place[k]);
+    if (size > tail && memcmp(label + size - tail, in_place[k], tail) == 0) return false;
+  }
+  return true;
+}
+
 static void load(reader *r, agc_program *p) {
   if (memcmp(take(r, 4), AGC_MAGIC, 4) != 0) reject(r, "bad magic");
   r->format = read_u32(r);
@@ -663,6 +686,7 @@ static void load(reader *r, agc_program *p) {
   for (uint32_t i = 0; i < p->source_count; i++) {
     // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: a count of 0 gets NULL and no loop
     p->sources[i].name = read_string(r);
+    p->sources[i].library = library_source(p->sources[i].name);
     p->sources[i].text = read_string(r);
     index_lines(r, &p->sources[i]);
   }

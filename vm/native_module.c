@@ -815,7 +815,7 @@ agc_native_fn *agc_native_bind(agc_vm *vm, const char *text, size_t len, bool di
   atomic_init(&fn->warned, false);
   fn->next = lib->fns;
   lib->fns = fn;
-  if (vm->profile) vm->profile->report_native = report_native;
+  if (AGC_PROFILE_REPORTS(vm)) vm->profile->report_native = report_native;
   return fn;
 }
 
@@ -1000,7 +1000,7 @@ static void run_module(void *arg) {
    per short function that took over SLOW_NS, ten times the about 100 microseconds that a short call may take. Those
    builds only test, so the line goes straight to the C stream. */
 static void note_time(agc_vm *vm, agc_native_fn *fn, uint64_t ns) {
-  if (vm->profile) {
+  if (AGC_PROFILE_REPORTS(vm)) {
     fn->calls++;
     fn->ns += ns;
   }
@@ -1050,7 +1050,7 @@ agc_native_outcome agc_native_call(agc_vm *vm, agc_native_fn *fn, const agc_valu
   agc_charge(vm, CALL_COST);
   an_env env = {&API, vm, fn, held, holds, NULL, NULL, NULL};
   module_call made = {fn, &env, terms, {{0, 0}}};
-  bool timed = vm->profile || AGC_LEAF_CHECK;
+  bool timed = AGC_PROFILE_REPORTS(vm) || AGC_LEAF_CHECK;
   uint64_t began = timed ? agc_trace_now() : 0;
   agc_ffi_refusing_callbacks(run_module, &made);
   if (timed) note_time(vm, fn, agc_trace_now() - began);
@@ -1243,7 +1243,7 @@ agc_native_dirty *agc_native_dirty_new(agc_vm *vm, agc_native_fn *fn, const agc_
   if (!d) agc_out_of_memory();
   d->vm = vm;
   d->fn = fn;
-  d->profile = vm->profile != NULL;
+  d->profile = AGC_PROFILE_REPORTS(vm);
   memcpy(d->argv, argv, fn->arity * sizeof *argv);
   d->held = held;
   d->holds = holds;

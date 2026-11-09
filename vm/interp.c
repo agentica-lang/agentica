@@ -240,9 +240,8 @@ static void sync_budget(agc_vm *vm) {
 
 static void set_counter(agc_vm *vm) {
   int64_t c = vm->turn_left < vm->batch ? vm->turn_left : vm->batch;
-  /* With the profile or --coverage on, no STEP takes the fast path in the loop, so step_slow sees each one and counts
-     it. */
-  if (c < 0 || AGC_PROFILE_ON(vm) || __builtin_expect(vm->rt->cover != NULL, 0)) c = 0;
+  /* With the profile on, no STEP takes the fast path in the loop, so step_slow sees each one and counts it. */
+  if (c < 0 || AGC_PROFILE_ON(vm)) c = 0;
 #ifdef AGC_NO_GC
   /* Past the soft allocation limit the next STEP takes the slow path, which ends the run (agc_alloc_limit_check). */
   if (agc_alloc_over_limit()) c = 0;
@@ -328,9 +327,8 @@ static uint64_t frame_code(const agc_vm *vm, const agc_frame *frame, const agc_f
 static const agc_frame *stack_frame(const agc_task *t, uint32_t n, uint32_t k, const agc_frame **caller) {
   agc_frame_segment level = {t->frames, t->frame_count, t->below};
   uint32_t first = n - level.count;
-  /* N counts the frames of every segment, so a segment below is there while K is under FIRST; the test of `below`
-     says so to the static analyzer, which cannot tie N to the chain. */
-  while (k < first && level.below) {
+  while (k < first) {
+    // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-NULLDEREFERENCE: N counts every segment, so one is below
     level = *level.below;
     first -= level.count;
   }
@@ -367,6 +365,8 @@ static PROFILE_HOOK void profile_steps(agc_vm *vm, int64_t n) {
   agc_profile *profile = vm->profile;
   const agc_frame *frame = &t->frames[t->frame_count - 1];
   profile->steps[frame->native ? profile->functions : frame->function] += (uint64_t)n;
+  if (profile->cover && !frame->native)
+    agc_cover_step(profile->cover, &vm->rt->program->functions[frame->function], frame->pc, n);
   if (!profile->every) return;
   if ((uint64_t)n < profile->left) {
     profile->left -= (uint64_t)n;
@@ -457,7 +457,6 @@ static void step_slow(agc_vm *vm, int64_t n, uint32_t span) {
   agc_alloc_limit_check();
 #endif
   if (AGC_PROFILE_ON(vm)) profile_steps(vm, n);
-  if (__builtin_expect(vm->rt->cover != NULL, 0)) agc_cover_hit(vm->rt->cover, span, n);
   sync_budget(vm);
   if (vm->batch < n) take_steps(vm, n - vm->batch + AGC_TURN_STEPS);
   if (vm->batch < n)
