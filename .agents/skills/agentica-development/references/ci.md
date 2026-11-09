@@ -31,6 +31,16 @@ release's `zig` install and `strip`). A new check gets a target first (in
   two heavy multicore race cases; the weekly sweep runs them 20 times.
 - Test helpers are in `tests/agentica_test.py`. A missing tool or binary fails
   when `CI` is set, and skips locally.
+- Property tests (Hypothesis; the profiles are in `tests/conftest.py`): write
+  one for a codec or wire format that has a Python standard library peer, where
+  the edge cases are easy to miss by hand: a round trip, or "accepted if and
+  only if valid". It runs in both tiers: the fast tier replays the same few
+  examples, the slow tier draws many from a seed it prints (`hypothesis seed
+  N`). One VM serves every example of a run (a server, or a program that reads
+  cases from stdin), as in the header value property of
+  `tests/test_vm_http.py`. A failure prints the shrunk input and a
+  `@reproduce_failure` line to put on the test; a slow-tier seed replays with
+  `PYTEST_ADDOPTS=--hypothesis-seed=N make test-slow TESTS=...`.
 - Timeouts, three layers, all stretched by `AGENTICA_TEST_TIMEOUT_SCALE`
   (default 1; CI sets 4): one test (SIGALRM, 120 s, 900 s for `@slow`;
   `@timeout(seconds)` overrides; `faulthandler` kills the module 30 s later);

@@ -20,6 +20,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^9.1.1"
+hypothesis = "^6.170.15"
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

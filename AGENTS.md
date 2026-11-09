@@ -123,8 +123,9 @@ stay.
   placeholder files or nodes for later phases.
 - New features are VM-only, tested with golden outputs and independent
   Node/Python peers.
-- Python tests use pytest (a test-only Poetry dependency) and live in
-  `tests/test_<area>.py`; `make test` runs each module in its own process.
+- Python tests use pytest and Hypothesis (test-only Poetry dependencies) and
+  live in `tests/test_<area>.py`; `make test` runs each module in its own
+  process.
   `unittest.TestCase` modules (from `tests.agentica_test.TestCase`) are
   collected too. Node and Python peers (curl included) use the standard
   library only. Dependencies: the C submodules in `vm/third_party`, the

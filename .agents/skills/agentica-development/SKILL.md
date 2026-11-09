@@ -120,6 +120,6 @@ Recipes: `references/frontend.md` ("Common tasks"). Homes:
 | `library-notes.md` | a library area (stdio, JSON, tasks, TCP/TLS/HTTP, logging, files, processes, bits, std/binary, std/toml) or `stdlib/` style |
 | `bdd.md` | `agentica test`: the driver, `std/bdd`, `stdlib/test/`, step programs |
 | `vm.md` | any VM work: pipeline, layers, rules, index of `vm-*.md` |
-| `ci.md` | `.github/workflows/`, Makefile and `mk/`, new VM files, peers, fixtures, jscpd, releases, stage0 |
+| `ci.md` | `.github/workflows/`, Makefile and `mk/`, new VM files, peers, fixtures, property tests, jscpd, releases, stage0 |
 | `site.md` | `site/`, or a language rule or builtin shown on a site page |
 | `bench-eval.md` | `benchmarks/`, `make bench`, `tests/eval/`, measuring speed |

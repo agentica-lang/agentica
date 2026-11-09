@@ -21,4 +21,5 @@ RUN apt-get update \
       perl \
       python3 \
       python3-pytest \
+      python3-hypothesis \
  && rm -rf /var/lib/apt/lists/*
