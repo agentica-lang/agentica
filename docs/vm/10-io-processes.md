@@ -83,8 +83,17 @@ systems get none.
   kept.
 - **Close.** `Process.close`, a timed-out read or write, the end of the run
   (step 1 of §14.4) and a stop signal share one close: a running child gets
-  `SIGKILL`, and libuv's exit callback reaps it (no `waitpid`, no sleep). The
-  pipes close at once, and a task blocked on the child (reader, writer or
+  `SIGKILL`, and libuv's exit callback reaps it (no `waitpid`, no sleep). A
+  child started with `pgroup` (POSIX: libuv's `UV_PROCESS_DETACHED`, a
+  `setsid` in the child) leads its own group, and each signal of a stop goes to
+  the group, so its descendants end too. A captured group's SIGKILL comes when
+  the grace ends even if the leader was reaped meanwhile (the grace timer
+  outlives the exit; the guard keeps a group in its grace on a second list, and
+  the end of the run waits, up to the grace, until those groups are gone),
+  since POSIX does not reuse a pid while its group exists. A group whose
+  leader exited before any stop is not signalled. Windows does not use it,
+  since a detached child leaves libuv's job object. The pipes close at once,
+  and a task blocked on the child (reader, writer or
   waiter) wakes with `process: process is closed`. Only the call that parks
   waits: `Process.close` of a running plain child parks its task on a job with a
   1-second timer, which the exit callback ends, and other tasks run meanwhile,

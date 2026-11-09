@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 137,
+  "steps": 141,
   "stdout": [
     "ok 5",
     "error(\"process: end of input\")",

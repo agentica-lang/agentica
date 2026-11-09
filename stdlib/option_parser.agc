@@ -76,6 +76,7 @@ export struct Parser
   description: String
   args: List[Arg]
   opts: List[Opt]
+  rest: String = ""
 end
 
 ## The converted values of a command line, read by the getters. Treat it as opaque: `kinds` says which names were
@@ -86,6 +87,8 @@ export struct Parsed
   ints: Map[String, Int]
   floats: Map[String, Float]
   flags: Map[String, Bool]
+  rest: List[String] = []
+  after_dashes: List[String] = []
 end
 
 # One Arg or Opt, as the parser sees them.
@@ -110,10 +113,12 @@ struct Reader
   args: List[String]
 end
 
-# The raw text of each given name, and the positional words in order.
+# The raw text of each given name, the positional words in order, and how many of them came before `--` (all of them
+# when there is none).
 struct Scan
   values: Map[String, String]
   positionals: List[String]
+  before_dashes: Int
 end
 
 # The result of reading one word: the values so far, the index of the next word, and whether help was asked.
@@ -123,9 +128,17 @@ struct Step
   help: Bool
 end
 
-## Describes a program: its name, a one-line description and its arguments and options, each list in order.
-export def new(program: String, description: String = "", args: List[Arg] = [], opts: List[Opt] = []) -> Parser
-  return Parser(program: program, description: description, args: args, opts: opts)
+## Describes a program: its name, a one-line description and its arguments and options, each list in order. `rest`
+## names the positional words after the arguments (`FILE` shows `[FILE...]` in the usage line; the help has no row for
+## it), which `parse` then keeps for `rest` and `after_dashes` instead of refusing them; "" (the default) refuses them.
+export def new(
+  program: String,
+  description: String = "",
+  args: List[Arg] = [],
+  opts: List[Opt] = [],
+  rest: String = "",
+) -> Parser
+  return Parser(program: program, description: description, args: args, opts: opts, rest: rest)
 end
 
 ## Checks the words (normally `System.args()`) against the parser and returns the converted values. An error says
@@ -236,6 +249,18 @@ export def optional_float(parsed: Parsed, name: String) -> Optional[Float]
   return parsed.floats.get(name)
 end
 
+## Returns the positional words after the arguments, in order, those after `--` included, as Ruby's
+## `OptionParser#parse` returns them. Empty unless `new` was given `rest`.
+export def rest(parsed: Parsed) -> List[String]
+  return parsed.rest
+end
+
+## Returns the words of `rest` that came after `--`, its last ones: in `FILE... -- FLAGS` they are the flags, and the
+## files are `rest` without them.
+export def after_dashes(parsed: Parsed) -> List[String]
+  return parsed.after_dashes
+end
+
 # Halts with a bug of the program: an undeclared name, the wrong getter for a kind, or a plain getter for a value
 # that may be absent. `present` is whether the value exists.
 def require(parsed: Parsed, name: String, kind: Kind, present: Bool) -> Void
@@ -332,11 +357,14 @@ def slots_unchecked(parser: Parser) -> List[Slot]
   return positionals.concat(options)
 end
 
-# The slots, once the specification is checked: names and short names are well formed, free and different, and
-# every default is valid for its kind and choices.
+# The slots, once the specification is checked: names and short names are well formed, free and different, every
+# default is valid for its kind and choices, and the name of the rest has no space or control character.
 def slots_of(parser: Parser) -> Result[List[Slot]]
   if parser.program.empty?
     return error("option_parser: invalid specification: the program name is empty")
+  end
+  if spaced?(parser.rest)
+    try bad_spec(parser, "'#{parser.rest}' is not a valid name for the rest")
   end
   slots = slots_unchecked(parser)
   names = Set.new(["help"])
@@ -411,6 +439,7 @@ def scan_words(parser: Parser, slots: List[Slot], args: List[String]) -> Result[
   words: List[String] = []
   i = 0
   ended = false
+  before_dashes = -1
   while i < args.size
     word = args[i]
     if ended or value_word?(word)
@@ -418,6 +447,7 @@ def scan_words(parser: Parser, slots: List[Slot], args: List[String]) -> Result[
       i = i + 1
     elsif word == "--"
       ended = true
+      before_dashes = words.size
       i = i + 1
     else
       step = try read_option(reader, values, i)
@@ -428,7 +458,10 @@ def scan_words(parser: Parser, slots: List[Slot], args: List[String]) -> Result[
       i = step.next
     end
   end
-  return ok(Scan(values: values, positionals: words))
+  if !ended
+    before_dashes = words.size
+  end
+  return ok(Scan(values: values, positionals: words, before_dashes: before_dashes))
 end
 
 # Reads the option at args[i], which starts with "-" and is not "-" or "--".
@@ -541,14 +574,16 @@ def build(parser: Parser, slots: List[Slot], scan: Scan) -> Result[Parsed]
   if scan.positionals.size < positionals.size
     return failure(parser, "missing argument #{label(positionals[scan.positionals.size])}")
   end
-  if scan.positionals.size > positionals.size
+  if scan.positionals.size > positionals.size and parser.rest.empty?
     return failure(parser, "unexpected argument '#{scan.positionals[positionals.size]}'")
   end
   values = scan.values
   for index in 0...positionals.size
     values = values.put(positionals[index].name, scan.positionals[index])
   end
-  parsed = empty_parsed()
+  rest = scan.positionals.drop(positionals.size)
+  after_dashes = scan.positionals.drop(wider(scan.before_dashes, positionals.size))
+  parsed = empty_parsed().with(rest: rest, after_dashes: after_dashes)
   for slot in slots
     parsed = parsed.with(kinds: parsed.kinds.put(slot.name, slot.kind))
     if slot.flag
@@ -628,7 +663,11 @@ end
 
 def usage_line(parser: Parser, slots: List[Slot]) -> String
   positionals = slots.select do |slot| slot.positional end
-  return [parser.program, "[options]"].concat(positionals.map do |slot| label(slot) end).join(" ")
+  words = [parser.program, "[options]"].concat(positionals.map do |slot| label(slot) end)
+  if !parser.rest.empty?
+    words = words.push("[#{parser.rest}...]")
+  end
+  return words.join(" ")
 end
 
 # The left column of the help: "-p, --port PORT", "    --user USER", "-v, --verbose" or "<file>".

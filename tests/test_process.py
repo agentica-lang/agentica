@@ -12,7 +12,8 @@ import shutil
 
 import pytest
 
-from tests.agentica_test import FIXTURES, PYTHON, TARGET_OS, agc_literal, cli, run, tool, vm_environment
+from tests.agentica_test import (FIXTURES, PYTHON, TARGET_OS, agc_literal, cli, host_only, kill_process, process_alive,
+                                 run, tool, vm_environment, wait_until)
 
 PEER = FIXTURES / "process-peer.js"
 PY_PEER = FIXTURES / "process-peer.py"
@@ -403,3 +404,64 @@ def test_an_out_or_err_file_that_cannot_be_opened_is_an_error_and_no_child_runs(
     assert not late.exists()
     result = cli_run("--deny-fs", write(tmp_path, "program.agc", streams_to(1, agc_literal(late), '""')))
     assert result.stdout == "denied: --deny-fs turns off file access\n" and not late.exists()
+
+
+@host_only(TARGET_OS == "windows", "Windows has no process groups that a stop signals; pgroup stops the child alone")
+@pytest.mark.parametrize("start", ['Process.spawn(%s, [%s, "family"], 5000, {}, "", "", %s)',
+                                   'Process.spawn_captured(%s, [%s, "family"], ".", 5000, {}, %s)'],
+                         ids=["spawn", "captured"])
+def test_closing_a_child_started_with_pgroup_stops_its_own_children(tmp_path, start):
+    """The Python peer starts a grandchild and waits. With pgroup, close signals the child's whole process group
+    (SIGKILL for spawn, SIGTERM for spawn_captured), so the grandchild ends too; without it the grandchild outlives
+    the close."""
+    def grandchild(group):
+        text = ('def main() -> Void\n  p = Result.unwrap!(%s)\n  puts(Result.unwrap!(Process.read_line(p, 5000)))\n'
+                '  Process.close(p)\nend\n\n' % (start % (agc_literal(PYTHON), agc_literal(PY_PEER), group)))
+        return output(tmp_path, text).strip()
+
+    left = grandchild("false")
+    try:
+        assert process_alive(left)
+    finally:
+        kill_process(left)
+    pid = grandchild("true")
+    try:
+        assert wait_until(lambda: not process_alive(pid))
+    finally:
+        kill_process(pid)
+
+
+def stopped_family(tmp_path, ending, *mode):
+    """Starts the Python peer in family mode as a captured pgroup child, prints its grandchild's pid, then closes it
+    and returns at once, or just returns: either way the end of the run comes inside the child's 1 s grace."""
+    stop = "  Process.close(p)\n" if ending == "close" else ""
+    words = ", ".join(agc_literal(word) for word in ("family",) + mode)
+    text = ('def main() -> Void\n  p = Result.unwrap!(Process.spawn_captured(%s, [%s, %s], ".", 5000, {}, true))\n'
+            '  puts(Result.unwrap!(Process.read_line(p, 5000)))\n%send\n\n' % (agc_literal(PYTHON), agc_literal(PY_PEER),
+                                                                               words, stop))
+    return output(tmp_path, text).strip()
+
+
+@host_only(TARGET_OS == "windows", "Windows has no process groups that a stop signals; pgroup stops the child alone")
+@pytest.mark.parametrize("ending", ["close", "end of run"])
+def test_a_pgroup_descendant_that_ignores_sigterm_gets_sigkill_after_the_grace(tmp_path, ending):
+    """The captured child dies of the SIGTERM at once, but its grandchild ignores it: when the grace is over, the group
+    gets SIGKILL although its leader was already reaped."""
+    pid = stopped_family(tmp_path, ending, "stubborn")
+    try:
+        assert wait_until(lambda: not process_alive(pid))
+    finally:
+        kill_process(pid)
+
+
+@host_only(TARGET_OS == "windows", "Windows has no process groups that a stop signals; pgroup stops the child alone")
+@pytest.mark.parametrize("ending", ["close", "end of run"])
+def test_a_pgroup_descendant_gets_the_whole_grace_after_its_leader_is_reaped(tmp_path, ending):
+    """The grandchild takes 300 ms on SIGTERM, then writes a marker: the end of the run waits for it within the grace
+    instead of sending SIGKILL once the leader is reaped."""
+    marker = tmp_path / "marker"
+    pid = stopped_family(tmp_path, ending, "slow", str(marker))
+    try:
+        assert marker.read_text() == "done"
+    finally:
+        kill_process(pid)
