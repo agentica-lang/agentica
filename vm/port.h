@@ -989,9 +989,13 @@ void agc_flush(agc_vm *vm);
    holds, and starts their write: they never wait on the descriptor, and they take only the room that a waiting print
    does not need, so they never go ahead of it. False when the notice queue holds more than
    AGC_FORWARD_BOUND bytes after them: the caller stops reading, and W is called back once there is room. A failed
-   stream drops the bytes and returns true. A stream left on its blocking FILE (agc_output_open did not put it on the
-   loop: the C tests, the fuzzer, a descriptor that cannot be reopened) writes them with fwrite. */
+   stream drops the bytes and returns true. OUT must be on the loop: see agc_output_on_file. */
 bool agc_output_forward(agc_output *out, const uint8_t *data, size_t n, agc_forward_wait *w);
+/* True for a stream left on its blocking FILE (agc_output_open did not put it on the loop: the C tests, the fuzzer, a
+   descriptor that cannot be reopened). Bytes from outside the program go to it through agc_output_write_file, a
+   blocking fwrite under the stream's lock, which the I/O thread must never call: a pool thread does. */
+bool agc_output_on_file(const agc_output *out);
+void agc_output_write_file(agc_output *out, const uint8_t *data, size_t n);
 /* True once a write of the stream failed (its data is dropped from then on) and text of the program or the VM was lost
    with it (agc_output.own_end): a failure that lost only bytes of a child's stderr does not fail the run. */
 bool agc_output_failed(const agc_output *out);

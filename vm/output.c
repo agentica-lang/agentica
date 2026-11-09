@@ -51,13 +51,14 @@ static _Noreturn void write_failed(agc_vm *vm, agc_output *out) {
   fail_write(vm, out);
 }
 
-/* Forwarded bytes on a stream left on its blocking FILE: written at once, as the VM's own writes to it are. A failed
-   write drops them; the next chunk tries again. */
-static bool forward_file(agc_output *out, const uint8_t *data, size_t n) {
+bool agc_output_on_file(const agc_output *out) { return !out->base; }
+
+/* A failed write drops the bytes; the next chunk tries again. While the lock is solo (one scheduler) it takes nothing,
+   and stdio's own lock keeps each call whole, so a chunk may land between the text of a print and its newline. */
+void agc_output_write_file(agc_output *out, const uint8_t *data, size_t n) {
   agc_lock_take(out->lock);
   if (fwrite(data, 1, n, out->file) == n) (void)fflush(out->file);
   agc_lock_drop(out->lock);
-  return true;
 }
 
 bool agc_output_waiting(const agc_vm *vm, const agc_output *out) { return vm->task->output.out == out; }
@@ -68,8 +69,11 @@ bool agc_output_failed(const agc_output *out) {
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 /* The scheduler remembers the stream lock it holds (vm->stream_lock), so a failure that jumps out of the code that holds
-   it gives it back (agc_sync_reset). The streams' locks are never held together. */
-CC_ACQUIRES(l->mutex) static void stream_take(agc_vm *vm, agc_lock *l) {
+   it gives it back (agc_sync_reset). The streams' locks are never held together. Taking it counts as short for the I/O
+   thread (agc_output_forward, the done half of a write): every holder keeps it for bounded work on the ring and the
+   queue, with writes that never wait (agc_stdio_try) or that go to the pool, and settle drops it before it runs the
+   loop. Only the blocking FILE fallback holds a stream's lock across fwrite, and it never uses stream_take. */
+CC_ACQUIRES(l->mutex) CC_ASSUME_SHORT static void stream_take(agc_vm *vm, agc_lock *l) {
   agc_lock_take(l);
   vm->stream_lock = l;
 }
@@ -738,7 +742,8 @@ static void finish_text(agc_vm *vm, agc_output *s, const char *text, size_t n) {
 
 bool agc_output_forward(agc_output *out, const uint8_t *data, size_t n, agc_forward_wait *w) {
   agc_output *s = out->base;
-  if (!s) return forward_file(out, data, n);
+  /* The caller writes to a stream on its FILE itself (agc_output_on_file), off the I/O thread. */
+  if (!s) return true;
   /* The vm that opened the stream is the I/O thread's context: this runs in a libuv callback there. */
   agc_vm *vm = s->vm;
   stream_take(vm, s->lock);
@@ -828,7 +833,8 @@ void agc_notice_end(agc_vm *vm, agc_notice *n, agc_notice_mode mode) {
 
 bool agc_output_forward(agc_output *out, const uint8_t *data, size_t n, agc_forward_wait *w) {
   (void)w;
-  return forward_file(out, data, n);
+  agc_output_write_file(out, data, n);
+  return true;
 }
 #endif
 

@@ -229,7 +229,8 @@ callbacks only set flags and queue the task. Only `vm/loop.c`,
   leaves both streams on the blocking `FILE *` it was given (`base` is null), so
   C tests and the fuzzer never depend on the loop. `vm/process.c` hands a
   child's stderr to `agc_output_forward` and stops reading the pipe while that
-  queue is full.
+  queue is full; for a stream on its `FILE` (`agc_output_on_file`) a pool
+  thread writes the chunk instead, since the I/O thread never calls `fwrite`.
 - A builtin whose work grows with its input sets a turn cost
   (`docs/vm/10-io-scheduler.md` §10.2.1), taken from the turn only, never from
   `steps_left`, so `--max-steps` stops a program at the same place.

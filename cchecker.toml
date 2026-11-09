@@ -35,15 +35,18 @@ stop = ["agc_trace_emit"]
 # - agc_fd_reopen: an open of the descriptor's own path (/proc/self/fd/N, F_GETPATH on macOS) with O_NONBLOCK.
 # - agc_stdio_try: writes what the target takes now and never waits (vm/port.h).
 # - call_on: runs a loop step inline or queues it; the steps are roots of their own ([roots] above).
-# - agc_compute_submit: pool->lock is held for bounded sections (a queue link, a thread start, an inbox post, a nudge).
+# - agc_compute_submit, agc_compute_submit_direct: pool->lock is held for bounded sections (a queue link, a thread
+#   start, an inbox post, a nudge).
 # - release_state: the release flush of a handle not closed, one bounded write (docs/vm/14-core-invariants.md §14.1).
-# - agc_unregister: reg->lock is held for a swap, a push or a copy; an agc_alloc there may collect, which stops the
-#   loop's thread anyway.
+# - agc_register, agc_unregister: reg->lock is held for a swap, a push or a copy; an agc_alloc there may collect, which
+#   stops the loop's thread anyway.
 short = ["agc_proc_read_now", "read_once", "agc_fd_reopen", "agc_stdio_try", "call_on", "agc_compute_submit",
-         "release_state", "agc_unregister"]
+         "agc_compute_submit_direct", "release_state", "agc_register", "agc_unregister"]
 
-# The I/O inbox's lock is held to link one request; the poster wakes the loop after the unlock (vm/inbox.c).
-short_locks = ["agc_inbox.lock"]
+# The I/O inbox's lock is held to link one request; the poster wakes the loop after the unlock (vm/inbox.c). The run
+# queue's lock is held to link or unlink tasks: its waits give it back (uv_cond_wait), and a push signals after the
+# unlock (vm/runq.c), so the loop thread may wake a task (fail_stream under agc_output_forward).
+short_locks = ["agc_inbox.lock", "agc_runq.lock"]
 
 # agc_request.call holds both the compute pool's work (it blocks, on a pool thread) and the loop's REQ_CALL steps.
 stop_fields = ["agc_request.call"]
