@@ -1093,6 +1093,7 @@ def test_bodies_name_the_modules_defaults_and_values_a_translator_needs(driver, 
     # A call leaves out a parameter with a default: the parameter holds it.
     scale = functions["scale"]["params"]
     assert [[(node["kind"], node["text"]) for node in param["default"]] for param in scale] == [[], [("int", "2")]]
+    assert type_text(scale[1]["default"][0]["type"]) == "Int"
     assert (body[0]["kind"], body[0]["text"], len(body[0]["children"][0]["children"])) == ("discard", "_", 1)
     low = body[1]["children"][0]
     assert (low["kind"], low["text"], type_text(low["type"])) == ("int", "-9223372036854775808", "Int")

@@ -153,6 +153,9 @@ export type Node = Model.Node
 ## One parameter of a function of `bodies`.
 export type BodyParam = Model.BodyParam
 
+## A module of the linked program of `bodies`: the prefix of its linked names and its file.
+export type BodyModule = Model.BodyModule
+
 ## One function of `bodies`.
 export type Body = Model.Body
 
