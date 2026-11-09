@@ -142,14 +142,16 @@ TLS_PROGRAM = """\
 def main() -> Void
   certs = System.args()[0]
   port = System.args()[2]
-  secure = Result.unwrap!(HTTP.client(options(5000, 1, 1000, certs + "/ca.pem")))
+  # The deadline of each call, scaled: a TLS handshake with the Python server can take seconds on a loaded runner.
+  limit = String.to_int!(System.args()[4])
+  secure = Result.unwrap!(HTTP.client(options(limit, 1, 1000, certs + "/ca.pem")))
   show(HTTP.get(secure, "https://localhost:#{port}/hello"))
   show(HTTP.get(secure, "https://LOCALHOST:#{port}/hello"))
   show(HTTP.post(secure, "https://127.0.0.1:#{port}/post", "over tls".bytes))
   show(HTTP.get(secure, "https://localhost:#{port}/notify"))
   show(HTTP.get(secure, "https://localhost:#{port}/close"))
   show(HTTP.get(secure, "http://localhost:#{port}/hello"))
-  show(HTTP.get(Result.unwrap!(HTTP.client(options(5000, 1, 1000, certs + "/self-signed.pem"))), "https://localhost:#{port}/hello"))
+  show(HTTP.get(Result.unwrap!(HTTP.client(options(limit, 1, 1000, certs + "/self-signed.pem"))), "https://localhost:#{port}/hello"))
   # A context reads its CA file when it is built, so a missing one fails there, before any client.
   puts(TLS.client_context(TlsClientOptions(ca_file: certs + "/missing.pem")).message.split("\\n")[0])
 end
@@ -928,7 +930,8 @@ def run_program(tmp_path, name, text, ports):
     source = tmp_path / (name + ".agc")
     source.write_text(PRELUDE + text, encoding="utf-8")
     bytecode = compile_agc(source, tmp_path / (name + ".agcb"))
-    # The fifth argument is the client deadline of RAW_PROGRAM: a call that a correct run must finish, so it is scaled.
+    # The fifth argument is the client deadline of RAW_PROGRAM and TLS_PROGRAM: a call that a correct run must finish,
+    # so it is scaled.
     args = [CERTS] + [ports[key] for key in ("plain", "tls", "raw")] + [str(scaled(5000))]
     result = run_vm(bytecode, env=vm_environment(), args=args)
     assert result.code == 0, result.stderr
