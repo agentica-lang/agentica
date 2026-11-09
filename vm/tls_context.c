@@ -191,11 +191,6 @@ void agc_tls_http1_check(agc_vm *vm, const agc_tls_config *config, uint32_t at) 
              "std/http speaks only HTTP/1.1, so the alpn of its TlsContext must be [] or [\"http/1.1\"]", at);
 }
 
-agc_tls_config *agc_tls_context_take(agc_vm *vm, agc_value context, bool server, const char *message, uint32_t at) {
-  agc_tls_context_check(vm, context, server, message, at);
-  return agc_tls_config_ref(agc_as_tls_context(vm, context)->config);
-}
-
 const agc_builtin agc_tls_context_builtins[] = {
   {"TLS.client_context", 1, builtin_client_context, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},
   {"TLS.server_context", 1, builtin_server_context, AGC_NATIVE_NONE, AGC_COST_NONE, false, false, false},

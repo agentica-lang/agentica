@@ -532,8 +532,9 @@ static net *make_net(const agc_trace *trace, agc_loop *io, CC_OWNS char *host, i
   return n;
 }
 
-static net *new_net(agc_vm *vm, CC_OWNS char *host, int64_t port, bool listener) {
-  return make_net(&vm->rt->trace, agc_io_loop(vm), host, port, listener);
+/* IO is agc_io_loop(vm), which can raise: the caller makes it before it mallocs HOST (#1259). */
+static net *new_net(agc_vm *vm, agc_loop *io, CC_OWNS char *host, int64_t port, bool listener) {
+  return make_net(&vm->rt->trace, io, host, port, listener);
 }
 
 /* The resource lets its net go, and its count on it with it, to the caller; NULL when it was closed already. */
@@ -1430,9 +1431,9 @@ static tls_shared *client_context(agc_vm *vm, agc_http_client *c) {
 /* Opens a client socket to NAME:PORT, which the net then owns. CONFIG is the TLS config with a count for the net
    (TLS.connect); CLIENT, when not NULL, is the HttpClient whose lazy context the net takes a count on
    (HttpWire.connect_tls). Neither: TCP. */
-static agc_value connect_net(agc_vm *vm, CC_OWNS char *name, int64_t port, agc_tls_config *config,
+static agc_value connect_net(agc_vm *vm, agc_loop *io, CC_OWNS char *name, int64_t port, agc_tls_config *config,
                              agc_http_client *client, int64_t timeout) {
-  net *n = new_net(vm, name, port, false);
+  net *n = new_net(vm, io, name, port, false);
   n->secure = config || client;
   n->config = config;
   agc_socket *sk = new_socket(vm, n, true);
@@ -1448,7 +1449,8 @@ static const char server_role[] = "TLS.listen takes a server TlsContext (TLS.ser
 
 /* The checks of a connect to WHERE (host, port), in order: --deny-net, the timeout, the port, the host. Then the socket,
    with one more count on the config of CONTEXT (a TlsContext, or Void for none) taken only once every check passed,
-   so an error takes none, or on CLIENT's shared context. */
+   so an error takes none, or on CLIENT's shared context. Everything that can raise comes before the malloc of the
+   host's name. */
 static agc_value checked_connect(agc_vm *vm, const agc_value *where, int64_t timeout, uint32_t span, agc_value context,
                                  agc_http_client *client) {
   agc_value denied = net_denied(vm, span);
@@ -1457,11 +1459,12 @@ static agc_value checked_connect(agc_vm *vm, const agc_value *where, int64_t tim
   int64_t port = agc_as_int(vm, where[1]);
   if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_NETWORK);
   if (port < 1 || port > 65535) return agc_error_value("network: port must be 1..65535");
+  agc_tls_context *tls = agc_is(context, AGC_T_TLS_CONTEXT) ? agc_as_tls_context(vm, context) : NULL;
+  if (tls) agc_tls_context_check(vm, context, false, client_role, span + 3);
+  agc_loop *io = agc_io_loop(vm);
   char *name = agc_cstr(host);
   if (!name) return agc_error_value("network: host cannot contain NUL");
-  agc_tls_config *config =
-    agc_is(context, AGC_T_TLS_CONTEXT) ? agc_tls_context_take(vm, context, false, client_role, span + 3) : NULL;
-  return connect_net(vm, name, port, config, client, timeout);
+  return connect_net(vm, io, name, port, tls ? agc_tls_config_ref(tls->config) : NULL, client, timeout);
 }
 
 /* TCP.connect(host, port, timeout_ms), or TLS.connect(host, port, context, timeout_ms); a server context is a bug in
@@ -1502,11 +1505,13 @@ static agc_value open_listener(agc_vm *vm, const agc_value *args, uint32_t span,
   const agc_string *host = agc_as_string(vm, args[0]);
   int64_t port = agc_as_int(vm, args[1]);
   if (port < 0 || port > 65535) return agc_error_value("network: port must be 0..65535");
+  agc_tls_context *tls = secure ? agc_as_tls_context(vm, args[2]) : NULL;
+  agc_loop *io = agc_io_loop(vm);
   char *name = agc_cstr(host);
   if (!name) return agc_error_value("network: host cannot contain NUL");
-  net *n = new_net(vm, name, port, true);
+  net *n = new_net(vm, io, name, port, true);
   n->secure = secure;
-  if (secure) n->config = agc_tls_context_take(vm, args[2], true, server_role, span + 3);
+  if (tls) n->config = agc_tls_config_ref(tls->config);
   agc_listener *lv = agc_alloc(sizeof(agc_listener));
   lv->state = own(vm, n, true);
   lv->port = port;
@@ -1605,6 +1610,7 @@ static agc_value upgrade_socket(agc_vm *vm, agc_socket *sk, agc_tls_context *con
   if (plain->secure) return agc_error_value("network: the socket is TLS already");
   if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_NETWORK);
   if (!server && !host->bytes) return agc_error_value("network: host cannot be empty");
+  agc_loop *io = agc_io_loop(vm);
   char *name = agc_cstr(host);
   if (!name) return agc_error_value("network: host cannot contain NUL");
   /* The count on the shared context goes with the last check, so no error that follows loses it. A client that gave
@@ -1614,7 +1620,7 @@ static agc_value upgrade_socket(agc_vm *vm, agc_socket *sk, agc_tls_context *con
     free(name);
     return agc_error_value("network: the client is closed");
   }
-  net *n = new_net(vm, name, 0, false);
+  net *n = new_net(vm, io, name, 0, false);
   n->secure = n->upgraded = true;
   n->server_side = server;
   n->shared = shared;

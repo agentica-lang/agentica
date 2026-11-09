@@ -113,6 +113,10 @@ typedef enum { AGC_WRITE_LINES, AGC_WRITE_BYTES } agc_writer_form;
 agc_line_writer *agc_writer_new(agc_vm *vm, agc_value path, int64_t timeout, agc_writer_form form, uint32_t span);
 agc_writer_status agc_writer_next(agc_vm *vm, agc_line_writer *w, agc_value last, agc_value line, agc_value *out);
 void agc_writer_stop(agc_line_writer *w, agc_value outcome);
+/* S as a malloc'd path of the host, joined to the VM's directory when relative. agc_host_path_try gives NULL for an S
+   with a NUL, and never raises, so a caller that holds other malloc'd memory loses none (#1259); agc_host_path raises
+   RUNTIME-INTERNAL instead on POSIX. */
+CC_OWNS char *agc_host_path_try(agc_vm *vm, const agc_string *s);
 CC_OWNS char *agc_host_path(agc_vm *vm, const agc_string *s);
 agc_value agc_utf8_error(const uint8_t *data, size_t len);
 agc_value agc_system_error(agc_vm *vm, const char *what, int err);
