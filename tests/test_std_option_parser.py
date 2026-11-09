@@ -152,3 +152,43 @@ def test_help_shows_limits_in_brackets_and_the_default_value_names(limits):
     result = run_vm(limits, args=["--help"])
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout == (FIXTURE / "limits_help.expected").read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def rest(tmp_path_factory):
+    return compile_agc(FIXTURE / "rest.agc", tmp_path_factory.mktemp("agentica-option-parser-") / "rest.agcb")
+
+
+def rest_peer_lines(args):
+    """argparse's intermixed parse with a `nargs="*"` argument gives the rest; the words of it after `--` are the
+    flags, the ones before the files."""
+    parser = argparse.ArgumentParser(prog="check", add_help=False, allow_abbrev=False)
+    parser.add_argument("src")
+    parser.add_argument("files", nargs="*")
+    parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument("-o", "--out")
+    got = parser.parse_intermixed_args(args)
+    after = args[args.index("--") + 1:] if "--" in args else []
+    count = min(len(after), len(got.files))
+    files, flags = got.files[:len(got.files) - count], got.files[len(got.files) - count:]
+    return [f"src={got.src} files={','.join(files)} flags={','.join(flags)}",
+            f"v={str(got.verbose).lower()} out={got.out or 'none'}"]
+
+
+@pytest.mark.parametrize("args", [
+    ["s"],
+    ["s", "a.c", "b.c"],
+    ["s", "a.c", "-v", "b.c", "-o", "r.txt", "c.c"],
+    ["s", "a.c", "--", "-Iinclude", "-DX=1"],
+    ["-v", "s", "--", "-x"],
+    ["--", "s", "-x", "y"],
+    ["s", "a.c", "-", "-5", "--"],
+], ids=lambda args: " ".join(args))
+def test_the_rest_of_the_words_and_those_after_dashes_match_argparse(rest, args):
+    result = run_vm(rest, args=args)
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.splitlines() == rest_peer_lines(args)
+
+
+def test_the_usage_line_names_the_rest(rest):
+    assert run_vm(rest, args=["--help"]).stdout.splitlines()[0] == "Usage: check [options] <src> [FILE...]"

@@ -7,7 +7,7 @@ description: The std/option_parser module, which reads the command line of a pro
 `std/option_parser` is written in Agentica: `import OP from "std/option_parser"` and `import {Arg, Opt, Kind} from "std/option_parser"`. It has the shape of Python's `argparse` and the names of Ruby's `OptionParser`. It uses only structs, enums and `Optional`: no Json. You describe the program with `Arg` (a positional argument) and `Opt` (an option), `parse` checks the words, and typed getters read each value into your own struct.
 
 ```ruby
-OP.new(program: String, description: String = "", args: List[Arg] = [], opts: List[Opt] = []) -> Parser
+OP.new(program: String, description: String = "", args: List[Arg] = [], opts: List[Opt] = [], rest: String = "") -> Parser
 OP.parse(parser: Parser, args: List[String]) -> Result[Parsed]
 OP.string(parsed: Parsed, name: String) -> String
 OP.int(parsed: Parsed, name: String) -> Int
@@ -16,6 +16,8 @@ OP.flag(parsed: Parsed, name: String) -> Bool
 OP.optional_string(parsed: Parsed, name: String) -> Optional[String]
 OP.optional_int(parsed: Parsed, name: String) -> Optional[Int]
 OP.optional_float(parsed: Parsed, name: String) -> Optional[Float]
+OP.rest(parsed: Parsed) -> List[String]
+OP.after_dashes(parsed: Parsed) -> List[String]
 OP.run!(result: Result[T]) -> T
 OP.usage(parser: Parser) -> String
 OP.help?(message: String) -> Bool
@@ -124,6 +126,31 @@ true
 none
 8080
 false
+```
+
+## The rest of the words
+
+Every argument is required, and a word past the last one is an error (`unexpected argument 'g'`), unless `new` gets a fifth argument, `rest`: the name of those words in the usage line (`"FILE"` shows `[FILE...]`). `parse` then keeps them, and `OP.rest(p)` returns them in order, those after `--` included, as Ruby's `OptionParser#parse` returns the rest of `ARGV`. `OP.after_dashes(p)` returns the last words of `rest` that came after `--`, so a command such as `check FILE... -- FLAGS` splits them without looking at the words itself:
+
+```agentica
+import OP from "std/option_parser"
+import {Opt, Kind as K} from "std/option_parser"
+
+def main() -> Void
+  parser = OP.new("check", "", [], [Opt(name: "verbose", short: "v", kind: K.Flag)], "FILE")
+  p = OP.parse(parser, ["a.c", "-v", "b.c", "--", "-Iinclude", "-DX=1"]).unwrap!
+  rest = OP.rest(p)
+  flags = OP.after_dashes(p)
+  puts(rest.take(rest.size - flags.size))
+  puts(flags)
+  puts(OP.usage(parser).split("\n")[0])
+end
+```
+
+```output
+["a.c", "b.c"]
+["-Iinclude", "-DX=1"]
+Usage: check [options] [FILE...]
 ```
 
 A getter called with a name that was not declared, with the getter of another kind, or on an option that may be absent (`OP.string` where `optional_string` is needed) is a bug of the program, not a mistake of its user. It halts with `RUNTIME-UNWRAP-ERROR`, whose message names the option and whose stack names the line of the call. It is not an `Optional` or a `Result`, so the getters stay plain.

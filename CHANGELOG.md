@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `std/option_parser`: `OP.new(..., rest)` keeps the positional words after the
+  arguments, which `OP.rest` returns (as Ruby's `parse` does) and
+  `OP.after_dashes` splits at `--`.
 - `Process.spawn(cmd, args, timeout_ms, env, out, err)` sends the child's
   stdout and stderr to files, with no shell and no 1 MiB limit.
 

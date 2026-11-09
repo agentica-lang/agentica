@@ -5,10 +5,11 @@
 Ruby names. Written in Agentica; no Json.
 
 ```text
-OP.new(program: String, description: String = "", args: List[Arg] = [], opts: List[Opt] = []) -> Parser
+OP.new(program: String, description: String = "", args: List[Arg] = [], opts: List[Opt] = [], rest: String = "") -> Parser
 OP.parse(parser: Parser, args: List[String]) -> Result[Parsed]
 OP.string / int / float / flag (parsed: Parsed, name: String) -> String / Int / Float / Bool
 OP.optional_string / optional_int / optional_float (parsed: Parsed, name: String) -> Optional[T]
+OP.rest / after_dashes (parsed: Parsed) -> List[String]
 OP.run!(result: Result[T]) -> T
 OP.usage(parser: Parser) -> String
 OP.help?(message: String) -> Bool
@@ -30,7 +31,10 @@ Options(file: OP.string(p, "file"), port: OP.int(p, "port"),
 ```
 
 - Arguments and options are two lists (a list holds one type). Arguments are
-  required, in order. `default` is a String converted by `kind`; `""` means
+  required, in order. A word past them is `unexpected argument`, unless `new`
+  gets `rest` (fifth, positional: `OP.new("check", "", [], opts, "FILE")`, usage
+  `[FILE...]`): then `OP.rest(p)` gives those words, after `--` included, and
+  `OP.after_dashes(p)` the last of them, those after `--` (`FILE... -- FLAGS`). `default` is a String converted by `kind`; `""` means
   none. A Flag has no default or choices. `choices` compare as text.
 - `min: some(1), max: some(65535)` limit an Int option or argument (and its
   default); a value outside is `invalid value for --port: '0' is below the
