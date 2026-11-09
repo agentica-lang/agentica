@@ -357,8 +357,8 @@ static void finished(proc *p, int64_t status) {
 static int signal_child(proc *p, int sig) {
   /* The group's id is the child's pid: libuv's spawn returns after the child's setsid, so the group exists while the
      child runs. A group that is gone (ESRCH) leaves the child alone to signal, and only while it is unreaped: a reaped
-     pid may already be another process's. */
-  int rc = p->group && p->process.pid > 0 ? uv_kill(-p->process.pid, sig) : UV_ESRCH;
+     pid may already be another process's. A group the end-of-run wait found gone (group_gone) is not signalled. */
+  int rc = p->group && !p->group_gone && p->process.pid > 0 ? uv_kill(-p->process.pid, sig) : UV_ESRCH;
   if (rc == UV_ESRCH && p->running) rc = uv_process_kill(&p->process, sig);
   if (rc == UV_ESRCH) rc = 0;
   AGC_TRACE(&p->trace, AGC_TRACE_PROC, "%s pid=%d group=%d rc=%d", sig == SIGKILL ? "kill" : "term",
@@ -519,7 +519,7 @@ static void close_children(guard *g) {
   grace_wait(g);
   for (proc *p = g->graced, *next = NULL; p; p = next) {
     next = p->grace_next;
-    if (group_in_grace(p) && !p->group_gone) signal_child(p, SIGKILL);
+    if (group_in_grace(p)) signal_child(p, SIGKILL);
     if (p->stop == STOP_TERM) p->stop = STOP_KILLED;
     retire(p);
     (void)drop_grace(p);
