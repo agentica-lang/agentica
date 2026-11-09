@@ -106,10 +106,17 @@ export def main() -> Void
   if timing and config.style != "json"
     text = Report.timed_text(files, config.style == "ai", seed, wall_ms)
   end
-  # A red run still writes its coverage: what its tests reached is worth seeing.
+  # A red run still writes its coverage: what its tests reached is worth seeing. A green run whose report cannot be
+  # written fails, so that CI does not upload an old report as this run's.
   covered = covered_run(config, parts, entries)
+  code = Report.exit_code(files)
+  if code == 0 and Coverage.failed?(covered)
+    code = 1
+  end
+
   if config.style == "json" and parts != ""
-    text = JSON.encode(Report.json_and(files, seed, wall_ms, {"coverage": Coverage.json(covered)}))
+    more = {"coverage": Coverage.json(covered), "ok": JSON.from(code == 0), "exit_code": JSON.from(code)}
+    text = JSON.encode(Report.json_and(files, seed, wall_ms, more))
   elsif config.style == "json"
     text = JSON.encode(Report.json(files, seed, wall_ms))
   elsif parts != ""
@@ -120,7 +127,6 @@ export def main() -> Void
     IO.warn("cannot write the BDD report: #{saved.message}")
     System.exit(2)
   end
-  code = Report.exit_code(files)
   if code != 0
     System.exit(code)
   end

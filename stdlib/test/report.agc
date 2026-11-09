@@ -176,7 +176,7 @@ export def json(files: List[FileResult], seed: Int, wall_ms: Int) -> Json
   return json_and(files, seed, wall_ms, {})
 end
 
-## `json` with the fields of `more` added (`coverage`).
+## `json` with the fields of `more` added (`coverage`), or put in place of its own (`ok` and `exit_code`).
 export def json_and(files: List[FileResult], seed: Int, wall_ms: Int, more: Map[String, Json]) -> Json
   sums = totals(files)
   fields: Map[String, Json] = {

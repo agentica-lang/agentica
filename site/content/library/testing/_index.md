@@ -26,13 +26,15 @@ coverage: coverage/lcov.info
 
 Each test file and each scenario runs with [`--coverage FILE`](/cli/#options), and the runner adds their counts up. So the report counts what that option counts: your files and the packages read in place, not `std/` or fetched packages.
 
-- The test files and step programs that the run ran are left out. A program that a step starts, such as the one of "the Agentica program", is not counted.
+- The test files and step programs that the run ran are left out, but the helper modules they import are counted. A program that a step starts, such as the one of "the Agentica program", is not counted.
 - Files are in name order and lines in line order, so `--jobs` does not change the report.
 - A run with failing tests still writes the report, and keeps the exit code of the tests.
 - A test file stopped at its timeout adds nothing. A part that is not LCOV is left out and named after the summary. Neither changes the exit code.
-- The new report replaces an old `coverage/lcov.info` in one step, so a reader never sees half of it.
+- When no part could be read, as in a run with no tests, nothing is written and an old `coverage/lcov.info` stays.
+- A report that cannot be written, for example when `coverage` is a file, or parts that are all broken, fail a run whose tests passed with exit code 1 and a `RUNTIME-INTERNAL` line (the code `--coverage FILE` gives), so CI does not upload an old report.
+- The new report replaces an old `coverage/lcov.info` in one step, so a reader never sees half of it (above 16 MiB the old one is removed first).
 
-With `--json`, the report has a `coverage` object. `lines` counts the lines with code and `hit` those that ran; `broken` names the parts left out, and `problem` says why the report could not be written (`null` when it was):
+With `--json`, the report has a `coverage` object. `lines` counts the lines with code and `hit` those that ran. `path` is `null` when no report was written. `broken` lists the parts left out, each as `{"part", "message"}`, and `problem` is `{"code", "message"}` when the report could not be written, or `null`:
 
 ```json
 {"path": "coverage/lcov.info", "lines": 6, "hit": 4, "files": [{"file": "src/shapes.agc", "lines": 6, "hit": 4}], "broken": [], "problem": null}

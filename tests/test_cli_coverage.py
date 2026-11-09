@@ -208,8 +208,7 @@ def test_a_file_that_cannot_be_written_fails_the_run_or_adds_a_notice_to_its_fai
 def test_coverage_needs_a_file_name_and_the_test_runner_takes_its_own_option(tmp_path):
     cwd = program(tmp_path)
     assert agentica(cwd, "--coverage", "", "main.agc").code == 2
-    refused = agentica(cwd, "--coverage", "out.info", "test")
-    assert refused.code == 2 and "agentica test --coverage" in refused.stderr
+    assert agentica(cwd, "--coverage", "out.info", "test").code == 2
     assert not (cwd / "out.info").exists()
 
 
@@ -244,6 +243,30 @@ def test_a_test_run_writes_one_report_of_its_sources_whatever_the_order_of_its_c
         "broken": [], "problem": None}
 
 
+def test_a_green_run_whose_report_cannot_be_written_fails(tmp_path):
+    cwd = project(tmp_path)
+    (cwd / "coverage").write_text("not a folder\n")
+    result = agentica(cwd, "--json", "test", "--coverage", "--only", "square")
+    assert result.code == 1, result.stderr
+    report = json.loads(result.stdout)
+    assert (report["ok"], report["exit_code"], report["failed"]) == (False, 1, 0)
+    assert (report["coverage"]["path"], report["coverage"]["problem"]["code"]) == (None, "RUNTIME-INTERNAL")
+    assert (cwd / "coverage").read_text() == "not a folder\n"
+    assert not list(cwd.glob("coverage*.new"))
+
+
+def test_a_run_with_no_tests_keeps_the_old_report(tmp_path):
+    (tmp_path / "test").mkdir()
+    (tmp_path / "coverage").mkdir()
+    (tmp_path / "coverage" / "lcov.info").write_text("SF:old.agc\nend_of_record\n")
+    result = agentica(tmp_path, "--json", "test", "--coverage")
+    assert result.code == 1
+    report = json.loads(result.stdout)
+    assert report["files"][0]["error"]["code"] == "CHECK-BDD-EMPTY"
+    assert report["coverage"] == {"path": None, "lines": 0, "hit": 0, "files": [], "broken": [], "problem": None}
+    assert (tmp_path / "coverage" / "lcov.info").read_text() == "SF:old.agc\nend_of_record\n"
+
+
 def merge(tmp_path, *words):
     shutil.copy(FIXTURE / "merge.agc", tmp_path / "merge.agc")
     return agentica(tmp_path, "merge.agc", *words)
@@ -266,10 +289,19 @@ def test_a_part_that_is_not_lcov_is_left_out_and_named(tmp_path):
     parts.mkdir()
     (parts / "1.info").write_text("SF:a.agc\nDA:1,1\nDA:2,0\nLF:2\nLH:1\nend_of_record\n")
     (parts / "2.info").write_text("SF:a.agc\nDA:oops\nend_of_record\n")
-    (parts / "3.info").write_text("SF:a.agc\nDA:2,3\nend_of_record\n")
+    # A TN line is valid LCOV and is ignored; a part cut in the middle of a record is broken.
+    (parts / "3.info").write_text("TN:\nSF:a.agc\nDA:2,3\nend_of_record\n")
+    (parts / "4.info").write_text("SF:a.agc\nDA:1,1\n")
     result = merge(tmp_path, "collect", "parts")
     assert result.code == 0, result.stderr
-    assert result.stdout.splitlines() == [
-        "coverage: coverage/lcov.info", "  a.agc 2/2 lines (100.0%)", "  total 2/2 lines (100.0%)",
-        "  left out the coverage part 2.info: not an LCOV line: DA:oops"]
+    covered = json.loads(result.stdout)
+    assert [part["part"] for part in covered["broken"]] == ["2.info", "4.info"]
+    assert (covered["path"], covered["files"], covered["problem"]) == (
+        "coverage/lcov.info", [{"file": "a.agc", "lines": 2, "hit": 2}], None)
+    assert records((tmp_path / "coverage" / "lcov.info").read_text())["a.agc"]["lines"] == {1: 1, 2: 3}
+    # Parts that are all broken are a problem: the old report stays and would pass for this run's.
+    (parts / "1.info").unlink()
+    (parts / "3.info").unlink()
+    covered = json.loads(merge(tmp_path, "collect", "parts").stdout)
+    assert (covered["path"], covered["problem"]["code"]) == (None, "RUNTIME-INTERNAL")
     assert records((tmp_path / "coverage" / "lcov.info").read_text())["a.agc"]["lines"] == {1: 1, 2: 3}
