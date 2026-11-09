@@ -777,11 +777,13 @@ static bool keep_private(int fd, void *data) {
 
 static guard *guard_of(agc_vm *vm) {
   if (vm->rt->process_guard) return vm->rt->process_guard->native;
+  /* The loop first: agc_io_loop can raise, which would lose a guard already malloc'd (#1259). */
+  agc_loop *io = agc_io_loop(vm);
   agc_resource *r = agc_register(vm, NULL, release_guard);
   guard *g = calloc(1, sizeof(guard));
   if (!g) agc_out_of_memory();
   g->trace = vm->rt->trace;
-  g->io = agc_io_loop(vm);
+  g->io = io;
 #ifndef _WIN32
   agc_each_fd(keep_private, NULL);
 #endif
@@ -963,8 +965,8 @@ static CC_OWNS char *candidate(agc_vm *vm, const char *dir, size_t dir_len, cons
   return agc_host_path_try(vm, joined);
 }
 
-/* Takes the malloc'd path (NULL for none); returns it, or a copy with a suffix added, when a
-   file that may run is there (process_os.h), else NULL. */
+/* Takes the malloc'd path (NULL for none); returns it, or a copy with a suffix added, when a file that may run is
+   there (process_os.h), else NULL. */
 static CC_OWNS char *executable(CC_OWNS char *path) {
   if (!path) return NULL;
   if (agc_proc_suffix_ok(path)) {
