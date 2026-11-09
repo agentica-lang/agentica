@@ -283,6 +283,38 @@ vm-lint-sanitize:
 vm-lint-gcstress:
 	$(LINT) -I $(GC_DIR)/include -DGC_DEBUG -DAGC_GC_STRESS
 
+# cchecker (https://github.com/agentica-lang/cchecker): the project rules for C (blocking calls on short paths, locks on every
+# path, ownership, collector values) plus gcc -fanalyzer and clang-tidy, over the compile database of `make compile-commands`.
+# It is an Agentica program, so dist/agentica runs it; it needs gcc 10+, clang and clang-tidy on PATH. The release has no
+# binary: the tag is cloned into build/cchecker/ and its commit must be the pinned one. The settings are cchecker.toml, the
+# accepted findings cchecker-baseline.json (references/ci.md of the development skill says how to change both). vm/tests/ is
+# test harness code and not checked. It exits 1 on a finding that is not in the baseline; the CI job reports it and does not
+# fail the build yet.
+CCHECKER_VERSION := 0.1.0
+CCHECKER_COMMIT := bffe57d2498a3278c6228f19127507834389066e
+CCHECKER_DIR := build/cchecker/$(CCHECKER_VERSION)
+CCHECKER_FLAGS ?=
+
+.PHONY: cchecker cchecker-update-baseline
+
+# An existing clone is trusted by its path: change the version and the commit together.
+$(CCHECKER_DIR)/cchecker.agc:
+	@rm -rf $(CCHECKER_DIR) $(CCHECKER_DIR).tmp && mkdir -p build/cchecker
+	git -c advice.detachedHead=false clone --quiet --depth 1 --branch $(CCHECKER_VERSION) https://github.com/agentica-lang/cchecker $(CCHECKER_DIR).tmp
+	@[ "$$(git -C $(CCHECKER_DIR).tmp rev-parse HEAD)" = "$(CCHECKER_COMMIT)" ] || { echo "cchecker $(CCHECKER_VERSION) is not commit $(CCHECKER_COMMIT)" >&2; rm -rf $(CCHECKER_DIR).tmp; exit 1; }
+	mv $(CCHECKER_DIR).tmp $(CCHECKER_DIR)
+
+# Run from the root of the checkout: cchecker reads paths relative to the working directory.
+CCHECKER = $(RUN_PROGRAM) dist/agentica$(EXE) $(CCHECKER_DIR)/cchecker.agc -p $(COMPILE_COMMANDS) -c cchecker.toml -j $(JOBS) \
+  --exclude vm/tests --baseline cchecker-baseline.json $(CCHECKER_FLAGS)
+
+cchecker: $(PRODUCT) $(CCHECKER_DIR)/cchecker.agc compile-commands
+	$(CCHECKER)
+
+# Accepts today's findings: rewrites the baseline (the diff is the review).
+cchecker-update-baseline: $(PRODUCT) $(CCHECKER_DIR)/cchecker.agc compile-commands
+	$(CCHECKER) --update-baseline
+
 vm-layers: $(VM_OBJS) $(VM_OBJ)/agentica.o $(VM_OBJ)/launch.o
 	for h in vm/*.h vm/jit/*.h; do $(VM_CC) $(VM_CFLAGS) -fsyntax-only -x c -include $$h /dev/null || exit 1; done
 	sh vm/tools/check-layers.sh $(VM_OBJ)

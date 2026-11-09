@@ -165,7 +165,8 @@ proof). These are the rules they do not show.
   has coverage only in the slow tier.
 - A new CI job counts against the 20 runners the organization shares with
   `platforms.yml`: a run is 9 jobs, and 19 when C changed (the two aggregates
-  included). Merge small steps into an existing job before adding one.
+  included), plus `cchecker` when `vm/`, the build files or its settings
+  changed. Merge small steps into an existing job before adding one.
 - The artifacts live one day: after 24 hours, re-run all jobs of a run, not only
   the failed ones, since a shard could not download the build.
 - Peers: TCP needs Node; TLS needs Node and Python 3; the goldens need Python 3
@@ -174,6 +175,47 @@ proof). These are the rules they do not show.
   `AGENTICA_GC=vendored`), OpenSSL 3 and zlib 1.2.0; `warm-third-party`,
   `sweep.yml` and the release use the vendored ones. Both modes share
   `build/vm/release/obj`; a mode change forces a full rebuild.
+
+## cchecker (`make cchecker`)
+
+[cchecker](https://github.com/agentica-lang/cchecker) checks `vm/` for the
+project rules of C (a short path never blocks, a lock is released on every
+path, ownership) and runs `gcc -fanalyzer` and clang-tidy, on the
+`compile_commands.json` of `make compile-commands`. It is an Agentica program:
+`make cchecker` clones the tag pinned in `mk/vm-test.mk` (`CCHECKER_VERSION`,
+checked against `CCHECKER_COMMIT`; the release has no binary) into
+`build/cchecker/`, runs it with `dist/agentica`, and needs gcc 10+, clang and
+clang-tidy. `vm/tests/` is not checked. A full run takes 3 to 5 minutes. Its
+docs are in that clone (`docs/settings.md`, `docs/suppressions.md`).
+
+- `cchecker.toml` holds the settings (`[library]`, `[assume]`, later
+  `[roots]`); `cchecker-baseline.json` holds the accepted findings. It exits 1
+  on a finding the baseline lacks.
+- The CI job `cchecker` runs when `vm/`, the build files, `.clang-tidy` or those
+  two files change, and for now only reports (`continue-on-error`; no aggregate
+  needs it). Remove that line to make it block: the step runs with pipefail, so
+  the exit code of make (1: new findings; 2: a tool error, a failed clone or a
+  commit that is not the pinned one) is the step's, and the print step fails on
+  an empty or invalid JSON. It prints the new findings, the tool errors and the
+  files not checked, and uploads the JSON of `--json` as the artifact
+  `cchecker-findings`.
+- The job pins gcc 14 and clang and clang-tidy 19, and the baseline matches by
+  message, which the analyzers reword between versions: a local run with other
+  versions may differ from the CI by a finding
+  (`CCHECKER_FLAGS="--gcc gcc-14 --clang-tidy clang-tidy-19"`). The baseline
+  was made with Debian's compilers, so before the job becomes blocking, refresh
+  it from the runner's: take the `new` and `fixed` of the artifact, or run `make
+  cchecker-update-baseline` with those flags on Ubuntu 24.04 with gcc-14,
+  clang-19 and clang-tidy-19.
+- Accept a finding by fixing it first. A false positive of one line gets
+  `// cchecker: ignore CODE: reason` next to the code; a function that makes
+  many findings for the same reason gets an `[assume]` entry with its reason.
+  Only a finding that stays goes into the baseline: `make
+  cchecker-update-baseline` (a full run) rewrites the file; the diff is the
+  review, and a PR says why each new entry is accepted.
+- To move to a new release, change the version and the commit
+  (`git ls-remote https://github.com/agentica-lang/cchecker 'X^{}' X`), run
+  `make cchecker-update-baseline` and review the diff.
 
 ## Conformance matrix (`platforms.yml`)
 

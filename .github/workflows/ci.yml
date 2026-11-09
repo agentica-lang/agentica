@@ -90,6 +90,7 @@ jobs:
     outputs:
       c: ${{ steps.changes.outputs.c }}
       trace: ${{ steps.changes.outputs.trace }}
+      cchecker: ${{ steps.changes.outputs.cchecker }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -100,12 +101,15 @@ jobs:
         run: |
           c=false
           trace=false
+          cchecker=false
           if [ "$EVENT" != pull_request ]; then
             c=true
             trace=true
+            cchecker=true
           elif ! files=$(git -c core.quotePath=false diff --name-only --no-renames HEAD^1 HEAD); then
             c=true
             trace=true
+            cchecker=true
           else
             while IFS= read -r f; do
               case "$f" in
@@ -116,11 +120,17 @@ jobs:
                 vm/*|Makefile|mk/*|.gitmodules|.clang-tidy|.github/workflows/ci.yml|.github/actions/*)
                   c=true ;;
               esac
+              # The same files plus the settings and the baseline of cchecker, which do not need the sanitizer half.
+              case "$f" in
+                vm/*|Makefile|mk/*|.gitmodules|.clang-tidy|cchecker.toml|cchecker-baseline.json|.github/workflows/ci.yml|.github/actions/*)
+                  cchecker=true ;;
+              esac
             done <<< "$files"
           fi
-          echo "c=$c trace=$trace"
+          echo "c=$c trace=$trace cchecker=$cchecker"
           echo "c=$c" >> "$GITHUB_OUTPUT"
           echo "trace=$trace" >> "$GITHUB_OUTPUT"
+          echo "cchecker=$cchecker" >> "$GITHUB_OUTPUT"
 
   # The one build of the release mode: dist/agentica, the first binary of the bootstrap (tests/test_bdd_posix.py runs it) and
   # the C test programs, with the stage files and objects that make needs to see them as up to date.
@@ -334,6 +344,56 @@ jobs:
         run: make vendored-test
       - if: ${{ !cancelled() }}
         run: make dup-check
+
+  # cchecker (project rules for C, gcc -fanalyzer and clang-tidy over vm/) against cchecker-baseline.json, on the
+  # dist/agentica of `build`. It reports and does not fail the run yet (#1238): `continue-on-error` keeps a new finding from
+  # failing the workflow, and no aggregate job needs it; making it blocking is removing that line. The analyzers word their
+  # messages differently between versions and the baseline matches by message, so the job pins the versions it was made with
+  # (gcc 14, clang and clang-tidy 19).
+  cchecker:
+    name: cchecker (reports only)
+    needs: [changes, build]
+    if: ${{ needs.changes.outputs.cchecker != 'false' }}
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: ./.github/actions/setup
+        with:
+          tools: 'false'
+          clang-tidy: 'true'
+      - name: gcc 14 and clang 19, the versions of the baseline
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gcc-14 clang-19
+      - uses: ./.github/actions/use-build
+        with:
+          artifact: release-build
+          targets: dist/agentica
+      # --json prints one object (the new findings, the counts of the baselined and the fixed ones, the tool errors, the files
+      # that were not checked); the next steps print it as lines and keep it as an artifact, which is what refreshing the
+      # baseline from the runner starts from. `shell: bash` runs with pipefail, so the exit status of make (1: new findings,
+      # 2: a tool error, a failed clone or a commit that is not the pinned one) is the step's, not tee's.
+      - name: make cchecker (clones the pinned tag and checks its commit)
+        shell: bash
+        run: make -s cchecker CCHECKER_FLAGS="--gcc gcc-14 --clang clang-19 --clang-tidy clang-tidy-19 --json" | tee build/cchecker.json
+      - name: The findings that are not in the baseline
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: |
+          [ -s build/cchecker.json ] || { echo "::error::cchecker printed no JSON"; exit 1; }
+          jq -e -r '"cchecker: \(.findings | length) new, \(.baselined) baselined, \(.fixed) fixed, \(.errors | length) tool errors, \(.unchecked_files | length) unchecked files, \(.skipped) skipped",
+            (.findings[] | "\(.file):\(.line) \(.code) \(.message)"),
+            (.errors[] | "error: \(.tool) \(.file) \(.message)"),
+            (.unchecked_files[] | "unchecked: \(.file) (missing \(.missing))")' build/cchecker.json
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: cchecker-findings
+          path: build/cchecker.json
+          if-no-files-found: ignore
+          retention-days: 7
 
   # The check that branch protection names: every job of the Linux tests passed. A job that failed, was cancelled or did not
   # run fails it (none of them is skipped on a pull request or a manual run).

@@ -1,0 +1,21 @@
+# Settings of cchecker for vm/ (make cchecker; references/ci.md of the development skill). The pinned version is
+# CCHECKER_VERSION in mk/vm-test.mk; docs/settings.md of that release describes every key.
+
+# The library knowledge, all on (the default), listed so a turned-off family shows in review. The roots of the rules are
+# inferred from it: a function passed to a libuv call that runs it on the loop thread (uv_read_start, uv_write,
+# uv_timer_start, uv_close, ...) is a short root, which must never reach a blocking call (docs/vm/14-core-invariants.md).
+# There is no [roots] table: marks (cchecker.h) come later, for the roots that inference does not find.
+[library]
+libc_blocking = true
+pthread_blocking = true
+libuv_blocking = true
+libgc_blocking = true
+libuv_callbacks_short = true
+libgc_alloc = true
+libc_nonblocking_flags = true
+
+# What the code knows and cchecker cannot see.
+[assume]
+# AGC_TRACE (vm/trace.h) calls agc_trace_emit only when the category is on in the mask of a debug run
+# (AGENTICA_VM_TRACE), so the write inside it is not on a path of a normal run.
+stop = ["agc_trace_emit"]

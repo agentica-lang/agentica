@@ -19,6 +19,7 @@
 # the checkout and the -g modes map it to . in debug info (-fdebug-prefix-map), so worktrees share hits.
 # make TRACE=0            compile out the AGENTICA_VM_TRACE trace points
 # make compile-commands   write compile_commands.json, the compilation database of this mode (gitignored)
+# make cchecker           cchecker (the C rules of vm/, gcc -fanalyzer, clang-tidy) over the compilation database, against cchecker-baseline.json (mk/vm-test.mk)
 # make vm-libfuzz         the libFuzzer target (LIBFUZZ=1 mode: build/vm/libfuzz/agentica-vm-libfuzz, clang only)
 # make vm-libfuzz-run     a bounded coverage-guided run from the compiled fixtures (see mk/vm-test.mk)
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests (sampled --max-steps sweep)
