@@ -101,8 +101,7 @@ def scan_decl(file: String, decl: Ast.Decl, aliases: Set[String]) -> Scan
     Ast.Decl.Function(node) ->
       roots = node.body.map do |stmt: Ast.Stmt| Walk.Node.Stmt(stmt) end
       return scan(file, roots, function_locals(node, roots, aliases), aliases)
-    Ast.Decl.Constant(node) ->
-      return scan(file, [Walk.Node.Expr(node.value)], Stmts.Locals(origins: {}), aliases)
+    Ast.Decl.Constant(node) -> return scan(file, [Walk.Node.Expr(node.value)], Stmts.Locals(origins: {}), aliases)
     _ -> return Scan(found: [], mentions: [])
   end
 end
