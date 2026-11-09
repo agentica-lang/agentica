@@ -1,5 +1,6 @@
 ## The rules of `agentica lint`: each is a suggestion from the style guide (site/content/style.md) that the syntax tree
-## shows without types, with a stable LINT- code. A suggestion is a Problem, so it prints and serializes as any
+## shows without types, with a stable LINT- code. The rules read the catalog of builtins as data (a builtin is no step
+## of a pipe), never the checker. A suggestion is a Problem, so it prints and serializes as any
 ## diagnostic does, but it never means the program is wrong: `agentica check` owns what is always a mistake.
 
 import Diag from "../diagnostics/diagnostic"
@@ -25,6 +26,16 @@ export SINGLE_PIPE = Rule(
   code: "LINT-SINGLE-PIPE",
   message: "a pipe with one step is a plain call",
   help: "a plain call, or the `.` form for a builtin: `shout(text)`, not `text |> shout()`",
+)
+
+## Three calls nested in first position are a pipe that starts with the innermost one.
+export NESTED_CALL = Rule(
+  code: "LINT-NESTED-CALL",
+  message: "three calls are nested in first position",
+  help: (
+    "a pipe that starts with the innermost call, one step per line: `(g(x) |> f() |> h())` for `h(f(g(x)))`; " +
+    "a `try` stays on its step: `|> try h()`"
+  ),
 )
 
 ## Text is built with interpolation.

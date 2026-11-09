@@ -25,6 +25,7 @@ def helper(flag: Bool, text: String, n: Int) -> String
 
   label = "n=" + n.to_s + "!"
   shout = text |> upcase_it()
+  boxed = wrap(trim_it(pad_it(text)), "*")
   if not flag
     out = "a"
   else
@@ -44,8 +45,9 @@ end
 ''' + "".join(f'\nexport def make{i}() -> Db.Value\n  return Db.Value.Text("a")\nend\n' for i in range(20))
 
 # The good form of each rule, and the near misses that must stay quiet: a pipe of two steps, a String built outside a
-# loop, a List grown in a loop, a `+` of two Strings with no to_s, two branches, a doc on public code and a qualified
-# name used a few times.
+# loop, a List grown in a loop, a `+` of two Strings with no to_s, two branches, a doc on public code, a qualified name
+# used a few times, two nested calls, a nest that is not in first position, and nests whose outer calls are builtins or
+# methods of a constant.
 GOOD = '''import Db from "db"
 
 ## Returns the label of the count.
@@ -86,6 +88,11 @@ export def label(flag: Bool, text: String, n: Int) -> String
   end
 
   value = Db.Value.Text("a")
+  twice = wrap(trim_it(text), "*")
+  later = wrap(text, trim_it(pad_it(text)))
+  methods = String.upcase(String.strip(pad_it(text)))
+  builtins = puts(ok(pad_it(text)))
+  rows = ROWS.concat(MORE.concat(pad_it(text)))
   return "#{joined}#{greeting}#{note}#{shout}"
 end
 
@@ -157,6 +164,7 @@ def test_every_rule_reports_its_code_at_its_place(tmp_path):
         "LINT-BOOL-COMPARE": [where(BAD, "flag == true")],
         "LINT-TO-S-CONCAT": [where(BAD, '"n=" + n.to_s')],
         "LINT-SINGLE-PIPE": [where(BAD, "upcase_it()")],
+        "LINT-NESTED-CALL": [where(BAD, "wrap(trim_it")],
         "LINT-NEGATED-ELSE": [where(BAD, "not flag")],
         "LINT-IF-CHAIN": [where(BAD, "n == 1")],
         "LINT-REPEATED-QUALIFIED-NAME": [where(BAD, "Db.Value", nth=2)],
@@ -324,6 +332,36 @@ def test_a_chain_of_the_other_kind_is_not_hidden_by_the_chain_around_it(tmp_path
     assert found == {
         "LINT-TO-S-CONCAT": [where(source, '"n="')],
         "LINT-SINGLE-PIPE": [where(source, "shout()", nth=1), where(source, "shout()", nth=2)],
+    }
+
+
+def test_a_nest_of_calls_is_judged_once_from_its_outer_step_and_a_nest_in_a_later_argument_on_its_own(tmp_path):
+    """A step is a call of the file's own function or of a module it imports: a builtin around a nest breaks it, and
+    a method of a constant or of a module's constant, or a variant of an imported module, is no step. A pipe of one
+    step inside a nest is two suggestions, one for each rule."""
+    source = (
+        'import OP from "op"\n'
+        'import Mod from "mod"\n'
+        'import Domain from "domain"\n'
+        "\n"
+        "def f(text: String) -> String\n"
+        "  one = d(c(b(a(text))))\n"
+        "  two = d(text, c(b(a(text))))\n"
+        "  three = d(c(text |> b() |> a()))\n"
+        "  four = puts(d(c(b(text))))\n"
+        "  five = OP.a(OP.b(c(text)))\n"
+        "  six = Mod.LIMIT.concat(Mod.LIMIT.concat(c(text)))\n"
+        "  seven = d(c(text |> b()))\n"
+        "  eight = Domain.Some(Domain.Wrap(c(text)))\n"
+        "  nine = ROWS.concat(ROWS.concat(c(text)))\n"
+        "  return one\n"
+        "end\n"
+    )
+    found = suggested(tmp_path / "nested_calls.agc", source)
+    nests = ["d(c(b(a(", "c(b(a(text))))\n  three", "d(c(text |> b() |>", "d(c(b(text", "OP.a(", "d(c(text |> b()))"]
+    assert found == {
+        "LINT-NESTED-CALL": [where(source, needle) for needle in nests],
+        "LINT-SINGLE-PIPE": [where(source, "b()))")],
     }
 
 

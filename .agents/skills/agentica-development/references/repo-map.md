@@ -26,7 +26,7 @@ compiler/         # the front end: one folder per context; a new file goes in th
   bytecode/       # the writer; bytecode_tables.agc holds the format and OPCODES (same order as agc_opcode in vm/value.h)
   docs/           # `agentica doc`
   format/         # `agentica fmt`; refreeze stages `format` (attach.agc) and `fmt` (fmt.agc); goldens in tests/fixtures/frontend/format/
-  lint/           # `agentica lint` (#970): rules.agc (the LINT- codes), rule_*.agc (one per kind of node); pure, parse only
+  lint/           # `agentica lint` (#970): rules.agc (the LINT- codes), rule_*.agc (one per kind of node); pure, parse only (reads the builtin catalog as data)
   bdd/            # the `agentica test` driver (references/bdd.md)
   embedded/       # runner.agc and steps.agc: not stage inputs; compiled with stage2 and embedded in the binary
 vm/               # the C11 VM; layers and the "Read next" table in references/vm.md

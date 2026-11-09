@@ -109,7 +109,7 @@ Change style only in code you touch. Restyle untouched code separately.
 - Pipe into your own functions. Builtins with method forms use `.`; piping to
   them fails (`CHECK-PIPE-METHOD`): write `x.upcase`, not
   `x |> String.upcase()`.
-  Replace three-deep nested calls with a pipe.
+  Replace three-deep nested calls with a pipe (`LINT-NESTED-CALL`).
 
 ## case and if
 

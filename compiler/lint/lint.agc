@@ -4,8 +4,8 @@
 ## and gives each node to them.
 ##
 ## The walk uses a worklist, as ast_walk.agc does, and tells each node two things the rules need from above: whether it
-## is below a loop of the same function body, and whether it is the first operand of a pipe or of a `+` chain (the
-## expression above it speaks for the whole chain).
+## is below a loop of the same function body, and whether it is the first operand of a pipe, of a `+` chain or of a
+## plain call (the expression above it speaks for the whole chain).
 
 import Diag from "../diagnostics/diagnostic"
 import Problems from "../diagnostics/problem"
@@ -48,6 +48,7 @@ def of_program(file: String, program: Ast.Program) -> List[Problems.Problem]
   found: List[Problems.Problem] = []
   mentions: List[Qualified.Mention] = []
   imports: List[Ast.ImportDecl] = []
+  aliases = module_aliases(program)
   for decl in program.declarations
     for suggestion in Decls.suggestions(file, decl)
       found = found.push(suggestion)
@@ -58,7 +59,7 @@ def of_program(file: String, program: Ast.Program) -> List[Problems.Problem]
       _ -> imports = imports
     end
 
-    scan = scan_decl(file, decl)
+    scan = scan_decl(file, decl, aliases)
     for suggestion in scan.found
       found = found.push(suggestion)
     end
@@ -75,19 +76,37 @@ def of_program(file: String, program: Ast.Program) -> List[Problems.Problem]
   return found.sort_by do |suggestion: Problems.Problem| suggestion.span.start.offset end
 end
 
+# The aliases of the modules that the file imports (`import Paths from "..."`).
+def module_aliases(program: Ast.Program) -> Set[String]
+  found: Set[String] = Set.new([])
+  for decl in program.declarations
+    case decl
+      Ast.Decl.Import(node) ->
+        case node.alias
+          some(alias) -> found = found.add(alias)
+          none -> next
+        end
+
+      _ -> next
+    end
+  end
+
+  return found
+end
+
 # The walk of a function body or of the value of a constant, `export` or not.
-def scan_decl(file: String, decl: Ast.Decl) -> Scan
+def scan_decl(file: String, decl: Ast.Decl, aliases: Set[String]) -> Scan
   case decl
-    Ast.Decl.Export(node) -> return scan_decl(file, node.declaration)
+    Ast.Decl.Export(node) -> return scan_decl(file, node.declaration, aliases)
     Ast.Decl.Function(node) ->
       roots = node.body.map do |stmt: Ast.Stmt| Walk.Node.Stmt(stmt) end
-      return scan(file, roots, function_locals(node, roots))
-    Ast.Decl.Constant(node) -> return scan(file, [Walk.Node.Expr(node.value)], Stmts.Locals(origins: {}))
+      return scan(file, roots, function_locals(node, roots, aliases), aliases)
+    Ast.Decl.Constant(node) -> return scan(file, [Walk.Node.Expr(node.value)], Stmts.Locals(origins: {}), aliases)
     _ -> return Scan(found: [], mentions: [])
   end
 end
 
-def scan(file: String, roots: List[Walk.Node], locals: Stmts.Locals) -> Scan
+def scan(file: String, roots: List[Walk.Node], locals: Stmts.Locals, aliases: Set[String]) -> Scan
   found: List[Problems.Problem] = []
   mentions: List[Qualified.Mention] = []
   work: List[Item] = roots.map do |node: Walk.Node| Item(node: node, path: [], chained: false) end
@@ -95,7 +114,7 @@ def scan(file: String, roots: List[Walk.Node], locals: Stmts.Locals) -> Scan
   while at < work.size
     item = work[at]
     at += 1
-    for suggestion in suggestions(file, item, locals)
+    for suggestion in suggestions(file, item, locals, aliases)
       found = found.push(suggestion)
     end
 
@@ -103,7 +122,7 @@ def scan(file: String, roots: List[Walk.Node], locals: Stmts.Locals) -> Scan
       mentions = mentions.push(mention)
     end
 
-    for child in children(item)
+    for child in children(item, aliases)
       work = work.push(child)
     end
   end
@@ -111,16 +130,16 @@ def scan(file: String, roots: List[Walk.Node], locals: Stmts.Locals) -> Scan
   return Scan(found: found, mentions: mentions)
 end
 
-def suggestions(file: String, item: Item, locals: Stmts.Locals) -> List[Problems.Problem]
+def suggestions(file: String, item: Item, locals: Stmts.Locals, aliases: Set[String]) -> List[Problems.Problem]
   case item.node
-    Walk.Node.Expr(expr) -> return Exprs.suggestions(file, expr, item.chained)
+    Walk.Node.Expr(expr) -> return Exprs.suggestions(file, expr, item.chained, aliases)
     Walk.Node.Stmt(stmt) -> return Stmts.suggestions(file, stmt, item.path, locals)
   end
 end
 
 # The children of the item, each with its place. The template of an `<<~EAG` literal is code the parser made, not code
 # the author wrote, so it is not walked.
-def children(item: Item) -> List[Item]
+def children(item: Item, aliases: Set[String]) -> List[Item]
   if template?(item.node)
     return []
   end
@@ -128,7 +147,7 @@ def children(item: Item) -> List[Item]
   looped = path_below(item)
   out: List[Item] = []
   for kid in Walk.children(item.node)
-    out = out.push(Item(node: kid, path: looped, chained: out.size == 0 and continues?(item, kid)))
+    out = out.push(Item(node: kid, path: looped, chained: out.size == 0 and continues?(item, kid, aliases)))
   end
 
   return out
@@ -152,13 +171,13 @@ def path_below(item: Item) -> List[Int]
 end
 
 # Whether `first`, the first child of the item, is the first operand of a chain that the item continues: the value a
-# pipe passes on, or the left side of a `+`. Only a child of the same chain counts: in `(a + b.to_s) |> f()` and in
-# `a |> f() + "x"` the child is a chain of the other kind, which nobody has judged yet. A `try` that wraps a pipe is
-# part of it when the `try` is; a `+` does not look through a `try` (Shape.plus_operands), so the `+` inside is its own
-# chain.
-def continues?(item: Item, first: Walk.Node) -> Bool
-  kind = chain_kind(item.node)
-  if kind == "" or kind != chain_kind(first)
+# pipe passes on, the left side of a `+`, or the first argument of a step that is a step too (a nest, Exprs.step?).
+# Only a child of the same chain counts: in `(a + b.to_s) |> f()` and in `a |> f() + "x"` the child is a chain of the
+# other kind, which nobody has judged yet. A `try` that wraps a pipe is part of it when the `try` is; a `+` does not
+# look through a `try` (Shape.plus_operands), so the `+` inside is its own chain.
+def continues?(item: Item, first: Walk.Node, aliases: Set[String]) -> Bool
+  kind = chain_kind(item.node, aliases)
+  if kind == "" or kind != chain_kind(first, aliases)
     return false
   end
 
@@ -168,12 +187,15 @@ def continues?(item: Item, first: Walk.Node) -> Bool
   end
 end
 
-# "pipe" for a piped call, "plus" for a `+`, "pipe" for a `try` around a piped call, and "" for anything else.
-def chain_kind(node: Walk.Node) -> String
+# "pipe" for a piped call, "nest" for a call that is a step, "plus" for a `+`, "pipe" for a `try` around a piped call,
+# and "" for anything else: a builtin call breaks a nest, so `puts(f(g(h(x))))` is judged at `f`.
+def chain_kind(node: Walk.Node, aliases: Set[String]) -> String
   case node
     Walk.Node.Expr(Ast.Expr.Call(call)) ->
       if call.piped
         return "pipe"
+      elsif Exprs.step?(call, aliases)
+        return "nest"
       end
 
       return ""
@@ -184,7 +206,7 @@ def chain_kind(node: Walk.Node) -> String
 
       return ""
     Walk.Node.Expr(Ast.Expr.Try(wrapper)) ->
-      if chain_kind(Walk.Node.Expr(wrapper.operand)) == "pipe"
+      if chain_kind(Walk.Node.Expr(wrapper.operand), aliases) == "pipe"
         return "pipe"
       end
 
@@ -195,7 +217,7 @@ end
 
 # Where each name of a function was set (Stmts.Origin): the parameters first, then every binding with the loops around
 # it. The walk gives each binding its place, as the main walk does.
-def function_locals(decl: Ast.FunctionDecl, roots: List[Walk.Node]) -> Stmts.Locals
+def function_locals(decl: Ast.FunctionDecl, roots: List[Walk.Node], aliases: Set[String]) -> Stmts.Locals
   origins: Map[String, List[Stmts.Origin]] = {}
   for param in decl.params
     origin = Stmts.Origin(offset: -1, path: [], string: param.type.name == "String")
@@ -215,7 +237,7 @@ def function_locals(decl: Ast.FunctionDecl, roots: List[Walk.Node]) -> Stmts.Loc
       _ -> origins = origins
     end
 
-    for child in children(item)
+    for child in children(item, aliases)
       work = work.push(child)
     end
   end

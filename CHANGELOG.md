@@ -15,6 +15,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `OP.after_dashes` splits at `--`.
 - `Process.spawn(cmd, args, timeout_ms, env, out, err)` sends the child's
   stdout and stderr to files, with no shell and no 1 MiB limit.
+- `agentica lint` suggests a pipe for three calls nested in first position
+  (`LINT-NESTED-CALL`).
 - `optional = true` in `[native.NAME]` beside `build`: when the module cannot
   be built, the program runs without it after a warning.
 - `HTTP.prepare(message)` frames a WebSocket message once, so a broadcast does
