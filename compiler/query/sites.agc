@@ -340,6 +340,10 @@ def expression_sites(scan: Scan, expr: Ast.Expr) -> List[Site]
     Ast.Expr.FunctionRef(node) -> return name_sites(scan, node.name, after(node.span.start, 1), "value")
     Ast.Expr.ConstRef(node) -> return placed(scan, named(node.name), "value", node.span, node.span)
     Ast.Expr.TypeName(node) ->
+      if node.args.size > 0
+        return type_sites(scan, Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span), [])
+      end
+
       return bounded_type_sites(scan, node.name, node.span.start, node.span.stop.offset, "type")
     Ast.Expr.EnumConstructor(node) ->
       return enum_part_sites(scan, node.enum_name, node.variant_name, node.span, "construct")

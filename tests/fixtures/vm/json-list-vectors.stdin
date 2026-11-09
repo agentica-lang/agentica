@@ -1,0 +1,15 @@
+# json-list-vectors.stdin: made by python3 tests/fixtures/json-list-vectors.py (Python json module); do not edit by hand
+list	[]	ok	[]	same
+list	[{"name": "a", "count": 1}, {"name": "b"}]	ok	[{"name":"a","count":1},{"name":"b","count":null}]	changed
+list	[{"name": "a", "count": null}]	ok	[{"name":"a","count":null}]	same
+list	[{"name": "a"}, {"name": 2}]	error	[1].name: expected String	-
+list	[{"name": "a"}, null]	error	[1]: expected object	-
+list	[[]]	error	[0]: expected object	-
+list	{"name": "a"}	error	$: expected array	-
+list	null	error	$: expected array	-
+map	{}	ok	{}	same
+map	{"b": {"name": "x"}, "a": {"name": "y", "count": 2}}	ok	{"a":{"name":"y","count":2},"b":{"name":"x","count":null}}	changed
+map	{"a": {"count": 1}}	error	["a"].name: expected required field	-
+map	{"a": []}	error	["a"]: expected object	-
+map	[{"name": "a"}]	error	$: expected object	-
+map	"text"	error	$: expected object	-

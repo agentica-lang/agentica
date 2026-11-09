@@ -840,7 +840,8 @@ def bare(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
 
       return Docs.Doc.Concat([text(operator), operand(c, node.operand, UNARY_LEVEL)])
     Ast.Expr.Binary(node) -> return binary_doc(c, node, bracketed)
-    Ast.Expr.TypeName(node) -> return text(node.name)
+    Ast.Expr.TypeName(node) ->
+      return type_doc(c, Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span))
     Ast.Expr.MethodCall(_) -> return chain_doc(c, expr, bracketed)
     Ast.Expr.FieldAccess(_) -> return chain_doc(c, expr, bracketed)
     Ast.Expr.Invoke(_) -> return chain_doc(c, expr, bracketed)

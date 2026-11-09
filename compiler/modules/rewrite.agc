@@ -422,7 +422,7 @@ def rewrite_members(cx: Resolve.Context, node: Ast.Call, written: String, member
   size = written.length
   stop = Source.Position(offset: start.offset + size, line: start.line, column: start.column + size)
   receiver = Ast.Expr.TypeName(
-    Ast.TypeName(id: cx.ids + node.id, name: linked, span: Source.Span(start: start, stop: stop)),
+    Ast.TypeName(id: cx.ids + node.id, name: linked, args: [], span: Source.Span(start: start, stop: stop)),
   )
 
   name_span = member_span(cx, node, size, member)
@@ -655,6 +655,11 @@ end
 # one; a name that is a constant of this file, imported by name or exported by an alias (Alias.NAME) is a read of it;
 # any other name is a type.
 def rewrite_type_name(cx: Resolve.Context, node: Ast.TypeName) -> Result[Ast.Expr]
+  if node.args.size > 0
+    type = try rewrite_type(cx, Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span))
+    return ok(Ast.Expr.TypeName(node.with(name: type.name, args: type.args)))
+  end
+
   parts = node.name.split(".")
   if parts.size == 1 and cx.type_parameters.any? do |parameter| parameter == node.name end
     return ok(Ast.Expr.TypeName(node))

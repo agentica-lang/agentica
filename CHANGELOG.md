@@ -12,6 +12,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `Process.spawn(cmd, args, timeout_ms, env, out, err)` sends the child's
   stdout and stderr to files, with no shell and no 1 MiB limit.
+- `JSON.decode(text, List[T])` and `JSON.decode(text, Map[String, T])` read a
+  top-level JSON array or object of a decodable type in one call.
 
 ### Changed
 

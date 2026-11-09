@@ -16,6 +16,7 @@ import Source from "../syntax/source"
 import Types from "../syntax/types"
 import Ir from "ir"
 import Data from "lower_data"
+import Program from "lower_program"
 import Scans from "lower_scan"
 import Lowering from "lower_state"
 import {
@@ -515,15 +516,17 @@ def lower_const_read(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ConstRef, want:
   return ok(Lowering.Out(fx: fx, slot: made.slot))
 end
 
-# A type name as a value (JSON.decode(Person, text)): the name as a string, for a struct the VM can decode.
+# A type name as a value (JSON.decode(Person, text)): the name as a string, for a struct the VM can decode. A List or
+# Map type gives the name of the struct that stands for it (Program.json_list_name).
 def lower_type_name(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.TypeName, want: Int) -> Result[Lowering.Out]
-  if !cx.json_types.include?(node.name)
-    return error(Lowering.unsupported(cx, "the type #{Types.display_name(node.name)}", node.span))
+  name = Program.json_list_name(Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span))
+  if !cx.json_types.include?(name)
+    return error(Lowering.unsupported(cx, "the type #{Types.display_name(name)}", node.span))
   end
 
   fx = Lowering.step(fx, node.span)
   made = Lowering.target(fx, want)
-  fx = Lowering.emit_const(made.fx, made.slot, Ir.Imm.Text(node.name), node.span)
+  fx = Lowering.emit_const(made.fx, made.slot, Ir.Imm.Text(name), node.span)
   return ok(Lowering.Out(fx: fx, slot: made.slot))
 end
 
