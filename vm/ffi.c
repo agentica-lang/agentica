@@ -1395,8 +1395,8 @@ void agc_ffi_forget(agc_vm *vm) {
    result is dropped and so freed at once). A NULL pointer (an out resource that C left NULL) gives a resource that is
    closed already and was never registered: no close, owner's end or end of the run frees it, and a call that takes it
    is RUNTIME-NATIVE-CLOSED. */
-static agc_value make_resource(agc_vm *vm, agc_ffi_call *free_call, void *free_at, bool by_ref, const char *name,
-                               void *pointer, const made_from *from) {
+static agc_c_resource *new_resource(agc_vm *vm, agc_ffi_call *free_call, void *free_at, bool by_ref, const char *name,
+                                    void *pointer, const made_from *from) {
   agc_c_resource *res = agc_alloc(sizeof *res);
   res->parent = NULL;
   res->up = from->up;
@@ -1416,7 +1416,12 @@ static agc_value make_resource(agc_vm *vm, agc_ffi_call *free_call, void *free_a
     res->state = agc_register(vm, res, release_resource);
     agc_own(vm, res->state, close_owned);
   }
-  return agc_c_resource_value(res);
+  return res;
+}
+
+static agc_value make_resource(agc_vm *vm, agc_ffi_call *free_call, void *free_at, bool by_ref, const char *name,
+                               void *pointer, const made_from *from) {
+  return agc_c_resource_value(new_resource(vm, free_call, free_at, by_ref, name, pointer, from));
 }
 
 /* The address that frees a resource of a kind: FREE_AT, the free function that the call got (code e), for a kind
@@ -2070,10 +2075,10 @@ agc_value agc_ffi_module_resource(agc_vm *vm, const void *row, const char *name,
                                   agc_c_resource *const *held, uint32_t holds) {
   agc_sync_take(vm);
   made_from from = origins(vm, held, holds);
-  agc_value v = make_resource(vm, NULL, NULL, false, name, state, &from);
-  agc_as_c_resource(vm, v)->row = row;
+  agc_c_resource *res = new_resource(vm, NULL, NULL, false, name, state, &from);
+  res->row = row;
   agc_sync_drop(vm);
-  return v;
+  return agc_c_resource_value(res);
 }
 
 /* On a pool thread: the dirty call, unless the end of the run abandoned it first (one CAS decides, as in
