@@ -51,13 +51,3 @@ short_locks = ["agc_inbox.lock", "agc_runq.lock"]
 
 # agc_request.call holds both the compute pool's work (it blocks, on a pool thread) and the loop's REQ_CALL steps.
 stop_fields = ["agc_request.call"]
-
-# The checked accessors return, or jump out through agc_wrong_tag on hostile bytecode: a jump leaks an owned malloc'd
-# pointer (#1251), or holds a lock that agc_sync_reset does not give back, so a function checks the tags first.
-# cchecker 0.2.0 ends a path at the noreturn agc_wrong_tag and so cannot see the jump through them
-# (agentica-lang/cchecker#66; #1256 replaces this list).
-may_jump = ["agc_as_ats", "agc_as_bool", "agc_as_bytes", "agc_as_c_pointer", "agc_as_c_resource", "agc_as_channel",
-            "agc_as_enum", "agc_as_float", "agc_as_fn", "agc_as_handle", "agc_as_http_client", "agc_as_http_server",
-            "agc_as_int", "agc_as_json", "agc_as_lazy", "agc_as_list", "agc_as_listener", "agc_as_map", "agc_as_mutex",
-            "agc_as_process", "agc_as_range", "agc_as_result", "agc_as_set", "agc_as_socket", "agc_as_string",
-            "agc_as_struct", "agc_as_task", "agc_as_test_case", "agc_as_tls_context"]

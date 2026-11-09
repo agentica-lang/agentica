@@ -99,13 +99,14 @@ bool agc_output_failed(const agc_output *out) {
    loop. The same lock object is held across a blocking fwrite only by agc_write and agc_flush on a stream on its FILE.
    A stream goes to its FILE at agc_output_close, at the end of the run, after the schedulers have ended: a done half
    that runs after it (drain_done) and those writes are then on the one thread that closes, never at once. A child's
-   chunk that a pool thread writes takes the FILE's lock alone (agc_output_write_file). */
-CC_ACQUIRES(l->mutex) CC_ASSUME_SHORT static void stream_take(agc_vm *vm, agc_lock *l) {
+   chunk that a pool thread writes takes the FILE's lock alone (agc_output_write_file). CC_JUMP_RELEASES on these two
+   and on enter and take_turn, which wrap them: agc_sync_reset gives the lock back after a jump. */
+CC_JUMP_RELEASES CC_ACQUIRES(l->mutex) CC_ASSUME_SHORT static void stream_take(agc_vm *vm, agc_lock *l) {
   agc_lock_take(l);
   vm->stream_lock = l;
 }
 
-CC_RELEASES(l->mutex) static void stream_drop(agc_vm *vm, agc_lock *l) {
+CC_JUMP_RELEASES CC_RELEASES(l->mutex) static void stream_drop(agc_vm *vm, agc_lock *l) {
   vm->stream_lock = NULL;
   agc_lock_drop(l);
 }
@@ -537,7 +538,7 @@ static void callback_turn(agc_vm *vm, agc_output *out) {
 
 /* The start of a print or a flush, with the stream's lock taken: true when the task is not yet in the FIFO (it is a
    new writer; false when it comes back to the call it parked in). */
-CC_ACQUIRES(out->base->lock->mutex) static bool enter(agc_vm *vm, agc_output *out) {
+CC_JUMP_RELEASES CC_ACQUIRES(out->base->lock->mutex) static bool enter(agc_vm *vm, agc_output *out) {
   stream_take(vm, out->base->lock);
   bool new_writer = vm->task->output.out != out;
   if (new_writer && out->base->failed) fail_locked(vm, out);
@@ -547,7 +548,8 @@ CC_ACQUIRES(out->base->lock->mutex) static bool enter(agc_vm *vm, agc_output *ou
 /* The end of a print or a flush that waits its turn: marks the task PARKING before it links itself, looks at its wait
    once and drops the stream's lock. A new writer inside a native callback with no writer ahead waits in place
    (callback_turn) instead. */
-CC_RELEASES(out->base->lock->mutex) static bool take_turn(agc_vm *vm, agc_output *out, bool new_writer) {
+CC_JUMP_RELEASES CC_RELEASES(out->base->lock->mutex) static bool take_turn(agc_vm *vm, agc_output *out,
+                                                                               bool new_writer) {
   agc_output *s = out->base;
   if (new_writer && vm->task->callbacks && !s->waiters) {
     callback_turn(vm, out);

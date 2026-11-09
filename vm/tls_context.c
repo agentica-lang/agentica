@@ -33,7 +33,7 @@ typedef struct {
 
 static void release_config(void *config) { agc_tls_config_free(config); }
 
-static void free_build(build *b) {
+static void free_build(CC_FREES build *b) {
   agc_tls_config_free(b->config);
   free(b->ca);
   free(b->cert);
@@ -86,7 +86,7 @@ static agc_value expired(agc_vm *vm, void *data, agc_value context) {
   return agc_error_value("network: operation timed out");
 }
 
-static void drop(void *data) { free_build(data); }
+static void drop(CC_FREES void *data) { free_build(data); }
 
 static const agc_io_kind context_io = {work, done, expired, drop, false, "tls", NULL, false, NULL};
 
@@ -114,24 +114,26 @@ static const char *alpn_size(agc_vm *vm, agc_value field, size_t *len) {
   return NULL;
 }
 
-/* The alpn field of LEN bytes (alpn_size) in its wire form into B; an empty list leaves b->alpn NULL. alpn_size
-   checked every tag, so nothing here jumps out with B half built. */
-static void alpn_of(agc_vm *vm, agc_value field, size_t len, build *b) {
-  if (!len) return;
-  b->alpn = malloc(len);
-  if (!b->alpn) agc_out_of_memory();
-  b->alpn_len = len;
+/* The alpn field of LEN bytes (alpn_size) in its wire form, malloc'd, with its count of names in *PROTOCOLS; NULL for
+   an empty list. It runs before the build is allocated: its accessors jump out on a wrong tag, which alpn_size already
+   ruled out, but cchecker cannot know that. */
+static uint8_t *alpn_of(agc_vm *vm, agc_value field, size_t len, size_t *protocols) {
+  *protocols = 0;
+  if (!len) return NULL;
+  uint8_t *wire = malloc(len);
+  if (!wire) agc_out_of_memory();
   agc_list_cursor cursor;
   agc_value item;
   size_t at = 0;
   agc_list_cursor_begin(&cursor, agc_as_list(vm, field), 0);
   while (agc_list_cursor_next(&cursor, &item)) {
     const agc_string *name = agc_as_string(vm, item);
-    b->alpn[at++] = (uint8_t)name->bytes;
-    memcpy(b->alpn + at, name->data, name->bytes);
+    wire[at++] = (uint8_t)name->bytes;
+    memcpy(wire + at, name->data, name->bytes);
     at += name->bytes;
-    b->protocols++;
+    (*protocols)++;
   }
+  return wire;
 }
 
 /* A field count or a field type other than the record's is bytecode the front end would not write: a wrong-type
@@ -151,9 +153,14 @@ static agc_value start_build(agc_vm *vm, agc_value options, bool server, uint32_
   const char *refused = alpn_size(vm, alpn, &alpn_len);
   if (refused) return agc_error_value(refused);
   agc_task_check_park(vm, "a callback of native code cannot wait for a TLS context", span);
-  build *b = calloc(1, sizeof *b);
+  size_t protocols;
+  uint8_t *wire = alpn_of(vm, alpn, alpn_len, &protocols);
+  CC_OWNS build *b = calloc(1, sizeof *b);
   if (!b) agc_out_of_memory();
   b->server = server;
+  b->alpn = wire;
+  b->alpn_len = wire ? alpn_len : 0;
+  b->protocols = protocols;
   bool copied = server ? path_of(field[0], &b->cert) && path_of(field[1], &b->key)
                        : path_of(field[0], &b->ca) && path_of(field[1], &b->cert) && path_of(field[2], &b->key);
   if (!copied)
@@ -168,7 +175,6 @@ static agc_value start_build(agc_vm *vm, agc_value options, bool server, uint32_
     free_build(b);
     return agc_error_value(refused);
   }
-  alpn_of(vm, alpn, alpn_len, b);
   agc_io_start(vm, &context_io, b, agc_void(), -1);
   return agc_void();
 }

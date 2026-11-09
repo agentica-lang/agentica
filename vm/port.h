@@ -757,15 +757,17 @@ static inline void agc_file_unlock(FILE *f) {
    failure that jumps out of the code that holds it is undone by the scheduler (agc_sync_reset). Lock order: sync, then a
    stream's lock, then the I/O inbox's and the run queue's. With one scheduler (before agc_share) these are a test of
    one flag. In a shared VM agc_sync_assert fails when a mutator of those lists runs without it. */
-CC_ACQUIRES(vm->rt->sync->mutex) void agc_sync_take_shared(agc_vm *vm);
-CC_RELEASES(vm->rt->sync->mutex) void agc_sync_drop_shared(agc_vm *vm);
+/* CC_JUMP_RELEASES on these four: vm->sync_depth records the lock, and the scheduler's catch of a failure gives it
+   back (agc_sync_reset). */
+CC_JUMP_RELEASES CC_ACQUIRES(vm->rt->sync->mutex) void agc_sync_take_shared(agc_vm *vm);
+CC_JUMP_RELEASES CC_RELEASES(vm->rt->sync->mutex) void agc_sync_drop_shared(agc_vm *vm);
 _Noreturn void agc_sync_missing(agc_vm *vm);
 
-CC_ACQUIRES(vm->rt->sync->mutex) static inline void agc_sync_take(agc_vm *vm) {
+CC_JUMP_RELEASES CC_ACQUIRES(vm->rt->sync->mutex) static inline void agc_sync_take(agc_vm *vm) {
   if (__builtin_expect(vm->rt->shared, 0)) agc_sync_take_shared(vm);
 }
 
-CC_RELEASES(vm->rt->sync->mutex) static inline void agc_sync_drop(agc_vm *vm) {
+CC_JUMP_RELEASES CC_RELEASES(vm->rt->sync->mutex) static inline void agc_sync_drop(agc_vm *vm) {
   if (__builtin_expect(vm->rt->shared, 0)) agc_sync_drop_shared(vm);
 }
 
@@ -882,7 +884,8 @@ bool agc_task_join(agc_vm *vm, agc_task *target);
 void agc_task_cancel(agc_vm *vm, agc_task *t);
 
 struct uv_loop_s *agc_io_uv(agc_vm *vm);
-agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms);
+agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, CC_OWNS void *data, agc_value context,
+                         int64_t timeout_ms);
 void agc_io_ready(agc_io_job *j);
 /* Runs FN(DATA) on the I/O thread: at once where the caller is that thread (always while one thread plays both roles),
    else as a request in its inbox, after every request the caller posted before. A libuv step of a service that has no
@@ -904,14 +907,15 @@ bool agc_io_here(agc_vm *vm);
 #define AGC_JOB_QUIET 2u
 /* Internal to vm/loop.c: set by agc_io_compute, never passed to agc_io_detached. */
 #define AGC_JOB_COMPUTE 4u
-agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, unsigned flags);
+agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, CC_OWNS void *data, agc_value context,
+                             unsigned flags);
 /* agc_io_start for a native call that may run without bound (a `compute def`) or a key derivation (the KDF jobs of
    vm/crypto.c): the kind's `work` runs on the compute pool (vm/compute.c), never on the libuv pool, which takes only
    bounded work (docs/vm/14-core-invariants.md §14.1). The task parks; there is no deadline, and like any pool work the
    call runs to its end, so a cancel only detaches the job and its result is dropped (a queued one skips its work).
    CONTEXT is the job's context: the registry keeps it alive until the job ends, also after a cancel detached it, so
    the work may read the GC values it reaches (a dirty call of a native module reads its arguments there). */
-agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context);
+agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, CC_OWNS void *data, agc_value context);
 /* Gives the pool the compute job that this scheduler's turn started, if any (vm->direct); run_task calls it once the
    turn is over and rt->sync is free. */
 void agc_io_submit_direct(agc_vm *vm);
@@ -930,12 +934,12 @@ int agc_io_getaddrinfo(struct uv_loop_s *uv, struct uv_getaddrinfo_s *req,
                        void (*done)(struct uv_getaddrinfo_s *req, int status, struct addrinfo *res), const char *node,
                        const char *service, const struct addrinfo *hints);
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
-agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
-                              agc_more_fn more);
+agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, CC_OWNS void *data, agc_value context,
+                              int64_t timeout_ms, agc_more_fn more);
 /* agc_io_start_then with FLAGS: AGC_JOB_FLUSH makes the end of the run wait for the job's pool work, within the flush
    limit, even after its task gave it up (a timeout or a cancel), as for a detached flush. */
-agc_io_job *agc_io_start_flags(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
-                               agc_more_fn more, unsigned flags);
+agc_io_job *agc_io_start_flags(agc_vm *vm, const agc_io_kind *kind, CC_OWNS void *data, agc_value context,
+                               int64_t timeout_ms, agc_more_fn more, unsigned flags);
 #endif
 #if defined(__linux__) || defined(__APPLE__)
 int agc_fd_reopen(int fd, int access);
