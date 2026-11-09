@@ -65,9 +65,12 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
   no shell and no 1 MiB limit: created or truncated (Unix mode 0666 less the
   umask; an existing file keeps its mode), relative to the working directory.
   One file for both is shared, as `> f 2>&1`. That stream is then not readable
-  (`read_line` gives the end at once) or forwarded. A file that cannot be
-  opened is an error starting `process: cannot open the out file` (or `err`)
-  and starts nothing; NUL is an error; `--deny-fs` refuses them.
+  (`read_line` gives the end at once) or forwarded. A folder, the VM's own
+  stdout/stderr descriptor name or an internal pipe is `error("process: out
+  does not refer to a regular file")` (or `err`); another failure is an error
+  starting `process: cannot open the out file`; both start nothing. NUL is an
+  error; `--deny-fs` refuses them. A start that fails after the open (a file
+  that cannot run) may leave the files created or truncated.
 - A process belongs to the task that opened it: when that task ends (return,
   crash, cancel) the child is closed as by `close`, without waiting, unless
   `Task.spawn_owning` handed it over (`tasks.md`). `close` force-kills a running

@@ -599,7 +599,10 @@ def test_file_calls_cannot_reopen_the_vms_own_pipes_so_a_later_spawn_does_not_de
   for name in Dir.list("@FD_ROOT@", 1000).unwrap!
     if name != "0" and name != "1" and name != "2"
       path = "@FD_ROOT@/" + name
-      IO.inspect([File.read_text(path, 100).ok?, File.open(path, "append", 100).ok?])
+      read = File.read_text(path, 100).ok?
+      append = File.open(path, "append", 100).ok?
+      out = Process.spawn("true", [], 1000, {}, path).ok?
+      IO.inspect([read, append, out, Process.spawn("true", [], 1000, {}, "", path).ok?])
     end
   end
   p = Process.spawn("true", [], 1000).unwrap!
@@ -611,7 +614,8 @@ end
     lines = output_lines(output)
     assert code == 0, errors
     assert lines[-1] == "ok(0)"
-    assert list(dict.fromkeys(lines[:-1])) == ["[false, false]"]
+    # Process.spawn's out and err files take the same guards, so a child never gets one of the VM's pipes.
+    assert list(dict.fromkeys(lines[:-1])) == ["[false, false, false, false]"]
 
 
 @no_stdin_path

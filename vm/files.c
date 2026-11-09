@@ -404,15 +404,6 @@ static int probe(int fd, bool *polled) {
 #endif
 }
 
-static void blocking(int fd) {
-#ifdef _WIN32
-  (void)fd;
-#else
-  int flags = fcntl(fd, F_GETFL);
-  if (flags >= 0) fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
-#endif
-}
-
 static bool read_all(int fd, uint8_t *buf, size_t want, size_t *got, int *err) {
   size_t done = 0;
   while (done < want) {
@@ -578,16 +569,16 @@ static bool same_directory(const agc_fs_info *info, const char *path) {
   return agc_fs_stat(path, &other, true) == 0 && other.dev == info->dev && other.ino == info->ino;
 }
 
-static bool names_output_fd(const op *o) {
-  const char *slash = strrchr(o->path, '/');
-  const char *name = slash ? slash + 1 : o->path;
+static bool names_output_fd(const agc_runtime *rt, const char *path) {
+  const char *slash = strrchr(path, '/');
+  const char *name = slash ? slash + 1 : path;
   char *end = NULL;
   long fd = strtol(name, &end, 10);
-  if (end == name || *end || fd <= 2 || (fd != o->rt->out.fd && fd != o->rt->err.fd)) return false;
+  if (end == name || *end || fd <= 2 || (fd != rt->out.fd && fd != rt->err.fd)) return false;
   char copy[PATH_MAX];
-  size_t len = slash ? (size_t)(slash - o->path) : 0;
+  size_t len = slash ? (size_t)(slash - path) : 0;
   if (len >= sizeof copy) return false;
-  memcpy(copy, o->path, len);
+  memcpy(copy, path, len);
   copy[len] = '\0';
   agc_fs_info info;
   if (agc_fs_stat(slash ? (len ? copy : "/") : ".", &info, true) != 0) return false;
@@ -599,7 +590,11 @@ static bool names_output_fd(const op *o) {
 }
 
 #else
-static bool names_output_fd(const op *o) { (void)o; return false; }
+static bool names_output_fd(const agc_runtime *rt, const char *path) {
+  (void)rt;
+  (void)path;
+  return false;
+}
 #endif
 
 static int open_for(op *o, bool reading, bool append) {
@@ -609,7 +604,7 @@ static int open_for(op *o, bool reading, bool append) {
     if (fd < 0) fail_op(o, FS_OPEN, errno);
     return fd;
   }
-  if (names_output_fd(o)) {
+  if (names_output_fd(o->rt, o->path)) {
     fail_op(o, FS_NOT_REGULAR, 0);
     return -1;
   }
@@ -644,6 +639,16 @@ static int open_for(op *o, bool reading, bool append) {
   int fd = agc_fs_open(o->path, AGC_FS_WRITE | AGC_FS_CREATE | (append ? AGC_FS_APPEND | lockable : AGC_FS_TRUNCATE));
   if (fd < 0) fail_op(o, errno == EISDIR ? FS_IS_DIR : FS_OPEN, errno);
   return checked(o, fd);
+}
+
+int agc_files_open_output(agc_vm *vm, const char *path, bool *refused) {
+  *refused = names_output_fd(vm->rt, path) || !write_target(path);
+  if (*refused) return -1;
+  int fd = agc_fs_open(path, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_TRUNCATE);
+  if (fd < 0 || !private_pipe(vm->rt, fd)) return fd;
+  agc_fs_close(fd);
+  *refused = true;
+  return -1;
 }
 
 static bool on_loop(op *o, int fd) {
@@ -691,7 +696,7 @@ static void step_read_text(op *o) {
 static void work_read_text(op *o) {
   int fd = open_for(o, true, false);
   if (fd < 0 || on_loop(o, fd)) return;
-  blocking(fd);
+  agc_fs_blocking(fd);
   agc_fs_info info;
   if (o->count == 1 && agc_fs_fstat(fd, &info) == 0 && AGC_FS_ISREG(info.mode)) {
     o->fd = fd;
@@ -712,7 +717,7 @@ static void work_read_text(op *o) {
 static void work_write_text(op *o) {
   int fd = open_for(o, false, o->kind == OP_APPEND_TEXT);
   if (fd < 0 || on_loop(o, fd)) return;
-  blocking(fd);
+  agc_fs_blocking(fd);
   if (!write_all(fd, o->in, o->in_len, &o->err)) o->status = FS_WRITE;
   agc_fs_close(fd);
 }
@@ -737,7 +742,7 @@ static void work_sha256(op *o) {
     fail_op(o, FS_NOT_REGULAR, 0);
     return;
   }
-  blocking(fd);
+  agc_fs_blocking(fd);
   /* The digest of the bytes in read order; a concurrent writer changes what is hashed, as with File.read_text. */
   unsigned char digest[AGC_SHA256_BYTES];
   agc_sha256_stream *hash = agc_sha256_begin();
@@ -1089,7 +1094,7 @@ static void work_open(op *o) {
     fail_op(o, FS_OPEN, err);
     return;
   }
-  if (!o->st->polled) blocking(fd);
+  if (!o->st->polled) agc_fs_blocking(fd);
   o->st->fd = fd;
 }
 

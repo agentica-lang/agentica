@@ -1243,25 +1243,19 @@ static CC_OWNS char *child_dir(agc_vm *vm, const agc_string *dir, bool *found) {
 }
 
 /* The file of `out` or `err`, created or truncated with mode 0666 less the umask, as File.write_text and a shell's `>`
-   make it (a file that exists keeps its mode). It opens without waiting, so a FIFO with no reader fails at once and
-   never holds the scheduler, and is then made blocking again: the child writes to it as to any stdout. -1 with errno
-   on failure; a folder is EISDIR on every system. */
-static int open_target(agc_vm *vm, const agc_string *path) {
+   make it (a file that exists keeps its mode), with the guards of the File calls (agc_files_open_output). It opens
+   without waiting, so a FIFO with no reader fails at once and never holds the scheduler, and is then made blocking
+   again: the child writes to it as to any stdout. -1 with errno, or with *refused set. */
+static int open_target(agc_vm *vm, const agc_string *path, bool *refused) {
+  *refused = false;
   char *host = agc_host_path(vm, path);
-  int fd = agc_fs_open(host, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_TRUNCATE);
-  free(host);
-  if (fd < 0) return -1;
-  agc_fs_info info;
-  int problem = agc_fs_fstat(fd, &info) != 0 ? errno : AGC_FS_ISDIR(info.mode) ? EISDIR : 0;
-  if (problem) {
-    agc_fs_close(fd);
-    errno = problem;
+  if (!host) {
+    errno = EINVAL;
     return -1;
   }
-#ifndef _WIN32
-  int flags = fcntl(fd, F_GETFL);
-  if (flags >= 0) fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
-#endif
+  int fd = agc_files_open_output(vm, host, refused);
+  free(host);
+  if (fd >= 0) agc_fs_blocking(fd);
   return fd;
 }
 
@@ -1273,21 +1267,25 @@ static bool same_file(int a, int b) {
 }
 
 /* Opens the files of `out` and `err` (empty: the pipe) into FILES; NULL, or the error of the one that failed, with
-   nothing left open. */
+   nothing left open (*problem: its errno, 0 for a refused path). */
 static const char *open_targets(agc_vm *vm, const agc_string *out, const agc_string *err, int files[2], int *problem) {
   const agc_string *paths[2] = {out, err};
-  static const char *const texts[2] = {"process: cannot open the out file", "process: cannot open the err file"};
+  static const char *const texts[2][2] = {
+    {"process: cannot open the out file", "process: out does not refer to a regular file"},
+    {"process: cannot open the err file", "process: err does not refer to a regular file"},
+  };
   for (size_t k = 0; k < 2; k++) {
     if (!paths[k] || !paths[k]->bytes) continue;
     if (k == 1 && files[0] >= 0 && agc_same_string(vm, out, err)) {
       files[1] = files[0];
       continue;
     }
-    files[k] = open_target(vm, paths[k]);
+    bool refused;
+    files[k] = open_target(vm, paths[k], &refused);
     if (files[k] < 0) {
-      *problem = errno;
+      *problem = refused ? 0 : errno;
       close_fd(&files[0]);
-      return texts[k];
+      return texts[k][refused];
     }
   }
   if (files[0] >= 0 && files[1] >= 0 && files[1] != files[0] && same_file(files[0], files[1])) {
@@ -1354,9 +1352,9 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   const char *env_text = env_problem(vm, env, &pairs, &pair_count);
   if (env_text) return agc_error_value(env_text);
   bool files = (out && out->bytes) || (err && err->bytes);
+  if (files && vm->rt->deny_fs) return agc_error_value(AGC_DENIED_FS);
   if (files && ((out && !no_nul(out)) || (err && !no_nul(err))))
     return agc_error_value("process: out and err cannot contain NUL");
-  if (files && vm->rt->deny_fs) return agc_error_value(AGC_DENIED_FS);
   agc_process *pr = agc_alloc(sizeof(agc_process));
   pr->reader = agc_new_lock(vm);
   pr->writer = agc_new_lock(vm);
@@ -1381,7 +1379,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
     AGC_TRACE(&vm->rt->trace, AGC_TRACE_PROC, "spawn_failed reason=file");
     free(path);
     free(cwd);
-    return agc_system_error(vm, target_text, problem);
+    return problem ? agc_system_error(vm, target_text, problem) : agc_error_value(target_text);
   }
   launch *l = calloc(1, sizeof(launch));
   if (!l) agc_out_of_memory();

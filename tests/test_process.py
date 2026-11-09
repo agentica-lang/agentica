@@ -390,7 +390,7 @@ def test_out_and_err_send_the_streams_to_files_created_or_truncated(tmp_path):
 def test_an_out_or_err_file_that_cannot_be_opened_is_an_error_and_no_child_runs(tmp_path):
     late = tmp_path / "late.txt"
     for out, err, expected in [
-        (agc_literal(tmp_path), '""', "process: cannot open the out file"),
+        (agc_literal(tmp_path), '""', "process: out does not refer to a regular file"),
         ('""', agc_literal(tmp_path / "no-such-dir" / "err.txt"), "process: cannot open the err file"),
         ('"a" + String.from_code(0)', '""', "process: out and err cannot contain NUL"),
     ]:

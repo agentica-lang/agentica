@@ -37,6 +37,9 @@ enum {
 int agc_fs_open(const char *path, unsigned flags);
 int agc_fs_bytecode_open(const char *path, bool private, size_t maximum, size_t *size);
 int agc_fs_close(int fd);
+/* Clears O_NONBLOCK, which agc_fs_open sets, so reads and writes on the descriptor wait as usual (a file the pool
+   reads, a child's stdout); nothing on Windows, where agc_fs_open sets no such flag. */
+void agc_fs_blocking(int fd);
 int64_t agc_fs_read(int fd, void *data, size_t size);
 int64_t agc_fs_write(int fd, const void *data, size_t size);
 int agc_fs_stat(const char *path, agc_fs_info *info, bool follow);
