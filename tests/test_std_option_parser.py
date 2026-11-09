@@ -9,7 +9,7 @@ import io
 
 import pytest
 
-from tests.agentica_test import FIXTURES, compile_agc, run_vm
+from tests.agentica_test import FIXTURES, cli, compile_agc, run, run_vm
 
 FIXTURE = FIXTURES / "option_parser"
 
@@ -152,3 +152,70 @@ def test_help_shows_limits_in_brackets_and_the_default_value_names(limits):
     result = run_vm(limits, args=["--help"])
     assert (result.code, result.stderr) == (0, "")
     assert result.stdout == (FIXTURE / "limits_help.expected").read_text(encoding="utf-8")
+
+
+@pytest.fixture(scope="module")
+def rest(tmp_path_factory):
+    return compile_agc(FIXTURE / "rest.agc", tmp_path_factory.mktemp("agentica-option-parser-") / "rest.agcb")
+
+
+def rest_peer_lines(args):
+    """argparse's intermixed parse with a `nargs="*"` argument gives the rest. argparse does not tell which words came
+    after `--`, so that half is written here by hand: the words of the rest that come after the first `--` are the
+    flags, and the words before them are the files."""
+    parser = argparse.ArgumentParser(prog="check", add_help=False, allow_abbrev=False)
+    parser.add_argument("src")
+    parser.add_argument("files", nargs="*")
+    parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument("-o", "--out")
+    got = parser.parse_intermixed_args(args)
+    after = args[args.index("--") + 1:] if "--" in args else []
+    count = min(len(after), len(got.files))
+    files, flags = got.files[:len(got.files) - count], got.files[len(got.files) - count:]
+    return [f"src={got.src} files={','.join(files)} flags={','.join(flags)}",
+            f"v={str(got.verbose).lower()} out={got.out or 'none'}"]
+
+
+@pytest.mark.parametrize("args", [
+    ["s"],
+    ["s", "a.c", "b.c"],
+    ["s", "a.c", "-v", "b.c", "-o", "r.txt", "c.c"],
+    ["s", "a.c", "--", "-Iinclude", "-DX=1"],
+    ["-v", "s", "--", "-x"],
+    ["--", "s", "-x", "y"],
+    ["s", "a.c", "-", "-5", "--"],
+    ["s", ""],
+    ["s", "--", "--"],
+], ids=lambda args: repr(args))
+def test_the_rest_of_the_words_and_those_after_dashes_match_argparse(rest, args):
+    result = run_vm(rest, args=args)
+    assert (result.code, result.stderr) == (0, "")
+    assert result.stdout.splitlines() == rest_peer_lines(args)
+
+
+def test_the_usage_line_names_the_rest(rest):
+    assert run_vm(rest, args=["--help"]).stdout.splitlines()[0] == "Usage: check [options] <src> [FILE...]"
+
+
+@pytest.mark.parametrize("args,message", [
+    ([], "missing argument <src>"),
+    (["--"], "missing argument <src>"),
+    (["s", "a.c", "-x"], "unknown option -x"),
+])
+def test_a_parser_with_a_rest_still_wants_its_arguments_and_knows_its_options(rest, args, message):
+    result = run_vm(rest, args=args)
+    assert result.code == 2
+    assert result.stderr.splitlines() == [f"check: {message}", "Try 'check --help' for more information"]
+
+
+def test_a_rest_name_with_a_space_is_an_invalid_specification(tmp_path):
+    program = tmp_path / "spec.agc"
+    program.write_text(
+        'import OP from "std/option_parser"\n\n'
+        "def main() -> Void\n"
+        '  puts(OP.parse(OP.new("t", "", [], [], "MY FILE"), []).message)\n'
+        "end\n",
+        encoding="utf-8",
+    )
+    result = run(cli() + [str(program)])
+    assert (result.code, result.stdout) == (0, "t: invalid specification: 'MY FILE' is not a valid name for the rest\n")

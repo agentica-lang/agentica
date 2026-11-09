@@ -12,7 +12,7 @@ def test_the_cache_tests_pass_on_four_schedulers():
     result = run(command, env=vm_environment({"AGENTICA_SCHEDULERS": 4}))
     assert result.stderr == ""
     report = json.loads(result.stdout)
-    assert (result.code, report["passed"], report["failed"]) == (0, 18, 0), failures(report)
+    assert (result.code, report["passed"], report["failed"]) == (0, 19, 0), failures(report)
 
 
 def failures(report):

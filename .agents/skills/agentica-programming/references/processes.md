@@ -5,7 +5,7 @@ encoding.
 
 ```text
 Process.spawn(command: String, args: List[String], timeout_ms: Int = 30000, env: Map[String, String] = {},
-              out: String = "", err: String = "") -> Result[Process]
+              out: String = "", err: String = "", pgroup: Bool = false) -> Result[Process]
 Process.send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
 Process.send_bytes(p: Process, bytes: Bytes, timeout_ms: Int) -> Result[Void]
 Process.read_line(p: Process, timeout_ms: Int) -> Result[String]
@@ -14,10 +14,10 @@ Process.close_stdin(p: Process, timeout_ms: Int) -> Result[Void]
 Process.wait(p: Process, timeout_ms: Int) -> Result[Int]
 Process.close(p: Process) -> Void
 Process.spawn_captured(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000,
-                       env: Map[String, String] = {}) -> Result[Process]
+                       env: Map[String, String] = {}, pgroup: Bool = false) -> Result[Process]
 Process.output(p: Process, timeout_ms: Int) -> Result[ProcessOutput]
 Process.spawn_channel(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000,
-                      env: Map[String, String] = {}) -> Result[Process]
+                      env: Map[String, String] = {}, pgroup: Bool = false) -> Result[Process]
 Process.channel_read_line(p: Process, timeout_ms: Int) -> Result[String]
 Process.channel_send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
 Process.channel_close(p: Process, timeout_ms: Int) -> Result[Void]
@@ -78,7 +78,13 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
   child, waits for it to exit (other tasks run meanwhile), closes owned
   ports/workers and is idempotent; a timeout closes the child without waiting;
   other operations on a closed handle fail. The end of the run also cleans up
-  directly spawned children; descendant trees are outside the guarantee.
+  directly spawned children; descendant trees are outside the guarantee
+  unless the child started with `pgroup: true` (last parameter of each spawn):
+  then it leads its own process group (a new session on POSIX: no controlling
+  terminal, so no `/dev/tty` prompt, and a SIGKILLed VM leaves the group) and a
+  stop while it runs signals the whole group, with SIGKILL after a SIGTERM's
+  grace even if the child already exited. Descendants of a child that exited on
+  its own are not stopped. Windows ignores `pgroup`.
 - Operational failures return String error Results; explicit cleanup failures
   are `RUNTIME-PROCESS-CLOSE`, at the call span.
 
