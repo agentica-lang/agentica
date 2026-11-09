@@ -165,10 +165,18 @@ end
 # `test` and `install` build nothing, and the program names the library by its bare name, which the VM refuses with
 # the rest of the native code (RUNTIME-NATIVE-DENIED, on a bytecode cache hit as on a miss: the cache keeps such
 # programs apart, Settings.native_denied). With `--json` or `--ai` the builder prints nothing, so stderr holds only
-# the diagnostic.
+# the diagnostic and the warning of an optional module that was not built (PKG-NATIVE-UNBUILT), one line or block
+# each.
 def builder_settings(settings: Env.Settings, deny: List[String], style: String, verb: String) -> Env.Settings
   if deny.size == 0
-    builder: Fn[Workspace.BuildRequest, Workspace.Built] = NativeBuild.builder(style == "plain")
+    warned: Fn[String, Void] = &warn_plain
+    if style == "json"
+      warned = &warn_json
+    elsif style == "ai"
+      warned = &warn_ai
+    end
+
+    builder: Fn[Workspace.BuildRequest, Workspace.Built] = NativeBuild.builder(style == "plain", warned)
     return settings.with(workspace: settings.workspace.with(native_build: builder))
   end
 
@@ -179,6 +187,20 @@ def builder_settings(settings: Env.Settings, deny: List[String], style: String, 
   end
 
   return denied
+end
+
+# The warning that a packed failure holds, on stderr: `warning: MESSAGE` in plain text, the JSON object of the problem
+# with `"warning": true`, or the compact form with `warning` as its first line.
+def warn_plain(packed: String) -> Void
+  IO.warn("warning: #{Failure.unpack_failure(packed).diagnostic.message}")
+end
+
+def warn_json(packed: String) -> Void
+  IO.warn(JSON.encode(DiagnosticJson.warning(Front.link_problem(Failure.unpack_failure(packed)))))
+end
+
+def warn_ai(packed: String) -> Void
+  IO.warn(Ai.warning(Front.link_problem(Failure.unpack_failure(packed))))
 end
 
 # `help`: the builtins from the catalog, or a module of `std/` as `doc` reads it.

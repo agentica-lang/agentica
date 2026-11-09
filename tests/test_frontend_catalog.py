@@ -48,7 +48,8 @@ def test_the_rule_enum_has_the_rules_of_the_builtin_table():
 def test_the_highlighter_colors_the_reserved_type_names_and_no_other():
     data = (ROOT / "compiler" / "catalog" / "builtins_data.agc").read_text(encoding="utf-8")
     reserved = re.search(r"^export RESERVED_TYPE_NAMES: List\[String\] = \[(.*?)^\]", data, flags=re.M | re.S).group(1)
-    grammar = json.loads((ROOT / "site" / "highlight" / "agentica.tmLanguage.json").read_text(encoding="utf-8"))
+    grammar_file = ROOT / "site" / "themes" / "docs-theme" / "highlight" / "agentica.tmLanguage.json"
+    grammar = json.loads(grammar_file.read_text(encoding="utf-8"))
     colored = re.fullmatch(r"\\b\((.*)\)\\b", grammar["repository"]["builtin-types"]["match"]).group(1)
     assert sorted(colored.split("|")) == sorted(re.findall(r'"([^"]+)"', reserved))
 

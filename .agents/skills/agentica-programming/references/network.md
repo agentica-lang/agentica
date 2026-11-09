@@ -189,7 +189,8 @@ HTTP.body_refusal(message: String) -> HTTP.Answer
 HTTP.whole(data: Bytes) -> Channel[Bytes]
 HTTP.accept_websocket(request: HttpRequest, session: HTTP.WebSocketSession, options: HTTP.WebSocketOptions = HTTP.WebSocketOptions()) -> Result[HTTP.Upgrade]
 HTTP.WebSocket(incoming: Channel[HTTP.Message], outgoing: Channel[HTTP.Message], protocol: String)
-HTTP.Message: Text(String), Binary(Bytes), Ping(Bytes), Pong(Bytes), Close(Int, String)
+HTTP.Message: Text(String), Binary(Bytes), Ping(Bytes), Pong(Bytes), Close(Int, String), Prepared(Bytes)
+HTTP.prepare(message: HTTP.Message) -> HTTP.Message
 HTTP.WebSocketOptions(max_message_bytes: Int = 1048576, idle_ms: Int = 0, ping_ms: Int = 0, close_ms: Int = 5000, protocols: List[String] = [], outgoing_queue: Int = 8)
 
 HttpRequest(method: String, target: String, path: String, headers: List[Header], body: Bytes,
@@ -389,6 +390,11 @@ end
   pings itself, a `Pong` is handed on. Sending `Close(code, reason)` starts the
   close handshake. When the session returns the server sends `Close(1000)`
   (1011 for an `error`) and closes.
+- To send one message to many sockets, frame it once with
+  `HTTP.prepare(HTTP.Message.Text(text))` and send the `Prepared` result on
+  every `outgoing`, so it is not framed for every socket. A session never
+  receives `Prepared`, but a `case` on `HTTP.Message` needs `_` or a
+  `Prepared` arm.
 - Frames that break RFC 6455 close the connection with 1002, 1007 or 1009; the
   cap is `max_message_bytes`.
 - `accept_websocket` answers a bad handshake itself (400, or 426 for another

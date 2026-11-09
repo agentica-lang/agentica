@@ -85,8 +85,8 @@ export def parse(reading: Reader.Reading, value: Toml.Value, path: String) -> Re
 end
 
 ## The request for the build of `library` from the package folder `root` (a real path), for the system `os`. `pinned`
-## is the locked hash of a fetched package, "" for one read in place. Its files are not listed yet: `listed` does that
-## when a file first uses the library, so an unused one costs nothing.
+## is the locked hash of a fetched package, "" for one read in place; `optional` is the library's `optional` key. Its
+## files are not listed yet: `listed` does that when a file first uses the library, so an unused one costs nothing.
 export def request(
   library: String,
   build: Build,
@@ -95,6 +95,7 @@ export def request(
   file: String,
   cache_root: String,
   pinned: String,
+  optional: Bool,
 ) -> Workspace.BuildRequest
   return Workspace.BuildRequest(
     cache_root: cache_root,
@@ -104,6 +105,7 @@ export def request(
     key: Reader.child(Reader.child("native", library), "build"),
     root: root,
     pinned: pinned,
+    optional: optional,
     sources: build.sources,
     defines: build.defines,
     libs: build.libs,
@@ -135,6 +137,20 @@ export def listed(workspace: Workspace.Workspace, request: Workspace.BuildReques
   end
 
   return ok(request.with(files: files, contents: pinned.contents))
+end
+
+## The library that an optional module which could not be built stands for: a folder path, ending in `/`, which no
+## loader opens as a library, so a call of the module fails as for a missing library and Native.load gives an error.
+## It is `native-build/unbuilt/` in the build cache, which nothing makes, and whose libraries the bytecode cache reads
+## before it stores a program: one it cannot read stores none, so the next run tries the build again. With no cache
+## (no HOME), it is the package's native/ folder, which holds the sources.
+export def unbuilt_path(request: Workspace.BuildRequest) -> String
+  base = Paths.join(request.root, NATIVE_FOLDER)
+  if request.cache_root != ""
+    base = Paths.join(Paths.join(request.cache_root, "native-build"), "unbuilt")
+  end
+
+  return "#{base}/"
 end
 
 ## The file name of the built library of `name` on `system`, as the VM opens it.

@@ -1,4 +1,4 @@
-/* The tokens come from the page's own theme (site/assets/scss/_tokens.scss); the fallbacks are for releases without one. */
+/* The tokens come from the page's own theme (_tokens.scss of the docs theme, site/themes/docs-theme); the fallbacks are for releases without one. */
 .version-select {
   flex-shrink: 0;
   max-width: 9rem;

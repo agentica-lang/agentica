@@ -1,6 +1,9 @@
 # Documentation site
 
-The site's design rules are in `site/DESIGN.md`.
+The look, the layouts, the outputs and the highlighter come from the docs
+theme, the submodule `site/themes/docs-theme` (agentica-lang/docs-theme). Its
+README says how it works and lists its params; its `DESIGN.md` has the design
+rules. A change of style is a docs-theme PR, then a submodule bump here.
 
 Read this before changing `site/`, a site page, or a builtin or language
 rule that a site page shows.
@@ -9,26 +12,28 @@ rule that a site page shows.
 
 - `make site` builds `site/public` (Hugo extended; the Hugo and Dart Sass
   versions are pinned in `pages.yml`; `mk/site.mk` says where `sass` must be).
-  Warnings fail the build. `make site-serve` serves it. Styles are SCSS partials
-  in `site/assets/scss/` (custom properties in `_tokens.scss`).
-- `make site` also needs Node: after Hugo, `site/highlight/highlight.mjs` colors
-  every `agentica` block with the TextMate grammar of agc-tmlanguage (copied to
-  `site/highlight/agentica.tmLanguage.json`; its `package.json` `grammar` field
-  is the source commit). `render-codeblock.html` wraps each block in
-  `div.agc-code` for it and fails the build on Hugo highlight options
-  (`linenos`, `hl_lines`); the script fails on a block of another shape, an
-  unknown HTML entity or a `CLASSES` entry that colors no token.
-  `make site-serve` skips the script. The same script colors the `signature`
-  blocks with a small tokenizer and fails on a line of another shape.
-- To update the grammar, copy `syntaxes/agentica.tmLanguage.json` from
-  agc-tmlanguage, set the `grammar` field to its commit and run `make site`.
+  It needs the theme (`git submodule update --init site/themes/docs-theme`).
+  Warnings fail the build. `make site-serve` serves it.
+- `make site` also needs Node: after Hugo, the theme's
+  `highlight/highlight.mjs --strict` colors every `agentica` and `signature`
+  block, and fails on a block of another shape or a color class that no token
+  matches.
+- The grammar is the theme's `highlight/agentica.tmLanguage.json`; it must
+  color exactly `RESERVED_TYPE_NAMES` (`tests/test_frontend_catalog.py`). A
+  change to that list needs a docs-theme PR, merged first, then a submodule
+  bump here. The `grammarChanges` field of the theme's
+  `highlight/package.json` says where the copy differs from agc-tmlanguage
+  (agentica-lang/agc-tmlanguage#13).
+- The site's own templates override the theme: `layouts/reference/list.html`
+  (the spec index) and `layouts/_shortcodes/release.md`. `site/hugo.toml` sets
+  the params and `_merge = "deep"`, which takes the theme's outputs.
 - The site shows the version of the `VERSION` file (header, footer, `llms.txt`,
   `llms-full.txt`, Getting started). `make site` passes it to Hugo as
-  `HUGO_PARAMS_VERSION`, and `_partials/version.html` fails a plain `hugo`
-  build without it. Never type the version in `site/`. The Getting started text
-  comes from the `release` shortcode (`layouts/_shortcodes/release.md`).
-- `/search.json` is built from `layouts/home.search.json` (never edit it by
-  hand).
+  `HUGO_PARAMS_VERSION`; the `release` shortcode (Getting started) fails a
+  plain `hugo` build without it. Never type the version in `site/`.
+- To take a newer theme: `git -C site/themes/docs-theme checkout <commit>`,
+  `git add site/themes/docs-theme`, `make site`. `tools/site_versions.py`
+  builds each tag with the theme commit that tag pins.
 
 ## Content
 
@@ -63,13 +68,13 @@ rule that a site page shows.
 
 ## Markdown and llms.txt
 
-Every page is also published as Markdown (`layouts/all.markdown.md`;
-`_partials/markdown-links.html` rewrites links to `.md` URLs, and
-`home.llms.txt` fails the build if that rewrite changes). It skips top-level
-``` fences, code spans and images, but not `~~~` or 4-backtick fences. Fence
+Every page is also published as Markdown (the theme's `layouts/all.markdown.md`;
+its `_partials/markdown-links.html` rewrites links to `.md` URLs, and
+`home.llms.txt` fails the build if that rewrite changes). It skips top-level ```
+fences, code spans and images, but not `~~~` or 4-backtick fences. Fence
 attributes become plain text: `{expect="CHECK-X"}` adds ``Does not compile:
 `error[CHECK-X]` `` after the block, `{file="a.agc"}` adds ``File `a.agc`:``
-before it. `/llms.txt` and `/llms-full.txt` come from
+before it. `/llms.txt` and `/llms-full.txt` come from the theme's
 `_partials/llms-groups.html`.
 
 ## Examples are tests
@@ -86,10 +91,10 @@ Fence attributes:
 
 - `{mode="check"}` only checks. Use it for examples that touch files,
   processes, the network or other outside state.
-- `{expect="CODE"}` expects that diagnostic. `render-codeblock.html` shows
-  `error[CODE]` in a box below the code, labeled "Runtime error" for
-  `RUNTIME-` codes and "Does not compile" otherwise. It shows only the code,
-  so the page cannot drift from the diagnostic message.
+- `{expect="CODE"}` expects that diagnostic. The theme's code block shows
+  `error[CODE]` in a box below the code, labeled "Runtime error" for `RUNTIME-`
+  codes and "Does not compile" otherwise. It shows only the code, so the page
+  cannot drift from the diagnostic message.
 - `{file="name.agc"}` is a module that the page's other blocks can import.
 - `{fmt="off"}` leaves the block out of the format check (below). Use it only
   for a block that is wrong or partial on purpose: a style rule shown by
@@ -135,7 +140,8 @@ that runs: `master`) and the latest release again at the root.
   the current ones;
   they read `/versions.json`, which the assembly writes. A fix to them applies
   to every version at the next deploy. They use only the `.site-header`, its
-  `.version` link and the tokens of `_tokens.scss`, which every release has.
+  `.version` link and the color tokens (`_tokens.scss` of the docs theme);
+  each old release carries its own copy of them.
 - `make site-versions` writes `build/site-versions/public`; serve it with
   `python3 -m http.server 8000 -d build/site-versions/public`.
 

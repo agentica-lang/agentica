@@ -1,19 +1,40 @@
-## The rules that read one expression: a Bool compared with a literal, a pipe of one step and text joined with `+` and
-## `to_s`.
+## The rules that read one expression: a Bool compared with a literal, a pipe of one step, three nested calls and text
+## joined with `+` and `to_s`.
 
+import {ENTRIES} from "../catalog/builtins"
 import Problems from "../diagnostics/problem"
 import Ast from "../syntax/ast"
 import Rules from "rules"
 import Shape from "shape"
 
-## The suggestions for `expr`. `chained` is true when it is the first operand of a pipe or of a `+` chain: the
-## expression above it judged the whole chain, so it must not be judged again as a chain of its own.
-export def suggestions(file: String, expr: Ast.Expr, chained: Bool) -> List[Problems.Problem]
+## The suggestions for `expr`. `chained` is true when it is the first operand of a pipe, of a `+` chain or of a call
+## that is a step (step?): the expression above it judged the whole chain, so it must not be judged again as a chain of
+## its own. `aliases` are the module aliases that the file imports.
+export def suggestions(file: String, expr: Ast.Expr, chained: Bool, aliases: Set[String]) -> List[Problems.Problem]
   case expr
     Ast.Expr.Binary(node) -> return binary(file, node, chained)
-    Ast.Expr.Call(node) -> return single_pipe(file, node, chained)
+    Ast.Expr.Call(node) -> return single_pipe(file, node, chained).concat(nested_call(file, node, chained, aliases))
     _ -> return []
   end
+end
+
+## Whether a pipe could pass the first argument of the call to its function: a plain call with arguments, to a
+## function of the file or of a module it imports by alias (`f(x)`, `Paths.join(x, y)`), not a builtin (`puts`, `ok`,
+## `List.map`), and not a variant (`Domain.Some(x)`: the member after the alias starts with a capital). Any other
+## qualified name is a method of a constant, a type or a value (`ROWS.concat(x)`, `Mod.LIMIT.concat(x)`), or a
+## variant, and its first argument is not its receiver.
+export def step?(node: Ast.Call, aliases: Set[String]) -> Bool
+  if node.piped or node.args.size == 0 or ENTRIES.has_key?(node.name)
+    return false
+  end
+
+  parts = node.name.split(".")
+  if parts.size == 2
+    member = parts[1]
+    return aliases.include?(parts[0]) and member.slice(0, 1) != member.slice(0, 1).upcase
+  end
+
+  return parts.size == 1
 end
 
 def binary(file: String, node: Ast.Binary, chained: Bool) -> List[Problems.Problem]
@@ -45,6 +66,33 @@ def single_pipe(file: String, node: Ast.Call, chained: Bool) -> List[Problems.Pr
   end
 
   return [Rules.at(file, Rules.SINGLE_PIPE, node.span)]
+end
+
+# `h(f(g(x)))`: a call whose first argument is a call whose first argument is a call, which a pipe writes from the
+# inside out. The two outer calls become the steps, and a pipe goes into the program's own functions (the style
+# guide), so they must be steps (step?): piping to a builtin with a method form is CHECK-PIPE-METHOD, and `ok`,
+# `error`, `some` and `puts` read better as calls.
+def nested_call(file: String, node: Ast.Call, chained: Bool, aliases: Set[String]) -> List[Problems.Problem]
+  if chained or !step?(node, aliases)
+    return []
+  end
+
+  case node.args[0]
+    Ast.Expr.Call(middle) ->
+      if step?(middle, aliases) and call?(middle.args[0])
+        return [Rules.at(file, Rules.NESTED_CALL, node.span)]
+      end
+
+      return []
+    _ -> return []
+  end
+end
+
+def call?(expr: Ast.Expr) -> Bool
+  case expr
+    Ast.Expr.Call(_) -> return true
+    _ -> return false
+  end
 end
 
 # Whether the expression is a piped call, as `x |> try f()` is too.

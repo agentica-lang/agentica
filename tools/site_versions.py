@@ -6,15 +6,15 @@
 The output is one site per final release (`X.Y.Z` tags, no pre-releases) under `VERSION/`, the development site under
 `dev/`, the latest release again at the root, `versions.json` and `_versions/selector.{js,css}` (site/versions/).
 
-Each tag is built from its own tree with `make site`, using the Hugo and Dart Sass versions that tag pins in its
-`.github/workflows/pages.yml`. Only a tag whose tree has no site (no `site/hugo.toml`, no pins) and that is older than
-every built tag is left out. Any other failure (a download, `npm ci`, a timeout, a Hugo error, a no-site tag newer than
-a built one) is tried once more and then fails the run, so a release never drops silently from the deploy; so does a run
-in which no tag built. The output of a tag is cached by its commit sha (and the base URL, which Hugo bakes into every
-link), so a run builds only `dev` and the tags it has not seen; the cache folder is pruned to the current builds. With
-GITHUB_OUTPUT set, `fresh=true` tells the workflow that something new is worth saving. The selector is not part of a
-cached build: the assembly adds its `<link>` and `<script>` tags to every page, so a build from the cache loads the
-current selector.
+Each tag is built from its own tree with `make site` (plus the docs theme commit it pins, which `git archive` leaves
+out), using the Hugo and Dart Sass versions that tag pins in its `.github/workflows/pages.yml`. Only a tag whose tree
+has no site (no `site/hugo.toml`, no pins) and that is older than every built tag is left out. Any other failure (a
+download, `npm ci`, a timeout, a Hugo error, a no-site tag newer than a built one) is tried once more and then fails the
+run, so a release never drops silently from the deploy; so does a run in which no tag built. The output of a tag is
+cached by its commit sha (and the base URL, which Hugo bakes into every link), so a run builds only `dev` and the tags
+it has not seen; the cache folder is pruned to the current builds. With GITHUB_OUTPUT set, `fresh=true` tells the
+workflow that something new is worth saving. The selector is not part of a cached build: the assembly adds its `<link>`
+and `<script>` tags to every page, so a build from the cache loads the current selector.
 
 Python's standard library only.
 """
@@ -39,6 +39,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
+THEME = "site/themes/docs-theme"
 # The pauses between the tries of a download (5 tries, 220 s in all): GitHub answers 5xx (504 too) for a minute or two
 # now and then.
 DOWNLOAD_BACKOFF = (10, 30, 60, 120)
@@ -281,9 +282,30 @@ def build_ref(ref: str, base_url: str, cache: Path, tools: Path, logs: Path, lab
             tar.extractall(tree, filter="data")
         if archive.wait() != 0:
             raise BuildError("git archive failed")
+        unpack_theme(sha, tree)
         public = _build_tree(tree, base_url, tools, logs / (label + ".log"))
         _store(public, cache, key)
     return done, False
+
+
+def unpack_theme(sha: str, tree: Path) -> None:
+    """Unpack into tree the docs theme commit that sha pins (a submodule, empty in `git archive`); a tree from before
+    the theme has none. The commit comes from the theme checkout, fetched when it is not there yet."""
+    entry = run(["git", "-C", str(ROOT), "ls-tree", sha, THEME], capture_output=True).stdout.split()
+    if not entry:
+        return
+    if entry[1] != "commit":
+        raise BuildError("%s is not a submodule at %s" % (THEME, sha))
+    commit, checkout = entry[2], ROOT / THEME
+    if not (checkout / ".git").exists():
+        raise BuildError("the docs theme is not checked out: git submodule update --init " + THEME)
+    if subprocess.run(["git", "-C", str(checkout), "cat-file", "-e", commit + "^{commit}"], capture_output=True).returncode:
+        run(["git", "-C", str(checkout), "fetch", "-q", "origin", commit])
+    archive = subprocess.Popen(["git", "-C", str(checkout), "archive", "--format=tar", commit], stdout=subprocess.PIPE)
+    with tarfile.open(fileobj=archive.stdout, mode="r|") as tar:
+        tar.extractall(tree / THEME, filter="data")
+    if archive.wait() != 0:
+        raise BuildError("git archive of the docs theme failed")
 
 
 def build_tag(tag: str, base_url: str, cache: Path, tools: Path, logs: Path, label: str = "") -> tuple[Path, bool]:

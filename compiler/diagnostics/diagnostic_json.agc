@@ -13,8 +13,33 @@ export def json(problem: Problems.Problem) -> Json
   return object(Model.of_problem(problem))
 end
 
+## The JSON object of a warning: the object of the problem with `"warning": true`. A warning is not an error: the
+## command goes on (a native module that was not built, io/native_build.agc).
+export def warning(problem: Problems.Problem) -> Json
+  return JSON.object(fields_of(Model.of_problem(problem)).put("warning", JSON.from(true)))
+end
+
 ## The JSON object of a diagnostic.
 export def object(diagnostic: Model.Diagnostic) -> Json
+  return JSON.object(fields_of(diagnostic))
+end
+
+## The JSON object of a range: `start` and `end`, each with a `line` and a `column`.
+export def range(part: Model.Region) -> Json
+  return JSON.object({"start": position(part.start), "end": position(part.stop)})
+end
+
+## The `shape` of an answer from a program that does not check (docs/future/39-semantic-cli.md, 39.6): `partial` is
+## true and `diagnostics` holds its problems. A complete answer leaves both keys out.
+export def partial(shape: Map[String, Json], diagnostics: List[Model.Diagnostic]) -> Map[String, Json]
+  return (
+    shape.put("partial", JSON.from(true))
+      .put("diagnostics", JSON.array(diagnostics.map do |found: Model.Diagnostic| object(found) end))
+  )
+end
+
+# The fields of the object of a diagnostic.
+def fields_of(diagnostic: Model.Diagnostic) -> Map[String, Json]
   fields: Map[String, Json] = {
     "code": JSON.from(diagnostic.code),
     "message": JSON.from(diagnostic.message),
@@ -40,21 +65,7 @@ export def object(diagnostic: Model.Diagnostic) -> Json
     fields = fields.put("labels", JSON.array(labels))
   end
 
-  return JSON.object(fields)
-end
-
-## The JSON object of a range: `start` and `end`, each with a `line` and a `column`.
-export def range(part: Model.Region) -> Json
-  return JSON.object({"start": position(part.start), "end": position(part.stop)})
-end
-
-## The `shape` of an answer from a program that does not check (docs/future/39-semantic-cli.md, 39.6): `partial` is
-## true and `diagnostics` holds its problems. A complete answer leaves both keys out.
-export def partial(shape: Map[String, Json], diagnostics: List[Model.Diagnostic]) -> Map[String, Json]
-  return (
-    shape.put("partial", JSON.from(true))
-      .put("diagnostics", JSON.array(diagnostics.map do |found: Model.Diagnostic| object(found) end))
-  )
+  return fields
 end
 
 # A note that the diagnostic does not have is the empty text.
