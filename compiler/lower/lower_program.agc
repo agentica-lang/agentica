@@ -38,8 +38,14 @@ end
 ## Builds the tables. decls are all the declarations of the program in order. used are the watched type names that the
 ## program writes or whose types some expression has (a builtin record or enum is in the tables only then). type_names
 ## are the types that functions use as a value, which is when the user structs and enums that JSON can build are looked
-## for.
-export def build(decls: List[Ast.Decl], used: Set[String], type_names: List[String]) -> Tables
+## for, and targets the types the checker gave them (lowering.agc json_targets): an alias counts by what it names, and
+## a List or Map target gets a struct of its own (json_list_name).
+export def build(
+  decls: List[Ast.Decl],
+  used: Set[String],
+  type_names: List[String],
+  targets: List[Types.Type],
+) -> Tables
   struct_decls: List[Ast.StructDecl] = []
   enum_decls: List[Ast.EnumDecl] = []
   for decl in decls
@@ -51,7 +57,12 @@ export def build(decls: List[Ast.Decl], used: Set[String], type_names: List[Stri
   end
 
   builtin_types = builtin_decodable()
-  decodable = user_decodable(struct_decls, enum_decls, builtin_types, type_names)
+  names = type_names
+  for target in targets
+    names = names.concat(struct_names_in(target))
+  end
+
+  decodable = user_decodable(struct_decls, enum_decls, builtin_types, names)
   wanted = used
   if decodable.values.any? do |types: List[Types.Type]| types.any? do |type: Types.Type| json_field?(type) end end
     # JSON.decode builds JsonField values, so the enum is in the table even when no expression names it.
@@ -75,7 +86,7 @@ export def build(decls: List[Ast.Decl], used: Set[String], type_names: List[Stri
     structs = structs.push(Ir.StructDef(name: decl.name, fields: fields, decodable: known, types: types))
   end
 
-  structs = structs.concat(builtin_structs(used, builtin_types))
+  structs = structs.concat(builtin_structs(used, builtin_types)).concat(json_list_structs(targets, decodable))
   enums: List[Ir.EnumDef] = []
   for decl in enum_decls
     variants = decl.variants.map do |variant: Ast.EnumVariant|
@@ -106,6 +117,20 @@ export def build(decls: List[Ast.Decl], used: Set[String], type_names: List[Stri
   end
 
   return index(structs, enums)
+end
+
+## The name of the struct that stands for a List[T] or Map[String, T] used as a JSON.decode target: the type with its
+## linked names, such as List[app.Person]. A `[` keeps it apart from every struct a program declares, and the VM
+## decodes such a struct's one field in its place (docs/vm/03-ir-and-bytecode.md).
+export def json_list_name(type: Types.Type) -> String
+  case type
+    Types.Type.List(item) -> return "List[#{json_list_name(item)}]"
+    Types.Type.Map(key, value) -> return "Map[#{json_list_name(key)}, #{json_list_name(value)}]"
+    Types.Type.Optional(item) -> return "Optional[#{json_list_name(item)}]"
+    Types.Type.Struct(name, _) -> return name
+    Types.Type.Enum(name, _) -> return name
+    _ -> return Types.tag(type)
+  end
 end
 
 # The lookups over the finished tables.
@@ -156,6 +181,24 @@ def index(structs: List[Ir.StructDef], enums: List[Ir.EnumDef]) -> Tables
     variants: variants,
     json_types: json_types,
   )
+end
+
+# One decodable struct of a single field for each List or Map target, named by json_list_name: the type table holds
+# only the field types of structs and enums. decodable are the structs and enums JSON can build; a target with another
+# struct or enum in it has none, so the lowering of its name refuses it as it refuses such a struct.
+def json_list_structs(targets: List[Types.Type], decodable: Map[String, List[Types.Type]]) -> List[Ir.StructDef]
+  found: List[Ir.StructDef] = []
+  seen: Set[String] = Set.new([])
+  for type in targets
+    name = json_list_name(type)
+    list = Types.is?(type, "List") or Types.is?(type, "Map")
+    if list and !seen.include?(name) and references_known?([type], decodable)
+      found = found.push(Ir.StructDef(name: name, fields: ["value"], decodable: true, types: [type]))
+      seen = seen.add(name)
+    end
+  end
+
+  return found
 end
 
 # The field types of the builtin records JSON.decode can build: all but those with a field of an UNDECODABLE type.

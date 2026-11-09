@@ -373,7 +373,8 @@ def print_expr(out: List[String], at: Margin, role: String, expr: Ast.Expr) -> L
       return out.push(head(at, role, "literal", node.id, node.span, " value=#{value_text(node.value)}"))
     Ast.Expr.Name(node) -> return out.push(head(at, role, "name-ref", node.id, node.span, name_attr(node.name)))
     Ast.Expr.TypeName(node) ->
-      return out.push(head(at, role, "type-expression", node.id, node.span, name_attr(node.name)))
+      lines = out.push(head(at, role, "type-expression", node.id, node.span, name_attr(node.name)))
+      return print_types(lines, child, "arg", node.args)
     Ast.Expr.ConstRef(node) -> return out.push(head(at, role, "const-ref", node.id, node.span, name_attr(node.name)))
     Ast.Expr.FunctionRef(node) ->
       return out.push(head(at, role, "function-ref", node.id, node.span, name_attr(node.name)))

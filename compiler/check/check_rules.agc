@@ -60,7 +60,7 @@ end
 
 ## Type.codec: the codec of the struct or enum named by the type name, which must be a type JSON.decode takes.
 export def check_codec_of(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[T.Type]
-  return ok(T.Type.Codec(try json_target(cx, st, node)))
+  return ok(T.Type.Codec(try json_target(cx, st, node, "codec requires a struct or enum name")))
 end
 
 # CHECK-ARITY: no form of the builtin takes this many arguments. The note is the signature of every form. A call
@@ -347,7 +347,8 @@ def check_none(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out
 end
 
 # JSON.decode(source, Type) and JSON.schema(Type): the type argument is a struct or enum name whose fields or payloads
-# can all be decoded. The source of JSON.decode is JSON text (String) or a Json value.
+# can all be decoded, or for JSON.decode also a List[T] or Map[String, T] of such a T. The source of JSON.decode is
+# JSON text (String) or a Json value.
 def check_json_type(cx: State.Cx, st: State.St, site: State.Site, decode: Bool) -> Result[State.Out]
   current = st
   target = site.args[0]
@@ -356,7 +357,9 @@ def check_json_type(cx: State.Cx, st: State.St, site: State.Site, decode: Bool) 
     target = site.args[1]
   end
 
-  type = try json_type(cx, current, target)
+  type = try json_type(cx, current, target, decode)
+  # The lowering names the target by this type: an alias resolved, a List or Map whole (Lowering.json_targets).
+  current = State.record_type(current, Ast.expr_id(target), type)
   if decode
     return ok(State.Out(st: current, type: T.Type.Result(type)))
   end
@@ -396,10 +399,18 @@ def check_decode_source(cx: State.Cx, st: State.St, source: Ast.Expr) -> Result[
   return ok(out.st)
 end
 
-# The struct or enum a JSON type argument names, which must be a name whose fields or payloads can all be decoded.
-def json_type(cx: State.Cx, st: State.St, target: Ast.Expr) -> Result[T.Type]
+# The struct or enum a JSON type argument names, which must be a name whose fields or payloads can all be decoded. A
+# List[T] or Map[String, T], written so or through an alias, is a target of JSON.decode only: JSON.schema describes a
+# named type.
+def json_type(cx: State.Cx, st: State.St, target: Ast.Expr, decode: Bool) -> Result[T.Type]
   case target
-    Ast.Expr.TypeName(node) -> return json_target(cx, st, node)
+    Ast.Expr.TypeName(node) ->
+      refusal = ""
+      if !decode
+        refusal = "JSON.schema requires a struct or enum name"
+      end
+
+      return json_target(cx, st, node, refusal)
     _ ->
       message = "JSON type argument requires a struct or enum name"
       return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", message, Ast.expr_span(target)))
@@ -414,11 +425,18 @@ def decode_source_mismatch(cx: State.Cx, st: State.St, actual: T.Type, span: Sou
   return Failure.pack(base.with(expected: "String or Json", actual: found))
 end
 
-def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[T.Type]
-  ref = Ast.TypeRef(id: node.id, name: node.name, args: [], span: node.span)
+# The type a JSON target names. refusal is the CHECK-TYPE-MISMATCH message for a List or Map target, or "" when the
+# caller takes one (JSON.decode); it comes before the decodable check, so a List of anything is refused the same way.
+def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName, refusal: String) -> Result[T.Type]
+  ref = Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span)
   type = try CheckTypes.resolve_type(cx, st, ref, false)
+  if container?(type) and refusal != ""
+    return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", refusal, node.span))
+  end
+
   try json_field_place(cx, st, type, "decode target", node.span)
-  if !(T.is?(type, "Struct") or T.is?(type, "Enum")) or !CheckTypes.decodable?(cx, type)
+  named = T.is?(type, "Struct") or T.is?(type, "Enum")
+  if !(named or container?(type)) or !CheckTypes.decodable?(cx, type)
     return error(
       State.fail_maybe(
         cx,
@@ -432,6 +450,11 @@ def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[T.Type
   end
 
   return ok(type)
+end
+
+# True for a List or Map JSON target, which only JSON.decode takes.
+def container?(type: T.Type) -> Bool
+  return T.is?(type, "List") or T.is?(type, "Map")
 end
 
 # The help of a JSON builtin that refuses a type with a JsonField of an Optional or a Bytes inside, or "": JSON has no

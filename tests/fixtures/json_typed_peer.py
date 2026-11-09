@@ -71,21 +71,26 @@ def typed(text):
     return json.loads(text, parse_int=lambda digits: ("int", int(digits)), parse_float=lambda digits: ("float", digits))
 
 
-def write_vectors(output, header, documents, decode, encode):
-    """Writes one line per document: the document, "ok" and the encoded text or "error" and the message, and
-    "same" or "changed" (the round trip up to key order) or "-". decode and encode take the parsed document and the
-    decoded value."""
-    rows = []
-    for document in documents:
-        try:
-            text = encode(decode(json.loads(document)))
-        except DecodeError as problem:
-            rows.append("\t".join([document, "error", str(problem), "-"]))
-            continue
-        same = "same" if typed(text) == typed(document) else "changed"
-        rows.append("\t".join([document, "ok", text, same]))
+def vector_row(document, decode, encode):
+    """The line of one document: the document, "ok" and the encoded text or "error" and the message, and "same" or
+    "changed" (the round trip up to key order) or "-". decode and encode take the parsed document and the decoded
+    value."""
+    try:
+        text = encode(decode(json.loads(document)))
+    except DecodeError as problem:
+        return "\t".join([document, "error", str(problem), "-"])
+    same = "same" if typed(text) == typed(document) else "changed"
+    return "\t".join([document, "ok", text, same])
+
+
+def write_rows(output, header, rows):
     output.write_text(header + "\n" + "\n".join(rows) + "\n", encoding="utf-8")
     print(f"wrote {len(rows)} vectors to {output}")
+
+
+def write_vectors(output, header, documents, decode, encode):
+    """Writes one line per document (vector_row)."""
+    write_rows(output, header, [vector_row(document, decode, encode) for document in documents])
 
 
 def is_optional(kind):
@@ -162,3 +167,51 @@ def encode_struct(value, fields, encode):
     """The text of a struct: its keys in declaration order, no spaces."""
     parts = [json.dumps(name) + ":" + encode(value[name], kind) for name, kind in fields]
     return "{" + ",".join(parts) + "}"
+
+
+def struct_codec(structs, other=None):
+    """The decode and encode of a model whose kinds are the scalars, ("list", T), ("map", T) with String keys,
+    ("optional", T) and the names of structs, which maps to their (name, kind) fields. encode writes struct keys in
+    declaration order, map keys sorted, no spaces. other, when given, is a (decode, encode) pair for the kinds of the
+    model's own (an enum), tried first; each gives UNHANDLED for a kind that is not its own."""
+
+    def decode(value, kind, path):
+        found = decode_common(value, kind, path, decode)
+        if found is UNHANDLED and other:
+            found = other[0](value, kind, path)
+        if found is not UNHANDLED:
+            return found
+        if isinstance(kind, tuple):
+            if not isinstance(value, dict):
+                fail(path, "object")
+            return {key: decode(item, kind[1], f"{path}[{json.dumps(key)}]") for key, item in sorted(value.items())}
+        return decode_struct(value, structs[kind], path, decode)
+
+    def encode(value, kind):
+        found = encode_common(value, kind, encode)
+        if found is UNHANDLED and other:
+            found = other[1](value, kind)
+        if found is not UNHANDLED:
+            return found
+        if isinstance(kind, tuple):
+            return "{" + ",".join(json.dumps(key) + ":" + encode(item, kind[1]) for key, item in value.items()) + "}"
+        return encode_struct(value, structs[kind], encode)
+
+    return decode, encode
+
+
+def join(path, key):
+    return f"{path}.{key}" if path else key
+
+
+def enum_tag(value, names, path):
+    """The variant name of an enum value {"tag": name, ...}, one of names, with the errors of JSON.decode."""
+    if not isinstance(value, dict):
+        fail(path, "object")
+    if "tag" not in value:
+        fail(join(path, "tag"), "required field")
+    if not isinstance(value["tag"], str):
+        fail(join(path, "tag"), "String")
+    if value["tag"] not in names:
+        fail(join(path, "tag"), "one of " + ", ".join(names))
+    return value["tag"]

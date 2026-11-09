@@ -37,6 +37,9 @@ JSON.list(j: Json) -> Result[List[Json]]
 - `JSON.schema(User)`, `JSON.decode(text, User)` and `User.codec` take a
   named struct type, not a value (bare type names are valid only there). A
   schema is a `Json` value, not text.
+- `JSON.decode(text, List[User])` and `JSON.decode(text, Map[String, User])`
+  read a top-level array or object in one call; `schema` and `codec` take only
+  a named type.
 - `JSON.decode` takes JSON text or a `Json` value (`JSON.decode(item, User)` for
   an item of a parsed document; no `JSON.encode` first).
 - Decoded fields may be Int, Float, Bool, String, lists, String-keyed maps,

@@ -5,8 +5,8 @@ description: >-
   compare links, stage0 refresh), the annotated tag, the release workflow that
   publishes the five native archives, the hand-written release notes, the
   GitHub Pages rebuild and the post-release checks. Use when asked to make,
-  tag, publish or announce a release or beta (for example "release
-  0.5.0-beta.1"). Not for building or testing packages locally (release
+  tag, publish or announce a release, a beta or a patch release (for example
+  "release 0.5.0-beta.1"). Not for building or testing packages locally (release
   targets: references/ci.md of agentica-development).
 ---
 
@@ -26,11 +26,12 @@ check before it fails.
   the owner if unsure.
 - A tag containing `-` is published as a GitHub pre-release
   (`--prerelease` in the `publish` job).
+- A patch (`X.Y.Z`, Z > 0) is built from the last tag of its line: §6.
 
 ## 1. Version bump PR
 
-Make a worktree from `origin/master` (never switch the main checkout) on a
-branch such as `release/<version>`. Change only:
+Make a worktree from `origin/master` (a patch: §6; never switch the main
+checkout) on a branch such as `release/<version>`. Change only:
 
 1. `VERSION`: the new version, one line.
 2. `CHANGELOG.md`:
@@ -120,6 +121,62 @@ new version and its release link opens the release.
   `bin/agentica --version`: it prints `<version>`.
 - CI and Pages on master are green.
 - Report the release URL, the archives, the notes and anything skipped.
+
+## 6. Patch releases
+
+A patch `X.Y.Z` (Z > 0) holds bug fixes only: no feature and no breaking
+change, unless the owner approves a small compatible one. A fix for a flaky
+test is not patch material, since it does not change the binary.
+
+- **Milestones (owner's policy):** when `X.Y.0` is published, create the
+  milestone `X.Y.1`. A bug that users see, or a regression of `X.Y`, gets the
+  `bug` label and that milestone. Cut the patch at once for a serious bug or
+  a regression; otherwise when about 3 to 5 fixes have merged.
+- Each fix merges on master first, with a normal PR.
+- **The branch:** the patch is built from the last tag of its line, not from
+  master, which has unreleased features. Pushing a branch is outward-facing,
+  as a tag is.
+
+  ```bash
+  git fetch origin --tags
+  # the tag is annotated, so push the commit it points to
+  git push origin 'X.Y.<Z-1>^{commit}:refs/heads/release-X.Y'
+  git fetch origin --tags
+  git worktree add -b release/X.Y.Z ../agentica-X.Y.Z origin/release-X.Y
+  ```
+
+  Take each fix as its merge commit on master:
+  `git cherry-pick -x -m 1 <merge sha>` (PR branches hold merges of master,
+  so a range of their commits does not pick cleanly). On a CHANGELOG
+  conflict, keep only that fix's line. Never merge master into this
+  branch: in §1 and in `agentica-dev-workflow`, read `origin/release-X.Y`
+  wherever they say `origin/master`.
+- **The PR:** that branch is the version bump PR, with base `release-X.Y`.
+  §1 applies, with two changes. The CHANGELOG of the branch has an empty
+  `[Unreleased]`: write one line per fix there first. The compare link is
+  `X.Y.<Z-1>...X.Y.Z`. The stage0 refresh builds from the stage0 of
+  `release-X.Y`, and CI and Platforms run on the PR as usual. Its body lists
+  each fix with its master PR. Tag its merge commit (§2), then write the
+  notes (§3). If a job fails before `publish`, the fix goes onto
+  `release-X.Y` through a PR (a cherry-pick of the master fix), then the tag
+  is pushed again with the owner's approval.
+- **Latest:** `release.yml` creates the release with no `--latest` flag. In
+  `gh release list`, Latest must be the highest version; if not, run
+  `gh release edit <highest> --latest`.
+- **Master:** forward-port in a small PR. Add `## [X.Y.Z] - <date>` in
+  version order and its compare link. Move the entries of the fixes out of
+  `[Unreleased]`, unless a release already lists them. When X.Y.Z is the
+  highest version, also set `VERSION` to it, so the site's Install section
+  shows it once `pages.yml` runs (§4), and make `[unreleased]` compare
+  `X.Y.Z...HEAD`. Leave stage0 alone: the next master release refreshes it.
+  For a patch of an older line, `VERSION` and `[unreleased]` stay.
+- **Pages and checks:** after the master PR, follow §4 and §5. For a patch
+  of an older line, the Install section keeps the newest release; check only
+  that the version selector lists `X.Y.Z` and that its release page has the
+  archives.
+- After §5 passes, delete `release/X.Y.Z` and `release-X.Y` (the next patch
+  makes `release-X.Y` again from the last tag), and create the milestone
+  `X.Y.<Z+1>`.
 
 ## Gotchas
 

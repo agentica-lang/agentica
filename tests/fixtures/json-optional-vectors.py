@@ -17,10 +17,9 @@ Run by hand: python3 tests/fixtures/json-optional-vectors.py
 CI does not run it; commit both files when the vectors change.
 """
 
-import json
 from pathlib import Path
 
-from json_typed_peer import UNHANDLED, decode_common, decode_struct, encode_common, encode_struct, fail, write_vectors
+from json_typed_peer import struct_codec, write_vectors
 
 OUTPUT = Path(__file__).resolve().parent / "vm" / "json-optional-vectors.stdin"
 HEADER = (
@@ -77,25 +76,7 @@ DOCUMENTS = [
 ]
 
 
-def decode(value, kind, path):
-    found = decode_common(value, kind, path, decode)
-    if found is not UNHANDLED:
-        return found
-    if isinstance(kind, tuple):
-        if not isinstance(value, dict):
-            fail(path, "object")
-        return {key: decode(item, kind[1], f"{path}[{json.dumps(key)}]") for key, item in sorted(value.items())}
-    return decode_struct(value, STRUCTS[kind], path, decode)
-
-
-def encode(value, kind):
-    """The text JSON.encode writes: struct keys in declaration order, map keys sorted, no spaces."""
-    found = encode_common(value, kind, encode)
-    if found is not UNHANDLED:
-        return found
-    if isinstance(kind, tuple):
-        return "{" + ",".join(json.dumps(key) + ":" + encode(item, kind[1]) for key, item in value.items()) + "}"
-    return encode_struct(value, STRUCTS[kind], encode)
+decode, encode = struct_codec(STRUCTS)
 
 
 def main():

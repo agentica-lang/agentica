@@ -74,8 +74,13 @@ Known exceptions (the mechanisms are in §10.2.2):
   build is not Linux, macOS or Windows. A full pipe then stalls every task, the
   final `fflush` is not bounded by the flush limit, and a stop signal interrupts
   the write (`EINTR`) and ends the run (§14.4). A child's stderr goes through
-  the same buffer (`agc_output_forward`); in the fallback it takes the blocking
-  `fwrite` on the I/O thread, under the stream's lock (§10.2.3, Output).
+  the same buffer (`agc_output_forward`); in the fallback one libuv pool write
+  at a time takes the chunks of all children in turn, with the blocking
+  `fwrite` under the `FILE`'s lock, and a child's pipe is not read until its
+  chunk is written. A stuck stderr then stops the children and holds one pool
+  thread, which file jobs and name lookups share, but not the I/O thread
+  (§10.2.3, Output). That write starts the pool, so under a low `ulimit` a run
+  can end there with status 70.
 - **Release flush of a file handle.** When a file job is dropped before its pool
   work ran (its timeout, a cancel, or the flush limit), or a handle is released
   at the end of the run (`release_handles`), `release_state` in `vm/files.c`

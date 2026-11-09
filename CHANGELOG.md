@@ -15,6 +15,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `OP.after_dashes` splits at `--`.
 - `Process.spawn(cmd, args, timeout_ms, env, out, err)` sends the child's
   stdout and stderr to files, with no shell and no 1 MiB limit.
+- `JSON.decode(text, List[T])` and `JSON.decode(text, Map[String, T])` read a
+  top-level JSON array or object of a decodable type in one call.
 - `agentica lint` suggests a pipe for three calls nested in first position
   (`LINT-NESTED-CALL`).
 - `optional = true` in `[native.NAME]` beside `build`: when the module cannot
@@ -34,6 +36,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `JSON.decode`, `JSON.schema` and `T.codec` take a type alias of a struct or
+  enum; they failed with `LOWER-UNSUPPORTED` or at run time.
 - `Cache.memory` no longer leaks bytes, or moves back a generation, when a
   rotation is taken over after a 2 s stall or a cancel of the task running it.
   The lease now runs on the `clock` option, so a clock that stops keeps a
@@ -44,6 +48,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A run that cannot start a scheduler thread (a low `ulimit -v` or
   `ulimit -u`) prints one line and exits with status 70; so does one that
   cannot start the I/O thread pool, on Linux and macOS. They used to abort.
+- A child's stderr no longer stalls the event loop when the program's stderr is
+  a full pipe that the VM writes with plain blocking writes (a descriptor it
+  cannot reopen): the children wait for it instead.
 
 ## [0.27.0] - 2026-11-08
 
