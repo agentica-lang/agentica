@@ -263,7 +263,6 @@ def show_all(session: Analysis.Session, paths: List[String]) -> Void
     end
     ok(line)
   end
-
   for line in lines
     puts(line.unwrap!)
   end
@@ -281,7 +280,6 @@ def share(session: Analysis.Session, paths: List[String]) -> Void
     end
     ok(path)
   end
-
   lines = Task.map(paths, 4, 60000) do |path: String|
     adopted = session
     found = table.get(path)
@@ -296,7 +294,6 @@ def share(session: Analysis.Session, paths: List[String]) -> Void
     end
     ok([line, refreshed.internal.cache.checks.to_s])
   end
-
   rechecks = 0
   for found in lines
     puts(found.unwrap![0])

@@ -19,9 +19,20 @@ import Model from "model"
 # The version of the shape. The query is experimental: the shape may change between releases with the same number.
 BODIES_VERSION = 1
 
+# The source form of each binary operator token; `and` and `or` are written as words in the answer.
+OPERATOR_TEXT: Map[String, String] = {
+  "plus": "+", "minus": "-", "multiply": "*", "divide": "/", "modulo": "%", "less": "<", "less-equal": "<=",
+  "greater": ">", "greater-equal": ">=", "equal": "==", "not-equal": "!=", "and": "and", "or": "or",
+}
+
 ## The functions of the root file of `linked` (checked as `checked`) that have a body, in source order. `file` is the
-## name the answer gives the file.
-export def of_program(file: String, linked: Linker.Linked, checked: Checker.Checked) -> Model.Bodies
+## name the answer gives the file, and `modules` the prefix and the file of each linked module.
+export def of_program(
+  file: String,
+  modules: List[Model.BodyModule],
+  linked: Linker.Linked,
+  checked: Checker.Checked,
+) -> Model.Bodies
   root = linked.modules[0]
   exported: Set[Int] = Set.new([])
   written: Map[Int, String] = {}
@@ -49,12 +60,17 @@ export def of_program(file: String, linked: Linker.Linked, checked: Checker.Chec
     end
   end
 
-  return Model.Bodies(version: BODIES_VERSION, file: file, functions: functions)
+  return Model.Bodies(version: BODIES_VERSION, file: file, modules: modules, functions: functions)
 end
 
 def body_of(checked: Checker.Checked, node: Ast.FunctionDecl, name: String, exported: Bool) -> Model.Body
   params = node.params.map do |param: Ast.Param|
-    Model.BodyParam(name: param.name, type: bound(checked, param.id, 0), range: DiagnosticModel.range_of(param.span))
+    Model.BodyParam(
+      name: param.name,
+      type: bound(checked, param.id, 0),
+      range: DiagnosticModel.range_of(param.span),
+      default: param.default.map do |value: Ast.Expr| [expression(checked, value)] end.unwrap_or([]),
+    )
   end
 
   return Model.Body(
@@ -74,8 +90,16 @@ def statements(checked: Checker.Checked, body: List[Ast.Stmt]) -> List[Model.Nod
   return body.map do |stmt: Ast.Stmt| statement(checked, stmt) end
 end
 
-def block(checked: Checker.Checked, body: List[Ast.Stmt], span: Source.Span) -> Model.Node
-  return leaf("block", Types.Type.Unknown, span).with(children: statements(checked, body))
+# A block runs from its first statement to its last; an empty one is the empty place at the start of `owner`.
+def block(checked: Checker.Checked, body: List[Ast.Stmt], owner: Source.Span) -> Model.Node
+  children = statements(checked, body)
+  span = Source.Span(start: owner.start, stop: owner.start)
+  made = leaf("block", Types.Type.Unknown, span).with(children: children)
+  if children.size > 0
+    made = made.with(range: DiagnosticModel.Region(start: children[0].range.start, stop: children.last.range.stop))
+  end
+
+  return made
 end
 
 def statement(checked: Checker.Checked, stmt: Ast.Stmt) -> Model.Node
@@ -89,17 +113,28 @@ def statement(checked: Checker.Checked, stmt: Ast.Stmt) -> Model.Node
         type = bound(checked, node.id, 0)
       end
 
-      return leaf("let", Types.Type.Unknown, node.span).with(
+      value = expression(checked, node.value)
+      kind = "let"
+      if node.name == "_"
+        kind = "discard"
+      end
+
+      return leaf(kind, Types.Type.Unknown, node.span).with(
         type: type,
+        range: through(node.span, value),
         text: node.name,
         new: made,
-        children: [expression(checked, node.value)],
+        children: [value],
       )
     Ast.Stmt.Return(node) ->
       case node.value
         some(value) ->
           made = expression(checked, value)
-          return leaf("return", Types.Type.Unknown, node.span).with(type: made.type, children: [made])
+          return leaf("return", Types.Type.Unknown, node.span).with(
+            type: made.type,
+            range: through(node.span, made),
+            children: [made],
+          )
         none -> return leaf("return", Types.Type.Unknown, node.span)
       end
 
@@ -233,12 +268,17 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
       return leaf("index", type, span).with(children: children)
     Ast.Expr.Try(node) -> return leaf("try", type, span).with(children: [expression(checked, node.operand)])
     Ast.Expr.Unary(node) ->
-      kind = "not"
-      if node.op == "minus"
-        kind = "neg"
+      operand = expression(checked, node.operand)
+      if node.op == "not"
+        return leaf("not", type, span).with(text: "!", children: [operand])
       end
 
-      return leaf(kind, type, span).with(children: [expression(checked, node.operand)])
+      # -9223372036854775808 only fits under its minus, so its digits have no type of their own: it is one literal.
+      if operand.kind == "int" and operand.type.kind == "none"
+        return operand.with(type: shape(type), range: DiagnosticModel.range_of(span), text: "-#{operand.text}")
+      end
+
+      return leaf("neg", type, span).with(text: "-", children: [operand])
     Ast.Expr.Binary(node) ->
       if node.op == "dot-dot" or node.op == "dot-dot-dot"
         return other("range", span)
@@ -250,7 +290,7 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
       end
 
       return leaf(kind, type, span).with(
-        text: node.op,
+        text: OPERATOR_TEXT.get(node.op, node.op),
         children: [expression(checked, node.left), expression(checked, node.right)],
       )
     Ast.Expr.Interpolation(node) ->
@@ -320,6 +360,11 @@ def leaf(kind: String, type: Types.Type, span: Source.Span) -> Model.Node
   )
 end
 
+# The place of a statement from its start to the end of its value: the statement's own place runs to the next line.
+def through(span: Source.Span, value: Model.Node) -> DiagnosticModel.Region
+  return DiagnosticModel.Region(start: DiagnosticModel.range_of(span).start, stop: value.range.stop)
+end
+
 def other(syntax: String, span: Source.Span) -> Model.Node
   return leaf("other", Types.Type.Unknown, span).with(text: syntax)
 end
@@ -354,20 +399,26 @@ def shape(type: Types.Type) -> Model.TypeShape
     Types.Type.Opaque(name) -> return Model.TypeShape(kind: "opaque", name: name, args: [])
     Types.Type.Var(name) -> return Model.TypeShape(kind: "var", name: name, args: [])
     Types.Type.Unknown -> return Model.TypeShape(kind: "none", name: "", args: [])
-    Types.Type.Fn(params, result) ->
-      return Model.TypeShape(kind: "builtin", name: "Fn", args: params.push(result).map(&shape))
+    Types.Type.Fn(params, result) -> return builtin("Fn", params.push(result))
     Types.Type.Map(key, value) -> return builtin("Map", [key, value])
     Types.Type.ATS(key, value) -> return builtin("ATS", [key, value])
-    _ ->
-      if Types.is?(type, "Result") or Types.is?(type, "Optional") or Types.is?(type, "Task") or Types.is?(type, "List")
-        return builtin(Types.tag(type), [Types.item(type)])
-      end
-
-      if Types.is?(type, "Channel") or Types.is?(type, "Lazy") or Types.is?(type, "Codec") or Types.is?(type, "Set")
-        return builtin(Types.tag(type), [Types.item(type)])
-      end
-
-      return builtin(Types.tag(type), [])
+    Types.Type.Result(item) -> return builtin("Result", [item])
+    Types.Type.Optional(item) -> return builtin("Optional", [item])
+    Types.Type.Task(item) -> return builtin("Task", [item])
+    Types.Type.Channel(item) -> return builtin("Channel", [item])
+    Types.Type.Lazy(item) -> return builtin("Lazy", [item])
+    Types.Type.Codec(item) -> return builtin("Codec", [item])
+    Types.Type.List(item) -> return builtin("List", [item])
+    Types.Type.Set(item) -> return builtin("Set", [item])
+    Types.Type.Int -> return builtin("Int", [])
+    Types.Type.Float -> return builtin("Float", [])
+    Types.Type.Bool -> return builtin("Bool", [])
+    Types.Type.String -> return builtin("String", [])
+    Types.Type.Nil -> return builtin("Nil", [])
+    Types.Type.Void -> return builtin("Void", [])
+    Types.Type.Json -> return builtin("Json", [])
+    Types.Type.Range -> return builtin("Range", [])
+    Types.Type.Bytes -> return builtin("Bytes", [])
   end
 end
 

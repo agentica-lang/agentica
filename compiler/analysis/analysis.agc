@@ -9,6 +9,7 @@ import Diag from "../diagnostics/diagnostic"
 import DiagnosticModel from "../diagnostics/diagnostic_model"
 import Problems from "../diagnostics/problem"
 import Env from "../modules/link_env"
+import Linker from "../modules/linker"
 import Outline from "../query/outline"
 import PartialAt from "../query/partial_at"
 import QueryFiles from "../query/query_files"
@@ -167,7 +168,17 @@ export def bodies(cache: Cache.Cache, settings: Env.Settings, path: String) -> B
       case Front.query_cached(cache, path, settings)
         Front.Outcome.Rejected(problem) -> return Bodied.Rejected(problem)
         Front.Outcome.Done(front) ->
-          return Bodied.Done(Bodies.of_program(QueryFiles.display(settings, path, true), front.linked, front.checked))
+          name = QueryFiles.display(settings, path, true)
+          modules = front.linked.modules.map do |module: Linker.LinkedModule|
+            shown = name
+            if module.file != front.linked.modules[0].file
+              shown = QueryFiles.display(settings, module.file, false)
+            end
+
+            Model.BodyModule(prefix: module.prefix, file: shown)
+          end
+
+          return Bodied.Done(Bodies.of_program(name, modules, front.linked, front.checked))
       end
   end
 end

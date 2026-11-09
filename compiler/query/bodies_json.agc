@@ -1,6 +1,7 @@
-## The JSON form of `Analysis.bodies` (#1159, experimental): `{version, command, file, functions}`. A function is
-## `{name, linked, exported, span, name_span, generics, params, result, body}`, with a span `{file, range}`. A node is
-## `{kind, type, range, text, target, new, children}`, and a type `{kind, name, args}`.
+## The JSON form of `Analysis.bodies` (#1159, experimental): `{version, command, file, modules, functions}`. A module
+## is `{prefix, file}`. A function is `{name, linked, exported, span, name_span, generics, params, result, body}`, with
+## a span `{file, range}`, and a parameter `{name, type, range, default}`. A node is `{kind, type, range, text, target,
+## new, children}`, and a type `{kind, name, args}`.
 
 import Model from "../analysis/model"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
@@ -13,6 +14,11 @@ export def json(found: Model.Bodies) -> Json
     "version": JSON.from(found.version),
     "command": JSON.from("bodies"),
     "file": JSON.from(found.file),
+    "modules": JSON.array(
+      found.modules.map do |module: Model.BodyModule|
+        JSON.object({"prefix": JSON.from(module.prefix), "file": JSON.from(module.file)})
+      end,
+    ),
     "functions": JSON.array(functions),
   })
 end
@@ -23,6 +29,7 @@ def function_json(file: String, function: Model.Body) -> Json
       "name": JSON.from(param.name),
       "type": type_json(param.type),
       "range": DiagnosticJson.range(param.range),
+      "default": JSON.array(param.default.map(&node_json)),
     })
   end
 

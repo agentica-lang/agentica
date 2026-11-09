@@ -287,25 +287,29 @@ end
 ## - `int`, `float`, `string`, `bool`, `nil`: a literal; `text` is its value (the digits, the text of a string,
 ##   `true`).
 ## - `local`: a read of a parameter or local, `text` its name.
-## - `let`: `text = child`; `new` is true when it makes a new local, false when it changes a visible one.
+## - `let`: `text = child`; `new` is true when it makes a new local, false when it changes a visible one. `discard`:
+##   `_ = child`.
 ## - `call`: `target` is the function or builtin the checker resolved (`window`, `@2::helper`, `Int.shift_left`,
 ##   `Bytes.length` for `data.size`, `Bytes.at` for `data[i]`, `ok`, `some`); the children are the arguments, the
 ##   receiver of a method first.
 ## - `index`: `target[index]` on a List or Map; the children are the target and the index.
-## - `op`: a binary operator, `text` its token (`plus`, `minus`, `less`, `equal`, `not-equal`, ...); the two children
-##   carry their own types. `and`, `or`, `not` and `neg` (unary minus) are their own kinds.
+## - `op`: a binary operator, `text` as written (`+`, `-`, `<=`, `==`, `!=`, ...); the two children carry their own
+##   types. `and`, `or`, `not` (`text` `!`) and `neg` (`text` `-`) are their own kinds. A minus before a number literal
+##   that only fits under it (`-9223372036854775808`) is one `int` node.
 ## - `try`: its operand. `return`: its value, if any.
 ## - `interpolation`: `string` nodes and the typed expressions between them.
 ## - `if`: one `branch` (the condition, then a `block`) per `if` and `elsif`, then a `block` for `else` when written.
 ## - `case`: the value, then one `arm` each: its pattern, a `guard` (holding the condition) when written, then a
-##   `block`.
+##   `block`. A case that gives a value has its type, and the last node of each arm's block is that arm's value.
 ## - Patterns: `wildcard`; `literal` (`text` as for a literal); `variant`, whose `target` is `Enum.Variant` (the linked
 ##   enum name), `ok`, `error`, `some` or `none`, and whose children are its slots: `bind` (`text` the name), `skip`
 ##   (`_`) or a nested pattern. A pattern's type is the type it matches.
 ## - `block`: the statements of a body.
 ## - `other`: a node that this version does not describe yet; `text` is its syntax (`while`, `list`, ...), and it has
 ##   no children.
-## `range` is the place of the node; a `string` part of an interpolation has the range of the interpolation.
+## `range` is the place of the node. Some are coarse: a `string` part of an interpolation has the range of the
+## interpolation, a `skip` slot that of its variant, and an `if` or `case` statement runs to the start of the next
+## line. A `block` runs from its first statement to its last (an empty one is empty, at the start of its owner).
 export struct Node
   kind: String
   type: TypeShape
@@ -316,11 +320,21 @@ export struct Node
   children: List[Node]
 end
 
-## One parameter of a function of `bodies`, with its resolved type.
+## One parameter of a function of `bodies`, with its resolved type and its default value (one node, or none). Arguments
+## are positional: a call may have fewer arguments than parameters, and the ones it leaves out take their defaults, in
+## order; a trailing block (`do ... end`) always fills the last parameter.
 export struct BodyParam
   name: String
   type: TypeShape
   range: Diagnostics.Region
+  default: List[Node]
+end
+
+## A module of the linked program: `prefix` is the `@N::` that the linked names of its declarations start with ("" for
+## none), and `file` its name as the other answers give it (`std/NAME.agc` for a `std/` module).
+export struct BodyModule
+  prefix: String
+  file: String
 end
 
 ## One function of `bodies`: `name` as written, `linked` the name a `call` node targets, `generics` its type
@@ -341,5 +355,6 @@ end
 export struct Bodies
   version: Int
   file: String
+  modules: List[BodyModule]
   functions: List[Body]
 end

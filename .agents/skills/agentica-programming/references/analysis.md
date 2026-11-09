@@ -80,13 +80,15 @@ Analysis.outline_json(found) -> Json     # also type_at_json, symbols_json, refs
   declarations only, and two blocks of one library are one.
 - `bodies` (experimental: the shape may change between releases with no
   breaking mark) gives every function of a file with a body, private ones too:
-  `name`, `linked`, `generics`, typed `params` and `result` (`TypeShape`:
-  `kind`, `name`, `args`), and `body`, a list of `Node` (`kind`, `type`,
-  `range`, `text`, `target`, `new`, `children`). A `call` has the resolved
-  `target` (`Int.shift_left`, `Bytes.length` for `data.size`, `Bytes.at` for
-  `data[i]`, a linked function name), `let` has `new`, and a node past what it
-  covers yet is `other` (loops, lists, maps, structs, blocks). No command line
-  form.
+  `name`, `linked`, `generics`, typed `params` (with `default`, one node or
+  none) and `result` (`TypeShape`: `kind`, `name`, `args`), and `body`, a list
+  of `Node` (`kind`, `type`, `range`, `text`, `target`, `new`, `children`).
+  `modules` maps each `@N::` prefix of a linked name to its file. A `call` has
+  the resolved `target` (`Int.shift_left`, `Bytes.length` for `data.size`,
+  `Bytes.at` for `data[i]`, a linked function name) and may leave out
+  defaulted arguments; `op` has the operator as written (`+`, `<=`); `let` has
+  `new`, `_ = x` is `discard`; a node past what it covers yet is `other`
+  (loops, lists, maps, structs, blocks). No command line form.
 - `outline`, `type_at`, `type_at_partial`, `symbol`, `refs`, `refs_partial`,
   `native_modules` and `bodies` return an error whose message is one JSON
   diagnostic (the `--json` object); `Analysis.diagnostic(message)` reads it, so

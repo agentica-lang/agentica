@@ -958,6 +958,30 @@ end
 """
 
 
+# Two imported files that both define `twice`, a default argument, `_ =`, the literal that only fits under its minus,
+# `try` and `case` as values, `and`, and an index into a List and a Map.
+CALLS = """import A from "a"
+import B from "b"
+
+def scale(x: Int, by: Int = 2) -> Int
+  return x * by
+end
+
+def use(n: Int, xs: List[Int], m: Map[String, Int], text: String) -> Result[Int]
+  _ = scale(n)
+  low = -9223372036854775808
+  both = n > 0 and n < 10
+  total = A.twice(n) + B.twice(xs[0]) + m["a"] + low
+  parsed = try text.to_i
+  kind = case parsed
+    0 -> "zero"
+    _ -> "many"
+  end
+  return ok(kind.size)
+end
+"""
+
+
 def type_text(type):
     """A type of `bodies` as `Result[Int]`, or `-` for none."""
     if type["kind"] == "none":
@@ -1028,7 +1052,7 @@ def test_bodies_resolve_calls_bindings_patterns_and_mark_what_they_do_not_cover(
     nested = case["children"][2]["children"][0]["children"]
     assert [(slot["kind"], slot["target"]) for slot in nested] == [("variant", "Shape.Dot"), ("skip", "")]
     recursive = case["children"][3]["children"][1]["children"][0]["children"][0]
-    assert (recursive["kind"], recursive["text"]) == ("op", "plus")
+    assert (recursive["kind"], recursive["text"]) == ("op", "+")
     assert [call["target"] for call in recursive["children"]] == ["size", "size"]
     # A new local and a change of it, a call into another file by its linked name, `not`, unary minus and `if`.
     sign = functions["sign"]["body"]
@@ -1053,3 +1077,36 @@ def test_bodies_give_the_diagnostic_of_a_file_that_does_not_check_or_cannot_be_r
     assert (out, json.loads(err)["code"]) == ("", "CHECK-TYPE-MISMATCH")
     out, err = library(driver, project, "bodies", "absent.agc")
     assert (out, json.loads(err)["code"]) == ("", "QUERY-USAGE")
+
+
+def test_bodies_name_the_modules_defaults_and_values_a_translator_needs(driver, project):
+    twice = "export def twice(n: Int) -> Int\n  return n {} n\nend\n"
+    write_files(project, {"a.agc": twice.format("*"), "b.agc": twice.format("+"), "calls.agc": CALLS})
+    answer, functions = bodies_of(driver, project, "calls.agc")
+    # A linked name `@N::` is found in `modules`: the two `twice` are two files.
+    files = {module["prefix"]: module["file"] for module in answer["modules"]}
+    body = functions["use"]["body"]
+    total = body[3]["children"][0]
+    left = total["children"][0]["children"][0]
+    targets = [call["target"] for call in left["children"]]
+    assert [files[""]] + [files[target.split("::")[0] + "::"] for target in targets] == ["calls.agc", "a.agc", "b.agc"]
+    # A call leaves out a parameter with a default: the parameter holds it.
+    scale = functions["scale"]["params"]
+    assert [[(node["kind"], node["text"]) for node in param["default"]] for param in scale] == [[], [("int", "2")]]
+    assert (body[0]["kind"], body[0]["text"], len(body[0]["children"][0]["children"])) == ("discard", "_", 1)
+    low = body[1]["children"][0]
+    assert (low["kind"], low["text"], type_text(low["type"])) == ("int", "-9223372036854775808", "Int")
+    both = body[2]["children"][0]
+    assert (both["kind"], [side["text"] for side in both["children"]]) == ("and", [">", "<"])
+    index_list, index_map = left["children"][1]["children"][0], total["children"][0]["children"][1]
+    assert [(node["kind"], type_text(node["children"][0]["type"])) for node in (index_list, index_map)] == [
+        ("index", "List[Int]"), ("index", "Map[String,Int]")]
+    parsed = body[4]["children"][0]
+    assert (parsed["kind"], type_text(parsed["type"]), parsed["children"][0]["target"]) == ("try", "Int", "String.to_int")
+    # A case as a value: its type, and the last node of each arm's block is the arm's value.
+    case = body[5]["children"][0]
+    values = [arm["children"][-1]["children"][-1]["text"] for arm in case["children"][1:]]
+    assert (type_text(case["type"]), values) == ("String", ["zero", "many"])
+    function = json.loads(library(driver, project, "bodies", "calls.agc")[0])["functions"][0]
+    assert function["span"]["file"] == function["name_span"]["file"] == "calls.agc"
+    assert function["name_span"]["range"] == {"start": {"line": 4, "column": 5}, "end": {"line": 4, "column": 10}}
