@@ -297,6 +297,7 @@ CCHECKER_FLAGS ?=
 
 .PHONY: cchecker cchecker-update-baseline
 
+# An existing clone is trusted by its path: change the version and the commit together.
 $(CCHECKER_DIR)/cchecker.agc:
 	@rm -rf $(CCHECKER_DIR) $(CCHECKER_DIR).tmp && mkdir -p build/cchecker
 	git -c advice.detachedHead=false clone --quiet --depth 1 --branch $(CCHECKER_VERSION) https://github.com/agentica-lang/cchecker $(CCHECKER_DIR).tmp
@@ -304,7 +305,7 @@ $(CCHECKER_DIR)/cchecker.agc:
 	mv $(CCHECKER_DIR).tmp $(CCHECKER_DIR)
 
 # Run from the root of the checkout: cchecker reads paths relative to the working directory.
-CCHECKER = $(RUN_PROGRAM) dist/agentica $(CCHECKER_DIR)/cchecker.agc -p $(COMPILE_COMMANDS) -c cchecker.toml -j $(JOBS) \
+CCHECKER = $(RUN_PROGRAM) dist/agentica$(EXE) $(CCHECKER_DIR)/cchecker.agc -p $(COMPILE_COMMANDS) -c cchecker.toml -j $(JOBS) \
   --exclude vm/tests --baseline cchecker-baseline.json $(CCHECKER_FLAGS)
 
 cchecker: $(PRODUCT) $(CCHECKER_DIR)/cchecker.agc compile-commands

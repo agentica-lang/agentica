@@ -122,7 +122,7 @@ jobs:
               esac
               # The same files plus the settings and the baseline of cchecker, which do not need the sanitizer half.
               case "$f" in
-                vm/*|Makefile|mk/*|.gitmodules|cchecker.toml|cchecker-baseline.json|.github/workflows/ci.yml|.github/actions/*)
+                vm/*|Makefile|mk/*|.gitmodules|.clang-tidy|cchecker.toml|cchecker-baseline.json|.github/workflows/ci.yml|.github/actions/*)
                   cchecker=true ;;
               esac
             done <<< "$files"
@@ -371,14 +371,22 @@ jobs:
         with:
           artifact: release-build
           targets: dist/agentica
-      # --json prints one object (the new findings, the counts of the baselined and the fixed ones); the next steps print it as
-      # lines and keep it as an artifact, which is what refreshing the baseline from the runner starts from.
+      # --json prints one object (the new findings, the counts of the baselined and the fixed ones, the tool errors, the files
+      # that were not checked); the next steps print it as lines and keep it as an artifact, which is what refreshing the
+      # baseline from the runner starts from. `shell: bash` runs with pipefail, so the exit status of make (1: new findings,
+      # 2: a tool error, a failed clone or a commit that is not the pinned one) is the step's, not tee's.
       - name: make cchecker (clones the pinned tag and checks its commit)
+        shell: bash
         run: make -s cchecker CCHECKER_FLAGS="--gcc gcc-14 --clang clang-19 --clang-tidy clang-tidy-19 --json" | tee build/cchecker.json
       - name: The findings that are not in the baseline
         if: ${{ !cancelled() }}
+        shell: bash
         run: |
-          jq -r '"cchecker: \(.findings | length) new, \(.baselined) baselined, \(.fixed) fixed, \(.errors | length) tool errors", (.findings[] | "\(.file):\(.line) \(.code) \(.message)"), (.errors[] | "error: \(.tool) \(.file) \(.message)")' build/cchecker.json
+          [ -s build/cchecker.json ] || { echo "::error::cchecker printed no JSON"; exit 1; }
+          jq -e -r '"cchecker: \(.findings | length) new, \(.baselined) baselined, \(.fixed) fixed, \(.errors | length) tool errors, \(.unchecked_files | length) unchecked files, \(.skipped) skipped",
+            (.findings[] | "\(.file):\(.line) \(.code) \(.message)"),
+            (.errors[] | "error: \(.tool) \(.file) \(.message)"),
+            (.unchecked_files[] | "unchecked: \(.file) (missing \(.missing))")' build/cchecker.json
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
