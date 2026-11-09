@@ -26,8 +26,9 @@
 ## a run left (it died during a build) are removed once an hour old.
 ##
 ## A compiler that cannot start, fails or leaves no library is PKG-NATIVE-BUILD at the manifest and
-## `native.NAME.build`; for an optional module (`optional = true`) any failure of the builder is instead a warning on
-## stderr (the plain builder only) and Unbuilt, so the program runs without the module. The plain builder prints the
+## `native.NAME.build`; for an optional module (`optional = true`) any failure of the builder is instead the warning
+## PKG-NATIVE-UNBUILT at the same place, which the builder hands to `warned` (app/ prints it in the form the options
+## ask for), and Unbuilt, so the program runs without the module. The plain builder prints the
 ## compiler's standard error as it is, and `built native NAME: PATH` after a build, on stderr; the quiet one (for
 ## `--json` and `--ai`) prints nothing and puts the start of the compiler's standard error in the message instead. A
 ## builder keeps what it built or failed for the rest of the run (an ATS table), so a module that many files use is
@@ -76,10 +77,11 @@ end
 
 ## A builder for one run: it builds a request, or finds it built, the first time it is asked, and gives the same
 ## answer for the same library afterwards. `noted` prints on stderr what the compiler says and the path of a new build;
-## without it (`--json`, `--ai`) nothing is printed, so stderr holds the diagnostic alone.
-export def builder(noted: Bool) -> Fn[Workspace.BuildRequest, Workspace.Built]
+## without it (`--json`, `--ai`) nothing is printed, so stderr holds the diagnostic alone. `warned` gets the packed
+## PKG-NATIVE-UNBUILT warning of an optional module that was not built, once a run.
+export def builder(noted: Bool, warned: Fn[String, Void]) -> Fn[Workspace.BuildRequest, Workspace.Built]
   memo: ATS[String, String] = ATS.new()
-  return builder_of() do |request: Workspace.BuildRequest| remembered(memo, request, noted) end
+  return builder_of() do |request: Workspace.BuildRequest| remembered(memo, request, noted, warned) end
 end
 
 ## The builder of `compile` under `flag` (a --deny-* flag or --sandbox), whose program may not open native code: it
@@ -99,8 +101,13 @@ def refused(request: Workspace.BuildRequest, flag: String) -> Workspace.Built
 end
 
 # The answer kept for the library (`L` and its path, `F` and the packed failure, or `U` and the reason an optional
-# module was not built), else a build. The warning of an optional module is printed here, so once a run.
-def remembered(memo: ATS[String, String], request: Workspace.BuildRequest, noted: Bool) -> Workspace.Built
+# module was not built), else a build. The warning of an optional module is given here, so once a run.
+def remembered(
+  memo: ATS[String, String],
+  request: Workspace.BuildRequest,
+  noted: Bool,
+  warned: Fn[String, Void],
+) -> Workspace.Built
   name = [request.file, request.key, request.root, request.system].join("\n")
   kept = ATS.get(memo, name)
   if kept.ok?
@@ -115,9 +122,9 @@ def remembered(memo: ATS[String, String], request: Workspace.BuildRequest, noted
       if request.optional
         reason = Failure.unpack_failure(packed).diagnostic.message
         text = "U#{reason}"
-        if noted
-          IO.warn("warning: native module #{request.library} not built: #{reason}; the package runs without it")
-        end
+        message = "native module #{request.library} not built: #{reason}; the package runs without it"
+        help = "install a C compiler or fix the module, then run again to build it"
+        warned.call(Failure.fail_key(request.file, request.key, "PKG-NATIVE-UNBUILT", message, Failure.hint(help)))
       end
   end
 

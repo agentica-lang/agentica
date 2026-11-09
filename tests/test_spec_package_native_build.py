@@ -369,17 +369,37 @@ def test_an_optional_module_with_no_compiler_warns_once_a_run_and_the_program_ru
         ran = agentica(ws, main, **no_compiler(ws))
         assert (ran.code, ran.stdout) == (0, "without adder\n") and NOT_BUILT.fullmatch(ran.stderr), ran.stderr
     assert builds(ws) == [] and bytecode_entries(ws) == []
+    # With --json the warning is the object of a problem with "warning": true; with --ai, a block that starts so.
     quiet = agentica(ws, "--json", main, **no_compiler(ws))
-    assert (quiet.code, quiet.stdout, quiet.stderr) == (0, "without adder\n", "")
+    assert (quiet.code, quiet.stdout) == (0, "without adder\n"), quiet.stderr
+    warning = json.loads(quiet.stderr)
+    assert warning["warning"] is True
+    assert_at_key(warning, "PKG-NATIVE-UNBUILT", ws.project / "agentica.toml", "native.adder.build")
+    compact = agentica(ws, "--ai", main, **no_compiler(ws))
+    assert (compact.code, compact.stdout) == (0, "without adder\n"), compact.stderr
+    assert compact.stderr.startswith("warning\n") and compact.stderr.count("[PKG-NATIVE-UNBUILT]") == 1
     installed = agentica(ws, "install", **no_compiler(ws))
     assert installed.code == 0 and NOT_BUILT.fullmatch(installed.stderr), installed.stderr
     compiled = agentica(ws, "compile", main, "-o", str(ws.base / "main.agcb"), **no_compiler(ws))
     assert compiled.code == 0 and NOT_BUILT.fullmatch(compiled.stderr), compiled.stderr
     ran = agentica(ws, "run", "--", str(ws.base / "main.agcb"))
     assert (ran.code, ran.stdout, ran.stderr) == (0, "without adder\n", "")
-    # A call of the module fails as for a missing library.
+    # A call of the module fails as for a missing library, after the warning.
     (ws.project / "main.agc").write_text(MAIN, encoding="utf-8")
-    assert problem(agentica(ws, "--json", main, **no_compiler(ws)))["code"] == "RUNTIME-NATIVE-LOAD"
+    called = agentica(ws, "--json", main, **no_compiler(ws))
+    codes = [json.loads(line)["code"] for line in called.stderr.splitlines()]
+    assert (called.code, codes) == (1, ["PKG-NATIVE-UNBUILT", "RUNTIME-NATIVE-LOAD"]), called.stderr
+
+
+def test_an_optional_module_still_fails_on_a_missing_source_and_under_a_deny_flag_compile(ws):
+    project(ws, table=OPTIONAL_TABLE)
+    main = str(ws.project / "main.agc")
+    found = problem(agentica(ws, "--json", "--deny-native", "compile", main, "-o", str(ws.base / "main.agcb"),
+                             **no_compiler(ws)))
+    assert_at_key(found, "PKG-NATIVE-BUILD", ws.project / "agentica.toml", "native.adder.build")
+    (ws.project / "native" / "adder.c").unlink()
+    found = problem(agentica(ws, "--json", main, **no_compiler(ws)))
+    assert_at_key(found, "PKG-NATIVE-MISSING", ws.project / "agentica.toml", "native.adder.build.sources[0]")
 
 
 @NATIVE_CALLS

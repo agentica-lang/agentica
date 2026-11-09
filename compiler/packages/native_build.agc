@@ -139,17 +139,18 @@ export def listed(workspace: Workspace.Workspace, request: Workspace.BuildReques
   return ok(request.with(files: files, contents: pinned.contents))
 end
 
-## The library that an optional module which could not be built stands for: a path that no build makes, so a call of
-## the module fails as for a missing library and Native.load gives an error. It is in the build cache
-## (`native-build/unbuilt/`), whose libraries the bytecode cache reads: a missing one stores no program, so the next
-## run tries the build again. With no cache it is the package folder, which no loader opens.
+## The library that an optional module which could not be built stands for: a folder path, ending in `/`, which no
+## loader opens as a library, so a call of the module fails as for a missing library and Native.load gives an error.
+## It is `native-build/unbuilt/` in the build cache, which nothing makes, and whose libraries the bytecode cache reads
+## before it stores a program: one it cannot read stores none, so the next run tries the build again. With no cache
+## (no HOME), it is the package's native/ folder, which holds the sources.
 export def unbuilt_path(request: Workspace.BuildRequest) -> String
-  if request.cache_root == ""
-    return request.root
+  base = Paths.join(request.root, NATIVE_FOLDER)
+  if request.cache_root != ""
+    base = Paths.join(Paths.join(request.cache_root, "native-build"), "unbuilt")
   end
 
-  folder = Paths.join(Paths.join(request.cache_root, "native-build"), "unbuilt")
-  return Paths.join(folder, output_name(request.library, request.system))
+  return "#{base}/"
 end
 
 ## The file name of the built library of `name` on `system`, as the VM opens it.

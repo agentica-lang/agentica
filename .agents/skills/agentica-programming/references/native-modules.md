@@ -73,7 +73,9 @@ end
   dotfiles are left out and a header outside `native/` is not found.
 - `optional = true` beside `build` (it needs `build`): a module that cannot
   be built (no compiler, a compile error) prints `warning: native module NAME
-  not built: ...` once a run on stderr, and the program runs without it.
+  not built: ...` once a run on stderr (`PKG-NATIVE-UNBUILT`, a JSON object
+  with `"warning": true` under `--json`), and the program runs without it.
+  Every run compiles the program and tries the build again.
   `Native.load("NAME")` then gives `error` and a call of the module is
   `RUNTIME-NATIVE-LOAD`, so check `Native.load` before using the module and
   fall back. A program that `compile` wrote then never opens the module.

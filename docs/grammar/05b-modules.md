@@ -676,10 +676,11 @@ import Sqlite from "pkg/sqlite/db"
     package author's tests run with the package as the project). The project's
     files are not hashed. A workspace member is read from its folder with no
     hash, as its `.agc` files are.
-  - `build` is the one key of `[native.NAME]` that is not a system: the C
-    sources of a native module (`extern module`), which the project, a
-    workspace member, a `path` dependency and a fetched package build instead
-    of using their system entry. A fetched package is never compiled in
+  - `build` and `optional` are the keys of `[native.NAME]` that are not a
+    system. `build` gives the C sources of a native module (`extern module`),
+    which the project, a workspace member, a `path` dependency and a fetched
+    package build instead of using their system entry. A fetched package is
+    never compiled in
     `deps/`: when a file first uses the library, the files its hash covers are
     read once and checked against the hash of its lock row
     (`PKG-HASH-MISMATCH` at `native.NAME.build`), and the files of `native/`
@@ -752,13 +753,16 @@ import Sqlite from "pkg/sqlite/db"
     is compiled again.
   - `optional = true` beside `build` makes the module optional: when the
     build fails (no compiler, a compile error, an unusable build cache), a
-    run, `compile`, `test` and `install` go on without it, and the plain
-    output prints `warning: native module NAME not built: REASON; the package
-    runs without it` on stderr once a run (`--json` and `--ai` print
-    nothing). `Native.load("NAME")` then gives `error` and a call of the
-    module is `RUNTIME-NATIVE-LOAD`. The bytecode cache stores no program
-    whose module block names it, so the next run tries the build again; a
-    program that `compile` wrote without it never opens it. A missing source,
+    run, `compile`, `test` and `install` go on without it, after the warning
+    `PKG-NATIVE-UNBUILT` at `native.NAME.build` on stderr, once a run: the
+    line `warning: native module NAME not built: REASON; the package runs
+    without it`, with `--json` the object of the problem with
+    `"warning": true`, with `--ai` its block with `warning` as the first line.
+    `Native.load("NAME")` then gives `error` and a call of the module is
+    `RUNTIME-NATIVE-LOAD`. The bytecode cache stores no program whose module
+    block names it, so every run compiles the program again and tries the
+    build again, with its warning; a program that `compile` wrote without
+    it never opens it. A missing source,
     a link in `native/`, a copy that differs from the lock and the `--deny-*`
     flags fail as for a required module. `optional` without `build`, or not
     a boolean, is `PKG-MANIFEST-INVALID` at `native.NAME.optional`.
