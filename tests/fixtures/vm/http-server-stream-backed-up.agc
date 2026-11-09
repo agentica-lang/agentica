@@ -2,8 +2,8 @@ import HTTP from "std/http"
 
 # A client that does not read holds a streaming producer back, and the server then cuts the client off. It is a program
 # of its own, apart from http-server-stream.agc, because how many pieces the kernel's socket buffers take before the
-# server's send waits is the system's to decide and changes from run to run, and so do the steps of the run: no
-# --max-steps limit at T - 1 or at T is swept for it (KERNEL_TIMED_FIXTURES in tests/vm_diff_support.py).
+# server's send waits is the system's to decide, and so are the steps of the run: no --max-steps limit at T - 1 or at T
+# is swept for it, and its count is not held to the golden's (KERNEL_TIMED_FIXTURES in tests/vm_diff_support.py).
 
 struct Feed
   said: Channel[String]

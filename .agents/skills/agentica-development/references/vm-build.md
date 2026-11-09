@@ -134,8 +134,9 @@ make compile-commands                # compile_commands.json (gitignored) with t
   test`, the release and the weekly `sweep.yml` keep the full sweep.
   `AGENTICA_SWEEP=ends` (`make test-shared`) runs only the ends, as do the
   fixtures of `ENDS_ONLY_FIXTURES` in every mode. A fixture whose steps change
-  with the kernel is in `KERNEL_TIMED_FIXTURES` (no limit at `T` or `T - 1`; the
-  reason is in `tests/vm_diff_support.py`). Make a fixture's step count
+  with the kernel is in `KERNEL_TIMED_FIXTURES`: no limit at `T` or `T - 1`, no
+  step allowance, and its last limit is `16 T` (the reason is in
+  `tests/vm_diff_support.py`). Make a fixture's step count
   independent of time first: wait on a channel, never loop with `Task.sleep`
   until something changes, read a known size with `read_line` (not a
   `recv_bytes` loop), and leave no producer with a timer running when `main`
