@@ -599,7 +599,15 @@ def test_file_calls_cannot_reopen_the_vms_own_pipes_so_a_later_spawn_does_not_de
   for name in Dir.list("@FD_ROOT@", 1000).unwrap!
     if name != "0" and name != "1" and name != "2"
       path = "@FD_ROOT@/" + name
-      IO.inspect([File.read_text(path, 100).ok?, File.open(path, "append", 100).ok?])
+      read = File.read_text(path, 100).ok?
+      append = File.open(path, "append", 100).ok?
+      out = Process.spawn("true", [], 1000, {}, path)
+      err = Process.spawn("true", [], 1000, {}, "", path)
+      IO.inspect([read, append, out.ok?, err.ok?])
+      info = File.stat(path, 100)
+      if info.ok? and info.unwrap!.kind == "fifo"
+        IO.inspect(["pipe", out.message, err.message])
+      end
     end
   end
   p = Process.spawn("true", [], 1000).unwrap!
@@ -611,7 +619,17 @@ end
     lines = output_lines(output)
     assert code == 0, errors
     assert lines[-1] == "ok(0)"
-    assert list(dict.fromkeys(lines[:-1])) == ["[false, false]"]
+    # Process.spawn's out and err files take the same guards, so a child never gets one of the VM's pipes. On Linux each
+    # pipe opens again by its /proc/self/fd path and the guard refuses it, as such, not merely as a failed open. On
+    # macOS /dev/fd/N duplicates the descriptor instead and refuses an access mode the descriptor lacks with EACCES, so
+    # a read end fails to open for writing before the guard runs; the write ends still reach the guard.
+    pipes = [json.loads(line)[1:] for line in lines[:-1] if line.startswith('["pipe", ')]
+    messages = [message for pair in pipes for message in pair]
+    refusals = [m for m in messages if re.fullmatch(r"process: (out|err) does not refer to a regular file", m)]
+    unopened = [m for m in messages if re.match(r"process: cannot open the (out|err) file\n.*errno=13$", m, re.S)]
+    assert refusals and len(refusals) + (len(unopened) if sys.platform == "darwin" else 0) == len(messages), pipes
+    assert list(dict.fromkeys(line for line in lines[:-1] if not line.startswith('["pipe", '))) == [
+        "[false, false, false, false]"]
 
 
 @no_stdin_path

@@ -107,6 +107,15 @@ int agc_fs_bytecode_open(const char *path, bool private, size_t maximum, size_t 
   return fd;
 }
 
+void agc_fs_blocking(int fd) {
+#ifdef _WIN32
+  (void)fd;
+#else
+  int flags = fcntl(fd, F_GETFL);
+  if (flags >= 0) fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
+#endif
+}
+
 int agc_fs_close(int fd) {
   uv_fs_t req;
   int result = uv_fs_close(NULL, &req, fd, NULL);

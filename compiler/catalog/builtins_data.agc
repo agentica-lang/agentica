@@ -3963,13 +3963,16 @@ ROWS_33: List[Model.Builtin] = [
         type: Types.Type.Map(Types.Type.String, Types.Type.String),
         default: Model.Default.EmptyMap,
       ),
+      Model.Named(name: "out", type: Types.Type.String, default: Model.Default.Text("")),
+      Model.Named(name: "err", type: Types.Type.String, default: Model.Default.Text("")),
     ],
     result: Types.Type.Result(Types.Type.Opaque("Process")),
     rule: Model.Rule.Plain,
     implementation: "Process.spawn",
     effects: ["subprocess"],
     description: (
-      "Start an executable with literal arguments and extra environment entries; --deny-run makes it an error."
+      "Start an executable with literal arguments and extra environment entries; out and err, when not empty, are " +
+      "files that get its stdout and stderr; --deny-run makes it an error."
     ),
     alternatives: [],
   ),

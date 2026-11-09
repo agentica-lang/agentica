@@ -57,12 +57,14 @@ typedef struct {
   const agc_string *value;
 } env_pair;
 
-/* What a spawn hands to the I/O thread: malloc'd strings, no VM values. */
+/* What a spawn hands to the I/O thread: malloc'd strings, no VM values. files[0] and files[1] are the open files of
+   `out` and `err` (-1: the pipe), owned by the launch; both are the same descriptor when they name one file. */
 struct launch {
   guard *g;
   CC_OWNS char **argv, **env;
   CC_OWNS char *cwd;
   size_t args;
+  int files[2];
   bool channel;
 };
 
@@ -504,6 +506,11 @@ static bool begin_link(void *data, agc_io_job *job) {
   return true;
 }
 
+static void close_fd(int *fd) {
+  if (*fd >= 0) agc_fs_close(*fd);
+  *fd = -1;
+}
+
 static void free_launch(launch *l) {
   if (!l) return;
   if (l->argv)
@@ -513,6 +520,8 @@ static void free_launch(launch *l) {
     for (size_t k = 0; l->env[k]; k++) free(l->env[k]);
   free(l->env);
   free(l->cwd);
+  if (l->files[1] != l->files[0]) close_fd(&l->files[1]);
+  close_fd(&l->files[0]);
   free(l);
 }
 
@@ -1081,11 +1090,6 @@ static CC_OWNS char **child_env(bool drop_uring, const char *channel, const env_
   return env;
 }
 
-static void close_fd(int *fd) {
-  if (*fd >= 0) agc_fs_close(*fd);
-  *fd = -1;
-}
-
 static int open_pipe(uv_pipe_t *pipe, int *fd, int rc) {
   if (rc) return rc;
   rc = uv_pipe_open(pipe, *fd);
@@ -1110,9 +1114,12 @@ static int start_child(guard *g, proc *p, const launch *l) {
   if (!rc && channel) rc = agc_chan_pair(&link);
   if (!rc) {
     uv_stdio_container_t stdio[STDIO_SLOTS];
+    /* A stream sent to a file still has its pipe: the child gets the file instead of the pipe's write end, which is
+       closed below, so the VM's side of the pipe ends at once (read_line finds the end of output, and stderr has
+       nothing to forward). */
     for (size_t k = 0; k < 3; k++) {
       stdio[k].flags = UV_INHERIT_FD;
-      stdio[k].data.fd = fds[2 * k + (k == 0 ? 0 : 1)];
+      stdio[k].data.fd = k > 0 && l->files[k - 1] >= 0 ? l->files[k - 1] : fds[2 * k + (k == 0 ? 0 : 1)];
     }
     for (int k = 0; k < link.child_count; k++) {
       stdio[3 + k].flags = UV_INHERIT_FD;
@@ -1238,6 +1245,52 @@ static CC_OWNS char *child_dir(agc_vm *vm, const agc_string *dir, bool *found) {
   return path;
 }
 
+/* The file of `out` or `err`, created or truncated with mode 0666 less the umask, as File.write_text and a shell's `>`
+   make it (a file that exists keeps its mode), with the guards of the File calls (agc_files_open_output). It opens
+   without waiting, so a FIFO with no reader fails at once and never holds the scheduler, and is then made blocking
+   again: the child writes to it as to any stdout. -1 with errno, or with *refused set. */
+static int open_target(agc_vm *vm, const agc_string *path, bool *refused) {
+  int fd = agc_files_open_output(vm, path, refused);
+  if (fd >= 0) agc_fs_blocking(fd);
+  return fd;
+}
+
+/* True when two open descriptors are one file, so `out` and `err` share one descriptor and one offset, as `> f 2>&1`
+   does: two descriptors would each write from the start and overwrite each other. */
+static bool same_file(int a, int b) {
+  agc_fs_info x, y;
+  return agc_fs_fstat(a, &x) == 0 && agc_fs_fstat(b, &y) == 0 && x.ino != 0 && x.dev == y.dev && x.ino == y.ino;
+}
+
+/* Opens the files of `out` and `err` (empty: the pipe) into FILES; NULL, or the error of the one that failed, with
+   nothing left open (*problem: its errno, 0 for a refused path). */
+static const char *open_targets(agc_vm *vm, const agc_string *out, const agc_string *err, int files[2], int *problem) {
+  const agc_string *paths[2] = {out, err};
+  static const char *const texts[2][2] = {
+    {"process: cannot open the out file", "process: out does not refer to a regular file"},
+    {"process: cannot open the err file", "process: err does not refer to a regular file"},
+  };
+  for (size_t k = 0; k < 2; k++) {
+    if (!paths[k] || !paths[k]->bytes) continue;
+    if (k == 1 && files[0] >= 0 && agc_same_string(vm, out, err)) {
+      files[1] = files[0];
+      continue;
+    }
+    bool refused;
+    files[k] = open_target(vm, paths[k], &refused);
+    if (files[k] < 0) {
+      *problem = refused ? 0 : errno;
+      close_fd(&files[0]);
+      return texts[k][refused];
+    }
+  }
+  if (files[0] >= 0 && files[1] >= 0 && files[1] != files[0] && same_file(files[0], files[1])) {
+    close_fd(&files[1]);
+    files[1] = files[0];
+  }
+  return NULL;
+}
+
 /* The spawn on the I/O thread (in the builtin at N = 1). */
 static int launch_child(proc *p, const launch *l) {
   p->begun = true;
@@ -1274,9 +1327,10 @@ static bool begin_spawn(void *data, agc_io_job *job) {
 }
 
 /* dir is NULL for Process.spawn; "." keeps the VM's directory. The command
-   resolves before the child changes directory (§10.4). */
+   resolves before the child changes directory (§10.4). out and err (Process.spawn only; NULL or empty: the pipe) are
+   files for the child's stdout and stderr, opened last, so a spawn refused for its other arguments touches no file. */
 static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string *dir, int64_t timeout, bool channel,
-                             const agc_map *env) {
+                             const agc_map *env, const agc_string *out, const agc_string *err) {
   if (vm->rt->deny_run) return agc_error_value("denied: --deny-run turns off starting programs");
   const agc_string *command = agc_as_string(vm, args[0]);
   const agc_list *list = agc_as_list(vm, args[1]);
@@ -1300,6 +1354,10 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   size_t pair_count;
   const char *env_text = env_problem(vm, env, &pairs, &pair_count);
   if (env_text) return agc_error_value(env_text);
+  bool files = (out && out->bytes) || (err && err->bytes);
+  if (files && vm->rt->deny_fs) return agc_error_value(AGC_DENIED_FS);
+  if (files && ((out && !no_nul(out)) || (err && !no_nul(err))))
+    return agc_error_value("process: out and err cannot contain NUL");
   agc_process *pr = agc_alloc(sizeof(agc_process));
   pr->reader = agc_new_lock(vm);
   pr->writer = agc_new_lock(vm);
@@ -1318,9 +1376,19 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
     free(cwd);
     return agc_error_value("process: directory is unavailable");
   }
+  int targets[2] = {-1, -1}, problem = 0;
+  const char *target_text = files ? open_targets(vm, out, err, targets, &problem) : NULL;
+  if (target_text) {
+    AGC_TRACE(&vm->rt->trace, AGC_TRACE_PROC, "spawn_failed reason=file");
+    free(path);
+    free(cwd);
+    return problem ? agc_system_error(vm, target_text, problem) : agc_error_value(target_text);
+  }
   launch *l = calloc(1, sizeof(launch));
   if (!l) agc_out_of_memory();
   l->g = g;
+  l->files[0] = targets[0];
+  l->files[1] = targets[1];
   l->argv = child_args(path, items, count);
   l->env = child_env(vm->rt->drop_uring_env, channel ? agc_chan_value() : NULL, pairs, pair_count);
   l->cwd = cwd;
@@ -1365,37 +1433,40 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   return agc_result_value(true, agc_process_value(pr));
 }
 
-/* Each spawn has two arities. The one with the trailing `env` Map is what the catalog now lowers to; the one without it
-   stays for the bytecode of bootstrap/stage0.agcb, which was compiled before `env` existed (remove it with the next
-   refresh of stage0). */
+/* Each spawn has two arities. The longer one (with `env`, and `out` and `err` for Process.spawn) is what the catalog
+   now lowers to; the shorter one stays for the bytecode of bootstrap/stage0.agcb, which was compiled before `env`
+   existed (remove it with the next refresh of stage0). */
 static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false, NULL);
+  return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false, NULL, NULL, NULL);
 }
 
-static agc_value builtin_spawn_env(agc_vm *vm, agc_value *args, uint32_t span) {
+static agc_value builtin_spawn_files(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false, agc_as_map(vm, args[3]));
+  return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false, agc_as_map(vm, args[3]),
+                     agc_as_string(vm, args[4]), agc_as_string(vm, args[5]));
 }
 
 static agc_value builtin_spawn_captured(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, NULL);
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, NULL, NULL, NULL);
 }
 
 static agc_value builtin_spawn_captured_env(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, agc_as_map(vm, args[4]));
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, agc_as_map(vm, args[4]),
+                     NULL, NULL);
 }
 
 static agc_value builtin_spawn_channel(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, NULL);
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, NULL, NULL, NULL);
 }
 
 static agc_value builtin_spawn_channel_env(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, agc_as_map(vm, args[4]));
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, agc_as_map(vm, args[4]),
+                     NULL, NULL);
 }
 
 /* The child of a process value that is not closed. With several schedulers the I/O thread owns `closed`, so only the
@@ -1689,7 +1760,7 @@ static agc_value builtin_read_available(agc_vm *vm, agc_value *args, uint32_t sp
 
 const agc_builtin agc_process_builtins[] = {
   {"Process.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"Process.spawn", 4, builtin_spawn_env, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Process.spawn", 6, builtin_spawn_files, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.send_bytes.bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},

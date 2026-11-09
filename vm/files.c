@@ -238,13 +238,21 @@ static bool same_text(const char *data, size_t len, const char *word) {
   return len == strlen(word) && memcmp(data, word, len) == 0;
 }
 
-static bool path_string(const agc_string *s) {
-  if (!s->bytes || memchr(s->data, 0, s->bytes)) return false;
+/* Windows: a path that starts \\.\ or \\?\ (either slash) names a device or switches off path parsing; no file call
+   takes it. */
+static bool device_prefix(const char *data, size_t len) {
 #ifdef _WIN32
-  if (s->bytes >= 4 && (s->data[0] == '/' || s->data[0] == '\\') &&
-      (s->data[1] == '/' || s->data[1] == '\\') && (s->data[2] == '.' || s->data[2] == '?')) return false;
+  return len >= 4 && (data[0] == '/' || data[0] == '\\') && (data[1] == '/' || data[1] == '\\') &&
+         (data[2] == '.' || data[2] == '?');
+#else
+  (void)data;
+  (void)len;
+  return false;
 #endif
-  return true;
+}
+
+static bool path_string(const agc_string *s) {
+  return s->bytes && !memchr(s->data, 0, s->bytes) && !device_prefix(s->data, s->bytes);
 }
 
 #ifdef _WIN32
@@ -407,15 +415,6 @@ static int probe(int fd, bool *polled) {
   }
   *polled = true;
   return 0;
-#endif
-}
-
-static void blocking(int fd) {
-#ifdef _WIN32
-  (void)fd;
-#else
-  int flags = fcntl(fd, F_GETFL);
-  if (flags >= 0) fcntl(fd, F_SETFL, flags & ~O_NONBLOCK);
 #endif
 }
 
@@ -584,16 +583,16 @@ static bool same_directory(const agc_fs_info *info, const char *path) {
   return agc_fs_stat(path, &other, true) == 0 && other.dev == info->dev && other.ino == info->ino;
 }
 
-static bool names_output_fd(const op *o) {
-  const char *slash = strrchr(o->path, '/');
-  const char *name = slash ? slash + 1 : o->path;
+static bool names_output_fd(const agc_runtime *rt, const char *path) {
+  const char *slash = strrchr(path, '/');
+  const char *name = slash ? slash + 1 : path;
   char *end = NULL;
   long fd = strtol(name, &end, 10);
-  if (end == name || *end || fd <= 2 || (fd != o->rt->out.fd && fd != o->rt->err.fd)) return false;
+  if (end == name || *end || fd <= 2 || (fd != rt->out.fd && fd != rt->err.fd)) return false;
   char copy[PATH_MAX];
-  size_t len = slash ? (size_t)(slash - o->path) : 0;
+  size_t len = slash ? (size_t)(slash - path) : 0;
   if (len >= sizeof copy) return false;
-  memcpy(copy, o->path, len);
+  memcpy(copy, path, len);
   copy[len] = '\0';
   agc_fs_info info;
   if (agc_fs_stat(slash ? (len ? copy : "/") : ".", &info, true) != 0) return false;
@@ -605,7 +604,11 @@ static bool names_output_fd(const op *o) {
 }
 
 #else
-static bool names_output_fd(const op *o) { (void)o; return false; }
+static bool names_output_fd(const agc_runtime *rt, const char *path) {
+  (void)rt;
+  (void)path;
+  return false;
+}
 #endif
 
 static int open_for(op *o, bool reading, bool append) {
@@ -615,7 +618,7 @@ static int open_for(op *o, bool reading, bool append) {
     if (fd < 0) fail_op(o, FS_OPEN, errno);
     return fd;
   }
-  if (names_output_fd(o)) {
+  if (names_output_fd(o->rt, o->path)) {
     fail_op(o, FS_NOT_REGULAR, 0);
     return -1;
   }
@@ -650,6 +653,28 @@ static int open_for(op *o, bool reading, bool append) {
   int fd = agc_fs_open(o->path, AGC_FS_WRITE | AGC_FS_CREATE | (append ? AGC_FS_APPEND | lockable : AGC_FS_TRUNCATE));
   if (fd < 0) fail_op(o, errno == EISDIR ? FS_IS_DIR : FS_OPEN, errno);
   return checked(o, fd);
+}
+
+int agc_files_open_output(agc_vm *vm, const agc_string *given, bool *refused) {
+  *refused = !path_string(given);
+  if (*refused) return -1;
+  char *path = agc_host_path(vm, given);
+  if (!path) {
+    errno = EINVAL;
+    return -1;
+  }
+  int fd = -1;
+  *refused = names_output_fd(vm->rt, path) || !write_target(path);
+  if (!*refused) fd = agc_fs_open(path, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_TRUNCATE);
+  int problem = errno;
+  free(path);
+  if (fd >= 0 && private_pipe(vm->rt, fd)) {
+    agc_fs_close(fd);
+    *refused = true;
+    fd = -1;
+  }
+  errno = problem;
+  return fd;
 }
 
 static bool on_loop(op *o, int fd) {
@@ -697,7 +722,7 @@ static void step_read_text(op *o) {
 static void work_read_text(op *o) {
   int fd = open_for(o, true, false);
   if (fd < 0 || on_loop(o, fd)) return;
-  blocking(fd);
+  agc_fs_blocking(fd);
   agc_fs_info info;
   if (o->count == 1 && agc_fs_fstat(fd, &info) == 0 && AGC_FS_ISREG(info.mode)) {
     o->fd = fd;
@@ -718,7 +743,7 @@ static void work_read_text(op *o) {
 static void work_write_text(op *o) {
   int fd = open_for(o, false, o->kind == OP_APPEND_TEXT);
   if (fd < 0 || on_loop(o, fd)) return;
-  blocking(fd);
+  agc_fs_blocking(fd);
   if (!write_all(fd, o->in, o->in_len, &o->err)) o->status = FS_WRITE;
   agc_fs_close(fd);
 }
@@ -743,7 +768,7 @@ static void work_sha256(op *o) {
     fail_op(o, FS_NOT_REGULAR, 0);
     return;
   }
-  blocking(fd);
+  agc_fs_blocking(fd);
   /* The digest of the bytes in read order; a concurrent writer changes what is hashed, as with File.read_text. */
   unsigned char digest[AGC_SHA256_BYTES];
   agc_sha256_stream *hash = agc_sha256_begin();
@@ -1095,7 +1120,7 @@ static void work_open(op *o) {
     fail_op(o, FS_OPEN, err);
     return;
   }
-  if (!o->st->polled) blocking(fd);
+  if (!o->st->polled) agc_fs_blocking(fd);
   o->st->fd = fd;
 }
 

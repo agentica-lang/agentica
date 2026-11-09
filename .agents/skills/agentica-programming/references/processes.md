@@ -4,7 +4,8 @@
 encoding.
 
 ```text
-Process.spawn(command: String, args: List[String], timeout_ms: Int = 30000, env: Map[String, String] = {}) -> Result[Process]
+Process.spawn(command: String, args: List[String], timeout_ms: Int = 30000, env: Map[String, String] = {},
+              out: String = "", err: String = "") -> Result[Process]
 Process.send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
 Process.send_bytes(p: Process, bytes: Bytes, timeout_ms: Int) -> Result[Void]
 Process.read_line(p: Process, timeout_ms: Int) -> Result[String]
@@ -60,6 +61,17 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
   stdout and waits for stderr forwarding to finish.
 - Stderr streams separately to the program's stderr. A child can block when
   stdout's pipe fills: read in a task concurrently with sending or waiting.
+- `out` and `err` (not empty) send the child's stdout and stderr to files, with
+  no shell and no 1 MiB limit: created or truncated (Unix mode 0666 less the
+  umask; an existing file keeps its mode), relative to the working directory.
+  One file for both is shared, as `> f 2>&1`. That stream is then not readable
+  (`read_line` gives the end at once) or forwarded. A folder, the VM's own
+  stdout/stderr descriptor name, an internal pipe or a Windows `\\.\` or
+  `\\?\` path is `error("process: out does not refer to a regular file")` (or
+  `err`); another failure is an error
+  starting `process: cannot open the out file`; both start nothing. NUL is an
+  error; `--deny-fs` refuses them. A start that fails after the open (a file
+  that cannot run) may leave the files created or truncated.
 - A process belongs to the task that opened it: when that task ends (return,
   crash, cancel) the child is closed as by `close`, without waiting, unless
   `Task.spawn_owning` handed it over (`tasks.md`). `close` force-kills a running
