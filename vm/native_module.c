@@ -456,6 +456,7 @@ static int parse_type(const char **at, const char *end, const block_list *blocks
     if (kind < 0) return -1;
     if (outer < 0) {
       outer = kind;
+      // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-NULLDEREFERENCE: kinds >= K_STRUCT come from a found block
       *id = kind == K_RESOURCE ? at_block : kind >= K_STRUCT ? blocks->items[at_block].index : 0;
     }
     if (kind < K_STRUCT && KINDS[kind].arity) {
@@ -750,6 +751,7 @@ static void bind_tables(agc_native_fn *fn, const native_library *lib, const bloc
     fn->param_ids[k] = blocks->items[fn->param_ids[k]].index;
     fn->holds[fn->hold_count++] = (uint8_t)k;
   }
+  // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-NULLDEREFERENCE: result_id came from a found block
   if (fn->result == K_RESOURCE) fn->result_id = blocks->items[fn->result_id].index;
 }
 
@@ -786,6 +788,7 @@ agc_native_fn *agc_native_bind(agc_vm *vm, const char *text, size_t len, bool di
   native_library *lib = module_of(vm, at, library_len, span);
   const an_module *m = lib->module;
   const an_function *row = NULL;
+  // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-NULLDEREFERENCE: module_of fails unless lib->module is loaded
   for (uint32_t k = 0; k < m->function_count && !row; k++)
     if (strlen(m->functions[k].name) == symbol_len && memcmp(m->functions[k].name, symbol, symbol_len) == 0)
       row = &m->functions[k];
@@ -917,6 +920,7 @@ static check_item *push_check(check_item *stack, size_t *n, size_t *cap, agc_val
 
 /* The text after the type at AT (one type of a signature or a shape, NUL-terminated module text). */
 static const char *after_type(const char *at) {
+  // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-NONNULLPARAMCHECKER: AT is a checked signature or shape
   const char *end = at + strlen(at);
   return skip_type(&at, end) ? at : end;
 }
@@ -1071,6 +1075,7 @@ static void *arena_take(agc_native_dirty *d, size_t size) {
   }
   void *at = (char *)c->data + c->used;
   c->used += size;
+  // cchecker: ignore CC-GCC-ANALYZER-MALLOC-LEAK: the chunk is linked on d->chunks, which agc_native_dirty_free frees
   return at;
 }
 
@@ -1084,6 +1089,7 @@ static an_term stage(agc_native_dirty *d, uint8_t kind, uint32_t id, size_t n, v
     d->cap = cap;
   }
   d->nodes[d->count] = (staged){kind, id, n, data};
+  // cchecker: ignore CC-GCC-ANALYZER-MALLOC-LEAK: d->nodes keeps the block, which agc_native_dirty_free frees
   return term_of(agc_word_value(STAGED_TAG, d->count++));
 }
 

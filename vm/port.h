@@ -699,18 +699,18 @@ struct agc_lock {
 
 agc_lock *agc_lock_new(const char *name);
 void agc_lock_share(agc_lock *l);
-void agc_lock_take_shared(agc_lock *l);
-void agc_lock_drop_shared(agc_lock *l);
+CC_ACQUIRES(l->mutex) void agc_lock_take_shared(agc_lock *l);
+CC_RELEASES(l->mutex) void agc_lock_drop_shared(agc_lock *l);
 bool agc_lock_held(const agc_lock *l);
 /* A broken invariant of the VM's threads, where no diagnostic can be raised safely: writes "agentica: internal error: "
    and DETAIL to stderr and aborts. */
 _Noreturn void agc_internal_abort(const char *detail);
 
-static inline void agc_lock_take(agc_lock *l) {
+CC_ACQUIRES(l->mutex) static inline void agc_lock_take(agc_lock *l) {
   if (__builtin_expect(!l->solo, 0)) agc_lock_take_shared(l);
 }
 
-static inline void agc_lock_drop(agc_lock *l) {
+CC_RELEASES(l->mutex) static inline void agc_lock_drop(agc_lock *l) {
   if (__builtin_expect(!l->solo, 0)) agc_lock_drop_shared(l);
 }
 
@@ -723,15 +723,15 @@ static inline void agc_lock_drop(agc_lock *l) {
    failure that jumps out of the code that holds it is undone by the scheduler (agc_sync_reset). Lock order: sync, then a
    stream's lock, then the I/O inbox's and the run queue's. With one scheduler (before agc_share) these are a test of
    one flag. In a shared VM agc_sync_assert fails when a mutator of those lists runs without it. */
-void agc_sync_take_shared(agc_vm *vm);
-void agc_sync_drop_shared(agc_vm *vm);
+CC_ACQUIRES(vm->rt->sync->mutex) void agc_sync_take_shared(agc_vm *vm);
+CC_RELEASES(vm->rt->sync->mutex) void agc_sync_drop_shared(agc_vm *vm);
 _Noreturn void agc_sync_missing(agc_vm *vm);
 
-static inline void agc_sync_take(agc_vm *vm) {
+CC_ACQUIRES(vm->rt->sync->mutex) static inline void agc_sync_take(agc_vm *vm) {
   if (__builtin_expect(vm->rt->shared, 0)) agc_sync_take_shared(vm);
 }
 
-static inline void agc_sync_drop(agc_vm *vm) {
+CC_RELEASES(vm->rt->sync->mutex) static inline void agc_sync_drop(agc_vm *vm) {
   if (__builtin_expect(vm->rt->shared, 0)) agc_sync_drop_shared(vm);
 }
 
