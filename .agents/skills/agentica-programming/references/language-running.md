@@ -17,7 +17,7 @@ the list of commands and flags.
   (exit 1). `[style]` of the nearest `agentica.toml` sets the width (default
   119) and `blank_line_after_end`. `agentica lint` suggests style changes
   (`LINT-` codes, never errors); it only parses, so run `check` for
-  correctness.
+  correctness. For CI, `fmt --check` and `lint --strict` exit 1 on a change.
 - `--ai` prints a diagnostic as compact text, `--json` as one object (the last
   stderr line, after the program's own stderr). Put them before the file.
 - `agentica help NAME` prints a builtin's signature (unknown name: exit 2);
