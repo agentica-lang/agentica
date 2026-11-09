@@ -392,7 +392,10 @@ header and the entry.
     section, at most once; one with a kind 8 entry has the `Optional` enum
     (None, Some, with arities 0 and 1), at most once. Then a `u32` count of
     decodable structs, each a `u32` struct index (increasing), the `str` linked
-    name and one `u32` type index per field.
+    name and one `u32` type index per field. A linked name with a `[`
+    (`List[@2::Point]`) stands for a `List` or `Map` target of `JSON.decode`:
+    the struct has exactly one field, and the root is decoded as that field's
+    type.
 
 - **Section:** Enums
   - **Entry:** `str` display name, `u32` variant count, each `str` name and

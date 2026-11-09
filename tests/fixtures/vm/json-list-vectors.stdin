@@ -1,15 +1,32 @@
 # json-list-vectors.stdin: made by python3 tests/fixtures/json-list-vectors.py (Python json module); do not edit by hand
 list	[]	ok	[]	same
-list	[{"name": "a", "count": 1}, {"name": "b"}]	ok	[{"name":"a","count":1},{"name":"b","count":null}]	changed
-list	[{"name": "a", "count": null}]	ok	[{"name":"a","count":null}]	same
-list	[{"name": "a"}, {"name": 2}]	error	[1].name: expected String	-
-list	[{"name": "a"}, null]	error	[1]: expected object	-
+list	[{"name": "a", "count": 1}, {"count": 2, "name": "b", "extra": true}]	ok	[{"name":"a","count":1},{"name":"b","count":2}]	changed
+list	[{"name": "a", "count": 1}, {"name": 2, "count": 1}]	error	[1].name: expected String	-
+list	[{"name": "a", "count": 1}, null]	error	[1]: expected object	-
+list	[{"name": "a"}]	error	[0].count: expected required field	-
 list	[[]]	error	[0]: expected object	-
-list	{"name": "a"}	error	$: expected array	-
+list	{"name": "a", "count": 1}	error	$: expected array	-
 list	null	error	$: expected array	-
 map	{}	ok	{}	same
-map	{"b": {"name": "x"}, "a": {"name": "y", "count": 2}}	ok	{"a":{"name":"y","count":2},"b":{"name":"x","count":null}}	changed
+map	{"b": {"name": "x", "count": 1}, "a": {"name": "y", "count": 2}}	ok	{"a":{"name":"y","count":2},"b":{"name":"x","count":1}}	same
 map	{"a": {"count": 1}}	error	["a"].name: expected required field	-
 map	{"a": []}	error	["a"]: expected object	-
-map	[{"name": "a"}]	error	$: expected object	-
+map	[{"name": "a", "count": 1}]	error	$: expected object	-
 map	"text"	error	$: expected object	-
+ints	[1, -2, 9223372036854775807]	ok	[1,-2,9223372036854775807]	same
+ints	[1, 2.5]	error	[1]: expected signed 64-bit Int	-
+ints	[9223372036854775808]	error	[0]: expected signed 64-bit Int	-
+ints	{"a": 1}	error	$: expected array	-
+optionals	[1, null, 3]	ok	[1,null,3]	same
+optionals	[]	ok	[]	same
+optionals	[1, "x"]	error	[1]: expected signed 64-bit Int or null	-
+colors	[{"tag": "Red"}, {"tag": "Blue", "values": []}]	ok	[{"tag":"Red","values":[]},{"tag":"Blue","values":[]}]	changed
+colors	[{"tag": "Green"}]	error	[0].tag: expected one of Red, Blue	-
+colors	[{"tag": "Red", "values": [1]}]	error	[0].values: expected array of 0 items	-
+colors	["Red"]	error	[0]: expected object	-
+grid	[[{"name": "a", "count": 1}], []]	ok	[[{"name":"a","count":1}],[]]	same
+grid	[[{"name": "a", "count": 1}, {"count": 2}]]	error	[0][1].name: expected required field	-
+grid	[[{"name": "a", "count": 1}], {"name": "b", "count": 2}]	error	[1]: expected array	-
+groups	{"x": [{"name": "a", "count": 1}], "y": []}	ok	{"x":[{"name":"a","count":1}],"y":[]}	same
+groups	{"x": [{"name": "a", "count": "1"}]}	error	["x"][0].count: expected signed 64-bit Int	-
+groups	{"x": {"name": "a", "count": 1}}	error	["x"]: expected array	-

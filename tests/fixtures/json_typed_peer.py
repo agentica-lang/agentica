@@ -169,13 +169,16 @@ def encode_struct(value, fields, encode):
     return "{" + ",".join(parts) + "}"
 
 
-def struct_codec(structs):
+def struct_codec(structs, other=None):
     """The decode and encode of a model whose kinds are the scalars, ("list", T), ("map", T) with String keys,
     ("optional", T) and the names of structs, which maps to their (name, kind) fields. encode writes struct keys in
-    declaration order, map keys sorted, no spaces."""
+    declaration order, map keys sorted, no spaces. other, when given, is a (decode, encode) pair for the kinds of the
+    model's own (an enum), tried first; each gives UNHANDLED for a kind that is not its own."""
 
     def decode(value, kind, path):
         found = decode_common(value, kind, path, decode)
+        if found is UNHANDLED and other:
+            found = other[0](value, kind, path)
         if found is not UNHANDLED:
             return found
         if isinstance(kind, tuple):
@@ -186,6 +189,8 @@ def struct_codec(structs):
 
     def encode(value, kind):
         found = encode_common(value, kind, encode)
+        if found is UNHANDLED and other:
+            found = other[1](value, kind)
         if found is not UNHANDLED:
             return found
         if isinstance(kind, tuple):
@@ -193,3 +198,20 @@ def struct_codec(structs):
         return encode_struct(value, structs[kind], encode)
 
     return decode, encode
+
+
+def join(path, key):
+    return f"{path}.{key}" if path else key
+
+
+def enum_tag(value, names, path):
+    """The variant name of an enum value {"tag": name, ...}, one of names, with the errors of JSON.decode."""
+    if not isinstance(value, dict):
+        fail(path, "object")
+    if "tag" not in value:
+        fail(join(path, "tag"), "required field")
+    if not isinstance(value["tag"], str):
+        fail(join(path, "tag"), "String")
+    if value["tag"] not in names:
+        fail(join(path, "tag"), "one of " + ", ".join(names))
+    return value["tag"]

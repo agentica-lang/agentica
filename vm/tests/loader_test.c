@@ -565,11 +565,11 @@ static buffer type_tables(int which) {
   u32(&t, which == 6 ? 1 : 2);
   if (which != 5 && which != 6) {
     u32(&t, which == 9 ? 5 : 0);
-    str(&t, "P");
+    str(&t, which == 24 ? "List[P]" : "P");
     u32(&t, which == 4 ? 3 : 2);
   }
   u32(&t, 1);
-  str(&t, which == 11 ? "P" : "@1::Q");
+  str(&t, which == 11 ? "P" : which == 23 ? "List[@1::Q]" : "@1::Q");
   u32(&t, 1);
   u32(&t, 0);
   if (which == 5) {
@@ -580,7 +580,8 @@ static buffer type_tables(int which) {
   /* 13: a JsonField type (kind 7) and no enum; 14: with the JsonField enum; 15 to 18: a JsonField enum of the
      wrong shape (Value without its payload, a fourth variant, Null before Absent) or a second JsonField enum. 19: an
      Optional type (kind 8) and no enum; 20: with the Optional enum; 21: an enum named Optional of another shape (Some
-     without its payload), which is not the builtin one; 22: two Optional enums. */
+     without its payload), which is not the builtin one; 22: two Optional enums. 23: a List target name (a `[`) on Q,
+     which has two fields; 24: one on P, which has one. */
   if (which < 14 || which == 19) {
     u32(&t, 0);
     return t;
@@ -2185,6 +2186,8 @@ int main(void) {
   assert(loads_types(20, NULL));
   assert(!loads_types(21, "Optional type without the Optional enum"));
   assert(!loads_types(22, "duplicate Optional enum"));
+  assert(!loads_types(23, "a List or Map JSON target needs one field"));
+  assert(loads_types(24, NULL));
   buffer typed = type_tables(0);
   s = base();
   s.tables = &typed;

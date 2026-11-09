@@ -81,6 +81,12 @@ CASES = [
         "List[Raw]",
     ),
     (
+        "members takes a named type only",
+        main_with("  puts(List[Raw].members)\n"),
+        "CHECK-TYPE-MISMATCH",
+        "List[Raw]",
+    ),
+    (
         "a List type is no value outside a JSON type argument",
         main_with("  x = List[Raw]\n  puts(x)\n"),
         "CHECK-TYPE-MISMATCH",
@@ -108,3 +114,20 @@ def test_a_list_of_an_imported_type_decodes_through_its_alias(tmp_path):
     result = run(cli() + [str(root)])
     assert result.code == 0, result.stderr
     assert result.stdout == '[Raw(file: "a.c")]\n'
+
+
+def test_an_alias_decodes_as_the_type_it_names_alone_and_as_an_item(tmp_path):
+    """The lowering names a target by the type the checker resolved, so an alias of a struct works in both places."""
+    program = tmp_path / "program.agc"
+    program.write_text(
+        HEAD
+        + "type Pair = Raw\n\n"
+        "def main() -> Void\n"
+        '  puts(JSON.decode("{\\"file\\": \\"a.c\\"}", Pair).unwrap!)\n'
+        '  puts(JSON.decode("[{\\"file\\": \\"b.c\\"}]", List[Pair]).unwrap!)\n'
+        "end\n",
+        encoding="utf-8",
+    )
+    result = run(cli() + [str(program)])
+    assert result.code == 0, result.stderr
+    assert result.stdout == 'Raw(file: "a.c", line: none)\n[Raw(file: "b.c", line: none)]\n'

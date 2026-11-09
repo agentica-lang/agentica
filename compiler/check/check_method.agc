@@ -111,6 +111,10 @@ end
 # from the fields recorded here, so the program needs no runtime support. An alias is refused as a struct
 # construction is (CHECK-UNKNOWN-TYPE); an enum or a resource has no members (CHECK-UNKNOWN-METHOD).
 def check_members(cx: State.Cx, st: State.St, node: Ast.FieldAccess, type_name: Ast.TypeName) -> Result[State.Out]
+  if type_name.args.size > 0
+    return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", "members requires a struct name", type_name.span))
+  end
+
   name = type_name.name
   display = T.display_name(name)
   fields = cx.structs.get(name)

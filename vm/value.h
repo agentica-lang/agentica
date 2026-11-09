@@ -443,6 +443,9 @@ typedef struct {
   agc_string **fields;
   agc_string *json_name;
   uint32_t *field_types;
+  /* json_root: a decodable struct whose linked name has a `[` (List[app.T]) stands for a List or Map target of
+     JSON.decode, which decodes the root as its one field (the loader checks the count). No declared struct has one. */
+  bool json_root;
 } agc_struct_def;
 
 /* One struct update (`value.with(...)`): the struct it applies to and the

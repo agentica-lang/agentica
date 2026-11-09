@@ -38,12 +38,13 @@ end
 ## Builds the tables. decls are all the declarations of the program in order. used are the watched type names that the
 ## program writes or whose types some expression has (a builtin record or enum is in the tables only then). type_names
 ## are the types that functions use as a value, which is when the user structs and enums that JSON can build are looked
-## for, and json_lists the List and Map types they use as a value (each a JSON.decode target, see json_list_name).
+## for, and targets the types the checker gave them (lowering.agc json_targets): an alias counts by what it names, and
+## a List or Map target gets a struct of its own (json_list_name).
 export def build(
   decls: List[Ast.Decl],
   used: Set[String],
   type_names: List[String],
-  json_lists: List[Ast.TypeRef],
+  targets: List[Types.Type],
 ) -> Tables
   struct_decls: List[Ast.StructDecl] = []
   enum_decls: List[Ast.EnumDecl] = []
@@ -56,17 +57,19 @@ export def build(
   end
 
   builtin_types = builtin_decodable()
-  decodable = user_decodable(struct_decls, enum_decls, builtin_types, type_names)
-  lists = json_list_structs(json_lists, kinds_of(struct_decls, enum_decls), decodable)
+  names = type_names
+  for target in targets
+    names = names.concat(struct_names_in(target))
+  end
+
+  decodable = user_decodable(struct_decls, enum_decls, builtin_types, names)
   wanted = used
   if decodable.values.any? do |types: List[Types.Type]| types.any? do |type: Types.Type| json_field?(type) end end
     # JSON.decode builds JsonField values, so the enum is in the table even when no expression names it.
     wanted = used.add("JsonField")
   end
 
-  field_types = lists.map do |entry: Ir.StructDef| entry.types end
-  field_types = field_types.concat(decodable.values)
-  if field_types.any? do |types: List[Types.Type]| types.any? do |type: Types.Type| optional_in?(type) end end
+  if decodable.values.any? do |types: List[Types.Type]| types.any? do |type: Types.Type| optional_in?(type) end end
     # The same for the Optional values that JSON.decode builds.
     wanted = wanted.add("Optional")
   end
@@ -83,7 +86,7 @@ export def build(
     structs = structs.push(Ir.StructDef(name: decl.name, fields: fields, decodable: known, types: types))
   end
 
-  structs = structs.concat(builtin_structs(used, builtin_types)).concat(lists)
+  structs = structs.concat(builtin_structs(used, builtin_types)).concat(json_list_structs(targets, decodable))
   enums: List[Ir.EnumDef] = []
   for decl in enum_decls
     variants = decl.variants.map do |variant: Ast.EnumVariant|
@@ -116,16 +119,18 @@ export def build(
   return index(structs, enums)
 end
 
-## The name of the struct that stands for a List[T] or Map[K, V] used as a JSON.decode target: the type as written
-## after linking, such as List[app.Person]. A `[` keeps it apart from every struct a program declares, and the VM
-## decodes such a struct's one field in its place (vm/json.c).
-export def json_list_name(ref: Ast.TypeRef) -> String
-  if ref.args.size == 0
-    return ref.name
+## The name of the struct that stands for a List[T] or Map[String, T] used as a JSON.decode target: the type with its
+## linked names, such as List[app.Person]. A `[` keeps it apart from every struct a program declares, and the VM
+## decodes such a struct's one field in its place (docs/vm/03-bytecode-format.md).
+export def json_list_name(type: Types.Type) -> String
+  case type
+    Types.Type.List(item) -> return "List[#{json_list_name(item)}]"
+    Types.Type.Map(key, value) -> return "Map[#{json_list_name(key)}, #{json_list_name(value)}]"
+    Types.Type.Optional(item) -> return "Optional[#{json_list_name(item)}]"
+    Types.Type.Struct(name, _) -> return name
+    Types.Type.Enum(name, _) -> return name
+    _ -> return Types.tag(type)
   end
-
-  inner = ref.args.map do |arg: Ast.TypeRef| json_list_name(arg) end
-  return "#{ref.name}[#{inner.join(", ")}]"
 end
 
 # The lookups over the finished tables.
@@ -178,26 +183,18 @@ def index(structs: List[Ir.StructDef], enums: List[Ir.EnumDef]) -> Tables
   )
 end
 
-# One decodable struct of a single field per List or Map type used as a JSON.decode target, named by json_list_name:
-# the type table holds only the field types of structs and enums. kinds are those of kinds_of, and decodable the
-# structs and enums JSON can build: a type with any other struct or enum has none, so the lowering of its name refuses
-# it as it refuses such a struct.
-def json_list_structs(
-  refs: List[Ast.TypeRef],
-  kinds: Map[String, String],
-  decodable: Map[String, List[Types.Type]],
-) -> List[Ir.StructDef]
+# One decodable struct of a single field for each List or Map target, named by json_list_name: the type table holds
+# only the field types of structs and enums. decodable are the structs and enums JSON can build; a target with another
+# struct or enum in it has none, so the lowering of its name refuses it as it refuses such a struct.
+def json_list_structs(targets: List[Types.Type], decodable: Map[String, List[Types.Type]]) -> List[Ir.StructDef]
   found: List[Ir.StructDef] = []
   seen: Set[String] = Set.new([])
-  for ref in refs
-    name = json_list_name(ref)
-    type = json_field_inner(ref, kinds)
-    if !seen.include?(name) and type.some?
-      types = [type.unwrap!]
-      if references_known?(types, decodable)
-        found = found.push(Ir.StructDef(name: name, fields: ["value"], decodable: true, types: types))
-        seen = seen.add(name)
-      end
+  for type in targets
+    name = json_list_name(type)
+    list = Types.is?(type, "List") or Types.is?(type, "Map")
+    if list and !seen.include?(name) and references_known?([type], decodable)
+      found = found.push(Ir.StructDef(name: name, fields: ["value"], decodable: true, types: [type]))
+      seen = seen.add(name)
     end
   end
 
@@ -270,7 +267,21 @@ def user_decodable(
     return {}
   end
 
-  kinds = kinds_of(structs, enums)
+  kinds: Map[String, String] = {}
+  for name in BUILTIN_STRUCTS
+    kinds = kinds.put(name, "Struct")
+  end
+
+  for decl in structs
+    kinds = kinds.put(decl.name, "Struct")
+  end
+
+  for decl in enums
+    if decl.type_parameters.size == 0
+      kinds = kinds.put(decl.name, "Enum")
+    end
+  end
+
   table = builtin
   for decl in structs
     types: List[Types.Type] = []
@@ -320,27 +331,6 @@ def user_decodable(
   end
 
   return with_reachable_enums(table, kinds, type_names)
-end
-
-# The kinds of the types JSON.decode may build by name: "Struct" for a builtin record or a struct, "Enum" for an enum
-# with no type parameters.
-def kinds_of(structs: List[Ast.StructDecl], enums: List[Ast.EnumDecl]) -> Map[String, String]
-  kinds: Map[String, String] = {}
-  for name in BUILTIN_STRUCTS
-    kinds = kinds.put(name, "Struct")
-  end
-
-  for decl in structs
-    kinds = kinds.put(decl.name, "Struct")
-  end
-
-  for decl in enums
-    if decl.type_parameters.size == 0
-      kinds = kinds.put(decl.name, "Enum")
-    end
-  end
-
-  return kinds
 end
 
 # The table with the structs and the enums that a struct or a name of type_names reaches: an enum nothing JSON

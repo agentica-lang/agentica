@@ -362,6 +362,8 @@ def check_json_type(cx: State.Cx, st: State.St, site: State.Site, decode: Bool) 
   end
 
   type = try json_type(cx, current, target, decode)
+  # The lowering names the target by this type: an alias resolved, a List or Map whole (Lowering.json_targets).
+  current = State.record_type(current, Ast.expr_id(target), type)
   if decode
     return ok(State.Out(st: current, type: T.Type.Result(type)))
   end

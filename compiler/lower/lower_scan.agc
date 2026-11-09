@@ -6,18 +6,18 @@ import AstWalk from "../syntax/ast_walk"
 
 ## What a body mentions. consts are the linked names of the constants it reads and calls the names of the functions it
 ## calls or takes with `&`, in the order found. written are the watched type names it writes (a type, a type used as a
-## value, an enum constructor, a pattern), and type_names the linked names it uses as a value (JSON.decode(Person,
-## ...)), type arguments included; json_lists are the List[T] and Map[K, V] it uses as a value
-## (JSON.decode(List[Person], ...)). covered are the ids of some(x), ok(x) and [x, ...]: check_some, check_ok and
-## check_list build their type, a List, Optional or Result, around a type with the names of the type recorded at x's
-## id, so lowering.agc's top_names reads only its top. regexes are the regex literals of a function body: each one
-## reads the constant regex_constant names, which lowering.agc makes for it, so a literal is compiled once.
+## value, an enum constructor, a pattern), type_names the linked names it uses as a value (JSON.decode(Person, ...)),
+## and type_ids the ids of those nodes, where the checker recorded the type of a JSON target (lowering.agc). covered
+## are the ids of some(x), ok(x) and [x, ...]: check_some, check_ok and check_list build their type, a List, Optional
+## or Result, around a type with the names of the type recorded at x's id, so lowering.agc's top_names reads only its
+## top. regexes are the regex literals of a function body: each one reads the constant regex_constant names, which
+## lowering.agc makes for it, so a literal is compiled once.
 export struct Scan
   consts: List[String]
   calls: List[String]
   written: List[String]
   type_names: List[String]
-  json_lists: List[Ast.TypeRef]
+  type_ids: List[Int]
   covered: List[Int]
   regexes: List[Ast.RegexLit]
 end
@@ -65,7 +65,7 @@ export def written_signature(decl: Ast.FunctionDecl, watched: Set[String]) -> Li
 end
 
 def empty() -> Scan
-  return Scan(consts: [], calls: [], written: [], type_names: [], json_lists: [], covered: [], regexes: [])
+  return Scan(consts: [], calls: [], written: [], type_names: [], type_ids: [], covered: [], regexes: [])
 end
 
 def walk(start: List[AstWalk.Node], watched: Set[String], first: Scan, hoist: Bool) -> Scan
@@ -127,15 +127,10 @@ def see_expr(found: Scan, expr: Ast.Expr, watched: Set[String]) -> Scan
       return found.with(calls: found.calls.push(node.name), covered: wrapping(found.covered, node))
     Ast.Expr.FunctionRef(node) -> return found.with(calls: found.calls.push(node.name))
     Ast.Expr.TypeName(node) ->
-      if node.args.size > 0
-        ref = Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span)
-        written = found.written.concat(written_in(ref, watched))
-        names = found.type_names.concat(names_in(node.args))
-        return found.with(written: written, type_names: names, json_lists: found.json_lists.push(ref))
-      end
-
-      written = named(found.written, node.name, watched)
-      return found.with(written: written, type_names: found.type_names.push(node.name))
+      ref = Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span)
+      written = found.written.concat(written_in(ref, watched))
+      names = found.type_names.push(node.name)
+      return found.with(written: written, type_names: names, type_ids: found.type_ids.push(node.id))
     Ast.Expr.EnumConstructor(node) -> return found.with(written: named(found.written, node.enum_name, watched))
     Ast.Expr.BlockLit(node) -> return found.with(written: block_types(found.written, node, watched))
     Ast.Expr.Case(node) -> return found.with(written: arm_names(found.written, node.arms, watched))
@@ -173,16 +168,6 @@ def named(written: List[String], name: String, watched: Set[String]) -> List[Str
   end
 
   return written
-end
-
-# The names of some types and of their type arguments.
-def names_in(refs: List[Ast.TypeRef]) -> List[String]
-  found: List[String] = []
-  for ref in refs
-    found = found.push(ref.name).concat(names_in(ref.args))
-  end
-
-  return found
 end
 
 def optional_type(written: List[String], type: Optional[Ast.TypeRef], watched: Set[String]) -> List[String]

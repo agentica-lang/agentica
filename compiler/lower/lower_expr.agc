@@ -516,10 +516,18 @@ def lower_const_read(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ConstRef, want:
   return ok(Lowering.Out(fx: fx, slot: made.slot))
 end
 
-# A type name as a value (JSON.decode(Person, text)): the name as a string, for a struct the VM can decode. A List or
-# Map type gives the name of the struct that stands for it (Program.json_list_name).
+# A type name as a value (JSON.decode(Person, text)): the name as a string, for a struct the VM can decode. The type
+# the checker recorded there names it: an alias gives the struct or enum it names, and a List or Map type the struct
+# that stands for it (Program.json_list_name).
 def lower_type_name(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.TypeName, want: Int) -> Result[Lowering.Out]
-  name = Program.json_list_name(Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span))
+  name = node.name
+  type = Lowering.type_of(cx, Ast.Expr.TypeName(node))
+  if Types.is?(type, "List") or Types.is?(type, "Map")
+    name = Program.json_list_name(type)
+  elsif Types.is?(type, "Struct") or Types.is?(type, "Enum")
+    name = Types.name(type)
+  end
+
   if !cx.json_types.include?(name)
     return error(Lowering.unsupported(cx, "the type #{Types.display_name(name)}", node.span))
   end

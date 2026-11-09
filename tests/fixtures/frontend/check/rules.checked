@@ -78,7 +78,7 @@ program #220 0:1:1-1398:57:1
       body: binding #76 469:26:3-506:27:1 name="decoded"
         value: call #75 479:26:13-505:26:39 name="JSON.decode" piped=false type=Result(Struct(Reading))
           arg: name-ref #73 491:26:25-495:26:29 name="text" type=String
-          arg: type-expression #74 497:26:31-504:26:38 name="Reading"
+          arg: type-expression #74 497:26:31-504:26:38 name="Reading" type=Struct(Reading)
       body: expr-stmt #80 508:27:3-530:28:1
         value: call #79 508:27:3-529:27:24 name="puts" piped=false type=Void
           arg: field-access #78 513:27:8-528:27:23 name="message" type=String resolved=call("Result.message", Result(Struct(Reading)))
@@ -93,7 +93,7 @@ program #220 0:1:1-1398:57:1
       body: expr-stmt #91 585:30:3-612:31:1
         value: call #90 585:30:3-611:30:29 name="puts" piped=false type=Void
           arg: call #89 590:30:8-610:30:28 name="JSON.schema" piped=false type=Json
-            arg: type-expression #88 602:30:20-609:30:27 name="Reading"
+            arg: type-expression #88 602:30:20-609:30:27 name="Reading" type=Struct(Reading)
       body: binding #95 614:31:3-644:32:1 name="task"
         value: call #94 621:31:10-643:31:32 name="Task.spawn" piped=false type=Task(Int)
           arg: function-ref #92 632:31:21-639:31:28 name="square" type=Fn([Int], Int)

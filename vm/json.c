@@ -286,14 +286,14 @@ static uint32_t decodable_type(agc_vm *vm, agc_value name, uint32_t span, uint32
 }
 
 /* JSON.decode(source, Type): the source is JSON text or a Json value, which is decoded in place without text. A
-   List[T] or Map[String, T] target is a struct of one field whose name has a `[`, which no declared struct has
-   (lower_program.agc json_list_name): the root is decoded as that field's type. */
+   List[T] or Map[String, T] target is a struct of one field (json_root, set by the loader): the root is decoded as
+   that field's type. */
 static agc_value builtin_decode(agc_vm *vm, agc_value *args, uint32_t span) {
   uint32_t kind;
   uint32_t type = decodable_type(vm, args[1], span + 2, &kind);
   if (kind == AGC_TYPE_STRUCT) {
     const agc_struct_def *def = &vm->rt->program->structs[type];
-    if (def->count == 1 && memchr(def->json_name->data, '[', def->json_name->bytes)) {
+    if (def->json_root) {
       const agc_type *field = &vm->rt->program->types[def->field_types[0]];
       kind = field->kind;
       type = field->arg;

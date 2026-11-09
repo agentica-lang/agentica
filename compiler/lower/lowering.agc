@@ -57,14 +57,14 @@ struct Table
 end
 
 # What the scans of all the bodies give: one per function and constant, the watched type names written anywhere, with
-# the type names and the List and Map types that functions use as a value, and the ids of the covered expressions
+# the type names that functions use as a value and the ids of their nodes, and the ids of the covered expressions
 # (Scans.Scan).
 struct Scanned
   function_scans: List[Scans.Scan]
   constant_scans: List[Scans.Scan]
   written: List[String]
   type_names: List[String]
-  json_lists: List[Ast.TypeRef]
+  type_ids: List[Int]
   covered: Set[Int]
 end
 
@@ -124,7 +124,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
     used = used.add("Optional")
   end
 
-  tables = Program.build(decls, used, scanned.type_names, scanned.json_lists)
+  tables = Program.build(decls, used, scanned.type_names, json_targets(checked.types, scanned.type_ids))
   plan = Const.plan(function_decls, scanned.function_scans, constant_decls, scanned.constant_scans, order)
   start = plan.slots.size > 0
   files_of = constant_files(constants)
@@ -373,14 +373,14 @@ def scan_all(
   written: List[String] = []
   covered: List[Int] = []
   type_names: List[String] = []
-  json_lists: List[Ast.TypeRef] = []
+  type_ids: List[Int] = []
   for decl in functions
     scan = Scans.scan_body(decl.body, watched)
     function_scans = function_scans.push(scan)
     written = written.concat(scan.written).concat(Scans.written_signature(decl, watched))
     covered = covered.concat(scan.covered)
     type_names = type_names.concat(scan.type_names)
-    json_lists = json_lists.concat(scan.json_lists)
+    type_ids = type_ids.concat(scan.type_ids)
   end
 
   for decl in constants
@@ -389,7 +389,7 @@ def scan_all(
     written = written.concat(scan.written)
     covered = covered.concat(scan.covered)
     type_names = type_names.concat(scan.type_names)
-    json_lists = json_lists.concat(scan.json_lists)
+    type_ids = type_ids.concat(scan.type_ids)
     case decl.type
       some(ref) -> written = written.concat(Scans.written_in(ref, watched))
       none -> written = written
@@ -405,7 +405,7 @@ def scan_all(
     constant_scans: constant_scans,
     written: written,
     type_names: type_names,
-    json_lists: json_lists,
+    type_ids: type_ids,
     covered: Set.new(covered),
   )
 end
@@ -470,6 +470,19 @@ def declared_names(decl: Ast.Decl, watched: Set[String]) -> List[String]
       end
 
     _ -> found = found
+  end
+
+  return found
+end
+
+# The types the checker recorded at the type names used as a value: those of the JSON targets, an alias resolved and a
+# List or Map whole (CheckRules.check_json_type). A name with no type recorded (Type.members) is left out.
+def json_targets(types: List[Types.Type], ids: List[Int]) -> List[Types.Type]
+  found: List[Types.Type] = []
+  for id in ids
+    if id < types.size and !Types.unknown?(types[id])
+      found = found.push(types[id])
+    end
   end
 
   return found

@@ -89,6 +89,9 @@ functions up by name.
   the bytecode writer interns them into the Types section. `$defs` names and the
   type-argument constant are the linked names (`@2::Point`), not display names:
   `JSON.schema` prints them, and two imported structs can share a display name.
+  A `List[T]` or `Map[String, T]` target of `JSON.decode` is a decodable struct
+  of one field named by `json_list_name` (`List[@2::Point]`); the `[` tells the
+  loader to set `json_root`, and `builtin_decode` decodes the root as the field.
   A new decodable kind (enums) needs a new type kind and loader rules; an
   appended kind keeps the format version, as type kind 7 (`JsonField`) did.
   `JsonField[T]` is only the direct type of a field (`field_type`), and a
