@@ -431,17 +431,37 @@ def test_closing_a_child_started_with_pgroup_stops_its_own_children(tmp_path, st
         kill_process(pid)
 
 
+def stopped_family(tmp_path, ending, *mode):
+    """Starts the Python peer in family mode as a captured pgroup child, prints its grandchild's pid, then closes it
+    and returns at once, or just returns: either way the end of the run comes inside the child's 1 s grace."""
+    stop = "  Process.close(p)\n" if ending == "close" else ""
+    words = ", ".join(agc_literal(word) for word in ("family",) + mode)
+    text = ('def main() -> Void\n  p = Result.unwrap!(Process.spawn_captured(%s, [%s, %s], ".", 5000, {}, true))\n'
+            '  puts(Result.unwrap!(Process.read_line(p, 5000)))\n%send\n\n' % (agc_literal(PYTHON), agc_literal(PY_PEER),
+                                                                               words, stop))
+    return output(tmp_path, text).strip()
+
+
 @host_only(TARGET_OS == "windows", "Windows has no process groups that a stop signals; pgroup stops the child alone")
 @pytest.mark.parametrize("ending", ["close", "end of run"])
 def test_a_pgroup_descendant_that_ignores_sigterm_gets_sigkill_after_the_grace(tmp_path, ending):
-    """A captured child gets SIGTERM and dies of it at once, but its grandchild ignores it: when the 1 s grace is over,
-    the group gets SIGKILL although its leader was already reaped."""
-    stop = "  Process.close(p)\n  Task.sleep(2000)\n" if ending == "close" else ""
-    text = ('def main() -> Void\n  p = Result.unwrap!(Process.spawn_captured(%s, [%s, "family", "stubborn"], ".", 5000,'
-            ' {}, true))\n  puts(Result.unwrap!(Process.read_line(p, 5000)))\n%send\n\n'
-            % (agc_literal(PYTHON), agc_literal(PY_PEER), stop))
-    pid = output(tmp_path, text).strip()
+    """The captured child dies of the SIGTERM at once, but its grandchild ignores it: when the grace is over, the group
+    gets SIGKILL although its leader was already reaped."""
+    pid = stopped_family(tmp_path, ending, "stubborn")
     try:
         assert wait_until(lambda: not process_alive(pid))
+    finally:
+        kill_process(pid)
+
+
+@host_only(TARGET_OS == "windows", "Windows has no process groups that a stop signals; pgroup stops the child alone")
+@pytest.mark.parametrize("ending", ["close", "end of run"])
+def test_a_pgroup_descendant_gets_the_whole_grace_after_its_leader_is_reaped(tmp_path, ending):
+    """The grandchild takes 300 ms on SIGTERM, then writes a marker: the end of the run waits for it within the grace
+    instead of sending SIGKILL once the leader is reaped."""
+    marker = tmp_path / "marker"
+    pid = stopped_family(tmp_path, ending, "slow", str(marker))
+    try:
+        assert marker.read_text() == "done"
     finally:
         kill_process(pid)

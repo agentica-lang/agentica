@@ -88,11 +88,12 @@ systems get none.
   `setsid` in the child) leads its own group, and each signal of a stop goes to
   the group, so its descendants end too. A captured group's SIGKILL comes when
   the grace ends even if the leader was reaped meanwhile (the grace timer
-  outlives the exit; the end of the run keeps the group ids), since POSIX does
-  not reuse a pid while its group exists. A group whose leader exited before
-  any stop is not signalled. Windows does not use it, since a detached child
-  leaves libuv's job object. The
-  pipes close at once, and a task blocked on the child (reader, writer or
+  outlives the exit; the guard keeps a group in its grace on a second list, and
+  the end of the run waits, up to the grace, until those groups are gone),
+  since POSIX does not reuse a pid while its group exists. A group whose
+  leader exited before any stop is not signalled. Windows does not use it,
+  since a detached child leaves libuv's job object. The pipes close at once,
+  and a task blocked on the child (reader, writer or
   waiter) wakes with `process: process is closed`. Only the call that parks
   waits: `Process.close` of a running plain child parks its task on a job with a
   1-second timer, which the exit callback ends, and other tasks run meanwhile,

@@ -2,7 +2,7 @@
 
 Modes: args (argv as one JSON line), env (the AGENTICA_* and PROBE_* variables as JSON), cwd (the working directory),
 hold (prints its pid and waits; tests/test_process_lifecycle.py uses it), streams N (N bytes "o" on stdout, then
-"err\n" on stderr, as bytes), family [stubborn] (starts a Python child that sleeps, ignoring SIGTERM if stubborn, prints its pid and waits).
+"err\n" on stderr, as bytes), family [stubborn | slow MARKER] (starts a Python child that sleeps, prints its pid and waits; see below).
 """
 import json
 import os
@@ -33,8 +33,14 @@ def main():
     elif mode == "family":
         # The grandchild prints a line once it is set up, so the pid printed here is of a process that already ignores
         # SIGTERM when "stubborn" is given.
-        ignore = "signal.signal(signal.SIGTERM, signal.SIG_IGN); " if sys.argv[2:] == ["stubborn"] else ""
-        code = "import signal, time; %sprint(flush=True); time.sleep(120)" % ignore
+        # stubborn: the grandchild ignores SIGTERM. slow MARKER: on SIGTERM it works 300 ms, writes MARKER and exits.
+        handler = ""
+        if sys.argv[2:3] == ["stubborn"]:
+            handler = "signal.signal(signal.SIGTERM, signal.SIG_IGN); "
+        elif sys.argv[2:3] == ["slow"]:
+            handler = ("def done(*_):\n    time.sleep(0.3)\n    open(%r, 'w').write('done')\n    sys.exit(0)\n"
+                       "signal.signal(signal.SIGTERM, done)\n" % sys.argv[3])
+        code = "import signal, sys, time\n%sprint(flush=True)\ntime.sleep(120)\n" % handler
         child = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE)
         child.stdout.readline()
         print(child.pid, flush=True)
