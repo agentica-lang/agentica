@@ -61,13 +61,37 @@ def library_name(name):
     return name + ".dll" if WINDOWS else "lib%s.dylib" % name if MACOS else "lib%s.so" % name
 
 
-def shared_library(tmp_path_factory, name, *flags, folder=None, source=None):
+def tsan_vm():
+    """Whether the VM under test is the ThreadSanitizer binary of `make vm-tsan-run` and `make vm-tsan-native`, for
+    the programs and for the command line."""
+    if TARGET_OS != "linux":
+        return False
+    expected = os.path.realpath("build/vm/tsan/agentica")
+    return (os.path.realpath(os.environ.get("AGENTICA_VM_BINARY", "")) == expected and
+            os.path.realpath(os.environ.get("AGENTICA_TEST_EXECUTABLE", "")) == expected)
+
+
+# TSan flags for the peers when the VM under test is the TSan binary (#1169): a race in a peer's own C, such as the
+# lost bump of #1160, then fails the run. Such a library takes the TSan runtime from the VM, so it loads only there,
+# and it is linked without -Wl,-z,defs, which would refuse the runtime's symbols.
+PEER_TSAN_FLAGS = ["-fsanitize=thread", "-g", "-fno-omit-frame-pointer"] if tsan_vm() else []
+# `make vm-tsan-native` sets AGENTICA_TSAN_PEERS=1: a run that would load peers built without TSan stops here.
+if os.environ.get("AGENTICA_TSAN_PEERS") == "1" and not PEER_TSAN_FLAGS:
+    raise RuntimeError("AGENTICA_TSAN_PEERS=1 needs AGENTICA_VM_BINARY and AGENTICA_TEST_EXECUTABLE to be "
+                       "build/vm/tsan/agentica on Linux, or the peers are built without TSan")
+
+
+def shared_library(tmp_path_factory, name, *flags, folder=None, source=None, sanitize=True):
     """Build SOURCE (tests/fixtures/native/NAME.c by default) into a shared library (library_name) in FOLDER (a new
-    one by default), with the extra compiler FLAGS, and return its absolute path."""
+    one by default), with the extra compiler FLAGS, and return its absolute path. Under the TSan VM it is built with
+    TSan too, unless SANITIZE is false."""
     folder = folder or tmp_path_factory.mktemp("native")
     out = folder / library_name(name)
     kind = ["-shared"] if WINDOWS else ["-dynamiclib"] if MACOS else ["-shared", "-fPIC"]
-    subprocess.run([tool("cc"), *kind, "-O1", "-o", str(out),
+    compiler, tsan = (tool("clang"), PEER_TSAN_FLAGS) if sanitize and PEER_TSAN_FLAGS else (tool("cc"), [])
+    if tsan:
+        flags = [flag for flag in flags if flag != "-Wl,-z,defs"]
+    subprocess.run([compiler, *kind, "-O1", *tsan, "-o", str(out),
                     str(source or FIXTURES / "native" / (name + ".c")), *flags], check=True)
     return out
 
@@ -81,14 +105,6 @@ def literal(path):
 def peer(tmp_path_factory):
     """The path of the peer library, built once for the module."""
     return shared_library(tmp_path_factory, "peer", *(["-lws2_32"] if WINDOWS else ["-pthread"]))
-
-
-def tsan_stdio_fixture_enabled():
-    if TARGET_OS != "linux":
-        return False
-    expected = os.path.realpath("build/vm/tsan/agentica")
-    return (os.path.realpath(os.environ.get("AGENTICA_VM_BINARY", "")) == expected and
-            os.path.realpath(os.environ.get("AGENTICA_TEST_EXECUTABLE", "")) == expected)
 
 
 def assert_tsan_finalize_race_report(report):
@@ -182,12 +198,13 @@ def run_tsan_finalize_control(binary, hook, args, expected, tsan_options):
 @pytest.fixture(scope="module")
 def tsan_stdio_support(tmp_path_factory):
     """Build test-only TSan hook/peer support once, with report and exit-status controls."""
-    if not tsan_stdio_fixture_enabled():
+    if not tsan_vm():
         return None
     tsan_peer = shared_library(tmp_path_factory, "tsan_stdio_peer",
                                source=FIXTURES / "native" / "tsan_stdio_peer.c")
+    # The hook is TSan's own finalization callback, preloaded before the runtime is set up: never instrumented.
     hook = shared_library(tmp_path_factory, "tsan_stdio_release",
-                          source=FIXTURES / "native" / "tsan_stdio_release.c")
+                          source=FIXTURES / "native" / "tsan_stdio_release.c", sanitize=False)
     control_dir = tmp_path_factory.mktemp("tsan-finalize-control")
     control = control_dir / "tsan_finalize_control"
     subprocess.run([tool("clang"), "-std=c11", "-O1", "-g", "-fno-omit-frame-pointer",

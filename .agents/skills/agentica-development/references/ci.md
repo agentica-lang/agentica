@@ -149,6 +149,19 @@ proof). These are the rules they do not show.
   binaries again. A job must not build two modes in a row and then use the
   first: its binaries would be relinked, and through the first binary of the
   bootstrap the stages would run again (about 45 s in sanitizer mode).
+- **TSan and native peers.** `make vm-tsan-native` runs the native-call,
+  native-module and FFI modules on the TSan binary at 2 and then 4 schedulers;
+  the `tsan-native` jobs run one count each (`TSAN_NATIVE_SCHEDULERS`, about 8
+  minutes each), and `vm-tsan-run` leaves those modules out. When the VM under
+  test is that binary, `shared_library` of `tests/test_vm_native.py` builds each
+  peer with clang and `-fsanitize=thread`, so a race in a peer's C fails the run
+  (#1160); the target sets `AGENTICA_TSAN_PEERS=1`, which makes the module fail
+  at import if the peers would be built without TSan. A library that TSan itself
+  loads, such as the finalization hook, passes `sanitize=False`. An intended
+  race stays out of the peers that the run loads: behind a `Native.mutex()`
+  (`peer_racy_add`) or in a program of its own (the TSan control
+  `tsan_finalize_control.c`). A change under `tests/fixtures/native/` or to
+  `examples/ffi/*.c` runs the C half.
 - **Check names.** `test` and `vm-sanitizers` are the checks to name in a
   branch protection rule or a merge gate; the other jobs are not (a shard job
   is `fast tests (1/2)` and so on).
