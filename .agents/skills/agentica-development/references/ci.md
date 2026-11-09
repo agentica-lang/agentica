@@ -196,27 +196,26 @@ clang-tidy. A run takes 3 to 5 minutes. Its docs are in that clone
   only passed through a pointer (an `agc_loop_call` step) goes in `[roots]
   short`.
 - The CI job `cchecker` runs when `vm/`, the build files, `.clang-tidy` or those
-  two files change, and for now only reports (`continue-on-error`; no aggregate
-  needs it). Remove that line to make it block: the step runs with pipefail, so
-  the exit code of make (1: new findings; 2: a tool error, a failed clone or a
-  commit that is not the pinned one) is the step's, and the print step fails on
-  an empty or invalid JSON. It prints the new findings, the tool errors and the
+  two files change, and blocks: `test` needs it (skipped counts only when it
+  did not run). A clone step tries the pinned tag three times, so a network
+  failure shows there (a commit that is not the pinned one fails at once).
+  The step fails when cchecker exits non-zero (the JSON says which: new
+  findings, a stale ignore included, or a tool error), and the print step
+  fails on an empty or invalid JSON. It prints the new findings, the tool errors and the
   files not checked, and uploads the JSON of `--json` as the artifact
-  `cchecker-findings`.
-- The job pins gcc 14 and clang and clang-tidy 19, and the baseline matches by
-  message, which the analyzers reword between versions: a local run with other
-  versions may differ from the CI by a finding
-  (`CCHECKER_FLAGS="--gcc gcc-14 --clang-tidy clang-tidy-19"`). The baseline
-  was made with Debian's compilers, so before the job becomes blocking, refresh
-  it from the runner's: take the `new` and `fixed` of the artifact, or run `make
-  cchecker-update-baseline` with those flags on Ubuntu 24.04 with gcc-14,
-  clang-19 and clang-tidy-19.
-- Accept a finding by fixing it first. A false positive of one line gets
-  `// cchecker: ignore CODE: reason` next to the code; a function that makes
-  many findings for the same reason gets an `[assume]` entry with its reason.
-  Only a finding that stays goes into the baseline: `make
-  cchecker-update-baseline` rewrites the file; the diff is the review, and a
-  PR says why each new entry is accepted.
+  `cchecker-findings`, also on a failure.
+- The job pins gcc 14 and clang and clang-tidy 19, which are the reference:
+  the baseline matches by message and the analyzers reword between versions,
+  so a local run with other versions may differ by a finding or an unused
+  ignore (`CCHECKER_FLAGS="--gcc gcc-14 --clang clang-19 --clang-tidy
+  clang-tidy-19"`). Fix what CI reports from the artifact.
+- A new finding is accepted in the PR that brings it, in this order: fix the
+  code; a false positive of one line gets `// cchecker: ignore CODE: reason`
+  next to the code (or above the function, for a rule's finding); a function
+  that makes many findings for the same reason gets an `[assume]` entry with
+  its reason; only a finding that stays goes into the baseline, with `make
+  cchecker-update-baseline` (the diff is the review, and the PR says why each
+  new entry is accepted). Each reason is one line a reviewer can check.
 - Marks: `vm/cchecker.h` is a copy of `include/cchecker.h` of the pinned
   release; its macros are empty under gcc and only annotate under clang. Put
   `CC_OWNS` on a function that returns malloc memory and on the fields and
@@ -228,7 +227,7 @@ clang-tidy. A run takes 3 to 5 minutes. Its docs are in that clone
   reason. Settings first (`cchecker.toml`); a mark is for what they cannot
   say. A pointer put into a returned array, or set through an out parameter,
   is not followed: ignore it with the reason.
-- To move to a new release, change the version and the commit
+- To move to a new release, change `CCHECKER_VERSION` and `CCHECKER_COMMIT`
   (`git ls-remote https://github.com/agentica-lang/cchecker 'X^{}' X`), copy
   its `include/cchecker.h` over `vm/cchecker.h`, run
   `make cchecker-update-baseline` and review the diff.

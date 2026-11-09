@@ -286,18 +286,19 @@ vm-lint-gcstress:
 # cchecker (https://github.com/agentica-lang/cchecker): the project rules for C (blocking calls on short paths, locks on every
 # path, ownership, collector values) plus gcc -fanalyzer and clang-tidy, over a VM compile database (`make cchecker-db`).
 # It is an Agentica program, so dist/agentica runs it; it needs gcc 10+, clang and clang-tidy on PATH. The release has no
-# binary: the tag is cloned into build/cchecker/ and its commit must be the pinned one. The settings are cchecker.toml, the
-# accepted findings cchecker-baseline.json (references/ci.md of the development skill says how to change both). vm/tests/ is
-# test harness code and not checked: cchecker reads a database of its own without it (CCHECKER_DB), so each run is a full
-# run, which checks the names of the settings and reports a stale ignore of the rules. It exits 1 on a finding that is not
-# in the baseline; the CI job reports it and does not fail the build yet.
+# binary: the tag is cloned into build/cchecker/ and its commit must be the pinned one (a new release is CCHECKER_VERSION,
+# CCHECKER_COMMIT and its include/cchecker.h copied to vm/cchecker.h). The settings are cchecker.toml, the accepted findings
+# cchecker-baseline.json (references/ci.md of the development skill says how to change both). vm/tests/ is test harness
+# code and not checked: cchecker reads a database of its own without it (CCHECKER_DB), so each run is a full run, which
+# checks the names of the settings and reports a stale ignore of the rules. It exits 1 on a finding that is not in the
+# baseline, which fails the CI job `cchecker`.
 CCHECKER_VERSION := 0.1.0
 CCHECKER_COMMIT := bffe57d2498a3278c6228f19127507834389066e
 CCHECKER_DIR := build/cchecker/$(CCHECKER_VERSION)
 CCHECKER_FLAGS ?=
 CCHECKER_DB := build/cchecker/compile_commands.json
 
-.PHONY: cchecker cchecker-update-baseline
+.PHONY: cchecker cchecker-update-baseline cchecker-clone
 
 # An existing clone is trusted by its path: change the version and the commit together.
 $(CCHECKER_DIR)/cchecker.agc:
@@ -305,6 +306,9 @@ $(CCHECKER_DIR)/cchecker.agc:
 	git -c advice.detachedHead=false clone --quiet --depth 1 --branch $(CCHECKER_VERSION) https://github.com/agentica-lang/cchecker $(CCHECKER_DIR).tmp
 	@[ "$$(git -C $(CCHECKER_DIR).tmp rev-parse HEAD)" = "$(CCHECKER_COMMIT)" ] || { echo "cchecker $(CCHECKER_VERSION) is not commit $(CCHECKER_COMMIT)" >&2; rm -rf $(CCHECKER_DIR).tmp; exit 1; }
 	mv $(CCHECKER_DIR).tmp $(CCHECKER_DIR)
+
+# The clone alone, which CI runs as a step of its own (a network failure is then not a failed check).
+cchecker-clone: $(CCHECKER_DIR)/cchecker.agc
 
 # Run from the root of the checkout: cchecker reads paths relative to the working directory.
 CCHECKER = $(RUN_PROGRAM) dist/agentica$(EXE) $(CCHECKER_DIR)/cchecker.agc -p $(CCHECKER_DB) -c cchecker.toml -j $(JOBS) \

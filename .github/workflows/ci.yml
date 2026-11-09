@@ -346,15 +346,12 @@ jobs:
         run: make dup-check
 
   # cchecker (project rules for C, gcc -fanalyzer and clang-tidy over vm/) against cchecker-baseline.json, on the
-  # dist/agentica of `build`. It reports and does not fail the run yet (#1238): `continue-on-error` keeps a new finding from
-  # failing the workflow, and no aggregate job needs it; making it blocking is removing that line. The analyzers word their
-  # messages differently between versions and the baseline matches by message, so the job pins the versions it was made with
-  # (gcc 14, clang and clang-tidy 19).
+  # dist/agentica of `build`. A new finding, a stale ignore or a tool error fails it, and `test` needs it. The analyzers word
+  # their messages differently between versions and the baseline matches by message, so the job pins the versions it was
+  # made with (gcc 14, clang and clang-tidy 19).
   cchecker:
-    name: cchecker (reports only)
     needs: [changes, build]
     if: ${{ needs.changes.outputs.cchecker != 'false' }}
-    continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -371,15 +368,34 @@ jobs:
         with:
           artifact: release-build
           targets: dist/agentica
+      # The pinned tag from GitHub, tried three times (two minutes each), so a network failure shows here and not as a
+      # finding. A tag that is not the pinned commit is no network failure: it fails at once.
+      - name: Clone the pinned cchecker (CCHECKER_VERSION, checked against CCHECKER_COMMIT)
+        id: clone
+        run: |
+          for try in 1 2 3; do
+            if out=$(timeout -k 10 120 make -s cchecker-clone 2>&1); then
+              exit 0
+            fi
+            printf '%s\n' "$out"
+            if printf '%s\n' "$out" | grep -q 'is not commit'; then
+              echo "::error::the cchecker tag is not the pinned commit (CCHECKER_COMMIT in mk/vm-test.mk)"
+              exit 1
+            fi
+            echo "::warning::cchecker clone failed (try $try of 3)"
+            if [ "$try" -lt 3 ]; then sleep 15; fi
+          done
+          echo "::error::could not clone cchecker; see the git messages above"
+          exit 1
       # --json prints one object (the new findings, the counts of the baselined and the fixed ones, the tool errors, the files
       # that were not checked); the next steps print it as lines and keep it as an artifact, which is what refreshing the
-      # baseline from the runner starts from. `shell: bash` runs with pipefail, so the exit status of make (1: new findings,
-      # 2: a tool error, a failed clone or a commit that is not the pinned one) is the step's, not tee's.
-      - name: make cchecker (clones the pinned tag and checks its commit)
+      # baseline from the runner starts from. `shell: bash` runs with pipefail, so the step fails when cchecker exits
+      # non-zero (make's status, not tee's; the JSON says which: new findings or a tool error).
+      - name: make cchecker
         shell: bash
         run: make -s cchecker CCHECKER_FLAGS="--gcc gcc-14 --clang clang-19 --clang-tidy clang-tidy-19 --json" | tee build/cchecker.json
       - name: The findings that are not in the baseline
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && steps.clone.outcome == 'success' }}
         shell: bash
         run: |
           [ -s build/cchecker.json ] || { echo "::error::cchecker printed no JSON"; exit 1; }
@@ -396,19 +412,27 @@ jobs:
           retention-days: 7
 
   # The check that branch protection names: every job of the Linux tests passed. A job that failed, was cancelled or did not
-  # run fails it (none of them is skipped on a pull request or a manual run).
+  # run fails it (none of them is skipped on a pull request or a manual run, but cchecker, which runs when vm/, the build or
+  # its settings changed).
   test:
-    needs: [build, tests-fast, tests-slow, tests-shared, checks]
+    needs: [changes, build, tests-fast, tests-slow, tests-shared, checks, cchecker]
     if: ${{ always() && github.event_name != 'push' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Every job of the tests succeeded
+      - name: Every job of the tests succeeded, cchecker unless it was skipped
         env:
           NEEDS: ${{ toJSON(needs) }}
+          CCHECKER: ${{ needs.changes.outputs.cchecker }}
         run: |
           printf '%s\n' "$NEEDS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-          printf '%s\n' "$NEEDS" | jq -e 'all(.[]; .result == "success")' > /dev/null
+          echo "cchecker=$CCHECKER"
+          printf '%s\n' "$NEEDS" | jq -e 'del(.cchecker) | all(.[]; .result == "success")' > /dev/null
+          if [ "$CCHECKER" = false ]; then
+            printf '%s\n' "$NEEDS" | jq -e '.cchecker.result == "skipped"' > /dev/null
+          else
+            printf '%s\n' "$NEEDS" | jq -e '.cchecker.result == "success"' > /dev/null
+          fi
 
   # The sanitizer half, only when C changed (the `changes` job). It builds in two jobs at once, so the shards below compile
   # nothing. `sanitizer-build` makes the sanitizer binary (dist/agentica with SANITIZE=1 and the stages it needs);
