@@ -27,6 +27,7 @@ import Analysis from "std/analysis"
 #   refs PATH LINE COL     the same
 #   type-at-partial PATH LINE COL, refs-partial PATH LINE COL   the same, with the partial answers
 #   native-modules PATH    the JSON of Analysis.native_modules_json on stdout, or the diagnostic on stderr
+#   bodies PATH            the JSON of Analysis.bodies_json on stdout, or the diagnostic on stderr
 #   symbol NAME PATH...    the last command (it takes every word left): the same
 # An error is printed after Analysis.diagnostic read it and Analysis.diagnostic_json wrote it back, so the output of a
 # failure also proves that the pair is the identity.
@@ -115,6 +116,9 @@ def main() -> Void
       at = words.size
     elsif word == "native-modules"
       show(natives(session, words[at + 1]))
+      at += 2
+    elsif word == "bodies"
+      show(bodied(session, words[at + 1]))
       at += 2
     elsif word == "type-at-partial"
       show(typed_partial(session, words[at + 1], words[at + 2].to_i!, words[at + 3].to_i!))
@@ -219,6 +223,11 @@ def natives(session: Analysis.Session, path: String) -> Result[Json]
   return ok(Analysis.native_modules_json(found))
 end
 
+def bodied(session: Analysis.Session, path: String) -> Result[Json]
+  found = try Analysis.bodies(session, path)
+  return ok(Analysis.bodies_json(found))
+end
+
 def typed(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Json]
   found = try Analysis.type_at(session, path, line, column)
   return ok(Analysis.type_at_json(found))
@@ -254,6 +263,7 @@ def show_all(session: Analysis.Session, paths: List[String]) -> Void
     end
     ok(line)
   end
+
   for line in lines
     puts(line.unwrap!)
   end
@@ -271,6 +281,7 @@ def share(session: Analysis.Session, paths: List[String]) -> Void
     end
     ok(path)
   end
+
   lines = Task.map(paths, 4, 60000) do |path: String|
     adopted = session
     found = table.get(path)
@@ -285,6 +296,7 @@ def share(session: Analysis.Session, paths: List[String]) -> Void
     end
     ok([line, refreshed.internal.cache.checks.to_s])
   end
+
   rechecks = 0
   for found in lines
     puts(found.unwrap![0])

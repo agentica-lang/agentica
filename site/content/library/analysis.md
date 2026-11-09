@@ -22,12 +22,14 @@ Analysis.symbol(session: Analysis.Session, name: String, paths: List[String]) ->
 Analysis.refs(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Analysis.Refs]
 Analysis.refs_partial(session: Analysis.Session, path: String, line: Int, column: Int) -> Result[Analysis.Refs]
 Analysis.native_modules(session: Analysis.Session, path: String) -> Result[Analysis.NativeModules]
+Analysis.bodies(session: Analysis.Session, path: String) -> Result[Analysis.Bodies]
 Analysis.diagnostic(message: String) -> Result[Analysis.Diagnostic]
 Analysis.outline_json(found: Analysis.Outline) -> Json
 Analysis.type_at_json(found: Analysis.TypeAt) -> Json
 Analysis.symbols_json(found: Analysis.Symbols) -> Json
 Analysis.refs_json(found: Analysis.Refs) -> Json
 Analysis.native_modules_json(found: Analysis.NativeModules) -> Json
+Analysis.bodies_json(found: Analysis.Bodies) -> Json
 Analysis.diagnostic_json(found: Analysis.Diagnostic) -> Json
 ```
 
@@ -99,9 +101,25 @@ A `NativeModules` has the `blocks` of the file, in source order, two blocks of o
 
 A `doc` is `""` in the record when there is none, and null in the JSON. A `signature` is the text the module's function table must have, `(List[Float]) -> Optional[Summary]`, and a `shape` the text its type table must have, `count: Int, mean: Float` or `Empty | Number(Float) | Text(String)`. They are written by the code that the compiler binds a call with, so they are the bytes the loader compares. A `shape` is the text after `=` in the `{S<index>=...}` or `{E<index>=...}` that the compiler writes, whose `<index>` is the type's place in the program and is not part of the answer.
 
+## Function bodies
+
+`Analysis.bodies(session, path)` gives the functions of a file with their bodies as a typed tree, for a tool that translates them, such as a prover. **It is experimental:** until a first tool works with it, its shape may change between releases without a breaking mark, though the answer has a `version`. The file is linked and checked as for `type_at`, and needs no `main`. It has no command line form; `bodies_json` gives the JSON of the answer, with `command` `bodies`.
+
+A `Bodies` has the `functions` of the file that have a body, private ones too, in source order. A `Body` has its `name` as written, its `linked` name (the one a call targets), `exported`, its `range` and `name_range`, its `generics`, its `params` (`name`, `type`, `range`), its `result` and its `body`, a list of `Node`. A type is a `TypeShape`: `kind` is `builtin` (`name` is `Int`, `Bytes`, `List`, `Result`, `Fn`, ...), `struct`, `enum` or `opaque` (`name` is the linked name), `var` (a type parameter) or `none` (a node with no value), and `args` are its type arguments.
+
+A `Node` has a `kind`, its `type`, its `range`, a `text`, a `target`, `new` and its `children`, in source order:
+
+- `int`, `float`, `string`, `bool`, `nil`: a literal, with its value in `text`. `local`: a read of a name, in `text`.
+- `let`: `text = value`, with `new` true when it makes a new local and false when it changes one.
+- `call`: the `target` is what the checker resolved: a function by its linked name, or a builtin, such as `Int.shift_left`, `Bytes.length` for `data.size`, `Bytes.at` for `data[i]`, `ok` or `some`. The children are the arguments, the receiver of a method first. `index` is `target[index]` on a `List` or `Map`.
+- `op`: a binary operator, with its token in `text` (`plus`, `less`, `equal`, ...); its two children have their types. `and`, `or`, `not` and `neg` (unary minus) are kinds of their own.
+- `try`, `return`, and `interpolation`, whose children are `string` parts and typed expressions.
+- `if`: a `branch` (the condition, then a `block`) for each `if` and `elsif`, then a `block` for `else`. `case`: the value, then an `arm` each: its pattern, a `guard` when written, and a `block`. A pattern is a `wildcard`, a `literal` or a `variant` (`target` `Shape.Square`, `ok`, `error`, `some` or `none`) whose children are its slots: `bind`, `skip` or a nested pattern.
+- `other`: a node that this version does not describe yet (loops, lists, maps, struct and enum values, blocks), with its syntax in `text` and no children.
+
 ## Errors
 
-`outline`, `type_at`, `type_at_partial`, `symbol`, `refs`, `refs_partial` and `native_modules` return a `Result` whose error message is the diagnostic as one JSON object, the `--json` form, so `try` works. `Analysis.diagnostic` reads it back into an `Analysis.Diagnostic`. The codes are those of the command line: `LEX-`, `PARSE-`, `CHECK-` and `PKG-`; `QUERY-NO-EXPRESSION` for a position on no expression; `QUERY-NOT-FOUND` for a `symbol` name that nothing declares; and `QUERY-USAGE` for a file that cannot be read, a position below line 1 or column 1, or a `symbol` with an empty name or a path that names no `*.agc` file. For `outline`, `type_at` and `refs` the diagnostic names the file; for `symbol` its `file` is `<arguments>`, as on the command line. Unlike the command line, `QUERY-USAGE` has no usage `help` line; `QUERY-NOT-FOUND` keeps its `help` (the files not searched).
+`outline`, `type_at`, `type_at_partial`, `symbol`, `refs`, `refs_partial`, `native_modules` and `bodies` return a `Result` whose error message is the diagnostic as one JSON object, the `--json` form, so `try` works. `Analysis.diagnostic` reads it back into an `Analysis.Diagnostic`. The codes are those of the command line: `LEX-`, `PARSE-`, `CHECK-` and `PKG-`; `QUERY-NO-EXPRESSION` for a position on no expression; `QUERY-NOT-FOUND` for a `symbol` name that nothing declares; and `QUERY-USAGE` for a file that cannot be read, a position below line 1 or column 1, or a `symbol` with an empty name or a path that names no `*.agc` file. For `outline`, `type_at` and `refs` the diagnostic names the file; for `symbol` its `file` is `<arguments>`, as on the command line. Unlike the command line, `QUERY-USAGE` has no usage `help` line; `QUERY-NOT-FOUND` keeps its `help` (the files not searched).
 
 ```agentica {mode="check"}
 import Analysis from "std/analysis"

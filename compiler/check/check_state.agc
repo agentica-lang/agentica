@@ -340,7 +340,8 @@ end
 
 ## The state with the types that a node introduced as names recorded: one for a parameter, a block parameter, a binding
 ## or a `for` statement (the type of its variable), and one for each payload position of a variant pattern (the type of
-## the name there, if the slot has one). They are kept apart from `types`, which holds expressions only, so a type that
+## the name there, if the slot has one). The result annotation of a function has its result type, for
+## Analysis.bodies. They are kept apart from `types`, which holds expressions only, so a type that
 ## only a binding names does not reach the lowering.
 export def record_bound(st: St, id: Int, types: List[Types.Type]) -> St
   return st.with(bound: st.bound.put(id, types))

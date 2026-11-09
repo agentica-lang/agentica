@@ -910,3 +910,146 @@ def test_the_api_versions_of_a_block_are_those_of_the_native_header():
     # The comment of the header says which minor version added what.
     assert constants["API_MINOR_TYPES"] == int(re.search(r"enums\s+(?:\*\s+)?\(1\.(\d)\)", header).group(1))
     assert constants["API_MINOR_RESOURCES"] == int(re.search(r"resources\s+(?:\*\s+)?\(1\.(\d)\)", header).group(1))
+
+
+# The bodies of `bodies` (#1159): a little of every node of the first subset, beside the readers of std/binary.
+BODIES = """import Util from "util"
+
+enum Shape
+  Dot
+  Square(Int)
+  Pair(Shape, Shape)
+end
+
+export def first_or[T](item: Optional[T], fallback: T) -> T
+  return item.unwrap_or(fallback)
+end
+
+def size(shape: Shape) -> Int
+  case shape
+    Shape.Square(side) if side > 0 -> return side * side
+    Shape.Pair(Shape.Dot, _) -> return 1
+    Shape.Pair(left, right) -> return size(left) + size(right)
+    _ -> return 0
+  end
+end
+
+def sign(n: Int, label: Optional[String]) -> String
+  total = Util.twice(n)
+  total = -total
+  if not (total < 0)
+    return "zero"
+  elsif total == -1
+    return "#{total}"
+  else
+    case label
+      some(text) -> return text
+      none -> return "negative"
+    end
+  end
+end
+
+def count(n: Int) -> Int
+  while n > 0
+    return n
+  end
+  return 0
+end
+"""
+
+
+def type_text(type):
+    """A type of `bodies` as `Result[Int]`, or `-` for none."""
+    if type["kind"] == "none":
+        return "-"
+    args = ",".join(type_text(arg) for arg in type["args"])
+    return type["name"] + (f"[{args}]" if args else "")
+
+
+def tree_text(node, depth=1):
+    """One line for `node` and each of its children: `kind type text=... target=... new @line:column-line:column`."""
+    start, end = node["range"]["start"], node["range"]["end"]
+    words = [node["kind"], type_text(node["type"])]
+    words += [f"{key}={node[key]!r}" for key in ("text", "target") if node[key]]
+    words += ["new"] if node["new"] else []
+    words.append(f"@{start['line']}:{start['column']}-{end['line']}:{end['column']}")
+    lines = ["  " * depth + " ".join(words)]
+    for child in node["children"]:
+        lines += tree_text(child, depth + 1)
+    return lines
+
+
+def bodies_of(driver, project, path):
+    """The answer of `bodies` for `path`, and its functions by name."""
+    out, err = library(driver, project, "bodies", path)
+    assert err == ""
+    answer = json.loads(out)
+    assert (answer["version"], answer["command"], answer["file"]) == (1, "bodies", path)
+    return answer, {function["name"]: function for function in answer["functions"]}
+
+
+def test_bodies_give_the_typed_tree_of_the_binary_readers(driver, project):
+    # A copy of std/binary as a file of the disk; the golden is the tree of the readers that the Lean translator starts
+    # from, so a change of their source or of the shape shows here.
+    shutil.copy(ROOT / "stdlib" / "binary.agc", project / "binary.agc")
+    _answer, functions = bodies_of(driver, project, "binary.agc")
+    lines = []
+    for name in ("read_u16_le", "load16_le", "window"):
+        function = functions[name]
+        params = ", ".join(f"{param['name']}: {type_text(param['type'])}" for param in function["params"])
+        result = type_text(function["result"])
+        lines.append(f"{function['linked']} exported={function['exported']} ({params}) -> {result}")
+        for node in function["body"]:
+            lines += tree_text(node)
+    golden = ROOT / "tests" / "fixtures" / "analysis" / "binary_readers.tree"
+    assert "\n".join(lines) + "\n" == golden.read_text()
+
+
+def test_bodies_resolve_calls_bindings_patterns_and_mark_what_they_do_not_cover(driver, project):
+    write_files(project, {"shapes.agc": BODIES})
+    answer, functions = bodies_of(driver, project, "shapes.agc")
+    assert [(function["name"], function["exported"]) for function in answer["functions"]] == [
+        ("first_or", True), ("size", False), ("sign", False), ("count", False)]
+    generic = functions["first_or"]
+    assert generic["generics"] == ["T"]
+    assert [param["type"] for param in generic["params"]] == [
+        {"kind": "builtin", "name": "Optional", "args": [{"kind": "var", "name": "T", "args": []}]},
+        {"kind": "var", "name": "T", "args": []}]
+    assert generic["body"][0]["children"][0]["target"] == "Optional.unwrap_or"
+    # A case with a guard, a nested pattern and a recursive call; the pattern names have the payload types.
+    case = functions["size"]["body"][0]
+    assert [child["kind"] for child in case["children"]] == ["local", "arm", "arm", "arm", "arm"]
+    guarded = case["children"][1]
+    assert [part["kind"] for part in guarded["children"]] == ["variant", "guard", "block"]
+    square = guarded["children"][0]
+    assert (square["target"], square["type"]["kind"], square["type"]["name"]) == ("Shape.Square", "enum", "Shape")
+    slots = [(slot["kind"], slot["text"], slot["type"]["name"]) for slot in square["children"]]
+    assert slots == [("bind", "side", "Int")]
+    nested = case["children"][2]["children"][0]["children"]
+    assert [(slot["kind"], slot["target"]) for slot in nested] == [("variant", "Shape.Dot"), ("skip", "")]
+    recursive = case["children"][3]["children"][1]["children"][0]["children"][0]
+    assert (recursive["kind"], recursive["text"]) == ("op", "plus")
+    assert [call["target"] for call in recursive["children"]] == ["size", "size"]
+    # A new local and a change of it, a call into another file by its linked name, `not`, unary minus and `if`.
+    sign = functions["sign"]["body"]
+    bindings = [(node["kind"], node["text"], node["new"], type_text(node["type"])) for node in sign[:2]]
+    assert bindings == [("let", "total", True, "Int"), ("let", "total", False, "Int")]
+    assert re.fullmatch(r"@\d+::twice", sign[0]["children"][0]["target"])
+    assert sign[1]["children"][0]["kind"] == "neg"
+    branches = sign[2]["children"]
+    assert [child["kind"] for child in branches] == ["branch", "branch", "block"]
+    assert branches[0]["children"][0]["kind"] == "not"
+    optional = branches[2]["children"][0]["children"]
+    assert [arm["children"][0]["target"] for arm in optional[1:]] == ["some", "none"]
+    assert optional[0]["type"]["name"] == "Optional"
+    # A loop is past the first subset: it is `other`, with its place and no children.
+    loop = functions["count"]["body"][0]
+    assert (loop["kind"], loop["text"], loop["children"], loop["range"]["start"]) == (
+        "other", "while", [], {"line": 38, "column": 3})
+
+
+def test_bodies_give_the_diagnostic_of_a_file_that_does_not_check_or_cannot_be_read(driver, project):
+    out, err = library(driver, project, "bodies", "type_error.agc")
+    assert (out, json.loads(err)["code"]) == ("", "CHECK-TYPE-MISMATCH")
+    out, err = library(driver, project, "bodies", "absent.agc")
+    assert (out, json.loads(err)["code"]) == ("", "QUERY-USAGE")

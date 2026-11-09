@@ -272,3 +272,74 @@ export struct NativeModules
   file: String
   blocks: List[NativeBlock]
 end
+
+## A resolved type of `bodies`. `kind` is `builtin` (`name` is Int, Bytes, List, Result, Fn, ...), `struct`, `enum`
+## or `opaque` (`name` is the linked name, `@N::Name` for one of another file), `var` (a type parameter, `name` as
+## written) or `none` (a node that has no value, such as a statement). `args` are the type arguments in order; an `Fn`
+## has its parameters, then its result.
+export struct TypeShape
+  kind: String
+  name: String
+  args: List[TypeShape]
+end
+
+## One node of the typed tree of a body. `kind` says what it is, and `children` are its parts in source order:
+## - `int`, `float`, `string`, `bool`, `nil`: a literal; `text` is its value (the digits, the text of a string,
+##   `true`).
+## - `local`: a read of a parameter or local, `text` its name.
+## - `let`: `text = child`; `new` is true when it makes a new local, false when it changes a visible one.
+## - `call`: `target` is the function or builtin the checker resolved (`window`, `@2::helper`, `Int.shift_left`,
+##   `Bytes.length` for `data.size`, `Bytes.at` for `data[i]`, `ok`, `some`); the children are the arguments, the
+##   receiver of a method first.
+## - `index`: `target[index]` on a List or Map; the children are the target and the index.
+## - `op`: a binary operator, `text` its token (`plus`, `minus`, `less`, `equal`, `not-equal`, ...); the two children
+##   carry their own types. `and`, `or`, `not` and `neg` (unary minus) are their own kinds.
+## - `try`: its operand. `return`: its value, if any.
+## - `interpolation`: `string` nodes and the typed expressions between them.
+## - `if`: one `branch` (the condition, then a `block`) per `if` and `elsif`, then a `block` for `else` when written.
+## - `case`: the value, then one `arm` each: its pattern, a `guard` (holding the condition) when written, then a
+##   `block`.
+## - Patterns: `wildcard`; `literal` (`text` as for a literal); `variant`, whose `target` is `Enum.Variant` (the linked
+##   enum name), `ok`, `error`, `some` or `none`, and whose children are its slots: `bind` (`text` the name), `skip`
+##   (`_`) or a nested pattern. A pattern's type is the type it matches.
+## - `block`: the statements of a body.
+## - `other`: a node that this version does not describe yet; `text` is its syntax (`while`, `list`, ...), and it has
+##   no children.
+## `range` is the place of the node; a `string` part of an interpolation has the range of the interpolation.
+export struct Node
+  kind: String
+  type: TypeShape
+  range: Diagnostics.Region
+  text: String
+  target: String
+  new: Bool
+  children: List[Node]
+end
+
+## One parameter of a function of `bodies`, with its resolved type.
+export struct BodyParam
+  name: String
+  type: TypeShape
+  range: Diagnostics.Region
+end
+
+## One function of `bodies`: `name` as written, `linked` the name a `call` node targets, `generics` its type
+## parameters, the resolved types of its parameters and result, and its body as a list of statement nodes.
+export struct Body
+  name: String
+  linked: String
+  exported: Bool
+  range: Diagnostics.Region
+  name_range: Diagnostics.Region
+  generics: List[String]
+  params: List[BodyParam]
+  result: TypeShape
+  body: List[Node]
+end
+
+## The answer of `bodies` (experimental): every function of a file with a body, private ones too, in source order.
+export struct Bodies
+  version: Int
+  file: String
+  functions: List[Body]
+end

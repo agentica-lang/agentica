@@ -21,9 +21,11 @@ Analysis.symbol(session, name: String, paths: List[String]) -> Result[Analysis.S
 Analysis.refs(session, path: String, line: Int, column: Int) -> Result[Analysis.Refs]
 Analysis.refs_partial(session, path: String, line: Int, column: Int) -> Result[Analysis.Refs]
 Analysis.native_modules(session, path: String) -> Result[Analysis.NativeModules]
+Analysis.bodies(session, path: String) -> Result[Analysis.Bodies]   # experimental
 Analysis.diagnostic(message: String) -> Result[Analysis.Diagnostic]
 Analysis.outline_json(found) -> Json     # also type_at_json, symbols_json, refs_json,
-                                         # native_modules_json, diagnostic_json
+                                         # native_modules_json, bodies_json,
+                                         # diagnostic_json
 ```
 
 - Files come from the disk of the working folder, except those with a buffer
@@ -76,9 +78,19 @@ Analysis.outline_json(found) -> Json     # also type_at_json, symbols_json, refs
   and `api_major`/`api_minor`. `signature` and `shape` are the exact texts the
   loader compares with the module's tables. A block `range` covers its
   declarations only, and two blocks of one library are one.
-- `outline`, `type_at`, `type_at_partial`, `symbol`, `refs`, `refs_partial` and
-  `native_modules` return an error whose message is one JSON diagnostic (the
-  `--json` object); `Analysis.diagnostic(message)` reads it, so `try` works.
+- `bodies` (experimental: the shape may change between releases with no
+  breaking mark) gives every function of a file with a body, private ones too:
+  `name`, `linked`, `generics`, typed `params` and `result` (`TypeShape`:
+  `kind`, `name`, `args`), and `body`, a list of `Node` (`kind`, `type`,
+  `range`, `text`, `target`, `new`, `children`). A `call` has the resolved
+  `target` (`Int.shift_left`, `Bytes.length` for `data.size`, `Bytes.at` for
+  `data[i]`, a linked function name), `let` has `new`, and a node past what it
+  covers yet is `other` (loops, lists, maps, structs, blocks). No command line
+  form.
+- `outline`, `type_at`, `type_at_partial`, `symbol`, `refs`, `refs_partial`,
+  `native_modules` and `bodies` return an error whose message is one JSON
+  diagnostic (the `--json` object); `Analysis.diagnostic(message)` reads it, so
+  `try` works.
   Codes are the command line's, and `QUERY-USAGE` also covers a position below
   line 1 or column 1 and an empty `symbol` name.
 - Cost: the compiler's pure core is compiled into the program, so a run from

@@ -21,6 +21,7 @@ import SymbolLink from "../query/symbol_link"
 import SymbolPaths from "../query/symbol_paths"
 import TypeAt from "../query/type_at"
 import SourceFile from "../syntax/source_file"
+import Bodies from "bodies"
 import Cache from "cache"
 import Convert from "convert"
 import Front from "front"
@@ -67,6 +68,13 @@ end
 ## The `extern module` blocks of a file, the file cannot be read, or the first problem.
 export enum Natived
   Done(Model.NativeModules)
+  Unreadable
+  Rejected(Problems.Problem)
+end
+
+## The answer of `bodies`.
+export enum Bodied
+  Done(Model.Bodies)
   Unreadable
   Rejected(Problems.Problem)
 end
@@ -144,6 +152,22 @@ export def native_modules(cache: Cache.Cache, settings: Env.Settings, path: Stri
             Diag.Outcome.Failed(problem) -> return Natived.Rejected(Front.stage_problem(path, problem))
             Diag.Outcome.Done(found) -> return Natived.Done(found)
           end
+      end
+  end
+end
+
+## The functions of the file at `path` (never a `std/` module) with their bodies as a typed tree, linked and checked
+## with what it imports and without requiring `main`: bodies.agc. Experimental. `cache` only saves work.
+export def bodies(cache: Cache.Cache, settings: Env.Settings, path: String) -> Bodied
+  settings = for_query(settings)
+  case Front.read_root(settings.workspace, path)
+    Front.Root.Unreadable(_) -> return Bodied.Unreadable
+    Front.Root.Invalid(problem) -> return Bodied.Rejected(problem)
+    Front.Root.Readable ->
+      case Front.query_cached(cache, path, settings)
+        Front.Outcome.Rejected(problem) -> return Bodied.Rejected(problem)
+        Front.Outcome.Done(front) ->
+          return Bodied.Done(Bodies.of_program(QueryFiles.display(settings, path, true), front.linked, front.checked))
       end
   end
 end

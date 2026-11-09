@@ -1,4 +1,5 @@
 analysis/analysis.agc
+analysis/bodies.agc
 analysis/cache.agc
 analysis/convert.agc
 analysis/front.agc
@@ -81,6 +82,7 @@ packages/package_import.agc
 packages/project.agc
 packages/toml_read.agc
 query/at.agc
+query/bodies_json.agc
 query/definitions.agc
 query/locals.agc
 query/native_modules_json.agc
