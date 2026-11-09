@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "tools": {"clang":"Debian clang version 19.1.7 (3+b1)","clang-tidy":"Debian LLVM version 19.1.7","gcc":"gcc (Debian 14.2.0-19) 14.2.0"},
+  "tools": {"clang":"Debian clang version 19.1.7 (3+b1)","clang-tidy":"Debian LLVM version 19.1.7","gcc":"gcc-14 (Ubuntu 14.3.0-14ubuntu1) 14.3.0"},
   "findings": [
 
   ]
