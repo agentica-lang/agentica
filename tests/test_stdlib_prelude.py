@@ -102,6 +102,10 @@ def pick(keys, wins):
     return ("some", best)
 
 
+def first_index(items, test):
+    return next((("some", at) for at, item in enumerate(items) if test(item)), ("none",))
+
+
 def peer_lines(numbers, words, floats, names):
     """Compute the output of peer_program() independently with plain Python."""
     lines = []
@@ -138,6 +142,11 @@ def peer_lines(numbers, words, floats, names):
     lines.append(show(any(x == float("nan") for x in floats)))
     lines.append(show(any(n > 5 for n in numbers)))
     lines.append(show(any([n, -n] == [5, -5] for n in numbers)))
+    # The first index whose item == the value (or passes the test), by == as above; none when no item does.
+    lines.append(show(first_index(numbers, lambda n: n == 5)))
+    lines.append(show(first_index(words, lambda w: w == "a")))
+    lines.append(show(first_index(floats, lambda x: x == float("nan"))))
+    lines.append(show(first_index(numbers, lambda n: n > 5)))
     # Python's string order is Unicode code-point order, as are compare and sort.
     for keys in (numbers, floats, names):
         lines.append(show(pick(keys, lambda a, b: a < b)))
@@ -177,6 +186,10 @@ def main() -> Void
   puts(floats.include?(nan).to_s)
   puts(numbers.map do |n| n > 5 end.include?(true).to_s)
   puts(numbers.map do |n| [n, -n] end.member?([5, -5]).to_s)
+  puts(numbers.index(5).to_s)
+  puts(words.index("a").to_s)
+  puts(floats.index(nan).to_s)
+  puts(numbers.find_index do |n| n > 5 end.to_s)
 {minmax}
 end
 """.format(

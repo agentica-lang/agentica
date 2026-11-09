@@ -1,0 +1,28 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 542,
+  "stdout": [
+    "some(1)",
+    "none",
+    "none",
+    "some(1)",
+    "none",
+    "some(1)",
+    "none",
+    "some(1)",
+    "some(1)",
+    "some(1)",
+    "some(1)",
+    "some(1)",
+    "some(1)",
+    "none",
+    "none",
+    "saw 3",
+    "saw 1",
+    "1",
+    "1",
+    ""
+  ],
+  "stderr": []
+}
