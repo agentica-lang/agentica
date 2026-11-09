@@ -5,6 +5,8 @@ import json
 import os
 import shutil
 
+import pytest
+
 from tests.agentica_test import ROOT, cli, run, vm_environment
 from tests.package_support import (dependency, environment, git, inline_table, install, lock_entry,  # noqa: F401
                                     remotes, ws)
@@ -252,7 +254,21 @@ def test_a_green_run_whose_report_cannot_be_written_fails(tmp_path):
     assert (report["ok"], report["exit_code"], report["failed"]) == (False, 1, 0)
     assert (report["coverage"]["path"], report["coverage"]["problem"]["code"]) == (None, "RUNTIME-INTERNAL")
     assert (cwd / "coverage").read_text() == "not a folder\n"
-    assert not list(cwd.glob("coverage*.new"))
+
+
+@pytest.mark.skipif(os.name == "nt" or os.geteuid() == 0, reason="needs a folder its owner cannot write to")
+def test_a_report_that_cannot_be_written_in_its_folder_leaves_nothing_there(tmp_path):
+    cwd = project(tmp_path)
+    folder = cwd / "coverage"
+    folder.mkdir()
+    folder.chmod(0o555)
+    try:
+        result = agentica(cwd, "--json", "test", "--coverage", "--only", "square")
+        assert result.code == 1, result.stderr
+        assert json.loads(result.stdout)["coverage"]["problem"]["code"] == "RUNTIME-INTERNAL"
+        assert list(folder.iterdir()) == []
+    finally:
+        folder.chmod(0o755)
 
 
 def test_a_run_with_no_tests_keeps_the_old_report(tmp_path):

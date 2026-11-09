@@ -361,30 +361,36 @@ def write_report(report: String) -> Result[Void]
     written = Path.remove(REPORT, 5000)
   end
 
-  if written.ok?
-    written = Path.rename(fresh, REPORT, 5000)
-  end
-
   if !written.ok?
     _ = Path.remove(fresh, 5000)
+    return written
   end
 
-  return written
+  moved = Path.rename(fresh, REPORT, 5000)
+  if !moved.ok?
+    # The old report may be gone already, so the new one stays where it is.
+    return error("#{moved.message}; the report is at #{fresh}")
+  end
+
+  return moved
 end
 
 # A file gets at most 1 MiB in one write, and a character takes up to 4 bytes.
 def write_chunks(path: String, report: String) -> Result[Void]
-  out = try File.open(path, "write", 5000)
-  at = 0
-  while at < report.length
-    size = 250000
-    if report.length - at < size
-      size = report.length - at
+  # The block form closes the file on every path, so a failed write leaves no open handle (Windows cannot remove an
+  # open file).
+  return File.open(path, "write", 5000) do |out|
+    at = 0
+    while at < report.length
+      size = 250000
+      if report.length - at < size
+        size = report.length - at
+      end
+
+      try File.write(out, report.slice(at, size), 5000)
+      at += size
     end
 
-    try File.write(out, report.slice(at, size), 5000)
-    at += size
+    ok()
   end
-
-  return File.close(out, 5000)
 end
