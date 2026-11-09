@@ -15,13 +15,14 @@ libuv_callbacks_short = true
 libgc_alloc = true
 libc_nonblocking_flags = true
 
-# The steps that run on the loop's thread by contract: passed to agc_loop_call, agc_io_call or call_on (vm/loop.c), or
-# stored in agc_forward_wait.resume. Inference does not find them: a step reaches the loop through call_on's parameter
-# or agc_request.call. reader_go (vm/stdio_windows.c) is one too, outside this Linux database.
+# The steps that run on the loop's thread by contract: passed to agc_loop_call, agc_io_call or call_on (vm/loop.c),
+# stored in agc_forward_wait.resume, or the after half of agc_io_queue_work (err_written). Inference does not find them:
+# a step reaches the loop through call_on's parameter, agc_request.call or that wrapper's parameter. reader_go
+# (vm/stdio_windows.c) is one too, outside this Linux database.
 [roots]
 short = ["release_step", "drop_request", "half_close_step", "direct_over", "close_step", "stop_request", "waiter_end",
          "attach_step", "give_back_step", "poller_wait_run", "poller_pause_run", "poller_close_run", "start_stream",
-         "resume_err"]
+         "resume_err", "write_turn", "err_written"]
 
 # What the code knows and cchecker cannot see.
 [assume]

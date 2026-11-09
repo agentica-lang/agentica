@@ -290,7 +290,11 @@ struct agc_output {
      one) and go ahead of a waiting print. On the base stream. */
   uint64_t sent, own_end;
   agc_task *waiters, *waiters_tail;
+  /* On the loop: the readers paused by a full queue, under the lock. On its FILE (base is null): file_busy while a
+     pool thread writes a child's chunk, and the readers whose chunk waits for its turn, in order; both touched on the
+     I/O thread only (agc_output_file_turn). */
   agc_forward_wait *forward_waits;
+  bool file_busy;
 };
 
 #define AGC_LOG_NO_HANDLER 4
@@ -714,6 +718,23 @@ CC_RELEASES(l->mutex) static inline void agc_lock_drop(agc_lock *l) {
   if (__builtin_expect(!l->solo, 0)) agc_lock_drop_shared(l);
 }
 
+/* The lock of a stdio FILE across several calls (flockfile; _lock_file on Windows). */
+static inline void agc_file_lock(FILE *f) {
+#ifdef _WIN32
+  _lock_file(f);
+#else
+  flockfile(f);
+#endif
+}
+
+static inline void agc_file_unlock(FILE *f) {
+#ifdef _WIN32
+  _unlock_file(f);
+#else
+  funlockfile(f);
+#endif
+}
+
 /* rt->sync, the one lock of the shared state of the tasks (docs/vm/16-architecture.md §16.9). It protects the task tree
    (parent, children, waiters, awaiting), the waiter lists of channels, handles and stdin, the Task.map groups and the
    logger table. The interpreter takes it around the builtins whose row is marked `shared` and the code that ends a task
@@ -996,6 +1017,11 @@ bool agc_output_forward(agc_output *out, const uint8_t *data, size_t n, agc_forw
    blocking fwrite under the stream's lock, which the I/O thread must never call: a pool thread does. */
 bool agc_output_on_file(const agc_output *out);
 void agc_output_write_file(agc_output *out, const uint8_t *data, size_t n);
+/* One pool write at a time for a stream on its FILE, on the I/O thread: turn is true when W's chunk may be written now,
+   else W waits in line and its RESUME runs when the write before it is done (done, which hands the turn on or frees
+   it). So a stuck stderr holds one pool thread, whatever the number of children, and chunks stay whole. */
+bool agc_output_file_turn(agc_output *out, agc_forward_wait *w);
+void agc_output_file_done(agc_output *out);
 /* True once a write of the stream failed (its data is dropped from then on) and text of the program or the VM was lost
    with it (agc_output.own_end): a failure that lost only bytes of a child's stderr does not fail the run. */
 bool agc_output_failed(const agc_output *out);

@@ -33,9 +33,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A run that cannot start a scheduler thread (a low `ulimit -v` or
   `ulimit -u`) prints one line and exits with status 70; so does one that
   cannot start the I/O thread pool, on Linux and macOS. They used to abort.
-- A child's stderr no longer stalls every socket, timer and child of the run
-  when the program's stderr is a full pipe that the VM writes with plain
-  blocking writes (a descriptor it cannot reopen).
+- A child's stderr no longer stalls the event loop when the program's stderr is
+  a full pipe that the VM writes with plain blocking writes (a descriptor it
+  cannot reopen): the children wait for it instead.
 
 ## [0.27.0] - 2026-11-08
 

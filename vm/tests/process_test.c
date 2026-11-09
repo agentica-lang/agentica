@@ -394,9 +394,10 @@ static int child(int argc, char **argv) {
 #endif
   if (strcmp(argv[1], "--wait") == 0) { uv_sleep(30000); return 0; }
   if (strcmp(argv[1], "--stderr") == 0) {
-    /* STDERR_BYTES of 'e' on stderr, more than one chunk of the parent's read. */
-    static char block[STDERR_BYTES];
-    memset(block, 'e', sizeof block);
+    /* STDERR_BYTES on stderr, more than one chunk of the parent's read: byte k is k % 251, or 255 with a second
+       argument, so the parent can tell two children apart and check the order. */
+    static unsigned char block[STDERR_BYTES];
+    for (size_t k = 0; k < sizeof block; k++) block[k] = (unsigned char)(argc > 2 ? 255 : k % 251);
     fwrite(block, 1, sizeof block, stderr);
     fflush(stderr);
     return 0;
@@ -642,9 +643,9 @@ static size_t fill_pipe(int write_end) {
 }
 
 /* The C tests leave the VM's stderr on its blocking FILE, so a plain child's stderr goes out through a pool thread
-   (#1245). With that FILE on a full pipe that nobody reads, the loop still runs: a wait times out, since a wait also
-   waits for the child's stderr to end. Once the pipe is read, every byte of the child comes through and the wait
-   ends. */
+   (#1245), one chunk at a time for all children. With that FILE on a full pipe that nobody reads, the loop still
+   runs: a wait times out, since a wait also waits for the child's stderr to end. Once the pipe is read, every byte of
+   both children comes through, each child's in order, and the waits end. */
 static void stuck_stderr_test(const char *self) {
   int fds[2];
   assert(pipe(fds) == 0);
@@ -655,12 +656,14 @@ static void stuck_stderr_test(const char *self) {
   FILE *saved = vm.rt->err.file;
   vm.rt->err.file = stuck;
   assert(agc_output_on_file(&vm.rt->err));
-  agc_value words[] = {text("--stderr")};
+  agc_value words[] = {text("--stderr"), text("ff")};
   agc_value args[] = {text(self), agc_list_value(agc_list_from_array(words, 1)), agc_int(5000)};
   agc_value handle[] = {ok(call("Process.spawn", args)), agc_int(300)};
+  args[1] = agc_list_value(agc_list_from_array(words, 2));
+  agc_value other[] = {ok(call("Process.spawn", args)), agc_int(5000)};
   fails(call("Process.wait", handle), "process: operation timed out");
-  static char got[1 << 20];
-  size_t total = 0, want = junk + STDERR_BYTES;
+  static unsigned char got[1 << 20];
+  size_t total = 0, want = junk + 2 * STDERR_BYTES;
   uint64_t deadline = uv_hrtime() + UINT64_C(10000000000);
   while (total < want && uv_hrtime() < deadline) {
     ssize_t n = read(fds[0], got + total, sizeof got - total);
@@ -669,10 +672,19 @@ static void stuck_stderr_test(const char *self) {
     uv_sleep(1);
   }
   assert(total == want);
-  for (size_t k = junk; k < want; k++) assert(got[k] == 'e');
+  size_t counted = 0, marks = 0;
+  for (size_t k = junk; k < want; k++) {
+    if (got[k] == 255)
+      marks++;
+    else
+      assert(got[k] == counted++ % 251);
+  }
+  assert(counted == STDERR_BYTES && marks == STDERR_BYTES);
   handle[1] = agc_int(5000);
   assert(agc_as_int(&vm, ok(call("Process.wait", handle))) == 0);
+  assert(agc_as_int(&vm, ok(call("Process.wait", other))) == 0);
   call("Process.close", handle);
+  call("Process.close", other);
   vm.rt->err.file = saved;
   fclose(stuck);
   close(fds[0]);
