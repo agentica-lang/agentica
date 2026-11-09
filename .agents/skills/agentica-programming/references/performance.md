@@ -122,13 +122,13 @@ writes `/tmp/perf-PID.map`, so `perf report` names the compiled functions
 
 ## Enumerable methods
 
-`find`, `each_with_index`, `flat_map`, `partition`, `take_while`, `drop_while`,
-`each_slice`, `group_by`, `tally`, `uniq`, `sum`, `min`, `max`, `min_by`,
-`max_by`, `Map.each` and `Map.select` are written in Agentica and run in your
-program, so their steps count against `--max-steps`. Each is one O(n) pass
-with no list copy per element, 4 to 28 steps per element of its own (not the
-block's; `min` and `max` on Floats take 12 to 14). Measure the one you use with
-the profiler.
+`find`, `find_index`, `each_with_index`, `flat_map`, `partition`, `take_while`,
+`drop_while`, `each_slice`, `group_by`, `tally`, `uniq`, `sum`, `min`, `max`,
+`min_by`, `max_by`, `Map.each` and `Map.select` are written in Agentica and run
+in your program, so their steps count against `--max-steps`. Each is one O(n)
+pass with no list copy per element, 4 to 28 steps per element of its own (not
+the block's; `min` and `max` on Floats take 12 to 14). Measure the one you use
+with the profiler.
 
 Wall time of `tally`, `uniq` and `group_by` also grows with the number of
 distinct keys (the cost of the VM's `Map` and `Set` insert). The bodies avoid

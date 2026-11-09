@@ -211,6 +211,30 @@ ok(8)
 error("not found")
 ```
 
+## index and find_index
+
+```signature
+List.index(list: List[T], value: T) -> Optional[Int]
+List.find_index(list: List[A], f: Fn[A, Bool]) -> Optional[Int]
+```
+
+`index` gives `some` with the position of the first item `==` the value, else `none`; the items need `==`, as for `include?`. `find_index` takes a block instead and gives the position of the first element for which it gives `true`, so it is the block form: `xs.index do ... end` is `CHECK-BLOCK-TARGET`. Floats compare with `==`, so a NaN never matches (`[nan].index(nan)` is `none`) and `-0.0` matches `0.0`. Both stop at the first match and are O(n).
+
+```agentica
+def main() -> Void
+  xs = ["pear", "fig", "fig"]
+  puts(xs.index("fig"))
+  puts(xs.index("kiwi"))
+  puts(xs.find_index do |x| x.length > 3 end)
+end
+```
+
+```output
+some(1)
+none
+some(0)
+```
+
 ## flat_map
 
 ```signature

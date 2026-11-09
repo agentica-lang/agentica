@@ -10108,6 +10108,9 @@
         "  _u: Map[String, Int] = t.filter do |_k, v| v > 0 end",
         "  _w: Int = String.compare(\"a\", \"b\")",
         "  _x: Bool = xs.include?(2) and [\"a\"].member?(\"a\") and [1.5].include?(1.5) and [true].include?(true) and [[1]].include?([1])",
+        "  _y: Optional[Int] = xs.index(2)",
+        "  _z: Optional[Int] = [[1]].index([1])",
+        "  _za: Optional[Int] = xs.find_index do |x| x > 1 end",
         "end",
         "",
         ""
@@ -10327,6 +10330,69 @@
         21
       ],
       "covers": "\"a\"",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts([1].index(\"a\"))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [
+        2,
+        18
+      ],
+      "covers": "\"a\"",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts([JSON.null].index(JSON.null))",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [
+        2,
+        8
+      ],
+      "covers": "[JSON.null]",
+      "help": true
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts([1, 2].find_index do |x| x end)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [
+        2,
+        33
+      ],
+      "covers": "x"
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts([1, 2].index do |x| x > 1 end)",
+        "end",
+        "",
+        ""
+      ],
+      "code": "CHECK-BLOCK-TARGET",
+      "start": [
+        2,
+        21
+      ],
+      "covers": "do |x| x > 1 end",
       "help": true
     },
     {

@@ -17,6 +17,17 @@ def find(list: List[A], f: Fn[A, Bool]) -> Result[A]
   return error("not found")
 end
 
+def find_index(list: List[A], f: Fn[A, Bool]) -> Optional[Int]
+  index = 0
+  for item in list
+    if f.call(item)
+      return some(index)
+    end
+    index += 1
+  end
+  return none
+end
+
 def each_with_index(list: List[A], f: Fn[A, Int, Void]) -> Void
   index = 0
   for item in list
@@ -159,6 +170,51 @@ def include_string(list: List[String], value: String) -> Bool
     end
   end
   return false
+end
+
+def index(list: List[A], value: A) -> Optional[Int]
+  at = 0
+  for item in list
+    if item == value
+      return some(at)
+    end
+    at += 1
+  end
+  return none
+end
+
+# The faster loops of include_int and its kin, for index.
+def index_int(list: List[Int], value: Int) -> Optional[Int]
+  at = 0
+  for item in list
+    if item == value
+      return some(at)
+    end
+    at += 1
+  end
+  return none
+end
+
+def index_float(list: List[Float], value: Float) -> Optional[Int]
+  at = 0
+  for item in list
+    if item == value
+      return some(at)
+    end
+    at += 1
+  end
+  return none
+end
+
+def index_string(list: List[String], value: String) -> Optional[Int]
+  at = 0
+  for item in list
+    if item == value
+      return some(at)
+    end
+    at += 1
+  end
+  return none
 end
 
 def sum_int(list: List[Int]) -> Int

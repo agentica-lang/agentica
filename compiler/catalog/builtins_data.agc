@@ -2365,6 +2365,19 @@ ROWS_22: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "List.find_index",
+    parameters: [
+      Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A"))),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("A")], Types.Type.Bool)),
+    ],
+    result: Types.Type.Optional(Types.Type.Int),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "The index of the first element f accepts, else none; f stops being called at the first true; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "List.first",
     parameters: [Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("A")))],
     result: Types.Type.Var("A"),
@@ -2414,6 +2427,19 @@ ROWS_22: List[Model.Builtin] = [
     implementation: "",
     effects: [],
     description: "Check whether a value is in the list, comparing with ==; items need equality; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "List.index",
+    parameters: [
+      Model.Named(name: "list", type: Types.Type.List(Types.Type.Var("T"))),
+      Model.Named(name: "value", type: Types.Type.Var("T")),
+    ],
+    result: Types.Type.Optional(Types.Type.Int),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "The index of the first item == value, else none; items need equality; O(n).",
     alternatives: [],
   ),
   Model.Builtin(

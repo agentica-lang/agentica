@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `xs.index(value)` gives the position of the first item `==` the value, and
+  `xs.find_index do |x| ... end` of the first that passes the block, as an
+  `Optional[Int]`.
 - `std/option_parser`: `OP.new(..., rest)` keeps the positional words after the
   arguments, which `OP.rest` returns (as Ruby's `parse` does) and
   `OP.after_dashes` splits at `--`.
