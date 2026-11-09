@@ -95,3 +95,12 @@ none -> Optional[T]
   `o == some(3)`. Prints as `some(3)` or `none`. JSON writes `none` as `null`
   and reads `null` or a missing key as `none` (`json.md`).
 - `some`, `none`, `ok` and `error` cannot name a variable, function or field.
+
+## Design patterns
+
+Strategy: an `Fn` parameter (`&name` or a block). Factory: a function
+returning `Result[T]`. Builder: field defaults and `.with(...)`. State machine:
+an enum and `case`. Command: enum variants applied with `reduce`. Decorator: a
+function taking and returning an `Fn` (`def wrap(f: Fn[A, B]) -> Fn[A, B]`
+returns the block). Observer: a struct holding a `List[Fn[...]]`, called with
+`map`.
