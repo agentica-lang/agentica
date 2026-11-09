@@ -45,7 +45,7 @@ expected Int, found String
 
 - Exit code `1`: the program has an error. Exit code `2`: a bad command or an unreadable file.
 - Codes start with `LEX-`, `PARSE-`, `CHECK-`, `RUNTIME-` or `LINT-` (the suggestions of [`lint`](#suggest-style-changes)). A runtime error also prints the call stack. See [Diagnostics](/reference/diagnostics/).
-- `--ai` and `--json` print the same error for tools: `{"code":"CHECK-TYPE-MISMATCH","file":"bad.agc","range":{...},...}`.
+- `--ai` and `--json` print the same error for tools: `{"code":"CHECK-TYPE-MISMATCH","file":"bad.agc","range":{...},...}`. A warning, which is not an error (`PKG-NATIVE-UNBUILT`), is a JSON object with `"warning": true`, or an `--ai` block that starts with `warning`.
 
 ## Suggest style changes
 

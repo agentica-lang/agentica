@@ -27,8 +27,10 @@ PLACE_KEYS = ["file", "system", "url", "sha256", "member"]
 SYSTEMS = Set.new(["linux", "macos", "windows"])
 # The folder of a package that holds its native files (package_hash.agc hashes them with the .agc files).
 NATIVE_FOLDER = "native"
-# The key of [native.NAME] that is not a system: the C sources of the library (native_build.agc).
+# The keys of [native.NAME] that are not a system: the C sources of the library (native_build.agc), and whether the
+# package runs without it when it cannot be built.
 BUILD_KEY = "build"
+OPTIONAL_KEY = "optional"
 MAX_SYSTEM_NAME = 128
 MAX_SYSTEM_PATH = 1024
 # The most candidates a `system` list holds: each one is looked up on disk when the library is used.
@@ -56,12 +58,14 @@ export struct Place
   member: String
 end
 
-## A native library of a package: the name its `extern "name"` uses, where it is on each system it names, and the
-## `build` table that compiles it from the package's C sources (native_build.agc), if any.
+## A native library of a package: the name its `extern "name"` uses, where it is on each system it names, the
+## `build` table that compiles it from the package's C sources (native_build.agc), if any, and `optional`: when true, a
+## build that fails is a warning and the program runs without the library.
 export struct NativeLibrary
   name: String
   places: List[Place]
   build: Optional[NativeBuild.Build]
+  optional: Bool
 end
 
 ## A read manifest. name is "" when the file has none; max_line_width is 0 when it sets no limit;
@@ -281,8 +285,8 @@ def git_source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], pat
   return ok(GitSource.Source(git: git, subdir: subdir, tag: tag, ref: ref, path: ""))
 end
 
-# [native.NAME]: for each library a table of systems, each with `file`, `system` or a download, and an optional
-# `build`.
+# [native.NAME]: for each library a table of systems, each with `file`, `system` or a download, an optional `build`,
+# and `optional`, which needs `build`.
 def natives_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[List[NativeLibrary]]
   found: List[NativeLibrary] = []
   if !root.has_key?("native")
@@ -300,6 +304,7 @@ def natives_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result
     systems = try Reader.table(reading, entries[name], path)
     places: List[Place] = []
     build: Optional[NativeBuild.Build] = none
+    optional = false
     for system in systems.keys
       here = Reader.child(path, system)
       if system == BUILD_KEY
@@ -307,8 +312,13 @@ def natives_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result
         next
       end
 
+      if system == OPTIONAL_KEY
+        optional = try Reader.boolean(reading, systems[system], here)
+        next
+      end
+
       if !SYSTEMS.include?(system)
-        return error(Reader.fail_help(reading, here, "not a system", "write linux, macos, windows or build"))
+        return error(Reader.fail_help(reading, here, "not a system", "write linux, macos, windows, build or optional"))
       end
 
       places = places.push(try place_of(reading, system, systems[system], here))
@@ -319,7 +329,12 @@ def natives_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result
       return error(Reader.fail_help(reading, path, "not a library name", help))
     end
 
-    found = found.push(NativeLibrary(name: name, places: places, build: build))
+    if optional and build.none?
+      help = "add a build table: only a library that builds can be optional"
+      return error(Reader.fail_help(reading, Reader.child(path, OPTIONAL_KEY), "optional without build", help))
+    end
+
+    found = found.push(NativeLibrary(name: name, places: places, build: build, optional: optional))
   end
 
   return ok(found)

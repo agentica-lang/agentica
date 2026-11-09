@@ -47,7 +47,8 @@ end
 ## `pinned` is the hash that agentica.lock pins for a fetched package ("" for a package read in place). For such a
 ## package `files` are only the files of native/ that the hash covers and `contents` holds their bytes, read once and
 ## checked against the pin (packages/native_build.agc, listed): the machine builds from a private copy of those bytes,
-## never from the package folder. `contents` is empty for a package read in place.
+## never from the package folder. `contents` is empty for a package read in place. `optional` is true when the manifest
+## says `optional = true`: a build that fails is then Unbuilt, not Failed.
 export struct BuildRequest
   cache_root: String
   library: String
@@ -56,6 +57,7 @@ export struct BuildRequest
   key: String
   root: String
   pinned: String
+  optional: Bool
   sources: List[String]
   defines: List[String]
   libs: List[String]
@@ -64,11 +66,13 @@ export struct BuildRequest
 end
 
 ## What the machine did with a BuildRequest: the absolute path of the built library, nothing (a command that never
-## builds, such as `check`: the program is not run), or a packed PKG- failure at the request's file and key.
+## builds, such as `check`: the program is not run), a packed PKG- failure at the request's file and key, or, for an
+## optional module that could not be built, the reason (the machine has warned already).
 export enum Built
   Library(String)
   Skipped
   Failed(String)
+  Unbuilt(String)
 end
 
 ## The cache of checked modules (modules/check_cache.agc) as the core sees it. `on` says whether there is one; `read`
