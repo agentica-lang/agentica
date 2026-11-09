@@ -3,7 +3,9 @@
 A native module is C code written against the VM's C API
 (`agentica_native.h`). An `extern module "NAME"` block declares its functions
 with Agentica types; one call can take and return lists, maps and the
-program's structs and enums.
+program's structs and enums. The native-gen package
+(https://agentica-lang.github.io/packages/native-gen/) makes a C header from
+the block: typed prototypes, the argument checks and the tables.
 
 ~~~ruby
 struct Summary
