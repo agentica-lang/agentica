@@ -177,7 +177,7 @@ static agc_task *take_waited(agc_runq *q, bool *chain) {
 }
 
 /* The end of a wait or a spin: unlocks, then sends the chained wake if take_waited asked for one. */
-static agc_task *leave_with(agc_runq *q, agc_task *t, bool chain) {
+CC_RELEASES(q->lock) static agc_task *leave_with(agc_runq *q, agc_task *t, bool chain) {
   uv_mutex_unlock(&q->lock);
   if (chain) uv_cond_signal(&q->wake);
   return t;

@@ -97,6 +97,7 @@ static agc_string *read_string(reader *r) {
   size_t chars;
   if (!agc_utf8_chars(bytes, len, &chars)) reject(r, "invalid UTF-8 text");
   agc_string *s = load_alloc(r, agc_size_add(sizeof(agc_string), len), true);
+  // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: load_alloc gives NULL only for size 0
   s->bytes = len;
   s->chars = chars;
   if (len) memcpy(s->data, bytes, len);
@@ -110,6 +111,7 @@ static const agc_bytes *read_bytes(reader *r) {
   const uint8_t *bytes = take(r, len);
   if (len == 0) return agc_empty_bytes();
   agc_bytes *b = load_alloc(r, agc_size_add(sizeof(agc_bytes), len), true);
+  // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: load_alloc gives NULL only for size 0
   b->len = len;
   memcpy(b->data, bytes, len);
   return b;
@@ -449,6 +451,7 @@ static void load_types(reader *r, agc_program *p) {
   p->types = load_alloc(r, agc_size_mul(p->type_count, sizeof(agc_type)), true);
   uint16_t *depth = load_alloc(r, agc_size_mul(p->type_count, sizeof(uint16_t)), true);
   for (uint32_t i = 0; i < p->type_count; i++) {
+    // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: a count of 0 gets NULL and no loop
     depth[i] = 0;
     agc_type *t = &p->types[i];
     t->kind = read_u8(r);
@@ -532,6 +535,7 @@ static void load_tables(reader *r, agc_program *p) {
   p->structs = load_alloc(r, agc_size_mul(p->struct_count, sizeof(agc_struct_def)), false);
   for (uint32_t i = 0; i < p->struct_count; i++) {
     agc_struct_def *d = &p->structs[i];
+    // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: a count of 0 gets NULL and no loop
     d->name = read_string(r);
     d->count = read_count(r, 4, "field");
     if (d->count > 65535) reject(r, "too many fields");
@@ -657,6 +661,7 @@ static void load(reader *r, agc_program *p) {
   p->source_count = read_count(r, 8, "source");
   p->sources = load_alloc(r, agc_size_mul(p->source_count, sizeof(agc_source)), false);
   for (uint32_t i = 0; i < p->source_count; i++) {
+    // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: a count of 0 gets NULL and no loop
     p->sources[i].name = read_string(r);
     p->sources[i].text = read_string(r);
     index_lines(r, &p->sources[i]);
@@ -679,6 +684,7 @@ static void load(reader *r, agc_program *p) {
     check_position(r, source, s.end_line, s.end_column);
     if (s.start_line > s.end_line || (s.start_line == s.end_line && s.start_column > s.end_column))
       reject(r, "span starts after it ends");
+    // cchecker: ignore CC-GCC-ANALYZER-NULL-DEREFERENCE: a count of 0 gets NULL and no loop
     p->spans[i] = s;
   }
 

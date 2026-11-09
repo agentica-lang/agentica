@@ -805,6 +805,7 @@ static void err_over(proc *p, ssize_t n) {
 
 /* A chunk of a plain child's stderr goes to the VM's stderr through its buffer, never by a write that waits on the
    descriptor (§14.1). When the stream holds too much, the read stops, so the child waits on its own pipe. */
+// cchecker: ignore CC-EFFECT-SHORT-BLOCKS: blocking-FILE fallback only, see #1245
 static void forward_err(uv_stream_t *s, ssize_t n, const uv_buf_t *buf) {
   proc *p = OWNER(s, err);
   if (n < 0) {

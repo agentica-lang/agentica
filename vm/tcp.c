@@ -290,6 +290,7 @@ static void cut_head(net *n, request *q) {
   q->cut.len = window && head_status(&n->in, window, q->kind, &used) == AGC_HTTP_OK ? used : window;
   q->cut.data = malloc(q->cut.len ? q->cut.len : 1);
   if (!q->cut.data) agc_out_of_memory();
+  // cchecker: ignore CC-GCC-ANALYZER-MALLOC-LEAK: the request owns q->cut, which agc_inbuf_cut_free frees
   if (q->cut.len) memcpy(q->cut.data, n->in.data + n->in.start, q->cut.len);
   agc_inbuf_take(&n->in, q->cut.len);
   q->buffered = agc_inbuf_pending(&n->in);

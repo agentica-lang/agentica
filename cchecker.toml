@@ -4,8 +4,8 @@
 # The library knowledge, all on (the default), listed so a turned-off family shows in review. The roots of the rules are
 # inferred from it: a function passed to a libuv call that runs it on the loop thread (uv_read_start, uv_write,
 # uv_timer_start, uv_close, ...) is a short root, which must never reach a blocking call (docs/vm/14-core-invariants.md).
-# There is no [roots] table: the marks of vm/cchecker.h in the C are for ownership (CC_OWNS, CC_FREES, CC_GC_ALLOC); marks
-# for the roots that inference does not find come later.
+# There is no [roots] table. The marks of vm/cchecker.h in the C are for ownership (CC_OWNS, CC_FREES, CC_GC_ALLOC)
+# and for the lock helpers (CC_ACQUIRES, CC_RELEASES).
 [library]
 libc_blocking = true
 pthread_blocking = true
@@ -20,3 +20,22 @@ libc_nonblocking_flags = true
 # AGC_TRACE (vm/trace.h) calls agc_trace_emit only when the category is on in the mask of a debug run
 # (AGENTICA_VM_TRACE), so the write inside it is not on a path of a normal run.
 stop = ["agc_trace_emit"]
+
+# Fine on the loop thread, each for its reason:
+# - agc_proc_read_now: a read of a libuv pipe, which is O_NONBLOCK (EAGAIN is AGC_PROC_NOTHING).
+# - read_once: stdin reopened O_NONBLOCK by agc_fd_reopen, or a socket read with MSG_DONTWAIT.
+# - agc_fd_reopen: an open of the descriptor's own path (/proc/self/fd/N, F_GETPATH on macOS) with O_NONBLOCK.
+# - step (vm/files.c): one pass on a polled descriptor, which work_open made non-blocking.
+# - agc_stdio_try: writes what the target takes now and never waits (vm/port.h).
+# - call_on: runs a loop step inline or queues it; its FN fans out to every step, the end-of-run reap included.
+# - agc_compute_submit: pool->lock is held for a queue link; a thread start under it costs only latency.
+# - release_state: the release flush of a handle not closed, one bounded write (docs/vm/14-core-invariants.md §14.1).
+# - agc_unregister: reg->lock is held for a swap in the registry array.
+short = ["agc_proc_read_now", "read_once", "agc_fd_reopen", "step", "agc_stdio_try", "call_on", "agc_compute_submit",
+         "release_state", "agc_unregister"]
+
+# The I/O inbox's lock is held to link one request; the poster wakes the loop after the unlock (vm/inbox.c).
+short_locks = ["agc_inbox.lock"]
+
+# agc_request.call holds both the compute pool's work (it blocks, on a pool thread) and the loop's REQ_CALL steps.
+stop_fields = ["agc_request.call"]

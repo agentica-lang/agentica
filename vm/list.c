@@ -125,6 +125,7 @@ static char *trie_make(agc_list *l, size_t items, uint32_t kind, const agc_list 
   }
   char *block = bytes ? items_alloc(kind, bytes) : NULL;
   for (size_t k = 0; k < leaves; k++)
+    // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-NULLDEREFERENCE: items > 0 here, so depth >= 1
     levels[0][k >> LIST_BITS].child[k & LIST_MASK] =
         k < shared ? (void *)leaf_of(src, first + k) : block + (k - shared) * leaf_bytes;
   count = leaves;
@@ -132,6 +133,7 @@ static char *trie_make(agc_list *l, size_t items, uint32_t kind, const agc_list 
     count = (count + LIST_MASK) >> LIST_BITS;
     for (size_t k = 0; k < count; k++) levels[d][k >> LIST_BITS].child[k & LIST_MASK] = levels[d - 1] + k;
   }
+  // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-UNINITIALIZED-ASSIGN: items > 0 here, so depth >= 1
   l->root = levels[depth - 1];
   l->shift = shift;
   return block;

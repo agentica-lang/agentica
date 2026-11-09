@@ -142,9 +142,9 @@ agc_compute *agc_compute_open(struct uv_loop_s *loop, uint32_t size, void (*fini
   return pool;
 }
 
-/* Queues ENTRY and starts a thread when it needs one, under the lock (held at the call, dropped by the caller on
-   success, which then calls wake_one). False, with the lock dropped and ENTRY freed, when no thread exists and none can
-   start. */
+/* Queues ENTRY and starts a thread when it needs one, under the lock, which the caller holds and drops (then calls
+   wake_one on success). False, with ENTRY taken back off the queue, when no thread exists and none can start: the
+   caller then drops the lock and frees ENTRY. */
 static bool enqueue(agc_compute *pool, agc_request *entry) {
   if (pool->last)
     pool->last->next = entry;
@@ -166,8 +166,6 @@ static bool enqueue(agc_compute *pool, agc_request *entry) {
   if (pool->started == 0) {
     pool->first = pool->last = NULL;
     pool->queued = 0;
-    uv_mutex_unlock(&pool->lock);
-    free(entry);
     return false;
   }
   return true;
@@ -189,7 +187,11 @@ static agc_request *new_entry(int kind, void (*work)(void *item), void *item) {
 bool agc_compute_submit(agc_compute *pool, void (*work)(void *item), void *item) {
   agc_request *entry = new_entry(0, work, item);
   uv_mutex_lock(&pool->lock);
-  if (!enqueue(pool, entry)) return false;
+  if (!enqueue(pool, entry)) {
+    uv_mutex_unlock(&pool->lock);
+    free(entry);
+    return false;
+  }
   bool waiting = pool->idle > 0;
   uv_mutex_unlock(&pool->lock);
   wake_one(pool, waiting);
@@ -210,6 +212,8 @@ bool agc_compute_submit_direct(agc_compute *pool, void (*work)(void *item), void
   }
   atomic_fetch_add_explicit(&pool->direct, 1, memory_order_seq_cst);
   if (!enqueue(pool, entry)) {
+    uv_mutex_unlock(&pool->lock);
+    free(entry);
     atomic_fetch_sub_explicit(&pool->direct, 1, memory_order_seq_cst);
     return false;
   }
