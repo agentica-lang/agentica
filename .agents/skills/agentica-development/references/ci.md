@@ -198,9 +198,10 @@ clang-tidy. A run takes 3 to 5 minutes. Its docs are in that clone
 - The CI job `cchecker` runs when `vm/`, the build files, `.clang-tidy` or those
   two files change, and blocks: `test` needs it (skipped counts only when it
   did not run). A clone step tries the pinned tag three times, so a network
-  failure shows there. Then the exit code of make is the step's (1: a new
-  finding or a stale ignore; 2: a tool error), and the print step fails on an
-  empty or invalid JSON. It prints the new findings, the tool errors and the
+  failure shows there (a commit that is not the pinned one fails at once).
+  The step fails when cchecker exits non-zero (the JSON says which: new
+  findings, a stale ignore included, or a tool error), and the print step
+  fails on an empty or invalid JSON. It prints the new findings, the tool errors and the
   files not checked, and uploads the JSON of `--json` as the artifact
   `cchecker-findings`, also on a failure.
 - The job pins gcc 14 and clang and clang-tidy 19, which are the reference:
