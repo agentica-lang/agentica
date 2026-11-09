@@ -182,30 +182,36 @@ proof). These are the rules they do not show.
 project rules of C (a short path never blocks, a lock is released on every
 path, ownership) and runs `gcc -fanalyzer` and clang-tidy, on the
 `compile_commands.json` of `make compile-commands`. It is an Agentica program:
-`make cchecker` downloads the source archive of the release pinned in
-`mk/vm-test.mk` (`CCHECKER_VERSION`, `CCHECKER_SHA256`; the release has no
-binary) into `build/cchecker/`, runs it with `dist/agentica`, and needs gcc 10+,
-clang and clang-tidy. A full run takes 3 to 5 minutes. Its docs are in that
-archive (`docs/settings.md`, `docs/suppressions.md`).
+`make cchecker` clones the tag pinned in `mk/vm-test.mk` (`CCHECKER_VERSION`,
+checked against `CCHECKER_COMMIT`; the release has no binary) into
+`build/cchecker/`, runs it with `dist/agentica`, and needs gcc 10+, clang and
+clang-tidy. `vm/tests/` is not checked. A full run takes 3 to 5 minutes. Its
+docs are in that clone (`docs/settings.md`, `docs/suppressions.md`).
 
 - `cchecker.toml` holds the settings (`[library]`, `[assume]`, later
   `[roots]`); `cchecker-baseline.json` holds the accepted findings. It exits 1
   on a finding the baseline lacks.
 - The CI job `cchecker` runs when `vm/`, the build files or those two files
   change, and for now only reports (`continue-on-error`; no aggregate needs
-  it). Remove that line to make it block. It pins gcc 14 and clang and
-  clang-tidy 19: the baseline matches by message, which the analyzers reword
-  between versions, so a local run with other versions may show findings the CI
-  does not (`CCHECKER_FLAGS="--gcc gcc-14 --clang-tidy clang-tidy-19"`).
+  it). Remove that line to make it block. It prints the new findings and
+  uploads them as the artifact `cchecker-findings` (the JSON of `--json`).
+- The job pins gcc 14 and clang and clang-tidy 19, and the baseline matches by
+  message, which the analyzers reword between versions: a local run with other
+  versions may differ from the CI by a finding
+  (`CCHECKER_FLAGS="--gcc gcc-14 --clang-tidy clang-tidy-19"`). The baseline
+  was made with Debian's compilers, so before the job becomes blocking, refresh
+  it from the runner's: take the `new` and `fixed` of the artifact, or run `make
+  cchecker-update-baseline` with those flags on Ubuntu 24.04 with gcc-14,
+  clang-19 and clang-tidy-19.
 - Accept a finding by fixing it first. A false positive of one line gets
   `// cchecker: ignore CODE: reason` next to the code; a function that makes
   many findings for the same reason gets an `[assume]` entry with its reason.
   Only a finding that stays goes into the baseline: `make
   cchecker-update-baseline` (a full run) rewrites the file; the diff is the
   review, and a PR says why each new entry is accepted.
-- To move to a new release, change the version and the sha256
-  (`curl -sL .../archive/refs/tags/X.tar.gz | sha256sum`), run `make
-  cchecker-update-baseline` and review the diff.
+- To move to a new release, change the version and the commit
+  (`git ls-remote https://github.com/agentica-lang/cchecker 'X^{}' X`), run
+  `make cchecker-update-baseline` and review the diff.
 
 ## Conformance matrix (`platforms.yml`)
 

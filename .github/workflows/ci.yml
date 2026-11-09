@@ -371,8 +371,21 @@ jobs:
         with:
           artifact: release-build
           targets: dist/agentica
-      - name: make cchecker (downloads the pinned release, checks its sha256)
-        run: make cchecker CCHECKER_FLAGS="--gcc gcc-14 --clang clang-19 --clang-tidy clang-tidy-19"
+      # --json prints one object (the new findings, the counts of the baselined and the fixed ones); the next steps print it as
+      # lines and keep it as an artifact, which is what refreshing the baseline from the runner starts from.
+      - name: make cchecker (clones the pinned tag and checks its commit)
+        run: make -s cchecker CCHECKER_FLAGS="--gcc gcc-14 --clang clang-19 --clang-tidy clang-tidy-19 --json" | tee build/cchecker.json
+      - name: The findings that are not in the baseline
+        if: ${{ !cancelled() }}
+        run: |
+          jq -r '"cchecker: \(.findings | length) new, \(.baselined) baselined, \(.fixed) fixed, \(.errors | length) tool errors", (.findings[] | "\(.file):\(.line) \(.code) \(.message)"), (.errors[] | "error: \(.tool) \(.file) \(.message)")' build/cchecker.json
+      - if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: cchecker-findings
+          path: build/cchecker.json
+          if-no-files-found: ignore
+          retention-days: 7
 
   # The check that branch protection names: every job of the Linux tests passed. A job that failed, was cancelled or did not
   # run fails it (none of them is skipped on a pull request or a manual run).
