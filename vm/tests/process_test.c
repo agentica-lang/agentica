@@ -663,7 +663,7 @@ static void stuck_stderr_test(const char *self) {
   agc_value other[] = {ok(call("Process.spawn", args)), agc_int(5000)};
   fails(call("Process.wait", handle), "process: operation timed out");
   static unsigned char got[1 << 20];
-  size_t total = 0, want = junk + 2 * STDERR_BYTES;
+  size_t total = 0, want = junk + (size_t)2 * STDERR_BYTES;
   uint64_t deadline = uv_hrtime() + UINT64_C(10000000000);
   while (total < want && uv_hrtime() < deadline) {
     ssize_t n = read(fds[0], got + total, sizeof got - total);
