@@ -267,7 +267,19 @@ _Noreturn void agc_op_fail(agc_vm *vm, agc_status status, const agc_value *a, co
 agc_outcome agc_vm_run(agc_vm *vm);
 
 void agc_profile_start(agc_vm *vm);
+void agc_profile_start_cover(agc_vm *vm);
 void agc_profile_report(agc_vm *vm);
+
+/* Line coverage (vm/cover.c, `--coverage PATH`): agc_cover_new makes a zero counter for each span of PROGRAM, and
+ * agc_cover_step adds one to each span of the instruction at PC of F when it is a STEP of N steps (the one that just
+ * ran), from any scheduler.
+ * agc_cover_lcov gives the LCOV text of the counts to EMIT, piece by piece, once the schedulers are joined: a record
+ * for each source of the program's own (not std/, the prelude or a fetched package), with its functions and the lines
+ * that start a span of a STEP. */
+typedef void (*agc_cover_emit)(void *context, const char *text, size_t size);
+agc_cover *agc_cover_new(const agc_program *program);
+void agc_cover_step(agc_cover *cover, const agc_function *f, uint32_t pc, int64_t n);
+void agc_cover_lcov(const agc_cover *cover, const agc_program *program, agc_cover_emit emit, void *context);
 const char *agc_opcode_name(uint32_t op);
 
 /* A frame of a folded stack (vm/profile.c) is one code: its kind in the high 32 bits and an index in the low ones (a

@@ -780,6 +780,10 @@ def vm_flags(options: Options.Options, source: String) -> List[String]
     flags = flags.concat(["--jit", options.jit])
   end
 
+  if options.coverage != ""
+    flags = flags.concat(["--coverage", options.coverage])
+  end
+
   flags = flags.concat(options.deny)
   root = SourceRoot.option(source)
   if root != ""
@@ -883,6 +887,10 @@ def test(session: Session, words: List[String]) -> Int
 
   if options.jit != ""
     return emit(Reply.failed(2, "agentica: test does not take --jit; set AGENTICA_JIT instead\n"))
+  end
+
+  if options.coverage != ""
+    return emit(Reply.failed(2, "agentica: test does not take --coverage\n"))
   end
 
   driver: List[String] = [

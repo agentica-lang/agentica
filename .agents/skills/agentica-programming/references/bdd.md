@@ -185,8 +185,9 @@ BDD.then_stdout_includes(ctx, expected) / then_stderr_includes(ctx, expected)
   `RUNTIME-BDD-USAGE`) runs up to `N` files at once, never the scenarios of
   one file; the report keeps the file order. Files that share a port, a path
   or a database need `--jobs 1`; a high `N` makes per-test timeouts likelier
-  under CPU load. Without `--seed N` every child shares
-  the seed the runner drew (`testing.md`). A `*_test.agc` file in `specs/` is a
+  under CPU load. `--timing` adds the time of each file and of the 5 slowest
+  scenarios. Without `--seed N` every child shares the seed the runner drew
+  (`testing.md`). A `*_test.agc` file in `specs/` is a
   test file: a helper with that name fails with `RUNTIME-TEST-RUN`. Use port 0
   and fresh temporary directories, not fixed names.
 - To run a suite from a program, start `agentica test --json` with
@@ -198,8 +199,7 @@ BDD.then_stdout_includes(ctx, expected) / then_stderr_includes(ctx, expected)
 
 - `PARSE-GHERKIN-*`: the `.feature` file breaks the supported Gherkin subset
   (section order, a step outside a scenario, a misplaced Doc String, table or
-  tag, bad Examples or `<parameter>`, an empty Feature or Background, a
-  non-English keyword).
+  tag, bad Examples, an empty Feature or Background, a non-English keyword).
 - `CHECK-BDD-UNDEFINED`, `CHECK-BDD-AMBIGUOUS`, `CHECK-BDD-EMPTY`: no step
   pattern matches; more than one matches; no `.feature` or `*_test.agc` files
   found (or no name matches `--only`).

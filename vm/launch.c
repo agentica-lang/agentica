@@ -65,6 +65,15 @@ void __gcov_dump(void);
 #define PROFILE_SAMPLE 1000
 #define PROFILE_SAMPLE_MAX 1000000000
 
+/* The file of --coverage while the LCOV goes to it (agc_cover_lcov): the pieces gather in `data`, which is written
+   when it is full and at the end, and `failed` says that a write did not take all of it. */
+typedef struct {
+  int fd;
+  bool failed;
+  size_t used;
+  char data[65536];
+} cover_file;
+
 #ifndef _WIN32
 static bool urandom_entropy(uint8_t *out, size_t len) {
   int fd = open("/dev/urandom", O_RDONLY | O_CLOEXEC);
@@ -196,6 +205,85 @@ static void announce_outcome(agc_vm *vm, const agc_outcome *outcome) {
   if (setjmp(vm->fail) == 0) print_outcome(vm, outcome, AGC_NOTICE_KEPT);
 }
 
+static void cover_flush(cover_file *file) {
+  size_t done = 0;
+  while (!file->failed && done < file->used) {
+    int64_t wrote = agc_fs_write(file->fd, file->data + done, file->used - done);
+    if (wrote <= 0) file->failed = true;
+    else done += (size_t)wrote;
+  }
+  file->used = 0;
+}
+
+static void cover_put(void *context, const char *text, size_t size) {
+  cover_file *file = context;
+  while (size > 0) {
+    if (file->used == sizeof file->data) cover_flush(file);
+    size_t room = sizeof file->data - file->used;
+    size_t part = size < room ? size : room;
+    memcpy(file->data + file->used, text, part);
+    file->used += part;
+    text += part;
+    size -= part;
+  }
+}
+
+/* The mode the report gets: the target's, made first when it is missing, so a new one has 0666 less the umask, as
+   File.write_text makes a file. False when the target cannot be made or is not a regular file. */
+static bool cover_mode(const char *path, int *mode) {
+  int fd = agc_fs_open(path, AGC_FS_WRITE | AGC_FS_CREATE);
+  if (fd < 0) return false;
+  agc_fs_info info;
+  bool ok = agc_fs_fstat(fd, &info) == 0 && AGC_FS_ISREG(info.mode);
+  ok = agc_fs_close(fd) == 0 && ok;
+  *mode = (int)(info.mode & 0777);
+  return ok;
+}
+
+/* Writes the LCOV of --coverage to a new file beside its target, then puts it in the target's place, so a reader never
+   sees half a report; false when it cannot be written. The fsync before the rename keeps a power loss from leaving an
+   empty file there (as File.write_text, vm/files.c). It runs after the schedulers are joined, so the counts are
+   final. */
+static bool write_coverage(agc_vm *vm) {
+  agc_runtime *rt = vm->rt;
+  if (!rt->cover) return true;
+  int mode = 0;
+  if (!cover_mode(rt->cover_path, &mode)) return false;
+  cover_file *file = malloc(sizeof *file);
+  char *fresh = NULL;
+  int fd = file ? agc_fs_open_beside(rt->cover_path, &fresh) : -1;
+  bool ok = fd >= 0;
+  if (ok) {
+    file->fd = fd;
+    file->failed = false;
+    file->used = 0;
+    agc_cover_lcov(rt->cover, rt->program, cover_put, file);
+    cover_flush(file);
+    ok = !file->failed && agc_fs_fchmod(fd, mode) == 0 && agc_fs_fsync(fd) == 0;
+    ok = agc_fs_close(fd) == 0 && ok;
+    ok = ok && agc_fs_replace(fresh, rt->cover_path) == 0;
+    if (ok)
+      agc_fs_sync_folder(rt->cover_path);
+    else
+      agc_fs_unlink(fresh);
+  }
+  free(fresh);
+  free(file);
+  return ok;
+}
+
+/* The notice of a run that failed, or was stopped, and could not write its coverage file either: the failure is the
+   run's own, so this one is a line of its own. */
+static void coverage_notice(agc_vm *vm) {
+  agc_notice notice;
+  FILE *err = agc_notice_begin(&vm->rt->err, &notice);
+  if (vm->rt->style == AGC_STYLE_JSON)
+    fputs("{\"warning\":\"cannot write the coverage file\"}\n", err);
+  else
+    fputs("agentica: cannot write the coverage file\n", err);
+  agc_notice_end(vm, &notice, AGC_NOTICE_FINAL);
+}
+
 /* agc_io_goodbye runs requests left in the inbox, and one may fail (sweep's "a job was freed while held"). vm->fail
    still points at the run's setjmp, whose frame has returned, so goodbye gets its own target. A failure becomes the
    outcome of a run that did not fail, else it is printed beside the run's own. */
@@ -228,6 +316,7 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
   if (outcome->kind == AGC_FAILED) announce_outcome(vm, outcome);
   flush_files(vm);
   agc_files_close(vm);
+  bool covered = write_coverage(vm);
   bool freed = free_natives(vm);
   stdout_ok = stdout_ok && !agc_output_failed(&vm->rt->out);
   if (vm->rt->flush_expired || !freed) {
@@ -242,6 +331,10 @@ int agc_launch_settle(agc_vm *vm, agc_outcome *outcome) {
       write_error = "cannot write to standard output";
     else if (agc_output_failed(&vm->rt->err))
       write_error = "cannot write to standard error";
+    else if (!covered)
+      write_error = "cannot write the coverage file";
+  } else if (!covered) {
+    coverage_notice(vm);
   }
   if (write_error) {
     outcome->kind = AGC_FAILED;
@@ -668,6 +761,14 @@ agc_launch_status agc_launch_parse(const char *name, int argc, char **argv, int 
         return refuse(name, "--source-root needs a folder name in UTF-8");
       options->source_root = value;
       i += 2;
+    } else if (strcmp(arg, "--coverage") == 0) {
+      bool seen = options->coverage != NULL;
+      if (!once(name, &seen, arg)) return AGC_LAUNCH_BAD;
+      if (!value || !*value || strcmp(value, "--") == 0) return refuse(name, "--coverage needs a file name");
+      /* The counts come through the profile's hook, which a build without trace points (make TRACE=0) leaves out. */
+      if (!AGC_TRACE_BUILD) return refuse(name, "--coverage needs a build with trace points");
+      options->coverage = value;
+      i += 2;
     } else if (strcmp(arg, "--embedded") == 0) {
       bool seen = options->embedded != NULL;
       if (!once(name, &seen, arg)) return AGC_LAUNCH_BAD;
@@ -742,6 +843,15 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
   if (front_end) {
     const char *test_mode = getenv("AGENTICA_VM_TEST_FRONT_END_JIT");
     if (!test_mode || !agc_jit_mode_parse(test_mode, &mode)) mode = AGC_JIT_OFF;
+  }
+  /* --coverage counts the interpreter's STEPs through the profile (agc_profile.cover), which compiled code does not
+     run: the program runs in the interpreter. It is the user's program only, never the front end's run. A report of
+     an earlier run is removed now, so a run that ends without writing one leaves none. */
+  if (options->coverage && !front_end) {
+    rt->cover = agc_cover_new(program);
+    rt->cover_path = options->coverage;
+    mode = AGC_JIT_OFF;
+    agc_fs_unlink(options->coverage);
   }
   rt->jit = agc_jit_new(program, mode, &rt->trace);
   /* Test-only: AGENTICA_VM_TEST_JIT_BUDGET=N gives the JIT a compile budget of N units instead of AGC_JIT_BUDGET, so a

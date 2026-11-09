@@ -968,6 +968,7 @@ static agc_outcome run_threads(agc_vm *vm) {
     agc_vm_init_context(s, rt);
     s->index = (uint32_t)k;
     s->runnext_on = true;
+    agc_profile_start_cover(s);
     rt->scheds[k] = s;
   }
   agc_input_watch(vm);

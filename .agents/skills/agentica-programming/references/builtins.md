@@ -142,6 +142,8 @@ List.tally(list: List[K]) -> Map[K, Int]                 # K is Int or String; f
 List.uniq(list: List[K]) -> List[K]                      # K is Int or String; keeps the first of each
 List.sum(list: List[N]) -> N                             # Int or Float; empty gives 0 or 0.0; Int overflow halts
 List.include?(list: List[T], value: T) -> Bool           # any T with ==; also member?; stops at the first match
+List.index(list: List[T], value: T) -> Optional[Int]     # first position of an item == value; none when absent
+List.find_index(list: List[A], f: Fn[A, Bool]) -> Optional[Int]   # the block form of index (index takes no block)
 List.min(list: List[T]) -> Optional[T]                   # T Int, Float or String; none when empty; also max
 List.min_by(list: List[A], key: Fn[A, O]) -> Optional[A]   # key Int, Float or String; first wins ties; empty is none
 List.max_by(list: List[A], key: Fn[A, O]) -> Optional[A]   # NaN keys never win unless all are NaN

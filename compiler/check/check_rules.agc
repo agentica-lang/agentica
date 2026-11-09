@@ -188,10 +188,15 @@ def block_target_message(name: String) -> String
   return "\"#{name}\" does not take a block: its last parameter is not a function"
 end
 
-# The help of a block given to a builtin that takes none: each_slice returns the slices, which each then walks.
+# The help of a block given to a builtin that takes none: each_slice returns the slices, which each then walks, and
+# index takes a value, while find_index takes the block.
 def block_target_help(name: String) -> String
   if name == "List.each_slice"
     return "each_slice returns the slices and takes no block: xs.each_slice(2).each do |pair| ... end"
+  end
+
+  if name == "List.index"
+    return "index takes a value, not a block: xs.index(value), or xs.find_index do |x| ... end for a test"
   end
 
   if name == "Task.spawn"

@@ -17,7 +17,7 @@ the list of commands and flags.
   (exit 1). `[style]` of the nearest `agentica.toml` sets the width (default
   119) and `blank_line_after_end`. `agentica lint` suggests style changes
   (`LINT-` codes, never errors); it only parses, so run `check` for
-  correctness.
+  correctness. For CI, `fmt --check` and `lint --strict` exit 1 on a change.
 - `--ai` prints a diagnostic as compact text, `--json` as one object (the last
   stderr line, after the program's own stderr). Put them before the file.
 - `agentica help NAME` prints a builtin's signature (unknown name: exit 2);
@@ -30,10 +30,14 @@ the list of commands and flags.
   `--sandbox` or add `--deny-run`.
 - `--max-steps N` bounds expression and statement entries across all tasks
   (`RUNTIME-STEP-LIMIT`); it is not an I/O timeout.
+- `--coverage FILE` writes the line coverage of the run as LCOV (the program's
+  files, not `std/` or fetched packages), a failed run too; the JIT is off for
+  that run. `agentica test` does not take it.
 - `agentica compile FILE.agc -o OUT.agcb` writes bytecode; `agentica run
   [FLAGS] -- OUT.agcb [ARGS...]` runs it, on the same Agentica version only.
   Flags go before `--` (`--max-steps`, `--seed`, `--schedulers N`, `--jit MODE`,
-  `--deny-*`, `--sandbox`, `--source-root DIR`, `--ai`, `--json`).
+  `--deny-*`, `--sandbox`, `--source-root DIR`, `--coverage FILE`, `--ai`,
+  `--json`).
 - `agentica F.agc` and `agentica test` keep the compiled program of each root
   file in `_build/bytecode/`, in the folder of the nearest `agentica.toml`
   (else beside F), and read it while F, its imports, `agentica.toml`,
