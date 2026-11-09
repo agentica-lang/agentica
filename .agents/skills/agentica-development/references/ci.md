@@ -218,8 +218,9 @@ docs are in that clone (`docs/settings.md`, `docs/suppressions.md`).
   `CC_OWNS` on a function that returns malloc memory and on the fields and
   parameters that own it; `CC_FREES` on the parameter of a function that frees
   it; `CC_GC_ALLOC` on an allocator of the collector. Settings first
-  (`cchecker.toml`); a mark is for what they cannot say. A pointer put into a returned array, or set through an out parameter, is
-  not followed: ignore it with the reason.
+  (`cchecker.toml`); a mark is for what they cannot say. A pointer put into a
+  returned array, or set through an out parameter, is not followed: ignore it
+  with the reason.
 - To move to a new release, change the version and the commit
   (`git ls-remote https://github.com/agentica-lang/cchecker 'X^{}' X`), copy
   its `include/cchecker.h` over `vm/cchecker.h`, run
