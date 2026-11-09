@@ -116,9 +116,10 @@ def churn(job: Job) -> Int
 end
 
 # The clock of the takeover test: key 0 of `now` is the time. Once key 1 is set, the second read moves the time past
-# the two-second lease of a rotation and has another task put the keys young1 to young5. The first read is the claim of
-# a rotation and the second its beat after 1024 deletes, so the rotation is taken over in its middle: the new owner
-# publishes, and the young keys go into the generation it published while the old owner is still emptying.
+# the two-second lease of a rotation and has another task put the keys young1 to young5. It depends on the order in
+# which the cache reads its clock: the first read is the claim of a rotation and the second its beat after 1024
+# deletes, so the rotation is taken over in its middle: the new owner publishes, and the young keys go into the
+# generation it published while the old owner is still emptying.
 def takeover_clock(now: ATS[Int, Int], holder: Channel[Cache.Store]) -> Int
   if now.get(1).unwrap_or(0) == 1 and now.add(3, 1) == 2
     now.put(2, 1)

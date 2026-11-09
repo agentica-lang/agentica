@@ -43,7 +43,8 @@ export struct Options
   ## The time to live of an entry in milliseconds, 0 for none.
   ttl_ms: Int = 0
   ## The time in milliseconds, which only has to go forward; the default is the monotonic clock. It times the entries
-  ## and the two-second lease of a rotation. A test gives a fake.
+  ## and the two-second lease of a rotation, so a clock that stops also keeps a stalled rotation from being taken over.
+  ## A test gives a fake.
   clock: Optional[Fn[Int]] = none
 end
 
@@ -418,7 +419,15 @@ def turn_if_due(state: Memory) -> Void
   end
 
   g = current(state)
-  if now(state) - state.started.get(g).unwrap_or(0) >= max_of(state.ttl_ms / 2, 1)
+  # A generation that a late publish skipped to has no start: it starts now, rather than at 0, which would drop it at
+  # once.
+  started = state.started.get(g)
+  if not started.ok?
+    _ = state.started.put_new(g, now(state))
+    return
+  end
+
+  if now(state) - started.unwrap! >= max_of(state.ttl_ms / 2, 1)
     _ = rotate(state, g)
   end
 end
@@ -436,9 +445,14 @@ def rotate(state: Memory, g: Int) -> Bool
     return false
   end
 
-  # Keys of long dead generations: nothing reads them, and they would pile up.
+  # Keys of long dead generations: nothing reads them, and they would pile up. All those up to g - 3 go, not only
+  # g - 3, since the rotation from a generation that a late publish skipped never ran. The tables hold a few keys.
   for table in [state.started, state.rotations, state.beats, state.stored, state.counted]
-    table.delete(g - 3)
+    for key in table.keys
+      if key <= g - 3
+        table.delete(key)
+      end
+    end
   end
 
   if state.ttl_ms > 0
