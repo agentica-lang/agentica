@@ -64,8 +64,9 @@ ENDS_ONLY_FIXTURES = {"task-map-flushed.agc", "http-client-queue.agc", "http-ser
 
 # A fixture whose step count the kernel decides: how many pieces its socket buffers take before a send waits depends
 # on the host's TCP buffer sizes and their autotuning, and so does the work per piece (#1263). A limit at T, the
-# golden's count, must finish and one at T - 1 must stop only for a fixture whose runs take exactly T steps, so the limits swept for
-# these are 1, T / 4, T / 2 and KERNEL_TIMED_LAST times T, and no step allowance holds them (check_fixture).
+# golden's count, must finish and one at T - 1 must stop only for a fixture whose runs take exactly T steps, so the
+# limits swept for these are 1, T / 4, T / 2 and KERNEL_TIMED_LAST times T, and no step allowance holds them
+# (check_fixture).
 KERNEL_TIMED_FIXTURES = {"http-server-stream-backed-up.agc"}
 KERNEL_TIMED_LAST = 16
 
