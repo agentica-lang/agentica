@@ -445,10 +445,12 @@ static inline agc_value call_leaf(agc_vm *vm, const agc_builtin *b, agc_value *a
  * does. A LEAF call goes through call_leaf, so the check of the leaf rule runs under the profile too. */
 static PROFILE_HOOK agc_value profile_builtin(agc_vm *vm, const agc_builtin *b, uint32_t id, agc_value *args,
                                               uint32_t span, bool leaf) {
-  uint64_t began = agc_trace_now();
+  /* A profile of --coverage alone writes no report: it skips the clock. */
+  bool timed = vm->profile->report;
+  uint64_t began = timed ? agc_trace_now() : 0;
   agc_value result = leaf ? call_leaf(vm, b, args, span) : call_builtin(vm, b, args, span);
   vm->profile->builtin_calls[id]++;
-  vm->profile->builtin_ns[id] += agc_trace_now() - began;
+  if (timed) vm->profile->builtin_ns[id] += agc_trace_now() - began;
   return result;
 }
 

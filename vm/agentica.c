@@ -127,8 +127,8 @@ static void run_front_end(agc_launch *launch, const char *self, const char *repl
  * report a start that failed. The options are those of `agentica run` (--ai, --json, the --deny-* flags, --sandbox,
  * --max-steps, --seed, --flush-timeout, --schedulers, --jit, --source-root, --coverage), each once. The front end is
  * trusted with them, but --driver-pid is not one: it names the process that started this one, which only that process
- * can say, so the front end cannot. The counts are capped by the hand-off (AGC_FRONT_END_MAX_OPTIONS and _ARGUMENTS), so they fit
- * an int. */
+ * can say, so the front end cannot. The counts are capped by the hand-off (AGC_FRONT_END_MAX_OPTIONS and _ARGUMENTS),
+ * so they fit an int. */
 static int run_program(agc_launch *launch, const agc_front_end *fe) {
   agc_launch_options options;
   int at = 0;

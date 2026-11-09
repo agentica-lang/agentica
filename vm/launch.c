@@ -228,12 +228,27 @@ static void cover_put(void *context, const char *text, size_t size) {
   }
 }
 
+/* The mode the report gets: the target's, made first when it is missing, so a new one has 0666 less the umask, as
+   File.write_text makes a file. False when the target cannot be made or is not a regular file. */
+static bool cover_mode(const char *path, int *mode) {
+  int fd = agc_fs_open(path, AGC_FS_WRITE | AGC_FS_CREATE);
+  if (fd < 0) return false;
+  agc_fs_info info;
+  bool ok = agc_fs_fstat(fd, &info) == 0 && AGC_FS_ISREG(info.mode);
+  ok = agc_fs_close(fd) == 0 && ok;
+  *mode = (int)(info.mode & 0777);
+  return ok;
+}
+
 /* Writes the LCOV of --coverage to a new file beside its target, then puts it in the target's place, so a reader never
-   sees half a report; false when it cannot be written. It runs after the schedulers are joined, so the counts are
+   sees half a report; false when it cannot be written. The fsync before the rename keeps a power loss from leaving an
+   empty file there (as File.write_text, vm/files.c). It runs after the schedulers are joined, so the counts are
    final. */
 static bool write_coverage(agc_vm *vm) {
   agc_runtime *rt = vm->rt;
   if (!rt->cover) return true;
+  int mode = 0;
+  if (!cover_mode(rt->cover_path, &mode)) return false;
   cover_file *file = malloc(sizeof *file);
   char *fresh = NULL;
   int fd = file ? agc_fs_open_beside(rt->cover_path, &fresh) : -1;
@@ -244,10 +259,13 @@ static bool write_coverage(agc_vm *vm) {
     file->used = 0;
     agc_cover_lcov(rt->cover, rt->program, cover_put, file);
     cover_flush(file);
-    ok = !file->failed && agc_fs_fchmod(fd, 0644) == 0;
+    ok = !file->failed && agc_fs_fchmod(fd, mode) == 0 && agc_fs_fsync(fd) == 0;
     ok = agc_fs_close(fd) == 0 && ok;
     ok = ok && agc_fs_replace(fresh, rt->cover_path) == 0;
-    if (!ok) agc_fs_unlink(fresh);
+    if (ok)
+      agc_fs_sync_folder(rt->cover_path);
+    else
+      agc_fs_unlink(fresh);
   }
   free(fresh);
   free(file);
@@ -827,8 +845,8 @@ agc_vm *agc_launch_vm(agc_launch *launch, const agc_program *program, const agc_
     if (!test_mode || !agc_jit_mode_parse(test_mode, &mode)) mode = AGC_JIT_OFF;
   }
   /* --coverage counts the interpreter's STEPs through the profile (agc_profile.cover), which compiled code does not
-     run: the program runs in the interpreter. It is the user's program only, never the front end's run. A report of an earlier run is removed
-     now, so a run that ends without writing one leaves none. */
+     run: the program runs in the interpreter. It is the user's program only, never the front end's run. A report of
+     an earlier run is removed now, so a run that ends without writing one leaves none. */
   if (options->coverage && !front_end) {
     rt->cover = agc_cover_new(program);
     rt->cover_path = options->coverage;

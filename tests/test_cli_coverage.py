@@ -5,7 +5,8 @@ import os
 import shutil
 
 from tests.agentica_test import ROOT, cli, run, vm_environment
-from tests.package_support import dependency, environment, git, install, lock_entry, remotes, ws  # noqa: F401
+from tests.package_support import (dependency, environment, git, inline_table, install, lock_entry,  # noqa: F401
+                                    remotes, ws)
 
 FIXTURE = ROOT / "tests" / "fixtures" / "coverage"
 GOLDEN = (FIXTURE / "main.info").read_text()
@@ -68,8 +69,13 @@ def test_a_run_writes_the_coverage_of_the_program_and_its_imports_but_not_of_std
         (23, 2), (28, 3), (33, 3), (38, 4)]
     assert [main["lines"][line] for line in (29, 30, 34, 35, 39, 40)] == [3, 3, 3, 3, 4, 4]
     assert sources["helper.agc"]["functions"] == {"size_of": (4, 3)}
-    # The report is written beside its target and renamed over it: no temporary file is left.
+    # The report is written beside its target and renamed over it: no temporary file is left, and a new report has the
+    # mode of a new file, 0666 less the umask.
     assert sorted(path.name for path in cwd.iterdir()) == ["helper.agc", "main.agc", "out.info"]
+    if os.name != "nt":
+        umask = os.umask(0)
+        os.umask(umask)
+        assert (cwd / "out.info").stat().st_mode & 0o777 == 0o666 & ~umask
 
 
 def test_a_path_dependency_is_counted_under_its_package_name(tmp_path):
@@ -86,6 +92,31 @@ def test_a_path_dependency_is_counted_under_its_package_name(tmp_path):
     sources = records((tmp_path / "app" / "out.info").read_text())
     assert sources["pkg/tools@path/tools.agc"] == {"lines": {2: 1}, "functions": {"twice": (1, 1)}}
     assert list(sources) == ["main.agc", "pkg/tools@path/tools.agc"]
+
+
+def test_a_workspace_member_is_counted_as_a_path_dependency_is(ws, remotes, tmp_path):
+    """A member that another member of the repository depends on is read from its folder (`pkg/NAME@workspace/`): the
+    project's own code, so it is counted."""
+    url = remotes.url("owner/packages")
+    files = {
+        "agentica.toml": '[workspace]\nrepository = "%s"\nmembers = ["app", "common"]\n' % url,
+        "common/agentica.toml": 'name = "common"\n',
+        "common/util.agc": "export def twice(n: Int) -> Int\n  return n * 2\nend\n",
+        "app/agentica.toml": 'name = "app"\n\n[dependencies]\ncommon = %s\n'
+                             % inline_table(dependency(url, tag="common-1", subdir="common")),
+        "app/main.agc": 'import Util from "pkg/common/util"\n\ndef main() -> Void\n  puts(Util.twice(2))\nend\n',
+    }
+    for relative, text in files.items():
+        (tmp_path / "repo" / relative).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / "repo" / relative).write_text(text)
+    app = tmp_path / "repo" / "app"
+    updated = run(cli() + ["update"], cwd=app, env=environment(ws, remotes))
+    assert updated.code == 0, updated.stderr
+    result = run(cli() + ["--coverage", "out.info", "main.agc"], cwd=app, env=environment(ws, remotes))
+    assert result.code == 0, result.stderr
+    sources = records((app / "out.info").read_text())
+    assert list(sources) == ["main.agc", "pkg/common@workspace/util.agc"]
+    assert sources["pkg/common@workspace/util.agc"]["functions"] == {"twice": (1, 1)}
 
 
 def test_a_fetched_package_is_left_out_when_the_entry_is_in_another_folder(ws, remotes):
@@ -141,6 +172,14 @@ def test_the_profile_and_coverage_in_one_run_both_count_and_coverage_alone_write
         text = trace.read_text()
         assert (" profile fn calls=3 " in text and "name=classify" in text) == profiled, text[-2000:]
         assert (" profile " in text) == profiled
+
+
+def test_an_old_report_is_removed_when_the_run_starts(tmp_path):
+    (tmp_path / "out.info").write_text("SF:stale.agc\nend_of_record\n")
+    (tmp_path / "look.agc").write_text('def main() -> Void\n  puts(File.stat("out.info").ok?)\nend\n')
+    result = agentica(tmp_path, "--coverage", "out.info", "look.agc")
+    assert (result.code, result.stdout) == (0, "false\n"), result.stderr
+    assert list(records((tmp_path / "out.info").read_text())) == ["look.agc"]
 
 
 def test_a_failing_run_still_writes_its_coverage(tmp_path):
