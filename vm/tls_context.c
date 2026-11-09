@@ -91,8 +91,7 @@ static void drop(void *data) { free_build(data); }
 static const agc_io_kind context_io = {work, done, expired, drop, false, "tls", NULL, false, NULL};
 
 /* The path of a field: NULL for "", false for a path with NUL. */
-static bool path_of(agc_vm *vm, agc_value field, CC_OWNS_OUT char **path) {
-  const agc_string *s = agc_as_string(vm, field);
+static bool path_of(const agc_string *s, CC_OWNS_OUT char **path) {
   *path = NULL;
   if (s->bytes == 0) return true;
   *path = agc_cstr(s);
@@ -115,7 +114,8 @@ static const char *alpn_size(agc_vm *vm, agc_value field, size_t *len) {
   return NULL;
 }
 
-/* The alpn field of LEN bytes (alpn_size) in its wire form into B; an empty list leaves b->alpn NULL. */
+/* The alpn field of LEN bytes (alpn_size) in its wire form into B; an empty list leaves b->alpn NULL. alpn_size
+   checked every tag, so nothing here jumps out with B half built. */
 static void alpn_of(agc_vm *vm, agc_value field, size_t len, build *b) {
   if (!len) return;
   b->alpn = malloc(len);
@@ -134,12 +134,17 @@ static void alpn_of(agc_vm *vm, agc_value field, size_t len, build *b) {
   }
 }
 
-/* A field count other than the record's is bytecode the front end would not write: a wrong-type failure, as for any
-   other argument. */
+/* A field count or a field type other than the record's is bytecode the front end would not write: a wrong-type
+   failure, as for any other argument. Every check that can jump out comes before the build is allocated, since a jump
+   would leak it and the paths already copied into it (#1251). */
 static agc_value start_build(agc_vm *vm, agc_value options, bool server, uint32_t span) {
   if (vm->rt->no_files) agc_fail(vm, "RUNTIME-INTERNAL", "network access is off in this run", span);
   const agc_struct *o = agc_as_struct(vm, options);
   if (o->n != (server ? SERVER_FIELDS : CLIENT_FIELDS)) agc_wrong_tag(vm);
+  /* The path fields come first in both records: ca_file, cert_file, key_file, or cert_file, key_file. */
+  const agc_string *field[CLIENT_FIELDS - 1] = {NULL};
+  size_t paths = server ? SERVER_FIELDS - 1 : CLIENT_FIELDS - 1;
+  for (size_t k = 0; k < paths; k++) field[k] = agc_as_string(vm, o->fields[k]);
   if (vm->rt->deny_net) return agc_error_value(AGC_DENIED_NET);
   agc_value alpn = o->fields[server ? 2 : 3];
   size_t alpn_len;
@@ -149,10 +154,9 @@ static agc_value start_build(agc_vm *vm, agc_value options, bool server, uint32_
   build *b = calloc(1, sizeof *b);
   if (!b) agc_out_of_memory();
   b->server = server;
-  bool paths = server ? path_of(vm, o->fields[0], &b->cert) && path_of(vm, o->fields[1], &b->key)
-                      : path_of(vm, o->fields[0], &b->ca) && path_of(vm, o->fields[1], &b->cert) &&
-                          path_of(vm, o->fields[2], &b->key);
-  if (!paths)
+  bool copied = server ? path_of(field[0], &b->cert) && path_of(field[1], &b->key)
+                       : path_of(field[0], &b->ca) && path_of(field[1], &b->cert) && path_of(field[2], &b->key);
+  if (!copied)
     refused = "network: path cannot contain NUL";
   else if (server && (!b->cert || !b->key))
     refused = "network: a server context needs cert_file and key_file";

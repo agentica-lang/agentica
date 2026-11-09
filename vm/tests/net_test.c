@@ -26,6 +26,12 @@
 #include <sys/time.h>
 #include <unistd.h>
 #include <uv.h>
+/* mallinfo2 is glibc 2.33; the release build links against glibc 2.28 (release.yml), where the count is
+   skipped. */
+#if defined(__GLIBC__) && !defined(AGC_NO_GC) && (__GLIBC__ > 2 || __GLIBC_MINOR__ >= 33)
+#include <malloc.h>
+#define MALLOC_COUNT 1
+#endif
 
 #define CERTS "tests/fixtures/tls/"
 
@@ -711,6 +717,44 @@ static void test_upgrade_context_names_its_context_argument(void) {
   assert(vm.outcome->span == 102);
 }
 
+/* The code of the failure of NAME (arity 1) on OPTIONS, or "nothing" when it returns. */
+static const char *context_fails(const char *name, agc_value options) {
+  const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), 1);
+  assert(b);
+  agc_value args[1] = {options};
+  if (setjmp(vm.fail) != 0) return vm.outcome->code;
+  (void)b->fn(&vm, args, 0);
+  return "nothing";
+}
+
+/* A TlsClientOptions or TlsServerOptions of N fields: the paths, then an empty alpn list. */
+static agc_value tls_options(uint32_t n, agc_value a, agc_value b, agc_value c) {
+  agc_struct *s = agc_new_struct(0, n);
+  agc_value paths[3] = {a, b, c};
+  for (uint32_t k = 0; k + 1 < n; k++) s->fields[k] = paths[k];
+  s->fields[n - 1] = agc_list_value(agc_list_from_array(NULL, 0));
+  return agc_struct_value(s);
+}
+
+/* Hostile bytecode: a path field of the TLS options that is not a String fails with RUNTIME-INTERNAL before the build
+   is allocated (#1251), also after a good path that would have been copied into it. With glibc's count of the bytes
+   malloc has out (values live on the GC heap, which is not malloc's), a thousand failures grow it by less than 16
+   bytes each, where a build alone is more. */
+static void test_context_with_a_path_that_is_not_a_string(void) {
+  agc_value one = agc_int(1), empty = text(""), path = text(CERTS "ca.pem");
+  const char *names[] = {"TLS.client_context", "TLS.client_context", "TLS.client_context", "TLS.server_context"};
+  agc_value options[] = {tls_options(4, one, empty, empty), tls_options(4, path, one, empty),
+                         tls_options(4, path, path, one), tls_options(3, path, one, empty)};
+  for (size_t k = 0; k < 4; k++) {
+    assert(strcmp(context_fails(names[k], options[k]), "RUNTIME-INTERNAL") == 0);
+#if MALLOC_COUNT
+    size_t before = mallinfo2().uordblks;
+    for (int n = 0; n < 1000; n++) assert(strcmp(context_fails(names[k], options[k]), "RUNTIME-INTERNAL") == 0);
+    assert(mallinfo2().uordblks < before + (size_t)16 * 1000);
+#endif
+  }
+}
+
 /* The first HttpWire.upgrade_tls of a client builds its shared system-trust context (a pool job), waits for it, then
    starts the handshake on the socket it was given: the peer reads a TLS record (0x16, the ClientHello) and closes, the
    call fails, and the client keeps the context until HttpWire.drop_tls gives it back. The call's deadline covers the
@@ -760,6 +804,7 @@ int main(void) {
   AGC_TEST_RUN(test_a_close_waits_for_a_direct_send());
   AGC_TEST_RUN(test_upgrade_tls_on_a_dropped_client());
   AGC_TEST_RUN(test_upgrade_context_names_its_context_argument());
+  AGC_TEST_RUN(test_context_with_a_path_that_is_not_a_string());
   AGC_TEST_RUN(test_upgrade_tls_builds_the_shared_context_then_handshakes());
   AGC_TEST_RUN(test_a_send_waits_for_a_direct_send_of_another_task());
 #endif

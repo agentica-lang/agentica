@@ -325,9 +325,11 @@ static agc_writer_status lazy_write(agc_vm *vm, lazy_run *run, agc_value last, a
   return status;
 }
 
+/* The channel is taken from its value before the lock: nothing may jump out while the lock is held. */
 static agc_recv_status lazy_receive(agc_vm *vm, const lazy_node *source, agc_value *out) {
+  agc_channel *channel = agc_as_channel(vm, source->value);
   agc_sync_take(vm);
-  agc_recv_status status = agc_channel_receive(vm, agc_as_channel(vm, source->value), source->timeout, out);
+  agc_recv_status status = agc_channel_receive(vm, channel, source->timeout, out);
   agc_sync_drop(vm);
   return status;
 }
