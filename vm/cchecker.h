@@ -1,5 +1,5 @@
 /* Copyright 2026 Johanderson Mogollon. Apache License 2.0 (cchecker's license), as the rest of the project (LICENSE).
- * A copy of include/cchecker.h of cchecker 0.3.0, the release that CCHECKER_VERSION of mk/vm-test.mk pins: to move to
+ * A copy of include/cchecker.h of cchecker 0.4.0, the release that CCHECKER_VERSION of mk/vm-test.mk pins: to move to
  * a new release, replace this file with the one of that release. Only the comments are split to fit vm/'s header rule.
  */
 /* Annotations for cchecker, the rule checker for C (https://github.com/agentica-lang/cchecker).
