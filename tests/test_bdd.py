@@ -851,15 +851,22 @@ def test_timing_adds_the_time_of_each_file_and_the_slowest_scenarios_and_json_al
         # The report, then the timing block, then the totals line.
         assert lines[-1] == "2 passed, 0 failed, 0 skipped, 0 not executed, 0 file errors"
         block = lines[lines.index(next(line for line in lines if line.startswith("timing: "))):-1]
+        shown = "\n".join(block)
         total = int(re.fullmatch(r"timing: (\d+) ms", block[0]).group(1))
         files = [re.fullmatch(r"  (\d+) ms of scenarios (\S+) \((1 scenario)\)", line) for line in block[1:3]]
         # The files are in the order of discovery: sorted by path.
-        assert [found.group(2) for found in files] == [quick, slow]
-        assert int(files[1].group(1)) >= 150 and total >= 150
-        assert block[3] == "slowest scenarios:"
-        first = re.fullmatch(r"  (\d+) ms (\S+) / sleeps", block[4])
-        assert first and first.group(2) == slow and int(first.group(1)) >= 150
-        assert re.fullmatch(r"  \d+ ms %s / quick" % re.escape(quick), block[5])
+        assert [found and found.group(2) for found in files] == [quick, slow], shown
+        assert int(files[1].group(1)) >= 150 and total >= 150, shown
+        assert block[3] == "slowest scenarios:" and len(block) == 6, shown
+        # The slowest first. The time of the first test of a file also counts the start of the file's child VM, so on a
+        # loaded host the quick test can take as long as the one that sleeps: the order is checked, not who is first.
+        slowest = [re.fullmatch(r"  (\d+) ms (\S+) / (\w+)", line) for line in block[4:]]
+        assert all(slowest), shown
+        times = [int(found.group(1)) for found in slowest]
+        assert times == sorted(times, reverse=True), shown
+        named = {found.group(3): (found.group(2), int(found.group(1))) for found in slowest}
+        assert named.keys() == {"sleeps", "quick"} and named["quick"][0] == quick, shown
+        assert named["sleeps"][0] == slow and named["sleeps"][1] >= 150, shown
     # --timing changes nothing in the JSON report (and prints no timing text there), which has the durations either way.
     status, report = bdd.json_test("--timing", slow, quick)
     assert status == 0
