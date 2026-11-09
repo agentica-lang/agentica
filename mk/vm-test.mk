@@ -284,7 +284,7 @@ vm-lint-gcstress:
 	$(LINT) -I $(GC_DIR)/include -DGC_DEBUG -DAGC_GC_STRESS
 
 # cchecker (https://github.com/agentica-lang/cchecker): the project rules for C (blocking calls on short paths, locks on every
-# path, ownership, collector values) plus gcc -fanalyzer and clang-tidy, over the compile database of `make compile-commands`.
+# path, ownership, collector values) plus gcc -fanalyzer and clang-tidy, over a VM compile database (`make cchecker-db`).
 # It is an Agentica program, so dist/agentica runs it; it needs gcc 10+, clang and clang-tidy on PATH. The release has no
 # binary: the tag is cloned into build/cchecker/ and its commit must be the pinned one. The settings are cchecker.toml, the
 # accepted findings cchecker-baseline.json (references/ci.md of the development skill says how to change both). vm/tests/ is
@@ -311,7 +311,7 @@ CCHECKER = $(RUN_PROGRAM) dist/agentica$(EXE) $(CCHECKER_DIR)/cchecker.agc -p $(
   --baseline cchecker-baseline.json $(CCHECKER_FLAGS)
 
 .PHONY: cchecker-db
-cchecker-db: $(CC_DB_DEPS)
+cchecker-db: $(CC_DB_DEPS) | $(CC_DB_ORDER)
 	@mkdir -p $(dir $(CCHECKER_DB))
 	@sh vm/tools/compile-commands.sh '$(CURDIR)' $(VM_OBJ) '$(filter-out vm/tests/%,$(CC_DB_SRC))' '' $(VM_CC) $(VM_CFLAGS) \
 	  > '$(CCHECKER_DB).new' || { rm -f '$(CCHECKER_DB).new'; exit 1; }

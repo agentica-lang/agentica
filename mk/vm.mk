@@ -19,7 +19,8 @@
 # the checkout and the -g modes map it to . in debug info (-fdebug-prefix-map), so worktrees share hits.
 # make TRACE=0            compile out the AGENTICA_VM_TRACE trace points
 # make compile-commands   write compile_commands.json, the compilation database of this mode (gitignored)
-# make cchecker           cchecker (the C rules of vm/, gcc -fanalyzer, clang-tidy) over the compilation database, against cchecker-baseline.json (mk/vm-test.mk)
+# make cchecker-db        build/cchecker/compile_commands.json, the database of compile-commands without vm/tests (cchecker's)
+# make cchecker           cchecker (the C rules of vm/, gcc -fanalyzer, clang-tidy) over that database, against cchecker-baseline.json (mk/vm-test.mk)
 # make vm-libfuzz         the libFuzzer target (LIBFUZZ=1 mode: build/vm/libfuzz/agentica-vm-libfuzz, clang only)
 # make vm-libfuzz-run     a bounded coverage-guided run from the compiled fixtures (see mk/vm-test.mk)
 # make vm-gc-stress       GC-debug build that collects every 64 allocations, on the differential tests (sampled --max-steps sweep)
@@ -368,9 +369,9 @@ $(VM_OBJ)/agentica-res.o: vm/agentica.rc vm/agentica.manifest $(VM_OBJ_STAMP)
 # first, as for an object.
 COMPILE_COMMANDS ?= compile_commands.json
 CC_DB_SRC := $(VM_SRC) vm/agentica.c vm/launch.c vm/fuzz.c $(wildcard vm/tests/*.c)
-CC_DB_DEPS := $(FFI_HEADERS) | $(OSSL_DEP) $(GC_DEP) $(ZLIB_DEP) $(YY_DIR)/src/yyjson.c $(PICO_DIR)/picohttpparser.c \
-  $(UV_DIR)/src/uv-common.c
-compile-commands: $(CC_DB_DEPS)
+CC_DB_DEPS := $(FFI_HEADERS)
+CC_DB_ORDER := $(OSSL_DEP) $(GC_DEP) $(ZLIB_DEP) $(YY_DIR)/src/yyjson.c $(PICO_DIR)/picohttpparser.c $(UV_DIR)/src/uv-common.c
+compile-commands: $(CC_DB_DEPS) | $(CC_DB_ORDER)
 	@sh vm/tools/compile-commands.sh '$(CURDIR)' $(VM_OBJ) '$(CC_DB_SRC)' '$(VM_TEST_FLAGS)' $(VM_CC) $(VM_CFLAGS) \
 	  > '$(COMPILE_COMMANDS).new' || { rm -f '$(COMPILE_COMMANDS).new'; exit 1; }
 	@mv '$(COMPILE_COMMANDS).new' '$(COMPILE_COMMANDS)'

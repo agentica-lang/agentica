@@ -134,7 +134,7 @@ static int walk(const char *root, level *levels, char **failed) {
         rc = AGC_TREE_TOO_DEEP;
         break;
       }
-      DIR *child = NULL;
+      DIR *child;
       rc = open_dir(dir_fd, entry->d_name, &child);
       /* The entry became a link or a file, or went away, after unlinkat said directory: leave it. If something
          else in this directory was removed in this pass, the next pass meets the entry again; if not, the pass
