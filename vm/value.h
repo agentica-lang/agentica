@@ -590,7 +590,10 @@ agc_c_resource *agc_as_c_resource(agc_vm *vm, agc_value v);
  * use them on every instruction, and a call for each access (they used to live in value.c) cost more than the
  * Int add they served. A value of the wrong type calls agc_wrong_tag, which fails with RUNTIME-INTERNAL and does not
  * return. The rest of the code still never reads the union. */
-_Noreturn void agc_wrong_tag(agc_vm *vm);
+/* CC_JUMPS: it fails with agc_fail, which jumps to the scheduler's catch; cchecker infers from it that the checked
+   accessors (agc_as_*) and their callers may jump. It is the only raise marked: a direct call of agc_fail and its
+   family is not seen as a jump yet (#1304). */
+CC_JUMPS _Noreturn void agc_wrong_tag(agc_vm *vm);
 
 static inline agc_value agc_void(void) {
   agc_value v;

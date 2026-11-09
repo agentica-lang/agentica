@@ -247,9 +247,15 @@ clang-tidy. A run takes 3 to 5 minutes. Its docs are in that clone
   `CC_FREES` on the parameter of a function that frees it; `CC_GC_ALLOC` on an
   allocator of the collector; `CC_ACQUIRES(lock)` or `CC_RELEASES(lock)` on a
   function that takes a lock for its caller or drops the caller's
-  (`agc_lock_take`, `leave_with`). A function that takes or drops a lock only
-  on some paths (by a flag or a count) gets an ignore with the reason.
-  Settings first (`cchecker.toml`); a mark is for what they cannot say.
+  (`agc_lock_take`, `leave_with`). `CC_JUMPS` goes on a raise that never
+  returns: cchecker infers from it which functions may jump out, and checks
+  what they hold there. Only `agc_wrong_tag` has it, so only the wrong-tag
+  raise is seen; a direct `agc_fail` and its family are not yet (#1304).
+  `CC_JUMP_RELEASES` goes on a lock helper whose lock the scheduler gives back
+  after a jump (`agc_sync_reset`: `agc_sync_take`, `stream_take`). A function
+  that takes or drops a lock only on some paths (by a flag or a count) gets an
+  ignore with the reason. Settings first (`cchecker.toml`); a mark is for what
+  they cannot say.
 - To move to a new release, change `CCHECKER_VERSION` and `CCHECKER_COMMIT`
   (`git ls-remote https://github.com/agentica-lang/cchecker 'X^{}' X`), copy
   its `include/cchecker.h` over `vm/cchecker.h`, run
