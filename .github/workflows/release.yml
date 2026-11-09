@@ -202,11 +202,8 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - uses: msys2/setup-msys2@v2.33.0
+      - uses: ./.github/actions/msys2
         with:
-          msystem: UCRT64
-          path-type: inherit
-          update: false
           install: make perl mingw-w64-ucrt-x86_64-gcc
       - run: test "$(command -v gcc)" = /ucrt64/bin/gcc && gcc --version
       - name: Build the binary

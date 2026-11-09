@@ -249,6 +249,9 @@ Skip rules, checked by the report:
   missing, or the product has a bug. The reason is `known-issue: #N ...`, the
   number is in `KNOWN_ISSUES`, and the report lists it under "Open gaps". Remove
   the skip, the entry and the issue together.
+- MSYS2 is set up by `.github/actions/msys2`, which runs `setup-msys2` up to
+  three times (60 s and 180 s apart) because the MSYS2 servers answer 504 now
+  and then; the workflows do not use `msys2/setup-msys2` directly.
 - A tool the test needs is installed by the workflow; a skip for a missing tool
   fails the report. A hosted-runner limit is said in the PR, not skipped
   silently.
