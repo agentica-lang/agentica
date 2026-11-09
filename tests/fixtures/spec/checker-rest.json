@@ -10372,7 +10372,12 @@
         "",
         ""
       ],
-      "code": "CHECK-TYPE-MISMATCH"
+      "code": "CHECK-TYPE-MISMATCH",
+      "start": [
+        2,
+        33
+      ],
+      "covers": "x"
     },
     {
       "program": [
@@ -10387,7 +10392,8 @@
         2,
         21
       ],
-      "covers": "do |x| x > 1 end"
+      "covers": "do |x| x > 1 end",
+      "help": true
     },
     {
       "program": [

@@ -1,9 +1,10 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 542,
+  "steps": 558,
   "stdout": [
     "some(1)",
+    "some(0)",
     "none",
     "none",
     "some(1)",

@@ -15,6 +15,7 @@ def main() -> Void
 
   ints = [3, 1, 2, 1]
   puts(ints.index(1))
+  puts(ints.index(3))
   puts(ints.index(9))
   puts(empty.index(1))
 

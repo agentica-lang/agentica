@@ -145,6 +145,7 @@ def peer_lines(numbers, words, floats, names):
     # The first index whose item == the value (or passes the test), by == as above; none when no item does.
     lines.append(show(first_index(numbers, lambda n: n == 5)))
     lines.append(show(first_index(words, lambda w: w == "a")))
+    lines.append(show(first_index(floats, lambda x: x == 1.5)))
     lines.append(show(first_index(floats, lambda x: x == float("nan"))))
     lines.append(show(first_index(numbers, lambda n: n > 5)))
     # Python's string order is Unicode code-point order, as are compare and sort.
@@ -188,6 +189,7 @@ def main() -> Void
   puts(numbers.map do |n| [n, -n] end.member?([5, -5]).to_s)
   puts(numbers.index(5).to_s)
   puts(words.index("a").to_s)
+  puts(floats.index(1.5).to_s)
   puts(floats.index(nan).to_s)
   puts(numbers.find_index do |n| n > 5 end.to_s)
 {minmax}
