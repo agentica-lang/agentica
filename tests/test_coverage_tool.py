@@ -48,10 +48,20 @@ def assert_core_only(text):
     assert functions == {"used": "1", "unused": "0"}, text
 
 
+def major_of(compiler):
+    return subprocess.run([compiler, "-dumpversion"], capture_output=True, text=True, check=True).stdout.split(".")[0]
+
+
+def llvm_tool(clang, name):
+    """NAME of the clang's LLVM, as mk/vm-test.mk finds it: next to the clang, else NAME-MAJOR, else NAME."""
+    beside = subprocess.run([clang, "-print-prog-name=" + name], capture_output=True, text=True,
+                            check=True).stdout.strip()
+    return shutil.which(beside) or shutil.which("%s-%s" % (name, major_of(clang))) or tool(name)
+
+
 def test_the_gcc_report_has_vm_alone_with_the_counts_of_the_run(tmp_path):
     gcc = tool("gcc")
-    major = subprocess.run([gcc, "-dumpversion"], capture_output=True, text=True, check=True).stdout.split(".")[0]
-    gcov = shutil.which("gcov-" + major) or tool("gcov")
+    gcov = shutil.which("gcov-" + major_of(gcc)) or tool("gcov")
     tree(tmp_path)
     binary = build(tmp_path, gcc, ["--coverage"])
     subprocess.run([str(binary)], cwd=tmp_path, check=True)
@@ -60,11 +70,10 @@ def test_the_gcc_report_has_vm_alone_with_the_counts_of_the_run(tmp_path):
 
 def test_the_clang_report_has_vm_alone_with_the_counts_of_the_run(tmp_path):
     clang = tool("clang")
-    profdata, cov = (subprocess.run([clang, "-print-prog-name=" + name], capture_output=True, text=True,
-                                    check=True).stdout.strip() for name in ("llvm-profdata", "llvm-cov"))
+    profdata, cov = llvm_tool(clang, "llvm-profdata"), llvm_tool(clang, "llvm-cov")
     tree(tmp_path)
     binary = build(tmp_path, clang, ["-fprofile-instr-generate", "-fcoverage-mapping"])
     (tmp_path / "profraw").mkdir()
     subprocess.run([str(binary)], cwd=tmp_path, check=True,
                    env={**os.environ, "LLVM_PROFILE_FILE": str(tmp_path / "profraw" / "%m.profraw")})
-    assert_core_only(report(tmp_path, "clang", tool(profdata), tool(cov), "profraw", "lcov.info", str(binary)))
+    assert_core_only(report(tmp_path, "clang", profdata, cov, "profraw", "lcov.info", str(binary)))

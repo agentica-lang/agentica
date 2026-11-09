@@ -178,17 +178,24 @@ vm-gc-stress-jit: dist/agentica$(EXE)
 # Line and function coverage of vm/ (#1234): the COVERAGE=1 binary and C tests (mk/vm.mk; gcc, or COVERAGE_CC=clang), the C
 # tests and the goldens on them (COVERAGE_TESTS, compiled by dist/agentica; the sweep is `ends` unless AGENTICA_SWEEP says
 # otherwise), then build/coverage/lcov.info (tools/coverage.py, without vm/third_party and vm/tests) and build/coverage/html
-# when genhtml (lcov) is installed. Each run starts from zero counters. A failed test still gets its report written, and the
-# target then fails. The readers must match the compiler: GCOV is gcov-MAJOR of the gcc when there is one, and
-# LLVM_PROFDATA and LLVM_COV are the ones next to the clang.
+# when genhtml (lcov) is installed. Each run starts from zero counters and no old report. A failed test still gets its
+# report written, and the target then fails. The readers must match the compiler: GCOV is gcov-MAJOR of the gcc when there
+# is one, and LLVM_PROFDATA and LLVM_COV are the ones next to the clang, else NAME-MAJOR. genhtml 2.x checks the report
+# against the sources and stops on what gcov's own counts can give (a function hit with no line hit, an inline line
+# number past the end of a header); those two checks are turned off there, while a missing or unreadable report still
+# fails.
 COVERAGE_DIR := build/coverage
 COVERAGE_TESTS ?= $(VM_DIFF_TESTS)
 COVERAGE_COMPILER = $(or $(COVERAGE_CC),gcc)
 COVERAGE_IS_CLANG = $(findstring clang,$(notdir $(COVERAGE_COMPILER)))
-GCOV ?= $(firstword $(shell command -v gcov-$$($(COVERAGE_COMPILER) -dumpversion 2>/dev/null | cut -d. -f1) 2>/dev/null) gcov)
-LLVM_PROFDATA ?= $(if $(COVERAGE_IS_CLANG),$(shell $(COVERAGE_COMPILER) -print-prog-name=llvm-profdata),llvm-profdata)
-LLVM_COV ?= $(if $(COVERAGE_IS_CLANG),$(shell $(COVERAGE_COMPILER) -print-prog-name=llvm-cov),llvm-cov)
+COVERAGE_MAJOR = $$($(COVERAGE_COMPILER) -dumpversion 2>/dev/null | cut -d. -f1)
+GCOV ?= $(firstword $(shell command -v gcov-$(COVERAGE_MAJOR) 2>/dev/null) gcov)
+COVERAGE_LLVM_TOOL = $(firstword $(shell p=$$($(COVERAGE_COMPILER) -print-prog-name=$(1) 2>/dev/null); \
+  command -v "$$p" 2>/dev/null || command -v $(1)-$(COVERAGE_MAJOR) 2>/dev/null) $(1))
+LLVM_PROFDATA ?= $(if $(COVERAGE_IS_CLANG),$(call COVERAGE_LLVM_TOOL,llvm-profdata),llvm-profdata)
+LLVM_COV ?= $(if $(COVERAGE_IS_CLANG),$(call COVERAGE_LLVM_TOOL,llvm-cov),llvm-cov)
 COVERAGE_ENV = LLVM_PROFILE_FILE='$(CURDIR)/$(COVERAGE_DIR)/profraw/%4m.profraw'
+COVERAGE_MODE = COVERAGE=1 SANITIZE=0 TSAN=0 GC_STRESS=0 LIBFUZZ=0
 COVERAGE_TEST_BINARIES = $(patsubst $(VM_BUILD)/%,build/vm/coverage/%,$(VM_TESTS_NORMAL))
 COVERAGE_REPORT = $(if $(COVERAGE_IS_CLANG),$(PYTHON) tools/coverage.py clang $(LLVM_PROFDATA) $(LLVM_COV) \
   $(COVERAGE_DIR)/profraw $(COVERAGE_DIR)/lcov.info build/vm/coverage/agentica$(EXE) $(COVERAGE_TEST_BINARIES),$(PYTHON) \
@@ -196,16 +203,20 @@ COVERAGE_REPORT = $(if $(COVERAGE_IS_CLANG),$(PYTHON) tools/coverage.py clang $(
 coverage: dist/agentica$(EXE)
 	mkdir -p $(COVERAGE_DIR)/profraw
 	find $(COVERAGE_DIR)/profraw -name '*.profraw' -delete
+	find $(COVERAGE_DIR) -maxdepth 1 -name lcov.info -delete
+	if [ -d $(COVERAGE_DIR)/html ]; then find $(COVERAGE_DIR)/html -delete; fi
 	if [ -d build/vm/coverage ]; then find build/vm/coverage -name '*.gcda' -delete; fi
-	$(MAKE) build/vm/coverage/agentica$(EXE) vm-test-binaries COVERAGE=1
+	$(MAKE) build/vm/coverage/agentica$(EXE) vm-test-binaries $(COVERAGE_MODE)
 	status=0; \
-	$(COVERAGE_ENV) $(MAKE) --no-print-directory vm-test COVERAGE=1 || status=1; \
+	$(COVERAGE_ENV) $(MAKE) --no-print-directory vm-test $(COVERAGE_MODE) || status=1; \
 	$(COVERAGE_ENV) AGENTICA_VM_BINARY=build/vm/coverage/agentica$(EXE) AGENTICA_REQUIRE_VM=1 \
 	  AGENTICA_SWEEP=$${AGENTICA_SWEEP:-ends} $(MAKE) --no-print-directory test-py TESTS="$(COVERAGE_TESTS)" || status=1; \
 	$(COVERAGE_REPORT) || exit 1; \
 	echo "coverage: $(COVERAGE_DIR)/lcov.info"; \
 	if command -v genhtml >/dev/null; then \
-	  genhtml --quiet --output-directory $(COVERAGE_DIR)/html $(COVERAGE_DIR)/lcov.info || exit 1; \
+	  lcov_major=$$(genhtml --version | sed -n 's/.*LCOV version \([0-9][0-9]*\).*/\1/p'); \
+	  ignore=; if [ "$${lcov_major:-1}" -ge 2 ]; then ignore="--ignore-errors inconsistent,range"; fi; \
+	  genhtml --quiet $$ignore --output-directory $(COVERAGE_DIR)/html $(COVERAGE_DIR)/lcov.info || exit 1; \
 	fi; \
 	exit $$status
 

@@ -70,8 +70,9 @@ def gcc_report(gcov, obj_dir, out):
         sys.exit("coverage.py: no .gcda file under %s: did the tests run on the COVERAGE=1 build?" % obj_dir)
     documents = []
     for start in range(0, len(data), BATCH):
+        # gcov's warnings (a stale .gcda, a missing source) go to stderr, shown as they come; an error fails here.
         run = subprocess.run([gcov, "--json-format", "--stdout", *data[start:start + BATCH]], check=True,
-                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+                             stdout=subprocess.PIPE, text=True)
         documents += [json.loads(line) for line in run.stdout.splitlines() if line.strip()]
     Path(out).write_text(lcov(merge_gcov(documents)), encoding="utf-8")
 

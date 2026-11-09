@@ -213,7 +213,7 @@ EXCLUDED = {
     "tests/test_docker_tests.py": "the Docker launcher of the Linux developer container, not the product",
     "tests/test_release_tools.py": "tools/release.py packing; release.yml runs the packages on all four systems",
     "tests/test_shard_tests.py": "tools/shard_tests.py, the split of the test modules over the CI runners",
-    "tests/test_coverage_tool.py": "tools/coverage.py, the LCOV report of make coverage, which ci.yml runs on Linux",
+    "tests/test_coverage_tool.py": "tools/coverage.py: needs gcc/gcov and clang with llvm-cov; Linux `make test`",
     "tests/test_layout_check.py": "tools/layout_check.py, a binutils check of the Linux x86-64 build that ci.yml runs",
     "tests/test_site_examples.py": "the code blocks of the site, checked with the site build",
     "tests/test_site_versions.py": "tools/site_versions.py, the multi-version site build that pages.yml runs on Linux",

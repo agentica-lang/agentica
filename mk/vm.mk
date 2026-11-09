@@ -175,12 +175,13 @@ YY_CFLAGS := -O1 -g $(VM_PIC)
 OSSL_CFLAGS := -g
 DEBUG_MAP := $(DEBUG_MAPS)
 else ifeq ($(COVERAGE),1)
-# make coverage (mk/vm-test.mk): -O0, so each line keeps its own code. gcc's counters are updated atomically, since the
+# make coverage (mk/vm-test.mk): -O0, so each line keeps its own code. The counters are updated atomically, since the
 # VM runs threads; COVERAGE_CC=clang uses its source-based coverage. AGC_COVERAGE writes the counters before the VM's
 # _exit (vm/launch.c). The vendored libraries are not instrumented, so they have no data.
 COVERAGE_CC ?= gcc
 VM_CC := $(COVERAGE_CC)
-COVERAGE_FLAGS := $(if $(findstring clang,$(notdir $(COVERAGE_CC))),-fprofile-instr-generate -fcoverage-mapping,--coverage -fprofile-update=atomic)
+COVERAGE_FLAGS := $(if $(findstring clang,$(notdir $(COVERAGE_CC))),-fprofile-instr-generate -fcoverage-mapping,--coverage) \
+  -fprofile-update=atomic
 VM_CFLAGS := $(VM_WARN) -O0 -g $(COVERAGE_FLAGS) -DAGC_COVERAGE $(VM_PIC)
 VM_LDFLAGS := $(VM_PIE) $(COVERAGE_FLAGS) $(VM_LIBS)
 GC_MODE := $(AGENTICA_GC)

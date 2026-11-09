@@ -81,10 +81,11 @@ jobs:
           cache-dependency-path: tools/jscpd/package-lock.json
       - run: make dup-check
 
-  # make coverage on each master push (#1234): line and function coverage of vm/ from the C tests and the goldens, as
-  # LCOV and HTML in the artifact `vm-coverage`. Not on pull requests; a failed test fails the job after the report.
+  # make coverage on each master push and by hand (#1234): line and function coverage of vm/ from the C tests and the
+  # goldens, as LCOV and HTML in the artifact `vm-coverage`. Not on pull requests; a failed test fails the job after the
+  # report.
   coverage:
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
