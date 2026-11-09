@@ -179,24 +179,32 @@ int agc_thread_start(void *threads, size_t k, void (*fn)(void *arg), void *arg) 
   return uv_thread_create_ex(&((uv_thread_t *)threads)[k], &options, fn, arg);
 }
 
-/* Pieces of one line, put together with memcpy: no stdio, so a signal handler may call it (uv_strerror returns a
-   constant string). */
-_Noreturn void agc_thread_start_failed(const char *what, int err) {
-  static const char hint[] = ": the system refused a thread or its memory (ulimit -v, ulimit -u); raise the limit "
-                             "or set AGENTICA_SCHEDULERS=1\n";
-  const char *parts[] = {"agentica: cannot start ", what, err ? " (" : "", err ? uv_strerror(err) : "", err ? ")" : ""};
-  char line[384];
+/* Pieces of one line, put together with memcpy: no stdio, so a signal handler may call it with ERR 0 (uv_strerror,
+   which formats a code it does not know into a buffer, is then not called). */
+_Noreturn void agc_thread_start_failed(const char *what, int err, const char *fix) {
+  const char *parts[] = {"agentica: cannot start ",
+                         what,
+                         err ? " (" : "",
+                         err ? uv_strerror(err) : "",
+                         err ? ")" : "",
+                         ": the system refused a thread or its memory (ulimit -v, ulimit -u); raise the limit or ",
+                         fix};
+  char line[512];
   size_t n = 0;
   for (size_t k = 0; k < sizeof parts / sizeof parts[0]; k++) {
     size_t len = strlen(parts[k]);
-    if (len > sizeof line - sizeof hint - n) len = sizeof line - sizeof hint - n;
+    if (len > sizeof line - 1 - n) len = sizeof line - 1 - n;
     memcpy(line + n, parts[k], len);
     n += len;
   }
-  memcpy(line + n, hint, sizeof hint - 1);
-  n += sizeof hint - 1;
+  line[n++] = '\n';
   (void)!write(2, line, n);
+#ifdef AGC_FUZZ
+  /* As agc_out_of_memory: 70 is libFuzzer's timeout exit code, so a crash keeps the input. */
+  abort();
+#else
   _exit(70);
+#endif
 }
 
 void agc_thread_join(void *threads, size_t k) { (void)uv_thread_join(&((uv_thread_t *)threads)[k]); }

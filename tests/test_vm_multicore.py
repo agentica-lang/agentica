@@ -29,9 +29,9 @@ try:
 except ImportError:
     fcntl = None
 
-from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, WINDOWS, cli, compile_text,
-                                 host_only, kill_process, process_alive, run, scaled, vm_command, vm_environment,
-                                 wait_readable, wait_until)
+from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, WINDOWS, cli, compile_agc,
+                                 compile_text, host_only, kill_process, process_alive, run, scaled, vm_command,
+                                 vm_environment, wait_readable, wait_until)
 from tests import vm_diff_support as diff
 
 SCHEDULERS = os.environ.get("AGENTICA_VM_TEST_SCHEDULER_COUNT", "4")
@@ -671,12 +671,14 @@ OTHER_BUILD = bool(os.environ.get("AGENTICA_VM_BINARY") or os.environ.get("AGENT
 def test_a_start_under_a_low_ulimit_v_ends_with_one_line_and_status_70(tmp_path):
     # Each scheduler thread costs its stack and a malloc arena of glibc (64 MiB of address space), and the first file
     # step of the front end starts libuv's pool of four threads: the low limits refuse one or the other, depending on
-    # the layout, and the last one refuses nothing.
+    # the layout, and the last one refuses nothing. Below about 40 MB the dynamic loader fails first.
+    if "sanitizer build" in run([*cli(), "--version"]).stdout:
+        pytest.skip("a sanitizer build reserves its shadow memory, more than the limits")
     source = tmp_path / "hello.agc"
     source.write_text(HELLO, encoding="utf-8")
-    bytecode = compile_text(HELLO, "hello", tmp_path)
+    bytecode = compile_agc(source, tmp_path / "hello.agcb")
     refused = []
-    for mb in (60, 90, 150, 250, 400, 4096):
+    for mb in (90, 150, 250, 400, 4096):
         for words in ([*cli(), str(source)], [*vm_command(), "--", bytecode]):
             result = run(["sh", "-c", 'ulimit -v "$1" && shift && exec "$@"', "sh", str(mb * 1024), *words],
                          env=vm_environment({"AGENTICA_SCHEDULERS": SCHEDULERS}), timeout=scaled(60))

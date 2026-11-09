@@ -472,11 +472,21 @@ static void work_finished(uv_work_t *req, int status) {
    whichever it is, and take the signal mask of the thread that submits, so they keep the stop signals blocked and a
    stop signal is handled on the loop's thread only (unwatch_stop). Nothing to block on Windows. */
 #if !defined(_WIN32)
-/* libuv starts its pool at the first submit and calls abort() when it cannot (a thread or its 8 MiB stack refused, as
-   under a low ulimit -v), which would end the run with a bare SIGABRT. So the first submit catches SIGABRT and, on the
-   submitting thread, ends with agc_thread_start_failed's line instead; an abort on another thread meanwhile gets the
-   action it had. pool_state goes 0 (not started), 1 (one thread's first submit runs; only it touches abort_action), 2
-   (started): a second loop that submits meanwhile passes through as before. */
+static void pool_enter(pool_mask *saved) { agc_io_block_stop(saved); }
+static void pool_leave(const pool_mask *saved) { pthread_sigmask(SIG_SETMASK, saved, NULL); }
+#else
+static void pool_enter(pool_mask *saved) { *saved = 0; }
+static void pool_leave(const pool_mask *saved) { (void)saved; }
+#endif
+
+#if !defined(_WIN32) && !defined(AGC_FUZZ)
+/* libuv starts its pool at the first submit to libuv's pool (uv_queue_work or uv_getaddrinfo, the only two ways in),
+   and calls abort() when it cannot (a thread or its 8 MiB stack refused, as under a low ulimit -v): a bare SIGABRT.
+   So that first submit catches SIGABRT and, on the submitting thread, ends with agc_thread_start_failed's line
+   instead; an abort on another thread meanwhile gets the action it had. pool_state goes 0 (not started), 1 (one
+   thread's first submit runs; only it touches abort_action), 2 (started): another thread that submits meanwhile passes
+   through as before. The compute pool (vm/compute.c) starts its own threads and sees their failures. Not in a fuzz
+   build, where an abort is the crash libFuzzer keeps. */
 #define POOL_IDLE 0
 #define POOL_STARTING 1
 #define POOL_STARTED 2
@@ -485,14 +495,13 @@ static _Atomic int pool_state;                             // NOLINT(cppcoreguid
 static struct sigaction abort_action;                      // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 
 static void pool_start_aborted(int sig) {
-  if (starting_pool) agc_thread_start_failed("the I/O thread pool", 0);
+  if (starting_pool) agc_thread_start_failed("the I/O thread pool", 0, "set UV_THREADPOOL_SIZE=1");
   /* Blocked while this handler runs, so it comes back with the old action once the handler returns. */
   (void)sigaction(sig, &abort_action, NULL);
   (void)raise(sig);
 }
 
-static void pool_enter(pool_mask *saved) {
-  agc_io_block_stop(saved);
+static void catch_pool_start(void) {
   int idle = POOL_IDLE;
   if (atomic_load_explicit(&pool_state, memory_order_acquire) != POOL_IDLE ||
       !atomic_compare_exchange_strong(&pool_state, &idle, POOL_STARTING))
@@ -504,24 +513,24 @@ static void pool_enter(pool_mask *saved) {
   if (sigaction(SIGABRT, &catch_abort, &abort_action) == 0) starting_pool = 1;
 }
 
-static void pool_leave(const pool_mask *saved) {
-  if (starting_pool) {
-    starting_pool = 0;
-    (void)sigaction(SIGABRT, &abort_action, NULL);
-    atomic_store_explicit(&pool_state, POOL_STARTED, memory_order_release);
-  }
-  pthread_sigmask(SIG_SETMASK, saved, NULL);
+static void pool_start_caught(void) {
+  if (!starting_pool) return;
+  starting_pool = 0;
+  (void)sigaction(SIGABRT, &abort_action, NULL);
+  atomic_store_explicit(&pool_state, POOL_STARTED, memory_order_release);
 }
 #else
-static void pool_enter(pool_mask *saved) { *saved = 0; }
-static void pool_leave(const pool_mask *saved) { (void)saved; }
+static void catch_pool_start(void) {}
+static void pool_start_caught(void) {}
 #endif
 
 int agc_io_queue_work(struct uv_loop_s *uv, struct uv_work_s *work, void (*run)(struct uv_work_s *work),
                       void (*after)(struct uv_work_s *work, int status)) {
   pool_mask saved;
   pool_enter(&saved);
+  catch_pool_start();
   int rc = uv_queue_work(uv, work, run, after);
+  pool_start_caught();
   pool_leave(&saved);
   return rc;
 }
@@ -531,7 +540,9 @@ int agc_io_getaddrinfo(struct uv_loop_s *uv, struct uv_getaddrinfo_s *req,
                        const char *service, const struct addrinfo *hints) {
   pool_mask saved;
   pool_enter(&saved);
+  catch_pool_start();
   int rc = uv_getaddrinfo(uv, req, done, node, service, hints);
+  pool_start_caught();
   pool_leave(&saved);
   return rc;
 }

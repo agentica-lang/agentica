@@ -115,12 +115,12 @@ bool agc_runq_still_quiet(agc_runq *q, uint64_t epoch);
 /* Scheduler threads, as libuv threads (vm/sync.c): an array of N ids, the start of one with its entry and argument
  * (0, or libuv's error when the system refuses), and its join or detach (a thread that is never joined: a busy compute
  * thread). agc_thread_start_failed ends the process when a thread the run needs cannot start (a low ulimit -v or
- * ulimit -u): one line on stderr, naming WHAT and libuv's ERR (0: none known), and exit status 70, as out of memory. It
- * only writes and exits, so a signal handler may call it. */
+ * ulimit -u): one line on stderr, naming WHAT, libuv's ERR (0: none known) and what else FIX can do, and exit status
+ * 70, as out of memory. It only writes and exits, so a signal handler may call it. */
 void *agc_threads_new(size_t n);
 void agc_threads_free(void *threads);
 int agc_thread_start(void *threads, size_t k, void (*fn)(void *arg), void *arg);
-_Noreturn void agc_thread_start_failed(const char *what, int err);
+_Noreturn void agc_thread_start_failed(const char *what, int err, const char *fix);
 void agc_thread_join(void *threads, size_t k);
 void agc_thread_detach(void *threads, size_t k);
 /* The end of a run with several schedulers (vm/task.c): the first caller of agc_run_over records the end (the
