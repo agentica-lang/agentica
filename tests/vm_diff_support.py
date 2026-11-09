@@ -62,10 +62,9 @@ SAMPLED_SWEEP = SWEEP_MODE == "sampled"
 # task-map-steps and http-client; only the full sweep stops a Task.map item that holds a buffered file.
 ENDS_ONLY_FIXTURES = {"task-map-flushed.agc", "http-client-queue.agc", "http-server-stream.agc"}
 
-# A fixture whose step count the kernel decides: how many pieces its socket buffers take before a send waits changes
-# with the system (its TCP buffer sizes and their autotuning; 9123 steps where the golden was made, 14073 on a Linux
-# host with 4 MiB and 6 MiB buffer limits), and so does the work per piece (#1263). A limit at T, the golden's count,
-# must finish and one at T - 1 must stop only for a fixture whose runs take exactly T steps, so the limits swept for
+# A fixture whose step count the kernel decides: how many pieces its socket buffers take before a send waits depends
+# on the host's TCP buffer sizes and their autotuning, and so does the work per piece (#1263). A limit at T, the
+# golden's count, must finish and one at T - 1 must stop only for a fixture whose runs take exactly T steps, so the limits swept for
 # these are 1, T / 4, T / 2 and KERNEL_TIMED_LAST times T, and no step allowance holds them (check_fixture).
 KERNEL_TIMED_FIXTURES = {"http-server-stream-backed-up.agc"}
 KERNEL_TIMED_LAST = 16
@@ -689,7 +688,7 @@ def total_steps(limited):
 
 def fixture_limits(name, steps):
     """The --max-steps limits of a fixture, around the step count T of its golden (the check of the allowance proves
-    that the VM's own count is not above it)."""
+    that the VM's own count is not above it; it does not run for KERNEL_TIMED_FIXTURES)."""
     if name in KERNEL_TIMED_FIXTURES:
         return sorted({1, steps // 4, steps // 2, KERNEL_TIMED_LAST * steps})
     if SWEEP_MODE == "ends" or (name in ENDS_ONLY_FIXTURES and SWEEP_MODE != "full"):
