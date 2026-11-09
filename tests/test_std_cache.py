@@ -12,4 +12,17 @@ def test_the_cache_tests_pass_on_four_schedulers():
     result = run(command, env=vm_environment({"AGENTICA_SCHEDULERS": 4}))
     assert result.stderr == ""
     report = json.loads(result.stdout)
-    assert (result.code, report["passed"], report["failed"]) == (0, 18, 0)
+    assert (result.code, report["passed"], report["failed"]) == (0, 18, 0), failures(report)
+
+
+def failures(report):
+    """The file errors and the failed tests of REPORT, each with its error, for the assertion message: a race that
+    fails once in many runs is then named by the run that hit it."""
+    lines = []
+    for file in report["files"]:
+        if file["error"]:
+            lines.append("file %s: %s" % (file["path"], json.dumps(file["error"])))
+        for scenario in file["scenarios"]:
+            if scenario["status"] != "passed":
+                lines.append("%s %r: %s" % (scenario["status"], scenario["name"], json.dumps(scenario["error"])))
+    return "\n".join(lines)
