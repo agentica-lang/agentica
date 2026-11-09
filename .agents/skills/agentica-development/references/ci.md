@@ -191,14 +191,13 @@ docs are in that clone (`docs/settings.md`, `docs/suppressions.md`).
 - `cchecker.toml` holds the settings (`[library]`, `[assume]`, later
   `[roots]`); `cchecker-baseline.json` holds the accepted findings. It exits 1
   on a finding the baseline lacks.
-- The CI job `cchecker` runs when `vm/`, the build files, `.clang-tidy` or
-  those two files change, and for now only reports (`continue-on-error`; no
-  aggregate needs it). Remove that line to make it block: the step runs with
-  pipefail, so the
-  exit code of make (1: new findings; 2: a tool error, a failed clone or a
+- The CI job `cchecker` runs when `vm/`, the build files, `.clang-tidy` or those
+  two files change, and for now only reports (`continue-on-error`; no aggregate
+  needs it). Remove that line to make it block: the step runs with pipefail, so
+  the exit code of make (1: new findings; 2: a tool error, a failed clone or a
   commit that is not the pinned one) is the step's, and the print step fails on
-  an empty or invalid JSON. It prints the new findings, the tool errors and
-  the files not checked, and uploads the JSON of `--json` as the artifact
+  an empty or invalid JSON. It prints the new findings, the tool errors and the
+  files not checked, and uploads the JSON of `--json` as the artifact
   `cchecker-findings`.
 - The job pins gcc 14 and clang and clang-tidy 19, and the baseline matches by
   message, which the analyzers reword between versions: a local run with other
