@@ -105,6 +105,26 @@ parser is `agc_launch_parse` (`vm/launch.c`).
   all names are capped at 64 MiB (past it, exit 2). The `.agcb` stores names
   relative to the folder of the entry file (4.6). DIR is not normalized: an
   imported file above the root prints as `DIR/../shared/x.agc`.
+- `--coverage FILE` counts, for each span of the program, the STEPs that ran it
+  (`vm/cover.c`). Every scheduler gets a profile that writes no report
+  (`agc_profile.cover`), so the run is interpreted by the profiling copy of the
+  turn loop (the JIT is off), where every STEP takes `step_slow`, and its
+  `profile_steps` hook adds one to the counter of each span of the STEP before
+  the frame's pc. The other copies of the loop and its fast path are unchanged.
+  Each scheduler's profile costs about 22 KiB for `ops` and `pairs`
+  (AGC_OP_COUNT² × 8 bytes) and 16 bytes per function and per builtin. The steps
+  that builtins and native loops count are not counted. The hook runs before
+  `step_slow` checks `--max-steps`, so the STEP that stops the run with
+  `RUNTIME-STEP-LIMIT` is counted as run. A build without trace points (`make
+  TRACE=0`) refuses the flag. At the end (`agc_launch_settle`, after the files)
+  the counts go to a new file beside FILE, which is synced and then replaces it,
+  as LCOV: for each source that the loader did not mark `library` (`std/`, the
+  prelude, a fetched package `pkg/NAME@VERSION/`, judged by the stored name
+  before `--source-root` joins it), `FN`/`FNDA` from each function's span and
+  its first STEP, and `DA` for each line that starts a span of a STEP, with the
+  highest count of its spans. An old FILE is removed when the run starts. A file
+  that cannot be written is `RUNTIME-INTERNAL` (exit 1), or a notice after the
+  failure of a run that failed. The front end's own run is never counted.
 - `--flush-timeout MS` (or `AGENTICA_FLUSH_TIMEOUT_MS`, read by the VM; the flag
   wins) sets the end-of-run wait for file close jobs and buffered output
   (10.2.2). `0` means no wait; above 86400000 is rejected. When the wait runs
@@ -220,10 +240,11 @@ stages.
   FILE` is for the build and the tests only and has the same standing as the
   binary itself. The options it may pass are exactly `--ai`, `--json`, the
   `--deny-*` flags, `--sandbox`, `--max-steps N`, `--seed N`,
-  `--flush-timeout MS`, `--schedulers N`, `--jit MODE` and `--source-root DIR`,
-  each once; no positional word, no `--version`. `--driver-pid` and
-  `--embedded` are refused (exit 2): only the process that started this one can
-  say so, and only `agentica run` starts an embedded program. The hand-off takes
+  `--flush-timeout MS`, `--schedulers N`, `--jit MODE`, `--source-root DIR`
+  and `--coverage FILE`, each once; no positional word, no `--version`.
+  `--driver-pid` and `--embedded` are refused (exit 2): only the process that
+  started this one can say so, and only `agentica run` starts an embedded
+  program. The hand-off takes
   at most 64 option words and 1,048,576 argument words
   (`AGC_FRONT_END_MAX_OPTIONS`, `AGC_FRONT_END_MAX_ARGUMENTS`). The file of
   `--front-end` is opened with `O_NONBLOCK` and must be a regular file of at

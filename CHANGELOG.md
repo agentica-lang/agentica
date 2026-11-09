@@ -31,6 +31,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `pgroup: true`, the last parameter of `Process.spawn`, `spawn_captured` and
   `spawn_channel`, starts the child in its own process group, and stopping it
   while it runs stops the programs it started too (Linux and macOS).
+- `agentica --coverage FILE` (and `agentica run --coverage FILE`) writes the
+  line coverage of the run as LCOV.
 
 ### Changed
 

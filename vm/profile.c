@@ -267,7 +267,7 @@ uint32_t agc_profile_measure_label(const agc_stepper *stepper) { return ((const 
 static agc_value builtin_measure(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   agc_as_string(vm, args[0]);
-  if (!AGC_PROFILE_ON(vm)) {
+  if (!AGC_PROFILE_REPORTS(vm)) {
     agc_task_call_block(vm);
     return agc_void();
   }
@@ -322,10 +322,10 @@ static uint64_t sum_counts(const uint64_t *counts, size_t n) {
   return sum;
 }
 
-/* Starts the counters of the run when the profile category is on. Called before the first task enters a function. */
-void agc_profile_start(agc_vm *vm) {
+/* The counters of VM: with REPORT, those of the profile trace, else those that the profiling copy of the turn loop
+   writes as it runs a --coverage run (agc_profile.cover). */
+static void start(agc_vm *vm, bool report) {
   const agc_trace *tr = &vm->rt->trace;
-  if (!AGC_TRACE_ON(tr, AGC_TRACE_PROFILE)) return;
   const agc_program *p = vm->rt->program;
   agc_profile *profile = agc_alloc(sizeof *profile);
   profile->functions = p->function_count;
@@ -345,7 +345,9 @@ void agc_profile_start(agc_vm *vm) {
   sections->index = build_index(sections->slots, 0, section_hash, NULL);
   sections->overflow = NO_SECTION;
   profile->sections = sections;
-  profile->every = profile->left = tr->profile_every;
+  profile->cover = vm->rt->cover;
+  profile->report = report;
+  profile->every = profile->left = report ? tr->profile_every : 0;
   if (profile->every) {
     struct agc_profile_stacks *stacks = agc_alloc(sizeof *stacks);
     stacks->cap = 64;
@@ -361,6 +363,19 @@ void agc_profile_start(agc_vm *vm) {
   profile->start_ns = agc_trace_now();
   agc_gc_measure();
   vm->profile = profile;
+}
+
+/* Starts the counters of the run when the profile category or --coverage is on. Called before the first task enters
+   a function, on the one scheduler of the run. */
+void agc_profile_start(agc_vm *vm) {
+  bool report = AGC_TRACE_ON(&vm->rt->trace, AGC_TRACE_PROFILE);
+  if (report || vm->rt->cover) start(vm, report);
+}
+
+/* The counters of a scheduler of a run on several, for --coverage alone: the profile trace needs one scheduler
+   (agc_launch_supported). Called before the scheduler starts. */
+void agc_profile_start_cover(agc_vm *vm) {
+  if (vm->rt->cover) start(vm, false);
 }
 
 /* The steps and calls of the functions defined in each source file, in the order of the program's sources. */
@@ -540,7 +555,7 @@ static void report_folded(const agc_vm *vm, const agc_profile *profile) {
  * handed a program over, so the output is the program's alone. */
 void agc_profile_report(agc_vm *vm) {
   const agc_profile *profile = vm->profile;
-  if (!profile) return;
+  if (!profile || !profile->report) return;
   if (profile->every) {
     if (!vm->rt->front_end || !vm->rt->front_end->handed) report_folded(vm, profile);
     return;

@@ -328,6 +328,7 @@ static const agc_frame *stack_frame(const agc_task *t, uint32_t n, uint32_t k, c
   agc_frame_segment level = {t->frames, t->frame_count, t->below};
   uint32_t first = n - level.count;
   while (k < first) {
+    // cchecker: ignore CC-TIDY-CLANG-ANALYZER-CORE-NULLDEREFERENCE: N counts every segment, so one is below
     level = *level.below;
     first -= level.count;
   }
@@ -364,6 +365,8 @@ static PROFILE_HOOK void profile_steps(agc_vm *vm, int64_t n) {
   agc_profile *profile = vm->profile;
   const agc_frame *frame = &t->frames[t->frame_count - 1];
   profile->steps[frame->native ? profile->functions : frame->function] += (uint64_t)n;
+  if (profile->cover && !frame->native)
+    agc_cover_step(profile->cover, &vm->rt->program->functions[frame->function], frame->pc, n);
   if (!profile->every) return;
   if ((uint64_t)n < profile->left) {
     profile->left -= (uint64_t)n;
@@ -442,10 +445,12 @@ static inline agc_value call_leaf(agc_vm *vm, const agc_builtin *b, agc_value *a
  * does. A LEAF call goes through call_leaf, so the check of the leaf rule runs under the profile too. */
 static PROFILE_HOOK agc_value profile_builtin(agc_vm *vm, const agc_builtin *b, uint32_t id, agc_value *args,
                                               uint32_t span, bool leaf) {
-  uint64_t began = agc_trace_now();
+  /* A profile of --coverage alone writes no report: it skips the clock. */
+  bool timed = vm->profile->report;
+  uint64_t began = timed ? agc_trace_now() : 0;
   agc_value result = leaf ? call_leaf(vm, b, args, span) : call_builtin(vm, b, args, span);
   vm->profile->builtin_calls[id]++;
-  vm->profile->builtin_ns[id] += agc_trace_now() - began;
+  if (timed) vm->profile->builtin_ns[id] += agc_trace_now() - began;
   return result;
 }
 
