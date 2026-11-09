@@ -769,7 +769,7 @@ def test_a_prepared_message_goes_out_as_the_same_frame_as_the_message_itself(tmp
     """HTTP.prepare frames a text or binary message once: the peer gets the bytes a Text or Binary gives, for each
     length form, a ping passes through as it is, one prepared message can be sent again, and bytes that are no frame
     go out as a close with 1011. The session queues everything before the writer runs (outgoing_queue 32), so a
-    prepared frame also goes out joined to the plain frames of the same batch."""
+    prepared frame can go out joined to the plain frames of the same batch."""
     vm, port, _ = start_server(tmp_path, adopt)
     long_head = b"\x81\x7f" + struct.pack(">Q", 70000)
     expected = [b"\x81\x02hi", b"\x81\x7e\x00\xc8" + "é".encode() * 100, long_head + b"x" * 70000, b"\x82\x03bin"]
@@ -804,6 +804,9 @@ NOT_FRAMES = {
     "fragment": b"\x01\x02hi",
     "continuation": b"\x80\x02hi",
     "long 126 form": b"\x81\x7e\x00\x02hi",
+    "126 size not the payload's": b"\x81\x7e\x00\x80" + b"x" * 10,
+    "126 head cut": b"\x81\x7e\x00",
+    "127 head cut": b"\x81\x7f\x00\x00\x00",
     "long 127 form": b"\x81\x7f" + struct.pack(">Q", 2) + b"hi",
     "huge 127 length": HUGE_LENGTH + b"hi",
 }

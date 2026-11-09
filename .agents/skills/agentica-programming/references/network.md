@@ -392,7 +392,7 @@ end
   (1011 for an `error`) and closes.
 - To send one message to many sockets, frame it once with
   `HTTP.prepare(HTTP.Message.Text(text))` and send the `Prepared` result on
-  every `outgoing`: framed once, not once per socket. A session never
+  every `outgoing`, so it is not framed for every socket. A session never
   receives `Prepared`, but a `case` on `HTTP.Message` needs `_` or a
   `Prepared` arm.
 - Frames that break RFC 6455 close the connection with 1002, 1007 or 1009; the

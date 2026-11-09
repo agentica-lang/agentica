@@ -389,7 +389,7 @@ end
 ## end: the code (1000 to 1003 and 1007 to 1014 are the registered codes, 3000 to 4999 are for programs) and a reason
 ## of at most 123 bytes. It is always the last message the handler receives, and when the connection ended with no
 ## close frame (the peer left, a timeout) its code is 1006. `Prepared` is a text or binary message already framed by
-## `prepare`, to send one message on many sockets framed once, not once per socket; the server never receives one.
+## `prepare`, so a broadcast does not frame its message for every socket; the server never receives one.
 export enum Message
   Text(String)
   Binary(Bytes)
