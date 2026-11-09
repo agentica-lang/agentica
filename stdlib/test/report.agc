@@ -173,6 +173,11 @@ end
 ## Builds the `--json` report of `files` and the `seed` as a JSON object. `wall_ms` is the time the run took, which
 ## is less than the sum of the file times when files run in parallel (`--jobs`).
 export def json(files: List[FileResult], seed: Int, wall_ms: Int) -> Json
+  return json_and(files, seed, wall_ms, {})
+end
+
+## `json` with the fields of `more` added (`coverage`).
+export def json_and(files: List[FileResult], seed: Int, wall_ms: Int, more: Map[String, Json]) -> Json
   sums = totals(files)
   fields: Map[String, Json] = {
     "ok": JSON.from(sums.exit_code == 0),
@@ -186,6 +191,10 @@ export def json(files: List[FileResult], seed: Int, wall_ms: Int) -> Json
     "duration_ms": JSON.from(wall_ms),
     "files": JSON.array(files.map do |file| file_json(file) end),
   }
+
+  for key in more.keys
+    fields = fields.put(key, more[key])
+  end
 
   return JSON.object(fields)
 end

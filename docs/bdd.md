@@ -20,7 +20,7 @@ make test-bdd
 `agentica test` builds and installs nothing.
 
 ```text
-agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR] [--jobs N] [--timing]
+agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [--tags EXPR] [--jobs N] [--timing] [--coverage]
 ```
 
 - **Discovery.** With no paths, `specs/` and `test/` are searched; a missing

@@ -8,6 +8,7 @@ import Match from "std/bdd/match"
 import Tags from "std/bdd/tags"
 import Report from "report"
 import Child from "child"
+import Coverage from "coverage"
 import Units from "units"
 
 struct Config
@@ -86,6 +87,7 @@ export def main() -> Void
   tags = read_tags(handle)
   jobs = read_jobs(handle)
   timing = read_timing(handle)
+  parts = read_coverage(handle)
   _ = File.close(handle, 5000)
   if read.any? do |entry| not entry.ok? end
     IO.warn("invalid BDD runner configuration: a feature entry does not decode")
@@ -96,15 +98,22 @@ export def main() -> Void
     seed = Random.int(0, 2147483647)
   end
   started = Time.monotonic_ms()
-  files = selected(seeded(config, seed), tags, jobs, read.map do |entry| entry.unwrap! end)
+  entries = read.map do |entry| entry.unwrap! end
+  files = selected(seeded(config, seed), tags, jobs, parts, entries)
   # Wall time, not the sum of the file times: with `--jobs` the files overlap.
   wall_ms = Time.monotonic_ms() - started
   text = Report.text(files, config.style == "ai", seed)
   if timing and config.style != "json"
     text = Report.timed_text(files, config.style == "ai", seed, wall_ms)
   end
-  if config.style == "json"
+  # A red run still writes its coverage: what its tests reached is worth seeing.
+  covered = covered_run(config, parts, entries)
+  if config.style == "json" and parts != ""
+    text = JSON.encode(Report.json_and(files, seed, wall_ms, {"coverage": Coverage.json(covered)}))
+  elsif config.style == "json"
     text = JSON.encode(Report.json(files, seed, wall_ms))
+  elsif parts != ""
+    text = "#{text}\n#{Coverage.report_text(covered)}"
   end
   saved = save_report(config.report_path, text)
   if not saved.ok?
@@ -172,6 +181,27 @@ def read_jobs(handle: FileHandle) -> Int
   return parsed.unwrap!
 end
 
+# The `--coverage` line, after the timing line: the folder for the LCOV part of each child, as a JSON string. A missing
+# line is no coverage.
+def read_coverage(handle: FileHandle) -> String
+  line = File.read_line(handle, 5000)
+  if !line.ok?
+    return ""
+  end
+
+  return JSON.string(JSON.parse(line.unwrap!).unwrap_or(JSON.null())).unwrap_or("")
+end
+
+# The coverage of the run (Coverage.collect), without the test files and the step program: they always run.
+def covered_run(config: Config, parts: String, entries: List[Entry]) -> Coverage.Run
+  if parts == ""
+    return Coverage.Run(path: "", files: [], broken: [], problem: "")
+  end
+
+  left_out = entries.filter do |entry| entry.kind == "tests" end.map do |entry| Coverage.shown(entry.path) end
+  return Coverage.collect(parts, left_out.push(Coverage.shown(config.steps_source)))
+end
+
 # The `--timing` line, after the jobs line: a JSON boolean. A missing or unusable line is no timing.
 def read_timing(handle: FileHandle) -> Bool
   line = File.read_line(handle, 5000)
@@ -184,7 +214,13 @@ end
 
 # The report of the run. A `--tags` expression that cannot be read or is bad is a usage error and nothing runs (the
 # driver has checked the expression already, so this is a mismatch of driver and runner).
-def selected(config: Config, tags: Result[String], jobs: Int, entries: List[Entry]) -> List[Report.FileResult]
+def selected(
+  config: Config,
+  tags: Result[String],
+  jobs: Int,
+  parts: String,
+  entries: List[Entry],
+) -> List[Report.FileResult]
   compiled = Tags.compile(tags.unwrap_or(""))
   message = ""
   if !tags.ok?
@@ -198,10 +234,10 @@ def selected(config: Config, tags: Result[String], jobs: Int, entries: List[Entr
     return [Report.file_error("<arguments>", "", Report.error_at("RUNTIME-BDD-USAGE", message, where))]
   end
 
-  return matched(config, tags.unwrap!, compiled.unwrap!, run_all(config, compiled.unwrap!, jobs, entries))
+  return matched(config, tags.unwrap!, compiled.unwrap!, run_all(config, compiled.unwrap!, jobs, parts, entries))
 end
 
-def run_all(config: Config, tags: Tags.Expr, jobs: Int, found: List[Entry]) -> List[Report.FileResult]
+def run_all(config: Config, tags: Tags.Expr, jobs: Int, parts: String, found: List[Entry]) -> List[Report.FileResult]
   if found.size == 0
     problem = Child.located("CHECK-BDD-EMPTY", config.empty_message, config.empty_path)
     return [Report.file_error(config.empty_path, "", problem)]
@@ -220,9 +256,9 @@ def run_all(config: Config, tags: Tags.Expr, jobs: Int, found: List[Entry]) -> L
   end
   case listing
     Listing.Broken(problem) ->
-      tests = run_entries(config, tags, [], jobs, entries.filter do |entry| entry.kind == "tests" end)
+      tests = run_entries(config, tags, [], jobs, parts, entries.filter do |entry| entry.kind == "tests" end)
       return [Report.file_error(config.steps_source, "steps", problem)].concat(tests)
-    Listing.Ready(patterns) -> return run_entries(config, tags, patterns, jobs, entries)
+    Listing.Ready(patterns) -> return run_entries(config, tags, patterns, jobs, parts, entries)
   end
 end
 
@@ -235,13 +271,20 @@ def run_entries(
   tags: Tags.Expr,
   patterns: List[Match.Pattern],
   jobs: Int,
+  parts: String,
   entries: List[Entry],
 ) -> List[Report.FileResult]
+  # The LCOV part of each child is named after its file's place in `entries` (and its scenario's in the file), so
+  # children that run at once never share one.
+  indices = (0...entries.size).to_a
   if jobs <= 1 or entries.size <= 1
-    return entries.map do |entry| run_entry(config, tags, patterns, entry) end
+    return indices.map do |at| run_entry(config, tags, patterns, part_of(parts, at), entries[at]) end
   end
 
-  ended = Task.map(entries, jobs, 86_400_000) do |entry| ok(run_entry(config, tags, patterns, entry)) end
+  ended = Task.map(indices, jobs, 86_400_000) do |at|
+    ok(run_entry(config, tags, patterns, part_of(parts, at), entries[at]))
+  end
+
   results: List[Report.FileResult] = []
   for at in 0...entries.size
     case ended[at]
@@ -297,7 +340,22 @@ def steps_listing(config: Config) -> Listing
   return list_steps(config, where)
 end
 
-def run_entry(config: Config, tags: Tags.Expr, patterns: List[Match.Pattern], entry: Entry) -> Report.FileResult
+# The name of the LCOV parts of the file at `at` without its `.info`, or "" without coverage.
+def part_of(parts: String, at: Int) -> String
+  if parts == ""
+    return ""
+  end
+
+  return "#{parts}/#{at}"
+end
+
+def run_entry(
+  config: Config,
+  tags: Tags.Expr,
+  patterns: List[Match.Pattern],
+  part: String,
+  entry: Entry,
+) -> Report.FileResult
   if entry.problem != ""
     return Report.file_error(entry.path, entry.kind, Child.located("RUNTIME-BDD-INFRA", entry.problem, entry.path))
   end
@@ -309,11 +367,12 @@ def run_entry(config: Config, tags: Tags.Expr, patterns: List[Match.Pattern], en
       timeout_ms: config.test_timeout_ms,
       source_root: entry.source_root,
       deny: deny(config),
+      coverage: part,
     )
 
     return Units.run(settings, entry.path, entry.bytecode, entry.front_end)
   end
-  return run_file(config, tags, patterns, entry.path)
+  return run_file(config, tags, patterns, part, entry.path)
 end
 
 def seeded(config: Config, seed: Int) -> Config
@@ -339,7 +398,7 @@ end
 
 # The list child sends the patterns of BDD.run in order on its channel and exits, so the channel is read until it ends.
 def list_steps(config: Config, where: Report.Span) -> Listing
-  spawned = Process.spawn_channel(config.vm, vm_args(config, 1000000, "list"), ".", 30000)
+  spawned = Process.spawn_channel(config.vm, vm_args(config, 1000000, "list", ""), ".", 30000)
   if not spawned.ok?
     return Listing.Broken(Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where))
   end
@@ -382,7 +441,13 @@ def list_steps(config: Config, where: Report.Span) -> Listing
   end
 end
 
-def run_file(config: Config, tags: Tags.Expr, patterns: List[Match.Pattern], path: String) -> Report.FileResult
+def run_file(
+  config: Config,
+  tags: Tags.Expr,
+  patterns: List[Match.Pattern],
+  part: String,
+  path: String,
+) -> Report.FileResult
   text = File.read_text(path, 5000)
   if text.message == "filesystem: file exceeds 1048576 bytes"
     return Report.file_error(path, "feature", Child.located("RUNTIME-BDD-IO", "feature file exceeds 1 MiB", path))
@@ -398,7 +463,15 @@ def run_file(config: Config, tags: Tags.Expr, patterns: List[Match.Pattern], pat
         (config.only == "" or item.name.include?(config.only)) and Tags.selects?(tags, item.tags)
       end
 
-      scenarios = chosen.map do |item| run_scenario(config, patterns, base, item) end
+      scenarios = (0...chosen.size).to_a.map do |at|
+        cover = ""
+        if part != ""
+          cover = "#{part}-#{at}.info"
+        end
+
+        run_scenario(config, patterns, base, chosen[at], cover)
+      end
+
       return Report.FileResult(
         path: path,
         feature: feature.name,
@@ -416,6 +489,7 @@ def run_scenario(
   patterns: List[Match.Pattern],
   base: String,
   item: Gherkin.Scenario,
+  cover: String,
 ) -> Report.ScenarioResult
   started = Time.monotonic_ms()
   found = item.steps.map do |step| resolved_of(Match.resolve(patterns, step)) end
@@ -423,7 +497,7 @@ def run_scenario(
   ran = failing.size == 0
   run = Run(failed_at: item.steps.size, verdict: Report.Verdict.Pass)
   if ran
-    run = run_child(config, base, item, found, patterns, started)
+    run = run_child(config, base, item, found, patterns, started, cover)
   else
     at = failing[0]
     run = Run(failed_at: at, verdict: Report.Verdict.Fail(unresolved(patterns, item.steps[at])))
@@ -464,9 +538,10 @@ def run_child(
   found: List[Match.Resolved],
   patterns: List[Match.Pattern],
   started: Int,
+  cover: String,
 ) -> Run
   count = item.steps.size
-  spawned = Process.spawn_channel(config.vm, vm_args(config, 1000000 * (count + 1), "scenario"), ".", 30000)
+  spawned = Process.spawn_channel(config.vm, vm_args(config, 1000000 * (count + 1), "scenario", cover), ".", 30000)
   if not spawned.ok?
     return Run(failed_at: 0, verdict: failure("RUNTIME-BDD-INFRA", spawned.message, item.steps[0].span))
   end
@@ -736,7 +811,8 @@ def unresolved(patterns: List[Match.Pattern], step: Gherkin.Step) -> Report.Erro
   end
 end
 
-def vm_args(config: Config, steps: Int, mode: String) -> List[String]
+# `cover` is the LCOV part of the child (`--coverage`), or "" for none.
+def vm_args(config: Config, steps: Int, mode: String, cover: String) -> List[String]
   options = [
     "run",
     "--json",
@@ -747,6 +823,10 @@ def vm_args(config: Config, steps: Int, mode: String) -> List[String]
     "--source-root",
     config.steps_root,
   ].concat(deny(config))
+
+  if cover != ""
+    options = options.concat(["--coverage", cover])
+  end
 
   if config.steps_bytecode == ""
     return options.concat(["--embedded", "steps", "--", "--agentica-bdd", mode])

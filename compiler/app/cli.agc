@@ -890,7 +890,7 @@ def test(session: Session, words: List[String]) -> Int
   end
 
   if options.coverage != ""
-    return emit(Reply.failed(2, "agentica: test does not take --coverage\n"))
+    return emit(Reply.failed(2, "agentica: test does not take --coverage FILE; use agentica test --coverage\n"))
   end
 
   driver: List[String] = [

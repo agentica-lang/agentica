@@ -1,6 +1,7 @@
 """`agentica --coverage FILE`: the line coverage of a run as LCOV. The fixture program has a branch that never runs, a
 function that is never called, a block, a file it imports and a std/ module; the golden is its report. The report is
 also read back by a small LCOV reader here, which checks the totals of each record against its lines."""
+import json
 import os
 import shutil
 
@@ -204,8 +205,71 @@ def test_a_file_that_cannot_be_written_fails_the_run_or_adds_a_notice_to_its_fai
     assert lines[1:] == ['{"warning":"cannot write the coverage file"}']
 
 
-def test_coverage_needs_a_file_name_and_the_test_runner_refuses_it(tmp_path):
+def test_coverage_needs_a_file_name_and_the_test_runner_takes_its_own_option(tmp_path):
     cwd = program(tmp_path)
     assert agentica(cwd, "--coverage", "", "main.agc").code == 2
-    assert agentica(cwd, "test", "--coverage", "out.info").code == 2
+    refused = agentica(cwd, "--coverage", "out.info", "test")
+    assert refused.code == 2 and "agentica test --coverage" in refused.stderr
     assert not (cwd / "out.info").exists()
+
+
+# `agentica test --coverage`: a project with a source, two test files (one test fails), a feature and its step program.
+# The golden counts only src/shapes.agc: the test files and steps.agc ran but are left out.
+def project(tmp_path):
+    shutil.copytree(FIXTURE / "project", tmp_path, dirs_exist_ok=True)
+    return tmp_path
+
+
+def test_a_test_run_writes_one_report_of_its_sources_whatever_the_order_of_its_children(tmp_path):
+    cwd = project(tmp_path)
+    report = cwd / "coverage" / "lcov.info"
+    result = agentica(cwd, "test", "--coverage")
+    # A failing test keeps its exit code and still writes the report.
+    assert result.code == 1, result.stderr
+    golden = (FIXTURE / "project.info").read_text()
+    assert report.read_text() == golden
+    assert records(golden)["src/shapes.agc"]["functions"] == {"area": (1, 4), "unused": (11, 0)}
+    assert result.stdout.splitlines()[-3:] == [
+        "coverage: coverage/lcov.info", "  src/shapes.agc 4/6 lines (66.6%)", "  total 4/6 lines (66.6%)"]
+    # The parts of the children are gone, and the report is replaced in place on the next run.
+    assert sorted(str(path.relative_to(cwd)) for path in cwd.rglob("*") if "_build" not in path.parts) == [
+        "coverage", "coverage/lcov.info", "specs", "specs/area.feature", "specs/steps.agc", "src", "src/shapes.agc",
+        "test", "test/area_test.agc", "test/other_test.agc"]
+    assert agentica(cwd, "test", "--coverage", "--jobs", "3").code == 1
+    assert report.read_text() == golden
+
+    result = agentica(cwd, "--json", "test", "--coverage")
+    assert json.loads(result.stdout)["coverage"] == {
+        "path": "coverage/lcov.info", "lines": 6, "hit": 4, "files": [{"file": "src/shapes.agc", "lines": 6, "hit": 4}],
+        "broken": [], "problem": None}
+
+
+def merge(tmp_path, *words):
+    shutil.copy(FIXTURE / "merge.agc", tmp_path / "merge.agc")
+    return agentica(tmp_path, "merge.agc", *words)
+
+
+def test_the_merge_writes_back_what_it_reads_from_a_part(tmp_path):
+    cwd = program(tmp_path)
+    assert agentica(cwd, "--coverage", "part.info", "main.agc").code == 0
+    part = (cwd / "part.info").read_text()
+    # The merge writes the files in name order and keeps everything else of each record.
+    blocks = sorted(block + "end_of_record\n" for block in part.split("end_of_record\n")[:-1])
+    result = merge(cwd, "read", "part.info")
+    assert result.code == 0, result.stderr
+    assert result.stdout == "".join(blocks)
+    assert records(result.stdout) == records(part)
+
+
+def test_a_part_that_is_not_lcov_is_left_out_and_named(tmp_path):
+    parts = tmp_path / "parts"
+    parts.mkdir()
+    (parts / "1.info").write_text("SF:a.agc\nDA:1,1\nDA:2,0\nLF:2\nLH:1\nend_of_record\n")
+    (parts / "2.info").write_text("SF:a.agc\nDA:oops\nend_of_record\n")
+    (parts / "3.info").write_text("SF:a.agc\nDA:2,3\nend_of_record\n")
+    result = merge(tmp_path, "collect", "parts")
+    assert result.code == 0, result.stderr
+    assert result.stdout.splitlines() == [
+        "coverage: coverage/lcov.info", "  a.agc 2/2 lines (100.0%)", "  total 2/2 lines (100.0%)",
+        "  left out the coverage part 2.info: not an LCOV line: DA:oops"]
+    assert records((tmp_path / "coverage" / "lcov.info").read_text())["a.agc"]["lines"] == {1: 1, 2: 3}

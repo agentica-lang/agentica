@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `agentica test --coverage` writes the line coverage of the sources that the
+  tests ran to `coverage/lcov.info` (LCOV) and prints a summary of each file.
 - `std/analysis`: `Analysis.bodies(session, path)` gives the functions of a file
   with their bodies as a typed tree, for proof tools. It is experimental: its
   shape may change between releases without a breaking mark.

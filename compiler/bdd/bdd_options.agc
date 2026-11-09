@@ -5,8 +5,8 @@
 ## run` for the runner and the tests), `--version V` (the Agentica version the programs it compiles are written for),
 ## `--agentica WORD` (once for each word of the command that runs `agentica`), `--style plain|ai|json`,
 ## `--seed N` and `--test-timeout-ms N`. ARGUMENTS are the words the user wrote after `test`: paths, `--steps FILE`,
-## `--only TEXT`, `--tags EXPR`, `--jobs N`, `--timing`, `--json`, `--ai`, `--no-cache`, the `--deny-*` flags and
-## `--sandbox` (cli.agc adds the ones in front of `test`).
+## `--only TEXT`, `--tags EXPR`, `--jobs N`, `--timing`, `--coverage`, `--json`, `--ai`, `--no-cache`, the `--deny-*`
+## flags and `--sandbox` (cli.agc adds the ones in front of `test`).
 
 import Tags from "std/bdd/tags"
 
@@ -34,6 +34,7 @@ export struct Options
   deny: List[String]
   no_cache: Bool
   timing: Bool
+  coverage: Bool
 end
 
 ## What the arguments are: options to run with; a usage error of the user (RUNTIME-BDD-USAGE, with the options read so
@@ -62,6 +63,7 @@ export def parse(arguments: List[String]) -> Parsed
     deny: [],
     no_cache: false,
     timing: false,
+    coverage: false,
   )
 
   at = 0
@@ -166,6 +168,9 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
       at += 1
     elsif word == "--timing"
       shown = shown.with(timing: true)
+      at += 1
+    elsif word == "--coverage"
+      shown = shown.with(coverage: true)
       at += 1
     elsif DENY.include?(word)
       shown = shown.with(deny: shown.deny.push(word).uniq)

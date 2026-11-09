@@ -15,6 +15,8 @@ export struct Settings
   timeout_ms: Int
   source_root: String
   deny: List[String]
+  # The LCOV part of the child that runs the tests, without its `.info`, or "" without coverage.
+  coverage: String
 end
 
 struct UnitTest
@@ -397,10 +399,17 @@ def joined(output: String, stderr: String) -> String
   return [output, stderr].filter do |part| part != "" end.join("\n")
 end
 
+# The child that runs the tests writes the LCOV part of the file; the one that lists them does not.
 def args(settings: Settings, bytecode: String, steps: Int, mode: String) -> List[String]
+  cover: List[String] = []
+  if settings.coverage != "" and mode == "run"
+    cover = ["--coverage", "#{settings.coverage}.info"]
+  end
+
   return (
     ["run", "--json", "--max-steps", steps.to_s, "--seed", settings.seed.to_s, "--source-root", settings.source_root]
       .concat(settings.deny)
+      .concat(cover)
       .concat(["--", bytecode, "--agentica-test", mode])
   )
 end
