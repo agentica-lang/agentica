@@ -215,10 +215,10 @@ docs are in that clone (`docs/settings.md`, `docs/suppressions.md`).
   review, and a PR says why each new entry is accepted.
 - Marks: `vm/cchecker.h` is a copy of `include/cchecker.h` of the pinned
   release; its macros are empty under gcc and only annotate under clang. Put
-  `CC_OWNS` / `CC_FREES` on a function that returns or frees malloc memory and
-  on the fields and parameters that own it, `CC_GC_ALLOC` on an allocator of the
-  collector. Settings first (`cchecker.toml`); a mark is for what they cannot
-  say. A pointer put into a returned array, or set through an out parameter, is
+  `CC_OWNS` on a function that returns malloc memory and on the fields and
+  parameters that own it; `CC_FREES` on the parameter of a function that frees
+  it; `CC_GC_ALLOC` on an allocator of the collector. Settings first
+  (`cchecker.toml`); a mark is for what they cannot say. A pointer put into a returned array, or set through an out parameter, is
   not followed: ignore it with the reason.
 - To move to a new release, change the version and the commit
   (`git ls-remote https://github.com/agentica-lang/cchecker 'X^{}' X`), copy
