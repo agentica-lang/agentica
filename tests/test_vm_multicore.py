@@ -672,16 +672,21 @@ def test_a_start_under_a_low_ulimit_v_ends_with_one_line_and_status_70(tmp_path)
     # Each scheduler thread costs its stack and a malloc arena of glibc (64 MiB of address space), and the first file
     # step of the front end starts libuv's pool of four threads: the low limits refuse one or the other, depending on
     # the layout, and the last one refuses nothing. Below about 40 MB the dynamic loader fails first.
-    if "sanitizer build" in run([*cli(), "--version"]).stdout:
-        pytest.skip("a sanitizer build reserves its shadow memory, more than the limits")
     source = tmp_path / "hello.agc"
     source.write_text(HELLO, encoding="utf-8")
     bytecode = compile_agc(source, tmp_path / "hello.agcb")
+
+    def under(mb, words):
+        return run(["sh", "-c", 'ulimit -v "$1" && shift && exec "$@"', "sh", str(mb * 1024), *words],
+                   env=vm_environment({"AGENTICA_SCHEDULERS": SCHEDULERS}), timeout=scaled(60))
+
+    # A sanitizer build (ASan reserves terabytes of shadow memory) cannot start under any of these limits.
+    if "Sanitizer" in under(4096, [*vm_command(), "--", bytecode]).stderr:
+        pytest.skip("a sanitizer build reserves more address space than the limits")
     refused = []
     for mb in (90, 150, 250, 400, 4096):
         for words in ([*cli(), str(source)], [*vm_command(), "--", bytecode]):
-            result = run(["sh", "-c", 'ulimit -v "$1" && shift && exec "$@"', "sh", str(mb * 1024), *words],
-                         env=vm_environment({"AGENTICA_SCHEDULERS": SCHEDULERS}), timeout=scaled(60))
+            result = under(mb, words)
             if (result.code, result.stdout, result.stderr) == (0, "hi\n", ""):
                 continue
             assert mb < 4096 and result.code == 70 and result.stdout in ("", "hi\n"), (mb, words, result)
