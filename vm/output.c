@@ -51,13 +51,38 @@ static _Noreturn void write_failed(agc_vm *vm, agc_output *out) {
   fail_write(vm, out);
 }
 
-/* Forwarded bytes on a stream left on its blocking FILE: written at once, as the VM's own writes to it are. A failed
-   write drops them; the next chunk tries again. */
-static bool forward_file(agc_output *out, const uint8_t *data, size_t n) {
-  agc_lock_take(out->lock);
+bool agc_output_on_file(const agc_output *out) { return !out->base; }
+
+/* A failed write drops the bytes; the next chunk tries again. It takes the FILE's own lock, which a print on the FILE
+   holds across its text and its newline (agc_write), never the stream's lock: so a pool thread stuck here never holds
+   a lock that the I/O thread takes (stream_take). */
+void agc_output_write_file(agc_output *out, const uint8_t *data, size_t n) {
+  agc_file_lock(out->file);
   if (fwrite(data, 1, n, out->file) == n) (void)fflush(out->file);
-  agc_lock_drop(out->lock);
-  return true;
+  agc_file_unlock(out->file);
+}
+
+bool agc_output_file_turn(agc_output *out, agc_forward_wait *w) {
+  if (!out->file_busy) {
+    out->file_busy = true;
+    return true;
+  }
+  agc_forward_wait **at = &out->forward_waits;
+  while (*at) at = &(*at)->next;
+  w->next = NULL;
+  *at = w;
+  return false;
+}
+
+void agc_output_file_done(agc_output *out) {
+  agc_forward_wait *w = out->forward_waits;
+  if (!w) {
+    out->file_busy = false;
+    return;
+  }
+  out->forward_waits = w->next;
+  w->next = NULL;
+  w->resume(w->data);
 }
 
 bool agc_output_waiting(const agc_vm *vm, const agc_output *out) { return vm->task->output.out == out; }
@@ -68,8 +93,14 @@ bool agc_output_failed(const agc_output *out) {
 
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 /* The scheduler remembers the stream lock it holds (vm->stream_lock), so a failure that jumps out of the code that holds
-   it gives it back (agc_sync_reset). The streams' locks are never held together. */
-CC_ACQUIRES(l->mutex) static void stream_take(agc_vm *vm, agc_lock *l) {
+   it gives it back (agc_sync_reset). The streams' locks are never held together. Taking it counts as short for the I/O
+   thread (agc_output_forward, the done half of a write): every holder keeps it for bounded work on the ring and the
+   queue, with writes that never wait (agc_stdio_try) or that go to the pool, and settle drops it before it runs the
+   loop. The same lock object is held across a blocking fwrite only by agc_write and agc_flush on a stream on its FILE.
+   A stream goes to its FILE at agc_output_close, at the end of the run, after the schedulers have ended: a done half
+   that runs after it (drain_done) and those writes are then on the one thread that closes, never at once. A child's
+   chunk that a pool thread writes takes the FILE's lock alone (agc_output_write_file). */
+CC_ACQUIRES(l->mutex) CC_ASSUME_SHORT static void stream_take(agc_vm *vm, agc_lock *l) {
   agc_lock_take(l);
   vm->stream_lock = l;
 }
@@ -738,7 +769,8 @@ static void finish_text(agc_vm *vm, agc_output *s, const char *text, size_t n) {
 
 bool agc_output_forward(agc_output *out, const uint8_t *data, size_t n, agc_forward_wait *w) {
   agc_output *s = out->base;
-  if (!s) return forward_file(out, data, n);
+  /* The caller writes to a stream on its FILE itself (agc_output_on_file), off the I/O thread. */
+  if (!s) return true;
   /* The vm that opened the stream is the I/O thread's context: this runs in a libuv callback there. */
   agc_vm *vm = s->vm;
   stream_take(vm, s->lock);
@@ -828,7 +860,8 @@ void agc_notice_end(agc_vm *vm, agc_notice *n, agc_notice_mode mode) {
 
 bool agc_output_forward(agc_output *out, const uint8_t *data, size_t n, agc_forward_wait *w) {
   (void)w;
-  return forward_file(out, data, n);
+  agc_output_write_file(out, data, n);
+  return true;
 }
 #endif
 
@@ -841,14 +874,20 @@ CC_RELEASES(l->mutex) static bool unlock_keeping_errno(agc_lock *l, bool ok) {
 }
 
 /* The blocking FILE fallback: a print is two stdio calls (the text, then the newline), so the stream's own lock keeps
-   the lines of two tasks apart. The lock is dropped before a failure, and errno is kept for write_failed. */
+   the lines of two tasks apart, and the FILE's lock keeps a child's chunk that a pool thread writes out of the middle
+   (the stream's lock is solo with one scheduler). The locks are dropped before a failure, and errno is kept for
+   write_failed. */
 bool agc_write(agc_vm *vm, agc_output *out, const agc_string *text, bool newline) {
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
   if (out->base) return put(vm, out, text, newline);
 #endif
   agc_lock_take(out->lock);
+  agc_file_lock(out->file);
   bool ok = !text->bytes || fwrite(text->data, 1, text->bytes, out->file) == text->bytes;
   ok = ok && (!newline || fputc('\n', out->file) != EOF);
+  int saved = errno;
+  agc_file_unlock(out->file);
+  errno = saved;
   if (!unlock_keeping_errno(out->lock, ok)) write_failed(vm, out);
   return true;
 }

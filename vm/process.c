@@ -111,9 +111,14 @@ struct proc {
   uv_timer_t grace;
   uv_write_t write_req;
   /* A plain child's stderr goes to the VM's stderr (agc_output_forward). While the stream's queue is full the read is
-     stopped (paused) and the stream holds forward_wait, with one count in `users`, until it resumes the read. */
+     stopped (paused) and the stream holds forward_wait, with one count in `users`, until it resumes the read. A stream
+     left on its blocking FILE gets each chunk from a libuv pool thread instead (err_work, err_len bytes of err_buf),
+     with the read paused the same way until the write is over; file_wait keeps the child in line while another
+     child's chunk is being written (agc_output_file_turn). */
   agc_output *forward;
-  agc_forward_wait forward_wait;
+  agc_forward_wait forward_wait, file_wait;
+  uv_work_t err_work;
+  size_t err_len;
   agc_duplex *channel;
   guard *g, *grace_g;
   proc *run_prev, *run_next, *grace_prev, *grace_next;
@@ -912,9 +917,40 @@ static void err_over(proc *p, ssize_t n) {
   notify_waits(p);
 }
 
+/* The pool thread's half of a chunk for a stream on its blocking FILE: the write may wait for the reader of the VM's
+   stderr, which the I/O thread must never do. err_buf holds the chunk, since the read is paused until it is written.
+   p->forward is rt->err, which outlives every child, and only its FILE is touched here. */
+static void write_err(uv_work_t *work) {
+  proc *p = OWNER(work, err_work);
+  agc_output_write_file(p->forward, p->err_buf, p->err_len);
+}
+
+/* The chunk is written or dropped: the next child in line takes the stream, then this one reads again through
+   forward_wait's resume, as when the stream has room. The resume may free P, so it comes last. */
+static void err_turn_over(const proc *p) {
+  agc_output_file_done(p->forward);
+  p->forward_wait.resume(p->forward_wait.data);
+}
+
+static void err_written(uv_work_t *work, int status) {
+  (void)status;
+  err_turn_over(OWNER(work, err_work));
+}
+
+/* False when the pool refuses the job: the chunk is then dropped, as a failed stream drops it. */
+static bool start_err_write(proc *p) {
+  return agc_io_queue_work(agc_loop_uv(p->io), &p->err_work, write_err, err_written) == 0;
+}
+
+/* The turn of a child that waited in line (agc_output_file_done, on the I/O thread). */
+static void write_turn(void *data) {
+  proc *p = data;
+  if (!start_err_write(p)) err_turn_over(p);
+}
+
 /* A chunk of a plain child's stderr goes to the VM's stderr through its buffer, never by a write that waits on the
-   descriptor (§14.1). When the stream holds too much, the read stops, so the child waits on its own pipe. */
-// cchecker: ignore CC-EFFECT-SHORT-BLOCKS: the blocking-FILE fallback (#1245) and the stream lock of the normal path
+   descriptor (§14.1). When the stream holds too much, the read stops, so the child waits on its own pipe. A stream
+   left on its blocking FILE is written by a pool thread, one chunk of one child at a time, while the read waits. */
 static void forward_err(uv_stream_t *s, ssize_t n, const uv_buf_t *buf) {
   proc *p = OWNER(s, err);
   if (n < 0) {
@@ -922,8 +958,18 @@ static void forward_err(uv_stream_t *s, ssize_t n, const uv_buf_t *buf) {
     return;
   }
   if (n == 0) return;
-  bool more = agc_output_forward(p->forward, (const uint8_t *)buf->base, (size_t)n, &p->forward_wait);
   AGC_TRACE(&p->trace, AGC_TRACE_PROC, "stderr pid=%d bytes=%zd", (int)p->process.pid, n);
+  bool more = true;
+  if (!agc_output_on_file(p->forward)) {
+    more = agc_output_forward(p->forward, (const uint8_t *)buf->base, (size_t)n, &p->forward_wait);
+  } else {
+    p->err_len = (size_t)n;
+    more = false;
+    if (agc_output_file_turn(p->forward, &p->file_wait) && !start_err_write(p)) {
+      agc_output_file_done(p->forward);
+      more = true;
+    }
+  }
   if (more) return;
   /* resume_err runs on this thread, after this callback at the earliest, so the stop and the count come first even
      when another scheduler has drained the queue already. */
@@ -1516,6 +1562,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   /* rt is GC memory that the malloc'd proc does not keep alive, but it lives for the whole run, past every child. */
   p->forward = &vm->rt->err;
   p->forward_wait = (agc_forward_wait){NULL, p->io, resume_err, p};
+  p->file_wait = (agc_forward_wait){NULL, p->io, write_turn, p};
   p->captured = dir != NULL;
   if (!agc_io_here(vm)) {
     /* The resource comes first, so the owner's end closes the child whatever happens to the spawn. */
