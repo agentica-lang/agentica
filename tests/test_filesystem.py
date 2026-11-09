@@ -601,8 +601,13 @@ def test_file_calls_cannot_reopen_the_vms_own_pipes_so_a_later_spawn_does_not_de
       path = "@FD_ROOT@/" + name
       read = File.read_text(path, 100).ok?
       append = File.open(path, "append", 100).ok?
-      out = Process.spawn("true", [], 1000, {}, path).ok?
-      IO.inspect([read, append, out, Process.spawn("true", [], 1000, {}, "", path).ok?])
+      out = Process.spawn("true", [], 1000, {}, path)
+      err = Process.spawn("true", [], 1000, {}, "", path)
+      IO.inspect([read, append, out.ok?, err.ok?])
+      info = File.stat(path, 100)
+      if info.ok? and info.unwrap!.kind == "fifo"
+        puts("pipe: " + out.message + " | " + err.message)
+      end
     end
   end
   p = Process.spawn("true", [], 1000).unwrap!
@@ -614,8 +619,12 @@ end
     lines = output_lines(output)
     assert code == 0, errors
     assert lines[-1] == "ok(0)"
-    # Process.spawn's out and err files take the same guards, so a child never gets one of the VM's pipes.
-    assert list(dict.fromkeys(lines[:-1])) == ["[false, false, false, false]"]
+    # Process.spawn's out and err files take the same guards, so a child never gets one of the VM's pipes; a pipe is
+    # refused as one, not merely a failed open.
+    pipes = [line for line in lines[:-1] if line.startswith("pipe: ")]
+    refused = "pipe: process: out does not refer to a regular file | process: err does not refer to a regular file"
+    assert pipes and set(pipes) == {refused}, pipes
+    assert list(dict.fromkeys(line for line in lines[:-1] if line not in pipes)) == ["[false, false, false, false]"]
 
 
 @no_stdin_path

@@ -114,11 +114,12 @@ agc_line_writer *agc_writer_new(agc_vm *vm, agc_value path, int64_t timeout, agc
 agc_writer_status agc_writer_next(agc_vm *vm, agc_line_writer *w, agc_value last, agc_value line, agc_value *out);
 void agc_writer_stop(agc_line_writer *w, agc_value outcome);
 CC_OWNS char *agc_host_path(agc_vm *vm, const agc_string *s);
-/* Opens PATH (a host path) to write from the start, created or truncated as File.write_text opens it, with the guards
-   of the File calls: a folder, a link loop, the VM's stdout or stderr by its descriptor name (/proc/self/fd/N) or a
-   pipe the VM made gives -1 with *refused set (a File call says "path does not refer to a regular file"); another
-   failure gives -1 with errno. The descriptor may be nonblocking (agc_fs_blocking). */
-int agc_files_open_output(agc_vm *vm, const char *path, bool *refused);
+/* Opens PATH (a program's path, relative to its folder) to write from the start, created or truncated as
+   File.write_text opens it, with the guards of the File calls: an empty path, NUL, a Windows device path (\\.\ or
+   \\?\), a folder, a link loop, the VM's stdout or stderr by its descriptor name (/proc/self/fd/N) or a pipe the VM
+   made gives -1 with *refused set; another failure gives -1 with errno. The descriptor may be nonblocking
+   (agc_fs_blocking). */
+int agc_files_open_output(agc_vm *vm, const agc_string *path, bool *refused);
 agc_value agc_utf8_error(const uint8_t *data, size_t len);
 agc_value agc_system_error(agc_vm *vm, const char *what, int err);
 bool agc_tree_refused(const char *path);

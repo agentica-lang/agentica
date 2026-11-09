@@ -393,7 +393,9 @@ def test_an_out_or_err_file_that_cannot_be_opened_is_an_error_and_no_child_runs(
         (agc_literal(tmp_path), '""', "process: out does not refer to a regular file"),
         ('""', agc_literal(tmp_path / "no-such-dir" / "err.txt"), "process: cannot open the err file"),
         ('"a" + String.from_code(0)', '""', "process: out and err cannot contain NUL"),
-    ]:
+    ] + ([(agc_literal(r"\\.\NUL"), '""', "process: out does not refer to a regular file"),
+          ('""', agc_literal("//?/" + str(tmp_path / "err.txt")), "process: err does not refer to a regular file")]
+         if TARGET_OS == "windows" else []):
         assert output(tmp_path, streams_to(1, out, err)).startswith(expected + "\n")
     # A spawn refused for its command opens no file.
     text = streams_to(1, agc_literal(late), '""', command='"agentica-no-such-command-7h"')

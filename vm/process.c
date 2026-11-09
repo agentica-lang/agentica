@@ -1245,14 +1245,7 @@ static CC_OWNS char *child_dir(agc_vm *vm, const agc_string *dir, bool *found) {
    without waiting, so a FIFO with no reader fails at once and never holds the scheduler, and is then made blocking
    again: the child writes to it as to any stdout. -1 with errno, or with *refused set. */
 static int open_target(agc_vm *vm, const agc_string *path, bool *refused) {
-  *refused = false;
-  char *host = agc_host_path(vm, path);
-  if (!host) {
-    errno = EINVAL;
-    return -1;
-  }
-  int fd = agc_files_open_output(vm, host, refused);
-  free(host);
+  int fd = agc_files_open_output(vm, path, refused);
   if (fd >= 0) agc_fs_blocking(fd);
   return fd;
 }

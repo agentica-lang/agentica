@@ -238,13 +238,21 @@ static bool same_text(const char *data, size_t len, const char *word) {
   return len == strlen(word) && memcmp(data, word, len) == 0;
 }
 
-static bool path_string(const agc_string *s) {
-  if (!s->bytes || memchr(s->data, 0, s->bytes)) return false;
+/* Windows: a path that starts \\.\ or \\?\ (either slash) names a device or switches off path parsing; no file call
+   takes it. */
+static bool device_prefix(const char *data, size_t len) {
 #ifdef _WIN32
-  if (s->bytes >= 4 && (s->data[0] == '/' || s->data[0] == '\\') &&
-      (s->data[1] == '/' || s->data[1] == '\\') && (s->data[2] == '.' || s->data[2] == '?')) return false;
+  return len >= 4 && (data[0] == '/' || data[0] == '\\') && (data[1] == '/' || data[1] == '\\') &&
+         (data[2] == '.' || data[2] == '?');
+#else
+  (void)data;
+  (void)len;
+  return false;
 #endif
-  return true;
+}
+
+static bool path_string(const agc_string *s) {
+  return s->bytes && !memchr(s->data, 0, s->bytes) && !device_prefix(s->data, s->bytes);
 }
 
 #ifdef _WIN32
@@ -641,14 +649,26 @@ static int open_for(op *o, bool reading, bool append) {
   return checked(o, fd);
 }
 
-int agc_files_open_output(agc_vm *vm, const char *path, bool *refused) {
-  *refused = names_output_fd(vm->rt, path) || !write_target(path);
+int agc_files_open_output(agc_vm *vm, const agc_string *given, bool *refused) {
+  *refused = !path_string(given);
   if (*refused) return -1;
-  int fd = agc_fs_open(path, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_TRUNCATE);
-  if (fd < 0 || !private_pipe(vm->rt, fd)) return fd;
-  agc_fs_close(fd);
-  *refused = true;
-  return -1;
+  char *path = agc_host_path(vm, given);
+  if (!path) {
+    errno = EINVAL;
+    return -1;
+  }
+  int fd = -1;
+  *refused = names_output_fd(vm->rt, path) || !write_target(path);
+  if (!*refused) fd = agc_fs_open(path, AGC_FS_WRITE | AGC_FS_CREATE | AGC_FS_TRUNCATE);
+  int problem = errno;
+  free(path);
+  if (fd >= 0 && private_pipe(vm->rt, fd)) {
+    agc_fs_close(fd);
+    *refused = true;
+    fd = -1;
+  }
+  errno = problem;
+  return fd;
 }
 
 static bool on_loop(op *o, int fd) {
