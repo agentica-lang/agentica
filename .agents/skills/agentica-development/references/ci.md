@@ -151,7 +151,7 @@ proof). These are the rules they do not show.
   bootstrap the stages would run again (about 45 s in sanitizer mode).
 - **TSan and native peers.** `make vm-tsan-native` runs the native-call,
   native-module and FFI modules on the TSan binary at 2 and then 4 schedulers;
-  the `tsan-native` jobs run one count each (`TSAN_NATIVE_SCHEDULERS`, about 6
+  the `tsan-native` jobs run one count each (`TSAN_NATIVE_SCHEDULERS`, about 8
   minutes each), and `vm-tsan-run` leaves those modules out. When the VM under
   test is that binary, `shared_library` of `tests/test_vm_native.py` builds each
   peer with clang and `-fsanitize=thread`, so a race in a peer's C fails the run
