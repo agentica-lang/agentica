@@ -221,27 +221,41 @@ def access_denied(path: str | Path, rights: str):
             icacls(path, "/remove:d", name)
 
 
-def processes_mentioning(text: str | Path) -> list[int]:
-    """The ids of the processes whose command line contains `text` (without regard to case or the direction of the
-    slashes), the Windows counterpart of reading /proc/<pid>/cmdline."""
+def process_commands(timeout: float = 60) -> list[tuple[int, str, str]]:
+    """The id, a "parent PARENT, started DATE" note and the command line of every process (Win32_Process)."""
     system = Path(os.environ["SystemRoot"]) / "System32"
     listing = subprocess.run(
         [str(system / "WindowsPowerShell" / "v1.0" / "powershell.exe"), "-NoProfile", "-NonInteractive", "-Command",
          "[Console]::OutputEncoding = [Text.Encoding]::UTF8; "
-         "Get-CimInstance Win32_Process | ForEach-Object { '{0}|{1}' -f $_.ProcessId, $_.CommandLine }"],
-        capture_output=True, check=False, timeout=60)
+         "Get-CimInstance Win32_Process | ForEach-Object { '{0}|{1}|{2:o}|{3}' -f "
+         "$_.ProcessId, $_.ParentProcessId, $_.CreationDate, $_.CommandLine }"],
+        capture_output=True, check=False, timeout=timeout)
     assert listing.returncode == 0, listing.stderr.decode(errors="replace")
-
-    def plain(value: str) -> str:
-        return value.lower().replace("/", "\\")
-
-    needle = plain(str(text))
-    found = []
+    commands = []
     for line in listing.stdout.decode("utf-8", errors="replace").splitlines():
-        number, _, command = line.partition("|")
-        if number.strip().isdigit() and needle in plain(command):
-            found.append(int(number))
-    return found
+        number, parent, started, command = (line.split("|", 3) + ["", "", ""])[:4]
+        if number.strip().isdigit():
+            commands.append((int(number), "parent %s, started %s" % (parent, started), command))
+    return commands
+
+
+def plain_command(value: str) -> str:
+    """A command line or a path compared without regard to case or the direction of the slashes."""
+    return value.lower().replace("/", "\\")
+
+
+def processes_mentioning(text: str | Path) -> list[int]:
+    """The ids of the processes whose command line contains `text` (without regard to case or the direction of the
+    slashes), the Windows counterpart of reading /proc/<pid>/cmdline."""
+    needle = plain_command(str(text))
+    return [number for number, _, command in process_commands() if needle in plain_command(command)]
+
+
+def processes_naming(texts: list[str], timeout: float) -> str:
+    """The processes whose command line names one of `texts`, one "pid (parent, start) command" line each."""
+    needles = [plain_command(text) for text in texts]
+    return "\n".join("%d (%s) %s" % (number, note, command) for number, note, command in process_commands(timeout)
+                     if any(needle in plain_command(command) for needle in needles))
 
 
 @contextmanager

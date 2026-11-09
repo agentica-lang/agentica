@@ -187,7 +187,8 @@ def settled(ws, *flags, **asked):
     cold = answers(ws, *flags, **asked)
     warm = answers(ws, *flags, **asked)
     off = answers(ws, "--no-cache", *flags, **asked)
-    assert cold == warm == off
+    # The answers whole: pytest's diff cuts long ones, and which run lost what is the clue (#1098).
+    assert cold == warm == off, "cold: %r\nwarm: %r\noff: %r" % (cold, warm, off)
     return warm
 
 
