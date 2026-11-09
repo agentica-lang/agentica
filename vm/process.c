@@ -121,8 +121,9 @@ struct proc {
   /* begun: the spawn has run, so the handles below are in some state; a child whose spawn never ran has none. */
   bool begun, linked, running, exited, err_done, in_closed, closed, reading;
   /* group: the child leads its own process group (Process.spawn* with pgroup, where agc_proc_groups), and every
-     signal of a stop goes to the group. */
-  bool captured, out_cut, err_cut, stop_failed, group;
+     signal of a stop goes to the group. group_gone: the end-of-run wait found the group empty (ESRCH), so it is not
+     probed or signalled again: its id may since name another group. */
+  bool captured, out_cut, err_cut, stop_failed, group, group_gone;
   stop_state stop;
   int write_status;
   int64_t status;
@@ -373,10 +374,11 @@ static bool group_in_grace(const proc *p) { return p->group && p->stop == STOP_T
 
 /* A captured child's pipes close at once, but its uv_process_t stays open
    until it exits, and its grace timer until it exits or got SIGKILL. The timer of a group child runs to its end even
-   after the exit, so grace_over can kill the group; the end of the run has no timer (close_children). */
+   after the exit, so grace_over can kill the group. At the end of the run a group child that close_children holds
+   (grace_g) keeps it too, timer or not: the wait after the SIGTERM needs it on `graced` until the SIGKILL. */
 static void retire(proc *p) {
   if (!p->closed) return;
-  bool timed = group_in_grace(p) && uv_is_active((uv_handle_t *)&p->grace);
+  bool timed = group_in_grace(p) && (uv_is_active((uv_handle_t *)&p->grace) || p->grace_g);
   if (p->captured && ((!p->running && !timed) || p->stop == STOP_KILLED))
     close_handle((uv_handle_t *)&p->grace, closed_grace);
   if (!p->running) close_handle((uv_handle_t *)&p->process, closed_process);
@@ -470,11 +472,17 @@ static void await_exits(guard *g, bool grace) {
 }
 
 /* True while a group in its grace still has a process. A leader reaped during the grace leaves `first`, not
-   `graced`, and its group id stays its own while any member lives (grace_over). */
+   `graced`, and its group id stays its own while any member lives (grace_over). A group found empty (ESRCH) is
+   marked gone and skipped from then on; any other failure (EPERM) counts as gone for this probe only. */
 static bool groups_alive(const guard *g) {
-  for (const proc *p = g->graced; p; p = p->grace_next)
-    if (group_in_grace(p) && p->process.pid > 0 && uv_kill(-p->process.pid, 0) == 0) return true;
-  return false;
+  bool alive = false;
+  for (proc *p = g->graced; p; p = p->grace_next) {
+    if (!group_in_grace(p) || p->group_gone || p->process.pid <= 0) continue;
+    int rc = uv_kill(-p->process.pid, 0);
+    if (rc == UV_ESRCH) p->group_gone = true;
+    if (rc == 0) alive = true;
+  }
+  return alive;
 }
 
 /* The grace of the end of the run: the loop runs until every captured child exited and every group in its grace
@@ -511,7 +519,7 @@ static void close_children(guard *g) {
   grace_wait(g);
   for (proc *p = g->graced, *next = NULL; p; p = next) {
     next = p->grace_next;
-    if (group_in_grace(p)) signal_child(p, SIGKILL);
+    if (group_in_grace(p) && !p->group_gone) signal_child(p, SIGKILL);
     if (p->stop == STOP_TERM) p->stop = STOP_KILLED;
     retire(p);
     (void)drop_grace(p);
