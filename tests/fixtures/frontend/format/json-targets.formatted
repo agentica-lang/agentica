@@ -1,0 +1,9 @@
+# A List or Map JSON target prints as a type: its arguments spaced, the module alias kept.
+
+import Rows from "rows"
+
+def main() -> Void
+  rows = JSON.decode("[]", List[Rows.Raw])
+  grid = JSON.decode("{}", Map[String, List[Int]])
+  puts(rows, grid)
+end

@@ -18,7 +18,17 @@ CI does not run it; commit both files when the vectors change.
 import json
 from pathlib import Path
 
-from json_typed_peer import UNHANDLED, decode_common, decode_struct, encode_common, encode_struct, fail, write_vectors
+from json_typed_peer import (
+    UNHANDLED,
+    decode_common,
+    decode_struct,
+    encode_common,
+    encode_struct,
+    enum_tag,
+    fail,
+    join,
+    write_vectors,
+)
 
 OUTPUT = Path(__file__).resolve().parent / "vm" / "json-enum-vectors.stdin"
 HEADER = (
@@ -87,23 +97,11 @@ DOCUMENTS = [
 ]
 
 
-def join(path, key):
-    return f"{path}.{key}" if path else key
-
-
 def decode_enum(value, name, path):
     """An enum from {"tag": ..., "values": [...]}: a variant with no payload may leave "values" out."""
-    if not isinstance(value, dict):
-        fail(path, "object")
-    if "tag" not in value:
-        fail(join(path, "tag"), "required field")
-    if not isinstance(value["tag"], str):
-        fail(join(path, "tag"), "String")
     variants = ENUMS[name]
-    found = [payload for variant, payload in variants if variant == value["tag"]]
-    if not found:
-        fail(join(path, "tag"), "one of " + ", ".join(variant for variant, _ in variants))
-    payload = found[0]
+    tag = enum_tag(value, [variant for variant, _ in variants], path)
+    payload = dict(variants)[tag]
     if "values" not in value:
         if payload:
             fail(join(path, "values"), "required field")

@@ -802,7 +802,7 @@ def test_an_exported_extern_struct_is_imported_like_a_struct(tmp_path):
 
 # Native.size_of(T) is an Int, Native.get_struct(p, offset, T) a T and Native.put_struct(p, offset, value) Void, for a
 # struct of an extern block, also through a type alias or from another module; a struct of the program, a resource, a
-# value in place of the type or a type name in place of the value is CHECK-TYPE-MISMATCH at it.
+# value in place of the type, a List or Map type or a type name in place of the value is CHECK-TYPE-MISMATCH at it.
 @pytest.mark.parametrize("body, code, start, stop", [
     ("  buf = Native.memory_pointer(2 * Native.size_of(Outer))\n"
      "  Native.put_struct(buf, Native.size_of(OuterAlias), Outer(inner: Inner(x: 1.5, n: 2), scale: 0.5))\n"
@@ -815,6 +815,8 @@ def test_an_exported_extern_struct_is_imported_like_a_struct(tmp_path):
     ("  Native.put_struct(Native.null(), 0, Plain(x: 1))", "CHECK-TYPE-MISMATCH", (32, 39), (32, 50)),
     ("  Native.put_struct(Native.null(), 0, Outer)", "CHECK-TYPE-MISMATCH", (32, 39), (32, 44)),
     ("  puts(Native.size_of(Model))", "CHECK-TYPE-MISMATCH", (32, 23), (32, 28)),
+    ("  puts(Native.size_of(List[Outer]))", "CHECK-TYPE-MISMATCH", (32, 23), (32, 34)),
+    ("  puts(Native.get_struct(Native.null(), 0, Map[String, Outer]))", "CHECK-TYPE-MISMATCH", (32, 44), (32, 62)),
     ("  puts(Native.size_of(3))", "CHECK-TYPE-MISMATCH", (32, 23), (32, 24)),
     ("  s: String = Native.get_struct(Native.null(), 0, Inner)", "CHECK-TYPE-MISMATCH", (32, 15), (32, 57)),
 ])

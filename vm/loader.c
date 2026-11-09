@@ -475,6 +475,8 @@ static void load_types(reader *r, agc_program *p) {
     agc_struct_def *d = &p->structs[index];
     d->json_name = read_string(r);
     names[i] = d->json_name;
+    d->json_root = memchr(d->json_name->data, '[', d->json_name->bytes) != NULL;
+    if (d->json_root && d->count != 1) reject(r, "a List or Map JSON target needs one field");
     if ((uint64_t)d->count * 4 > left(r)) reject(r, "field type count exceeds the file");
     d->field_types = load_alloc(r, agc_size_mul(d->count, sizeof(uint32_t)), true);
     for (uint32_t k = 0; k < d->count; k++) {
@@ -544,6 +546,7 @@ static void load_tables(reader *r, agc_program *p) {
     if (d->count > p->max_fields) p->max_fields = d->count;
     d->json_name = NULL;
     d->field_types = NULL;
+    d->json_root = false;
   }
 
   load_types(r, p);

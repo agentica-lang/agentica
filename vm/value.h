@@ -440,6 +440,10 @@ typedef struct {
 typedef struct {
   agc_string *name;
   uint32_t count;
+  /* json_root: a decodable struct whose linked name has a `[` (List[app.T]) stands for a List or Map target of
+     JSON.decode, which decodes the root as its one field (the loader checks the count). No declared struct has one.
+     It sits in the padding after count, so the struct keeps its size and the hot loop its code. */
+  bool json_root;
   agc_string **fields;
   agc_string *json_name;
   uint32_t *field_types;

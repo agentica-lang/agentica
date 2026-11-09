@@ -251,7 +251,7 @@ def check_native_struct(cx: State.Cx, st: State.St, site: State.Site) -> Result[
 
   case last
     Ast.Expr.TypeName(node) ->
-      ref = Ast.TypeRef(id: node.id, name: node.name, args: [], span: node.span)
+      ref = Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span)
       type = try CheckTypes.resolve_type(cx, current, ref, false)
       if !c_struct?(cx, type)
         return error(not_c_struct(cx, current, name, T.to_text(type), node.span))
@@ -280,7 +280,7 @@ def check_native_callback(cx: State.Cx, st: State.St, site: State.Site) -> Resul
   current = st
   case first
     Ast.Expr.TypeName(node) ->
-      ref = Ast.TypeRef(id: node.id, name: node.name, args: [], span: node.span)
+      ref = Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span)
       type = try CheckTypes.resolve_type(cx, current, ref, false)
       if !T.is?(type, "Opaque") or !cx.callbacks.has_key?(T.name(type))
         return error(

@@ -823,8 +823,8 @@ int main(int argc, char **argv) {
   point_fields[0] = agc_make_string("x", 1, 1);
   point_fields[1] = agc_make_string("y", 1, 1);
   point_fields[2] = agc_make_string("x: Int, y", 9, 9);
-  structs[0] = (agc_struct_def){agc_make_string("Point", 5, 5), 2, point_fields, NULL, NULL};
-  structs[1] = (agc_struct_def){agc_make_string("Point", 5, 5), 1, &point_fields[2], NULL, NULL};
+  structs[0] = (agc_struct_def){agc_make_string("Point", 5, 5), 2, false, point_fields, NULL, NULL};
+  structs[1] = (agc_struct_def){agc_make_string("Point", 5, 5), 1, false, &point_fields[2], NULL, NULL};
   enums[0] = (agc_enum_def){agc_make_string("Shape", 5, 5), 2, 3, NULL, NULL};
   enums[1] = (agc_enum_def){agc_make_string("Shape", 5, 5), 5, 2, NULL, NULL};
   enums[2] = (agc_enum_def){agc_make_string("Shape", 5, 5), 7, 2, NULL, NULL};
