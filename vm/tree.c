@@ -100,8 +100,7 @@ static CC_OWNS char *entry_path(const char *root, const level *levels, size_t to
    a file system that lists a name it cannot remove: an ENOENT from unlinkat is not progress. On a failure inside
    the tree, *failed is the path of the entry (or of the directory) that failed. The root is removed by its path:
    rmdir only takes an empty directory, so a path swapped at this point costs nothing. */
-// cchecker: ignore CC-OWN-LEAK: *failed is an out parameter: the caller owns the path set there
-static int walk(const char *root, level *levels, char **failed) {
+static int walk(const char *root, level *levels, CC_OWNS_OUT char **failed) {
   int rc = open_dir(AT_FDCWD, root, &levels[0].dir);
   if (rc) return rc;
   size_t top = 0;
@@ -186,7 +185,7 @@ static int walk(const char *root, level *levels, char **failed) {
   return rc;
 }
 
-int agc_remove_tree(const char *path, char **failed) {
+int agc_remove_tree(const char *path, CC_OWNS_OUT char **failed) {
   if (failed) *failed = NULL;
   if (agc_tree_refused(path)) return AGC_TREE_REFUSED;
   /* Trailing slashes are cut: "link/" would make the kernel follow "link". */
@@ -205,7 +204,7 @@ int agc_remove_tree(const char *path, char **failed) {
   return rc;
 }
 #else
-int agc_remove_tree(const char *path, char **failed) {
+int agc_remove_tree(const char *path, CC_OWNS_OUT char **failed) {
   (void)path;
   if (failed) *failed = NULL;
   return ENOSYS;

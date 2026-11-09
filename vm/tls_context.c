@@ -91,8 +91,7 @@ static void drop(void *data) { free_build(data); }
 static const agc_io_kind context_io = {work, done, expired, drop, false, "tls", NULL, false, NULL};
 
 /* The path of a field: NULL for "", false for a path with NUL. */
-// cchecker: ignore CC-OWN-LEAK: *path is an out parameter: the caller owns the path set there
-static bool path_of(agc_vm *vm, agc_value field, char **path) {
+static bool path_of(agc_vm *vm, agc_value field, CC_OWNS_OUT char **path) {
   const agc_string *s = agc_as_string(vm, field);
   *path = NULL;
   if (s->bytes == 0) return true;

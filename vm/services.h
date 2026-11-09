@@ -118,7 +118,7 @@ agc_value agc_utf8_error(const uint8_t *data, size_t len);
 agc_value agc_system_error(agc_vm *vm, const char *what, int err);
 bool agc_tree_refused(const char *path);
 /* Removes the tree at path; on a failure inside it, *failed is a malloc'd path of the entry that failed, else NULL. */
-int agc_remove_tree(const char *path, char **failed);
+int agc_remove_tree(const char *path, CC_OWNS_OUT char **failed);
 #if defined(__linux__) || defined(__APPLE__)
 bool agc_each_fd(bool (*visit)(int fd, void *data), void *data);
 #endif

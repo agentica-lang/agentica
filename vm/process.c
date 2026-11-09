@@ -1000,7 +1000,6 @@ static CC_OWNS char *resolve(agc_vm *vm, const agc_string *command) {
   return found;
 }
 
-// cchecker: ignore CC-OWN-LEAK: path and each copy go into the array that is returned
 static CC_OWNS char **child_args(agc_vm *vm, CC_OWNS char *path, const agc_list *list) {
   CC_OWNS char **argv = calloc(agc_size_add(agc_list_len(list), 2), sizeof(char *));
   if (!argv) agc_out_of_memory();
@@ -1056,7 +1055,6 @@ static bool env_overridden(const char *host_name, const env_pair *pairs, size_t 
 /* The environment of a child: the VM's own, minus the entries the VM owns and the names of `pairs` (the `env` map as
    env_problem checked it), plus those pairs; `channel` is the value of AGENTICA_CHANNEL when the child gets a channel.
    Nothing here can fail but the allocation, so no malloc'd entry is lost to an agc_fail. */
-// cchecker: ignore CC-OWN-LEAK: each entry goes into the array that is returned
 static CC_OWNS char **child_env(bool drop_uring, const char *channel, const env_pair *pairs, size_t added) {
   uv_env_item_t *host = NULL;
   int count = 0;
