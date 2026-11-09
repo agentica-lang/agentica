@@ -35,7 +35,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # The pins of Hugo and Dart Sass. tools/site_versions.py reads them from this file in each tag's tree, so an old
-    # tag builds with its own versions; keep the four names and the one-line form.
+    # tag builds with its own versions; keep the four names and the one-line form. Keep them equal to the pins of
+    # agentica-lang/docs-theme's .github/workflows/ci.yml, which builds the theme's example site.
     env:
       HUGO_VERSION: 0.167.0
       HUGO_SHA256: 0163f5c3deddac1f494a1629ddc40c65d18de9d5794facd98f7f96ac2c7d8957
@@ -47,11 +48,14 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+      # The docs theme (only this submodule: the VM's are not needed), with its history, so that
+      # tools/site_versions.py can unpack the theme commit that each tag pins.
+      - run: git submodule update --init site/themes/docs-theme
       - uses: actions/setup-node@v7
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: site/highlight/package-lock.json
+          cache-dependency-path: site/themes/docs-theme/highlight/package-lock.json
       - id: pages
         uses: actions/configure-pages@v6
       # The cache holds the output of each tag by commit sha and base URL (a sha never changes, so an entry is never

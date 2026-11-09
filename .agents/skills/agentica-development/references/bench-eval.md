@@ -39,7 +39,9 @@ A new program needs `def scale() -> Int` returning 1 (the script rewrites it for
 `--size`), a deterministic checksum line, and a Python twin that takes the size
 as `argv[1]`. The HTTP sanity check is apart: `python3
 benchmarks/http_bench.py`; record numbers only from an idle machine, in the last
-section of `docs/vm-benchmarks.md`.
+section of `docs/vm-benchmarks.md`. `python3 benchmarks/websocket_broadcast.py`
+compares the GC time of a WebSocket broadcast sent as `Text` and as
+`HTTP.prepare`.
 
 ## Speed work
 

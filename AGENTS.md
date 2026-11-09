@@ -29,7 +29,9 @@ docs/               grammar/ (the language definition, index: docs/grammar.md),
                     vm/ (VM design), future/ (the design decisions of planned
                     features and what was decided against; plans live in GitHub
                     issues)
-site/content/       Hugo documentation site
+site/               Hugo documentation site: content/, versions/ and the
+                    layouts/ overrides; the look and the layouts come from
+                    themes/docs-theme (a submodule)
 benchmarks/         make bench programs and Python twins
 .agents/skills/     agent skills; also documentation-pruning (shrinking docs)
 ```
@@ -129,8 +131,8 @@ stay.
   `unittest.TestCase` modules (from `tests.agentica_test.TestCase`) are
   collected too. Node and Python peers (curl included) use the standard
   library only. Dependencies: the C submodules in `vm/third_party`, the
-  pinned jscpd in `tools/jscpd` and the site highlighter in `site/highlight`;
-  nothing else.
+  pinned jscpd in `tools/jscpd` and the docs theme (with the site
+  highlighter) in `site/themes/docs-theme`; nothing else.
 - A language rule is tested through the CLI, in `tests/test_spec_<area>.py`:
   `--json check FILE`, asserting the code and the span, never the message.
 - Network and process tests are hermetic: localhost, port 0, no external

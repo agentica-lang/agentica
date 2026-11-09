@@ -17,6 +17,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   stdout and stderr to files, with no shell and no 1 MiB limit.
 - `optional = true` in `[native.NAME]` beside `build`: when the module cannot
   be built, the program runs without it after a warning.
+- `HTTP.prepare(message)` frames a WebSocket message once, so a broadcast does
+  not frame it for every socket.
+- **Breaking:** `HTTP.Message` has a new variant, `Prepared(Bytes)`; a `case`
+  on it with no `_` arm needs a `Prepared` arm.
 - `pgroup: true`, the last parameter of `Process.spawn`, `spawn_captured` and
   `spawn_channel`, starts the child in its own process group, and stopping it
   while it runs stops the programs it started too (Linux and macOS).
