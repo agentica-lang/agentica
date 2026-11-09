@@ -50,6 +50,8 @@ bool agc_proc_env_case_blind(void) { return false; }
 
 bool agc_proc_drains(void) { return true; }
 
+bool agc_proc_groups(void) { return true; }
+
 int64_t agc_proc_read_now(intptr_t fd, uint8_t *buf, size_t len) {
   for (;;) {
     ssize_t n = read((int)fd, buf, len);

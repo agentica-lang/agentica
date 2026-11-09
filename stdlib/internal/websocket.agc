@@ -338,6 +338,32 @@ export def binary_frame(data: Bytes) -> Bytes
   return frame(BINARY, data)
 end
 
+## True for the bytes of one whole text or binary frame as the server writes them: FIN set, no reserved bits, not
+## masked, the shortest length form, and exactly that many bytes of payload. It reads the head only, so it costs the
+## same for any size; the UTF-8 of a text payload is not checked again.
+export def data_frame?(frame: Bytes) -> Bool
+  if frame.size < 2 or (frame.at(0) != 128 + TEXT and frame.at(0) != 128 + BINARY)
+    return false
+  end
+
+  length = frame.at(1)
+  if length < 126
+    return frame.size - 2 == length
+  end
+
+  if length == 126
+    size = Binary.read_u16_be(frame, 2).unwrap_or(0)
+    return size >= 126 and frame.size - 4 == size
+  end
+
+  if length == 127
+    size = Binary.read_i64_be(frame, 2).unwrap_or(-1)
+    return size >= 65536 and frame.size - 10 == size
+  end
+
+  return false
+end
+
 ## A ping frame the server writes.
 export def ping_frame(data: Bytes) -> Bytes
   return frame(PING, data)

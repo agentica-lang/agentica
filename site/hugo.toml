@@ -1,30 +1,24 @@
+# The look, the layouts, the outputs and the highlighter come from the docs theme (themes/docs-theme). The deep
+# merge takes its [outputs], [markup] and [minify] defaults too; this file sets only what is the site's own.
+_merge = "deep"
 baseURL = "https://agentica-lang.github.io/agentica/"
 locale = "en"
 title = "Agentica"
+theme = "docs-theme"
 disableKinds = ["taxonomy", "term", "rss"]
 
 [params]
   description = "Agentica is Ruby with static types: Ruby-like syntax, checked before running, with immutable values."
+  tagline = "Ruby with static types"
   repo = "https://github.com/agentica-lang/agentica"
+  branch = "master"
   repoPublic = false
-  narrow = "50rem"
 
-[markup.highlight]
-  noClasses = false
+[module.hugoVersion]
+  extended = true
+  min = "0.167.0"
 
-[markup.tableOfContents]
-  startLevel = 2
-  endLevel = 2
-
-[outputFormats.search]
-  mediaType = "application/json"
-  baseName = "search"
-  isPlainText = true
-  notAlternative = true
-
-[minify]
-  minifyOutput = true
-
+# A mount of the site replaces Hugo's default for its target root, so content and assets are listed with the grammar.
 [[module.mounts]]
   source = "content"
   target = "content"
@@ -36,20 +30,3 @@ disableKinds = ["taxonomy", "term", "rss"]
 [[module.mounts]]
   source = "../docs/grammar"
   target = "assets/grammar"
-
-[outputs]
-  home = ["html", "markdown", "search", "llms", "llmsfull"]
-  section = ["html", "markdown"]
-  page = ["html", "markdown"]
-
-[outputFormats.llms]
-  baseName = "llms"
-  mediaType = "text/plain"
-  isPlainText = true
-  notAlternative = true
-
-[outputFormats.llmsfull]
-  baseName = "llms-full"
-  mediaType = "text/plain"
-  isPlainText = true
-  notAlternative = true

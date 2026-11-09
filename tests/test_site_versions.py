@@ -3,7 +3,8 @@
 The real Hugo build runs in `make site-versions` and pages.yml. This test runs the whole assembly on a small git
 repository whose `make site` writes two pages: the tags that become versions (and the ones that do not), the tag with
 no site left out, a tag that fails (or no tag built at all) failing the run, the latest release served at the root, the
-selector tags added to every page once and to nothing else, and a second run that builds only what is not cached.
+selector tags added to every page once and to nothing else, a second run that builds only what is not cached, and
+each tag built with the docs theme commit it pins.
 """
 import importlib.util
 import json
@@ -15,7 +16,8 @@ import pytest
 
 from tests.agentica_test import ROOT
 
-# Each tag's `make site` records its own base URL and version in its pages; a tree with a FAIL file fails.
+# Each tag's `make site` records its own base URL and version in its pages (and the mark of its docs theme, when it has
+# one); a tree with a FAIL file fails.
 MAKEFILE = (
     ".PHONY: site\n"
     "site:\n"
@@ -27,6 +29,7 @@ MAKEFILE = (
     " > site/public/library/index.html\n"
     "\tprintf '<html><head></head><body>%s</body></html>' '$(HUGO_FLAGS)' > site/public/index.html\n"
     "\tprintf 'see <head></head> /agentica/' > site/public/llms.txt\n"
+    "\t@if [ -e site/themes/docs-theme/mark ]; then cat site/themes/docs-theme/mark >> site/public/index.html; fi\n"
 )
 
 
@@ -138,6 +141,26 @@ def test_every_html_page_loads_the_selector_once_and_the_cache_skips_builds(repo
     code, out, total = build(tmp_path, monkeypatch)
     assert code == 0 and total - first == 1  # only dev builds again: the working tree is never cached
     assert all(page.read_text().count(tags) == 1 for page in out.rglob("*.html"))
+
+
+def test_a_tag_is_built_with_the_theme_commit_it_pins(repo, tmp_path, monkeypatch):
+    theme = tmp_path / "theme"
+    theme.mkdir()
+    git(theme, "init", "-q")
+    (theme / "mark").write_text("theme one")
+    git(theme, "add", "-A")
+    git(theme, "commit", "-q", "-m", "one")
+    git(repo, "-c", "protocol.file.allow=always", "submodule", "add", "-q", str(theme), tool.THEME)
+    release(repo, "0.13.0", "0.13.0")
+    # The checkout moves on, uncommitted: git archive leaves the submodule empty, so the tag needs its own commit.
+    (theme / "mark").write_text("theme two")
+    git(theme, "commit", "-q", "-am", "two")
+    git(repo / tool.THEME, "pull", "-q")
+    code, out, _ = build(tmp_path, monkeypatch)
+    assert code == 0
+    assert "theme one" in (out / "0.13.0" / "index.html").read_text()
+    assert "theme one" in (out / "index.html").read_text()
+    assert "theme two" in (out / "dev" / "index.html").read_text()
 
 
 def test_a_tag_that_fails_fails_the_run(repo, tmp_path, monkeypatch, capsys):

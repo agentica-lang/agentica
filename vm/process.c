@@ -32,6 +32,7 @@
 #define ERR_CHUNK 4096
 #define REAP_MS 1000
 #define GRACE_MS 1000
+#define GROUP_POLL_MS 20
 #define URING_ENV "UV_USE_IO_URING="
 #define CHANNEL_PREFIX AGC_CHANNEL_ENV "="
 #define METRICS_ENV "AGENTICA_VM_METRICS="
@@ -65,7 +66,7 @@ struct launch {
   CC_OWNS char *cwd;
   size_t args;
   int files[2];
-  bool channel;
+  bool channel, group;
 };
 
 /* A request's slot and count on its child are taken by its START step (link_request), on the I/O thread. A request
@@ -92,10 +93,12 @@ struct request {
   launch *start;
 };
 
+/* first: the children that run. graced: the group children (pgroup) whose stop is in its grace, each with one count
+   in `users`, so the end of the run can still kill a group whose leader was reaped meanwhile. */
 struct guard {
   agc_trace trace;
   agc_loop *io;
-  proc *first;
+  proc *first, *graced;
   size_t running;
   bool released, reaping;
 };
@@ -112,12 +115,15 @@ struct proc {
   agc_output *forward;
   agc_forward_wait forward_wait;
   agc_duplex *channel;
-  guard *g;
-  proc *run_prev, *run_next;
+  guard *g, *grace_g;
+  proc *run_prev, *run_next, *grace_prev, *grace_next;
   size_t users, handles;
   /* begun: the spawn has run, so the handles below are in some state; a child whose spawn never ran has none. */
   bool begun, linked, running, exited, err_done, in_closed, closed, reading;
-  bool captured, out_cut, err_cut, stop_failed;
+  /* group: the child leads its own process group (Process.spawn* with pgroup, where agc_proc_groups), and every
+     signal of a stop goes to the group. group_gone: the end-of-run wait found the group empty (ESRCH), so it is not
+     probed or signalled again: its id may since name another group. */
+  bool captured, out_cut, err_cut, stop_failed, group, group_gone;
   stop_state stop;
   int write_status;
   int64_t status;
@@ -154,14 +160,37 @@ static void closed_out(uv_handle_t *h) { handle_gone(OWNER(h, out)); }
 
 static void closed_err(uv_handle_t *h) { handle_gone(OWNER(h, err)); }
 
-static void closed_grace(uv_handle_t *h) { handle_gone(OWNER(h, grace)); }
-
 static void close_handle(uv_handle_t *h, uv_close_cb done) {
   if (!uv_is_closing(h)) uv_close(h, done);
 }
 
 static void guard_settle(guard *g) {
-  if (g->released && !g->running) free(g);
+  if (g->released && !g->running && !g->graced) free(g);
+}
+
+static void hold_grace(guard *g, proc *p) {
+  p->grace_g = g;
+  p->grace_prev = NULL;
+  p->grace_next = g->graced;
+  if (g->graced) g->graced->grace_prev = p;
+  g->graced = p;
+  p->users++;
+}
+
+/* Takes P off the graced list and gives back its count. The caller settles P, and the guard returned (NULL when P was
+   not on the list). */
+static guard *drop_grace(proc *p) {
+  guard *g = p->grace_g;
+  if (!g) return NULL;
+  p->grace_g = NULL;
+  if (p->grace_prev)
+    p->grace_prev->grace_next = p->grace_next;
+  else
+    g->graced = p->grace_next;
+  if (p->grace_next) p->grace_next->grace_prev = p->grace_prev;
+  p->grace_prev = p->grace_next = NULL;
+  p->users--;
+  return g;
 }
 
 static void unlink_child(proc *p) {
@@ -176,6 +205,13 @@ static void unlink_child(proc *p) {
   p->run_prev = p->run_next = NULL;
   if (--g->running) return;
   guard_settle(g);
+}
+
+static void closed_grace(uv_handle_t *h) {
+  proc *p = OWNER(h, grace);
+  guard *g = drop_grace(p);
+  if (g) guard_settle(g);
+  handle_gone(p);
 }
 
 static bool wait_over(const proc *p) { return p->closed || (p->exited && p->err_done); }
@@ -319,26 +355,46 @@ static void finished(proc *p, int64_t status) {
    comes while `running` is still true, the exit is awaited, for up to REAP_MS
    at the end of a run. */
 static int signal_child(proc *p, int sig) {
-  int rc = uv_process_kill(&p->process, sig);
+  /* The group's id is the child's pid: libuv's spawn returns after the child's setsid, so the group exists while the
+     child runs. A group that is gone (ESRCH) leaves the child alone to signal, and only while it is unreaped: a reaped
+     pid may already be another process's. A group the end-of-run wait found gone (group_gone) is not signalled. */
+  int rc = p->group && !p->group_gone && p->process.pid > 0 ? uv_kill(-p->process.pid, sig) : UV_ESRCH;
+  if (rc == UV_ESRCH && p->running) rc = uv_process_kill(&p->process, sig);
   if (rc == UV_ESRCH) rc = 0;
-  AGC_TRACE(&p->trace, AGC_TRACE_PROC, "%s pid=%d rc=%d", sig == SIGKILL ? "kill" : "term", (int)p->process.pid, rc);
+  AGC_TRACE(&p->trace, AGC_TRACE_PROC, "%s pid=%d group=%d rc=%d", sig == SIGKILL ? "kill" : "term",
+            (int)p->process.pid, p->group ? 1 : 0, rc);
   p->stop = sig == SIGTERM && !rc ? STOP_TERM : STOP_KILLED;
   p->stop_failed = rc != 0;
   return rc;
 }
 
+/* True while a group child's grace is still to end in a SIGKILL of the group: its leader may exit on the SIGTERM
+   while a descendant ignores it or takes longer. */
+static bool group_in_grace(const proc *p) { return p->group && p->stop == STOP_TERM; }
+
 /* A captured child's pipes close at once, but its uv_process_t stays open
-   until it exits, and its grace timer until it exits or got SIGKILL. */
+   until it exits, and its grace timer until it exits or got SIGKILL. The timer of a group child runs to its end even
+   after the exit, so grace_over can kill the group. At the end of the run a group child that close_children holds
+   (grace_g) keeps it too, timer or not: the wait after the SIGTERM needs it on `graced` until the SIGKILL. */
 static void retire(proc *p) {
   if (!p->closed) return;
-  if (p->captured && (!p->running || p->stop == STOP_KILLED)) close_handle((uv_handle_t *)&p->grace, closed_grace);
+  bool timed = group_in_grace(p) && (uv_is_active((uv_handle_t *)&p->grace) || p->grace_g);
+  if (p->captured && ((!p->running && !timed) || p->stop == STOP_KILLED))
+    close_handle((uv_handle_t *)&p->grace, closed_grace);
   if (!p->running) close_handle((uv_handle_t *)&p->process, closed_process);
 }
 
 static void grace_over(uv_timer_t *t) {
   proc *p = OWNER(t, grace);
-  if (p->running && p->stop == STOP_TERM) signal_child(p, SIGKILL);
+  /* A group gets its SIGKILL even when the leader was reaped during the grace: POSIX does not give the pid to a new
+     process while a group with that id exists, so -pid still names this group, or nothing (ESRCH). The risk left is
+     an empty group whose id a new group leader took within the grace. */
+  if ((p->running || p->group) && p->stop == STOP_TERM) signal_child(p, SIGKILL);
+  if (p->stop == STOP_TERM) p->stop = STOP_KILLED;
   retire(p);
+  guard *g = drop_grace(p);
+  if (g) guard_settle(g);
+  settle(p);
 }
 
 /* docs/vm/10-io-processes.md §10.4: a captured child gets SIGTERM and one
@@ -355,6 +411,7 @@ static int shut(proc *p) {
     if (p->stop == STOP_NONE) {
       err = signal_child(p, SIGTERM);
       if (!err) uv_timer_start(&p->grace, grace_over, GRACE_MS, 0);
+      if (!err && p->group && p->linked) hold_grace(p->g, p);
     }
   } else if (p->running) {
     err = signal_child(p, SIGKILL);
@@ -414,20 +471,60 @@ static void await_exits(guard *g, bool grace) {
   uv_run(loop, UV_RUN_NOWAIT);
 }
 
+/* True while a group in its grace still has a process. A leader reaped during the grace leaves `first`, not
+   `graced`, and its group id stays its own while any member lives (grace_over). A group found empty (ESRCH) is
+   marked gone and skipped from then on; any other failure (EPERM) counts as gone for this probe only. */
+static bool groups_alive(const guard *g) {
+  bool alive = false;
+  for (proc *p = g->graced; p; p = p->grace_next) {
+    if (!group_in_grace(p) || p->group_gone || p->process.pid <= 0) continue;
+    int rc = uv_kill(-p->process.pid, 0);
+    if (rc == UV_ESRCH) p->group_gone = true;
+    if (rc == 0) alive = true;
+  }
+  return alive;
+}
+
+/* The grace of the end of the run: the loop runs until every captured child exited and every group in its grace
+   is gone, or GRACE_MS passed. A group's end makes no event, so a short repeating timer wakes the loop to look. */
+static void grace_wait(guard *g) {
+  if (!exits_pending(g, true) && !groups_alive(g)) return;
+  uv_loop_t *loop = agc_loop_uv(g->io);
+  uv_timer_t bound, tick;
+  uv_update_time(loop);
+  uv_timer_init(loop, &bound);
+  uv_timer_init(loop, &tick);
+  uv_timer_start(&bound, bound_over, GRACE_MS, 0);
+  uv_timer_start(&tick, bound_over, GROUP_POLL_MS, GROUP_POLL_MS);
+  while (uv_is_active((uv_handle_t *)&bound) && (exits_pending(g, true) || groups_alive(g))) uv_run(loop, UV_RUN_ONCE);
+  uv_close((uv_handle_t *)&bound, NULL);
+  uv_close((uv_handle_t *)&tick, NULL);
+  uv_run(loop, UV_RUN_NOWAIT);
+}
+
 /* Plain children get SIGKILL at once; captured ones SIGTERM, then SIGKILL
-   when the grace wait is over, then one more wait for the exits. */
+   when the grace wait is over, then one more wait for the exits. A group child in its grace (from here, or from a
+   Process.close whose timer has not fired) is on `graced`: its group gets the SIGKILL even if its leader was reaped
+   during the wait. */
 static void close_children(guard *g) {
   if (g->reaping) return;
   g->reaping = true;
-  bool grace = false;
   for (proc *p = g->first; p; p = p->run_next) {
     if (p->running && p->captured && p->stop == STOP_NONE)
       signal_child(p, SIGTERM);
     else if (p->running && !p->captured && !p->closed)
       signal_child(p, SIGKILL);
-    grace = grace || in_grace(p);
+    if (group_in_grace(p) && !p->grace_g) hold_grace(g, p);
   }
-  if (grace) await_exits(g, true);
+  grace_wait(g);
+  for (proc *p = g->graced, *next = NULL; p; p = next) {
+    next = p->grace_next;
+    if (group_in_grace(p)) signal_child(p, SIGKILL);
+    if (p->stop == STOP_TERM) p->stop = STOP_KILLED;
+    retire(p);
+    (void)drop_grace(p);
+    settle(p);
+  }
   for (proc *p = g->first, *next = NULL; p; p = next) {
     next = p->run_next;
     if (p->captured && p->running && p->stop == STOP_TERM) signal_child(p, SIGKILL);
@@ -1134,6 +1231,10 @@ static int start_child(guard *g, proc *p, const launch *l) {
     options.cwd = l->cwd;
     options.stdio_count = 3 + link.child_count;
     options.stdio = stdio;
+    /* POSIX: libuv's DETACHED is setsid() in the child, a new session and process group led by the child. It is not
+       used on Windows, where it would also take the child out of libuv's job object (agc_proc_groups). */
+    p->group = l->group && agc_proc_groups();
+    if (p->group) options.flags |= UV_PROCESS_DETACHED;
     link_child(g, p);
     rc = uv_spawn(loop, &p->process, &options);
     p->handles = 1;
@@ -1330,7 +1431,7 @@ static bool begin_spawn(void *data, agc_io_job *job) {
    resolves before the child changes directory (§10.4). out and err (Process.spawn only; NULL or empty: the pipe) are
    files for the child's stdout and stderr, opened last, so a spawn refused for its other arguments touches no file. */
 static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string *dir, int64_t timeout, bool channel,
-                             const agc_map *env, const agc_string *out, const agc_string *err) {
+                             const agc_map *env, const agc_string *out, const agc_string *err, bool group) {
   if (vm->rt->deny_run) return agc_error_value("denied: --deny-run turns off starting programs");
   const agc_string *command = agc_as_string(vm, args[0]);
   const agc_list *list = agc_as_list(vm, args[1]);
@@ -1394,6 +1495,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   l->cwd = cwd;
   l->args = count;
   l->channel = channel;
+  l->group = group;
   if (!l->env) {
     AGC_TRACE(&vm->rt->trace, AGC_TRACE_PROC, "spawn_failed path=%s rc=%d", l->argv[0], UV_ENOMEM);
     free_launch(l);
@@ -1433,40 +1535,53 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   return agc_result_value(true, agc_process_value(pr));
 }
 
-/* Each spawn has two arities. The longer one (with `env`, and `out` and `err` for Process.spawn) is what the catalog
-   now lowers to; the shorter one stays for the bytecode of bootstrap/stage0.agcb, which was compiled before `env`
-   existed (remove it with the next refresh of stage0). */
+/* The longest arity of each spawn (with `pgroup` last) is what the catalog lowers to. spawn_captured and
+   spawn_channel keep the arity before `pgroup`: bootstrap/stage0.agcb and the front end it compiles call the first, and
+   the first binary's driver (stage0) compiles std/test's runner, which calls the second. Each spawn also keeps the one
+   from before `env`, for older seeds (remove them with the next refresh of stage0). The C tests call the shortest. */
 static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false, NULL, NULL, NULL);
+  return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false, NULL, NULL, NULL, false);
 }
 
-static agc_value builtin_spawn_files(agc_vm *vm, agc_value *args, uint32_t span) {
+static agc_value builtin_spawn_group(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false, agc_as_map(vm, args[3]),
-                     agc_as_string(vm, args[4]), agc_as_string(vm, args[5]));
+                     agc_as_string(vm, args[4]), agc_as_string(vm, args[5]), agc_as_bool(vm, args[6]));
 }
 
 static agc_value builtin_spawn_captured(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, NULL, NULL, NULL);
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, NULL, NULL, NULL, false);
 }
 
 static agc_value builtin_spawn_captured_env(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, agc_as_map(vm, args[4]),
-                     NULL, NULL);
+                     NULL, NULL, false);
+}
+
+static agc_value builtin_spawn_captured_group(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, agc_as_map(vm, args[4]),
+                     NULL, NULL, agc_as_bool(vm, args[5]));
 }
 
 static agc_value builtin_spawn_channel(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, NULL, NULL, NULL);
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, NULL, NULL, NULL, false);
 }
 
 static agc_value builtin_spawn_channel_env(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, agc_as_map(vm, args[4]),
-                     NULL, NULL);
+                     NULL, NULL, false);
+}
+
+static agc_value builtin_spawn_channel_group(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, agc_as_map(vm, args[4]),
+                     NULL, NULL, agc_as_bool(vm, args[5]));
 }
 
 /* The child of a process value that is not closed. With several schedulers the I/O thread owns `closed`, so only the
@@ -1760,7 +1875,7 @@ static agc_value builtin_read_available(agc_vm *vm, agc_value *args, uint32_t sp
 
 const agc_builtin agc_process_builtins[] = {
   {"Process.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"Process.spawn", 6, builtin_spawn_files, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Process.spawn", 7, builtin_spawn_group, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.send_bytes.bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
@@ -1770,9 +1885,11 @@ const agc_builtin agc_process_builtins[] = {
   {"Process.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Process.spawn_captured", 4, builtin_spawn_captured, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.spawn_captured", 5, builtin_spawn_captured_env, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Process.spawn_captured", 6, builtin_spawn_captured_group, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.output", 2, builtin_output, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Process.spawn_channel", 4, builtin_spawn_channel, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.spawn_channel", 5, builtin_spawn_channel_env, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Process.spawn_channel", 6, builtin_spawn_channel_group, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.channel_read_line", 2, builtin_channel_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.channel_send", 3, builtin_channel_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.channel_close", 2, builtin_channel_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
