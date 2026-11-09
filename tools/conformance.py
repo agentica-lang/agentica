@@ -68,8 +68,8 @@ WINDOWS_ONLY_MODULES = frozenset({
 # descriptor flags and colon names (and the descriptor flags, FIFOs and ptys of the Native.wait_* cases in
 # tests/test_vm_native.py, where Windows waits only on sockets, and the SIGTERM grace of a child at the end of the run
 # that tests/test_vm_crypto.py uses to hold the run open); macOS lacks non-UTF-8 names, a way to limit the CPUs of a
-# process, and an RLIMIT_NPROC that limits threads (tests/test_vm_native.py); the other systems lack the Windows-only
-# modules above.
+# process, an RLIMIT_NPROC that limits threads (tests/test_vm_native.py) and a ulimit -v that limits the address space
+# (tests/test_vm_multicore.py); the other systems lack the Windows-only modules above.
 # Golden fixtures named -posix or -windows are allowed by name (host_only_fixture).
 _NEEDS_POSIX = frozenset({
     "tests/test_bdd_integration.py", "tests/test_bdd_posix.py", "tests/test_check_stdin.py", "tests/test_cli_fmt.py",
@@ -85,6 +85,7 @@ _NEEDS_POSIX = frozenset({
 })
 _NEEDS_LINUX = frozenset({
     "tests/test_vm_diff_8.py", "tests/test_single_binary.py", "tests/test_vm_file_open_block.py", "tests/test_vm_native.py",
+    "tests/test_vm_multicore.py",
 })
 HOST_ONLY_ALLOWED = {
     "linux-x86_64": WINDOWS_ONLY_MODULES,
