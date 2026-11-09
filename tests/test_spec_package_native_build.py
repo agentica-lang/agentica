@@ -378,6 +378,7 @@ def test_an_optional_module_with_no_compiler_warns_once_a_run_and_the_program_ru
     compact = agentica(ws, "--ai", main, **no_compiler(ws))
     assert (compact.code, compact.stdout) == (0, "without adder\n"), compact.stderr
     assert compact.stderr.startswith("warning\n") and compact.stderr.count("[PKG-NATIVE-UNBUILT]") == 1
+    assert "\n  key: native.adder.build\n" in compact.stderr and compact.stderr.endswith("\n\n")
     installed = agentica(ws, "install", **no_compiler(ws))
     assert installed.code == 0 and NOT_BUILT.fullmatch(installed.stderr), installed.stderr
     compiled = agentica(ws, "compile", main, "-o", str(ws.base / "main.agcb"), **no_compiler(ws))
@@ -389,6 +390,31 @@ def test_an_optional_module_with_no_compiler_warns_once_a_run_and_the_program_ru
     called = agentica(ws, "--json", main, **no_compiler(ws))
     codes = [json.loads(line)["code"] for line in called.stderr.splitlines()]
     assert (called.code, codes) == (1, ["PKG-NATIVE-UNBUILT", "RUNTIME-NATIVE-LOAD"]), called.stderr
+
+
+@NATIVE_CALLS
+@host_only(WINDOWS, "the cache root comes from LOCALAPPDATA there")
+def test_an_optional_module_with_no_cache_root_warns_and_a_call_fails_as_for_a_missing_library(ws):
+    project(ws, table=OPTIONAL_TABLE)
+    env = environment(ws, **no_compiler(ws))
+    for name in ("HOME", "XDG_CACHE_HOME"):
+        env.pop(name, None)
+    called = run(cli() + ["--json", str(ws.project / "main.agc")], cwd=ws.project, env=env)
+    codes = [json.loads(line)["code"] for line in called.stderr.splitlines()]
+    assert (called.code, codes) == (1, ["PKG-NATIVE-UNBUILT", "RUNTIME-NATIVE-LOAD"]), called.stderr
+
+
+@NATIVE_CALLS
+def test_agentica_test_json_gives_the_warning_of_an_optional_module_and_the_test_falls_back(ws):
+    project(ws, table=OPTIONAL_TABLE)
+    (ws.project / "test").mkdir()
+    (ws.project / "test" / "adder_test.agc").write_text(
+        'import Adder from "../adder"\n\ndef main() -> Void\n  Test.run([Test.test("adds or falls back") do\n'
+        '    Test.assert(!Native.load("adder").ok? or Adder.add(40, 2) == 42, "adds")\n  end])\nend\n',
+        encoding="utf-8")
+    tested = agentica(ws, "--json", "test", **no_compiler(ws))
+    assert tested.code == 0 and json.loads(tested.stdout)["passed"] == 1, tested.stdout + tested.stderr
+    assert [json.loads(line)["code"] for line in tested.stderr.splitlines()] == ["PKG-NATIVE-UNBUILT"], tested.stderr
 
 
 def test_an_optional_module_still_fails_on_a_missing_source_and_under_a_deny_flag_compile(ws):

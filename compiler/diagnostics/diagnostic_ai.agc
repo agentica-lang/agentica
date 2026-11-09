@@ -41,11 +41,11 @@ export def ai(problem: Problems.Problem, text: String) -> String
 end
 
 ## The compact form of a warning, which is not an error (the command goes on): the form of `ai` with `warning` as its
-## first line.
+## first line, and an empty line after it, which sets it apart from what the command prints next.
 export def warning(problem: Problems.Problem) -> String
   text = ai(problem, "")
   at = text.index_of("\n").unwrap!
-  return "warning#{text.slice(at, text.length - at)}"
+  return "warning#{text.slice(at, text.length - at)}\n"
 end
 
 def hint_text(help: Diag.Help) -> String
