@@ -88,6 +88,31 @@ def processes_mentioning(text):
     return found
 
 
+def describe_missing_run(temporary, driver, pid_file):
+    """Why the process list may not name the run folder, for an assertion message (Windows): the driver's state, the
+    pid file, the folder in both spellings and what it holds, and the processes that name the folder or agentica. A
+    part that cannot be read says so, so the message never hides the failure."""
+    def part(read):
+        try:
+            return read()
+        except Exception as problem:  # any failure to read a part is shown, never raised
+            return "unavailable: %r" % problem
+
+    def listing():
+        from tests.windows_support import processes_naming
+        names = [str(temporary), os.path.realpath(temporary), "agentica"]
+        return processes_naming(names, 15)
+
+    return "\n".join([
+        "no process names the run folder",
+        "driver exit status (None while it runs): %s" % part(driver.process.poll),
+        "pid file: %s" % part(lambda: repr(pid_file.read_text())),
+        "folder: %s, real path %s" % (temporary, part(lambda: os.path.realpath(temporary))),
+        "folder holds: %s" % part(lambda: sorted(os.listdir(temporary))),
+        "processes that name the folder or agentica:\n%s" % part(listing),
+    ])
+
+
 def doc(text):
     return '  """\n  ' + text + '\n  """\n'
 
@@ -721,10 +746,8 @@ def test_killing_the_driver_stops_the_runner_the_scenario_vm_and_the_program_and
     if os.name == "nt":
         # The process list names the runner and the scenario VM by their run folder; without them in the list, the wait
         # for an empty list after the kill would prove nothing.
-        from tests.windows_support import processes_of_agentica
         assert wait_until(lambda: processes_mentioning(temporary), scaled(20), 0.5), (
-            "no process names %s; the folder holds %s; the processes of agentica:\n%s"
-            % (temporary, sorted(os.listdir(temporary)), processes_of_agentica()))
+            describe_missing_run(temporary, driver, pid_file))
     # Only the driver dies, not its process group: the runner, the VM and the program must follow it.
     driver.process.kill()
     driver.process.wait(scaled(20))
