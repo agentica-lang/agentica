@@ -3,6 +3,7 @@
   "code": null,
   "steps": 6,
   "stdout": [
+    "channel> {\"event\":\"ready\"}",
     "channel> {\"code\":\"RUNTIME-BDD-INFRA\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-bad-index-bytes.agc\",\"message\":\"invalid test index\",\"range\":{\"end\":{\"column\":5,\"line\":6},\"start\":{\"column\":3,\"line\":2}}}",
     ""
   ],

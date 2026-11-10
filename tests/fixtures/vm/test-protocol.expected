@@ -4,6 +4,7 @@
   "steps": 41,
   "stdout": [
     "main reads: first line",
+    "channel> {\"event\":\"ready\"}",
     "channel> {\"event\":\"pass\"}",
     "{\"event\":\"pass\"}",
     "\u001eagentica-bdd {\"event\":\"pass\"}",
