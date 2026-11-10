@@ -3,8 +3,9 @@
 A run has one scheduler per logical core unless it asks for a count; these cases pin four, so they mean the same on
 any machine. The goldens of tests/fixtures/vm are taken at one scheduler (tests/vm_diff_support.py) and must hold at
 four too, except where the order of output between tasks is not fixed (the ORDER set), which keeps its golden at
-`--schedulers 1`. TCP, TLS, the HTTP server, processes, the child channel and the Test protocol post every step to the
-I/O thread, so their fixtures run here. The other cases check what threads must keep: whole lines, exact sums, timers
+`--schedulers 1`, and the short programs of one task with no I/O but their prints (SHARED_WORK), which show nothing
+new there. TCP, TLS, the HTTP server, processes, the child channel and the Test protocol post every step to the I/O
+thread, so their fixtures run here. The other cases check what threads must keep: whole lines, exact sums, timers
 that fire, the end of the run from any scheduler, standard input and FIFOs, sockets and processes used and closed from
 several schedulers, and what still needs one scheduler.
 `make test-multicore` runs this module; `make vm-tsan-run` runs it on a ThreadSanitizer build.
@@ -78,10 +79,21 @@ def program(tmp_path, name, text):
     return compile_text(text, name, tmp_path)
 
 
+# A fixture whose source names none of these runs one task whose only I/O is its prints (a run with
+# AGENTICA_VM_TRACE=sched,io shows one spawn and only output jobs). At four schedulers three of them stay idle, so a
+# short such run proves nothing its golden does not, and is left out. A run of SHORT_STEPS steps or more is kept: it
+# has several turns, so its task can move between schedulers, and the GC runs with the other schedulers parked.
+SHARED_WORK = re.compile(r"\b(Task|Channel|TCP|TLS|HTTP|Process|Child|File|Dir|Logger|Test|Time|KDF|Profile|ATS|System"
+                         r"|import|extern|compute)\b|\bIO\.(gets|read|eof|flush)")
+SHORT_STEPS = 5000
+
+
 def fixture_cases():
     cases = []
     for path in diff.fixture_programs():
         if path.stem in ORDER:
+            continue
+        if not SHARED_WORK.search(path.read_text(encoding="utf-8")) and diff.read_expected_steps(path) < SHORT_STEPS:
             continue
         cases.append(pytest.param(path, id=path.stem))
     return cases
