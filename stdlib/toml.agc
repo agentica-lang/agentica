@@ -125,7 +125,7 @@ export def parse(text: String) -> Result[Value]
       p = try end_of_line(src, parsed.pos)
     end
   end
-  return ok(to_value(root))
+  ok(to_value(root))
 end
 
 ## Writes a `Value.Table` as a TOML document ending in a newline. Any other root is an error.
@@ -144,8 +144,8 @@ export def encode(value: Value) -> Result[String]
     Value.Table(entries) ->
       lines = try emit_table(entries, [], [], class_table())
       return ok("") if lines.size == 0
-      return ok("#{lines.join("\n")}\n")
-    _ -> return error("the root of a TOML document must be a table")
+      ok("#{lines.join("\n")}\n")
+    _ -> error("the root of a TOML document must be a table")
   end
 end
 
@@ -174,7 +174,7 @@ export def get(value: Value, path: String) -> Result[Value]
       _ -> return error("\"#{part}\" in \"#{path}\" is not inside a table or an array")
     end
   end
-  return ok(current)
+  ok(current)
 end
 
 # A plain run of ASCII digits without a leading zero (`0`, `7`, `12`): not `01`, `+1` or `-0`.
@@ -184,7 +184,7 @@ def index_segment?(part: String) -> Bool
     c = String.code(ch)
     return false if c < 48 or c > 57
   end
-  return true
+  true
 end
 
 # `depth` counts the arrays and tables above `value`. The deepest tree `parse` can build has under
@@ -192,13 +192,13 @@ end
 # levels), so the limit of 2,048 never refuses a parsed document.
 def json_of(value: Value, depth: Int) -> Result[Json]
   case value
-    Value.Str(s) -> return ok(JSON.from(s))
-    Value.Int(n) -> return ok(JSON.from(n))
-    Value.Bool(b) -> return ok(JSON.from(b))
-    Value.DateTime(s) -> return ok(JSON.from(s))
+    Value.Str(s) -> ok(JSON.from(s))
+    Value.Int(n) -> ok(JSON.from(n))
+    Value.Bool(b) -> ok(JSON.from(b))
+    Value.DateTime(s) -> ok(JSON.from(s))
     Value.Float(x) ->
       return error("cannot convert #{float_text(x)} to JSON") if !finite?(x)
-      return ok(JSON.from(x))
+      ok(JSON.from(x))
     Value.Array(items) ->
       return error("a value nests more than 2048 levels") if depth >= 2048
       out: List[Json] = []
@@ -206,7 +206,7 @@ def json_of(value: Value, depth: Int) -> Result[Json]
         j = try json_of(item, depth + 1)
         out = out.push(j)
       end
-      return ok(JSON.array(out))
+      ok(JSON.array(out))
     Value.Table(entries) ->
       return error("a value nests more than 2048 levels") if depth >= 2048
       out: Map[String, Json] = {}
@@ -214,7 +214,7 @@ def json_of(value: Value, depth: Int) -> Result[Json]
         j = try json_of(entries[k], depth + 1)
         out = out.put(k, j)
       end
-      return ok(JSON.object(out))
+      ok(JSON.object(out))
   end
 end
 
@@ -224,7 +224,7 @@ def max_depth() -> Int = 256
 
 def empty_tbl(origin: Origin, stamp: Int) -> Tbl
   entries: Map[String, Node] = {}
-  return Tbl(entries: entries, origin: origin, stamp: stamp)
+  Tbl(entries: entries, origin: origin, stamp: stamp)
 end
 
 # Bits of the class table, indexed by code point (0 .. 127; other code points have none).
@@ -251,19 +251,19 @@ def class_table() -> List[Int]
     end
     table = table.set(i, bits)
   end
-  return table
+  table
 end
 
 def make_src(text: String) -> Src
   clean = text.replace("\r\n", "\n")
   codes = clean.split("").map do |c| String.code(c) end
-  return Src(text: clean, codes: codes, n: codes.size, cls: class_table())
+  Src(text: clean, codes: codes, n: codes.size, cls: class_table())
 end
 
 # The code point at `pos`, or -1 past the end.
 def at(src: Src, pos: Int) -> Int
   return src.codes[pos] if pos >= 0 and pos < src.n
-  return -1
+  -1
 end
 
 def has(src: Src, c: Int, bit: Int) -> Bool = c >= 0 and c < 128 and src.cls[c].bit_and(bit) != 0
@@ -275,7 +275,7 @@ def piece(src: Src, from: Int, to: Int) -> String
     stop = src.n
   end
   return "" if stop <= from
-  return String.slice(src.text, from, stop - from)
+  String.slice(src.text, from, stop - from)
 end
 
 # A message with its place. It runs only on the error path, so it may scan from the start.
@@ -296,7 +296,7 @@ def place(src: Src, pos: Int, message: String) -> String
     end
     i += 1
   end
-  return "line #{line}, column #{column}: #{message}"
+  "line #{line}, column #{column}: #{message}"
 end
 
 def skip_ws(src: Src, pos: Int) -> Int
@@ -304,7 +304,7 @@ def skip_ws(src: Src, pos: Int) -> Int
   while at(src, p) == 32 or at(src, p) == 9
     p += 1
   end
-  return p
+  p
 end
 
 # Skips a comment and returns the position of the LF that ends it (or of the end of input).
@@ -314,7 +314,7 @@ def skip_comment(src: Src, pos: Int) -> Result[Int]
     return error(place(src, p, "control character in a comment")) if has(src, at(src, p), 16)
     p += 1
   end
-  return ok(p)
+  ok(p)
 end
 
 # Skips spaces, tabs, line ends and comments (inside an array).
@@ -330,7 +330,7 @@ def skip_trivia(src: Src, pos: Int) -> Result[Int]
       return ok(p)
     end
   end
-  return ok(p)
+  ok(p)
 end
 
 # After a statement only a comment may follow on the line. Returns the position after the LF.
@@ -345,7 +345,7 @@ def end_of_line(src: Src, pos: Int) -> Result[Int]
   elsif c == 10
     return ok(p + 1)
   end
-  return error(place(src, p, "expected a line end after the value"))
+  error(place(src, p, "expected a line end after the value"))
 end
 
 # A dotted key. `pos` of the result is after the key and the spaces that follow it.
@@ -380,7 +380,7 @@ def parse_key(src: Src, pos: Int) -> Result[Key]
       return ok(Key(parts: parts, pos: p))
     end
   end
-  return error("unreachable")
+  error("unreachable")
 end
 
 def parse_value(src: Src, pos: Int, depth: Int) -> Result[Parsed]
@@ -413,12 +413,12 @@ def parse_value(src: Src, pos: Int, depth: Int) -> Result[Parsed]
   elsif (c >= 48 and c <= 57) or c == 43 or c == 45 or c == 105 or c == 110
     return parse_number(src, pos)
   end
-  return error(place(src, pos, "expected a value"))
+  error(place(src, pos, "expected a value"))
 end
 
 # `word` at `pos`, not followed by another number character (so `truex` is not `true`).
 def word_at(src: Src, pos: Int, word: String) -> Bool
-  return piece(src, pos, pos + word.length) == word and !has(src, at(src, pos + word.length), 8)
+  piece(src, pos, pos + word.length) == word and !has(src, at(src, pos + word.length), 8)
 end
 
 def parse_array(src: Src, pos: Int, depth: Int) -> Result[Parsed]
@@ -437,7 +437,7 @@ def parse_array(src: Src, pos: Int, depth: Int) -> Result[Parsed]
       return error(place(src, p, "expected ',' or ']' in an array"))
     end
   end
-  return error("unreachable")
+  error("unreachable")
 end
 
 # An inline table lives on one line and has no trailing comma. It is read with the same rules as
@@ -465,7 +465,7 @@ def parse_inline_table(src: Src, pos: Int, depth: Int) -> Result[Parsed]
       return error(place(src, p, "expected ',' or '}' in an inline table"))
     end
   end
-  return error("unreachable")
+  error("unreachable")
 end
 
 # ---- strings ----
@@ -496,7 +496,7 @@ def basic_string(src: Src, pos: Int) -> Result[Scan]
       i += 1
     end
   end
-  return error("unreachable")
+  error("unreachable")
 end
 
 def literal_string(src: Src, pos: Int) -> Result[Scan]
@@ -515,7 +515,7 @@ def literal_string(src: Src, pos: Int) -> Result[Scan]
       i += 1
     end
   end
-  return error("unreachable")
+  error("unreachable")
 end
 
 # Counts the run of `quote` characters at `pos`, up to 6.
@@ -524,7 +524,7 @@ def quote_run(src: Src, pos: Int, quote: Int) -> Int
   while n < 6 and at(src, pos + n) == quote
     n += 1
   end
-  return n
+  n
 end
 
 # A multi-line basic string. `pos` is at the first of the three opening quotes.
@@ -576,7 +576,7 @@ def multi_basic(src: Src, pos: Int) -> Result[Scan]
       i += 1
     end
   end
-  return error("unreachable")
+  error("unreachable")
 end
 
 def multi_literal(src: Src, pos: Int) -> Result[Scan]
@@ -608,7 +608,7 @@ def multi_literal(src: Src, pos: Int) -> Result[Scan]
       i += 1
     end
   end
-  return error("unreachable")
+  error("unreachable")
 end
 
 # The escape after a backslash; `pos` is at the character after it.
@@ -633,7 +633,7 @@ def read_escape(src: Src, pos: Int) -> Result[Scan]
   elsif c == 85
     return read_unicode(src, pos + 1, 8)
   end
-  return error(place(src, pos - 1, "invalid escape in a string"))
+  error(place(src, pos - 1, "invalid escape in a string"))
 end
 
 # `count` hex digits at `pos` that must name a Unicode scalar value (no surrogates).
@@ -647,7 +647,7 @@ def read_unicode(src: Src, pos: Int, count: Int) -> Result[Scan]
   if code > 1114111 or (code >= 55296 and code <= 57343)
     return error(place(src, pos - 2, "a unicode escape must be a Unicode scalar value"))
   end
-  return ok(Scan(text: String.from_code(code), pos: pos + count))
+  ok(Scan(text: String.from_code(code), pos: pos + count))
 end
 
 # 0 .. 15 for a hex digit, -1 for anything else.
@@ -659,7 +659,7 @@ def hex_value(c: Int) -> Int
   elsif c >= 65 and c <= 70
     return c - 55
   end
-  return -1
+  -1
 end
 
 # ---- numbers ----
@@ -679,7 +679,7 @@ def digit_run(src: Src, pos: Int) -> Int
       return p
     end
   end
-  return p
+  p
 end
 
 def parse_number(src: Src, pos: Int) -> Result[Parsed]
@@ -744,7 +744,7 @@ def parse_number(src: Src, pos: Int) -> Result[Parsed]
   end
   value = String.to_int(sign + digits)
   return error(place(src, pos, "integer out of the 64-bit range")) if !value.ok?
-  return ok(Parsed(value: Value.Int(value.unwrap!), pos: stop))
+  ok(Parsed(value: Value.Int(value.unwrap!), pos: stop))
 end
 
 # The JSON number grammar is the TOML float grammar without underscores and a leading plus, and
@@ -763,7 +763,7 @@ def decimal_float(src: Src, pos: Int, digits: String, negative: Bool, stop: Int)
   if negative
     x = x * (0.0 - 1.0)
   end
-  return ok(Parsed(value: Value.Float(x), pos: stop))
+  ok(Parsed(value: Value.Float(x), pos: stop))
 end
 
 # `0x`, `0o` and `0b` integers: digits from `from` up to `stop`, no sign, leading zeros allowed.
@@ -785,7 +785,7 @@ def radix_integer(src: Src, pos: Int, from: Int, stop: Int, radix: Int) -> Resul
       previous_digit = true
     end
   end
-  return ok(Parsed(value: Value.Int(value), pos: stop))
+  ok(Parsed(value: Value.Int(value), pos: stop))
 end
 
 # ---- dates and times ----
@@ -798,14 +798,11 @@ def number_at(src: Src, pos: Int, count: Int) -> Int
     return -1 if c < 48 or c > 57
     value = value * 10 + c - 48
   end
-  return value
+  value
 end
 
 def date_time_start?(src: Src, pos: Int) -> Bool
-  return (
-    (number_at(src, pos, 4) >= 0 and at(src, pos + 4) == 45) or
-    (number_at(src, pos, 2) >= 0 and at(src, pos + 2) == 58)
-  )
+  (number_at(src, pos, 4) >= 0 and at(src, pos + 4) == 45) or (number_at(src, pos, 2) >= 0 and at(src, pos + 2) == 58)
 end
 
 def days_in_month(year: Int, month: Int) -> Int
@@ -815,7 +812,7 @@ def days_in_month(year: Int, month: Int) -> Int
   elsif month == 4 or month == 6 or month == 9 or month == 11
     return 30
   end
-  return 31
+  31
 end
 
 # Reads a local date, a local time, a local date-time or an offset date-time at `pos` and
@@ -847,7 +844,7 @@ def date_time_end(src: Src, pos: Int) -> Result[Int]
     end
     return ok(clock_end + 6)
   end
-  return ok(clock_end)
+  ok(clock_end)
 end
 
 # `HH:MM:SS` with optional fractional seconds; a leap second (60) is accepted, as TOML allows.
@@ -876,7 +873,7 @@ def time_end(src: Src, pos: Int) -> Result[Int]
     return error(place(src, stop, "a time needs digits after the point")) if fraction == stop + 1
     stop = fraction
   end
-  return ok(stop)
+  ok(stop)
 end
 
 # True when `text` is exactly one TOML date-time (used by the encoder, which builds the class table
@@ -886,7 +883,7 @@ def valid_date_time?(text: String, cls: List[Int]) -> Bool
   src = Src(text: text, codes: codes, n: codes.size, cls: cls)
   return false if !date_time_start?(src, 0)
   stop = date_time_end(src, 0)
-  return stop.ok? and stop.unwrap! == src.n
+  stop.ok? and stop.unwrap! == src.n
 end
 
 # ---- the tree ----
@@ -894,8 +891,8 @@ end
 # Applies a `[header]` or `[[header]]` to the tree and returns the new tree. The root is a Tab.
 def open_table(root: Node, path: List[String], is_array: Bool) -> Result[Node]
   case root
-    Node.Tab(table) -> return header_into(table, path, 0, is_array)
-    _ -> return error("internal error: the root is not a table")
+    Node.Tab(table) -> header_into(table, path, 0, is_array)
+    _ -> error("internal error: the root is not a table")
   end
 end
 
@@ -913,22 +910,22 @@ def header_into(table: Tbl, path: List[String], i: Int, is_array: Bool) -> Resul
   case child
     Node.Tab(inner) ->
       sub = try header_into(inner, path, i + 1, is_array)
-      return ok(Node.Tab(table.with(entries: entries.put(seg, sub))))
+      ok(Node.Tab(table.with(entries: entries.put(seg, sub))))
     Node.Rows(rows) ->
       sub = try header_into(last_row(rows), path, i + 1, is_array)
       replaced = Node.Rows(rows.set(rows.size - 1, sub))
-      return ok(Node.Tab(table.with(entries: entries.put(seg, replaced))))
+      ok(Node.Tab(table.with(entries: entries.put(seg, replaced))))
     Node.Leaf(_) ->
       held = path.join(".")
-      return error("\"#{seg}\" is not a table, so it cannot hold \"#{held}\"")
+      error("\"#{seg}\" is not a table, so it cannot hold \"#{held}\"")
   end
 end
 
 # The element of an array of tables that headers and keys extend.
 def last_row(rows: List[Node]) -> Tbl
   case rows[rows.size - 1]
-    Node.Tab(table) -> return table
-    _ -> return empty_tbl(Origin.Header, 0)
+    Node.Tab(table) -> table
+    _ -> empty_tbl(Origin.Header, 0)
   end
 end
 
@@ -945,12 +942,12 @@ def header_last(entries: Map[String, Node], seg: String, name: String, is_array:
   case entries[seg]
     Node.Tab(existing) ->
       case existing.origin
-        Origin.Implicit -> return ok(Node.Tab(existing.with(origin: Origin.Header)))
-        Origin.Header -> return error("table \"#{name}\" is already defined")
-        Origin.Dotted -> return error("table \"#{name}\" is already defined by dotted keys")
+        Origin.Implicit -> ok(Node.Tab(existing.with(origin: Origin.Header)))
+        Origin.Header -> error("table \"#{name}\" is already defined")
+        Origin.Dotted -> error("table \"#{name}\" is already defined by dotted keys")
       end
-    Node.Rows(_) -> return error("\"#{name}\" is an array of tables, not a table")
-    Node.Leaf(_) -> return error("\"#{name}\" is already defined")
+    Node.Rows(_) -> error("\"#{name}\" is an array of tables, not a table")
+    Node.Leaf(_) -> error("\"#{name}\" is already defined")
   end
 end
 
@@ -959,8 +956,8 @@ end
 # earlier section made it, so `a.b = 1` and `[a]` cannot both define `a`.
 def put_key(root: Node, full: List[String], header_size: Int, value: Value, section: Int) -> Result[Node]
   case root
-    Node.Tab(table) -> return put_into(table, full, header_size, 0, value, section)
-    _ -> return error("internal error: the root is not a table")
+    Node.Tab(table) -> put_into(table, full, header_size, 0, value, section)
+    _ -> error("internal error: the root is not a table")
   end
 end
 
@@ -989,32 +986,32 @@ def put_into(table: Tbl, full: List[String], header_size: Int, i: Int, value: Va
         end
       end
       sub = try put_into(entered, full, header_size, i + 1, value, section)
-      return ok(Node.Tab(table.with(entries: entries.put(seg, sub))))
+      ok(Node.Tab(table.with(entries: entries.put(seg, sub))))
     Node.Rows(rows) ->
       return error("cannot add keys to the array of tables \"#{seg}\" with dotted keys") if i >= header_size
       sub = try put_into(last_row(rows), full, header_size, i + 1, value, section)
-      return ok(Node.Tab(table.with(entries: entries.put(seg, Node.Rows(rows.set(rows.size - 1, sub))))))
-    Node.Leaf(_) -> return error("\"#{seg}\" is a value, not a table")
+      ok(Node.Tab(table.with(entries: entries.put(seg, Node.Rows(rows.set(rows.size - 1, sub))))))
+    Node.Leaf(_) -> error("\"#{seg}\" is a value, not a table")
   end
 end
 
 def to_value(node: Node) -> Value
   case node
-    Node.Leaf(value) -> return value
-    Node.Rows(rows) -> return Value.Array(rows.map do |row| to_value(row) end)
+    Node.Leaf(value) -> value
+    Node.Rows(rows) -> Value.Array(rows.map do |row| to_value(row) end)
     Node.Tab(table) ->
       out: Map[String, Value] = {}
       for k in table.entries.keys
         out = out.put(k, to_value(table.entries[k]))
       end
-      return Value.Table(out)
+      Value.Table(out)
   end
 end
 
 # ---- writing ----
 
 def finite?(x: Float) -> Bool
-  return x == x and x != Float.from_bits(9218868437227405312) and x != Float.from_bits(-4503599627370496)
+  x == x and x != Float.from_bits(9218868437227405312) and x != Float.from_bits(-4503599627370496)
 end
 
 def float_text(x: Float) -> String
@@ -1025,7 +1022,7 @@ def float_text(x: Float) -> String
   elsif x == Float.from_bits(-4503599627370496)
     return "-inf"
   end
-  return String.from_float(x)
+  String.from_float(x)
 end
 
 def hex_digit(n: Int) -> String = String.slice("0123456789ABCDEF", n, 1)
@@ -1047,7 +1044,7 @@ def escape_for(c: Int) -> String
   elsif c == 13
     return "\\r"
   end
-  return "\\u00#{hex_digit(c / 16)}#{hex_digit(c % 16)}"
+  "\\u00#{hex_digit(c / 16)}#{hex_digit(c % 16)}"
 end
 
 # A basic string with escapes. Characters above 127 are written as they are. Runs of plain
@@ -1072,7 +1069,7 @@ def quote(s: String) -> String
     parts = parts.push(String.slice(s, start, chars.size - start))
   end
   parts = parts.push("\"")
-  return parts.join("")
+  parts.join("")
 end
 
 def bare_key?(key: String) -> Bool
@@ -1081,12 +1078,12 @@ def bare_key?(key: String) -> Bool
     c = String.code(ch)
     return false if !((c >= 97 and c <= 122) or (c >= 65 and c <= 90) or (c >= 48 and c <= 57) or c == 95 or c == 45)
   end
-  return true
+  true
 end
 
 def key_text(key: String) -> String
   return key if bare_key?(key)
-  return quote(key)
+  quote(key)
 end
 
 def path_text(path: List[String]) -> String = path.map do |k| key_text(k) end.join(".")
@@ -1095,13 +1092,13 @@ def path_text(path: List[String]) -> String = path.map do |k| key_text(k) end.jo
 # writer does too, and what it writes can be read back.
 def inline(value: Value, cls: List[Int], depth: Int) -> Result[String]
   case value
-    Value.Str(s) -> return ok(quote(s))
-    Value.Int(n) -> return ok(n.to_s)
-    Value.Float(x) -> return ok(float_text(x))
-    Value.Bool(b) -> return ok(b.to_s)
+    Value.Str(s) -> ok(quote(s))
+    Value.Int(n) -> ok(n.to_s)
+    Value.Float(x) -> ok(float_text(x))
+    Value.Bool(b) -> ok(b.to_s)
     Value.DateTime(s) ->
       return error("not a valid TOML date-time: #{quote(s)}") if !valid_date_time?(s, cls)
-      return ok(s)
+      ok(s)
     Value.Array(items) ->
       return error("arrays and inline tables nest more than 256 levels") if depth >= max_depth()
       texts: List[String] = []
@@ -1109,7 +1106,7 @@ def inline(value: Value, cls: List[Int], depth: Int) -> Result[String]
         text = try inline(item, cls, depth + 1)
         texts = texts.push(text)
       end
-      return ok("[#{texts.join(", ")}]")
+      ok("[#{texts.join(", ")}]")
     Value.Table(entries) ->
       return error("arrays and inline tables nest more than 256 levels") if depth >= max_depth()
       texts: List[String] = []
@@ -1117,7 +1114,7 @@ def inline(value: Value, cls: List[Int], depth: Int) -> Result[String]
         text = try inline(entries[k], cls, depth + 1)
         texts = texts.push("#{key_text(k)} = #{text}")
       end
-      return ok("{#{texts.join(", ")}}")
+      ok("{#{texts.join(", ")}}")
   end
 end
 
@@ -1132,8 +1129,8 @@ def table_array?(value: Value) -> Bool
           _ -> return false
         end
       end
-      return true
-    _ -> return false
+      true
+    _ -> false
   end
 end
 
@@ -1187,7 +1184,7 @@ def emit_table(
       _ -> next
     end
   end
-  return ok(lines)
+  ok(lines)
 end
 
 # True when a table has an entry that is written as a `key = value` line.
@@ -1199,5 +1196,5 @@ def has_plain?(entries: Map[String, Value]) -> Bool
       _ -> return true if !table_array?(v)
     end
   end
-  return false
+  false
 end

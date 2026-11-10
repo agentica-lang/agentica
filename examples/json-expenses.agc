@@ -15,7 +15,7 @@ def expense_totals(text: String) -> Result[Map[String, Int]]
     end
     totals = Map.put(totals, category, previous + amount)
   end
-  return ok(totals)
+  ok(totals)
 end
 
 def main() -> Void

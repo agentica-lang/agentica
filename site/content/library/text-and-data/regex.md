@@ -25,7 +25,7 @@ import Regex from "std/regex"
 def read_year(text: String) -> Result[String]
   found = try Regex.match(text, /(?P<year>\d{4})-\d{2}-\d{2}/)
   year = try Regex.named(found, "year")
-  return ok(year.text)
+  ok(year.text)
 end
 
 def main() -> Void

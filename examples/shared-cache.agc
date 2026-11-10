@@ -19,7 +19,7 @@ def lookup(shared: Shared, n: Int) -> String
     shared.stats.add("stored", 1)
   end
 
-  return text
+  text
 end
 
 def work(shared: Shared) -> Int
@@ -28,7 +28,7 @@ def work(shared: Shared) -> Int
     letters += lookup(shared, n).length
   end
 
-  return letters
+  letters
 end
 
 def main() -> Void

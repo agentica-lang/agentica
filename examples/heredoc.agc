@@ -1,7 +1,7 @@
 # Heredocs: a string of several lines. The common indentation of the text is removed.
 
 def usage(program: String, version: Int) -> String
-  return <<~TEXT
+  <<~TEXT
     Usage: #{program} [options] FILE
 
       --verbose   print more

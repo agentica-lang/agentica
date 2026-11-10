@@ -99,7 +99,7 @@ end
 
 ## Builds an `Error` at `span` with no expected or actual value.
 export def error_at(code: String, message: String, span: Span) -> Error
-  return Error(
+  Error(
     code: code,
     message: message,
     span: span,
@@ -124,7 +124,7 @@ export def from_json(text: String) -> Result[Error]
     end_column: try int_at(stop, "column"),
   )
 
-  return ok(
+  ok(
     Error(
       code: try text_at(root, "code"),
       message: try text_at(root, "message"),
@@ -141,7 +141,7 @@ end
 ## is what the report writes, so the text and the JSON cannot disagree.
 export def with_actual(problem: Error, actual: String) -> Error
   return problem if not JSON.null?(problem.original)
-  return Error(
+  Error(
     code: problem.code,
     message: problem.message,
     span: problem.span,
@@ -157,7 +157,7 @@ export def file_error(path: String, kind: String, problem: Error) -> FileResult 
 
 ## Like `file_error`, and keeps the `output` of the file.
 export def file_failure(path: String, kind: String, problem: Error, output: String) -> FileResult
-  return FileResult(path: path, feature: "", kind: kind, scenarios: [], verdict: Verdict.Fail(problem), output: output)
+  FileResult(path: path, feature: "", kind: kind, scenarios: [], verdict: Verdict.Fail(problem), output: output)
 end
 
 ## Returns the exit code of a run: 0 when there is a scenario and nothing failed or was left unexecuted (a skipped
@@ -188,7 +188,7 @@ export def json_and(files: List[FileResult], seed: Int, wall_ms: Int, more: Map[
     fields = fields.put(key, more[key])
   end
 
-  return JSON.object(fields)
+  JSON.object(fields)
 end
 
 ## Builds the plain text report, or the `--ai` text when `ai` is true. It has no final newline.
@@ -197,7 +197,7 @@ export def text(files: List[FileResult], ai: Bool, seed: Int) -> String = report
 ## Like `text`, with the time of the run (`wall_ms`, as in `json`), of each file and of the slowest scenarios
 ## (`agentica test --timing`) before the totals.
 export def timed_text(files: List[FileResult], ai: Bool, seed: Int, wall_ms: Int) -> String
-  return report_text(files, ai, seed, true, wall_ms)
+  report_text(files, ai, seed, true, wall_ms)
 end
 
 def report_text(files: List[FileResult], ai: Bool, seed: Int, timing: Bool, wall_ms: Int) -> String
@@ -214,7 +214,7 @@ def report_text(files: List[FileResult], ai: Bool, seed: Int, timing: Bool, wall
   if sums.exit_code != 0
     last = "#{last}, seed #{seed}"
   end
-  return chunks.filter do |chunk| chunk != "" end.push(last).join("\n")
+  chunks.filter do |chunk| chunk != "" end.push(last).join("\n")
 end
 
 # The time of a file: the durations of its scenarios, which run one after another.
@@ -241,19 +241,19 @@ def timing_text(files: List[FileResult], wall_ms: Int) -> String
     lines = lines.push("  #{entry.item.duration_ms} ms #{entry.label} / #{entry.item.name}")
   end
 
-  return lines.join("\n")
+  lines.join("\n")
 end
 
 def file_label(file: FileResult) -> String
   return file.path if file.kind == "tests"
 
-  return file.feature
+  file.feature
 end
 
 def count_text(count: Int) -> String
   return "1 scenario" if count == 1
 
-  return "#{count} scenarios"
+  "#{count} scenarios"
 end
 
 def totals(files: List[FileResult]) -> Totals
@@ -278,7 +278,7 @@ def totals(files: List[FileResult]) -> Totals
   elsif severe
     code = 2
   end
-  return Totals(
+  Totals(
     passed: passed,
     failed: scenarios - passed - skipped - not_run,
     skipped: skipped,
@@ -292,19 +292,19 @@ def failed?(verdict: Verdict) -> Bool = status(verdict) == "failed"
 
 def severe?(verdict: Verdict) -> Bool
   case verdict
-    Verdict.Fail(problem) -> return problem.code == "RUNTIME-BDD-INFRA" or problem.code == "RUNTIME-BDD-USAGE"
-    Verdict.Pass -> return false
-    Verdict.Skipped(_) -> return false
-    Verdict.NotExecuted -> return false
+    Verdict.Fail(problem) -> problem.code == "RUNTIME-BDD-INFRA" or problem.code == "RUNTIME-BDD-USAGE"
+    Verdict.Pass -> false
+    Verdict.Skipped(_) -> false
+    Verdict.NotExecuted -> false
   end
 end
 
 def status(verdict: Verdict) -> String
   case verdict
-    Verdict.Pass -> return "passed"
-    Verdict.Fail(_) -> return "failed"
-    Verdict.Skipped(_) -> return "skipped"
-    Verdict.NotExecuted -> return "not_executed"
+    Verdict.Pass -> "passed"
+    Verdict.Fail(_) -> "failed"
+    Verdict.Skipped(_) -> "skipped"
+    Verdict.NotExecuted -> "not_executed"
   end
 end
 
@@ -324,7 +324,7 @@ def file_json(file: FileResult) -> Json
     "output": JSON.from(file.output),
   }
 
-  return JSON.object(fields)
+  JSON.object(fields)
 end
 
 def scenario_json(item: ScenarioResult) -> Json
@@ -346,16 +346,16 @@ def scenario_json(item: ScenarioResult) -> Json
     "output": JSON.from(item.output),
   }
 
-  return JSON.object(fields)
+  JSON.object(fields)
 end
 
 # The reason a step gave to `BDD.skip`, or null.
 def reason_json(verdict: Verdict) -> Json
   case verdict
-    Verdict.Skipped(reason) -> return JSON.from(reason)
-    Verdict.Pass -> return JSON.null()
-    Verdict.Fail(_) -> return JSON.null()
-    Verdict.NotExecuted -> return JSON.null()
+    Verdict.Skipped(reason) -> JSON.from(reason)
+    Verdict.Pass -> JSON.null()
+    Verdict.Fail(_) -> JSON.null()
+    Verdict.NotExecuted -> JSON.null()
   end
 end
 
@@ -377,7 +377,7 @@ def step_json(step: StepResult) -> Json
     "error": problem,
   }
 
-  return JSON.object(fields)
+  JSON.object(fields)
 end
 
 def location_json(span: Span) -> Json
@@ -387,15 +387,15 @@ def location_json(span: Span) -> Json
     "column": JSON.from(span.column),
   }
 
-  return JSON.object(fields)
+  JSON.object(fields)
 end
 
 def verdict_json(verdict: Verdict) -> Json
   case verdict
-    Verdict.Fail(problem) -> return error_json(problem)
-    Verdict.Pass -> return JSON.null()
-    Verdict.Skipped(_) -> return JSON.null()
-    Verdict.NotExecuted -> return JSON.null()
+    Verdict.Fail(problem) -> error_json(problem)
+    Verdict.Pass -> JSON.null()
+    Verdict.Skipped(_) -> JSON.null()
+    Verdict.NotExecuted -> JSON.null()
   end
 end
 
@@ -412,13 +412,13 @@ def error_json(problem: Error) -> Json
     "range": JSON.object(range),
   }
 
-  return JSON.object(put_detail(put_detail(fields, "expected", problem.expected), "actual", problem.actual))
+  JSON.object(put_detail(put_detail(fields, "expected", problem.expected), "actual", problem.actual))
 end
 
 def put_detail(fields: Map[String, Json], key: String, detail: Detail) -> Map[String, Json]
   case detail
-    Detail.Known(value) -> return fields.put(key, JSON.from(value))
-    Detail.Unknown -> return fields
+    Detail.Known(value) -> fields.put(key, JSON.from(value))
+    Detail.Unknown -> fields
   end
 end
 
@@ -433,16 +433,16 @@ def file_text(file: FileResult, ai: Bool) -> String
   end
   label = file_label(file)
   lines = file.scenarios.map do |item| scenario_text(label, item, ai) end
-  return head.concat(lines).join("\n")
+  head.concat(lines).join("\n")
 end
 
 def scenario_text(label: String, item: ScenarioResult, ai: Bool) -> String
   case item.verdict
-    Verdict.Pass -> return "PASS #{label} / #{item.name}"
-    Verdict.NotExecuted -> return "NOT RUN #{label} / #{item.name}"
-    Verdict.Skipped(reason) -> return "SKIP #{label} / #{item.name}#{skip_text(reason, ai)}"
+    Verdict.Pass -> "PASS #{label} / #{item.name}"
+    Verdict.NotExecuted -> "NOT RUN #{label} / #{item.name}"
+    Verdict.Skipped(reason) -> "SKIP #{label} / #{item.name}#{skip_text(reason, ai)}"
     Verdict.Fail(problem) ->
-      return "FAIL #{label} / #{item.name}#{separator(ai)}#{summary(problem, ai)}#{output_text(item.output, ai)}"
+      "FAIL #{label} / #{item.name}#{separator(ai)}#{summary(problem, ai)}#{output_text(item.output, ai)}"
   end
 end
 
@@ -455,12 +455,12 @@ def skip_text(reason: String, ai: Bool) -> String
     return " | #{shown}"
   end
 
-  return "\n  #{shown}"
+  "\n  #{shown}"
 end
 
 def separator(ai: Bool) -> String
   return " | " if ai
-  return "\n"
+  "\n"
 end
 
 def output_text(output: String, ai: Bool) -> String
@@ -470,18 +470,13 @@ def output_text(output: String, ai: Bool) -> String
     return " | output #{output.inspect}"
   end
   indented = output.split("\n").map do |line| "  #{line}" end.join("\n")
-  return "\n#{indented}"
+  "\n#{indented}"
 end
 
 def summary(problem: Error, ai: Bool) -> String
   span = problem.span
   head = "#{span.file}:#{span.line}:#{span.column} [#{problem.code}] #{problem.message}"
-  return (
-    head +
-    detail_text("expected", problem.expected) +
-    detail_text("actual", problem.actual) +
-    stack_text(problem, ai)
-  )
+  head + detail_text("expected", problem.expected) + detail_text("actual", problem.actual) + stack_text(problem, ai)
 end
 
 def stack_text(problem: Error, ai: Bool) -> String
@@ -492,7 +487,7 @@ def stack_text(problem: Error, ai: Bool) -> String
     return " | stack #{lines.join("; ")}"
   end
   frames = lines.map do |line| "    #{line}" end.join("\n")
-  return "\n  stack, innermost first:\n#{frames}"
+  "\n  stack, innermost first:\n#{frames}"
 end
 
 def stack_lines(root: Json) -> List[String]
@@ -512,7 +507,7 @@ def stack_lines(root: Json) -> List[String]
   if spawned.ok?
     lines = lines.concat(["task spawned at #{place_text(spawned.unwrap!)}"])
   end
-  return lines
+  lines
 end
 
 # The frames the VM shows before a cut stack's gap: AGC_STACK_HEAD in vm/port.h.
@@ -520,7 +515,7 @@ def stack_head() -> Int = 15
 
 def not_shown(omitted: Int) -> String
   return "... 1 frame not shown ..." if omitted == 1
-  return "... #{omitted} frames not shown ..."
+  "... #{omitted} frames not shown ..."
 end
 
 def frame_line(frame: Json) -> String
@@ -533,20 +528,20 @@ def frame_line(frame: Json) -> String
   if JSON.get(frame, "tail").ok?
     line = "#{line} (after a tail call)"
   end
-  return line
+  line
 end
 
 def place_text(place: Json) -> String
   file = text_at(place, "file").unwrap_or("?")
   line = int_at(place, "line").unwrap_or(0)
   column = int_at(place, "column").unwrap_or(0)
-  return "#{file}:#{line}:#{column}"
+  "#{file}:#{line}:#{column}"
 end
 
 def detail_text(label: String, detail: Detail) -> String
   case detail
-    Detail.Known(value) -> return "; #{label} #{value}"
-    Detail.Unknown -> return ""
+    Detail.Known(value) -> "; #{label} #{value}"
+    Detail.Unknown -> ""
   end
 end
 
@@ -560,5 +555,5 @@ def detail_at(root: Json, key: String) -> Detail
     value = JSON.string(found.unwrap!)
     return Detail.Known(value.unwrap!) if value.ok?
   end
-  return Detail.Unknown
+  Detail.Unknown
 end

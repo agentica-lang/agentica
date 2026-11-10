@@ -1,16 +1,16 @@
 def classify(age: Int) -> String
   if age >= 18
-    return "adult"
+    "adult"
   elsif age >= 13
-    return "teen"
+    "teen"
   else
-    return "child"
+    "child"
   end
 end
 
 def classify_text(text: String) -> Result[String]
   age = try String.to_int(text)
-  return ok(classify(age))
+  ok(classify(age))
 end
 
 def main() -> Void

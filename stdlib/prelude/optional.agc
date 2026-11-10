@@ -3,8 +3,8 @@
 
 def unwrap_or(value: Optional[A], default: A) -> A
   case value
-    some(item) -> return item
-    none -> return default
+    some(item) -> item
+    none -> default
   end
 end
 
@@ -16,33 +16,33 @@ def unwrap(value: Optional[A]) -> A
   end
   # Never reached, since __fail_arg halts; it gives the A that every path must return.
   never: Result[A] = error("unwrap! on none")
-  return never.unwrap!
+  never.unwrap!
 end
 
 def map(value: Optional[A], f: Fn[A, B]) -> Optional[B]
   case value
-    some(item) -> return some(f.call(item))
-    none -> return none
+    some(item) -> some(f.call(item))
+    none -> none
   end
 end
 
 def is_some(value: Optional[A]) -> Bool
   case value
-    some(_) -> return true
-    none -> return false
+    some(_) -> true
+    none -> false
   end
 end
 
 def is_none(value: Optional[A]) -> Bool
   case value
-    some(_) -> return false
-    none -> return true
+    some(_) -> false
+    none -> true
   end
 end
 
 def to_result(value: Optional[A], message: String) -> Result[A]
   case value
-    some(item) -> return ok(item)
-    none -> return error(message)
+    some(item) -> ok(item)
+    none -> error(message)
   end
 end

@@ -13,7 +13,7 @@ export def read_u8(data: Bytes, offset: Int) -> Result[Int] = load8(data, offset
 ## Reads a signed 8-bit integer at `offset`. Returns an error when the bytes are outside `data`.
 export def read_i8(data: Bytes, offset: Int) -> Result[Int]
   value = try load8(data, offset, "i8")
-  return ok(extend(value, 8))
+  ok(extend(value, 8))
 end
 
 ## Reads a big-endian unsigned 16-bit integer at `offset`. Returns an error when the bytes are outside `data`.
@@ -25,13 +25,13 @@ export def read_u16_le(data: Bytes, offset: Int) -> Result[Int] = load16_le(data
 ## Reads a big-endian signed 16-bit integer at `offset`. Returns an error when the bytes are outside `data`.
 export def read_i16_be(data: Bytes, offset: Int) -> Result[Int]
   value = try load16_be(data, offset, "i16")
-  return ok(extend(value, 16))
+  ok(extend(value, 16))
 end
 
 ## Reads a little-endian signed 16-bit integer at `offset`. Returns an error when the bytes are outside `data`.
 export def read_i16_le(data: Bytes, offset: Int) -> Result[Int]
   value = try load16_le(data, offset, "i16")
-  return ok(extend(value, 16))
+  ok(extend(value, 16))
 end
 
 ## Reads a big-endian unsigned 32-bit integer at `offset`. Returns an error when the bytes are outside `data`.
@@ -43,27 +43,27 @@ export def read_u32_le(data: Bytes, offset: Int) -> Result[Int] = load32_le(data
 ## Reads a big-endian signed 32-bit integer at `offset`. Returns an error when the bytes are outside `data`.
 export def read_i32_be(data: Bytes, offset: Int) -> Result[Int]
   value = try load32_be(data, offset, "i32")
-  return ok(extend(value, 32))
+  ok(extend(value, 32))
 end
 
 ## Reads a little-endian signed 32-bit integer at `offset`. Returns an error when the bytes are outside `data`.
 export def read_i32_le(data: Bytes, offset: Int) -> Result[Int]
   value = try load32_le(data, offset, "i32")
-  return ok(extend(value, 32))
+  ok(extend(value, 32))
 end
 
 ## Reads a big-endian unsigned 64-bit integer at `offset`. Returns an error when the bytes are outside `data`, or when
 ## the value is above `9223372036854775807`.
 export def read_u64_be(data: Bytes, offset: Int) -> Result[Int]
   value = try load64_be(data, offset, "u64")
-  return unsigned64(value, offset)
+  unsigned64(value, offset)
 end
 
 ## Reads a little-endian unsigned 64-bit integer at `offset`. Returns an error when the bytes are outside `data`, or
 ## when the value is above `9223372036854775807`.
 export def read_u64_le(data: Bytes, offset: Int) -> Result[Int]
   value = try load64_le(data, offset, "u64")
-  return unsigned64(value, offset)
+  unsigned64(value, offset)
 end
 
 ## Reads a big-endian signed 64-bit integer at `offset`. Returns an error when the bytes are outside `data`.
@@ -75,107 +75,107 @@ export def read_i64_le(data: Bytes, offset: Int) -> Result[Int] = load64_le(data
 ## Reads a big-endian 32-bit IEEE 754 float at `offset`. Returns an error when the bytes are outside `data`.
 export def read_f32_be(data: Bytes, offset: Int) -> Result[Float]
   bits = try load32_be(data, offset, "f32")
-  return ok(Float.from_bits32(bits))
+  ok(Float.from_bits32(bits))
 end
 
 ## Reads a little-endian 32-bit IEEE 754 float at `offset`. Returns an error when the bytes are outside `data`.
 export def read_f32_le(data: Bytes, offset: Int) -> Result[Float]
   bits = try load32_le(data, offset, "f32")
-  return ok(Float.from_bits32(bits))
+  ok(Float.from_bits32(bits))
 end
 
 ## Reads a big-endian 64-bit IEEE 754 float at `offset`. Returns an error when the bytes are outside `data`.
 export def read_f64_be(data: Bytes, offset: Int) -> Result[Float]
   bits = try load64_be(data, offset, "f64")
-  return ok(Float.from_bits(bits))
+  ok(Float.from_bits(bits))
 end
 
 ## Reads a little-endian 64-bit IEEE 754 float at `offset`. Returns an error when the bytes are outside `data`.
 export def read_f64_le(data: Bytes, offset: Int) -> Result[Float]
   bits = try load64_le(data, offset, "f64")
-  return ok(Float.from_bits(bits))
+  ok(Float.from_bits(bits))
 end
 
 ## Returns the 1 byte of `value` as an unsigned 8-bit integer. Returns an error when `value` is not in `0 .. 255`.
 export def write_u8(value: Int) -> Result[Bytes]
   try fits(value, 0, 255, "u8")
-  return ok(pack([value]))
+  ok(pack([value]))
 end
 
 ## Returns the 1 byte of `value` as a signed 8-bit integer. Returns an error when `value` is not in `-128 .. 127`.
 export def write_i8(value: Int) -> Result[Bytes]
   try fits(value, -128, 127, "i8")
-  return ok(pack([value.bit_and(255)]))
+  ok(pack([value.bit_and(255)]))
 end
 
 ## Returns the 2 bytes of `value` as a big-endian unsigned 16-bit integer. Returns an error when `value` is not in
 ## `0 .. 65535`.
 export def write_u16_be(value: Int) -> Result[Bytes]
   try fits(value, 0, 65535, "u16")
-  return ok(bytes2_be(value))
+  ok(bytes2_be(value))
 end
 
 ## Returns the 2 bytes of `value` as a little-endian unsigned 16-bit integer. Returns an error when `value` is not in
 ## `0 .. 65535`.
 export def write_u16_le(value: Int) -> Result[Bytes]
   try fits(value, 0, 65535, "u16")
-  return ok(bytes2_le(value))
+  ok(bytes2_le(value))
 end
 
 ## Returns the 2 bytes of `value` as a big-endian signed 16-bit integer. Returns an error when `value` is not in
 ## `-32768 .. 32767`.
 export def write_i16_be(value: Int) -> Result[Bytes]
   try fits(value, -32768, 32767, "i16")
-  return ok(bytes2_be(value))
+  ok(bytes2_be(value))
 end
 
 ## Returns the 2 bytes of `value` as a little-endian signed 16-bit integer. Returns an error when `value` is not in
 ## `-32768 .. 32767`.
 export def write_i16_le(value: Int) -> Result[Bytes]
   try fits(value, -32768, 32767, "i16")
-  return ok(bytes2_le(value))
+  ok(bytes2_le(value))
 end
 
 ## Returns the 4 bytes of `value` as a big-endian unsigned 32-bit integer. Returns an error when `value` is not in
 ## `0 .. 4294967295`.
 export def write_u32_be(value: Int) -> Result[Bytes]
   try fits(value, 0, 4294967295, "u32")
-  return ok(bytes4_be(value))
+  ok(bytes4_be(value))
 end
 
 ## Returns the 4 bytes of `value` as a little-endian unsigned 32-bit integer. Returns an error when `value` is not in
 ## `0 .. 4294967295`.
 export def write_u32_le(value: Int) -> Result[Bytes]
   try fits(value, 0, 4294967295, "u32")
-  return ok(bytes4_le(value))
+  ok(bytes4_le(value))
 end
 
 ## Returns the 4 bytes of `value` as a big-endian signed 32-bit integer. Returns an error when `value` is not in
 ## `-2147483648 .. 2147483647`.
 export def write_i32_be(value: Int) -> Result[Bytes]
   try fits(value, -2147483648, 2147483647, "i32")
-  return ok(bytes4_be(value))
+  ok(bytes4_be(value))
 end
 
 ## Returns the 4 bytes of `value` as a little-endian signed 32-bit integer. Returns an error when `value` is not in
 ## `-2147483648 .. 2147483647`.
 export def write_i32_le(value: Int) -> Result[Bytes]
   try fits(value, -2147483648, 2147483647, "i32")
-  return ok(bytes4_le(value))
+  ok(bytes4_le(value))
 end
 
 ## Returns the 8 bytes of `value` as a big-endian unsigned 64-bit integer. Returns an error when `value` is not in
 ## `0 .. 9223372036854775807`.
 export def write_u64_be(value: Int) -> Result[Bytes]
   try fits(value, 0, 9223372036854775807, "u64")
-  return ok(bytes8_be(value))
+  ok(bytes8_be(value))
 end
 
 ## Returns the 8 bytes of `value` as a little-endian unsigned 64-bit integer. Returns an error when `value` is not in
 ## `0 .. 9223372036854775807`.
 export def write_u64_le(value: Int) -> Result[Bytes]
   try fits(value, 0, 9223372036854775807, "u64")
-  return ok(bytes8_le(value))
+  ok(bytes8_le(value))
 end
 
 ## Returns the 8 bytes of `value`, big-endian. It never fails.
@@ -204,7 +204,7 @@ export def write_f64_le(x: Float) -> Bytes = bytes8_le(Float.to_bits(x))
 ## than 4294967295 bytes.
 export def frame(payload: Bytes) -> Result[Bytes]
   return error("payload of #{payload.size} bytes does not fit in a u32 length") if payload.size > 4294967295
-  return ok(bytes4_be(payload.size) + payload)
+  ok(bytes4_be(payload.size) + payload)
 end
 
 ## Reads the 4-byte big-endian length of a frame at `offset`. Returns an error when `max` is negative, the bytes are
@@ -213,19 +213,19 @@ export def read_frame_length(data: Bytes, offset: Int, max: Int) -> Result[Int]
   return error("frame limit #{max} is negative") if max < 0
   length = try load32_be(data, offset, "u32")
   return error("frame length #{length} is above the limit #{max}") if length > max
-  return ok(length)
+  ok(length)
 end
 
 def window(data: Bytes, offset: Int, n: Int, type: String) -> Result[Void]
   if offset < 0 or offset > data.size - n
     return error("#{type} at offset #{offset} is outside bytes of length #{data.size}")
   end
-  return ok()
+  ok()
 end
 
 def fits(value: Int, low: Int, high: Int, type: String) -> Result[Void]
   return error("value #{value} does not fit in #{type}") if value < low or value > high
-  return ok()
+  ok()
 end
 
 def extend(value: Int, bits: Int) -> Int = value.shift_left(64 - bits).shift_right(64 - bits)
@@ -233,21 +233,21 @@ def extend(value: Int, bits: Int) -> Int = value.shift_left(64 - bits).shift_rig
 def load8(data: Bytes, offset: Int, type: String) -> Result[Int]
   try window(data, offset, 1, type)
   a = data[offset]
-  return ok(a)
+  ok(a)
 end
 
 def load16_be(data: Bytes, offset: Int, type: String) -> Result[Int]
   try window(data, offset, 2, type)
   a = data[offset]
   b = data[offset + 1]
-  return ok(a.shift_left(8).bit_or(b))
+  ok(a.shift_left(8).bit_or(b))
 end
 
 def load16_le(data: Bytes, offset: Int, type: String) -> Result[Int]
   try window(data, offset, 2, type)
   a = data[offset]
   b = data[offset + 1]
-  return ok(b.shift_left(8).bit_or(a))
+  ok(b.shift_left(8).bit_or(a))
 end
 
 def load32_be(data: Bytes, offset: Int, type: String) -> Result[Int]
@@ -256,7 +256,7 @@ def load32_be(data: Bytes, offset: Int, type: String) -> Result[Int]
   b = data[offset + 1]
   c = data[offset + 2]
   d = data[offset + 3]
-  return ok(a.shift_left(24).bit_or(b.shift_left(16)).bit_or(c.shift_left(8)).bit_or(d))
+  ok(a.shift_left(24).bit_or(b.shift_left(16)).bit_or(c.shift_left(8)).bit_or(d))
 end
 
 def load32_le(data: Bytes, offset: Int, type: String) -> Result[Int]
@@ -265,7 +265,7 @@ def load32_le(data: Bytes, offset: Int, type: String) -> Result[Int]
   b = data[offset + 1]
   c = data[offset + 2]
   d = data[offset + 3]
-  return ok(d.shift_left(24).bit_or(c.shift_left(16)).bit_or(b.shift_left(8)).bit_or(a))
+  ok(d.shift_left(24).bit_or(c.shift_left(16)).bit_or(b.shift_left(8)).bit_or(a))
 end
 
 def load64_be(data: Bytes, offset: Int, type: String) -> Result[Int]
@@ -280,7 +280,7 @@ def load64_be(data: Bytes, offset: Int, type: String) -> Result[Int]
   h = data[offset + 7]
   high = a.shift_left(24).bit_or(b.shift_left(16)).bit_or(c.shift_left(8)).bit_or(d)
   low = e.shift_left(24).bit_or(f.shift_left(16)).bit_or(g.shift_left(8)).bit_or(h)
-  return ok(high.shift_left(32).bit_or(low))
+  ok(high.shift_left(32).bit_or(low))
 end
 
 def load64_le(data: Bytes, offset: Int, type: String) -> Result[Int]
@@ -295,12 +295,12 @@ def load64_le(data: Bytes, offset: Int, type: String) -> Result[Int]
   h = data[offset + 7]
   low = d.shift_left(24).bit_or(c.shift_left(16)).bit_or(b.shift_left(8)).bit_or(a)
   high = h.shift_left(24).bit_or(g.shift_left(16)).bit_or(f.shift_left(8)).bit_or(e)
-  return ok(high.shift_left(32).bit_or(low))
+  ok(high.shift_left(32).bit_or(low))
 end
 
 def unsigned64(value: Int, offset: Int) -> Result[Int]
   return error("u64 at offset #{offset} does not fit in Int") if value < 0
-  return ok(value)
+  ok(value)
 end
 
 def bytes2_be(value: Int) -> Bytes = pack([value.shift_right(8).bit_and(255), value.bit_and(255)])
@@ -308,7 +308,7 @@ def bytes2_be(value: Int) -> Bytes = pack([value.shift_right(8).bit_and(255), va
 def bytes2_le(value: Int) -> Bytes = pack([value.bit_and(255), value.shift_right(8).bit_and(255)])
 
 def bytes4_be(value: Int) -> Bytes
-  return pack([
+  pack([
     value.shift_right(24).bit_and(255),
     value.shift_right(16).bit_and(255),
     value.shift_right(8).bit_and(255),
@@ -317,7 +317,7 @@ def bytes4_be(value: Int) -> Bytes
 end
 
 def bytes4_le(value: Int) -> Bytes
-  return pack([
+  pack([
     value.bit_and(255),
     value.shift_right(8).bit_and(255),
     value.shift_right(16).bit_and(255),
@@ -326,7 +326,7 @@ def bytes4_le(value: Int) -> Bytes
 end
 
 def bytes8_be(value: Int) -> Bytes
-  return pack([
+  pack([
     value.shift_right(56).bit_and(255),
     value.shift_right(48).bit_and(255),
     value.shift_right(40).bit_and(255),
@@ -339,7 +339,7 @@ def bytes8_be(value: Int) -> Bytes
 end
 
 def bytes8_le(value: Int) -> Bytes
-  return pack([
+  pack([
     value.bit_and(255),
     value.shift_right(8).bit_and(255),
     value.shift_right(16).bit_and(255),

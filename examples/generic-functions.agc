@@ -8,7 +8,7 @@ end
 def first_or[T](xs: List[T], fallback: T) -> T
   return fallback if xs.length == 0
 
-  return xs[0]
+  xs[0]
 end
 
 # The item with the largest key, or none when xs is empty.
@@ -25,14 +25,14 @@ def max_by[T](xs: List[T], key: Fn[T, Int]) -> Optional[T]
     end
   end
 
-  return some(best)
+  some(best)
 end
 
 # Runs body on the first item of the pool, or fails when the pool is empty.
 def with[T, R](pool: Pool[T], body: Fn[T, Result[R]]) -> Result[R]
   return error("empty pool") if pool.items.length == 0
 
-  return body.call(pool.items[0])
+  body.call(pool.items[0])
 end
 
 def double(n: Int) -> Int = n * 2

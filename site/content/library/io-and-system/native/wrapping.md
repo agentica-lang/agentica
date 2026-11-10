@@ -36,8 +36,8 @@ end
 ## Opens a file for appending, or says which path failed.
 export def open_append(path: String) -> Result[Stream]
   case fopen(path, "a")
-    Result.Ok(stream) -> return ok(stream)
-    Result.Err(_) -> return error("cannot open #{path}")
+    Result.Ok(stream) -> ok(stream)
+    Result.Err(_) -> error("cannot open #{path}")
   end
 end
 
@@ -45,14 +45,14 @@ end
 export def write_line(stream: Stream, text: String) -> Result[Void]
   return error("cannot write to the stream") if fputs("#{text}\n", stream) < 0
 
-  return ok()
+  ok()
 end
 
 ## Pushes the buffered text to the file.
 export def flush(stream: Stream) -> Result[Void]
   return error("cannot flush the stream") if fflush(stream) != 0
 
-  return ok()
+  ok()
 end
 
 ## True when the descriptor is a terminal.
@@ -74,7 +74,7 @@ end
 ## Splits x into its whole part and its fraction, both with the sign of x.
 export def split(x: Float) -> Split
   parts = modf(x)
-  return Split(whole: parts.whole, fraction: parts.result)
+  Split(whole: parts.whole, fraction: parts.result)
 end
 
 extern "libm.so.6"
@@ -89,7 +89,7 @@ A C function that fills memory its caller gives it, such as `getcwd`, gets an [o
 ```agentica {mode="check"}
 ## The working directory, or an error when it is longer than 4095 bytes.
 export def cwd() -> Result[String]
-  return Native.memory_pointer(4096) do |buf|
+  Native.memory_pointer(4096) do |buf|
     return error("the working directory is longer than 4095 bytes") if Native.null?(getcwd(buf, 4096))
 
     ok(Native.get_string(buf, 0))
@@ -115,7 +115,7 @@ export def append_to(path: String, f: Fn[Stream, Result[Void]]) -> Result[Void]
   stream = try fopen(path, "a")
   done = f.call(stream)
   Native.close(stream)
-  return done
+  done
 end
 
 def main() -> Void
@@ -164,7 +164,7 @@ export def open_file(path: String, options: OpenOptions) -> Result[Int]
   fd = open(path, flags, options.mode)
   return error("cannot open #{path}") if fd < 0
 
-  return ok(fd)
+  ok(fd)
 end
 
 ## Sets or clears close-on-exec.
@@ -176,7 +176,7 @@ export def set_close_on_exec(fd: Int, on: Bool = true) -> Result[Void]
 
   return error("cannot set close-on-exec on #{fd}") if fcntl_set(fd, F_SETFD, flag) < 0
 
-  return ok()
+  ok()
 end
 
 ## Writes one or two fields to fd, separated by a tab and ended by a newline.
@@ -190,7 +190,7 @@ export def write_fields(fd: Int, fields: List[String]) -> Result[Void]
 
   return error("cannot write #{fields.length} fields to #{fd}") if written < 0
 
-  return ok()
+  ok()
 end
 
 extern "libc.so.6"
@@ -234,8 +234,8 @@ end
 export def context(model: Model, options: ContextOptions) -> Result[Context]
   params = infer_context_default_params().with(n_ctx: options.size, n_threads: options.threads)
   case infer_init_from_model(model, params)
-    Result.Ok(made) -> return ok(made)
-    Result.Err(_) -> return error("cannot make a context of #{options.size} tokens")
+    Result.Ok(made) -> ok(made)
+    Result.Err(_) -> error("cannot make a context of #{options.size} tokens")
   end
 end
 ```

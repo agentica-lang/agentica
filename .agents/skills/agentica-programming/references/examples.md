@@ -15,8 +15,8 @@ end
 
 def describe(status: Status) -> String
   case status
-    Status.Paid -> return "paid"
-    Status.Owed(amount) -> return "owed #{amount}"
+    Status.Paid -> "paid"
+    Status.Owed(amount) -> "owed #{amount}"
   end
 end
 
@@ -28,7 +28,7 @@ def parse_price(text: String) -> Result[Int]
     return error("free")
   end
 
-  return ok(price)
+  ok(price)
 end
 
 def main() -> Void
@@ -63,7 +63,7 @@ def parse_numbers(line: String) -> Result[List[Int]]
     numbers = numbers.push(n)
   end
 
-  return ok(numbers)
+  ok(numbers)
 end
 
 def main() -> Void

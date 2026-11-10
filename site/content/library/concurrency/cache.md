@@ -38,7 +38,7 @@ import Cache from "std/cache"
 
 def render(id: Int, renders: ATS[String, Int]) -> String
   renders.add("renders", 1)
-  return "<p>message #{id}</p>"
+  "<p>message #{id}</p>"
 end
 
 def main() -> Void
@@ -197,7 +197,7 @@ def table_get(table: ATS[String, String], key: String) -> Optional[String]
   found = table.get(key)
   return some(found.unwrap!) if found.ok?
 
-  return none
+  none
 end
 
 def table_clear(table: ATS[String, String]) -> Void
@@ -208,7 +208,7 @@ end
 
 def table_cache() -> Cache.Store
   table: ATS[String, String] = ATS.new()
-  return Cache.Store(
+  Cache.Store(
     get: block1() do |key| table_get(table, key) end,
     put: block2() do |key, value| table.put(key, value) end,
     put_new: block2() do |key, value| table.put_new(key, value) end,

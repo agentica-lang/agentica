@@ -233,12 +233,12 @@ export def extract_zip(
   )
 
   outcome = try pass3(src, found, ordered, ctx)
-  return ok(outcome)
+  ok(outcome)
 end
 
 def smaller(a: Int, b: Int) -> Int
   return a if a < b
-  return b
+  b
 end
 
 # Adds `b` to `a` within `cap`, for the counters that must never pass a ceiling. Operands that are already bounded
@@ -246,20 +246,20 @@ end
 def add_cap(a: Int, b: Int, cap: Int, message: String) -> Result[Int]
   return error(message) if b < 0
   return error(message) if a > cap - b
-  return ok(a + b)
+  ok(a + b)
 end
 
 def time_left(deadline: Int) -> Result[Int]
   left = deadline - Time.monotonic_ms()
   return error("archive: operation timed out") if left <= 0
-  return ok(left)
+  ok(left)
 end
 
 # The budget of a cleanup close: the remaining deadline, capped, and never zero or negative.
 def close_budget(deadline: Int) -> Int
   left = deadline - Time.monotonic_ms()
   return CLOSE_MS if left <= 0
-  return smaller(left, CLOSE_MS)
+  smaller(left, CLOSE_MS)
 end
 
 def close_file(handle: FileHandle, budget: Int) -> Void
@@ -271,29 +271,29 @@ end
 
 def stat_src(src: String, deadline: Int) -> Result[FileInfo]
   case File.lstat(src, try time_left(deadline))
-    ok(found) -> return ok(found)
-    error(message) -> return error("archive: cannot use #{src}: #{message}")
+    ok(found) -> ok(found)
+    error(message) -> error("archive: cannot use #{src}: #{message}")
   end
 end
 
 def open_src(src: String, deadline: Int) -> Result[FileHandle]
   case File.open(src, "read", try time_left(deadline))
-    ok(opened) -> return ok(opened)
-    error(message) -> return error("archive: cannot open #{src}: #{message}")
+    ok(opened) -> ok(opened)
+    error(message) -> error("archive: cannot open #{src}: #{message}")
   end
 end
 
 def make_dest(dest: String, deadline: Int) -> Result[Void]
   case Dir.mkdir_private(dest, try time_left(deadline))
-    ok(_) -> return ok()
-    error(message) -> return error("archive: cannot create #{dest}: #{message}")
+    ok(_) -> ok()
+    error(message) -> error("archive: cannot create #{dest}: #{message}")
   end
 end
 
 def read_raw(handle: FileHandle, n: Int, deadline: Int, src: String) -> Result[Bytes]
   case File.read_bytes(handle, n, try time_left(deadline))
-    ok(bytes) -> return ok(bytes)
-    error(message) -> return error("archive: cannot read #{src}: #{message}")
+    ok(bytes) -> ok(bytes)
+    error(message) -> error("archive: cannot read #{src}: #{message}")
   end
 end
 
@@ -303,7 +303,7 @@ def strip_slashes(path: String) -> String
     break if !String.ends_with?(out, "/")
     out = String.slice(out, 0, String.length(out) - 1)
   end
-  return out
+  out
 end
 
 # Reads until `buf` holds `need` bytes or the file ends. Every physical byte counts against `cap`.
@@ -331,7 +331,7 @@ def stream_fill(st: Stream, need: Int, cap: Int, deadline: Int, src: String) -> 
       )
     end
   end
-  return ok(st)
+  ok(st)
 end
 
 # Takes exactly `n` bytes, failing on truncation. Callers keep `n` small except through `stream_skip`.
@@ -348,7 +348,7 @@ def stream_take(st: Stream, n: Int, cap: Int, deadline: Int, src: String, what: 
     st = st.with(buf: st.buf.drop(k))
     rest -= k
   end
-  return ok(TakeOut(stream: st, bytes: got))
+  ok(TakeOut(stream: st, bytes: got))
 end
 
 # Skips exactly `n` bytes without holding them, failing on truncation.
@@ -359,27 +359,27 @@ def stream_skip(st: Stream, n: Int, cap: Int, deadline: Int, src: String, what: 
     st = out.stream
     rest -= out.bytes.size
   end
-  return ok(st)
+  ok(st)
 end
 
 def read_u16(buf: Bytes, at: Int, what: String) -> Result[Int]
   case Binary.read_u16_le(buf, at)
-    ok(value) -> return ok(value)
-    error(_) -> return error("archive: truncated ZIP data, #{what}")
+    ok(value) -> ok(value)
+    error(_) -> error("archive: truncated ZIP data, #{what}")
   end
 end
 
 def read_u32(buf: Bytes, at: Int, what: String) -> Result[Int]
   case Binary.read_u32_le(buf, at)
-    ok(value) -> return ok(value)
-    error(_) -> return error("archive: truncated ZIP data, #{what}")
+    ok(value) -> ok(value)
+    error(_) -> error("archive: truncated ZIP data, #{what}")
   end
 end
 
 def le_bytes(value: Int, what: String) -> Result[Bytes]
   case Binary.write_u32_le(value)
-    ok(bytes) -> return ok(bytes)
-    error(_) -> return error("archive: bad size for #{what}")
+    ok(bytes) -> ok(bytes)
+    error(_) -> error("archive: bad size for #{what}")
   end
 end
 
@@ -398,7 +398,7 @@ def check_relative(path: String, name: String, suffix: String) -> Result[String]
   for seg in String.split(path, "/")
     return error("archive: #{name} is not a safe relative path#{suffix}") if seg == "" or seg == "." or seg == ".."
   end
-  return ok(path)
+  ok(path)
 end
 
 # Validates one allowlist member: nonempty, short, and a safe relative path after one optional leading `./`.
@@ -410,7 +410,7 @@ def normalize_selector(text: String) -> Result[String]
     path = String.slice(path, 2, String.length(path) - 2)
   end
   return error("archive: a member must name a file, not the root: #{text}") if path == "" or path == "."
-  return check_relative(path, "member #{text}", "")
+  check_relative(path, "member #{text}", "")
 end
 
 # Validates the whole allowlist: 1 to 256 safe members, no exact, normalized or case-only repeats.
@@ -430,7 +430,7 @@ def validate_members(members: List[String]) -> Result[List[Wanted]]
       Wanted(path: canon, segments: String.split(canon, "/"), text: text, index: wanted.size),
     )
   end
-  return ok(wanted)
+  ok(wanted)
 end
 
 # The first pass: reads the whole source once, keeps the last TAIL_BYTES, and parses the end record.
@@ -438,7 +438,7 @@ def pass1(src: String, deadline: Int) -> Result[Found]
   handle = try open_src(src, deadline)
   outcome = scan_tail(handle, src, deadline)
   close_file(handle, close_budget(deadline))
-  return outcome
+  outcome
 end
 
 def scan_tail(handle: FileHandle, src: String, deadline: Int) -> Result[Found]
@@ -457,7 +457,7 @@ def scan_tail(handle: FileHandle, src: String, deadline: Int) -> Result[Found]
   return error("archive: #{src} is empty, not a ZIP archive") if total == 0
   return error("archive: #{src} is not a ZIP archive") if total < 22
   eocd = try find_eocd(tail, total, src)
-  return ok(Found(size: total, eocd: eocd))
+  ok(Found(size: total, eocd: eocd))
 end
 
 # Parses one end-record candidate at tail offset `p`. With `from_anchor` the candidate must end exactly at the end
@@ -480,7 +480,7 @@ def parse_eocd_at(tail: Bytes, p: Int, size: Int, src: String, from_anchor: Bool
   start = size - tail.size + p
   return error("archive: the end record does not end the file") if from_anchor and start + 22 + comment_len != size
   return error("archive: the central directory does not abut the end record") if cd_offset + cd_size != start
-  return ok(Eocd(start: start, count: total_count, cd_size: cd_size, cd_offset: cd_offset))
+  ok(Eocd(start: start, count: total_count, cd_size: cd_size, cd_offset: cd_offset))
 end
 
 def find_eocd(tail: Bytes, size: Int, src: String) -> Result[Eocd]
@@ -505,13 +505,13 @@ def find_eocd(tail: Bytes, size: Int, src: String) -> Result[Eocd]
     end
   end
   return error("archive: the end record does not end the file") if unanchored
-  return error("archive: the end of the central directory was not found: #{src}")
+  error("archive: the end of the central directory was not found: #{src}")
 end
 
 # True when the candidate at tail offset `p` with this comment length ends exactly at the end of the file: only
 # then is it the end record, whose field errors report instead of scanning on.
 def starts_at_end(tail: Bytes, p: Int, size: Int, comment_len: Int) -> Bool
-  return size - tail.size + p + 22 + comment_len == size
+  size - tail.size + p + 22 + comment_len == size
 end
 
 # The second pass: skips to the central directory and indexes every record, validating all of it before the
@@ -520,7 +520,7 @@ def pass2(src: String, found: Found, deadline: Int) -> Result[List[Entry]]
   handle = try open_src(src, deadline)
   outcome = scan_cd(handle, src, found, deadline)
   close_file(handle, close_budget(deadline))
-  return outcome
+  outcome
 end
 
 def scan_cd(handle: FileHandle, src: String, found: Found, deadline: Int) -> Result[List[Entry]]
@@ -549,7 +549,7 @@ def scan_cd(handle: FileHandle, src: String, found: Found, deadline: Int) -> Res
   if st.raw - eocd.cd_offset != eocd.cd_size
     return error("archive: the central directory holds #{st.raw - eocd.cd_offset} of #{eocd.cd_size} bytes")
   end
-  return ok(entries)
+  ok(entries)
 end
 
 def parse_cd_head(head: Bytes, index: Int) -> Result[Head]
@@ -579,7 +579,7 @@ def parse_cd_head(head: Bytes, index: Int) -> Result[Head]
   attrs = try read_u32(head, 38, "a central directory entry")
   offset = try read_u32(head, 42, "a central directory entry")
   return error("archive: ZIP64 is not supported at entry #{index}") if offset == ZIP64_SENTINEL
-  return ok(
+  ok(
     Head(
       method: method,
       flags: flags,
@@ -606,7 +606,7 @@ def scan_zip64_extra(extra: Bytes, index: Int) -> Result[Void]
     pos += 4 + size
     return error("archive: bad extra field at entry #{index}") if pos > extra.size
   end
-  return ok()
+  ok()
 end
 
 # Decodes a central-directory name for matching: one leading `./` and any trailing `/` characters are removed, and
@@ -637,7 +637,7 @@ def decode_canon(raw: Bytes, flags: Int, index: Int) -> Result[String]
   while String.length(path) > 0 and String.ends_with?(path, "/")
     path = String.slice(path, 0, String.length(path) - 1)
   end
-  return ok(path)
+  ok(path)
 end
 
 # True for a regular file: no trailing slash, a regular Unix mode or no type information with no DOS directory bit.
@@ -649,7 +649,7 @@ def classify_regular(name: Bytes, attrs: Int) -> Bool
   return false if ftype == S_IFDIR
   return false if ftype != 0
   return false if Int.bit_and(attrs, 16) != 0
-  return true
+  true
 end
 
 def finish_entry(parsed: Head, name: Bytes, index: Int) -> Result[Entry]
@@ -660,7 +660,7 @@ def finish_entry(parsed: Head, name: Bytes, index: Int) -> Result[Entry]
   return error("archive: empty deflate data at entry #{index}") if parsed.method == 8 and parsed.csize == 0
   canon = try decode_canon(name, parsed.flags, index)
   regular = classify_regular(name, parsed.attrs)
-  return ok(
+  ok(
     Entry(
       index: index,
       offset: parsed.offset,
@@ -682,7 +682,7 @@ def pass3(src: String, found: Found, ordered: List[Entry], ctx: Zctx) -> Result[
   handle = try open_src(src, ctx.deadline)
   outcome = walk_locals(handle, src, found, ordered, ctx)
   close_file(handle, close_budget(ctx.deadline))
-  return outcome
+  outcome
 end
 
 def walk_locals(handle: FileHandle, src: String, found: Found, ordered: List[Entry], ctx: Zctx) -> Result[List[Int]]
@@ -708,7 +708,7 @@ def walk_locals(handle: FileHandle, src: String, found: Found, ordered: List[Ent
   end
   return error("archive: trailing data before the central directory") if cursor != found.eocd.cd_offset
   try check_missing(ctx)
-  return ok(ctx.counts)
+  ok(ctx.counts)
 end
 
 def consume_entry(st: Stream, cursor: Int, entry: Entry, next_offset: Int, ctx: Zctx, src: String) -> Result[StepOut]
@@ -725,7 +725,7 @@ def consume_entry(st: Stream, cursor: Int, entry: Entry, next_offset: Int, ctx: 
         return error("archive: output exceeds #{ctx.max_output} bytes")
       end
       written = try write_selected(st, cursor, entry, index, next_offset, ctx, src)
-      return ok(StepOut(stream: written.stream, cursor: written.cursor, ctx: written.ctx))
+      ok(StepOut(stream: written.stream, cursor: written.cursor, ctx: written.ctx))
     none ->
       st = try stream_skip(st, entry.csize, INPUT_BYTES, deadline, src, "entry data of #{entry.canon}")
       cursor = try add_cap(cursor, entry.csize, ctx.size, "archive: entry data runs past the central directory")
@@ -734,7 +734,7 @@ def consume_entry(st: Stream, cursor: Int, entry: Entry, next_offset: Int, ctx: 
         st = desc.stream
         cursor = desc.cursor
       end
-      return ok(StepOut(stream: st, cursor: cursor, ctx: ctx))
+      ok(StepOut(stream: st, cursor: cursor, ctx: ctx))
   end
 end
 
@@ -773,7 +773,7 @@ def read_local(st: Stream, cursor: Int, entry: Entry, size: Int, deadline: Int, 
   st = extra.stream
   try scan_zip64_extra(extra.bytes, entry.index)
   cursor = try add_cap(cursor, extra_len, size, "archive: a local extra field runs past the end")
-  return ok(LocalOut(stream: st, cursor: cursor, descriptor: descriptor))
+  ok(LocalOut(stream: st, cursor: cursor, descriptor: descriptor))
 end
 
 # Reads a data descriptor: 12 bytes, or 16 when the magic leads. The expected sizes come from the central
@@ -805,14 +805,14 @@ def read_descriptor(
     cursor = try add_cap(cursor, 12, next_offset, "archive: bad data descriptor for #{entry.canon}")
     return ok(DescOut(stream: st, cursor: cursor))
   end
-  return error("archive: bad data descriptor for #{entry.canon}")
+  error("archive: bad data descriptor for #{entry.canon}")
 end
 
 def expected_triple(entry: Entry) -> Result[Bytes]
   crc = try le_bytes(entry.crc, "a data descriptor")
   csize = try le_bytes(entry.csize, "a data descriptor")
   usize = try le_bytes(entry.usize, "a data descriptor")
-  return ok(Bytes.concat([crc, csize, usize]))
+  ok(Bytes.concat([crc, csize, usize]))
 end
 
 def write_selected(
@@ -870,7 +870,7 @@ def write_selected(
       )
     error(message) -> return error("archive: cannot finish #{out}: #{message}")
   end
-  return ok(WriteOut(stream: st, cursor: cursor, ctx: ctx))
+  ok(WriteOut(stream: st, cursor: cursor, ctx: ctx))
 end
 
 # Streams one stored file, chaining the CRC32 over 64 KiB pieces.
@@ -889,17 +889,17 @@ def pump_stored(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, src
     crc = try chain_crc(data, crc, entry.canon)
   end
   return error("archive: CRC32 mismatch for #{entry.canon}: expected #{entry.crc}, got #{crc}") if crc != entry.crc
-  return ok(st)
+  ok(st)
 end
 
 def write_piece(handle: FileHandle, piece: Bytes, timeout_ms: Int) -> Result[Void]
-  return File.write_bytes(handle, piece, timeout_ms)
+  File.write_bytes(handle, piece, timeout_ms)
 end
 
 def chain_crc(piece: Bytes, crc: Int, canon: String) -> Result[Int]
   case Zlib.crc32(piece, crc)
-    ok(next) -> return ok(next)
-    error(message) -> return error("archive: cannot checksum #{canon}: #{message}")
+    ok(next) -> ok(next)
+    error(message) -> error("archive: cannot checksum #{canon}: #{message}")
   end
 end
 
@@ -930,8 +930,8 @@ def pump_deflated(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, s
       if pump.crc != entry.crc
         return error("archive: CRC32 mismatch for #{entry.canon}: expected #{entry.crc}, got #{pump.crc}")
       end
-      return ok(st.with(buf: st.buf.drop(held.size), raw: raw))
-    error(message) -> return error(inflate_error(message, entry.canon))
+      ok(st.with(buf: st.buf.drop(held.size), raw: raw))
+    error(message) -> error(inflate_error(message, entry.canon))
   end
 end
 
@@ -945,14 +945,14 @@ def next_piece(handle: FileHandle, piece: Piece, deadline: Int, src: String, can
   if bytes.size < want
     return error("archive: truncated ZIP data, needed #{want} bytes for compressed data of #{canon}")
   end
-  return ok(Piece(bytes: bytes, left: piece.left - want, done: false))
+  ok(Piece(bytes: bytes, left: piece.left - want, done: false))
 end
 
 # Writes one inflated piece of a selected file and chains its CRC32.
 def pump_out(handle: FileHandle, pump: Pump, out: Bytes, deadline: Int, entry: Entry) -> Result[Pump]
   case write_piece(handle, out, try time_left(deadline))
-    ok(_) -> return ok(Pump(got: pump.got + out.size, crc: try chain_crc(out, pump.crc, entry.canon)))
-    error(message) -> return error("archive: cannot write a selected file: #{message}")
+    ok(_) -> ok(Pump(got: pump.got + out.size, crc: try chain_crc(out, pump.crc, entry.canon)))
+    error(message) -> error("archive: cannot write a selected file: #{message}")
   end
 end
 
@@ -964,13 +964,13 @@ def inflate_error(message: String, canon: String) -> String
     return "archive: trailing bytes after the deflate stream of #{canon}"
   end
   return "archive: truncated deflate data for #{canon}" if message == "zlib: truncated stream"
-  return "archive: deflate data is invalid for #{canon}: #{message}"
+  "archive: deflate data is invalid for #{canon}: #{message}"
 end
 
 def join_one(parts: List[String]) -> Result[String]
   case Path.join(parts)
-    ok(joined) -> return ok(joined)
-    error(_) -> return error("archive: cannot join a path")
+    ok(joined) -> ok(joined)
+    error(_) -> error("archive: cannot join a path")
   end
 end
 
@@ -979,7 +979,7 @@ end
 def stays_under(out: String, dest: String) -> Bool
   return true if out == dest
   return true if String.starts_with?(out, "#{dest}/")
-  return String.starts_with?(out, back_join(dest))
+  String.starts_with?(out, back_join(dest))
 end
 
 def back_join(dest: String) -> String = "#{dest}\\"
@@ -987,7 +987,7 @@ def back_join(dest: String) -> String = "#{dest}\\"
 def join_under(dest: String, segments: List[String]) -> Result[String]
   out = try join_one(List.concat([dest], segments))
   return error("archive: selected path escapes the destination") if !stays_under(out, dest)
-  return ok(out)
+  ok(out)
 end
 
 # Creates the parents of a selected file under the new base, refusing case-only collisions portably.
@@ -1010,13 +1010,13 @@ def make_parents(ctx: Zctx, segments: List[String], deadline: Int) -> Result[Zct
       end
     end
   end
-  return ok(ctx)
+  ok(ctx)
 end
 
 def create_out(out: String, deadline: Int) -> Result[FileHandle]
   case File.open(out, "create_private", try time_left(deadline))
-    ok(opened) -> return ok(opened)
-    error(message) -> return error("archive: cannot create #{out}: #{message}")
+    ok(opened) -> ok(opened)
+    error(message) -> error("archive: cannot create #{out}: #{message}")
   end
 end
 
@@ -1025,5 +1025,5 @@ def check_missing(ctx: Zctx) -> Result[Void]
   for item in ctx.wanted
     return error("archive: member not found: #{item.text}") if !ctx.matched[item.index]
   end
-  return ok()
+  ok()
 end

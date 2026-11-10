@@ -19,7 +19,7 @@ def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
     return ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: headers, body: events)))
   end
 
-  return ok(HTTP.Answer.Whole(HttpResponse(status: 404, headers: [], body: "not found\n".bytes)))
+  ok(HTTP.Answer.Whole(HttpResponse(status: 404, headers: [], body: "not found\n".bytes)))
 end
 
 def main() -> Void

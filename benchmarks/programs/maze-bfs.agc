@@ -19,7 +19,7 @@ def make_maze(width: Int, height: Int, seed: Int) -> Maze
     end
     square += 1
   end
-  return Maze(width: width, height: height, cells: cells)
+  Maze(width: width, height: height, cells: cells)
 end
 
 def neighbors(maze: Maze, square: Int) -> List[Int]
@@ -38,7 +38,7 @@ def neighbors(maze: Maze, square: Int) -> List[Int]
   if x > 0
     result = result.push(square - 1)
   end
-  return result
+  result
 end
 
 def path_length(start: Int, goal: Int, previous: Map[Int, Int]) -> Int
@@ -48,7 +48,7 @@ def path_length(start: Int, goal: Int, previous: Map[Int, Int]) -> Int
     current = previous[current]
     length += 1
   end
-  return length
+  length
 end
 
 def shortest(maze: Maze, start: Int, goal: Int) -> Int
@@ -74,7 +74,7 @@ def shortest(maze: Maze, start: Int, goal: Int) -> Int
       end
     end
   end
-  return -1
+  -1
 end
 
 def main() -> Void

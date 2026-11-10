@@ -7,7 +7,7 @@ struct Item
 end
 
 def apply_discount(items: List[Item], rule: Fn[Item, Float]) -> List[Item]
-  return items.map do |item|
+  items.map do |item|
     Item(name: item.name, price: rule.call(item), stock: item.stock)
   end
 end

@@ -18,7 +18,7 @@ def echo(p: Pair) -> Int
       error(_) -> return -1
     end
   end
-  return n
+  n
 end
 
 def main() -> Void

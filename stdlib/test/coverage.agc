@@ -88,7 +88,7 @@ export def collect(parts: String, left_out: List[String]) -> Run
   written = write_report(text(merged, left_out))
   return covered.with(problem: "cannot write #{REPORT}: #{written.message}") if !written.ok?
 
-  return covered.with(path: REPORT)
+  covered.with(path: REPORT)
 end
 
 ## Whether the coverage fails the run: a report that should have been written was not, so an old one may be stale.
@@ -99,7 +99,7 @@ export def shown(path: String) -> String
   here = Path.cwd().unwrap_or("")
   return path.slice(here.length + 1, path.length - here.length - 1) if here != "" and path.starts_with?("#{here}/")
 
-  return path
+  path
 end
 
 ## The sources of an LCOV text, in its order. A line that is not LCOV of the shape the VM writes is an error.
@@ -136,7 +136,7 @@ export def parse(text: String) -> Result[List[Source]]
 
   return error("the last LCOV record has no end_of_record") if open
 
-  return ok(found)
+  ok(found)
 end
 
 ## `merged` with the counts of `sources` added, file by file.
@@ -155,7 +155,7 @@ export def add(merged: Map[String, Source], sources: List[Source]) -> Map[String
     result = result.put(source.file, known)
   end
 
-  return result
+  result
 end
 
 ## The LCOV text of `merged`, without the files of `left_out`, in the order of the module doc.
@@ -176,12 +176,12 @@ export def text(merged: Map[String, Source], left_out: List[String]) -> String
     chunks = chunks.push("#{record.join("\n")}\nend_of_record\n")
   end
 
-  return chunks.join("")
+  chunks.join("")
 end
 
 ## The line totals of each file of `merged`, without the files of `left_out`, in name order.
 export def summary(merged: Map[String, Source], left_out: List[String]) -> List[Covered]
-  return kept(merged, left_out).map do |file: String|
+  kept(merged, left_out).map do |file: String|
     lines = merged[file].lines
     Covered(file: file, lines: lines.size, hit: lines.keys.select do |line: Int| lines[line] > 0 end.size)
   end
@@ -209,7 +209,7 @@ export def report_text(run: Run) -> String
     lines = lines.push("  left out the coverage part #{part.part}: #{part.message}")
   end
 
-  return lines.join("\n")
+  lines.join("\n")
 end
 
 ## The `coverage` object of the `--json` report: `{path, lines, hit, files: [{file, lines, hit}], broken: [{part,
@@ -234,7 +234,7 @@ export def json(run: Run) -> Json
     problem = JSON.object({"code": JSON.from(PROBLEM_CODE), "message": JSON.from(run.problem)})
   end
 
-  return JSON.object({
+  JSON.object({
     "path": path,
     "lines": JSON.from(total(run.files, false)),
     "hit": JSON.from(total(run.files, true)),
@@ -258,7 +258,7 @@ def with_field(source: Source, key: String, value: String) -> Result[Source]
     return ok(add_function(source, Function(name: name, line: number, calls: 0)))
   end
 
-  return ok(add_function(source, Function(name: name, line: -1, calls: number)))
+  ok(add_function(source, Function(name: name, line: -1, calls: number)))
 end
 
 # `source` with the calls of `function` added to the function of that name, or with it as a new one. A line of -1
@@ -280,11 +280,11 @@ def add_function(source: Source, function: Function) -> Source
     at += 1
   end
 
-  return source.with(functions: source.functions.push(function))
+  source.with(functions: source.functions.push(function))
 end
 
 def kept(merged: Map[String, Source], left_out: List[String]) -> List[String]
-  return merged.keys.filter do |file: String| !left_out.include?(file) end.sort
+  merged.keys.filter do |file: String| !left_out.include?(file) end.sort
 end
 
 # "3/4 lines (75.0%)", the share rounded down to a tenth.
@@ -292,7 +292,7 @@ def share(lines: Int, hit: Int) -> String
   return "0/0 lines" if lines == 0
 
   tenths = (hit * 1000) / lines
-  return "#{hit}/#{lines} lines (#{tenths / 10}.#{tenths % 10}%)"
+  "#{hit}/#{lines} lines (#{tenths / 10}.#{tenths % 10}%)"
 end
 
 def total(files: List[Covered], hit: Bool) -> Int
@@ -305,7 +305,7 @@ def total(files: List[Covered], hit: Bool) -> Int
     end
   end
 
-  return sum
+  sum
 end
 
 # The sources of a part, each named as `shown` names it: a test file's own name is absolute, and an import of it may
@@ -323,9 +323,7 @@ def read_part(path: String) -> Result[List[Source]]
   return error(line.message) if line.message != "filesystem: end of file"
 
   sources = try parse(lines.join("\n"))
-  return ok(
-    sources.map do |source: Source| source.with(file: shown(Path.resolve(source.file).unwrap_or(source.file))) end,
-  )
+  ok(sources.map do |source: Source| source.with(file: shown(Path.resolve(source.file).unwrap_or(source.file))) end)
 end
 
 # Puts `report` at REPORT. Over an old report of up to 16 MiB, File.replace swaps it in one step, so a reader never
@@ -354,14 +352,14 @@ def write_report(report: String) -> Result[Void]
     return error("#{moved.message}; the report is at #{fresh}")
   end
 
-  return moved
+  moved
 end
 
 # A file gets at most 1 MiB in one write, and a character takes up to 4 bytes.
 def write_chunks(path: String, report: String) -> Result[Void]
   # The block form closes the file on every path, so a failed write leaves no open handle (Windows cannot remove an
   # open file).
-  return File.open(path, "write", 5000) do |out|
+  File.open(path, "write", 5000) do |out|
     at = 0
     while at < report.length
       size = 250000

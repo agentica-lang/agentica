@@ -116,7 +116,7 @@ Say it positively. Put the positive case first and do not pair a negated test wi
 def describe(visible: Bool) -> String
   return "shown" if visible
 
-  return "hidden"
+  "hidden"
 end
 
 def main() -> Void
@@ -153,7 +153,7 @@ def total(prices: List[Int]) -> Int
     sum += price
   end
 
-  return sum
+  sum
 end
 
 def main() -> Void
@@ -170,7 +170,7 @@ export def total(prices: List[Int]) -> Int
     sum += price
   end
 
-  return sum
+  sum
 end
 
 def main() -> Void
@@ -200,7 +200,7 @@ def ship(weight: Int, width: Int, height: Int, depth: Int, rush: Bool) -> Int
     end
   end
 
-  return cost
+  cost
 end
 
 def main() -> Void
@@ -223,7 +223,7 @@ def ship(parcel: Parcel) -> Int
 
   return parcel.weight * 3 if parcel.rush
 
-  return parcel.weight * 2
+  parcel.weight * 2
 end
 
 def main() -> Void
@@ -303,7 +303,7 @@ end
 def line(order: Order) -> String
   total = order.price * order.count
   tax = total / 10
-  return "#{order.item}: #{total + tax}"
+  "#{order.item}: #{total + tax}"
 end
 
 def main() -> Void
@@ -332,11 +332,11 @@ Use `if` for a yes-or-no question. Use `case` for an enum, a `Result`, or three 
 # bad
 def size_name(n: Int) -> String
   if n == 0
-    return "empty"
+    "empty"
   elsif n == 1
-    return "one"
+    "one"
   else
-    return "many"
+    "many"
   end
 end
 
@@ -349,9 +349,9 @@ end
 # good
 def size_name(n: Int) -> String
   case n
-    0 -> return "empty"
-    1 -> return "one"
-    _ -> return "many"
+    0 -> "empty"
+    1 -> "one"
+    _ -> "many"
   end
 end
 
@@ -371,7 +371,7 @@ def color_name(code: Int) -> String
     return "green"
   end
 
-  return "unknown"
+  "unknown"
 end
 
 def main() -> Void
@@ -388,8 +388,8 @@ end
 
 def color_name(color: Color) -> String
   case color
-    Color.Red -> return "red"
-    Color.Green -> return "green"
+    Color.Red -> "red"
+    Color.Green -> "green"
   end
 end
 
@@ -409,8 +409,8 @@ end
 
 def area(shape: Shape) -> Int
   case shape
-    Shape.Circle(r) -> return r * r * 3
-    _ -> return 0
+    Shape.Circle(r) -> r * r * 3
+    _ -> 0
   end
 end
 
@@ -428,8 +428,8 @@ end
 
 def area(shape: Shape) -> Int
   case shape
-    Shape.Circle(r) -> return r * r * 3
-    Shape.Dot -> return 0
+    Shape.Circle(r) -> r * r * 3
+    Shape.Dot -> 0
   end
 end
 
@@ -449,7 +449,7 @@ end
 
 def area(shape: Shape) -> Int
   case shape
-    Shape.Circle(r) -> return r * r * 3
+    Shape.Circle(r) -> r * r * 3
   end
 end
 
@@ -469,7 +469,7 @@ def shout(text: String) -> String = text.upcase
 def wrap(text: String, mark: String) -> String = "#{mark}#{text}#{mark}"
 
 def banner(text: String) -> String
-  return (
+  (
     text
     |> shout()
     |> wrap("*")
@@ -508,7 +508,7 @@ end
 # good
 def double_text(text: String) -> Result[Int]
   n = try text.to_i
-  return ok(n * 2)
+  ok(n * 2)
 end
 
 def main() -> Void
@@ -527,7 +527,7 @@ def parse_port(text: String) -> Result[Int]
   n = try text.to_i
   return error("port out of range: #{n}") if n < 1 or n > 65535
 
-  return ok(n)
+  ok(n)
 end
 
 def main() -> Void
@@ -556,7 +556,7 @@ end
 def line(name: String, count: Int) -> String = "#{name}: #{count} items"
 
 def help() -> String
-  return <<~TEXT
+  <<~TEXT
     usage: tool FILE
     prints the lines of FILE
   TEXT

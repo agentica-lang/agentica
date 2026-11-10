@@ -505,7 +505,7 @@ export def client(options: HttpClientOptions = HttpClientOptions()) -> Result[Ht
 
   try check_proxy(options)
   jobs: Channel[HttpWire.Job] = Channel.new(CLIENT_JOBS)
-  return ok(HttpWire.service(jobs, options) do |own| supervise_pool(own) end)
+  ok(HttpWire.service(jobs, options) do |own| supervise_pool(own) end)
 end
 
 ## The proxy that the environment names for `url`, to pass as `HttpClientOptions(proxy: ...)`, or `""` when there is
@@ -530,8 +530,8 @@ export def proxy_from_env(url: String) -> String
     ok(where) ->
       return "" if no_proxy_for?(where)
 
-      return proxy_of_scheme(where.scheme)
-    error(_) -> return ""
+      proxy_of_scheme(where.scheme)
+    error(_) -> ""
   end
 end
 
@@ -547,7 +547,7 @@ export def get(pool: HttpClient, url: String) -> Result[HttpResponse] = request(
 ## Sends a `POST` request to `url` with the `Bytes` `body` and `headers`, which default to none, as Ruby's
 ## `Net::HTTP.post(uri, data, header)` does. Send text as `"...".bytes`.
 export def post(pool: HttpClient, url: String, body: Bytes, headers: List[Header] = []) -> Result[HttpResponse]
-  return request(pool, "POST", url, body, headers)
+  request(pool, "POST", url, body, headers)
 end
 
 ## Sends a `GET` request to `url` on a client of its own and returns the response, like Ruby's
@@ -555,7 +555,7 @@ end
 ## `HttpClientOptions()`), makes the call and closes the client, and with it the connection, before it returns. Many
 ## requests to the same hosts belong on one `HTTP.client()` with `get`, which reuses connections.
 export def get_response(url: String, options: HttpClientOptions = HttpClientOptions()) -> Result[HttpResponse]
-  return request_once("GET", url, NO_BYTES, [], options)
+  request_once("GET", url, NO_BYTES, [], options)
 end
 
 ## Sends a `POST` request on a client of its own, as `get_response` does for `GET`: the `Bytes` `body`, `headers`
@@ -567,7 +567,7 @@ export def post_response(
   headers: List[Header] = [],
   options: HttpClientOptions = HttpClientOptions(),
 ) -> Result[HttpResponse]
-  return request_once("POST", url, body, headers, options)
+  request_once("POST", url, body, headers, options)
 end
 
 ## Sends a request with any `method`. `url` must start with `http://` or `https://`.
@@ -612,10 +612,10 @@ export def request(
   )
 
   case HttpWire.jobs(pool).send(job, options.timeout_ms)
-    ok(_) -> return unless_denied(options, where.scheme, wait_reply(reply, deadline))
+    ok(_) -> unless_denied(options, where.scheme, wait_reply(reply, deadline))
     error(message) ->
       return error(CLIENT_CLOSED) if message == CHANNEL_CLOSED
-      return error(TIMED_OUT)
+      error(TIMED_OUT)
   end
 end
 
@@ -663,10 +663,10 @@ export def download(
 
   socket = try connect_download(pool, via, deadline)
   case TCP.send_bytes(socket, head_bytes(head), try time_left(socket, deadline))
-    ok(_) -> return finish_download(socket, path, options, deadline, denied)
+    ok(_) -> finish_download(socket, path, options, deadline, denied)
     error(message) ->
       TCP.close(socket)
-      return error(message)
+      error(message)
   end
 end
 
@@ -690,7 +690,7 @@ export def start(origin: String, options: HttpClientOptions = HttpClientOptions(
 
   where = try parse_url(origin)
   return error("http: start takes an origin such as http://host:8080, with no path or query") if where.target != "/"
-  return connect_to(where, options)
+  connect_to(where, options)
 end
 
 ## Sends a request on the connection and returns when the head of the response has been read, as Ruby's
@@ -731,10 +731,10 @@ export def send_request(
   )
 
   case encoded
-    ok(request) -> return send_encoded(conn, request, method == "HEAD", body)
+    ok(request) -> send_encoded(conn, request, method == "HEAD", body)
     error(message) ->
       put_exchange(conn, exchange)
-      return error(message)
+      error(message)
   end
 end
 
@@ -759,10 +759,10 @@ export def read_body(conn: Connection, max_bytes: Int = 65536) -> Result[Bytes]
   case next_piece(conn.socket, exchange, max_bytes, deadline)
     ok(step) ->
       put_exchange(conn, finished_exchange(conn, step.exchange))
-      return ok(step.piece)
+      ok(step.piece)
     error(message) ->
       end_connection(conn)
-      return error(message)
+      error(message)
   end
 end
 
@@ -800,10 +800,10 @@ export def open(
     ok(head) ->
       pieces: Channel[Bytes] = Channel.new(STREAM_PIECES)
       done = Task.spawn_owning(&feed_stream, Feed(conn: conn, pieces: pieces))
-      return ok(Stream(status: head.status, headers: head.headers, body: pieces, done: done))
+      ok(Stream(status: head.status, headers: head.headers, body: pieces, done: done))
     error(message) ->
       end_connection(conn)
-      return error(message)
+      error(message)
   end
 end
 
@@ -830,7 +830,7 @@ export def upload(
 ) -> Result[HttpResponse]
   answer = upload_whole(method, url, body, length, headers, options)
   body.close
-  return answer
+  answer
 end
 
 ## Returns every value of the header `name`, ignoring case, in order.
@@ -842,7 +842,7 @@ export def header_values(headers: List[Header], name: String) -> List[String]
       found = List.append(found, header.value)
     end
   end
-  return found
+  found
 end
 
 ## Returns `body` as a `String`, decoded in the `charset` of the `Content-Type` of `headers`, those of the same
@@ -868,8 +868,8 @@ export def text(body: Bytes, headers: List[Header] = []) -> Result[String]
     return error("http: charset #{shown} is not supported, decode the body with agentica-lang/charset")
   end
   case body.decode(charset)
-    ok(decoded) -> return ok(decoded)
-    error(message) -> return error("http: #{message}")
+    ok(decoded) -> ok(decoded)
+    error(message) -> error("http: #{message}")
   end
 end
 
@@ -891,7 +891,7 @@ export def read_all(body: RequestBody, max_bytes: Int) -> Result[Bytes]
     end
   end
   try Task.await(body.done)
-  return ok(Bytes.concat(pieces))
+  ok(Bytes.concat(pieces))
 end
 
 ## Checks that `request` is a WebSocket handshake and makes the `Upgrade` that runs `session` on it. The request must
@@ -909,8 +909,8 @@ export def accept_websocket(
 ) -> Result[Upgrade]
   try check_websocket_options(options)
   case handshake_problem(request)
-    some(response) -> return ok(Upgrade.Reply(response))
-    none -> return ok(accepted(request, session, options))
+    some(response) -> ok(Upgrade.Reply(response))
+    none -> ok(accepted(request, session, options))
   end
 end
 
@@ -920,9 +920,9 @@ end
 ## is.
 export def prepare(message: Message) -> Message
   case message
-    Message.Text(text) -> return Message.Prepared(WebSocketWire.text_frame(text))
-    Message.Binary(data) -> return Message.Prepared(WebSocketWire.binary_frame(data))
-    _ -> return message
+    Message.Text(text) -> Message.Prepared(WebSocketWire.text_frame(text))
+    Message.Binary(data) -> Message.Prepared(WebSocketWire.binary_frame(data))
+    _ -> message
   end
 end
 
@@ -952,7 +952,7 @@ export def serve(
   )
 
   listener = try TCP.listen(host, port)
-  return ok(start_server(listener, app, options))
+  ok(start_server(listener, app, options))
 end
 
 ## Like `serve`, but over TLS, with the certificate and key of `tls`, a server context. `options` is optional and
@@ -973,7 +973,7 @@ export def serve_tls(
   )
 
   listener = try TLS.listen(host, port, tls)
-  return ok(start_server(listener, app, options))
+  ok(start_server(listener, app, options))
 end
 
 ## Makes an `App` from a `Handler`, for a route that wants the request whole: the body is read first, at most
@@ -987,7 +987,7 @@ export def app(handler: Handler, max_body_bytes: Int = 1048576) -> App
   if limit < 0
     limit = 0
   end
-  return serving() do |request, body| whole_answer(handler, limit, request, body) end
+  serving() do |request, body| whole_answer(handler, limit, request, body) end
 end
 
 ## The answer that refuses a request body `read_all` could not read, from its error: 413 for a body over its limit
@@ -999,7 +999,7 @@ end
 export def body_refusal(message: String) -> Answer
   return Answer.Whole(closing_answer(413)) if message == BODY_TOO_LONG
   return Answer.Whole(closing_answer(431)) if String.starts_with?(message, FIELDS_TOO_LARGE)
-  return Answer.Whole(closing_answer(400))
+  Answer.Whole(closing_answer(400))
 end
 
 ## Returns a closed channel that holds `data` as its one piece: the body of a `StreamResponse` that is one whole
@@ -1010,7 +1010,7 @@ export def whole(data: Bytes) -> Channel[Bytes]
     _ = body.send(data, 0)
   end
   body.close
-  return body
+  body
 end
 
 ## Returns the port the server listens on.
@@ -1036,12 +1036,12 @@ def request_once(
   pool = try client(options)
   response = request(pool, method, url, body, headers)
   close_client(pool)
-  return response
+  response
 end
 
 def settled(phase: Int, closes: Bool) -> Exchange
   chunks = HttpWire.chunked(DOWNLOAD_MAX_BYTES)
-  return Exchange(phase: phase, framing: BY_LENGTH, left: 0, chunks: chunks, closes: closes)
+  Exchange(phase: phase, framing: BY_LENGTH, left: 0, chunks: chunks, closes: closes)
 end
 
 # What the request line says of the target: the path with its query, or, through a proxy, the whole URL (RFC 9112
@@ -1050,12 +1050,12 @@ end
 def request_target(options: HttpClientOptions, where: Target) -> String
   return where.target if options.proxy == "" or where.scheme == "https"
 
-  return "http://#{host_authority(where.host, where.port)}#{where.target}"
+  "http://#{host_authority(where.host, where.port)}#{where.target}"
 end
 
 # The target of a request on `conn`, in the form `request_target` gives.
 def connection_target(conn: Connection, target: String) -> String
-  return request_target(conn.options, Target(scheme: conn.scheme, host: conn.host, port: conn.port, target: target))
+  request_target(conn.options, Target(scheme: conn.scheme, host: conn.host, port: conn.port, target: target))
 end
 
 # The host and port as the `Host` header of `encode_request` writes them: an IPv6 literal in brackets, the default port
@@ -1068,7 +1068,7 @@ def host_authority(host: String, port: Int) -> String
 
   return name if port == 80
 
-  return "#{name}:#{port}"
+  "#{name}:#{port}"
 end
 
 # Where a request to `where` connects, as the pool names it: the host itself, or the proxy of the options for `http`.
@@ -1077,13 +1077,13 @@ end
 def connect_target(where: Target, options: HttpClientOptions) -> Result[Target]
   return ok(where) if options.proxy == "" or where.scheme == "https"
 
-  return proxy_target(options)
+  proxy_target(options)
 end
 
 # The proxy of the options: an `http://host:port` origin.
 def proxy_target(options: HttpClientOptions) -> Result[Target]
   proxy = try proxy_of(options)
-  return ok(proxy.target)
+  ok(proxy.target)
 end
 
 # The proxy of the options and its login. The user info is cut out of the URL before `parse_url` sees it, which refuses
@@ -1112,7 +1112,7 @@ def proxy_of(options: HttpClientOptions) -> Result[Proxy]
     error(_) -> return error(BAD_PROXY)
   end
 
-  return error(BAD_PROXY)
+  error(BAD_PROXY)
 end
 
 # The index of the last `@` of `text`, or -1.
@@ -1124,7 +1124,7 @@ def last_at(text: String) -> Int
     end
   end
 
-  return found
+  found
 end
 
 # The `Proxy-Authorization` value (RFC 7617, Basic) of the `user:password` user info of a proxy URL, percent-decoded.
@@ -1141,14 +1141,14 @@ def login_of(info: String) -> Result[String]
 
   return error(BAD_LOGIN) if user == "" or String.contains?(user, ":")
 
-  return ok("Basic #{Base64.strict_encode64("#{user}:#{password}".bytes)}")
+  ok("Basic #{Base64.strict_encode64("#{user}:#{password}".bytes)}")
 end
 
 # A part of the user info, percent-decoded, with an error that does not quote it.
 def unescaped(text: String) -> Result[String]
   case URI.decode_uri_component(text)
-    ok(decoded) -> return ok(decoded)
-    error(_) -> return error(BAD_LOGIN)
+    ok(decoded) -> ok(decoded)
+    error(_) -> error(BAD_LOGIN)
   end
 end
 
@@ -1160,8 +1160,8 @@ def with_login(options: HttpClientOptions, scheme: String, headers: List[Header]
   return headers if options.proxy == "" or scheme == "https"
 
   case proxy_of(options)
-    ok(proxy) -> return add_login(proxy.login, headers)
-    error(_) -> return headers
+    ok(proxy) -> add_login(proxy.login, headers)
+    error(_) -> headers
   end
 end
 
@@ -1173,15 +1173,15 @@ def connection_headers(conn: Connection, headers: List[Header]) -> List[Header]
   case conn.login.recv(0)
     ok(login) ->
       _ = conn.login.send(login, 0)
-      return add_login(login, headers)
-    error(_) -> return headers
+      add_login(login, headers)
+    error(_) -> headers
   end
 end
 
 def add_login(login: String, headers: List[Header]) -> List[Header]
   return headers if login == "" or not header_values(headers, "proxy-authorization").empty?
 
-  return List.append(headers, Header(name: "Proxy-Authorization", value: login))
+  List.append(headers, Header(name: "Proxy-Authorization", value: login))
 end
 
 # Whether the request on `conn` carried a login.
@@ -1189,8 +1189,8 @@ def offered?(conn: Connection) -> Bool
   case conn.login.recv(0)
     ok(login) ->
       _ = conn.login.send(login, 0)
-      return login != ""
-    error(_) -> return false
+      login != ""
+    error(_) -> false
   end
 end
 
@@ -1202,16 +1202,16 @@ def proxy_denied(options: HttpClientOptions, offered: Bool) -> String
       name = proxy_name(proxy.target)
       return "http: the proxy #{name} requires credentials (407): put user:password in the proxy URL" if not offered
 
-      return "http: the proxy #{name} refused the credentials (407)"
-    error(message) -> return message
+      "http: the proxy #{name} refused the credentials (407)"
+    error(message) -> message
   end
 end
 
 # `proxy_denied` for the options of a client, whose user info is still in `proxy`.
 def client_denied(options: HttpClientOptions) -> String
   case proxy_of(options)
-    ok(proxy) -> return proxy_denied(options, proxy.login != "")
-    error(message) -> return message
+    ok(proxy) -> proxy_denied(options, proxy.login != "")
+    error(message) -> message
   end
 end
 
@@ -1221,15 +1221,15 @@ def unless_denied(options: HttpClientOptions, scheme: String, answer: Result[Htt
     ok(response) ->
       return error(client_denied(options)) if proxy_asked?(options, scheme, response.status)
 
-      return ok(response)
-    error(message) -> return error(message)
+      ok(response)
+    error(message) -> error(message)
   end
 end
 
 # True for a `407` answered by the proxy of `options` to an `http` request, which is an error for the call, not a
 # response. Inside a tunnel (`https`) a 407 is the target's own answer.
 def proxy_asked?(options: HttpClientOptions, scheme: String, status: Int) -> Bool
-  return status == 407 and options.proxy != "" and scheme == "http"
+  status == 407 and options.proxy != "" and scheme == "http"
 end
 
 # `host:port` of a target as an error shows it: an IPv6 literal in brackets and the port always there.
@@ -1239,7 +1239,7 @@ def proxy_name(where: Target) -> String
     name = "[#{name}]"
   end
 
-  return "#{name}:#{where.port}"
+  "#{name}:#{where.port}"
 end
 
 # The proxy of the environment for a URL scheme (`http` or `https`), as `http://host:port` text, or "".
@@ -1261,18 +1261,18 @@ def proxy_of_scheme(scheme: String) -> String
   value = String.trim(env_value(lower, upper, trusted))
   return value if value == "" or String.contains?(value, "://")
 
-  return "http://#{value}"
+  "http://#{value}"
 end
 
 # The variable `lower`, else `upper` when `upper_read`: the lower-case one wins, empty or not, as in curl. ""
 # when unset.
 def env_value(lower: String, upper: String, upper_read: Bool) -> String
   case System.env(lower)
-    ok(value) -> return value
+    ok(value) -> value
     error(_) ->
       return "" if not upper_read
 
-      return Result.unwrap_or(System.env(upper), "")
+      Result.unwrap_or(System.env(upper), "")
   end
 end
 
@@ -1284,7 +1284,7 @@ def no_proxy_for?(where: Target) -> Bool
     return true if item == "*" or (item != "" and exempt?(item, where))
   end
 
-  return false
+  false
 end
 
 # One `no_proxy` entry against a target: `host`, `.domain`, `host:port`, `[v6]:port` or an IPv4 `a.b.c.d/bits`.
@@ -1328,14 +1328,14 @@ def exempt?(item: String, where: Target) -> Bool
   # An IP literal is matched by the same address or by a range, never by the tail of its digits (0.1 and 10.0.0.1).
   return name == suffix if ipv4_number(name) >= 0 or String.contains?(name, ":")
 
-  return name == suffix or String.ends_with?(name, ".#{suffix}")
+  name == suffix or String.ends_with?(name, ".#{suffix}")
 end
 
 # The name without one trailing dot.
 def without_dot(name: String) -> String
   return String.slice(name, 0, String.length(name) - 1) if String.length(name) > 1 and String.ends_with?(name, ".")
 
-  return name
+  name
 end
 
 # The port of a `no_proxy` entry, or -1 when it is not 1..65535.
@@ -1345,7 +1345,7 @@ def entry_port(text: String) -> Int
   port = String.to_int!(text)
   return -1 if port < 1 or port > 65535
 
-  return port
+  port
 end
 
 # True when the IPv4 address `host` is in the range `spec` (`10.0.0.0/8`); anything else is not in a range.
@@ -1365,7 +1365,7 @@ def in_range?(spec: String, host: String) -> Bool
     step = step * 2
   end
 
-  return base / step == address / step
+  base / step == address / step
 end
 
 # An IPv4 address `a.b.c.d` as one number, or -1 when `text` is not one.
@@ -1380,14 +1380,14 @@ def ipv4_number(text: String) -> Int
     total = total * 256 + String.to_int!(part)
   end
 
-  return total
+  total
 end
 
 def check_proxy(options: HttpClientOptions) -> Result[Void]
   return ok() if options.proxy == ""
 
   try proxy_target(options)
-  return ok()
+  ok()
 end
 
 # The connection to the host of `where`, idle and with no request yet. Its options keep the proxy without the user
@@ -1407,7 +1407,7 @@ def connect_to(where: Target, options: HttpClientOptions) -> Result[Connection]
 
   cell: Channel[Exchange] = Channel.new(1)
   _ = cell.send(settled(IDLE, false), 0)
-  return ok(
+  ok(
     Connection(
       socket: socket,
       scheme: where.scheme,
@@ -1433,18 +1433,18 @@ def open_socket(where: Target, options: HttpClientOptions) -> Result[Socket]
         return HttpWire.connect_context(where.host, where.port, context, options.timeout_ms)
     end
   end
-  return reaching(TCP.connect(where.host, where.port, options.timeout_ms), options, where)
+  reaching(TCP.connect(where.host, where.port, options.timeout_ms), options, where)
 end
 
 # The result of connecting to `where`, which is the proxy when the options have one: a failure names the proxy, so the
 # caller does not take it for the target being down.
 def reaching(connected: Result[Socket], options: HttpClientOptions, where: Target) -> Result[Socket]
   case connected
-    ok(socket) -> return ok(socket)
+    ok(socket) -> ok(socket)
     error(message) ->
       return error(message) if options.proxy == ""
 
-      return error("http: cannot reach the proxy #{proxy_name(where)}: #{message}")
+      error("http: cannot reach the proxy #{proxy_name(where)}: #{message}")
   end
 end
 
@@ -1452,8 +1452,8 @@ end
 # when it names none (HttpWire.connect_tls builds it once per client).
 def connect_tls(client: HttpClient, host: String, port: Int, timeout_ms: Int) -> Result[Socket]
   case HttpWire.options(client).tls
-    some(context) -> return HttpWire.connect_context(host, port, context, timeout_ms)
-    none -> return HttpWire.connect_tls(client, host, port, timeout_ms)
+    some(context) -> HttpWire.connect_context(host, port, context, timeout_ms)
+    none -> HttpWire.connect_tls(client, host, port, timeout_ms)
   end
 end
 
@@ -1467,7 +1467,7 @@ def connect_https(client: HttpClient, host: String, port: Int, timeout_ms: Int) 
   deadline = Time.monotonic_ms() + timeout_ms
   socket = try tunnel(options, host, port, deadline)
   upgraded = upgrade_client(client, options, socket, host, deadline)
-  return closing_on_error(upgraded, socket, options, host, port)
+  closing_on_error(upgraded, socket, options, host, port)
 end
 
 # TLS inside the tunnel `socket` to `host`, on the context of `options.tls` or the client's shared one.
@@ -1480,8 +1480,8 @@ def upgrade_client(
 ) -> Result[Socket]
   left = try time_left(socket, deadline)
   case options.tls
-    some(context) -> return HttpWire.upgrade_context(socket, context, host, left)
-    none -> return HttpWire.upgrade_tls(client, socket, host, left)
+    some(context) -> HttpWire.upgrade_context(socket, context, host, left)
+    none -> HttpWire.upgrade_tls(client, socket, host, left)
   end
 end
 
@@ -1494,13 +1494,13 @@ def tunnel_context(where: Target, options: HttpClientOptions) -> Result[Socket]
   socket = try tunnel(options, where.host, where.port, deadline)
   left = try time_left(socket, deadline)
   upgraded = HttpWire.upgrade_context(socket, context, where.host, left)
-  return closing_on_error(upgraded, socket, options, where.host, where.port)
+  closing_on_error(upgraded, socket, options, where.host, where.port)
 end
 
 def tunnel_trust(options: HttpClientOptions) -> Result[TlsContext]
   case options.tls
-    some(context) -> return ok(context)
-    none -> return TLS.client_context(TlsClientOptions())
+    some(context) -> ok(context)
+    none -> TLS.client_context(TlsClientOptions())
   end
 end
 
@@ -1515,25 +1515,25 @@ def closing_on_error(
   port: Int,
 ) -> Result[Socket]
   case answer
-    ok(secured) -> return ok(secured)
+    ok(secured) -> ok(secured)
     error(message) ->
       TCP.close(socket)
       return error(message) if message != BEFORE_TLS
 
       case proxy_of(options)
-        ok(proxy) -> return error(tunnel_failed(proxy, tunnel_name(host, port), message))
-        error(_) -> return error(message)
+        ok(proxy) -> error(tunnel_failed(proxy, tunnel_name(host, port), message))
+        error(_) -> error(message)
       end
   end
 end
 
 def tunnel_name(host: String, port: Int) -> String
-  return proxy_name(Target(scheme: "https", host: host, port: port, target: "/"))
+  proxy_name(Target(scheme: "https", host: host, port: port, target: "/"))
 end
 
 # An error after the CONNECT went out, told with the proxy and the target, never with the login.
 def tunnel_failed(proxy: Proxy, target: String, message: String) -> String
-  return "http: the tunnel to #{target} through the proxy #{proxy_name(proxy.target)} failed: #{message}"
+  "http: the tunnel to #{target} through the proxy #{proxy_name(proxy.target)} failed: #{message}"
 end
 
 # A CONNECT tunnel to `host:port` through the proxy of `options`, as a plain socket the proxy now relays: CONNECT
@@ -1553,10 +1553,10 @@ def tunnel(options: HttpClientOptions, host: String, port: Int, deadline: Int) -
       TCP.close(socket)
       return error(proxy_denied(options, proxy.login != "")) if status == 407
 
-      return error("http: the proxy #{proxy_name(proxy.target)} refused the tunnel to #{target} (#{status})")
+      error("http: the proxy #{proxy_name(proxy.target)} refused the tunnel to #{target} (#{status})")
     error(message) ->
       TCP.close(socket)
-      return error(tunnel_failed(proxy, target, message))
+      error(tunnel_failed(proxy, target, message))
   end
 end
 
@@ -1570,14 +1570,14 @@ def tunnel_opened(socket: Socket, proxy: Proxy, target: String, deadline: Int) -
   try TCP.send(socket, "#{head}\r\n", try time_left(socket, deadline))
   # The answer has no body to read: a 2xx is followed by the tunnel and the others are dropped with the socket.
   response = try read_head_of(socket, true, DOWNLOAD_MAX_BYTES, deadline)
-  return ok(response.status)
+  ok(response.status)
 end
 
 # The one value of the cell of `conn`, which the call now holds. An empty cell means another call has it.
 def take_exchange(conn: Connection) -> Result[Exchange]
   case conn.cell.recv(0)
-    ok(exchange) -> return ok(exchange)
-    error(_) -> return error("http: the connection is in use by another call")
+    ok(exchange) -> ok(exchange)
+    error(_) -> error("http: the connection is in use by another call")
   end
 end
 
@@ -1603,10 +1603,10 @@ def send_encoded(conn: Connection, request: String, head_only: Bool, body: Bytes
       end
 
       put_exchange(conn, finished_exchange(conn, exchange_of(head)))
-      return ok(ResponseHead(status: head.status, headers: head.headers))
+      ok(ResponseHead(status: head.status, headers: head.headers))
     error(message) ->
       end_connection(conn)
-      return error(message)
+      error(message)
   end
 end
 
@@ -1620,7 +1620,7 @@ def sent_request(conn: Connection, head: String, head_only: Bool, body: Bytes) -
     try TCP.send_bytes(conn.socket, piece, try time_left(conn.socket, deadline))
     at = at + piece.size
   end
-  return read_head_of(conn.socket, head_only, DOWNLOAD_MAX_BYTES, deadline)
+  read_head_of(conn.socket, head_only, DOWNLOAD_MAX_BYTES, deadline)
 end
 
 # Where the connection stands after a head: reading its body, which a response with no body makes an empty one that
@@ -1634,7 +1634,7 @@ def exchange_of(head: HttpWire.Response) -> Exchange
     framing = BY_CLOSE
   end
   chunks = HttpWire.chunked(DOWNLOAD_MAX_BYTES)
-  return Exchange(phase: READING, framing: framing, left: head.length, chunks: chunks, closes: head.closes)
+  Exchange(phase: READING, framing: framing, left: head.length, chunks: chunks, closes: head.closes)
 end
 
 # A body that has been read to its end leaves the connection idle. It is closed instead when the server said so or
@@ -1646,13 +1646,13 @@ def finished_exchange(conn: Connection, exchange: Exchange) -> Exchange
     TCP.close(conn.socket)
     return settled(SPENT, true)
   end
-  return settled(IDLE, false)
+  settled(IDLE, false)
 end
 
 def body_ended?(exchange: Exchange) -> Bool
   return exchange.chunks.done if exchange.framing == BY_CHUNKS
   return exchange.left == 0 if exchange.framing == BY_LENGTH
-  return false
+  false
 end
 
 # The next piece of a body, and the response after it. A piece is never empty unless the body is over.
@@ -1670,7 +1670,7 @@ def next_piece(socket: Socket, exchange: Exchange, most: Int, deadline: Int) -> 
     closes: exchange.closes,
   )
 
-  return ok(Step(piece: data, exchange: next))
+  ok(Step(piece: data, exchange: next))
 end
 
 # A chunked body: the decoder says which bytes of each read are body, and a read may be all framing, so it goes on
@@ -1698,11 +1698,11 @@ def next_chunked(socket: Socket, exchange: Exchange, most: Int, deadline: Int) -
       error(problem) -> return error("http: #{rest_of(problem, 4)}")
     end
   end
-  return error(TRUNCATED)
+  error(TRUNCATED)
 end
 
 def with_chunks(exchange: Exchange, state: HttpWire.Chunk) -> Exchange
-  return Exchange(phase: READING, framing: BY_CHUNKS, left: 0, chunks: state, closes: exchange.closes)
+  Exchange(phase: READING, framing: BY_CHUNKS, left: 0, chunks: state, closes: exchange.closes)
 end
 
 # The pieces of data that the runs (start, length pairs) of the decoder name.
@@ -1713,7 +1713,7 @@ def run_pieces(data: Bytes, runs: List[Int]) -> List[Bytes]
     pieces = pieces.push(data.slice(List.at(runs, at), List.at(runs, at + 1)))
     at = at + 2
   end
-  return pieces
+  pieces
 end
 
 # A body that ends with the connection: over TLS the end must be the peer's close_notify, else it was cut. The end
@@ -1729,7 +1729,7 @@ def next_until_close(socket: Socket, exchange: Exchange, most: Int, deadline: In
   given = exchange.left + data.size
   return error(TOO_LARGE) if given > DOWNLOAD_MAX_BYTES
   next = Exchange(phase: READING, framing: BY_CLOSE, left: given, chunks: exchange.chunks, closes: true)
-  return ok(Step(piece: data, exchange: next))
+  ok(Step(piece: data, exchange: next))
 end
 
 def upload_whole(
@@ -1754,7 +1754,7 @@ def upload_whole(
   conn = try connect_to(where, options)
   answer = uploaded(conn, where.target, method, body, length, headers)
   end_connection(conn)
-  return answer
+  answer
 end
 
 # The task of a Stream: it ends the channel and the connection on every path, so the reader's loop ends.
@@ -1762,7 +1762,7 @@ def feed_stream(feed: Feed) -> Result[Void]
   outcome = feed_pieces(feed.conn, feed.pieces)
   feed.pieces.close
   end_connection(feed.conn)
-  return outcome
+  outcome
 end
 
 def feed_pieces(conn: Connection, pieces: Channel[Bytes]) -> Result[Void]
@@ -1771,7 +1771,7 @@ def feed_pieces(conn: Connection, pieces: Channel[Bytes]) -> Result[Void]
     return ok() if piece.empty?
     try pieces.send(piece, conn.options.timeout_ms)
   end
-  return ok()
+  ok()
 end
 
 # The request head and the body from the channel, then the whole response. The head is encoded with an empty body,
@@ -1804,10 +1804,10 @@ def uploaded(
     error(message) -> failed = "http: #{message}"
   end
   case read_head_of(conn.socket, false, DOWNLOAD_MAX_BYTES, Time.monotonic_ms() + timeout)
-    ok(response) -> return upload_answer(conn, response)
+    ok(response) -> upload_answer(conn, response)
     error(message) ->
       return error(failed) if failed != ""
-      return error(message)
+      error(message)
   end
 end
 
@@ -1821,7 +1821,7 @@ def upload_answer(conn: Connection, response: HttpWire.Response) -> Result[HttpR
   try take_exchange(conn)
   put_exchange(conn, finished_exchange(conn, exchange_of(response)))
   whole = try read_whole(conn, conn.options.max_body_bytes)
-  return ok(HttpResponse(status: response.status, headers: response.headers, body: whole))
+  ok(HttpResponse(status: response.status, headers: response.headers, body: whole))
 end
 
 # Sends each piece of the channel as it comes: as chunks, until the channel closes and then the last chunk, or with a
@@ -1851,7 +1851,7 @@ def upload_pieces(socket: Socket, body: Channel[Bytes], length: Int, timeout: In
     end
   end
   return error("http: the upload body is shorter than its length") if count != length
-  return ok("")
+  ok("")
 end
 
 # The rest of the body of the last response, as one value of at most `most` bytes.
@@ -1865,7 +1865,7 @@ def read_whole(conn: Connection, most: Int) -> Result[Bytes]
     return error(TOO_LARGE) if total > most
     pieces = pieces.push(piece)
   end
-  return error(TRUNCATED)
+  error(TRUNCATED)
 end
 
 # `most_body` is the ceiling of `max_body_bytes`: CLIENT_MAX_BODY for a client, DOWNLOAD_MAX_BYTES for a server.
@@ -1881,7 +1881,7 @@ def check_options(
   end
   return error("http: max_connections must be at most 65536") if max_connections > 65536
   return error("http: max_body_bytes must be at most #{most_body}") if max_body_bytes > most_body
-  return ok()
+  ok()
 end
 
 # The charset parameter of the first Content-Type header, in lowercase and unquoted; "" when there is none.
@@ -1899,7 +1899,7 @@ def charset_of(headers: List[Header]) -> String
       return value.downcase
     end
   end
-  return ""
+  ""
 end
 
 def first_of(text: String, part: String) -> Int = text.index_of(part).unwrap_or(text.length)
@@ -1911,7 +1911,7 @@ def plain?(text: String, digits_only: Bool) -> Bool
     code = String.code(c)
     return false if code < 33 or code > 126 or (digits_only and (code < 48 or code > 57))
   end
-  return true
+  true
 end
 
 def ipv6?(text: String) -> Bool
@@ -1922,7 +1922,7 @@ def ipv6?(text: String) -> Bool
       return false
     end
   end
-  return true
+  true
 end
 
 def bad_url() -> Result[Target] = error("http: the URL must be http:// or https:// with a host, and without user info")
@@ -1973,7 +1973,7 @@ def parse_url(url: String) -> Result[Target]
     port = String.to_int!(port_text)
   end
   return error("http: the port must be 1..65535") if port < 1 or port > 65535
-  return ok(Target(scheme: scheme, host: String.downcase(host), port: port, target: target))
+  ok(Target(scheme: scheme, host: String.downcase(host), port: port, target: target))
 end
 
 def start_server(listener: Listener, app: App, options: HttpServerOptions) -> HttpServer
@@ -1981,7 +1981,7 @@ def start_server(listener: Listener, app: App, options: HttpServerOptions) -> Ht
   # server's tasks, and a task of its own could end cancelled before it ran.
   ended = Task.spawn(&no_body)
   _ = Task.await(ended)
-  return HttpWire.server(listener, options.max_connections) do |server|
+  HttpWire.server(listener, options.max_connections) do |server|
     accept_all(Service(server: server, app: app, options: options, ended: ended))
   end
 end
@@ -2027,7 +2027,7 @@ def start_request(socket: Socket, rest: Bytes, first_ms: Int, options: HttpServe
   if head.expect_continue and (head.chunked or head.length > 0) and head.buffered == 0
     try TCP.send(socket, "HTTP/1.1 100 Continue\r\n\r\n", try time_left(socket, deadline))
   end
-  return ok(Reading(socket: socket, head: head, deadline: deadline, max_body_bytes: max_body_bytes))
+  ok(Reading(socket: socket, head: head, deadline: deadline, max_body_bytes: max_body_bytes))
 end
 
 # The head stays in the socket's input until it is whole (HttpWire.read_head), so a slow head holds no bytes here.
@@ -2037,10 +2037,10 @@ def read_head(socket: Socket, rest: Bytes, deadline: Int, max_body_bytes: Int) -
   case HttpWire.read_head(socket, rest, max_body_bytes, left)
     ok(head) ->
       return error(refuse(socket, head.status, head.reason, deadline)) if head.status > 0
-      return ok(head)
+      ok(head)
     error(message) ->
       TCP.close(socket)
-      return error(message)
+      error(message)
   end
 end
 
@@ -2048,7 +2048,7 @@ end
 def closing_unless(response: HttpResponse, whole: Bool) -> HttpResponse
   return response if whole
   headers = response.headers.push(Header(name: "Connection", value: "close"))
-  return HttpResponse(status: response.status, headers: headers, body: response.body)
+  HttpResponse(status: response.status, headers: headers, body: response.body)
 end
 
 # One request, whose body goes to the app as it arrives: a task feeds it on a channel, and the answer goes out as a
@@ -2102,14 +2102,14 @@ def answer_app(reading: Reading, service: Service) -> Sent
   Task.cancel(feeder)
   drain(socket, Time.monotonic_ms() + ANSWER_MS)
   TCP.close(socket)
-  return Sent(keep: false, rest: NO_BYTES)
+  Sent(keep: false, rest: NO_BYTES)
 end
 
 # The pieces of a request with no body.
 def closed_pieces() -> Channel[Bytes]
   pieces: Channel[Bytes] = Channel.new(1)
   pieces.close
-  return pieces
+  pieces
 end
 
 # The feeder of a request with no body.
@@ -2121,10 +2121,10 @@ def cancelled?(feeder: Task[Result[Void]]) -> Bool
   case Task.await(feeder, 1)
     Await.Done(outcome) ->
       case outcome
-        error(message) -> return message == TASK_CANCELLED
-        ok(_) -> return false
+        error(message) -> message == TASK_CANCELLED
+        ok(_) -> false
       end
-    Await.TimedOut -> return false
+    Await.TimedOut -> false
   end
 end
 
@@ -2162,14 +2162,14 @@ def send_answer(
       IO.warn("http: handler error: #{message}")
       failed(socket, request, timeout)
   end
-  return Sent(keep: false, rest: NO_BYTES)
+  Sent(keep: false, rest: NO_BYTES)
 end
 
 # The streamed response, with `Connection: close` added unless the body of the request was read whole.
 def stream_closing_unless(response: StreamResponse, whole: Bool) -> StreamResponse
   return response if whole
   headers = response.headers.push(Header(name: "Connection", value: "close"))
-  return StreamResponse(status: response.status, headers: headers, body: response.body, length: response.length)
+  StreamResponse(status: response.status, headers: headers, body: response.body, length: response.length)
 end
 
 def serving(f: App) -> App = f
@@ -2189,8 +2189,8 @@ def whole_answer(handler: Handler, max_body_bytes: Int, request: HttpRequest, bo
         remote_addr: request.remote_addr,
       )
 
-      return ok(Answer.Whole(try handler.call(whole)))
-    error(message) -> return ok(body_refusal(message))
+      ok(Answer.Whole(try handler.call(whole)))
+    error(message) -> ok(body_refusal(message))
   end
 end
 
@@ -2198,11 +2198,11 @@ end
 def announced_length(headers: List[Header]) -> Int
   values = header_values(headers, "content-length")
   return 0 if values.empty? or not plain?(values[0], true)
-  return String.to_int!(values[0])
+  String.to_int!(values[0])
 end
 
 def closing_answer(status: Int) -> HttpResponse
-  return HttpResponse(status: status, headers: [Header(name: "Connection", value: "close")], body: NO_BYTES)
+  HttpResponse(status: status, headers: [Header(name: "Connection", value: "close")], body: NO_BYTES)
 end
 
 # Checked when accept_websocket runs, so a bad number is an error there, not a hang later.
@@ -2219,7 +2219,7 @@ def check_websocket_options(options: WebSocketOptions) -> Result[Void]
     return error("http: outgoing_queue must be 1 to #{WS_MAX_QUEUE}")
   end
 
-  return ok()
+  ok()
 end
 
 # The answer to a request that is not a WebSocket handshake, when it is not: 426 for another version, 400 otherwise.
@@ -2241,11 +2241,11 @@ def handshake_problem(request: HttpRequest) -> Optional[HttpResponse]
     return some(handshake_refusal(400, "invalid Sec-WebSocket-Key", []))
   end
 
-  return none
+  none
 end
 
 def handshake_refusal(status: Int, reason: String, headers: List[Header]) -> HttpResponse
-  return HttpResponse(status: status, headers: headers, body: reason.bytes)
+  HttpResponse(status: status, headers: headers, body: reason.bytes)
 end
 
 # True when a header called `name` lists `token`, in any of its lines.
@@ -2254,13 +2254,13 @@ def listed?(headers: List[Header], name: String, token: String) -> Bool
     return true if WebSocketWire.has_token?(value, token)
   end
 
-  return false
+  false
 end
 
 def accepted(request: HttpRequest, session: WebSocketSession, options: WebSocketOptions) -> Upgrade
   key = header_values(request.headers, "sec-websocket-key")[0].strip
   protocol = agreed_protocol(request.headers, options.protocols)
-  return Upgrade.Accept(session, options, WebSocketWire.accept_key(key), protocol)
+  Upgrade.Accept(session, options, WebSocketWire.accept_key(key), protocol)
 end
 
 # The first protocol of the server's list that the client offered, or "".
@@ -2278,14 +2278,14 @@ def agreed_protocol(headers: List[Header], ours: List[String]) -> String
     end
   end
 
-  return ""
+  ""
 end
 
 def answer_upgrade(socket: Socket, incoming: Incoming, upgrade: Upgrade, options: HttpServerOptions) -> Sent
   case upgrade
     Upgrade.Reply(response) ->
       keep = reply_whole(socket, incoming.request, response, options.request_timeout_ms)
-      return Sent(keep: keep, rest: incoming.rest)
+      Sent(keep: keep, rest: incoming.rest)
     Upgrade.Accept(session, limits, key, protocol) ->
       case check_accept(limits, key, protocol)
         ok(_) -> run_websocket(socket, incoming.rest, session, limits, key, protocol, options)
@@ -2294,7 +2294,7 @@ def answer_upgrade(socket: Socket, incoming: Incoming, upgrade: Upgrade, options
           failed(socket, incoming.request, options.request_timeout_ms)
       end
 
-      return Sent(keep: false, rest: NO_BYTES)
+      Sent(keep: false, rest: NO_BYTES)
   end
 end
 
@@ -2306,7 +2306,7 @@ def check_accept(limits: WebSocketOptions, key: String, protocol: String) -> Res
     return error("http: an Upgrade.Accept must come from accept_websocket")
   end
 
-  return ok()
+  ok()
 end
 
 # Writes the 101 answer, then runs the session in this task with a reader and a writer around it: the reader parses
@@ -2335,7 +2335,7 @@ def switching_head(key: String, protocol: String) -> String
     head = "#{head}Sec-WebSocket-Protocol: #{protocol}\r\n"
   end
 
-  return "#{head}\r\n"
+  "#{head}\r\n"
 end
 
 def run_session(
@@ -2386,27 +2386,27 @@ end
 
 def session_code(result: Result[Void]) -> Int
   case result
-    ok(_) -> return WebSocketWire.CLOSE_NORMAL
+    ok(_) -> WebSocketWire.CLOSE_NORMAL
     error(message) ->
       IO.warn("http: websocket session error: #{message}")
-      return WebSocketWire.CLOSE_INTERNAL
+      WebSocketWire.CLOSE_INTERNAL
   end
 end
 
 # The frame of a message.
 def frame_of(message: Message) -> Bytes
   case message
-    Message.Text(text) -> return WebSocketWire.text_frame(text)
-    Message.Binary(data) -> return WebSocketWire.binary_frame(data)
-    Message.Ping(data) -> return WebSocketWire.ping_frame(cut_control(data))
-    Message.Pong(data) -> return WebSocketWire.pong_frame(cut_control(data))
-    Message.Close(code, reason) -> return WebSocketWire.close_frame(sendable_code(code), reason)
+    Message.Text(text) -> WebSocketWire.text_frame(text)
+    Message.Binary(data) -> WebSocketWire.binary_frame(data)
+    Message.Ping(data) -> WebSocketWire.ping_frame(cut_control(data))
+    Message.Pong(data) -> WebSocketWire.pong_frame(cut_control(data))
+    Message.Close(code, reason) -> WebSocketWire.close_frame(sendable_code(code), reason)
     Message.Prepared(frame) ->
       return frame if WebSocketWire.data_frame?(frame)
 
       # Bytes that are no frame `prepare` makes are the handler's mistake, as a close code that cannot be sent is.
       IO.warn("http: websocket Prepared message is not a frame of HTTP.prepare: closing with 1011")
-      return WebSocketWire.close_frame(WebSocketWire.CLOSE_INTERNAL, "")
+      WebSocketWire.close_frame(WebSocketWire.CLOSE_INTERNAL, "")
   end
 end
 
@@ -2420,7 +2420,7 @@ def cut_control(data: Bytes) -> Bytes = data.take(WS_CONTROL_BYTES)
 def sendable_code(code: Int) -> Int
   return code if WebSocketWire.valid_code?(code)
 
-  return WebSocketWire.CLOSE_INTERNAL
+  WebSocketWire.CLOSE_INTERNAL
 end
 
 # Sends when the channel has room, waiting as long as it takes: a send that times out only starts the next wait. False
@@ -2433,7 +2433,7 @@ def send_when_room[T](channel: Channel[T], value: T) -> Bool
     end
   end
 
-  return false
+  false
 end
 
 # The only task that writes the socket. It reads `outgoing` itself and writes every frame queued at that moment in one
@@ -2537,7 +2537,7 @@ def gather(wire: Wire, first: Message, flushing: Bool) -> Batch
 
   return Batch(data: frames[0], closes: closes, woken: woken) if frames.size == 1
 
-  return Batch(data: Bytes.concat(frames), closes: closes, woken: woken)
+  Batch(data: Bytes.concat(frames), closes: closes, woken: woken)
 end
 
 # Whether a message is the wake that `tell_writer` queued (`wire.wake`, a close nobody else can build: its reason is
@@ -2547,10 +2547,10 @@ def wake?(wire: Wire, message: Message) -> Bool
   case message
     Message.Close(code, reason) ->
       case wire.wake
-        Message.Close(_, token) -> return code == -1 and reason == token
-        _ -> return false
+        Message.Close(_, token) -> code == -1 and reason == token
+        _ -> false
       end
-    _ -> return false
+    _ -> false
   end
 end
 
@@ -2558,7 +2558,7 @@ end
 def write_batch(wire: Wire, batch: Batch) -> Result[Void]
   return ok() if batch.data.empty?
 
-  return send_all(wire.socket, batch.data, wire.write_ms)
+  send_all(wire.socket, batch.data, wire.write_ms)
 end
 
 # What the writer does when its wait ended with no message: the connection ends when our close frame got no answer in
@@ -2568,14 +2568,14 @@ def keep_waiting(wire: Wire, closing: Bool) -> Bool
 
   return true if wire.options.ping_ms == 0
 
-  return Result.ok?(send_all(wire.socket, WebSocketWire.ping_frame(NO_BYTES), wire.write_ms))
+  Result.ok?(send_all(wire.socket, WebSocketWire.ping_frame(NO_BYTES), wire.write_ms))
 end
 
 # How long the writer waits for the next message: for the peer's answer once we closed, else until a ping is due.
 def writer_wait(options: WebSocketOptions, closing: Bool, deadline: Int) -> Int
   return smaller(options.close_ms, larger(deadline - Time.monotonic_ms(), 0)) if closing
 
-  return quiet_wait(options)
+  quiet_wait(options)
 end
 
 # The wait of a task that has nothing to do until something comes: the interval of the pings, else a day. A timeout
@@ -2583,7 +2583,7 @@ end
 def quiet_wait(options: WebSocketOptions) -> Int
   return options.ping_ms if options.ping_ms > 0
 
-  return WS_WAIT_MS
+  WS_WAIT_MS
 end
 
 # The item that waits in `control` ends the connection. `woken`: the writer already read the wake, so everything
@@ -2629,7 +2629,7 @@ def flush_queued(wire: Wire) -> Result[Bool]
     end
   end
 
-  return ok(false)
+  ok(false)
 end
 
 # Sends the close frame of the reader unless ours is out already (`closing`), then ends the connection, lingering so
@@ -2694,7 +2694,7 @@ end
 def message_of(text: Bool, data: Bytes) -> Message
   return Message.Text(Result.unwrap_or(String.from_bytes(data), "")) if text
 
-  return Message.Binary(data)
+  Message.Binary(data)
 end
 
 # Hands a message to the handler, waiting for room; false when the handler is gone (the channel closed).
@@ -2709,7 +2709,7 @@ def on_control(wire: Wire, head: WebSocketWire.Head, payload: Bytes) -> Bool
     return false
   end
 
-  return deliver(wire, Message.Pong(payload))
+  deliver(wire, Message.Pong(payload))
 end
 
 # The pong of a ping goes through `outgoing`, behind what the handler sent. True when the connection goes on: a
@@ -2717,7 +2717,7 @@ end
 def answer_ping(wire: Wire, payload: Bytes) -> Bool
   return true if send_when_room(wire.outgoing, Message.Pong(payload))
 
-  return not wire.control.closed?
+  not wire.control.closed?
 end
 
 # The peer's close frame: the answer goes first, so the peer is not kept waiting for a handler that is slow to read.
@@ -2759,32 +2759,32 @@ end
 # read, so a message past the cap (`held` bytes of its earlier fragments and this frame) is never allocated.
 def read_frame(wire: Wire, rest: Bytes, held: Int) -> Read
   case take_bytes(wire, rest, 2)
-    error(_) -> return Read.Lost
+    error(_) -> Read.Lost
     ok(first) ->
       head = WebSocketWire.head_of(first.front)
       case WebSocketWire.check_head(head)
-        some(problem) -> return Read.Bad(problem)
-        none -> return read_tail(wire, head, first.rest, held)
+        some(problem) -> Read.Bad(problem)
+        none -> read_tail(wire, head, first.rest, held)
       end
   end
 end
 
 def read_tail(wire: Wire, head: WebSocketWire.Head, rest: Bytes, held: Int) -> Read
   case take_bytes(wire, rest, WebSocketWire.tail_size(head))
-    error(_) -> return Read.Lost
+    error(_) -> Read.Lost
     ok(tail) ->
       whole = WebSocketWire.complete(head, tail.front)
       case WebSocketWire.check_length(whole, wire.options.max_message_bytes, held)
-        some(problem) -> return Read.Bad(problem)
-        none -> return read_payload(wire, whole, tail.rest)
+        some(problem) -> Read.Bad(problem)
+        none -> read_payload(wire, whole, tail.rest)
       end
   end
 end
 
 def read_payload(wire: Wire, head: WebSocketWire.Head, rest: Bytes) -> Read
   case take_bytes(wire, rest, head.length)
-    error(_) -> return Read.Lost
-    ok(payload) -> return Read.Got(head, WebSocketWire.unmask(payload.front, head.key), payload.rest)
+    error(_) -> Read.Lost
+    ok(payload) -> Read.Got(head, WebSocketWire.unmask(payload.front, head.key), payload.rest)
   end
 end
 
@@ -2804,7 +2804,7 @@ def take_bytes(wire: Wire, rest: Bytes, count: Int) -> Result[Cut]
   end
 
   all = Bytes.concat(pieces)
-  return ok(Cut(front: all.take(count), rest: all.drop(count)))
+  ok(Cut(front: all.take(count), rest: all.drop(count)))
 end
 
 # A small need reads what has arrived (up to READ_BYTES), so the head and tail of a frame are not two reads; a large
@@ -2812,14 +2812,14 @@ end
 def read_size(need: Int) -> Int
   return READ_BYTES if need < READ_BYTES
 
-  return smaller(need, BODY_READ_BYTES)
+  smaller(need, BODY_READ_BYTES)
 end
 
 # A timeout of a read closes the socket, so there is no wait without an end: with no `idle_ms` it is a year.
 def read_wait(options: WebSocketOptions) -> Int
   return options.idle_ms if options.idle_ms > 0
 
-  return WATCH_MS
+  WATCH_MS
 end
 
 # The task of an upload: it sends the pieces of the body to the channel and closes it on every path. When the body
@@ -2830,11 +2830,11 @@ def feed_request(feeding: Feeding) -> Result[Void]
     ok(past) ->
       _ = feeding.rest.send(past, 0)
       feeding.pieces.close
-      return ok()
+      ok()
     error(message) ->
       feeding.pieces.close
       feeding.rest.close
-      return error(message)
+      error(message)
   end
 end
 
@@ -2849,7 +2849,7 @@ def feed_body(feeding: Feeding) -> Result[Bytes]
     try feeding.pieces.send(data, feeding.step_ms)
     left = left - data.size
   end
-  return ok(NO_BYTES)
+  ok(NO_BYTES)
 end
 
 def feed_chunked(feeding: Feeding) -> Result[Bytes]
@@ -2875,7 +2875,7 @@ def feed_chunked(feeding: Feeding) -> Result[Bytes]
       end
     end
   end
-  return ok(data.drop(state.next))
+  ok(data.drop(state.next))
 end
 
 # The error of a chunked body the feeder cannot go on with ("NNN reason" from HttpWire.chunk): one over the limit is
@@ -2883,12 +2883,12 @@ end
 def feed_problem(problem: String) -> String
   return BODY_TOO_LONG if String.starts_with?(problem, "413")
   return FIELDS_TOO_LARGE + rest_of(problem, 4) if String.starts_with?(problem, "431")
-  return "http: #{rest_of(problem, 4)}"
+  "http: #{rest_of(problem, 4)}"
 end
 
 def smaller(a: Int, b: Int) -> Int
   return a if a < b
-  return b
+  b
 end
 
 # The next bytes of a request that has started: the end of input here closes the connection with no answer.
@@ -2898,7 +2898,7 @@ def more_request(socket: Socket, most: Int, deadline: Int) -> Result[Bytes]
     TCP.close(socket)
     return error("http: connection closed before the request was complete")
   end
-  return ok(data)
+  ok(data)
 end
 
 # The milliseconds left before deadline. When none are left the socket closes, as a timeout in TCP closes it.
@@ -2908,13 +2908,13 @@ def time_left(socket: Socket, deadline: Int) -> Result[Int]
     TCP.close(socket)
     return error("network: operation timed out")
   end
-  return ok(left)
+  ok(left)
 end
 
 # Answers a bad request, closes, and returns the error text.
 def refuse(socket: Socket, status: Int, reason: String, deadline: Int) -> String
   linger(socket, HttpWire.error_answer(status), deadline)
-  return "http: #{reason}"
+  "http: #{reason}"
 end
 
 # Sends text, closes the write side, and reads and drops input until the peer closes, deadline, or DRAIN_BYTES bytes,
@@ -2963,7 +2963,7 @@ def reply_whole(socket: Socket, request: HttpRequest, response: HttpResponse, ti
         failed(socket, request, timeout)
       end
   end
-  return false
+  false
 end
 
 # A streamed response. A body that is already closed is the whole body, which goes out with Content-Length as for a
@@ -2998,8 +2998,8 @@ def answer_stream(socket: Socket, incoming: Incoming, response: StreamResponse, 
         end
         return send_whole(socket, incoming, reply, NO_BYTES, timeout)
       end
-      return stream_out(socket, incoming, response.body, ready.pieces, reply, length, options)
-    error(reason) -> return invalid_stream(socket, request, response.body, reason, timeout)
+      stream_out(socket, incoming, response.body, ready.pieces, reply, length, options)
+    error(reason) -> invalid_stream(socket, request, response.body, reason, timeout)
   end
 end
 
@@ -3011,8 +3011,8 @@ def length_problem(response: StreamResponse, ended: Bool, size: Int, bodyless: B
       return "the length of a streamed body cannot be negative" if length < 0
       return NO_BODY if bodyless
       return WRONG_SIZE if ended and size != length
-      return ""
-    none -> return ""
+      ""
+    none -> ""
   end
 end
 
@@ -3032,7 +3032,7 @@ def send_whole(socket: Socket, incoming: Incoming, reply: HttpWire.Reply, data: 
     linger(socket, "", deadline)
     return Sent(keep: false, rest: NO_BYTES)
   end
-  return Sent(keep: true, rest: incoming.rest)
+  Sent(keep: true, rest: incoming.rest)
 end
 
 # Sends bytes in the pieces TCP.send_bytes takes. The whole send has `timeout`, not each piece.
@@ -3044,14 +3044,14 @@ def send_all(socket: Socket, data: Bytes, timeout: Int) -> Result[Void]
     try TCP.send_bytes(socket, data.slice(at, count), try time_left(socket, deadline))
     at = at + count
   end
-  return ok()
+  ok()
 end
 
 def invalid_stream(socket: Socket, request: HttpRequest, body: Channel[Bytes], reason: String, timeout: Int) -> Sent
   IO.warn("http: invalid response: #{reason}")
   body.close
   failed(socket, request, timeout)
-  return Sent(keep: false, rest: NO_BYTES)
+  Sent(keep: false, rest: NO_BYTES)
 end
 
 # What the body channel holds without waiting. It has ended when the receive fails because the channel is closed and
@@ -3068,7 +3068,7 @@ def take_ready(body: Channel[Bytes]) -> Ready
         more = false
     end
   end
-  return Ready(pieces: pieces, ended: ended)
+  Ready(pieces: pieces, ended: ended)
 end
 
 # The bytes of an encoded head. The head is a String of characters up to U+00FF (a header value is Latin-1), so each
@@ -3081,7 +3081,7 @@ def head_bytes(head: String) -> Bytes = head.encode("latin-1").unwrap!
 # one with a length says it.
 def stream_head(head: String, length: Int) -> String
   return String.replace(head, "\r\nContent-Length: 0\r\n", "\r\nTransfer-Encoding: chunked\r\n") if length == UNSIZED
-  return String.replace(head, "\r\nContent-Length: 0\r\n", "\r\nContent-Length: #{length}\r\n")
+  String.replace(head, "\r\nContent-Length: 0\r\n", "\r\nContent-Length: #{length}\r\n")
 end
 
 # Sends the head and then the body, as chunks or (with a `length`) as it is. A HEAD request gets the head and the
@@ -3117,7 +3117,7 @@ def stream_out(
     return Sent(keep: false, rest: NO_BYTES)
   end
   return end_stream(socket, watcher, timeout) if reply.closes or not incoming.rest.empty? or ended == STREAM_EARLY
-  return next_request(socket, watcher, options.idle_timeout_ms)
+  next_request(socket, watcher, options.idle_timeout_ms)
 end
 
 # The connection closes after the stream, as linger does: the write side first, then the peer gets the rest of the time
@@ -3129,7 +3129,7 @@ def end_stream(socket: Socket, watcher: Task[Result[Bytes]], timeout: Int) -> Se
     Await.TimedOut -> TCP.close(socket)
   end
   TCP.close(socket)
-  return Sent(keep: false, rest: NO_BYTES)
+  Sent(keep: false, rest: NO_BYTES)
 end
 
 # After a HEAD response: false when the connection closes.
@@ -3138,7 +3138,7 @@ def end_head(socket: Socket, reply: HttpWire.Reply, timeout: Int) -> Bool
     linger(socket, "", Time.monotonic_ms() + timeout)
     return false
   end
-  return true
+  true
 end
 
 # The stream ended and the client is still there: the watcher's read is the first byte of its next request.
@@ -3151,7 +3151,7 @@ def next_request(socket: Socket, watcher: Task[Result[Bytes]], idle_ms: Int) -> 
       end
     Await.TimedOut -> TCP.close(socket)
   end
-  return Sent(keep: false, rest: NO_BYTES)
+  Sent(keep: false, rest: NO_BYTES)
 end
 
 # What the watcher has seen so far: STREAM_CUT when the client left, STREAM_EARLY when it sent bytes, else STREAM_DONE.
@@ -3160,7 +3160,7 @@ end
 def watched(left: Channel[Bool], sent: Channel[Bool]) -> Int
   return STREAM_CUT if Result.ok?(left.recv(0))
   return STREAM_EARLY if Result.ok?(sent.recv(0))
-  return STREAM_DONE
+  STREAM_DONE
 end
 
 # Sends the pieces as they come, then the last chunk (a body with a length has none). The wait for a piece has no
@@ -3230,7 +3230,7 @@ def pump(
     early = watched(left, sent)
     return STREAM_CUT if early == STREAM_CUT or not Result.ok?(TCP.send(socket, "0\r\n\r\n", timeout))
   end
-  return early
+  early
 end
 
 # Sends one piece and gives the bytes sent so far: as chunks, or with a `length`, as they are and only while they fit
@@ -3242,7 +3242,7 @@ def emit(socket: Socket, piece: Bytes, timeout: Int, length: Int, count: Int) ->
   end
   return error("longer than its length") if count + piece.size > length
   try send_all(socket, piece, timeout)
-  return ok(count + piece.size)
+  ok(count + piece.size)
 end
 
 # The piece as chunks: the size in hex, the bytes and the CRLFs, in one send so a chunk is one flush. A piece over
@@ -3258,7 +3258,7 @@ def send_piece(socket: Socket, piece: Bytes, timeout: Int) -> Result[Void]
     try TCP.send_bytes(socket, chunk, try time_left(socket, deadline))
     at = at + count
   end
-  return ok()
+  ok()
 end
 
 def hex_of(number: Int) -> String
@@ -3268,7 +3268,7 @@ def hex_of(number: Int) -> String
     digits = String.slice(HEX_DIGITS, rest % 16, 1) + digits
     rest = rest / 16
   end
-  return digits
+  digits
 end
 
 # Reads the socket for the whole stream. The end of the client's input, or a read error, means it left: left is set and
@@ -3294,15 +3294,15 @@ def watch(watching: Watch) -> Result[Bytes]
         return error(message)
     end
   end
-  return ok(NO_BYTES)
+  ok(NO_BYTES)
 end
 
 # Writes one whole response with Content-Length. ok(false) when the request or the response asked to close: the
 # connection then closes as in linger.
 def write_response(socket: Socket, request: HttpRequest, response: HttpResponse, timeout: Int) -> Result[Bool]
   case HttpWire.encode_response(request, response, Time.now_ms())
-    ok(reply) -> return send_response(socket, request, response, reply, timeout)
-    error(reason) -> return error("http: invalid response: #{reason}")
+    ok(reply) -> send_response(socket, request, response, reply, timeout)
+    error(reason) -> error("http: invalid response: #{reason}")
   end
 end
 
@@ -3328,7 +3328,7 @@ def send_response(
     linger(socket, "", deadline)
     return ok(false)
   end
-  return ok(true)
+  ok(true)
 end
 
 def failed(socket: Socket, request: HttpRequest, timeout: Int) -> Void
@@ -3343,8 +3343,8 @@ end
 # The worker answers by the deadline; the grace only covers its last steps.
 def wait_reply(reply: Channel[Result[HttpResponse]], deadline: Int) -> Result[HttpResponse]
   case reply.recv(larger(deadline - Time.monotonic_ms(), 0) + REPLY_GRACE_MS)
-    ok(answer) -> return answer
-    error(_) -> return error(TIMED_OUT)
+    ok(answer) -> answer
+    error(_) -> error(TIMED_OUT)
   end
 end
 
@@ -3382,17 +3382,17 @@ def run_pool(pool: Pool) -> Result[Void]
         end
     end
   end
-  return ok()
+  ok()
 end
 
 def origin_of(pool: Pool, key: String) -> Origin
-  return Map.get(pool.origins, key, Origin(open: 0, idle: [], waiting: [], front: 0))
+  Map.get(pool.origins, key, Origin(open: 0, idle: [], waiting: [], front: 0))
 end
 
 # An origin with no connection and no waiting job is dropped, so the map does not grow with every host called.
 def with_origin(pool: Pool, key: String, origin: Origin) -> Pool
   return pool.with(origins: Map.delete(pool.origins, key)) if origin.open == 0 and queued(origin) == 0
-  return pool.with(origins: Map.put(pool.origins, key, origin))
+  pool.with(origins: Map.put(pool.origins, key, origin))
 end
 
 def dispatch(pool: Pool, job: HttpWire.Job) -> Pool
@@ -3400,7 +3400,7 @@ def dispatch(pool: Pool, job: HttpWire.Job) -> Pool
   result = place(pool, job)
   return result.pool if result.placed
   origin = origin_of(result.pool, job.origin)
-  return with_origin(result.pool, job.origin, origin.with(waiting: List.append(origin.waiting, job)))
+  with_origin(result.pool, job.origin, origin.with(waiting: List.append(origin.waiting, job)))
 end
 
 # Gives job to the idle worker freed last, or to a new worker when a slot is free. A worker that has just timed out
@@ -3432,7 +3432,7 @@ def place(pool: Pool, job: HttpWire.Job) -> Placed
   worker = Worker(id: id, client: pool.client, options: pool.options, jobs: pool.jobs, inbox: inbox, notice: notice)
   Task.spawn(&supervise, worker)
   pool = pool.with(inboxes: Map.put(pool.inboxes, id, inbox), busy: Map.put(pool.busy, id, job.reply), next_id: id + 1)
-  return Placed(pool: pool, placed: true)
+  Placed(pool: pool, placed: true)
 end
 
 # The worker is free and keeps its connection: it takes the oldest waiting job, or stays idle. Its job is answered,
@@ -3442,7 +3442,7 @@ def freed(pool: Pool, message: HttpWire.Job) -> Pool
   pool = pool.with(busy: Map.delete(pool.busy, message.worker))
   pool = with_origin(pool, message.origin, origin.with(idle: List.append(origin.idle, message.worker)))
   return pool if queued(origin) == 0
-  return next_waiting(pool, message.origin)
+  next_waiting(pool, message.origin)
 end
 
 # The worker has closed its connection and ended: its slot goes to the oldest waiting job. Its last job's reply gets
@@ -3458,7 +3458,7 @@ def gone(pool: Pool, message: HttpWire.Job) -> Pool
   idle = List.filter(origin.idle) do |k| k != id end
   pool = pool.with(busy: Map.delete(pool.busy, id), inboxes: Map.delete(pool.inboxes, id))
   pool = with_origin(pool, message.origin, origin.with(open: origin.open - 1, idle: idle))
-  return next_waiting(pool, message.origin)
+  next_waiting(pool, message.origin)
 end
 
 # The oldest waiting job that still has time goes out, if a worker or a slot takes it. The caller of a job past its
@@ -3477,7 +3477,7 @@ def next_waiting(pool: Pool, key: String) -> Pool
     end
     origin = rest
   end
-  return with_origin(pool, key, origin)
+  with_origin(pool, key, origin)
 end
 
 def queued(origin: Origin) -> Int = List.size(origin.waiting) - origin.front
@@ -3489,7 +3489,7 @@ def popped(origin: Origin) -> Origin
   if front >= 32 and front * 2 >= List.size(origin.waiting)
     return origin.with(waiting: List.drop(origin.waiting, front), front: 0)
   end
-  return origin.with(front: front)
+  origin.with(front: front)
 end
 
 # The client is closed: every job still waiting or in flight fails now, and the idle workers close their
@@ -3565,7 +3565,7 @@ def work(worker: Worker) -> Result[Void]
         end
     end
   end
-  return ok()
+  ok()
 end
 
 def close_socket(socket: Result[Socket]) -> Void
@@ -3578,7 +3578,7 @@ end
 # Tells the owner that this worker is free (kept) or gone; false when the client is closed.
 def tell(worker: Worker, job: HttpWire.Job, kept: Bool) -> Bool
   message = job.with(worker: worker.id, kept: kept)
-  return Result.ok?(worker.jobs.send(message, OWNER_WAIT_MS))
+  Result.ok?(worker.jobs.send(message, OWNER_WAIT_MS))
 end
 
 # One job: on the worker's connection when it has one, else on a new one. A reused connection that fails before any
@@ -3597,15 +3597,15 @@ def run_job(worker: Worker, socket: Result[Socket], job: HttpWire.Job) -> Done
         return Done(socket: socket, answer: attempt.answer, kept: attempt.kept and not refused)
       end
       TCP.close(s)
-      return run_job(worker, error(""), job)
-    error(message) -> return Done(socket: socket, answer: error(message), kept: false)
+      run_job(worker, error(""), job)
+    error(message) -> Done(socket: socket, answer: error(message), kept: false)
   end
 end
 
 def ok_status?(answer: Result[HttpResponse], status: Int) -> Bool
   case answer
-    ok(response) -> return response.status == status
-    error(_) -> return false
+    ok(response) -> response.status == status
+    error(_) -> false
   end
 end
 
@@ -3614,11 +3614,11 @@ def connect(worker: Worker, job: HttpWire.Job) -> Result[Socket]
   return error(TIMED_OUT) if left <= 0
   return connect_https(worker.client, job.host, job.port, left) if job.scheme == "https"
   where = Target(scheme: job.scheme, host: job.host, port: job.port, target: "/")
-  return reaching(TCP.connect(job.host, job.port, left), HttpWire.options(worker.client), where)
+  reaching(TCP.connect(job.host, job.port, left), HttpWire.options(worker.client), where)
 end
 
 def idempotent?(method: String) -> Bool
-  return method == "GET" or method == "HEAD" or method == "OPTIONS" or method == "PUT" or method == "DELETE"
+  method == "GET" or method == "HEAD" or method == "OPTIONS" or method == "PUT" or method == "DELETE"
 end
 
 # Sends the request and reads the response. A large body is written by a task of its own while the response is
@@ -3652,13 +3652,13 @@ def exchange(answer: Pending, reused: Bool) -> Attempt
       TCP.close(socket)
       sent = Task.await(writer)
   end
-  return finish_exchange(answer, received, sent, reused)
+  finish_exchange(answer, received, sent, reused)
 end
 
 def write_request(answer: Pending) -> Result[Void]
   left = answer.job.deadline - Time.monotonic_ms()
   return error(TIMED_OUT) if left <= 0
-  return send_all(answer.socket, head_bytes(answer.job.head) + answer.job.body, left)
+  send_all(answer.socket, head_bytes(answer.job.head) + answer.job.body, left)
 end
 
 # A failure before any byte of the response (the end of input, a read or a write error) is retried on a reused
@@ -3669,23 +3669,23 @@ def finish_exchange(answer: Pending, received: Received, sent: Result[Void], reu
     TCP.close(answer.socket)
   end
   case received.response
-    ok(response) -> return Attempt(answer: ok(response), kept: kept, retry: false)
+    ok(response) -> Attempt(answer: ok(response), kept: kept, retry: false)
     error(message) ->
       lost = message == END_OF_INPUT or String.starts_with?(message, READ_FAILED)
       retry = reused and idempotent?(answer.job.method) and not received.started
       case sent
-        error(problem) -> return Attempt(answer: error(problem), kept: false, retry: retry)
+        error(problem) -> Attempt(answer: error(problem), kept: false, retry: retry)
         ok(_) ->
           if message == END_OF_INPUT
             message = CUT_SHORT
           end
-          return Attempt(answer: error(message), kept: false, retry: retry and lost)
+          Attempt(answer: error(message), kept: false, retry: retry and lost)
       end
   end
 end
 
 def failed_read(message: String, started: Bool) -> Received
-  return Received(response: error(message), kept: false, started: started)
+  Received(response: error(message), kept: false, started: started)
 end
 
 # The response head (after at most MAX_INTERIM interim ones) and its body.
@@ -3709,7 +3709,7 @@ def read_response(answer: Pending) -> Received
       error(message) -> return failed_read(message, interim > 0)
     end
   end
-  return failed_read(TIMED_OUT, true)
+  failed_read(TIMED_OUT, true)
 end
 
 # A connection is kept only when nothing follows the response in its input and the input has not ended: bytes there
@@ -3729,8 +3729,8 @@ def read_response_body(answer: Pending, head: HttpWire.Response) -> Received
   case whole
     ok(done) ->
       response = HttpResponse(status: head.status, headers: head.headers, body: done.body)
-      return Received(response: ok(response), kept: done.kept and not head.closes, started: true)
-    error(message) -> return failed_read(message, true)
+      Received(response: ok(response), kept: done.kept and not head.closes, started: true)
+    error(message) -> failed_read(message, true)
   end
 end
 
@@ -3743,7 +3743,7 @@ def read_length_body(answer: Pending, length: Int) -> Result[Whole]
     pieces = List.append(pieces, data)
     left = left - data.size
   end
-  return ok(Whole(body: Bytes.concat(pieces), kept: nothing_buffered(answer)))
+  ok(Whole(body: Bytes.concat(pieces), kept: nothing_buffered(answer)))
 end
 
 # Bytes read past the end of the body, or still in the input after it, stop the connection from being kept. Framing
@@ -3769,7 +3769,7 @@ def read_chunked_body(answer: Pending) -> Result[Whole]
       pieces = add_runs(pieces, framing, state.runs)
     end
   end
-  return ok(Whole(body: Bytes.concat(pieces), kept: state.next == framing.size and nothing_buffered(answer)))
+  ok(Whole(body: Bytes.concat(pieces), kept: state.next == framing.size and nothing_buffered(answer)))
 end
 
 # The pieces with the runs of data (start, length pairs) added.
@@ -3779,14 +3779,14 @@ def add_runs(pieces: List[Bytes], data: Bytes, runs: List[Int]) -> List[Bytes]
     pieces = List.append(pieces, data.slice(List.at(runs, at), List.at(runs, at + 1)))
     at = at + 2
   end
-  return pieces
+  pieces
 end
 
 # Whether the socket's input holds no byte now and has not ended (HttpWire.idle? does not wait for input).
 def nothing_buffered(answer: Pending) -> Bool
   case time_left(answer.socket, answer.job.deadline)
-    ok(left) -> return Result.unwrap_or(HttpWire.idle?(answer.socket, left), false)
-    error(_) -> return false
+    ok(left) -> Result.unwrap_or(HttpWire.idle?(answer.socket, left), false)
+    error(_) -> false
   end
 end
 
@@ -3804,7 +3804,7 @@ def read_until_close(answer: Pending) -> Result[Whole]
     return error(TOO_LARGE) if total > answer.max_body_bytes
     pieces = List.append(pieces, data)
   end
-  return error(TRUNCATED)
+  error(TRUNCATED)
 end
 
 # One download connection: on a new socket, which closes when the download ends, since the pool only runs
@@ -3813,7 +3813,7 @@ def connect_download(pool: HttpClient, where: Target, deadline: Int) -> Result[S
   left = deadline - Time.monotonic_ms()
   return error(TIMED_OUT) if left <= 0
   return connect_https(pool, where.host, where.port, left) if where.scheme == "https"
-  return reaching(TCP.connect(where.host, where.port, left), HttpWire.options(pool), where)
+  reaching(TCP.connect(where.host, where.port, left), HttpWire.options(pool), where)
 end
 
 # Opens the destination exclusively, then streams the response into it. Every error below closes both handles;
@@ -3828,14 +3828,14 @@ def finish_download(
   case time_left(socket, deadline)
     ok(left) ->
       case File.open(path, "create_private", left)
-        ok(out) -> return stream_download(socket, out, options, deadline, denied)
+        ok(out) -> stream_download(socket, out, options, deadline, denied)
         error(message) ->
           TCP.close(socket)
-          return error(message)
+          error(message)
       end
     error(message) ->
       TCP.close(socket)
-      return error(message)
+      error(message)
   end
 end
 
@@ -3856,12 +3856,12 @@ def stream_download(
           case File.close(out, larger(deadline - Time.monotonic_ms(), 1))
             ok(_) ->
               TCP.close(socket)
-              return ok(Download(status: head.status, headers: head.headers, bytes_written: written))
-            error(message) -> return fail_download(socket, out, deadline, message)
+              ok(Download(status: head.status, headers: head.headers, bytes_written: written))
+            error(message) -> fail_download(socket, out, deadline, message)
           end
-        error(message) -> return fail_download(socket, out, deadline, message)
+        error(message) -> fail_download(socket, out, deadline, message)
       end
-    error(message) -> return fail_download(socket, out, deadline, message)
+    error(message) -> fail_download(socket, out, deadline, message)
   end
 end
 
@@ -3869,12 +3869,12 @@ end
 def fail_download(socket: Socket, out: FileHandle, deadline: Int, message: String) -> Result[Download]
   _ = File.close(out, larger(deadline - Time.monotonic_ms(), 1))
   TCP.close(socket)
-  return error(message)
+  error(message)
 end
 
 # The response head of a download, with the download budget as the body limit.
 def download_head(socket: Socket, budget: Int, deadline: Int) -> Result[HttpWire.Response]
-  return read_head_of(socket, false, budget, deadline)
+  read_head_of(socket, false, budget, deadline)
 end
 
 # The head of the final response (after at most MAX_INTERIM interim ones), with the framing of a response to HEAD when
@@ -3896,26 +3896,26 @@ def read_head_of(socket: Socket, head_only: Bool, budget: Int, deadline: Int) ->
       error(message) -> return error(message)
     end
   end
-  return error(TIMED_OUT)
+  error(TIMED_OUT)
 end
 
 # Streams the body framing of head into the file and counts its bytes.
 def save_body(socket: Socket, out: FileHandle, head: HttpWire.Response, budget: Int, deadline: Int) -> Result[Int]
   return save_chunked(socket, out, budget, deadline) if head.chunked
   return save_until_close(socket, out, budget, deadline) if head.until_close
-  return save_length(socket, out, head.length, budget, deadline)
+  save_length(socket, out, head.length, budget, deadline)
 end
 
 # The next body bytes, at most most of them; no bytes means the peer closed the input.
 def recv_body(socket: Socket, most: Int, deadline: Int) -> Result[Bytes]
-  return TCP.recv_bytes(socket, most, try time_left(socket, deadline))
+  TCP.recv_bytes(socket, most, try time_left(socket, deadline))
 end
 
 # Appends data to the download within the whole-call deadline.
 def write_body(out: FileHandle, data: Bytes, deadline: Int) -> Result[Void]
   left = deadline - Time.monotonic_ms()
   return error(TIMED_OUT) if left <= 0
-  return File.write_bytes(out, data, left)
+  File.write_bytes(out, data, left)
 end
 
 # Appends data without letting the file grow past the budget: writes what fits, then reports TOO_LARGE.
@@ -3928,7 +3928,7 @@ def write_bounded(out: FileHandle, data: Bytes, written: Int, budget: Int, deadl
     return error(TOO_LARGE)
   end
   try write_body(out, data, deadline)
-  return ok(written + data.size)
+  ok(written + data.size)
 end
 
 # A Content-Length body: the head already refused one over the budget, so the count only follows it.
@@ -3941,7 +3941,7 @@ def save_length(socket: Socket, out: FileHandle, length: Int, budget: Int, deadl
     written = try write_bounded(out, data, written, budget, deadline)
     left = left - data.size
   end
-  return ok(written)
+  ok(written)
 end
 
 # A chunked body: framing goes through the decoder, whose runs say which bytes of each read are body.
@@ -3965,7 +3965,7 @@ def save_chunked(socket: Socket, out: FileHandle, budget: Int, deadline: Int) ->
       written = try write_runs(out, data, state.runs, written, budget, deadline)
     end
   end
-  return ok(written)
+  ok(written)
 end
 
 # Appends the runs of data (start, length pairs) to the download.
@@ -3976,7 +3976,7 @@ def write_runs(out: FileHandle, data: Bytes, runs: List[Int], written: Int, budg
     written = try write_bounded(out, piece, written, budget, deadline)
     at = at + 2
   end
-  return ok(written)
+  ok(written)
 end
 
 # A body that ends with the connection: over TLS the end must be the peer's close_notify.
@@ -3990,10 +3990,10 @@ def save_until_close(socket: Socket, out: FileHandle, budget: Int, deadline: Int
     end
     written = try write_bounded(out, data, written, budget, deadline)
   end
-  return error(TRUNCATED)
+  error(TRUNCATED)
 end
 
 def larger(a: Int, b: Int) -> Int
   return a if a > b
-  return b
+  b
 end

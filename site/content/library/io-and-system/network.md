@@ -90,7 +90,7 @@ def echo_once(listener: Listener) -> Result[Void]
   line = try TCP.read_line(client, 2000)
   try TCP.send(client, "echo: #{line}\n", 2000)
   TCP.close(client)
-  return ok()
+  ok()
 end
 
 def main() -> Void
@@ -178,7 +178,7 @@ A client that speaks HTTP/2 offers it first and reads which protocol the server 
 def protocol(host: String) -> Result[String]
   context = try TLS.client_context(TlsClientOptions(alpn: ["h2", "http/1.1"]))
   socket = try TLS.connect(host, 443, context, 5000)
-  return ok(TLS.alpn(socket))
+  ok(TLS.alpn(socket))
 end
 ```
 
@@ -201,7 +201,7 @@ def reply(socket: Socket) -> Result[String]
     line = try TCP.read_line(socket, 5000)
   end
 
-  return ok(line)
+  ok(line)
 end
 
 def starttls(host: String, context: TlsContext) -> Result[Socket]
@@ -213,7 +213,7 @@ def starttls(host: String, context: TlsContext) -> Result[Socket]
   ready = try reply(plain)
   return error(ready) if !ready.start_with?("220")
 
-  return TLS.upgrade(plain, context, host, 5000)
+  TLS.upgrade(plain, context, host, 5000)
 end
 ```
 
@@ -522,7 +522,7 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
     )
   end
 
-  return ok(HttpResponse(status: 404, headers: [], body: "not found".bytes))
+  ok(HttpResponse(status: 404, headers: [], body: "not found".bytes))
 end
 
 def main() -> Void
@@ -550,7 +550,7 @@ A server with a page, a file sent in pieces, an upload and a WebSocket on one po
 import HTTP from "std/http"
 
 def page(request: HttpRequest) -> Result[HttpResponse]
-  return ok(HttpResponse(status: 200, headers: [], body: "hello".bytes))
+  ok(HttpResponse(status: 200, headers: [], body: "hello".bytes))
 end
 
 def produce(pieces: Channel[Bytes]) -> Void
@@ -564,7 +564,7 @@ end
 def file() -> HTTP.Answer
   pieces: Channel[Bytes] = Channel.new(2)
   Task.spawn(&produce, pieces)
-  return HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: [], body: pieces, length: some(28)))
+  HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: [], body: pieces, length: some(28)))
 end
 
 def upload(body: HTTP.RequestBody) -> Result[HTTP.Answer]
@@ -577,7 +577,7 @@ def upload(body: HTTP.RequestBody) -> Result[HTTP.Answer]
   end
 
   try Task.await(body.done)
-  return ok(HTTP.Answer.Whole(HttpResponse(status: 200, headers: [], body: "#{total} bytes".bytes)))
+  ok(HTTP.Answer.Whole(HttpResponse(status: 200, headers: [], body: "#{total} bytes".bytes)))
 end
 
 def echo(ws: HTTP.WebSocket) -> Result[Void]
@@ -590,7 +590,7 @@ def echo(ws: HTTP.WebSocket) -> Result[Void]
     end
   end
 
-  return ok()
+  ok()
 end
 
 def route(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
@@ -600,7 +600,7 @@ def route(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
 
   return upload(body) if request.path == "/upload"
 
-  return HTTP.app(&page).call(request, body)
+  HTTP.app(&page).call(request, body)
 end
 
 def main() -> Void
@@ -621,7 +621,7 @@ import HTTP from "std/http"
 def handler(f: HTTP.Handler) -> HTTP.Handler = f
 
 def hello(request: HttpRequest) -> Result[HttpResponse]
-  return ok(HttpResponse(status: 200, headers: [], body: "hello".bytes))
+  ok(HttpResponse(status: 200, headers: [], body: "hello".bytes))
 end
 
 def log_answer(next: HTTP.Handler, request: HttpRequest) -> Result[HttpResponse]
@@ -631,7 +631,7 @@ def log_answer(next: HTTP.Handler, request: HttpRequest) -> Result[HttpResponse]
     error(_) -> puts("#{request.method} #{request.path} failed")
   end
 
-  return response
+  response
 end
 
 # Logs the request line and the status of the answer; an error of the next handler passes through unchanged.
@@ -642,7 +642,7 @@ def authorized(next: HTTP.Handler, request: HttpRequest) -> Result[HttpResponse]
     return ok(HttpResponse(status: 401, headers: [], body: "".bytes))
   end
 
-  return next.call(request)
+  next.call(request)
 end
 
 # Answers 401 to a request without an Authorization header, and does not call the next handler.
@@ -731,7 +731,7 @@ def count(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   end
 
   try Task.await(body.done)
-  return ok(HTTP.Answer.Whole(HttpResponse(status: 200, headers: [], body: "#{total} bytes".bytes)))
+  ok(HTTP.Answer.Whole(HttpResponse(status: 200, headers: [], body: "#{total} bytes".bytes)))
 end
 
 def feed(into: Channel[Bytes]) -> Void
@@ -780,13 +780,13 @@ For a body that is not ready when the handler returns: events, tokens as a model
 import HTTP from "std/http"
 
 def echoed(data: Bytes) -> HTTP.Answer
-  return HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(data)))
+  HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(data)))
 end
 
 def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   case HTTP.read_all(body, 65536)
-    ok(data) -> return ok(echoed(data))
-    error(message) -> return ok(HTTP.body_refusal(message))
+    ok(data) -> ok(echoed(data))
+    error(message) -> ok(HTTP.body_refusal(message))
   end
 end
 
@@ -825,7 +825,7 @@ def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
     return ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: headers, body: events)))
   end
 
-  return ok(HTTP.Answer.Whole(HttpResponse(status: 404, headers: [], body: "not found\n".bytes)))
+  ok(HTTP.Answer.Whole(HttpResponse(status: 404, headers: [], body: "not found\n".bytes)))
 end
 
 def main() -> Void
@@ -886,12 +886,12 @@ def relay(ws: HTTP.WebSocket, message: HTTP.Message) -> Result[Bool]
   case message
     HTTP.Message.Text(text) ->
       try ws.outgoing.send(HTTP.Message.Text("echo: #{text}"), 5000)
-      return ok(true)
+      ok(true)
     HTTP.Message.Binary(data) ->
       try ws.outgoing.send(HTTP.Message.Binary(data), 5000)
-      return ok(true)
-    HTTP.Message.Close(_, _) -> return ok(false)
-    _ -> return ok(true)
+      ok(true)
+    HTTP.Message.Close(_, _) -> ok(false)
+    _ -> ok(true)
   end
 end
 
@@ -904,7 +904,7 @@ def echo(ws: HTTP.WebSocket) -> Result[Void]
     end
   end
 
-  return ok()
+  ok()
 end
 
 def home(request: HttpRequest) -> Result[HttpResponse] = ok(HttpResponse(status: 200, headers: [], body: "home".bytes))
@@ -912,7 +912,7 @@ def home(request: HttpRequest) -> Result[HttpResponse] = ok(HttpResponse(status:
 def route(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   return ok(HTTP.Answer.Upgrade(try HTTP.accept_websocket(request, &echo))) if request.path == "/echo"
 
-  return HTTP.app(&home).call(request, body)
+  HTTP.app(&home).call(request, body)
 end
 
 def main() -> Void
@@ -952,7 +952,7 @@ HTTP.close_server(server: HttpServer) -> Void
 import HTTP from "std/http"
 
 def handle(request: HttpRequest) -> Result[HttpResponse]
-  return ok(HttpResponse(status: 200, headers: [], body: "you asked for #{request.path}".bytes))
+  ok(HttpResponse(status: 200, headers: [], body: "you asked for #{request.path}".bytes))
 end
 
 def main() -> Void

@@ -8,7 +8,7 @@ def nap(index: Int) -> Int
     Task.sleep(1)
     total += index + k
   end
-  return total
+  total
 end
 
 def quick(index: Int) -> Int

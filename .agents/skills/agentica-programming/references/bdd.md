@@ -55,7 +55,7 @@ def remember(ctx: BDD.Context, args: List[String]) -> BDD.Context = BDD.set(ctx,
 
 def check_count(ctx: BDD.Context, args: List[String]) -> BDD.Context
   count = JSON.int(BDD.get(ctx, "count").unwrap!).unwrap!
-  return BDD.assert(ctx, count == args[0].to_i!, "wrong count")
+  BDD.assert(ctx, count == args[0].to_i!, "wrong count")
 end
 
 def main() -> Void

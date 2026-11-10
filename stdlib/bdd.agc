@@ -60,7 +60,7 @@ end
 
 ## Returns a step that runs `handler` for the steps whose text matches `pattern`.
 export def step(pattern: String, handler: Fn[Context, List[String], Context]) -> Step
-  return Step(pattern: pattern, handler: handler)
+  Step(pattern: pattern, handler: handler)
 end
 
 ## Serves the steps that `agentica test` asks for, with the built-in steps added in front of `steps`. It never returns.
@@ -93,7 +93,7 @@ end
 export def doc_string(ctx: Context) -> String
   return ctx.scenario.step.doc if ctx.scenario.step.has_doc
   halt(ctx, "RUNTIME-BDD-CONTEXT", "this step has no Doc String")
-  return ""
+  ""
 end
 
 ## Returns the Data Table under the current step as rows of cells. Ends the scenario with an error when the step has
@@ -103,7 +103,7 @@ export def table(ctx: Context) -> List[List[String]]
   if not ctx.scenario.step.has_table
     halt(ctx, "RUNTIME-BDD-CONTEXT", "this step has no Data Table")
   end
-  return rows
+  rows
 end
 
 ## Fails the scenario with `message` when `condition` is false. Returns the context.
@@ -112,7 +112,7 @@ export def assert(ctx: Context, condition: Bool, message: String) -> Context
   if not condition
     halt(ctx, "RUNTIME-BDD-ASSERTION", message)
   end
-  return ctx
+  ctx
 end
 
 ## Ends the scenario as skipped, with `reason` in the report. The step ends at once, like a failed assertion, and no
@@ -130,31 +130,31 @@ export def skip(ctx: Context, reason: String) -> Context
   fields: Map[String, Json] = {"event": JSON.from("skip"), "reason": JSON.from(clip(reason))}
   deliver(record_text(fields))
   System.exit(0)
-  return ctx
+  ctx
 end
 
 ## Returns the context with `value` saved under `name`, for the later steps of the same scenario.
 export def set(ctx: Context, name: String, value: Json) -> Context
-  return with_state(ctx, ctx.scenario.state.put(name, value))
+  with_state(ctx, ctx.scenario.state.put(name, value))
 end
 
 ## Returns the value saved under `name`, or an error when there is none.
 export def get(ctx: Context, name: String) -> Result[Json]
-  return ctx.scenario.state.get(name).to_result("missing scenario state")
+  ctx.scenario.state.get(name).to_result("missing scenario state")
 end
 
 ## Returns the context with `service` kept under `name`, for the later steps of the same scenario. A service is a
 ## function from a request to a result, both JSON: the way to keep a value that is not JSON, such as an open database
 ## connection, which the function captures. The handles close when the scenario's child VM ends with the scenario.
 export def keep(ctx: Context, name: String, service: Fn[Json, Result[Json]]) -> Context
-  return with_services(ctx, ctx.scenario.services.put(name, service))
+  with_services(ctx, ctx.scenario.services.put(name, service))
 end
 
 ## Calls the service kept under `name` with `request` and returns its result, or an error when there is none.
 export def call(ctx: Context, name: String, request: Json) -> Result[Json]
   found = ctx.scenario.services.get(name)
   return error("missing scenario service") if found.none?
-  return found.unwrap!.call(request)
+  found.unwrap!.call(request)
 end
 
 ## Returns the context with the environment variable `name` set to `value` for the program that `given_program` starts
@@ -178,14 +178,14 @@ export def given_env(ctx: Context, name: String, value: String) -> Context
   end
   # Where names ignore case the old spelling goes first: the child would get both and could see either.
   env = ctx.scenario.env.filter do |key, _| !same_env_name?(key, name) end
-  return with_launch(ctx, env.put(name, value), ctx.scenario.arguments)
+  with_launch(ctx, env.put(name, value), ctx.scenario.arguments)
 end
 
 ## Returns the context with `value` added to the command-line arguments of the program that `given_program` starts
 ## later: the program reads them with `System.args`, in the order of the calls. It must come before `given_program`.
 export def given_argument(ctx: Context, value: String) -> Context
   not_started(ctx, "the arguments")
-  return with_launch(ctx, ctx.scenario.env, ctx.scenario.arguments.push(value))
+  with_launch(ctx, ctx.scenario.env, ctx.scenario.arguments.push(value))
 end
 
 ## Returns the context with `hook` registered to run when the scenario ends, whether it passed, failed or was skipped.
@@ -196,7 +196,7 @@ end
 ## when a hook crashes or fails a `BDD` check, on its own context or on one it captured earlier. Hooks do not run when
 ## the process itself ends: a crash in a step, the scenario's time limit or `System.exit`.
 export def after(ctx: Context, hook: Fn[Context, Result[Void]]) -> Context
-  return with_after(ctx, ctx.scenario.after.push(hook))
+  with_after(ctx, ctx.scenario.after.push(hook))
 end
 
 ## Starts the Agentica program at `path`, relative to the feature file, and returns the context that holds it. It runs
@@ -206,7 +206,7 @@ export def given_program(ctx: Context, path: String) -> Context
     Program.Running(_) -> halt(ctx, "RUNTIME-BDD-CONTEXT", "only one program may start per scenario")
     Program.NotStarted -> return start(ctx, path)
   end
-  return ctx
+  ctx
 end
 
 ## Sends `text` and a newline to the program's input.
@@ -220,7 +220,7 @@ export def when_eof(ctx: Context) -> Context
   p = program(ctx)
   closed = Process.close_stdin(p, 5000)
   check(ctx, closed.ok?, closed.message)
-  return ctx
+  ctx
 end
 
 ## Returns the next output line of the program, waiting up to `timeout_ms` milliseconds. It is an error when the output
@@ -234,12 +234,12 @@ export def read_line(ctx: Context, timeout_ms: Int) -> Result[String]
     return error("no line within #{timeout_ms} milliseconds")
   end
   check(ctx, false, line.message)
-  return line
+  line
 end
 
 ## Checks that the next output line of the program is `expected`, waiting up to `timeout_ms` milliseconds.
 export def then_line(ctx: Context, expected: String, timeout_ms: Int) -> Context
-  return compare_text(ctx, next_line(ctx, timeout_ms), expected)
+  compare_text(ctx, next_line(ctx, timeout_ms), expected)
 end
 
 ## Checks that the next output line and `expected` are the same JSON value, in any key order, waiting up to
@@ -252,7 +252,7 @@ export def then_json_line(ctx: Context, expected: String, timeout_ms: Int) -> Co
     halt(ctx, "RUNTIME-BDD-JSON", "expected and received lines must be valid JSON")
     return ctx
   end
-  return compare(ctx, Test.eq(right.unwrap!, left.unwrap!), JSON.encode(left.unwrap!), JSON.encode(right.unwrap!))
+  compare(ctx, Test.eq(right.unwrap!, left.unwrap!), JSON.encode(left.unwrap!), JSON.encode(right.unwrap!))
 end
 
 ## Checks that the program is still running with its input open.
@@ -263,7 +263,7 @@ export def then_stdin_open(ctx: Context) -> Context
   if Process.send(p, "", 5000).ok? and not Process.wait(p, 1).ok?
     state = wanted
   end
-  return compare(ctx, Test.eq(state, wanted), wanted, state)
+  compare(ctx, Test.eq(state, wanted), wanted, state)
 end
 
 ## Waits up to `timeout_ms` milliseconds for the program to exit and checks that its exit code is `code`.
@@ -274,31 +274,31 @@ export def then_exit(ctx: Context, code: Int, timeout_ms: Int) -> Context
   check(ctx, status.ok?, status.message)
   finished(ctx, p)
   actual = status.unwrap!
-  return compare(ctx, Test.eq(actual, code), code.inspect, actual.inspect)
+  compare(ctx, Test.eq(actual, code), code.inspect, actual.inspect)
 end
 
 ## Checks that the output no line step has read yet is `expected`. The program must have exited.
 export def then_stdout(ctx: Context, expected: String) -> Context
-  return compare_text(ctx, finished(ctx, exited(ctx, program(ctx))).stdout, expected)
+  compare_text(ctx, finished(ctx, exited(ctx, program(ctx))).stdout, expected)
 end
 
 ## Checks that the whole error output is `expected`. The program must have exited.
 export def then_stderr(ctx: Context, expected: String) -> Context
-  return compare_text(ctx, finished(ctx, exited(ctx, program(ctx))).stderr, expected)
+  compare_text(ctx, finished(ctx, exited(ctx, program(ctx))).stderr, expected)
 end
 
 ## Checks that the output no line step has read yet includes `expected` as a substring. The program must have exited.
 export def then_stdout_includes(ctx: Context, expected: String) -> Context
-  return compare_includes(ctx, finished(ctx, exited(ctx, program(ctx))).stdout, expected)
+  compare_includes(ctx, finished(ctx, exited(ctx, program(ctx))).stdout, expected)
 end
 
 ## Checks that the whole error output includes `expected` as a substring. The program must have exited.
 export def then_stderr_includes(ctx: Context, expected: String) -> Context
-  return compare_includes(ctx, finished(ctx, exited(ctx, program(ctx))).stderr, expected)
+  compare_includes(ctx, finished(ctx, exited(ctx, program(ctx))).stderr, expected)
 end
 
 def predefined() -> List[Step]
-  return [
+  [
     step("the Agentica program {string}") do |ctx, args| given_program(ctx, args[0]) end,
     step("the environment variable {string} is {string}") do |ctx, args| given_env(ctx, args[0], args[1]) end,
     step("the program argument {string}") do |ctx, args| given_argument(ctx, args[0]) end,
@@ -408,7 +408,7 @@ def run_after(ctx: Context) -> List[String]
       problems = problems.push(outcome.message)
     end
   end
-  return problems
+  problems
 end
 
 def after_record(problems: List[String]) -> String
@@ -418,7 +418,7 @@ def after_record(problems: List[String]) -> String
     "message": JSON.from(clip("after hook failed: #{problems.join("; ")}")),
   }
 
-  return record_text(fields)
+  record_text(fields)
 end
 
 # Ends the scenario when a task is still running (with `pending` as the message) or crashed unobserved. `fail` ends it:
@@ -479,7 +479,7 @@ def start(ctx: Context, path: String) -> Context
     end
     halt(ctx, "RUNTIME-BDD-IO", spawned.message)
   end
-  return Context(
+  Context(
     scenario: Scenario(
       settings: settings,
       state: ctx.scenario.state,
@@ -508,7 +508,7 @@ def program(ctx: Context) -> Process
     Program.Running(p) -> found = ok(p)
     Program.NotStarted -> halt(ctx, "RUNTIME-BDD-CONTEXT", found.message)
   end
-  return found.unwrap!
+  found.unwrap!
 end
 
 def send(ctx: Context, text: String) -> Context
@@ -517,13 +517,13 @@ def send(ctx: Context, text: String) -> Context
     halt(ctx, "RUNTIME-BDD-CONTEXT", "stdin is already closed")
   end
   check(ctx, sent.ok?, sent.message)
-  return ctx
+  ctx
 end
 
 def raw_line(ctx: Context, timeout_ms: Int) -> Result[String]
   p = program(ctx)
   positive(ctx, timeout_ms)
-  return Process.read_line(p, timeout_ms)
+  Process.read_line(p, timeout_ms)
 end
 
 def next_line(ctx: Context, timeout_ms: Int) -> String
@@ -532,14 +532,14 @@ def next_line(ctx: Context, timeout_ms: Int) -> String
     halt(ctx, "RUNTIME-BDD-ASSERTION", "stdout ended before the expected line")
   end
   check(ctx, line.ok?, line.message)
-  return line.unwrap!
+  line.unwrap!
 end
 
 def exited(ctx: Context, p: Process) -> Process
   if not Process.wait(p, 1).ok?
     halt(ctx, "RUNTIME-BDD-CONTEXT", "complete output requires program exit")
   end
-  return p
+  p
 end
 
 def finished(ctx: Context, p: Process) -> ProcessOutput
@@ -548,7 +548,7 @@ def finished(ctx: Context, p: Process) -> ProcessOutput
   if output.unwrap!.truncated
     halt(ctx, "RUNTIME-BDD-OUTPUT-LIMIT", "program output exceeds 1 MiB")
   end
-  return output.unwrap!
+  output.unwrap!
 end
 
 def positive(ctx: Context, timeout_ms: Int) -> Void
@@ -569,7 +569,7 @@ def check(ctx: Context, fine: Bool, message: String) -> Void
 end
 
 def compare_text(ctx: Context, actual: String, expected: String) -> Context
-  return compare(ctx, Test.eq(actual, expected), expected.inspect, actual.inspect)
+  compare(ctx, Test.eq(actual, expected), expected.inspect, actual.inspect)
 end
 
 # The failure shows the whole stream as `actual`, so a log scenario sees what the substring missed. Every text includes
@@ -579,7 +579,7 @@ def compare_includes(ctx: Context, actual: String, expected: String) -> Context
     halt(ctx, "RUNTIME-BDD-CONTEXT", "the text an includes step looks for must not be empty")
   end
   checked = Test.assert(actual.contains?(expected), "the output does not include the text")
-  return compare(ctx, checked, "text including #{expected.inspect}", actual.inspect)
+  compare(ctx, checked, "text including #{expected.inspect}", actual.inspect)
 end
 
 def compare(ctx: Context, checked: Result[Void], expected: String, actual: String) -> Context
@@ -595,16 +595,16 @@ def compare(ctx: Context, checked: Result[Void], expected: String, actual: Strin
 
     finish(ctx, fields)
   end
-  return ctx
+  ctx
 end
 
 def clip(text: String) -> String
   return text if text.length <= 65536
-  return "#{text.slice(0, 65536)}... (#{text.length - 65536} more characters)"
+  "#{text.slice(0, 65536)}... (#{text.length - 65536} more characters)"
 end
 
 def with_state(ctx: Context, state: Map[String, Json]) -> Context
-  return Context(
+  Context(
     scenario: Scenario(
       settings: ctx.scenario.settings,
       state: state,
@@ -620,7 +620,7 @@ def with_state(ctx: Context, state: Map[String, Json]) -> Context
 end
 
 def with_services(ctx: Context, services: Map[String, Fn[Json, Result[Json]]]) -> Context
-  return Context(
+  Context(
     scenario: Scenario(
       settings: ctx.scenario.settings,
       state: ctx.scenario.state,
@@ -636,7 +636,7 @@ def with_services(ctx: Context, services: Map[String, Fn[Json, Result[Json]]]) -
 end
 
 def with_step(ctx: Context, current: StepLine) -> Context
-  return Context(
+  Context(
     scenario: Scenario(
       settings: ctx.scenario.settings,
       state: ctx.scenario.state,
@@ -652,7 +652,7 @@ def with_step(ctx: Context, current: StepLine) -> Context
 end
 
 def with_launch(ctx: Context, env: Map[String, String], arguments: List[String]) -> Context
-  return Context(
+  Context(
     scenario: Scenario(
       settings: ctx.scenario.settings,
       state: ctx.scenario.state,
@@ -668,7 +668,7 @@ def with_launch(ctx: Context, env: Map[String, String], arguments: List[String])
 end
 
 def with_after(ctx: Context, after: List[Fn[Context, Result[Void]]]) -> Context
-  return Context(
+  Context(
     scenario: Scenario(
       settings: ctx.scenario.settings,
       state: ctx.scenario.state,
@@ -694,14 +694,14 @@ def has_nul?(text: String) -> Bool = text.bytes.to_a.include?(0)
 def same_env_name?(a: String, b: String) -> Bool
   return true if a == b
   return false if System.os() != "windows" or a.bytesize != b.bytesize
-  return ascii_folded(a) == ascii_folded(b)
+  ascii_folded(a) == ascii_folded(b)
 end
 
 def ascii_folded(name: String) -> List[Int] = name.bytes.to_a.map do |byte| ascii_lower(byte) end
 
 def ascii_lower(byte: Int) -> Int
   return byte + 32 if byte >= 65 and byte <= 90
-  return byte
+  byte
 end
 
 # Fails the scenario at once, for the failures that no hook can follow: before the scenario's context exists.

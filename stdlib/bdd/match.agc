@@ -39,7 +39,7 @@ export def compile(texts: List[String], where: Report.Span) -> Gherkin.Outcome[L
     return failed("RUNTIME-BDD-PATTERN", compiled[i].message, text, where) if not compiled[i].ok?
     seen = seen.put(text, true)
   end
-  return Gherkin.Outcome.Done(compiled.map do |pattern| pattern.unwrap! end)
+  Gherkin.Outcome.Done(compiled.map do |pattern| pattern.unwrap! end)
 end
 
 ## Finds the one pattern that matches the text of `step`. Fails with `CHECK-BDD-UNDEFINED` when none does and
@@ -66,14 +66,14 @@ export def resolve(patterns: List[Pattern], step: Gherkin.Step) -> Gherkin.Outco
       Gherkin.Diagnostic(code: "CHECK-BDD-AMBIGUOUS", message: "multiple step definitions match", span: step.span),
     )
   end
-  return Gherkin.Outcome.Done(Resolved(index: first, captures: found[first].unwrap!))
+  Gherkin.Outcome.Done(Resolved(index: first, captures: found[first].unwrap!))
 end
 
 ## Matches `text` against `pattern`. Returns the captured values as strings, or an error when the text does not match.
 export def captures(pattern: Pattern, text: String) -> Result[List[String]]
   chars = text.split("")
   return error("no match") if not literal_at?(chars, 0, pattern.head)
-  return walk(pattern.slots, 0, chars, pattern.head.size, [])
+  walk(pattern.slots, 0, chars, pattern.head.size, [])
 end
 
 # An outline leaves a `<name>` that is not an Examples column as written, so a misspelled column ends here: the text
@@ -83,11 +83,11 @@ def undefined_message(text: String) -> String
   if open.some? and text.slice(open.unwrap!, text.length - open.unwrap!).include?(">")
     return "no step definition matches; if `<...>` is an Examples column, the table has no column of that name"
   end
-  return "no step definition matches"
+  "no step definition matches"
 end
 
 def failed(code: String, reason: String, text: String, where: Report.Span) -> Gherkin.Outcome[List[Pattern]]
-  return Gherkin.Outcome.Failed(Gherkin.Diagnostic(code: code, message: "#{reason}: #{text}", span: where))
+  Gherkin.Outcome.Failed(Gherkin.Diagnostic(code: code, message: "#{reason}: #{text}", span: where))
 end
 
 # Each "{" opens a placeholder only when the next brace is a "}".
@@ -114,7 +114,7 @@ def compile_one(text: String) -> Result[Pattern]
     Slot(capture: capture, literal: after(tail, close).split(""))
   end
 
-  return ok(Pattern(text: text, head: parts[0].split(""), slots: slots))
+  ok(Pattern(text: text, head: parts[0].split(""), slots: slots))
 end
 
 def placeholder?(kind: String) -> Bool = kind == "string" or kind == "int"
@@ -126,7 +126,7 @@ def literal_at?(chars: List[String], at: Int, literal: List[String]) -> Bool
   for i in 0...literal.size
     return false if chars[at + i] != literal[i]
   end
-  return true
+  true
 end
 
 # Tries the captures from the regular expression's order: {int} from its longest to its shortest.
@@ -160,7 +160,7 @@ def walk(slots: List[Slot], k: Int, chars: List[String], at: Int, found: List[St
         stop -= 1
       end
   end
-  return error("no match")
+  error("no match")
 end
 
 # The index after the closing quote, or `at` when there is no quoted string there.
@@ -175,12 +175,12 @@ def quoted_end(chars: List[String], at: Int) -> Int
     end
     i += 1
   end
-  return at
+  at
 end
 
 # Splitting on escaped backslashes first leaves each other backslash just before the character it escapes.
 def unquote(chars: List[String], at: Int, stop: Int) -> String
   content = chars.take(stop - 1).drop(at + 1).join("")
   return content if not content.include?("\\")
-  return content.split("\\\\").map do |part| part.replace("\\", "") end.join("\\")
+  content.split("\\\\").map do |part| part.replace("\\", "") end.join("\\")
 end
