@@ -330,6 +330,17 @@ def expect_statement_end(e: Base.Env, pos: Int, description: String) -> Result[I
     )
   end
 
+  if token.kind == "name" and token.lexeme == "unless"
+    return error(
+      Base.unexpected_help(
+        e,
+        pos,
+        "expected a newline after the statement, found \"unless\"",
+        "there is no unless: write a guard with not, return x if not c, or put the statement inside if not c ... end",
+      ),
+    )
+  end
+
   if e.depth > 0 and token.kind == "end"
     return ok(pos)
   end

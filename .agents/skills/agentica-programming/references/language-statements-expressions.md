@@ -65,7 +65,8 @@ expressions and operators. Builtin methods and `to_s`: `builtins.md`.
 - A guard: `return x if c`, `return if c`, `break if c`, `next if c` is the
   `if c` with that statement and `end` written out. The `if` is on the line of
   the statement (no multi-line `case` value or block before it), and no
-  `elsif`, `else` or second `if` follows. No other statement takes a modifier,
+  `elsif`, `else` or second `if` follows. A guard fits a one-line case arm
+  (`1 -> return x if c`) or `do` block. No other statement takes a modifier,
   and there is no `unless`.
 - A statement after `return`, `break`, `next`, or an `if` (with `else`) or
   `case` whose every branch ends in one is `CHECK-UNREACHABLE-CODE`.
@@ -182,5 +183,6 @@ Operators, from highest to lowest precedence:
 
 Rejected with a `help` line that names the Agentica form: `let`, `match`,
 `when`, `elif`, `fn(x: Int)`, `lambda do`, `len(x)`, `Hash.new`, `range(n)`,
-`loop do`, `puts(x) if ok`, `continue` (use `next`), `;`, braces,
-single-quoted strings. `xs << x` is `xs = xs.push(x)`.
+`return x unless c` (use `if not c`), `loop do`, `puts(x) if ok`, `continue`
+(use `next`), `;`, braces, single-quoted strings. `xs << x` is
+`xs = xs.push(x)`.

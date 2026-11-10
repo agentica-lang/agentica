@@ -364,6 +364,8 @@ same way. Its `if` is on the line where the statement starts, so a `case` value
 or a block that spans lines cannot take one, and nothing follows the condition
 (no `elsif`, `else` or second `if`); each is `PARSE-UNEXPECTED-TOKEN`. The
 condition reads as an `if` condition: a call with a block needs no parentheses.
+A guard is a simple statement, so it can be the one-line body of a `case` arm
+(`1 -> return x if c`) or of a one-line `do` block.
 No other statement takes a modifier (`puts(x) if c`, `x = 1 if c`), and there
 is no `unless`: both are `PARSE-UNEXPECTED-TOKEN`.
 

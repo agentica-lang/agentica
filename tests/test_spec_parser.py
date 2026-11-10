@@ -372,7 +372,9 @@ class TestSpecParser:
                       "  say(\"\")\n  say(\"shown\")\n"
                       "  for n in [1, 2, 3, 4, 5]\n    next if n == 2\n    break if n == 4\n    puts(n)\n  end\n"
                       "  ys = [1, 2, 3].map do |n|\n    return 0 if n == 2\n    n * 10\n  end\n\n  puts(ys)\n"
-                      "  [8, 9].each do |n| return if n == 8 end\n"))
+                      "  [8, 9].each do |n| return if n == 8 end\n"
+                      "  case 1\n    1 -> return if first([1]) == 1\n    _ -> puts(\"other\")\n  end\n\n"
+                      "  puts(\"after\")\n"))
         self.check_output([Output(program, ["3", "-1", "0", "shown", "1", "3", "[10, 0, 30]"])])
 
     def test_a_guard_checks_as_the_if_written_out(self):
@@ -382,6 +384,10 @@ class TestSpecParser:
             Reject("def f(x: Int) -> Int\n  return 1 if x > 0\nend\n\n" + main_of("  puts(f(1))\n"),
                    "CHECK-MISSING-RETURN", (1, 1)),
             Reject(main_of("  break if true\n"), "CHECK-LOOP-CONTROL", (2, 3, 2, 8)),
+            Reject(main_of("  for n in [1]\n    [1].each do |x| break if x == 1 end\n  end\n"),
+                   "CHECK-LOOP-CONTROL", (3, 21, 3, 26)),
+            # An `if` on the next line is an `if` statement, as before: dead after the return.
+            Reject("def f() -> Int\n  return 1\n  if true\n    return 2\n  end\nend\n", "CHECK-UNREACHABLE-CODE", (3, 3)),
             Reject("def f(x: Int) -> Int\n  return 1 if x\n  return 0\nend\n\n" + main_of("  puts(f(1))\n"),
                    "CHECK-TYPE-MISMATCH", (2, 15, 2, 16)),
         ])
@@ -397,6 +403,10 @@ class TestSpecParser:
             Reject(main_of("  return if true else false\n"), unexpected, (2, 18, 2, 22)),
             Reject(main_of("  return if true elsif false\n"), unexpected, (2, 18, 2, 23)),
             Reject(main_of("  return if true if false\n"), unexpected, (2, 18, 2, 20)),
+            # The condition starts on the line of the `if`; there is no `unless` and no `while` modifier.
+            Reject("def f(x: Int) -> Int\n  return 1 if\n    x > 0\n  return 0\nend\n", unexpected, (2, 14)),
+            Reject("def f(x: Int) -> Int\n  return 1 unless x > 0\n  return 0\nend\n", unexpected, (2, 12, 2, 18)),
+            Reject("def f(x: Int) -> Int\n  return 1 while x > 0\n  return 0\nend\n", unexpected, (2, 12, 2, 17)),
             # The `if` is on the line of the `return`: not after a `case` value or a block that spans lines.
             Reject("def f(x: Int) -> Int\n  return case x\n    1 -> 2\n    _ -> 3\n  end if x > 0\n  return 0\nend\n",
                    unexpected, (5, 7, 5, 9)),

@@ -147,10 +147,17 @@ def statement(checked: Checker.Checked, stmt: Ast.Stmt) -> Model.Node
   end
 end
 
+# The children of each branch are [condition, block], for a guard (`return x if c`) too, whose block is its one
+# statement, written before the condition: the block then takes the statement's span.
 def if_node(checked: Checker.Checked, node: Ast.IfStmt) -> Model.Node
   children = node.branches.map do |branch: Ast.IfBranch|
+    owner = branch.span
+    if node.guard
+      owner = Ast.stmt_span(branch.body[0])
+    end
+
     leaf("branch", Types.Type.Unknown, branch.span).with(
-      children: [expression(checked, branch.condition), block(checked, branch.body, branch.span)],
+      children: [expression(checked, branch.condition), block(checked, branch.body, owner)],
     )
   end
 

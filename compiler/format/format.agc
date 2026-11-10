@@ -10,8 +10,9 @@
 ## file gets none.
 ##
 ## The normal form (`tree_text`, what `agentica fmt --tree` prints) is the parse text of the tree (parse_text.agc)
-## without node ids and spans, which the layout moves, then one line with the words of every comment in order, since
-## a long comment is wrapped into more lines.
+## without node ids and spans, which the layout moves, and without the `guard` mark of an `if`, since the layout
+## writes a guard too long for its line as the `if` it stands for. Then one line with the words of every comment in
+## order, since a long comment is wrapped into more lines.
 
 import Style from "../check/check_style"
 import Diag from "../diagnostics/diagnostic"
@@ -79,7 +80,7 @@ export def tree_text(text: String) -> Diag.Outcome[String]
       case Parser.parse(scanned.tokens, 0)
         Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
         Diag.Outcome.Done(program) ->
-          lines = ParseText.print_program(program).map do |line: String| without_places(line) end
+          lines = ParseText.print_program(program).map do |line: String| without_guard(without_places(line)) end
           return Diag.Outcome.Done(lines.push(comment_words(scanned.comments)).join("\n"))
       end
   end
@@ -192,6 +193,15 @@ def without_places(line: String) -> String
   end
 
   return kept.join("")
+end
+
+# The line of an `if` without its ` guard` mark (parse_text.agc writes it last on the `if-stmt` line).
+def without_guard(line: String) -> String
+  if line.ends_with?(" guard") and line.contains?("if-stmt ")
+    return line.slice(0, line.length - " guard".length)
+  end
+
+  return line
 end
 
 def digit?(char: String) -> Bool

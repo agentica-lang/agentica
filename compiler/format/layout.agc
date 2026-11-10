@@ -593,16 +593,21 @@ end
 
 # `if`, its `elsif` branches and its `else`. A comment before `elsif` or `else` stays just before the keyword, at the
 # indent of the `if`; a comment after `else` on its line stays there.
+# A guard (`return x if c`) stays one when it fits on its line, and is written as the `if` it stands for when it does
+# not: the parser takes a guard only when its `if` is on the line where its statement starts, which a statement that
+# breaks over lines would not keep.
 def if_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
-  if node.guard
-    branch = node.branches[0]
-    return Docs.Doc.Concat([
-      statement_doc(c, branch.body[0], false),
-      text(" if "),
-      expr_doc(c, branch.condition, false),
-    ])
+  if !node.guard
+    return spelled_if_doc(c, node)
   end
 
+  branch = node.branches[0]
+  flat = Docs.Doc.Concat([statement_doc(c, branch.body[0], false), text(" if "), expr_doc(c, branch.condition, false)])
+
+  return Docs.Doc.Group([Docs.Doc.IfBreak([spelled_if_doc(c, node)], [flat])])
+end
+
+def spelled_if_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
   key = Comments.key_of("IfStmt", node.span)
   dangling = c.dangling.get(key, [])
   parts: List[Docs.Doc] = []
@@ -753,7 +758,7 @@ def arm_doc(c: Context, arm: Ast.CaseArm) -> Docs.Doc
     end
   end
 
-  if arm.body.size == 1 and simple?(arm.body[0]) and after.size == 0
+  if arm.body.size == 1 and inline?(arm.body[0]) and after.size == 0
     stmt = arm.body[0]
     span = Ast.stmt_span(stmt)
     key = Comments.key_of(Comments.stmt_kind(stmt), span)
@@ -778,9 +783,17 @@ def dangling_end(c: Context, key: String) -> List[Docs.Doc]
   return [Docs.Doc.Indent([Docs.Doc.HardLine, sequence(c, items)])]
 end
 
-def simple?(stmt: Ast.Stmt) -> Bool
+# A statement that may share the line of a `case` arm or of a one-line `do` block: a simple one, or a guard, which
+# writes itself out as an `if` on lines of its own when it does not fit.
+def inline?(stmt: Ast.Stmt) -> Bool
   case stmt
     Ast.Stmt.If(node) -> return node.guard
+    _ -> return simple?(stmt)
+  end
+end
+
+def simple?(stmt: Ast.Stmt) -> Bool
+  case stmt
     Ast.Stmt.Binding(_) -> return true
     Ast.Stmt.Return(_) -> return true
     Ast.Stmt.Expression(_) -> return true
@@ -1449,7 +1462,7 @@ def block_doc(c: Context, node: Ast.BlockLit) -> Docs.Doc
   end
 
   quiet = suffixes.size == 0 and above.size == 0
-  if quiet and node.body.size == 1 and simple?(node.body[0]) and c.dangling.get(key, []).size == 0
+  if quiet and node.body.size == 1 and inline?(node.body[0]) and c.dangling.get(key, []).size == 0
     stmt = node.body[0]
     stmt_key = Comments.key_of(Comments.stmt_kind(stmt), Ast.stmt_span(stmt))
     if c.leading.get(stmt_key, []).size == 0 and c.trailing.get(stmt_key, []).size == 0
