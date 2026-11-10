@@ -398,6 +398,17 @@ agc_resource **agc_registry_copy(agc_vm *vm, size_t *count) {
   return items;
 }
 
+/* The job takes DATA (CC_OWNS in port.h), so a start that fails before the job exists drops it first. `drop` runs on
+   the I/O thread once a job holds the data (§16.5); here no job was posted, so the I/O thread has never seen DATA and
+   the caller's thread drops it. The callers check agc_task_check_park or agc_task_check_wait before they make their
+   data; one that did not could reach job_parking with data whose drop touches the loop (a process request with
+   `holds_resource`, vm/process.c). */
+// cchecker: ignore CC-OWN-LEAK: kind->drop frees data, through a pointer that the rules do not follow
+static _Noreturn void job_refused(agc_vm *vm, const agc_io_kind *kind, CC_FREES void *data, const char *message) {
+  if (data) kind->drop(data);
+  agc_fail(vm, "RUNTIME-INTERNAL", message, 0);
+}
+
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 static job *timer_job(uv_handle_t *handle) { return (job *)(void *)((char *)handle - offsetof(job, timer)); }
 
@@ -1694,13 +1705,24 @@ void agc_io_submit_direct(agc_vm *vm) {
   post(j, REQ_START, -1);
 }
 
+/* agc_task_parking refuses a wait in a callback of native code: DATA is dropped before that refusal, on this thread
+   for the reason job_refused gives. */
+static void job_parking(agc_vm *vm, const agc_io_kind *kind, void *data) {
+  if (vm->task->callbacks) {
+    if (data) kind->drop(data);
+    agc_task_refuse_wait(vm);
+  }
+  agc_task_parking(vm);
+}
+
 /* Returns the job without reading r->native after the START is posted: a detached job may be swept by then. */
 static job *start_job(agc_vm *vm, const agc_io_kind *kind, CC_OWNS void *data, agc_value context, int64_t timeout_ms,
                       const agc_task *task, agc_more_fn more, unsigned flags) {
-  if (kind->work && kind->cancel && !more) agc_fail(vm, "RUNTIME-INTERNAL", "a pool job cannot have a cancel half", 0);
+  if (kind->work && kind->cancel && !more) job_refused(vm, kind, data, "a pool job cannot have a cancel half");
   /* A plain deadline is a task timer (vm/timers.c), not a job. */
-  if (!kind->work && !kind->external) agc_fail(vm, "RUNTIME-INTERNAL", "a job needs pool work or a wait", 0);
-  agc_loop *loop = loop_of(vm);
+  if (!kind->work && !kind->external) job_refused(vm, kind, data, "a job needs pool work or a wait");
+  agc_loop *loop = new_loop(vm);
+  if (!loop) job_refused(vm, kind, data, "cannot start the event loop");
   job *j = calloc(1, sizeof(job));
   if (!j) agc_out_of_memory();
   j->kind = kind;
@@ -1754,9 +1776,10 @@ agc_io_job *agc_io_start_then(agc_vm *vm, const agc_io_kind *kind, void *data, a
   return agc_io_start_flags(vm, kind, data, context, timeout_ms, more, 0);
 }
 
+// cchecker: ignore CC-OWN-LEAK: job_parking drops data before agc_task_parking could refuse the wait
 agc_io_job *agc_io_start_flags(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms,
                                agc_more_fn more, unsigned flags) {
-  agc_task_parking(vm);
+  job_parking(vm, kind, data);
   job *j = start_job(vm, kind, data, context, timeout_ms, vm->task, more, flags);
   agc_task_park(vm, false);
   return j;
@@ -1770,10 +1793,11 @@ agc_io_job *agc_io_detached(agc_vm *vm, const agc_io_kind *kind, void *data, agc
   return start_job(vm, kind, data, context, -1, NULL, NULL, flags);
 }
 
+// cchecker: ignore CC-OWN-LEAK: job_parking drops data before agc_task_parking could refuse the wait
 agc_io_job *agc_io_compute(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context) {
   if (!kind->work || kind->external || kind->cancel || agc_is(context, AGC_T_HANDLE))
-    agc_fail(vm, "RUNTIME-INTERNAL", "a compute job needs pool work and nothing else", 0);
-  agc_task_parking(vm);
+    job_refused(vm, kind, data, "a compute job needs pool work and nothing else");
+  job_parking(vm, kind, data);
   job *j = start_job(vm, kind, data, context, -1, vm->task, NULL, AGC_JOB_COMPUTE);
   agc_task_park(vm, false);
   return j;
@@ -2318,10 +2342,8 @@ bool agc_io_init(void) { return false; }
 
 const char *agc_uv_version(void) { return NULL; }
 
-/* The job takes DATA (CC_OWNS in port.h), so a stub that starts no job frees it before it fails. */
 static _Noreturn void no_job(agc_vm *vm, const agc_io_kind *kind, CC_FREES void *data) {
-  if (data) kind->drop(data);
-  agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
+  job_refused(vm, kind, data, "this builtin needs Linux");
 }
 
 agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {
