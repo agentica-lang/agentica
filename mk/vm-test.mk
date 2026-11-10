@@ -359,9 +359,10 @@ vm-lint-gcstress:
 # It is an Agentica program, so dist/agentica runs it; it needs gcc 10+, clang and clang-tidy on PATH. The release has no
 # binary: the tag is cloned into build/cchecker/ and its commit must be the pinned one (a new release is CCHECKER_VERSION,
 # CCHECKER_COMMIT and its include/cchecker.h copied to vm/cchecker.h). The settings are cchecker.toml, the accepted
-# findings cchecker-baseline.json (references/ci.md of the development skill says how to change both). vm/tests/ is test harness code and not checked: cchecker reads a database of its own without
-# it (CCHECKER_DB), so each run is a full run, which checks the names of the settings and reports a stale ignore of the
-# rules. It exits 1 on a finding that is not in the baseline, which fails the CI job `cchecker`.
+# findings cchecker-baseline.json (references/ci.md of the development skill says how to change both). vm/tests/ is
+# test harness code and not checked: cchecker reads a database of its own without it (CCHECKER_DB), so each run is a
+# full run, which checks the names of the settings and reports a stale ignore of the rules. It exits 1 on a finding
+# that is not in the baseline, which fails the CI job `cchecker`.
 CCHECKER_VERSION := 0.6.0
 CCHECKER_COMMIT := f7ec380044b6e2c5dc7c89eeed6f57028917fc1c
 CCHECKER_DIR := build/cchecker/$(CCHECKER_VERSION)
