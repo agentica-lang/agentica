@@ -8,58 +8,42 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-11-10
+
 ### Added
 
+- The last expression of a function is its value, also in the branches of a last
+  `if` with `else` and the arms of a last `case`; `return` stays for early
+  exits.
+- Guards: `return x if c`, `return if c`, `break if c` and `next if c`.
+- One-line def: `def double(x: Int) -> Int = x * 2`.
 - `std/option_parser`: `min_float` and `max_float` limit a `Float` option or
-  argument, as `min` and `max` limit an `Int` one, with the same messages and
-  help.
-- Guards: `return x if c`, `return if c`, `break if c` and `next if c` run as
-  the `if` written out. No other statement takes a modifier.
-- Native API 1.3: `an_blocking` runs a C library call that switches stacks
-  (MariaDB Connector/C's non-blocking API) out of the collector's way.
-- One-line def: `def double(x: Int) -> Int = x * 2` is the def whose body is
-  `return x * 2`. Not for `Void` functions. One-line defs may follow each other
-  with no blank line, as constants can.
-- The last expression of a function is its value, and so is the last
-  expression of each branch of a last `if` with `else` and of each arm of a
-  last `case`. `return` stays for early exits. A `Void` function still drops
-  its last value.
+  argument.
+- Native API 1.3: `an_blocking` runs a C library call that switches stacks out
+  of the collector's way.
 
 ### Changed
 
-- `agentica test`: the time of a file's first test (`--timing`, `duration_ms`)
-  no longer counts the start of the file's child VM. A child that fails or
-  takes over 30 seconds before its first test is a file error instead of that
-  test's failure.
-- `std/option_parser`: a Float option or argument refuses a value that is not
-  finite (`+inf.0`, `+nan.0`, `1e400`): `does not fit a Float`.
 - **Breaking:** `Process.spawn`, `Process.spawn_captured` and
-  `Process.spawn_channel` take their options as one `Process.Options` record
-  (`timeout_ms`, `chdir`, `env`, `out`, `err`, `pgroup`) instead of positional
-  arguments; the folder is `chdir`, formerly `dir`, and `Process.spawn` takes it
-  too.
-- `agentica fmt` writes an `if` whose only body is one `return`, `break` or
-  `next` as a guard when it fits on the line, so `fmt --check` flags these
-  `if`s in existing projects until they are formatted.
-- `agentica fmt` writes a `def` whose body is one `return value` as a one-line
-  def when it fits and holds no comment, so `fmt --check` flags such defs in
-  existing projects until they are formatted.
+  `Process.spawn_channel` take a `Process.Options` record (`timeout_ms`,
+  `chdir`, `env`, `out`, `err`, `pgroup`) instead of positional arguments; `dir`
+  is now `chdir`.
+- `agentica fmt` drops the `return` of a function's last value, writes a lone
+  `return`, `break` or `next` body as a guard and a one-`return` def as a
+  one-line def, so `fmt --check` flags existing code until it is formatted.
 - A function that ends with a value of the wrong type is now
-  `CHECK-TYPE-MISMATCH` at that value, not `CHECK-MISSING-RETURN` (or
-  `CHECK-UNUSED-VALUE` and `CHECK-UNUSED-RESULT` for some calls). One that ends
-  with a `Void` call is still `CHECK-MISSING-RETURN`, now at the call.
-- `agentica fmt` writes a one-line def too long for its line with its value as
-  the last line of the body, without `return`.
-- `agentica fmt` drops the `return` of a function's last value (also in the
-  branches of a last `if` with `else` and the arms of a last `case`), so
-  `fmt --check` flags these `return`s in existing projects until they are
-  formatted.
+  `CHECK-TYPE-MISMATCH` at that value, not `CHECK-MISSING-RETURN`.
+- `std/option_parser`: a Float option or argument refuses a value that is not
+  finite.
+- `agentica test`: the time of a file's first test no longer counts the start
+  of the file's child VM; a child that fails or takes over 30 seconds to start
+  is a file error.
+- The native API docs say which terms a dirty call can read back.
 
 ### Fixed
 
 - `agentica fmt` keeps a comment after the last statement of an `if` or `elsif`
-  body on that statement's line: it moved up to the `if` line, and with a
-  comment line before the statement the file failed with `FMT-INTERNAL`.
+  body on its line; it moved up, or failed with `FMT-INTERNAL`.
 
 ## [0.28.0] - 2026-11-10
 
@@ -1366,7 +1350,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.28.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.29.0...HEAD
+[0.29.0]: https://github.com/agentica-lang/agentica/compare/0.28.0...0.29.0
 [0.28.0]: https://github.com/agentica-lang/agentica/compare/0.27.0...0.28.0
 [0.27.0]: https://github.com/agentica-lang/agentica/compare/0.26.2...0.27.0
 [0.26.2]: https://github.com/agentica-lang/agentica/compare/0.26.1...0.26.2
