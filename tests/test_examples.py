@@ -1,4 +1,5 @@
-"""examples/*.agc, rejected fragments and the CLI exit codes.
+"""examples/*.agc, rejected fragments and the Ruby names of the methods. The CLI exit codes, options and `help`
+outputs are rows of tests/fixtures/cli/forms.json (test_cli_forms.py).
 
 Each case runs the CLI as a child (`cli()`), like the original test did in
 process. The two cases that the original file ran both in process and as a
@@ -14,7 +15,7 @@ import time
 
 import pytest
 
-from tests.agentica_test import ROOT, Child, agentica_version, cli, run, scaled, vm_environment, wait_readable
+from tests.agentica_test import ROOT, Child, cli, run, scaled, vm_environment, wait_readable
 from tests.spec_support import check_diagnostic
 
 EXAMPLES = ROOT / "examples"
@@ -297,126 +298,11 @@ def test_rejected_fragments_fail_with_the_intended_code(program):
     assert code_of(program, '  puts "hello"') == "PARSE-UNEXPECTED-TOKEN"
 
 
-def test_help_reads_the_catalog_without_a_source_file():
-    help_result = cli_run("help", "String.to_int", "--json")
-    assert help_result.code == 0
-    assert help_result.stderr == ""
-    data = json.loads(help_result.stdout)
-    assert data["arity"] == 1
-    assert data["result"] == "Result[Int]"
-    assert data["parameters"] == [{"name": "s", "type": "String"}]
-    assert data["effects"] == []
-    assert cli_run("--json", "help", "String.to_int") == help_result
-    assert cli_run("--max-steps", "10", "help", "String.to_int", "--json") == help_result
-    get_help = cli_run("help", "Map.get", "--json")
-    assert get_help.code == 0
-    assert get_help.stderr == ""
-    variants = json.loads(get_help.stdout)["overloads"]
-    assert [variant["arity"] for variant in variants] == [2, 3]
-    assert [variant["result"] for variant in variants] == ["Optional[V]", "V"]
-    get_text = cli_run("help", "Map.get")
-    assert get_text.code == 0
-    assert "map.get(key: K) -> Optional[V]\nmap.get(key: K, default: V) -> V\n" in get_text.stdout
-    unknown = cli_run("help", "String.to_it", "--json")
-    assert unknown.code == 2
-    assert "s.to_i" in unknown.stderr
-
-
 def check_table(name):
     """The text of one function of the checker tables (compiler/check/check_tables.agc)."""
     text = (ROOT / "compiler" / "check" / "check_tables.agc").read_text(encoding="utf-8")
     start = text.index("export def %s()" % name)
     return text[start:text.index("\nend\n", start)]
-
-
-def test_help_answers_the_agentica_name_of_a_name_from_another_language():
-    for name, target in [("strip", "String.trim"), ("push", "List.append"), ("Json.get", "JSON.get")]:
-        found = cli_run("help", name, "--json")
-        assert (found.code, found.stderr) == (0, ""), name
-        data = json.loads(found.stdout)
-        assert data["alias"] == name
-        assert [builtin["name"] for builtin in data["builtins"]] == [target], name
-        text = cli_run("help", name)
-        assert (text.code, text.stderr) == (0, ""), name
-        assert cli_run("--ai", "help", name) == text
-    # A name that fits several types lists each of them, in name order.
-    unwrap = json.loads(cli_run("help", "value!", "--json").stdout)
-    assert [builtin["name"] for builtin in unwrap["builtins"]] == ["Optional.unwrap!", "Result.unwrap!"]
-    several = json.loads(cli_run("help", "to_i", "--json").stdout)
-    assert [builtin["name"] for builtin in several["builtins"]] == ["Float.to_int", "String.to_int"]
-    assert [builtin["ruby"] for builtin in several["builtins"]] == [
-        "x.to_i() -> Result[Int]", "s.to_i() -> Result[Int]"]
-    # A kind narrows the answer to that kind.
-    assert [b["name"] for b in json.loads(cli_run("help", "Map.length", "--json").stdout)["builtins"]] == ["Map.size"]
-
-
-def test_help_shows_the_ruby_method_form_and_keeps_the_builtin_name_in_json():
-    strip = json.loads(cli_run("help", "String.trim", "--json").stdout)
-    assert (strip["name"], strip["signature"], strip["ruby"]) == (
-        "String.trim", "String.trim(s: String) -> String", "s.strip() -> String")
-    # A method of its own kind has a Ruby form without an alias; a builtin that is no method has none.
-    assert json.loads(cli_run("help", "Result.ok?", "--json").stdout)["ruby"] == "r.ok?() -> Bool"
-    assert json.loads(cli_run("help", "puts", "--json").stdout)["ruby"] is None
-    # Each form of an overloaded builtin has its own.
-    forms = json.loads(cli_run("help", "Map.get", "--json").stdout)["overloads"]
-    assert [form["ruby"] for form in forms] == ["map.get(key: K) -> Optional[V]", "map.get(key: K, default: V) -> V"]
-    every = json.loads(cli_run("help", "--json").stdout)
-    assert all("ruby" in form for form in every if "overloads" not in form)
-
-
-def test_help_writes_the_ruby_form_for_the_builtin_and_for_the_agentica_name():
-    for name in ("strip", "trim", "String.trim", "String.strip"):
-        lines = cli_run("help", name).stdout.splitlines()
-        assert "s.strip() -> String" in lines, name
-        assert "String.trim(s: String) -> String" not in lines, name
-    # The Agentica name says which form to write; the Ruby name needs no such line.
-    assert ".strip" in cli_run("help", "trim").stdout.splitlines()[0]
-    assert cli_run("help", "strip").stdout.splitlines()[0] == "s.strip() -> String"
-    for name, form in [("ok?", "r.ok?() -> Bool"), ("unwrap_or", "r.unwrap_or(default: T) -> T"),
-                       ("value!", "r.unwrap!() -> T"), ("contains?", "s.include?(part: String) -> Bool"),
-                       ("push", "list.push(value: T) -> List[T]")]:
-        assert form in cli_run("help", name).stdout.splitlines(), name
-
-
-def test_help_lists_the_method_form_first_and_answers_include():
-    names = [builtin["name"] for builtin in json.loads(cli_run("help", "join", "--json").stdout)["builtins"]]
-    assert names[:2] == ["String.join", "Path.join"]
-    found = cli_run("help", "include", "--json")
-    assert found.code == 0
-    assert {"String.contains?", "Set.include?"} <= {b["name"] for b in json.loads(found.stdout)["builtins"]}
-
-
-def test_help_answers_length_and_size_for_every_kind_that_has_them():
-    kinds = {"ATS.size", "Bytes.length", "List.size", "Map.size", "Range.size", "Set.size", "String.length"}
-    for name in ("length", "size"):
-        found = {b["name"] for b in json.loads(cli_run("help", name, "--json").stdout)["builtins"]}
-        assert found == kinds, name
-        # The texts show one name: the one of the builtin, whichever of the two was asked.
-        lines = cli_run("help", name).stdout.splitlines()
-        assert "s.length() -> Int" in lines and "s.size() -> Int" not in lines, name
-
-
-def test_help_prints_the_checker_hint_of_a_bare_name_on_other_types():
-    found = json.loads(cli_run("help", "contains", "--json").stdout)
-    assert "String.contains?" in [builtin["name"] for builtin in found["builtins"]]
-    assert "List.contains" in found["hints"]
-    hint_only = cli_run("help", "reject")
-    assert (hint_only.code, hint_only.stdout) == (2, "")
-    assert "List.reject" in hint_only.stderr
-
-
-def test_help_does_not_answer_a_foreign_name_with_a_builtin_that_means_something_else():
-    for name, wrong in [("int", "JSON.int"), ("float", "JSON.float"), ("len", "List.size")]:
-        result = cli_run("help", name)
-        assert (result.code, result.stdout) == (2, ""), name
-        assert wrong not in result.stderr, name
-
-
-def test_help_keeps_the_unknown_builtin_error_for_a_name_with_no_alias():
-    for arguments in [["help", "frobnicate"], ["help", "frobnicate", "--json"], ["--ai", "help", "Nope.frobnicate"]]:
-        result = cli_run(*arguments)
-        assert (result.code, result.stdout) == (2, ""), arguments
-        assert result.stderr.startswith("agentica: unknown builtin "), arguments
 
 
 def test_every_alias_of_the_checker_tables_names_a_public_builtin():
@@ -476,18 +362,6 @@ def test_a_ruby_synonym_runs_like_its_base_name(program):
                       "  _ = xs\n  _ = m\n  puts(%s)\nend\n\n" % expression)
             outputs.append(run_text_io(program, source))
         assert outputs[0] == outputs[1] and outputs[0][1] is None, synonym
-
-
-def test_help_of_a_synonym_resolves_to_the_shown_name():
-    for name, builtin, shown in [("collect", "List.map", "list.map("), ("inject", "List.reduce", "list.reduce("),
-                                 ("detect", "List.find", "list.find("), ("member?", "Set.include?", "set.include?("),
-                                 ("select", "List.filter", "list.select("), ("filter", "List.filter", "list.select("),
-                                 ("key?", "Map.has_key?", "map.key?("), ("has_key?", "Map.has_key?", "map.key?(")]:
-        found = json.loads(cli_run("help", name, "--json").stdout)
-        assert builtin in [entry["name"] for entry in found["builtins"]], name
-        text = cli_run("help", name)
-        assert text.code == 0 and shown in text.stdout, name
-        assert "list.collect(" not in text.stdout and "map.has_key?(" not in text.stdout, name
 
 
 def test_a_list_of_methods_leaves_out_the_synonyms(tmp_path):
@@ -551,21 +425,6 @@ def test_an_unknown_method_suggests_the_ruby_method(tmp_path):
         assert suggested in found["help"], expression
 
 
-def test_help_lists_the_subcommands_the_core_rules_and_the_builtin_namespaces():
-    usage = cli_run("--help")
-    assert usage.code == 0
-    for token in ("agentica check", "agentica test", "--steps FILE", "agentica help NAME", "def main() -> Void",
-                  "xs = xs.push(2)", "CHECK-CAPTURED-ASSIGNMENT", "--deny-run"):
-        assert token in usage.stdout
-    overview = cli_run("help")
-    assert overview.code == 0
-    assert overview.stderr == ""
-    for token in ("agentica check", "agentica test", "namespaces:", "List", "Map", "String", "JSON", "Task", "puts"):
-        assert token in overview.stdout
-    assert "HttpWire" not in overview.stdout
-    assert cli_run("help", "List.map", "String.split").code == 2
-
-
 def test_new_diagnostics_retain_their_codes_across_the_three_printers(program):
     path = program("")
     for body, code in [
@@ -587,56 +446,6 @@ def test_new_diagnostics_retain_their_codes_across_the_three_printers(program):
                 assert "range" in data
             else:
                 assert code in result.stderr
-
-
-def test_cli_budget_validation_and_checking_do_not_run_the_program(program):
-    path = program("def main() -> Void\n  while true\n  end\nend\n\n")
-    assert cli_run("--max-steps", "1", "check", path) == (0, "check ok\n", "")
-    result = cli_run("--json", "--max-steps", "10", path)
-    assert result.code == 1
-    assert json.loads(result.stderr)["code"] == "RUNTIME-STEP-LIMIT"
-    for value in ("0", "-1", "1.5", "abc", "#e3"):
-        assert cli_run("--max-steps", value, path).code == 2, value
-
-
-def test_cli_version_prints_the_version_and_exits_0():
-    assert cli_run("--version") == (0, agentica_version() + "\n", "")
-
-
-def test_cli_seed_repeats_random_and_rejects_bad_seeds(program):
-    path = program("def main() -> Void\n  IO.inspect([Random.int(1, 1000000), Random.int(1, 1000000)])\nend\n\n")
-    first = cli_run("--seed", "5", path)
-    again = cli_run("--seed", "5", path)
-    bad = cli_run("--seed", "2147483648", path)
-    assert first.code == 0
-    assert first == again
-    assert bad.code == 2
-
-
-def test_cli_exit_codes(program):
-    hello = str(EXAMPLES / "hello.agc")
-    assert cli_run(hello) == (0, "hello\n", "")
-    assert cli_run("no-such-file.agc").code == 2
-    assert cli_run("check", hello) == (0, "check ok\n", "")
-    type_error = program("def main() -> Void\n  x: String = 1\nend\n\n")
-    checked = cli_run("check", type_error)
-    ai = cli_run("--ai", "check", type_error)
-    as_json = cli_run("--json", "check", type_error)
-    assert checked.code == 1
-    assert checked.stdout == ""
-    assert re.search(r"error\[CHECK-", checked.stderr)
-    assert ai.code == 1
-    assert re.search(r"\Acheck failed: 1 error\n\n\[CHECK-", ai.stderr)
-    assert as_json.code == 1
-    assert json.loads(as_json.stderr)["code"] == "CHECK-TYPE-MISMATCH"
-    assert as_json.stdout == ""
-    assert cli_run("--json", "check", hello) == (0, '{"ok":true}\n', "")
-    failed = cli_run(program("def main() -> Void\n  _x = 1 / 0\nend\n\n"))
-    assert failed.code == 1
-    assert re.search(r"error\[RUNTIME-DIVISION-BY-ZERO\]", failed.stderr)
-    assert cli_run(program("def main() -> Void\n  System.exit(3)\nend\n\n")).code == 3
-    args_file = program("def main() -> Void\n  for a in System.args()\n    puts(a)\n  end\nend\n\n")
-    assert cli_run(args_file, "x", "y", "--json") == (0, "x\ny\n--json\n", "")
 
 
 # Slow tier: the full list of malformed inputs, one run each. The fast tier keeps one input per program.

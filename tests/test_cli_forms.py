@@ -61,16 +61,26 @@ PROGRAMS = ["ok.agc", "lex.agc", "parse.agc", "tab.agc", "crlf.agc", "unicode.ag
             "twice.agc", "helped.agc", "missing_import.agc", "std_error.agc", "sub/bad.agc", "sub/boom.agc",
             "invalid.agc", "divide.agc", "absent.agc"]
 
-BUILTINS = ["String.split", "ok", "Task.await", "Map.get", "List.group_by", "String.compare"]
+# `help NAME` in both forms: builtins; Ruby names, synonyms and the names of other languages, which answer with the
+# Ruby form; names that answer with a checker hint or with `unknown builtin`.
+BUILTINS = ["String.split", "ok", "Task.await", "Map.get", "List.group_by", "String.compare",
+            "String.to_int", "String.to_it", "String.trim", "String.strip", "Result.ok?", "puts", "Map.length",
+            "Json.get", "strip", "trim", "push", "value!", "to_i", "ok?", "unwrap_or", "contains?", "join", "include",
+            "length", "size", "contains", "reject", "float", "len", "frobnicate",
+            "collect", "inject", "detect", "member?", "select", "filter", "key?", "has_key?"]
 
 # Arguments with no file: the options, their mistakes and the help.
 OPTIONS = [
     ["--version"], ["-h"], ["--help"], ["-hx"], ["-xh"], ["-ab", "c"], ["--foo"], ["+x"], ["-"], ["+"], [],
     ["check"], ["compile"], ["help"], ["help", "Nope"],
     ["help", "Strin.split"], ["help", "String.to_i"], ["help", "int"], ["help", "String.chomp"],
-    ["help", "a", "b", "c"],
+    ["help", "a", "b", "c"], ["help", "List.map", "String.split"], ["--json", "help", "String.to_int"],
+    ["--max-steps", "10", "help", "String.to_int", "--json"], ["--ai", "help", "strip"], ["--ai", "help", "push"],
+    ["--ai", "help", "Json.get"], ["--ai", "help", "Nope.frobnicate"],
     ["help", "std/nope"], ["help", "std"], ["--json", "help", "std/queue."], ["help", "HttpWire.service"], ["help", "__fail_arg"], ["help", "Native.string_at"],
     ["--max-steps"], ["--max-steps", "x", "ok.agc"], ["--max-steps", "0", "ok.agc"], ["--max-steps", "007", "ok.agc"],
+    ["--max-steps", "-1", "ok.agc"], ["--max-steps", "1.5", "ok.agc"], ["--max-steps", "#e3", "ok.agc"],
+    ["--max-steps", "1", "check", "loop.agc"],
     ["--max-steps=5", "ok.agc"], ["--seed", "2147483648", "ok.agc"], ["--seed", "007", "ok.agc"],
     ["--seed", "--json", "ok.agc"], ["--seed", "1", "--seed"], ["--seed", "5", "--seed", "6", "ok.agc"],
     ["--ai", "--ai", "check", "ok.agc"], ["--deny-run", "--deny-run", "ok.agc"], ["--allow-run", "ok.agc"],
@@ -250,8 +260,10 @@ def test_help_json_without_a_name_is_every_entry_as_help_name_json_prints_it(wor
     with ThreadPoolExecutor(JOBS) as pool:
         single = list(pool.map(one, names))
     assert [entry for entry, found in zip(catalog, single) if entry != found] == []
-    # A builtin with several forms keeps its `overloads`, as `help NAME --json` shows it.
+    # A builtin with several forms keeps its `overloads`, as `help NAME --json` shows it; every other entry has its
+    # Ruby form (`ruby`, null for a builtin that is no method).
     assert any("overloads" in entry for entry in catalog)
+    assert [entry["name"] for entry in catalog if "overloads" not in entry and "ruby" not in entry] == []
     # Private (`__`) names and std-only names stay out, as `help NAME` refuses them.
     assert not [name for name in names if name.startswith("__")] and "Http.get" not in names
 
