@@ -12,6 +12,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `TCP.recv_bytes(socket, max_bytes)` without a timeout waits with no limit,
   for a server that keeps an idle client connected.
+- Module blocks: `module Name ... end` holds several named modules in one file;
+  `export module` makes one importable (`import {Counter} from "agents"`).
 
 ## [0.29.0] - 2026-11-10
 

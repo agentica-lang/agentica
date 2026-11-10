@@ -649,3 +649,122 @@ class TestModuleRules:
         assert start(variant) == (4, 7)
         assert "Shade" in variant["help"]
         self.assert_rejected(results[1], "CHECK-UNKNOWN-NAME", line=5)
+
+    BLOCKS = ("import Lib from \"lib\"\n\nTOP = 1\n\n"
+              "export module Pub\n  export enum Tree[T]\n    Leaf(T)\n    Node(List[Tree[T]])\n  end\n\n"
+              "  export struct Pair[A, B]\n    left: A\n    right: B\n  end\n\n"
+              "  export def leaf[T](value: T) -> Tree[T] = Tree.Leaf(value)\n\n"
+              "  export def total() -> Int = hidden() + Priv.f() + Lib.one()\n\n"
+              "  def hidden() -> Int = TOP + secret()\nend\n\n"
+              "module Priv\n  export def f() -> Int = Pub.total() - Pub.total() + 1\n\n  def g() -> Int = 2\nend\n\n"
+              "def secret() -> Int = 3\n")
+
+    def test_module_blocks_see_their_file_and_each_other_and_export_through_both_import_forms(self):
+        lib = {"lib.agc": "export def one() -> Int = 1\n", "mods.agc": self.BLOCKS}
+        braces = ('import {Pub} from "mods"\n\ndef main() -> Void\n'
+                  "  t: Pub.Tree[Int] = Pub.Tree.Node([Pub.leaf(1)])\n"
+                  "  p: Pub.Pair[Int, String] = Pub.Pair(left: Pub.total(), right: \"x\")\n"
+                  "  case t\n    Pub.Tree.Leaf(n) -> puts(n + p.left)\n    Pub.Tree.Node(_) -> puts(p.right)\n  end\nend\n")
+        alias = ('import Mods from "mods"\n\ndef main() -> Void\n'
+                 "  t: Mods.Pub.Tree[Int] = Mods.Pub.Tree.Node([Mods.Pub.leaf(1)])\n"
+                 "  p: Mods.Pub.Pair[Int, String] = Mods.Pub.Pair(left: Mods.Pub.total(), right: \"x\")\n"
+                 "  case t\n    Mods.Pub.Tree.Leaf(n) -> puts(n + p.left)\n    Mods.Pub.Tree.Node(_) -> puts(p.right)\n"
+                 "  end\nend\n")
+        results = self.checks([({**lib, "root.agc": braces}, "root.agc", None),
+                               ({**lib, "root.agc": alias}, "root.agc", None)])
+        assert [problem for _directory, problem in results] == [None, None]
+
+    def test_a_private_name_of_a_module_block_and_a_private_block_are_refused_like_private_exports(self):
+        lib = {"lib.agc": "export def one() -> Int = 1\n", "mods.agc": self.BLOCKS}
+        cases = [('import {Pub} from "mods"\n\ndef main() -> Void\n  puts(Pub.hidden())\nend\n', (4, 8)),
+                 ('import {Priv} from "mods"\n\ndef main() -> Void\nend\n', (1, 9)),
+                 ('import Mods from "mods"\n\ndef main() -> Void\n  puts(Mods.Priv.f())\nend\n', (4, 8))]
+        results = self.checks([({**lib, "root.agc": root}, "root.agc", None) for root, _at in cases])
+        for (_root, at), checked in zip(cases, results):
+            assert start(self.assert_rejected(checked, "CHECK-IMPORT-NAME", file="root.agc")) == at
+        # Inside the file, a private name of a block is refused the same way.
+        local = "module A\n  def hidden() -> Int = 1\nend\n\ndef main() -> Void\n  puts(A.hidden())\nend\n"
+        assert start(self.assert_rejected(self.check({"root.agc": local}), "CHECK-IMPORT-NAME")) == (6, 8)
+
+    def test_a_module_block_name_follows_the_rules_of_an_import_alias(self):
+        lib = {"lib.agc": "export def one() -> Int = 1\n"}
+        cases = [("module String\nend\n\n" + MAIN, (1, 8)),
+                 ("struct Point\n  x: Int\nend\n\nmodule Point\nend\n\n" + MAIN, (5, 8)),
+                 ("module M\nend\n\nmodule M\nend\n\n" + MAIN, (4, 8)),
+                 ('import Lib from "lib"\n\nmodule Lib\nend\n\n' + MAIN, (1, 1))]
+        results = self.checks([({**lib, "root.agc": root}, "root.agc", None) for root, _at in cases])
+        for (_root, at), checked in zip(cases, results):
+            assert start(self.assert_rejected(checked, "CHECK-REDEFINED-NAME")) == at
+
+    def test_a_module_block_is_top_level_ranks_with_the_types_and_may_be_empty(self):
+        cases = [("module A\n  module B\n  end\nend\n\n" + MAIN, "PARSE-NESTED-MODULE", (2, 3)),
+                 ("module A\n  ## B.\n  export module B\n  end\nend\n\n" + MAIN, "PARSE-NESTED-MODULE", (3, 10)),
+                 ('module A\n  import B from "b"\nend\n\n' + MAIN, "PARSE-UNEXPECTED-TOKEN", (2, 3)),
+                 ("def f() -> Int = 1\n\nmodule A\nend\n\n" + MAIN, "CHECK-DECL-ORDER", (3, 1))]
+        results = self.checks([({"root.agc": root}, "root.agc", None) for root, _code, _at in cases])
+        for (_root, code, at), checked in zip(cases, results):
+            assert start(self.assert_rejected(checked, code)) == at
+        empty = "module Empty\nend\n\n" + MAIN
+        assert self.check({"root.agc": empty})[1] is None
+
+    def test_an_import_a_re_export_or_an_extern_block_inside_a_module_block_is_a_parse_error(self):
+        cases = ["module A\n  export Lib.one\nend\n\n" + MAIN,
+                 'module A\n  extern module "m"\n    def f() -> Int\n  end\nend\n\n' + MAIN]
+        results = self.checks([({"root.agc": root}, "root.agc", None) for root in cases])
+        for checked in results:
+            assert start(self.assert_rejected(checked, "PARSE-UNEXPECTED-TOKEN")) == (2, 3)
+
+    def test_a_module_block_may_not_declare_a_name_its_file_has_and_may_not_declare_main(self):
+        """One name means one thing in a scope: a block cannot hide a top-level declaration, private ones too, an
+        import alias, an imported name or a block of its file. Two blocks may each declare the same name."""
+        lib = {"lib.agc": "export def parse() -> Int = 1\n"}
+        member = "  export def go() -> Int = 2\n"
+        cases = [
+            ("def helper() -> Int = 1\n", "module M\n" + member + "\n  def helper() -> Int = 3\nend\n", (4, 7)),
+            ("LIMIT = 1\n", "module M\n  LIMIT = 2\n\n" + member + "end\n", (4, 3)),
+            ('import {parse} from "lib"\n', "module M\n" + member + "\n  def parse() -> Int = parse()\nend\n",
+             (6, 7)),
+            ('import Lib from "lib"\n', "module M\n  export struct Lib\n    n: Int\n  end\nend\n", (4, 17)),
+            ("", "module M\n  export enum N\n    V\n  end\nend\n\nmodule N\nend\n", (3, 15)),
+        ]
+        roots = []
+        for top, block, _at in cases:
+            text = top + "\n" + block + "\ndef main() -> Void\nend\n"
+            # A top-level function goes after the block (CHECK-DECL-ORDER).
+            if top.startswith("def "):
+                text = block + "\n" + top + "\ndef main() -> Void\nend\n"
+            roots.append(text)
+        results = self.checks([({**lib, "root.agc": root}, "root.agc", None) for root in roots])
+        for (_top, _block, at), checked in zip(cases, results):
+            problem = self.assert_rejected(checked, "CHECK-SHADOWED-NAME", file="root.agc")
+            assert start(problem) == at
+            assert problem["help"]
+        # `main` runs only at the top level of the root file, so a block may never declare one.
+        mains = ["module M\n  def main() -> Void\n  end\nend\n\n" + MAIN,
+                 "module M\n  def main() -> Void\n  end\nend\n"]
+        for checked in self.checks([({"root.agc": root}, "root.agc", None) for root in mains]):
+            assert start(self.assert_rejected(checked, "CHECK-MAIN")) == (2, 7)
+        twins = ("module A\n  export def start() -> Int = 1\nend\n\nmodule B\n  export def start() -> Int = 2\nend\n\n"
+                 "def main() -> Void\n  puts(A.start() * 10 + B.start())\nend\n")
+        directory = self.files({"root.agc": twins})
+        result = run(cli() + [str(directory / "root.agc")], cwd=self.cwd, env=vm_environment(HERMETIC))
+        assert (result.code, result.stdout) == (0, "12\n")
+
+    def test_a_file_re_exports_a_name_of_its_own_module_block(self):
+        lib = ("export Counter.start\n\nmodule Counter\n  export def start() -> Int = 41\nend\n\n"
+               "def main() -> Void\n  puts(Counter.start())\nend\n")
+        root = 'import {start} from "lib"\n\ndef main() -> Void\n  puts(start() + 1)\nend\n'
+        directory = self.files({"lib.agc": lib, "root.agc": root})
+        runs = [run(cli() + [str(directory / name)], cwd=self.cwd, env=vm_environment(HERMETIC))
+                for name in ("lib.agc", "root.agc")]
+        assert [(result.code, result.stdout) for result in runs] == [(0, "41\n"), (0, "42\n")]
+
+    def test_named_arguments_to_a_variant_of_a_module_block_enum_are_refused_through_an_alias_too(self):
+        cases = [('import {B} from "lib"\n\ndef main() -> Void\n  _x = B.E.V(v: 1)\nend\n', (4, 8)),
+                 ('import A from "lib"\n\ndef main() -> Void\n  _x = A.B.E.V(v: 1)\nend\n', (4, 8)),
+                 ('import A from "lib"\n\ndef main() -> Void\n  _x = A.B.E.V(1)\n  _y = A.F.V(v: 1)\nend\n',
+                  (5, 8))]
+        lib_enum = {"lib.agc": "export module B\n  export enum E\n    V(Int)\n  end\nend\n\nexport enum F\n  V(Int)\nend\n"}
+        results = self.checks([({**lib_enum, "root.agc": root}, "root.agc", None) for root, _at in cases])
+        for (_root, at), checked in zip(cases, results):
+            assert start(self.assert_rejected(checked, "CHECK-ENUM-POSITIONAL-ARGS", file="root.agc")) == at

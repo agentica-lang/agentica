@@ -105,6 +105,13 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
     Ast.Decl.Export(node) ->
       lines = out.push(head(at, role, "export-decl", node.id, node.span, doc_attr(node.doc)))
       print_decl(lines, child, "declaration", node.declaration)
+    Ast.Decl.Module(node) ->
+      lines = out.push(head(at, role, "module-decl", node.id, node.span, name_attr(node.name) + doc_attr(node.doc)))
+      for inner in node.declarations
+        lines = print_decl(lines, child, "declaration", inner)
+      end
+
+      lines
     Ast.Decl.Function(node) ->
       attrs = name_attr(node.name)
       if node.type_parameters.size > 0

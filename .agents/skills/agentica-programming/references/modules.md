@@ -9,8 +9,8 @@ part with a dot such as `"models.rb"`): a module file name has no dot except
 
 - Relative paths resolve from the importing file, not the working directory.
 - Every file, imported ones included, keeps the order: `import`s, constants,
-  `struct` and `enum`, `export def`, private `def`. An imported file out of
-  order is `CHECK-DECL-ORDER`, located in that file.
+  `struct`, `enum` and `module` blocks, `export def`, private `def`. An
+  imported file out of order is `CHECK-DECL-ORDER`, located in that file.
 - Each file is linked once. A cycle is `CHECK-IMPORT-CYCLE`; a missing or
   unreadable import `CHECK-IMPORT-IO`; an invalid path `CHECK-IMPORT-PATH`.
 - An import alias that the file never uses is `CHECK-UNUSED-IMPORT`: remove
@@ -80,10 +80,25 @@ constant cannot equal a constant or another name of the file
 (`CHECK-IMPORT-NAME`). The constants of the imported
 files that the program can reach are built before `main`.
 
+## Module blocks
+
+`module Counter ... end` at the top level groups declarations under a name, so
+one file holds several modules (a namespace only). Inside: constants, structs,
+enums, aliases and functions with the file's layout rules; `export` marks what
+is visible outside as `Counter.start(0)`, `Counter.Msg.Add(5)`,
+`Counter.LIMIT`. A private name is `CHECK-IMPORT-NAME`. The body sees the
+file's imports, top-level names (private too) and other blocks; it may not
+declare one of those names again (`CHECK-SHADOWED-NAME`) or `main`
+(`CHECK-MAIN`), but two blocks may both have `start`. `export module Counter`
+is importable: `import {Counter} from "agents"` (an alias) or
+`Agents.Counter.start(0)`. The name follows the alias rules
+(`CHECK-REDEFINED-NAME`); a block inside a block is `PARSE-NESTED-MODULE`; no
+import, re-export or extern block inside.
+
 ## Running
 
 Only the root file's `main` runs; imported `main` functions never run. There are
-no wildcard imports, mutable module state or nested module blocks.
+no wildcard imports, mutable module state or module blocks inside module blocks.
 
 ## Standard library and external libraries
 

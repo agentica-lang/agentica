@@ -18,6 +18,8 @@ Run an example with `dist/agentica examples/<name>.agc`. The
   once, and constants that read each other.
 - [`defaults.agc`](defaults.agc): default parameter values: constants, `[]`,
   enum variants, and a last `Fn` parameter filled by a block.
+- [`module-blocks.agc`](module-blocks.agc): two `module` blocks in one file,
+  each with exported and private names.
 - [`type-aliases.agc`](type-aliases.agc): transparent aliases for long types,
   used in function signatures and annotations.
 - [`generic-structs.agc`](generic-structs.agc): a struct with a type parameter,

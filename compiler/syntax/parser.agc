@@ -208,6 +208,14 @@ struct ParamsAt
   ids: Int
 end
 
+# The declarations of a file, or of a module block (`nested`) up to its `end`, and the module doc of a file.
+struct BodyAt
+  declarations: List[Ast.Decl]
+  module_doc: Optional[String]
+  pos: Int
+  ids: Int
+end
+
 struct DeclsAt
   nodes: List[Ast.Decl]
   pos: Int
@@ -1211,6 +1219,13 @@ def construct_node(
   expr_at(node, cursor, ids)
 end
 
+# The construct `name(field: value, ...)` from `start`, with its "(" at `open`.
+def named_construct(e: Base.Env, start: Int, name: String, open: Int, ids: Int) -> Result[Base.ExprAt]
+  named = try parse_named_arguments(e, open + 1, ids)
+  close = try Base.expect(e, named.pos, "right-paren", "\")\"", false)
+  construct_node(e, start, name, named.nodes, named.ids, close)
+end
+
 def enum_constructor_node(
   e: Base.Env,
   start: Int,
@@ -1257,6 +1272,21 @@ def parse_qualified_member(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprA
   if kind == "dot"
     variant_pos = cursor + 1
     after_variant = try Base.expect(e, variant_pos, "type-name", "an enum variant", false)
+    following = e.tokens[after_variant].kind
+    if following == "dot" and Base.kind_at(e, after_variant + 1) == "type-name"
+      # Alias.Block.Enum.Variant: an enum of a module block that the module under the alias exports.
+      qualified = "#{qualified}.#{e.tokens[variant_pos].lexeme}"
+      variant_pos = after_variant + 1
+      after_variant = variant_pos + 1
+      if e.tokens[after_variant].kind == "left-paren" and named_argument_at?(e, after_variant + 1)
+        # Alias.Block.Enum.Variant(name: v): a construct, so the checker refuses the names as it does for Block.E.V.
+        return named_construct(e, pos, "#{qualified}.#{e.tokens[variant_pos].lexeme}", after_variant, ids)
+      end
+    elsif following == "left-paren" and named_argument_at?(e, after_variant + 1)
+      # Alias.Block.Struct(field: value): a struct of a module block.
+      return named_construct(e, pos, "#{qualified}.#{e.tokens[variant_pos].lexeme}", after_variant, ids)
+    end
+
     args = Base.ExprsAt(nodes: no_args, pos: after_variant, ids: ids)
     if e.tokens[after_variant].kind == "left-paren"
       args = try parenthesized_arguments(e, after_variant, ids)
@@ -1282,7 +1312,7 @@ def parse_qualified_member(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprA
       return construct_node(e, pos, qualified, no_named, ids, inside + 1)
     end
 
-    if e.tokens[inside].kind == "name" and Base.kind_at(e, inside + 1) == "colon"
+    if named_argument_at?(e, inside)
       named = try parse_named_arguments(e, inside, ids)
       close = try Base.expect(e, named.pos, "right-paren", "\")\"", false)
       return construct_node(e, pos, qualified, named.nodes, named.ids, close)
@@ -1297,6 +1327,11 @@ def parse_qualified_member(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprA
     cursor,
     ids,
   )
+end
+
+# Whether a named argument (`name:`) starts at `at`.
+def named_argument_at?(e: Base.Env, at: Int) -> Bool
+  e.tokens[at].kind == "name" and Base.kind_at(e, at + 1) == "colon"
 end
 
 # After Alias.name or Type.name: a module function call, with or without parentheses. A call without them may not be
@@ -3724,7 +3759,8 @@ def starts_member?(e: Base.Env, pos: Int, member: String) -> Bool
     kind == "enum" or
     (kind == "export" and !reexport_start?(e, pos)) or
     constant_start?(e, pos) or
-    (kind == "name" and e.tokens[pos].lexeme == "type")
+    (kind == "name" and e.tokens[pos].lexeme == "type") or
+    module_start?(e, pos)
   )
 end
 
@@ -3899,7 +3935,9 @@ def parse_exportable(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
 
   return parse_type_alias_decl(e, pos, ids, absent) if kind == "name" and e.tokens[pos].lexeme == "type"
 
-  error(Base.unexpected(e, pos, "export requires def, struct, enum, type, or a constant"))
+  return parse_module_decl(e, pos, ids, absent) if module_start?(e, pos)
+
+  error(Base.unexpected(e, pos, "export requires def, struct, enum, type, module, or a constant"))
 end
 
 # A constant starts with a type-name token followed by `=` or `:` (docs/future/44-module-constants.md 44.3). The name
@@ -4067,7 +4105,52 @@ def parse_declaration(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) ->
 
   return parse_type_alias_decl(e, pos, ids, doc) if kind == "name" and e.tokens[pos].lexeme == "type"
 
+  return parse_module_decl(e, pos, ids, doc) if module_start?(e, pos)
+
   parse_enum_decl(e, pos, ids, doc)
+end
+
+# `module` is a plain name: it starts a module block only before a type name (`extern module "NAME"` takes a string).
+def module_start?(e: Base.Env, at: Int) -> Bool
+  e.tokens[at].kind == "name" and e.tokens[at].lexeme == "module" and Base.kind_at(e, at + 1) == "type-name"
+end
+
+# module Name NL declarations end NL. The body follows the rules of a file without imports, re-exports, extern blocks
+# and module blocks.
+def parse_module_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> Result[DeclAt]
+  after_name = try Base.expect(e, pos + 1, "type-name", "a module name", false)
+  cursor = try Base.expect(e, after_name, "NL", "a newline after the module name", false)
+  body = try parse_body(e, cursor, ids, true)
+  close = try expect_end(e, body.pos)
+  stop = try expect_statement_end(e, close, "a newline after end")
+  node = Ast.Decl.Module(
+    Ast.ModuleDecl(
+      id: body.ids,
+      name: e.tokens[pos + 1].lexeme,
+      name_span: e.tokens[pos + 1].span,
+      declarations: body.declarations,
+      doc: doc,
+      span: Base.span_from(e, pos, stop),
+    ),
+  )
+
+  decl_at(node, stop, body.ids)
+end
+
+# The `module` of a module block inside another one, after its doc block and `export`, or -1.
+def nested_module_at(e: Base.Env, at: Int) -> Int
+  cursor = at
+  if Base.kind_at(e, cursor) == "DOC"
+    cursor += 2
+  end
+
+  if Base.kind_at(e, cursor) == "export"
+    cursor += 1
+  end
+
+  return cursor if module_start?(e, cursor)
+
+  -1
 end
 
 def declaration_start?(e: Base.Env, at: Int) -> Bool
@@ -4079,6 +4162,7 @@ def declaration_start?(e: Base.Env, at: Int) -> Bool
     kind == "export" or
     constant_start?(e, at) or
     (kind == "name" and e.tokens[at].lexeme == "type") or
+    module_start?(e, at) or
     extern_start?(e, at)
   )
 end
@@ -4328,12 +4412,20 @@ end
 # import or a doc block (PARSE-MISSING-BLANK-LINE), before the newlines are skipped. A constant may follow a constant,
 # and a one-line def a one-line def. The first doc block of a file, followed by a blank line, is the module doc.
 def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
+  body = try parse_body(e, 0, first_id, false)
+  span = Base.span_from(e, 0, body.pos)
+  ok(Ast.Program(id: body.ids, declarations: body.declarations, module_doc: body.module_doc, span: span))
+end
+
+# The declarations from `start` to the end of the file, or for a module block (`nested`) to the `end` that closes it,
+# which is left for the caller. A module block holds no import, re-export, extern block or other module block.
+def parse_body(e: Base.Env, start: Int, first_id: Int, nested: Bool) -> Result[BodyAt]
   declarations: List[Ast.Decl] = []
   module_doc: Optional[String] = none
   after_declaration = false
   after_constant = false
   after_one_line = false
-  cursor = 0
+  cursor = start
   next_id = first_id
   looping = true
   while looping
@@ -4360,9 +4452,29 @@ def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
     after_declaration = false
     after_constant = false
     after_one_line = false
-    if kind == "EOF"
+    if kind == "EOF" or (nested and kind == "end")
       looping = false
+    elsif nested and (kind == "import" or reexport_start?(e, cursor) or extern_start?(e, cursor))
+      return error(
+        Base.unexpected_help(
+          e,
+          cursor,
+          "a module block holds no import, re-export or extern block",
+          "write it at the top level of the file, outside the module block",
+        ),
+      )
+    elsif nested and nested_module_at(e, cursor) >= 0
+      return error(
+        Base.bail(
+          e,
+          nested_module_at(e, cursor),
+          "PARSE-NESTED-MODULE",
+          "a module block cannot be inside another module block",
+          Base.hint("write each module block at the top level of the file"),
+        ),
+      )
     elsif (
+      !nested and
       kind == "DOC" and
       declarations.size == 0 and
       doc_block(e.tokens[cursor]).next == "blank" and
@@ -4409,7 +4521,7 @@ def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
     end
   end
 
-  ok(Ast.Program(id: next_id, declarations: declarations, module_doc: module_doc, span: Base.span_from(e, 0, cursor)))
+  ok(BodyAt(declarations: declarations, module_doc: module_doc, pos: cursor, ids: next_id))
 end
 
 def constant?(decl: Ast.Decl) -> Bool

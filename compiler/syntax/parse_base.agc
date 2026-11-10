@@ -328,6 +328,12 @@ export def parse_type(e: Env, pos: Int, ids: Int) -> Result[TypeAt]
     cursor = stop
   end
 
+  # Alias.Block.Type: a type of a module block that the module under the alias exports.
+  if kind?(e, cursor, "dot") and kind?(e, cursor + 1, "type-name")
+    name = "#{name}.#{e.tokens[cursor + 1].lexeme}"
+    cursor += 2
+  end
+
   args: List[Ast.TypeRef] = []
   next_id = ids
   if kind?(e, cursor, "left-bracket")
@@ -630,11 +636,14 @@ def parse_variant_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
   end
 
   cursor = after
-  if kind?(e, cursor, "dot")
+  # Alias.Enum.Variant, and Alias.Block.Enum.Variant for an enum of a module block.
+  segments = 2
+  while kind?(e, cursor, "dot") and segments < 4
     last = try expect(e, cursor + 1, "type-name", "a variant name", false)
     enum_name = "#{enum_name}.#{variant_name}"
     variant_name = e.tokens[cursor + 1].lexeme
     cursor = last
+    segments += 1
   end
 
   slots: List[Ast.Slot] = []
@@ -651,12 +660,13 @@ def parse_variant_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
 end
 
 # The case_arm_start? helpers look ahead without consuming; they return the index after the pattern, or -1.
-# The index after the segments of a qualified variant (`Enum.Variant`, or one more segment for a module alias), or -1.
+# The index after the segments of a qualified variant (`Enum.Variant`, one more segment for a module alias, and one
+# more for a module block through the alias), or -1.
 def variant_head_end(e: Env, index: Int) -> Int
   at = index + 1
   segments = 1
   while kind_at(e, at) == "dot"
-    return -1 if segments >= 3 or kind_at(e, at + 1) != "type-name"
+    return -1 if segments >= 4 or kind_at(e, at + 1) != "type-name"
 
     at += 2
     segments += 1

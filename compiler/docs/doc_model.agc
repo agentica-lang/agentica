@@ -39,17 +39,18 @@ export struct Variant
 end
 
 ## What an item has besides the common data: the parameters and the result of a function, the fields of a struct, the
-## variants of an enum. An alias or a constant has none.
+## variants of an enum, the declarations of a module block, private ones included. An alias or a constant has none.
 export enum Detail
   Function(List[Parameter], String)
   Struct(List[Field])
   Enum(List[Variant])
+  Module(List[Item])
   Plain
 end
 
-## One top-level declaration. `kind` is "function", "struct", "enum", "alias", "resource" or "constant"; `span` is the
-## whole declaration, `export` included, and `name_span` the name alone. `agentica doc` lists the exported ones only;
-## `agentica outline` lists all of them.
+## One top-level declaration. `kind` is "function", "struct", "enum", "alias", "resource", "constant" or "module";
+## `span` is the whole declaration, `export` included, and `name_span` the name alone. `agentica doc` lists the
+## exported ones only; `agentica outline` lists all of them.
 export struct Item
   kind: String
   name: String
@@ -72,7 +73,7 @@ end
 ## entry is left out.
 export def of_program(program: Ast.Program, text: String, origins: Map[String, Item]) -> Module
   items = declared_through(program, text, origins).filter do |item: Item| item.exported end
-  Module(doc: cleaned(program.module_doc), items: items)
+  Module(doc: cleaned(program.module_doc), items: items.map do |item: Item| exported_only(item) end)
 end
 
 ## Every declaration of a parsed program that is not an import, private ones included, in source order. A re-export
@@ -142,6 +143,7 @@ def items_of(declaration: Ast.Decl, text: String, origins: Map[String, Item]) ->
     Ast.Decl.Enum(node) -> [enum_item(node, node.doc, node.span, false)]
     Ast.Decl.TypeAlias(node) -> [alias_item(node, node.doc, node.span, false)]
     Ast.Decl.Resource(node) -> [resource_item(node, node.doc, node.span, false)]
+    Ast.Decl.Module(node) -> [module_item(node, node.doc, node.span, false, text)]
     Ast.Decl.Import(_) -> []
     Ast.Decl.Reexport(node) -> reexport_items(node, origins)
   end
@@ -169,6 +171,7 @@ def placed(detail: Detail, at: Source.Span) -> Detail
     Detail.Struct(fields) -> Detail.Struct(fields.map do |field: Field| field.with(span: at, name_span: at) end)
     Detail.Enum(variants) -> Detail.Enum(variants.map do |variant: Variant| variant.with(span: at, name_span: at) end)
     Detail.Function(_, _) -> detail
+    Detail.Module(_) -> detail
     Detail.Plain -> detail
   end
 end
@@ -182,6 +185,7 @@ def inner_items(declaration: Ast.Decl, doc: Optional[String], span: Source.Span,
     Ast.Decl.TypeAlias(node) -> [alias_item(node, doc, span, true)]
     Ast.Decl.Resource(node) -> [resource_item(node, doc, span, true)]
     Ast.Decl.Constant(node) -> [constant_item(node, span, true)]
+    Ast.Decl.Module(node) -> [module_item(node, doc, span, true, text)]
     Ast.Decl.Import(_) -> []
     Ast.Decl.Reexport(_) -> []
     Ast.Decl.Export(_) -> []
@@ -323,4 +327,31 @@ def constant_item(node: Ast.ConstDecl, span: Source.Span, exported: Bool) -> Ite
     span: span,
     detail: Detail.Plain,
   )
+end
+
+# A module block holds no import or re-export, so its items need no origins.
+def module_item(node: Ast.ModuleDecl, doc: Optional[String], span: Source.Span, exported: Bool, text: String) -> Item
+  items: List[Item] = []
+  for declaration in node.declarations
+    items = items.concat(items_of(declaration, text, {}))
+  end
+
+  Item(
+    kind: "module",
+    name: node.name,
+    name_span: node.name_span,
+    exported: exported,
+    signature: "module #{node.name}",
+    doc: cleaned(chosen(doc, node.doc)),
+    span: span,
+    detail: Detail.Module(items),
+  )
+end
+
+# A module block keeps only its exported declarations.
+def exported_only(item: Item) -> Item
+  case item.detail
+    Detail.Module(items) -> item.with(detail: Detail.Module(items.filter do |inner: Item| inner.exported end))
+    _ -> item
+  end
 end

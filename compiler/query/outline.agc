@@ -48,6 +48,7 @@ def imports_of(program: Ast.Program) -> List[Ast.ImportDecl]
       Ast.Decl.TypeAlias(_) -> imports = imports
       Ast.Decl.Resource(_) -> imports = imports
       Ast.Decl.Constant(_) -> imports = imports
+      Ast.Decl.Module(_) -> imports = imports
     end
   end
 

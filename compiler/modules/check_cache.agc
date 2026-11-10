@@ -151,8 +151,12 @@ export def store(cache: Workspace.CheckCache, key: String, digest: String, entry
 end
 
 ## The stub of `text`, which `program` is the parse of, or `none` when there is none worth keeping: nothing to blank,
-## or the text does not have the shape the cut relies on, or the stub does not parse to the same declarations.
+## a module block in the file, or the text does not have the shape the cut relies on, or the stub does not parse to the
+## same declarations.
 export def stub_of(text: String, program: Ast.Program) -> Optional[String]
+  # A module block of the file is checked with the file's private functions, which a stub leaves out.
+  return none if Declarations.modules_of(program.declarations).size > 0
+
   cuts = cuts_of(text, program.declarations)
   return none if !cuts.ok? or cuts.unwrap!.size == 0
 

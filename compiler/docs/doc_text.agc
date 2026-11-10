@@ -28,6 +28,7 @@ export def part_lines(detail: Model.Detail) -> List[String]
     Model.Detail.Struct(fields) -> fields.map do |field: Model.Field| part_line(field_signature(field), field.doc) end
     Model.Detail.Enum(variants) -> variants.map do |variant: Model.Variant| variant_line(variant) end
     Model.Detail.Function(_, _) -> []
+    Model.Detail.Module(_) -> []
     Model.Detail.Plain -> []
   end
 end
@@ -45,7 +46,23 @@ def item_blocks(item: Model.Item) -> List[String]
     blocks = blocks.push(parts.join("\n"))
   end
 
+  case item.detail
+    # The declarations of a module block follow it, one heading level down.
+    Model.Detail.Module(items) ->
+      for inner in items
+        blocks = blocks.concat(item_blocks(inner).map do |block: String| nested_block(block) end)
+      end
+
+    _ -> blocks = blocks
+  end
+
   blocks
+end
+
+def nested_block(block: String) -> String
+  return "##{block}" if block.starts_with?("#")
+
+  block
 end
 
 # `name: Type`, with ` = default` as written when the field has one.

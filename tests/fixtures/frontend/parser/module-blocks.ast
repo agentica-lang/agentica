@@ -1,0 +1,18 @@
+program #17 0:1:1-148:14:1
+  declaration: export-decl #15 12:2:1-130:11:1 doc="Counter."
+    declaration: module-decl #14 19:2:8-130:11:1 name="Counter"
+      declaration: const-decl #1 36:3:3-53:4:1 name="LIMIT" exported=true
+        value: literal #0 51:3:18-52:3:19 value=int:1
+      declaration: export-decl #5 56:5:3-91:8:1
+        declaration: enum-decl #4 63:5:10-91:8:1 name="Msg" type-parameters=[]
+          variant: enum-variant #3 76:6:5-85:7:1 name="Add"
+            payload: type-ref #2 80:6:9-83:6:12 name="Int"
+      declaration: function-decl #13 94:9:3-126:10:1 name="step" expression
+        param: param #7 103:9:12-109:9:18 name="n"
+          type: type-ref #6 106:9:15-109:9:18 name="Int"
+        result: type-ref #8 114:9:23-117:9:26 name="Int"
+        body: return-stmt #12 120:9:29-125:9:34 implicit
+          value: binary #11 120:9:29-125:9:34 op=plus op-span=122:9:31-123:9:32
+            left: name-ref #9 120:9:29-121:9:30 name="n"
+            right: literal #10 124:9:33-125:9:34 value=int:1
+  declaration: module-decl #16 131:12:1-148:14:1 name="Empty"

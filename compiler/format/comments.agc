@@ -147,6 +147,7 @@ export def decl_kind(decl: Ast.Decl) -> String
     Ast.Decl.TypeAlias(_) -> "TypeAliasDecl"
     Ast.Decl.Resource(_) -> "ResourceDecl"
     Ast.Decl.Constant(_) -> "ConstDecl"
+    Ast.Decl.Module(_) -> "ModuleDecl"
   end
 end
 
@@ -536,6 +537,7 @@ def decl_span(decl: Ast.Decl) -> Source.Span
     Ast.Decl.TypeAlias(node) -> node.span
     Ast.Decl.Resource(node) -> node.span
     Ast.Decl.Constant(node) -> node.span
+    Ast.Decl.Module(node) -> node.span
   end
 end
 
@@ -602,6 +604,7 @@ def decl_children(decl: Ast.Decl) -> List[Part]
     Ast.Decl.TypeAlias(node) -> [Part.Type(node.target)]
     Ast.Decl.Resource(node) -> resource_children(node)
     Ast.Decl.Constant(node) -> optional_type(node.type).push(Part.Expr(node.value))
+    Ast.Decl.Module(node) -> decls(node.declarations)
     Ast.Decl.Reexport(_) -> []
   end
 end

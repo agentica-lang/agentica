@@ -105,6 +105,7 @@ export def declared_at(module: Linker.LinkedModule, name_span: Source.Span) -> O
         end
 
       Model.Detail.Function(_, _) -> next
+      Model.Detail.Module(_) -> next
       Model.Detail.Plain -> next
     end
   end
@@ -186,6 +187,7 @@ def of_item(file: String, item: Model.Item, prefix: String, name: String) -> Lis
         .map do |variant: Model.Variant| variant_match(file, item, variant) end
 
     Model.Detail.Function(_, _) -> []
+    Model.Detail.Module(_) -> []
     Model.Detail.Plain -> []
   end
 end
@@ -291,6 +293,7 @@ def candidates(modules: List[Linker.LinkedModule]) -> List[String]
         Model.Detail.Enum(variants) ->
           names = names.concat(variants.map do |variant: Model.Variant| "#{item.name}.#{variant.name}" end)
         Model.Detail.Function(_, _) -> names = names
+        Model.Detail.Module(_) -> names = names
         Model.Detail.Plain -> names = names
       end
     end

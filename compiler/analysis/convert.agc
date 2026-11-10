@@ -30,6 +30,7 @@ export def item(declared: DocModel.Item) -> Model.Item
   result = ""
   fields: List[Model.Field] = []
   variants: List[Model.Variant] = []
+  items: List[Model.Item] = []
   case declared.detail
     DocModel.Detail.Function(found, written) ->
       parameters = found.map do |parameter: DocModel.Parameter|
@@ -58,6 +59,7 @@ export def item(declared: DocModel.Item) -> Model.Item
         )
       end
 
+    DocModel.Detail.Module(found) -> items = found.map do |inner: DocModel.Item| item(inner) end
     DocModel.Detail.Plain -> parameters = parameters
   end
 
@@ -74,6 +76,7 @@ export def item(declared: DocModel.Item) -> Model.Item
     result: result,
     fields: fields,
     variants: variants,
+    items: items,
   )
 end
 
