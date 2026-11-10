@@ -114,4 +114,18 @@ static inline void agc_test_shapes_init(agc_test_shapes *shapes) {
   shapes->program.variants = shapes->variants;
 }
 
+/* A Process.Options as the catalog lays it out (OPTION_* in vm/process.c: timeout_ms, chdir, env, out, err, pgroup):
+   CHDIR in its slot, a timeout of 5000 ms and the defaults elsewhere. The C tests spawn with the `.options` keys, as
+   the front end does. */
+static inline agc_value agc_test_process_options(agc_value chdir) {
+  agc_struct *o = agc_new_struct(0, 6);
+  o->fields[0] = agc_int(5000);
+  o->fields[1] = chdir;
+  o->fields[2] = agc_map_value(agc_new_map());
+  o->fields[3] = agc_string_value(agc_make_string("", 0, 0));
+  o->fields[4] = o->fields[3];
+  o->fields[5] = agc_bool(false);
+  return agc_struct_value(o);
+}
+
 #endif
