@@ -77,11 +77,13 @@ static bool error_is(agc_value v, const char *message) {
 static void wait_ms(unsigned ms) { uv_sleep(ms); }
 
 static void captured(const char *script) {
-  child = ok_of(step(call(one, "Process.spawn_captured", 4, text("sh"), sh(script), text("."), agc_int(5000))));
+  child = ok_of(step(call(one, "Process.spawn_captured.options", 3, text("sh"), sh(script),
+                          agc_test_process_options(text(".")), agc_void())));
 }
 
 static void plain(const char *script) {
-  child = ok_of(step(call(one, "Process.spawn", 3, text("sh"), sh(script), agc_int(5000), agc_void())));
+  child = ok_of(step(call(one, "Process.spawn.options", 3, text("sh"), sh(script), agc_test_process_options(text(".")),
+                          agc_void())));
 }
 
 static agc_value read_line(agc_task *task, int64_t timeout) {
@@ -259,9 +261,9 @@ static void test_a_wait_cancelled_past_its_deadline(void) {
    and the end of input after the child exits. */
 static void test_the_channel_through_posted_steps(void) {
   assert(agc_io_share(&vm, false));
-  child = ok_of(step(call(one, "Process.spawn_channel", 4, text("sh"),
-                          sh("read x <&3; echo \"got:$x\" >&3; read y <&3 || echo end >&3"), text("."),
-                          agc_int(5000))));
+  child = ok_of(step(call(one, "Process.spawn_channel.options", 3, text("sh"),
+                          sh("read x <&3; echo \"got:$x\" >&3; read y <&3 || echo end >&3"),
+                          agc_test_process_options(text(".")), agc_void())));
   assert(agc_as_result(&vm, step(call(one, "Process.channel_send", 3, child, text("hi\n"), agc_int(5000),
                                       agc_void())))->ok);
   agc_value line = step(call(one, "Process.channel_read_line", 2, child, agc_int(5000), agc_void(), agc_void()));
@@ -290,9 +292,9 @@ static const char *fail_code(const agc_builtin *b, agc_value *args) {
    which is not malloc's), a thousand refusals grow it by less than 64 bytes each, where a launch is kilobytes. */
 static void spawn_in_callback(void *arg) {
   (void)arg;
-  const agc_builtin *b = agc_find_builtin((const uint8_t *)"Process.spawn", strlen("Process.spawn"), 3);
+  const agc_builtin *b = agc_find_builtin((const uint8_t *)"Process.spawn.options", strlen("Process.spawn.options"), 3);
   assert(b);
-  agc_value args[] = {text("sh"), sh("exit 0"), agc_int(5000)};
+  agc_value args[] = {text("sh"), sh("exit 0"), agc_test_process_options(text("."))};
   vm.task = one;
   vm.in_turn = false;
   one->callbacks = 1;
