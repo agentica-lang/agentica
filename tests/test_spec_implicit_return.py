@@ -5,6 +5,8 @@ The rule: in a def whose result is not written `Void`, an expression statement a
 and so is one at the end of each branch of a last `if` that has an `else` and of each arm of a last `case`, at any
 depth. An `if` without `else`, a loop, a binding or a `try` at the end gives no value, so the def fails as before. The
 fixture tests/fixtures/vm/implicit-return.agc runs the rule, against a Python and a Node peer."""
+import re
+
 import pytest
 
 from tests.agentica_test import FIXTURES, PYTHON, cli, run, tool, vm_environment
@@ -112,3 +114,31 @@ def test_the_fixture_prints_what_the_python_and_node_peers_print():
     node = run([tool("node"), str(FIXTURES / "implicit-return-peer.js")])
     assert (python.code, node.code) == (0, 0)
     assert result.stdout == python.stdout == node.stdout
+
+
+ALIAS_VOID = """type Nothing = Void
+
+def name() -> String = "n"
+
+def f() -> Nothing
+  name()
+end
+
+def main() -> Void
+  f()
+end
+"""
+
+
+def test_a_def_whose_result_is_an_alias_of_void_lowers_as_a_void_def(tmp_path):
+    # Its last expression is a statement: the call is not a tail call that returns the String, so `f` stays in a
+    # backtrace. The IR is the one of the def written `Void`, positions and the file name aside.
+    def instructions(source):
+        path = tmp_path / "program.agc"
+        path.write_text(source, encoding="utf-8")
+        result = run(cli() + ["--dump-ir", str(path)], env=vm_environment())
+        assert result.code == 0, result.stderr
+        lines = [line for line in result.stdout.splitlines() if not line.startswith("source ")]
+        return [re.sub(r" @ [\d:-]+$", "", line) for line in lines]
+
+    assert instructions(ALIAS_VOID) == instructions(ALIAS_VOID.replace("-> Nothing", "-> Void"))

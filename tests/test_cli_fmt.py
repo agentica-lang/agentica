@@ -415,8 +415,9 @@ def test_a_wrong_call_is_fmt_usage_with_status_2(tmp_path):
 
 # A one-line def stays one when it fits. A one-line def too long for its line (an exported one with a `##` doc too),
 # or whose value takes lines of its own (a pipe chain of two or more `|>`), is written as the def with a body that it
-# stands for: the value is its last line, with no `return`, since the source wrote none. A trailing comment stays on the line, and a value spread over lines inside parentheses or with a leading
-# `.` is joined when it fits.
+# stands for: the value is its last line, with no `return`, since the source wrote none (a `try` value keeps
+# `return`, or it would be a statement). A trailing comment stays on the line, and a value spread over lines inside
+# parentheses or with a leading `.` is joined when it fits.
 ONE_LINE_DEFS = """## The product, scaled.
 export def scaled_product(first_argument: Int, second_argument: Int) -> Int = first_argument * second_argument * 7000000
 
@@ -757,3 +758,18 @@ def test_a_last_expression_and_a_return_are_written_back_as_they_were(tmp_path):
     assert fmt(cwd=tmp_path).code == 0
     assert text(tmp_path, "implicit.agc") == explicit
     assert fmt("--tree", "implicit.agc", cwd=tmp_path).stdout == before.stdout
+
+
+# A one-line def whose value is a `try` and that does not fit is written with `return`: a `try` at the end of a body
+# is a statement, so the bare value would not give it.
+LONG_TRY = 'def f() -> Result[Int] = try long_call(%s)\n' % ("1" * 100)
+
+
+def test_a_long_one_line_def_of_a_try_keeps_return_in_its_body(tmp_path):
+    lay_out(tmp_path, {"long.agc": LONG_TRY})
+    before = fmt("--tree", "long.agc", cwd=tmp_path)
+    assert fmt(cwd=tmp_path).code == 0
+    expected = 'def f() -> Result[Int]\n  return try long_call(\n    %s,\n  )\nend\n' % ("1" * 100)
+    assert text(tmp_path, "long.agc") == expected
+    assert fmt("--check", cwd=tmp_path).stdout == ""
+    assert fmt("--tree", "long.agc", cwd=tmp_path).stdout == before.stdout
