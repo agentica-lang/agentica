@@ -90,65 +90,65 @@ program #63 0:1:1-570:21:1
               arg: field-access #24 761:27:40-768:27:47 name="items"
                 target: name-ref #23 761:27:40-762:27:41 name="q"
               arg: name-ref #25 770:27:49-775:27:54 name="value"
-    declaration: function-decl #58 893:31:8-1086:37:1 name="@2::pop"
+    declaration: function-decl #58 893:31:8-1076:35:1 name="@2::pop"
       param: param #33 901:31:16-914:31:29 name="q"
         type: type-ref #32 904:31:19-914:31:29 name="@2::QueueState"
       result: type-ref #35 919:31:34-933:31:48 name="Result"
         arg: type-ref #34 926:31:41-932:31:47 name="@2::Popped"
-      body: if-stmt #42 936:32:3-990:35:1
-        branch: if-branch #41 936:32:3-984:34:1
-          condition: call #37 939:32:6-948:32:15 name="@2::empty?" piped=false
-            arg: name-ref #36 946:32:13-947:32:14 name="q"
-          body: return-stmt #40 953:33:5-984:34:1
-            value: call #39 960:33:12-983:33:35 name="error" piped=false
-              arg: literal #38 966:33:18-982:33:34 value=string:"queue is empty"
-      body: return-stmt #57 992:35:3-1082:36:1
-        value: call #56 999:35:10-1081:35:92 name="ok" piped=false
-          arg: construct #55 1002:35:13-1080:35:91 type="@2::Popped"
-            arg: named-arg #47 1009:35:20-1026:35:37 name="value"
-              value: index-access #46 1016:35:27-1026:35:37
-                target: field-access #44 1016:35:27-1023:35:34 name="items"
-                  target: name-ref #43 1016:35:27-1017:35:28 name="q"
-                index: literal #45 1024:35:35-1025:35:36 value=int:0
-            arg: named-arg #54 1028:35:39-1079:35:90 name="remaining"
-              value: construct #53 1039:35:50-1079:35:90 type="@2::QueueState"
-                arg: named-arg #52 1050:35:61-1078:35:89 name="items"
-                  value: call #51 1057:35:68-1078:35:89 name="List.drop" piped=false
-                    arg: field-access #49 1067:35:78-1074:35:85 name="items"
-                      target: name-ref #48 1067:35:78-1068:35:79 name="q"
-                    arg: literal #50 1076:35:87-1077:35:88 value=int:1
-    declaration: function-decl #77 1180:39:8-1306:45:1 name="@2::peek"
-      param: param #61 1189:39:17-1202:39:30 name="q"
-        type: type-ref #60 1192:39:20-1202:39:30 name="@2::QueueState"
-      result: type-ref #63 1207:39:35-1221:39:49 name="Result"
-        arg: type-ref #62 1214:39:42-1220:39:48 name="String"
-      body: if-stmt #70 1224:40:3-1278:43:1
-        branch: if-branch #69 1224:40:3-1272:42:1
-          condition: call #65 1227:40:6-1236:40:15 name="@2::empty?" piped=false
-            arg: name-ref #64 1234:40:13-1235:40:14 name="q"
-          body: return-stmt #68 1241:41:5-1272:42:1
-            value: call #67 1248:41:12-1271:41:35 name="error" piped=false
-              arg: literal #66 1254:41:18-1270:41:34 value=string:"queue is empty"
-      body: return-stmt #76 1280:43:3-1302:44:1
-        value: call #75 1287:43:10-1301:43:24 name="ok" piped=false
-          arg: index-access #74 1290:43:13-1300:43:23
-            target: field-access #72 1290:43:13-1297:43:20 name="items"
-              target: name-ref #71 1290:43:13-1291:43:14 name="q"
-            index: literal #73 1298:43:21-1299:43:22 value=int:0
-    declaration: function-decl #86 1359:47:8-1422:50:1 name="@2::size"
-      param: param #80 1368:47:17-1381:47:30 name="q"
-        type: type-ref #79 1371:47:20-1381:47:30 name="@2::QueueState"
-      result: type-ref #81 1386:47:35-1389:47:38 name="Int"
-      body: return-stmt #85 1392:48:3-1418:49:1
-        value: call #84 1399:48:10-1417:48:28 name="List.size" piped=false
-          arg: field-access #83 1409:48:20-1416:48:27 name="items"
-            target: name-ref #82 1409:48:20-1410:48:21 name="q"
-    declaration: function-decl #96 1476:52:8-1536:55:1 name="@2::empty?"
-      param: param #89 1487:52:19-1500:52:32 name="q"
-        type: type-ref #88 1490:52:22-1500:52:32 name="@2::QueueState"
-      result: type-ref #90 1505:52:37-1509:52:41 name="Bool"
-      body: return-stmt #95 1512:53:3-1532:54:1
-        value: binary #94 1519:53:10-1531:53:22 op=equal op-span=1527:53:18-1529:53:20
-          left: call #92 1519:53:10-1526:53:17 name="@2::size" piped=false
-            arg: name-ref #91 1524:53:15-1525:53:16 name="q"
-          right: literal #93 1530:53:21-1531:53:22 value=int:0
+      body: if-stmt #42 936:32:3-980:33:1 guard
+        branch: if-branch #41 936:32:3-979:32:46
+          condition: call #40 970:32:37-979:32:46 name="@2::empty?" piped=false
+            arg: name-ref #39 977:32:44-978:32:45 name="q"
+          body: return-stmt #38 936:32:3-966:32:33
+            value: call #37 943:32:10-966:32:33 name="error" piped=false
+              arg: literal #36 949:32:16-965:32:32 value=string:"queue is empty"
+      body: return-stmt #57 982:33:3-1072:34:1
+        value: call #56 989:33:10-1071:33:92 name="ok" piped=false
+          arg: construct #55 992:33:13-1070:33:91 type="@2::Popped"
+            arg: named-arg #47 999:33:20-1016:33:37 name="value"
+              value: index-access #46 1006:33:27-1016:33:37
+                target: field-access #44 1006:33:27-1013:33:34 name="items"
+                  target: name-ref #43 1006:33:27-1007:33:28 name="q"
+                index: literal #45 1014:33:35-1015:33:36 value=int:0
+            arg: named-arg #54 1018:33:39-1069:33:90 name="remaining"
+              value: construct #53 1029:33:50-1069:33:90 type="@2::QueueState"
+                arg: named-arg #52 1040:33:61-1068:33:89 name="items"
+                  value: call #51 1047:33:68-1068:33:89 name="List.drop" piped=false
+                    arg: field-access #49 1057:33:78-1064:33:85 name="items"
+                      target: name-ref #48 1057:33:78-1058:33:79 name="q"
+                    arg: literal #50 1066:33:87-1067:33:88 value=int:1
+    declaration: function-decl #77 1170:37:8-1286:41:1 name="@2::peek"
+      param: param #61 1179:37:17-1192:37:30 name="q"
+        type: type-ref #60 1182:37:20-1192:37:30 name="@2::QueueState"
+      result: type-ref #63 1197:37:35-1211:37:49 name="Result"
+        arg: type-ref #62 1204:37:42-1210:37:48 name="String"
+      body: if-stmt #70 1214:38:3-1258:39:1 guard
+        branch: if-branch #69 1214:38:3-1257:38:46
+          condition: call #68 1248:38:37-1257:38:46 name="@2::empty?" piped=false
+            arg: name-ref #67 1255:38:44-1256:38:45 name="q"
+          body: return-stmt #66 1214:38:3-1244:38:33
+            value: call #65 1221:38:10-1244:38:33 name="error" piped=false
+              arg: literal #64 1227:38:16-1243:38:32 value=string:"queue is empty"
+      body: return-stmt #76 1260:39:3-1282:40:1
+        value: call #75 1267:39:10-1281:39:24 name="ok" piped=false
+          arg: index-access #74 1270:39:13-1280:39:23
+            target: field-access #72 1270:39:13-1277:39:20 name="items"
+              target: name-ref #71 1270:39:13-1271:39:14 name="q"
+            index: literal #73 1278:39:21-1279:39:22 value=int:0
+    declaration: function-decl #86 1339:43:8-1402:46:1 name="@2::size"
+      param: param #80 1348:43:17-1361:43:30 name="q"
+        type: type-ref #79 1351:43:20-1361:43:30 name="@2::QueueState"
+      result: type-ref #81 1366:43:35-1369:43:38 name="Int"
+      body: return-stmt #85 1372:44:3-1398:45:1
+        value: call #84 1379:44:10-1397:44:28 name="List.size" piped=false
+          arg: field-access #83 1389:44:20-1396:44:27 name="items"
+            target: name-ref #82 1389:44:20-1390:44:21 name="q"
+    declaration: function-decl #96 1456:48:8-1516:51:1 name="@2::empty?"
+      param: param #89 1467:48:19-1480:48:32 name="q"
+        type: type-ref #88 1470:48:22-1480:48:32 name="@2::QueueState"
+      result: type-ref #90 1485:48:37-1489:48:41 name="Bool"
+      body: return-stmt #95 1492:49:3-1512:50:1
+        value: binary #94 1499:49:10-1511:49:22 op=equal op-span=1507:49:18-1509:49:20
+          left: call #92 1499:49:10-1506:49:17 name="@2::size" piped=false
+            arg: name-ref #91 1504:49:15-1505:49:16 name="q"
+          right: literal #93 1510:49:21-1511:49:22 value=int:0
