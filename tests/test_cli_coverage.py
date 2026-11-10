@@ -233,7 +233,7 @@ def test_a_test_run_writes_one_report_of_its_sources_whatever_the_order_of_its_c
     assert result.stdout.splitlines()[-3:] == [
         "coverage: coverage/lcov.info", "  src/shapes.agc 4/6 lines (66.6%)", "  total 4/6 lines (66.6%)"]
     # The parts of the children are gone, and the report is replaced in place on the next run.
-    assert sorted(str(path.relative_to(cwd)) for path in cwd.rglob("*") if "_build" not in path.parts) == [
+    assert sorted(path.relative_to(cwd).as_posix() for path in cwd.rglob("*") if "_build" not in path.parts) == [
         "coverage", "coverage/lcov.info", "specs", "specs/area.feature", "specs/steps.agc", "src", "src/shapes.agc",
         "test", "test/area_test.agc", "test/other_test.agc"]
     assert agentica(cwd, "test", "--coverage", "--jobs", "3").code == 1
@@ -256,7 +256,8 @@ def test_a_green_run_whose_report_cannot_be_written_fails(tmp_path):
     assert (cwd / "coverage").read_text() == "not a folder\n"
 
 
-@pytest.mark.skipif(os.name == "nt" or os.geteuid() == 0, reason="needs a folder its owner cannot write to")
+@pytest.mark.skipif(os.name == "nt" or os.geteuid() == 0,
+                    reason="host-only: the folder is made read-only with its mode bits, which root ignores")
 def test_a_report_that_cannot_be_written_in_its_folder_leaves_nothing_there(tmp_path):
     cwd = project(tmp_path)
     folder = cwd / "coverage"
