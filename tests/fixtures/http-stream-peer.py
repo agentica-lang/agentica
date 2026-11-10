@@ -8,6 +8,7 @@ import os
 import socket
 import ssl
 import sys
+import threading
 import time
 
 # Windows would print CRLF in the ANSI code page; the tests compare UTF-8 LF lines.
@@ -22,6 +23,43 @@ PAUSE = int(sys.argv[4]) / 1000
 APART = PAUSE * 0.6
 # The socket timeouts grow with the pause, so a scaled run is not cut by a fixed one.
 TIMEOUT = max(20, 10 * PAUSE)
+# The lines of a case that runs on a thread of together(), or None on the main thread, which prints at once.
+_said = threading.local()
+
+
+def say(*parts):
+    """One line, as print() would write it."""
+    lines = getattr(_said, "lines", None)
+    text = " ".join(str(part) for part in parts)
+    if lines is None:
+        print(text)
+    else:
+        lines.append(text)
+
+
+def together(*cases):
+    """Run the cases at once, each on its own connection and thread, then print their lines in the order given. The
+    cases that wait for the server's pauses run this way, so the run lasts about one stream and not their sum."""
+    said = [[] for _ in cases]
+    failed = []
+
+    def one(case, lines):
+        _said.lines = lines
+        try:
+            case()
+        except BaseException as error:
+            failed.append(error)
+
+    threads = [threading.Thread(target=one, args=(case, lines)) for case, lines in zip(cases, said)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    if failed:
+        raise failed[0]
+    for lines in said:
+        for line in lines:
+            print(line)
 
 
 def apart(gaps):
@@ -62,7 +100,7 @@ def stream_twice(label, conn, path, with_type):
     head = [response.status, response.getheader("Transfer-Encoding"), response.getheader("Content-Length")]
     if with_type:
         head.append(response.getheader("Content-Type"))
-    print(label, *head, [text for _, text in pieces])
+    say(label, *head, [text for _, text in pieces])
     tries = [gaps]
     if not apart(gaps):
         # Once more: a stall of a loaded runner is rare and passes, while pieces that are held back are held back
@@ -70,11 +108,11 @@ def stream_twice(label, conn, path, with_type):
         conn.request("GET", path)
         again = read_pieces(conn.getresponse())
         tries.append([later[0] - earlier[0] for earlier, later in zip(again, again[1:])])
-    print(label + "-timing", "apart" if any(apart(t) for t in tries) else "held back %s" % tries)
+    say(label + "-timing", "apart" if any(apart(t) for t in tries) else "held back %s" % tries)
     sock = conn.sock
     conn.request("GET", "/whole")
     whole = conn.getresponse()
-    print(label + "-keep-alive", whole.status, whole.getheader("Content-Length"), whole.read().decode(),
+    say(label + "-keep-alive", whole.status, whole.getheader("Content-Length"), whole.read().decode(),
           conn.sock is sock)
 
 
@@ -95,7 +133,7 @@ def sized_head():
     sock = conn.sock
     conn.request("GET", "/whole")
     whole = conn.getresponse()
-    print("sized-head", response.status, response.getheader("Content-Length"), response.getheader("Transfer-Encoding"),
+    say("sized-head", response.status, response.getheader("Content-Length"), response.getheader("Transfer-Encoding"),
           body, whole.read().decode(), conn.sock is sock)
 
 
@@ -107,9 +145,9 @@ def sized_cut(label, path):
     response = conn.getresponse()
     try:
         response.read()
-        print(label, response.status, response.getheader("Content-Length"), "complete")
+        say(label, response.status, response.getheader("Content-Length"), "complete")
     except http.client.IncompleteRead as error:
-        print(label, response.status, response.getheader("Content-Length"), "incomplete", error.partial)
+        say(label, response.status, response.getheader("Content-Length"), "incomplete", error.partial)
     conn.close()
 
 
@@ -126,7 +164,7 @@ def sized_extra():
         got += s.recv(4096)
     except OSError:
         pass
-    print("sized-extra", got.split(b" ")[1].decode(), got.split(b"Content-Length: ")[1].split(b"\r\n")[0].decode(),
+    say("sized-extra", got.split(b" ")[1].decode(), got.split(b"Content-Length: ")[1].split(b"\r\n")[0].decode(),
           got.split(b"\r\n\r\n")[1])
     s.close()
 
@@ -136,18 +174,18 @@ def sized_whole():
     conn = plain()
     conn.request("GET", "/sized-whole")
     response = conn.getresponse()
-    print("sized-whole", response.status, response.getheader("Content-Length"), response.read())
+    say("sized-whole", response.status, response.getheader("Content-Length"), response.read())
     conn.request("GET", "/sized-wrong")
     wrong = conn.getresponse()
     wrong.read()
-    print("sized-wrong", wrong.status)
+    say("sized-wrong", wrong.status)
     conn.close()
     for label, path in (("sized-negative", "/sized-negative"), ("sized-204", "/sized-204")):
         conn = plain()
         conn.request("GET", path)
         response = conn.getresponse()
         response.read()
-        print(label, response.status)
+        say(label, response.status)
         conn.close()
 
 
@@ -161,7 +199,7 @@ def sized_next(label, path):
     sock = conn.sock
     conn.request("GET", "/whole")
     whole = conn.getresponse()
-    print(label, response.status, response.getheader("Content-Length"), body, whole.read().decode(), conn.sock is sock)
+    say(label, response.status, response.getheader("Content-Length"), body, whole.read().decode(), conn.sock is sock)
     conn.close()
 
 
@@ -172,7 +210,7 @@ def head(conn):
     sock = conn.sock
     conn.request("GET", "/whole")
     whole = conn.getresponse()
-    print("head", response.status, response.getheader("Transfer-Encoding"), body, whole.read().decode(),
+    say("head", response.status, response.getheader("Transfer-Encoding"), body, whole.read().decode(),
           conn.sock is sock)
 
 
@@ -187,17 +225,17 @@ def binary(label, conn):
     body = response.read()
     chunked = response.getheader("Transfer-Encoding") == "chunked"
     framed = chunked or response.getheader("Content-Length") == str(len(body))
-    print(label, response.status, body, "framed" if framed else "mis-framed")
+    say(label, response.status, body, "framed" if framed else "mis-framed")
     conn.request("GET", "/binary-whole")
     whole = conn.getresponse()
-    print(label + "-whole", whole.status, whole.getheader("Content-Length"), whole.read())
+    say(label + "-whole", whole.status, whole.getheader("Content-Length"), whole.read())
 
 
 def said(label):
     """What the server says about the producer of /endless: it learns that the client left, and stops."""
     conn = plain()
     conn.request("GET", "/said")
-    print(label, conn.getresponse().read().decode())
+    say(label, conn.getresponse().read().decode())
     conn.close()
 
 
@@ -207,7 +245,7 @@ def leave(label, conn):
     first = response.read1(65536)
     # Close without reading the rest: the producer is mid-stream and ready to send more.
     conn.close()
-    print(label + "-first", response.status, [first.decode()])
+    say(label + "-first", response.status, [first.decode()])
     said(label)
 
 
@@ -229,7 +267,7 @@ def half_close():
     while chunk := s.recv(65536):
         got += chunk
     s.close()
-    print("half-close", got.startswith(b"HTTP/1.1 200"), b"0\r\n\r\n" in got[-7:])
+    say("half-close", got.startswith(b"HTTP/1.1 200"), b"0\r\n\r\n" in got[-7:])
     said("half-close")
 
 
@@ -240,20 +278,21 @@ def http10():
     while chunk := s.recv(4096):
         got += chunk
     s.close()
-    print("http-1.0", got.split(b" ")[1].decode(), got.count(b"Transfer-Encoding"))
+    say("http-1.0", got.split(b" ")[1].decode(), got.count(b"Transfer-Encoding"))
 
 
 def main():
-    ticks("plain", plain())
-    ticks("tls", secure())
+    # Eight connections, the server's max_connections.
+    together(lambda: ticks("plain", plain()),
+             lambda: ticks("tls", secure()),
+             lambda: sized("plain-sized", plain()),
+             lambda: sized("tls-sized", secure()),
+             lambda: sized_cut("sized-short", "/sized-short"),
+             lambda: sized_cut("sized-long", "/sized-long"),
+             sized_extra,
+             lambda: sized_next("sized-late", "/sized-late"))
     head(plain())
-    sized("plain-sized", plain())
-    sized("tls-sized", secure())
     sized_head()
-    sized_cut("sized-short", "/sized-short")
-    sized_cut("sized-long", "/sized-long")
-    sized_extra()
-    sized_next("sized-late", "/sized-late")
     sized_next("sized-queued", "/sized-queued")
     sized_next("sized-zero", "/sized-zero")
     sized_whole()

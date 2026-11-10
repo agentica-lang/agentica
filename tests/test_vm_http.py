@@ -5,6 +5,11 @@ ssl server and raw hostile sockets). The server runs against Python raw
 sockets and http.client (fixtures/http-server-peer.py) and Node http clients
 (fixtures/http-server-peer.js). Everything is on 127.0.0.1 with port 0; the
 certificates are the ones in fixtures/tls.
+
+The servers run on the module's scheduler count (tests/agentica_test.py,
+TEST_SCHEDULERS): one per logical core in `make test` (CI checks that the
+runner has four or more), one in `make test-shared` and four in
+`make vm-tsan-run`.
 """
 import http.client
 import json
@@ -627,8 +632,10 @@ end
 
 def ticks(feed: Feed) -> Void
   for n in 1..4
+    if n > 1
+      Task.sleep(TICK_MS)
+    end
     _ = feed.body.send("data: #{n}\\n\\n".bytes, 5000)
-    Task.sleep(TICK_MS)
   end
   feed.body.close
 end
@@ -825,18 +832,18 @@ STREAM_PYTHON_LINES = [
     "tls 200 chunked None text/event-stream ['data: 1\\n\\n', 'data: 2\\n\\n', 'data: 3\\n\\n', 'data: 4\\n\\n']",
     "tls-timing apart",
     "tls-keep-alive 200 5 whole True",
-    "head 200 chunked b'' whole True",
     "plain-sized 200 None 8 ['abc', 'defgh']",
     "plain-sized-timing apart",
     "plain-sized-keep-alive 200 5 whole True",
     "tls-sized 200 None 8 ['abc', 'defgh']",
     "tls-sized-timing apart",
     "tls-sized-keep-alive 200 5 whole True",
-    "sized-head 200 8 None b'' whole True",
     "sized-short 200 8 incomplete b'abc'",
     "sized-long 200 5 incomplete b'abc'",
     "sized-extra 200 5 b'abcde'",
     "sized-late 200 5 b'abcde' whole True",
+    "head 200 chunked b'' whole True",
+    "sized-head 200 8 None b'' whole True",
     "sized-queued 200 5 b'abcde' whole True",
     "sized-zero 200 0 b'' whole True",
     "sized-whole 200 5 b'hello'",
@@ -1161,9 +1168,8 @@ def test_server_against_python_raw_sockets_python_http_client_and_node_http_clie
     assert vm.stderr_text() == ""
 
 
-@pytest.mark.parametrize("flags", [(), ("--schedulers", "4")], ids=["one-scheduler", "four-schedulers"])
 def test_streaming_server_sends_each_chunk_when_it_is_ready_and_stops_the_producer_of_a_client_that_left(
-        tmp_path, adopt, flags):
+        tmp_path, adopt):
     """http.client reads the chunks of /ticks as they arrive and times them, over plain TCP and TLS; HEAD, keep-alive
     after a stream, a client that leaves mid-stream (its producer must learn of it) and an HTTP/1.0 client. A stream
     with a length goes out with Content-Length and no chunks: whole, cut short, cut for a piece past the length and
@@ -1172,7 +1178,7 @@ def test_streaming_server_sends_each_chunk_when_it_is_ready_and_stops_the_produc
     500."""
     source = tmp_path / "stream-server.agc"
     source.write_text(stream_server_program(), encoding="utf-8")
-    vm = adopt(start_vm(compile_agc(source, tmp_path / "stream-server.agcb"), CERTS, flags=flags, stdin=True))
+    vm = adopt(start_vm(compile_agc(source, tmp_path / "stream-server.agcb"), CERTS, stdin=True))
     port, tls_port = vm.next_line().split()
     peer = run([PYTHON, STREAM_PEER, port, tls_port, str(CERTS), str(STREAM_TICK_MS)], timeout=scaled(120))
     assert peer.code == 0, peer.stderr
@@ -1389,15 +1395,14 @@ def test_client_writes_and_reads_latin1_header_values_as_single_bytes(tmp_path):
     assert b"\r\nX-Name: caf\xe9\r\n" in seen[0], seen
 
 
-@pytest.mark.parametrize("flags", [(), ("--schedulers", "4")], ids=["one-scheduler", "four-schedulers"])
-def test_upload_server_hands_the_body_to_the_handler_piece_by_piece_and_keeps_the_connection(tmp_path, adopt, flags):
+def test_upload_server_hands_the_body_to_the_handler_piece_by_piece_and_keeps_the_connection(tmp_path, adopt):
     """serve: a body of either framing arrives on a channel (3 MiB through a handler that waits before it reads,
     so the socket backs up), the connection stays for the next request, also when it arrived in the same write as the
     end of a chunked body; a handler that answers first, or a body that is cut or bad, ends the connection; over TLS
     too."""
     source = tmp_path / "upload-server.agc"
     source.write_text(UPLOAD_SERVER_PROGRAM, encoding="utf-8")
-    vm = adopt(start_vm(compile_agc(source, tmp_path / "upload-server.agcb"), CERTS, flags=flags, stdin=True))
+    vm = adopt(start_vm(compile_agc(source, tmp_path / "upload-server.agcb"), CERTS, stdin=True))
     port, tls_port = vm.next_line().split()
     port = int(port)
     big = bytes(range(256)) * (3 * 4096)
@@ -1722,8 +1727,7 @@ end
 """
 
 
-@pytest.mark.parametrize("flags", [(), ("--schedulers", "4")], ids=["one-scheduler", "four-schedulers"])
-def test_serve_answers_a_page_a_file_an_upload_and_a_websocket_on_one_port(tmp_path, adopt, flags):
+def test_serve_answers_a_page_a_file_an_upload_and_a_websocket_on_one_port(tmp_path, adopt):
     """HTTP.serve: on one keep-alive connection of http.client, a page, a file sent in pieces with its Content-Length
     (and its HEAD), an upload of either framing counted as it arrives, and a small POST read whole by HTTP.app; a body
     over the limit of HTTP.app is a 413 that closes. Then a plain request and a WebSocket on one raw connection
@@ -1733,7 +1737,7 @@ def test_serve_answers_a_page_a_file_an_upload_and_a_websocket_on_one_port(tmp_p
 
     from tests.fixtures.websocket_client import TEXT, Client
 
-    vm, port, tls_port = start_serve(tmp_path, adopt, flags)
+    vm, port, tls_port = start_serve(tmp_path, adopt)
     conn = http.client.HTTPConnection("127.0.0.1", port, timeout=scaled(20))
 
     def ask(method, path, body=None, chunked=False):
@@ -1826,10 +1830,10 @@ def test_serve_refuses_a_body_over_max_body_bytes_before_the_app_and_before_100_
     finish_serve(vm)
 
 
-def start_serve(tmp_path, adopt, flags=()):
+def start_serve(tmp_path, adopt):
     source = tmp_path / "serve.agc"
     source.write_text(SERVE_PROGRAM, encoding="utf-8")
-    vm = adopt(start_vm(compile_agc(source, tmp_path / "serve.agcb"), CERTS, flags=flags, stdin=True))
+    vm = adopt(start_vm(compile_agc(source, tmp_path / "serve.agcb"), CERTS, stdin=True))
     port, tls_port = vm.next_line().split()
     return vm, int(port), int(tls_port)
 
@@ -1854,12 +1858,11 @@ def raw_answer(conn, until_close):
     return head.lower(), rest
 
 
-@pytest.mark.parametrize("flags", [(), ("--schedulers", "4")], ids=["one-scheduler", "four-schedulers"])
-def test_serve_keeps_a_connection_only_for_a_body_that_arrived_and_upgrades_only_then(tmp_path, adopt, flags):
+def test_serve_keeps_a_connection_only_for_a_body_that_arrived_and_upgrades_only_then(tmp_path, adopt):
     """HTTP.serve: an empty chunked body that the app never reads still counts as read, so the connection stays, and a
     handshake with an empty chunked body upgrades. An answer that comes before the body arrived says `Connection:
     close` and the connection ends; an upgrade while the body is still coming is a 500 that closes, with a warning."""
-    vm, port, _ = start_serve(tmp_path, adopt, flags)
+    vm, port, _ = start_serve(tmp_path, adopt)
     upgrade = b"Upgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Version: 13\r\n"
     key = b"Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
     chunked = b"Transfer-Encoding: chunked\r\n\r\n0\r\n\r\n"

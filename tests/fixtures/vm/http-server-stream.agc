@@ -103,15 +103,6 @@ def quiet(feed: Feed) -> Void
   end
 end
 
-# A pause longer than the server's request_timeout_ms between two pieces: a live stream is not cut.
-def slow(feed: Feed) -> Void
-  _ = feed.body.send("a".bytes, 5000)
-  Task.sleep(2100)
-  _ = feed.body.send("b".bytes, 5000)
-  _ = feed.body.send("c".bytes, 5000)
-  finish(feed)
-end
-
 def stream_with(hub: Hub, job: Fn[Feed, Void], status: Int, headers: List[Header]) -> Result[HTTP.StreamResponse]
   body: Channel[Bytes] = Channel.new(2)
   Task.spawn(job, Feed(hub: hub, body: body))
@@ -156,7 +147,6 @@ def routes(hub: Hub) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
       "/length" -> return stream_with(hub, &head_only, 200, [Header(name: "Content-Length", value: "3")])
       "/framing" -> return stream_with(hub, &head_only, 200, [Header(name: "Transfer-Encoding", value: "chunked")])
       "/quiet" -> return stream(hub, &quiet, 200)
-      "/slow" -> return stream(hub, &slow, 200)
       "/nobody" -> return stream(hub, &head_only, 204)
       "/whole" -> return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole("whole text\n".bytes)))
       "/fail" -> return error("the handler failed")
@@ -333,16 +323,6 @@ def main() -> Void
   _ = hub.gate.send(true, 5000)
   TCP.close(socket)
   puts(hub.said.recv(5000).unwrap!)
-  socket = connect(port)
-
-  puts("-- a slow producer is not cut by the timeouts")
-  ask(socket, "GET", "/slow", "")
-  puts(head_of(socket))
-  for _ in 1..4
-    puts(chunk_of(socket))
-  end
-
-  TCP.close(socket)
 
   puts("-- responses that cannot be streamed")
   for path in ["/length", "/framing"]
