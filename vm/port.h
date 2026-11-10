@@ -816,6 +816,9 @@ agc_recv_status agc_channel_receive(agc_vm *vm, agc_channel *c, int64_t timeout_
    coarse time). */
 bool agc_clock_coarse_ms(uint64_t *now_ms);
 void agc_clock_note_ms(uint64_t ms);
+/* The CPU time the calling thread has used, in *NS, where the system counts it exactly (Linux, macOS); false
+   elsewhere (vm/clock_posix.c, vm/clock_windows.c). */
+bool agc_thread_cpu_ns(uint64_t *ns);
 
 /* A compute call keeps the Native.Mutex locks of its task taken until it ends, even if the task ends first (a
    cancel), since its C still runs (vm/mutex.c). agc_mutex_lease takes a lease on each lock that the running task

@@ -1,7 +1,7 @@
 /* Native modules (vm/native_module.c) through Native.call: each kind of value both ways, structs and enums, the
    failures the env holds, binding and bad bytecode, version and load refusals, dirty calls, resources (a close and a
-   cancel during a dirty call, the end of the run), the type table at its cap, no_files, the module as a shared
-   library, short calls and a first load on several threads, and an_blocking while another thread collects. */
+   cancel during a dirty call, the end of the run), the type table at its cap, the slow short call warning, no_files,
+   the module as a shared library, short calls on several threads, and an_blocking while another thread collects. */
 #include "../core.h"
 #include "../services.h"
 #include "io_harness.h"
@@ -728,6 +728,32 @@ static void test_dirty_calls_charge_on_the_scheduler(void) {
   assert(task->turn_cost > paid);
 }
 
+#if AGC_LEAF_CHECK && !defined(_WIN32)
+/* The sanitizer, TSan and GC-stress builds warn once about a short function that kept the CPU busy for 20 ms, and not
+   about one that slept 5 ms: the check counts the call's CPU time, which a turn of other threads during the call
+   neither raises nor hides. */
+static void test_a_slow_short_call_warns(void) {
+  FILE *out = tmpfile();
+  assert(out);
+  fflush(stderr);
+  int saved = dup(2);
+  assert(saved >= 0 && dup2(fileno(out), 2) == 2);
+  agc_value five = agc_int(5), twenty = agc_int(20);
+  assert(agc_as_int(&vm, call("module (Int) -> Int nap demo", &five, 1)) == 5);
+  for (int k = 0; k < 2; k++) assert(agc_as_int(&vm, call("module (Int) -> Int spin demo", &twenty, 1)) == 20);
+  fflush(stderr);
+  assert(dup2(saved, 2) == 2);
+  close(saved);
+  char text[512] = {0};
+  rewind(out);
+  size_t n = fread(text, 1, sizeof text - 1, out);
+  fclose(out);
+  const char *warning = "agentica: warning: the short native function spin took ";
+  const char *at = strstr(text, warning);
+  assert(n > 0 && at && !strstr(at + 1, warning) && !strstr(text, "function nap took"));
+}
+#endif
+
 /* The fuzz driver's no_files: a carried module runs, a library is never opened. */
 static void test_no_files(void) {
   agc_value two[2] = {agc_int(1), agc_int(2)};
@@ -999,6 +1025,9 @@ int main(int argc, char **argv) {
   test_resources();
   test_close_during_a_dirty_call();
   test_type_cap();
+#if AGC_LEAF_CHECK && !defined(_WIN32)
+  test_a_slow_short_call_warns();
+#endif
   test_no_files();
   test_shared_library(argv[0]);
   test_threads();
