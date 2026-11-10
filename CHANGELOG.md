@@ -27,6 +27,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `std/option_parser`: a Float option or argument refuses a value that is not
+  finite (`+inf.0`, `+nan.0`, `1e400`): `does not fit a Float`.
 - **Breaking:** `Process.spawn`, `Process.spawn_captured` and
   `Process.spawn_channel` take their options as one `Process.Options` record
   (`timeout_ms`, `chdir`, `env`, `out`, `err`, `pgroup`) instead of positional

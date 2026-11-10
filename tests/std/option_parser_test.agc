@@ -43,6 +43,7 @@ def ranged() -> OP.Parser
       Opt(name: "temp", kind: K.Float, default: "0.8", min_float: some(0.0), max_float: some(2.0)),
       Opt(name: "top-p", kind: K.Float, max_float: some(1.0)),
       Opt(name: "bias", kind: K.Float, min_float: some(-0.25)),
+      Opt(name: "eps", kind: K.Float, min_float: some(1e-7), max_float: some(0.1)),
     ],
   )
 end
@@ -162,7 +163,7 @@ def main() -> Void
       Test.eq(OP.int(p, "count"), 1)
     end,
     Test.test("a Float limit refuses a value outside it and the edges are valid") do
-      for words in [["--temp", "2.5", "1"], ["--temp", "-1", "1"], ["--temp", "1e400", "1"]]
+      for words in [["--temp", "2.5", "1"], ["--temp", "-1", "1"]]
         failed = OP.parse(ranged(), words)
         try Test.assert(failed.message.include?("invalid value for --temp: '#{words[1]}' is"), failed.message)
       end
@@ -178,6 +179,10 @@ def main() -> Void
       try Test.assert(top.include?("'1.0000001' is above the maximum 1.0"), top)
       try Test.assert(OP.parse(ranged(), ["--bias", "-0.3", "1"]).message.include?("below the minimum -0.25"), "bias")
       try Test.assert(OP.parse(ranged(), ["--temp", "nan", "1"]).message.include?("'nan' is not a Float"), "nan")
+      eps = OP.parse(ranged(), ["--eps", "0.10000001", "1"]).message
+      try Test.assert(eps.include?("above the maximum 0.1"), eps)
+      signed = OP.new("gen", "", [], [Opt(name: "zero", kind: K.Float, min_float: some(-0.0))])
+      try Test.eq(OP.float(try OP.parse(signed, ["--zero", "0"]), "zero"), 0.0)
       words = ["0", "2.0", "-0.0", "1e-3"]
       values = [0.0, 2.0, 0.0, 0.001]
       for index in 0...words.size
@@ -190,12 +195,24 @@ def main() -> Void
       try Test.eq(OP.float(p, "scale"), 4.0)
       Test.eq(OP.float(p, "temp"), 0.8)
     end,
+    Test.test("a Float that is not finite is refused, with limits or without") do
+      for text in ["+nan.0", "+inf.0", "-inf.0", "1e400", "-1e400"]
+        limited_one = OP.parse(ranged(), ["--temp=#{text}", "1"]).message
+        try Test.assert(limited_one.include?("invalid value for --temp: '#{text}' does not fit a Float"), limited_one)
+        try fails(["--ratio=#{text}", "f"], "invalid value for --ratio: '#{text}' does not fit a Float")
+      end
+      for text in ["+nan.0", "+inf.0", "1e400"]
+        try fails(["--ratio", text, "f"], "'#{text}' does not fit a Float")
+      end
+      Test.assert(OP.parse(ranged(), ["+inf.0"]).message.include?("for <scale>: '+inf.0' does not fit a Float"), "arg")
+    end,
     Test.test("the help shows the Float limits, and they read back as the specification has them") do
       help = OP.usage(ranged())
       try Test.assert(help.include?("  <scale>            [min: 0.5, max: 4.0]"), help)
       try Test.eq(try shown_limits(help, "--temp"), [0.0, 2.0])
       try Test.eq(try shown_limits(help, "--top-p"), [1.0])
       try Test.eq(try shown_limits(help, "--bias"), [-0.25])
+      try Test.eq(try shown_limits(help, "--eps"), [1e-7, 0.1])
       usage = OP.usage(parser())
       jobs = try shown_limits(usage, "--jobs")
       Test.eq(jobs, [1.0, 64.0])
@@ -231,6 +248,8 @@ def main() -> Void
         OP.new("tool", "", [], [Opt(name: "temp", kind: K.Float, max_float: some(infinite))]),
         OP.new("tool", "", [], [Opt(name: "temp", kind: K.Float, min_float: some(infinite - infinite))]),
         OP.new("tool", "", [], [Opt(name: "temp", kind: K.Float, default: "3.0", max_float: some(2.0))]),
+        OP.new("tool", "", [], [Opt(name: "temp", kind: K.Float, default: "+nan.0")]),
+        OP.new("tool", "", [], [Opt(name: "temp", kind: K.Float, min: some(0), min_float: some(0.0))]),
       ]
 
       # What each specification above must name in its error, in the same order.
@@ -256,6 +275,8 @@ def main() -> Void
         "the min_float or max_float of --temp is not a finite number",
         "the min_float or max_float of --temp is not a finite number",
         "invalid default for --temp: '3.0' is above the maximum 2.0",
+        "invalid default for --temp: '+nan.0' does not fit a Float",
+        "--temp has min or max but is not an Int",
       ]
 
       for index in 0...cases.size

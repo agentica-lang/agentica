@@ -443,8 +443,8 @@ def check_slot(parser: Parser, slot: Slot) -> Result[Void]
   end
 end
 
-# Whether a Float limit is absent or a finite number: NaN is not equal to itself, and an infinity minus itself is
-# NaN.
+# Whether a Float limit or value is absent or a finite number: an infinity minus itself is NaN, and NaN minus itself
+# too.
 def finite?(limit: Optional[Float]) -> Bool
   return true if limit.none?
   return limit.unwrap! - limit.unwrap! == 0.0
@@ -637,6 +637,9 @@ def store(parsed: Parsed, slot: Slot, text: String) -> Result[Parsed]
     Kind.Float ->
       number = text.to_f
       return error("'#{text}' is not a Float") if !number.ok?
+      # to_f reads what Float#to_s writes (`+inf.0`, `+nan.0`) and gives an infinity for a number too big (`1e400`):
+      # none of them is a value a limit can hold.
+      return error("'#{text}' does not fit a Float") if !finite?(some(number.unwrap!))
       if slot.min_float.some? and number.unwrap! < slot.min_float.unwrap!
         return error("'#{text}' is below the minimum #{slot.min_float.unwrap!}")
       end

@@ -40,7 +40,8 @@ Options(file: OP.string(p, "file"), port: OP.int(p, "port"),
   minimum 1` (`does not fit an Int` for a number too big). A Float one takes
   `min_float: some(0.0), max_float: some(1.0)` (an Int such as `some(0)` does
   not fit). On another kind, with the min above the max, or a Float limit that
-  is not finite, they are a wrong specification.
+  is not finite, they are a wrong specification. A Float value that is not
+  finite (`+inf.0`, `+nan.0`, `1e400`) is refused: `does not fit a Float`.
 - A word past the arguments is `unexpected argument`, unless `new` gets
   `rest`, its fifth argument (positional), such as `"FILE"`, shown as
   `[FILE...]` in the usage line. Then `OP.rest(p)` gives those words, after

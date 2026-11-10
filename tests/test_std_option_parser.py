@@ -141,6 +141,7 @@ def test_int_limits_accept_their_edges_and_on_off_is_a_choice(limits, args, line
     (["--threads", "0"], "invalid value for --threads: '0' is below the minimum 1"),
     (["--temp", "2.5"], "invalid value for --temp: '2.5' is above the maximum 2.0"),
     (["--temp", "-1"], "invalid value for --temp: '-1' is below the minimum 0.0"),
+    (["--temp=-inf.0"], "invalid value for --temp: '-inf.0' does not fit a Float"),
     (["--stats", "maybe"], "invalid value for --stats: 'maybe' is not one of on, off"),
 ])
 def test_a_value_outside_its_limit_or_choices_is_refused_with_exit_2(limits, args, message):

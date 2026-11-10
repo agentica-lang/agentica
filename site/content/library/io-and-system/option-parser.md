@@ -166,6 +166,7 @@ Usage: check [options] [FILE...]
 - `option --port needs a value`
 - `option --verbose does not take a value`
 - `invalid value for --port: 'abc' is not an Int` (or `a Float`; `'99999999999999999999' does not fit an Int` for a number too big)
+- `invalid value for --ratio: '1e400' does not fit a Float`: a Float option or argument refuses a value that is not finite (`+inf.0`, `-inf.0`, `+nan.0`, or a number too big), with limits or without
 - `invalid value for --user: 'cy' is not one of ana, bob`
 - `invalid value for --port: '70000' is above the maximum 65535` (or `below the minimum`; `the maximum 1.0` for a Float)
 - `missing argument <file>`
