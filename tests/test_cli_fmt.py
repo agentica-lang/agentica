@@ -290,6 +290,18 @@ def test_an_if_with_one_return_break_or_next_becomes_a_guard_unless_something_ke
     assert fmt("--tree", "spelled.agc", cwd=tmp_path).stdout == before.stdout
 
 
+def test_an_if_whose_statement_fmt_writes_on_one_line_is_a_guard_on_the_first_run(tmp_path):
+    # The block takes three lines in the source and one in the output: the guard comes at once, so a second run of
+    # `fmt` finds nothing to change.
+    source = ("def f(n: Int) -> Fn[Int, Int]\n  if n > 0\n    return keep() do |x: Int|\n      x + n\n    end\n  end\n"
+              "  return keep() do |x: Int| x end\nend\n")
+    lay_out(tmp_path, {"block.agc": source})
+    assert fmt(cwd=tmp_path).code == 0
+    assert text(tmp_path, "block.agc") == ("def f(n: Int) -> Fn[Int, Int]\n  return keep() do |x: Int| x + n end if n > 0\n"
+                                           "  return keep() do |x: Int| x end\nend\n")
+    assert fmt("--check", cwd=tmp_path).stdout == ""
+
+
 @pytest.mark.parametrize("size, guarded", [(95, True), (96, False)])
 def test_the_guard_and_the_if_meet_at_the_same_width(tmp_path, size, guarded):
     # `  return 0 if text == "..."` is 24 characters plus the text: 119, the width, for 95, and 120 for 96. Both forms of

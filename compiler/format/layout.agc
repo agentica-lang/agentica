@@ -40,6 +40,8 @@ LEVELS: Map[String, Int] = {
 PIPE_LEVEL = 5
 UNARY_LEVEL = 8
 POSTFIX_LEVEL = 9
+# A width no line reaches: a doc laid out in it breaks only where it must.
+UNLIMITED = 1000000
 
 ## What the layout reads besides the tree: the source lines, the tokens that are not line breaks with their starts,
 ## the comments of each node by its key (`Comments.key_of`), the body of each heredoc by the offset of its opener, and
@@ -593,10 +595,13 @@ end
 def if_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
   return spelled_if_doc(c, node) if not node.guard and not guardable?(c, node)
 
-  branch = node.branches[0]
-  flat = Docs.Doc.Concat([statement_doc(c, branch.body[0], false), text(" if "), expr_doc(c, branch.condition, false)])
+  return Docs.Doc.Group([Docs.Doc.IfBreak([spelled_if_doc(c, node)], [guard_doc(c, node)])])
+end
 
-  return Docs.Doc.Group([Docs.Doc.IfBreak([spelled_if_doc(c, node)], [flat])])
+# The one-line form of an `if` with one branch of one statement: `statement if condition`.
+def guard_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
+  branch = node.branches[0]
+  return Docs.Doc.Concat([statement_doc(c, branch.body[0], false), text(" if "), expr_doc(c, branch.condition, false)])
 end
 
 # `if`, its `elsif` branches and its `else`. A comment before `elsif` or `else` stays just before the keyword, at the
@@ -782,19 +787,20 @@ def inline?(c: Context, stmt: Ast.Stmt) -> Bool
   end
 end
 
-# An `if c` whose body is one `return`, `break` or `next` of one line, with no `elsif` or `else` and no comment from
-# its `if` line to its `end` line: written as a guard when that fits on the line (if_doc).
+# An `if c` whose body is one `return`, `break` or `next`, with no `elsif` or `else`, no comment from its `if` line to
+# its `end` line, and a guard that can be one line: written as a guard when that fits on the line (if_doc). Whether the
+# guard can be one line is read from its own layout with no width limit, not from the source, so an `if` whose
+# statement the formatter joins onto one line is a guard already on the first run (a heredoc or a block of several
+# statements still takes lines of its own).
 def guardable?(c: Context, node: Ast.IfStmt) -> Bool
   return false if node.branches.size != 1 or node.else_body.some? or node.branches[0].body.size != 1
 
-  stmt = node.branches[0].body[0]
-  return false if not exit?(stmt)
-
-  span = Ast.stmt_span(stmt)
-  return false if tight(c, span).start.line != last_line(c, span)
+  return false if not exit?(node.branches[0].body[0])
 
   last = last_line(c, node.span)
-  return not (node.span.start.line..last).to_a.any? do |line: Int| c.noted.include?(line) end
+  return false if (node.span.start.line..last).to_a.any? do |line: Int| c.noted.include?(line) end
+
+  return not Docs.render(guard_doc(c, node), UNLIMITED).strip.include?("\n")
 end
 
 # A `return`, `break` or `next`: the statements that take a guard.
