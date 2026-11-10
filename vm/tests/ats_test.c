@@ -29,8 +29,6 @@ static agc_value call_on(agc_vm *v, const char *name, uint32_t arity, agc_value 
 
 static agc_value call(const char *name, uint32_t arity, agc_value *args) { return call_on(&vm, name, arity, args); }
 
-static agc_value text(const char *s) { return agc_string_value(agc_make_string(s, strlen(s), strlen(s))); }
-
 static agc_value put(agc_value t, agc_value key, int64_t n) {
   agc_value args[3] = {t, key, agc_int(n)};
   return call("ATS.put", 3, args);
@@ -60,18 +58,18 @@ static void fails(const char *name, uint32_t arity, agc_value *args, const char 
 
 static void test_order(void) {
   agc_value t = call("ATS.new", 0, NULL);
-  put(t, text("b"), 2);
-  put(t, text("a"), 1);
-  put(t, text("b"), 3);
-  agc_value del[2] = {t, text("b")};
+  put(t, agc_test_str("b"), 2);
+  put(t, agc_test_str("a"), 1);
+  put(t, agc_test_str("b"), 3);
+  agc_value del[2] = {t, agc_test_str("b")};
   (void)call("ATS.delete", 2, del);
-  put(t, text("b"), 4);
+  put(t, agc_test_str("b"), 4);
   agc_value keys = call("ATS.keys", 1, &t);
   const agc_list *list = agc_as_list(&vm, keys);
   assert(agc_list_len(list) == 2);
   assert(agc_as_string(&vm, agc_list_get(list, 0))->data[0] == 'a');
   assert(agc_as_string(&vm, agc_list_get(list, 1))->data[0] == 'b');
-  assert(get_int(t, text("b")) == 4 && size_of(t) == 2);
+  assert(get_int(t, agc_test_str("b")) == 4 && size_of(t) == 2);
   /* Enough keys for every rotation of the trees, then every other one removed: the size and the order still hold. */
   agc_value u = call("ATS.new", 0, NULL);
   for (int64_t k = 0; k < 1000; k++) put(u, agc_int((k * 7919) % 1000), k);
@@ -119,17 +117,17 @@ static agc_value raw(const char *s, size_t n) { return agc_bytes_value(agc_make_
 static void test_mixed_keys(void) {
   agc_value t = call("ATS.new", 0, NULL);
   put(t, raw("a\0", 2), 1);
-  put(t, text("a"), 2);
+  put(t, agc_test_str("a"), 2);
   put(t, raw("a", 1), 3);
   put(t, agc_int(97), 4);
   put(t, raw("", 0), 5);
   put(t, raw("a\0", 2), 6);
   assert(size_of(t) == 5 && agc_ats_valid(&vm, t));
-  assert(get_int(t, text("a")) == 2 && get_int(t, raw("a", 1)) == 3 && get_int(t, agc_int(97)) == 4);
+  assert(get_int(t, agc_test_str("a")) == 2 && get_int(t, raw("a", 1)) == 3 && get_int(t, agc_int(97)) == 4);
   assert(get_int(t, raw("", 0)) == 5 && get_int(t, raw("a\0", 2)) == 6);
   agc_value del[2] = {t, raw("a", 1)};
   (void)call("ATS.delete", 2, del);
-  assert(size_of(t) == 4 && get_int(t, text("a")) == 2 && agc_ats_valid(&vm, t));
+  assert(size_of(t) == 4 && get_int(t, agc_test_str("a")) == 2 && agc_ats_valid(&vm, t));
   agc_value wrong[3] = {t, agc_bool(true), agc_int(0)};
   fails("ATS.put", 3, wrong, "RUNTIME-INTERNAL");
   assert(size_of(t) == 4);
@@ -137,15 +135,15 @@ static void test_mixed_keys(void) {
 
 static void test_overflow_keeps_the_value(void) {
   agc_value t = call("ATS.new", 0, NULL);
-  put(t, text("max"), INT64_MAX);
-  agc_value args[3] = {t, text("max"), agc_int(1)};
+  put(t, agc_test_str("max"), INT64_MAX);
+  agc_value args[3] = {t, agc_test_str("max"), agc_int(1)};
   fails("ATS.add", 3, args, "RUNTIME-INTEGER-OVERFLOW");
-  assert(get_int(t, text("max")) == INT64_MAX && size_of(t) == 1);
-  agc_value fresh[3] = {t, text("min"), agc_int(INT64_MIN)};
+  assert(get_int(t, agc_test_str("max")) == INT64_MAX && size_of(t) == 1);
+  agc_value fresh[3] = {t, agc_test_str("min"), agc_int(INT64_MIN)};
   (void)call("ATS.add", 3, fresh);
-  agc_value under[3] = {t, text("min"), agc_int(-1)};
+  agc_value under[3] = {t, agc_test_str("min"), agc_int(-1)};
   fails("ATS.add", 3, under, "RUNTIME-INTEGER-OVERFLOW");
-  assert(get_int(t, text("min")) == INT64_MIN && size_of(t) == 2);
+  assert(get_int(t, agc_test_str("min")) == INT64_MIN && size_of(t) == 2);
 }
 
 static void test_other_run(void) {
@@ -169,14 +167,14 @@ static void worker(void *arg) {
   agc_vm *v = &workers[k];
   assert(agc_gc_thread_enter());
   uv_barrier_wait(&gate);
-  agc_value counter = text("counter");
+  agc_value counter = agc_test_str("counter");
   char name[32];
   for (int r = 0; r < ROUNDS; r++) {
     add_on(v, shared_table, counter, 1);
     snprintf(name, sizeof name, "t%d-%d", (int)k, r % OWN_KEYS);
-    add_on(v, shared_table, text(name), 1);
+    add_on(v, shared_table, agc_test_str(name), 1);
     snprintf(name, sizeof name, "tmp%d", (int)k);
-    agc_value args[3] = {shared_table, text(name), agc_int(r)};
+    agc_value args[3] = {shared_table, agc_test_str(name), agc_int(r)};
     (void)call_on(v, "ATS.put", 3, args);
     (void)call_on(v, "ATS.delete", 2, args);
   }
@@ -194,13 +192,13 @@ static void test_threads(void) {
   for (intptr_t k = 0; k < THREADS; k++) assert(uv_thread_create(&threads[k], worker, (void *)k) == 0);
   for (int k = 0; k < THREADS; k++) assert(uv_thread_join(&threads[k]) == 0);
   uv_barrier_destroy(&gate);
-  assert(get_int(shared_table, text("counter")) == (int64_t)THREADS * ROUNDS);
+  assert(get_int(shared_table, agc_test_str("counter")) == (int64_t)THREADS * ROUNDS);
   assert(size_of(shared_table) == 1 + THREADS * OWN_KEYS && agc_ats_valid(&vm, shared_table));
   char name[32];
   for (int k = 0; k < THREADS; k++)
     for (int j = 0; j < OWN_KEYS; j++) {
       snprintf(name, sizeof name, "t%d-%d", k, j);
-      assert(get_int(shared_table, text(name)) == ROUNDS / OWN_KEYS);
+      assert(get_int(shared_table, agc_test_str(name)) == ROUNDS / OWN_KEYS);
     }
 }
 

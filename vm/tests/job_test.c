@@ -571,11 +571,6 @@ static void start_detached(void *arg) {
   agc_io_detached(&vm, &where_io, arg, agc_void(), AGC_JOB_QUIET);
 }
 
-static void service_on_thread(void *arg) {
-  (void)arg;
-  agc_test_service(&vm);
-}
-
 /* A detached job that finishes while a second thread runs the schedulers is ended by a scheduler: the I/O role finds it
    ready, queues it and nudges the run queue, and `done` runs on the thread that services (agc_io_service), never on the
    loop's thread. The nudge ends an idle wait with NULL and one caller takes it. */
@@ -591,7 +586,7 @@ static void test_detached_ends_on_a_scheduler(void) {
   assert(swift_done_calls == 0);
   assert(agc_runq_wait(vm.rt->runq) == NULL);
   assert(agc_runq_take_nudge(vm.rt->runq) && !agc_runq_take_nudge(vm.rt->runq));
-  on_thread(service_on_thread, NULL);
+  on_thread(agc_test_service, &vm);
   assert(swift_done_calls == 1 && !uv_thread_equal(&done_thread, &loop_thread));
   pump_until_idle();
   settle_loop();
@@ -625,7 +620,7 @@ static void test_task_start_after_the_run_is_over(void) {
   agc_io_goodbye(&vm);
   pump_until_idle();
   wait_for_hand_over();
-  on_thread(service_on_thread, NULL);
+  on_thread(agc_test_service, &vm);
   pump_until_idle();
   settle_loop();
   assert(dropped == 1 && dropped_without_work == 1 && finished_calls == 0 && swift_done_calls == 1);
@@ -654,7 +649,7 @@ static void test_job_ready_twice_is_listed_once(void) {
   uv_sem_post(&g->go);
   pump_until_idle();
   assert(finished_calls == 0 && swift_done_calls == 0);
-  on_thread(service_on_thread, NULL);
+  on_thread(agc_test_service, &vm);
   assert(finished_calls == 1 && swift_done_calls == 1 && dropped == 0);
   pump_until_idle();
   settle_loop();
@@ -745,7 +740,7 @@ static void test_direct_compute_wakes_on_a_scheduler(void) {
   uv_sem_wait(&g->entered);
   wait_for_direct_end(g);
   assert(task->state == AGC_TASK_PARKED);
-  on_thread(service_on_thread, NULL);
+  on_thread(agc_test_service, &vm);
   assert(task->state == AGC_TASK_READY && agc_runq_pop(vm.rt->runq) == task);
   finishing f = {task, 0};
   on_thread(finish_on_thread, &f);
@@ -770,7 +765,7 @@ static void test_direct_compute_cancelled_while_working(void) {
   to_detach = task;
   on_thread(detach_on_thread, NULL);
   wait_for_direct_end(g);
-  on_thread(service_on_thread, NULL);
+  on_thread(agc_test_service, &vm);
   assert(task->state == AGC_TASK_PARKED && !task->parked && finished_calls == 0);
   wait_for_hand_over();
   swift_done_calls = 0;
@@ -778,7 +773,7 @@ static void test_direct_compute_cancelled_while_working(void) {
   assert(data);
   on_thread(start_detached, data);
   wait_for_hand_over();
-  on_thread(service_on_thread, NULL);
+  on_thread(agc_test_service, &vm);
   assert(finished_calls == 1 && swift_done_calls == 1);
   pump_until_idle();
   settle_loop();
@@ -834,7 +829,7 @@ static void test_detach_from_a_scheduler_while_ready(void) {
   assert(agc_io_poll(&vm, false));
   assert(counted_done == 0 && counted_drop == 0 && !task->parked);
   wait_for_hand_over();
-  on_thread(service_on_thread, NULL);
+  on_thread(agc_test_service, &vm);
   assert(counted_done == 1 && counted_drop == 0);
   pump_until_idle();
   settle_loop();
@@ -859,10 +854,10 @@ static void test_expire_cancel_from_a_scheduler(void) {
   agc_io_detach(&vm, task);
   counted_done = counted_drop = 0;
   wait_for_hand_over();
-  on_thread(service_on_thread, NULL);
+  on_thread(agc_test_service, &vm);
   assert(counted_done == 0 && counted_drop == 0);
   wait_for_hand_over();
-  on_thread(service_on_thread, NULL);
+  on_thread(agc_test_service, &vm);
   assert(counted_done == 0 && counted_drop == 0);
   while (counted_drop == 0) assert(agc_io_poll(&vm, true));
   assert(counted_drop == 1 && uv_thread_equal(&counted_drop_thread, &loop_thread));

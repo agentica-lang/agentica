@@ -8,6 +8,7 @@
 #include "../digest.h"
 #include "../services.h"
 #include "builtin_test.h"
+#include "test_support.h"
 
 #include <assert.h>
 #include <limits.h>
@@ -26,21 +27,14 @@
 
 static agc_vm vm;
 
-/* The row as the loader finds it, by key and arity. */
-static const agc_builtin *row(const char *name, uint32_t arity) {
-  const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), arity);
-  if (!b) fprintf(stderr, "no builtin %s/%u\n", name, arity);
-  assert(b);
-  return b;
+static agc_value call(const char *name, uint32_t arity, agc_value *args) {
+  return agc_test_call_row(&vm, name, arity, args);
 }
-
-static agc_value call(const char *name, uint32_t arity, agc_value *args) { return row(name, arity)->fn(&vm, args, 0); }
 
 static void fails(const char *name, uint32_t arity, agc_value *args, const char *code) {
-  agc_test_fails(&vm, name, row(name, arity), args, code);
+  agc_test_fails_row(&vm, name, arity, args, code);
 }
 
-static agc_value text(const char *s) { return agc_string_value(agc_make_string(s, strlen(s), strlen(s))); }
 
 static agc_value raw(const char *data, size_t len) {
   return agc_bytes_value(agc_make_bytes((const uint8_t *)data, len));
@@ -77,7 +71,7 @@ static bool equal(agc_value a, agc_value b) {
    refuses a Bytes (hand-made bytecode: the checker lowers == on Bytes to the builtin), and a Bytes is never equal to a
    String of the same bytes. */
 static void test_equality(void) {
-  agc_value a = raw("abc", 3), b = raw("abc", 3), c = raw("abd", 3), d = raw("ab", 2), s = text("abc");
+  agc_value a = raw("abc", 3), b = raw("abc", 3), c = raw("abd", 3), d = raw("ab", 2), s = agc_test_str("abc");
   assert(equal(a, b) && !equal(a, c) && !equal(a, d) && !equal(d, a));
   agc_value empty = agc_bytes_value(agc_empty_bytes()), fresh = agc_bytes_value(agc_new_bytes(0));
   assert(equal(empty, fresh) && !equal(empty, d));
@@ -93,27 +87,27 @@ static void test_equality(void) {
    the hash's domain). */
 static void test_keys(void) {
   agc_map *m = agc_map_put(&vm, agc_new_map(), raw("key", 3), agc_int(1));
-  m = agc_map_put(&vm, m, text("key"), agc_int(2));
+  m = agc_map_put(&vm, m, agc_test_str("key"), agc_int(2));
   m = agc_map_put(&vm, m, raw("key", 3), agc_int(3));
   m = agc_map_put(&vm, m, raw("", 0), agc_int(4));
   assert(m->size == 3);
   agc_value v;
   assert(agc_map_get(&vm, m, raw("key", 3), &v) && agc_as_int(&vm, v) == 3);
-  assert(agc_map_get(&vm, m, text("key"), &v) && agc_as_int(&vm, v) == 2);
+  assert(agc_map_get(&vm, m, agc_test_str("key"), &v) && agc_as_int(&vm, v) == 2);
   assert(agc_map_get(&vm, m, agc_bytes_value(agc_new_bytes(0)), &v) && agc_as_int(&vm, v) == 4);
   assert(!agc_map_get(&vm, m, raw("kez", 3), &v));
   assert(agc_key_hash(&vm, raw("key", 3)) == agc_key_hash(&vm, raw("key", 3)));
-  assert(agc_key_hash(&vm, raw("key", 3)) != agc_key_hash(&vm, text("key")));
+  assert(agc_key_hash(&vm, raw("key", 3)) != agc_key_hash(&vm, agc_test_str("key")));
   m = agc_map_delete(&vm, m, raw("key", 3));
   assert(m->size == 2 && !agc_map_get(&vm, m, raw("key", 3), &v));
 
-  agc_value items[4] = {raw("a", 1), raw("b", 1), raw("a", 1), text("a")};
+  agc_value items[4] = {raw("a", 1), raw("b", 1), raw("a", 1), agc_test_str("a")};
   agc_value list = agc_list_value(agc_list_from_array(items, 4));
   agc_value set = call("Set.new", 1, &list);
   assert(agc_as_set(&vm, set)->size == 3);
   agc_value probe[2] = {set, raw("b", 1)};
   assert(agc_as_bool(&vm, call("Set.include?", 2, probe)));
-  agc_value fewer[3] = {raw("b", 1), text("a"), raw("a", 1)};
+  agc_value fewer[3] = {raw("b", 1), agc_test_str("a"), raw("a", 1)};
   agc_value list2 = agc_list_value(agc_list_from_array(fewer, 3));
   assert(agc_equal(&vm, set, call("Set.new", 1, &list2), 0));
 }
@@ -246,7 +240,7 @@ static void test_builtins(void) {
   assert(agc_as_bytes(&vm, call("Bytes.concat", 1, &single)) == agc_as_bytes(&vm, parts[3]));
   assert(shared_empty(call("Bytes.concat", 1, &none)));
 
-  agc_value s = text("h\xc3\xa9");
+  agc_value s = agc_test_str("h\xc3\xa9");
   bytes_are(call("String.bytes", 1, &s), "h\xc3\xa9", 3);
   agc_value blank = agc_string_value(vm.rt->empty_string);
   assert(shared_empty(call("String.bytes", 1, &blank)));
@@ -295,7 +289,7 @@ static void test_costs(void) {
 /* Hand-made bytecode can pass any value to any builtin: a wrong tag, or a list with an item that is not of its type,
    fails with RUNTIME-INTERNAL. */
 static void test_wrong_tags(void) {
-  agc_value b = raw("ab", 2), s = text("ab"), i = agc_int(1);
+  agc_value b = raw("ab", 2), s = agc_test_str("ab"), i = agc_int(1);
   agc_value one[1] = {s};
   fails("Bytes.to_a", 1, one, "RUNTIME-INTERNAL");
   fails("Bytes.length", 1, one, "RUNTIME-INTERNAL");
@@ -358,7 +352,7 @@ static void test_crypto_keys(void) {
   agc_value cmac_args[2] = {key, datas[1]};
   const agc_result *tag = agc_as_result(&vm, call("OpenSSL.CMAC.des_ede3", 2, cmac_args));
   assert(tag->ok && agc_as_bytes(&vm, tag->value)->len == 8);
-  agc_value hello = text("aGVsbG8=");
+  agc_value hello = agc_test_str("aGVsbG8=");
   const agc_result *decoded = agc_as_result(&vm, call("Base64.strict_decode64.bytes", 1, &hello));
   assert(decoded->ok && agc_as_bytes(&vm, decoded->value)->len == 5);
 
@@ -558,7 +552,7 @@ static void test_rsa_oaep(void) {
   assert(agc_rsa_oaep_encrypt(max_e, strlen(max_e), data, 20, out, &len) == AGC_RSA_DONE && len == 128);
   assert(agc_rsa_oaep_encrypt(even_n, strlen(even_n), data, 20, out, &len) == AGC_RSA_BAD_KEY && len == 0);
   assert(agc_rsa_oaep_encrypt(e_one, strlen(e_one), data, 20, out, &len) == AGC_RSA_BAD_KEY && len == 0);
-  agc_value args[2] = {text(spki), raw((const char *)data, 214)};
+  agc_value args[2] = {agc_test_str(spki), raw((const char *)data, 214)};
   const agc_result *sealed = agc_as_result(&vm, call("OpenSSL.RSA.public_encrypt_oaep", 2, args));
   assert(sealed->ok && agc_as_bytes(&vm, sealed->value)->len == 256);
   args[1] = raw((const char *)data, 215);
@@ -639,7 +633,7 @@ static void handed(agc_value program, agc_front_end *fe) {
   agc_value args[3] = {program, vm.rt->empty_list, vm.rt->empty_list};
   memset(fe, 0, sizeof *fe);
   if (setjmp(vm.fail) == 0) {
-    (void)row("FrontEnd.hand_off.bytes", 3)->fn(&vm, args, 0);
+    (void)agc_test_row("FrontEnd.hand_off.bytes", 3)->fn(&vm, args, 0);
     assert(0);
   }
   assert(fe->handed && fe->option_count == 0 && fe->argument_count == 0);

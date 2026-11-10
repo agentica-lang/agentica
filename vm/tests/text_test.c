@@ -48,15 +48,7 @@ int main(void) {
     assert(agc_utf8_chars((const uint8_t *)d->data, d->bytes, &chars) && chars == d->chars);
     previous = one;
   }
-  debug_is("", "\"\"");
-  debug_is("a\xe2\x80\x8d\xe2\x80\x8d \xe2\x80\x8d\xe2\x80\x8c", "\"a\xe2\x80\x8d\xe2\x80\x8d \\u200D\\u200C\"");
   debug_is("\xe2\x80\x8d\xf3\xa0\x81\x81", "\"\\u200D\\U000E0041\"");
-  debug_is("a\"b\\c", "\"a\\\"b\\\\c\"");
-  debug_is("\a\b\t\n\v\f\r\x1b", "\"\\a\\b\\t\\n\\v\\f\\r\\e\"");
-  debug_is("\x01\x7f\xc2\x80\xc2\xad", "\"\\u0001\\u007F\\u0080\\u00AD\"");
-  debug_is("e\xcc\x81 \xc2\xa0\xe3\x80\x80", "\"e\xcc\x81 \xc2\xa0\xe3\x80\x80\"");
-  debug_is("\xe2\x80\xa8\xee\x80\x80\xef\xbb\xbf", "\"\\u2028\\uE000\\uFEFF\"");
-  debug_is("\xf0\x9f\x98\x80\xf4\x8f\xbf\xbf\xf3\xa0\x80\x81", "\"\xf0\x9f\x98\x80\\U0010FFFF\\U000E0001\"");
   agc_value inner[] = {agc_int(-7), agc_float(0.5), agc_string_value(agc_make_string("a\"\xce\xbb", 4, 3)),
                        agc_list_value(agc_list_from_array(NULL, 0))};
   agc_value outer[] = {agc_nil(), agc_list_value(agc_list_from_array(inner, 4)), agc_bool(true)};

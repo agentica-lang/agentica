@@ -18,14 +18,6 @@ enum { NEW, SEND, RECV, CLOSE, CLOSED, EMPTY, COUNT };
 static agc_vm vm;
 static agc_task *main_task;
 static const agc_builtin *calls[COUNT];
-static uint64_t ids;
-
-static agc_task *make_task(void) {
-  agc_task *t = agc_alloc(sizeof(agc_task));
-  t->id = ++ids;
-  t->state = AGC_TASK_RUNNING;
-  return t;
-}
 
 static agc_value run(agc_task *t, int which, agc_value *args, bool *parked) {
   vm.task = t;
@@ -147,7 +139,7 @@ static void test_ring(void) {
 
 static void test_receiver_order(void) {
   agc_value ch = make_channel(2);
-  agc_task *a = make_task(), *b = make_task(), *c = make_task();
+  agc_task *a = agc_test_task(), *b = agc_test_task(), *c = agc_test_task();
   wait_recv(a, ch, 5000);
   wait_recv(b, ch, 5000);
   wait_recv(c, ch, 5000);
@@ -168,7 +160,7 @@ static void test_receiver_order(void) {
 
 static void test_sender_order(void) {
   agc_value ch = make_channel(1);
-  agc_task *a = make_task(), *b = make_task(), *c = make_task();
+  agc_task *a = agc_test_task(), *b = agc_test_task(), *c = agc_test_task();
   send(main_task, ch, 10, 0);
   wait_send(a, ch, 11, 5000);
   wait_send(b, ch, 12, 5000);
@@ -194,7 +186,7 @@ static void test_sender_order(void) {
 
 static void test_cancelled_receiver(void) {
   agc_value ch = make_channel(2);
-  agc_task *a = make_task(), *b = make_task();
+  agc_task *a = agc_test_task(), *b = agc_test_task();
   wait_recv(a, ch, 5000);
   wait_recv(b, ch, 5000);
   send(main_task, ch, 7, 0);
@@ -211,7 +203,7 @@ static void test_cancelled_receiver(void) {
 
 static void test_value_back_to_buffer(void) {
   agc_value ch = make_channel(3);
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   wait_recv(a, ch, 5000);
   send(main_task, ch, 1, 0);
   send(main_task, ch, 2, 0);
@@ -225,7 +217,7 @@ static void test_value_back_to_buffer(void) {
 
 static void test_values_back_in_send_order(bool reverse) {
   agc_value ch = make_channel(4);
-  agc_task *a = make_task(), *b = make_task();
+  agc_task *a = agc_test_task(), *b = agc_test_task();
   wait_recv(a, ch, 5000);
   wait_recv(b, ch, 5000);
   send(main_task, ch, 1, 0);
@@ -243,7 +235,7 @@ static void test_values_back_in_send_order(bool reverse) {
 
 static void test_value_back_to_full_buffer(void) {
   agc_value ch = make_channel(1);
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   wait_recv(a, ch, 5000);
   send(main_task, ch, 1, 0);
   send(main_task, ch, 2, 0);
@@ -261,7 +253,7 @@ static void test_values_back_into_wrapped_ring(void) {
   for (int64_t k = 0; k < 5; k++) assert(sent(send(main_task, ch, k, 0)));
   for (int64_t k = 0; k < 5; k++) assert(got(recv(main_task, ch, 0), k));
   for (int k = 0; k < 4; k++) {
-    receivers[k] = make_task();
+    receivers[k] = agc_test_task();
     wait_recv(receivers[k], ch, 5000);
   }
   for (int64_t v = 1; v <= 12; v++) assert(sent(send(main_task, ch, v, 0)));
@@ -274,7 +266,7 @@ static void test_values_back_into_wrapped_ring(void) {
 
 static void test_sender_waits_while_over_capacity(void) {
   agc_value ch = make_channel(2);
-  agc_task *receiver = make_task(), *sender = make_task();
+  agc_task *receiver = agc_test_task(), *sender = agc_test_task();
   wait_recv(receiver, ch, 5000);
   for (int64_t v = 1; v <= 3; v++) assert(sent(send(main_task, ch, v, 0)));
   wait_send(sender, ch, 4, 5000);
@@ -304,7 +296,7 @@ static agc_value free_slot_for_senders(agc_task *a, agc_task *b) {
 }
 
 static void test_reserved_sender_to_receiver(void) {
-  agc_task *a = make_task(), *b = make_task(), *r = make_task();
+  agc_task *a = agc_test_task(), *b = agc_test_task(), *r = agc_test_task();
   agc_value ch = free_slot_for_senders(a, b);
   assert(next_ready() == a);
   settle();
@@ -322,7 +314,7 @@ static void test_reserved_sender_to_receiver(void) {
 }
 
 static void test_cancelled_sender(void) {
-  agc_task *a = make_task(), *b = make_task();
+  agc_task *a = agc_test_task(), *b = agc_test_task();
   agc_value ch = free_slot_for_senders(a, b);
   assert(ready_head() == a && a->channel.reserved);
   agc_task_cancel(&vm, a);
@@ -337,7 +329,7 @@ static void test_cancelled_sender(void) {
 
 static void test_cancelled_sender_frees_slot(void) {
   agc_value ch = make_channel(1);
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   send(main_task, ch, 1, 0);
   wait_send(a, ch, 2, 5000);
   assert(got(recv(main_task, ch, 0), 1));
@@ -350,7 +342,7 @@ static void test_cancelled_sender_frees_slot(void) {
 
 static void test_close_with_reserved_value(void) {
   agc_value ch = make_channel(2);
-  agc_task *a = make_task(), *b = make_task();
+  agc_task *a = agc_test_task(), *b = agc_test_task();
   wait_recv(a, ch, 5000);
   send(main_task, ch, 5, 0);
   close_channel(ch);
@@ -387,7 +379,7 @@ static void test_closed_with_buffered_values(void) {
 
 static void test_close_cancels_reserved_value(void) {
   agc_value ch = make_channel(2);
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   wait_recv(a, ch, 5000);
   send(main_task, ch, 5, 0);
   close_channel(ch);
@@ -401,7 +393,7 @@ static void test_close_cancels_reserved_value(void) {
 
 static void test_close_with_reserved_slot(void) {
   agc_value ch = make_channel(1);
-  agc_task *a = make_task(), *b = make_task();
+  agc_task *a = agc_test_task(), *b = agc_test_task();
   send(main_task, ch, 1, 0);
   wait_send(a, ch, 2, 5000);
   agc_value args_b[3] = {ch, agc_int(3), agc_int(5000)};
@@ -420,7 +412,7 @@ static void test_close_with_reserved_slot(void) {
 
 static void test_close_wakes_receivers(void) {
   agc_value ch = make_channel(2);
-  agc_task *a = make_task(), *b = make_task();
+  agc_task *a = agc_test_task(), *b = agc_test_task();
   wait_recv(a, ch, 5000);
   wait_recv(b, ch, 5000);
   close_channel(ch);
@@ -433,7 +425,7 @@ static void test_close_wakes_receivers(void) {
 
 static void test_timeout_before_reservation(void) {
   agc_value ch = make_channel(2);
-  agc_task *a = make_task(), *b = make_task();
+  agc_task *a = agc_test_task(), *b = agc_test_task();
   wait_recv(a, ch, 20);
   wait_recv(b, ch, 5000);
   struct timespec delay = {0, 80000000L};
@@ -453,7 +445,7 @@ static void test_timeout_before_reservation(void) {
 
 static void test_reservation_beats_deadline(void) {
   agc_value ch = make_channel(2);
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   wait_recv(a, ch, 20);
   agc_timers_settle(&vm);
   send(main_task, ch, 4, 0);
@@ -472,7 +464,7 @@ static void test_reservation_beats_deadline(void) {
    the clock reaches it; the retry then times out without parking again. */
 static void test_clock_starts_late(void) {
   agc_value ch = make_channel(1);
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   wait_recv(a, ch, 20);
   assert(a->timer.pending && a->timer.deadline == 20);
   struct timespec delay = {0, 40000000L};
@@ -500,7 +492,7 @@ static void test_clock_starts_late(void) {
 /* A task cancelled while its wait is pending leaves the slot empty: nothing starts or fires for it later. */
 static void test_cancel_pending_wait(void) {
   agc_value ch = make_channel(1);
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   uint64_t armed = atomic_load(&vm.rt->timers_armed);
   wait_recv(a, ch, 5000);
   assert(a->timer.pending && atomic_load(&vm.rt->timers_armed) == armed + 1);
@@ -522,7 +514,7 @@ static void test_abandoned(void) {
   assert(got(recv(main_task, ch, 0), 1));
   assert(failed(recv(main_task, ch, 0), "channel: timed out"));
   assert(!agc_channel_abandoned(&vm, c));
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   wait_recv(a, ch, 5000);
   send(main_task, ch, 2, 0);
   assert(next_ready() == a);
@@ -530,12 +522,12 @@ static void test_abandoned(void) {
   agc_value args[2] = {ch, agc_int(5000)};
   assert(got(now(a, RECV, args), 2));
   assert(!agc_channel_abandoned(&vm, c));
-  agc_task *b = make_task();
+  agc_task *b = agc_test_task();
   wait_recv(b, ch, 5000);
   agc_task_cancel(&vm, b);
   assert(agc_channel_abandoned(&vm, c));
   agc_value timed = make_channel(1);
-  agc_task *d = make_task();
+  agc_task *d = agc_test_task();
   wait_recv(d, timed, 20);
   agc_timers_settle(&vm);
   struct timespec delay = {0, 80000000L};

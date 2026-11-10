@@ -7,6 +7,7 @@
 #include "../services.h"
 #include "../trace.h"
 #include "builtin_test.h"
+#include "test_support.h"
 
 #include <assert.h>
 #include <stdlib.h>
@@ -16,7 +17,6 @@ enum { CHAR, CLASS, ANY, ANY_NL, SPLIT, JUMP, SAVE, ASSERT, MATCH };
 enum { TEST, FIRST, ALL };
 
 static agc_vm vm;
-static uint64_t ids;
 static const agc_builtin *search;
 /* The last drive: the turn cost all its resumes charged, and the time of the slowest resume (printed when it is long,
    never asserted: shared runners are too noisy for a time bound). */
@@ -30,13 +30,6 @@ typedef struct {
   agc_value classes;
   int64_t ncap;
 } program;
-
-static agc_task *make_task(void) {
-  agc_task *t = agc_alloc(sizeof(agc_task));
-  t->id = ++ids;
-  t->state = AGC_TASK_RUNNING;
-  return t;
-}
 
 static agc_value ints(const int64_t *items, size_t n) {
   agc_list_builder b;
@@ -73,7 +66,7 @@ static void args_of(agc_value *args, agc_value text, const program *p, int64_t m
 static agc_value drive(agc_value text, const program *p, int64_t mode, bool collect, size_t *resumes) {
   agc_value args[7];
   args_of(args, text, p, mode);
-  agc_task *t = make_task();
+  agc_task *t = agc_test_task();
   vm.task = t;
   assert(agc_is(search->fn(&vm, args, 0), AGC_T_VOID) && t->stepper);
   *resumes = 0;
@@ -220,7 +213,7 @@ static void test_empty_loops_end(void) {
 static void refused(agc_value text, const program *p, int64_t mode) {
   agc_value args[7];
   args_of(args, text, p, mode);
-  vm.task = make_task();
+  vm.task = agc_test_task();
   agc_test_fails(&vm, "RegexEngine.search", search, args, "RUNTIME-INTERNAL");
 }
 
@@ -259,7 +252,7 @@ static void test_hostile_programs_are_refused(void) {
   agc_value args[7];
   args_of(args, text, &good, TEST);
   args[3] = ints(plus_ys, 5);
-  vm.task = make_task();
+  vm.task = agc_test_task();
   agc_test_fails(&vm, "RegexEngine.search", search, args, "RUNTIME-INTERNAL");
   /* Classes that are not sorted, disjoint [low, high] pairs of code points. */
   static const int64_t odd[] = {1, 2, 3}, reversed[] = {5, 4}, overlap[] = {1, 5, 5, 9}, unsorted[] = {7, 9, 1, 2},

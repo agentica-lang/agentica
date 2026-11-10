@@ -70,4 +70,23 @@ static inline void agc_test_fails(agc_vm *vm, const char *name, const agc_builti
   assert(strcmp(got, code) == 0);
 }
 
+/* The row as the loader finds it, by key and arity; a missing row is named before the assert. */
+static inline const agc_builtin *agc_test_row(const char *name, uint32_t arity) {
+  const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), arity);
+  if (!b) fprintf(stderr, "no builtin %s/%u\n", name, arity);
+  assert(b);
+  return b;
+}
+
+/* A call of the row NAME/ARITY on VM, outside a turn: for rows that never park. */
+static inline agc_value agc_test_call_row(agc_vm *vm, const char *name, uint32_t arity, agc_value *args) {
+  return agc_test_row(name, arity)->fn(vm, args, 0);
+}
+
+/* agc_test_fails for the row NAME/ARITY. */
+static inline void agc_test_fails_row(agc_vm *vm, const char *name, uint32_t arity, agc_value *args,
+                                      const char *code) {
+  agc_test_fails(vm, name, agc_test_row(name, arity), args, code);
+}
+
 #endif

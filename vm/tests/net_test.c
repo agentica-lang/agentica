@@ -68,7 +68,6 @@ static agc_value step(calling c) {
   return take(&c);
 }
 
-static agc_value text(const char *s) { return agc_string_value(agc_make_string(s, strlen(s), strlen(s))); }
 
 static agc_value ok_of(agc_value v) {
   agc_result *r = agc_as_result(&vm, v);
@@ -130,7 +129,7 @@ static void wait_eof(int fd) {
 /* A VM listener and one accepted socket (socket_v) whose peer is the returned descriptor. */
 static int open_pair(void) {
   assert(agc_io_share(&vm, false));
-  listener = ok_of(step(call("TCP.listen", 2, text("127.0.0.1"), agc_int(0), agc_void(), agc_void())));
+  listener = ok_of(step(call("TCP.listen", 2, agc_test_str("127.0.0.1"), agc_int(0), agc_void(), agc_void())));
   int fd = raw_connect(agc_as_listener(&vm, listener)->port);
   socket_v = ok_of(step(call("TCP.accept", 2, listener, agc_int(5000), agc_void(), agc_void())));
   return fd;
@@ -266,7 +265,7 @@ static void peer_drains(int fd, size_t *at) {
    and the peer reads the bytes while the loop does not run. */
 static void test_a_send_goes_out_from_the_scheduler(void) {
   int fd = open_pair();
-  calling sending = call("TCP.send", 3, socket_v, text("direct\n"), agc_int(5000), agc_void());
+  calling sending = call("TCP.send", 3, socket_v, agc_test_str("direct\n"), agc_int(5000), agc_void());
   assert(!start(&sending));
   ok_of(sending.result);
   peer_reads(fd, "direct\n", 7);
@@ -394,7 +393,7 @@ static void test_a_close_waits_for_a_direct_send(void) {
   wait_eof(fd);
   assert(fcntl(mine, F_GETFL) < 0);
   assert(error_is(take(&reading), "network: operation timed out"));
-  agc_value again = step(call("TCP.send", 3, socket_v, text("late\n"), agc_int(1000), agc_void()));
+  agc_value again = step(call("TCP.send", 3, socket_v, agc_test_str("late\n"), agc_int(1000), agc_void()));
   assert(error_is(again, "network: socket is closed"));
   close_pair(fd);
 }
@@ -465,7 +464,7 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   locked_call first = {&vm, vm.task, call("TCP.send", 3, socket_v, pattern(len), agc_int(60000), agc_void())};
   /* Every call is made before the sender starts: call() reads vm.task, which call_locked sets on the sender's
      thread. */
-  locked_call behind = {&other, second, call("TCP.send", 3, socket_v, text("behind\n"), agc_int(60000), agc_void())};
+  locked_call behind = {&other, second, call("TCP.send", 3, socket_v, agc_test_str("behind\n"), agc_int(60000), agc_void())};
   uv_thread_t sender;
   assert(uv_thread_create(&sender, send_first, &first) == 0);
   struct pollfd p = {fd, POLLIN, 0};
@@ -501,8 +500,8 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   set_blocking(mine, true);
   struct timeval give_up = {1, 0};
   assert(setsockopt(mine, SOL_SOCKET, SO_SNDTIMEO, &give_up, sizeof give_up) == 0);
-  first.c = call("TCP.send", 3, socket_v, text("first\n"), agc_int(60000), agc_void());
-  behind = (locked_call){&other, third, call("TCP.send", 3, socket_v, text("second\n"), agc_int(60000), agc_void())};
+  first.c = call("TCP.send", 3, socket_v, agc_test_str("first\n"), agc_int(60000), agc_void());
+  behind = (locked_call){&other, third, call("TCP.send", 3, socket_v, agc_test_str("second\n"), agc_int(60000), agc_void())};
   assert(uv_thread_create(&sender, send_first, &first) == 0);
   /* The first send holds the lock: it is inside send(), which gives up after a second. */
   for (bool held = false; !held;) {
@@ -538,7 +537,7 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   on_thread(park_locked, &queued);
   agc_test_wait_woken(&vm, upgraded);
   ok_of(take(&queued.c));
-  queued.c = agc_test_call_of(&vm, upgraded, "TCP.send", 3, socket_v, text("queued\n"), agc_int(60000), agc_void());
+  queued.c = agc_test_call_of(&vm, upgraded, "TCP.send", 3, socket_v, agc_test_str("queued\n"), agc_int(60000), agc_void());
   on_thread(park_locked, &queued);
   assert(upgraded->parked != NULL);
   agc_test_wait_woken(&vm, upgraded);
@@ -553,11 +552,6 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   agc_test_settle_loop(&vm);
 }
 
-static void service_on_thread(void *arg) {
-  (void)arg;
-  agc_test_service(&vm);
-}
-
 static void detach_task(void *arg) {
   (void)arg;
   atomic_store(&vm.task->state, AGC_TASK_RUNNING);
@@ -567,7 +561,7 @@ static void detach_task(void *arg) {
 /* The detached job is handed to a scheduler, which ends it: dropped, or its `done` half run and the result dropped. */
 static void end_detached_job(void) {
   agc_test_wait_for_hand_over(&vm);
-  on_thread(service_on_thread, NULL);
+  on_thread(agc_test_service, &vm);
 }
 
 /* The line the peer FD sends is read back on socket_v: the bytes reached a live read. */
@@ -582,7 +576,7 @@ static void check_line_arrives(int fd) {
 static void start_accept(void) {
   assert(agc_io_share(&vm, false));
   agc_runq_share(vm.rt->runq);
-  listener = ok_of(step(call("TCP.listen", 2, text("127.0.0.1"), agc_int(0), agc_void(), agc_void())));
+  listener = ok_of(step(call("TCP.listen", 2, agc_test_str("127.0.0.1"), agc_int(0), agc_void(), agc_void())));
   calling accepting = call("TCP.accept", 2, listener, agc_int(60000), agc_void(), agc_void());
   assert(start(&accepting));
 }
@@ -658,7 +652,7 @@ static void test_cancelled_tls_connect_past_its_deadline(bool std) {
   agc_tls_config *config = agc_tls_client_config(CERTS "ca.pem", NULL, NULL, &f);
   assert(config);
   agc_value tls = agc_tls_context_value(config, release_config, false);
-  calling dial = call(std ? "HttpWire.connect_context" : "TLS.connect", 4, text("127.0.0.1"), agc_int(port), tls,
+  calling dial = call(std ? "HttpWire.connect_context" : "TLS.connect", 4, agc_test_str("127.0.0.1"), agc_int(port), tls,
                       agc_int(3000));
   assert(start(&dial));
   struct pollfd p = {silent, POLLIN, 0};
@@ -670,9 +664,9 @@ static void test_cancelled_tls_connect_past_its_deadline(bool std) {
   assert(peer >= 0);
   on_thread(detach_task, NULL);
   agc_test_wait_for_hand_over(&vm);
-  on_thread(service_on_thread, NULL);
+  on_thread(agc_test_service, &vm);
   agc_test_wait_for_hand_over(&vm);
-  on_thread(service_on_thread, NULL);
+  on_thread(agc_test_service, &vm);
   on_thread(close_owned, NULL);
   wait_eof(peer);
   close(peer);
@@ -694,7 +688,7 @@ static agc_value new_client(bool dropped) {
 static void test_upgrade_tls_on_a_dropped_client(void) {
   int fd = open_pair();
   agc_value client = new_client(true);
-  agc_value out = step(call("HttpWire.upgrade_tls", 4, client, socket_v, text("localhost"), agc_int(1000)));
+  agc_value out = step(call("HttpWire.upgrade_tls", 4, client, socket_v, agc_test_str("localhost"), agc_int(1000)));
   assert(error_is(out, "network: the client is closed"));
   assert(send(fd, "still\n", 6, 0) == 6);
   agc_value line = ok_of(step(call("TCP.read_line", 2, socket_v, agc_int(2000), agc_void(), agc_void())));
@@ -709,7 +703,7 @@ static void test_upgrade_context_names_its_context_argument(void) {
   agc_tls_failure f;
   agc_tls_config *config = agc_tls_server_config(CERTS "server.pem", CERTS "server-key.pem", &f);
   assert(config);
-  agc_value args[4] = {socket_v, agc_tls_context_value(config, release_config, true), text("localhost"), agc_int(1000)};
+  agc_value args[4] = {socket_v, agc_tls_context_value(config, release_config, true), agc_test_str("localhost"), agc_int(1000)};
   const char *name = "HttpWire.upgrade_context";
   const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), 4);
   assert(b);
@@ -745,7 +739,7 @@ static agc_value tls_options(uint32_t n, agc_value a, agc_value b, agc_value c) 
    malloc has out (values live on the GC heap, which is not malloc's), a thousand failures grow it by less than 16
    bytes each, where a build alone is more. */
 static void test_context_with_a_path_that_is_not_a_string(void) {
-  agc_value one = agc_int(1), empty = text(""), path = text(CERTS "ca.pem");
+  agc_value one = agc_int(1), empty = agc_test_str(""), path = agc_test_str(CERTS "ca.pem");
   const char *names[] = {"TLS.client_context", "TLS.client_context", "TLS.client_context", "TLS.server_context"};
   agc_value options[] = {tls_options(4, one, empty, empty), tls_options(4, path, one, empty),
                          tls_options(4, path, path, one), tls_options(3, path, one, empty)};
@@ -769,7 +763,7 @@ static void test_context_with_a_path_that_is_not_a_string(void) {
 static void test_upgrade_tls_builds_the_shared_context_then_handshakes(void) {
   int fd = open_pair();
   agc_value client = new_client(false);
-  calling upgrading = call("HttpWire.upgrade_tls", 4, client, socket_v, text("localhost"), agc_int(60000));
+  calling upgrading = call("HttpWire.upgrade_tls", 4, client, socket_v, agc_test_str("localhost"), agc_int(60000));
   assert(start(&upgrading));
   struct pollfd p = {fd, POLLIN, 0};
   while (poll(&p, 1, 10) <= 0) {

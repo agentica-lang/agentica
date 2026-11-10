@@ -190,24 +190,9 @@ static void strings(void) {
   fails(agc_op_concat(&vm, &dst, &ab, &i), AGC_STATUS_WRONG_TAG, &dst, mark);
   fails(agc_op_concat(&vm, &dst, &i, &ab), AGC_STATUS_WRONG_TAG, &dst, mark);
   fails(agc_op_concat(&vm, &dst, &i, &i), AGC_STATUS_WRONG_TAG, &dst, mark);
-  /* TO_TEXT prints every tag with a form; a String comes back as it was. */
-  agc_value neg = agc_int(-42), one_five = agc_float(1.5), yes = agc_bool(true), nothing = agc_nil();
-  agc_value range = agc_range_value(1, 3, false), void_value = agc_void();
+  /* TO_TEXT gives a String back as it was (the printed forms of the other tags are in the goldens). */
+  agc_value void_value = agc_void();
   assert(agc_op_to_text(&vm, &dst, &ab) == AGC_STATUS_OK && same_bits(dst, ab));
-  assert(agc_op_to_text(&vm, &dst, &neg) == AGC_STATUS_OK);
-  text_is(dst, "-42");
-  assert(agc_op_to_text(&vm, &dst, &one_five) == AGC_STATUS_OK);
-  text_is(dst, "1.5");
-  assert(agc_op_to_text(&vm, &dst, &yes) == AGC_STATUS_OK);
-  text_is(dst, "true");
-  assert(agc_op_to_text(&vm, &dst, &nothing) == AGC_STATUS_OK);
-  text_is(dst, "nil");
-  assert(agc_op_to_text(&vm, &dst, &range) == AGC_STATUS_OK);
-  text_is(dst, "1..3");
-  agc_value items[2] = {agc_int(7), agc_int(8)};
-  agc_value list = agc_list_value(agc_list_from_array(items, 2));
-  assert(agc_op_to_text(&vm, &dst, &list) == AGC_STATUS_OK);
-  text_is(dst, "[7, 8]");
   /* A Void value is hand-made bytecode (the checker rejects one with CHECK-VOID-VALUE). */
   dst = mark;
   fails(agc_op_to_text(&vm, &dst, &void_value), AGC_STATUS_WRONG_TAG, &dst, mark);

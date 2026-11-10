@@ -58,6 +58,20 @@ static inline void agc_test_yield(void) {
 #endif
 }
 
+/* A String value of the C string S. */
+static inline agc_value agc_test_str(const char *s) {
+  return agc_string_value(agc_make_string(s, strlen(s), strlen(s)));
+}
+
+/* A running task with the next id of this test binary, as a scheduler would hand it to a builtin. */
+static inline agc_task *agc_test_task(void) {
+  static uint64_t ids;
+  agc_task *t = agc_alloc(sizeof(agc_task));
+  t->id = ++ids;
+  t->state = AGC_TASK_RUNNING;
+  return t;
+}
+
 /* The first ready task, left in the queue: it pops every task and pushes them back in order. For tests that run on
    one thread. */
 static inline agc_task *agc_test_ready_head(agc_runq *q) {

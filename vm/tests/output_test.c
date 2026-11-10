@@ -7,6 +7,7 @@
 #define _DARWIN_C_SOURCE
 #endif
 #include "../core.h"
+#include "test_support.h"
 
 #include <assert.h>
 #include <fcntl.h>
@@ -44,12 +45,6 @@ typedef struct {
 static agc_output *out(void) { return &vm.rt->out; }
 
 static agc_output *err(void) { return &vm.rt->err; }
-
-static agc_task *make_task(void) {
-  agc_task *t = agc_alloc(sizeof(agc_task));
-  t->state = AGC_TASK_RUNNING;
-  return t;
-}
 
 #ifdef _WIN32
 #define NULL_DEVICE "NUL"
@@ -257,7 +252,7 @@ static void test_small_prints_keep_order(void) {
   open_pipe();
   fresh(pipe_fds[1]);
   assert(out()->base == out() && (out()->mode == AGC_WRITE_POLL || out()->mode == AGC_WRITE_STREAM));
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   assert(write_as(a, 'a', 5, true));
   assert(write_as(a, 'b', 3, false));
   assert(out()->len == 9);
@@ -275,7 +270,7 @@ static void test_waiters_do_not_jump_the_queue(void) {
   open_pipe();
   size_t junk = block_pipe();
   fresh(pipe_fds[1]);
-  agc_task *a = make_task(), *b = make_task(), *c = make_task();
+  agc_task *a = agc_test_task(), *b = agc_test_task(), *c = agc_test_task();
   for (int k = 0; k < 3; k++) assert(write_as(a, 'a', BLOCK, false));
   assert(!write_as(b, 'b', 2 * BLOCK, false));
   assert(!write_as(c, 'c', 1, false));
@@ -304,7 +299,7 @@ static void test_waiters_do_not_jump_the_queue(void) {
 static void test_the_buffer_wraps(void) {
   open_pipe();
   fresh(pipe_fds[1]);
-  agc_task *a = make_task(), *b = make_task(), *c = make_task();
+  agc_task *a = agc_test_task(), *b = agc_test_task(), *c = agc_test_task();
   assert(write_as(a, 'a', 40000, false));
   assert(write_as(c, 'c', 10000, false));
   assert(!write_as(b, 'b', 30000, false));
@@ -326,7 +321,7 @@ static void test_the_buffer_wraps(void) {
   size_t freed = read_some(scratch, sizeof scratch);
   assert(freed > 0);
   fresh(pipe_fds[1]);
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   assert(write_as(a, 'a', 60000, false));
   agc_io_poll(&vm, false);
   size_t accepted = 60000 - out()->len;
@@ -347,7 +342,7 @@ static void test_flush_waits_for_an_empty_buffer(void) {
   open_pipe();
   size_t junk = block_pipe();
   fresh(pipe_fds[1]);
-  agc_task *a = make_task(), *d = make_task();
+  agc_task *a = agc_test_task(), *d = agc_test_task();
   assert(write_as(a, 'a', 100, false));
   assert(!drain_as(d));
   assert(out()->waiters == d && d->output.flush);
@@ -367,7 +362,7 @@ static void test_flush_waits_for_an_empty_buffer(void) {
 static void test_flush_fails_when_the_reader_left(void) {
   open_pipe();
   fresh(pipe_fds[1]);
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   assert(write_as(a, 'a', 10, false));
   pump_until(10);
   pump_idle();
@@ -391,7 +386,7 @@ static void test_a_leaving_head_hands_on(void) {
   open_pipe();
   size_t junk = block_pipe();
   fresh(pipe_fds[1]);
-  agc_task *a = make_task(), *b = make_task(), *c = make_task();
+  agc_task *a = agc_test_task(), *b = agc_test_task(), *c = agc_test_task();
   assert(write_as(a, 'a', CAP, false));
   assert(!write_as(b, 'b', 10, false));
   assert(!write_as(c, 'c', 10, false));
@@ -419,7 +414,7 @@ static void test_a_file_is_drained_by_the_pool(void) {
   uv_fs_req_cleanup(&request);
   fresh(fd);
   assert(out()->mode == AGC_WRITE_DISK && out()->fd == fd);
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   assert(write_as(a, 'a', 40000, false));
   while (out()->len || out()->writing) agc_io_poll(&vm, true);
   assert(write_as(a, 'b', 40000, true));
@@ -446,7 +441,7 @@ static void test_a_device_that_never_waits_is_pooled(void) {
   assert(fd >= 0);
   fresh(fd);
   assert(out()->mode == AGC_WRITE_DISK && out()->fd == fd);
-  assert(write_as(make_task(), 'a', 10, true));
+  assert(write_as(agc_test_task(), 'a', 10, true));
   agc_io_flush_files(&vm);
   assert(out()->len == 0 && !out()->failed);
   finish();
@@ -469,7 +464,7 @@ static void test_a_stream_on_the_same_target_shares_the_buffer(void) {
   fresh(pipe_fds[1]);
   agc_output_open(&vm, err(), pipe_fds[1]);
   assert(err()->base == out() && out()->base == out());
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   assert(write_as(a, 'a', 3, true));
   assert(print_as(err(), a, 'b', 3, true));
   assert(write_as(a, 'c', 3, true));
@@ -502,14 +497,14 @@ static void test_the_program_writes_the_pipe_that_the_front_end_wrote(void) {
   fresh(pipe_fds[1]);
   agc_write_mode mode = out()->mode;
   assert(mode == AGC_WRITE_POLL || mode == AGC_WRITE_STREAM);
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   assert(write_as(a, 'a', 5, true));
   pump_until(6);
   pump_idle();
   finish();
   fresh(pipe_fds[1]);
   assert(out()->mode == mode);
-  a = make_task();
+  a = agc_test_task();
   assert(write_as(a, 'b', 3, true));
   pump_until(10);
   assert(memcmp(collected, "aaaaa\nbbb\n", 10) == 0);
@@ -525,7 +520,7 @@ static void test_a_duplicate_of_the_descriptor_is_the_same_target(void) {
   assert(again >= 0);
   agc_output_open(&vm, err(), again);
   assert(err()->base == out());
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   assert(write_as(a, 'a', 2, true));
   assert(print_as(err(), a, 'b', 2, true));
   pump_until(6);
@@ -543,7 +538,7 @@ static void test_two_pipes_are_two_targets(void) {
   fresh(first_write);
   agc_output_open(&vm, err(), pipe_fds[1]);
   assert(err()->base == err() && out()->base == out());
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   assert(print_as(err(), a, 'e', 4, true));
   pump_until(5);
   assert(memcmp(collected, "eeee\n", 5) == 0);
@@ -567,7 +562,7 @@ static void test_a_notice_waits_for_room_and_keeps_its_text(void) {
   open_pipe();
   size_t junk = block_pipe();
   fresh(pipe_fds[1]);
-  agc_task *a = make_task(), *b = make_task();
+  agc_task *a = agc_test_task(), *b = agc_test_task();
   assert(write_as(a, 'a', CAP - 6, false));
   agc_notice n;
   fputs(text, agc_notice_begin(out(), &n));
@@ -596,7 +591,7 @@ static void queue_short_notice(void) {
 static void test_a_notice_does_not_enter_a_long_print(void) {
   open_pipe();
   fresh(pipe_fds[1]);
-  agc_task *l = make_task();
+  agc_task *l = agc_test_task();
   const size_t big = 2 * CAP + 100;
   assert(!write_as(l, 'l', big, false));
   assert(l->output.done == CAP);
@@ -618,7 +613,7 @@ static void test_a_leaving_long_print_lets_a_notice_and_the_next_writer_through(
   open_pipe();
   size_t junk = block_pipe();
   fresh(pipe_fds[1]);
-  agc_task *l = make_task(), *t = make_task();
+  agc_task *l = agc_test_task(), *t = agc_test_task();
   assert(!write_as(l, 'l', 2 * CAP + 100, false));
   assert(!write_as(t, 't', CAP, false));
   queue_short_notice();
@@ -640,7 +635,7 @@ static void test_the_end_of_run_moves_a_notice_held_by_a_stuck_print(void) {
   open_pipe();
   size_t junk = block_pipe();
   fresh(pipe_fds[1]);
-  agc_task *l = make_task();
+  agc_task *l = agc_test_task();
   assert(!write_as(l, 'l', 2 * CAP + 100, false));
   agc_notice n;
   fputs("notice\n", agc_notice_begin(out(), &n));
@@ -667,7 +662,7 @@ static void test_the_notice_queue_is_bounded_but_a_kept_notice_is_not_dropped(vo
   open_pipe();
   block_pipe();
   fresh(pipe_fds[1]);
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   assert(write_as(a, 'a', CAP, false));
   notice_of(AGC_NOTICE_LIMIT + 10, AGC_NOTICE_QUEUED);
   size_t full = out()->notice_len - out()->notice_at;
@@ -742,7 +737,7 @@ static void test_a_stop_signal_does_not_wait_for_a_silent_reader(void) {
   open_pipe();
   block_pipe();
   fresh(pipe_fds[1]);
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   assert(write_as(a, 'a', 1000, false));
   leave_while_stuck();
   assert(out()->len > 0 && !out()->failed);
@@ -814,7 +809,7 @@ static void test_a_handle_that_libuv_refuses_is_written_by_a_pool_thread(void) {
   assert(fd >= 0);
   fresh(fd);
   assert(out()->mode == AGC_WRITE_THREAD && out()->fd == fd);
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   assert(write_as(a, 'a', 1000, false));
   leave_while_stuck();
   /* Wine takes the write at once, so there the thread is never stuck; native Windows blocks it. */
@@ -866,7 +861,7 @@ static void test_shared_writers_keep_their_lines_whole(void) {
     atomic_store(&shared_go, 0);
     for (int k = 0; k < SHARED_WRITERS; k++) {
       writers[k].vm = vm;
-      writers[k].task = *make_task();
+      writers[k].task = *agc_test_task();
       writers[k].vm.task = &writers[k].task;
       writers[k].line = letters_of((char)('a' + k), SHARED_LEN);
       assert(uv_thread_create(&threads[k], write_lines, &writers[k]) == 0);
@@ -956,7 +951,7 @@ static void test_child_bytes_queued_before_a_print_that_needs_the_whole_ring_go_
   open_pipe();
   size_t junk = block_pipe();
   fresh(pipe_fds[1]);
-  agc_task *a = make_task(), *t = make_task();
+  agc_task *a = agc_test_task(), *t = agc_test_task();
   agc_forward_wait w = {NULL, agc_io_loop(&vm), count_resume, NULL};
   uint8_t before[1000], after[1000];
   memset(before, 'f', sizeof before);

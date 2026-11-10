@@ -42,8 +42,7 @@ static const uint8_t abc_bytes[] = {0x61, 0x62, 0x63};
    holds rt->sync across a shared row, so the test takes it the same way. No
    Zlib call parks. */
 static agc_value call_on(agc_vm *v, agc_task *t, const char *name, uint32_t arity, agc_value *args) {
-  const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), arity);
-  assert(b);
+  const agc_builtin *b = agc_test_row(name, arity);
   bool shared = v->rt->shared;
   if (shared) agc_sync_take(v);
   t->state = AGC_TASK_RUNNING;
@@ -89,7 +88,7 @@ static void check_bytes(agc_value value, const uint8_t *data, size_t n) {
 }
 
 static void fails(const char *name, uint32_t arity, agc_value *args, const char *code) {
-  agc_test_fails(&vm, name, agc_find_builtin((const uint8_t *)name, strlen(name), arity), args, code);
+  agc_test_fails_row(&vm, name, arity, args, code);
 }
 
 /* The 5 public rows in the contract's order, under their ".bytes" keys, with
