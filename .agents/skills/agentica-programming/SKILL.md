@@ -64,7 +64,7 @@ Read only what the task needs.
 | `builtins.md` | IO, Int/Float, String, List, Map, Set, Range, Result, Optional, System, Time, Random, `to_s`; Ruby names |
 | `examples.md` | complete programs to start from |
 | `diagnostics.md` | meaning and fix of a diagnostic code, call stacks |
-| `modules.md` | several files, `std/`, `pkg/`, packages |
+| `modules.md` | several files, `module` blocks, `std/`, `pkg/`, packages |
 | `json.md` | parse, encode, decode into structs |
 | `files.md` | File, Dir, Path, locks |
 | `bytes.md` | `Bytes`: the byte string type, `s.bytes`, slicing, joining, keys |

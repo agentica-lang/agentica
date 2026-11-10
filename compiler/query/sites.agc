@@ -178,6 +178,7 @@ def declaration_names(declaration: Ast.Decl) -> List[String]
     Ast.Decl.Import(_) -> []
     Ast.Decl.Reexport(_) -> []
     Ast.Decl.Export(_) -> []
+    Ast.Decl.Module(_) -> []
   end
 end
 
@@ -212,6 +213,7 @@ def declaration_sites(scan: Scan, declaration: Ast.Decl) -> List[Site]
     Ast.Decl.Import(_) -> []
     Ast.Decl.Reexport(_) -> []
     Ast.Decl.Export(_) -> []
+    Ast.Decl.Module(_) -> []
   end
 end
 

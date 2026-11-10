@@ -299,7 +299,10 @@ end
 
 # ---- Declarations ----
 
-def decl_items(c: Context, decl: Ast.Decl) -> List[Item]
+def decl_items(c: Context, decl: Ast.Decl) -> List[Item] = decl_items_at(c, decl, 0)
+
+# The items of a declaration that starts `column` columns in: 0 at the top level, 2 inside a module block.
+def decl_items_at(c: Context, decl: Ast.Decl, column: Int) -> List[Item]
   span = decl_span(decl)
   key = Comments.key_of(Comments.decl_kind(decl), span)
   first = span.start.line
@@ -309,7 +312,7 @@ def decl_items(c: Context, decl: Ast.Decl) -> List[Item]
     parts = doc_lines(c, first)
   end
 
-  form = one_line_form(c, decl, 0)
+  form = one_line_form(c, decl, column)
   doc = Docs.Doc.Concat(parts.push(decl_doc(c, decl, form)))
   items = node_items(c, key, first, last_line(c, span), doc)
   at = c.leading.get(key, []).size
@@ -373,6 +376,7 @@ def has_doc?(decl: Ast.Decl) -> Bool
     Ast.Decl.Enum(node) -> node.doc.some?
     Ast.Decl.TypeAlias(node) -> node.doc.some?
     Ast.Decl.Constant(node) -> node.doc.some?
+    Ast.Decl.Module(node) -> node.doc.some?
     _ -> false
   end
 end
@@ -396,7 +400,19 @@ def decl_doc(c: Context, decl: Ast.Decl, form: Optional[Docs.Doc]) -> Docs.Doc
       Docs.Doc.Concat([text("type #{node.name}#{type_parameters(node.type_parameters)} = "), type_doc(c, node.target)])
     Ast.Decl.Resource(node) -> text(source(c, node.span))
     Ast.Decl.Constant(node) -> constant_doc(c, node)
+    Ast.Decl.Module(node) -> module_block_doc(c, node)
   end
+end
+
+# A module block: its declarations two spaces in, laid out as those of a file.
+def module_block_doc(c: Context, node: Ast.ModuleDecl) -> Docs.Doc
+  items: List[Item] = []
+  for decl in node.declarations
+    items = items.concat(decl_items_at(c, decl, 2))
+  end
+
+  items = items.concat(dangling_items(c, Comments.key_of("ModuleDecl", node.span)))
+  Docs.Doc.Concat([text("module #{node.name}"), body(c, items), Docs.Doc.HardLine, text("end")])
 end
 
 def import_doc(c: Context, node: Ast.ImportDecl) -> Docs.Doc
@@ -1042,6 +1058,7 @@ def alias_of(decl: Ast.Decl) -> List[Ast.TypeAliasDecl]
   case decl
     Ast.Decl.Export(node) -> alias_of(node.declaration)
     Ast.Decl.TypeAlias(node) -> [node]
+    Ast.Decl.Module(node) -> node.declarations.flat_map do |inner: Ast.Decl| alias_of(inner) end
     _ -> []
   end
 end
@@ -1892,6 +1909,7 @@ def decl_span(decl: Ast.Decl) -> Source.Span
     Ast.Decl.TypeAlias(node) -> node.span
     Ast.Decl.Resource(node) -> node.span
     Ast.Decl.Constant(node) -> node.span
+    Ast.Decl.Module(node) -> node.span
   end
 end
 

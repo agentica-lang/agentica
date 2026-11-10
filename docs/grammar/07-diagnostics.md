@@ -190,7 +190,10 @@ is a rule:
   `export def`, a constant after a declaration that is not an import or a
   constant, an `import` after a declaration (`CHECK-DECL-ORDER`)
   Help: keep the file order: module doc and imports, then constants, then
-  `struct`, `enum` and type aliases, then `export def`, then `def`
+  `struct`, `enum`, type aliases and `module` blocks, then `export def`, then
+  `def`
+- `module Inner ... end` inside another `module` block (`PARSE-NESTED-MODULE`)
+  Help: write each module block at the top level of the file
 - `Limit = 1`, `X = 1`, `maxDepth = 1` at the top level (`PARSE-CONSTANT-NAME`)
   Help: a constant name is capitals, digits and `_`, at least two characters:
   `LIMIT`; the help suggests `MAX_DEPTH` for `MaxDepth`

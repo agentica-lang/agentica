@@ -28,12 +28,12 @@ export EAG_MODULE = "std/eag.agc"
 export EAG_IMPORT_CODE = "CHECK-EAG-IMPORT"
 
 ## The declarations of a file in the linked program: its functions, structs, enums and aliases without the export,
-## imports left
-## out.
+## imports and module blocks left out (a module block is a module of its own, Modules.enter_block).
 export def rewrite_declarations(cx: Resolve.Context) -> Result[List[Ast.Decl]]
   out: List[Ast.Decl] = []
   for wrapped in cx.me.program.declarations
-    if !Declarations.import?(Declarations.kind_of(wrapped))
+    kind = Declarations.kind_of(wrapped)
+    if !Declarations.import?(kind) and !Declarations.module?(kind)
       out = out.push(try rewrite_decl(cx, Declarations.unwrap(wrapped)))
     end
   end
@@ -300,6 +300,13 @@ def rewrite_expr(cx: Resolve.Context, expr: Ast.Expr) -> Result[Ast.Expr]
     Ast.Expr.TypeName(node) -> rewrite_type_name(cx, node)
     Ast.Expr.Call(node) -> rewrite_call(cx, node)
     Ast.Expr.EnumConstructor(node) ->
+      parts = node.enum_name.split(".")
+      if node.args.size == 0 and parts.size == 2 and Resolve.aliased_block(cx, parts[0], parts[1]) != ""
+        # Alias.Block.NAME or Alias.Block.Type, which the parser reads as a variant.
+        written = "#{node.enum_name}.#{node.variant_name}"
+        return rewrite_type_name(cx, Ast.TypeName(id: node.id, name: written, args: [], span: node.span))
+      end
+
       name = try Resolve.resolve(cx, node.enum_name, Resolve.Want.Enum, node.span, false)
       args = try rewrite_exprs(cx, node.args)
       ok(Ast.Expr.EnumConstructor(node.with(enum_name: name, args: args)))
@@ -579,6 +586,9 @@ def family_member(cx: Resolve.Context, target: Ast.Expr) -> String
       parts = node.name.split(".")
       if parts.size == 2 and Resolve.family?(cx, parts[0]) and !Builtins.member_type?(parts[0], parts[1])
         return node.name
+      elsif parts.size == 2 and Resolve.aliased_block(cx, parts[0], parts[1]) != ""
+        # Alias.Block.fn(args): a function of a module block that the module under the alias exports.
+        return node.name
       end
 
       ""
@@ -667,7 +677,8 @@ def rewrite_type_name(cx: Resolve.Context, node: Ast.TypeName) -> Result[Ast.Exp
 
   alias_constant = Resolve.alias_constant_identity(cx, node.name)
   if alias_constant != ""
-    return ok(Ast.Expr.ConstRef(Ast.ConstRef(id: node.id, name: alias_constant, span: member_only(node, parts[1]))))
+    member = member_only(node, parts[parts.size - 1])
+    return ok(Ast.Expr.ConstRef(Ast.ConstRef(id: node.id, name: alias_constant, span: member)))
   end
 
   if parts.size == 1 and Resolve.unknown_constant?(cx, node.name)
@@ -722,6 +733,9 @@ def rewrite_construct(cx: Resolve.Context, node: Ast.Construct) -> Result[Ast.Ex
   elsif parts.size == 3 and exported_enum?(cx, parts[0], parts[1])
     name = try Resolve.resolve(cx, "#{parts[0]}.#{parts[1]}", Resolve.Want.Enum, node.span, false)
     return ok(variant(node.id, name, parts[2], [], try rewrite_named(cx, node.args), node.span))
+  elsif parts.size == 4 and block_enum?(cx, parts[0], parts[1], parts[2])
+    name = try Resolve.resolve(cx, "#{parts[0]}.#{parts[1]}.#{parts[2]}", Resolve.Want.Enum, node.span, false)
+    return ok(variant(node.id, name, parts[3], [], try rewrite_named(cx, node.args), node.span))
   end
 
   name = try Resolve.resolve(cx, node.type_name, Resolve.Want.Type, node.span, false)
@@ -732,4 +746,10 @@ end
 def exported_enum?(cx: Resolve.Context, alias: String, name: String) -> Bool
   target = cx.me.aliases.get(alias, "")
   target != "" and Resolve.exports_enum?(cx.modules[target], name)
+end
+
+# True when `Alias.Block.Name` is an enum that the module block `Block`, exported by the module under `Alias`, exports.
+def block_enum?(cx: Resolve.Context, alias: String, block: String, name: String) -> Bool
+  key = Resolve.aliased_block(cx, alias, block)
+  key != "" and Resolve.exports_enum?(cx.modules[key], name)
 end

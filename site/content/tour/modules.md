@@ -27,7 +27,7 @@ Each file lists its declarations in this order (`CHECK-DECL-ORDER` otherwise):
 ```text
 # module doc and imports
 # constants (see Constants)
-# struct, enum, type alias and extern block with a resource or a struct (its defs too), in any order
+# struct, enum, type alias, module block and extern block with a resource or a struct (its defs too), in any order
 # export def
 # def
 ```
@@ -199,6 +199,68 @@ end
 ```
 
 The alias must be an import of the file, and the module must export the name (`CHECK-IMPORT-NAME`). The name must not be a declaration, another re-export or an import alias of the file (`CHECK-REDEFINED-NAME`). There is no `as` and no wildcard: a facade that wants another name writes a wrapper function. A re-export adds no local name, so inside the facade the name is still `Shapes.area`. Re-exports follow the imports, and one after a declaration needs a blank line (`PARSE-MISSING-BLANK-LINE`).
+
+## Module blocks
+
+`module Name ... end` groups declarations under a name, so one file can hold several modules. A block holds constants, structs, enums, type aliases and functions with the layout rules of a file, and `export` marks what is visible outside it. Save this as `agents.agc`:
+
+```agentica {file="agents.agc"}
+export module Counter
+  export LIMIT = 100
+
+  export enum Msg
+    Add(Int)
+    Get
+  end
+
+  export def start(initial: Int) -> Int = step(initial, Msg.Add(1))
+
+  def step(count: Int, msg: Msg) -> Int
+    case msg
+      Msg.Add(n) -> count + n
+      Msg.Get -> count
+    end
+  end
+end
+
+export module Greeter
+  export def hello(name: String) -> String = "hello #{name}, up to #{Counter.LIMIT}"
+end
+```
+
+Inside a block its own names are bare, and the imports, top-level names and other blocks of the file are visible too. Outside, write the block's name first. `import {Counter} from "agents"` imports an exported block like an alias, and `import Agents from "agents"` reads it as `Agents.Counter`:
+
+```agentica
+import {Counter, Greeter} from "agents"
+import Agents from "agents"
+
+def main() -> Void
+  puts(Counter.start(1))
+  puts(Greeter.hello("Ana"))
+  msg = Agents.Counter.Msg.Add(2)
+  puts(Agents.Counter.start(0) + Counter.LIMIT)
+  puts(msg == Counter.Msg.Add(2))
+end
+```
+
+```output
+2
+hello Ana, up to 100
+101
+true
+```
+
+A private name of a block is `CHECK-IMPORT-NAME`, as a private name of a file:
+
+```agentica {expect="CHECK-IMPORT-NAME"}
+import {Counter} from "agents"
+
+def main() -> Void
+  puts(Counter.step(1, Counter.Msg.Get))
+end
+```
+
+The name of a block follows the rules of an import alias (`CHECK-REDEFINED-NAME`), a block sits at the top level with the structs and enums (a block inside a block is `PARSE-NESTED-MODULE`), and it holds no import, re-export or extern block. A block without `export` is private to its file. Inside a block, a name the file already declares or imports is `CHECK-SHADOWED-NAME` (one name means one thing), and `main` is `CHECK-MAIN`; two blocks may each have a `start`.
 
 ## The standard library
 

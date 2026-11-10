@@ -185,6 +185,27 @@ struct Taken
   stubbed: Bool
 end
 
+## The kind of `name` in `module`: an export (a re-export included), or else a name that the file declares. A module
+## block (`module_blocks`) reads the private names of its file through the `named` table, which points at the file.
+export def kind_in(module: Module, name: String) -> Declarations.Kind
+  return module.public[name] if module.public.has_key?(name)
+
+  module.names[name]
+end
+
+## The key of the module block `name` of the file `key`: the module that the linker makes of the block.
+export def block_key(key: String, name: String) -> String = "#{key}##{name}"
+
+## The key of the module block that `module` exports as `name`, its own or one it re-exports, or "" when `name` is no
+## exported module block.
+export def exported_block(module: Module, name: String) -> String
+  return "" if !module.public.has_key?(name) or !Declarations.module?(module.public[name])
+
+  return block_key(module.reexports[name].target, module.reexports[name].name) if module.reexports.has_key?(name)
+
+  block_key(module.key, name)
+end
+
 ## Parses nothing again: the files are numbered one after the other from 0.
 export def no_parses() -> Parses = Parses(kept: {}, top: 0)
 
@@ -387,26 +408,116 @@ def step(settings: Env.Settings, walk: Walk) -> Result[Walk]
 end
 
 def finish(walk: Walk, frame: Frame) -> Result[Walk]
-  module = frame.module.with(aliases: frame.aliases, named: frame.named, imports: frame.imported)
+  blocks = Declarations.modules_of(frame.module.program.declarations)
+  aliases = frame.aliases
+  for block in blocks
+    aliases = aliases.put(block.name, block_key(frame.module.key, block.name))
+  end
+
+  module = frame.module.with(aliases: aliases, named: frame.named, imports: frame.imported)
+  # The blocks are entered first: a re-export may name one (`export Counter.start`), and a constant of the file may
+  # have the type of one, so both read them from `done`.
+  done = walk.with(stack: walk.stack.take(walk.stack.size - 1))
+  for block in blocks
+    done = try enter_block(done, module, block)
+  end
+
   # The imports are all done: the re-exports can take their kinds and origins from the finished exports.
-  module = try bind_reexports(walk, module)
+  module = try bind_reexports(done, module)
   if module.digest != ""
     # Every file it imports is done: the stack only finishes a file after the ones it read.
-    below = module.imports.map do |imported: String| walk.done[imported].tree end
+    below = module.imports.map do |imported: String| done.done[imported].tree end
     tree = CheckCache.tree_digest(shape_of(module), module.digest, below)
     module = module.with(tree: tree)
     if module.verified == tree
-      module = vouched_clean(walk, module)
+      module = vouched_clean(done, module)
     end
   end
 
-  ok(
-    walk.with(
-      stack: walk.stack.take(walk.stack.size - 1),
-      seen: walk.seen.put(module.key, 0),
-      done: walk.done.put(module.key, module),
-    ),
+  module = module.with(imports: module.imports.concat(blocks.map do |block| block_key(module.key, block.name) end))
+  ok(done.with(seen: done.seen.put(module.key, 0), done: done.done.put(module.key, module)))
+end
+
+# The module that the linker makes of a module block of `file` (docs/grammar/05b-modules.md): its declarations under a
+# prefix of their own, with the layout rules of a file. It sees the imports of the file, the other blocks and the
+# top-level names of the file, private ones included, and its own names bare, which may not be any of those
+# (`unshadowed`). It has the imports of the file, so a cache that reuses checks sees a change below the file. The file
+# and the importers see only its exports, through the block's name.
+def enter_block(walk: Walk, file: Module, block: Ast.ModuleDecl) -> Result[Walk]
+  try Declarations.check_order(file.file, block.declarations)
+  collected = try collect(file.file, block.declarations)
+  try unshadowed(file, block.declarations)
+  key = block_key(file.key, block.name)
+  named = file.named
+  for name in file.names.keys
+    if !Declarations.module?(file.names[name])
+      named = named.put(name, Named(target: file.key, name: name))
+    end
+  end
+
+  program = Ast.Program(id: block.id, declarations: block.declarations, module_doc: none, span: block.span)
+  module = Module(
+    key: key,
+    file: file.file,
+    name: file.name,
+    origin: file.origin,
+    prefix: "@#{walk.seen.size + 1}::",
+    first_id: file.first_id,
+    text: file.text,
+    program: program,
+    names: collected.names,
+    public: collected.public,
+    aliases: file.aliases,
+    named: named,
+    reexports: {},
+    imports: file.imports,
+    digest: "",
+    verified: "",
+    styled: false,
+    held: {},
+    stubbed: false,
+    tree: "",
+    clean: false,
+    constants: {},
+    tested: false,
   )
+
+  ok(walk.with(seen: walk.seen.put(key, 0), done: walk.done.put(key, module), order: walk.order.push(key)))
+end
+
+# Refuses a declaration of a module block whose name the file already gives a meaning: one name means one thing in a
+# scope, so a block may not hide a top-level declaration, an import alias, an imported name or another block
+# (CHECK-SHADOWED-NAME). `main` runs only at the top level of a file, so a block may not declare one (CHECK-MAIN).
+def unshadowed(file: Module, declarations: List[Ast.Decl]) -> Result[Bool]
+  for wrapped in declarations
+    next if Declarations.import?(Declarations.kind_of(wrapped))
+
+    name = Declarations.name_of(wrapped)
+    site = Failure.Site(file: file.file, span: Declarations.declared_name_span(wrapped))
+    if name == "main"
+      return error(
+        Failure.fail_at(
+          site,
+          "CHECK-MAIN",
+          "main is not allowed in a module block",
+          Failure.hint("declare main at the top level of the root file"),
+        ),
+      )
+    end
+
+    if file.names.has_key?(name) or file.aliases.has_key?(name) or file.named.has_key?(name)
+      return error(
+        Failure.fail_at(
+          site,
+          "CHECK-SHADOWED-NAME",
+          "a module block declares a name its file already has",
+          Failure.hint("rename it: the file declares or imports #{name}, and one name means one thing in a scope"),
+        ),
+      )
+    end
+  end
+
+  ok(true)
 end
 
 # The re-exports of `module` (`export Alias.name`), in the order of the file: the alias must be an import of the file,
@@ -575,11 +686,19 @@ end
 def bind_names(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.ImportDecl) -> Result[Walk]
   target = walk.done[frame.pending]
   named = frame.named
+  aliases = frame.aliases
   for entry in decl.names
-    named = try bind_name(settings, frame, target, entry, named)
+    bound = try bind_name(settings, frame.with(aliases: aliases), target, entry, named)
+    block = exported_block(target, entry.name)
+    # An imported module block is an alias of the file, as `import Counter from "path"` would make.
+    if block != ""
+      aliases = aliases.put(entry.local, block)
+    else
+      named = bound
+    end
   end
 
-  ok(replace_top(walk, frame.with(named: named, next: frame.next + 1, pending: "")))
+  ok(replace_top(walk, frame.with(named: named, aliases: aliases, next: frame.next + 1, pending: "")))
 end
 
 def bind_name(
@@ -716,7 +835,7 @@ def enter(settings: Env.Settings, walk: Walk, parsed: Parsed, fresh: Bool) -> Re
   key = parsed.key
   program = parsed.program
   try Declarations.check_order(parsed.file, program.declarations)
-  collected = try collect(settings, parsed.file, program.declarations)
+  collected = try collect(parsed.file, program.declarations)
   count = walk.seen.size + 1
   prefix = "@#{count}::"
   if walk.order.size == 0 and !walk.prefixed
@@ -810,7 +929,7 @@ end
 
 # The names a file declares, and those it exports; a repeated name, a builtin name or a reserved type name is
 # CHECK-REDEFINED-NAME at the declaration name.
-def collect(settings: Env.Settings, file: String, declarations: List[Ast.Decl]) -> Result[Collected]
+def collect(file: String, declarations: List[Ast.Decl]) -> Result[Collected]
   names: Map[String, Declarations.Kind] = {}
   public: Map[String, Declarations.Kind] = {}
   for wrapped in declarations

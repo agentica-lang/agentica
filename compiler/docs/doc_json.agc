@@ -20,8 +20,8 @@ export def json(module: String, documented: DocModel.Module) -> Json
 end
 
 ## `{kind, name, signature, summary, doc, span}` and, by kind, the parameters and the result, the fields or the
-## variants. `located` adds what `agentica outline` lists: `exported` and the `name_span` of the item and of each field
-## or variant.
+## variants, or the `items` of a module block. `located` adds what `agentica outline` lists: `exported` and the
+## `name_span` of the item and of each field or variant.
 export def item_json(module: String, item: Model.Item, located: Bool) -> Json
   fields: Map[String, Json] = {
     "kind": JSON.from(item.kind),
@@ -50,6 +50,9 @@ export def item_json(module: String, item: Model.Item, located: Bool) -> Json
   elsif item.kind == "enum"
     variants_json = item.variants.map do |variant: Model.Variant| variant_json(module, variant, located) end
     fields = fields.put("variants", JSON.array(variants_json))
+  elsif item.kind == "module"
+    items_json = item.items.map do |inner: Model.Item| item_json(module, inner, located) end
+    fields = fields.put("items", JSON.array(items_json))
   end
 
   JSON.object(fields)

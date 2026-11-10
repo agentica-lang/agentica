@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Module blocks: `module Name ... end` holds several named modules in one file;
+  `export module` makes one importable (`import {Counter} from "agents"`).
+
 ## [0.29.0] - 2026-11-10
 
 ### Added

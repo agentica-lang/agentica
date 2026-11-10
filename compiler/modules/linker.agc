@@ -367,6 +367,10 @@ def visible_structs(module: Modules.Module, modules: Map[String, Modules.Module]
 
   for entry in module.named.values
     names = names.concat(structs_of(modules, modules[entry.target], modules[entry.target].public))
+    # A module block sees the private structs of its file too.
+    if Declarations.struct?(Modules.kind_in(modules[entry.target], entry.name))
+      names = names.push(Modules.linked_name(modules, modules[entry.target], entry.name))
+    end
   end
 
   Set.new(names).to_a.sort

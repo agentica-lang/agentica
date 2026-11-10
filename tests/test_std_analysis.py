@@ -555,6 +555,34 @@ def test_a_refresh_after_an_edit_checks_only_the_modules_that_changed_or_import_
     assert out.splitlines()[-1] == "same 2"
 
 
+BLOCKS_LIB = ('import X from "x"\n\nLIMIT = 2\n\nmodule M\n  BASE = 10\n\n  export def get() -> Int = BASE + X.n()\nend\n\n'
+              "module N\n  export def twice() -> Int = M.get() * LIMIT\nend\n\nexport def total() -> Int = N.twice()\n")
+BLOCKS_USER = 'import Lib from "blocks_lib"\n\ndef main() -> Void\n  puts(Lib.total())\nend\n'
+
+
+def test_a_module_block_is_checked_again_when_a_file_its_file_imports_changes_and_kept_with_its_file(driver, project):
+    """A block has the imports of its file, so an edit below the file checks it again; when only a file above it
+    changes, the file and its blocks are taken together and the answers are a cold check's."""
+    user_edit = "# An edit.\n" + BLOCKS_USER
+    write_files(project, {
+        "x.agc": "export def n() -> Int = 1\n", "x_string.agc": 'export def n() -> String = "a"\n',
+        "blocks_lib.agc": BLOCKS_LIB, "blocks_user.agc": BLOCKS_USER, "blocks_user_edit.agc": user_edit,
+    })
+    out, _err = library(
+        driver, project,
+        "refresh", "blocks_user.agc", "update", "blocks_user.agc", "blocks_user_edit.agc",
+        "refresh", "blocks_user.agc", "stats", "compare", "blocks_user.agc",
+        *positions(user_edit, ("Lib.total", 4)),
+    )
+    # x.agc, blocks_lib.agc and its two blocks are taken.
+    assert stats_of(out)[0]["reused"] == 4
+    assert out.splitlines()[-1] == "same 1"
+    _out, err = library(driver, project, "refresh", "blocks_user.agc", "update", "x.agc", "x_string.agc",
+                        "refresh", "blocks_user.agc", "check", "blocks_user.agc")
+    mismatch = json.loads(err)
+    assert (mismatch["code"], Path(mismatch["file"])) == ("CHECK-TYPE-MISMATCH", project / "blocks_lib.agc")
+
+
 CHECKED_TOGETHER = ["main.agc", "type_error.agc", "orders.agc", "missing_import.agc", "main.agc"]
 
 
