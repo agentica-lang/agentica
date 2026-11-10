@@ -106,6 +106,8 @@ export EXTERN_LIBRARY_HELP = (
   "write a library name such as \"libm.so.6\" or an absolute path such as \"/usr/lib/libx.so\""
 )
 EXTERN_SYMBOL_HELP = "write the C name as a plain string of letters, digits and _, such as = \"fcntl\""
+# The help of a one-line def that cannot be one: a Void function, or a `case` or an `if` after `=`.
+ONE_LINE_DEF_HELP = "write a function with a body: def name() -> Type, then its statements, then end"
 # The types that C's default argument promotions leave as they are, which the variadic part of an extern function
 # takes: C.Bool, C.Int8, C.Int16, C.UInt8 and C.UInt16 (promoted to int) and C.Float (promoted to double) are not.
 VARIADIC_CODES = Set.new(["i", "l", "j", "n", "d", "s", "p", "y", "r", "o"])
@@ -276,6 +278,13 @@ struct TypeParametersAt
   names: List[String]
   spans: List[Source.Span]
   pos: Int
+end
+
+# The signature of a def up to its return type, for parse_one_line_def.
+struct FunctionShape
+  type_parameters: TypeParametersAt
+  params: ParamsAt
+  result: Base.TypeAt
 end
 
 ## Parses the tokens of the lexer into a Program, or returns the first PARSE- diagnostic. It stops at the first error
@@ -2224,8 +2233,24 @@ def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) 
     )
   end
 
+  if e.tokens[after_params].kind == "assign"
+    return error(
+      Base.unexpected_help(
+        e,
+        after_params,
+        "expected \"->\", found \"=\"",
+        "a one-line def has a return type too: def name() -> Type = value",
+      ),
+    )
+  end
+
   after_arrow = try Base.expect(e, after_params, "arrow", "\"->\"", false)
   result = try Base.parse_type(e, after_arrow, params.ids)
+  if e.tokens[result.pos].kind == "assign"
+    shape = FunctionShape(type_parameters: type_parameters, params: params, result: result)
+    return parse_one_line_def(e, pos, shape, doc)
+  end
+
   head = try expect_head_end(e, result.pos, "a newline after the function signature", "def name() -> Type")
   body = try parse_block(e, head, result.ids, 0)
   close = try expect_end(e, body.pos)
@@ -2247,6 +2272,60 @@ def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) 
   )
 
   return decl_at(node, stop, body.ids)
+end
+
+# def name(params) -> Type = value NL: a function whose body is `return value`, marked `expression` so that the
+# formatter keeps the form. The value starts on the line of `=` and may go on as any expression does. A Void function
+# has no value to return, and a `case` or an `if` is a statement: both are written in a def with a body.
+# The signature ends at the `=`.
+def parse_one_line_def(e: Base.Env, pos: Int, shape: FunctionShape, doc: Optional[String]) -> Result[DeclAt]
+  result = shape.result.node
+  assign = shape.result.pos
+  if result.name == "Void" and result.args.size == 0
+    message = "a Void function returns no value to write after ="
+    return error(Base.unexpected_help(e, assign, message, ONE_LINE_DEF_HELP))
+  end
+
+  at = assign + 1
+  kind = e.tokens[at].kind
+  if kind == "NL" or kind == "EOF"
+    return error(
+      Base.unexpected_help(
+        e,
+        at,
+        "expected the value of the function after =, found #{Base.describe(e.tokens[at])}",
+        "the value starts on the line of =: def name() -> Type = value",
+      ),
+    )
+  end
+
+  if kind == "case" or kind == "if"
+    message = "a one-line def has one expression, found #{Base.describe(e.tokens[at])}"
+    return error(Base.unexpected_help(e, at, message, ONE_LINE_DEF_HELP))
+  end
+
+  value = try parse_expression(e, at, shape.result.ids)
+  stop = try expect_statement_end(e, value.pos, "a newline after the value of the function")
+  span = Ast.expr_span(value.node)
+  body = [Ast.Stmt.Return(Ast.Return(id: value.ids, value: some(value.node), span: span))]
+  node = Ast.Decl.Function(
+    Ast.FunctionDecl(
+      id: value.ids + 1,
+      name: e.tokens[pos + 1].lexeme,
+      name_span: e.tokens[pos + 1].span,
+      type_parameters: shape.type_parameters.names,
+      type_parameter_spans: shape.type_parameters.spans,
+      params: shape.params.nodes,
+      result: result,
+      body: body,
+      doc: doc,
+      native: none,
+      span: Base.span_from(e, pos, stop),
+      expression: true,
+    ),
+  )
+
+  return decl_at(node, stop, value.ids + 1)
 end
 
 # extern "library" NL, then [##doc] [export] members, then end. A member is [compute] def, a function with no body

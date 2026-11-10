@@ -58,6 +58,28 @@ end
 
 Code after a `return` can never run, so it is also an error (`CHECK-UNREACHABLE-CODE`): remove it or move it before the `return`.
 
+## One-line functions
+
+A function whose body is one value can be written on one line, with `=` after the result type. It is the same as a `def` whose body is `return` and that value.
+
+```agentica
+def double(n: Int) -> Int = n * 2
+
+def label(name: String, count: Int = 1) -> String = "#{count} #{name}"
+
+def main() -> Void
+  puts(double(4))
+  puts(label("apple"))
+end
+```
+
+```output
+8
+1 apple
+```
+
+The value starts on the line of `=`; it can go on to more lines as any expression can: inside parentheses or a block, or on a next line that starts with `.name`. The result type is still required. A `Void` function has no value to give, so it cannot use this form, and neither can `case` or `if`, which are statements. `agentica fmt` keeps a one-line function on one line when it fits, and writes it with `return` and `end` when it does not. In an `extern` block, `= "name"` after a signature is the C name of the function instead (see [Native code](/library/io-and-system/native/)).
+
 ## Void functions
 
 A function that gives nothing returns `Void`. It ends at its last line, or at a bare `return`.

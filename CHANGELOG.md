@@ -12,6 +12,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - Guards: `return x if c`, `return if c`, `break if c` and `next if c` run as
   the `if` written out. No other statement takes a modifier.
+- One-line def: `def double(x: Int) -> Int = x * 2` is the def whose body is
+  `return x * 2`. Not for `Void` functions.
 
 ### Changed
 
