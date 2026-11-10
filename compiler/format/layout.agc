@@ -58,7 +58,7 @@ export struct Context
   externs: List[Extern]
   # The lines that hold a comment, so that an `if` with a comment is never turned into a guard.
   noted: Set[Int]
-  # The width of a line, which decides before the layout whether a one-line def stays one (one_line_written?).
+  # The width of a line, which decides before the layout whether a one-line def stays one (one_line_form).
   width: Int
 end
 
@@ -82,9 +82,9 @@ struct Item
   doc: Docs.Doc
   spread: Bool
   closing: Bool
-  # A top-level declaration, and one that needs an empty line before and after it next to another declaration: a
-  # one-line def written with a body, which the source may have next to another one-line def (sequence).
-  declaration: Bool = false
+  # A one-line def of the source, and one that the layout writes with a body: next to another one-line def, which the
+  # source may have on the next line, it needs an empty line (sequence).
+  one_line: Bool = false
   gap: Bool = false
 end
 
@@ -213,10 +213,10 @@ def sequence(c: Context, items: List[Item]) -> Docs.Doc
   return Docs.Doc.Concat(parts)
 end
 
-# Whether two declarations that follow each other need an empty line that the source may lack: one of them is a
-# one-line def that the layout writes with a body.
+# Whether two declarations that follow each other need an empty line that the source may lack: both are one-line defs
+# of the source, which the parser lets follow each other, and the layout writes one of them with a body.
 def gap_between?(before: Item, item: Item) -> Bool
-  return item.declaration and before.declaration and (item.gap or before.gap)
+  return item.one_line and before.one_line and (item.gap or before.gap)
 end
 
 # Whether the line right before `first` is blank and comes after `last`.
@@ -310,18 +310,39 @@ def decl_items(c: Context, decl: Ast.Decl) -> List[Item]
     parts = doc_lines(c, first)
   end
 
-  doc = Docs.Doc.Concat(parts.push(decl_doc(c, decl)))
+  form = one_line_form(c, decl, 0)
+  doc = Docs.Doc.Concat(parts.push(decl_doc(c, decl, form)))
   items = node_items(c, key, first, last_line(c, span), doc)
   at = c.leading.get(key, []).size
-  return items.set(at, items[at].with(declaration: true, gap: written_with_body?(c, decl, 0)))
+  one_line = one_line_def?(decl)
+  return items.set(at, items[at].with(one_line: one_line, gap: one_line and form.none?))
 end
 
-# Whether `decl` is a one-line def that the layout writes with a body, at `column` (after `export `).
-def written_with_body?(c: Context, decl: Ast.Decl, column: Int) -> Bool
+# A one-line def of the source, exported or not.
+def one_line_def?(decl: Ast.Decl) -> Bool
   case decl
-    Ast.Decl.Export(node) -> return written_with_body?(c, node.declaration, EXPORT.length)
-    Ast.Decl.Function(node) -> return node.expression and not one_line_written?(c, node, column)
+    Ast.Decl.Export(node) -> return one_line_def?(node.declaration)
+    Ast.Decl.Function(node) -> return node.expression
     _ -> return false
+  end
+end
+
+# The one line of a one-line def that starts `column` columns in, when it stays one: laid out with no width limit it
+# is one line, and that line fits. Otherwise, or for any other declaration, none: the def is written with a body, so
+# the output always parses and formatting again changes nothing. The choice is made before the layout, since a
+# one-line def written with a body needs an empty line next to another one-line def (sequence).
+def one_line_form(c: Context, decl: Ast.Decl, column: Int) -> Optional[Docs.Doc]
+  case decl
+    Ast.Decl.Export(node) -> return one_line_form(c, node.declaration, column + EXPORT.length)
+    Ast.Decl.Function(node) ->
+      return none if not node.expression
+
+      doc = one_line_doc(c, node)
+      line = Docs.render(doc, UNLIMITED).strip
+      return none if line.include?("\n") or column + line.length > c.width
+
+      return some(doc)
+    _ -> return none
   end
 end
 
@@ -337,13 +358,19 @@ def has_doc?(decl: Ast.Decl) -> Bool
   end
 end
 
-# A declaration without its doc, which `decl_items` prints before it.
-def decl_doc(c: Context, decl: Ast.Decl) -> Docs.Doc
+# A declaration without its doc, which `decl_items` prints before it. `form` is the one line of a one-line def that
+# stays one (one_line_form).
+def decl_doc(c: Context, decl: Ast.Decl, form: Optional[Docs.Doc]) -> Docs.Doc
   case decl
     Ast.Decl.Import(node) -> return import_doc(c, node)
     Ast.Decl.Reexport(node) -> return text("export #{node.alias}.#{node.name}")
-    Ast.Decl.Export(node) -> return Docs.Doc.Concat([text(EXPORT), exported_doc(c, node.declaration)])
-    Ast.Decl.Function(node) -> return function_doc(c, node, 0)
+    Ast.Decl.Export(node) -> return Docs.Doc.Concat([text(EXPORT), decl_doc(c, node.declaration, form)])
+    Ast.Decl.Function(node) ->
+      case form
+        some(line) -> return line
+        none -> return function_doc(c, node)
+      end
+
     Ast.Decl.Struct(node) -> return struct_doc(c, node)
     Ast.Decl.Enum(node) -> return enum_doc(c, node)
     Ast.Decl.TypeAlias(node) ->
@@ -388,21 +415,8 @@ def import_path(c: Context, node: Ast.ImportDecl) -> String
   return found
 end
 
-# The declaration after `export `, which starts EXPORT.length columns in.
-def exported_doc(c: Context, decl: Ast.Decl) -> Docs.Doc
-  case decl
-    Ast.Decl.Function(node) -> return function_doc(c, node, EXPORT.length)
-    _ -> return decl_doc(c, decl)
-  end
-end
-
-# A def that starts `column` columns in. A one-line def stays one when it fits on its line, and is written as the def
-# with a body that it stands for when it does not or when its value takes lines of its own, so the output always
-# parses and formatting again changes nothing. The choice is made here, before the layout, since a one-line def
-# written with a body needs the empty lines of a declaration around it (sequence).
-def function_doc(c: Context, node: Ast.FunctionDecl, column: Int) -> Docs.Doc
-  return one_line_doc(c, node) if node.expression and one_line_written?(c, node, column)
-
+# A def with its body: also a one-line def that does not stay one (one_line_form).
+def function_doc(c: Context, node: Ast.FunctionDecl) -> Docs.Doc
   key = Comments.key_of("FunctionDecl", node.span)
   items = statement_items(c, node.body).concat(dangling_items(c, key))
   return Docs.Doc.Concat([Docs.Doc.Group(signature_doc(c, node)), body(c, items), Docs.Doc.HardLine, text("end")])
@@ -424,12 +438,6 @@ end
 # `def name(params) -> Type = value`, for a one-line def.
 def one_line_doc(c: Context, node: Ast.FunctionDecl) -> Docs.Doc
   return Docs.Doc.Concat([Docs.Doc.Group(signature_doc(c, node)), text(" = "), expression_value_doc(c, node.body[0])])
-end
-
-# Whether a one-line def stays one at `column`: laid out with no width limit it is one line, and that line fits.
-def one_line_written?(c: Context, node: Ast.FunctionDecl, column: Int) -> Bool
-  line = Docs.render(one_line_doc(c, node), UNLIMITED).strip
-  return not line.include?("\n") and column + line.length <= c.width
 end
 
 # The value after `=` of a one-line def (`def name() -> Type = value`), laid out as the value of its `return` in a

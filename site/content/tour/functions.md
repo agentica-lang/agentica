@@ -78,7 +78,7 @@ end
 1 apple
 ```
 
-The value starts on the line of `=`; it can go on to more lines as any expression can: inside parentheses or a block, or on a next line that starts with `.name`. The result type is still required. A `Void` function has no value to give, so it cannot use this form, and neither can `case` or `if`, which are statements. One-line functions may follow each other with no empty line between them, as constants can; any other declaration next to one still needs the empty line. `agentica fmt` keeps a one-line function on one line when it fits, and writes it with `return` and `end` when it does not, with an empty line on both sides. In an `extern` block, `= "name"` after a signature is the C name of the function instead (see [Native code](/library/io-and-system/native/)).
+The value starts on the line of `=`; it can go on to more lines as any expression can: inside parentheses or a block, or on a next line that starts with `.name`. The result type is still required. A `Void` function has no value to give, so it cannot use this form, and neither can `case` or `if`, which are statements. One-line functions may follow each other with no empty line between them, as constants can; next to any other declaration the empty line is still needed, except right after an import, as for every declaration. `agentica fmt` keeps a one-line function on one line when it fits, and writes it with `return` and `end` when it does not, with an empty line on both sides. In an `extern` block, `= "name"` after a signature is the C name of the function instead (see [Native code](/library/io-and-system/native/)).
 
 ## Void functions
 

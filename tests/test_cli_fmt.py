@@ -476,16 +476,19 @@ def test_a_one_line_def_stays_one_when_it_fits(tmp_path):
     assert fmt("--tree", "defs.agc", cwd=tmp_path).stdout == before.stdout
 
 
-@pytest.mark.parametrize("size, one_line", [(97, True), (98, False)])
-def test_a_one_line_def_and_its_body_form_meet_at_the_width(tmp_path, size, one_line):
-    # `def f() -> String = "..."` is 22 characters plus the text: 119, the width, for 97, and 120 for 98.
+@pytest.mark.parametrize("prefix, size, one_line", [
+    ("", 97, True), ("", 98, False), ("export ", 90, True), ("export ", 91, False),
+])
+def test_a_one_line_def_and_its_body_form_meet_at_the_width(tmp_path, prefix, size, one_line):
+    # `def f() -> String = "..."` is 22 characters plus the text: 119, the width, for 97, and 120 for 98; `export `
+    # takes 7 more.
     value = "x" * size
-    short = 'def f() -> String = "%s"\n' % value
-    assert len(short) - 1 == 22 + size
+    short = '%sdef f() -> String = "%s"\n' % (prefix, value)
+    assert len(short) - 1 == len(prefix) + 22 + size
     lay_out(tmp_path, {"short.agc": short})
     before = fmt("--tree", "short.agc", cwd=tmp_path)
     assert fmt(cwd=tmp_path).code == 0
-    expected = short if one_line else 'def f() -> String\n  return "%s"\nend\n' % value
+    expected = short if one_line else '%sdef f() -> String\n  return "%s"\nend\n' % (prefix, value)
     assert text(tmp_path, "short.agc") == expected
     assert fmt("--check", cwd=tmp_path).stdout == ""
     assert fmt("--tree", "short.agc", cwd=tmp_path).stdout == before.stdout
@@ -520,11 +523,23 @@ def five() -> Int = 5
 """
 
 
-def test_consecutive_one_line_defs_keep_their_layout_and_a_long_one_gets_empty_lines(tmp_path):
-    lay_out(tmp_path, {"defs.agc": CONSECUTIVE})
+# A def may follow an import with no empty line, so one written with a body gets none there either.
+IMPORTED = """import HTTP from "std/http"
+def long_name(first_argument: Int, second_argument: Int) -> Int = first_argument * second_argument + first_argument * 20000
+"""
+IMPORTED_FORMATTED = """import HTTP from "std/http"
+def long_name(first_argument: Int, second_argument: Int) -> Int
+  return first_argument * second_argument + first_argument * 20000
+end
+"""
+
+
+@pytest.mark.parametrize("source, formatted", [(CONSECUTIVE, CONSECUTIVE_FORMATTED), (IMPORTED, IMPORTED_FORMATTED)])
+def test_consecutive_one_line_defs_keep_their_layout_and_a_long_one_gets_empty_lines(tmp_path, source, formatted):
+    lay_out(tmp_path, {"defs.agc": source})
     before = fmt("--tree", "defs.agc", cwd=tmp_path)
     assert before.code == 0, before.stderr
     assert fmt(cwd=tmp_path).code == 0
-    assert text(tmp_path, "defs.agc") == CONSECUTIVE_FORMATTED
+    assert text(tmp_path, "defs.agc") == formatted
     assert fmt("--check", cwd=tmp_path).stdout == ""
     assert fmt("--tree", "defs.agc", cwd=tmp_path).stdout == before.stdout

@@ -438,17 +438,21 @@ class TestSpecParser:
         assert json.loads(void.stderr).get("help")
 
     def test_one_line_defs_may_follow_each_other_without_a_blank_line(self):
-        # Like constants: a one-line def right after a one-line def, also with a `#` comment, a `##` doc or `export`
-        # in between, or with the blank line. Any other pair of declarations still needs the blank line, reported at
-        # the second one.
+        # Like constants: a one-line def right after a one-line def, also with a `##` doc or `export` before the
+        # second, and with the blank line (a `#` comment line counts as one, as before). The `=` of a default and the
+        # brackets of a generic do not end the lookahead. Any other pair of declarations still needs the blank line,
+        # reported at the second one.
         self.check_accepted([
             Accept("export def f() -> Int = 1\n## Two.\nexport def g() -> Int = 2\ndef h() -> Int = 3\n# a note\n"
                    "def i() -> Int = 4\n\ndef j() -> Int = 5\n\n" + main_of("  puts(f() + g() + h() + i() + j())\n")),
+            Accept("def f() -> Int = 1\ndef g[T](x: T, n: Int = 1) -> Int = n\n\n" + main_of("  puts(f() + g(\"a\"))\n")),
         ])
         missing = "PARSE-MISSING-BLANK-LINE"
         self.check_rejected([
             Reject("def f() -> Int = 1\ndef g() -> Int\n  return 2\nend\n", missing, (2, 1, 2, 4)),
             Reject("def f() -> Int\n  return 1\nend\ndef g() -> Int = 2\n", missing, (4, 1, 4, 4)),
+            Reject("def f() -> Int = 1\ndef g(x: Int = 1) -> Int\n  return x\nend\n", missing, (2, 1, 2, 4)),
+            Reject("def f() -> Int = 1\n## Two.\ndef g() -> Int\n  return 2\nend\n", missing, (2, 1)),
             Reject("def f() -> Int = 1\nstruct S\n  n: Int\nend\n", missing, (2, 1, 2, 7)),
             # Next to a constant, on either side.
             Reject("LIMIT = 3\ndef f() -> Int = 1\n", missing, (2, 1, 2, 4)),

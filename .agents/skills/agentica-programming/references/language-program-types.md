@@ -217,5 +217,5 @@ end
   and needs the return type; not for `Void` (`main` included), `case` or `if`
   (`PARSE-UNEXPECTED-TOKEN`). One-line defs may follow each other with no blank
   line, as constants; next to any other declaration the blank line stays
-  (`PARSE-MISSING-BLANK-LINE`). In an `extern` block `= "name"` is the C name
-  instead.
+  (`PARSE-MISSING-BLANK-LINE`), except right after an import. In an `extern`
+  block `= "name"` is the C name instead.
