@@ -97,8 +97,8 @@ import, re-export or extern block inside.
 
 ## Running
 
-Only the root file's `main` runs; imported `main` functions never run. There are no wildcard imports, mutable module state or
-module blocks inside module blocks.
+Only the root file's `main` runs; imported `main` functions never run. There are
+no wildcard imports, mutable module state or module blocks inside module blocks.
 
 ## Standard library and external libraries
 
