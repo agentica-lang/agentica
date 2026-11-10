@@ -1,12 +1,11 @@
 """The stages reach the machine only through the Workspace record (compiler/modules/workspace.agc).
 
-fixtures/frontend/workspace/in-memory.agc builds a Workspace over an in-memory table of files and links two roots with
-it: a program with an import, and one whose import is missing. Nothing it links exists on the disk, so a read that
-bypassed the Workspace would fail the first root. fixtures/frontend/workspace/end-to-end.agc goes on through the
-checker, the lowering and the writer, for a program with a sibling module, a package from deps/ and a std/
-module from std_source, and writes the .agcb, which the test then runs with the CLI.
+fixtures/frontend/workspace/end-to-end.agc builds a Workspace over an in-memory table of files and goes through the
+linker, the checker, the lowering and the writer, for a program with a sibling module, a package from deps/ and a std/
+module from std_source, and writes the .agcb, which the test then runs with the CLI. (An import that the Workspace
+cannot read is CHECK-IMPORT-IO: tests/test_frontend_modules.py.)
 
-The end-to-end case is the dynamic proof for reads: its table is keyed under a folder of the test, where the test has
+The case is the dynamic proof for reads: its table is keyed under a folder of the test, where the test has
 written garbage at every path of the tree (main.agc, util.agc, the manifest, the lock and the package), so a stage that
 read the disk, even with a fallback to the Workspace, would parse the garbage and fail. It does not see a call that
 reads nothing (a File.stat with its answer ignored, or a pure Path call), nor a stage that asks the Workspace first and
@@ -17,7 +16,6 @@ import pytest
 from tests.agentica_test import FIXTURES, ROOT, WINDOWS, cli, run
 from tests.package_support import COMMIT, package_hash
 
-PROGRAM = FIXTURES / "frontend" / "workspace" / "in-memory.agc"
 END_TO_END = FIXTURES / "frontend" / "workspace" / "end-to-end.agc"
 
 GIT = "https://github.com/acme/greet.git"
@@ -27,16 +25,6 @@ export def hello(name: String) -> String
 end
 """
 GARBAGE = "}}} nothing the front end reads {{{\n"
-
-
-def test_the_linker_reads_files_from_a_workspace_that_is_not_the_disk():
-    result = run(cli() + [str(PROGRAM)], cwd=ROOT)
-    assert result.code == 0, result.stderr
-    assert result.stdout.splitlines() == [
-        'module "root.agc" first=0 next=9',
-        'module "util.agc" first=9 next=19',
-        'ERROR CHECK-IMPORT-IO 0:1:1-30:2:1 "cannot read import" - file="broken.agc"',
-    ]
 
 
 def write_decoys(root):

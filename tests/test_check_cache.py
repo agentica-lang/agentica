@@ -128,29 +128,32 @@ def ws(tmp_path):
 
 @pytest.fixture(scope="module")
 def warm_template(tmp_path_factory):
-    """The project of the cases with its entries written once (the cold, warm and off runs of `settled`), and a copy of
-    the whole folder to start each case from."""
+    """The project of the cases with its entries written once (the cold, warm and off runs of `settled`), a copy of
+    the whole folder to start each case from, and the answers of the project."""
     base = tmp_path_factory.mktemp("check-cache-warm") / "base"
     template = build(base)
-    assert settled(template)[0][0] == 0
+    answered = settled(template)
+    assert answered[0][0] == 0
     snapshot = base.parent / "snapshot"
     shutil.copytree(base, snapshot, symlinks=True)
-    return template, snapshot
+    return template, snapshot, answered
 
 
 @pytest.fixture
 def warm(warm_template):
     """The project with its entries in place, as `settled` leaves it, from the same state in every case: the folder
     is put back from the copy at the same path, because the entries hold the keys of their files."""
-    template, snapshot = warm_template
+    template, snapshot, _ = warm_template
     shutil.rmtree(template.base)
     shutil.copytree(snapshot, template.base, symlinks=True)
     return copy.deepcopy(template)
 
 
-def expected_of(ws):
-    """The answers of the project without the cache, which every run with the entries in any state must give."""
-    return answers(ws, "--no-cache")
+@pytest.fixture(scope="module")
+def expected(warm_template):
+    """The answers of the `warm` project without the cache (`settled` asked them with --no-cache), which every run with
+    the entries in any state must give. Each case puts the folder back at the same path, so they hold for all."""
+    return warm_template[2]
 
 
 def folder_of(ws):
@@ -377,9 +380,8 @@ def corrupt_cases(head):
 
 
 @pytest.mark.parametrize("case", sorted(corrupt_cases(b"")), ids=str)
-def test_a_corrupt_entry_is_a_miss_and_never_a_different_answer(warm, case):
+def test_a_corrupt_entry_is_a_miss_and_never_a_different_answer(warm, expected, case):
     ws = warm
-    expected = expected_of(ws)
     assert entries(ws)
     for path in entries(ws):
         good = path.read_bytes()
@@ -388,9 +390,8 @@ def test_a_corrupt_entry_is_a_miss_and_never_a_different_answer(warm, case):
     assert answers(ws) == expected
 
 
-def test_a_misaligned_stub_is_a_miss(warm):
+def test_a_misaligned_stub_is_a_miss(warm, expected):
     ws = warm
-    expected = expected_of(ws)
     for path in entries(ws):
         good = path.read_bytes()
         # The stub is replaced by text of the same length that declares something else.
@@ -408,9 +409,8 @@ def test_no_cache_writes_nothing_and_leaves_what_is_there(ws):
 
 
 @host_only(not POSIX_PYTHON, "file modes and links")
-def test_a_folder_or_entry_that_is_not_private_is_not_used(warm):
+def test_a_folder_or_entry_that_is_not_private_is_not_used(warm, expected):
     ws = warm
-    expected = expected_of(ws)
     kept = {path: path.read_bytes() for path in entries(ws)}
     victim = entries(ws)[0]
     # An entry other users can write.
