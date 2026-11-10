@@ -358,13 +358,14 @@ vm-lint-gcstress:
 # path, ownership, collector values) plus gcc -fanalyzer and clang-tidy, over a VM compile database (`make cchecker-db`).
 # It is an Agentica program, so dist/agentica runs it; it needs gcc 10+, clang and clang-tidy on PATH. The release has no
 # binary: the tag is cloned into build/cchecker/ and its commit must be the pinned one (a new release is CCHECKER_VERSION,
-# CCHECKER_COMMIT and its include/cchecker.h copied to vm/cchecker.h). The settings are cchecker.toml, the accepted findings
+# CCHECKER_COMMIT and its include/cchecker.h copied to vm/cchecker.h). Until cchecker has a release for Agentica 0.29
+# (Process.Options), the pin is the branch agentica-0.29 at a fixed commit; it goes back to a tag with that release. The settings are cchecker.toml, the accepted findings
 # cchecker-baseline.json (references/ci.md of the development skill says how to change both). vm/tests/ is test harness
 # code and not checked: cchecker reads a database of its own without it (CCHECKER_DB), so each run is a full run, which
 # checks the names of the settings and reports a stale ignore of the rules. It exits 1 on a finding that is not in the
 # baseline, which fails the CI job `cchecker`.
-CCHECKER_VERSION := 0.4.0
-CCHECKER_COMMIT := 4b17d20aaa5e8b6b1784d71a3093728af58acd4e
+CCHECKER_VERSION := agentica-0.29
+CCHECKER_COMMIT := e76a4ab466cddb27a9c5989f2168170604887b70
 CCHECKER_DIR := build/cchecker/$(CCHECKER_VERSION)
 CCHECKER_FLAGS ?=
 CCHECKER_DB := build/cchecker/compile_commands.json

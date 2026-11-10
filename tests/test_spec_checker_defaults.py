@@ -449,6 +449,12 @@ HELPED = [
      main_with('  a = Process.spawn("ls", [], 5000)\n'), "CHECK-TYPE-MISMATCH", "5000"),
     ("a directory where the spawns take Process.Options",
      main_with('  a = Process.spawn_captured("ls", [], "d")\n'), "CHECK-TYPE-MISMATCH", '"d"'),
+    ("a folder and a timeout where the spawns take Process.Options",
+     main_with('  a = Process.spawn_captured("git", ["status"], ".", 5000)\n'), "CHECK-ARITY",
+     'Process.spawn_captured("git", ["status"], ".", 5000)'),
+    ("a timeout and an env map where Process.spawn takes Process.Options",
+     main_with('  a = Process.spawn("sh", [], 1000, {"A": "b"})\n'), "CHECK-ARITY",
+     'Process.spawn("sh", [], 1000, {"A": "b"})'),
     ("TLS.listen with the PEM paths",
      main_with('  a = TLS.listen("h", 0, "c.pem", "k.pem")\n'), "CHECK-ARITY", 'TLS.listen("h", 0, "c.pem", "k.pem")'),
 ]

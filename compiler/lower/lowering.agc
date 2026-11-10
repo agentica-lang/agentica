@@ -489,9 +489,6 @@ def json_targets(types: List[Types.Type], ids: List[Int]) -> List[Types.Type]
   return found
 end
 
-# The watched struct and enum names that the type of some expression mentions. The type of a covered expression is
-# not walked below its top: the rest has the names of its child's type, walked at the child's id. Nested some(...),
-# ok(...) or [...] hold one another's types, so walking each of them whole is quadratic in the depth.
 # The builtin records that the called builtins build from a Fields default (Builtins.default_records).
 def called_records(scans: List[Scans.Scan]) -> Set[String]
   found: Set[String] = Set.new([])
@@ -506,6 +503,9 @@ def called_records(scans: List[Scans.Scan]) -> Set[String]
   return found
 end
 
+# The watched struct and enum names that the type of some expression mentions. The type of a covered expression is
+# not walked below its top: the rest has the names of its child's type, walked at the child's id. Nested some(...),
+# ok(...) or [...] hold one another's types, so walking each of them whole is quadratic in the depth.
 def mentioned_in(types: List[Types.Type], covered: Set[Int], watched: Set[String]) -> List[String]
   found: Set[String] = Set.new([])
   id = 0

@@ -29,9 +29,10 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
 ```
 
 - The options of a start go in the builtin record `Process.Options`; give only
-  the fields you need: `Process.spawn("make", [], Process.Options(chdir:
-  "build", timeout_ms: 5000))`. A positional timeout or folder is
-  `CHECK-TYPE-MISMATCH`.
+  the fields you need:
+  `Process.spawn("make", [], Process.Options(chdir: "build"))`. A positional
+  timeout or folder is `CHECK-TYPE-MISMATCH`, and four or more arguments are
+  `CHECK-ARITY`.
 - Launching needs no flag. With `--deny-run` (or `--sandbox`) every start
   returns an error beginning `denied: --deny-run`, and extern blocks are
   refused as with `--deny-native`. `agentica test` passes the `--deny-*` flags

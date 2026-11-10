@@ -12,6 +12,10 @@
   except that an `out` or `err` file of `Process.spawn` goes to the child in
   place of that pipe's write end, which the VM closes, so its read end ends at
   once. `UV_PROCESS_WINDOWS_VERBATIM_ARGUMENTS` is never used.
+- Every spawn checks `chdir` of `Process.Options` (nonempty, no NUL) after the
+  arguments and before the timeout. It must be a directory, else `process:
+  directory is unavailable`; `"."` passes no working directory. The command
+  still resolves against the program's working directory.
 - A child must not get `UV_USE_IO_URING=0` from the VM's own environment
   (§10.2.2), unless the user set it before the VM started.
 - Windows: allow only `.exe` and `.com` after resolution, case-insensitively
@@ -125,9 +129,10 @@ systems get none.
 `Process.output` (specified in
 `site/content/library/io-and-system/process.md`) share the code above.
 
-- **Spawn.** The checks keep the order above, with `dir` (nonempty, no NUL)
-  checked after the arguments and before the timeout. `dir` must be a directory,
-  else `process: directory is unavailable`. `"."` passes no working directory.
+- **Spawn.** A non-empty `out` or `err` is refused with `process: out and err
+  need Process.spawn`, right after `--deny-run` and before the command and
+  argument checks, so `spawn_captured("", [], Process.Options(out: "x"))`
+  reports that refusal.
 - **Reading.** Both pipes are read from the spawn on and never stopped. Pending
   bytes are capped at 1 MiB. A byte that does not fit marks its stream as cut,
   and later chunks of that stream are read and dropped, so the child never

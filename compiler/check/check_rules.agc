@@ -9,6 +9,7 @@ import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import T from "../syntax/types"
 import Args from "check_args"
+import {PROCESS_OPTIONS_HELP} from "check_help"
 import Collections from "check_collections"
 import Lists from "check_list"
 import PreludeCalls from "check_prelude"
@@ -97,8 +98,12 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Built
   return Failure.pack(base.with(callee: Builtins.signature(entry)))
 end
 
-# The help for a call in a form that a builtin had before (TLS.listen with the PEM paths before contexts, 19a), or "".
+# The help for a call in a form that a builtin had before (TLS.listen with the PEM paths before contexts, 19a, and the
+# spawns with positional options before Process.Options), or "".
 def old_form_help(name: String, node: Ast.Call) -> String
+  spawns = ["Process.spawn", "Process.spawn_captured", "Process.spawn_channel"]
+  return PROCESS_OPTIONS_HELP if spawns.include?(name) and node.args.size > 3
+
   if name == "TLS.listen" and node.args.size == 4
     return (
       "a TlsContext holds the PEM files: build one with " +

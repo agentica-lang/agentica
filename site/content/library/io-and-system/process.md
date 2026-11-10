@@ -31,7 +31,6 @@ Process.spawn(command: String, args: List[String], options: Process.Options = Pr
 Starts a program with your program's environment, plus the variables of `env`.
 
 - The program starts in the folder `chdir` (`"."`, the default, is the current one). An empty `chdir` or one with a NUL byte gives `error("process: chdir must be nonempty and cannot contain NUL")`, and one that is not a folder `error("process: directory is unavailable")`. The command is found from the current folder, not from `chdir`.
-
 - A name with no `/` (`"echo"`) is looked up in each `PATH` folder, in order. The current folder is never added and empty entries are skipped; a relative entry such as `bin` is looked up under the current folder, as in the shell.
 - A command with `/` is a path (on Windows `\` and a drive such as `C:` too), relative to the current folder: run a local program as `"./tool"`.
 - `env` sets variables for that program only, on top of a copy of your environment: a pair replaces the variable of the same name (Windows ignores case, also of letters like `Ä`, and a map with two names that differ only in case is an `error`), and an empty value is a value. Your own environment does not change, and a `PATH` in `env` does not change how the command is found: your `PATH` resolves it, and only the program sees the new one. An empty name, a name with `=`, or a NUL byte in a name or value is an `error`, and so are `AGENTICA_CHANNEL`, `AGENTICA_VM_METRICS`, `AGENTICA_VM_METRICS_FILE` and `UV_USE_IO_URING`, which the VM owns.

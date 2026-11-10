@@ -291,6 +291,53 @@ static bool fd_absent(int fd) {
 #endif
 }
 
+/* The lowest free descriptor, to see that a refused call left none open. */
+static int next_fd(void) {
+  int fd = dup(0);
+  assert(fd >= 0);
+  close(fd);
+  return fd;
+}
+
+/* A Process.Options of 6 fields as the catalog lays it out (timeout_ms, chdir, env, out, err, pgroup), with the
+   given value in slot 1, `chdir`. */
+static agc_value options_with(agc_value chdir) {
+  agc_struct *o = agc_new_struct(0, 6);
+  o->fields[0] = agc_int(5000);
+  o->fields[1] = chdir;
+  o->fields[2] = agc_map_value(agc_new_map());
+  o->fields[3] = text("");
+  o->fields[4] = text("");
+  o->fields[5] = agc_bool(false);
+  return agc_struct_value(o);
+}
+
+/* Hostile bytecode can hand the `.options` spawns any value where the record goes: a non-struct, a struct of another
+   size, or a field of the wrong kind each fail with RUNTIME-INTERNAL before the spawn allocates or opens anything. */
+static void options_shape_tests(const char *self) {
+  static const char *const keys[] = {"Process.spawn.options", "Process.spawn_captured.options",
+                                     "Process.spawn_channel.options"};
+  agc_struct *five = agc_new_struct(0, 5);
+  for (uint32_t k = 0; k < 5; k++) five->fields[k] = agc_int(0);
+  agc_value shapes[] = {agc_int(5), agc_struct_value(five), options_with(agc_int(1))};
+  agc_value words[] = {text("--wait")};
+  int before = next_fd();
+  /* Out of a turn a failure longjmps to vm.fail, where agc_test_fails catches it (in a turn it goes to vm.turn). */
+  vm.in_turn = false;
+  for (size_t k = 0; k < sizeof keys / sizeof keys[0]; k++) {
+    for (size_t s = 0; s < sizeof shapes / sizeof shapes[0]; s++) {
+      agc_value args[] = {text(self), agc_list_value(agc_list_from_array(words, 1)), shapes[s]};
+      agc_test_fails(&vm, keys[k], first_builtin(keys[k]), args, "RUNTIME-INTERNAL");
+    }
+  }
+  vm.in_turn = true;
+  assert(next_fd() == before);
+  /* The well-formed record starts the child: the shapes above were refused for their shape alone. */
+  agc_value args[] = {text(self), agc_list_value(agc_list_from_array(words, 1)), options_with(text("."))};
+  agc_value handle[] = {ok(call("Process.spawn.options", args))};
+  call("Process.close", handle);
+}
+
 /* Starts this program again in `mode` (with one more word when `extra` is given) with Process.spawn_channel or
    Process.spawn_captured, and returns the handle. */
 static agc_value start(const char *builtin, const char *self, const char *mode, const char *extra) {
@@ -832,6 +879,7 @@ int main(int argc, char **argv) {
   args[1] = agc_int(5000);
   assert(agc_as_int(&vm, ok(call("Process.wait", args))) == 0);
   call("Process.close", args);
+  options_shape_tests(self);
   name_rules();
   search_tests(self);
   rest[0] = text("--channel");
