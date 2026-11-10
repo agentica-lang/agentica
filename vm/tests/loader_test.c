@@ -20,6 +20,10 @@
 #include <gc.h>
 #endif
 
+/* The STEP that starts, and the RETURN that ends, most code_case rows. */
+#define STEP1 {AGC_OP_STEP, 1, 0, 0}
+#define RETURN0 {AGC_OP_RETURN, 0, 0, 0}
+
 /* spans_at and count_at, set by build only, are where the span count and the instruction count of the first function
  * are, for the tests that patch them. */
 typedef struct {
@@ -75,6 +79,20 @@ typedef struct {
   /* Bytes written after the entry: the Decodable enums section. */
   const buffer *tail;
 } spec;
+
+/* What a code_case adds to the base file: nothing, the tables of make_tables(1), or those and good_updates. */
+typedef enum { BASE, TABLES, UPDATES } case_file;
+
+/* The main function of one case, inline so that a table row holds the exact bytes of its file; spans not given are 0.
+ * registers 0 keeps the base file's 1. reason is what the refusal must contain, or NULL when the file must load. */
+typedef struct {
+  const char *name;
+  case_file file;
+  uint32_t registers, count;
+  agc_instr code[5];
+  uint32_t spans[5];
+  const char *reason;
+} code_case;
 
 static const agc_instr puts_code[] = {
   {AGC_OP_STEP, 2, 0, 0},
@@ -272,7 +290,7 @@ static void two_structs(buffer *t, uint32_t q_fields) {
 }
 
 static buffer make_tables(uint32_t arity) {
-  buffer t;
+  buffer t = {0};
   t.data = malloc(4096);
   assert(t.data);
   t.len = 0;
@@ -438,20 +456,6 @@ static void expect_output(FILE *out, const char *expected) {
   fclose(out);
 }
 
-static bool loads_with_tables(const agc_instr *code, const uint32_t *spans, uint32_t count, uint32_t registers,
-                              const char *reason) {
-  buffer t = make_tables(1);
-  spec s = base();
-  s.tables = &t;
-  s.code = code;
-  s.code_spans = spans;
-  s.count = count;
-  s.registers = registers;
-  bool ok = loads(s, reason);
-  free(t.data);
-  return ok;
-}
-
 static agc_outcome run_with_tables(const agc_instr *code, const uint32_t *spans, uint32_t count, FILE *out) {
   buffer t = make_tables(1);
   spec s = base();
@@ -468,7 +472,7 @@ static agc_outcome run_with_tables(const agc_instr *code, const uint32_t *spans,
 /* An Updates section: the count, then the words of every entry (struct index,
    field count, the field indexes), written as given so a case can be wrong. */
 static buffer make_updates(uint32_t count, const uint32_t *words, size_t n) {
-  buffer u;
+  buffer u = {0};
   u.data = malloc(4 + 4 * n);
   assert(u.data);
   u.len = 0;
@@ -499,16 +503,6 @@ static bool loads_updates(uint32_t count, const uint32_t *words, size_t n, const
   buffer t = make_tables(1);
   buffer u = make_updates(count, words, n);
   bool ok = loads(updates_spec(&t, &u, NULL, NULL, 0, 0), reason);
-  free(t.data);
-  free(u.data);
-  return ok;
-}
-
-static bool loads_with_updates(const agc_instr *code, const uint32_t *spans, uint32_t count, uint32_t registers,
-                               const char *reason) {
-  buffer t = make_tables(1);
-  buffer u = make_updates(2, good_updates, sizeof good_updates / sizeof good_updates[0]);
-  bool ok = loads(updates_spec(&t, &u, code, spans, count, registers), reason);
   free(t.data);
   free(u.data);
   return ok;
@@ -1273,6 +1267,162 @@ static void json_enum_tests(void) {
   free(three.data);
 }
 
+/* The file of one row; t and u hold the tables and updates it may point to, and the caller frees them. */
+static spec case_spec(const code_case *c, buffer *t, buffer *u) {
+  *t = make_tables(1);
+  *u = make_updates(2, good_updates, sizeof good_updates / sizeof good_updates[0]);
+  spec s = base();
+  if (c->file != BASE) s.tables = t;
+  if (c->file == UPDATES) s.updates = u;
+  s.code = c->code;
+  s.code_spans = c->spans;
+  s.count = c->count;
+  if (c->registers) s.registers = c->registers;
+  return s;
+}
+
+/* One rule of the code checks per row, with the case just inside a bound next to the refused one. */
+static void code_load_tests(void) {
+  static const code_case cases[] = {
+    {"bad_register", BASE, 0, 2, {{AGC_OP_CONST, 1, 0, 0}, RETURN0}, {0}, "register out of range"},
+    {"bad_constant", BASE, 0, 2, {{AGC_OP_CONST, 0, 2, 0}, RETURN0}, {0}, "constant index"},
+    {"bad_span", BASE, 0, 2, {{AGC_OP_CONST, 0, 1, 0}, RETURN0}, {0, 3}, "span index"},
+    {"bad_jump", BASE, 0, 2, {{AGC_OP_CONST, 0, 1, 0}, {AGC_OP_JUMP, 0, 9, 0}}, {0}, "jump target"},
+    {"step_zero", BASE, 0, 3, {{AGC_OP_STEP, 0, 0, 0}, {AGC_OP_CONST, 0, 1, 0}, RETURN0}, {1}, "STEP count"},
+    {"step_wide", BASE, 0, 3, {{AGC_OP_STEP, 3, 0, 0}, {AGC_OP_CONST, 0, 1, 0}, RETURN0}, {1}, "span index"},
+    {"builtin_wide", BASE, 0, 5,
+     {{AGC_OP_STEP, 2, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CALL_BUILTIN, 0, 0, 0}, {AGC_OP_CONST, 0, 1, 0}, RETURN0},
+     {1, 2, 2}, "span index"},
+    {"tail_far", BASE, 0, 4, {STEP1, {AGC_OP_TAIL_CALL, 0, 2, 0}, {AGC_OP_CONST, 0, 1, 0}, RETURN0}, {1, 1},
+     "function index out of range"},
+    {"tail_without_step", BASE, 0, 2, {{AGC_OP_TAIL_CALL, 0, 0, 0}, RETURN0}, {0}, "does not start with STEP"},
+    {"builtin_window", BASE, 0, 4, {STEP1, {AGC_OP_CALL_BUILTIN, 1, 0, 0}, {AGC_OP_CONST, 0, 1, 0}, RETURN0}, {1, 1},
+     "register out of range"},
+    {"back_to_const", BASE, 0, 3, {STEP1, {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_JUMP, 0, 1, 0}}, {1}, "backward jump"},
+    {"call_without_step", BASE, 0, 3, {{AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CALL_BUILTIN, 0, 0, 0}, RETURN0}, {0, 1},
+     "does not start with STEP"},
+    {"long_without_step", BASE, 0, 3, {{AGC_OP_CONST, 0, 1, 0}, {AGC_OP_MOVE, 0, 0, 0}, RETURN0}, {1},
+     "does not start with STEP"},
+    {"unknown_op", BASE, 0, 2, {{AGC_OP_COUNT, 0, 0, 0}, RETURN0}, {0}, "unknown opcode"},
+    {"no_return", BASE, 0, 2, {{AGC_OP_CONST, 0, 1, 0}, {AGC_OP_MOVE, 0, 0, 0}}, {0}, "does not end with RETURN"},
+    {"bad_float_op", BASE, 0, 2, {{AGC_OP_ADD_F, 0, 0, 1}, RETURN0}, {0}, "register out of range"},
+    {"bad_float_neg", BASE, 0, 2, {{AGC_OP_NEG_F, 0, 1, 0}, RETURN0}, {0}, "register out of range"},
+    {"bad_concat", BASE, 0, 2, {{AGC_OP_CONCAT, 0, 0, 1}, RETURN0}, {0}, "register out of range"},
+    {"bad_to_text", BASE, 0, 2, {{AGC_OP_TO_TEXT, 0, 1, 0}, RETURN0}, {0}, "register out of range"},
+    {"bad_inspect", BASE, 0, 2, {{AGC_OP_INSPECT, 1, 0, 0}, RETURN0}, {0}, "register out of range"},
+    {"bad_list_target", BASE, 0, 2, {{AGC_OP_LIST, 1, 0, 0}, RETURN0}, {0}, "register out of range"},
+    {"bad_list_start", BASE, 0, 2, {{AGC_OP_LIST, 0, 1, 0}, RETURN0}, {0}, "register out of range"},
+    {"bad_list_window", BASE, 0, 2, {{AGC_OP_LIST, 0, 0, 2}, RETURN0}, {0}, "register range out of range"},
+    {"exact_window", BASE, 2, 2, {{AGC_OP_LIST, 0, 0, 2}, RETURN0}, {0}, NULL},
+    {"bad_list_len", BASE, 0, 2, {{AGC_OP_LIST_LEN, 0, 1, 0}, RETURN0}, {0}, "register out of range"},
+    {"bad_list_get", BASE, 0, 2, {{AGC_OP_LIST_GET, 0, 0, 1}, RETURN0}, {0}, "register out of range"},
+    {"bad_field without tables", BASE, 0, 2, {{AGC_OP_FIELD, 0, 0, 2}, RETURN0}, {0}, "field index out of range"},
+    {"value_without_step", BASE, 0, 2, {{AGC_OP_CALL_VALUE, 0, 0, 0}, RETURN0}, {0}, "does not start with STEP"},
+    {"value_window", BASE, 0, 3, {STEP1, {AGC_OP_CALL_VALUE, 0, 1, 0}, RETURN0}, {1}, "register range"},
+    {"closure_far", BASE, 0, 2, {{AGC_OP_CLOSURE, 0, 1, 0}, RETURN0}, {0}, "function index out of range"},
+    {"closure_target", BASE, 0, 2, {{AGC_OP_CLOSURE, 1, 0, 0}, RETURN0}, {0}, "register out of range"},
+    {"update_without_table", BASE, 0, 2, {{AGC_OP_STRUCT_WITH, 0, 0, 0}, RETURN0}, {0},
+     "struct update index out of range"},
+    {"bad_struct_type", TABLES, 4, 2, {{AGC_OP_STRUCT, 0, 0, 2}, RETURN0}, {0}, "struct index out of range"},
+    {"bad_struct_window", TABLES, 4, 2, {{AGC_OP_STRUCT, 0, 3, 1}, RETURN0}, {0}, "register range out of range"},
+    {"bad_struct_target", TABLES, 4, 2, {{AGC_OP_STRUCT, 4, 0, 0}, RETURN0}, {0}, "register out of range"},
+    {"exact_struct", TABLES, 4, 2, {{AGC_OP_STRUCT, 0, 2, 1}, RETURN0}, {0}, NULL},
+    {"bad_enum_variant", TABLES, 4, 2, {{AGC_OP_ENUM, 0, 0, 2}, RETURN0}, {0}, "variant index out of range"},
+    {"bad_enum_window", TABLES, 4, 2, {{AGC_OP_ENUM, 0, 4, 1}, RETURN0}, {0}, "register out of range"},
+    {"bad_nullary_start", TABLES, 4, 2, {{AGC_OP_ENUM, 0, 4, 0}, RETURN0}, {0}, "register out of range"},
+    {"bad_is_variant", TABLES, 4, 2, {{AGC_OP_IS_VARIANT, 0, 0, 2}, RETURN0}, {0}, "variant index out of range"},
+    {"bad_is_variant_reg", TABLES, 4, 2, {{AGC_OP_IS_VARIANT, 0, 4, 0}, RETURN0}, {0}, "register out of range"},
+    {"bad_field", TABLES, 4, 2, {{AGC_OP_FIELD, 0, 0, 2}, RETURN0}, {0}, "field index out of range"},
+    {"bad_field_reg", TABLES, 4, 2, {{AGC_OP_FIELD, 4, 0, 0}, RETURN0}, {0}, "register out of range"},
+    {"bad_payload", TABLES, 4, 2, {{AGC_OP_PAYLOAD, 0, 0, 1}, RETURN0}, {0}, "payload index out of range"},
+    {"bad_payload_reg", TABLES, 4, 2, {{AGC_OP_PAYLOAD, 0, 4, 0}, RETURN0}, {0}, "register out of range"},
+    {"bad_same", TABLES, 4, 2, {{AGC_OP_SAME, 0, 0, 4}, RETURN0}, {0}, "register out of range"},
+    {"bad_try", TABLES, 4, 2, {{AGC_OP_TRY, 0, 4, 0}, RETURN0}, {0}, "register out of range"},
+    {"bad_try_step", TABLES, 4, 2, {{AGC_OP_TRY_STEP, 4, 0, 0}, RETURN0}, {0}, "register out of range"},
+    {"bad_try_step_source", TABLES, 4, 2, {{AGC_OP_TRY_STEP, 0, 4, 0}, RETURN0}, {0}, "register out of range"},
+    {"wide_try_step", TABLES, 4, 2, {{AGC_OP_TRY_STEP, 0, 65535, 0}, RETURN0}, {0}, "register out of range"},
+    {"bad_is_ok", TABLES, 4, 2, {{AGC_OP_IS_OK, 4, 0, 0}, RETURN0}, {0}, "register out of range"},
+    {"bad_result_value", TABLES, 4, 2, {{AGC_OP_RESULT_VALUE, 0, 4, 0}, RETURN0}, {0}, "register out of range"},
+    {"bad_map_target", TABLES, 4, 2, {{AGC_OP_MAP, 4, 0, 0}, RETURN0}, {0}, "register out of range"},
+    {"bad_map_start", TABLES, 4, 2, {{AGC_OP_MAP, 0, 4, 0}, RETURN0}, {0}, "register out of range"},
+    {"bad_map_window", TABLES, 4, 2, {{AGC_OP_MAP, 0, 1, 2}, RETURN0}, {0}, "register range out of range"},
+    {"huge_map_window", TABLES, 65535, 2, {{AGC_OP_MAP, 0, 0, 65535}, RETURN0}, {0}, "map literal chunk too large"},
+    {"big_map_chunk", TABLES, 1024, 2, {{AGC_OP_MAP, 0, 0, 256}, RETURN0}, {0}, "map literal chunk too large"},
+    {"max_map_chunk", TABLES, 510, 2, {{AGC_OP_MAP, 0, 0, 255}, RETURN0}, {0}, NULL},
+    {"exact_map_window", TABLES, 4, 2, {{AGC_OP_MAP, 0, 0, 2}, RETURN0}, {0}, NULL},
+    {"bad_map_get", TABLES, 4, 2, {{AGC_OP_MAP_GET, 0, 0, 4}, RETURN0}, {0}, "register out of range"},
+    {"bad_map_get_target", TABLES, 4, 2, {{AGC_OP_MAP_GET, 4, 0, 0}, RETURN0}, {0}, "register out of range"},
+    /* STRUCT_WITH: the entry, the window of the receiver and the values, the target. */
+    {"bad_update_index", UPDATES, 4, 2, {{AGC_OP_STRUCT_WITH, 0, 0, 2}, RETURN0}, {0},
+     "struct update index out of range"},
+    {"bad_update_window", UPDATES, 4, 2, {{AGC_OP_STRUCT_WITH, 0, 3, 0}, RETURN0}, {0}, "register range out of range"},
+    {"bad_update_wide_window", UPDATES, 4, 2, {{AGC_OP_STRUCT_WITH, 0, 2, 1}, RETURN0}, {0},
+     "register range out of range"},
+    {"bad_update_target", UPDATES, 4, 2, {{AGC_OP_STRUCT_WITH, 4, 0, 0}, RETURN0}, {0}, "register out of range"},
+    {"exact_update", UPDATES, 4, 2, {{AGC_OP_STRUCT_WITH, 3, 1, 1}, RETURN0}, {0}, NULL},
+  };
+  for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+    buffer t, u;
+    bool ok = loads(case_spec(&cases[i], &t, &u), cases[i].reason) == !cases[i].reason;
+    free(t.data);
+    free(u.data);
+    if (!ok) fprintf(stderr, "code case %s\n", cases[i].name);
+    assert(ok);
+  }
+}
+
+/* Files that load but hold a value of the wrong kind where an instruction reads it, which only a hand-made file can
+ * do: each run must end in RUNTIME-INTERNAL, not in a crash. */
+static void internal_run_tests(void) {
+  static const code_case cases[] = {
+    {"int_as_float", BASE, 0, 4, {STEP1, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_ADD_F, 0, 0, 0}, RETURN0}, {1, 2, 2}, NULL},
+    {"int_concat", BASE, 0, 4, {STEP1, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CONCAT, 0, 0, 0}, RETURN0}, {1, 2, 2}, NULL},
+    {"void_text", BASE, 0, 2, {{AGC_OP_TO_TEXT, 0, 0, 0}, RETURN0}, {0}, NULL},
+    {"void_inspect", BASE, 0, 2, {{AGC_OP_INSPECT, 0, 0, 0}, RETURN0}, {0}, NULL},
+    {"int_list_len", BASE, 0, 4, {STEP1, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_LIST_LEN, 0, 0, 0}, RETURN0}, {1, 2, 2},
+     NULL},
+    {"int_list_get", BASE, 0, 4, {STEP1, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_LIST_GET, 0, 0, 0}, RETURN0}, {1, 2, 2},
+     NULL},
+    {"void_item_puts", BASE, 0, 4, {STEP1, {AGC_OP_LIST, 0, 0, 1}, {AGC_OP_CALL_BUILTIN, 0, 0, 0}, RETURN0},
+     {1, 2, 1}, NULL},
+    {"void_item_inspect", BASE, 0, 4, {STEP1, {AGC_OP_LIST, 0, 0, 1}, {AGC_OP_INSPECT, 0, 0, 0}, RETURN0}, {1, 2, 1},
+     NULL},
+    {"call_int", BASE, 0, 4, {STEP1, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CALL_VALUE, 0, 0, 0}, RETURN0}, {1, 1}, NULL},
+    {"field_past_own", TABLES, 4, 4, {STEP1, {AGC_OP_STRUCT, 0, 0, 0}, {AGC_OP_FIELD, 0, 0, 1}, RETURN0}, {1, 2, 2},
+     NULL},
+    {"payload_of_nullary", TABLES, 4, 4, {STEP1, {AGC_OP_ENUM, 0, 0, 0}, {AGC_OP_PAYLOAD, 0, 0, 0}, RETURN0},
+     {1, 2, 2}, NULL},
+    {"field_of_int", TABLES, 4, 4, {STEP1, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_FIELD, 0, 0, 0}, RETURN0}, {1, 2, 2},
+     NULL},
+    {"variant_of_struct", TABLES, 4, 4, {STEP1, {AGC_OP_STRUCT, 0, 0, 0}, {AGC_OP_IS_VARIANT, 0, 0, 0}, RETURN0},
+     {1, 2, 2}, NULL},
+    {"same_lists", TABLES, 4, 4, {STEP1, {AGC_OP_LIST, 0, 0, 0}, {AGC_OP_SAME, 0, 0, 0}, RETURN0}, {1, 2, 2}, NULL},
+    {"same_structs", TABLES, 4, 4, {STEP1, {AGC_OP_STRUCT, 0, 0, 0}, {AGC_OP_SAME, 0, 0, 0}, RETURN0}, {1, 2, 2},
+     NULL},
+    {"same_enums", TABLES, 4, 4, {STEP1, {AGC_OP_ENUM, 0, 0, 0}, {AGC_OP_SAME, 0, 0, 0}, RETURN0}, {1, 2, 2}, NULL},
+    {"try_step_int", TABLES, 4, 4, {STEP1, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_TRY_STEP, 0, 0, 0}, RETURN0}, {1, 2, 2},
+     NULL},
+    {"try_int", TABLES, 4, 4, {STEP1, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_TRY, 0, 0, 0}, RETURN0}, {1, 2, 2}, NULL},
+    {"is_ok_int", TABLES, 4, 4, {STEP1, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_IS_OK, 0, 0, 0}, RETURN0}, {1, 2, 2}, NULL},
+    {"value_of_int", TABLES, 4, 4, {STEP1, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_RESULT_VALUE, 0, 0, 0}, RETURN0},
+     {1, 2, 2}, NULL},
+    {"map_get_of_list", TABLES, 4, 4, {STEP1, {AGC_OP_LIST, 0, 0, 0}, {AGC_OP_MAP_GET, 0, 0, 0}, RETURN0}, {1, 2, 2},
+     NULL},
+    {"map_void_key", TABLES, 4, 4, {STEP1, {AGC_OP_MAP, 0, 0, 1}, {AGC_OP_NOT, 0, 0, 0}, RETURN0}, {1, 2, 2}, NULL},
+    {"map_get_void_key", TABLES, 4, 4, {STEP1, {AGC_OP_MAP, 1, 1, 0}, {AGC_OP_MAP_GET, 0, 1, 0}, RETURN0}, {1, 2, 2},
+     NULL},
+  };
+  for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+    buffer t, u;
+    agc_outcome run = run_quiet(case_spec(&cases[i], &t, &u));
+    free(t.data);
+    free(u.data);
+    bool ok = run.kind == AGC_FAILED && strcmp(run.code, "RUNTIME-INTERNAL") == 0;
+    if (!ok) fprintf(stderr, "internal run case %s\n", cases[i].name);
+    assert(ok);
+  }
+}
+
 int main(void) {
   agc_init();
   buffer b = build(base());
@@ -1382,56 +1532,31 @@ int main(void) {
   s.extra_voids = 400000;
   assert(!loads(s, "too much memory"));
 
-  static const agc_instr bad_register[] = {{AGC_OP_CONST, 1, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(bad_register, two_spans, 2, "register out of range"));
-  static const agc_instr bad_constant[] = {{AGC_OP_CONST, 0, 2, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(bad_constant, two_spans, 2, "constant index"));
-  static const uint32_t bad_span[] = {0, 3};
   assert(loads_code(helper_code, two_spans, 2, NULL));
-  assert(!loads_code(helper_code, bad_span, 2, "span index"));
-  static const agc_instr bad_jump[] = {{AGC_OP_CONST, 0, 1, 0}, {AGC_OP_JUMP, 0, 9, 0}};
-  assert(!loads_code(bad_jump, two_spans, 2, "jump target"));
-
-  static const agc_instr step_zero[] = {{AGC_OP_STEP, 0, 0, 0}, {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
   static const uint32_t three_spans[] = {1, 0, 0};
-  assert(!loads_code(step_zero, three_spans, 3, "STEP count"));
-  static const agc_instr step_wide[] = {{AGC_OP_STEP, 3, 0, 0}, {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(step_wide, three_spans, 3, "span index"));
-  static const uint32_t builtin_wide[] = {1, 2, 2, 0, 0};
-  assert(!loads_code(puts_code, builtin_wide, 5, "span index"));
 
   static const agc_instr call_window[] = {
     {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CALL, 1, 1, 0}, {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
   static const uint32_t four_spans[] = {1, 1, 0, 0};
-  s = base();
-  s.code = call_window;
-  s.code_spans = four_spans;
-  s.count = 4;
-  s.registers = 2;
-  s.helper_params = 2;
-  assert(!loads(s, "register range"));
-  s.registers = 3;
-  assert(loads(s, NULL));
   static const agc_instr tail_window[] = {
     {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_TAIL_CALL, 1, 1, 0}, {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  s = base();
-  s.code = tail_window;
-  s.code_spans = four_spans;
-  s.count = 4;
-  s.registers = 2;
-  s.helper_params = 2;
-  assert(!loads(s, "register range"));
-  s.registers = 3;
-  assert(loads(s, NULL));
+  const agc_instr *call_windows[] = {call_window, tail_window};
+  for (int k = 0; k < 2; k++) {
+    s = base();
+    s.code = call_windows[k];
+    s.code_spans = four_spans;
+    s.count = 4;
+    s.registers = 2;
+    s.helper_params = 2;
+    assert(!loads(s, "register range"));
+    s.registers = 3;
+    assert(loads(s, NULL));
+  }
+  /* s is the tail_window file that loaded. */
   out = tmpfile();
   assert(out);
   assert(run_spec(s, out).kind == AGC_DONE);
   expect_output(out, "");
-  static const agc_instr tail_far[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_TAIL_CALL, 0, 2, 0}, {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(tail_far, four_spans, 4, "function index out of range"));
-  static const agc_instr tail_without_step[] = {{AGC_OP_TAIL_CALL, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(tail_without_step, two_spans, 2, "does not start with STEP"));
   static const agc_instr tail_spin[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_TAIL_CALL, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
   static const uint32_t tail_spin_spans[] = {1, 1, 0};
   s = base();
@@ -1447,23 +1572,9 @@ int main(void) {
   static const agc_instr builtin_window[] = {
     {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CALL_BUILTIN, 1, 0, 0}, {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
   static const uint32_t builtin_spans[] = {1, 1, 0, 0};
-  assert(!loads_code(builtin_window, builtin_spans, 4, "register out of range"));
 
-  static const agc_instr back_to_const[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_JUMP, 0, 1, 0}};
   static const agc_instr back_to_step[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_JUMP, 0, 0, 0}};
-  assert(!loads_code(back_to_const, three_spans, 3, "backward jump"));
   assert(loads_code(back_to_step, three_spans, 3, NULL));
-
-  static const agc_instr call_without_step[] = {
-    {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CALL_BUILTIN, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  static const uint32_t call_spans[] = {0, 1, 0};
-  assert(!loads_code(call_without_step, call_spans, 3, "does not start with STEP"));
-  static const agc_instr long_without_step[] = {
-    {AGC_OP_CONST, 0, 1, 0}, {AGC_OP_MOVE, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(long_without_step, three_spans, 3, "does not start with STEP"));
-
-  static const agc_instr unknown_op[] = {{AGC_OP_COUNT, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(unknown_op, two_spans, 2, "unknown opcode"));
 
   /* The fused STEP forms are the loader's own: a file that holds one is rejected, and a checked STEP before a CONST
      becomes one while the CONST stays in place; a STEP before an opcode with no fused form stays a STEP. */
@@ -1568,8 +1679,6 @@ int main(void) {
   assert(agc_load(unfused.data, unfused.len, &p, error, sizeof error));
   free(unfused.data);
   assert(p->functions[p->entry].code[0].op == AGC_OP_STEP);
-  static const agc_instr no_return[] = {{AGC_OP_CONST, 0, 1, 0}, {AGC_OP_MOVE, 0, 0, 0}};
-  assert(!loads_code(no_return, two_spans, 2, "does not end with RETURN"));
 
   static const agc_instr puts_extra[] = {
     {AGC_OP_STEP, 2, 0, 0}, {AGC_OP_CONST, 0, 2, 0}, {AGC_OP_CALL_BUILTIN, 0, 0, 0},
@@ -1584,96 +1693,20 @@ int main(void) {
       agc_program *q;
       assert(!agc_load(extra.data, n, &q, error, sizeof error));
     }
-    assert(agc_load(extra.data, extra.len, &p, error, sizeof error));
     free(extra.data);
     out = tmpfile();
     assert(out);
-    agc_vm_init(&vm, p, out, out, INT64_MAX);
-    assert(agc_vm_run(&vm).kind == AGC_DONE);
-    memset(text, 0, sizeof text);
-    rewind(out);
-    assert(fread(text, 1, sizeof text, out) == strlen(printed[k]) && strcmp(text, printed[k]) == 0);
-    fclose(out);
+    assert(run_spec(s, out).kind == AGC_DONE);
+    expect_output(out, printed[k]);
   }
-  static const agc_instr int_as_float[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_ADD_F, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  static const uint32_t confused_spans[] = {1, 2, 2, 0};
-  s = base();
-  s.code = int_as_float;
-  s.code_spans = confused_spans;
-  s.count = 4;
-  buffer confused = build(s);
-  assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
-  free(confused.data);
-  agc_vm_init(&vm, p, stdout, stdout, INT64_MAX);
-  agc_outcome wrong = agc_vm_run(&vm);
-  assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INTERNAL") == 0);
   s = base();
   s.extra_kind = 8;
   assert(!loads(s, "unsupported constant kind"));
   bytes_constant_tests();
-
-  static const agc_instr bad_float_op[] = {{AGC_OP_ADD_F, 0, 0, 1}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(bad_float_op, two_spans, 2, "register out of range"));
-  static const agc_instr bad_float_neg[] = {{AGC_OP_NEG_F, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(bad_float_neg, two_spans, 2, "register out of range"));
-
-  static const agc_instr bad_concat[] = {{AGC_OP_CONCAT, 0, 0, 1}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(bad_concat, two_spans, 2, "register out of range"));
-  static const agc_instr bad_to_text[] = {{AGC_OP_TO_TEXT, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(bad_to_text, two_spans, 2, "register out of range"));
-  static const agc_instr bad_inspect[] = {{AGC_OP_INSPECT, 1, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(bad_inspect, two_spans, 2, "register out of range"));
-  static const agc_instr int_concat[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CONCAT, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  s = base();
-  s.code = int_concat;
-  s.code_spans = confused_spans;
-  s.count = 4;
-  confused = build(s);
-  assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
-  free(confused.data);
-  agc_vm_init(&vm, p, stdout, stdout, INT64_MAX);
-  wrong = agc_vm_run(&vm);
-  assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INTERNAL") == 0);
-  static const agc_instr void_text[] = {{AGC_OP_TO_TEXT, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  static const agc_instr void_inspect[] = {{AGC_OP_INSPECT, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  const agc_instr *void_codes[] = {void_text, void_inspect};
-  for (int k = 0; k < 2; k++) {
-    s = base();
-    s.code = void_codes[k];
-    s.code_spans = two_spans;
-    s.count = 2;
-    confused = build(s);
-    assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
-    free(confused.data);
-    agc_vm_init(&vm, p, stdout, stdout, INT64_MAX);
-    wrong = agc_vm_run(&vm);
-    assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INTERNAL") == 0);
-  }
   s = base();
   s.extra_kind = 6;
   s.extra_string = "\xE2\x82";
   assert(!loads(s, "invalid UTF-8"));
-
-  static const agc_instr bad_list_target[] = {{AGC_OP_LIST, 1, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(bad_list_target, two_spans, 2, "register out of range"));
-  static const agc_instr bad_list_start[] = {{AGC_OP_LIST, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(bad_list_start, two_spans, 2, "register out of range"));
-  static const agc_instr bad_list_window[] = {{AGC_OP_LIST, 0, 0, 2}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(bad_list_window, two_spans, 2, "register range out of range"));
-  static const agc_instr bad_list_len[] = {{AGC_OP_LIST_LEN, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(bad_list_len, two_spans, 2, "register out of range"));
-  static const agc_instr bad_list_get[] = {{AGC_OP_LIST_GET, 0, 0, 1}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(bad_list_get, two_spans, 2, "register out of range"));
-
-  static const agc_instr exact_window[] = {{AGC_OP_LIST, 0, 0, 2}, {AGC_OP_RETURN, 0, 0, 0}};
-  s = base();
-  s.code = exact_window;
-  s.code_spans = two_spans;
-  s.count = 2;
-  s.registers = 2;
-  assert(loads(s, NULL));
 
   static const agc_instr nested_list[] = {
     {AGC_OP_STEP, 2, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_LIST, 0, 0, 1}, {AGC_OP_LIST, 0, 0, 1},
@@ -1684,53 +1717,10 @@ int main(void) {
   s.code_spans = nested_spans;
   s.count = 8;
   s.registers = 2;
-  confused = build(s);
-  assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
-  free(confused.data);
   out = tmpfile();
   assert(out);
-  agc_vm_init(&vm, p, out, out, INT64_MAX);
-  assert(agc_vm_run(&vm).kind == AGC_DONE);
-  memset(text, 0, sizeof text);
-  rewind(out);
-  assert(fread(text, 1, sizeof text, out) == 6 && strcmp(text, "[[1]]\n") == 0);
-  fclose(out);
-
-  static const agc_instr int_list_len[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_LIST_LEN, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  static const agc_instr int_list_get[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_LIST_GET, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  const agc_instr *not_lists[] = {int_list_len, int_list_get};
-  for (int k = 0; k < 2; k++) {
-    s = base();
-    s.code = not_lists[k];
-    s.code_spans = confused_spans;
-    s.count = 4;
-    confused = build(s);
-    assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
-    free(confused.data);
-    agc_vm_init(&vm, p, stdout, stdout, INT64_MAX);
-    wrong = agc_vm_run(&vm);
-    assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INTERNAL") == 0);
-  }
-  static const agc_instr void_item_puts[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_LIST, 0, 0, 1}, {AGC_OP_CALL_BUILTIN, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  static const agc_instr void_item_inspect[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_LIST, 0, 0, 1}, {AGC_OP_INSPECT, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  static const uint32_t void_item_spans[] = {1, 2, 1, 0};
-  const agc_instr *void_items[] = {void_item_puts, void_item_inspect};
-  for (int k = 0; k < 2; k++) {
-    s = base();
-    s.code = void_items[k];
-    s.code_spans = void_item_spans;
-    s.count = 4;
-    confused = build(s);
-    assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
-    free(confused.data);
-    agc_vm_init(&vm, p, stdout, stdout, INT64_MAX);
-    wrong = agc_vm_run(&vm);
-    assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INTERNAL") == 0);
-  }
+  assert(run_spec(s, out).kind == AGC_DONE);
+  expect_output(out, "[[1]]\n");
 
   static const agc_instr concat_ints[] = {
     {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CONST, 1, 0, 0}, {AGC_OP_CALL_BUILTIN, 0, 0, 0},
@@ -1743,11 +1733,7 @@ int main(void) {
   s.code_spans = concat_spans;
   s.count = 5;
   s.registers = 2;
-  confused = build(s);
-  assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
-  free(confused.data);
-  agc_vm_init(&vm, p, stdout, stdout, INT64_MAX);
-  wrong = agc_vm_run(&vm);
+  agc_outcome wrong = run_spec(s, stdout);
   assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INTERNAL") == 0);
   s.builtin_arity = 3;
   s.registers = 3;
@@ -1762,11 +1748,7 @@ int main(void) {
   s.code_spans = outside_spans;
   s.count = 5;
   s.registers = 2;
-  confused = build(s);
-  assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
-  free(confused.data);
-  agc_vm_init(&vm, p, stdout, stdout, INT64_MAX);
-  wrong = agc_vm_run(&vm);
+  wrong = run_spec(s, stdout);
   assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INDEX-OUT-OF-RANGE") == 0 && wrong.span == 2);
   assert(strcmp(wrong.message, "index 1 is outside a list of length 1") == 0);
   static const agc_instr list_get_negative[] = {
@@ -1784,11 +1766,7 @@ int main(void) {
     s.code_spans = negative_spans;
     s.count = 6;
     s.registers = 2;
-    confused = build(s);
-    assert(agc_load(confused.data, confused.len, &p, error, sizeof error));
-    free(confused.data);
-    agc_vm_init(&vm, p, stdout, stdout, INT64_MAX);
-    wrong = agc_vm_run(&vm);
+    wrong = run_spec(s, stdout);
     assert(wrong.kind == AGC_FAILED && strcmp(wrong.code, "RUNTIME-INDEX-OUT-OF-RANGE") == 0 && wrong.span == 2);
     assert(strcmp(wrong.message, negative_messages[k]) == 0);
   }
@@ -1890,16 +1868,7 @@ int main(void) {
   assert(run_spec(s, out).kind == AGC_DONE);
   expect_output(out, "true\nfalse\ntrue\n");
 
-  static const agc_instr bad_struct_type[] = {{AGC_OP_STRUCT, 0, 0, 2}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_struct_type, two_spans, 2, 4, "struct index out of range"));
-  static const agc_instr bad_struct_window[] = {{AGC_OP_STRUCT, 0, 3, 1}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_struct_window, two_spans, 2, 4, "register range out of range"));
-  static const agc_instr bad_struct_target[] = {{AGC_OP_STRUCT, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_struct_target, two_spans, 2, 4, "register out of range"));
-  static const agc_instr bad_enum_variant[] = {{AGC_OP_ENUM, 0, 0, 2}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_enum_variant, two_spans, 2, 4, "variant index out of range"));
-  static const agc_instr bad_enum_window[] = {{AGC_OP_ENUM, 0, 4, 1}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_enum_window, two_spans, 2, 4, "register out of range"));
+  /* An arity-2 variant takes a window of two registers; the code_case files have only arity 1. */
   buffer pair_tables = make_tables(2);
   static const agc_instr bad_pair_window[] = {{AGC_OP_ENUM, 0, 3, 1}, {AGC_OP_RETURN, 0, 0, 0}};
   s = base();
@@ -1910,74 +1879,7 @@ int main(void) {
   s.registers = 4;
   assert(!loads(s, "register range out of range"));
   free(pair_tables.data);
-  static const agc_instr bad_nullary_start[] = {{AGC_OP_ENUM, 0, 4, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_nullary_start, two_spans, 2, 4, "register out of range"));
-  static const agc_instr bad_is_variant[] = {{AGC_OP_IS_VARIANT, 0, 0, 2}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_is_variant, two_spans, 2, 4, "variant index out of range"));
-  static const agc_instr bad_is_variant_reg[] = {{AGC_OP_IS_VARIANT, 0, 4, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_is_variant_reg, two_spans, 2, 4, "register out of range"));
-  static const agc_instr bad_field[] = {{AGC_OP_FIELD, 0, 0, 2}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_field, two_spans, 2, 4, "field index out of range"));
-  static const agc_instr bad_field_reg[] = {{AGC_OP_FIELD, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_field_reg, two_spans, 2, 4, "register out of range"));
-  static const agc_instr bad_payload[] = {{AGC_OP_PAYLOAD, 0, 0, 1}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_payload, two_spans, 2, 4, "payload index out of range"));
-  static const agc_instr bad_payload_reg[] = {{AGC_OP_PAYLOAD, 0, 4, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_payload_reg, two_spans, 2, 4, "register out of range"));
-  static const agc_instr bad_same[] = {{AGC_OP_SAME, 0, 0, 4}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_same, two_spans, 2, 4, "register out of range"));
-  assert(!loads_code(bad_field, two_spans, 2, "field index out of range"));
-  static const agc_instr exact_struct[] = {{AGC_OP_STRUCT, 0, 2, 1}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(loads_with_tables(exact_struct, two_spans, 2, 4, NULL));
 
-  static const agc_instr field_past_own[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_STRUCT, 0, 0, 0}, {AGC_OP_FIELD, 0, 0, 1}, {AGC_OP_RETURN, 0, 0, 0}};
-  static const agc_instr payload_of_nullary[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_ENUM, 0, 0, 0}, {AGC_OP_PAYLOAD, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  static const agc_instr field_of_int[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_FIELD, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  static const agc_instr variant_of_struct[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_STRUCT, 0, 0, 0}, {AGC_OP_IS_VARIANT, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  static const agc_instr same_lists[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_LIST, 0, 0, 0}, {AGC_OP_SAME, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  static const agc_instr same_structs[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_STRUCT, 0, 0, 0}, {AGC_OP_SAME, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  static const agc_instr same_enums[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_ENUM, 0, 0, 0}, {AGC_OP_SAME, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  const agc_instr *broken[] = {field_past_own,    payload_of_nullary, field_of_int, variant_of_struct,
-                               same_lists,        same_structs,       same_enums};
-  for (int k = 0; k < 7; k++) {
-    agc_outcome bad = run_with_tables(broken[k], confused_spans, 4, stdout);
-    assert(bad.kind == AGC_FAILED && strcmp(bad.code, "RUNTIME-INTERNAL") == 0);
-  }
-
-  static const agc_instr bad_try[] = {{AGC_OP_TRY, 0, 4, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_try, two_spans, 2, 4, "register out of range"));
-  static const agc_instr bad_try_step[] = {{AGC_OP_TRY_STEP, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_try_step, two_spans, 2, 4, "register out of range"));
-  static const agc_instr bad_try_step_source[] = {{AGC_OP_TRY_STEP, 0, 4, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_try_step_source, two_spans, 2, 4, "register out of range"));
-  static const agc_instr wide_try_step[] = {{AGC_OP_TRY_STEP, 0, 65535, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(wide_try_step, two_spans, 2, 4, "register out of range"));
-  static const agc_instr try_step_int[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_TRY_STEP, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  agc_outcome step_not_result = run_with_tables(try_step_int, confused_spans, 4, stdout);
-  assert(step_not_result.kind == AGC_FAILED && strcmp(step_not_result.code, "RUNTIME-INTERNAL") == 0);
-  static const agc_instr bad_is_ok[] = {{AGC_OP_IS_OK, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_is_ok, two_spans, 2, 4, "register out of range"));
-  static const agc_instr bad_result_value[] = {{AGC_OP_RESULT_VALUE, 0, 4, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_result_value, two_spans, 2, 4, "register out of range"));
-  static const agc_instr try_int[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_TRY, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  static const agc_instr is_ok_int[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_IS_OK, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  static const agc_instr value_of_int[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_RESULT_VALUE, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  const agc_instr *not_results[] = {try_int, is_ok_int, value_of_int};
-  for (int k = 0; k < 3; k++) {
-    agc_outcome bad = run_with_tables(not_results[k], confused_spans, 4, stdout);
-    assert(bad.kind == AGC_FAILED && strcmp(bad.code, "RUNTIME-INTERNAL") == 0);
-  }
   static const agc_instr try_error_in_main[] = {
     {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 2, 0}, {AGC_OP_CALL_BUILTIN, 0, 0, 0},
     {AGC_OP_TRY, 1, 0, 0},  {AGC_OP_NOT, 0, 0, 0},   {AGC_OP_RETURN, 0, 0, 0}};
@@ -2001,36 +1903,6 @@ int main(void) {
   assert(outside.kind == AGC_FAILED && strcmp(outside.code, "RUNTIME-INTERNAL") == 0);
   try_step_outside_lazy_tests();
 
-  static const agc_instr bad_map_target[] = {{AGC_OP_MAP, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_map_target, two_spans, 2, 4, "register out of range"));
-  static const agc_instr bad_map_start[] = {{AGC_OP_MAP, 0, 4, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_map_start, two_spans, 2, 4, "register out of range"));
-  static const agc_instr bad_map_window[] = {{AGC_OP_MAP, 0, 1, 2}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_map_window, two_spans, 2, 4, "register range out of range"));
-  static const agc_instr huge_map_window[] = {{AGC_OP_MAP, 0, 0, 65535}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(huge_map_window, two_spans, 2, 65535, "map literal chunk too large"));
-  static const agc_instr big_map_chunk[] = {{AGC_OP_MAP, 0, 0, 256}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(big_map_chunk, two_spans, 2, 1024, "map literal chunk too large"));
-  static const agc_instr max_map_chunk[] = {{AGC_OP_MAP, 0, 0, 255}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(loads_with_tables(max_map_chunk, two_spans, 2, 510, NULL));
-  static const agc_instr exact_map_window[] = {{AGC_OP_MAP, 0, 0, 2}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(loads_with_tables(exact_map_window, two_spans, 2, 4, NULL));
-  static const agc_instr bad_map_get[] = {{AGC_OP_MAP_GET, 0, 0, 4}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_map_get, two_spans, 2, 4, "register out of range"));
-  static const agc_instr bad_map_get_target[] = {{AGC_OP_MAP_GET, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_tables(bad_map_get_target, two_spans, 2, 4, "register out of range"));
-
-  static const agc_instr map_get_of_list[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_LIST, 0, 0, 0}, {AGC_OP_MAP_GET, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  static const agc_instr map_void_key[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_MAP, 0, 0, 1}, {AGC_OP_NOT, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  static const agc_instr map_get_void_key[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_MAP, 1, 1, 0}, {AGC_OP_MAP_GET, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  const agc_instr *bad_maps[] = {map_get_of_list, map_void_key, map_get_void_key};
-  for (int k = 0; k < 3; k++) {
-    agc_outcome bad = run_with_tables(bad_maps[k], confused_spans, 4, stdout);
-    assert(bad.kind == AGC_FAILED && strcmp(bad.code, "RUNTIME-INTERNAL") == 0);
-  }
   static const agc_instr map_get_missing[] = {
     {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_MAP, 1, 1, 0}, {AGC_OP_MAP_GET, 0, 1, 0},
     {AGC_OP_RETURN, 0, 0, 0}};
@@ -2090,22 +1962,6 @@ int main(void) {
   assert(!loads(s, "direct call to a function with captures"));
   s.code = tail_window;
   assert(!loads(s, "direct call to a function with captures"));
-  static const agc_instr call_int[] = {
-    {AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CONST, 0, 0, 0}, {AGC_OP_CALL_VALUE, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  s = base();
-  s.code = call_int;
-  s.code_spans = four_spans;
-  s.count = 4;
-  agc_outcome not_fn = run_spec(s, stdout);
-  assert(not_fn.kind == AGC_FAILED && strcmp(not_fn.code, "RUNTIME-INTERNAL") == 0);
-  static const agc_instr value_without_step[] = {{AGC_OP_CALL_VALUE, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(value_without_step, two_spans, 2, "does not start with STEP"));
-  static const agc_instr value_window[] = {{AGC_OP_STEP, 1, 0, 0}, {AGC_OP_CALL_VALUE, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(value_window, three_spans, 3, "register range"));
-  static const agc_instr closure_far[] = {{AGC_OP_CLOSURE, 0, 1, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(closure_far, two_spans, 2, "function index out of range"));
-  static const agc_instr closure_target[] = {{AGC_OP_CLOSURE, 1, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(closure_target, two_spans, 2, "register out of range"));
   s = base();
   s.captures = 2;
   assert(!loads(s, "bad register count"));
@@ -2237,20 +2093,6 @@ int main(void) {
   agc_outcome int_receiver = run_with_updates(update_of_int, update_of_int_spans, 5, 4, 7, stdout);
   assert(int_receiver.kind == AGC_FAILED && strcmp(int_receiver.code, "RUNTIME-INTERNAL") == 0);
 
-  /* Operands of the instruction: the entry, the window of the receiver and the values, the target. */
-  static const agc_instr bad_update_index[] = {{AGC_OP_STRUCT_WITH, 0, 0, 2}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_updates(bad_update_index, two_spans, 2, 4, "struct update index out of range"));
-  static const agc_instr bad_update_window[] = {{AGC_OP_STRUCT_WITH, 0, 3, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_updates(bad_update_window, two_spans, 2, 4, "register range out of range"));
-  static const agc_instr bad_update_wide_window[] = {{AGC_OP_STRUCT_WITH, 0, 2, 1}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_updates(bad_update_wide_window, two_spans, 2, 4, "register range out of range"));
-  static const agc_instr bad_update_target[] = {{AGC_OP_STRUCT_WITH, 4, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_with_updates(bad_update_target, two_spans, 2, 4, "register out of range"));
-  static const agc_instr exact_update[] = {{AGC_OP_STRUCT_WITH, 3, 1, 1}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(loads_with_updates(exact_update, two_spans, 2, 4, NULL));
-  static const agc_instr update_without_table[] = {{AGC_OP_STRUCT_WITH, 0, 0, 0}, {AGC_OP_RETURN, 0, 0, 0}};
-  assert(!loads_code(update_without_table, two_spans, 2, "struct update index out of range"));
-
   /* The section: each entry names a struct and strictly increasing fields below that struct's field count. */
   assert(loads_updates(2, good_updates, 7, NULL));
   assert(loads_updates(0, NULL, 0, NULL));
@@ -2283,6 +2125,8 @@ int main(void) {
   free(table.data);
   free(updates.data);
 
+  code_load_tests();
+  internal_run_tests();
   globals_tests();
   prelude_tests();
   source_root_tests();
