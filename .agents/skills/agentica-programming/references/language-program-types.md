@@ -213,5 +213,6 @@ end
   `return` is `CHECK-UNREACHABLE-CODE`.
 - A one-line def, `def double(x: Int) -> Int = x * 2`, is the def with
   `return x * 2` as its body. The expression starts on the line of `=` and needs
-  the return type; not for `Void` (`PARSE-ONE-LINE-DEF-VOID`, `main` included),
-  `case` or `if`. In an `extern` block `= "name"` is the C name instead.
+  the return type; not for `Void` (`main` included), `case` or `if`
+  (`PARSE-UNEXPECTED-TOKEN`). In an `extern` block `= "name"` is the C name
+  instead.

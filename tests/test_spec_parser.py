@@ -435,8 +435,8 @@ class TestSpecParser:
         unexpected = "PARSE-UNEXPECTED-TOKEN"
         self.check_rejected([
             # A Void function, `main` included, has no value to return: at the `=`.
-            Reject("def f() -> Void = puts(1)\n", "PARSE-ONE-LINE-DEF-VOID", (1, 17, 1, 18)),
-            Reject("def main() -> Void = puts(1)\n", "PARSE-ONE-LINE-DEF-VOID", (1, 20, 1, 21)),
+            Reject("def f() -> Void = puts(1)\n", unexpected, (1, 17, 1, 18)),
+            Reject("def main() -> Void = puts(1)\n", unexpected, (1, 20, 1, 21)),
             Reject("def main() -> Int = 1\n", "CHECK-MAIN"),
             # The value starts on the line of `=`, and a line does not go on after an operator, as anywhere.
             Reject("def f() -> Int =\n  1\n", unexpected, (1, 17)),
@@ -450,6 +450,9 @@ class TestSpecParser:
             # A one-line def is a declaration: a blank line separates it from the next one.
             Reject("def f() -> Int = 1\ndef g() -> Int = 2\n", "PARSE-MISSING-BLANK-LINE", (2, 1)),
         ])
+        # The Void case has a help: write the def with a body.
+        void = self.run_all([("def f() -> Void = puts(1)\n", None)], "--json", "check")[0]
+        assert json.loads(void.stderr).get("help")
         self.check_accepted([Accept("def f() -> Int = 1\n\ndef g() -> Int = 2\n\n" + main_of("  puts(f() + g())\n"))])
 
     def test_in_an_extern_block_the_string_after_equals_is_the_c_name(self):

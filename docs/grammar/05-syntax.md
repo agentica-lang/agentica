@@ -69,8 +69,8 @@ defaults, `export` and a `##` doc included. The expression starts on the line of
 `=` (`PARSE-UNEXPECTED-TOKEN` at the end of the line otherwise) and goes on to
 other lines only as any expression does, inside parentheses or a block. A `case`
 or an `if` after `=` is `PARSE-UNEXPECTED-TOKEN`: they are statements. A `Void`
-function returns no value, so `-> Void =` is `PARSE-ONE-LINE-DEF-VOID` at the
-`=`; this includes `main`. The return type is required (`def f(x: Int) = x` is
+function returns no value, so `-> Void =` is `PARSE-UNEXPECTED-TOKEN` at the
+`=`, with a help to write the def with a body; this includes `main`. The return type is required (`def f(x: Int) = x` is
 `PARSE-UNEXPECTED-TOKEN` at the `=`), and the blank line after a declaration is
 too. In an `extern` block, `= "name"` after the signature is the C name of the
 function instead (below), not a value.

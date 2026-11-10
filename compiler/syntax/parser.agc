@@ -106,8 +106,7 @@ export EXTERN_LIBRARY_HELP = (
   "write a library name such as \"libm.so.6\" or an absolute path such as \"/usr/lib/libx.so\""
 )
 EXTERN_SYMBOL_HELP = "write the C name as a plain string of letters, digits and _, such as = \"fcntl\""
-# The code of a one-line def of a Void function, which returns no value to write after `=`.
-ONE_LINE_DEF_VOID = "PARSE-ONE-LINE-DEF-VOID"
+# The help of a one-line def that cannot be one: a Void function, or a `case` or an `if` after `=`.
 ONE_LINE_DEF_HELP = "write a function with a body: def name() -> Type, then its statements, then end"
 # The types that C's default argument promotions leave as they are, which the variadic part of an extern function
 # takes: C.Bool, C.Int8, C.Int16, C.UInt8 and C.UInt16 (promoted to int) and C.Float (promoted to double) are not.
@@ -2277,14 +2276,14 @@ end
 
 # def name(params) -> Type = value NL: a function whose body is `return value`, marked `expression` so that the
 # formatter keeps the form. The value starts on the line of `=` and may go on as any expression does. A Void function
-# has no value to return (ONE_LINE_DEF_VOID), and a `case` or an `if` is a statement, written in a def with a body.
+# has no value to return, and a `case` or an `if` is a statement: both are written in a def with a body.
 # The signature ends at the `=`.
 def parse_one_line_def(e: Base.Env, pos: Int, shape: FunctionShape, doc: Optional[String]) -> Result[DeclAt]
   result = shape.result.node
   assign = shape.result.pos
   if result.name == "Void" and result.args.size == 0
     message = "a Void function returns no value to write after ="
-    return error(Base.bail(e, assign, ONE_LINE_DEF_VOID, message, Base.hint(ONE_LINE_DEF_HELP)))
+    return error(Base.unexpected_help(e, assign, message, ONE_LINE_DEF_HELP))
   end
 
   at = assign + 1
