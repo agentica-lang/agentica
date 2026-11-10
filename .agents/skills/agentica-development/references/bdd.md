@@ -125,7 +125,11 @@ the programming skill or the site).
   without `ready` is `RUNTIME-TEST-RUN`; the printed lines and stderr go in the
   file's `output`), the `--only` filter, then one run child (`--max-steps`
   1,000,000 x (tests + 1)) that gets one index per test with
-  `Process.channel_send`. Tests are walked through a `Map[Int, UnitTest]`.
+  `Process.channel_send`. `await_ready` waits up to 30 s for the child's
+  `ready` before the first index, so a test's time leaves out the child's
+  start. Otherwise a file error with what the child printed: another record is
+  `RUNTIME-BDD-INFRA`, no `ready` in 30 s `RUNTIME-TEST-TIMEOUT`, an early end
+  the child's crash diagnostic. Tests are walked through a `Map[Int, UnitTest]`.
 - `await_test` reads the record, then the printed stdout with
   `Process.read_available` (the child flushes before it sends the record, so the
   order is fixed); the last 64 Ki characters go to `output` for a failed test.

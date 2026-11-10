@@ -834,11 +834,10 @@ def test_jobs_run_the_files_at_the_same_time_and_the_report_keeps_the_order_of_t
     assert [(item["name"], item["status"]) for item in report_cases(report)] == [("a", "passed"), ("b", "passed")]
 
 
-# Each file starts with a test that does nothing: the time of a file's first test also counts the start of its child
-# VM, which a loaded host can stretch past 150 ms, so it lands on warm up and the order of sleeps and quick is real.
-WARM_UP = 'def test_warm_up() -> Result[Void]\n  return Test.assert(true, "x")\nend\n\n'
-SLEEPS = WARM_UP + 'def test_sleeps() -> Result[Void]\n  Task.sleep(150)\n  return Test.assert(true, "x")\nend\n'
-QUICK = WARM_UP + 'def test_quick() -> Result[Void]\n  return Test.assert(true, "x")\nend\n'
+# The sleep is longer than the 150 ms the test asserts: the parent's Time.monotonic_ms can read a coarse clock
+# (vm/numbers.c), so across two processes its interval can come out a few milliseconds short of the child's sleep.
+SLEEPS = 'def test_sleeps() -> Result[Void]\n  Task.sleep(200)\n  return Test.assert(true, "x")\nend\n'
+QUICK = 'def test_quick() -> Result[Void]\n  return Test.assert(true, "x")\nend\n'
 
 
 def test_timing_adds_the_time_of_each_file_and_the_slowest_scenarios_and_json_always_has_it(bdd):
@@ -853,27 +852,25 @@ def test_timing_adds_the_time_of_each_file_and_the_slowest_scenarios_and_json_al
         assert (result.code, result.stderr) == (0, ""), shown
         lines = result.stdout.splitlines()
         # The report, then the timing block, then the totals line.
-        assert lines[-1] == "4 passed, 0 failed, 0 skipped, 0 not executed, 0 file errors", shown
+        assert lines[-1] == "2 passed, 0 failed, 0 skipped, 0 not executed, 0 file errors", shown
         starts = [at for at, line in enumerate(lines) if line.startswith("timing: ")]
         assert len(starts) == 1, shown
         block = lines[starts[0]:-1]
         shown = "\n".join(block)
         timing = re.fullmatch(r"timing: (\d+) ms", block[0])
-        assert timing and len(block) == 8 and block[3] == "slowest scenarios:", shown
-        files = [re.fullmatch(r"  (\d+) ms of scenarios (\S+) \(2 scenarios\)", line) for line in block[1:3]]
+        assert timing and len(block) == 6 and block[3] == "slowest scenarios:", shown
+        files = [re.fullmatch(r"  (\d+) ms of scenarios (\S+) \(1 scenario\)", line) for line in block[1:3]]
         # The files are in the order of discovery: sorted by path.
         assert [found and found.group(2) for found in files] == [quick, slow], shown
         assert int(files[1].group(1)) >= 150 and int(timing.group(1)) >= 150, shown
-        # The slowest first: sleeps before quick. A warm up may come anywhere, as its time is the child's start.
+        # The slowest first: sleeps before quick. The start of a file's child is in no test's time (#1276).
         slowest = [re.fullmatch(r"  (\d+) ms (\S+) / (\w+(?: \w+)*)", line) for line in block[4:]]
         assert all(slowest), shown
         times = [int(found.group(1)) for found in slowest]
         assert times == sorted(times, reverse=True), shown
         listed = [(found.group(3), found.group(2)) for found in slowest]
-        expected = [("warm up", slow), ("warm up", quick), ("sleeps", slow), ("quick", quick)]
-        assert sorted(listed) == sorted(expected), shown
-        assert listed.index(("sleeps", slow)) < listed.index(("quick", quick)), shown
-        assert times[listed.index(("sleeps", slow))] >= 150, shown
+        assert listed == [("sleeps", slow), ("quick", quick)], shown
+        assert times[0] >= 150, shown
     # --timing changes nothing in the JSON report (and prints no timing text there), which has the durations either way.
     status, report = bdd.json_test("--timing", slow, quick)
     assert status == 0

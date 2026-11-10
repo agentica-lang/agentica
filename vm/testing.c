@@ -288,6 +288,11 @@ static agc_value builtin_run(agc_vm *vm, agc_value *args, uint32_t span) {
     if (mode == MODE_LIST) {
       r->record = list_lines(vm, tests);
       r->after = AFTER_FINISH;
+    } else {
+      /* Run mode says ready before it reads the first index: the parent starts the clock of a test after this
+         record, so the start of the child VM is not in the time of the file's first test (#1276). */
+      r->record = event_line(vm, "ready");
+      r->after = AFTER_RECORD;
     }
   }
   for (;;) {

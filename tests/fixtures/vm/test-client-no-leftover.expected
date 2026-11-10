@@ -3,6 +3,7 @@
   "code": null,
   "steps": 5498,
   "stdout": [
+    "channel> {\"event\":\"ready\"}",
     "channel> {\"event\":\"pass\"}",
     "channel> {\"event\":\"pass\"}",
     ""

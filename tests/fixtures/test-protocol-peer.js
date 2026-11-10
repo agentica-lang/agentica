@@ -41,6 +41,10 @@ async function run(vm, bytecode, count) {
   try {
     const results = [];
     peer.child.stdin.write("from the peer\n");
+    const first = await peer.line();
+    if (first === "" || JSON.parse(first).event !== "ready") {
+      throw new Error("the run child did not answer ready: " + first);
+    }
     for (let index = 0; index < count; index++) {
       await peer.send(index + "\n");
       const line = await peer.line();

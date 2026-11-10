@@ -107,7 +107,8 @@ for a test function with parameters, type parameters or another result;
   before or after its tests (exit, crash in `main`, no `Test.run`:
   `RUNTIME-TEST-RUN`) is a file error with what it printed and its stderr.
 - Each test file runs in its own child VM, each test in its own task, 30 seconds
-  per test (`RUNTIME-TEST-TIMEOUT`). `System.exit`, a step limit or a timeout in
+  per test (`RUNTIME-TEST-TIMEOUT`); `main` has 30 seconds to reach `Test.run`
+  (a file error with the same code). `System.exit`, a step limit or a timeout in
   a test ends the file's run: the rest is not executed. A front-end error in a
   test file is a file error; the other files still run.
 - A passed test's output is dropped; a failed one shows the last 64 Ki

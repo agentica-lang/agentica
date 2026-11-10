@@ -6,6 +6,10 @@ import sys
 from child_channel import launch, read_ready
 
 PREFIX = b"channel> "
+# A test child (--agentica-test run) sends this before it reads its first index. The first line already went at the
+# start, so this record brings no line: the next index goes only after the record of the test before, as the runner
+# sends it, and a test's output stays before that record.
+READY = b'{"event":"ready"}'
 
 
 def drain(stream, out):
@@ -62,7 +66,8 @@ def main():
                 line, buffer = buffer.split(b"\n", 1)
                 out.write(PREFIX + line + b"\n")
                 out.flush()
-                feed(channel, pending)
+                if line != READY:
+                    feed(channel, pending)
     if buffer:
         out.write(PREFIX + buffer + b"\n")
         out.flush()

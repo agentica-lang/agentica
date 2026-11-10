@@ -3,6 +3,7 @@
   "code": null,
   "steps": 140,
   "stdout": [
+    "channel> {\"event\":\"ready\"}",
     "channel> {\"code\":\"RUNTIME-TEST-PENDING-TASKS\",\"event\":\"fail\",\"file\":\"@fixtures/vm/test-leftover-server.agc\",\"message\":\"the test returned while its tasks were still running\",\"range\":{\"end\":{\"column\":8,\"line\":14},\"start\":{\"column\":5,\"line\":10}}}",
     "channel> {\"event\":\"pass\"}",
     ""
