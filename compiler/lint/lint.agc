@@ -140,9 +140,7 @@ end
 # The children of the item, each with its place. The template of an `<<~EAG` literal is code the parser made, not code
 # the author wrote, so it is not walked.
 def children(item: Item, aliases: Set[String]) -> List[Item]
-  if template?(item.node)
-    return []
-  end
+  return [] if template?(item.node)
 
   looped = path_below(item)
   out: List[Item] = []
@@ -177,9 +175,7 @@ end
 # look through a `try` (Shape.plus_operands), so the `+` inside is its own chain.
 def continues?(item: Item, first: Walk.Node, aliases: Set[String]) -> Bool
   kind = chain_kind(item.node, aliases)
-  if kind == "" or kind != chain_kind(first, aliases)
-    return false
-  end
+  return false if kind == "" or kind != chain_kind(first, aliases)
 
   case item.node
     Walk.Node.Expr(Ast.Expr.Try(_)) -> return item.chained
@@ -200,15 +196,11 @@ def chain_kind(node: Walk.Node, aliases: Set[String]) -> String
 
       return ""
     Walk.Node.Expr(Ast.Expr.Binary(binary)) ->
-      if binary.op == "plus"
-        return "plus"
-      end
+      return "plus" if binary.op == "plus"
 
       return ""
     Walk.Node.Expr(Ast.Expr.Try(wrapper)) ->
-      if chain_kind(Walk.Node.Expr(wrapper.operand), aliases) == "pipe"
-        return "pipe"
-      end
+      return "pipe" if chain_kind(Walk.Node.Expr(wrapper.operand), aliases) == "pipe"
 
       return ""
     _ -> return ""

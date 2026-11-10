@@ -15,9 +15,7 @@ MAX_VALUE_TEXT = 60
 ## the value could only have been used for itself: a pure builtin, a to_s on a data value, a .with. Anything else, and
 ## any Void value, is fine.
 export def check_unused_value(cx: State.Cx, st: State.St, value: Ast.Expr, type: T.Type) -> Result[Bool]
-  if T.is?(type, "Void")
-    return ok(true)
-  end
+  return ok(true) if T.is?(type, "Void")
 
   resolved = resolution(st, value)
   name = call_name(value, resolved)
@@ -70,9 +68,7 @@ end
 export def value_text(cx: State.Cx, value: Ast.Expr) -> String
   span = Ast.expr_span(value)
   text = cx.texts.get(cx.file).unwrap_or("").slice(span.start.offset, span.stop.offset - span.start.offset)
-  if text.length > MAX_VALUE_TEXT or text.contains?("\n")
-    return "..."
-  end
+  return "..." if text.length > MAX_VALUE_TEXT or text.contains?("\n")
 
   return text
 end
@@ -115,13 +111,9 @@ end
 # True when dropping the value loses something: a method that resolved to the receiver, to_s or inspect, a struct
 # update, or a call of a pure builtin.
 def unused_result?(value: Ast.Expr, resolved: Optional[State.Resolved], entry: Optional[Model.Builtin]) -> Bool
-  if struct_update?(value) or yields_value?(resolved)
-    return true
-  end
+  return true if struct_update?(value) or yields_value?(resolved)
 
-  if entry.none?
-    return false
-  end
+  return false if entry.none?
 
   found = entry.unwrap!
   return found.effects.size == 0 and !takes_function?(found) and !found.name.ends_with?("!")
@@ -155,13 +147,9 @@ end
 
 # The name of the call for a message. The linker names a call into another module `@3::save`: only `save` is shown.
 def unused_subject(name: String) -> String
-  if name == ""
-    return "this expression"
-  end
+  return "this expression" if name == ""
 
-  if name.starts_with?("@") and name.contains?("::")
-    return name.split("::").last
-  end
+  return name.split("::").last if name.starts_with?("@") and name.contains?("::")
 
   return name
 end
@@ -190,9 +178,7 @@ def receiver_name(value: Ast.Expr) -> String
 end
 
 def first_argument_name(args: List[Ast.Expr]) -> String
-  if args.size == 0
-    return ""
-  end
+  return "" if args.size == 0
 
   return name_of(args[0])
 end

@@ -61,9 +61,7 @@ end
 
 # Lowers after `frames` calls that wait for it, which are not tail calls.
 def lower_deeper(linked: Linker.Linked, checked: Checker.Checked, frames: Int) -> Lowering.Lowered
-  if frames == 0
-    return Lowering.lower(linked, checked)
-  end
+  return Lowering.lower(linked, checked) if frames == 0
 
   done = lower_deeper(linked, checked, frames - 1)
   return done
@@ -174,9 +172,7 @@ def arg_text(instr: Ir.Instr, at: Int) -> String
   op = instr.op
   value = instr.args[at]
   if instr.op == "call-builtin"
-    if at == 0
-      return "r#{value} #{Text.quote(instr.name)}"
-    end
+    return "r#{value} #{Text.quote(instr.name)}" if at == 0
 
     return value.to_s
   end
@@ -199,9 +195,7 @@ def arg_text(instr: Ir.Instr, at: Int) -> String
   elsif op == "call-value" and at == 1
     return value.to_s
   elsif op == "range" and at == 2
-    if value == 1
-      return "..."
-    end
+    return "..." if value == 1
 
     return ".."
   end

@@ -208,17 +208,11 @@ end
 ## and the comment attachment both walk a chain through this, so their stages and keys cannot differ.
 export def pipe_stage(expr: Ast.Expr) -> Optional[PipeStage]
   case expr
-    Ast.Expr.Call(node) ->
-      if node.piped
-        return some(PipeStage(call: node, tried: false))
-      end
+    Ast.Expr.Call(node) -> return some(PipeStage(call: node, tried: false)) if node.piped
 
     Ast.Expr.Try(node) ->
       case node.operand
-        Ast.Expr.Call(call) ->
-          if call.piped
-            return some(PipeStage(call: call, tried: true))
-          end
+        Ast.Expr.Call(call) -> return some(PipeStage(call: call, tried: true)) if call.piped
 
         _ -> return none
       end
@@ -272,9 +266,7 @@ def widened(part: Part, raw: Source.Span) -> Source.Span
   case part
     Part.Expr(expr) ->
       start = chain_start(expr)
-      if start.offset < raw.start.offset
-        return raw.with(start: start)
-      end
+      return raw.with(start: start) if start.offset < raw.start.offset
 
       return raw
     _ -> return raw
@@ -313,9 +305,7 @@ end
 # The span cut at its last token that is not a line break.
 def tight(span: Source.Span, marks: Marks) -> Source.Span
   last = last_at_or_before(marks.stops, span.stop.offset)
-  if last < 0 or marks.stops[last] <= span.start.offset
-    return span
-  end
+  return span if last < 0 or marks.stops[last] <= span.start.offset
 
   return span.with(stop: marks.tokens[last].span.stop)
 end
@@ -433,21 +423,15 @@ def by_order(
   first_role: Role,
   second_role: Role,
 ) -> Attached
-  if first >= 0
-    return Attached(comment: comment, node: first, role: first_role, keyword: "")
-  end
+  return Attached(comment: comment, node: first, role: first_role, keyword: "") if first >= 0
 
-  if second >= 0
-    return Attached(comment: comment, node: second, role: second_role, keyword: "")
-  end
+  return Attached(comment: comment, node: second, role: second_role, keyword: "") if second >= 0
 
   return Attached(comment: comment, node: enclosing, role: Role.Dangling, keyword: "")
 end
 
 def token_kind(marks: Marks, index: Int) -> String
-  if index < 0 or index >= marks.tokens.size
-    return ""
-  end
+  return "" if index < 0 or index >= marks.tokens.size
 
   return marks.tokens[index].kind
 end
@@ -477,9 +461,7 @@ end
 def preceding_of(outline: Outline, parent: Int, offset: Int) -> Int
   first = outline.first[parent]
   found = last_in(outline.stops, first, first + outline.count[parent], offset)
-  if found < first
-    return -1
-  end
+  return -1 if found < first
 
   return found
 end
@@ -489,9 +471,7 @@ def following_of(outline: Outline, parent: Int, offset: Int) -> Int
   first = outline.first[parent]
   stop = first + outline.count[parent]
   found = first_in(outline.starts, first, stop, offset)
-  if found == stop
-    return -1
-  end
+  return -1 if found == stop
 
   return found
 end
@@ -499,28 +479,20 @@ end
 # The last statement before an `end`: `node` itself, or for an `if` branch or a `case` arm the last statement of its
 # body; -1 when there is none (no node, or an empty body).
 def last_statement(outline: Outline, node: Int) -> Int
-  if node < 0
-    return -1
-  end
+  return -1 if node < 0
 
   kind = outline.nodes[node].kind
-  if kind != "IfBranch" and kind != "CaseArm"
-    return node
-  end
+  return node if kind != "IfBranch" and kind != "CaseArm"
 
   last = preceding_of(outline, node, outline.nodes[node].span.stop.offset)
-  if last >= 0 and statement?(outline.nodes[last].kind)
-    return last
-  end
+  return last if last >= 0 and statement?(outline.nodes[last].kind)
 
   return -1
 end
 
 # Whether `following` is the value of `enclosing`, a statement that is one value with no body.
 def value_follows?(outline: Outline, enclosing: Int, following: Int) -> Bool
-  if following < 0
-    return false
-  end
+  return false if following < 0
 
   kind = outline.nodes[enclosing].kind
   return (kind == "Binding" or kind == "Return" or kind == "ExprStmt") and outline.nodes[following].kind != "TypeRef"
@@ -636,9 +608,7 @@ end
 # The record that the parser makes for an extern function with `out` parameters has the function's span: it is not
 # text of its own.
 def struct_children(node: Ast.StructDecl) -> List[Part]
-  if node.record_of != ""
-    return []
-  end
+  return [] if node.record_of != ""
 
   return node.fields.map do |field: Ast.FieldDecl| Part.Field(field) end
 end
@@ -731,9 +701,7 @@ end
 # The first operand of a piped call, then the stage written on the right with the rest of the arguments, so a comment
 # before a `|>` leads the stage (`PipeStage`) and one after a stage trails the chain up to it.
 def call_children(node: Ast.Call) -> List[Part]
-  if node.piped
-    return [Part.Expr(node.args[0]), Part.Stage(node)]
-  end
+  return [Part.Expr(node.args[0]), Part.Stage(node)] if node.piped
 
   return exprs(node.args)
 end

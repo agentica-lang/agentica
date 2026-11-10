@@ -50,9 +50,7 @@ export def check_main(
     end
   end
 
-  if found or !required
-    return ok(true)
-  end
+  return ok(true) if found or !required
 
   return error(
     State.fail(
@@ -145,10 +143,7 @@ end
 def main_of(module: Linker.LinkedModule) -> Optional[Ast.FunctionDecl]
   for decl in module.declarations
     case decl
-      Ast.Decl.Function(node) ->
-        if T.display_name(node.name) == "main"
-          return some(node)
-        end
+      Ast.Decl.Function(node) -> return some(node) if T.display_name(node.name) == "main"
 
       _ -> next
     end
@@ -243,17 +238,13 @@ def check_type_parameters(
 end
 
 def span_at(spans: List[Source.Span], index: Int, fallback: Source.Span) -> Source.Span
-  if index < spans.size
-    return spans[index]
-  end
+  return spans[index] if index < spans.size
 
   return fallback
 end
 
 def article(owner: String) -> String
-  if owner == "enum"
-    return "an"
-  end
+  return "an" if owner == "enum"
 
   return "a"
 end
@@ -536,9 +527,7 @@ def check_inferable(
   params: List[T.Type],
   result: T.Type,
 ) -> Result[Bool]
-  if T.display_name(node.name) == "main"
-    return ok(true)
-  end
+  return ok(true) if T.display_name(node.name) == "main"
 
   written = Types.variable_names(result)
   for type in params

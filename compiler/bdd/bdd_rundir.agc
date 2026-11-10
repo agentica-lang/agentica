@@ -70,9 +70,7 @@ export def temporary_directory() -> Result[String]
   candidates = temporary_candidates()
   for path in candidates
     info = File.stat(path, IO_TIMEOUT)
-    if info.ok? and info.unwrap!.kind == "directory"
-      return ok(path)
-    end
+    return ok(path) if info.ok? and info.unwrap!.kind == "directory"
   end
 
   return error("no temporary directory: none of #{candidates.join(", ")} is a directory")
@@ -107,15 +105,11 @@ end
 export def sweep(temporary: String, own: Run) -> Void
   owner = File.lstat(own.path, IO_TIMEOUT)
   names = Dir.list(temporary, IO_TIMEOUT)
-  if !owner.ok? or !names.ok?
-    return
-  end
+  return if !owner.ok? or !names.ok?
 
   for name in names.unwrap!
     joined = Path.join([temporary, name])
-    if !joined.ok?
-      next
-    end
+    next if !joined.ok?
 
     path = joined.unwrap!
     # The minimum age in seconds of the folder to remove, or -1 for a name that is not a run directory.
@@ -164,9 +158,7 @@ def make_private(temporary: String, prefix: String) -> Result[String]
     name = try RandomName.hex()
     path = try Path.join([temporary, "#{prefix}#{name}"])
     made = Dir.mkdir_private(path, IO_TIMEOUT)
-    if made.ok?
-      return ok(path)
-    end
+    return ok(path) if made.ok?
 
     last = made.message
     attempt += 1
@@ -203,9 +195,7 @@ def take_lock(directory: String) -> Result[FileHandle]
   path = try Path.join([directory, "lock"])
   lock = try File.open(path, "create_private", IO_TIMEOUT)
   taken = File.try_lock(lock, IO_TIMEOUT)
-  if taken.ok? and taken.unwrap!
-    return ok(lock)
-  end
+  return ok(lock) if taken.ok? and taken.unwrap!
 
   _ = File.close(lock, IO_TIMEOUT)
   return error("cannot lock #{directory}")
@@ -218,16 +208,12 @@ end
 # cannot run there; the run folder is only for its owner, but it relies on a temporary folder that only the user can
 # modify (see the header).
 def shared_and_not_sticky?(temporary: String, own: String) -> Result[Bool]
-  if windows?()
-    return ok(false)
-  end
+  return ok(false) if windows?()
 
   folder = try File.stat(temporary, IO_TIMEOUT)
   mine = try File.lstat(own, IO_TIMEOUT)
   mode = folder.mode
-  if mode.bit_and(512) != 0
-    return ok(false)
-  end
+  return ok(false) if mode.bit_and(512) != 0
 
   others_write = mode.bit_and(2) != 0
   group_write = mode.bit_and(16) != 0
@@ -239,14 +225,10 @@ end
 # The prefix and then hexadecimal digits only. `agentica-bdd-` is the final name of a run, `agentica-bdd-new-` a run
 # being made (the "n" of "new" is not a digit, so the first never matches the second).
 def hex_name?(name: String, prefix: String) -> Bool
-  if !name.starts_with?(prefix) or name.length == prefix.length
-    return false
-  end
+  return false if !name.starts_with?(prefix) or name.length == prefix.length
 
   for digit in name.slice(prefix.length, name.length - prefix.length).split("")
-    if !DIGITS.contains?(digit)
-      return false
-    end
+    return false if !DIGITS.contains?(digit)
   end
 
   return true
@@ -264,15 +246,11 @@ def abandoned(path: String, owner: Int, age: Int) -> Result[FileHandle]
     return error("not a run directory")
   end
 
-  if age > 0 and Time.now_ms() / 1000 - folder.modified_seconds < age
-    return error("too new to be abandoned")
-  end
+  return error("too new to be abandoned") if age > 0 and Time.now_ms() / 1000 - folder.modified_seconds < age
 
   lock = try File.open(lock_path, "read", IO_TIMEOUT)
   taken = File.try_lock(lock, IO_TIMEOUT)
-  if taken.ok? and taken.unwrap!
-    return ok(lock)
-  end
+  return ok(lock) if taken.ok? and taken.unwrap!
 
   _ = File.close(lock, IO_TIMEOUT)
   return error("the run is alive")

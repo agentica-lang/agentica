@@ -22,9 +22,7 @@ end
 ## a lock has no source lines: the key path takes their place, and a problem about the whole file shows the file name
 ## alone.
 export def format(problem: Problems.Problem, text: String) -> String
-  if !Problems.at_source?(problem)
-    return without_source(problem)
-  end
+  return without_source(problem) if !Problems.at_source?(problem)
 
   lines = text.split("\n")
   marks = [mark(problem.span, "^", "", false, lines)]
@@ -50,23 +48,17 @@ export def without_source(problem: Problems.Problem) -> String
   end
 
   notes = notes.concat(help_note(problem.help))
-  if notes.size == 0
-    return head
-  end
+  return head if notes.size == 0
 
   return "#{head}\n\n#{notes.join("\n")}"
 end
 
 ## The text of a line (1-based), without one carriage return at its end; empty outside the file.
 export def line_text(lines: List[String], number: Int) -> String
-  if number < 1 or number > lines.size
-    return ""
-  end
+  return "" if number < 1 or number > lines.size
 
   text = lines[number - 1]
-  if text.ends_with?("\r")
-    return text.slice(0, text.length - 1)
-  end
+  return text.slice(0, text.length - 1) if text.ends_with?("\r")
 
   return text
 end

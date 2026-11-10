@@ -119,9 +119,7 @@ end
 ## The form for a call of that many arguments with no block: the entry alone for a builtin with a block form
 ## (File.open), since its block form takes the block as its last argument, so it is not a form without one.
 export def form_without_block(entry: Model.Builtin, arity: Int) -> Result[Model.Builtin]
-  if block_form?(entry)
-    return form_among([entry], arity)
-  end
+  return form_among([entry], arity) if block_form?(entry)
 
   return form_for(entry, arity)
 end
@@ -143,9 +141,7 @@ end
 ## The builtin that `target[index]` runs for a target of that type: `Bytes.at`, or "" for a List or Map, which the VM
 ## indexes with an instruction of its own. The lowering and `Analysis.bodies` both ask here.
 export def index_builtin(target: Types.Type) -> String
-  if Types.is?(target, "Bytes")
-    return "Bytes.at"
-  end
+  return "Bytes.at" if Types.is?(target, "Bytes")
 
   return ""
 end
@@ -164,9 +160,7 @@ end
 ## The fewest arguments a call of the form takes: the parameters before the first default, and the last Fn after them.
 export def required_count(form: Model.Builtin) -> Int
   first = first_default(form)
-  if fn_last?(form)
-    return first + 1
-  end
+  return first + 1 if fn_last?(form)
 
   return first
 end
@@ -175,9 +169,7 @@ end
 ## call written as a method.
 export def arity_text(form: Model.Builtin, skipped: Int) -> String
   total = form.parameters.size - skipped
-  if !defaulted?(form)
-    return total.to_s
-  end
+  return total.to_s if !defaulted?(form)
 
   return "#{required_count(form) - skipped} to #{total}"
 end
@@ -208,9 +200,7 @@ end
 ## A parameter as a signature writes it: `level: Int = 6`.
 export def parameter_text(parameter: Model.Named) -> String
   typed = "#{parameter.name}: #{Types.to_text(parameter.type)}"
-  if !default_present?(parameter.default)
-    return typed
-  end
+  return typed if !default_present?(parameter.default)
 
   return "#{typed} = #{default_text(parameter.default)}"
 end
@@ -269,9 +259,7 @@ end
 
 ## The problem with the defaults of a record field, or "" when its default fits its type (default_fits?).
 export def record_default_problem(record: String, field: Model.Named) -> String
-  if default_fits?(field)
-    return ""
-  end
+  return "" if default_fits?(field)
 
   written = Types.to_text(field.type)
   return "the default of #{record}.#{field.name} is not #{article(written)} #{written}"
@@ -284,9 +272,7 @@ end
 ## one of its enum, with no payload). The catalog text prints a problem, and a test fails on it.
 export def default_problem(entry: Model.Builtin) -> String
   forms = [entry].concat(entry.alternatives)
-  if !forms.any? do |form: Model.Builtin| defaulted?(form) end
-    return ""
-  end
+  return "" if !forms.any? do |form: Model.Builtin| defaulted?(form) end
 
   if !forms.all? do |form: Model.Builtin| takes_defaults?(form.rule) end
     return "a default needs a Plain or Prelude builtin with no alternative form"
@@ -349,15 +335,11 @@ end
 # The first form that takes exactly that many arguments, else the first whose defaults let it take that many.
 def form_among(forms: List[Model.Builtin], arity: Int) -> Result[Model.Builtin]
   for form in forms
-    if form.parameters.size == arity
-      return ok(form)
-    end
+    return ok(form) if form.parameters.size == arity
   end
 
   for form in forms
-    if arity >= required_count(form) and arity < form.parameters.size
-      return ok(form)
-    end
+    return ok(form) if arity >= required_count(form) and arity < form.parameters.size
   end
 
   return error("no form with that arity")
@@ -371,20 +353,14 @@ end
 # True for a builtin whose one alternative is its block form: the same parameters and defaults with a last Fn after
 # them (File.open with a block). Its forms are told apart by the block, not by the count of arguments.
 def block_form?(entry: Model.Builtin) -> Bool
-  if entry.alternatives.size != 1 or takes_block?(entry)
-    return false
-  end
+  return false if entry.alternatives.size != 1 or takes_block?(entry)
 
   alternative = entry.alternatives[0]
-  if !takes_block?(alternative) or alternative.parameters.size != entry.parameters.size + 1
-    return false
-  end
+  return false if !takes_block?(alternative) or alternative.parameters.size != entry.parameters.size + 1
 
   index = 0
   while index < entry.parameters.size
-    if parameter_text(entry.parameters[index]) != parameter_text(alternative.parameters[index])
-      return false
-    end
+    return false if parameter_text(entry.parameters[index]) != parameter_text(alternative.parameters[index])
 
     index += 1
   end
@@ -396,9 +372,7 @@ end
 def first_default(form: Model.Builtin) -> Int
   at = 0
   while at < form.parameters.size
-    if default_present?(form.parameters[at].default)
-      return at
-    end
+    return at if default_present?(form.parameters[at].default)
 
     at += 1
   end
@@ -447,9 +421,7 @@ end
 
 # "an" before a vowel, else "a".
 def article(word: String) -> String
-  if "AEIOU".contains?(word.slice(0, 1))
-    return "an"
-  end
+  return "an" if "AEIOU".contains?(word.slice(0, 1))
 
   return "a"
 end
@@ -464,9 +436,7 @@ end
 
 def module_of(name: String) -> String
   dot = name.index_of(".")
-  if dot.some?
-    return name.slice(0, dot.unwrap!)
-  end
+  return name.slice(0, dot.unwrap!) if dot.some?
 
   return ""
 end

@@ -79,14 +79,10 @@ end
 ## The root that was made from the modules of `loaded` with their texts, if the cache has it.
 export def find(cache: Cache, loaded: Modules.Loaded) -> Found
   key = loaded.order[0]
-  if !cache.roots.has_key?(key)
-    return Found.Miss
-  end
+  return Found.Miss if !cache.roots.has_key?(key)
 
   root = cache.roots[key]
-  if root.fingerprint == fingerprint(loaded) and same_texts?(root.loaded, loaded)
-    return Found.Hit(root)
-  end
+  return Found.Hit(root) if root.fingerprint == fingerprint(loaded) and same_texts?(root.loaded, loaded)
 
   return Found.Miss
 end
@@ -132,9 +128,7 @@ end
 
 ## The root that the cache holds for the file with the canonical key `key`.
 export def root_of(cache: Cache, key: String) -> Optional[Root]
-  if cache.roots.has_key?(key)
-    return some(cache.roots[key])
-  end
+  return some(cache.roots[key]) if cache.roots.has_key?(key)
 
   return none
 end
@@ -157,14 +151,10 @@ export def reusing(cache: Cache, loaded: Modules.Loaded) -> Optional[Checker.Reu
       case root.good
         none -> return none
         some(good) ->
-          if good.loaded.root_dir != loaded.root_dir
-            return none
-          end
+          return none if good.loaded.root_dir != loaded.root_dir
 
           clean = unchanged(good, loaded)
-          if clean.size == 0
-            return none
-          end
+          return none if clean.size == 0
 
           return some(Checker.Reusing(earlier: good.earlier, clean: clean))
       end
@@ -225,18 +215,14 @@ export def remember(cache: Cache, root: Root, loaded: Modules.Loaded, computed: 
 end
 
 def counted(count: Int, one: Bool) -> Int
-  if one
-    return count + 1
-  end
+  return count + 1 if one
 
   return count
 end
 
 # The roots without the least recently used ones beyond MAX_ROOTS.
 def trimmed(roots: Map[String, Root]) -> Map[String, Root]
-  if roots.size <= MAX_ROOTS
-    return roots
-  end
+  return roots if roots.size <= MAX_ROOTS
 
   oldest = roots.keys.sort_by do |key: String| roots[key].used end
   for key in oldest.take(roots.size - MAX_ROOTS)
@@ -334,9 +320,7 @@ end
 
 def same_texts?(kept: Modules.Loaded, loaded: Modules.Loaded) -> Bool
   for key in loaded.order
-    if kept.modules[key].text != loaded.modules[key].text
-      return false
-    end
+    return false if kept.modules[key].text != loaded.modules[key].text
   end
 
   return true

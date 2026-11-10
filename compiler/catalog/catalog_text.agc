@@ -63,9 +63,7 @@ end
 # A parameter type, then ` = default` when it has one.
 def shape_parameter(parameter: Model.Named) -> String
   written = Types.debug_text(parameter.type)
-  if Builtins.default_present?(parameter.default)
-    return "#{written} = #{Builtins.default_text(parameter.default)}"
-  end
+  return "#{written} = #{Builtins.default_text(parameter.default)}" if Builtins.default_present?(parameter.default)
 
   return written
 end
@@ -126,9 +124,7 @@ def name_lines() -> List[String]
 end
 
 def limit_types(limit: Model.Limit) -> String
-  if limit.equality
-    return "equality"
-  end
+  return "equality" if limit.equality
 
   return limit.allowed.map do |type: Types.Type| Types.debug_text(type) end.join("/")
 end
@@ -178,9 +174,7 @@ end
 
 def signature_text(name: String) -> String
   found = Builtins.lookup(name)
-  if found.some?
-    return Text.quote(Builtins.signature(found.unwrap!))
-  end
+  return Text.quote(Builtins.signature(found.unwrap!)) if found.some?
 
   return "-"
 end
@@ -188,9 +182,7 @@ end
 def ref_text(spec: String) -> String
   parts = spec.split("/")
   found = Builtins.ref(parts[0], parts[1].to_i!)
-  if found.ok?
-    return form_line(found.unwrap!)
-  end
+  return form_line(found.unwrap!) if found.ok?
 
   return "-"
 end
@@ -203,9 +195,7 @@ def help_text(help: Optional[String]) -> String
 end
 
 def variant_text(variant: Model.Variant) -> String
-  if variant.payload.size == 0
-    return variant.name
-  end
+  return variant.name if variant.payload.size == 0
 
   payload = variant.payload.map do |type: Types.Type| Types.debug_text(type) end.join(", ")
   return "#{variant.name}(#{payload})"

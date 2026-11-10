@@ -282,9 +282,7 @@ end
 
 ## The failure of a diagnostic whose help may be absent ("" is no help).
 export def fail_maybe(cx: Cx, st: St, code: String, message: String, span: Source.Span, help: String) -> String
-  if help == ""
-    return fail(cx, st, code, message, span)
-  end
+  return fail(cx, st, code, message, span) if help == ""
 
   return fail_help(cx, st, code, message, span, help)
 end
@@ -355,9 +353,7 @@ end
 ## Whether the node `id` was resolved to a call of an `Fn` field (`store.put(a, b)`).
 export def field_call?(resolved: Map[Int, Resolved], id: Int) -> Bool
   found = resolved.get(id)
-  if found.none?
-    return false
-  end
+  return false if found.none?
 
   case found.unwrap!
     Resolved.FieldCall -> return true
@@ -384,9 +380,7 @@ end
 ## result qualifies only when it must give a Result), or it is the block of a Lazy method, where a failed `try` ends
 ## the pipeline.
 export def try_allowed?(st: St) -> Bool
-  if st.step
-    return true
-  end
+  return true if st.step
 
   case st.result
     Slot.Known(type) -> return Types.is?(type, "Result")
@@ -416,9 +410,7 @@ export def introduce_local(
   shown: Source.Span,
   value: Optional[Ast.Expr],
 ) -> Result[St]
-  if name.starts_with?("_")
-    return introduce_slot(cx, st, name, type, span, immutable, -1)
-  end
+  return introduce_slot(cx, st, name, type, span, immutable, -1) if name.starts_with?("_")
 
   key = shown.start.offset
   introduced = try introduce_slot(cx, st, name, type, span, immutable, key)
@@ -428,27 +420,21 @@ end
 
 ## The state after the name of `binding` was read, unless it is the name that is being assigned.
 export def read(st: St, binding: Binding) -> St
-  if binding.slot < 0 or st.reads.include?(binding.slot) or st.assigning.include?(binding.slot)
-    return st
-  end
+  return st if binding.slot < 0 or st.reads.include?(binding.slot) or st.assigning.include?(binding.slot)
 
   return st.with(reads: st.reads.add(binding.slot))
 end
 
 ## The state at the start of the assignment to `binding`: it is set again, and a read of it in the value is no use.
 export def assigning(st: St, binding: Binding) -> St
-  if binding.slot < 0
-    return st
-  end
+  return st if binding.slot < 0
 
   return st.with(writes: st.writes.add(binding.slot), assigning: st.assigning.add(binding.slot))
 end
 
 ## The state at the end of the assignment to `binding`.
 export def assigned(st: St, binding: Binding) -> St
-  if binding.slot < 0
-    return st
-  end
+  return st if binding.slot < 0
 
   return st.with(assigning: st.assigning.delete(binding.slot))
 end
@@ -495,9 +481,7 @@ end
 
 ## A Diag.Help for a help text that may be absent ("" is absent).
 export def hint_of(text: String) -> Diag.Help
-  if text == ""
-    return Diag.Help.NoHelp
-  end
+  return Diag.Help.NoHelp if text == ""
 
   return Diag.Help.Hint(text)
 end
@@ -511,9 +495,7 @@ def introduce_slot(
   immutable: Bool,
   slot: Int,
 ) -> Result[St]
-  if name == "_"
-    return ok(st)
-  end
+  return ok(st) if name == "_"
 
   try reserve_local(cx, st, name, span)
   existing = st.vars.get(name)

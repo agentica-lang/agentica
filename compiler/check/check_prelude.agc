@@ -121,9 +121,7 @@ end
 # Result[Unknown] (Slot.InferResult), unless it is also the call's result and the expected type of the call is a
 # Result that names its item. Anything else is Unknown: the body decides it all.
 def block_result(form: Model.Builtin, template: T.Type, expected: T.Type) -> T.Type
-  if !T.is?(template, "Fn") or !T.is?(T.result(template), "Result")
-    return T.Type.Unknown
-  end
+  return T.Type.Unknown if !T.is?(template, "Fn") or !T.is?(T.result(template), "Result")
 
   if T.same?(T.result(template), form.result) and T.is?(expected, "Result") and !T.unknown?(T.item(expected))
     return expected
@@ -176,9 +174,7 @@ def check_equality(
   found: T.Type,
   call: Source.Span,
 ) -> Result[Bool]
-  if CheckTypes.equality?(cx, found)
-    return ok(true)
-  end
+  return ok(true) if CheckTypes.equality?(cx, found)
 
   message = "#{form.name} needs #{limit.what} with equality, found #{T.to_text(found)}"
   why = CheckTypes.equality_gap(cx, found).why
@@ -203,14 +199,10 @@ end
 # variable, else the one under "" (a row may name a faster body for a few types and a general one for the rest), or the
 # only one.
 def body_of(row: Model.PreludeRow, types: Map[String, T.Type]) -> String
-  if row.selector == ""
-    return "#{row.module}::#{row.bodies[""]}"
-  end
+  return "#{row.module}::#{row.bodies[""]}" if row.selector == ""
 
   tag = T.tag(types[row.selector])
-  if !row.bodies.has_key?(tag)
-    return "#{row.module}::#{row.bodies[""]}"
-  end
+  return "#{row.module}::#{row.bodies[""]}" if !row.bodies.has_key?(tag)
 
   return "#{row.module}::#{row.bodies[tag]}"
 end

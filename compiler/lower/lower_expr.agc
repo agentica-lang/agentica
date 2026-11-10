@@ -36,9 +36,7 @@ export def lower_expression(
 ) -> Result[Lowering.Out]
   case expr
     Ast.Expr.Call(node) ->
-      if known and optional_call?(node)
-        return lower_optional(cx, fx, node, want, void, true, false)
-      end
+      return lower_optional(cx, fx, node, want, void, true, false) if known and optional_call?(node)
 
       return lower_call(cx, fx, node, want, void, known and ok_call?(node), false)
     Ast.Expr.Binary(node) ->
@@ -140,9 +138,7 @@ export def lower_call(
   end
 
   builtin = key != "" and VM_BUILTINS.include?(key)
-  if form.ok? and !builtin and !prelude
-    return error(Lowering.unsupported(cx, "the builtin #{node.name}", span))
-  end
+  return error(Lowering.unsupported(cx, "the builtin #{node.name}", span)) if form.ok? and !builtin and !prelude
 
   if !builtin and !cx.functions.has_key?(target)
     return error(Lowering.unsupported(cx, "the call to #{node.name}", span))
@@ -302,9 +298,7 @@ def lower_optional(
   end
 
   out = try Data.lower_enum(cx, fx, "Optional", variant, node.args, node.span, want, true)
-  if tail
-    return ok(out.with(fx: Lowering.emit_at(out.fx, "return", [out.slot], node.span)))
-  end
+  return ok(out.with(fx: Lowering.emit_at(out.fx, "return", [out.slot], node.span))) if tail
 
   return ok(out)
 end
@@ -346,9 +340,7 @@ def lower_argument(
   param: Int,
 ) -> Result[Lowering.Out]
   source = Defaults.argument_for(shape, node.args.size, param)
-  if source >= 0
-    return lower_expression(cx, fx, node.args[source], fx.next - 1, false, false)
-  end
+  return lower_expression(cx, fx, node.args[source], fx.next - 1, false, false) if source >= 0
 
   return lower_default(cx, fx, node, fill.unwrap!, param)
 end
@@ -363,9 +355,7 @@ def lower_builtin_argument(
   param: Int,
 ) -> Result[Lowering.Out]
   source = Defaults.argument_for(shape, node.args.size, param)
-  if source >= 0
-    return lower_expression(cx, fx, node.args[source], fx.next - 1, false, false)
-  end
+  return lower_expression(cx, fx, node.args[source], fx.next - 1, false, false) if source >= 0
 
   return lower_builtin_default(cx, fx, node, form.parameters[param].default)
 end
@@ -373,9 +363,7 @@ end
 # The spans of a builtin call for the VM: the call's, then each argument's, in the order of the parameters; a default
 # has the span of the call.
 def builtin_spans(node: Ast.Call, shape: Defaults.Shape) -> List[Source.Span]
-  if shape.total == node.args.size
-    return [node.span].concat(node.args.map do |arg: Ast.Expr| Ast.expr_span(arg) end)
-  end
+  return [node.span].concat(node.args.map do |arg: Ast.Expr| Ast.expr_span(arg) end) if shape.total == node.args.size
 
   spans = [node.span]
   param = 0
@@ -423,9 +411,7 @@ end
 
 # The type of an expression must be one the VM holds, unless the item was checked with its list.
 def typed(cx: Lowering.Cx, expr: Ast.Expr, known: Bool) -> Result[Bool]
-  if known
-    return ok(true)
-  end
+  return ok(true) if known
 
   return Lowering.require_type(cx, expr, false, Lowering.type_of(cx, expr))
 end
@@ -465,9 +451,7 @@ def await_key(cx: Lowering.Cx, node: Ast.Call, checked: Bool, count: Int) -> Res
     type = Types.args(type)[0]
   end
 
-  if Types.is?(type, "Result")
-    return ok("Task.await_result")
-  end
+  return ok("Task.await_result") if Types.is?(type, "Result")
 
   return ok("Task.await")
 end
@@ -504,9 +488,7 @@ def lower_const_read(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ConstRef, want:
   fx = Lowering.step(fx, node.span)
   made = Lowering.target(fx, want)
   read = cx.reads.get(node.name)
-  if read.none?
-    return error(Lowering.internal(cx, "lower: constant #{node.name} has no slot", node.span))
-  end
+  return error(Lowering.internal(cx, "lower: constant #{node.name} has no slot", node.span)) if read.none?
 
   case read.unwrap!
     Lowering.Read.Literal(value) -> fx = Lowering.emit_const(made.fx, made.slot, value, node.span)
@@ -551,9 +533,7 @@ def lower_unary_checked(
     Ast.Expr.Literal(literal) ->
       case literal.value
         Ast.LitValue.Huge(digits) ->
-          if node.op == "minus" and digits == INT_MIN_DIGITS
-            return lower_min_int(fx, node, literal, want)
-          end
+          return lower_min_int(fx, node, literal, want) if node.op == "minus" and digits == INT_MIN_DIGITS
 
         _ -> fx = fx
       end
@@ -665,9 +645,7 @@ def lower_bytes_operator(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, dst
   end
 
   window = try bytes_call(cx, fx, key, node.left, node.right, node.op_span)
-  if node.op == "not-equal"
-    return ok(Lowering.emit_at(window.fx, "not", [dst, window.slot], node.op_span))
-  end
+  return ok(Lowering.emit_at(window.fx, "not", [dst, window.slot], node.op_span)) if node.op == "not-equal"
 
   return ok(Lowering.emit_at(window.fx, "move", [dst, window.slot], node.op_span))
 end
@@ -676,9 +654,7 @@ end
 # (Bytes and Optional have their own builtins). The checker lets only types with equality reach here.
 def deep_equality?(type: Types.Type) -> Bool
   for flat in ["Int", "Float", "Bool", "String", "Nil", "Range"]
-    if Types.is?(type, flat)
-      return false
-    end
+    return false if Types.is?(type, flat)
   end
 
   return true
@@ -808,9 +784,7 @@ end
 
 # The conversion of a value in slot to its text, unless it is a String already.
 def text_of(fx: Lowering.Fx, type: Types.Type, slot: Int, span: Source.Span) -> Result[Lowering.Fx]
-  if Types.is?(type, "String")
-    return ok(fx)
-  end
+  return ok(fx) if Types.is?(type, "String")
 
   return ok(Lowering.emit_at(fx, "to-text", [slot, slot], span))
 end
@@ -942,9 +916,7 @@ def lower_method_checked(
   resolved = cx.resolved.get(node.id)
   if resolved.some?
     try Lowering.require_type(cx, expr, void, Lowering.type_of(cx, expr))
-    if field_call?(resolved.unwrap!)
-      return lower_field_call(cx, fx, node, want)
-    end
+    return lower_field_call(cx, fx, node, want) if field_call?(resolved.unwrap!)
 
     return lower_resolved(cx, fx, node.target, node.args, node.span, node.id, resolved.unwrap!, want, void)
   end

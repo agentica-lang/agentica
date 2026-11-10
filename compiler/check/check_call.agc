@@ -33,9 +33,7 @@ end
 ## function of the program.
 export def check_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Type) -> Result[State.Out]
   entry = ENTRIES.get(node.name)
-  if entry.none? or (PRELUDE_ONLY.include?(node.name) and !cx.prelude)
-    return check_plain_call(cx, st, node, expected)
-  end
+  return check_plain_call(cx, st, node, expected) if entry.none? or (PRELUDE_ONLY.include?(node.name) and !cx.prelude)
 
   out = try Rules.check_builtin_call(cx, st, node, expected, entry.unwrap!)
   if node.piped
@@ -173,9 +171,7 @@ end
 ## The field of that name in the list, or an error.
 export def find_field(fields: List[Model.Named], name: String) -> Result[Model.Named]
   for field in fields
-    if field.name == name
-      return ok(field)
-    end
+    return ok(field) if field.name == name
   end
 
   return error("no such field")
@@ -184,9 +180,7 @@ end
 # The text of the source between the start of an expression, including a piped receiver, and its end.
 def extent_text(cx: State.Cx, node: Ast.Expr) -> String
   text = cx.texts.get(cx.file)
-  if text.none?
-    return ""
-  end
+  return "" if text.none?
 
   start = extent_start(node)
   stop = Ast.expr_span(node).stop.offset
@@ -203,18 +197,14 @@ def extent_start(node: Ast.Expr) -> Int
 end
 
 def call_start(call: Ast.Call) -> Int
-  if call.piped
-    return extent_start(call.args[0])
-  end
+  return extent_start(call.args[0]) if call.piped
 
   return call.span.start.offset
 end
 
 def try_start(attempt: Ast.TryExpr) -> Int
   inner = extent_start(attempt.operand)
-  if inner < attempt.span.start.offset
-    return inner
-  end
+  return inner if inner < attempt.span.start.offset
 
   return attempt.span.start.offset
 end
@@ -230,19 +220,13 @@ end
 # CHECK-PIPE-METHOD: a builtin that has a method form (x |> String.upcase) is written as the method, x.upcase.
 def check_pipe_method(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Builtin) -> Result[Bool]
   selected = Builtins.form_for(entry, node.args.size)
-  if !selected.ok? or selected.unwrap!.parameters.size == 0
-    return ok(true)
-  end
+  return ok(true) if !selected.ok? or selected.unwrap!.parameters.size == 0
 
   kind = Names.receiver_kind(selected.unwrap!.parameters[0].type)
-  if kind == ""
-    return ok(true)
-  end
+  return ok(true) if kind == ""
 
   method = Names.pipe_method_name(cx, kind, entry.name)
-  if method == ""
-    return ok(true)
-  end
+  return ok(true) if method == ""
 
   return error(
     State.fail_help(
@@ -320,13 +304,9 @@ def check_plain_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Typ
   signature = entry.unwrap!
   shape = signature.shape
   count = node.args.size
-  if count < shape.required or count > shape.total
-    return error(arity_failure(cx, st, node, signature))
-  end
+  return error(arity_failure(cx, st, node, signature)) if count < shape.required or count > shape.total
 
-  if signature.type_parameters.size > 0
-    return check_generic_call(cx, st, node, signature, expected)
-  end
+  return check_generic_call(cx, st, node, signature, expected) if signature.type_parameters.size > 0
 
   current = st
   index = 0
@@ -399,17 +379,13 @@ def check_generic_call(
 
   for at in later
     template = signature.params[Defaults.param_of(shape, count, at)]
-    if Types.open_variables?(template, found)
-      return error(uninferred_failure(cx, current, node, signature, found))
-    end
+    return error(uninferred_failure(cx, current, node, signature, found)) if Types.open_variables?(template, found)
 
     current = try check_closed_argument(cx, current, node.args[at], template, found)
   end
 
   unresolved = signature.type_parameters.filter do |name: String| !found.has_key?(name) end
-  if unresolved.size > 0
-    return error(uninferred_failure(cx, current, node, signature, found))
-  end
+  return error(uninferred_failure(cx, current, node, signature, found)) if unresolved.size > 0
 
   try check_void_arguments(cx, current, node, signature, found)
   templates: List[T.Type] = []
@@ -425,9 +401,7 @@ end
 # The parameter type with the variables found so far put in, or Unknown while one is open: an argument is then checked
 # for a type of its own.
 def known_part(template: T.Type, found: Map[String, T.Type]) -> T.Type
-  if Types.open_variables?(template, found)
-    return T.Type.Unknown
-  end
+  return T.Type.Unknown if Types.open_variables?(template, found)
 
   return Types.substitute(template, found)
 end
@@ -607,9 +581,7 @@ end
 # The payload types of a variant of the enum, or an error when it has no such variant.
 def variant_payload(definition: Model.EnumDef, name: String) -> Result[List[T.Type]]
   for variant in definition.variants
-    if variant.name == name
-      return ok(variant.payload)
-    end
+    return ok(variant.payload) if variant.name == name
   end
 
   return error("no such variant")
@@ -763,9 +735,7 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expe
     end
   end
 
-  if parameters.size == 0
-    return ok(State.Out(st: checked.st, type: T.Type.Struct(name, [])))
-  end
+  return ok(State.Out(st: checked.st, type: T.Type.Struct(name, []))) if parameters.size == 0
 
   return finish_struct(cx, checked, name, parameters, node.span, expected)
 end

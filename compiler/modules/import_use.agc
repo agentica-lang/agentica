@@ -46,19 +46,13 @@ end
 ## when its entry was made, so it is not checked. With `unused` false (a query about this file, whose editor adds the
 ## import before the code that uses it) only CHECK-IMPORT-NAME is reported: the other rule is skipped.
 export def check(module: Modules.Module, modules: Map[String, Modules.Module], unused: Bool) -> Result[Bool]
-  if module.stubbed
-    return ok(true)
-  end
+  return ok(true) if module.stubbed
 
   written = of_program(module.program)
-  if mistyped_call?(module, written)
-    return ok(true)
-  end
+  return ok(true) if mistyped_call?(module, written)
 
   try bare_alias(module, modules, written)
-  if !unused
-    return ok(true)
-  end
+  return ok(true) if !unused
 
   heads: List[String] = []
   libraries: List[String] = []
@@ -90,9 +84,7 @@ export def check(module: Modules.Module, modules: Map[String, Modules.Module], u
     case decl
       Ast.Decl.Import(node) ->
         alias = Declarations.alias_of(node)
-        if alias != "" and !used.include?(alias)
-          return error(unused_failure(module, node, alias))
-        end
+        return error(unused_failure(module, node, alias)) if alias != "" and !used.include?(alias)
 
       _ -> next
     end
@@ -141,9 +133,7 @@ end
 # True when the place writes an import alias with no member: a type or an enum that is the alias, or a variant of an
 # enum named like the alias, when the module exports no name of that variant.
 def without_member?(module: Modules.Module, modules: Map[String, Modules.Module], item: Written) -> Bool
-  if !module.aliases.has_key?(item.name)
-    return false
-  end
+  return false if !module.aliases.has_key?(item.name)
 
   case item.role
     Role.Type -> return true
@@ -157,16 +147,12 @@ end
 def bare_help(target: Modules.Module, item: Written) -> String
   if item.role == Role.Variant
     owners = enums_with(target, item.member)
-    if owners.size == 1
-      return "write #{item.name}.#{owners[0]}.#{item.member}(...)"
-    end
+    return "write #{item.name}.#{owners[0]}.#{item.member}(...)" if owners.size == 1
 
     return "write #{item.name}.<Enum>.#{item.member}(...), the enum of #{item.name} that has #{item.member}"
   end
 
-  if target.public.has_key?(item.name)
-    return "write #{item.name}.#{item.name}"
-  end
+  return "write #{item.name}.#{item.name}" if target.public.has_key?(item.name)
 
   return "write #{item.name}.<Type>, the type or enum that #{item.name} exports"
 end
@@ -212,15 +198,11 @@ end
 def alias_span(text: String, node: Ast.ImportDecl, alias: String) -> Source.Span
   start = node.span.start
   size = node.span.stop.offset - start.offset
-  if size <= 0 or start.offset + size > text.length
-    return node.span
-  end
+  return node.span if size <= 0 or start.offset + size > text.length
 
   line = text.slice(start.offset, size).split("\n")[0]
   found = line.index_of(alias)
-  if found.none?
-    return node.span
-  end
+  return node.span if found.none?
 
   first = Source.Position(offset: start.offset + found.unwrap!, line: start.line, column: start.column + found.unwrap!)
   last = Source.Position(offset: first.offset + alias.length, line: first.line, column: first.column + alias.length)
@@ -359,9 +341,7 @@ def typed_name(found: List[Written], node: Ast.TypeName, parameters: List[String
     return of_type(found, Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span), parameters)
   end
 
-  if !node.name.contains?(".") and parameters.include?(node.name)
-    return found
-  end
+  return found if !node.name.contains?(".") and parameters.include?(node.name)
 
   return found.push(Written(name: node.name, role: Role.Type, span: node.span, member: ""))
 end

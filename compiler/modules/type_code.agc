@@ -60,17 +60,13 @@ end
 ## whole type, or that names a file the walk lacks, is an error.
 export def decode(text: String, prefixes: Map[String, String]) -> Result[T.Type]
   found = try read_type(text, 0, 0, prefixes)
-  if found.next != text.length
-    return error("the type has text after it")
-  end
+  return error("the type has text after it") if found.next != text.length
 
   return ok(found.type)
 end
 
 def written(type: T.Type, keys: Map[String, String], depth: Int) -> Result[String]
-  if depth > MAX_DEPTH
-    return error("the type is too deep")
-  end
+  return error("the type is too deep") if depth > MAX_DEPTH
 
   case type
     T.Type.Int -> return ok("i")
@@ -105,9 +101,7 @@ end
 
 # `T<name>` for a plain struct, `G<name><count>:<types>` for one with type arguments.
 def struct_text(name: String, args: List[T.Type], keys: Map[String, String], depth: Int) -> Result[String]
-  if args.size == 0
-    return ok("T" + try name_text(name, keys))
-  end
+  return ok("T" + try name_text(name, keys)) if args.size == 0
 
   return ok("G" + try name_text(name, keys) + "#{args.size}:" + try list_text(args, keys, depth))
 end
@@ -124,19 +118,13 @@ end
 # `<length>:<name>` for a name with no prefix, `@<length>:<key><length>:<local>` for "@N::local" with the key of the
 # file that has the prefix "@N::".
 def name_text(name: String, keys: Map[String, String]) -> Result[String]
-  if !name.starts_with?("@")
-    return ok(name_plain(name))
-  end
+  return ok(name_plain(name)) if !name.starts_with?("@")
 
   split = name.index_of("::")
-  if split.none?
-    return error("the name has a prefix that does not end")
-  end
+  return error("the name has a prefix that does not end") if split.none?
 
   prefix = name.slice(0, split.unwrap! + 2)
-  if !keys.has_key?(prefix)
-    return error("the name belongs to a file that is not in the walk")
-  end
+  return error("the name belongs to a file that is not in the walk") if !keys.has_key?(prefix)
 
   local = name.slice(prefix.length, name.length - prefix.length)
   return ok("@" + name_plain(keys[prefix]) + name_plain(local))
@@ -147,14 +135,10 @@ def name_plain(name: String) -> String
 end
 
 def read_type(text: String, at: Int, depth: Int, prefixes: Map[String, String]) -> Result[Read]
-  if depth > MAX_DEPTH or at >= text.length
-    return error("the type ends too soon or is too deep")
-  end
+  return error("the type ends too soon or is too deep") if depth > MAX_DEPTH or at >= text.length
 
   letter = text.slice(at, 1)
-  if SIMPLE.has_key?(letter)
-    return ok(Read(type: SIMPLE[letter], next: at + 1))
-  end
+  return ok(Read(type: SIMPLE[letter], next: at + 1)) if SIMPLE.has_key?(letter)
 
   after = at + 1
   if "RPKCZDLS".contains?(letter)
@@ -244,9 +228,7 @@ end
 # A name written by name_plain: its length, a colon and the name.
 def read_plain(text: String, at: Int) -> Result[Named]
   length = try read_count(text, at)
-  if length.next + length.value > text.length
-    return error("the type has a name that ends too soon")
-  end
+  return error("the type has a name that ends too soon") if length.next + length.value > text.length
 
   return ok(Named(name: text.slice(length.next, length.value), next: length.next + length.value))
 end
@@ -254,19 +236,13 @@ end
 # A name written by name_text: plain, or "@" and the key of a file of the walk and the local name, which gets the
 # prefix that file has in this walk.
 def read_name(text: String, at: Int, prefixes: Map[String, String]) -> Result[Named]
-  if at >= text.length
-    return error("the type ends too soon")
-  end
+  return error("the type ends too soon") if at >= text.length
 
-  if text.slice(at, 1) != "@"
-    return read_plain(text, at)
-  end
+  return read_plain(text, at) if text.slice(at, 1) != "@"
 
   key = try read_plain(text, at + 1)
   local = try read_plain(text, key.next)
-  if !prefixes.has_key?(key.name)
-    return error("the type names a file that is not in the walk")
-  end
+  return error("the type names a file that is not in the walk") if !prefixes.has_key?(key.name)
 
   return ok(Named(name: prefixes[key.name] + local.name, next: local.next))
 end

@@ -136,9 +136,7 @@ def module_signature(
   enums: Map[String, Ast.EnumDecl],
 ) -> Result[String]
   found = NativeShape.of_function(cx.types, function, structs, enums)
-  if !found.ok?
-    return error(Lowering.internal(cx, found.message, function.span))
-  end
+  return error(Lowering.internal(cx, found.message, function.span)) if !found.ok?
 
   signature = found.unwrap!
   blocks: List[String] = []
@@ -170,9 +168,7 @@ def indexed_codes(
   structs: Map[String, Ast.StructDecl],
 ) -> Result[String]
   pieces = native.codes.split("{")
-  if pieces.size == 1
-    return ok(native.codes)
-  end
+  return ok(native.codes) if pieces.size == 1
 
   result = function.result.name
   if record?(native)
@@ -210,9 +206,7 @@ end
 
 # The struct of this name, then the structs of its fields in order, each before its own; none when it is not a struct.
 def nested_structs(name: String, structs: Map[String, Ast.StructDecl]) -> List[String]
-  if !structs.has_key?(name)
-    return []
-  end
+  return [] if !structs.has_key?(name)
 
   names = [name]
   for field in structs[name].fields

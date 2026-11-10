@@ -507,17 +507,13 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
         lexeme = "\n"
         next = index + 1
         if char == "\r"
-          if chars[next] != "\n"
-            return Diag.Outcome.Failed(lone_carriage_return(start))
-          end
+          return Diag.Outcome.Failed(lone_carriage_return(start)) if chars[next] != "\n"
 
           lexeme = "\r\n"
           next += 1
         end
 
-        if top.inside >= 0
-          return Diag.Outcome.Failed(unterminated(delimiters[top.inside].start, start))
-        end
+        return Diag.Outcome.Failed(unterminated(delimiters[top.inside].start, start)) if top.inside >= 0
 
         newline_end = Source.Position(offset: next, line: line + 1, column: 1)
         index = next
@@ -659,9 +655,7 @@ def finish(
   end
 
   opening = innermost_bracket(delimiters)
-  if opening >= 0
-    return Diag.Outcome.Failed(unclosed(delimiters[opening], here))
-  end
+  return Diag.Outcome.Failed(unclosed(delimiters[opening], here)) if opening >= 0
 
   return Diag.Outcome.Done(closed.push(token(input.text, "EOF", Tokens.Value.NoValue, here, here)))
 end
@@ -669,9 +663,7 @@ end
 # The offset where the comment or doc text that is at `from` ends: the line break, or the end of the text. A line
 # knows its length, so this costs no scan of the characters.
 def line_end(input: Input, from: Int, line: Int, line_start: Int) -> Int
-  if input.by_lines
-    return line_start + input.lines[line - 1].length
-  end
+  return line_start + input.lines[line - 1].length if input.by_lines
 
   return skip_until(input.chars, from, LINE_ENDS)
 end
@@ -707,9 +699,7 @@ end
 # An integer or float starting at `first`. A `_` must sit between two digits.
 def scan_number(input: Input, first: Int, line: Int, line_start: Int) -> Diag.Outcome[Tokens.Token]
   chars = input.chars
-  if chars[first] == "0" and RADIX_BASES.has_key?(chars[first + 1])
-    return scan_radix(input, first, line, line_start)
-  end
+  return scan_radix(input, first, line, line_start) if chars[first] == "0" and RADIX_BASES.has_key?(chars[first + 1])
 
   index = skip_in(chars, first, NUMBER_CHARS)
   fractional = chars[index] == "." and NUMBER_CHARS.include?(chars[index + 1])
@@ -863,9 +853,7 @@ def scan_string(
         decoded = ESCAPES.get(chars[index + 1], "")
       end
 
-      if decoded == ""
-        return Diag.Outcome.Failed(bad_escape(input, index, line, line_start))
-      end
+      return Diag.Outcome.Failed(bad_escape(input, index, line, line_start)) if decoded == ""
 
       parts = parts.push(input.text.slice(segment, index - segment)).push(decoded)
       index += 2
@@ -954,9 +942,7 @@ def close_brace(
   line: Int,
   line_start: Int,
 ) -> Diag.Outcome[Progress]
-  if in_interpolation?(delimiters)
-    return scan_piece(input, tokens, delimiters, index, line, line_start)
-  end
+  return scan_piece(input, tokens, delimiters, index, line, line_start) if in_interpolation?(delimiters)
 
   if delimiters.size == 0 or delimiters[delimiters.size - 1].kind != "{"
     return Diag.Outcome.Failed(unmatched(delimiters, index, "}", line, 1 - line_start))
@@ -1002,9 +988,7 @@ end
 # `<<` stays two `<` tokens, which the parser reports for `xs << x` with a help of its own.
 def heredoc_opener?(chars: List[String], index: Int) -> Bool
   third = chars[index + 2]
-  if third == "~" or HEREDOC_UPPER.include?(third)
-    return true
-  end
+  return true if third == "~" or HEREDOC_UPPER.include?(third)
 
   return third == "-" and HEREDOC_UPPER.include?(chars[index + 3])
 end
@@ -1040,18 +1024,14 @@ def scan_heredoc(
   opener = span(start, Source.position(name_stop, line, line_start))
   # The body starts on the next line, and an interpolation ends on its line: a heredoc inside one cannot end.
   inside = innermost_interpolation(delimiters)
-  if inside >= 0
-    return Diag.Outcome.Failed(unterminated(delimiters[inside].start, opener.stop))
-  end
+  return Diag.Outcome.Failed(unterminated(delimiters[inside].start, opener.stop)) if inside >= 0
 
   name = input.text.slice(index + 3, name_stop - index - 3)
   case heredoc_body(input, name, resume, line, line_start, opener)
     Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
     Diag.Outcome.Done(body) ->
       # A template of one line has no string literal to write instead: it is `<%= ... %>` with no tag-free form.
-      if body.lines.size < 2 and name != EAG_HEREDOC
-        return Diag.Outcome.Failed(heredoc_one_line(opener))
-      end
+      return Diag.Outcome.Failed(heredoc_one_line(opener)) if body.lines.size < 2 and name != EAG_HEREDOC
 
       if name == EAG_HEREDOC
         return Diag.Outcome.Done(
@@ -1086,9 +1066,7 @@ def heredoc_body(
     stop = line_end(input, opener.stop.offset, line, line_start)
     following = next_line_start(chars, size, stop)
     if following < 0
-      if stop < size
-        return Diag.Outcome.Failed(lone_carriage_return(Source.position(stop, line, line_start)))
-      end
+      return Diag.Outcome.Failed(lone_carriage_return(Source.position(stop, line, line_start))) if stop < size
 
       return Diag.Outcome.Failed(unterminated_heredoc(opener, name))
     end
@@ -1186,9 +1164,7 @@ def common_indent(lines: List[BodyLine]) -> Int
     end
   end
 
-  if indent < 0
-    return 0
-  end
+  return 0 if indent < 0
 
   return indent
 end
@@ -1246,9 +1222,7 @@ def heredoc_line(
       cursor = skip_until(chars, segment, HEREDOC_STOPS)
     elsif stopper == "\\"
       decoded = ESCAPES.get(chars[cursor + 1], "")
-      if decoded == ""
-        return Diag.Outcome.Failed(bad_escape(input, cursor, body.line, body.start))
-      end
+      return Diag.Outcome.Failed(bad_escape(input, cursor, body.line, body.start)) if decoded == ""
 
       parts = parts.push(input.text.slice(segment, cursor - segment)).push(decoded)
       segment = cursor + 2
@@ -1277,9 +1251,7 @@ def regex_start?(tokens: List[Tokens.Token], ahead: String, offset: Int) -> Bool
   end
 
   last = tokens[tokens.size - 1]
-  if (last.kind == "divide" or last.kind == "multiply") and last.span.stop.offset == offset
-    return false
-  end
+  return false if (last.kind == "divide" or last.kind == "multiply") and last.span.stop.offset == offset
 
   return !ENDS_EXPRESSION.include?(last.kind)
 end
@@ -1494,9 +1466,7 @@ end
 # def or struct line is then the stray dot of a block, not a continuation.
 def ends_in_type?(tokens: List[Tokens.Token]) -> Bool
   size = tokens.size
-  if size < 2 or tokens[size - 1].kind != "type-name"
-    return false
-  end
+  return false if size < 2 or tokens[size - 1].kind != "type-name"
 
   before = tokens[size - 2].kind
   return before == "arrow" or before == "colon"
@@ -1513,22 +1483,16 @@ def dot_follows?(chars: List[String], from: Int) -> Bool
     end
 
     char = chars[index]
-    if char == "."
-      return NAME_STARTS.include?(chars[index + 1])
-    end
+    return NAME_STARTS.include?(chars[index + 1]) if char == "."
 
-    if char != "#" or chars[index + 1] == "#"
-      return false
-    end
+    return false if char != "#" or chars[index + 1] == "#"
 
     index = skip_until(chars, index, LINE_ENDS)
     if chars[index] == "\r"
       index += 1
     end
 
-    if chars[index] != "\n"
-      return false
-    end
+    return false if chars[index] != "\n"
 
     index += 1
   end
@@ -1551,9 +1515,7 @@ end
 # The stack index of the innermost `#` frame, or -1. O(1): the top frame
 # already knows it.
 def innermost_interpolation(delimiters: List[Frame]) -> Int
-  if delimiters.size == 0
-    return -1
-  end
+  return -1 if delimiters.size == 0
 
   return delimiters[delimiters.size - 1].inside
 end
@@ -1563,9 +1525,7 @@ end
 def innermost_bracket(delimiters: List[Frame]) -> Int
   index = delimiters.size - 1
   while index >= 0
-    if delimiters[index].kind != "kw"
-      return index
-    end
+    return index if delimiters[index].kind != "kw"
 
     index -= 1
   end
@@ -1590,17 +1550,13 @@ end
 
 # The last frame of a stack of `depth` frames, or ROOT.
 def frame_on_top(delimiters: List[Frame], depth: Int) -> Frame
-  if depth == 0
-    return ROOT
-  end
+  return ROOT if depth == 0
 
   return delimiters[depth - 1]
 end
 
 def unclosed(frame: Frame, here: Source.Position) -> Diag.Diagnostic
-  if frame.kind == "#"
-    return unterminated(frame.start, here)
-  end
+  return unterminated(frame.start, here) if frame.kind == "#"
 
   help = Diag.Help.NoHelp
   if frame.kind == "{"
@@ -1623,9 +1579,7 @@ end
 
 # The character at `index`, or "" past the end of the text.
 def at(chars: List[String], size: Int, index: Int) -> String
-  if index < size
-    return chars[index]
-  end
+  return chars[index] if index < size
 
   return ""
 end
@@ -1665,9 +1619,7 @@ end
 def only_blanks?(chars: List[String], from: Int, stop: Int) -> Bool
   index = from
   while index < stop
-    if !blank?(chars[index])
-      return false
-    end
+    return false if !blank?(chars[index])
 
     index += 1
   end
@@ -1680,39 +1632,25 @@ def doc_marker?(chars: List[String], size: Int, index: Int) -> Bool
 end
 
 def next_line_start(chars: List[String], size: Int, index: Int) -> Int
-  if index >= size
-    return -1
-  end
+  return -1 if index >= size
 
-  if chars[index] == "\n"
-    return index + 1
-  end
+  return index + 1 if chars[index] == "\n"
 
-  if chars[index] == "\r" and at(chars, size, index + 1) == "\n"
-    return index + 2
-  end
+  return index + 2 if chars[index] == "\r" and at(chars, size, index + 1) == "\n"
 
   return -1
 end
 
 def line_after_doc(chars: List[String], size: Int, index: Int) -> String
   following = next_line_start(chars, size, index)
-  if following < 0
-    return "eof"
-  end
+  return "eof" if following < 0
 
   found = skip_blanks(chars, size, following)
-  if found >= size
-    return "eof"
-  end
+  return "eof" if found >= size
 
-  if newline?(chars[found])
-    return "blank"
-  end
+  return "blank" if newline?(chars[found])
 
-  if chars[found] == "#"
-    return "comment"
-  end
+  return "comment" if chars[found] == "#"
 
   return "code"
 end
@@ -1742,18 +1680,14 @@ end
 
 # Where the digits of an exponent start when an `e` or `E` at `index` begins one (`e5`, `E-5`, `e+5`), else -1.
 def exponent_start(chars: List[String], index: Int) -> Int
-  if chars[index] != "e" and chars[index] != "E"
-    return -1
-  end
+  return -1 if chars[index] != "e" and chars[index] != "E"
 
   digits = index + 1
   if chars[digits] == "+" or chars[digits] == "-"
     digits += 1
   end
 
-  if DIGITS.include?(chars[digits])
-    return digits
-  end
+  return digits if DIGITS.include?(chars[digits])
 
   return -1
 end
@@ -1764,9 +1698,7 @@ def invalid_separator?(chars: List[String], from: Int, stop: Int) -> Bool
     char = chars[index]
     if char == "_"
       following = at(chars, stop, index + 1)
-      if !DIGITS.include?(following)
-        return true
-      end
+      return true if !DIGITS.include?(following)
     elsif char == "." and at(chars, stop, index + 1) == "_"
       return true
     end
@@ -1788,9 +1720,7 @@ end
 
 def integer_value(digits: String) -> Tokens.Value
   parsed = digits.to_i
-  if parsed.ok?
-    return Tokens.Value.Whole(parsed.unwrap!)
-  end
+  return Tokens.Value.Whole(parsed.unwrap!) if parsed.ok?
 
   return Tokens.Value.Huge(strip_zeros(digits))
 end

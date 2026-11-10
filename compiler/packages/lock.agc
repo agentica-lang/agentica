@@ -62,9 +62,7 @@ export def read(workspace: Workspace.Workspace, file: String) -> Result[Lock]
   text = try Reader.read_text(workspace, reading)
   root = try Reader.parse(reading, text)
   try Reader.known_keys(reading, root, TOP_KEYS, "")
-  if !root.has_key?("version")
-    return error(Reader.fail(reading, "version", "missing key"))
-  end
+  return error(Reader.fail(reading, "version", "missing key")) if !root.has_key?("version")
 
   format = try Reader.integer(reading, root["version"], "version")
   if format != LOCK_FORMAT
@@ -144,9 +142,7 @@ end
 ## The locked package with this name, or an error.
 export def find(lock: Lock, name: String) -> Result[Locked]
   for locked in lock.packages
-    if locked.name == name
-      return ok(locked)
-    end
+    return ok(locked) if locked.name == name
   end
 
   return error("#{name} is not in the lock")
@@ -155,9 +151,7 @@ end
 ## The locked artifact for this package, library and system, or an error. package is "" for the project root.
 export def find_artifact(lock: Lock, package: String, library: String, system: String) -> Result[Artifact]
   for artifact in lock.artifacts
-    if artifact.package == package and artifact.library == library and artifact.system == system
-      return ok(artifact)
-    end
+    return ok(artifact) if artifact.package == package and artifact.library == library and artifact.system == system
   end
 
   return error("#{package} #{library} #{system} is not in the lock")
@@ -166,13 +160,9 @@ end
 ## `name@version` for the messages and the stored names of a package's files: the tag, the first characters of the
 ## commit, or `workspace` for a member.
 export def label(locked: Locked) -> String
-  if locked.member
-    return "#{locked.name}@workspace"
-  end
+  return "#{locked.name}@workspace" if locked.member
 
-  if GitSource.local?(locked.source)
-    return "#{locked.name}@path"
-  end
+  return "#{locked.name}@path" if GitSource.local?(locked.source)
 
   return "#{locked.name}@#{GitSource.version_label(locked.source, locked.commit)}"
 end
@@ -206,9 +196,7 @@ def package_keys(locked: Locked) -> Map[String, Toml.Value]
   end
 
   keys = keys.put(pin_key, pin)
-  if locked.member
-    return keys.put("workspace", Toml.Value.Bool(true))
-  end
+  return keys.put("workspace", Toml.Value.Bool(true)) if locked.member
 
   return keys.put("commit", Toml.Value.Str(locked.commit)).put("hash", Toml.Value.Str(locked.hash))
 end
@@ -242,9 +230,7 @@ def artifact_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Res
   entries = try Reader.table(reading, value, path)
   try Reader.known_keys(reading, entries, ARTIFACT_KEYS, path)
   for key in ARTIFACT_KEYS
-    if !entries.has_key?(key)
-      return error(Reader.fail(reading, Reader.child(path, key), "missing key"))
-    end
+    return error(Reader.fail(reading, Reader.child(path, key), "missing key")) if !entries.has_key?(key)
   end
 
   package = try text_of(reading, entries, path, "package")
@@ -300,32 +286,22 @@ def package_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Resu
   end
 
   for key in required
-    if !entries.has_key?(key)
-      return error(Reader.fail(reading, Reader.child(path, key), "missing key"))
-    end
+    return error(Reader.fail(reading, Reader.child(path, key), "missing key")) if !entries.has_key?(key)
   end
 
   name = try text_of(reading, entries, path, "name")
   problem = GitSource.name_problem(name)
-  if problem != ""
-    return error(Reader.fail_help(reading, Reader.child(path, "name"), "not a package name", problem))
-  end
+  return error(Reader.fail_help(reading, Reader.child(path, "name"), "not a package name", problem)) if problem != ""
 
   override = try override_of(reading, entries, path)
-  if entries.has_key?("path")
-    return path_of(reading, entries, path, name, override)
-  end
+  return path_of(reading, entries, path, name, override) if entries.has_key?("path")
 
   source = try source_of(reading, entries, path)
-  if entries.has_key?("workspace")
-    return member_of(reading, entries, path, name, source, override)
-  end
+  return member_of(reading, entries, path, name, source, override) if entries.has_key?("workspace")
 
   commit = try text_of(reading, entries, path, "commit")
   problem = GitSource.commit_problem(commit)
-  if problem != ""
-    return error(Reader.fail_help(reading, Reader.child(path, "commit"), "not a commit", problem))
-  end
+  return error(Reader.fail_help(reading, Reader.child(path, "commit"), "not a commit", problem)) if problem != ""
 
   if source.ref != "" and !commit.starts_with?(source.ref)
     return error(Reader.fail(reading, Reader.child(path, "commit"), "the commit does not start with the ref"))
@@ -384,9 +360,7 @@ def path_of(
 
   folder = try text_of(reading, entries, path, "path")
   problem = GitSource.path_problem(folder)
-  if problem != ""
-    return error(Reader.fail_help(reading, Reader.child(path, "path"), "not a path", problem))
-  end
+  return error(Reader.fail_help(reading, Reader.child(path, "path"), "not a path", problem)) if problem != ""
 
   source = GitSource.Source(git: "", subdir: "", tag: "", ref: "", path: folder)
   return ok(Locked(name: name, source: source, commit: "", hash: "", member: false, override: override))
@@ -394,9 +368,7 @@ end
 
 # `override = true`, or false when the key is left out.
 def override_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: String) -> Result[Bool]
-  if !entries.has_key?("override")
-    return ok(false)
-  end
+  return ok(false) if !entries.has_key?("override")
 
   here = Reader.child(path, "override")
   flag = try Reader.boolean(reading, entries["override"], here)
@@ -411,9 +383,7 @@ end
 def source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: String) -> Result[GitSource.Source]
   git = try text_of(reading, entries, path, "git")
   problem = GitSource.git_problem(git)
-  if problem != ""
-    return error(Reader.fail_help(reading, Reader.child(path, "git"), "not a git URL", problem))
-  end
+  return error(Reader.fail_help(reading, Reader.child(path, "git"), "not a git URL", problem)) if problem != ""
 
   if entries.has_key?("tag") == entries.has_key?("ref")
     return error(Reader.fail(reading, path, "a package has a tag or a ref: write exactly one of them"))
@@ -423,26 +393,20 @@ def source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: S
   if entries.has_key?("subdir")
     subdir = try text_of(reading, entries, path, "subdir")
     problem = GitSource.subdir_problem(subdir)
-    if problem != ""
-      return error(Reader.fail_help(reading, Reader.child(path, "subdir"), "not a subdir", problem))
-    end
+    return error(Reader.fail_help(reading, Reader.child(path, "subdir"), "not a subdir", problem)) if problem != ""
   end
 
   if entries.has_key?("tag")
     tag = try text_of(reading, entries, path, "tag")
     problem = GitSource.tag_problem(tag)
-    if problem != ""
-      return error(Reader.fail_help(reading, Reader.child(path, "tag"), "not a tag", problem))
-    end
+    return error(Reader.fail_help(reading, Reader.child(path, "tag"), "not a tag", problem)) if problem != ""
 
     return ok(GitSource.Source(git: git, subdir: subdir, tag: tag, ref: "", path: ""))
   end
 
   ref = try text_of(reading, entries, path, "ref")
   problem = GitSource.ref_problem(ref)
-  if problem != ""
-    return error(Reader.fail_help(reading, Reader.child(path, "ref"), "not a ref", problem))
-  end
+  return error(Reader.fail_help(reading, Reader.child(path, "ref"), "not a ref", problem)) if problem != ""
 
   return ok(GitSource.Source(git: git, subdir: subdir, tag: "", ref: ref, path: ""))
 end

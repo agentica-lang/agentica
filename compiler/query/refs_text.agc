@@ -18,9 +18,7 @@ export def text(found: Model.Refs) -> String
     lines = lines.push("#{OutlineText.place(use.file, use.range)} #{use.kind}#{inside(use.function)}")
   end
 
-  if lines.size == 0
-    return ""
-  end
+  return "" if lines.size == 0
 
   return "#{lines.join("\n")}\n"
 end
@@ -31,9 +29,7 @@ export def skipped_text(found: Model.Refs) -> String
 end
 
 def inside(function: String) -> String
-  if function == ""
-    return ""
-  end
+  return "" if function == ""
 
   return " in #{function}"
 end

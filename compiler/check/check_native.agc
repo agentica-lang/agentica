@@ -71,9 +71,7 @@ export def check_all(
   program = Program(written: written_types(modules), owners: resource_owners(modules))
   current = st
   for module in modules
-    if clean.include?(module.key)
-      next
-    end
+    next if clean.include?(module.key)
 
     here = cx.with(file: module.file)
     # One walk per block: a module's library, as written, names it.
@@ -169,9 +167,7 @@ def check_ref(
     item = pending[at]
     at += 1
     tag = T.tag(item)
-    if PLAIN.include?(tag)
-      next
-    end
+    next if PLAIN.include?(tag)
 
     if tag == "Opaque" and program.owners.get(T.name(item), "") == library
       if (!result and item != type) or (fields >= 0 and at > fields)
@@ -226,9 +222,7 @@ end
 # Whether the type is a struct or an enum of the program with no type arguments: a struct whose fields the program
 # declares (a builtin record has none), or an enum that is not builtin.
 def user_type?(cx: State.Cx, type: T.Type) -> Bool
-  if T.args(type).size > 0
-    return false
-  end
+  return false if T.args(type).size > 0
 
   case type
     T.Type.Struct(name, _) -> return cx.field_sites.has_key?(name)
@@ -246,9 +240,7 @@ def user_type(
   name: String,
   written: Map[String, Written],
 ) -> Result[Reached]
-  if walk.seen.include?(name)
-    return ok(Reached(walk: walk, types: []))
-  end
+  return ok(Reached(walk: walk, types: [])) if walk.seen.include?(name)
 
   st = walk.st
   types: List[T.Type] = []

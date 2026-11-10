@@ -61,9 +61,7 @@ end
 
 ## `Name` or `Name(Int, String)`: a variant with the types of its payload, as written.
 export def variant_text(name: String, payload: List[String]) -> String
-  if payload.size == 0
-    return name
-  end
+  return name if payload.size == 0
 
   return "#{name}(#{payload.join(", ")})"
 end
@@ -120,9 +118,7 @@ end
 
 # `[T, U]` for the type parameters of an enum or an alias, nothing for none.
 def parameters_text(names: List[String]) -> String
-  if names.size == 0
-    return ""
-  end
+  return "" if names.size == 0
 
   return "[#{names.join(", ")}]"
 end

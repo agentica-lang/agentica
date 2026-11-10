@@ -207,9 +207,7 @@ export def type_at_partial(cache: Cache.Cache, settings: Env.Settings, asked: Qu
     Partly.Unreadable -> return Typed.Unreadable
     Partly.Rejected(problem) -> return Typed.Rejected(problem)
     Partly.Done(found) ->
-      if found.problems.size == 0
-        return located(settings, asked, found.front)
-      end
+      return located(settings, asked, found.front) if found.problems.size == 0
 
       case PartialAt.answer(found.front.linked, found.front.checked, found.failed, asked)
         Diag.Outcome.Failed(problem) -> return Typed.Rejected(unanswered(found, asked, problem))
@@ -233,16 +231,12 @@ export def refs_partial(cache: Cache.Cache, settings: Env.Settings, asked: Query
     Partly.Unreadable -> return Referenced.Unreadable
     Partly.Rejected(problem) -> return Referenced.Rejected(problem)
     Partly.Done(found) ->
-      if found.problems.size == 0
-        return referenced(settings, asked, found.front, [])
-      end
+      return referenced(settings, asked, found.front, []) if found.problems.size == 0
 
       case Refs.answer(found.front.linked, found.front.checked, asked)
         Diag.Outcome.Failed(problem) -> return Referenced.Rejected(unanswered(found, asked, problem))
         Diag.Outcome.Done(answered) ->
-          if Refs.needs_types?(answered)
-            return Referenced.Rejected(found.problems[0])
-          end
+          return Referenced.Rejected(found.problems[0]) if Refs.needs_types?(answered)
 
           query = "#{asked.file}:#{asked.line}:#{asked.column}"
           marked = Convert.refs(query, answered, [], file_names(settings, answered))
@@ -278,9 +272,7 @@ export def refs_at(
   usage: String,
 ) -> Referenced
   settings = for_query(settings)
-  if paths.size == 0
-    return refs(cache, settings, asked)
-  end
+  return refs(cache, settings, asked) if paths.size == 0
 
   case Front.read_root(settings.workspace, asked.file)
     Front.Root.Unreadable(_) -> return Referenced.Unreadable
@@ -294,9 +286,7 @@ export def refs_at(
             none -> return Referenced.Rejected(linked.skipped[0].problem)
             some(program) ->
               # The file of the position is the first root: when it is left out there is nothing to ask about.
-              if program.modules[0].key != roots[0].key
-                return Referenced.Rejected(linked.skipped[0].problem)
-              end
+              return Referenced.Rejected(linked.skipped[0].problem) if program.modules[0].key != roots[0].key
 
               case Front.query_linked(program, settings)
                 Front.Outcome.Rejected(problem) -> return Referenced.Rejected(named_in(settings, problem, roots))
@@ -320,9 +310,7 @@ export def refs_named(
   usage: String,
 ) -> Referenced
   settings = for_query(settings)
-  if name == ""
-    return Referenced.Rejected(QueryOptions.refusal("missing NAME or FILE:LINE:COL", usage))
-  end
+  return Referenced.Rejected(QueryOptions.refusal("missing NAME or FILE:LINE:COL", usage)) if name == ""
 
   case SymbolPaths.expand(settings.workspace, paths, buffer, usage)
     SymbolPaths.Expanded.Refused(problem) -> return Referenced.Rejected(problem)
@@ -352,9 +340,7 @@ export def symbol(
   usage: String,
 ) -> Found
   settings = for_query(settings)
-  if name == ""
-    return Found.Rejected(QueryOptions.refusal("missing NAME", usage))
-  end
+  return Found.Rejected(QueryOptions.refusal("missing NAME", usage)) if name == ""
 
   case SymbolPaths.expand(settings.workspace, paths, buffer, usage)
     SymbolPaths.Expanded.Refused(problem) -> return Found.Rejected(problem)
@@ -371,9 +357,7 @@ end
 ## The problem with the root file named as the caller wrote it (`source`): the linker knows it by its canonical path. A
 ## problem in another file keeps its canonical path.
 export def named(settings: Env.Settings, problem: Problems.Problem, source: String) -> Problems.Problem
-  if root?(problem.file, source, settings)
-    return problem.with(file: source)
-  end
+  return problem.with(file: source) if root?(problem.file, source, settings)
 
   return problem
 end
@@ -381,9 +365,7 @@ end
 ## Whether a file that a problem names is the root file typed as `typed`. The Workspace answers for the canonical path
 ## of the root, which is not a file of the disk when it is a buffer.
 export def root?(named: String, typed: String, settings: Env.Settings) -> Bool
-  if named == typed
-    return true
-  end
+  return true if named == typed
 
   real = settings.workspace.real_path.call(typed)
   return real.ok? and real.unwrap! == named
@@ -414,9 +396,7 @@ def position_front(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosit
 end
 
 def asked_front(cache: Cache.Cache, settings: Env.Settings, file: String, skipping: Bool) -> Front.Outcome
-  if skipping
-    return Front.query_checked(cache, file, settings)
-  end
+  return Front.query_checked(cache, file, settings) if skipping
 
   return Front.query_cached(cache, file, settings)
 end
@@ -436,9 +416,7 @@ end
 # Why a program with failed functions has no answer for a position: its first problem when the position is in a failed
 # function and could name something there, else the position is on no expression.
 def unanswered(found: Partial.Recovered, asked: QueryPosition.Asked, missed: Diag.Diagnostic) -> Problems.Problem
-  if PartialAt.unclear?(found.front.linked, found.failed, asked)
-    return found.problems[0]
-  end
+  return found.problems[0] if PartialAt.unclear?(found.front.linked, found.failed, asked)
 
   return Front.stage_problem(asked.file, missed)
 end
@@ -504,9 +482,7 @@ end
 # check.
 def named_in(settings: Env.Settings, problem: Problems.Problem, roots: List[SymbolPaths.Root]) -> Problems.Problem
   for root in roots
-    if root?(problem.file, root.typed, settings)
-      return problem.with(file: root.typed)
-    end
+    return problem.with(file: root.typed) if root?(problem.file, root.typed, settings)
   end
 
   return problem
@@ -532,9 +508,7 @@ end
 
 # The match with the name its answer gives its file; a builtin has none.
 def shown(settings: Env.Settings, match: Symbol.Match) -> Symbol.Match
-  if match.file == ""
-    return match
-  end
+  return match if match.file == ""
 
   return match.with(file: QueryFiles.display(settings, match.file, true))
 end

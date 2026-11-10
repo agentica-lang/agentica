@@ -39,9 +39,7 @@ def documented(settings: Env.Settings, path: String, text: String, as_json: Bool
   case Docs.of_file(settings, path, text)
     Diag.Outcome.Failed(problem) -> return Reply.Answer.Rejected(Front.stage_problem(path, problem))
     Diag.Outcome.Done(module) ->
-      if as_json
-        return Reply.Answer.Printed(Reply.printed("#{JSON.encode(DocJson.json(path, module))}\n"))
-      end
+      return Reply.Answer.Printed(Reply.printed("#{JSON.encode(DocJson.json(path, module))}\n")) if as_json
 
       return Reply.Answer.Printed(Reply.printed(DocText.text(path, module)))
   end

@@ -38,9 +38,7 @@ export def add_main(file: String, program: Ast.Program) -> Result[Ast.Program]
     end
   end
 
-  if tests.size == 0
-    return ok(program)
-  end
+  return ok(program) if tests.size == 0
 
   try no_main(file, main)
   for test in tests
@@ -97,9 +95,7 @@ def check_test(file: String, function: Ast.FunctionDecl) -> Result[Void]
 end
 
 def result_void?(result: Ast.TypeRef) -> Bool
-  if result.name != "Result" or result.args.size != 1
-    return false
-  end
+  return false if result.name != "Result" or result.args.size != 1
 
   return result.args[0].name == "Void" and result.args[0].args.size == 0
 end

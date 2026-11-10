@@ -44,9 +44,7 @@ end
 ## The `--ai` text of a problem of `file` with the file in place of its `check failed: 1 error` heading, which the last
 ## line of a run says for all the files.
 export def headed(file: String, text: String) -> String
-  if !text.starts_with?(AI_HEADING)
-    return text
-  end
+  return text if !text.starts_with?(AI_HEADING)
 
   return "#{file}:#{text.slice(AI_HEADING.length, text.length - AI_HEADING.length)}"
 end
@@ -63,9 +61,7 @@ end
 
 ## `1 file` or `3 files`.
 export def files_text(count: Int) -> String
-  if count == 1
-    return "1 file"
-  end
+  return "1 file" if count == 1
 
   return "#{count} files"
 end

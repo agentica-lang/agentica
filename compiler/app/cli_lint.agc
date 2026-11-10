@@ -34,9 +34,7 @@ export def entry(file: String, text: String) -> Entry
   case Lint.check(file, text)
     Diag.Outcome.Failed(diagnostic) -> return Entry.Unparsed(file, Front.stage_problem(file, diagnostic))
     Diag.Outcome.Done(found) ->
-      if found.size == 0
-        return Entry.Clean(file)
-      end
+      return Entry.Clean(file) if found.size == 0
 
       return Entry.Suggested(file, found)
   end
@@ -79,9 +77,7 @@ export def summary_text(entries: List[Entry]) -> String
   unreadable = entries.select do |entry: Entry| unreadable?(entry) end.size
   holding = entries.select do |entry: Entry| suggested?(entry) end.size
   if unparsed + unreadable == 0
-    if total == 0
-      return "lint ok: #{CliCheck.files_text(entries.size)}\n"
-    end
+    return "lint ok: #{CliCheck.files_text(entries.size)}\n" if total == 0
 
     return "lint: #{suggestions_count(total)} in #{holding} of #{CliCheck.files_text(entries.size)}\n"
   end
@@ -187,9 +183,7 @@ def failure(unparsed: Int, unreadable: Int) -> String
 end
 
 def plural(count: Int, word: String) -> String
-  if count == 1
-    return word
-  end
+  return word if count == 1
 
   return "#{word}s"
 end

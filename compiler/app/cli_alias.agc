@@ -33,9 +33,7 @@ export def targets(name: String) -> List[String]
   )
 
   public = found.uniq.sort.filter do |target: String| CatalogJson.public(target).ok? end
-  if public.size > MAX_TARGETS
-    return []
-  end
+  return [] if public.size > MAX_TARGETS
 
   # The builtins written as a method of that name come first: `join` is the join of a List before `Path.join`.
   written = public.filter do |target: String| RubyForm.written_as?(target, method) end
@@ -47,9 +45,7 @@ end
 export def kind_hints(name: String) -> Map[String, String]
   hints = Tables.foreign_kind_methods()
   found: Map[String, String] = {}
-  if name.contains?(".")
-    return found
-  end
+  return found if name.contains?(".")
 
   for key in hints.keys.sort
     if key.ends_with?(".#{name}")
@@ -78,9 +74,7 @@ end
 # The foreign method names of the checker: `len` is `size` or `length`, in each module that has one.
 def from_renamed(method: String, kind: String, modules: Map[String, String]) -> List[String]
   renamed = Tables.foreign_methods().get(method)
-  if renamed.none?
-    return []
-  end
+  return [] if renamed.none?
 
   aliases = Tables.method_aliases()
   found: List[String] = []

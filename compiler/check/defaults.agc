@@ -56,9 +56,7 @@ end
 
 ## The parameter that argument index fills in a call with count arguments.
 export def param_of(shape: Shape, count: Int, index: Int) -> Int
-  if shape.fn_last and index == count - 1
-    return shape.total - 1
-  end
+  return shape.total - 1 if shape.fn_last and index == count - 1
 
   return index
 end
@@ -68,16 +66,12 @@ export def argument_for(shape: Shape, count: Int, param: Int) -> Int
   if shape.fn_last and param == shape.total - 1
     return count - 1
   elsif shape.fn_last
-    if param < count - 1
-      return param
-    end
+    return param if param < count - 1
 
     return -1
   end
 
-  if param < count
-    return param
-  end
+  return param if param < count
 
   return -1
 end

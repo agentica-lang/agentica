@@ -94,9 +94,7 @@ export def expand(opener: Tokens.Token, body: Tokens.EagBody) -> Diag.Outcome[Li
     end
   end
 
-  if built.open.size > 0
-    return Diag.Outcome.Failed(unclosed(built.open[built.open.size - 1]))
-  end
+  return Diag.Outcome.Failed(unclosed(built.open[built.open.size - 1])) if built.open.size > 0
 
   at = opener.span
   head = block_head(built, at)
@@ -238,9 +236,7 @@ def split(line: Tokens.EagLine, cut: Int) -> Diag.Outcome[List[Part]]
       # to the one with the `%>` are joined once.
       inside = piece.slice(width, piece.length - width)
       if !inside.include?("%>")
-        if last_closing <= at
-          return Diag.Outcome.Failed(unterminated_tag(line, cut + column))
-        end
+        return Diag.Outcome.Failed(unterminated_tag(line, cut + column)) if last_closing <= at
 
         chunks = [inside]
         at += 1
@@ -378,9 +374,7 @@ end
 
 # The place where the waiting text starts: the line of its first piece, so the push of a text has that line's place.
 def text_start(built: Built, line: Tokens.EagLine) -> Source.Span
-  if built.text.size > 0
-    return built.text_at
-  end
+  return built.text_at if built.text.size > 0
 
   start = line.start
   stop = Source.Position(offset: start.offset + line.text.length, line: start.line, column: line.text.length + 1)
@@ -395,9 +389,7 @@ end
 # The blocks still open after the code of a tag: one more for each opener word at its start and each `do`, one fewer
 # for each `end`. An `end` with no block open is the error.
 def counted(built: Built, part: Part, code: List[Tokens.Token]) -> Diag.Outcome[List[Source.Span]]
-  if part.kind != "stmt" or code.size == 0
-    return Diag.Outcome.Done(built.open)
-  end
+  return Diag.Outcome.Done(built.open) if part.kind != "stmt" or code.size == 0
 
   here = Source.Span(start: code[0].span.start, stop: code[code.size - 1].span.stop)
   open = built.open
@@ -409,9 +401,7 @@ def counted(built: Built, part: Part, code: List[Tokens.Token]) -> Diag.Outcome[
     if token.kind == "do"
       open = open.push(here)
     elsif token.kind == "end"
-      if open.size == 0
-        return Diag.Outcome.Failed(stray_end(token.span))
-      end
+      return Diag.Outcome.Failed(stray_end(token.span)) if open.size == 0
 
       open = open.take(open.size - 1)
     end
@@ -444,9 +434,7 @@ end
 def with_code(at: Source.Span, line: Tokens.EagLine, built: Built, part: Part, code: List[Tokens.Token]) -> Built
   flushed = flush(built, at)
   if part.kind == "stmt"
-    if code.size == 0
-      return flushed
-    end
+    return flushed if code.size == 0
 
     return flushed.with(tokens: appended(flushed.tokens, code).push(word("NL", "\n", code[code.size - 1].span)))
   end
@@ -495,9 +483,7 @@ end
 
 # The pending text as one push of a string, when there is any.
 def flush(built: Built, at: Source.Span) -> Built
-  if built.text.size == 0
-    return built
-  end
+  return built if built.text.size == 0
 
   where = built.text_at
   literal = Tokens.Token(kind: "string", lexeme: "\"\"", value: Tokens.Value.Text(built.text.join("")), span: where)

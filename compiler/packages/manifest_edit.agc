@@ -19,9 +19,7 @@ export def add_dependency(text: String, name: String, source: GitSource.Source) 
   entry = "#{name} = #{inline_table(source)}"
   lines = text.split("\n")
   header = header_index(lines)
-  if header < 0
-    return with_new_table(text, entry, newline)
-  end
+  return with_new_table(text, entry, newline) if header < 0
 
   at = after_last_entry(lines, header)
   # A CRLF file splits at the LF, so each of its lines keeps the CR: the new line needs one too.
@@ -41,9 +39,7 @@ def inline_table(source: GitSource.Source) -> String
     pin = "tag = \"#{source.tag}\""
   end
 
-  if source.subdir != ""
-    return "{ git = \"#{source.git}\", #{pin}, subdir = \"#{source.subdir}\" }"
-  end
+  return "{ git = \"#{source.git}\", #{pin}, subdir = \"#{source.subdir}\" }" if source.subdir != ""
 
   return "{ git = \"#{source.git}\", #{pin} }"
 end
@@ -54,9 +50,7 @@ def header_index(lines: List[String]) -> Int
     head = lines[index].trim
     if head.starts_with?(HEADER)
       rest = head.slice(HEADER.length, head.length - HEADER.length).trim
-      if rest == "" or rest.starts_with?("#")
-        return index
-      end
+      return index if rest == "" or rest.starts_with?("#")
     end
   end
 
@@ -82,9 +76,7 @@ end
 
 # A new table after the text, with one blank line between them.
 def with_new_table(text: String, entry: String, newline: String) -> String
-  if text.trim == ""
-    return "#{HEADER}#{newline}#{entry}#{newline}"
-  end
+  return "#{HEADER}#{newline}#{entry}#{newline}" if text.trim == ""
 
   body = text
   if !body.ends_with?("\n")

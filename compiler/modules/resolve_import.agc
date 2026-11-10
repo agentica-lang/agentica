@@ -47,17 +47,13 @@ end
 ## stdlib/ folder, or the copy that the binary carries).
 export def read_source(settings: Env.Settings, key: String) -> SourceFile.Read
   workspace = settings.workspace
-  if !embedded?(key)
-    return workspace.read_text.call(key)
-  end
+  return workspace.read_text.call(key) if !embedded?(key)
 
   case settings.std
     Env.StdProvider.Folder(folder) -> return workspace.read_text.call(std_file(folder, key))
     Env.StdProvider.Embedded ->
       text = workspace.std_source.call(std_path(key))
-      if text.ok?
-        return SourceFile.Read.Text(text.unwrap!)
-      end
+      return SourceFile.Read.Text(text.unwrap!) if text.ok?
 
       return SourceFile.Read.Unreadable(text.message)
   end
@@ -210,9 +206,7 @@ def library(settings: Env.Settings, libs_dir: String, file: String, site: Failur
   rest = file.slice(4, file.length - 4)
   for root in roots
     candidate = Paths.join(root, rest)
-    if settings.workspace.file_exists.call(candidate)
-      return contained(settings.workspace, root, candidate, site)
-    end
+    return contained(settings.workspace, root, candidate, site) if settings.workspace.file_exists.call(candidate)
   end
 
   return error(io_failure(site, "cannot find library module"))
@@ -231,9 +225,7 @@ def library_roots(settings: Env.Settings, libs_dir: String, site: Failure.Site) 
 
   configured: List[String] = []
   for entry in settings.env.agentica_path.split(separator)
-    if entry == ""
-      next
-    end
+    next if entry == ""
 
     if !Paths.absolute?(entry, on_windows)
       return error(
@@ -246,9 +238,7 @@ def library_roots(settings: Env.Settings, libs_dir: String, site: Failure.Site) 
 
   first = [Paths.join(libs_dir, "agc_libs")]
   roots = first.concat(configured).concat(user_roots(settings.env, on_windows))
-  if on_windows
-    return ok(roots)
-  end
+  return ok(roots) if on_windows
 
   return ok(roots.concat(["/usr/local/share/agentica/lib", "/usr/share/agentica/lib"]))
 end
@@ -258,20 +248,14 @@ end
 # XDG_DATA_HOME and HOME are not read there.
 def user_roots(env: Env.Env, on_windows: Bool) -> List[String]
   if on_windows
-    if Paths.absolute?(env.local_app_data, true)
-      return [Paths.join(env.local_app_data, "agentica/lib")]
-    end
+    return [Paths.join(env.local_app_data, "agentica/lib")] if Paths.absolute?(env.local_app_data, true)
 
     return []
   end
 
-  if env.xdg_data_home.starts_with?("/")
-    return [Paths.join(env.xdg_data_home, "agentica/lib")]
-  end
+  return [Paths.join(env.xdg_data_home, "agentica/lib")] if env.xdg_data_home.starts_with?("/")
 
-  if env.home == ""
-    return []
-  end
+  return [] if env.home == ""
 
   return [Paths.join(env.home, ".local/share/agentica/lib")]
 end
@@ -280,9 +264,7 @@ end
 def contained(workspace: Workspace.Workspace, root: String, candidate: String, site: Failure.Site) -> Result[String]
   base = workspace.real_path.call(root)
   target = workspace.real_path.call(candidate)
-  if !base.ok? or !target.ok?
-    return error(io_failure(site, "cannot resolve import"))
-  end
+  return error(io_failure(site, "cannot resolve import")) if !base.ok? or !target.ok?
 
   if !Paths.inside?(base.unwrap!, target.unwrap!)
     return error(Failure.fail_at(site, "CHECK-IMPORT-PATH", "library path escapes its root", Diag.Help.NoHelp))
@@ -365,17 +347,13 @@ end
 # `Paths.folded` drops the "/" that a rooted path starts with: put it back, as `like` has it.
 def folded_from(like: String, path: String) -> String
   folded = Paths.folded(path)
-  if like.starts_with?("/")
-    return "/#{folded}"
-  end
+  return "/#{folded}" if like.starts_with?("/")
 
   return folded
 end
 
 def base_name(importer: Importer) -> String
-  if importer.origin.root == ""
-    return "project"
-  end
+  return "project" if importer.origin.root == ""
 
   return "package"
 end

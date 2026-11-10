@@ -62,16 +62,12 @@ export def sync(
     cache = try PackageFetch.cache_for(settings.env, lock_file, packages)
     for index in 0...packages.size
       locked = packages[index]
-      if Lock.in_place?(locked)
-        next
-      end
+      next if Lock.in_place?(locked)
 
       place = PackageFetch.Place(file: lock_file, entry: Reader.item("package", index))
       folder = PackageCache.folder(cache, locked.source, locked.commit)
       source = workspace.real_path.call(folder)
-      if !source.ok?
-        return error(PackageFetch.fail(place, "PKG-FETCH", "", "cannot read #{folder}", source.message))
-      end
+      return error(PackageFetch.fail(place, "PKG-FETCH", "", "cannot read #{folder}", source.message)) if !source.ok?
 
       try put(workspace, deps, source.unwrap!, place, locked)
     end
@@ -100,9 +96,7 @@ export def put(
   place: PackageFetch.Place,
   locked: Lock.Locked,
 ) -> Result[Void]
-  if up_to_date?(workspace, deps, locked)
-    return ok()
-  end
+  return ok() if up_to_date?(workspace, deps, locked)
 
   files = try chosen(workspace, source, place, locked)
   try prepare(workspace, deps)
@@ -118,15 +112,11 @@ end
 # included, is a reason to write it again.
 def up_to_date?(workspace: Workspace.Workspace, deps: String, locked: Lock.Locked) -> Bool
   here = kind_of(workspace, deps)
-  if !here.ok? or !folder?(here.unwrap!)
-    return false
-  end
+  return false if !here.ok? or !folder?(here.unwrap!)
 
   target = Paths.join(deps, locked.name)
   seen = kind_of(workspace, target)
-  if !seen.ok? or !folder?(seen.unwrap!)
-    return false
-  end
+  return false if !seen.ok? or !folder?(seen.unwrap!)
 
   case PackageHash.hash_folder(workspace, target)
     PackageHash.Hashed.Hash(found) -> return found == locked.hash
@@ -148,14 +138,10 @@ end
 # is left alone (the writes refuse it later). A leftover that cannot be removed or looked at stays.
 def sweep(workspace: Workspace.Workspace, deps: String) -> Result[Void]
   here = try kind_of(workspace, deps)
-  if !folder?(here)
-    return ok()
-  end
+  return ok() if !folder?(here)
 
   listed = workspace.list_folder.call(deps)
-  if !listed.ok?
-    return ok()
-  end
+  return ok() if !listed.ok?
 
   now = Time.now_ms() / 1000
   for entry in listed.unwrap!
@@ -183,9 +169,7 @@ def chosen(
     PackageHash.Listing.Stopped(reason) -> return error(unreadable(place, source, locked, reason))
     PackageHash.Listing.Files(paths) ->
       entries = workspace.list_folder.call(source)
-      if !entries.ok?
-        return error(PackageFetch.fail(place, "PKG-FETCH", "", "cannot read #{source}", entries.message))
-      end
+      return error(PackageFetch.fail(place, "PKG-FETCH", "", "cannot read #{source}", entries.message)) if !entries.ok?
 
       chosen = paths.sort
       for entry in entries.unwrap!
@@ -221,9 +205,7 @@ def prepare(workspace: Workspace.Workspace, deps: String) -> Result[Void]
   case kind
     Kind.Absent ->
       made = Dir.mkdir(deps, FS_TIMEOUT_MS)
-      if !made.ok?
-        return error(write_failure(deps, "cannot make #{deps}", made.message))
-      end
+      return error(write_failure(deps, "cannot make #{deps}", made.message)) if !made.ok?
 
       return ok()
     Kind.Folder -> return ok()
@@ -236,9 +218,7 @@ end
 
 def kind_of(workspace: Workspace.Workspace, path: String) -> Result[Kind]
   entries = workspace.list_folder.call(Paths.directory_of(path))
-  if !entries.ok?
-    return error(write_failure(path, "cannot read the folder of #{path}", entries.message))
-  end
+  return error(write_failure(path, "cannot read the folder of #{path}", entries.message)) if !entries.ok?
 
   name = Paths.last_part(path)
   for entry in entries.unwrap!
@@ -260,9 +240,7 @@ def make_stage(deps: String) -> Result[String]
   for _ in 0...TEMP_TRIES
     name = Paths.join(deps, ".tmp-#{unique()}")
     made = Dir.mkdir_private(name, FS_TIMEOUT_MS)
-    if made.ok?
-      return ok(name)
-    end
+    return ok(name) if made.ok?
 
     failure = made.message
   end
@@ -286,9 +264,7 @@ def stage_and_swap(
   # Dir.mkdir keeps the mode of an ordinary folder (0777 less the umask), unlike the private parent.
   stage = Paths.join(parent, "copy")
   made = Dir.mkdir(stage, FS_TIMEOUT_MS)
-  if !made.ok?
-    return error(write_failure(stage, "cannot make #{stage}", made.message))
-  end
+  return error(write_failure(stage, "cannot make #{stage}", made.message)) if !made.ok?
 
   for path in files
     try copy(workspace, source, stage, path)
@@ -315,19 +291,13 @@ def copy(workspace: Workspace.Workspace, source: String, stage: String, path: St
   from = Paths.join(source, path)
   to = Paths.join(stage, path)
   read = workspace.read_bytes.call(from)
-  if !read.ok?
-    return error(write_failure(from, "cannot read #{from}", read.message))
-  end
+  return error(write_failure(from, "cannot read #{from}", read.message)) if !read.ok?
 
   made = Dir.mkdir(Paths.directory_of(to), FS_TIMEOUT_MS)
-  if !made.ok?
-    return error(write_failure(to, "cannot make the folder of #{to}", made.message))
-  end
+  return error(write_failure(to, "cannot make the folder of #{to}", made.message)) if !made.ok?
 
   written = SaveFile.bytes(to, read.unwrap!, FS_TIMEOUT_MS)
-  if !written.ok?
-    return error(write_failure(to, "cannot write #{to}", written.message))
-  end
+  return error(write_failure(to, "cannot write #{to}", written.message)) if !written.ok?
 
   return ok()
 end
@@ -341,9 +311,7 @@ def swap(workspace: Workspace.Workspace, deps: String, stage: String, name: Stri
   replacing = !absent?(seen)
   if replacing
     moved = Path.rename(target, backup, FS_TIMEOUT_MS)
-    if !moved.ok?
-      return error(write_failure(target, "cannot replace #{target}", moved.message))
-    end
+    return error(write_failure(target, "cannot replace #{target}", moved.message)) if !moved.ok?
   end
 
   placed = Path.rename(stage, target, FS_TIMEOUT_MS)
@@ -373,22 +341,16 @@ end
 # A deps/ that does not exist has nothing to remove, and one that is a link is refused as `put` refuses it.
 def remove(workspace: Workspace.Workspace, deps: String, name: String) -> Result[Void]
   here = try kind_of(workspace, deps)
-  if absent?(here)
-    return ok()
-  end
+  return ok() if absent?(here)
 
   try prepare(workspace, deps)
   target = Paths.join(deps, name)
   seen = try kind_of(workspace, target)
-  if absent?(seen)
-    return ok()
-  end
+  return ok() if absent?(seen)
 
   backup = Paths.join(deps, ".old-#{unique()}-#{name}")
   moved = Path.rename(target, backup, FS_TIMEOUT_MS)
-  if !moved.ok?
-    return error(write_failure(target, "cannot remove #{target}", moved.message))
-  end
+  return error(write_failure(target, "cannot remove #{target}", moved.message)) if !moved.ok?
 
   # An old folder that cannot be removed is only a spare hidden folder.
   _ = Path.remove(backup, FS_TIMEOUT_MS)

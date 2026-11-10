@@ -77,15 +77,11 @@ end
 ## The matches of `name` in `linked`, the program of `roots` (symbol_link.agc): as `answer`, for a caller that needs
 ## the program as well.
 export def search(name: String, roots: List[SymbolPaths.Root], linked: SymbolLink.Linked) -> Outcome
-  if linked.modules.size == 0
-    return Outcome.Refused(linked.skipped[0].problem)
-  end
+  return Outcome.Refused(linked.skipped[0].problem) if linked.modules.size == 0
 
   aliases = aliases_of(linked.modules, roots)
   matches = declared(linked.modules, aliases, name).concat(builtin(name))
-  if matches.size == 0
-    return Outcome.Refused(not_found(name, linked))
-  end
+  return Outcome.Refused(not_found(name, linked)) if matches.size == 0
 
   return Outcome.Found(Answer(matches: matches, skipped: linked.skipped))
 end
@@ -95,23 +91,17 @@ end
 export def declared_at(module: Linker.LinkedModule, name_span: Source.Span) -> Optional[Match]
   at = name_span.start.offset
   for item in Model.declared(module.parsed, module.text)
-    if item.name_span.start.offset == at
-      return some(item_match(module.key, item))
-    end
+    return some(item_match(module.key, item)) if item.name_span.start.offset == at
 
     case item.detail
       Model.Detail.Struct(fields) ->
         for field in fields
-          if field.name_span.start.offset == at
-            return some(field_match(module.key, item, field))
-          end
+          return some(field_match(module.key, item, field)) if field.name_span.start.offset == at
         end
 
       Model.Detail.Enum(variants) ->
         for variant in variants
-          if variant.name_span.start.offset == at
-            return some(variant_match(module.key, item, variant))
-          end
+          return some(variant_match(module.key, item, variant)) if variant.name_span.start.offset == at
         end
 
       Model.Detail.Function(_, _) -> next
@@ -141,9 +131,7 @@ end
 # The aliases that the roots import the module `key` under, in the order they were found.
 def aliases_for(aliases: Map[String, List[String]], key: String) -> List[String]
   found = aliases.get(key)
-  if found.some?
-    return found.unwrap!
-  end
+  return found.unwrap! if found.some?
 
   return []
 end
@@ -165,9 +153,7 @@ end
 # alias of a root file (`Models.`) and `std/NAME.` for a module of the standard library.
 def written_names(module: Linker.LinkedModule, exported: Bool, aliases: Map[String, List[String]]) -> List[String]
   out = [""]
-  if !exported
-    return out
-  end
+  return out if !exported
 
   for alias in aliases_for(aliases, module.key).uniq
     out = out.push("#{alias}.")
@@ -252,9 +238,7 @@ end
 # The public builtin called `name`, as `agentica help NAME` finds it: a match with no file and no place.
 def builtin(name: String) -> List[Match]
   entry = CatalogJson.public(name)
-  if !entry.ok?
-    return []
-  end
+  return [] if !entry.ok?
 
   here = Source.Position(offset: 0, line: 0, column: 0)
   nowhere = Source.Span(start: here, stop: here)

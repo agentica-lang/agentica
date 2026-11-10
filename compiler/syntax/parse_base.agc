@@ -147,9 +147,7 @@ end
 
 ## The kind of the token at an index. An index past the end reads the last token (EOF).
 export def kind_at(e: Env, index: Int) -> String
-  if index < e.size
-    return e.tokens[index].kind
-  end
+  return e.tokens[index].kind if index < e.size
 
   return e.tokens[e.size - 1].kind
 end
@@ -158,16 +156,12 @@ end
 ## (UPPER_SNAKE_CASE). The lexer makes every such name a type-name token; this tells it from a CamelCase type.
 export def constant_name?(text: String) -> Bool
   codes = text.split("").map do |character| String.code(character) end
-  if codes.size < 2 or codes[0] < 65 or codes[0] > 90
-    return false
-  end
+  return false if codes.size < 2 or codes[0] < 65 or codes[0] > 90
 
   index = 1
   while index < codes.size
     code = codes[index]
-    if !((code >= 65 and code <= 90) or (code >= 48 and code <= 57) or code == 95)
-      return false
-    end
+    return false if !((code >= 65 and code <= 90) or (code >= 48 and code <= 57) or code == 95)
 
     index += 1
   end
@@ -183,21 +177,13 @@ end
 
 ## How a token is named in "found ..." messages. The lexeme is shown in the form of `written_text` (unicode.agc).
 export def describe(token: Tokens.Token) -> String
-  if token.lexeme == ""
-    return token.kind
-  end
+  return token.kind if token.lexeme == ""
 
-  if token.kind == "NL"
-    return "a newline"
-  end
+  return "a newline" if token.kind == "NL"
 
-  if token.kind == "interp-end" and token.lexeme == "%>"
-    return "\"%>\""
-  end
+  return "\"%>\"" if token.kind == "interp-end" and token.lexeme == "%>"
 
-  if token.kind == "interp-middle" or token.kind == "interp-end"
-    return "\"}\""
-  end
+  return "\"}\"" if token.kind == "interp-middle" or token.kind == "interp-end"
 
   return Unicode.written_text(token.lexeme)
 end
@@ -238,9 +224,7 @@ end
 ## PARSE-MISSING-BLANK-LINE.
 export def bail(e: Env, at: Int, code: String, message: String, help: Diag.Help) -> String
   token = e.tokens[at]
-  if token.kind == "DOC" and code != "PARSE-MISSING-BLANK-LINE"
-    return detached_doc(token)
-  end
+  return detached_doc(token) if token.kind == "DOC" and code != "PARSE-MISSING-BLANK-LINE"
 
   return pack(code, message, token.span, help)
 end
@@ -268,9 +252,7 @@ end
 ## The context `levels` deeper than e; PARSE-TOO-DEEP when that passes nesting_limit. enter adds one level, deepen adds
 ## the k links of a chain so far.
 export def deepen(e: Env, pos: Int, levels: Int) -> Result[Env]
-  if e.nesting + levels > NESTING_LIMIT
-    return error(too_deep(e, pos))
-  end
+  return error(too_deep(e, pos)) if e.nesting + levels > NESTING_LIMIT
 
   return ok(
     Env(
@@ -305,9 +287,7 @@ end
 ## true, which only function and method names allow.
 export def expect(e: Env, pos: Int, kind: String, description: String, suffix: Bool) -> Result[Int]
   token = e.tokens[pos]
-  if token.kind == kind and !(kind == "name" and !suffix and decorated?(token.lexeme))
-    return ok(pos + 1)
-  end
+  return ok(pos + 1) if token.kind == kind and !(kind == "name" and !suffix and decorated?(token.lexeme))
 
   return error(found(e, pos, description))
 end
@@ -383,9 +363,7 @@ end
 export def parse_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
   token = e.tokens[pos]
   kind = token.kind
-  if kind == "name"
-    return parse_name_pattern(e, pos, ids)
-  end
+  return parse_name_pattern(e, pos, ids) if kind == "name"
 
   if kind == "string" and heredoc?(token)
     return error(
@@ -397,13 +375,9 @@ export def parse_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
     return literal_pattern(e, ids, literal_value(token), pos, pos + 1)
   end
 
-  if kind == "true" or kind == "false"
-    return literal_pattern(e, ids, Ast.LitValue.Flag(kind == "true"), pos, pos + 1)
-  end
+  return literal_pattern(e, ids, Ast.LitValue.Flag(kind == "true"), pos, pos + 1) if kind == "true" or kind == "false"
 
-  if kind == "nil"
-    return literal_pattern(e, ids, Ast.LitValue.Nothing, pos, pos + 1)
-  end
+  return literal_pattern(e, ids, Ast.LitValue.Nothing, pos, pos + 1) if kind == "nil"
 
   if kind == "minus"
     number = e.tokens[pos + 1]
@@ -414,9 +388,7 @@ export def parse_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
     return literal_pattern(e, ids, negated(literal_value(number)), pos, pos + 2)
   end
 
-  if kind == "type-name"
-    return parse_variant_pattern(e, pos, ids)
-  end
+  return parse_variant_pattern(e, pos, ids) if kind == "type-name"
 
   if kind == "regex"
     return error(
@@ -436,13 +408,9 @@ end
 ## there, because arms have no closing token. A guard is looked for up to the end of its line.
 export def case_arm_start?(e: Env, pos: Int) -> Bool
   stop = pattern_end(e, pos)
-  if stop < 0
-    return false
-  end
+  return false if stop < 0
 
-  if kind_at(e, stop) == "if"
-    return guard_arrow(e, stop + 1) >= 0
-  end
+  return guard_arrow(e, stop + 1) >= 0 if kind_at(e, stop) == "if"
 
   return kind_at(e, stop) == "arrow"
 end
@@ -503,9 +471,7 @@ def parse_slot(e: Env, pos: Int, ids: Int) -> Result[SlotAt]
   kind = token.kind
   if kind == "name"
     lexeme = token.lexeme
-    if constructor_pattern?(e, pos)
-      return nested_slot(e, pos, ids)
-    end
+    return nested_slot(e, pos, ids) if constructor_pattern?(e, pos)
 
     advanced = try expect(e, pos, "name", "a pattern binding or _", false)
     slot = Ast.Slot.Bind(lexeme, token.span)
@@ -516,13 +482,9 @@ def parse_slot(e: Env, pos: Int, ids: Int) -> Result[SlotAt]
     return ok(SlotAt(slot: slot, pos: advanced, ids: ids))
   end
 
-  if LITERAL_KINDS.include?(kind)
-    return nested_slot(e, pos, ids)
-  end
+  return nested_slot(e, pos, ids) if LITERAL_KINDS.include?(kind)
 
-  if kind == "type-name"
-    return nested_slot(e, pos, ids)
-  end
+  return nested_slot(e, pos, ids) if kind == "type-name"
 
   if kind == "minus" and (kind_at(e, pos + 1) == "integer" or kind_at(e, pos + 1) == "float")
     return nested_slot(e, pos, ids)
@@ -601,9 +563,7 @@ end
 # True when the name at pos starts a pattern of a builtin constructor: ok(, error(, some( or a bare none.
 def constructor_pattern?(e: Env, pos: Int) -> Bool
   lexeme = e.tokens[pos].lexeme
-  if lexeme == "none"
-    return true
-  end
+  return true if lexeme == "none"
 
   return (lexeme == "ok" or lexeme == "error" or lexeme == "some") and kind?(e, pos + 1, "left-paren")
 end
@@ -710,17 +670,13 @@ def variant_head_end(e: Env, index: Int) -> Int
   at = index + 1
   segments = 1
   while kind_at(e, at) == "dot"
-    if segments >= 3 or kind_at(e, at + 1) != "type-name"
-      return -1
-    end
+    return -1 if segments >= 3 or kind_at(e, at + 1) != "type-name"
 
     at += 2
     segments += 1
   end
 
-  if segments < 2
-    return -1
-  end
+  return -1 if segments < 2
 
   return at
 end
@@ -737,16 +693,12 @@ def scan_item(e: Env, at: Int, inside: Bool) -> Scanned
       return Scanned(next: at + 2, opens: true)
     end
 
-    if token.lexeme == "_" or inside
-      return Scanned(next: at + 1, opens: false)
-    end
+    return Scanned(next: at + 1, opens: false) if token.lexeme == "_" or inside
   elsif kind == "integer" or kind == "float" or kind == "string" or kind == "true" or kind == "false" or kind == "nil"
     return Scanned(next: at + 1, opens: false)
   elsif kind == "minus"
     following = kind_at(e, at + 1)
-    if following == "integer" or following == "float"
-      return Scanned(next: at + 2, opens: false)
-    end
+    return Scanned(next: at + 2, opens: false) if following == "integer" or following == "float"
   elsif kind == "type-name"
     head = variant_head_end(e, at)
     if head >= 0 and kind_at(e, head) == "left-paren"
@@ -767,9 +719,7 @@ def pattern_end(e: Env, start: Int) -> Int
   open = 0
   while true
     item = scan_item(e, cursor, open > 0)
-    if item.next < 0
-      return -1
-    end
+    return -1 if item.next < 0
 
     cursor = item.next
     if item.opens
@@ -777,9 +727,7 @@ def pattern_end(e: Env, start: Int) -> Int
     else
       closing = true
       while closing
-        if open == 0
-          return cursor
-        end
+        return cursor if open == 0
 
         following = kind_at(e, cursor)
         if following == "comma"

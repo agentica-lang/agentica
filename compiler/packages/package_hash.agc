@@ -93,33 +93,21 @@ end
 ## manifest that cannot be read or parsed is left out; the build reports it where it reads it.
 export def manifest_hashed?(workspace: Workspace.Workspace, root: String, paths: List[String]) -> Bool
   entries = workspace.list_folder.call(root)
-  if !entries.ok?
-    return false
-  end
+  return false if !entries.ok?
 
   present = entries.unwrap!.any? do |entry: Workspace.Entry| entry.name == MANIFEST_FILE and regular?(entry.kind) end
-  if !present
-    return false
-  end
+  return false if !present
 
-  if paths.any? do |path: String| native_path?(path) and !source_file?(path) end
-    return true
-  end
+  return true if paths.any? do |path: String| native_path?(path) and !source_file?(path) end
 
   read = workspace.read_bytes.call(join(root, MANIFEST_FILE))
-  if !read.ok?
-    return false
-  end
+  return false if !read.ok?
 
   text = String.from_bytes(read.unwrap!)
-  if !text.ok?
-    return false
-  end
+  return false if !text.ok?
 
   parsed = Toml.parse(text.unwrap!)
-  if !parsed.ok?
-    return false
-  end
+  return false if !parsed.ok?
 
   case parsed.unwrap!
     Toml.Value.Table(table) -> return table.has_key?("native")
@@ -136,9 +124,7 @@ export def list_files(workspace: Workspace.Workspace, root: String) -> Listing
     folder = pending[pending.size - 1]
     pending = pending.take(pending.size - 1)
     entries = workspace.list_folder.call(join(root, folder))
-    if !entries.ok?
-      return Listing.Stopped(Hashed.Unreadable(entries.message))
-    end
+    return Listing.Stopped(Hashed.Unreadable(entries.message)) if !entries.ok?
 
     for entry in entries.unwrap!
       path = join(folder, entry.name)
@@ -161,9 +147,7 @@ export def list_files(workspace: Workspace.Workspace, root: String) -> Listing
         # A FIFO, a socket or a device under a name the hash covers: reading it could wait or give bytes that are not
         # the package's.
         Workspace.EntryKind.Other ->
-          if covered?(entry.name, path)
-            return Listing.Stopped(Hashed.Unreadable("#{path} is not a regular file"))
-          end
+          return Listing.Stopped(Hashed.Unreadable("#{path} is not a regular file")) if covered?(entry.name, path)
       end
     end
   end
@@ -241,9 +225,7 @@ def hash_files(workspace: Workspace.Workspace, root: String, paths: List[String]
   contents: List[Bytes] = []
   for path in paths
     read = workspace.read_bytes.call(Paths.join(root, path))
-    if !read.ok?
-      return Hashed.Unreadable(read.message)
-    end
+    return Hashed.Unreadable(read.message) if !read.ok?
 
     contents = contents.push(read.unwrap!)
   end
@@ -253,13 +235,9 @@ end
 
 # Joins with one "/". An empty side gives the other one, so the root folder is listed as "<root>", never "<root>/".
 def join(folder: String, name: String) -> String
-  if folder == ""
-    return name
-  end
+  return name if folder == ""
 
-  if name == ""
-    return folder
-  end
+  return folder if name == ""
 
   return "#{folder}/#{name}"
 end

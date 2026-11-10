@@ -26,9 +26,7 @@ end
 
 def read_as(path: String, shown: Bool) -> SourceFile.Read
   opened = File.open(path, "read", IO_TIMEOUT_MS)
-  if !opened.ok?
-    return SourceFile.Read.Unreadable(opened.message)
-  end
+  return SourceFile.Read.Unreadable(opened.message) if !opened.ok?
 
   handle = opened.unwrap!
   result = read_chunks(handle, shown)
@@ -43,9 +41,7 @@ def read_chunks(handle: FileHandle, shown: Bool) -> SourceFile.Read
   finished = false
   while !finished
     got = File.read_bytes(handle, CHUNK_BYTES, IO_TIMEOUT_MS)
-    if !got.ok?
-      return SourceFile.Read.Unreadable(got.message)
-    end
+    return SourceFile.Read.Unreadable(got.message) if !got.ok?
 
     chunk = got.unwrap!
     finished = chunk.size == 0

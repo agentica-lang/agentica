@@ -19,22 +19,16 @@ end
 ## folder).
 export def directory_of(path: String) -> String
   tail = last_part(path).length
-  if tail == path.length
-    return ""
-  end
+  return "" if tail == path.length
 
-  if tail + 1 == path.length
-    return "/"
-  end
+  return "/" if tail + 1 == path.length
 
   return path.slice(0, path.length - tail - 1)
 end
 
 ## Two path parts joined by one "/".
 export def join(base: String, rest: String) -> String
-  if base.ends_with?("/")
-    return base + rest
-  end
+  return base + rest if base.ends_with?("/")
 
   return "#{base}/#{rest}"
 end
@@ -42,13 +36,9 @@ end
 ## Whether a path starts at "/", an absolute Windows drive path or a UNC share. A drive needs an ASCII letter,
 ## a colon and a separator: "C:" and "C:file" depend on a working directory and are not absolute paths.
 export def rooted?(path: String) -> Bool
-  if path.starts_with?("/") or path.starts_with?("\\\\")
-    return true
-  end
+  return true if path.starts_with?("/") or path.starts_with?("\\\\")
 
-  if path.length < 3
-    return false
-  end
+  return false if path.length < 3
 
   drive = String.code(path.at(0))
   separator = path.at(2)
@@ -60,9 +50,7 @@ end
 ## (C:\ or C:/), a UNC path (\\server\share) or a path from the root of the current drive (/ or \); "C:libs" is
 ## relative.
 export def absolute?(path: String, on_windows: Bool) -> Bool
-  if on_windows
-    return path.starts_with?("\\") or rooted?(path)
-  end
+  return path.starts_with?("\\") or rooted?(path) if on_windows
 
   return path.starts_with?("/")
 end
@@ -72,9 +60,7 @@ end
 ## ("../shared/x.agc"); a std/NAME.agc key is unchanged, and a user file under a std/ folder is "./std/NAME.agc". The
 ## bytes of an .agcb then do not depend on where the project lives.
 export def stored_name(root_dir: String, file: String) -> String
-  if root_dir == "" or !rooted?(file)
-    return file
-  end
+  return file if root_dir == "" or !rooted?(file)
 
   from = path_parts(root_dir)
   to = path_parts(file)
@@ -95,9 +81,7 @@ export def stored_name(root_dir: String, file: String) -> String
   stored = out.join("/")
   # A user file under a std/ folder must not look like a standard module (the VM puts --source-root before every name
   # but those).
-  if stored.starts_with?("std/")
-    return "./#{stored}"
-  end
+  return "./#{stored}" if stored.starts_with?("std/")
 
   return stored
 end
@@ -105,14 +89,10 @@ end
 ## The stored name of the file of a failure. The root file of a failure is the path as given (Path.resolve keeps
 ## links), so it is made canonical first, as the key of a loaded file is.
 export def stored_file(workspace: Workspace.Workspace, root_dir: String, file: String) -> String
-  if file.starts_with?("std/") or file.starts_with?(PRELUDE_PREFIX)
-    return file
-  end
+  return file if file.starts_with?("std/") or file.starts_with?(PRELUDE_PREFIX)
 
   real = workspace.real_path.call(file)
-  if real.ok?
-    return stored_name(root_dir, real.unwrap!)
-  end
+  return stored_name(root_dir, real.unwrap!) if real.ok?
 
   return stored_name(root_dir, file)
 end
@@ -169,14 +149,10 @@ end
 ## CHECK-IMPORT-PATH unless a std/ or pkg/ path is made of plain parts: no backslash, no empty, "." or ".." part, and
 ## no ":" in a part.
 export def validate_library_path(path: String, site: Failure.Site) -> Result[Void]
-  if path.contains?("\\")
-    return error(invalid_library_path(site))
-  end
+  return error(invalid_library_path(site)) if path.contains?("\\")
 
   for part in path.split("/")
-    if part == "" or part == "." or part == ".." or part.contains?(":")
-      return error(invalid_library_path(site))
-    end
+    return error(invalid_library_path(site)) if part == "" or part == "." or part == ".." or part.contains?(":")
   end
 
   return ok()
@@ -226,14 +202,10 @@ end
 export def inside?(root: String, file: String) -> Bool
   base = path_parts(root)
   target = path_parts(file)
-  if target.size < base.size
-    return false
-  end
+  return false if target.size < base.size
 
   for index in 0...base.size
-    if base[index] != target[index]
-      return false
-    end
+    return false if base[index] != target[index]
   end
 
   return true
@@ -256,9 +228,7 @@ end
 # The path without a final ".ext".
 def without_extension(path: String) -> String
   pieces = last_part(path).split(".")
-  if pieces.size == 1
-    return path
-  end
+  return path if pieces.size == 1
 
   return path.slice(0, path.length - pieces[pieces.size - 1].length - 1)
 end

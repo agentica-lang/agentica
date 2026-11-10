@@ -189,9 +189,7 @@ end
 ## are not read), so a file outside that folder never has it, whoever imports it. A library file is not a file of the
 ## project, wherever its folder is: what it imports keeps its origin.
 export def file_origin(workspace: Workspace.Workspace, scope: Scope, importer: Origin, key: String) -> Origin
-  if importer.library
-    return importer
-  end
+  return importer if importer.library
 
   if Project.styled?(workspace, scope.style_dir, key)
     return importer.with(blank_line_after_end: scope.blank_line_after_end, max_line_width: scope.max_line_width)
@@ -251,9 +249,7 @@ export def open_package(
   opened = scope.opened
   if !opened.has_key?(name)
     locked = Lock.find(scope.lock, name)
-    if !locked.ok?
-      return error(missing(site, "#{name} is not in the lock", "the lock must list #{name}"))
-    end
+    return error(missing(site, "#{name} is not in the lock", "the lock must list #{name}")) if !locked.ok?
 
     loaded = try load(workspace, scope, locked.unwrap!, site)
     opened = opened.put(name, loaded)
@@ -313,9 +309,7 @@ end
 export def check_folders(workspace: Workspace.Workspace, scope: Scope, folders: Map[String, String]) -> Result[Scope]
   declared = scope.declared
   for locked in scope.lock.packages
-    if !folders.has_key?(locked.name) or folders[locked.name] == ""
-      next
-    end
+    next if !folders.has_key?(locked.name) or folders[locked.name] == ""
 
     real = workspace.real_path.call(folders[locked.name])
     if real.ok? and workspace.directory_exists.call(real.unwrap!)
@@ -336,9 +330,7 @@ end
 ## The folder of a locked package, `deps/<name>` beside the manifest of the project, or the folder of the workspace
 ## member or of the `path` (scope.deps is beside the manifest, so its folder is the project's).
 export def folder_of(scope: Scope, locked: Lock.Locked) -> String
-  if Lock.in_place?(locked)
-    return Project.folder_of(Paths.directory_of(scope.deps), scope.members, locked)
-  end
+  return Project.folder_of(Paths.directory_of(scope.deps), scope.members, locked) if Lock.in_place?(locked)
 
   return Paths.join(scope.deps, locked.name)
 end
@@ -346,9 +338,7 @@ end
 ## The hash that pins the content of a fetched package, which its folder must have before it builds a native module
 ## (NativeBuild.listed checks it again): the locked hash, "" for a package read in place.
 export def pinned_hash(locked: Lock.Locked) -> String
-  if Lock.in_place?(locked)
-    return ""
-  end
+  return "" if Lock.in_place?(locked)
 
   return locked.hash
 end
@@ -443,19 +433,13 @@ end
 # would let the build read a file outside the cache folder, or block on a device.
 def shape_of(workspace: Workspace.Workspace, root: String) -> Shape
   entries = workspace.list_folder.call(root)
-  if !entries.ok?
-    return Shape.Unlisted(entries.message)
-  end
+  return Shape.Unlisted(entries.message) if !entries.ok?
 
   for entry in entries.unwrap!
-    if PackageHash.fold(entry.name) == MANIFEST_FILE and !regular?(entry.kind)
-      return Shape.Unsafe(entry.name)
-    end
+    return Shape.Unsafe(entry.name) if PackageHash.fold(entry.name) == MANIFEST_FILE and !regular?(entry.kind)
   end
 
-  if workspace.file_exists.call(Paths.join(root, MANIFEST_FILE))
-    return Shape.Regular
-  end
+  return Shape.Regular if workspace.file_exists.call(Paths.join(root, MANIFEST_FILE))
 
   return Shape.Absent
 end
@@ -477,9 +461,7 @@ def names_of(
   root: String,
   site: Failure.Site,
 ) -> Result[List[String]]
-  if scope.declared.has_key?(locked.name)
-    return ok(scope.declared[locked.name])
-  end
+  return ok(scope.declared[locked.name]) if scope.declared.has_key?(locked.name)
 
   return declared_names(workspace, scope, root, site)
 end
@@ -567,9 +549,7 @@ end
 
 # The folder of the manifest when it asks for a style rule, else "".
 def style_folder(found: Project.Found) -> String
-  if found.manifest.blank_line_after_end or found.manifest.max_line_width > 0
-    return found.dir
-  end
+  return found.dir if found.manifest.blank_line_after_end or found.manifest.max_line_width > 0
 
   return ""
 end

@@ -166,9 +166,7 @@ end
 # then the rest of the fill. The last item of a fill is followed by what is on the stack (the trailing comma of a
 # broken list), so its fit counts that text up to the next line break; the items before it carry their own comma.
 def fill(stack: List[Command], indent: Int, flat: Bool, parts: List[Doc], room: Int) -> List[Command]
-  if parts.size == 0
-    return stack
-  end
+  return stack if parts.size == 0
 
   item = parts[0]
   item_flat = false
@@ -207,14 +205,10 @@ def fits(next: Command, stack: List[Command], room: Int) -> Bool
   pending: List[Command] = [next]
   rest = stack.size - 1
   while true
-    if left < 0
-      return false
-    end
+    return false if left < 0
 
     if pending.size == 0
-      if rest < 0
-        return true
-      end
+      return true if rest < 0
 
       pending = [stack[rest]]
       rest -= 1
@@ -226,15 +220,10 @@ def fits(next: Command, stack: List[Command], room: Int) -> Bool
     case command.doc
       Doc.Text(text) -> left -= text.length
       Doc.Line ->
-        if not flat
-          return true
-        end
+        return true if not flat
 
         left -= 1
-      Doc.SoftLine ->
-        if not flat
-          return true
-        end
+      Doc.SoftLine -> return true if not flat
 
       Doc.HardLine -> return true
       Doc.Concat(parts) -> pending = push_all(pending, command.indent, command.flat, parts)
@@ -248,18 +237,12 @@ def fits(next: Command, stack: List[Command], room: Int) -> Bool
         end
 
       Doc.LineSuffix(_) -> left = left
-      Doc.BreakParent ->
-        if flat
-          return false
-        end
+      Doc.BreakParent -> return false if flat
 
       Doc.Fill(parts) -> pending = push_all(pending, command.indent, command.flat, parts)
       Doc.Comment(_) -> return not flat
       Doc.After(_) -> return not flat
-      Doc.Below(_) ->
-        if flat
-          return false
-        end
+      Doc.Below(_) -> return false if flat
 
       Doc.Measure(parts) -> pending = push_all(pending, command.indent, command.flat, parts)
       Doc.Measured(_) -> left = left
@@ -272,18 +255,14 @@ end
 
 # The column after what the current line holds, counting the indent it will get.
 def column(out: Output) -> Int
-  if out.line == ""
-    return out.indent
-  end
+  return out.indent if out.line == ""
 
   return out.line.length
 end
 
 # Writes text on the current line, putting its indent first when the line is still empty.
 def write(out: Output, text: String) -> Output
-  if text == ""
-    return out
-  end
+  return out if text == ""
 
   line = out.line
   if line == ""
@@ -374,15 +353,11 @@ end
 # The lines of a comment that fit in `room` columns, each with the marker of the comment (`#` and the spaces after it).
 # A comment that fits, or that has a single word, is one line. The last line has two words when they fit.
 def wrap(text: String, room: Int) -> List[String]
-  if text.length <= room
-    return [text]
-  end
+  return [text] if text.length <= room
 
   marker = marker_of(text)
   words = text.slice(marker.length, text.length - marker.length).split(" ").select do |word: String| word != "" end
-  if words.size <= 1
-    return [text]
-  end
+  return [text] if words.size <= 1
 
   rows: List[List[String]] = []
   row = [words[0]]

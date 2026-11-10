@@ -212,9 +212,7 @@ export def native_files(
 ) -> Result[List[String]]
   found: List[String] = []
   top = workspace.list_folder.call(root)
-  if !top.ok?
-    return error(refused(file, key, "cannot list the package folder: #{top.message}", UNLISTED))
-  end
+  return error(refused(file, key, "cannot list the package folder: #{top.message}", UNLISTED)) if !top.ok?
 
   present = false
   for entry in top.unwrap!
@@ -226,9 +224,7 @@ export def native_files(
     end
   end
 
-  if !present
-    return ok(found)
-  end
+  return ok(found) if !present
 
   pending = [NATIVE_FOLDER]
   folders = 0
@@ -236,9 +232,7 @@ export def native_files(
     folder = pending[pending.size - 1]
     pending = pending.take(pending.size - 1)
     entries = workspace.list_folder.call(Paths.join(root, folder))
-    if !entries.ok?
-      return error(refused(file, key, "cannot list #{folder}: #{entries.message}", UNLISTED))
-    end
+    return error(refused(file, key, "cannot list #{folder}: #{entries.message}", UNLISTED)) if !entries.ok?
 
     for entry in entries.unwrap!
       path = Paths.join(folder, entry.name)
@@ -266,9 +260,7 @@ end
 # are read and match the pin; none for a package read in place.
 def pinned_files(workspace: Workspace.Workspace, request: Workspace.BuildRequest) -> Result[Pinned]
   empty = Pinned(files: [], contents: [])
-  if request.pinned == ""
-    return ok(empty)
-  end
+  return ok(empty) if request.pinned == ""
 
   paths: List[String] = []
   case PackageHash.covered_files(workspace, request.root)
@@ -282,9 +274,7 @@ def pinned_files(workspace: Workspace.Workspace, request: Workspace.BuildRequest
   total = 0
   for path in paths
     read = workspace.read_prefix.call(Paths.join(request.root, path), PackageHash.MAX_FILE_BYTES + 1)
-    if !read.ok?
-      return error(unreadable(request, PackageHash.Hashed.Unreadable("#{path}: #{read.message}")))
-    end
+    return error(unreadable(request, PackageHash.Hashed.Unreadable("#{path}: #{read.message}"))) if !read.ok?
 
     total += read.unwrap!.size
     if read.unwrap!.size > PackageHash.MAX_FILE_BYTES or total > PackageHash.MAX_TOTAL_BYTES
@@ -338,23 +328,17 @@ def words(
   problem: Fn[String, String],
 ) -> Result[List[String]]
   found: List[String] = []
-  if !entries.has_key?(name)
-    return ok(found)
-  end
+  return ok(found) if !entries.has_key?(name)
 
   here = Reader.child(path, name)
   items = try Reader.array(reading, entries[name], here)
-  if items.size > limit
-    return error(Reader.fail_help(reading, here, "too many items", "write at most #{limit}"))
-  end
+  return error(Reader.fail_help(reading, here, "too many items", "write at most #{limit}")) if items.size > limit
 
   for index in 0...items.size
     at = Reader.item(here, index)
     word = try Reader.text(reading, items[index], at)
     why = problem.call(word)
-    if why != ""
-      return error(Reader.fail_help(reading, at, "not a #{name.slice(0, name.length - 1)}", why))
-    end
+    return error(Reader.fail_help(reading, at, "not a #{name.slice(0, name.length - 1)}", why)) if why != ""
 
     found = found.push(word)
   end
@@ -365,9 +349,7 @@ end
 # A C file of native/, in plain folder names (the rules of a subdir), so the hash and the walk cover it.
 def source_problem(source: String) -> String
   problem = GitSource.subdir_problem(source)
-  if problem != ""
-    return problem
-  end
+  return problem if problem != ""
 
   if !source.starts_with?("#{NATIVE_FOLDER}/") or !source.ends_with?(".c")
     return "a source is a .c file in the #{NATIVE_FOLDER}/ folder of the package"
@@ -393,9 +375,7 @@ def define_problem(define: String) -> String
     return "the name of a define holds only letters, digits and _"
   end
 
-  if parts.size == 1
-    return ""
-  end
+  return "" if parts.size == 1
 
   value = define.slice(name.length + 1, define.length - name.length - 1)
   if value.length > MAX_VALUE or !value.split("").all? do |letter: String| WORD_CHARACTERS.include?(letter) end

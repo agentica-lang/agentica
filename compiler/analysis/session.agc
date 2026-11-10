@@ -57,9 +57,7 @@ end
 ## The root that the cache of `session` holds for the file `path`, as the last `refresh` of it left it.
 export def entry(session: Session, path: String) -> Optional[Cache.Root]
   known = asking(session).workspace.real_path.call(path)
-  if !known.ok?
-    return none
-  end
+  return none if !known.ok?
 
   return Cache.root_of(session.cache, known.unwrap!)
 end

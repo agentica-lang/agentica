@@ -109,9 +109,7 @@ end
 # The type recorded for the target of a field access; Unknown when there is none.
 def target_type(types: List[T.Type], target: Ast.Expr) -> T.Type
   id = Ast.expr_id(target)
-  if id < types.size
-    return types[id]
-  end
+  return types[id] if id < types.size
 
   return T.Type.Unknown
 end
@@ -125,15 +123,11 @@ end
 
 # The first declaration with the linked name `name`; `none` for a builtin, which no file declares.
 def find(modules: List[Linker.LinkedModule], name: String) -> Optional[Found]
-  if name == ""
-    return none
-  end
+  return none if name == ""
 
   for module in modules
     for declaration in module.declarations
-      if declared_name(declaration) == name
-        return some(Found(module: module, declaration: declaration))
-      end
+      return some(Found(module: module, declaration: declaration)) if declared_name(declaration) == name
     end
   end
 
@@ -249,9 +243,7 @@ end
 def of_item(module: Linker.LinkedModule, linked: String) -> Described
   name = T.display_name(linked)
   for item in Model.declared(module.parsed, module.text)
-    if item.name == name
-      return Described(doc: item.doc, signature: item.signature, exported: item.exported)
-    end
+    return Described(doc: item.doc, signature: item.signature, exported: item.exported) if item.name == name
   end
 
   return nothing_said()

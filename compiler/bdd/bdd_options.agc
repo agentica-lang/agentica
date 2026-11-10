@@ -77,9 +77,7 @@ export def parse(arguments: List[String]) -> Parsed
     end
   end
 
-  if at >= arguments.size
-    return Parsed.Broken("the driver options end with --")
-  end
+  return Parsed.Broken("the driver options end with --") if at >= arguments.size
 
   if options.vm == "" or options.version == "" or options.agentica.size == 0
     return Parsed.Broken("--vm, --version and --agentica are required")
@@ -119,17 +117,13 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
   while at < words.size
     word = words[at]
     if word == "--steps" or word == "--only" or word == "--tags" or word == "--jobs"
-      if at + 1 >= words.size
-        return Parsed.Usage("option needs a value", shown)
-      end
+      return Parsed.Usage("option needs a value", shown) if at + 1 >= words.size
 
       value = words[at + 1]
       if word == "--steps"
         shown = shown.with(steps: shown.steps.push(value))
       elsif word == "--tags"
-        if shown.tags != ""
-          return Parsed.Usage("one --tags EXPR", shown)
-        end
+        return Parsed.Usage("one --tags EXPR", shown) if shown.tags != ""
 
         checked = Tags.compile(value)
         if !checked.ok?
@@ -141,9 +135,7 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
 
         shown = shown.with(tags: value)
       elsif word == "--jobs"
-        if jobs_seen
-          return Parsed.Usage("one --jobs N", shown)
-        end
+        return Parsed.Usage("one --jobs N", shown) if jobs_seen
 
         parsed = value.to_int
         if !parsed.ok? or parsed.unwrap! < 1 or parsed.unwrap! > MAX_JOBS

@@ -150,9 +150,7 @@ export def link_programs(roots: List[String], settings: Env.Settings, parses: Mo
     end
   end
 
-  if kept.size == 0
-    return Programs(linked: none, skipped: skipped)
-  end
+  return Programs(linked: none, skipped: skipped) if kept.size == 0
 
   together = Linked(
     root: loaded.modules[kept[0].key].program,
@@ -195,9 +193,7 @@ def reached(loaded: Modules.Loaded, key: String) -> List[String]
   while pending.size > 0
     here = pending[pending.size - 1]
     pending = pending.take(pending.size - 1)
-    if seen.has_key?(here)
-      next
-    end
+    next if seen.has_key?(here)
 
     seen = seen.put(here, true)
     order = order.push(here)
@@ -268,9 +264,7 @@ end
 
 def id_count(loaded: Modules.Loaded) -> Int
   for key in loaded.order
-    if loaded.modules[key].names.values.any? do |kind| Declarations.constant?(kind) end
-      return parser_ids(loaded) * 2
-    end
+    return parser_ids(loaded) * 2 if loaded.modules[key].names.values.any? do |kind| Declarations.constant?(kind) end
   end
 
   return parser_ids(loaded)
@@ -278,9 +272,7 @@ end
 
 # Where the receivers of rewritten constant members start (the room id_count made), or -1 when there is none.
 def receivers_at(loaded: Modules.Loaded) -> Int
-  if id_count(loaded) > parser_ids(loaded)
-    return parser_ids(loaded)
-  end
+  return parser_ids(loaded) if id_count(loaded) > parser_ids(loaded)
 
   return -1
 end
@@ -393,9 +385,7 @@ end
 # Like `link_file`, with the trees of `parses` for the files whose text is the same (Modules.load_with).
 def link_file_with(path: String, settings: Env.Settings, parses: Modules.Parses) -> Linking
   loaded = Modules.load_with(path, settings, parses)
-  if loaded.ok?
-    return link_loaded(loaded.unwrap!, settings)
-  end
+  return link_loaded(loaded.unwrap!, settings) if loaded.ok?
 
   return Linking.Failed(Failure.unpack_failure(loaded.message))
 end

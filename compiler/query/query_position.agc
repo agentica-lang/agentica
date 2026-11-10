@@ -34,9 +34,7 @@ end
 ## `usage` is the usage line of the command, given as the help of QUERY-USAGE.
 export def parse(word: String, usage: String) -> Parsed
   parts = word.split(":")
-  if parts.size < 3
-    return Parsed.Refused(QueryOptions.refusal("#{word} is not FILE:LINE:COL", usage))
-  end
+  return Parsed.Refused(QueryOptions.refusal("#{word} is not FILE:LINE:COL", usage)) if parts.size < 3
 
   line = number(parts[parts.size - 2])
   column = number(parts[parts.size - 1])
@@ -52,9 +50,7 @@ end
 ## line; a line past the last is outside, at the end of the text.
 export def locate(text: String, line: Int, column: Int) -> Located
   lines = text.split("\n")
-  if lines.size == 0
-    return Located.Outside(point(0, 1, 1))
-  end
+  return Located.Outside(point(0, 1, 1)) if lines.size == 0
 
   start = 0
   at = 1
@@ -96,13 +92,9 @@ end
 
 # The value of a run of digits, or 0 for anything else: a position starts at 1, so 0 stands for "not a number".
 def number(text: String) -> Int
-  if text.length == 0 or text.length > MAX_DIGITS
-    return 0
-  end
+  return 0 if text.length == 0 or text.length > MAX_DIGITS
 
-  if !text.split("").all? do |character: String| character.code >= 48 and character.code <= 57 end
-    return 0
-  end
+  return 0 if !text.split("").all? do |character: String| character.code >= 48 and character.code <= 57 end
 
   return text.to_i!
 end

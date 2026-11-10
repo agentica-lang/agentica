@@ -42,9 +42,7 @@ export def run(words: List[String], style: String, settings: Env.Settings) -> Re
   if dot.some?
     path = asked.slice(0, dot.unwrap!)
     name = asked.slice(dot.unwrap! + 1, asked.length - dot.unwrap! - 1)
-    if name == ""
-      return Reply.Answer.Rejected(QueryOptions.refusal("missing name after #{path}.", USAGE))
-    end
+    return Reply.Answer.Rejected(QueryOptions.refusal("missing name after #{path}.", USAGE)) if name == ""
   end
 
   case QueryFiles.read(settings, path, false)
@@ -56,9 +54,7 @@ end
 
 # The words of `help` without a trailing `--json`.
 def unflagged(words: List[String]) -> List[String]
-  if words.size > 0 and words[words.size - 1] == "--json"
-    return words.take(words.size - 1)
-  end
+  return words.take(words.size - 1) if words.size > 0 and words[words.size - 1] == "--json"
 
   return words
 end
@@ -67,14 +63,10 @@ def answered(settings: Env.Settings, path: String, name: String, text: String, a
   case Docs.of_file(settings, path, text)
     Diag.Outcome.Failed(problem) -> return Reply.Answer.Rejected(Front.stage_problem(path, problem))
     Diag.Outcome.Done(module) ->
-      if name == ""
-        return Reply.Answer.Printed(module_reply(path, module, as_json))
-      end
+      return Reply.Answer.Printed(module_reply(path, module, as_json)) if name == ""
 
       found = module.items.filter do |item: DocModel.Item| item.name == name end
-      if found.size == 0
-        return Reply.Answer.Rejected(unknown_name(path, name, module))
-      end
+      return Reply.Answer.Rejected(unknown_name(path, name, module)) if found.size == 0
 
       return Reply.Answer.Printed(item_reply(path, found[0], as_json))
   end
@@ -136,9 +128,7 @@ end
 # `result`, `signature`, `description` as the whole doc or null) and `summary`, with `kind`, and the `fields` of a
 # struct or the `variants` of an enum. As text it is the signature, the doc, and a list line per field or variant.
 def item_reply(path: String, item: DocModel.Item, as_json: Bool) -> Reply.Reply
-  if as_json
-    return Reply.printed("#{JSON.encode(DocJson.help_json(path, Convert.item(item)))}\n")
-  end
+  return Reply.printed("#{JSON.encode(DocJson.help_json(path, Convert.item(item)))}\n") if as_json
 
   blocks = [item.signature]
   case item.doc
@@ -171,9 +161,7 @@ def shortened(summary: String) -> String
     sentence = summary.slice(0, stop.unwrap! + 1)
   end
 
-  if sentence.length <= SHORT_SUMMARY
-    return sentence
-  end
+  return sentence if sentence.length <= SHORT_SUMMARY
 
   cut = SHORT_SUMMARY
   while cut > 0 and sentence.slice(cut, 1) != " "

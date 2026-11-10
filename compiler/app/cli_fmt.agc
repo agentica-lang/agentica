@@ -40,9 +40,7 @@ export def verdict(text: String, settings: Format.Settings) -> Verdict
   case Format.format_text(text, settings)
     Diag.Outcome.Failed(problem) -> return Verdict.Refused(problem)
     Diag.Outcome.Done(output) ->
-      if output == text
-        return Verdict.Same
-      end
+      return Verdict.Same if output == text
 
       return Verdict.Changed(output)
   end
@@ -58,9 +56,7 @@ end
 ## its folder.
 export def manifest_dir(workspace: Workspace.Workspace, path: String) -> String
   real = workspace.real_path.call(path)
-  if real.ok?
-    return Project.nearest_manifest(workspace, real.unwrap!)
-  end
+  return Project.nearest_manifest(workspace, real.unwrap!) if real.ok?
 
   return ""
 end
@@ -68,9 +64,7 @@ end
 ## The settings of the files that follow the manifest in the folder `found` ("" for none: the default settings). A
 ## manifest that cannot be read or has a bad value is a packed failure, PKG-MANIFEST-INVALID.
 export def settings_of(workspace: Workspace.Workspace, found: String) -> Result[Format.Settings]
-  if found == ""
-    return ok(Format.default_settings())
-  end
+  return ok(Format.default_settings()) if found == ""
 
   manifest = try Manifest.read(workspace, Paths.join(found, Project.MANIFEST_FILE))
   width = Format.WIDTH

@@ -111,9 +111,7 @@ def member(found: Found, program: Program, decl: Ast.Decl, placed: Placed) -> Re
       end
 
     Ast.Decl.Resource(node) ->
-      if node.module == ""
-        return ok(found)
-      end
+      return ok(found) if node.module == ""
 
       known = found.resources.get(node.module, [])
       made = Model.NativeResource(
@@ -140,15 +138,11 @@ def function_in(
   library: String,
   placed: Placed,
 ) -> Result[Found]
-  if !program.functions.has_key?(node.id)
-    return error("the linked program has no function for #{node.name}")
-  end
+  return error("the linked program has no function for #{node.name}") if !program.functions.has_key?(node.id)
 
   linked = program.functions[node.id]
   made = NativeShape.of_function(program.types, linked, program.structs, program.enums)
-  if !made.ok?
-    return error(made.message)
-  end
+  return error(made.message) if !made.ok?
 
   signature = made.unwrap!
   parameters: List[Model.NativeParameter] = []
@@ -226,17 +220,13 @@ def opened(found: Found, library: String, span: Source.Span) -> Found
 end
 
 def earlier(a: Source.Position, b: Source.Position) -> Source.Position
-  if b.offset < a.offset
-    return b
-  end
+  return b if b.offset < a.offset
 
   return a
 end
 
 def later(a: Source.Position, b: Source.Position) -> Source.Position
-  if b.offset > a.offset
-    return b
-  end
+  return b if b.offset > a.offset
 
   return a
 end

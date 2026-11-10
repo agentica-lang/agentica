@@ -100,9 +100,7 @@ end
 # else the name as written.
 def native_target(cx: Resolve.Context, library: String) -> Result[String]
   natives = cx.me.origin.natives
-  if !natives.has_key?(library)
-    return ok(library)
-  end
+  return ok(library) if !natives.has_key?(library)
 
   return target_text(cx, library, natives[library])
 end
@@ -333,9 +331,7 @@ end
 # The call inside a regex literal names std/regex's compile when the file imports std/regex in any form; it stays ""
 # otherwise, which the checker reports as CHECK-REGEX-IMPORT. The rest of the call needs no rewrite.
 def rewrite_regex(cx: Resolve.Context, node: Ast.RegexLit) -> Ast.RegexLit
-  if !cx.me.imports.any? do |key: String| key == REGEX_MODULE end
-    return node
-  end
+  return node if !cx.me.imports.any? do |key: String| key == REGEX_MODULE end
 
   name = Modules.linked_name(cx.modules, cx.modules[REGEX_MODULE], "compile")
   case node.call
@@ -368,9 +364,7 @@ end
 # x |> try A.B.c() of no family is reported with its try, as the parser reports x |> try f; a try before the whole
 # pipe starts before x and is not part of the right side.
 def rewrite_try(cx: Resolve.Context, node: Ast.TryExpr) -> Result[Ast.Expr]
-  if bad_piped_try?(cx, node)
-    return error(pipe_target_failure(cx, node.span))
-  end
+  return error(pipe_target_failure(cx, node.span)) if bad_piped_try?(cx, node)
 
   return ok(Ast.Expr.Try(node.with(operand: try rewrite_expr(cx, node.operand))))
 end
@@ -385,9 +379,7 @@ end
 
 def rewrite_call(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
   parts = node.name.split(".")
-  if bad_pipe_target?(cx, node)
-    return error(pipe_target_failure(cx, node.span))
-  end
+  return error(pipe_target_failure(cx, node.span)) if bad_pipe_target?(cx, node)
 
   if parts.size == 2 and Resolve.constant_identity(cx, parts[0]) != ""
     return rewrite_constant_member(cx, node, Resolve.constant_identity(cx, parts[0]), parts[0].length, parts[1])
@@ -506,14 +498,10 @@ def member_span(cx: Resolve.Context, node: Ast.Call, length: Int, member: String
   start = node.span.start
   after = start.offset + length
   size = node.span.stop.offset - after
-  if size <= 0 or after + size > cx.me.text.length
-    return node.span
-  end
+  return node.span if size <= 0 or after + size > cx.me.text.length
 
   found = cx.me.text.slice(after, size).index_of(member)
-  if found.none?
-    return node.span
-  end
+  return node.span if found.none?
 
   first = member_position(cx.me.text, after, found.unwrap!, start.line, start.column + length)
   last = Source.Position(offset: first.offset + member.length, line: first.line, column: first.column + member.length)

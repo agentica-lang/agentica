@@ -43,9 +43,7 @@ end
 ## in the lock, and only this host is fetched. With no package but host artifacts, the answer counts the host
 ## artifacts ensured; a lock with neither, or with no entry for this host, stays quiet.
 export def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
-  if lock.packages.size == 0 and lock.artifacts.size == 0
-    return ok("nothing to install\n")
-  end
+  return ok("nothing to install\n") if lock.packages.size == 0 and lock.artifacts.size == 0
 
   lines: List[String] = []
   if lock.packages.size > 0
@@ -75,13 +73,9 @@ export def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
   hosted = try fill_artifacts(settings, lock)
   lines = lines.concat(overridden_lines(lock.packages, {}))
   if lines.size == 0
-    if hosted == 0
-      return ok("nothing to install\n")
-    end
+    return ok("nothing to install\n") if hosted == 0
 
-    if hosted == 1
-      return ok("1 native artifact ready\n")
-    end
+    return ok("1 native artifact ready\n") if hosted == 1
 
     return ok("#{hosted} native artifacts ready\n")
   end
@@ -95,9 +89,7 @@ export def overridden_lines(packages: List[Lock.Locked], asked: Map[String, List
   lines: List[String] = []
   ordered = packages.sort_by do |item| item.name end
   for locked in ordered
-    if !locked.override
-      next
-    end
+    next if !locked.override
 
     line = "overridden #{Lock.label(locked)}"
     if asked.has_key?(locked.name)
@@ -116,9 +108,7 @@ end
 # a corrupt cache is a packed failure at the lock entry.
 def fill_artifacts(settings: Env.Settings, lock: Lock.Lock) -> Result[Int]
   wanted = lock.artifacts.filter do |artifact: Lock.Artifact| artifact.system == settings.env.os end
-  if wanted.size == 0
-    return ok(0)
-  end
+  return ok(0) if wanted.size == 0
 
   cache = PackageCache.root(settings.env)
   if cache == ""
@@ -175,14 +165,10 @@ def build_natives(settings: Env.Settings, found: Project.Found, scope: PackageIm
   os = settings.env.os
   try NativeLibrary.build_all(workspace, found.manifest, found.dir, os, cache)
   for locked in found.lock.packages
-    if !Lock.in_place?(locked)
-      next
-    end
+    next if !Lock.in_place?(locked)
 
     real = workspace.real_path.call(PackageImport.folder_of(scope, locked))
-    if !real.ok?
-      next
-    end
+    next if !real.ok?
 
     file = Paths.join(real.unwrap!, Project.MANIFEST_FILE)
     if workspace.file_exists.call(file)
@@ -196,9 +182,7 @@ end
 
 # The manifests of the packages in the cache, checked against the lock before anything is written to deps/.
 def check_cache(settings: Env.Settings, lock: Lock.Lock, scope: PackageImport.Scope) -> Result[Void]
-  if lock.packages.size == 0
-    return ok()
-  end
+  return ok() if lock.packages.size == 0
 
   cache = try PackageFetch.cache_for(settings.env, lock.file, lock.packages)
   folders: Map[String, String] = {}

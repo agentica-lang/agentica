@@ -17,9 +17,7 @@ def value_text(token: Tokens.Token) -> String
   case token.value
     Tokens.Value.NoValue -> return "-"
     Tokens.Value.Text(text) ->
-      if text == token.lexeme
-        return "="
-      end
+      return "=" if text == token.lexeme
 
       return Text.quote(text)
     Tokens.Value.Whole(number) -> return number.to_s
