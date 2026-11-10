@@ -63,7 +63,7 @@ HABITS = [
     ("  x = 4 // 2", 2),
     ("  /* note */", 2),
     ("  xs = [1]\n  xs << 2", 3),
-    ("  break if x > 3", 2),
+    ("  x = 4 if x > 3", 2),
     ("  puts(\"a\") if x", 2),
     ("  n = String.length \"abc\"", 2),
     ("  case r\n    ok() -> puts(\"a\")\n  end", 3),
@@ -358,6 +358,51 @@ class TestSpecParser:
             "def main() -> Void\n  if true\n    x = 1\n  else if false\n    x = 2\n  end\n  end\nend\n",
         ]
         self.check_rejected([Reject(text, "PARSE-UNEXPECTED-TOKEN", (4,)) for text in texts])
+
+    def test_return_break_and_next_take_a_guard_that_runs_as_the_if_written_out(self):
+        # The condition is an `if` condition: `and`, `or`, `not` and a call with a block need no parentheses. A
+        # statement after a guard runs when the guard does not, and a guard ends at the `end` of a one-line block.
+        program = (
+            "def first(xs: List[Int]) -> Int\n"
+            "  return -1 if xs.any? do |x| x < 0 end\n"
+            "  return xs[0] if xs.size > 0 and not xs.include?(7) # the first one\n"
+            "  return 0\nend\n\n"
+            "def say(text: String) -> Void\n  return if text == \"\" or text == \"-\"\n  puts(text)\nend\n\n"
+            + main_of("  puts(first([3, 4]))\n  puts(first([3, -4]))\n  puts(first([7]))\n"
+                      "  say(\"\")\n  say(\"shown\")\n"
+                      "  for n in [1, 2, 3, 4, 5]\n    next if n == 2\n    break if n == 4\n    puts(n)\n  end\n"
+                      "  ys = [1, 2, 3].map do |n|\n    return 0 if n == 2\n    n * 10\n  end\n\n  puts(ys)\n"
+                      "  [8, 9].each do |n| return if n == 8 end\n"))
+        self.check_output([Output(program, ["3", "-1", "0", "shown", "1", "3", "[10, 0, 30]"])])
+
+    def test_a_guard_checks_as_the_if_written_out(self):
+        # A guard as the last statement misses a return as the `if` does; `break if` outside a loop is the error of
+        # `break` there; the condition must be Bool.
+        self.check_rejected([
+            Reject("def f(x: Int) -> Int\n  return 1 if x > 0\nend\n\n" + main_of("  puts(f(1))\n"),
+                   "CHECK-MISSING-RETURN", (1, 1)),
+            Reject(main_of("  break if true\n"), "CHECK-LOOP-CONTROL", (2, 3, 2, 8)),
+            Reject("def f(x: Int) -> Int\n  return 1 if x\n  return 0\nend\n\n" + main_of("  puts(f(1))\n"),
+                   "CHECK-TYPE-MISMATCH", (2, 15, 2, 16)),
+        ])
+
+    def test_only_return_break_and_next_take_a_guard_with_one_condition_on_their_line(self):
+        unexpected = "PARSE-UNEXPECTED-TOKEN"
+        self.check_rejected([
+            # A modifier on any other statement, at its `if`.
+            Reject(main_of("  x = 1 if true\n"), unexpected, (2, 9, 2, 11)),
+            Reject(main_of("  puts(1) if true\n"), unexpected, (2, 11, 2, 13)),
+            Reject(main_of("  x = 1\n  x += 1 if true\n"), unexpected, (3, 10, 3, 12)),
+            # No elsif, else or second if after the condition.
+            Reject(main_of("  return if true else false\n"), unexpected, (2, 18, 2, 22)),
+            Reject(main_of("  return if true elsif false\n"), unexpected, (2, 18, 2, 23)),
+            Reject(main_of("  return if true if false\n"), unexpected, (2, 18, 2, 20)),
+            # The `if` is on the line of the `return`: not after a `case` value or a block that spans lines.
+            Reject("def f(x: Int) -> Int\n  return case x\n    1 -> 2\n    _ -> 3\n  end if x > 0\n  return 0\nend\n",
+                   unexpected, (5, 7, 5, 9)),
+            Reject("def f(xs: List[Int]) -> List[Int]\n  return xs.map do |x|\n    x\n  end if xs.size > 0\n"
+                   "  return xs\nend\n", unexpected, (4, 7, 4, 9)),
+        ])
 
     def test_if_elsif_else_parses(self):
         program = (

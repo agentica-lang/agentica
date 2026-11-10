@@ -88,8 +88,9 @@ Change style only in code you touch. Restyle untouched code separately.
 - Prefer four or fewer parameters; group more in a struct, and give its
   optional fields defaults so a caller names only what differs. Put options
   last with defaults (`CHECK-DEFAULT-ORDER`).
-- Guard-return bad cases early. Nest `if`, `for`, `while` and `case` at most
-  three levels.
+- Guard-return bad cases early, with a guard (`return error("empty") if
+  text.empty?`, `next if line == ""`). Nest `if`, `for`, `while` and `case` at
+  most three levels.
 - Return a struct/enum, not parallel lists, fixed-key maps or magic codes.
 - Use `for` for totals/results, collection methods for transforms. Blocks
   cannot assign outer variables (`CHECK-CAPTURED-ASSIGNMENT`). Rebind only

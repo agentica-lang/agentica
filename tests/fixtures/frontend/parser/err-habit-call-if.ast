@@ -1,1 +1,1 @@
-ERROR PARSE-UNEXPECTED-TOKEN 31:2:13-33:2:15 "expected a newline after the statement, found \"if\"" "there are no if modifiers: put the statement inside if cond ... end"
+ERROR PARSE-UNEXPECTED-TOKEN 31:2:13-33:2:15 "expected a newline after the statement, found \"if\"" "only return, break and next take an if modifier: put the statement inside if cond ... end"

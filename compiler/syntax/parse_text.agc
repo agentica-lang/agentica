@@ -551,7 +551,12 @@ def print_stmt(out: List[String], at: Margin, role: String, stmt: Ast.Stmt) -> L
       lines = out.push(head(at, role, "expr-stmt", node.id, node.span, ""))
       return print_expr(lines, child, "value", node.value)
     Ast.Stmt.If(node) ->
-      lines = out.push(head(at, role, "if-stmt", node.id, node.span, ""))
+      extra = ""
+      if node.guard
+        extra = " guard"
+      end
+
+      lines = out.push(head(at, role, "if-stmt", node.id, node.span, extra))
       for branch in node.branches
         lines = print_branch(lines, child, branch)
       end

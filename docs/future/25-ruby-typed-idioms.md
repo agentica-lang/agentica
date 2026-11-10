@@ -203,9 +203,10 @@ one exists.
   arguments.
 - **`loop do ... end`:** `while true ... end` already does it, and `break`
   cannot leave a block, so it would be a statement that looks like a block.
-- **`unless` and statement modifiers** (`return x if c`, `puts(x) if v`): second
-  ways to write `if`. The parser gives `PARSE-UNEXPECTED-TOKEN` with a help that
-  shows `if !c ... end`, or `if x`, the statement on its own line, then `end`.
+- **`unless` and modifiers on other statements** (`puts(x) if v`,
+  `x += 1 if c`): second ways to write `if`. The parser gives
+  `PARSE-UNEXPECTED-TOKEN`. Only `return`, `break` and `next` take an `if`
+  guard (#1288).
 - **New method aliases** (`select`, `collect`, `detect`, `inject`) and **second
   ways** (`reject`, the `Range` Enumerable methods, the block form of
   `each_slice`): each gets `CHECK-UNKNOWN-METHOD` (or `CHECK-BLOCK-TARGET`) with

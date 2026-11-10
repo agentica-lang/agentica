@@ -314,12 +314,14 @@ statement        = simple_statement, NL
                  | while_statement
                  | for_statement ;
 
-simple_statement = binding | compound_binding | return_statement | loop_control | expression ;
+simple_statement = binding | compound_binding | return_statement | loop_control | expression
+                 | guard ;
 binding          = NAME, [ ":", type ], "=", value ;
 compound_binding = NAME, ( "+=" | "-=" | "*=" | "/=" | "%=" ), value ;
 return_statement = "return", [ value ] ;
 value            = expression | case_expression ;
 loop_control     = "break" | "next" ;
+guard            = ( return_statement | loop_control ), "if", expression ;
 
 if_statement     = "if", expression, NL, block,
                    { "elsif", expression, NL, block },
@@ -353,8 +355,17 @@ the same checks as the long form.
 `break` leaves the innermost `while` or `for`; `next` skips to its next
 iteration. Both are `CHECK-LOOP-CONTROL` outside a loop of the same function or
 block: a block cannot break or skip its caller's loop. Inside a block, `return`
-leaves the block. There are no statement modifiers (`break if x`), no
-`continue`, and no assignment to fields or indexes.
+leaves the block. There is no `continue`, and no assignment to fields or
+indexes.
+
+A guard, `return x if c`, `return if c`, `break if c` or `next if c`, is the
+`if c` with that one statement and `end` written out: it checks and runs the
+same way. Its `if` is on the line where the statement starts, so a `case` value
+or a block that spans lines cannot take one, and nothing follows the condition
+(no `elsif`, `else` or second `if`); each is `PARSE-UNEXPECTED-TOKEN`. The
+condition reads as an `if` condition: a call with a block needs no parentheses.
+No other statement takes a modifier (`puts(x) if c`, `x = 1 if c`), and there
+is no `unless`: both are `PARSE-UNEXPECTED-TOKEN`.
 
 A statement that follows a terminator in the same block is
 `CHECK-UNREACHABLE-CODE`, at the first such statement; remove it or move it

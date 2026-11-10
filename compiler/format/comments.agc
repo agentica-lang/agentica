@@ -598,7 +598,7 @@ def children_of(part: Part, marks: Marks) -> List[Part]
     Part.Variant(node) -> return types(node.payload_types)
     Part.Type(node) -> return types(node.args)
     Part.Stmt(stmt) -> return stmt_children(stmt)
-    Part.Branch(node) -> return [Part.Expr(node.condition)].concat(stmts(node.body))
+    Part.Branch(node) -> return branch_children(node)
     Part.Arm(node) -> return [Part.Pattern(node.pattern)].concat(optional_expr(node.guard)).concat(stmts(node.body))
     Part.Pattern(pattern) -> return pattern_children(pattern)
     Part.Expr(expr) -> return expr_children(expr)
@@ -674,6 +674,16 @@ def if_children(node: Ast.IfStmt) -> List[Part]
     some(body) -> return branches.concat(stmts(body))
     none -> return branches
   end
+end
+
+# The condition, then the body; in a guard (`return x if c`) the one statement comes first, as in the source.
+def branch_children(node: Ast.IfBranch) -> List[Part]
+  condition = [Part.Expr(node.condition)]
+  if node.body.size == 1 and Ast.stmt_span(node.body[0]).start.offset < Ast.expr_span(node.condition).start.offset
+    return stmts(node.body).concat(condition)
+  end
+
+  return condition.concat(stmts(node.body))
 end
 
 def pattern_children(pattern: Ast.Pattern) -> List[Part]

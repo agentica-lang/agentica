@@ -150,6 +150,19 @@ def test_a_dash_formats_the_standard_input_to_the_standard_output(tmp_path):
     assert json.loads(broken.stderr)["code"] == "LEX-UNCLOSED-DELIMITER"
 
 
+def test_a_guard_is_written_back_as_a_guard_with_the_same_tree(tmp_path):
+    guards = ('def f(xs: List[Int]) -> Int\n  for x in xs\n    next  if x < 0 # skip\n    break if x > 9\n  end\n\n'
+              '  return  0 if xs.any? do |x| x == 5 end\n  xs.each do |x| return if x == 1 end\n  return 1\nend\n')
+    laid_out = guards.replace("next  if", "next if").replace("return  0", "return 0")
+    lay_out(tmp_path, {"guards.agc": guards})
+    before = fmt("--tree", "guards.agc", cwd=tmp_path)
+    assert fmt(cwd=tmp_path).code == 0
+    assert text(tmp_path, "guards.agc") == laid_out
+    after = fmt("--tree", "guards.agc", cwd=tmp_path)
+    assert (before.code, after.code, before.stdout) == (0, 0, after.stdout)
+    assert before.stdout.count(" guard") == 4
+
+
 def test_tree_is_the_same_before_and_after_formatting(tmp_path):
     lay_out(tmp_path, {"bad.agc": UNFORMATTED, "good.agc": FORMATTED})
     before = fmt("--tree", "bad.agc", cwd=tmp_path)

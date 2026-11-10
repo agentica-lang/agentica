@@ -594,6 +594,15 @@ end
 # `if`, its `elsif` branches and its `else`. A comment before `elsif` or `else` stays just before the keyword, at the
 # indent of the `if`; a comment after `else` on its line stays there.
 def if_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
+  if node.guard
+    branch = node.branches[0]
+    return Docs.Doc.Concat([
+      statement_doc(c, branch.body[0], false),
+      text(" if "),
+      expr_doc(c, branch.condition, false),
+    ])
+  end
+
   key = Comments.key_of("IfStmt", node.span)
   dangling = c.dangling.get(key, [])
   parts: List[Docs.Doc] = []
@@ -771,6 +780,7 @@ end
 
 def simple?(stmt: Ast.Stmt) -> Bool
   case stmt
+    Ast.Stmt.If(node) -> return node.guard
     Ast.Stmt.Binding(_) -> return true
     Ast.Stmt.Return(_) -> return true
     Ast.Stmt.Expression(_) -> return true

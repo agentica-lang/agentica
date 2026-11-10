@@ -112,19 +112,13 @@ round 1
 
 ## break and next
 
-`break` leaves the loop. `next` skips to the next round.
+`break` leaves the loop. `next` skips to the next round. When one of them, or a `return`, depends on a condition, write the condition after it: `next if c` is the `if c` with `next` and `end` written out. Only `return`, `break` and `next` take this guard, and it has one condition: there is no `unless`, and no `else`.
 
 ```agentica
 def main() -> Void
   for n in [1, 2, 3, 4, 5, 6]
-    if n % 2 == 0
-      next
-    end
-
-    if n > 4
-      break
-    end
-
+    next if n % 2 == 0
+    break if n > 4
     puts(n)
   end
 end
