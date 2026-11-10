@@ -585,7 +585,7 @@ program #6 0:1:1-76:6:1
         type: type-ref #597 25592:545:39-25598:545:45 name="String"
       result: type-ref #600 25603:545:50-25623:545:70 name="Result"
         arg: type-ref #599 25610:545:57-25622:545:69 name="HttpResponse"
-      body: return-stmt #606 25626:545:73-25661:545:108
+      body: return-stmt #606 25626:545:73-25661:545:108 implicit
         value: call #605 25626:545:73-25661:545:108 name="@2::request" piped=false
           arg: name-ref #601 25634:545:81-25638:545:85 name="pool"
           arg: literal #602 25640:545:87-25645:545:92 value=string:"GET"
@@ -1603,7 +1603,7 @@ program #6 0:1:1-76:6:1
       param: param #1633 47864:1017:23-47882:1017:41 name="server"
         type: type-ref #1632 47872:1017:31-47882:1017:41 name="HttpServer"
       result: type-ref #1634 47887:1017:46-47890:1017:49 name="Int"
-      body: return-stmt #1637 47893:1017:52-47920:1017:79
+      body: return-stmt #1637 47893:1017:52-47920:1017:79 implicit
         value: call #1636 47893:1017:52-47920:1017:79 name="HttpWire.local_port" piped=false
           arg: name-ref #1635 47913:1017:72-47919:1017:78 name="server"
     declaration: function-decl #1647 47987:1020:8-48056:1021:1 name="@2::wait" expression
@@ -1611,7 +1611,7 @@ program #6 0:1:1-76:6:1
         type: type-ref #1640 48004:1020:25-48014:1020:35 name="HttpServer"
       result: type-ref #1643 48019:1020:40-48031:1020:52 name="Result"
         arg: type-ref #1642 48026:1020:47-48030:1020:51 name="Void"
-      body: return-stmt #1646 48034:1020:55-48055:1020:76
+      body: return-stmt #1646 48034:1020:55-48055:1020:76 implicit
         value: call #1645 48034:1020:55-48055:1020:76 name="HttpWire.wait" piped=false
           arg: name-ref #1644 48048:1020:69-48054:1020:75 name="server"
     declaration: function-decl #1655 48173:1023:8-48254:1026:1 name="@2::close_server"
@@ -4626,7 +4626,7 @@ program #6 0:1:1-76:6:1
       param: param #4622 82151:1905:28-82163:1905:40 name="part"
         type: type-ref #4621 82157:1905:34-82163:1905:40 name="String"
       result: type-ref #4623 82168:1905:45-82171:1905:48 name="Int"
-      body: return-stmt #4630 82174:1905:51-82216:1905:93
+      body: return-stmt #4630 82174:1905:51-82216:1905:93 implicit
         value: method-call #4629 82174:1905:51-82216:1905:93 name="unwrap_or"
           target: method-call #4626 82174:1905:51-82193:1905:70 name="index_of"
             target: name-ref #4624 82174:1905:51-82178:1905:55 name="text"
@@ -4639,7 +4639,7 @@ program #6 0:1:1-76:6:1
       param: param #4635 82244:1907:27-82254:1907:37 name="start"
         type: type-ref #4634 82251:1907:34-82254:1907:37 name="Int"
       result: type-ref #4636 82259:1907:42-82265:1907:48 name="String"
-      body: return-stmt #4644 82268:1907:51-82322:1907:105
+      body: return-stmt #4644 82268:1907:51-82322:1907:105 implicit
         value: call #4643 82268:1907:51-82322:1907:105 name="String.slice" piped=false
           arg: name-ref #4637 82281:1907:64-82285:1907:68 name="text"
           arg: name-ref #4638 82287:1907:70-82292:1907:75 name="start"
@@ -4739,7 +4739,7 @@ program #6 0:1:1-76:6:1
     declaration: function-decl #4740 82863:1928:1-82983:1929:1 name="@2::bad_url" expression
       result: type-ref #4736 82880:1928:18-82894:1928:32 name="Result"
         arg: type-ref #4735 82887:1928:25-82893:1928:31 name="@2::Target"
-      body: return-stmt #4739 82897:1928:35-82982:1928:120
+      body: return-stmt #4739 82897:1928:35-82982:1928:120 implicit
         value: call #4738 82897:1928:35-82982:1928:120 name="error" piped=false
           arg: literal #4737 82903:1928:41-82981:1928:119 value=string:"http: the URL must be http:// or https:// with a host, and without user info"
     declaration: function-decl #4976 82984:1930:1-84715:1978:1 name="@2::parse_url"
@@ -5414,7 +5414,7 @@ program #6 0:1:1-76:6:1
     declaration: function-decl #5413 90489:2116:1-90526:2117:1 name="@2::no_body" expression
       result: type-ref #5410 90506:2116:18-90518:2116:30 name="Result"
         arg: type-ref #5409 90513:2116:25-90517:2116:29 name="Void"
-      body: return-stmt #5412 90521:2116:33-90525:2116:37
+      body: return-stmt #5412 90521:2116:33-90525:2116:37 implicit
         value: call #5411 90521:2116:33-90525:2116:37 name="ok" piped=false
     declaration: function-decl #5441 90665:2120:1-90935:2130:1 name="@2::cancelled?"
       param: param #5417 90680:2120:16-90706:2120:42 name="feeder"
@@ -5588,7 +5588,7 @@ program #6 0:1:1-76:6:1
       param: param #5582 92892:2175:13-92898:2175:19 name="f"
         type: type-ref #5581 92895:2175:16-92898:2175:19 name="@2::App"
       result: type-ref #5583 92903:2175:24-92906:2175:27 name="@2::App"
-      body: return-stmt #5585 92909:2175:30-92910:2175:31
+      body: return-stmt #5585 92909:2175:30-92910:2175:31 implicit
         value: name-ref #5584 92909:2175:30-92910:2175:31 name="f"
     declaration: function-decl #5647 93048:2179:1-93662:2196:1 name="@2::whole_answer"
       param: param #5588 93065:2179:18-93081:2179:34 name="handler"
@@ -6301,7 +6301,7 @@ program #6 0:1:1-76:6:1
       param: param #6287 102162:2415:20-102174:2415:32 name="frame"
         type: type-ref #6286 102169:2415:27-102174:2415:32 name="Bytes"
       result: type-ref #6288 102179:2415:37-102183:2415:41 name="Bool"
-      body: return-stmt #6295 102186:2415:44-102224:2415:82
+      body: return-stmt #6295 102186:2415:44-102224:2415:82 implicit
         value: call #6294 102186:2415:44-102224:2415:82 name="@3::close?" piped=false
           arg: binary #6293 102207:2415:65-102223:2415:81 op=modulo op-span=102219:2415:77-102220:2415:78
             left: method-call #6291 102207:2415:65-102218:2415:76 name="at"
@@ -6312,7 +6312,7 @@ program #6 0:1:1-76:6:1
       param: param #6298 102242:2417:17-102253:2417:28 name="data"
         type: type-ref #6297 102248:2417:23-102253:2417:28 name="Bytes"
       result: type-ref #6299 102258:2417:33-102263:2417:38 name="Bytes"
-      body: return-stmt #6303 102266:2417:41-102293:2417:68
+      body: return-stmt #6303 102266:2417:41-102293:2417:68 implicit
         value: method-call #6302 102266:2417:41-102293:2417:68 name="take"
           target: name-ref #6300 102266:2417:41-102270:2417:45 name="data"
           arg: const-ref #6301 102276:2417:51-102292:2417:67 name="@2::WS_CONTROL_BYTES"
@@ -7042,7 +7042,7 @@ program #6 0:1:1-76:6:1
       param: param #7025 112532:2701:25-112548:2701:41 name="message"
         type: type-ref #7024 112541:2701:34-112548:2701:41 name="@2::Message"
       result: type-ref #7026 112553:2701:46-112557:2701:50 name="Bool"
-      body: return-stmt #7031 112560:2701:53-112598:2701:91
+      body: return-stmt #7031 112560:2701:53-112598:2701:91 implicit
         value: call #7030 112560:2701:53-112598:2701:91 name="@2::send_when_room" piped=false
           arg: field-access #7028 112575:2701:68-112588:2701:81 name="incoming"
             target: name-ref #7027 112575:2701:68-112579:2701:72 name="wire"
@@ -8284,7 +8284,7 @@ program #6 0:1:1-76:6:1
       param: param #8260 127744:3078:16-127756:3078:28 name="head"
         type: type-ref #8259 127750:3078:22-127756:3078:28 name="String"
       result: type-ref #8261 127761:3078:33-127766:3078:38 name="Bytes"
-      body: return-stmt #8266 127769:3078:41-127799:3078:71
+      body: return-stmt #8266 127769:3078:41-127799:3078:71 implicit
         value: field-access #8265 127769:3078:41-127799:3078:71 name="unwrap!"
           target: method-call #8264 127769:3078:41-127791:3078:63 name="encode"
             target: name-ref #8262 127769:3078:41-127773:3078:45 name="head"
@@ -9692,7 +9692,7 @@ program #6 0:1:1-76:6:1
       param: param #9662 144999:3483:12-145013:3483:26 name="origin"
         type: type-ref #9661 145007:3483:20-145013:3483:26 name="@2::Origin"
       result: type-ref #9663 145018:3483:31-145021:3483:34 name="Int"
-      body: return-stmt #9670 145024:3483:37-145064:3483:77
+      body: return-stmt #9670 145024:3483:37-145064:3483:77 implicit
         value: binary #9669 145024:3483:37-145064:3483:77 op=minus op-span=145050:3483:63-145051:3483:64
           left: call #9666 145024:3483:37-145049:3483:62 name="List.size" piped=false
             arg: field-access #9665 145034:3483:47-145048:3483:61 name="waiting"
@@ -11681,7 +11681,7 @@ program #6 0:1:1-76:6:1
       param: param #93 3086:87:23-3097:87:34 name="key"
         type: type-ref #92 3091:87:28-3097:87:34 name="String"
       result: type-ref #94 3102:87:39-3108:87:45 name="String"
-      body: return-stmt #102 3111:87:48-3177:87:114
+      body: return-stmt #102 3111:87:48-3177:87:114 implicit
         value: call #101 3111:87:48-3177:87:114 name="Base64.strict_encode64" piped=false
           arg: call #100 3134:87:71-3176:87:113 name="OpenSSL.Digest.sha1" piped=false
             arg: field-access #99 3154:87:91-3175:87:112 name="bytes"
@@ -12000,7 +12000,7 @@ program #6 0:1:1-76:6:1
       param: param #423 6660:211:21-6671:211:32 name="opcode"
         type: type-ref #422 6668:211:29-6671:211:32 name="Int"
       result: type-ref #424 6676:211:37-6680:211:41 name="Bool"
-      body: return-stmt #428 6683:211:44-6698:211:59
+      body: return-stmt #428 6683:211:44-6698:211:59 implicit
         value: binary #427 6683:211:44-6698:211:59 op=greater-equal op-span=6690:211:51-6692:211:53
           left: name-ref #425 6683:211:44-6689:211:50 name="opcode"
           right: const-ref #426 6693:211:54-6698:211:59 name="@3::CLOSE"
@@ -12008,7 +12008,7 @@ program #6 0:1:1-76:6:1
       param: param #432 6748:214:19-6759:214:30 name="opcode"
         type: type-ref #431 6756:214:27-6759:214:30 name="Int"
       result: type-ref #433 6764:214:35-6768:214:39 name="Bool"
-      body: return-stmt #437 6771:214:42-6786:214:57
+      body: return-stmt #437 6771:214:42-6786:214:57 implicit
         value: binary #436 6771:214:42-6786:214:57 op=equal op-span=6778:214:49-6780:214:51
           left: name-ref #434 6771:214:42-6777:214:48 name="opcode"
           right: const-ref #435 6781:214:52-6786:214:57 name="@3::CLOSE"
@@ -12016,7 +12016,7 @@ program #6 0:1:1-76:6:1
       param: param #441 6834:217:18-6845:217:29 name="opcode"
         type: type-ref #440 6842:217:26-6845:217:29 name="Int"
       result: type-ref #442 6850:217:34-6854:217:38 name="Bool"
-      body: return-stmt #446 6857:217:41-6871:217:55
+      body: return-stmt #446 6857:217:41-6871:217:55 implicit
         value: binary #445 6857:217:41-6871:217:55 op=equal op-span=6864:217:48-6866:217:50
           left: name-ref #443 6857:217:41-6863:217:47 name="opcode"
           right: const-ref #444 6867:217:51-6871:217:55 name="@3::PING"
@@ -12063,7 +12063,7 @@ program #6 0:1:1-76:6:1
             arg: name-ref #485 7257:231:26-7260:231:29 name="out"
     declaration: function-decl #502 7332:235:8-7421:236:1 name="@3::new_assembly" expression
       result: type-ref #491 7354:235:30-7362:235:38 name="@3::Assembly"
-      body: return-stmt #501 7365:235:41-7420:235:96
+      body: return-stmt #501 7365:235:41-7420:235:96 implicit
         value: construct #500 7365:235:41-7420:235:96 type="@3::Assembly"
           arg: named-arg #493 7374:235:50-7385:235:61 name="text"
             value: literal #492 7380:235:56-7385:235:61 value=bool:false
@@ -12296,7 +12296,7 @@ program #6 0:1:1-76:6:1
       param: param #727 10002:294:23-10014:294:35 name="text"
         type: type-ref #726 10008:294:29-10014:294:35 name="String"
       result: type-ref #728 10019:294:40-10024:294:45 name="Bytes"
-      body: return-stmt #733 10027:294:48-10050:294:71
+      body: return-stmt #733 10027:294:48-10050:294:71 implicit
         value: call #732 10027:294:48-10050:294:71 name="@3::frame" piped=false
           arg: const-ref #729 10033:294:54-10037:294:58 name="@3::TEXT"
           arg: field-access #731 10039:294:60-10049:294:70 name="bytes"
@@ -12305,7 +12305,7 @@ program #6 0:1:1-76:6:1
       param: param #737 10113:297:25-10124:297:36 name="data"
         type: type-ref #736 10119:297:31-10124:297:36 name="Bytes"
       result: type-ref #738 10129:297:41-10134:297:46 name="Bytes"
-      body: return-stmt #742 10137:297:49-10156:297:68
+      body: return-stmt #742 10137:297:49-10156:297:68 implicit
         value: call #741 10137:297:49-10156:297:68 name="@3::frame" piped=false
           arg: const-ref #739 10143:297:55-10149:297:61 name="@3::BINARY"
           arg: name-ref #740 10151:297:63-10155:297:67 name="data"
@@ -12404,7 +12404,7 @@ program #6 0:1:1-76:6:1
       param: param #838 11016:322:23-11027:322:34 name="data"
         type: type-ref #837 11022:322:29-11027:322:34 name="Bytes"
       result: type-ref #839 11032:322:39-11037:322:44 name="Bytes"
-      body: return-stmt #843 11040:322:47-11057:322:64
+      body: return-stmt #843 11040:322:47-11057:322:64 implicit
         value: call #842 11040:322:47-11057:322:64 name="@3::frame" piped=false
           arg: const-ref #840 11046:322:53-11050:322:57 name="@3::PING"
           arg: name-ref #841 11052:322:59-11056:322:63 name="data"
@@ -12412,7 +12412,7 @@ program #6 0:1:1-76:6:1
       param: param #847 11116:325:23-11127:325:34 name="data"
         type: type-ref #846 11122:325:29-11127:325:34 name="Bytes"
       result: type-ref #848 11132:325:39-11137:325:44 name="Bytes"
-      body: return-stmt #852 11140:325:47-11157:325:64
+      body: return-stmt #852 11140:325:47-11157:325:64 implicit
         value: call #851 11140:325:47-11157:325:64 name="@3::frame" piped=false
           arg: const-ref #849 11146:325:53-11150:325:57 name="@3::PONG"
           arg: name-ref #850 11152:325:59-11156:325:63 name="data"
@@ -12471,7 +12471,7 @@ program #6 0:1:1-76:6:1
       param: param #909 11715:339:19-11726:339:30 name="opcode"
         type: type-ref #908 11723:339:27-11726:339:30 name="Int"
       result: type-ref #910 11731:339:35-11735:339:39 name="Bool"
-      body: return-stmt #922 11738:339:42-11794:339:98
+      body: return-stmt #922 11738:339:42-11794:339:98 implicit
         value: binary #921 11738:339:42-11794:339:98 op=or op-span=11755:339:59-11757:339:61
           left: binary #913 11738:339:42-11754:339:58 op=less-equal op-span=11745:339:49-11747:339:51
             left: name-ref #911 11738:339:42-11744:339:48 name="opcode"
@@ -12613,7 +12613,7 @@ program #6 0:1:1-76:6:1
         type: type-ref #2 812:11:41-815:11:44 name="Int"
       result: type-ref #5 820:11:49-831:11:60 name="Result"
         arg: type-ref #4 827:11:56-830:11:59 name="Int"
-      body: return-stmt #10 834:11:63-859:11:88
+      body: return-stmt #10 834:11:63-859:11:88 implicit
         value: call #9 834:11:63-859:11:88 name="@4::load8" piped=false
           arg: name-ref #6 840:11:69-844:11:73 name="data"
           arg: name-ref #7 846:11:75-852:11:81 name="offset"
@@ -12643,7 +12643,7 @@ program #6 0:1:1-76:6:1
         type: type-ref #34 1248:20:45-1251:20:48 name="Int"
       result: type-ref #37 1256:20:53-1267:20:64 name="Result"
         arg: type-ref #36 1263:20:60-1266:20:63 name="Int"
-      body: return-stmt #42 1270:20:67-1300:20:97
+      body: return-stmt #42 1270:20:67-1300:20:97 implicit
         value: call #41 1270:20:67-1300:20:97 name="@4::load16_be" piped=false
           arg: name-ref #38 1280:20:77-1284:20:81 name="data"
           arg: name-ref #39 1286:20:83-1292:20:89 name="offset"
@@ -12655,7 +12655,7 @@ program #6 0:1:1-76:6:1
         type: type-ref #47 1460:23:45-1463:23:48 name="Int"
       result: type-ref #50 1468:23:53-1479:23:64 name="Result"
         arg: type-ref #49 1475:23:60-1478:23:63 name="Int"
-      body: return-stmt #55 1482:23:67-1512:23:97
+      body: return-stmt #55 1482:23:67-1512:23:97 implicit
         value: call #54 1482:23:67-1512:23:97 name="@4::load16_le" piped=false
           arg: name-ref #51 1492:23:77-1496:23:81 name="data"
           arg: name-ref #52 1498:23:83-1504:23:89 name="offset"
@@ -12703,7 +12703,7 @@ program #6 0:1:1-76:6:1
         type: type-ref #98 2180:38:45-2183:38:48 name="Int"
       result: type-ref #101 2188:38:53-2199:38:64 name="Result"
         arg: type-ref #100 2195:38:60-2198:38:63 name="Int"
-      body: return-stmt #106 2202:38:67-2232:38:97
+      body: return-stmt #106 2202:38:67-2232:38:97 implicit
         value: call #105 2202:38:67-2232:38:97 name="@4::load32_be" piped=false
           arg: name-ref #102 2212:38:77-2216:38:81 name="data"
           arg: name-ref #103 2218:38:83-2224:38:89 name="offset"
@@ -12715,7 +12715,7 @@ program #6 0:1:1-76:6:1
         type: type-ref #111 2392:41:45-2395:41:48 name="Int"
       result: type-ref #114 2400:41:53-2411:41:64 name="Result"
         arg: type-ref #113 2407:41:60-2410:41:63 name="Int"
-      body: return-stmt #119 2414:41:67-2444:41:97
+      body: return-stmt #119 2414:41:67-2444:41:97 implicit
         value: call #118 2414:41:67-2444:41:97 name="@4::load32_le" piped=false
           arg: name-ref #115 2424:41:77-2428:41:81 name="data"
           arg: name-ref #116 2430:41:83-2436:41:89 name="offset"
@@ -12797,7 +12797,7 @@ program #6 0:1:1-76:6:1
         type: type-ref #198 3739:70:45-3742:70:48 name="Int"
       result: type-ref #201 3747:70:53-3758:70:64 name="Result"
         arg: type-ref #200 3754:70:60-3757:70:63 name="Int"
-      body: return-stmt #206 3761:70:67-3791:70:97
+      body: return-stmt #206 3761:70:67-3791:70:97 implicit
         value: call #205 3761:70:67-3791:70:97 name="@4::load64_be" piped=false
           arg: name-ref #202 3771:70:77-3775:70:81 name="data"
           arg: name-ref #203 3777:70:83-3783:70:89 name="offset"
@@ -12809,7 +12809,7 @@ program #6 0:1:1-76:6:1
         type: type-ref #211 3949:73:45-3952:73:48 name="Int"
       result: type-ref #214 3957:73:53-3968:73:64 name="Result"
         arg: type-ref #213 3964:73:60-3967:73:63 name="Int"
-      body: return-stmt #219 3971:73:67-4001:73:97
+      body: return-stmt #219 3971:73:67-4001:73:97 implicit
         value: call #218 3971:73:67-4001:73:97 name="@4::load64_le" piped=false
           arg: name-ref #215 3981:73:77-3985:73:81 name="data"
           arg: name-ref #216 3987:73:83-3993:73:89 name="offset"
@@ -13087,21 +13087,21 @@ program #6 0:1:1-76:6:1
       param: param #508 8321:182:25-8331:182:35 name="value"
         type: type-ref #507 8328:182:32-8331:182:35 name="Int"
       result: type-ref #509 8336:182:40-8341:182:45 name="Bytes"
-      body: return-stmt #512 8344:182:48-8360:182:64
+      body: return-stmt #512 8344:182:48-8360:182:64 implicit
         value: call #511 8344:182:48-8360:182:64 name="@4::bytes8_be" piped=false
           arg: name-ref #510 8354:182:58-8359:182:63 name="value"
     declaration: function-decl #521 8435:185:8-8492:186:1 name="@4::write_i64_le" expression
       param: param #516 8452:185:25-8462:185:35 name="value"
         type: type-ref #515 8459:185:32-8462:185:35 name="Int"
       result: type-ref #517 8467:185:40-8472:185:45 name="Bytes"
-      body: return-stmt #520 8475:185:48-8491:185:64
+      body: return-stmt #520 8475:185:48-8491:185:64 implicit
         value: call #519 8475:185:48-8491:185:64 name="@4::bytes8_le" piped=false
           arg: name-ref #518 8485:185:58-8490:185:63 name="value"
     declaration: function-decl #530 8669:189:8-8737:190:1 name="@4::write_f32_be" expression
       param: param #524 8686:189:25-8694:189:33 name="x"
         type: type-ref #523 8689:189:28-8694:189:33 name="Float"
       result: type-ref #525 8699:189:38-8704:189:43 name="Bytes"
-      body: return-stmt #529 8707:189:46-8736:189:75
+      body: return-stmt #529 8707:189:46-8736:189:75 implicit
         value: call #528 8707:189:46-8736:189:75 name="@4::bytes4_be" piped=false
           arg: call #527 8717:189:56-8735:189:74 name="Float.to_bits32" piped=false
             arg: name-ref #526 8733:189:72-8734:189:73 name="x"
@@ -13109,7 +13109,7 @@ program #6 0:1:1-76:6:1
       param: param #533 8934:193:25-8942:193:33 name="x"
         type: type-ref #532 8937:193:28-8942:193:33 name="Float"
       result: type-ref #534 8947:193:38-8952:193:43 name="Bytes"
-      body: return-stmt #538 8955:193:46-8984:193:75
+      body: return-stmt #538 8955:193:46-8984:193:75 implicit
         value: call #537 8955:193:46-8984:193:75 name="@4::bytes4_le" piped=false
           arg: call #536 8965:193:56-8983:193:74 name="Float.to_bits32" piped=false
             arg: name-ref #535 8981:193:72-8982:193:73 name="x"
@@ -13117,7 +13117,7 @@ program #6 0:1:1-76:6:1
       param: param #542 9138:197:25-9146:197:33 name="x"
         type: type-ref #541 9141:197:28-9146:197:33 name="Float"
       result: type-ref #543 9151:197:38-9156:197:43 name="Bytes"
-      body: return-stmt #547 9159:197:46-9186:197:73
+      body: return-stmt #547 9159:197:46-9186:197:73 implicit
         value: call #546 9159:197:46-9186:197:73 name="@4::bytes8_be" piped=false
           arg: call #545 9169:197:56-9185:197:72 name="Float.to_bits" piped=false
             arg: name-ref #544 9183:197:70-9184:197:71 name="x"
@@ -13125,7 +13125,7 @@ program #6 0:1:1-76:6:1
       param: param #551 9343:201:25-9351:201:33 name="x"
         type: type-ref #550 9346:201:28-9351:201:33 name="Float"
       result: type-ref #552 9356:201:38-9361:201:43 name="Bytes"
-      body: return-stmt #556 9364:201:46-9391:201:73
+      body: return-stmt #556 9364:201:46-9391:201:73 implicit
         value: call #555 9364:201:46-9391:201:73 name="@4::bytes8_le" piped=false
           arg: call #554 9374:201:56-9390:201:72 name="Float.to_bits" piped=false
             arg: name-ref #553 9388:201:70-9389:201:71 name="x"
@@ -13264,7 +13264,7 @@ program #6 0:1:1-76:6:1
       param: param #683 10672:231:24-10681:231:33 name="bits"
         type: type-ref #682 10678:231:30-10681:231:33 name="Int"
       result: type-ref #684 10686:231:38-10689:231:41 name="Int"
-      body: return-stmt #694 10692:231:44-10742:231:94
+      body: return-stmt #694 10692:231:44-10742:231:94 implicit
         value: method-call #693 10692:231:44-10742:231:94 name="shift_right"
           target: method-call #689 10692:231:44-10719:231:71 name="shift_left"
             target: name-ref #685 10692:231:44-10697:231:49 name="value"
@@ -13688,7 +13688,7 @@ program #6 0:1:1-76:6:1
       param: param #1105 13016:306:15-13026:306:25 name="value"
         type: type-ref #1104 13023:306:22-13026:306:25 name="Int"
       result: type-ref #1106 13031:306:30-13036:306:35 name="Bytes"
-      body: return-stmt #1117 13039:306:38-13100:306:99
+      body: return-stmt #1117 13039:306:38-13100:306:99 implicit
         value: call #1116 13039:306:38-13100:306:99 name="@4::pack" piped=false
           arg: list-lit #1115 13044:306:43-13099:306:98
             element: method-call #1111 13045:306:44-13078:306:77 name="bit_and"
@@ -13703,7 +13703,7 @@ program #6 0:1:1-76:6:1
       param: param #1120 13116:308:15-13126:308:25 name="value"
         type: type-ref #1119 13123:308:22-13126:308:25 name="Int"
       result: type-ref #1121 13131:308:30-13136:308:35 name="Bytes"
-      body: return-stmt #1132 13139:308:38-13200:308:99
+      body: return-stmt #1132 13139:308:38-13200:308:99 implicit
         value: call #1131 13139:308:38-13200:308:99 name="@4::pack" piped=false
           arg: list-lit #1130 13144:308:43-13199:308:98
             element: method-call #1124 13145:308:44-13163:308:62 name="bit_and"
@@ -13859,7 +13859,7 @@ program #6 0:1:1-76:6:1
         type: type-ref #1275 14433:355:17-14442:355:26 name="List"
           arg: type-ref #1274 14438:355:22-14441:355:25 name="Int"
       result: type-ref #1277 14447:355:31-14452:355:36 name="Bytes"
-      body: return-stmt #1281 14455:355:39-14485:355:69
+      body: return-stmt #1281 14455:355:39-14485:355:69 implicit
         value: field-access #1280 14455:355:39-14485:355:69 name="unwrap!"
           target: call #1279 14455:355:39-14477:355:61 name="Bytes.from_list" piped=false
             arg: name-ref #1278 14471:355:55-14476:355:60 name="items"
@@ -13924,7 +13924,7 @@ program #6 0:1:1-76:6:1
       param: param #58 2090:37:38-2102:37:50 name="text"
         type: type-ref #57 2096:37:44-2102:37:50 name="String"
       result: type-ref #59 2107:37:55-2113:37:61 name="String"
-      body: return-stmt #64 2116:37:64-2136:37:84
+      body: return-stmt #64 2116:37:64-2136:37:84 implicit
         value: call #63 2116:37:64-2136:37:84 name="@5::encode" piped=false
           arg: name-ref #60 2123:37:71-2127:37:75 name="text"
           arg: list-lit #62 2129:37:77-2135:37:83
@@ -13933,7 +13933,7 @@ program #6 0:1:1-76:6:1
       param: param #68 2346:41:33-2358:41:45 name="text"
         type: type-ref #67 2352:41:39-2358:41:45 name="String"
       result: type-ref #69 2363:41:50-2369:41:56 name="String"
-      body: return-stmt #73 2372:41:59-2399:41:86
+      body: return-stmt #73 2372:41:59-2399:41:86 implicit
         value: call #72 2372:41:59-2399:41:86 name="@5::encode" piped=false
           arg: name-ref #70 2379:41:66-2383:41:70 name="text"
           arg: const-ref #71 2385:41:72-2398:41:85 name="@5::ENCODED_SPACE"
@@ -13942,7 +13942,7 @@ program #6 0:1:1-76:6:1
         type: type-ref #76 2667:45:44-2673:45:50 name="String"
       result: type-ref #79 2678:45:55-2692:45:69 name="Result"
         arg: type-ref #78 2685:45:62-2691:45:68 name="String"
-      body: return-stmt #83 2695:45:72-2713:45:90
+      body: return-stmt #83 2695:45:72-2713:45:90 implicit
         value: call #82 2695:45:72-2713:45:90 name="@5::decode" piped=false
           arg: name-ref #80 2702:45:79-2706:45:83 name="text"
           arg: literal #81 2708:45:85-2712:45:89 value=bool:true
@@ -13951,7 +13951,7 @@ program #6 0:1:1-76:6:1
         type: type-ref #86 2971:49:39-2977:49:45 name="String"
       result: type-ref #89 2982:49:50-2996:49:64 name="Result"
         arg: type-ref #88 2989:49:57-2995:49:63 name="String"
-      body: return-stmt #93 2999:49:67-3018:49:86
+      body: return-stmt #93 2999:49:67-3018:49:86 implicit
         value: call #92 2999:49:67-3018:49:86 name="@5::decode" piped=false
           arg: name-ref #90 3006:49:74-3010:49:78 name="text"
           arg: literal #91 3012:49:80-3017:49:85 value=bool:false

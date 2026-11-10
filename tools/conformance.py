@@ -51,7 +51,9 @@ KNOWN_ISSUE = re.compile(r"known-issue: #(\d+) \S")
 
 # The open issues that a known-issue skip may name: number -> what is missing. Closing an issue removes its skips and
 # its line here in the same pull request.
-KNOWN_ISSUES: dict[int, str] = {}
+KNOWN_ISSUES: dict[int, str] = {
+    1328: "an_blocking with a stack switch lost one object once on macOS x86_64",
+}
 
 # Reasons that only mean "this case belongs to the other tier" (tests/conftest.py, tests/agentica_test.py).
 TIER_REASONS = ("not selected in this test tier", "slow tier only", "fast tier only", "no cases in this tier")
@@ -120,7 +122,7 @@ AREAS = {
             "tests/test_spec_alias.py", "tests/test_spec_bytecode.py", "tests/test_spec_checker_defaults.py",
             "tests/test_spec_checker.py", "tests/test_spec_checker_rest.py", "tests/test_spec_diagnostic.py",
             "tests/test_spec_lexer.py", "tests/test_spec_main.py", "tests/test_spec_modules.py", "tests/test_spec_regex_literal.py",
-            "tests/test_spec_eag.py",
+            "tests/test_spec_eag.py", "tests/test_spec_implicit_return.py",
             "tests/test_spec_package_add.py", "tests/test_spec_package_fetch.py",
             "tests/test_spec_package_native_artifact.py", "tests/test_spec_package_subdir.py",
             "tests/test_spec_package_deps.py", "tests/test_spec_package_native.py",

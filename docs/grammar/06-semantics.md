@@ -229,13 +229,21 @@ operate on `Result[Void]`. The timed `Task.await(task, timeout_ms)` on a
 - Functions can be called before their declaration, and can be recursive.
   Arguments are positional: there is no overloading or named argument for
   ordinary functions. A parameter may have a default value (below).
-- A function with a non-`Void` return type must return on every reachable path.
-  A loop does not guarantee a return.
-- The last expression does not return implicitly. A `case` as the last
-  statement of a function is a statement; a non-`Void` function may end with an
-  exhaustive `case` only when every arm returns.
-- `return` without a value completes a `Void` function. A `Nil` function uses
-  `return nil`.
+- A function with a non-`Void` return type must give a value on every reachable
+  path. A loop does not guarantee one.
+- The value of such a function is its last expression, unless a `return` leaves
+  before it. When the last statement is an `if` with an `else`, or a `case`, the
+  rule applies to the last statement of each branch and each arm, at any depth.
+  An `if` without `else`, a loop, a binding or a `try` statement at the end
+  gives no value: `CHECK-MISSING-RETURN` at the function. A last expression of
+  type `Void` (a call) gives none either: `CHECK-MISSING-RETURN` at that
+  expression. A last value of another type is `CHECK-TYPE-MISMATCH` there.
+- The rule reads the result type as written. In a `Void` function, and in one
+  whose result is an alias of `Void`, the last expression is a statement whose
+  value is dropped: `CHECK-UNUSED-VALUE` and `CHECK-UNUSED-RESULT` apply to it.
+  Blocks give their last expression already (below).
+- `return` without a value completes a `Void` function. A `Nil` function ends
+  with `nil`.
 - An executable declares exactly one `main() -> Void` with no parameters and no
   type parameters. A run and `agentica compile` report `CHECK-MAIN` without it;
   `agentica check` does not need a `main`, but one that is declared must have

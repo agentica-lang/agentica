@@ -901,12 +901,16 @@ def test_every_shape_and_signature_of_the_query_is_what_the_lowering_writes(driv
 
 
 def test_the_api_versions_of_a_block_are_those_of_the_native_header():
-    """The least minor version of each feature is a constant of the compiler: the header's version is the highest."""
+    """The least minor version of each feature is a constant of the compiler, up to the header's version (1.3 added
+    an_blocking, which a block does not show)."""
     header = (ROOT / "vm" / "agentica_native.h").read_text(encoding="utf-8")
     shape = (ROOT / "compiler" / "check" / "native_shape.agc").read_text(encoding="utf-8")
     major, minor = (int(re.search(r"#define AN_API_%s (\d+)" % name, header).group(1)) for name in ("MAJOR", "MINOR"))
     constants = {name: int(value) for name, value in re.findall(r"^export (API_\w+) = (\d+)$", shape, re.M)}
-    assert (constants["API_MAJOR"], constants["API_MINOR_RESOURCES"]) == (major, minor)
+    assert constants["API_MAJOR"] == major and constants["API_MINOR_RESOURCES"] <= minor
+    # The header comment names each minor version up to the header's own.
+    comment = header[:header.index("*/")]
+    assert max(int(n) for n in re.findall(r"\(1\.(\d+)\)", comment)) == minor
     # The comment of the header says which minor version added what.
     assert constants["API_MINOR_TYPES"] == int(re.search(r"enums\s+(?:\*\s+)?\(1\.(\d)\)", header).group(1))
     assert constants["API_MINOR_RESOURCES"] == int(re.search(r"resources\s+(?:\*\s+)?\(1\.(\d)\)", header).group(1))
@@ -1082,6 +1086,39 @@ def test_bodies_resolve_calls_bindings_patterns_and_mark_what_they_do_not_cover(
     assert (guard["kind"], condition["kind"], block["kind"]) == ("if", "op", "block")
     assert (block["range"]["start"], block["range"]["end"], condition["range"]["start"]) == (
         {"line": 45, "column": 3}, {"line": 45, "column": 11}, {"line": 45, "column": 15})
+
+
+# The same def with its values given by `return` and as the last expressions (#1287).
+EXPLICIT_RETURNS = """def sign(n: Int) -> String
+  if n > 0
+    return "plus"
+  else
+    case n
+      0 -> return "zero"
+      _ -> return "minus"
+    end
+  end
+end
+"""
+
+
+def test_bodies_show_a_last_expression_as_the_return_it_stands_for(driver, project):
+    implicit = EXPLICIT_RETURNS.replace("return ", "")
+    write_files(project, {"explicit.agc": EXPLICIT_RETURNS, "implicit.agc": implicit})
+    _answer, explicit_functions = bodies_of(driver, project, "explicit.agc")
+    _answer, implicit_functions = bodies_of(driver, project, "implicit.agc")
+
+    def without_ranges(node):
+        return {**{key: value for key, value in node.items() if key not in ("range", "children")},
+                "children": [without_ranges(child) for child in node["children"]]}
+
+    explicit_body = explicit_functions["sign"]["body"]
+    implicit_body = implicit_functions["sign"]["body"]
+    assert [without_ranges(node) for node in implicit_body] == [without_ranges(node) for node in explicit_body]
+    # A `return` with no keyword covers its value: `"plus"` on line 3.
+    plus = implicit_body[0]["children"][0]["children"][1]["children"][0]
+    assert (plus["kind"], plus["range"]["start"], plus["range"]["end"]) == (
+        "return", {"line": 3, "column": 5}, {"line": 3, "column": 11})
 
 
 def test_bodies_give_the_diagnostic_of_a_file_that_does_not_check_or_cannot_be_read(driver, project):

@@ -175,6 +175,13 @@ end
 def lower_return(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Return, saved: Int) -> Result[Lowering.Fx]
   case node.value
     some(value) ->
+      # The last expression of a def whose result is an alias of Void (check_stmt.agc, implicit_return): a statement,
+      # after which the def ends with its Void return, as a def written `Void` does.
+      if node.implicit and Types.is?(cx.types[node.id], "Void")
+        out = try Expr.lower_expression(cx, fx, value, -1, true, false)
+        return ok(out.fx.with(next: saved))
+      end
+
       call = tail_call(cx, value)
       case call
         some(found) ->

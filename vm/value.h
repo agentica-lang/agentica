@@ -540,6 +540,7 @@ unsigned agc_gc_version(void);
 void agc_gc_allow_threads(void);
 bool agc_gc_thread_enter(void);
 void agc_gc_thread_leave(void);
+void agc_gc_blocking(void (*fn)(void *arg), void *arg);
 void agc_gc_pause(void);
 void agc_gc_resume(void);
 bool agc_gc_stats(agc_gc_info *info);
@@ -591,8 +592,8 @@ agc_c_resource *agc_as_c_resource(agc_vm *vm, agc_value v);
  * Int add they served. A value of the wrong type calls agc_wrong_tag, which fails with RUNTIME-INTERNAL and does not
  * return. The rest of the code still never reads the union. */
 /* CC_JUMPS: it fails with agc_fail, which jumps to the scheduler's catch; cchecker infers from it that the checked
-   accessors (agc_as_*) and their callers may jump. It is the only raise marked: a direct call of agc_fail and its
-   family is not seen as a jump yet (#1304). */
+   accessors (agc_as_*) and their callers may jump. The raises of vm/port.h (agc_fail and its family) carry the mark
+   too. */
 CC_JUMPS _Noreturn void agc_wrong_tag(agc_vm *vm);
 
 static inline agc_value agc_void(void) {

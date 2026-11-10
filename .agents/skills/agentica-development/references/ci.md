@@ -252,8 +252,8 @@ clang-tidy. A run takes 3 to 5 minutes. Its docs are in that clone
   function that takes a lock for its caller or drops the caller's
   (`agc_lock_take`, `leave_with`). `CC_JUMPS` goes on a raise that never
   returns: cchecker infers from it which functions may jump out, and checks
-  what they hold there. Only `agc_wrong_tag` has it, so only the wrong-tag
-  raise is seen; a direct `agc_fail` and its family are not yet (#1304).
+  what they hold there. The raises have it: `agc_wrong_tag` (vm/value.h) and
+  `agc_fail` and its family (vm/port.h).
   `CC_JUMP_RELEASES` goes on a lock helper whose lock the scheduler gives back
   after a jump (`agc_sync_reset`: `agc_sync_take`, `stream_take`). A function
   that takes or drops a lock only on some paths (by a flag or a count) gets an

@@ -133,6 +133,9 @@ The design (trie, unboxed Int and Float leaves, builders, costs) is
   malloc (`agc_native_dirty_*`), which the done half builds or drops. A
   `{R=NAME}` block names a resource of the module's table: an
   `agc_c_resource` with `row` set, freed through `agc_native_free_state`.
+  `an_blocking` (API 1.3) runs C under `GC_do_blocking` (`agc_gc_blocking`)
+  on a thread libgc knows, and as is on one it does not (the compute pool),
+  for C libraries that switch stacks.
   `make bench-native` times it.
 - Resources that extern functions return are `agc_c_resource` (`vm/value.h`): a
   registry entry owned like a handle, freed by `Native.close` or the owner's

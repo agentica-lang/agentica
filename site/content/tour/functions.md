@@ -24,41 +24,57 @@ Calls always use parentheses, also with no arguments: `main()`, `puts("hi")`. Ar
 
 ## return
 
-A function that gives a value must `return` on every path. The last line is not returned on its own.
+The value of a function is its last expression. When the last statement is an `if` with an `else`, or a `case`, the value is the last expression of the branch or arm that runs. `return` leaves the function early, often as a guard:
 
 ```agentica
 def max(a: Int, b: Int) -> Int
   return a if a > b
 
-  return b
+  b
+end
+
+def sign(n: Int) -> String
+  if n > 0
+    "plus"
+  elsif n < 0
+    "minus"
+  else
+    "zero"
+  end
 end
 
 def main() -> Void
   puts(max(3, 9))
+  puts(sign(-2))
 end
 ```
 
 ```output
 9
+minus
 ```
 
-Forgetting a `return` is a checker error:
+Every path must give a value. An `if` without `else`, a loop or an assignment at the end gives none, and neither does a call of a `Void` function such as `puts`, so this is a checker error:
 
 ```agentica {expect="CHECK-MISSING-RETURN"}
-def double(n: Int) -> Int
-  n * 2
+def sign(n: Int) -> String
+  if n > 0
+    "plus"
+  end
 end
 
 def main() -> Void
-  puts(double(2))
+  puts(sign(2))
 end
 ```
+
+A `Void` function gives no value: its last expression is a statement like any other.
 
 Code after a `return` can never run, so it is also an error (`CHECK-UNREACHABLE-CODE`): remove it or move it before the `return`.
 
 ## One-line functions
 
-A function whose body is one value can be written on one line, with `=` after the result type. It is the same as a `def` whose body is `return` and that value.
+A function whose body is one value can be written on one line, with `=` after the result type. It is the same as a `def` whose body is that value.
 
 ```agentica
 def double(n: Int) -> Int = n * 2
@@ -76,7 +92,7 @@ end
 1 apple
 ```
 
-The value starts on the line of `=`; it can go on to more lines as any expression can: inside parentheses or a block, or on a next line that starts with `.name`. The result type is still required. A `Void` function has no value to give, so it cannot use this form, and neither can `case` or `if`, which are statements. One-line functions may follow each other with no empty line between them, as constants can; next to any other declaration the empty line is still needed, except right after an import, as for every declaration. `agentica fmt` writes a function whose body is one `return` as a one-line function when it fits and no comment sits from its `def` line to its `end` line, and writes a one-line function with `return` and `end` when it does not fit, with an empty line on both sides. In an `extern` block, `= "name"` after a signature is the C name of the function instead (see [Native code](/library/io-and-system/native/)).
+The value starts on the line of `=`; it can go on to more lines as any expression can: inside parentheses or a block, or on a next line that starts with `.name`. The result type is still required. A `Void` function has no value to give, so it cannot use this form, and neither can `case` or `if`, which are statements. One-line functions may follow each other with no empty line between them, as constants can; next to any other declaration the empty line is still needed, except right after an import, as for every declaration. `agentica fmt` writes a function whose body is one `return` as a one-line function when it fits and no comment sits from its `def` line to its `end` line, and writes a one-line function as a `def` with the value as its body and `end` when it does not fit, with an empty line on both sides. In an `extern` block, `= "name"` after a signature is the C name of the function instead (see [Native code](/library/io-and-system/native/)).
 
 ## Void functions
 

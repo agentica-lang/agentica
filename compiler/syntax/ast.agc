@@ -301,11 +301,13 @@ export struct Binding
   span: Source.Span
 end
 
-## return with an optional value.
+## return with an optional value. `implicit` is true for the last expression of a def that gives its value, written
+## with no `return` (the parser's tail_returns); its span is the expression's.
 export struct Return
   id: Int
   value: Optional[Expr]
   span: Source.Span
+  implicit: Bool = false
 end
 
 ## An expression used as a statement.

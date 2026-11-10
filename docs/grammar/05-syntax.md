@@ -64,10 +64,10 @@ type             = qualified_type, [ "[", type, { ",", type }, "]" ] ;
 ```
 
 A one-line def, `def name(params) -> Type = expression`, is the def with
-`return expression` as its body, and the form `agentica fmt` writes for such a
-def when it fits on its line and holds no comment: it checks and runs the same
-way, generics, defaults, `export` and a `##` doc included. The expression starts
-on the line of `=` (`PARSE-UNEXPECTED-TOKEN` at the end of the line otherwise)
+`expression` as its body, and the form `agentica fmt` writes for such a def when
+it fits on its line and holds no comment: it checks and runs the same way,
+generics, defaults, `export` and a `##` doc included. The expression starts on
+the line of `=` (`PARSE-UNEXPECTED-TOKEN` at the end of the line otherwise)
 and goes on to other lines only as any expression does: inside parentheses or a
 block, or on a next line that starts with `.name`. A `case` or an `if` after `=`
 is `PARSE-UNEXPECTED-TOKEN`: they are statements. A `Void` function returns no

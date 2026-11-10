@@ -52,7 +52,7 @@ end
 ## The help of CHECK-MISSING-RETURN: what is missing at the end of the body, or "".
 export def missing_return_help(body: List[Ast.Stmt], type_name: String) -> String
   if !contains_return?(body)
-    return "add \"return <value>\" of type #{type_name} at the end"
+    return "end the function with a value of type #{type_name}"
   elsif body.size == 0
     return ""
   end
@@ -62,14 +62,15 @@ export def missing_return_help(body: List[Ast.Stmt], type_name: String) -> Strin
     Ast.Stmt.If(node) -> return if_help(node, type_name)
     Ast.Stmt.While(_) -> return loop_help(type_name)
     Ast.Stmt.For(_) -> return loop_help(type_name)
-    Ast.Stmt.Case(_) -> return "every arm of the last \"case\" must end with return, or return #{type_name} after it"
+    Ast.Stmt.Case(_) ->
+      return "every arm of the last \"case\" must end with a value or a return, or give #{type_name} after it"
     _ -> return ""
   end
 end
 
 ## The help of CHECK-MISSING-RETURN for a loop at the end of the body.
 export def loop_help(type_name: String) -> String
-  return "a loop does not count as a return; add \"return <value>\" of type #{type_name} after it"
+  return "a loop gives no value; end the function with a value of type #{type_name} after it"
 end
 
 ## The message of CHECK-CAPTURED-ASSIGNMENT. A template is a block of its function (eag.agc), so two assignments get a
@@ -184,12 +185,14 @@ end
 
 def if_help(node: Ast.IfStmt, type_name: String) -> String
   if node.guard
-    return "the last statement is a guard, which returns only when its condition holds; return #{type_name} after it"
+    return "the last statement is a guard, which returns only when its condition holds; give #{type_name} after it"
   end
 
   case node.else_body
-    some(_) -> return "every branch of the last \"if\" must end with return, or return #{type_name} after it"
-    none -> return "the last \"if\" has no \"else\"; add an \"else\" that returns #{type_name}, or return after it"
+    some(_) ->
+      return "every branch of the last \"if\" must end with a value or a return, or give #{type_name} after it"
+    none ->
+      return "the last \"if\" has no \"else\"; add an \"else\" that gives #{type_name}, or give it after the \"if\""
   end
 end
 

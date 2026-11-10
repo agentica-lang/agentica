@@ -629,7 +629,10 @@ def statement_doc(c: Context, stmt: Ast.Stmt, forced: Bool) -> Docs.Doc
     Ast.Stmt.Binding(node) -> return binding_doc(c, node, forced)
     Ast.Stmt.Return(node) ->
       case node.value
-        some(value) -> return Docs.Doc.Concat([text("return "), value_doc(c, value, forced)])
+        some(value) ->
+          return value_doc(c, value, forced) if node.implicit and not try?(value)
+
+          return Docs.Doc.Concat([text("return "), value_doc(c, value, forced)])
         none -> return text("return")
       end
 
@@ -902,6 +905,15 @@ def guard_shaped?(c: Context, node: Ast.IfStmt) -> Bool
 
   last = last_line(c, node.span)
   return not (node.span.start.line..last).to_a.any? do |line: Int| c.noted.include?(line) end
+end
+
+# A `try` value: a one-line def can give it, but a `try` at the end of a body is a statement and gives no value (the
+# parser's tail_returns), so a body written for that def keeps `return`.
+def try?(value: Ast.Expr) -> Bool
+  case value
+    Ast.Expr.Try(_) -> return true
+    _ -> return false
+  end
 end
 
 # Whether `doc` laid out with no width limit is one line. This reads the layout and not the source, so an `if` whose

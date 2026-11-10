@@ -415,8 +415,9 @@ def test_a_wrong_call_is_fmt_usage_with_status_2(tmp_path):
 
 # A one-line def stays one when it fits. A one-line def too long for its line (an exported one with a `##` doc too),
 # or whose value takes lines of its own (a pipe chain of two or more `|>`), is written as the def with a body that it
-# stands for. A trailing comment stays on the line, and a value spread over lines inside parentheses or with a leading
-# `.` is joined when it fits.
+# stands for: the value is its last line, with no `return`, since the source wrote none (a `try` value keeps
+# `return`, or it would be a statement). A trailing comment stays on the line, and a value spread over lines inside
+# parentheses or with a leading `.` is joined when it fits.
 ONE_LINE_DEFS = """## The product, scaled.
 export def scaled_product(first_argument: Int, second_argument: Int) -> Int = first_argument * second_argument * 7000000
 
@@ -436,7 +437,7 @@ def long_name(first_argument: Int, second_argument: Int) -> Int = first_argument
 """
 ONE_LINE_DEFS_FORMATTED = """## The product, scaled.
 export def scaled_product(first_argument: Int, second_argument: Int) -> Int
-  return first_argument * second_argument * 7000000
+  first_argument * second_argument * 7000000
 end
 
 def double(x: Int) -> Int = x * 2 # twice
@@ -446,7 +447,7 @@ def inside(a: Int, b: Int) -> Int = a + b
 def summed(xs: List[Int]) -> Int = xs.sum
 
 def piped(xs: List[Int]) -> List[Int]
-  return (
+  (
     xs
     |> twice()
     |> twice()
@@ -454,7 +455,7 @@ def piped(xs: List[Int]) -> List[Int]
 end
 
 def long_name(first_argument: Int, second_argument: Int) -> Int
-  return first_argument * second_argument + first_argument * 20000
+  first_argument * second_argument + first_argument * 20000
 end
 """
 
@@ -474,7 +475,8 @@ def test_a_one_line_def_stays_one_when_it_fits(tmp_path):
 ])
 def test_a_one_line_def_and_its_body_form_meet_at_the_width(tmp_path, source_form, prefix, size, one_line):
     # `def f() -> String = "..."` is 22 characters plus the text: 119, the width, for 97, and 120 for 98; `export `
-    # takes 7 more. The source form does not matter: only the width decides.
+    # takes 7 more. The source form does not matter: only the width decides. A body keeps its `return` or its lack of
+    # one.
     value = "x" * size
     short = '%sdef f() -> String = "%s"\n' % (prefix, value)
     body = '%sdef f() -> String\n  return "%s"\nend\n' % (prefix, value)
@@ -483,6 +485,8 @@ def test_a_one_line_def_and_its_body_form_meet_at_the_width(tmp_path, source_for
     before = fmt("--tree", "short.agc", cwd=tmp_path)
     assert fmt(cwd=tmp_path).code == 0
     expected = short if one_line else body
+    if not one_line and source_form == "one line":
+        expected = '%sdef f() -> String\n  "%s"\nend\n' % (prefix, value)
     assert text(tmp_path, "short.agc") == expected
     assert fmt("--check", cwd=tmp_path).stdout == ""
     assert fmt("--tree", "short.agc", cwd=tmp_path).stdout == before.stdout
@@ -508,7 +512,7 @@ def two() -> Int = 2
 def three() -> Int = 3
 
 def long_name(first_argument: Int, second_argument: Int) -> Int
-  return first_argument * second_argument + first_argument * 20000
+  first_argument * second_argument + first_argument * 20000
 end
 
 def four() -> Int = 4
@@ -523,7 +527,7 @@ def long_name(first_argument: Int, second_argument: Int) -> Int = first_argument
 """
 IMPORTED_FORMATTED = """import HTTP from "std/http"
 def long_name(first_argument: Int, second_argument: Int) -> Int
-  return first_argument * second_argument + first_argument * 20000
+  first_argument * second_argument + first_argument * 20000
 end
 """
 
@@ -708,3 +712,64 @@ def test_a_def_whose_body_is_one_return_is_written_as_a_one_line_def(tmp_path):
     assert text(tmp_path, "bodies.agc") == BODIES_FORMATTED
     assert fmt("--check", cwd=tmp_path).stdout == ""
     assert fmt("--tree", "bodies.agc", cwd=tmp_path).stdout == before.stdout
+
+
+# The last expression of a def gives its value (#1287). `fmt` writes back what the source wrote: a value with no
+# `return` stays so, in the body, in the branches of an `if` and in the arms of a `case`, and a `return` stays too; a
+# pipe chain with no `return` keeps its parentheses. The `implicit` mark is not in `--tree`, so the two forms of a def
+# are one tree.
+IMPLICIT = """def sign(x: Int) -> String
+  if x > 0
+    "plus"
+  elsif x < 0
+    return "minus"
+  else
+    case x
+      0 -> "zero"
+      _ -> "other"
+    end
+  end
+end
+
+def piped(xs: List[Int]) -> List[Int]
+  ys = xs
+  (
+    ys
+    |> twice()
+    |> twice()
+  )
+end
+
+def main() -> Void
+  puts(sign(1))
+end
+"""
+
+
+def test_a_last_expression_and_a_return_are_written_back_as_they_were(tmp_path):
+    lay_out(tmp_path, {"implicit.agc": IMPLICIT})
+    before = fmt("--tree", "implicit.agc", cwd=tmp_path)
+    assert before.code == 0, before.stderr
+    assert fmt(cwd=tmp_path).code == 0
+    assert text(tmp_path, "implicit.agc") == IMPLICIT
+    assert fmt("--check", cwd=tmp_path).stdout == ""
+    explicit = IMPLICIT.replace('    "plus"', '    return "plus"').replace("  (\n    ys", "  return (\n    ys")
+    lay_out(tmp_path, {"implicit.agc": explicit})
+    assert fmt(cwd=tmp_path).code == 0
+    assert text(tmp_path, "implicit.agc") == explicit
+    assert fmt("--tree", "implicit.agc", cwd=tmp_path).stdout == before.stdout
+
+
+# A one-line def whose value is a `try` and that does not fit is written with `return`: a `try` at the end of a body
+# is a statement, so the bare value would not give it.
+LONG_TRY = 'def f() -> Result[Int] = try long_call(%s)\n' % ("1" * 100)
+
+
+def test_a_long_one_line_def_of_a_try_keeps_return_in_its_body(tmp_path):
+    lay_out(tmp_path, {"long.agc": LONG_TRY})
+    before = fmt("--tree", "long.agc", cwd=tmp_path)
+    assert fmt(cwd=tmp_path).code == 0
+    expected = 'def f() -> Result[Int]\n  return try long_call(\n    %s,\n  )\nend\n' % ("1" * 100)
+    assert text(tmp_path, "long.agc") == expected
+    assert fmt("--check", cwd=tmp_path).stdout == ""
+    assert fmt("--tree", "long.agc", cwd=tmp_path).stdout == before.stdout

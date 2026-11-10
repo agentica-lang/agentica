@@ -179,7 +179,7 @@ program #24 0:1:1-217:9:1
             right: call #154 2864:74:38-2884:74:58 name="LogRegistry.lowest" piped=false
     declaration: function-decl #164 2963:78:8-3007:79:1 name="@2::level" expression
       result: type-ref #160 2978:78:23-2986:78:31 name="LogLevel"
-      body: return-stmt #163 2989:78:34-3006:78:51
+      body: return-stmt #163 2989:78:34-3006:78:51 implicit
         value: call #162 2989:78:34-3006:78:51 name="@2::level_of" piped=false
           arg: call #161 2998:78:43-3005:78:50 name="@2::ready" piped=false
     declaration: function-decl #175 3080:81:8-3177:85:1 name="@2::set_level"
@@ -310,7 +310,7 @@ program #24 0:1:1-217:9:1
       param: param #298 5363:144:22-5370:144:29 name="ms"
         type: type-ref #297 5367:144:26-5370:144:29 name="Int"
       result: type-ref #299 5375:144:34-5381:144:40 name="String"
-      body: return-stmt #303 5384:144:43-5402:144:61
+      body: return-stmt #303 5384:144:43-5402:144:61 implicit
         value: call #302 5384:144:43-5402:144:61 name="@3::iso8601" piped=false
           arg: name-ref #300 5396:144:55-5398:144:57 name="ms"
           arg: literal #301 5400:144:59-5401:144:60 value=int:3

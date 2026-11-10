@@ -437,11 +437,53 @@ end
 def return_known(cx: State.Cx, st: State.St, node: Ast.Return, expected: T.Type) -> Result[State.St]
   case node.value
     some(value) ->
+      return implicit_return(cx, st, node, value, expected) if node.implicit
+
       out = try State.expr_completion_if(cx, st, value, expected, T.is?(expected, "Void"))
       return ok(out.st)
     none ->
       try State.ensure(cx, st, T.Type.Void, expected, node.span)
       return ok(st)
+  end
+end
+
+# The last expression of a def, which gives its value (Ast.Return.implicit). In a def whose result is an alias of
+# Void, the value is dropped as the value of any statement is: the return gets the type Void at its id, which tells the
+# lowering to lower it as the statement it is in a def written `Void`. A value of the wrong type is CHECK-TYPE-MISMATCH
+# at the expression; one that gives no value at all (a Void call) is CHECK-MISSING-RETURN there, as when the def has
+# no value on that path, since the user wrote a statement and not a value.
+def implicit_return(
+  cx: State.Cx,
+  st: State.St,
+  node: Ast.Return,
+  value: Ast.Expr,
+  expected: T.Type,
+) -> Result[State.St]
+  if T.is?(expected, "Void")
+    done = try check_expression_statement(cx, st, Ast.ExprStmt(id: node.id, value: value, span: node.span))
+    return ok(State.record_type(done, node.id, T.Type.Void))
+  end
+
+  case State.expr(cx, st, value, expected)
+    ok(out) -> return ok(out.st)
+    error(failure) ->
+      case State.expr_completion(cx, st, value, T.Type.Unknown)
+        ok(out) ->
+          return error(failure) if !T.is?(out.type, "Void")
+
+          type_name = T.to_text(expected)
+          return error(
+            State.fail_help(
+              cx,
+              st,
+              "CHECK-MISSING-RETURN",
+              "the last statement gives no value, and the function must return #{type_name} on every path",
+              node.span,
+              "end the function with a value of type #{type_name}, or return one before this statement",
+            ),
+          )
+        error(_) -> return error(failure)
+      end
   end
 end
 

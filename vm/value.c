@@ -11,6 +11,14 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifndef AGC_NO_GC
+/* A call of agc_gc_blocking, for the function that GC_do_blocking runs. */
+typedef struct {
+  void (*fn)(void *arg);
+  void *arg;
+} blocking_call;
+#endif
+
 #ifdef AGC_NO_GC
 const char *__asan_default_options(void); // NOLINT(readability-identifier-naming,misc-use-internal-linkage)
 const char *__asan_default_options(void) { return "detect_leaks=0:allocator_may_return_null=1"; }
@@ -174,6 +182,31 @@ bool agc_gc_thread_enter(void) {
 void agc_gc_thread_leave(void) {
 #ifndef AGC_NO_GC
   GC_unregister_my_thread();
+#endif
+}
+
+#ifndef AGC_NO_GC
+/* GC_do_blocking takes a function that returns a pointer. */
+static void *run_blocking(void *data) {
+  const blocking_call *call = data;
+  call->fn(call->arg);
+  return NULL;
+}
+#endif
+
+/* Runs FN(ARG) with this thread marked blocked: the collector does not stop it with a signal and scans its stack only
+   down to this call, so FN may switch to a stack of its own, and must not touch GC memory. A thread that is not
+   registered (the compute pool) is never stopped, so it runs FN as is; so does the build without the collector. */
+void agc_gc_blocking(void (*fn)(void *arg), void *arg) {
+#ifdef AGC_NO_GC
+  fn(arg);
+#else
+  if (!GC_thread_is_registered()) {
+    fn(arg);
+    return;
+  }
+  blocking_call call = {fn, arg};
+  (void)GC_do_blocking(run_blocking, &call);
 #endif
 }
 
