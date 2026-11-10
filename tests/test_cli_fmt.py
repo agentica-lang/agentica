@@ -411,3 +411,66 @@ def test_a_wrong_call_is_fmt_usage_with_status_2(tmp_path):
         result = fmt(*words, cwd=tmp_path, json_style=True)
         assert (result.code, json.loads(result.stderr)["code"]) == (2, "FMT-USAGE"), words
     assert text(tmp_path, "good.agc") == FORMATTED
+
+
+# `fmt` keeps each form of a def: a one-line def stays one when it fits, and a def with a body stays one. A one-line
+# def too long for its line, or whose value takes lines of its own (a pipe chain of two or more `|>`), is written as
+# the def with a body that it stands for. A trailing comment stays on the line, and a value spread over lines inside
+# parentheses is joined when it fits.
+ONE_LINE_DEFS = """def double(x: Int) -> Int = x * 2 # twice
+
+def triple(x: Int) -> Int
+  return x * 3
+end
+
+def inside(a: Int, b: Int) -> Int = (
+  a +
+  b
+)
+
+def piped(xs: List[Int]) -> List[Int] = xs |> twice() |> twice()
+
+def long_name(first_argument: Int, second_argument: Int) -> Int = first_argument * second_argument + first_argument * 20000
+"""
+ONE_LINE_DEFS_FORMATTED = """def double(x: Int) -> Int = x * 2 # twice
+
+def triple(x: Int) -> Int
+  return x * 3
+end
+
+def inside(a: Int, b: Int) -> Int = a + b
+
+def piped(xs: List[Int]) -> List[Int]
+  return (
+    xs
+    |> twice()
+    |> twice()
+  )
+end
+
+def long_name(first_argument: Int, second_argument: Int) -> Int
+  return first_argument * second_argument + first_argument * 20000
+end
+"""
+
+
+def test_a_one_line_def_stays_one_when_it_fits(tmp_path):
+    lay_out(tmp_path, {"defs.agc": ONE_LINE_DEFS})
+    before = fmt("--tree", "defs.agc", cwd=tmp_path)
+    assert fmt(cwd=tmp_path).code == 0
+    assert text(tmp_path, "defs.agc") == ONE_LINE_DEFS_FORMATTED
+    assert fmt("--check", cwd=tmp_path).stdout == ""
+    assert fmt("--tree", "defs.agc", cwd=tmp_path).stdout == before.stdout
+
+
+@pytest.mark.parametrize("size, one_line", [(97, True), (98, False)])
+def test_a_one_line_def_and_its_body_form_meet_at_the_width(tmp_path, size, one_line):
+    # `def f() -> String = "..."` is 22 characters plus the text: 119, the width, for 97, and 120 for 98.
+    value = "x" * size
+    short = 'def f() -> String = "%s"\n' % value
+    assert len(short) - 1 == 22 + size
+    lay_out(tmp_path, {"short.agc": short})
+    assert fmt(cwd=tmp_path).code == 0
+    expected = short if one_line else 'def f() -> String\n  return "%s"\nend\n' % value
+    assert text(tmp_path, "short.agc") == expected
+    assert fmt("--check", cwd=tmp_path).stdout == ""

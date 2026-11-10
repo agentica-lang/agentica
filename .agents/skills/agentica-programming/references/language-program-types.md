@@ -211,3 +211,7 @@ end
   expression is not returned implicitly. A Void function completes at `return`
   or at its end. A `Nil` function returns `nil` explicitly. A statement after a
   `return` is `CHECK-UNREACHABLE-CODE`.
+- A one-line def, `def double(x: Int) -> Int = x * 2`, is the def with
+  `return x * 2` as its body. The expression starts on the line of `=` and needs
+  the return type; not for `Void` (`PARSE-ONE-LINE-DEF-VOID`, `main` included),
+  `case` or `if`. In an `extern` block `= "name"` is the C name instead.

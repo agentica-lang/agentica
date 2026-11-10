@@ -375,7 +375,30 @@ def function_doc(c: Context, node: Ast.FunctionDecl) -> Docs.Doc
   end
 
   items = statement_items(c, node.body).concat(dangling_items(c, key))
-  return Docs.Doc.Concat([Docs.Doc.Group(head), body(c, items), Docs.Doc.HardLine, text("end")])
+  spelled = Docs.Doc.Concat([Docs.Doc.Group(head), body(c, items), Docs.Doc.HardLine, text("end")])
+  return spelled if not node.expression
+
+  one = Docs.Doc.Concat([Docs.Doc.Group(head), text(" = "), expression_value_doc(c, node.body[0])])
+  return spelled if not one_line?(one)
+
+  return Docs.Doc.Group([Docs.Doc.IfBreak([spelled], [one])])
+end
+
+# The value after `=` of a one-line def (`def name() -> Type = value`), laid out as the value of its `return` in a
+# body, with the comments of that `return`. A one-line def stays one when that fits on its line, and is written as the
+# def with a body that it stands for when it does not or when its value takes lines of its own (function_doc), so the
+# output always parses and formatting again changes nothing.
+def expression_value_doc(c: Context, stmt: Ast.Stmt) -> Docs.Doc
+  key = Comments.key_of(Comments.stmt_kind(stmt), Ast.stmt_span(stmt))
+  case stmt
+    Ast.Stmt.Return(node) ->
+      case node.value
+        some(value) -> return commented(c, key, value_doc(c, value, true))
+        none -> return statement_doc(c, stmt, true)
+      end
+
+    _ -> return statement_doc(c, stmt, true)
+  end
 end
 
 def param_doc(c: Context, param: Ast.Param) -> Docs.Doc
@@ -602,8 +625,9 @@ def if_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
 end
 
 # The one-line form of an `if` with one branch of one statement: `statement if condition`. The statement is laid out
-# as in a body (`forced`), so a value that a body breaks (a pipe chain of two or more `|>`, a method chain with a `.`
-# at the start of each line) breaks the guard too, which is then written as its `if`.
+# as in a body (`forced`), so a pipe chain of two or more `|>`, which a body breaks, breaks the guard too, and the
+# guard is then written as its `if`. A method chain with a `.` at the start of each line is joined when it fits, as
+# in a body.
 def guard_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
   branch = node.branches[0]
   return Docs.Doc.Concat([statement_doc(c, branch.body[0], true), text(" if "), expr_doc(c, branch.condition, false)])

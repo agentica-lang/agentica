@@ -133,6 +133,8 @@ export struct FunctionDecl
   doc: Optional[String]
   native: Optional[Native]
   span: Source.Span
+  # Written `def name() -> Type = value`: the body is the one `return value`, and the formatter keeps the form.
+  expression: Bool = false
 end
 
 ## The C side of an extern function: the library it is in, as written, its C name (the def's name or the string after

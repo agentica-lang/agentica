@@ -119,6 +119,10 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
       end
 
       attrs += doc_attr(node.doc) + native_attr(node.name, node.native)
+      if node.expression
+        attrs += " expression"
+      end
+
       lines = out.push(head(at, role, "function-decl", node.id, node.span, attrs))
       for param in node.params
         lines = print_param(lines, child, param)

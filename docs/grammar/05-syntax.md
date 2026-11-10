@@ -19,7 +19,7 @@ import_name      = ( NAME | TYPE_NAME ), [ "as", ( NAME | TYPE_NAME ) ] ;
 reexport_decl    = "export", TYPE_NAME, ".", ( NAME | TYPE_NAME ), NL ;
 
 function_decl    = "def", NAME, [ type_parameters ], "(", [ parameters ], ")",
-                   "->", type, NL, block, "end", NL ;
+                   "->", type, ( NL, block, "end" | "=", expression ), NL ;
 parameters       = parameter, { ",", parameter }, [ "," ] ;
 parameter        = NAME, ":", type, [ "=", expression ] ;
 
@@ -62,6 +62,18 @@ variant_decl     = [ DOC, NL ], TYPE_NAME, [ "(", type, { ",", type }, ")" ], NL
 qualified_type   = TYPE_NAME, [ ".", TYPE_NAME ] ;
 type             = qualified_type, [ "[", type, { ",", type }, "]" ] ;
 ```
+
+A one-line def, `def name(params) -> Type = expression`, is the def with
+`return expression` as its body: it checks and runs the same way, generics,
+defaults, `export` and a `##` doc included. The expression starts on the line of
+`=` (`PARSE-UNEXPECTED-TOKEN` at the end of the line otherwise) and goes on to
+other lines only as any expression does, inside parentheses or a block. A `case`
+or an `if` after `=` is `PARSE-UNEXPECTED-TOKEN`: they are statements. A `Void`
+function returns no value, so `-> Void =` is `PARSE-ONE-LINE-DEF-VOID` at the
+`=`; this includes `main`. The return type is required (`def f(x: Int) = x` is
+`PARSE-UNEXPECTED-TOKEN` at the `=`), and the blank line after a declaration is
+too. In an `extern` block, `= "name"` after the signature is the C name of the
+function instead (below), not a value.
 
 A parameter may end with a default value, `NAME: type = expression`. The parser
 takes any expression after `=`, so that the checker can say why a default is not
