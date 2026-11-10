@@ -179,6 +179,15 @@ def test_a_guard_too_long_for_its_line_is_written_as_the_if_it_stands_for(tmp_pa
     assert fmt("--tree", "long.agc", cwd=tmp_path).stdout == before.stdout
 
 
+def test_a_guard_that_spans_lines_is_written_as_the_if_it_stands_for(tmp_path):
+    # A heredoc value takes the lines below its guard, which is one line, so it becomes the `if` even though it fits.
+    lay_out(tmp_path, {"doc.agc": 'def f(x: Int) -> String\n  return <<~A if x > 0\n    a\n    b\n  A\n  return ""\nend\n'})
+    assert fmt(cwd=tmp_path).code == 0
+    assert text(tmp_path, "doc.agc") == (
+        'def f(x: Int) -> String\n  if x > 0\n    return <<~A\n    a\n    b\n  A\n  end\n  return ""\nend\n')
+    assert fmt("--check", cwd=tmp_path).stdout == ""
+
+
 def test_tree_is_the_same_before_and_after_formatting(tmp_path):
     lay_out(tmp_path, {"bad.agc": UNFORMATTED, "good.agc": FORMATTED})
     before = fmt("--tree", "bad.agc", cwd=tmp_path)

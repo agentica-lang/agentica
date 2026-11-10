@@ -591,13 +591,11 @@ def binding_doc(c: Context, node: Ast.Binding, forced: Bool) -> Docs.Doc
   end
 end
 
-# `if`, its `elsif` branches and its `else`. A comment before `elsif` or `else` stays just before the keyword, at the
-# indent of the `if`; a comment after `else` on its line stays there.
 # A guard (`return x if c`) stays one when it fits on its line, and is written as the `if` it stands for when it does
-# not: the parser takes a guard only when its `if` is on the line where its statement starts, which a statement that
-# breaks over lines would not keep.
+# not or when it spans lines (a heredoc, a block of several lines): the parser takes a guard only when its `if` is on
+# the line where its statement starts.
 def if_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
-  if !node.guard
+  if not node.guard
     return spelled_if_doc(c, node)
   end
 
@@ -607,6 +605,8 @@ def if_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
   return Docs.Doc.Group([Docs.Doc.IfBreak([spelled_if_doc(c, node)], [flat])])
 end
 
+# `if`, its `elsif` branches and its `else`. A comment before `elsif` or `else` stays just before the keyword, at the
+# indent of the `if`; a comment after `else` on its line stays there.
 def spelled_if_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
   key = Comments.key_of("IfStmt", node.span)
   dangling = c.dangling.get(key, [])

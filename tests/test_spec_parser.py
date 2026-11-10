@@ -407,6 +407,8 @@ class TestSpecParser:
             Reject("def f(x: Int) -> Int\n  return 1 if\n    x > 0\n  return 0\nend\n", unexpected, (2, 14)),
             Reject("def f(x: Int) -> Int\n  return 1 unless x > 0\n  return 0\nend\n", unexpected, (2, 12, 2, 18)),
             Reject("def f(x: Int) -> Int\n  return 1 while x > 0\n  return 0\nend\n", unexpected, (2, 12, 2, 17)),
+            Reject(main_of("  for n in [1]\n    next unless n > 0\n  end\n"), unexpected, (3, 10, 3, 16)),
+            Reject(main_of("  puts(1) unless true\n"), unexpected, (2, 11, 2, 17)),
             # The `if` is on the line of the `return`: not after a `case` value or a block that spans lines.
             Reject("def f(x: Int) -> Int\n  return case x\n    1 -> 2\n    _ -> 3\n  end if x > 0\n  return 0\nend\n",
                    unexpected, (5, 7, 5, 9)),
