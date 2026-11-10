@@ -28,7 +28,7 @@ USAGE = "usage: agentica help std/MODULE[.NAME] [--json]"
 ## starts with `std/`, with or without a trailing `--json`. No builtin name is written that way.
 export def asks?(words: List[String]) -> Bool
   rest = unflagged(words)
-  return rest.size == 2 and (rest[1] == "std" or rest[1].starts_with?("std/"))
+  rest.size == 2 and (rest[1] == "std" or rest[1].starts_with?("std/"))
 end
 
 ## Runs `agentica help std/...` for `words`, the words from `help` on, in the style `--json` or `--ai` gave in front of
@@ -46,9 +46,9 @@ export def run(words: List[String], style: String, settings: Env.Settings) -> Re
   end
 
   case QueryFiles.read(settings, path, false)
-    SourceFile.Read.Unreadable(_) -> return Reply.Answer.Rejected(unknown_module(path))
-    SourceFile.Read.Invalid(at) -> return Reply.Answer.Rejected(Front.stage_problem(path, SourceFile.invalid_utf8(at)))
-    SourceFile.Read.Text(text) -> return answered(settings, path, name, text, as_json)
+    SourceFile.Read.Unreadable(_) -> Reply.Answer.Rejected(unknown_module(path))
+    SourceFile.Read.Invalid(at) -> Reply.Answer.Rejected(Front.stage_problem(path, SourceFile.invalid_utf8(at)))
+    SourceFile.Read.Text(text) -> answered(settings, path, name, text, as_json)
   end
 end
 
@@ -56,25 +56,25 @@ end
 def unflagged(words: List[String]) -> List[String]
   return words.take(words.size - 1) if words.size > 0 and words[words.size - 1] == "--json"
 
-  return words
+  words
 end
 
 def answered(settings: Env.Settings, path: String, name: String, text: String, as_json: Bool) -> Reply.Answer
   case Docs.of_file(settings, path, text)
-    Diag.Outcome.Failed(problem) -> return Reply.Answer.Rejected(Front.stage_problem(path, problem))
+    Diag.Outcome.Failed(problem) -> Reply.Answer.Rejected(Front.stage_problem(path, problem))
     Diag.Outcome.Done(module) ->
       return Reply.Answer.Printed(module_reply(path, module, as_json)) if name == ""
 
       found = module.items.filter do |item: DocModel.Item| item.name == name end
       return Reply.Answer.Rejected(unknown_name(path, name, module)) if found.size == 0
 
-      return Reply.Answer.Printed(item_reply(path, found[0], as_json))
+      Reply.Answer.Printed(item_reply(path, found[0], as_json))
   end
 end
 
 def unknown_module(path: String) -> Problems.Problem
   message = "#{path} is not a module of the standard library"
-  return QueryOptions.at_arguments("QUERY-NOT-FOUND", message, Diag.Help.Hint(USAGE))
+  QueryOptions.at_arguments("QUERY-NOT-FOUND", message, Diag.Help.Hint(USAGE))
 end
 
 def unknown_name(path: String, name: String, module: DocModel.Module) -> Problems.Problem
@@ -85,7 +85,7 @@ def unknown_name(path: String, name: String, module: DocModel.Module) -> Problem
     none -> help = help
   end
 
-  return QueryOptions.at_arguments("QUERY-NOT-FOUND", "#{path} exports no #{name}", help)
+  QueryOptions.at_arguments("QUERY-NOT-FOUND", "#{path} exports no #{name}", help)
 end
 
 # The list of a module: `{module, doc, items: [{kind, name, summary}]}`, or its path and doc and then each export as
@@ -121,7 +121,7 @@ def module_reply(path: String, module: DocModel.Module, as_json: Bool) -> Reply.
     blocks = blocks.push(lines.join("\n"))
   end
 
-  return Reply.printed("#{blocks.join("\n\n")}\n")
+  Reply.printed("#{blocks.join("\n\n")}\n")
 end
 
 # One export. As JSON it has the fields of `help NAME --json` for a builtin that apply (`name`, `arity`, `parameters`,
@@ -141,14 +141,14 @@ def item_reply(path: String, item: DocModel.Item, as_json: Bool) -> Reply.Reply
     blocks = blocks.push(parts.join("\n"))
   end
 
-  return Reply.printed("#{blocks.join("\n")}\n")
+  Reply.printed("#{blocks.join("\n")}\n")
 end
 
 # The signature of an export, and its summary under it when it has one.
 def list_line(item: DocModel.Item) -> String
   case DocModel.summary(item.doc)
-    some(summary) -> return "  #{item.signature}\n      #{shortened(summary)}"
-    none -> return "  #{item.signature}"
+    some(summary) -> "  #{item.signature}\n      #{shortened(summary)}"
+    none -> "  #{item.signature}"
   end
 end
 
@@ -177,14 +177,14 @@ def shortened(summary: String) -> String
     head = head.slice(0, head.length - 1)
   end
 
-  return "#{head}…"
+  "#{head}…"
 end
 
 def summary_of(item: DocModel.Item) -> String = text_of(DocModel.summary(item.doc))
 
 def text_of(doc: Optional[String]) -> String
   case doc
-    some(text) -> return text
-    none -> return ""
+    some(text) -> text
+    none -> ""
   end
 end

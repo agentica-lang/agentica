@@ -28,7 +28,7 @@ end
 
 ## The failure for a place in a file.
 export def fail_at(site: Site, code: String, message: String, help: Diag.Help) -> String
-  return in_file(site.file, Base.bail_span(code, message, site.span, help))
+  in_file(site.file, Base.bail_span(code, message, site.span, help))
 end
 
 ## The failure for the key at key_path in file (agentica.toml or agentica.lock). The span is the start of the file, so
@@ -36,7 +36,7 @@ end
 export def fail_key(file: String, key_path: String, code: String, message: String, help: Diag.Help) -> String
   start = Source.Position(offset: 0, line: 1, column: 1)
   packed = Base.bail_span(code, message, Source.Span(start: start, stop: start), help)
-  return "#{file.length}\n#{file}#{key_path.length}\n#{key_path}#{packed}"
+  "#{file.length}\n#{file}#{key_path.length}\n#{key_path}#{packed}"
 end
 
 ## The failure for agentica.toml or agentica.lock as a whole: the file is missing or cannot be read, so there is no key
@@ -44,12 +44,12 @@ end
 ## so they print the file name and no position.
 export def fail_file(file: String, code: String, message: String, help: Diag.Help) -> String
   origin = Source.Position(offset: 0, line: 0, column: 0)
-  return in_file(file, Base.bail_span(code, message, Source.Span(start: origin, stop: origin), help))
+  in_file(file, Base.bail_span(code, message, Source.Span(start: origin, stop: origin), help))
 end
 
 ## The failure for a diagnostic of the lexer or the parser, which have no file.
 export def from_stage(file: String, problem: Diag.Diagnostic) -> String
-  return in_file(file, Base.bail_span(problem.code, problem.message, problem.span, problem.help))
+  in_file(file, Base.bail_span(problem.code, problem.message, problem.span, problem.help))
 end
 
 ## A help text.
@@ -67,7 +67,7 @@ export def add_help(text: String, more: String) -> String
   end
 
   packed = Base.bail_span(shown.code, shown.message, shown.span, hint(line))
-  return "#{failure.file.length}\n#{failure.file}#{failure.key_path.length}\n#{failure.key_path}#{packed}"
+  "#{failure.file.length}\n#{failure.file}#{failure.key_path.length}\n#{failure.key_path}#{packed}"
 end
 
 ## Reads back the failure that fail_at or from_stage wrote.
@@ -75,13 +75,13 @@ export def unpack_failure(text: String) -> Failure
   file = take_field(text, 0)
   key_path = take_field(text, file.next)
   rest = text.slice(key_path.next, text.length - key_path.next)
-  return Failure(file: file.value, key_path: key_path.value, diagnostic: Base.unpack(rest))
+  Failure(file: file.value, key_path: key_path.value, diagnostic: Base.unpack(rest))
 end
 
 def take_field(text: String, at: Int) -> Field
   newline = at + text.slice(at, text.length - at).index_of("\n").unwrap!
   size = text.slice(at, newline - at).to_i!
-  return Field(value: text.slice(newline + 1, size), next: newline + 1 + size)
+  Field(value: text.slice(newline + 1, size), next: newline + 1 + size)
 end
 
 def in_file(file: String, packed: String) -> String = "#{file.length}\n#{file}0\n#{packed}"

@@ -12,7 +12,7 @@ import DocJson from "../docs/doc_json"
 ## The object of the answer; the `module` of each match is the name the answer gives its file (query_files.agc,
 ## `display`).
 export def json(found: Model.Symbols) -> Json
-  return JSON.object({
+  JSON.object({
     "version": JSON.from(found.version),
     "command": JSON.from("symbol"),
     "query": JSON.from(found.query),
@@ -55,9 +55,9 @@ export def match_json(match: Model.Symbol) -> Json
     return JSON.object(fields.put("payload", written).put("enum", JSON.from(match.owner)))
   end
 
-  return JSON.object(fields)
+  JSON.object(fields)
 end
 
 def skipped_json(left: Model.Skipped) -> Json
-  return JSON.object({"file": JSON.from(left.file), "diagnostic": DiagnosticJson.object(left.diagnostic)})
+  JSON.object({"file": JSON.from(left.file), "diagnostic": DiagnosticJson.object(left.diagnostic)})
 end

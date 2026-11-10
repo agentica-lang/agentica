@@ -5,7 +5,7 @@ import Types from "types"
 ## The help text for the exported name closest to name, or `none` when none is close. A name of up to 4 characters may
 ## differ by 1 edit, a longer one by 2; the nearest wins, and the smaller name breaks a tie.
 export def did_you_mean(name: String, candidates: List[String]) -> Optional[String]
-  return did_you_mean_among(name, candidates, [])
+  did_you_mean_among(name, candidates, [])
 end
 
 ## did_you_mean for the names of a linked program. A linked name starts with "@N::",
@@ -13,8 +13,8 @@ end
 ## candidates that have no prefix, such as the builtin names.
 export def did_you_mean_among(full_name: String, candidates: List[String], shared: List[String]) -> Optional[String]
   case closest_among(full_name, candidates, shared)
-    some(name) -> return some("did you mean \"#{name}\"?")
-    none -> return none
+    some(name) -> some("did you mean \"#{name}\"?")
+    none -> none
   end
 end
 
@@ -34,20 +34,20 @@ export def closest_among(full_name: String, candidates: List[String], shared: Li
     end
   end
 
-  return nearest(name, pool.concat(shared).sort, limit)
+  nearest(name, pool.concat(shared).sort, limit)
 end
 
 ## The "@N::" a linked name starts with, or "".
 export def file_prefix(name: String) -> String
   shown = Types.display_name(name)
-  return name.slice(0, name.length - shown.length)
+  name.slice(0, name.length - shown.length)
 end
 
 ## The number of single-character edits (insert, delete, replace) from a to b.
 export def edit_distance(a: String, b: String) -> Int
   right = b.split("")
   first: List[Int] = (0..right.size).to_a
-  return last_row(a.split(""), right, 1, first)
+  last_row(a.split(""), right, 1, first)
 end
 
 # The candidates are sorted, so the first one at the smallest distance is the smaller name of a tie. A candidate whose
@@ -67,14 +67,14 @@ def nearest(name: String, ordered: List[String], limit: Int) -> Optional[String]
 
   return none if best_distance > limit
 
-  return some(best)
+  some(best)
 end
 
 # One row of the table per character of the left word; the answer is the end of the last row.
 def last_row(left: List[String], right: List[String], index: Int, previous: List[Int]) -> Int
   return previous[right.size] if index > left.size
 
-  return last_row(left, right, index + 1, next_row(left[index - 1], right, index, previous))
+  last_row(left, right, index + 1, next_row(left[index - 1], right, index, previous))
 end
 
 def next_row(character: String, right: List[String], index: Int, previous: List[Int]) -> List[Int]
@@ -89,7 +89,7 @@ def next_row(character: String, right: List[String], index: Int, previous: List[
     row = row.push(best)
   end
 
-  return row
+  row
 end
 
 def smallest(a: Int, b: Int, c: Int) -> Int
@@ -102,9 +102,9 @@ def smallest(a: Int, b: Int, c: Int) -> Int
     least = c
   end
 
-  return least
+  least
 end
 
 def close_in_length?(a: String, b: String, limit: Int) -> Bool
-  return a.length - b.length <= limit and b.length - a.length <= limit
+  a.length - b.length <= limit and b.length - a.length <= limit
 end

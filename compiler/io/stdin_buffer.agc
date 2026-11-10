@@ -30,12 +30,12 @@ export def take() -> Taken
   data = bytes.unwrap!
   read = SourceFile.decode(data)
   case read
-    SourceFile.Read.Text(text) -> return Taken.Got(Buffer(read: read, shown: text))
-    _ -> return Taken.Got(Buffer(read: read, shown: SourceFile.replace_invalid(data)))
+    SourceFile.Read.Text(text) -> Taken.Got(Buffer(read: read, shown: text))
+    _ -> Taken.Got(Buffer(read: read, shown: SourceFile.replace_invalid(data)))
   end
 end
 
 ## `workspace` with `buffer` as the content of `file` (modules/overlay.agc). `windows` is true on a Windows host.
 export def over(workspace: Workspace.Workspace, windows: Bool, file: String, buffer: Buffer) -> Workspace.Workspace
-  return Overlay.over(workspace, [Overlay.buffer(workspace, windows, file, buffer.read)])
+  Overlay.over(workspace, [Overlay.buffer(workspace, windows, file, buffer.read)])
 end

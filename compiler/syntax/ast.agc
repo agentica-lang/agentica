@@ -686,83 +686,83 @@ end
 ## The id of an expression node.
 export def expr_id(expr: Expr) -> Int
   case expr
-    Expr.Literal(node) -> return node.id
-    Expr.Name(node) -> return node.id
-    Expr.Call(node) -> return node.id
-    Expr.EnumConstructor(node) -> return node.id
-    Expr.FunctionRef(node) -> return node.id
-    Expr.Invoke(node) -> return node.id
-    Expr.Construct(node) -> return node.id
-    Expr.Update(node) -> return node.id
-    Expr.ListLit(node) -> return node.id
-    Expr.MapLit(node) -> return node.id
-    Expr.FieldAccess(node) -> return node.id
-    Expr.MethodCall(node) -> return node.id
-    Expr.Interpolation(node) -> return node.id
-    Expr.BlockLit(node) -> return node.id
-    Expr.Index(node) -> return node.id
-    Expr.Try(node) -> return node.id
-    Expr.Unary(node) -> return node.id
-    Expr.Binary(node) -> return node.id
-    Expr.TypeName(node) -> return node.id
-    Expr.Typed(node) -> return node.id
-    Expr.ConstRef(node) -> return node.id
-    Expr.RegexLit(node) -> return node.id
-    Expr.EagLit(node) -> return node.id
-    Expr.Case(node) -> return node.id
+    Expr.Literal(node) -> node.id
+    Expr.Name(node) -> node.id
+    Expr.Call(node) -> node.id
+    Expr.EnumConstructor(node) -> node.id
+    Expr.FunctionRef(node) -> node.id
+    Expr.Invoke(node) -> node.id
+    Expr.Construct(node) -> node.id
+    Expr.Update(node) -> node.id
+    Expr.ListLit(node) -> node.id
+    Expr.MapLit(node) -> node.id
+    Expr.FieldAccess(node) -> node.id
+    Expr.MethodCall(node) -> node.id
+    Expr.Interpolation(node) -> node.id
+    Expr.BlockLit(node) -> node.id
+    Expr.Index(node) -> node.id
+    Expr.Try(node) -> node.id
+    Expr.Unary(node) -> node.id
+    Expr.Binary(node) -> node.id
+    Expr.TypeName(node) -> node.id
+    Expr.Typed(node) -> node.id
+    Expr.ConstRef(node) -> node.id
+    Expr.RegexLit(node) -> node.id
+    Expr.EagLit(node) -> node.id
+    Expr.Case(node) -> node.id
   end
 end
 
 ## The span of an expression node.
 export def expr_span(expr: Expr) -> Source.Span
   case expr
-    Expr.Literal(node) -> return node.span
-    Expr.Name(node) -> return node.span
-    Expr.Call(node) -> return node.span
-    Expr.EnumConstructor(node) -> return node.span
-    Expr.FunctionRef(node) -> return node.span
-    Expr.Invoke(node) -> return node.span
-    Expr.Construct(node) -> return node.span
-    Expr.Update(node) -> return node.span
-    Expr.ListLit(node) -> return node.span
-    Expr.MapLit(node) -> return node.span
-    Expr.FieldAccess(node) -> return node.span
-    Expr.MethodCall(node) -> return node.span
-    Expr.Interpolation(node) -> return node.span
-    Expr.BlockLit(node) -> return node.span
-    Expr.Index(node) -> return node.span
-    Expr.Try(node) -> return node.span
-    Expr.Unary(node) -> return node.span
-    Expr.Binary(node) -> return node.span
-    Expr.TypeName(node) -> return node.span
-    Expr.Typed(node) -> return node.span
-    Expr.ConstRef(node) -> return node.span
-    Expr.RegexLit(node) -> return node.span
-    Expr.EagLit(node) -> return node.span
-    Expr.Case(node) -> return node.span
+    Expr.Literal(node) -> node.span
+    Expr.Name(node) -> node.span
+    Expr.Call(node) -> node.span
+    Expr.EnumConstructor(node) -> node.span
+    Expr.FunctionRef(node) -> node.span
+    Expr.Invoke(node) -> node.span
+    Expr.Construct(node) -> node.span
+    Expr.Update(node) -> node.span
+    Expr.ListLit(node) -> node.span
+    Expr.MapLit(node) -> node.span
+    Expr.FieldAccess(node) -> node.span
+    Expr.MethodCall(node) -> node.span
+    Expr.Interpolation(node) -> node.span
+    Expr.BlockLit(node) -> node.span
+    Expr.Index(node) -> node.span
+    Expr.Try(node) -> node.span
+    Expr.Unary(node) -> node.span
+    Expr.Binary(node) -> node.span
+    Expr.TypeName(node) -> node.span
+    Expr.Typed(node) -> node.span
+    Expr.ConstRef(node) -> node.span
+    Expr.RegexLit(node) -> node.span
+    Expr.EagLit(node) -> node.span
+    Expr.Case(node) -> node.span
   end
 end
 
 ## The span of a pattern node.
 export def pattern_span(pattern: Pattern) -> Source.Span
   case pattern
-    Pattern.Wildcard(node) -> return node.span
-    Pattern.Literal(node) -> return node.span
-    Pattern.Variant(node) -> return node.span
+    Pattern.Wildcard(node) -> node.span
+    Pattern.Literal(node) -> node.span
+    Pattern.Variant(node) -> node.span
   end
 end
 
 ## The span of a statement node.
 export def stmt_span(stmt: Stmt) -> Source.Span
   case stmt
-    Stmt.Binding(node) -> return node.span
-    Stmt.Return(node) -> return node.span
-    Stmt.Expression(node) -> return node.span
-    Stmt.If(node) -> return node.span
-    Stmt.While(node) -> return node.span
-    Stmt.For(node) -> return node.span
-    Stmt.Control(node) -> return node.span
-    Stmt.Case(node) -> return node.span
+    Stmt.Binding(node) -> node.span
+    Stmt.Return(node) -> node.span
+    Stmt.Expression(node) -> node.span
+    Stmt.If(node) -> node.span
+    Stmt.While(node) -> node.span
+    Stmt.For(node) -> node.span
+    Stmt.Control(node) -> node.span
+    Stmt.Case(node) -> node.span
   end
 end
 
@@ -774,7 +774,7 @@ export def block_call?(call: Call) -> Bool
   return false if call.args.size == 0
 
   case call.args[call.args.size - 1]
-    Expr.BlockLit(_) -> return true
-    _ -> return false
+    Expr.BlockLit(_) -> true
+    _ -> false
   end
 end

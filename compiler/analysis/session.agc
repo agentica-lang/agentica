@@ -27,7 +27,7 @@ export def open(settings: Env.Settings, texts: Map[String, String]) -> Session
     session = update(session, path, texts[path])
   end
 
-  return session
+  session
 end
 
 ## `session` with `text` as the content of the file `path`, whether or not the disk has it. Two spellings of one file
@@ -35,14 +35,14 @@ end
 export def update(session: Session, path: String, text: String) -> Session
   settings = session.settings
   buffer = Overlay.buffer(settings.workspace, settings.env.windows, path, SourceFile.Read.Text(text))
-  return session.with(buffers: Overlay.put(session.buffers, buffer), generation: session.generation + 1)
+  session.with(buffers: Overlay.put(session.buffers, buffer), generation: session.generation + 1)
 end
 
 ## `session` without the buffer of `path`: the disk answers for the file again.
 export def close(session: Session, path: String) -> Session
   settings = session.settings
   kept = Overlay.remove(session.buffers, settings.workspace, settings.env.windows, path)
-  return session.with(buffers: kept, generation: session.generation + 1)
+  session.with(buffers: kept, generation: session.generation + 1)
 end
 
 ## `session` with the program of the file `path` linked and checked in its cache, and the files it reads parsed there,
@@ -51,7 +51,7 @@ end
 ## loaded or linked leaves the cache as it was. The cache belongs to one line of sessions: run one `refresh` at a time
 ## and keep the session it returns (the cache has no merge of two).
 export def refresh(session: Session, path: String) -> Session
-  return session.with(cache: Front.refresh(session.cache, path, asking(session)))
+  session.with(cache: Front.refresh(session.cache, path, asking(session)))
 end
 
 ## The root that the cache of `session` holds for the file `path`, as the last `refresh` of it left it.
@@ -59,7 +59,7 @@ export def entry(session: Session, path: String) -> Optional[Cache.Root]
   known = asking(session).workspace.real_path.call(path)
   return none if !known.ok?
 
-  return Cache.root_of(session.cache, known.unwrap!)
+  Cache.root_of(session.cache, known.unwrap!)
 end
 
 ## `session` with the cache of `root` alone in place of its own cache. The buffers stay. A later `refresh` or question
@@ -69,11 +69,11 @@ export def adopt(session: Session, root: Cache.Root) -> Session = session.with(c
 
 ## The settings a question runs with: those of the session, over a Workspace that answers for its buffers.
 export def asking(session: Session) -> Env.Settings
-  return session.settings.with(workspace: Overlay.over(session.settings.workspace, session.buffers))
+  session.settings.with(workspace: Overlay.over(session.settings.workspace, session.buffers))
 end
 
 ## Whether a buffer stands in for the file `path`.
 export def buffered?(session: Session, path: String) -> Bool
   settings = session.settings
-  return Overlay.holds?(session.buffers, settings.workspace, settings.env.windows, path)
+  Overlay.holds?(session.buffers, settings.workspace, settings.env.windows, path)
 end

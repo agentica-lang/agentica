@@ -99,7 +99,7 @@ end
 
 ## Links the file at path, with the std/ sources of settings.std and the environment of settings.env.
 export def link_file(path: String, settings: Env.Settings) -> Linking
-  return link_file_with(path, settings, Modules.no_parses())
+  link_file_with(path, settings, Modules.no_parses())
 end
 
 ## The program in the form the checker reads: the declarations of every file in one list, with the id, span and module
@@ -110,7 +110,7 @@ export def program(linked: Linked) -> Ast.Program
     declarations = declarations.concat(module.declarations)
   end
 
-  return Ast.Program(
+  Ast.Program(
     id: linked.root.id,
     declarations: declarations,
     module_doc: linked.root.module_doc,
@@ -161,7 +161,7 @@ export def link_programs(roots: List[String], settings: Env.Settings, parses: Mo
     roots: kept.map do |entry: Modules.Entry| entry.key end,
   )
 
-  return Programs(linked: some(together), skipped: skipped)
+  Programs(linked: some(together), skipped: skipped)
 end
 
 ## Links files that were loaded (Modules.load_with): the second half of `link_file`.
@@ -181,7 +181,7 @@ export def link_loaded(loaded: Modules.Loaded, settings: Env.Settings) -> Linkin
     )
   end
 
-  return Linking.Failed(Failure.unpack_failure(files.message))
+  Linking.Failed(Failure.unpack_failure(files.message))
 end
 
 # The root `key` and the files it reaches, in the order `link_file` lists them: the file, then the files of its first
@@ -204,7 +204,7 @@ def reached(loaded: Modules.Loaded, key: String) -> List[String]
     end
   end
 
-  return order
+  order
 end
 
 # Rewrites the files of the root `key` that the pool does not hold. When every one rewrites, they join the pool; the
@@ -245,7 +245,7 @@ def admit(
     held = held.put(module.key, true)
   end
 
-  return Admission(pool: Pool(kept: pool.kept.concat(fresh), held: held, made: made, failed: failed), failure: none)
+  Admission(pool: Pool(kept: pool.kept.concat(fresh), held: held, made: made, failed: failed), failure: none)
 end
 
 # The ids of the parser end at the highest next_free_id of the files. The files are numbered one after the other in the
@@ -259,7 +259,7 @@ def parser_ids(loaded: Modules.Loaded) -> Int
     end
   end
 
-  return ids
+  ids
 end
 
 def id_count(loaded: Modules.Loaded) -> Int
@@ -267,14 +267,14 @@ def id_count(loaded: Modules.Loaded) -> Int
     return parser_ids(loaded) * 2 if loaded.modules[key].names.values.any? do |kind| Declarations.constant?(kind) end
   end
 
-  return parser_ids(loaded)
+  parser_ids(loaded)
 end
 
 # Where the receivers of rewritten constant members start (the room id_count made), or -1 when there is none.
 def receivers_at(loaded: Modules.Loaded) -> Int
   return parser_ids(loaded) if id_count(loaded) > parser_ids(loaded)
 
-  return -1
+  -1
 end
 
 def rewrite_all(loaded: Modules.Loaded, settings: Env.Settings, roots: List[String]) -> Result[List[LinkedModule]]
@@ -285,7 +285,7 @@ def rewrite_all(loaded: Modules.Loaded, settings: Env.Settings, roots: List[Stri
     out = out.push(module)
   end
 
-  return ok(out)
+  ok(out)
 end
 
 # The file `key` of `loaded` with its names rewritten. `ids` is the number of node ids of the parser, which the
@@ -312,7 +312,7 @@ def rewrite_module(
   declarations = try Rewrite.rewrite_declarations(cx)
   try ImportUse.check(module, loaded.modules, settings.unused or !roots.include?(key))
 
-  return ok(
+  ok(
     LinkedModule(
       key: key,
       file: module.file,
@@ -343,7 +343,7 @@ def linked_names(module: Modules.Module, modules: Map[String, Modules.Module]) -
     out = out.put(local, Modules.linked_name(modules, modules[entry.target], entry.name))
   end
 
-  return out
+  out
 end
 
 # Each name the file re-exports and the linked name of the declaration it stands for.
@@ -353,7 +353,7 @@ def reexported_names(module: Modules.Module, modules: Map[String, Modules.Module
     out = out.put(name, Modules.linked_name(modules, module, name))
   end
 
-  return out
+  out
 end
 
 # A file may update its own structs and the exported structs of the files it imports (the privacy rule of `.with`, the
@@ -369,7 +369,7 @@ def visible_structs(module: Modules.Module, modules: Map[String, Modules.Module]
     names = names.concat(structs_of(modules, modules[entry.target], modules[entry.target].public))
   end
 
-  return Set.new(names).to_a.sort
+  Set.new(names).to_a.sort
 end
 
 # The linked names of the structs among `kinds`, which are names of `module` (a re-exported struct is the original's).
@@ -379,7 +379,7 @@ def structs_of(
   kinds: Map[String, Declarations.Kind],
 ) -> List[String]
   structs = kinds.keys.filter do |name| Declarations.struct?(kinds[name]) end
-  return structs.map do |name| Modules.linked_name(modules, module, name) end
+  structs.map do |name| Modules.linked_name(modules, module, name) end
 end
 
 # Like `link_file`, with the trees of `parses` for the files whose text is the same (Modules.load_with).
@@ -387,5 +387,5 @@ def link_file_with(path: String, settings: Env.Settings, parses: Modules.Parses)
   loaded = Modules.load_with(path, settings, parses)
   return link_loaded(loaded.unwrap!, settings) if loaded.ok?
 
-  return Linking.Failed(Failure.unpack_failure(loaded.message))
+  Linking.Failed(Failure.unpack_failure(loaded.message))
 end

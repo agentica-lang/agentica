@@ -15,5 +15,5 @@ end
 
 ## Returns the position at `offset` on a line that starts at `line_start`; columns count from 1.
 export def position(offset: Int, line: Int, line_start: Int) -> Position
-  return Position(offset: offset, line: line, column: offset - line_start + 1)
+  Position(offset: offset, line: line, column: offset - line_start + 1)
 end

@@ -27,14 +27,14 @@ export def decode(data: Bytes) -> Read
   decoded = String.from_bytes(data)
   return Read.Text(decoded.unwrap!) if decoded.ok?
 
-  return Read.Invalid(error_position([], data))
+  Read.Invalid(error_position([], data))
 end
 
 ## The LEX-INVALID-UTF8 diagnostic for the invalid byte at `at`: a span of length 1 that starts there.
 export def invalid_utf8(at: Source.Position) -> Diag.Diagnostic
   stop = Source.Position(offset: at.offset + 1, line: at.line, column: at.column + 1)
   help = Diag.Help.Hint("source files are UTF-8: save the file as UTF-8 text")
-  return Diag.fail("LEX-INVALID-UTF8", "source file is not valid UTF-8", Source.Span(start: at, stop: stop), help)
+  Diag.fail("LEX-INVALID-UTF8", "source file is not valid UTF-8", Source.Span(start: at, stop: stop), help)
 end
 
 ## The text of `data` with U+FFFD for each byte at which no valid sequence starts, and
@@ -57,7 +57,7 @@ export def replace_invalid(data: Bytes) -> String
   end
 
   parts = parts.push(data.drop(start))
-  return String.from_bytes(Bytes.concat(parts)).unwrap!
+  String.from_bytes(Bytes.concat(parts)).unwrap!
 end
 
 ## How many leading bytes of `data` end on a character boundary. A lead byte in the last three bytes whose
@@ -79,7 +79,7 @@ export def complete_prefix(data: Bytes) -> Int
     back += 1
   end
 
-  return size
+  size
 end
 
 ## The position of the first invalid sequence of `head`, which did not decode, after the already decoded `parts`.
@@ -124,7 +124,7 @@ export def error_position(parts: List[String], head: Bytes) -> Source.Position
     at += 1
   end
 
-  return Source.Position(offset: offset, line: line, column: since_newline + 1)
+  Source.Position(offset: offset, line: line, column: since_newline + 1)
 end
 
 # The length of the sequence a lead byte starts, or 0 when it cannot start one.
@@ -135,7 +135,7 @@ def lead_width(byte: Int) -> Int
 
   return 4 if byte >= 240 and byte <= 244
 
-  return 0
+  0
 end
 
 # The index of the first byte of the first invalid sequence, or -1. The rules of agc_utf8_valid in vm/value.c.
@@ -148,7 +148,7 @@ def first_invalid(data: Bytes) -> Int
     at += width
   end
 
-  return -1
+  -1
 end
 
 # The length of the valid sequence that starts at `at`, or 0: no overlong form, no surrogate, nothing above
@@ -180,5 +180,5 @@ def sequence_width(data: Bytes, at: Int) -> Int
 
   return 0 if code >= 55_296 and code <= 57_343
 
-  return width
+  width
 end

@@ -56,22 +56,22 @@ export def of_expr(
   expr: Ast.Expr,
 ) -> Optional[Definition]
   case expr
-    Ast.Expr.Call(node) -> return top_level(modules, node.name)
-    Ast.Expr.FunctionRef(node) -> return top_level(modules, node.name)
-    Ast.Expr.Construct(node) -> return top_level(modules, node.type_name)
+    Ast.Expr.Call(node) -> top_level(modules, node.name)
+    Ast.Expr.FunctionRef(node) -> top_level(modules, node.name)
+    Ast.Expr.Construct(node) -> top_level(modules, node.type_name)
     # `type-at` does not reach this arm: the checker records no type for a TypeName, and the name of a type is answered
     # from its site (query/type_at.agc).
-    Ast.Expr.TypeName(node) -> return top_level(modules, node.name)
-    Ast.Expr.ConstRef(node) -> return top_level(modules, node.name)
-    Ast.Expr.EnumConstructor(node) -> return variant(find(modules, node.enum_name), node.variant_name)
-    Ast.Expr.FieldAccess(node) -> return field(find(modules, T.name(target_type(types, node.target))), node.name)
+    Ast.Expr.TypeName(node) -> top_level(modules, node.name)
+    Ast.Expr.ConstRef(node) -> top_level(modules, node.name)
+    Ast.Expr.EnumConstructor(node) -> variant(find(modules, node.enum_name), node.variant_name)
+    Ast.Expr.FieldAccess(node) -> field(find(modules, T.name(target_type(types, node.target))), node.name)
     Ast.Expr.MethodCall(node) ->
       if State.field_call?(resolved, node.id)
         return field(find(modules, T.name(target_type(types, node.target))), node.name)
       end
 
-      return none
-    _ -> return none
+      none
+    _ -> none
   end
 end
 
@@ -81,12 +81,12 @@ export def of_name(modules: List[Linker.LinkedModule], name: String) -> Optional
 
 ## The definition of the field `name` of the struct with the linked name `owner`, or `none`.
 export def of_field(modules: List[Linker.LinkedModule], owner: String, name: String) -> Optional[Definition]
-  return field(find(modules, owner), name)
+  field(find(modules, owner), name)
 end
 
 ## The definition of the variant `name` of the enum with the linked name `owner`, or `none`.
 export def of_variant(modules: List[Linker.LinkedModule], owner: String, name: String) -> Optional[Definition]
-  return variant(find(modules, owner), name)
+  variant(find(modules, owner), name)
 end
 
 ## The definition of a local: the binding site, with `kind` `parameter`, `local`, `loop` or `pattern` (see
@@ -94,7 +94,7 @@ end
 ## the binding node when it has one (the whole parameter or assignment), else the name (`loop` and `pattern`);
 ## `name_span` is the name.
 export def of_local(module: Linker.LinkedModule, local: Locals.Local, type_text: String) -> Definition
-  return made(
+  made(
     local.kind,
     local.name,
     module,
@@ -109,13 +109,13 @@ def target_type(types: List[T.Type], target: Ast.Expr) -> T.Type
   id = Ast.expr_id(target)
   return types[id] if id < types.size
 
-  return T.Type.Unknown
+  T.Type.Unknown
 end
 
 def top_level(modules: List[Linker.LinkedModule], name: String) -> Optional[Definition]
   case find(modules, name)
-    some(found) -> return some(whole(found))
-    none -> return none
+    some(found) -> some(whole(found))
+    none -> none
   end
 end
 
@@ -129,20 +129,20 @@ def find(modules: List[Linker.LinkedModule], name: String) -> Optional[Found]
     end
   end
 
-  return none
+  none
 end
 
 def declared_name(declaration: Ast.Decl) -> String
   case declaration
-    Ast.Decl.Function(node) -> return node.name
-    Ast.Decl.Struct(node) -> return node.name
-    Ast.Decl.Enum(node) -> return node.name
-    Ast.Decl.TypeAlias(node) -> return node.name
-    Ast.Decl.Resource(node) -> return node.name
-    Ast.Decl.Constant(node) -> return node.name
-    Ast.Decl.Import(_) -> return ""
-    Ast.Decl.Reexport(_) -> return ""
-    Ast.Decl.Export(_) -> return ""
+    Ast.Decl.Function(node) -> node.name
+    Ast.Decl.Struct(node) -> node.name
+    Ast.Decl.Enum(node) -> node.name
+    Ast.Decl.TypeAlias(node) -> node.name
+    Ast.Decl.Resource(node) -> node.name
+    Ast.Decl.Constant(node) -> node.name
+    Ast.Decl.Import(_) -> ""
+    Ast.Decl.Reexport(_) -> ""
+    Ast.Decl.Export(_) -> ""
   end
 end
 
@@ -151,21 +151,21 @@ end
 def whole(found: Found) -> Definition
   module = found.module
   case found.declaration
-    Ast.Decl.Function(node) -> return top("function", node.name, module, node.span, node.name_span)
-    Ast.Decl.Struct(node) -> return top("struct", node.name, module, node.span, node.name_span)
-    Ast.Decl.Enum(node) -> return top("enum", node.name, module, node.span, node.name_span)
-    Ast.Decl.TypeAlias(node) -> return top("alias", node.name, module, node.span, node.name_span)
-    Ast.Decl.Resource(node) -> return top("resource", node.name, module, node.span, node.name_span)
-    Ast.Decl.Constant(node) -> return top("constant", node.name, module, node.span, node.name_span)
-    Ast.Decl.Import(node) -> return made("import", "", module, node.span, node.span, nothing_said())
-    Ast.Decl.Reexport(node) -> return made("export", "", module, node.span, node.span, nothing_said())
-    Ast.Decl.Export(node) -> return made("export", "", module, node.span, node.span, nothing_said())
+    Ast.Decl.Function(node) -> top("function", node.name, module, node.span, node.name_span)
+    Ast.Decl.Struct(node) -> top("struct", node.name, module, node.span, node.name_span)
+    Ast.Decl.Enum(node) -> top("enum", node.name, module, node.span, node.name_span)
+    Ast.Decl.TypeAlias(node) -> top("alias", node.name, module, node.span, node.name_span)
+    Ast.Decl.Resource(node) -> top("resource", node.name, module, node.span, node.name_span)
+    Ast.Decl.Constant(node) -> top("constant", node.name, module, node.span, node.name_span)
+    Ast.Decl.Import(node) -> made("import", "", module, node.span, node.span, nothing_said())
+    Ast.Decl.Reexport(node) -> made("export", "", module, node.span, node.span, nothing_said())
+    Ast.Decl.Export(node) -> made("export", "", module, node.span, node.span, nothing_said())
   end
 end
 
 def variant(found: Optional[Found], name: String) -> Optional[Definition]
   case found
-    none -> return none
+    none -> none
     some(at) ->
       case at.declaration
         Ast.Decl.Enum(node) ->
@@ -176,15 +176,15 @@ def variant(found: Optional[Found], name: String) -> Optional[Definition]
             end
           end
 
-          return none
-        _ -> return none
+          none
+        _ -> none
       end
   end
 end
 
 def field(found: Optional[Found], name: String) -> Optional[Definition]
   case found
-    none -> return none
+    none -> none
     some(at) ->
       case at.declaration
         Ast.Decl.Struct(node) ->
@@ -195,8 +195,8 @@ def field(found: Optional[Found], name: String) -> Optional[Definition]
             end
           end
 
-          return none
-        _ -> return none
+          none
+        _ -> none
       end
   end
 end
@@ -210,7 +210,7 @@ def made(
   name_span: Source.Span,
   said: Described,
 ) -> Definition
-  return Definition(
+  Definition(
     kind: kind,
     name: T.display_name(linked),
     file: module.file,
@@ -230,7 +230,7 @@ def top(
   span: Source.Span,
   name_span: Source.Span,
 ) -> Definition
-  return made(kind, linked, module, span, name_span, of_item(module, linked))
+  made(kind, linked, module, span, name_span, of_item(module, linked))
 end
 
 def nothing_said() -> Described = Described(doc: none, signature: "", exported: false)
@@ -242,7 +242,7 @@ def of_item(module: Linker.LinkedModule, linked: String) -> Described
     return Described(doc: item.doc, signature: item.signature, exported: item.exported) if item.name == name
   end
 
-  return nothing_said()
+  nothing_said()
 end
 
 # The doc and signature of a field of the struct, or a variant of the enum, `owner` (a linked name).
@@ -275,5 +275,5 @@ def of_member(module: Linker.LinkedModule, owner: String, name: String) -> Descr
     end
   end
 
-  return nothing_said()
+  nothing_said()
 end

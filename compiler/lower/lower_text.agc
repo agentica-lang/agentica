@@ -32,8 +32,8 @@ export def lower_text(path: String, settings: Env.Settings) -> String = lower_te
 ## the call depth limit the lowering of a deep tree leaves free.
 export def lower_text_after(path: String, settings: Env.Settings, frames: Int) -> String
   case Linker.link_file(path, settings)
-    Linker.Linking.Failed(failure) -> return LinkText.root_failure_text(settings.workspace, path, failure)
-    Linker.Linking.Done(linked) -> return linked_text(linked, settings, frames)
+    Linker.Linking.Failed(failure) -> LinkText.root_failure_text(settings.workspace, path, failure)
+    Linker.Linking.Done(linked) -> linked_text(linked, settings, frames)
   end
 end
 
@@ -41,7 +41,7 @@ end
 ## ` file="path"` added.
 export def problem_text(workspace: Workspace.Workspace, root_dir: String, problem: Failure.Problem) -> String
   shown = Diag.Diagnostic(code: problem.code, message: problem.message, span: problem.span, help: problem.help)
-  return "#{Text.diagnostic_line(shown)} file=#{Text.quote(Paths.stored_file(workspace, root_dir, problem.file))}"
+  "#{Text.diagnostic_line(shown)} file=#{Text.quote(Paths.stored_file(workspace, root_dir, problem.file))}"
 end
 
 ## The text form of a lowered program: what `agentica --dump-ir` prints.
@@ -49,9 +49,8 @@ export def program_text(program: Ir.Program) -> String = program_lines(program).
 
 def linked_text(linked: Linker.Linked, settings: Env.Settings, frames: Int) -> String
   case Checker.check(linked, settings)
-    Checker.Checking.Failed(problem) -> return CheckText.problem_text(settings.workspace, linked.root_dir, problem)
-    Checker.Checking.Done(checked) ->
-      return lowered_text(settings.workspace, linked, lower_deeper(linked, checked, frames))
+    Checker.Checking.Failed(problem) -> CheckText.problem_text(settings.workspace, linked.root_dir, problem)
+    Checker.Checking.Done(checked) -> lowered_text(settings.workspace, linked, lower_deeper(linked, checked, frames))
   end
 end
 
@@ -60,13 +59,13 @@ def lower_deeper(linked: Linker.Linked, checked: Checker.Checked, frames: Int) -
   return Lowering.lower(linked, checked) if frames == 0
 
   done = lower_deeper(linked, checked, frames - 1)
-  return done
+  done
 end
 
 def lowered_text(workspace: Workspace.Workspace, linked: Linker.Linked, lowered: Lowering.Lowered) -> String
   case lowered
-    Lowering.Lowered.Failed(problem) -> return problem_text(workspace, linked.root_dir, problem)
-    Lowering.Lowered.Done(program) -> return program_text(program)
+    Lowering.Lowered.Failed(problem) -> problem_text(workspace, linked.root_dir, problem)
+    Lowering.Lowered.Done(program) -> program_text(program)
   end
 end
 
@@ -109,7 +108,7 @@ def program_lines(program: Ir.Program) -> List[String]
     index += 1
   end
 
-  return lines
+  lines
 end
 
 def struct_line(index: Int, entry: Ir.StructDef) -> String
@@ -120,7 +119,7 @@ def struct_line(index: Int, entry: Ir.StructDef) -> String
     line = "#{line} types=[#{types}]"
   end
 
-  return line
+  line
 end
 
 def function_lines(out: List[String], index: Int, function: Ir.Function, entry: Bool) -> List[String]
@@ -139,7 +138,7 @@ def function_lines(out: List[String], index: Int, function: Ir.Function, entry: 
     end
   end
 
-  return lines
+  lines
 end
 
 def instr_line(instr: Ir.Instr) -> String
@@ -160,7 +159,7 @@ def instr_line(instr: Ir.Instr) -> String
   end
 
   spans = instr.spans.map do |span: Source.Span| span_text(instr.file, span) end
-  return "#{text} @ #{spans.join(" ")}"
+  "#{text} @ #{spans.join(" ")}"
 end
 
 # One argument of an instruction, by the op: labels, functions, structs, variants and globals have their own prefix.
@@ -196,21 +195,21 @@ def arg_text(instr: Ir.Instr, at: Int) -> String
     return ".."
   end
 
-  return "r#{value}"
+  "r#{value}"
 end
 
 def imm_text(imm: Ir.Imm) -> String
   case imm
-    Ir.Imm.Void -> return "void"
-    Ir.Imm.Nil -> return "nil"
-    Ir.Imm.Bool(flag) -> return flag.to_s
-    Ir.Imm.Int(number) -> return "int:#{number}"
-    Ir.Imm.Float(number) -> return "float:bits:#{Float.to_bits(number)}"
-    Ir.Imm.Text(text) -> return Text.quote(text)
-    Ir.Imm.Bytes(text) -> return "bytes:#{Text.quote(text)}"
+    Ir.Imm.Void -> "void"
+    Ir.Imm.Nil -> "nil"
+    Ir.Imm.Bool(flag) -> flag.to_s
+    Ir.Imm.Int(number) -> "int:#{number}"
+    Ir.Imm.Float(number) -> "float:bits:#{Float.to_bits(number)}"
+    Ir.Imm.Text(text) -> Text.quote(text)
+    Ir.Imm.Bytes(text) -> "bytes:#{Text.quote(text)}"
   end
 end
 
 def span_text(file: Int, span: Source.Span) -> String
-  return "#{file}:#{span.start.line}:#{span.start.column}-#{span.stop.line}:#{span.stop.column}"
+  "#{file}:#{span.start.line}:#{span.start.column}-#{span.stop.line}:#{span.stop.column}"
 end

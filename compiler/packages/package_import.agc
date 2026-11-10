@@ -107,7 +107,7 @@ end
 export def scope_of(project: Project.Project) -> Scope
   case project
     Project.Project.Bare ->
-      return Scope(
+      Scope(
         deps: "",
         os: "",
         natives: {},
@@ -124,7 +124,7 @@ export def scope_of(project: Project.Project) -> Scope
         max_line_width: 0,
       )
     Project.Project.Declared(found) ->
-      return Scope(
+      Scope(
         deps: Paths.join(found.dir, DEPS_FOLDER),
         os: "",
         natives: {},
@@ -148,7 +148,7 @@ end
 ## Downloaded rows are verified from `scope.native_root` against `scope.lock` (the lock key "" is the project).
 export def with_project_natives(workspace: Workspace.Workspace, scope: Scope, project: Project.Project) -> Scope
   case project
-    Project.Project.Bare -> return scope
+    Project.Project.Bare -> scope
     Project.Project.Declared(found) ->
       native = NativeLibrary.resolve(
         workspace,
@@ -163,14 +163,14 @@ export def with_project_natives(workspace: Workspace.Workspace, scope: Scope, pr
         scope.native_root,
       )
 
-      return scope.with(natives: native.targets, watched: native.watched, probed: native.probed)
+      scope.with(natives: native.targets, watched: native.watched, probed: native.probed)
   end
 end
 
 ## The origin of the root file of the project: its folder's native libraries are the scope's. The root file is in the
 ## folder of the manifest or below it, with no nearer manifest, so it has the style rule when the manifest asks for it.
 export def project_origin(scope: Scope) -> Origin
-  return Origin(
+  Origin(
     package: "",
     root: "",
     label: "",
@@ -195,12 +195,12 @@ export def file_origin(workspace: Workspace.Workspace, scope: Scope, importer: O
     return importer.with(blank_line_after_end: scope.blank_line_after_end, max_line_width: scope.max_line_width)
   end
 
-  return importer.with(blank_line_after_end: false, max_line_width: 0)
+  importer.with(blank_line_after_end: false, max_line_width: 0)
 end
 
 ## The origin of a std/ or pkg/ library, which belongs to no package and has no native library of its own.
 export def library_origin() -> Origin
-  return Origin(
+  Origin(
     package: "",
     root: "",
     label: "",
@@ -234,7 +234,7 @@ export def match_import(scope: Scope, origin: Origin, file: String, site: Failur
     return error(missing(site, message, "declare #{parts[1]} in the agentica.toml of #{origin.package}"))
   end
 
-  return ok(Match.Library)
+  ok(Match.Library)
 end
 
 ## Finds the module rest of the package name in its folder of deps/, hashed (and its manifest read) the first time it
@@ -262,7 +262,7 @@ export def open_package(
   end
 
   inner = try confined(package.root, target.unwrap!, site)
-  return ok(
+  ok(
     Located(
       file: target.unwrap!,
       origin: Origin(
@@ -285,7 +285,7 @@ end
 ## Checks that a file found by a relative import in a package stays in the package, and gives its stored name.
 export def stay_inside(origin: Origin, file: String, site: Failure.Site) -> Result[String]
   inner = try confined(origin.root, file, site)
-  return ok(stored_name(origin.label, inner))
+  ok(stored_name(origin.label, inner))
 end
 
 ## Checks the manifest of every package of the lock that is in deps/ (or, for a member, in its folder) against the
@@ -300,7 +300,7 @@ export def check_manifests(workspace: Workspace.Workspace, scope: Scope) -> Resu
     folders = folders.put(locked.name, folder_of(scope, locked))
   end
 
-  return check_folders(workspace, scope, folders)
+  check_folders(workspace, scope, folders)
 end
 
 ## The same check over other folders: `folders` maps a package name to the folder that holds its files, such as its
@@ -324,7 +324,7 @@ export def check_folders(workspace: Workspace.Workspace, scope: Scope, folders: 
     end
   end
 
-  return ok(scope.with(declared: declared))
+  ok(scope.with(declared: declared))
 end
 
 ## The folder of a locked package, `deps/<name>` beside the manifest of the project, or the folder of the workspace
@@ -332,7 +332,7 @@ end
 export def folder_of(scope: Scope, locked: Lock.Locked) -> String
   return Project.folder_of(Paths.directory_of(scope.deps), scope.members, locked) if Lock.in_place?(locked)
 
-  return Paths.join(scope.deps, locked.name)
+  Paths.join(scope.deps, locked.name)
 end
 
 ## The hash that pins the content of a fetched package, which its folder must have before it builds a native module
@@ -340,7 +340,7 @@ end
 export def pinned_hash(locked: Lock.Locked) -> String
   return "" if Lock.in_place?(locked)
 
-  return locked.hash
+  locked.hash
 end
 
 # The name of a package file in the program and in the .agcb: it does not depend on the cache folder of the machine.
@@ -361,7 +361,7 @@ def confined(root: String, file: String, site: Failure.Site) -> Result[String]
     return error(refuse(site, message, "move the module"))
   end
 
-  return ok(below.join("/"))
+  ok(below.join("/"))
 end
 
 # The package from its folder of deps/, with its hash checked against the lock and its manifest read.
@@ -389,7 +389,7 @@ def load(workspace: Workspace.Workspace, scope: Scope, locked: Lock.Locked, site
 
   names = try names_of(workspace, scope, locked, real.unwrap!, site)
   native = try natives_of(workspace, scope, real.unwrap!, locked)
-  return ok(
+  ok(
     Opened(
       root: real.unwrap!,
       label: Lock.label(locked),
@@ -410,11 +410,9 @@ def verify(
 ) -> Result[Void]
   case PackageHash.hash_folder(workspace, real)
     PackageHash.Hashed.Link(path) ->
-      return error(
-        Failure.fail_at(site, "PKG-SYMLINK", "#{locked.name} has a symbolic link named #{path}", Diag.Help.NoHelp),
-      )
+      error(Failure.fail_at(site, "PKG-SYMLINK", "#{locked.name} has a symbolic link named #{path}", Diag.Help.NoHelp))
     PackageHash.Hashed.Unreadable(message) ->
-      return error(Failure.fail_at(site, "CHECK-IMPORT-IO", "cannot read the package: #{message}", Diag.Help.NoHelp))
+      error(Failure.fail_at(site, "CHECK-IMPORT-IO", "cannot read the package: #{message}", Diag.Help.NoHelp))
     PackageHash.Hashed.Hash(hash) ->
       if hash != locked.hash
         message = "the files of #{locked.name} in #{folder} are not the ones the lock names"
@@ -422,7 +420,7 @@ def verify(
         return error(Failure.fail_at(site, "PKG-HASH-MISMATCH", message, Failure.hint(help)))
       end
 
-      return ok()
+      ok()
   end
 end
 
@@ -439,15 +437,15 @@ def shape_of(workspace: Workspace.Workspace, root: String) -> Shape
 
   return Shape.Regular if workspace.file_exists.call(Paths.join(root, MANIFEST_FILE))
 
-  return Shape.Absent
+  Shape.Absent
 end
 
 def regular?(kind: Workspace.EntryKind) -> Bool
   case kind
-    Workspace.EntryKind.File -> return true
-    Workspace.EntryKind.Directory -> return false
-    Workspace.EntryKind.Link -> return false
-    Workspace.EntryKind.Other -> return false
+    Workspace.EntryKind.File -> true
+    Workspace.EntryKind.Directory -> false
+    Workspace.EntryKind.Link -> false
+    Workspace.EntryKind.Other -> false
   end
 end
 
@@ -461,7 +459,7 @@ def names_of(
 ) -> Result[List[String]]
   return ok(scope.declared[locked.name]) if scope.declared.has_key?(locked.name)
 
-  return declared_names(workspace, scope, root, site)
+  declared_names(workspace, scope, root, site)
 end
 
 # The names the manifest of the package declares, none when it has no manifest. Each must be in the lock with the same
@@ -476,13 +474,13 @@ def declared_names(
   site: Failure.Site,
 ) -> Result[List[String]]
   case shape_of(workspace, root)
-    Shape.Absent -> return ok([])
-    Shape.Regular -> return read_names(workspace, scope, root)
+    Shape.Absent -> ok([])
+    Shape.Regular -> read_names(workspace, scope, root)
     Shape.Unsafe(name) ->
       message = "#{name} in the package is not a regular file"
-      return error(Failure.fail_at(site, "PKG-SYMLINK", message, Failure.hint("a manifest is a file of the package")))
+      error(Failure.fail_at(site, "PKG-SYMLINK", message, Failure.hint("a manifest is a file of the package")))
     Shape.Unlisted(message) ->
-      return error(Failure.fail_at(site, "CHECK-IMPORT-IO", "cannot read the package: #{message}", Diag.Help.NoHelp))
+      error(Failure.fail_at(site, "CHECK-IMPORT-IO", "cannot read the package: #{message}", Diag.Help.NoHelp))
   end
 end
 
@@ -511,25 +509,25 @@ def natives_of(
         scope.native_root,
       )
 
-      return ok(found)
-    _ -> return ok(NativeLibrary.Found(targets: {}, watched: [], probed: []))
+      ok(found)
+    _ -> ok(NativeLibrary.Found(targets: {}, watched: [], probed: []))
   end
 end
 
 def read_names(workspace: Workspace.Workspace, scope: Scope, root: String) -> Result[List[String]]
   manifest = try Manifest.read(workspace, Paths.join(root, MANIFEST_FILE))
   try Project.check_dependencies(scope.lock, manifest, scope.members, true)
-  return ok(Manifest.names(manifest))
+  ok(Manifest.names(manifest))
 end
 
 def declared?(names: List[String], name: String) -> Bool = names.any? do |declared| declared == name end
 
 def missing(site: Failure.Site, message: String, help: String) -> String
-  return Failure.fail_at(site, "CHECK-IMPORT-PACKAGE", message, Failure.hint(help))
+  Failure.fail_at(site, "CHECK-IMPORT-PACKAGE", message, Failure.hint(help))
 end
 
 def refuse(site: Failure.Site, message: String, help: String) -> String
-  return Failure.fail_at(site, "CHECK-IMPORT-PATH", message, Failure.hint(help))
+  Failure.fail_at(site, "CHECK-IMPORT-PATH", message, Failure.hint(help))
 end
 
 # The project's own names for a file of the project, else those of the manifest of the package it belongs to.
@@ -540,12 +538,12 @@ def allowed_names(scope: Scope, origin: Origin) -> List[String]
     return []
   end
 
-  return scope.opened[origin.package].names
+  scope.opened[origin.package].names
 end
 
 # The folder of the manifest when it asks for a style rule, else "".
 def style_folder(found: Project.Found) -> String
   return found.dir if found.manifest.blank_line_after_end or found.manifest.max_line_width > 0
 
-  return ""
+  ""
 end

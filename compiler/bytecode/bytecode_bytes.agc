@@ -30,12 +30,12 @@ export def u32(number: Int) -> List[Int]
   # negative one would take the fast branch and give negative bytes.
   return [number % 256, number / 256, 0, 0] if number < 65_536
 
-  return [number % 256, (number / 256) % 256, (number / 65_536) % 256, number / 16_777_216]
+  [number % 256, (number / 256) % 256, (number / 65_536) % 256, number / 16_777_216]
 end
 
 ## The 8 bytes of a signed number, low byte first (a two's complement integer).
 export def i64(number: Int) -> List[Int]
-  return [
+  [
     number.bit_and(255),
     number.shift_right(8).bit_and(255),
     number.shift_right(16).bit_and(255),
@@ -56,7 +56,7 @@ export def utf8(text: String) -> List[Int] = text.bytes.to_a
 ## A text as the file stores it: the number of its UTF-8 bytes as a u32, then the bytes.
 export def string(text: String) -> List[Int]
   data = utf8(text)
-  return u32(data.size).concat(data)
+  u32(data.size).concat(data)
 end
 
 ## Chunks with no byte.
@@ -69,7 +69,7 @@ export def add(chunks: Chunks, piece: List[Int]) -> Chunks
   open = chunks.open.concat(piece)
   return close(chunks.with(open: open)) if open.size > OPEN_LIMIT
 
-  return chunks.with(open: open)
+  chunks.with(open: open)
 end
 
 ## The chunks with a text added as the file stores it (see string); the text of a long one is not made a list.
@@ -79,7 +79,7 @@ export def add_text(chunks: Chunks, text: String) -> Chunks
 
   sized = add(chunks, u32(data.size))
   closed = close(sized)
-  return closed.with(done: closed.done.push(data))
+  closed.with(done: closed.done.push(data))
 end
 
 ## The chunks with the chunks of another list added at the end.
@@ -96,7 +96,7 @@ export def add_all(chunks: Chunks, more: Chunks) -> Chunks
 
   return out if more.open.size == 0
 
-  return add(out, more.open)
+  add(out, more.open)
 end
 
 ## All the chunks as one `Bytes`, or an error naming the first item that was not a byte.
@@ -105,14 +105,14 @@ export def join(chunks: Chunks) -> Result[Bytes]
   closed = close(chunks)
   return error(closed.failed) if closed.failed != ""
 
-  return ok(Bytes.concat(closed.done))
+  ok(Bytes.concat(closed.done))
 end
 
 # The chunks with the open list sealed as a chunk.
 def close(chunks: Chunks) -> Chunks
   return chunks if chunks.open.size == 0
 
-  return seal(chunks.with(open: []), chunks.open)
+  seal(chunks.with(open: []), chunks.open)
 end
 
 # The chunks with the items sealed as a chunk at the end. Every writer piece holds bytes, so a failure is a bug of the
@@ -123,5 +123,5 @@ def seal(chunks: Chunks, items: List[Int]) -> Chunks
 
   return chunks.with(failed: made.message) if chunks.failed == ""
 
-  return chunks
+  chunks
 end

@@ -12,7 +12,7 @@ import DocModel from "doc_model"
 ## of each span.
 export def json(module: String, documented: DocModel.Module) -> Json
   items = documented.items.map do |item: DocModel.Item| item_json(module, Convert.item(item), false) end
-  return JSON.object({
+  JSON.object({
     "module": JSON.from(module),
     "doc": text_json(Convert.text(documented.doc)),
     "items": JSON.array(items),
@@ -52,7 +52,7 @@ export def item_json(module: String, item: Model.Item, located: Bool) -> Json
     fields = fields.put("variants", JSON.array(variants_json))
   end
 
-  return JSON.object(fields)
+  JSON.object(fields)
 end
 
 ## The object of `agentica help std/MODULE.NAME --json`: the fields `help NAME --json` has for a builtin that apply
@@ -84,23 +84,23 @@ export def help_json(module: String, item: Model.Item) -> Json
     fields = fields.put("variants", JSON.array(variants_json))
   end
 
-  return JSON.object(fields)
+  JSON.object(fields)
 end
 
 ## `{file, range}`: the two keys a diagnostic puts at its top level, in an object of their own.
 export def span_json(module: String, range: DiagnosticModel.Region) -> Json
-  return JSON.object({"file": JSON.from(module), "range": DiagnosticJson.range(range)})
+  JSON.object({"file": JSON.from(module), "range": DiagnosticJson.range(range)})
 end
 
 ## The text, or null when it is empty.
 export def text_json(text: String) -> Json
   return JSON.null() if text == ""
 
-  return JSON.from(text)
+  JSON.from(text)
 end
 
 def parameter_json(parameter: Model.Parameter) -> Json
-  return JSON.object({
+  JSON.object({
     "name": JSON.from(parameter.name),
     "type": JSON.from(parameter.type),
     "default": text_json(parameter.default),
@@ -119,7 +119,7 @@ def field_json(module: String, field: Model.Field, located: Bool) -> Json
     fields = fields.put("name_span", span_json(module, field.name_range))
   end
 
-  return JSON.object(fields)
+  JSON.object(fields)
 end
 
 def variant_json(module: String, variant: Model.Variant, located: Bool) -> Json
@@ -134,5 +134,5 @@ def variant_json(module: String, variant: Model.Variant, located: Bool) -> Json
     fields = fields.put("name_span", span_json(module, variant.name_range))
   end
 
-  return JSON.object(fields)
+  JSON.object(fields)
 end

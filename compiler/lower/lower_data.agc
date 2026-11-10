@@ -60,7 +60,7 @@ export def lower_list(cx: State.Cx, fx: State.Fx, node: Ast.ListLit, want: Int) 
     end
   end
 
-  return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
+  ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
 end
 
 ## Type.members: the list of StructMember for the fields the checker recorded, each name and type a constant text.
@@ -109,7 +109,7 @@ export def lower_members(
     dst = want
   end
 
-  return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
+  ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
 end
 
 ## Type.codec: a Codec.Info record of the linked name of the type and the list Type.members gives for its fields. The
@@ -135,7 +135,7 @@ export def lower_codec(
     dst = want
   end
 
-  return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
+  ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
 end
 
 ## A map literal: key and value registers one after the other. One `map` instruction gathers at most MAX_CHUNK entries;
@@ -179,7 +179,7 @@ export def lower_map(cx: State.Cx, fx: State.Fx, node: Ast.MapLit, want: Int) ->
     end
   end
 
-  return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
+  ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
 end
 
 ## An enum value: the payload items in consecutive registers and an `enum` instruction with the id of the variant.
@@ -213,7 +213,7 @@ export def lower_enum(
   end
 
   fx = State.emit_at(fx, "enum", [dst, first, id], span)
-  return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
+  ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
 end
 
 ## A struct construction: a register for each field, each value computed into the register of its field, in source
@@ -259,7 +259,7 @@ export def lower_struct(cx: State.Cx, fx: State.Fx, node: Ast.Construct, want: I
   end
 
   fx = State.emit_at(fx, "struct", [dst, first, info.index], span)
-  return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
+  ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
 end
 
 ## The value of a catalog default (Model.Default) in register want: a literal, an empty list, map or Bytes, a
@@ -295,7 +295,7 @@ export def lower_catalog_default(
     Model.Default.Absent -> return error(State.internal(cx, "lower: a missing argument has no default", span))
   end
 
-  return lower_known_literal(cx, fx, literal, id, span, want)
+  lower_known_literal(cx, fx, literal, id, span, want)
 end
 
 ## A struct update, `target.with(f: v)`: the receiver goes to the first register of a window and the new values after
@@ -327,7 +327,7 @@ export def lower_update(cx: State.Cx, fx: State.Fx, node: Ast.StructUpdate, want
   end
 
   fx = State.emit_at(fx, "struct-with", [dst, window, info.index].concat(positions), span)
-  return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
+  ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
 end
 
 # The StructMember of fields[from, to) in consecutive registers: a register for each, then two scratch registers
@@ -357,7 +357,7 @@ def member_items(
     at += 1
   end
 
-  return fx.with(next: start + to - from)
+  fx.with(next: start + to - from)
 end
 
 # A literal that the catalog gives: its type is the one of the parameter or field it fills, so it has no check.
@@ -370,7 +370,7 @@ def lower_known_literal(
   want: Int,
 ) -> Result[State.Out]
   literal = Ast.Expr.Literal(Ast.Literal(id: id, value: value, span: span))
-  return cx.expression.call(cx, fx, literal, want, false, true)
+  cx.expression.call(cx, fx, literal, want, false, true)
 end
 
 # The fields of a builtin record that a construction leaves out, from the defaults of the catalog (the checker let
@@ -391,7 +391,7 @@ def lower_record_defaults(
     end
   end
 
-  return ok(fx)
+  ok(fx)
 end
 
 # A default is an expression of the file that declares the struct, so it is lowered with that file's index (the spans
@@ -406,7 +406,7 @@ def lower_field_default(
 ) -> Result[State.Fx]
   here = cx.with(file: fills.file, index: fills.index)
   out = try cx.expression.call(here, fx.with(file: fills.index), value, slot, false, false)
-  return ok(out.fx.with(file: fx.file))
+  ok(out.fx.with(file: fx.file))
 end
 
 # Lowers items[from] up to items[stop] into consecutive new registers. A literal item needs no type check of its own:
@@ -420,7 +420,7 @@ def items(cx: State.Cx, fx: State.Fx, elements: List[Ast.Expr], from: Int, stop:
     at += 1
   end
 
-  return ok(fx)
+  ok(fx)
 end
 
 # The same for map entries: the key, then the value.
@@ -435,7 +435,7 @@ def entries(cx: State.Cx, fx: State.Fx, pairs: List[Ast.MapEntry], from: Int, st
     at += 1
   end
 
-  return ok(fx)
+  ok(fx)
 end
 
 # The index of a value in the sorted positions.
@@ -445,5 +445,5 @@ def rank_of(positions: List[Int], position: Int) -> Int
     at += 1
   end
 
-  return at
+  at
 end

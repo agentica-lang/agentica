@@ -36,7 +36,7 @@ export def kind_of(path: String) -> String
     return "feature"
   end
 
-  return ""
+  ""
 end
 
 ## True for the name of a unit test file, `*_test.agc`.
@@ -71,15 +71,15 @@ export def discover(given: List[String]) -> List[Entry]
     previous = path
   end
 
-  return entries
+  entries
 end
 
 def entry(path: String, problem: String) -> Entry
-  return Entry(path: path, problem: problem, kind: kind_of(path), bytecode: "", source_root: "", front_end: "")
+  Entry(path: path, problem: problem, kind: kind_of(path), bytecode: "", source_root: "", front_end: "")
 end
 
 def problem(found: Found, path: String, message: String) -> Found
-  return Found(problems: found.problems.push(entry(path, message)), files: found.files)
+  Found(problems: found.problems.push(entry(path, message)), files: found.files)
 end
 
 def walk(directory: String, found: Found) -> Found
@@ -93,7 +93,7 @@ def walk(directory: String, found: Found) -> Found
     after = visit(Path.join([directory, name]).unwrap_or("#{directory}/#{name}"), name, project, after)
   end
 
-  return after
+  after
 end
 
 # Dir.list decodes a name with a byte that is not UTF-8 as U+FFFD, and no path can be made from that name, so such a
@@ -123,7 +123,7 @@ def visit(path: String, name: String, project: Bool, found: Found) -> Found
     return follow(path, found)
   end
 
-  return Found(problems: found.problems, files: found.files.push(path))
+  Found(problems: found.problems, files: found.files.push(path))
 end
 
 # A link takes part when it names a file that exists and is not a folder.
@@ -133,5 +133,5 @@ def follow(path: String, found: Found) -> Found
     return Found(problems: found.problems, files: found.files.push(path))
   end
 
-  return problem(found, path, "the symbolic link does not name a file")
+  problem(found, path, "the symbolic link does not name a file")
 end

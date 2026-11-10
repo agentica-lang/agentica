@@ -19,10 +19,10 @@ end
 ## The text of the file, or the failure for a file that cannot be read or is not UTF-8.
 export def read_text(workspace: Workspace.Workspace, reading: Reading) -> Result[String]
   case workspace.read_text.call(reading.file)
-    SourceFile.Read.Text(text) -> return ok(text)
+    SourceFile.Read.Text(text) -> ok(text)
     SourceFile.Read.Invalid(at) ->
-      return error(located(reading, at, "the file is not valid UTF-8", Failure.hint("save the file as UTF-8 text")))
-    SourceFile.Read.Unreadable(message) -> return error(fail(reading, "", "cannot read the file: #{message}"))
+      error(located(reading, at, "the file is not valid UTF-8", Failure.hint("save the file as UTF-8 text")))
+    SourceFile.Read.Unreadable(message) -> error(fail(reading, "", "cannot read the file: #{message}"))
   end
 end
 
@@ -31,24 +31,24 @@ export def parse(reading: Reading, text: String) -> Result[Map[String, Toml.Valu
   parsed = Toml.parse(text)
   return error(located(reading, position_of(text, parsed.message), parsed.message, Diag.Help.NoHelp)) if !parsed.ok?
 
-  return table(reading, parsed.unwrap!, "")
+  table(reading, parsed.unwrap!, "")
 end
 
 ## The failure for a key path: "" is the file as a whole, which has no position to show.
 export def fail(reading: Reading, key_path: String, message: String) -> String
-  return fail_with(reading, key_path, message, Diag.Help.NoHelp)
+  fail_with(reading, key_path, message, Diag.Help.NoHelp)
 end
 
 ## Like fail, with a help text.
 export def fail_help(reading: Reading, key_path: String, message: String, help: String) -> String
-  return fail_with(reading, key_path, message, Failure.hint(help))
+  fail_with(reading, key_path, message, Failure.hint(help))
 end
 
 ## The path of a key inside the table at path.
 export def child(path: String, key: String) -> String
   return key if path == ""
 
-  return "#{path}.#{key}"
+  "#{path}.#{key}"
 end
 
 ## The path of an item of the array at path (counted from 0).
@@ -57,40 +57,40 @@ export def item(path: String, index: Int) -> String = "#{path}[#{index}]"
 ## The entries of a table value, or a failure that says the value at path is not a table.
 export def table(reading: Reading, value: Toml.Value, path: String) -> Result[Map[String, Toml.Value]]
   case value
-    Toml.Value.Table(entries) -> return ok(entries)
-    _ -> return error(fail(reading, path, "expected a table"))
+    Toml.Value.Table(entries) -> ok(entries)
+    _ -> error(fail(reading, path, "expected a table"))
   end
 end
 
 ## The items of an array value, or a failure.
 export def array(reading: Reading, value: Toml.Value, path: String) -> Result[List[Toml.Value]]
   case value
-    Toml.Value.Array(items) -> return ok(items)
-    _ -> return error(fail(reading, path, "expected an array"))
+    Toml.Value.Array(items) -> ok(items)
+    _ -> error(fail(reading, path, "expected an array"))
   end
 end
 
 ## The text of a string value, or a failure.
 export def text(reading: Reading, value: Toml.Value, path: String) -> Result[String]
   case value
-    Toml.Value.Str(content) -> return ok(content)
-    _ -> return error(fail(reading, path, "expected a string"))
+    Toml.Value.Str(content) -> ok(content)
+    _ -> error(fail(reading, path, "expected a string"))
   end
 end
 
 ## The number of an integer value, or a failure.
 export def integer(reading: Reading, value: Toml.Value, path: String) -> Result[Int]
   case value
-    Toml.Value.Int(number) -> return ok(number)
-    _ -> return error(fail(reading, path, "expected an integer"))
+    Toml.Value.Int(number) -> ok(number)
+    _ -> error(fail(reading, path, "expected an integer"))
   end
 end
 
 ## The value of a boolean, or a failure.
 export def boolean(reading: Reading, value: Toml.Value, path: String) -> Result[Bool]
   case value
-    Toml.Value.Bool(flag) -> return ok(flag)
-    _ -> return error(fail(reading, path, "expected true or false"))
+    Toml.Value.Bool(flag) -> ok(flag)
+    _ -> error(fail(reading, path, "expected true or false"))
   end
 end
 
@@ -109,7 +109,7 @@ export def known_keys(
     end
   end
 
-  return ok()
+  ok()
 end
 
 # The line and column in "line L, column C: ..." as a position in text; the start of the file when the message has
@@ -133,17 +133,17 @@ def position_of(source: String, message: String) -> Source.Position
     end
   end
 
-  return Source.Position(offset: before + column.unwrap! - 1, line: line.unwrap!, column: column.unwrap!)
+  Source.Position(offset: before + column.unwrap! - 1, line: line.unwrap!, column: column.unwrap!)
 end
 
 def fail_with(reading: Reading, key_path: String, message: String, help: Diag.Help) -> String
   return Failure.fail_file(reading.file, reading.code, message, help) if key_path == ""
 
-  return Failure.fail_key(reading.file, key_path, reading.code, message, help)
+  Failure.fail_key(reading.file, key_path, reading.code, message, help)
 end
 
 def located(reading: Reading, at: Source.Position, message: String, help: Diag.Help) -> String
   stop = Source.Position(offset: at.offset + 1, line: at.line, column: at.column + 1)
   site = Failure.Site(file: reading.file, span: Source.Span(start: at, stop: stop))
-  return Failure.fail_at(site, reading.code, message, help)
+  Failure.fail_at(site, reading.code, message, help)
 end

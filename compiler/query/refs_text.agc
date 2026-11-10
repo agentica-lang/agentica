@@ -20,7 +20,7 @@ export def text(found: Model.Refs) -> String
 
   return "" if lines.size == 0
 
-  return "#{lines.join("\n")}\n"
+  "#{lines.join("\n")}\n"
 end
 
 ## One line for each file left out, each with a line feed at the end; empty when none was.
@@ -29,7 +29,7 @@ export def skipped_text(found: Model.Refs) -> String = SymbolText.skipped_lines(
 def inside(function: String) -> String
   return "" if function == ""
 
-  return " in #{function}"
+  " in #{function}"
 end
 
 # `field User.email: String` and `variant Shape.Circle(Float)` through the owner; `function make(name: String) -> User`
@@ -42,5 +42,5 @@ def described(found: Model.Symbol) -> String
     return "#{found.kind} #{found.name}"
   end
 
-  return "#{found.kind} #{found.signature}"
+  "#{found.kind} #{found.signature}"
 end

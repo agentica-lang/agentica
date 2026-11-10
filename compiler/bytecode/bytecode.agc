@@ -52,36 +52,36 @@ end
 # Compiles the file at path into the file at output, and says what happened in one line.
 def compile(path: String, output: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
-    Linker.Linking.Failed(failure) -> return LinkText.root_failure_text(settings.workspace, path, failure)
-    Linker.Linking.Done(linked) -> return check(linked, output, settings)
+    Linker.Linking.Failed(failure) -> LinkText.root_failure_text(settings.workspace, path, failure)
+    Linker.Linking.Done(linked) -> check(linked, output, settings)
   end
 end
 
 def check(linked: Linker.Linked, output: String, settings: Env.Settings) -> String
   case Checker.check(linked, settings)
-    Checker.Checking.Failed(problem) -> return CheckText.problem_text(settings.workspace, linked.root_dir, problem)
+    Checker.Checking.Failed(problem) -> CheckText.problem_text(settings.workspace, linked.root_dir, problem)
     Checker.Checking.Done(checked) ->
       lowered = Lowering.lower(linked, checked)
-      return lower(linked, lowered, output, settings)
+      lower(linked, lowered, output, settings)
   end
 end
 
 def lower(linked: Linker.Linked, lowered: Lowering.Lowered, output: String, settings: Env.Settings) -> String
   case lowered
-    Lowering.Lowered.Failed(problem) -> return LowerText.problem_text(settings.workspace, linked.root_dir, problem)
+    Lowering.Lowered.Failed(problem) -> LowerText.problem_text(settings.workspace, linked.root_dir, problem)
     Lowering.Lowered.Done(program) ->
       written = Writer.write(program, settings.version)
-      return write(linked.root_dir, written, output, settings)
+      write(linked.root_dir, written, output, settings)
   end
 end
 
 def write(root_dir: String, written: Writer.Written, output: String, settings: Env.Settings) -> String
   case written
-    Writer.Written.Failed(problem) -> return LowerText.problem_text(settings.workspace, root_dir, problem)
+    Writer.Written.Failed(problem) -> LowerText.problem_text(settings.workspace, root_dir, problem)
     Writer.Written.Done(bytes) ->
       saved = SaveFile.bytes(output, bytes, 60_000)
       return "wrote #{bytes.size} bytes" if saved.ok?
 
-      return "cannot write #{output}: #{saved.message}"
+      "cannot write #{output}: #{saved.message}"
   end
 end

@@ -62,7 +62,7 @@ export def temporary_candidates() -> List[String]
     end
   end
 
-  return candidates.concat(fixed)
+  candidates.concat(fixed)
 end
 
 ## The temporary directory: the first of `temporary_candidates()` that is a directory.
@@ -73,7 +73,7 @@ export def temporary_directory() -> Result[String]
     return ok(path) if info.ok? and info.unwrap!.kind == "directory"
   end
 
-  return error("no temporary directory: none of #{candidates.join(", ")} is a directory")
+  error("no temporary directory: none of #{candidates.join(", ")} is a directory")
 end
 
 ## Makes the run directory in `temporary`, locked and under its final name. Nothing is left behind on a failure.
@@ -89,7 +89,7 @@ export def claim(temporary: String) -> Result[Run]
     _ = Path.remove(current, IO_TIMEOUT)
   end
 
-  return claimed
+  claimed
 end
 
 ## Removes the run directory and releases its lock. The removal is best effort: what stays is swept by a later run.
@@ -162,7 +162,7 @@ def make_private(temporary: String, prefix: String) -> Result[String]
     attempt += 1
   end
 
-  return error("cannot make a private directory in #{temporary}: #{last}")
+  error("cannot make a private directory in #{temporary}: #{last}")
 end
 
 def lock_and_name(temporary: String, current: String) -> Result[Run]
@@ -185,7 +185,7 @@ def lock_and_name(temporary: String, current: String) -> Result[Run]
     return error("cannot name the run directory #{final}: #{renamed.message}")
   end
 
-  return ok(Run(path: final, lock: lock))
+  ok(Run(path: final, lock: lock))
 end
 
 # Creates the lock file and locks it. It is a new file, so a name in the way is an error and never a link followed.
@@ -196,7 +196,7 @@ def take_lock(directory: String) -> Result[FileHandle]
   return ok(lock) if taken.ok? and taken.unwrap!
 
   _ = File.close(lock, IO_TIMEOUT)
-  return error("cannot lock #{directory}")
+  error("cannot lock #{directory}")
 end
 
 # A temporary directory where other users can write and delete our entries is not safe for a run that trusts its
@@ -217,7 +217,7 @@ def shared_and_not_sticky?(temporary: String, own: String) -> Result[Bool]
   group_write = mode.bit_and(16) != 0
   setgid = mode.bit_and(1024) != 0
   ours_alone = folder.user_id == mine.user_id and folder.group_id == mine.group_id and !setgid
-  return ok(others_write or (group_write and !ours_alone))
+  ok(others_write or (group_write and !ours_alone))
 end
 
 # The prefix and then hexadecimal digits only. `agentica-bdd-` is the final name of a run, `agentica-bdd-new-` a run
@@ -229,7 +229,7 @@ def hex_name?(name: String, prefix: String) -> Bool
     return false if !DIGITS.contains?(digit)
   end
 
-  return true
+  true
 end
 
 # The lock of a folder that may belong to a run that ended: ok(handle) when the folder is a real folder (not a link) of
@@ -251,5 +251,5 @@ def abandoned(path: String, owner: Int, age: Int) -> Result[FileHandle]
   return ok(lock) if taken.ok? and taken.unwrap!
 
   _ = File.close(lock, IO_TIMEOUT)
-  return error("the run is alive")
+  error("the run is alive")
 end

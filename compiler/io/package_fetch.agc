@@ -68,7 +68,7 @@ export def cache_root(env: Env.Env, file: String) -> Result[String]
     return error(Failure.fail_file(file, "PKG-FETCH", message, Failure.hint("set HOME or XDG_CACHE_HOME")))
   end
 
-  return ok(cache)
+  ok(cache)
 end
 
 ## Like `cache_root`, for the packages of a lock: a lock of workspace members and paths alone fetches nothing and
@@ -76,7 +76,7 @@ end
 export def cache_for(env: Env.Env, file: String, packages: List[Lock.Locked]) -> Result[String]
   return ok("") if packages.all? do |locked| Lock.in_place?(locked) end
 
-  return cache_root(env, file)
+  cache_root(env, file)
 end
 
 ## Puts the files of the locked package into the cache under `cache` (a folder; PackageCache.root).
@@ -84,8 +84,8 @@ export def fill(workspace: Workspace.Workspace, cache: String, place: Place, loc
   target = PackageCache.folder(cache, locked.source, locked.commit)
   seen = try inspect(workspace, place, target, locked)
   case seen
-    Seen.Matches -> return ok(Filled.Present)
-    Seen.Absent -> return fetch(workspace, cache, place, target, locked)
+    Seen.Matches -> ok(Filled.Present)
+    Seen.Absent -> fetch(workspace, cache, place, target, locked)
   end
 end
 
@@ -117,7 +117,7 @@ export def resolve(
   resolved = resolve_into(workspace, cache, place, scratch, pin)
   # As in fetch: a temporary folder that cannot be removed does not change the answer.
   remove_temp(temp)
-  return resolved
+  resolved
 end
 
 ## The failure for the key of an entry ("" for the entry as a whole). An empty help is no help.
@@ -129,7 +129,7 @@ export def fail(place: Place, code: String, key: String, message: String, help: 
 
   return Failure.fail_key(place.file, path, code, message, Diag.Help.NoHelp) if help == ""
 
-  return Failure.fail_key(place.file, path, code, message, Failure.hint(help))
+  Failure.fail_key(place.file, path, code, message, Failure.hint(help))
 end
 
 # Looks at the folder of the commit, if there is one: the locked files (nothing to do) or others (an error).
@@ -144,11 +144,10 @@ def inspect(workspace: Workspace.Workspace, place: Place, target: String, locked
       return ok(Seen.Matches) if found == locked.hash
 
       message = "the files of #{locked.name} in the cache are not the ones the lock names"
-      return error(fail(place, "PKG-HASH-MISMATCH", "hash", message, "remove #{target} and run install again"))
+      error(fail(place, "PKG-HASH-MISMATCH", "hash", message, "remove #{target} and run install again"))
     PackageHash.Hashed.Link(path) ->
-      return error(fail(place, "PKG-SYMLINK", "", "#{locked.name} has a symbolic link named #{path}", ""))
-    PackageHash.Hashed.Unreadable(message) ->
-      return error(fail(place, "PKG-FETCH", "", "cannot read #{target}", message))
+      error(fail(place, "PKG-SYMLINK", "", "#{locked.name} has a symbolic link named #{path}", ""))
+    PackageHash.Hashed.Unreadable(message) -> error(fail(place, "PKG-FETCH", "", "cannot read #{target}", message))
   end
 end
 
@@ -171,7 +170,7 @@ def fetch(
   # A folder that cannot be removed stays hidden in the cache root, and the result of the install stands: the failure
   # to clean up is not worth failing a fetch that worked (or hiding the error of one that did not).
   remove_temp(temp)
-  return filled
+  filled
 end
 
 # git writes its objects read-only and Path.remove refuses a read-only entry on Windows, so `attrib` clears the
@@ -204,7 +203,7 @@ def make_temp(cache: String) -> Result[String]
     failure = made.message
   end
 
-  return error(failure)
+  error(failure)
 end
 
 def fetch_into(
@@ -219,7 +218,7 @@ def fetch_into(
   try check_commit(place, scratch, locked)
   try copy_tree(place, scratch, locked.commit, locked.source.subdir)
   try check_hash(workspace, place, scratch.files, locked)
-  return move_into_place(workspace, place, scratch.files, target, locked)
+  move_into_place(workspace, place, scratch.files, target, locked)
 end
 
 # The files of the commit that the hash covers (and the manifest) go to scratch.files. For a package that is a folder
@@ -234,8 +233,8 @@ def copy_tree(place: Place, scratch: Scratch, commit: String, subdir: String) ->
 
   listing = try git_text(place, scratch, inside(scratch, ["ls-tree", "-r", "-z", "-l", tree]))
   case Tree.plan(listing)
-    Tree.Plan.Refused(fault) -> return error(fail(place, fault.code, fault.key, fault.message, fault.help))
-    Tree.Plan.Files(blobs) -> return copy_blobs(place, scratch, blobs)
+    Tree.Plan.Refused(fault) -> error(fail(place, fault.code, fault.key, fault.message, fault.help))
+    Tree.Plan.Files(blobs) -> copy_blobs(place, scratch, blobs)
   end
 end
 
@@ -248,7 +247,7 @@ def check_subdir(place: Place, scratch: Scratch, tree: String) -> Result[Void]
     return error(fail(place, "PKG-FETCH", "subdir", "#{tree} is not a folder", ""))
   end
 
-  return ok()
+  ok()
 end
 
 def resolve_into(
@@ -270,7 +269,7 @@ def resolve_into(
   locked = Lock.Locked(name: pin.name, source: pin.source, commit: commit, hash: hash, member: false, override: false)
   target = PackageCache.folder(cache, locked.source, commit)
   try move_into_place(workspace, place, scratch.files, target, locked)
-  return ok(locked)
+  ok(locked)
 end
 
 # An empty template, so a hook from the user's template folder cannot run.
@@ -281,7 +280,7 @@ def init_repository(place: Place, scratch: Scratch, locked: Lock.Locked) -> Resu
   end
 
   try git(place, scratch, arguments.push(scratch.repo))
-  return ok()
+  ok()
 end
 
 # The url is passed as written: git's own url.<base>.insteadOf settings apply to it, and the lock keeps what the
@@ -304,7 +303,7 @@ def fetch_pin(place: Place, scratch: Scratch, locked: Lock.Locked) -> Result[Voi
   ]
 
   try git(place, scratch, inside(scratch, arguments))
-  return ok()
+  ok()
 end
 
 # The fetched pin must be the locked commit; a tag that now points elsewhere is a moved tag, never a new lock.
@@ -317,14 +316,14 @@ def check_commit(place: Place, scratch: Scratch, locked: Lock.Locked) -> Result[
     return error(fail(place, "PKG-TAG-MOVED", "tag", message, "the lock is not changed; update it on purpose"))
   end
 
-  return error(fail(place, "PKG-FETCH", "commit", "git fetched #{commit}, not #{locked.commit}", ""))
+  error(fail(place, "PKG-FETCH", "commit", "git fetched #{commit}, not #{locked.commit}", ""))
 end
 
 # The commit that the fetched pin points to (a tag is peeled).
 def peel(place: Place, scratch: Scratch) -> Result[String]
   arguments = ["rev-parse", "--verify", "--quiet", "#{PINNED}^{commit}"]
   peeled = try git_text(place, scratch, inside(scratch, arguments))
-  return ok(peeled.trim)
+  ok(peeled.trim)
 end
 
 def copy_blobs(place: Place, scratch: Scratch, blobs: List[Tree.Blob]) -> Result[Void]
@@ -336,7 +335,7 @@ def copy_blobs(place: Place, scratch: Scratch, blobs: List[Tree.Blob]) -> Result
     try write_file(place, Paths.join(scratch.files, blob.path), data)
   end
 
-  return ok()
+  ok()
 end
 
 # A file is at most Tree.MAX_FILE_BYTES (1 MiB, the most File.write_bytes takes in one call), so it goes in one write.
@@ -358,7 +357,7 @@ def write_file(place: Place, path: String, data: Bytes) -> Result[Void]
   closed = File.close(handle, FS_TIMEOUT_MS)
   return error(fail(place, "PKG-FETCH", "", "cannot write #{path}", closed.message)) if !closed.ok?
 
-  return ok()
+  ok()
 end
 
 def check_hash(workspace: Workspace.Workspace, place: Place, files: String, locked: Lock.Locked) -> Result[Void]
@@ -366,17 +365,17 @@ def check_hash(workspace: Workspace.Workspace, place: Place, files: String, lock
   return ok() if found == locked.hash
 
   message = "the files fetched for #{locked.name} are not the ones the lock names (#{found})"
-  return error(fail(place, "PKG-HASH-MISMATCH", "hash", message, "the lock is not changed; update it on purpose"))
+  error(fail(place, "PKG-HASH-MISMATCH", "hash", message, "the lock is not changed; update it on purpose"))
 end
 
 # The hash of the fetched files (the pin's, or the locked entry's, name is only for the messages).
 def hash_of(workspace: Workspace.Workspace, place: Place, locked: Lock.Locked, files: String) -> Result[String]
   case PackageHash.hash_folder(workspace, files)
-    PackageHash.Hashed.Hash(found) -> return ok(found)
+    PackageHash.Hashed.Hash(found) -> ok(found)
     PackageHash.Hashed.Link(path) ->
-      return error(fail(place, "PKG-SYMLINK", "", "#{locked.name} has a symbolic link named #{path}", ""))
+      error(fail(place, "PKG-SYMLINK", "", "#{locked.name} has a symbolic link named #{path}", ""))
     PackageHash.Hashed.Unreadable(message) ->
-      return error(fail(place, "PKG-FETCH", "", "cannot read the fetched files of #{locked.name}", message))
+      error(fail(place, "PKG-FETCH", "", "cannot read the fetched files of #{locked.name}", message))
   end
 end
 
@@ -396,8 +395,8 @@ def move_into_place(
 
   seen = try inspect(workspace, place, target, locked)
   case seen
-    Seen.Matches -> return ok(Filled.Present)
-    Seen.Absent -> return error(fail(place, "PKG-FETCH", "", "cannot move the files to #{target}", moved.message))
+    Seen.Matches -> ok(Filled.Present)
+    Seen.Absent -> error(fail(place, "PKG-FETCH", "", "cannot move the files to #{target}", moved.message))
   end
 end
 
@@ -407,7 +406,7 @@ def inside(scratch: Scratch, arguments: List[String]) -> List[String] = ["--git-
 # Runs git in the temporary folder; a git that does not start, one whose output cannot be read and a non-zero status
 # are PKG-FETCH at the git key, the last with the start of git's errors.
 def git(place: Place, scratch: Scratch, arguments: List[String]) -> Result[Bytes]
-  return git_at(place, scratch, "git", arguments)
+  git_at(place, scratch, "git", arguments)
 end
 
 # The same, with a non-zero status reported at `key`: a command that fails because of one value of the entry (the
@@ -415,13 +414,13 @@ end
 def git_at(place: Place, scratch: Scratch, key: String, arguments: List[String]) -> Result[Bytes]
   case GitProcess.run(arguments, scratch.temp)
     GitProcess.Ran.Missing(message) ->
-      return error(fail(place, "PKG-FETCH", "git", "cannot run git: #{message}", "install git and put it on PATH"))
+      error(fail(place, "PKG-FETCH", "git", "cannot run git: #{message}", "install git and put it on PATH"))
     GitProcess.Ran.Broken(message) ->
-      return error(fail(place, "PKG-FETCH", "git", "cannot read the output of git: #{message}", ""))
+      error(fail(place, "PKG-FETCH", "git", "cannot read the output of git: #{message}", ""))
     GitProcess.Ran.Exited(status, output, errors) ->
       return error(fail(place, "PKG-FETCH", key, "git exited with status #{status}", brief(errors))) if status != 0
 
-      return ok(output)
+      ok(output)
   end
 end
 
@@ -430,12 +429,12 @@ def git_text(place: Place, scratch: Scratch, arguments: List[String]) -> Result[
   text = String.from_bytes(output)
   return error(fail(place, "PKG-FETCH", "git", "git gave text that is not UTF-8", "")) if !text.ok?
 
-  return ok(text.unwrap!)
+  ok(text.unwrap!)
 end
 
 def brief(errors: String) -> String
   text = errors.trim
   return text.slice(0, HELP_LIMIT) if text.length > HELP_LIMIT
 
-  return text
+  text
 end

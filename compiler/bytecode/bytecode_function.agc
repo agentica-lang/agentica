@@ -83,14 +83,14 @@ export def encode(program: Ir.Program, tables: Tables, function: Ir.Function) ->
   head = head.concat(Wire.u32(function.slots)).concat(Wire.u32(own.id))
   head = head.concat(Wire.u32(prelude_flag(program, function))).concat(Wire.u32(count))
   parts = Wire.add(Wire.add(Wire.add(Wire.start(), head), code), refs)
-  return ok(Encoded(tables: state.with(spans: own.pool), parts: parts))
+  ok(Encoded(tables: state.with(spans: own.pool), parts: parts))
 end
 
 # 1 for a function lowered from a file of the prelude, else 0: the VM reports an error in it at the user's call.
 def prelude_flag(program: Ir.Program, function: Ir.Function) -> Int
   return 1 if Ir.prelude_file?(program, function.file)
 
-  return 0
+  0
 end
 
 # The operands of one instruction, which is a written run of `run` instructions when it is a `step`. The tables gain
@@ -133,18 +133,18 @@ def operands(
   end
 
   # Any other number of operands is written as given: the loader rejects it.
-  return ok(Operands(tables: tables, a: 0, b: 0, c: 0, generic: true))
+  ok(Operands(tables: tables, a: 0, b: 0, c: 0, generic: true))
 end
 
 def plain(tables: Tables, a: Int, b: Int, c: Int) -> Operands
-  return Operands(tables: tables, a: a, b: b, c: c, generic: false)
+  Operands(tables: tables, a: a, b: b, c: c, generic: false)
 end
 
 # A wide operand is a 32-bit index that the VM reads from the last two, low half first.
 def wide_operands(program: Ir.Program, tables: Tables, op: String, a: Int, index: Int) -> Result[Operands]
   return error(Failure.internal(program, "a negative index in #{op}")) if index < 0
 
-  return ok(plain(tables, a, index % 65_536, index / 65_536))
+  ok(plain(tables, a, index % 65_536, index / 65_536))
 end
 
 # const: the register, and the index of its constant, which is added to the table when it is new.
@@ -154,7 +154,7 @@ def const_operands(program: Ir.Program, tables: Tables, instr: Ir.Instr) -> Resu
   return wide_operands(program, tables, instr.op, instr.args[0], found.unwrap!) if found.some?
 
   added = Pool.add(tables.constants, key, constant_bytes(instr.imm), 1)
-  return wide_operands(program, tables.with(constants: added), instr.op, instr.args[0], tables.constants.count)
+  wide_operands(program, tables.with(constants: added), instr.op, instr.args[0], tables.constants.count)
 end
 
 # struct-with: the two registers, and the number of its update (the struct and the positions it sets), which is added
@@ -174,7 +174,7 @@ def update_operands(program: Ir.Program, tables: Tables, args: List[Int]) -> Res
     entry = entry.concat(Wire.u32(position))
   end
 
-  return ok(plain(tables.with(updates: Pool.add(updates, key, entry, 1)), args[0], args[1], updates.count))
+  ok(plain(tables.with(updates: Pool.add(updates, key, entry, 1)), args[0], args[1], updates.count))
 end
 
 # call-builtin: the register, and the index of its builtin (the name and the argument count), which is added to the
@@ -187,7 +187,7 @@ def builtin_operands(program: Ir.Program, tables: Tables, instr: Ir.Instr) -> Re
 
   bytes = Wire.string(instr.name).concat(Wire.u32(args[1]))
   added = Pool.add(tables.builtins, key, bytes, 1)
-  return wide_operands(program, tables.with(builtins: added), instr.op, args[0], tables.builtins.count)
+  wide_operands(program, tables.with(builtins: added), instr.op, args[0], tables.builtins.count)
 end
 
 # jump, jump-if-false and jump-if-true: the register of the test, if there is one, and the number of the instruction
@@ -211,7 +211,7 @@ def jump_operands(
     return error(Failure.internal(program, "the function #{function.name} jumps to a missing label"))
   end
 
-  return wide_operands(program, tables, instr.op, register, labels[label])
+  wide_operands(program, tables, instr.op, register, labels[label])
 end
 
 # The instruction as bytes: the opcode, a zero, and the operands as u16.
@@ -238,7 +238,7 @@ def instr_words(program: Ir.Program, instr: Ir.Instr, found: Operands) -> Result
     return error(Failure.internal(program, "an operand of #{op} does not fit in 16 bits"))
   end
 
-  return ok([OPCODES[op], 0, a % 256, a / 256, b % 256, b / 256, c % 256, c / 256])
+  ok([OPCODES[op], 0, a % 256, a / 256, b % 256, b / 256, c % 256, c / 256])
 end
 
 # The place after the run of `step` instructions that starts at `at`. A run is cut at 65,535, the most one instruction
@@ -249,7 +249,7 @@ def step_run_end(body: List[Ir.Instr], at: Int) -> Int
     stop += 1
   end
 
-  return stop
+  stop
 end
 
 # The number of the instruction each label stands before, counting a run of steps as one instruction.
@@ -272,20 +272,20 @@ def label_pcs(body: List[Ir.Instr]) -> Map[Int, Int]
     end
   end
 
-  return labels
+  labels
 end
 
 # The text that stands for a constant in the table: two constants are one entry when this is the same. The tag keeps
 # an Int, a Float (by its bits, so 0.0 and -0.0 differ), a Bool, a String and a Bytes apart.
 def constant_key(imm: Ir.Imm) -> String
   case imm
-    Ir.Imm.Void -> return "v"
-    Ir.Imm.Nil -> return "n"
-    Ir.Imm.Bool(flag) -> return "b#{flag}"
-    Ir.Imm.Int(number) -> return "i#{number}"
-    Ir.Imm.Float(number) -> return "f#{Float.to_bits(number)}"
-    Ir.Imm.Text(text) -> return "s#{text}"
-    Ir.Imm.Bytes(text) -> return "y#{text}"
+    Ir.Imm.Void -> "v"
+    Ir.Imm.Nil -> "n"
+    Ir.Imm.Bool(flag) -> "b#{flag}"
+    Ir.Imm.Int(number) -> "i#{number}"
+    Ir.Imm.Float(number) -> "f#{Float.to_bits(number)}"
+    Ir.Imm.Text(text) -> "s#{text}"
+    Ir.Imm.Bytes(text) -> "y#{text}"
   end
 end
 
@@ -293,18 +293,18 @@ end
 # Bytes is written as a String is, a length and the bytes; only the tag tells the VM not to check them as UTF-8.
 def constant_bytes(imm: Ir.Imm) -> List[Int]
   case imm
-    Ir.Imm.Void -> return [0]
-    Ir.Imm.Nil -> return [1]
-    Ir.Imm.Bool(flag) -> return flag_bytes(flag)
-    Ir.Imm.Int(number) -> return [4].concat(Wire.i64(number))
-    Ir.Imm.Float(number) -> return [5].concat(Wire.f64(number))
-    Ir.Imm.Text(text) -> return [6].concat(Wire.string(text))
-    Ir.Imm.Bytes(text) -> return [7].concat(Wire.string(text))
+    Ir.Imm.Void -> [0]
+    Ir.Imm.Nil -> [1]
+    Ir.Imm.Bool(flag) -> flag_bytes(flag)
+    Ir.Imm.Int(number) -> [4].concat(Wire.i64(number))
+    Ir.Imm.Float(number) -> [5].concat(Wire.f64(number))
+    Ir.Imm.Text(text) -> [6].concat(Wire.string(text))
+    Ir.Imm.Bytes(text) -> [7].concat(Wire.string(text))
   end
 end
 
 def flag_bytes(flag: Bool) -> List[Int]
   return [3] if flag
 
-  return [2]
+  [2]
 end

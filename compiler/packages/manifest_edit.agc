@@ -29,7 +29,7 @@ export def add_dependency(text: String, name: String, source: GitSource.Source) 
     return lines.take(at - 1).push("#{lines[at - 1]}#{carriage}").push(entry).join("\n")
   end
 
-  return lines.take(at).push("#{entry}#{carriage}").concat(lines.drop(at)).join("\n")
+  lines.take(at).push("#{entry}#{carriage}").concat(lines.drop(at)).join("\n")
 end
 
 # The values were checked (GitSource), so they hold no quote or backslash and need no escape.
@@ -41,7 +41,7 @@ def inline_table(source: GitSource.Source) -> String
 
   return "{ git = \"#{source.git}\", #{pin}, subdir = \"#{source.subdir}\" }" if source.subdir != ""
 
-  return "{ git = \"#{source.git}\", #{pin} }"
+  "{ git = \"#{source.git}\", #{pin} }"
 end
 
 # The line of `[dependencies]`, maybe with a comment after it; -1 when there is none.
@@ -54,7 +54,7 @@ def header_index(lines: List[String]) -> Int
     end
   end
 
-  return -1
+  -1
 end
 
 # The line after the last entry of the table that starts at `header`. The blank lines and comments after that entry
@@ -71,7 +71,7 @@ def after_last_entry(lines: List[String], header: Int) -> Int
     index += 1
   end
 
-  return last + 1
+  last + 1
 end
 
 # A new table after the text, with one blank line between them.
@@ -87,5 +87,5 @@ def with_new_table(text: String, entry: String, newline: String) -> String
     body = "#{body}#{newline}"
   end
 
-  return "#{body}#{HEADER}#{newline}#{entry}#{newline}"
+  "#{body}#{HEADER}#{newline}#{entry}#{newline}"
 end

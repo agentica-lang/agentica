@@ -25,14 +25,14 @@ export def hex() -> Result[String]
   end
 
   try File.close(source, IO_TIMEOUT_MS)
-  return ok(hex_of(bytes))
+  ok(hex_of(bytes))
 end
 
 ## The bytes (each 0 to 255) as two lowercase hex digits each.
 export def hex_of(bytes: List[Int]) -> String
   digits = bytes.map do |byte: Int| "#{DIGITS.slice(byte.shift_right(4), 1)}#{DIGITS.slice(byte.bit_and(15), 1)}" end
 
-  return digits.join("")
+  digits.join("")
 end
 
 # 8 bytes from Random.int, 4 from the clock and the process id as 4 bytes: 16 bytes like the name from /dev/urandom.
@@ -53,5 +53,5 @@ def process_bytes() -> List[Int]
     bytes = bytes.push(pid.shift_right(shift).bit_and(255))
   end
 
-  return bytes
+  bytes
 end

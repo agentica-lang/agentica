@@ -50,7 +50,7 @@ export def find(workspace: Workspace.Workspace, project_dir: String) -> Result[M
     here = parent
   end
 
-  return ok(empty())
+  ok(empty())
 end
 
 ## Whether a dependency source names a member of this workspace: its repository is the workspace's, and its subdir is a
@@ -60,7 +60,7 @@ export def member?(members: Members, source: GitSource.Source) -> Bool
 
   return false if GitSource.identity(source.git) != GitSource.identity(members.repository)
 
-  return members.folders.any? do |folder| folder == source.subdir end
+  members.folders.any? do |folder| folder == source.subdir end
 end
 
 ## The folder of the member that a source names (`member?` is true for it).
@@ -77,7 +77,7 @@ def declared(workspace: Workspace.Workspace, file: String) -> List[Toml.Value]
   root = Reader.parse(reading, text.unwrap!)
   return [] if !root.ok? or !root.unwrap!.has_key?("workspace")
 
-  return [root.unwrap!["workspace"]]
+  [root.unwrap!["workspace"]]
 end
 
 # The answer for the project when the manifest at root_dir has the `workspace` value: the workspace when the project is
@@ -97,7 +97,7 @@ def belongs(
   try Reader.known_keys(reading, table, TABLE_KEYS, "workspace")
   repository = try repository_of(reading, table)
   folders = try folders_of(workspace, reading, table, root_dir)
-  return ok(Members(root: root_dir, repository: repository, folders: folders))
+  ok(Members(root: root_dir, repository: repository, folders: folders))
 end
 
 # The path of dir below root_dir, written with "/": "" when dir is not below it.
@@ -109,7 +109,7 @@ def relative_to(root_dir: String, dir: String) -> String
 
   return "" if !dir.starts_with?(prefix)
 
-  return dir.slice(prefix.length, dir.length - prefix.length)
+  dir.slice(prefix.length, dir.length - prefix.length)
 end
 
 # Whether the raw `workspace` value lists the folder `relative` among its members: false for anything that is not a
@@ -122,18 +122,18 @@ def listed?(value: Toml.Value, relative: String) -> Bool
       return false if !entries.has_key?("members")
 
       case entries["members"]
-        Toml.Value.Array(items) -> return items.any? do |item| names?(item, relative) end
-        _ -> return false
+        Toml.Value.Array(items) -> items.any? do |item| names?(item, relative) end
+        _ -> false
       end
 
-    _ -> return false
+    _ -> false
   end
 end
 
 def names?(item: Toml.Value, relative: String) -> Bool
   case item
-    Toml.Value.Str(content) -> return content == relative
-    _ -> return false
+    Toml.Value.Str(content) -> content == relative
+    _ -> false
   end
 end
 
@@ -147,7 +147,7 @@ def repository_of(reading: Reader.Reading, table: Map[String, Toml.Value]) -> Re
   problem = GitSource.git_problem(repository)
   return error(Reader.fail_help(reading, path, "not a git URL", problem)) if problem != ""
 
-  return ok(repository)
+  ok(repository)
 end
 
 # The members: subdirs of the repository (the same rules as `subdir`), each once, each a folder with its own manifest.
@@ -185,5 +185,5 @@ def folders_of(
     folders = folders.push(folder)
   end
 
-  return ok(folders)
+  ok(folders)
 end

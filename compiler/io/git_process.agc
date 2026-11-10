@@ -29,7 +29,7 @@ export def run(arguments: List[String], dir: String) -> Ran
   _ = Process.close_stdin(child, CLOSE_TIMEOUT_MS)
   ran = finish(child)
   Process.close(child)
-  return ran
+  ran
 end
 
 # Reads standard output to its end, then standard error and the exit status. The pieces are joined once at the end.
@@ -50,5 +50,5 @@ def finish(child: Process) -> Ran
   waited = Process.wait(child, GIT_TIMEOUT_MS)
   return Ran.Broken(waited.message) if !waited.ok?
 
-  return Ran.Exited(waited.unwrap!, Bytes.concat(pieces), output.unwrap!.stderr)
+  Ran.Exited(waited.unwrap!, Bytes.concat(pieces), output.unwrap!.stderr)
 end

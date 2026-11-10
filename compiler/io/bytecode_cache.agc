@@ -113,24 +113,24 @@ export def plan(settings: Env.Settings, root: String, wanted: Bool) -> Plan
   return Plan.Off if !wanted or settings.self_path == ""
 
   case settings.std
-    Env.StdProvider.Folder(_) -> return Plan.Off
+    Env.StdProvider.Folder(_) -> Plan.Off
     Env.StdProvider.Embedded ->
       made = entry_for(settings, root)
       return Plan.On(made.unwrap!) if made.ok?
 
-      return Plan.Off
+      Plan.Off
   end
 end
 
 ## The program kept for the plan, if the sources are the ones it was made from and the entry is the program's own.
 export def lookup(plan: Plan, settings: Env.Settings) -> Lookup
   case plan
-    Plan.Off -> return Lookup.Miss
+    Plan.Off -> Lookup.Miss
     Plan.On(entry) ->
       found = read_entry(entry, settings)
       return Lookup.Hit(found.unwrap!) if found.ok?
 
-      return Lookup.Miss
+      Lookup.Miss
   end
 end
 
@@ -139,7 +139,7 @@ end
 ## so a file that appears between the two is the one gap: it is seen as present, not as absent.
 export def store(plan: Plan, settings: Env.Settings, modules: List[Linker.LinkedModule], program: Bytes) -> Bool
   case plan
-    Plan.Off -> return false
+    Plan.Off -> false
     Plan.On(entry) ->
       sources = modules.filter do |module: Linker.LinkedModule| !Resolve.embedded?(module.key) end
       probes = probe_lines(settings, entry.libs_dir, sources)
@@ -151,12 +151,12 @@ export def store(plan: Plan, settings: Env.Settings, modules: List[Linker.Linked
 
       lines = lines.concat(libraries.unwrap!)
       text = [entry.key, "program #{CacheFiles.digest(program)}"].concat(lines).concat(probes.unwrap!).join("\n")
-      return publish(entry, text, program)
+      publish(entry, text, program)
   end
 end
 
 def source_line(module: Linker.LinkedModule) -> String
-  return "#{SOURCE_WORD}#{CacheFiles.digest(module.text.bytes)} #{module.key}"
+  "#{SOURCE_WORD}#{CacheFiles.digest(module.text.bytes)} #{module.key}"
 end
 
 # One `source` line for each file that a native library of the program may come from or load (the manifest that names
@@ -192,7 +192,7 @@ def library_lines(
     end
   end
 
-  return ok(lines)
+  ok(lines)
 end
 
 # The libraries of the build cache (io/native_build.agc) that the extern functions of the program name: a removed or
@@ -220,7 +220,7 @@ def built_libraries(settings: Env.Settings, modules: List[Linker.LinkedModule]) 
     end
   end
 
-  return found
+  found
 end
 
 # The digest of the names of the native/ files of a package folder: those the package hash covers, and those the walk
@@ -233,7 +233,7 @@ def names_digest(workspace: Workspace.Workspace, root: String) -> String
     error(packed) -> walked = "refused #{packed}"
   end
 
-  return CacheFiles.digest("#{hashed}\n\n#{walked}".bytes)
+  CacheFiles.digest("#{hashed}\n\n#{walked}".bytes)
 end
 
 # The place of the entry and the key it must match. The inputs are read now, before the compile, so a file that changes
@@ -262,7 +262,7 @@ def entry_for(settings: Env.Settings, root: String) -> Result[Entry]
   key = [FORMAT, "version #{settings.version}", site.binary, root, site.inputs].join("\n")
   folder = Paths.join(site.build, BYTECODE_FOLDER)
   name = "#{Paths.last_part(real)}-#{CacheFiles.digest(named.bytes).slice(0, 16)}.agcb"
-  return ok(
+  ok(
     Entry(
       build: site.build,
       folder: folder,
@@ -303,7 +303,7 @@ def probe_lines(settings: Env.Settings, libs_dir: String, modules: List[Linker.L
     end
   end
 
-  return ok(lines.uniq)
+  ok(lines.uniq)
 end
 
 # The line for one place. A path with a line feed or a tab would break the lines; it keeps the entry from being made.
@@ -315,11 +315,11 @@ def probe(workspace: Workspace.Workspace, path: String) -> Result[String]
   real = try workspace.real_path.call(path)
   return error("the path has a line feed, a tab or a NUL") if !plain?(real)
 
-  return ok("#{PRESENT_WORD}#{path}\t#{real}")
+  ok("#{PRESENT_WORD}#{path}\t#{real}")
 end
 
 def plain?(path: String) -> Bool
-  return !path.contains?("\n") and !path.contains?("\t") and !path.contains?(String.from_code(0))
+  !path.contains?("\n") and !path.contains?("\t") and !path.contains?(String.from_code(0))
 end
 
 def read_entry(entry: Entry, settings: Env.Settings) -> Result[Bytes]
@@ -330,7 +330,7 @@ def read_entry(entry: Entry, settings: Env.Settings) -> Result[Bytes]
   handle = try File.open(entry.file, "read", CacheFiles.IO_TIMEOUT_MS)
   read = read_whole(handle, entry, settings)
   _ = File.close(handle, CacheFiles.IO_TIMEOUT_MS)
-  return read
+  read
 end
 
 def read_whole(handle: FileHandle, entry: Entry, settings: Env.Settings) -> Result[Bytes]
@@ -348,7 +348,7 @@ def read_whole(handle: FileHandle, entry: Entry, settings: Env.Settings) -> Resu
     return error("the program of the entry is damaged")
   end
 
-  return ok(program)
+  ok(program)
 end
 
 # The length that the head of an entry gives.
@@ -362,7 +362,7 @@ def text_size(head: Bytes) -> Result[Int]
   size = try text.slice(HEAD_WORD.length, HEAD_DIGITS).to_int
   return error("the head of the entry is wrong") if size < 0 or size > MAX_TEXT_BYTES
 
-  return ok(size)
+  ok(size)
 end
 
 # Every source file must still have the digest the entry holds, and every probe must still answer as it did.
@@ -384,7 +384,7 @@ def check_lines(workspace: Workspace.Workspace, lines: List[String]) -> Result[V
     end
   end
 
-  return ok()
+  ok()
 end
 
 def check_source(workspace: Workspace.Workspace, line: String) -> Result[Void]
@@ -399,7 +399,7 @@ def check_source(workspace: Workspace.Workspace, line: String) -> Result[Void]
   read = try workspace.read_bytes.call(path)
   return error("#{path} changed") if CacheFiles.digest(read) != wanted
 
-  return ok()
+  ok()
 end
 
 def check_tree(workspace: Workspace.Workspace, line: String) -> Result[Void]
@@ -413,7 +413,7 @@ def check_tree(workspace: Workspace.Workspace, line: String) -> Result[Void]
     return error("the native files of #{path} changed")
   end
 
-  return ok()
+  ok()
 end
 
 # `PATH<TAB>REAL`: the path must still lead to the same file.
@@ -424,7 +424,7 @@ def check_present(workspace: Workspace.Workspace, rest: String) -> Result[Void]
   real = try workspace.real_path.call(parts[0])
   return error("#{parts[0]} leads somewhere else") if real != parts[1]
 
-  return ok()
+  ok()
 end
 
 # Whether the bytes begin as a program of this version does (the check that an entry of another build, with the same
@@ -435,7 +435,7 @@ def made_by?(program: Bytes, version: String) -> Bool
 
   magic = String.from_bytes(program.take(MAGIC.length))
   found = String.from_bytes(program.take(VERSION_AT + wanted.size).drop(VERSION_AT))
-  return magic.ok? and magic.unwrap! == MAGIC and found.ok? and found.unwrap! == version
+  magic.ok? and magic.unwrap! == MAGIC and found.ok? and found.unwrap! == version
 end
 
 # Exactly `count` bytes, or an error when the file ends first.
@@ -450,13 +450,13 @@ def read_exact(handle: FileHandle, count: Int) -> Result[Bytes]
     left -= got.size
   end
 
-  return ok(Bytes.concat(pieces))
+  ok(Bytes.concat(pieces))
 end
 
 def piece(left: Int) -> Int
   return left if left < CacheFiles.PIECE
 
-  return CacheFiles.PIECE
+  CacheFiles.PIECE
 end
 
 # The rest of the file, up to the size the VM takes.
@@ -473,7 +473,7 @@ def read_rest(handle: FileHandle) -> Result[Bytes]
     pieces = pieces.push(got)
   end
 
-  return ok(Bytes.concat(pieces))
+  ok(Bytes.concat(pieces))
 end
 
 # Writes the entry to a new private file beside its place under a name nobody can guess, and renames it there. A
@@ -491,7 +491,7 @@ def publish(entry: Entry, text: String, program: Bytes) -> Bool
   body = text.bytes
   data = Bytes.concat([head(body.size).bytes, body, program])
   temporary = Paths.join(entry.folder, "#{Paths.last_part(entry.file)}.tmp-#{suffix.unwrap!}")
-  return CacheFiles.install(temporary, data, entry.file)
+  CacheFiles.install(temporary, data, entry.file)
 end
 
 # Both folders must be ones this program may trust (private_kind), or be made now. The .gitignore goes in `_build/`
@@ -504,7 +504,7 @@ def prepare_folder(entry: Entry) -> Result[Void]
   end
 
   try CacheFiles.private_folder(entry.folder, user)
-  return ok()
+  ok()
 end
 
 def head(size: Int) -> String
@@ -513,5 +513,5 @@ def head(size: Int) -> String
     digits = "0#{digits}"
   end
 
-  return "#{HEAD_WORD}#{digits}\n"
+  "#{HEAD_WORD}#{digits}\n"
 end

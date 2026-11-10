@@ -112,7 +112,7 @@ export def expand(opener: Tokens.Token, body: Tokens.EagBody) -> Diag.Outcome[Li
     word("EOF", "", at),
   ]
 
-  return Diag.Outcome.Done(appended(appended(head, flush(built, at).tokens), tail))
+  Diag.Outcome.Done(appended(appended(head, flush(built, at).tokens), tail))
 end
 
 # The tokens up to the first line of the block: `[0].map do |eag#n: Int|`, then the binding of the escaper when the
@@ -152,7 +152,7 @@ def block_head(built: Built, at: Source.Span) -> List[Tokens.Token]
     head = appended(appended(head, bound), built.escaper).push(word("NL", "\n", here))
   end
 
-  return appended(
+  appended(
     head,
     [
       name(Ast.EAG_PIECES, at),
@@ -177,8 +177,8 @@ def line_built(at: Source.Span, indent: Int, line: Tokens.EagLine, built: Built)
   end
 
   case split(line, cut)
-    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
-    Diag.Outcome.Done(parts) -> return emit(at, line, parts, built)
+    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
+    Diag.Outcome.Done(parts) -> emit(at, line, parts, built)
   end
 end
 
@@ -277,7 +277,7 @@ def split(line: Tokens.EagLine, cut: Int) -> Diag.Outcome[List[Part]]
     parts = parts.push(Part(kind: "text", text: rest, start: 0, trim: false))
   end
 
-  return Diag.Outcome.Done(parts)
+  Diag.Outcome.Done(parts)
 end
 
 # The error for the `<%` at index `open_at` of the line as written: the span runs to the end of the line.
@@ -289,7 +289,7 @@ def unterminated_tag(line: Tokens.EagLine, open_at: Int) -> Diag.Diagnostic
     column: line.text.length + 1,
   )
 
-  return Diag.fail(
+  Diag.fail(
     UNTERMINATED_TAG,
     "a tag has no end on its line",
     Source.Span(start: start, stop: stop),
@@ -330,7 +330,7 @@ def emit(at: Source.Span, line: Tokens.EagLine, parts: List[Part], built: Built)
     current = current.with(text: current.text.push("\n"), text_at: text_start(current, line))
   end
 
-  return Diag.Outcome.Done(current)
+  Diag.Outcome.Done(current)
 end
 
 # Whether a tag writes its value into the output.
@@ -349,7 +349,7 @@ def directed(line: Tokens.EagLine, part: Part, built: Built) -> Diag.Outcome[Bui
   end
 
   case code_tokens(line, part)
-    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
     Diag.Outcome.Done(code) ->
       if code.size < 2 or code[0].kind != "name" or code[0].lexeme != ESCAPE
         return Diag.Outcome.Failed(
@@ -357,12 +357,12 @@ def directed(line: Tokens.EagLine, part: Part, built: Built) -> Diag.Outcome[Bui
         )
       end
 
-      return Diag.Outcome.Done(built.with(escaper: code.drop(1), escaper_at: here))
+      Diag.Outcome.Done(built.with(escaper: code.drop(1), escaper_at: here))
   end
 end
 
 def directive_error(message: String, at: Source.Span) -> Diag.Diagnostic
-  return Diag.fail(
+  Diag.fail(
     DIRECTIVE,
     message,
     at,
@@ -376,12 +376,12 @@ def text_start(built: Built, line: Tokens.EagLine) -> Source.Span
 
   start = line.start
   stop = Source.Position(offset: start.offset + line.text.length, line: start.line, column: line.text.length + 1)
-  return Source.Span(start: start, stop: stop)
+  Source.Span(start: start, stop: stop)
 end
 
 # Whether the text parts of a line are all spaces.
 def blank_around?(parts: List[Part]) -> Bool
-  return parts.all? do |part: Part| part.kind != "text" or part.text.strip == "" end
+  parts.all? do |part: Part| part.kind != "text" or part.text.strip == "" end
 end
 
 # The blocks still open after the code of a tag: one more for each opener word at its start and each `do`, one fewer
@@ -405,11 +405,11 @@ def counted(built: Built, part: Part, code: List[Tokens.Token]) -> Diag.Outcome[
     end
   end
 
-  return Diag.Outcome.Done(open)
+  Diag.Outcome.Done(open)
 end
 
 def stray_end(at: Source.Span) -> Diag.Diagnostic
-  return Diag.fail(
+  Diag.fail(
     UNBALANCED,
     "an end with no if, for, while, case or do to close in this template",
     at,
@@ -418,7 +418,7 @@ def stray_end(at: Source.Span) -> Diag.Diagnostic
 end
 
 def unclosed(at: Source.Span) -> Diag.Diagnostic
-  return Diag.fail(
+  Diag.fail(
     UNBALANCED,
     "this tag opens a block that the template never ends",
     at,
@@ -452,7 +452,7 @@ def with_code(at: Source.Span, line: Tokens.EagLine, built: Built, part: Part, c
   end
 
   pushed = appended(appended(head.push(opened), code), tail)
-  return flushed.with(tokens: appended(flushed.tokens, pushed).push(word("NL", "\n", here)))
+  flushed.with(tokens: appended(flushed.tokens, pushed).push(word("NL", "\n", here)))
 end
 
 # The place of the code of a tag in the template, empty code included.
@@ -464,12 +464,12 @@ def tag_span(line: Tokens.EagLine, part: Part) -> Source.Span
     column: start.column + part.text.length,
   )
 
-  return Source.Span(start: start, stop: stop)
+  Source.Span(start: start, stop: stop)
 end
 
 # The tokens `eag#t = eag#t.push(`.
 def push_head(at: Source.Span) -> List[Tokens.Token]
-  return [
+  [
     name(Ast.EAG_PIECES, at),
     word("assign", "=", at),
     name(Ast.EAG_PIECES, at),
@@ -486,7 +486,7 @@ def flush(built: Built, at: Source.Span) -> Built
   where = built.text_at
   literal = Tokens.Token(kind: "string", lexeme: "\"\"", value: Tokens.Value.Text(built.text.join("")), span: where)
   pushed = push_head(where).push(literal).push(word("right-paren", ")", where)).push(word("NL", "\n", where))
-  return built.with(tokens: appended(built.tokens, pushed), text: [])
+  built.with(tokens: appended(built.tokens, pushed), text: [])
 end
 
 # The tokens of the code of a tag, lexed from its own text and moved to where it stands in the template, without the
@@ -494,21 +494,21 @@ end
 def code_tokens(line: Tokens.EagLine, part: Part) -> Diag.Outcome[List[Tokens.Token]]
   origin = Source.Position(offset: line.start.offset + part.start, line: line.start.line, column: part.start + 1)
   case Lexer.lex(part.text)
-    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem.with(span: moved_span(origin, problem.span)))
+    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem.with(span: moved_span(origin, problem.span)))
     Diag.Outcome.Done(tokens) ->
       kept = tokens.select do |token: Tokens.Token| token.kind != "NL" and token.kind != "EOF" end
-      return Diag.Outcome.Done(kept.map do |token: Tokens.Token| token.with(span: moved_span(origin, token.span)) end)
+      Diag.Outcome.Done(kept.map do |token: Tokens.Token| token.with(span: moved_span(origin, token.span)) end)
   end
 end
 
 def moved_span(origin: Source.Position, span: Source.Span) -> Source.Span
-  return Source.Span(start: moved(origin, span.start), stop: moved(origin, span.stop))
+  Source.Span(start: moved(origin, span.start), stop: moved(origin, span.stop))
 end
 
 # A position of the code of a tag, counted from the start of that code, as a position of the template. The code is on
 # one line, so the column moves by the column of the origin.
 def moved(origin: Source.Position, at: Source.Position) -> Source.Position
-  return Source.Position(
+  Source.Position(
     offset: origin.offset + at.offset,
     line: origin.line + at.line - 1,
     column: origin.column + at.column - 1,
@@ -522,17 +522,17 @@ def appended(list: List[Tokens.Token], items: List[Tokens.Token]) -> List[Tokens
     out = out.push(item)
   end
 
-  return out
+  out
 end
 
 def word(kind: String, lexeme: String, at: Source.Span) -> Tokens.Token
-  return Tokens.Token(kind: kind, lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: at)
+  Tokens.Token(kind: kind, lexeme: lexeme, value: Tokens.Value.Text(lexeme), span: at)
 end
 
 def name(text: String, at: Source.Span) -> Tokens.Token
-  return Tokens.Token(kind: "name", lexeme: text, value: Tokens.Value.Text(text), span: at)
+  Tokens.Token(kind: "name", lexeme: text, value: Tokens.Value.Text(text), span: at)
 end
 
 def number(value: Int, at: Source.Span) -> Tokens.Token
-  return Tokens.Token(kind: "integer", lexeme: "#{value}", value: Tokens.Value.Whole(value), span: at)
+  Tokens.Token(kind: "integer", lexeme: "#{value}", value: Tokens.Value.Whole(value), span: at)
 end

@@ -46,15 +46,15 @@ end
 export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Position.Asked) -> Diag.Outcome[Answer]
   module = linked.modules[0]
   case Position.locate(module.text, asked.line, asked.column)
-    Position.Located.Outside(span) -> return Diag.Outcome.Failed(Position.no_expression(asked, span))
+    Position.Located.Outside(span) -> Diag.Outcome.Failed(Position.no_expression(asked, span))
     Position.Located.At(offset) ->
       here = Position.character(offset, asked.line, asked.column)
       case Locals.find(module, checked.bound, offset)
         some(found) ->
           return Diag.Outcome.Failed(Position.no_expression(asked, here)) if found.local.kind == "discard"
 
-          return Diag.Outcome.Done(of_local(linked, checked, found.local))
-        none -> return of_name(linked, checked, asked, offset, here)
+          Diag.Outcome.Done(of_local(linked, checked, found.local))
+        none -> of_name(linked, checked, asked, offset, here)
       end
   end
 end
@@ -67,15 +67,15 @@ export def of_match(linked: Linker.Linked, checked: Checker.Checked, found: Symb
     defined = none
   end
 
-  return of_target(linked, checked, target_of(linked.modules, found), defined)
+  of_target(linked, checked, target_of(linked.modules, found), defined)
 end
 
 ## Whether the answer needs the types of every function to be complete: a field is read through the type of its target,
 ## and a builtin may be a method that resolved through one.
 export def needs_types?(found: Answer) -> Bool
   case found.definition
-    some(declared) -> return declared.kind == "field"
-    none -> return true
+    some(declared) -> declared.kind == "field"
+    none -> true
   end
 end
 
@@ -87,7 +87,7 @@ export def definition_of(modules: List[Linker.LinkedModule], target: Sites.Targe
     return Definitions.of_variant(modules, target.owner, target.name)
   end
 
-  return Definitions.of_name(modules, target.name)
+  Definitions.of_name(modules, target.name)
 end
 
 # A local: its binding is the definition, and its uses are in the function that holds it.
@@ -99,7 +99,7 @@ def of_local(linked: Linker.Linked, checked: Checker.Checked, local: Locals.Loca
     Reference(kind: "binding", function: function, file: module.file, span: span)
   end
 
-  return Answer(
+  Answer(
     definition: some(of_definition(module.key, Definitions.of_local(module, local, type))),
     builtin: "",
     references: once(uses.sort_by do |use: Reference| use.span.start.offset end),
@@ -108,7 +108,7 @@ end
 
 # The match of a local: it has no `exported` flag, no doc and nothing but its signature (`name: Type`).
 def of_definition(file: String, found: Definitions.Definition) -> Symbol.Match
-  return Symbol.Match(
+  Symbol.Match(
     kind: found.kind,
     name: found.name,
     owner: "",
@@ -131,7 +131,7 @@ def once(sorted: List[Reference]) -> List[Reference]
     end
   end
 
-  return out
+  out
 end
 
 # Anything else: the name of an import list or the place of the first file that the position is on, and the other
@@ -152,7 +152,7 @@ def of_name(
 
   own = Sites.of_module(root, checked, declared, "")
   case Sites.innermost(own, offset)
-    none -> return Diag.Outcome.Failed(Position.no_expression(asked, here))
+    none -> Diag.Outcome.Failed(Position.no_expression(asked, here))
     some(site) ->
       key = site.target.key
       found = used(root, own, key)
@@ -160,7 +160,7 @@ def of_name(
         found = found.concat(used(module, Sites.of_module(module, checked, declared, key), key))
       end
 
-      return Diag.Outcome.Done(named_answer(linked, site.target, none, found))
+      Diag.Outcome.Done(named_answer(linked, site.target, none, found))
   end
 end
 
@@ -174,7 +174,7 @@ def target_of(modules: List[Linker.LinkedModule], found: Symbol.Match) -> Sites.
     return Sites.member(found.kind, "#{prefix}#{found.owner}", found.name)
   end
 
-  return Sites.named("#{prefix}#{found.name}")
+  Sites.named("#{prefix}#{found.name}")
 end
 
 # The uses of `target` in every module. `defined` is its definition when the caller has it.
@@ -190,13 +190,13 @@ def of_target(
     found = found.concat(used(module, Sites.of_module(module, checked, declared, target.key), target.key))
   end
 
-  return named_answer(linked, target, defined, found)
+  named_answer(linked, target, defined, found)
 end
 
 # The references among the sites of `module`: those of the target `key` that are not its definition.
 def used(module: Linker.LinkedModule, sites: List[Sites.Site], key: String) -> List[Reference]
   found = sites.filter do |site: Sites.Site| site.target.key == key and site.kind != "definition" end
-  return found.map do |site: Sites.Site|
+  found.map do |site: Sites.Site|
     Reference(kind: site.kind, function: site.function, file: module.file, span: site.span)
   end
 end
@@ -220,16 +220,16 @@ def named_answer(
     some(_) -> builtin = ""
   end
 
-  return Answer(definition: definition, builtin: builtin, references: references)
+  Answer(definition: definition, builtin: builtin, references: references)
 end
 
 # The declaration of `target` as `symbol` lists it; `none` for a builtin.
 def defined(modules: List[Linker.LinkedModule], target: Sites.Target) -> Optional[Symbol.Match]
   case definition_of(modules, target)
-    none -> return none
+    none -> none
     some(declared) ->
       home = modules.filter do |module: Linker.LinkedModule| module.file == declared.file end
-      return Symbol.declared_at(home[0], declared.name_span)
+      Symbol.declared_at(home[0], declared.name_span)
   end
 end
 
@@ -244,5 +244,5 @@ def function_at(module: Linker.LinkedModule, offset: Int) -> String
     end
   end
 
-  return ""
+  ""
 end

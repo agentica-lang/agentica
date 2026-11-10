@@ -80,13 +80,13 @@ export BARE_NAMES = Set.new(ENTRIES.keys.filter do |name| !name.contains?(".") e
 ## True when the name is Family.Member.fn, a function of a member of a builtin family.
 export def member_function?(name: String) -> Bool
   parts = name.split(".")
-  return parts.size == 3 and member?(parts[0], parts[1])
+  parts.size == 3 and member?(parts[0], parts[1])
 end
 
 ## True when the family has the member: Family.Member names a group of functions or a builtin type.
 export def member?(family: String, member: String) -> Bool
   found = FAMILY_MEMBERS.get(family)
-  return found.some? and found.unwrap!.include?(member)
+  found.some? and found.unwrap!.include?(member)
 end
 
 ## True when Family.Member names a builtin type (a record, an enum or an opaque type) rather than a group of functions.
@@ -98,7 +98,7 @@ export def lookup(name: String) -> Optional[Model.Builtin] = ENTRIES.get(name)
 ## The form of a builtin that takes that many arguments, or an error when none does. A form with defaults takes every
 ## count from its required parameters to all of them; a form that takes exactly that many wins.
 export def form_for(entry: Model.Builtin, arity: Int) -> Result[Model.Builtin]
-  return form_among([entry].concat(entry.alternatives), arity)
+  form_among([entry].concat(entry.alternatives), arity)
 end
 
 ## The form for a call: block is true when its last argument is a block (do ... end). A block call takes the block form
@@ -109,7 +109,7 @@ export def form_for_call(entry: Model.Builtin, arity: Int, block: Bool) -> Resul
     return form_among(forms.filter do |form: Model.Builtin| takes_block?(form) end, arity)
   end
 
-  return form_for(entry, arity)
+  form_for(entry, arity)
 end
 
 ## The form for a call of that many arguments with no block: the entry alone for a builtin with a block form
@@ -117,20 +117,20 @@ end
 export def form_without_block(entry: Model.Builtin, arity: Int) -> Result[Model.Builtin]
   return form_among([entry], arity) if block_form?(entry)
 
-  return form_for(entry, arity)
+  form_for(entry, arity)
 end
 
 ## The form of the builtin name for a call with that many arguments, the last a block when block is true.
 export def call_ref(name: String, arity: Int, block: Bool) -> Result[Model.Builtin]
   entry = try lookup(name).to_result("unknown builtin")
-  return form_for_call(entry, arity, block)
+  form_for_call(entry, arity, block)
 end
 
 ## True for a form whose body is a function of the prelude (Rule.Prelude), such as the block form of File.open.
 export def prelude_form?(form: Model.Builtin) -> Bool
   case form.rule
-    Model.Rule.Prelude -> return true
-    _ -> return false
+    Model.Rule.Prelude -> true
+    _ -> false
   end
 end
 
@@ -139,7 +139,7 @@ end
 export def index_builtin(target: Types.Type) -> String
   return "Bytes.at" if Types.is?(target, "Bytes")
 
-  return ""
+  ""
 end
 
 ## True when some parameter of the form has a default.
@@ -148,7 +148,7 @@ export def defaulted?(form: Model.Builtin) -> Bool = first_default(form) < form.
 ## True when the last parameter of a form with defaults has none: it is an Fn, and the last argument (or the block)
 ## always goes to it, as in a function of the program (check/defaults.agc).
 export def fn_last?(form: Model.Builtin) -> Bool
-  return defaulted?(form) and !default_present?(form.parameters[form.parameters.size - 1].default)
+  defaulted?(form) and !default_present?(form.parameters[form.parameters.size - 1].default)
 end
 
 ## The fewest arguments a call of the form takes: the parameters before the first default, and the last Fn after them.
@@ -156,7 +156,7 @@ export def required_count(form: Model.Builtin) -> Int
   first = first_default(form)
   return first + 1 if fn_last?(form)
 
-  return first
+  first
 end
 
 ## What a call of the form expects: `2`, or `1 to 2` when the form has defaults. skipped leaves out the receiver of a
@@ -165,13 +165,13 @@ export def arity_text(form: Model.Builtin, skipped: Int) -> String
   total = form.parameters.size - skipped
   return total.to_s if !defaulted?(form)
 
-  return "#{required_count(form) - skipped} to #{total}"
+  "#{required_count(form) - skipped} to #{total}"
 end
 
 ## The form of the builtin name that takes that many arguments (builtin-ref with an arity).
 export def ref(name: String, arity: Int) -> Result[Model.Builtin]
   entry = try lookup(name).to_result("unknown builtin")
-  return form_for(entry, arity)
+  form_for(entry, arity)
 end
 
 ## True for a name inside a std-only module, such as HttpWire.service.
@@ -180,13 +180,13 @@ export def std_only_name?(name: String) -> Bool = STD_ONLY.has_key?(module_of(na
 ## The signature of every form of a builtin, one per line: name(param: Type, ...) -> Result.
 export def signature(entry: Model.Builtin) -> String
   forms = [entry].concat(entry.alternatives)
-  return forms.map do |form: Model.Builtin| form_signature(form) end.join("\n")
+  forms.map do |form: Model.Builtin| form_signature(form) end.join("\n")
 end
 
 ## The signature of one form.
 export def form_signature(form: Model.Builtin) -> String
   parameters = form.parameters.map do |parameter: Model.Named| parameter_text(parameter) end
-  return "#{form.name}(#{parameters.join(", ")}) -> #{Types.to_text(form.result)}"
+  "#{form.name}(#{parameters.join(", ")}) -> #{Types.to_text(form.result)}"
 end
 
 ## A parameter as a signature writes it: `level: Int = 6`.
@@ -194,33 +194,33 @@ export def parameter_text(parameter: Model.Named) -> String
   typed = "#{parameter.name}: #{Types.to_text(parameter.type)}"
   return typed if !default_present?(parameter.default)
 
-  return "#{typed} = #{default_text(parameter.default)}"
+  "#{typed} = #{default_text(parameter.default)}"
 end
 
 ## A default as the source writes it: 6, 0.5, "x", true, nil, [], {}, "".bytes, none, Enum.Variant or Record(); ""
 ## for no default.
 export def default_text(value: Model.Default) -> String
   case value
-    Model.Default.Absent -> return ""
-    Model.Default.Whole(number) -> return number.to_s
-    Model.Default.Real(number) -> return number.to_s
-    Model.Default.Text(text) -> return Text.quote(text)
-    Model.Default.Flag(flag) -> return flag.to_s
-    Model.Default.Nothing -> return "nil"
-    Model.Default.EmptyList -> return "[]"
-    Model.Default.EmptyMap -> return "{}"
-    Model.Default.EmptyBytes -> return "\"\".bytes"
-    Model.Default.None -> return "none"
-    Model.Default.Variant(name) -> return name
-    Model.Default.Fields(name) -> return "#{name}()"
+    Model.Default.Absent -> ""
+    Model.Default.Whole(number) -> number.to_s
+    Model.Default.Real(number) -> number.to_s
+    Model.Default.Text(text) -> Text.quote(text)
+    Model.Default.Flag(flag) -> flag.to_s
+    Model.Default.Nothing -> "nil"
+    Model.Default.EmptyList -> "[]"
+    Model.Default.EmptyMap -> "{}"
+    Model.Default.EmptyBytes -> "\"\".bytes"
+    Model.Default.None -> "none"
+    Model.Default.Variant(name) -> name
+    Model.Default.Fields(name) -> "#{name}()"
   end
 end
 
 ## True for a default (not Absent).
 export def default_present?(value: Model.Default) -> Bool
   case value
-    Model.Default.Absent -> return false
-    _ -> return true
+    Model.Default.Absent -> false
+    _ -> true
   end
 end
 
@@ -233,7 +233,7 @@ export def record_defaults() -> Map[String, Set[String]]
     found = found.put(record.name, Set.new(defaulted.map do |field: Model.Named| field.name end))
   end
 
-  return found
+  found
 end
 
 ## The builtin records with a field whose default is `none`: a program that builds one needs the Optional enum in its
@@ -247,7 +247,7 @@ export def none_default_records() -> Set[String]
     end
   end
 
-  return Set.new(names)
+  Set.new(names)
 end
 
 ## The problem with the defaults of a record field, or "" when its default fits its type (default_fits?).
@@ -255,7 +255,7 @@ export def record_default_problem(record: String, field: Model.Named) -> String
   return "" if default_fits?(field)
 
   written = Types.to_text(field.type)
-  return "the default of #{record}.#{field.name} is not #{article(written)} #{written}"
+  "the default of #{record}.#{field.name} is not #{article(written)} #{written}"
 end
 
 ## The problem with the defaults of a builtin, or "" when it has none. A default is for a Plain or Prelude builtin with
@@ -276,7 +276,7 @@ export def default_problem(entry: Model.Builtin) -> String
   end
 
   # The block form repeats the parameters of the entry, so its own last Fn is the only parameter left to check.
-  return form_default_problem(forms[forms.size - 1])
+  form_default_problem(forms[forms.size - 1])
 end
 
 ## The builtin enums that some builtin gives a default variant of: the lowering keeps them in the tables of every
@@ -293,7 +293,7 @@ export def default_enums() -> Set[String]
     end
   end
 
-  return Set.new(names)
+  Set.new(names)
 end
 
 ## The builtin records that a call of the builtin named `name` may build from a Fields default (Process.Options for
@@ -310,14 +310,14 @@ export def default_records(name: String) -> List[String]
     end
   end
 
-  return found
+  found
 end
 
 # True for the `none` default.
 def none_default?(value: Model.Default) -> Bool
   case value
-    Model.Default.None -> return true
-    _ -> return false
+    Model.Default.None -> true
+    _ -> false
   end
 end
 
@@ -339,7 +339,7 @@ def form_default_problem(entry: Model.Builtin) -> String
     at += 1
   end
 
-  return ""
+  ""
 end
 
 # The first form that takes exactly that many arguments, else the first whose defaults let it take that many.
@@ -352,12 +352,12 @@ def form_among(forms: List[Model.Builtin], arity: Int) -> Result[Model.Builtin]
     return ok(form) if arity >= required_count(form) and arity < form.parameters.size
   end
 
-  return error("no form with that arity")
+  error("no form with that arity")
 end
 
 # True when the last parameter of the form is a function, which a block fills.
 def takes_block?(form: Model.Builtin) -> Bool
-  return form.parameters.size > 0 and Types.is?(form.parameters[form.parameters.size - 1].type, "Fn")
+  form.parameters.size > 0 and Types.is?(form.parameters[form.parameters.size - 1].type, "Fn")
 end
 
 # True for a builtin whose one alternative is its block form: the same parameters and defaults with a last Fn after
@@ -375,7 +375,7 @@ def block_form?(entry: Model.Builtin) -> Bool
     index += 1
   end
 
-  return true
+  true
 end
 
 # The index of the first parameter with a default, or the number of parameters when none has one.
@@ -387,15 +387,15 @@ def first_default(form: Model.Builtin) -> Int
     at += 1
   end
 
-  return at
+  at
 end
 
 # True for the Plain and Prelude rules: the arguments are checked against the parameters, one each.
 def takes_defaults?(rule: Model.Rule) -> Bool
   case rule
-    Model.Rule.Plain -> return true
-    Model.Rule.Prelude -> return true
-    _ -> return false
+    Model.Rule.Plain -> true
+    Model.Rule.Prelude -> true
+    _ -> false
   end
 end
 
@@ -403,18 +403,18 @@ end
 def default_fits?(parameter: Model.Named) -> Bool
   type = parameter.type
   case parameter.default
-    Model.Default.Absent -> return true
-    Model.Default.Whole(_) -> return Types.is?(type, "Int")
-    Model.Default.Real(_) -> return Types.is?(type, "Float")
-    Model.Default.Text(_) -> return Types.is?(type, "String")
-    Model.Default.Flag(_) -> return Types.is?(type, "Bool")
-    Model.Default.Nothing -> return Types.is?(type, "Nil")
-    Model.Default.EmptyList -> return Types.is?(type, "List")
-    Model.Default.EmptyMap -> return Types.is?(type, "Map")
-    Model.Default.EmptyBytes -> return Types.is?(type, "Bytes")
-    Model.Default.None -> return Types.is?(type, "Optional")
-    Model.Default.Variant(name) -> return variant_fits?(type, name)
-    Model.Default.Fields(name) -> return fields_fit?(type, name)
+    Model.Default.Absent -> true
+    Model.Default.Whole(_) -> Types.is?(type, "Int")
+    Model.Default.Real(_) -> Types.is?(type, "Float")
+    Model.Default.Text(_) -> Types.is?(type, "String")
+    Model.Default.Flag(_) -> Types.is?(type, "Bool")
+    Model.Default.Nothing -> Types.is?(type, "Nil")
+    Model.Default.EmptyList -> Types.is?(type, "List")
+    Model.Default.EmptyMap -> Types.is?(type, "Map")
+    Model.Default.EmptyBytes -> Types.is?(type, "Bytes")
+    Model.Default.None -> Types.is?(type, "Optional")
+    Model.Default.Variant(name) -> variant_fits?(type, name)
+    Model.Default.Fields(name) -> fields_fit?(type, name)
   end
 end
 
@@ -425,30 +425,28 @@ def variant_fits?(type: Types.Type, name: String) -> Bool
     return false
   end
 
-  return ENUMS[parts[0]].variants.any? do |variant: Model.Variant|
-    variant.name == parts[1] and variant.payload.size == 0
-  end
+  ENUMS[parts[0]].variants.any? do |variant: Model.Variant| variant.name == parts[1] and variant.payload.size == 0 end
 end
 
 # True when the type is the builtin record of that name and each of its fields has a default.
 def fields_fit?(type: Types.Type, name: String) -> Bool
   return false if !Types.is?(type, "Struct") or Types.name(type) != name or !RECORDS.has_key?(name)
 
-  return RECORDS[name].all? do |field: Model.Named| default_present?(field.default) end
+  RECORDS[name].all? do |field: Model.Named| default_present?(field.default) end
 end
 
 # "an" before a vowel, else "a".
 def article(word: String) -> String
   return "an" if "AEIOU".contains?(word.slice(0, 1))
 
-  return "a"
+  "a"
 end
 
 # The enum of a default variant, or "".
 def variant_enum(value: Model.Default) -> String
   case value
-    Model.Default.Variant(name) -> return name.split(".")[0]
-    _ -> return ""
+    Model.Default.Variant(name) -> name.split(".")[0]
+    _ -> ""
   end
 end
 
@@ -456,5 +454,5 @@ def module_of(name: String) -> String
   dot = name.index_of(".")
   return name.slice(0, dot.unwrap!) if dot.some?
 
-  return ""
+  ""
 end

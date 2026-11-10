@@ -69,7 +69,7 @@ export def run(options: Opts.Options, settings: Env.Settings) -> Report.Ending
   RunDir.sweep(temporary.unwrap!, run_directory)
   ending = inside(run_directory.path, options, settings, temporary.unwrap!)
   RunDir.release(run_directory)
-  return ending
+  ending
 end
 
 # Whether this binary carries the runner and the default step program, compiled with the std/ sources.
@@ -85,13 +85,13 @@ def inside(directory: String, options: Opts.Options, settings: Env.Settings, tem
   case compile_runner(directory, settings)
     Pipeline.Compiled.Rejected(problem) ->
       message = "the BDD runner does not compile: #{problem.message}"
-      return Report.infrastructure(message, options.vm, options)
+      Report.infrastructure(message, options.vm, options)
     Pipeline.Compiled.Bytes(bytes) ->
       file = "#{directory}/runner.agcb"
       written = write_bytes(file, bytes)
       return Report.infrastructure(written.message, temporary, options) if !written.ok?
 
-      return ended(prepare_and_run(directory, options, settings, Runner.Program.File(file)), options, temporary)
+      ended(prepare_and_run(directory, options, settings, Runner.Program.File(file)), options, temporary)
   end
 end
 
@@ -99,7 +99,7 @@ end
 def ended(ran: Result[Report.Ending], options: Opts.Options, temporary: String) -> Report.Ending
   return Report.infrastructure(ran.message, temporary, options) if !ran.ok?
 
-  return ran.unwrap!
+  ran.unwrap!
 end
 
 def compile_runner(directory: String, settings: Env.Settings) -> Pipeline.Compiled
@@ -107,7 +107,7 @@ def compile_runner(directory: String, settings: Env.Settings) -> Pipeline.Compil
   written = write_text(source, RUNNER_ROOT)
   return Pipeline.Compiled.Rejected(Report.located(source, "RUNTIME-BDD-INFRA", written.message)) if !written.ok?
 
-  return Compile.file(source, settings, "cannot read the runner", false)
+  Compile.file(source, settings, "cannot read the runner", false)
 end
 
 # Compiles the step program and the tests, writes the files the runner reads, runs it and reads its report. An error
@@ -172,8 +172,8 @@ def prepare_and_run(
   try write_text("#{directory}/config.jsonl", lines)
   ran = Runner.run(options, runner, "#{directory}/config.jsonl", config.report_path)
   case ran
-    Runner.Ran.Reported(code, text) -> return ok(Report.Ending(code: code, text: "#{text}\n"))
-    Runner.Ran.Failed(message) -> return ok(Report.infrastructure(message, options.vm, options))
+    Runner.Ran.Reported(code, text) -> ok(Report.Ending(code: code, text: "#{text}\n"))
+    Runner.Ran.Failed(message) -> ok(Report.infrastructure(message, options.vm, options))
   end
 end
 
@@ -190,7 +190,7 @@ def default_steps(searched: List[String]) -> List[String]
     end
   end
 
-  return found
+  found
 end
 
 # Whether `path` is one of `features` or a folder that holds one. Both are resolved as Discover.discover resolves them.
@@ -201,7 +201,7 @@ def holds_feature?(path: String, features: List[Discover.Entry]) -> Bool
     below = "#{below}/"
   end
 
-  return features.any? do |entry: Discover.Entry| entry.path == resolved or entry.path.starts_with?(below) end
+  features.any? do |entry: Discover.Entry| entry.path == resolved or entry.path.starts_with?(below) end
 end
 
 # The nearest `steps.agc` for one path, or "" when there is none. A path that cannot be resolved has none.
@@ -232,7 +232,7 @@ def steps_near(path: String, here: String) -> String
     folder = parent
   end
 
-  return ""
+  ""
 end
 
 # The paths of the empty-run report: the first path given, or the first default folder.
@@ -242,13 +242,13 @@ def empty_path(given: List[String]) -> String
     first = given[0]
   end
 
-  return Path.resolve(first).unwrap_or(first)
+  Path.resolve(first).unwrap_or(first)
 end
 
 def empty_message(given: List[String]) -> String
   return "no .feature or *_test.agc files found: neither specs/ nor test/ exists" if given.size == 0
 
-  return "no .feature or *_test.agc files found"
+  "no .feature or *_test.agc files found"
 end
 
 # The step program: the file of --steps, or the default one written in the run directory.
@@ -272,10 +272,10 @@ def compile_steps(directory: String, options: Opts.Options, settings: Env.Settin
   case compiled
     Pipeline.Compiled.Rejected(problem) ->
       error_text = JSON.encode(DiagnosticJson.json(problem))
-      return ok(Steps(bytecode: bytecode, source: source, root: root, failure: error_text, given: given))
+      ok(Steps(bytecode: bytecode, source: source, root: root, failure: error_text, given: given))
     Pipeline.Compiled.Bytes(bytes) ->
       try write_bytes(bytecode, bytes)
-      return ok(Steps(bytecode: bytecode, source: source, root: root, failure: "", given: given))
+      ok(Steps(bytecode: bytecode, source: source, root: root, failure: "", given: given))
   end
 end
 
@@ -301,7 +301,7 @@ def compile_tests(
     index += 1
   end
 
-  return ok(out)
+  ok(out)
 end
 
 def compile_test(entry: Discover.Entry, output: String, settings: Env.Settings, cached: Bool) -> Result[Discover.Entry]
@@ -312,5 +312,5 @@ def compile_test(entry: Discover.Entry, output: String, settings: Env.Settings, 
     Pipeline.Compiled.Bytes(bytes) -> try write_bytes(output, bytes)
   end
 
-  return ok(entry.with(bytecode: output, source_root: SourceRoot.option(entry.path), front_end: front_end))
+  ok(entry.with(bytecode: output, source_root: SourceRoot.option(entry.path), front_end: front_end))
 end

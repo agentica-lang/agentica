@@ -38,13 +38,13 @@ export def link(roots: List[SymbolPaths.Root], settings: Env.Settings, parses: M
     none -> modules = modules
   end
 
-  return Linked(program: programs.linked, modules: modules, skipped: skipped)
+  Linked(program: programs.linked, modules: modules, skipped: skipped)
 end
 
 # The root that was typed as `typed`.
 def rooted(roots: List[SymbolPaths.Root], typed: String) -> SymbolPaths.Root
   named = roots.filter do |root: SymbolPaths.Root| root.typed == typed end
-  return named[0]
+  named[0]
 end
 
 # The problem of a failure, as `check` prints it. A problem in the root file names it as it was typed (the linker knows
@@ -56,5 +56,5 @@ def problem_of(failure: Failure.Failure, root: SymbolPaths.Root) -> Problems.Pro
     return problem.with(key_path: failure.key_path, file: root.typed)
   end
 
-  return problem.with(key_path: failure.key_path)
+  problem.with(key_path: failure.key_path)
 end

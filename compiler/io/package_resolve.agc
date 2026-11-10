@@ -112,7 +112,7 @@ export def resolve(
     queue = queue.concat(more)
   end
 
-  return ok(Resolved(packages: found.values, asked: asked))
+  ok(Resolved(packages: found.values, asked: asked))
 end
 
 ## The native artifacts of `manifest` and every package of `packages`: one row per alias on every system the
@@ -167,12 +167,12 @@ export def resolve_artifacts(
     return error(PackageFetch.fail(place, "PKG-FETCH", "", message, "set HOME or XDG_CACHE_HOME"))
   end
 
-  return ok(found.values.map do |entry: Found_artifact| entry.artifact end)
+  ok(found.values.map do |entry: Found_artifact| entry.artifact end)
 end
 
 # A package that is read in place and never fetched: a `path`, or a member of the workspace.
 def in_place?(members: Members.Members, source: GitSource.Source) -> Bool
-  return GitSource.local?(source) or Members.member?(members, source)
+  GitSource.local?(source) or Members.member?(members, source)
 end
 
 # Records that the package `wanted.by` asked for a source of an overridden name other than the one that won.
@@ -184,7 +184,7 @@ def note_asked(asked: Map[String, List[String]], winner: Lock.Locked, wanted: Wa
     names = asked[wanted.name]
   end
 
-  return asked.put(wanted.name, names.push(wanted.by))
+  asked.put(wanted.name, names.push(wanted.by))
 end
 
 # Every downloaded row of `manifest` (lock key `package_name`), in `found` by (package, library, system).
@@ -212,12 +212,12 @@ def collect_manifest(
     end
   end
 
-  return found
+  found
 end
 
 def artifact_key(artifact: Lock.Artifact) -> String
   sep = String.from_code(0)
-  return "#{artifact.package}#{sep}#{artifact.library}#{sep}#{artifact.system}"
+  "#{artifact.package}#{sep}#{artifact.library}#{sep}#{artifact.system}"
 end
 
 # One name must stand for one source in a build, whoever asks for it.
@@ -228,7 +228,7 @@ def agree(locked: Lock.Locked, wanted: Wanted) -> Result[Void]
   message = "#{wanted.name} is #{asked}, but another package has it at #{GitSource.describe(locked.source)}"
   help = Failure.hint(Project.CONFLICT_HELP)
   path = Reader.child("dependencies", wanted.name)
-  return error(Failure.fail_key(wanted.asked_in, path, "PKG-SOURCE-CONFLICT", message, help))
+  error(Failure.fail_key(wanted.asked_in, path, "PKG-SOURCE-CONFLICT", message, help))
 end
 
 # A `path` and a member of the workspace are locked as such, with no fetch. Else keeps the locked entry when it is the
@@ -280,11 +280,11 @@ def settle(
 
   place = PackageFetch.Place(file: wanted.asked_in, entry: Reader.child("dependencies", wanted.name))
   fetched = try PackageFetch.resolve(settings.workspace, cache, place, wanted.name, wanted.source)
-  return ok(fetched.with(override: wanted.override))
+  ok(fetched.with(override: wanted.override))
 end
 
 def moves?(refresh: Refresh, wanted: Wanted) -> Bool
-  return wanted.source.tag != "" and (refresh.all or refresh.name == wanted.name)
+  wanted.source.tag != "" and (refresh.all or refresh.name == wanted.name)
 end
 
 # The dependencies in the manifest of a package that is in the cache (or in the folder of a member or a path); none
@@ -306,7 +306,7 @@ def asked_by(
 
   manifest = try Manifest.read(settings.workspace, file)
   try Manifest.require_package(manifest)
-  return ok(
+  ok(
     manifest.dependencies.map do |dependency|
       Wanted(name: dependency.name, source: dependency.source, asked_in: file, by: locked.name, override: false)
     end,

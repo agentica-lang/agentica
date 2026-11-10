@@ -58,7 +58,7 @@ export def resolve(cx: Context, name: String, want: Want, span: Source.Span, hin
 
   return ok(name) if builtin_name?(cx, name, want)
 
-  return ok(cx.me.prefix + name)
+  ok(cx.me.prefix + name)
 end
 
 ## True when the name is a builtin family (OpenSSL) in this file: its members are written Family.Member. An import
@@ -67,17 +67,17 @@ export def family?(cx: Context, name: String) -> Bool = FAMILY_MEMBERS.has_key?(
 
 ## True when the file declares an enum with this name.
 export def local_enum?(cx: Context, name: String) -> Bool
-  return cx.me.names.has_key?(name) and Declarations.enum?(cx.me.names[name])
+  cx.me.names.has_key?(name) and Declarations.enum?(cx.me.names[name])
 end
 
 ## True when the module exports an enum with this name.
 export def exports_enum?(module: Modules.Module, name: String) -> Bool
-  return module.public.has_key?(name) and Declarations.enum?(module.public[name])
+  module.public.has_key?(name) and Declarations.enum?(module.public[name])
 end
 
 ## True when the file imports an enum by name under this name.
 export def named_enum?(cx: Context, name: String) -> Bool
-  return cx.me.named.has_key?(name) and exports_enum?(cx.modules[cx.me.named[name].target], cx.me.named[name].name)
+  cx.me.named.has_key?(name) and exports_enum?(cx.modules[cx.me.named[name].target], cx.me.named[name].name)
 end
 
 ## The linked name of the constant that a name reads in this file (declared here, or imported by name), or "" when the
@@ -91,7 +91,7 @@ export def constant_identity(cx: Context, name: String) -> String
     return Modules.linked_name(cx.modules, target, entry.name) if Declarations.constant?(target.public[entry.name])
   end
 
-  return ""
+  ""
 end
 
 ## The linked name of the constant that Alias.NAME reads, or "" when the alias is unknown or the module it names does
@@ -107,7 +107,7 @@ export def alias_constant_identity(cx: Context, name: String) -> String
     return Modules.linked_name(cx.modules, target, parts[1])
   end
 
-  return ""
+  ""
 end
 
 ## True when the name is a type that the file declares or imports by name (a struct, enum, type alias or resource), or
@@ -120,13 +120,13 @@ export def declared_type?(cx: Context, name: String) -> Bool
     return right_kind?(cx.modules[entry.target].public[entry.name], Want.Type)
   end
 
-  return RECORDS.has_key?(name)
+  RECORDS.has_key?(name)
 end
 
 ## A name in capitals that no declaration, import, alias or reserved type of the file owns: a constant that does not
 ## exist.
 export def unknown_constant?(cx: Context, name: String) -> Bool
-  return (
+  (
     Base.constant_name?(name) and
     !RESERVED.include?(name) and
     !cx.me.names.has_key?(name) and
@@ -158,7 +158,7 @@ export def unknown_constant_failure(cx: Context, name: String, span: Source.Span
     none -> help = Diag.Help.NoHelp
   end
 
-  return Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "unknown name \"#{name}\"", help)
+  Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "unknown name \"#{name}\"", help)
 end
 
 ## The name in the linked program of a declaration of the file.
@@ -167,9 +167,9 @@ export def identity(cx: Context, name: String) -> String = cx.me.prefix + name
 # A reserved type, a builtin enum (and Result and Optional), or a bare builtin function keeps its name.
 def builtin_name?(cx: Context, name: String, want: Want) -> Bool
   case want
-    Want.Type -> return RESERVED.include?(name)
-    Want.Enum -> return name == "Result" or name == "Optional" or ENUMS.has_key?(name)
-    Want.Function -> return BARE_NAMES.include?(name)
+    Want.Type -> RESERVED.include?(name)
+    Want.Enum -> name == "Result" or name == "Optional" or ENUMS.has_key?(name)
+    Want.Function -> BARE_NAMES.include?(name)
   end
 end
 
@@ -193,9 +193,7 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
     message = "JSON.Codec no longer exists"
   end
 
-  return error(
-    Failure.fail_at(site(cx, span), "CHECK-IMPORT-NAME", message, Failure.hint(alias_help(alias, member, hint))),
-  )
+  error(Failure.fail_at(site(cx, span), "CHECK-IMPORT-NAME", message, Failure.hint(alias_help(alias, member, hint))))
 end
 
 # Family.Member: a builtin type of the family where a type is wanted, or a function of the family itself
@@ -212,7 +210,7 @@ def family_member(cx: Context, family: String, member: String, want: Want, span:
     return error(not_a_type(cx, name, name, span))
   end
 
-  return error(unknown_member(cx, family, member, span))
+  error(unknown_member(cx, family, member, span))
 end
 
 # Family.Member.fn: the builtin function of a member, which the checker judges (an unknown fn there is an unknown
@@ -223,13 +221,13 @@ def member_function(cx: Context, parts: List[String], want: Want, span: Source.S
   name = parts.join(".")
   return error(not_a_type(cx, name, "#{parts[0]}.#{parts[1]}", span)) if !function_wanted?(want)
 
-  return ok(name)
+  ok(name)
 end
 
 # CHECK-UNKNOWN-TYPE for a name of a family that is no type, where member is the group of functions it names.
 def not_a_type(cx: Context, name: String, member: String, span: Source.Span) -> String
   help = "#{member} is a group of functions, such as #{first_function(member)}"
-  return Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-TYPE", "#{name} is not a type", Failure.hint(help))
+  Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-TYPE", "#{name} is not a type", Failure.hint(help))
 end
 
 # CHECK-UNKNOWN-NAME for Family.name when the family has no such member: the closest member, a member whose function
@@ -247,12 +245,7 @@ def unknown_member(cx: Context, family: String, member: String, span: Source.Spa
     end
   end
 
-  return Failure.fail_at(
-    site(cx, span),
-    "CHECK-UNKNOWN-NAME",
-    "#{family} has no member \"#{member}\"",
-    Failure.hint(help),
-  )
+  Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "#{family} has no member \"#{member}\"", Failure.hint(help))
 end
 
 # The first function, by name, of a member that is a group of functions: an example for a help.
@@ -260,49 +253,44 @@ def first_function(member: String) -> String
   found = ENTRIES.keys.filter do |name: String| name.starts_with?("#{member}.") end
   return "#{member}.fn" if found.size == 0
 
-  return found.sort[0]
+  found.sort[0]
 end
 
 # A builtin record of a std-only module, such as HttpWire.Head: a type that only std/ can name, so it reserves no name
 # in user programs.
 def std_record?(alias: String, member: String, want: Want) -> Bool
   case want
-    Want.Type -> return STD_ONLY.has_key?(alias) and RECORDS.has_key?("#{alias}.#{member}")
-    _ -> return false
+    Want.Type -> STD_ONLY.has_key?(alias) and RECORDS.has_key?("#{alias}.#{member}")
+    _ -> false
   end
 end
 
 # True for one of MODULE_TYPES where a type is wanted.
 def builtin_type?(alias: String, member: String, want: Want) -> Bool
   case want
-    Want.Type -> return MODULE_TYPES.include?("#{alias}.#{member}")
-    _ -> return false
+    Want.Type -> MODULE_TYPES.include?("#{alias}.#{member}")
+    _ -> false
   end
 end
 
 def type_wanted?(want: Want) -> Bool
   case want
-    Want.Type -> return true
-    _ -> return false
+    Want.Type -> true
+    _ -> false
   end
 end
 
 def function_wanted?(want: Want) -> Bool
   case want
-    Want.Function -> return true
-    _ -> return false
+    Want.Function -> true
+    _ -> false
   end
 end
 
 def std_only_failure(cx: Context, alias: String, member: String, span: Source.Span) -> String
   wrapper = STD_ONLY[alias]
   help = "#{alias} is internal to #{wrapper[0]}; use import #{wrapper[1]} from \"#{wrapper[0]}\""
-  return Failure.fail_at(
-    site(cx, span),
-    "CHECK-UNKNOWN-NAME",
-    "unknown function \"#{alias}.#{member}\"",
-    Failure.hint(help),
-  )
+  Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "unknown function \"#{alias}.#{member}\"", Failure.hint(help))
 end
 
 def alias_help(alias: String, member: String, hint: Bool) -> String
@@ -327,7 +315,7 @@ def alias_help(alias: String, member: String, hint: Bool) -> String
     )
   end
 
-  return "import a module with import #{alias} from \"path\""
+  "import a module with import #{alias} from \"path\""
 end
 
 # A name bound by import {Name} from "path": the linked name of the export, if it is of the kind wanted. The import
@@ -340,7 +328,7 @@ def imported_by_name(cx: Context, entry: Modules.Named, want: Want, span: Source
     )
   end
 
-  return ok(Modules.linked_name(cx.modules, target, entry.name))
+  ok(Modules.linked_name(cx.modules, target, entry.name))
 end
 
 # Only exports are candidates, so a private name is never suggested.
@@ -362,19 +350,19 @@ def imported(cx: Context, target: Modules.Module, member: String, want: Want, sp
     )
   end
 
-  return ok(Modules.linked_name(cx.modules, target, member))
+  ok(Modules.linked_name(cx.modules, target, member))
 end
 
 def right_kind?(kind: Declarations.Kind, want: Want) -> Bool
   case want
     Want.Type ->
-      return (
+      (
         Declarations.struct?(kind) or
         Declarations.enum?(kind) or
         Declarations.type_alias?(kind) or
         Declarations.resource?(kind)
       )
-    Want.Enum -> return Declarations.enum?(kind)
-    Want.Function -> return Declarations.function?(kind)
+    Want.Enum -> Declarations.enum?(kind)
+    Want.Function -> Declarations.function?(kind)
   end
 end

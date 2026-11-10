@@ -92,7 +92,7 @@ export def text_digest(text: String) -> String = OpenSSL.Digest.sha256_hexdigest
 ## digests of the files it imports, in the order of its import lines.
 export def tree_digest(shape: String, digest: String, imported: List[String]) -> String
   pieces = [FORMAT, shape, digest].concat(imported)
-  return OpenSSL.Digest.sha256_hexdigest(pieces.map do |text: String| piece(text) end.join("").bytes)
+  OpenSSL.Digest.sha256_hexdigest(pieces.map do |text: String| piece(text) end.join("").bytes)
 end
 
 ## Every piece is written with its length, so two different lists never give one text.
@@ -108,7 +108,7 @@ export def constant_names(program: Ast.Program) -> List[String]
     end
   end
 
-  return names.sort
+  names.sort
 end
 
 ## The entry the cache holds for the file `key` if it is for the text with `digest`, else `none`.
@@ -118,7 +118,7 @@ export def find(cache: Workspace.CheckCache, key: String, digest: String) -> Opt
   raw = cache.read.call(key)
   return none if !raw.ok?
 
-  return decode(raw.unwrap!, digest)
+  decode(raw.unwrap!, digest)
 end
 
 ## The text of an entry for the text with `digest`: five lines of head, the stub, then one line for each constant.
@@ -140,14 +140,14 @@ export def encode(digest: String, entry: Entry) -> String
     "\n#{CONSTANT_WORD} #{name} #{escaped(entry.constants[name])}"
   end
 
-  return head + "\n" + entry.stub + lines.join("")
+  head + "\n" + entry.stub + lines.join("")
 end
 
 ## Keeps the entry of the file `key` for the text with `digest`. False when the machine could not.
 export def store(cache: Workspace.CheckCache, key: String, digest: String, entry: Entry) -> Bool
   return false if !cache.on
 
-  return cache.write.call(key, encode(digest, entry))
+  cache.write.call(key, encode(digest, entry))
 end
 
 ## The stub of `text`, which `program` is the parse of, or `none` when there is none worth keeping: nothing to blank,
@@ -167,7 +167,7 @@ export def stub_of(text: String, program: Ast.Program) -> Optional[String]
   stub = pieces.push(text.slice(at, text.length - at)).join("")
   return some(stub) if stub.length == text.length and same_declarations?(program, stub)
 
-  return none
+  none
 end
 
 # The entry in `raw` if it is well formed and for `digest`. Every length is looked at before a slice is taken: an entry
@@ -203,7 +203,7 @@ def decode(raw: String, digest: String) -> Optional[Entry]
     tree = ""
   end
 
-  return some(Entry(tree: tree, styled: styled, stub: stub, constants: constants.unwrap!))
+  some(Entry(tree: tree, styled: styled, stub: stub, constants: constants.unwrap!))
 end
 
 # The constants of the tail of an entry: nothing, or a line feed and a `const NAME TYPE` line for each.
@@ -231,13 +231,13 @@ def decode_constants(tail: String) -> Result[Map[String, String]]
     found = found.put(name, unescaped(rest.slice(space.unwrap! + 1, rest.length - space.unwrap! - 1)))
   end
 
-  return ok(found)
+  ok(found)
 end
 
 def styled_digit(styled: Bool) -> String
   return "1" if styled
 
-  return "0"
+  "0"
 end
 
 # A type text on one line: the key of a file may hold a line feed.
@@ -267,7 +267,7 @@ def cuts_of(text: String, declarations: List[Ast.Decl]) -> Result[List[Cut]]
     end
   end
 
-  return ok(cuts)
+  ok(cuts)
 end
 
 # Whether the stub can leave out the whole of a function: a private one, which the importers of its file cannot name
@@ -277,8 +277,8 @@ def droppable?(wrapped: Ast.Decl, node: Ast.FunctionDecl) -> Bool
   return false if Declarations.exported?(wrapped)
 
   case node.native
-    some(_) -> return false
-    none -> return node.doc.none?
+    some(_) -> false
+    none -> node.doc.none?
   end
 end
 
@@ -304,7 +304,7 @@ def function_cut(text: String, node: Ast.FunctionDecl, whole: Bool) -> Result[Li
     stop += END_WORD.length
   end
 
-  return ok([Cut(first: first, stop: stop, wrap: false)])
+  ok([Cut(first: first, stop: stop, wrap: false)])
 end
 
 # The offset after the `end` that closes a function whose span stops at `stop`: the span goes on over the line break
@@ -321,7 +321,7 @@ def end_offset(text: String, floor: Int, stop: Int) -> Int
   mark = text.slice(line, at - line).index_of("#")
   return trimmed(text, floor, line + mark.unwrap!) if mark.some?
 
-  return at
+  at
 end
 
 # `stop` moved back over the blanks and line breaks before it, down to `floor`.
@@ -331,14 +331,14 @@ def trimmed(text: String, floor: Int, stop: Int) -> Int
     at -= 1
   end
 
-  return at
+  at
 end
 
 def value_cut(node: Ast.ConstDecl) -> List[Cut]
   span = Ast.expr_span(node.value)
   return [] if span.stop.offset - span.start.offset < ELIDE_FROM
 
-  return [Cut(first: span.start.offset, stop: span.stop.offset, wrap: true)]
+  [Cut(first: span.start.offset, stop: span.stop.offset, wrap: true)]
 end
 
 # `piece` of the text as the stub has it, with the same length and line breaks. The statements of a body become a
@@ -365,14 +365,14 @@ def replacement(piece: String, wrap: Bool) -> String
     at += 1
   end
 
-  return out.join("\n")
+  out.join("\n")
 end
 
 # "\r" for a line that ends with one, which stays where it is.
 def carriage(line: String) -> String
   return "\r" if line.ends_with?("\r")
 
-  return ""
+  ""
 end
 
 # The line of a constant's value that holds the zero: the first with room for it beside the parenthesis the first and
@@ -397,7 +397,7 @@ def zero_line(widths: List[Int]) -> Int
     at += 1
   end
 
-  return -1
+  -1
 end
 
 # One line of a replacement, `width` characters long, the line `at` of lines 0 to `last`; `zero` is the line with the
@@ -427,14 +427,14 @@ def cell(width: Int, at: Int, last: Int, wrap: Bool, zero: Int) -> String
     return opening + blanks(width - opening.length - closing.length) + closing
   end
 
-  return commented(width)
+  commented(width)
 end
 
 # A comment over `width` characters, or nothing for an empty line.
 def commented(width: Int) -> String
   return "" if width == 0
 
-  return "#" + blanks(width - 1)
+  "#" + blanks(width - 1)
 end
 
 def blanks(count: Int) -> String
@@ -445,31 +445,31 @@ def blanks(count: Int) -> String
     left -= BLANK_RUN
   end
 
-  return out + BLANKS.slice(0, left)
+  out + BLANKS.slice(0, left)
 end
 
 # Whether the stub parses, and to the same declarations as the text: the same names, and each declaration over the same
 # characters, so the spans of the headers are those of the text.
 def same_declarations?(program: Ast.Program, stub: String) -> Bool
   case Lexer.lex(stub)
-    Diag.Outcome.Failed(_) -> return false
+    Diag.Outcome.Failed(_) -> false
     Diag.Outcome.Done(tokens) ->
       case Parser.parse(tokens, 0)
-        Diag.Outcome.Failed(_) -> return false
-        Diag.Outcome.Done(parsed) -> return same_list?(kept_declarations(program.declarations), parsed.declarations)
+        Diag.Outcome.Failed(_) -> false
+        Diag.Outcome.Done(parsed) -> same_list?(kept_declarations(program.declarations), parsed.declarations)
       end
   end
 end
 
 # The declarations that a stub keeps: all but the private functions it leaves out.
 def kept_declarations(declarations: List[Ast.Decl]) -> List[Ast.Decl]
-  return declarations.select do |wrapped: Ast.Decl| kept?(wrapped) end
+  declarations.select do |wrapped: Ast.Decl| kept?(wrapped) end
 end
 
 def kept?(wrapped: Ast.Decl) -> Bool
   case wrapped
-    Ast.Decl.Function(node) -> return !droppable?(wrapped, node)
-    _ -> return true
+    Ast.Decl.Function(node) -> !droppable?(wrapped, node)
+    _ -> true
   end
 end
 
@@ -491,5 +491,5 @@ def same_list?(whole: List[Ast.Decl], stub: List[Ast.Decl]) -> Bool
     at += 1
   end
 
-  return true
+  true
 end

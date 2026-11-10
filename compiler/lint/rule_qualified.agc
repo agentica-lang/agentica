@@ -21,8 +21,8 @@ end
 ## has a `.` too; `suggestions` drops it, as its first part is not an import alias.
 export def mentions(node: Walk.Node) -> List[Mention]
   case node
-    Walk.Node.Expr(expr) -> return of_expr(expr)
-    Walk.Node.Stmt(stmt) -> return of_stmt(stmt)
+    Walk.Node.Expr(expr) -> of_expr(expr)
+    Walk.Node.Stmt(stmt) -> of_stmt(stmt)
   end
 end
 
@@ -51,7 +51,7 @@ export def suggestions(file: String, found: List[Mention], imports: List[Ast.Imp
     end
   end
 
-  return out
+  out
 end
 
 def alias_names(imports: List[Ast.ImportDecl]) -> Set[String]
@@ -63,7 +63,7 @@ def alias_names(imports: List[Ast.ImportDecl]) -> Set[String]
     end
   end
 
-  return names
+  names
 end
 
 def message(name: String, count: Int) -> String = "#{name} is built or matched #{count} times in this file"
@@ -89,7 +89,7 @@ def help(name: String, imports: List[Ast.ImportDecl]) -> String
     end
   end
 
-  return "import it by name: `import {#{local}} from \"#{path}\"` (`as V` gives a shorter name)"
+  "import it by name: `import {#{local}} from \"#{path}\"` (`as V` gives a shorter name)"
 end
 
 # The name that `import {name}` of the declaration binds, `none` when it does not import `name`.
@@ -98,30 +98,30 @@ def bound_as(item: Ast.ImportDecl, name: String) -> Optional[String]
     return some(imported.local) if imported.name == name
   end
 
-  return none
+  none
 end
 
 def of_expr(expr: Ast.Expr) -> List[Mention]
   case expr
-    Ast.Expr.EnumConstructor(node) -> return qualified(node.enum_name, node.span)
-    Ast.Expr.Construct(node) -> return qualified(node.type_name, node.span)
-    Ast.Expr.TypeName(node) -> return qualified(node.name, node.span)
-    Ast.Expr.Case(node) -> return case_mentions(node)
-    _ -> return []
+    Ast.Expr.EnumConstructor(node) -> qualified(node.enum_name, node.span)
+    Ast.Expr.Construct(node) -> qualified(node.type_name, node.span)
+    Ast.Expr.TypeName(node) -> qualified(node.name, node.span)
+    Ast.Expr.Case(node) -> case_mentions(node)
+    _ -> []
   end
 end
 
 def qualified(name: String, span: Source.Span) -> List[Mention]
   return [Mention(name: name, span: span)] if name.contains?(".")
 
-  return []
+  []
 end
 
 # The patterns of a `case` and the patterns nested in them, walked with a worklist.
 def of_stmt(stmt: Ast.Stmt) -> List[Mention]
   case stmt
-    Ast.Stmt.Case(node) -> return case_mentions(node)
-    _ -> return []
+    Ast.Stmt.Case(node) -> case_mentions(node)
+    _ -> []
   end
 end
 
@@ -136,15 +136,15 @@ def case_mentions(node: Ast.CaseStmt) -> List[Mention]
     work = work.concat(nested_patterns(current))
   end
 
-  return found
+  found
 end
 
 # The qualified name that the pattern itself writes: a variant, and nothing else.
 def pattern_mentions(pattern: Ast.Pattern) -> List[Mention]
   case pattern
-    Ast.Pattern.Variant(variant) -> return qualified(variant.enum_name, variant.span)
-    Ast.Pattern.Wildcard(_) -> return []
-    Ast.Pattern.Literal(_) -> return []
+    Ast.Pattern.Variant(variant) -> qualified(variant.enum_name, variant.span)
+    Ast.Pattern.Wildcard(_) -> []
+    Ast.Pattern.Literal(_) -> []
   end
 end
 
@@ -164,5 +164,5 @@ def nested_patterns(pattern: Ast.Pattern) -> List[Ast.Pattern]
     Ast.Pattern.Literal(_) -> inner = inner
   end
 
-  return inner
+  inner
 end

@@ -35,7 +35,7 @@ NATIVE_TIMEOUT_MS = 300_000
 ## Runs `install` in the working folder. `style` is the output style of the options: with `json` a success prints
 ## `{"ok":true}`, as `check` does.
 export def run(settings: Env.Settings, style: String) -> Reply.Answer
-  return CliProject.run(style, settings.workspace) do |dir: String| install(settings, dir) end
+  CliProject.run(style, settings.workspace) do |dir: String| install(settings, dir) end
 end
 
 ## Fills the cache with every package of the lock, in the order of the file, then every downloaded native artifact
@@ -80,7 +80,7 @@ export def fill_all(settings: Env.Settings, lock: Lock.Lock) -> Result[String]
     return ok("#{hosted} native artifacts ready\n")
   end
 
-  return ok("#{lines.join("\n")}\n")
+  ok("#{lines.join("\n")}\n")
 end
 
 ## One line for each overridden package, by name: `overridden NAME@VERSION`, and when `asked` has the packages that
@@ -99,7 +99,7 @@ export def overridden_lines(packages: List[Lock.Locked], asked: Map[String, List
     lines = lines.push(line)
   end
 
-  return lines
+  lines
 end
 
 # The downloaded native artifacts of this host in the lock, verified from the cache alone afterwards: the archive is
@@ -126,7 +126,7 @@ def fill_artifacts(settings: Env.Settings, lock: Lock.Lock) -> Result[Int]
     end
   end
 
-  return ok(wanted.size)
+  ok(wanted.size)
 end
 
 # The `native-artifact[i]` key path of this artifact in its lock, for precise failures.
@@ -138,7 +138,7 @@ def artifact_key(lock: Lock.Lock, artifact: Lock.Artifact) -> String
     end
   end
 
-  return "native-artifact"
+  "native-artifact"
 end
 
 # The lines of the answer, or a packed failure.
@@ -146,14 +146,14 @@ def install(settings: Env.Settings, dir: String) -> Result[String]
   workspace = settings.workspace
   project = try Project.find(workspace, dir)
   case project
-    Project.Project.Bare -> return error(CliProject.missing_manifest(dir))
+    Project.Project.Bare -> error(CliProject.missing_manifest(dir))
     Project.Project.Declared(found) ->
       lines = try fill_all(settings, found.lock)
       scope = PackageImport.scope_of(project)
       try check_cache(settings, found.lock, scope)
       try PackageDeps.sync(settings, found.lock.file, scope.deps, found.lock.packages, [])
       try build_natives(settings, found, scope)
-      return ok(lines)
+      ok(lines)
   end
 end
 
@@ -177,7 +177,7 @@ def build_natives(settings: Env.Settings, found: Project.Found, scope: PackageIm
     end
   end
 
-  return ok()
+  ok()
 end
 
 # The manifests of the packages in the cache, checked against the lock before anything is written to deps/.
@@ -195,5 +195,5 @@ def check_cache(settings: Env.Settings, lock: Lock.Lock, scope: PackageImport.Sc
   end
 
   try PackageImport.check_folders(settings.workspace, scope, folders)
-  return ok()
+  ok()
 end

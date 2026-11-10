@@ -60,7 +60,7 @@ export def of_program(
     end
   end
 
-  return Model.Bodies(version: BODIES_VERSION, file: file, modules: modules, functions: functions)
+  Model.Bodies(version: BODIES_VERSION, file: file, modules: modules, functions: functions)
 end
 
 def body_of(checked: Checker.Checked, node: Ast.FunctionDecl, name: String, exported: Bool) -> Model.Body
@@ -73,7 +73,7 @@ def body_of(checked: Checker.Checked, node: Ast.FunctionDecl, name: String, expo
     )
   end
 
-  return Model.Body(
+  Model.Body(
     name: name,
     linked: node.name,
     exported: exported,
@@ -87,7 +87,7 @@ def body_of(checked: Checker.Checked, node: Ast.FunctionDecl, name: String, expo
 end
 
 def statements(checked: Checker.Checked, body: List[Ast.Stmt]) -> List[Model.Node]
-  return body.map do |stmt: Ast.Stmt| statement(checked, stmt) end
+  body.map do |stmt: Ast.Stmt| statement(checked, stmt) end
 end
 
 # A block runs from its first statement to its last; an empty one is the empty place at the start of `owner`.
@@ -99,7 +99,7 @@ def block(checked: Checker.Checked, body: List[Ast.Stmt], owner: Source.Span) ->
     made = made.with(range: DiagnosticModel.Region(start: children[0].range.start, stop: children.last.range.stop))
   end
 
-  return made
+  made
 end
 
 def statement(checked: Checker.Checked, stmt: Ast.Stmt) -> Model.Node
@@ -119,7 +119,7 @@ def statement(checked: Checker.Checked, stmt: Ast.Stmt) -> Model.Node
         kind = "discard"
       end
 
-      return leaf(kind, Types.Type.Unknown, node.span).with(
+      leaf(kind, Types.Type.Unknown, node.span).with(
         type: type,
         range: through(node.span, value),
         text: node.name,
@@ -130,20 +130,20 @@ def statement(checked: Checker.Checked, stmt: Ast.Stmt) -> Model.Node
       case node.value
         some(value) ->
           made = expression(checked, value)
-          return leaf("return", Types.Type.Unknown, node.span).with(
+          leaf("return", Types.Type.Unknown, node.span).with(
             type: made.type,
             range: through(node.span, made),
             children: [made],
           )
-        none -> return leaf("return", Types.Type.Unknown, node.span)
+        none -> leaf("return", Types.Type.Unknown, node.span)
       end
 
-    Ast.Stmt.Expression(node) -> return expression(checked, node.value)
-    Ast.Stmt.If(node) -> return if_node(checked, node)
-    Ast.Stmt.Case(node) -> return case_node(checked, node)
-    Ast.Stmt.While(node) -> return other("while", node.span)
-    Ast.Stmt.For(node) -> return other("for", node.span)
-    Ast.Stmt.Control(node) -> return other(node.kind, node.span)
+    Ast.Stmt.Expression(node) -> expression(checked, node.value)
+    Ast.Stmt.If(node) -> if_node(checked, node)
+    Ast.Stmt.Case(node) -> case_node(checked, node)
+    Ast.Stmt.While(node) -> other("while", node.span)
+    Ast.Stmt.For(node) -> other("for", node.span)
+    Ast.Stmt.Control(node) -> other(node.kind, node.span)
   end
 end
 
@@ -166,7 +166,7 @@ def if_node(checked: Checker.Checked, node: Ast.IfStmt) -> Model.Node
     none -> children = children
   end
 
-  return leaf("if", Types.Type.Unknown, node.span).with(children: children)
+  leaf("if", Types.Type.Unknown, node.span).with(children: children)
 end
 
 # A case statement, or a case that gives a value (its type is then the case's own).
@@ -184,18 +184,18 @@ def case_node(checked: Checker.Checked, node: Ast.CaseStmt) -> Model.Node
   end
 
   made = leaf("case", Types.Type.Unknown, node.span)
-  return made.with(type: type_of(checked, node.id), children: [value].concat(arms))
+  made.with(type: type_of(checked, node.id), children: [value].concat(arms))
 end
 
 def guard_node(checked: Checker.Checked, guard: Ast.Expr) -> Model.Node
-  return leaf("guard", Types.Type.Bool, Ast.expr_span(guard)).with(children: [expression(checked, guard)])
+  leaf("guard", Types.Type.Bool, Ast.expr_span(guard)).with(children: [expression(checked, guard)])
 end
 
 def pattern(checked: Checker.Checked, found: Ast.Pattern, matched: Model.TypeShape) -> Model.Node
   case found
-    Ast.Pattern.Wildcard(node) -> return leaf("wildcard", Types.Type.Unknown, node.span).with(type: matched)
+    Ast.Pattern.Wildcard(node) -> leaf("wildcard", Types.Type.Unknown, node.span).with(type: matched)
     Ast.Pattern.Literal(node) ->
-      return leaf("literal", Types.Type.Unknown, node.span).with(type: matched, text: literal_text(node.value))
+      leaf("literal", Types.Type.Unknown, node.span).with(type: matched, text: literal_text(node.value))
     Ast.Pattern.Variant(node) ->
       payload = checked.bound.get(node.id, [])
       slots: List[Model.Node] = []
@@ -215,7 +215,7 @@ def pattern(checked: Checker.Checked, found: Ast.Pattern, matched: Model.TypeSha
         at += 1
       end
 
-      return leaf("variant", Types.Type.Unknown, node.span).with(
+      leaf("variant", Types.Type.Unknown, node.span).with(
         type: matched,
         target: variant_target(node.enum_name, node.variant_name),
         children: slots,
@@ -236,7 +236,7 @@ def variant_target(enum_name: String, variant_name: String) -> String
     return "none"
   end
 
-  return "#{enum_name}.#{variant_name}"
+  "#{enum_name}.#{variant_name}"
 end
 
 def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
@@ -244,25 +244,24 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
   span = Ast.expr_span(expr)
   type = types_at(checked, id)
   case expr
-    Ast.Expr.Literal(node) -> return leaf(literal_kind(node.value), type, span).with(text: literal_text(node.value))
-    Ast.Expr.Name(node) -> return leaf("local", type, span).with(text: node.name)
-    Ast.Expr.Call(node) ->
-      return leaf("call", type, span).with(target: node.name, children: arguments(checked, node.args))
+    Ast.Expr.Literal(node) -> leaf(literal_kind(node.value), type, span).with(text: literal_text(node.value))
+    Ast.Expr.Name(node) -> leaf("local", type, span).with(text: node.name)
+    Ast.Expr.Call(node) -> leaf("call", type, span).with(target: node.name, children: arguments(checked, node.args))
     Ast.Expr.MethodCall(node) ->
       case checked.resolved.get(id)
         some(State.Resolved.Call(name, _)) ->
-          return leaf("call", type, span).with(
+          leaf("call", type, span).with(
             target: name,
             children: [expression(checked, node.target)].concat(arguments(checked, node.args)),
           )
-        _ -> return other("method", span)
+        _ -> other("method", span)
       end
 
     Ast.Expr.FieldAccess(node) ->
       case checked.resolved.get(id)
         some(State.Resolved.Call(name, _)) ->
-          return leaf("call", type, span).with(target: name, children: [expression(checked, node.target)])
-        _ -> return other("field", span)
+          leaf("call", type, span).with(target: name, children: [expression(checked, node.target)])
+        _ -> other("field", span)
       end
 
     Ast.Expr.Index(node) ->
@@ -270,8 +269,8 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
       builtin = Builtins.index_builtin(types_at(checked, Ast.expr_id(node.target)))
       return leaf("call", type, span).with(target: builtin, children: children) if builtin != ""
 
-      return leaf("index", type, span).with(children: children)
-    Ast.Expr.Try(node) -> return leaf("try", type, span).with(children: [expression(checked, node.operand)])
+      leaf("index", type, span).with(children: children)
+    Ast.Expr.Try(node) -> leaf("try", type, span).with(children: [expression(checked, node.operand)])
     Ast.Expr.Unary(node) ->
       operand = expression(checked, node.operand)
       return leaf("not", type, span).with(text: "!", children: [operand]) if node.op == "not"
@@ -281,7 +280,7 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
         return operand.with(type: shape(type), range: DiagnosticModel.range_of(span), text: "-#{operand.text}")
       end
 
-      return leaf("neg", type, span).with(text: "-", children: [operand])
+      leaf("neg", type, span).with(text: "-", children: [operand])
     Ast.Expr.Binary(node) ->
       return other("range", span) if node.op == "dot-dot" or node.op == "dot-dot-dot"
 
@@ -290,67 +289,67 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
         kind = node.op
       end
 
-      return leaf(kind, type, span).with(
+      leaf(kind, type, span).with(
         text: OPERATOR_TEXT.get(node.op, node.op),
         children: [expression(checked, node.left), expression(checked, node.right)],
       )
     Ast.Expr.Interpolation(node) ->
       parts = node.parts.map do |part: Ast.Part| part_node(checked, part, span) end
 
-      return leaf("interpolation", type, span).with(children: parts)
-    Ast.Expr.Typed(node) -> return expression(checked, node.target)
-    Ast.Expr.Case(node) -> return case_node(checked, node)
-    Ast.Expr.EnumConstructor(_) -> return other("variant", span)
-    Ast.Expr.FunctionRef(_) -> return other("function", span)
-    Ast.Expr.Invoke(_) -> return other("invoke", span)
-    Ast.Expr.Construct(_) -> return other("struct", span)
-    Ast.Expr.Update(_) -> return other("with", span)
-    Ast.Expr.ListLit(_) -> return other("list", span)
-    Ast.Expr.MapLit(_) -> return other("map", span)
-    Ast.Expr.BlockLit(_) -> return other("block", span)
-    Ast.Expr.TypeName(_) -> return other("type", span)
-    Ast.Expr.ConstRef(_) -> return other("constant", span)
-    Ast.Expr.RegexLit(_) -> return other("regex", span)
-    Ast.Expr.EagLit(_) -> return other("template", span)
+      leaf("interpolation", type, span).with(children: parts)
+    Ast.Expr.Typed(node) -> expression(checked, node.target)
+    Ast.Expr.Case(node) -> case_node(checked, node)
+    Ast.Expr.EnumConstructor(_) -> other("variant", span)
+    Ast.Expr.FunctionRef(_) -> other("function", span)
+    Ast.Expr.Invoke(_) -> other("invoke", span)
+    Ast.Expr.Construct(_) -> other("struct", span)
+    Ast.Expr.Update(_) -> other("with", span)
+    Ast.Expr.ListLit(_) -> other("list", span)
+    Ast.Expr.MapLit(_) -> other("map", span)
+    Ast.Expr.BlockLit(_) -> other("block", span)
+    Ast.Expr.TypeName(_) -> other("type", span)
+    Ast.Expr.ConstRef(_) -> other("constant", span)
+    Ast.Expr.RegexLit(_) -> other("regex", span)
+    Ast.Expr.EagLit(_) -> other("template", span)
   end
 end
 
 # A text part has no place of its own, so it takes the place of the interpolation.
 def part_node(checked: Checker.Checked, part: Ast.Part, span: Source.Span) -> Model.Node
   case part
-    Ast.Part.Text(text) -> return leaf("string", Types.Type.String, span).with(text: text)
-    Ast.Part.Code(code) -> return expression(checked, code)
+    Ast.Part.Text(text) -> leaf("string", Types.Type.String, span).with(text: text)
+    Ast.Part.Code(code) -> expression(checked, code)
   end
 end
 
 def arguments(checked: Checker.Checked, args: List[Ast.Expr]) -> List[Model.Node]
-  return args.map do |arg: Ast.Expr| expression(checked, arg) end
+  args.map do |arg: Ast.Expr| expression(checked, arg) end
 end
 
 def literal_kind(value: Ast.LitValue) -> String
   case value
-    Ast.LitValue.Whole(_) -> return "int"
-    Ast.LitValue.Huge(_) -> return "int"
-    Ast.LitValue.Real(_) -> return "float"
-    Ast.LitValue.Text(_) -> return "string"
-    Ast.LitValue.Flag(_) -> return "bool"
-    Ast.LitValue.Nothing -> return "nil"
+    Ast.LitValue.Whole(_) -> "int"
+    Ast.LitValue.Huge(_) -> "int"
+    Ast.LitValue.Real(_) -> "float"
+    Ast.LitValue.Text(_) -> "string"
+    Ast.LitValue.Flag(_) -> "bool"
+    Ast.LitValue.Nothing -> "nil"
   end
 end
 
 def literal_text(value: Ast.LitValue) -> String
   case value
-    Ast.LitValue.Whole(number) -> return "#{number}"
-    Ast.LitValue.Huge(digits) -> return digits
-    Ast.LitValue.Real(number) -> return "#{number}"
-    Ast.LitValue.Text(text) -> return text
-    Ast.LitValue.Flag(flag) -> return "#{flag}"
-    Ast.LitValue.Nothing -> return "nil"
+    Ast.LitValue.Whole(number) -> "#{number}"
+    Ast.LitValue.Huge(digits) -> digits
+    Ast.LitValue.Real(number) -> "#{number}"
+    Ast.LitValue.Text(text) -> text
+    Ast.LitValue.Flag(flag) -> "#{flag}"
+    Ast.LitValue.Nothing -> "nil"
   end
 end
 
 def leaf(kind: String, type: Types.Type, span: Source.Span) -> Model.Node
-  return Model.Node(
+  Model.Node(
     kind: kind,
     type: shape(type),
     range: DiagnosticModel.range_of(span),
@@ -363,7 +362,7 @@ end
 
 # The place of a statement from its start to the end of its value: the statement's own place runs to the next line.
 def through(span: Source.Span, value: Model.Node) -> DiagnosticModel.Region
-  return DiagnosticModel.Region(start: DiagnosticModel.range_of(span).start, stop: value.range.stop)
+  DiagnosticModel.Region(start: DiagnosticModel.range_of(span).start, stop: value.range.stop)
 end
 
 def other(syntax: String, span: Source.Span) -> Model.Node = leaf("other", Types.Type.Unknown, span).with(text: syntax)
@@ -372,7 +371,7 @@ def other(syntax: String, span: Source.Span) -> Model.Node = leaf("other", Types
 def types_at(checked: Checker.Checked, id: Int) -> Types.Type
   return Types.Type.Unknown if id < 0 or id >= checked.types.size
 
-  return checked.types[id]
+  checked.types[id]
 end
 
 def type_of(checked: Checker.Checked, id: Int) -> Model.TypeShape = shape(types_at(checked, id))
@@ -382,39 +381,39 @@ def bound(checked: Checker.Checked, id: Int, at: Int) -> Model.TypeShape
   types = checked.bound.get(id, [])
   return shape(Types.Type.Unknown) if at >= types.size
 
-  return shape(types[at])
+  shape(types[at])
 end
 
 def shape(type: Types.Type) -> Model.TypeShape
   case type
-    Types.Type.Struct(name, args) -> return Model.TypeShape(kind: "struct", name: name, args: args.map(&shape))
-    Types.Type.Enum(name, args) -> return Model.TypeShape(kind: "enum", name: name, args: args.map(&shape))
-    Types.Type.Opaque(name) -> return Model.TypeShape(kind: "opaque", name: name, args: [])
-    Types.Type.Var(name) -> return Model.TypeShape(kind: "var", name: name, args: [])
-    Types.Type.Unknown -> return Model.TypeShape(kind: "none", name: "", args: [])
-    Types.Type.Fn(params, result) -> return builtin("Fn", params.push(result))
-    Types.Type.Map(key, value) -> return builtin("Map", [key, value])
-    Types.Type.ATS(key, value) -> return builtin("ATS", [key, value])
-    Types.Type.Result(item) -> return builtin("Result", [item])
-    Types.Type.Optional(item) -> return builtin("Optional", [item])
-    Types.Type.Task(item) -> return builtin("Task", [item])
-    Types.Type.Channel(item) -> return builtin("Channel", [item])
-    Types.Type.Lazy(item) -> return builtin("Lazy", [item])
-    Types.Type.Codec(item) -> return builtin("Codec", [item])
-    Types.Type.List(item) -> return builtin("List", [item])
-    Types.Type.Set(item) -> return builtin("Set", [item])
-    Types.Type.Int -> return builtin("Int", [])
-    Types.Type.Float -> return builtin("Float", [])
-    Types.Type.Bool -> return builtin("Bool", [])
-    Types.Type.String -> return builtin("String", [])
-    Types.Type.Nil -> return builtin("Nil", [])
-    Types.Type.Void -> return builtin("Void", [])
-    Types.Type.Json -> return builtin("Json", [])
-    Types.Type.Range -> return builtin("Range", [])
-    Types.Type.Bytes -> return builtin("Bytes", [])
+    Types.Type.Struct(name, args) -> Model.TypeShape(kind: "struct", name: name, args: args.map(&shape))
+    Types.Type.Enum(name, args) -> Model.TypeShape(kind: "enum", name: name, args: args.map(&shape))
+    Types.Type.Opaque(name) -> Model.TypeShape(kind: "opaque", name: name, args: [])
+    Types.Type.Var(name) -> Model.TypeShape(kind: "var", name: name, args: [])
+    Types.Type.Unknown -> Model.TypeShape(kind: "none", name: "", args: [])
+    Types.Type.Fn(params, result) -> builtin("Fn", params.push(result))
+    Types.Type.Map(key, value) -> builtin("Map", [key, value])
+    Types.Type.ATS(key, value) -> builtin("ATS", [key, value])
+    Types.Type.Result(item) -> builtin("Result", [item])
+    Types.Type.Optional(item) -> builtin("Optional", [item])
+    Types.Type.Task(item) -> builtin("Task", [item])
+    Types.Type.Channel(item) -> builtin("Channel", [item])
+    Types.Type.Lazy(item) -> builtin("Lazy", [item])
+    Types.Type.Codec(item) -> builtin("Codec", [item])
+    Types.Type.List(item) -> builtin("List", [item])
+    Types.Type.Set(item) -> builtin("Set", [item])
+    Types.Type.Int -> builtin("Int", [])
+    Types.Type.Float -> builtin("Float", [])
+    Types.Type.Bool -> builtin("Bool", [])
+    Types.Type.String -> builtin("String", [])
+    Types.Type.Nil -> builtin("Nil", [])
+    Types.Type.Void -> builtin("Void", [])
+    Types.Type.Json -> builtin("Json", [])
+    Types.Type.Range -> builtin("Range", [])
+    Types.Type.Bytes -> builtin("Bytes", [])
   end
 end
 
 def builtin(name: String, args: List[Types.Type]) -> Model.TypeShape
-  return Model.TypeShape(kind: "builtin", name: name, args: args.map(&shape))
+  Model.TypeShape(kind: "builtin", name: name, args: args.map(&shape))
 end

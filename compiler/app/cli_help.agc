@@ -44,7 +44,7 @@ export def help(words: List[String], style: String) -> Reply.Reply
 
   return Reply.printed("#{JSON.encode(CatalogJson.builtin(entry.unwrap!, &RubyForm.signature))}\n") if as_json
 
-  return Reply.printed(block(name, entry.unwrap!))
+  Reply.printed(block(name, entry.unwrap!))
 end
 
 # The answer for a name that is no builtin: the hint of the checker for a name from another language that has one
@@ -74,7 +74,7 @@ def renamed(name: String, as_json: Bool) -> Reply.Reply
 
   blocks = entries.map do |entry: Model.Builtin| block(name, entry) end
   notes = hints.keys.sort.map do |key: String| "#{key}: #{hints[key]}\n" end
-  return Reply.printed(blocks.concat(notes).join("\n"))
+  Reply.printed(blocks.concat(notes).join("\n"))
 end
 
 # The text of one builtin for the name asked: a line when the name is not how Ruby writes it, then the signature of
@@ -82,7 +82,7 @@ end
 def block(name: String, entry: Model.Builtin) -> String
   written = RubyForm.method_name(entry.name)
   forms = [entry].concat(entry.alternatives).map do |form: Model.Builtin| form_text(form, written) end
-  return "#{rename_line(name, entry.name, written)}#{forms.join("\n")}\n#{entry.description}\n"
+  "#{rename_line(name, entry.name, written)}#{forms.join("\n")}\n#{entry.description}\n"
 end
 
 # The signature of a form: in the Ruby form with the method name `method`, else as the catalog has it.
@@ -90,7 +90,7 @@ def form_text(form: Model.Builtin, method: String) -> String
   ruby = RubyForm.signature_as(form, method)
   return Builtins.form_signature(form) if ruby == ""
 
-  return ruby
+  ruby
 end
 
 # "`String.trim` is written `.strip`" when `name` is not how Ruby writes the builtin, "`strip` is called `Y` in
@@ -113,7 +113,7 @@ def rename_line(name: String, target: String, written: String) -> String
 
   return "" if method == own[own.size - 1]
 
-  return "`#{name}` is called `#{target}` in Agentica\n"
+  "`#{name}` is called `#{target}` in Agentica\n"
 end
 
 # `; HINT` when the checker has help for this foreign name (`Hash.new`, `String.chomp`, `select`), else `; did you
@@ -134,8 +134,8 @@ def suggestion(name: String) -> String
   return "; " + hints.keys.sort.map do |key: String| "#{key}: #{hints[key]}" end.join("; ") if hints.size > 0
 
   case Suggest.closest_among(name, CALLABLE_NAMES, [])
-    some(found) -> return "; did you mean \"#{RubyForm.shown(found)}\"?"
-    none -> return ""
+    some(found) -> "; did you mean \"#{RubyForm.shown(found)}\"?"
+    none -> ""
   end
 end
 
@@ -154,7 +154,7 @@ def namespaces_text() -> String
     end
   end
 
-  return [
+  [
     "Builtins: agentica help NAME prints one signature (NAME is Namespace.function, or a bare function).",
     "  namespaces: #{spaces.join(" ")}",
     "  bare functions: #{bare.join(" ")}",

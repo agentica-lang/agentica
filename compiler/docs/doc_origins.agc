@@ -16,8 +16,8 @@ export def of_file(settings: Env.Settings, path: String, program: Ast.Program) -
   return {} if Declarations.reexports_of(program.declarations).size == 0
 
   case Linker.link_file(path, settings)
-    Linker.Linking.Done(linked) -> return of_linked(linked)
-    Linker.Linking.Failed(_) -> return {}
+    Linker.Linking.Done(linked) -> of_linked(linked)
+    Linker.Linking.Failed(_) -> {}
   end
 end
 
@@ -50,7 +50,7 @@ def of_linked(linked: Linker.Linked) -> Map[String, Model.Item]
     end
   end
 
-  return origins
+  origins
 end
 
 # The declarations of a file by their own name.
@@ -60,5 +60,5 @@ def items_by_name(module: Linker.LinkedModule) -> Map[String, Model.Item]
     items = items.put(item.name, item)
   end
 
-  return items
+  items
 end

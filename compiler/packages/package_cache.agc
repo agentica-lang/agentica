@@ -21,7 +21,7 @@ export def root(env: Env.Env) -> String
     return Paths.join(env.home, ".cache/agentica/pkg")
   end
 
-  return ""
+  ""
 end
 
 ## The folder of one commit of the package at this git source: `<root>/<host>/<owner>/<repo>/<commit>`. The commit in
@@ -35,5 +35,5 @@ export def folder(root: String, source: GitSource.Source, commit: String) -> Str
     name = "#{commit}@#{source.subdir.split("/").join("@")}"
   end
 
-  return Paths.join(Paths.join(root, GitSource.cache_path(source.git)), name)
+  Paths.join(Paths.join(root, GitSource.cache_path(source.git)), name)
 end

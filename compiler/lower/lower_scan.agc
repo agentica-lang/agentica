@@ -26,13 +26,13 @@ end
 ## The scan of the statements of a function body, and of the types it writes.
 export def scan_body(body: List[Ast.Stmt], watched: Set[String]) -> Scan
   work: List[AstWalk.Node] = body.map do |stmt: Ast.Stmt| AstWalk.Node.Stmt(stmt) end
-  return walk(work, watched, empty(), true)
+  walk(work, watched, empty(), true)
 end
 
 ## The scan of the initializer of a constant. A regex literal there is built with the constant, so the scan goes into
 ## its call.
 export def scan_value(value: Ast.Expr, watched: Set[String]) -> Scan
-  return walk([AstWalk.Node.Expr(value)], watched, empty(), false)
+  walk([AstWalk.Node.Expr(value)], watched, empty(), false)
 end
 
 ## The linked name of the constant that holds a regex literal of a function body. `#` keeps it apart from every name a
@@ -50,7 +50,7 @@ export def written_in(ref: Ast.TypeRef, watched: Set[String]) -> List[String]
     found = found.concat(written_in(arg, watched))
   end
 
-  return found
+  found
 end
 
 ## The watched names the signature of a function writes: its parameters and result.
@@ -60,7 +60,7 @@ export def written_signature(decl: Ast.FunctionDecl, watched: Set[String]) -> Li
     found = found.concat(written_in(param.type, watched))
   end
 
-  return found
+  found
 end
 
 def empty() -> Scan = Scan(consts: [], calls: [], written: [], type_names: [], type_ids: [], covered: [], regexes: [])
@@ -90,7 +90,7 @@ def walk(start: List[AstWalk.Node], watched: Set[String], first: Scan, hoist: Bo
     end
   end
 
-  return found
+  found
 end
 
 # The children of a node, except the type name of Type.members, which is no type used as a value.
@@ -104,23 +104,22 @@ def walked_children(node: AstWalk.Node) -> List[AstWalk.Node]
               # Type.codec reads the type at run time, so its name counts as a type used as a value.
               return AstWalk.children(node) if access.name == "codec"
 
-              return []
-            _ -> return AstWalk.children(node)
+              []
+            _ -> AstWalk.children(node)
           end
 
-        _ -> return AstWalk.children(node)
+        _ -> AstWalk.children(node)
       end
 
-    _ -> return AstWalk.children(node)
+    _ -> AstWalk.children(node)
   end
 end
 
 def see_expr(found: Scan, expr: Ast.Expr, watched: Set[String]) -> Scan
   case expr
-    Ast.Expr.ConstRef(node) -> return found.with(consts: found.consts.push(node.name))
-    Ast.Expr.Call(node) ->
-      return found.with(calls: found.calls.push(node.name), covered: wrapping(found.covered, node))
-    Ast.Expr.FunctionRef(node) -> return found.with(calls: found.calls.push(node.name))
+    Ast.Expr.ConstRef(node) -> found.with(consts: found.consts.push(node.name))
+    Ast.Expr.Call(node) -> found.with(calls: found.calls.push(node.name), covered: wrapping(found.covered, node))
+    Ast.Expr.FunctionRef(node) -> found.with(calls: found.calls.push(node.name))
     Ast.Expr.FieldAccess(node) ->
       # Type.codec: its type, a Codec of the struct or enum, is recorded here, not at the type name, whose id the
       # linker made past the program's.
@@ -130,20 +129,20 @@ def see_expr(found: Scan, expr: Ast.Expr, watched: Set[String]) -> Scan
         _ -> return found
       end
 
-      return found
+      found
     Ast.Expr.TypeName(node) ->
       ref = Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span)
       written = found.written.concat(written_in(ref, watched))
       names = found.type_names.push(node.name)
-      return found.with(written: written, type_names: names, type_ids: found.type_ids.push(node.id))
-    Ast.Expr.EnumConstructor(node) -> return found.with(written: named(found.written, node.enum_name, watched))
-    Ast.Expr.BlockLit(node) -> return found.with(written: block_types(found.written, node, watched))
-    Ast.Expr.Case(node) -> return found.with(written: arm_names(found.written, node.arms, watched))
+      found.with(written: written, type_names: names, type_ids: found.type_ids.push(node.id))
+    Ast.Expr.EnumConstructor(node) -> found.with(written: named(found.written, node.enum_name, watched))
+    Ast.Expr.BlockLit(node) -> found.with(written: block_types(found.written, node, watched))
+    Ast.Expr.Case(node) -> found.with(written: arm_names(found.written, node.arms, watched))
     Ast.Expr.ListLit(node) ->
       return found.with(covered: found.covered.push(node.id)) if node.elements.size > 0
 
-      return found
-    _ -> return found
+      found
+    _ -> found
   end
 end
 
@@ -152,27 +151,27 @@ end
 def wrapping(covered: List[Int], node: Ast.Call) -> List[Int]
   return covered.push(node.id) if (node.name == "some" or node.name == "ok") and node.args.size == 1
 
-  return covered
+  covered
 end
 
 def see_stmt(found: Scan, stmt: Ast.Stmt, watched: Set[String]) -> Scan
   case stmt
-    Ast.Stmt.Binding(node) -> return found.with(written: optional_type(found.written, node.type, watched))
-    Ast.Stmt.Case(node) -> return found.with(written: arm_names(found.written, node.arms, watched))
-    _ -> return found
+    Ast.Stmt.Binding(node) -> found.with(written: optional_type(found.written, node.type, watched))
+    Ast.Stmt.Case(node) -> found.with(written: arm_names(found.written, node.arms, watched))
+    _ -> found
   end
 end
 
 def named(written: List[String], name: String, watched: Set[String]) -> List[String]
   return written.push(name) if watched.include?(name)
 
-  return written
+  written
 end
 
 def optional_type(written: List[String], type: Optional[Ast.TypeRef], watched: Set[String]) -> List[String]
   case type
-    some(ref) -> return written.concat(written_in(ref, watched))
-    none -> return written
+    some(ref) -> written.concat(written_in(ref, watched))
+    none -> written
   end
 end
 
@@ -181,7 +180,7 @@ def block_types(written: List[String], node: Ast.BlockLit, watched: Set[String])
     written = optional_type(written, param.type, watched)
   end
 
-  return written
+  written
 end
 
 def arm_names(written: List[String], arms: List[Ast.CaseArm], watched: Set[String]) -> List[String]
@@ -189,7 +188,7 @@ def arm_names(written: List[String], arms: List[Ast.CaseArm], watched: Set[Strin
     written = pattern_names(written, arm.pattern, watched)
   end
 
-  return written
+  written
 end
 
 # The enums a pattern names: its own, and those of the variants nested in its slots.
@@ -204,7 +203,7 @@ def pattern_names(written: List[String], pattern: Ast.Pattern, watched: Set[Stri
         end
       end
 
-      return written
-    _ -> return written
+      written
+    _ -> written
   end
 end

@@ -80,7 +80,7 @@ export def of_function(
   inputs = try reach(types, written, structs, enums)
   outputs = try reach(types, [result], structs, enums)
   text = "(#{params.join(", ")}) -> #{Types.to_text(result)}"
-  return ok(
+  ok(
     Signature(
       params: params,
       result: Types.to_text(result),
@@ -146,14 +146,14 @@ def reach(
     end
   end
 
-  return ok(crossings)
+  ok(crossings)
 end
 
 # A variant as the shape writes it: its name, then its payload in parentheses when it has one.
 def variant_text(member: Member) -> String
   return member.name if member.types.size == 0
 
-  return "#{member.name}(#{member.types.join(", ")})"
+  "#{member.name}(#{member.types.join(", ")})"
 end
 
 # The type the checker recorded for a written type, or the message that it recorded none.
@@ -162,7 +162,7 @@ def recorded(types: List[Types.Type], ref: Ast.TypeRef) -> Result[Types.Type]
     return error("the checker recorded no type for #{ref.name}")
   end
 
-  return ok(types[ref.id])
+  ok(types[ref.id])
 end
 
 # The types inside a List, Optional, Result or Map, which crossing types are besides the scalars and user types.
@@ -171,5 +171,5 @@ def inner_types(type: Types.Type) -> List[Types.Type]
 
   return [Types.item(type)] if Types.is?(type, "List") or Types.is?(type, "Optional") or Types.is?(type, "Result")
 
-  return []
+  []
 end

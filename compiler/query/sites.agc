@@ -72,7 +72,7 @@ export def declared_names(modules: List[Linker.LinkedModule]) -> Set[String]
     end
   end
 
-  return Set.new(names)
+  Set.new(names)
 end
 
 ## The sites of `module`, in the order of the text, with those of other targets left out when `wanted` is a key.
@@ -82,14 +82,14 @@ export def of_module(
   declared: Set[String],
   wanted: String,
 ) -> List[Site]
-  return scanned(module, checked, declared, wanted, false)
+  scanned(module, checked, declared, wanted, false)
 end
 
 ## The sites of kind `type` of `module`, in the order of the text: the names of types in annotations and as type
 ## arguments. Unlike `of_module`, the name of a builtin type is a site too, with the target `named("Int")`, so a query
 ## can answer on it.
 export def of_types(module: Linker.LinkedModule, checked: Checker.Checked, declared: Set[String]) -> List[Site]
-  return scanned(module, checked, declared, "", true).filter do |site: Site| site.kind == "type" end
+  scanned(module, checked, declared, "", true).filter do |site: Site| site.kind == "type" end
 end
 
 ## The innermost site whose written name holds the character at `offset`: the shortest, and the first of two equal.
@@ -105,7 +105,7 @@ export def innermost(sites: List[Site], offset: Int) -> Optional[Site]
     end
   end
 
-  return best
+  best
 end
 
 ## The target of a name that is a top-level declaration (its linked name) or a builtin.
@@ -114,7 +114,7 @@ export def named(name: String) -> Target = Target(key: "name|#{name}", kind: "na
 ## The target of the field or variant `name` of the struct or enum `owner` (a linked name); `kind` is `field` or
 ## `variant`.
 export def member(kind: String, owner: String, name: String) -> Target
-  return Target(key: "#{kind}|#{owner}|#{name}", kind: kind, owner: owner, name: name)
+  Target(key: "#{kind}|#{owner}|#{name}", kind: kind, owner: owner, name: name)
 end
 
 ## The target of the imported name that the character at `offset` is on in the import lists of `module`: `make` or
@@ -139,7 +139,7 @@ export def imported(module: Linker.LinkedModule, offset: Int) -> Optional[Target
     end
   end
 
-  return none
+  none
 end
 
 def scanned(
@@ -164,20 +164,20 @@ def scanned(
     out = out.concat(declaration_sites(scan, declaration))
   end
 
-  return distinct(out.sort_by do |site: Site| site.reach.start.offset end)
+  distinct(out.sort_by do |site: Site| site.reach.start.offset end)
 end
 
 def declaration_names(declaration: Ast.Decl) -> List[String]
   case declaration
-    Ast.Decl.Function(node) -> return [node.name]
-    Ast.Decl.Struct(node) -> return [node.name]
-    Ast.Decl.Enum(node) -> return [node.name]
-    Ast.Decl.TypeAlias(node) -> return [node.name]
-    Ast.Decl.Resource(node) -> return [node.name]
-    Ast.Decl.Constant(node) -> return [node.name]
-    Ast.Decl.Import(_) -> return []
-    Ast.Decl.Reexport(_) -> return []
-    Ast.Decl.Export(_) -> return []
+    Ast.Decl.Function(node) -> [node.name]
+    Ast.Decl.Struct(node) -> [node.name]
+    Ast.Decl.Enum(node) -> [node.name]
+    Ast.Decl.TypeAlias(node) -> [node.name]
+    Ast.Decl.Resource(node) -> [node.name]
+    Ast.Decl.Constant(node) -> [node.name]
+    Ast.Decl.Import(_) -> []
+    Ast.Decl.Reexport(_) -> []
+    Ast.Decl.Export(_) -> []
   end
 end
 
@@ -194,24 +194,24 @@ def distinct(sites: List[Site]) -> List[Site]
     end
   end
 
-  return out
+  out
 end
 
 def declaration_sites(scan: Scan, declaration: Ast.Decl) -> List[Site]
   case declaration
-    Ast.Decl.Function(node) -> return function_sites(scan.with(function: T.display_name(node.name)), node)
-    Ast.Decl.Struct(node) -> return struct_sites(scan, node)
-    Ast.Decl.Enum(node) -> return enum_sites(scan, node)
+    Ast.Decl.Function(node) -> function_sites(scan.with(function: T.display_name(node.name)), node)
+    Ast.Decl.Struct(node) -> struct_sites(scan, node)
+    Ast.Decl.Enum(node) -> enum_sites(scan, node)
     Ast.Decl.TypeAlias(node) ->
       head = defined(scan, named(node.name), node.name_span)
-      return head.concat(type_sites(scan, node.target, node.type_parameters))
-    Ast.Decl.Resource(node) -> return defined(scan, named(node.name), node.name_span)
+      head.concat(type_sites(scan, node.target, node.type_parameters))
+    Ast.Decl.Resource(node) -> defined(scan, named(node.name), node.name_span)
     Ast.Decl.Constant(node) ->
       head = defined(scan, named(node.name), node.name_span).concat(optional_type_sites(scan, node.type, []))
-      return head.concat(walk(scan, [Walk.Node.Expr(node.value)]))
-    Ast.Decl.Import(_) -> return []
-    Ast.Decl.Reexport(_) -> return []
-    Ast.Decl.Export(_) -> return []
+      head.concat(walk(scan, [Walk.Node.Expr(node.value)]))
+    Ast.Decl.Import(_) -> []
+    Ast.Decl.Reexport(_) -> []
+    Ast.Decl.Export(_) -> []
   end
 end
 
@@ -232,7 +232,7 @@ def function_sites(scan: Scan, node: Ast.FunctionDecl) -> List[Site]
     end
   end
 
-  return out.concat(walk(scan, roots))
+  out.concat(walk(scan, roots))
 end
 
 # The record of an extern function (record_of) has the function's name span, which the function's definition takes. A
@@ -253,15 +253,15 @@ def struct_sites(scan: Scan, node: Ast.StructDecl) -> List[Site]
     end
   end
 
-  return out.concat(walk(scan, roots))
+  out.concat(walk(scan, roots))
 end
 
 # Whether the function is an extern function with out parameters, whose result is its record: one of its codes is a
 # capital (Ast.Native), whatever the type, so a new type code needs no change here.
 def record_result?(node: Ast.FunctionDecl) -> Bool
   case node.native
-    some(native) -> return native.codes.split("").any? do |code: String| code != code.downcase end
-    none -> return false
+    some(native) -> native.codes.split("").any? do |code: String| code != code.downcase end
+    none -> false
   end
 end
 
@@ -275,17 +275,17 @@ def enum_sites(scan: Scan, node: Ast.EnumDecl) -> List[Site]
     end
   end
 
-  return out
+  out
 end
 
 def defined(scan: Scan, target: Target, span: Source.Span) -> List[Site]
-  return placed(scan, target, "definition", span, span)
+  placed(scan, target, "definition", span, span)
 end
 
 def placed(scan: Scan, target: Target, kind: String, span: Source.Span, reach: Source.Span) -> List[Site]
   return [] if scan.wanted != "" and scan.wanted != target.key
 
-  return [Site(target: target, kind: kind, span: span, reach: reach, function: scan.function)]
+  [Site(target: target, kind: kind, span: span, reach: reach, function: scan.function)]
 end
 
 # Every expression and statement below the roots.
@@ -304,7 +304,7 @@ def walk(scan: Scan, roots: List[Walk.Node]) -> List[Site]
     work = work.concat(Walk.children(node))
   end
 
-  return out
+  out
 end
 
 def case_sites(scan: Scan, node: Ast.CaseStmt) -> List[Site]
@@ -313,39 +313,38 @@ def case_sites(scan: Scan, node: Ast.CaseStmt) -> List[Site]
     out = out.concat(pattern_sites(scan, arm.pattern))
   end
 
-  return out
+  out
 end
 
 def statement_sites(scan: Scan, stmt: Ast.Stmt) -> List[Site]
   case stmt
-    Ast.Stmt.Binding(node) -> return optional_type_sites(scan, node.type, [])
-    Ast.Stmt.Case(node) -> return case_sites(scan, node)
-    _ -> return []
+    Ast.Stmt.Binding(node) -> optional_type_sites(scan, node.type, [])
+    Ast.Stmt.Case(node) -> case_sites(scan, node)
+    _ -> []
   end
 end
 
 def expression_sites(scan: Scan, expr: Ast.Expr) -> List[Site]
   case expr
-    Ast.Expr.Call(node) -> return name_sites(scan, node.name, node.span.start, "call")
-    Ast.Expr.FunctionRef(node) -> return name_sites(scan, node.name, after(node.span.start, 1), "value")
-    Ast.Expr.ConstRef(node) -> return placed(scan, named(node.name), "value", node.span, node.span)
+    Ast.Expr.Call(node) -> name_sites(scan, node.name, node.span.start, "call")
+    Ast.Expr.FunctionRef(node) -> name_sites(scan, node.name, after(node.span.start, 1), "value")
+    Ast.Expr.ConstRef(node) -> placed(scan, named(node.name), "value", node.span, node.span)
     Ast.Expr.TypeName(node) ->
       if node.args.size > 0
         return type_sites(scan, Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span), [])
       end
 
-      return bounded_type_sites(scan, node.name, node.span.start, node.span.stop.offset, "type")
-    Ast.Expr.EnumConstructor(node) ->
-      return enum_part_sites(scan, node.enum_name, node.variant_name, node.span, "construct")
+      bounded_type_sites(scan, node.name, node.span.start, node.span.stop.offset, "type")
+    Ast.Expr.EnumConstructor(node) -> enum_part_sites(scan, node.enum_name, node.variant_name, node.span, "construct")
     Ast.Expr.Construct(node) ->
-      return type_name_sites(scan, node.type_name, node.span.start, "construct").concat(
+      type_name_sites(scan, node.type_name, node.span.start, "construct").concat(
         field_sites(scan, node.type_name, node.args, "construct"),
       )
-    Ast.Expr.Update(node) -> return field_sites(scan, struct_of(scan, node.target), node.args, "construct")
+    Ast.Expr.Update(node) -> field_sites(scan, struct_of(scan, node.target), node.args, "construct")
     Ast.Expr.FieldAccess(node) ->
       return [] if glue?(node.span, node.name_span)
 
-      return access_sites(scan, node.id, node.target, node.name, node.name_span)
+      access_sites(scan, node.id, node.target, node.name, node.name_span)
     Ast.Expr.MethodCall(node) ->
       return [] if glue?(node.span, node.name_span)
 
@@ -353,30 +352,30 @@ def expression_sites(scan: Scan, expr: Ast.Expr) -> List[Site]
         return field_read_sites(scan, node.target, node.name, node.name_span)
       end
 
-      return builtin_method_sites(scan, node.id, node.name_span)
+      builtin_method_sites(scan, node.id, node.name_span)
     Ast.Expr.BlockLit(node) ->
       out: List[Site] = []
       for param in node.params
         out = out.concat(optional_type_sites(scan, param.type, []))
       end
 
-      return out
-    Ast.Expr.Case(node) -> return case_sites(scan, node)
-    _ -> return []
+      out
+    Ast.Expr.Case(node) -> case_sites(scan, node)
+    _ -> []
   end
 end
 
 # Whether a call or field access is made by the expansion of an `<<~EAG` template (syntax/eag.agc), which gives the
 # whole node and its name one span, the tag or the line. A written call has its target before its name.
 def glue?(span: Source.Span, name_span: Source.Span) -> Bool
-  return span.start.offset == name_span.start.offset and span.stop.offset == name_span.stop.offset
+  span.start.offset == name_span.start.offset and span.stop.offset == name_span.stop.offset
 end
 
 # `x.name`: a method that resolved to a builtin, else a field of the struct that the target is.
 def access_sites(scan: Scan, id: Int, target: Ast.Expr, name: String, name_span: Source.Span) -> List[Site]
   return builtin_method_sites(scan, id, name_span) if scan.resolved.has_key?(id)
 
-  return field_read_sites(scan, target, name, name_span)
+  field_read_sites(scan, target, name, name_span)
 end
 
 # The read of a struct field of the program, or the call of an Fn field (`x.name(args)`).
@@ -384,7 +383,7 @@ def field_read_sites(scan: Scan, target: Ast.Expr, name: String, name_span: Sour
   owner = struct_of(scan, target)
   return [] if !scan.declared.include?(owner)
 
-  return placed(scan, member("field", owner, name), "read", name_span, name_span)
+  placed(scan, member("field", owner, name), "read", name_span, name_span)
 end
 
 def builtin_method_sites(scan: Scan, id: Int, name_span: Source.Span) -> List[Site]
@@ -395,8 +394,8 @@ def builtin_method_sites(scan: Scan, id: Int, name_span: Source.Span) -> List[Si
     State.Resolved.Call(name, _) ->
       return placed(scan, named(name), "call", name_span, name_span) if CatalogJson.public(name).ok?
 
-      return []
-    _ -> return []
+      []
+    _ -> []
   end
 end
 
@@ -405,7 +404,7 @@ def struct_of(scan: Scan, target: Ast.Expr) -> String
   id = Ast.expr_id(target)
   return T.name(scan.types[id]) if id < scan.types.size
 
-  return ""
+  ""
 end
 
 # The name of a function (a call, a `&f`) or of a builtin, written from `start`.
@@ -420,12 +419,12 @@ def name_sites(scan: Scan, name: String, start: Source.Position, kind: String) -
   return placed(scan, named(name), kind, parts[parts.size - 1], whole) if user
 
   # A builtin is named with its namespace (`File.read`), which is part of the name.
-  return placed(scan, named(name), kind, whole, whole)
+  placed(scan, named(name), kind, whole, whole)
 end
 
 # The name of a declared type written from `start`, or of a builtin one when the scan wants those.
 def type_name_sites(scan: Scan, name: String, start: Source.Position, kind: String) -> List[Site]
-  return bounded_type_sites(scan, name, start, scan.text.length, kind)
+  bounded_type_sites(scan, name, start, scan.text.length, kind)
 end
 
 # The same, reading only the names that end by offset `limit`: `Models.User.members` holds the type `Models.User`
@@ -437,7 +436,7 @@ def bounded_type_sites(scan: Scan, name: String, start: Source.Position, limit: 
   return [] if parts.size == 0
 
   last = parts[parts.size - 1]
-  return placed(scan, named(name), kind, last, Source.Span(start: parts[0].start, stop: last.stop))
+  placed(scan, named(name), kind, last, Source.Span(start: parts[0].start, stop: last.stop))
 end
 
 # `Shape.Circle` (or `Models.Shape.Circle`) written from the start of `span`: the enum is the part before the last, the
@@ -449,7 +448,7 @@ def enum_part_sites(scan: Scan, enum_name: String, variant_name: String, span: S
   enum_part = parts[parts.size - 2]
   variant_part = parts[parts.size - 1]
   reach = Source.Span(start: parts[0].start, stop: enum_part.stop)
-  return placed(scan, named(enum_name), kind, enum_part, reach).concat(
+  placed(scan, named(enum_name), kind, enum_part, reach).concat(
     placed(scan, member("variant", enum_name, variant_name), kind, variant_part, variant_part),
   )
 end
@@ -464,7 +463,7 @@ def field_sites(scan: Scan, owner: String, args: List[Ast.NamedArg], kind: Strin
     out = out.concat(placed(scan, member("field", owner, arg.name), kind, span, span))
   end
 
-  return out
+  out
 end
 
 # The variants named by a pattern, nested patterns included.
@@ -489,13 +488,13 @@ def pattern_sites(scan: Scan, pattern: Ast.Pattern) -> List[Site]
     at += 1
   end
 
-  return out
+  out
 end
 
 def optional_type_sites(scan: Scan, type: Optional[Ast.TypeRef], parameters: List[String]) -> List[Site]
   case type
-    some(found) -> return type_sites(scan, found, parameters)
-    none -> return []
+    some(found) -> type_sites(scan, found, parameters)
+    none -> []
   end
 end
 
@@ -516,18 +515,18 @@ def type_sites(scan: Scan, type: Ast.TypeRef, parameters: List[String]) -> List[
     work = work.concat(ref.args)
   end
 
-  return out
+  out
 end
 
 # A type the parser made around a written one, with its span (the Result of an extern function that returns a
 # resource): it is not written, so the name there is its argument's.
 def made?(ref: Ast.TypeRef) -> Bool
-  return ref.args.any? do |arg: Ast.TypeRef| arg.span.start.offset == ref.span.start.offset end
+  ref.args.any? do |arg: Ast.TypeRef| arg.span.start.offset == ref.span.start.offset end
 end
 
 # The position `count` characters further on the same line.
 def after(start: Source.Position, count: Int) -> Source.Position
-  return Source.Position(offset: start.offset + count, line: start.line, column: start.column + count)
+  Source.Position(offset: start.offset + count, line: start.line, column: start.column + count)
 end
 
 # The dotted name that the text holds from `start`, one span for each name between dots (`Models.User` has two). Only
@@ -549,7 +548,7 @@ def written(text: String, start: Source.Position) -> List[Source.Span]
     at += 1
   end
 
-  return piece(parts, start, from, at)
+  piece(parts, start, from, at)
 end
 
 # Adds the span from `from` to `to` (excluded), counted from `start`, when it holds a character.
@@ -557,5 +556,5 @@ def piece(parts: List[Source.Span], start: Source.Position, from: Int, to: Int) 
   return parts if to <= from
 
   span = Source.Span(start: after(start, from), stop: after(start, to))
-  return parts.push(span)
+  parts.push(span)
 end

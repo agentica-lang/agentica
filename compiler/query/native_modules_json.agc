@@ -8,7 +8,7 @@ import DocJson from "../docs/doc_json"
 ## The object of the answer.
 export def json(found: Model.NativeModules) -> Json
   blocks = found.blocks.map do |block: Model.NativeBlock| block_json(found.file, block) end
-  return JSON.object({
+  JSON.object({
     "version": JSON.from(found.version),
     "command": JSON.from("native-modules"),
     "file": JSON.from(found.file),
@@ -21,7 +21,7 @@ def block_json(file: String, block: Model.NativeBlock) -> Json
   functions = block.functions.map do |function: Model.NativeFunction| function_json(file, function) end
   resources = block.resources.map do |resource: Model.NativeResource| resource_json(file, resource) end
   types = block.types.map do |type: Model.NativeType| type_json(type) end
-  return JSON.object({
+  JSON.object({
     "library": JSON.from(block.library),
     "span": DocJson.span_json(file, block.range),
     "api": JSON.object({"major": JSON.from(block.api_major), "minor": JSON.from(block.api_minor)}),
@@ -36,7 +36,7 @@ def function_json(file: String, function: Model.NativeFunction) -> Json
     JSON.object({"name": JSON.from(parameter.name), "type": JSON.from(parameter.type)})
   end
 
-  return JSON.object({
+  JSON.object({
     "name": JSON.from(function.name),
     "mode": JSON.from(function.mode),
     "exported": JSON.from(function.exported),
@@ -52,7 +52,7 @@ def function_json(file: String, function: Model.NativeFunction) -> Json
 end
 
 def resource_json(file: String, resource: Model.NativeResource) -> Json
-  return JSON.object({
+  JSON.object({
     "name": JSON.from(resource.name),
     "exported": JSON.from(resource.exported),
     "doc": DocJson.text_json(resource.doc),
@@ -71,7 +71,7 @@ def type_json(type: Model.NativeType) -> Json
     })
   end
 
-  return JSON.object({
+  JSON.object({
     "kind": JSON.from(type.kind),
     "name": JSON.from(type.name),
     "shape": JSON.from(type.shape),

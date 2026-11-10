@@ -97,10 +97,10 @@ export def prelude_file?(program: Program, file: Int) -> Bool = program.sources[
 
 ## The instruction with no immediate and no builtin name.
 export def instr(op: String, args: List[Int], file: Int, spans: List[Source.Span]) -> Instr
-  return Instr(op: op, args: args, imm: Imm.Void, name: "", file: file, spans: spans)
+  Instr(op: op, args: args, imm: Imm.Void, name: "", file: file, spans: spans)
 end
 
 ## The label with that id.
 export def label(id: Int, file: Int) -> Instr
-  return Instr(op: "label", args: [id], imm: Imm.Void, name: "", file: file, spans: [])
+  Instr(op: "label", args: [id], imm: Imm.Void, name: "", file: file, spans: [])
 end

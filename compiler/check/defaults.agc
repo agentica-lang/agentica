@@ -23,7 +23,7 @@ end
 ## first unless the last parameter is an Fn (Builtins.default_problem), so the shape is the one a function of the
 ## program with those defaults would have.
 export def builtin_shape(form: Model.Builtin) -> Shape
-  return Shape(required: Builtins.required_count(form), total: form.parameters.size, fn_last: Builtins.fn_last?(form))
+  Shape(required: Builtins.required_count(form), total: form.parameters.size, fn_last: Builtins.fn_last?(form))
 end
 
 ## The shape of a function, read from its parameters. The order of the defaults was checked before
@@ -46,7 +46,7 @@ export def shape(params: List[Ast.Param]) -> Shape
     required = first + 1
   end
 
-  return Shape(required: required, total: total, fn_last: fn_last)
+  Shape(required: required, total: total, fn_last: fn_last)
 end
 
 ## True when the function has a parameter with a default.
@@ -56,7 +56,7 @@ export def has_defaults?(shape: Shape) -> Bool = shape.required < shape.total
 export def param_of(shape: Shape, count: Int, index: Int) -> Int
   return shape.total - 1 if shape.fn_last and index == count - 1
 
-  return index
+  index
 end
 
 ## The argument that fills a parameter in a call with count arguments, or -1 when the default fills it.
@@ -71,7 +71,7 @@ export def argument_for(shape: Shape, count: Int, param: Int) -> Int
 
   return param if param < count
 
-  return -1
+  -1
 end
 
 ## True when a struct field has a default value.

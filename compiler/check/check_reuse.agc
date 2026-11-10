@@ -61,7 +61,7 @@ export def take(
     step_tries: moved_tries(linked, before, old.step_tries, plan.stretches),
   )
 
-  return Taken(st: st, constants: plan.constants, clean: plan.clean)
+  Taken(st: st, constants: plan.constants, clean: plan.clean)
 end
 
 # The modules of `wanted` that `before` has with the same ids and the types of all their constants, ordered by ids.
@@ -97,7 +97,7 @@ def planned(
   end
 
   ordered = stretches.sort_by do |stretch: Stretch| stretch.first end
-  return Plan(stretches: joined(ordered), clean: Set.new(clean), constants: constants)
+  Plan(stretches: joined(ordered), clean: Set.new(clean), constants: constants)
 end
 
 # The stretches with those that touch one another made one: a walk that kept its files leaves a few long stretches, so
@@ -113,7 +113,7 @@ def joined(ordered: List[Stretch]) -> List[Stretch]
     end
   end
 
-  return found
+  found
 end
 
 # The types that `old_constants` holds for the constants of `module`, or an error when it lacks one.
@@ -128,7 +128,7 @@ def constants_of(module: Linker.LinkedModule, old_constants: Map[String, T.Type]
     end
   end
 
-  return ok(found)
+  ok(found)
 end
 
 # The types of the new program: the old types of the stretches, at the same ids and again at the ids of their
@@ -157,7 +157,7 @@ def types_of(linked: Linker.Linked, before: Linker.Linked, old: List[T.Type], st
     end
   end
 
-  return types.concat(State.no_types(linked.ids - at))
+  types.concat(State.no_types(linked.ids - at))
 end
 
 # The id that an old id has in the new program when a stretch holds it, else -1.
@@ -184,7 +184,7 @@ def placed(linked: Linker.Linked, before: Linker.Linked, stretches: List[Stretch
     end
   end
 
-  return -1
+  -1
 end
 
 def moved_resolved(
@@ -201,7 +201,7 @@ def moved_resolved(
     end
   end
 
-  return found
+  found
 end
 
 def moved_bound(
@@ -218,7 +218,7 @@ def moved_bound(
     end
   end
 
-  return found
+  found
 end
 
 def moved_bodies(
@@ -235,7 +235,7 @@ def moved_bodies(
     end
   end
 
-  return found
+  found
 end
 
 def moved_tries(linked: Linker.Linked, before: Linker.Linked, old: Set[Int], stretches: List[Stretch]) -> Set[Int]
@@ -247,5 +247,5 @@ def moved_tries(linked: Linker.Linked, before: Linker.Linked, old: Set[Int], str
     end
   end
 
-  return Set.new(found)
+  Set.new(found)
 end

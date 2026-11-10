@@ -35,7 +35,7 @@ export def pick(query: QueryOptions.Query, usage: String) -> Picked
     return Picked.Refused(QueryOptions.refusal("extra argument #{query.words[1]}", usage))
   end
 
-  return Picked.File(query.words[0])
+  Picked.File(query.words[0])
 end
 
 ## The text of `file`. `buffered` is true when the Workspace holds the standard input as that file.
@@ -50,12 +50,12 @@ export def read(settings: Env.Settings, file: String, buffered: Bool) -> SourceF
     return Resolve.read_source(settings, key)
   end
 
-  return settings.workspace.read_text.call(file)
+  settings.workspace.read_text.call(file)
 end
 
 ## The QUERY-USAGE diagnostic of a file that cannot be read.
 export def unreadable(file: String, usage: String) -> Problems.Problem
-  return QueryOptions.refusal("cannot read #{file}", usage)
+  QueryOptions.refusal("cannot read #{file}", usage)
 end
 
 ## The name an answer gives the file: `std/MOD.agc` for a module of the standard library, otherwise the canonical path,
@@ -77,7 +77,7 @@ export def display(settings: Env.Settings, file: String, buffered: Bool) -> Stri
 
   return Paths.stored_name(base, named) if named != base and Paths.inside?(base, named)
 
-  return real.unwrap!
+  real.unwrap!
 end
 
 def embedded?(file: String, buffered: Bool) -> Bool = !buffered and file.starts_with?("std/")
@@ -86,5 +86,5 @@ def embedded?(file: String, buffered: Bool) -> Bool = !buffered and file.starts_
 def std_key(file: String) -> String
   return file if file.ends_with?(".agc")
 
-  return "#{file}.agc"
+  "#{file}.agc"
 end

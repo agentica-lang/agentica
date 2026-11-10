@@ -51,7 +51,7 @@ export def resolve_type(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bo
   return resolve_expanded(cx, st, ref, completion) if !contains_alias?(cx, ref)
 
   expanded = try expand_alias(cx, st, ref, [], State.nesting_limit(), ref.span)
-  return resolve_expanded(cx, st, expanded.ref, completion)
+  resolve_expanded(cx, st, expanded.ref, completion)
 end
 
 ## The types of several type references, in order.
@@ -61,7 +61,7 @@ export def resolve_all(cx: State.Cx, st: State.St, refs: List[TypeRef]) -> Resul
     out = out.push(try resolve_type(cx, st, ref, false))
   end
 
-  return ok(out)
+  ok(out)
 end
 
 ## The context that checks the target of a type alias: the alias's type parameters are in scope as type variables. A
@@ -70,25 +70,25 @@ end
 export def alias_scope(cx: State.Cx, decl: Ast.TypeAliasDecl) -> State.Cx
   return cx if decl.type_parameters.size == 0
 
-  return cx.with(type_params: decl.type_parameters, prelude: true)
+  cx.with(type_params: decl.type_parameters, prelude: true)
 end
 
 ## The type an alias stands for as text; a generic alias prints its parameters (List[List[T]]).
 export def alias_target_text(cx: State.Cx, st: State.St, name: String) -> Result[String]
   decl = cx.aliases[name]
   target = try resolve_type(alias_scope(cx, decl), st, decl.target, true)
-  return ok(Types.to_text(target))
+  ok(Types.to_text(target))
 end
 
 ## True for Int, String and Bytes, the types of a Map key or a Set element.
 export def key_type?(type: ResolvedType) -> Bool
-  return Types.is?(type, "Int") or Types.is?(type, "String") or Types.is?(type, "Bytes")
+  Types.is?(type, "Int") or Types.is?(type, "String") or Types.is?(type, "Bytes")
 end
 
 ## True when the type may be a Map key or a Set element where cx checks: Int, String and Bytes, and in the files of the
 ## prelude a type variable too (the checker has checked the types it stands for, check_prelude.agc).
 export def key_here?(cx: State.Cx, type: ResolvedType) -> Bool
-  return key_type?(type) or (cx.prelude and Types.is?(type, "Var"))
+  key_type?(type) or (cx.prelude and Types.is?(type, "Var"))
 end
 
 ## True for Int and Float.
@@ -96,12 +96,12 @@ export def numeric?(type: ResolvedType) -> Bool = Types.is?(type, "Int") or Type
 
 ## True for Int, Float, Bool, String and Nil, the types that == compares.
 export def primitive?(type: ResolvedType) -> Bool
-  return numeric?(type) or Types.is?(type, "Bool") or Types.is?(type, "String") or Types.is?(type, "Nil")
+  numeric?(type) or Types.is?(type, "Bool") or Types.is?(type, "String") or Types.is?(type, "Nil")
 end
 
 ## True for JsonField[T], the builtin enum of an optional and nullable JSON field.
 export def json_field?(type: ResolvedType) -> Bool
-  return Types.is?(type, "Enum") and Types.name(type) == "JsonField" and Types.args(type).size == 1
+  Types.is?(type, "Enum") and Types.name(type) == "JsonField" and Types.args(type).size == 1
 end
 
 ## Where the type has a JsonField that a JSON builtin does not allow, or "" when it has none: JsonField may only be the
@@ -109,7 +109,7 @@ end
 ## not ("list item", "map value", "nested JsonField", "encode argument") and owner the struct field it sits in
 ## ("Wrapper.items", "" outside a struct). Runs before the decodable and encodable tests.
 export def json_field_place(cx: State.Cx, type: ResolvedType, direct: Bool, kind: String, owner: String) -> String
-  return place_walk(cx, type, direct, kind, owner, {}).place
+  place_walk(cx, type, direct, kind, owner, {}).place
 end
 
 ## True when a Bytes sits anywhere in the type: the type itself, an item, a key or a value, a type argument, or a field
@@ -117,15 +117,13 @@ end
 ## way). A struct is read once, by its declared fields: its type arguments are walked on their own, so a generic struct
 ## that nests itself with other arguments ends.
 export def bytes_inside?(cx: State.Cx, type: ResolvedType) -> Bool
-  return inside?(cx, type) do |current: ResolvedType| Types.is?(current, "Bytes") end
+  inside?(cx, type) do |current: ResolvedType| Types.is?(current, "Bytes") end
 end
 
 ## True when a JsonField of an Optional sits anywhere in the type, walked as bytes_inside? walks: it picks the help of
 ## a JSON builtin that refuses the type, since JSON writes null for both none and JsonField.Null.
 export def optional_json_field_inside?(cx: State.Cx, type: ResolvedType) -> Bool
-  return inside?(cx, type) do |current: ResolvedType|
-    json_field?(current) and Types.is?(json_item(current), "Optional")
-  end
+  inside?(cx, type) do |current: ResolvedType| json_field?(current) and Types.is?(json_item(current), "Optional") end
 end
 
 ## True when JSON.encode can write a value of the type: primitives, Json, lists, maps with String keys, structs of
@@ -145,7 +143,7 @@ export def encode_needs(cx: State.Cx, type: ResolvedType) -> Optional[List[Resol
 
   return none if !encodable?(cx, substitute(type, strings))
 
-  return some(variable_needs(type, []))
+  some(variable_needs(type, []))
 end
 
 ## CHECK-NOT-ENCODABLE when the type arguments that a call or a reference of the generic function callee binds (found)
@@ -185,7 +183,7 @@ export def check_json_needs(
     end
   end
 
-  return ok(current)
+  ok(current)
 end
 
 ## found with the need, unless it holds the same type already.
@@ -193,7 +191,7 @@ export def add_need(found: List[ResolvedType], need: ResolvedType) -> List[Resol
   text = Types.to_text(need)
   return found if found.any? do |known: ResolvedType| Types.to_text(known) == text end
 
-  return found.push(need)
+  found.push(need)
 end
 
 ## True when JSON.decode can read a value of the type: Int, Float, Bool, String, lists, maps with String keys, plain
@@ -209,12 +207,12 @@ export def decodable?(cx: State.Cx, type: ResolvedType) -> Bool = decode_walk(cx
 export def ats_value?(cx: State.Cx, type: ResolvedType) -> Bool
   return false if Types.is?(type, "Nil") or !data?(cx, type)
 
-  return cx.prelude or !has_variables?(type)
+  cx.prelude or !has_variables?(type)
 end
 
 ## CHECK-ATS-VALUE for the value type of an ATS that ats_value? refuses, at span.
 export def ats_value_failure(cx: State.Cx, st: State.St, type: ResolvedType, span: Source.Span) -> String
-  return State.fail_help(
+  State.fail_help(
     cx,
     st,
     "CHECK-ATS-VALUE",
@@ -241,28 +239,28 @@ export def equality?(cx: State.Cx, type: ResolvedType) -> Bool = data_walk(cx, t
 ## (List[Fn[Int, Int]]). A struct field also gives its declaration.
 export def equality_gap(cx: State.Cx, type: ResolvedType) -> Gap
   found = data_walk(cx, type, {}, true)
-  return Gap(why: found.why, file: found.file, field: found.field)
+  Gap(why: found.why, file: found.file, field: found.field)
 end
 
 ## True when the type has a type variable inside.
 export def has_variables?(type: ResolvedType) -> Bool
   case type
-    Types.Type.Var(_) -> return true
-    Types.Type.Result(item) -> return has_variables?(item)
-    Types.Type.Optional(item) -> return has_variables?(item)
-    Types.Type.Task(item) -> return has_variables?(item)
-    Types.Type.Channel(item) -> return has_variables?(item)
-    Types.Type.Lazy(item) -> return has_variables?(item)
-    Types.Type.Codec(item) -> return has_variables?(item)
-    Types.Type.List(item) -> return has_variables?(item)
-    Types.Type.Set(item) -> return has_variables?(item)
-    Types.Type.Map(key, value) -> return has_variables?(key) or has_variables?(value)
-    Types.Type.ATS(key, value) -> return has_variables?(key) or has_variables?(value)
+    Types.Type.Var(_) -> true
+    Types.Type.Result(item) -> has_variables?(item)
+    Types.Type.Optional(item) -> has_variables?(item)
+    Types.Type.Task(item) -> has_variables?(item)
+    Types.Type.Channel(item) -> has_variables?(item)
+    Types.Type.Lazy(item) -> has_variables?(item)
+    Types.Type.Codec(item) -> has_variables?(item)
+    Types.Type.List(item) -> has_variables?(item)
+    Types.Type.Set(item) -> has_variables?(item)
+    Types.Type.Map(key, value) -> has_variables?(key) or has_variables?(value)
+    Types.Type.ATS(key, value) -> has_variables?(key) or has_variables?(value)
     Types.Type.Fn(params, result) ->
-      return params.any? do |param: ResolvedType| has_variables?(param) end or has_variables?(result)
-    Types.Type.Struct(_, args) -> return args.any? do |arg: ResolvedType| has_variables?(arg) end
-    Types.Type.Enum(_, args) -> return args.any? do |arg: ResolvedType| has_variables?(arg) end
-    _ -> return false
+      params.any? do |param: ResolvedType| has_variables?(param) end or has_variables?(result)
+    Types.Type.Struct(_, args) -> args.any? do |arg: ResolvedType| has_variables?(arg) end
+    Types.Type.Enum(_, args) -> args.any? do |arg: ResolvedType| has_variables?(arg) end
+    _ -> false
   end
 end
 
@@ -270,7 +268,7 @@ end
 ## function or the type of a field: every variable in it is a parameter of the declaration, whatever the types in
 ## substitutions hold (they may hold the variables of the code that calls).
 export def open_variables?(template: ResolvedType, substitutions: Map[String, ResolvedType]) -> Bool
-  return variable_names(template).any? do |name: String| !substitutions.has_key?(name) end
+  variable_names(template).any? do |name: String| !substitutions.has_key?(name) end
 end
 
 ## The names of the type variables written in the type, in order, with repeats.
@@ -282,19 +280,19 @@ export def variable_names(type: ResolvedType) -> List[String]
     names = names.concat(variable_names(part))
   end
 
-  return names
+  names
 end
 
 ## True when the type has Void where a value is needed. Void is valid as the result of a function type, the last type
 ## of an Fn, and the item of a Result or a Task: completion says the type is in such a place.
 export def misplaced_void?(type: ResolvedType, completion: Bool) -> Bool
   case type
-    Types.Type.Void -> return !completion
-    Types.Type.Result(item) -> return misplaced_void?(item, true)
-    Types.Type.Task(item) -> return misplaced_void?(item, true)
+    Types.Type.Void -> !completion
+    Types.Type.Result(item) -> misplaced_void?(item, true)
+    Types.Type.Task(item) -> misplaced_void?(item, true)
     Types.Type.Fn(params, result) ->
-      return params.any? do |param: ResolvedType| misplaced_void?(param, false) end or misplaced_void?(result, true)
-    _ -> return parts(type).any? do |part: ResolvedType| misplaced_void?(part, false) end
+      params.any? do |param: ResolvedType| misplaced_void?(param, false) end or misplaced_void?(result, true)
+    _ -> parts(type).any? do |part: ResolvedType| misplaced_void?(part, false) end
   end
 end
 
@@ -326,36 +324,34 @@ export def learn(
     index += 1
   end
 
-  return found
+  found
 end
 
 ## The type with each type variable that has a substitution replaced.
 export def substitute(type: ResolvedType, substitutions: Map[String, ResolvedType]) -> ResolvedType
   case type
-    Types.Type.Var(name) -> return substitution(type, name, substitutions)
-    Types.Type.Result(item) -> return Types.Type.Result(substitute(item, substitutions))
-    Types.Type.Optional(item) -> return Types.Type.Optional(substitute(item, substitutions))
-    Types.Type.Task(item) -> return Types.Type.Task(substitute(item, substitutions))
-    Types.Type.Channel(item) -> return Types.Type.Channel(substitute(item, substitutions))
-    Types.Type.Lazy(item) -> return Types.Type.Lazy(substitute(item, substitutions))
-    Types.Type.Codec(item) -> return Types.Type.Codec(substitute(item, substitutions))
-    Types.Type.List(item) -> return Types.Type.List(substitute(item, substitutions))
-    Types.Type.Set(item) -> return Types.Type.Set(substitute(item, substitutions))
-    Types.Type.Map(key, value) ->
-      return Types.Type.Map(substitute(key, substitutions), substitute(value, substitutions))
-    Types.Type.ATS(key, value) ->
-      return Types.Type.ATS(substitute(key, substitutions), substitute(value, substitutions))
+    Types.Type.Var(name) -> substitution(type, name, substitutions)
+    Types.Type.Result(item) -> Types.Type.Result(substitute(item, substitutions))
+    Types.Type.Optional(item) -> Types.Type.Optional(substitute(item, substitutions))
+    Types.Type.Task(item) -> Types.Type.Task(substitute(item, substitutions))
+    Types.Type.Channel(item) -> Types.Type.Channel(substitute(item, substitutions))
+    Types.Type.Lazy(item) -> Types.Type.Lazy(substitute(item, substitutions))
+    Types.Type.Codec(item) -> Types.Type.Codec(substitute(item, substitutions))
+    Types.Type.List(item) -> Types.Type.List(substitute(item, substitutions))
+    Types.Type.Set(item) -> Types.Type.Set(substitute(item, substitutions))
+    Types.Type.Map(key, value) -> Types.Type.Map(substitute(key, substitutions), substitute(value, substitutions))
+    Types.Type.ATS(key, value) -> Types.Type.ATS(substitute(key, substitutions), substitute(value, substitutions))
     Types.Type.Fn(params, result) ->
-      return Types.Type.Fn(substitute_all(params, substitutions), substitute(result, substitutions))
-    Types.Type.Struct(name, args) -> return Types.Type.Struct(name, substitute_all(args, substitutions))
-    Types.Type.Enum(name, args) -> return Types.Type.Enum(name, substitute_all(args, substitutions))
-    _ -> return type
+      Types.Type.Fn(substitute_all(params, substitutions), substitute(result, substitutions))
+    Types.Type.Struct(name, args) -> Types.Type.Struct(name, substitute_all(args, substitutions))
+    Types.Type.Enum(name, args) -> Types.Type.Enum(name, substitute_all(args, substitutions))
+    _ -> type
   end
 end
 
 ## substitute for each type of a list.
 export def substitute_all(types: List[ResolvedType], substitutions: Map[String, ResolvedType]) -> List[ResolvedType]
-  return types.map do |type: ResolvedType| substitute(type, substitutions) end
+  types.map do |type: ResolvedType| substitute(type, substitutions) end
 end
 
 ## The substitutions that a list of type parameters and a list of type arguments of the same length make.
@@ -367,7 +363,7 @@ export def bindings(parameters: List[String], args: List[ResolvedType]) -> Map[S
     index += 1
   end
 
-  return found
+  found
 end
 
 ## The fields of a struct type with its type arguments put in, in declaration order: a Box[Int] has `value: Int`.
@@ -378,7 +374,7 @@ export def fields_of(cx: State.Cx, type: ResolvedType) -> List[Model.Named]
   return cx.structs[name] if parameters.size == 0 or parameters.size != Types.args(type).size
 
   substitutions = bindings(parameters, Types.args(type))
-  return cx.structs[name].map do |field: Model.Named| field.with(type: substitute(field.type, substitutions)) end
+  cx.structs[name].map do |field: Model.Named| field.with(type: substitute(field.type, substitutions)) end
 end
 
 ## Matches the actual type against a template that may have type variables, and returns the substitutions with what the
@@ -407,13 +403,13 @@ export def unify(
   end
 
   try State.ensure(cx, st, actual, template, span)
-  return ok(substitutions)
+  ok(substitutions)
 end
 
 def contains_alias?(cx: State.Cx, ref: TypeRef) -> Bool
   return true if !cx.type_params.any? do |item: String| item == ref.name end and cx.aliases.has_key?(ref.name)
 
-  return ref.args.any? do |arg: TypeRef| contains_alias?(cx, arg) end
+  ref.args.any? do |arg: TypeRef| contains_alias?(cx, arg) end
 end
 
 def expand_alias(
@@ -476,7 +472,7 @@ def expand_alias(
     left = expanded.remaining
   end
 
-  return ok(Expansion(ref: ref.with(args: args), remaining: left))
+  ok(Expansion(ref: ref.with(args: args), remaining: left))
 end
 
 # One use of a declared alias: the arguments first, in the scope of the use, so an alias in an argument is not taken
@@ -528,14 +524,14 @@ def expand_use(
     )
   end
 
-  return ok(Expansion(ref: result, remaining: left))
+  ok(Expansion(ref: result, remaining: left))
 end
 
 def alias_arity_text(name: String, decl: Ast.TypeAliasDecl, ref: TypeRef) -> String
   shown = Types.display_name(name)
   return "type alias #{shown} takes no type arguments" if decl.type_parameters.size == 0
 
-  return "type alias #{shown} #{expects_text(decl.type_parameters.size, ref.args.size)}"
+  "type alias #{shown} #{expects_text(decl.type_parameters.size, ref.args.size)}"
 end
 
 # The tail of the arity message of a generic alias or enum.
@@ -556,7 +552,7 @@ def replace_parameters(ref: TypeRef, parameters: List[String], args: List[TypeRe
   end
 
   inner = ref.args.map do |arg: TypeRef| replace_parameters(arg, parameters, args) end
-  return ref.with(args: inner)
+  ref.with(args: inner)
 end
 
 # CHECK-UNKNOWN-TYPE when the expanded target names a type that a type parameter of the use hides. Reading the name as
@@ -591,7 +587,7 @@ def check_capture(
     try check_capture(cx, st, arg, parameters, span)
   end
 
-  return ok(true)
+  ok(true)
 end
 
 # A parameter that the target does not use drops its argument in the substitution; the argument still has to be a type
@@ -612,13 +608,13 @@ def check_unused_arguments(
     index += 1
   end
 
-  return ok(true)
+  ok(true)
 end
 
 def uses_name?(ref: TypeRef, name: String) -> Bool
   return ref.name == name if ref.args.size == 0
 
-  return ref.args.any? do |arg: TypeRef| uses_name?(arg, name) end
+  ref.args.any? do |arg: TypeRef| uses_name?(arg, name) end
 end
 
 # The number of type references written in the type: the unit of the expansion limit.
@@ -628,12 +624,12 @@ def ref_count(ref: TypeRef) -> Int
     total += ref_count(arg)
   end
 
-  return total
+  total
 end
 
 def relocate(ref: TypeRef, span: Source.Span) -> TypeRef
   args = ref.args.map do |arg: TypeRef| relocate(arg, span) end
-  return ref.with(args: args, span: span)
+  ref.with(args: args, span: span)
 end
 
 def cycle_text(seen: List[String], repeated: String) -> String
@@ -647,7 +643,7 @@ def cycle_text(seen: List[String], repeated: String) -> String
   end
 
   names = names.push(repeated).map do |name: String| Types.display_name(name) end
-  return names.join(" -> ")
+  names.join(" -> ")
 end
 
 def resolve_expanded(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) -> Result[ResolvedType]
@@ -679,7 +675,7 @@ def resolve_expanded(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool)
     return resolve_set(cx, st, args[0])
   end
 
-  return resolve_generic(cx, st, ref)
+  resolve_generic(cx, st, ref)
 end
 
 # The type resolved when it has no arguments: a type parameter, Void, a primitive, a handle, a resource, an enum or a
@@ -714,7 +710,7 @@ def resolve_plain(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) ->
     return ok(Types.Type.Opaque(name))
   end
 
-  return resolve_generic(cx, st, ref)
+  resolve_generic(cx, st, ref)
 end
 
 def resolve_function(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[ResolvedType]
@@ -726,7 +722,7 @@ def resolve_function(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[
   end
 
   result = try resolve_expanded(cx, st, args[args.size - 1], true)
-  return ok(Types.Type.Fn(params, result))
+  ok(Types.Type.Fn(params, result))
 end
 
 def resolve_map(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[ResolvedType]
@@ -743,7 +739,7 @@ def resolve_map(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[Resol
     )
   end
 
-  return ok(Types.Type.Map(key, try resolve_expanded(cx, st, args[1], false)))
+  ok(Types.Type.Map(key, try resolve_expanded(cx, st, args[1], false)))
 end
 
 # ATS[K, V]: the key as a Map key (Int, String or Bytes; CHECK-MAP-KEY-TYPE otherwise), and a value that
@@ -753,7 +749,7 @@ def resolve_ats(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[Resol
   value = Types.value(map)
   return error(ats_value_failure(cx, st, value, args[1].span)) if !ats_value?(cx, value)
 
-  return ok(Types.Type.ATS(Types.key(map), value))
+  ok(Types.Type.ATS(Types.key(map), value))
 end
 
 def resolve_set(cx: State.Cx, st: State.St, arg: TypeRef) -> Result[ResolvedType]
@@ -770,7 +766,7 @@ def resolve_set(cx: State.Cx, st: State.St, arg: TypeRef) -> Result[ResolvedType
     )
   end
 
-  return ok(Types.Type.Set(element))
+  ok(Types.Type.Set(element))
 end
 
 # An enum (with its type arguments), a struct, or the unknown type.
@@ -809,9 +805,7 @@ def resolve_generic(cx: State.Cx, st: State.St, ref: TypeRef) -> Result[Resolved
     help = Help.near(name, candidates, shared_type_names(cx))
   end
 
-  return error(
-    State.fail_maybe(cx, st, "CHECK-UNKNOWN-TYPE", "unknown type \"#{Types.display_name(name)}\"", ref.span, help),
-  )
+  error(State.fail_maybe(cx, st, "CHECK-UNKNOWN-TYPE", "unknown type \"#{Types.display_name(name)}\"", ref.span, help))
 end
 
 # A generic struct with its type arguments: one per type parameter, CHECK-UNKNOWN-TYPE otherwise (a bare Box too).
@@ -834,12 +828,12 @@ def resolve_generic_struct(cx: State.Cx, st: State.St, ref: TypeRef) -> Result[R
     args = args.push(try resolve_expanded(cx, st, arg, false))
   end
 
-  return ok(Types.Type.Struct(ref.name, args))
+  ok(Types.Type.Struct(ref.name, args))
 end
 
 # The type names offered as a guess for an unknown type besides the structs and enums.
 def shared_type_names(cx: State.Cx) -> List[String]
-  return [
+  [
     "Int",
     "Float",
     "Bool",
@@ -892,7 +886,7 @@ def inside?(cx: State.Cx, type: ResolvedType, found: Fn[ResolvedType, Bool]) -> 
     end
   end
 
-  return false
+  false
 end
 
 # json_field_place for one type. seen holds every struct walked in the whole call (place_key), not only the ones on
@@ -947,7 +941,7 @@ def place_walk(
     return place_enum(cx, type, seen)
   end
 
-  return Placed(place: "", seen: seen)
+  Placed(place: "", seen: seen)
 end
 
 # place_walk for an instance of a user enum. A JsonField is never allowed in a payload, whatever the enum's arguments
@@ -982,13 +976,13 @@ def place_enum(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Pla
     end
   end
 
-  return Placed(place: "", seen: seen)
+  Placed(place: "", seen: seen)
 end
 
 # True for an enum the program declares: not a builtin one (JsonField, LogLevel ...), which JSON handles on its own or
 # not at all.
 def user_enum?(cx: State.Cx, type: ResolvedType) -> Bool
-  return cx.enums.has_key?(Types.name(type)) and !ENUMS.has_key?(Types.name(type))
+  cx.enums.has_key?(Types.name(type)) and !ENUMS.has_key?(Types.name(type))
 end
 
 # The name of a struct type and a J for each JsonField argument and an I for each other one ("Box[J]"): what the
@@ -1006,7 +1000,7 @@ def place_key(type: ResolvedType) -> String
     end
   end
 
-  return "Struct:#{name}[#{marks}]"
+  "Struct:#{name}[#{marks}]"
 end
 
 # The fields of a struct type to place after its type arguments were walked: each type parameter is replaced by a
@@ -1030,7 +1024,7 @@ def place_fields(cx: State.Cx, type: ResolvedType) -> List[Model.Named]
     index += 1
   end
 
-  return cx.structs[name].map do |field: Model.Named| field.with(type: substitute(field.type, stand)) end
+  cx.structs[name].map do |field: Model.Named| field.with(type: substitute(field.type, stand)) end
 end
 
 def passed(seen: Map[String, Bool]) -> Walk = Walk(passes: true, seen: seen, why: "", file: "", field: none)
@@ -1041,7 +1035,7 @@ def refused(seen: Map[String, Bool]) -> Walk = Walk(passes: false, seen: seen, w
 def refused_at(found: Walk, why: String) -> Walk
   return found if found.why != ""
 
-  return found.with(why: why)
+  found.with(why: why)
 end
 
 # refused_at for the field at index of the struct: the declaration of the field goes with the reason. A struct with no
@@ -1053,7 +1047,7 @@ def refused_in_field(cx: State.Cx, found: Walk, name: String, index: Int, why: S
   return found.with(why: why) if !sites.some? or index >= sites.unwrap!.spans.size
 
   site = sites.unwrap!
-  return found.with(why: why, file: site.file, field: some(site.spans[index]))
+  found.with(why: why, file: site.file, field: some(site.spans[index]))
 end
 
 def encode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
@@ -1075,7 +1069,7 @@ def encode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Wa
     return enum_walk(cx, type, seen, 0)
   end
 
-  return refused(seen)
+  refused(seen)
 end
 
 def decode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Walk
@@ -1101,7 +1095,7 @@ def decode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Wa
     return enum_walk(cx, type, seen, 1)
   end
 
-  return refused(seen)
+  refused(seen)
 end
 
 # The walk of a user enum type for the test (0 encodable, 1 decodable), as struct_walk walks a struct: the type
@@ -1133,21 +1127,21 @@ def enum_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test: I
     end
   end
 
-  return passed(seen)
+  passed(seen)
 end
 
 # T of a JsonField[T] or an Optional[T].
 def json_item(type: ResolvedType) -> ResolvedType
   return Types.args(type)[0] if json_field?(type)
 
-  return Types.item(type)
+  Types.item(type)
 end
 
 # True for a JsonField or an Optional whose T is Nil, or a JsonField of an Optional: JSON would write null for a value
 # that is there, so decode could not give it back.
 def json_null_item?(type: ResolvedType) -> Bool
   item = json_item(type)
-  return Types.is?(item, "Nil") or (json_field?(type) and Types.is?(item, "Optional"))
+  Types.is?(item, "Nil") or (json_field?(type) and Types.is?(item, "Optional"))
 end
 
 # data? for one type, or equality? when equal is true (Json is then refused). seen holds every struct and enum walked
@@ -1184,7 +1178,7 @@ def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equal: 
     return nominal_walk(cx, type, seen, equal)
   end
 
-  return refused(seen)
+  refused(seen)
 end
 
 # The walk of a struct type for the test: 0 for encodable, 1 for decodable. The type arguments are tested first, each
@@ -1218,14 +1212,14 @@ def struct_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test:
     seen = found.seen
   end
 
-  return passed(seen)
+  passed(seen)
 end
 
 # encode_walk for test 0, decode_walk for test 1.
 def test_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test: Int) -> Walk
   return encode_walk(cx, type, seen) if test == 0
 
-  return decode_walk(cx, type, seen)
+  decode_walk(cx, type, seen)
 end
 
 # The name of a struct type and an N for each Nil argument and an I for each other one ("W[IN]"): what the stand-ins
@@ -1243,7 +1237,7 @@ def walk_key(type: ResolvedType) -> String
     end
   end
 
-  return "#{name}[#{marks}]"
+  "#{name}[#{marks}]"
 end
 
 # data_walk for a struct or an enum: the type arguments, then the fields or payloads once for each key (struct_walk).
@@ -1294,7 +1288,7 @@ def nominal_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equa
     end
   end
 
-  return passed(seen)
+  passed(seen)
 end
 
 # The fields of a struct type to walk after its type arguments were tested: each type parameter is replaced by a
@@ -1307,7 +1301,7 @@ def stand_in_fields(cx: State.Cx, type: ResolvedType) -> List[Model.Named]
   return cx.structs[name] if parameters.size == 0 or parameters.size != Types.args(type).size
 
   stand = stand_ins(parameters, Types.args(type))
-  return cx.structs[name].map do |field: Model.Named| field.with(type: substitute(field.type, stand)) end
+  cx.structs[name].map do |field: Model.Named| field.with(type: substitute(field.type, stand)) end
 end
 
 # A type for each parameter to stand for its argument once the argument was tested: Int, or Nil for a Nil argument,
@@ -1325,19 +1319,19 @@ def stand_ins(parameters: List[String], args: List[ResolvedType]) -> Map[String,
     index += 1
   end
 
-  return found
+  found
 end
 
 def substitution(type: ResolvedType, name: String, substitutions: Map[String, ResolvedType]) -> ResolvedType
   found = substitutions.get(name)
   return found.unwrap! if found.some?
 
-  return type
+  type
 end
 
 # True for Unknown, or a type that has Unknown inside.
 def has_unknown?(type: ResolvedType) -> Bool
-  return Types.unknown?(type) or parts(type).any? do |part: ResolvedType| has_unknown?(part) end
+  Types.unknown?(type) or parts(type).any? do |part: ResolvedType| has_unknown?(part) end
 end
 
 # True for a type with other types inside: the ones unify matches part by part.
@@ -1369,26 +1363,26 @@ def unify_inside(
     index += 1
   end
 
-  return ok(found)
+  ok(found)
 end
 
 # The types inside a type, in order: the item, the key and value, the parameters then the result, the type arguments.
 def parts(type: ResolvedType) -> List[ResolvedType]
   case type
-    Types.Type.Result(item) -> return [item]
-    Types.Type.Optional(item) -> return [item]
-    Types.Type.Task(item) -> return [item]
-    Types.Type.Channel(item) -> return [item]
-    Types.Type.Lazy(item) -> return [item]
-    Types.Type.Codec(item) -> return [item]
-    Types.Type.List(item) -> return [item]
-    Types.Type.Set(item) -> return [item]
-    Types.Type.Map(key, value) -> return [key, value]
-    Types.Type.ATS(key, value) -> return [key, value]
-    Types.Type.Fn(params, result) -> return params.concat([result])
-    Types.Type.Struct(_, args) -> return args
-    Types.Type.Enum(_, args) -> return args
-    _ -> return []
+    Types.Type.Result(item) -> [item]
+    Types.Type.Optional(item) -> [item]
+    Types.Type.Task(item) -> [item]
+    Types.Type.Channel(item) -> [item]
+    Types.Type.Lazy(item) -> [item]
+    Types.Type.Codec(item) -> [item]
+    Types.Type.List(item) -> [item]
+    Types.Type.Set(item) -> [item]
+    Types.Type.Map(key, value) -> [key, value]
+    Types.Type.ATS(key, value) -> [key, value]
+    Types.Type.Fn(params, result) -> params.concat([result])
+    Types.Type.Struct(_, args) -> args
+    Types.Type.Enum(_, args) -> args
+    _ -> []
   end
 end
 
@@ -1407,7 +1401,7 @@ def binding_span(
     index += 1
   end
 
-  return span
+  span
 end
 
 # The needs of encode_needs, added to found once each.
@@ -1430,5 +1424,5 @@ def variable_needs(type: ResolvedType, found: List[ResolvedType]) -> List[Resolv
     return Types.args(type).reduce(found) do |sum: List[ResolvedType], arg: ResolvedType| variable_needs(arg, sum) end
   end
 
-  return found
+  found
 end

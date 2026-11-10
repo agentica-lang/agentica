@@ -29,18 +29,18 @@ export def run(words: List[String], style: String, settings: Env.Settings) -> Re
 
   path = rest[0]
   case QueryFiles.read(settings, path, false)
-    SourceFile.Read.Unreadable(_) -> return Reply.Answer.Printed(Reply.failed(2, "agentica: cannot read #{path}\n"))
-    SourceFile.Read.Invalid(at) -> return Reply.Answer.Rejected(Front.stage_problem(path, SourceFile.invalid_utf8(at)))
-    SourceFile.Read.Text(text) -> return documented(settings, path, text, as_json)
+    SourceFile.Read.Unreadable(_) -> Reply.Answer.Printed(Reply.failed(2, "agentica: cannot read #{path}\n"))
+    SourceFile.Read.Invalid(at) -> Reply.Answer.Rejected(Front.stage_problem(path, SourceFile.invalid_utf8(at)))
+    SourceFile.Read.Text(text) -> documented(settings, path, text, as_json)
   end
 end
 
 def documented(settings: Env.Settings, path: String, text: String, as_json: Bool) -> Reply.Answer
   case Docs.of_file(settings, path, text)
-    Diag.Outcome.Failed(problem) -> return Reply.Answer.Rejected(Front.stage_problem(path, problem))
+    Diag.Outcome.Failed(problem) -> Reply.Answer.Rejected(Front.stage_problem(path, problem))
     Diag.Outcome.Done(module) ->
       return Reply.Answer.Printed(Reply.printed("#{JSON.encode(DocJson.json(path, module))}\n")) if as_json
 
-      return Reply.Answer.Printed(Reply.printed(DocText.text(path, module)))
+      Reply.Answer.Printed(Reply.printed(DocText.text(path, module)))
   end
 end

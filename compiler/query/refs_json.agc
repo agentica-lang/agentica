@@ -24,15 +24,15 @@ export def json(found: Model.Refs) -> Json
 
   return JSON.object(DiagnosticJson.partial(shape, found.diagnostics)) if found.partial
 
-  return JSON.object(shape)
+  JSON.object(shape)
 end
 
 def skipped_json(left: Model.Skipped) -> Json
-  return JSON.object({"file": JSON.from(left.file), "diagnostic": DiagnosticJson.object(left.diagnostic)})
+  JSON.object({"file": JSON.from(left.file), "diagnostic": DiagnosticJson.object(left.diagnostic)})
 end
 
 def reference_json(use: Model.Reference) -> Json
-  return JSON.object({
+  JSON.object({
     "kind": JSON.from(use.kind),
     "function": DocJson.text_json(use.function),
     "span": DocJson.span_json(use.file, use.range),
@@ -42,5 +42,5 @@ end
 def definition_json(definition: List[Model.Symbol]) -> Json
   return JSON.null() if definition.size == 0
 
-  return SymbolJson.match_json(definition[0])
+  SymbolJson.match_json(definition[0])
 end

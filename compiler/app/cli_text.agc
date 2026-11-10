@@ -190,12 +190,12 @@ OPTIONS = [
 ## What a command line gets when it names `run` after other words: `agentica run` is answered before the options of the
 ## command line are read, so it must be the first word.
 export def run_first_text() -> String
-  return "agentica: run must be the first word, before any option: agentica run [OPTIONS] -- <file.agcb> [args...]\n"
+  "agentica: run must be the first word, before any option: agentica run [OPTIONS] -- <file.agcb> [args...]\n"
 end
 
 ## What `test` says when the front end does not know the path of the binary that it has to start again.
 export def test_without_binary_text() -> String
-  return "agentica: the test command needs the path of the binary, which this front end was not given (--self)\n"
+  "agentica: the test command needs the path of the binary, which this front end was not given (--self)\n"
 end
 
 ## The usage lines, each ending with a line feed.
@@ -208,5 +208,5 @@ export def summary_text() -> String = "#{SUMMARY.join("\n")}\n"
 ## The help of `-h` and `--help`.
 export def help_text() -> String
   lines = [HELP_FIRST_LINE].concat(SUMMARY.map do |line: String| "  #{line}" end).concat(OPTIONS)
-  return "#{lines.join("\n")}\n"
+  "#{lines.join("\n")}\n"
 end
