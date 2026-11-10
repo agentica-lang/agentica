@@ -8,6 +8,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-11-10
+
 ### Added
 
 - `agentica test --coverage` writes the line coverage of the sources that the
@@ -1311,7 +1313,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.27.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.28.0...HEAD
+[0.28.0]: https://github.com/agentica-lang/agentica/compare/0.27.0...0.28.0
 [0.27.0]: https://github.com/agentica-lang/agentica/compare/0.26.2...0.27.0
 [0.26.2]: https://github.com/agentica-lang/agentica/compare/0.26.1...0.26.2
 [0.26.1]: https://github.com/agentica-lang/agentica/compare/0.26.0...0.26.1
