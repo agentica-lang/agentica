@@ -10,9 +10,7 @@ DIGITS = "0123456789abcdef"
 ## is enough there because `Dir.mkdir_private` and the `create_private` mode fail on a name that is taken and make
 ## something that only its owner can use, so a guessed name costs a retry and gives no access.
 export def hex() -> Result[String]
-  if System.os() == "windows"
-    return ok(hex_of(process_bytes()))
-  end
+  return ok(hex_of(process_bytes())) if System.os() == "windows"
 
   source = try File.open("/dev/urandom", "read", IO_TIMEOUT_MS)
   bytes: List[Int] = []

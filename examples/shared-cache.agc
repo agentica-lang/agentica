@@ -14,9 +14,7 @@ end
 def lookup(shared: Shared, n: Int) -> String
   shared.stats.add("lookups", 1)
   found = shared.cache.get(n)
-  if found.ok?
-    return found.unwrap!
-  end
+  return found.unwrap! if found.ok?
 
   text = describe(n)
   if shared.cache.put_new(n, text)

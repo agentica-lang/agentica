@@ -9,9 +9,7 @@ import Rules from "rules"
 export def suggestions(file: String, decl: Ast.Decl) -> List[Problems.Problem]
   case decl
     Ast.Decl.Function(node) ->
-      if node.doc.some? and node.native.none?
-        return [Rules.at(file, Rules.PRIVATE_DOC, node.name_span)]
-      end
+      return [Rules.at(file, Rules.PRIVATE_DOC, node.name_span)] if node.doc.some? and node.native.none?
 
       return []
     Ast.Decl.Struct(node) ->
@@ -21,9 +19,7 @@ export def suggestions(file: String, decl: Ast.Decl) -> List[Problems.Problem]
 
       return []
     Ast.Decl.Enum(node) ->
-      if node.doc.some?
-        return [Rules.at(file, Rules.PRIVATE_DOC, node.name_span)]
-      end
+      return [Rules.at(file, Rules.PRIVATE_DOC, node.name_span)] if node.doc.some?
 
       return []
     _ -> return []

@@ -28,27 +28,21 @@ export def json(found: Model.TypeAt) -> Json
     "help": found.help,
   }
 
-  if found.partial
-    return JSON.object(DiagnosticJson.partial(shape.put("type", typed(found.type)), found.diagnostics))
-  end
+  return JSON.object(DiagnosticJson.partial(shape.put("type", typed(found.type)), found.diagnostics)) if found.partial
 
   return JSON.object(shape)
 end
 
 # The type, or null for a name that only the link could answer.
 def typed(type: String) -> Json
-  if type == ""
-    return JSON.null()
-  end
+  return JSON.null() if type == ""
 
   return JSON.from(type)
 end
 
 # `{file, range, kind, name, name_span}`, or null for what no file declares.
 def definition_json(definition: List[Model.Definition]) -> Json
-  if definition.size == 0
-    return JSON.null()
-  end
+  return JSON.null() if definition.size == 0
 
   found = definition[0]
   return JSON.object({

@@ -10,9 +10,7 @@ def read_service(text: String) -> Result[Service]
   name = try JSON.string(try JSON.get(service, "name"))
   port = try JSON.int(try JSON.get(service, "port"))
   enabled = try JSON.bool(try JSON.get(service, "enabled"))
-  if name == "" or port < 1 or port > 65535
-    return error("invalid config")
-  end
+  return error("invalid config") if name == "" or port < 1 or port > 65535
   return ok(Service(name: name, port: port, enabled: enabled))
 end
 

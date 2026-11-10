@@ -108,9 +108,7 @@ end
 ## not be built, a library that does not open (NativeBuild.unbuilt_path).
 export def build_target(workspace: Workspace.Workspace, request: Workspace.BuildRequest, name: String) -> Target
   listed = NativeBuild.listed(workspace, request)
-  if !listed.ok?
-    return Target.Unusable(listed.message)
-  end
+  return Target.Unusable(listed.message) if !listed.ok?
 
   case workspace.native_build.call(listed.unwrap!)
     Workspace.Built.Library(path) -> return Target.File(path)
@@ -166,15 +164,11 @@ end
 # `extern "/missing.so"`.
 def pick(workspace: Workspace.Workspace, names: List[String]) -> String
   for name in names
-    if Paths.rooted?(name) and workspace.file_exists.call(name)
-      return name
-    end
+    return name if Paths.rooted?(name) and workspace.file_exists.call(name)
   end
 
   for name in names
-    if !Paths.rooted?(name)
-      return name
-    end
+    return name if !Paths.rooted?(name)
   end
 
   return names[0]
@@ -215,22 +209,16 @@ def target_of(
 
   here = Reader.child("native", library.name)
   for place in library.places
-    if place.system != os
-      next
-    end
+    next if place.system != os
 
     if place.url != ""
       return downloaded_target(workspace, manifest, library.name, here, place, os, package_name, lock, cache_root)
     end
 
-    if place.file == ""
-      return Target.System(pick(workspace, place.names))
-    end
+    return Target.System(pick(workspace, place.names)) if place.file == ""
 
     path = Paths.join(root, place.file)
-    if workspace.file_exists.call(path)
-      return Target.File(path)
-    end
+    return Target.File(path) if workspace.file_exists.call(path)
 
     key = Reader.child(Reader.child(here, os), "file")
     message = "the native file #{place.file} is not in the package"
@@ -317,9 +305,7 @@ end
 def same_member?(left: String, right: String) -> Bool
   left_canonical = NativeArtifact.canonical_member(left)
   right_canonical = NativeArtifact.canonical_member(right)
-  if !left_canonical.ok? or !right_canonical.ok?
-    return left == right
-  end
+  return left == right if !left_canonical.ok? or !right_canonical.ok?
 
   return left_canonical.unwrap! == right_canonical.unwrap!
 end
@@ -334,9 +320,7 @@ def downloaded_watched(
   cache_root: String,
   targets: Map[String, Target],
 ) -> List[String]
-  if cache_root == ""
-    return []
-  end
+  return [] if cache_root == ""
 
   found: List[String] = []
   for library in manifest.natives

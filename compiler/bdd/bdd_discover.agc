@@ -86,9 +86,7 @@ end
 
 def walk(directory: String, found: Found) -> Found
   names = Dir.list(directory, IO_TIMEOUT)
-  if !names.ok?
-    return problem(found, directory, "cannot list the directory: #{names.message}")
-  end
+  return problem(found, directory, "cannot list the directory: #{names.message}") if !names.ok?
 
   after = found
   # The folder `deps/` beside an agentica.toml is the project's installed packages.
@@ -107,9 +105,7 @@ def visit(path: String, name: String, project: Bool, found: Found) -> Found
   bad_name = name.contains?(String.from_code(65_533))
   info = File.lstat(path, IO_TIMEOUT)
   if !info.ok? and bad_name
-    if kind_of(name) != ""
-      return problem(found, path, "the file name is not valid UTF-8")
-    end
+    return problem(found, path, "the file name is not valid UTF-8") if kind_of(name) != ""
 
     return found
   elsif !info.ok?

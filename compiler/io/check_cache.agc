@@ -53,18 +53,14 @@ end
 ## reads a stdlib/ folder, or the folder is not one that can be trusted.
 export def attach(settings: Env.Settings, root: String, wanted: Bool) -> Env.Settings
   planned = plan(settings, root, wanted)
-  if !planned.ok?
-    return settings
-  end
+  return settings if !planned.ok?
 
   return settings.with(workspace: settings.workspace.with(check_cache: port(planned.unwrap!)))
 end
 
 ## The plan for the root file `root` (as typed).
 export def plan(settings: Env.Settings, root: String, wanted: Bool) -> Result[Plan]
-  if !wanted or settings.self_path == ""
-    return error("the cache is off")
-  end
+  return error("the cache is off") if !wanted or settings.self_path == ""
 
   case settings.std
     Env.StdProvider.Folder(_) -> return error("the front end reads a stdlib folder")
@@ -76,9 +72,7 @@ end
 # folders. A root that cannot be resolved, or has a line feed in its path, has no plan.
 def planned(settings: Env.Settings, root: String) -> Result[Plan]
   real = try settings.workspace.real_path.call(root)
-  if real.contains?("\n")
-    return error("the path has a line feed")
-  end
+  return error("the path has a line feed") if real.contains?("\n")
 
   site = try CacheFiles.site(settings, real)
   user = try CacheFiles.own_user()
@@ -138,17 +132,13 @@ end
 # The text of the entry for `key` when the file is a regular file of this user that no one else can write, was made
 # for this run (the head) and File.read_text takes it (it stops at 1 MiB: the entry of a larger file is a miss).
 def read_entry(plan: Plan, key: String) -> Result[String]
-  if !plan.present
-    return error("there is no entry")
-  end
+  return error("there is no entry") if !plan.present
 
   path = entry_path(plan, key)
   try CacheFiles.private_kind(path, "file", plan.user)
   text = try File.read_text(path, CacheFiles.IO_TIMEOUT_MS)
   wanted = "#{plan.head}\n"
-  if !text.starts_with?(wanted)
-    return error("the entry is for another build or project")
-  end
+  return error("the entry is for another build or project") if !text.starts_with?(wanted)
 
   return ok(text.slice(wanted.length, text.length - wanted.length))
 end
@@ -157,15 +147,11 @@ end
 # rename never replaces (Path.rename), so the old entry is removed first: a reader that comes in between finds none,
 # which is a miss, and a run that dies in between leaves no entry. False when anything fails.
 def write_entry(plan: Plan, key: String, text: String) -> Bool
-  if !prepare(plan).ok?
-    return false
-  end
+  return false if !prepare(plan).ok?
 
   CacheFiles.sweep(plan.folder)
   suffix = RandomName.hex()
-  if !suffix.ok?
-    return false
-  end
+  return false if !suffix.ok?
 
   path = entry_path(plan, key)
   temporary = "#{path}#{CacheFiles.TEMP_MARK}#{suffix.unwrap!}"

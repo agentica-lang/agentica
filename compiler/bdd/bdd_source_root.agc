@@ -9,24 +9,16 @@ import Paths from "../modules/import_path"
 ## "" when the file is in the working directory, and also when a path cannot be resolved.
 export def option(entry: String) -> String
   real = Path.real(entry)
-  if !real.ok?
-    return ""
-  end
+  return "" if !real.ok?
 
   folder = Paths.directory_of(real.unwrap!)
-  if Paths.rooted?(entry)
-    return folder
-  end
+  return folder if Paths.rooted?(entry)
 
   here = Path.cwd()
-  if !here.ok?
-    return ""
-  end
+  return "" if !here.ok?
 
   canonical = Path.real(here.unwrap!)
-  if !canonical.ok?
-    return ""
-  end
+  return "" if !canonical.ok?
 
   return relative(parts(canonical.unwrap!), parts(folder))
 end

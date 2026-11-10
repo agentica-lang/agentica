@@ -14,26 +14,18 @@ import Tables from "check_tables"
 ## none.
 export def method_key(name: String) -> String
   aliased = by_builtin().get(name)
-  if aliased.some?
-    return aliased.unwrap!
-  end
+  return aliased.unwrap! if aliased.some?
 
   entry = ENTRIES.get(name)
-  if entry.none? or entry.unwrap!.parameters.size == 0
-    return ""
-  end
+  return "" if entry.none? or entry.unwrap!.parameters.size == 0
 
   kind = parameter_kind(entry.unwrap!.parameters[0].type)
   module = Tables.method_modules().get(kind)
-  if module.none? or !name.starts_with?("#{module.unwrap!}.")
-    return ""
-  end
+  return "" if module.none? or !name.starts_with?("#{module.unwrap!}.")
 
   key = "#{kind}.#{name.slice(module.unwrap!.length + 1, name.length - module.unwrap!.length - 1)}"
   taken = Tables.method_aliases().get(key)
-  if taken.some? and taken.unwrap! != name
-    return ""
-  end
+  return "" if taken.some? and taken.unwrap! != name
 
   return key
 end
@@ -41,9 +33,7 @@ end
 ## The receiver kind of a builtin whose first parameter has this type: its tag (`String`, `List`, ...), but Mutex for
 ## Native.Mutex, the one opaque type with methods.
 export def parameter_kind(type: Types.Type) -> String
-  if Types.is?(type, "Opaque") and Types.name(type) == "Native.Mutex"
-    return "Mutex"
-  end
+  return "Mutex" if Types.is?(type, "Opaque") and Types.name(type) == "Native.Mutex"
 
   return Types.tag(type)
 end
@@ -51,9 +41,7 @@ end
 ## The method name of the Ruby form of the builtin `name` (`strip` for `String.trim`), or "".
 export def method_name(name: String) -> String
   key = method_key(name)
-  if key == ""
-    return ""
-  end
+  return "" if key == ""
 
   return key.slice(key.index_of(".").unwrap! + 1, key.length - key.index_of(".").unwrap! - 1)
 end
@@ -73,9 +61,7 @@ end
 ## The Ruby form of `form` written with the method name `method`, which is its own or a synonym of it (`s.size()` for
 ## `String.length`); "" when `method` is "".
 export def signature_as(form: Model.Builtin, method: String) -> String
-  if method == ""
-    return ""
-  end
+  return "" if method == ""
 
   rest = form.parameters.drop(1).map do |parameter: Model.Named| Builtins.parameter_text(parameter) end
 
@@ -84,17 +70,13 @@ end
 
 ## True when `method` is a way to write the builtin `name` as a method: its Ruby name or a synonym of it, on any kind.
 export def written_as?(name: String, method: String) -> Bool
-  if method_name(name) == method
-    return true
-  end
+  return true if method_name(name) == method
 
   aliases = Tables.method_aliases()
   for key in Tables.ruby_synonyms()
     # A synonym that `method_aliases` lacks is skipped (a test keeps the two lists in step).
     target = aliases.get(key)
-    if key.ends_with?(".#{method}") and target.some? and target.unwrap! == name
-      return true
-    end
+    return true if key.ends_with?(".#{method}") and target.some? and target.unwrap! == name
   end
 
   return false
@@ -104,9 +86,7 @@ end
 export def shown(name: String) -> String
   method = method_name(name)
   entry = ENTRIES.get(name)
-  if method == "" or entry.none?
-    return name
-  end
+  return name if method == "" or entry.none?
 
   return "#{entry.unwrap!.parameters[0].name}.#{method}"
 end

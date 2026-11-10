@@ -36,24 +36,18 @@ end
 ## workspace: a project below a broken table that does not list it builds as if the table were not there, unless the
 ## project folder is the root itself, which reports the table. A bad table is PKG-MANIFEST-INVALID.
 export def find(workspace: Workspace.Workspace, project_dir: String) -> Result[Members]
-  if Paths.last_part(Paths.directory_of(project_dir)) == DEPS_FOLDER
-    return ok(empty())
-  end
+  return ok(empty()) if Paths.last_part(Paths.directory_of(project_dir)) == DEPS_FOLDER
 
   here = project_dir
   while here != ""
     file = Paths.join(here, MANIFEST_FILE)
     if workspace.file_exists.call(file)
       tables = declared(workspace, file)
-      if tables.size > 0
-        return belongs(workspace, here, file, tables[0], project_dir)
-      end
+      return belongs(workspace, here, file, tables[0], project_dir) if tables.size > 0
     end
 
     parent = Paths.directory_of(here)
-    if parent == here
-      return ok(empty())
-    end
+    return ok(empty()) if parent == here
 
     here = parent
   end
@@ -64,13 +58,9 @@ end
 ## Whether a dependency source names a member of this workspace: its repository is the workspace's, and its subdir is a
 ## member.
 export def member?(members: Members, source: GitSource.Source) -> Bool
-  if members.root == "" or source.subdir == ""
-    return false
-  end
+  return false if members.root == "" or source.subdir == ""
 
-  if GitSource.identity(source.git) != GitSource.identity(members.repository)
-    return false
-  end
+  return false if GitSource.identity(source.git) != GitSource.identity(members.repository)
 
   return members.folders.any? do |folder| folder == source.subdir end
 end
@@ -86,14 +76,10 @@ end
 def declared(workspace: Workspace.Workspace, file: String) -> List[Toml.Value]
   reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
   text = Reader.read_text(workspace, reading)
-  if !text.ok?
-    return []
-  end
+  return [] if !text.ok?
 
   root = Reader.parse(reading, text.unwrap!)
-  if !root.ok? or !root.unwrap!.has_key?("workspace")
-    return []
-  end
+  return [] if !root.ok? or !root.unwrap!.has_key?("workspace")
 
   return [root.unwrap!["workspace"]]
 end
@@ -108,9 +94,7 @@ def belongs(
   value: Toml.Value,
   project_dir: String,
 ) -> Result[Members]
-  if root_dir != project_dir and !listed?(value, relative_to(root_dir, project_dir))
-    return ok(empty())
-  end
+  return ok(empty()) if root_dir != project_dir and !listed?(value, relative_to(root_dir, project_dir))
 
   reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
   table = try Reader.table(reading, value, "workspace")
@@ -127,9 +111,7 @@ def relative_to(root_dir: String, dir: String) -> String
     prefix = "#{prefix}/"
   end
 
-  if !dir.starts_with?(prefix)
-    return ""
-  end
+  return "" if !dir.starts_with?(prefix)
 
   return dir.slice(prefix.length, dir.length - prefix.length)
 end
@@ -137,15 +119,11 @@ end
 # Whether the raw `workspace` value lists the folder `relative` among its members: false for anything that is not a
 # table with a `members` array.
 def listed?(value: Toml.Value, relative: String) -> Bool
-  if relative == ""
-    return false
-  end
+  return false if relative == ""
 
   case value
     Toml.Value.Table(entries) ->
-      if !entries.has_key?("members")
-        return false
-      end
+      return false if !entries.has_key?("members")
 
       case entries["members"]
         Toml.Value.Array(items) -> return items.any? do |item| names?(item, relative) end
@@ -171,9 +149,7 @@ def repository_of(reading: Reader.Reading, table: Map[String, Toml.Value]) -> Re
 
   repository = try Reader.text(reading, table["repository"], path)
   problem = GitSource.git_problem(repository)
-  if problem != ""
-    return error(Reader.fail_help(reading, path, "not a git URL", problem))
-  end
+  return error(Reader.fail_help(reading, path, "not a git URL", problem)) if problem != ""
 
   return ok(repository)
 end
@@ -200,13 +176,9 @@ def folders_of(
     here = Reader.item(path, index)
     folder = try Reader.text(reading, items[index], here)
     problem = GitSource.subdir_problem(folder)
-    if problem != ""
-      return error(Reader.fail_help(reading, here, "not a member folder", problem))
-    end
+    return error(Reader.fail_help(reading, here, "not a member folder", problem)) if problem != ""
 
-    if folders.any? do |seen| seen == folder end
-      return error(Reader.fail(reading, here, "member listed twice"))
-    end
+    return error(Reader.fail(reading, here, "member listed twice")) if folders.any? do |seen| seen == folder end
 
     manifest = Paths.join(Paths.join(root_dir, folder), MANIFEST_FILE)
     if !workspace.file_exists.call(manifest)

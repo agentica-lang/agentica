@@ -199,9 +199,7 @@ end
 def tail_call(cx: Lowering.Cx, value: Ast.Expr) -> Optional[Ast.Call]
   case value
     Ast.Expr.Call(node) ->
-      if Builtins.ref(node.name, node.args.size).ok?
-        return none
-      end
+      return none if Builtins.ref(node.name, node.args.size).ok?
 
       return some(node)
     _ -> return none
@@ -260,9 +258,7 @@ end
 
 # break and next jump to the labels of the innermost loop.
 def lower_control(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.LoopControl) -> Result[Lowering.Fx]
-  if fx.loop_next < 0
-    return error(Lowering.unsupported(cx, "this statement", node.span))
-  end
+  return error(Lowering.unsupported(cx, "this statement", node.span)) if fx.loop_next < 0
 
   label = fx.loop_next
   if node.kind == "break"
@@ -275,9 +271,7 @@ end
 # The variable of a range loop names the register of its counter, except `_`: a discard must not alias that register,
 # which a later `_ = value` would otherwise overwrite.
 def bind_variable(fx: Lowering.Fx, name: String, slot: Int) -> Lowering.Fx
-  if name == "_"
-    return fx
-  end
+  return fx if name == "_"
 
   return fx.with(vars: fx.vars.put(name, slot))
 end
@@ -480,9 +474,7 @@ end
 # The body of an arm. In a case that gives a value (target is a register) the last statement is an expression, which
 # is computed into the target.
 def lower_arm_body(cx: Lowering.Cx, fx: Lowering.Fx, body: List[Ast.Stmt], target: Int) -> Result[Lowering.Fx]
-  if target < 0
-    return lower_block(cx, fx, body)
-  end
+  return lower_block(cx, fx, body) if target < 0
 
   last = body.size - 1
   fx = try lower_block(cx, fx, body.take(last))
@@ -554,9 +546,7 @@ end
 
 # Reads the payload position `item` of the variant in `value` into the register `target`.
 def read_payload(fx: Lowering.Fx, node: Ast.VariantPattern, target: Int, value: Int, item: Int) -> Lowering.Fx
-  if node.enum_name == "Result"
-    return Lowering.emit_at(fx, "result-value", [target, value], node.span)
-  end
+  return Lowering.emit_at(fx, "result-value", [target, value], node.span) if node.enum_name == "Result"
 
   return Lowering.emit_at(fx, "payload", [target, value, item], node.span)
 end
@@ -577,9 +567,7 @@ def lower_literal_test(
     Ast.LitValue.Flag(flag) -> imm = Ir.Imm.Bool(flag)
     Ast.LitValue.Nothing -> imm = Ir.Imm.Nil
     Ast.LitValue.Huge(digits) ->
-      if digits != "-#{INT_MIN_DIGITS}"
-        return ok(Lowering.emit_at(fx, "jump", [skip], node.span))
-      end
+      return ok(Lowering.emit_at(fx, "jump", [skip], node.span)) if digits != "-#{INT_MIN_DIGITS}"
 
       imm = Ir.Imm.Int(INT_MIN)
   end
@@ -673,15 +661,11 @@ end
 
 # The case on the last line of a block when the checker made it a value: it recorded the type of the case.
 def final_case(cx: Lowering.Cx, statements: List[Ast.Stmt]) -> Optional[Ast.CaseStmt]
-  if statements.size == 0
-    return none
-  end
+  return none if statements.size == 0
 
   case statements[statements.size - 1]
     Ast.Stmt.Case(node) ->
-      if Types.unknown?(cx.types[node.id])
-        return none
-      end
+      return none if Types.unknown?(cx.types[node.id])
 
       return some(node)
     _ -> return none

@@ -13,9 +13,7 @@ export def intern_run(pool: Pool.Pool, body: List[Ir.Instr], at: Int, count: Int
   # With one instruction and one span the general path below has keys = [span_key(file, span)], so its key is that one
   # key (join of one item) and run_bytes is span_bytes(file, span): intern_one builds exactly the same key and bytes.
   first = body[at]
-  if count == 1 and first.spans.size == 1
-    return intern_one(pool, first.file, first.spans[0])
-  end
+  return intern_one(pool, first.file, first.spans[0]) if count == 1 and first.spans.size == 1
 
   keys: List[String] = []
   for offset in 0...count
@@ -27,9 +25,7 @@ export def intern_run(pool: Pool.Pool, body: List[Ir.Instr], at: Int, count: Int
 
   key = keys.join(";")
   found = Pool.find(pool, key)
-  if found.some?
-    return Pool.Interned(pool: pool, id: found.unwrap!)
-  end
+  return Pool.Interned(pool: pool, id: found.unwrap!) if found.some?
 
   return Pool.Interned(pool: Pool.add(pool, key, run_bytes(body, at, count), keys.size), id: pool.count)
 end
@@ -38,9 +34,7 @@ end
 export def intern_one(pool: Pool.Pool, file: Int, span: Source.Span) -> Pool.Interned
   key = span_key(file, span)
   found = Pool.find(pool, key)
-  if found.some?
-    return Pool.Interned(pool: pool, id: found.unwrap!)
-  end
+  return Pool.Interned(pool: pool, id: found.unwrap!) if found.some?
 
   return Pool.Interned(pool: Pool.add(pool, key, span_bytes(file, span), 1), id: pool.count)
 end

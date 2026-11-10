@@ -38,9 +38,7 @@ end
 ## The item of an entry with one item, added when the key is new: its number, and the pool that holds it.
 export def intern(pool: Pool, key: String, bytes: List[Int]) -> Interned
   found = find(pool, key)
-  if found.some?
-    return Interned(pool: pool, id: found.unwrap!)
-  end
+  return Interned(pool: pool, id: found.unwrap!) if found.some?
 
   return Interned(pool: add(pool, key, bytes, 1), id: pool.count)
 end

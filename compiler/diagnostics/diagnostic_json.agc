@@ -70,9 +70,7 @@ end
 
 # A note that the diagnostic does not have is the empty text.
 def note(fields: Map[String, Json], key: String, text: String) -> Map[String, Json]
-  if text == ""
-    return fields
-  end
+  return fields if text == ""
 
   return fields.put(key, JSON.from(text))
 end

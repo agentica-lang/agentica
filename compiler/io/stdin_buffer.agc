@@ -25,9 +25,7 @@ end
 ## Reads all of the standard input.
 export def take() -> Taken
   bytes = FrontEnd.stdin_bytes()
-  if !bytes.ok?
-    return Taken.Failed(bytes.message)
-  end
+  return Taken.Failed(bytes.message) if !bytes.ok?
 
   data = bytes.unwrap!
   read = SourceFile.decode(data)

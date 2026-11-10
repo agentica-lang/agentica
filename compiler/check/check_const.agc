@@ -43,9 +43,7 @@ end
 ## and the state already hold (their constants are not read again, but they take their place in the order).
 export def check_all(cx: State.Cx, st: State.St, modules: List[Linker.LinkedModule], kept: Set[String]) -> Result[Done]
   entries = collect(modules, kept)
-  if entries.size == 0
-    return ok(Done(cx: cx, st: st, order: []))
-  end
+  return ok(Done(cx: cx, st: st, order: [])) if entries.size == 0
 
   order = try order_of(cx, st, entries)
   current = Done(cx: cx, st: st, order: [])
@@ -248,9 +246,7 @@ def builtin_of(cx: State.Cx, st: State.St, node: AstWalk.Node) -> Optional[Model
     AstWalk.Node.Expr(expr) ->
       case expr
         Ast.Expr.Call(found) ->
-          if cx.functions.has_key?(found.name)
-            return none
-          end
+          return none if cx.functions.has_key?(found.name)
 
           return entry_named(cx, found.name)
         Ast.Expr.MethodCall(found) -> return entry_resolved(cx, st, found.id)
@@ -262,18 +258,14 @@ end
 
 def entry_named(cx: State.Cx, name: String) -> Optional[Model.Builtin]
   found = ENTRIES.get(name)
-  if found.some?
-    return some(found.unwrap!)
-  end
+  return some(found.unwrap!) if found.some?
 
   return none
 end
 
 def entry_resolved(cx: State.Cx, st: State.St, id: Int) -> Optional[Model.Builtin]
   resolved = st.resolved.get(id)
-  if resolved.none?
-    return none
-  end
+  return none if resolved.none?
 
   case resolved.unwrap!
     State.Resolved.Call(name, _) -> return entry_named(cx, name)
@@ -356,9 +348,7 @@ def check_data(cx: State.Cx, st: State.St, node: AstWalk.Node, block_allowed: Bo
     AstWalk.Node.Stmt(_) -> return ok(true)
     AstWalk.Node.Expr(expr) ->
       type = st.types[Ast.expr_id(expr)]
-      if T.unknown?(type) or (block_allowed and block?(expr)) or CheckTypes.data?(cx, type)
-        return ok(true)
-      end
+      return ok(true) if T.unknown?(type) or (block_allowed and block?(expr)) or CheckTypes.data?(cx, type)
 
       return error(
         State.fail_help(
@@ -374,9 +364,7 @@ def check_data(cx: State.Cx, st: State.St, node: AstWalk.Node, block_allowed: Bo
 end
 
 def data_help(type: T.Type) -> String
-  if T.is?(type, "Void")
-    return "a constant's value must be data: write nil, not a Void call"
-  end
+  return "a constant's value must be data: write nil, not a Void call" if T.is?(type, "Void")
 
   return (
     "a constant holds numbers, text, collections, structs and enums of those; " +

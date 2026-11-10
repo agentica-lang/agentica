@@ -91,9 +91,7 @@ end
 
 ## Returns the Doc String under the current step. Ends the scenario with an error when the step has none.
 export def doc_string(ctx: Context) -> String
-  if ctx.scenario.step.has_doc
-    return ctx.scenario.step.doc
-  end
+  return ctx.scenario.step.doc if ctx.scenario.step.has_doc
   halt(ctx, "RUNTIME-BDD-CONTEXT", "this step has no Doc String")
   return ""
 end
@@ -155,9 +153,7 @@ end
 ## Calls the service kept under `name` with `request` and returns its result, or an error when there is none.
 export def call(ctx: Context, name: String, request: Json) -> Result[Json]
   found = ctx.scenario.services.get(name)
-  if found.none?
-    return error("missing scenario service")
-  end
+  return error("missing scenario service") if found.none?
   return found.unwrap!.call(request)
 end
 
@@ -235,9 +231,7 @@ end
 ## ended or no line came in time.
 export def read_line(ctx: Context, timeout_ms: Int) -> Result[String]
   line = raw_line(ctx, timeout_ms)
-  if line.ok?
-    return line
-  end
+  return line if line.ok?
   if line.message == ended_text()
     return error("stdout ended before a line")
   elsif line.message == timed_out_text()
@@ -568,9 +562,7 @@ end
 
 # Ends the scenario child with a fail record for a failed stream operation.
 def check(ctx: Context, fine: Bool, message: String) -> Void
-  if fine
-    return
-  end
+  return if fine
   if message == timed_out_text()
     halt(ctx, "RUNTIME-BDD-TIMEOUT", "BDD operation timed out")
   elsif message == over_text() or message == "process: line exceeds 1048576 bytes"
@@ -610,9 +602,7 @@ def compare(ctx: Context, checked: Result[Void], expected: String, actual: Strin
 end
 
 def clip(text: String) -> String
-  if text.length <= 65536
-    return text
-  end
+  return text if text.length <= 65536
   return "#{text.slice(0, 65536)}... (#{text.length - 65536} more characters)"
 end
 
@@ -709,12 +699,8 @@ end
 # Windows ASCII case is ignored. Windows ignores the case of other letters too, by a table of its own that std/ cannot
 # read; such twins stay in the map, and the VM refuses them when `given_program` spawns (`case_twins` in vm/process.c).
 def same_env_name?(a: String, b: String) -> Bool
-  if a == b
-    return true
-  end
-  if System.os() != "windows" or a.bytesize != b.bytesize
-    return false
-  end
+  return true if a == b
+  return false if System.os() != "windows" or a.bytesize != b.bytesize
   return ascii_folded(a) == ascii_folded(b)
 end
 
@@ -723,9 +709,7 @@ def ascii_folded(name: String) -> List[Int]
 end
 
 def ascii_lower(byte: Int) -> Int
-  if byte >= 65 and byte <= 90
-    return byte + 32
-  end
+  return byte + 32 if byte >= 65 and byte <= 90
   return byte
 end
 

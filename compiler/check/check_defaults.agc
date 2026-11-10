@@ -98,9 +98,7 @@ end
 # at each construction, without end. The name of a constant is a default when the value of the constant is one (the
 # lowering writes that value in place of the name, so the default needs no read of the constant at the call).
 def check_value(cx: State.Cx, st: State.St, value: Ast.Expr, param: Bool, remedy: String) -> Result[Bool]
-  if acceptable?(value, param)
-    return ok(true)
-  end
+  return ok(true) if acceptable?(value, param)
 
   forms = "a literal, true, false, nil, none, [], {} or an enum variant without a payload"
   if param

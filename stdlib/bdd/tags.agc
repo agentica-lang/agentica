@@ -20,9 +20,7 @@ end
 export def compile(text: String) -> Result[Expr]
   spaced = text.split("").map do |character| separator(character) end.join("")
   words = spaced.split(" ").filter do |word| word != "" end
-  if words.size == 0
-    return ok(Expr(groups: []))
-  end
+  return ok(Expr(groups: [])) if words.size == 0
 
   groups: List[List[Literal]] = []
   group: List[Literal] = []
@@ -47,18 +45,14 @@ export def compile(text: String) -> Result[Expr]
     end
   end
 
-  if literal
-    return error("the expression must end with a tag")
-  end
+  return error("the expression must end with a tag") if literal
 
   return ok(Expr(groups: groups.push(group)))
 end
 
 ## Whether the expression selects a scenario that has `tags` (with their `@`).
 export def selects?(expr: Expr, tags: List[String]) -> Bool
-  if expr.groups.size == 0
-    return true
-  end
+  return true if expr.groups.size == 0
 
   return expr.groups.any? do |group| holds?(group, tags) end
 end
@@ -74,9 +68,7 @@ def separator(character: String) -> String
   spacing = (point >= 9 and point <= 13) or point == 133 or point == 160 or point == 5760
   spacing = spacing or (point >= 8192 and point <= 8202) or point == 8232 or point == 8233
   spacing = spacing or point == 8239 or point == 8287 or point == 12288
-  if spacing
-    return " "
-  end
+  return " " if spacing
 
   return character
 end

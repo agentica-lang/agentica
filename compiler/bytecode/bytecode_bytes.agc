@@ -30,9 +30,7 @@ export def u32(number: Int) -> List[Int]
   # The fast branch gives the same bytes as the general formula for 0 .. 65535 (the two high bytes are 0 there) and
   # skips the arithmetic for them. Callers never pass a negative number (lines, columns, counts and ids are >= 0): a
   # negative one would take the fast branch and give negative bytes.
-  if number < 65_536
-    return [number % 256, number / 256, 0, 0]
-  end
+  return [number % 256, number / 256, 0, 0] if number < 65_536
 
   return [number % 256, (number / 256) % 256, (number / 65_536) % 256, number / 16_777_216]
 end
@@ -74,14 +72,10 @@ end
 
 ## The chunks with the piece added at the end: a small piece joins the open list, a long one is sealed as a chunk.
 export def add(chunks: Chunks, piece: List[Int]) -> Chunks
-  if piece.size > SMALL_PIECE
-    return seal(close(chunks), piece)
-  end
+  return seal(close(chunks), piece) if piece.size > SMALL_PIECE
 
   open = chunks.open.concat(piece)
-  if open.size > OPEN_LIMIT
-    return close(chunks.with(open: open))
-  end
+  return close(chunks.with(open: open)) if open.size > OPEN_LIMIT
 
   return chunks.with(open: open)
 end
@@ -89,9 +83,7 @@ end
 ## The chunks with a text added as the file stores it (see string); the text of a long one is not made a list.
 export def add_text(chunks: Chunks, text: String) -> Chunks
   data = text.bytes
-  if data.size <= SMALL_PIECE
-    return add(chunks, u32(data.size).concat(data.to_a))
-  end
+  return add(chunks, u32(data.size).concat(data.to_a)) if data.size <= SMALL_PIECE
 
   sized = add(chunks, u32(data.size))
   closed = close(sized)
@@ -110,9 +102,7 @@ export def add_all(chunks: Chunks, more: Chunks) -> Chunks
     out = out.with(failed: more.failed)
   end
 
-  if more.open.size == 0
-    return out
-  end
+  return out if more.open.size == 0
 
   return add(out, more.open)
 end
@@ -121,18 +111,14 @@ end
 export def join(chunks: Chunks) -> Result[Bytes]
   # The failure is read after the close: sealing the open list is where a bad item of it is found.
   closed = close(chunks)
-  if closed.failed != ""
-    return error(closed.failed)
-  end
+  return error(closed.failed) if closed.failed != ""
 
   return ok(Bytes.concat(closed.done))
 end
 
 # The chunks with the open list sealed as a chunk.
 def close(chunks: Chunks) -> Chunks
-  if chunks.open.size == 0
-    return chunks
-  end
+  return chunks if chunks.open.size == 0
 
   return seal(chunks.with(open: []), chunks.open)
 end
@@ -141,13 +127,9 @@ end
 # writer: it is kept for join, which reports it, and the chunk is left out.
 def seal(chunks: Chunks, items: List[Int]) -> Chunks
   made = Bytes.from_list(items)
-  if made.ok?
-    return chunks.with(done: chunks.done.push(made.unwrap!))
-  end
+  return chunks.with(done: chunks.done.push(made.unwrap!)) if made.ok?
 
-  if chunks.failed == ""
-    return chunks.with(failed: made.message)
-  end
+  return chunks.with(failed: made.message) if chunks.failed == ""
 
   return chunks
 end

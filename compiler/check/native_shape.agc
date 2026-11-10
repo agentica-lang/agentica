@@ -108,9 +108,7 @@ def reach(
     type = pending[at]
     at += 1
     name = Types.name(type)
-    if seen.include?(name)
-      next
-    end
+    next if seen.include?(name)
 
     if Types.is?(type, STRUCT)
       seen = seen.add(name)
@@ -153,9 +151,7 @@ end
 
 # A variant as the shape writes it: its name, then its payload in parentheses when it has one.
 def variant_text(member: Member) -> String
-  if member.types.size == 0
-    return member.name
-  end
+  return member.name if member.types.size == 0
 
   return "#{member.name}(#{member.types.join(", ")})"
 end
@@ -171,13 +167,9 @@ end
 
 # The types inside a List, Optional, Result or Map, which crossing types are besides the scalars and user types.
 def inner_types(type: Types.Type) -> List[Types.Type]
-  if Types.is?(type, "Map")
-    return [Types.key(type), Types.value(type)]
-  end
+  return [Types.key(type), Types.value(type)] if Types.is?(type, "Map")
 
-  if Types.is?(type, "List") or Types.is?(type, "Optional") or Types.is?(type, "Result")
-    return [Types.item(type)]
-  end
+  return [Types.item(type)] if Types.is?(type, "List") or Types.is?(type, "Optional") or Types.is?(type, "Result")
 
   return []
 end

@@ -29,14 +29,10 @@ end
 ## Writes the program. version is the Agentica version that the header names; the VM loads the file only when it is
 ## its own, so an empty one is BYTECODE-INTERNAL.
 export def write(program: Ir.Program, version: String) -> Written
-  if version == ""
-    return Written.Failed(Problems.unpack(Failure.internal(program, "the Agentica version is empty")))
-  end
+  return Written.Failed(Problems.unpack(Failure.internal(program, "the Agentica version is empty"))) if version == ""
 
   result = build(program, version)
-  if result.ok?
-    return Written.Done(result.unwrap!)
-  end
+  return Written.Done(result.unwrap!) if result.ok?
 
   return Written.Failed(Problems.unpack(result.message))
 end
@@ -88,9 +84,7 @@ def build(program: Ir.Program, version: String) -> Result[Bytes]
   )
 
   joined = Wire.join(out)
-  if !joined.ok?
-    return error(Failure.internal(program, joined.message))
-  end
+  return error(Failure.internal(program, joined.message)) if !joined.ok?
 
   return joined
 end
@@ -98,9 +92,7 @@ end
 # The decodable enums, after the entry: a count and the records, written only when some enum can be decoded, so a
 # program without one has the bytes it always had.
 def decodable_enums(out: Wire.Chunks, json: JsonTypes.Section) -> Wire.Chunks
-  if json.enums_count == 0
-    return out
-  end
+  return out if json.enums_count == 0
 
   return Wire.add_all(Wire.add(out, Wire.u32(json.enums_count)), json.enums)
 end
@@ -109,36 +101,26 @@ end
 # while those are written.
 def check_limits(program: Ir.Program) -> Result[Void]
   span = program.span
-  if program.structs.size > MAX_U16
-    return error(Failure.limit(program, 0, "structs", span))
-  end
+  return error(Failure.limit(program, 0, "structs", span)) if program.structs.size > MAX_U16
 
   variants = 0
   for entry in program.enums
     variants += entry.variants.size
   end
 
-  if variants > MAX_U16
-    return error(Failure.limit(program, 0, "enum variants", span))
-  end
+  return error(Failure.limit(program, 0, "enum variants", span)) if variants > MAX_U16
 
   for entry in program.structs
-    if entry.fields.size > MAX_U16
-      return error(Failure.limit(program, 0, "fields in one struct", span))
-    end
+    return error(Failure.limit(program, 0, "fields in one struct", span)) if entry.fields.size > MAX_U16
   end
 
   for entry in program.enums
     for variant in entry.variants
-      if variant.size > MAX_U16
-        return error(Failure.limit(program, 0, "payload items in one variant", span))
-      end
+      return error(Failure.limit(program, 0, "payload items in one variant", span)) if variant.size > MAX_U16
     end
   end
 
-  if program.globals > MAX_U16
-    return error(Failure.limit(program, 0, "module constants", span))
-  end
+  return error(Failure.limit(program, 0, "module constants", span)) if program.globals > MAX_U16
 
   return ok()
 end

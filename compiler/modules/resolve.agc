@@ -49,13 +49,9 @@ export def resolve(cx: Context, name: String, want: Want, span: Source.Span, hin
     return member_function(cx, parts, want, span)
   end
 
-  if cx.me.named.has_key?(name)
-    return imported_by_name(cx, cx.me.named[name], want, span)
-  end
+  return imported_by_name(cx, cx.me.named[name], want, span) if cx.me.named.has_key?(name)
 
-  if builtin_name?(cx, name, want)
-    return ok(name)
-  end
+  return ok(name) if builtin_name?(cx, name, want)
 
   return ok(cx.me.prefix + name)
 end
@@ -84,16 +80,12 @@ end
 ## The linked name of the constant that a name reads in this file (declared here, or imported by name), or "" when the
 ## name is not a constant of the file.
 export def constant_identity(cx: Context, name: String) -> String
-  if cx.me.names.has_key?(name) and Declarations.constant?(cx.me.names[name])
-    return identity(cx, name)
-  end
+  return identity(cx, name) if cx.me.names.has_key?(name) and Declarations.constant?(cx.me.names[name])
 
   if cx.me.named.has_key?(name)
     entry = cx.me.named[name]
     target = cx.modules[entry.target]
-    if Declarations.constant?(target.public[entry.name])
-      return Modules.linked_name(cx.modules, target, entry.name)
-    end
+    return Modules.linked_name(cx.modules, target, entry.name) if Declarations.constant?(target.public[entry.name])
   end
 
   return ""
@@ -105,9 +97,7 @@ end
 export def alias_constant_identity(cx: Context, name: String) -> String
   # An alias is a single segment, so only `Alias.NAME` counts.
   parts = name.split(".")
-  if parts.size != 2 or !cx.me.aliases.has_key?(parts[0])
-    return ""
-  end
+  return "" if parts.size != 2 or !cx.me.aliases.has_key?(parts[0])
 
   target = cx.modules[cx.me.aliases[parts[0]]]
   if target.public.has_key?(parts[1]) and Declarations.constant?(target.public[parts[1]])
@@ -120,9 +110,7 @@ end
 ## True when the name is a type that the file declares or imports by name (a struct, enum, type alias or resource), or
 ## a builtin record such as HttpResponse.
 export def declared_type?(cx: Context, name: String) -> Bool
-  if cx.me.names.has_key?(name)
-    return right_kind?(cx.me.names[name], Want.Type)
-  end
+  return right_kind?(cx.me.names[name], Want.Type) if cx.me.names.has_key?(name)
 
   if cx.me.named.has_key?(name)
     entry = cx.me.named[name]
@@ -231,14 +219,10 @@ end
 # Family.Member.fn: the builtin function of a member, which the checker judges (an unknown fn there is an unknown
 # function with the closest name). A member the family lacks is CHECK-UNKNOWN-NAME here.
 def member_function(cx: Context, parts: List[String], want: Want, span: Source.Span) -> Result[String]
-  if !Builtins.member?(parts[0], parts[1])
-    return error(unknown_member(cx, parts[0], parts[1], span))
-  end
+  return error(unknown_member(cx, parts[0], parts[1], span)) if !Builtins.member?(parts[0], parts[1])
 
   name = parts.join(".")
-  if !function_wanted?(want)
-    return error(not_a_type(cx, name, "#{parts[0]}.#{parts[1]}", span))
-  end
+  return error(not_a_type(cx, name, "#{parts[0]}.#{parts[1]}", span)) if !function_wanted?(want)
 
   return ok(name)
 end
@@ -275,9 +259,7 @@ end
 # The first function, by name, of a member that is a group of functions: an example for a help.
 def first_function(member: String) -> String
   found = ENTRIES.keys.filter do |name: String| name.starts_with?("#{member}.") end
-  if found.size == 0
-    return "#{member}.fn"
-  end
+  return "#{member}.fn" if found.size == 0
 
   return found.sort[0]
 end

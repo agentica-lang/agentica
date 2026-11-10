@@ -25,9 +25,7 @@ end
 ## UTF-8, and the place of the first invalid byte when it is not.
 export def decode(data: Bytes) -> Read
   decoded = String.from_bytes(data)
-  if decoded.ok?
-    return Read.Text(decoded.unwrap!)
-  end
+  return Read.Text(decoded.unwrap!) if decoded.ok?
 
   return Read.Invalid(error_position([], data))
 end
@@ -70,14 +68,10 @@ export def complete_prefix(data: Bytes) -> Int
   back = 1
   while back <= 3 and back <= size
     byte = data[size - back]
-    if byte < 128
-      return size
-    end
+    return size if byte < 128
 
     if byte >= 192
-      if lead_width(byte) > back
-        return size - back
-      end
+      return size - back if lead_width(byte) > back
 
       return size
     end
@@ -135,17 +129,11 @@ end
 
 # The length of the sequence a lead byte starts, or 0 when it cannot start one.
 def lead_width(byte: Int) -> Int
-  if byte >= 194 and byte <= 223
-    return 2
-  end
+  return 2 if byte >= 194 and byte <= 223
 
-  if byte >= 224 and byte <= 239
-    return 3
-  end
+  return 3 if byte >= 224 and byte <= 239
 
-  if byte >= 240 and byte <= 244
-    return 4
-  end
+  return 4 if byte >= 240 and byte <= 244
 
   return 0
 end
@@ -155,9 +143,7 @@ def first_invalid(data: Bytes) -> Int
   at = 0
   while at < data.size
     width = sequence_width(data, at)
-    if width == 0
-      return at
-    end
+    return at if width == 0
 
     at += width
   end
@@ -169,14 +155,10 @@ end
 # U+10FFFF, and no sequence cut short by the end of the data.
 def sequence_width(data: Bytes, at: Int) -> Int
   lead = data[at]
-  if lead < 128
-    return 1
-  end
+  return 1 if lead < 128
 
   width = lead_width(lead)
-  if width == 0 or at + width > data.size
-    return 0
-  end
+  return 0 if width == 0 or at + width > data.size
 
   code = lead - 192
   if width == 3
@@ -189,20 +171,14 @@ def sequence_width(data: Bytes, at: Int) -> Int
 
   for k in 1...width
     next_byte = data[at + k]
-    if next_byte < 128 or next_byte > 191
-      return 0
-    end
+    return 0 if next_byte < 128 or next_byte > 191
 
     code = code * 64 + next_byte - 128
   end
 
-  if (width == 3 and code < 2048) or (width == 4 and code < 65_536) or code > 1_114_111
-    return 0
-  end
+  return 0 if (width == 3 and code < 2048) or (width == 4 and code < 65_536) or code > 1_114_111
 
-  if code >= 55_296 and code <= 57_343
-    return 0
-  end
+  return 0 if code >= 55_296 and code <= 57_343
 
   return width
 end

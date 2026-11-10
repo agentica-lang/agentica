@@ -80,18 +80,13 @@ export def find(module: Linker.LinkedModule, bound: Map[Int, List[T.Type]], offs
   ask = Query(offset: offset, bound: bound)
   for declaration in module.declarations
     case declaration
-      Ast.Decl.Function(node) ->
-        if At.holds?(node.span, offset)
-          return typed(function_found(ask, node))
-        end
+      Ast.Decl.Function(node) -> return typed(function_found(ask, node)) if At.holds?(node.span, offset)
 
       Ast.Decl.Constant(node) ->
         # A block in the value of a constant has no function around it: the scope starts empty. No other top-level
         # form holds an expression that can hold a block (a parameter default must be a constant, and a struct field
         # has no default).
-        if At.holds?(node.span, offset)
-          return typed(walk(ask, Step.Expr(node.value), {}))
-        end
+        return typed(walk(ask, Step.Expr(node.value), {})) if At.holds?(node.span, offset)
 
       _ -> ask = ask
     end
@@ -115,10 +110,7 @@ export def uses(module: Linker.LinkedModule, bound: Map[Int, List[T.Type]], targ
           return sweep(ask, target, Step.Block(node.body), scope)
         end
 
-      Ast.Decl.Constant(node) ->
-        if At.holds?(node.span, offset)
-          return sweep(ask, target, Step.Expr(node.value), {})
-        end
+      Ast.Decl.Constant(node) -> return sweep(ask, target, Step.Expr(node.value), {}) if At.holds?(node.span, offset)
 
       _ -> ask = ask
     end
@@ -132,9 +124,7 @@ end
 def typed(found: Optional[Found]) -> Optional[Found]
   case found
     some(at) ->
-      if at.local.kind != "discard" and T.unknown?(at.local.type)
-        return none
-      end
+      return none if at.local.kind != "discard" and T.unknown?(at.local.type)
 
       return found
     none -> return found
@@ -164,9 +154,7 @@ def bind_parameters(ask: Query, params: List[Local], scope: Map[String, Local]) 
   inner = scope
   for local in params
     if At.holds?(local.name_span, ask.offset)
-      if local.name == "_"
-        return hit(scope, discard(local), local.name_span)
-      end
+      return hit(scope, discard(local), local.name_span) if local.name == "_"
 
       return hit(scope, local, local.name_span)
     end
@@ -249,9 +237,7 @@ end
 # The local of a binding: the one in scope when the binding assigns an existing name, else a new one.
 def introduced(ask: Query, scope: Map[String, Local], node: Ast.Binding) -> Local
   existing = scope.get(node.name)
-  if existing.some?
-    return existing.unwrap!
-  end
+  return existing.unwrap! if existing.some?
 
   return Local(
     kind: "local",
@@ -264,9 +250,7 @@ end
 
 # `_` binds nothing and is never in scope.
 def declare(scope: Map[String, Local], local: Local) -> Map[String, Local]
-  if local.name == "_"
-    return scope
-  end
+  return scope if local.name == "_"
 
   return scope.put(local.name, local)
 end
@@ -278,14 +262,10 @@ end
 # The type the checker recorded for the `index`th name the node `id` introduced; Unknown when there is none.
 def bound_type(ask: Query, id: Int, index: Int) -> T.Type
   found = ask.bound.get(id)
-  if found.none?
-    return T.Type.Unknown
-  end
+  return T.Type.Unknown if found.none?
 
   types = found.unwrap!
-  if index < types.size
-    return types[index]
-  end
+  return types[index] if index < types.size
 
   return T.Type.Unknown
 end
@@ -319,9 +299,7 @@ end
 
 # The head of a statement when the position is in it, else its body.
 def into_part(ask: Query, head: Ast.Expr, body: List[Ast.Stmt], scope: Map[String, Local]) -> Move
-  if reaches?(head, ask.offset)
-    return go(Step.Expr(head), scope)
-  end
+  return go(Step.Expr(head), scope) if reaches?(head, ask.offset)
 
   return go(Step.Block(body), scope)
 end
@@ -345,13 +323,9 @@ end
 # The variable is in scope for the body only, not for the iterable.
 def into_for(ask: Query, node: Ast.ForStmt, scope: Map[String, Local]) -> Move
   variable = loop_variable(ask, node)
-  if At.holds?(node.variable_span, ask.offset) and node.variable != "_"
-    return hit(scope, variable, node.variable_span)
-  end
+  return hit(scope, variable, node.variable_span) if At.holds?(node.variable_span, ask.offset) and node.variable != "_"
 
-  if reaches?(node.iterable, ask.offset)
-    return go(Step.Expr(node.iterable), scope)
-  end
+  return go(Step.Expr(node.iterable), scope) if reaches?(node.iterable, ask.offset)
 
   return go(Step.Block(node.body), declare(scope, variable))
 end
@@ -368,14 +342,10 @@ end
 
 # The value, or the arm that holds the position. The names of the pattern are in scope for the guard and the body.
 def into_case(ask: Query, node: Ast.CaseStmt, scope: Map[String, Local]) -> Move
-  if reaches?(node.value, ask.offset)
-    return go(Step.Expr(node.value), scope)
-  end
+  return go(Step.Expr(node.value), scope) if reaches?(node.value, ask.offset)
 
   for arm in node.arms
-    if At.holds?(arm.span, ask.offset)
-      return into_arm(ask, arm, scope)
-    end
+    return into_arm(ask, arm, scope) if At.holds?(arm.span, ask.offset)
   end
 
   return stop(scope)
@@ -384,18 +354,13 @@ end
 def into_arm(ask: Query, arm: Ast.CaseArm, scope: Map[String, Local]) -> Move
   inner = scope
   for local in pattern_locals(ask, arm.pattern)
-    if At.holds?(local.name_span, ask.offset)
-      return hit(scope, local, local.name_span)
-    end
+    return hit(scope, local, local.name_span) if At.holds?(local.name_span, ask.offset)
 
     inner = declare(inner, local)
   end
 
   case arm.guard
-    some(condition) ->
-      if reaches?(condition, ask.offset)
-        return go(Step.Expr(condition), inner)
-      end
+    some(condition) -> return go(Step.Expr(condition), inner) if reaches?(condition, ask.offset)
 
     none -> inner = inner
   end
@@ -560,9 +525,7 @@ end
 def visit_expression(ask: Query, target: Local, expr: Ast.Expr, scope: Map[String, Local]) -> Visit
   case expr
     Ast.Expr.Name(node) ->
-      if scope.has_key?(node.name) and stands_for?(scope[node.name], target)
-        return Visit(hits: [node.span], next: [])
-      end
+      return Visit(hits: [node.span], next: []) if scope.has_key?(node.name) and stands_for?(scope[node.name], target)
 
       return below([])
     Ast.Expr.BlockLit(node) ->
@@ -591,9 +554,7 @@ def into_expression(ask: Query, expr: Ast.Expr, scope: Map[String, Local]) -> Mo
   case expr
     Ast.Expr.Name(node) ->
       found = scope.get(node.name)
-      if found.some? and At.holds?(node.span, ask.offset)
-        return hit(scope, found.unwrap!, node.span)
-      end
+      return hit(scope, found.unwrap!, node.span) if found.some? and At.holds?(node.span, ask.offset)
 
       return stop(scope)
     Ast.Expr.BlockLit(node) -> return into_block(ask, node, scope)
@@ -614,10 +575,7 @@ end
 def into_child(ask: Query, expr: Ast.Expr, scope: Map[String, Local]) -> Move
   for child in Walk.children(Walk.Node.Expr(expr))
     case child
-      Walk.Node.Expr(part) ->
-        if reaches?(part, ask.offset)
-          return go(Step.Expr(part), scope)
-        end
+      Walk.Node.Expr(part) -> return go(Step.Expr(part), scope) if reaches?(part, ask.offset)
 
       Walk.Node.Stmt(_) -> scope = scope
     end

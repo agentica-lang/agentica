@@ -15,9 +15,7 @@ export def receiver_kind(type: T.Type) -> String
     return "Task"
   end
 
-  if RubyForm.parameter_kind(type) == "Mutex"
-    return "Mutex"
-  end
+  return "Mutex" if RubyForm.parameter_kind(type) == "Mutex"
 
   if (
     word == "String" or
@@ -47,9 +45,7 @@ end
 ## push), then the builtin of the kind's module whose first parameter has that kind.
 export def resolve_method(cx: State.Cx, kind: String, name: String) -> String
   alias = cx.help.aliases.get("#{kind}.#{name}")
-  if alias.some?
-    return alias.unwrap!
-  end
+  return alias.unwrap! if alias.some?
 
   return catalog_method(cx, kind, name)
 end
@@ -86,9 +82,7 @@ end
 ## The method name a builtin is written as in method form, for the help of CHECK-PIPE-METHOD: String.upcase is upcase,
 ## String.trim is strip. "" when there is none for that kind.
 export def pipe_method_name(cx: State.Cx, kind: String, name: String) -> String
-  if RubyForm.method_key(name).starts_with?("#{kind}.")
-    return RubyForm.method_name(name)
-  end
+  return RubyForm.method_name(name) if RubyForm.method_key(name).starts_with?("#{kind}.")
 
   return ""
 end
@@ -96,9 +90,7 @@ end
 ## The help for a method name another language has, or "".
 export def foreign_method_help(cx: State.Cx, kind: String, name: String) -> String
   direct = cx.help.kind_methods.get("#{kind}.#{name}")
-  if direct.some?
-    return direct.unwrap!
-  end
+  return direct.unwrap! if direct.some?
 
   if kind == "Result" and string_method?(cx, name)
     return result_help(cx, name)
@@ -121,9 +113,7 @@ end
 # True when Lazy has a step with that name: a method that takes a Lazy and returns one (not the source produce).
 def lazy_step?(name: String) -> Bool
   entry = ENTRIES.get("Lazy.#{name}")
-  if entry.none?
-    return false
-  end
+  return false if entry.none?
 
   row = entry.unwrap!
   return T.is?(row.result, "Lazy") and row.parameters.size > 0 and T.is?(row.parameters[0].type, "Lazy")
@@ -132,18 +122,12 @@ end
 # The builtin of the kind's module with that name whose first parameter has the kind, or "".
 def catalog_method(cx: State.Cx, kind: String, name: String) -> String
   module = cx.help.modules.get(kind)
-  if module.none?
-    return ""
-  end
+  return "" if module.none?
 
   entry = ENTRIES.get("#{module.unwrap!}.#{name}")
-  if entry.none? or entry.unwrap!.parameters.size == 0
-    return ""
-  end
+  return "" if entry.none? or entry.unwrap!.parameters.size == 0
 
-  if RubyForm.parameter_kind(entry.unwrap!.parameters[0].type) == kind
-    return entry.unwrap!.name
-  end
+  return entry.unwrap!.name if RubyForm.parameter_kind(entry.unwrap!.parameters[0].type) == kind
 
   return ""
 end
@@ -172,9 +156,7 @@ end
 def result_help(cx: State.Cx, name: String) -> String
   string_help = foreign_method_help(cx, "String", name)
   text = "this is a Result; unwrap it first with r.unwrap! (use gets! to read a line without a Result)"
-  if string_help != ""
-    return "#{text}, then: #{string_help}"
-  end
+  return "#{text}, then: #{string_help}" if string_help != ""
 
   return text
 end
@@ -189,9 +171,7 @@ end
 # there are any (`len` is `.length` or `.size` on a String).
 def renamed_help(cx: State.Cx, kind: String, name: String) -> String
   candidates = cx.help.foreign_methods.get(name)
-  if candidates.none?
-    return ""
-  end
+  return "" if candidates.none?
 
   found: List[String] = []
   for candidate in candidates.unwrap!
@@ -206,9 +186,7 @@ def renamed_help(cx: State.Cx, kind: String, name: String) -> String
     end
   end
 
-  if found.size == 0
-    return ""
-  end
+  return "" if found.size == 0
 
   return "use #{found.uniq.map do |written: String| ".#{written}" end.join(" or ")}"
 end

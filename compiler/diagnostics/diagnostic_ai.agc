@@ -56,9 +56,7 @@ def hint_text(help: Diag.Help) -> String
 end
 
 def field(out: List[String], name: String, value: String) -> List[String]
-  if value == ""
-    return out
-  end
+  return out if value == ""
 
   return out.push("  #{name}: #{value}")
 end

@@ -31,9 +31,7 @@ export def check_method(cx: State.Cx, st: State.St, node: Ast.MethodCall, expect
   end
 
   field = fn_field(cx, target.type, node.name)
-  if field.some?
-    return check_field_call(cx, target.st, node, field.unwrap!)
-  end
+  return check_field_call(cx, target.st, node, field.unwrap!) if field.some?
 
   return method_on(cx, target, node.id, node.target, node.name, node.args, node.span, expected)
 end
@@ -77,9 +75,7 @@ export def check_field_access(cx: State.Cx, st: State.St, node: Ast.FieldAccess,
   end
 
   target = try State.expr(cx, st, node.target, T.Type.Unknown)
-  if field_target?(cx, target.type, node.name)
-    return check_struct_field(cx, target.st, node, target.type)
-  end
+  return check_struct_field(cx, target.st, node, target.type) if field_target?(cx, target.type, node.name)
 
   return method_on(cx, target, node.id, node.target, node.name, [], node.span, expected)
 end
@@ -89,14 +85,10 @@ end
 # callable (CHECK-UNKNOWN-METHOD). A field named `with` cannot hold a function (check_register), so `with(` stays the
 # struct update.
 def fn_field(cx: State.Cx, target: T.Type, name: String) -> Optional[Model.Named]
-  if !T.is?(target, "Struct")
-    return none
-  end
+  return none if !T.is?(target, "Struct")
 
   found = Calls.find_field(CheckTypes.fields_of(cx, target), name)
-  if found.ok? and T.is?(found.unwrap!.type, "Fn")
-    return some(found.unwrap!)
-  end
+  return some(found.unwrap!) if found.ok? and T.is?(found.unwrap!.type, "Fn")
 
   return none
 end
@@ -167,13 +159,9 @@ end
 
 # A struct is read by field unless the name is to_s or inspect and the struct has no such field.
 def field_target?(cx: State.Cx, target: T.Type, name: String) -> Bool
-  if !T.is?(target, "Struct")
-    return false
-  end
+  return false if !T.is?(target, "Struct")
 
-  if name == "to_s" or name == "inspect"
-    return Calls.find_field(cx.structs[T.name(target)], name).ok?
-  end
+  return Calls.find_field(cx.structs[T.name(target)], name).ok? if name == "to_s" or name == "inspect"
 
   return true
 end
@@ -203,9 +191,7 @@ end
 def method_kind(cx: State.Cx, target: T.Type, kind: String, name: String) -> String
   if kind != ""
     found = Names.resolve_method(cx, kind, name)
-    if found != ""
-      return found
-    end
+    return found if found != ""
   end
 
   if name == "to_s" and CheckTypes.data?(cx, target)
@@ -269,9 +255,7 @@ def check_own_method(
   span: Source.Span,
   expected: T.Type,
 ) -> Result[State.Out]
-  if args.size > 0
-    return error(State.fail(cx, st, "CHECK-ARITY", "\"#{name}\" takes no arguments", span))
-  end
+  return error(State.fail(cx, st, "CHECK-ARITY", "\"#{name}\" takes no arguments", span)) if args.size > 0
 
   result = T.Type.String
   how = State.Resolved.Text(type)
@@ -315,9 +299,7 @@ def struct_help(cx: State.Cx, target: T.Type, name: String) -> String
   if field.ok?
     # A field that a function shares its name with is the likelier mistake, so it comes first.
     hint = "#{name} is a field of type #{T.to_text(field.unwrap!.type)}, not a function; call only an Fn field"
-    if cx.functions.has_key?(name)
-      return hint + "; or call #{name}(...) with the struct as an argument"
-    end
+    return hint + "; or call #{name}(...) with the struct as an argument" if cx.functions.has_key?(name)
 
     return hint
   elsif cx.functions.has_key?(name)
@@ -333,15 +315,11 @@ end
 # The help for a method another language has, a close name, or the methods the kind has.
 def kind_help(cx: State.Cx, target: T.Type, kind: String, name: String) -> String
   foreign = Names.foreign_method_help(cx, kind, name)
-  if foreign != ""
-    return foreign
-  end
+  return foreign if foreign != ""
 
   names = method_names(cx, target, kind)
   guess = Help.near(name, names, [])
-  if guess != ""
-    return guess
-  end
+  return guess if guess != ""
 
   return "#{T.to_text(target)} methods: #{names.sort.join(", ")}"
 end

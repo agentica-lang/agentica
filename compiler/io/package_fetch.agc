@@ -74,9 +74,7 @@ end
 ## Like `cache_root`, for the packages of a lock: a lock of workspace members and paths alone fetches nothing and
 ## needs no cache, so it gives "" for it and fails only when a package has to be fetched.
 export def cache_for(env: Env.Env, file: String, packages: List[Lock.Locked]) -> Result[String]
-  if packages.all? do |locked| Lock.in_place?(locked) end
-    return ok("")
-  end
+  return ok("") if packages.all? do |locked| Lock.in_place?(locked) end
 
   return cache_root(env, file)
 end
@@ -129,29 +127,21 @@ export def fail(place: Place, code: String, key: String, message: String, help: 
     path = place.entry
   end
 
-  if help == ""
-    return Failure.fail_key(place.file, path, code, message, Diag.Help.NoHelp)
-  end
+  return Failure.fail_key(place.file, path, code, message, Diag.Help.NoHelp) if help == ""
 
   return Failure.fail_key(place.file, path, code, message, Failure.hint(help))
 end
 
 # Looks at the folder of the commit, if there is one: the locked files (nothing to do) or others (an error).
 def inspect(workspace: Workspace.Workspace, place: Place, target: String, locked: Lock.Locked) -> Result[Seen]
-  if !workspace.directory_exists.call(target) and !workspace.file_exists.call(target)
-    return ok(Seen.Absent)
-  end
+  return ok(Seen.Absent) if !workspace.directory_exists.call(target) and !workspace.file_exists.call(target)
 
   real = workspace.real_path.call(target)
-  if !real.ok?
-    return error(fail(place, "PKG-FETCH", "", "cannot read #{target}", real.message))
-  end
+  return error(fail(place, "PKG-FETCH", "", "cannot read #{target}", real.message)) if !real.ok?
 
   case PackageHash.hash_folder(workspace, real.unwrap!)
     PackageHash.Hashed.Hash(found) ->
-      if found == locked.hash
-        return ok(Seen.Matches)
-      end
+      return ok(Seen.Matches) if found == locked.hash
 
       message = "the files of #{locked.name} in the cache are not the ones the lock names"
       return error(fail(place, "PKG-HASH-MISMATCH", "hash", message, "remove #{target} and run install again"))
@@ -209,9 +199,7 @@ def make_temp(cache: String) -> Result[String]
   for _ in 0...TEMP_TRIES
     name = Paths.join(cache, ".tmp-#{System.pid()}-#{Random.int(0, 999_999_999)}")
     made = Dir.mkdir_private(name, FS_TIMEOUT_MS)
-    if made.ok?
-      return ok(name)
-    end
+    return ok(name) if made.ok?
 
     failure = made.message
   end
@@ -322,9 +310,7 @@ end
 # The fetched pin must be the locked commit; a tag that now points elsewhere is a moved tag, never a new lock.
 def check_commit(place: Place, scratch: Scratch, locked: Lock.Locked) -> Result[Void]
   commit = try peel(place, scratch)
-  if commit == locked.commit
-    return ok()
-  end
+  return ok() if commit == locked.commit
 
   if locked.source.tag != ""
     message = "the tag #{locked.source.tag} of #{locked.name} is now #{commit}, and the lock has #{locked.commit}"
@@ -343,9 +329,7 @@ end
 
 def copy_blobs(place: Place, scratch: Scratch, blobs: List[Tree.Blob]) -> Result[Void]
   made = Dir.mkdir(scratch.files, FS_TIMEOUT_MS)
-  if !made.ok?
-    return error(fail(place, "PKG-FETCH", "", "cannot make #{scratch.files}", made.message))
-  end
+  return error(fail(place, "PKG-FETCH", "", "cannot make #{scratch.files}", made.message)) if !made.ok?
 
   for blob in blobs
     data = try git(place, scratch, inside(scratch, ["cat-file", "blob", blob.oid]))
@@ -359,14 +343,10 @@ end
 def write_file(place: Place, path: String, data: Bytes) -> Result[Void]
   folder = Paths.directory_of(path)
   made = Dir.mkdir(folder, FS_TIMEOUT_MS)
-  if !made.ok?
-    return error(fail(place, "PKG-FETCH", "", "cannot make #{folder}", made.message))
-  end
+  return error(fail(place, "PKG-FETCH", "", "cannot make #{folder}", made.message)) if !made.ok?
 
   opened = File.open(path, "write", FS_TIMEOUT_MS)
-  if !opened.ok?
-    return error(fail(place, "PKG-FETCH", "", "cannot write #{path}", opened.message))
-  end
+  return error(fail(place, "PKG-FETCH", "", "cannot write #{path}", opened.message)) if !opened.ok?
 
   handle = opened.unwrap!
   wrote = File.write_bytes(handle, data, FS_TIMEOUT_MS)
@@ -376,18 +356,14 @@ def write_file(place: Place, path: String, data: Bytes) -> Result[Void]
   end
 
   closed = File.close(handle, FS_TIMEOUT_MS)
-  if !closed.ok?
-    return error(fail(place, "PKG-FETCH", "", "cannot write #{path}", closed.message))
-  end
+  return error(fail(place, "PKG-FETCH", "", "cannot write #{path}", closed.message)) if !closed.ok?
 
   return ok()
 end
 
 def check_hash(workspace: Workspace.Workspace, place: Place, files: String, locked: Lock.Locked) -> Result[Void]
   found = try hash_of(workspace, place, locked, files)
-  if found == locked.hash
-    return ok()
-  end
+  return ok() if found == locked.hash
 
   message = "the files fetched for #{locked.name} are not the ones the lock names (#{found})"
   return error(fail(place, "PKG-HASH-MISMATCH", "hash", message, "the lock is not changed; update it on purpose"))
@@ -413,14 +389,10 @@ def move_into_place(
   locked: Lock.Locked,
 ) -> Result[Filled]
   made = Dir.mkdir(Paths.directory_of(target), FS_TIMEOUT_MS)
-  if !made.ok?
-    return error(fail(place, "PKG-FETCH", "", "cannot make the folder of #{target}", made.message))
-  end
+  return error(fail(place, "PKG-FETCH", "", "cannot make the folder of #{target}", made.message)) if !made.ok?
 
   moved = Path.rename(files, target, FS_TIMEOUT_MS)
-  if moved.ok?
-    return ok(Filled.Fetched)
-  end
+  return ok(Filled.Fetched) if moved.ok?
 
   seen = try inspect(workspace, place, target, locked)
   case seen
@@ -449,9 +421,7 @@ def git_at(place: Place, scratch: Scratch, key: String, arguments: List[String])
     GitProcess.Ran.Broken(message) ->
       return error(fail(place, "PKG-FETCH", "git", "cannot read the output of git: #{message}", ""))
     GitProcess.Ran.Exited(status, output, errors) ->
-      if status != 0
-        return error(fail(place, "PKG-FETCH", key, "git exited with status #{status}", brief(errors)))
-      end
+      return error(fail(place, "PKG-FETCH", key, "git exited with status #{status}", brief(errors))) if status != 0
 
       return ok(output)
   end
@@ -460,18 +430,14 @@ end
 def git_text(place: Place, scratch: Scratch, arguments: List[String]) -> Result[String]
   output = try git(place, scratch, arguments)
   text = String.from_bytes(output)
-  if !text.ok?
-    return error(fail(place, "PKG-FETCH", "git", "git gave text that is not UTF-8", ""))
-  end
+  return error(fail(place, "PKG-FETCH", "git", "git gave text that is not UTF-8", "")) if !text.ok?
 
   return ok(text.unwrap!)
 end
 
 def brief(errors: String) -> String
   text = errors.trim
-  if text.length > HELP_LIMIT
-    return text.slice(0, HELP_LIMIT)
-  end
+  return text.slice(0, HELP_LIMIT) if text.length > HELP_LIMIT
 
   return text
 end

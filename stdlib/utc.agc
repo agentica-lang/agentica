@@ -85,9 +85,7 @@ end
 # The point and the digits of the second after it, or "" for no digits.
 def fraction(milli: Int, digits: Int) -> String
   # Clamp before padding: the loop below must run at most 6 times, whatever the caller passes.
-  if digits <= 0
-    return ""
-  end
+  return "" if digits <= 0
   if digits > 9
     digits = 9
   end

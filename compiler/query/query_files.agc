@@ -45,9 +45,7 @@ export def read(settings: Env.Settings, file: String, buffered: Bool) -> SourceF
     here = Source.Position(offset: 0, line: 1, column: 1)
     site = Failure.Site(file: file, span: Source.Span(start: here, stop: here))
     checked = Resolve.standard(settings, key, site)
-    if !checked.ok?
-      return SourceFile.Read.Unreadable(checked.message)
-    end
+    return SourceFile.Read.Unreadable(checked.message) if !checked.ok?
 
     return Resolve.read_source(settings, key)
   end
@@ -64,15 +62,11 @@ end
 ## made relative to the working folder when the file is below it (a canonical path is the same file under any
 ## spelling). A file the Workspace cannot resolve keeps the name it was typed with.
 export def display(settings: Env.Settings, file: String, buffered: Bool) -> String
-  if embedded?(file, buffered)
-    return std_key(file)
-  end
+  return std_key(file) if embedded?(file, buffered)
 
   real = settings.workspace.real_path.call(file)
   here = settings.workspace.real_path.call(".")
-  if !real.ok? or !here.ok?
-    return file
-  end
+  return file if !real.ok? or !here.ok?
 
   named = real.unwrap!
   base = here.unwrap!
@@ -81,9 +75,7 @@ export def display(settings: Env.Settings, file: String, buffered: Bool) -> Stri
     base = base.replace("\\", "/")
   end
 
-  if named != base and Paths.inside?(base, named)
-    return Paths.stored_name(base, named)
-  end
+  return Paths.stored_name(base, named) if named != base and Paths.inside?(base, named)
 
   return real.unwrap!
 end
@@ -94,9 +86,7 @@ end
 
 # The key of a module in the provider: the name with its extension.
 def std_key(file: String) -> String
-  if file.ends_with?(".agc")
-    return file
-  end
+  return file if file.ends_with?(".agc")
 
   return "#{file}.agc"
 end

@@ -26,9 +26,7 @@ end
 ## file is written beside the path first and renamed into place (`Path.rename` never replaces, so a file made there
 ## meanwhile is kept); a step that fails removes what was made.
 export def replace(path: String, data: Bytes, replacing: Bool, timeout_ms: Int) -> Result[Void]
-  if replacing
-    return File.replace(path, data, timeout_ms)
-  end
+  return File.replace(path, data, timeout_ms) if replacing
 
   fresh = "#{path}.new-#{System.pid()}"
   placed = bytes(fresh, data, timeout_ms)

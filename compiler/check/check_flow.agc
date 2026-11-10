@@ -7,9 +7,7 @@ import State from "check_state"
 ## True when every path of the statements ends in a return. A terminator is always the last statement of its block
 ## (CHECK-UNREACHABLE-CODE), so only the last one is looked at.
 export def block_returns?(statements: List[Ast.Stmt]) -> Bool
-  if statements.size == 0
-    return false
-  end
+  return false if statements.size == 0
 
   return returns?(statements[statements.size - 1])
 end
@@ -42,9 +40,7 @@ end
 ## case arm) or as the last expression. The call has no type of its own, so a block with such a value may need its
 ## result type from another path (Stmt.check_block_in).
 export def gives_error?(statements: List[Ast.Stmt]) -> Bool
-  if statements.size == 0
-    return false
-  end
+  return false if statements.size == 0
 
   last = statements[statements.size - 1]
   case last
@@ -90,9 +86,7 @@ end
 
 ## The help of CHECK-CAPTURED-ASSIGNMENT: a for loop can assign.
 export def captured_help(name: String, capture: State.Capture) -> String
-  if template_block?(capture)
-    return "compute it before the template, or use a new name inside it"
-  end
+  return "compute it before the template, or use a new name inside it" if template_block?(capture)
 
   element = "x"
   if capture.params.size == 1 and capture.params[0].name != "_"
@@ -143,9 +137,7 @@ def returns?(statement: Ast.Stmt) -> Bool
 end
 
 def block_ends?(statements: List[Ast.Stmt]) -> Bool
-  if statements.size == 0
-    return false
-  end
+  return false if statements.size == 0
 
   return ends?(statements[statements.size - 1])
 end
@@ -184,9 +176,7 @@ def holds_return?(statement: Ast.Stmt) -> Bool
 end
 
 def if_holds_return?(node: Ast.IfStmt) -> Bool
-  if node.branches.any? do |branch: Ast.IfBranch| contains_return?(branch.body) end
-    return true
-  end
+  return true if node.branches.any? do |branch: Ast.IfBranch| contains_return?(branch.body) end
 
   case node.else_body
     some(body) -> return contains_return?(body)
@@ -217,9 +207,7 @@ end
 
 def field_path(node: Ast.FieldAccess) -> String
   target = path_text(node.target)
-  if target == ""
-    return ""
-  end
+  return "" if target == ""
 
   return "#{target}.#{node.name}"
 end
@@ -247,9 +235,7 @@ def returned_error?(node: Ast.Return) -> Bool
 end
 
 def if_returns_error?(node: Ast.IfStmt) -> Bool
-  if node.branches.any? do |branch: Ast.IfBranch| error_returns?(branch.body) end
-    return true
-  end
+  return true if node.branches.any? do |branch: Ast.IfBranch| error_returns?(branch.body) end
 
   case node.else_body
     some(body) -> return error_returns?(body)

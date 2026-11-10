@@ -263,9 +263,7 @@ def user_decodable(
   builtin: Map[String, List[Types.Type]],
   type_names: List[String],
 ) -> Map[String, List[Types.Type]]
-  if type_names.size == 0
-    return {}
-  end
+  return {} if type_names.size == 0
 
   kinds: Map[String, String] = {}
   for name in BUILTIN_STRUCTS
@@ -377,9 +375,7 @@ end
 def references_known?(types: List[Types.Type], table: Map[String, List[Types.Type]]) -> Bool
   for type in types
     for name in struct_names_in(type)
-      if !table.has_key?(name)
-        return false
-      end
+      return false if !table.has_key?(name)
     end
   end
 
@@ -394,9 +390,7 @@ def struct_names_in(type: Types.Type) -> List[String]
     Types.Type.Optional(item) -> return struct_names_in(item)
     Types.Type.Map(_, value) -> return struct_names_in(value)
     Types.Type.Enum(name, args) ->
-      if name == "JsonField"
-        return struct_names_in(args[0])
-      end
+      return struct_names_in(args[0]) if name == "JsonField"
 
       return [name]
     _ -> return []

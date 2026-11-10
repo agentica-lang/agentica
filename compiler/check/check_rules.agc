@@ -111,9 +111,7 @@ end
 
 # True for a call that a method call became: its first argument is the typed receiver.
 def method_form?(node: Ast.Call) -> Bool
-  if node.args.size == 0
-    return false
-  end
+  return false if node.args.size == 0
 
   case node.args[0]
     Ast.Expr.Typed(_) -> return true
@@ -124,9 +122,7 @@ end
 # CHECK-BLOCK-TARGET when the call has one argument more than a form takes and that last argument is a block, so the
 # block was meant for a function parameter the form does not have.
 def block_without_target(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Builtin) -> Result[Bool]
-  if node.args.size == 0
-    return ok(true)
-  end
+  return ok(true) if node.args.size == 0
 
   last = node.args[node.args.size - 1]
   without = Builtins.form_without_block(entry, node.args.size - 1)
@@ -153,9 +149,7 @@ end
 
 # A block as the last argument needs a function as the last parameter.
 def check_block_target(cx: State.Cx, st: State.St, node: Ast.Call, form: Model.Builtin) -> Result[Bool]
-  if node.args.size == 0
-    return ok(true)
-  end
+  return ok(true) if node.args.size == 0
 
   last = node.args[node.args.size - 1]
   case last
@@ -181,9 +175,7 @@ end
 
 # The message of a block given to a builtin that takes none. Task.spawn takes a block, but alone.
 def block_target_message(name: String) -> String
-  if name == "Task.spawn"
-    return "Task.spawn got a function reference and a block: it takes one of them, not both"
-  end
+  return "Task.spawn got a function reference and a block: it takes one of them, not both" if name == "Task.spawn"
 
   return "\"#{name}\" does not take a block: its last parameter is not a function"
 end
@@ -331,9 +323,7 @@ def check_none(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out
     return error(State.mismatch(cx, st, expected, T.Type.Optional(T.Type.Var("T")), span))
   end
 
-  if T.unknown?(expected) and st.probe
-    return ok(State.Out(st: st, type: T.Type.Optional(T.Type.Unknown)))
-  end
+  return ok(State.Out(st: st, type: T.Type.Optional(T.Type.Unknown))) if T.unknown?(expected) and st.probe
 
   if T.unknown?(expected)
     return error(
@@ -365,9 +355,7 @@ def check_json_type(cx: State.Cx, st: State.St, site: State.Site, decode: Bool) 
   type = try json_type(cx, current, target, decode)
   # The lowering names the target by this type: an alias resolved, a List or Map whole (Lowering.json_targets).
   current = State.record_type(current, Ast.expr_id(target), type)
-  if decode
-    return ok(State.Out(st: current, type: T.Type.Result(type)))
-  end
+  return ok(State.Out(st: current, type: T.Type.Result(type))) if decode
 
   return ok(State.Out(st: current, type: T.Type.Json))
 end
@@ -435,9 +423,7 @@ end
 def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName, refusal: String) -> Result[T.Type]
   ref = Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span)
   type = try CheckTypes.resolve_type(cx, st, ref, false)
-  if container?(type) and refusal != ""
-    return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", refusal, node.span))
-  end
+  return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", refusal, node.span)) if container?(type) and refusal != ""
 
   try json_field_place(cx, st, type, "decode target", node.span)
   named = T.is?(type, "Struct") or T.is?(type, "Enum")
@@ -472,13 +458,9 @@ def json_refusal_help(cx: State.Cx, type: T.Type, verb: String) -> String
     )
   end
 
-  if !CheckTypes.bytes_inside?(cx, type)
-    return ""
-  end
+  return "" if !CheckTypes.bytes_inside?(cx, type)
 
-  if verb == "encode"
-    return "JSON has no byte type; encode it first: Base64.strict_encode64(b)"
-  end
+  return "JSON has no byte type; encode it first: Base64.strict_encode64(b)" if verb == "encode"
 
   if T.is?(type, "Bytes")
     return "JSON has no byte type; decode a String and convert it with Base64.strict_decode64(text)"
@@ -518,9 +500,7 @@ def check_json_encode(cx: State.Cx, st: State.St, site: State.Site, from: Bool) 
     )
   end
 
-  if from
-    return ok(State.Out(st: out.st, type: T.Type.Json))
-  end
+  return ok(State.Out(st: out.st, type: T.Type.Json)) if from
 
   return ok(State.Out(st: out.st, type: T.Type.String))
 end
@@ -529,9 +509,7 @@ end
 # struct field. kind names the place of the whole type.
 def json_field_place(cx: State.Cx, st: State.St, type: T.Type, kind: String, span: Source.Span) -> Result[Void]
   place = CheckTypes.json_field_place(cx, type, false, kind, "")
-  if place == ""
-    return ok()
-  end
+  return ok() if place == ""
 
   return error(
     State.fail_help(
@@ -594,9 +572,7 @@ end
 
 # The rules of the Task, Channel, Map and Set builtins, then of the List builtins.
 def check_other_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]
-  if list_rule?(rule)
-    return Lists.check_list_rule(cx, st, site, rule)
-  end
+  return Lists.check_list_rule(cx, st, site, rule) if list_rule?(rule)
 
   return Collections.check_collection_rule(cx, st, site, rule)
 end

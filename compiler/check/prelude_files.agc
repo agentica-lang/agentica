@@ -40,9 +40,7 @@ end
 ## Reads, checks and returns the prelude functions that st.bodies names. base is the context of the program before its
 ## declarations were registered, and the node ids of the prelude files start at the end of the ids of the program.
 export def attach(settings: Env.Settings, base: State.Cx, st: State.St) -> Result[Attached]
-  if st.bodies.size == 0
-    return ok(Attached(st: st, modules: []))
-  end
+  return ok(Attached(st: st, modules: [])) if st.bodies.size == 0
 
   wanted = wanted_functions(st.bodies.values)
   modules: List[Linker.LinkedModule] = []

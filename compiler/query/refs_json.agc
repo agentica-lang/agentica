@@ -22,9 +22,7 @@ export def json(found: Model.Refs) -> Json
     "skipped": JSON.array(found.skipped.map do |left: Model.Skipped| skipped_json(left) end),
   }
 
-  if found.partial
-    return JSON.object(DiagnosticJson.partial(shape, found.diagnostics))
-  end
+  return JSON.object(DiagnosticJson.partial(shape, found.diagnostics)) if found.partial
 
   return JSON.object(shape)
 end
@@ -42,9 +40,7 @@ def reference_json(use: Model.Reference) -> Json
 end
 
 def definition_json(definition: List[Model.Symbol]) -> Json
-  if definition.size == 0
-    return JSON.null()
-  end
+  return JSON.null() if definition.size == 0
 
   return SymbolJson.match_json(definition[0])
 end

@@ -16,9 +16,7 @@ export def read_records(p: Process, deadline: Int) -> Records
   items: List[Json] = []
   while true
     line = Process.channel_read_line(p, left(deadline))
-    if not line.ok?
-      return Records(items: items, problem: line.message)
-    end
+    return Records(items: items, problem: line.message) if not line.ok?
     record = record_of(line.unwrap!)
     if not JSON.null?(record)
       items = items.push(record)
@@ -40,18 +38,14 @@ end
 ## Returns the string at `key` in a record, or an empty string when it is missing or not a string.
 export def text_of(record: Json, key: String) -> String
   found = JSON.get(record, key)
-  if found.ok?
-    return JSON.string(found.unwrap!).unwrap_or("")
-  end
+  return JSON.string(found.unwrap!).unwrap_or("") if found.ok?
   return ""
 end
 
 ## Returns the integer at `key` in a record, or 1 when it is missing or not an integer.
 export def int_of(record: Json, key: String) -> Int
   found = JSON.get(record, key)
-  if found.ok?
-    return JSON.int(found.unwrap!).unwrap_or(1)
-  end
+  return JSON.int(found.unwrap!).unwrap_or(1) if found.ok?
   return 1
 end
 
@@ -70,9 +64,7 @@ end
 ## Returns the string at `key` as a known detail, or an unknown one.
 export def detail_of(record: Json, key: String) -> Report.Detail
   found = JSON.get(record, key)
-  if found.ok? and JSON.string(found.unwrap!).ok?
-    return Report.Detail.Known(JSON.string(found.unwrap!).unwrap!)
-  end
+  return Report.Detail.Known(JSON.string(found.unwrap!).unwrap!) if found.ok? and JSON.string(found.unwrap!).ok?
   return Report.Detail.Unknown
 end
 
@@ -88,18 +80,14 @@ end
 ## Returns the milliseconds left until `deadline`, at most 2000.
 export def brief(deadline: Int) -> Int
   remaining = left(deadline)
-  if remaining < 2000
-    return remaining
-  end
+  return remaining if remaining < 2000
   return 2000
 end
 
 ## Returns the milliseconds left until `deadline`, at least 1.
 export def left(deadline: Int) -> Int
   remaining = deadline - Time.monotonic_ms()
-  if remaining < 1
-    return 1
-  end
+  return 1 if remaining < 1
   return remaining
 end
 
@@ -110,17 +98,13 @@ end
 
 ## Returns `output` without one final newline.
 export def printed(output: String) -> String
-  if output.end_with?("\n")
-    return output.slice(0, output.length - 1)
-  end
+  return output.slice(0, output.length - 1) if output.end_with?("\n")
   return output
 end
 
 ## Returns the last `limit` characters of `text`.
 export def tail(text: String, limit: Int) -> String
-  if text.length <= limit
-    return text
-  end
+  return text if text.length <= limit
   return text.slice(text.length - limit, limit)
 end
 
@@ -129,9 +113,7 @@ end
 ## task crashes are skipped. Returns an error when there is none.
 export def stderr_diagnostic(stderr: String, span: Report.Span) -> Result[Report.Error]
   lines = stderr.split("\n").filter do |line| line != "" and not vm_shape?(line, true) end
-  if lines.size == 0
-    return error("no diagnostic")
-  end
+  return error("no diagnostic") if lines.size == 0
   last = lines[lines.size - 1]
   if summary?(last)
     summary = JSON.parse(last).unwrap!
@@ -139,9 +121,7 @@ export def stderr_diagnostic(stderr: String, span: Report.Span) -> Result[Report
     first = text_of(summary, "first")
     return ok(Report.error_at("RUNTIME-TASK-CRASHED", "#{count} task crashes not observed; first: #{first}", span))
   end
-  if vm_shape?(last, false)
-    return Report.from_json(last)
-  end
+  return Report.from_json(last) if vm_shape?(last, false)
   return error("no diagnostic")
 end
 
@@ -157,9 +137,7 @@ end
 
 def vm_shape?(line: String, task: Bool) -> Bool
   parsed = JSON.parse(line)
-  if not parsed.ok?
-    return false
-  end
+  return false if not parsed.ok?
   root = parsed.unwrap!
   range = JSON.get(root, "range").unwrap_or(JSON.null())
   start = JSON.get(range, "start").unwrap_or(JSON.null())
@@ -184,12 +162,8 @@ def vm_shape?(line: String, task: Bool) -> Bool
 end
 
 def trace_kind?(key: String, value: Json) -> Bool
-  if key == "stack"
-    return JSON.list(value).ok?
-  end
-  if key == "stack_omitted"
-    return JSON.int(value).ok?
-  end
+  return JSON.list(value).ok? if key == "stack"
+  return JSON.int(value).ok? if key == "stack_omitted"
   return JSON.get(value, "file").ok?
 end
 
@@ -200,9 +174,7 @@ end
 
 def summary?(line: String) -> Bool
   parsed = JSON.parse(line)
-  if not parsed.ok?
-    return false
-  end
+  return false if not parsed.ok?
   root = parsed.unwrap!
   fields: Map[String, Json] = {
     "unobserved_crashes": JSON.from(int_of(root, "unobserved_crashes")),

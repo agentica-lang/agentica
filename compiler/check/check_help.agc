@@ -71,9 +71,7 @@ end
 ## The help for a name another language has but Agentica does not, or for a builtin that moved into a family, or "".
 export def foreign(tables: Tables, name: String) -> String
   found = tables.foreign_names.get(name)
-  if found.some?
-    return found.unwrap!
-  end
+  return found.unwrap! if found.some?
 
   return moved(name)
 end
@@ -83,14 +81,10 @@ end
 export def moved(name: String) -> String
   parts = name.split(".")
   member = Data.moved_modules().get(parts[0])
-  if parts.size != 2 or member.none?
-    return ""
-  end
+  return "" if parts.size != 2 or member.none?
 
   written = "#{member.unwrap!}.#{parts[1]}"
-  if ENTRIES.has_key?(written)
-    return "#{parts[0]} is #{member.unwrap!} now: use #{written}"
-  end
+  return "#{parts[0]} is #{member.unwrap!} now: use #{written}" if ENTRIES.has_key?(written)
 
   return "#{parts[0]} is #{member.unwrap!} now: its functions are written #{member.unwrap!}.NAME"
 end
@@ -115,9 +109,7 @@ export def field_help(name: String, fields: List[Model.Named]) -> String
   names = fields.map do |field: Model.Named| field.name end
   all = field_list(fields)
   guess = near(name, names, [])
-  if guess == ""
-    return all
-  end
+  return all if guess == ""
 
   return "#{guess} #{all}"
 end
@@ -147,9 +139,7 @@ def convert_help(expected: Types.Type, actual: Types.Type) -> String
   elsif Types.is?(expected, "Float") and Types.is?(actual, "Int")
     return "convert it with n.to_f"
   elsif Types.is?(expected, "Result") and !Types.is?(actual, "Result")
-    if Types.is?(Types.item(expected), "Void")
-      return "give a Result with ok() or error(\"message\")"
-    end
+    return "give a Result with ok() or error(\"message\")" if Types.is?(Types.item(expected), "Void")
 
     return "give a Result with ok(...) or error(\"message\")"
   elsif Types.is?(expected, "Int") and Types.is?(actual, "Float")

@@ -63,9 +63,7 @@ end
 
 # The order the constants are initialized in, after the program, when there are constants.
 def order_lines(checked: Checker.Checked) -> List[String]
-  if checked.constants.size == 0
-    return []
-  end
+  return [] if checked.constants.size == 0
 
   names = checked.constants.map do |name: String| Text.quote(name) end
   return ["constant-order [#{names.join(",")}]"]
@@ -114,9 +112,7 @@ def members_text(fields: List[Model.Named]) -> String
 end
 
 def note(label: String, text: String) -> String
-  if text == ""
-    return ""
-  end
+  return "" if text == ""
 
   return label + Text.quote(text)
 end

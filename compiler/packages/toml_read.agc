@@ -29,9 +29,7 @@ end
 ## Parses a document. A syntax error is located at its line and column, as std/toml reports them; the root is a table.
 export def parse(reading: Reading, text: String) -> Result[Map[String, Toml.Value]]
   parsed = Toml.parse(text)
-  if !parsed.ok?
-    return error(located(reading, position_of(text, parsed.message), parsed.message, Diag.Help.NoHelp))
-  end
+  return error(located(reading, position_of(text, parsed.message), parsed.message, Diag.Help.NoHelp)) if !parsed.ok?
 
   return table(reading, parsed.unwrap!, "")
 end
@@ -48,9 +46,7 @@ end
 
 ## The path of a key inside the table at path.
 export def child(path: String, key: String) -> String
-  if path == ""
-    return key
-  end
+  return key if path == ""
 
   return "#{path}.#{key}"
 end
@@ -124,15 +120,11 @@ def position_of(source: String, message: String) -> Source.Position
   start = Source.Position(offset: 0, line: 1, column: 1)
   pieces = message.split(": ")
   words = pieces[0].split(", ")
-  if words.size != 2 or !words[0].starts_with?("line ") or !words[1].starts_with?("column ")
-    return start
-  end
+  return start if words.size != 2 or !words[0].starts_with?("line ") or !words[1].starts_with?("column ")
 
   line = words[0].slice(5, words[0].length - 5).to_i
   column = words[1].slice(7, words[1].length - 7).to_i
-  if !line.ok? or !column.ok? or line.unwrap! < 1 or column.unwrap! < 1
-    return start
-  end
+  return start if !line.ok? or !column.ok? or line.unwrap! < 1 or column.unwrap! < 1
 
   # The offset counts the characters before the line (each with its line feed), then the column.
   before = 0
@@ -147,9 +139,7 @@ def position_of(source: String, message: String) -> Source.Position
 end
 
 def fail_with(reading: Reading, key_path: String, message: String, help: Diag.Help) -> String
-  if key_path == ""
-    return Failure.fail_file(reading.file, reading.code, message, help)
-  end
+  return Failure.fail_file(reading.file, reading.code, message, help) if key_path == ""
 
   return Failure.fail_key(reading.file, key_path, reading.code, message, help)
 end

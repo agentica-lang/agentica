@@ -41,9 +41,7 @@ end
 ## PKG-MANIFEST-INVALID, PKG-LOCK-MISSING, PKG-LOCK-INVALID or PKG-LOCK-STALE.
 export def find(workspace: Workspace.Workspace, root_dir: String) -> Result[Project]
   dir = nearest_manifest(workspace, root_dir)
-  if dir == ""
-    return ok(Project.Bare)
-  end
+  return ok(Project.Bare) if dir == ""
 
   manifest = try Manifest.read(workspace, Paths.join(dir, MANIFEST_FILE))
   try check_paths(workspace, dir, manifest)
@@ -85,9 +83,7 @@ end
 ## that is there must be a good one (PKG-LOCK-INVALID); a lock that is not there is an empty one.
 export def find_to_write(workspace: Workspace.Workspace, root_dir: String) -> Result[Project]
   dir = nearest_manifest(workspace, root_dir)
-  if dir == ""
-    return ok(Project.Bare)
-  end
+  return ok(Project.Bare) if dir == ""
 
   manifest = try Manifest.read(workspace, Paths.join(dir, MANIFEST_FILE))
   try check_paths(workspace, dir, manifest)
@@ -120,18 +116,14 @@ end
 ## The folder of a package that is read in place: the folder of the workspace member, or the `path` of the root
 ## manifest in `dir`, which is the folder of that manifest (a relative path starts there).
 export def folder_of(dir: String, members: Members.Members, locked: Lock.Locked) -> String
-  if locked.member
-    return Members.folder_of(members, locked.source)
-  end
+  return Members.folder_of(members, locked.source) if locked.member
 
   return path_folder(dir, locked.source.path)
 end
 
 ## The folder that a `path` names, for the root manifest in `dir`.
 export def path_folder(dir: String, path: String) -> String
-  if Paths.rooted?(path)
-    return path
-  end
+  return path if Paths.rooted?(path)
 
   return Paths.join(dir, path)
 end
@@ -140,9 +132,7 @@ end
 ## must have one. A failure is PKG-MANIFEST-INVALID at `dependencies.<name>.path`.
 export def check_paths(workspace: Workspace.Workspace, dir: String, manifest: Manifest.Manifest) -> Result[Void]
   for dependency in manifest.dependencies
-    if !GitSource.local?(dependency.source)
-      next
-    end
+    next if !GitSource.local?(dependency.source)
 
     folder = path_folder(dir, dependency.source.path)
     if !workspace.file_exists.call(Paths.join(folder, MANIFEST_FILE))
@@ -177,14 +167,10 @@ export def check_dependencies(
   for dependency in manifest.dependencies
     path = "dependencies.#{dependency.name}"
     found = Lock.find(lock, dependency.name)
-    if !found.ok?
-      return error(stale(manifest.file, path, "#{dependency.name} is not in #{LOCK_FILE}"))
-    end
+    return error(stale(manifest.file, path, "#{dependency.name} is not in #{LOCK_FILE}")) if !found.ok?
 
     locked = found.unwrap!
-    if of_package and locked.override
-      next
-    end
+    next if of_package and locked.override
 
     if !of_package and dependency.override != locked.override
       message = "#{dependency.name} is overridden in #{MANIFEST_FILE}, but not in #{LOCK_FILE}"
@@ -198,9 +184,7 @@ export def check_dependencies(
     if !GitSource.same?(dependency.source, locked.source)
       wanted = GitSource.describe(dependency.source)
       message = "#{dependency.name} is #{wanted}, but #{LOCK_FILE} has #{GitSource.describe(locked.source)}"
-      if of_package
-        return error(conflict(manifest.file, path, message))
-      end
+      return error(conflict(manifest.file, path, message)) if of_package
 
       return error(stale(manifest.file, path, message))
     end
@@ -211,9 +195,7 @@ export def check_dependencies(
         message = "#{dependency.name} is not a workspace member of this project, but #{LOCK_FILE} has it as one"
       end
 
-      if of_package
-        return error(conflict(manifest.file, path, message))
-      end
+      return error(conflict(manifest.file, path, message)) if of_package
 
       return error(stale(manifest.file, path, message))
     end
@@ -232,9 +214,7 @@ export def styled?(workspace: Workspace.Workspace, style_dir: String, key: Strin
 
   here = Paths.directory_of(key)
   while here != style_dir and Paths.inside?(style_dir, here)
-    if workspace.file_exists.call(Paths.join(here, MANIFEST_FILE))
-      return false
-    end
+    return false if workspace.file_exists.call(Paths.join(here, MANIFEST_FILE))
 
     here = Paths.directory_of(here)
   end
@@ -246,14 +226,10 @@ end
 export def nearest_manifest(workspace: Workspace.Workspace, dir: String) -> String
   here = dir
   while here != ""
-    if workspace.file_exists.call(Paths.join(here, MANIFEST_FILE))
-      return here
-    end
+    return here if workspace.file_exists.call(Paths.join(here, MANIFEST_FILE))
 
     parent = Paths.directory_of(here)
-    if parent == here
-      return ""
-    end
+    return "" if parent == here
 
     here = parent
   end

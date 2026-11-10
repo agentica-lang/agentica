@@ -144,17 +144,13 @@ export def check_query_taking(
 end
 
 def recovered(result: Result[Recovered]) -> Recovering
-  if result.ok?
-    return Recovering.Done(result.unwrap!)
-  end
+  return Recovering.Done(result.unwrap!) if result.ok?
 
   return Recovering.Failed(Failure.unpack(result.message))
 end
 
 def finished(result: Result[Recovered]) -> Checking
-  if result.ok?
-    return Checking.Done(result.unwrap!.checked)
-  end
+  return Checking.Done(result.unwrap!.checked) if result.ok?
 
   return Checking.Failed(Failure.unpack(result.message))
 end
@@ -206,9 +202,7 @@ end
 # value is not looked at: the whole text may have a 0 at the same place. A short 0 that the cache did not cut, with a
 # long comment after it, can read as cut; the answer is then the one of the whole text, which is the right one.
 def blanked?(stubbed: Bool, text: String, node: Ast.ConstDecl) -> Bool
-  if !stubbed
-    return false
-  end
+  return false if !stubbed
 
   case node.value
     Ast.Expr.Literal(lit) ->
@@ -236,9 +230,7 @@ def stub_open(text: String, zero: Int) -> Int
     at -= 1
   end
 
-  if at > 0 and at < zero and "[{(".contains?(text.slice(at - 1, 1))
-    return at - 1
-  end
+  return at - 1 if at > 0 and at < zero and "[{(".contains?(text.slice(at - 1, 1))
 
   return zero - 1
 end
@@ -275,9 +267,7 @@ def run(
   st = done.st
   # Like a constant, the default of a field belongs to no function, so a failure of one is the failure of the run.
   for module in linked.modules
-    if taken.clean.include?(module.key)
-      next
-    end
+    next if taken.clean.include?(module.key)
 
     for decl in module.declarations
       case decl
@@ -292,9 +282,7 @@ def run(
   problems: List[Failure.Problem] = []
   failed: List[String] = []
   for module in linked.modules
-    if taken.clean.include?(module.key)
-      next
-    end
+    next if taken.clean.include?(module.key)
 
     here = cx.with(file: module.file)
     for decl in module.declarations

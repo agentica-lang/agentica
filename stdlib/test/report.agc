@@ -140,9 +140,7 @@ end
 ## Adds `actual` to an error built from fields. An error from `from_json` is returned unchanged, since its kept object
 ## is what the report writes, so the text and the JSON cannot disagree.
 export def with_actual(problem: Error, actual: String) -> Error
-  if not JSON.null?(problem.original)
-    return problem
-  end
+  return problem if not JSON.null?(problem.original)
   return Error(
     code: problem.code,
     message: problem.message,
@@ -257,17 +255,13 @@ def timing_text(files: List[FileResult], wall_ms: Int) -> String
 end
 
 def file_label(file: FileResult) -> String
-  if file.kind == "tests"
-    return file.path
-  end
+  return file.path if file.kind == "tests"
 
   return file.feature
 end
 
 def count_text(count: Int) -> String
-  if count == 1
-    return "1 scenario"
-  end
+  return "1 scenario" if count == 1
 
   return "#{count} scenarios"
 end
@@ -418,9 +412,7 @@ def verdict_json(verdict: Verdict) -> Json
 end
 
 def error_json(problem: Error) -> Json
-  if not JSON.null?(problem.original)
-    return problem.original
-  end
+  return problem.original if not JSON.null?(problem.original)
   span = problem.span
   start: Map[String, Json] = {"line": JSON.from(span.line), "column": JSON.from(span.column)}
   stop: Map[String, Json] = {"line": JSON.from(problem.end_line), "column": JSON.from(span.end_column)}
@@ -479,9 +471,7 @@ def skip_text(reason: String, ai: Bool) -> String
 end
 
 def separator(ai: Bool) -> String
-  if ai
-    return " | "
-  end
+  return " | " if ai
   return "\n"
 end
 
@@ -519,9 +509,7 @@ end
 
 def stack_lines(root: Json) -> List[String]
   found = JSON.get(root, "stack")
-  if not found.ok?
-    return []
-  end
+  return [] if not found.ok?
   no_frames: List[Json] = []
   frames = JSON.list(found.unwrap!).unwrap_or(no_frames)
   omitted = int_at(root, "stack_omitted").unwrap_or(0)
@@ -545,9 +533,7 @@ def stack_head() -> Int
 end
 
 def not_shown(omitted: Int) -> String
-  if omitted == 1
-    return "... 1 frame not shown ..."
-  end
+  return "... 1 frame not shown ..." if omitted == 1
   return "... #{omitted} frames not shown ..."
 end
 
@@ -590,9 +576,7 @@ def detail_at(root: Json, key: String) -> Detail
   found = JSON.get(root, key)
   if found.ok?
     value = JSON.string(found.unwrap!)
-    if value.ok?
-      return Detail.Known(value.unwrap!)
-    end
+    return Detail.Known(value.unwrap!) if value.ok?
   end
   return Detail.Unknown
 end

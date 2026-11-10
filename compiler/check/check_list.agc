@@ -31,9 +31,7 @@ end
 
 ## The type written on parameter number index of a block, or Unknown when it has none.
 export def annotated_parameter(cx: State.Cx, st: State.St, block: Ast.BlockLit, index: Int) -> Result[T.Type]
-  if block.params.size <= index
-    return ok(T.Type.Unknown)
-  end
+  return ok(T.Type.Unknown) if block.params.size <= index
 
   case block.params[index].type
     some(annotation) -> return CheckTypes.resolve_type(cx, st, annotation, false)
@@ -121,9 +119,7 @@ def check_count(cx: State.Cx, st: State.St, site: State.Site, at: Bool) -> Resul
 
   target = try Args.list_argument(cx, st, site, context)
   count = try State.expr(cx, target.st, site.args[1], T.Type.Int)
-  if at
-    return ok(State.Out(st: count.st, type: T.item(target.type)))
-  end
+  return ok(State.Out(st: count.st, type: T.item(target.type))) if at
 
   return ok(State.Out(st: count.st, type: target.type))
 end
@@ -235,9 +231,7 @@ def block_callback(
     receiver = some(site.args[0])
   end
 
-  if reduces?(rule)
-    return reduce_block(cx, list.st, site, block, element)
-  end
+  return reduce_block(cx, list.st, site, block, element) if reduces?(rule)
 
   return Stmt.check_block_body(cx, list.st, block, some([element]), block_result(rule), receiver)
 end
@@ -307,9 +301,7 @@ def callback_result(
     current = list.st
   end
 
-  if reduces?(rule)
-    return reduce_result(cx, current, site, callback, params[0], result)
-  end
+  return reduce_result(cx, current, site, callback, params[0], result) if reduces?(rule)
 
   return plain_result(cx, current, rule, span, element, result)
 end
@@ -323,9 +315,7 @@ def reduce_result(
   result: T.Type,
 ) -> Result[State.Out]
   span = Ast.expr_span(callback)
-  if !T.same?(accumulator, result)
-    return error(State.mismatch(cx, st, accumulator, result, span))
-  end
+  return error(State.mismatch(cx, st, accumulator, result, span)) if !T.same?(accumulator, result)
 
   current = st
   if !block?(callback)
@@ -362,17 +352,13 @@ def plain_result(
 end
 
 def map_result(cx: State.Cx, st: State.St, span: Source.Span, result: T.Type) -> Result[State.Out]
-  if T.is?(result, "Void")
-    return error(State.fail(cx, st, "CHECK-VOID-VALUE", "map callbacks must return data", span))
-  end
+  return error(State.fail(cx, st, "CHECK-VOID-VALUE", "map callbacks must return data", span)) if T.is?(result, "Void")
 
   return ok(State.Out(st: st, type: T.Type.List(result)))
 end
 
 def require_type(cx: State.Cx, st: State.St, expected: T.Type, actual: T.Type, span: Source.Span) -> Result[Bool]
-  if !T.same?(expected, actual)
-    return error(State.mismatch(cx, st, expected, actual, span))
-  end
+  return error(State.mismatch(cx, st, expected, actual, span)) if !T.same?(expected, actual)
 
   return ok(true)
 end

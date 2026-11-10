@@ -24,9 +24,7 @@ end
 ## qualified name is a method of a constant, a type or a value (`ROWS.concat(x)`, `Mod.LIMIT.concat(x)`), or a
 ## variant, and its first argument is not its receiver.
 export def step?(node: Ast.Call, aliases: Set[String]) -> Bool
-  if node.piped or node.args.size == 0 or ENTRIES.has_key?(node.name)
-    return false
-  end
+  return false if node.piped or node.args.size == 0 or ENTRIES.has_key?(node.name)
 
   parts = node.name.split(".")
   if parts.size == 2
@@ -61,9 +59,7 @@ end
 
 # `x |> f()` where x is not itself the result of a pipe.
 def single_pipe(file: String, node: Ast.Call, chained: Bool) -> List[Problems.Problem]
-  if !node.piped or chained or node.args.size == 0 or piped_call?(node.args[0])
-    return []
-  end
+  return [] if !node.piped or chained or node.args.size == 0 or piped_call?(node.args[0])
 
   return [Rules.at(file, Rules.SINGLE_PIPE, node.span)]
 end
@@ -73,15 +69,11 @@ end
 # guide), so they must be steps (step?): piping to a builtin with a method form is CHECK-PIPE-METHOD, and `ok`,
 # `error`, `some` and `puts` read better as calls.
 def nested_call(file: String, node: Ast.Call, chained: Bool, aliases: Set[String]) -> List[Problems.Problem]
-  if chained or !step?(node, aliases)
-    return []
-  end
+  return [] if chained or !step?(node, aliases)
 
   case node.args[0]
     Ast.Expr.Call(middle) ->
-      if step?(middle, aliases) and call?(middle.args[0])
-        return [Rules.at(file, Rules.NESTED_CALL, node.span)]
-      end
+      return [Rules.at(file, Rules.NESTED_CALL, node.span)] if step?(middle, aliases) and call?(middle.args[0])
 
       return []
     _ -> return []

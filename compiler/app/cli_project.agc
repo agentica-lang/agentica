@@ -15,9 +15,7 @@ MANIFEST_FILE = "agentica.toml"
 ## options: with `json` a success prints `{"ok":true}`, as `check` does.
 export def run(style: String, workspace: Workspace.Workspace, work: Fn[String, Result[String]]) -> Reply.Answer
   cwd = Path.cwd()
-  if !cwd.ok?
-    return Reply.Answer.Printed(Reply.failed(2, "agentica: cannot read the working folder\n"))
-  end
+  return Reply.Answer.Printed(Reply.failed(2, "agentica: cannot read the working folder\n")) if !cwd.ok?
 
   real = workspace.real_path.call(cwd.unwrap!)
   dir = cwd.unwrap!
@@ -26,13 +24,9 @@ export def run(style: String, workspace: Workspace.Workspace, work: Fn[String, R
   end
 
   done = work.call(dir)
-  if !done.ok?
-    return Reply.Answer.Rejected(Front.link_problem(Failure.unpack_failure(done.message)))
-  end
+  return Reply.Answer.Rejected(Front.link_problem(Failure.unpack_failure(done.message))) if !done.ok?
 
-  if style == "json"
-    return Reply.Answer.Printed(Reply.printed("{\"ok\":true}\n"))
-  end
+  return Reply.Answer.Printed(Reply.printed("{\"ok\":true}\n")) if style == "json"
 
   return Reply.Answer.Printed(Reply.printed(done.unwrap!))
 end

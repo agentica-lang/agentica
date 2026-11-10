@@ -80,15 +80,11 @@ end
 ## change.
 export def query_cached(cache: Cache.Cache, path: String, settings: Env.Settings) -> Outcome
   walked = Modules.load_with(path, settings, cache.parses)
-  if !walked.ok?
-    return Outcome.Rejected(link_problem(Failure.unpack_failure(walked.message)))
-  end
+  return Outcome.Rejected(link_problem(Failure.unpack_failure(walked.message))) if !walked.ok?
 
   case Cache.find(cache, walked.unwrap!)
     Cache.Found.Hit(root) ->
-      if strict_failure?(root, settings)
-        return link_reusing(cache, walked.unwrap!, settings)
-      end
+      return link_reusing(cache, walked.unwrap!, settings) if strict_failure?(root, settings)
 
       return stored_outcome(root)
     Cache.Found.Miss -> return link_reusing(cache, walked.unwrap!, settings)
@@ -108,25 +104,19 @@ export def query_checked(cache: Cache.Cache, path: String, settings: Env.Setting
   end
 
   first = Modules.load_checked(path, settings, true)
-  if !first.ok?
-    return query_cached(cache, path, settings)
-  end
+  return query_cached(cache, path, settings) if !first.ok?
 
   loaded = first.unwrap!
   if unvouched?(loaded)
     second = Modules.load_checked(path, settings, false)
-    if !second.ok?
-      return query_cached(cache, path, settings)
-    end
+    return query_cached(cache, path, settings) if !second.ok?
 
     loaded = second.unwrap!
   end
 
   case Linker.link_loaded(loaded, settings)
     Linker.Linking.Failed(failure) ->
-      if stand_in?(loaded, failure.file)
-        return query_cached(cache, path, settings)
-      end
+      return query_cached(cache, path, settings) if stand_in?(loaded, failure.file)
 
       return Outcome.Rejected(link_problem(failure))
     Linker.Linking.Done(program) -> return skipped(cache, path, settings, loaded, program)
@@ -139,17 +129,13 @@ end
 ## refreshes; two refreshes of one cache give two caches, and the caller keeps one (stdlib/analysis.agc).
 export def refresh(cache: Cache.Cache, path: String, settings: Env.Settings) -> Cache.Cache
   walked = Modules.load_with(path, settings, cache.parses)
-  if !walked.ok?
-    return cache
-  end
+  return cache if !walked.ok?
 
   loaded = walked.unwrap!
   reaching = Cache.reaching(cache, loaded)
   if Cache.crowded?(reaching)
     again = Modules.load_with(path, settings, Modules.no_parses())
-    if !again.ok?
-      return cache
-    end
+    return cache if !again.ok?
 
     loaded = again.unwrap!
     reaching = Cache.restart(cache, loaded)
@@ -241,9 +227,7 @@ def skipped(
   checking = Checker.check_query_taking(program, settings, Set.new(clean), constants)
   case checking
     Checker.Checking.Failed(problem) ->
-      if stand_in?(loaded, problem.file)
-        return query_cached(cache, path, settings)
-      end
+      return query_cached(cache, path, settings) if stand_in?(loaded, problem.file)
 
       return Outcome.Rejected(problem)
     Checker.Checking.Done(checked) ->
@@ -299,9 +283,7 @@ def enter_checked(
 
   for key in loaded.order.drop(1)
     module = loaded.modules[key]
-    if module.digest == "" or module.clean
-      next
-    end
+    next if module.digest == "" or module.clean
 
     stub = ""
     case CheckCache.stub_of(module.text, module.program)
@@ -337,9 +319,7 @@ def coded_constants(
   found: Map[String, String] = {}
   for name in CheckCache.constant_names(module.program)
     linked = module.prefix + name
-    if !checked.constant_types.has_key?(linked)
-      return error("the check recorded no type for #{linked}")
-    end
+    return error("the check recorded no type for #{linked}") if !checked.constant_types.has_key?(linked)
 
     found = found.put(name, try TypeCode.encode(checked.constant_types[linked], keys))
   end
@@ -348,9 +328,7 @@ def coded_constants(
 end
 
 def check(linked: Linker.Linked, settings: Env.Settings, main_required: Bool) -> Outcome
-  if main_required
-    return checked_outcome(linked, Checker.check(linked, settings), NO_STYLED)
-  end
+  return checked_outcome(linked, Checker.check(linked, settings), NO_STYLED) if main_required
 
   return checked_outcome(linked, Checker.check_query(linked, settings), NO_STYLED)
 end

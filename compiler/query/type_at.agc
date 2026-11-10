@@ -58,25 +58,19 @@ export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Positi
     Position.Located.At(offset) ->
       here = Position.character(offset, asked.line, asked.column)
       token = kind_at(module.text, offset)
-      if token == ""
-        return nothing(asked, here)
-      end
+      return nothing(asked, here) if token == ""
 
       # A local comes first: on the name of a binding, the innermost expression would be the one around it.
       case Locals.find(module, checked.bound, offset)
         some(local) ->
-          if local.local.kind == "discard"
-            return nothing(asked, here)
-          end
+          return nothing(asked, here) if local.local.kind == "discard"
 
           return Diag.Outcome.Done(local_answer(linked, local))
         none ->
           # A type is before the expressions: the parameters of a block are inside the block, which holds the position.
           if type_token?(module.text, token, offset)
             found = type_answer(linked, checked, offset)
-            if found.size > 0
-              return Diag.Outcome.Done(found[0])
-            end
+            return Diag.Outcome.Done(found[0]) if found.size > 0
           end
 
           return expression_answer(linked, checked, asked, offset, here)
@@ -177,9 +171,7 @@ end
 # Whether the token at `offset` may be in the name of a type: a type name, or the dot of `Models.User`, which is
 # followed by a name that starts with a capital. The dot of a call (`Models.total`) needs no scan of the sites.
 def type_token?(text: String, token: String, offset: Int) -> Bool
-  if token == "type-name"
-    return true
-  end
+  return true if token == "type-name"
 
   return token == "dot" and offset + 1 < text.length and CAPITALS.include?(text.at(offset + 1))
 end
@@ -264,9 +256,7 @@ end
 # that stays as it is resolve to no catalog row.
 def resolved(checked: Checker.Checked, id: Int) -> Optional[Model.Builtin]
   found = checked.resolved.get(id)
-  if found.none?
-    return none
-  end
+  return none if found.none?
 
   case found.unwrap!
     State.Resolved.Call(name, _) -> return public(name)
@@ -276,9 +266,7 @@ end
 
 def public(name: String) -> Optional[Model.Builtin]
   entry = CatalogJson.public(name)
-  if entry.ok?
-    return some(entry.unwrap!)
-  end
+  return some(entry.unwrap!) if entry.ok?
 
   return none
 end
@@ -286,9 +274,7 @@ end
 # The text of a span; empty when the span does not lie in the text.
 def source_text(text: String, span: Source.Span) -> String
   size = span.stop.offset - span.start.offset
-  if span.start.offset < 0 or size < 0 or span.stop.offset > text.length
-    return ""
-  end
+  return "" if span.start.offset < 0 or size < 0 or span.stop.offset > text.length
 
   return text.slice(span.start.offset, size)
 end
@@ -317,9 +303,7 @@ def on_head?(text: String, span: Source.Span, offset: Int) -> Bool
     size = HEAD_LIMIT
   end
 
-  if start < 0 or size <= 0 or start + size > text.length
-    return false
-  end
+  return false if start < 0 or size <= 0 or start + size > text.length
 
   head = 0
   written = text.slice(start, size)

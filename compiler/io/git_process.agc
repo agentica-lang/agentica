@@ -23,9 +23,7 @@ end
 ## Runs `git` with `arguments` in the folder `dir`, so that it never looks for a repository around the working folder.
 export def run(arguments: List[String], dir: String) -> Ran
   spawned = Process.spawn_captured("git", arguments, dir, START_TIMEOUT_MS)
-  if !spawned.ok?
-    return Ran.Missing(spawned.message)
-  end
+  return Ran.Missing(spawned.message) if !spawned.ok?
 
   child = spawned.unwrap!
   _ = Process.close_stdin(child, CLOSE_TIMEOUT_MS)
@@ -40,23 +38,17 @@ def finish(child: Process) -> Ran
   finished = false
   while !finished
     got = Process.read_bytes(child, CHUNK_BYTES, GIT_TIMEOUT_MS)
-    if !got.ok?
-      return Ran.Broken(got.message)
-    end
+    return Ran.Broken(got.message) if !got.ok?
 
     finished = got.unwrap!.empty?
     pieces = pieces.push(got.unwrap!)
   end
 
   output = Process.output(child, GIT_TIMEOUT_MS)
-  if !output.ok?
-    return Ran.Broken(output.message)
-  end
+  return Ran.Broken(output.message) if !output.ok?
 
   waited = Process.wait(child, GIT_TIMEOUT_MS)
-  if !waited.ok?
-    return Ran.Broken(waited.message)
-  end
+  return Ran.Broken(waited.message) if !waited.ok?
 
   return Ran.Exited(waited.unwrap!, Bytes.concat(pieces), output.unwrap!.stderr)
 end

@@ -138,9 +138,7 @@ end
 ## The dependency with this name, or an error.
 export def find(manifest: Manifest, name: String) -> Result[Dependency]
   for dependency in manifest.dependencies
-    if dependency.name == name
-      return ok(dependency)
-    end
+    return ok(dependency) if dependency.name == name
   end
 
   return error("#{name} is not a dependency")
@@ -156,9 +154,7 @@ end
 export def has_downloaded(manifest: Manifest) -> Bool
   for library in manifest.natives
     for place in library.places
-      if place.url != ""
-        return true
-      end
+      return true if place.url != ""
     end
   end
 
@@ -167,15 +163,11 @@ end
 
 # The project's own name, a package name too. "" when the file has none.
 def optional_name(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[String]
-  if !root.has_key?("name")
-    return ok("")
-  end
+  return ok("") if !root.has_key?("name")
 
   name = try Reader.text(reading, root["name"], "name")
   problem = GitSource.name_problem(name)
-  if problem != ""
-    return error(Reader.fail_help(reading, "name", "not a package name", problem))
-  end
+  return error(Reader.fail_help(reading, "name", "not a package name", problem)) if problem != ""
 
   return ok(name)
 end
@@ -183,17 +175,13 @@ end
 # [dependencies]: a name and an inline table each, in the order of the file.
 def dependencies_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[List[Dependency]]
   found: List[Dependency] = []
-  if !root.has_key?("dependencies")
-    return ok(found)
-  end
+  return ok(found) if !root.has_key?("dependencies")
 
   entries = try Reader.table(reading, root["dependencies"], "dependencies")
   for name in entries.keys
     path = Reader.child("dependencies", name)
     problem = GitSource.name_problem(name)
-    if problem != ""
-      return error(Reader.fail_help(reading, path, "not a package name", problem))
-    end
+    return error(Reader.fail_help(reading, path, "not a package name", problem)) if problem != ""
 
     dependency = try dependency_of(reading, name, entries[name], path)
     found = found.push(dependency)
@@ -233,9 +221,7 @@ def path_source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], pa
   here = Reader.child(path, "path")
   folder = try Reader.text(reading, entries["path"], here)
   problem = GitSource.path_problem(folder)
-  if problem != ""
-    return error(Reader.fail_help(reading, here, "not a path", problem))
-  end
+  return error(Reader.fail_help(reading, here, "not a path", problem)) if problem != ""
 
   return ok(GitSource.Source(git: "", subdir: "", tag: "", ref: "", path: folder))
 end
@@ -249,9 +235,7 @@ def git_source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], pat
 
   git = try Reader.text(reading, entries["git"], Reader.child(path, "git"))
   problem = GitSource.git_problem(git)
-  if problem != ""
-    return error(Reader.fail_help(reading, Reader.child(path, "git"), "not a git URL", problem))
-  end
+  return error(Reader.fail_help(reading, Reader.child(path, "git"), "not a git URL", problem)) if problem != ""
 
   if entries.has_key?("tag") == entries.has_key?("ref")
     return error(Reader.fail_help(reading, path, "a dependency has a tag or a ref", "write exactly one of them"))
@@ -262,15 +246,11 @@ def git_source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], pat
   if entries.has_key?("tag")
     tag = try Reader.text(reading, entries["tag"], Reader.child(path, "tag"))
     tag_problem = GitSource.tag_problem(tag)
-    if tag_problem != ""
-      return error(Reader.fail_help(reading, Reader.child(path, "tag"), "not a tag", tag_problem))
-    end
+    return error(Reader.fail_help(reading, Reader.child(path, "tag"), "not a tag", tag_problem)) if tag_problem != ""
   else
     ref = try Reader.text(reading, entries["ref"], Reader.child(path, "ref"))
     ref_problem = GitSource.ref_problem(ref)
-    if ref_problem != ""
-      return error(Reader.fail_help(reading, Reader.child(path, "ref"), "not a ref", ref_problem))
-    end
+    return error(Reader.fail_help(reading, Reader.child(path, "ref"), "not a ref", ref_problem)) if ref_problem != ""
   end
 
   subdir = ""
@@ -289,17 +269,13 @@ end
 # and `optional`, which needs `build`.
 def natives_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[List[NativeLibrary]]
   found: List[NativeLibrary] = []
-  if !root.has_key?("native")
-    return ok(found)
-  end
+  return ok(found) if !root.has_key?("native")
 
   entries = try Reader.table(reading, root["native"], "native")
   for name in entries.keys
     path = Reader.child("native", name)
     problem = GitSource.name_problem(name)
-    if problem != ""
-      return error(Reader.fail_help(reading, path, "not a library name", problem))
-    end
+    return error(Reader.fail_help(reading, path, "not a library name", problem)) if problem != ""
 
     systems = try Reader.table(reading, entries[name], path)
     places: List[Place] = []
@@ -387,9 +363,7 @@ def place_of(reading: Reader.Reading, system: String, value: Toml.Value, path: S
   if entries.has_key?("file")
     file = try Reader.text(reading, entries["file"], Reader.child(path, "file"))
     problem = file_problem(file)
-    if problem != ""
-      return error(Reader.fail_help(reading, Reader.child(path, "file"), "not a native file", problem))
-    end
+    return error(Reader.fail_help(reading, Reader.child(path, "file"), "not a native file", problem)) if problem != ""
 
     return ok(Place(system: system, file: file, names: [], url: "", sha256: "", member: ""))
   end
@@ -423,9 +397,7 @@ end
 def system_name(reading: Reader.Reading, value: Toml.Value, path: String) -> Result[String]
   name = try Reader.text(reading, value, path)
   problem = system_problem(name)
-  if problem != ""
-    return error(Reader.fail_help(reading, path, "not a library name", problem))
-  end
+  return error(Reader.fail_help(reading, path, "not a library name", problem)) if problem != ""
 
   return ok(name)
 end
@@ -433,9 +405,7 @@ end
 # A file of the native/ folder, in plain folder names (the rules of a subdir), so the hash covers it.
 def file_problem(file: String) -> String
   problem = GitSource.subdir_problem(file)
-  if problem != ""
-    return problem
-  end
+  return problem if problem != ""
 
   if !file.starts_with?("#{NATIVE_FOLDER}/")
     return "a native file is a path in the #{NATIVE_FOLDER}/ folder of the package"
@@ -477,17 +447,13 @@ end
 # when there is none). Both are off when there is no [style].
 def style_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[Style]
   style = Style(max_line_width: 0, blank_line_after_end: false)
-  if !root.has_key?("style")
-    return ok(style)
-  end
+  return ok(style) if !root.has_key?("style")
 
   entries = try Reader.table(reading, root["style"], "style")
   try Reader.known_keys(reading, entries, STYLE_KEYS, "style")
   if entries.has_key?("max_line_width")
     width = try Reader.integer(reading, entries["max_line_width"], "style.max_line_width")
-    if width < 1
-      return error(Reader.fail(reading, "style.max_line_width", "the line width is at least 1"))
-    end
+    return error(Reader.fail(reading, "style.max_line_width", "the line width is at least 1")) if width < 1
 
     style = style.with(max_line_width: width)
   end
@@ -503,9 +469,7 @@ end
 # [tool]: a table of tables, one per tool (`[tool.cchecker]`), as pyproject.toml has. Agentica reads nothing inside a
 # tool's table, so its keys and values are the tool's own; only the two outer levels are checked.
 def tool_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[Void]
-  if !root.has_key?("tool")
-    return ok()
-  end
+  return ok() if !root.has_key?("tool")
 
   tools = try Reader.table(reading, root["tool"], "tool")
   for name in tools.keys

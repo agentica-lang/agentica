@@ -36,9 +36,7 @@ end
 # by itself, as only a String adds to a String.
 def appended(file: String, node: Ast.Binding, path: List[Int], locals: Locals) -> List[Problems.Problem]
   operands = Shape.plus_operands(node.value)
-  if path.size == 0 or operands.size < 2 or Shape.read_name(operands[0]) != some(node.name)
-    return []
-  end
+  return [] if path.size == 0 or operands.size < 2 or Shape.read_name(operands[0]) != some(node.name)
 
   case nearest(locals.origins.get(node.name, []), node.span.start.offset)
     none -> return []
@@ -94,9 +92,7 @@ end
 
 # Without an `else`, the `case` needs a `_` arm for every other value: say so.
 def if_chain(node: Ast.IfStmt) -> Rules.Rule
-  if node.else_body.some?
-    return Rules.IF_CHAIN
-  end
+  return Rules.IF_CHAIN if node.else_body.some?
 
   return Rules.IF_CHAIN.with(help: "use `case value` with one arm for each literal and add a `_` arm for the rest")
 end
@@ -116,9 +112,7 @@ def on_one_value?(node: Ast.IfStmt) -> Bool
   end
 
   first = tested(node.branches[0].condition)
-  if arms < 3 or first.none?
-    return false
-  end
+  return false if arms < 3 or first.none?
 
   return node.branches.all? do |branch: Ast.IfBranch| tested(branch.condition) == first end
 end
@@ -127,9 +121,7 @@ end
 def tested(condition: Ast.Expr) -> Optional[String]
   case condition
     Ast.Expr.Binary(node) ->
-      if node.op != "equal"
-        return none
-      end
+      return none if node.op != "equal"
 
       case node.right
         Ast.Expr.Literal(_) -> return Shape.read_name(node.left)
