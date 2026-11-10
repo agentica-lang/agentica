@@ -20,6 +20,10 @@ def branches(x: Int) -> Void
     puts(0)
     # before the last
     puts(x) # after the last
+  elsif x == 4 # empty
+  else
+    puts(x)
+    return if x > 5 # g
   end
 
   if true
@@ -41,17 +45,23 @@ def sign(x: Int) -> Int
   end
 end
 
-def name(x: Int) -> String
+def name(x: Int, y: Int) -> String
   case x
     1 ->
       # c
       "one" # d
-    _ -> "many" # e
+    2 ->
+      case y
+        2 -> "two" # t
+        _ -> "more"
+      end # e
+    _ -> "many" # m
   end
 end
 
 def main() -> Void
   branches(sign(1))
+  puts(name(1, 2))
   [1, 2].each do |x|
     # c
     puts(x) # d

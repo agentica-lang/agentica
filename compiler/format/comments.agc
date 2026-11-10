@@ -14,7 +14,8 @@
 ## alone on its line leads the following node, else trails the preceding one; a comment after code trails the
 ## preceding node, else leads the following one; with neither it dangles on the enclosing node. The positions where
 ## that is wrong are fixed by keyword, read from the tokens, since `elsif`, `else`, `end` and a chain's `.` have no
-## node: see `place`.
+## node: see `place`. One is fixed by node: a comment after the last statement of an `if` branch or a `case` arm, on
+## its line, trails that statement, not the branch (`body_end`).
 
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
@@ -483,7 +484,8 @@ end
 # The node a comment after code trails when `node` is the node before it. An `if` branch or a `case` arm ends with its
 # last statement, so a comment after that statement on its line lies past the branch and finds the branch as the node
 # before it; it trails that statement, since the layout writes the comments of a branch on its head line, before the
-# body. Any other node is itself.
+# body. A branch or an arm with an empty body is itself, so its comment stays on the head line, and so is any other
+# node.
 def body_end(outline: Outline, node: Int) -> Int
   last = last_statement(outline, node)
   return last if last >= 0
