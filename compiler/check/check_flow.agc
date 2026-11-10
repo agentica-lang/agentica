@@ -195,6 +195,10 @@ def if_holds_return?(node: Ast.IfStmt) -> Bool
 end
 
 def if_help(node: Ast.IfStmt, type_name: String) -> String
+  if node.guard
+    return "the last statement is a guard, which returns only when its condition holds; return #{type_name} after it"
+  end
+
   case node.else_body
     some(_) -> return "every branch of the last \"if\" must end with return, or return #{type_name} after it"
     none -> return "the last \"if\" has no \"else\"; add an \"else\" that returns #{type_name}, or return after it"

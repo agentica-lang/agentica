@@ -150,6 +150,44 @@ def test_a_dash_formats_the_standard_input_to_the_standard_output(tmp_path):
     assert json.loads(broken.stderr)["code"] == "LEX-UNCLOSED-DELIMITER"
 
 
+def test_a_guard_is_written_back_as_a_guard_with_the_same_tree(tmp_path):
+    guards = ('def f(xs: List[Int]) -> Int\n  for x in xs\n    next  if x < 0 # skip\n    # big ones end it\n'
+              '    break if x > 9\n  end\n\n  return  0 if xs.any? do |x| x == 5 end\n'
+              '  xs.each do |x| return if x == 1 end\n  case xs.size\n    1 -> return 2 if xs[0] == 2\n    _ -> puts(1)\n'
+              '  end\n\n  if xs.size == 3\n    return 3\n  end\n\n  return 1\nend\n')
+    laid_out = guards.replace("next  if", "next if").replace("return  0", "return 0")
+    lay_out(tmp_path, {"guards.agc": guards})
+    before = fmt("--tree", "guards.agc", cwd=tmp_path)
+    assert fmt(cwd=tmp_path).code == 0
+    # The 3-line `if` stays as it is.
+    assert text(tmp_path, "guards.agc") == laid_out
+    after = fmt("--tree", "guards.agc", cwd=tmp_path)
+    assert (before.code, after.code, before.stdout) == (0, 0, after.stdout)
+
+
+def test_a_guard_too_long_for_its_line_is_written_as_the_if_it_stands_for(tmp_path):
+    message = "x" * 90
+    long = 'def f(text: String) -> Result[Int]\n  return error("%s") if text.empty?\n  return ok(1)\nend\n' % message
+    spelled = ('def f(text: String) -> Result[Int]\n  if text.empty?\n    return error("%s")\n  end\n  return ok(1)\nend\n'
+               % message)
+    lay_out(tmp_path, {"long.agc": long})
+    before = fmt("--tree", "long.agc", cwd=tmp_path)
+    assert fmt(cwd=tmp_path).code == 0
+    assert text(tmp_path, "long.agc") == spelled
+    # Formatting again changes nothing, and the normal form leaves out the guard mark, so the check of the output passes.
+    assert fmt("--check", cwd=tmp_path).stdout == ""
+    assert fmt("--tree", "long.agc", cwd=tmp_path).stdout == before.stdout
+
+
+def test_a_guard_that_spans_lines_is_written_as_the_if_it_stands_for(tmp_path):
+    # A heredoc value takes the lines below its guard, which is one line, so it becomes the `if` even though it fits.
+    lay_out(tmp_path, {"doc.agc": 'def f(x: Int) -> String\n  return <<~A if x > 0\n    a\n    b\n  A\n  return ""\nend\n'})
+    assert fmt(cwd=tmp_path).code == 0
+    assert text(tmp_path, "doc.agc") == (
+        'def f(x: Int) -> String\n  if x > 0\n    return <<~A\n    a\n    b\n  A\n  end\n  return ""\nend\n')
+    assert fmt("--check", cwd=tmp_path).stdout == ""
+
+
 def test_tree_is_the_same_before_and_after_formatting(tmp_path):
     lay_out(tmp_path, {"bad.agc": UNFORMATTED, "good.agc": FORMATTED})
     before = fmt("--tree", "bad.agc", cwd=tmp_path)

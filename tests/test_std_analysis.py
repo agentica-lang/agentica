@@ -955,6 +955,11 @@ def count(n: Int) -> Int
   end
   return 0
 end
+
+def clamp(n: Int) -> Int
+  return 0 if n < 0
+  return n
+end
 """
 
 
@@ -1033,7 +1038,7 @@ def test_bodies_resolve_calls_bindings_patterns_and_mark_what_they_do_not_cover(
     write_files(project, {"shapes.agc": BODIES})
     answer, functions = bodies_of(driver, project, "shapes.agc")
     assert [(function["name"], function["exported"]) for function in answer["functions"]] == [
-        ("first_or", True), ("size", False), ("sign", False), ("count", False)]
+        ("first_or", True), ("size", False), ("sign", False), ("count", False), ("clamp", False)]
     generic = functions["first_or"]
     assert generic["generics"] == ["T"]
     assert [param["type"] for param in generic["params"]] == [
@@ -1070,6 +1075,13 @@ def test_bodies_resolve_calls_bindings_patterns_and_mark_what_they_do_not_cover(
     loop = functions["count"]["body"][0]
     assert (loop["kind"], loop["text"], loop["children"], loop["range"]["start"]) == (
         "other", "while", [], {"line": 38, "column": 3})
+    # A guard is an `if` whose branch is [condition, block], as written out; the block is the statement before the
+    # condition, so the two do not overlap.
+    guard = functions["clamp"]["body"][0]
+    condition, block = guard["children"][0]["children"]
+    assert (guard["kind"], condition["kind"], block["kind"]) == ("if", "op", "block")
+    assert (block["range"]["start"], block["range"]["end"], condition["range"]["start"]) == (
+        {"line": 45, "column": 3}, {"line": 45, "column": 11}, {"line": 45, "column": 15})
 
 
 def test_bodies_give_the_diagnostic_of_a_file_that_does_not_check_or_cannot_be_read(driver, project):

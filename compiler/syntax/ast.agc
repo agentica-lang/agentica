@@ -321,11 +321,14 @@ export struct IfBranch
   span: Source.Span
 end
 
-## if with its elsif branches. else_body is `some` when the else keyword is written, even for an empty body.
+## if with its elsif branches. else_body is `some` when the else keyword is written, even for an empty body. `guard` is
+## true for a guard, `return x if c`, `break if c` or `next if c`: one branch whose body is that one statement, which
+## checks and lowers as the `if` written out, and which the formatter writes back as a guard.
 export struct IfStmt
   id: Int
   branches: List[IfBranch]
   else_body: Optional[List[Stmt]]
+  guard: Bool
   span: Source.Span
 end
 

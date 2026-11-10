@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Guards: `return x if c`, `return if c`, `break if c` and `next if c` run as
+  the `if` written out. No other statement takes a modifier.
+
 ## [0.28.0] - 2026-11-10
 
 ### Added

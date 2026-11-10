@@ -325,9 +325,13 @@ def expect_statement_end(e: Base.Env, pos: Int, description: String) -> Result[I
         e,
         pos,
         "expected a newline after the statement, found #{Base.describe(token)}",
-        "there are no #{token.lexeme} modifiers: put the statement inside #{token.lexeme} cond ... end",
+        modifier_help(token.lexeme),
       ),
     )
+  end
+
+  if unless_at?(e, pos)
+    return error(unless_help(e, pos, "there is no unless: put the statement inside if not c ... end"))
   end
 
   if e.depth > 0 and token.kind == "end"
@@ -335,6 +339,24 @@ def expect_statement_end(e: Base.Env, pos: Int, description: String) -> Result[I
   end
 
   return Base.expect(e, pos, "NL", description, false)
+end
+
+def unless_at?(e: Base.Env, pos: Int) -> Bool
+  return e.tokens[pos].kind == "name" and e.tokens[pos].lexeme == "unless"
+end
+
+# PARSE-UNEXPECTED-TOKEN at an `unless` after a statement; `help` shows a guard after return, break and next.
+def unless_help(e: Base.Env, pos: Int, help: String) -> String
+  return Base.unexpected_help(e, pos, "expected a newline after the statement, found \"unless\"", help)
+end
+
+# Only return, break and next take an `if` modifier (parse_statement_guard); no statement takes a `while` one.
+def modifier_help(keyword: String) -> String
+  if keyword == "if"
+    return "only return, break and next take an if modifier: put the statement inside if cond ... end"
+  end
+
+  return "there are no #{keyword} modifiers: put the statement inside #{keyword} cond ... end"
 end
 
 def expect_end(e: Base.Env, pos: Int) -> Result[Int]
@@ -1593,11 +1615,18 @@ def parse_return(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   cursor = pos + 1
   next_id = ids
   value: Optional[Ast.Expr] = none
-  if !statement_end?(e, cursor)
+  if !statement_end?(e, cursor) and e.tokens[cursor].kind != "if"
     parsed = try parse_value(e, cursor, ids)
     value = some(parsed.node)
     cursor = parsed.pos
     next_id = parsed.ids
+  end
+
+  if unless_at?(e, cursor)
+    return error(unless_help(e, cursor, "there is no unless: write a guard with not, return x if not c"))
+  elsif e.tokens[cursor].kind == "if"
+    node = Ast.Return(id: next_id, value: value, span: Base.span_from(e, pos, cursor))
+    return parse_statement_guard(e, pos, cursor, Ast.Stmt.Return(node), next_id + 1)
   end
 
   stop = try expect_statement_end(e, cursor, "a newline after the statement")
@@ -1609,12 +1638,66 @@ def parse_return(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
 end
 
 def parse_loop_control(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
+  node = Ast.Stmt.Control(Ast.LoopControl(id: ids, kind: e.tokens[pos].lexeme, span: e.tokens[pos].span))
+  if e.tokens[pos + 1].kind == "if"
+    return parse_statement_guard(e, pos, pos + 1, node, ids + 1)
+  elsif unless_at?(e, pos + 1)
+    return error(
+      unless_help(e, pos + 1, "there is no unless: write a guard with not, #{e.tokens[pos].lexeme} if not c"),
+    )
+  end
+
   stop = try expect_statement_end(e, pos + 1, "a newline after the statement")
-  return stmt_at(
-    Ast.Stmt.Control(Ast.LoopControl(id: ids, kind: e.tokens[pos].lexeme, span: e.tokens[pos].span)),
-    stop,
-    ids,
+  return stmt_at(node, stop, ids)
+end
+
+# A guard, `stmt if cond`, where `stmt` (a return, break or next) starts at `pos` and its `if` is at `at`: an if with
+# one branch whose body is `stmt`, marked `guard`. The `if` must be on the line where `stmt` starts, so a value that
+# spans lines (a `case`, a block) cannot take a guard. The condition is read as an `if` condition (a call with a block
+# needs no parentheses), and it is the last thing on the line: no `elsif`, `else` or second `if`.
+def parse_statement_guard(e: Base.Env, pos: Int, at: Int, stmt: Ast.Stmt, ids: Int) -> Result[Base.StmtAt]
+  keyword = e.tokens[pos].lexeme
+  if e.tokens[at].span.start.line != e.tokens[pos].span.start.line
+    return error(
+      Base.unexpected_help(
+        e,
+        at,
+        "expected a newline after the statement, found \"if\"",
+        "a guard fits on the line of its #{keyword}: write if cond, then #{keyword}, then end",
+      ),
+    )
+  end
+
+  condition = try parse_expression(e, at + 1, ids)
+  following = e.tokens[condition.pos]
+  if following.kind == "elsif" or following.kind == "else" or following.kind == "if"
+    return error(
+      Base.unexpected_help(
+        e,
+        condition.pos,
+        "expected a newline after the condition, found #{Base.describe(following)}",
+        "a guard has one condition and no elsif or else: write if cond, then #{keyword}, then else ... end",
+      ),
+    )
+  end
+
+  stop = try expect_statement_end(e, condition.pos, "a newline after the condition")
+  branch = Ast.IfBranch(
+    id: condition.ids,
+    condition: condition.node,
+    body: [stmt],
+    span: Base.span_from(e, pos, condition.pos),
   )
+
+  node = Ast.IfStmt(
+    id: condition.ids + 1,
+    branches: [branch],
+    else_body: none,
+    guard: true,
+    span: Base.span_from(e, pos, stop),
+  )
+
+  return stmt_at(Ast.Stmt.If(node), stop, condition.ids + 1)
 end
 
 def parse_binding(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
@@ -1719,10 +1802,8 @@ end
 def keyword_help(name: String) -> String
   case name
     "match" -> return "use case value, then arms pattern -> ..., then end"
-    "break" ->
-      return "#{name} stands alone on its line; there are no if modifiers: write if cond, then #{name}, then end"
-    "next" ->
-      return "#{name} stands alone on its line; there are no if modifiers: write if cond, then #{name}, then end"
+    "break" -> return "#{name} stands alone on its line, or takes an if modifier: #{name} if cond"
+    "next" -> return "#{name} stands alone on its line, or takes an if modifier: #{name} if cond"
     "continue" -> return "write next to skip to the next iteration"
     _ -> return "write x = 5, or x: Int = 5 to give a type"
   end
@@ -1802,7 +1883,7 @@ def parse_simple_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtA
     following = Base.kind_at(e, pos + 1)
     if (
       (token.lexeme == "break" or token.lexeme == "next") and
-      (following == "NL" or following == "end" or following == "EOF")
+      (following == "NL" or following == "end" or following == "EOF" or following == "if" or unless_at?(e, pos + 1))
     )
       return parse_loop_control(e, pos, ids)
     end
@@ -1892,7 +1973,15 @@ def parse_if(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   close = try expect_end(e, cursor)
   stop = try expect_statement_end(e, close, "a newline after end")
   return stmt_at(
-    Ast.Stmt.If(Ast.IfStmt(id: next_id, branches: branches, else_body: else_body, span: Base.span_from(e, pos, stop))),
+    Ast.Stmt.If(
+      Ast.IfStmt(
+        id: next_id,
+        branches: branches,
+        else_body: else_body,
+        guard: false,
+        span: Base.span_from(e, pos, stop),
+      ),
+    ),
     stop,
     next_id,
   )

@@ -1,0 +1,14 @@
+def main() -> Void
+  return if x > 3
+  for y in ys
+    next if y == 1 # a comment
+    break if y > 9 and not done?(y)
+  end
+
+  ys.each do |y| return if y == 2 end
+end
+
+def f(x: Int) -> Int
+  return x + 1 if xs.any? do |y| y > x end
+  return 0
+end
