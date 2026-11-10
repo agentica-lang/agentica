@@ -169,8 +169,8 @@ def run_child(settings: Settings, path: String, bytecode: String, chosen: List[U
   case await_ready(settings, p, where)
     Started.Broken(found) ->
       Process.close(p)
-      return Report.file_failure(path, "tests", found.problem, found.output)
-    Started.Ready -> return run_tests(settings, path, p, chosen, where)
+      Report.file_failure(path, "tests", found.problem, found.output)
+    Started.Ready -> run_tests(settings, path, p, chosen, where)
   end
 end
 
@@ -253,7 +253,7 @@ def await_ready(settings: Settings, p: Process, where: Report.Span) -> Started
   end
   found = failure(settings, p, line.message, deadline, where)
   output = Child.tail(joined(shown, found.output), 65536)
-  return Started.Broken(Failure(problem: found.problem, output: output, blame: found.blame))
+  Started.Broken(Failure(problem: found.problem, output: output, blame: found.blame))
 end
 
 def await_test(settings: Settings, p: Process, deadline: Int, span: Report.Span) -> TestEnd
