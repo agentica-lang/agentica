@@ -263,9 +263,9 @@ Process.read_bytes.bytes
 Process.read_line
 Process.send
 Process.send_bytes.bytes
-Process.spawn
-Process.spawn_captured
-Process.spawn_channel
+Process.spawn.options
+Process.spawn_captured.options
+Process.spawn_channel.options
 Process.wait
 Profile.measure
 Profile.steps

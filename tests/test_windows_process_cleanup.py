@@ -30,7 +30,7 @@ WAIT = scaled(20)
 INNER_PROGRAM = """\
 def main() -> Void
   args = System.args()
-  p = Result.unwrap!(Process.spawn(args[0], [args[1], "hold"], 60000))
+  p = Result.unwrap!(Process.spawn(args[0], [args[1], "hold"], Process.Options(timeout_ms: 60000)))
   puts("#{System.pid()} #{Result.unwrap!(Process.read_line(p, 60000))}")
   IO.flush()
   Task.sleep(60000)
@@ -43,7 +43,7 @@ OUTER_PROGRAM = """\
 def main() -> Void
   args = System.args()
   words = ["run", "--", args[1], args[3], args[4]]
-  child = Result.unwrap!(Process.spawn_captured(args[0], words, ".", 60000))
+  child = Result.unwrap!(Process.spawn_captured(args[0], words, Process.Options(timeout_ms: 60000)))
   puts(Result.unwrap!(Process.read_line(child, 60000)))
   IO.flush()
   if args[2] == "close"
@@ -66,7 +66,7 @@ STUBBORN_CHILD = ("import os,signal,sys,time;signal.signal(signal.SIGBREAK,signa
 CLOSE_PROGRAM = """\
 def main() -> Void
   args = System.args()
-  p = Result.unwrap!(Process.spawn_captured(args[0], ["-c", args[1]], ".", 60000))
+  p = Result.unwrap!(Process.spawn_captured(args[0], ["-c", args[1]], Process.Options(timeout_ms: 60000)))
   puts(Result.unwrap!(Process.read_line(p, 60000)))
   IO.flush()
   start = Time.monotonic_ms()

@@ -4,8 +4,10 @@
 encoding.
 
 ```text
-Process.spawn(command: String, args: List[String], timeout_ms: Int = 30000, env: Map[String, String] = {},
-              out: String = "", err: String = "", pgroup: Bool = false) -> Result[Process]
+Process.Options(timeout_ms: Int = 30000, chdir: String = ".", env: Map[String, String] = {},
+                out: String = "", err: String = "", pgroup: Bool = false)
+Process.spawn(command: String, args: List[String],
+              options: Process.Options = Process.Options()) -> Result[Process]
 Process.send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
 Process.send_bytes(p: Process, bytes: Bytes, timeout_ms: Int) -> Result[Void]
 Process.read_line(p: Process, timeout_ms: Int) -> Result[String]
@@ -13,11 +15,11 @@ Process.read_bytes(p: Process, count: Int, timeout_ms: Int) -> Result[Bytes]
 Process.close_stdin(p: Process, timeout_ms: Int) -> Result[Void]
 Process.wait(p: Process, timeout_ms: Int) -> Result[Int]
 Process.close(p: Process) -> Void
-Process.spawn_captured(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000,
-                       env: Map[String, String] = {}, pgroup: Bool = false) -> Result[Process]
+Process.spawn_captured(command: String, args: List[String],
+                       options: Process.Options = Process.Options()) -> Result[Process]
 Process.output(p: Process, timeout_ms: Int) -> Result[ProcessOutput]
-Process.spawn_channel(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000,
-                      env: Map[String, String] = {}, pgroup: Bool = false) -> Result[Process]
+Process.spawn_channel(command: String, args: List[String],
+                      options: Process.Options = Process.Options()) -> Result[Process]
 Process.channel_read_line(p: Process, timeout_ms: Int) -> Result[String]
 Process.channel_send(p: Process, text: String, timeout_ms: Int) -> Result[Void]
 Process.channel_close(p: Process, timeout_ms: Int) -> Result[Void]
@@ -26,10 +28,17 @@ Process.parent_read_line(timeout_ms: Int) -> Result[String]
 Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
 ```
 
+- The options of a start go in the builtin record `Process.Options`; give only
+  the fields you need: `Process.spawn("make", [], Process.Options(chdir:
+  "build", timeout_ms: 5000))`. A positional timeout or folder is
+  `CHECK-TYPE-MISMATCH`.
 - Launching needs no flag. With `--deny-run` (or `--sandbox`) every start
   returns an error beginning `denied: --deny-run`, and extern blocks are
   refused as with `--deny-native`. `agentica test` passes the `--deny-*` flags
   and `--sandbox` on to test files, step programs and programs under test.
+- Each spawn starts the child in `chdir` (`"."` keeps the working directory;
+  not a directory is "directory is unavailable"). The command still resolves
+  against the program's working directory, not `chdir`.
 - A bare command name (no `/`) is looked up in each `PATH` entry in order; the
   working directory is never added: run a program
   in the current directory as `./name`. A command with `/` is a path,
@@ -79,7 +88,7 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
   ports/workers and is idempotent; a timeout closes the child without waiting;
   other operations on a closed handle fail. The end of the run also cleans up
   directly spawned children; descendant trees are outside the guarantee
-  unless the child started with `pgroup: true` (last parameter of each spawn):
+  unless the child started with `pgroup: true` (a field of `Process.Options`):
   then it leads its own process group (a new session on POSIX: no controlling
   terminal, so no `/dev/tty` prompt, and a SIGKILLed VM leaves the group) and a
   stop while it runs signals the whole group, with SIGKILL after a SIGTERM's
@@ -93,9 +102,7 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
 `spawn_captured` works like `spawn` (same lookup, `--deny-run`, environment and
 cleanup) with these differences.
 
-- The child starts in `dir` (`"."` keeps the working directory; not a directory
-  is "directory is unavailable"). The command still resolves against the
-  program's working directory, not `dir`.
+- `out` and `err` are an error: the streams go to the buffers below.
 - The VM reads the child's stdout and stderr all the time, so the child never
   blocks on a full pipe: stdout goes into a buffer that `read_line` and
   `read_bytes` read, stderr into its own buffer and never to the program's

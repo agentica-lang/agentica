@@ -54,7 +54,7 @@ end
 PIPES_PROGRAM = WAIT_FOR + r"""
 def main() -> Void
   args = System.args()
-  hold = Process.spawn(args[1], ["-c", "import sys; sys.stdin.read()"], 1000).unwrap!
+  hold = Process.spawn(args[1], ["-c", "import sys; sys.stdin.read()"], Process.Options(timeout_ms: 1000)).unwrap!
   puts("ready")
   IO.inspect(wait_for(args[0]))
   for path in File.read_text(args[0], 100000).unwrap!.split("\n")
@@ -67,7 +67,7 @@ def main() -> Void
   IO.inspect(wait_for(args[2]))
   IO.inspect(Process.close_stdin(hold, 5000))
   IO.inspect(Process.wait(hold, 10000))
-  next_one = Process.spawn(args[1], ["-c", "pass"], 1000).unwrap!
+  next_one = Process.spawn(args[1], ["-c", "pass"], Process.Options(timeout_ms: 1000)).unwrap!
   IO.inspect(Process.wait(next_one, 10000))
 end
 """

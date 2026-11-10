@@ -10,12 +10,12 @@ def parent(p: Process) -> Result[Int]
 end
 
 def main() -> Void
-  p = Process.spawn("sh", ["-c", "echo $$; exec cat"], 5000).unwrap!
+  p = Process.spawn("sh", ["-c", "echo $$; exec cat"], Process.Options(timeout_ms: 5000)).unwrap!
   pid = Process.read_line(p, 5000).unwrap!
   t = Task.spawn_owning(&parent, p)
   puts(Task.await(t).ok?)
   script = "while kill -0 #{pid} 2>/dev/null; do sleep 0.02; done; echo gone"
-  watcher = Process.spawn("sh", ["-c", script], 5000).unwrap!
+  watcher = Process.spawn("sh", ["-c", script], Process.Options(timeout_ms: 5000)).unwrap!
   IO.inspect(Process.read_line(watcher, 5000))
   puts(Task.pending_count())
 end

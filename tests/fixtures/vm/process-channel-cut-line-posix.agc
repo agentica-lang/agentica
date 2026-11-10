@@ -1,7 +1,7 @@
 # A channel line that the child's exit cuts off (no LF at the end) is an error, never a line. A line that ends in LF
 # before the exit is read as usual, and so is the end of input after it.
 def ask(script: String) -> Void
-  p = Process.spawn_channel("sh", ["-c", script], ".", 5000).unwrap!
+  p = Process.spawn_channel("sh", ["-c", script], Process.Options(timeout_ms: 5000)).unwrap!
   first = Process.channel_read_line(p, 5000)
   if first.ok?
     puts("ok #{first.unwrap!.length}")

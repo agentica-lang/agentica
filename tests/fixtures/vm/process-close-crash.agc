@@ -4,13 +4,13 @@ end
 
 def watch(pid: String) -> Process
   script = "while kill -0 #{pid} 2>/dev/null; do sleep 0.02; done; echo gone"
-  return Process.spawn("sh", ["-c", script], 5000).unwrap!
+  return Process.spawn("sh", ["-c", script], Process.Options(timeout_ms: 5000)).unwrap!
 end
 
 def main() -> Void
-  plain = Process.spawn("sh", ["-c", "echo $$; exec cat"], 5000).unwrap!
+  plain = Process.spawn("sh", ["-c", "echo $$; exec cat"], Process.Options(timeout_ms: 5000)).unwrap!
   plain_pid = Process.read_line(plain, 5000).unwrap!
-  captured = Process.spawn_captured("sh", ["-c", "echo $$; exec cat"], ".", 5000).unwrap!
+  captured = Process.spawn_captured("sh", ["-c", "echo $$; exec cat"], Process.Options(timeout_ms: 5000)).unwrap!
   captured_pid = Process.read_line(captured, 5000).unwrap!
   a = Task.spawn_owning(&crash, plain)
   b = Task.spawn_owning(&crash, captured)

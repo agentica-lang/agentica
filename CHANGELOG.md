@@ -18,6 +18,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** `Process.spawn`, `Process.spawn_captured` and
+  `Process.spawn_channel` take their options as one `Process.Options` record
+  (`timeout_ms`, `chdir`, `env`, `out`, `err`, `pgroup`) instead of positional
+  arguments; the folder is `chdir`, formerly `dir`, and `Process.spawn` takes it
+  too.
 - `agentica fmt` writes an `if` whose only body is one `return`, `break` or
   `next` as a guard when it fits on the line, so `fmt --check` flags these
   `if`s in existing projects until they are formatted.

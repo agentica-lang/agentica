@@ -280,7 +280,8 @@ end
 # Runs the compiler words with `arguments` in the package folder; standard input is closed at once.
 def run(request: Workspace.BuildRequest, compiler: List[String], arguments: List[String], ms: Int) -> Result[Ran]
   words = compiler.drop(1).concat(arguments)
-  spawned = Process.spawn_captured(compiler[0], words, request.root, START_TIMEOUT_MS)
+  start = Process.Options(chdir: request.root, timeout_ms: START_TIMEOUT_MS)
+  spawned = Process.spawn_captured(compiler[0], words, start)
   if !spawned.ok?
     message = "cannot start the C compiler #{compiler[0]}: #{spawned.message}"
     help = "install a C compiler, or set CC to one"

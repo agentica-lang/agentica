@@ -84,10 +84,10 @@ def child_program(trap="", windows=False):
     `windows` the program spawns, captured, the command that the arguments after the mode give (an executable, the
     code it runs and the file it writes its pid to), so the test chooses a child that ignores Ctrl+C and Ctrl+Break.
     """
-    spawn = ('Process.%s("/bin/sh", ["-c", "%secho $$; exec sleep 30"]%s, 1000)' %
-             (("spawn", "", "") if trap == "" else ("spawn_captured", trap, ', "."')))
+    spawn = ('Process.%s("/bin/sh", ["-c", "%secho $$; exec sleep 30"], Process.Options(timeout_ms: 1000))' %
+             (("spawn", "") if trap == "" else ("spawn_captured", trap)))
     if windows:
-        spawn = 'Process.spawn_captured(System.args()[2], ["-c", System.args()[3], System.args()[4]], ".", 1000)'
+        spawn = 'Process.spawn_captured(System.args()[2], ["-c", System.args()[3], System.args()[4]], Process.Options(timeout_ms: 1000))'
     return """\
 def main() -> Void
   f = File.open(System.args()[0], "write", 1000).unwrap!

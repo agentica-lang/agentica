@@ -333,7 +333,7 @@ LIVE_CHILD = '"ping", ["-n", "30", "127.0.0.1"]' if WINDOWS else '"/bin/sh", ["-
 
 LIVE_CHILD_PROGRAM = """\
 def main() -> Void
-  child = Result.unwrap!(Process.spawn(%s, 5000))
+  child = Result.unwrap!(Process.spawn(%s, Process.Options(timeout_ms: 5000)))
   puts("child started")
   IO.inspect(Process.read_line(child, 100))
   puts("done")
@@ -637,7 +637,7 @@ def test_a_stderr_that_cannot_be_written_makes_the_exit_code_1(tmp_path):
 CHILD_STDERR_PROGRAM = """\
 def main() -> Void
   %s
-  child = Result.unwrap!(Process.spawn(%s, ["-c", "import sys; sys.stderr.buffer.write(b'e' * 200000)"], 60000))
+  child = Result.unwrap!(Process.spawn(%s, ["-c", "import sys; sys.stderr.buffer.write(b'e' * 200000)"], Process.Options(timeout_ms: 60000)))
   _ = Process.wait(child, 60000)
   %s
 end
@@ -754,7 +754,7 @@ def ticker(child: Process) -> Int
 end
 
 def main() -> Void
-  child = Result.unwrap!(Process.spawn(%s, ["-c", "import sys; sys.stderr.buffer.write(b'e' * %d)"], 60000))
+  child = Result.unwrap!(Process.spawn(%s, ["-c", "import sys; sys.stderr.buffer.write(b'e' * %d)"], Process.Options(timeout_ms: 60000)))
   slowest = Task.await(Task.spawn(&ticker, child))
   puts("slowest #{slowest}")
   IO.inspect(Process.wait(child, 60000))
@@ -785,7 +785,7 @@ STREAMING_BYTES = 8_000_000
 STREAMING_WARN = "w" * 1000
 STREAMING_PROGRAM = """\
 def main() -> Void
-  child = Result.unwrap!(Process.spawn(%s, ["-c", "import sys; sys.stderr.buffer.write(b'e' * %d)"], 60000))
+  child = Result.unwrap!(Process.spawn(%s, ["-c", "import sys; sys.stderr.buffer.write(b'e' * %d)"], Process.Options(timeout_ms: 60000)))
   Task.sleep(300)
   start = Time.monotonic_ms()
   IO.warn("%s")
@@ -829,7 +829,7 @@ end
 
 def main() -> Void
   stop: Channel[Int] = Channel.new(1)
-  child = Result.unwrap!(Process.spawn(%s, ["-c", "import sys,time; time.sleep(0.3); sys.stderr.buffer.write(b'e' * %d)"], 60000))
+  child = Result.unwrap!(Process.spawn(%s, ["-c", "import sys,time; time.sleep(0.3); sys.stderr.buffer.write(b'e' * %d)"], Process.Options(timeout_ms: 60000)))
   printer = Task.spawn(&printer, stop)
   start = Time.monotonic_ms()
   waited = Process.wait(child, %d)

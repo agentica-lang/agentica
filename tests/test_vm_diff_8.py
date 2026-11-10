@@ -244,7 +244,7 @@ def test_process_spawn_searches_path_only_and_resolves_a_name_with_a_slash_again
     arguments = '["-e", "console.log(\'ran \' + process.argv[1])", "x"]' if WINDOWS else '["x"]'
     bytecode = compile_program(
         tmp_path, "path-lookup",
-        "def show(name: String) -> Void\n  case Process.spawn(name, " + arguments + ", 60000)\n"
+        "def show(name: String) -> Void\n  case Process.spawn(name, " + arguments + ", Process.Options(timeout_ms: 60000))\n"
         "    ok(p) ->\n"
         "      puts(\"#{name}: #{Process.read_line(p, 60000)} #{Process.wait(p, 60000)}\")\n"
         "      Process.close(p)\n    error(message) -> puts(\"#{name}: #{message}\")\n  end\nend\n\n"
@@ -275,8 +275,8 @@ def test_process_spawn_searches_path_only_and_resolves_a_name_with_a_slash_again
 def test_a_program_that_is_stopped_by_sigterm_kills_the_vms_running_children(adopt, request, tmp_path):
     program = tmp_path / "signal-children.agc"
     program.write_text(
-        "def main() -> Void\n  p = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", \"echo $$; exec sleep 30\"], "
-        "60000))\n  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  IO.flush()\n  Task.sleep(20000)\nend\n",
+        "def main() -> Void\n  p = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", \"echo $$; exec sleep 30\"], Process.Options(timeout_ms: "
+        "60000)))\n  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  IO.flush()\n  Task.sleep(20000)\nend\n",
         encoding="utf-8")
     driver = adopt(Child(
         cli() + [program], env=vm_environment({"TMPDIR": tmp_path}),
@@ -294,13 +294,13 @@ def test_closing_a_captured_vm_child_sends_sigterm_first_so_the_child_stops_its_
     inner = compile_program(
         tmp_path, "captured-inner",
         "def main() -> Void\n"
-        "  p = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", \"echo $PPID $$; exec sleep 30\"], 60000))\n"
+        "  p = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", \"echo $PPID $$; exec sleep 30\"], Process.Options(timeout_ms: 60000)))\n"
         "  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  IO.flush()\n  Task.sleep(5000)\nend\n")
     outer = compile_program(
         tmp_path, "captured-outer",
         "def main() -> Void\n  args = System.args()\n"
-        "  child = Result.unwrap!(Process.spawn_captured(args[0], [\"run\", \"--\", args[1]], \".\", "
-        "60000))\n  puts(Result.unwrap!(Process.read_line(child, 60000)))\n"
+        "  child = Result.unwrap!(Process.spawn_captured(args[0], [\"run\", \"--\", args[1]], Process.Options(timeout_ms: "
+        "60000)))\n  puts(Result.unwrap!(Process.read_line(child, 60000)))\n"
         "  if args[2] == \"close\"\n    Process.close(child)\n  else\n    IO.inspect(Process.read_line(child, 200))\n"
         "  end\nend\n")
     for mode in ["close", "timeout"]:
@@ -324,11 +324,11 @@ def test_close_never_waits_for_a_captured_child_and_one_that_ignores_sigterm_get
         "def main() -> Void\n  mode = System.args()[0]\n"
         "  script = \"trap '' TERM; echo $$; exec sleep 30\"\n  if mode == \"quick\"\n"
         "    script = \"echo $$; exec sleep 30\"\n  end\n"
-        "  p = Result.unwrap!(Process.spawn_captured(\"/bin/sh\", [\"-c\", script], \".\", 60000))\n"
+        "  p = Result.unwrap!(Process.spawn_captured(\"/bin/sh\", [\"-c\", script], Process.Options(timeout_ms: 60000)))\n"
         "  pid = Result.unwrap!(Process.read_line(p, 60000))\n  puts(pid)\n  IO.flush()\n"
         "  start = Time.monotonic_ms()\n  Process.close(p)\n  puts(Time.monotonic_ms() - start)\n"
         "  if mode == \"wait\"\n    Task.sleep(1500)\n"
-        "    probe = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", \"kill -0 #{pid} 2>/dev/null\"], 60000))\n"
+        "    probe = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", \"kill -0 #{pid} 2>/dev/null\"], Process.Options(timeout_ms: 60000)))\n"
         "    puts(Result.unwrap!(Process.wait(probe, 60000)) == 0)\n    Process.close(probe)\n  end\nend\n")
     traced = "trace off" not in vm(tmp_path, "--version")[1]
     for mode in ["wait", "exit", "quick"]:
@@ -359,7 +359,7 @@ def test_an_output_timeout_keeps_the_captured_child_and_output_decodes_invalid_u
     bytecode = compile_program(
         tmp_path, "captured-output",
         "def main() -> Void\n  args = System.args()\n"
-        "  p = Result.unwrap!(Process.spawn_captured(args[0], [args[1], args[2]], \".\", 60000))\n"
+        "  p = Result.unwrap!(Process.spawn_captured(args[0], [args[1], args[2]], Process.Options(timeout_ms: 60000)))\n"
         "  IO.inspect(Process.output(p, 50))\n  out = Result.unwrap!(Process.output(p, 60000))\n"
         "  puts(\"#{out.stdout.inspect} #{out.stderr.length} #{String.code(out.stderr)} #{out.truncated}\")\n"
         "  Process.close(p)\nend\n")
@@ -373,8 +373,8 @@ def test_a_signal_caught_while_the_vm_is_blocked_is_not_lost_when_the_last_child
     # The child prints its pid and sleeps. Windows has no /bin/sh, so a Python child (an argument of the program) does
     # the same, and the stop is the Ctrl+Break of the stop tests of Windows, which only a new process group can take.
     windows = os.name == "nt"
-    spawn = ('Process.spawn(System.args()[0], ["-c", System.args()[1]], 60000)' if windows else
-             'Process.spawn("/bin/sh", ["-c", "echo $$; exec sleep 30"], 60000)')
+    spawn = ('Process.spawn(System.args()[0], ["-c", System.args()[1]], Process.Options(timeout_ms: 60000))' if windows else
+             'Process.spawn("/bin/sh", ["-c", "echo $$; exec sleep 30"], Process.Options(timeout_ms: 60000))')
     bytecode = compile_program(
         tmp_path, "signal-pending",
         "def main() -> Void\n  p = Result.unwrap!(" + spawn + ")\n"
@@ -404,7 +404,7 @@ def test_a_child_does_not_inherit_descriptors_the_vm_inherited(tmp_path):
     bytecode = compile_program(
         tmp_path, "private-fds",
         "def main() -> Void\n  p = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", "
-        "\"if [ -e /dev/fd/7 ]; then echo leaked; else echo private; fi\"], 60000))\n"
+        "\"if [ -e /dev/fd/7 ]; then echo leaked; else echo private; fi\"], Process.Options(timeout_ms: 60000)))\n"
         "  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  Process.close(p)\nend\n")
     result = execute(["/bin/sh", "-c", "exec 7</dev/null; exec \"$0\" run -- \"$1\"", vm_binary(), bytecode],
                      cwd=tmp_path, env=vm_environment())

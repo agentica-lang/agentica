@@ -240,7 +240,7 @@ import BDD from "std/bdd"
 
 # ./peer prints the port it listens on, then one line for each message it receives.
 def start_peer(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  peer = Process.spawn_captured("./peer", [], ".", 5000).unwrap!
+  peer = Process.spawn_captured("./peer", [], Process.Options(timeout_ms: 5000)).unwrap!
   port = Process.read_line(peer, 5000).unwrap!
   kept = BDD.keep(ctx, "peer") do |_request| ok(JSON.from(Process.read_line(peer, 5000).unwrap_or(""))) end
   return BDD.given_env(kept, "PEER_PORT", port)

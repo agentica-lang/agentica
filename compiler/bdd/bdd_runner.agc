@@ -100,7 +100,7 @@ export def run(options: Opts.Options, program: Program, config_file: String, rep
     Program.Embedded(name) -> words = words.concat(["--embedded", name, "--", config_file])
   end
 
-  spawned = Process.spawn_captured(options.vm, words, ".", START_TIMEOUT)
+  spawned = Process.spawn_captured(options.vm, words)
   return Ran.Failed("cannot start the BDD runner: #{spawned.message}") if !spawned.ok?
 
   child = spawned.unwrap!
