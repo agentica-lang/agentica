@@ -664,7 +664,7 @@ def grouped_lines(c: Context, stmt: Ast.Stmt, span: Source.Span) -> Source.Span
     after += 1
   end
 
-  return tight_span.with(start: start, stop: stop)
+  tight_span.with(start: start, stop: stop)
 end
 
 # Where an expression starts in the source: a piped call starts at the value piped into it, and a node whose span
@@ -688,7 +688,7 @@ def value_start(expr: Ast.Expr) -> Source.Position
 
   return inner if inner.offset < own.offset
 
-  return own
+  own
 end
 
 # A statement. `forced` says that it is an item of a body, where a pipe chain of two or more `|>` that is the whole
@@ -980,7 +980,7 @@ def tail_values(stmts: List[Ast.Stmt]) -> List[Ast.Stmt]
   return stmts if stmts.size == 0
 
   last = stmts.size - 1
-  return stmts.set(last, tail_value(stmts[last]))
+  stmts.set(last, tail_value(stmts[last]))
 end
 
 def tail_value(stmt: Ast.Stmt) -> Ast.Stmt
@@ -989,25 +989,25 @@ def tail_value(stmt: Ast.Stmt) -> Ast.Stmt
       case node.value
         some(value) ->
           case value
-            Ast.Expr.Case(_) -> return stmt
-            _ -> return Ast.Stmt.Return(node.with(implicit: true))
+            Ast.Expr.Case(_) -> stmt
+            _ -> Ast.Stmt.Return(node.with(implicit: true))
           end
 
-        none -> return stmt
+        none -> stmt
       end
 
     Ast.Stmt.If(node) ->
       case node.else_body
         some(body) ->
           branches = node.branches.map do |branch: Ast.IfBranch| branch.with(body: tail_values(branch.body)) end
-          return Ast.Stmt.If(node.with(branches: branches, else_body: some(tail_values(body))))
-        none -> return stmt
+          Ast.Stmt.If(node.with(branches: branches, else_body: some(tail_values(body))))
+        none -> stmt
       end
 
     Ast.Stmt.Case(node) ->
       arms = node.arms.map do |arm: Ast.CaseArm| arm.with(body: tail_values(arm.body)) end
-      return Ast.Stmt.Case(node.with(arms: arms))
-    _ -> return stmt
+      Ast.Stmt.Case(node.with(arms: arms))
+    _ -> stmt
   end
 end
 
@@ -1028,21 +1028,21 @@ def void_aliases(decls: List[Ast.Decl]) -> List[String]
     end
   end
 
-  return found.drop(1)
+  found.drop(1)
 end
 
 # A result written `Void`, or an alias of Void declared in the file, with type arguments or not (`type V[T] = Void`).
 def void_result?(c: Context, result: Ast.TypeRef) -> Bool
   return result.args.size == 0 if result.name == "Void"
 
-  return c.void_aliases.include?(result.name)
+  c.void_aliases.include?(result.name)
 end
 
 def alias_of(decl: Ast.Decl) -> List[Ast.TypeAliasDecl]
   case decl
-    Ast.Decl.Export(node) -> return alias_of(node.declaration)
-    Ast.Decl.TypeAlias(node) -> return [node]
-    _ -> return []
+    Ast.Decl.Export(node) -> alias_of(node.declaration)
+    Ast.Decl.TypeAlias(node) -> [node]
+    _ -> []
   end
 end
 
