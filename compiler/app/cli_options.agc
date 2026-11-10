@@ -108,13 +108,9 @@ export def parse(arguments: List[String], version: String) -> Parsed
   return Parsed.Ready(options)
 end
 
-def mistake(message: String) -> Parsed
-  return Parsed.Answer(Reply.failed(1, "agentica: #{message}\n"))
-end
+def mistake(message: String) -> Parsed = Parsed.Answer(Reply.failed(1, "agentica: #{message}\n"))
 
-def option?(word: String) -> Bool
-  return word.length > 1 and (word.starts_with?("-") or word.starts_with?("+"))
-end
+def option?(word: String) -> Bool = word.length > 1 and (word.starts_with?("-") or word.starts_with?("+"))
 
 # How many values an option takes, or -1 when it is not one.
 def values(word: String) -> Int

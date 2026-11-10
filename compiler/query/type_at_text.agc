@@ -21,13 +21,9 @@ export def text(found: Model.TypeAt) -> String
 end
 
 # `line:column-line:column`, the end exclusive.
-def range(part: DiagnosticModel.Region) -> String
-  return "#{start(part)}-#{part.stop.line}:#{part.stop.column}"
-end
+def range(part: DiagnosticModel.Region) -> String = "#{start(part)}-#{part.stop.line}:#{part.stop.column}"
 
-def start(part: DiagnosticModel.Region) -> String
-  return "#{part.start.line}:#{part.start.column}"
-end
+def start(part: DiagnosticModel.Region) -> String = "#{part.start.line}:#{part.start.column}"
 
 # The text up to its first line break, with "..." when more follows: a block spans lines and the answer is one line.
 def first_line(text: String) -> String

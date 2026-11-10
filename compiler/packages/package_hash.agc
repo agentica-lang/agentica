@@ -156,9 +156,7 @@ export def list_files(workspace: Workspace.Workspace, root: String) -> Listing
 end
 
 ## Whether a file name is a source file of a package: it ends in `.agc`, in any case.
-export def source_file?(name: String) -> Bool
-  return fold(name).ends_with?(".agc")
-end
+export def source_file?(name: String) -> Bool = fold(name).ends_with?(".agc")
 
 ## Whether a path of the package (parts joined by "/") is under its native/ folder, whose files are all part of the
 ## package. The name is compared without regard to case, as agc_libs is.
@@ -179,14 +177,10 @@ end
 
 ## Whether the path is the native/ entry of the package root itself (a link named so would hide a folder from the
 ## hash).
-export def native_root?(path: String) -> Bool
-  return fold(path) == NATIVE_FOLDER
-end
+export def native_root?(path: String) -> Bool = fold(path) == NATIVE_FOLDER
 
 ## Whether a file name under native/ is left out: a dotfile (.DS_Store) or one that Windows adds.
-export def native_junk?(name: String) -> Bool
-  return name.starts_with?(".") or NATIVE_JUNK.include?(fold(name))
-end
+export def native_junk?(name: String) -> Bool = name.starts_with?(".") or NATIVE_JUNK.include?(fold(name))
 
 ## Whether a folder is left out of the hash, and cannot be imported: a hidden one or _build at any depth, or agc_libs
 ## or deps at the root of the package (`top`). The names are folded, as for agc_libs, because a case-insensitive file
@@ -197,20 +191,14 @@ export def skipped_folder?(name: String, top: Bool) -> Bool
 end
 
 ## Whether a folder is agc_libs, in any case.
-export def libs_folder?(name: String) -> Bool
-  return fold(name) == LIBS_FOLDER
-end
+export def libs_folder?(name: String) -> Bool = fold(name) == LIBS_FOLDER
 
 ## The name without its case, for comparing it with a fixed name. Upper then lower case, so that a letter that has no
 ## lowercase form of its own (such as the long s, which a case-insensitive file system folds to S) is folded too.
-export def fold(name: String) -> String
-  return name.upcase.downcase
-end
+export def fold(name: String) -> String = name.upcase.downcase
 
 # Whether the hash covers the regular file `path` (named `name`): a source file, or a file of native/ that is not junk.
-def covered?(name: String, path: String) -> Bool
-  return source_file?(name) or (native_path?(path) and !native_junk?(name))
-end
+def covered?(name: String, path: String) -> Bool = source_file?(name) or (native_path?(path) and !native_junk?(name))
 
 def regular?(kind: Workspace.EntryKind) -> Bool
   case kind
@@ -243,6 +231,4 @@ def join(folder: String, name: String) -> String
 end
 
 # path, 0, size in decimal, 0.
-def header(path: String, size: Int) -> Bytes
-  return "#{path}#{NUL}#{size}#{NUL}".bytes
-end
+def header(path: String, size: Int) -> Bytes = "#{path}#{NUL}#{size}#{NUL}".bytes

@@ -180,9 +180,7 @@ def shortened(summary: String) -> String
   return "#{head}…"
 end
 
-def summary_of(item: DocModel.Item) -> String
-  return text_of(DocModel.summary(item.doc))
-end
+def summary_of(item: DocModel.Item) -> String = text_of(DocModel.summary(item.doc))
 
 def text_of(doc: Optional[String]) -> String
   case doc

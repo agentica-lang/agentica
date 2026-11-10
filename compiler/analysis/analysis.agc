@@ -372,9 +372,7 @@ export def root?(named: String, typed: String, settings: Env.Settings) -> Bool
 end
 
 ## The QUERY-USAGE problem of a file that cannot be read, in that file.
-export def unreadable(path: String) -> Problems.Problem
-  return QueryFiles.unreadable(path, "").with(file: path)
-end
+export def unreadable(path: String) -> Problems.Problem = QueryFiles.unreadable(path, "").with(file: path)
 
 ## The QUERY-USAGE problem of a question that is wrong in itself, such as a position below line 1, put in `path`.
 export def refused(message: String, path: String) -> Problems.Problem
@@ -515,6 +513,4 @@ end
 
 # The settings of a query: an import or a variable that nothing uses yet is not an error in the file asked about,
 # since an editor adds the name first. The files it imports keep the rule, and `check` keeps refusing it everywhere.
-def for_query(settings: Env.Settings) -> Env.Settings
-  return settings.with(unused: false)
-end
+def for_query(settings: Env.Settings) -> Env.Settings = settings.with(unused: false)

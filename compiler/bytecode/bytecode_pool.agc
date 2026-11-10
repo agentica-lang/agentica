@@ -19,9 +19,7 @@ export struct Interned
 end
 
 ## A pool with no entry.
-export def empty() -> Pool
-  return Pool(index: {}, chunks: Wire.start(), count: 0)
-end
+export def empty() -> Pool = Pool(index: {}, chunks: Wire.start(), count: 0)
 
 ## The pool with a new entry for the key: its bytes, and how many items it adds. The first item of the entry is
 ## numbered pool.count of the pool before.
@@ -31,9 +29,7 @@ end
 
 ## The number of the first item of the entry for the key, or none when the pool has no such entry. Callers build the
 ## bytes of an entry only after this gives none, so a key that is already there costs no bytes.
-export def find(pool: Pool, key: String) -> Optional[Int]
-  return pool.index.get(key)
-end
+export def find(pool: Pool, key: String) -> Optional[Int] = pool.index.get(key)
 
 ## The item of an entry with one item, added when the key is new: its number, and the pool that holds it.
 export def intern(pool: Pool, key: String, bytes: List[Int]) -> Interned

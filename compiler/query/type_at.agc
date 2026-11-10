@@ -120,14 +120,10 @@ end
 
 ## Whether some token of the text holds the character at `offset`. Line breaks and the end are tokens that hold
 ## nothing.
-export def on_token?(text: String, offset: Int) -> Bool
-  return kind_at(text, offset) != ""
-end
+export def on_token?(text: String, offset: Int) -> Bool = kind_at(text, offset) != ""
 
 # The "@N::" in front of a linked name; "" for a name of the root file.
-def prefix_of(name: String) -> String
-  return name.slice(0, name.length - T.display_name(name).length)
-end
+def prefix_of(name: String) -> String = name.slice(0, name.length - T.display_name(name).length)
 
 # The kind of the token that holds the character at `offset`; "" for none, a line break and the end included.
 def kind_at(text: String, offset: Int) -> String

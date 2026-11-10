@@ -72,9 +72,7 @@ export enum Found
 end
 
 ## A cache that holds nothing.
-export def empty() -> Cache
-  return Cache(roots: {}, parses: Modules.no_parses(), clock: 0, checks: 0, parsed: 0, reused: 0)
-end
+export def empty() -> Cache = Cache(roots: {}, parses: Modules.no_parses(), clock: 0, checks: 0, parsed: 0, reused: 0)
 
 ## The root that was made from the modules of `loaded` with their texts, if the cache has it.
 export def find(cache: Cache, loaded: Modules.Loaded) -> Found
@@ -122,9 +120,7 @@ export def solved(
 end
 
 ## The root that the cache holds for the file that `loaded` starts from.
-export def held(cache: Cache, loaded: Modules.Loaded) -> Optional[Root]
-  return root_of(cache, loaded.order[0])
-end
+export def held(cache: Cache, loaded: Modules.Loaded) -> Optional[Root] = root_of(cache, loaded.order[0])
 
 ## The root that the cache holds for the file with the canonical key `key`.
 export def root_of(cache: Cache, key: String) -> Optional[Root]

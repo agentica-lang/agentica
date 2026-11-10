@@ -271,9 +271,7 @@ def optional_call?(node: Ast.Call) -> Bool
 end
 
 # A call of the builtin ok with a value.
-def ok_call?(node: Ast.Call) -> Bool
-  return node.name == "ok" and node.args.size == 1 and Builtins.ref("ok", 1).ok?
-end
+def ok_call?(node: Ast.Call) -> Bool = node.name == "ok" and node.args.size == 1 and Builtins.ref("ok", 1).ok?
 
 # some(x) and none: a value of the builtin enum Optional (Program.OPTIONAL), made by an `enum` instruction. The check
 # of Optional[T] covers T, so the payload is lowered as known: a check at each level of nested some(...) walks the

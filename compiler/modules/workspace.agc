@@ -108,20 +108,12 @@ end
 
 ## The builder of a workspace that never builds: every request is Skipped. It is the default, so only the commands
 ## that run or write a program (app/) turn source builds on.
-export def no_build(request: BuildRequest) -> Built
-  return Built.Skipped
-end
+export def no_build(request: BuildRequest) -> Built = Built.Skipped
 
 ## The cache that holds nothing: the default of every workspace, so a stage that does not ask for the cache never sees
 ## one.
-export def no_check_cache() -> CheckCache
-  return CheckCache(on: false, read: &no_entry, write: &no_write)
-end
+export def no_check_cache() -> CheckCache = CheckCache(on: false, read: &no_entry, write: &no_write)
 
-def no_entry(key: String) -> Result[String]
-  return error("there is no check cache")
-end
+def no_entry(key: String) -> Result[String] = error("there is no check cache")
 
-def no_write(key: String, entry: String) -> Bool
-  return false
-end
+def no_write(key: String, entry: String) -> Bool = false

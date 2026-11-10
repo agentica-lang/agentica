@@ -88,9 +88,7 @@ export def missing_lines(text: String, tokens: List[Tokens.Token]) -> List[Token
 end
 
 ## Whether `text` has no `end` that the rule refuses, whatever the project of the file asks.
-export def follows_rule?(file: String, text: String) -> Bool
-  return problem_in(file, text).none?
-end
+export def follows_rule?(file: String, text: String) -> Bool = problem_in(file, text).none?
 
 def problem_in(file: String, text: String) -> Optional[Failure.Problem]
   case Lexer.lex(text)

@@ -123,9 +123,7 @@ end
 
 ## The key of a tree node of kind `kind` (as `Node.kind` names it) with the span `span` as the parser gave it. Two
 ## nodes of one tree never share a key: a node and its child of the same kind never have the same span.
-export def key_of(kind: String, span: Source.Span) -> String
-  return "#{kind}:#{span.start.offset}:#{span.stop.offset}"
-end
+export def key_of(kind: String, span: Source.Span) -> String = "#{kind}:#{span.start.offset}:#{span.stop.offset}"
 
 ## The name of a role, as the text form prints it.
 export def role_name(role: Role) -> String
@@ -298,9 +296,7 @@ def chain_start(expr: Ast.Expr) -> Source.Position
 end
 
 # A node the parser made without text of its own has an empty span; it gets no comment.
-def written?(span: Source.Span) -> Bool
-  return span.stop.offset > span.start.offset
-end
+def written?(span: Source.Span) -> Bool = span.stop.offset > span.start.offset
 
 # The span cut at its last token that is not a line break.
 def tight(span: Source.Span, marks: Marks) -> Source.Span
@@ -311,9 +307,7 @@ def tight(span: Source.Span, marks: Marks) -> Source.Span
 end
 
 # The index of the last value of the ascending `values` that is at most `limit`, or -1.
-def last_at_or_before(values: List[Int], limit: Int) -> Int
-  return last_in(values, 0, values.size, limit)
-end
+def last_at_or_before(values: List[Int], limit: Int) -> Int = last_in(values, 0, values.size, limit)
 
 # The index of the last value of `values[from...to]`, ascending, that is at most `limit`, or `from - 1`.
 def last_in(values: List[Int], from: Int, to: Int, limit: Int) -> Int
@@ -332,9 +326,7 @@ def last_in(values: List[Int], from: Int, to: Int, limit: Int) -> Int
 end
 
 # The index of the first value of the ascending `values` that is at least `limit`, or the size of the list.
-def first_at_or_after(values: List[Int], limit: Int) -> Int
-  return first_in(values, 0, values.size, limit)
-end
+def first_at_or_after(values: List[Int], limit: Int) -> Int = first_in(values, 0, values.size, limit)
 
 # The index of the first value of `values[from...to]`, ascending, that is at least `limit`, or `to`.
 def first_in(values: List[Int], from: Int, to: Int, limit: Int) -> Int
@@ -453,9 +445,7 @@ def enclosing_of(outline: Outline, offset: Int) -> Int
   return current
 end
 
-def holds?(span: Source.Span, offset: Int) -> Bool
-  return span.start.offset <= offset and offset < span.stop.offset
-end
+def holds?(span: Source.Span, offset: Int) -> Bool = span.start.offset <= offset and offset < span.stop.offset
 
 # The child of `parent` that ends last at or before `offset`, or -1.
 def preceding_of(outline: Outline, parent: Int, offset: Int) -> Int
@@ -498,9 +488,7 @@ def value_follows?(outline: Outline, enclosing: Int, following: Int) -> Bool
   return (kind == "Binding" or kind == "Return" or kind == "ExprStmt") and outline.nodes[following].kind != "TypeRef"
 end
 
-def statement?(kind: String) -> Bool
-  return STATEMENT_KINDS.include?(kind)
-end
+def statement?(kind: String) -> Bool = STATEMENT_KINDS.include?(kind)
 
 def span_of(part: Part) -> Source.Span
   case part
@@ -718,29 +706,17 @@ def interpolated(parts: List[Ast.Part]) -> List[Part]
   return out
 end
 
-def decls(items: List[Ast.Decl]) -> List[Part]
-  return items.map do |item: Ast.Decl| Part.Decl(item) end
-end
+def decls(items: List[Ast.Decl]) -> List[Part] = items.map do |item: Ast.Decl| Part.Decl(item) end
 
-def exprs(items: List[Ast.Expr]) -> List[Part]
-  return items.map do |item: Ast.Expr| Part.Expr(item) end
-end
+def exprs(items: List[Ast.Expr]) -> List[Part] = items.map do |item: Ast.Expr| Part.Expr(item) end
 
-def stmts(items: List[Ast.Stmt]) -> List[Part]
-  return items.map do |item: Ast.Stmt| Part.Stmt(item) end
-end
+def stmts(items: List[Ast.Stmt]) -> List[Part] = items.map do |item: Ast.Stmt| Part.Stmt(item) end
 
-def types(items: List[Ast.TypeRef]) -> List[Part]
-  return items.map do |item: Ast.TypeRef| Part.Type(item) end
-end
+def types(items: List[Ast.TypeRef]) -> List[Part] = items.map do |item: Ast.TypeRef| Part.Type(item) end
 
-def params(items: List[Ast.Param]) -> List[Part]
-  return items.map do |item: Ast.Param| Part.Param(item) end
-end
+def params(items: List[Ast.Param]) -> List[Part] = items.map do |item: Ast.Param| Part.Param(item) end
 
-def named(items: List[Ast.NamedArg]) -> List[Part]
-  return items.map do |item: Ast.NamedArg| Part.Named(item) end
-end
+def named(items: List[Ast.NamedArg]) -> List[Part] = items.map do |item: Ast.NamedArg| Part.Named(item) end
 
 def block_params(items: List[Ast.BlockParam]) -> List[Part]
   return items.map do |item: Ast.BlockParam| Part.BlockParam(item) end

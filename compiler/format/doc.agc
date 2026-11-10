@@ -328,9 +328,7 @@ def trim_end(line: String) -> String
   return line.slice(0, stop)
 end
 
-def spaces(count: Int) -> String
-  return List.repeat(" ", count).join("")
-end
+def spaces(count: Int) -> String = List.repeat(" ", count).join("")
 
 # Writes an own-line comment at `indent`, wrapped at its words when it is wider than the width; a word longer than the
 # width stays whole. The comment starts a line, and its last line stays open for the break that follows it.

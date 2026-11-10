@@ -344,9 +344,7 @@ export def pinned_hash(locked: Lock.Locked) -> String
 end
 
 # The name of a package file in the program and in the .agcb: it does not depend on the cache folder of the machine.
-def stored_name(label: String, inner: String) -> String
-  return "pkg/#{label}/#{inner}"
-end
+def stored_name(label: String, inner: String) -> String = "pkg/#{label}/#{inner}"
 
 # The path of file from root, which is in it and in no folder the hash leaves out (hidden, _build/, agc_libs/, deps/:
 # not hashed, so not importable). A file that is outside is CHECK-IMPORT-PATH.
@@ -524,9 +522,7 @@ def read_names(workspace: Workspace.Workspace, scope: Scope, root: String) -> Re
   return ok(Manifest.names(manifest))
 end
 
-def declared?(names: List[String], name: String) -> Bool
-  return names.any? do |declared| declared == name end
-end
+def declared?(names: List[String], name: String) -> Bool = names.any? do |declared| declared == name end
 
 def missing(site: Failure.Site, message: String, help: String) -> String
   return Failure.fail_at(site, "CHECK-IMPORT-PACKAGE", message, Failure.hint(help))

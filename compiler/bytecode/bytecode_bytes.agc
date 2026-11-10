@@ -21,9 +21,7 @@ export struct Chunks
 end
 
 ## The 2 bytes of a number in 0 .. 65535, low byte first.
-export def u16(number: Int) -> List[Int]
-  return [number % 256, number / 256]
-end
+export def u16(number: Int) -> List[Int] = [number % 256, number / 256]
 
 ## The 4 bytes of a number in 0 .. 4294967295, low byte first.
 export def u32(number: Int) -> List[Int]
@@ -50,14 +48,10 @@ export def i64(number: Int) -> List[Int]
 end
 
 ## The 8 bytes of the IEEE 754 binary64 of a number, low byte first.
-export def f64(number: Float) -> List[Int]
-  return i64(Float.to_bits(number))
-end
+export def f64(number: Float) -> List[Int] = i64(Float.to_bits(number))
 
 ## The UTF-8 bytes of a text.
-export def utf8(text: String) -> List[Int]
-  return text.bytes.to_a
-end
+export def utf8(text: String) -> List[Int] = text.bytes.to_a
 
 ## A text as the file stores it: the number of its UTF-8 bytes as a u32, then the bytes.
 export def string(text: String) -> List[Int]
@@ -66,9 +60,7 @@ export def string(text: String) -> List[Int]
 end
 
 ## Chunks with no byte.
-export def start() -> Chunks
-  return Chunks(done: [], open: [], failed: "")
-end
+export def start() -> Chunks = Chunks(done: [], open: [], failed: "")
 
 ## The chunks with the piece added at the end: a small piece joins the open list, a long one is sealed as a chunk.
 export def add(chunks: Chunks, piece: List[Int]) -> Chunks

@@ -33,9 +33,7 @@ end
 
 ## The workspace of this machine for a run with `--stdlib DIR` (the entry programs of the stages), which reads the std/
 ## sources from that folder and never asks the workspace for them.
-export def workspace() -> Workspace.Workspace
-  return workspace_with(&no_std_source)
-end
+export def workspace() -> Workspace.Workspace = workspace_with(&no_std_source)
 
 ## The environment of this process.
 export def process_env() -> Env.Env
@@ -51,17 +49,11 @@ export def process_env() -> Env.Env
   )
 end
 
-def no_std_source(name: String) -> Result[String]
-  return error("this workspace carries no std sources")
-end
+def no_std_source(name: String) -> Result[String] = error("this workspace carries no std sources")
 
-def real_path(path: String) -> Result[String]
-  return Path.real(path)
-end
+def real_path(path: String) -> Result[String] = Path.real(path)
 
-def resolve_path(path: String) -> Result[String]
-  return Path.resolve(path)
-end
+def resolve_path(path: String) -> Result[String] = Path.resolve(path)
 
 def file_exists(path: String) -> Bool
   info = File.stat(path, STAT_TIMEOUT_MS)
@@ -98,9 +90,7 @@ def entry_kind(kind: String) -> Workspace.EntryKind
 end
 
 # The whole file, read in chunks of 256 KiB (File.read_bytes gives at most 1 MiB a call).
-def read_bytes(path: String) -> Result[Bytes]
-  return read_prefix(path, -1)
-end
+def read_bytes(path: String) -> Result[Bytes] = read_prefix(path, -1)
 
 # At most the first `limit` bytes of the file (no limit when it is negative), read in chunks of 256 KiB.
 def read_prefix(path: String, limit: Int) -> Result[Bytes]

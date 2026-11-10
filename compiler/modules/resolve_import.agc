@@ -39,9 +39,7 @@ export struct Resolution
 end
 
 ## True for the key of a standard module, which no canonical path can look like.
-export def embedded?(key: String) -> Bool
-  return !Paths.rooted?(key)
-end
+export def embedded?(key: String) -> Bool = !Paths.rooted?(key)
 
 ## Reads the source of the module with this key: a file, or a std/ module from the provider of the settings (a
 ## stdlib/ folder, or the copy that the binary carries).
@@ -116,9 +114,7 @@ def standard_for(settings: Env.Settings, file: String, site: Failure.Site, from_
 end
 
 # The path of the source of a std/ module under stdlib/: the key without its std/.
-def std_path(key: String) -> String
-  return key.slice(4, key.length - 4)
-end
+def std_path(key: String) -> String = key.slice(4, key.length - 4)
 
 # The file of the source of a std/ module in the folder of a run with `--stdlib DIR`. The core that std/analysis embeds
 # as std/internal/compiler/X is the file compiler/X of the checkout, next to the stdlib/ folder.

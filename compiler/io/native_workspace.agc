@@ -16,13 +16,9 @@ export def workspace_with(std_source: Fn[String, Result[String]]) -> Workspace.W
 end
 
 ## The workspace of this machine for a run with `--stdlib DIR`.
-export def workspace() -> Workspace.Workspace
-  return workspace_with(&no_std_source)
-end
+export def workspace() -> Workspace.Workspace = workspace_with(&no_std_source)
 
-def no_std_source(name: String) -> Result[String]
-  return error("this workspace carries no std sources")
-end
+def no_std_source(name: String) -> Result[String] = error("this workspace carries no std sources")
 
 # The verified local path of the downloaded member named by the request, from the cache alone and without any
 # network use. The caller matched the manifest row against the lock; this only verifies the cache object.

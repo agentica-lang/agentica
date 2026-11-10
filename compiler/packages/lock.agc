@@ -135,9 +135,7 @@ end
 
 ## Whether the files of the package are read in place, with no fetch, no cache and no hash: a workspace member or a
 ## `path`.
-export def in_place?(locked: Locked) -> Bool
-  return locked.member or GitSource.local?(locked.source)
-end
+export def in_place?(locked: Locked) -> Bool = locked.member or GitSource.local?(locked.source)
 
 ## The locked package with this name, or an error.
 export def find(lock: Lock, name: String) -> Result[Locked]
@@ -222,9 +220,7 @@ def artifact_table(artifact: Artifact) -> Toml.Value
 end
 
 # The identity of a native artifact row: one alias on one system of one package.
-def identity(artifact: Artifact) -> String
-  return sort_key(artifact)
-end
+def identity(artifact: Artifact) -> String = sort_key(artifact)
 
 def artifact_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Result[Artifact]
   entries = try Reader.table(reading, value, path)
@@ -415,6 +411,4 @@ def text_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: Str
   return Reader.text(reading, entries[key], Reader.child(path, key))
 end
 
-def hex?(text: String) -> Bool
-  return text.split("").all? do |letter| HEX.include?(letter) end
-end
+def hex?(text: String) -> Bool = text.split("").all? do |letter| HEX.include?(letter) end

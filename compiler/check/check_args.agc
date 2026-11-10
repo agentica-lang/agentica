@@ -43,9 +43,7 @@ export def task_argument(cx: State.Cx, st: State.St, site: State.Site) -> Result
 end
 
 ## True for the TaskRef of Task.current.
-export def task_ref?(type: T.Type) -> Bool
-  return T.is?(type, "Opaque") and T.name(type) == "TaskRef"
-end
+export def task_ref?(type: T.Type) -> Bool = T.is?(type, "Opaque") and T.name(type) == "TaskRef"
 
 ## Argument 0 as a Result[T].
 export def result_argument(cx: State.Cx, st: State.St, site: State.Site, context: T.Type) -> Result[State.Out]

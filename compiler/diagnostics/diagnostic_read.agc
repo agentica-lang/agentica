@@ -32,13 +32,9 @@ export def read(text: String) -> Result[Model.Diagnostic]
   )
 end
 
-def has?(object: Json, key: String) -> Bool
-  return JSON.get(object, key).ok?
-end
+def has?(object: Json, key: String) -> Bool = JSON.get(object, key).ok?
 
-def string(object: Json, key: String) -> Result[String]
-  return JSON.string(try JSON.get(object, key))
-end
+def string(object: Json, key: String) -> Result[String] = JSON.string(try JSON.get(object, key))
 
 # A note the diagnostic does not have is left out of the object.
 def note(object: Json, key: String) -> Result[String]

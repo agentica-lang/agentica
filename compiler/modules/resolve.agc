@@ -58,9 +58,7 @@ end
 
 ## True when the name is a builtin family (OpenSSL) in this file: its members are written Family.Member. An import
 ## alias of the same name wins, though a family name is reserved, so only std/ internals could take one.
-export def family?(cx: Context, name: String) -> Bool
-  return FAMILY_MEMBERS.has_key?(name) and !cx.me.aliases.has_key?(name)
-end
+export def family?(cx: Context, name: String) -> Bool = FAMILY_MEMBERS.has_key?(name) and !cx.me.aliases.has_key?(name)
 
 ## True when the file declares an enum with this name.
 export def local_enum?(cx: Context, name: String) -> Bool
@@ -159,9 +157,7 @@ export def unknown_constant_failure(cx: Context, name: String, span: Source.Span
 end
 
 ## The name in the linked program of a declaration of the file.
-export def identity(cx: Context, name: String) -> String
-  return cx.me.prefix + name
-end
+export def identity(cx: Context, name: String) -> String = cx.me.prefix + name
 
 # A reserved type, a builtin enum (and Result and Optional), or a bare builtin function keeps its name.
 def builtin_name?(cx: Context, name: String, want: Want) -> Bool
@@ -172,9 +168,7 @@ def builtin_name?(cx: Context, name: String, want: Want) -> Bool
   end
 end
 
-def site(cx: Context, span: Source.Span) -> Failure.Site
-  return Failure.Site(file: cx.me.file, span: span)
-end
+def site(cx: Context, span: Source.Span) -> Failure.Site = Failure.Site(file: cx.me.file, span: span)
 
 # Alias.member: through an import, or a builtin module call that the checker will judge.
 def qualified(cx: Context, alias: String, member: String, want: Want, span: Source.Span, hint: Bool) -> Result[String]

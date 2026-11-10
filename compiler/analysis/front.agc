@@ -62,17 +62,13 @@ export def link_problem(failure: Failure.Failure) -> Problems.Problem
 end
 
 ## Links the file at `path` and checks it.
-export def check_file(path: String, settings: Env.Settings) -> Outcome
-  return front(path, settings, true)
-end
+export def check_file(path: String, settings: Env.Settings) -> Outcome = front(path, settings, true)
 
 ## Links the file at `path` and checks it as `agentica check` and `agentica type-at` do: every rule of `check_file`
 ## except that the program declares a `main`, so a library file passes, and that an unused import or variable of the
 ## root file is not an error when `settings.unused` is false (the files it imports keep the rule). A `main` that is
 ## declared keeps its signature.
-export def query_file(path: String, settings: Env.Settings) -> Outcome
-  return query_cached(Cache.empty(), path, settings)
-end
+export def query_file(path: String, settings: Env.Settings) -> Outcome = query_cached(Cache.empty(), path, settings)
 
 ## Like `query_file`, using the program that `cache` holds for the file when the modules it reads are the ones the
 ## program was made from. The modules are read and walked again either way, so the answer is the one `query_file`
@@ -149,15 +145,11 @@ end
 
 ## Checks `linked`, a program that `Linker.link_programs` made from several files, as `query_file` does: with
 ## `settings.unused` false, an unused import or variable is no error in a root.
-export def query_linked(linked: Linker.Linked, settings: Env.Settings) -> Outcome
-  return check(linked, settings, false)
-end
+export def query_linked(linked: Linker.Linked, settings: Env.Settings) -> Outcome = check(linked, settings, false)
 
 ## The first style problem of a linked program: the files whose project asks for a rule that they break. `none` when
 ## none does. The style rules come after the type check, so a program that does not check reports that first.
-export def style_problem(linked: Linker.Linked) -> Optional[Problems.Problem]
-  return Style.first_problem(linked, NO_STYLED)
-end
+export def style_problem(linked: Linker.Linked) -> Optional[Problems.Problem] = Style.first_problem(linked, NO_STYLED)
 
 def front(path: String, settings: Env.Settings, main_required: Bool) -> Outcome
   case Linker.link_file(path, settings)
@@ -340,9 +332,7 @@ end
 
 # The outcome for a root that the cache holds: its style problem was found when it was made, from the same texts and
 # the same projects (Cache.find compares both), so the modules are not lexed again.
-def stored_outcome(root: Cache.Root) -> Outcome
-  return finished(root.linked, root.checking, root.style)
-end
+def stored_outcome(root: Cache.Root) -> Outcome = finished(root.linked, root.checking, root.style)
 
 # The style problem of `linked`, looked for only when it checked: a type error is reported first.
 def style_after(checking: Checker.Checking, linked: Linker.Linked, styled: Set[String]) -> Optional[Problems.Problem]

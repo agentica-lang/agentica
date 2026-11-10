@@ -37,6 +37,4 @@ def line_of(attachment: Comments.Attachment, placed: Comments.Attached) -> Strin
   return "#{at} #{role} #{node.kind} #{place_text(node.span.start)}#{keyword} #{text}"
 end
 
-def place_text(position: Source.Position) -> String
-  return "#{position.line}:#{position.column}"
-end
+def place_text(position: Source.Position) -> String = "#{position.line}:#{position.column}"

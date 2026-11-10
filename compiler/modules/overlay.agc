@@ -60,17 +60,11 @@ export def over(workspace: Workspace.Workspace, buffers: List[Buffer]) -> Worksp
 end
 
 # The identity of a function value: a block can only be written as the block of a call.
-def as_reader(f: Fn[String, SourceFile.Read]) -> Fn[String, SourceFile.Read]
-  return f
-end
+def as_reader(f: Fn[String, SourceFile.Read]) -> Fn[String, SourceFile.Read] = f
 
-def as_check(f: Fn[String, Bool]) -> Fn[String, Bool]
-  return f
-end
+def as_check(f: Fn[String, Bool]) -> Fn[String, Bool] = f
 
-def as_resolver(f: Fn[String, Result[String]]) -> Fn[String, Result[String]]
-  return f
-end
+def as_resolver(f: Fn[String, Result[String]]) -> Fn[String, Result[String]] = f
 
 # On Windows Path.resolve gives `\` separators, which the path helpers split only on `/`: they are split on a copy
 # with `/`, as Path.join writes them.

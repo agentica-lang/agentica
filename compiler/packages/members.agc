@@ -25,9 +25,7 @@ export struct Members
 end
 
 ## The workspace of a project that is in none.
-export def empty() -> Members
-  return Members(root: "", repository: "", folders: [])
-end
+export def empty() -> Members = Members(root: "", repository: "", folders: [])
 
 ## Finds the workspace of the project whose manifest is in `project_dir` (a canonical path): the nearest manifest going
 ## up, from that folder, that has a `[workspace]` table, provided the project is that folder or one of its listed
@@ -66,9 +64,7 @@ export def member?(members: Members, source: GitSource.Source) -> Bool
 end
 
 ## The folder of the member that a source names (`member?` is true for it).
-export def folder_of(members: Members, source: GitSource.Source) -> String
-  return Paths.join(members.root, source.subdir)
-end
+export def folder_of(members: Members, source: GitSource.Source) -> String = Paths.join(members.root, source.subdir)
 
 # The value of the `workspace` key of the manifest at file, as a list of one value, or of none when the file has no
 # such key. A file that cannot be read or parsed has none here: the project's own manifest was read before and reports

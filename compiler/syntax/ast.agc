@@ -765,9 +765,7 @@ export def stmt_span(stmt: Stmt) -> Source.Span
 end
 
 ## The first id the next file can use: one more than the id of the Program.
-export def next_free_id(program: Program) -> Int
-  return program.id + 1
-end
+export def next_free_id(program: Program) -> Int = program.id + 1
 
 ## True when the last argument of a call is a block (do ... end), which picks the block form of a builtin (File.open).
 export def block_call?(call: Call) -> Bool

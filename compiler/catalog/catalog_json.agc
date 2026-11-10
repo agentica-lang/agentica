@@ -70,6 +70,4 @@ def text_or_null(text: String) -> Json
   return JSON.from(text)
 end
 
-def strings(items: List[String]) -> Json
-  return JSON.array(items.map do |item: String| JSON.from(item) end)
-end
+def strings(items: List[String]) -> Json = JSON.array(items.map do |item: String| JSON.from(item) end)

@@ -3,9 +3,7 @@
 import {GRAPHIC_RANGES} from "unicode_table"
 
 ## Whether the code point is a graphic character, one that a program can write as it is.
-export def graphic?(code: Int) -> Bool
-  return in_ranges?(GRAPHIC_RANGES, code, 0, GRAPHIC_RANGES.size / 2)
-end
+export def graphic?(code: Int) -> Bool = in_ranges?(GRAPHIC_RANGES, code, 0, GRAPHIC_RANGES.size / 2)
 
 ## An Int as upper-case hexadecimal digits, padded with zeros to width.
 export def hex(value: Int, width: Int) -> String
@@ -25,9 +23,7 @@ export def hex(value: Int, width: Int) -> String
 end
 
 ## Returns the code as upper-case hexadecimal digits, with at least one.
-export def hex_text(value: Int) -> String
-  return hex(value, 1)
-end
+export def hex_text(value: Int) -> String = hex(value, 1)
 
 ## Returns the character literal of the code point, such as `#\tab` or `#\u00E9`.
 export def written(code: Int) -> String

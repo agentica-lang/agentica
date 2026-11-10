@@ -54,9 +54,7 @@ end
 
 ## The signature of one form of a builtin in its Ruby form, `s.strip() -> String` or `list.push(value: T) -> List[T]`,
 ## or "" when the builtin has none. The receiver is the first parameter.
-export def signature(form: Model.Builtin) -> String
-  return signature_as(form, method_name(form.name))
-end
+export def signature(form: Model.Builtin) -> String = signature_as(form, method_name(form.name))
 
 ## The Ruby form of `form` written with the method name `method`, which is its own or a synonym of it (`s.size()` for
 ## `String.length`); "" when `method` is "".
@@ -93,9 +91,7 @@ end
 
 ## True when the alias key `Kind.method` is a second Ruby name (`List.collect`, `String.size`): accepted, and never
 ## shown in a text.
-export def synonym?(key: String) -> Bool
-  return Tables.ruby_synonyms().any? do |known: String| known == key end
-end
+export def synonym?(key: String) -> Bool = Tables.ruby_synonyms().any? do |known: String| known == key end
 
 # The alias key of each builtin that has a Ruby name of its own; the first key in name order wins.
 def by_builtin() -> Map[String, String]

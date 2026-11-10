@@ -93,9 +93,7 @@ end
 
 ## True when the source file at index file is a file of the prelude: the functions lowered from it are the prelude
 ## functions, which the bytecode flags and the VM reports at the call of the user.
-export def prelude_file?(program: Program, file: Int) -> Bool
-  return program.sources[file].file.starts_with?(PRELUDE_PREFIX)
-end
+export def prelude_file?(program: Program, file: Int) -> Bool = program.sources[file].file.starts_with?(PRELUDE_PREFIX)
 
 ## The instruction with no immediate and no builtin name.
 export def instr(op: String, args: List[Int], file: Int, spans: List[Source.Span]) -> Instr

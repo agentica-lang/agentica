@@ -26,14 +26,10 @@ end
 ## Lexes and parses a file and returns the text form of the tree, or the ERROR line of the first diagnostic. One node
 ## per line: `role: kind #id span attributes`, children indented by two spaces. The goldens are in
 ## tests/fixtures/frontend/parser/.
-export def parse_text(text: String) -> String
-  return parse_text_from(text, 0)
-end
+export def parse_text(text: String) -> String = parse_text_from(text, 0)
 
 ## Like parse_text, with the ids of the nodes starting at first_id.
-export def parse_text_from(text: String, first_id: Int) -> String
-  return print_from(text, first_id).text
-end
+export def parse_text_from(text: String, first_id: Int) -> String = print_from(text, first_id).text
 
 ## Like parse_text_from, and also gives Ast.next_free_id of the Program, so the next file can continue the numbering.
 export def print_from(text: String, first_id: Int) -> Printed
@@ -49,9 +45,7 @@ export def print_from(text: String, first_id: Int) -> Printed
 end
 
 ## The margin one level deeper.
-export def deeper(at: Margin) -> Margin
-  return at.with(indent: "#{at.indent}  ")
-end
+export def deeper(at: Margin) -> Margin = at.with(indent: "#{at.indent}  ")
 
 ## The first line of a node: the indent, the role if there is one (the root has none), the kind, the id relative to the
 ## margin, the span and the attributes.
@@ -217,9 +211,7 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
   end
 end
 
-def doc_attr(doc: Optional[String]) -> String
-  return text_attr(" doc=", doc)
-end
+def doc_attr(doc: Optional[String]) -> String = text_attr(" doc=", doc)
 
 # The library and the C type codes of an extern function, its C name when it is not the def's name, compute=true for
 # a compute def, module=true for a function of a native module, the resource and its free function for one that returns
@@ -253,9 +245,7 @@ def native_attr(name: String, native: Optional[Ast.Native]) -> String
   end
 end
 
-def name_attr(name: String) -> String
-  return " name=#{Text.quote(name)}"
-end
+def name_attr(name: String) -> String = " name=#{Text.quote(name)}"
 
 def value_text(value: Ast.LitValue) -> String
   case value
@@ -277,9 +267,7 @@ def visible_attr(visible: Optional[List[String]]) -> String
   end
 end
 
-def list_text(items: List[String]) -> String
-  return "[#{items.join(",")}]"
-end
+def list_text(items: List[String]) -> String = "[#{items.join(",")}]"
 
 def print_type(out: List[String], at: Margin, role: String, type: Ast.TypeRef) -> List[String]
   lines = out.push(head(at, role, "type-ref", type.id, type.span, name_attr(type.name)))
@@ -352,9 +340,7 @@ def print_map_entry(out: List[String], at: Margin, entry: Ast.MapEntry) -> List[
   return print_expr(lines, deeper(at), "value", entry.value)
 end
 
-def op_attrs(op: String, op_span: Source.Span) -> String
-  return " op=#{op} op-span=#{Text.span_text(op_span)}"
-end
+def op_attrs(op: String, op_span: Source.Span) -> String = " op=#{op} op-span=#{Text.span_text(op_span)}"
 
 def print_call_like(
   out: List[String],

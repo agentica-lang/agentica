@@ -366,9 +366,7 @@ def through(span: Source.Span, value: Model.Node) -> DiagnosticModel.Region
   return DiagnosticModel.Region(start: DiagnosticModel.range_of(span).start, stop: value.range.stop)
 end
 
-def other(syntax: String, span: Source.Span) -> Model.Node
-  return leaf("other", Types.Type.Unknown, span).with(text: syntax)
-end
+def other(syntax: String, span: Source.Span) -> Model.Node = leaf("other", Types.Type.Unknown, span).with(text: syntax)
 
 # The type the checker recorded for the node `id`, Unknown when it has none.
 def types_at(checked: Checker.Checked, id: Int) -> Types.Type
@@ -377,9 +375,7 @@ def types_at(checked: Checker.Checked, id: Int) -> Types.Type
   return checked.types[id]
 end
 
-def type_of(checked: Checker.Checked, id: Int) -> Model.TypeShape
-  return shape(types_at(checked, id))
-end
+def type_of(checked: Checker.Checked, id: Int) -> Model.TypeShape = shape(types_at(checked, id))
 
 # The type that the node `id` introduced at `at` (a parameter, a binding).
 def bound(checked: Checker.Checked, id: Int, at: Int) -> Model.TypeShape

@@ -334,9 +334,7 @@ def emit(at: Source.Span, line: Tokens.EagLine, parts: List[Part], built: Built)
 end
 
 # Whether a tag writes its value into the output.
-def writes?(part: Part) -> Bool
-  return part.kind == "expr" or part.kind == "raw"
-end
+def writes?(part: Part) -> Bool = part.kind == "expr" or part.kind == "raw"
 
 # The template with the escaper that the directive `<%@ escape function %>` names. A directive is valid on the first
 # line of the body, once, and holds the word `escape` and the tokens of a function.

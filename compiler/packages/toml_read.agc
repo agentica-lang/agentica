@@ -52,9 +52,7 @@ export def child(path: String, key: String) -> String
 end
 
 ## The path of an item of the array at path (counted from 0).
-export def item(path: String, index: Int) -> String
-  return "#{path}[#{index}]"
-end
+export def item(path: String, index: Int) -> String = "#{path}[#{index}]"
 
 ## The entries of a table value, or a failure that says the value at path is not a table.
 export def table(reading: Reading, value: Toml.Value, path: String) -> Result[Map[String, Toml.Value]]

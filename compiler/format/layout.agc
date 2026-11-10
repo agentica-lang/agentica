@@ -215,9 +215,7 @@ end
 
 # Whether two declarations that follow each other need an empty line that the source may lack: both are one-line defs
 # of the source, which the parser lets follow each other, and the layout writes one of them with a body.
-def gap_between?(before: Item, item: Item) -> Bool
-  return item.one_line and before.one_line and (item.gap or before.gap)
-end
+def gap_between?(before: Item, item: Item) -> Bool = item.one_line and before.one_line and (item.gap or before.gap)
 
 # Whether the line right before `first` is blank and comes after `last`.
 def blank_before?(c: Context, first: Int, last: Int) -> Bool
@@ -255,9 +253,7 @@ def comment_item(comment: Tokens.Comment) -> Item
 end
 
 # A comment alone at the end of its body.
-def closing_item(comment: Tokens.Comment) -> Item
-  return comment_item(comment).with(closing: true)
-end
+def closing_item(comment: Tokens.Comment) -> Item = comment_item(comment).with(closing: true)
 
 # The comments of a node inside an expression: the leading ones on their own lines before it, a comment after code at
 # the end of its line, and a comment alone on its line after it on the next line.
@@ -891,9 +887,7 @@ end
 # Whether `doc` laid out with no width limit is one line. This reads the layout and not the source, so an `if` whose
 # statement the formatter joins onto one line is a guard already on the first run, and a heredoc, a block of several
 # statements or a value that a body breaks keeps the `if`.
-def one_line?(doc: Docs.Doc) -> Bool
-  return not Docs.render(doc, UNLIMITED).strip.include?("\n")
-end
+def one_line?(doc: Docs.Doc) -> Bool = not Docs.render(doc, UNLIMITED).strip.include?("\n")
 
 # A `return`, `break` or `next`: the statements that take a guard.
 def exit?(stmt: Ast.Stmt) -> Bool
@@ -1128,9 +1122,7 @@ def clarify?(op: String, child: Ast.Expr) -> Bool
   end
 end
 
-def comparison?(op: String) -> Bool
-  return LEVELS.get(op, 0) == 3 or LEVELS.get(op, 0) == 4
-end
+def comparison?(op: String) -> Bool = LEVELS.get(op, 0) == 3 or LEVELS.get(op, 0) == 4
 
 def binary?(expr: Ast.Expr) -> Bool
   case expr
@@ -1273,9 +1265,7 @@ def pipe_doc(c: Context, expr: Ast.Expr, bracketed: Bool, forced: Bool) -> Docs.
 end
 
 # A call by name: `f(args)`, `puts x` without parentheses, and a trailing `do` block.
-def call_doc(c: Context, node: Ast.Call) -> Docs.Doc
-  return call_doc_keyed(c, node, Comments.key_of("Call", node.span))
-end
+def call_doc(c: Context, node: Ast.Call) -> Docs.Doc = call_doc_keyed(c, node, Comments.key_of("Call", node.span))
 
 # `call_doc`, where `key` holds the dangling comments of an empty argument list: the call's own, or its pipe stage's.
 def call_doc_keyed(c: Context, node: Ast.Call, key: String) -> Docs.Doc
@@ -1346,9 +1336,7 @@ end
 # A method chain: the receiver, then each `.name(args)`, `.name`, `.call(args)`, `.with(...)` or `[index]`. A chain
 # with two calls or more breaks before each `.` when it does not fit (47.5 rule 10): the first call stays with a
 # receiver that is a plain name.
-def chain_doc(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
-  return chain_of(c, expr, bracketed, false)
-end
+def chain_doc(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc = chain_of(c, expr, bracketed, false)
 
 # `chain_doc`, where `open` says that the chain breaks with leading dots alone, with no parentheses of its own.
 def chain_of(c: Context, expr: Ast.Expr, bracketed: Bool, open: Bool) -> Docs.Doc
@@ -1642,9 +1630,7 @@ end
 
 # ---- Helpers ----
 
-def text(value: String) -> Docs.Doc
-  return Docs.Doc.Text(value)
-end
+def text(value: String) -> Docs.Doc = Docs.Doc.Text(value)
 
 def join(items: List[Docs.Doc], separator: List[Docs.Doc]) -> Docs.Doc
   parts: List[Docs.Doc] = []
@@ -1662,9 +1648,7 @@ def join(items: List[Docs.Doc], separator: List[Docs.Doc]) -> Docs.Doc
 end
 
 # A node the parser made without text of its own has an empty span.
-def written?(span: Source.Span) -> Bool
-  return span.stop.offset > span.start.offset
-end
+def written?(span: Source.Span) -> Bool = span.stop.offset > span.start.offset
 
 # The source text of a span.
 def source(c: Context, span: Source.Span) -> String
@@ -1700,9 +1684,7 @@ def tight(c: Context, span: Source.Span) -> Source.Span
 end
 
 # The line of the last token of a span.
-def last_line(c: Context, span: Source.Span) -> Int
-  return tight(c, span).stop.line
-end
+def last_line(c: Context, span: Source.Span) -> Int = tight(c, span).stop.line
 
 # The index of the first token that starts at or after `offset`.
 def token_index(c: Context, offset: Int) -> Int
