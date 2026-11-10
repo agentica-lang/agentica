@@ -181,10 +181,7 @@ def main() -> Void
   while true
     case jobs.recv(1000)
       ok(n) -> total += n
-      error(_) ->
-        if jobs.closed? and jobs.empty?
-          break
-        end
+      error(_) -> break if jobs.closed? and jobs.empty?
     end
   end
 
@@ -299,10 +296,7 @@ def main() -> Void
           Event.Failed(text) -> puts(text)
         end
 
-      error(_) ->
-        if events.closed? and events.empty?
-          break
-        end
+      error(_) -> break if events.closed? and events.empty?
     end
   end
 
@@ -327,10 +321,7 @@ def count(inbox: Channel[Int]) -> Int
   while true
     case inbox.recv(1000)
       ok(n) -> total += n
-      error(_) ->
-        if inbox.closed? and inbox.empty?
-          break
-        end
+      error(_) -> break if inbox.closed? and inbox.empty?
     end
   end
 

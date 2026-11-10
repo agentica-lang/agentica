@@ -47,9 +47,7 @@ def shortest_path(graph: Map[String, List[String]], start: String, goal: String)
     node = queue[head]
     head += 1
     steps = distance[node]
-    if node == goal
-      return ok(steps)
-    end
+    return ok(steps) if node == goal
 
     for next in graph.get(node, [])
       if not distance.key?(next)
@@ -94,13 +92,9 @@ struct Memo
 end
 
 def fib(n: Int, cache: Map[Int, Int]) -> Memo
-  if n < 2
-    return Memo(value: n, cache: cache)
-  end
+  return Memo(value: n, cache: cache) if n < 2
 
-  if cache.key?(n)
-    return Memo(value: cache[n], cache: cache)
-  end
+  return Memo(value: cache[n], cache: cache) if cache.key?(n)
 
   left = fib(n - 1, cache)
   right = fib(n - 2, left.cache)
@@ -147,9 +141,7 @@ end
 
 # Moves needed for n disks: move n - 1 aside, move one, move n - 1 back on top.
 def hanoi(n: Int, from: String, to: String, via: String) -> Int
-  if n == 0
-    return 0
-  end
+  return 0 if n == 0
 
   return hanoi(n - 1, from, via, to) + 1 + hanoi(n - 1, via, to, from)
 end

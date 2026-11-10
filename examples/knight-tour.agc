@@ -27,9 +27,7 @@ end
 def search(size: Int, square: Int, visited: List[Bool], path: List[Int]) -> Result[List[Int]]
   marked = List.set(visited, square, true)
   route = List.append(path, square)
-  if List.size(route) == size * size
-    return ok(route)
-  end
+  return ok(route) if List.size(route) == size * size
   candidates = destinations(size, square, marked)
   attempted = List.repeat(false, List.size(candidates))
   remaining = List.size(candidates)
@@ -49,9 +47,7 @@ def search(size: Int, square: Int, visited: List[Bool], path: List[Int]) -> Resu
     end
     attempted = List.set(attempted, best, true)
     result = search(size, candidates[best], marked, route)
-    if Result.ok?(result)
-      return result
-    end
+    return result if Result.ok?(result)
     remaining = remaining - 1
   end
   return error("no tour")
@@ -61,16 +57,10 @@ def solve(text: String) -> Result[Tour]
   request = try JSON.parse(text)
   size = try JSON.int(try JSON.get(request, "size"))
   start = try JSON.int(try JSON.get(request, "start"))
-  if size < 1 or size > 8
-    return error("invalid input")
-  end
-  if start < 0 or start >= size * size
-    return error("invalid input")
-  end
+  return error("invalid input") if size < 1 or size > 8
+  return error("invalid input") if start < 0 or start >= size * size
   result = search(size, start, List.repeat(false, size * size), [])
-  if Result.ok?(result)
-    return ok(Tour(found: true, path: Result.unwrap!(result)))
-  end
+  return ok(Tour(found: true, path: Result.unwrap!(result))) if Result.ok?(result)
   return ok(Tour(found: false, path: []))
 end
 

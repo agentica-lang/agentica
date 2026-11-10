@@ -3,9 +3,7 @@ import HTTP from "std/http"
 # Sends one event every 100 ms, then ends the stream. A failed send means the client left, so it stops.
 def produce(events: Channel[Bytes]) -> Void
   for n in 1..3
-    if not Result.ok?(events.send("data: tick #{n}\n\n".bytes, 5000))
-      break
-    end
+    break if not Result.ok?(events.send("data: tick #{n}\n\n".bytes, 5000))
 
     Task.sleep(100)
   end

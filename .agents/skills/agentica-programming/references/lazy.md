@@ -52,9 +52,7 @@ def main() -> Void
   puts(odd_squares.first(3))                                  # ok([1, 9, 25])
   puts((1..7).lazy.each_slice(3).to_a)                        # ok([[1, 2, 3], [4, 5, 6], [7]])
   done = naturals.each do |n|
-    if n > 2
-      return error("stop")
-    end
+    return error("stop") if n > 2
 
     puts(n)
     ok()

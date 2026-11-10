@@ -95,9 +95,7 @@ end
 ```agentica
 def main() -> Void
   labels = [5, 50].map do |n|
-    if n > 10
-      return "big"
-    end
+    return "big" if n > 10
 
     "small"
   end

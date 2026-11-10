@@ -40,6 +40,8 @@ LEVELS: Map[String, Int] = {
 PIPE_LEVEL = 5
 UNARY_LEVEL = 8
 POSTFIX_LEVEL = 9
+# A width no line reaches: a doc laid out in it breaks only where it must.
+UNLIMITED = 1000000
 
 ## What the layout reads besides the tree: the source lines, the tokens that are not line breaks with their starts,
 ## the comments of each node by its key (`Comments.key_of`), the body of each heredoc by the offset of its opener, and
@@ -53,6 +55,8 @@ export struct Context
   dangling: Map[String, List[Comments.Attached]]
   heredocs: Map[Int, List[String]]
   externs: List[Extern]
+  # The lines that hold a comment, so that an `if` with a comment is never turned into a guard.
+  noted: Set[Int]
 end
 
 ## An `extern` block, copied whole: its first and last lines and offsets, and the comments that the attachment gave
@@ -133,6 +137,7 @@ export def context(text: String, tokens: List[Tokens.Token], attachment: Comment
     dangling: dangling,
     heredocs: heredoc_bodies(lines, kept),
     externs: externs,
+    noted: Set.new(attachment.comments.map do |placed: Comments.Attached| placed.comment.span.start.line end),
   )
 end
 
@@ -585,14 +590,23 @@ end
 
 # A guard (`return x if c`) stays one when it fits on its line, and is written as the `if` it stands for when it does
 # not or when it spans lines (a heredoc, a block of several lines): the parser takes a guard only when its `if` is on
-# the line where its statement starts.
+# the line where its statement starts. An `if` that could be a guard (`guardable?`) takes the same choice, so the two
+# forms meet at the same width and formatting again changes nothing.
 def if_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
-  return spelled_if_doc(c, node) if not node.guard
+  return spelled_if_doc(c, node) if not node.guard and not guard_shaped?(c, node)
 
+  guard = guard_doc(c, node)
+  return spelled_if_doc(c, node) if not node.guard and not one_line?(guard)
+
+  return Docs.Doc.Group([Docs.Doc.IfBreak([spelled_if_doc(c, node)], [guard])])
+end
+
+# The one-line form of an `if` with one branch of one statement: `statement if condition`. The statement is laid out
+# as in a body (`forced`), so a value that a body breaks (a pipe chain of two or more `|>`, a method chain with a `.`
+# at the start of each line) breaks the guard too, which is then written as its `if`.
+def guard_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
   branch = node.branches[0]
-  flat = Docs.Doc.Concat([statement_doc(c, branch.body[0], false), text(" if "), expr_doc(c, branch.condition, false)])
-
-  return Docs.Doc.Group([Docs.Doc.IfBreak([spelled_if_doc(c, node)], [flat])])
+  return Docs.Doc.Concat([statement_doc(c, branch.body[0], true), text(" if "), expr_doc(c, branch.condition, false)])
 end
 
 # `if`, its `elsif` branches and its `else`. A comment before `elsif` or `else` stays just before the keyword, at the
@@ -746,7 +760,7 @@ def arm_doc(c: Context, arm: Ast.CaseArm) -> Docs.Doc
     end
   end
 
-  if arm.body.size == 1 and inline?(arm.body[0]) and after.size == 0
+  if arm.body.size == 1 and inline?(c, arm.body[0]) and after.size == 0
     stmt = arm.body[0]
     span = Ast.stmt_span(stmt)
     key = Comments.key_of(Comments.stmt_kind(stmt), span)
@@ -769,12 +783,46 @@ def dangling_end(c: Context, key: String) -> List[Docs.Doc]
   return [Docs.Doc.Indent([Docs.Doc.HardLine, sequence(c, items)])]
 end
 
-# A statement that may share the line of a `case` arm or of a one-line `do` block: a simple one, or a guard, which
-# writes itself out as an `if` on lines of its own when it does not fit.
-def inline?(stmt: Ast.Stmt) -> Bool
+# A statement that may share the line of a `case` arm or of a one-line `do` block: a simple one, or a guard (or an
+# `if` that becomes one), which writes itself out as an `if` on lines of its own when it does not fit.
+def inline?(c: Context, stmt: Ast.Stmt) -> Bool
   case stmt
-    Ast.Stmt.If(node) -> return node.guard
+    Ast.Stmt.If(node) -> return node.guard or guardable?(c, node)
     _ -> return simple?(stmt)
+  end
+end
+
+# An `if c` whose body is one `return`, `break` or `next`, with no `elsif` or `else`, no comment from its `if` line to
+# its `end` line, and a guard that can be one line: written as a guard when that fits on the line (if_doc).
+def guardable?(c: Context, node: Ast.IfStmt) -> Bool
+  return false if not guard_shaped?(c, node)
+
+  return one_line?(guard_doc(c, node))
+end
+
+# The shape of `guardable?`: one branch of one `return`, `break` or `next`, no `else`, no comment.
+def guard_shaped?(c: Context, node: Ast.IfStmt) -> Bool
+  return false if node.branches.size != 1 or node.else_body.some? or node.branches[0].body.size != 1
+
+  return false if not exit?(node.branches[0].body[0])
+
+  last = last_line(c, node.span)
+  return not (node.span.start.line..last).to_a.any? do |line: Int| c.noted.include?(line) end
+end
+
+# Whether `doc` laid out with no width limit is one line. This reads the layout and not the source, so an `if` whose
+# statement the formatter joins onto one line is a guard already on the first run, and a heredoc, a block of several
+# statements or a value that a body breaks keeps the `if`.
+def one_line?(doc: Docs.Doc) -> Bool
+  return not Docs.render(doc, UNLIMITED).strip.include?("\n")
+end
+
+# A `return`, `break` or `next`: the statements that take a guard.
+def exit?(stmt: Ast.Stmt) -> Bool
+  case stmt
+    Ast.Stmt.Return(_) -> return true
+    Ast.Stmt.Control(_) -> return true
+    _ -> return false
   end
 end
 
@@ -1406,7 +1454,7 @@ def block_doc(c: Context, node: Ast.BlockLit) -> Docs.Doc
   end
 
   quiet = suffixes.size == 0 and above.size == 0
-  if quiet and node.body.size == 1 and inline?(node.body[0]) and c.dangling.get(key, []).size == 0
+  if quiet and node.body.size == 1 and inline?(c, node.body[0]) and c.dangling.get(key, []).size == 0
     stmt = node.body[0]
     stmt_key = Comments.key_of(Comments.stmt_kind(stmt), Ast.stmt_span(stmt))
     if c.leading.get(stmt_key, []).size == 0 and c.trailing.get(stmt_key, []).size == 0

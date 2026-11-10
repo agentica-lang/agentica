@@ -201,9 +201,7 @@ end
 
 def table_get(table: ATS[String, String], key: String) -> Optional[String]
   found = table.get(key)
-  if found.ok?
-    return some(found.unwrap!)
-  end
+  return some(found.unwrap!) if found.ok?
 
   return none
 end

@@ -39,9 +39,7 @@ end
 ## Prepares one statement, or gives SQLite's message.
 def prepare(db: Db, sql: String) -> Result[Stmt]
   prepared = sqlite3_prepare_v2(db, sql, -1)
-  if prepared.result != SQLITE_OK
-    return error("sqlite: #{sqlite3_errmsg(db)}")
-  end
+  return error("sqlite: #{sqlite3_errmsg(db)}") if prepared.result != SQLITE_OK
 
   return ok(prepared.stmt)
 end

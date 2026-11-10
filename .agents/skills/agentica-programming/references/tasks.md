@@ -258,10 +258,7 @@ def main() -> Void
   while true
     case jobs.recv(1000)
       ok(n) -> total += n
-      error(_) ->
-        if jobs.closed? and jobs.empty?
-          break
-        end
+      error(_) -> break if jobs.closed? and jobs.empty?
     end
   end
 

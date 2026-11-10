@@ -20,9 +20,7 @@ def main() -> Void
   ]
   rate = 0.5
   cheaper = apply_discount(items) do |item|
-    if item.stock > 10
-      return item.price * rate
-    end
+    return item.price * rate if item.stock > 10
     item.price
   end
   in_stock = cheaper.filter do |item| item.stock > 0 end

@@ -225,9 +225,7 @@ The block returns `ok()` to go on, or an `error` that stops the pipeline and is 
 ```agentica
 def main() -> Void
   result = Lazy.produce(1) do |n| n + 1 end.each do |n|
-    if n > 2
-      return error("stopped at #{n}")
-    end
+    return error("stopped at #{n}") if n > 2
 
     puts(n)
     ok()

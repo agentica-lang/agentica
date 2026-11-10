@@ -146,9 +146,7 @@ end
 
 def lookup(shared: Shared, n: Int) -> String
   found = shared.cache.get(n)
-  if found.ok?
-    return found.unwrap!
-  end
+  return found.unwrap! if found.ok?
 
   text = "#{n} squared is #{n * n}"
   if shared.cache.put_new(n, text)

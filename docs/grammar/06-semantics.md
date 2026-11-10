@@ -579,9 +579,7 @@ cannot infer it (`CHECK-ENUM-TYPE-INFERENCE` at the call).
 
 ```ruby
 def first_or[T](xs: List[T], fallback: T) -> T
-  if xs.length == 0
-    return fallback
-  end
+  return fallback if xs.length == 0
 
   return xs[0]
 end

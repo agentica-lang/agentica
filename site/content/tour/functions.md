@@ -30,9 +30,7 @@ A function that gives a value must `return` on every path. The last line is not 
 
 ```agentica
 def max(a: Int, b: Int) -> Int
-  if a > b
-    return a
-  end
+  return a if a > b
 
   return b
 end
@@ -95,9 +93,7 @@ def main() -> Void
 end
 
 def factorial(n: Int) -> Int
-  if n <= 1
-    return 1
-  end
+  return 1 if n <= 1
 
   return n * factorial(n - 1)
 end
@@ -196,9 +192,7 @@ def parse(text: String) -> Result[Int]
 end
 
 def validate(n: Int) -> Result[Int]
-  if n < 0
-    return error("negative")
-  end
+  return error("negative") if n < 0
 
   return ok(n)
 end
@@ -324,17 +318,13 @@ A function can take type parameters after its name, so one definition works on a
 
 ```agentica
 def first_or[T](xs: List[T], fallback: T) -> T
-  if xs.length == 0
-    return fallback
-  end
+  return fallback if xs.length == 0
 
   return xs[0]
 end
 
 def max_by[T](xs: List[T], key: Fn[T, Int]) -> Optional[T]
-  if xs.length == 0
-    return none
-  end
+  return none if xs.length == 0
 
   best = xs[0]
   best_key = key.call(best)

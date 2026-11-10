@@ -107,9 +107,7 @@ def parse(text: String) -> Result[Int]
 end
 
 def check(n: Int) -> Result[Int]
-  if n < 0
-    return error("negative: #{n}")
-  end
+  return error("negative: #{n}") if n < 0
 
   return ok(n)
 end

@@ -13,6 +13,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Guards: `return x if c`, `return if c`, `break if c` and `next if c` run as
   the `if` written out. No other statement takes a modifier.
 
+### Changed
+
+- `agentica fmt` writes an `if` whose only body is one `return`, `break` or
+  `next` as a guard when it fits on the line, so `fmt --check` flags these
+  `if`s in existing projects until they are formatted.
+
 ## [0.28.0] - 2026-11-10
 
 ### Added
