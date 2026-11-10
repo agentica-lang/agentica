@@ -1,5 +1,5 @@
 2:3 leading Binding 3:3 "# the label"
 3:18 trailing NameRef 3:15 "# head"
 4:5 leading CaseArm 5:5 "# before the arm"
-5:16 trailing CaseArm 5:5 "# trailing"
+5:16 trailing ExprStmt 5:10 "# trailing"
 25:5 leading CaseStmt 26:5 "# in the block"

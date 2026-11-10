@@ -1,0 +1,69 @@
+# A comment after the last statement of an `if`, `elsif`, `else` or `case` body stays on that statement's line, also
+# with a comment line before the statement; nested and in tail position too.
+def branches(x: Int) -> Void
+  if x == 1
+    # c1
+    puts(1) # d1
+  elsif x == 2
+    # c2
+    puts(2) # d2
+  else
+    # c3
+    puts(3) # d3
+  end
+
+  if x > 0
+    puts(x) # only trailing
+  end
+
+  if x > 1
+    puts(0)
+    # before the last
+    puts(x) # after the last
+  elsif x == 4 # empty
+  else
+    puts(x)
+    return if x > 5 # g
+  end
+
+  if true
+    # a
+    if false
+      # c
+      puts(1) # d
+    end # e
+  end
+end
+
+def sign(x: Int) -> Int
+  if x > 0
+    # c
+    1 # d
+  else
+    # c2
+    -1 # d2
+  end
+end
+
+def name(x: Int, y: Int) -> String
+  case x
+    1 ->
+      # c
+      "one" # d
+    2 ->
+      case y
+        2 -> "two" # t
+        _ -> "more"
+      end # e
+    _ -> "many" # m
+  end
+end
+
+def main() -> Void
+  branches(sign(1))
+  puts(name(1, 2))
+  [1, 2].each do |x|
+    # c
+    puts(x) # d
+  end
+end

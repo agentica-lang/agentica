@@ -55,6 +55,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `fmt --check` flags these `return`s in existing projects until they are
   formatted.
 
+### Fixed
+
+- `agentica fmt` keeps a comment after the last statement of an `if` or `elsif`
+  body on that statement's line: it moved up to the `if` line, and with a
+  comment line before the statement the file failed with `FMT-INTERNAL`.
+
 ## [0.28.0] - 2026-11-10
 
 ### Added

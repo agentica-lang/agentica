@@ -34,6 +34,10 @@ PIPE_COMMENTS = (PIPES_HEAD + '  n = 3\n  total = (n # first\n    # between\n   
 PIPE_COMMENTS_LAID_OUT = (PIPES_HEAD + '  n = 3\n  total = (\n    n # first\n    # between\n    |> twice() # after one\n'
                           '    |> twice()\n  )\n\n  puts(total)\nend\n')
 
+# The only statement of an `if` body, with a comment line before it and a comment after it (#1330): the file was
+# refused with FMT-INTERNAL. The other positions are in the golden branch-comments of tests/fixtures/frontend/format.
+BRANCH_COMMENTS = 'def main() -> Void\n  if true\n    # c\n    puts(1) # d\n  end\nend\n'
+
 
 def fmt(*words, cwd, json_style=False, stdin=None):
     style = ["--json"] if json_style else []
@@ -128,6 +132,17 @@ def test_comments_inside_a_pipe_chain_stay_on_their_stage_and_keep_the_tree(tmp_
     assert text(tmp_path, "chain.agc") == PIPE_COMMENTS_LAID_OUT
     assert fmt("--check", cwd=tmp_path).stdout == ""
     after = fmt("--tree", "chain.agc", cwd=tmp_path)
+    assert (before.code, after.code, before.stdout) == (0, 0, after.stdout)
+
+
+def test_a_comment_after_the_only_statement_of_an_if_stays_on_its_line(tmp_path):
+    lay_out(tmp_path, {"branch.agc": BRANCH_COMMENTS})
+    before = fmt("--tree", "branch.agc", cwd=tmp_path)
+    checked = fmt("--check", cwd=tmp_path)
+    assert (checked.code, checked.stdout) == (0, "")
+    assert fmt(cwd=tmp_path).code == 0
+    assert text(tmp_path, "branch.agc") == BRANCH_COMMENTS
+    after = fmt("--tree", "branch.agc", cwd=tmp_path)
     assert (before.code, after.code, before.stdout) == (0, 0, after.stdout)
 
 
