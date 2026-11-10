@@ -715,9 +715,11 @@ def test_a_def_whose_body_is_one_return_is_written_as_a_one_line_def(tmp_path):
 
 # The last expression of a def gives its value (#1287), so `fmt` drops a `return` where the parser reads the bare value
 # as one: the last statement, and the last of each branch of a last `if` with `else` and of each arm of a last `case`,
-# at any depth. Comments stay where they were. A `return` stays for a guard, before the end, in an `if` without
-# `else`, in a block, for a `try` value (a last `try` is a statement), for a `case` value (a bare `case` is a statement),
-# when it has no value, and in a Void function. The `implicit` mark is not in `--tree`, so both forms are one tree.
+# at any depth. Comments and empty lines stay where they were, also the empty line before the `(` of a value. A
+# `return` stays for a guard, before the end, in an `if` without `else`, in a block, for a `try` value (a last `try` is
+# a statement), for a `case` value (a bare `case` is a statement), when it has no value, and in a Void function, also
+# one whose result is an alias of Void declared in the file (there `5` would check where `return 5` does not). The
+# `implicit` mark is not in `--tree`, so both forms are one tree.
 EXPLICIT = """def sign(x: Int) -> String
   return "none" if x == 100
   if x > 0
@@ -737,6 +739,8 @@ end
 
 def piped(xs: List[Int]) -> List[Int]
   ys = xs
+  return ys if ys.empty?
+
   return (
     ys
     |> twice()
@@ -773,6 +777,13 @@ end
 def say(text: String) -> Void
   puts(text)
   return
+end
+
+type Nothing = Void
+
+def noted(text: String) -> Nothing
+  puts(text)
+  return 5
 end
 """
 IMPLICIT = (EXPLICIT.replace('    return "plus"', '    "plus"').replace('return "minus"', '"minus"')
