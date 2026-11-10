@@ -104,11 +104,12 @@ make stage0 STAGE1_COMPILER="build/vm/release/bootstrap/agentica --front-end I.a
 ```
 
 After the refresh, run `make fixed-point` and `make` as usual. A later PR
-removes the old keys once no stage0 imports them. The same goes for the short
-arities that `Process.spawn`, `spawn_captured` and `spawn_channel` keep without
-`env` (the 3, 4 and 4 rows of `agc_process_builtins`, and `builtin_spawn*` in
-`vm/process.c`): remove them in the PR that refreshes stage0 after the one that
-added `env`, and make the C tests call the arity with `env`.
+removes the old keys once no stage0 imports them. The same goes for the
+positional keys of `Process.spawn`, `spawn_captured` and `spawn_channel` (the
+rows of `agc_process_builtins` other than `.options`, and the positional
+`builtin_spawn*` in `vm/process.c`): remove them in the PR after the one that
+refreshed stage0 with `Process.Options`, and make the C tests call the
+`.options` keys.
 
 A PR that changes stage0 runs `make stage0-check BASE_STAGE0=<base stage0>` in
 the `checks` job (`mk/bootstrap.mk` says what it compares). It checks the merge

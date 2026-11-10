@@ -171,6 +171,23 @@ export RECORDS: List[Model.Record] = [
       Model.Named(name: "task", type: Types.Type.Int),
     ],
   ),
+  # The options of Process.spawn, spawn_captured and spawn_channel. vm/process.c reads the fields by position
+  # (OPTION_* there; tests/test_process.py test_options_layout checks the two orders agree).
+  Model.Record(
+    name: "Process.Options",
+    fields: [
+      Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+      Model.Named(name: "chdir", type: Types.Type.String, default: Model.Default.Text(".")),
+      Model.Named(
+        name: "env",
+        type: Types.Type.Map(Types.Type.String, Types.Type.String),
+        default: Model.Default.EmptyMap,
+      ),
+      Model.Named(name: "out", type: Types.Type.String, default: Model.Default.Text("")),
+      Model.Named(name: "err", type: Types.Type.String, default: Model.Default.Text("")),
+      Model.Named(name: "pgroup", type: Types.Type.Bool, default: Model.Default.Flag(false)),
+    ],
+  ),
   Model.Record(
     name: "ProcessOutput",
     fields: [
@@ -3983,24 +4000,20 @@ ROWS_33: List[Model.Builtin] = [
     parameters: [
       Model.Named(name: "command", type: Types.Type.String),
       Model.Named(name: "args", type: Types.Type.List(Types.Type.String)),
-      Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       Model.Named(
-        name: "env",
-        type: Types.Type.Map(Types.Type.String, Types.Type.String),
-        default: Model.Default.EmptyMap,
+        name: "options",
+        type: Types.Type.Struct("Process.Options", []),
+        default: Model.Default.Fields("Process.Options"),
       ),
-      Model.Named(name: "out", type: Types.Type.String, default: Model.Default.Text("")),
-      Model.Named(name: "err", type: Types.Type.String, default: Model.Default.Text("")),
-      Model.Named(name: "pgroup", type: Types.Type.Bool, default: Model.Default.Flag(false)),
     ],
     result: Types.Type.Result(Types.Type.Opaque("Process")),
     rule: Model.Rule.Plain,
-    implementation: "Process.spawn",
+    implementation: "Process.spawn.options",
     effects: ["subprocess"],
     description: (
-      "Start an executable with literal arguments and extra environment entries; out and err, when not empty, are " +
-      "files that get its stdout and stderr; pgroup starts it in its own process group, which a stop signals " +
-      "whole; --deny-run makes it an error."
+      "Start an executable with literal arguments and Process.Options: timeout_ms, chdir, extra env entries, out " +
+      "and err files that get its stdout and stderr when not empty, and pgroup to start it in its own process " +
+      "group, which a stop signals whole; --deny-run makes it an error."
     ),
     alternatives: [],
   ),
@@ -4012,22 +4025,19 @@ ROWS_34: List[Model.Builtin] = [
     parameters: [
       Model.Named(name: "command", type: Types.Type.String),
       Model.Named(name: "args", type: Types.Type.List(Types.Type.String)),
-      Model.Named(name: "dir", type: Types.Type.String, default: Model.Default.Text(".")),
-      Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       Model.Named(
-        name: "env",
-        type: Types.Type.Map(Types.Type.String, Types.Type.String),
-        default: Model.Default.EmptyMap,
+        name: "options",
+        type: Types.Type.Struct("Process.Options", []),
+        default: Model.Default.Fields("Process.Options"),
       ),
-      Model.Named(name: "pgroup", type: Types.Type.Bool, default: Model.Default.Flag(false)),
     ],
     result: Types.Type.Result(Types.Type.Opaque("Process")),
     rule: Model.Rule.Plain,
-    implementation: "Process.spawn_captured",
+    implementation: "Process.spawn_captured.options",
     effects: ["subprocess"],
     description: (
-      "Start an executable in dir with extra environment entries and stdout and stderr kept in 1 MiB buffers; " +
-      "pgroup as in spawn; VM only."
+      "Start an executable with Process.Options and stdout and stderr kept in 1 MiB buffers; out or err is an " +
+      "error; VM only."
     ),
     alternatives: [],
   ),
@@ -4036,18 +4046,15 @@ ROWS_34: List[Model.Builtin] = [
     parameters: [
       Model.Named(name: "command", type: Types.Type.String),
       Model.Named(name: "args", type: Types.Type.List(Types.Type.String)),
-      Model.Named(name: "dir", type: Types.Type.String, default: Model.Default.Text(".")),
-      Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       Model.Named(
-        name: "env",
-        type: Types.Type.Map(Types.Type.String, Types.Type.String),
-        default: Model.Default.EmptyMap,
+        name: "options",
+        type: Types.Type.Struct("Process.Options", []),
+        default: Model.Default.Fields("Process.Options"),
       ),
-      Model.Named(name: "pgroup", type: Types.Type.Bool, default: Model.Default.Flag(false)),
     ],
     result: Types.Type.Result(Types.Type.Opaque("Process")),
     rule: Model.Rule.Plain,
-    implementation: "Process.spawn_channel",
+    implementation: "Process.spawn_channel.options",
     effects: ["subprocess"],
     description: (
       "Like spawn_captured, plus a channel to the child: fd 3 and AGENTICA_CHANNEL=3 in the child; VM only."

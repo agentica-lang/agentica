@@ -1,6 +1,6 @@
 def main() -> Void
   script = "printf '%s|' \"$@\"; echo; echo err-line >&2; cat; exit 7"
-  p = Result.unwrap!(Process.spawn("sh", ["-c", script, "sh", "a b;$x", "--allow-run", "ñ"], 5000))
+  p = Result.unwrap!(Process.spawn("sh", ["-c", script, "sh", "a b;$x", "--allow-run", "ñ"], Process.Options(timeout_ms: 5000)))
   puts(Result.unwrap!(Process.read_line(p, 5000)))
   IO.inspect(Process.send(p, "ñ\n", 5000))
   IO.inspect(Process.read_line(p, 5000))

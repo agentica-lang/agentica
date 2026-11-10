@@ -8,6 +8,10 @@ import Suggest from "../syntax/suggest"
 import Types from "../syntax/types"
 import Data from "check_tables"
 
+## The help for positional options where the spawns take Process.Options (a type mismatch or, past three arguments, an
+## arity error).
+export PROCESS_OPTIONS_HELP = "the options go in a record: Process.Options(timeout_ms: 5000, chdir: \"dir\")"
+
 ## The tables of check_tables.agc, built once per run. A key is the receiver kind and the name, `String.size`.
 export struct Tables
   modules: Map[String, String]
@@ -64,6 +68,10 @@ export def conversion(expected: Types.Type, actual: Types.Type) -> String
       "TLS.client_context(...) or TLS.server_context(...)"
     )
   end
+
+  # A positional option where the options record goes, as in the spawns before Process.Options.
+  options = Types.Type.Struct("Process.Options", [])
+  return PROCESS_OPTIONS_HELP if Types.same?(expected, options) and !Types.is?(actual, "Struct")
 
   return convert_help(expected, actual)
 end

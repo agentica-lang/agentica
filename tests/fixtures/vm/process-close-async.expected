@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 133,
+  "steps": 141,
   "stdout": [
     "other: ran",
     "closer: closed",

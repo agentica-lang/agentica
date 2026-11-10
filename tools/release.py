@@ -280,7 +280,7 @@ end
 """
 PROCESS = """\
 def main() -> Void
-  p = Result.unwrap!(Process.spawn(System.args()[0], ["--version"], 10000))
+  p = Result.unwrap!(Process.spawn(System.args()[0], ["--version"], Process.Options(timeout_ms: 10000)))
   Result.unwrap!(Process.close_stdin(p, 10000))
   puts(Result.unwrap!(Process.read_line(p, 10000)))
   puts(Result.unwrap!(Process.wait(p, 10000)))

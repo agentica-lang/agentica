@@ -111,6 +111,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   order = checked.constants.concat(hoisted.map do |entry: LocatedConst| entry.constant.name end)
   mentioned = mentioned_in(checked.types, scanned.covered, watched)
   used = Set.new(scanned.written.concat(mentioned).concat(Builtins.default_enums().to_a))
+  used = used.union(called_records(scanned.function_scans.concat(scanned.constant_scans)))
   if used.include?("TaskDown")
     # The VM builds the reason of a TaskDown, so the enum is in the table even when no expression names it.
     used = used.add("TaskExit")
@@ -481,6 +482,20 @@ def json_targets(types: List[Types.Type], ids: List[Int]) -> List[Types.Type]
       case types[id]
         Types.Type.Codec(item) -> found = found.push(item)
         _ -> found = found.push(types[id])
+      end
+    end
+  end
+
+  return found
+end
+
+# The builtin records that the called builtins build from a Fields default (Builtins.default_records).
+def called_records(scans: List[Scans.Scan]) -> Set[String]
+  found: Set[String] = Set.new([])
+  for scan in scans
+    for name in scan.calls
+      for record in Builtins.default_records(name)
+        found = found.add(record)
       end
     end
   end

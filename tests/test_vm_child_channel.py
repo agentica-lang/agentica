@@ -23,7 +23,7 @@ WAIT = scaled(20)
 PARENT_PROGRAM = """\
 def main() -> Void
   args = System.args()
-  p = Result.unwrap!(Process.spawn_channel(args[0], [args[1], "child", "watch", args[2]], ".", 5000))
+  p = Result.unwrap!(Process.spawn_channel(args[0], [args[1], "child", "watch", args[2]], Process.Options(timeout_ms: 5000)))
   puts(Result.unwrap!(Process.read_line(p, 5000)))
   IO.flush()
   Task.sleep(60000)

@@ -19,14 +19,14 @@ def holder(p: Process) -> Result[Int]
 end
 
 def main() -> Void
-  p = Process.spawn_channel("sh", ["-c", "exec sleep 60"], ".", 5000).unwrap!
+  p = Process.spawn_channel("sh", ["-c", "exec sleep 60"], Process.Options(timeout_ms: 5000)).unwrap!
   r = Task.spawn(&reader, p)
   s = Task.spawn(&sender, p)
   Task.sleep(100)
   Process.close(p)
   puts(Task.await(r))
   puts(Task.await(s))
-  q = Process.spawn_channel("sh", ["-c", "exec sleep 60"], ".", 5000).unwrap!
+  q = Process.spawn_channel("sh", ["-c", "exec sleep 60"], Process.Options(timeout_ms: 5000)).unwrap!
   t = Task.spawn_owning(&holder, q)
   puts(Task.await(t).ok?)
   Process.close(q)

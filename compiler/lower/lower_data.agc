@@ -262,8 +262,9 @@ export def lower_struct(cx: State.Cx, fx: State.Fx, node: Ast.Construct, want: I
   return ok(State.Out(fx: State.release(fx, saved, want, dst), slot: dst))
 end
 
-## The value of a catalog default (Model.Default) in register want: a literal, an empty list, map or Bytes, or a
-## variant without a payload. id and span are the ones of the node that the default stands in for.
+## The value of a catalog default (Model.Default) in register want: a literal, an empty list, map or Bytes, a
+## variant without a payload, or a builtin record built from the defaults of its fields. id and span are the ones of
+## the node that the default stands in for.
 export def lower_catalog_default(
   cx: State.Cx,
   fx: State.Fx,
@@ -289,6 +290,8 @@ export def lower_catalog_default(
     Model.Default.Variant(name) ->
       parts = name.split(".")
       return lower_enum(cx, fx, parts[0], parts[1], [], span, want, false)
+    Model.Default.Fields(name) ->
+      return lower_struct(cx, fx, Ast.Construct(id: id, type_name: name, args: [], span: span), want)
     Model.Default.Absent -> return error(State.internal(cx, "lower: a missing argument has no default", span))
   end
 

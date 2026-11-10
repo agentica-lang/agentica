@@ -22,7 +22,7 @@ end
 
 ## Runs `git` with `arguments` in the folder `dir`, so that it never looks for a repository around the working folder.
 export def run(arguments: List[String], dir: String) -> Ran
-  spawned = Process.spawn_captured("git", arguments, dir, START_TIMEOUT_MS)
+  spawned = Process.spawn_captured("git", arguments, Process.Options(chdir: dir, timeout_ms: START_TIMEOUT_MS))
   return Ran.Missing(spawned.message) if !spawned.ok?
 
   child = spawned.unwrap!

@@ -1,4 +1,8 @@
 """The peer of tests/fixtures/vm/implicit-return.agc in Python: the same functions, each value given by `return`."""
+import sys
+
+# Text-mode stdout writes CRLF on Windows; the VM and Node write LF.
+sys.stdout.reconfigure(encoding="utf-8", newline="\n")
 
 
 def area(shape):

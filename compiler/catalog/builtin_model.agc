@@ -84,8 +84,9 @@ end
 
 ## The default value of a builtin parameter, a constant the call site can build with no code of its own (the same
 ## constants as the default of a user function, and an empty Bytes). Absent is no default. Whole, Real, Text and Flag
-## are the literals of those types, Nothing is nil, EmptyBytes is `"".bytes`, None is `none` (an Optional), and
-## Variant holds "Enum.Variant" of a builtin enum whose variant has no payload.
+## are the literals of those types, Nothing is nil, EmptyBytes is `"".bytes`, None is `none` (an Optional),
+## Variant holds "Enum.Variant" of a builtin enum whose variant has no payload, and Fields holds the name of a builtin
+## record whose fields all have a default: the record those defaults build (`Process.Options()`).
 export enum Default
   Absent
   Whole(Int)
@@ -98,6 +99,7 @@ export enum Default
   EmptyBytes
   None
   Variant(String)
+  Fields(String)
 end
 
 ## A name with a type: a parameter of a builtin, or a field of a struct. Only a parameter of a builtin has a default;

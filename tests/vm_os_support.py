@@ -62,7 +62,7 @@ def main() -> Void
   end
   puts(Result.unwrap!(File.try_lock(file, 5000)))
   if args[1] == "spawn"
-    _child = Result.unwrap!(Process.spawn_captured("sleep", ["60"], ".", 5000))
+    _child = Result.unwrap!(Process.spawn_captured("sleep", ["60"], Process.Options(timeout_ms: 5000)))
     Result.unwrap!(File.close(file, 5000))
     puts("closed")
   end
@@ -85,7 +85,7 @@ end
 
 def run_child(vm: String, driver: Int, source: String, target: String) -> Void
   copy_private(source, target)
-  p = Result.unwrap!(Process.spawn_captured(vm, ["run", "--driver-pid", String.from_int(driver), "--", target], ".", 5000))
+  p = Result.unwrap!(Process.spawn_captured(vm, ["run", "--driver-pid", String.from_int(driver), "--", target], Process.Options(timeout_ms: 5000)))
   out = Result.unwrap!(Process.output(p, 10000))
   code = Result.unwrap!(Process.wait(p, 10000))
   puts("driver-pid #{driver} exit #{code} stdout #{out.stdout.trim} stderr #{out.stderr.trim}")
@@ -96,7 +96,7 @@ def main() -> Void
   me = System.pid()
   puts("pid #{me}")
   puts("stable #{System.pid() == me}")
-  sh = Result.unwrap!(Process.spawn_captured("sh", ["-c", "echo $PPID"], ".", 5000))
+  sh = Result.unwrap!(Process.spawn_captured("sh", ["-c", "echo $PPID"], Process.Options(timeout_ms: 5000)))
   out = Result.unwrap!(Process.output(sh, 10000))
   puts("parent seen by sh #{out.stdout.trim}")
   run_child(args[0], me, args[1], args[2] + "/first.agcb")

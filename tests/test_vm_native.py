@@ -4152,24 +4152,24 @@ def reads_stdin(x: Int) -> Int
 end
 
 def spawns(x: Int) -> Int
-  puts(Process.spawn("no-such-executable-1060", [], 1000).ok?)
+  puts(Process.spawn("no-such-executable-1060", [], Process.Options(timeout_ms: 1000)).ok?)
   return x
 end
 
 def runs(x: Int) -> Int
-  puts(Process.spawn(System.args()[1], ["-c", "pass"], 1000).ok?)
+  puts(Process.spawn(System.args()[1], ["-c", "pass"], Process.Options(timeout_ms: 1000)).ok?)
   return x
 end
 
 def stops(x: Int) -> Int
-  child = Process.spawn(System.args()[1], ["-c", "import time; time.sleep(60)"], 1000).unwrap!
+  child = Process.spawn(System.args()[1], ["-c", "import time; time.sleep(60)"], Process.Options(timeout_ms: 1000)).unwrap!
   puts("spawned")
   Process.close(child)
   return x
 end
 
 def stops_captured(x: Int) -> Int
-  child = Process.spawn_captured(System.args()[1], ["-c", "import time; time.sleep(60)"], ".", 1000).unwrap!
+  child = Process.spawn_captured(System.args()[1], ["-c", "import time; time.sleep(60)"], Process.Options(timeout_ms: 1000)).unwrap!
   Process.close(child)
   puts("closed")
   return x
@@ -4268,7 +4268,7 @@ def child() -> Void
 end
 
 def parent(binary: String, me: String) -> Void
-  p = Process.spawn_channel(binary, ["--schedulers", "1", me, "child"], ".", 30000).unwrap!
+  p = Process.spawn_channel(binary, ["--schedulers", "1", me, "child"], Process.Options(timeout_ms: 30000)).unwrap!
   puts(Process.read_line(p, 30000).unwrap!)
   puts(Process.read_line(p, 30000).unwrap!)
   puts(Process.channel_read_line(p, 30000).unwrap!.size)

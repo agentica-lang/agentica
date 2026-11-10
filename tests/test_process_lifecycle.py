@@ -21,7 +21,7 @@ WAIT = scaled(20)
 # The python path and the peer reach the programs as arguments, so no path is written in the source.
 OWNER_PROGRAM = """\
 def owner(args: List[String]) -> String
-  p = Result.unwrap!(Process.spawn(args[0], [args[1], "hold"], 5000))
+  p = Result.unwrap!(Process.spawn(args[0], [args[1], "hold"], Process.Options(timeout_ms: 5000)))
   return Result.unwrap!(Process.read_line(p, 5000))
 end
 
@@ -35,7 +35,7 @@ end
 HOLD_PROGRAM = """\
 def main() -> Void
   args = System.args()
-  p = Result.unwrap!(Process.spawn(args[0], [args[1], "hold"], 5000))
+  p = Result.unwrap!(Process.spawn(args[0], [args[1], "hold"], Process.Options(timeout_ms: 5000)))
   puts(Result.unwrap!(Process.read_line(p, 5000)))
   IO.flush()
   Task.sleep(60000)
@@ -47,7 +47,7 @@ CHILD_VM_PROGRAM = """\
 def main() -> Void
   args = System.args()
   puts(System.pid())
-  p = Result.unwrap!(Process.spawn(args[0], [args[1], "hold"], 5000))
+  p = Result.unwrap!(Process.spawn(args[0], [args[1], "hold"], Process.Options(timeout_ms: 5000)))
   puts(Result.unwrap!(Process.read_line(p, 5000)))
   IO.flush()
   Task.sleep(60000)
@@ -69,7 +69,7 @@ def main() -> Void
   args = System.args()
   copy_private(args[1], args[2] + "/child.agcb")
   words = ["run", "--driver-pid", String.from_int(System.pid()), "--", args[2] + "/child.agcb", args[3], args[4]]
-  p = Result.unwrap!(Process.spawn_captured(args[0], words, ".", 5000))
+  p = Result.unwrap!(Process.spawn_captured(args[0], words, Process.Options(timeout_ms: 5000)))
   puts(Result.unwrap!(Process.read_line(p, 20000)))
   puts(Result.unwrap!(Process.read_line(p, 20000)))
   IO.flush()

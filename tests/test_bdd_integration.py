@@ -33,7 +33,7 @@ STREAM_SPEC = str(TESTS / "bdd" / "specs" / "json-lines.feature")
 
 HOLDER_PROGRAM = f"""\
 def main() -> Void
-  p = Process.spawn("/bin/sh", ["-c", "echo $$ > pid.txt; echo started; exec sleep 60"], {ms(5000)}).unwrap!
+  p = Process.spawn("/bin/sh", ["-c", "echo $$ > pid.txt; echo started; exec sleep 60"], Process.Options(timeout_ms: {ms(5000)})).unwrap!
   _started = Process.read_line(p, {ms(5000)}).unwrap!
   puts("ready")
   IO.flush()
@@ -50,7 +50,7 @@ WINDOWS_HOLDER_PROGRAM = f"""def publish(name: String, text: String) -> Void
 end
 
 def main() -> Void
-  p = Process.spawn({agc_literal(PYTHON)}, [{agc_literal(FIXTURES / "process-peer.py")}, "hold"], {ms(5000)}).unwrap!
+  p = Process.spawn({agc_literal(PYTHON)}, [{agc_literal(FIXTURES / "process-peer.py")}, "hold"], Process.Options(timeout_ms: {ms(5000)})).unwrap!
   pid = Process.read_line(p, {ms(5000)}).unwrap!
   publish("program-pid.txt", String.from_int(System.pid()))
   publish("pid.txt", pid)
@@ -375,7 +375,7 @@ def test_a_step_runs_a_peer_with_spawn_captured_and_keep_beside_the_program_and_
             import BDD from "std/bdd"
 
             def start_peer(ctx: BDD.Context, args: List[String]) -> BDD.Context
-              peer = Process.spawn_captured({agc_literal(PYTHON)}, [{agc_literal(FIXTURES / "process-peer.py")}, "hold"], ".", {ms(5000)}).unwrap!
+              peer = Process.spawn_captured({agc_literal(PYTHON)}, [{agc_literal(FIXTURES / "process-peer.py")}, "hold"], Process.Options(timeout_ms: {ms(5000)})).unwrap!
               pid = Process.read_line(peer, {ms(5000)}).unwrap!
               File.write_text({agc_literal(peer_pid)}, pid, {ms(5000)}).unwrap!
               kept = BDD.keep(ctx, "peer") do |_request|

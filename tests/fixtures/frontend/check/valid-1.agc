@@ -47,7 +47,7 @@ def main() -> Void
   t: Task[Result[String]] = Task.spawn_owning(&serve, socket)
   _ = Task.await(t)
   Task.spawn_owning(&edit, File.open("x", "read", 10).unwrap!)
-  Task.spawn_owning(&watch, Process.spawn("x", [], 10).unwrap!)
+  Task.spawn_owning(&watch, Process.spawn("x", [], Process.Options(timeout_ms: 10)).unwrap!)
   ch: Channel[Int] = Channel.new(4)
   _fed: Task[Result[Int]] = Task.spawn_owning(&feed, ch)
   Task.spawn_owning(&feed, Channel.new(2))
