@@ -1,7 +1,7 @@
 """std/archive: the explicit-allowlist TAR extractor on the VM.
 
-Peers: Python's stdlib tarfile, gzip and io only. The cases run small
-generated Agentica drivers through the CLI in temp directories, so every
+Peers: Python's stdlib tarfile, gzip and io only. The cases run the
+precompiled driver of tests/archive_support.py in temp directories, so every
 archive is hermetic and no downloaded library is ever executed. Expected
 outputs name the exact `error(...)` text of std/archive.
 """
@@ -12,54 +12,21 @@ import pathlib
 import subprocess
 import tarfile
 
+import pytest
+
 from tests.agentica_test import ROOT, binary, run, vm_environment
+from tests.archive_support import compile_driver, extract, limits
 
 WINDOWS = os.name == "nt"
 
 
-def call_text(src, quoted, dest, options):
-    """The extract_tar call; OPTIONS None leaves the argument to its default."""
-    tail = "" if options is None else ", %s" % options
-    return 'Archive.extract_tar("%s", [%s], "%s"%s)' % (src, quoted, dest, tail)
+@pytest.fixture(scope="module")
+def driver(tmp_path_factory):
+    return compile_driver(tmp_path_factory)
 
 
-SHOW = (
-    'import Archive from "std/archive"\n'
-    "def oneline(text: String) -> String\n"
-    '  return String.join(String.split(text, String.from_code(10)), " | ")\n'
-    "end\n"
-    "\n"
-    "def show(label: String, r: Result[List[Int]]) -> Void\n"
-    "  case r\n"
-    '    ok(counts) -> puts("#{label} ok #{counts}")\n'
-    '    error(message) -> puts("#{label} error #{oneline(message)}")\n'
-    "  end\n"
-    "end\n\n"
-)
-
-
-def driver(calls):
-    """An Agentica program that prints one line per `Archive.extract_tar` call.
-
-    Each call is (label, src, quoted-members, dest, options) with the members
-    already quoted as Agentica source.
-    """
-    lines = [SHOW.rstrip("\n"), "", "def main() -> Void"]
-    for label, src, quoted, dest, options in calls:
-        lines.append('  show("%s", %s)' % (label, call_text(src, quoted, dest, options)))
-    lines.append("end")
-    return "\n".join(lines) + "\n"
-
-
-def opts(timeout=30000, max_out=268435456):
-    return "Archive.Options(timeout_ms: %d, max_output_bytes: %d)" % (timeout, max_out)
-
-
-def q(*members):
-    return ", ".join('"%s"' % member for member in members)
-
-
-def run_driver(work, name, text):
+def run_source(work, name, text):
+    """Run the Agentica program TEXT from source in WORK (the narrowed copies of std/archive need it)."""
     program = work / (name + ".agc")
     program.write_text(text, encoding="utf-8")
     result = run([str(binary()), str(program)], cwd=work, env=vm_environment())
@@ -125,7 +92,7 @@ def pax_tar(work, name, files):
     return path.name
 
 
-def test_basic_roundtrips_keep_member_order_and_counts(tmp_path):
+def test_basic_roundtrips_keep_member_order_and_counts(tmp_path, driver):
     work = tmp_path
     pax_tar(work, "p.tar", [("lib.so", b"hello lib"), ("sub/nested.bin", b"nested!"), ("readme.txt", b"readme text")])
     with tarfile.open(work / "u.tar", "w", format=tarfile.USTAR_FORMAT) as tar:
@@ -139,25 +106,15 @@ def test_basic_roundtrips_keep_member_order_and_counts(tmp_path):
         tar.addfile(info, io.BytesIO(b"data"))
     with open(work / "p.tar", "rb") as raw:
         (work / "p.tar.gz").write_bytes(gzip.compress(raw.read()))
-    options = "Archive.Options()"
-    defaults_text = (
-        'import Archive from "std/archive"\n'
-        "\n"
-        "def main() -> Void\n"
-        "  o = Archive.Options()\n"
-        "  d = Archive.Options()\n"
-        '  puts("defaults #{o.timeout_ms} #{o.max_output_bytes} #{d.timeout_ms} #{d.max_output_bytes}")\n'
-        "end\n"
-    )
-    assert run_driver(work, "defaults", defaults_text) == ["defaults 30000 268435456 30000 268435456", ""]
+    assert extract(driver, work, "defaults", [("defaults", "", [], "", None)]) == ["defaults 30000 268435456", ""]
     calls = [
-        ("pax", "p.tar", q("readme.txt", "lib.so", "sub/nested.bin"), "d1", options),
-        ("dot", "p.tar", q("./sub/nested.bin"), "d2", options),
-        ("ustar", "u.tar", q("b/c.txt", "a.txt"), "d3", options),
-        ("gnu", "g.tar", q("g" * 120), "d4", options),
-        ("gzip", "p.tar.gz", q("lib.so", "sub/nested.bin"), "d5", options),
+        ("pax", "p.tar", ["readme.txt", "lib.so", "sub/nested.bin"], "d1", None),
+        ("dot", "p.tar", ["./sub/nested.bin"], "d2", None),
+        ("ustar", "u.tar", ["b/c.txt", "a.txt"], "d3", None),
+        ("gnu", "g.tar", ["g" * 120], "d4", None),
+        ("gzip", "p.tar.gz", ["lib.so", "sub/nested.bin"], "d5", None),
     ]
-    lines = run_driver(work, "basic", driver(calls))
+    lines = extract(driver, work, "tar", calls)
     assert lines[0] == "pax ok [11, 9, 7]"
     assert lines[1] == "dot ok [7]"
     assert lines[2] == "ustar ok [2, 5]"
@@ -171,7 +128,7 @@ def test_basic_roundtrips_keep_member_order_and_counts(tmp_path):
     assert (work / "d5" / "lib.so").read_bytes() == b"hello lib"
 
 
-def test_destination_spellings_with_backslashes_extract(tmp_path):
+def test_destination_spellings_with_backslashes_extract(tmp_path, driver):
     """A destination may hold host backslashes (a cache root from the OS does): the join the
 extractor uses normalizes them, so forward, backslash, mixed and cache-root spellings all
 extract on every system with no host skip."""
@@ -185,85 +142,57 @@ extract on every system with no host skip."""
         ("mixed", fwd + "\\d-mix"),
         ("cacheroot", root + "/d-cache"),
     ]
-    calls = [
-        (label, "reg.tar", q("lib.so"), dest.replace("\\", "\\\\"), "Archive.Options()")
-        for label, dest in dests
-    ]
-    assert run_driver(work, "spellings", driver(calls)) == ["%s ok [9]" % label for label, _ in dests] + [""]
+    calls = [(label, "reg.tar", ["lib.so"], dest, None) for label, dest in dests]
+    assert extract(driver, work, "tar", calls) == ["%s ok [9]" % label for label, _ in dests] + [""]
     for _, dest in dests:
         assert (pathlib.Path(dest) / "lib.so").read_bytes() == b"hello lib"
 
 
-def test_dot_prefixed_names_normalize_both_ways(tmp_path):
+def test_dot_prefixed_names_normalize_both_ways(tmp_path, driver):
     work = tmp_path
     blocks = [entry(b"./lib.so", b"0123456789"), entry(b"plain.txt", b"abc")]
     (work / "a.tar").write_bytes(finish(blocks))
-    options = "Archive.Options()"
     calls = [
-        ("plain", "a.tar", q("lib.so"), "d1", options),
-        ("dotted", "a.tar", q("./plain.txt"), "d2", options),
+        ("plain", "a.tar", ["lib.so"], "d1", None),
+        ("dotted", "a.tar", ["./plain.txt"], "d2", None),
     ]
-    assert run_driver(work, "dots", driver(calls)) == ["plain ok [10]", "dotted ok [3]", ""]
+    assert extract(driver, work, "tar", calls) == ["plain ok [10]", "dotted ok [3]", ""]
     assert (work / "d1" / "lib.so").read_bytes() == b"0123456789"
     assert (work / "d2" / "plain.txt").read_bytes() == b"abc"
 
 
-def test_archive_of_dot_allows_its_root_header(tmp_path):
+def test_archive_of_dot_allows_its_root_header(tmp_path, driver):
     work = tmp_path
     (work / "src").mkdir()
     (work / "src" / "lib.so").write_bytes(b"hello lib")
     with tarfile.open(work / "dot.tar", "w") as tar:
         tar.add(work / "src", ".")
-    lines = run_driver(work, "dotroot", driver([("root", "dot.tar", q("lib.so"), "out", None)]))
+    lines = extract(driver, work, "tar", [("root", "dot.tar", ["lib.so"], "out", None)])
     assert lines == ["root ok [9]", ""]
     assert (work / "out" / "lib.so").read_bytes() == b"hello lib"
 
 
-def test_option_and_member_validation(tmp_path):
+def test_option_and_member_validation(tmp_path, driver):
     work = tmp_path
     (work / "empty.tar").write_bytes(b"")
-    members_257 = ", ".join('"f%d"' % i for i in range(257))
-    text = (
-        "def main() -> Void\n"
-        '  nul = "a#{String.from_code(0)}b"\n'
-        '  show("empty-m", %s)\n'
-        '  show("many-m", %s)\n'
-        '  show("nul-m", %s)\n'
-        '  show("t0", %s)\n'
-        '  show("tneg", %s)\n'
-        '  show("tbig", %s)\n'
-        '  show("o0", %s)\n'
-        '  show("obig", %s)\n'
-        '  show("missing", %s)\n'
-        '  show("isdir", %s)\n'
-        '  show("destfile", %s)\n'
-        '  show("destdir", %s)\n'
-        '  show("noparent", %s)\n'
-        'end\n'
-        % (
-            call_text("empty.tar", "", "d", "Archive.Options()"),
-            call_text("empty.tar", members_257, "d", "Archive.Options()"),
-            call_text("empty.tar", "nul", "d", "Archive.Options()"),
-            call_text("empty.tar", q("a"), "d", opts(timeout=0)),
-            call_text("empty.tar", q("a"), "d", opts(timeout=-1)),
-            call_text("empty.tar", q("a"), "d", opts(timeout=86400001)),
-            call_text("empty.tar", q("a"), "d", opts(max_out=0)),
-            call_text("empty.tar", q("a"), "d", opts(max_out=1073741825)),
-            call_text("gone.tar", q("a"), "d", "Archive.Options()"),
-            call_text("sub", q("a"), "d", "Archive.Options()"),
-            call_text("empty.tar", q("a"), "taken", "Archive.Options()"),
-            call_text("empty.tar", q("a"), "sub", "Archive.Options()"),
-            call_text("empty.tar", q("a"), "no/such/d", "Archive.Options()"),
-        )
-    )
+    calls = [
+        ("empty-m", "empty.tar", [], "d", None),
+        ("many-m", "empty.tar", ["f%d" % i for i in range(257)], "d", None),
+        ("nul-m", "empty.tar", ["a\x00b"], "d", None),
+        ("t0", "empty.tar", ["a"], "d", limits(timeout=0)),
+        ("tneg", "empty.tar", ["a"], "d", limits(timeout=-1)),
+        ("tbig", "empty.tar", ["a"], "d", limits(timeout=86400001)),
+        ("o0", "empty.tar", ["a"], "d", limits(max_out=0)),
+        ("obig", "empty.tar", ["a"], "d", limits(max_out=1073741825)),
+        ("missing", "gone.tar", ["a"], "d", None),
+        ("isdir", "sub", ["a"], "d", None),
+        ("destfile", "empty.tar", ["a"], "taken", None),
+        ("destdir", "empty.tar", ["a"], "sub", None),
+        ("noparent", "empty.tar", ["a"], "no/such/d", None),
+    ]
     (work / "sub").mkdir()
     (work / "taken").write_bytes(b"keep")
-    text = SHOW + text
-    program = work / "validation.agc"
-    program.write_text(text, encoding="utf-8")
-    result = run([str(binary()), str(program)], cwd=work, env=vm_environment())
-    assert result.code == 0, result.stderr
-    lines = result.stdout.split("\n")
+    lines = extract(driver, work, "tar", calls)
     assert lines[0] == "empty-m error archive: members must select 1..256 files"
     assert lines[1] == "many-m error archive: members must select 1..256 files"
     assert lines[2].startswith("nul-m error archive: member ")
@@ -287,13 +216,12 @@ UNSAFE_MEMBERS = [
 ]
 
 
-def test_unsafe_members_rejected_before_touching_disk(tmp_path):
+def test_unsafe_members_rejected_before_touching_disk(tmp_path, driver):
     """One driver runs every member spelling; each call has its own destination, which must stay absent."""
     work = tmp_path
     (work / "empty.tar").write_bytes(b"")
-    calls = [("m%d" % n, "empty.tar", '"%s"' % member.replace("\\", "\\\\").replace('"', '\\"'), "d%d" % n,
-              "Archive.Options()") for n, member in enumerate(UNSAFE_MEMBERS)]
-    lines = run_driver(work, "unsafe", driver(calls))
+    calls = [("m%d" % n, "empty.tar", [member], "d%d" % n, None) for n, member in enumerate(UNSAFE_MEMBERS)]
+    lines = extract(driver, work, "tar", calls)
     bad = [member for n, member in enumerate(UNSAFE_MEMBERS)
            if not lines[n].startswith("m%d error archive: " % n) or (work / ("d%d" % n)).exists()]
     assert not bad, (bad, lines)
@@ -307,12 +235,12 @@ DUPLICATE_MEMBERS = [
 ]
 
 
-def test_duplicate_and_case_colliding_members_rejected(tmp_path):
+def test_duplicate_and_case_colliding_members_rejected(tmp_path, driver):
     work = tmp_path
     (work / "empty.tar").write_bytes(b"")
-    calls = [("m%d" % n, "empty.tar", q(first, second), "d%d" % n, "Archive.Options()")
+    calls = [("m%d" % n, "empty.tar", [first, second], "d%d" % n, None)
              for n, (first, second) in enumerate(DUPLICATE_MEMBERS)]
-    lines = run_driver(work, "dups", driver(calls))
+    lines = extract(driver, work, "tar", calls)
     bad = [pair for n, pair in enumerate(DUPLICATE_MEMBERS)
            if not lines[n].startswith("m%d error archive: members " % n) or (work / ("d%d" % n)).exists()]
     assert not bad, (bad, lines)
@@ -328,29 +256,28 @@ def make_link(target, link):
     assert made.returncode == 0, made.stdout + made.stderr
 
 
-def test_symlink_source_is_refused(tmp_path):
+def test_symlink_source_is_refused(tmp_path, driver):
     work = tmp_path
     (work / "real.tar").write_bytes(finish([entry(b"a.txt", b"hi")]))
     make_link(work / "real.tar", work / "link.tar")
-    lines = run_driver(work, "linksrc", driver([("link", "link.tar", q("a.txt"), "d", "Archive.Options()")]))
+    lines = extract(driver, work, "tar", [("link", "link.tar", ["a.txt"], "d", None)])
     assert lines == ["link error archive: source is not a regular file: link.tar", ""]
     assert not (work / "d").exists()
 
 
-def test_missing_member_and_duplicates_and_bad_checksum(tmp_path):
+def test_missing_member_and_duplicates_and_bad_checksum(tmp_path, driver):
     work = tmp_path
     good = entry(b"wanted.txt", b"0123456789")
     (work / "m.tar").write_bytes(finish([good, entry(b"other.txt", b"xy"), entry(b"late.txt", b"zz")]))
     (work / "d.tar").write_bytes(finish([good, entry(b"./wanted.txt", b"0123456789")]))
     (work / "c.tar").write_bytes(
         finish([good, entry(b"late.txt", b"zz", bad_checksum=True), entry(b"wanted.txt", b"zz")]))
-    options = "Archive.Options()"
     calls = [
-        ("missing", "m.tar", q("wanted.txt", "gone.txt"), "d1", options),
-        ("dup", "d.tar", q("wanted.txt"), "d2", options),
-        ("checksum", "c.tar", q("wanted.txt", "late.txt"), "d3", options),
+        ("missing", "m.tar", ["wanted.txt", "gone.txt"], "d1", None),
+        ("dup", "d.tar", ["wanted.txt"], "d2", None),
+        ("checksum", "c.tar", ["wanted.txt", "late.txt"], "d3", None),
     ]
-    lines = run_driver(work, "scan", driver(calls))
+    lines = extract(driver, work, "tar", calls)
     assert lines[0] == "missing error archive: member not found: gone.txt"
     assert lines[1] == "dup error archive: the same archive holds wanted.txt twice"
     assert lines[2] == "checksum error archive: bad header checksum at entry 2"
@@ -358,7 +285,7 @@ def test_missing_member_and_duplicates_and_bad_checksum(tmp_path):
     assert (work / "d3" / "wanted.txt").read_bytes() == b"0123456789"
 
 
-def test_truncations_and_end_blocks(tmp_path):
+def test_truncations_and_end_blocks(tmp_path, driver):
     work = tmp_path
     whole = finish([entry(b"a.txt", b"0123456789"), entry(b"b.txt", b"xy")])
     (work / "full.tar").write_bytes(whole)
@@ -377,21 +304,20 @@ def test_truncations_and_end_blocks(tmp_path):
     (work / "garbage.tar").write_bytes(garbage)
     (work / "one-byte.tar").write_bytes(b"x")
     (work / "empty.tar").write_bytes(b"")
-    options = "Archive.Options()"
     calls = [
-        ("full", "full.tar", q("a.txt", "b.txt"), "d0", options),
-        ("cut-data", "cut-data.tar", q("a.txt"), "d1", options),
-        ("cut-head", "cut-head.tar", q("a.txt"), "d2", options),
-        ("cut-entries", "cut-entries.tar", q("a.txt"), "d3", options),
-        ("one-zero", "one-zero.tar", q("a.txt"), "d4", options),
-        ("nonzero-pad", "nonzero-pad.tar", q("a.txt"), "d5", options),
-        ("garbage", "garbage.tar", q("a.txt"), "d6", options),
-        ("one-byte", "one-byte.tar", q("a.txt"), "d7", options),
-        ("empty", "empty.tar", q("a.txt"), "d8", options),
-        ("zero-tail", "zero-tail.tar", q("a.txt"), "d9", options),
-        ("late-pad", "late-pad.tar", q("a.txt"), "d10", options),
+        ("full", "full.tar", ["a.txt", "b.txt"], "d0", None),
+        ("cut-data", "cut-data.tar", ["a.txt"], "d1", None),
+        ("cut-head", "cut-head.tar", ["a.txt"], "d2", None),
+        ("cut-entries", "cut-entries.tar", ["a.txt"], "d3", None),
+        ("one-zero", "one-zero.tar", ["a.txt"], "d4", None),
+        ("nonzero-pad", "nonzero-pad.tar", ["a.txt"], "d5", None),
+        ("garbage", "garbage.tar", ["a.txt"], "d6", None),
+        ("one-byte", "one-byte.tar", ["a.txt"], "d7", None),
+        ("empty", "empty.tar", ["a.txt"], "d8", None),
+        ("zero-tail", "zero-tail.tar", ["a.txt"], "d9", None),
+        ("late-pad", "late-pad.tar", ["a.txt"], "d10", None),
     ]
-    lines = run_driver(work, "trunc", driver(calls))
+    lines = extract(driver, work, "tar", calls)
     assert lines[0] == "full ok [10, 2]"
     assert lines[1] == "cut-data error archive: truncated TAR data, needed 10 bytes for file data of a.txt"
     assert lines[2].startswith("cut-head error archive: truncated TAR data, ")
@@ -405,7 +331,7 @@ def test_truncations_and_end_blocks(tmp_path):
     assert lines[10] == "late-pad error archive: non-zero padding after the archive end"
 
 
-def test_non_regular_selections_and_output_safety(tmp_path):
+def test_non_regular_selections_and_output_safety(tmp_path, driver):
     work = tmp_path
     blocks = [
         entry(b"dir/", b"", b"5"),
@@ -416,18 +342,17 @@ def test_non_regular_selections_and_output_safety(tmp_path):
         entry(b"pre.txt", b"3333"),
     ]
     (work / "n.tar").write_bytes(finish(blocks))
-    options = "Archive.Options()"
     calls = [
-        ("dir", "n.tar", q("dir"), "o1", options),
-        ("link", "n.tar", q("link.txt"), "o2", options),
-        ("dev", "n.tar", q("dev.txt"), "o3", options),
-        ("fold", "n.tar", q("afile/sub.txt", "afile"), "o4", options),
-        ("pre", "n.tar", q("pre.txt"), "o5", options),
-        ("trav", "n.tar", q("../outside.txt"), "o6", options),
+        ("dir", "n.tar", ["dir"], "o1", None),
+        ("link", "n.tar", ["link.txt"], "o2", None),
+        ("dev", "n.tar", ["dev.txt"], "o3", None),
+        ("fold", "n.tar", ["afile/sub.txt", "afile"], "o4", None),
+        ("pre", "n.tar", ["pre.txt"], "o5", None),
+        ("trav", "n.tar", ["../outside.txt"], "o6", None),
     ]
     (work / "o5").mkdir()
     (work / "o5" / "pre.txt").write_bytes(b"original")
-    lines = run_driver(work, "safety", driver(calls))
+    lines = extract(driver, work, "tar", calls)
     assert lines[0] == "dir error archive: member is not a regular file: dir"
     assert lines[1] == "link error archive: member is not a regular file: link.txt"
     assert lines[2] == "dev error archive: member is not a regular file: dev.txt"
@@ -440,68 +365,65 @@ def test_non_regular_selections_and_output_safety(tmp_path):
     assert not list(work.glob("o6"))
 
 
-def test_sparse_typeflag_is_not_a_regular_file(tmp_path):
+def test_sparse_typeflag_is_not_a_regular_file(tmp_path, driver):
     work = tmp_path
     sparse = ustar_header(b"sparse.bin", 10, b"S") + b"0123456789" + b"\x00" * 502
     (work / "s.tar").write_bytes(finish([sparse, entry(b"plain.txt", b"ok")]))
-    options = "Archive.Options()"
     calls = [
-        ("sparse", "s.tar", q("sparse.bin"), "o1", options),
-        ("plain", "s.tar", q("plain.txt"), "o2", options),
+        ("sparse", "s.tar", ["sparse.bin"], "o1", None),
+        ("plain", "s.tar", ["plain.txt"], "o2", None),
     ]
-    lines = run_driver(work, "sparseflag", driver(calls))
+    lines = extract(driver, work, "tar", calls)
     assert lines[0] == "sparse error archive: member is not a regular file: sparse.bin"
     assert lines[1] == "plain ok [2]"
     assert (work / "o2" / "plain.txt").read_bytes() == b"ok"
 
 
-def test_sparse_pax_marker_is_refused(tmp_path):
+def test_sparse_pax_marker_is_refused(tmp_path, driver):
     work = tmp_path
     blocks = [pax_block([(b"GNU.sparse.size", b"10")]) + ustar_header(b"psparse.bin", 0)]
     (work / "p.tar").write_bytes(finish(blocks))
-    lines = run_driver(work, "sparsepax", driver([("sparse", "p.tar", q("psparse.bin"), "o1", "Archive.Options()")]))
+    lines = extract(driver, work, "tar", [("sparse", "p.tar", ["psparse.bin"], "o1", None)])
     assert lines == ["sparse error archive: sparse entries are not supported at entry 1", ""]
 
 
-def test_gnu_long_names_and_name_cap(tmp_path):
+def test_gnu_long_names_and_name_cap(tmp_path, driver):
     work = tmp_path
     (work / "g.tar").write_bytes(finish([longname_block(b"n" * 150) + entry(b"n" * 100, b"long!")]))
     (work / "t.tar").write_bytes(finish([longname_block(b"m" * 1025) + entry(b"m" * 100, b"x")]))
-    options = "Archive.Options()"
     calls = [
-        ("gnu", "g.tar", q("n" * 150), "o1", options),
-        ("toolong", "t.tar", q("m" * 300), "o2", options),
+        ("gnu", "g.tar", ["n" * 150], "o1", None),
+        ("toolong", "t.tar", ["m" * 300], "o2", None),
     ]
-    lines = run_driver(work, "gnulong", driver(calls))
+    lines = extract(driver, work, "tar", calls)
     assert lines[0] == "gnu ok [5]"
     assert lines[1] == "toolong error archive: entry name is too long at entry 1"
     assert (work / "o1" / ("n" * 150)).read_bytes() == b"long!"
 
 
-def test_gnu_name_over_1024_bytes_is_refused(tmp_path):
+def test_gnu_name_over_1024_bytes_is_refused(tmp_path, driver):
     work = tmp_path
     (work / "t.tar").write_bytes(finish([longname_block(b"m" * 1025) + entry(b"m" * 100, b"x")]))
-    lines = run_driver(work, "gnucap", driver([("cap", "t.tar", q("plain"), "o1", "Archive.Options()")]))
+    lines = extract(driver, work, "tar", [("cap", "t.tar", ["plain"], "o1", None)])
     assert lines == ["cap error archive: entry name is too long at entry 1", ""]
 
 
-def test_pax_size_override_and_global_header(tmp_path):
+def test_pax_size_override_and_global_header(tmp_path, driver):
     work = tmp_path
     pax = pax_block([(b"path", b"renamed.txt"), (b"size", b"4"), (b"comment", b"ignored")])
     blocks = [pax + entry(b"orig.txt", b"0123456789"), pax_block([(b"size", b"999")])]
     (work / "p.tar").write_bytes(finish(blocks) + b"\x00" * 1024)
-    options = "Archive.Options()"
     calls = [
-        ("renamed", "p.tar", q("renamed.txt"), "o1", options),
-        ("orig", "p.tar", q("orig.txt"), "o2", options),
+        ("renamed", "p.tar", ["renamed.txt"], "o1", None),
+        ("orig", "p.tar", ["orig.txt"], "o2", None),
     ]
-    lines = run_driver(work, "paxsize", driver(calls))
+    lines = extract(driver, work, "tar", calls)
     assert lines[0] == "renamed ok [4]"
     assert lines[1] == "orig error archive: member not found: orig.txt"
     assert (work / "o1" / "renamed.txt").read_bytes() == b"0123"
 
 
-def test_limits_and_streaming_chunks(tmp_path):
+def test_limits_and_streaming_chunks(tmp_path, driver):
     work = tmp_path
     big = bytes(i % 251 for i in range(200000))
     (work / "big.bin").write_bytes(big)
@@ -512,16 +434,15 @@ def test_limits_and_streaming_chunks(tmp_path):
     (work / "huge.tar").write_bytes(finish([huge_size]))
     meta = ustar_header(b"././@PaxHeader", 70000, b"x")
     (work / "meta.tar").write_bytes(meta + b"\x00" * 1024)
-    options = "Archive.Options()"
     calls = [
-        ("big", "big.tar", q("big.bin", "small.txt"), "o1", options),
-        ("big-gz", "big.tar.gz", q("big.bin"), "o2", options),
-        ("cap-each", "big.tar", q("big.bin"), "o3", opts(max_out=100000)),
-        ("cap-total", "big.tar", q("big.bin", "small.txt"), "o4", opts(max_out=200001)),
-        ("huge", "huge.tar", q("huge.bin"), "o5", options),
-        ("meta", "meta.tar", q("anything"), "o6", options),
+        ("big", "big.tar", ["big.bin", "small.txt"], "o1", None),
+        ("big-gz", "big.tar.gz", ["big.bin"], "o2", None),
+        ("cap-each", "big.tar", ["big.bin"], "o3", limits(max_out=100000)),
+        ("cap-total", "big.tar", ["big.bin", "small.txt"], "o4", limits(max_out=200001)),
+        ("huge", "huge.tar", ["huge.bin"], "o5", None),
+        ("meta", "meta.tar", ["anything"], "o6", None),
     ]
-    lines = run_driver(work, "limits", driver(calls))
+    lines = extract(driver, work, "tar", calls)
     assert lines[0] == "big ok [200000, 3]"
     assert lines[1] == "big-gz ok [200000]"
     assert lines[2] == "cap-each error archive: output exceeds 100000 bytes"
@@ -532,7 +453,7 @@ def test_limits_and_streaming_chunks(tmp_path):
     assert (work / "o2" / "big.bin").read_bytes() == big
 
 
-def test_gzip_trailer_and_concat_rejected(tmp_path):
+def test_gzip_trailer_and_concat_rejected(tmp_path, driver):
     work = tmp_path
     mini = finish([entry(b"a.txt", b"0123456789")])
     single = gzip.compress(mini)
@@ -545,17 +466,16 @@ def test_gzip_trailer_and_concat_rejected(tmp_path):
     corrupted[20] ^= 1
     (work / "crc.tar.gz").write_bytes(bytes(corrupted))
     (work / "fake.tar.gz").write_bytes(b"\x1f\x8b" + b"not really gzip" * 100)
-    options = "Archive.Options()"
     calls = [
-        ("one", "one.tar.gz", q("a.txt"), "o1", options),
-        ("concat", "concat.tar.gz", q("a.txt"), "o2", options),
-        ("trailing", "trailing.tar.gz", q("a.txt"), "o3", options),
-        ("zeros", "zeros.tar.gz", q("a.txt"), "o4", options),
-        ("cut", "cut.tar.gz", q("a.txt"), "o5", options),
-        ("crc", "crc.tar.gz", q("a.txt"), "o6", options),
-        ("fake", "fake.tar.gz", q("a.txt"), "o7", options),
+        ("one", "one.tar.gz", ["a.txt"], "o1", None),
+        ("concat", "concat.tar.gz", ["a.txt"], "o2", None),
+        ("trailing", "trailing.tar.gz", ["a.txt"], "o3", None),
+        ("zeros", "zeros.tar.gz", ["a.txt"], "o4", None),
+        ("cut", "cut.tar.gz", ["a.txt"], "o5", None),
+        ("crc", "crc.tar.gz", ["a.txt"], "o6", None),
+        ("fake", "fake.tar.gz", ["a.txt"], "o7", None),
     ]
-    lines = run_driver(work, "gz", driver(calls))
+    lines = extract(driver, work, "tar", calls)
     assert lines[0] == "one ok [10]"
     assert lines[1] == "concat error archive: trailing bytes after the gzip member"
     assert lines[2] == "trailing error archive: trailing bytes after the gzip member"
@@ -566,39 +486,37 @@ def test_gzip_trailer_and_concat_rejected(tmp_path):
     assert (work / "o1" / "a.txt").read_bytes() == b"0123456789"
 
 
-def test_entry_cap_trips_past_8192(tmp_path):
+def test_entry_cap_trips_past_8192(tmp_path, driver):
     work = tmp_path
     tiny = []
     for i in range(8193):
         tiny.append(entry(("f%05d.txt" % i).encode("ascii"), b"x"))
     (work / "ok.tar").write_bytes(finish(tiny[:8192]))
     (work / "over.tar").write_bytes(finish(tiny))
-    options = "Archive.Options()"
     calls = [
-        ("ok", "ok.tar", q("f08191.txt"), "o1", options),
-        ("over", "over.tar", q("f08192.txt"), "o2", options),
+        ("ok", "ok.tar", ["f08191.txt"], "o1", None),
+        ("over", "over.tar", ["f08192.txt"], "o2", None),
     ]
-    lines = run_driver(work, "entrycap", driver(calls))
+    lines = extract(driver, work, "tar", calls)
     assert lines[0] == "ok ok [1]"
     assert lines[1] == "over error archive: too many entries, past 8192"
     assert (work / "o1" / "f08191.txt").read_bytes() == b"x"
 
 
-def test_pax_local_beats_gnu_longname_and_longlink(tmp_path):
+def test_pax_local_beats_gnu_longname_and_longlink(tmp_path, driver):
     work = tmp_path
     pax = pax_block([(b"path", b"PAX_NAME"), (b"size", b"4")])
     reg = entry(b"HEADER_NAME", b"0123456789")
     (work / "mix.tar").write_bytes(finish([pax + longname_block(b"GNU_NAME") + reg]))
     (work / "mixk.tar").write_bytes(
         finish([pax + entry(b"././@LongLink", b"GNU_LINK\x00", b"K") + reg]))
-    options = "Archive.Options()"
     calls = [
-        ("pax", "mix.tar", q("PAX_NAME"), "o1", options),
-        ("gnu", "mix.tar", q("GNU_NAME"), "o2", options),
-        ("hdr", "mix.tar", q("HEADER_NAME"), "o3", options),
-        ("paxk", "mixk.tar", q("PAX_NAME"), "o4", options),
+        ("pax", "mix.tar", ["PAX_NAME"], "o1", None),
+        ("gnu", "mix.tar", ["GNU_NAME"], "o2", None),
+        ("hdr", "mix.tar", ["HEADER_NAME"], "o3", None),
+        ("paxk", "mixk.tar", ["PAX_NAME"], "o4", None),
     ]
-    lines = run_driver(work, "paxgnu", driver(calls))
+    lines = extract(driver, work, "tar", calls)
     # Both Python's tarfile and GNU tar resolve this to PAX_NAME with 4
     # bytes, so the local PAX override wins over the GNU long name or link.
     assert lines[0] == "pax ok [4]"
@@ -609,17 +527,17 @@ def test_pax_local_beats_gnu_longname_and_longlink(tmp_path):
     assert (work / "o4" / "PAX_NAME").read_bytes() == b"0123"
 
 
-def test_expired_deadline_aborts_long_scans(tmp_path):
+def test_expired_deadline_aborts_long_scans(tmp_path, driver):
     work = tmp_path
     pax_tar(work, "big.tar", [("z.bin", b"\x00" * 10000000), ("small.txt", b"abc")])
     with open(work / "big.tar", "rb") as raw:
         (work / "big.tar.gz").write_bytes(gzip.compress(raw.read()))
-    tiny = opts(timeout=1)
+    tiny = limits(timeout=1)
     calls = [
-        ("gz", "big.tar.gz", q("z.bin"), "o1", tiny),
-        ("plain", "big.tar", q("small.txt"), "o2", tiny),
+        ("gz", "big.tar.gz", ["z.bin"], "o1", tiny),
+        ("plain", "big.tar", ["small.txt"], "o2", tiny),
     ]
-    lines = run_driver(work, "expired", driver(calls))
+    lines = extract(driver, work, "tar", calls)
     # Ten megabytes through the interpreter can never fit in one
     # millisecond, so an already-expired deadline must fail, not hang or go
     # ok: the gzip poll fires mid-inflate and the plain skip path checks each
@@ -630,14 +548,14 @@ def test_expired_deadline_aborts_long_scans(tmp_path):
     assert lines[1].startswith("plain error archive: ") and "timed out" in lines[1]
 
 
-def test_utf8_names_and_skipped_entries_do_not_materialize(tmp_path):
+def test_utf8_names_and_skipped_entries_do_not_materialize(tmp_path, driver):
     work = tmp_path
     name = "café-日本語.txt".encode("utf-8")
     blocks = [entry(name, "héllo".encode("utf-8")), entry(b"unselected.bin", b"z" * 100000)]
     (work / "u.tar").write_bytes(finish(blocks))
     selector = "café-日本語.txt"
-    calls = [("utf8", "u.tar", q(selector), "o1", "Archive.Options()")]
-    lines = run_driver(work, "utf8", driver(calls))
+    calls = [("utf8", "u.tar", [selector], "o1", None)]
+    lines = extract(driver, work, "tar", calls)
     assert lines == ["utf8 ok [6]", ""]
     assert (work / "o1" / selector).read_bytes() == "héllo".encode("utf-8")
     assert sorted(path.name for path in (work / "o1").iterdir()) == [selector]
@@ -688,7 +606,7 @@ def test_compressed_cap_counts_physical_bytes_exactly(tmp_path):
     (work / "tiny.tar.gz").write_bytes(blob)
     write_capped(work, "archive_capped.agc", 32, len(blob))
     write_capped(work, "archive_short.agc", 32, len(blob) - 1)
-    lines = run_driver(work, "capped", CAPPED_SHOW)
+    lines = run_source(work, "capped", CAPPED_SHOW)
     # The 32-byte reads fragment every feed, so the exact cap must still succeed while one byte less must fail:
     # within_input counts the file bytes read so far (index * CHUNK plus the chunk), never decoded bytes.
     assert lines[0] == "exact ok [16]"
