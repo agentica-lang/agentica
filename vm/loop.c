@@ -398,6 +398,17 @@ agc_resource **agc_registry_copy(agc_vm *vm, size_t *count) {
   return items;
 }
 
+/* The job takes DATA (CC_OWNS in port.h), so a start that fails before the job exists drops it first. `drop` runs on
+   the I/O thread once a job holds the data (§16.5); here no job was posted, so the I/O thread has never seen DATA and
+   the caller's thread drops it. The callers check agc_task_check_park or agc_task_check_wait before they make their
+   data; one that did not could reach job_parking with data whose drop touches the loop (a process request with
+   `holds_resource`, vm/process.c). */
+// cchecker: ignore CC-OWN-LEAK: kind->drop frees data, through a pointer that the rules do not follow
+static _Noreturn void job_refused(agc_vm *vm, const agc_io_kind *kind, CC_FREES void *data, const char *message) {
+  if (data) kind->drop(data);
+  agc_fail(vm, "RUNTIME-INTERNAL", message, 0);
+}
+
 #if defined(__linux__) || defined(__APPLE__) || defined(_WIN32)
 static job *timer_job(uv_handle_t *handle) { return (job *)(void *)((char *)handle - offsetof(job, timer)); }
 
@@ -1694,14 +1705,8 @@ void agc_io_submit_direct(agc_vm *vm) {
   post(j, REQ_START, -1);
 }
 
-/* The job takes DATA (CC_OWNS in port.h), so a start that fails before the job exists drops it first. */
-// cchecker: ignore CC-OWN-LEAK: kind->drop frees data, through a pointer that the rules do not follow
-static _Noreturn void job_refused(agc_vm *vm, const agc_io_kind *kind, CC_FREES void *data, const char *message) {
-  if (data) kind->drop(data);
-  agc_fail(vm, "RUNTIME-INTERNAL", message, 0);
-}
-
-/* agc_task_parking refuses a wait in a callback of native code: DATA is dropped before that refusal. */
+/* agc_task_parking refuses a wait in a callback of native code: DATA is dropped before that refusal, on this thread
+   for the reason job_refused gives. */
 static void job_parking(agc_vm *vm, const agc_io_kind *kind, void *data) {
   if (vm->task->callbacks) {
     if (data) kind->drop(data);
@@ -2337,10 +2342,8 @@ bool agc_io_init(void) { return false; }
 
 const char *agc_uv_version(void) { return NULL; }
 
-/* The job takes DATA (CC_OWNS in port.h), so a stub that starts no job frees it before it fails. */
 static _Noreturn void no_job(agc_vm *vm, const agc_io_kind *kind, CC_FREES void *data) {
-  if (data) kind->drop(data);
-  agc_fail(vm, "RUNTIME-INTERNAL", "this builtin needs Linux", 0);
+  job_refused(vm, kind, data, "this builtin needs Linux");
 }
 
 agc_io_job *agc_io_start(agc_vm *vm, const agc_io_kind *kind, void *data, agc_value context, int64_t timeout_ms) {

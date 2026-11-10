@@ -13,6 +13,7 @@
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <uv.h>
 #ifndef _WIN32
 #include <unistd.h>
@@ -1032,6 +1033,44 @@ static void test_timer_only_kind_is_refused(void) {
   settle_loop();
 }
 
+/* A start that fails before its job exists drops the data it was given, once: a wait refused in a callback of native
+   code (job_parking), and a kind that start_job refuses (job_refused). */
+static void refused_start(const agc_io_kind *kind, int callbacks, const char *code) {
+  running();
+  agc_task *task = vm.task;
+  task->callbacks = (uint32_t)callbacks;
+  gate *g = new_gate();
+  dropped = 0;
+  if (setjmp(vm.fail) == 0) {
+    (void)agc_io_start(&vm, kind, g, agc_void(), 5);
+    assert(!"a refused job was started");
+  }
+  assert(strcmp(vm.outcome->code, code) == 0);
+  assert(dropped == 1 && dropped_without_work == 1 && !task->parked);
+  task->callbacks = 0;
+  task->parking = false;
+  dropped = 0;
+  dropped_without_work = 0;
+  settle_loop();
+}
+
+static bool never_cancel(agc_vm *vm, void *data, agc_value context, bool deadline) {
+  (void)vm;
+  (void)data;
+  (void)context;
+  (void)deadline;
+  return false;
+}
+
+/* A pool job with a cancel half needs a `more` step; agc_io_start passes none. */
+static const agc_io_kind cancel_without_more_io = {gate_work, gate_done, gate_expired, gate_drop, false, "cancel",
+                                                   never_cancel, false, NULL};
+
+static void test_refused_start_drops_its_data(void) {
+  refused_start(&gate_io, 1, "RUNTIME-NATIVE-CALLBACK");
+  refused_start(&cancel_without_more_io, 0, "RUNTIME-INTERNAL");
+}
+
 #ifndef _WIN32
 static void nothing(void *data) { (void)data; }
 
@@ -1103,6 +1142,7 @@ int main(void) {
   test_raising_done_on_a_scheduler();
   test_unserviced_job_is_freed_at_the_close();
   test_timer_only_kind_is_refused();
+  test_refused_start_drops_its_data();
   test_service_holds_sync();
 #endif
   puts("job tests passed");
