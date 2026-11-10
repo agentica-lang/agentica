@@ -302,6 +302,85 @@ def test_an_if_whose_statement_fmt_writes_on_one_line_is_a_guard_on_the_first_ru
     assert fmt("--check", cwd=tmp_path).stdout == ""
 
 
+# A pipe chain of two or more `|>` breaks as the value of a `return`, so it keeps the `if`, and a guard with one becomes
+# the `if`. A method chain with leading dots joins when it fits, as in a body, so it becomes a guard; when it does not
+# fit, the `if` keeps it broken. Comments on the lines around the `if` stay where they are, and a call that the source
+# spreads over lines but that fits is joined into the guard.
+VALUES = """def f(xs: List[Int], c: Bool) -> List[Int]
+  if c
+    return xs |> twice() |> twice()
+  end
+
+  return xs |> twice() |> twice() if not c
+end
+
+def g(xs: List[Int], c: Bool) -> List[Int]
+  if c
+    return xs
+      .map(inc)
+      .select(odd)
+  end
+
+  if xs.size > 1
+    return xs
+      .map(increment_every_item_of_the_list_by_one)
+      .select(keep_only_the_odd_items_of_the_list_and_drop_the_rest)
+  end
+
+  # before the if
+  if not c
+    return f(
+      xs,
+      c,
+    )
+  end
+  # after the end
+  return xs
+end
+"""
+VALUES_FORMATTED = """def f(xs: List[Int], c: Bool) -> List[Int]
+  if c
+    return (
+      xs
+      |> twice()
+      |> twice()
+    )
+  end
+
+  if not c
+    return (
+      xs
+      |> twice()
+      |> twice()
+    )
+  end
+end
+
+def g(xs: List[Int], c: Bool) -> List[Int]
+  return xs.map(inc).select(odd) if c
+
+  if xs.size > 1
+    return xs.map(increment_every_item_of_the_list_by_one)
+      .select(keep_only_the_odd_items_of_the_list_and_drop_the_rest)
+  end
+
+  # before the if
+  return f(xs, c) if not c
+  # after the end
+  return xs
+end
+"""
+
+
+def test_a_guard_value_is_laid_out_as_in_a_body(tmp_path):
+    lay_out(tmp_path, {"values.agc": VALUES})
+    before = fmt("--tree", "values.agc", cwd=tmp_path)
+    assert fmt(cwd=tmp_path).code == 0
+    assert text(tmp_path, "values.agc") == VALUES_FORMATTED
+    assert fmt("--check", cwd=tmp_path).stdout == ""
+    assert fmt("--tree", "values.agc", cwd=tmp_path).stdout == before.stdout
+
+
 @pytest.mark.parametrize("size, guarded", [(95, True), (96, False)])
 def test_the_guard_and_the_if_meet_at_the_same_width(tmp_path, size, guarded):
     # `  return 0 if text == "..."` is 24 characters plus the text: 119, the width, for 95, and 120 for 96. Both forms of

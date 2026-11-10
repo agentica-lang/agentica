@@ -80,9 +80,7 @@ def handle(text: String) -> Void
 
   request_id = JSON.get(request, "id")
   # Notifications, including notifications/initialized, have no response.
-  if not Result.ok?(request_id)
-    return
-  end
+  return if not Result.ok?(request_id)
   id = Result.unwrap!(request_id)
   if not (Result.ok?(JSON.string(id)) or Result.ok?(JSON.int(id)))
     reject(JSON.null(), -32600, "Invalid Request")
@@ -127,9 +125,7 @@ end
 def main() -> Void
   while not IO.eof?()
     line = IO.gets()
-    if not Result.ok?(line)
-      return
-    end
+    return if not Result.ok?(line)
     handle(Result.unwrap!(line))
   end
 end

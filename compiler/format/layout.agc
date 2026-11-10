@@ -593,15 +593,20 @@ end
 # the line where its statement starts. An `if` that could be a guard (`guardable?`) takes the same choice, so the two
 # forms meet at the same width and formatting again changes nothing.
 def if_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
-  return spelled_if_doc(c, node) if not node.guard and not guardable?(c, node)
+  return spelled_if_doc(c, node) if not node.guard and not guard_shaped?(c, node)
 
-  return Docs.Doc.Group([Docs.Doc.IfBreak([spelled_if_doc(c, node)], [guard_doc(c, node)])])
+  guard = guard_doc(c, node)
+  return spelled_if_doc(c, node) if not node.guard and not one_line?(guard)
+
+  return Docs.Doc.Group([Docs.Doc.IfBreak([spelled_if_doc(c, node)], [guard])])
 end
 
-# The one-line form of an `if` with one branch of one statement: `statement if condition`.
+# The one-line form of an `if` with one branch of one statement: `statement if condition`. The statement is laid out
+# as in a body (`forced`), so a value that a body breaks (a pipe chain of two or more `|>`, a method chain with a `.`
+# at the start of each line) breaks the guard too, which is then written as its `if`.
 def guard_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
   branch = node.branches[0]
-  return Docs.Doc.Concat([statement_doc(c, branch.body[0], false), text(" if "), expr_doc(c, branch.condition, false)])
+  return Docs.Doc.Concat([statement_doc(c, branch.body[0], true), text(" if "), expr_doc(c, branch.condition, false)])
 end
 
 # `if`, its `elsif` branches and its `else`. A comment before `elsif` or `else` stays just before the keyword, at the
@@ -788,19 +793,28 @@ def inline?(c: Context, stmt: Ast.Stmt) -> Bool
 end
 
 # An `if c` whose body is one `return`, `break` or `next`, with no `elsif` or `else`, no comment from its `if` line to
-# its `end` line, and a guard that can be one line: written as a guard when that fits on the line (if_doc). Whether the
-# guard can be one line is read from its own layout with no width limit, not from the source, so an `if` whose
-# statement the formatter joins onto one line is a guard already on the first run (a heredoc or a block of several
-# statements still takes lines of its own).
+# its `end` line, and a guard that can be one line: written as a guard when that fits on the line (if_doc).
 def guardable?(c: Context, node: Ast.IfStmt) -> Bool
+  return false if not guard_shaped?(c, node)
+
+  return one_line?(guard_doc(c, node))
+end
+
+# The shape of `guardable?`: one branch of one `return`, `break` or `next`, no `else`, no comment.
+def guard_shaped?(c: Context, node: Ast.IfStmt) -> Bool
   return false if node.branches.size != 1 or node.else_body.some? or node.branches[0].body.size != 1
 
   return false if not exit?(node.branches[0].body[0])
 
   last = last_line(c, node.span)
-  return false if (node.span.start.line..last).to_a.any? do |line: Int| c.noted.include?(line) end
+  return not (node.span.start.line..last).to_a.any? do |line: Int| c.noted.include?(line) end
+end
 
-  return not Docs.render(guard_doc(c, node), UNLIMITED).strip.include?("\n")
+# Whether `doc` laid out with no width limit is one line. This reads the layout and not the source, so an `if` whose
+# statement the formatter joins onto one line is a guard already on the first run, and a heredoc, a block of several
+# statements or a value that a body breaks keeps the `if`.
+def one_line?(doc: Docs.Doc) -> Bool
+  return not Docs.render(doc, UNLIMITED).strip.include?("\n")
 end
 
 # A `return`, `break` or `next`: the statements that take a guard.

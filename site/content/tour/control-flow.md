@@ -197,13 +197,16 @@ added
 
 ## Statements, not expressions
 
-`if` and `case` give no value. Return from them or assign inside them:
+`if` and `case` give no value. Assign inside them, or return from them:
 
 ```agentica
 def sign(n: Int) -> String
-  return "negative" if n < 0
+  word = "not negative"
+  if n < 0
+    word = "negative"
+  end
 
-  return "not negative"
+  return word
 end
 
 def main() -> Void

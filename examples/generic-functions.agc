@@ -6,18 +6,14 @@ end
 
 # The first item of xs, or fallback when xs is empty.
 def first_or[T](xs: List[T], fallback: T) -> T
-  if xs.length == 0
-    return fallback
-  end
+  return fallback if xs.length == 0
 
   return xs[0]
 end
 
 # The item with the largest key, or none when xs is empty.
 def max_by[T](xs: List[T], key: Fn[T, Int]) -> Optional[T]
-  if xs.length == 0
-    return none
-  end
+  return none if xs.length == 0
 
   best = xs[0]
   best_key = key.call(best)
@@ -34,9 +30,7 @@ end
 
 # Runs body on the first item of the pool, or fails when the pool is empty.
 def with[T, R](pool: Pool[T], body: Fn[T, Result[R]]) -> Result[R]
-  if pool.items.length == 0
-    return error("empty pool")
-  end
+  return error("empty pool") if pool.items.length == 0
 
   return body.call(pool.items[0])
 end
