@@ -14,6 +14,7 @@ export enum Kind
   Resource
   Function
   Constant
+  Module
   Import
 end
 
@@ -37,18 +38,21 @@ export def span_of(decl: Ast.Decl) -> Source.Span
     Ast.Decl.TypeAlias(node) -> node.span
     Ast.Decl.Resource(node) -> node.span
     Ast.Decl.Constant(node) -> node.span
+    Ast.Decl.Module(node) -> node.span
   end
 end
 
-## Returns the span of the name of a type alias, and the span of the whole declaration for any other one.
+## Returns the span of the name of a type alias or a module block, and the span of the whole declaration for any other
+## one.
 export def name_span_of(decl: Ast.Decl) -> Source.Span
   case unwrap(decl)
     Ast.Decl.TypeAlias(node) -> node.name_span
+    Ast.Decl.Module(node) -> node.name_span
     _ -> span_of(decl)
   end
 end
 
-## The name a struct, enum, alias, resource, function or constant declares; "" for an import.
+## The name a struct, enum, alias, resource, function, constant or module block declares; "" for an import.
 export def name_of(decl: Ast.Decl) -> String
   case unwrap(decl)
     Ast.Decl.Function(node) -> node.name
@@ -57,6 +61,7 @@ export def name_of(decl: Ast.Decl) -> String
     Ast.Decl.TypeAlias(node) -> node.name
     Ast.Decl.Resource(node) -> node.name
     Ast.Decl.Constant(node) -> node.name
+    Ast.Decl.Module(node) -> node.name
     _ -> ""
   end
 end
@@ -70,6 +75,7 @@ export def kind_of(decl: Ast.Decl) -> Kind
     Ast.Decl.TypeAlias(_) -> Kind.TypeAlias
     Ast.Decl.Resource(_) -> Kind.Resource
     Ast.Decl.Constant(_) -> Kind.Constant
+    Ast.Decl.Module(_) -> Kind.Module
     _ -> Kind.Import
   end
 end
@@ -118,6 +124,14 @@ end
 export def constant?(kind: Kind) -> Bool
   case kind
     Kind.Constant -> true
+    _ -> false
+  end
+end
+
+## True for a module block.
+export def module?(kind: Kind) -> Bool
+  case kind
+    Kind.Module -> true
     _ -> false
   end
 end
@@ -172,6 +186,19 @@ export def imports_of(declarations: List[Ast.Decl]) -> List[Ast.ImportDecl]
   found
 end
 
+## The module blocks of a file, exported or not, in order.
+export def modules_of(declarations: List[Ast.Decl]) -> List[Ast.ModuleDecl]
+  found: List[Ast.ModuleDecl] = []
+  for decl in declarations
+    case unwrap(decl)
+      Ast.Decl.Module(node) -> found = found.push(node)
+      _ -> next
+    end
+  end
+
+  found
+end
+
 ## The re-exports of a file, in order.
 export def reexports_of(declarations: List[Ast.Decl]) -> List[Ast.ReexportDecl]
   found: List[Ast.ReexportDecl] = []
@@ -186,7 +213,8 @@ export def reexports_of(declarations: List[Ast.Decl]) -> List[Ast.ReexportDecl]
 end
 
 ## CHECK-DECL-ORDER, in file, for the first declaration that comes after a later group. The groups are: imports and
-## re-exports, then constants, then struct, enum, type alias and resource (exported or not), then export def, then def.
+## re-exports, then constants, then struct, enum, type alias, resource and module block (exported or not), then export
+## def, then def.
 ## The span is of the declaration out of place; the help names the group it belongs to. The functions of an extern
 ## block that declares a resource are in the group of the types, with the resource; a resource of an extern module
 ## block is in the group of a def (exported or not), with the block's functions. The record of an extern function
@@ -229,12 +257,14 @@ def rank(decl: Ast.Decl) -> Int
     Ast.Decl.Struct(_) -> 2
     Ast.Decl.Enum(_) -> 2
     Ast.Decl.TypeAlias(_) -> 2
+    Ast.Decl.Module(_) -> 2
     Ast.Decl.Resource(node) -> resource_rank(node, 4)
     Ast.Decl.Export(node) ->
       case node.declaration
         Ast.Decl.Struct(_) -> 2
         Ast.Decl.Enum(_) -> 2
         Ast.Decl.TypeAlias(_) -> 2
+        Ast.Decl.Module(_) -> 2
         Ast.Decl.Resource(inner) -> resource_rank(inner, 3)
         Ast.Decl.Function(inner) -> function_rank(inner, 3)
         _ -> 3
@@ -274,7 +304,7 @@ def order_help(group: Int) -> String
   case group
     0 -> "imports come first, before any constant, struct, enum, type alias or function"
     1 -> "constants come right after the imports"
-    2 -> "structs, enums, type aliases and resources come before functions"
+    2 -> "structs, enums, type aliases, resources and modules come before functions"
     _ -> "exported functions come before private functions"
   end
 end

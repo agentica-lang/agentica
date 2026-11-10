@@ -1,0 +1,15 @@
+# a block
+## The counter.
+export module Counter
+  # inside
+  export LIMIT = 100
+
+  export def start(initial: Int) -> Int = initial + 1
+
+  def helper() -> Int = 2 # trailing
+  # before end
+end
+
+module Empty
+  # only a comment
+end

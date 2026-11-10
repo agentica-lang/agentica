@@ -56,7 +56,9 @@ export def check(module: Modules.Module, modules: Map[String, Modules.Module], u
 
   heads: List[String] = []
   libraries: List[String] = []
-  for item in written
+  # A module block sees the imports of its file, so what it writes uses them too; the block's own module checks the
+  # rest of what it writes.
+  for item in written.concat(of_blocks(module.program))
     if item.role == Role.Module
       libraries = libraries.push(item.name)
     elsif item.name.contains?(".") or item.role == Role.Variant
@@ -215,6 +217,19 @@ def of_program(program: Ast.Program) -> List[Written]
   out: List[Written] = []
   for decl in program.declarations
     out = of_declaration(out, Declarations.unwrap(decl))
+  end
+
+  out
+end
+
+# Every name the module blocks of the file write.
+def of_blocks(program: Ast.Program) -> List[Written]
+  out: List[Written] = []
+  for decl in program.declarations
+    case Declarations.unwrap(decl)
+      Ast.Decl.Module(node) -> out = out.concat(of_program(program.with(declarations: node.declarations)))
+      _ -> next
+    end
   end
 
   out

@@ -16,8 +16,7 @@ export def text(outlined: Model.Outline) -> String
   end
 
   for item in outlined.items
-    lines = lines.push("#{place(file, item.range)} #{declaration_text(item.kind, item.exported, item.signature)}")
-    lines = lines.concat(member_lines(file, item))
+    lines = lines.concat(item_lines(file, item))
   end
 
   return "" if lines.size == 0
@@ -64,6 +63,17 @@ def imported_name(name: Model.ImportName) -> String
   return name.name if name.local == name.name
 
   "#{name.name} as #{name.local}"
+end
+
+# The line of the item, the lines of its fields or variants, and those of the declarations of a module block.
+def item_lines(file: String, item: Model.Item) -> List[String]
+  lines = ["#{place(file, item.range)} #{declaration_text(item.kind, item.exported, item.signature)}"]
+  lines = lines.concat(member_lines(file, item))
+  for inner in item.items
+    lines = lines.concat(item_lines(file, inner))
+  end
+
+  lines
 end
 
 # `field Struct.name: Type` and `variant Enum.Name(Payload)`, one line each, at the position of the name.

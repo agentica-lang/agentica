@@ -143,11 +143,12 @@ def declared_name(declaration: Ast.Decl) -> String
     Ast.Decl.Import(_) -> ""
     Ast.Decl.Reexport(_) -> ""
     Ast.Decl.Export(_) -> ""
+    Ast.Decl.Module(_) -> ""
   end
 end
 
-# Imports and exports are not in the linked program and have no name, so `find` never gives them; their arms keep the
-# case complete.
+# Imports, exports and module blocks are not in the linked program and have no name, so `find` never gives them; their
+# arms keep the case complete.
 def whole(found: Found) -> Definition
   module = found.module
   case found.declaration
@@ -160,6 +161,7 @@ def whole(found: Found) -> Definition
     Ast.Decl.Import(node) -> made("import", "", module, node.span, node.span, nothing_said())
     Ast.Decl.Reexport(node) -> made("export", "", module, node.span, node.span, nothing_said())
     Ast.Decl.Export(node) -> made("export", "", module, node.span, node.span, nothing_said())
+    Ast.Decl.Module(node) -> made("module", "", module, node.span, node.name_span, nothing_said())
   end
 end
 
@@ -270,6 +272,7 @@ def of_member(module: Linker.LinkedModule, owner: String, name: String) -> Descr
           end
 
         Model.Detail.Function(_, _) -> return nothing_said()
+        Model.Detail.Module(_) -> return nothing_said()
         Model.Detail.Plain -> return nothing_said()
       end
     end

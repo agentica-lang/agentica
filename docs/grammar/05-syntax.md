@@ -247,11 +247,11 @@ a def with a body included. Other text after a declaration's `end` is
 
 Declarations follow a fixed order in every file, the root program, imported
 files and embedded `std/` modules alike: the module doc and the imports first,
-then the constants, then `struct`, `enum` and type alias declarations (exported
-or not, in any order among themselves), then `export def` functions, then
-private `def` functions (an extern block that declares a resource or a struct
-goes with the types, as a whole). `type` is contextual in an alias declaration and remains an
-ordinary name elsewhere. The order is a style rule only: a function may still
+then the constants, then `struct`, `enum`, type alias and `module` block
+declarations (exported or not, in any order among themselves), then `export
+def` functions, then private `def` functions (an extern block that declares a
+resource or a struct goes with the types, as a whole). `type` is contextual in
+an alias declaration and remains an ordinary name elsewhere. The order is a style rule only: a function may still
 call a function, use a struct declared later or read a constant in the same
 group. The first declaration that comes after a declaration of a later group is
 `CHECK-DECL-ORDER`, reported at the start of that declaration (at `export` or

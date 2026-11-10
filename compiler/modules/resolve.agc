@@ -52,6 +52,8 @@ export def resolve(cx: Context, name: String, want: Want, span: Source.Span, hin
     return qualified(cx, parts[0], parts[1], want, span, hint)
   elsif parts.size == 3 and family?(cx, parts[0])
     return member_function(cx, parts, want, span)
+  elsif parts.size == 3 and aliased_block(cx, parts[0], parts[1]) != ""
+    return imported(cx, cx.modules[aliased_block(cx, parts[0], parts[1])], parts[2], want, span)
   end
 
   return imported_by_name(cx, cx.me.named[name], want, span) if cx.me.named.has_key?(name)
@@ -75,9 +77,17 @@ export def exports_enum?(module: Modules.Module, name: String) -> Bool
   module.public.has_key?(name) and Declarations.enum?(module.public[name])
 end
 
-## True when the file imports an enum by name under this name.
+## True when the file imports an enum by name under this name (or, in a module block, sees one of its file).
 export def named_enum?(cx: Context, name: String) -> Bool
-  cx.me.named.has_key?(name) and exports_enum?(cx.modules[cx.me.named[name].target], cx.me.named[name].name)
+  cx.me.named.has_key?(name) and Declarations.enum?(named_kind(cx, cx.me.named[name]))
+end
+
+## The key of the module block `block` that the module under the import alias `alias` exports (`Alias.Block.name`),
+## or "".
+export def aliased_block(cx: Context, alias: String, block: String) -> String
+  return "" if !cx.me.aliases.has_key?(alias)
+
+  Modules.exported_block(cx.modules[cx.me.aliases[alias]], block)
 end
 
 ## The linked name of the constant that a name reads in this file (declared here, or imported by name), or "" when the
@@ -88,7 +98,7 @@ export def constant_identity(cx: Context, name: String) -> String
   if cx.me.named.has_key?(name)
     entry = cx.me.named[name]
     target = cx.modules[entry.target]
-    return Modules.linked_name(cx.modules, target, entry.name) if Declarations.constant?(target.public[entry.name])
+    return Modules.linked_name(cx.modules, target, entry.name) if Declarations.constant?(named_kind(cx, entry))
   end
 
   ""
@@ -98,13 +108,21 @@ end
 ## not export a constant of that name (a private constant is left to `resolve`, which refuses it like a private
 ## function).
 export def alias_constant_identity(cx: Context, name: String) -> String
-  # An alias is a single segment, so only `Alias.NAME` counts.
+  # An alias is a single segment, so only `Alias.NAME` counts, and `Alias.Block.NAME` for a module block it exports.
   parts = name.split(".")
-  return "" if parts.size != 2 or !cx.me.aliases.has_key?(parts[0])
+  key = ""
+  if parts.size == 2 and cx.me.aliases.has_key?(parts[0])
+    key = cx.me.aliases[parts[0]]
+  elsif parts.size == 3
+    key = aliased_block(cx, parts[0], parts[1])
+  end
 
-  target = cx.modules[cx.me.aliases[parts[0]]]
-  if target.public.has_key?(parts[1]) and Declarations.constant?(target.public[parts[1]])
-    return Modules.linked_name(cx.modules, target, parts[1])
+  return "" if key == ""
+
+  target = cx.modules[key]
+  member = parts[parts.size - 1]
+  if target.public.has_key?(member) and Declarations.constant?(target.public[member])
+    return Modules.linked_name(cx.modules, target, member)
   end
 
   ""
@@ -116,8 +134,7 @@ export def declared_type?(cx: Context, name: String) -> Bool
   return right_kind?(cx.me.names[name], Want.Type) if cx.me.names.has_key?(name)
 
   if cx.me.named.has_key?(name)
-    entry = cx.me.named[name]
-    return right_kind?(cx.modules[entry.target].public[entry.name], Want.Type)
+    return right_kind?(named_kind(cx, cx.me.named[name]), Want.Type)
   end
 
   RECORDS.has_key?(name)
@@ -146,8 +163,7 @@ export def unknown_constant_failure(cx: Context, name: String, span: Source.Span
   end
 
   for local in cx.me.named.keys
-    entry = cx.me.named[local]
-    if Declarations.constant?(cx.modules[entry.target].public[entry.name])
+    if Declarations.constant?(named_kind(cx, cx.me.named[local]))
       seen = seen.push(local)
     end
   end
@@ -159,6 +175,11 @@ export def unknown_constant_failure(cx: Context, name: String, span: Source.Span
   end
 
   Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "unknown name \"#{name}\"", help)
+end
+
+## The kind of what a name of the `named` table stands for.
+export def named_kind(cx: Context, entry: Modules.Named) -> Declarations.Kind
+  Modules.kind_in(cx.modules[entry.target], entry.name)
 end
 
 ## The name in the linked program of a declaration of the file.
@@ -322,7 +343,7 @@ end
 # already checked that the module exports it.
 def imported_by_name(cx: Context, entry: Modules.Named, want: Want, span: Source.Span) -> Result[String]
   target = cx.modules[entry.target]
-  if !right_kind?(target.public[entry.name], want)
+  if !right_kind?(Modules.kind_in(target, entry.name), want)
     return error(
       Failure.fail_at(site(cx, span), "CHECK-TYPE-MISMATCH", "wrong kind of imported declaration", Diag.Help.NoHelp),
     )

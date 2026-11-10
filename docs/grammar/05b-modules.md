@@ -160,8 +160,60 @@ reads is the value the declaring file computed.
 Only the root file supplies the executable `main() -> Void`; imported `main`
 functions do not run. Imported calls and tasks share the program's step budget
 and resource ownership. The CLI and `agentica test` use the same loader. There
-are no wildcard imports, package registry, mutable module state, nested modules
-or receiver attachment.
+are no wildcard imports, package registry, mutable module state, module blocks
+inside module blocks or receiver attachment.
+
+#### Module blocks
+
+`module Name ... end` at the top level of a file groups declarations under a
+name, so one file can hold several named modules. It is a namespace only:
+
+```agentica
+# agents.agc
+export module Counter
+  export enum Msg
+    Add(Int)
+    Get
+  end
+
+  export def start(initial: Int) -> Int = step(initial, Msg.Add(1))
+
+  def step(count: Int, msg: Msg) -> Int
+    case msg
+      Msg.Add(n) -> count + n
+      Msg.Get -> count
+    end
+  end
+end
+```
+
+- The name is capitalized and follows the rules of an import alias: it must
+  not be the name of a declaration, an alias, an imported name or a builtin
+  name (`CHECK-REDEFINED-NAME`, at the name; at the import when an import line
+  takes it). `module name` with a lowercase name is not a block.
+- Inside, a block holds what a file holds, with the same layout rules (the
+  blank lines and `CHECK-DECL-ORDER`): constants, structs, enums, type aliases
+  and functions, generic ones included. An import, a re-export or an extern
+  block inside is `PARSE-UNEXPECTED-TOKEN`; a block inside a block is
+  `PARSE-NESTED-MODULE`, at the inner `module`. A block may be empty. In the
+  file it ranks with the structs and enums for `CHECK-DECL-ORDER`.
+- Scope is lexical: the body sees the imports of the file, its top-level
+  declarations (private ones too) and the other blocks, and its own names
+  bare. A name the block declares hides a top-level name or alias of the same
+  name inside the block.
+- Outside the block (the rest of the file and importers) only its exported
+  names are visible, written `Counter.start`, `Counter.Msg.Add(5)`,
+  `Counter.LIMIT`, `Counter.Box[Int]`. A private name is `CHECK-IMPORT-NAME`, as
+  for a name a file does not export. Uses inside a block count for
+  `CHECK-UNUSED-IMPORT`.
+- `export module Counter` lets an importer use it: `import {Counter} from
+  "agents"` binds `Counter` as an alias (`import {Counter as C}` renames it),
+  and `import Agents from "agents"` reads `Agents.Counter.start(0)`,
+  `Agents.Counter.Msg.Add(5)` and the type `Agents.Counter.Msg`. A block
+  without `export` is private to its file.
+- A `main` inside a block never runs; only the root file's top-level `main`
+  does. There is no mutable module state, and `extern module` keeps its
+  meaning.
 
 #### Standard library and external libraries
 

@@ -63,6 +63,7 @@ export enum Decl
   TypeAlias(TypeAliasDecl)
   Resource(ResourceDecl)
   Constant(ConstDecl)
+  Module(ModuleDecl)
 end
 
 ## An import: import Alias from "path" (alias is `some`, names is empty), or import {A, B as C} from "path" (alias is
@@ -99,6 +100,18 @@ end
 export struct ExportDecl
   id: Int
   declaration: Decl
+  doc: Optional[String]
+  span: Source.Span
+end
+
+## A module block: `module Name ... end` at the top level of a file, a namespace for the declarations inside it
+## (docs/grammar/05b-modules.md). `export module Name` wraps it in an ExportDecl. The linker makes a module of its own
+## of the declarations.
+export struct ModuleDecl
+  id: Int
+  name: String
+  name_span: Source.Span
+  declarations: List[Decl]
   doc: Optional[String]
   span: Source.Span
 end
