@@ -133,9 +133,7 @@ end
 export def declared_type?(cx: Context, name: String) -> Bool
   return right_kind?(cx.me.names[name], Want.Type) if cx.me.names.has_key?(name)
 
-  if cx.me.named.has_key?(name)
-    return right_kind?(named_kind(cx, cx.me.named[name]), Want.Type)
-  end
+  return right_kind?(named_kind(cx, cx.me.named[name]), Want.Type) if cx.me.named.has_key?(name)
 
   RECORDS.has_key?(name)
 end
