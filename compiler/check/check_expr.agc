@@ -86,14 +86,10 @@ def matches_expected?(node: Ast.Expr, expected: T.Type) -> Bool
 end
 
 # True when the type is a word (List, Optional, Result) of a known type.
-def known_item?(type: T.Type, word: String) -> Bool
-  return T.is?(type, word) and !T.unknown?(T.item(type))
-end
+def known_item?(type: T.Type, word: String) -> Bool = T.is?(type, word) and !T.unknown?(T.item(type))
 
 # An Int literal past the largest Int is CHECK-INT-RANGE, except this one under a minus.
-def int_min_digits() -> String
-  return "9223372036854775808"
-end
+def int_min_digits() -> String = "9223372036854775808"
 
 # The type of the node by its kind, before the Void and expected-type checks.
 def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Type) -> Result[State.Out]

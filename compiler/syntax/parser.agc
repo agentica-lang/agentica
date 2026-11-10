@@ -300,13 +300,9 @@ end
 ## Whether the library of an extern block or of Native.load is a name the system loader searches for or an absolute
 ## path. A relative path would resolve against the working directory, while imports resolve against the source file:
 ## until a later phase decides, it is refused.
-export def library_name?(name: String) -> Bool
-  return name != "" and (!name.contains?("/") or name.starts_with?("/"))
-end
+export def library_name?(name: String) -> Bool = name != "" and (!name.contains?("/") or name.starts_with?("/"))
 
-def brace_help(form: String) -> String
-  return "blocks have no braces: write \"#{form}\" ... \"end\""
-end
+def brace_help(form: String) -> String = "blocks have no braces: write \"#{form}\" ... \"end\""
 
 # The newline that ends the head of a def, if, case, while or for. A `{` here gets the help that blocks have no braces.
 def expect_head_end(e: Base.Env, pos: Int, description: String, form: String) -> Result[Int]
@@ -348,9 +344,7 @@ def expect_statement_end(e: Base.Env, pos: Int, description: String) -> Result[I
   return Base.expect(e, pos, "NL", description, false)
 end
 
-def unless_at?(e: Base.Env, pos: Int) -> Bool
-  return e.tokens[pos].kind == "name" and e.tokens[pos].lexeme == "unless"
-end
+def unless_at?(e: Base.Env, pos: Int) -> Bool = e.tokens[pos].kind == "name" and e.tokens[pos].lexeme == "unless"
 
 # PARSE-UNEXPECTED-TOKEN at an `unless` after a statement; `help` shows a guard after return, break and next.
 def unless_help(e: Base.Env, pos: Int, help: String) -> String
@@ -1429,9 +1423,7 @@ def parse_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   )
 end
 
-def adjacent?(first: Tokens.Token, second: Tokens.Token) -> Bool
-  return first.span.stop.offset == second.span.start.offset
-end
+def adjacent?(first: Tokens.Token, second: Tokens.Token) -> Bool = first.span.stop.offset == second.span.start.offset
 
 # Whether a / on this line, at or before pos, reads like the start of a regex after a name: `puts /x/`, a space before
 # the / and none after it. The lexer made it division, so the closing / of the pattern found no operand.
@@ -2212,9 +2204,7 @@ def out_start?(e: Base.Env, at: Int) -> Bool
   return e.tokens[at].kind == "name" and e.tokens[at].lexeme == "out" and Base.kind_at(e, at + 1) == "name"
 end
 
-def decl_at(node: Ast.Decl, pos: Int, ids: Int) -> Result[DeclAt]
-  return ok(DeclAt(node: node, pos: pos, ids: ids + 1))
-end
+def decl_at(node: Ast.Decl, pos: Int, ids: Int) -> Result[DeclAt] = ok(DeclAt(node: node, pos: pos, ids: ids + 1))
 
 def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> Result[DeclAt]
   after_name = try Base.expect(e, pos + 1, "name", "a function name", true)
@@ -4405,6 +4395,4 @@ def one_line_def?(decl: Ast.Decl) -> Bool
   end
 end
 
-def module_doc_absent?(doc: Optional[String]) -> Bool
-  return doc.none?
-end
+def module_doc_absent?(doc: Optional[String]) -> Bool = doc.none?

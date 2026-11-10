@@ -145,9 +145,7 @@ export def find(manifest: Manifest, name: String) -> Result[Dependency]
 end
 
 ## The local names of the dependencies, in the order of the file.
-export def names(manifest: Manifest) -> List[String]
-  return manifest.dependencies.map do |dependency| dependency.name end
-end
+export def names(manifest: Manifest) -> List[String] = manifest.dependencies.map do |dependency| dependency.name end
 
 ## Whether the manifest declares a downloaded native artifact on any system: a `[native]` row with
 ## `url`+`sha256`+`member`. Such a project needs a lock even with no dependencies.

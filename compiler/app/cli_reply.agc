@@ -18,11 +18,7 @@ export enum Answer
 end
 
 ## Success, with `text` on stdout.
-export def printed(text: String) -> Reply
-  return Reply(code: 0, out: text, err: "")
-end
+export def printed(text: String) -> Reply = Reply(code: 0, out: text, err: "")
 
 ## A failure with `code`, and `text` on stderr.
-export def failed(code: Int, text: String) -> Reply
-  return Reply(code: code, out: "", err: text)
-end
+export def failed(code: Int, text: String) -> Reply = Reply(code: code, out: "", err: text)

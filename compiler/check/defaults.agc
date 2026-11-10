@@ -50,9 +50,7 @@ export def shape(params: List[Ast.Param]) -> Shape
 end
 
 ## True when the function has a parameter with a default.
-export def has_defaults?(shape: Shape) -> Bool
-  return shape.required < shape.total
-end
+export def has_defaults?(shape: Shape) -> Bool = shape.required < shape.total
 
 ## The parameter that argument index fills in a call with count arguments.
 export def param_of(shape: Shape, count: Int, index: Int) -> Int
@@ -77,10 +75,6 @@ export def argument_for(shape: Shape, count: Int, param: Int) -> Int
 end
 
 ## True when a struct field has a default value.
-export def field_default?(field: Ast.FieldDecl) -> Bool
-  return field.default.some?
-end
+export def field_default?(field: Ast.FieldDecl) -> Bool = field.default.some?
 
-def default?(param: Ast.Param) -> Bool
-  return param.default.some?
-end
+def default?(param: Ast.Param) -> Bool = param.default.some?

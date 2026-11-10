@@ -114,13 +114,9 @@ def port(plan: Plan) -> Workspace.CheckCache
   )
 end
 
-def as_reader(f: Fn[String, Result[String]]) -> Fn[String, Result[String]]
-  return f
-end
+def as_reader(f: Fn[String, Result[String]]) -> Fn[String, Result[String]] = f
 
-def as_writer(f: Fn[String, String, Bool]) -> Fn[String, String, Bool]
-  return f
-end
+def as_writer(f: Fn[String, String, Bool]) -> Fn[String, String, Bool] = f
 
 # The path of the entry for the file `key`. The name holds the project inputs too, so two projects that share a build
 # folder (AGENTICA_BUILD_DIR) do not replace each other's entries for a file they both import.

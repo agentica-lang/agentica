@@ -21,14 +21,10 @@ export enum Entry
 end
 
 ## The usage line of `agentica check`.
-export def usage() -> String
-  return USAGE
-end
+export def usage() -> String = USAGE
 
 ## The number of files that did not pass.
-export def failures(entries: List[Entry]) -> Int
-  return entries.select do |entry: Entry| !passed?(entry) end.size
-end
+export def failures(entries: List[Entry]) -> Int = entries.select do |entry: Entry| !passed?(entry) end.size
 
 ## The exit status of a run: 2 when a file could not be read (a QUERY- problem), else 1 when a file failed, else 0.
 export def status(entries: List[Entry]) -> Int
@@ -50,14 +46,10 @@ export def headed(file: String, text: String) -> String
 end
 
 ## The line of a run in which every file passed.
-export def ok_text(total: Int) -> String
-  return "check ok: #{files_text(total)}\n"
-end
+export def ok_text(total: Int) -> String = "check ok: #{files_text(total)}\n"
 
 ## The last line of a run in which some file did not pass.
-export def failed_text(failed: Int, total: Int) -> String
-  return "check failed: #{failed} of #{files_text(total)}\n"
-end
+export def failed_text(failed: Int, total: Int) -> String = "check failed: #{failed} of #{files_text(total)}\n"
 
 ## `1 file` or `3 files`.
 export def files_text(count: Int) -> String

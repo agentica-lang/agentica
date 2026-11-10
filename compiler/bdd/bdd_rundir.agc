@@ -133,9 +133,7 @@ export def sweep(temporary: String, own: Run) -> Void
 end
 
 # Whether the run is on Windows, where the temporary folder, the random names and the ownership checks differ.
-def windows?() -> Bool
-  return System.os() == "windows"
-end
+def windows?() -> Bool = System.os() == "windows"
 
 # Removes the run folder and releases its lock. Elsewhere the lock is held until the folder is gone, so no other sweep
 # takes the same folder; Windows cannot remove a folder with an open file in it, so the lock is closed first there.

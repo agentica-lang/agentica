@@ -30,9 +30,7 @@ export enum Verdict
 end
 
 ## The usage line of `agentica fmt`.
-export def usage() -> String
-  return USAGE
-end
+export def usage() -> String = USAGE
 
 ## What formatting `text` as `settings` ask gives. A text whose bytes differ from the output is changed, so a CRLF file
 ## is.
@@ -47,9 +45,7 @@ export def verdict(text: String, settings: Format.Settings) -> Verdict
 end
 
 ## The normal form of `text`, or the diagnostic of a text that does not parse.
-export def tree(text: String) -> Diag.Outcome[String]
-  return Format.tree_text(text)
-end
+export def tree(text: String) -> Diag.Outcome[String] = Format.tree_text(text)
 
 ## The folder of the agentica.toml whose `[style]` the file or folder `path` follows: the nearest one going up from
 ## its canonical path, "" when there is none. A file has no agentica.toml of its own, so starting at it is starting at

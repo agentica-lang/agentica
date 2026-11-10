@@ -179,9 +179,7 @@ export def inside_std(path: String, site: Failure.Site) -> Result[String]
 end
 
 ## The parts of a canonical path, with no empty part.
-export def path_parts(path: String) -> List[String]
-  return path.split("/").filter do |part| part != "" end
-end
+export def path_parts(path: String) -> List[String] = path.split("/").filter do |part| part != "" end
 
 ## The parts of a path, with the "." and ".." parts folded in as text: a ".." removes the part before it, and one at
 ## the start is dropped. Joined with "/" they only serve to compare with inside?.

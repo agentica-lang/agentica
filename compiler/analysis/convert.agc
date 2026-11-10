@@ -165,9 +165,7 @@ end
 
 ## The text of an optional one. The docs and defaults of an item have been through `DocModel.cleaned`, which turns a
 ## blank one into `none`, and an alias is never empty, so absent and "" mean the same.
-export def text(value: Optional[String]) -> String
-  return value.unwrap_or("")
-end
+export def text(value: Optional[String]) -> String = value.unwrap_or("")
 
 def skipped_of(left: SymbolLink.Skipped) -> Model.Skipped
   return Model.Skipped(file: left.file, diagnostic: DiagnosticModel.of_problem(left.problem))

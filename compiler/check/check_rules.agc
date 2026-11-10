@@ -444,9 +444,7 @@ def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName, refusal: String)
 end
 
 # True for a List or Map JSON target, which only JSON.decode takes.
-def container?(type: T.Type) -> Bool
-  return T.is?(type, "List") or T.is?(type, "Map")
-end
+def container?(type: T.Type) -> Bool = T.is?(type, "List") or T.is?(type, "Map")
 
 # The help of a JSON builtin that refuses a type with a JsonField of an Optional or a Bytes inside, or "": JSON has no
 # byte type, so the bytes are written as Base64 text and read back from it.

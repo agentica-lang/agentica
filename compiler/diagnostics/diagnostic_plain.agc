@@ -101,9 +101,7 @@ def mark(span: Source.Span, character: String, note: String, noted: Bool, lines:
   return Mark(line: line, column: column, width: wanted, character: character, note: note, noted: noted)
 end
 
-def spaces(count: Int) -> String
-  return List.repeat(" ", count).join("")
-end
+def spaces(count: Int) -> String = List.repeat(" ", count).join("")
 
 # `count` characters of white space under the start of `text`: a tab stays a tab, so marks line up with the source.
 def padding(text: String, count: Int) -> String

@@ -43,9 +43,7 @@ export def innermost(module: Linker.LinkedModule, types: List[T.Type], offset: I
 end
 
 ## Whether the span, which ends before its last character, holds the character at `offset`.
-export def holds?(span: Source.Span, offset: Int) -> Bool
-  return span.start.offset <= offset and offset < span.stop.offset
-end
+export def holds?(span: Source.Span, offset: Int) -> Bool = span.start.offset <= offset and offset < span.stop.offset
 
 # The bodies and defaults of the functions that hold the position, and the values of the constants that do.
 def roots(module: Linker.LinkedModule, offset: Int) -> List[Walk.Node]

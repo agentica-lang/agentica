@@ -42,6 +42,4 @@ def relative(from: List[String], to: List[String]) -> String
   return names.join("/")
 end
 
-def parts(path: String) -> List[String]
-  return path.split("/").filter do |part: String| part != "" end
-end
+def parts(path: String) -> List[String] = path.split("/").filter do |part: String| part != "" end

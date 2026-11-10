@@ -197,13 +197,9 @@ def advance(ask: Query, step: Step, scope: Map[String, Local]) -> Move
   end
 end
 
-def go(step: Step, scope: Map[String, Local]) -> Move
-  return Move(step: some(step), scope: scope, found: none)
-end
+def go(step: Step, scope: Map[String, Local]) -> Move = Move(step: some(step), scope: scope, found: none)
 
-def stop(scope: Map[String, Local]) -> Move
-  return Move(step: none, scope: scope, found: none)
-end
+def stop(scope: Map[String, Local]) -> Move = Move(step: none, scope: scope, found: none)
 
 def hit(scope: Map[String, Local], local: Local, site: Source.Span) -> Move
   return Move(step: none, scope: scope, found: some(Found(local: local, site: site)))
@@ -480,13 +476,9 @@ def visit_statement(ask: Query, target: Local, stmt: Ast.Stmt, scope: Map[String
   end
 end
 
-def below(next: List[Pending]) -> Visit
-  return Visit(hits: [], next: next)
-end
+def below(next: List[Pending]) -> Visit = Visit(hits: [], next: next)
 
-def pending_expr(expr: Ast.Expr, scope: Map[String, Local]) -> Pending
-  return Pending(step: Step.Expr(expr), scope: scope)
-end
+def pending_expr(expr: Ast.Expr, scope: Map[String, Local]) -> Pending = Pending(step: Step.Expr(expr), scope: scope)
 
 def optional_expr(value: Optional[Ast.Expr], scope: Map[String, Local]) -> List[Pending]
   case value
@@ -544,9 +536,7 @@ def child_step(child: Walk.Node, scope: Map[String, Local]) -> Pending
 end
 
 # Whether `local` is the binding of `target`: a name is bound once, so the place of the name tells.
-def stands_for?(local: Local, target: Local) -> Bool
-  return local.name_span.start.offset == target.name_span.start.offset
-end
+def stands_for?(local: Local, target: Local) -> Bool = local.name_span.start.offset == target.name_span.start.offset
 
 # A name is a use of a local when it is in scope; the parts of any other expression are searched for the one that
 # holds the position.

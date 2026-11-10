@@ -77,9 +77,7 @@ end
 
 ## The definition of the top-level declaration with the linked name `name` (a function, struct, enum, alias or
 ## constant), or `none` for a builtin, which no file declares.
-export def of_name(modules: List[Linker.LinkedModule], name: String) -> Optional[Definition]
-  return top_level(modules, name)
-end
+export def of_name(modules: List[Linker.LinkedModule], name: String) -> Optional[Definition] = top_level(modules, name)
 
 ## The definition of the field `name` of the struct with the linked name `owner`, or `none`.
 export def of_field(modules: List[Linker.LinkedModule], owner: String, name: String) -> Optional[Definition]
@@ -235,9 +233,7 @@ def top(
   return made(kind, linked, module, span, name_span, of_item(module, linked))
 end
 
-def nothing_said() -> Described
-  return Described(doc: none, signature: "", exported: false)
-end
+def nothing_said() -> Described = Described(doc: none, signature: "", exported: false)
 
 # The doc and signature of the top-level declaration with the linked name `linked`, from the parsed file.
 def of_item(module: Linker.LinkedModule, linked: String) -> Described

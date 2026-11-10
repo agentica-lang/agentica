@@ -25,9 +25,7 @@ export enum Entry
 end
 
 ## The usage line of `agentica lint`.
-export def usage() -> String
-  return USAGE
-end
+export def usage() -> String = USAGE
 
 ## The entry of the file `file` whose text is `text`.
 export def entry(file: String, text: String) -> Entry
@@ -167,9 +165,7 @@ def suggestions(entries: List[Entry]) -> Int
   return total
 end
 
-def suggestions_count(total: Int) -> String
-  return "#{total} #{plural(total, "suggestion")}"
-end
+def suggestions_count(total: Int) -> String = "#{total} #{plural(total, "suggestion")}"
 
 # What went wrong with the files that failed: they did not parse, could not be read, or both.
 def failure(unparsed: Int, unreadable: Int) -> String

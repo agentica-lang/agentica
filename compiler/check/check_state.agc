@@ -213,9 +213,7 @@ export struct Out
 end
 
 ## The deepest nesting of expressions and statements the checker accepts (CHECK-TOO-DEEP beyond it).
-export def nesting_limit() -> Int
-  return 1000
-end
+export def nesting_limit() -> Int = 1000
 
 ## A list of `count` slots with no type, built from repeats of at most MAX_REPEAT, so no runtime error escapes for a
 ## huge program.
@@ -266,9 +264,7 @@ export def fresh() -> St
 end
 
 ## The state with one more JsonUse of the body.
-export def use_json(st: St, use: JsonUse) -> St
-  return st.with(json_uses: st.json_uses.push(use))
-end
+export def use_json(st: St, use: JsonUse) -> St = st.with(json_uses: st.json_uses.push(use))
 
 ## The failure of a diagnostic with a help text.
 export def fail_help(cx: Cx, st: St, code: String, message: String, span: Source.Span, help: String) -> String
@@ -332,18 +328,14 @@ export def expr_completion_if(cx: Cx, st: St, node: Ast.Expr, expected: Types.Ty
 end
 
 ## The state with the type of a node recorded.
-export def record_type(st: St, id: Int, type: Types.Type) -> St
-  return st.with(types: st.types.set(id, type))
-end
+export def record_type(st: St, id: Int, type: Types.Type) -> St = st.with(types: st.types.set(id, type))
 
 ## The state with the types that a node introduced as names recorded: one for a parameter, a block parameter, a binding
 ## or a `for` statement (the type of its variable), and one for each payload position of a variant pattern (the type of
 ## the name there, if the slot has one). The result annotation of a function has its result type, for
 ## Analysis.bodies. They are kept apart from `types`, which holds expressions only, so a type that
 ## only a binding names does not reach the lowering.
-export def record_bound(st: St, id: Int, types: List[Types.Type]) -> St
-  return st.with(bound: st.bound.put(id, types))
-end
+export def record_bound(st: St, id: Int, types: List[Types.Type]) -> St = st.with(bound: st.bound.put(id, types))
 
 ## The state with the resolution of a node recorded.
 export def record_resolved(st: St, id: Int, resolved: Resolved) -> St
@@ -362,19 +354,13 @@ export def field_call?(resolved: Map[Int, Resolved], id: Int) -> Bool
 end
 
 ## The binding of a name, or none when the name is not in scope.
-export def lookup(st: St, name: String) -> Optional[Binding]
-  return st.vars.get(name)
-end
+export def lookup(st: St, name: String) -> Optional[Binding] = st.vars.get(name)
 
 ## Opens a scope: the state to give back to leave when it is closed.
-export def enter(st: St) -> St
-  return st.with(depth: st.depth + 1)
-end
+export def enter(st: St) -> St = st.with(depth: st.depth + 1)
 
 ## Closes the scope opened from before: the names, the depth and nothing else go back; types and resolutions stay.
-export def leave(st: St, before: St) -> St
-  return st.with(vars: before.vars, depth: before.depth)
-end
+export def leave(st: St, before: St) -> St = st.with(vars: before.vars, depth: before.depth)
 
 ## Whether `try` is allowed in the function or block being checked: it returns a Result (a block with an inferred
 ## result qualifies only when it must give a Result), or it is the block of a Lazy method, where a failed `try` ends

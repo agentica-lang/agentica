@@ -82,9 +82,7 @@ def resolution(st: State.St, value: Ast.Expr) -> Optional[State.Resolved]
   end
 end
 
-def found_resolution(st: State.St, id: Int) -> Optional[State.Resolved]
-  return st.resolved.get(id)
-end
+def found_resolution(st: State.St, id: Int) -> Optional[State.Resolved] = st.resolved.get(id)
 
 # The builtin a dropped value calls: the one a method resolved to, or a call written by name. "" for anything else.
 def call_name(value: Ast.Expr, resolved: Optional[State.Resolved]) -> String

@@ -36,9 +36,7 @@ export struct Settings
 end
 
 ## The settings of a file with no `[style]`: the width WIDTH and no empty line added after `end`.
-export def default_settings() -> Settings
-  return Settings(width: WIDTH, blank_line_after_end: false)
-end
+export def default_settings() -> Settings = Settings(width: WIDTH, blank_line_after_end: false)
 
 ## The text of `text` formatted as `settings` ask, or the diagnostic of a text that does not lex or parse, or
 ## FMT-INTERNAL when the output would not keep the tree and the comments. CRLF line ends become LF.
@@ -200,9 +198,7 @@ def without_marks(line: String) -> String
   return line
 end
 
-def digit?(char: String) -> Bool
-  return char.length == 1 and "0123456789".contains?(char)
-end
+def digit?(char: String) -> Bool = char.length == 1 and "0123456789".contains?(char)
 
 def word_char?(char: String) -> Bool
   return char.length == 1 and "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_".contains?(char)

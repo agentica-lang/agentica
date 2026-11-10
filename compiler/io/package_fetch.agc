@@ -402,9 +402,7 @@ def move_into_place(
 end
 
 # The arguments of a git command that works on the temporary repository.
-def inside(scratch: Scratch, arguments: List[String]) -> List[String]
-  return ["--git-dir=#{scratch.repo}"].concat(arguments)
-end
+def inside(scratch: Scratch, arguments: List[String]) -> List[String] = ["--git-dir=#{scratch.repo}"].concat(arguments)
 
 # Runs git in the temporary folder; a git that does not start, one whose output cannot be read and a non-zero status
 # are PKG-FETCH at the git key, the last with the start of git's errors.

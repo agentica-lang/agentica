@@ -8,6 +8,4 @@ export PRELUDE_PREFIX = "<prelude>/"
 
 ## The name, in the lowered program, of the prelude function with this key: "list::find" is the function find of
 ## stdlib/prelude/list.agc. The prefix cannot start the name of a function of a program.
-export def prelude_name(key: String) -> String
-  return "@prelude::" + key
-end
+export def prelude_name(key: String) -> String = "@prelude::" + key

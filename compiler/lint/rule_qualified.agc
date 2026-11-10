@@ -66,9 +66,7 @@ def alias_names(imports: List[Ast.ImportDecl]) -> Set[String]
   return names
 end
 
-def message(name: String, count: Int) -> String
-  return "#{name} is built or matched #{count} times in this file"
-end
+def message(name: String, count: Int) -> String = "#{name} is built or matched #{count} times in this file"
 
 # `import {Value} from "db"` for `Db.Value`, with the path of the import that binds `Db`; when the file already imports
 # the name from that path, the help says to write it as it is bound.

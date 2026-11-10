@@ -24,9 +24,7 @@ export def text(found: Model.Refs) -> String
 end
 
 ## One line for each file left out, each with a line feed at the end; empty when none was.
-export def skipped_text(found: Model.Refs) -> String
-  return SymbolText.skipped_lines(found.skipped)
-end
+export def skipped_text(found: Model.Refs) -> String = SymbolText.skipped_lines(found.skipped)
 
 def inside(function: String) -> String
   return "" if function == ""

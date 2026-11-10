@@ -33,9 +33,7 @@ export struct Attached
 end
 
 ## The type variables the signatures of the prelude functions may use: the letters of the catalog rows.
-export def variables() -> List[String]
-  return ["A", "B", "K", "V"]
-end
+export def variables() -> List[String] = ["A", "B", "K", "V"]
 
 ## Reads, checks and returns the prelude functions that st.bodies names. base is the context of the program before its
 ## declarations were registered, and the node ids of the prelude files start at the end of the ids of the program.

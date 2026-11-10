@@ -199,15 +199,11 @@ export def test_without_binary_text() -> String
 end
 
 ## The usage lines, each ending with a line feed.
-export def usage_text() -> String
-  return "#{USAGE.join("\n")}\n"
-end
+export def usage_text() -> String = "#{USAGE.join("\n")}\n"
 
 ## The summary of the commands and the core rules: the lines of `agentica help` before the namespaces, each ending with
 ## a line feed.
-export def summary_text() -> String
-  return "#{SUMMARY.join("\n")}\n"
-end
+export def summary_text() -> String = "#{SUMMARY.join("\n")}\n"
 
 ## The help of `-h` and `--help`.
 export def help_text() -> String

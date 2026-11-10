@@ -108,15 +108,11 @@ end
 
 ## The hex SHA-256 of the canonical member UTF-8 bytes: the key of its cache object. The hex of the pathname would
 ## leak the member spelling into folder names and vary in length; the digest is fixed width and opaque.
-export def member_digest_hex(canonical: String) -> String
-  return OpenSSL.Digest.sha256_hexdigest(canonical.bytes)
-end
+export def member_digest_hex(canonical: String) -> String = OpenSSL.Digest.sha256_hexdigest(canonical.bytes)
 
 ## The folder that holds the native artifacts: `<root>/native`, beside the package folders, never inside one, so the
 ## package hash never sees them.
-export def native_base(cache_root: String) -> String
-  return Paths.join(cache_root, "native")
-end
+export def native_base(cache_root: String) -> String = Paths.join(cache_root, "native")
 
 ## Where the archive with this SHA-256 lives: `<root>/native/<sha>/archive`.
 export def archive_path(cache_root: String, sha: String) -> String
@@ -219,9 +215,7 @@ export def resolve_location(current: String, location: String) -> Result[String]
 end
 
 # A scheme-relative target (`//host/path`) with the scheme of the current URL, for the normal URL policy to judge.
-def scheme_relative_url(scheme: String, bare: String) -> String
-  return "#{scheme}:#{bare}"
-end
+def scheme_relative_url(scheme: String, bare: String) -> String = "#{scheme}:#{bare}"
 
 # Whether the text starts with a scheme (`name://` of letters, digits, "+" "-" and ".").
 def has_scheme?(text: String) -> Bool
@@ -272,13 +266,9 @@ def normalize_path(path: String) -> Result[String]
   return ok("/" + kept.join("/"))
 end
 
-def canonical_url(parts: Parts) -> String
-  return "#{parts.scheme}://#{parts.authority}#{parts.target}"
-end
+def canonical_url(parts: Parts) -> String = "#{parts.scheme}://#{parts.authority}#{parts.target}"
 
-def first_index(text: String, part: String) -> Int
-  return text.index_of(part).unwrap_or(text.length)
-end
+def first_index(text: String, part: String) -> Int = text.index_of(part).unwrap_or(text.length)
 
 def parse_url(url: String) -> Result[Parts]
   for b in url.bytes

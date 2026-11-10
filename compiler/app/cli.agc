@@ -895,9 +895,7 @@ def test(session: Session, words: List[String]) -> Int
   end
 end
 
-def finish(ending: Report.Ending) -> Int
-  return emit(Reply.Reply(code: ending.code, out: ending.text, err: ""))
-end
+def finish(ending: Report.Ending) -> Int = emit(Reply.Reply(code: ending.code, out: ending.text, err: ""))
 
 # Writes the answer to the standard streams and gives its status. stderr text ends with a line feed that IO.warn adds.
 def emit(reply: Reply.Reply) -> Int

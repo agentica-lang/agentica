@@ -398,9 +398,7 @@ def struct_names_in(type: Types.Type) -> List[String]
 end
 
 # True for a JsonField field type.
-def json_field?(type: Types.Type) -> Bool
-  return Types.is?(type, "Enum") and Types.name(type) == "JsonField"
-end
+def json_field?(type: Types.Type) -> Bool = Types.is?(type, "Enum") and Types.name(type) == "JsonField"
 
 # True when an Optional sits in a field type, under any List, Map or JsonField around it.
 def optional_in?(type: Types.Type) -> Bool

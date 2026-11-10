@@ -53,9 +53,7 @@ export def from_stage(file: String, problem: Diag.Diagnostic) -> String
 end
 
 ## A help text.
-export def hint(text: String) -> Diag.Help
-  return Diag.Help.Hint(text)
-end
+export def hint(text: String) -> Diag.Help = Diag.Help.Hint(text)
 
 ## The packed failure `text` with `more` added to its help (after the help it has, if any), for a caller that knows
 ## what the user should do next.
@@ -86,6 +84,4 @@ def take_field(text: String, at: Int) -> Field
   return Field(value: text.slice(newline + 1, size), next: newline + 1 + size)
 end
 
-def in_file(file: String, packed: String) -> String
-  return "#{file.length}\n#{file}0\n#{packed}"
-end
+def in_file(file: String, packed: String) -> String = "#{file.length}\n#{file}0\n#{packed}"

@@ -80,9 +80,7 @@ export def display(settings: Env.Settings, file: String, buffered: Bool) -> Stri
   return real.unwrap!
 end
 
-def embedded?(file: String, buffered: Bool) -> Bool
-  return !buffered and file.starts_with?("std/")
-end
+def embedded?(file: String, buffered: Bool) -> Bool = !buffered and file.starts_with?("std/")
 
 # The key of a module in the provider: the name with its extension.
 def std_key(file: String) -> String

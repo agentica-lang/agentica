@@ -256,6 +256,4 @@ def block_of(found: Found, library: String) -> Model.NativeBlock
   )
 end
 
-def doc_text(doc: Optional[String]) -> String
-  return DocModel.cleaned(doc).unwrap_or("")
-end
+def doc_text(doc: Optional[String]) -> String = DocModel.cleaned(doc).unwrap_or("")

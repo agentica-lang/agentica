@@ -397,6 +397,4 @@ def taking(linked: Linker.Linked, reusing: Optional[Reusing]) -> Reuse.Taken
 end
 
 # The number of node ids of the program, with the room the linker took for the receivers of constants (Linked.ids).
-def ids_of(linked: Linker.Linked) -> Int
-  return linked.ids
-end
+def ids_of(linked: Linker.Linked) -> Int = linked.ids

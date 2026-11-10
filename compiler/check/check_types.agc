@@ -92,9 +92,7 @@ export def key_here?(cx: State.Cx, type: ResolvedType) -> Bool
 end
 
 ## True for Int and Float.
-export def numeric?(type: ResolvedType) -> Bool
-  return Types.is?(type, "Int") or Types.is?(type, "Float")
-end
+export def numeric?(type: ResolvedType) -> Bool = Types.is?(type, "Int") or Types.is?(type, "Float")
 
 ## True for Int, Float, Bool, String and Nil, the types that == compares.
 export def primitive?(type: ResolvedType) -> Bool
@@ -133,9 +131,7 @@ end
 ## True when JSON.encode can write a value of the type: primitives, Json, lists, maps with String keys, structs of
 ## those (a generic struct by its fields with the type arguments put in), and JsonField and Optional of an encodable
 ## type other than Nil (and other than an Optional, for a JsonField).
-export def encodable?(cx: State.Cx, type: ResolvedType) -> Bool
-  return encode_walk(cx, type, {}).passes
-end
+export def encodable?(cx: State.Cx, type: ResolvedType) -> Bool = encode_walk(cx, type, {}).passes
 
 ## What a type with type variables needs to be encodable once they are bound, or none when no binding makes it
 ## encodable (an Fn, a Bytes, a Map with an Int key ...). Each need is a variable, an Optional or JsonField of one (its
@@ -204,9 +200,7 @@ end
 ## structs of those, and JsonField and Optional of a decodable type (Nil is not one; nor is an Optional, for a
 ## JsonField). A generic struct is not decodable: the schema of the structs is keyed by their bare names, which
 ## Box[Int] and Box[String] would share.
-export def decodable?(cx: State.Cx, type: ResolvedType) -> Bool
-  return decode_walk(cx, type, {}).passes
-end
+export def decodable?(cx: State.Cx, type: ResolvedType) -> Bool = decode_walk(cx, type, {}).passes
 
 ## True when the type may be the value of an ATS: a data type (data?, a deep walk that rejects Fn, Task, Channel, every
 ## handle and ATS itself, so no table holds a table) that is not Nil and has no type variable. A variable is allowed
@@ -233,18 +227,14 @@ end
 ## True for a type that has to_s: the data types. Numbers, Bool, String, nil, Json, ranges, and lists, maps, sets,
 ## Results, structs and enums of those. A type variable is one only in the files of the prelude: in the body of a
 ## generic function it stands for any type, which could be an Fn.
-export def data?(cx: State.Cx, type: ResolvedType) -> Bool
-  return data_walk(cx, type, {}, false).passes
-end
+export def data?(cx: State.Cx, type: ResolvedType) -> Bool = data_walk(cx, type, {}, false).passes
 
 ## True for a type that == and != compare: a data type (data?) with no Json inside. Numbers, Bool, String, nil,
 ## ranges, Bytes, and lists, maps, sets, Optionals, Results, structs and enums of those. A group of structs and enums
 ## that hold one another is judged as a whole, so the answer does not depend on where the walk starts. As in data?, a
 ## type variable passes only in the files of the prelude, where == on it lowers to Value.equal. List#include? needs it
 ## (include in stdlib/prelude/list.agc); its equality limit checks the item type at the call site (check_prelude.agc).
-export def equality?(cx: State.Cx, type: ResolvedType) -> Bool
-  return data_walk(cx, type, {}, true).passes
-end
+export def equality?(cx: State.Cx, type: ResolvedType) -> Bool = data_walk(cx, type, {}, true).passes
 
 ## Why a type that equality? refuses has no equality: a type variable of a generic function, else the innermost
 ## struct field or enum variant on the way ("field User.on_save is Fn[User, Void]"), or "" when neither is on the way
@@ -549,9 +539,7 @@ def alias_arity_text(name: String, decl: Ast.TypeAliasDecl, ref: TypeRef) -> Str
 end
 
 # The tail of the arity message of a generic alias or enum.
-def expects_text(expected: Int, found: Int) -> String
-  return "expects #{expected} type argument(s), found #{found}"
-end
+def expects_text(expected: Int, found: Int) -> String = "expects #{expected} type argument(s), found #{found}"
 
 # The target of a generic alias with each parameter replaced by its argument. One pass: an argument is not searched
 # again, so a parameter name inside an argument (the T of the use) stays.
@@ -1045,13 +1033,9 @@ def place_fields(cx: State.Cx, type: ResolvedType) -> List[Model.Named]
   return cx.structs[name].map do |field: Model.Named| field.with(type: substitute(field.type, stand)) end
 end
 
-def passed(seen: Map[String, Bool]) -> Walk
-  return Walk(passes: true, seen: seen, why: "", file: "", field: none)
-end
+def passed(seen: Map[String, Bool]) -> Walk = Walk(passes: true, seen: seen, why: "", file: "", field: none)
 
-def refused(seen: Map[String, Bool]) -> Walk
-  return Walk(passes: false, seen: seen, why: "", file: "", field: none)
-end
+def refused(seen: Map[String, Bool]) -> Walk = Walk(passes: false, seen: seen, why: "", file: "", field: none)
 
 # The refused walk found, with why as its reason when no part deeper in it gave one.
 def refused_at(found: Walk, why: String) -> Walk
@@ -1357,9 +1341,7 @@ def has_unknown?(type: ResolvedType) -> Bool
 end
 
 # True for a type with other types inside: the ones unify matches part by part.
-def composite?(type: ResolvedType) -> Bool
-  return parts(type).size > 0
-end
+def composite?(type: ResolvedType) -> Bool = parts(type).size > 0
 
 # unify for two types with the same head: the arguments pair by pair. A struct or an enum must have the same name.
 def unify_inside(

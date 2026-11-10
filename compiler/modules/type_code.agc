@@ -52,9 +52,7 @@ end
 
 ## The text of `type`. `keys` maps the prefix of each module of the walk ("@3::") to the key of its file. A name with a
 ## prefix that `keys` lacks is an error.
-export def encode(type: T.Type, keys: Map[String, String]) -> Result[String]
-  return written(type, keys, 0)
-end
+export def encode(type: T.Type, keys: Map[String, String]) -> Result[String] = written(type, keys, 0)
 
 ## The type that `text` holds. `prefixes` maps the key of each file of the walk to its prefix. A text that is not one
 ## whole type, or that names a file the walk lacks, is an error.
@@ -130,9 +128,7 @@ def name_text(name: String, keys: Map[String, String]) -> Result[String]
   return ok("@" + name_plain(keys[prefix]) + name_plain(local))
 end
 
-def name_plain(name: String) -> String
-  return "#{name.length}:#{name}"
-end
+def name_plain(name: String) -> String = "#{name.length}:#{name}"
 
 def read_type(text: String, at: Int, depth: Int, prefixes: Map[String, String]) -> Result[Read]
   return error("the type ends too soon or is too deep") if depth > MAX_DEPTH or at >= text.length
