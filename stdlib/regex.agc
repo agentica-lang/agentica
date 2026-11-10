@@ -171,19 +171,13 @@ end
 ## levels deep and 256 groups.
 export def compile(pattern: String) -> Result[Regex]
   chars = pattern.split("")
-  if chars.size > MAX_PATTERN
-    return error(place(MAX_PATTERN, "the pattern is longer than #{MAX_PATTERN} characters"))
-  end
+  return error(place(MAX_PATTERN, "the pattern is longer than #{MAX_PATTERN} characters")) if chars.size > MAX_PATTERN
   pat = Pat(chars: chars, codes: chars.map do |c| c.code end, n: chars.size)
   start = St(pos: 0, flags: Flags(fold: false, multi: false, dotall: false), groups: 0, names: {})
   out = try parse_alt(pat, start, 0)
   # parse_alt stops only at the end or at a `)` that closes no group.
-  if out.st.pos < pat.n
-    return error(place(out.st.pos, "unexpected ')'"))
-  end
-  if size_of(out.node) > MAX_INSTS
-    return error(place(0, "the pattern needs more than #{MAX_INSTS} instructions"))
-  end
+  return error(place(out.st.pos, "unexpected ')'")) if out.st.pos < pat.n
+  return error(place(0, "the pattern needs more than #{MAX_INSTS} instructions")) if size_of(out.node) > MAX_INSTS
   return ok(Regex(source: pattern, program: build(out.node, out.st.groups, out.st.names)))
 end
 
@@ -195,9 +189,7 @@ end
 ## The leftmost-first match in `text`, or `error("no match")`.
 export def match(text: String, re: Regex) -> Result[Match]
   caps = run(text, re.program, MODE_FIRST)
-  if caps.size == 0
-    return error("no match")
-  end
+  return error("no match") if caps.size == 0
   return ok(make_match(text, caps, 0, re.program))
 end
 
@@ -281,9 +273,7 @@ def place(pos: Int, message: String) -> String
 end
 
 def ch(pat: Pat, pos: Int) -> String
-  if pos < pat.n
-    return pat.chars[pos]
-  end
+  return pat.chars[pos] if pos < pat.n
   return ""
 end
 
@@ -298,14 +288,10 @@ def parse_alt(pat: Pat, st: St, depth: Int) -> Result[Out]
     out = try parse_cat(pat, cur, depth)
     branches = branches.push(out.node)
     cur = out.st
-    if ch(pat, cur.pos) != "|"
-      break
-    end
+    break if ch(pat, cur.pos) != "|"
     cur = cur.with(pos: cur.pos + 1)
   end
-  if branches.size == 1
-    return ok(Out(node: branches[0], st: cur))
-  end
+  return ok(Out(node: branches[0], st: cur)) if branches.size == 1
   return ok(Out(node: Node.Alt(branches), st: cur))
 end
 
@@ -314,12 +300,8 @@ def parse_cat(pat: Pat, st: St, depth: Int) -> Result[Out]
   cur = st
   while true
     c = ch(pat, cur.pos)
-    if c == "" or c == "|" or c == ")"
-      break
-    end
-    if quantifier(pat, cur.pos).some?
-      return error(place(cur.pos, "nothing to repeat before '#{c}'"))
-    end
+    break if c == "" or c == "|" or c == ")"
+    return error(place(cur.pos, "nothing to repeat before '#{c}'")) if quantifier(pat, cur.pos).some?
     atom = try parse_atom(pat, cur, depth)
     cur = atom.st
     if !atom.bare
@@ -351,9 +333,7 @@ def parse_repeat(pat: Pat, atom: Out) -> Result[Out]
       if !greedy
         stop += 1
       end
-      if quantifier(pat, stop).some?
-        return error(place(stop, "nested repetition '#{piece_of(pat, at, stop + 1)}'"))
-      end
+      return error(place(stop, "nested repetition '#{piece_of(pat, at, stop + 1)}'")) if quantifier(pat, stop).some?
       return ok(Out(node: Node.Rep(atom.node, q.min, q.max, greedy), st: atom.st.with(pos: stop)))
   end
 end
@@ -371,9 +351,7 @@ def quantifier(pat: Pat, pos: Int) -> Optional[Quant]
     return none
   end
   low = digits(pat, pos + 1)
-  if low.stop == pos + 1
-    return none
-  end
+  return none if low.stop == pos + 1
   high = low.value
   p = low.stop
   if ch(pat, p) == ","
@@ -384,9 +362,7 @@ def quantifier(pat: Pat, pos: Int) -> Optional[Quant]
     end
     p = more.stop
   end
-  if ch(pat, p) != "}"
-    return none
-  end
+  return none if ch(pat, p) != "}"
   return some(Quant(min: low.value, max: high, stop: p + 1))
 end
 
@@ -447,9 +423,7 @@ end
 
 def parse_group(pat: Pat, st: St, depth: Int) -> Result[Out]
   open = st.pos
-  if depth >= MAX_DEPTH
-    return error(place(open, "groups nest more than #{MAX_DEPTH} levels"))
-  end
+  return error(place(open, "groups nest more than #{MAX_DEPTH} levels")) if depth >= MAX_DEPTH
   p = open + 1
   capture = true
   name = ""
@@ -484,9 +458,7 @@ def parse_group(pat: Pat, st: St, depth: Int) -> Result[Out]
       p = close + 1
     else
       scan = try parse_flags(pat, p + 1, st.flags, open)
-      if !scan.scoped
-        return ok(Out(node: Node.Empty, st: st.with(pos: scan.stop, flags: scan.flags), bare: true))
-      end
+      return ok(Out(node: Node.Empty, st: st.with(pos: scan.stop, flags: scan.flags), bare: true)) if !scan.scoped
       capture = false
       inner = scan.flags
       p = scan.stop
@@ -496,18 +468,14 @@ def parse_group(pat: Pat, st: St, depth: Int) -> Result[Out]
   names = st.names
   if capture
     index += 1
-    if index > MAX_GROUPS
-      return error(place(open, "more than #{MAX_GROUPS} groups"))
-    end
+    return error(place(open, "more than #{MAX_GROUPS} groups")) if index > MAX_GROUPS
     if name != ""
       names = names.put(name, index)
     end
   end
   out = try parse_alt(pat, St(pos: p, flags: inner, groups: index, names: names), depth + 1)
   close_at = out.st.pos
-  if ch(pat, close_at) != ")"
-    return error(place(close_at, "missing ')' for the group at character #{open + 1}"))
-  end
+  return error(place(close_at, "missing ')' for the group at character #{open + 1}")) if ch(pat, close_at) != ")"
   node = out.node
   if capture
     node = Node.Group(out.node, index)
@@ -518,9 +486,7 @@ end
 
 def group_name?(name: String) -> Bool
   codes = name.split("").map do |c| c.code end
-  if codes.size == 0 or (codes[0] >= 48 and codes[0] <= 57)
-    return false
-  end
+  return false if codes.size == 0 or (codes[0] >= 48 and codes[0] <= 57)
   return codes.all? do |c| c < 128 and WORD_ASCII[c] end
 end
 
@@ -609,9 +575,7 @@ end
 def closes_posix?(pat: Pat, pos: Int) -> Bool
   p = pos
   while p + 1 < pat.n and pat.chars[p] != "]"
-    if pat.chars[p] == ":" and pat.chars[p + 1] == "]"
-      return true
-    end
+    return true if pat.chars[p] == ":" and pat.chars[p + 1] == "]"
     p += 1
   end
   return false
@@ -619,9 +583,7 @@ end
 
 # One item of a class: a code point, or a class escape such as `\d` (code -1).
 def class_item(pat: Pat, pos: Int) -> Result[Esc]
-  if ch(pat, pos) == "\\"
-    return escape_at(pat, pos, true)
-  end
+  return escape_at(pat, pos, true) if ch(pat, pos) == "\\"
   return ok(Esc(kind: -1, code: pat.codes[pos], ranges: [], stop: pos + 1))
 end
 
@@ -703,17 +665,13 @@ def hex_escape(pat: Pat, pos: Int) -> Result[Esc]
   end
   count = p - first
   if braced
-    if count == 0 or ch(pat, p) != "}"
-      return error(place(pos, "invalid escape \\x: write \\xHH or \\x{H...}"))
-    end
+    return error(place(pos, "invalid escape \\x: write \\xHH or \\x{H...}")) if count == 0 or ch(pat, p) != "}"
     if value > MAX_CODE or (value >= 0xD800 and value <= 0xDFFF)
       return error(place(pos, "#{piece_of(pat, pos, p + 1)} is not a Unicode scalar value"))
     end
     return ok(Esc(kind: -1, code: value, ranges: [], stop: p + 1))
   end
-  if count != 2
-    return error(place(pos, "invalid escape \\x: write \\xHH or \\x{H...}"))
-  end
+  return error(place(pos, "invalid escape \\x: write \\xHH or \\x{H...}")) if count != 2
   return ok(Esc(kind: -1, code: value, ranges: [], stop: p))
 end
 
@@ -770,16 +728,12 @@ def complement(ranges: List[Int]) -> List[Int]
 end
 
 def max_of(a: Int, b: Int) -> Int
-  if a > b
-    return a
-  end
+  return a if a > b
   return b
 end
 
 def min_of(a: Int, b: Int) -> Int
-  if a < b
-    return a
-  end
+  return a if a < b
   return b
 end
 
@@ -839,14 +793,10 @@ def emit_node(code: Code, node: Node) -> Code
     Node.Empty -> return code
     Node.Lit(c) -> return emit(code, OP_CHAR, c, 0)
     Node.Class(ranges) ->
-      if ranges.size == 2 and ranges[0] == ranges[1]
-        return emit(code, OP_CHAR, ranges[0], 0)
-      end
+      return emit(code, OP_CHAR, ranges[0], 0) if ranges.size == 2 and ranges[0] == ranges[1]
       return emit(code.with(classes: code.classes.push(ranges)), OP_CLASS, code.classes.size, 0)
     Node.Any(all) ->
-      if all
-        return emit(code, OP_ANY_NL, 0, 0)
-      end
+      return emit(code, OP_ANY_NL, 0, 0) if all
       return emit(code, OP_ANY, 0, 0)
     Node.Assert(kind) -> return emit(code, OP_ASSERT, kind, 0)
     Node.Cat(items) ->
@@ -938,9 +888,7 @@ end
 
 # A greedy SPLIT prefers `body`; a lazy one prefers `exit`.
 def set_split(code: Code, at: Int, body: Int, exit: Int, greedy: Bool) -> Code
-  if greedy
-    return code.with(xs: code.xs.set(at, body), ys: code.ys.set(at, exit))
-  end
+  return code.with(xs: code.xs.set(at, body), ys: code.ys.set(at, exit)) if greedy
   return code.with(xs: code.xs.set(at, exit), ys: code.ys.set(at, body))
 end
 
@@ -962,23 +910,17 @@ def make_match(text: String, caps: List[Int], at: Int, prog: Program) -> Match
 end
 
 def make_group(text: String, start: Int, stop: Int) -> Group
-  if start < 0 or stop < start
-    return Group(text: "", start: -1, stop: -1, matched: false)
-  end
+  return Group(text: "", start: -1, stop: -1, matched: false) if start < 0 or stop < start
   return Group(text: slice(text, start, stop), start: start, stop: stop, matched: true)
 end
 
 def slice(text: String, from: Int, to: Int) -> String
-  if to <= from
-    return ""
-  end
+  return "" if to <= from
   return String.slice(text, from, to - from)
 end
 
 def escape_char(c: String) -> String
-  if SPECIAL.include?(c)
-    return "\\#{c}"
-  end
+  return "\\#{c}" if SPECIAL.include?(c)
   return c
 end
 
@@ -1034,9 +976,7 @@ def parse_template(template: String, prog: Program) -> Result[List[Piece]]
       else
         return error("template character #{i + 1}: '$' starts no group; write $$ for a dollar sign")
       end
-      if ref > groups
-        return error("no group #{label}")
-      end
+      return error("no group #{label}") if ref > groups
       if text.size > 0
         pieces = pieces.push(Piece.Text(text.join("")))
         text = []

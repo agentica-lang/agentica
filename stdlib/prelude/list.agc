@@ -10,9 +10,7 @@
 
 def find(list: List[A], f: Fn[A, Bool]) -> Result[A]
   for item in list
-    if f.call(item)
-      return ok(item)
-    end
+    return ok(item) if f.call(item)
   end
   return error("not found")
 end
@@ -20,9 +18,7 @@ end
 def find_index(list: List[A], f: Fn[A, Bool]) -> Optional[Int]
   index = 0
   for item in list
-    if f.call(item)
-      return some(index)
-    end
+    return some(index) if f.call(item)
     index += 1
   end
   return none
@@ -63,9 +59,7 @@ end
 def take_while(list: List[A], f: Fn[A, Bool]) -> List[A]
   count = 0
   for item in list
-    if !f.call(item)
-      break
-    end
+    break if !f.call(item)
     count += 1
   end
   return list.take(count)
@@ -74,9 +68,7 @@ end
 def drop_while(list: List[A], f: Fn[A, Bool]) -> List[A]
   count = 0
   for item in list
-    if !f.call(item)
-      break
-    end
+    break if !f.call(item)
     count += 1
   end
   return list.drop(count)
@@ -136,9 +128,7 @@ end
 # here. A Float follows IEEE 754, so a NaN is never a member, not even of a list that holds it.
 def include(list: List[A], value: A) -> Bool
   for item in list
-    if item == value
-      return true
-    end
+    return true if item == value
   end
   return false
 end
@@ -147,27 +137,21 @@ end
 # times more.
 def include_int(list: List[Int], value: Int) -> Bool
   for item in list
-    if item == value
-      return true
-    end
+    return true if item == value
   end
   return false
 end
 
 def include_float(list: List[Float], value: Float) -> Bool
   for item in list
-    if item == value
-      return true
-    end
+    return true if item == value
   end
   return false
 end
 
 def include_string(list: List[String], value: String) -> Bool
   for item in list
-    if item == value
-      return true
-    end
+    return true if item == value
   end
   return false
 end
@@ -175,9 +159,7 @@ end
 def index(list: List[A], value: A) -> Optional[Int]
   at = 0
   for item in list
-    if item == value
-      return some(at)
-    end
+    return some(at) if item == value
     at += 1
   end
   return none
@@ -187,9 +169,7 @@ end
 def index_int(list: List[Int], value: Int) -> Optional[Int]
   at = 0
   for item in list
-    if item == value
-      return some(at)
-    end
+    return some(at) if item == value
     at += 1
   end
   return none
@@ -198,9 +178,7 @@ end
 def index_float(list: List[Float], value: Float) -> Optional[Int]
   at = 0
   for item in list
-    if item == value
-      return some(at)
-    end
+    return some(at) if item == value
     at += 1
   end
   return none
@@ -209,9 +187,7 @@ end
 def index_string(list: List[String], value: String) -> Optional[Int]
   at = 0
   for item in list
-    if item == value
-      return some(at)
-    end
+    return some(at) if item == value
     at += 1
   end
   return none
@@ -236,9 +212,7 @@ end
 # min and max: the first element wins a tie, so a later item must be strictly better. A NaN never wins, unless every
 # item is NaN, and then the first stays, as in min_by. Strings compare by String.compare, the order of sort.
 def min_int(list: List[Int]) -> Optional[Int]
-  if list.size == 0
-    return none
-  end
+  return none if list.size == 0
   best = list[0]
   for item in list
     if item < best
@@ -249,9 +223,7 @@ def min_int(list: List[Int]) -> Optional[Int]
 end
 
 def min_float(list: List[Float]) -> Optional[Float]
-  if list.size == 0
-    return none
-  end
+  return none if list.size == 0
   best = list[0]
   for item in list
     if item == item and (best != best or item < best)
@@ -262,9 +234,7 @@ def min_float(list: List[Float]) -> Optional[Float]
 end
 
 def min_string(list: List[String]) -> Optional[String]
-  if list.size == 0
-    return none
-  end
+  return none if list.size == 0
   best = list[0]
   for item in list
     if String.compare(item, best) < 0
@@ -275,9 +245,7 @@ def min_string(list: List[String]) -> Optional[String]
 end
 
 def max_int(list: List[Int]) -> Optional[Int]
-  if list.size == 0
-    return none
-  end
+  return none if list.size == 0
   best = list[0]
   for item in list
     if item > best
@@ -288,9 +256,7 @@ def max_int(list: List[Int]) -> Optional[Int]
 end
 
 def max_float(list: List[Float]) -> Optional[Float]
-  if list.size == 0
-    return none
-  end
+  return none if list.size == 0
   best = list[0]
   for item in list
     if item == item and (best != best or item > best)
@@ -301,9 +267,7 @@ def max_float(list: List[Float]) -> Optional[Float]
 end
 
 def max_string(list: List[String]) -> Optional[String]
-  if list.size == 0
-    return none
-  end
+  return none if list.size == 0
   best = list[0]
   for item in list
     if String.compare(item, best) > 0
@@ -317,9 +281,7 @@ end
 # every key is NaN, and then the first element stays (candidate == candidate is false for NaN). Strings compare by
 # String.compare, the order of sort.
 def min_by_int(list: List[A], key: Fn[A, Int]) -> Optional[A]
-  if list.size == 0
-    return none
-  end
+  return none if list.size == 0
   best = list[0]
   best_key = key.call(best)
   index = 1
@@ -336,9 +298,7 @@ def min_by_int(list: List[A], key: Fn[A, Int]) -> Optional[A]
 end
 
 def min_by_float(list: List[A], key: Fn[A, Float]) -> Optional[A]
-  if list.size == 0
-    return none
-  end
+  return none if list.size == 0
   best = list[0]
   best_key = key.call(best)
   index = 1
@@ -355,9 +315,7 @@ def min_by_float(list: List[A], key: Fn[A, Float]) -> Optional[A]
 end
 
 def min_by_string(list: List[A], key: Fn[A, String]) -> Optional[A]
-  if list.size == 0
-    return none
-  end
+  return none if list.size == 0
   best = list[0]
   best_key = key.call(best)
   index = 1
@@ -374,9 +332,7 @@ def min_by_string(list: List[A], key: Fn[A, String]) -> Optional[A]
 end
 
 def max_by_int(list: List[A], key: Fn[A, Int]) -> Optional[A]
-  if list.size == 0
-    return none
-  end
+  return none if list.size == 0
   best = list[0]
   best_key = key.call(best)
   index = 1
@@ -393,9 +349,7 @@ def max_by_int(list: List[A], key: Fn[A, Int]) -> Optional[A]
 end
 
 def max_by_float(list: List[A], key: Fn[A, Float]) -> Optional[A]
-  if list.size == 0
-    return none
-  end
+  return none if list.size == 0
   best = list[0]
   best_key = key.call(best)
   index = 1
@@ -412,9 +366,7 @@ def max_by_float(list: List[A], key: Fn[A, Float]) -> Optional[A]
 end
 
 def max_by_string(list: List[A], key: Fn[A, String]) -> Optional[A]
-  if list.size == 0
-    return none
-  end
+  return none if list.size == 0
   best = list[0]
   best_key = key.call(best)
   index = 1

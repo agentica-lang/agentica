@@ -16,9 +16,7 @@ def read_maze(text: String) -> Result[Maze]
   request = try JSON.parse(text)
   rows = try JSON.list(try JSON.get(request, "grid"))
   height = List.size(rows)
-  if height < 1 or height > 32
-    return error("invalid input")
-  end
+  return error("invalid input") if height < 1 or height > 32
   width = 0
   cells: Map[Int, Bool] = {}
   row_index = 0
@@ -27,9 +25,7 @@ def read_maze(text: String) -> Result[Maze]
     if row_index == 0
       width = String.length(line)
     end
-    if width < 1 or width > 32 or String.length(line) != width
-      return error("invalid input")
-    end
+    return error("invalid input") if width < 1 or width > 32 or String.length(line) != width
     column = 0
     for cell in String.split(line, "")
       if cell == "."
@@ -43,12 +39,8 @@ def read_maze(text: String) -> Result[Maze]
   end
   start = try JSON.int(try JSON.get(request, "start"))
   goal = try JSON.int(try JSON.get(request, "goal"))
-  if start < 0 or start >= width * height or goal < 0 or goal >= width * height
-    return error("invalid input")
-  end
-  if not Map.get(cells, start, false) or not Map.get(cells, goal, false)
-    return error("invalid input")
-  end
+  return error("invalid input") if start < 0 or start >= width * height or goal < 0 or goal >= width * height
+  return error("invalid input") if not Map.get(cells, start, false) or not Map.get(cells, goal, false)
   return ok(Maze(width: width, height: height, cells: cells, start: start, goal: goal))
 end
 

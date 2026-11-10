@@ -35,12 +35,8 @@ export def compile(texts: List[String], where: Report.Span) -> Gherkin.Outcome[L
   seen: Map[String, Bool] = {}
   for i in 0...texts.size
     text = texts[i]
-    if seen.has_key?(text)
-      return failed("RUNTIME-BDD-DUPLICATE", "duplicate step pattern", text, where)
-    end
-    if not compiled[i].ok?
-      return failed("RUNTIME-BDD-PATTERN", compiled[i].message, text, where)
-    end
+    return failed("RUNTIME-BDD-DUPLICATE", "duplicate step pattern", text, where) if seen.has_key?(text)
+    return failed("RUNTIME-BDD-PATTERN", compiled[i].message, text, where) if not compiled[i].ok?
     seen = seen.put(text, true)
   end
   return Gherkin.Outcome.Done(compiled.map do |pattern| pattern.unwrap! end)
@@ -76,9 +72,7 @@ end
 ## Matches `text` against `pattern`. Returns the captured values as strings, or an error when the text does not match.
 export def captures(pattern: Pattern, text: String) -> Result[List[String]]
   chars = text.split("")
-  if not literal_at?(chars, 0, pattern.head)
-    return error("no match")
-  end
+  return error("no match") if not literal_at?(chars, 0, pattern.head)
   return walk(pattern.slots, 0, chars, pattern.head.size, [])
 end
 
@@ -106,14 +100,10 @@ def compile_one(text: String) -> Result[Pattern]
       return error("only {string} and {int} are supported")
     end
   end
-  if parts[0].include?("}")
-    return error("unmatched pattern braces")
-  end
+  return error("unmatched pattern braces") if parts[0].include?("}")
   for tail in tails
     close = tail.index_of("}")
-    if close.none? or after(tail, close.unwrap!).include?("}")
-      return error("unmatched pattern braces")
-    end
+    return error("unmatched pattern braces") if close.none? or after(tail, close.unwrap!).include?("}")
   end
   slots = tails.map do |tail|
     close = tail.index_of("}").unwrap!
@@ -136,13 +126,9 @@ def after(text: String, close: Int) -> String
 end
 
 def literal_at?(chars: List[String], at: Int, literal: List[String]) -> Bool
-  if at + literal.size > chars.size
-    return false
-  end
+  return false if at + literal.size > chars.size
   for i in 0...literal.size
-    if chars[at + i] != literal[i]
-      return false
-    end
+    return false if chars[at + i] != literal[i]
   end
   return true
 end
@@ -150,9 +136,7 @@ end
 # Tries the captures from the regular expression's order: {int} from its longest to its shortest.
 def walk(slots: List[Slot], k: Int, chars: List[String], at: Int, found: List[String]) -> Result[List[String]]
   if k == slots.size
-    if at == chars.size
-      return ok(found)
-    end
+    return ok(found) if at == chars.size
     return error("no match")
   end
   slot = slots[k]
@@ -175,9 +159,7 @@ def walk(slots: List[Slot], k: Int, chars: List[String], at: Int, found: List[St
         if literal_at?(chars, stop, slot.literal)
           value = chars.take(stop).drop(at).join("")
           result = walk(slots, k + 1, chars, stop + slot.literal.size, found.push(value))
-          if result.ok?
-            return result
-          end
+          return result if result.ok?
         end
         stop -= 1
       end
@@ -187,15 +169,11 @@ end
 
 # The index after the closing quote, or `at` when there is no quoted string there.
 def quoted_end(chars: List[String], at: Int) -> Int
-  if at >= chars.size or (chars[at] != "\"" and chars[at] != "'")
-    return at
-  end
+  return at if at >= chars.size or (chars[at] != "\"" and chars[at] != "'")
   quote = chars[at]
   i = at + 1
   while i < chars.size
-    if chars[i] == quote
-      return i + 1
-    end
+    return i + 1 if chars[i] == quote
     if chars[i] == "\\"
       i += 1
     end
@@ -207,8 +185,6 @@ end
 # Splitting on escaped backslashes first leaves each other backslash just before the character it escapes.
 def unquote(chars: List[String], at: Int, stop: Int) -> String
   content = chars.take(stop - 1).drop(at + 1).join("")
-  if not content.include?("\\")
-    return content
-  end
+  return content if not content.include?("\\")
   return content.split("\\\\").map do |part| part.replace("\\", "") end.join("\\")
 end

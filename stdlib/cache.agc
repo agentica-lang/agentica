@@ -202,26 +202,20 @@ def monotonic_ms() -> Int
 end
 
 def max_of(a: Int, b: Int) -> Int
-  if a > b
-    return a
-  end
+  return a if a > b
 
   return b
 end
 
 def min_of(a: Int, b: Int) -> Int
-  if a < b
-    return a
-  end
+  return a if a < b
 
   return b
 end
 
 # The time of the clock, read only when entries expire.
 def now(state: Memory) -> Int
-  if state.ttl_ms > 0
-    return state.clock.call()
-  end
+  return state.clock.call() if state.ttl_ms > 0
 
   return 0
 end
@@ -261,9 +255,7 @@ def lookup(state: Memory, key: String) -> Optional[String]
     found = slot(state, gen).get(slot_key(gen, key))
     if found.ok?
       entry = found.unwrap!
-      if not expired?(state, entry, at)
-        return some(entry.value)
-      end
+      return some(entry.value) if not expired?(state, entry, at)
 
       _ = remove_entry(state, entry)
       return none
@@ -282,9 +274,7 @@ end
 
 def write(state: Memory, key: String, value: String) -> Void
   remove(state, key)
-  if insert(state, key, value)
-    return
-  end
+  return if insert(state, key, value)
 
   # The key may have been taken by a task that wrote it between the removal and the insert; the later write wins.
   remove(state, key)
@@ -305,15 +295,11 @@ end
 # and given back by the same task when the entry is not stored.
 def insert(state: Memory, key: String, value: String) -> Bool
   size = cost(key, value)
-  if size > state.byte_limit
-    return false
-  end
+  return false if size > state.byte_limit
 
   turn_if_due(state)
   g = reserve(state, size)
-  if g < 0
-    return false
-  end
+  return false if g < 0
 
   id = state.ids.add(0, 1)
   entry = Entry(key: key, value: value, at: now(state), id: id, gen: g)
@@ -345,9 +331,7 @@ def remove_entry(state: Memory, entry: Entry) -> Bool
   live = live_in(state, entry.gen)
   won = live.add(entry.id, -size) == 0
   live.delete(entry.id)
-  if not won
-    return false
-  end
+  return false if not won
 
   take_out(state, entry)
   give_back(state, entry.gen, size)
@@ -364,9 +348,7 @@ def take_out(state: Memory, entry: Entry) -> Void
 end
 
 def fits?(state: Memory, g: Int, size: Int) -> Bool
-  if state.stored.get(g).unwrap_or(0) + size > state.byte_limit
-    return false
-  end
+  return false if state.stored.get(g).unwrap_or(0) + size > state.byte_limit
 
   taken = state.stored.add(g, size)
   entries = 0
@@ -374,9 +356,7 @@ def fits?(state: Memory, g: Int, size: Int) -> Bool
     entries = state.counted.add(g, 1)
   end
 
-  if taken <= state.byte_limit and (state.entry_limit == 0 or entries <= state.entry_limit)
-    return true
-  end
+  return true if taken <= state.byte_limit and (state.entry_limit == 0 or entries <= state.entry_limit)
 
   give_back(state, g, size)
   return false
@@ -384,9 +364,7 @@ end
 
 def give_back(state: Memory, g: Int, size: Int) -> Void
   # The counts of a generation that is two behind are gone, and an add would make a key for it that nothing deletes.
-  if g <= current(state) - 2
-    return
-  end
+  return if g <= current(state) - 2
 
   state.stored.add(g, -size)
   if state.entry_limit > 0
@@ -398,15 +376,11 @@ end
 # a task that finds another rotation going gives up, since a cache may drop an entry.
 def reserve(state: Memory, size: Int) -> Int
   g = current(state)
-  if fits?(state, g, size)
-    return g
-  end
+  return g if fits?(state, g, size)
 
   _ = rotate(state, g)
   moved = current(state)
-  if moved != g and fits?(state, moved, size)
-    return moved
-  end
+  return moved if moved != g and fits?(state, moved, size)
 
   return -1
 end
@@ -414,9 +388,7 @@ end
 # With a time to live, a generation that has been young for half of it is dropped when the next one is due, so no entry
 # outlives the time to live by more than a generation or two even if nobody reads it. Only writes get here.
 def turn_if_due(state: Memory) -> Void
-  if state.ttl_ms <= 0
-    return
-  end
+  return if state.ttl_ms <= 0
 
   g = current(state)
   # A generation that a late publish skipped to has no start: it starts now, rather than at 0, which would drop it at
@@ -437,13 +409,9 @@ end
 def rotate(state: Memory, g: Int) -> Bool
   before = state.rotations.get(g).unwrap_or(0)
   token = claim(state, g)
-  if token == 0
-    return false
-  end
+  return false if token == 0
 
-  if not empty_slot(state, g + 1, g, token)
-    return false
-  end
+  return false if not empty_slot(state, g + 1, g, token)
 
   # Keys of long dead generations: nothing reads them, and they would pile up. All those up to g - 3 go, not only
   # g - 3, since the rotation from a generation that a late publish skipped never ran. The tables hold a few keys.
@@ -480,9 +448,7 @@ end
 # is the one deleted), and an id below its token (ids and tokens share one counter, and every entry of a later
 # generation draws its id after that generation was published, which is after this rotation was claimed).
 def empty_slot(state: Memory, dead: Int, g: Int, token: Int) -> Bool
-  if current(state) != g
-    return false
-  end
+  return false if current(state) != g
 
   table = slot(state, dead)
   count = 0
@@ -492,9 +458,7 @@ def empty_slot(state: Memory, dead: Int, g: Int, token: Int) -> Bool
       table.delete(key)
     end
     count += 1
-    if count % BEAT_EVERY == 0 and not beat(state, g, token)
-      return false
-    end
+    return false if count % BEAT_EVERY == 0 and not beat(state, g, token)
   end
 
   live = live_in(state, dead)
@@ -503,9 +467,7 @@ def empty_slot(state: Memory, dead: Int, g: Int, token: Int) -> Bool
       live.delete(id)
     end
     count += 1
-    if count % BEAT_EVERY == 0 and not beat(state, g, token)
-      return false
-    end
+    return false if count % BEAT_EVERY == 0 and not beat(state, g, token)
   end
 
   return true
@@ -514,9 +476,7 @@ end
 # Shows that the owner of the rotation from g is alive. Returns false when it is no longer the owner or the generation
 # has moved on, since the table it is emptying is then in use.
 def beat(state: Memory, g: Int, token: Int) -> Bool
-  if current(state) != g or state.rotations.get(g).unwrap_or(0) != token
-    return false
-  end
+  return false if current(state) != g or state.rotations.get(g).unwrap_or(0) != token
 
   state.beats.put(g, state.clock.call())
   return true
@@ -526,9 +486,7 @@ end
 # started. The owner beats while it works; a rotation whose owner has not beaten for the lease is taken over by the one
 # task that wins `deaths.add` on its token, so two tasks never take over the same dead owner.
 def claim(state: Memory, g: Int) -> Int
-  if current(state) != g
-    return 0
-  end
+  return 0 if current(state) != g
 
   token = state.ids.add(0, 1)
   at = state.clock.call()
@@ -540,9 +498,7 @@ def claim(state: Memory, g: Int) -> Int
   owner = state.rotations.get(g).unwrap_or(0)
   if owner > 0 and at - state.beats.get(g).unwrap_or(at) > ROTATION_LEASE_MS and state.deaths.add(owner, 1) == 1
     # The dead owner may have finished while this task decided; nothing has been taken from it yet, so just leave.
-    if current(state) != g
-      return 0
-    end
+    return 0 if current(state) != g
 
     state.beats.put(g, at)
     state.rotations.put(g, token)
@@ -564,9 +520,7 @@ def wipe(state: Memory) -> Void
 end
 
 def sweep(state: Memory) -> Int
-  if state.ttl_ms <= 0
-    return 0
-  end
+  return 0 if state.ttl_ms <= 0
 
   g = current(state)
   at = now(state)

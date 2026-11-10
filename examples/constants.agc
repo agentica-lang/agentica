@@ -14,9 +14,7 @@ LABELS = PRICES.keys().map do |name| name.upcase() end
 SUMMARY = "#{WIDTH}#{SEPARATOR}#{PAGE_SIZE}"
 
 def kind(name: String) -> String
-  if FRUITS.include?(name)
-    return "fruit"
-  end
+  return "fruit" if FRUITS.include?(name)
   return "drink"
 end
 

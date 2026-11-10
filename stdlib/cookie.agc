@@ -54,14 +54,10 @@ export def parse(header: String) -> Map[String, String]
   for piece in header.split(";")
     pair = piece.strip
     eq_at = pair.index_of("=")
-    if eq_at.none?
-      next
-    end
+    next if eq_at.none?
     at = eq_at.unwrap!
     name = pair.slice(0, at).strip
-    if name.empty? or cookies.key?(name)
-      next
-    end
+    next if name.empty? or cookies.key?(name)
     cookies = cookies.put(name, pair.slice(at + 1, pair.length - at - 1).strip)
   end
   return cookies
@@ -103,29 +99,19 @@ end
 
 # The checks of `set_header` that are not about one attribute alone. Returns the first error.
 def check_cookie(cookie: Cookie) -> Result[Bool]
-  if !valid_name?(cookie.name)
-    return error("invalid cookie name (#{printable(cookie.name)})")
-  end
+  return error("invalid cookie name (#{printable(cookie.name)})") if !valid_name?(cookie.name)
   bad_at = bad_value_position(cookie.value)
-  if bad_at >= 0
-    return error("invalid cookie value (byte #{bad_at})")
-  end
-  if cookie.domain.include?(" ")
-    return error("invalid cookie domain (#{printable(cookie.domain)})")
-  end
+  return error("invalid cookie value (byte #{bad_at})") if bad_at >= 0
+  return error("invalid cookie domain (#{printable(cookie.domain)})") if cookie.domain.include?(" ")
   if cookie.same_site != "" and !SAME_SITE_VALUES.include?(cookie.same_site)
     return error("invalid cookie same_site (#{printable(cookie.same_site)})")
   end
-  if cookie.same_site == "None" and !cookie.secure
-    return error("invalid cookie same_site (None needs secure)")
-  end
+  return error("invalid cookie same_site (None needs secure)") if cookie.same_site == "None" and !cookie.secure
   lower = cookie.name.downcase
   if lower.start_with?("__host-") and !(cookie.secure and cookie.path == "/" and cookie.domain == "")
     return error("invalid cookie name (__Host- needs secure, path / and no domain)")
   end
-  if lower.start_with?("__secure-") and !cookie.secure
-    return error("invalid cookie name (__Secure- needs secure)")
-  end
+  return error("invalid cookie name (__Secure- needs secure)") if lower.start_with?("__secure-") and !cookie.secure
   return ok(true)
 end
 
@@ -135,9 +121,7 @@ def valid_name?(name: String) -> Bool
 end
 
 def token_byte?(byte: Int) -> Bool
-  if TOKEN_SYMBOLS.include?(byte)
-    return true
-  end
+  return true if TOKEN_SYMBOLS.include?(byte)
   return (byte >= 48 and byte <= 57) or (byte >= 65 and byte <= 90) or (byte >= 97 and byte <= 122)
 end
 
@@ -159,9 +143,7 @@ end
 # Adds `Label=text` to `parts`, or nothing when `text` is empty. An attribute value is printable ASCII without `;`,
 # and does not start or end with a space.
 def add_attribute(parts: List[String], label: String, field: String, text: String) -> Result[List[String]]
-  if text == ""
-    return ok(parts)
-  end
+  return ok(parts) if text == ""
   if text != text.strip or !text.bytes.to_a.all? do |byte| byte >= SPACE and byte < DEL and byte != SEMICOLON end
     return error("invalid cookie #{field} (#{printable(text)})")
   end
@@ -175,8 +157,6 @@ def printable(text: String) -> String
 end
 
 def max_of(a: Int, b: Int) -> Int
-  if a > b
-    return a
-  end
+  return a if a > b
   return b
 end

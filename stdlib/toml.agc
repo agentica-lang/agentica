@@ -110,23 +110,17 @@ export def parse(text: String) -> Result[Value]
       end
       section += 1
       opened = open_table(root, key.parts, is_array)
-      if !opened.ok?
-        return error(place(src, p, opened.message))
-      end
+      return error(place(src, p, opened.message)) if !opened.ok?
       root = opened.unwrap!
       header = key.parts
       p = try end_of_line(src, close_at + closing.length)
     else
       key = try parse_key(src, p)
-      if at(src, key.pos) != 61
-        return error(place(src, key.pos, "expected '=' after key"))
-      end
+      return error(place(src, key.pos, "expected '=' after key")) if at(src, key.pos) != 61
       value_at = skip_ws(src, key.pos + 1)
       parsed = try parse_value(src, value_at, 0)
       stored = put_key(root, header.concat(key.parts), header.size, parsed.value, section)
-      if !stored.ok?
-        return error(place(src, p, stored.message))
-      end
+      return error(place(src, p, stored.message)) if !stored.ok?
       root = stored.unwrap!
       p = try end_of_line(src, parsed.pos)
     end
@@ -149,9 +143,7 @@ export def encode(value: Value) -> Result[String]
   case value
     Value.Table(entries) ->
       lines = try emit_table(entries, [], [], class_table())
-      if lines.size == 0
-        return ok("")
-      end
+      return ok("") if lines.size == 0
       return ok("#{lines.join("\n")}\n")
     _ -> return error("the root of a TOML document must be a table")
   end
@@ -173,9 +165,7 @@ export def get(value: Value, path: String) -> Result[Value]
   for part in path.split(".")
     case current
       Value.Table(entries) ->
-        if !entries.has_key?(part)
-          return error("no key \"#{part}\" in \"#{path}\"")
-        end
+        return error("no key \"#{part}\" in \"#{path}\"") if !entries.has_key?(part)
         current = entries[part]
       Value.Array(items) ->
         index = part.to_i
@@ -191,14 +181,10 @@ end
 
 # A plain run of ASCII digits without a leading zero (`0`, `7`, `12`): not `01`, `+1` or `-0`.
 def index_segment?(part: String) -> Bool
-  if part.length == 0 or (part.length > 1 and String.code(part.at(0)) == 48)
-    return false
-  end
+  return false if part.length == 0 or (part.length > 1 and String.code(part.at(0)) == 48)
   for ch in part.split("")
     c = String.code(ch)
-    if c < 48 or c > 57
-      return false
-    end
+    return false if c < 48 or c > 57
   end
   return true
 end
@@ -213,14 +199,10 @@ def json_of(value: Value, depth: Int) -> Result[Json]
     Value.Bool(b) -> return ok(JSON.from(b))
     Value.DateTime(s) -> return ok(JSON.from(s))
     Value.Float(x) ->
-      if !finite?(x)
-        return error("cannot convert #{float_text(x)} to JSON")
-      end
+      return error("cannot convert #{float_text(x)} to JSON") if !finite?(x)
       return ok(JSON.from(x))
     Value.Array(items) ->
-      if depth >= 2048
-        return error("a value nests more than 2048 levels")
-      end
+      return error("a value nests more than 2048 levels") if depth >= 2048
       out: List[Json] = []
       for item in items
         j = try json_of(item, depth + 1)
@@ -228,9 +210,7 @@ def json_of(value: Value, depth: Int) -> Result[Json]
       end
       return ok(JSON.array(out))
     Value.Table(entries) ->
-      if depth >= 2048
-        return error("a value nests more than 2048 levels")
-      end
+      return error("a value nests more than 2048 levels") if depth >= 2048
       out: Map[String, Json] = {}
       for k in entries.keys
         j = try json_of(entries[k], depth + 1)
@@ -286,9 +266,7 @@ end
 
 # The code point at `pos`, or -1 past the end.
 def at(src: Src, pos: Int) -> Int
-  if pos >= 0 and pos < src.n
-    return src.codes[pos]
-  end
+  return src.codes[pos] if pos >= 0 and pos < src.n
   return -1
 end
 
@@ -302,9 +280,7 @@ def piece(src: Src, from: Int, to: Int) -> String
   if stop > src.n
     stop = src.n
   end
-  if stop <= from
-    return ""
-  end
+  return "" if stop <= from
   return String.slice(src.text, from, stop - from)
 end
 
@@ -341,9 +317,7 @@ end
 def skip_comment(src: Src, pos: Int) -> Result[Int]
   p = pos
   while at(src, p) != 10 and at(src, p) != -1
-    if has(src, at(src, p), 16)
-      return error(place(src, p, "control character in a comment"))
-    end
+    return error(place(src, p, "control character in a comment")) if has(src, at(src, p), 16)
     p += 1
   end
   return ok(p)
@@ -404,9 +378,7 @@ def parse_key(src: Src, pos: Int) -> Result[Key]
     else
       return error(place(src, p, "expected a key"))
     end
-    if parts.size > max_depth()
-      return error(place(src, pos, "a key has more than 256 parts"))
-    end
+    return error(place(src, pos, "a key has more than 256 parts")) if parts.size > max_depth()
     p = skip_ws(src, p)
     if at(src, p) == 46
       p = skip_ws(src, p + 1)
@@ -456,15 +428,11 @@ def word_at(src: Src, pos: Int, word: String) -> Bool
 end
 
 def parse_array(src: Src, pos: Int, depth: Int) -> Result[Parsed]
-  if depth >= max_depth()
-    return error(place(src, pos, "arrays and inline tables nest more than 256 levels"))
-  end
+  return error(place(src, pos, "arrays and inline tables nest more than 256 levels")) if depth >= max_depth()
   items: List[Value] = []
   p = try skip_trivia(src, pos + 1)
   while true
-    if at(src, p) == 93
-      return ok(Parsed(value: Value.Array(items), pos: p + 1))
-    end
+    return ok(Parsed(value: Value.Array(items), pos: p + 1)) if at(src, p) == 93
     parsed = try parse_value(src, p, depth + 1)
     items = items.push(parsed.value)
     p = try skip_trivia(src, parsed.pos)
@@ -481,32 +449,22 @@ end
 # An inline table lives on one line and has no trailing comma. It is read with the same rules as
 # a document, so dotted keys and duplicates behave the same, then sealed into a Value.
 def parse_inline_table(src: Src, pos: Int, depth: Int) -> Result[Parsed]
-  if depth >= max_depth()
-    return error(place(src, pos, "arrays and inline tables nest more than 256 levels"))
-  end
+  return error(place(src, pos, "arrays and inline tables nest more than 256 levels")) if depth >= max_depth()
   node = Node.Tab(empty_tbl(Origin.Header, 0))
   p = skip_ws(src, pos + 1)
-  if at(src, p) == 125
-    return ok(Parsed(value: to_value(node), pos: p + 1))
-  end
+  return ok(Parsed(value: to_value(node), pos: p + 1)) if at(src, p) == 125
   while true
     key = try parse_key(src, p)
-    if at(src, key.pos) != 61
-      return error(place(src, key.pos, "expected '=' after key"))
-    end
+    return error(place(src, key.pos, "expected '=' after key")) if at(src, key.pos) != 61
     parsed = try parse_value(src, skip_ws(src, key.pos + 1), depth + 1)
     stored = put_key(node, key.parts, 0, parsed.value, 0)
-    if !stored.ok?
-      return error(place(src, p, stored.message))
-    end
+    return error(place(src, p, stored.message)) if !stored.ok?
     node = stored.unwrap!
     p = skip_ws(src, parsed.pos)
     c = at(src, p)
     if c == 44
       p = skip_ws(src, p + 1)
-      if at(src, p) == 125
-        return error(place(src, p, "an inline table cannot end with a comma"))
-      end
+      return error(place(src, p, "an inline table cannot end with a comma")) if at(src, p) == 125
     elsif c == 125
       return ok(Parsed(value: to_value(node), pos: p + 1))
     else
@@ -689,9 +647,7 @@ def read_unicode(src: Src, pos: Int, count: Int) -> Result[Scan]
   code = 0
   for i in 0...count
     d = hex_value(at(src, pos + i))
-    if d < 0
-      return error(place(src, pos - 2, "a unicode escape needs #{count} hex digits"))
-    end
+    return error(place(src, pos - 2, "a unicode escape needs #{count} hex digits")) if d < 0
     code = code * 16 + d
   end
   if code > 1114111 or (code >= 55296 and code <= 57343)
@@ -717,9 +673,7 @@ end
 # The end of a run of digits with single underscores between digits: `1_000`. Returns `pos` when
 # there is no digit. A trailing or doubled underscore is not consumed, so the caller finds it.
 def digit_run(src: Src, pos: Int) -> Int
-  if !has(src, at(src, pos), 1)
-    return pos
-  end
+  return pos if !has(src, at(src, pos), 1)
   p = pos + 1
   while true
     c = at(src, p)
@@ -749,9 +703,7 @@ def parse_number(src: Src, pos: Int) -> Result[Parsed]
   if c == 105 or c == 110
     word = piece(src, p, stop)
     if word == "inf"
-      if negative
-        return ok(Parsed(value: Value.Float(Float.from_bits(-4503599627370496)), pos: stop))
-      end
+      return ok(Parsed(value: Value.Float(Float.from_bits(-4503599627370496)), pos: stop)) if negative
       return ok(Parsed(value: Value.Float(Float.from_bits(9218868437227405312)), pos: stop))
     elsif word == "nan"
       return ok(Parsed(value: Value.Float(Float.from_bits(9221120237041090560)), pos: stop))
@@ -769,19 +721,13 @@ def parse_number(src: Src, pos: Int) -> Result[Parsed]
     return radix_integer(src, pos, p + 2, stop, radix)
   end
   whole = digit_run(src, p)
-  if whole == p
-    return error(place(src, pos, "invalid number"))
-  end
-  if whole - p > 1 and c == 48
-    return error(place(src, pos, "a number cannot have leading zeros"))
-  end
+  return error(place(src, pos, "invalid number")) if whole == p
+  return error(place(src, pos, "a number cannot have leading zeros")) if whole - p > 1 and c == 48
   j = whole
   is_float = false
   if at(src, j) == 46
     fraction = digit_run(src, j + 1)
-    if fraction == j + 1
-      return error(place(src, pos, "a float needs digits after the point"))
-    end
+    return error(place(src, pos, "a float needs digits after the point")) if fraction == j + 1
     j = fraction
     is_float = true
   end
@@ -791,27 +737,19 @@ def parse_number(src: Src, pos: Int) -> Result[Parsed]
       k += 1
     end
     exponent = digit_run(src, k)
-    if exponent == k
-      return error(place(src, pos, "a float needs digits in its exponent"))
-    end
+    return error(place(src, pos, "a float needs digits in its exponent")) if exponent == k
     j = exponent
     is_float = true
   end
-  if j != stop
-    return error(place(src, pos, "invalid number"))
-  end
+  return error(place(src, pos, "invalid number")) if j != stop
   digits = piece(src, p, stop).replace("_", "")
-  if is_float
-    return decimal_float(src, pos, digits, negative, stop)
-  end
+  return decimal_float(src, pos, digits, negative, stop) if is_float
   sign = ""
   if negative
     sign = "-"
   end
   value = String.to_int(sign + digits)
-  if !value.ok?
-    return error(place(src, pos, "integer out of the 64-bit range"))
-  end
+  return error(place(src, pos, "integer out of the 64-bit range")) if !value.ok?
   return ok(Parsed(value: Value.Int(value.unwrap!), pos: stop))
 end
 
@@ -836,27 +774,19 @@ end
 
 # `0x`, `0o` and `0b` integers: digits from `from` up to `stop`, no sign, leading zeros allowed.
 def radix_integer(src: Src, pos: Int, from: Int, stop: Int, radix: Int) -> Result[Parsed]
-  if from >= stop
-    return error(place(src, pos, "an integer needs digits"))
-  end
+  return error(place(src, pos, "an integer needs digits")) if from >= stop
   limit = 9223372036854775807
   value = 0
   previous_digit = false
   for i in from...stop
     c = at(src, i)
     if c == 95
-      if !previous_digit or i + 1 >= stop
-        return error(place(src, pos, "misplaced underscore in a number"))
-      end
+      return error(place(src, pos, "misplaced underscore in a number")) if !previous_digit or i + 1 >= stop
       previous_digit = false
     else
       d = hex_value(c)
-      if d < 0 or d >= radix
-        return error(place(src, pos, "invalid digit in a number"))
-      end
-      if value > (limit - d) / radix
-        return error(place(src, pos, "integer out of the 64-bit range"))
-      end
+      return error(place(src, pos, "invalid digit in a number")) if d < 0 or d >= radix
+      return error(place(src, pos, "integer out of the 64-bit range")) if value > (limit - d) / radix
       value = value * radix + d
       previous_digit = true
     end
@@ -871,9 +801,7 @@ def number_at(src: Src, pos: Int, count: Int) -> Int
   value = 0
   for i in 0...count
     c = at(src, pos + i)
-    if c < 48 or c > 57
-      return -1
-    end
+    return -1 if c < 48 or c > 57
     value = value * 10 + c - 48
   end
   return value
@@ -888,9 +816,7 @@ end
 
 def days_in_month(year: Int, month: Int) -> Int
   if month == 2
-    if (year % 4 == 0 and year % 100 != 0) or year % 400 == 0
-      return 29
-    end
+    return 29 if (year % 4 == 0 and year % 100 != 0) or year % 400 == 0
     return 28
   elsif month == 4 or month == 6 or month == 9 or month == 11
     return 30
@@ -901,9 +827,7 @@ end
 # Reads a local date, a local time, a local date-time or an offset date-time at `pos` and
 # returns where it ends.
 def date_time_end(src: Src, pos: Int) -> Result[Int]
-  if at(src, pos + 2) == 58
-    return time_end(src, pos)
-  end
+  return time_end(src, pos) if at(src, pos + 2) == 58
   year = number_at(src, pos, 4)
   month = number_at(src, pos + 5, 2)
   day = number_at(src, pos + 8, 2)
@@ -916,9 +840,7 @@ def date_time_end(src: Src, pos: Int) -> Result[Int]
   if c == 32 and number_at(src, stop + 1, 2) >= 0 and at(src, stop + 3) == 58
     has_time = true
   end
-  if !has_time
-    return ok(stop)
-  end
+  return ok(stop) if !has_time
   clock_end = try time_end(src, stop + 1)
   c = at(src, clock_end)
   if c == 90 or c == 122
@@ -957,9 +879,7 @@ def time_end(src: Src, pos: Int) -> Result[Int]
     while has(src, at(src, fraction), 1)
       fraction += 1
     end
-    if fraction == stop + 1
-      return error(place(src, stop, "a time needs digits after the point"))
-    end
+    return error(place(src, stop, "a time needs digits after the point")) if fraction == stop + 1
     stop = fraction
   end
   return ok(stop)
@@ -970,9 +890,7 @@ end
 def valid_date_time?(text: String, cls: List[Int]) -> Bool
   codes = text.split("").map do |c| String.code(c) end
   src = Src(text: text, codes: codes, n: codes.size, cls: cls)
-  if !date_time_start?(src, 0)
-    return false
-  end
+  return false if !date_time_start?(src, 0)
   stop = date_time_end(src, 0)
   return stop.ok? and stop.unwrap! == src.n
 end
@@ -1023,17 +941,13 @@ end
 # The last segment of a header: what `seg` becomes in `entries`.
 def header_last(entries: Map[String, Node], seg: String, name: String, is_array: Bool) -> Result[Node]
   if is_array
-    if !entries.has_key?(seg)
-      return ok(Node.Rows([Node.Tab(empty_tbl(Origin.Header, 0))]))
-    end
+    return ok(Node.Rows([Node.Tab(empty_tbl(Origin.Header, 0))])) if !entries.has_key?(seg)
     case entries[seg]
       Node.Rows(rows) -> return ok(Node.Rows(rows.push(Node.Tab(empty_tbl(Origin.Header, 0)))))
       _ -> return error("\"#{name}\" is already defined and is not an array of tables")
     end
   end
-  if !entries.has_key?(seg)
-    return ok(Node.Tab(empty_tbl(Origin.Header, 0)))
-  end
+  return ok(Node.Tab(empty_tbl(Origin.Header, 0))) if !entries.has_key?(seg)
   case entries[seg]
     Node.Tab(existing) ->
       case existing.origin
@@ -1060,9 +974,7 @@ def put_into(table: Tbl, full: List[String], header_size: Int, i: Int, value: Va
   seg = full[i]
   entries = table.entries
   if i == full.size - 1
-    if entries.has_key?(seg)
-      return error("key \"#{seg}\" is already defined")
-    end
+    return error("key \"#{seg}\" is already defined") if entries.has_key?(seg)
     return ok(Node.Tab(table.with(entries: entries.put(seg, Node.Leaf(value)))))
   end
   child = Node.Tab(empty_tbl(Origin.Dotted, section))
@@ -1085,9 +997,7 @@ def put_into(table: Tbl, full: List[String], header_size: Int, i: Int, value: Va
       sub = try put_into(entered, full, header_size, i + 1, value, section)
       return ok(Node.Tab(table.with(entries: entries.put(seg, sub))))
     Node.Rows(rows) ->
-      if i >= header_size
-        return error("cannot add keys to the array of tables \"#{seg}\" with dotted keys")
-      end
+      return error("cannot add keys to the array of tables \"#{seg}\" with dotted keys") if i >= header_size
       sub = try put_into(last_row(rows), full, header_size, i + 1, value, section)
       return ok(Node.Tab(table.with(entries: entries.put(seg, Node.Rows(rows.set(rows.size - 1, sub))))))
     Node.Leaf(_) -> return error("\"#{seg}\" is a value, not a table")
@@ -1174,22 +1084,16 @@ def quote(s: String) -> String
 end
 
 def bare_key?(key: String) -> Bool
-  if key.length == 0
-    return false
-  end
+  return false if key.length == 0
   for ch in key.split("")
     c = String.code(ch)
-    if !((c >= 97 and c <= 122) or (c >= 65 and c <= 90) or (c >= 48 and c <= 57) or c == 95 or c == 45)
-      return false
-    end
+    return false if !((c >= 97 and c <= 122) or (c >= 65 and c <= 90) or (c >= 48 and c <= 57) or c == 95 or c == 45)
   end
   return true
 end
 
 def key_text(key: String) -> String
-  if bare_key?(key)
-    return key
-  end
+  return key if bare_key?(key)
   return quote(key)
 end
 
@@ -1206,14 +1110,10 @@ def inline(value: Value, cls: List[Int], depth: Int) -> Result[String]
     Value.Float(x) -> return ok(float_text(x))
     Value.Bool(b) -> return ok(b.to_s)
     Value.DateTime(s) ->
-      if !valid_date_time?(s, cls)
-        return error("not a valid TOML date-time: #{quote(s)}")
-      end
+      return error("not a valid TOML date-time: #{quote(s)}") if !valid_date_time?(s, cls)
       return ok(s)
     Value.Array(items) ->
-      if depth >= max_depth()
-        return error("arrays and inline tables nest more than 256 levels")
-      end
+      return error("arrays and inline tables nest more than 256 levels") if depth >= max_depth()
       texts: List[String] = []
       for item in items
         text = try inline(item, cls, depth + 1)
@@ -1221,9 +1121,7 @@ def inline(value: Value, cls: List[Int], depth: Int) -> Result[String]
       end
       return ok("[#{texts.join(", ")}]")
     Value.Table(entries) ->
-      if depth >= max_depth()
-        return error("arrays and inline tables nest more than 256 levels")
-      end
+      return error("arrays and inline tables nest more than 256 levels") if depth >= max_depth()
       texts: List[String] = []
       for k in entries.keys
         text = try inline(entries[k], cls, depth + 1)
@@ -1237,9 +1135,7 @@ end
 def table_array?(value: Value) -> Bool
   case value
     Value.Array(items) ->
-      if items.size == 0
-        return false
-      end
+      return false if items.size == 0
       for item in items
         case item
           Value.Table(_) -> next
@@ -1258,9 +1154,7 @@ def emit_table(
   out: List[String],
   cls: List[Int],
 ) -> Result[List[String]]
-  if path.size > max_depth()
-    return error("tables nest more than 256 levels")
-  end
+  return error("tables nest more than 256 levels") if path.size > max_depth()
   lines = out
   for k in entries.keys
     v = entries[k]
@@ -1312,10 +1206,7 @@ def has_plain?(entries: Map[String, Value]) -> Bool
     v = entries[k]
     case v
       Value.Table(_) -> next
-      _ ->
-        if !table_array?(v)
-          return true
-        end
+      _ -> return true if !table_array?(v)
     end
   end
   return false

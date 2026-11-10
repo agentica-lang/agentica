@@ -8,9 +8,7 @@ def classify_record(text: String) -> Result[ScoreResult]
   name = try JSON.string(try JSON.get(root, "name"))
   score = try JSON.int(try JSON.get(root, "score"))
   active = try JSON.bool(try JSON.get(root, "active"))
-  if score < 0 or score > 100
-    return error("invalid record")
-  end
+  return error("invalid record") if score < 0 or score > 100
   return ok(ScoreResult(name: name, passed: active and score >= 60))
 end
 

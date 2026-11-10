@@ -94,9 +94,7 @@ end
 # The zlib steps: __lazy_zlib(lazy, kind, level, max_bytes) with kind 0 deflate, 1 raw deflate, 2 gzip, 3 inflate,
 # 4 raw inflate, 5 gunzip. A bad level or max_bytes is the error of the terminal, as in Zlib.deflate.
 def deflate(lazy: Lazy[Bytes], level: Int, raw: Bool) -> Lazy[Bytes]
-  if raw
-    return __lazy_zlib(lazy, 1, level, 0)
-  end
+  return __lazy_zlib(lazy, 1, level, 0) if raw
 
   return __lazy_zlib(lazy, 0, level, 0)
 end
@@ -106,9 +104,7 @@ def gzip(lazy: Lazy[Bytes], level: Int) -> Lazy[Bytes]
 end
 
 def inflate(lazy: Lazy[Bytes], raw: Bool, max_bytes: Int) -> Lazy[Bytes]
-  if raw
-    return __lazy_zlib(lazy, 4, 0, max_bytes)
-  end
+  return __lazy_zlib(lazy, 4, 0, max_bytes) if raw
 
   return __lazy_zlib(lazy, 3, 0, max_bytes)
 end

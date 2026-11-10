@@ -100,9 +100,7 @@ end
 ## name is a token here: it stands for no subprotocol.
 export def token?(name: String) -> Bool
   for byte in name.bytes
-    if not token_byte?(byte)
-      return false
-    end
+    return false if not token_byte?(byte)
   end
 
   return true
@@ -119,9 +117,7 @@ end
 ## True when `value`, a comma-separated list as in `Connection` and `Upgrade`, has `token`, as HTTP compares names.
 export def has_token?(value: String, token: String) -> Bool
   for part in value.split(",")
-    if part.strip.downcase == token
-      return true
-    end
+    return true if part.strip.downcase == token
   end
 
   return false
@@ -190,21 +186,13 @@ end
 
 ## What is wrong with a head, before any payload is read, when something is.
 export def check_head(head: Head) -> Optional[Problem]
-  if head.reserved != 0
-    return some(Problem(code: CLOSE_PROTOCOL, reason: "reserved bits are set"))
-  end
+  return some(Problem(code: CLOSE_PROTOCOL, reason: "reserved bits are set")) if head.reserved != 0
 
-  if not head.masked
-    return some(Problem(code: CLOSE_PROTOCOL, reason: "a client frame must be masked"))
-  end
+  return some(Problem(code: CLOSE_PROTOCOL, reason: "a client frame must be masked")) if not head.masked
 
-  if not known_opcode?(head.opcode)
-    return some(Problem(code: CLOSE_PROTOCOL, reason: "unknown opcode"))
-  end
+  return some(Problem(code: CLOSE_PROTOCOL, reason: "unknown opcode")) if not known_opcode?(head.opcode)
 
-  if control?(head.opcode)
-    return check_control(head)
-  end
+  return check_control(head) if control?(head.opcode)
 
   return none
 end
@@ -212,9 +200,7 @@ end
 ## What is wrong with the length of a head whose tail was read: a 64-bit length that is not a length, or a data frame
 ## that would take its message past the cap, given the `held` bytes of the message's earlier fragments.
 export def check_length(head: Head, max: Int, held: Int) -> Optional[Problem]
-  if head.length < 0
-    return some(Problem(code: CLOSE_PROTOCOL, reason: "invalid frame length"))
-  end
+  return some(Problem(code: CLOSE_PROTOCOL, reason: "invalid frame length")) if head.length < 0
 
   if not control?(head.opcode) and held + head.length > max
     return some(Problem(code: CLOSE_TOO_BIG, reason: "message too big"))
@@ -240,9 +226,7 @@ end
 
 ## The payload with the mask of the frame taken off: each byte is xor-ed with the byte of the key at its place mod 4.
 export def unmask(data: Bytes, key: Bytes) -> Bytes
-  if key.empty?
-    return data
-  end
+  return data if key.empty?
 
   k = key.to_a
   out: List[Int] = []
@@ -279,14 +263,10 @@ export def take(assembly: Assembly, head: Head, payload: Bytes, max: Int) -> Tak
   end
 
   total = assembly.total + payload.size
-  if total > max
-    return Taken.Broken(Problem(code: CLOSE_TOO_BIG, reason: "message too big"))
-  end
+  return Taken.Broken(Problem(code: CLOSE_TOO_BIG, reason: "message too big")) if total > max
 
   parts = assembly.parts.push(payload)
-  if not head.fin
-    return Taken.More(Assembly(text: text, open: true, parts: parts, total: total))
-  end
+  return Taken.More(Assembly(text: text, open: true, parts: parts, total: total)) if not head.fin
 
   return finished(text, Bytes.concat(parts))
 end
@@ -294,18 +274,12 @@ end
 ## A close frame: no payload (no code), or a code of two bytes and a reason that is UTF-8. A code that no peer may send
 ## (below 1000, 1004 to 1006, 1015 to 2999, past 4999) is a protocol error, as is one byte of payload.
 export def parse_close(payload: Bytes) -> Closing
-  if payload.empty?
-    return Closing.Peer(CLOSE_NORMAL, "")
-  end
+  return Closing.Peer(CLOSE_NORMAL, "") if payload.empty?
 
-  if payload.size == 1
-    return Closing.Invalid(Problem(code: CLOSE_PROTOCOL, reason: "a close frame with one byte"))
-  end
+  return Closing.Invalid(Problem(code: CLOSE_PROTOCOL, reason: "a close frame with one byte")) if payload.size == 1
 
   code = Binary.read_u16_be(payload, 0).unwrap!
-  if not valid_code?(code)
-    return Closing.Invalid(Problem(code: CLOSE_PROTOCOL, reason: "invalid close code"))
-  end
+  return Closing.Invalid(Problem(code: CLOSE_PROTOCOL, reason: "invalid close code")) if not valid_code?(code)
 
   case String.from_bytes(payload.drop(2))
     ok(reason) -> return Closing.Peer(code, reason)
@@ -317,9 +291,7 @@ end
 export def frame(opcode: Int, payload: Bytes) -> Bytes
   size = payload.size
   head = Bytes.from_list([128 + opcode]).unwrap!
-  if size < 126
-    return Bytes.concat([head, Bytes.from_list([size]).unwrap!, payload])
-  end
+  return Bytes.concat([head, Bytes.from_list([size]).unwrap!, payload]) if size < 126
 
   if size < 65536
     return Bytes.concat([head, Bytes.from_list([126]).unwrap!, Binary.write_u16_be(size).unwrap!, payload])
@@ -342,14 +314,10 @@ end
 ## masked, the shortest length form, and exactly that many bytes of payload. It reads the head only, so it costs the
 ## same for any size; the UTF-8 of a text payload is not checked again.
 export def data_frame?(frame: Bytes) -> Bool
-  if frame.size < 2 or (frame.at(0) != 128 + TEXT and frame.at(0) != 128 + BINARY)
-    return false
-  end
+  return false if frame.size < 2 or (frame.at(0) != 128 + TEXT and frame.at(0) != 128 + BINARY)
 
   length = frame.at(1)
-  if length < 126
-    return frame.size - 2 == length
-  end
+  return frame.size - 2 == length if length < 126
 
   if length == 126
     size = Binary.read_u16_be(frame, 2).unwrap_or(0)
@@ -381,9 +349,7 @@ end
 
 ## True for a close code that a peer may send: 1000 to 1014 except 1004 to 1006, and 3000 to 4999.
 export def valid_code?(code: Int) -> Bool
-  if code >= 3000 and code <= 4999
-    return true
-  end
+  return true if code >= 3000 and code <= 4999
 
   return code >= 1000 and code <= 1014 and code != 1004 and code != 1005 and code != 1006
 end
@@ -394,9 +360,7 @@ end
 
 # A control frame is whole and short. Its length field says so before the tail is read: 126 and 127 are too long.
 def check_control(head: Head) -> Optional[Problem]
-  if not head.fin
-    return some(Problem(code: CLOSE_PROTOCOL, reason: "a control frame cannot be fragmented"))
-  end
+  return some(Problem(code: CLOSE_PROTOCOL, reason: "a control frame cannot be fragmented")) if not head.fin
 
   if head.length > CONTROL_BYTES
     return some(Problem(code: CLOSE_PROTOCOL, reason: "a control frame is at most 125 bytes"))
@@ -406,9 +370,7 @@ def check_control(head: Head) -> Optional[Problem]
 end
 
 def finished(text: Bool, data: Bytes) -> Taken
-  if text and not utf8?(data)
-    return Taken.Broken(Problem(code: CLOSE_BAD_DATA, reason: "text is not valid UTF-8"))
-  end
+  return Taken.Broken(Problem(code: CLOSE_BAD_DATA, reason: "text is not valid UTF-8")) if text and not utf8?(data)
 
   return Taken.Whole(text, data, new_assembly())
 end
@@ -416,9 +378,7 @@ end
 # The reason as bytes of at most 123, without splitting a character.
 def short_reason(reason: String) -> Bytes
   data = reason.bytes
-  if data.size <= REASON_BYTES
-    return data
-  end
+  return data if data.size <= REASON_BYTES
 
   size = REASON_BYTES
   while size > 0 and not utf8?(data.take(size))
@@ -437,9 +397,7 @@ end
 
 def token_byte?(byte: Int) -> Bool
   for allowed in TOKEN_BYTES
-    if allowed == byte
-      return true
-    end
+    return true if allowed == byte
   end
 
   return false

@@ -76,9 +76,7 @@ end
 def list(settings: Settings, path: String, bytecode: String) -> Listed
   where = Report.Span(file: path, line: 1, column: 1, end_column: 1)
   spawned = Process.spawn_channel(settings.vm, args(settings, bytecode, 1000000, "list"), ".", 30000)
-  if not spawned.ok?
-    return broken(Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where), "")
-  end
+  return broken(Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where), "") if not spawned.ok?
   p = spawned.unwrap!
   _ = Process.close_stdin(p, 5000)
   deadline = Time.monotonic_ms() + 30000
@@ -118,16 +116,12 @@ def list(settings: Settings, path: String, bytecode: String) -> Listed
     )
   end
   failures = records.filter do |record| Child.event_of(record) == "fail" end
-  if failures.size > 0
-    return broken(record_error(failures[0]), shown)
-  end
+  return broken(record_error(failures[0]), shown) if failures.size > 0
   ready = records.any? do |record| Child.event_of(record) == "ready" end
   exit = code.unwrap_or(-1)
   if not ready or exit != 0
     crash = Child.stderr_diagnostic(found.stderr, where)
-    if crash.ok?
-      return broken(crash.unwrap!, shown)
-    end
+    return broken(crash.unwrap!, shown) if crash.ok?
     if ready or exit != 0
       return broken(
         Report.error_at("RUNTIME-BDD-PREMATURE-EXIT", "the test file exited with code #{exit}", where),
@@ -268,17 +262,11 @@ def finish(settings: Settings, p: Process, where: Report.Span) -> Ending
   end
   found = output.unwrap!
   shown = Child.stderr_text(found.stderr)
-  if found.truncated
-    return Ending(verdict: Report.Verdict.Fail(stderr_limit(where)), output: shown)
-  end
+  return Ending(verdict: Report.Verdict.Fail(stderr_limit(where)), output: shown) if found.truncated
   code = Process.wait(p, 5000)
-  if code.ok? and code.unwrap! == 0
-    return Ending(verdict: Report.Verdict.Pass, output: "")
-  end
+  return Ending(verdict: Report.Verdict.Pass, output: "") if code.ok? and code.unwrap! == 0
   crash = Child.stderr_diagnostic(found.stderr, where)
-  if crash.ok?
-    return Ending(verdict: Report.Verdict.Fail(crash.unwrap!), output: shown)
-  end
+  return Ending(verdict: Report.Verdict.Fail(crash.unwrap!), output: shown) if crash.ok?
   problem = Report.error_at(
     "RUNTIME-BDD-PREMATURE-EXIT",
     "the test file exited with code #{code.unwrap_or(-1)}",
@@ -289,9 +277,7 @@ def finish(settings: Settings, p: Process, where: Report.Span) -> Ending
 end
 
 def failure(settings: Settings, p: Process, message: String, deadline: Int, span: Report.Span) -> Failure
-  if message == "process: operation timed out"
-    return timed_out(settings, span)
-  end
+  return timed_out(settings, span) if message == "process: operation timed out"
   if message == "process: line exceeds 1048576 bytes"
     return Failure(
       problem: Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "a line of test output exceeds 1 MiB", span),
@@ -299,21 +285,15 @@ def failure(settings: Settings, p: Process, message: String, deadline: Int, span
       blame: true,
     )
   end
-  if message == "process: output exceeds 1048576 bytes"
-    return overflow(settings, p, deadline, span)
-  end
+  return overflow(settings, p, deadline, span) if message == "process: output exceeds 1048576 bytes"
   if not Child.gone?(message)
     return Failure(problem: Report.error_at("RUNTIME-BDD-IO", message, span), output: "", blame: true)
   end
   output = Process.output(p, Child.left(deadline))
-  if not output.ok?
-    return timed_out(settings, span)
-  end
+  return timed_out(settings, span) if not output.ok?
   stderr = output.unwrap!.stderr
   crash = Child.stderr_diagnostic(stderr, span)
-  if crash.ok?
-    return Failure(problem: crash.unwrap!, output: Child.stderr_text(stderr), blame: true)
-  end
+  return Failure(problem: crash.unwrap!, output: Child.stderr_text(stderr), blame: true) if crash.ok?
   code = Process.wait(p, Child.left(deadline))
   problem = Report.error_at(
     "RUNTIME-BDD-PREMATURE-EXIT",

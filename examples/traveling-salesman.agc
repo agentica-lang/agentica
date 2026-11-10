@@ -7,9 +7,7 @@ def search(distances: List[List[Int]], visited: List[Bool], path: List[Int], cos
   current = path[List.size(path) - 1]
   if List.size(path) == List.size(distances)
     total = cost + distances[current][0]
-    if total < best.cost
-      return Circuit(cost: total, route: List.append(path, 0))
-    end
+    return Circuit(cost: total, route: List.append(path, 0)) if total < best.cost
     return best
   end
   result = best
@@ -30,26 +28,18 @@ def read_distances(text: String) -> Result[List[List[Int]]]
   request = try JSON.parse(text)
   rows = try JSON.list(try JSON.get(request, "distances"))
   size = List.size(rows)
-  if size < 1 or size > 8
-    return error("invalid input")
-  end
+  return error("invalid input") if size < 1 or size > 8
   distances: List[List[Int]] = []
   row_index = 0
   for row in rows
     cells = try JSON.list(row)
-    if List.size(cells) != size
-      return error("invalid input")
-    end
+    return error("invalid input") if List.size(cells) != size
     values: List[Int] = []
     column = 0
     for cell in cells
       value = try JSON.int(cell)
-      if value < 0 or value > 1000000000
-        return error("invalid input")
-      end
-      if row_index == column and value != 0
-        return error("invalid input")
-      end
+      return error("invalid input") if value < 0 or value > 1000000000
+      return error("invalid input") if row_index == column and value != 0
       values = List.append(values, value)
       column = column + 1
     end

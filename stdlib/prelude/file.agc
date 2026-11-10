@@ -8,10 +8,7 @@ def open(path: String, mode: String, timeout_ms: Int, f: Fn[FileHandle, Result[A
   result = f.call(handle)
   closed = File.close(handle, timeout_ms)
   case closed
-    error(message) ->
-      if result.ok?
-        return error(message)
-      end
+    error(message) -> return error(message) if result.ok?
 
     ok(_) -> return result
   end

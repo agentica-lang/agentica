@@ -1,7 +1,5 @@
 def read_count(text: String) -> Result[Int]
-  if text == ""
-    return error("empty count")
-  end
+  return error("empty count") if text == ""
   count = try text.to_i
   return ok(count)
 end
