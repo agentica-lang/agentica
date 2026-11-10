@@ -86,9 +86,7 @@ TEXT_TYPES = Set.new([
 ## A name with no dot (`css`, `README`) has no extension, so it gives `fallback`.
 export def mime_type(path: String, fallback: String = "application/octet-stream") -> String
   ext = extension(path.split("?")[0].split("#")[0])
-  if TYPES.key?(ext)
-    return TYPES[ext]
-  end
+  return TYPES[ext] if TYPES.key?(ext)
   return fallback
 end
 
@@ -113,8 +111,6 @@ def extension(text: String) -> String
   while first < parts.size and parts[first].empty?
     first = first + 1
   end
-  if parts.size - first < 2
-    return ""
-  end
+  return "" if parts.size - first < 2
   return parts.last.downcase
 end

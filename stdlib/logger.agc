@@ -191,9 +191,7 @@ end
 # The event is made only when some handler accepts it.
 def dispatch(level: LogLevel, rank: Int, message: String, fields: Map[String, String]) -> Void
   accepting = LogRegistry.handlers(rank)
-  if accepting.size == 0
-    return
-  end
+  return if accepting.size == 0
   event = LogEvent(level: level, message: message, fields: fields, time_ms: Time.now_ms(), task: LogRegistry.task_id())
   for handler in accepting
     handler.call(event)
@@ -225,15 +223,11 @@ def line_break?(text: String) -> Bool
 end
 
 def message_token(message: String) -> String
-  if plain?(message) and !message.starts_with?(" ") and !message.ends_with?(" ")
-    return message
-  end
+  return message if plain?(message) and !message.starts_with?(" ") and !message.ends_with?(" ")
   return one_line(JSON.encode(message))
 end
 
 def field_token(text: String) -> String
-  if plain?(text) and !text.contains?(" ")
-    return text
-  end
+  return text if plain?(text) and !text.contains?(" ")
   return one_line(JSON.encode(text))
 end

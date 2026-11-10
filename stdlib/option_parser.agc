@@ -158,9 +158,7 @@ end
 ## and the message itself otherwise. A program that prints errors itself uses this and never prints the raw message
 ## of a help request.
 export def message(error_text: String) -> String
-  if help?(error_text)
-    return error_text.slice(HELP_MARK.length, error_text.length - HELP_MARK.length)
-  end
+  return error_text.slice(HELP_MARK.length, error_text.length - HELP_MARK.length) if help?(error_text)
   return error_text
 end
 
@@ -360,9 +358,7 @@ end
 # The slots, once the specification is checked: names and short names are well formed, free and different, every
 # default is valid for its kind and choices, and the name of the rest has no space or control character.
 def slots_of(parser: Parser) -> Result[List[Slot]]
-  if parser.program.empty?
-    return error("option_parser: invalid specification: the program name is empty")
-  end
+  return error("option_parser: invalid specification: the program name is empty") if parser.program.empty?
   if spaced?(parser.rest)
     try bad_spec(parser, "'#{parser.rest}' is not a valid name for the rest")
   end
@@ -382,9 +378,7 @@ def check_names(parser: Parser, slot: Slot, names: Set[String], shorts: Set[Stri
   if slot.name.empty? or slot.name.start_with?("-") or slot.name.include?("=") or spaced?(slot.name)
     return bad_spec(parser, "'#{slot.name}' is not a valid name")
   end
-  if names.include?(slot.name)
-    return bad_spec(parser, "the name #{label(slot)} is used twice or is reserved")
-  end
+  return bad_spec(parser, "the name #{label(slot)} is used twice or is reserved") if names.include?(slot.name)
   if !slot.short.empty? and (!letter?(slot.short) or shorts.include?(slot.short))
     return bad_spec(parser, "the short name '#{slot.short}' of #{label(slot)} is not one free character")
   end
@@ -403,9 +397,7 @@ def letter?(text: String) -> Bool
 end
 
 def check_slot(parser: Parser, slot: Slot) -> Result[Void]
-  if slot.flag and slot.positional
-    return bad_spec(parser, "#{label(slot)} cannot be a Flag")
-  end
+  return bad_spec(parser, "#{label(slot)} cannot be a Flag") if slot.flag and slot.positional
   if slot.flag and (!slot.default.empty? or !slot.choices.empty?)
     return bad_spec(parser, "the flag #{label(slot)} has no default or choices")
   end
@@ -415,9 +407,7 @@ def check_slot(parser: Parser, slot: Slot) -> Result[Void]
   if slot.min.some? and slot.max.some? and slot.min.unwrap! > slot.max.unwrap!
     return bad_spec(parser, "the min of #{label(slot)} is above its max")
   end
-  if slot.default.empty? or slot.flag
-    return ok()
-  end
+  return ok() if slot.default.empty? or slot.flag
   case store(empty_parsed(), slot, slot.default)
     ok(_) -> return ok()
     error(message) -> return bad_spec(parser, "invalid default for #{label(slot)}: #{message}")
@@ -451,9 +441,7 @@ def scan_words(parser: Parser, slots: List[Slot], args: List[String]) -> Result[
       i = i + 1
     else
       step = try read_option(reader, values, i)
-      if step.help
-        return error("#{HELP_MARK}#{usage(parser)}")
-      end
+      return error("#{HELP_MARK}#{usage(parser)}") if step.help
       values = step.values
       i = step.next
     end
@@ -467,9 +455,7 @@ end
 # Reads the option at args[i], which starts with "-" and is not "-" or "--".
 def read_option(reader: Reader, values: Map[String, String], i: Int) -> Result[Step]
   word = reader.args[i]
-  if word.start_with?("--")
-    return read_long(reader, values, i)
-  end
+  return read_long(reader, values, i) if word.start_with?("--")
   return read_short(reader, values, i)
 end
 
@@ -481,14 +467,10 @@ def read_long(reader: Reader, values: Map[String, String], i: Int) -> Result[Ste
   if equals.some?
     name = body.slice(0, equals.unwrap!)
   end
-  if name == "help"
-    return ok(Step(values: values, next: i + 1, help: true))
-  end
+  return ok(Step(values: values, next: i + 1, help: true)) if name == "help"
   slot = try find_slot(reader, name, false)
   if slot.flag
-    if equals.some?
-      return failure(reader.parser, "option --#{name} does not take a value")
-    end
+    return failure(reader.parser, "option --#{name} does not take a value") if equals.some?
     return ok(Step(values: values.put(name, "true"), next: i + 1, help: false))
   end
   if equals.some?
@@ -507,9 +489,7 @@ def read_short(reader: Reader, values: Map[String, String], i: Int) -> Result[St
   found = values
   j = 0
   while j < letters.size
-    if letters[j] == "h"
-      return ok(Step(values: found, next: i + 1, help: true))
-    end
+    return ok(Step(values: found, next: i + 1, help: true)) if letters[j] == "h"
     slot = try find_slot(reader, letters[j], true)
     if slot.flag
       found = found.put(slot.name, "true")
@@ -528,9 +508,7 @@ end
 # The rest of a joined short option from letters[from]: `-p3000` and `-p=3000` both give 3000, as in argparse.
 def joined_value(letters: List[String], from: Int) -> String
   rest = letters.drop(from).join("")
-  if rest.start_with?("=")
-    return rest.slice(1, rest.length - 1)
-  end
+  return rest.slice(1, rest.length - 1) if rest.start_with?("=")
   return rest
 end
 
@@ -538,13 +516,9 @@ end
 # a negative number (`-1`, `-2.5`, `-.5`), as in argparse. Any other word that starts with "-" is an option, so
 # `--port --verbose` is a missing value; `--port=--x` and `-p--x` give the literal.
 def value_word?(word: String) -> Bool
-  if !word.start_with?("-") or word == "-"
-    return true
-  end
+  return true if !word.start_with?("-") or word == "-"
   parts = word.slice(1, word.length - 1).split(".")
-  if parts.size == 1
-    return digits?(parts[0])
-  end
+  return digits?(parts[0]) if parts.size == 1
   return parts.size == 2 and (parts[0].empty? or digits?(parts[0])) and digits?(parts[1])
 end
 
@@ -559,12 +533,8 @@ def find_slot(reader: Reader, name: String, short: Bool) -> Result[Slot]
     !slot.positional and ((short and slot.short == name) or (!short and slot.name == name))
   end
 
-  if found.ok?
-    return found
-  end
-  if short
-    return failure(reader.parser, "unknown option -#{name}")
-  end
+  return found if found.ok?
+  return failure(reader.parser, "unknown option -#{name}") if short
   return failure(reader.parser, "unknown option --#{name}")
 end
 
@@ -620,9 +590,7 @@ def store(parsed: Parsed, slot: Slot, text: String) -> Result[Parsed]
         if text.start_with?("-")
           digits = text.slice(1, text.length - 1)
         end
-        if digits?(digits)
-          return error("'#{text}' does not fit an Int")
-        end
+        return error("'#{text}' does not fit an Int") if digits?(digits)
         return error("'#{text}' is not an Int")
       end
       if slot.min.some? and number.unwrap! < slot.min.unwrap!
@@ -634,9 +602,7 @@ def store(parsed: Parsed, slot: Slot, text: String) -> Result[Parsed]
       return ok(parsed.with(ints: parsed.ints.put(slot.name, number.unwrap!)))
     Kind.Float ->
       number = text.to_f
-      if !number.ok?
-        return error("'#{text}' is not a Float")
-      end
+      return error("'#{text}' is not a Float") if !number.ok?
       return ok(parsed.with(floats: parsed.floats.put(slot.name, number.unwrap!)))
     Kind.Flag -> return ok(parsed)
   end
@@ -648,16 +614,12 @@ end
 
 # The name as the messages and the help show it: --port, or <file> for an argument.
 def label(slot: Slot) -> String
-  if slot.positional
-    return "<#{shown_name(slot)}>"
-  end
+  return "<#{shown_name(slot)}>" if slot.positional
   return "--#{slot.name}"
 end
 
 def shown_name(slot: Slot) -> String
-  if slot.metavar.empty?
-    return slot.name
-  end
+  return slot.name if slot.metavar.empty?
   return slot.metavar
 end
 
@@ -672,27 +634,19 @@ end
 
 # The left column of the help: "-p, --port PORT", "    --user USER", "-v, --verbose" or "<file>".
 def head(slot: Slot) -> String
-  if slot.positional
-    return label(slot)
-  end
+  return label(slot) if slot.positional
   names = "    --#{slot.name}"
   if !slot.short.empty?
     names = "-#{slot.short}, --#{slot.name}"
   end
-  if slot.flag
-    return names
-  end
+  return names if slot.flag
   return "#{names} #{value_name(slot)}"
 end
 
 # The value name of an option: the metavar, else the choices (`on|off`), else the name in capitals.
 def value_name(slot: Slot) -> String
-  if !slot.metavar.empty?
-    return slot.metavar
-  end
-  if !slot.choices.empty?
-    return slot.choices.join("|")
-  end
+  return slot.metavar if !slot.metavar.empty?
+  return slot.choices.join("|") if !slot.choices.empty?
   return slot.name.upcase
 end
 
@@ -720,17 +674,13 @@ def notes(slot: Slot) -> List[String]
 end
 
 def wider(a: Int, b: Int) -> Int
-  if a > b
-    return a
-  end
+  return a if a > b
   return b
 end
 
 def row(slot: Slot, width: Int) -> String
   text = [slot.help].concat(notes(slot)).select do |part| !part.empty? end.join(" ")
   line = "  #{head(slot)}"
-  if text.empty?
-    return line
-  end
+  return line if text.empty?
   return "#{line}#{List.repeat(" ", width - head(slot).length).join("")}  #{text}"
 end

@@ -32,9 +32,7 @@ end
 ## (`&nbsp;`), a number that is not a Unicode scalar value (above `10FFFF` or a surrogate), and an entity without its
 ## `;`. The text is read once, so `&amp;lt;` becomes `&lt;`.
 export def unescape(text: String) -> String
-  if !text.include?("&")
-    return text
-  end
+  return text if !text.include?("&")
   pieces = text.split("&")
   out = [pieces[0]]
   for piece in List.drop(pieces, 1)
@@ -46,19 +44,13 @@ end
 # The text after one `&` up to the next one: the decoded entity followed by the rest, or the `&` and the piece again.
 def unescape_piece(piece: String) -> String
   end_at = piece.index_of(";")
-  if end_at.none?
-    return "&#{piece}"
-  end
+  return "&#{piece}" if end_at.none?
   at = end_at.unwrap!
   name = piece.slice(0, at)
   rest = piece.slice(at + 1, piece.length - at - 1)
-  if NAMED_ENTITIES.key?(name)
-    return "#{NAMED_ENTITIES.get(name, "")}#{rest}"
-  end
+  return "#{NAMED_ENTITIES.get(name, "")}#{rest}" if NAMED_ENTITIES.key?(name)
   code = numeric_code(name)
-  if code < 0
-    return "&#{piece}"
-  end
+  return "&#{piece}" if code < 0
   return "#{String.from_code(code)}#{rest}"
 end
 
@@ -66,48 +58,30 @@ end
 # scalar value.
 def numeric_code(name: String) -> Int
   bytes = name.bytes.to_a
-  if bytes.size < 2 or bytes[0] != HASH
-    return -1
-  end
-  if bytes[1] == LOWER_X or bytes[1] == UPPER_X
-    return digits_value(List.drop(bytes, 2), 16)
-  end
+  return -1 if bytes.size < 2 or bytes[0] != HASH
+  return digits_value(List.drop(bytes, 2), 16) if bytes[1] == LOWER_X or bytes[1] == UPPER_X
   return digits_value(List.drop(bytes, 1), 10)
 end
 
 # The value of digit bytes in `base`, or -1 for no digits, a bad digit, or a value that is not a Unicode scalar value.
 # Stops adding at the first value above the last code point, so a long run of digits cannot overflow.
 def digits_value(digits: List[Int], base: Int) -> Int
-  if digits.empty?
-    return -1
-  end
+  return -1 if digits.empty?
   value = 0
   for byte in digits
     digit = digit_value(byte)
-    if digit < 0 or digit >= base
-      return -1
-    end
+    return -1 if digit < 0 or digit >= base
     value = value * base + digit
-    if value > LAST_CODE_POINT
-      return -1
-    end
+    return -1 if value > LAST_CODE_POINT
   end
-  if value >= FIRST_SURROGATE and value <= LAST_SURROGATE
-    return -1
-  end
+  return -1 if value >= FIRST_SURROGATE and value <= LAST_SURROGATE
   return value
 end
 
 # The value of a hex digit byte of either case, or -1.
 def digit_value(byte: Int) -> Int
-  if byte >= 48 and byte <= 57
-    return byte - 48
-  end
-  if byte >= 65 and byte <= 70
-    return byte - 55
-  end
-  if byte >= 97 and byte <= 102
-    return byte - 87
-  end
+  return byte - 48 if byte >= 48 and byte <= 57
+  return byte - 55 if byte >= 65 and byte <= 70
+  return byte - 87 if byte >= 97 and byte <= 102
   return -1
 end

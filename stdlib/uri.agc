@@ -69,9 +69,7 @@ end
 export def decode_www_form(query: String) -> Result[List[Pair]]
   pairs: List[Pair] = []
   for piece in query.split("&")
-    if piece.empty?
-      next
-    end
+    next if piece.empty?
     pairs = pairs.push(try decode_pair(piece))
   end
   return ok(pairs)
@@ -96,23 +94,17 @@ end
 
 # Decodes the bytes of `text`. Text without a `%` (or a `+` to turn into a space) is returned as it is.
 def decode(text: String, plus_is_space: Bool) -> Result[String]
-  if !needs_decoding?(text, plus_is_space)
-    return ok(text)
-  end
+  return ok(text) if !needs_decoding?(text, plus_is_space)
   bytes = text.bytes
   out: List[Int] = []
   i = 0
   while i < bytes.size
     byte = bytes[i]
     if byte == PERCENT
-      if i + 2 >= bytes.size
-        return error("invalid %-encoding (#{text})")
-      end
+      return error("invalid %-encoding (#{text})") if i + 2 >= bytes.size
       high = hex_value(bytes[i + 1])
       low = hex_value(bytes[i + 2])
-      if high < 0 or low < 0
-        return error("invalid %-encoding (#{text})")
-      end
+      return error("invalid %-encoding (#{text})") if high < 0 or low < 0
       out = out.push(high * 16 + low)
       i = i + 3
     elsif byte == PLUS and plus_is_space
@@ -132,32 +124,22 @@ end
 
 # Whether `text` has a `%` escape or, for the form style, a `+`.
 def needs_decoding?(text: String, plus_is_space: Bool) -> Bool
-  if text.include?("%")
-    return true
-  end
+  return true if text.include?("%")
   return plus_is_space and text.include?("+")
 end
 
 # The value of a hex digit byte of either case, or -1.
 def hex_value(byte: Int) -> Int
-  if byte >= 48 and byte <= 57
-    return byte - 48
-  end
-  if byte >= 65 and byte <= 70
-    return byte - 55
-  end
-  if byte >= 97 and byte <= 102
-    return byte - 87
-  end
+  return byte - 48 if byte >= 48 and byte <= 57
+  return byte - 55 if byte >= 65 and byte <= 70
+  return byte - 87 if byte >= 97 and byte <= 102
   return -1
 end
 
 # One `name=value` piece. The first `=` splits it; a piece without one is a name with the value "".
 def decode_pair(piece: String) -> Result[Pair]
   split = piece.index_of("=")
-  if split.none?
-    return ok(Pair(name: try decode_www_form_component(piece), value: ""))
-  end
+  return ok(Pair(name: try decode_www_form_component(piece), value: "")) if split.none?
   at = split.unwrap!
   name = try decode_www_form_component(piece.slice(0, at))
   value = try decode_www_form_component(piece.slice(at + 1, piece.length - at - 1))

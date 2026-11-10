@@ -194,16 +194,12 @@ export def extract_zip(
   timeout_ms: Int,
   max_output_bytes: Int,
 ) -> Result[List[Int]]
-  if timeout_ms <= 0 or timeout_ms > 86400000
-    return error("archive: options.timeout_ms must be 1..86400000")
-  end
+  return error("archive: options.timeout_ms must be 1..86400000") if timeout_ms <= 0 or timeout_ms > 86400000
   if max_output_bytes <= 0 or max_output_bytes > 1073741824
     return error("archive: options.max_output_bytes must be 1..1073741824")
   end
   now = Time.monotonic_ms()
-  if now > INT_MAX - timeout_ms
-    return error("archive: the clock is too far ahead for the timeout")
-  end
+  return error("archive: the clock is too far ahead for the timeout") if now > INT_MAX - timeout_ms
   deadline = now + timeout_ms
   wanted = try validate_members(members)
   # The destination in the spelling the host join produces: on Windows Path.join turns every `\` into a `/`,
@@ -211,13 +207,9 @@ export def extract_zip(
   # output with this folder literally. Without this a valid destination looks like an escape on Windows.
   joined = try join_one([dest_dir])
   dest = strip_slashes(joined)
-  if dest == ""
-    return error("archive: destination must not be empty")
-  end
+  return error("archive: destination must not be empty") if dest == ""
   info = try stat_src(src, deadline)
-  if info.kind != "file"
-    return error("archive: source is not a regular file: #{src}")
-  end
+  return error("archive: source is not a regular file: #{src}") if info.kind != "file"
   found = try pass1(src, deadline)
   entries = try pass2(src, found, deadline)
   try make_dest(dest, deadline)
@@ -245,38 +237,28 @@ export def extract_zip(
 end
 
 def smaller(a: Int, b: Int) -> Int
-  if a < b
-    return a
-  end
+  return a if a < b
   return b
 end
 
 # Adds `b` to `a` within `cap`, for the counters that must never pass a ceiling. Operands that are already bounded
 # (u32 fields plus small constants) use plain `+`, which cannot overflow.
 def add_cap(a: Int, b: Int, cap: Int, message: String) -> Result[Int]
-  if b < 0
-    return error(message)
-  end
-  if a > cap - b
-    return error(message)
-  end
+  return error(message) if b < 0
+  return error(message) if a > cap - b
   return ok(a + b)
 end
 
 def time_left(deadline: Int) -> Result[Int]
   left = deadline - Time.monotonic_ms()
-  if left <= 0
-    return error("archive: operation timed out")
-  end
+  return error("archive: operation timed out") if left <= 0
   return ok(left)
 end
 
 # The budget of a cleanup close: the remaining deadline, capped, and never zero or negative.
 def close_budget(deadline: Int) -> Int
   left = deadline - Time.monotonic_ms()
-  if left <= 0
-    return CLOSE_MS
-  end
+  return CLOSE_MS if left <= 0
   return smaller(left, CLOSE_MS)
 end
 
@@ -318,9 +300,7 @@ end
 def strip_slashes(path: String) -> String
   out = path
   while String.length(out) > 1
-    if !String.ends_with?(out, "/")
-      break
-    end
+    break if !String.ends_with?(out, "/")
     out = String.slice(out, 0, String.length(out) - 1)
   end
   return out
@@ -329,12 +309,8 @@ end
 # Reads until `buf` holds `need` bytes or the file ends. Every physical byte counts against `cap`.
 def stream_fill(st: Stream, need: Int, cap: Int, deadline: Int, src: String) -> Result[Stream]
   while st.buf.size < need
-    if st.eof
-      break
-    end
-    if Time.monotonic_ms() >= deadline
-      return error("archive: operation timed out")
-    end
+    break if st.eof
+    return error("archive: operation timed out") if Time.monotonic_ms() >= deadline
     room = cap - st.raw
     if room <= 0
       probe = try read_raw(st.handle, 1, deadline, src)
@@ -360,19 +336,13 @@ end
 
 # Takes exactly `n` bytes, failing on truncation. Callers keep `n` small except through `stream_skip`.
 def stream_take(st: Stream, n: Int, cap: Int, deadline: Int, src: String, what: String) -> Result[TakeOut]
-  if n < 0
-    return error("archive: negative read of #{n} bytes for #{what}")
-  end
-  if n == 0
-    return ok(TakeOut(stream: st, bytes: "".bytes))
-  end
+  return error("archive: negative read of #{n} bytes for #{what}") if n < 0
+  return ok(TakeOut(stream: st, bytes: "".bytes)) if n == 0
   got = "".bytes
   rest = n
   while rest > 0
     st = try stream_fill(st, smaller(rest, CHUNK), cap, deadline, src)
-    if st.buf.size == 0
-      return error("archive: truncated ZIP data, needed #{n} bytes for #{what}")
-    end
+    return error("archive: truncated ZIP data, needed #{n} bytes for #{what}") if st.buf.size == 0
     k = smaller(rest, st.buf.size)
     got = got + st.buf.take(k)
     st = st.with(buf: st.buf.drop(k))
@@ -416,63 +386,41 @@ end
 # Checks one relative path after its leading `./` is gone: no absolute, drive, UNC, backslash, colon or NUL content
 # and no empty, `.` or `..` segments. `name` and `suffix` shape the error.
 def check_relative(path: String, name: String, suffix: String) -> Result[String]
-  if String.starts_with?(path, "/")
-    return error("archive: #{name} is absolute#{suffix}")
-  end
+  return error("archive: #{name} is absolute#{suffix}") if String.starts_with?(path, "/")
   for b in path.bytes
-    if b == 0
-      return error("archive: #{name} holds a NUL byte#{suffix}")
-    end
-    if b == 92 or b == 58
-      return error("archive: #{name} holds a portable separator#{suffix}")
-    end
+    return error("archive: #{name} holds a NUL byte#{suffix}") if b == 0
+    return error("archive: #{name} holds a portable separator#{suffix}") if b == 92 or b == 58
   end
   if String.length(path) >= 2
-    if String.slice(path, 1, 1) == ":"
-      return error("archive: #{name} holds a drive letter#{suffix}")
-    end
+    return error("archive: #{name} holds a drive letter#{suffix}") if String.slice(path, 1, 1) == ":"
   end
-  if String.starts_with?(path, "\\\\")
-    return error("archive: #{name} is a UNC path#{suffix}")
-  end
+  return error("archive: #{name} is a UNC path#{suffix}") if String.starts_with?(path, "\\\\")
   for seg in String.split(path, "/")
-    if seg == "" or seg == "." or seg == ".."
-      return error("archive: #{name} is not a safe relative path#{suffix}")
-    end
+    return error("archive: #{name} is not a safe relative path#{suffix}") if seg == "" or seg == "." or seg == ".."
   end
   return ok(path)
 end
 
 # Validates one allowlist member: nonempty, short, and a safe relative path after one optional leading `./`.
 def normalize_selector(text: String) -> Result[String]
-  if text == ""
-    return error("archive: a member must not be empty")
-  end
-  if text.bytesize > NAME_BYTES
-    return error("archive: member is too long: #{text}")
-  end
+  return error("archive: a member must not be empty") if text == ""
+  return error("archive: member is too long: #{text}") if text.bytesize > NAME_BYTES
   path = text
   if String.starts_with?(path, "./")
     path = String.slice(path, 2, String.length(path) - 2)
   end
-  if path == "" or path == "."
-    return error("archive: a member must name a file, not the root: #{text}")
-  end
+  return error("archive: a member must name a file, not the root: #{text}") if path == "" or path == "."
   return check_relative(path, "member #{text}", "")
 end
 
 # Validates the whole allowlist: 1 to 256 safe members, no exact, normalized or case-only repeats.
 def validate_members(members: List[String]) -> Result[List[Wanted]]
-  if members.size == 0 or members.size > MAX_MEMBERS
-    return error("archive: members must select 1..256 files")
-  end
+  return error("archive: members must select 1..256 files") if members.size == 0 or members.size > MAX_MEMBERS
   wanted: List[Wanted] = []
   for text in members
     canon = try normalize_selector(text)
     for seen in wanted
-      if seen.path == canon
-        return error("archive: members select the same file twice: #{canon}")
-      end
+      return error("archive: members select the same file twice: #{canon}") if seen.path == canon
       if String.downcase(seen.path) == String.downcase(canon)
         return error("archive: members collide on a case-insensitive system: #{seen.path} and #{canon}")
       end
@@ -497,25 +445,17 @@ def scan_tail(handle: FileHandle, src: String, deadline: Int) -> Result[Found]
   total = 0
   tail = "".bytes
   while true
-    if Time.monotonic_ms() >= deadline
-      return error("archive: operation timed out")
-    end
+    return error("archive: operation timed out") if Time.monotonic_ms() >= deadline
     chunk = try read_raw(handle, CHUNK, deadline, src)
-    if chunk.size == 0
-      break
-    end
+    break if chunk.size == 0
     total = try add_cap(total, chunk.size, INPUT_BYTES, "archive: source exceeds #{INPUT_BYTES} bytes")
     tail = tail + chunk
     if tail.size > TAIL_BYTES
       tail = tail.drop(tail.size - TAIL_BYTES)
     end
   end
-  if total == 0
-    return error("archive: #{src} is empty, not a ZIP archive")
-  end
-  if total < 22
-    return error("archive: #{src} is not a ZIP archive")
-  end
+  return error("archive: #{src} is empty, not a ZIP archive") if total == 0
+  return error("archive: #{src} is not a ZIP archive") if total < 22
   eocd = try find_eocd(tail, total, src)
   return ok(Found(size: total, eocd: eocd))
 end
@@ -535,19 +475,11 @@ def parse_eocd_at(tail: Bytes, p: Int, size: Int, src: String, from_anchor: Bool
   if disk != 0 or cd_disk != 0 or this_count != total_count
     return error("archive: multi-disk archives are not supported: #{src}")
   end
-  if total_count > MAX_ENTRIES
-    return error("archive: too many entries, past #{MAX_ENTRIES}")
-  end
-  if cd_size == ZIP64_SENTINEL or cd_offset == ZIP64_SENTINEL
-    return error("archive: ZIP64 is not supported: #{src}")
-  end
+  return error("archive: too many entries, past #{MAX_ENTRIES}") if total_count > MAX_ENTRIES
+  return error("archive: ZIP64 is not supported: #{src}") if cd_size == ZIP64_SENTINEL or cd_offset == ZIP64_SENTINEL
   start = size - tail.size + p
-  if from_anchor and start + 22 + comment_len != size
-    return error("archive: the end record does not end the file")
-  end
-  if cd_offset + cd_size != start
-    return error("archive: the central directory does not abut the end record")
-  end
+  return error("archive: the end record does not end the file") if from_anchor and start + 22 + comment_len != size
+  return error("archive: the central directory does not abut the end record") if cd_offset + cd_size != start
   return ok(Eocd(start: start, count: total_count, cd_size: cd_size, cd_offset: cd_offset))
 end
 
@@ -556,14 +488,10 @@ def find_eocd(tail: Bytes, size: Int, src: String) -> Result[Eocd]
   unanchored = false
   while p <= tail.size - 4
     if tail[p] == 80 and tail[p + 1] == 75 and tail[p + 2] == 5 and tail[p + 3] == 6
-      if p + 22 > tail.size
-        break
-      end
+      break if p + 22 > tail.size
       case read_u16(tail, p + 20, "the end record is truncated")
         ok(comment_len) ->
-          if starts_at_end(tail, p, size, comment_len)
-            return parse_eocd_at(tail, p, size, src, true)
-          end
+          return parse_eocd_at(tail, p, size, src, true) if starts_at_end(tail, p, size, comment_len)
           case parse_eocd_at(tail, p, size, src, false)
             ok(_) ->
               unanchored = true
@@ -576,9 +504,7 @@ def find_eocd(tail: Bytes, size: Int, src: String) -> Result[Eocd]
       p += 1
     end
   end
-  if unanchored
-    return error("archive: the end record does not end the file")
-  end
+  return error("archive: the end record does not end the file") if unanchored
   return error("archive: the end of the central directory was not found: #{src}")
 end
 
@@ -627,13 +553,9 @@ def scan_cd(handle: FileHandle, src: String, found: Found, deadline: Int) -> Res
 end
 
 def parse_cd_head(head: Bytes, index: Int) -> Result[Head]
-  if head.take(4) != CD_MAGIC
-    return error("archive: bad central directory entry at entry #{index}")
-  end
+  return error("archive: bad central directory entry at entry #{index}") if head.take(4) != CD_MAGIC
   needed = try read_u16(head, 6, "a central directory entry")
-  if needed > VERSION_MAX
-    return error("archive: unsupported version #{needed} at entry #{index}")
-  end
+  return error("archive: unsupported version #{needed} at entry #{index}") if needed > VERSION_MAX
   flags = try read_u16(head, 8, "a central directory entry")
   if Int.bit_and(flags, FLAG_ALLOWED) != flags
     if Int.bit_and(flags, FLAG_ENCRYPTED) == FLAG_ENCRYPTED
@@ -642,9 +564,7 @@ def parse_cd_head(head: Bytes, index: Int) -> Result[Head]
     return error("archive: unsupported flags #{flags} at entry #{index}")
   end
   method = try read_u16(head, 10, "a central directory entry")
-  if method != 0 and method != 8
-    return error("archive: unsupported method #{method} at entry #{index}")
-  end
+  return error("archive: unsupported method #{method} at entry #{index}") if method != 0 and method != 8
   crc = try read_u32(head, 16, "a central directory entry")
   csize = try read_u32(head, 20, "a central directory entry")
   usize = try read_u32(head, 24, "a central directory entry")
@@ -655,14 +575,10 @@ def parse_cd_head(head: Bytes, index: Int) -> Result[Head]
   extra_len = try read_u16(head, 30, "a central directory entry")
   comment_len = try read_u16(head, 32, "a central directory entry")
   disk = try read_u16(head, 34, "a central directory entry")
-  if disk != 0
-    return error("archive: multi-disk archives are not supported at entry #{index}")
-  end
+  return error("archive: multi-disk archives are not supported at entry #{index}") if disk != 0
   attrs = try read_u32(head, 38, "a central directory entry")
   offset = try read_u32(head, 42, "a central directory entry")
-  if offset == ZIP64_SENTINEL
-    return error("archive: ZIP64 is not supported at entry #{index}")
-  end
+  return error("archive: ZIP64 is not supported at entry #{index}") if offset == ZIP64_SENTINEL
   return ok(
     Head(
       method: method,
@@ -683,18 +599,12 @@ end
 def scan_zip64_extra(extra: Bytes, index: Int) -> Result[Void]
   pos = 0
   while pos < extra.size
-    if extra.size - pos < 4
-      return error("archive: bad extra field at entry #{index}")
-    end
+    return error("archive: bad extra field at entry #{index}") if extra.size - pos < 4
     tag = extra[pos] + extra[pos + 1] * 256
     size = extra[pos + 2] + extra[pos + 3] * 256
-    if tag == 1
-      return error("archive: ZIP64 is not supported at entry #{index}")
-    end
+    return error("archive: ZIP64 is not supported at entry #{index}") if tag == 1
     pos += 4 + size
-    if pos > extra.size
-      return error("archive: bad extra field at entry #{index}")
-    end
+    return error("archive: bad extra field at entry #{index}") if pos > extra.size
   end
   return ok()
 end
@@ -704,9 +614,7 @@ end
 # this alone; only a matched entry faces the strict `check_relative` of the third pass.
 def decode_canon(raw: Bytes, flags: Int, index: Int) -> Result[String]
   for b in raw
-    if b == 0
-      return ok("")
-    end
+    return ok("") if b == 0
   end
   path = ""
   if Int.bit_and(flags, FLAG_UTF8) == FLAG_UTF8
@@ -716,9 +624,7 @@ def decode_canon(raw: Bytes, flags: Int, index: Int) -> Result[String]
     end
   else
     for b in raw
-      if b >= 128
-        return error("archive: non-ASCII names need the UTF-8 flag at entry #{index}")
-      end
+      return error("archive: non-ASCII names need the UTF-8 flag at entry #{index}") if b >= 128
     end
     case String.from_bytes(raw)
       ok(text) -> path = text
@@ -736,23 +642,13 @@ end
 
 # True for a regular file: no trailing slash, a regular Unix mode or no type information with no DOS directory bit.
 def classify_regular(name: Bytes, attrs: Int) -> Bool
-  if name.size > 0 and name[name.size - 1] == 47
-    return false
-  end
+  return false if name.size > 0 and name[name.size - 1] == 47
   high = attrs / 65536
   ftype = Int.bit_and(high, S_IFMT)
-  if ftype == S_IFREG
-    return true
-  end
-  if ftype == S_IFDIR
-    return false
-  end
-  if ftype != 0
-    return false
-  end
-  if Int.bit_and(attrs, 16) != 0
-    return false
-  end
+  return true if ftype == S_IFREG
+  return false if ftype == S_IFDIR
+  return false if ftype != 0
+  return false if Int.bit_and(attrs, 16) != 0
   return true
 end
 
@@ -760,12 +656,8 @@ def finish_entry(parsed: Head, name: Bytes, index: Int) -> Result[Entry]
   if parsed.name_len > NAME_BYTES or name.size > NAME_BYTES
     return error("archive: entry name is too long at entry #{index}")
   end
-  if parsed.method == 0 and parsed.csize != parsed.usize
-    return error("archive: bad sizes at entry #{index}")
-  end
-  if parsed.method == 8 and parsed.csize == 0
-    return error("archive: empty deflate data at entry #{index}")
-  end
+  return error("archive: bad sizes at entry #{index}") if parsed.method == 0 and parsed.csize != parsed.usize
+  return error("archive: empty deflate data at entry #{index}") if parsed.method == 8 and parsed.csize == 0
   canon = try decode_canon(name, parsed.flags, index)
   regular = classify_regular(name, parsed.attrs)
   return ok(
@@ -800,14 +692,10 @@ def walk_locals(handle: FileHandle, src: String, found: Found, ordered: List[Ent
   for i in 0..(ordered.size - 1)
     entry = ordered[i]
     if first
-      if entry.offset != 0
-        return error("archive: the archive does not start with a local header")
-      end
+      return error("archive: the archive does not start with a local header") if entry.offset != 0
       first = false
     else
-      if entry.offset != cursor
-        return error("archive: local records overlap or leave a gap at offset #{cursor}")
-      end
+      return error("archive: local records overlap or leave a gap at offset #{cursor}") if entry.offset != cursor
     end
     next_offset = found.eocd.cd_offset
     if i + 1 < ordered.size
@@ -818,9 +706,7 @@ def walk_locals(handle: FileHandle, src: String, found: Found, ordered: List[Ent
     cursor = stepped.cursor
     ctx = stepped.ctx
   end
-  if cursor != found.eocd.cd_offset
-    return error("archive: trailing data before the central directory")
-  end
+  return error("archive: trailing data before the central directory") if cursor != found.eocd.cd_offset
   try check_missing(ctx)
   return ok(ctx.counts)
 end
@@ -833,12 +719,8 @@ def consume_entry(st: Stream, cursor: Int, entry: Entry, next_offset: Int, ctx: 
   case Map.get(ctx.by_name, entry.canon)
     some(index) ->
       canon = try check_relative(entry.canon, "entry name", " at entry #{entry.index}")
-      if ctx.matched[index]
-        return error("archive: the same archive holds #{canon} twice")
-      end
-      if !entry.regular
-        return error("archive: member is not a regular file: #{canon}")
-      end
+      return error("archive: the same archive holds #{canon} twice") if ctx.matched[index]
+      return error("archive: member is not a regular file: #{canon}") if !entry.regular
       if entry.usize > ctx.max_output or ctx.extracted + entry.usize > ctx.max_output
         return error("archive: output exceeds #{ctx.max_output} bytes")
       end
@@ -862,29 +744,19 @@ def read_local(st: Stream, cursor: Int, entry: Entry, size: Int, deadline: Int, 
   head = try stream_take(st, 30, INPUT_BYTES, deadline, src, "a local header")
   st = head.stream
   buf = head.bytes
-  if buf.take(4) != LOCAL_MAGIC
-    return error("archive: bad local header at offset #{cursor}")
-  end
+  return error("archive: bad local header at offset #{cursor}") if buf.take(4) != LOCAL_MAGIC
   needed = try read_u16(buf, 4, "a local header")
-  if needed > VERSION_MAX
-    return error("archive: unsupported version #{needed} at offset #{cursor}")
-  end
+  return error("archive: unsupported version #{needed} at offset #{cursor}") if needed > VERSION_MAX
   flags = try read_u16(buf, 6, "a local header")
-  if flags != entry.flags
-    return error("archive: local and central flags differ at entry #{entry.index}")
-  end
+  return error("archive: local and central flags differ at entry #{entry.index}") if flags != entry.flags
   method = try read_u16(buf, 8, "a local header")
-  if method != entry.method
-    return error("archive: local and central methods differ at entry #{entry.index}")
-  end
+  return error("archive: local and central methods differ at entry #{entry.index}") if method != entry.method
   crc = try read_u32(buf, 14, "a local header")
   csize = try read_u32(buf, 18, "a local header")
   usize = try read_u32(buf, 22, "a local header")
   descriptor = Int.bit_and(flags, FLAG_DESCRIPTOR) == FLAG_DESCRIPTOR
   if descriptor
-    if crc != 0 or csize != 0 or usize != 0
-      return error("archive: bad sizes at entry #{entry.index}")
-    end
+    return error("archive: bad sizes at entry #{entry.index}") if crc != 0 or csize != 0 or usize != 0
   else
     if crc != entry.crc or csize != entry.csize or usize != entry.usize
       return error("archive: local and central sizes differ at entry #{entry.index}")
@@ -895,9 +767,7 @@ def read_local(st: Stream, cursor: Int, entry: Entry, size: Int, deadline: Int, 
   cursor = try add_cap(cursor, 30, size, "archive: a local header runs past the end")
   name = try stream_take(st, name_len, INPUT_BYTES, deadline, src, "a local name")
   st = name.stream
-  if name.bytes != entry.name
-    return error("archive: local and central names differ at entry #{entry.index}")
-  end
+  return error("archive: local and central names differ at entry #{entry.index}") if name.bytes != entry.name
   cursor = try add_cap(cursor, name_len, size, "archive: a local name runs past the end")
   extra = try stream_take(st, extra_len, INPUT_BYTES, deadline, src, "a local extra field")
   st = extra.stream
@@ -1008,9 +878,7 @@ def pump_stored(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, src
   rest = entry.csize
   crc = 0
   while rest > 0
-    if Time.monotonic_ms() >= deadline
-      return error("archive: operation timed out")
-    end
+    return error("archive: operation timed out") if Time.monotonic_ms() >= deadline
     piece = try stream_take(st, smaller(rest, CHUNK), INPUT_BYTES, deadline, src, "file data of #{entry.canon}")
     st = piece.stream
     data = piece.bytes
@@ -1020,9 +888,7 @@ def pump_stored(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, src
     end
     crc = try chain_crc(data, crc, entry.canon)
   end
-  if crc != entry.crc
-    return error("archive: CRC32 mismatch for #{entry.canon}: expected #{entry.crc}, got #{crc}")
-  end
+  return error("archive: CRC32 mismatch for #{entry.canon}: expected #{entry.crc}, got #{crc}") if crc != entry.crc
   return ok(st)
 end
 
@@ -1072,12 +938,8 @@ end
 # The next piece of a compressed window, at most CHUNK bytes; a window that runs past the end of the file is
 # truncated.
 def next_piece(handle: FileHandle, piece: Piece, deadline: Int, src: String, canon: String) -> Result[Piece]
-  if piece.left == 0
-    return ok(Piece(bytes: "".bytes, left: 0, done: true))
-  end
-  if Time.monotonic_ms() >= deadline
-    return error("archive: operation timed out")
-  end
+  return ok(Piece(bytes: "".bytes, left: 0, done: true)) if piece.left == 0
+  return error("archive: operation timed out") if Time.monotonic_ms() >= deadline
   want = smaller(piece.left, CHUNK)
   bytes = try read_raw(handle, want, deadline, src)
   if bytes.size < want
@@ -1097,15 +959,11 @@ end
 # The error of the inflate pipeline as std/archive words it. The zlib texts matched here are the ones vm/zlib.c gives
 # (agc_zstep_next): keep them in step.
 def inflate_error(message: String, canon: String) -> String
-  if String.starts_with?(message, "archive: ")
-    return message
-  end
+  return message if String.starts_with?(message, "archive: ")
   if message == "zlib: trailing bytes after stream end"
     return "archive: trailing bytes after the deflate stream of #{canon}"
   end
-  if message == "zlib: truncated stream"
-    return "archive: truncated deflate data for #{canon}"
-  end
+  return "archive: truncated deflate data for #{canon}" if message == "zlib: truncated stream"
   return "archive: deflate data is invalid for #{canon}: #{message}"
 end
 
@@ -1119,12 +977,8 @@ end
 # True when `out` is the destination itself or lies directly below it. Either path separator counts: `Path.join`
 # uses the host one, and the joined segments themselves never hold a separator.
 def stays_under(out: String, dest: String) -> Bool
-  if out == dest
-    return true
-  end
-  if String.starts_with?(out, "#{dest}/")
-    return true
-  end
+  return true if out == dest
+  return true if String.starts_with?(out, "#{dest}/")
   return String.starts_with?(out, back_join(dest))
 end
 
@@ -1134,24 +988,18 @@ end
 
 def join_under(dest: String, segments: List[String]) -> Result[String]
   out = try join_one(List.concat([dest], segments))
-  if !stays_under(out, dest)
-    return error("archive: selected path escapes the destination")
-  end
+  return error("archive: selected path escapes the destination") if !stays_under(out, dest)
   return ok(out)
 end
 
 # Creates the parents of a selected file under the new base, refusing case-only collisions portably.
 def make_parents(ctx: Zctx, segments: List[String], deadline: Int) -> Result[Zctx]
-  if segments.size <= 1
-    return ok(ctx)
-  end
+  return ok(ctx) if segments.size <= 1
   parts: List[String] = [ctx.dest]
   for k in 0..(segments.size - 2)
     parts = List.append(parts, segments[k])
     dir = try join_one(parts)
-    if !stays_under(dir, ctx.dest)
-      return error("archive: selected path escapes the destination")
-    end
+    return error("archive: selected path escapes the destination") if !stays_under(dir, ctx.dest)
     fold = String.downcase(dir)
     if Map.has_key?(ctx.seen_fold, fold) and !Map.has_key?(ctx.seen_exact, dir)
       return error("archive: selected files collide on a case-insensitive system: #{dir}")
@@ -1177,9 +1025,7 @@ end
 # Names every selected member that the archive never held.
 def check_missing(ctx: Zctx) -> Result[Void]
   for item in ctx.wanted
-    if !ctx.matched[item.index]
-      return error("archive: member not found: #{item.text}")
-    end
+    return error("archive: member not found: #{item.text}") if !ctx.matched[item.index]
   end
   return ok()
 end

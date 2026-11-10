@@ -86,9 +86,7 @@ export def collect(parts: String, left_out: List[String]) -> Run
   end
 
   written = write_report(text(merged, left_out))
-  if !written.ok?
-    return covered.with(problem: "cannot write #{REPORT}: #{written.message}")
-  end
+  return covered.with(problem: "cannot write #{REPORT}: #{written.message}") if !written.ok?
 
   return covered.with(path: REPORT)
 end
@@ -101,9 +99,7 @@ end
 ## A path as the report names it: relative to the working directory when it is inside it.
 export def shown(path: String) -> String
   here = Path.cwd().unwrap_or("")
-  if here != "" and path.starts_with?("#{here}/")
-    return path.slice(here.length + 1, path.length - here.length - 1)
-  end
+  return path.slice(here.length + 1, path.length - here.length - 1) if here != "" and path.starts_with?("#{here}/")
 
   return path
 end
@@ -124,9 +120,7 @@ export def parse(text: String) -> Result[List[Source]]
     end
 
     colon = line.index_of(":").unwrap_or(-1)
-    if colon < 0
-      return error("not an LCOV line: #{line}")
-    end
+    return error("not an LCOV line: #{line}") if colon < 0
 
     key = line.slice(0, colon)
     value = line.slice(colon + 1, line.length - colon - 1)
@@ -142,9 +136,7 @@ export def parse(text: String) -> Result[List[Source]]
     end
   end
 
-  if open
-    return error("the last LCOV record has no end_of_record")
-  end
+  return error("the last LCOV record has no end_of_record") if open
 
   return ok(found)
 end
@@ -257,9 +249,7 @@ end
 # `source` with one FN (line, name), FNDA (calls, name) or DA (line, count). The totals are counted again on writing.
 def with_field(source: Source, key: String, value: String) -> Result[Source]
   comma = value.index_of(",").unwrap_or(-1)
-  if comma < 0
-    return error("not an LCOV line: #{key}:#{value}")
-  end
+  return error("not an LCOV line: #{key}:#{value}") if comma < 0
 
   number = try value.slice(0, comma).to_int
   name = value.slice(comma + 1, value.length - comma - 1)
@@ -301,9 +291,7 @@ end
 
 # "3/4 lines (75.0%)", the share rounded down to a tenth.
 def share(lines: Int, hit: Int) -> String
-  if lines == 0
-    return "0/0 lines"
-  end
+  return "0/0 lines" if lines == 0
 
   tenths = (hit * 1000) / lines
   return "#{hit}/#{lines} lines (#{tenths / 10}.#{tenths % 10}%)"
@@ -334,9 +322,7 @@ def read_part(path: String) -> Result[List[Source]]
   end
 
   _ = File.close(handle, 5000)
-  if line.message != "filesystem: end of file"
-    return error(line.message)
-  end
+  return error(line.message) if line.message != "filesystem: end of file"
 
   sources = try parse(lines.join("\n"))
   return ok(
@@ -351,9 +337,7 @@ def write_report(report: String) -> Result[Void]
   try Dir.mkdir("coverage", 5000)
   bytes = report.bytes
   there = File.stat(REPORT, 5000).ok?
-  if there and bytes.size <= REPLACE_LIMIT
-    return File.replace(REPORT, bytes, 5000)
-  end
+  return File.replace(REPORT, bytes, 5000) if there and bytes.size <= REPLACE_LIMIT
 
   fresh = "#{REPORT}.#{System.pid()}.new"
   written = write_chunks(fresh, report)

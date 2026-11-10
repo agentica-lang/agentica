@@ -145,9 +145,7 @@ def save_report(path: String, text: String) -> Result[Void]
 end
 
 def min_of(a: Int, b: Int) -> Int
-  if a < b
-    return a
-  end
+  return a if a < b
   return b
 end
 
@@ -156,17 +154,13 @@ end
 def read_tags(handle: FileHandle) -> Result[String]
   line = File.read_line(handle, 5000)
   if !line.ok?
-    if line.message == "filesystem: end of file"
-      return ok("")
-    end
+    return ok("") if line.message == "filesystem: end of file"
 
     return error(line.message)
   end
 
   text = JSON.string(JSON.parse(line.unwrap!).unwrap_or(JSON.null()))
-  if !text.ok?
-    return error("the line is not a JSON string")
-  end
+  return error("the line is not a JSON string") if !text.ok?
 
   return text
 end
@@ -175,14 +169,10 @@ end
 # behaviour without the flag.
 def read_jobs(handle: FileHandle) -> Int
   line = File.read_line(handle, 5000)
-  if !line.ok?
-    return 1
-  end
+  return 1 if !line.ok?
 
   parsed = JSON.int(JSON.parse(line.unwrap!).unwrap_or(JSON.null()))
-  if !parsed.ok? or parsed.unwrap! < 1
-    return 1
-  end
+  return 1 if !parsed.ok? or parsed.unwrap! < 1
 
   return parsed.unwrap!
 end
@@ -191,18 +181,14 @@ end
 # line is no coverage.
 def read_coverage(handle: FileHandle) -> String
   line = File.read_line(handle, 5000)
-  if !line.ok?
-    return ""
-  end
+  return "" if !line.ok?
 
   return JSON.string(JSON.parse(line.unwrap!).unwrap_or(JSON.null())).unwrap_or("")
 end
 
 # The coverage of the run (Coverage.collect), without the test files and the step program: they always run.
 def covered_run(config: Config, parts: String, entries: List[Entry]) -> Coverage.Run
-  if parts == ""
-    return Coverage.Run(path: "", files: [], broken: [], problem: "")
-  end
+  return Coverage.Run(path: "", files: [], broken: [], problem: "") if parts == ""
 
   left_out = entries.filter do |entry| entry.kind == "tests" end.map do |entry| Coverage.shown(entry.path) end
   return Coverage.collect(parts, left_out.push(Coverage.shown(config.steps_source)))
@@ -211,9 +197,7 @@ end
 # The `--timing` line, after the jobs line: a JSON boolean. A missing or unusable line is no timing.
 def read_timing(handle: FileHandle) -> Bool
   line = File.read_line(handle, 5000)
-  if !line.ok?
-    return false
-  end
+  return false if !line.ok?
 
   return JSON.bool(JSON.parse(line.unwrap!).unwrap_or(JSON.null())).unwrap_or(false)
 end
@@ -314,9 +298,7 @@ def matched(
 ) -> List[Report.FileResult]
   filtered = config.only != "" or Tags.filters?(tags)
   kept = files.any? do |file| file.scenarios.size > 0 or failed?(file.verdict) end
-  if not filtered or kept
-    return files
-  end
+  return files if not filtered or kept
   message = "no test or scenario name contains #{config.only.inspect}"
   if config.only == ""
     message = "no scenario has tags matching #{tags_text.inspect}"
@@ -348,9 +330,7 @@ end
 
 # The name of the LCOV parts of the file at `at` without its `.info`, or "" without coverage.
 def part_of(parts: String, at: Int) -> String
-  if parts == ""
-    return ""
-  end
+  return "" if parts == ""
 
   return "#{parts}/#{at}"
 end
@@ -405,9 +385,7 @@ end
 # The list child sends the patterns of BDD.run in order on its channel and exits, so the channel is read until it ends.
 def list_steps(config: Config, where: Report.Span) -> Listing
   spawned = Process.spawn_channel(config.vm, vm_args(config, 1000000, "list", ""), ".", 30000)
-  if not spawned.ok?
-    return Listing.Broken(Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where))
-  end
+  return Listing.Broken(Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where)) if not spawned.ok?
   p = spawned.unwrap!
   _ = Process.close_stdin(p, 5000)
   deadline = Time.monotonic_ms() + 30000
@@ -428,14 +406,10 @@ def list_steps(config: Config, where: Report.Span) -> Listing
   end
   records = read.items
   failures = records.filter do |record| Child.event_of(record) == "fail" end
-  if failures.size > 0
-    return Listing.Broken(record_error(failures[0], where))
-  end
+  return Listing.Broken(record_error(failures[0], where)) if failures.size > 0
   if not records.any? do |record| Child.event_of(record) == "ready" end
     crash = Child.stderr_diagnostic(output.unwrap!.stderr, where)
-    if crash.ok?
-      return Listing.Broken(crash.unwrap!)
-    end
+    return Listing.Broken(crash.unwrap!) if crash.ok?
     return Listing.Broken(Report.error_at("RUNTIME-BDD-CONTEXT", "the step program did not call BDD.run", where))
   end
   texts = records.filter do |record| Child.event_of(record) == "step" end
@@ -458,9 +432,7 @@ def run_file(
   if text.message == "filesystem: file exceeds 1048576 bytes"
     return Report.file_error(path, "feature", Child.located("RUNTIME-BDD-IO", "feature file exceeds 1 MiB", path))
   end
-  if not text.ok?
-    return Report.file_error(path, "feature", Child.located("RUNTIME-BDD-INFRA", text.message, path))
-  end
+  return Report.file_error(path, "feature", Child.located("RUNTIME-BDD-INFRA", text.message, path)) if not text.ok?
   case Gherkin.parse(path, text.unwrap!)
     Gherkin.Outcome.Failed(problem) -> return Report.file_error(path, "feature", from_diagnostic(problem))
     Gherkin.Outcome.Done(feature) ->
@@ -735,25 +707,17 @@ def await_exit(p: Process, deadline: Int, span: Report.Span) -> Report.Verdict
   if line.message == "process: end of input"
     code = Process.wait(p, Child.left(deadline))
     printed = Process.read_available(p, Child.left(deadline))
-    if not printed.ok?
-      return Report.Verdict.Fail(read_failure(p, printed.message, deadline, span))
-    end
-    if code.ok? and code.unwrap! == 0
-      return Report.Verdict.Pass
-    end
+    return Report.Verdict.Fail(read_failure(p, printed.message, deadline, span)) if not printed.ok?
+    return Report.Verdict.Pass if code.ok? and code.unwrap! == 0
   end
-  if line.message == "process: operation timed out"
-    return failure("RUNTIME-BDD-TIMEOUT", late_text(hooks), span)
-  end
+  return failure("RUNTIME-BDD-TIMEOUT", late_text(hooks), span) if line.message == "process: operation timed out"
   return Report.Verdict.Fail(read_failure(p, line.message, deadline, span))
 end
 
 # Why a child that has sent its last record is still running at the deadline: its after hooks when it said they run
 # (the `after` record), else only its own end.
 def late_text(hooks: Bool) -> String
-  if hooks
-    return "an after hook did not finish within the scenario's time limit"
-  end
+  return "an after hook did not finish within the scenario's time limit" if hooks
   return "the step program did not exit within the scenario's time limit"
 end
 
@@ -764,17 +728,11 @@ def read_failure(p: Process, message: String, deadline: Int, span: Report.Span) 
   if message == "process: output exceeds 1048576 bytes" or message == "process: line exceeds 1048576 bytes"
     return Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "handler output exceeds 1 MiB", span)
   end
-  if not Child.gone?(message)
-    return Report.error_at("RUNTIME-BDD-IO", message, span)
-  end
+  return Report.error_at("RUNTIME-BDD-IO", message, span) if not Child.gone?(message)
   output = Process.output(p, Child.left(deadline))
-  if not output.ok?
-    return Report.error_at("RUNTIME-BDD-TIMEOUT", "BDD operation timed out", span)
-  end
+  return Report.error_at("RUNTIME-BDD-TIMEOUT", "BDD operation timed out", span) if not output.ok?
   crash = Child.stderr_diagnostic(output.unwrap!.stderr, span)
-  if crash.ok?
-    return crash.unwrap!
-  end
+  return crash.unwrap! if crash.ok?
   code = Process.wait(p, Child.left(deadline))
   return Report.error_at(
     "RUNTIME-BDD-PREMATURE-EXIT",
@@ -834,9 +792,7 @@ def vm_args(config: Config, steps: Int, mode: String, cover: String) -> List[Str
     options = options.concat(["--coverage", cover])
   end
 
-  if config.steps_bytecode == ""
-    return options.concat(["--embedded", "steps", "--", "--agentica-bdd", mode])
-  end
+  return options.concat(["--embedded", "steps", "--", "--agentica-bdd", mode]) if config.steps_bytecode == ""
   return options.concat(["--", config.steps_bytecode, "--agentica-bdd", mode])
 end
 

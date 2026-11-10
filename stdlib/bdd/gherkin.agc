@@ -118,9 +118,7 @@ export def parse(file: String, text: String) -> Outcome[Feature]
       end
       cursor += 1
     elsif line.start_with?("@")
-      if not tags?(line)
-        return fail("PARSE-GHERKIN-TAGS", "invalid tags", where)
-      end
+      return fail("PARSE-GHERKIN-TAGS", "invalid tags", where) if not tags?(line)
       pending = pending.concat(split_tags(line))
       cursor += 1
     elsif heading != ""
@@ -129,9 +127,7 @@ export def parse(file: String, text: String) -> Outcome[Feature]
         return fail("PARSE-GHERKIN-HEADER", "a section needs a name", where)
       end
       if heading == "Feature"
-        if has_title
-          return fail("PARSE-GHERKIN-HEADER", "one Feature is allowed per file", where)
-        end
+        return fail("PARSE-GHERKIN-HEADER", "one Feature is allowed per file", where) if has_title
         title = name
         has_title = true
         title_span = where
@@ -204,16 +200,12 @@ export def parse(file: String, text: String) -> Outcome[Feature]
       if mode != "background" and mode != "scenario"
         return fail("PARSE-GHERKIN-STEP", "a step requires Background or Scenario", where)
       end
-      if pending.size > 0
-        return fail("PARSE-GHERKIN-TAGS", "tags must precede a section", where)
-      end
+      return fail("PARSE-GHERKIN-TAGS", "tags must precede a section", where) if pending.size > 0
       kind = action
       if action == "And" or action == "But"
         kind = previous
       end
-      if kind == ""
-        return fail("PARSE-GHERKIN-STEP", "And or But needs a preceding step", where)
-      end
+      return fail("PARSE-GHERKIN-STEP", "And or But needs a preceding step", where) if kind == ""
       previous = kind
       step = Step(
         kind: kind,
@@ -276,24 +268,14 @@ export def parse(file: String, text: String) -> Outcome[Feature]
       cursor += 1
     end
   end
-  if not has_title
-    return fail("PARSE-GHERKIN-HEADER", "missing Feature", location(src, 0))
-  end
-  if pending.size > 0
-    return fail("PARSE-GHERKIN-TAGS", "tags without a section", location(src, 0))
-  end
-  if not has_current
-    return fail("PARSE-GHERKIN-EMPTY", "Feature needs at least one scenario", title_span)
-  end
-  if has_background and background.size == 0
-    return fail("PARSE-GHERKIN-EMPTY", "Background needs steps", title_span)
-  end
+  return fail("PARSE-GHERKIN-HEADER", "missing Feature", location(src, 0)) if not has_title
+  return fail("PARSE-GHERKIN-TAGS", "tags without a section", location(src, 0)) if pending.size > 0
+  return fail("PARSE-GHERKIN-EMPTY", "Feature needs at least one scenario", title_span) if not has_current
+  return fail("PARSE-GHERKIN-EMPTY", "Background needs steps", title_span) if has_background and background.size == 0
   drafts = drafts.push(current)
   scenarios: List[Scenario] = []
   for draft in drafts
-    if draft.steps.size == 0
-      return fail("PARSE-GHERKIN-EMPTY", "Scenario needs steps", draft.span)
-    end
+    return fail("PARSE-GHERKIN-EMPTY", "Scenario needs steps", draft.span) if draft.steps.size == 0
     if draft.outline and draft.examples.size == 0
       return fail("PARSE-GHERKIN-EXAMPLES", "Scenario Outline needs Examples", draft.span)
     end
@@ -322,9 +304,7 @@ end
 
 def read_lines(file: String, text: String) -> Source
   raws = text.split("\n").map do |part|
-    if part.end_with?("\r")
-      return part.slice(0, part.length - 1)
-    end
+    return part.slice(0, part.length - 1) if part.end_with?("\r")
     part
   end
 
@@ -349,9 +329,7 @@ end
 def strip_prefix(text: String) -> Int
   count = 0
   for c in text.split("")
-    if not " \t\n\r".include?(c) and c != String.from_code(12)
-      return count
-    end
+    return count if not " \t\n\r".include?(c) and c != String.from_code(12)
 
     count += 1
   end
@@ -365,9 +343,7 @@ end
 def blank_prefix(text: String) -> Int
   count = 0
   for c in text.split("")
-    if c != " " and c != "\t"
-      return count
-    end
+    return count if c != " " and c != "\t"
     count += 1
   end
   return count
@@ -379,9 +355,7 @@ end
 
 def heading_keyword(line: String) -> String
   colon = line.index_of(":")
-  if colon.none?
-    return ""
-  end
+  return "" if colon.none?
   word = line.slice(0, colon.unwrap!)
   if (
     word == "Feature" or
@@ -409,18 +383,14 @@ end
 
 def unsupported?(line: String) -> Bool
   for prefix in ["Rule:", "Scenario Template:", "Scenarios:", "* ", "```", "Given:", "When:", "Then:", "And:", "But:"]
-    if line.start_with?(prefix)
-      return true
-    end
+    return true if line.start_with?(prefix)
   end
   return false
 end
 
 def tags?(line: String) -> Bool
   for tag in line.replace("\t", " ").split(" ")
-    if tag != "" and (tag.length < 2 or not tag.start_with?("@"))
-      return false
-    end
+    return false if tag != "" and (tag.length < 2 or not tag.start_with?("@"))
   end
   return true
 end
@@ -433,9 +403,7 @@ end
 def doc_delimiter?(line: String) -> Bool
   allowed = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_./+-"
   for c in rest_of(line, 3).split("")
-    if not allowed.include?(c)
-      return false
-    end
+    return false if not allowed.include?(c)
   end
   return true
 end
@@ -443,9 +411,7 @@ end
 def unique_names?(names: List[String]) -> Bool
   seen: Map[String, Bool] = {}
   for name in names
-    if name == "" or seen.has_key?(name)
-      return false
-    end
+    return false if name == "" or seen.has_key?(name)
     seen = seen.put(name, true)
   end
   return true
@@ -482,12 +448,8 @@ def with_examples(draft: Draft, rows: List[ExampleRow]) -> Draft
 end
 
 def active_steps(mode: String, background: List[Step], current: Draft, has_current: Bool) -> List[Step]
-  if mode == "background"
-    return background
-  end
-  if has_current
-    return current.steps
-  end
+  return background if mode == "background"
+  return current.steps if has_current
   return []
 end
 
@@ -505,9 +467,7 @@ def read_table(src: Source, start: Int) -> Outcome[Table]
   while cursor < src.texts.size and src.texts[cursor].start_with?("|")
     where = location(src, cursor)
     cells = table_row(src.texts[cursor])
-    if not cells.ok?
-      return Outcome.Failed(problem("PARSE-GHERKIN-TABLE", cells.message, where))
-    end
+    return Outcome.Failed(problem("PARSE-GHERKIN-TABLE", cells.message, where)) if not cells.ok?
     found = cells.unwrap!
     if rows.size == 0
       width = found.size
@@ -538,9 +498,7 @@ def read_doc(src: Source, start: Int) -> Outcome[Doc]
   end
   content = src.raws.take(cursor).drop(start + 1).map do |value|
     blanks = blank_prefix(value)
-    if indent < blanks
-      return rest_of(value, indent)
-    end
+    return rest_of(value, indent) if indent < blanks
     rest_of(value, blanks)
   end
 
@@ -548,9 +506,7 @@ def read_doc(src: Source, start: Int) -> Outcome[Doc]
 end
 
 def table_row(row: String) -> Result[List[String]]
-  if not row.end_with?("|")
-    return error("a table row must end with |")
-  end
+  return error("a table row must end with |") if not row.end_with?("|")
   body = rest_of(row, 1)
   chars = body.split("")
   ends = (0...chars.size).to_a.filter do |i| chars[i] == "|" and even_run?(chars, i) end
@@ -558,15 +514,9 @@ def table_row(row: String) -> Result[List[String]]
   raws = (0...ends.size).to_a.map do |k| body.slice(starts[k], ends[k] - starts[k]) end
   rest = rest_of(body, starts[ends.size])
   cells = collect(raws.concat([rest]).map(&unescape_cell))
-  if not cells.ok?
-    return cells
-  end
-  if rest != ""
-    return error("a table row must end with an unescaped |")
-  end
-  if ends.size == 0
-    return error("a table row needs at least one cell")
-  end
+  return cells if not cells.ok?
+  return error("a table row must end with an unescaped |") if rest != ""
+  return error("a table row needs at least one cell") if ends.size == 0
   return ok(cells.unwrap!.take(ends.size).map do |cell| cell.strip end)
 end
 
@@ -580,17 +530,13 @@ end
 
 def unescape_cell(raw: String) -> Result[String]
   parts = raw.split("\\\\").map do |part| part.replace("\\|", "|").replace("\\n", "\n") end
-  if parts.any? do |part| part.include?("\\") end
-    return error("invalid table escape")
-  end
+  return error("invalid table escape") if parts.any? do |part| part.include?("\\") end
   return ok(parts.join("\\"))
 end
 
 def collect(results: List[Result[String]]) -> Result[List[String]]
   for result in results
-    if not result.ok?
-      return error(result.message)
-    end
+    return error(result.message) if not result.ok?
   end
   return ok(results.map do |result| result.unwrap! end)
 end
@@ -621,9 +567,7 @@ end
 # report's `example` place tells them apart.
 def row_suffix(name: String, row: ExampleRow) -> String
   unused = (0...row.headers.size).to_a.filter do |i| not name.include?("<#{row.headers[i]}>") end
-  if unused.size == 0
-    return ""
-  end
+  return "" if unused.size == 0
 
   values = unused.map do |i| flat(row.cells[i]) end
   return " (#{values.join(", ")})"
@@ -632,9 +576,7 @@ end
 # A cell as one visible piece of a name: empty is `""`, and a control character (a line feed would break the text
 # report) is written as `\n`, `\r`, `\t` or `\xNN`.
 def flat(cell: String) -> String
-  if cell == ""
-    return "\"\""
-  end
+  return "\"\"" if cell == ""
 
   return cell.split("").map do |c| flat_char(c) end.join("")
 end
@@ -668,9 +610,7 @@ end
 # written, as in Cucumber: a doc string may hold `#include <stdio.h>` or HTML. So a misspelled column in a step is
 # not an error here; the step then fails as undefined or ambiguous, with the text unreplaced.
 def substitute(text: String, bindings: Map[String, String]) -> String
-  if not text.include?("<")
-    return text
-  end
+  return text if not text.include?("<")
   parts = text.split("<")
   return parts[0] + parts.drop(1).map do |part| substitute_part(part, bindings) end.join("")
 end
@@ -678,12 +618,8 @@ end
 def substitute_part(part: String, bindings: Map[String, String]) -> String
   # unwrap_or(0) keeps both a "<" with no ">" and an empty "<>" literal.
   close = part.index_of(">").unwrap_or(0)
-  if close == 0
-    return "<#{part}"
-  end
+  return "<#{part}" if close == 0
   name = part.slice(0, close)
-  if not bindings.has_key?(name)
-    return "<#{part}"
-  end
+  return "<#{part}" if not bindings.has_key?(name)
   return bindings[name] + rest_of(part, close + 1)
 end
