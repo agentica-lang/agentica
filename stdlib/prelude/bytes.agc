@@ -6,6 +6,4 @@ def each(bytes: Bytes, f: Fn[Int, Void]) -> Void
   end
 end
 
-def empty(bytes: Bytes) -> Bool
-  return bytes.length == 0
-end
+def empty(bytes: Bytes) -> Bool = bytes.length == 0

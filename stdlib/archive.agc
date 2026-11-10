@@ -302,9 +302,7 @@ def strip_slashes(path: String) -> String
   return out
 end
 
-def is_zero_block(block: Bytes) -> Bool
-  return block == ZERO_BLOCK
-end
+def is_zero_block(block: Bytes) -> Bool = block == ZERO_BLOCK
 
 def parse_octal(block: Bytes, offset: Int, length: Int, what: String, entry: Int) -> Result[Int]
   value = 0
@@ -350,9 +348,7 @@ def trim_nul(bytes: Bytes) -> Bytes
   return bytes
 end
 
-def slice_range(bytes: Bytes, from: Int, to: Int) -> Bytes
-  return bytes.drop(from).take(to - from)
-end
+def slice_range(bytes: Bytes, from: Int, to: Int) -> Bytes = bytes.drop(from).take(to - from)
 
 def read_header(block: Bytes, entry: Int) -> Result[TarHeader]
   stored = try parse_octal(block, 148, 8, "checksum", entry)
@@ -554,9 +550,7 @@ def stays_under(out: String, dest: String) -> Bool
   return String.starts_with?(out, back_join(dest))
 end
 
-def back_join(dest: String) -> String
-  return "#{dest}\\"
-end
+def back_join(dest: String) -> String = "#{dest}\\"
 
 def join_under(dest: String, segments: List[String]) -> Result[String]
   out = try join_one(List.concat([dest], segments))

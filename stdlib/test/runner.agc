@@ -797,9 +797,7 @@ def vm_args(config: Config, steps: Int, mode: String, cover: String) -> List[Str
 end
 
 # The user's --deny-* flags and --sandbox: the words after the binary in `agentica`.
-def deny(config: Config) -> List[String]
-  return config.agentica.drop(1)
-end
+def deny(config: Config) -> List[String] = config.agentica.drop(1)
 
 def failure(code: String, message: String, span: Report.Span) -> Report.Verdict
   return Report.Verdict.Fail(Report.error_at(code, message, span))

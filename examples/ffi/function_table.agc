@@ -12,9 +12,7 @@ extern "demo"
   def scale(fn: C.Function, x: C.Double, k: C.Double) -> C.Double
 end
 
-def slot(table: C.Pointer, index: Int) -> C.Pointer
-  return Native.get_pointer(table, index * 8)
-end
+def slot(table: C.Pointer, index: Int) -> C.Pointer = Native.get_pointer(table, index * 8)
 
 def main() -> Void
   table = demo_api_table(1)

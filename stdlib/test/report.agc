@@ -153,9 +153,7 @@ export def with_actual(problem: Error, actual: String) -> Error
 end
 
 ## Builds a file result with no scenarios that fails with `problem`.
-export def file_error(path: String, kind: String, problem: Error) -> FileResult
-  return file_failure(path, kind, problem, "")
-end
+export def file_error(path: String, kind: String, problem: Error) -> FileResult = file_failure(path, kind, problem, "")
 
 ## Like `file_error`, and keeps the `output` of the file.
 export def file_failure(path: String, kind: String, problem: Error, output: String) -> FileResult
@@ -164,15 +162,11 @@ end
 
 ## Returns the exit code of a run: 0 when there is a scenario and nothing failed or was left unexecuted (a skipped
 ## scenario is not a failure), 2 when any file or scenario error is `RUNTIME-BDD-INFRA` or `RUNTIME-BDD-USAGE`, else 1.
-export def exit_code(files: List[FileResult]) -> Int
-  return totals(files).exit_code
-end
+export def exit_code(files: List[FileResult]) -> Int = totals(files).exit_code
 
 ## Builds the `--json` report of `files` and the `seed` as a JSON object. `wall_ms` is the time the run took, which
 ## is less than the sum of the file times when files run in parallel (`--jobs`).
-export def json(files: List[FileResult], seed: Int, wall_ms: Int) -> Json
-  return json_and(files, seed, wall_ms, {})
-end
+export def json(files: List[FileResult], seed: Int, wall_ms: Int) -> Json = json_and(files, seed, wall_ms, {})
 
 ## `json` with the fields of `more` added (`coverage`), or put in place of its own (`ok` and `exit_code`).
 export def json_and(files: List[FileResult], seed: Int, wall_ms: Int, more: Map[String, Json]) -> Json
@@ -198,9 +192,7 @@ export def json_and(files: List[FileResult], seed: Int, wall_ms: Int, more: Map[
 end
 
 ## Builds the plain text report, or the `--ai` text when `ai` is true. It has no final newline.
-export def text(files: List[FileResult], ai: Bool, seed: Int) -> String
-  return report_text(files, ai, seed, false, 0)
-end
+export def text(files: List[FileResult], ai: Bool, seed: Int) -> String = report_text(files, ai, seed, false, 0)
 
 ## Like `text`, with the time of the run (`wall_ms`, as in `json`), of each file and of the slowest scenarios
 ## (`agentica test --timing`) before the totals.
@@ -226,9 +218,7 @@ def report_text(files: List[FileResult], ai: Bool, seed: Int, timing: Bool, wall
 end
 
 # The time of a file: the durations of its scenarios, which run one after another.
-def file_ms(file: FileResult) -> Int
-  return file.scenarios.reduce(0) do |n, item| n + item.duration_ms end
-end
+def file_ms(file: FileResult) -> Int = file.scenarios.reduce(0) do |n, item| n + item.duration_ms end
 
 # The time of the run, then one line for each file with the sum of the times of its scenarios in milliseconds, then the
 # slowest scenarios, as `agentica test --timing` prints them. A file with no scenario (a file error) shows no line.
@@ -298,9 +288,7 @@ def totals(files: List[FileResult]) -> Totals
   )
 end
 
-def failed?(verdict: Verdict) -> Bool
-  return status(verdict) == "failed"
-end
+def failed?(verdict: Verdict) -> Bool = status(verdict) == "failed"
 
 def severe?(verdict: Verdict) -> Bool
   case verdict
@@ -528,9 +516,7 @@ def stack_lines(root: Json) -> List[String]
 end
 
 # The frames the VM shows before a cut stack's gap: AGC_STACK_HEAD in vm/port.h.
-def stack_head() -> Int
-  return 15
-end
+def stack_head() -> Int = 15
 
 def not_shown(omitted: Int) -> String
   return "... 1 frame not shown ..." if omitted == 1
@@ -564,13 +550,9 @@ def detail_text(label: String, detail: Detail) -> String
   end
 end
 
-def text_at(root: Json, key: String) -> Result[String]
-  return JSON.string(try JSON.get(root, key))
-end
+def text_at(root: Json, key: String) -> Result[String] = JSON.string(try JSON.get(root, key))
 
-def int_at(root: Json, key: String) -> Result[Int]
-  return JSON.int(try JSON.get(root, key))
-end
+def int_at(root: Json, key: String) -> Result[Int] = JSON.int(try JSON.get(root, key))
 
 def detail_at(root: Json, key: String) -> Detail
   found = JSON.get(root, key)

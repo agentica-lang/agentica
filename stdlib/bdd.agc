@@ -210,14 +210,10 @@ export def given_program(ctx: Context, path: String) -> Context
 end
 
 ## Sends `text` and a newline to the program's input.
-export def when_line(ctx: Context, text: String) -> Context
-  return send(ctx, "#{text}\n")
-end
+export def when_line(ctx: Context, text: String) -> Context = send(ctx, "#{text}\n")
 
 ## Sends `text` to the program's input as it is.
-export def when_input(ctx: Context, text: String) -> Context
-  return send(ctx, text)
-end
+export def when_input(ctx: Context, text: String) -> Context = send(ctx, text)
 
 ## Closes the program's input.
 export def when_eof(ctx: Context) -> Context
@@ -687,13 +683,9 @@ def with_after(ctx: Context, after: List[Fn[Context, Result[Void]]]) -> Context
 end
 
 # True once the after hooks have started (`run_after`).
-def closing?(ctx: Context) -> Bool
-  return ctx.scenario.closing.closed?
-end
+def closing?(ctx: Context) -> Bool = ctx.scenario.closing.closed?
 
-def has_nul?(text: String) -> Bool
-  return text.bytes.to_a.include?(0)
-end
+def has_nul?(text: String) -> Bool = text.bytes.to_a.include?(0)
 
 # True when two names are one variable for `Process.spawn_captured` on this system: byte for byte, except that on
 # Windows ASCII case is ignored. Windows ignores the case of other letters too, by a table of its own that std/ cannot
@@ -704,9 +696,7 @@ def same_env_name?(a: String, b: String) -> Bool
   return ascii_folded(a) == ascii_folded(b)
 end
 
-def ascii_folded(name: String) -> List[Int]
-  return name.bytes.to_a.map do |byte| ascii_lower(byte) end
-end
+def ascii_folded(name: String) -> List[Int] = name.bytes.to_a.map do |byte| ascii_lower(byte) end
 
 def ascii_lower(byte: Int) -> Int
   return byte + 32 if byte >= 65 and byte <= 90
@@ -766,26 +756,14 @@ def deliver(text: String) -> Void
   end
 end
 
-def idle_ms() -> Int
-  return 86400000
-end
+def idle_ms() -> Int = 86400000
 
-def send_ms() -> Int
-  return 5000
-end
+def send_ms() -> Int = 5000
 
-def record_text(fields: Map[String, Json]) -> String
-  return "#{JSON.encode(JSON.object(fields))}\n"
-end
+def record_text(fields: Map[String, Json]) -> String = "#{JSON.encode(JSON.object(fields))}\n"
 
-def ended_text() -> String
-  return "process: end of input"
-end
+def ended_text() -> String = "process: end of input"
 
-def timed_out_text() -> String
-  return "process: operation timed out"
-end
+def timed_out_text() -> String = "process: operation timed out"
 
-def over_text() -> String
-  return "process: output exceeds 1048576 bytes"
-end
+def over_text() -> String = "process: output exceeds 1048576 bytes"

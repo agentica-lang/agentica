@@ -194,9 +194,7 @@ export def workspace() -> Workspace
 end
 
 ## Returns a session that reads `files`.
-export def open(files: Workspace) -> Session
-  return Session(internal: Sessions.open(settings(), files.buffers))
-end
+export def open(files: Workspace) -> Session = Session(internal: Sessions.open(settings(), files.buffers))
 
 ## Returns `session` with `text` as the content of the file `path`, whether or not the disk has it. Two spellings of
 ## one file are one buffer.
@@ -205,9 +203,7 @@ export def update(session: Session, path: String, text: String) -> Session
 end
 
 ## Returns `session` without the buffer of `path`: the disk answers for the file again.
-export def close(session: Session, path: String) -> Session
-  return Session(internal: Sessions.close(session.internal, path))
-end
+export def close(session: Session, path: String) -> Session = Session(internal: Sessions.close(session.internal, path))
 
 ## Returns `session` with the file `path` linked and checked in its cache, so the questions about `path` that follow
 ## reuse them, and so do those about files that import the same modules. A file that cannot be read or linked leaves
@@ -382,54 +378,34 @@ end
 
 ## Reads back the diagnostic that is the message of an error of `outline`, `type_at`, `type_at_partial`, `symbol`,
 ## `refs`, `refs_partial`, `native_modules` or `bodies`.
-export def diagnostic(message: String) -> Result[Diagnostic]
-  return DiagnosticRead.read(message)
-end
+export def diagnostic(message: String) -> Result[Diagnostic] = DiagnosticRead.read(message)
 
 ## Returns the JSON that `agentica --json outline` prints, without its final line feed.
-export def outline_json(found: Outline) -> Json
-  return OutlineJson.json(found)
-end
+export def outline_json(found: Outline) -> Json = OutlineJson.json(found)
 
 ## Returns the JSON that `agentica --json type-at` prints, without its final line feed.
-export def type_at_json(found: TypeAt) -> Json
-  return TypeAtJson.json(found)
-end
+export def type_at_json(found: TypeAt) -> Json = TypeAtJson.json(found)
 
 ## Returns the JSON that `agentica --json symbol` prints, without its final line feed.
-export def symbols_json(found: Symbols) -> Json
-  return SymbolJson.json(found)
-end
+export def symbols_json(found: Symbols) -> Json = SymbolJson.json(found)
 
 ## Returns the JSON that `agentica --json refs` prints, without its final line feed.
-export def refs_json(found: Refs) -> Json
-  return RefsJson.json(found)
-end
+export def refs_json(found: Refs) -> Json = RefsJson.json(found)
 
 ## Returns the JSON of the answer of `native_modules`, without its final line feed.
-export def native_modules_json(found: NativeModules) -> Json
-  return NativeModulesJson.json(found)
-end
+export def native_modules_json(found: NativeModules) -> Json = NativeModulesJson.json(found)
 
 ## Returns the JSON of the answer of `bodies`, without its final line feed.
-export def bodies_json(found: Bodies) -> Json
-  return BodiesJson.json(found)
-end
+export def bodies_json(found: Bodies) -> Json = BodiesJson.json(found)
 
 ## Returns the JSON that `agentica --json check` prints on stderr for a problem.
-export def diagnostic_json(found: Diagnostic) -> Json
-  return DiagnosticJson.object(found)
-end
+export def diagnostic_json(found: Diagnostic) -> Json = DiagnosticJson.object(found)
 
 # The settings of the machine: the disk, the process environment and the std/ sources of this binary. The version is
 # empty, since nothing is written.
-def settings() -> Env.Settings
-  return Env.embedded_settings(Host.workspace_with(&std_source), Host.process_env(), "", false)
-end
+def settings() -> Env.Settings = Env.embedded_settings(Host.workspace_with(&std_source), Host.process_env(), "", false)
 
-def std_source(name: String) -> Result[String]
-  return Std.source(name)
-end
+def std_source(name: String) -> Result[String] = Std.source(name)
 
 # Looping is safe: `Core.named` changes the file only when it is the canonical path of that buffer, and a path it has
 # changed is the typed name, which is not the canonical path of another buffer.
@@ -444,6 +420,4 @@ def named_in(settings: Env.Settings, problem: Problems.Problem, buffers: List[St
 end
 
 # The message of the error of a problem: the diagnostic as JSON text.
-def failure(problem: Problems.Problem) -> String
-  return JSON.encode(DiagnosticJson.json(problem))
-end
+def failure(problem: Problems.Problem) -> String = JSON.encode(DiagnosticJson.json(problem))
