@@ -19,6 +19,7 @@ TCP.accept(listener: Listener, timeout_ms: Int) -> Result[Socket]
 TCP.send(socket: Socket, text: String, timeout_ms: Int) -> Result[Void]
 TCP.send_bytes(socket: Socket, bytes: Bytes, timeout_ms: Int) -> Result[Void]
 TCP.recv_bytes(socket: Socket, max_bytes: Int, timeout_ms: Int) -> Result[Bytes]
+TCP.recv_bytes(socket: Socket, max_bytes: Int) -> Result[Bytes]   # no time limit
 TCP.read_line(socket: Socket, timeout_ms: Int) -> Result[String]
 TCP.close(socket: Socket) -> Void
 TCP.close_listener(listener: Listener) -> Void
@@ -74,7 +75,9 @@ TlsServerOptions(cert_file: String, key_file: String, alpn: List[String] = [])
   for the lock does not. Failures are Results; close is idempotent.
 - Send encodes UTF-8 and flushes; `send_bytes` takes a `Bytes` of at most 1 MiB.
   `recv_bytes` accepts 1..1048576 and returns the available data up to that
-  count as `Bytes`, empty at EOF. TCP is a stream, not messages.
+  count as `Bytes`, empty at EOF. TCP is a stream, not messages. Without
+  `timeout_ms` it waits with no limit (a server waiting for an idle client: a
+  timeout would close the socket); a cancel still ends the wait.
 - `read_line` handles fragmented UTF-8, strips LF or CRLF and accepts a final
   unterminated line at EOF. It errors on an empty EOF, on a read error (a reset
   mid-line is an error, not a line) and on a line over 1 MiB, which also closes

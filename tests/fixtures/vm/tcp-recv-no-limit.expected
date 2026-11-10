@@ -1,0 +1,18 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 237,
+  "stdout": [
+    "error(\"network: timeout must be positive milliseconds\")",
+    "error(\"network: timeout must be positive milliseconds\")",
+    "error(\"network: read size must be 1..1048576\")",
+    "late",
+    "2^31 + 1",
+    "max Int",
+    "[\"a\", \"b\"]",
+    "kept",
+    "ok(<Bytes 0>)",
+    ""
+  ],
+  "stderr": []
+}

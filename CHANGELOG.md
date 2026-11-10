@@ -8,6 +8,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `TCP.recv_bytes(socket, max_bytes)` without a timeout waits with no limit,
+  for a server that keeps an idle client connected.
+
 ## [0.29.0] - 2026-11-10
 
 ### Added

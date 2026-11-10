@@ -796,3 +796,53 @@ def test_a_cancelled_accept_or_read_leaves_its_place_at_once(tmp_path):
     result = run_text(tmp_path, "cancelled_waits", CANCELLED_WAITS_PROGRAM)
     assert (result.code, result.stdout) == (0, '[error("task: timed out")]\nok("first")\n'
                                                '[error("task: timed out")]\nok("kept")\n'), result.stderr
+
+
+IDLE_PROGRAM = """\
+def wait_bytes(socket: Socket) -> Result[Bytes]
+  return TCP.recv_bytes(socket, 16)
+end
+
+def main() -> Void
+  listener = TCP.listen("127.0.0.1", 0).unwrap!
+  puts(TCP.local_port(listener))
+  IO.flush()
+  readers = (1..%d).to_a.map do |_i: Int|
+    Task.spawn_owning(&wait_bytes, TCP.accept(listener, 10000).unwrap!)
+  end
+  puts("waiting")
+  IO.flush()
+  sizes = readers.map do |reader: Task[Result[Bytes]]| Task.await(reader).unwrap!.size end
+  puts(sizes.sum)
+  TCP.close_listener(listener)
+end
+"""
+
+
+@pytest.mark.skipif(TARGET_OS == "windows", reason="the CPU time of a child needs resource.getrusage")
+def test_reads_without_a_timeout_wait_for_idle_python_clients_without_using_the_cpu(tmp_path, adopt):
+    """Many tasks wait in TCP.recv_bytes with no timeout while their Python clients stay idle: no timer closes a
+    socket, the waits cost no CPU (a busy loop would cost about the idle time), and each ends with the client's byte
+    or, for a client that closes, with empty Bytes."""
+    import resource
+    count, idle_seconds = 20, 2.0
+    vm = adopt(start_vm(compile_text(IDLE_PROGRAM % count, "idle", tmp_path)))
+    before = resource.getrusage(resource.RUSAGE_CHILDREN)
+    port = int(vm.next_line())
+    clients = [socket.create_connection(("127.0.0.1", port), timeout=scaled(10)) for _ in range(count)]
+    try:
+        assert vm.next_line() == "waiting"
+        time.sleep(idle_seconds)
+        for index, client in enumerate(clients):
+            if index % 2:
+                client.sendall(b"x")
+            else:
+                client.close()
+        assert vm.next_line() == str(count // 2)
+        assert vm.wait() == 0, vm.stderr_text()
+    finally:
+        for client in clients:
+            client.close()
+    after = resource.getrusage(resource.RUSAGE_CHILDREN)
+    cpu = (after.ru_utime - before.ru_utime) + (after.ru_stime - before.ru_stime)
+    assert cpu < idle_seconds / 2, cpu

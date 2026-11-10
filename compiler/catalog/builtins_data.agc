@@ -4893,8 +4893,22 @@ ROWS_48: List[Model.Builtin] = [
     rule: Model.Rule.Plain,
     implementation: "TCP.recv_bytes.bytes",
     effects: ["network"],
-    description: "Read available bytes; empty Bytes indicate EOF.",
-    alternatives: [],
+    description: "Read available bytes; empty Bytes indicate EOF; a timeout closes the socket.",
+    alternatives: [
+      Model.Builtin(
+        name: "TCP.recv_bytes",
+        parameters: [
+          Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
+          Model.Named(name: "max_bytes", type: Types.Type.Int),
+        ],
+        result: Types.Type.Result(Types.Type.Bytes),
+        rule: Model.Rule.Plain,
+        implementation: "TCP.recv_bytes.bytes",
+        effects: ["network"],
+        description: "Read available bytes with no time limit; empty Bytes indicate EOF.",
+        alternatives: [],
+      ),
+    ],
   ),
   Model.Builtin(
     name: "TCP.send",

@@ -9,7 +9,7 @@ Network functions return a `Result` and take timeouts in milliseconds.
 - With `--deny-net` (or `--sandbox`), every connect and listen returns an error that begins with `denied: --deny-net`, before any DNS lookup. With `--deny-fs`, a TLS call that names a file (a CA file, a certificate or a key) returns `denied: --deny-fs`.
 - Sockets, listeners, clients and servers are handles: `IO.inspect` prints `<Socket>`, they cannot be compared, and they close when the program ends.
 - A handle belongs to the task that opened it and closes when that task ends, so open it in the task that keeps it. [Task.spawn_owning](/library/concurrency/task/#taskspawn_owning) gives one to a new task.
-- Timeouts are positive milliseconds. A timeout covers the whole call, including the wait for another task using the same socket. After a timeout during active I/O the socket is closed, and later calls fail at once with `network: socket is closed`; a timeout while only waiting for a lock keeps it open.
+- Timeouts are positive milliseconds, up to the largest `Int`, taken as given: `0` or a negative one returns `network: timeout must be positive milliseconds`. A timeout covers the whole call, including the wait for another task using the same socket. After a timeout during active I/O the socket is closed, and later calls fail at once with `network: socket is closed`; a timeout while only waiting for a lock keeps it open.
 
 ## TCP
 
@@ -115,9 +115,12 @@ ok()
 ```signature
 TCP.send_bytes(socket: Socket, bytes: Bytes, timeout_ms: Int) -> Result[Void]
 TCP.recv_bytes(socket: Socket, max_bytes: Int, timeout_ms: Int) -> Result[Bytes]
+TCP.recv_bytes(socket: Socket, max_bytes: Int) -> Result[Bytes]
 ```
 
 Raw bytes, as [`Bytes`](/library/data-structures/bytes/). `send_bytes` takes at most 1 MiB per call. `recv_bytes` takes a `max_bytes` from 1 to 1048576 and gives what has arrived, up to `max_bytes`, and empty `Bytes` when the other side has closed.
+
+Without `timeout_ms`, `recv_bytes` waits with no limit, until bytes arrive, the other side closes or the task is cancelled. A server uses it for the next request of an idle client: a timeout would close the socket and so disconnect the client. A cancelled read takes nothing, and the bytes that arrive later go to the next read.
 
 ### TCP.close and TCP.close_listener
 
