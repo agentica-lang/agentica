@@ -4,6 +4,7 @@
   "steps": 256,
   "stdout": [
     "outside a test: expected 2; actual 1",
+    "channel> {\"event\":\"ready\"}",
     "channel> {\"event\":\"pass\"}",
     "channel> {\"actual\":\"Point(x: 1, tags: [\\\"a\\\"])\",\"code\":\"RUNTIME-TEST-ASSERTION\",\"event\":\"fail\",\"expected\":\"Point(x: 2, tags: [\\\"b\\\"])\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"values are not equal\",\"range\":{\"end\":{\"column\":70,\"line\":43},\"start\":{\"column\":11,\"line\":43}}}",
     "channel> {\"actual\":\"error(\\\"cannot convert \\\\\\\"x\\\\\\\" to Int\\\")\",\"code\":\"RUNTIME-TEST-ASSERTION\",\"event\":\"fail\",\"expected\":\"ok(80)\",\"file\":\"@fixtures/vm/test-assertions.agc\",\"message\":\"values are not equal\",\"range\":{\"end\":{\"column\":34,\"line\":48},\"start\":{\"column\":7,\"line\":48}}}",

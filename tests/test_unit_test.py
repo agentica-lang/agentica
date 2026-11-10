@@ -224,6 +224,40 @@ class UnitTest(TestCase):
         _status, empty = self.json_test(cwd=directory)
         self.assertEqual(file_codes(empty), [("", "CHECK-BDD-EMPTY")])
 
+    def test_the_start_of_the_child_is_not_in_the_time_of_the_first_test(self):
+        # main sleeps before Test.run, so the run child takes 500 ms to start: the runner starts the clock of the first
+        # test at the child's ready record, after that (#1276). The second test's own sleep still counts.
+        directory = self.make_temp_dir("agentica-unit-").resolve()
+        path = directory / "start_test.agc"
+        path.write_text(
+            'def main() -> Void\n  Task.sleep(500)\n  Test.run([\n'
+            '    Test.test("first") do\n      Test.assert(true, "x")\n    end,\n'
+            '    Test.test("second") do\n      Task.sleep(150)\n      Test.assert(true, "x")\n    end,\n'
+            '  ])\nend\n', encoding="utf-8")
+        status, report = self.json_test(path.as_posix())
+        self.assertEqual(status, 0)
+        first, second = [item["duration_ms"] for item in report_cases(report)]
+        self.assertLess(first, 500)
+        self.assertGreaterEqual(second, 100)
+
+    def test_a_run_child_that_breaks_before_ready_is_a_file_error_with_its_output(self):
+        # Only the run child (not the list child) does this before Test.run, so the start of the run is what breaks.
+        directory = self.make_temp_dir("agentica-unit-").resolve()
+        tests = '  Test.run([\n    Test.test("never") do\n      Test.assert(true, "x")\n    end,\n  ])\nend\n'
+        early = '  if System.args().include?("run")\n%s  end\n'
+        crash = directory / "crash_test.agc"
+        crash.write_text('def main() -> Void\n' + early % (
+            '    puts("setup")\n    IO.warn("on stderr")\n    puts(1 / (System.args().size - 2))\n') + tests,
+            encoding="utf-8")
+        record = directory / "record_test.agc"
+        record.write_text('def main() -> Void\n' + early % (
+            '    _ = Process.parent_send("{\\"event\\":\\"pass\\"}\\n", 5000)\n') + tests, encoding="utf-8")
+        status, report = self.json_test(crash.as_posix(), record.as_posix())
+        self.assertEqual(status, 2)
+        self.assertEqual(file_codes(report), [("tests", "RUNTIME-DIVISION-BY-ZERO"), ("tests", "RUNTIME-BDD-INFRA")])
+        self.assertEqual(report_cases(report), [])
+        self.assertEqual(report["files"][0]["output"].splitlines(), ["setup", "on stderr"])
+
     def test_deny_flags_reach_the_test_files_and_the_programs_under_test_but_not_the_runner(self):
         # The runner still reads the folders and starts the children; the user's code runs with --deny-env, given
         # once in front of `test` and once after it.

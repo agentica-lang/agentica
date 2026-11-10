@@ -27,6 +27,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- `agentica test`: the time of a file's first test (`--timing`, `duration_ms`)
+  no longer counts the start of the file's child VM. A child that fails or
+  takes over 30 seconds before its first test is a file error instead of that
+  test's failure.
 - `std/option_parser`: a Float option or argument refuses a value that is not
   finite (`+inf.0`, `+nan.0`, `1e400`): `does not fit a Float`.
 - **Breaking:** `Process.spawn`, `Process.spawn_captured` and

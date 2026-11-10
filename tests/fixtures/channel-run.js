@@ -13,6 +13,10 @@ const { launch, watchdog, writeAll } = require("./child_channel.js");
 
 const PREFIX = Buffer.from("channel> ");
 const NEWLINE = Buffer.from("\n");
+// A test child (--agentica-test run) sends this before it reads its first index. The first line already went at the
+// start, so this record brings no line: the next index goes only after the record of the test before, as the runner
+// sends it, and a test's output stays before that record.
+const READY = '{"event":"ready"}';
 
 async function main(peers) {
   const [feedFile, ...command] = process.argv.slice(2);
@@ -43,9 +47,10 @@ async function main(peers) {
     for (let at = buffer.indexOf(10); at >= 0; at = buffer.indexOf(10)) {
       // The stdout written before the record, and then the record.
       writeAll(1, peer.takeStdout());
-      writeAll(1, Buffer.concat([PREFIX, buffer.subarray(0, at), NEWLINE]));
+      const line = buffer.subarray(0, at);
+      writeAll(1, Buffer.concat([PREFIX, line, NEWLINE]));
       buffer = buffer.subarray(at + 1);
-      feed();
+      if (line.toString("latin1") !== READY) feed();
     }
   });
   feed();
