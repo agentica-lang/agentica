@@ -718,8 +718,9 @@ def test_a_def_whose_body_is_one_return_is_written_as_a_one_line_def(tmp_path):
 # at any depth. Comments and empty lines stay where they were, also the empty line before the `(` of a value. A
 # `return` stays for a guard, before the end, in an `if` without `else`, in a block, for a `try` value (a last `try` is
 # a statement), for a `case` value (a bare `case` is a statement), when it has no value, and in a Void function, also
-# one whose result is an alias of Void declared in the file (there `5` would check where `return 5` does not). The
-# `implicit` mark is not in `--tree`, so both forms are one tree.
+# one whose result is an alias of Void declared in the file, also through another alias or with type arguments (there
+# `5` would check where `return 5` does not); such a def is not made a one-line def either. The `implicit` mark is not
+# in `--tree`, so both forms are one tree, and `fmt --check` lists the file with a `return` to drop.
 EXPLICIT = """def sign(x: Int) -> String
   return "none" if x == 100
   if x > 0
@@ -785,6 +786,19 @@ def noted(text: String) -> Nothing
   puts(text)
   return 5
 end
+
+type Later = Nothing
+
+type Box[T] = Void
+
+def chained() -> Later
+  return 5
+end
+
+def boxed() -> Box[Int]
+  puts("x")
+  return 5
+end
 """
 IMPLICIT = (EXPLICIT.replace('    return "plus"', '    "plus"').replace('return "minus"', '"minus"')
             .replace('-> return "zero"', '-> "zero"').replace('return "other', '"other')
@@ -796,6 +810,7 @@ def test_a_last_return_is_written_as_the_value_it_gives(tmp_path, source):
     lay_out(tmp_path, {"tail.agc": source})
     before = fmt("--tree", "tail.agc", cwd=tmp_path)
     assert before.code == 0, before.stderr
+    assert fmt("--check", cwd=tmp_path).code == (1 if source == EXPLICIT else 0)
     assert fmt(cwd=tmp_path).code == 0
     assert text(tmp_path, "tail.agc") == IMPLICIT
     assert fmt("--check", cwd=tmp_path).stdout == ""

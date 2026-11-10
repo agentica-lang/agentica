@@ -142,3 +142,28 @@ def test_a_def_whose_result_is_an_alias_of_void_lowers_as_a_void_def(tmp_path):
         return [re.sub(r" @ [\d:-]+$", "", line) for line in lines]
 
     assert instructions(ALIAS_VOID) == instructions(ALIAS_VOID.replace("-> Nothing", "-> Void"))
+
+
+# `fmt` cannot see an alias of Void imported from another file, so it writes a last `return count_down(n - 1)` there
+# as the bare call. That call is still the tail call that `return` gives, so deep recursion does not overflow.
+COUNT_DOWN = """import {Nothing} from "./types"
+
+def count_down(n: Int) -> Nothing
+  return if n == 0
+  %s
+end
+
+def main() -> Void
+  count_down(200000)
+  puts("done")
+end
+"""
+
+
+@pytest.mark.parametrize("last", ["return count_down(n - 1)", "count_down(n - 1)"])
+def test_a_last_void_call_in_a_def_of_an_imported_void_alias_is_a_tail_call(tmp_path, last):
+    (tmp_path / "types.agc").write_text("export type Nothing = Void\n", encoding="utf-8")
+    path = tmp_path / "main.agc"
+    path.write_text(COUNT_DOWN % last, encoding="utf-8")
+    result = run(cli() + [str(path)], env=vm_environment())
+    assert (result.code, result.stdout) == (0, "done\n"), result.stderr

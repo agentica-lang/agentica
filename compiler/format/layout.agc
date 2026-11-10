@@ -324,7 +324,7 @@ end
 def one_line_body?(c: Context, node: Ast.FunctionDecl) -> Bool
   return false if node.native.some? or node.body.size != 1 or not written?(node.result.span)
 
-  return false if node.result.name == "Void" and node.result.args.size == 0
+  return false if void_result?(c, node.result)
 
   case node.body[0]
     Ast.Stmt.Return(stmt) -> return false if stmt.value.none?
@@ -438,7 +438,7 @@ end
 def function_doc(c: Context, node: Ast.FunctionDecl) -> Docs.Doc
   key = Comments.key_of("FunctionDecl", node.span)
   stmts = node.body
-  if node.result.args.size != 0 or (node.result.name != "Void" and not c.void_aliases.include?(node.result.name))
+  if not void_result?(c, node.result)
     stmts = tail_values(stmts)
   end
 
@@ -1037,6 +1037,13 @@ def void_aliases(decls: List[Ast.Decl]) -> List[String]
   end
 
   return found.drop(1)
+end
+
+# A result written `Void`, or an alias of Void declared in the file, with type arguments or not (`type V[T] = Void`).
+def void_result?(c: Context, result: Ast.TypeRef) -> Bool
+  return result.args.size == 0 if result.name == "Void"
+
+  return c.void_aliases.include?(result.name)
 end
 
 def alias_of(decl: Ast.Decl) -> List[Ast.TypeAliasDecl]

@@ -215,7 +215,8 @@ end
   completes at `return` or at its end, and drops its last value
   (`CHECK-UNUSED-VALUE` still applies). A `Nil` function ends with `nil`. A
   statement after a `return` is `CHECK-UNREACHABLE-CODE`. `agentica fmt` writes
-  a last `return x` as `x` (not for a `try` or `case` value).
+  a last `return x` as `x` (not for a `try` or `case` value, nor in a `Void` def
+  or one whose result is a `Void` alias of the same file).
 - A one-line def, `def double(x: Int) -> Int = x * 2`, is the def with
   `x * 2` as its body; `agentica fmt` writes a def whose body is one
   `return` this way when it fits and no comment sits from its `def` line to its
