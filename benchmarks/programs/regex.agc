@@ -17,7 +17,7 @@ def make_log(lines: Int) -> String
     path = "/api/items/#{i % 1000}"
     parts = parts.push("#{stamp} #{levels[i % 8]} user=#{users[i % 5]} id=#{i * 7} path=#{path} #{tail}")
   end
-  return parts.join("\n")
+  parts.join("\n")
 end
 
 def main() -> Void

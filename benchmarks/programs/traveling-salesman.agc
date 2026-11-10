@@ -27,7 +27,7 @@ def search(distances: List[List[Int]], visited: List[Bool], path: List[Int], cos
     end
     city += 1
   end
-  return result
+  result
 end
 
 def make_distances(count: Int, seed: Int) -> List[List[Int]]
@@ -58,7 +58,7 @@ def make_distances(count: Int, seed: Int) -> List[List[Int]]
     end
     rows = rows.push(row)
   end
-  return rows
+  rows
 end
 
 def main() -> Void

@@ -25,7 +25,7 @@ def produce(seed: A, f: Fn[A, A]) -> Lazy[A] = __lazy_produce(seed, f)
 # File.foreach. Argument 1 of the call is buffer_bytes: a size outside 1024..16777216 is reported there. The file opens
 # only in a terminal, which closes it before it returns.
 def from_file(path: String, buffer_bytes: Int, timeout_ms: Int) -> Lazy[String]
-  return __lazy_file(path, buffer_bytes, timeout_ms)
+  __lazy_file(path, buffer_bytes, timeout_ms)
 end
 
 # File.chunks. Argument 1 of the call is size: a size outside 1..16777216 is reported there. The file opens only in a
@@ -64,7 +64,7 @@ def chunk_while(lazy: Lazy[A], f: Fn[A, A, Bool]) -> Lazy[List[A]] = __lazy_chun
 def deflate(lazy: Lazy[Bytes], level: Int, raw: Bool) -> Lazy[Bytes]
   return __lazy_zlib(lazy, 1, level, 0) if raw
 
-  return __lazy_zlib(lazy, 0, level, 0)
+  __lazy_zlib(lazy, 0, level, 0)
 end
 
 def gzip(lazy: Lazy[Bytes], level: Int) -> Lazy[Bytes] = __lazy_zlib(lazy, 2, level, 0)
@@ -72,7 +72,7 @@ def gzip(lazy: Lazy[Bytes], level: Int) -> Lazy[Bytes] = __lazy_zlib(lazy, 2, le
 def inflate(lazy: Lazy[Bytes], raw: Bool, max_bytes: Int) -> Lazy[Bytes]
   return __lazy_zlib(lazy, 4, 0, max_bytes) if raw
 
-  return __lazy_zlib(lazy, 3, 0, max_bytes)
+  __lazy_zlib(lazy, 3, 0, max_bytes)
 end
 
 def gunzip(lazy: Lazy[Bytes], max_bytes: Int) -> Lazy[Bytes] = __lazy_zlib(lazy, 5, 0, max_bytes)
@@ -90,10 +90,10 @@ def find(lazy: Lazy[A], f: Fn[A, Bool]) -> Result[A] = __lazy_find(lazy, f)
 
 # write_lines. The path and timeout are checked when the terminal starts, as for File.foreach: a bad one is its error.
 def write_lines(lazy: Lazy[String], path: String, timeout_ms: Int) -> Result[Void]
-  return __lazy_write_lines(lazy, path, timeout_ms)
+  __lazy_write_lines(lazy, path, timeout_ms)
 end
 
 # write_bytes. As for write_lines, the path and timeout are checked when the terminal starts.
 def write_bytes(lazy: Lazy[Bytes], path: String, timeout_ms: Int) -> Result[Int]
-  return __lazy_write_bytes(lazy, path, timeout_ms)
+  __lazy_write_bytes(lazy, path, timeout_ms)
 end

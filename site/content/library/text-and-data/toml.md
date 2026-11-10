@@ -124,7 +124,7 @@ end
 def load(text: String) -> Result[Config]
   doc = try Toml.parse(text)
   json = try Toml.to_json(doc)
-  return JSON.decode(json, Config)
+  JSON.decode(json, Config)
 end
 
 def main() -> Void

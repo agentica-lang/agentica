@@ -4,7 +4,7 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
   if request.method == "GET" and request.path == "/"
     return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; charset=utf-8")], body: "hello\n".bytes))
   end
-  return ok(HttpResponse(status: 404, headers: [], body: "not found\n".bytes))
+  ok(HttpResponse(status: 404, headers: [], body: "not found\n".bytes))
 end
 
 def main() -> Void

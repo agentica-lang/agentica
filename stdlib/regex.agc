@@ -178,7 +178,7 @@ export def compile(pattern: String) -> Result[Regex]
   # parse_alt stops only at the end or at a `)` that closes no group.
   return error(place(out.st.pos, "unexpected ')'")) if out.st.pos < pat.n
   return error(place(0, "the pattern needs more than #{MAX_INSTS} instructions")) if size_of(out.node) > MAX_INSTS
-  return ok(Regex(source: pattern, program: build(out.node, out.st.groups, out.st.names)))
+  ok(Regex(source: pattern, program: build(out.node, out.st.groups, out.st.names)))
 end
 
 ## Whether the pattern matches anywhere in `text`. It keeps no groups, so it is the cheapest search.
@@ -188,7 +188,7 @@ export def match?(text: String, re: Regex) -> Bool = run(text, re.program, MODE_
 export def match(text: String, re: Regex) -> Result[Match]
   caps = run(text, re.program, MODE_FIRST)
   return error("no match") if caps.size == 0
-  return ok(make_match(text, caps, 0, re.program))
+  ok(make_match(text, caps, 0, re.program))
 end
 
 ## Every match from left to right, without overlaps. After an empty match the search moves one character on, and an
@@ -202,7 +202,7 @@ export def find_all(text: String, re: Regex) -> List[Match]
     found = found.push(make_match(text, caps, at, prog))
     at += prog.ncap
   end
-  return found
+  found
 end
 
 ## Replaces every match that `find_all` finds. In `template`, `$0` is the whole match, `$N` group N (the
@@ -232,7 +232,7 @@ export def replace(text: String, re: Regex, template: String) -> Result[String]
     at += ncap
   end
   out = out.push(slice(text, last, text.length))
-  return ok(out.join(""))
+  ok(out.join(""))
 end
 
 ## The parts of `text` between the matches that take at least one character. Empty parts are kept, and an empty
@@ -250,7 +250,7 @@ export def split(text: String, re: Regex) -> List[String]
     end
     at += ncap
   end
-  return parts.push(slice(text, last, text.length))
+  parts.push(slice(text, last, text.length))
 end
 
 ## A pattern that matches `text` literally. A backslash goes before each of the characters `\.+*?()|[]{}^$`.
@@ -259,8 +259,8 @@ export def escape(text: String) -> String = text.split("").map(&escape_char).joi
 ## The group of `m` with that name, or an error when the pattern has no such group.
 export def named(m: Match, name: String) -> Result[Group]
   case m.names.get(name)
-    some(index) if index >= 0 and index < m.groups.size -> return ok(m.groups[index])
-    _ -> return error("no group named \"#{name}\"")
+    some(index) if index >= 0 and index < m.groups.size -> ok(m.groups[index])
+    _ -> error("no group named \"#{name}\"")
   end
 end
 
@@ -268,7 +268,7 @@ def place(pos: Int, message: String) -> String = "character #{pos + 1}: #{messag
 
 def ch(pat: Pat, pos: Int) -> String
   return pat.chars[pos] if pos < pat.n
-  return ""
+  ""
 end
 
 def piece_of(pat: Pat, from: Int, to: Int) -> String = pat.chars.drop(from).take(to - from).join("")
@@ -284,7 +284,7 @@ def parse_alt(pat: Pat, st: St, depth: Int) -> Result[Out]
     cur = cur.with(pos: cur.pos + 1)
   end
   return ok(Out(node: branches[0], st: cur)) if branches.size == 1
-  return ok(Out(node: Node.Alt(branches), st: cur))
+  ok(Out(node: Node.Alt(branches), st: cur))
 end
 
 def parse_cat(pat: Pat, st: St, depth: Int) -> Result[Out]
@@ -307,13 +307,13 @@ def parse_cat(pat: Pat, st: St, depth: Int) -> Result[Out]
   elsif items.size == 1
     return ok(Out(node: items[0], st: cur))
   end
-  return ok(Out(node: Node.Cat(items), st: cur))
+  ok(Out(node: Node.Cat(items), st: cur))
 end
 
 def parse_repeat(pat: Pat, atom: Out) -> Result[Out]
   at = atom.st.pos
   case quantifier(pat, at)
-    none -> return ok(atom)
+    none -> ok(atom)
     some(q) ->
       if q.max != -1 and q.max < q.min
         return error(place(at, "invalid repetition '#{piece_of(pat, at, q.stop)}'"))
@@ -326,7 +326,7 @@ def parse_repeat(pat: Pat, atom: Out) -> Result[Out]
         stop += 1
       end
       return error(place(stop, "nested repetition '#{piece_of(pat, at, stop + 1)}'")) if quantifier(pat, stop).some?
-      return ok(Out(node: Node.Rep(atom.node, q.min, q.max, greedy), st: atom.st.with(pos: stop)))
+      ok(Out(node: Node.Rep(atom.node, q.min, q.max, greedy), st: atom.st.with(pos: stop)))
   end
 end
 
@@ -355,7 +355,7 @@ def quantifier(pat: Pat, pos: Int) -> Optional[Quant]
     p = more.stop
   end
   return none if ch(pat, p) != "}"
-  return some(Quant(min: low.value, max: high, stop: p + 1))
+  some(Quant(min: low.value, max: high, stop: p + 1))
 end
 
 # A decimal number; its value stops growing past MAX_COUNT, so a long run of digits cannot overflow.
@@ -368,7 +368,7 @@ def digits(pat: Pat, pos: Int) -> Num
     end
     p += 1
   end
-  return Num(value: value, stop: p)
+  Num(value: value, stop: p)
 end
 
 def parse_atom(pat: Pat, st: St, depth: Int) -> Result[Out]
@@ -403,14 +403,14 @@ def parse_atom(pat: Pat, st: St, depth: Int) -> Result[Out]
     end
     return ok(Out(node: Node.Assert(kind), st: after))
   end
-  return ok(Out(node: literal(pat.codes[pos], st.flags.fold), st: after))
+  ok(Out(node: literal(pat.codes[pos], st.flags.fold), st: after))
 end
 
 def literal(code: Int, fold: Bool) -> Node
   if fold and ((code >= 65 and code <= 90) or (code >= 97 and code <= 122))
     return Node.Class(fold_ranges([code, code]))
   end
-  return Node.Lit(code)
+  Node.Lit(code)
 end
 
 def parse_group(pat: Pat, st: St, depth: Int) -> Result[Out]
@@ -473,13 +473,13 @@ def parse_group(pat: Pat, st: St, depth: Int) -> Result[Out]
     node = Node.Group(out.node, index)
   end
   # Flags set inside a group end with it.
-  return ok(Out(node: node, st: out.st.with(pos: close_at + 1, flags: st.flags)))
+  ok(Out(node: node, st: out.st.with(pos: close_at + 1, flags: st.flags)))
 end
 
 def group_name?(name: String) -> Bool
   codes = name.split("").map do |c| c.code end
   return false if codes.size == 0 or (codes[0] >= 48 and codes[0] <= 57)
-  return codes.all? do |c| c < 128 and WORD_ASCII[c] end
+  codes.all? do |c| c < 128 and WORD_ASCII[c] end
 end
 
 # `(?flags)` or `(?flags:`, from the first flag letter: i, m and s, and after one `-` the flags to turn off.
@@ -513,7 +513,7 @@ def parse_flags(pat: Pat, pos: Int, flags: Flags, open: Int) -> Result[FlagScan]
     letters += 1
     p += 1
   end
-  return error(place(p, "unknown flag"))
+  error(place(p, "unknown flag"))
 end
 
 def parse_class(pat: Pat, st: St) -> Result[Out]
@@ -560,7 +560,7 @@ def parse_class(pat: Pat, st: St) -> Result[Out]
   if negate
     set = complement(set)
   end
-  return ok(Out(node: Node.Class(set), st: st.with(pos: p + 1)))
+  ok(Out(node: Node.Class(set), st: st.with(pos: p + 1)))
 end
 
 # Whether a `:]` follows in the class, so that `[:` starts a POSIX class such as `[:alpha:]` (as Go reads it).
@@ -570,13 +570,13 @@ def closes_posix?(pat: Pat, pos: Int) -> Bool
     return true if pat.chars[p] == ":" and pat.chars[p + 1] == "]"
     p += 1
   end
-  return false
+  false
 end
 
 # One item of a class: a code point, or a class escape such as `\d` (code -1).
 def class_item(pat: Pat, pos: Int) -> Result[Esc]
   return escape_at(pat, pos, true) if ch(pat, pos) == "\\"
-  return ok(Esc(kind: -1, code: pat.codes[pos], ranges: [], stop: pos + 1))
+  ok(Esc(kind: -1, code: pat.codes[pos], ranges: [], stop: pos + 1))
 end
 
 def escape_at(pat: Pat, pos: Int, in_class: Bool) -> Result[Esc]
@@ -629,13 +629,13 @@ def escape_at(pat: Pat, pos: Int, in_class: Bool) -> Result[Esc]
   else
     return error(place(pos, "invalid escape \\#{e}"))
   end
-  return ok(Esc(kind: -1, code: code, ranges: [], stop: stop))
+  ok(Esc(kind: -1, code: code, ranges: [], stop: stop))
 end
 
 def digit?(c: String) -> Bool = c != "" and c.code >= 48 and c.code <= 57
 
 def punctuation?(c: Int) -> Bool
-  return (c >= 33 and c <= 47) or (c >= 58 and c <= 64) or (c >= 91 and c <= 96) or (c >= 123 and c <= 126)
+  (c >= 33 and c <= 47) or (c >= 58 and c <= 64) or (c >= 91 and c <= 96) or (c >= 123 and c <= 126)
 end
 
 # `\xHH` (two hex digits) or `\x{H...}` (a Unicode scalar value).
@@ -662,7 +662,7 @@ def hex_escape(pat: Pat, pos: Int) -> Result[Esc]
     return ok(Esc(kind: -1, code: value, ranges: [], stop: p + 1))
   end
   return error(place(pos, "invalid escape \\x: write \\xHH or \\x{H...}")) if count != 2
-  return ok(Esc(kind: -1, code: value, ranges: [], stop: p))
+  ok(Esc(kind: -1, code: value, ranges: [], stop: p))
 end
 
 # Sorts [low, high] pairs and joins the ones that overlap or touch.
@@ -679,7 +679,7 @@ def normalize(ranges: List[Int]) -> List[Int]
       out = out.concat(pair)
     end
   end
-  return out
+  out
 end
 
 # Adds the other ASCII case of every letter in the ranges.
@@ -697,7 +697,7 @@ def fold_ranges(ranges: List[Int]) -> List[Int]
     end
     i += 2
   end
-  return normalize(out)
+  normalize(out)
 end
 
 def complement(ranges: List[Int]) -> List[Int]
@@ -714,17 +714,17 @@ def complement(ranges: List[Int]) -> List[Int]
   if next_low <= MAX_CODE
     out = out.concat([next_low, MAX_CODE])
   end
-  return out
+  out
 end
 
 def max_of(a: Int, b: Int) -> Int
   return a if a > b
-  return b
+  b
 end
 
 def min_of(a: Int, b: Int) -> Int
   return a if a < b
-  return b
+  b
 end
 
 # The number of instructions `emit_node` writes, at most MAX_INSTS + 1, so a nested repetition cannot overflow.
@@ -756,14 +756,14 @@ def size_of(node: Node) -> Int
       end
     Node.Group(body, _) -> total = size_of(body) + 2
   end
-  return min_of(total, MAX_INSTS + 1)
+  min_of(total, MAX_INSTS + 1)
 end
 
 def build(node: Node, groups: Int, names: Map[String, Int]) -> Program
   code = emit(Code(ops: [], xs: [], ys: [], classes: []), OP_SAVE, 0, 0)
   code = emit(emit_node(code, node), OP_SAVE, 1, 0)
   code = emit(code, OP_MATCH, 0, 0)
-  return Program(
+  Program(
     ops: code.ops,
     xs: code.xs,
     ys: code.ys,
@@ -775,30 +775,29 @@ def build(node: Node, groups: Int, names: Map[String, Int]) -> Program
 end
 
 def emit(code: Code, op: Int, x: Int, y: Int) -> Code
-  return code.with(ops: code.ops.push(op), xs: code.xs.push(x), ys: code.ys.push(y))
+  code.with(ops: code.ops.push(op), xs: code.xs.push(x), ys: code.ys.push(y))
 end
 
 def emit_node(code: Code, node: Node) -> Code
   case node
-    Node.Empty -> return code
-    Node.Lit(c) -> return emit(code, OP_CHAR, c, 0)
+    Node.Empty -> code
+    Node.Lit(c) -> emit(code, OP_CHAR, c, 0)
     Node.Class(ranges) ->
       return emit(code, OP_CHAR, ranges[0], 0) if ranges.size == 2 and ranges[0] == ranges[1]
-      return emit(code.with(classes: code.classes.push(ranges)), OP_CLASS, code.classes.size, 0)
+      emit(code.with(classes: code.classes.push(ranges)), OP_CLASS, code.classes.size, 0)
     Node.Any(all) ->
       return emit(code, OP_ANY_NL, 0, 0) if all
-      return emit(code, OP_ANY, 0, 0)
-    Node.Assert(kind) -> return emit(code, OP_ASSERT, kind, 0)
+      emit(code, OP_ANY, 0, 0)
+    Node.Assert(kind) -> emit(code, OP_ASSERT, kind, 0)
     Node.Cat(items) ->
       out = code
       for item in items
         out = emit_node(out, item)
       end
-      return out
-    Node.Alt(branches) -> return emit_alt(code, branches)
-    Node.Rep(body, low, high, greedy) -> return emit_rep(code, body, low, high, greedy)
-    Node.Group(body, index) ->
-      return emit(emit_node(emit(code, OP_SAVE, 2 * index, 0), body), OP_SAVE, 2 * index + 1, 0)
+      out
+    Node.Alt(branches) -> emit_alt(code, branches)
+    Node.Rep(body, low, high, greedy) -> emit_rep(code, body, low, high, greedy)
+    Node.Group(body, index) -> emit(emit_node(emit(code, OP_SAVE, 2 * index, 0), body), OP_SAVE, 2 * index + 1, 0)
   end
 end
 
@@ -818,7 +817,7 @@ def emit_alt(code: Code, branches: List[Node]) -> Code
   for jump in jumps
     out = out.with(xs: out.xs.set(jump, end_pc))
   end
-  return out
+  out
 end
 
 # x{n,m} is n copies of x, then m - n optional copies, each reached only after the one before it matched. x* is
@@ -859,33 +858,33 @@ def emit_rep(code: Code, body: Node, low: Int, high: Int, greedy: Bool) -> Code
   for split in splits
     out = set_split(out, split, split + 1, end_pc, greedy)
   end
-  return out
+  out
 end
 
 def nullable?(node: Node) -> Bool
   case node
-    Node.Empty -> return true
-    Node.Lit(_) -> return false
-    Node.Class(_) -> return false
-    Node.Any(_) -> return false
-    Node.Assert(_) -> return true
-    Node.Cat(items) -> return items.all?(&nullable?)
-    Node.Alt(branches) -> return branches.any?(&nullable?)
-    Node.Rep(body, low, _, _) -> return low == 0 or nullable?(body)
-    Node.Group(body, _) -> return nullable?(body)
+    Node.Empty -> true
+    Node.Lit(_) -> false
+    Node.Class(_) -> false
+    Node.Any(_) -> false
+    Node.Assert(_) -> true
+    Node.Cat(items) -> items.all?(&nullable?)
+    Node.Alt(branches) -> branches.any?(&nullable?)
+    Node.Rep(body, low, _, _) -> low == 0 or nullable?(body)
+    Node.Group(body, _) -> nullable?(body)
   end
 end
 
 # A greedy SPLIT prefers `body`; a lazy one prefers `exit`.
 def set_split(code: Code, at: Int, body: Int, exit: Int, greedy: Bool) -> Code
   return code.with(xs: code.xs.set(at, body), ys: code.ys.set(at, exit)) if greedy
-  return code.with(xs: code.xs.set(at, exit), ys: code.ys.set(at, body))
+  code.with(xs: code.xs.set(at, exit), ys: code.ys.set(at, body))
 end
 
 # A search with the compiled program: see MODE_TEST, MODE_FIRST and MODE_ALL. Each match gives `ncap` positions, two
 # per group, -1 for a group that did not take part.
 def run(text: String, prog: Program, mode: Int) -> List[Int]
-  return RegexEngine.search(text, prog.ops, prog.xs, prog.ys, prog.classes, prog.ncap, mode)
+  RegexEngine.search(text, prog.ops, prog.xs, prog.ys, prog.classes, prog.ncap, mode)
 end
 
 # The match whose positions start at caps[at].
@@ -896,22 +895,22 @@ def make_match(text: String, caps: List[Int], at: Int, prog: Program) -> Match
     groups = groups.push(make_group(text, caps[slot], caps[slot + 1]))
     slot += 2
   end
-  return Match(text: groups[0].text, start: groups[0].start, stop: groups[0].stop, groups: groups, names: prog.names)
+  Match(text: groups[0].text, start: groups[0].start, stop: groups[0].stop, groups: groups, names: prog.names)
 end
 
 def make_group(text: String, start: Int, stop: Int) -> Group
   return Group(text: "", start: -1, stop: -1, matched: false) if start < 0 or stop < start
-  return Group(text: slice(text, start, stop), start: start, stop: stop, matched: true)
+  Group(text: slice(text, start, stop), start: start, stop: stop, matched: true)
 end
 
 def slice(text: String, from: Int, to: Int) -> String
   return "" if to <= from
-  return String.slice(text, from, to - from)
+  String.slice(text, from, to - from)
 end
 
 def escape_char(c: String) -> String
   return "\\#{c}" if SPECIAL.include?(c)
-  return c
+  c
 end
 
 # The pieces of a replacement template, checked against the groups of the pattern.
@@ -978,7 +977,7 @@ def parse_template(template: String, prog: Program) -> Result[List[Piece]]
   if text.size > 0
     pieces = pieces.push(Piece.Text(text.join("")))
   end
-  return ok(pieces)
+  ok(pieces)
 end
 
 # A group number from its digits; it stops growing past MAX_GROUPS, which is already no group.
@@ -989,5 +988,5 @@ def group_number(digits_text: String) -> Int
       value = value * 10 + d.code - 48
     end
   end
-  return value
+  value
 end

@@ -21,7 +21,7 @@ def search(distances: List[List[Int]], visited: List[Bool], path: List[Int], cos
     end
     city = city + 1
   end
-  return result
+  result
 end
 
 def read_distances(text: String) -> Result[List[List[Int]]]
@@ -46,14 +46,14 @@ def read_distances(text: String) -> Result[List[List[Int]]]
     distances = List.append(distances, values)
     row_index = row_index + 1
   end
-  return ok(distances)
+  ok(distances)
 end
 
 def solve(text: String) -> Result[Circuit]
   distances = try read_distances(text)
   visited = List.set(List.repeat(false, List.size(distances)), 0, true)
   best = Circuit(cost: 8000000001, route: [])
-  return ok(search(distances, visited, [0], 0, best))
+  ok(search(distances, visited, [0], 0, best))
 end
 
 def main() -> Void

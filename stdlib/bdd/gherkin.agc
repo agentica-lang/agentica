@@ -291,15 +291,15 @@ export def parse(file: String, text: String) -> Outcome[Feature]
       )
     end
   end
-  return Outcome.Done(Feature(name: title, scenarios: scenarios, tags: feature_tags, span: title_span))
+  Outcome.Done(Feature(name: title, scenarios: scenarios, tags: feature_tags, span: title_span))
 end
 
 def problem(code: String, message: String, span: Report.Span) -> Diagnostic
-  return Diagnostic(code: code, message: message, span: span)
+  Diagnostic(code: code, message: message, span: span)
 end
 
 def fail(code: String, message: String, span: Report.Span) -> Outcome[Feature]
-  return Outcome.Failed(problem(code, message, span))
+  Outcome.Failed(problem(code, message, span))
 end
 
 def read_lines(file: String, text: String) -> Source
@@ -308,7 +308,7 @@ def read_lines(file: String, text: String) -> Source
     part
   end
 
-  return Source(file: file, raws: raws, texts: raws.map do |raw| raw.strip end)
+  Source(file: file, raws: raws, texts: raws.map do |raw| raw.strip end)
 end
 
 # A location covers its whole raw line; past the end it is the last line.
@@ -317,13 +317,13 @@ def location(src: Source, index: Int) -> Report.Span
   if at >= src.raws.size
     at = src.raws.size - 1
   end
-  return Report.Span(file: src.file, line: at + 1, column: 1, end_column: src.raws[at].length + 1)
+  Report.Span(file: src.file, line: at + 1, column: 1, end_column: src.raws[at].length + 1)
 end
 
 # A step's place starts at its keyword, so a report points past the indentation. The skipped blanks are the ones
 # `strip` removes, since the line was classified through it.
 def at_keyword(where: Report.Span, raw: String) -> Report.Span
-  return Report.Span(file: where.file, line: where.line, column: strip_prefix(raw) + 1, end_column: where.end_column)
+  Report.Span(file: where.file, line: where.line, column: strip_prefix(raw) + 1, end_column: where.end_column)
 end
 
 def strip_prefix(text: String) -> Int
@@ -333,7 +333,7 @@ def strip_prefix(text: String) -> Int
 
     count += 1
   end
-  return count
+  count
 end
 
 def rest_of(text: String, start: Int) -> String = text.slice(start, text.length - start)
@@ -344,7 +344,7 @@ def blank_prefix(text: String) -> Int
     return count if c != " " and c != "\t"
     count += 1
   end
-  return count
+  count
 end
 
 def drop_blanks(text: String) -> String = rest_of(text, blank_prefix(text))
@@ -363,7 +363,7 @@ def heading_keyword(line: String) -> String
   )
     return word
   end
-  return ""
+  ""
 end
 
 def step_keyword(line: String) -> String
@@ -374,26 +374,26 @@ def step_keyword(line: String) -> String
   )
     return word
   end
-  return ""
+  ""
 end
 
 def unsupported?(line: String) -> Bool
   for prefix in ["Rule:", "Scenario Template:", "Scenarios:", "* ", "```", "Given:", "When:", "Then:", "And:", "But:"]
     return true if line.start_with?(prefix)
   end
-  return false
+  false
 end
 
 def tags?(line: String) -> Bool
   for tag in line.replace("\t", " ").split(" ")
     return false if tag != "" and (tag.length < 2 or not tag.start_with?("@"))
   end
-  return true
+  true
 end
 
 def split_tags(line: String) -> List[String]
   spaced = line.replace("\t", " ").replace("\r", " ").replace(String.from_code(12), " ")
-  return spaced.split(" ").filter do |tag| tag != "" end
+  spaced.split(" ").filter do |tag| tag != "" end
 end
 
 def doc_delimiter?(line: String) -> Bool
@@ -401,7 +401,7 @@ def doc_delimiter?(line: String) -> Bool
   for c in rest_of(line, 3).split("")
     return false if not allowed.include?(c)
   end
-  return true
+  true
 end
 
 def unique_names?(names: List[String]) -> Bool
@@ -410,7 +410,7 @@ def unique_names?(names: List[String]) -> Bool
     return false if name == "" or seen.has_key?(name)
     seen = seen.put(name, true)
   end
-  return true
+  true
 end
 
 def bind(headers: List[String], cells: List[String]) -> Map[String, String]
@@ -418,11 +418,11 @@ def bind(headers: List[String], cells: List[String]) -> Map[String, String]
   for i in 0...headers.size
     bindings = bindings.put(headers[i], cells[i])
   end
-  return bindings
+  bindings
 end
 
 def with_steps(draft: Draft, steps: List[Step]) -> Draft
-  return Draft(
+  Draft(
     name: draft.name,
     outline: draft.outline,
     steps: steps,
@@ -433,7 +433,7 @@ def with_steps(draft: Draft, steps: List[Step]) -> Draft
 end
 
 def with_examples(draft: Draft, rows: List[ExampleRow]) -> Draft
-  return Draft(
+  Draft(
     name: draft.name,
     outline: draft.outline,
     steps: draft.steps,
@@ -446,13 +446,13 @@ end
 def active_steps(mode: String, background: List[Step], current: Draft, has_current: Bool) -> List[Step]
   return background if mode == "background"
   return current.steps if has_current
-  return []
+  []
 end
 
 def has_argument?(step: Step) -> Bool
   case step.argument
-    Argument.NoArgument -> return false
-    _ -> return true
+    Argument.NoArgument -> false
+    _ -> true
   end
 end
 
@@ -474,7 +474,7 @@ def read_table(src: Source, start: Int) -> Outcome[Table]
     rows = rows.push(TableRow(span: where, cells: found))
     cursor += 1
   end
-  return Outcome.Done(Table(rows: rows, next: cursor))
+  Outcome.Done(Table(rows: rows, next: cursor))
 end
 
 # Each content line loses the opening line's indentation, at most.
@@ -498,7 +498,7 @@ def read_doc(src: Source, start: Int) -> Outcome[Doc]
     rest_of(value, blanks)
   end
 
-  return Outcome.Done(Doc(text: content.join("\n"), next: cursor + 1))
+  Outcome.Done(Doc(text: content.join("\n"), next: cursor + 1))
 end
 
 def table_row(row: String) -> Result[List[String]]
@@ -513,7 +513,7 @@ def table_row(row: String) -> Result[List[String]]
   return cells if not cells.ok?
   return error("a table row must end with an unescaped |") if rest != ""
   return error("a table row needs at least one cell") if ends.size == 0
-  return ok(cells.unwrap!.take(ends.size).map do |cell| cell.strip end)
+  ok(cells.unwrap!.take(ends.size).map do |cell| cell.strip end)
 end
 
 def even_run?(chars: List[String], at: Int) -> Bool
@@ -521,20 +521,20 @@ def even_run?(chars: List[String], at: Int) -> Bool
   while i > 0 and chars[i - 1] == "\\"
     i -= 1
   end
-  return (at - i) % 2 == 0
+  (at - i) % 2 == 0
 end
 
 def unescape_cell(raw: String) -> Result[String]
   parts = raw.split("\\\\").map do |part| part.replace("\\|", "|").replace("\\n", "\n") end
   return error("invalid table escape") if parts.any? do |part| part.include?("\\") end
-  return ok(parts.join("\\"))
+  ok(parts.join("\\"))
 end
 
 def collect(results: List[Result[String]]) -> Result[List[String]]
   for result in results
     return error(result.message) if not result.ok?
   end
-  return ok(results.map do |result| result.unwrap! end)
+  ok(results.map do |result| result.unwrap! end)
 end
 
 def expand_row(draft: Draft, steps: List[Step], tags: List[String], row: ExampleRow) -> Scenario
@@ -549,7 +549,7 @@ def expand_row(draft: Draft, steps: List[Step], tags: List[String], row: Example
     )
   end
 
-  return Scenario(
+  Scenario(
     name: name,
     steps: expanded,
     tags: tags.concat(row.tags),
@@ -566,7 +566,7 @@ def row_suffix(name: String, row: ExampleRow) -> String
   return "" if unused.size == 0
 
   values = unused.map do |i| flat(row.cells[i]) end
-  return " (#{values.join(", ")})"
+  " (#{values.join(", ")})"
 end
 
 # A cell as one visible piece of a name: empty is `""`, and a control character (a line feed would break the text
@@ -574,7 +574,7 @@ end
 def flat(cell: String) -> String
   return "\"\"" if cell == ""
 
-  return cell.split("").map do |c| flat_char(c) end.join("")
+  cell.split("").map do |c| flat_char(c) end.join("")
 end
 
 def flat_char(c: String) -> String
@@ -590,15 +590,15 @@ def flat_char(c: String) -> String
     return "\\x#{digits.slice(code / 16, 1)}#{digits.slice(code % 16, 1)}"
   end
 
-  return c
+  c
 end
 
 def substitute_argument(argument: Argument, bindings: Map[String, String]) -> Argument
   case argument
-    Argument.DocString(text) -> return Argument.DocString(substitute(text, bindings))
+    Argument.DocString(text) -> Argument.DocString(substitute(text, bindings))
     Argument.DataTable(rows) ->
-      return Argument.DataTable(rows.map do |cells| cells.map do |cell| substitute(cell, bindings) end end)
-    Argument.NoArgument -> return argument
+      Argument.DataTable(rows.map do |cells| cells.map do |cell| substitute(cell, bindings) end end)
+    Argument.NoArgument -> argument
   end
 end
 
@@ -608,7 +608,7 @@ end
 def substitute(text: String, bindings: Map[String, String]) -> String
   return text if not text.include?("<")
   parts = text.split("<")
-  return parts[0] + parts.drop(1).map do |part| substitute_part(part, bindings) end.join("")
+  parts[0] + parts.drop(1).map do |part| substitute_part(part, bindings) end.join("")
 end
 
 def substitute_part(part: String, bindings: Map[String, String]) -> String
@@ -617,5 +617,5 @@ def substitute_part(part: String, bindings: Map[String, String]) -> String
   return "<#{part}" if close == 0
   name = part.slice(0, close)
   return "<#{part}" if not bindings.has_key?(name)
-  return bindings[name] + rest_of(part, close + 1)
+  bindings[name] + rest_of(part, close + 1)
 end

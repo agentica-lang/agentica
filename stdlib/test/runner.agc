@@ -141,12 +141,12 @@ def save_report(path: String, text: String) -> Result[Void]
     try File.write(out, text.slice(at, size), 5000)
     at += size
   end
-  return File.close(out, 5000)
+  File.close(out, 5000)
 end
 
 def min_of(a: Int, b: Int) -> Int
   return a if a < b
-  return b
+  b
 end
 
 # The `--tags` expression: the line after the entries, a JSON string. No line is no filter; a line that cannot be read
@@ -162,7 +162,7 @@ def read_tags(handle: FileHandle) -> Result[String]
   text = JSON.string(JSON.parse(line.unwrap!).unwrap_or(JSON.null()))
   return error("the line is not a JSON string") if !text.ok?
 
-  return text
+  text
 end
 
 # The `--jobs` line, after the tags line: a JSON integer. A missing or unusable line is one file at a time, the
@@ -174,7 +174,7 @@ def read_jobs(handle: FileHandle) -> Int
   parsed = JSON.int(JSON.parse(line.unwrap!).unwrap_or(JSON.null()))
   return 1 if !parsed.ok? or parsed.unwrap! < 1
 
-  return parsed.unwrap!
+  parsed.unwrap!
 end
 
 # The `--coverage` line, after the timing line: the folder for the LCOV part of each child, as a JSON string. A missing
@@ -183,7 +183,7 @@ def read_coverage(handle: FileHandle) -> String
   line = File.read_line(handle, 5000)
   return "" if !line.ok?
 
-  return JSON.string(JSON.parse(line.unwrap!).unwrap_or(JSON.null())).unwrap_or("")
+  JSON.string(JSON.parse(line.unwrap!).unwrap_or(JSON.null())).unwrap_or("")
 end
 
 # The coverage of the run (Coverage.collect), without the test files and the step program: they always run.
@@ -191,7 +191,7 @@ def covered_run(config: Config, parts: String, entries: List[Entry]) -> Coverage
   return Coverage.Run(path: "", files: [], broken: [], problem: "") if parts == ""
 
   left_out = entries.filter do |entry| entry.kind == "tests" end.map do |entry| Coverage.shown(entry.path) end
-  return Coverage.collect(parts, left_out.push(Coverage.shown(config.steps_source)))
+  Coverage.collect(parts, left_out.push(Coverage.shown(config.steps_source)))
 end
 
 # The `--timing` line, after the jobs line: a JSON boolean. A missing or unusable line is no timing.
@@ -199,7 +199,7 @@ def read_timing(handle: FileHandle) -> Bool
   line = File.read_line(handle, 5000)
   return false if !line.ok?
 
-  return JSON.bool(JSON.parse(line.unwrap!).unwrap_or(JSON.null())).unwrap_or(false)
+  JSON.bool(JSON.parse(line.unwrap!).unwrap_or(JSON.null())).unwrap_or(false)
 end
 
 # The report of the run. A `--tags` expression that cannot be read or is bad is a usage error and nothing runs (the
@@ -224,7 +224,7 @@ def selected(
     return [Report.file_error("<arguments>", "", Report.error_at("RUNTIME-BDD-USAGE", message, where))]
   end
 
-  return matched(config, tags.unwrap!, compiled.unwrap!, run_all(config, compiled.unwrap!, jobs, parts, entries))
+  matched(config, tags.unwrap!, compiled.unwrap!, run_all(config, compiled.unwrap!, jobs, parts, entries))
 end
 
 def run_all(config: Config, tags: Tags.Expr, jobs: Int, parts: String, found: List[Entry]) -> List[Report.FileResult]
@@ -247,8 +247,8 @@ def run_all(config: Config, tags: Tags.Expr, jobs: Int, parts: String, found: Li
   case listing
     Listing.Broken(problem) ->
       tests = run_entries(config, tags, [], jobs, parts, entries.filter do |entry| entry.kind == "tests" end)
-      return [Report.file_error(config.steps_source, "steps", problem)].concat(tests)
-    Listing.Ready(patterns) -> return run_entries(config, tags, patterns, jobs, parts, entries)
+      [Report.file_error(config.steps_source, "steps", problem)].concat(tests)
+    Listing.Ready(patterns) -> run_entries(config, tags, patterns, jobs, parts, entries)
   end
 end
 
@@ -286,7 +286,7 @@ def run_entries(
     end
   end
 
-  return results
+  results
 end
 
 # A filter (`--only` or `--tags`) that keeps nothing is an error, not a pass.
@@ -307,15 +307,15 @@ def matched(
   end
 
   problem = Child.located("CHECK-BDD-EMPTY", message, config.empty_path)
-  return files.push(Report.file_error(config.empty_path, "", problem))
+  files.push(Report.file_error(config.empty_path, "", problem))
 end
 
 def failed?(verdict: Report.Verdict) -> Bool
   case verdict
-    Report.Verdict.Fail(_) -> return true
-    Report.Verdict.Pass -> return false
-    Report.Verdict.Skipped(_) -> return false
-    Report.Verdict.NotExecuted -> return false
+    Report.Verdict.Fail(_) -> true
+    Report.Verdict.Pass -> false
+    Report.Verdict.Skipped(_) -> false
+    Report.Verdict.NotExecuted -> false
   end
 end
 
@@ -325,14 +325,14 @@ def steps_listing(config: Config) -> Listing
     parsed = Report.from_json(config.steps_error)
     return Listing.Broken(parsed.unwrap_or(Report.error_at("RUNTIME-BDD-INFRA", parsed.message, where)))
   end
-  return list_steps(config, where)
+  list_steps(config, where)
 end
 
 # The name of the LCOV parts of the file at `at` without its `.info`, or "" without coverage.
 def part_of(parts: String, at: Int) -> String
   return "" if parts == ""
 
-  return "#{parts}/#{at}"
+  "#{parts}/#{at}"
 end
 
 def run_entry(
@@ -358,11 +358,11 @@ def run_entry(
 
     return Units.run(settings, entry.path, entry.bytecode, entry.front_end)
   end
-  return run_file(config, tags, patterns, part, entry.path)
+  run_file(config, tags, patterns, part, entry.path)
 end
 
 def seeded(config: Config, seed: Int) -> Config
-  return Config(
+  Config(
     vm: config.vm,
     steps_bytecode: config.steps_bytecode,
     steps_source: config.steps_source,
@@ -416,8 +416,8 @@ def list_steps(config: Config, where: Report.Span) -> Listing
     .map do |record| Child.text_of(record, "pattern") end
 
   case Match.compile(texts, where)
-    Gherkin.Outcome.Done(patterns) -> return Listing.Ready(patterns)
-    Gherkin.Outcome.Failed(problem) -> return Listing.Broken(from_diagnostic(problem))
+    Gherkin.Outcome.Done(patterns) -> Listing.Ready(patterns)
+    Gherkin.Outcome.Failed(problem) -> Listing.Broken(from_diagnostic(problem))
   end
 end
 
@@ -434,7 +434,7 @@ def run_file(
   end
   return Report.file_error(path, "feature", Child.located("RUNTIME-BDD-INFRA", text.message, path)) if not text.ok?
   case Gherkin.parse(path, text.unwrap!)
-    Gherkin.Outcome.Failed(problem) -> return Report.file_error(path, "feature", from_diagnostic(problem))
+    Gherkin.Outcome.Failed(problem) -> Report.file_error(path, "feature", from_diagnostic(problem))
     Gherkin.Outcome.Done(feature) ->
       base = Path.resolve(Path.join([path, ".."]).unwrap_or(path)).unwrap_or(path)
       chosen = feature.scenarios.filter do |item|
@@ -450,7 +450,7 @@ def run_file(
         run_scenario(config, patterns, base, chosen[at], cover)
       end
 
-      return Report.FileResult(
+      Report.FileResult(
         path: path,
         feature: feature.name,
         kind: "feature",
@@ -495,7 +495,7 @@ def run_scenario(
     Report.StepResult(text: item.steps[i].text, location: item.steps[i].span, status: status)
   end
 
-  return Report.ScenarioResult(
+  Report.ScenarioResult(
     name: item.name,
     tags: item.tags,
     location: item.span,
@@ -574,7 +574,7 @@ def run_child(
     end
   end
   Process.close(p)
-  return run
+  run
 end
 
 def step_line(index: Int, found: Match.Resolved, patterns: List[Match.Pattern], step: Gherkin.Step) -> String
@@ -602,7 +602,7 @@ def step_line(index: Int, found: Match.Resolved, patterns: List[Match.Pattern], 
     "table": JSON.from(table),
   }
 
-  return JSON.encode(JSON.object(fields))
+  JSON.encode(JSON.object(fields))
 end
 
 # Reads channel records until the step ends; what the handler printed is read once per step and may not exceed 1 MiB.
@@ -655,7 +655,7 @@ def await_step(p: Process, index: Int, deadline: Int, span: Report.Span, then_st
       return StepEnd(verdict: Report.Verdict.Pass, asserts: asserts)
     end
   end
-  return StepEnd(verdict: Report.Verdict.Pass, asserts: asserts)
+  StepEnd(verdict: Report.Verdict.Pass, asserts: asserts)
 end
 
 # After a failed step the child runs its after hooks (`BDD.after`) and then exits. What the hooks report arrives as
@@ -678,7 +678,7 @@ def with_hook_problems(p: Process, failure: Report.Error, deadline: Int) -> Repo
   if line.message == "process: operation timed out"
     message = "#{message}; #{late_text(hooks)}"
   end
-  return Report.Error(
+  Report.Error(
     code: failure.code,
     message: message,
     span: failure.span,
@@ -711,14 +711,14 @@ def await_exit(p: Process, deadline: Int, span: Report.Span) -> Report.Verdict
     return Report.Verdict.Pass if code.ok? and code.unwrap! == 0
   end
   return failure("RUNTIME-BDD-TIMEOUT", late_text(hooks), span) if line.message == "process: operation timed out"
-  return Report.Verdict.Fail(read_failure(p, line.message, deadline, span))
+  Report.Verdict.Fail(read_failure(p, line.message, deadline, span))
 end
 
 # Why a child that has sent its last record is still running at the deadline: its after hooks when it said they run
 # (the `after` record), else only its own end.
 def late_text(hooks: Bool) -> String
   return "an after hook did not finish within the scenario's time limit" if hooks
-  return "the step program did not exit within the scenario's time limit"
+  "the step program did not exit within the scenario's time limit"
 end
 
 def read_failure(p: Process, message: String, deadline: Int, span: Report.Span) -> Report.Error
@@ -734,22 +734,18 @@ def read_failure(p: Process, message: String, deadline: Int, span: Report.Span) 
   crash = Child.stderr_diagnostic(output.unwrap!.stderr, span)
   return crash.unwrap! if crash.ok?
   code = Process.wait(p, Child.left(deadline))
-  return Report.error_at(
-    "RUNTIME-BDD-PREMATURE-EXIT",
-    "step exited prematurely (exit code #{code.unwrap_or(-1)})",
-    span,
-  )
+  Report.error_at("RUNTIME-BDD-PREMATURE-EXIT", "step exited prematurely (exit code #{code.unwrap_or(-1)})", span)
 end
 
 def send_failure(p: Process, message: String, deadline: Int, span: Report.Span) -> Report.Error
   if message == "process: send exceeds 1048576 bytes"
     return Report.error_at("RUNTIME-BDD-IO", "the step line exceeds 1 MiB after JSON escaping", span)
   end
-  return read_failure(p, message, deadline, span)
+  read_failure(p, message, deadline, span)
 end
 
 def record_error(record: Json, span: Report.Span) -> Report.Error
-  return Report.Error(
+  Report.Error(
     code: Child.text_of(record, "code"),
     message: Child.text_of(record, "message"),
     span: span,
@@ -762,16 +758,15 @@ end
 
 def resolved_of(outcome: Gherkin.Outcome[Match.Resolved]) -> Match.Resolved
   case outcome
-    Gherkin.Outcome.Done(found) -> return found
-    Gherkin.Outcome.Failed(_) -> return Match.Resolved(index: -1, captures: [])
+    Gherkin.Outcome.Done(found) -> found
+    Gherkin.Outcome.Failed(_) -> Match.Resolved(index: -1, captures: [])
   end
 end
 
 def unresolved(patterns: List[Match.Pattern], step: Gherkin.Step) -> Report.Error
   case Match.resolve(patterns, step)
-    Gherkin.Outcome.Failed(problem) -> return Report.with_actual(from_diagnostic(problem), step.text.inspect)
-    Gherkin.Outcome.Done(_) ->
-      return Report.error_at("RUNTIME-BDD-INFRA", "the step resolved on the second try", step.span)
+    Gherkin.Outcome.Failed(problem) -> Report.with_actual(from_diagnostic(problem), step.text.inspect)
+    Gherkin.Outcome.Done(_) -> Report.error_at("RUNTIME-BDD-INFRA", "the step resolved on the second try", step.span)
   end
 end
 
@@ -793,16 +788,16 @@ def vm_args(config: Config, steps: Int, mode: String, cover: String) -> List[Str
   end
 
   return options.concat(["--embedded", "steps", "--", "--agentica-bdd", mode]) if config.steps_bytecode == ""
-  return options.concat(["--", config.steps_bytecode, "--agentica-bdd", mode])
+  options.concat(["--", config.steps_bytecode, "--agentica-bdd", mode])
 end
 
 # The user's --deny-* flags and --sandbox: the words after the binary in `agentica`.
 def deny(config: Config) -> List[String] = config.agentica.drop(1)
 
 def failure(code: String, message: String, span: Report.Span) -> Report.Verdict
-  return Report.Verdict.Fail(Report.error_at(code, message, span))
+  Report.Verdict.Fail(Report.error_at(code, message, span))
 end
 
 def from_diagnostic(problem: Gherkin.Diagnostic) -> Report.Error
-  return Report.error_at(problem.code, problem.message, problem.span)
+  Report.error_at(problem.code, problem.message, problem.span)
 end

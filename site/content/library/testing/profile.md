@@ -23,7 +23,7 @@ def total(n: Int) -> Int
     sum += k
   end
 
-  return sum
+  sum
 end
 
 def main() -> Void
@@ -41,7 +41,7 @@ A block that uses `try` gives a `Result`. Give the call a `Result` type, so the 
 ```agentica
 def parse(text: String) -> Result[Int]
   n = try text.to_int
-  return ok(n)
+  ok(n)
 end
 
 def main() -> Void
@@ -75,7 +75,7 @@ def work(n: Int) -> Int
     i += 1
   end
 
-  return sum
+  sum
 end
 
 def main() -> Void
@@ -108,13 +108,13 @@ def work(n: Int) -> Int
     sum += k
   end
 
-  return sum
+  sum
 end
 
 def cost(n: Int) -> Int
   before = Profile.steps()
   work(n)
-  return Profile.steps() - before
+  Profile.steps() - before
 end
 
 def main() -> Void

@@ -19,7 +19,7 @@ def destinations(size: Int, square: Int, visited: List[Bool], moves: List[Move])
       end
     end
   end
-  return result
+  result
 end
 
 def search(size: Int, square: Int, visited: List[Bool], path: List[Int], moves: List[Move]) -> Result[List[Int]]
@@ -52,7 +52,7 @@ def search(size: Int, square: Int, visited: List[Bool], path: List[Int], moves: 
     end
     remaining -= 1
   end
-  return error("no tour")
+  error("no tour")
 end
 
 def main() -> Void

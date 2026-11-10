@@ -56,7 +56,7 @@ export def run(settings: Settings, path: String, bytecode: String, front_end: St
     return Report.file_error(path, "tests", parsed.unwrap_or(Child.located("RUNTIME-BDD-INFRA", parsed.message, path)))
   end
   case list(settings, path, bytecode)
-    Listed.Broken(found) -> return Report.file_failure(path, "tests", found.problem, found.output)
+    Listed.Broken(found) -> Report.file_failure(path, "tests", found.problem, found.output)
     Listed.Ready(found) ->
       chosen = found.filter do |item| settings.only == "" or item.name.include?(settings.only) end
       if chosen.size == 0
@@ -69,7 +69,7 @@ export def run(settings: Settings, path: String, bytecode: String, front_end: St
           output: "",
         )
       end
-      return run_child(settings, path, bytecode, chosen)
+      run_child(settings, path, bytecode, chosen)
   end
 end
 
@@ -145,11 +145,11 @@ def list(settings: Settings, path: String, bytecode: String) -> Listed
       )
     end
 
-  return Listed.Ready(listed.values)
+  Listed.Ready(listed.values)
 end
 
 def broken(problem: Report.Error, output: String) -> Listed
-  return Listed.Broken(Failure(problem: problem, output: output, blame: true))
+  Listed.Broken(Failure(problem: problem, output: output, blame: true))
 end
 
 def run_child(settings: Settings, path: String, bytecode: String, chosen: List[UnitTest]) -> Report.FileResult
@@ -197,7 +197,7 @@ def run_child(settings: Settings, path: String, bytecode: String, chosen: List[U
   end
   Process.close(p)
   scenarios = chosen.map do |item| results.get(item.index, scenario(item, 0, Report.Verdict.NotExecuted, "")) end
-  return Report.FileResult(
+  Report.FileResult(
     path: path,
     feature: "",
     kind: "tests",
@@ -241,7 +241,7 @@ def await_test(settings: Settings, p: Process, deadline: Int, span: Report.Span)
     )
   end
   problem = Report.error_at("RUNTIME-BDD-INFRA", "the test file broke the test record protocol", span)
-  return TestEnd(verdict: Report.Verdict.Fail(problem), output: Child.tail(shown, 65536), stopped: true, blame: true)
+  TestEnd(verdict: Report.Verdict.Fail(problem), output: Child.tail(shown, 65536), stopped: true, blame: true)
 end
 
 def finish(settings: Settings, p: Process, where: Report.Span) -> Ending
@@ -268,7 +268,7 @@ def finish(settings: Settings, p: Process, where: Report.Span) -> Ending
     where,
   )
 
-  return Ending(verdict: Report.Verdict.Fail(problem), output: shown)
+  Ending(verdict: Report.Verdict.Fail(problem), output: shown)
 end
 
 def failure(settings: Settings, p: Process, message: String, deadline: Int, span: Report.Span) -> Failure
@@ -296,7 +296,7 @@ def failure(settings: Settings, p: Process, message: String, deadline: Int, span
     span,
   )
 
-  return Failure(problem: problem, output: Child.stderr_text(stderr), blame: true)
+  Failure(problem: problem, output: Child.stderr_text(stderr), blame: true)
 end
 
 def overflow(settings: Settings, p: Process, deadline: Int, span: Report.Span) -> Failure
@@ -319,16 +319,16 @@ def overflow(settings: Settings, p: Process, deadline: Int, span: Report.Span) -
     )
   end
   where = Report.Span(file: span.file, line: 1, column: 1, end_column: 1)
-  return Failure(problem: stderr_limit(where), output: Child.stderr_text(stderr), blame: false)
+  Failure(problem: stderr_limit(where), output: Child.stderr_text(stderr), blame: false)
 end
 
 def timed_out(settings: Settings, span: Report.Span) -> Failure
   problem = Report.error_at("RUNTIME-TEST-TIMEOUT", "the test did not finish within #{settings.timeout_ms} ms", span)
-  return Failure(problem: problem, output: "", blame: true)
+  Failure(problem: problem, output: "", blame: true)
 end
 
 def stderr_limit(where: Report.Span) -> Report.Error
-  return Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "the test file's stderr over all its tests exceeds 1 MiB", where)
+  Report.error_at("RUNTIME-BDD-OUTPUT-LIMIT", "the test file's stderr over all its tests exceeds 1 MiB", where)
 end
 
 def record_error(record: Json) -> Report.Error
@@ -346,7 +346,7 @@ def record_error(record: Json) -> Report.Error
   if JSON.get(record, "stack").ok?
     original = Child.diagnostic_of(record)
   end
-  return Report.Error(
+  Report.Error(
     code: Child.text_of(record, "code"),
     message: Child.text_of(record, "message"),
     span: span,
@@ -358,7 +358,7 @@ def record_error(record: Json) -> Report.Error
 end
 
 def scenario(item: UnitTest, duration_ms: Int, verdict: Report.Verdict, output: String) -> Report.ScenarioResult
-  return Report.ScenarioResult(
+  Report.ScenarioResult(
     name: item.name,
     tags: [],
     location: item.span,
@@ -378,8 +378,7 @@ def args(settings: Settings, bytecode: String, steps: Int, mode: String) -> List
   if settings.coverage != "" and mode == "run"
     cover = ["--coverage", "#{settings.coverage}.info"]
   end
-
-  return (
+  (
     ["run", "--json", "--max-steps", steps.to_s, "--seed", settings.seed.to_s, "--source-root", settings.source_root]
       .concat(settings.deny)
       .concat(cover)

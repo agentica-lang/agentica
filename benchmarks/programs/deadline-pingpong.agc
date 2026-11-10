@@ -19,7 +19,7 @@ def echo(p: Pair) -> Int
         return -1
     end
   end
-  return total
+  total
 end
 
 def main() -> Void

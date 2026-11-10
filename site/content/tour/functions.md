@@ -131,7 +131,7 @@ end
 def factorial(n: Int) -> Int
   return 1 if n <= 1
 
-  return n * factorial(n - 1)
+  n * factorial(n - 1)
 end
 ```
 
@@ -153,7 +153,7 @@ end
 
 def min_max(xs: List[Int]) -> MinMax
   sorted = xs.sort
-  return MinMax(min: sorted[0], max: sorted[sorted.size - 1])
+  MinMax(min: sorted[0], max: sorted[sorted.size - 1])
 end
 
 def main() -> Void
@@ -222,13 +222,13 @@ def parse(text: String) -> Result[Int] = text.to_i
 def validate(n: Int) -> Result[Int]
   return error("negative") if n < 0
 
-  return ok(n)
+  ok(n)
 end
 
 def add(a: Int, b: Int) -> Int = a + b
 
 def load(text: String) -> Result[Int]
-  return (
+  (
     text.strip
     |> try parse()
     |> validate()
@@ -338,7 +338,7 @@ A function can take type parameters after its name, so one definition works on a
 def first_or[T](xs: List[T], fallback: T) -> T
   return fallback if xs.length == 0
 
-  return xs[0]
+  xs[0]
 end
 
 def max_by[T](xs: List[T], key: Fn[T, Int]) -> Optional[T]
@@ -354,7 +354,7 @@ def max_by[T](xs: List[T], key: Fn[T, Int]) -> Optional[T]
     end
   end
 
-  return some(best)
+  some(best)
 end
 
 def main() -> Void

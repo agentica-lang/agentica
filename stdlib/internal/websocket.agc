@@ -89,8 +89,8 @@ export def accept_key(key: String) -> String = Base64.strict_encode64(OpenSSL.Di
 ## A Sec-WebSocket-Accept is the base64 of a SHA-1 digest of 20 bytes: what `accept_key` makes.
 export def valid_accept?(accept: String) -> Bool
   case Base64.strict_decode64(accept)
-    ok(data) -> return data.size == ACCEPT_BYTES
-    error(_) -> return false
+    ok(data) -> data.size == ACCEPT_BYTES
+    error(_) -> false
   end
 end
 
@@ -101,14 +101,14 @@ export def token?(name: String) -> Bool
     return false if not token_byte?(byte)
   end
 
-  return true
+  true
 end
 
 ## A Sec-WebSocket-Key is the base64 of 16 random bytes.
 export def valid_key?(key: String) -> Bool
   case Base64.strict_decode64(key)
-    ok(data) -> return data.size == KEY_BYTES
-    error(_) -> return false
+    ok(data) -> data.size == KEY_BYTES
+    error(_) -> false
   end
 end
 
@@ -118,14 +118,14 @@ export def has_token?(value: String, token: String) -> Bool
     return true if part.strip.downcase == token
   end
 
-  return false
+  false
 end
 
 ## The first two bytes of a frame as a `Head` that has no tail yet.
 export def head_of(two: Bytes) -> Head
   first = two.at(0)
   second = two.at(1)
-  return Head(
+  Head(
     fin: first >= 128,
     opcode: first % 16,
     masked: second >= 128,
@@ -150,7 +150,7 @@ export def tail_size(head: Head) -> Int
     size = size + MASK_BYTES
   end
 
-  return size
+  size
 end
 
 ## The head with its length and mask, from the tail `tail_size` counted.
@@ -172,14 +172,7 @@ export def complete(head: Head, tail: Bytes) -> Head
     key = tail.slice(used, MASK_BYTES)
   end
 
-  return Head(
-    fin: head.fin,
-    opcode: head.opcode,
-    masked: head.masked,
-    reserved: head.reserved,
-    length: length,
-    key: key,
-  )
+  Head(fin: head.fin, opcode: head.opcode, masked: head.masked, reserved: head.reserved, length: length, key: key)
 end
 
 ## What is wrong with a head, before any payload is read, when something is.
@@ -192,7 +185,7 @@ export def check_head(head: Head) -> Optional[Problem]
 
   return check_control(head) if control?(head.opcode)
 
-  return none
+  none
 end
 
 ## What is wrong with the length of a head whose tail was read: a 64-bit length that is not a length, or a data frame
@@ -204,7 +197,7 @@ export def check_length(head: Head, max: Int, held: Int) -> Optional[Problem]
     return some(Problem(code: CLOSE_TOO_BIG, reason: "message too big"))
   end
 
-  return none
+  none
 end
 
 ## True for the opcodes of control frames (close, ping, pong).
@@ -228,7 +221,7 @@ export def unmask(data: Bytes, key: Bytes) -> Bytes
     place = (place + 1) % MASK_BYTES
   end
 
-  return Bytes.from_list(out).unwrap!
+  Bytes.from_list(out).unwrap!
 end
 
 ## The state before the first frame of a message.
@@ -258,7 +251,7 @@ export def take(assembly: Assembly, head: Head, payload: Bytes, max: Int) -> Tak
   parts = assembly.parts.push(payload)
   return Taken.More(Assembly(text: text, open: true, parts: parts, total: total)) if not head.fin
 
-  return finished(text, Bytes.concat(parts))
+  finished(text, Bytes.concat(parts))
 end
 
 ## A close frame: no payload (no code), or a code of two bytes and a reason that is UTF-8. A code that no peer may send
@@ -272,8 +265,8 @@ export def parse_close(payload: Bytes) -> Closing
   return Closing.Invalid(Problem(code: CLOSE_PROTOCOL, reason: "invalid close code")) if not valid_code?(code)
 
   case String.from_bytes(payload.drop(2))
-    ok(reason) -> return Closing.Peer(code, reason)
-    error(_) -> return Closing.Invalid(Problem(code: CLOSE_BAD_DATA, reason: "close reason is not valid UTF-8"))
+    ok(reason) -> Closing.Peer(code, reason)
+    error(_) -> Closing.Invalid(Problem(code: CLOSE_BAD_DATA, reason: "close reason is not valid UTF-8"))
   end
 end
 
@@ -287,7 +280,7 @@ export def frame(opcode: Int, payload: Bytes) -> Bytes
     return Bytes.concat([head, Bytes.from_list([126]).unwrap!, Binary.write_u16_be(size).unwrap!, payload])
   end
 
-  return Bytes.concat([head, Bytes.from_list([127]).unwrap!, Binary.write_i64_be(size), payload])
+  Bytes.concat([head, Bytes.from_list([127]).unwrap!, Binary.write_i64_be(size), payload])
 end
 
 ## A text frame the server writes.
@@ -315,7 +308,7 @@ export def data_frame?(frame: Bytes) -> Bool
     return size >= 65536 and frame.size - 10 == size
   end
 
-  return false
+  false
 end
 
 ## A ping frame the server writes.
@@ -326,14 +319,14 @@ export def pong_frame(data: Bytes) -> Bytes = frame(PONG, data)
 
 ## A close frame; the reason is cut to what a control frame can hold, at a character boundary.
 export def close_frame(code: Int, reason: String) -> Bytes
-  return frame(CLOSE, Bytes.concat([Binary.write_u16_be(code).unwrap!, short_reason(reason)]))
+  frame(CLOSE, Bytes.concat([Binary.write_u16_be(code).unwrap!, short_reason(reason)]))
 end
 
 ## True for a close code that a peer may send: 1000 to 1014 except 1004 to 1006, and 3000 to 4999.
 export def valid_code?(code: Int) -> Bool
   return true if code >= 3000 and code <= 4999
 
-  return code >= 1000 and code <= 1014 and code != 1004 and code != 1005 and code != 1006
+  code >= 1000 and code <= 1014 and code != 1004 and code != 1005 and code != 1006
 end
 
 def known_opcode?(opcode: Int) -> Bool = opcode <= BINARY or (opcode >= CLOSE and opcode <= PONG)
@@ -346,13 +339,13 @@ def check_control(head: Head) -> Optional[Problem]
     return some(Problem(code: CLOSE_PROTOCOL, reason: "a control frame is at most 125 bytes"))
   end
 
-  return none
+  none
 end
 
 def finished(text: Bool, data: Bytes) -> Taken
   return Taken.Broken(Problem(code: CLOSE_BAD_DATA, reason: "text is not valid UTF-8")) if text and not utf8?(data)
 
-  return Taken.Whole(text, data, new_assembly())
+  Taken.Whole(text, data, new_assembly())
 end
 
 # The reason as bytes of at most 123, without splitting a character.
@@ -365,13 +358,13 @@ def short_reason(reason: String) -> Bytes
     size = size - 1
   end
 
-  return data.take(size)
+  data.take(size)
 end
 
 def utf8?(data: Bytes) -> Bool
   case String.from_bytes(data)
-    ok(_) -> return true
-    error(_) -> return false
+    ok(_) -> true
+    error(_) -> false
   end
 end
 
@@ -380,5 +373,5 @@ def token_byte?(byte: Int) -> Bool
     return true if allowed == byte
   end
 
-  return false
+  false
 end

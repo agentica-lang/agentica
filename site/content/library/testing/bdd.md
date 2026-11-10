@@ -112,12 +112,12 @@ Without `--steps`, `agentica test` uses the nearest `steps.agc` found in the fol
 import BDD from "std/bdd"
 
 def remember(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  return BDD.set(ctx, "count", JSON.from(String.to_int!(args[0])))
+  BDD.set(ctx, "count", JSON.from(String.to_int!(args[0])))
 end
 
 def check_count(ctx: BDD.Context, args: List[String]) -> BDD.Context
   count = JSON.int(BDD.get(ctx, "count").unwrap!).unwrap!
-  return BDD.assert(ctx, count == String.to_int!(args[0]), "wrong count")
+  BDD.assert(ctx, count == String.to_int!(args[0]), "wrong count")
 end
 
 def main() -> Void
@@ -180,7 +180,7 @@ import BDD from "std/bdd"
 def need_postgres(ctx: BDD.Context, args: List[String]) -> BDD.Context
   return ctx if System.env("POSTGRES_URL").ok?
 
-  return BDD.skip(ctx, "POSTGRES_URL is not set")
+  BDD.skip(ctx, "POSTGRES_URL is not set")
 end
 
 def main() -> Void
@@ -215,7 +215,7 @@ def open_pair(ctx: BDD.Context, args: List[String]) -> BDD.Context
   listener = TCP.listen("127.0.0.1", 0).unwrap!
   client = TCP.connect("127.0.0.1", TCP.local_port(listener), 5000).unwrap!
   server = TCP.accept(listener, 5000).unwrap!
-  return BDD.keep(ctx, "pair") do |request|
+  BDD.keep(ctx, "pair") do |request|
     try TCP.send(client, JSON.encode(request) + "\n", 5000)
     JSON.parse(try TCP.read_line(server, 5000))
   end
@@ -223,7 +223,7 @@ end
 
 def check_echo(ctx: BDD.Context, args: List[String]) -> BDD.Context
   reply = BDD.call(ctx, "pair", JSON.from(args[0])).unwrap!
-  return BDD.assert(ctx, JSON.string(reply).unwrap! == args[0], "wrong reply")
+  BDD.assert(ctx, JSON.string(reply).unwrap! == args[0], "wrong reply")
 end
 
 def main() -> Void
@@ -243,12 +243,12 @@ def start_peer(ctx: BDD.Context, args: List[String]) -> BDD.Context
   peer = Process.spawn_captured("./peer", [], Process.Options(timeout_ms: 5000)).unwrap!
   port = Process.read_line(peer, 5000).unwrap!
   kept = BDD.keep(ctx, "peer") do |_request| ok(JSON.from(Process.read_line(peer, 5000).unwrap_or(""))) end
-  return BDD.given_env(kept, "PEER_PORT", port)
+  BDD.given_env(kept, "PEER_PORT", port)
 end
 
 def check_received(ctx: BDD.Context, args: List[String]) -> BDD.Context
   line = JSON.string(BDD.call(ctx, "peer", JSON.null()).unwrap!).unwrap!
-  return BDD.assert(ctx, line == args[0], "the peer received #{line.inspect}")
+  BDD.assert(ctx, line == args[0], "the peer received #{line.inspect}")
 end
 
 def main() -> Void
@@ -289,7 +289,7 @@ def remove(path: String) -> Result[Void] = Path.remove(path, 5000)
 def make_folder(ctx: BDD.Context, args: List[String]) -> BDD.Context
   path = args[0]
   Dir.mkdir(path, 5000).unwrap!
-  return BDD.after(ctx) do |_| remove(path) end
+  BDD.after(ctx) do |_| remove(path) end
 end
 
 def main() -> Void
@@ -311,7 +311,7 @@ import BDD from "std/bdd"
 
 def check_rows(ctx: BDD.Context, args: List[String]) -> BDD.Context
   rows = BDD.table(ctx)
-  return BDD.assert(ctx, rows.size == 3, "expected a header and two rows")
+  BDD.assert(ctx, rows.size == 3, "expected a header and two rows")
 end
 
 def send_body(ctx: BDD.Context, args: List[String]) -> BDD.Context = BDD.when_line(ctx, BDD.doc_string(ctx))

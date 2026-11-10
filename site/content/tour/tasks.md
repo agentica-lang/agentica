@@ -30,7 +30,7 @@ Start all the tasks, then wait. They progress at the same time, which helps with
 ```agentica
 def slow_double(n: Int) -> Int
   Task.sleep(10)
-  return n * 2
+  n * 2
 end
 
 def main() -> Void

@@ -22,7 +22,7 @@ def parse_port(text: String) -> Result[Int]
   n = try text.strip.to_i
   return error("port out of range: #{n}") if n < 1 or n > 65535
 
-  return ok(n)
+  ok(n)
 end
 
 def main() -> Void
@@ -50,7 +50,7 @@ a function body needs its `return`.
 ```ruby
 def test_parses_port() -> Result[Void]
   try Test.eq(parse_port("8080"), ok(8080))
-  return Test.eq(parse_port(" 80 "), ok(80))
+  Test.eq(parse_port(" 80 "), ok(80))
 end
 ```
 

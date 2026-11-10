@@ -22,7 +22,7 @@ export def read_records(p: Process, deadline: Int) -> Records
       items = items.push(record)
     end
   end
-  return Records(items: items, problem: "")
+  Records(items: items, problem: "")
 end
 
 ## Parses a channel line as JSON. Returns JSON null when it is not valid.
@@ -35,14 +35,14 @@ export def event_of(record: Json) -> String = text_of(record, "event")
 export def text_of(record: Json, key: String) -> String
   found = JSON.get(record, key)
   return JSON.string(found.unwrap!).unwrap_or("") if found.ok?
-  return ""
+  ""
 end
 
 ## Returns the integer at `key` in a record, or 1 when it is missing or not an integer.
 export def int_of(record: Json, key: String) -> Int
   found = JSON.get(record, key)
   return JSON.int(found.unwrap!).unwrap_or(1) if found.ok?
-  return 1
+  1
 end
 
 ## Returns the diagnostic a crash record carries as `--json` writes it: the code, file, message, range and stack keys.
@@ -54,19 +54,19 @@ export def diagnostic_of(record: Json) -> Json
       fields = fields.put(key, found.unwrap!)
     end
   end
-  return JSON.object(fields)
+  JSON.object(fields)
 end
 
 ## Returns the string at `key` as a known detail, or an unknown one.
 export def detail_of(record: Json, key: String) -> Report.Detail
   found = JSON.get(record, key)
   return Report.Detail.Known(JSON.string(found.unwrap!).unwrap!) if found.ok? and JSON.string(found.unwrap!).ok?
-  return Report.Detail.Unknown
+  Report.Detail.Unknown
 end
 
 ## Returns true when the error `message` says the child's channel has ended or closed.
 export def gone?(message: String) -> Bool
-  return (
+  (
     message == "process: end of input" or
     message == "process: channel is closed" or
     message.starts_with?("could not write to the stream")
@@ -77,31 +77,31 @@ end
 export def brief(deadline: Int) -> Int
   remaining = left(deadline)
   return remaining if remaining < 2000
-  return 2000
+  2000
 end
 
 ## Returns the milliseconds left until `deadline`, at least 1.
 export def left(deadline: Int) -> Int
   remaining = deadline - Time.monotonic_ms()
   return 1 if remaining < 1
-  return remaining
+  remaining
 end
 
 ## Builds an `Error` for the file `path`, at line 1 and column 1.
 export def located(code: String, message: String, path: String) -> Report.Error
-  return Report.error_at(code, message, Report.Span(file: path, line: 1, column: 1, end_column: 1))
+  Report.error_at(code, message, Report.Span(file: path, line: 1, column: 1, end_column: 1))
 end
 
 ## Returns `output` without one final newline.
 export def printed(output: String) -> String
   return output.slice(0, output.length - 1) if output.end_with?("\n")
-  return output
+  output
 end
 
 ## Returns the last `limit` characters of `text`.
 export def tail(text: String, limit: Int) -> String
   return text if text.length <= limit
-  return text.slice(text.length - limit, limit)
+  text.slice(text.length - limit, limit)
 end
 
 ## Reads the diagnostic a child wrote as the last line of `stderr`. A child that halts writes its `--json` diagnostic
@@ -118,7 +118,7 @@ export def stderr_diagnostic(stderr: String, span: Report.Span) -> Result[Report
     return ok(Report.error_at("RUNTIME-TASK-CRASHED", "#{count} task crashes not observed; first: #{first}", span))
   end
   return Report.from_json(last) if vm_shape?(last, false)
-  return error("no diagnostic")
+  error("no diagnostic")
 end
 
 ## Returns the lines of `stderr` that are not diagnostics, cut to their last 65536 characters.
@@ -128,7 +128,7 @@ export def stderr_text(stderr: String) -> String
       line != "" and not vm_shape?(line, true) and not vm_shape?(line, false) and not summary?(line)
     end
 
-  return tail(kept.join("\n"), 65536)
+  tail(kept.join("\n"), 65536)
 end
 
 def vm_shape?(line: String, task: Bool) -> Bool
@@ -154,18 +154,18 @@ def vm_shape?(line: String, task: Bool) -> Bool
   if task
     fields = fields.put("task", JSON.from(true))
   end
-  return JSON.encode(JSON.object(fields)) == JSON.encode(root)
+  JSON.encode(JSON.object(fields)) == JSON.encode(root)
 end
 
 def trace_kind?(key: String, value: Json) -> Bool
   return JSON.list(value).ok? if key == "stack"
   return JSON.int(value).ok? if key == "stack_omitted"
-  return JSON.get(value, "file").ok?
+  JSON.get(value, "file").ok?
 end
 
 def position(at: Json) -> Json
   fields: Map[String, Json] = {"line": JSON.from(int_of(at, "line")), "column": JSON.from(int_of(at, "column"))}
-  return JSON.object(fields)
+  JSON.object(fields)
 end
 
 def summary?(line: String) -> Bool
@@ -177,5 +177,5 @@ def summary?(line: String) -> Bool
     "first": JSON.from(text_of(root, "first")),
   }
 
-  return JSON.encode(JSON.object(fields)) == JSON.encode(root)
+  JSON.encode(JSON.object(fields)) == JSON.encode(root)
 end

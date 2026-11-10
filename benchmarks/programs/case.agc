@@ -21,7 +21,7 @@ def apply(acc: Int, op: Op) -> Int
     Op.Neg -> result = -acc
     Op.Twice -> result = acc * 2
   end
-  return result
+  result
 end
 
 def bucket(value: Int) -> Int
@@ -32,7 +32,7 @@ def bucket(value: Int) -> Int
     2 -> result = 7
     _ -> result = 11
   end
-  return result
+  result
 end
 
 def main() -> Void

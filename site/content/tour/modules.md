@@ -89,8 +89,8 @@ import S from "status"
 
 def show(s: S.Status) -> String
   case s
-    S.Status.Active -> return "active"
-    S.Status.Banned(why) -> return "banned: #{why}"
+    S.Status.Active -> "active"
+    S.Status.Banned(why) -> "banned: #{why}"
   end
 end
 
@@ -129,8 +129,8 @@ import {Status} from "status"
 
 def show(s: Status) -> String
   case s
-    Status.Active -> return "active"
-    Status.Banned(why) -> return "banned: #{why}"
+    Status.Active -> "active"
+    Status.Banned(why) -> "banned: #{why}"
   end
 end
 

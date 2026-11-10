@@ -203,7 +203,7 @@ def save_lines(path: String, lines: List[String]) -> Result[Void]
   end
 
   try File.flush(file, 1000)
-  return File.close(file, 1000)
+  File.close(file, 1000)
 end
 
 def main() -> Void

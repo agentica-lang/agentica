@@ -12,12 +12,12 @@ end
 # A guard (`if condition`) is an extra test on an arm; it can use the names of its pattern.
 def size(shape: Shape) -> String
   case shape
-    Shape.Circle(r) if r > 100 -> return "big circle"
-    Shape.Circle(0) -> return "empty circle"
-    Shape.Circle(_) -> return "circle"
-    Shape.Pair(a, b) if a == b -> return "twin"
-    Shape.Pair(_, _) -> return "pair"
-    Shape.Dot -> return "dot"
+    Shape.Circle(r) if r > 100 -> "big circle"
+    Shape.Circle(0) -> "empty circle"
+    Shape.Circle(_) -> "circle"
+    Shape.Pair(a, b) if a == b -> "twin"
+    Shape.Pair(_, _) -> "pair"
+    Shape.Dot -> "dot"
   end
 end
 
@@ -25,12 +25,12 @@ end
 # An arm with such a part does not cover its variant, so `ok(_)` and `error(_)` end the case.
 def describe(r: Result[Reading]) -> String
   case r
-    ok(Reading.Value(0)) -> return "zero"
-    ok(Reading.Value(n)) if n < 0 -> return "negative #{n}"
-    ok(Reading.Value(n)) -> return "value #{n}"
-    ok(_) -> return "missing"
-    error("timeout") -> return "timed out"
-    error(_) -> return "failed"
+    ok(Reading.Value(0)) -> "zero"
+    ok(Reading.Value(n)) if n < 0 -> "negative #{n}"
+    ok(Reading.Value(n)) -> "value #{n}"
+    ok(_) -> "missing"
+    error("timeout") -> "timed out"
+    error(_) -> "failed"
   end
 end
 

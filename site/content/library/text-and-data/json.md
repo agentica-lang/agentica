@@ -238,7 +238,7 @@ def describe_age(age: JsonField[Int]) -> String
     JsonField.Value(n) -> text = "age: set to #{n}"
   end
 
-  return text
+  text
 end
 
 def show(text: String) -> Result[Void]
@@ -252,7 +252,7 @@ def show(text: String) -> Result[Void]
 
   puts("name: #{name}")
   puts(JSON.encode(update))
-  return ok()
+  ok()
 end
 
 def main() -> Void
@@ -431,7 +431,7 @@ def city(text: String) -> Result[String]
   root = try JSON.parse(text)
   address = try root.get("address")
   name = try address.get("city")
-  return name.string
+  name.string
 end
 
 def main() -> Void

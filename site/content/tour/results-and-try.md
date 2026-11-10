@@ -12,7 +12,7 @@ A function that can fail returns `Result[T]`. It is either `ok(value)` or `error
 def divide(a: Int, b: Int) -> Result[Int]
   return error("division by zero") if b == 0
 
-  return ok(a / b)
+  ok(a / b)
 end
 
 def main() -> Void
@@ -81,7 +81,7 @@ number 42
 def add_texts(a: String, b: String) -> Result[Int]
   x = try a.to_i
   y = try b.to_i
-  return ok(x + y)
+  ok(x + y)
 end
 
 def main() -> Void
@@ -103,7 +103,7 @@ error("cannot convert \"three\" to Int")
 def check_age(age: Int) -> Result[Void]
   return error("age must not be negative") if age < 0
 
-  return ok()
+  ok()
 end
 
 def main() -> Void
@@ -125,7 +125,7 @@ A call whose `Result` is dropped would lose its error, so it is `CHECK-UNUSED-RE
 def check_age(age: Int) -> Result[Void]
   return error("age must not be negative") if age < 0
 
-  return ok()
+  ok()
 end
 
 def main() -> Void
@@ -139,7 +139,7 @@ Handle it with `try`, a `case` or `unwrap!`. To drop it on purpose, write `_ =` 
 def check_age(age: Int) -> Result[Void]
   return error("age must not be negative") if age < 0
 
-  return ok()
+  ok()
 end
 
 def main() -> Void

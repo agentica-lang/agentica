@@ -19,7 +19,7 @@ struct Item
 end
 
 def page(name: String, items: List[Item]) -> String
-  return <<~EAG
+  <<~EAG
     <h1><%= EAG.html_escape(name) %></h1>
     <ul>
     <% for item in items %>
@@ -51,7 +51,7 @@ A template with an escaper escapes what `<%= %>` inserts and leaves `<%==` alone
 import EAG from "std/eag"
 
 def card(name: String, note: String) -> String
-  return <<~EAG
+  <<~EAG
     <%@ escape &EAG.html_escape %>
     <p><%= name %>: <%== note %></p>
   EAG

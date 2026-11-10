@@ -53,7 +53,7 @@ export def parts(ms: Int) -> Parts
     month = shifted - 9
     year += 1
   end
-  return Parts(
+  Parts(
     year: year,
     month: month,
     day: day,
@@ -79,7 +79,7 @@ export def iso8601(ms: Int, fraction_digits: Int = 0) -> String
   end
   date = "#{sign}#{pad(year, 4)}-#{pad(p.month, 2)}-#{pad(p.day, 2)}"
   clock = "#{pad(p.hour, 2)}:#{pad(p.minute, 2)}:#{pad(p.second, 2)}"
-  return "#{date}T#{clock}#{fraction(p.millisecond, fraction_digits)}Z"
+  "#{date}T#{clock}#{fraction(p.millisecond, fraction_digits)}Z"
 end
 
 # The point and the digits of the second after it, or "" for no digits.
@@ -93,7 +93,7 @@ def fraction(milli: Int, digits: Int) -> String
   while text.length < digits
     text = "#{text}0"
   end
-  return ".#{text.slice(0, digits)}"
+  ".#{text.slice(0, digits)}"
 end
 
 def pad(n: Int, width: Int) -> String
@@ -101,5 +101,5 @@ def pad(n: Int, width: Int) -> String
   while text.length < width
     text = "0#{text}"
   end
-  return text
+  text
 end

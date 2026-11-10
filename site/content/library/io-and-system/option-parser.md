@@ -48,7 +48,7 @@ def load() -> Result[Options]
   )
 
   p = try OP.parse(parser, System.args())
-  return ok(
+  ok(
     Options(
       file: OP.string(p, "file"),
       port: OP.int(p, "port"),

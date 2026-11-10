@@ -8,7 +8,7 @@ it, with no `eval`. The file must `import EAG from "std/eag"` (any import form;
 import EAG from "std/eag"
 
 def page(names: List[String]) -> String
-  return <<~EAG
+  <<~EAG
     <ul>
     <% for name in names %>
       <li><%= EAG.html_escape(name) %></li>

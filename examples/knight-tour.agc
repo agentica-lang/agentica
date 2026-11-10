@@ -21,7 +21,7 @@ def destinations(size: Int, square: Int, visited: List[Bool]) -> List[Int]
       end
     end
   end
-  return result
+  result
 end
 
 def search(size: Int, square: Int, visited: List[Bool], path: List[Int]) -> Result[List[Int]]
@@ -50,7 +50,7 @@ def search(size: Int, square: Int, visited: List[Bool], path: List[Int]) -> Resu
     return result if Result.ok?(result)
     remaining = remaining - 1
   end
-  return error("no tour")
+  error("no tour")
 end
 
 def solve(text: String) -> Result[Tour]
@@ -61,7 +61,7 @@ def solve(text: String) -> Result[Tour]
   return error("invalid input") if start < 0 or start >= size * size
   result = search(size, start, List.repeat(false, size * size), [])
   return ok(Tour(found: true, path: Result.unwrap!(result))) if Result.ok?(result)
-  return ok(Tour(found: false, path: []))
+  ok(Tour(found: false, path: []))
 end
 
 def main() -> Void

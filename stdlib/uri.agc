@@ -52,7 +52,7 @@ export def decode_uri_component(text: String) -> Result[String] = decode(text, f
 ## may repeat and the order is kept.
 export def encode_www_form(pairs: List[Pair]) -> String
   parts = pairs.map do |pair| "#{encode_www_form_component(pair.name)}=#{encode_www_form_component(pair.value)}" end
-  return parts.join("&")
+  parts.join("&")
 end
 
 ## Splits a query string on `&` into pairs and decodes both parts with `decode_www_form_component`, as Ruby's
@@ -64,7 +64,7 @@ export def decode_www_form(query: String) -> Result[List[Pair]]
     next if piece.empty?
     pairs = pairs.push(try decode_pair(piece))
   end
-  return ok(pairs)
+  ok(pairs)
 end
 
 def encode(text: String, space: List[Int]) -> String
@@ -81,7 +81,7 @@ def encode(text: String, space: List[Int]) -> String
     end
   end
   # Every output byte is ASCII (a plain byte, `%`, a hex digit, `+`), so neither step can halt.
-  return String.from_bytes(Bytes.from_list(out).unwrap!).unwrap!
+  String.from_bytes(Bytes.from_list(out).unwrap!).unwrap!
 end
 
 # Decodes the bytes of `text`. Text without a `%` (or a `+` to turn into a space) is returned as it is.
@@ -109,15 +109,15 @@ def decode(text: String, plus_is_space: Bool) -> Result[String]
   end
   # Every item of `out` is a byte (one of `text`, or two hex digits), so Bytes.from_list cannot fail.
   case String.from_bytes(try Bytes.from_list(out))
-    ok(decoded) -> return ok(decoded)
-    error(_) -> return error("invalid UTF-8 after decoding (#{text})")
+    ok(decoded) -> ok(decoded)
+    error(_) -> error("invalid UTF-8 after decoding (#{text})")
   end
 end
 
 # Whether `text` has a `%` escape or, for the form style, a `+`.
 def needs_decoding?(text: String, plus_is_space: Bool) -> Bool
   return true if text.include?("%")
-  return plus_is_space and text.include?("+")
+  plus_is_space and text.include?("+")
 end
 
 # The value of a hex digit byte of either case, or -1.
@@ -125,7 +125,7 @@ def hex_value(byte: Int) -> Int
   return byte - 48 if byte >= 48 and byte <= 57
   return byte - 55 if byte >= 65 and byte <= 70
   return byte - 87 if byte >= 97 and byte <= 102
-  return -1
+  -1
 end
 
 # One `name=value` piece. The first `=` splits it; a piece without one is a name with the value "".
@@ -135,5 +135,5 @@ def decode_pair(piece: String) -> Result[Pair]
   at = split.unwrap!
   name = try decode_www_form_component(piece.slice(0, at))
   value = try decode_www_form_component(piece.slice(at + 1, piece.length - at - 1))
-  return ok(Pair(name: name, value: value))
+  ok(Pair(name: name, value: value))
 end

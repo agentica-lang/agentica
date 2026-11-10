@@ -15,7 +15,7 @@ SUMMARY = "#{WIDTH}#{SEPARATOR}#{PAGE_SIZE}"
 
 def kind(name: String) -> String
   return "fruit" if FRUITS.include?(name)
-  return "drink"
+  "drink"
 end
 
 def main() -> Void

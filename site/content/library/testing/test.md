@@ -11,7 +11,7 @@ def parse_port(text: String) -> Result[Int]
   n = try text.strip.to_i
   return error("port out of range: #{n}") if n < 1 or n > 65535
 
-  return ok(n)
+  ok(n)
 end
 
 def main() -> Void
@@ -33,12 +33,12 @@ def parse_port(text: String) -> Result[Int]
   n = try text.strip.to_i
   return error("port out of range: #{n}") if n < 1 or n > 65535
 
-  return ok(n)
+  ok(n)
 end
 
 def test_parses_a_port() -> Result[Void]
   try Test.eq(parse_port("8080"), ok(8080))
-  return Test.eq(parse_port(" 80 "), ok(80))
+  Test.eq(parse_port(" 80 "), ok(80))
 end
 
 def test_rejects_zero() -> Result[Void] = Test.error?(parse_port("0"))

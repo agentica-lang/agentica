@@ -57,7 +57,7 @@ def shortest_path(graph: Map[String, List[String]], start: String, goal: String)
     end
   end
 
-  return error("no path from #{start} to #{goal}")
+  error("no path from #{start} to #{goal}")
 end
 
 def main() -> Void
@@ -99,7 +99,7 @@ def fib(n: Int, cache: Map[Int, Int]) -> Memo
   left = fib(n - 1, cache)
   right = fib(n - 2, left.cache)
   total = left.value + right.value
-  return Memo(value: total, cache: right.cache.put(n, total))
+  Memo(value: total, cache: right.cache.put(n, total))
 end
 
 def main() -> Void
@@ -128,14 +128,14 @@ def factorial(n: Int) -> Int
     return 1
   end
 
-  return n * factorial(n - 1)
+  n * factorial(n - 1)
 end
 
 # Every leaf of the tree, left to right: a node flattens each child.
 def flatten(tree: Tree) -> List[Int]
   case tree
-    Tree.Leaf(value) -> return [value]
-    Tree.Node(children) -> return children.reduce([]) do |all, child| all.concat(flatten(child)) end
+    Tree.Leaf(value) -> [value]
+    Tree.Node(children) -> children.reduce([]) do |all, child| all.concat(flatten(child)) end
   end
 end
 
@@ -143,7 +143,7 @@ end
 def hanoi(n: Int, from: String, to: String, via: String) -> Int
   return 0 if n == 0
 
-  return hanoi(n - 1, from, via, to) + 1 + hanoi(n - 1, via, to, from)
+  hanoi(n - 1, from, via, to) + 1 + hanoi(n - 1, via, to, from)
 end
 
 def main() -> Void

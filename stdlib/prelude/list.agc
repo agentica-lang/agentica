@@ -12,7 +12,7 @@ def find(list: List[A], f: Fn[A, Bool]) -> Result[A]
   for item in list
     return ok(item) if f.call(item)
   end
-  return error("not found")
+  error("not found")
 end
 
 def find_index(list: List[A], f: Fn[A, Bool]) -> Optional[Int]
@@ -21,7 +21,7 @@ def find_index(list: List[A], f: Fn[A, Bool]) -> Optional[Int]
     return some(index) if f.call(item)
     index += 1
   end
-  return none
+  none
 end
 
 def each_with_index(list: List[A], f: Fn[A, Int, Void]) -> Void
@@ -39,7 +39,7 @@ def flat_map(list: List[A], f: Fn[A, List[B]]) -> List[B]
       found = found.push(part)
     end
   end
-  return found
+  found
 end
 
 def partition(list: List[A], f: Fn[A, Bool]) -> List[List[A]]
@@ -52,7 +52,7 @@ def partition(list: List[A], f: Fn[A, Bool]) -> List[List[A]]
       rejected = rejected.push(item)
     end
   end
-  return [accepted, rejected]
+  [accepted, rejected]
 end
 
 # One scan for the length of the prefix, then one take: f is not called after the first false.
@@ -62,7 +62,7 @@ def take_while(list: List[A], f: Fn[A, Bool]) -> List[A]
     break if !f.call(item)
     count += 1
   end
-  return list.take(count)
+  list.take(count)
 end
 
 def drop_while(list: List[A], f: Fn[A, Bool]) -> List[A]
@@ -71,7 +71,7 @@ def drop_while(list: List[A], f: Fn[A, Bool]) -> List[A]
     break if !f.call(item)
     count += 1
   end
-  return list.drop(count)
+  list.drop(count)
 end
 
 # Argument 1 of the call is size (argument 0 is the list): the error is reported there.
@@ -91,7 +91,7 @@ def each_slice(list: List[A], size: Int) -> List[List[A]]
   if current.size > 0
     slices = slices.push(current)
   end
-  return slices
+  slices
 end
 
 # The groups and their elements keep the order of first appearance.
@@ -101,7 +101,7 @@ def group_by(list: List[A], key: Fn[A, K]) -> Map[K, List[A]]
     name = key.call(item)
     groups = groups.put(name, groups.get(name, []).push(item))
   end
-  return groups
+  groups
 end
 
 def tally(list: List[K]) -> Map[K, Int]
@@ -109,7 +109,7 @@ def tally(list: List[K]) -> Map[K, Int]
   for item in list
     counts = counts.put(item, counts.get(item, 0) + 1)
   end
-  return counts
+  counts
 end
 
 def uniq(list: List[K]) -> List[K]
@@ -121,7 +121,7 @@ def uniq(list: List[K]) -> List[K]
       found = found.push(item)
     end
   end
-  return found
+  found
 end
 
 # The call site checked that the items have equality (the row limits T by it), so == is allowed on the type variable
@@ -130,7 +130,7 @@ def include(list: List[A], value: A) -> Bool
   for item in list
     return true if item == value
   end
-  return false
+  false
 end
 
 # The same loop for the types whose == is a single instruction: a call of Value.equal for each item costs about three
@@ -139,21 +139,21 @@ def include_int(list: List[Int], value: Int) -> Bool
   for item in list
     return true if item == value
   end
-  return false
+  false
 end
 
 def include_float(list: List[Float], value: Float) -> Bool
   for item in list
     return true if item == value
   end
-  return false
+  false
 end
 
 def include_string(list: List[String], value: String) -> Bool
   for item in list
     return true if item == value
   end
-  return false
+  false
 end
 
 def index(list: List[A], value: A) -> Optional[Int]
@@ -162,7 +162,7 @@ def index(list: List[A], value: A) -> Optional[Int]
     return some(at) if item == value
     at += 1
   end
-  return none
+  none
 end
 
 # The faster loops of include_int and its kin, for index.
@@ -172,7 +172,7 @@ def index_int(list: List[Int], value: Int) -> Optional[Int]
     return some(at) if item == value
     at += 1
   end
-  return none
+  none
 end
 
 def index_float(list: List[Float], value: Float) -> Optional[Int]
@@ -181,7 +181,7 @@ def index_float(list: List[Float], value: Float) -> Optional[Int]
     return some(at) if item == value
     at += 1
   end
-  return none
+  none
 end
 
 def index_string(list: List[String], value: String) -> Optional[Int]
@@ -190,7 +190,7 @@ def index_string(list: List[String], value: String) -> Optional[Int]
     return some(at) if item == value
     at += 1
   end
-  return none
+  none
 end
 
 def sum_int(list: List[Int]) -> Int
@@ -198,7 +198,7 @@ def sum_int(list: List[Int]) -> Int
   for item in list
     total += item
   end
-  return total
+  total
 end
 
 def sum_float(list: List[Float]) -> Float
@@ -206,7 +206,7 @@ def sum_float(list: List[Float]) -> Float
   for item in list
     total += item
   end
-  return total
+  total
 end
 
 # min and max: the first element wins a tie, so a later item must be strictly better. A NaN never wins, unless every
@@ -219,7 +219,7 @@ def min_int(list: List[Int]) -> Optional[Int]
       best = item
     end
   end
-  return some(best)
+  some(best)
 end
 
 def min_float(list: List[Float]) -> Optional[Float]
@@ -230,7 +230,7 @@ def min_float(list: List[Float]) -> Optional[Float]
       best = item
     end
   end
-  return some(best)
+  some(best)
 end
 
 def min_string(list: List[String]) -> Optional[String]
@@ -241,7 +241,7 @@ def min_string(list: List[String]) -> Optional[String]
       best = item
     end
   end
-  return some(best)
+  some(best)
 end
 
 def max_int(list: List[Int]) -> Optional[Int]
@@ -252,7 +252,7 @@ def max_int(list: List[Int]) -> Optional[Int]
       best = item
     end
   end
-  return some(best)
+  some(best)
 end
 
 def max_float(list: List[Float]) -> Optional[Float]
@@ -263,7 +263,7 @@ def max_float(list: List[Float]) -> Optional[Float]
       best = item
     end
   end
-  return some(best)
+  some(best)
 end
 
 def max_string(list: List[String]) -> Optional[String]
@@ -274,7 +274,7 @@ def max_string(list: List[String]) -> Optional[String]
       best = item
     end
   end
-  return some(best)
+  some(best)
 end
 
 # min_by and max_by: the first element wins a tie, so a later key must be strictly better. A NaN key never wins, unless
@@ -294,7 +294,7 @@ def min_by_int(list: List[A], key: Fn[A, Int]) -> Optional[A]
     end
     index += 1
   end
-  return some(best)
+  some(best)
 end
 
 def min_by_float(list: List[A], key: Fn[A, Float]) -> Optional[A]
@@ -311,7 +311,7 @@ def min_by_float(list: List[A], key: Fn[A, Float]) -> Optional[A]
     end
     index += 1
   end
-  return some(best)
+  some(best)
 end
 
 def min_by_string(list: List[A], key: Fn[A, String]) -> Optional[A]
@@ -328,7 +328,7 @@ def min_by_string(list: List[A], key: Fn[A, String]) -> Optional[A]
     end
     index += 1
   end
-  return some(best)
+  some(best)
 end
 
 def max_by_int(list: List[A], key: Fn[A, Int]) -> Optional[A]
@@ -345,7 +345,7 @@ def max_by_int(list: List[A], key: Fn[A, Int]) -> Optional[A]
     end
     index += 1
   end
-  return some(best)
+  some(best)
 end
 
 def max_by_float(list: List[A], key: Fn[A, Float]) -> Optional[A]
@@ -362,7 +362,7 @@ def max_by_float(list: List[A], key: Fn[A, Float]) -> Optional[A]
     end
     index += 1
   end
-  return some(best)
+  some(best)
 end
 
 def max_by_string(list: List[A], key: Fn[A, String]) -> Optional[A]
@@ -379,7 +379,7 @@ def max_by_string(list: List[A], key: Fn[A, String]) -> Optional[A]
     end
     index += 1
   end
-  return some(best)
+  some(best)
 end
 
 def empty(list: List[A]) -> Bool = list.size == 0
