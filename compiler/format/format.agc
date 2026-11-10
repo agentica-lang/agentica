@@ -10,8 +10,9 @@
 ## file gets none.
 ##
 ## The normal form (`tree_text`, what `agentica fmt --tree` prints) is the parse text of the tree (parse_text.agc)
-## without node ids and spans, which the layout moves, and without the `guard` mark of an `if`, since the layout
-## writes a guard too long for its line as the `if` it stands for. Then one line with the words of every comment in
+## without node ids and spans, which the layout moves, and without the `guard` mark of an `if` and the `expression`
+## mark of a one-line `def`, since the layout writes a guard or a one-line def too long for its line as the `if` or
+## the `def` with a body that it stands for. Then one line with the words of every comment in
 ## order, since a long comment is wrapped into more lines.
 
 import Style from "../check/check_style"
@@ -78,7 +79,7 @@ export def tree_text(text: String) -> Diag.Outcome[String]
       case Parser.parse(scanned.tokens, 0)
         Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
         Diag.Outcome.Done(program) ->
-          lines = ParseText.print_program(program).map do |line: String| without_guard(without_places(line)) end
+          lines = ParseText.print_program(program).map do |line: String| without_marks(without_places(line)) end
           return Diag.Outcome.Done(lines.push(comment_words(scanned.comments)).join("\n"))
       end
   end
@@ -187,9 +188,14 @@ def without_places(line: String) -> String
   return kept.join("")
 end
 
-# The line of an `if` without its ` guard` mark (parse_text.agc writes it last on the `if-stmt` line).
-def without_guard(line: String) -> String
+# The line without the mark of a form that the layout may turn into another: ` guard` on an `if-stmt` line and
+# ` expression` on a `function-decl` line (parse_text.agc writes each last on its line).
+def without_marks(line: String) -> String
   return line.slice(0, line.length - " guard".length) if line.ends_with?(" guard") and line.contains?("if-stmt ")
+
+  if line.ends_with?(" expression") and line.contains?("function-decl ")
+    return line.slice(0, line.length - " expression".length)
+  end
 
   return line
 end

@@ -14,6 +14,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   the `if` written out. No other statement takes a modifier.
 - Native API 1.3: `an_blocking` runs a C library call that switches stacks
   (MariaDB Connector/C's non-blocking API) out of the collector's way.
+- One-line def: `def double(x: Int) -> Int = x * 2` is the def whose body is
+  `return x * 2`. Not for `Void` functions.
 
 ### Changed
 

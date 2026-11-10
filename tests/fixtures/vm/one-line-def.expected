@@ -1,0 +1,17 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 116,
+  "stdout": [
+    "[\"a\", \"b\"]",
+    "42",
+    "hi ann",
+    "hello bob",
+    "ok(42)",
+    "error(\"cannot convert \\\"x\\\" to Int\")",
+    "12",
+    "3",
+    ""
+  ],
+  "stderr": []
+}
