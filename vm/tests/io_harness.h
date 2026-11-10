@@ -147,8 +147,9 @@ static inline void agc_test_fire_timer(uv_handle_t *handle, void *arg) {
   *(uint64_t *)arg += 1;
 }
 
-/* Fires the armed job timers on the loop now, whatever their deadline, so the test and not the clock orders a timer
-   against another event; gives how many there were. */
+/* Fires every active libuv timer of the loop now, whatever its deadline, and makes a repeating one one-shot, so the
+   test and not the clock orders a timer against another event; gives how many there were. Only for a loop whose
+   active timers are job timers (no pollers, no parent_check). */
 static inline uint64_t agc_test_fire_timers(agc_vm *vm) {
   uint64_t count = 0;
   uv_walk(agc_io_uv(vm), agc_test_fire_timer, &count);

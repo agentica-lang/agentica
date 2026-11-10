@@ -222,6 +222,7 @@ static void test_completion_before_timer(void) {
   agc_task *task = park_on(g, 60000);
   wait_woken(task);
   assert(fire_timers() == 1);
+  assert(armed_timers() == 0);
   assert(take(task) == 107);
   settle_loop();
   assert(dropped == 0 && finished_calls == 1);
