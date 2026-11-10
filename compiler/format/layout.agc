@@ -785,9 +785,7 @@ end
 # An `if c` whose body is one `return`, `break` or `next` of one line, with no `elsif` or `else` and no comment from
 # its `if` line to its `end` line: written as a guard when that fits on the line (if_doc).
 def guardable?(c: Context, node: Ast.IfStmt) -> Bool
-  if node.branches.size != 1 or node.else_body.some? or node.branches[0].body.size != 1
-    return false
-  end
+  return false if node.branches.size != 1 or node.else_body.some? or node.branches[0].body.size != 1
 
   stmt = node.branches[0].body[0]
   case stmt
@@ -797,9 +795,7 @@ def guardable?(c: Context, node: Ast.IfStmt) -> Bool
   end
 
   span = Ast.stmt_span(stmt)
-  if tight(c, span).start.line != last_line(c, span)
-    return false
-  end
+  return false if tight(c, span).start.line != last_line(c, span)
 
   last = last_line(c, node.span)
   return not (node.span.start.line..last).to_a.any? do |line: Int| c.noted.include?(line) end
