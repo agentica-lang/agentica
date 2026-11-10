@@ -219,7 +219,7 @@ end
   or one whose result is a `Void` alias of the same file).
 - A one-line def, `def double(x: Int) -> Int = x * 2`, is the def with
   `x * 2` as its body; `agentica fmt` writes a def whose body is one
-  `return` this way when it fits and no comment sits from its `def` line to its
+  value this way when it fits and no comment sits from its `def` line to its
   `end` line. The expression starts on the line of `=` (it goes on only inside
   parentheses or a block, or on a line that starts with `.name`) and needs the
   return type; not for `Void` (`main` included), `case` or `if`
