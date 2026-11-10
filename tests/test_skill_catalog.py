@@ -46,7 +46,7 @@ SPAN = re.compile(r"`([^`\n]+)`")
 REFERENCE = re.compile(
     r"(?<![\w.:@&$])([A-Z][A-Za-z0-9]*)\.([A-Za-z_][A-Za-z0-9_]*[?!]?)(?:\.([A-Za-z_][A-Za-z0-9_]*[?!]?))?"
 )
-DECLARED = re.compile(r"\b(?:import|enum|struct|type|resource)\s+([A-Z][A-Za-z0-9]*)")
+DECLARED = re.compile(r"\b(?:import|enum|struct|type|resource|module)\s+([A-Z][A-Za-z0-9]*)")
 # A module constant, NAME = ... or NAME: Type = ...
 CONSTANT = re.compile(r"^\s*([A-Z][A-Z0-9_]*)\s*(?::[^=\n]*)?=[^=]", re.M)
 
