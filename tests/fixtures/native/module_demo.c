@@ -255,7 +255,6 @@ static an_term area(an_env *env, int argc, const an_term *argv) {
   return an_int(env, (int64_t)(((uint64_t)x1 - (uint64_t)x0) * ((uint64_t)y1 - (uint64_t)y0)));
 }
 
-/* Circle(n) for n > 0, else Dot; Rect from (0, 0) to (n, n) when it is a Circle already. */
 /* Reads back what it makes, one bit per check: bits 0 to 4 are set when an Int, a Float, a Bool, none and a variant
    without a payload read back; bits 5 to 7 when a String, some and a variant with a payload do NOT. A dirty call gives
    0xff (only those last three are staged) and a short call 0x1f. The argument only binds the Shape type. */
@@ -282,6 +281,7 @@ static an_term read_made(an_env *env, int argc, const an_term *argv) {
   return an_int(env, bits);
 }
 
+/* Circle(n) for n > 0, else Dot; Rect from (0, 0) to (n, n) when it is a Circle already. */
 static an_term grow(an_env *env, int argc, const an_term *argv) {
   uint32_t variant;
   int64_t n;

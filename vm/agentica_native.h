@@ -62,9 +62,9 @@ typedef an_term (*an_fn)(an_env *env, int argc, const an_term *argv);
    task waits, and may block. Its arguments are the caller's values, read in place. An Int, Float, Bool or Void that it
    makes, none, and a variant without a payload are values at once and the getters read them; any other term that its
    constructors make (a String, Bytes, List, Map, some, ok, error, struct, variant with a payload or resource) is kept
-   apart and becomes a value once it returns, so a getter gives false for it. A dirty call does not read back what it
-   made: keep the C data of a resource that the call makes in its state, which an_resource_new gives. A task cancelled
-   during a dirty call does not stop it: it runs to its end and its result is dropped. */
+   apart and becomes a value once it returns, so a getter gives false for it. Keep the C data of a resource that the
+   call makes in its state, which an_resource_new gives. A task cancelled during a dirty call does not stop it: it runs
+   to its end and its result is dropped. */
 enum { AN_SHORT = 0, AN_DIRTY = 1 };
 
 /* A row of the module's function table. NAME is the Agentica name (`autocommit?` included), SIGNATURE its canonical
