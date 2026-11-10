@@ -60,7 +60,7 @@ export def parse(header: String) -> Map[String, String]
     next if name.empty? or cookies.key?(name)
     cookies = cookies.put(name, pair.slice(at + 1, pair.length - at - 1).strip)
   end
-  return cookies
+  cookies
 end
 
 ## Writes the value of a `Set-Cookie` header: `name=value`, then the attributes in Rack's order (`Domain`, `Path`,
@@ -94,7 +94,7 @@ export def set_header(cookie: Cookie) -> Result[String]
   if cookie.same_site != ""
     parts = parts.push("SameSite=#{cookie.same_site}")
   end
-  return ok(parts.join("; "))
+  ok(parts.join("; "))
 end
 
 # The checks of `set_header` that are not about one attribute alone. Returns the first error.
@@ -112,17 +112,17 @@ def check_cookie(cookie: Cookie) -> Result[Bool]
     return error("invalid cookie name (__Host- needs secure, path / and no domain)")
   end
   return error("invalid cookie name (__Secure- needs secure)") if lower.start_with?("__secure-") and !cookie.secure
-  return ok(true)
+  ok(true)
 end
 
 def valid_name?(name: String) -> Bool
   bytes = name.bytes.to_a
-  return !bytes.empty? and bytes.all? do |byte| token_byte?(byte) end
+  !bytes.empty? and bytes.all? do |byte| token_byte?(byte) end
 end
 
 def token_byte?(byte: Int) -> Bool
   return true if TOKEN_SYMBOLS.include?(byte)
-  return (byte >= 48 and byte <= 57) or (byte >= 65 and byte <= 90) or (byte >= 97 and byte <= 122)
+  (byte >= 48 and byte <= 57) or (byte >= 65 and byte <= 90) or (byte >= 97 and byte <= 122)
 end
 
 # The position of the first byte of `value` that is not an RFC 6265 cookie-octet (printable ASCII except space, `"`,
@@ -137,7 +137,7 @@ def bad_value_position(value: String) -> Int
     end
     i = i + 1
   end
-  return -1
+  -1
 end
 
 # Adds `Label=text` to `parts`, or nothing when `text` is empty. An attribute value is printable ASCII without `;`,
@@ -147,16 +147,16 @@ def add_attribute(parts: List[String], label: String, field: String, text: Strin
   if text != text.strip or !text.bytes.to_a.all? do |byte| byte >= SPACE and byte < DEL and byte != SEMICOLON end
     return error("invalid cookie #{field} (#{printable(text)})")
   end
-  return ok(parts.push("#{label}=#{text}"))
+  ok(parts.push("#{label}=#{text}"))
 end
 
 # `text` without control bytes, for an error message. Removing ASCII bytes keeps valid UTF-8 valid.
 def printable(text: String) -> String
   kept = text.bytes.to_a.select do |byte| byte >= SPACE and byte != DEL end
-  return String.from_bytes(Bytes.from_list(kept).unwrap_or("".bytes)).unwrap_or("")
+  String.from_bytes(Bytes.from_list(kept).unwrap_or("".bytes)).unwrap_or("")
 end
 
 def max_of(a: Int, b: Int) -> Int
   return a if a > b
-  return b
+  b
 end

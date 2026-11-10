@@ -12,5 +12,5 @@ def open(path: String, mode: String, timeout_ms: Int, f: Fn[FileHandle, Result[A
 
     ok(_) -> return result
   end
-  return result
+  result
 end

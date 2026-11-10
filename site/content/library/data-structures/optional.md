@@ -49,7 +49,7 @@ def greet(name: String, title: Optional[String] = none) -> String = "#{title.unw
 def first_or_none[T](xs: List[T]) -> Optional[T]
   return none if xs.length == 0
 
-  return some(xs[0])
+  some(xs[0])
 end
 
 def main() -> Void
@@ -135,7 +135,7 @@ def find(names: List[String], wanted: String) -> Optional[Int]
     index += 1
   end
 
-  return none
+  none
 end
 
 def main() -> Void
@@ -243,12 +243,12 @@ def first_even(numbers: List[Int]) -> Optional[Int]
     return some(n) if n % 2 == 0
   end
 
-  return none
+  none
 end
 
 def half(numbers: List[Int]) -> Result[Int]
   n = try first_even(numbers).to_result("no even number")
-  return ok(n / 2)
+  ok(n / 2)
 end
 
 def main() -> Void

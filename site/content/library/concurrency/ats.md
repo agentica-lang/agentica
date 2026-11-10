@@ -153,7 +153,7 @@ def lookup(shared: Shared, n: Int) -> String
     shared.stats.add("stored", 1)
   end
 
-  return text
+  text
 end
 
 def work(shared: Shared) -> Void

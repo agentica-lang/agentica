@@ -10,7 +10,7 @@ A rule is an `Fn` value: pass a function with `&name` or a block.
 
 ```agentica
 def total(prices: List[Int], discount: Fn[Int, Int]) -> Int
-  return prices.reduce(0) do |sum, price| sum + discount.call(price) end
+  prices.reduce(0) do |sum, price| sum + discount.call(price) end
 end
 
 def half(price: Int) -> Int = price / 2
@@ -38,9 +38,9 @@ end
 
 def shape(kind: String, size: Float) -> Result[Shape]
   case kind
-    "circle" -> return ok(Shape.Circle(size))
-    "square" -> return ok(Shape.Square(size))
-    _ -> return error("unknown shape: #{kind}")
+    "circle" -> ok(Shape.Circle(size))
+    "square" -> ok(Shape.Square(size))
+    _ -> error("unknown shape: #{kind}")
   end
 end
 
@@ -95,14 +95,14 @@ def step(door: Door, event: Event) -> Door
   case door
     Door.Open ->
       case event
-        Event.Push -> return Door.Closed
-        _ -> return door
+        Event.Push -> Door.Closed
+        _ -> door
       end
 
     Door.Closed ->
       case event
-        Event.Pull -> return Door.Open
-        _ -> return door
+        Event.Pull -> Door.Open
+        _ -> door
       end
   end
 end
@@ -128,8 +128,8 @@ end
 
 def apply(balance: Int, command: Command) -> Int
   case command
-    Command.Deposit(n) -> return balance + n
-    Command.Withdraw(n) -> return balance - n
+    Command.Deposit(n) -> balance + n
+    Command.Withdraw(n) -> balance - n
   end
 end
 
@@ -150,7 +150,7 @@ A function takes an `Fn` and returns a new one. A block can only follow a call, 
 def wrap(f: Fn[Int, Int]) -> Fn[Int, Int] = f
 
 def logged(f: Fn[Int, Int]) -> Fn[Int, Int]
-  return wrap() do |x: Int|
+  wrap() do |x: Int|
     y = f.call(x)
     puts("f(#{x}) = #{y}")
     y

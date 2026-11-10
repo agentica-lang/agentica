@@ -5,7 +5,7 @@ end
 
 def double(work: Work) -> Int
   Task.sleep(work.delay)
-  return work.value * 2
+  work.value * 2
 end
 
 def main() -> Void

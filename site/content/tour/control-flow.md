@@ -151,9 +151,9 @@ end
 ```agentica
 def describe(n: Int) -> String
   case n
-    0 -> return "zero"
-    1 -> return "one"
-    _ -> return "many"
+    0 -> "zero"
+    1 -> "one"
+    _ -> "many"
   end
 end
 
@@ -206,7 +206,7 @@ def sign(n: Int) -> String
     word = "negative"
   end
 
-  return word
+  word
 end
 
 def main() -> Void

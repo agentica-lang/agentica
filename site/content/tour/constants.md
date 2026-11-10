@@ -45,7 +45,7 @@ FRUITS = Set.new(["kiwi", "apple"])
 def kind(name: String) -> String
   return "fruit" if FRUITS.include?(name)
 
-  return "drink"
+  "drink"
 end
 
 def main() -> Void

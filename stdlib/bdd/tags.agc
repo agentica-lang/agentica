@@ -47,14 +47,14 @@ export def compile(text: String) -> Result[Expr]
 
   return error("the expression must end with a tag") if literal
 
-  return ok(Expr(groups: groups.push(group)))
+  ok(Expr(groups: groups.push(group)))
 end
 
 ## Whether the expression selects a scenario that has `tags` (with their `@`).
 export def selects?(expr: Expr, tags: List[String]) -> Bool
   return true if expr.groups.size == 0
 
-  return expr.groups.any? do |group| holds?(group, tags) end
+  expr.groups.any? do |group| holds?(group, tags) end
 end
 
 ## Whether the expression leaves some scenarios out, that is, whether `--tags` was given.
@@ -68,12 +68,12 @@ def separator(character: String) -> String
   spacing = spacing or point == 8239 or point == 8287 or point == 12288
   return " " if spacing
 
-  return character
+  character
 end
 
 # Every literal of the group: a tag is there, or a negated one is not.
 def holds?(group: List[Literal], tags: List[String]) -> Bool
-  return group.all? do |item| has_tag?(tags, item.tag) != item.negated end
+  group.all? do |item| has_tag?(tags, item.tag) != item.negated end
 end
 
 def has_tag?(tags: List[String], wanted: String) -> Bool = tags.any? do |tag| tag == wanted end

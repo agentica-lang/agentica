@@ -110,7 +110,7 @@ that outlives one block (one shared with tasks).
 
 ```agentica
 def read_lines(path: String) -> Result[List[String]]
-  return File.open(path, "read", 1000) do |f|
+  File.open(path, "read", 1000) do |f|
     lines: List[String] = []
     line = File.read_line(f)
     while line.ok?

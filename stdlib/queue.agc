@@ -26,13 +26,13 @@ export def push(q: QueueState, value: String) -> QueueState = QueueState(items: 
 ## Takes the oldest value. Returns it with the rest of the queue, or an error when the queue is empty.
 export def pop(q: QueueState) -> Result[Popped]
   return error("queue is empty") if empty?(q)
-  return ok(Popped(value: q.items[0], remaining: QueueState(items: List.drop(q.items, 1))))
+  ok(Popped(value: q.items[0], remaining: QueueState(items: List.drop(q.items, 1))))
 end
 
 ## Returns the oldest value without removing it, or an error when the queue is empty.
 export def peek(q: QueueState) -> Result[String]
   return error("queue is empty") if empty?(q)
-  return ok(q.items[0])
+  ok(q.items[0])
 end
 
 ## Returns how many values are in the queue.

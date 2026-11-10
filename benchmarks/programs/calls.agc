@@ -1,20 +1,20 @@
 def scale() -> Int
-  return 1
+  1
 end
 
 def fib(n: Int) -> Int
   if n < 2
     return n
   end
-  return fib(n - 1) + fib(n - 2)
+  fib(n - 1) + fib(n - 2)
 end
 
 def add(a: Int, b: Int) -> Int
-  return a + b
+  a + b
 end
 
 def mix(total: Int, value: Int) -> Int
-  return add(total * 31, value) % 1000000007
+  add(total * 31, value) % 1000000007
 end
 
 def main() -> Void

@@ -87,7 +87,7 @@ TEXT_TYPES = Set.new([
 export def mime_type(path: String, fallback: String = "application/octet-stream") -> String
   ext = extension(path.split("?")[0].split("#")[0])
   return TYPES[ext] if TYPES.key?(ext)
-  return fallback
+  fallback
 end
 
 ## Returns true when a file of this media type holds text, so a `charset` parameter applies: `text/*`, any `+json` or
@@ -95,7 +95,7 @@ end
 ## (`text/html; charset=utf-8`) and any case.
 export def text?(type: String) -> Bool
   base = type.split(";")[0].strip.downcase
-  return base.start_with?("text/") or base.end_with?("+json") or base.end_with?("+xml") or TEXT_TYPES.include?(base)
+  base.start_with?("text/") or base.end_with?("+json") or base.end_with?("+xml") or TEXT_TYPES.include?(base)
 end
 
 # The lowercase extension of `text`, or "" when there is none.
@@ -112,5 +112,5 @@ def extension(text: String) -> String
     first = first + 1
   end
   return "" if parts.size - first < 2
-  return parts.last.downcase
+  parts.last.downcase
 end

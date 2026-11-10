@@ -14,7 +14,7 @@ end
 
 def ring(fd: Int) -> Int
   Task.sleep(50)
-  return eventfd_write(fd, 1)
+  eventfd_write(fd, 1)
 end
 
 def main() -> Void

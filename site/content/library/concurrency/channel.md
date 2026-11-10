@@ -165,13 +165,13 @@ def send_all(jobs: Channel[Int]) -> Result[Void]
     try jobs.send(n, 1000)
   end
 
-  return ok()
+  ok()
 end
 
 def produce(jobs: Channel[Int]) -> Result[Void]
   result = send_all(jobs)
   jobs.close
-  return result
+  result
 end
 
 def main() -> Void
@@ -207,7 +207,7 @@ def produce(jobs: Channel[Int]) -> Result[Void]
   try jobs.send(2, 1000)
   zero = 0
   try jobs.send(100 / zero, 1000)
-  return ok()
+  ok()
 end
 
 def main() -> Void
@@ -325,7 +325,7 @@ def count(inbox: Channel[Int]) -> Int
     end
   end
 
-  return total
+  total
 end
 
 def send_three(inbox: Channel[Int]) -> Void
@@ -371,7 +371,7 @@ A task that receives its own handle over a channel and awaits it stops with `RUN
 ```agentica
 def follow(inbox: Channel[Task[Result[Int]]]) -> Result[Int]
   me = inbox.recv(1000).unwrap!
-  return Task.await(me)
+  Task.await(me)
 end
 
 def main() -> Void

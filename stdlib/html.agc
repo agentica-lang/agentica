@@ -18,13 +18,7 @@ NAMED_ENTITIES = {"amp": "&", "lt": "<", "gt": ">", "quot": "\"", "apos": "'"}
 ## Replaces `&`, `<`, `>`, `"` and `'` with `&amp;`, `&lt;`, `&gt;`, `&quot;` and `&#39;`, as Ruby's
 ## `CGI.escape_html`.
 export def escape(text: String) -> String
-  return (
-    text.replace("&", "&amp;")
-      .replace("<", "&lt;")
-      .replace(">", "&gt;")
-      .replace("\"", "&quot;")
-      .replace("'", "&#39;")
-  )
+  text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")
 end
 
 ## Replaces `&amp;`, `&lt;`, `&gt;`, `&quot;`, `&apos;`, `&#NN;` and `&#xHH;` with their characters, as Ruby's
@@ -38,7 +32,7 @@ export def unescape(text: String) -> String
   for piece in List.drop(pieces, 1)
     out = out.push(unescape_piece(piece))
   end
-  return out.join("")
+  out.join("")
 end
 
 # The text after one `&` up to the next one: the decoded entity followed by the rest, or the `&` and the piece again.
@@ -51,7 +45,7 @@ def unescape_piece(piece: String) -> String
   return "#{NAMED_ENTITIES.get(name, "")}#{rest}" if NAMED_ENTITIES.key?(name)
   code = numeric_code(name)
   return "&#{piece}" if code < 0
-  return "#{String.from_code(code)}#{rest}"
+  "#{String.from_code(code)}#{rest}"
 end
 
 # The code point that an entity name like `#65` or `#x41` stands for, or -1 when it is not a number or not a Unicode
@@ -60,7 +54,7 @@ def numeric_code(name: String) -> Int
   bytes = name.bytes.to_a
   return -1 if bytes.size < 2 or bytes[0] != HASH
   return digits_value(List.drop(bytes, 2), 16) if bytes[1] == LOWER_X or bytes[1] == UPPER_X
-  return digits_value(List.drop(bytes, 1), 10)
+  digits_value(List.drop(bytes, 1), 10)
 end
 
 # The value of digit bytes in `base`, or -1 for no digits, a bad digit, or a value that is not a Unicode scalar value.
@@ -75,7 +69,7 @@ def digits_value(digits: List[Int], base: Int) -> Int
     return -1 if value > LAST_CODE_POINT
   end
   return -1 if value >= FIRST_SURROGATE and value <= LAST_SURROGATE
-  return value
+  value
 end
 
 # The value of a hex digit byte of either case, or -1.
@@ -83,5 +77,5 @@ def digit_value(byte: Int) -> Int
   return byte - 48 if byte >= 48 and byte <= 57
   return byte - 55 if byte >= 65 and byte <= 70
   return byte - 87 if byte >= 97 and byte <= 102
-  return -1
+  -1
 end

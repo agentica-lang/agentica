@@ -169,7 +169,7 @@ def write_events(events: Channel[LogEvent]) -> Result[Void]
     end
   end
 
-  return ok()
+  ok()
 end
 
 def main() -> Void

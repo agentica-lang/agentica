@@ -71,7 +71,7 @@ end
 ## above the lowest level of the attached handlers. Guard costly fields with it.
 export def enabled?(level: LogLevel) -> Bool
   rank = rank_of(level)
-  return rank >= ready() and rank >= LogRegistry.lowest()
+  rank >= ready() and rank >= LogRegistry.lowest()
 end
 
 ## Returns the global level, `info` until `set_level` changes it.
@@ -87,19 +87,19 @@ end
 ## or a block. A name already in use is an error result.
 export def attach(name: String, level: LogLevel, handler: Fn[LogEvent, Void]) -> Result[Void]
   _ = ready()
-  return LogRegistry.attach(name, rank_of(level), handler)
+  LogRegistry.attach(name, rank_of(level), handler)
 end
 
 ## Detaches the handler with that name. A name not in use is an error result.
 export def detach(name: String) -> Result[Void]
   _ = ready()
-  return LogRegistry.detach(name)
+  LogRegistry.detach(name)
 end
 
 ## Returns the names of the attached handlers, in attach order.
 export def handlers() -> List[String]
   _ = ready()
-  return LogRegistry.names()
+  LogRegistry.names()
 end
 
 ## Writes `format_text(event)` to stderr as one line.
@@ -120,13 +120,13 @@ export def format_text(event: LogEvent) -> String
   for key in event.fields.keys
     parts = parts.push("#{field_token(key)}=#{field_token(event.fields.get(key, ""))}")
   end
-  return parts.join(" ")
+  parts.join(" ")
 end
 
 ## Returns the JSON line of an event: the keys `time`, `level`, `msg`, `fields` and `task`. The fields are nested, so a
 ## field named `level` never clashes with a fixed key.
 export def format_json(event: LogEvent) -> String
-  return one_line(
+  one_line(
     JSON.encode(
       JsonLine(
         time: time_text(event.time_ms),
@@ -147,28 +147,28 @@ export def time_text(ms: Int) -> String = UTC.iso8601(ms, 3)
 # so its rows need no enum type.
 def rank_of(level: LogLevel) -> Int
   case level
-    LogLevel.Debug -> return 0
-    LogLevel.Info -> return 1
-    LogLevel.Warning -> return 2
-    LogLevel.Error -> return 3
+    LogLevel.Debug -> 0
+    LogLevel.Info -> 1
+    LogLevel.Warning -> 2
+    LogLevel.Error -> 3
   end
 end
 
 def level_of(rank: Int) -> LogLevel
   case rank
-    0 -> return LogLevel.Debug
-    1 -> return LogLevel.Info
-    2 -> return LogLevel.Warning
-    _ -> return LogLevel.Error
+    0 -> LogLevel.Debug
+    1 -> LogLevel.Info
+    2 -> LogLevel.Warning
+    _ -> LogLevel.Error
   end
 end
 
 def level_name(level: LogLevel) -> String
   case level
-    LogLevel.Debug -> return "debug"
-    LogLevel.Info -> return "info"
-    LogLevel.Warning -> return "warning"
-    LogLevel.Error -> return "error"
+    LogLevel.Debug -> "debug"
+    LogLevel.Info -> "info"
+    LogLevel.Warning -> "warning"
+    LogLevel.Error -> "error"
   end
 end
 
@@ -180,7 +180,7 @@ def ready() -> Int
     LogRegistry.install_default(&stderr_text)
     return LogRegistry.level()
   end
-  return current
+  current
 end
 
 # The event takes its handlers here, so a handler that attaches or detaches another does not change this event.
@@ -197,13 +197,13 @@ end
 # JSON.encode(s) is the quoted, escaped text, so it equals "\"" + s + "\"" exactly when s has no quote, backslash
 # or control character (DEL included). The three line breaks above are not escaped by it, so they are checked apart.
 def plain?(text: String) -> Bool
-  return text.length > 0 and !text.contains?("=") and !line_break?(text) and JSON.encode(text) == "\"#{text}\""
+  text.length > 0 and !text.contains?("=") and !line_break?(text) and JSON.encode(text) == "\"#{text}\""
 end
 
 # JSON.encode leaves U+0085, U+2028 and U+2029 as they are, but splitlines() and some viewers break lines there.
 # Escaping them keeps one event on one line.
 def one_line(text: String) -> String
-  return (
+  (
     text.replace(String.from_code(133), "\\u0085")
       .replace(String.from_code(8232), "\\u2028")
       .replace(String.from_code(8233), "\\u2029")
@@ -211,7 +211,7 @@ def one_line(text: String) -> String
 end
 
 def line_break?(text: String) -> Bool
-  return (
+  (
     text.contains?(String.from_code(133)) or
     text.contains?(String.from_code(8232)) or
     text.contains?(String.from_code(8233))
@@ -220,10 +220,10 @@ end
 
 def message_token(message: String) -> String
   return message if plain?(message) and !message.starts_with?(" ") and !message.ends_with?(" ")
-  return one_line(JSON.encode(message))
+  one_line(JSON.encode(message))
 end
 
 def field_token(text: String) -> String
   return text if plain?(text) and !text.contains?(" ")
-  return one_line(JSON.encode(text))
+  one_line(JSON.encode(text))
 end

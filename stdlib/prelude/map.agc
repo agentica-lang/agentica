@@ -17,7 +17,7 @@ def filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]
       kept = kept.put(key, value)
     end
   end
-  return kept
+  kept
 end
 
 def empty(map: Map[K, V]) -> Bool = map.size == 0

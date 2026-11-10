@@ -190,7 +190,7 @@ end
 ## Returns the workspace of the disk, with no buffer.
 export def workspace() -> Workspace
   no_buffers: Map[String, String] = {}
-  return Workspace(version: 1, buffers: no_buffers)
+  Workspace(version: 1, buffers: no_buffers)
 end
 
 ## Returns a session that reads `files`.
@@ -199,7 +199,7 @@ export def open(files: Workspace) -> Session = Session(internal: Sessions.open(s
 ## Returns `session` with `text` as the content of the file `path`, whether or not the disk has it. Two spellings of
 ## one file are one buffer.
 export def update(session: Session, path: String, text: String) -> Session
-  return Session(internal: Sessions.update(session.internal, path, text))
+  Session(internal: Sessions.update(session.internal, path, text))
 end
 
 ## Returns `session` without the buffer of `path`: the disk answers for the file again.
@@ -209,15 +209,15 @@ export def close(session: Session, path: String) -> Session = Session(internal: 
 ## reuse them, and so do those about files that import the same modules. A file that cannot be read or linked leaves
 ## the cache as it was, and the questions say why. Run one `refresh` at a time per session and keep what it returns.
 export def refresh(session: Session, path: String) -> Session
-  return Session(internal: Sessions.refresh(session.internal, path))
+  Session(internal: Sessions.refresh(session.internal, path))
 end
 
 ## Returns the entry that the cache of `session` holds for the file `path`, as the last `refresh` of it left it. It is
 ## an error when the cache holds none: the file was not refreshed, could not be linked, or its entry left the cache.
 export def entry(session: Session, path: String) -> Result[Entry]
   case Sessions.entry(session.internal, path)
-    some(root) -> return ok(Entry(internal: root))
-    none -> return error("the cache holds no entry for #{path}")
+    some(root) -> ok(Entry(internal: root))
+    none -> error("the cache holds no entry for #{path}")
   end
 end
 
@@ -228,13 +228,13 @@ end
 ## made by one session can be adopted by another over the same folder: tasks that each `refresh` their own session and
 ## keep the entries in an `ATS` table share the work, where two refreshes of one session would drop one of the caches.
 export def adopt(session: Session, entry: Entry) -> Session
-  return Session(internal: Sessions.adopt(session.internal, entry.internal))
+  Session(internal: Sessions.adopt(session.internal, entry.internal))
 end
 
 ## Returns the answer of `agentica check` for the file `path`: it links and checks the program, and its `diagnostics`
 ## hold the first problem, if any. A file that cannot be read is a `QUERY-USAGE` diagnostic.
 export def check(session: Session, path: String) -> Checked
-  return Core.checked(session.internal.cache, Sessions.asking(session.internal), path)
+  Core.checked(session.internal.cache, Sessions.asking(session.internal), path)
 end
 
 ## Returns the declarations of the file `path`, as `agentica outline` lists them. The file is only parsed, so its
@@ -243,9 +243,9 @@ export def outline(session: Session, path: String) -> Result[Outline]
   settings = Sessions.asking(session.internal)
   buffered = Sessions.buffered?(session.internal, path)
   case Core.outline(settings, path, buffered)
-    Core.Outlined.Done(found) -> return ok(found)
-    Core.Outlined.Unreadable -> return error(failure(Core.unreadable(path)))
-    Core.Outlined.Rejected(problem) -> return error(failure(Core.named(settings, problem, path)))
+    Core.Outlined.Done(found) -> ok(found)
+    Core.Outlined.Unreadable -> error(failure(Core.unreadable(path)))
+    Core.Outlined.Rejected(problem) -> error(failure(Core.named(settings, problem, path)))
   end
 end
 
@@ -259,9 +259,9 @@ export def type_at(session: Session, path: String, line: Int, column: Int) -> Re
     return error(failure(Core.refused("the position is FILE, LINE and COLUMN, from line 1 and column 1", path)))
   end
   case Core.type_at(session.internal.cache, settings, QueryPosition.Asked(file: path, line: line, column: column))
-    Core.Typed.Done(found) -> return ok(found)
-    Core.Typed.Unreadable -> return error(failure(Core.unreadable(path)))
-    Core.Typed.Rejected(problem) -> return error(failure(Core.named(settings, problem, path)))
+    Core.Typed.Done(found) -> ok(found)
+    Core.Typed.Unreadable -> error(failure(Core.unreadable(path)))
+    Core.Typed.Rejected(problem) -> error(failure(Core.named(settings, problem, path)))
   end
 end
 
@@ -278,9 +278,9 @@ export def type_at_partial(session: Session, path: String, line: Int, column: In
   end
   asked = QueryPosition.Asked(file: path, line: line, column: column)
   case Core.type_at_partial(session.internal.cache, settings, asked)
-    Core.Typed.Done(found) -> return ok(found)
-    Core.Typed.Unreadable -> return error(failure(Core.unreadable(path)))
-    Core.Typed.Rejected(problem) -> return error(failure(Core.named(settings, problem, path)))
+    Core.Typed.Done(found) -> ok(found)
+    Core.Typed.Unreadable -> error(failure(Core.unreadable(path)))
+    Core.Typed.Rejected(problem) -> error(failure(Core.named(settings, problem, path)))
   end
 end
 
@@ -307,8 +307,8 @@ export def symbol(session: Session, name: String, paths: List[String]) -> Result
     searched = ["."]
   end
   case Core.symbol(session.internal.cache, settings, name, held.concat(searched), "", "")
-    Core.Found.Done(found) -> return ok(found)
-    Core.Found.Rejected(problem) -> return error(failure(named_in(settings, problem, held)))
+    Core.Found.Done(found) -> ok(found)
+    Core.Found.Rejected(problem) -> error(failure(named_in(settings, problem, held)))
   end
 end
 
@@ -323,9 +323,9 @@ end
 export def native_modules(session: Session, path: String) -> Result[NativeModules]
   settings = Sessions.asking(session.internal)
   case Core.native_modules(session.internal.cache, settings, path)
-    Core.Natived.Done(found) -> return ok(found)
-    Core.Natived.Unreadable -> return error(failure(Core.unreadable(path)))
-    Core.Natived.Rejected(problem) -> return error(failure(Core.named(settings, problem, path)))
+    Core.Natived.Done(found) -> ok(found)
+    Core.Natived.Unreadable -> error(failure(Core.unreadable(path)))
+    Core.Natived.Rejected(problem) -> error(failure(Core.named(settings, problem, path)))
   end
 end
 
@@ -336,9 +336,9 @@ end
 export def bodies(session: Session, path: String) -> Result[Bodies]
   settings = Sessions.asking(session.internal)
   case Core.bodies(session.internal.cache, settings, path)
-    Core.Bodied.Done(found) -> return ok(found)
-    Core.Bodied.Unreadable -> return error(failure(Core.unreadable(path)))
-    Core.Bodied.Rejected(problem) -> return error(failure(Core.named(settings, problem, path)))
+    Core.Bodied.Done(found) -> ok(found)
+    Core.Bodied.Unreadable -> error(failure(Core.unreadable(path)))
+    Core.Bodied.Rejected(problem) -> error(failure(Core.named(settings, problem, path)))
   end
 end
 
@@ -352,9 +352,9 @@ export def refs(session: Session, path: String, line: Int, column: Int) -> Resul
     return error(failure(Core.refused("the position is FILE, LINE and COLUMN, from line 1 and column 1", path)))
   end
   case Core.refs(session.internal.cache, settings, QueryPosition.Asked(file: path, line: line, column: column))
-    Core.Referenced.Done(found) -> return ok(found)
-    Core.Referenced.Unreadable -> return error(failure(Core.unreadable(path)))
-    Core.Referenced.Rejected(problem) -> return error(failure(Core.named(settings, problem, path)))
+    Core.Referenced.Done(found) -> ok(found)
+    Core.Referenced.Unreadable -> error(failure(Core.unreadable(path)))
+    Core.Referenced.Rejected(problem) -> error(failure(Core.named(settings, problem, path)))
   end
 end
 
@@ -370,9 +370,9 @@ export def refs_partial(session: Session, path: String, line: Int, column: Int) 
   end
   asked = QueryPosition.Asked(file: path, line: line, column: column)
   case Core.refs_partial(session.internal.cache, settings, asked)
-    Core.Referenced.Done(found) -> return ok(found)
-    Core.Referenced.Unreadable -> return error(failure(Core.unreadable(path)))
-    Core.Referenced.Rejected(problem) -> return error(failure(Core.named(settings, problem, path)))
+    Core.Referenced.Done(found) -> ok(found)
+    Core.Referenced.Unreadable -> error(failure(Core.unreadable(path)))
+    Core.Referenced.Rejected(problem) -> error(failure(Core.named(settings, problem, path)))
   end
 end
 
@@ -416,7 +416,7 @@ def named_in(settings: Env.Settings, problem: Problems.Problem, buffers: List[St
   for typed in buffers
     shown = Core.named(settings, shown, typed)
   end
-  return shown
+  shown
 end
 
 # The message of the error of a problem: the diagnostic as JSON text.

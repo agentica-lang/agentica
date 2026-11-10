@@ -55,7 +55,7 @@ Starts `function(handle)` like `Task.spawn` and gives `handle` to the new task i
 def echo(socket: Socket) -> Result[String]
   line = try TCP.read_line(socket, 2000)
   try TCP.send(socket, "echo: #{line}\n", 2000)
-  return ok(line)
+  ok(line)
 end
 
 def main() -> Void
@@ -133,7 +133,7 @@ The worker waits on a [Channel](/library/concurrency/channel/). The first wait r
 ```agentica
 def double(inbox: Channel[Int]) -> Int
   n = inbox.recv(10000).unwrap!
-  return n * 2
+  n * 2
 end
 
 def main() -> Void
@@ -199,7 +199,7 @@ Runs the function for each item in its own task, at most `limit` at a time. It g
 ```agentica
 def slow_double(n: Int) -> Result[Int]
   Task.sleep(100)
-  return ok(n * 2)
+  ok(n * 2)
 end
 
 def main() -> Void
@@ -252,7 +252,7 @@ def fetch(n: Int) -> Result[String]
     Task.sleep(10000)
   end
 
-  return ok("page #{n}")
+  ok("page #{n}")
 end
 
 def main() -> Void
@@ -296,7 +296,7 @@ Pauses the current task. `0` lets other tasks run; a negative value is `RUNTIME-
 def late(label: String) -> String
   Task.sleep(30)
   puts(label)
-  return label
+  label
 end
 
 def main() -> Void
@@ -348,7 +348,7 @@ def keep(inbox: Channel[Int]) -> Result[Int]
     total += try inbox.recv(60000)
   end
 
-  return ok(total)
+  ok(total)
 end
 
 def main() -> Void
@@ -403,7 +403,7 @@ end
 def start(job: Job, inbox: Channel[Msg], running: Map[Int, Job]) -> Map[Int, Job]
   task = Task.spawn do work(job, inbox) end
   Task.monitor(task, inbox) do |down| Msg.Down(down) end
-  return running.put(task.id, job)
+  running.put(task.id, job)
 end
 
 def main() -> Void
@@ -460,7 +460,7 @@ end
 def parent(report: Channel[String]) -> Int
   me = Task.current
   _child = Task.spawn do watch(me, report) end
-  return 7
+  7
 end
 
 def main() -> Void
@@ -492,7 +492,7 @@ def wait_for(task: Task[Int]) -> Int = Task.await(task)
 
 def nap(ms: Int) -> Int
   Task.sleep(ms)
-  return ms
+  ms
 end
 
 def main() -> Void

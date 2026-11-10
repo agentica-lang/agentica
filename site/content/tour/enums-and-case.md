@@ -38,9 +38,9 @@ end
 
 def name(c: Color) -> String
   case c
-    Color.Red -> return "red"
-    Color.Green -> return "green"
-    Color.Blue -> return "blue"
+    Color.Red -> "red"
+    Color.Green -> "green"
+    Color.Blue -> "blue"
   end
 end
 
@@ -80,8 +80,8 @@ end
 
 def area(s: Shape) -> Float
   case s
-    Shape.Circle(r) -> return 3.14 * r * r
-    Shape.Rect(w, h) -> return w * h
+    Shape.Circle(r) -> 3.14 * r * r
+    Shape.Rect(w, h) -> w * h
   end
 end
 
@@ -203,8 +203,8 @@ end
 
 def describe(change: Change[Int]) -> String
   case change
-    Change.Added(n) -> return "+#{n}"
-    Change.Removed(n) -> return "-#{n}"
+    Change.Added(n) -> "+#{n}"
+    Change.Removed(n) -> "-#{n}"
   end
 end
 
@@ -231,8 +231,8 @@ end
 
 def eval(e: Expr) -> Int
   case e
-    Expr.Num(n) -> return n
-    Expr.Add(a, b) -> return eval(a) + eval(b)
+    Expr.Num(n) -> n
+    Expr.Add(a, b) -> eval(a) + eval(b)
   end
 end
 
@@ -257,10 +257,10 @@ end
 
 def size(s: Shape) -> String
   case s
-    Shape.Circle(r) if r > 100 -> return "big circle"
-    Shape.Circle(_) -> return "circle"
-    Shape.Rect(w, h) if w == h -> return "square"
-    Shape.Rect(_, _) -> return "rect"
+    Shape.Circle(r) if r > 100 -> "big circle"
+    Shape.Circle(_) -> "circle"
+    Shape.Rect(w, h) if w == h -> "square"
+    Shape.Rect(_, _) -> "rect"
   end
 end
 
@@ -295,12 +295,12 @@ In a payload position, a pattern can be a literal (also a negative number), a na
 ```agentica
 def describe(r: Result[Optional[Int]]) -> String
   case r
-    ok(some(0)) -> return "zero"
-    ok(some(n)) if n < 0 -> return "negative #{n}"
-    ok(some(n)) -> return "value #{n}"
-    ok(_) -> return "none"
-    error("timeout") -> return "timed out"
-    error(_) -> return "failed"
+    ok(some(0)) -> "zero"
+    ok(some(n)) if n < 0 -> "negative #{n}"
+    ok(some(n)) -> "value #{n}"
+    ok(_) -> "none"
+    error("timeout") -> "timed out"
+    error(_) -> "failed"
   end
 end
 
@@ -329,10 +329,10 @@ end
 
 def label(r: Reading) -> String
   case r
-    Reading.Value(some(0)) -> return "zero"
-    Reading.Value(some(n)) -> return "value #{n}"
-    Reading.Value(_) -> return "no value"
-    Reading.Missing -> return "missing"
+    Reading.Value(some(0)) -> "zero"
+    Reading.Value(some(n)) -> "value #{n}"
+    Reading.Value(_) -> "no value"
+    Reading.Missing -> "missing"
   end
 end
 

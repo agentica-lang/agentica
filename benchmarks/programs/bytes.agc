@@ -12,7 +12,7 @@ def block() -> Bytes
     x = (x * 1103515245 + 12345) % 2147483648
     items = items.push((x / 65536) % 256)
   end
-  return Bytes.from_list(items).unwrap!
+  Bytes.from_list(items).unwrap!
 end
 
 # Each 512 KiB part through gzip and back: the count of parts that came back equal.
@@ -28,7 +28,7 @@ def zlib_round_trip(data: Bytes) -> Int
     end
     at += part
   end
-  return same
+  same
 end
 
 # The little-endian u32 at every fourth offset of the first `size` bytes, summed.
@@ -39,7 +39,7 @@ def binary_sum(data: Bytes, size: Int) -> Int
     total = (total + Binary.read_u32_le(data, at).unwrap!) % 1000000007
     at += 4
   end
-  return total
+  total
 end
 
 # The data written to a file in 1 MiB writes and read back in 1 MiB reads: the SHA-256 of what came back.
@@ -62,7 +62,7 @@ def file_round_trip(data: Bytes, path: String) -> String
   end
   File.close(input).unwrap!
   Path.remove(path).unwrap!
-  return OpenSSL.Digest.sha256_hexdigest(Bytes.concat(parts))
+  OpenSSL.Digest.sha256_hexdigest(Bytes.concat(parts))
 end
 
 def main() -> Void

@@ -70,7 +70,7 @@ end
 ```agentica
 def load(n: Int) -> Int
   puts("load #{n}")
-  return n
+  n
 end
 
 def main() -> Void

@@ -122,7 +122,7 @@ export def memory(max_bytes: Int, options: Options = Options()) -> Store
     started.put(0, clock.call())
   end
 
-  return Store(
+  Store(
     get: block1() do |key| lookup(state, key) end,
     put: block2() do |key, value| write(state, key, value) end,
     put_new: block2() do |key, value| write_new(state, key, value) end,
@@ -140,8 +140,8 @@ export def get(cache: Store, key: String) -> Optional[String] = cache.get.call(k
 ## together both run the block; one result is kept. A value that the cache refuses is returned and not stored.
 export def fetch(cache: Store, key: String, compute: Fn[String]) -> String
   case get(cache, key)
-    some(value) -> return value
-    none -> return fetched(cache, key, compute.call())
+    some(value) -> value
+    none -> fetched(cache, key, compute.call())
   end
 end
 
@@ -180,7 +180,7 @@ def block2[A, B, R](f: Fn[A, B, R]) -> Fn[A, B, R] = f
 
 def fetched(cache: Store, key: String, value: String) -> String
   _ = put_new(cache, key, value)
-  return value
+  value
 end
 
 def monotonic_ms() -> Int = Time.monotonic_ms
@@ -188,27 +188,27 @@ def monotonic_ms() -> Int = Time.monotonic_ms
 def max_of(a: Int, b: Int) -> Int
   return a if a > b
 
-  return b
+  b
 end
 
 def min_of(a: Int, b: Int) -> Int
   return a if a < b
 
-  return b
+  b
 end
 
 # The time of the clock, read only when entries expire.
 def now(state: Memory) -> Int
   return state.clock.call() if state.ttl_ms > 0
 
-  return 0
+  0
 end
 
 def expired?(state: Memory, entry: Entry, at: Int) -> Bool = state.ttl_ms > 0 and at - entry.at >= state.ttl_ms
 
 def current(state: Memory) -> Int
   # memory puts key 0 and nothing deletes it.
-  return state.generation.get(0).unwrap!
+  state.generation.get(0).unwrap!
 end
 
 def slot(state: Memory, g: Int) -> ATS[String, Entry] = state.tables[(g + SLOTS) % SLOTS]
@@ -236,13 +236,13 @@ def lookup(state: Memory, key: String) -> Optional[String]
     end
   end
 
-  return none
+  none
 end
 
 def write_new(state: Memory, key: String, value: String) -> Bool
   case lookup(state, key)
-    some(_) -> return false
-    none -> return insert(state, key, value)
+    some(_) -> false
+    none -> insert(state, key, value)
   end
 end
 
@@ -293,7 +293,7 @@ def insert(state: Memory, key: String, value: String) -> Bool
     take_out(state, entry)
   end
 
-  return true
+  true
 end
 
 # Takes an entry that was read out of its table. The task whose add of the entry's size to its id makes 0 is the only
@@ -309,7 +309,7 @@ def remove_entry(state: Memory, entry: Entry) -> Bool
 
   take_out(state, entry)
   give_back(state, entry.gen, size)
-  return true
+  true
 end
 
 def take_out(state: Memory, entry: Entry) -> Void
@@ -333,7 +333,7 @@ def fits?(state: Memory, g: Int, size: Int) -> Bool
   return true if taken <= state.byte_limit and (state.entry_limit == 0 or entries <= state.entry_limit)
 
   give_back(state, g, size)
-  return false
+  false
 end
 
 def give_back(state: Memory, g: Int, size: Int) -> Void
@@ -356,7 +356,7 @@ def reserve(state: Memory, size: Int) -> Int
   moved = current(state)
   return moved if moved != g and fits?(state, moved, size)
 
-  return -1
+  -1
 end
 
 # With a time to live, a generation that has been young for half of it is dropped when the next one is due, so no entry
@@ -412,7 +412,7 @@ def rotate(state: Memory, g: Int) -> Bool
     return true
   end
 
-  return false
+  false
 end
 
 # Empties the table and the ids of the slot of generation `dead`, beating the heart of the rotation from g as it goes.
@@ -444,7 +444,7 @@ def empty_slot(state: Memory, dead: Int, g: Int, token: Int) -> Bool
     return false if count % BEAT_EVERY == 0 and not beat(state, g, token)
   end
 
-  return true
+  true
 end
 
 # Shows that the owner of the rotation from g is alive. Returns false when it is no longer the owner or the generation
@@ -453,7 +453,7 @@ def beat(state: Memory, g: Int, token: Int) -> Bool
   return false if current(state) != g or state.rotations.get(g).unwrap_or(0) != token
 
   state.beats.put(g, state.clock.call())
-  return true
+  true
 end
 
 # The right to rotate from generation g, as a token, or 0. Only the rotation from the current generation can be
@@ -479,7 +479,7 @@ def claim(state: Memory, g: Int) -> Int
     return token
   end
 
-  return 0
+  0
 end
 
 def wipe(state: Memory) -> Void
@@ -509,14 +509,14 @@ def sweep(state: Memory) -> Int
     end
   end
 
-  return removed
+  removed
 end
 
 # The counts of a generation can pass its limit for an instant, while tasks that found it full take their reservation
 # back, so each is read as at most the limit.
 def held(state: Memory) -> Int
   g = current(state)
-  return (
+  (
     min_of(state.stored.get(g).unwrap_or(0), state.byte_limit) +
     min_of(state.stored.get(g - 1).unwrap_or(0), state.byte_limit)
   )

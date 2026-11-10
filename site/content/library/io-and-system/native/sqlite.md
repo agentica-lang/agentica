@@ -33,7 +33,7 @@ def open(path: String) -> Result[Db]
     return error("sqlite: #{sqlite3_errstr(opened.result)}")
   end
 
-  return ok(opened.db)
+  ok(opened.db)
 end
 
 ## Prepares one statement, or gives SQLite's message.
@@ -41,7 +41,7 @@ def prepare(db: Db, sql: String) -> Result[Stmt]
   prepared = sqlite3_prepare_v2(db, sql, -1)
   return error("sqlite: #{sqlite3_errmsg(db)}") if prepared.result != SQLITE_OK
 
-  return ok(prepared.stmt)
+  ok(prepared.stmt)
 end
 
 ## Runs a statement that returns no rows.
@@ -54,7 +54,7 @@ def run(db: Db, sql: String) -> Result[Void]
   end
 
   Native.close(stmt)
-  return ok()
+  ok()
 end
 
 def main() -> Void

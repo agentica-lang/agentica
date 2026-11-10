@@ -154,7 +154,7 @@ def fetch(n: Int) -> Result[String]
     Task.sleep(10000)
   end
 
-  return ok("page #{n}")
+  ok("page #{n}")
 end
 
 def main() -> Void
@@ -242,13 +242,13 @@ def send_all(jobs: Channel[Int]) -> Result[Void]
     try jobs.send(n, 1000)
   end
 
-  return ok()
+  ok()
 end
 
 def produce(jobs: Channel[Int]) -> Result[Void]
   result = send_all(jobs)
   jobs.close
-  return result
+  result
 end
 
 def main() -> Void

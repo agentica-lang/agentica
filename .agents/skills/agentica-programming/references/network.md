@@ -212,7 +212,7 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
     return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; charset=utf-8")], body: "hello\n".bytes))
   end
 
-  return ok(HttpResponse(status: 404, headers: [], body: "not found\n".bytes))
+  ok(HttpResponse(status: 404, headers: [], body: "not found\n".bytes))
 end
 
 def main() -> Void
@@ -281,7 +281,7 @@ def store(body: HTTP.RequestBody) -> Result[HTTP.Answer]
   end
 
   try Task.await(body.done)
-  return ok(HTTP.Answer.Whole(HttpResponse(status: 200, headers: [], body: "#{total}".bytes)))
+  ok(HTTP.Answer.Whole(HttpResponse(status: 200, headers: [], body: "#{total}".bytes)))
 end
 ```
 
@@ -322,7 +322,7 @@ def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   events: Channel[Bytes] = Channel.new(8)
   Task.spawn(&produce, events)
   headers = [Header(name: "Content-Type", value: "text/event-stream")]
-  return ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: headers, body: events)))
+  ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: headers, body: events)))
 end
 ```
 
@@ -370,7 +370,7 @@ def echo(ws: HTTP.WebSocket) -> Result[Void]
     end
   end
 
-  return ok()
+  ok()
 end
 ```
 

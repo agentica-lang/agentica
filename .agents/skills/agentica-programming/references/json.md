@@ -200,7 +200,7 @@ def greet_json(text: String) -> Result[String]
   root = try JSON.parse(text)
   member = try JSON.get(root, "name")
   name = try JSON.string(member)
-  return ok("hello, " + name)
+  ok("hello, " + name)
 end
 
 def main() -> Void

@@ -13,7 +13,7 @@ def collatz_length(start: Int) -> Int
     end
     steps += 1
   end
-  return steps
+  steps
 end
 
 def main() -> Void

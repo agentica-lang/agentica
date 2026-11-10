@@ -41,7 +41,7 @@ def read_maze(text: String) -> Result[Maze]
   goal = try JSON.int(try JSON.get(request, "goal"))
   return error("invalid input") if start < 0 or start >= width * height or goal < 0 or goal >= width * height
   return error("invalid input") if not Map.get(cells, start, false) or not Map.get(cells, goal, false)
-  return ok(Maze(width: width, height: height, cells: cells, start: start, goal: goal))
+  ok(Maze(width: width, height: height, cells: cells, start: start, goal: goal))
 end
 
 def neighbors(maze: Maze, square: Int) -> List[Int]
@@ -60,7 +60,7 @@ def neighbors(maze: Maze, square: Int) -> List[Int]
   if x > 0
     result = List.append(result, square - 1)
   end
-  return result
+  result
 end
 
 def reconstruct(start: Int, goal: Int, previous: Map[Int, Int]) -> List[Int]
@@ -70,7 +70,7 @@ def reconstruct(start: Int, goal: Int, previous: Map[Int, Int]) -> List[Int]
     path = List.append(path, current)
     current = Optional.unwrap!(Map.get(previous, current))
   end
-  return List.reverse(List.append(path, start))
+  List.reverse(List.append(path, start))
 end
 
 def shortest_route(maze: Maze) -> Route
@@ -98,7 +98,7 @@ def shortest_route(maze: Maze) -> Route
       end
     end
   end
-  return Route(found: false, distance: -1, path: [])
+  Route(found: false, distance: -1, path: [])
 end
 
 def main() -> Void

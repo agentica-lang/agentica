@@ -145,7 +145,7 @@ export def new(
   opts: List[Opt] = [],
   rest: String = "",
 ) -> Parser
-  return Parser(program: program, description: description, args: args, opts: opts, rest: rest)
+  Parser(program: program, description: description, args: args, opts: opts, rest: rest)
 end
 
 ## Checks the words (normally `System.args()`) against the parser and returns the converted values. An error says
@@ -153,7 +153,7 @@ end
 export def parse(parser: Parser, args: List[String]) -> Result[Parsed]
   slots = try slots_of(parser)
   scan = try scan_words(parser, slots, args)
-  return build(parser, slots, scan)
+  build(parser, slots, scan)
 end
 
 ## Returns true when the error of `parse` stands for `--help`: the program prints `usage` and exits with 0.
@@ -164,7 +164,7 @@ export def help?(message: String) -> Bool = message.start_with?(HELP_MARK)
 ## of a help request.
 export def message(error_text: String) -> String
   return error_text.slice(HELP_MARK.length, error_text.length - HELP_MARK.length) if help?(error_text)
-  return error_text
+  error_text
 end
 
 ## Returns the help text: the usage line, the description and a row for every argument and option.
@@ -197,7 +197,7 @@ export def usage(parser: Parser) -> String
     lines = lines.push("").push("Arguments:").concat(positionals.map do |slot| row(slot, width) end)
   end
   lines = lines.push("").push("Options:").concat(options.push(help_slot).map do |slot| row(slot, width) end)
-  return lines.join("\n")
+  lines.join("\n")
 end
 
 ## Prints the help (to stdout) and exits with 0 when `result` is the error for `--help`; prints the error to stderr
@@ -208,50 +208,50 @@ export def run![T](result: Result[T]) -> T
     ok(value) -> return value
     error(text) -> finish(text)
   end
-  return result.unwrap!
+  result.unwrap!
 end
 
 ## Returns the value of a String option or argument. The option needs a default (or be an argument); otherwise use
 ## `optional_string`.
 export def string(parsed: Parsed, name: String) -> String
   require(parsed, name, Kind.String, parsed.strings.key?(name))
-  return parsed.strings[name]
+  parsed.strings[name]
 end
 
 ## Returns the value of an Int option or argument; see `string`.
 export def int(parsed: Parsed, name: String) -> Int
   require(parsed, name, Kind.Int, parsed.ints.key?(name))
-  return parsed.ints[name]
+  parsed.ints[name]
 end
 
 ## Returns the value of a Float option or argument; see `string`.
 export def float(parsed: Parsed, name: String) -> Float
   require(parsed, name, Kind.Float, parsed.floats.key?(name))
-  return parsed.floats[name]
+  parsed.floats[name]
 end
 
 ## Returns true when the flag was given, false otherwise.
 export def flag(parsed: Parsed, name: String) -> Bool
   require(parsed, name, Kind.Flag, true)
-  return parsed.flags[name]
+  parsed.flags[name]
 end
 
 ## Returns the value of a String option, or `none` when it was not given and has no default.
 export def optional_string(parsed: Parsed, name: String) -> Optional[String]
   require(parsed, name, Kind.String, true)
-  return parsed.strings.get(name)
+  parsed.strings.get(name)
 end
 
 ## Returns the value of an Int option, or `none` when it was not given and has no default.
 export def optional_int(parsed: Parsed, name: String) -> Optional[Int]
   require(parsed, name, Kind.Int, true)
-  return parsed.ints.get(name)
+  parsed.ints.get(name)
 end
 
 ## Returns the value of a Float option, or `none` when it was not given and has no default.
 export def optional_float(parsed: Parsed, name: String) -> Optional[Float]
   require(parsed, name, Kind.Float, true)
-  return parsed.floats.get(name)
+  parsed.floats.get(name)
 end
 
 ## Returns the positional words after the arguments, in order, those after `--` included, as Ruby's
@@ -296,37 +296,37 @@ end
 
 def kind_name(kind: Kind) -> String
   case kind
-    Kind.Int -> return "int"
-    Kind.Float -> return "float"
-    Kind.String -> return "string"
-    Kind.Flag -> return "flag"
+    Kind.Int -> "int"
+    Kind.Float -> "float"
+    Kind.String -> "string"
+    Kind.Flag -> "flag"
   end
 end
 
 def int_kind?(kind: Kind) -> Bool
   case kind
-    Kind.Int -> return true
-    Kind.Float -> return false
-    Kind.String -> return false
-    Kind.Flag -> return false
+    Kind.Int -> true
+    Kind.Float -> false
+    Kind.String -> false
+    Kind.Flag -> false
   end
 end
 
 def float_kind?(kind: Kind) -> Bool
   case kind
-    Kind.Float -> return true
-    Kind.Int -> return false
-    Kind.String -> return false
-    Kind.Flag -> return false
+    Kind.Float -> true
+    Kind.Int -> false
+    Kind.String -> false
+    Kind.Flag -> false
   end
 end
 
 def flag_kind?(kind: Kind) -> Bool
   case kind
-    Kind.Flag -> return true
-    Kind.Int -> return false
-    Kind.Float -> return false
-    Kind.String -> return false
+    Kind.Flag -> true
+    Kind.Int -> false
+    Kind.Float -> false
+    Kind.String -> false
   end
 end
 
@@ -368,7 +368,7 @@ def slots_unchecked(parser: Parser) -> List[Slot]
     )
   end
 
-  return positionals.concat(options)
+  positionals.concat(options)
 end
 
 # The slots, once the specification is checked: names and short names are well formed, free and different, every
@@ -387,7 +387,7 @@ def slots_of(parser: Parser) -> Result[List[Slot]]
     shorts = shorts.add(slot.short)
     try check_slot(parser, slot)
   end
-  return ok(slots)
+  ok(slots)
 end
 
 def check_names(parser: Parser, slot: Slot, names: Set[String], shorts: Set[String]) -> Result[Void]
@@ -398,18 +398,18 @@ def check_names(parser: Parser, slot: Slot, names: Set[String], shorts: Set[Stri
   if !slot.short.empty? and (!letter?(slot.short) or shorts.include?(slot.short))
     return bad_spec(parser, "the short name '#{slot.short}' of #{label(slot)} is not one free character")
   end
-  return ok()
+  ok()
 end
 
 # Whether the text has a space or a control character.
 def spaced?(text: String) -> Bool
-  return text.split("").any? do |character| character.code <= 32 or character.code == 127 end
+  text.split("").any? do |character| character.code <= 32 or character.code == 127 end
 end
 
 # One character that is not a space, a control character, "-", "=" or a digit: a digit would read as a negative
 # number, and "=" as the end of the name.
 def letter?(text: String) -> Bool
-  return text.length == 1 and !spaced?(text) and text != "-" and text != "=" and !digits?(text)
+  text.length == 1 and !spaced?(text) and text != "-" and text != "=" and !digits?(text)
 end
 
 def check_slot(parser: Parser, slot: Slot) -> Result[Void]
@@ -438,8 +438,8 @@ def check_slot(parser: Parser, slot: Slot) -> Result[Void]
   end
   return ok() if slot.default.empty? or slot.flag
   case store(empty_parsed(), slot, slot.default)
-    ok(_) -> return ok()
-    error(message) -> return bad_spec(parser, "invalid default for #{label(slot)}: #{message}")
+    ok(_) -> ok()
+    error(message) -> bad_spec(parser, "invalid default for #{label(slot)}: #{message}")
   end
 end
 
@@ -447,11 +447,11 @@ end
 # too.
 def finite?(limit: Optional[Float]) -> Bool
   return true if limit.none?
-  return limit.unwrap! - limit.unwrap! == 0.0
+  limit.unwrap! - limit.unwrap! == 0.0
 end
 
 def bad_spec(parser: Parser, message: String) -> Result[Void]
-  return error("#{parser.program}: invalid specification: #{message}")
+  error("#{parser.program}: invalid specification: #{message}")
 end
 
 def empty_parsed() -> Parsed = Parsed(kinds: {}, strings: {}, ints: {}, floats: {}, flags: {})
@@ -483,14 +483,14 @@ def scan_words(parser: Parser, slots: List[Slot], args: List[String]) -> Result[
   if !ended
     before_dashes = words.size
   end
-  return ok(Scan(values: values, positionals: words, before_dashes: before_dashes))
+  ok(Scan(values: values, positionals: words, before_dashes: before_dashes))
 end
 
 # Reads the option at args[i], which starts with "-" and is not "-" or "--".
 def read_option(reader: Reader, values: Map[String, String], i: Int) -> Result[Step]
   word = reader.args[i]
   return read_long(reader, values, i) if word.start_with?("--")
-  return read_short(reader, values, i)
+  read_short(reader, values, i)
 end
 
 # `--name`, `--name=value` or `--name value`.
@@ -514,7 +514,7 @@ def read_long(reader: Reader, values: Map[String, String], i: Int) -> Result[Ste
   if i + 1 >= reader.args.size or !value_word?(reader.args[i + 1])
     return failure(reader.parser, "option --#{name} needs a value")
   end
-  return ok(Step(values: values.put(name, reader.args[i + 1]), next: i + 2, help: false))
+  ok(Step(values: values.put(name, reader.args[i + 1]), next: i + 2, help: false))
 end
 
 # `-p value`, `-pvalue`, and flags joined as `-vq` (the last letter may take a value).
@@ -536,14 +536,14 @@ def read_short(reader: Reader, values: Map[String, String], i: Int) -> Result[St
       return failure(reader.parser, "option --#{slot.name} needs a value")
     end
   end
-  return ok(Step(values: found, next: i + 1, help: false))
+  ok(Step(values: found, next: i + 1, help: false))
 end
 
 # The rest of a joined short option from letters[from]: `-p3000` and `-p=3000` both give 3000, as in argparse.
 def joined_value(letters: List[String], from: Int) -> String
   rest = letters.drop(from).join("")
   return rest.slice(1, rest.length - 1) if rest.start_with?("=")
-  return rest
+  rest
 end
 
 # Whether a word is an argument or the value of an option, not an option: it does not start with "-", or it is "-" or
@@ -553,12 +553,12 @@ def value_word?(word: String) -> Bool
   return true if !word.start_with?("-") or word == "-"
   parts = word.slice(1, word.length - 1).split(".")
   return digits?(parts[0]) if parts.size == 1
-  return parts.size == 2 and (parts[0].empty? or digits?(parts[0])) and digits?(parts[1])
+  parts.size == 2 and (parts[0].empty? or digits?(parts[0])) and digits?(parts[1])
 end
 
 # Whether the text is one or more of the digits 0 to 9.
 def digits?(text: String) -> Bool
-  return !text.empty? and text.split("").all? do |character| "0123456789".include?(character) end
+  !text.empty? and text.split("").all? do |character| "0123456789".include?(character) end
 end
 
 # The option with this long name, or with this short name when `short` is true.
@@ -569,7 +569,7 @@ def find_slot(reader: Reader, name: String, short: Bool) -> Result[Slot]
 
   return found if found.ok?
   return failure(reader.parser, "unknown option -#{name}") if short
-  return failure(reader.parser, "unknown option --#{name}")
+  failure(reader.parser, "unknown option --#{name}")
 end
 
 # Matches the positional words to the arguments, converts every value and fills the defaults.
@@ -598,13 +598,13 @@ def build(parser: Parser, slots: List[Slot], scan: Scan) -> Result[Parsed]
       parsed = try store(parsed, slot, slot.default)
     end
   end
-  return ok(parsed)
+  ok(parsed)
 end
 
 def given(parser: Parser, parsed: Parsed, slot: Slot, text: String) -> Result[Parsed]
   case store(parsed, slot, text)
-    ok(stored) -> return ok(stored)
-    error(message) -> return failure(parser, "invalid value for #{label(slot)}: #{message}")
+    ok(stored) -> ok(stored)
+    error(message) -> failure(parser, "invalid value for #{label(slot)}: #{message}")
   end
 end
 
@@ -615,7 +615,7 @@ def store(parsed: Parsed, slot: Slot, text: String) -> Result[Parsed]
     return error("'#{text}' is not one of #{slot.choices.join(", ")}")
   end
   case slot.kind
-    Kind.String -> return ok(parsed.with(strings: parsed.strings.put(slot.name, text)))
+    Kind.String -> ok(parsed.with(strings: parsed.strings.put(slot.name, text)))
     Kind.Int ->
       number = text.to_i
       if !number.ok?
@@ -633,7 +633,7 @@ def store(parsed: Parsed, slot: Slot, text: String) -> Result[Parsed]
       if slot.max.some? and number.unwrap! > slot.max.unwrap!
         return error("'#{text}' is above the maximum #{slot.max.unwrap!}")
       end
-      return ok(parsed.with(ints: parsed.ints.put(slot.name, number.unwrap!)))
+      ok(parsed.with(ints: parsed.ints.put(slot.name, number.unwrap!)))
     Kind.Float ->
       number = text.to_f
       return error("'#{text}' is not a Float") if !number.ok?
@@ -646,24 +646,24 @@ def store(parsed: Parsed, slot: Slot, text: String) -> Result[Parsed]
       if slot.max_float.some? and number.unwrap! > slot.max_float.unwrap!
         return error("'#{text}' is above the maximum #{slot.max_float.unwrap!}")
       end
-      return ok(parsed.with(floats: parsed.floats.put(slot.name, number.unwrap!)))
-    Kind.Flag -> return ok(parsed)
+      ok(parsed.with(floats: parsed.floats.put(slot.name, number.unwrap!)))
+    Kind.Flag -> ok(parsed)
   end
 end
 
 def failure[T](parser: Parser, message: String) -> Result[T]
-  return error("#{parser.program}: #{message}\nTry '#{parser.program} --help' for more information")
+  error("#{parser.program}: #{message}\nTry '#{parser.program} --help' for more information")
 end
 
 # The name as the messages and the help show it: --port, or <file> for an argument.
 def label(slot: Slot) -> String
   return "<#{shown_name(slot)}>" if slot.positional
-  return "--#{slot.name}"
+  "--#{slot.name}"
 end
 
 def shown_name(slot: Slot) -> String
   return slot.name if slot.metavar.empty?
-  return slot.metavar
+  slot.metavar
 end
 
 def usage_line(parser: Parser, slots: List[Slot]) -> String
@@ -672,7 +672,7 @@ def usage_line(parser: Parser, slots: List[Slot]) -> String
   if !parser.rest.empty?
     words = words.push("[#{parser.rest}...]")
   end
-  return words.join(" ")
+  words.join(" ")
 end
 
 # The left column of the help: "-p, --port PORT", "    --user USER", "-v, --verbose" or "<file>".
@@ -683,14 +683,14 @@ def head(slot: Slot) -> String
     names = "-#{slot.short}, --#{slot.name}"
   end
   return names if slot.flag
-  return "#{names} #{value_name(slot)}"
+  "#{names} #{value_name(slot)}"
 end
 
 # The value name of an option: the metavar, else the choices (`on|off`), else the name in capitals.
 def value_name(slot: Slot) -> String
   return slot.metavar if !slot.metavar.empty?
   return slot.choices.join("|") if !slot.choices.empty?
-  return slot.name.upcase
+  slot.name.upcase
 end
 
 # The notes after the help text, each in brackets so that parentheses in the help text itself read well.
@@ -719,17 +719,17 @@ def notes(slot: Slot) -> List[String]
   if !limits.empty?
     found = found.push("[#{limits.join(", ")}]")
   end
-  return found
+  found
 end
 
 def wider(a: Int, b: Int) -> Int
   return a if a > b
-  return b
+  b
 end
 
 def row(slot: Slot, width: Int) -> String
   text = [slot.help].concat(notes(slot)).select do |part| !part.empty? end.join(" ")
   line = "  #{head(slot)}"
   return line if text.empty?
-  return "#{line}#{List.repeat(" ", width - head(slot).length).join("")}  #{text}"
+  "#{line}#{List.repeat(" ", width - head(slot).length).join("")}  #{text}"
 end
