@@ -72,9 +72,7 @@ def closer?(best: Optional[Origin], origin: Origin) -> Bool
 end
 
 # Whether `inner` starts with all of `outer` and has more loops.
-def outside?(outer: List[Int], inner: List[Int]) -> Bool
-  return outer.size < inner.size and inner.take(outer.size) == outer
-end
+def outside?(outer: List[Int], inner: List[Int]) -> Bool = outer.size < inner.size and inner.take(outer.size) == outer
 
 def branches(file: String, node: Ast.IfStmt) -> List[Problems.Problem]
   found: List[Problems.Problem] = []

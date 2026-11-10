@@ -231,9 +231,7 @@ export def sweep(folder: String) -> Void
   end
 end
 
-export def digest(data: Bytes) -> String
-  return OpenSSL.Digest.sha256_hexdigest(data)
-end
+export def digest(data: Bytes) -> String = OpenSSL.Digest.sha256_hexdigest(data)
 
 # What, besides the files an import reads, changes what a build makes of the root: the environment that places
 # libraries and packages, the C compiler a native module builds with and its search variables (CC, CPATH and the

@@ -648,9 +648,7 @@ def scoped(cx: Lowering.Cx, fx: Lowering.Fx, statements: List[Ast.Stmt]) -> Resu
 end
 
 # Closes a scope: the names and the register count go back to what they were when it opened.
-def leave(fx: Lowering.Fx, before: Lowering.Fx) -> Lowering.Fx
-  return fx.with(vars: before.vars, next: before.next)
-end
+def leave(fx: Lowering.Fx, before: Lowering.Fx) -> Lowering.Fx = fx.with(vars: before.vars, next: before.next)
 
 def final_expression?(statement: Ast.Stmt) -> Bool
   case statement

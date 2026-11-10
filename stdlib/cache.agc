@@ -134,9 +134,7 @@ export def memory(max_bytes: Int, options: Options = Options()) -> Store
 end
 
 ## Returns the value of `key`, or `none`.
-export def get(cache: Store, key: String) -> Optional[String]
-  return cache.get.call(key)
-end
+export def get(cache: Store, key: String) -> Optional[String] = cache.get.call(key)
 
 ## Returns the value of `key`. On a miss it runs the block and stores its result, then returns it. Two tasks that miss
 ## together both run the block; one result is kept. A value that the cache refuses is returned and not stored.
@@ -153,9 +151,7 @@ export def put(cache: Store, key: String, value: String) -> Void
 end
 
 ## Stores `value` under `key` only when the key has none. Returns true when it stored it.
-export def put_new(cache: Store, key: String, value: String) -> Bool
-  return cache.put_new.call(key, value)
-end
+export def put_new(cache: Store, key: String, value: String) -> Bool = cache.put_new.call(key, value)
 
 ## Removes `key`.
 export def delete(cache: Store, key: String) -> Void
@@ -169,37 +165,25 @@ end
 
 ## Removes every entry past its time to live and returns how many it removed. It is safe next to any other call, so a
 ## task may run it every few seconds.
-export def cleanup(cache: Store) -> Int
-  return cache.cleanup.call()
-end
+export def cleanup(cache: Store) -> Int = cache.cleanup.call()
 
 ## Returns how many bytes the entries take, never above `max_bytes` in `memory`.
-export def bytes(cache: Store) -> Int
-  return cache.bytes.call()
-end
+export def bytes(cache: Store) -> Int = cache.bytes.call()
 
 # A block is a value only when it is passed to a call, and the cache needs blocks that hold its state: these hand one
 # back.
-def block0[R](f: Fn[R]) -> Fn[R]
-  return f
-end
+def block0[R](f: Fn[R]) -> Fn[R] = f
 
-def block1[A, R](f: Fn[A, R]) -> Fn[A, R]
-  return f
-end
+def block1[A, R](f: Fn[A, R]) -> Fn[A, R] = f
 
-def block2[A, B, R](f: Fn[A, B, R]) -> Fn[A, B, R]
-  return f
-end
+def block2[A, B, R](f: Fn[A, B, R]) -> Fn[A, B, R] = f
 
 def fetched(cache: Store, key: String, value: String) -> String
   _ = put_new(cache, key, value)
   return value
 end
 
-def monotonic_ms() -> Int
-  return Time.monotonic_ms
-end
+def monotonic_ms() -> Int = Time.monotonic_ms
 
 def max_of(a: Int, b: Int) -> Int
   return a if a > b
@@ -220,33 +204,23 @@ def now(state: Memory) -> Int
   return 0
 end
 
-def expired?(state: Memory, entry: Entry, at: Int) -> Bool
-  return state.ttl_ms > 0 and at - entry.at >= state.ttl_ms
-end
+def expired?(state: Memory, entry: Entry, at: Int) -> Bool = state.ttl_ms > 0 and at - entry.at >= state.ttl_ms
 
 def current(state: Memory) -> Int
   # memory puts key 0 and nothing deletes it.
   return state.generation.get(0).unwrap!
 end
 
-def slot(state: Memory, g: Int) -> ATS[String, Entry]
-  return state.tables[(g + SLOTS) % SLOTS]
-end
+def slot(state: Memory, g: Int) -> ATS[String, Entry] = state.tables[(g + SLOTS) % SLOTS]
 
-def live_in(state: Memory, g: Int) -> ATS[Int, Int]
-  return state.lives[(g + SLOTS) % SLOTS]
-end
+def live_in(state: Memory, g: Int) -> ATS[Int, Int] = state.lives[(g + SLOTS) % SLOTS]
 
-def cost(key: String, value: String) -> Int
-  return ENTRY_OVERHEAD + key.bytesize + value.bytesize
-end
+def cost(key: String, value: String) -> Int = ENTRY_OVERHEAD + key.bytesize + value.bytesize
 
 # The key of an entry in its table. A remover reads an entry and then deletes its key, two calls apart; if the table
 # were reused in between under the bare key, the delete would drop the newer generation's entry and leave its bytes
 # counted. The generation in the key keeps the delete in the old generation.
-def slot_key(g: Int, key: String) -> String
-  return "#{g}:#{key}"
-end
+def slot_key(g: Int, key: String) -> String = "#{g}:#{key}"
 
 def lookup(state: Memory, key: String) -> Optional[String]
   g = current(state)

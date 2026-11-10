@@ -58,9 +58,7 @@ export def selects?(expr: Expr, tags: List[String]) -> Bool
 end
 
 ## Whether the expression leaves some scenarios out, that is, whether `--tags` was given.
-export def filters?(expr: Expr) -> Bool
-  return expr.groups.size > 0
-end
+export def filters?(expr: Expr) -> Bool = expr.groups.size > 0
 
 # A space for any character that separates words: the ASCII and Unicode white space.
 def separator(character: String) -> String
@@ -78,6 +76,4 @@ def holds?(group: List[Literal], tags: List[String]) -> Bool
   return group.all? do |item| has_tag?(tags, item.tag) != item.negated end
 end
 
-def has_tag?(tags: List[String], wanted: String) -> Bool
-  return tags.any? do |tag| tag == wanted end
-end
+def has_tag?(tags: List[String], wanted: String) -> Bool = tags.any? do |tag| tag == wanted end

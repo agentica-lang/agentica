@@ -26,9 +26,7 @@ import Lowering from "lowering"
 ## FILE:LINE:COLUMN-LINE:COLUMN, with the index of its source. A register is `rN`, a function `fnN`, a struct `sN`, a
 ## variant `vN`, a global `gN`, a label `LN`; a `const` shows its value as `void`, `nil`, `true`, `false`, `int:N`,
 ## `float:bits:N` or a quoted string. The goldens in tests/fixtures/frontend/lower/ hold it.
-export def lower_text(path: String, settings: Env.Settings) -> String
-  return lower_text_after(path, settings, 0)
-end
+export def lower_text(path: String, settings: Env.Settings) -> String = lower_text_after(path, settings, 0)
 
 ## The same, with the lowering started `frames` VM calls deeper than it would be. A test uses it to show how much of
 ## the call depth limit the lowering of a deep tree leaves free.
@@ -47,9 +45,7 @@ export def problem_text(workspace: Workspace.Workspace, root_dir: String, proble
 end
 
 ## The text form of a lowered program: what `agentica --dump-ir` prints.
-export def program_text(program: Ir.Program) -> String
-  return program_lines(program).join("\n")
-end
+export def program_text(program: Ir.Program) -> String = program_lines(program).join("\n")
 
 def linked_text(linked: Linker.Linked, settings: Env.Settings, frames: Int) -> String
   case Checker.check(linked, settings)

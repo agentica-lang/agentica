@@ -116,9 +116,7 @@ def spawn_found(type: T.Type) -> String
   return T.to_text(type)
 end
 
-def c_pointer?(type: T.Type) -> Bool
-  return T.is?(type, "Opaque") and T.name(type) == "C.Pointer"
-end
+def c_pointer?(type: T.Type) -> Bool = T.is?(type, "Opaque") and T.name(type) == "C.Pointer"
 
 def handle?(cx: State.Cx, type: T.Type) -> Bool
   return T.is?(type, "Opaque") and (HANDLES.include?(T.name(type)) or cx.resources.include?(T.name(type)))
@@ -354,9 +352,7 @@ def type_name?(expr: Ast.Expr) -> Bool
   end
 end
 
-def c_struct?(cx: State.Cx, type: T.Type) -> Bool
-  return T.is?(type, "Struct") and cx.c_structs.include?(T.name(type))
-end
+def c_struct?(cx: State.Cx, type: T.Type) -> Bool = T.is?(type, "Struct") and cx.c_structs.include?(T.name(type))
 
 # CHECK-TYPE-MISMATCH of a struct builtin of Native given something that is not a C struct of an extern block.
 def not_c_struct(cx: State.Cx, st: State.St, name: String, found: String, span: Source.Span) -> String

@@ -117,13 +117,9 @@ def compile_one(text: String) -> Result[Pattern]
   return ok(Pattern(text: text, head: parts[0].split(""), slots: slots))
 end
 
-def placeholder?(kind: String) -> Bool
-  return kind == "string" or kind == "int"
-end
+def placeholder?(kind: String) -> Bool = kind == "string" or kind == "int"
 
-def after(text: String, close: Int) -> String
-  return text.slice(close + 1, text.length - close - 1)
-end
+def after(text: String, close: Int) -> String = text.slice(close + 1, text.length - close - 1)
 
 def literal_at?(chars: List[String], at: Int, literal: List[String]) -> Bool
   return false if at + literal.size > chars.size

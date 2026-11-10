@@ -58,24 +58,16 @@ export enum RefsAsk
 end
 
 ## The usage line of `agentica outline`.
-export def outline_usage() -> String
-  return OUTLINE_USAGE
-end
+export def outline_usage() -> String = OUTLINE_USAGE
 
 ## The usage line of `agentica type-at`.
-export def type_at_usage() -> String
-  return TYPE_AT_USAGE
-end
+export def type_at_usage() -> String = TYPE_AT_USAGE
 
 ## The usage line of `agentica refs`.
-export def refs_usage() -> String
-  return REFS_USAGE
-end
+export def refs_usage() -> String = REFS_USAGE
 
 ## The usage line of `agentica symbol`.
-export def symbol_usage() -> String
-  return SYMBOL_USAGE
-end
+export def symbol_usage() -> String = SYMBOL_USAGE
 
 ## `agentica outline` for `file`. `buffered` is true when the Workspace of `settings` holds the standard input as
 ## `file`; `style` is "json" for the JSON form.

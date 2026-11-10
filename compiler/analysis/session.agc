@@ -65,9 +65,7 @@ end
 ## `session` with the cache of `root` alone in place of its own cache. The buffers stay. A later `refresh` or question
 ## about the file of `root` takes the program from it when the files still say what they said, else it checks again as
 ## usual, taking what the unchanged modules left.
-export def adopt(session: Session, root: Cache.Root) -> Session
-  return session.with(cache: Cache.alone(root))
-end
+export def adopt(session: Session, root: Cache.Root) -> Session = session.with(cache: Cache.alone(root))
 
 ## The settings a question runs with: those of the session, over a Workspace that answers for its buffers.
 export def asking(session: Session) -> Env.Settings

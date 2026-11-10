@@ -144,9 +144,7 @@ export def emit_at(fx: Fx, op: String, args: List[Int], span: Source.Span) -> Fx
 end
 
 ## The state with a `step` for a node.
-export def step(fx: Fx, span: Source.Span) -> Fx
-  return fx.with(code: fx.code.push(Ir.instr("step", [], fx.file, [span])))
-end
+export def step(fx: Fx, span: Source.Span) -> Fx = fx.with(code: fx.code.push(Ir.instr("step", [], fx.file, [span])))
 
 ## The state with a `const` of a value.
 export def emit_const(fx: Fx, dst: Int, value: Ir.Imm, span: Source.Span) -> Fx
@@ -162,14 +160,10 @@ export def emit_builtin(fx: Fx, base: Int, name: String, count: Int, spans: List
 end
 
 ## The state with a label placed here.
-export def place(fx: Fx, id: Int) -> Fx
-  return fx.with(code: fx.code.push(Ir.label(id, fx.file)))
-end
+export def place(fx: Fx, id: Int) -> Fx = fx.with(code: fx.code.push(Ir.label(id, fx.file)))
 
 ## The state with a new label id; the id is labels - 1 of the result.
-export def new_label(fx: Fx) -> Fx
-  return fx.with(labels: fx.labels + 1)
-end
+export def new_label(fx: Fx) -> Fx = fx.with(labels: fx.labels + 1)
 
 ## The state with one more register taken; the register is next - 1 of the result.
 export def alloc(fx: Fx) -> Fx
@@ -199,14 +193,10 @@ export def release(fx: Fx, saved: Int, want: Int, dst: Int) -> Fx
 end
 
 ## The register of a name in scope, or -1.
-export def lookup(fx: Fx, name: String) -> Int
-  return fx.vars.get(name, -1)
-end
+export def lookup(fx: Fx, name: String) -> Int = fx.vars.get(name, -1)
 
 ## The type the checker recorded for an expression (Unknown when none).
-export def type_of(cx: Cx, expr: Ast.Expr) -> Types.Type
-  return cx.types[Ast.expr_id(expr)]
-end
+export def type_of(cx: Cx, expr: Ast.Expr) -> Types.Type = cx.types[Ast.expr_id(expr)]
 
 ## The type of an expression, or the type a TypedTarget carries.
 export def static_type(cx: Cx, expr: Ast.Expr) -> Types.Type

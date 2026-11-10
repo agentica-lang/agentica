@@ -123,9 +123,7 @@ def template_block?(capture: State.Capture) -> Bool
   return capture.params.size == 1 and capture.params[0].name == Ast.EAG_SEED
 end
 
-def fix_text(word: String) -> String
-  return "remove this statement, or move it before the #{word}"
-end
+def fix_text(word: String) -> String = "remove this statement, or move it before the #{word}"
 
 def returns?(statement: Ast.Stmt) -> Bool
   case statement

@@ -1500,9 +1500,7 @@ def dot_follows?(chars: List[String], from: Int) -> Bool
   return false
 end
 
-def ends_with_newline?(tokens: List[Tokens.Token]) -> Bool
-  return tokens.size > 0 and tokens[tokens.size - 1].kind == "NL"
-end
+def ends_with_newline?(tokens: List[Tokens.Token]) -> Bool = tokens.size > 0 and tokens[tokens.size - 1].kind == "NL"
 
 def in_interpolation?(delimiters: List[Frame]) -> Bool
   return delimiters.size > 0 and delimiters[delimiters.size - 1].kind == "#"
@@ -1544,9 +1542,7 @@ def open_frame(delimiters: List[Frame], kind: String, start: Source.Position) ->
   return delimiters.push(Frame(kind: kind, start: start, inside: inside))
 end
 
-def pop(delimiters: List[Frame]) -> List[Frame]
-  return delimiters.take(delimiters.size - 1)
-end
+def pop(delimiters: List[Frame]) -> List[Frame] = delimiters.take(delimiters.size - 1)
 
 # The last frame of a stack of `depth` frames, or ROOT.
 def frame_on_top(delimiters: List[Frame], depth: Int) -> Frame
@@ -1569,13 +1565,9 @@ def unclosed(frame: Frame, here: Source.Position) -> Diag.Diagnostic
   return Diag.fail("LEX-UNCLOSED-DELIMITER", "unclosed #{frame.kind} delimiter", span(frame.start, here), help)
 end
 
-def blank?(char: String) -> Bool
-  return char == " " or char == "\t"
-end
+def blank?(char: String) -> Bool = char == " " or char == "\t"
 
-def newline?(char: String) -> Bool
-  return char == "\n" or char == "\r"
-end
+def newline?(char: String) -> Bool = char == "\n" or char == "\r"
 
 # The character at `index`, or "" past the end of the text.
 def at(chars: List[String], size: Int, index: Int) -> String
@@ -1655,9 +1647,7 @@ def line_after_doc(chars: List[String], size: Int, index: Int) -> String
   return "code"
 end
 
-def span(start: Source.Position, stop: Source.Position) -> Source.Span
-  return Source.Span(start: start, stop: stop)
-end
+def span(start: Source.Position, stop: Source.Position) -> Source.Span = Source.Span(start: start, stop: stop)
 
 def token(
   text: String,

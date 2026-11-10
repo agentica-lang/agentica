@@ -248,9 +248,7 @@ def make_stage(deps: String) -> Result[String]
   return error(write_failure(deps, "cannot make a folder in #{deps}", failure))
 end
 
-def unique() -> String
-  return "#{System.pid()}-#{Random.int(0, 999_999_999)}"
-end
+def unique() -> String = "#{System.pid()}-#{Random.int(0, 999_999_999)}"
 
 def stage_and_swap(
   workspace: Workspace.Workspace,

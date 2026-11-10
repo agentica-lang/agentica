@@ -77,9 +77,7 @@ end
 
 ## Every declaration of a parsed program that is not an import, private ones included, in source order. A re-export
 ## (`export Url.parse`) is not a declaration of the file, so it is left out.
-export def declared(program: Ast.Program, text: String) -> List[Item]
-  return declared_through(program, text, {})
-end
+export def declared(program: Ast.Program, text: String) -> List[Item] = declared_through(program, text, {})
 
 ## `declared`, and the re-exports of the program as the items in `origins`: the original declaration, with its doc and
 ## signature, at the place of the `export` line, so every span of the item is in this file.

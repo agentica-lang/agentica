@@ -84,9 +84,7 @@ end
 
 ## The `Sec-WebSocket-Accept` for a `Sec-WebSocket-Key` (RFC 6455 4.2.2): the base64 of the SHA-1 of the key and
 ## the GUID.
-export def accept_key(key: String) -> String
-  return Base64.strict_encode64(OpenSSL.Digest.sha1("#{key}#{GUID}".bytes))
-end
+export def accept_key(key: String) -> String = Base64.strict_encode64(OpenSSL.Digest.sha1("#{key}#{GUID}".bytes))
 
 ## A Sec-WebSocket-Accept is the base64 of a SHA-1 digest of 20 bytes: what `accept_key` makes.
 export def valid_accept?(accept: String) -> Bool
@@ -210,19 +208,13 @@ export def check_length(head: Head, max: Int, held: Int) -> Optional[Problem]
 end
 
 ## True for the opcodes of control frames (close, ping, pong).
-export def control?(opcode: Int) -> Bool
-  return opcode >= CLOSE
-end
+export def control?(opcode: Int) -> Bool = opcode >= CLOSE
 
 ## True for the close opcode.
-export def close?(opcode: Int) -> Bool
-  return opcode == CLOSE
-end
+export def close?(opcode: Int) -> Bool = opcode == CLOSE
 
 ## True for the ping opcode.
-export def ping?(opcode: Int) -> Bool
-  return opcode == PING
-end
+export def ping?(opcode: Int) -> Bool = opcode == PING
 
 ## The payload with the mask of the frame taken off: each byte is xor-ed with the byte of the key at its place mod 4.
 export def unmask(data: Bytes, key: Bytes) -> Bytes
@@ -240,9 +232,7 @@ export def unmask(data: Bytes, key: Bytes) -> Bytes
 end
 
 ## The state before the first frame of a message.
-export def new_assembly() -> Assembly
-  return Assembly(text: false, open: false, parts: [], total: 0)
-end
+export def new_assembly() -> Assembly = Assembly(text: false, open: false, parts: [], total: 0)
 
 ## Adds a data frame (text, binary or continuation) to the message being assembled. The message is whole at its last
 ## frame, and a text message must then be UTF-8. A fragment that starts a message while another is open, or that
@@ -301,14 +291,10 @@ export def frame(opcode: Int, payload: Bytes) -> Bytes
 end
 
 ## A text frame the server writes.
-export def text_frame(text: String) -> Bytes
-  return frame(TEXT, text.bytes)
-end
+export def text_frame(text: String) -> Bytes = frame(TEXT, text.bytes)
 
 ## A binary frame the server writes.
-export def binary_frame(data: Bytes) -> Bytes
-  return frame(BINARY, data)
-end
+export def binary_frame(data: Bytes) -> Bytes = frame(BINARY, data)
 
 ## True for the bytes of one whole text or binary frame as the server writes them: FIN set, no reserved bits, not
 ## masked, the shortest length form, and exactly that many bytes of payload. It reads the head only, so it costs the
@@ -333,14 +319,10 @@ export def data_frame?(frame: Bytes) -> Bool
 end
 
 ## A ping frame the server writes.
-export def ping_frame(data: Bytes) -> Bytes
-  return frame(PING, data)
-end
+export def ping_frame(data: Bytes) -> Bytes = frame(PING, data)
 
 ## A pong frame the server writes.
-export def pong_frame(data: Bytes) -> Bytes
-  return frame(PONG, data)
-end
+export def pong_frame(data: Bytes) -> Bytes = frame(PONG, data)
 
 ## A close frame; the reason is cut to what a control frame can hold, at a character boundary.
 export def close_frame(code: Int, reason: String) -> Bytes
@@ -354,9 +336,7 @@ export def valid_code?(code: Int) -> Bool
   return code >= 1000 and code <= 1014 and code != 1004 and code != 1005 and code != 1006
 end
 
-def known_opcode?(opcode: Int) -> Bool
-  return opcode <= BINARY or (opcode >= CLOSE and opcode <= PONG)
-end
+def known_opcode?(opcode: Int) -> Bool = opcode <= BINARY or (opcode >= CLOSE and opcode <= PONG)
 
 # A control frame is whole and short. Its length field says so before the tail is read: 126 and 127 are too long.
 def check_control(head: Head) -> Optional[Problem]

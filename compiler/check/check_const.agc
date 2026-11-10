@@ -193,9 +193,7 @@ def visit(cx: State.Cx, st: State.St, node: AstWalk.Node, block_allowed: Bool) -
   return check_data(cx, st, node, block_allowed)
 end
 
-def has_entry?(entry: Optional[Model.Builtin]) -> Bool
-  return entry.some?
-end
+def has_entry?(entry: Optional[Model.Builtin]) -> Bool = entry.some?
 
 def refuse(cx: State.Cx, st: State.St, span: Source.Span, what: String, help: String) -> String
   return State.fail_help(cx, st, "CHECK-CONSTANT-EXPRESSION", what, span, help)

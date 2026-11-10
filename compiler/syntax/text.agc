@@ -27,9 +27,7 @@ export def quote(text: String) -> String
 end
 
 ## A span as offset:line:column-offset:line:column.
-export def span_text(span: Source.Span) -> String
-  return "#{position_text(span.start)}-#{position_text(span.stop)}"
-end
+export def span_text(span: Source.Span) -> String = "#{position_text(span.start)}-#{position_text(span.stop)}"
 
 ## The ERROR line of a diagnostic: code, span, message and help (- when there is none).
 export def diagnostic_line(problem: Diag.Diagnostic) -> String
@@ -47,9 +45,7 @@ def escaped(code: Int) -> String
   end
 end
 
-def position_text(position: Source.Position) -> String
-  return "#{position.offset}:#{position.line}:#{position.column}"
-end
+def position_text(position: Source.Position) -> String = "#{position.offset}:#{position.line}:#{position.column}"
 
 def help_text(help: Diag.Help) -> String
   case help

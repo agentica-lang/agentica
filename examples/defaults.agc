@@ -7,13 +7,9 @@ end
 
 # A default is a constant value: a literal, true, false, nil, none, [], {}, an enum variant without a payload or the
 # name of a constant that holds one of these.
-def label(text: String, level: Level = Level.Info, tags: List[String] = []) -> String
-  return "#{level} #{text} #{tags.size}"
-end
+def label(text: String, level: Level = Level.Info, tags: List[String] = []) -> String = "#{level} #{text} #{tags.size}"
 
-def join(words: List[String], sep: String = ", ") -> String
-  return words.join(sep)
-end
+def join(words: List[String], sep: String = ", ") -> String = words.join(sep)
 
 # A last Fn parameter stays without a default so that a block can fill it.
 def each_word(text: String, limit: Int = 2, f: Fn[String, Void]) -> Void

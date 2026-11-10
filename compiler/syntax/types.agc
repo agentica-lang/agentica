@@ -67,14 +67,10 @@ export def tag(type: Type) -> String
 end
 
 ## True when the type is that variant: is?(type, "List").
-export def is?(type: Type, word: String) -> Bool
-  return tag(type) == word
-end
+export def is?(type: Type, word: String) -> Bool = tag(type) == word
 
 ## True for no type (Unknown).
-export def unknown?(type: Type) -> Bool
-  return tag(type) == "Unknown"
-end
+export def unknown?(type: Type) -> Bool = tag(type) == "Unknown"
 
 ## The element type of a List, Set, Result, Optional, Task, Channel, Lazy or Codec; Unknown for any other type.
 export def item(type: Type) -> Type
@@ -257,9 +253,7 @@ export def display_name(name: String) -> String
 end
 
 ## The type as the messages print it: Int, List[String], Map[String, Int], Fn[Int, Void], Point, Option[Int].
-export def to_text(type: Type) -> String
-  return to_text_as(type, {})
-end
+export def to_text(type: Type) -> String = to_text_as(type, {})
 
 ## The type as `to_text` prints it, except that a struct or an enum of another file is written through the import alias
 ## of the file that asks: `written` maps the "@N::" prefix of a linked name to that alias, so `@1::User` prints as
@@ -319,9 +313,7 @@ export def debug_text(type: Type) -> String
 end
 
 ## The types joined by ", ".
-export def list_text(types: List[Type]) -> String
-  return types.map do |type: Type| to_text(type) end.join(", ")
-end
+export def list_text(types: List[Type]) -> String = types.map do |type: Type| to_text(type) end.join(", ")
 
 # A struct with no type arguments prints as Struct(Name), a generic one as Struct(Name, [Int]).
 def struct_debug(name: String, args: List[Type]) -> String
@@ -330,9 +322,7 @@ def struct_debug(name: String, args: List[Type]) -> String
   return "Struct(#{name}, [#{debug_list(args)}])"
 end
 
-def debug_list(types: List[Type]) -> String
-  return types.map do |type: Type| debug_text(type) end.join(", ")
-end
+def debug_list(types: List[Type]) -> String = types.map do |type: Type| debug_text(type) end.join(", ")
 
 def generic_text(name: String, args: List[Type], written: Map[String, String]) -> String
   return written_name(name, written) if args.size == 0

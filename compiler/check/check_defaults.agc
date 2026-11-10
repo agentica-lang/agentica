@@ -143,9 +143,7 @@ def blanked_failure(cx: State.Cx, st: State.St, site: State.ConstSite) -> String
   )
 end
 
-def acceptable?(value: Ast.Expr, param: Bool) -> Bool
-  return constant?(value) or (param and empty_construct?(value))
-end
+def acceptable?(value: Ast.Expr, param: Bool) -> Bool = constant?(value) or (param and empty_construct?(value))
 
 # The forms accepted here and in empty_construct? must be the kinds that `respanned` handles in `Const.in_place`
 # (lower/lower_const.agc), and the reverse.

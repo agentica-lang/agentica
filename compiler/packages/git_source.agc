@@ -53,9 +53,7 @@ end
 
 ## Whether a name is a Windows device name (`con`, `nul`, `com1` and the others, in any case, with or without an
 ## extension), which cannot name a file there.
-export def device_name?(name: String) -> Bool
-  return WINDOWS_DEVICES.include?(name.split(".")[0].downcase)
-end
+export def device_name?(name: String) -> Bool = WINDOWS_DEVICES.include?(name.split(".")[0].downcase)
 
 ## Why text is not the git URL of a package, or "". It is `https://host/owner/repo` or `https://host/owner/repo.git`:
 ## https only, a lowercase host with no port and no user name, and exactly an owner and a repository.
@@ -144,9 +142,7 @@ export def path_problem(path: String) -> String
 end
 
 ## Whether the source is a local folder, read in place.
-export def local?(source: Source) -> Bool
-  return source.path != ""
-end
+export def local?(source: Source) -> Bool = source.path != ""
 
 ## Why text is not a ref, or "". A ref is a commit: 7 to 64 lowercase hex digits (a prefix of the commit, or all of
 ## it).

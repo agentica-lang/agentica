@@ -18,14 +18,10 @@ export struct Popped
 end
 
 ## Returns an empty queue.
-export def new() -> QueueState
-  return QueueState(items: [])
-end
+export def new() -> QueueState = QueueState(items: [])
 
 ## Returns a queue with `value` added at the back.
-export def push(q: QueueState, value: String) -> QueueState
-  return QueueState(items: List.append(q.items, value))
-end
+export def push(q: QueueState, value: String) -> QueueState = QueueState(items: List.append(q.items, value))
 
 ## Takes the oldest value. Returns it with the rest of the queue, or an error when the queue is empty.
 export def pop(q: QueueState) -> Result[Popped]
@@ -40,11 +36,7 @@ export def peek(q: QueueState) -> Result[String]
 end
 
 ## Returns how many values are in the queue.
-export def size(q: QueueState) -> Int
-  return List.size(q.items)
-end
+export def size(q: QueueState) -> Int = List.size(q.items)
 
 ## Returns true when the queue has no values.
-export def empty?(q: QueueState) -> Bool
-  return size(q) == 0
-end
+export def empty?(q: QueueState) -> Bool = size(q) == 0

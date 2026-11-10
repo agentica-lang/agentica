@@ -91,9 +91,7 @@ export def refusing(flag: String) -> Fn[Workspace.BuildRequest, Workspace.Built]
 end
 
 # The identity of a function value: a block can only be written as the block of a call.
-def builder_of(f: Fn[Workspace.BuildRequest, Workspace.Built]) -> Fn[Workspace.BuildRequest, Workspace.Built]
-  return f
-end
+def builder_of(f: Fn[Workspace.BuildRequest, Workspace.Built]) -> Fn[Workspace.BuildRequest, Workspace.Built] = f
 
 def refused(request: Workspace.BuildRequest, flag: String) -> Workspace.Built
   message = "#{flag} refuses native code, so the module is not built"

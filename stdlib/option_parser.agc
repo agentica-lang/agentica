@@ -150,9 +150,7 @@ export def parse(parser: Parser, args: List[String]) -> Result[Parsed]
 end
 
 ## Returns true when the error of `parse` stands for `--help`: the program prints `usage` and exits with 0.
-export def help?(message: String) -> Bool
-  return message.start_with?(HELP_MARK)
-end
+export def help?(message: String) -> Bool = message.start_with?(HELP_MARK)
 
 ## Returns the text to print for an error of `parse`: the usage text when `help?` is true, without the marker line,
 ## and the message itself otherwise. A program that prints errors itself uses this and never prints the raw message
@@ -249,15 +247,11 @@ end
 
 ## Returns the positional words after the arguments, in order, those after `--` included, as Ruby's
 ## `OptionParser#parse` returns them. Empty unless `new` was given `rest`.
-export def rest(parsed: Parsed) -> List[String]
-  return parsed.rest
-end
+export def rest(parsed: Parsed) -> List[String] = parsed.rest
 
 ## Returns the words of `rest` that came after `--`, its last ones: in `FILE... -- FLAGS` they are the flags, and the
 ## files are `rest` without them.
-export def after_dashes(parsed: Parsed) -> List[String]
-  return parsed.after_dashes
-end
+export def after_dashes(parsed: Parsed) -> List[String] = parsed.after_dashes
 
 # Halts with a bug of the program: an undeclared name, the wrong getter for a kind, or a plain getter for a value
 # that may be absent. `present` is whether the value exists.
@@ -418,9 +412,7 @@ def bad_spec(parser: Parser, message: String) -> Result[Void]
   return error("#{parser.program}: invalid specification: #{message}")
 end
 
-def empty_parsed() -> Parsed
-  return Parsed(kinds: {}, strings: {}, ints: {}, floats: {}, flags: {})
-end
+def empty_parsed() -> Parsed = Parsed(kinds: {}, strings: {}, ints: {}, floats: {}, flags: {})
 
 # Reads the words one at a time, left to right: the first `--help` or mistake ends the scan.
 def scan_words(parser: Parser, slots: List[Slot], args: List[String]) -> Result[Scan]

@@ -9,9 +9,7 @@ import Model from "diagnostic_model"
 import Problems from "problem"
 
 ## The JSON object of the problem.
-export def json(problem: Problems.Problem) -> Json
-  return object(Model.of_problem(problem))
-end
+export def json(problem: Problems.Problem) -> Json = object(Model.of_problem(problem))
 
 ## The JSON object of a warning: the object of the problem with `"warning": true`. A warning is not an error: the
 ## command goes on (a native module that was not built, io/native_build.agc).
@@ -20,14 +18,10 @@ export def warning(problem: Problems.Problem) -> Json
 end
 
 ## The JSON object of a diagnostic.
-export def object(diagnostic: Model.Diagnostic) -> Json
-  return JSON.object(fields_of(diagnostic))
-end
+export def object(diagnostic: Model.Diagnostic) -> Json = JSON.object(fields_of(diagnostic))
 
 ## The JSON object of a range: `start` and `end`, each with a `line` and a `column`.
-export def range(part: Model.Region) -> Json
-  return JSON.object({"start": position(part.start), "end": position(part.stop)})
-end
+export def range(part: Model.Region) -> Json = JSON.object({"start": position(part.start), "end": position(part.stop)})
 
 ## The `shape` of an answer from a program that does not check (docs/future/39-semantic-cli.md, 39.6): `partial` is
 ## true and `diagnostics` holds its problems. A complete answer leaves both keys out.
@@ -75,6 +69,4 @@ def note(fields: Map[String, Json], key: String, text: String) -> Map[String, Js
   return fields.put(key, JSON.from(text))
 end
 
-def position(at: Model.Position) -> Json
-  return JSON.object({"line": JSON.from(at.line), "column": JSON.from(at.column)})
-end
+def position(at: Model.Position) -> Json = JSON.object({"line": JSON.from(at.line), "column": JSON.from(at.column)})

@@ -50,9 +50,7 @@ export def field_text(owner: String, name: String, type: String, default: String
 end
 
 ## `variant Enum.Name(Payload)`, the variant written as its signature.
-export def variant_text(owner: String, signature: String) -> String
-  return "variant #{owner}.#{signature}"
-end
+export def variant_text(owner: String, signature: String) -> String = "variant #{owner}.#{signature}"
 
 # `import Models from "models"` or `import {A, B as C} from "models"`.
 def import_text(declaration: Model.Import) -> String

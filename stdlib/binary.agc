@@ -8,9 +8,7 @@
 ## `write_i64_be` for all 64 bits.
 
 ## Reads an unsigned 8-bit integer at `offset`. Returns an error when the bytes are outside `data`.
-export def read_u8(data: Bytes, offset: Int) -> Result[Int]
-  return load8(data, offset, "u8")
-end
+export def read_u8(data: Bytes, offset: Int) -> Result[Int] = load8(data, offset, "u8")
 
 ## Reads a signed 8-bit integer at `offset`. Returns an error when the bytes are outside `data`.
 export def read_i8(data: Bytes, offset: Int) -> Result[Int]
@@ -19,14 +17,10 @@ export def read_i8(data: Bytes, offset: Int) -> Result[Int]
 end
 
 ## Reads a big-endian unsigned 16-bit integer at `offset`. Returns an error when the bytes are outside `data`.
-export def read_u16_be(data: Bytes, offset: Int) -> Result[Int]
-  return load16_be(data, offset, "u16")
-end
+export def read_u16_be(data: Bytes, offset: Int) -> Result[Int] = load16_be(data, offset, "u16")
 
 ## Reads a little-endian unsigned 16-bit integer at `offset`. Returns an error when the bytes are outside `data`.
-export def read_u16_le(data: Bytes, offset: Int) -> Result[Int]
-  return load16_le(data, offset, "u16")
-end
+export def read_u16_le(data: Bytes, offset: Int) -> Result[Int] = load16_le(data, offset, "u16")
 
 ## Reads a big-endian signed 16-bit integer at `offset`. Returns an error when the bytes are outside `data`.
 export def read_i16_be(data: Bytes, offset: Int) -> Result[Int]
@@ -41,14 +35,10 @@ export def read_i16_le(data: Bytes, offset: Int) -> Result[Int]
 end
 
 ## Reads a big-endian unsigned 32-bit integer at `offset`. Returns an error when the bytes are outside `data`.
-export def read_u32_be(data: Bytes, offset: Int) -> Result[Int]
-  return load32_be(data, offset, "u32")
-end
+export def read_u32_be(data: Bytes, offset: Int) -> Result[Int] = load32_be(data, offset, "u32")
 
 ## Reads a little-endian unsigned 32-bit integer at `offset`. Returns an error when the bytes are outside `data`.
-export def read_u32_le(data: Bytes, offset: Int) -> Result[Int]
-  return load32_le(data, offset, "u32")
-end
+export def read_u32_le(data: Bytes, offset: Int) -> Result[Int] = load32_le(data, offset, "u32")
 
 ## Reads a big-endian signed 32-bit integer at `offset`. Returns an error when the bytes are outside `data`.
 export def read_i32_be(data: Bytes, offset: Int) -> Result[Int]
@@ -77,14 +67,10 @@ export def read_u64_le(data: Bytes, offset: Int) -> Result[Int]
 end
 
 ## Reads a big-endian signed 64-bit integer at `offset`. Returns an error when the bytes are outside `data`.
-export def read_i64_be(data: Bytes, offset: Int) -> Result[Int]
-  return load64_be(data, offset, "i64")
-end
+export def read_i64_be(data: Bytes, offset: Int) -> Result[Int] = load64_be(data, offset, "i64")
 
 ## Reads a little-endian signed 64-bit integer at `offset`. Returns an error when the bytes are outside `data`.
-export def read_i64_le(data: Bytes, offset: Int) -> Result[Int]
-  return load64_le(data, offset, "i64")
-end
+export def read_i64_le(data: Bytes, offset: Int) -> Result[Int] = load64_le(data, offset, "i64")
 
 ## Reads a big-endian 32-bit IEEE 754 float at `offset`. Returns an error when the bytes are outside `data`.
 export def read_f32_be(data: Bytes, offset: Int) -> Result[Float]
@@ -193,38 +179,26 @@ export def write_u64_le(value: Int) -> Result[Bytes]
 end
 
 ## Returns the 8 bytes of `value`, big-endian. It never fails.
-export def write_i64_be(value: Int) -> Bytes
-  return bytes8_be(value)
-end
+export def write_i64_be(value: Int) -> Bytes = bytes8_be(value)
 
 ## Returns the 8 bytes of `value`, little-endian. It never fails.
-export def write_i64_le(value: Int) -> Bytes
-  return bytes8_le(value)
-end
+export def write_i64_le(value: Int) -> Bytes = bytes8_le(value)
 
 ## Returns the 4 bytes of `x` as a big-endian 32-bit IEEE 754 float. It rounds to the nearest binary32 value. It never
 ## fails; every NaN gives the canonical NaN bits.
-export def write_f32_be(x: Float) -> Bytes
-  return bytes4_be(Float.to_bits32(x))
-end
+export def write_f32_be(x: Float) -> Bytes = bytes4_be(Float.to_bits32(x))
 
 ## Returns the 4 bytes of `x` as a little-endian 32-bit IEEE 754 float. It rounds to the nearest binary32 value. It
 ## never fails; every NaN gives the canonical NaN bits.
-export def write_f32_le(x: Float) -> Bytes
-  return bytes4_le(Float.to_bits32(x))
-end
+export def write_f32_le(x: Float) -> Bytes = bytes4_le(Float.to_bits32(x))
 
 ## Returns the 8 bytes of `x` as a big-endian 64-bit IEEE 754 float. It never fails; every NaN gives the canonical NaN
 ## bits.
-export def write_f64_be(x: Float) -> Bytes
-  return bytes8_be(Float.to_bits(x))
-end
+export def write_f64_be(x: Float) -> Bytes = bytes8_be(Float.to_bits(x))
 
 ## Returns the 8 bytes of `x` as a little-endian 64-bit IEEE 754 float. It never fails; every NaN gives the canonical
 ## NaN bits.
-export def write_f64_le(x: Float) -> Bytes
-  return bytes8_le(Float.to_bits(x))
-end
+export def write_f64_le(x: Float) -> Bytes = bytes8_le(Float.to_bits(x))
 
 ## Returns the 4-byte big-endian length of `payload` followed by `payload`. Returns an error when `payload` has more
 ## than 4294967295 bytes.
@@ -254,9 +228,7 @@ def fits(value: Int, low: Int, high: Int, type: String) -> Result[Void]
   return ok()
 end
 
-def extend(value: Int, bits: Int) -> Int
-  return value.shift_left(64 - bits).shift_right(64 - bits)
-end
+def extend(value: Int, bits: Int) -> Int = value.shift_left(64 - bits).shift_right(64 - bits)
 
 def load8(data: Bytes, offset: Int, type: String) -> Result[Int]
   try window(data, offset, 1, type)
@@ -331,13 +303,9 @@ def unsigned64(value: Int, offset: Int) -> Result[Int]
   return ok(value)
 end
 
-def bytes2_be(value: Int) -> Bytes
-  return pack([value.shift_right(8).bit_and(255), value.bit_and(255)])
-end
+def bytes2_be(value: Int) -> Bytes = pack([value.shift_right(8).bit_and(255), value.bit_and(255)])
 
-def bytes2_le(value: Int) -> Bytes
-  return pack([value.bit_and(255), value.shift_right(8).bit_and(255)])
-end
+def bytes2_le(value: Int) -> Bytes = pack([value.bit_and(255), value.shift_right(8).bit_and(255)])
 
 def bytes4_be(value: Int) -> Bytes
   return pack([
@@ -384,6 +352,4 @@ def bytes8_le(value: Int) -> Bytes
 end
 
 # Every item the callers give is masked to 0 .. 255, so from_list cannot fail.
-def pack(items: List[Int]) -> Bytes
-  return Bytes.from_list(items).unwrap!
-end
+def pack(items: List[Int]) -> Bytes = Bytes.from_list(items).unwrap!

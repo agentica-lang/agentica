@@ -425,9 +425,7 @@ end
 
 # While a block is probed, the value of an error(...) is a Result[Unknown], which says nothing about the result of the
 # block: a later return or the last expression has to give it.
-def unsettled?(out: State.Out) -> Bool
-  return out.st.probe and settling?(out.type)
-end
+def unsettled?(out: State.Out) -> Bool = out.st.probe and settling?(out.type)
 
 # CHECK-TYPE-MISMATCH, with the help that shows ok(...), unless the type is a Result.
 def require_result(cx: State.Cx, st: State.St, type: T.Type, span: Source.Span) -> Result[Bool]
@@ -621,14 +619,10 @@ def check_variant_arm(
   return ok(ArmDone(st: left, arms: seen.with(covered: arms.covered.push(pattern.variant_name))))
 end
 
-def guarded?(arm: Ast.CaseArm) -> Bool
-  return arm.guard.some?
-end
+def guarded?(arm: Ast.CaseArm) -> Bool = arm.guard.some?
 
 # A pattern with no literal and no variant in its payload matches every value of its variant.
-def irrefutable?(pattern: Ast.VariantPattern) -> Bool
-  return pattern.slots.all? do |slot: Ast.Slot| !nested?(slot) end
-end
+def irrefutable?(pattern: Ast.VariantPattern) -> Bool = pattern.slots.all? do |slot: Ast.Slot| !nested?(slot) end
 
 def nested?(slot: Ast.Slot) -> Bool
   case slot
@@ -1186,6 +1180,4 @@ def statement_span(statement: Ast.Stmt) -> Source.Span
 end
 
 # Whether the function is declared in an extern block.
-def extern?(node: Ast.FunctionDecl) -> Bool
-  return node.native.some?
-end
+def extern?(node: Ast.FunctionDecl) -> Bool = node.native.some?

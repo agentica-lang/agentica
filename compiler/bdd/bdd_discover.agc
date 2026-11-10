@@ -40,9 +40,7 @@ export def kind_of(path: String) -> String
 end
 
 ## True for the name of a unit test file, `*_test.agc`.
-export def test_file?(path: String) -> Bool
-  return path.ends_with?("_test.agc")
-end
+export def test_file?(path: String) -> Bool = path.ends_with?("_test.agc")
 
 ## The entries for the given paths: first the problems in the order they were met, then the files sorted by path, each
 ## once. A path is made absolute without following links. A folder is searched for the files whose names fit, in every

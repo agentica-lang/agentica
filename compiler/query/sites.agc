@@ -109,9 +109,7 @@ export def innermost(sites: List[Site], offset: Int) -> Optional[Site]
 end
 
 ## The target of a name that is a top-level declaration (its linked name) or a builtin.
-export def named(name: String) -> Target
-  return Target(key: "name|#{name}", kind: "name", owner: "", name: name)
-end
+export def named(name: String) -> Target = Target(key: "name|#{name}", kind: "name", owner: "", name: name)
 
 ## The target of the field or variant `name` of the struct or enum `owner` (a linked name); `kind` is `field` or
 ## `variant`.
@@ -183,9 +181,7 @@ def declaration_names(declaration: Ast.Decl) -> List[String]
   end
 end
 
-def holds?(span: Source.Span, offset: Int) -> Bool
-  return span.start.offset <= offset and offset < span.stop.offset
-end
+def holds?(span: Source.Span, offset: Int) -> Bool = span.start.offset <= offset and offset < span.stop.offset
 
 # The same name written once is one site: a rewritten `x += 1` or a receiver may carry one span twice.
 def distinct(sites: List[Site]) -> List[Site]

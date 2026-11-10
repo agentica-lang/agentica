@@ -86,9 +86,7 @@ struct Cut
 end
 
 ## The SHA-256 of `text` as 64 lowercase hex digits.
-export def text_digest(text: String) -> String
-  return OpenSSL.Digest.sha256_hexdigest(text.bytes)
-end
+export def text_digest(text: String) -> String = OpenSSL.Digest.sha256_hexdigest(text.bytes)
 
 ## The tree digest of a file: `shape` (what describes it apart from its text), the digest of its text and the tree
 ## digests of the files it imports, in the order of its import lines.
@@ -98,9 +96,7 @@ export def tree_digest(shape: String, digest: String, imported: List[String]) ->
 end
 
 ## Every piece is written with its length, so two different lists never give one text.
-export def piece(text: String) -> String
-  return "#{text.length}:#{text}"
-end
+export def piece(text: String) -> String = "#{text.length}:#{text}"
 
 ## The names of the constants that `program` declares, sorted.
 export def constant_names(program: Ast.Program) -> List[String]
@@ -245,13 +241,9 @@ def styled_digit(styled: Bool) -> String
 end
 
 # A type text on one line: the key of a file may hold a line feed.
-def escaped(text: String) -> String
-  return text.replace("%", "%25").replace("\n", "%0A")
-end
+def escaped(text: String) -> String = text.replace("%", "%25").replace("\n", "%0A")
 
-def unescaped(text: String) -> String
-  return text.replace("%0A", "\n").replace("%25", "%")
-end
+def unescaped(text: String) -> String = text.replace("%0A", "\n").replace("%25", "%")
 
 # The pieces of the text to blank: the statements of each function body, from the first statement up to the `end` that
 # closes the function (the last statement, a heredoc included, ends before it), and the value of each long constant. A

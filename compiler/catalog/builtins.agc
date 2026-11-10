@@ -90,14 +90,10 @@ export def member?(family: String, member: String) -> Bool
 end
 
 ## True when Family.Member names a builtin type (a record, an enum or an opaque type) rather than a group of functions.
-export def member_type?(family: String, member: String) -> Bool
-  return FAMILY_TYPES.include?("#{family}.#{member}")
-end
+export def member_type?(family: String, member: String) -> Bool = FAMILY_TYPES.include?("#{family}.#{member}")
 
 ## The builtin of that name, or none when there is none (builtin-ref without an arity).
-export def lookup(name: String) -> Optional[Model.Builtin]
-  return ENTRIES.get(name)
-end
+export def lookup(name: String) -> Optional[Model.Builtin] = ENTRIES.get(name)
 
 ## The form of a builtin that takes that many arguments, or an error when none does. A form with defaults takes every
 ## count from its required parameters to all of them; a form that takes exactly that many wins.
@@ -147,9 +143,7 @@ export def index_builtin(target: Types.Type) -> String
 end
 
 ## True when some parameter of the form has a default.
-export def defaulted?(form: Model.Builtin) -> Bool
-  return first_default(form) < form.parameters.size
-end
+export def defaulted?(form: Model.Builtin) -> Bool = first_default(form) < form.parameters.size
 
 ## True when the last parameter of a form with defaults has none: it is an Fn, and the last argument (or the block)
 ## always goes to it, as in a function of the program (check/defaults.agc).
@@ -181,9 +175,7 @@ export def ref(name: String, arity: Int) -> Result[Model.Builtin]
 end
 
 ## True for a name inside a std-only module, such as HttpWire.service.
-export def std_only_name?(name: String) -> Bool
-  return STD_ONLY.has_key?(module_of(name))
-end
+export def std_only_name?(name: String) -> Bool = STD_ONLY.has_key?(module_of(name))
 
 ## The signature of every form of a builtin, one per line: name(param: Type, ...) -> Result.
 export def signature(entry: Model.Builtin) -> String

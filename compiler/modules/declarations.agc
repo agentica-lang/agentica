@@ -150,20 +150,14 @@ export def import_line(written: String, decl: Ast.ImportDecl) -> String
 end
 
 ## The alias of an import, or "" for an import list (an alias is never empty).
-export def alias_of(decl: Ast.ImportDecl) -> String
-  return decl.alias.unwrap_or("")
-end
+export def alias_of(decl: Ast.ImportDecl) -> String = decl.alias.unwrap_or("")
 
 ## True when the name starts with a capital letter, as a TYPE_NAME token does: the case rule that tells a type from a
 ## function.
-export def type_name?(name: String) -> Bool
-  return "ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains?(name.slice(0, 1))
-end
+export def type_name?(name: String) -> Bool = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains?(name.slice(0, 1))
 
 ## True for the name of a constant: capitals, digits and `_`, starting with a capital, at least two characters.
-export def constant_name?(name: String) -> Bool
-  return Base.constant_name?(name)
-end
+export def constant_name?(name: String) -> Bool = Base.constant_name?(name)
 
 ## The imports of a file, in order.
 export def imports_of(declarations: List[Ast.Decl]) -> List[Ast.ImportDecl]

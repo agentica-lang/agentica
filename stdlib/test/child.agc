@@ -26,14 +26,10 @@ export def read_records(p: Process, deadline: Int) -> Records
 end
 
 ## Parses a channel line as JSON. Returns JSON null when it is not valid.
-export def record_of(line: String) -> Json
-  return JSON.parse(line).unwrap_or(JSON.null())
-end
+export def record_of(line: String) -> Json = JSON.parse(line).unwrap_or(JSON.null())
 
 ## Returns the `event` text of a record, or an empty string when it is missing or not a string.
-export def event_of(record: Json) -> String
-  return text_of(record, "event")
-end
+export def event_of(record: Json) -> String = text_of(record, "event")
 
 ## Returns the string at `key` in a record, or an empty string when it is missing or not a string.
 export def text_of(record: Json, key: String) -> String

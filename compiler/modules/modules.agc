@@ -186,9 +186,7 @@ struct Taken
 end
 
 ## Parses nothing again: the files are numbered one after the other from 0.
-export def no_parses() -> Parses
-  return Parses(kept: {}, top: 0)
-end
+export def no_parses() -> Parses = Parses(kept: {}, top: 0)
 
 ## The name in the linked program of the export `name` of `module`: with the prefix of the file that declares it, which
 ## is another file when the module re-exports the name.
@@ -203,9 +201,7 @@ end
 
 ## Loads the root file and everything it imports. A failure is a packed failure (link_failure.agc): CHECK-IMPORT-*,
 ## CHECK-DECL-ORDER and CHECK-REDEFINED-NAME, or the diagnostic of the lexer or the parser for a file.
-export def load(root: String, settings: Env.Settings) -> Result[Loaded]
-  return load_with(root, settings, no_parses())
-end
+export def load(root: String, settings: Env.Settings) -> Result[Loaded] = load_with(root, settings, no_parses())
 
 ## Like `load`, taking from `parses` the tree of each file whose text it still has. The files are read as before, so a
 ## file that appeared, vanished or changed since the earlier walk is met, and the walk fails or differs as it would
@@ -664,9 +660,7 @@ def rename_help(kind: Declarations.Kind) -> String
   end
 end
 
-def replace_top(walk: Walk, frame: Frame) -> Walk
-  return walk.with(stack: walk.stack.set(walk.stack.size - 1, frame))
-end
+def replace_top(walk: Walk, frame: Frame) -> Walk = walk.with(stack: walk.stack.set(walk.stack.size - 1, frame))
 
 def load_file(settings: Env.Settings, walk: Walk, found: Resolve.Resolution, site: Failure.Site) -> Result[Walk]
   key = found.key

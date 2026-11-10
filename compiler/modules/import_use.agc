@@ -331,9 +331,7 @@ def of_expr(found: List[Written], expr: Ast.Expr, parameters: List[String]) -> L
   end
 end
 
-def library(key: String, span: Source.Span) -> Written
-  return Written(name: key, role: Role.Module, span: span, member: "")
-end
+def library(key: String, span: Source.Span) -> Written = Written(name: key, role: Role.Module, span: span, member: "")
 
 # A bare type name that is a type parameter in an expression (`T`) is no alias.
 def typed_name(found: List[Written], node: Ast.TypeName, parameters: List[String]) -> List[Written]

@@ -211,9 +211,7 @@ export def unpack(text: String) -> Diag.Diagnostic
 end
 
 ## A help text.
-export def hint(text: String) -> Diag.Help
-  return Diag.Help.Hint(text)
-end
+export def hint(text: String) -> Diag.Help = Diag.Help.Hint(text)
 
 ## The failure for a span that is not the span of one token.
 export def bail_span(code: String, message: String, span: Source.Span, help: Diag.Help) -> String
@@ -230,9 +228,7 @@ export def bail(e: Env, at: Int, code: String, message: String, help: Diag.Help)
 end
 
 ## The PARSE-DETACHED-DOC failure for the doc token at at.
-export def bail_detached(e: Env, at: Int) -> String
-  return detached_doc(e.tokens[at])
-end
+export def bail_detached(e: Env, at: Int) -> String = detached_doc(e.tokens[at])
 
 ## A PARSE-UNEXPECTED-TOKEN failure without help.
 export def unexpected(e: Env, at: Int, message: String) -> String
@@ -268,9 +264,7 @@ export def deepen(e: Env, pos: Int, levels: Int) -> Result[Env]
 end
 
 ## Counts one more level of nesting; PARSE-TOO-DEEP when that passes nesting_limit.
-export def enter(e: Env, pos: Int) -> Result[Env]
-  return deepen(e, pos, 1)
-end
+export def enter(e: Env, pos: Int) -> Result[Env] = deepen(e, pos, 1)
 
 ## A failure for a state the grammar functions cannot reach, so that no code path needs a bare string error:
 ## PARSE-UNEXPECTED-TOKEN at the token at pos.
@@ -279,9 +273,7 @@ export def impossible(e: Env, pos: Int) -> String
 end
 
 ## True for a name token without a ? or ! suffix: the names of fields, parameters and bindings.
-export def plain_name?(token: Tokens.Token) -> Bool
-  return token.kind == "name" and !decorated?(token.lexeme)
-end
+export def plain_name?(token: Tokens.Token) -> Bool = token.kind == "name" and !decorated?(token.lexeme)
 
 ## The position after the token at pos when it has the kind. A name that ends in ? or ! is refused unless suffix is
 ## true, which only function and method names allow.
@@ -312,9 +304,7 @@ end
 
 ## Whether a `string` token is a heredoc (25.10). The lexer gives a heredoc the lexeme of its opener, `<<~NAME`, and
 ## a string literal the lexeme of its quotes, so the parser tells them apart with no field on the token.
-export def heredoc?(token: Tokens.Token) -> Bool
-  return token.lexeme.starts_with?("<<~")
-end
+export def heredoc?(token: Tokens.Token) -> Bool = token.lexeme.starts_with?("<<~")
 
 ## The literal value of an integer, float or string token.
 export def literal_value(token: Tokens.Token) -> Ast.LitValue
@@ -415,9 +405,7 @@ export def case_arm_start?(e: Env, pos: Int) -> Bool
   return kind_at(e, stop) == "arrow"
 end
 
-def kind?(e: Env, pos: Int, kind: String) -> Bool
-  return e.tokens[pos].kind == kind
-end
+def kind?(e: Env, pos: Int, kind: String) -> Bool = e.tokens[pos].kind == kind
 
 # A Result error is a String, so the diagnostic travels packed: the code, the six numbers of the span, a help flag, the
 # length of the message, then the message followed by the help.
@@ -459,9 +447,7 @@ def too_deep(e: Env, pos: Int) -> String
   )
 end
 
-def decorated?(lexeme: String) -> Bool
-  return lexeme.ends_with?("?") or lexeme.ends_with?("!")
-end
+def decorated?(lexeme: String) -> Bool = lexeme.ends_with?("?") or lexeme.ends_with?("!")
 
 # One payload slot: a name binds the value, `_` drops it, and a literal, a variant, ok(...), error(...), some(...) or
 # none is a nested pattern. A nested variant counts one level of nesting, which bounds the calls of the parser on a

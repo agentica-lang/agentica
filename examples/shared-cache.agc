@@ -7,9 +7,7 @@ struct Shared
   stats: ATS[String, Int]
 end
 
-def describe(n: Int) -> String
-  return "#{n} squared is #{n * n}"
-end
+def describe(n: Int) -> String = "#{n} squared is #{n * n}"
 
 def lookup(shared: Shared, n: Int) -> String
   shared.stats.add("lookups", 1)

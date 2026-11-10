@@ -336,9 +336,7 @@ def strip_prefix(text: String) -> Int
   return count
 end
 
-def rest_of(text: String, start: Int) -> String
-  return text.slice(start, text.length - start)
-end
+def rest_of(text: String, start: Int) -> String = text.slice(start, text.length - start)
 
 def blank_prefix(text: String) -> Int
   count = 0
@@ -349,9 +347,7 @@ def blank_prefix(text: String) -> Int
   return count
 end
 
-def drop_blanks(text: String) -> String
-  return rest_of(text, blank_prefix(text))
-end
+def drop_blanks(text: String) -> String = rest_of(text, blank_prefix(text))
 
 def heading_keyword(line: String) -> String
   colon = line.index_of(":")

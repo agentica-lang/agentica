@@ -20,9 +20,7 @@ export def children(node: Node) -> List[Node]
 end
 
 ## The start offset of a read, the key the reads are ordered by.
-export def read_offset(read: Ast.ConstRef) -> Int
-  return read.span.start.offset
-end
+export def read_offset(read: Ast.ConstRef) -> Int = read.span.start.offset
 
 ## The reads of constants below an initializer, ordered by the start offsets of the reads in the source text, so the
 ## order does not depend on how a tree stores its parts (a map entry gives its key before its value). It walks with a
@@ -54,17 +52,11 @@ def push_read(found: List[Ast.ConstRef], expr: Ast.Expr) -> List[Ast.ConstRef]
   end
 end
 
-def exprs(items: List[Ast.Expr]) -> List[Node]
-  return items.map do |item: Ast.Expr| Node.Expr(item) end
-end
+def exprs(items: List[Ast.Expr]) -> List[Node] = items.map do |item: Ast.Expr| Node.Expr(item) end
 
-def stmts(items: List[Ast.Stmt]) -> List[Node]
-  return items.map do |item: Ast.Stmt| Node.Stmt(item) end
-end
+def stmts(items: List[Ast.Stmt]) -> List[Node] = items.map do |item: Ast.Stmt| Node.Stmt(item) end
 
-def named_values(args: List[Ast.NamedArg]) -> List[Node]
-  return args.map do |arg: Ast.NamedArg| Node.Expr(arg.value) end
-end
+def named_values(args: List[Ast.NamedArg]) -> List[Node] = args.map do |arg: Ast.NamedArg| Node.Expr(arg.value) end
 
 def expr_children(expr: Ast.Expr) -> List[Node]
   case expr

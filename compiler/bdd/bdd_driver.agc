@@ -73,9 +73,7 @@ export def run(options: Opts.Options, settings: Env.Settings) -> Report.Ending
 end
 
 # Whether this binary carries the runner and the default step program, compiled with the std/ sources.
-def embedded?(settings: Env.Settings) -> Bool
-  return settings.embedded_bdd
-end
+def embedded?(settings: Env.Settings) -> Bool = settings.embedded_bdd
 
 # The run in its directory. Without the binary's own runner it is compiled before anything else: its failure is a bug
 # of the installation.

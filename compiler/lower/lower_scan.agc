@@ -37,9 +37,7 @@ end
 
 ## The linked name of the constant that holds a regex literal of a function body. `#` keeps it apart from every name a
 ## program can write.
-export def regex_constant(node: Ast.RegexLit) -> String
-  return "regex##{node.id}"
-end
+export def regex_constant(node: Ast.RegexLit) -> String = "regex##{node.id}"
 
 ## The watched names a type annotation writes, nested names included.
 export def written_in(ref: Ast.TypeRef, watched: Set[String]) -> List[String]
@@ -65,9 +63,7 @@ export def written_signature(decl: Ast.FunctionDecl, watched: Set[String]) -> Li
   return found
 end
 
-def empty() -> Scan
-  return Scan(consts: [], calls: [], written: [], type_names: [], type_ids: [], covered: [], regexes: [])
-end
+def empty() -> Scan = Scan(consts: [], calls: [], written: [], type_names: [], type_ids: [], covered: [], regexes: [])
 
 def walk(start: List[AstWalk.Node], watched: Set[String], first: Scan, hoist: Bool) -> Scan
   work = start

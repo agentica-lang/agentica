@@ -145,9 +145,7 @@ def entry_of(pool: Pool.Pool, tag: Int, number: Int) -> Pool.Interned
   return Pool.intern(pool, "#{tag}:#{number}", [tag].concat(Wire.u32(number)))
 end
 
-def unsupported(program: Ir.Program, message: String) -> String
-  return Failure.internal(program, message)
-end
+def unsupported(program: Ir.Program, message: String) -> String = Failure.internal(program, message)
 
 # The levels of List, Map, JsonField and Optional around a type.
 def nesting(type: Types.Type) -> Int
