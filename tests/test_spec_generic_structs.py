@@ -7,7 +7,7 @@ A program that must check clean has no code.
 import pytest
 
 from tests.agentica_test import cli, output_lines, run, vm_environment
-from tests.spec_support import assert_rule
+from tests.spec_support import assert_rule, check_many
 
 BOX = "struct Box[T]\n  value: T\nend\n\n"
 BOTH = "struct Both[T]\n  value: T\n  items: List[T]\nend\n\n"
@@ -184,16 +184,24 @@ MODULE_RULES = {
 }
 
 
+@pytest.fixture(scope="module")
+def batch(tmp_path_factory):
+    """The programs of the rule tables, checked by one `check` call."""
+    programs = [rule[0] for rule in RULES.values()]
+    programs += [{"m.agc": MODULE, "main.agc": rule[0]} for rule in MODULE_RULES.values()]
+    return check_many(programs, tmp_path_factory.mktemp("generic-structs"))
+
+
 @pytest.mark.parametrize("name", list(RULES))
-def test_generic_struct_rules(agentica_check, name):
+def test_generic_struct_rules(batch, name):
     program, code, text = RULES[name]
-    assert_rule(agentica_check(program), program, code, text)
+    assert_rule(batch(program), program, code, text)
 
 
 @pytest.mark.parametrize("name", list(MODULE_RULES))
-def test_generic_structs_across_modules(agentica_check, name):
+def test_generic_structs_across_modules(batch, name):
     program, code, text = MODULE_RULES[name]
-    assert_rule(agentica_check({"m.agc": MODULE, "main.agc": program}), program, code, text)
+    assert_rule(batch({"m.agc": MODULE, "main.agc": program}), program, code, text)
 
 
 def test_a_generic_struct_of_another_module_stays_private_to_update(agentica_check):

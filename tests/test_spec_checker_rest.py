@@ -2,8 +2,9 @@
 
 tests/test_spec_checker.py has the cases about spans, pipes and the nesting limit. The other cases of the old
 checker test are in tests/fixtures/spec/checker-rest.json: one list of programs for each rule group, in the
-order of that file. Each program is written to a file and checked with `--json check FILE`. A case says what the check
-gives:
+order of that file. Each program is written to a file of its own and one `--json check FILE...` call checks them all
+(`check_many`: the diagnostic of a check of each file alone); each case keeps its own test id. A case says what the
+check gives:
 
 - `code`: the diagnostic code, or null when the program checks clean (always asserted).
 - `start`: the line and column where the range starts; `covers`: the source text that the range covers.
@@ -17,16 +18,22 @@ import re
 import pytest
 
 from tests.agentica_test import FIXTURES
-from tests.spec_support import check_diagnostic as diagnostic, covered
+from tests.spec_support import check_many, covered
 
 GROUPS = json.loads((FIXTURES / "spec" / "checker-rest.json").read_text(encoding="utf-8"))
 
 FIELDS = ("expected", "actual", "function", "callee")
 
 
-def assert_case(case, tmp_path):
+@pytest.fixture(scope="module")
+def diagnostic(tmp_path_factory):
+    programs = ["\n".join(case["program"]) for cases in GROUPS.values() for case in cases]
+    return check_many(programs, tmp_path_factory.mktemp("checker-rest"), "program.agc")
+
+
+def assert_case(case, diagnostic):
     text = "\n".join(case["program"])
-    found = diagnostic(text, tmp_path)
+    found = diagnostic(text)
     assert (found and found["code"]) == case["code"], text
     if found is None:
         return
@@ -49,8 +56,8 @@ def method_name(title):
 
 
 def group_test(title, cases):
-    def test(case, tmp_path):
-        assert_case(case, tmp_path)
+    def test(case, diagnostic):
+        assert_case(case, diagnostic)
 
     test.__name__ = method_name(title)
     test.__doc__ = title

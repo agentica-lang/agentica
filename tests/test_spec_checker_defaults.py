@@ -13,6 +13,7 @@ from tests.spec_support import (
     assert_multi_file_case,
     assert_program_diagnostic,
     assert_single_file_case,
+    check_many,
 )
 
 JOIN = 'def join(xs: List[String], sep: String = ", ") -> String\n  return xs.join(sep)\nend\n\n'
@@ -417,13 +418,26 @@ MODULES = [
 ]
 
 
+@pytest.fixture(scope="module")
+def one_file(tmp_path_factory):
+    """The one-file programs of SINGLE_FILE and HELPED, checked by one `check` call."""
+    programs = [case[1] for case in (*SINGLE_FILE, *HELPED)]
+    return check_many(programs, tmp_path_factory.mktemp("defaults-one"), "program.agc")
+
+
+@pytest.fixture(scope="module")
+def several_files(tmp_path_factory):
+    """The programs of MODULES, checked by one `check` call."""
+    return check_many([case[1] for case in MODULES], tmp_path_factory.mktemp("defaults-several"), "root.agc")
+
+
 @pytest.mark.parametrize(
     ("title", "program", "code", "text"),
     SINGLE_FILE,
     ids=[case[0] for case in SINGLE_FILE],
 )
-def test_single_file_programs(title, program, code, text, agentica_check):
-    assert_single_file_case(agentica_check, program, code, text, assert_exact_span)
+def test_single_file_programs(title, program, code, text, one_file):
+    assert_single_file_case(one_file, program, code, text, assert_exact_span)
 
 
 @pytest.mark.parametrize(
@@ -431,8 +445,8 @@ def test_single_file_programs(title, program, code, text, agentica_check):
     MODULES,
     ids=[case[0] for case in MODULES],
 )
-def test_programs_of_several_files(title, files, code, file, text, agentica_check):
-    assert_multi_file_case(agentica_check, files, code, file, text, assert_exact_span)
+def test_programs_of_several_files(title, files, code, file, text, several_files):
+    assert_multi_file_case(several_files, files, code, file, text, assert_exact_span)
 
 
 # The forms before contexts and before Process.Options, and a context where its Optional goes, carry a help: (title,
@@ -461,7 +475,7 @@ HELPED = [
 
 
 @pytest.mark.parametrize(("title", "program", "code", "text"), HELPED, ids=[case[0] for case in HELPED])
-def test_old_forms_have_a_help(title, program, code, text, agentica_check):
-    found = assert_program_diagnostic(agentica_check, program, code)
+def test_old_forms_have_a_help(title, program, code, text, one_file):
+    found = assert_program_diagnostic(one_file, program, code)
     assert_exact_span(program, found["range"], text)
     assert found.get("help"), found

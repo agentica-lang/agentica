@@ -9,7 +9,7 @@ import time
 import pytest
 
 from tests.agentica_test import scaled
-from tests.spec_support import assert_rule, covered
+from tests.spec_support import assert_rule, check_many, covered
 
 FIRST_OR = (
     "def first_or[T](xs: List[T], fallback: T) -> T\n"
@@ -381,16 +381,24 @@ CODEC_RULES = {
 }
 
 
+@pytest.fixture(scope="module")
+def batch(tmp_path_factory):
+    """The programs of the rule tables, checked by one `check` call."""
+    programs = [rule[0] for rule in (*RULES.values(), *CODEC_RULES.values())]
+    programs += [{"m.agc": LIB, "main.agc": rule[0]} for rule in MODULE_RULES.values()]
+    return check_many(programs, tmp_path_factory.mktemp("generics"))
+
+
 @pytest.mark.parametrize("name", list(RULES))
-def test_generic_function_rules(agentica_check, name):
+def test_generic_function_rules(batch, name):
     program, code, text = RULES[name]
-    assert_rule(agentica_check(program), program, code, text)
+    assert_rule(batch(program), program, code, text)
 
 
 @pytest.mark.parametrize("name", list(MODULE_RULES))
-def test_generic_functions_across_modules(agentica_check, name):
+def test_generic_functions_across_modules(batch, name):
     program, code, text = MODULE_RULES[name]
-    assert_rule(agentica_check({"m.agc": LIB, "main.agc": program}), program, code, text)
+    assert_rule(batch({"m.agc": LIB, "main.agc": program}), program, code, text)
 
 
 def nest(depth: int, use: str) -> str:
@@ -453,9 +461,9 @@ def test_a_struct_with_every_nil_shape_of_its_arguments_checks_fast(agentica_che
 
 
 @pytest.mark.parametrize("name", list(CODEC_RULES))
-def test_codec_rules(agentica_check, name):
+def test_codec_rules(batch, name):
     program, code, text = CODEC_RULES[name]
-    assert_rule(agentica_check(program), program, code, text)
+    assert_rule(batch(program), program, code, text)
 
 
 def test_codec_is_reserved_as_an_import_alias(agentica_check):

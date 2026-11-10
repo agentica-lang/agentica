@@ -9,7 +9,7 @@ from collections import namedtuple
 import pytest
 
 from tests.agentica_test import cli, run
-from tests.spec_support import assert_multi_file_case, assert_single_file_case, covered
+from tests.spec_support import assert_multi_file_case, assert_single_file_case, check_many, covered
 
 # A range that starts with this text (a whole `case` or an arm: the range runs to its end).
 Starts = namedtuple("Starts", "text")
@@ -275,16 +275,23 @@ def assert_span_covers(program, span, expected):
         assert seen.rstrip("\n") == expected
 
 
+@pytest.fixture(scope="module")
+def batches(tmp_path_factory):
+    """The SINGLE_FILE and the MODULES programs, each table checked by one `check` call."""
+    return (check_many([case[1] for case in SINGLE_FILE], tmp_path_factory.mktemp("patterns"), "program.agc"),
+            check_many([case[1] for case in MODULES], tmp_path_factory.mktemp("patterns-modules"), "root.agc"))
+
+
 @pytest.mark.parametrize("case", SINGLE_FILE, ids=[case[0] for case in SINGLE_FILE])
-def test_single_file_programs(case, agentica_check):
+def test_single_file_programs(case, batches):
     _, program, code, text = case
-    assert_single_file_case(agentica_check, program, code, text, assert_span_covers)
+    assert_single_file_case(batches[0], program, code, text, assert_span_covers)
 
 
 @pytest.mark.parametrize("case", MODULES, ids=[case[0] for case in MODULES])
-def test_programs_of_several_files(case, agentica_check):
+def test_programs_of_several_files(case, batches):
     _, files, code, file, text = case
-    assert_multi_file_case(agentica_check, files, code, file, text, assert_span_covers)
+    assert_multi_file_case(batches[1], files, code, file, text, assert_span_covers)
 
 
 @pytest.mark.parametrize(

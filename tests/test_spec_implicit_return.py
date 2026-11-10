@@ -10,7 +10,7 @@ import re
 import pytest
 
 from tests.agentica_test import FIXTURES, PYTHON, cli, run, tool, vm_environment
-from tests.spec_support import check_diagnostic, covered
+from tests.spec_support import check_many, covered
 
 # Programs that check: the value at the end of the body, of every branch and of every arm, nested, generic, after a
 # guard, a one-line def, `Nil`, a def whose result is an alias of Void (which drops the value of a call), and a `case`
@@ -36,9 +36,16 @@ ACCEPTED = {
 }
 
 
+@pytest.fixture(scope="module")
+def batch(tmp_path_factory):
+    """The programs of ACCEPTED and REJECTED, checked by one `check` call."""
+    programs = [*ACCEPTED.values(), *(case[0] for case in REJECTED.values())]
+    return check_many(programs, tmp_path_factory.mktemp("implicit-return"), "program.agc")
+
+
 @pytest.mark.parametrize("name", list(ACCEPTED))
-def test_the_last_expression_gives_the_value(tmp_path, name):
-    assert check_diagnostic(ACCEPTED[name], tmp_path) is None
+def test_the_last_expression_gives_the_value(batch, name):
+    assert batch(ACCEPTED[name]) is None
 
 
 # Programs that do not check: the code and the source text the range covers. "DEF" covers the whole def, as for a
@@ -95,9 +102,9 @@ REJECTED = {
 
 
 @pytest.mark.parametrize("name", list(REJECTED))
-def test_a_path_with_no_value_or_a_wrong_one_is_reported_where_it_is(tmp_path, name):
+def test_a_path_with_no_value_or_a_wrong_one_is_reported_where_it_is(batch, name):
     program, code, covers = REJECTED[name]
-    found = check_diagnostic(program, tmp_path)
+    found = batch(program)
     assert (found and found["code"]) == code, program
     text = covered(program, found["range"])
     if covers == WHOLE_DEF:
