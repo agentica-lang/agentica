@@ -834,8 +834,8 @@ def test_jobs_run_the_files_at_the_same_time_and_the_report_keeps_the_order_of_t
     assert [(item["name"], item["status"]) for item in report_cases(report)] == [("a", "passed"), ("b", "passed")]
 
 
-# The sleep is longer than the 150 ms the test asserts: libuv times a timer from the loop's cached clock, so a sleep
-# can end a few milliseconds early as the parent sees it.
+# The sleep is longer than the 150 ms the test asserts: the parent's Time.monotonic_ms can read a coarse clock
+# (vm/numbers.c), so across two processes its interval can come out a few milliseconds short of the child's sleep.
 SLEEPS = 'def test_sleeps() -> Result[Void]\n  Task.sleep(200)\n  return Test.assert(true, "x")\nend\n'
 QUICK = 'def test_quick() -> Result[Void]\n  return Test.assert(true, "x")\nend\n'
 

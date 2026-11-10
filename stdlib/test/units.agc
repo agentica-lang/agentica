@@ -230,16 +230,30 @@ def run_tests(
 end
 
 # The run child sends `ready` before it reads the first test index, so the clock of the first test starts after the
-# start of the child VM (#1276). No `ready` within 30 seconds, or another record, is a file error.
+# start of the child VM (#1276). A file error otherwise, with what the child printed: another record breaks the
+# protocol, no `ready` within 30 seconds is a timeout as in listing, and a child that ends first shows its crash.
 def await_ready(settings: Settings, p: Process, where: Report.Span) -> Started
   deadline = Time.monotonic_ms() + 30000
   line = Process.channel_read_line(p, Child.left(deadline))
   return Started.Ready if line.ok? and Child.event_of(Child.record_of(line.unwrap!)) == "ready"
-  if line.ok? or line.message == "process: operation timed out"
-    problem = Report.error_at("RUNTIME-BDD-INFRA", "the test file did not answer ready within 30 seconds", where)
-    return Started.Broken(Failure(problem: problem, output: "", blame: true))
+  shown = Child.printed(Process.read_available(p, Child.brief(deadline)).unwrap_or(""))
+  if line.ok?
+    # The child keeps its stdout until its next record: the end of the channel lets it end, and its output come.
+    _ = Process.channel_close(p, Child.brief(deadline))
+    rest = Process.output(p, Child.brief(deadline))
+    if rest.ok?
+      shown = joined(shown, joined(Child.printed(rest.unwrap!.stdout), Child.stderr_text(rest.unwrap!.stderr)))
+    end
+    problem = Report.error_at("RUNTIME-BDD-INFRA", "the test file broke the test record protocol", where)
+    return Started.Broken(Failure(problem: problem, output: Child.tail(shown, 65536), blame: true))
   end
-  return Started.Broken(failure(settings, p, line.message, deadline, where))
+  if line.message == "process: operation timed out"
+    problem = Report.error_at("RUNTIME-TEST-TIMEOUT", "the test file did not start its tests within 30 seconds", where)
+    return Started.Broken(Failure(problem: problem, output: Child.tail(shown, 65536), blame: true))
+  end
+  found = failure(settings, p, line.message, deadline, where)
+  output = Child.tail(joined(shown, found.output), 65536)
+  return Started.Broken(Failure(problem: found.problem, output: output, blame: found.blame))
 end
 
 def await_test(settings: Settings, p: Process, deadline: Int, span: Report.Span) -> TestEnd

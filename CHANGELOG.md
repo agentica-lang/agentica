@@ -25,8 +25,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - `agentica test`: the time of a file's first test (`--timing`, `duration_ms`)
-  no longer counts the start of the file's child VM, and a child that fails
-  before its first test is a file error instead of that test's failure.
+  no longer counts the start of the file's child VM. A child that fails or
+  takes over 30 seconds before its first test is a file error instead of that
+  test's failure.
 - **Breaking:** `Process.spawn`, `Process.spawn_captured` and
   `Process.spawn_channel` take their options as one `Process.Options` record
   (`timeout_ms`, `chdir`, `env`, `out`, `err`, `pgroup`) instead of positional
