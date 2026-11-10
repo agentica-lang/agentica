@@ -788,17 +788,22 @@ def guardable?(c: Context, node: Ast.IfStmt) -> Bool
   return false if node.branches.size != 1 or node.else_body.some? or node.branches[0].body.size != 1
 
   stmt = node.branches[0].body[0]
-  case stmt
-    Ast.Stmt.Return(_) -> stmt = stmt
-    Ast.Stmt.Control(_) -> stmt = stmt
-    _ -> return false
-  end
+  return false if not exit?(stmt)
 
   span = Ast.stmt_span(stmt)
   return false if tight(c, span).start.line != last_line(c, span)
 
   last = last_line(c, node.span)
   return not (node.span.start.line..last).to_a.any? do |line: Int| c.noted.include?(line) end
+end
+
+# A `return`, `break` or `next`: the statements that take a guard.
+def exit?(stmt: Ast.Stmt) -> Bool
+  case stmt
+    Ast.Stmt.Return(_) -> return true
+    Ast.Stmt.Control(_) -> return true
+    _ -> return false
+  end
 end
 
 def simple?(stmt: Ast.Stmt) -> Bool
