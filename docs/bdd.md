@@ -530,8 +530,9 @@ that calls them can break the protocol, and nothing stops it.
 
 - `list` sends `{"column":C,"event":"test","line":L,"name":N}` for each test,
   then `{"event":"ready"}`. No test runs.
-- `run` reads one test index per line from the channel, from 0, and ends at the
-  end of the channel. It runs each test in a new task, a child of the task that
+- `run` first sends `{"event":"ready"}`, so the runner times each test from its
+  index and the start of the child is in no test's time. Then it reads one test
+  index per line from the channel, from 0, and ends at the end of the channel. It runs each test in a new task, a child of the task that
   called `Test.run`, and sends `{"event":"pass"}` or a `fail` record: the
   `--json` diagnostic (`code`, `file`, `message`, `range`) with
   `"event":"fail"`, plus `expected` and `actual` for an assertion, and `stack`,

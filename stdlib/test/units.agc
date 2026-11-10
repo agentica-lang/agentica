@@ -36,6 +36,11 @@ enum Listed
   Broken(Failure)
 end
 
+enum Started
+  Ready
+  Broken(Failure)
+end
+
 struct TestEnd
   verdict: Report.Verdict
   output: String
@@ -161,6 +166,23 @@ def run_child(settings: Settings, path: String, bytecode: String, chosen: List[U
   end
   p = spawned.unwrap!
   _ = Process.close_stdin(p, 5000)
+  case await_ready(settings, p, where)
+    Started.Broken(found) ->
+      Process.close(p)
+      return Report.file_failure(path, "tests", found.problem, found.output)
+    Started.Ready -> return run_tests(settings, path, p, chosen, where)
+  end
+end
+
+# Sends the index of each test in `chosen` to the run child `p`, which has said ready, and times each test from its
+# index to its record.
+def run_tests(
+  settings: Settings,
+  path: String,
+  p: Process,
+  chosen: List[UnitTest],
+  where: Report.Span,
+) -> Report.FileResult
   empty: Map[Int, UnitTest] = {}
   queue = chosen.reduce(empty) do |acc: Map[Int, UnitTest], item: UnitTest| acc.put(acc.size, item) end
   results: Map[Int, Report.ScenarioResult] = {}
@@ -205,6 +227,19 @@ def run_child(settings: Settings, path: String, bytecode: String, chosen: List[U
     verdict: ending.verdict,
     output: ending.output,
   )
+end
+
+# The run child sends `ready` before it reads the first test index, so the clock of the first test starts after the
+# start of the child VM (#1276). No `ready` within 30 seconds, or another record, is a file error.
+def await_ready(settings: Settings, p: Process, where: Report.Span) -> Started
+  deadline = Time.monotonic_ms() + 30000
+  line = Process.channel_read_line(p, Child.left(deadline))
+  return Started.Ready if line.ok? and Child.event_of(Child.record_of(line.unwrap!)) == "ready"
+  if line.ok? or line.message == "process: operation timed out"
+    problem = Report.error_at("RUNTIME-BDD-INFRA", "the test file did not answer ready within 30 seconds", where)
+    return Started.Broken(Failure(problem: problem, output: "", blame: true))
+  end
+  return Started.Broken(failure(settings, p, line.message, deadline, where))
 end
 
 def await_test(settings: Settings, p: Process, deadline: Int, span: Report.Span) -> TestEnd
