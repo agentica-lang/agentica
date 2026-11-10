@@ -33,7 +33,7 @@ site/               Hugo documentation site: content/, versions/ and the
                     layouts/ overrides; the look and the layouts come from
                     themes/docs-theme (a submodule)
 benchmarks/         make bench programs and Python twins
-.agents/skills/     agent skills; also documentation-pruning (shrinking docs)
+.agents/skills/     agent skills
 ```
 
 `docs/grammar.md` indexes `docs/grammar/`, and `docs/vm/` and `docs/future/`

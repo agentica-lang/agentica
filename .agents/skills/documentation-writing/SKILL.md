@@ -5,15 +5,13 @@ description: >-
   the smallest correct edit in the right place. Use whenever about to write or
   update docs/, site/content/, a skill, a README, a CHANGELOG entry, a doc
   comment or a PR body in the Agentica repository, or when reviewing such an
-  edit. Not for shrinking or consolidating docs that already exist (use
-  documentation-pruning).
+  edit. Not for shrinking or consolidating docs that already exist.
 ---
 
 # Documentation writing
 
 **Document only when strictly necessary.** The default is no doc change.
-Change docs only when a reader would otherwise be wrong or blocked. To
-shrink grown docs, use `documentation-pruning`.
+Change docs only when a reader would otherwise be wrong or blocked.
 
 ## 1. Is a doc change needed?
 
@@ -37,10 +35,15 @@ leave it out and mention the gap in the PR body.
 ## 2. One home per topic
 
 Each fact lives in one file. Edit that file in place; other places hold only
-a pointer. The homes are in the lifecycle table and the Agentica map of
-`documentation-pruning` (§2); follow them, do not copy them here or into new
-docs. Do not create files under `docs/` unless the user asks for one
-(AGENTS.md).
+a pointer. Do not create files under `docs/` unless the user asks for one
+(AGENTS.md). The homes:
+
+- `docs/grammar/`: the language contract (the site renders it).
+- `site/content/library/`: the only home of the builtin and `std/` reference.
+- `docs/vm/`: the VM design. `docs/bdd.md`: the contract for BDD.
+- GitHub issues: pending work. `docs/future/` keeps only the decisions of
+  planned features whose issue points there, and what was decided against.
+- `CHANGELOG.md` and the merged PR: shipped work.
 
 ## 3. Provable claims
 
@@ -71,8 +74,8 @@ docs. Do not create files under `docs/` unless the user asks for one
 
 - `rg` the old names, removed symbols and changed numbers across `docs/`,
   `.agents/`, `site/` and `CHANGELOG.md`; fix every stale hit.
-- When you move or delete a section, apply the reference fan-out protocol of
-  `documentation-pruning` (§6).
+- When you move or delete a section, `rg` its path, its heading and its
+  section number, and fix every pointer in the same change.
 - Prose wrap (AGENTS.md): 80 columns in `docs/` and `.agents/skills/`; one
   line per paragraph in `site/content/`. Run `git diff --check`.
 - Run `make site` only when `site/content/` changed.
