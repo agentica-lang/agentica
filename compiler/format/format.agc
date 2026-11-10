@@ -61,7 +61,7 @@ export def unchecked_text(text: String, settings: Settings) -> Diag.Outcome[Stri
         Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
         Diag.Outcome.Done(program) ->
           attachment = Comments.attach(program, scanned.tokens, scanned.comments)
-          context = Layout.context(input, scanned.tokens, attachment)
+          context = Layout.context(input, scanned.tokens, attachment, settings.width)
           output = Docs.render(Layout.program_doc(context, program), settings.width)
           return Diag.Outcome.Done(with_blank_lines(output)) if settings.blank_line_after_end
 

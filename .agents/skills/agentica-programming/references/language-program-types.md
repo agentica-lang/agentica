@@ -215,5 +215,7 @@ end
   `return x * 2` as its body. The expression starts on the line of `=` (it goes
   on only inside parentheses or a block, or on a line that starts with `.name`)
   and needs the return type; not for `Void` (`main` included), `case` or `if`
-  (`PARSE-UNEXPECTED-TOKEN`). In an `extern` block `= "name"` is the C name
-  instead.
+  (`PARSE-UNEXPECTED-TOKEN`). One-line defs may follow each other with no blank
+  line, as constants; next to any other declaration the blank line stays
+  (`PARSE-MISSING-BLANK-LINE`), except right after an import. In an `extern`
+  block `= "name"` is the C name instead.

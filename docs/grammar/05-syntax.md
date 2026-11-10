@@ -72,9 +72,10 @@ next line that starts with `.name`. A `case` or an `if` after `=` is
 `PARSE-UNEXPECTED-TOKEN`: they are statements. A `Void` function returns no
 value, so `-> Void =` is `PARSE-UNEXPECTED-TOKEN` at the `=`, with a help to
 write the def with a body; this includes `main`. The return type is required
-(`def f(x: Int) = x` is `PARSE-UNEXPECTED-TOKEN` at the `=`), and the blank line
-after a declaration is too. In an `extern` block, `= "name"` after the
-signature is the C name of the function instead (below), not a value.
+(`def f(x: Int) = x` is `PARSE-UNEXPECTED-TOKEN` at the `=`). Like constants,
+one-line defs may follow each other with no blank line (below). In an `extern`
+block, `= "name"` after the signature is the C name of the function instead
+(below), not a value.
 
 A parameter may end with a default value, `NAME: type = expression`. The parser
 takes any expression after `=`, so that the checker can say why a default is not
@@ -236,7 +237,11 @@ follow each other directly, but an import after a declaration also needs the
 blank line. A constant follows the imports, and another constant, with no blank
 line, also when the next constant has a doc block or `export`; the blank line is
 still needed between a constant and a `struct`, `enum`, type alias or `def`, and
-before an import. Other text after a declaration's `end` is
+before an import. In the same way a one-line def may follow a one-line def with
+no blank line, also when the next one has a doc block or `export`; after a
+one-line def the blank line is still needed before any other declaration, and
+before a one-line def after any other declaration but an import, a constant or
+a def with a body included. Other text after a declaration's `end` is
 `PARSE-TOP-LEVEL-STATEMENT`.
 
 Declarations follow a fixed order in every file, the root program, imported
