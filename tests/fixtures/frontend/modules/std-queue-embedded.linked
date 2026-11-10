@@ -73,7 +73,7 @@ program #63 0:1:1-570:21:1
         type: type-ref #7 501:17:14-511:17:24 name="@2::QueueState"
     declaration: function-decl #16 551:21:8-599:22:1 name="@2::new" expression
       result: type-ref #11 564:21:21-574:21:31 name="@2::QueueState"
-      body: return-stmt #15 577:21:34-598:21:55
+      body: return-stmt #15 577:21:34-598:21:55 implicit
         value: construct #14 577:21:34-598:21:55 type="@2::QueueState"
           arg: named-arg #13 588:21:45-597:21:54 name="items"
             value: list-lit #12 595:21:52-597:21:54
@@ -83,7 +83,7 @@ program #63 0:1:1-570:21:1
       param: param #21 682:24:32-695:24:45 name="value"
         type: type-ref #20 689:24:39-695:24:45 name="String"
       result: type-ref #22 700:24:50-710:24:60 name="@2::QueueState"
-      body: return-stmt #29 713:24:63-759:24:109
+      body: return-stmt #29 713:24:63-759:24:109 implicit
         value: construct #28 713:24:63-759:24:109 type="@2::QueueState"
           arg: named-arg #27 724:24:74-758:24:108 name="items"
             value: call #26 731:24:81-758:24:108 name="List.append" piped=false
@@ -139,7 +139,7 @@ program #63 0:1:1-570:21:1
       param: param #80 1326:39:17-1339:39:30 name="q"
         type: type-ref #79 1329:39:20-1339:39:30 name="@2::QueueState"
       result: type-ref #81 1344:39:35-1347:39:38 name="Int"
-      body: return-stmt #85 1350:39:41-1368:39:59
+      body: return-stmt #85 1350:39:41-1368:39:59 implicit
         value: call #84 1350:39:41-1368:39:59 name="List.size" piped=false
           arg: field-access #83 1360:39:51-1367:39:58 name="items"
             target: name-ref #82 1360:39:51-1361:39:52 name="q"
@@ -147,7 +147,7 @@ program #63 0:1:1-570:21:1
       param: param #89 1434:42:19-1447:42:32 name="q"
         type: type-ref #88 1437:42:22-1447:42:32 name="@2::QueueState"
       result: type-ref #90 1452:42:37-1456:42:41 name="Bool"
-      body: return-stmt #95 1459:42:44-1471:42:56
+      body: return-stmt #95 1459:42:44-1471:42:56 implicit
         value: binary #94 1459:42:44-1471:42:56 op=equal op-span=1467:42:52-1469:42:54
           left: call #92 1459:42:44-1466:42:51 name="@2::size" piped=false
             arg: name-ref #91 1464:42:49-1465:42:50 name="q"

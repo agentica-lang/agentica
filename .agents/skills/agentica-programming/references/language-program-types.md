@@ -203,16 +203,20 @@ end
 - Nesting goes 1000 levels at most (`PARSE-TOO-DEEP`, `CHECK-TOO-DEEP`); each
   operator of a chain counts a level, so 1,000 `+` already fail.
 - Calls nest 10000 deep at most (`RUNTIME-STACK-OVERFLOW`). Tail calls do not
-  count: only `return f(...)` whose value is directly a user-function call
-  (`return 1 + f(n - 1)` and builtin calls are not). Recurse over big inputs in
-  tail form with an accumulator, or use `for`, `map`, `select`, `each`.
-- A non-Void function must `return` on every path (`CHECK-MISSING-RETURN`); a
-  loop does not count (put a `return` after `while true`) and the last
-  expression is not returned implicitly. A Void function completes at `return`
-  or at its end. A `Nil` function returns `nil` explicitly. A statement after a
-  `return` is `CHECK-UNREACHABLE-CODE`.
+  count: only `return f(...)` or a last expression `f(...)` whose value is
+  directly a user-function call (`1 + f(n - 1)` and builtin calls are not).
+  Recurse over big inputs in tail form with an accumulator, or use `for`, `map`,
+  `select`, `each`.
+- A non-Void function's value is its last expression; `return` leaves early.
+  A last `if` with `else` or a last `case` gives the last expression of the
+  branch or arm that runs. Every path needs a value (`CHECK-MISSING-RETURN`): an
+  `if` without `else`, a loop (put a value after `while true`), a binding, a
+  `try` statement or a `Void` call at the end gives none. A Void function
+  completes at `return` or at its end, and drops its last value
+  (`CHECK-UNUSED-VALUE` still applies). A `Nil` function ends with `nil`. A
+  statement after a `return` is `CHECK-UNREACHABLE-CODE`.
 - A one-line def, `def double(x: Int) -> Int = x * 2`, is the def with
-  `return x * 2` as its body; `agentica fmt` writes a def whose body is one
+  `x * 2` as its body; `agentica fmt` writes a def whose body is one
   `return` this way when it fits and no comment sits from its `def` line to its
   `end` line. The expression starts on the line of `=` (it goes on only inside
   parentheses or a block, or on a line that starts with `.name`) and needs the

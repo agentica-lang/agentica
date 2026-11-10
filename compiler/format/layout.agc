@@ -629,7 +629,10 @@ def statement_doc(c: Context, stmt: Ast.Stmt, forced: Bool) -> Docs.Doc
     Ast.Stmt.Binding(node) -> return binding_doc(c, node, forced)
     Ast.Stmt.Return(node) ->
       case node.value
-        some(value) -> return Docs.Doc.Concat([text("return "), value_doc(c, value, forced)])
+        some(value) ->
+          return value_doc(c, value, forced) if node.implicit
+
+          return Docs.Doc.Concat([text("return "), value_doc(c, value, forced)])
         none -> return text("return")
       end
 

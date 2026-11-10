@@ -531,7 +531,12 @@ def print_stmt(out: List[String], at: Margin, role: String, stmt: Ast.Stmt) -> L
       lines = print_optional_type(lines, child, "type", node.type)
       return print_expr(lines, child, "value", node.value)
     Ast.Stmt.Return(node) ->
-      lines = out.push(head(at, role, "return-stmt", node.id, node.span, ""))
+      extra = ""
+      if node.implicit
+        extra = " implicit"
+      end
+
+      lines = out.push(head(at, role, "return-stmt", node.id, node.span, extra))
       case node.value
         some(value) -> return print_expr(lines, child, "value", value)
         none -> return lines

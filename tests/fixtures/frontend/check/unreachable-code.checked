@@ -1,1 +1,1 @@
-ERROR CHECK-UNREACHABLE-CODE 101:7:3-114:8:1 "this statement never runs" "every branch of the if above ends with return, break or next; remove this statement, or move it before the if" signature="sign(n: Int) -> String" file="unreachable-code.agc"
+ERROR CHECK-UNREACHABLE-CODE 101:7:3-113:7:15 "this statement never runs" "every branch of the if above ends with return, break or next; remove this statement, or move it before the if" signature="sign(n: Int) -> String" file="unreachable-code.agc"

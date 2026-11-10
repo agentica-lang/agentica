@@ -1,0 +1,23 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 19951,
+  "stdout": [
+    "9",
+    "11",
+    "none",
+    "one",
+    "minus one",
+    "below",
+    "far below",
+    "7 items",
+    "610",
+    "ab,ab",
+    "ok 42",
+    "error",
+    "144",
+    "say done",
+    ""
+  ],
+  "stderr": []
+}
