@@ -56,9 +56,7 @@ export def flush(stream: Stream) -> Result[Void]
 end
 
 ## True when the descriptor is a terminal.
-export def tty?(fd: Int) -> Bool
-  return isatty(fd) == 1
-end
+export def tty?(fd: Int) -> Bool = isatty(fd) == 1
 ```
 
 `fopen` is declared `-> Stream`, so the raw call already gives a `Result[Stream]`. The wrapper only replaces its message with one that names the path. `Stream` is exported, so callers can name the type. Callers close the stream with `Native.close`, or the task that owns it frees it when it ends. `fflush` is a `compute def` in the raw layer, and `flush` calls it like any function.

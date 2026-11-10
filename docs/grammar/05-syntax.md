@@ -64,12 +64,13 @@ type             = qualified_type, [ "[", type, { ",", type }, "]" ] ;
 ```
 
 A one-line def, `def name(params) -> Type = expression`, is the def with
-`return expression` as its body: it checks and runs the same way, generics,
-defaults, `export` and a `##` doc included. The expression starts on the line of
-`=` (`PARSE-UNEXPECTED-TOKEN` at the end of the line otherwise) and goes on to
-other lines only as any expression does: inside parentheses or a block, or on a
-next line that starts with `.name`. A `case` or an `if` after `=` is
-`PARSE-UNEXPECTED-TOKEN`: they are statements. A `Void` function returns no
+`return expression` as its body, and the form `agentica fmt` writes for such a
+def when it fits on its line and holds no comment: it checks and runs the same
+way, generics, defaults, `export` and a `##` doc included. The expression starts
+on the line of `=` (`PARSE-UNEXPECTED-TOKEN` at the end of the line otherwise)
+and goes on to other lines only as any expression does: inside parentheses or a
+block, or on a next line that starts with `.name`. A `case` or an `if` after `=`
+is `PARSE-UNEXPECTED-TOKEN`: they are statements. A `Void` function returns no
 value, so `-> Void =` is `PARSE-UNEXPECTED-TOKEN` at the `=`, with a help to
 write the def with a body; this includes `main`. The return type is required
 (`def f(x: Int) = x` is `PARSE-UNEXPECTED-TOKEN` at the `=`). Like constants,
@@ -285,9 +286,7 @@ effect when the program runs.
 
 ```ruby
 ## Adds two numbers.
-def add(a: Int, b: Int) -> Int
-  return a + b
-end
+def add(a: Int, b: Int) -> Int = a + b
 ```
 
 Struct, enum, type alias and function declarations appear only at the top level.

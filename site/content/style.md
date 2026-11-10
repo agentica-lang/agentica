@@ -87,9 +87,7 @@ A function that returns a `Bool` ends in `?` and reads as a question. Do not use
 
 ```agentica {mode="check"}
 # good
-def blank?(text: String) -> Bool
-  return text.length == 0
-end
+def blank?(text: String) -> Bool = text.length == 0
 
 def main() -> Void
   puts(blank?(""))
@@ -104,9 +102,7 @@ Name things by what they mean, not by their type: `price`, not `int_value`. Name
 # good
 MAX_BYTES = 1_048_576
 
-def too_big?(bytes: Int) -> Bool
-  return bytes > MAX_BYTES
-end
+def too_big?(bytes: Int) -> Bool = bytes > MAX_BYTES
 
 def main() -> Void
   puts(too_big?(2048))
@@ -188,7 +184,7 @@ Delete code instead of commenting it out.
 
 Give each function one job. If comments split it into parts, split it into functions.
 
-Use four parameters or fewer. Put more in a struct. Return early on bad cases, so the main path stays flat:
+Use four parameters or fewer. Put more in a struct. A function whose body is one value is a one-line def, `def double(n: Int) -> Int = n * 2`; `agentica fmt` writes it so. Return early on bad cases, so the main path stays flat:
 
 ```agentica {mode="check"}
 # bad
@@ -243,9 +239,7 @@ struct User
   name: String
 end
 
-def greet(user: User) -> String
-  return "hello #{user.name}"
-end
+def greet(user: User) -> String = "hello #{user.name}"
 
 def main() -> Void
   puts(greet(User(name: "Ana")))
@@ -323,9 +317,7 @@ Use a `Bool` as it is, with `and`, `or` and `not`, never compared with `true` or
 
 ```agentica {mode="check"}
 # good
-def allowed?(admin: Bool, banned: Bool) -> Bool
-  return admin and not banned
-end
+def allowed?(admin: Bool, banned: Bool) -> Bool = admin and not banned
 
 def main() -> Void
   puts(allowed?(true, false))
@@ -472,13 +464,9 @@ Use a pipe for two or more `|>` steps on one value. Start with the value, and pu
 
 ```agentica {mode="check"}
 # good
-def shout(text: String) -> String
-  return text.upcase
-end
+def shout(text: String) -> String = text.upcase
 
-def wrap(text: String, mark: String) -> String
-  return "#{mark}#{text}#{mark}"
-end
+def wrap(text: String, mark: String) -> String = "#{mark}#{text}#{mark}"
 
 def banner(text: String) -> String
   return (
@@ -509,9 +497,7 @@ A function that can fail returns a `Result` and passes errors up with `try`. Use
 
 ```agentica {mode="check"}
 # bad
-def double_text(text: String) -> Int
-  return text.to_i! * 2
-end
+def double_text(text: String) -> Int = text.to_i! * 2
 
 def main() -> Void
   puts(double_text("21"))
@@ -558,9 +544,7 @@ Build text with interpolation, not by joining pieces with `+` and `.to_s`. To wr
 
 ```agentica {mode="check"}
 # bad
-def line(name: String, count: Int) -> String
-  return name + ": " + count.to_s + " items"
-end
+def line(name: String, count: Int) -> String = name + ": " + count.to_s + " items"
 
 def main() -> Void
   puts(line("cart", 3))
@@ -569,9 +553,7 @@ end
 
 ```agentica {mode="check"}
 # good
-def line(name: String, count: Int) -> String
-  return "#{name}: #{count} items"
-end
+def line(name: String, count: Int) -> String = "#{name}: #{count} items"
 
 def help() -> String
   return <<~TEXT

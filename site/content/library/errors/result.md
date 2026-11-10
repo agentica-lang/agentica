@@ -34,9 +34,7 @@ error(message: String) -> Result[T]
 The type comes from an annotation, a return type, a parameter or a field.
 
 ```agentica
-def fail_now() -> Result[Int]
-  return error("broken")
-end
+def fail_now() -> Result[Int] = error("broken")
 
 def main() -> Void
   puts(fail_now())

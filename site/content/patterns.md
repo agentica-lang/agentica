@@ -13,9 +13,7 @@ def total(prices: List[Int], discount: Fn[Int, Int]) -> Int
   return prices.reduce(0) do |sum, price| sum + discount.call(price) end
 end
 
-def half(price: Int) -> Int
-  return price / 2
-end
+def half(price: Int) -> Int = price / 2
 
 def main() -> Void
   puts(total([100, 50], &half))
@@ -149,9 +147,7 @@ end
 A function takes an `Fn` and returns a new one. A block can only follow a call, so `wrap` returns it.
 
 ```agentica
-def wrap(f: Fn[Int, Int]) -> Fn[Int, Int]
-  return f
-end
+def wrap(f: Fn[Int, Int]) -> Fn[Int, Int] = f
 
 def logged(f: Fn[Int, Int]) -> Fn[Int, Int]
   return wrap() do |x: Int|
@@ -180,17 +176,11 @@ struct Bus
   handlers: List[Fn[String, String]]
 end
 
-def subscribe(bus: Bus, handler: Fn[String, String]) -> Bus
-  return bus.with(handlers: bus.handlers.push(handler))
-end
+def subscribe(bus: Bus, handler: Fn[String, String]) -> Bus = bus.with(handlers: bus.handlers.push(handler))
 
-def publish(bus: Bus, message: String) -> List[String]
-  return bus.handlers.map do |handler| handler.call(message) end
-end
+def publish(bus: Bus, message: String) -> List[String] = bus.handlers.map do |handler| handler.call(message) end
 
-def shout(text: String) -> String
-  return text.upcase
-end
+def shout(text: String) -> String = text.upcase
 
 def main() -> Void
   puts(Bus(handlers: []) |> subscribe(&shout) |> publish("hello"))

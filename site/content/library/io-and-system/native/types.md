@@ -251,9 +251,7 @@ extern "/opt/plugin/libplugin.so"
   compute def read(fn: C.Function, handle: Handle, buf: C.Pointer, size: C.Int64) -> C.Int64
 end
 
-def slot(api: C.Pointer, index: Int) -> C.Pointer
-  return Native.get_pointer(api, index * 8)
-end
+def slot(api: C.Pointer, index: Int) -> C.Pointer = Native.get_pointer(api, index * 8)
 
 def main() -> Void
   api = plugin_api(1)
@@ -285,9 +283,7 @@ extern "libsqlite3.so.0"
   def sqlite3_create_collation(db: Db, name: C.String, enc: C.Int32, arg: C.Pointer, cmp: Compare) -> C.Int32
 end
 
-def by_length(arg: C.Pointer, a_len: Int, a: C.Pointer, b_len: Int, b: C.Pointer) -> Int
-  return a_len - b_len
-end
+def by_length(arg: C.Pointer, a_len: Int, a: C.Pointer, b_len: Int, b: C.Pointer) -> Int = a_len - b_len
 
 def main() -> Void
   db = sqlite3_open(":memory:").db

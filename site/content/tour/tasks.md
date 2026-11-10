@@ -9,9 +9,7 @@ description: Run work at the same time with lightweight tasks.
 `Task.spawn` starts a function in a lightweight task, with one argument, or with none for a function that takes no parameter. `Task.await` waits for it and gives the result.
 
 ```agentica
-def square(n: Int) -> Int
-  return n * n
-end
+def square(n: Int) -> Int = n * n
 
 def main() -> Void
   task = Task.spawn(&square, 7)
@@ -60,9 +58,7 @@ struct Job
   times: Int
 end
 
-def run(job: Job) -> String
-  return "#{job.name.upcase} x#{job.times}"
-end
+def run(job: Job) -> String = "#{job.name.upcase} x#{job.times}"
 
 def main() -> Void
   t = Task.spawn(&run, Job(name: "go", times: 2))

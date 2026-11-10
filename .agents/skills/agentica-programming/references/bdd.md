@@ -51,9 +51,7 @@ to `BDD.run`. Other files are imported from it.
 ```ruby
 import BDD from "std/bdd"
 
-def remember(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  return BDD.set(ctx, "count", JSON.from(args[0].to_i!))
-end
+def remember(ctx: BDD.Context, args: List[String]) -> BDD.Context = BDD.set(ctx, "count", JSON.from(args[0].to_i!))
 
 def check_count(ctx: BDD.Context, args: List[String]) -> BDD.Context
   count = JSON.int(BDD.get(ctx, "count").unwrap!).unwrap!

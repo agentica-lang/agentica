@@ -25,9 +25,7 @@ A block is the function too: `Task.spawn do ... end` runs the block as a task, l
 - `Task.spawn` moves nothing: a handle in the argument, or in a struct or list in it, stays with the caller. To give it away, use `Task.spawn_owning`, which also takes such a struct or list.
 
 ```agentica
-def greet(name: String) -> String
-  return "hi #{name}"
-end
+def greet(name: String) -> String = "hi #{name}"
 
 def main() -> Void
   task = Task.spawn(&greet, "Ana")
@@ -96,9 +94,7 @@ Waits for the task and gives its result. Waiting again gives the same value, and
 - Awaiting yourself, directly or through other tasks (a handle can arrive over a [Channel](/library/concurrency/channel/), or inside a closure that captures it), stops with `RUNTIME-TASK-AWAIT-CYCLE`.
 
 ```agentica
-def parse(text: String) -> Result[Int]
-  return ok(100 / text.to_i!)
-end
+def parse(text: String) -> Result[Int] = ok(100 / text.to_i!)
 
 def main() -> Void
   task = Task.spawn(&parse, "0")
@@ -164,9 +160,7 @@ done 42
 For a `Result` task, `Await.Done` holds the `Result`: match it in a second `case`.
 
 ```agentica
-def parse(text: String) -> Result[Int]
-  return ok(100 / text.to_i!)
-end
+def parse(text: String) -> Result[Int] = ok(100 / text.to_i!)
 
 def main() -> Void
   task = Task.spawn(&parse, "4")
@@ -320,9 +314,7 @@ second
 A block can run in a task too, when you pass it through a function parameter:
 
 ```agentica
-def start(f: Fn[Int, Int]) -> Task[Int]
-  return Task.spawn(f, 20)
-end
+def start(f: Fn[Int, Int]) -> Task[Int] = Task.spawn(f, 20)
 
 def main() -> Void
   task = start() do |n| n + 1 end
@@ -496,9 +488,7 @@ Gives how many tasks have not ended yet, not counting `main`.
 - The tasks `std/http` starts for an `HttpClient` never count, and `Test.test` does not see them as leftovers.
 
 ```agentica
-def wait_for(task: Task[Int]) -> Int
-  return Task.await(task)
-end
+def wait_for(task: Task[Int]) -> Int = Task.await(task)
 
 def nap(ms: Int) -> Int
   Task.sleep(ms)
@@ -531,9 +521,7 @@ Task.unobserved_crash() -> Result[String]
 Gives `ok(text)` with the first crash that no `Task.await` has seen, else `error("no unobserved crash")`. Asking does not count as seeing.
 
 ```agentica
-def boom(n: Int) -> Int
-  return 10 / n
-end
+def boom(n: Int) -> Int = 10 / n
 
 def main() -> Void
   puts(Task.unobserved_crash().ok?)

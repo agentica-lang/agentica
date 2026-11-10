@@ -151,9 +151,7 @@ codec.members() -> List[StructMember]
 A generic function may call `JSON.encode` and `JSON.from` on a value of its type parameter `T` (or of `List[T]`, `Map[String, T]`, `Optional[T]`, or a generic struct or enum of `T`): each call of the function then checks that the type it binds to `T` can be written as JSON, and a call with an `Fn`, a `Bytes` or a `Task` is `CHECK-NOT-ENCODABLE` at that argument. A generic function that passes its `T` on carries the same check to its own callers.
 
 ```agentica
-def to_json[T](value: T) -> String
-  return JSON.encode(value)
-end
+def to_json[T](value: T) -> String = JSON.encode(value)
 
 def main() -> Void
   puts(to_json([1, 2]))
@@ -174,13 +172,9 @@ struct User
   age: Int
 end
 
-def body_as[T](body: String, codec: Codec[T]) -> Result[T]
-  return codec.decode(body)
-end
+def body_as[T](body: String, codec: Codec[T]) -> Result[T] = codec.decode(body)
 
-def show[T](codec: Codec[T], value: T) -> String
-  return codec.encode(value)
-end
+def show[T](codec: Codec[T], value: T) -> String = codec.encode(value)
 
 def main() -> Void
   user = body_as("{\"name\": \"Ana\", \"age\": 25}", User.codec).unwrap!

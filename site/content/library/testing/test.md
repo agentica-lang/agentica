@@ -41,9 +41,7 @@ def test_parses_a_port() -> Result[Void]
   return Test.eq(parse_port(" 80 "), ok(80))
 end
 
-def test_rejects_zero() -> Result[Void]
-  return Test.error?(parse_port("0"))
-end
+def test_rejects_zero() -> Result[Void] = Test.error?(parse_port("0"))
 ```
 
 A file with both `main` and `test_` functions is `CHECK-TEST-MAIN`, so a forgotten `main` never hides tests; with the `main` form, name helpers without the `test_` prefix. Without `main`, a test function takes no parameters and its result is written `Result[Void]` (a type alias of it does not count); anything else is `CHECK-TEST-SIGNATURE`, and a function named just `test_` is `CHECK-TEST-NAME`. `agentica check` applies these rules to `*_test.agc` files. Run as a normal program, a test file with no `main` is `CHECK-MAIN`; in a file of any other name, `test_` functions are ordinary functions.

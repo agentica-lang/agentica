@@ -245,9 +245,7 @@ operate on `Result[Void]`. The timed `Task.await(task, timeout_ms)` on a
 ### Default parameter values
 
 ```agentica
-def join(xs: List[String], sep: String = ", ") -> String
-  return xs.join(sep)
-end
+def join(xs: List[String], sep: String = ", ") -> String = xs.join(sep)
 
 join(["a", "b"])        # a, b
 join(["a", "b"], "-")   # a-b

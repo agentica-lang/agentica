@@ -16,6 +16,4 @@ end
 
 # before a doc block
 ## A doc.
-def double(n: Int) -> Int
-  return n * 2
-end
+def double(n: Int) -> Int = n * 2

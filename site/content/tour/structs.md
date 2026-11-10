@@ -85,9 +85,7 @@ struct Account
   balance: Int
 end
 
-def deposit(account: Account, amount: Int) -> Account
-  return account.with(balance: account.balance + amount)
-end
+def deposit(account: Account, amount: Int) -> Account = account.with(balance: account.balance + amount)
 
 def main() -> Void
   account = Account(owner: "Bob", balance: 10)
@@ -288,9 +286,7 @@ struct Box[T]
   value: T
 end
 
-def total(box: Box[List[Int]]) -> Int
-  return box.value.sum
-end
+def total(box: Box[List[Int]]) -> Int = box.value.sum
 
 def main() -> Void
   puts(total(Box(value: [1, 2, 3])))
@@ -327,9 +323,7 @@ struct Rect
   height: Int
 end
 
-def area(r: Rect) -> Int
-  return r.width * r.height
-end
+def area(r: Rect) -> Int = r.width * r.height
 
 def main() -> Void
   puts(area(Rect(width: 3, height: 4)))

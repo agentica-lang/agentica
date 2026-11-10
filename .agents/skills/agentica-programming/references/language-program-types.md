@@ -212,10 +212,12 @@ end
   or at its end. A `Nil` function returns `nil` explicitly. A statement after a
   `return` is `CHECK-UNREACHABLE-CODE`.
 - A one-line def, `def double(x: Int) -> Int = x * 2`, is the def with
-  `return x * 2` as its body. The expression starts on the line of `=` (it goes
-  on only inside parentheses or a block, or on a line that starts with `.name`)
-  and needs the return type; not for `Void` (`main` included), `case` or `if`
+  `return x * 2` as its body; `agentica fmt` writes a def whose body is one
+  `return` this way when it fits and no comment sits from its `def` line to its
+  `end` line. The expression starts on the line of `=` (it goes on only inside
+  parentheses or a block, or on a line that starts with `.name`) and needs the
+  return type; not for `Void` (`main` included), `case` or `if`
   (`PARSE-UNEXPECTED-TOKEN`). One-line defs may follow each other with no blank
   line, as constants; next to any other declaration the blank line stays
-  (`PARSE-MISSING-BLANK-LINE`), except right after an import. In an `extern`
-  block `= "name"` is the C name instead.
+  (`PARSE-MISSING-BLANK-LINE`), except right
+  after an import. In an `extern` block `= "name"` is the C name instead.

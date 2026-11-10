@@ -353,9 +353,7 @@ end
 A task waiting on a channel always holds a timer, so tasks waiting for each other end with timeout errors instead of hanging.
 
 ```agentica
-def wait_for(inbox: Channel[Int]) -> Result[Int]
-  return inbox.recv(20)
-end
+def wait_for(inbox: Channel[Int]) -> Result[Int] = inbox.recv(20)
 
 def main() -> Void
   inbox: Channel[Int] = Channel.new(1)

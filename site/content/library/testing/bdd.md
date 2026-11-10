@@ -284,9 +284,7 @@ Registers a cleanup that runs when the scenario ends, whether it passed, failed 
 ```agentica {mode="check"}
 import BDD from "std/bdd"
 
-def remove(path: String) -> Result[Void]
-  return Path.remove(path, 5000)
-end
+def remove(path: String) -> Result[Void] = Path.remove(path, 5000)
 
 def make_folder(ctx: BDD.Context, args: List[String]) -> BDD.Context
   path = args[0]
@@ -316,9 +314,7 @@ def check_rows(ctx: BDD.Context, args: List[String]) -> BDD.Context
   return BDD.assert(ctx, rows.size == 3, "expected a header and two rows")
 end
 
-def send_body(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  return BDD.when_line(ctx, BDD.doc_string(ctx))
-end
+def send_body(ctx: BDD.Context, args: List[String]) -> BDD.Context = BDD.when_line(ctx, BDD.doc_string(ctx))
 
 def main() -> Void
   BDD.run([BDD.step("the table has two rows:", &check_rows), BDD.step("I send the record:", &send_body)])

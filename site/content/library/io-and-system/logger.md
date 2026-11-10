@@ -33,9 +33,7 @@ In the example, the console handler is at `info`. So `enabled?` is false for `de
 ```agentica
 import Logger from "std/logger"
 
-def count_lines() -> Int
-  return 3
-end
+def count_lines() -> Int = 3
 
 def main() -> Void
   Logger.set_level(LogLevel.Debug)

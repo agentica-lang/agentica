@@ -15,13 +15,9 @@ export struct Square
   side: Int
 end
 
-export def area(s: Square) -> Int
-  return s.side * s.side
-end
+export def area(s: Square) -> Int = s.side * s.side
 
-def secret() -> Int
-  return 42
-end
+def secret() -> Int = 42
 ```
 
 ## File layout
@@ -41,13 +37,9 @@ A blank line goes before each declaration after the first.
 A private function before an exported one is `CHECK-DECL-ORDER`:
 
 ```agentica {expect="CHECK-DECL-ORDER"}
-def secret() -> Int
-  return 42
-end
+def secret() -> Int = 42
 
-export def reveal() -> Int
-  return secret()
-end
+export def reveal() -> Int = secret()
 
 def main() -> Void
   puts(reveal())

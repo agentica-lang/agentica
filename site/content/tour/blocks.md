@@ -113,9 +113,7 @@ end
 The last parameter of your function must be a `Fn`. The block becomes that argument.
 
 ```agentica
-def twice(value: Int, f: Fn[Int, Int]) -> Int
-  return f.call(f.call(value))
-end
+def twice(value: Int, f: Fn[Int, Int]) -> Int = f.call(f.call(value))
 
 def main() -> Void
   result = twice(3) do |n| n + 10 end
@@ -132,9 +130,7 @@ end
 A block always follows a call; there are no standalone lambdas. To keep a block in a variable, pass it to a function that returns it:
 
 ```agentica
-def keep(f: Fn[Int, Int]) -> Fn[Int, Int]
-  return f
-end
+def keep(f: Fn[Int, Int]) -> Fn[Int, Int] = f
 
 def main() -> Void
   add_one = keep() do |n| n + 1 end

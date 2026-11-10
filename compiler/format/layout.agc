@@ -314,6 +314,24 @@ def decl_items(c: Context, decl: Ast.Decl) -> List[Item]
   return items.set(at, items[at].with(one_line: one_line, gap: one_line and form.none?))
 end
 
+# A def with a body that can be a one-line def: it returns a value (not Void, so never `main`), its body is one
+# `return value`, and no comment sits from its `def` line to its `end` line, where the one line would lose it. Whether
+# the value fits on the line is read from the layout (one_line_form), not from the source, so a value that the source
+# spreads over lines and the layout joins is a one-line def already on the first run.
+def one_line_body?(c: Context, node: Ast.FunctionDecl) -> Bool
+  return false if node.native.some? or node.body.size != 1 or not written?(node.result.span)
+
+  return false if node.result.name == "Void" and node.result.args.size == 0
+
+  case node.body[0]
+    Ast.Stmt.Return(stmt) -> return false if stmt.value.none?
+    _ -> return false
+  end
+
+  last = last_line(c, node.span)
+  return not (node.span.start.line..last).to_a.any? do |line: Int| c.noted.include?(line) end
+end
+
 # A one-line def of the source, exported or not.
 def one_line_def?(decl: Ast.Decl) -> Bool
   case decl
@@ -323,15 +341,17 @@ def one_line_def?(decl: Ast.Decl) -> Bool
   end
 end
 
-# The one line of a one-line def that starts `column` columns in, when it stays one: laid out with no width limit it
-# is one line, and that line fits. Otherwise, or for any other declaration, none: the def is written with a body, so
-# the output always parses and formatting again changes nothing. The choice is made before the layout, since a
-# one-line def written with a body needs an empty line next to another one-line def (sequence).
+# The one line of a def that starts `column` columns in, when it is written as one: a one-line def, or a def whose
+# body is one `return value` (one_line_body?), laid out with no width limit is one line, and that line fits.
+# Otherwise, or for any other declaration, none: the def is written with a body, so the output always parses and
+# formatting again changes nothing. The choice is made before the layout, since a one-line def written with a body
+# needs an empty line next to another one-line def (sequence); a def with a body written as one line keeps the empty
+# lines around it.
 def one_line_form(c: Context, decl: Ast.Decl, column: Int) -> Optional[Docs.Doc]
   case decl
     Ast.Decl.Export(node) -> return one_line_form(c, node.declaration, column + EXPORT.length)
     Ast.Decl.Function(node) ->
-      return none if not node.expression
+      return none if not node.expression and not one_line_body?(c, node)
 
       doc = one_line_doc(c, node)
       line = Docs.render(doc, UNLIMITED).strip

@@ -6,12 +6,10 @@ description: Define functions, return values, recursion and function values.
 
 ## Define a function
 
-`def` defines a function. Every parameter and the result need a type.
+`def` defines a function. Every parameter and the result need a type. A function whose body is one value is written on one line, after `=`; a longer body goes on the lines between the signature and `end` (see `return` and One-line functions below).
 
 ```agentica
-def greet(name: String) -> String
-  return "Hello, #{name}!"
-end
+def greet(name: String) -> String = "Hello, #{name}!"
 
 def main() -> Void
   puts(greet("Ana"))
@@ -78,7 +76,7 @@ end
 1 apple
 ```
 
-The value starts on the line of `=`; it can go on to more lines as any expression can: inside parentheses or a block, or on a next line that starts with `.name`. The result type is still required. A `Void` function has no value to give, so it cannot use this form, and neither can `case` or `if`, which are statements. One-line functions may follow each other with no empty line between them, as constants can; next to any other declaration the empty line is still needed, except right after an import, as for every declaration. `agentica fmt` keeps a one-line function on one line when it fits, and writes it with `return` and `end` when it does not, with an empty line on both sides. In an `extern` block, `= "name"` after a signature is the C name of the function instead (see [Native code](/library/io-and-system/native/)).
+The value starts on the line of `=`; it can go on to more lines as any expression can: inside parentheses or a block, or on a next line that starts with `.name`. The result type is still required. A `Void` function has no value to give, so it cannot use this form, and neither can `case` or `if`, which are statements. One-line functions may follow each other with no empty line between them, as constants can; next to any other declaration the empty line is still needed, except right after an import, as for every declaration. `agentica fmt` writes a function whose body is one `return` as a one-line function when it fits and no comment sits from its `def` line to its `end` line, and writes a one-line function with `return` and `end` when it does not fit, with an empty line on both sides. In an `extern` block, `= "name"` after a signature is the C name of the function instead (see [Native code](/library/io-and-system/native/)).
 
 ## Void functions
 
@@ -157,13 +155,9 @@ end
 `&name` is a function as a value. Its type is `Fn[...]`: the parameter types, then the result type. Call it with `.call(...)`.
 
 ```agentica
-def double(n: Int) -> Int
-  return n * 2
-end
+def double(n: Int) -> Int = n * 2
 
-def apply(f: Fn[Int, Int], value: Int) -> Int
-  return f.call(value)
-end
+def apply(f: Fn[Int, Int], value: Int) -> Int = f.call(value)
 
 def main() -> Void
   f: Fn[Int, Int] = &double
@@ -188,9 +182,7 @@ struct Counter
   next: Fn[Int, Int]
 end
 
-def succ(n: Int) -> Int
-  return n + 1
-end
+def succ(n: Int) -> Int = n + 1
 
 def main() -> Void
   counter = Counter(next: &succ)
@@ -209,9 +201,7 @@ end
 `x |> f(a)` means `f(x, a)`: the left value becomes the first argument.
 
 ```agentica
-def parse(text: String) -> Result[Int]
-  return text.to_i
-end
+def parse(text: String) -> Result[Int] = text.to_i
 
 def validate(n: Int) -> Result[Int]
   return error("negative") if n < 0
@@ -219,9 +209,7 @@ def validate(n: Int) -> Result[Int]
   return ok(n)
 end
 
-def add(a: Int, b: Int) -> Int
-  return a + b
-end
+def add(a: Int, b: Int) -> Int = a + b
 
 def load(text: String) -> Result[Int]
   return (
@@ -272,9 +260,7 @@ A parameter can end with `= value`. A call may leave it out.
 - Arguments fill the parameters from the left. A wrong count is `CHECK-ARITY`, such as `expects 1 to 2 arguments`.
 
 ```agentica
-def join(words: List[String], sep: String = ", ") -> String
-  return words.join(sep)
-end
+def join(words: List[String], sep: String = ", ") -> String = words.join(sep)
 
 def each_line(path: String, timeout_ms: Int = 1000, f: Fn[String, Void]) -> Void
   f.call("#{path} after #{timeout_ms} ms")
@@ -305,9 +291,7 @@ A default can name a constant, so one value serves many functions:
 ```agentica
 LIMIT = 2
 
-def first(words: List[String], count: Int = LIMIT) -> List[String]
-  return words.take(count)
-end
+def first(words: List[String], count: Int = LIMIT) -> List[String] = words.take(count)
 
 def main() -> Void
   puts(first(["a", "b", "c"]))
@@ -321,13 +305,9 @@ end
 ```
 
 ```agentica {expect="CHECK-DEFAULT-VALUE"}
-def next_id() -> Int
-  return 1
-end
+def next_id() -> Int = 1
 
-def label(id: Int = next_id()) -> String
-  return "item #{id}"
-end
+def label(id: Int = next_id()) -> String = "item #{id}"
 
 def main() -> Void
   puts(label())
@@ -380,9 +360,7 @@ banana
 In `first_or(["ana", "ben"], "none")` the type `T` is `String`, from the first argument. In `first_or([], 0)` the empty list says nothing, so `T` is `Int` from the `0`, and the list is checked last. The result type of the call can also fix `T`, as in `xs: List[Int] = empty_of()` for `def empty_of[T]() -> List[T]`. The block comes last: its parameter types come from `T`, and its result fixes the type parameters that only the result of the `Fn` mentions. A parameter still open is `CHECK-ENUM-TYPE-INFERENCE`. A parameter whose type has `T` takes a default as any other, such as `rest: List[T] = []` or `extra: Optional[T] = none`; a call must still show `T` through another argument or its expected type.
 
 ```agentica {expect="CHECK-ENUM-TYPE-INFERENCE"}
-def empty_of[T]() -> List[T]
-  return []
-end
+def empty_of[T]() -> List[T] = []
 
 def main() -> Void
   xs = empty_of()
@@ -392,9 +370,7 @@ end
 Inside the body, `T` can be any type, so the body can only store it, return it and pass it on. Comparing, adding, printing or reading a field of a `T` value is an error, such as `CHECK-TYPE-MISMATCH` for `==`. To act on the items, take a function, as `max_by` does with `key`. `JSON.encode` and `JSON.from` are the exception: they work on a `T` value, and each call checks that the type it gives `T` can be written as JSON ([JSON](/library/text-and-data/json/)).
 
 ```agentica {expect="CHECK-TYPE-MISMATCH"}
-def same[T](a: T, b: T) -> Bool
-  return a == b
-end
+def same[T](a: T, b: T) -> Bool = a == b
 
 def main() -> Void
   puts(same(1, 1))
