@@ -13,6 +13,7 @@ import pytest
 
 from tests.agentica_test import cli, run, vm_environment
 from tests.module_support import write_module_files
+from tests.spec_support import check_paths
 
 # No AGENTICA_PATH roots, no user data folder (XDG_DATA_HOME, or LOCALAPPDATA on Windows) and no package cache
 # (XDG_CACHE_HOME), so only the files of a case resolve.
@@ -63,29 +64,16 @@ class TestModuleRules:
             groups.setdefault(env, []).append(path)
         problems = {}
         for env, paths in groups.items():
-            paths = list(dict.fromkeys(paths))
-            result = run(cli() + ["--json", "check", *paths], cwd=self.cwd,
-                         env=vm_environment({**HERMETIC, **dict(env)}))
-            problems.update(((env, path), problem) for path, problem in zip(paths, self.problems_of(result, paths)))
+            found = check_paths(list(dict.fromkeys(paths)), cwd=self.cwd, env=vm_environment({**HERMETIC, **dict(env)}))
+            problems.update(((env, path), problem) for path, problem in found.items())
+        for problem in problems.values():
+            # Internal names (with the module mangling '@') must not reach a user in the message or the help.
+            assert "@" not in json.dumps({key: (problem or {}).get(key) for key in ("message", "help")})
         return [(directory, problems[(env, path)]) for directory, path, env in jobs]
 
     def check(self, files, root="root.agc", env=None):
         """One check (see checks()): its (directory, problem)."""
         return self.checks([(files, root, env)])[0]
-
-    def problems_of(self, result, paths):
-        """The diagnostic of each of PATHS, or None, from the check RESULT of them all."""
-        assert result.code in (0, 1), result.stderr
-        if len(paths) == 1:
-            assert result.code or result.stdout == '{"ok":true}\n'
-            problems = [json.loads(result.stderr) if result.code else None]
-        else:
-            found = {entry["file"]: entry.get("diagnostic") for entry in json.loads(result.stdout)["files"]}
-            problems = [found[path] for path in paths]
-        for problem in problems:
-            # Internal names (with the module mangling '@') must not reach a user in the message or the help.
-            assert "@" not in json.dumps({key: (problem or {}).get(key) for key in ("message", "help")})
-        return problems
 
     def assert_rejected(self, checked, code, line=None, file=None):
         """The check fails with `code`, at `line`, and in `file` (a name of the folder) when given."""

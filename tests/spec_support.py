@@ -25,13 +25,46 @@ def _program_key(program: str | Mapping[str, str]) -> object:
     return program if isinstance(program, str) else tuple(sorted(program.items()))
 
 
+# Windows refuses a command line over 32,767 characters (WinError 206); a few hundred temp paths pass it.
+COMMAND_LINE_BUDGET = 16_000
+
+
+def _command_lines(paths: list[str]) -> list[list[str]]:
+    """Split PATHS into groups whose joined length stays under COMMAND_LINE_BUDGET."""
+    groups: list[list[str]] = []
+    size = COMMAND_LINE_BUDGET
+    for path in paths:
+        if size + len(path) + 1 > COMMAND_LINE_BUDGET:
+            groups.append([])
+            size = 0
+        groups[-1].append(path)
+        size += len(path) + 1
+    return groups
+
+
+def check_paths(paths: list[str], cwd: Path | None = None, env: dict[str, str] | None = None) -> dict[str, object]:
+    """`--json check` of PATHS in as few calls as the command-line budget allows: each path's diagnostic, or None."""
+    found = {}
+    for group in _command_lines(paths):
+        result = run(cli() + ["--json", "check", *group], cwd=cwd, env=env)
+        assert result.code in (0, 1), result.stderr
+        if len(group) == 1:
+            # One file gets the one-file form: the diagnostic on stderr, or {"ok":true} on stdout.
+            assert result.code or result.stdout == '{"ok":true}\n', result.stdout
+            found[group[0]] = json.loads(result.stderr) if result.code else None
+        else:
+            found.update({entry["file"]: entry.get("diagnostic") for entry in json.loads(result.stdout)["files"]})
+    return found
+
+
 def check_many(programs: Iterable[str | Mapping[str, str]], directory: Path, root: str = "main.agc") -> Check:
     """Check every program with one `--json check` call and return a Check that looks their diagnostics up.
 
     A program is its source text, or a map of file names to texts that holds ROOT. Each one goes in a folder of its
     own under DIRECTORY with the name ROOT and is listed as a root of its own, so it gets the diagnostic that a
     `--json check` of that file alone gives, file field included (tests/test_cli_check.py has the multi-file form).
-    One process instead of one per case is most of the time saved. The Check takes a program of the batch and ROOT,
+    One process instead of one per case is most of the time saved (a few processes when the paths would pass the
+    Windows command-line limit). The Check takes a program of the batch and ROOT,
     and gives its diagnostic or None; any other program is a KeyError. A program listed twice is checked once.
     """
     roots = {}
@@ -46,13 +79,7 @@ def check_many(programs: Iterable[str | Mapping[str, str]], directory: Path, roo
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text, encoding="utf-8")
         roots[key] = str(folder / root)
-    result = run(cli() + ["--json", "check", *roots.values()])
-    assert result.code in (0, 1), result.stderr
-    if len(roots) == 1:
-        # One file gets the one-file form: the diagnostic on stderr, or {"ok":true} on stdout.
-        found = {path: json.loads(result.stderr) if result.code else None for path in roots.values()}
-    else:
-        found = {entry["file"]: entry.get("diagnostic") for entry in json.loads(result.stdout)["files"]}
+    found = check_paths(list(roots.values()))
     diagnostics = {key: found[path] for key, path in roots.items()}
 
     def check(program: str | Mapping[str, str], name: str = root) -> dict[str, object] | None:
