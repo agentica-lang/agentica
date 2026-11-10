@@ -4,9 +4,8 @@ types. `check` loads no library, so these cases hold on every system. Tests asse
 """
 import json
 
-import pytest
-
 from tests.agentica_test import cli, run
+from tests.spec_support import Batch
 
 VALID = """extern "libm.so.6"
   ## The cosine of x.
@@ -45,17 +44,34 @@ def problem_of(result):
     return json.loads(result.stderr.strip().split("\n")[-1])
 
 
+def diagnostic(result):
+    """The diagnostic of a check RESULT of one file, or None when it is ok."""
+    if result.code == 0:
+        assert result.stdout == '{"ok":true}\n'
+        return None
+    return problem_of(result)
+
+
 def at(problem):
+    assert problem is not None, "the program checks"
     start, end = problem["range"]["start"], problem["range"]["end"]
     return problem["code"], (start["line"], start["column"]), (end["line"], end["column"])
 
 
-def assert_checks(result, code, start, stop):
-    """A check RESULT is ok when CODE is None, else the diagnostic CODE from START to STOP."""
+def assert_checks(problem, code, start, stop):
+    """PROBLEM, a diagnostic or None, is None when CODE is None, else the diagnostic CODE from START to STOP."""
     if code is None:
-        assert (result.code, result.stdout) == (0, '{"ok":true}\n')
+        assert problem is None, problem
     else:
-        assert at(problem_of(result)) == (code, start, stop)
+        assert at(problem) == (code, start, stop)
+
+
+# The programs of the tables, as program.agc; `checked(program)` gives the diagnostic of one, or None.
+BATCH = Batch("program.agc")
+table = BATCH.table
+checked = BATCH.fixture()
+
+IN_LIBC = 'extern "libc.so.6"\n  %s\nend\n'
 
 
 def test_an_extern_block_declares_functions_that_check_like_any_other(tmp_path):
@@ -77,7 +93,7 @@ def test_a_private_extern_function_is_not_exported(tmp_path):
     assert at(problem_of(check(source(tmp_path, text))))[0].startswith("CHECK-")
 
 
-@pytest.mark.parametrize("signature, start, stop", [
+@table("signature, start, stop", [
     ("def f(x: Float) -> C.Int32", (2, 12), (2, 17)),
     ("def f(x: C.Int32) -> Int", (2, 24), (2, 27)),
     ("def f(x: C.Char) -> Void", (2, 12), (2, 18)),
@@ -86,10 +102,9 @@ def test_a_private_extern_function_is_not_exported(tmp_path):
     ("def f(x: List[C.Int32]) -> Void", (2, 12), (2, 25)),
     ("def f(x: C.Int) -> Void", (2, 12), (2, 17)),
     ("def f(x: C.Int32) -> C.Int", (2, 24), (2, 29)),
-])
-def test_only_c_types_cross_an_extern_signature(tmp_path, signature, start, stop):
-    text = 'extern "libc.so.6"\n  %s\nend\n' % signature
-    assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-TYPE", start, stop)
+], IN_LIBC)
+def test_only_c_types_cross_an_extern_signature(checked, signature, start, stop):
+    assert at(checked(IN_LIBC % signature)) == ("PARSE-EXTERN-TYPE", start, stop)
 
 
 FLOATS = """extern "/opt/libpeer.so"
@@ -104,17 +119,13 @@ end
 
 
 # C.Float is a 32-bit float in C and a Float to the checker, as a parameter, a result and an out parameter.
-@pytest.mark.parametrize("body, code, start, stop", [
+@table("body, code, start, stop", [
     ("  x: Float = scalef(1.5, 2.0) + half(3.0).half\n  puts(x)", None, None, None),
     ("  puts(scalef(1, 2.0))", "CHECK-TYPE-MISMATCH", (7, 15), (7, 16)),
     ("  n: Int = scalef(1.0, 2.0)", "CHECK-TYPE-MISMATCH", (7, 12), (7, 28)),
-])
-def test_c_float_is_a_float_to_the_checker(tmp_path, body, code, start, stop):
-    result = check(source(tmp_path, FLOATS % body))
-    if code is None:
-        assert (result.code, result.stdout) == (0, '{"ok":true}\n')
-    else:
-        assert at(problem_of(result)) == (code, start, stop)
+], FLOATS)
+def test_c_float_is_a_float_to_the_checker(checked, body, code, start, stop):
+    assert_checks(checked(FLOATS % body), code, start, stop)
 
 
 INTEGERS = """extern "/opt/libpeer.so"
@@ -140,30 +151,29 @@ end
 
 # The integer types C.Int8, C.Int16, C.UInt8, C.UInt16, C.UInt32 and C.Long are Int to the checker as parameters,
 # results, out parameters, struct fields and (C.UInt32 and C.Long, which C does not promote) variadic parameters.
-@pytest.mark.parametrize("body, code, start, stop", [
+@table("body, code, start, stop", [
     ("  h = read_header(Packet(tag: -1, flags: 255, kind: 2, port: 80, oid: 4_000_000_000, length: 9))\n"
      "  n: Int = narrow(1, 2, 3, 4, 5, 6) + h.result.oid + h.size + h.code + wide(7) + vsum(2, 3, 4)\n  puts(n)",
      None, None, None),
     ("  puts(narrow(1, 2, 3, 4, 5.0, 6))", "CHECK-TYPE-MISMATCH", (17, 27), (17, 30)),
     ("  s: String = wide(1)", "CHECK-TYPE-MISMATCH", (17, 15), (17, 22)),
-])
-def test_the_integer_types_are_int_to_the_checker(tmp_path, body, code, start, stop):
-    assert_checks(check(source(tmp_path, INTEGERS % body)), code, start, stop)
+], INTEGERS)
+def test_the_integer_types_are_int_to_the_checker(checked, body, code, start, stop):
+    assert_checks(checked(INTEGERS % body), code, start, stop)
 
 
 # An integer type narrower than an int is promoted by C after ..., so it is refused there as C.Bool is; C has no
 # unsigned 64-bit or unsigned long type here: C.Int64 and C.Long carry the same bits, and the help says so.
-@pytest.mark.parametrize("signature, code, start, stop", [
+@table("signature, code, start, stop", [
     ("def f(a: C.Int32, ..., b: C.Int8) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 29), (2, 35)),
     ("def f(a: C.Int32, ..., b: C.Int16) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 29), (2, 36)),
     ("def f(a: C.Int32, ..., b: C.UInt8) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 29), (2, 36)),
     ("def f(a: C.Int32, ..., b: C.UInt16) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (2, 29), (2, 37)),
     ("def f(a: C.UInt64) -> Void", "PARSE-EXTERN-TYPE", (2, 12), (2, 20)),
     ("def f() -> C.ULong", "PARSE-EXTERN-TYPE", (2, 14), (2, 21)),
-])
-def test_promoted_and_missing_integer_types_are_refused(tmp_path, signature, code, start, stop):
-    problem = problem_of(check(source(tmp_path, 'extern "libc.so.6"\n  %s\nend\n' % signature)))
-    assert at(problem) == (code, start, stop)
+], IN_LIBC)
+def test_promoted_and_missing_integer_types_are_refused(checked, signature, code, start, stop):
+    assert at(checked(IN_LIBC % signature)) == (code, start, stop)
 
 
 MEMORY = """extern "/opt/libpeer.so"
@@ -185,7 +195,7 @@ end
 # The block form yields a C.Pointer and has the type of the block's value (a Result from a `try` in it included); the
 # block or function must take one C.Pointer. Native.from_string takes a String in place of the size, and
 # text.bytesize is an Int.
-@pytest.mark.parametrize("body, code, start, stop", [
+@table("body, code, start, stop", [
     ("  buf = Native.memory_pointer(16)\n  fill(buf, 4)\n  xs: List[Float] = Native.get_array_of_float32(buf, 0, 4)\n"
      "  n: Int = Native.get_uint8(buf, 0) + Native.get_int64(buf, 8)\n  p: C.Pointer = Native.get_pointer(buf, 8)\n"
      "  Native.put_array_of_int64(buf, 0, [1, 2])\n  Native.put_float32(buf, 0, 1.5)\n  Native.put_pointer(buf, 8, p)\n"
@@ -210,9 +220,9 @@ end
     ("  n = Native.from_string(3) do |buf| 1 end", "CHECK-TYPE-MISMATCH", (10, 26), (10, 27)),
     ('  n = Native.memory_pointer("x") do |buf| 1 end', "CHECK-TYPE-MISMATCH", (10, 29), (10, 32)),
     ('  s: String = "ab".bytesize', "CHECK-TYPE-MISMATCH", (10, 15), (10, 28)),
-])
-def test_owned_buffers_and_typed_memory_check_as_c_pointers(tmp_path, body, code, start, stop):
-    assert_checks(check(source(tmp_path, MEMORY % body)), code, start, stop)
+], MEMORY)
+def test_owned_buffers_and_typed_memory_check_as_c_pointers(checked, body, code, start, stop):
+    assert_checks(checked(MEMORY % body), code, start, stop)
 
 
 def test_c_int_is_refused_with_the_widths_to_write(tmp_path):
@@ -232,7 +242,7 @@ def test_an_extern_parameter_has_no_default(tmp_path):
     assert at(problem_of(check(source(tmp_path, text))))[:2] == ("PARSE-EXTERN-DEFAULT", (2, 11))
 
 
-@pytest.mark.parametrize("text, start", [
+@table("text, start", [
     ('extern "libc.so.6"\n  def abs(n: C.Int32) -> C.Int32\n    return 1\n  end\nend\n', (3, 5)),
     ('extern "libc.so.6"\n  def abs(n: C.Int32) -> C.Int32\n', (3, 1)),
     ('extern "libc.so.6" def abs(n: C.Int32) -> C.Int32\nend\n', (1, 20)),
@@ -240,47 +250,55 @@ def test_an_extern_parameter_has_no_default(tmp_path):
     ('extern "libc.so.6"\n  compute export def abs(n: C.Int32) -> C.Int32\nend\n', (2, 3)),
     ('extern "libc.so.6"\n  compute abs(n: C.Int32) -> C.Int32\nend\n', (2, 3)),
 ])
-def test_an_extern_block_holds_only_signatures(tmp_path, text, start):
-    assert at(problem_of(check(source(tmp_path, text))))[:2] == ("PARSE-UNEXPECTED-TOKEN", start)
+def test_an_extern_block_holds_only_signatures(checked, text, start):
+    assert at(checked(text))[:2] == ("PARSE-UNEXPECTED-TOKEN", start)
 
 
-@pytest.mark.parametrize("library, stop", [
+LIBRARY = 'extern %s\n  def abs(n: C.Int32) -> C.Int32\nend\n'
+
+
+@table("library, stop", [
     ('""', 10),
     ('"./libpeer.so"', 22),
     ('"lib/peer.so"', 21),
     ('"lib#{1}.so"', 20),
-])
-def test_a_library_is_a_system_name_or_an_absolute_path(tmp_path, library, stop):
-    text = 'extern %s\n  def abs(n: C.Int32) -> C.Int32\nend\n' % library
-    assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-LIBRARY", (1, 8), (1, stop))
+], LIBRARY)
+def test_a_library_is_a_system_name_or_an_absolute_path(checked, library, stop):
+    assert at(checked(LIBRARY % library)) == ("PARSE-EXTERN-LIBRARY", (1, 8), (1, stop))
+
+
+def load_program(before, local, library, *_):
+    return "%sdef main() -> Void\n%s  puts(Native.load(%s).ok?)\nend\n" % (before, local, library)
 
 
 # The library of Native.load is a string literal with the rule of an extern library, so the front end can resolve it
 # like one; anything else (a variable or a constant too) is CHECK-NATIVE-LOAD at the argument.
-@pytest.mark.parametrize("before, local, library, code", [
+@table("before, local, library, code", [
     ("", "", '"libm.so.6"', None),
     ("", "", '""', "CHECK-NATIVE-LOAD"),
     ("", '  name = "libm.so.6"\n', "name", "CHECK-NATIVE-LOAD"),
     ('LIB = "libm.so.6"\n\n', "", "LIB", "CHECK-NATIVE-LOAD"),
     ("", "", '"lib/m.so"', "CHECK-NATIVE-LOAD"),
     ("", "", '"m#{1}"', "CHECK-NATIVE-LOAD"),
-])
-def test_native_load_takes_a_library_literal(tmp_path, before, local, library, code):
-    text = "%sdef main() -> Void\n%s  puts(Native.load(%s).ok?)\nend\n" % (before, local, library)
+], load_program)
+def test_native_load_takes_a_library_literal(checked, before, local, library, code):
+    text = load_program(before, local, library)
     line = next(k for k, row in enumerate(text.split("\n"), 1) if "Native.load" in row)
-    assert_checks(check(source(tmp_path, text)), code, (line, 20), (line, 20 + len(library)))
+    assert_checks(checked(text), code, (line, 20), (line, 20 + len(library)))
+
+
+FUNCTION = 'def main() -> Void\n  name = "libm.so.6"\n  puts(Native.function?(%s, name))\nend\n'
 
 
 # Native.function?(library, name) takes its library as Native.load does: a literal, or CHECK-NATIVE-LOAD at the first
 # argument; the name is any String.
-@pytest.mark.parametrize("library, code", [
+@table("library, code", [
     ('"libm.so.6"', None),
     ("name", "CHECK-NATIVE-LOAD"),
     ('"lib/m.so"', "CHECK-NATIVE-LOAD"),
-])
-def test_native_function_takes_a_library_literal(tmp_path, library, code):
-    text = 'def main() -> Void\n  name = "libm.so.6"\n  puts(Native.function?(%s, name))\nend\n' % library
-    assert_checks(check(source(tmp_path, text)), code, (3, 25), (3, 25 + len(library)))
+], FUNCTION)
+def test_native_function_takes_a_library_literal(checked, library, code):
+    assert_checks(checked(FUNCTION % library), code, (3, 25), (3, 25 + len(library)))
 
 
 def test_an_extern_function_takes_at_most_64_parameters(tmp_path):
@@ -320,7 +338,7 @@ def test_a_variadic_extern_function_checks_like_any_other(tmp_path):
     assert at(problem_of(check(source(tmp_path, bad))))[:2] == ("CHECK-TYPE-MISMATCH", (11, 46))
 
 
-@pytest.mark.parametrize("signature, code, start, stop", [
+@table("signature, code, start, stop", [
     ("def f(...) -> Void", "PARSE-EXTERN-VARIADIC-FIXED", (2, 9), (2, 12)),
     ("def f(a: C.Int32, ..., ...) -> Void", "PARSE-EXTERN-VARIADIC", (2, 26), (2, 29)),
     ("def f(a: C.Int32, ..., b: C.Int32, ...) -> Void", "PARSE-EXTERN-VARIADIC", (2, 38), (2, 41)),
@@ -335,10 +353,9 @@ def test_a_variadic_extern_function_checks_like_any_other(tmp_path):
     ('def f(a: C.Int32) -> Void = "x#{1}"', "PARSE-EXTERN-SYMBOL", (2, 31), (2, 38)),
     ("def f(a: C.Int32) -> Void = fcntl", "PARSE-UNEXPECTED-TOKEN", (2, 31), (2, 36)),
     ("def f(a: C.Int32 ...) -> Void", "PARSE-UNEXPECTED-TOKEN", (2, 20), (2, 23)),
-])
-def test_the_variadic_part_and_the_c_name_have_rules(tmp_path, signature, code, start, stop):
-    text = 'extern "libc.so.6"\n  %s\nend\n' % signature
-    assert at(problem_of(check(source(tmp_path, text)))) == (code, start, stop)
+], IN_LIBC)
+def test_the_variadic_part_and_the_c_name_have_rules(checked, signature, code, start, stop):
+    assert at(checked(IN_LIBC % signature)) == (code, start, stop)
 
 
 def test_a_variadic_part_belongs_to_an_extern_function(tmp_path):
@@ -367,12 +384,6 @@ def test_an_extern_block_follows_the_blank_line_rule(tmp_path):
 def test_a_compute_def_belongs_in_an_extern_block(tmp_path):
     text = 'compute def abs(n: Int) -> Int\n  return n\nend\n'
     assert at(problem_of(check(source(tmp_path, text))))[:2] == ("PARSE-TOP-LEVEL-STATEMENT", (1, 1))
-
-
-def test_extern_and_compute_are_still_names_elsewhere(tmp_path):
-    text = 'def compute(n: Int) -> Int\n  return n\nend\n\n' \
-           'def main() -> Void\n  extern = 1\n  puts(compute(extern))\nend\n'
-    assert check(source(tmp_path, text)).code == 0
 
 
 WAIT = """def connect(fd: Int) -> Result[Void]
@@ -437,16 +448,16 @@ def test_resources_pointers_and_bytes_check(tmp_path):
     assert (result.code, result.stdout) == (0, '{"ok":true}\n')
 
 
+BLOB = 'extern "/opt/libblob.so"\n  def blob_sum(blob: C.Bytes, n: C.Int32) -> C.Int32\nend\n\n' \
+    "def main() -> Void\n  list: List[Int] = [0, 255]\n  puts(blob_sum(%s, 2))\nend\n"
+
+
 # A C.Bytes parameter takes a Bytes only: a List[Int], a list literal or a String is CHECK-TYPE-MISMATCH at the
 # argument.
-@pytest.mark.parametrize("argument", ["[0, 255]", "list", '"ab"'])
-def test_a_c_bytes_parameter_takes_bytes_not_a_list(tmp_path, argument):
-    line = "  puts(blob_sum(%s, 2))" % argument
-    text = 'extern "/opt/libblob.so"\n  def blob_sum(blob: C.Bytes, n: C.Int32) -> C.Int32\nend\n\n' \
-        "def main() -> Void\n  list: List[Int] = [0, 255]\n%s\nend\n" % line
-    start = line.index(argument) + 1
-    assert at(problem_of(check(source(tmp_path, text)))) == (
-        "CHECK-TYPE-MISMATCH", (7, start), (7, start + len(argument)))
+@table("argument", ["[0, 255]", "list", '"ab"'], BLOB)
+def test_a_c_bytes_parameter_takes_bytes_not_a_list(checked, argument):
+    start = len("  puts(blob_sum(") + 1
+    assert at(checked(BLOB % argument)) == ("CHECK-TYPE-MISMATCH", (7, start), (7, start + len(argument)))
 
 
 def test_an_exported_resource_is_imported_like_a_type(tmp_path):
@@ -466,7 +477,7 @@ OPENER = 'extern "/opt/libdb.so"\n  resource Db, free: db_close\n  def db_open()
 
 # The checker keeps resources, pointers and Results apart, and pointers and resources have no ==, to_s or JSON.
 # Native.close takes a resource; Native.closed? a resource or a C.Pointer, and gives a Bool.
-@pytest.mark.parametrize("body, code, start, stop", [
+@table("body, code, start, stop", [
     ("  db: Db = db_open()", "CHECK-TYPE-MISMATCH", (8, 12), (8, 21)),
     ("  p: C.Pointer = db_open().unwrap!", "CHECK-TYPE-MISMATCH", (8, 18), (8, 27)),
     ("  puts(db_handle(Native.null()))", "CHECK-TYPE-MISMATCH", (8, 18), (8, 31)),
@@ -476,16 +487,16 @@ OPENER = 'extern "/opt/libdb.so"\n  resource Db, free: db_close\n  def db_open()
     ("  puts(Native.null() == Native.null())", "CHECK-TYPE-MISMATCH", (8, 22), (8, 24)),
     ("  puts(db_open().unwrap!)", "CHECK-TYPE-MISMATCH", (8, 8), (8, 25)),
     ("  puts(JSON.encode(db_open().unwrap!))", "CHECK-NOT-ENCODABLE", (8, 20), (8, 37)),
-])
-def test_resources_and_pointers_are_opaque(tmp_path, body, code, start, stop):
-    assert at(problem_of(check(source(tmp_path, OPENER % body)))) == (code, start, stop)
+], OPENER)
+def test_resources_and_pointers_are_opaque(checked, body, code, start, stop):
+    assert at(checked(OPENER % body)) == (code, start, stop)
 
 
 # Native.get_string and get_bytes read memory at a C.Pointer (not a resource) with an Int offset and length, get_bytes
 # gives and put_bytes writes a Bytes (a List[Int] is CHECK-TYPE-MISMATCH), and Native.pointer makes a C.Pointer of an Int; a wrong argument is CHECK-TYPE-MISMATCH at it,
 # and a wrong count CHECK-ARITY. The old names string_at and bytes_at are CHECK-UNKNOWN-NAME, with a help that gives
 # the call with offset 0.
-@pytest.mark.parametrize("body, code, start, stop", [
+@table("body, code, start, stop", [
     ("  s: String = Native.get_string(db_handle(db_open().unwrap!), 1, 3)\n"
      "  b: Bytes = Native.get_bytes(Native.pointer(-1), 0, 0)\n"
      "  Native.put_bytes(Native.pointer(1), 0, b)\n"
@@ -503,31 +514,37 @@ def test_resources_and_pointers_are_opaque(tmp_path, body, code, start, stop):
     ('  Native.put_bytes(Native.null(), 0, "ab")', "CHECK-TYPE-MISMATCH", (8, 38), (8, 42)),
     ("  puts(Native.pointer(1.5))", "CHECK-TYPE-MISMATCH", (8, 23), (8, 26)),
     ("  n: Int = Native.pointer(1)", "CHECK-TYPE-MISMATCH", (8, 12), (8, 29)),
-])
-def test_the_memory_builtins_take_a_pointer_and_a_length(tmp_path, body, code, start, stop):
-    assert_checks(check(source(tmp_path, OPENER % body)), code, start, stop)
+], OPENER)
+def test_the_memory_builtins_take_a_pointer_and_a_length(checked, body, code, start, stop):
+    assert_checks(checked(OPENER % body), code, start, stop)
+
+
+def puts_in_opener(call):
+    return OPENER % ("  puts(%s)" % call)
 
 
 # The old names carry the help that gives the new call (its presence, not its text).
-@pytest.mark.parametrize("call", ["Native.string_at(Native.null(), 3)", "Native.bytes_at(Native.null(), 3).size"])
-def test_the_old_memory_names_have_a_help(tmp_path, call):
-    assert problem_of(check(source(tmp_path, OPENER % ("  puts(%s)" % call)))).get("help")
+@table("call", ["Native.string_at(Native.null(), 3)", "Native.bytes_at(Native.null(), 3).size"], puts_in_opener)
+def test_the_old_memory_names_have_a_help(checked, call):
+    assert checked(puts_in_opener(call)).get("help")
+
+
+IN_LIBDB = 'extern "/opt/libdb.so"\n%s\nend\n'
 
 
 # The block's free function is the VM's to call: a def of it, before or after the resource, is PARSE-EXTERN-FREE at
 # the later of the two names.
-@pytest.mark.parametrize("members, start, stop", [
+@table("members, start, stop", [
     ("  resource Db, free: db_close\n  def db_close(db: Db) -> Void", (3, 7), (3, 15)),
     ("  def db_close(p: C.Pointer) -> Void\n  resource Db, free: db_close", (3, 22), (3, 30)),
-])
-def test_the_free_function_is_not_a_def_of_the_block(tmp_path, members, start, stop):
-    text = 'extern "/opt/libdb.so"\n%s\nend\n' % members
-    assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-FREE", start, stop)
+], IN_LIBDB)
+def test_the_free_function_is_not_a_def_of_the_block(checked, members, start, stop):
+    assert at(checked(IN_LIBDB % members)) == ("PARSE-EXTERN-FREE", start, stop)
 
 
 # free_ref: names a C function that takes the address of the handle, checked as a free: name is. A resource has
 # one free function: free: with free_ref:, in either order, is PARSE-EXTERN-FREE at the second word.
-@pytest.mark.parametrize("members, code, start, stop", [
+@table("members, code, start, stop", [
     ("  resource Db, free_ref: db_close\n  def db_open() -> Db", None, None, None),
     ("  resource Db, free: db_close, free_ref: db_free", "PARSE-EXTERN-FREE", (2, 32), (2, 40)),
     ("  resource Db, free_ref: db_close, free: db_free", "PARSE-EXTERN-FREE", (2, 36), (2, 40)),
@@ -536,44 +553,37 @@ def test_the_free_function_is_not_a_def_of_the_block(tmp_path, members, start, s
     ("  def db_close(p: C.Pointer) -> Void\n  resource Db, free_ref: db_close", "PARSE-EXTERN-FREE", (3, 26), (3, 34)),
     ("  resource Db, free_ref: C.Function", "PARSE-EXTERN-FUNCTION", (2, 26), (2, 36)),
     ("  resource Db, free_ref: db_close?", "PARSE-EXTERN-NAME", (2, 26), (2, 35)),
-])
-def test_a_resource_may_be_freed_through_a_reference_to_its_handle(tmp_path, members, code, start, stop):
-    text = 'extern "/opt/libdb.so"\n%s\nend\n' % members
-    assert_checks(check(source(tmp_path, text)), code, start, stop)
+], IN_LIBDB)
+def test_a_resource_may_be_freed_through_a_reference_to_its_handle(checked, members, code, start, stop):
+    assert_checks(checked(IN_LIBDB % members), code, start, stop)
 
 
-@pytest.mark.parametrize("members, code, start", [
+@table("members, code, start", [
     ("  def db_open() -> Db\n  resource Db, free: db_close", "PARSE-EXTERN-TYPE", (2, 20)),
     ('  resource Db, free: db_close\nend\n\nextern "/opt/libdb.so"\n  def db_use(db: Db) -> C.Int32', "PARSE-EXTERN-TYPE",
      (6, 18)),
     ("  resource Db, free: db_close?", "PARSE-EXTERN-NAME", (2, 22)),
     ("  resource Db free: db_close", "PARSE-UNEXPECTED-TOKEN", (2, 15)),
     ("  compute resource Db, free: db_close", "PARSE-UNEXPECTED-TOKEN", (2, 3)),
-])
-def test_a_resource_is_declared_before_use_with_a_c_free_function(tmp_path, members, code, start):
-    text = 'extern "/opt/libdb.so"\n%s\nend\n' % members
-    assert at(problem_of(check(source(tmp_path, text))))[:2] == (code, start)
+], IN_LIBDB)
+def test_a_resource_is_declared_before_use_with_a_c_free_function(checked, members, code, start):
+    assert at(checked(IN_LIBDB % members))[:2] == (code, start)
 
 
 # A resource is a type name of the file: a second resource, a struct or a reserved type of that name is
 # CHECK-REDEFINED-NAME at the later declaration.
-@pytest.mark.parametrize("text, start", [
+@table("text, start", [
     ('extern "/opt/libdb.so"\n  resource Db, free: db_close\n  resource Db, free: db_free\nend\n', (3, 3)),
     ('struct Db\n  x: Int\nend\n\nextern "/opt/libdb.so"\n  resource Db, free: db_close\nend\n', (6, 3)),
     ('extern "/opt/libdb.so"\n  resource Socket, free: db_close\nend\n', (2, 3)),
 ])
-def test_a_resource_name_is_not_taken_twice(tmp_path, text, start):
-    assert at(problem_of(check(source(tmp_path, text))))[:2] == ("CHECK-REDEFINED-NAME", start)
+def test_a_resource_name_is_not_taken_twice(checked, text, start):
+    assert at(checked(text))[:2] == ("CHECK-REDEFINED-NAME", start)
 
 
 # C.Pointer is a type of every file, not only of one with an extern block.
 def test_c_pointer_is_a_type_without_an_extern_block(tmp_path):
     text = "def empty?(p: C.Pointer) -> Bool\n  return Native.null?(p)\nend\n"
-    assert check(source(tmp_path, text)).code == 0
-
-
-def test_resource_is_still_a_name_elsewhere(tmp_path):
-    text = 'def main() -> Void\n  resource = 1\n  puts(resource)\nend\n'
     assert check(source(tmp_path, text)).code == 0
 
 
@@ -586,7 +596,7 @@ OUTS = 'extern "/opt/libdb.so"\n  resource Db, free: db_close\n' \
 # An out parameter is not an argument: the call gives the function's record, DbOpen, with `result` (absent for Void)
 # and one field per out parameter, of its Agentica type (a resource itself, not a Result). A wrong field or a wrong use
 # of one is the checker's usual code.
-@pytest.mark.parametrize("body, code, start, stop", [
+@table("body, code, start, stop", [
     ("  opened: DbOpen = db_open(\"x\")\n  Native.close(opened.db)\n  puts(opened.result + opened.code)\n"
      "  filled = db_fill()\n  _x: Float = filled.x\n  puts(filled.n + 1)\n  puts(filled.on)\n"
      "  puts(Native.null?(filled.p))", None, None, None),
@@ -595,13 +605,9 @@ OUTS = 'extern "/opt/libdb.so"\n  resource Db, free: db_close\n' \
     ("  puts(db_fill().result)", "CHECK-UNKNOWN-FIELD", (8, 8), (8, 24)),
     ("  n: Int = db_open(\"x\")", "CHECK-TYPE-MISMATCH", (8, 12), (8, 24)),
     ("  puts(db_open(\"x\").db)", "CHECK-TYPE-MISMATCH", (8, 8), (8, 23)),
-])
-def test_out_parameters_are_fields_of_the_record_of_the_call(tmp_path, body, code, start, stop):
-    result = check(source(tmp_path, OUTS % body))
-    if code is None:
-        assert (result.code, result.stdout) == (0, '{"ok":true}\n')
-    else:
-        assert at(problem_of(result)) == (code, start, stop)
+], OUTS)
+def test_out_parameters_are_fields_of_the_record_of_the_call(checked, body, code, start, stop):
+    assert_checks(checked(OUTS % body), code, start, stop)
 
 
 # The record is exported with its function, so an importer can name it.
@@ -616,7 +622,7 @@ def test_the_record_of_an_exported_extern_function_is_imported(tmp_path):
 # parameter named result when the function has a C result, at a C name with no letter for the record's name, at the
 # word out outside an extern block, and at the later of an in and an out parameter of one name. `out` is still a
 # parameter name.
-@pytest.mark.parametrize("text, start, stop", [
+@table("text, start, stop", [
     ('extern "libc.so.6"\n  def f(out s: C.String) -> C.Int32\nend\n', (2, 16), (2, 24)),
     ('extern "libc.so.6"\n  def f(out b: C.Bytes) -> Void\nend\n', (2, 16), (2, 23)),
     ('extern "libc.so.6"\n  def f(out result: C.Int32) -> C.Int32\nend\n', (2, 13), (2, 19)),
@@ -625,13 +631,18 @@ def test_the_record_of_an_exported_extern_function_is_imported(tmp_path):
     ('extern "libm.so.6"\n  def frexp(x: C.Double, out x: C.Int32) -> C.Double\nend\n', (2, 30), (2, 31)),
     ('extern "libm.so.6"\n  def f(out x: C.Int32, x: C.Double) -> C.Double\nend\n', (2, 25), (2, 26)),
 ])
-def test_an_out_parameter_is_a_c_value_of_an_extern_function(tmp_path, text, start, stop):
-    assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-OUT", start, stop)
+def test_an_out_parameter_is_a_c_value_of_an_extern_function(checked, text, start, stop):
+    assert at(checked(text)) == ("PARSE-EXTERN-OUT", start, stop)
 
 
-def test_out_is_still_a_name_and_result_is_an_out_of_a_void_function(tmp_path):
+# extern, compute, resource and out are still names outside an extern block, and an out parameter of a Void function
+# may be named result.
+def test_the_words_of_an_extern_block_are_still_names_elsewhere(tmp_path):
     text = 'extern "libc.so.6"\n  def f(out result: C.Int32) -> Void\nend\n\n' \
-           'def g(out: Int) -> Int\n  return out\nend\n\ndef main() -> Void\n  puts(f().result + g(1))\nend\n'
+           'def compute(n: Int) -> Int\n  return n\nend\n\n' \
+           'def g(out: Int) -> Int\n  return out\nend\n\n' \
+           'def main() -> Void\n  extern = 1\n  resource = 2\n' \
+           '  puts(compute(extern) + resource + f().result + g(1))\nend\n'
     assert check(source(tmp_path, text)).code == 0
 
 
@@ -676,7 +687,10 @@ def test_function_pointers_check_as_c_pointers(tmp_path):
     assert at(problem_of(check(source(tmp_path, bad))))[0] == "CHECK-TYPE-MISMATCH"
 
 
-@pytest.mark.parametrize("signature, code, start, stop", [
+WITH_THING = 'extern "/opt/libx.so"\n  resource Thing, free: C.Function\n  %s\nend\n'
+
+
+@table("signature, code, start, stop", [
     ("def f(a: C.Int32, fn: C.Function, b: C.Int32) -> Void", "PARSE-EXTERN-FUNCTION", (3, 25), (3, 35)),
     ("def f(fn: C.Function, g: C.Function) -> Void", "PARSE-EXTERN-FUNCTION", (3, 28), (3, 38)),
     ("def f(a: C.Int32, free: C.Function) -> Void", "PARSE-EXTERN-FUNCTION", (3, 27), (3, 37)),
@@ -691,36 +705,41 @@ def test_function_pointers_check_as_c_pointers(tmp_path):
     ("def f(free: C.Function, ...) -> Thing", "PARSE-EXTERN-VARIADIC-FIXED", (3, 27), (3, 30)),
     ("def f(fn: C.Function, free: C.Function, ...) -> Thing", "PARSE-EXTERN-VARIADIC-FIXED", (3, 43), (3, 46)),
     ("def f(fn: C.Function, a: C.Int32, ..., g: C.Function) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (3, 45), (3, 55)),
-])
-def test_a_c_function_is_the_function_to_call_or_a_free_function(tmp_path, signature, code, start, stop):
-    text = 'extern "/opt/libx.so"\n  resource Thing, free: C.Function\n  %s\nend\n' % signature
-    assert at(problem_of(check(source(tmp_path, text)))) == (code, start, stop)
+], WITH_THING)
+def test_a_c_function_is_the_function_to_call_or_a_free_function(checked, signature, code, start, stop):
+    assert at(checked(WITH_THING % signature)) == (code, start, stop)
+
+
+CAPITAL_FREE = 'struct Thing\n  x: Int\nend\n\nextern "/opt/libx.so"\n  resource Handle, free: %s\n' \
+    '  def make() -> Handle\nend\n'
 
 
 # A free word that starts with a capital letter is a C name (libpq, OpenSSL), also one that is a type of the program;
 # only the dotted C.Function is the type.
-@pytest.mark.parametrize("free", ["PQfinish", "SSL_free", "XFree", "Thing", "C"])
-def test_a_resource_may_be_freed_by_a_c_name_with_a_capital(tmp_path, free):
-    text = 'struct Thing\n  x: Int\nend\n\nextern "/opt/libx.so"\n  resource Handle, free: %s\n' \
-           '  def make() -> Handle\nend\n' % free
-    assert check(source(tmp_path, text)).code == 0
+@table("free", ["PQfinish", "SSL_free", "XFree", "Thing", "C"], CAPITAL_FREE)
+def test_a_resource_may_be_freed_by_a_c_name_with_a_capital(checked, free):
+    assert checked(CAPITAL_FREE % free) is None
 
 
-@pytest.mark.parametrize("members, code, start", [
+IN_LIBX = 'extern "/opt/libx.so"\n%s\nend\n'
+
+
+@table("members, code, start", [
     ('  resource Handle, free: PQfinish\n  def pq_finish(h: Handle) -> Void = "PQfinish"', "PARSE-EXTERN-FREE", (3, 38)),
     ("  resource Handle, free: PQfinish?", "LEX-UNEXPECTED-CHAR", (2, 34)),
     ("  resource Handle, free: PQfinish extra", "PARSE-UNEXPECTED-TOKEN", (2, 35)),
     ("  resource Handle, free: C.Pointer", "PARSE-EXTERN-FUNCTION", (2, 26)),
-])
-def test_a_capital_free_name_is_checked_like_any_c_name(tmp_path, members, code, start):
-    text = 'extern "/opt/libx.so"\n%s\nend\n' % members
-    assert at(problem_of(check(source(tmp_path, text))))[:2] == (code, start)
+], IN_LIBX)
+def test_a_capital_free_name_is_checked_like_any_c_name(checked, members, code, start):
+    assert at(checked(IN_LIBX % members))[:2] == (code, start)
 
 
-@pytest.mark.parametrize("free, stop", [("C.Pointer", (2, 34)), ("C.Function[Int]", (2, 40))])
-def test_a_resource_is_freed_by_a_c_name_or_a_c_function(tmp_path, free, stop):
-    text = 'extern "/opt/libx.so"\n  resource Thing, free: %s\nend\n' % free
-    assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-FUNCTION", (2, 25), stop)
+FREE_THING = 'extern "/opt/libx.so"\n  resource Thing, free: %s\nend\n'
+
+
+@table("free, stop", [("C.Pointer", (2, 34)), ("C.Function[Int]", (2, 40))], FREE_THING)
+def test_a_resource_is_freed_by_a_c_name_or_a_c_function(checked, free, stop):
+    assert at(checked(FREE_THING % free)) == ("PARSE-EXTERN-FUNCTION", (2, 25), stop)
 
 
 # A call through a pointer has no C name, so a def of the name of a free function of the block is not one.
@@ -730,19 +749,22 @@ def test_a_call_through_a_pointer_may_take_the_name_of_a_free_function(tmp_path)
     assert check(source(tmp_path, text)).code == 0
 
 
+def maker(signature):
+    name = signature.split("(")[0].split()[-1]
+    return 'extern "/opt/libx.so"\n  resource Thing, free: C.Function\n  %s\nend\n\n' \
+           'def make(f: C.Pointer) -> Result[Thing]\n  return %s(%sf)\nend\n' \
+           % (signature, name, "f, " if "fn:" in signature else "")
+
+
 # A sole C.Function parameter of a def that makes a resource of a free: C.Function kind is its free function, not the
 # function to call: the def calls its C function by name (void *thing_new(void)), so = "symbol" is allowed.
-@pytest.mark.parametrize("signature", [
+@table("signature", [
     "def thing_new(free: C.Function) -> Thing",
     'def new_thing(free: C.Function) -> Thing = "thing_new"',
     "def thing_at(fn: C.Function, free: C.Function) -> Thing",
-])
-def test_a_sole_c_function_of_a_maker_is_its_free_function(tmp_path, signature):
-    name = signature.split("(")[0].split()[-1]
-    text = 'extern "/opt/libx.so"\n  resource Thing, free: C.Function\n  %s\nend\n\n' \
-           'def make(f: C.Pointer) -> Result[Thing]\n  return %s(%sf)\nend\n' \
-           % (signature, name, "f, " if "fn:" in signature else "")
-    assert check(source(tmp_path, text)).code == 0
+], maker)
+def test_a_sole_c_function_of_a_maker_is_its_free_function(checked, signature):
+    assert checked(maker(signature)) is None
 
 
 STRUCTS = """extern "/opt/libllama.so"
@@ -776,7 +798,7 @@ end
 # A struct of an extern block is a record with the Agentica types of its C fields (Int, Float, Bool, C.Pointer, a
 # nested struct): construction, field defaults, .with and field access check as for any struct, and extern functions
 # take and return it by value, also through a function pointer, in a compute def and as the result of a record.
-@pytest.mark.parametrize("body, code, start, stop", [
+@table("body, code, start, stop", [
     ("  params = llama_model_default_params().with(n_gpu_layers: 99)\n"
      "  _model: Result[Model] = llama_model_load_from_file(\"m.gguf\", params)\n"
      "  o = outer_twice(Native.null(), Outer(inner: Inner(x: 1.5, n: 2), scale: 0.5))\n"
@@ -787,9 +809,9 @@ end
      "CHECK-TYPE-MISMATCH", (24, 33), (24, 36)),
     ("  o = outer_twice(Native.null(), Inner(x: 1.5, n: 2))", "CHECK-TYPE-MISMATCH", (24, 34), (24, 53)),
     ("  s: String = llama_model_default_params().progress", "CHECK-TYPE-MISMATCH", (24, 15), (24, 52)),
-])
-def test_a_struct_of_an_extern_block_is_a_record_passed_by_value(tmp_path, body, code, start, stop):
-    assert_checks(check(source(tmp_path, STRUCTS % body)), code, start, stop)
+], STRUCTS)
+def test_a_struct_of_an_extern_block_is_a_record_passed_by_value(checked, body, code, start, stop):
+    assert_checks(checked(STRUCTS % body), code, start, stop)
 
 
 def test_an_exported_extern_struct_is_imported_like_a_struct(tmp_path):
@@ -800,10 +822,17 @@ def test_an_exported_extern_struct_is_imported_like_a_struct(tmp_path):
     assert check(source(tmp_path, text)).code == 0
 
 
+def through_pointers(body, *_):
+    """A program.agc of STRUCTS with BODY that imports a raw.agc of STRUCTS."""
+    text = 'import {ModelParams as RawParams} from "./raw"\n\nstruct Plain\n  x: Int\nend\n\n' \
+        'type OuterAlias = Outer\n\n'
+    return {"program.agc": text + STRUCTS % body, "raw.agc": STRUCTS % "  puts(1)"}
+
+
 # Native.size_of(T) is an Int, Native.get_struct(p, offset, T) a T and Native.put_struct(p, offset, value) Void, for a
 # struct of an extern block, also through a type alias or from another module; a struct of the program, a resource, a
 # value in place of the type, a List or Map type or a type name in place of the value is CHECK-TYPE-MISMATCH at it.
-@pytest.mark.parametrize("body, code, start, stop", [
+@table("body, code, start, stop", [
     ("  buf = Native.memory_pointer(2 * Native.size_of(Outer))\n"
      "  Native.put_struct(buf, Native.size_of(OuterAlias), Outer(inner: Inner(x: 1.5, n: 2), scale: 0.5))\n"
      "  o: Outer = Native.get_struct(buf, 0, OuterAlias)\n  puts(o.inner.n)", None, None, None),
@@ -819,17 +848,19 @@ def test_an_exported_extern_struct_is_imported_like_a_struct(tmp_path):
     ("  puts(Native.get_struct(Native.null(), 0, Map[String, Outer]))", "CHECK-TYPE-MISMATCH", (32, 44), (32, 62)),
     ("  puts(Native.size_of(3))", "CHECK-TYPE-MISMATCH", (32, 23), (32, 24)),
     ("  s: String = Native.get_struct(Native.null(), 0, Inner)", "CHECK-TYPE-MISMATCH", (32, 15), (32, 57)),
-])
-def test_structs_through_pointers_take_a_struct_of_an_extern_block(tmp_path, body, code, start, stop):
-    source(tmp_path, STRUCTS % "  puts(1)", "raw.agc")
-    text = 'import {ModelParams as RawParams} from "./raw"\n\nstruct Plain\n  x: Int\nend\n\ntype OuterAlias = Outer\n\n' + STRUCTS % body
-    assert_checks(check(source(tmp_path, text)), code, start, stop)
+], through_pointers)
+def test_structs_through_pointers_take_a_struct_of_an_extern_block(checked, body, code, start, stop):
+    assert_checks(checked(through_pointers(body)), code, start, stop)
+
+
+FIELD = 'extern "/opt/libx.so"\n  resource Thing, free: thing_free\n  struct S\n    %s\n  end\n' \
+    '  struct Later\n    n: C.Int32\n  end\nend\n'
 
 
 # A field of a C struct is a C integer type, C.Double, C.Float, C.Bool, C.Pointer or a struct declared above in the
 # block: a C.String, C.Bytes, C.Function or resource field (whose lifetime the VM cannot follow), an Agentica type, a
 # struct declared below and C.Int are PARSE-EXTERN-TYPE at the type.
-@pytest.mark.parametrize("field, start, stop", [
+@table("field, start, stop", [
     ("name: C.String", (4, 11), (4, 19)),
     ("data: C.Bytes", (4, 11), (4, 18)),
     ("fn: C.Function", (4, 9), (4, 19)),
@@ -839,27 +870,28 @@ def test_structs_through_pointers_take_a_struct_of_an_extern_block(tmp_path, bod
     ("later: Later", (4, 12), (4, 17)),
     ("n: C.Int", (4, 8), (4, 13)),
     ("n: C.UInt64", (4, 8), (4, 16)),
-])
-def test_a_c_struct_field_has_a_c_value_type(tmp_path, field, start, stop):
-    text = 'extern "/opt/libx.so"\n  resource Thing, free: thing_free\n  struct S\n    %s\n  end\n' \
-           '  struct Later\n    n: C.Int32\n  end\nend\n' % field
-    assert at(problem_of(check(source(tmp_path, text)))) == ("PARSE-EXTERN-TYPE", start, stop)
+], FIELD)
+def test_a_c_struct_field_has_a_c_value_type(checked, field, start, stop):
+    assert at(checked(FIELD % field)) == ("PARSE-EXTERN-TYPE", start, stop)
+
+
+def struct_order(signature, code, *_):
+    """SIGNATURE before a struct Later when CODE is PARSE-EXTERN-TYPE, else after a struct Pair."""
+    if code == "PARSE-EXTERN-TYPE":
+        return 'extern "/opt/libx.so"\n  %s\n  struct Later\n    n: C.Int32\n  end\nend\n' % signature
+    return 'extern "/opt/libx.so"\n  struct Pair\n    x: C.Int32\n    y: C.Int32\n  end\n  %s\nend\n' % signature
 
 
 # A struct is a type of the block after it is declared; it is not an out parameter (C would fill memory the program
 # gives: a C.Pointer to an owned buffer) or a variadic one.
-@pytest.mark.parametrize("signature, code, start, stop", [
+@table("signature, code, start, stop", [
     ("def f(p: Later) -> Void", "PARSE-EXTERN-TYPE", (2, 12), (2, 17)),
     ("def f() -> Later", "PARSE-EXTERN-TYPE", (2, 14), (2, 19)),
     ("def f(out p: Pair) -> Void", "PARSE-EXTERN-OUT", (6, 16), (6, 20)),
     ("def f(n: C.Int32, ..., p: Pair) -> Void", "PARSE-EXTERN-VARIADIC-TYPE", (6, 29), (6, 33)),
-])
-def test_a_c_struct_is_passed_in_or_returned_after_its_declaration(tmp_path, signature, code, start, stop):
-    if code == "PARSE-EXTERN-TYPE":
-        text = 'extern "/opt/libx.so"\n  %s\n  struct Later\n    n: C.Int32\n  end\nend\n' % signature
-    else:
-        text = 'extern "/opt/libx.so"\n  struct Pair\n    x: C.Int32\n    y: C.Int32\n  end\n  %s\nend\n' % signature
-    assert at(problem_of(check(source(tmp_path, text)))) == (code, start, stop)
+], struct_order)
+def test_a_c_struct_is_passed_in_or_returned_after_its_declaration(checked, signature, code, start, stop):
+    assert at(checked(struct_order(signature, code))) == (code, start, stop)
 
 
 # C has no empty struct (PARSE-EXTERN-TYPE at the name), and the VM takes at most 1024 fields and 16 levels in one
@@ -929,7 +961,7 @@ end
 # of that type, also in the variadic part, and a type alias names. The function is a declared function named with &
 # (a block, an Fn value and a function of an extern block are refused) and takes and returns the Agentica types of the
 # callback.
-@pytest.mark.parametrize("body, code, start, stop", [
+@table("body, code, start, stop", [
     ("  cmp: Compare = Native.callback(Cmp, &by_length)\n"
      "  puts(sqlite3_create_collation(db, \"len\", 1, Native.null(), cmp))\n"
      "  hook = Native.callback(Hook, &on_change)\n"
@@ -949,9 +981,9 @@ end
     ("  Native.callback(Compare, &nothing)", "CHECK-UNKNOWN-NAME", (33, 28), (33, 36)),
     ("  Native.callback(Compare, &pass)", "CHECK-ENUM-TYPE-INFERENCE", (33, 28), (33, 33)),
     ("  sqlite3_update_hook(db, Native.null(), Native.null())", "CHECK-TYPE-MISMATCH", (33, 27), (33, 40)),
-])
-def test_native_callback_makes_a_callback_of_a_named_function(tmp_path, body, code, start, stop):
-    assert_checks(check(source(tmp_path, CALLBACKS % body)), code, start, stop)
+], CALLBACKS)
+def test_native_callback_makes_a_callback_of_a_named_function(checked, body, code, start, stop):
+    assert_checks(checked(CALLBACKS % body), code, start, stop)
 
 
 def test_an_exported_callback_is_imported_with_its_function_type(tmp_path):
@@ -961,12 +993,15 @@ def test_an_exported_callback_is_imported_with_its_function_type(tmp_path):
     assert check(source(tmp_path, good)).code == 0
 
 
+CALLBACK_MEMBER = 'extern "/opt/libx.so"\n  %s\n  resource Thing, free: thing_free\nend\n'
+
+
 # A callback crosses by value: its parameters are C integer types, C.Double, C.Float, C.Bool, C.String or C.Pointer,
 # and its result one of them but C.String, or Void (else PARSE-EXTERN-TYPE at the type). It has no default, out
 # parameter, `...` or two parameters of one name, takes at most 64 parameters, and is a parameter of a def of its
 # block below it, not a result, an out parameter or a struct field; so is an Optional of it, and an Optional of
 # anything else is no C type.
-@pytest.mark.parametrize("member, code, start, stop", [
+@table("member, code, start, stop", [
     ("callback F(a: C.Bytes) -> Void", "PARSE-EXTERN-TYPE", (2, 17), (2, 24)),
     ("callback F(a: C.Function) -> Void", "PARSE-EXTERN-TYPE", (2, 17), (2, 27)),
     ("callback F(t: Thing) -> Void", "PARSE-EXTERN-TYPE", (2, 17), (2, 22)),
@@ -987,10 +1022,9 @@ def test_an_exported_callback_is_imported_with_its_function_type(tmp_path):
     ("callback F(a: C.Int32) -> C.Int32\n  def f(out g: Optional[F]) -> Void", "PARSE-EXTERN-OUT", (3, 16), (3, 27)),
     ("def f(g: Optional[C.Int32]) -> Void", "PARSE-EXTERN-TYPE", (2, 12), (2, 29)),
     ("def f(g: Optional[Thing]) -> Void", "PARSE-EXTERN-TYPE", (2, 12), (2, 27)),
-])
-def test_a_callback_takes_c_value_types(tmp_path, member, code, start, stop):
-    text = 'extern "/opt/libx.so"\n  %s\n  resource Thing, free: thing_free\nend\n' % member
-    assert at(problem_of(check(source(tmp_path, text)))) == (code, start, stop)
+], CALLBACK_MEMBER)
+def test_a_callback_takes_c_value_types(checked, member, code, start, stop):
+    assert at(checked(CALLBACK_MEMBER % member)) == (code, start, stop)
 
 
 # An Optional of a callback is a parameter that C may get as NULL: none passes NULL, also in the variadic part.
@@ -999,7 +1033,7 @@ def test_an_optional_callback_parameter_takes_none(tmp_path):
            '  def f(g: Optional[F], ..., h: Optional[F]) -> Void\nend\n\n' \
            'def twice(a: Int) -> Int\n  return a * 2\nend\n\n' \
            'def main() -> Void\n  f(none, some(Native.callback(F, &twice)))\nend\n'
-    assert_checks(check(source(tmp_path, text)), None, None, None)
+    assert_checks(diagnostic(check(source(tmp_path, text))), None, None, None)
 
 
 def test_a_callback_takes_at_most_64_parameters(tmp_path):
@@ -1025,7 +1059,7 @@ end
 
 # Native.mutex() makes a Native.Mutex, a type any file may name; lock.synchronize runs a block of no parameters and
 # gives its value. A mutex is no data: it has no ==, no to_s and is no constant.
-@pytest.mark.parametrize("body, code, start, stop", [
+@table("body, code, start, stop", [
     ("  n: Int = lock.synchronize do 1 end\n  puts(n)", None, None, None),
     ("  s: String = lock.synchronize do 1 end\n  puts(s)", "CHECK-TYPE-MISMATCH", (7, 35), (7, 36)),
     ("  puts(lock.synchronize(3))", "CHECK-TYPE-MISMATCH", (7, 25), (7, 26)),
@@ -1034,14 +1068,14 @@ end
     ("  puts(lock == lock)", "CHECK-TYPE-MISMATCH", (7, 13), (7, 15)),
     ("  puts(lock)", "CHECK-TYPE-MISMATCH", (7, 8), (7, 12)),
     ("  Native.mutex(1)", "CHECK-ARITY", (7, 3), (7, 18)),
-])
-def test_native_mutex_synchronizes_a_block(tmp_path, body, code, start, stop):
-    assert_checks(check(source(tmp_path, MUTEX % body)), code, start, stop)
+], MUTEX)
+def test_native_mutex_synchronizes_a_block(checked, body, code, start, stop):
+    assert_checks(checked(MUTEX % body), code, start, stop)
 
 
 def test_a_native_mutex_is_no_constant(tmp_path):
     text = "LOCK = Native.mutex()\n\ndef main() -> Void\n  LOCK.synchronize do puts(1) end\nend\n"
-    assert_checks(check(source(tmp_path, text)), "CHECK-CONSTANT-EXPRESSION", (1, 8), (1, 22))
+    assert_checks(diagnostic(check(source(tmp_path, text))), "CHECK-CONSTANT-EXPRESSION", (1, 8), (1, 22))
 
 
 MODULE_VALID = """type Id = Int
@@ -1079,12 +1113,15 @@ end
 # An `extern module "NAME"` block declares functions of a native module's table: Ruby names with ? and !, Agentica
 # types (aliases, structs and enums of the program), and compute def for a dirty function.
 def test_an_extern_module_block_declares_functions_with_agentica_types(tmp_path):
-    assert_checks(check(source(tmp_path, MODULE_VALID)), None, None, None)
+    assert_checks(diagnostic(check(source(tmp_path, MODULE_VALID))), None, None, None)
+
+
+IN_MODULE = 'extern module "demo"\n  %s\nend\n'
 
 
 # The module's table gives the C function and its types, so what an extern block says of C is refused in a module block:
 # a resource is a name alone, which the module's resource table frees.
-@pytest.mark.parametrize("member, code, start, stop", [
+@table("member, code, start, stop", [
     ("resource Db, free: db_close", "PARSE-EXTERN-MODULE", (2, 14), (2, 15)),
     ("callback Visit(n: C.Int32) -> Void", "PARSE-EXTERN-MODULE", (2, 3), (2, 11)),
     ("struct Pair\n    x: Int\n  end", "PARSE-EXTERN-MODULE", (2, 3), (2, 9)),
@@ -1094,10 +1131,9 @@ def test_an_extern_module_block_declares_functions_with_agentica_types(tmp_path)
     ("def f(p: C.Pointer) -> Int", "PARSE-EXTERN-TYPE", (2, 12), (2, 21)),
     ("def f(n: Int) -> List[C.Int32]", "PARSE-EXTERN-TYPE", (2, 25), (2, 32)),
     ("def f(n: Int = 1) -> Int", "PARSE-EXTERN-DEFAULT", (2, 9), (2, 19)),
-])
-def test_a_module_block_refuses_what_only_c_has(tmp_path, member, code, start, stop):
-    text = 'extern module "demo"\n  %s\nend\n' % member
-    assert at(problem_of(check(source(tmp_path, text)))) == (code, start, stop)
+], IN_MODULE)
+def test_a_module_block_refuses_what_only_c_has(checked, member, code, start, stop):
+    assert at(checked(IN_MODULE % member)) == (code, start, stop)
 
 
 NATIVE_TYPES = """struct Box[T]
@@ -1130,7 +1166,7 @@ end
 # Only Agentica values cross: a type that is not one, a generic struct, a builtin enum, a Set, or a struct or enum of
 # the program whose field or payload does not cross is CHECK-NATIVE-TYPE at the type of the signature. A Map key that
 # would not cross is no Map key at all (CHECK-MAP-KEY-TYPE).
-@pytest.mark.parametrize("signature, code, start, stop", [
+@table("signature, code, start, stop", [
     ("def f(t: Task[Int]) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 21)),
     ("def f(b: Box[Int]) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 20)),
     ("def f(h: Holder) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 18)),
@@ -1139,16 +1175,15 @@ end
     ("def f(n: Int) -> LogLevel", "CHECK-NATIVE-TYPE", (20, 20), (20, 28)),
     ("def f(n: Int) -> Fn[Int, Int]", "CHECK-NATIVE-TYPE", (20, 20), (20, 32)),
     ("def f(m: Map[Float, Int]) -> Int", "CHECK-MAP-KEY-TYPE", (20, 16), (20, 21)),
-])
-def test_only_agentica_values_cross_to_a_native_module(tmp_path, signature, code, start, stop):
-    problem = problem_of(check(source(tmp_path, NATIVE_TYPES % signature)))
-    assert at(problem) == (code, start, stop)
+], NATIVE_TYPES)
+def test_only_agentica_values_cross_to_a_native_module(checked, signature, code, start, stop):
+    assert at(checked(NATIVE_TYPES % signature)) == (code, start, stop)
 
 
 # A recursive type crosses: the checker and the lowering walk each user type once.
 def test_a_recursive_type_crosses_to_a_native_module(tmp_path):
     path = source(tmp_path, NATIVE_TYPES % "def f(tree: Tree) -> List[Tree]")
-    assert_checks(check(path), None, None, None)
+    assert_checks(diagnostic(check(path)), None, None, None)
     assert run(cli() + ["compile", path, "-o", str(tmp_path / "tree.agcb")]).code == 0
 
 
@@ -1199,7 +1234,7 @@ end
 # A resource of the module block crosses as a whole parameter type, and in a result anywhere but in a user type. A
 # resource nested in a parameter, in a struct or enum, of an extern block or of another module block is
 # CHECK-NATIVE-TYPE.
-@pytest.mark.parametrize("signature, code, start, stop", [
+@table("signature, code, start, stop", [
     ("def f(db: Db) -> Db", None, None, None),
     ("compute def f(n: Int) -> Result[List[Db]]", None, None, None),
     ("def f(n: Int) -> Map[String, Optional[Db]]", None, None, None),
@@ -1212,13 +1247,9 @@ end
     ("def f(r: Result[Db]) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 22)),
     ("def f(file: CFile) -> Int", "CHECK-NATIVE-TYPE", (20, 15), (20, 20)),
     ("def f(n: Int) -> Conn", "CHECK-NATIVE-TYPE", (20, 20), (20, 24)),
-])
-def test_a_resource_of_the_module_block_crosses_whole(tmp_path, signature, code, start, stop):
-    result = check(source(tmp_path, MODULE_RESOURCES % signature))
-    if code is None:
-        assert_checks(result, None, None, None)
-    else:
-        assert at(problem_of(result)) == (code, start, stop)
+], MODULE_RESOURCES)
+def test_a_resource_of_the_module_block_crosses_whole(checked, signature, code, start, stop):
+    assert_checks(checked(MODULE_RESOURCES % signature), code, start, stop)
 
 
 # A resource counts in the bare names of a block: a struct of its name is refused at the second.
@@ -1229,12 +1260,15 @@ def test_a_resource_and_a_struct_of_one_bare_name_cannot_cross_to_one_module(tmp
     assert at(problem_of(check(source(tmp_path, text)))) == ("CHECK-NATIVE-TYPE", (5, 20), (5, 24))
 
 
+def module_after(before, block):
+    return '%s\nextern module "demo"\n%s\nend\n\ndef main() -> Void\nend\n' % (before, block)
+
+
 # A resource line of a module block takes the place of a def, as the block's functions do: the block may follow the
 # functions of the file, and an exported resource an exported def.
-@pytest.mark.parametrize("before, block", [
+@table("before, block", [
     ("def helper() -> Int\n  return 1\nend\n", "  resource Db\n  def open() -> Db"),
     ("export def helper() -> Int\n  return 1\nend\n", "  export resource Db\n  export def open() -> Db"),
-])
-def test_a_module_block_with_a_resource_takes_the_place_of_a_def(tmp_path, before, block):
-    text = '%s\nextern module "demo"\n%s\nend\n\ndef main() -> Void\nend\n' % (before, block)
-    assert_checks(check(source(tmp_path, text)), None, None, None)
+], module_after)
+def test_a_module_block_with_a_resource_takes_the_place_of_a_def(checked, before, block):
+    assert checked(module_after(before, block)) is None

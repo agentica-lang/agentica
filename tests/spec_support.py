@@ -4,6 +4,8 @@ import json
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 
+import pytest
+
 from tests.agentica_test import cli, run
 
 Check = Callable[[str | Mapping[str, str], str], dict[str, object] | None]
@@ -46,7 +48,11 @@ def check_many(programs: Iterable[str | Mapping[str, str]], directory: Path, roo
         roots[key] = str(folder / root)
     result = run(cli() + ["--json", "check", *roots.values()])
     assert result.code in (0, 1), result.stderr
-    found = {entry["file"]: entry.get("diagnostic") for entry in json.loads(result.stdout)["files"]}
+    if len(roots) == 1:
+        # One file gets the one-file form: the diagnostic on stderr, or {"ok":true} on stdout.
+        found = {path: json.loads(result.stderr) if result.code else None for path in roots.values()}
+    else:
+        found = {entry["file"]: entry.get("diagnostic") for entry in json.loads(result.stdout)["files"]}
     diagnostics = {key: found[path] for key, path in roots.items()}
 
     def check(program: str | Mapping[str, str], name: str = root) -> dict[str, object] | None:
@@ -54,6 +60,32 @@ def check_many(programs: Iterable[str | Mapping[str, str]], directory: Path, roo
         return diagnostics[_program_key(program)]
 
     return check
+
+
+class Batch:
+    """The programs of the parametrized tables of a module, checked by one check_many call."""
+
+    def __init__(self, root: str = "main.agc") -> None:
+        self.root = root
+        self.programs: list[str | Mapping[str, str]] = []
+
+    def table(self, names, rows, program: object = "%s"):
+        """`pytest.mark.parametrize(NAMES, ROWS)`, and the program of each row joins the batch.
+
+        PROGRAM is a template that the first value of a row fills (by default that value is the program), or a
+        function of the row's values. The test builds its program the same way and looks it up in the fixture.
+        """
+        build = program if callable(program) else lambda first, *_: program % first
+        self.programs.extend(build(*(row if isinstance(row, tuple) else (row,))) for row in rows)
+        return pytest.mark.parametrize(names, rows)
+
+    def fixture(self):
+        """A module fixture, `checked`, that checks the batch and gives its Check."""
+        @pytest.fixture(scope="module")
+        def checked(tmp_path_factory):
+            return check_many(self.programs, tmp_path_factory.mktemp("batch"), self.root)
+
+        return checked
 
 
 def assert_program_diagnostic(check: Check, program: str, code: str | None) -> dict[str, object] | None:

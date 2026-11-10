@@ -50,34 +50,42 @@ class TestModuleRules:
         (directory, problem) in the same order, where problem is None for a program that checks clean.
 
         `files` is a name -> text map, or a folder that already exists. In `env`, {dir} stands for the folder.
+        The roots of one env are checked by one `--json check ROOT...` call, which gives each root the diagnostic of
+        a check of that root alone.
         """
         jobs = []
         for files, root, env in cases:
             directory = files if isinstance(files, Path) else self.files(files)
             env = {key: value.replace("{dir}", str(directory)) for key, value in (env or {}).items()}
-            jobs.append((directory, root, env))
-
-        def check(job):
-            directory, root, env = job
-            return run(cli() + ["--json", "check", str(directory / root)], cwd=self.cwd,
-                       env=vm_environment({**HERMETIC, **env}))
-
-        results = [check(job) for job in jobs]
-        return [(directory, self.problem_of(result)) for (directory, _root, _env), result in zip(jobs, results)]
+            jobs.append((directory, str(directory / root), tuple(sorted(env.items()))))
+        groups = {}
+        for _directory, path, env in jobs:
+            groups.setdefault(env, []).append(path)
+        problems = {}
+        for env, paths in groups.items():
+            paths = list(dict.fromkeys(paths))
+            result = run(cli() + ["--json", "check", *paths], cwd=self.cwd,
+                         env=vm_environment({**HERMETIC, **dict(env)}))
+            problems.update(((env, path), problem) for path, problem in zip(paths, self.problems_of(result, paths)))
+        return [(directory, problems[(env, path)]) for directory, path, env in jobs]
 
     def check(self, files, root="root.agc", env=None):
         """One check (see checks()): its (directory, problem)."""
         return self.checks([(files, root, env)])[0]
 
-    def problem_of(self, result):
-        if result.code == 0:
-            assert result.stdout == '{"ok":true}\n'
-            return None
-        assert result.code == 1, result.stderr
-        problem = json.loads(result.stderr)
-        # Internal names (with the module mangling '@') must not reach a user in the message or the help.
-        assert "@" not in json.dumps({key: problem.get(key) for key in ("message", "help")})
-        return problem
+    def problems_of(self, result, paths):
+        """The diagnostic of each of PATHS, or None, from the check RESULT of them all."""
+        assert result.code in (0, 1), result.stderr
+        if len(paths) == 1:
+            assert result.code or result.stdout == '{"ok":true}\n'
+            problems = [json.loads(result.stderr) if result.code else None]
+        else:
+            found = {entry["file"]: entry.get("diagnostic") for entry in json.loads(result.stdout)["files"]}
+            problems = [found[path] for path in paths]
+        for problem in problems:
+            # Internal names (with the module mangling '@') must not reach a user in the message or the help.
+            assert "@" not in json.dumps({key: (problem or {}).get(key) for key in ("message", "help")})
+        return problems
 
     def assert_rejected(self, checked, code, line=None, file=None):
         """The check fails with `code`, at `line`, and in `file` (a name of the folder) when given."""

@@ -42,16 +42,16 @@ tests/test_site_examples.py 4 20 0 0
 tests/test_site_versions.py 6 0 0 0
 tests/test_source_paths.py 4 0 0 0
 tests/test_source_utf8.py 1 0 0 0
-tests/test_spec_alias.py 5 0 0 0
+tests/test_spec_alias.py 3 0 0 0
 tests/test_spec_bytecode.py 1 0 0 0
 tests/test_spec_bytes.py 2 0 0 0
 tests/test_spec_checker.py 3 0 0 0
 tests/test_spec_checker_defaults.py 1 0 0 0
-tests/test_spec_checker_rest.py 5 2 0 0
+tests/test_spec_checker_rest.py 7 2 0 0
 tests/test_spec_doc.py 1 0 0 0
 tests/test_spec_eag.py 2 0 0 0
 tests/test_spec_equality.py 2 0 0 0
-tests/test_spec_extern.py 20 1 0 0
+tests/test_spec_extern.py 5 1 0 0
 tests/test_spec_generic_structs.py 1 0 0 0
 tests/test_spec_generics.py 2 0 0 0
 tests/test_spec_help_std.py 1 0 0 0
@@ -61,7 +61,7 @@ tests/test_spec_json_lists.py 1 0 0 0
 tests/test_spec_lexer.py 3 0 0 0
 tests/test_spec_lint.py 2 0 0 0
 tests/test_spec_main.py 2 0 0 0
-tests/test_spec_modules.py 11 0 0 0
+tests/test_spec_modules.py 6 0 0 0
 tests/test_spec_optional.py 1 0 0 0
 tests/test_spec_outline.py 2 0 0 0
 tests/test_spec_package_add.py 9 0 0 0
@@ -75,7 +75,7 @@ tests/test_spec_package_override.py 3 0 0 0
 tests/test_spec_package_subdir.py 10 0 0 0
 tests/test_spec_package_workspace.py 3 0 0 0
 tests/test_spec_packages.py 11 0 0 0
-tests/test_spec_parser.py 11 0 0 0
+tests/test_spec_parser.py 3 0 0 0
 tests/test_spec_partial.py 21 0 0 0
 tests/test_spec_patterns.py 1 0 0 0
 tests/test_spec_refs.py 15 0 0 0
