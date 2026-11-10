@@ -78,13 +78,13 @@ program #78 0:1:1-293:16:1
             arg: literal #72 279:14:13-282:14:16 value=string:"a" type=String
             arg: list-lit #73 284:14:18-286:14:20 type=List(String)
   module "std/eag.agc"
-    declaration: function-decl #7 919:27:8-992:30:1 name="@2::html_escape"
+    declaration: function-decl #7 919:27:8-981:28:1 name="@2::html_escape" expression
       param: param #2 935:27:24-948:27:37 name="value"
         type: type-ref #1 942:27:31-948:27:37 name="String"
       result: type-ref #3 953:27:42-959:27:48 name="String"
-      body: return-stmt #6 962:28:3-988:29:1
-        value: call #5 969:28:10-987:28:28 name="@3::escape" piped=false type=String
-          arg: name-ref #4 981:28:22-986:28:27 name="value" type=String
+      body: return-stmt #6 962:27:51-980:27:69
+        value: call #5 962:27:51-980:27:69 name="@3::escape" piped=false type=String
+          arg: name-ref #4 974:27:63-979:27:68 name="value" type=String
   module "std/html.agc"
     declaration: const-decl #1 320:8:1-330:9:1 name="@3::HASH"
       value: literal #0 327:8:8-329:8:10 value=int:35 type=Int
