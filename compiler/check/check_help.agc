@@ -65,6 +65,12 @@ export def conversion(expected: Types.Type, actual: Types.Type) -> String
     )
   end
 
+  # A positional option where the options record goes, as in the spawns before Process.Options.
+  options = Types.Type.Struct("Process.Options", [])
+  if Types.same?(expected, options) and !Types.is?(actual, "Struct")
+    return "the options go in a record: Process.Options(timeout_ms: 5000, chdir: \"dir\", env: {...})"
+  end
+
   return convert_help(expected, actual)
 end
 

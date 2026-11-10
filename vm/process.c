@@ -51,6 +51,10 @@ typedef struct request request;
 typedef struct guard guard;
 typedef struct launch launch;
 
+/* Process.Options as compiler/catalog/builtins_data.agc lays it out, read by position; tests/test_process.py
+   (test_options_layout) fails when the two orders differ. */
+enum { OPTION_TIMEOUT_MS, OPTION_CHDIR, OPTION_ENV, OPTION_OUT, OPTION_ERR, OPTION_PGROUP, OPTION_FIELDS };
+
 /* One pair of the program's `env` map, taken out of the map by env_problem. Both strings are GC memory, and so is the
    array that holds the pairs, which keeps them alive. */
 typedef struct {
@@ -1473,12 +1477,16 @@ static bool begin_spawn(void *data, agc_io_job *job) {
   return true;
 }
 
-/* dir is NULL for Process.spawn; "." keeps the VM's directory. The command
-   resolves before the child changes directory (§10.4). out and err (Process.spawn only; NULL or empty: the pipe) are
-   files for the child's stdout and stderr, opened last, so a spawn refused for its other arguments touches no file. */
-static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string *dir, int64_t timeout, bool channel,
-                             const agc_map *env, const agc_string *out, const agc_string *err, bool group) {
+/* dir (NULL or "." keeps the VM's directory) is where the child starts; the command resolves before the child
+   changes directory (§10.4). captured keeps stdout and stderr in buffers (spawn_captured, spawn_channel). out and err
+   (Process.spawn only; NULL or empty: the pipe) are files for the child's stdout and stderr, opened last, so a spawn
+   refused for its other arguments touches no file. */
+static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string *dir, int64_t timeout, bool captured,
+                             bool channel, const agc_map *env, const agc_string *out, const agc_string *err,
+                             bool group) {
   if (vm->rt->deny_run) return agc_error_value("denied: --deny-run turns off starting programs");
+  bool files = (out && out->bytes) || (err && err->bytes);
+  if (files && captured) return agc_error_value("process: out and err need Process.spawn");
   const agc_string *command = agc_as_string(vm, args[0]);
   const agc_list *list = agc_as_list(vm, args[1]);
   /* Every argument is a String before the first malloc of the spawn (resolve): child_args copies these, so a wrong
@@ -1495,13 +1503,12 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   }
   if (!valid) return agc_error_value("process: command must be nonempty and arguments cannot contain NUL");
   if (dir && (dir->bytes == 0 || !no_nul(dir)))
-    return agc_error_value("process: dir must be nonempty and cannot contain NUL");
+    return agc_error_value("process: chdir must be nonempty and cannot contain NUL");
   if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_PROCESS);
   const env_pair *pairs;
   size_t pair_count;
   const char *env_text = env_problem(vm, env, &pairs, &pair_count);
   if (env_text) return agc_error_value(env_text);
-  bool files = (out && out->bytes) || (err && err->bytes);
   if (files && vm->rt->deny_fs) return agc_error_value(AGC_DENIED_FS);
   if (files && ((out && !no_nul(out)) || (err && !no_nul(err))))
     return agc_error_value("process: out and err cannot contain NUL");
@@ -1563,7 +1570,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   p->forward = &vm->rt->err;
   p->forward_wait = (agc_forward_wait){NULL, p->io, resume_err, p};
   p->file_wait = (agc_forward_wait){NULL, p->io, write_turn, p};
-  p->captured = dir != NULL;
+  p->captured = captured;
   if (!agc_io_here(vm)) {
     /* The resource comes first, so the owner's end closes the child whatever happens to the spawn. */
     request *q = new_request(vm, p, REQ_SPAWN);
@@ -1582,53 +1589,79 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   return agc_result_value(true, agc_process_value(pr));
 }
 
-/* The longest arity of each spawn (with `pgroup` last) is what the catalog lowers to. spawn_captured and
-   spawn_channel keep the arity before `pgroup`: bootstrap/stage0.agcb and the front end it compiles call the first, and
-   the first binary's driver (stage0) compiles std/test's runner, which calls the second. Each spawn also keeps the one
-   from before `env`, for older seeds (remove them with the next refresh of stage0). The C tests call the shortest. */
+/* Process.spawn, spawn_captured and spawn_channel with their Process.Options (the third argument): what the catalog
+   lowers to. */
+static agc_value spawn_options(agc_vm *vm, const agc_value *args, bool captured, bool channel) {
+  const agc_struct *o = agc_as_struct(vm, args[2]);
+  if (o->n != OPTION_FIELDS) agc_wrong_tag(vm);
+  const agc_value *f = o->fields;
+  return spawn_child(vm, args, agc_as_string(vm, f[OPTION_CHDIR]), agc_as_int(vm, f[OPTION_TIMEOUT_MS]), captured,
+                     channel, agc_as_map(vm, f[OPTION_ENV]), agc_as_string(vm, f[OPTION_OUT]),
+                     agc_as_string(vm, f[OPTION_ERR]), agc_as_bool(vm, f[OPTION_PGROUP]));
+}
+
+static agc_value builtin_spawn_options(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return spawn_options(vm, args, false, false);
+}
+
+static agc_value builtin_spawn_captured_options(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return spawn_options(vm, args, true, false);
+}
+
+static agc_value builtin_spawn_channel_options(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  return spawn_options(vm, args, true, true);
+}
+
+/* The positional spawns, from before Process.Options: the base stage0 and the older seeds still call them, and the C
+   tests call the shortest. Remove them in the PR after the one that refreshed stage0 with Process.Options. */
 static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false, NULL, NULL, NULL, false);
+  return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false, false, NULL, NULL, NULL, false);
 }
 
 static agc_value builtin_spawn_group(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false, agc_as_map(vm, args[3]),
+  return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false, false, agc_as_map(vm, args[3]),
                      agc_as_string(vm, args[4]), agc_as_string(vm, args[5]), agc_as_bool(vm, args[6]));
 }
 
 static agc_value builtin_spawn_captured(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, NULL, NULL, NULL, false);
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, false, NULL, NULL, NULL,
+                     false);
 }
 
 static agc_value builtin_spawn_captured_env(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, agc_as_map(vm, args[4]),
-                     NULL, NULL, false);
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, false,
+                     agc_as_map(vm, args[4]), NULL, NULL, false);
 }
 
 static agc_value builtin_spawn_captured_group(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), false, agc_as_map(vm, args[4]),
-                     NULL, NULL, agc_as_bool(vm, args[5]));
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, false,
+                     agc_as_map(vm, args[4]), NULL, NULL, agc_as_bool(vm, args[5]));
 }
 
 static agc_value builtin_spawn_channel(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, NULL, NULL, NULL, false);
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, true, NULL, NULL, NULL,
+                     false);
 }
 
 static agc_value builtin_spawn_channel_env(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, agc_as_map(vm, args[4]),
-                     NULL, NULL, false);
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, true,
+                     agc_as_map(vm, args[4]), NULL, NULL, false);
 }
 
 static agc_value builtin_spawn_channel_group(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, agc_as_map(vm, args[4]),
-                     NULL, NULL, agc_as_bool(vm, args[5]));
+  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, true,
+                     agc_as_map(vm, args[4]), NULL, NULL, agc_as_bool(vm, args[5]));
 }
 
 /* The child of a process value that is not closed. With several schedulers the I/O thread owns `closed`, so only the
@@ -1923,6 +1956,11 @@ static agc_value builtin_read_available(agc_vm *vm, agc_value *args, uint32_t sp
 const agc_builtin agc_process_builtins[] = {
   {"Process.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.spawn", 7, builtin_spawn_group, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Process.spawn.options", 3, builtin_spawn_options, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
+  {"Process.spawn_captured.options", 3, builtin_spawn_captured_options, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false,
+   false},
+  {"Process.spawn_channel.options", 3, builtin_spawn_channel_options, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false,
+   false},
   {"Process.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.send_bytes.bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},

@@ -111,6 +111,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
   order = checked.constants.concat(hoisted.map do |entry: LocatedConst| entry.constant.name end)
   mentioned = mentioned_in(checked.types, scanned.covered, watched)
   used = Set.new(scanned.written.concat(mentioned).concat(Builtins.default_enums().to_a))
+  used = used.union(called_records(scanned.function_scans.concat(scanned.constant_scans)))
   if used.include?("TaskDown")
     # The VM builds the reason of a TaskDown, so the enum is in the table even when no expression names it.
     used = used.add("TaskExit")
@@ -491,6 +492,20 @@ end
 # The watched struct and enum names that the type of some expression mentions. The type of a covered expression is
 # not walked below its top: the rest has the names of its child's type, walked at the child's id. Nested some(...),
 # ok(...) or [...] hold one another's types, so walking each of them whole is quadratic in the depth.
+# The builtin records that the called builtins build from a Fields default (Builtins.default_records).
+def called_records(scans: List[Scans.Scan]) -> Set[String]
+  found: Set[String] = Set.new([])
+  for scan in scans
+    for name in scan.calls
+      for record in Builtins.default_records(name)
+        found = found.add(record)
+      end
+    end
+  end
+
+  return found
+end
+
 def mentioned_in(types: List[Types.Type], covered: Set[Int], watched: Set[String]) -> List[String]
   found: Set[String] = Set.new([])
   id = 0

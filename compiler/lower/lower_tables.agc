@@ -35,8 +35,9 @@ export VM_BUILTINS = Set.new([
   "Dir.mkdir_private", "Path.cwd", "Path.join", "Path.resolve", "Path.real", "Path.remove", "Path.rename", "ATS.new",
   "ATS.put", "ATS.put_new", "ATS.get", "ATS.has_key?", "ATS.delete", "ATS.add", "ATS.size", "ATS.keys", "ATS.to_map",
   "Task.spawn", "Task.spawn_owning", "Task.await", "Task.sleep", "Channel.new", "Channel.send", "Channel.recv",
-  "Channel.close", "Channel.closed?", "Channel.empty?", "Process.spawn", "Process.send", "Process.send_bytes.bytes",
-  "Process.read_line", "Process.read_bytes.bytes", "Process.close_stdin", "Process.wait", "Process.close",
+  "Channel.close", "Channel.closed?", "Channel.empty?", "Process.spawn.options", "Process.send",
+  "Process.send_bytes.bytes", "Process.read_line", "Process.read_bytes.bytes", "Process.close_stdin", "Process.wait",
+  "Process.close",
   "TCP.connect", "TCP.listen", "TCP.accept", "TCP.local_port", "TCP.remote_address", "TCP.close_listener", "TCP.send",
   "TLS.alpn", "TCP.send_bytes.bytes", "TCP.recv_bytes.bytes", "TCP.read_line", "TCP.close", "TLS.connect",
   "TLS.listen", "TLS.client_context", "TLS.server_context", "TLS.upgrade", "HttpWire.service", "HttpWire.awaited?",
@@ -47,8 +48,9 @@ export VM_BUILTINS = Set.new([
   "HttpWire.server", "HttpWire.accept", "HttpWire.spawn", "HttpWire.close_server", "HttpWire.wait",
   "HttpWire.local_port", "LogRegistry.level", "LogRegistry.floor", "LogRegistry.set_level", "LogRegistry.lowest",
   "LogRegistry.install_default", "LogRegistry.attach", "LogRegistry.detach", "LogRegistry.names",
-  "LogRegistry.handlers", "LogRegistry.task_id", "RegexEngine.search", "Process.spawn_captured", "Process.output",
-  "Task.pending_count", "Process.spawn_channel", "Process.channel_read_line", "Process.channel_send",
+  "LogRegistry.handlers", "LogRegistry.task_id", "RegexEngine.search", "Process.spawn_captured.options",
+  "Process.output", "Task.pending_count", "Process.spawn_channel.options", "Process.channel_read_line",
+  "Process.channel_send",
   "Process.channel_close", "Process.read_available", "Process.parent_read_line", "Process.parent_send",
   "Task.await_result", "Task.unobserved_crash", "Test.test", "Test.run", "Test.eq", "Test.ok?", "Test.error?",
   "Test.assert", "FrontEnd.hand_off.bytes", "FrontEnd.std_source", "FrontEnd.stdin_bytes.bytes", "Task.map",
@@ -108,7 +110,7 @@ export NATIVE_LAYOUTS = Set.new(["Native.size_of", "Native.get_struct", "Native.
 export BUILTIN_STRUCTS = [
   "FileInfo", "Header", "HttpRequest", "HttpResponse", "HttpClientOptions", "HttpServerOptions", "ProcessOutput",
   "LogEvent", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Reply", "HttpWire.Job", "HttpWire.Response", "StructMember",
-  "Codec.Info", "TlsClientOptions", "TlsServerOptions", "TaskDown",
+  "Codec.Info", "TlsClientOptions", "TlsServerOptions", "TaskDown", "Process.Options",
 ]
 
 ## The builtin structs that another one has a field of: using the key also puts these in the table.
