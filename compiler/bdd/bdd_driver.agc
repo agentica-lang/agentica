@@ -175,7 +175,14 @@ def prepare_and_run(
     report_path: "#{directory}/report.txt",
   )
 
-  lines = Runner.config_text(config, entries, options.tags, options.jobs, options.timing)
+  # The parts of --coverage are files of the private run directory, so they go with it whatever the run's end.
+  parts = ""
+  if options.coverage
+    parts = "#{directory}/coverage"
+    try Dir.mkdir(parts, IO_TIMEOUT)
+  end
+
+  lines = Runner.config_text(config, entries, options.tags, options.jobs, options.timing, parts)
   try write_text("#{directory}/config.jsonl", lines)
   ran = Runner.run(options, runner, "#{directory}/config.jsonl", config.report_path)
   case ran

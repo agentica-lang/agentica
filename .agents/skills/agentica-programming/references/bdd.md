@@ -186,7 +186,11 @@ BDD.then_stdout_includes(ctx, expected) / then_stderr_includes(ctx, expected)
   one file; the report keeps the file order. Files that share a port, a path
   or a database need `--jobs 1`; a high `N` makes per-test timeouts likelier
   under CPU load. `--timing` adds the time of each file and of the 5 slowest
-  scenarios. Without `--seed N` every child shares the seed the runner drew
+  scenarios. `--coverage` writes the line coverage to `coverage/lcov.info`
+  (LCOV), without the test files, the step programs and the programs that a
+  step starts, and prints a summary; a failing run still writes it, and a
+  report that cannot be written fails the run (`RUNTIME-INTERNAL`). Without
+  `--seed N` every child shares the seed the runner drew
   (`testing.md`). A `*_test.agc` file in `specs/` is a
   test file: a helper with that name fails with `RUNTIME-TEST-RUN`. Use port 0
   and fresh temporary directories, not fixed names.

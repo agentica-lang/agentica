@@ -23,6 +23,7 @@ prelude/string.agc
 queue.agc
 regex.agc
 test/child.agc
+test/coverage.agc
 test/report.agc
 test/runner.agc
 test/units.agc

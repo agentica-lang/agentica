@@ -1,0 +1,16 @@
+SF:src/shapes.agc
+FN:1,area
+FN:11,unused
+FNDA:4,area
+FNDA:0,unused
+FNF:2
+FNH:1
+DA:2,4
+DA:3,3
+DA:4,1
+DA:5,1
+DA:8,0
+DA:12,0
+LF:6
+LH:4
+end_of_record

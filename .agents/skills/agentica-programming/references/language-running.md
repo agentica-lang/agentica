@@ -32,7 +32,8 @@ the list of commands and flags.
   (`RUNTIME-STEP-LIMIT`); it is not an I/O timeout.
 - `--coverage FILE` writes the line coverage of the run as LCOV (the program's
   files, not `std/` or fetched packages), a failed run too; the JIT is off for
-  that run. `agentica test` does not take it.
+  that run. `agentica test --coverage` (no file) writes the coverage of the
+  sources a test run ran to `coverage/lcov.info` (`bdd.md`).
 - `agentica compile FILE.agc -o OUT.agcb` writes bytecode; `agentica run
   [FLAGS] -- OUT.agcb [ARGS...]` runs it, on the same Agentica version only.
   Flags go before `--` (`--max-steps`, `--seed`, `--schedulers N`, `--jit MODE`,

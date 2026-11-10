@@ -4,9 +4,8 @@ How `agentica test` works: the driver (`compiler/bdd/bdd_driver.agc`, part of
 the front end), `std/bdd`, the runner in `stdlib/test/`, step programs, unit
 test files and the child channel records. Read before changing any of them.
 User docs and the runner protocol are in `docs/bdd.md`. `std/bdd` is the public
-step API; `std/bdd/gherkin`, `std/bdd/match`, `std/bdd/tags`,
-`std/test/runner`, `std/test/report` are internal (not in the programming skill
-or the site).
+step API; the modules under `std/bdd/` and `std/test/` are internal (not in
+the programming skill or the site).
 
 ## Driver (`compiler/bdd/`)
 
@@ -146,6 +145,10 @@ or the site).
   are `NotExecuted`. After the last test it closes stdin and waits: exit 1 with
   the unobserved summary is a `RUNTIME-TASK-CRASHED` file error.
 - `std/test/child` holds what both runners share.
+- `std/test/coverage` merges the LCOV part of each child of `agentica test
+  --coverage` (in the run folder, `N.info` or `N-K.info`) into
+  `coverage/lcov.info`; the parts folder is the last line of the runner
+  configuration.
 - A crash record carries the stack (`stack`, `stack_omitted`, `spawned_at` in
   the `fail` record); `record_error` in `units.agc` keeps them as the error's
   `original`, so `--json` writes them and `Report.text` prints them. Assertion,

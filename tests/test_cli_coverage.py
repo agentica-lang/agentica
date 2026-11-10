@@ -1,8 +1,11 @@
 """`agentica --coverage FILE`: the line coverage of a run as LCOV. The fixture program has a branch that never runs, a
 function that is never called, a block, a file it imports and a std/ module; the golden is its report. The report is
 also read back by a small LCOV reader here, which checks the totals of each record against its lines."""
+import json
 import os
 import shutil
+
+import pytest
 
 from tests.agentica_test import ROOT, cli, run, vm_environment
 from tests.package_support import (dependency, environment, git, inline_table, install, lock_entry,  # noqa: F401
@@ -204,8 +207,117 @@ def test_a_file_that_cannot_be_written_fails_the_run_or_adds_a_notice_to_its_fai
     assert lines[1:] == ['{"warning":"cannot write the coverage file"}']
 
 
-def test_coverage_needs_a_file_name_and_the_test_runner_refuses_it(tmp_path):
+def test_coverage_needs_a_file_name_and_the_test_runner_takes_its_own_option(tmp_path):
     cwd = program(tmp_path)
     assert agentica(cwd, "--coverage", "", "main.agc").code == 2
-    assert agentica(cwd, "test", "--coverage", "out.info").code == 2
+    assert agentica(cwd, "--coverage", "out.info", "test").code == 2
     assert not (cwd / "out.info").exists()
+
+
+# `agentica test --coverage`: a project with a source, two test files (one test fails), a feature and its step program.
+# The golden counts only src/shapes.agc: the test files and steps.agc ran but are left out.
+def project(tmp_path):
+    shutil.copytree(FIXTURE / "project", tmp_path, dirs_exist_ok=True)
+    return tmp_path
+
+
+def test_a_test_run_writes_one_report_of_its_sources_whatever_the_order_of_its_children(tmp_path):
+    cwd = project(tmp_path)
+    report = cwd / "coverage" / "lcov.info"
+    result = agentica(cwd, "test", "--coverage")
+    # A failing test keeps its exit code and still writes the report.
+    assert result.code == 1, result.stderr
+    golden = (FIXTURE / "project.info").read_text()
+    assert report.read_text() == golden
+    assert records(golden)["src/shapes.agc"]["functions"] == {"area": (1, 4), "unused": (11, 0)}
+    assert result.stdout.splitlines()[-3:] == [
+        "coverage: coverage/lcov.info", "  src/shapes.agc 4/6 lines (66.6%)", "  total 4/6 lines (66.6%)"]
+    # The parts of the children are gone, and the report is replaced in place on the next run.
+    assert sorted(str(path.relative_to(cwd)) for path in cwd.rglob("*") if "_build" not in path.parts) == [
+        "coverage", "coverage/lcov.info", "specs", "specs/area.feature", "specs/steps.agc", "src", "src/shapes.agc",
+        "test", "test/area_test.agc", "test/other_test.agc"]
+    assert agentica(cwd, "test", "--coverage", "--jobs", "3").code == 1
+    assert report.read_text() == golden
+
+    result = agentica(cwd, "--json", "test", "--coverage")
+    assert json.loads(result.stdout)["coverage"] == {
+        "path": "coverage/lcov.info", "lines": 6, "hit": 4, "files": [{"file": "src/shapes.agc", "lines": 6, "hit": 4}],
+        "broken": [], "problem": None}
+
+
+def test_a_green_run_whose_report_cannot_be_written_fails(tmp_path):
+    cwd = project(tmp_path)
+    (cwd / "coverage").write_text("not a folder\n")
+    result = agentica(cwd, "--json", "test", "--coverage", "--only", "square")
+    assert result.code == 1, result.stderr
+    report = json.loads(result.stdout)
+    assert (report["ok"], report["exit_code"], report["failed"]) == (False, 1, 0)
+    assert (report["coverage"]["path"], report["coverage"]["problem"]["code"]) == (None, "RUNTIME-INTERNAL")
+    assert (cwd / "coverage").read_text() == "not a folder\n"
+
+
+@pytest.mark.skipif(os.name == "nt" or os.geteuid() == 0, reason="needs a folder its owner cannot write to")
+def test_a_report_that_cannot_be_written_in_its_folder_leaves_nothing_there(tmp_path):
+    cwd = project(tmp_path)
+    folder = cwd / "coverage"
+    folder.mkdir()
+    folder.chmod(0o555)
+    try:
+        result = agentica(cwd, "--json", "test", "--coverage", "--only", "square")
+        assert result.code == 1, result.stderr
+        assert json.loads(result.stdout)["coverage"]["problem"]["code"] == "RUNTIME-INTERNAL"
+        assert list(folder.iterdir()) == []
+    finally:
+        folder.chmod(0o755)
+
+
+def test_a_run_with_no_tests_keeps_the_old_report(tmp_path):
+    (tmp_path / "test").mkdir()
+    (tmp_path / "coverage").mkdir()
+    (tmp_path / "coverage" / "lcov.info").write_text("SF:old.agc\nend_of_record\n")
+    result = agentica(tmp_path, "--json", "test", "--coverage")
+    assert result.code == 1
+    report = json.loads(result.stdout)
+    assert report["files"][0]["error"]["code"] == "CHECK-BDD-EMPTY"
+    assert report["coverage"] == {"path": None, "lines": 0, "hit": 0, "files": [], "broken": [], "problem": None}
+    assert (tmp_path / "coverage" / "lcov.info").read_text() == "SF:old.agc\nend_of_record\n"
+
+
+def merge(tmp_path, *words):
+    shutil.copy(FIXTURE / "merge.agc", tmp_path / "merge.agc")
+    return agentica(tmp_path, "merge.agc", *words)
+
+
+def test_the_merge_writes_back_what_it_reads_from_a_part(tmp_path):
+    cwd = program(tmp_path)
+    assert agentica(cwd, "--coverage", "part.info", "main.agc").code == 0
+    part = (cwd / "part.info").read_text()
+    # The merge writes the files in name order and keeps everything else of each record.
+    blocks = sorted(block + "end_of_record\n" for block in part.split("end_of_record\n")[:-1])
+    result = merge(cwd, "read", "part.info")
+    assert result.code == 0, result.stderr
+    assert result.stdout == "".join(blocks)
+    assert records(result.stdout) == records(part)
+
+
+def test_a_part_that_is_not_lcov_is_left_out_and_named(tmp_path):
+    parts = tmp_path / "parts"
+    parts.mkdir()
+    (parts / "1.info").write_text("SF:a.agc\nDA:1,1\nDA:2,0\nLF:2\nLH:1\nend_of_record\n")
+    (parts / "2.info").write_text("SF:a.agc\nDA:oops\nend_of_record\n")
+    # A TN line is valid LCOV and is ignored; a part cut in the middle of a record is broken.
+    (parts / "3.info").write_text("TN:\nSF:a.agc\nDA:2,3\nend_of_record\n")
+    (parts / "4.info").write_text("SF:a.agc\nDA:1,1\n")
+    result = merge(tmp_path, "collect", "parts")
+    assert result.code == 0, result.stderr
+    covered = json.loads(result.stdout)
+    assert [part["part"] for part in covered["broken"]] == ["2.info", "4.info"]
+    assert (covered["path"], covered["files"], covered["problem"]) == (
+        "coverage/lcov.info", [{"file": "a.agc", "lines": 2, "hit": 2}], None)
+    assert records((tmp_path / "coverage" / "lcov.info").read_text())["a.agc"]["lines"] == {1: 1, 2: 3}
+    # Parts that are all broken are a problem: the old report stays and would pass for this run's.
+    (parts / "1.info").unlink()
+    (parts / "3.info").unlink()
+    covered = json.loads(merge(tmp_path, "collect", "parts").stdout)
+    assert (covered["path"], covered["problem"]["code"]) == (None, "RUNTIME-INTERNAL")
+    assert records((tmp_path / "coverage" / "lcov.info").read_text())["a.agc"]["lines"] == {1: 1, 2: 3}
