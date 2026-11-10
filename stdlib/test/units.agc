@@ -375,9 +375,7 @@ def scenario(item: UnitTest, duration_ms: Int, verdict: Report.Verdict, output: 
   )
 end
 
-def joined(output: String, stderr: String) -> String
-  return [output, stderr].filter do |part| part != "" end.join("\n")
-end
+def joined(output: String, stderr: String) -> String = [output, stderr].filter do |part| part != "" end.join("\n")
 
 # The child that runs the tests writes the LCOV part of the file; the one that lists them does not.
 def args(settings: Settings, bytecode: String, steps: Int, mode: String) -> List[String]

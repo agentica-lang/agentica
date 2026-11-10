@@ -13,9 +13,7 @@ end
 
 # The rest of the opener line is code, so a heredoc is a value like any other string, and two on a line take their
 # texts one after the other.
-def banner(title: String, body: String) -> String
-  return "#{title.upcase}\n#{body}"
-end
+def banner(title: String, body: String) -> String = "#{title.upcase}\n#{body}"
 
 def main() -> Void
   print(usage("tool", 2))

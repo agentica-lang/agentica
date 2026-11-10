@@ -153,9 +153,7 @@ end
 ## A `DateTime` becomes its string. An `inf` or `nan` float is an error, since `Json` cannot hold it. An integer stays
 ## an integer and a float stays a float (`1.0` is not `1`). A value nested more than 2,048 levels (no document `parse`
 ## reads is that deep) is an error, not a halt.
-export def to_json(value: Value) -> Result[Json]
-  return json_of(value, 0)
-end
+export def to_json(value: Value) -> Result[Json] = json_of(value, 0)
 
 ## Looks up a value by a dotted path of keys: `Toml.get(doc, "package.name")`. A segment of plain ASCII digits without
 ## a leading zero also indexes an array (`"bin.0.path"`). Returns an error that names the missing key. A key that holds
@@ -222,9 +220,7 @@ end
 
 # Nesting limit of arrays, inline tables and keys. The recursion of the reader, the encoder and
 # to_json is about three frames per level, far under the VM's call limit of 10,000.
-def max_depth() -> Int
-  return 256
-end
+def max_depth() -> Int = 256
 
 def empty_tbl(origin: Origin, stamp: Int) -> Tbl
   entries: Map[String, Node] = {}
@@ -270,9 +266,7 @@ def at(src: Src, pos: Int) -> Int
   return -1
 end
 
-def has(src: Src, c: Int, bit: Int) -> Bool
-  return c >= 0 and c < 128 and src.cls[c].bit_and(bit) != 0
-end
+def has(src: Src, c: Int, bit: Int) -> Bool = c >= 0 and c < 128 and src.cls[c].bit_and(bit) != 0
 
 # The text of the characters `from` up to, not including, `to`.
 def piece(src: Src, from: Int, to: Int) -> String
@@ -1034,9 +1028,7 @@ def float_text(x: Float) -> String
   return String.from_float(x)
 end
 
-def hex_digit(n: Int) -> String
-  return String.slice("0123456789ABCDEF", n, 1)
-end
+def hex_digit(n: Int) -> String = String.slice("0123456789ABCDEF", n, 1)
 
 # The escape of one character that a basic string cannot hold as it is.
 def escape_for(c: Int) -> String
@@ -1097,9 +1089,7 @@ def key_text(key: String) -> String
   return quote(key)
 end
 
-def path_text(path: List[String]) -> String
-  return path.map do |k| key_text(k) end.join(".")
-end
+def path_text(path: List[String]) -> String = path.map do |k| key_text(k) end.join(".")
 
 # `depth` counts the arrays and tables above `value`; the reader refuses more than 256, so the
 # writer does too, and what it writes can be read back.

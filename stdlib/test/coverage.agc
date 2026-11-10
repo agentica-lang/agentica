@@ -92,9 +92,7 @@ export def collect(parts: String, left_out: List[String]) -> Run
 end
 
 ## Whether the coverage fails the run: a report that should have been written was not, so an old one may be stale.
-export def failed?(run: Run) -> Bool
-  return run.problem != ""
-end
+export def failed?(run: Run) -> Bool = run.problem != ""
 
 ## A path as the report names it: relative to the working directory when it is inside it.
 export def shown(path: String) -> String

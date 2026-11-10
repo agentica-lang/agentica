@@ -542,9 +542,7 @@ export def close_client(pool: HttpClient) -> Void
 end
 
 ## Sends a `GET` request to `url` and returns the response, whose `body` is `Bytes`.
-export def get(pool: HttpClient, url: String) -> Result[HttpResponse]
-  return request(pool, "GET", url, NO_BYTES)
-end
+export def get(pool: HttpClient, url: String) -> Result[HttpResponse] = request(pool, "GET", url, NO_BYTES)
 
 ## Sends a `POST` request to `url` with the `Bytes` `body` and `headers`, which default to none, as Ruby's
 ## `Net::HTTP.post(uri, data, header)` does. Send text as `"...".bytes`.
@@ -1016,14 +1014,10 @@ export def whole(data: Bytes) -> Channel[Bytes]
 end
 
 ## Returns the port the server listens on.
-export def local_port(server: HttpServer) -> Int
-  return HttpWire.local_port(server)
-end
+export def local_port(server: HttpServer) -> Int = HttpWire.local_port(server)
 
 ## Returns `ok()` once the server and its tasks are done.
-export def wait(server: HttpServer) -> Result[Void]
-  return HttpWire.wait(server)
-end
+export def wait(server: HttpServer) -> Result[Void] = HttpWire.wait(server)
 
 ## Stops accepting, closes every connection and cancels the running handlers. Calling it again does nothing.
 export def close_server(server: HttpServer) -> Void
@@ -1908,13 +1902,9 @@ def charset_of(headers: List[Header]) -> String
   return ""
 end
 
-def first_of(text: String, part: String) -> Int
-  return text.index_of(part).unwrap_or(text.length)
-end
+def first_of(text: String, part: String) -> Int = text.index_of(part).unwrap_or(text.length)
 
-def rest_of(text: String, start: Int) -> String
-  return String.slice(text, start, String.length(text) - start)
-end
+def rest_of(text: String, start: Int) -> String = String.slice(text, start, String.length(text) - start)
 
 def plain?(text: String, digits_only: Bool) -> Bool
   for c in String.split(text, "")
@@ -1935,9 +1925,7 @@ def ipv6?(text: String) -> Bool
   return true
 end
 
-def bad_url() -> Result[Target]
-  return error("http: the URL must be http:// or https:// with a host, and without user info")
-end
+def bad_url() -> Result[Target] = error("http: the URL must be http:// or https:// with a host, and without user info")
 
 def parse_url(url: String) -> Result[Target]
   split = first_of(url, "://")
@@ -2125,9 +2113,7 @@ def closed_pieces() -> Channel[Bytes]
 end
 
 # The feeder of a request with no body.
-def no_body() -> Result[Void]
-  return ok()
-end
+def no_body() -> Result[Void] = ok()
 
 # Whether the feeder ended cancelled. A feeder that still reads a body the app left unread gets 1 ms before it counts
 # as not cancelled.
@@ -2186,9 +2172,7 @@ def stream_closing_unless(response: StreamResponse, whole: Bool) -> StreamRespon
   return StreamResponse(status: response.status, headers: headers, body: response.body, length: response.length)
 end
 
-def serving(f: App) -> App
-  return f
-end
+def serving(f: App) -> App = f
 
 # The answer of `app(handler)`: the body read whole (the `body_refusal` of its error when it cannot be), then the
 # handler's response.
@@ -2428,13 +2412,9 @@ end
 
 # Whether a frame `frame_of` made closes the connection: a close, or a `Prepared` it turned into one. The opcode is
 # read off the frame, so a message is checked once.
-def closing_frame?(frame: Bytes) -> Bool
-  return WebSocketWire.close?(frame.at(0) % 16)
-end
+def closing_frame?(frame: Bytes) -> Bool = WebSocketWire.close?(frame.at(0) % 16)
 
-def cut_control(data: Bytes) -> Bytes
-  return data.take(WS_CONTROL_BYTES)
-end
+def cut_control(data: Bytes) -> Bytes = data.take(WS_CONTROL_BYTES)
 
 # The code of a close frame a handler asked for; one that cannot be sent is the handler's mistake: 1011.
 def sendable_code(code: Int) -> Int
@@ -2718,9 +2698,7 @@ def message_of(text: Bool, data: Bytes) -> Message
 end
 
 # Hands a message to the handler, waiting for room; false when the handler is gone (the channel closed).
-def deliver(wire: Wire, message: Message) -> Bool
-  return send_when_room(wire.incoming, message)
-end
+def deliver(wire: Wire, message: Message) -> Bool = send_when_room(wire.incoming, message)
 
 # What a control frame does. True when the connection goes on.
 def on_control(wire: Wire, head: WebSocketWire.Head, payload: Bytes) -> Bool
@@ -3097,9 +3075,7 @@ end
 # character is one byte on the wire and a value with `é` goes out as the single byte 0xE9, as HTTP/1.1 allows.
 # `unwrap!` cannot fail: encode_request and encode_response refuse any header value above U+00FF, and the rest of
 # the head (method, target, host, status line, names) is ASCII.
-def head_bytes(head: String) -> Bytes
-  return head.encode("latin-1").unwrap!
-end
+def head_bytes(head: String) -> Bytes = head.encode("latin-1").unwrap!
 
 # The encoded head says Content-Length: 0 (the body there is empty): a stream with no known length says chunked, and
 # one with a length says it.
@@ -3504,9 +3480,7 @@ def next_waiting(pool: Pool, key: String) -> Pool
   return with_origin(pool, key, origin)
 end
 
-def queued(origin: Origin) -> Int
-  return List.size(origin.waiting) - origin.front
-end
+def queued(origin: Origin) -> Int = List.size(origin.waiting) - origin.front
 
 # The origin without its oldest waiting job. The taken jobs are dropped once they are half of the list.
 def popped(origin: Origin) -> Origin

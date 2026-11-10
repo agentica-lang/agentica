@@ -1,8 +1,6 @@
 type Names = List[String]
 
-def count(names: Names) -> Int
-  return names.size
-end
+def count(names: Names) -> Int = names.size
 
 def main() -> Void
   names: Names = ["red", "blue"]

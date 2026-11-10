@@ -182,9 +182,7 @@ export def compile(pattern: String) -> Result[Regex]
 end
 
 ## Whether the pattern matches anywhere in `text`. It keeps no groups, so it is the cheapest search.
-export def match?(text: String, re: Regex) -> Bool
-  return run(text, re.program, MODE_TEST).size > 0
-end
+export def match?(text: String, re: Regex) -> Bool = run(text, re.program, MODE_TEST).size > 0
 
 ## The leftmost-first match in `text`, or `error("no match")`.
 export def match(text: String, re: Regex) -> Result[Match]
@@ -256,9 +254,7 @@ export def split(text: String, re: Regex) -> List[String]
 end
 
 ## A pattern that matches `text` literally. A backslash goes before each of the characters `\.+*?()|[]{}^$`.
-export def escape(text: String) -> String
-  return text.split("").map(&escape_char).join("")
-end
+export def escape(text: String) -> String = text.split("").map(&escape_char).join("")
 
 ## The group of `m` with that name, or an error when the pattern has no such group.
 export def named(m: Match, name: String) -> Result[Group]
@@ -268,18 +264,14 @@ export def named(m: Match, name: String) -> Result[Group]
   end
 end
 
-def place(pos: Int, message: String) -> String
-  return "character #{pos + 1}: #{message}"
-end
+def place(pos: Int, message: String) -> String = "character #{pos + 1}: #{message}"
 
 def ch(pat: Pat, pos: Int) -> String
   return pat.chars[pos] if pos < pat.n
   return ""
 end
 
-def piece_of(pat: Pat, from: Int, to: Int) -> String
-  return pat.chars.drop(from).take(to - from).join("")
-end
+def piece_of(pat: Pat, from: Int, to: Int) -> String = pat.chars.drop(from).take(to - from).join("")
 
 def parse_alt(pat: Pat, st: St, depth: Int) -> Result[Out]
   branches: List[Node] = []
@@ -640,9 +632,7 @@ def escape_at(pat: Pat, pos: Int, in_class: Bool) -> Result[Esc]
   return ok(Esc(kind: -1, code: code, ranges: [], stop: stop))
 end
 
-def digit?(c: String) -> Bool
-  return c != "" and c.code >= 48 and c.code <= 57
-end
+def digit?(c: String) -> Bool = c != "" and c.code >= 48 and c.code <= 57
 
 def punctuation?(c: Int) -> Bool
   return (c >= 33 and c <= 47) or (c >= 58 and c <= 64) or (c >= 91 and c <= 96) or (c >= 123 and c <= 126)

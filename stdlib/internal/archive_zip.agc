@@ -982,9 +982,7 @@ def stays_under(out: String, dest: String) -> Bool
   return String.starts_with?(out, back_join(dest))
 end
 
-def back_join(dest: String) -> String
-  return "#{dest}\\"
-end
+def back_join(dest: String) -> String = "#{dest}\\"
 
 def join_under(dest: String, segments: List[String]) -> Result[String]
   out = try join_one(List.concat([dest], segments))

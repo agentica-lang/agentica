@@ -5,21 +5,13 @@ struct Page[T]
   number: Int = 1
 end
 
-def numbers_page() -> Page[Int]
-  return Page(items: [10, 20, 30])
-end
+def numbers_page() -> Page[Int] = Page(items: [10, 20, 30])
 
-def names_page() -> Page[String]
-  return Page(items: ["ana", "ben"], number: 2)
-end
+def names_page() -> Page[String] = Page(items: ["ana", "ben"], number: 2)
 
-def last_page() -> Page[String]
-  return Page(items: [], number: 3)
-end
+def last_page() -> Page[String] = Page(items: [], number: 3)
 
-def describe(page: Page[String]) -> String
-  return "page #{page.number}: #{page.items.size} item(s)"
-end
+def describe(page: Page[String]) -> String = "page #{page.number}: #{page.items.size} item(s)"
 
 def main() -> Void
   numbers = numbers_page()

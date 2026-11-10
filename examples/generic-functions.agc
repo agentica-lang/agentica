@@ -35,9 +35,7 @@ def with[T, R](pool: Pool[T], body: Fn[T, Result[R]]) -> Result[R]
   return body.call(pool.items[0])
 end
 
-def double(n: Int) -> Int
-  return n * 2
-end
+def double(n: Int) -> Int = n * 2
 
 def main() -> Void
   names = ["ana", "ben"]

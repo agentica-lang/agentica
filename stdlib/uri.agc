@@ -34,27 +34,19 @@ end
 
 ## Encodes `text` for a query string or a form: space becomes `+` and every byte but `A-Z a-z 0-9 * - . _` becomes
 ## `%XX`, as Ruby's `URI.encode_www_form_component`.
-export def encode_www_form_component(text: String) -> String
-  return encode(text, [PLUS])
-end
+export def encode_www_form_component(text: String) -> String = encode(text, [PLUS])
 
 ## Encodes `text` for a path segment or any URI component: space becomes `%20` and every byte but `A-Z a-z 0-9 * - . _`
 ## becomes `%XX`, as Ruby's `URI.encode_uri_component`.
-export def encode_uri_component(text: String) -> String
-  return encode(text, ENCODED_SPACE)
-end
+export def encode_uri_component(text: String) -> String = encode(text, ENCODED_SPACE)
 
 ## Decodes a query string or form component: `+` becomes a space and `%XX` becomes its byte, as Ruby's
 ## `URI.decode_www_form_component`. Returns an error for a `%` without two hex digits and for bytes that are not UTF-8.
-export def decode_www_form_component(text: String) -> Result[String]
-  return decode(text, true)
-end
+export def decode_www_form_component(text: String) -> Result[String] = decode(text, true)
 
 ## Decodes a path segment or any URI component: `%XX` becomes its byte and `+` stays a plus, as Ruby's
 ## `URI.decode_uri_component`. Returns an error for a `%` without two hex digits and for bytes that are not UTF-8.
-export def decode_uri_component(text: String) -> Result[String]
-  return decode(text, false)
-end
+export def decode_uri_component(text: String) -> Result[String] = decode(text, false)
 
 ## Joins pairs into a query string, `a=1&a=2&b=`, encoding each name and value with `encode_www_form_component`. Names
 ## may repeat and the order is kept.
