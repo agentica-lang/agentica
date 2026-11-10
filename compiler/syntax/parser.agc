@@ -292,8 +292,8 @@ end
 ## one program can share one numbering: start the next file at Ast.next_free_id(program).
 export def parse(tokens: List[Tokens.Token], first_id: Int) -> Diag.Outcome[Ast.Program]
   case parse_program(Base.make_env(tokens), first_id)
-    ok(program) -> return Diag.Outcome.Done(program)
-    error(text) -> return Diag.Outcome.Failed(Base.unpack(text))
+    ok(program) -> Diag.Outcome.Done(program)
+    error(text) -> Diag.Outcome.Failed(Base.unpack(text))
   end
 end
 
@@ -312,14 +312,14 @@ def expect_head_end(e: Base.Env, pos: Int, description: String, form: String) ->
     )
   end
 
-  return Base.expect(e, pos, "NL", description, false)
+  Base.expect(e, pos, "NL", description, false)
 end
 
 # Inside a do block body a statement may also end at `end` on the same line; the end is not consumed
 # (expect_statement_end).
 def statement_end?(e: Base.Env, pos: Int) -> Bool
   kind = e.tokens[pos].kind
-  return kind == "NL" or (e.depth > 0 and kind == "end")
+  kind == "NL" or (e.depth > 0 and kind == "end")
 end
 
 def expect_statement_end(e: Base.Env, pos: Int, description: String) -> Result[Int]
@@ -341,21 +341,21 @@ def expect_statement_end(e: Base.Env, pos: Int, description: String) -> Result[I
 
   return ok(pos) if e.depth > 0 and token.kind == "end"
 
-  return Base.expect(e, pos, "NL", description, false)
+  Base.expect(e, pos, "NL", description, false)
 end
 
 def unless_at?(e: Base.Env, pos: Int) -> Bool = e.tokens[pos].kind == "name" and e.tokens[pos].lexeme == "unless"
 
 # PARSE-UNEXPECTED-TOKEN at an `unless` after a statement; `help` shows a guard after return, break and next.
 def unless_help(e: Base.Env, pos: Int, help: String) -> String
-  return Base.unexpected_help(e, pos, "expected a newline after the statement, found \"unless\"", help)
+  Base.unexpected_help(e, pos, "expected a newline after the statement, found \"unless\"", help)
 end
 
 # Only return, break and next take an `if` modifier (parse_statement_guard); no statement takes a `while` one.
 def modifier_help(keyword: String) -> String
   return "only return, break and next take an if modifier: put the statement inside if cond ... end" if keyword == "if"
 
-  return "there are no #{keyword} modifiers: put the statement inside #{keyword} cond ... end"
+  "there are no #{keyword} modifiers: put the statement inside #{keyword} cond ... end"
 end
 
 def expect_end(e: Base.Env, pos: Int) -> Result[Int]
@@ -366,11 +366,11 @@ def expect_end(e: Base.Env, pos: Int) -> Result[Int]
     return error(Base.bail(e, pos, "PARSE-UNCLOSED-BLOCK", "unclosed block, expected \"end\"", Diag.Help.NoHelp))
   end
 
-  return error(Base.found(e, pos, "\"end\""))
+  error(Base.found(e, pos, "\"end\""))
 end
 
 def expr_at(node: Ast.Expr, pos: Int, ids: Int) -> Result[Base.ExprAt]
-  return ok(Base.ExprAt(node: node, pos: pos, ids: ids + 1))
+  ok(Base.ExprAt(node: node, pos: pos, ids: ids + 1))
 end
 
 def call_node(
@@ -393,7 +393,7 @@ def call_node(
     ),
   )
 
-  return expr_at(node, cursor, ids)
+  expr_at(node, cursor, ids)
 end
 
 # Ranges bind loosest and do not chain: a range is parsed here, over operands of level 1 and above.
@@ -428,7 +428,7 @@ def parse_expression(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     ),
   )
 
-  return expr_at(node, right.pos, right.ids)
+  expr_at(node, right.pos, right.ids)
 end
 
 # x |> f(a) becomes the call f(x, a), keeping the id and span of the call written on the right, so the ids stay in
@@ -441,11 +441,11 @@ def pipe_insert(left: Ast.Expr, node: Ast.Expr) -> Optional[Ast.Expr]
   case node
     Ast.Expr.Try(wrapper) ->
       case piped_call(left, wrapper.operand)
-        some(inserted) -> return some(Ast.Expr.Try(Ast.TryExpr(id: wrapper.id, operand: inserted, span: wrapper.span)))
-        none -> return none
+        some(inserted) -> some(Ast.Expr.Try(Ast.TryExpr(id: wrapper.id, operand: inserted, span: wrapper.span)))
+        none -> none
       end
 
-    _ -> return piped_call(left, node)
+    _ -> piped_call(left, node)
   end
 end
 
@@ -454,28 +454,28 @@ def piped_call(left: Ast.Expr, node: Ast.Expr) -> Optional[Ast.Expr]
     Ast.Expr.Call(call) ->
       return none if call.piped or !call.parenthesized
 
-      return some(pipe_node(call.id, call.name, List.concat([left], call.args), call.span))
+      some(pipe_node(call.id, call.name, List.concat([left], call.args), call.span))
     Ast.Expr.MethodCall(call) ->
       case call.target
         Ast.Expr.TypeName(type_name) ->
           return none if type_name.name.split(".").size != 2
 
-          return some(pipe_node(call.id, "#{type_name.name}.#{call.name}", List.concat([left], call.args), call.span))
-        _ -> return none
+          some(pipe_node(call.id, "#{type_name.name}.#{call.name}", List.concat([left], call.args), call.span))
+        _ -> none
       end
 
-    _ -> return none
+    _ -> none
   end
 end
 
 def pipe_node(id: Int, name: String, args: List[Ast.Expr], span: Source.Span) -> Ast.Expr
-  return Ast.Expr.Call(Ast.Call(id: id, name: name, args: args, piped: true, parenthesized: false, span: span))
+  Ast.Expr.Call(Ast.Call(id: id, name: name, args: args, piped: true, parenthesized: false, span: span))
 end
 
 def chained_message(level: Int) -> String
   return "equality does not chain; combine two comparisons with \"and\"" if level == 3
 
-  return "comparison does not chain; write \"a < b and b < c\""
+  "comparison does not chain; write \"a < b and b < c\""
 end
 
 # Precedence climbing over the binary levels of level_of, the same grammar as the chain of parse-or ...
@@ -553,7 +553,7 @@ def parse_climb(e: Base.Env, pos: Int, ids: Int, minimum: Int) -> Result[Base.Ex
     end
   end
 
-  return error(Base.impossible(e, cursor))
+  error(Base.impossible(e, cursor))
 end
 
 # try, - and not nest, so each one counts a level.
@@ -582,15 +582,15 @@ def parse_unary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     return expr_at(node, operand.pos, operand.ids)
   end
 
-  return parse_postfix(e, pos, ids)
+  parse_postfix(e, pos, ids)
 end
 
 def block_target?(target: Ast.Expr) -> Bool
   case target
-    Ast.Expr.Call(_) -> return true
-    Ast.Expr.MethodCall(_) -> return true
-    Ast.Expr.FieldAccess(_) -> return true
-    _ -> return false
+    Ast.Expr.Call(_) -> true
+    Ast.Expr.MethodCall(_) -> true
+    Ast.Expr.FieldAccess(_) -> true
+    _ -> false
   end
 end
 
@@ -601,7 +601,7 @@ def block_name_help(name: String) -> String
 
   return "there is no loop; use while true ... end, or a while condition" if name == "loop"
 
-  return "to call a function, add parentheses: #{name}() do ... end; an if condition ends with a newline, not do"
+  "to call a function, add parentheses: #{name}() do ... end; an if condition ends with a newline, not do"
 end
 
 # `do` after a call, a method call or a field access adds a block as the last argument. The node built before is
@@ -623,7 +623,7 @@ def attach_block(e: Base.Env, start: Int, target: Ast.Expr, cursor: Int, ids: In
         ),
       )
 
-      return expr_at(node, block.pos, block.ids)
+      expr_at(node, block.pos, block.ids)
     Ast.Expr.MethodCall(call) ->
       node = Ast.Expr.MethodCall(
         Ast.MethodCall(
@@ -636,7 +636,7 @@ def attach_block(e: Base.Env, start: Int, target: Ast.Expr, cursor: Int, ids: In
         ),
       )
 
-      return expr_at(node, block.pos, block.ids)
+      expr_at(node, block.pos, block.ids)
     Ast.Expr.FieldAccess(access) ->
       node = Ast.Expr.MethodCall(
         Ast.MethodCall(
@@ -649,8 +649,8 @@ def attach_block(e: Base.Env, start: Int, target: Ast.Expr, cursor: Int, ids: In
         ),
       )
 
-      return expr_at(node, block.pos, block.ids)
-    _ -> return error(Base.impossible(e, cursor))
+      expr_at(node, block.pos, block.ids)
+    _ -> error(Base.impossible(e, cursor))
   end
 end
 
@@ -754,20 +754,20 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     end
   end
 
-  return error(Base.impossible(e, cursor))
+  error(Base.impossible(e, cursor))
 end
 
 def name_target?(target: Ast.Expr) -> Bool
   case target
-    Ast.Expr.Name(_) -> return true
-    _ -> return false
+    Ast.Expr.Name(_) -> true
+    _ -> false
   end
 end
 
 def target_name(target: Ast.Expr) -> String
   case target
-    Ast.Expr.Name(reference) -> return reference.name
-    _ -> return ""
+    Ast.Expr.Name(reference) -> reference.name
+    _ -> ""
   end
 end
 
@@ -808,7 +808,7 @@ def parse_block_params(e: Base.Env, pos: Int, ids: Int) -> Result[BlockParamsAt]
     end
   end
 
-  return ok(BlockParamsAt(params: params, pos: cursor, ids: next_id))
+  ok(BlockParamsAt(params: params, pos: cursor, ids: next_id))
 end
 
 # do |params| body end. The body allows blocks again and is a block body (depth 1), where `end` may follow a statement
@@ -845,7 +845,7 @@ def parse_block_lit(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     Ast.BlockLit(id: body.ids, params: params, body: body.nodes, span: Base.span_from(e, pos, close)),
   )
 
-  return expr_at(node, close, body.ids)
+  expr_at(node, close, body.ids)
 end
 
 def parse_expression_list(e: Base.Env, pos: Int, ids: Int, terminator: String) -> Result[Base.ExprsAt]
@@ -871,7 +871,7 @@ def parse_expression_list(e: Base.Env, pos: Int, ids: Int, terminator: String) -
     end
   end
 
-  return ok(Base.ExprsAt(nodes: nodes, pos: cursor, ids: next_id))
+  ok(Base.ExprsAt(nodes: nodes, pos: cursor, ids: next_id))
 end
 
 def parse_named_arguments(e: Base.Env, pos: Int, ids: Int) -> Result[NamedArgsAt]
@@ -906,7 +906,7 @@ def parse_named_arguments(e: Base.Env, pos: Int, ids: Int) -> Result[NamedArgsAt
     end
   end
 
-  return ok(NamedArgsAt(nodes: nodes, pos: cursor, ids: next_id))
+  ok(NamedArgsAt(nodes: nodes, pos: cursor, ids: next_id))
 end
 
 # The arguments of `.with(`: one or more name: value pairs, with `do` blocks allowed as in any call. A positional value
@@ -941,7 +941,7 @@ def parse_update_arguments(e: Base.Env, pos: Int, ids: Int) -> Result[NamedArgsA
     end
   end
 
-  return ok(NamedArgsAt(nodes: nodes, pos: cursor, ids: next_id))
+  ok(NamedArgsAt(nodes: nodes, pos: cursor, ids: next_id))
 end
 
 # The position of the value after `name:` at pos; PARSE-UNEXPECTED-TOKEN with a help text for anything else.
@@ -961,14 +961,14 @@ def expect_update_argument(e: Base.Env, pos: Int) -> Result[Int]
     )
   end
 
-  return error(Base.unexpected_help(e, pos, "expected a field name, found #{Base.describe(e.tokens[pos])}", help))
+  error(Base.unexpected_help(e, pos, "expected a field name, found #{Base.describe(e.tokens[pos])}", help))
 end
 
 def parse_list_literal(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   elements = try parse_expression_list(e, pos + 1, ids, "right-bracket")
   close = try Base.expect(e, elements.pos, "right-bracket", "\"]\"", false)
   node = Ast.Expr.ListLit(Ast.ListLit(id: elements.ids, elements: elements.nodes, span: Base.span_from(e, pos, close)))
-  return expr_at(node, close, elements.ids)
+  expr_at(node, close, elements.ids)
 end
 
 def parse_map_entry(e: Base.Env, pos: Int, ids: Int, block_form: String) -> Result[MapEntryAt]
@@ -987,7 +987,7 @@ def parse_map_entry(e: Base.Env, pos: Int, ids: Int, block_form: String) -> Resu
   colon = try Base.expect(e, key.pos, "colon", "\":\"", false)
   value = try parse_expression(e, colon, key.ids)
   node = Ast.MapEntry(id: value.ids, key: key.node, value: value.node, span: Base.span_from(e, pos, value.pos))
-  return ok(MapEntryAt(node: node, pos: value.pos, ids: value.ids + 1))
+  ok(MapEntryAt(node: node, pos: value.pos, ids: value.ids + 1))
 end
 
 def parse_map_literal(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
@@ -1020,7 +1020,7 @@ def parse_map_literal(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
 
   close = try Base.expect(e, cursor, "right-brace", "\"}\"", false)
   node = Ast.Expr.MapLit(Ast.MapLit(id: next_id, entries: entries, span: Base.span_from(e, pos, close)))
-  return expr_at(node, close, next_id)
+  expr_at(node, close, next_id)
 end
 
 # The parts of "a#{x}b" arrive as one string token, then expressions and string tokens in turn; empty text parts are
@@ -1060,11 +1060,11 @@ def parse_interpolation(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     end
   end
 
-  return error(Base.impossible(e, cursor))
+  error(Base.impossible(e, cursor))
 end
 
 def literal_node(token: Tokens.Token, value: Ast.LitValue, ids: Int) -> Ast.Expr
-  return Ast.Expr.Literal(Ast.Literal(id: ids, value: value, span: token.span))
+  Ast.Expr.Literal(Ast.Literal(id: ids, value: value, span: token.span))
 end
 
 # A regex literal with its call `compile(pattern).unwrap!`, in post-order: the pattern string, the call, the
@@ -1096,7 +1096,7 @@ def regex_node(token: Tokens.Token, ids: Int) -> Ast.Expr
     Ast.MethodCall(id: ids + 2, target: call, name: "unwrap!", name_span: token.span, args: [], span: token.span),
   )
 
-  return Ast.Expr.RegexLit(Ast.RegexLit(id: ids + 3, body: body, flags: flags, call: unwrap, span: token.span))
+  Ast.Expr.RegexLit(Ast.RegexLit(id: ids + 3, body: body, flags: flags, call: unwrap, span: token.span))
 end
 
 # An `<<~EAG` template: its body is expanded into the tokens of an expression (eag.agc), parsed on its own, and the
@@ -1107,7 +1107,7 @@ def parse_eag(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     Tokens.Value.Eag(body) ->
       case Eag.expand(token, body)
         Diag.Outcome.Failed(problem) ->
-          return error(Base.bail_span(problem.code, problem.message, problem.span, problem.help))
+          error(Base.bail_span(problem.code, problem.message, problem.span, problem.help))
         Diag.Outcome.Done(tokens) ->
           inner = Base.make_env(tokens).with(nesting: e.nesting)
           parsed = try parse_expression(inner, 0, ids)
@@ -1122,10 +1122,10 @@ def parse_eag(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
           end
 
           node = Ast.Expr.EagLit(Ast.EagLit(id: parsed.ids, call: parsed.node, span: token.span))
-          return ok(Base.ExprAt(node: node, pos: pos + 1, ids: parsed.ids + 1))
+          ok(Base.ExprAt(node: node, pos: pos + 1, ids: parsed.ids + 1))
       end
 
-    _ -> return error(Base.impossible(e, pos))
+    _ -> error(Base.impossible(e, pos))
   end
 end
 
@@ -1144,11 +1144,11 @@ def parse_function_ref(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   end
 
   node = Ast.Expr.FunctionRef(Ast.FunctionRef(id: ids, name: name, span: Base.span_from(e, pos, cursor)))
-  return expr_at(node, cursor, ids)
+  expr_at(node, cursor, ids)
 end
 
 def lambda_name?(lexeme: String) -> Bool
-  return lexeme == "fn" or lexeme == "func" or lexeme == "function" or lexeme == "lambda" or lexeme == "proc"
+  lexeme == "fn" or lexeme == "func" or lexeme == "function" or lexeme == "lambda" or lexeme == "proc"
 end
 
 # A name, a call name(args), or the bare calls gets, gets! and none. fn(x: Int), lambda(x: Int) and the like are an
@@ -1187,13 +1187,13 @@ def parse_name_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     return expr_at(node, paren, ids)
   end
 
-  return expr_at(Ast.Expr.Name(Ast.NameRef(id: ids, name: token.lexeme, span: token.span)), paren, ids)
+  expr_at(Ast.Expr.Name(Ast.NameRef(id: ids, name: token.lexeme, span: token.span)), paren, ids)
 end
 
 def parenthesized_arguments(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprsAt]
   args = try parse_expression_list(e, pos + 1, ids, "right-paren")
   close = try Base.expect(e, args.pos, "right-paren", "\")\"", false)
-  return ok(Base.ExprsAt(nodes: args.nodes, pos: close, ids: args.ids))
+  ok(Base.ExprsAt(nodes: args.nodes, pos: close, ids: args.ids))
 end
 
 def construct_node(
@@ -1208,7 +1208,7 @@ def construct_node(
     Ast.Construct(id: ids, type_name: name, args: args, span: Base.span_from(e, start, cursor)),
   )
 
-  return expr_at(node, cursor, ids)
+  expr_at(node, cursor, ids)
 end
 
 def enum_constructor_node(
@@ -1230,7 +1230,7 @@ def enum_constructor_node(
     ),
   )
 
-  return expr_at(node, cursor, args.ids)
+  expr_at(node, cursor, args.ids)
 end
 
 # After Type.Name: an enum constructor (A.B.C, A.B(args)), Result.Ok(x) and Result.Err(m), which are the calls ok and
@@ -1292,7 +1292,7 @@ def parse_qualified_member(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprA
     return enum_constructor_node(e, pos, name, member, args, args.pos)
   end
 
-  return expr_at(
+  expr_at(
     Ast.Expr.TypeName(Ast.TypeName(id: ids, name: qualified, args: [], span: Base.span_from(e, pos, cursor))),
     cursor,
     ids,
@@ -1334,7 +1334,7 @@ def parse_module_call(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     end
   end
 
-  return call_node(e, pos, "#{name}.#{member.lexeme}", args.nodes, parenthesized, args.ids, cursor)
+  call_node(e, pos, "#{name}.#{member.lexeme}", args.nodes, parenthesized, args.ids, cursor)
 end
 
 # NAME.with(field: x) updates a constant of a struct type: the postfix loop reads the .with. A call has no named
@@ -1344,7 +1344,7 @@ def updates_constant?(e: Base.Env, name: Tokens.Token, dot: Int) -> Bool
   member = e.tokens[dot + 1]
   return false if member.kind != "name" or member.lexeme != "with" or e.tokens[dot + 2].kind != "left-paren"
 
-  return e.tokens[dot + 3].kind == "name" and e.tokens[dot + 4].kind == "colon" and Base.constant_name?(name.lexeme)
+  e.tokens[dot + 3].kind == "name" and e.tokens[dot + 4].kind == "colon" and Base.constant_name?(name.lexeme)
 end
 
 def parse_construct(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
@@ -1373,7 +1373,7 @@ def parse_construct(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     return ok(Base.ExprAt(node: Ast.Expr.TypeName(node), pos: type.pos, ids: type.ids))
   end
 
-  return expr_at(bare, after, ids)
+  expr_at(bare, after, ids)
 end
 
 # A call keeps parenthesized: |> accepts only calls that were written with parentheses.
@@ -1412,7 +1412,7 @@ def parse_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
 
   return parse_map_literal(e, pos, ids) if kind == "left-brace"
 
-  return error(
+  error(
     Base.bail(
       e,
       pos,
@@ -1439,7 +1439,7 @@ def regex_after_name?(e: Base.Env, pos: Int) -> Bool
     at -= 1
   end
 
-  return false
+  false
 end
 
 # Help for a / or * where an expression should start: // and /* */ are not comments in Agentica. Also for the second <
@@ -1489,11 +1489,11 @@ def primary_help(e: Base.Env, pos: Int) -> Diag.Help
     return Base.hint("comments start with #, not /* */")
   end
 
-  return Diag.Help.NoHelp
+  Diag.Help.NoHelp
 end
 
 def stmt_at(node: Ast.Stmt, pos: Int, ids: Int) -> Result[Base.StmtAt]
-  return ok(Base.StmtAt(node: node, pos: pos, ids: ids + 1))
+  ok(Base.StmtAt(node: node, pos: pos, ids: ids + 1))
 end
 
 # Statements up to end, elsif, else or the end of the file. depth is the block depth of the body (0, or 1 in a do
@@ -1517,7 +1517,7 @@ def parse_block(e: Base.Env, pos: Int, ids: Int, depth: Int) -> Result[Base.Stmt
     end
   end
 
-  return ok(Base.StmtsAt(nodes: nodes, pos: cursor, ids: next_id))
+  ok(Base.StmtsAt(nodes: nodes, pos: cursor, ids: next_id))
 end
 
 # Every statement counts a level of nesting.
@@ -1549,7 +1549,7 @@ def parse_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
 
   return parse_case(inner, pos, ids) if kind == "case"
 
-  return parse_simple_statement(inner, pos, ids)
+  parse_simple_statement(inner, pos, ids)
 end
 
 def parse_return(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
@@ -1571,11 +1571,7 @@ def parse_return(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   end
 
   stop = try expect_statement_end(e, cursor, "a newline after the statement")
-  return stmt_at(
-    Ast.Stmt.Return(Ast.Return(id: next_id, value: value, span: Base.span_from(e, pos, stop))),
-    stop,
-    next_id,
-  )
+  stmt_at(Ast.Stmt.Return(Ast.Return(id: next_id, value: value, span: Base.span_from(e, pos, stop))), stop, next_id)
 end
 
 def parse_loop_control(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
@@ -1589,7 +1585,7 @@ def parse_loop_control(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   end
 
   stop = try expect_statement_end(e, pos + 1, "a newline after the statement")
-  return stmt_at(node, stop, ids)
+  stmt_at(node, stop, ids)
 end
 
 # A guard, `stmt if cond`, where `stmt` (a return, break or next) starts at `pos` and its `if` is at `at`: an if with
@@ -1638,7 +1634,7 @@ def parse_statement_guard(e: Base.Env, pos: Int, at: Int, stmt: Ast.Stmt, ids: I
     span: Base.span_from(e, pos, stop),
   )
 
-  return stmt_at(Ast.Stmt.If(node), stop, condition.ids + 1)
+  stmt_at(Ast.Stmt.If(node), stop, condition.ids + 1)
 end
 
 def parse_binding(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
@@ -1670,7 +1666,7 @@ def parse_binding(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
     ),
   )
 
-  return stmt_at(node, stop, value.ids)
+  stmt_at(node, stop, value.ids)
 end
 
 # x += v is the binding x = x + v. The name node is numbered first so the ids stay in post-order: it is the left child
@@ -1705,17 +1701,17 @@ def parse_compound(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
     ),
   )
 
-  return stmt_at(node, stop, value.ids + 1)
+  stmt_at(node, stop, value.ids + 1)
 end
 
 def assignment_message(node: Ast.Expr) -> String
   case node
     Ast.Expr.Index(_) ->
-      return (
+      (
         "the core only assigns to a plain name; lists and maps are immutable, build a new value instead (for a map, " +
         "Map.put(map, key, value))"
       )
-    _ -> return "the core only assigns to a plain name"
+    _ -> "the core only assigns to a plain name"
   end
 end
 
@@ -1725,29 +1721,29 @@ def assignment_help(node: Ast.Expr) -> Diag.Help
     Ast.Expr.TypeName(found) ->
       return Base.hint("constants are set at the top level and never change") if Base.constant_name?(found.name)
 
-      return Diag.Help.NoHelp
-    _ -> return Diag.Help.NoHelp
+      Diag.Help.NoHelp
+    _ -> Diag.Help.NoHelp
   end
 end
 
 def keyword_message(name: String) -> String
   return "\"#{name}\" stands alone on its line" if name == "break" or name == "next"
 
-  return "\"#{name}\" is not a keyword"
+  "\"#{name}\" is not a keyword"
 end
 
 def keyword_help(name: String) -> String
   case name
-    "match" -> return "use case value, then arms pattern -> ..., then end"
-    "break" -> return "#{name} stands alone on its line, or takes an if modifier: #{name} if cond"
-    "next" -> return "#{name} stands alone on its line, or takes an if modifier: #{name} if cond"
-    "continue" -> return "write next to skip to the next iteration"
-    _ -> return "write x = 5, or x: Int = 5 to give a type"
+    "match" -> "use case value, then arms pattern -> ..., then end"
+    "break" -> "#{name} stands alone on its line, or takes an if modifier: #{name} if cond"
+    "next" -> "#{name} stands alone on its line, or takes an if modifier: #{name} if cond"
+    "continue" -> "write next to skip to the next iteration"
+    _ -> "write x = 5, or x: Int = 5 to give a type"
   end
 end
 
 def foreign_keyword?(name: String) -> Bool
-  return (
+  (
     name == "let" or
     name == "var" or
     name == "val" or
@@ -1799,7 +1795,7 @@ def parse_expression_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.S
   end
 
   stop = try expect_statement_end(e, value.pos, "a newline after the statement")
-  return stmt_at(
+  stmt_at(
     Ast.Stmt.Expression(Ast.ExprStmt(id: value.ids, value: value.node, span: Base.span_from(e, pos, stop))),
     stop,
     value.ids,
@@ -1826,7 +1822,7 @@ def parse_simple_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtA
     return parse_compound(e, pos, ids) if COMPOUND_OPERATORS.get(following, "") != ""
   end
 
-  return parse_expression_statement(e, pos, ids)
+  parse_expression_statement(e, pos, ids)
 end
 
 def parse_if_branch(e: Base.Env, pos: Int, ids: Int) -> Result[IfBranchAt]
@@ -1863,7 +1859,7 @@ def parse_if_branch(e: Base.Env, pos: Int, ids: Int) -> Result[IfBranchAt]
     span: Base.span_from(e, pos, body.pos),
   )
 
-  return ok(IfBranchAt(node: node, pos: body.pos, ids: body.ids + 1))
+  ok(IfBranchAt(node: node, pos: body.pos, ids: body.ids + 1))
 end
 
 def parse_if(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
@@ -1901,7 +1897,7 @@ def parse_if(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
 
   close = try expect_end(e, cursor)
   stop = try expect_statement_end(e, close, "a newline after end")
-  return stmt_at(
+  stmt_at(
     Ast.Stmt.If(
       Ast.IfStmt(
         id: next_id,
@@ -1927,7 +1923,7 @@ def parse_while(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   body = try parse_block(e, head, condition.ids, 0)
   close = try expect_end(e, body.pos)
   stop = try expect_statement_end(e, close, "a newline after end")
-  return stmt_at(
+  stmt_at(
     Ast.Stmt.While(
       Ast.WhileStmt(id: body.ids, condition: condition.node, body: body.nodes, span: Base.span_from(e, pos, stop)),
     ),
@@ -1949,7 +1945,7 @@ def parse_for(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   body = try parse_block(e, head, iterable.ids, 0)
   close = try expect_end(e, body.pos)
   stop = try expect_statement_end(e, close, "a newline after end")
-  return stmt_at(
+  stmt_at(
     Ast.Stmt.For(
       Ast.ForStmt(
         id: body.ids,
@@ -1966,7 +1962,7 @@ def parse_for(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
 end
 
 def unclosed_case(e: Base.Env, pos: Int) -> String
-  return Base.bail(e, pos, "PARSE-UNCLOSED-BLOCK", "unclosed case block, expected end", Diag.Help.NoHelp)
+  Base.bail(e, pos, "PARSE-UNCLOSED-BLOCK", "unclosed case block, expected end", Diag.Help.NoHelp)
 end
 
 # The body of an arm ends at the next arm or at end: arms have no closing token, so case_arm_start? looks ahead for a
@@ -1991,7 +1987,7 @@ def parse_case_body(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtsAt]
     end
   end
 
-  return ok(Base.StmtsAt(nodes: nodes, pos: cursor, ids: next_id))
+  ok(Base.StmtsAt(nodes: nodes, pos: cursor, ids: next_id))
 end
 
 def parse_arm_body(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtsAt]
@@ -1999,7 +1995,7 @@ def parse_arm_body(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtsAt]
 
   first = try parse_simple_statement(Base.with_depth(e, 0), pos, ids)
   rest = try parse_case_body(e, first.pos, first.ids)
-  return ok(Base.StmtsAt(nodes: List.concat([first.node], rest.nodes), pos: rest.pos, ids: rest.ids))
+  ok(Base.StmtsAt(nodes: List.concat([first.node], rest.nodes), pos: rest.pos, ids: rest.ids))
 end
 
 # The optional `if condition` between a pattern and ->. Its ids come after the pattern and before the body.
@@ -2007,7 +2003,7 @@ def parse_guard(e: Base.Env, pos: Int, ids: Int) -> Result[GuardAt]
   return ok(GuardAt(node: none, pos: pos, ids: ids)) if e.tokens[pos].kind != "if"
 
   condition = try parse_expression(e, pos + 1, ids)
-  return ok(GuardAt(node: some(condition.node), pos: condition.pos, ids: condition.ids))
+  ok(GuardAt(node: some(condition.node), pos: condition.pos, ids: condition.ids))
 end
 
 def parse_case_node(e: Base.Env, pos: Int, ids: Int) -> Result[CaseAt]
@@ -2053,13 +2049,13 @@ def parse_case_node(e: Base.Env, pos: Int, ids: Int) -> Result[CaseAt]
 
   close = try expect_end(e, cursor)
   node = Ast.CaseStmt(id: next_id, value: value.node, arms: arms, span: Base.span_from(e, pos, close))
-  return ok(CaseAt(node: node, pos: close, ids: next_id + 1))
+  ok(CaseAt(node: node, pos: close, ids: next_id + 1))
 end
 
 def parse_case(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   parsed = try parse_case_node(e, pos, ids)
   stop = try expect_statement_end(e, parsed.pos, "a newline after end")
-  return ok(
+  ok(
     Base.StmtAt(node: Ast.Stmt.Case(parsed.node.with(span: Base.span_from(e, pos, stop))), pos: stop, ids: parsed.ids),
   )
 end
@@ -2070,7 +2066,7 @@ def parse_value(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   return parse_expression(e, pos, ids) if e.tokens[pos].kind != "case"
 
   parsed = try parse_case_node(e, pos, ids)
-  return ok(Base.ExprAt(node: Ast.Expr.Case(parsed.node), pos: parsed.pos, ids: parsed.ids))
+  ok(Base.ExprAt(node: Ast.Expr.Case(parsed.node), pos: parsed.pos, ids: parsed.ids))
 end
 
 # The parameters of a def up to ")". extern is true in an extern block, where `out NAME: type` marks an out parameter
@@ -2153,7 +2149,7 @@ def parse_parameters(e: Base.Env, pos: Int, ids: Int, extern: Bool) -> Result[Pa
     end
   end
 
-  return ok(ParamsAt(nodes: nodes, outs: outs, fixed: fixed, mark: mark, pos: cursor, ids: next_id))
+  ok(ParamsAt(nodes: nodes, outs: outs, fixed: fixed, mark: mark, pos: cursor, ids: next_id))
 end
 
 # The `...` at `at`, after `count` parameters, gives the number of fixed parameters: PARSE-EXTERN-VARIADIC outside an
@@ -2196,12 +2192,12 @@ def variadic_marker(e: Base.Env, at: Int, count: Int, fixed: Int, extern: Bool) 
     )
   end
 
-  return ok(count)
+  ok(count)
 end
 
 # `out` is a plain name: before a parameter name it marks an out parameter.
 def out_start?(e: Base.Env, at: Int) -> Bool
-  return e.tokens[at].kind == "name" and e.tokens[at].lexeme == "out" and Base.kind_at(e, at + 1) == "name"
+  e.tokens[at].kind == "name" and e.tokens[at].lexeme == "out" and Base.kind_at(e, at + 1) == "name"
 end
 
 def decl_at(node: Ast.Decl, pos: Int, ids: Int) -> Result[DeclAt] = ok(DeclAt(node: node, pos: pos, ids: ids + 1))
@@ -2266,7 +2262,7 @@ def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) 
     ),
   )
 
-  return decl_at(node, stop, body.ids)
+  decl_at(node, stop, body.ids)
 end
 
 # The body of a def whose result is not written `Void`, with its last expression made the value: an expression
@@ -2280,31 +2276,31 @@ def tail_returns(statements: List[Ast.Stmt]) -> List[Ast.Stmt]
   return statements if statements.size == 0
 
   last = statements.size - 1
-  return statements.set(last, tail_return(statements[last]))
+  statements.set(last, tail_return(statements[last]))
 end
 
 def tail_return(statement: Ast.Stmt) -> Ast.Stmt
   case statement
     Ast.Stmt.Expression(node) ->
       case node.value
-        Ast.Expr.Try(_) -> return statement
+        Ast.Expr.Try(_) -> statement
         _ ->
           span = Ast.expr_span(node.value)
-          return Ast.Stmt.Return(Ast.Return(id: node.id, value: some(node.value), span: span, implicit: true))
+          Ast.Stmt.Return(Ast.Return(id: node.id, value: some(node.value), span: span, implicit: true))
       end
 
     Ast.Stmt.If(node) ->
       case node.else_body
         some(body) ->
           branches = node.branches.map do |branch: Ast.IfBranch| branch.with(body: tail_returns(branch.body)) end
-          return Ast.Stmt.If(node.with(branches: branches, else_body: some(tail_returns(body))))
-        none -> return statement
+          Ast.Stmt.If(node.with(branches: branches, else_body: some(tail_returns(body))))
+        none -> statement
       end
 
     Ast.Stmt.Case(node) ->
       arms = node.arms.map do |arm: Ast.CaseArm| arm.with(body: tail_returns(arm.body)) end
-      return Ast.Stmt.Case(node.with(arms: arms))
-    _ -> return statement
+      Ast.Stmt.Case(node.with(arms: arms))
+    _ -> statement
   end
 end
 
@@ -2359,7 +2355,7 @@ def parse_one_line_def(e: Base.Env, pos: Int, shape: FunctionShape, doc: Optiona
     ),
   )
 
-  return decl_at(node, stop, value.ids + 1)
+  decl_at(node, stop, value.ids + 1)
 end
 
 # extern "library" NL, then [##doc] [export] members, then end. A member is [compute] def, a function with no body
@@ -2466,7 +2462,7 @@ def parse_extern_block(e: Base.Env, pos: Int, ids: Int) -> Result[DeclsAt]
   end
 
   stop = try expect_statement_end(e, cursor + 1, "a newline after end")
-  return ok(DeclsAt(nodes: nodes, pos: stop, ids: next_id))
+  ok(DeclsAt(nodes: nodes, pos: stop, ids: next_id))
 end
 
 # Whether a member of the extern block that starts at pos is a resource, a callback or a struct. Only a struct has an
@@ -2479,7 +2475,7 @@ def declares_types?(e: Base.Env, pos: Int) -> Bool
     at += 1
   end
 
-  return false
+  false
 end
 
 # One member of an extern block at pos (after its doc and export), and the block with it.
@@ -2489,7 +2485,7 @@ def extern_member(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], block:
     return ok(MemberAt(decl: member, block: block, records: []))
   end
 
-  return parse_extern_member(e, pos, ids, doc, block)
+  parse_extern_member(e, pos, ids, doc, block)
 end
 
 # One member of an extern block that is not a module block at pos (after its doc and export), and the block with it.
@@ -2527,7 +2523,7 @@ def parse_extern_member(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], 
     symbols = symbols.add(member.symbol)
   end
 
-  return ok(MemberAt(decl: member.decl, block: block.with(symbols: symbols), records: member.records))
+  ok(MemberAt(decl: member.decl, block: block.with(symbols: symbols), records: member.records))
 end
 
 # The free word that the block keeps for a resource, which Native.free and NativeResource.free carry to the lowering:
@@ -2538,14 +2534,14 @@ def kept_free(decl: Ast.Decl) -> String
       # The VM (vm/ffi.c) reads the & and passes the address of the pointer.
       return "&#{node.free}" if node.by_ref
 
-      return node.free
-    _ -> return ""
+      node.free
+    _ -> ""
   end
 end
 
 # `resource` is a plain name: inside an extern block, before a type name, it declares a resource.
 def resource_start?(e: Base.Env, at: Int) -> Bool
-  return e.tokens[at].kind == "name" and e.tokens[at].lexeme == "resource" and Base.kind_at(e, at + 1) == "type-name"
+  e.tokens[at].kind == "name" and e.tokens[at].lexeme == "resource" and Base.kind_at(e, at + 1) == "type-name"
 end
 
 # resource Name, free: c_name NL in an extern block, or free: C.Function, when each value has its own free function,
@@ -2606,7 +2602,7 @@ def parse_resource(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], block
     ),
   )
 
-  return decl_at(node, stop, ids)
+  decl_at(node, stop, ids)
 end
 
 # PARSE-EXTERN-FREE at a second free word after the free function of a resource (at is the token after it): a resource
@@ -2624,12 +2620,12 @@ def one_free_word(e: Base.Env, at: Int) -> Result[Void]
     )
   end
 
-  return ok()
+  ok()
 end
 
 # Whether the token at pos is free or free_ref, a word that names the free function of a resource.
 def free_word?(e: Base.Env, pos: Int) -> Bool
-  return Base.kind_at(e, pos) == "name" and (e.tokens[pos].lexeme == "free" or e.tokens[pos].lexeme == FREE_REF)
+  Base.kind_at(e, pos) == "name" and (e.tokens[pos].lexeme == "free" or e.tokens[pos].lexeme == FREE_REF)
 end
 
 # The position after a C name at pos: a name (with a ? or ! left for the caller to reject) or a type-name, which is
@@ -2637,7 +2633,7 @@ end
 def expect_c_name(e: Base.Env, pos: Int, description: String) -> Result[Int]
   return ok(pos + 1) if Base.kind_at(e, pos) == "type-name"
 
-  return Base.expect(e, pos, "name", description, true)
+  Base.expect(e, pos, "name", description, true)
 end
 
 # The rest of resource Name, free: C.Function from at, the dotted type after the colon: any type but C.Function is
@@ -2671,12 +2667,12 @@ def parse_resource_by_pointer(e: Base.Env, pos: Int, ids: Int, doc: Optional[Str
     ),
   )
 
-  return decl_at(node, stop, ids)
+  decl_at(node, stop, ids)
 end
 
 # `callback` is a plain name: inside an extern block, before a type name, it declares a callback.
 def callback_start?(e: Base.Env, at: Int) -> Bool
-  return e.tokens[at].kind == "name" and e.tokens[at].lexeme == "callback" and Base.kind_at(e, at + 1) == "type-name"
+  e.tokens[at].kind == "name" and e.tokens[at].lexeme == "callback" and Base.kind_at(e, at + 1) == "type-name"
 end
 
 # callback Name(params) -> result NL in an extern block at pos (the word callback): the type of a C function pointer
@@ -2763,7 +2759,7 @@ def parse_callback(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> Re
     ),
   )
 
-  return decl_at(node, stop, result.ids)
+  decl_at(node, stop, result.ids)
 end
 
 # The code and the Agentica type of a C type of a callback, or PARSE-EXTERN-TYPE at it (CALLBACK_PARAM_CODES and
@@ -2793,7 +2789,7 @@ def callback_type(ref: Ast.TypeRef, result: Bool) -> Result[ExternType]
     )
   end
 
-  return ok(ExternType(code: code, type: ref.with(name: EXTERN_TYPES[code]), ids: 0))
+  ok(ExternType(code: code, type: ref.with(name: EXTERN_TYPES[code]), ids: 0))
 end
 
 # struct Name NL fields end NL in an extern block at pos: a C struct that extern functions take and return by value,
@@ -2840,14 +2836,14 @@ def parse_extern_struct(
   layout = "{#{codes.join("")}}"
   try struct_size(node, layout)
   decl = try decl_at(Ast.Decl.Struct(node.with(fields: fields, layout: layout)), parsed.pos, parsed.ids)
-  return ok(ExternStructAt(decl: decl, layout: layout))
+  ok(ExternStructAt(decl: decl, layout: layout))
 end
 
 # The code of a field of a C struct: of its C type, or the layout code of a struct of the block; "" for any other type.
 def struct_field_code(type: Ast.TypeRef, block: ExternBlock) -> String
   return "" if type.args.size > 0
 
-  return STRUCT_FIELD_CODES.get(type.name, block.structs.get(type.name, ""))
+  STRUCT_FIELD_CODES.get(type.name, block.structs.get(type.name, ""))
 end
 
 # PARSE-EXTERN-TYPE at the name of a C struct without fields (C has none), and PARSE-EXTERN-ARITY at the name of one
@@ -2891,11 +2887,11 @@ def struct_size(node: Ast.StructDecl, layout: String) -> Result[Void]
     )
   end
 
-  return ok()
+  ok()
 end
 
 def c_name_failure(e: Base.Env, at: Int, name: String) -> String
-  return Base.bail(
+  Base.bail(
     e,
     at,
     "PARSE-EXTERN-NAME",
@@ -2907,7 +2903,7 @@ end
 # PARSE-EXTERN-FREE at the name: a def of the free function would let the program free the pointer that the VM frees
 # again on close or at the end of the owning task.
 def free_failure(e: Base.Env, at: Int, name: String) -> String
-  return Base.bail(
+  Base.bail(
     e,
     at,
     "PARSE-EXTERN-FREE",
@@ -3184,7 +3180,7 @@ def parse_extern_function(
     symbol = ""
   end
 
-  return ok(ExternAt(decl: decl, symbol: symbol, records: records))
+  ok(ExternAt(decl: decl, symbol: symbol, records: records))
 end
 
 # One member of an `extern module "NAME"` block at pos (after its doc and export): a resource or a [compute] def. A
@@ -3211,7 +3207,7 @@ def parse_module_member(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], 
 
   return error(Base.found(e, at, "def, compute def or end in an extern module block")) if e.tokens[at].kind != "def"
 
-  return parse_module_function(e, pos, at, ids, doc, block)
+  parse_module_function(e, pos, at, ids, doc, block)
 end
 
 # resource Name NL in an extern module block at pos (the word resource): a type of the module's resource table, which
@@ -3245,7 +3241,7 @@ def parse_module_resource(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]
     ),
   )
 
-  return decl_at(node, stop, ids)
+  decl_at(node, stop, ids)
 end
 
 # [compute] def name(params) -> Type NL in an extern module block at pos (start is compute or def): a function of the
@@ -3361,7 +3357,7 @@ def parse_module_function(
     ),
   )
 
-  return decl_at(node, stop, result.ids)
+  decl_at(node, stop, result.ids)
 end
 
 # PARSE-EXTERN-TYPE at a C type anywhere in a type of a native module function: a module takes and returns Agentica
@@ -3382,12 +3378,12 @@ def agentica_type(ref: Ast.TypeRef) -> Result[Void]
     try agentica_type(arg)
   end
 
-  return ok()
+  ok()
 end
 
 # PARSE-EXTERN-FUNCTION at the type of a C.Function parameter that is neither the function to call nor a free function.
 def function_failure(type: Ast.TypeRef) -> String
-  return Base.bail_span(
+  Base.bail_span(
     "PARSE-EXTERN-FUNCTION",
     "a C.Function parameter is the function to call or a free function",
     type.span,
@@ -3405,7 +3401,7 @@ def callee?(params: ParamsAt, result: Ast.TypeRef, block: ExternBlock) -> Bool
   first = params.nodes[0].type
   return false if first.name != FUNCTION_TYPE or first.args.size > 0
 
-  return params.nodes.size > 1 or block.resources.get(result.name, "") != FUNCTION_TYPE
+  params.nodes.size > 1 or block.resources.get(result.name, "") != FUNCTION_TYPE
 end
 
 # A call that makes a resource of a free: C.Function kind (made: the type of each) takes its free function as its last
@@ -3436,7 +3432,7 @@ def free_function(made: List[Ast.TypeRef], free_params: List[Ast.Param]) -> Resu
 
   return error(function_failure(free_params[0].type)) if made.size == 0 and free_params.size == 1
 
-  return ok()
+  ok()
 end
 
 # The string at `at` after the = of an extern function, which names its C function, and the position after it: a
@@ -3454,7 +3450,7 @@ def symbol_string(e: Base.Env, at: Int) -> Result[Int]
     return error(Base.found(e, at, "the C name of the function as a string"))
   end
 
-  return error(
+  error(
     Base.bail_span(
       "PARSE-EXTERN-SYMBOL",
       "the C name of an extern function is a plain string of letters, digits and _",
@@ -3468,7 +3464,7 @@ end
 def c_name?(text: String) -> Bool
   return false if text == "" or DIGITS.include?(text.slice(0, 1))
 
-  return text.split("").all? do |char: String| C_NAME_CHARS.include?(char) end
+  text.split("").all? do |char: String| C_NAME_CHARS.include?(char) end
 end
 
 # PARSE-EXTERN-VARIADIC-TYPE for a parameter of the variadic part that C would promote (C.Bool, C.Float and the four
@@ -3496,7 +3492,7 @@ def variadic_type(param: Ast.Param, taken: ExternType, out: Bool) -> Result[Void
     )
   end
 
-  return ok()
+  ok()
 end
 
 # The field of the record for an out parameter, of the parameter's Agentica type (a resource itself, not a Result), or
@@ -3546,7 +3542,7 @@ def out_field(param: Ast.Param, taken: ExternType, result: String) -> Result[Ast
     span: param.span,
   )
 
-  return ok(field)
+  ok(field)
 end
 
 # Whether a parameter before the one at index has its name and is on the other side (in or out).
@@ -3558,14 +3554,14 @@ def other_side?(params: ParamsAt, index: Int) -> Bool
     at += 1
   end
 
-  return false
+  false
 end
 
 # The doc of a record, which its export repeats.
 def record_doc(record: Ast.Decl) -> Optional[String]
   case record
-    Ast.Decl.Struct(node) -> return node.doc
-    _ -> return none
+    Ast.Decl.Struct(node) -> node.doc
+    _ -> none
   end
 end
 
@@ -3577,7 +3573,7 @@ def record_name(name: String) -> String
   joined = words.join("")
   return "" if joined == "" or !"ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains?(joined.slice(0, 1))
 
-  return joined
+  joined
 end
 
 # The code and the Agentica type of a C type of an extern signature, or PARSE-EXTERN-TYPE at it. Void is a result only,
@@ -3634,14 +3630,14 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
     return ok(ExternType(code: code, type: ref, ids: ids))
   end
 
-  return ok(ExternType(code: code, type: ref.with(name: EXTERN_TYPES[code]), ids: ids))
+  ok(ExternType(code: code, type: ref.with(name: EXTERN_TYPES[code]), ids: ids))
 end
 
 def optional_callback?(ref: Ast.TypeRef, block: ExternBlock) -> Bool
   return false if ref.name != "Optional" or ref.args.size != 1
 
   inner = ref.args[0]
-  return inner.args.size == 0 and block.callbacks.include?(inner.name)
+  inner.args.size == 0 and block.callbacks.include?(inner.name)
 end
 
 def parse_field_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> Result[FieldAt]
@@ -3671,7 +3667,7 @@ def parse_field_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> 
     span: Base.span_from(e, pos, stop),
   )
 
-  return ok(FieldAt(node: node, pos: stop, ids: field_id + 1))
+  ok(FieldAt(node: node, pos: stop, ids: field_id + 1))
 end
 
 def parse_variant_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> Result[VariantAt]
@@ -3703,7 +3699,7 @@ def parse_variant_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -
     span: Base.span_from(e, pos, stop),
   )
 
-  return ok(VariantAt(node: node, pos: stop, ids: next_id + 1))
+  ok(VariantAt(node: node, pos: stop, ids: next_id + 1))
 end
 
 def starts_member?(e: Base.Env, pos: Int, member: String) -> Bool
@@ -3722,7 +3718,7 @@ def starts_member?(e: Base.Env, pos: Int, member: String) -> Bool
     )
   end
 
-  return (
+  (
     kind == "def" or
     kind == "struct" or
     kind == "enum" or
@@ -3734,8 +3730,8 @@ end
 
 def doc_block(token: Tokens.Token) -> Tokens.DocBlock
   case token.value
-    Tokens.Value.Doc(block) -> return block
-    _ -> return Tokens.DocBlock(text: "", next: "")
+    Tokens.Value.Doc(block) -> block
+    _ -> Tokens.DocBlock(text: "", next: "")
   end
 end
 
@@ -3747,18 +3743,18 @@ def take_doc(e: Base.Env, pos: Int, member: String) -> Result[DocAt]
     return ok(DocAt(doc: some(block.text), pos: pos + 2))
   end
 
-  return error(Base.bail_detached(e, pos))
+  error(Base.bail_detached(e, pos))
 end
 
 def documented(e: Base.Env, pos: Int, member: String) -> Result[DocAt]
   return take_doc(e, pos, member) if e.tokens[pos].kind == "DOC"
 
-  return ok(DocAt(doc: none, pos: pos))
+  ok(DocAt(doc: none, pos: pos))
 end
 
 def parse_struct_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> Result[DeclAt]
   parsed = try parse_struct(e, pos, ids, doc, true)
-  return decl_at(Ast.Decl.Struct(parsed.node), parsed.pos, parsed.ids)
+  decl_at(Ast.Decl.Struct(parsed.node), parsed.pos, parsed.ids)
 end
 
 # struct Name NL fields end NL at pos, with the next position and the next free node id. generic says the name may
@@ -3804,7 +3800,7 @@ def parse_struct(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], generic
     span: Base.span_from(e, pos, stop),
   )
 
-  return ok(StructAt(node: node, pos: stop, ids: next_id))
+  ok(StructAt(node: node, pos: stop, ids: next_id))
 end
 
 # The [T, U] after the name of a struct, enum, alias or function, with the span of each name; none when the next token
@@ -3825,7 +3821,7 @@ def parse_type_parameters(e: Base.Env, pos: Int) -> Result[TypeParametersAt]
   end
 
   cursor = try Base.expect(e, cursor, "right-bracket", "]", false)
-  return ok(TypeParametersAt(names: names, spans: spans, pos: cursor))
+  ok(TypeParametersAt(names: names, spans: spans, pos: cursor))
 end
 
 def parse_enum_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> Result[DeclAt]
@@ -3867,7 +3863,7 @@ def parse_enum_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> R
     ),
   )
 
-  return decl_at(node, stop, next_id)
+  decl_at(node, stop, next_id)
 end
 
 def parse_type_alias_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> Result[DeclAt]
@@ -3889,7 +3885,7 @@ def parse_type_alias_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]
     ),
   )
 
-  return decl_at(node, stop, target.ids + 1)
+  decl_at(node, stop, target.ids + 1)
 end
 
 def parse_exportable(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
@@ -3903,14 +3899,14 @@ def parse_exportable(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
 
   return parse_type_alias_decl(e, pos, ids, absent) if kind == "name" and e.tokens[pos].lexeme == "type"
 
-  return error(Base.unexpected(e, pos, "export requires def, struct, enum, type, or a constant"))
+  error(Base.unexpected(e, pos, "export requires def, struct, enum, type, or a constant"))
 end
 
 # A constant starts with a type-name token followed by `=` or `:` (docs/future/44-module-constants.md 44.3). The name
 # is checked when it is parsed, so `Limit = 1` is PARSE-CONSTANT-NAME and not a statement.
 def constant_start?(e: Base.Env, at: Int) -> Bool
   following = Base.kind_at(e, at + 1)
-  return Base.kind_at(e, at) == "type-name" and (following == "assign" or following == "colon")
+  Base.kind_at(e, at) == "type-name" and (following == "assign" or following == "colon")
 end
 
 # Whether the declaration after the doc block and the `export` that may start at `at` is a constant: the blank line
@@ -3925,7 +3921,7 @@ def constant_follows?(e: Base.Env, at: Int) -> Bool
     cursor += 1
   end
 
-  return constant_start?(e, cursor)
+  constant_start?(e, cursor)
 end
 
 # Whether a one-line def starts at `at`, after its doc block and `export`: a `def` whose signature, outside its
@@ -3962,7 +3958,7 @@ def one_line_def_follows?(e: Base.Env, at: Int) -> Bool
     cursor += 1
   end
 
-  return false
+  false
 end
 
 # The name in UPPER_SNAKE_CASE for a CamelCase one (MaxDepth is MAX_DEPTH), or "" when the result is still not a
@@ -3987,7 +3983,7 @@ def constant_suggestion(text: String) -> String
   snake = out.join("").upcase
   return snake if Base.constant_name?(snake)
 
-  return ""
+  ""
 end
 
 def constant_name_help(text: String) -> String
@@ -3996,7 +3992,7 @@ def constant_name_help(text: String) -> String
     return "write constant names in capitals with underscores, at least two characters, such as LIMIT"
   end
 
-  return "write constant names in capitals with underscores: use #{suggestion}"
+  "write constant names in capitals with underscores: use #{suggestion}"
 end
 
 # [export] NAME[: Type] = value. name_at is the name token, start the first token (the export, or the name).
@@ -4047,7 +4043,7 @@ def parse_constant_decl(
     ),
   )
 
-  return decl_at(node, stop, value.ids)
+  decl_at(node, stop, value.ids)
 end
 
 def parse_declaration(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> Result[DeclAt]
@@ -4071,12 +4067,12 @@ def parse_declaration(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) ->
 
   return parse_type_alias_decl(e, pos, ids, doc) if kind == "name" and e.tokens[pos].lexeme == "type"
 
-  return parse_enum_decl(e, pos, ids, doc)
+  parse_enum_decl(e, pos, ids, doc)
 end
 
 def declaration_start?(e: Base.Env, at: Int) -> Bool
   kind = e.tokens[at].kind
-  return (
+  (
     kind == "def" or
     kind == "struct" or
     kind == "enum" or
@@ -4089,7 +4085,7 @@ end
 
 # `compute` is a plain name: inside an extern block, before def, it makes the function a compute call.
 def compute_start?(e: Base.Env, at: Int) -> Bool
-  return e.tokens[at].kind == "name" and e.tokens[at].lexeme == "compute" and Base.kind_at(e, at + 1) == "def"
+  e.tokens[at].kind == "name" and e.tokens[at].lexeme == "compute" and Base.kind_at(e, at + 1) == "def"
 end
 
 # `extern` is a plain name: it starts a block only at the top level and before a string.
@@ -4101,14 +4097,14 @@ def extern_start?(e: Base.Env, at: Int) -> Bool
 
   next = Base.kind_at(e, string)
   library = next == "string" or next == "interp-start"
-  return e.tokens[at].kind == "name" and e.tokens[at].lexeme == "extern" and library
+  e.tokens[at].kind == "name" and e.tokens[at].lexeme == "extern" and library
 end
 
 # Whether the token at pos is the word module of `extern module "NAME"`: the name module before a string.
 def module_word?(e: Base.Env, pos: Int) -> Bool
   next = Base.kind_at(e, pos + 1)
   string = next == "string" or next == "interp-start"
-  return Base.kind_at(e, pos) == "name" and e.tokens[pos].lexeme == "module" and string
+  Base.kind_at(e, pos) == "name" and e.tokens[pos].lexeme == "module" and string
 end
 
 # The position of the interp-end token that closes the interpolated string starting at start (nested strings
@@ -4128,7 +4124,7 @@ def interpolation_end(e: Base.Env, start: Int) -> Int
     at += 1
   end
 
-  return at
+  at
 end
 
 def top_level_help(kind: String) -> String
@@ -4137,8 +4133,7 @@ def top_level_help(kind: String) -> String
   end
 
   return "this else has no matching if" if kind == "else" or kind == "elsif"
-
-  return (
+  (
     "statements go inside a function: def main() -> Void ... end; " +
     "a file holds only def, struct, enum, type aliases, import, export and constants (NAME = value)"
   )
@@ -4158,7 +4153,7 @@ def parse_import(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   message = "expected a module alias or \"{\", found #{Base.describe(e.tokens[pos + 1])}"
   return error(Base.unexpected_help(e, pos + 1, message, "write import Alias from \"path\"")) if kind == "string"
 
-  return error(Base.unexpected(e, pos + 1, message))
+  error(Base.unexpected(e, pos + 1, message))
 end
 
 # The path of an import. A heredoc is a `string` token too; the path takes a "..." literal only.
@@ -4169,7 +4164,7 @@ def expect_import_path(e: Base.Env, pos: Int) -> Result[Int]
     )
   end
 
-  return Base.expect(e, pos, "string", "an import path", false)
+  Base.expect(e, pos, "string", "an import path", false)
 end
 
 # import Alias from "path"
@@ -4193,7 +4188,7 @@ def parse_import_alias(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
     ),
   )
 
-  return decl_at(node, stop, ids)
+  decl_at(node, stop, ids)
 end
 
 # import {A, B as C} from "path"
@@ -4212,7 +4207,7 @@ def parse_import_names(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
     ),
   )
 
-  return decl_at(node, stop, ids)
+  decl_at(node, stop, ids)
 end
 
 # The position after the name token with this text (from, as). help is "" for none.
@@ -4222,7 +4217,7 @@ def expect_word(e: Base.Env, at: Int, word: String, help: String) -> Result[Int]
   message = "expected #{word}, found #{Base.describe(e.tokens[at])}"
   return error(Base.unexpected(e, at, message)) if help == ""
 
-  return error(Base.unexpected_help(e, at, message, help))
+  error(Base.unexpected_help(e, at, message, help))
 end
 
 # The entries after "{": one or more, a trailing comma allowed, then "}".
@@ -4261,7 +4256,7 @@ def parse_import_list(e: Base.Env, at: Int) -> Result[ImportNamesAt]
     end
   end
 
-  return ok(ImportNamesAt(nodes: nodes, pos: cursor))
+  ok(ImportNamesAt(nodes: nodes, pos: cursor))
 end
 
 # An exported name, then optionally `as` and the local name. The original always comes first, so `{as}` imports a
@@ -4280,7 +4275,7 @@ def parse_import_name(e: Base.Env, at: Int) -> Result[ImportNameAt]
     )
   end
 
-  return ok(
+  ok(
     ImportNameAt(
       node: Ast.ImportName(
         name: original.lexeme,
@@ -4298,17 +4293,13 @@ def import_word(e: Base.Env, at: Int, description: String) -> Result[Int]
   kind = Base.kind_at(e, at)
   return ok(at + 1) if kind == "name" or kind == "type-name"
 
-  return error(Base.found(e, at, description))
+  error(Base.found(e, at, description))
 end
 
 # `export` followed by a type name and a dot is a re-export. Today `export` is followed only by def, struct, enum, type
 # or a constant (a type name and `=` or `:`), so there is no clash.
 def reexport_start?(e: Base.Env, at: Int) -> Bool
-  return (
-    Base.kind_at(e, at) == "export" and
-    Base.kind_at(e, at + 1) == "type-name" and
-    Base.kind_at(e, at + 2) == "dot"
-  )
+  Base.kind_at(e, at) == "export" and Base.kind_at(e, at + 1) == "type-name" and Base.kind_at(e, at + 2) == "dot"
 end
 
 # export Alias.name, or export Alias.TypeName: no `as`, no wildcard (docs/grammar/05b-modules.md).
@@ -4330,7 +4321,7 @@ def parse_reexport(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
     ),
   )
 
-  return decl_at(node, stop, ids)
+  decl_at(node, stop, ids)
 end
 
 # The blank line rule: right after a declaration other than an import, the next token must not start a declaration, an
@@ -4418,24 +4409,22 @@ def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
     end
   end
 
-  return ok(
-    Ast.Program(id: next_id, declarations: declarations, module_doc: module_doc, span: Base.span_from(e, 0, cursor)),
-  )
+  ok(Ast.Program(id: next_id, declarations: declarations, module_doc: module_doc, span: Base.span_from(e, 0, cursor)))
 end
 
 def constant?(decl: Ast.Decl) -> Bool
   case decl
-    Ast.Decl.Constant(_) -> return true
-    _ -> return false
+    Ast.Decl.Constant(_) -> true
+    _ -> false
   end
 end
 
 # A one-line def (`def name() -> Type = value`), exported or not.
 def one_line_def?(decl: Ast.Decl) -> Bool
   case decl
-    Ast.Decl.Function(node) -> return node.expression
-    Ast.Decl.Export(node) -> return one_line_def?(node.declaration)
-    _ -> return false
+    Ast.Decl.Function(node) -> node.expression
+    Ast.Decl.Export(node) -> one_line_def?(node.declaration)
+    _ -> false
   end
 end
 

@@ -22,9 +22,9 @@ end
 ## re-exports something reads its imports (docs/doc_origins.agc).
 export def of_file(settings: Env.Settings, path: String, text: String) -> Diag.Outcome[Outline]
   case Docs.parse(text)
-    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
     Diag.Outcome.Done(program) ->
-      return Diag.Outcome.Done(
+      Diag.Outcome.Done(
         Outline(
           doc: Model.cleaned(program.module_doc),
           imports: imports_of(program),
@@ -51,5 +51,5 @@ def imports_of(program: Ast.Program) -> List[Ast.ImportDecl]
     end
   end
 
-  return imports
+  imports
 end

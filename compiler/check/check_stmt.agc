@@ -49,7 +49,7 @@ end
 export def check_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Result[State.St]
   return check_function_body(cx.with(type_params: node.type_parameters), st, node) if node.type_parameters.size > 0
 
-  return check_function_body(cx, st, node)
+  check_function_body(cx, st, node)
 end
 
 ## Checks the statements in order. A statement that follows a terminator (return, break, next, or an if or case that
@@ -63,7 +63,7 @@ export def check_block(cx: State.Cx, st: State.St, statements: List[Ast.Stmt]) -
     index += 1
   end
 
-  return ok(current)
+  ok(current)
 end
 
 ## Checks the body of a block literal (do |x| ... end) against the parameter types and result type its context knows
@@ -78,7 +78,7 @@ export def check_block_body(
   known_result: T.Type,
   each_receiver: Optional[Ast.Expr],
 ) -> Result[State.Out]
-  return check_block_in(cx, st, block, known_params, known_result, each_receiver, false)
+  check_block_in(cx, st, block, known_params, known_result, each_receiver, false)
 end
 
 ## check_block_body for the block of a Lazy method when step is true: a `try` in it (not in a block nested in it) ends
@@ -110,7 +110,7 @@ export def check_block_in(
     end
   end
 
-  return check_block_run(cx, st, block, known_params, known_result, each_receiver, step)
+  check_block_run(cx, st, block, known_params, known_result, each_receiver, step)
 end
 
 ## Checks a case that gives a value (the right side of an assignment, or after `return`): every arm ends with an
@@ -118,7 +118,7 @@ end
 ## otherwise). Exhaustiveness is the rule of a statement.
 export def check_case_value(cx: State.Cx, st: State.St, node: Ast.CaseStmt, expected: T.Type) -> Result[State.Out]
   done = try case_arms(cx, st, node, valued_arms(expected, false))
-  return ok(State.Out(st: done.st, type: done.type))
+  ok(State.Out(st: done.st, type: done.type))
 end
 
 # Fails at statements[index + 1] when statements[index], already checked, never falls through to it.
@@ -127,7 +127,7 @@ def check_reachable(cx: State.Cx, st: State.St, statements: List[Ast.Stmt], inde
 
   terminator = statements[index]
   line = statement_span(terminator).start.line
-  return error(
+  error(
     State.fail_help(
       cx,
       st,
@@ -176,13 +176,13 @@ def check_function_body(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> R
   end
 
   try Variables.check(cx, inner)
-  return ok(State.leave(inner, here))
+  ok(State.leave(inner, here))
 end
 
 # A known_result of Result[Unknown] or Optional[Unknown]: the block must give a Result or an Optional whose type the
 # body decides.
 def settling?(known_result: T.Type) -> Bool
-  return (T.is?(known_result, "Result") or T.is?(known_result, "Optional")) and T.unknown?(T.item(known_result))
+  (T.is?(known_result, "Result") or T.is?(known_result, "Optional")) and T.unknown?(T.item(known_result))
 end
 
 def check_block_run(
@@ -246,7 +246,7 @@ def check_block_run(
 
   block_type = T.Type.Fn(types, result)
   after = State.leave(done.st, st).with(result: st.result, capture: st.capture, loops: st.loops, step: st.step)
-  return ok(State.Out(st: State.record_type(after, block.id, block_type), type: block_type))
+  ok(State.Out(st: State.record_type(after, block.id, block_type), type: block_type))
 end
 
 # The statement checked; a nesting past the limit is CHECK-TOO-DEEP.
@@ -265,26 +265,26 @@ def check_statement(cx: State.Cx, st: State.St, statement: Ast.Stmt) -> Result[S
   end
 
   done = try statement_inside(cx, st.with(nest: st.nest + 1), statement)
-  return ok(done.with(nest: st.nest))
+  ok(done.with(nest: st.nest))
 end
 
 def statement_inside(cx: State.Cx, st: State.St, statement: Ast.Stmt) -> Result[State.St]
   case statement
-    Ast.Stmt.Binding(node) -> return check_binding(cx, st, node)
-    Ast.Stmt.Return(node) -> return check_return(cx, st, node)
-    Ast.Stmt.Expression(node) -> return check_expression_statement(cx, st, node)
-    Ast.Stmt.If(node) -> return check_if(cx, st, node)
-    Ast.Stmt.Case(node) -> return check_case(cx, st, node)
-    Ast.Stmt.While(node) -> return check_while(cx, st, node)
-    Ast.Stmt.For(node) -> return check_for(cx, st, node)
-    Ast.Stmt.Control(node) -> return check_loop_control(cx, st, node)
+    Ast.Stmt.Binding(node) -> check_binding(cx, st, node)
+    Ast.Stmt.Return(node) -> check_return(cx, st, node)
+    Ast.Stmt.Expression(node) -> check_expression_statement(cx, st, node)
+    Ast.Stmt.If(node) -> check_if(cx, st, node)
+    Ast.Stmt.Case(node) -> check_case(cx, st, node)
+    Ast.Stmt.While(node) -> check_while(cx, st, node)
+    Ast.Stmt.For(node) -> check_for(cx, st, node)
+    Ast.Stmt.Control(node) -> check_loop_control(cx, st, node)
   end
 end
 
 def check_expression_statement(cx: State.Cx, st: State.St, node: Ast.ExprStmt) -> Result[State.St]
   out = try State.expr_completion(cx, st, node.value, T.Type.Unknown)
   try Unused.check_unused_value(cx, out.st, node.value, out.type)
-  return ok(out.st)
+  ok(out.st)
 end
 
 def check_loop_control(cx: State.Cx, st: State.St, node: Ast.LoopControl) -> Result[State.St]
@@ -296,7 +296,7 @@ def check_loop_control(cx: State.Cx, st: State.St, node: Ast.LoopControl) -> Res
     none -> help = help
   end
 
-  return error(
+  error(
     State.fail_help(cx, st, "CHECK-LOOP-CONTROL", "#{node.kind} is only valid inside while or for", node.span, help),
   )
 end
@@ -335,7 +335,7 @@ def check_binding(cx: State.Cx, st: State.St, node: Ast.Binding) -> Result[State
     some(node.value),
   )
 
-  return ok(State.record_bound(introduced, node.id, [type]))
+  ok(State.record_bound(introduced, node.id, [type]))
 end
 
 # A binding of a name that is already in scope is an assignment: not from inside a block, not with an annotation, not
@@ -387,14 +387,14 @@ def check_assignment(cx: State.Cx, st: State.St, node: Ast.Binding, existing: St
   end
 
   out = try State.expr(cx, State.assigning(st, existing), node.value, existing.type)
-  return ok(State.assigned(out.st, existing))
+  ok(State.assigned(out.st, existing))
 end
 
 def check_return(cx: State.Cx, st: State.St, node: Ast.Return) -> Result[State.St]
   case st.result
-    State.Slot.Infer -> return return_inferred(cx, st, node)
-    State.Slot.InferResult -> return return_inferred_result(cx, st, node)
-    State.Slot.Known(expected) -> return return_known(cx, st, node, expected)
+    State.Slot.Infer -> return_inferred(cx, st, node)
+    State.Slot.InferResult -> return_inferred_result(cx, st, node)
+    State.Slot.Known(expected) -> return_known(cx, st, node, expected)
   end
 end
 
@@ -405,8 +405,8 @@ def return_inferred(cx: State.Cx, st: State.St, node: Ast.Return) -> Result[Stat
       out = try State.expr_completion(cx, st, value, T.Type.Unknown)
       return ok(out.st) if unsettled?(out)
 
-      return ok(out.st.with(result: State.Slot.Known(out.type)))
-    none -> return ok(st.with(result: State.Slot.Known(T.Type.Void)))
+      ok(out.st.with(result: State.Slot.Known(out.type)))
+    none -> ok(st.with(result: State.Slot.Known(T.Type.Void)))
   end
 end
 
@@ -418,8 +418,8 @@ def return_inferred_result(cx: State.Cx, st: State.St, node: Ast.Return) -> Resu
       try require_result(cx, out.st, out.type, Ast.expr_span(value))
       return ok(out.st) if unsettled?(out)
 
-      return ok(out.st.with(result: State.Slot.Known(out.type)))
-    none -> return error(State.mismatch(cx, st, T.Type.Result(T.Type.Var("T")), T.Type.Void, node.span))
+      ok(out.st.with(result: State.Slot.Known(out.type)))
+    none -> error(State.mismatch(cx, st, T.Type.Result(T.Type.Var("T")), T.Type.Void, node.span))
   end
 end
 
@@ -431,7 +431,7 @@ def unsettled?(out: State.Out) -> Bool = out.st.probe and settling?(out.type)
 def require_result(cx: State.Cx, st: State.St, type: T.Type, span: Source.Span) -> Result[Bool]
   return error(State.mismatch(cx, st, T.Type.Result(T.Type.Var("T")), type, span)) if !T.is?(type, "Result")
 
-  return ok(true)
+  ok(true)
 end
 
 def return_known(cx: State.Cx, st: State.St, node: Ast.Return, expected: T.Type) -> Result[State.St]
@@ -440,10 +440,10 @@ def return_known(cx: State.Cx, st: State.St, node: Ast.Return, expected: T.Type)
       return implicit_return(cx, st, node, value, expected) if node.implicit
 
       out = try State.expr_completion_if(cx, st, value, expected, T.is?(expected, "Void"))
-      return ok(out.st)
+      ok(out.st)
     none ->
       try State.ensure(cx, st, T.Type.Void, expected, node.span)
-      return ok(st)
+      ok(st)
   end
 end
 
@@ -465,14 +465,14 @@ def implicit_return(
   end
 
   case State.expr(cx, st, value, expected)
-    ok(out) -> return ok(out.st)
+    ok(out) -> ok(out.st)
     error(failure) ->
       case State.expr_completion(cx, st, value, T.Type.Unknown)
         ok(out) ->
           return error(failure) if !T.is?(out.type, "Void")
 
           type_name = T.to_text(expected)
-          return error(
+          error(
             State.fail_help(
               cx,
               st,
@@ -482,7 +482,7 @@ def implicit_return(
               "end the function with a value of type #{type_name}, or return one before this statement",
             ),
           )
-        error(_) -> return error(failure)
+        error(_) -> error(failure)
       end
   end
 end
@@ -502,13 +502,13 @@ def check_if(cx: State.Cx, st: State.St, node: Ast.IfStmt) -> Result[State.St]
     none -> current = current
   end
 
-  return ok(current)
+  ok(current)
 end
 
 def check_while(cx: State.Cx, st: State.St, node: Ast.WhileStmt) -> Result[State.St]
   condition = try State.expr(cx, st, node.condition, T.Type.Bool)
   inner = try in_loop(cx, State.enter(condition.st), node.body)
-  return ok(State.leave(inner, condition.st))
+  ok(State.leave(inner, condition.st))
 end
 
 def check_for(cx: State.Cx, st: State.St, node: Ast.ForStmt) -> Result[State.St]
@@ -545,22 +545,22 @@ def check_for(cx: State.Cx, st: State.St, node: Ast.ForStmt) -> Result[State.St]
 
   inner = State.record_bound(inner, node.id, [element])
   inner = try in_loop(cx, inner, node.body)
-  return ok(State.leave(inner, iterable.st))
+  ok(State.leave(inner, iterable.st))
 end
 
 def in_loop(cx: State.Cx, st: State.St, body: List[Ast.Stmt]) -> Result[State.St]
   done = try check_block(cx, st.with(loops: st.loops + 1), body)
-  return ok(done.with(loops: st.loops))
+  ok(done.with(loops: st.loops))
 end
 
 def check_case(cx: State.Cx, st: State.St, node: Ast.CaseStmt) -> Result[State.St]
   start = Arms(covered: [], literals: [], wildcard: false, valued: false, completion: false, type: T.Type.Unknown)
   done = try case_arms(cx, st, node, start)
-  return ok(done.st)
+  ok(done.st)
 end
 
 def valued_arms(type: T.Type, completion: Bool) -> Arms
-  return Arms(covered: [], literals: [], wildcard: false, valued: true, completion: completion, type: type)
+  Arms(covered: [], literals: [], wildcard: false, valued: true, completion: completion, type: type)
 end
 
 def case_arms(cx: State.Cx, st: State.St, node: Ast.CaseStmt, start: Arms) -> Result[CaseDone]
@@ -583,7 +583,7 @@ def case_arms(cx: State.Cx, st: State.St, node: Ast.CaseStmt, start: Arms) -> Re
     try check_exhaustive(cx, current, node, value_type, names, arms)
   end
 
-  return ok(CaseDone(st: current, type: arms.type))
+  ok(CaseDone(st: current, type: arms.type))
 end
 
 # A guarded arm covers nothing: it may fail at run time, so it adds no variant, no literal and no catch-all to `arms`.
@@ -591,9 +591,9 @@ def check_arm(cx: State.Cx, st: State.St, arm: Ast.CaseArm, value_type: T.Type, 
   case arm.pattern
     Ast.Pattern.Wildcard(_) ->
       body = try arm_body(cx, st, arm, arms)
-      return ok(ArmDone(st: body.st, arms: arms.with(wildcard: arms.wildcard or !guarded?(arm), type: body.type)))
-    Ast.Pattern.Literal(pattern) -> return check_literal_arm(cx, st, arm, pattern, value_type, arms)
-    Ast.Pattern.Variant(pattern) -> return check_variant_arm(cx, st, arm, pattern, value_type, arms)
+      ok(ArmDone(st: body.st, arms: arms.with(wildcard: arms.wildcard or !guarded?(arm), type: body.type)))
+    Ast.Pattern.Literal(pattern) -> check_literal_arm(cx, st, arm, pattern, value_type, arms)
+    Ast.Pattern.Variant(pattern) -> check_variant_arm(cx, st, arm, pattern, value_type, arms)
   end
 end
 
@@ -614,7 +614,7 @@ def check_literal_arm(
   seen = arms.with(type: body.type)
   return ok(ArmDone(st: body.st, arms: seen)) if guarded?(arm)
 
-  return ok(ArmDone(st: body.st, arms: seen.with(literals: arms.literals.push(pattern.value))))
+  ok(ArmDone(st: body.st, arms: seen.with(literals: arms.literals.push(pattern.value))))
 end
 
 # A literal pattern needs a primitive value of its own type (CHECK-PATTERN-TYPE), at the top of an arm or nested.
@@ -632,7 +632,7 @@ def check_literal(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, value
     )
   end
 
-  return ok(true)
+  ok(true)
 end
 
 def check_variant_arm(
@@ -658,7 +658,7 @@ def check_variant_arm(
   # Only an arm that cannot fail covers its variant: no guard, and nothing but names and _ in the payload.
   return ok(ArmDone(st: left, arms: seen)) if guarded?(arm) or !irrefutable?(pattern)
 
-  return ok(ArmDone(st: left, arms: seen.with(covered: arms.covered.push(pattern.variant_name))))
+  ok(ArmDone(st: left, arms: seen.with(covered: arms.covered.push(pattern.variant_name))))
 end
 
 def guarded?(arm: Ast.CaseArm) -> Bool = arm.guard.some?
@@ -668,8 +668,8 @@ def irrefutable?(pattern: Ast.VariantPattern) -> Bool = pattern.slots.all? do |s
 
 def nested?(slot: Ast.Slot) -> Bool
   case slot
-    Ast.Slot.Nested(_) -> return true
-    _ -> return false
+    Ast.Slot.Nested(_) -> true
+    _ -> false
   end
 end
 
@@ -717,7 +717,7 @@ def bind_pattern(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, types:
     index += 1
   end
 
-  return ok(current)
+  ok(current)
 end
 
 # A pattern in a payload position of the given type: a literal of that type, or a variant of the enum it has.
@@ -725,13 +725,13 @@ def check_nested(cx: State.Cx, st: State.St, inner: Ast.Pattern, type: T.Type) -
   case inner
     Ast.Pattern.Literal(pattern) ->
       try check_literal(cx, st, pattern, type)
-      return ok(st)
+      ok(st)
     Ast.Pattern.Variant(pattern) ->
       payload = payload_types(cx, pattern, type)
       return error(variant_mismatch(cx, st, pattern, type)) if !payload.ok?
 
-      return bind_pattern(cx, st, pattern, payload.unwrap!)
-    Ast.Pattern.Wildcard(_) -> return ok(st)
+      bind_pattern(cx, st, pattern, payload.unwrap!)
+    Ast.Pattern.Wildcard(_) -> ok(st)
   end
 end
 
@@ -748,7 +748,7 @@ def check_arm_body(cx: State.Cx, bound: State.St, arm: Ast.CaseArm, arms: Arms) 
   return check_arm_value(cx, current, arm, arms) if arms.valued
 
   done = try check_block(cx, current, arm.body)
-  return ok(Body(st: done, type: arms.type))
+  ok(Body(st: done, type: arms.type))
 end
 
 # The body of an arm of a case that gives a value: the statements before the last, then the last expression, which is
@@ -773,13 +773,13 @@ def check_arm_value(cx: State.Cx, st: State.St, arm: Ast.CaseArm, arms: Arms) ->
         type = out.type
       end
 
-      return ok(Body(st: out.st, type: type))
-    _ -> return error(arm_without_value(cx, current, statement_span(arm.body[last])))
+      ok(Body(st: out.st, type: type))
+    _ -> error(arm_without_value(cx, current, statement_span(arm.body[last])))
   end
 end
 
 def arm_without_value(cx: State.Cx, st: State.St, span: Source.Span) -> String
-  return State.fail_help(
+  State.fail_help(
     cx,
     st,
     "CHECK-CASE-ARM-VALUE",
@@ -791,7 +791,7 @@ end
 
 def arm_body(cx: State.Cx, st: State.St, arm: Ast.CaseArm, arms: Arms) -> Result[Body]
   inner = try check_arm_body(cx, State.enter(st), arm, arms)
-  return ok(Body(st: State.leave(inner.st, st), type: inner.type))
+  ok(Body(st: State.leave(inner.st, st), type: inner.type))
 end
 
 # The payload types of a variant pattern: Ok and Err of a Result, Some and None of an Optional, or the variant of the
@@ -810,7 +810,7 @@ def payload_types(cx: State.Cx, pattern: Ast.VariantPattern, value_type: T.Type)
     _ -> return error("no such variant")
   end
 
-  return error("no such variant")
+  error("no such variant")
 end
 
 def variant_payload(definition: Model.EnumDef, variant_name: String, args: List[T.Type]) -> Result[List[T.Type]]
@@ -825,7 +825,7 @@ def variant_payload(definition: Model.EnumDef, variant_name: String, args: List[
     return ok(Types.substitute_all(variant.payload, substitutions)) if variant.name == variant_name
   end
 
-  return error("no such variant")
+  error("no such variant")
 end
 
 def variant_mismatch(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, value_type: T.Type) -> String
@@ -867,18 +867,18 @@ def variant_mismatch(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, va
 
   return State.fail_help(cx, st, "CHECK-PATTERN-TYPE", message, pattern.span, help) if help != ""
 
-  return State.fail(cx, st, "CHECK-PATTERN-TYPE", message, pattern.span)
+  State.fail(cx, st, "CHECK-PATTERN-TYPE", message, pattern.span)
 end
 
 # A variant pattern as the program writes it: some(...), none, ok(...) and error(...) for the builtin enums,
 # Enum.Variant for the others.
 def pattern_text(pattern: Ast.VariantPattern) -> String
   case pattern.enum_name + "." + pattern.variant_name
-    "Optional.Some" -> return "some(...)"
-    "Optional.None" -> return "none"
-    "Result.Ok" -> return "ok(...)"
-    "Result.Err" -> return "error(...)"
-    _ -> return "#{T.display_name(pattern.enum_name)}.#{pattern.variant_name}"
+    "Optional.Some" -> "some(...)"
+    "Optional.None" -> "none"
+    "Result.Ok" -> "ok(...)"
+    "Result.Err" -> "error(...)"
+    _ -> "#{T.display_name(pattern.enum_name)}.#{pattern.variant_name}"
   end
 end
 
@@ -894,11 +894,11 @@ def variant_names(cx: State.Cx, value_type: T.Type) -> Result[List[String]]
     return ok(definition.unwrap!.variants.map do |variant: Model.Variant| variant.name end) if definition.some?
   end
 
-  return error("not an enum")
+  error("not an enum")
 end
 
 def all_covered?(names: List[String], covered: List[String]) -> Bool
-  return names.all? do |name: String| covered.any? do |seen: String| seen == name end end
+  names.all? do |name: String| covered.any? do |seen: String| seen == name end end
 end
 
 def check_exhaustive(
@@ -927,72 +927,72 @@ def check_exhaustive(
     )
   end
 
-  return ok(true)
+  ok(true)
 end
 
 # The type of a literal.
 def literal_type(value: Ast.LitValue) -> T.Type
   case value
-    Ast.LitValue.Whole(_) -> return T.Type.Int
-    Ast.LitValue.Huge(_) -> return T.Type.Int
-    Ast.LitValue.Real(_) -> return T.Type.Float
-    Ast.LitValue.Text(_) -> return T.Type.String
-    Ast.LitValue.Flag(_) -> return T.Type.Bool
-    Ast.LitValue.Nothing -> return T.Type.Nil
+    Ast.LitValue.Whole(_) -> T.Type.Int
+    Ast.LitValue.Huge(_) -> T.Type.Int
+    Ast.LitValue.Real(_) -> T.Type.Float
+    Ast.LitValue.Text(_) -> T.Type.String
+    Ast.LitValue.Flag(_) -> T.Type.Bool
+    Ast.LitValue.Nothing -> T.Type.Nil
   end
 end
 
 # equal? on literals: a float matches on its bits, so 0.0 and -0.0 differ.
 def same_literal?(a: Ast.LitValue, b: Ast.LitValue) -> Bool
   case a
-    Ast.LitValue.Whole(x) -> return whole_is?(b, x)
-    Ast.LitValue.Huge(x) -> return huge_is?(b, x)
-    Ast.LitValue.Real(x) -> return real_is?(b, x)
-    Ast.LitValue.Text(x) -> return text_is?(b, x)
-    Ast.LitValue.Flag(x) -> return flag_is?(b, x)
-    Ast.LitValue.Nothing -> return nothing?(b)
+    Ast.LitValue.Whole(x) -> whole_is?(b, x)
+    Ast.LitValue.Huge(x) -> huge_is?(b, x)
+    Ast.LitValue.Real(x) -> real_is?(b, x)
+    Ast.LitValue.Text(x) -> text_is?(b, x)
+    Ast.LitValue.Flag(x) -> flag_is?(b, x)
+    Ast.LitValue.Nothing -> nothing?(b)
   end
 end
 
 def whole_is?(b: Ast.LitValue, x: Int) -> Bool
   case b
-    Ast.LitValue.Whole(y) -> return x == y
-    _ -> return false
+    Ast.LitValue.Whole(y) -> x == y
+    _ -> false
   end
 end
 
 def huge_is?(b: Ast.LitValue, x: String) -> Bool
   case b
-    Ast.LitValue.Huge(y) -> return x == y
-    _ -> return false
+    Ast.LitValue.Huge(y) -> x == y
+    _ -> false
   end
 end
 
 def real_is?(b: Ast.LitValue, x: Float) -> Bool
   case b
-    Ast.LitValue.Real(y) -> return Float.to_bits(x) == Float.to_bits(y)
-    _ -> return false
+    Ast.LitValue.Real(y) -> Float.to_bits(x) == Float.to_bits(y)
+    _ -> false
   end
 end
 
 def text_is?(b: Ast.LitValue, x: String) -> Bool
   case b
-    Ast.LitValue.Text(y) -> return x == y
-    _ -> return false
+    Ast.LitValue.Text(y) -> x == y
+    _ -> false
   end
 end
 
 def flag_is?(b: Ast.LitValue, x: Bool) -> Bool
   case b
-    Ast.LitValue.Flag(y) -> return x == y
-    _ -> return false
+    Ast.LitValue.Flag(y) -> x == y
+    _ -> false
   end
 end
 
 def nothing?(b: Ast.LitValue) -> Bool
   case b
-    Ast.LitValue.Nothing -> return true
-    _ -> return false
+    Ast.LitValue.Nothing -> true
+    _ -> false
   end
 end
 
@@ -1026,7 +1026,7 @@ def block_parameter_types(
     index += 1
   end
 
-  return ok(out)
+  ok(out)
 end
 
 # The type of one block parameter: the annotation and the context agree, or one of them gives it.
@@ -1059,7 +1059,7 @@ def block_parameter_type(
     return ok(context)
   end
 
-  return error(
+  error(
     State.fail_help(
       cx,
       st,
@@ -1086,11 +1086,11 @@ def block_statements(cx: State.Cx, st: State.St, statements: List[Ast.Stmt]) -> 
 
   final = statements[statements.size - 1]
   case final
-    Ast.Stmt.Expression(node) -> return final_expression(cx, current, node.value)
-    Ast.Stmt.Case(node) -> return final_case(cx, current, node)
+    Ast.Stmt.Expression(node) -> final_expression(cx, current, node.value)
+    Ast.Stmt.Case(node) -> final_case(cx, current, node)
     _ ->
       done = try check_statement(cx, current, final)
-      return ok(State.Out(st: done, type: T.Type.Unknown))
+      ok(State.Out(st: done, type: T.Type.Unknown))
   end
 end
 
@@ -1127,39 +1127,39 @@ def final_case(cx: State.Cx, st: State.St, node: Ast.CaseStmt) -> Result[State.O
         try require_result(cx, done.st, done.type, node.span)
       end
 
-      return ok(State.Out(st: State.record_type(done.st, node.id, done.type), type: done.type))
+      ok(State.Out(st: State.record_type(done.st, node.id, done.type), type: done.type))
     error(problem) ->
       return final_statement(cx, st, node) if inferred and void_mismatch?(problem)
 
-      return error(problem)
+      error(problem)
   end
 end
 
 # Whether the problem is a CHECK-TYPE-MISMATCH between Void and another type: one arm of a case gives no value.
 def void_mismatch?(problem: String) -> Bool
   found = Failure.unpack(problem)
-  return found.code == "CHECK-TYPE-MISMATCH" and (found.expected == "Void" or found.actual == "Void")
+  found.code == "CHECK-TYPE-MISMATCH" and (found.expected == "Void" or found.actual == "Void")
 end
 
 def final_statement(cx: State.Cx, st: State.St, node: Ast.CaseStmt) -> Result[State.Out]
   done = try check_statement(cx, st, Ast.Stmt.Case(node))
-  return ok(State.Out(st: done, type: T.Type.Unknown))
+  ok(State.Out(st: done, type: T.Type.Unknown))
 end
 
 def ends_with_expression?(body: List[Ast.Stmt]) -> Bool
   return false if body.size == 0
 
   case body[body.size - 1]
-    Ast.Stmt.Expression(_) -> return true
-    _ -> return false
+    Ast.Stmt.Expression(_) -> true
+    _ -> false
   end
 end
 
 def final_expression(cx: State.Cx, st: State.St, value: Ast.Expr) -> Result[State.Out]
   case st.result
-    State.Slot.Infer -> return State.expr_completion(cx, st, value, T.Type.Unknown)
-    State.Slot.InferResult -> return final_inferred_result(cx, st, value)
-    State.Slot.Known(expected) -> return final_known(cx, st, value, expected)
+    State.Slot.Infer -> State.expr_completion(cx, st, value, T.Type.Unknown)
+    State.Slot.InferResult -> final_inferred_result(cx, st, value)
+    State.Slot.Known(expected) -> final_known(cx, st, value, expected)
   end
 end
 
@@ -1168,7 +1168,7 @@ end
 def final_inferred_result(cx: State.Cx, st: State.St, value: Ast.Expr) -> Result[State.Out]
   out = try State.expr_completion(cx, st, value, T.Type.Unknown)
   try require_result(cx, out.st, out.type, Ast.expr_span(value))
-  return ok(out)
+  ok(out)
 end
 
 def final_known(cx: State.Cx, st: State.St, value: Ast.Expr, expected: T.Type) -> Result[State.Out]
@@ -1178,22 +1178,22 @@ def final_known(cx: State.Cx, st: State.St, value: Ast.Expr, expected: T.Type) -
     return ok(State.Out(st: out.st, type: T.Type.Unknown))
   end
 
-  return State.expr_completion_if(cx, st, value, expected, T.is?(expected, "Result"))
+  State.expr_completion_if(cx, st, value, expected, T.is?(expected, "Result"))
 end
 
 # The result type of a block: the one it was given or a return gave, else the type of its last expression, else Void.
 def block_result(slot: State.Slot, last: T.Type) -> T.Type
   case slot
-    State.Slot.Known(type) -> return type
-    State.Slot.Infer -> return infer_result(last)
-    State.Slot.InferResult -> return infer_result(last)
+    State.Slot.Known(type) -> type
+    State.Slot.Infer -> infer_result(last)
+    State.Slot.InferResult -> infer_result(last)
   end
 end
 
 def infer_result(last: T.Type) -> T.Type
   return T.Type.Void if T.unknown?(last)
 
-  return last
+  last
 end
 
 # The text of a function's signature in the diagnostics: name(param: Type, ...) -> Result.
@@ -1205,19 +1205,19 @@ def signature_text(node: Ast.FunctionDecl, signature: State.Signature) -> String
     index += 1
   end
 
-  return "#{T.display_name(node.name)}(#{parts.join(", ")}) -> #{T.to_text(signature.result)}"
+  "#{T.display_name(node.name)}(#{parts.join(", ")}) -> #{T.to_text(signature.result)}"
 end
 
 def statement_span(statement: Ast.Stmt) -> Source.Span
   case statement
-    Ast.Stmt.Binding(node) -> return node.span
-    Ast.Stmt.Return(node) -> return node.span
-    Ast.Stmt.Expression(node) -> return node.span
-    Ast.Stmt.If(node) -> return node.span
-    Ast.Stmt.While(node) -> return node.span
-    Ast.Stmt.For(node) -> return node.span
-    Ast.Stmt.Control(node) -> return node.span
-    Ast.Stmt.Case(node) -> return node.span
+    Ast.Stmt.Binding(node) -> node.span
+    Ast.Stmt.Return(node) -> node.span
+    Ast.Stmt.Expression(node) -> node.span
+    Ast.Stmt.If(node) -> node.span
+    Ast.Stmt.While(node) -> node.span
+    Ast.Stmt.For(node) -> node.span
+    Ast.Stmt.Control(node) -> node.span
+    Ast.Stmt.Case(node) -> node.span
   end
 end
 

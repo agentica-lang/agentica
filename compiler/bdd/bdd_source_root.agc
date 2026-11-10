@@ -20,7 +20,7 @@ export def option(entry: String) -> String
   canonical = Path.real(here.unwrap!)
   return "" if !canonical.ok?
 
-  return relative(parts(canonical.unwrap!), parts(folder))
+  relative(parts(canonical.unwrap!), parts(folder))
 end
 
 # The path of `to` from `from`: one ".." for each part of `from` that `to` does not share, then the rest of `to`.
@@ -39,7 +39,7 @@ def relative(from: List[String], to: List[String]) -> String
     names = names.push(to[index])
   end
 
-  return names.join("/")
+  names.join("/")
 end
 
 def parts(path: String) -> List[String] = path.split("/").filter do |part: String| part != "" end

@@ -27,7 +27,7 @@ def read_as(path: String, shown: Bool) -> SourceFile.Read
   handle = opened.unwrap!
   result = read_chunks(handle, shown)
   _ = File.close(handle, IO_TIMEOUT_MS)
-  return result
+  result
 end
 
 # The bytes of a character that a chunk cuts in two wait in `carry` for the next chunk.
@@ -59,5 +59,5 @@ def read_chunks(handle: FileHandle, shown: Bool) -> SourceFile.Read
     end
   end
 
-  return SourceFile.Read.Text(parts.join(""))
+  SourceFile.Read.Text(parts.join(""))
 end

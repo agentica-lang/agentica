@@ -96,7 +96,7 @@ end
 
 ## Checks a linked program. The settings tell where the files of the prelude are read.
 export def check(linked: Linker.Linked, settings: Env.Settings) -> Checking
-  return finished(run(linked, settings, true, false, taking(linked, none)))
+  finished(run(linked, settings, true, false, taking(linked, none)))
 end
 
 ## Checks a linked program as `check_query` does, but a function whose body fails to check does not stop the run: its
@@ -105,27 +105,27 @@ end
 ## order, and the first is the one `check_query` gives. A failure of the registration of the declarations, of the main
 ## rule or of the module constants leaves no part that passes, so it is the failure, as for `check_query`.
 export def check_recovering(linked: Linker.Linked, settings: Env.Settings) -> Recovering
-  return recovered(run(linked, settings, false, true, taking(linked, none)))
+  recovered(run(linked, settings, false, true, taking(linked, none)))
 end
 
 ## `check_recovering`, taking from an earlier check what `reusing` says is unchanged. The answer is the one of
 ## `check_recovering` without it.
 export def check_recovering_reusing(linked: Linker.Linked, settings: Env.Settings, reusing: Reusing) -> Recovering
-  return recovered(run(linked, settings, false, true, taking(linked, some(reusing))))
+  recovered(run(linked, settings, false, true, taking(linked, some(reusing))))
 end
 
 ## Checks a linked program as `check` does, without the rule that it declares a main (CHECK-MAIN): `agentica check` and
 ## a query about a position (`agentica type-at`) take a library file as well as a program. A main that is declared must
 ## still be `main() -> Void`, and every other rule holds.
 export def check_query(linked: Linker.Linked, settings: Env.Settings) -> Checking
-  return finished(run(linked, settings, false, false, taking(linked, none)))
+  finished(run(linked, settings, false, false, taking(linked, none)))
 end
 
 ## `check_query`, taking from an earlier check what `reusing` says is unchanged. The answer is the one of `check_query`
 ## without it, and so is the first problem.
 export def check_query_reusing(linked: Linker.Linked, settings: Env.Settings, reusing: Reusing) -> Rechecked
   taken = taking(linked, some(reusing))
-  return Rechecked(checking: finished(run(linked, settings, false, false, taken)), taken: taken.clean.size)
+  Rechecked(checking: finished(run(linked, settings, false, false, taken)), taken: taken.clean.size)
 end
 
 ## Checks a linked program as `check_query` does, except that the modules of `clean` are not checked: not their
@@ -140,19 +140,19 @@ export def check_query_taking(
   constants: Map[String, T.Type],
 ) -> Checking
   st = State.fresh().with(types: State.no_types(ids_of(linked)))
-  return finished(run(linked, settings, false, false, Reuse.Taken(st: st, constants: constants, clean: clean)))
+  finished(run(linked, settings, false, false, Reuse.Taken(st: st, constants: constants, clean: clean)))
 end
 
 def recovered(result: Result[Recovered]) -> Recovering
   return Recovering.Done(result.unwrap!) if result.ok?
 
-  return Recovering.Failed(Failure.unpack(result.message))
+  Recovering.Failed(Failure.unpack(result.message))
 end
 
 def finished(result: Result[Recovered]) -> Checking
   return Checking.Done(result.unwrap!.checked) if result.ok?
 
-  return Checking.Failed(Failure.unpack(result.message))
+  Checking.Failed(Failure.unpack(result.message))
 end
 
 # The context of the run: the builtin records and enums, the tables built once, and the text of each file.
@@ -172,7 +172,7 @@ def start(linked: Linker.Linked) -> State.Cx
     end
   end
 
-  return State.Cx(
+  State.Cx(
     help: Help.tables(),
     structs: RECORDS,
     struct_params: {},
@@ -210,11 +210,11 @@ def blanked?(stubbed: Bool, text: String, node: Ast.ConstDecl) -> Bool
         Ast.LitValue.Whole(number) ->
           # The length the cache measured (value_cut) runs from the `(` of the stub.
           length = node.span.stop.offset - stub_open(text, lit.span.start.offset)
-          return number == 0 and length >= CheckCache.ELIDE_FROM
-        _ -> return false
+          number == 0 and length >= CheckCache.ELIDE_FROM
+        _ -> false
       end
 
-    _ -> return false
+    _ -> false
   end
 end
 
@@ -232,7 +232,7 @@ def stub_open(text: String, zero: Int) -> Int
 
   return at - 1 if at > 0 and at < zero and "[{(".contains?(text.slice(at - 1, 1))
 
-  return zero - 1
+  zero - 1
 end
 
 # The files whose unused names are no error: the roots of a query (`settings.unused` false), as for an unused import.
@@ -246,7 +246,7 @@ def lenient_files(linked: Linker.Linked, settings: Env.Settings) -> Set[String]
     end
   end
 
-  return Set.new(files)
+  Set.new(files)
 end
 
 # `recover` keeps the problem of a function body and goes on with the next function; without it the first problem ends
@@ -318,7 +318,7 @@ def run(
     bound: attached.st.bound,
   )
 
-  return ok(Recovered(checked: checked, problems: problems, failed: failed))
+  ok(Recovered(checked: checked, problems: problems, failed: failed))
 end
 
 # Cx.json_needs: the body of each generic function of every module is checked once with no needs known, which gives
@@ -368,11 +368,11 @@ def json_needs(cx: State.Cx, st: State.St, modules: List[Linker.LinkedModule]) -
     end
   end
 
-  return needs
+  needs
 end
 
 def add_json_need(needs: Map[String, List[T.Type]], name: String, need: T.Type) -> Map[String, List[T.Type]]
-  return needs.put(name, CheckTypes.add_need(needs.get(name).unwrap_or([]), need))
+  needs.put(name, CheckTypes.add_need(needs.get(name).unwrap_or([]), need))
 end
 
 # What the run starts from: nothing, or the entries of the unchanged modules of the earlier check.
@@ -388,11 +388,11 @@ def taking(linked: Linker.Linked, reusing: Optional[Reusing]) -> Reuse.Taken
         step_tries: before.checked.step_tries,
       )
 
-      return Reuse.take(linked, before.linked, old, before.checked.constant_types, found.clean)
+      Reuse.take(linked, before.linked, old, before.checked.constant_types, found.clean)
     none ->
       st = State.fresh().with(types: State.no_types(ids_of(linked)))
       nothing_clean: Set[String] = Set.new([])
-      return Reuse.Taken(st: st, constants: {}, clean: nothing_clean)
+      Reuse.Taken(st: st, constants: {}, clean: nothing_clean)
   end
 end
 

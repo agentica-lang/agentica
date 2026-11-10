@@ -37,7 +37,7 @@ export def targets(name: String) -> List[String]
 
   # The builtins written as a method of that name come first: `join` is the join of a List before `Path.join`.
   written = public.filter do |target: String| RubyForm.written_as?(target, method) end
-  return written.concat(public.filter do |target: String| !RubyForm.written_as?(target, method) end)
+  written.concat(public.filter do |target: String| !RubyForm.written_as?(target, method) end)
 end
 
 ## The checker's hints for the methods that a bare `name` is on some type (`List.contains: a List has no ...`), by
@@ -53,7 +53,7 @@ export def kind_hints(name: String) -> Map[String, String]
     end
   end
 
-  return found
+  found
 end
 
 # The method aliases of the checker: `String.strip` is `String.trim`. `self` (`String.to_s`) is no builtin.
@@ -68,7 +68,7 @@ def from_aliases(method: String, kind: String) -> List[String]
     end
   end
 
-  return found
+  found
 end
 
 # The foreign method names of the checker: `len` is `size` or `length`, in each module that has one.
@@ -91,7 +91,7 @@ def from_renamed(method: String, kind: String, modules: Map[String, String]) -> 
     end
   end
 
-  return found
+  found
 end
 
 # The builtins whose method name is `method`: `trim` is `String.trim`.
@@ -104,5 +104,5 @@ def from_method_names(method: String, kind: String, modules: Map[String, String]
     end
   end
 
-  return found
+  found
 end

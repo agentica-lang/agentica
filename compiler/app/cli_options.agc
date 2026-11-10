@@ -105,7 +105,7 @@ export def parse(arguments: List[String], version: String) -> Parsed
     at += 1 + taken
   end
 
-  return Parsed.Ready(options)
+  Parsed.Ready(options)
 end
 
 def mistake(message: String) -> Parsed = Parsed.Answer(Reply.failed(1, "agentica: #{message}\n"))
@@ -119,7 +119,7 @@ def values(word: String) -> Int
   found = ONCE.get(word)
   return found.unwrap! if found.some?
 
-  return -1
+  -1
 end
 
 def apply(options: Options, word: String, value: String) -> Applied
@@ -129,18 +129,18 @@ def apply(options: Options, word: String, value: String) -> Applied
   end
 
   case word
-    "--dump" -> return Applied.Changed(options.with(dump: true))
-    "--dump-ir" -> return Applied.Changed(options.with(dump_ir: true))
-    "--no-cache" -> return Applied.Changed(options.with(no_cache: true))
-    "--ai" -> return Applied.Changed(options.with(style: "ai"))
-    "--json" -> return Applied.Changed(options.with(style: "json"))
-    "--steps" -> return Applied.Changed(options.with(steps: options.steps.push(value)))
-    "--max-steps" -> return max_steps(options, value)
-    "--seed" -> return seed(options, value)
-    "--schedulers" -> return schedulers(options, value)
-    "--jit" -> return jit(options, value)
-    "--coverage" -> return coverage(options, value)
-    _ -> return flush_timeout(options, value)
+    "--dump" -> Applied.Changed(options.with(dump: true))
+    "--dump-ir" -> Applied.Changed(options.with(dump_ir: true))
+    "--no-cache" -> Applied.Changed(options.with(no_cache: true))
+    "--ai" -> Applied.Changed(options.with(style: "ai"))
+    "--json" -> Applied.Changed(options.with(style: "json"))
+    "--steps" -> Applied.Changed(options.with(steps: options.steps.push(value)))
+    "--max-steps" -> max_steps(options, value)
+    "--seed" -> seed(options, value)
+    "--schedulers" -> schedulers(options, value)
+    "--jit" -> jit(options, value)
+    "--coverage" -> coverage(options, value)
+    _ -> flush_timeout(options, value)
   end
 end
 
@@ -148,7 +148,7 @@ def max_steps(options: Options, value: String) -> Applied
   digits = without_leading_zeros(value)
   return Applied.Refused("--max-steps needs a positive integer") if !digits?(value) or digits == "0"
 
-  return Applied.Changed(options.with(max_steps: digits))
+  Applied.Changed(options.with(max_steps: digits))
 end
 
 def seed(options: Options, value: String) -> Applied
@@ -157,7 +157,7 @@ def seed(options: Options, value: String) -> Applied
     return Applied.Refused("--seed needs an integer from 0 to 2147483647")
   end
 
-  return Applied.Changed(options.with(seed: digits))
+  Applied.Changed(options.with(seed: digits))
 end
 
 def schedulers(options: Options, value: String) -> Applied
@@ -166,27 +166,27 @@ def schedulers(options: Options, value: String) -> Applied
     return Applied.Refused("--schedulers needs an integer from 1 to 1024")
   end
 
-  return Applied.Changed(options.with(schedulers: digits))
+  Applied.Changed(options.with(schedulers: digits))
 end
 
 def jit(options: Options, value: String) -> Applied
   return Applied.Refused("--jit needs off, on or always") if !JIT_MODES.include?(value)
 
-  return Applied.Changed(options.with(jit: value))
+  Applied.Changed(options.with(jit: value))
 end
 
 # The file that the run writes the LCOV of its lines to (vm/cover.c); the VM opens it, relative to the working folder.
 def coverage(options: Options, value: String) -> Applied
   return Applied.Refused("--coverage needs a file name") if value == ""
 
-  return Applied.Changed(options.with(coverage: value))
+  Applied.Changed(options.with(coverage: value))
 end
 
 # The flag passes the text as it was typed (a leading zero stays).
 def flush_timeout(options: Options, value: String) -> Applied
   return Applied.Refused("--flush-timeout needs a non-negative integer") if !digits?(value)
 
-  return Applied.Changed(options.with(flush_timeout: value))
+  Applied.Changed(options.with(flush_timeout: value))
 end
 
 # Not empty, and only the digits 0 to 9.
@@ -197,7 +197,7 @@ def digits?(text: String) -> Bool
     return false if !DIGITS.contains?(character)
   end
 
-  return true
+  true
 end
 
 # The number as `agentica` prints it: no leading zeros, and "0" for zero.
@@ -207,5 +207,5 @@ def without_leading_zeros(text: String) -> String
     at += 1
   end
 
-  return text.slice(at, text.length - at)
+  text.slice(at, text.length - at)
 end

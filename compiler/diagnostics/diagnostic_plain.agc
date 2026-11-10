@@ -36,7 +36,7 @@ export def format(problem: Problems.Problem, text: String) -> String
 
   start = problem.span.start
   head = "#{problem.file}:#{start.line}:#{start.column} error[#{problem.code}]"
-  return "#{head}\n#{problem.message}\n\n#{body.join("\n")}#{help_line(problem.help, width)}"
+  "#{head}\n#{problem.message}\n\n#{body.join("\n")}#{help_line(problem.help, width)}"
 end
 
 ## The text of a problem that has no place in the source: the file, the code, the message, and the key when it has one.
@@ -50,7 +50,7 @@ export def without_source(problem: Problems.Problem) -> String
   notes = notes.concat(help_note(problem.help))
   return head if notes.size == 0
 
-  return "#{head}\n\n#{notes.join("\n")}"
+  "#{head}\n\n#{notes.join("\n")}"
 end
 
 ## The text of a line (1-based), without one carriage return at its end; empty outside the file.
@@ -60,20 +60,20 @@ export def line_text(lines: List[String], number: Int) -> String
   text = lines[number - 1]
   return text.slice(0, text.length - 1) if text.ends_with?("\r")
 
-  return text
+  text
 end
 
 def help_note(help: Diag.Help) -> List[String]
   case help
-    Diag.Help.Hint(text) -> return ["  = help: #{text}"]
-    Diag.Help.NoHelp -> return []
+    Diag.Help.Hint(text) -> ["  = help: #{text}"]
+    Diag.Help.NoHelp -> []
   end
 end
 
 def help_line(help: Diag.Help, width: Int) -> String
   case help
-    Diag.Help.Hint(text) -> return "\n#{spaces(width)} = help: #{text}"
-    Diag.Help.NoHelp -> return ""
+    Diag.Help.Hint(text) -> "\n#{spaces(width)} = help: #{text}"
+    Diag.Help.NoHelp -> ""
   end
 end
 
@@ -98,7 +98,7 @@ def mark(span: Source.Span, character: String, note: String, noted: Bool, lines:
     wanted = 1
   end
 
-  return Mark(line: line, column: column, width: wanted, character: character, note: note, noted: noted)
+  Mark(line: line, column: column, width: wanted, character: character, note: note, noted: noted)
 end
 
 def spaces(count: Int) -> String = List.repeat(" ", count).join("")
@@ -114,7 +114,7 @@ def padding(text: String, count: Int) -> String
     end
   end
 
-  return characters.join("")
+  characters.join("")
 end
 
 # The source line, its row of marks, and the notes of the labels on it.
@@ -144,5 +144,5 @@ def render(number: Int, marks: List[Mark], lines: List[String], gutter: Int) -> 
     end
   end
 
-  return parts.join("\n")
+  parts.join("\n")
 end

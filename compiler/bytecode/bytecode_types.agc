@@ -87,9 +87,7 @@ export def build(program: Ir.Program, struct_index: Map[String, Int], enum_index
     end
   end
 
-  return ok(
-    Section(types: pool, decodable: chunks, decodable_count: count, enums: enum_chunks, enums_count: enum_count),
-  )
+  ok(Section(types: pool, decodable: chunks, decodable_count: count, enums: enum_chunks, enums_count: enum_count))
 end
 
 # The entry of a type, added after the entries of the types it is made of. An entry is its tag (0 Int, 1 Float, 2 Bool,
@@ -103,20 +101,20 @@ def type_id(
   type: Types.Type,
 ) -> Result[Pool.Interned]
   case type
-    Types.Type.Int -> return ok(Pool.intern(pool, "0", [0]))
-    Types.Type.Float -> return ok(Pool.intern(pool, "1", [1]))
-    Types.Type.Bool -> return ok(Pool.intern(pool, "2", [2]))
-    Types.Type.String -> return ok(Pool.intern(pool, "3", [3]))
+    Types.Type.Int -> ok(Pool.intern(pool, "0", [0]))
+    Types.Type.Float -> ok(Pool.intern(pool, "1", [1]))
+    Types.Type.Bool -> ok(Pool.intern(pool, "2", [2]))
+    Types.Type.String -> ok(Pool.intern(pool, "3", [3]))
     Types.Type.List(item) ->
       inner = try type_id(program, struct_index, enum_index, pool, item)
-      return ok(entry_of(inner.pool, 4, inner.id))
+      ok(entry_of(inner.pool, 4, inner.id))
     Types.Type.Map(key, value) ->
       if !Types.is?(key, "String")
         return error(unsupported(program, "a Map with a key that is not a String in a JSON field type"))
       end
 
       inner = try type_id(program, struct_index, enum_index, pool, value)
-      return ok(entry_of(inner.pool, 5, inner.id))
+      ok(entry_of(inner.pool, 5, inner.id))
     Types.Type.Enum(name, args) ->
       if name == "JsonField" and args.size == 1
         inner = try type_id(program, struct_index, enum_index, pool, args[0])
@@ -127,22 +125,22 @@ def type_id(
         return error(unsupported(program, "the enum #{name} in a JSON field type is not in the table"))
       end
 
-      return ok(entry_of(pool, 9, enum_index[name]))
+      ok(entry_of(pool, 9, enum_index[name]))
     Types.Type.Optional(item) ->
       inner = try type_id(program, struct_index, enum_index, pool, item)
-      return ok(entry_of(inner.pool, 8, inner.id))
+      ok(entry_of(inner.pool, 8, inner.id))
     Types.Type.Struct(name, _) ->
       if !struct_index.has_key?(name)
         return error(unsupported(program, "the struct #{name} in a JSON field type is not in the table"))
       end
 
-      return ok(entry_of(pool, 6, struct_index[name]))
-    _ -> return error(unsupported(program, "a JSON field type of #{Types.tag(type)}"))
+      ok(entry_of(pool, 6, struct_index[name]))
+    _ -> error(unsupported(program, "a JSON field type of #{Types.tag(type)}"))
   end
 end
 
 def entry_of(pool: Pool.Pool, tag: Int, number: Int) -> Pool.Interned
-  return Pool.intern(pool, "#{tag}:#{number}", [tag].concat(Wire.u32(number)))
+  Pool.intern(pool, "#{tag}:#{number}", [tag].concat(Wire.u32(number)))
 end
 
 def unsupported(program: Ir.Program, message: String) -> String = Failure.internal(program, message)
@@ -150,13 +148,13 @@ def unsupported(program: Ir.Program, message: String) -> String = Failure.intern
 # The levels of List, Map, JsonField and Optional around a type.
 def nesting(type: Types.Type) -> Int
   case type
-    Types.Type.List(item) -> return 1 + nesting(item)
-    Types.Type.Map(_, item) -> return 1 + nesting(item)
+    Types.Type.List(item) -> 1 + nesting(item)
+    Types.Type.Map(_, item) -> 1 + nesting(item)
     Types.Type.Enum(name, args) ->
       return 1 + nesting(args[0]) if name == "JsonField"
 
-      return 0
-    Types.Type.Optional(item) -> return 1 + nesting(item)
-    _ -> return 0
+      0
+    Types.Type.Optional(item) -> 1 + nesting(item)
+    _ -> 0
   end
 end

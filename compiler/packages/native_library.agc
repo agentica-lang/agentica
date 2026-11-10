@@ -99,7 +99,7 @@ export def resolve(
   end
 
   extra = downloaded_watched(manifest, lock, package_name, os, cache_root, targets)
-  return Found(targets: targets, watched: watched.concat(inputs).concat(extra), probed: probed)
+  Found(targets: targets, watched: watched.concat(inputs).concat(extra), probed: probed)
 end
 
 ## What a Build target means once a file uses it: native/ is walked (a missing source or a link there is the packed
@@ -111,10 +111,10 @@ export def build_target(workspace: Workspace.Workspace, request: Workspace.Build
   return Target.Unusable(listed.message) if !listed.ok?
 
   case workspace.native_build.call(listed.unwrap!)
-    Workspace.Built.Library(path) -> return Target.File(path)
-    Workspace.Built.Skipped -> return Target.System(name)
-    Workspace.Built.Failed(packed) -> return Target.Unusable(packed)
-    Workspace.Built.Unbuilt(_) -> return Target.File(NativeBuild.unbuilt_path(request))
+    Workspace.Built.Library(path) -> Target.File(path)
+    Workspace.Built.Skipped -> Target.System(name)
+    Workspace.Built.Failed(packed) -> Target.Unusable(packed)
+    Workspace.Built.Unbuilt(_) -> Target.File(NativeBuild.unbuilt_path(request))
   end
 end
 
@@ -142,7 +142,7 @@ export def build_all(
     end
   end
 
-  return ok()
+  ok()
 end
 
 # The absolute candidates of the `system` lists of this system. A list of one is not a choice, so it is not probed.
@@ -156,7 +156,7 @@ def probes(manifest: Manifest.Manifest, os: String) -> List[String]
     end
   end
 
-  return found
+  found
 end
 
 # The first candidate that is an absolute path to a file that exists, else the first bare name for the loader, else the
@@ -171,7 +171,7 @@ def pick(workspace: Workspace.Workspace, names: List[String]) -> String
     return name if !Paths.rooted?(name)
   end
 
-  return names[0]
+  names[0]
 end
 
 # The files that the targets name.
@@ -186,7 +186,7 @@ def files(targets: Map[String, Target]) -> List[String]
     end
   end
 
-  return found
+  found
 end
 
 def target_of(
@@ -229,13 +229,13 @@ def target_of(
 
   message = "the library #{library.name} is not declared for #{os}"
   help = "add [#{here}.#{os}] to the manifest of the package"
-  return Target.Unusable(Failure.fail_key(manifest.file, here, "PKG-NATIVE-PLATFORM", message, Failure.hint(help)))
+  Target.Unusable(Failure.fail_key(manifest.file, here, "PKG-NATIVE-PLATFORM", message, Failure.hint(help)))
 end
 
 def build?(target: Target) -> Bool
   case target
-    Target.Build(_) -> return true
-    _ -> return false
+    Target.Build(_) -> true
+    _ -> false
   end
 end
 
@@ -244,8 +244,8 @@ end
 # library: none here.
 def build_inputs(workspace: Workspace.Workspace, root: String) -> List[String]
   case NativeBuild.native_files(workspace, root, "", "")
-    ok(paths) -> return paths.map do |path: String| Paths.join(root, path) end
-    error(_) -> return []
+    ok(paths) -> paths.map do |path: String| Paths.join(root, path) end
+    error(_) -> []
   end
 end
 
@@ -296,8 +296,8 @@ def downloaded_target(
   )
 
   case workspace.native_artifact.call(request)
-    ok(path) -> return Target.File(path)
-    error(packed) -> return Target.Unusable(packed)
+    ok(path) -> Target.File(path)
+    error(packed) -> Target.Unusable(packed)
   end
 end
 
@@ -307,7 +307,7 @@ def same_member?(left: String, right: String) -> Bool
   right_canonical = NativeArtifact.canonical_member(right)
   return left == right if !left_canonical.ok? or !right_canonical.ok?
 
-  return left_canonical.unwrap! == right_canonical.unwrap!
+  left_canonical.unwrap! == right_canonical.unwrap!
 end
 
 # The receipt beside every downloaded payload the targets hold, so the bytecode cache watches both: a tampered
@@ -343,7 +343,7 @@ def downloaded_watched(
     end
   end
 
-  return found
+  found
 end
 
 # The receipt of the cached member object, or "" when the member is not safe (validated at parse).
@@ -351,7 +351,7 @@ def receipt_of(cache_root: String, artifact: Lock.Artifact) -> String
   case NativeArtifact.canonical_member(artifact.member)
     ok(canonical) ->
       digest = NativeArtifact.member_digest_hex(canonical)
-      return NativeArtifact.receipt_path(cache_root, artifact.sha256, digest)
-    error(_) -> return ""
+      NativeArtifact.receipt_path(cache_root, artifact.sha256, digest)
+    error(_) -> ""
   end
 end

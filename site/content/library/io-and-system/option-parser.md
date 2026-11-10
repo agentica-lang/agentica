@@ -72,12 +72,14 @@ Both are structs with defaults, so a call names only the fields it needs. The tw
 
 ```ruby
 Arg(name: String, help: String = "", kind: Kind = Kind.String, choices: List[String] = [], metavar: String = "",
-    min: Optional[Int] = none, max: Optional[Int] = none)
+    min: Optional[Int] = none, max: Optional[Int] = none, min_float: Optional[Float] = none,
+    max_float: Optional[Float] = none)
 Opt(name: String, short: String = "", kind: Kind = Kind.String, default: String = "", choices: List[String] = [],
-    help: String = "", metavar: String = "", min: Optional[Int] = none, max: Optional[Int] = none)
+    help: String = "", metavar: String = "", min: Optional[Int] = none, max: Optional[Int] = none,
+    min_float: Optional[Float] = none, max_float: Optional[Float] = none)
 ```
 
-`Kind` is `Int`, `Float`, `String` or `Flag`. A `Flag` takes no value: it is false unless given, and it has no default or choices. An argument cannot be a `Flag` (an error of `parse`), and every argument is required. `short` is one character: not a digit, `-`, `=` or a space. A name has no space or control character, and `program` is not empty. `default` is a String that is converted by `kind`, as the command line is (`default: "8080"` for an `Int`); an empty `default` means the option has none. `choices` lists the allowed texts, compared as text before the conversion. `metavar` is the name of the value in the help (`<file>` for an argument); an option without one shows its choices as `on|off`, else its name in capitals (`--user USER`; set `metavar: "DIR"` for a path). `min` and `max` limit an `Int` option or argument (`some(0)`, `some(65535)`; `none` is no limit) and they also apply to its `default`; on any other kind, or with `min` above `max`, they are an error of the specification.
+`Kind` is `Int`, `Float`, `String` or `Flag`. A `Flag` takes no value: it is false unless given, and it has no default or choices. An argument cannot be a `Flag` (an error of `parse`), and every argument is required. `short` is one character: not a digit, `-`, `=` or a space. A name has no space or control character, and `program` is not empty. `default` is a String that is converted by `kind`, as the command line is (`default: "8080"` for an `Int`); an empty `default` means the option has none. `choices` lists the allowed texts, compared as text before the conversion. `metavar` is the name of the value in the help (`<file>` for an argument); an option without one shows its choices as `on|off`, else its name in capitals (`--user USER`; set `metavar: "DIR"` for a path). `min` and `max` limit an `Int` option or argument (`some(0)`, `some(65535)`; `none` is no limit), and `min_float` and `max_float` a `Float` one (`some(0.0)`, `some(1.0)`); they also apply to the `default`. A limit on another kind, a min above its max, or a Float limit that is not a finite number is an error of the specification.
 
 ## The command line
 
@@ -164,8 +166,9 @@ Usage: check [options] [FILE...]
 - `option --port needs a value`
 - `option --verbose does not take a value`
 - `invalid value for --port: 'abc' is not an Int` (or `a Float`; `'99999999999999999999' does not fit an Int` for a number too big)
+- `invalid value for --ratio: '1e400' does not fit a Float`: a Float option or argument refuses a value that is not finite (`+inf.0`, `-inf.0`, `+nan.0`, or a number too big), with limits or without
 - `invalid value for --user: 'cy' is not one of ana, bob`
-- `invalid value for --port: '70000' is above the maximum 65535` (or `below the minimum`)
+- `invalid value for --port: '70000' is above the maximum 65535` (or `below the minimum`; `the maximum 1.0` for a Float)
 - `missing argument <file>`
 - `unexpected argument 'g'`
 

@@ -56,8 +56,8 @@ end
 ## Hashes the package folder.
 export def hash_folder(workspace: Workspace.Workspace, root: String) -> Hashed
   case covered_files(workspace, root)
-    Listing.Stopped(reason) -> return reason
-    Listing.Files(paths) -> return hash_files(workspace, root, paths)
+    Listing.Stopped(reason) -> reason
+    Listing.Files(paths) -> hash_files(workspace, root, paths)
   end
 end
 
@@ -65,14 +65,14 @@ end
 ## native/ and, when the hash covers it, its agentica.toml.
 export def covered_files(workspace: Workspace.Workspace, root: String) -> Listing
   case list_files(workspace, root)
-    Listing.Stopped(reason) -> return Listing.Stopped(reason)
+    Listing.Stopped(reason) -> Listing.Stopped(reason)
     Listing.Files(paths) ->
       covered = paths
       if manifest_hashed?(workspace, root, paths)
         covered = covered.push(MANIFEST_FILE)
       end
 
-      return Listing.Files(covered.sort)
+      Listing.Files(covered.sort)
   end
 end
 
@@ -85,7 +85,7 @@ export def stream_hash(paths: List[String], contents: List[Bytes]) -> String
     pieces = pieces.concat([header(paths[index], contents[index].size), contents[index]])
   end
 
-  return "sha256:#{OpenSSL.Digest.sha256_hexdigest(Bytes.concat(pieces))}"
+  "sha256:#{OpenSSL.Digest.sha256_hexdigest(Bytes.concat(pieces))}"
 end
 
 ## Whether the hash of the package folder covers its agentica.toml: the file is a regular file at the root and the
@@ -110,8 +110,8 @@ export def manifest_hashed?(workspace: Workspace.Workspace, root: String, paths:
   return false if !parsed.ok?
 
   case parsed.unwrap!
-    Toml.Value.Table(table) -> return table.has_key?("native")
-    _ -> return false
+    Toml.Value.Table(table) -> table.has_key?("native")
+    _ -> false
   end
 end
 
@@ -152,7 +152,7 @@ export def list_files(workspace: Workspace.Workspace, root: String) -> Listing
     end
   end
 
-  return Listing.Files(files)
+  Listing.Files(files)
 end
 
 ## Whether a file name is a source file of a package: it ends in `.agc`, in any case.
@@ -162,7 +162,7 @@ export def source_file?(name: String) -> Bool = fold(name).ends_with?(".agc")
 ## package. The name is compared without regard to case, as agc_libs is.
 export def native_path?(path: String) -> Bool
   parts = path.split("/")
-  return parts.size > 1 and fold(parts[0]) == NATIVE_FOLDER
+  parts.size > 1 and fold(parts[0]) == NATIVE_FOLDER
 end
 
 ## The covered files of native/ (relative paths, in bytewise order), none when the folder cannot be listed.
@@ -170,8 +170,8 @@ export def native_files(workspace: Workspace.Workspace, root: String) -> List[St
   case list_files(workspace, root)
     Listing.Files(paths) ->
       natives = paths.filter do |path: String| native_path?(path) end
-      return natives.sort
-    Listing.Stopped(_) -> return []
+      natives.sort
+    Listing.Stopped(_) -> []
   end
 end
 
@@ -187,7 +187,7 @@ export def native_junk?(name: String) -> Bool = name.starts_with?(".") or NATIVE
 ## system opens `_BUILD/x.agc` as `_build/x.agc`. The walks of a project (check, test) compare _build and deps exactly.
 export def skipped_folder?(name: String, top: Bool) -> Bool
   folded = fold(name)
-  return name.starts_with?(".") or folded == BUILD_FOLDER or (top and (folded == LIBS_FOLDER or folded == DEPS_FOLDER))
+  name.starts_with?(".") or folded == BUILD_FOLDER or (top and (folded == LIBS_FOLDER or folded == DEPS_FOLDER))
 end
 
 ## Whether a folder is agc_libs, in any case.
@@ -202,10 +202,10 @@ def covered?(name: String, path: String) -> Bool = source_file?(name) or (native
 
 def regular?(kind: Workspace.EntryKind) -> Bool
   case kind
-    Workspace.EntryKind.File -> return true
-    Workspace.EntryKind.Directory -> return false
-    Workspace.EntryKind.Link -> return false
-    Workspace.EntryKind.Other -> return false
+    Workspace.EntryKind.File -> true
+    Workspace.EntryKind.Directory -> false
+    Workspace.EntryKind.Link -> false
+    Workspace.EntryKind.Other -> false
   end
 end
 
@@ -218,7 +218,7 @@ def hash_files(workspace: Workspace.Workspace, root: String, paths: List[String]
     contents = contents.push(read.unwrap!)
   end
 
-  return Hashed.Hash(stream_hash(paths, contents))
+  Hashed.Hash(stream_hash(paths, contents))
 end
 
 # Joins with one "/". An empty side gives the other one, so the root folder is listed as "<root>", never "<root>/".
@@ -227,7 +227,7 @@ def join(folder: String, name: String) -> String
 
   return folder if name == ""
 
-  return "#{folder}/#{name}"
+  "#{folder}/#{name}"
 end
 
 # path, 0, size in decimal, 0.

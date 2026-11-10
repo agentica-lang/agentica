@@ -35,11 +35,11 @@ end
 ## The suggestions for the text of `file`, in source order, or the first lexer or parser diagnostic.
 export def check(file: String, text: String) -> Diag.Outcome[List[Problems.Problem]]
   case Lexer.lex(text)
-    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
     Diag.Outcome.Done(tokens) ->
       case Parser.parse(tokens, 0)
-        Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
-        Diag.Outcome.Done(program) -> return Diag.Outcome.Done(of_program(file, program))
+        Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
+        Diag.Outcome.Done(program) -> Diag.Outcome.Done(of_program(file, program))
       end
   end
 end
@@ -73,7 +73,7 @@ def of_program(file: String, program: Ast.Program) -> List[Problems.Problem]
     found = found.push(suggestion)
   end
 
-  return found.sort_by do |suggestion: Problems.Problem| suggestion.span.start.offset end
+  found.sort_by do |suggestion: Problems.Problem| suggestion.span.start.offset end
 end
 
 # The aliases of the modules that the file imports (`import Paths from "..."`).
@@ -91,18 +91,18 @@ def module_aliases(program: Ast.Program) -> Set[String]
     end
   end
 
-  return found
+  found
 end
 
 # The walk of a function body or of the value of a constant, `export` or not.
 def scan_decl(file: String, decl: Ast.Decl, aliases: Set[String]) -> Scan
   case decl
-    Ast.Decl.Export(node) -> return scan_decl(file, node.declaration, aliases)
+    Ast.Decl.Export(node) -> scan_decl(file, node.declaration, aliases)
     Ast.Decl.Function(node) ->
       roots = node.body.map do |stmt: Ast.Stmt| Walk.Node.Stmt(stmt) end
-      return scan(file, roots, function_locals(node, roots, aliases), aliases)
-    Ast.Decl.Constant(node) -> return scan(file, [Walk.Node.Expr(node.value)], Stmts.Locals(origins: {}), aliases)
-    _ -> return Scan(found: [], mentions: [])
+      scan(file, roots, function_locals(node, roots, aliases), aliases)
+    Ast.Decl.Constant(node) -> scan(file, [Walk.Node.Expr(node.value)], Stmts.Locals(origins: {}), aliases)
+    _ -> Scan(found: [], mentions: [])
   end
 end
 
@@ -127,13 +127,13 @@ def scan(file: String, roots: List[Walk.Node], locals: Stmts.Locals, aliases: Se
     end
   end
 
-  return Scan(found: found, mentions: mentions)
+  Scan(found: found, mentions: mentions)
 end
 
 def suggestions(file: String, item: Item, locals: Stmts.Locals, aliases: Set[String]) -> List[Problems.Problem]
   case item.node
-    Walk.Node.Expr(expr) -> return Exprs.suggestions(file, expr, item.chained, aliases)
-    Walk.Node.Stmt(stmt) -> return Stmts.suggestions(file, stmt, item.path, locals)
+    Walk.Node.Expr(expr) -> Exprs.suggestions(file, expr, item.chained, aliases)
+    Walk.Node.Stmt(stmt) -> Stmts.suggestions(file, stmt, item.path, locals)
   end
 end
 
@@ -148,23 +148,23 @@ def children(item: Item, aliases: Set[String]) -> List[Item]
     out = out.push(Item(node: kid, path: looped, chained: out.size == 0 and continues?(item, kid, aliases)))
   end
 
-  return out
+  out
 end
 
 def template?(node: Walk.Node) -> Bool
   case node
-    Walk.Node.Expr(Ast.Expr.EagLit(_)) -> return true
-    _ -> return false
+    Walk.Node.Expr(Ast.Expr.EagLit(_)) -> true
+    _ -> false
   end
 end
 
 # The loops that the children of the item sit in: a `for` or `while` adds its id, a block starts again.
 def path_below(item: Item) -> List[Int]
   case item.node
-    Walk.Node.Stmt(Ast.Stmt.For(loop)) -> return item.path.push(loop.id)
-    Walk.Node.Stmt(Ast.Stmt.While(loop)) -> return item.path.push(loop.id)
-    Walk.Node.Expr(Ast.Expr.BlockLit(_)) -> return []
-    _ -> return item.path
+    Walk.Node.Stmt(Ast.Stmt.For(loop)) -> item.path.push(loop.id)
+    Walk.Node.Stmt(Ast.Stmt.While(loop)) -> item.path.push(loop.id)
+    Walk.Node.Expr(Ast.Expr.BlockLit(_)) -> []
+    _ -> item.path
   end
 end
 
@@ -178,8 +178,8 @@ def continues?(item: Item, first: Walk.Node, aliases: Set[String]) -> Bool
   return false if kind == "" or kind != chain_kind(first, aliases)
 
   case item.node
-    Walk.Node.Expr(Ast.Expr.Try(_)) -> return item.chained
-    _ -> return true
+    Walk.Node.Expr(Ast.Expr.Try(_)) -> item.chained
+    _ -> true
   end
 end
 
@@ -194,16 +194,16 @@ def chain_kind(node: Walk.Node, aliases: Set[String]) -> String
         return "nest"
       end
 
-      return ""
+      ""
     Walk.Node.Expr(Ast.Expr.Binary(binary)) ->
       return "plus" if binary.op == "plus"
 
-      return ""
+      ""
     Walk.Node.Expr(Ast.Expr.Try(wrapper)) ->
       return "pipe" if chain_kind(Walk.Node.Expr(wrapper.operand), aliases) == "pipe"
 
-      return ""
-    _ -> return ""
+      ""
+    _ -> ""
   end
 end
 
@@ -234,12 +234,12 @@ def function_locals(decl: Ast.FunctionDecl, roots: List[Walk.Node], aliases: Set
     end
   end
 
-  return Stmts.Locals(origins: origins)
+  Stmts.Locals(origins: origins)
 end
 
 def string_binding?(binding: Ast.Binding) -> Bool
   case binding.type
-    some(declared) -> return declared.name == "String"
-    none -> return Shape.text?(binding.value)
+    some(declared) -> declared.name == "String"
+    none -> Shape.text?(binding.value)
   end
 end

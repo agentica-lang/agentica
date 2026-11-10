@@ -44,8 +44,8 @@ export def default_settings() -> Settings = Settings(width: WIDTH, blank_line_af
 export def format_text(text: String, settings: Settings) -> Diag.Outcome[String]
   input = text.replace("\r\n", "\n")
   case unchecked_text(input, settings)
-    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
-    Diag.Outcome.Done(output) -> return checked(input, output)
+    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
+    Diag.Outcome.Done(output) -> checked(input, output)
   end
 end
 
@@ -54,17 +54,17 @@ end
 export def unchecked_text(text: String, settings: Settings) -> Diag.Outcome[String]
   input = text.replace("\r\n", "\n")
   case Lexer.lex_with_comments(input)
-    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
     Diag.Outcome.Done(scanned) ->
       case Parser.parse(scanned.tokens, 0)
-        Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+        Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
         Diag.Outcome.Done(program) ->
           attachment = Comments.attach(program, scanned.tokens, scanned.comments)
           context = Layout.context(input, scanned.tokens, attachment, settings.width)
           output = Docs.render(Layout.program_doc(context, program), settings.width)
           return Diag.Outcome.Done(with_blank_lines(output)) if settings.blank_line_after_end
 
-          return Diag.Outcome.Done(output)
+          Diag.Outcome.Done(output)
       end
   end
 end
@@ -73,13 +73,13 @@ end
 ## a text that does not lex or parse.
 export def tree_text(text: String) -> Diag.Outcome[String]
   case Lexer.lex_with_comments(text.replace("\r\n", "\n"))
-    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
     Diag.Outcome.Done(scanned) ->
       case Parser.parse(scanned.tokens, 0)
-        Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+        Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
         Diag.Outcome.Done(program) ->
           lines = ParseText.print_program(program).map do |line: String| without_marks(without_places(line)) end
-          return Diag.Outcome.Done(lines.push(comment_words(scanned.comments)).join("\n"))
+          Diag.Outcome.Done(lines.push(comment_words(scanned.comments)).join("\n"))
       end
   end
 end
@@ -88,7 +88,7 @@ end
 # layout keeps every token.
 def with_blank_lines(output: String) -> String
   case Lexer.lex(output)
-    Diag.Outcome.Failed(_) -> return output
+    Diag.Outcome.Failed(_) -> output
     Diag.Outcome.Done(tokens) ->
       after = Set.new(Style.missing_lines(output, tokens).map do |token: Tokens.Token| token.span.start.line end)
       return output if after.size == 0
@@ -104,25 +104,25 @@ def with_blank_lines(output: String) -> String
         number += 1
       end
 
-      return lines.join("\n")
+      lines.join("\n")
   end
 end
 
 # The output, when its normal form is the input's; else FMT-INTERNAL at the first line where they differ.
 def checked(input: String, output: String) -> Diag.Outcome[String]
   case tree_text(input)
-    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
     Diag.Outcome.Done(before) ->
       case tree_text(output)
         Diag.Outcome.Failed(problem) ->
           at = problem.span.start
           message = "the formatted text does not parse: #{problem.code} at #{at.line}:#{at.column}"
-          return Diag.Outcome.Failed(internal(message))
+          Diag.Outcome.Failed(internal(message))
         Diag.Outcome.Done(after) ->
           return Diag.Outcome.Done(output) if before == after
 
           message = "the formatted text changes the tree at: #{first_change(before, after)}"
-          return Diag.Outcome.Failed(internal(message))
+          Diag.Outcome.Failed(internal(message))
       end
   end
 end
@@ -130,7 +130,7 @@ end
 def internal(message: String) -> Diag.Diagnostic
   help = Diag.Help.Hint("the file is left as it is; please report it with the file")
   start = Source.position(0, 1, 0)
-  return Diag.fail("FMT-INTERNAL", message, Source.Span(start: start, stop: start), help)
+  Diag.fail("FMT-INTERNAL", message, Source.Span(start: start, stop: start), help)
 end
 
 # The first line of `before` that `after` does not have at the same place.
@@ -144,7 +144,7 @@ def first_change(before: String, after: String) -> String
 
   return old[at].strip if at < old.size
 
-  return "the end of the file"
+  "the end of the file"
 end
 
 # The words of the comments, in order, without their `#` markers.
@@ -163,7 +163,7 @@ def comment_words(comments: List[Tokens.Comment]) -> String
     end
   end
 
-  return "comments: #{words.join(" ")}"
+  "comments: #{words.join(" ")}"
 end
 
 # A line of the parse text without its node id (` #12`) and its spans (`3:1:4-9:1:10`).
@@ -184,7 +184,7 @@ def without_places(line: String) -> String
     end
   end
 
-  return kept.join("")
+  kept.join("")
 end
 
 # The line without the mark of a form that the layout may turn into another: ` guard` on an `if-stmt` line,
@@ -201,13 +201,13 @@ def without_marks(line: String) -> String
     return line.slice(0, line.length - " expression".length)
   end
 
-  return line
+  line
 end
 
 def digit?(char: String) -> Bool = char.length == 1 and "0123456789".contains?(char)
 
 def word_char?(char: String) -> Bool
-  return char.length == 1 and "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_".contains?(char)
+  char.length == 1 and "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_".contains?(char)
 end
 
 # The index after the digits that start at `at` (`at` itself when there are none).
@@ -217,7 +217,7 @@ def digits_from(chars: List[String], at: Int) -> Int
     stop += 1
   end
 
-  return stop
+  stop
 end
 
 # The index after a span `N:N:N-N:N:N` that starts at `at`, or -1.
@@ -235,5 +235,5 @@ def span_end(chars: List[String], at: Int) -> Int
     end
   end
 
-  return cursor
+  cursor
 end

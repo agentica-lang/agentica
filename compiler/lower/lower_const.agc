@@ -73,23 +73,23 @@ export def plan(
     end
   end
 
-  return Plan(kept: kept, slots: slots, literals: literals)
+  Plan(kept: kept, slots: slots, literals: literals)
 end
 
 ## The value of a scalar literal initializer: one literal, or `-` and a number literal. `none` for any other
 ## initializer.
 export def literal_value(value: Ast.Expr) -> Optional[Ir.Imm]
   case value
-    Ast.Expr.Literal(node) -> return plain(node.value)
+    Ast.Expr.Literal(node) -> plain(node.value)
     Ast.Expr.Unary(node) ->
       return none if node.op != "minus"
 
       case node.operand
-        Ast.Expr.Literal(inner) -> return negated(inner.value)
-        _ -> return none
+        Ast.Expr.Literal(inner) -> negated(inner.value)
+        _ -> none
       end
 
-    _ -> return none
+    _ -> none
   end
 end
 
@@ -105,9 +105,9 @@ export def in_place(default: Ast.Expr, values: Map[String, Ast.Expr]) -> Ast.Exp
       found = values.get(node.name)
       return respanned(found.unwrap!, node.span) if found.some?
 
-      return default
+      default
 
-    _ -> return default
+    _ -> default
   end
 end
 
@@ -149,29 +149,29 @@ def kept_names(
     end
   end
 
-  return kept
+  kept
 end
 
 def plain(value: Ast.LitValue) -> Optional[Ir.Imm]
   case value
-    Ast.LitValue.Whole(number) -> return some(Ir.Imm.Int(number))
-    Ast.LitValue.Real(number) -> return some(Ir.Imm.Float(number))
-    Ast.LitValue.Text(text) -> return some(Ir.Imm.Text(text))
-    Ast.LitValue.Flag(flag) -> return some(Ir.Imm.Bool(flag))
-    Ast.LitValue.Nothing -> return some(Ir.Imm.Nil)
-    Ast.LitValue.Huge(_) -> return none
+    Ast.LitValue.Whole(number) -> some(Ir.Imm.Int(number))
+    Ast.LitValue.Real(number) -> some(Ir.Imm.Float(number))
+    Ast.LitValue.Text(text) -> some(Ir.Imm.Text(text))
+    Ast.LitValue.Flag(flag) -> some(Ir.Imm.Bool(flag))
+    Ast.LitValue.Nothing -> some(Ir.Imm.Nil)
+    Ast.LitValue.Huge(_) -> none
   end
 end
 
 def negated(value: Ast.LitValue) -> Optional[Ir.Imm]
   case value
-    Ast.LitValue.Whole(number) -> return some(Ir.Imm.Int(0 - number))
-    Ast.LitValue.Real(number) -> return some(Ir.Imm.Float(-number))
+    Ast.LitValue.Whole(number) -> some(Ir.Imm.Int(0 - number))
+    Ast.LitValue.Real(number) -> some(Ir.Imm.Float(-number))
     Ast.LitValue.Huge(digits) ->
       return some(Ir.Imm.Int(INT_MIN)) if digits == INT_MIN_DIGITS
 
-      return none
-    _ -> return none
+      none
+    _ -> none
   end
 end
 
@@ -179,14 +179,14 @@ end
 # reverse: a kind accepted there and missing here would stay a name that the call site cannot read.
 def respanned(value: Ast.Expr, span: Source.Span) -> Ast.Expr
   case value
-    Ast.Expr.Literal(node) -> return Ast.Expr.Literal(node.with(span: span))
+    Ast.Expr.Literal(node) -> Ast.Expr.Literal(node.with(span: span))
     Ast.Expr.Unary(node) ->
-      return Ast.Expr.Unary(node.with(span: span, op_span: span, operand: respanned(node.operand, span)))
-    Ast.Expr.ListLit(node) -> return Ast.Expr.ListLit(node.with(span: span))
-    Ast.Expr.MapLit(node) -> return Ast.Expr.MapLit(node.with(span: span))
-    Ast.Expr.EnumConstructor(node) -> return Ast.Expr.EnumConstructor(node.with(span: span))
-    Ast.Expr.Call(node) -> return Ast.Expr.Call(node.with(span: span))
-    Ast.Expr.Construct(node) -> return Ast.Expr.Construct(node.with(span: span))
-    _ -> return value
+      Ast.Expr.Unary(node.with(span: span, op_span: span, operand: respanned(node.operand, span)))
+    Ast.Expr.ListLit(node) -> Ast.Expr.ListLit(node.with(span: span))
+    Ast.Expr.MapLit(node) -> Ast.Expr.MapLit(node.with(span: span))
+    Ast.Expr.EnumConstructor(node) -> Ast.Expr.EnumConstructor(node.with(span: span))
+    Ast.Expr.Call(node) -> Ast.Expr.Call(node.with(span: span))
+    Ast.Expr.Construct(node) -> Ast.Expr.Construct(node.with(span: span))
+    _ -> value
   end
 end

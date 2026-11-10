@@ -33,7 +33,7 @@ export def check_method(cx: State.Cx, st: State.St, node: Ast.MethodCall, expect
   field = fn_field(cx, target.type, node.name)
   return check_field_call(cx, target.st, node, field.unwrap!) if field.some?
 
-  return method_on(cx, target, node.id, node.target, node.name, node.args, node.span, expected)
+  method_on(cx, target, node.id, node.target, node.name, node.args, node.span, expected)
 end
 
 ## The call of a function value of the given type: one argument for each parameter, each checked against its type, and
@@ -58,7 +58,7 @@ export def apply_function(
     index += 1
   end
 
-  return ok(State.Out(st: current, type: T.result(type)))
+  ok(State.Out(st: current, type: T.result(type)))
 end
 
 ## Checks target.name: a struct field, or a method without arguments (to_s, size, ...).
@@ -77,7 +77,7 @@ export def check_field_access(cx: State.Cx, st: State.St, node: Ast.FieldAccess,
   target = try State.expr(cx, st, node.target, T.Type.Unknown)
   return check_struct_field(cx, target.st, node, target.type) if field_target?(cx, target.type, node.name)
 
-  return method_on(cx, target, node.id, node.target, node.name, [], node.span, expected)
+  method_on(cx, target, node.id, node.target, node.name, [], node.span, expected)
 end
 
 # The Fn field a struct has under the name, if any. Such a field wins over a method of the same name (to_s, inspect):
@@ -90,13 +90,13 @@ def fn_field(cx: State.Cx, target: T.Type, name: String) -> Optional[Model.Named
   found = Calls.find_field(CheckTypes.fields_of(cx, target), name)
   return some(found.unwrap!) if found.ok? and T.is?(found.unwrap!.type, "Fn")
 
-  return none
+  none
 end
 
 # target.name(args) where name is an Fn field: the arguments match the parameters of the function the field holds.
 def check_field_call(cx: State.Cx, st: State.St, node: Ast.MethodCall, field: Model.Named) -> Result[State.Out]
   called = try apply_function(cx, st, field.type, node.args, node.span)
-  return ok(State.Out(st: State.record_resolved(called.st, node.id, State.Resolved.FieldCall), type: called.type))
+  ok(State.Out(st: State.record_resolved(called.st, node.id, State.Resolved.FieldCall), type: called.type))
 end
 
 # Type.members: the fields of a struct type, in declaration order, as a List[StructMember]. Lowering builds the list
@@ -129,7 +129,7 @@ def check_members(cx: State.Cx, st: State.St, node: Ast.FieldAccess, type_name: 
     )
   end
 
-  return error(
+  error(
     State.fail_help(
       cx,
       st,
@@ -154,7 +154,7 @@ def check_codec(cx: State.Cx, st: State.St, node: Ast.FieldAccess, type_name: As
   end
 
   resolved = State.record_resolved(st, node.id, State.Resolved.Codec(name, members))
-  return ok(State.Out(st: resolved, type: type))
+  ok(State.Out(st: resolved, type: type))
 end
 
 # A struct is read by field unless the name is to_s or inspect and the struct has no such field.
@@ -163,7 +163,7 @@ def field_target?(cx: State.Cx, target: T.Type, name: String) -> Bool
 
   return Calls.find_field(cx.structs[T.name(target)], name).ok? if name == "to_s" or name == "inspect"
 
-  return true
+  true
 end
 
 # The type of the field, CHECK-UNKNOWN-FIELD when the struct has none of that name.
@@ -183,7 +183,7 @@ def check_struct_field(cx: State.Cx, st: State.St, node: Ast.FieldAccess, target
     )
   end
 
-  return ok(State.Out(st: st, type: field.unwrap!.type))
+  ok(State.Out(st: st, type: field.unwrap!.type))
 end
 
 # What the method is: "self", "text" (to_s) or "inspect" for a data value, the full name of a builtin, or "" when there
@@ -200,7 +200,7 @@ def method_kind(cx: State.Cx, target: T.Type, kind: String, name: String) -> Str
     return "inspect"
   end
 
-  return ""
+  ""
 end
 
 # The method on a receiver that is already checked. The resolution is recorded by the id of the node.
@@ -240,7 +240,7 @@ def method_on(
 
   call = Ast.Call(id: id, name: resolved, args: [typed].concat(args), piped: false, parenthesized: true, span: span)
   st = State.record_resolved(target.st, id, State.Resolved.Call(resolved, type))
-  return Calls.check_call(cx, st, call, expected)
+  Calls.check_call(cx, st, call, expected)
 end
 
 # to_s and inspect, and a to_s that is the receiver itself: they take no arguments and give a String (or the receiver).
@@ -267,7 +267,7 @@ def check_own_method(
   end
 
   checked = try State.ensure(cx, st, result, expected, span)
-  return ok(State.Out(st: State.record_resolved(st, id, how), type: checked))
+  ok(State.Out(st: State.record_resolved(st, id, how), type: checked))
 end
 
 # The help of CHECK-UNKNOWN-METHOD: a range that needs parentheses, then what is special about the receiver.
@@ -289,7 +289,7 @@ def unknown_method_help(cx: State.Cx, st: State.St, id: Int, target: T.Type, kin
     return Help.near(name, ["to_s", "inspect"], [])
   end
 
-  return ""
+  ""
 end
 
 # A struct has no methods: the help says what the name could be instead.
@@ -309,7 +309,7 @@ def struct_help(cx: State.Cx, target: T.Type, name: String) -> String
     return "with needs the fields to change, as in .with(field: value); #{Help.field_list(fields)}"
   end
 
-  return "structs have no methods; #{Help.field_help(name, fields)}"
+  "structs have no methods; #{Help.field_help(name, fields)}"
 end
 
 # The help for a method another language has, a close name, or the methods the kind has.
@@ -321,7 +321,7 @@ def kind_help(cx: State.Cx, target: T.Type, kind: String, name: String) -> Strin
   guess = Help.near(name, names, [])
   return guess if guess != ""
 
-  return "#{T.to_text(target)} methods: #{names.sort.join(", ")}"
+  "#{T.to_text(target)} methods: #{names.sort.join(", ")}"
 end
 
 # The methods of the kind, with to_s and inspect for a data value.
@@ -333,14 +333,14 @@ def method_names(cx: State.Cx, target: T.Type, kind: String) -> List[String]
     )
   end
 
-  return names
+  names
 end
 
 # True for a File.foreach call written directly as the receiver: .each on it is the one job of File.each_line
 # (docs/future/27-iteration-and-concurrency.md 27.4, one way per job). A Lazy held in a variable is not followed.
 def foreach_call?(target: Ast.Expr) -> Bool
   case target
-    Ast.Expr.Call(call) -> return call.name == "File.foreach"
-    _ -> return false
+    Ast.Expr.Call(call) -> call.name == "File.foreach"
+    _ -> false
   end
 end

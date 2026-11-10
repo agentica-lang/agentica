@@ -37,7 +37,7 @@ export def ai(problem: Problems.Problem, text: String) -> String
   end
 
   out = field(out, "help", hint_text(problem.help))
-  return out.join("\n")
+  out.join("\n")
 end
 
 ## The compact form of a warning, which is not an error (the command goes on): the form of `ai` with `warning` as its
@@ -45,20 +45,20 @@ end
 export def warning(problem: Problems.Problem) -> String
   text = ai(problem, "")
   at = text.index_of("\n").unwrap!
-  return "warning#{text.slice(at, text.length - at)}\n"
+  "warning#{text.slice(at, text.length - at)}\n"
 end
 
 def hint_text(help: Diag.Help) -> String
   case help
-    Diag.Help.Hint(text) -> return text
-    Diag.Help.NoHelp -> return ""
+    Diag.Help.Hint(text) -> text
+    Diag.Help.NoHelp -> ""
   end
 end
 
 def field(out: List[String], name: String, value: String) -> List[String]
   return out if value == ""
 
-  return out.push("  #{name}: #{value}")
+  out.push("  #{name}: #{value}")
 end
 
 # Without the whitespace around it (space, tab, line feed, vertical tab, form feed and carriage return).
@@ -74,10 +74,10 @@ def trim(text: String) -> String
     last -= 1
   end
 
-  return text.slice(first, last - first)
+  text.slice(first, last - first)
 end
 
 def space?(character: String) -> Bool
   code = String.code(character)
-  return code == 32 or (code >= 9 and code <= 13)
+  code == 32 or (code >= 9 and code <= 13)
 end

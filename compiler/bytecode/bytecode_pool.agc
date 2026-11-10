@@ -24,7 +24,7 @@ export def empty() -> Pool = Pool(index: {}, chunks: Wire.start(), count: 0)
 ## The pool with a new entry for the key: its bytes, and how many items it adds. The first item of the entry is
 ## numbered pool.count of the pool before.
 export def add(pool: Pool, key: String, bytes: List[Int], items: Int) -> Pool
-  return Pool(index: pool.index.put(key, pool.count), chunks: Wire.add(pool.chunks, bytes), count: pool.count + items)
+  Pool(index: pool.index.put(key, pool.count), chunks: Wire.add(pool.chunks, bytes), count: pool.count + items)
 end
 
 ## The number of the first item of the entry for the key, or none when the pool has no such entry. Callers build the
@@ -36,5 +36,5 @@ export def intern(pool: Pool, key: String, bytes: List[Int]) -> Interned
   found = find(pool, key)
   return Interned(pool: pool, id: found.unwrap!) if found.some?
 
-  return Interned(pool: add(pool, key, bytes, 1), id: pool.count)
+  Interned(pool: add(pool, key, bytes, 1), id: pool.count)
 end

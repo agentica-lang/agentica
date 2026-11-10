@@ -30,11 +30,11 @@ export def usage() -> String = USAGE
 ## The entry of the file `file` whose text is `text`.
 export def entry(file: String, text: String) -> Entry
   case Lint.check(file, text)
-    Diag.Outcome.Failed(diagnostic) -> return Entry.Unparsed(file, Front.stage_problem(file, diagnostic))
+    Diag.Outcome.Failed(diagnostic) -> Entry.Unparsed(file, Front.stage_problem(file, diagnostic))
     Diag.Outcome.Done(found) ->
       return Entry.Clean(file) if found.size == 0
 
-      return Entry.Suggested(file, found)
+      Entry.Suggested(file, found)
   end
 end
 
@@ -49,7 +49,7 @@ export def status(entries: List[Entry], strict: Bool) -> Int
     return 1
   end
 
-  return 0
+  0
 end
 
 ## The lines of the suggestions of one file: `file:line:column CODE message`, and its help under it.
@@ -64,7 +64,7 @@ export def suggestions_text(found: List[Problems.Problem]) -> String
     end
   end
 
-  return "#{lines.join("\n")}\n"
+  "#{lines.join("\n")}\n"
 end
 
 ## The last line of a run: that every file is fine, how many suggestions the files hold, or, when a file did not parse
@@ -86,7 +86,7 @@ export def summary_text(entries: List[Entry]) -> String
     line = "#{line}; #{suggestions_count(total)} in #{CliCheck.files_text(holding)}"
   end
 
-  return "#{line}\n"
+  "#{line}\n"
 end
 
 ## The JSON document of a run: `ok` (no suggestion and no diagnostic), the number of files `checked` and of
@@ -101,54 +101,50 @@ export def json_text(entries: List[Entry]) -> String
     "files": JSON.array(entries.map do |entry: Entry| JSON.object(json_entry(entry)) end),
   })
 
-  return "#{JSON.encode(document)}\n"
+  "#{JSON.encode(document)}\n"
 end
 
 def json_entry(entry: Entry) -> Map[String, Json]
   case entry
-    Entry.Clean(file) -> return {"file": JSON.from(file), "ok": JSON.from(true), "suggestions": JSON.array([])}
+    Entry.Clean(file) -> {"file": JSON.from(file), "ok": JSON.from(true), "suggestions": JSON.array([])}
     Entry.Suggested(file, found) ->
-      return {
+      {
         "file": JSON.from(file),
         "ok": JSON.from(false),
         "suggestions": JSON.array(found.map do |problem: Problems.Problem| DiagnosticJson.json(problem) end),
       }
     Entry.Unparsed(file, problem) ->
-      return {"file": JSON.from(file), "ok": JSON.from(false), "diagnostic": DiagnosticJson.json(problem)}
+      {"file": JSON.from(file), "ok": JSON.from(false), "diagnostic": DiagnosticJson.json(problem)}
     Entry.Unreadable(file) ->
-      return {
-        "file": JSON.from(file),
-        "ok": JSON.from(false),
-        "diagnostic": DiagnosticJson.json(Core.unreadable(file)),
-      }
+      {"file": JSON.from(file), "ok": JSON.from(false), "diagnostic": DiagnosticJson.json(Core.unreadable(file))}
   end
 end
 
 def unreadable?(entry: Entry) -> Bool
   case entry
-    Entry.Unreadable(_) -> return true
-    _ -> return false
+    Entry.Unreadable(_) -> true
+    _ -> false
   end
 end
 
 def unparsed?(entry: Entry) -> Bool
   case entry
-    Entry.Unparsed(_, _) -> return true
-    _ -> return false
+    Entry.Unparsed(_, _) -> true
+    _ -> false
   end
 end
 
 def suggested?(entry: Entry) -> Bool
   case entry
-    Entry.Suggested(_, _) -> return true
-    _ -> return false
+    Entry.Suggested(_, _) -> true
+    _ -> false
   end
 end
 
 def clean?(entry: Entry) -> Bool
   case entry
-    Entry.Clean(_) -> return true
-    _ -> return false
+    Entry.Clean(_) -> true
+    _ -> false
   end
 end
 
@@ -162,7 +158,7 @@ def suggestions(entries: List[Entry]) -> Int
     end
   end
 
-  return total
+  total
 end
 
 def suggestions_count(total: Int) -> String = "#{total} #{plural(total, "suggestion")}"
@@ -175,11 +171,11 @@ def failure(unparsed: Int, unreadable: Int) -> String
     return "read"
   end
 
-  return "parsed or read"
+  "parsed or read"
 end
 
 def plural(count: Int, word: String) -> String
   return word if count == 1
 
-  return "#{word}s"
+  "#{word}s"
 end

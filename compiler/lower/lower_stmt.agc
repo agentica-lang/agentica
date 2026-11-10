@@ -78,7 +78,7 @@ export def lower_function(
     span: span,
   )
 
-  return ok(Built(function: made, fx: fx))
+  ok(Built(function: made, fx: fx))
 end
 
 ## Lowers a block literal as a function of the table (Cx.block). The block takes the next function index before its
@@ -95,7 +95,7 @@ export def lower_block_function(
   params = node.params.map do |param: Ast.BlockParam| param.name end
   inner = Lowering.fresh(cx.index, fx.blocks, index + 1)
   built = try lower_function(cx, inner, name, params, captured, node.body, node.span, true)
-  return ok(fx.with(blocks: built.fx.blocks.put(index, built.function), block_count: built.fx.block_count))
+  ok(fx.with(blocks: built.fx.blocks.put(index, built.function), block_count: built.fx.block_count))
 end
 
 ## Lowers a case that gives a value (Cx.case_value): each arm computes its last expression into the register `want`, or
@@ -106,7 +106,7 @@ export def lower_case_value(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt
   fx = target.fx
   entry = fx.next
   done = try lower_arms(cx, fx, node, target.slot)
-  return ok(Lowering.Out(fx: done.with(next: entry), slot: target.slot))
+  ok(Lowering.Out(fx: done.with(next: entry), slot: target.slot))
 end
 
 # The statements in order.
@@ -115,7 +115,7 @@ def lower_block(cx: Lowering.Cx, fx: Lowering.Fx, statements: List[Ast.Stmt]) ->
     fx = try lower_statement(cx, fx, statement)
   end
 
-  return ok(fx)
+  ok(fx)
 end
 
 # A statement: its `step`, the instructions the loop above it asked for after the step, then its own code.
@@ -132,16 +132,16 @@ def lower_statement(cx: Lowering.Cx, fx: Lowering.Fx, statement: Ast.Stmt) -> Re
   end
 
   case statement
-    Ast.Stmt.Binding(node) -> return lower_binding(cx, fx, node, saved)
-    Ast.Stmt.Return(node) -> return lower_return(cx, fx, node, saved)
+    Ast.Stmt.Binding(node) -> lower_binding(cx, fx, node, saved)
+    Ast.Stmt.Return(node) -> lower_return(cx, fx, node, saved)
     Ast.Stmt.Expression(node) ->
       out = try Expr.lower_expression(cx, fx, node.value, -1, true, false)
-      return ok(out.fx.with(next: saved))
-    Ast.Stmt.If(node) -> return lower_if(cx, fx, node, saved)
-    Ast.Stmt.While(node) -> return lower_while(cx, fx, node, saved)
-    Ast.Stmt.Control(node) -> return lower_control(cx, fx, node)
-    Ast.Stmt.For(node) -> return lower_for(cx, fx, node, saved)
-    Ast.Stmt.Case(node) -> return lower_case(cx, fx, node, saved)
+      ok(out.fx.with(next: saved))
+    Ast.Stmt.If(node) -> lower_if(cx, fx, node, saved)
+    Ast.Stmt.While(node) -> lower_while(cx, fx, node, saved)
+    Ast.Stmt.Control(node) -> lower_control(cx, fx, node)
+    Ast.Stmt.For(node) -> lower_for(cx, fx, node, saved)
+    Ast.Stmt.Case(node) -> lower_case(cx, fx, node, saved)
   end
 end
 
@@ -168,7 +168,7 @@ def lower_binding(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binding, saved: In
   fx = Lowering.alloc(fx)
   slot = fx.next - 1
   out = try Expr.lower_expression(cx, fx, node.value, slot, false, false)
-  return ok(out.fx.with(vars: out.fx.vars.put(node.name, slot)))
+  ok(out.fx.with(vars: out.fx.vars.put(node.name, slot)))
 end
 
 # A return of a call of a function of the program is a tail call, which returns by itself.
@@ -211,7 +211,7 @@ def lower_return(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Return, saved: Int)
       fx = Lowering.emit_at(fx, "return", [slot], node.span)
   end
 
-  return ok(fx.with(next: saved))
+  ok(fx.with(next: saved))
 end
 
 # The call when an expression is a call of a function of the program (not a builtin).
@@ -220,8 +220,8 @@ def tail_call(cx: Lowering.Cx, value: Ast.Expr) -> Optional[Ast.Call]
     Ast.Expr.Call(node) ->
       return none if Builtins.ref(node.name, node.args.size).ok?
 
-      return some(node)
-    _ -> return none
+      some(node)
+    _ -> none
   end
 end
 
@@ -255,7 +255,7 @@ def lower_if(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.IfStmt, saved: Int) -> 
     none -> fx = fx
   end
 
-  return ok(Lowering.place(fx, end_label))
+  ok(Lowering.place(fx, end_label))
 end
 
 def lower_while(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.WhileStmt, saved: Int) -> Result[Lowering.Fx]
@@ -272,7 +272,7 @@ def lower_while(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.WhileStmt, saved: In
   fx = try scoped(cx, fx, node.body)
   fx = fx.with(loop_next: outer_next, loop_exit: outer_exit)
   fx = Lowering.emit_at(fx, "jump", [head], node.span)
-  return ok(Lowering.place(fx, exit))
+  ok(Lowering.place(fx, exit))
 end
 
 # break and next jump to the labels of the innermost loop.
@@ -284,7 +284,7 @@ def lower_control(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.LoopControl) -> Re
     label = fx.loop_exit
   end
 
-  return ok(Lowering.emit_at(fx, "jump", [label], node.span))
+  ok(Lowering.emit_at(fx, "jump", [label], node.span))
 end
 
 # The variable of a range loop names the register of its counter, except `_`: a discard must not alias that register,
@@ -292,7 +292,7 @@ end
 def bind_variable(fx: Lowering.Fx, name: String, slot: Int) -> Lowering.Fx
   return fx if name == "_"
 
-  return fx.with(vars: fx.vars.put(name, slot))
+  fx.with(vars: fx.vars.put(name, slot))
 end
 
 # A for over a list, a set or a Bytes (a set is read as a list in first-insertion order): the length is read once, an
@@ -366,7 +366,7 @@ def lower_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, saved: Int) -
     fx = Lowering.place(fx, exit)
   end
 
-  return ok(fx.with(next: saved))
+  ok(fx.with(next: saved))
 end
 
 # The instructions that read the Bytes at index into element: the Bytes and the index are copied to element and the
@@ -381,11 +381,7 @@ def bytes_reads(fx: Lowering.Fx, element: Int, items: Int, index: Int, span: Sou
     spans: [span, span, span],
   )
 
-  return [
-    Ir.instr("move", [element, items], fx.file, [span]),
-    Ir.instr("move", [element + 1, index], fx.file, [span]),
-    call,
-  ]
+  [Ir.instr("move", [element, items], fx.file, [span]), Ir.instr("move", [element + 1, index], fx.file, [span]), call]
 end
 
 # A for over a range counts its bounds in registers; a literal range a..b or a...b is not built, and the body runs
@@ -449,7 +445,7 @@ def lower_range_for(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ForStmt, span: S
   fx = Lowering.emit_at(fx, "jump-if-true", [temp, exit], span)
   fx = Lowering.emit_at(fx, "add-i", [bounds, bounds, one], span)
   fx = Lowering.emit_at(fx, "jump", [top], span)
-  return ok(Lowering.place(fx, exit))
+  ok(Lowering.place(fx, exit))
 end
 
 # A case: each arm tests the scrutinee, jumps to the next arm when it does not match, binds the payload names in a
@@ -457,7 +453,7 @@ end
 # arm).
 def lower_case(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt, saved: Int) -> Result[Lowering.Fx]
   done = try lower_arms(cx, fx, node, -1)
-  return ok(done.with(next: saved))
+  ok(done.with(next: saved))
 end
 
 # The arms of a case. target is the register that holds the case's value, or -1 for a case that is a statement. The
@@ -487,7 +483,7 @@ def lower_arms(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.CaseStmt, target: Int
     index += 1
   end
 
-  return ok(Lowering.place(fx, end_label))
+  ok(Lowering.place(fx, end_label))
 end
 
 # The body of an arm. In a case that gives a value (target is a register) the last statement is an expression, which
@@ -505,7 +501,7 @@ def lower_arm_body(cx: Lowering.Cx, fx: Lowering.Fx, body: List[Ast.Stmt], targe
     fx = Lowering.emit_at(fx, "move", [target, out.slot], span)
   end
 
-  return ok(fx)
+  ok(fx)
 end
 
 # The instructions that jump to skip when the value in the register does not match the pattern: the tag of a variant,
@@ -514,8 +510,8 @@ end
 def lower_test(cx: Lowering.Cx, fx: Lowering.Fx, pattern: Ast.Pattern, value: Int, skip: Int) -> Result[Lowering.Fx]
   span = Ast.pattern_span(pattern)
   case pattern
-    Ast.Pattern.Wildcard(_) -> return ok(fx)
-    Ast.Pattern.Literal(node) -> return lower_literal_test(cx, fx, node, value, skip)
+    Ast.Pattern.Wildcard(_) -> ok(fx)
+    Ast.Pattern.Literal(node) -> lower_literal_test(cx, fx, node, value, skip)
     Ast.Pattern.Variant(node) ->
       fx = Lowering.alloc(fx)
       slot = fx.next - 1
@@ -533,7 +529,7 @@ def lower_test(cx: Lowering.Cx, fx: Lowering.Fx, pattern: Ast.Pattern, value: In
         fx = Lowering.emit_at(fx, "jump-if-false", [slot, skip], span)
       end
 
-      return test_nested(cx, fx, node, value, skip)
+      test_nested(cx, fx, node, value, skip)
   end
 end
 
@@ -560,14 +556,14 @@ def test_nested(
     item += 1
   end
 
-  return ok(fx)
+  ok(fx)
 end
 
 # Reads the payload position `item` of the variant in `value` into the register `target`.
 def read_payload(fx: Lowering.Fx, node: Ast.VariantPattern, target: Int, value: Int, item: Int) -> Lowering.Fx
   return Lowering.emit_at(fx, "result-value", [target, value], node.span) if node.enum_name == "Result"
 
-  return Lowering.emit_at(fx, "payload", [target, value, item], node.span)
+  Lowering.emit_at(fx, "payload", [target, value, item], node.span)
 end
 
 # A literal pattern compares with `same`. An integer that is not an Int never matches, so its arm is skipped at once.
@@ -595,7 +591,7 @@ def lower_literal_test(
   slot = fx.next - 1
   fx = Lowering.emit_const(fx, slot, imm, node.span)
   fx = Lowering.emit_at(fx, "same", [slot, value, slot], node.span)
-  return ok(Lowering.emit_at(fx, "jump-if-false", [slot, skip], node.span))
+  ok(Lowering.emit_at(fx, "jump-if-false", [slot, skip], node.span))
 end
 
 # The names of a variant pattern get a register each, filled from the payload of the scrutinee (a `_` takes none). A
@@ -628,22 +624,22 @@ def bind_payload(cx: Lowering.Cx, fx: Lowering.Fx, pattern: Ast.Pattern, value: 
     _ -> fx = fx
   end
 
-  return ok(fx)
+  ok(fx)
 end
 
 # Whether a pattern binds a name anywhere in it.
 def binds?(pattern: Ast.Pattern) -> Bool
   case pattern
-    Ast.Pattern.Variant(node) -> return node.slots.any? do |slot: Ast.Slot| slot_binds?(slot) end
-    _ -> return false
+    Ast.Pattern.Variant(node) -> node.slots.any? do |slot: Ast.Slot| slot_binds?(slot) end
+    _ -> false
   end
 end
 
 def slot_binds?(slot: Ast.Slot) -> Bool
   case slot
-    Ast.Slot.Bind(_, _) -> return true
-    Ast.Slot.Skip -> return false
-    Ast.Slot.Nested(inner) -> return binds?(inner)
+    Ast.Slot.Bind(_, _) -> true
+    Ast.Slot.Skip -> false
+    Ast.Slot.Nested(inner) -> binds?(inner)
   end
 end
 
@@ -655,15 +651,15 @@ def lower_guard(cx: Lowering.Cx, fx: Lowering.Fx, guard: Optional[Ast.Expr], ski
       kept = fx.next
       lowered = try Expr.lower_expression(cx, fx, condition, -1, false, false)
       fx = Lowering.emit_at(lowered.fx, "jump-if-false", [lowered.slot, skip], Ast.expr_span(condition))
-      return ok(fx.with(next: kept))
-    none -> return ok(fx)
+      ok(fx.with(next: kept))
+    none -> ok(fx)
   end
 end
 
 # A block of statements in a scope of its own: the names it makes and the registers it takes are gone after it.
 def scoped(cx: Lowering.Cx, fx: Lowering.Fx, statements: List[Ast.Stmt]) -> Result[Lowering.Fx]
   inner = try lower_block(cx, fx, statements)
-  return ok(leave(inner, fx))
+  ok(leave(inner, fx))
 end
 
 # Closes a scope: the names and the register count go back to what they were when it opened.
@@ -671,8 +667,8 @@ def leave(fx: Lowering.Fx, before: Lowering.Fx) -> Lowering.Fx = fx.with(vars: b
 
 def final_expression?(statement: Ast.Stmt) -> Bool
   case statement
-    Ast.Stmt.Expression(_) -> return true
-    _ -> return false
+    Ast.Stmt.Expression(_) -> true
+    _ -> false
   end
 end
 
@@ -684,28 +680,28 @@ def final_case(cx: Lowering.Cx, statements: List[Ast.Stmt]) -> Optional[Ast.Case
     Ast.Stmt.Case(node) ->
       return none if Types.unknown?(cx.types[node.id])
 
-      return some(node)
-    _ -> return none
+      some(node)
+    _ -> none
   end
 end
 
 def final_value(statement: Ast.Stmt) -> Ast.Expr
   case statement
-    Ast.Stmt.Expression(node) -> return node.value
-    _ -> return Ast.Expr.Literal(Ast.Literal(id: 0, value: Ast.LitValue.Nothing, span: statement_span(statement)))
+    Ast.Stmt.Expression(node) -> node.value
+    _ -> Ast.Expr.Literal(Ast.Literal(id: 0, value: Ast.LitValue.Nothing, span: statement_span(statement)))
   end
 end
 
 # The span of a statement node.
 def statement_span(statement: Ast.Stmt) -> Source.Span
   case statement
-    Ast.Stmt.Binding(node) -> return node.span
-    Ast.Stmt.Return(node) -> return node.span
-    Ast.Stmt.Expression(node) -> return node.span
-    Ast.Stmt.If(node) -> return node.span
-    Ast.Stmt.While(node) -> return node.span
-    Ast.Stmt.For(node) -> return node.span
-    Ast.Stmt.Control(node) -> return node.span
-    Ast.Stmt.Case(node) -> return node.span
+    Ast.Stmt.Binding(node) -> node.span
+    Ast.Stmt.Return(node) -> node.span
+    Ast.Stmt.Expression(node) -> node.span
+    Ast.Stmt.If(node) -> node.span
+    Ast.Stmt.While(node) -> node.span
+    Ast.Stmt.For(node) -> node.span
+    Ast.Stmt.Control(node) -> node.span
+    Ast.Stmt.Case(node) -> node.span
   end
 end

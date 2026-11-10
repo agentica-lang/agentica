@@ -38,31 +38,31 @@ end
 ## word.
 export def tag(type: Type) -> String
   case type
-    Type.Int -> return "Int"
-    Type.Float -> return "Float"
-    Type.Bool -> return "Bool"
-    Type.String -> return "String"
-    Type.Nil -> return "Nil"
-    Type.Void -> return "Void"
-    Type.Json -> return "Json"
-    Type.Range -> return "Range"
-    Type.Bytes -> return "Bytes"
-    Type.Unknown -> return "Unknown"
-    Type.Opaque(_) -> return "Opaque"
-    Type.Result(_) -> return "Result"
-    Type.Optional(_) -> return "Optional"
-    Type.Task(_) -> return "Task"
-    Type.Channel(_) -> return "Channel"
-    Type.Lazy(_) -> return "Lazy"
-    Type.Codec(_) -> return "Codec"
-    Type.List(_) -> return "List"
-    Type.Set(_) -> return "Set"
-    Type.Map(_, _) -> return "Map"
-    Type.ATS(_, _) -> return "ATS"
-    Type.Fn(_, _) -> return "Fn"
-    Type.Struct(_, _) -> return "Struct"
-    Type.Enum(_, _) -> return "Enum"
-    Type.Var(_) -> return "Var"
+    Type.Int -> "Int"
+    Type.Float -> "Float"
+    Type.Bool -> "Bool"
+    Type.String -> "String"
+    Type.Nil -> "Nil"
+    Type.Void -> "Void"
+    Type.Json -> "Json"
+    Type.Range -> "Range"
+    Type.Bytes -> "Bytes"
+    Type.Unknown -> "Unknown"
+    Type.Opaque(_) -> "Opaque"
+    Type.Result(_) -> "Result"
+    Type.Optional(_) -> "Optional"
+    Type.Task(_) -> "Task"
+    Type.Channel(_) -> "Channel"
+    Type.Lazy(_) -> "Lazy"
+    Type.Codec(_) -> "Codec"
+    Type.List(_) -> "List"
+    Type.Set(_) -> "Set"
+    Type.Map(_, _) -> "Map"
+    Type.ATS(_, _) -> "ATS"
+    Type.Fn(_, _) -> "Fn"
+    Type.Struct(_, _) -> "Struct"
+    Type.Enum(_, _) -> "Enum"
+    Type.Var(_) -> "Var"
   end
 end
 
@@ -75,69 +75,69 @@ export def unknown?(type: Type) -> Bool = tag(type) == "Unknown"
 ## The element type of a List, Set, Result, Optional, Task, Channel, Lazy or Codec; Unknown for any other type.
 export def item(type: Type) -> Type
   case type
-    Type.Result(inner) -> return inner
-    Type.Optional(inner) -> return inner
-    Type.Task(inner) -> return inner
-    Type.Channel(inner) -> return inner
-    Type.Lazy(inner) -> return inner
-    Type.Codec(inner) -> return inner
-    Type.List(inner) -> return inner
-    Type.Set(inner) -> return inner
-    _ -> return Type.Unknown
+    Type.Result(inner) -> inner
+    Type.Optional(inner) -> inner
+    Type.Task(inner) -> inner
+    Type.Channel(inner) -> inner
+    Type.Lazy(inner) -> inner
+    Type.Codec(inner) -> inner
+    Type.List(inner) -> inner
+    Type.Set(inner) -> inner
+    _ -> Type.Unknown
   end
 end
 
 ## The key type of a Map or an ATS; Unknown for any other type.
 export def key(type: Type) -> Type
   case type
-    Type.Map(inner, _) -> return inner
-    Type.ATS(inner, _) -> return inner
-    _ -> return Type.Unknown
+    Type.Map(inner, _) -> inner
+    Type.ATS(inner, _) -> inner
+    _ -> Type.Unknown
   end
 end
 
 ## The value type of a Map or an ATS; Unknown for any other type.
 export def value(type: Type) -> Type
   case type
-    Type.Map(_, inner) -> return inner
-    Type.ATS(_, inner) -> return inner
-    _ -> return Type.Unknown
+    Type.Map(_, inner) -> inner
+    Type.ATS(_, inner) -> inner
+    _ -> Type.Unknown
   end
 end
 
 ## The parameter types of an Fn; empty for any other type.
 export def params(type: Type) -> List[Type]
   case type
-    Type.Fn(found, _) -> return found
-    _ -> return []
+    Type.Fn(found, _) -> found
+    _ -> []
   end
 end
 
 ## The result type of an Fn; Unknown for any other type.
 export def result(type: Type) -> Type
   case type
-    Type.Fn(_, last) -> return last
-    _ -> return Type.Unknown
+    Type.Fn(_, last) -> last
+    _ -> Type.Unknown
   end
 end
 
 ## The name of an Opaque, Var, Struct or Enum type; "" for any other type.
 export def name(type: Type) -> String
   case type
-    Type.Opaque(found) -> return found
-    Type.Var(found) -> return found
-    Type.Struct(found, _) -> return found
-    Type.Enum(found, _) -> return found
-    _ -> return ""
+    Type.Opaque(found) -> found
+    Type.Var(found) -> found
+    Type.Struct(found, _) -> found
+    Type.Enum(found, _) -> found
+    _ -> ""
   end
 end
 
 ## The type arguments of a Struct or Enum type; empty for any other type.
 export def args(type: Type) -> List[Type]
   case type
-    Type.Struct(_, list) -> return list
-    Type.Enum(_, list) -> return list
-    _ -> return []
+    Type.Struct(_, list) -> list
+    Type.Enum(_, list) -> list
+    _ -> []
   end
 end
 
@@ -146,22 +146,22 @@ export def same?(a: Type, b: Type) -> Bool
   return false if tag(a) != tag(b)
 
   case a
-    Type.Opaque(found) -> return found == name(b)
-    Type.Var(found) -> return found == name(b)
-    Type.Struct(found, list) -> return found == name(b) and same_all?(list, args(b))
-    Type.Enum(found, list) -> return found == name(b) and same_all?(list, args(b))
-    Type.Map(key_type, value_type) -> return same?(key_type, key(b)) and same?(value_type, value(b))
-    Type.ATS(key_type, value_type) -> return same?(key_type, key(b)) and same?(value_type, value(b))
-    Type.Fn(list, last) -> return same_all?(list, params(b)) and same?(last, result(b))
-    Type.Result(inner) -> return same?(inner, item(b))
-    Type.Optional(inner) -> return same?(inner, item(b))
-    Type.Task(inner) -> return same?(inner, item(b))
-    Type.Channel(inner) -> return same?(inner, item(b))
-    Type.Lazy(inner) -> return same?(inner, item(b))
-    Type.Codec(inner) -> return same?(inner, item(b))
-    Type.List(inner) -> return same?(inner, item(b))
-    Type.Set(inner) -> return same?(inner, item(b))
-    _ -> return true
+    Type.Opaque(found) -> found == name(b)
+    Type.Var(found) -> found == name(b)
+    Type.Struct(found, list) -> found == name(b) and same_all?(list, args(b))
+    Type.Enum(found, list) -> found == name(b) and same_all?(list, args(b))
+    Type.Map(key_type, value_type) -> same?(key_type, key(b)) and same?(value_type, value(b))
+    Type.ATS(key_type, value_type) -> same?(key_type, key(b)) and same?(value_type, value(b))
+    Type.Fn(list, last) -> same_all?(list, params(b)) and same?(last, result(b))
+    Type.Result(inner) -> same?(inner, item(b))
+    Type.Optional(inner) -> same?(inner, item(b))
+    Type.Task(inner) -> same?(inner, item(b))
+    Type.Channel(inner) -> same?(inner, item(b))
+    Type.Lazy(inner) -> same?(inner, item(b))
+    Type.Codec(inner) -> same?(inner, item(b))
+    Type.List(inner) -> same?(inner, item(b))
+    Type.Set(inner) -> same?(inner, item(b))
+    _ -> true
   end
 end
 
@@ -176,63 +176,63 @@ export def same_all?(a: List[Type], b: List[Type]) -> Bool
     index += 1
   end
 
-  return true
+  true
 end
 
 ## Result[type], or Unknown when there is no type: the expected type of the operand of try.
 export def result_of(type: Type) -> Type
   return type if unknown?(type)
 
-  return Type.Result(type)
+  Type.Result(type)
 end
 
 ## Task[type], or Unknown when there is no type.
 export def task_of(type: Type) -> Type
   return type if unknown?(type)
 
-  return Type.Task(type)
+  Type.Task(type)
 end
 
 ## List[type], or Unknown when there is no type.
 export def list_of(type: Type) -> Type
   return type if unknown?(type)
 
-  return Type.List(type)
+  Type.List(type)
 end
 
 ## The type itself when it is a List, else Unknown: the expected type that a list operation passes on.
 export def only_list(type: Type) -> Type
   return type if is?(type, "List")
 
-  return Type.Unknown
+  Type.Unknown
 end
 
 ## The type itself when it is a Map, else Unknown.
 export def only_map(type: Type) -> Type
   return type if is?(type, "Map")
 
-  return Type.Unknown
+  Type.Unknown
 end
 
 ## The type itself when it is a Set, else Unknown.
 export def only_set(type: Type) -> Type
   return type if is?(type, "Set")
 
-  return Type.Unknown
+  Type.Unknown
 end
 
 ## The item of a Result, else Unknown: the expected type of the value inside a Result.
 export def only_result_item(type: Type) -> Type
   return item(type) if is?(type, "Result")
 
-  return Type.Unknown
+  Type.Unknown
 end
 
 ## The item of an Optional, else Unknown: the expected type of the value inside some(...).
 export def only_optional_item(type: Type) -> Type
   return item(type) if is?(type, "Optional")
 
-  return Type.Unknown
+  Type.Unknown
 end
 
 ## The name as the user wrote it: the linker gives a name from another file the prefix "@N::" to keep it unique, and
@@ -249,7 +249,7 @@ export def display_name(name: String) -> String
     return name.slice(digits_end + 2, name.length - digits_end - 2)
   end
 
-  return name
+  name
 end
 
 ## The type as the messages print it: Int, List[String], Map[String, Int], Fn[Int, Void], Point, Option[Int].
@@ -261,31 +261,31 @@ export def to_text(type: Type) -> String = to_text_as(type, {})
 ## written through that alias too. A prefix it does not map prints as the bare name.
 export def to_text_as(type: Type, written: Map[String, String]) -> String
   case type
-    Type.Int -> return "Int"
-    Type.Float -> return "Float"
-    Type.Bool -> return "Bool"
-    Type.String -> return "String"
-    Type.Nil -> return "Nil"
-    Type.Void -> return "Void"
-    Type.Json -> return "Json"
-    Type.Range -> return "Range"
-    Type.Bytes -> return "Bytes"
-    Type.Unknown -> return "?"
-    Type.Opaque(name) -> return written_name(name, written)
-    Type.Var(name) -> return name
-    Type.Struct(name, args) -> return generic_text(name, args, written)
-    Type.Enum(name, args) -> return generic_text(name, args, written)
-    Type.Result(item) -> return "Result[#{to_text_as(item, written)}]"
-    Type.Optional(item) -> return "Optional[#{to_text_as(item, written)}]"
-    Type.Task(item) -> return "Task[#{to_text_as(item, written)}]"
-    Type.Channel(item) -> return "Channel[#{to_text_as(item, written)}]"
-    Type.Lazy(item) -> return "Lazy[#{to_text_as(item, written)}]"
-    Type.Codec(item) -> return "Codec[#{to_text_as(item, written)}]"
-    Type.List(item) -> return "List[#{to_text_as(item, written)}]"
-    Type.Set(item) -> return "Set[#{to_text_as(item, written)}]"
-    Type.Map(key, value) -> return "Map[#{to_text_as(key, written)}, #{to_text_as(value, written)}]"
-    Type.ATS(key, value) -> return "ATS[#{to_text_as(key, written)}, #{to_text_as(value, written)}]"
-    Type.Fn(params, result) -> return "Fn[#{list_text_as(params.concat([result]), written)}]"
+    Type.Int -> "Int"
+    Type.Float -> "Float"
+    Type.Bool -> "Bool"
+    Type.String -> "String"
+    Type.Nil -> "Nil"
+    Type.Void -> "Void"
+    Type.Json -> "Json"
+    Type.Range -> "Range"
+    Type.Bytes -> "Bytes"
+    Type.Unknown -> "?"
+    Type.Opaque(name) -> written_name(name, written)
+    Type.Var(name) -> name
+    Type.Struct(name, args) -> generic_text(name, args, written)
+    Type.Enum(name, args) -> generic_text(name, args, written)
+    Type.Result(item) -> "Result[#{to_text_as(item, written)}]"
+    Type.Optional(item) -> "Optional[#{to_text_as(item, written)}]"
+    Type.Task(item) -> "Task[#{to_text_as(item, written)}]"
+    Type.Channel(item) -> "Channel[#{to_text_as(item, written)}]"
+    Type.Lazy(item) -> "Lazy[#{to_text_as(item, written)}]"
+    Type.Codec(item) -> "Codec[#{to_text_as(item, written)}]"
+    Type.List(item) -> "List[#{to_text_as(item, written)}]"
+    Type.Set(item) -> "Set[#{to_text_as(item, written)}]"
+    Type.Map(key, value) -> "Map[#{to_text_as(key, written)}, #{to_text_as(value, written)}]"
+    Type.ATS(key, value) -> "ATS[#{to_text_as(key, written)}, #{to_text_as(value, written)}]"
+    Type.Fn(params, result) -> "Fn[#{list_text_as(params.concat([result]), written)}]"
   end
 end
 
@@ -293,22 +293,22 @@ end
 ## Fn([Int], Void). Unlike to_text, two variants never print the same.
 export def debug_text(type: Type) -> String
   case type
-    Type.Opaque(name) -> return "Opaque(#{name})"
-    Type.Var(name) -> return "Var(#{name})"
-    Type.Struct(name, args) -> return struct_debug(name, args)
-    Type.Enum(name, args) -> return "Enum(#{name}, [#{debug_list(args)}])"
-    Type.Result(item) -> return "Result(#{debug_text(item)})"
-    Type.Optional(item) -> return "Optional(#{debug_text(item)})"
-    Type.Task(item) -> return "Task(#{debug_text(item)})"
-    Type.Channel(item) -> return "Channel(#{debug_text(item)})"
-    Type.Lazy(item) -> return "Lazy(#{debug_text(item)})"
-    Type.Codec(item) -> return "Codec(#{debug_text(item)})"
-    Type.List(item) -> return "List(#{debug_text(item)})"
-    Type.Set(item) -> return "Set(#{debug_text(item)})"
-    Type.Map(key, value) -> return "Map(#{debug_text(key)}, #{debug_text(value)})"
-    Type.ATS(key, value) -> return "ATS(#{debug_text(key)}, #{debug_text(value)})"
-    Type.Fn(params, result) -> return "Fn([#{debug_list(params)}], #{debug_text(result)})"
-    _ -> return to_text(type)
+    Type.Opaque(name) -> "Opaque(#{name})"
+    Type.Var(name) -> "Var(#{name})"
+    Type.Struct(name, args) -> struct_debug(name, args)
+    Type.Enum(name, args) -> "Enum(#{name}, [#{debug_list(args)}])"
+    Type.Result(item) -> "Result(#{debug_text(item)})"
+    Type.Optional(item) -> "Optional(#{debug_text(item)})"
+    Type.Task(item) -> "Task(#{debug_text(item)})"
+    Type.Channel(item) -> "Channel(#{debug_text(item)})"
+    Type.Lazy(item) -> "Lazy(#{debug_text(item)})"
+    Type.Codec(item) -> "Codec(#{debug_text(item)})"
+    Type.List(item) -> "List(#{debug_text(item)})"
+    Type.Set(item) -> "Set(#{debug_text(item)})"
+    Type.Map(key, value) -> "Map(#{debug_text(key)}, #{debug_text(value)})"
+    Type.ATS(key, value) -> "ATS(#{debug_text(key)}, #{debug_text(value)})"
+    Type.Fn(params, result) -> "Fn([#{debug_list(params)}], #{debug_text(result)})"
+    _ -> to_text(type)
   end
 end
 
@@ -319,7 +319,7 @@ export def list_text(types: List[Type]) -> String = types.map do |type: Type| to
 def struct_debug(name: String, args: List[Type]) -> String
   return "Struct(#{name})" if args.size == 0
 
-  return "Struct(#{name}, [#{debug_list(args)}])"
+  "Struct(#{name}, [#{debug_list(args)}])"
 end
 
 def debug_list(types: List[Type]) -> String = types.map do |type: Type| debug_text(type) end.join(", ")
@@ -327,11 +327,11 @@ def debug_list(types: List[Type]) -> String = types.map do |type: Type| debug_te
 def generic_text(name: String, args: List[Type], written: Map[String, String]) -> String
   return written_name(name, written) if args.size == 0
 
-  return "#{written_name(name, written)}[#{list_text_as(args, written)}]"
+  "#{written_name(name, written)}[#{list_text_as(args, written)}]"
 end
 
 def list_text_as(types: List[Type], written: Map[String, String]) -> String
-  return types.map do |type: Type| to_text_as(type, written) end.join(", ")
+  types.map do |type: Type| to_text_as(type, written) end.join(", ")
 end
 
 # The name with the alias that `written` has for the linked name or, failing that, for its prefix.
@@ -342,10 +342,10 @@ def written_name(name: String, written: Map[String, String]) -> String
   alias = written.get(name, written.get(name.slice(0, name.length - bare.length), ""))
   return bare if alias == ""
 
-  return "#{alias}.#{bare}"
+  "#{alias}.#{bare}"
 end
 
 def digit?(character: String) -> Bool
   code = character.code
-  return code >= 48 and code <= 57
+  code >= 48 and code <= 57
 end

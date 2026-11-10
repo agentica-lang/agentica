@@ -48,7 +48,7 @@ export def name_problem(name: String) -> String
     return "a package name starts with a lowercase letter and holds only lowercase letters, digits, _ and -"
   end
 
-  return ""
+  ""
 end
 
 ## Whether a name is a Windows device name (`con`, `nul`, `com1` and the others, in any case, with or without an
@@ -86,7 +86,7 @@ export def git_problem(url: String) -> String
     end
   end
 
-  return ""
+  ""
 end
 
 ## Why text is not a tag, or "". A tag is a git tag name made of letters, digits and . _ + - , without a `/`, so that
@@ -99,7 +99,7 @@ export def tag_problem(tag: String) -> String
     return "a tag holds letters, digits, . _ + and -, and does not start with . or -"
   end
 
-  return ""
+  ""
 end
 
 ## Why text is not a subdir, or "". A subdir is the folder of the repository that holds the package: a relative path of
@@ -127,7 +127,7 @@ export def subdir_problem(subdir: String) -> String
     return "a subdir has no agc_libs folder, which a package leaves out" if part.upcase.downcase == "agc_libs"
   end
 
-  return ""
+  ""
 end
 
 ## Why text is not the `path` of a dependency, or "". It is the folder of a package on this machine, relative to the
@@ -138,7 +138,7 @@ export def path_problem(path: String) -> String
     return "a path is a folder of 1 to #{MAX_PATH} characters, with no control character"
   end
 
-  return ""
+  ""
 end
 
 ## Whether the source is a local folder, read in place.
@@ -152,7 +152,7 @@ export def ref_problem(ref: String) -> String
     return "a ref is #{MIN_REF} to #{MAX_REF} lowercase hex digits of a commit"
   end
 
-  return ""
+  ""
 end
 
 ## Why text is not a full commit, or "": 40 or 64 lowercase hex digits (SHA-1 or SHA-256 repositories).
@@ -162,28 +162,28 @@ export def commit_problem(commit: String) -> String
     return "a commit is 40 or 64 lowercase hex digits"
   end
 
-  return ""
+  ""
 end
 
 ## The URL without a final `.git`: two spellings of one repository have one identity.
 export def identity(url: String) -> String
   return url.slice(0, url.length - 4) if url.ends_with?(".git")
 
-  return url
+  url
 end
 
 ## Whether two sources are the same: the same repository, the same folder of it and the same pin, or the same path as
 ## written.
 export def same?(left: Source, right: Source) -> Bool
   same_place = identity(left.git) == identity(right.git) and left.subdir == right.subdir
-  return same_place and left.tag == right.tag and left.ref == right.ref and left.path == right.path
+  same_place and left.tag == right.tag and left.ref == right.ref and left.path == right.path
 end
 
 ## The pin as written: the tag, or the ref.
 export def pin(source: Source) -> String
   return source.tag if source.tag != ""
 
-  return source.ref
+  source.ref
 end
 
 ## The part of a stored file name after `@`: the tag, or the first 12 characters of the commit, so that two machines
@@ -191,13 +191,13 @@ end
 export def version_label(source: Source, commit: String) -> String
   return source.tag if source.tag != ""
 
-  return commit.slice(0, SHORT_COMMIT)
+  commit.slice(0, SHORT_COMMIT)
 end
 
 ## The cache path of the repository: `host/owner/repo`. The URL is valid (git_problem is "").
 export def cache_path(url: String) -> String
   rest = identity(url)
-  return rest.slice(HTTPS.length, rest.length - HTTPS.length)
+  rest.slice(HTTPS.length, rest.length - HTTPS.length)
 end
 
 ## The source as the text of a message: the URL, the folder when there is one, and the pin.
@@ -211,5 +211,5 @@ export def describe(source: Source) -> String
 
   return "#{place} at tag #{source.tag}" if source.tag != ""
 
-  return "#{place} at ref #{source.ref}"
+  "#{place} at ref #{source.ref}"
 end

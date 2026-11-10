@@ -97,7 +97,7 @@ export def plan(listing: String) -> Plan
     chosen = chosen.push(Blob(path: found.path, oid: found.oid))
   end
 
-  return Plan.Files(chosen)
+  Plan.Files(chosen)
 end
 
 # `MODE SP TYPE SP OID SP... SIZE TAB PATH`.
@@ -111,7 +111,7 @@ def parse(record: String) -> Result[Line]
   path = record.slice(tab.unwrap! + 1, record.length - tab.unwrap! - 1)
   # A gitlink has no size ("-"); it is refused by its mode before its size matters.
   size = fields[3].to_i
-  return ok(Line(mode: fields[0], oid: fields[2], size: size.unwrap_or(0), path: path))
+  ok(Line(mode: fields[0], oid: fields[2], size: size.unwrap_or(0), path: path))
 end
 
 # Whether the path is under a folder the hash leaves out.
@@ -120,7 +120,7 @@ def skipped?(parts: List[String]) -> Bool
     return true if PackageHash.skipped_folder?(parts[index], index == 0)
   end
 
-  return false
+  false
 end
 
 # Only the manifest at the root, the source files and the files of native/ are copied. The manifest in another case is
@@ -136,7 +136,7 @@ def copied?(parts: List[String], name: String, mode: String) -> Bool
     return PackageHash.source_file?(name) or PackageHash.native_path?(path) or PackageHash.native_root?(path)
   end
 
-  return PackageHash.source_file?(name) or (PackageHash.native_path?(path) and !PackageHash.native_junk?(name))
+  PackageHash.source_file?(name) or (PackageHash.native_path?(path) and !PackageHash.native_junk?(name))
 end
 
 # No empty, `.` or `..` part and no backslash or colon, which a file system could read as another place. Git does not
@@ -146,9 +146,9 @@ def safe?(parts: List[String]) -> Bool
     return false if part == "" or part == "." or part == ".." or part.contains?("\\") or part.contains?(":")
   end
 
-  return true
+  true
 end
 
 def refusal(code: String, message: String, help: String) -> Fault
-  return Fault(code: code, key: "", message: message, help: help)
+  Fault(code: code, key: "", message: message, help: help)
 end

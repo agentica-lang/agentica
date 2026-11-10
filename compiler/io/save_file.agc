@@ -18,7 +18,7 @@ export def bytes(path: String, data: Bytes, timeout_ms: Int) -> Result[Void]
     rest = rest.drop(PIECE)
   end
 
-  return File.close(out, timeout_ms)
+  File.close(out, timeout_ms)
 end
 
 ## Puts `data` in the file at `path` so that no reader sees a half-written file there. An old file (`replacing`) is
@@ -38,5 +38,5 @@ export def replace(path: String, data: Bytes, replacing: Bool, timeout_ms: Int) 
     _ = Path.remove(fresh, timeout_ms)
   end
 
-  return placed
+  placed
 end

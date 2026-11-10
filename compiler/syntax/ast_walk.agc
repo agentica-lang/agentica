@@ -14,8 +14,8 @@ end
 ## case arms are not nodes of their own here: their parts come in the place of the wrapper.
 export def children(node: Node) -> List[Node]
   case node
-    Node.Expr(expr) -> return expr_children(expr)
-    Node.Stmt(stmt) -> return stmt_children(stmt)
+    Node.Expr(expr) -> expr_children(expr)
+    Node.Stmt(stmt) -> stmt_children(stmt)
   end
 end
 
@@ -42,13 +42,13 @@ export def references(root: Ast.Expr) -> List[Ast.ConstRef]
     end
   end
 
-  return found.sort_by do |read: Ast.ConstRef| read_offset(read) end
+  found.sort_by do |read: Ast.ConstRef| read_offset(read) end
 end
 
 def push_read(found: List[Ast.ConstRef], expr: Ast.Expr) -> List[Ast.ConstRef]
   case expr
-    Ast.Expr.ConstRef(read) -> return found.push(read)
-    _ -> return found
+    Ast.Expr.ConstRef(read) -> found.push(read)
+    _ -> found
   end
 end
 
@@ -60,25 +60,25 @@ def named_values(args: List[Ast.NamedArg]) -> List[Node] = args.map do |arg: Ast
 
 def expr_children(expr: Ast.Expr) -> List[Node]
   case expr
-    Ast.Expr.Call(node) -> return exprs(node.args)
-    Ast.Expr.EnumConstructor(node) -> return exprs(node.args).concat(named_values(node.named))
-    Ast.Expr.Invoke(node) -> return [Node.Expr(node.target)].concat(exprs(node.args))
-    Ast.Expr.Construct(node) -> return named_values(node.args)
-    Ast.Expr.Update(node) -> return [Node.Expr(node.target)].concat(named_values(node.args))
-    Ast.Expr.ListLit(node) -> return exprs(node.elements)
-    Ast.Expr.MapLit(node) -> return entries(node.entries)
-    Ast.Expr.FieldAccess(node) -> return [Node.Expr(node.target)]
-    Ast.Expr.MethodCall(node) -> return [Node.Expr(node.target)].concat(exprs(node.args))
-    Ast.Expr.Interpolation(node) -> return interpolated(node.parts)
-    Ast.Expr.BlockLit(node) -> return stmts(node.body)
-    Ast.Expr.Index(node) -> return [Node.Expr(node.target), Node.Expr(node.index)]
-    Ast.Expr.Try(node) -> return [Node.Expr(node.operand)]
-    Ast.Expr.Unary(node) -> return [Node.Expr(node.operand)]
-    Ast.Expr.Binary(node) -> return [Node.Expr(node.left), Node.Expr(node.right)]
-    Ast.Expr.Typed(node) -> return [Node.Expr(node.target)]
-    Ast.Expr.EagLit(node) -> return [Node.Expr(node.call)]
-    Ast.Expr.Case(node) -> return case_children(node)
-    _ -> return []
+    Ast.Expr.Call(node) -> exprs(node.args)
+    Ast.Expr.EnumConstructor(node) -> exprs(node.args).concat(named_values(node.named))
+    Ast.Expr.Invoke(node) -> [Node.Expr(node.target)].concat(exprs(node.args))
+    Ast.Expr.Construct(node) -> named_values(node.args)
+    Ast.Expr.Update(node) -> [Node.Expr(node.target)].concat(named_values(node.args))
+    Ast.Expr.ListLit(node) -> exprs(node.elements)
+    Ast.Expr.MapLit(node) -> entries(node.entries)
+    Ast.Expr.FieldAccess(node) -> [Node.Expr(node.target)]
+    Ast.Expr.MethodCall(node) -> [Node.Expr(node.target)].concat(exprs(node.args))
+    Ast.Expr.Interpolation(node) -> interpolated(node.parts)
+    Ast.Expr.BlockLit(node) -> stmts(node.body)
+    Ast.Expr.Index(node) -> [Node.Expr(node.target), Node.Expr(node.index)]
+    Ast.Expr.Try(node) -> [Node.Expr(node.operand)]
+    Ast.Expr.Unary(node) -> [Node.Expr(node.operand)]
+    Ast.Expr.Binary(node) -> [Node.Expr(node.left), Node.Expr(node.right)]
+    Ast.Expr.Typed(node) -> [Node.Expr(node.target)]
+    Ast.Expr.EagLit(node) -> [Node.Expr(node.call)]
+    Ast.Expr.Case(node) -> case_children(node)
+    _ -> []
   end
 end
 
@@ -88,7 +88,7 @@ def entries(items: List[Ast.MapEntry]) -> List[Node]
     out = out.push(Node.Expr(entry.key)).push(Node.Expr(entry.value))
   end
 
-  return out
+  out
 end
 
 def interpolated(parts: List[Ast.Part]) -> List[Node]
@@ -100,26 +100,26 @@ def interpolated(parts: List[Ast.Part]) -> List[Node]
     end
   end
 
-  return out
+  out
 end
 
 def stmt_children(stmt: Ast.Stmt) -> List[Node]
   case stmt
-    Ast.Stmt.Binding(node) -> return [Node.Expr(node.value)]
-    Ast.Stmt.Return(node) -> return optional_value(node.value)
-    Ast.Stmt.Expression(node) -> return [Node.Expr(node.value)]
-    Ast.Stmt.If(node) -> return if_children(node)
-    Ast.Stmt.While(node) -> return [Node.Expr(node.condition)].concat(stmts(node.body))
-    Ast.Stmt.For(node) -> return [Node.Expr(node.iterable)].concat(stmts(node.body))
-    Ast.Stmt.Case(node) -> return case_children(node)
-    Ast.Stmt.Control(_) -> return []
+    Ast.Stmt.Binding(node) -> [Node.Expr(node.value)]
+    Ast.Stmt.Return(node) -> optional_value(node.value)
+    Ast.Stmt.Expression(node) -> [Node.Expr(node.value)]
+    Ast.Stmt.If(node) -> if_children(node)
+    Ast.Stmt.While(node) -> [Node.Expr(node.condition)].concat(stmts(node.body))
+    Ast.Stmt.For(node) -> [Node.Expr(node.iterable)].concat(stmts(node.body))
+    Ast.Stmt.Case(node) -> case_children(node)
+    Ast.Stmt.Control(_) -> []
   end
 end
 
 def optional_value(value: Optional[Ast.Expr]) -> List[Node]
   case value
-    some(found) -> return [Node.Expr(found)]
-    none -> return []
+    some(found) -> [Node.Expr(found)]
+    none -> []
   end
 end
 
@@ -130,8 +130,8 @@ def if_children(node: Ast.IfStmt) -> List[Node]
   end
 
   case node.else_body
-    some(body) -> return out.concat(stmts(body))
-    none -> return out
+    some(body) -> out.concat(stmts(body))
+    none -> out
   end
 end
 
@@ -141,5 +141,5 @@ def case_children(node: Ast.CaseStmt) -> List[Node]
     out = out.concat(optional_value(arm.guard)).concat(stmts(arm.body))
   end
 
-  return out
+  out
 end

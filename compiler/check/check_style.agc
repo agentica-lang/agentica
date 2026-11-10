@@ -40,7 +40,7 @@ export def first_problem(linked: Linker.Linked, styled: Set[String]) -> Optional
     end
   end
 
-  return none
+  none
 end
 
 ## The first line of `text` longer than `width` characters, as CHECK-LINE-TOO-LONG from its first character past the
@@ -67,7 +67,7 @@ export def line_too_long(file: String, text: String, width: Int) -> Optional[Fai
     number += 1
   end
 
-  return none
+  none
 end
 
 ## The bare `end` tokens of `text`, lexed into `tokens`, that have no empty line after them, in order. An `end` is bare
@@ -84,7 +84,7 @@ export def missing_lines(text: String, tokens: List[Tokens.Token]) -> List[Token
     end
   end
 
-  return found
+  found
 end
 
 ## Whether `text` has no `end` that the rule refuses, whatever the project of the file asks.
@@ -96,9 +96,9 @@ def problem_in(file: String, text: String) -> Optional[Failure.Problem]
       missing_ends = missing_lines(text, tokens)
       return none if missing_ends.size == 0
 
-      return some(missing(file, missing_ends[0]))
+      some(missing(file, missing_ends[0]))
     # A file that linked lexes again, so this arm does not happen.
-    Diag.Outcome.Failed(_) -> return none
+    Diag.Outcome.Failed(_) -> none
   end
 end
 
@@ -120,7 +120,7 @@ def needs_empty_line?(text: String, tokens: List[Tokens.Token], at: Int) -> Bool
     position += 1
   end
 
-  return false
+  false
 end
 
 # Whether the first token after the line breaks from `at` is a FOLLOWERS word on the line right after the `end`'s.
@@ -130,11 +130,11 @@ def follower?(tokens: List[Tokens.Token], at: Int) -> Bool
     after += 1
   end
 
-  return tokens[after].span.start.line == tokens[at - 1].span.start.line + 1 and FOLLOWERS.include?(tokens[after].kind)
+  tokens[after].span.start.line == tokens[at - 1].span.start.line + 1 and FOLLOWERS.include?(tokens[after].kind)
 end
 
 def missing(file: String, token: Tokens.Token) -> Failure.Problem
-  return Failure.problem(
+  Failure.problem(
     file,
     "",
     "CHECK-BLANK-LINE-AFTER-END",

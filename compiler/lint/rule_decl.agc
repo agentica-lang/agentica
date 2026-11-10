@@ -11,17 +11,17 @@ export def suggestions(file: String, decl: Ast.Decl) -> List[Problems.Problem]
     Ast.Decl.Function(node) ->
       return [Rules.at(file, Rules.PRIVATE_DOC, node.name_span)] if node.doc.some? and node.native.none?
 
-      return []
+      []
     Ast.Decl.Struct(node) ->
       if node.doc.some? and node.layout == "" and node.record_of == ""
         return [Rules.at(file, Rules.PRIVATE_DOC, node.name_span)]
       end
 
-      return []
+      []
     Ast.Decl.Enum(node) ->
       return [Rules.at(file, Rules.PRIVATE_DOC, node.name_span)] if node.doc.some?
 
-      return []
-    _ -> return []
+      []
+    _ -> []
   end
 end

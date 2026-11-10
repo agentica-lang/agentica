@@ -81,7 +81,7 @@ export def parse(reading: Reader.Reading, value: Toml.Value, path: String) -> Re
 
   defines = try words(reading, entries, path, "defines", MAX_DEFINES, &define_problem)
   libs = try words(reading, entries, path, "libs", MAX_LIBS, &lib_problem)
-  return ok(Build(sources: sources, defines: defines, libs: libs))
+  ok(Build(sources: sources, defines: defines, libs: libs))
 end
 
 ## The request for the build of `library` from the package folder `root` (a real path), for the system `os`. `pinned`
@@ -97,7 +97,7 @@ export def request(
   pinned: String,
   optional: Bool,
 ) -> Workspace.BuildRequest
-  return Workspace.BuildRequest(
+  Workspace.BuildRequest(
     cache_root: cache_root,
     library: library,
     system: os,
@@ -136,7 +136,7 @@ export def listed(workspace: Workspace.Workspace, request: Workspace.BuildReques
     end
   end
 
-  return ok(request.with(files: files, contents: pinned.contents))
+  ok(request.with(files: files, contents: pinned.contents))
 end
 
 ## The library that an optional module which could not be built stands for: a folder path, ending in `/`, which no
@@ -150,7 +150,7 @@ export def unbuilt_path(request: Workspace.BuildRequest) -> String
     base = Paths.join(Paths.join(request.cache_root, "native-build"), "unbuilt")
   end
 
-  return "#{base}/"
+  "#{base}/"
 end
 
 ## The file name of the built library of `name` on `system`, as the VM opens it.
@@ -161,7 +161,7 @@ export def output_name(name: String, system: String) -> String
     return "lib#{name}.dylib"
   end
 
-  return "lib#{name}.so"
+  "lib#{name}.so"
 end
 
 ## The arguments of the compiler, after its own words: the flags every build gets, those of the system, the output, the
@@ -182,7 +182,7 @@ export def arguments(request: Workspace.BuildRequest, include: String, output: S
 
   found = found.concat(["-o", output])
   found = found.concat(request.sources.map do |source: String| Paths.join(request.root, source) end)
-  return found.concat(request.libs.map do |lib: String| "-l#{lib}" end)
+  found.concat(request.libs.map do |lib: String| "-l#{lib}" end)
 end
 
 ## The text the build key covers, from the request: the format, the library, the system, the table as written and
@@ -197,7 +197,7 @@ export def key_text(request: Workspace.BuildRequest, digests: List[String]) -> S
     lines = lines.push("file #{digests[index]} #{request.files[index]}")
   end
 
-  return lines.join("\n")
+  lines.join("\n")
 end
 
 ## Every file of native/ below `root` (relative paths, in bytewise order), hidden ones included, since a source may
@@ -253,7 +253,7 @@ export def native_files(
     end
   end
 
-  return ok(found.sort)
+  ok(found.sort)
 end
 
 # The files of native/ that the hash of a fetched package covers and their bytes, once all the bytes the hash covers
@@ -299,7 +299,7 @@ def pinned_files(workspace: Workspace.Workspace, request: Workspace.BuildRequest
     end
   end
 
-  return ok(found)
+  ok(found)
 end
 
 # A fetched package whose covered files cannot be listed or read.
@@ -311,11 +311,11 @@ def unreadable(request: Workspace.BuildRequest, reason: PackageHash.Hashed) -> S
     PackageHash.Hashed.Hash(_) -> message = "cannot read the package"
   end
 
-  return refused(request.file, request.key, message, "run agentica install to put the locked files back")
+  refused(request.file, request.key, message, "run agentica install to put the locked files back")
 end
 
 def refused(file: String, key: String, message: String, help: String) -> String
-  return Failure.fail_key(file, key, "PKG-NATIVE-BUILD", message, Failure.hint(help))
+  Failure.fail_key(file, key, "PKG-NATIVE-BUILD", message, Failure.hint(help))
 end
 
 # The strings of the optional list `name` of the table: at most `limit`, each one passing `problem` ("" when fine).
@@ -343,7 +343,7 @@ def words(
     found = found.push(word)
   end
 
-  return ok(found)
+  ok(found)
 end
 
 # A C file of native/, in plain folder names (the rules of a subdir), so the hash and the walk cover it.
@@ -359,7 +359,7 @@ def source_problem(source: String) -> String
     return "a source is not a hidden file, Thumbs.db or desktop.ini"
   end
 
-  return ""
+  ""
 end
 
 # `NAME` or `NAME=VALUE`: a C name, and a value of letters, digits and `_ . + -`.
@@ -382,7 +382,7 @@ def define_problem(define: String) -> String
     return "the value of a define holds only letters, digits and _ . + - (at most #{MAX_VALUE} characters)"
   end
 
-  return ""
+  ""
 end
 
 # A library name for `-l`: letters, digits and `_ . + -`, not starting with `-`.
@@ -396,5 +396,5 @@ def lib_problem(lib: String) -> String
     return "a library name holds only letters, digits and _ . + -"
   end
 
-  return ""
+  ""
 end

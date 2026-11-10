@@ -34,7 +34,7 @@ export def write(program: Ir.Program, version: String) -> Written
   result = build(program, version)
   return Written.Done(result.unwrap!) if result.ok?
 
-  return Written.Failed(Problems.unpack(result.message))
+  Written.Failed(Problems.unpack(result.message))
 end
 
 def build(program: Ir.Program, version: String) -> Result[Bytes]
@@ -86,7 +86,7 @@ def build(program: Ir.Program, version: String) -> Result[Bytes]
   joined = Wire.join(out)
   return error(Failure.internal(program, joined.message)) if !joined.ok?
 
-  return joined
+  joined
 end
 
 # The decodable enums, after the entry: a count and the records, written only when some enum can be decoded, so a
@@ -94,7 +94,7 @@ end
 def decodable_enums(out: Wire.Chunks, json: JsonTypes.Section) -> Wire.Chunks
   return out if json.enums_count == 0
 
-  return Wire.add_all(Wire.add(out, Wire.u32(json.enums_count)), json.enums)
+  Wire.add_all(Wire.add(out, Wire.u32(json.enums_count)), json.enums)
 end
 
 # The first limits of the format, in this order. The limits of the types, the registers and the updates are met
@@ -122,19 +122,19 @@ def check_limits(program: Ir.Program) -> Result[Void]
 
   return error(Failure.limit(program, 0, "module constants", span)) if program.globals > MAX_U16
 
-  return ok()
+  ok()
 end
 
 # The magic, the format version and the Agentica version.
 def header(version: String) -> Wire.Chunks
   out = Wire.add(Wire.start(), [65, 71, 67, 66])
   out = Wire.add(out, Wire.u32(FORMAT_VERSION))
-  return Wire.add_text(out, version)
+  Wire.add_text(out, version)
 end
 
 # The count of a table of entries, then its entries.
 def pool_section(out: Wire.Chunks, pool: Pool.Pool) -> Wire.Chunks
-  return Wire.add_all(Wire.add(out, Wire.u32(pool.count)), pool.chunks)
+  Wire.add_all(Wire.add(out, Wire.u32(pool.count)), pool.chunks)
 end
 
 # The sources: the stored name of each file and its text.
@@ -145,7 +145,7 @@ def sources(out: Wire.Chunks, program: Ir.Program) -> Wire.Chunks
     chunks = Wire.add_text(chunks, source.text)
   end
 
-  return chunks
+  chunks
 end
 
 # The structs: the name as the user wrote it, and the fields.
@@ -159,7 +159,7 @@ def structs(out: Wire.Chunks, program: Ir.Program) -> Wire.Chunks
     end
   end
 
-  return chunks
+  chunks
 end
 
 # The enums: the name as the user wrote it, and the variants with their payload sizes.
@@ -174,5 +174,5 @@ def enums(out: Wire.Chunks, program: Ir.Program) -> Wire.Chunks
     end
   end
 
-  return chunks
+  chunks
 end

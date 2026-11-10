@@ -23,5 +23,5 @@ end
 def hand_off(launch: Launch.Launch) -> Int
   handed = FrontEnd.hand_off(launch.bytes, launch.flags, launch.arguments)
   IO.warn("agentica: #{handed.message}")
-  return 2
+  2
 end

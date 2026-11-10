@@ -87,11 +87,9 @@ end
 ## to the standard streams of this process.
 export def run(settings: Env.Settings, args: List[String], hand_off: Fn[Launch.Launch, Int]) -> Int
   case Options.parse(args, settings.version)
-    Options.Parsed.Answer(reply) -> return emit(reply)
+    Options.Parsed.Answer(reply) -> emit(reply)
     Options.Parsed.Ready(options) ->
-      return dispatch(
-        Session(options: options, settings: settings, hand_off: hand_off, buffer_file: "", buffer_shown: ""),
-      )
+      dispatch(Session(options: options, settings: settings, hand_off: hand_off, buffer_file: "", buffer_shown: ""))
   end
 end
 
@@ -147,7 +145,7 @@ def dispatch(session: Session) -> Int
 
   return emit(Reply.failed(2, Texts.usage_text())) if !usable
 
-  return program(building(session, first), first, rest)
+  program(building(session, first), first, rest)
 end
 
 # The session whose workspace builds the native modules of the project and its packages from their C sources
@@ -155,7 +153,7 @@ end
 # `check`, the queries and the other commands never start a compiler.
 def building(session: Session, verb: String) -> Session
   settings = builder_settings(session.settings, session.options.deny, session.options.style, verb)
-  return session.with(settings: settings)
+  session.with(settings: settings)
 end
 
 # The settings with the builder of `verb`. Under any --deny-* flag or --sandbox the VM refuses native code, so nothing
@@ -184,7 +182,7 @@ def builder_settings(settings: Env.Settings, deny: List[String], style: String, 
     return denied.with(workspace: settings.workspace.with(native_build: refusing))
   end
 
-  return denied
+  denied
 end
 
 # The warning that a packed failure holds, on stderr: `warning: MESSAGE` in plain text, the JSON object of the problem
@@ -205,19 +203,19 @@ end
 def help(session: Session, words: List[String]) -> Int
   return answered(session, HelpStd.run(words, session.options.style, session.settings), "") if HelpStd.asks?(words)
 
-  return emit(Help.help(words, session.options.style))
+  emit(Help.help(words, session.options.style))
 end
 
 # `doc PATH`: a complete answer, or the first problem of the module, shown as a problem of PATH.
 def doc(session: Session, words: List[String]) -> Int
-  return answered(session, CliDoc.run(words, session.options.style, session.settings), "")
+  answered(session, CliDoc.run(words, session.options.style, session.settings), "")
 end
 
 # `install`: it takes no word; the project is the one of the working folder.
 def install(session: Session, words: List[String]) -> Int
   return emit(Reply.failed(2, Texts.usage_text())) if words.size != 0
 
-  return answered(session, Install.run(session.settings, session.options.style), "")
+  answered(session, Install.run(session.settings, session.options.style), "")
 end
 
 # What a command gave: print the answer, or reject the first problem of the program. A QUERY- problem is a mistake in
@@ -225,7 +223,7 @@ end
 # typed it ("" for the file of the problem).
 def answered(session: Session, answer: Reply.Answer, source: String) -> Int
   case answer
-    Reply.Answer.Printed(reply) -> return emit(reply)
+    Reply.Answer.Printed(reply) -> emit(reply)
     Reply.Answer.Rejected(problem) ->
       status = 1
       if problem.code.starts_with?("QUERY-")
@@ -234,7 +232,7 @@ def answered(session: Session, answer: Reply.Answer, source: String) -> Int
 
       return reject(session, problem, problem.file, status) if source == ""
 
-      return reject(session, problem, source, status)
+      reject(session, problem, source, status)
   end
 end
 
@@ -247,11 +245,11 @@ def query(session: Session, verb: String, words: List[String]) -> Int
   end
 
   case QueryOptions.parse(words, session.options.style, usage, true)
-    QueryOptions.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
+    QueryOptions.Parsed.Refused(problem) -> answered(session, Reply.Answer.Rejected(problem), "")
     QueryOptions.Parsed.Ready(asked) ->
       styled = session.with(options: session.options.with(style: asked.style))
       case QueryFiles.pick(asked, usage)
-        QueryFiles.Picked.Refused(problem) -> return answered(styled, Reply.Answer.Rejected(problem), "")
+        QueryFiles.Picked.Refused(problem) -> answered(styled, Reply.Answer.Rejected(problem), "")
         QueryFiles.Picked.File(file) ->
           return position(styled, file, asked, usage) if verb != "outline"
 
@@ -259,7 +257,7 @@ def query(session: Session, verb: String, words: List[String]) -> Int
             return answered(styled, CliQuery.outline(file, asked.style, false, styled.settings), file)
           end
 
-          return with_buffer(styled, file) do |buffered: Session|
+          with_buffer(styled, file) do |buffered: Session|
             answered(buffered, CliQuery.outline(file, asked.style, true, buffered.settings), file)
           end
       end
@@ -270,12 +268,12 @@ end
 # problem in FILE is shown against the buffer.
 def symbol(session: Session, words: List[String]) -> Int
   case QueryOptions.parse(words, session.options.style, CliQuery.symbol_usage(), false)
-    QueryOptions.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
+    QueryOptions.Parsed.Refused(problem) -> answered(session, Reply.Answer.Rejected(problem), "")
     QueryOptions.Parsed.Ready(asked) ->
       styled = session.with(options: session.options.with(style: asked.style))
       return answered(styled, CliQuery.symbol(asked, styled.settings), "") if asked.stdin == ""
 
-      return with_buffer(styled, asked.stdin) do |buffered: Session|
+      with_buffer(styled, asked.stdin) do |buffered: Session|
         answered(buffered, CliQuery.symbol(asked, buffered.settings), asked.stdin)
       end
   end
@@ -286,18 +284,18 @@ end
 # goes with a position alone (`CliQuery.refs_ask`).
 def refs(session: Session, words: List[String]) -> Int
   case QueryOptions.parse(words, session.options.style, CliQuery.refs_usage(), true)
-    QueryOptions.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
+    QueryOptions.Parsed.Refused(problem) -> answered(session, Reply.Answer.Rejected(problem), "")
     QueryOptions.Parsed.Ready(asked) ->
       styled = session.with(options: session.options.with(style: asked.style))
       case CliQuery.refs_ask(asked)
-        CliQuery.RefsAsk.Refused(problem) -> return answered(styled, Reply.Answer.Rejected(problem), "")
+        CliQuery.RefsAsk.Refused(problem) -> answered(styled, Reply.Answer.Rejected(problem), "")
         CliQuery.RefsAsk.At(position, paths) ->
           if asked.stdin == ""
             found = CliQuery.refs_at(position, paths, asked.style, asked.partial, styled.settings)
             return answered(styled, found, position.file)
           end
 
-          return with_buffer(styled, position.file) do |read: Session|
+          with_buffer(styled, position.file) do |read: Session|
             answered(read, CliQuery.refs_at(position, paths, asked.style, asked.partial, read.settings), position.file)
           end
 
@@ -306,7 +304,7 @@ def refs(session: Session, words: List[String]) -> Int
             return answered(styled, CliQuery.refs_named(name, paths, "", asked.style, styled.settings), "")
           end
 
-          return with_buffer(styled, asked.stdin) do |read: Session|
+          with_buffer(styled, asked.stdin) do |read: Session|
             answered(read, CliQuery.refs_named(name, paths, asked.stdin, asked.style, read.settings), asked.stdin)
           end
       end
@@ -317,11 +315,11 @@ end
 # words of the command: the style, `--stdin` and `--partial`.
 def position(session: Session, word: String, options: QueryOptions.Query, usage: String) -> Int
   case QueryPosition.parse(word, usage)
-    QueryPosition.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
+    QueryPosition.Parsed.Refused(problem) -> answered(session, Reply.Answer.Rejected(problem), "")
     QueryPosition.Parsed.Ready(asked) ->
       return answered(session, type_at(session, asked, options.partial), asked.file) if options.stdin == ""
 
-      return with_buffer(session, asked.file) do |read: Session|
+      with_buffer(session, asked.file) do |read: Session|
         answered(read, type_at(read, asked, options.partial), asked.file)
       end
   end
@@ -330,7 +328,7 @@ end
 # The answer of `type-at`, with the cache of checked modules of the project of the file unless `--no-cache`.
 def type_at(session: Session, asked: QueryPosition.Asked, partial: Bool) -> Reply.Answer
   settings = CheckCache.attach(session.settings, asked.file, !session.options.no_cache)
-  return CliQuery.type_at(asked, session.options.style, partial, settings)
+  CliQuery.type_at(asked, session.options.style, partial, settings)
 end
 
 # `check [PATH...]`: one file, or every `.agc` file of the folders and files named (none: the working folder). One file
@@ -341,14 +339,14 @@ def check(session: Session, words: List[String]) -> Int
   return emit(Reply.failed(2, Texts.usage_text())) if words.any? do |word: String| word == "--stdin" end
 
   case QueryOptions.parse(words, session.options.style, CliCheck.usage(), false)
-    QueryOptions.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
+    QueryOptions.Parsed.Refused(problem) -> answered(session, Reply.Answer.Rejected(problem), "")
     QueryOptions.Parsed.Ready(asked) ->
       styled = session.with(options: session.options.with(style: asked.style))
       if asked.words.size == 1 and !styled.settings.workspace.directory_exists.call(asked.words[0])
         return program(styled, "check", asked.words)
       end
 
-      return check_all(styled, asked.words)
+      check_all(styled, asked.words)
   end
 end
 
@@ -379,7 +377,7 @@ def fmt(session: Session, words: List[String]) -> Int
   end
 
   case SymbolPaths.expand(session.settings.workspace, paths, "", CliFmt.usage())
-    SymbolPaths.Expanded.Refused(problem) -> return reject(session, problem.with(code: "FMT-USAGE"), problem.file, 2)
+    SymbolPaths.Expanded.Refused(problem) -> reject(session, problem.with(code: "FMT-USAGE"), problem.file, 2)
     SymbolPaths.Expanded.Files(roots) ->
       status = 0
       settings: Map[String, Result[Format.Settings]] = {}
@@ -396,7 +394,7 @@ def fmt(session: Session, words: List[String]) -> Int
         end
       end
 
-      return status
+      status
   end
 end
 
@@ -416,24 +414,23 @@ def lint(session: Session, words: List[String]) -> Int
   end
 
   case QueryOptions.parse(rest, session.options.style, CliLint.usage(), false)
-    QueryOptions.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
+    QueryOptions.Parsed.Refused(problem) -> answered(session, Reply.Answer.Rejected(problem), "")
     QueryOptions.Parsed.Ready(asked) ->
       styled = session.with(options: session.options.with(style: asked.style))
       case SymbolPaths.expand(styled.settings.workspace, asked.words, "", CliLint.usage())
-        SymbolPaths.Expanded.Refused(problem) -> return answered(styled, Reply.Answer.Rejected(problem), "")
+        SymbolPaths.Expanded.Refused(problem) -> answered(styled, Reply.Answer.Rejected(problem), "")
         SymbolPaths.Expanded.Files(roots) ->
           entries = roots.map do |root: SymbolPaths.Root| lint_entry(root.typed) end
-          return lint_report(styled, entries, strict)
+          lint_report(styled, entries, strict)
       end
   end
 end
 
 def lint_entry(file: String) -> CliLint.Entry
   case SourceReader.read(file)
-    SourceFile.Read.Unreadable(_) -> return CliLint.Entry.Unreadable(file)
-    SourceFile.Read.Invalid(at) ->
-      return CliLint.Entry.Unparsed(file, Front.stage_problem(file, SourceFile.invalid_utf8(at)))
-    SourceFile.Read.Text(text) -> return CliLint.entry(file, text)
+    SourceFile.Read.Unreadable(_) -> CliLint.Entry.Unreadable(file)
+    SourceFile.Read.Invalid(at) -> CliLint.Entry.Unparsed(file, Front.stage_problem(file, SourceFile.invalid_utf8(at)))
+    SourceFile.Read.Text(text) -> CliLint.entry(file, text)
   end
 end
 
@@ -451,7 +448,7 @@ def lint_report(session: Session, entries: List[CliLint.Entry], strict: Bool) ->
   end
 
   print(CliLint.summary_text(entries))
-  return CliLint.status(entries, strict)
+  CliLint.status(entries, strict)
 end
 
 def show_lint_entry(session: Session, entry: CliLint.Entry) -> Void
@@ -471,19 +468,18 @@ end
 
 def fmt_usage(session: Session, message: String) -> Int
   problem = QueryOptions.at_arguments("FMT-USAGE", message, Diag.Help.Hint(CliFmt.usage()))
-  return reject(session, problem, problem.file, 2)
+  reject(session, problem, problem.file, 2)
 end
 
 # `fmt --tree FILE`: the normal form of the file.
 def fmt_tree(session: Session, file: String) -> Int
   case SourceReader.read(file)
-    SourceFile.Read.Unreadable(_) -> return fmt_usage(session, "cannot read #{file}")
-    SourceFile.Read.Invalid(at) ->
-      return reject(session, Front.stage_problem(file, SourceFile.invalid_utf8(at)), file, 1)
+    SourceFile.Read.Unreadable(_) -> fmt_usage(session, "cannot read #{file}")
+    SourceFile.Read.Invalid(at) -> reject(session, Front.stage_problem(file, SourceFile.invalid_utf8(at)), file, 1)
     SourceFile.Read.Text(text) ->
       case CliFmt.tree(text)
-        Diag.Outcome.Done(tree) -> return emit(Reply.printed(tree + "\n"))
-        Diag.Outcome.Failed(problem) -> return reject(session, Front.stage_problem(file, problem), file, 1)
+        Diag.Outcome.Done(tree) -> emit(Reply.printed(tree + "\n"))
+        Diag.Outcome.Failed(problem) -> reject(session, Front.stage_problem(file, problem), file, 1)
       end
   end
 end
@@ -492,13 +488,13 @@ end
 # does not parse prints its diagnostic, and nothing goes to the standard output.
 def fmt_stdin(session: Session) -> Int
   case StdinBuffer.take()
-    StdinBuffer.Taken.Failed(message) -> return emit(Reply.failed(2, "agentica: #{message}\n"))
+    StdinBuffer.Taken.Failed(message) -> emit(Reply.failed(2, "agentica: #{message}\n"))
     StdinBuffer.Taken.Got(buffer) ->
       buffered = session.with(buffer_file: STDIN_NAME, buffer_shown: buffer.shown)
       case buffer.read
-        SourceFile.Read.Unreadable(message) -> return emit(Reply.failed(2, "agentica: #{message}\n"))
+        SourceFile.Read.Unreadable(message) -> emit(Reply.failed(2, "agentica: #{message}\n"))
         SourceFile.Read.Invalid(at) ->
-          return reject(buffered, Front.stage_problem(STDIN_NAME, SourceFile.invalid_utf8(at)), STDIN_NAME, 1)
+          reject(buffered, Front.stage_problem(STDIN_NAME, SourceFile.invalid_utf8(at)), STDIN_NAME, 1)
         SourceFile.Read.Text(text) ->
           workspace = session.settings.workspace
           settings = CliFmt.settings_of(workspace, CliFmt.manifest_dir(workspace, "."))
@@ -513,7 +509,7 @@ def fmt_stdin(session: Session) -> Int
               return reject(buffered, Front.stage_problem(STDIN_NAME, problem), STDIN_NAME, 1)
           end
 
-          return 0
+          0
       end
   end
 end
@@ -528,12 +524,11 @@ def fmt_file(session: Session, file: String, settings: Result[Format.Settings], 
   case SourceReader.read(file)
     SourceFile.Read.Unreadable(_) ->
       IO.warn("agentica: cannot read #{file}")
-      return 2
-    SourceFile.Read.Invalid(at) ->
-      return reject(session, Front.stage_problem(file, SourceFile.invalid_utf8(at)), file, 1)
+      2
+    SourceFile.Read.Invalid(at) -> reject(session, Front.stage_problem(file, SourceFile.invalid_utf8(at)), file, 1)
     SourceFile.Read.Text(text) ->
       case CliFmt.verdict(text, settings.unwrap!)
-        CliFmt.Verdict.Same -> return 0
+        CliFmt.Verdict.Same -> 0
         CliFmt.Verdict.Changed(output) ->
           if checking
             puts(file)
@@ -546,8 +541,8 @@ def fmt_file(session: Session, file: String, settings: Result[Format.Settings], 
             return 2
           end
 
-          return 0
-        CliFmt.Verdict.Refused(problem) -> return reject(session, Front.stage_problem(file, problem), file, 1)
+          0
+        CliFmt.Verdict.Refused(problem) -> reject(session, Front.stage_problem(file, problem), file, 1)
       end
   end
 end
@@ -557,18 +552,18 @@ end
 # usage error before any file is checked.
 def check_all(session: Session, paths: List[String]) -> Int
   case SymbolPaths.expand(session.settings.workspace, paths, "", CliCheck.usage())
-    SymbolPaths.Expanded.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
+    SymbolPaths.Expanded.Refused(problem) -> answered(session, Reply.Answer.Rejected(problem), "")
     SymbolPaths.Expanded.Files(roots) ->
       entries = roots.map do |root: SymbolPaths.Root| check_entry(session, root.typed) end
-      return report(session, entries)
+      report(session, entries)
   end
 end
 
 def check_entry(session: Session, file: String) -> CliCheck.Entry
   case Core.check(Cache.empty(), check_settings(session, file), file)
-    Core.Verdict.Passed -> return CliCheck.Entry.Passed(file)
-    Core.Verdict.Unreadable -> return CliCheck.Entry.Unreadable(file)
-    Core.Verdict.Rejected(problem) -> return CliCheck.Entry.Failed(file, Core.named(session.settings, problem, file))
+    Core.Verdict.Passed -> CliCheck.Entry.Passed(file)
+    Core.Verdict.Unreadable -> CliCheck.Entry.Unreadable(file)
+    Core.Verdict.Rejected(problem) -> CliCheck.Entry.Failed(file, Core.named(session.settings, problem, file))
   end
 end
 
@@ -588,7 +583,7 @@ def report(session: Session, entries: List[CliCheck.Entry]) -> Int
 
   return emit(Reply.printed(CliCheck.ok_text(entries.size))) if failed == 0
 
-  return emit(Reply.failed(CliCheck.status(entries), CliCheck.failed_text(failed, entries.size)))
+  emit(Reply.failed(CliCheck.status(entries), CliCheck.failed_text(failed, entries.size)))
 end
 
 def show_entry(session: Session, entry: CliCheck.Entry) -> Void
@@ -611,17 +606,17 @@ end
 def check_stdin(session: Session, files: List[String]) -> Int
   return emit(Reply.failed(2, Texts.usage_text())) if files.size != 1 or !QueryOptions.file_name?(files[0])
 
-  return with_buffer(session, files[0]) do |buffered: Session| program(buffered, "check", files) end
+  with_buffer(session, files[0]) do |buffered: Session| program(buffered, "check", files) end
 end
 
 # Takes the standard input as the text of `file` and gives `then` a session whose workspace answers it. A standard
 # input that cannot be taken is status 2 and `then` never runs.
 def with_buffer(session: Session, file: String, then: Fn[Session, Int]) -> Int
   case StdinBuffer.take()
-    StdinBuffer.Taken.Failed(message) -> return emit(Reply.failed(2, "agentica: #{message}\n"))
+    StdinBuffer.Taken.Failed(message) -> emit(Reply.failed(2, "agentica: #{message}\n"))
     StdinBuffer.Taken.Got(buffer) ->
       workspace = StdinBuffer.over(session.settings.workspace, session.settings.env.windows, file, buffer)
-      return then.call(
+      then.call(
         Session(
           options: session.options,
           settings: session.settings.with(workspace: workspace),
@@ -642,8 +637,8 @@ def program(session: Session, verb: String, rest: List[String]) -> Int
 
   plan = cache_plan(session, verb, source)
   case BytecodeCache.lookup(plan, session.settings)
-    BytecodeCache.Lookup.Hit(bytes) -> return start(session, rest, bytes)
-    BytecodeCache.Lookup.Miss -> return read(session, verb, rest, plan)
+    BytecodeCache.Lookup.Hit(bytes) -> start(session, rest, bytes)
+    BytecodeCache.Lookup.Miss -> read(session, verb, rest, plan)
   end
 end
 
@@ -651,7 +646,7 @@ end
 # test`, so its `test_*` functions are checked as tests.
 def check_settings(session: Session, file: String) -> Env.Settings
   settings = CheckCache.attach(session.settings, file, !session.options.no_cache)
-  return settings.with(test_file: Discover.test_file?(file))
+  settings.with(test_file: Discover.test_file?(file))
 end
 
 # The bytecode cache (io/bytecode_cache.agc) serves a run: not `compile`, which is the explicit way to build a file,
@@ -659,15 +654,15 @@ end
 def cache_plan(session: Session, verb: String, source: String) -> BytecodeCache.Plan
   options = session.options
   wanted = verb != "compile" and !options.no_cache and !options.dump and !options.dump_ir
-  return BytecodeCache.plan(session.settings, source, wanted)
+  BytecodeCache.plan(session.settings, source, wanted)
 end
 
 def read(session: Session, verb: String, rest: List[String], plan: BytecodeCache.Plan) -> Int
   source = rest[0]
   case Front.read_root(session.settings.workspace, source)
-    Front.Root.Unreadable(_) -> return emit(Reply.failed(2, "agentica: cannot read #{source}\n"))
-    Front.Root.Invalid(problem) -> return reject(session, problem, source, 1)
-    Front.Root.Readable -> return linked(session, verb, rest, plan)
+    Front.Root.Unreadable(_) -> emit(Reply.failed(2, "agentica: cannot read #{source}\n"))
+    Front.Root.Invalid(problem) -> reject(session, problem, source, 1)
+    Front.Root.Readable -> linked(session, verb, rest, plan)
   end
 end
 
@@ -675,20 +670,20 @@ end
 # to run (a run, `compile`) needs a main.
 def verdict(session: Session, source: String, found: Core.Verdict) -> Int
   case found
-    Core.Verdict.Unreadable -> return emit(Reply.failed(2, "agentica: cannot read #{source}\n"))
-    Core.Verdict.Rejected(problem) -> return reject(session, problem, source, 1)
+    Core.Verdict.Unreadable -> emit(Reply.failed(2, "agentica: cannot read #{source}\n"))
+    Core.Verdict.Rejected(problem) -> reject(session, problem, source, 1)
     Core.Verdict.Passed ->
       return emit(Reply.printed("{\"ok\":true}\n")) if session.options.style == "json"
 
-      return emit(Reply.printed("check ok\n"))
+      emit(Reply.printed("check ok\n"))
   end
 end
 
 def linked(session: Session, verb: String, rest: List[String], plan: BytecodeCache.Plan) -> Int
   source = rest[0]
   case Front.check_file(source, session.settings)
-    Front.Outcome.Rejected(problem) -> return reject(session, problem, source, 1)
-    Front.Outcome.Done(front) -> return checked(session, verb, rest, front, plan)
+    Front.Outcome.Rejected(problem) -> reject(session, problem, source, 1)
+    Front.Outcome.Done(front) -> checked(session, verb, rest, front, plan)
   end
 end
 
@@ -702,28 +697,28 @@ def checked(session: Session, verb: String, rest: List[String], front: Front.Che
   end
 
   case Pipeline.build_cached(front, session.settings, plan)
-    Pipeline.Compiled.Rejected(problem) -> return reject(session, problem, source, 1)
+    Pipeline.Compiled.Rejected(problem) -> reject(session, problem, source, 1)
     Pipeline.Compiled.Bytes(bytes) ->
       return save(rest[2], bytes) if verb == "compile"
 
-      return start(session, rest, bytes)
+      start(session, rest, bytes)
   end
 end
 
 # Runs the program `bytes`: the VM gets the options in a fixed order, and the program its arguments.
 def start(session: Session, rest: List[String], bytes: Bytes) -> Int
   launch = Launch.Launch(bytes: bytes, flags: vm_flags(session.options, rest[0]), arguments: rest.drop(1))
-  return session.hand_off.call(launch)
+  session.hand_off.call(launch)
 end
 
 # `--dump-ir`: the lowered program in the text form of lower_text.agc. It is not the `format-ir` of the former front
 # end, which dropped what the bytecode needs (the status note of step 8a in docs/future/35-self-hosting.md says why).
 def dump_ir(session: Session, source: String, front: Front.Checked) -> Int
   case Lowering.lower(front.linked, front.checked)
-    Lowering.Lowered.Failed(problem) -> return reject(session, problem, source, 1)
+    Lowering.Lowered.Failed(problem) -> reject(session, problem, source, 1)
     Lowering.Lowered.Done(program) ->
       text = LowerText.program_text(program)
-      return emit(Reply.printed("#{text}\n"))
+      emit(Reply.printed("#{text}\n"))
   end
 end
 
@@ -766,7 +761,7 @@ def vm_flags(options: Options.Options, source: String) -> List[String]
     flags = flags.push("--json")
   end
 
-  return flags
+  flags
 end
 
 # `compile`: the bytes to the file, which is created or emptied first.
@@ -775,7 +770,7 @@ def save(output: String, bytes: Bytes) -> Int
     return emit(Reply.failed(2, "agentica: cannot write #{output}\n"))
   end
 
-  return 0
+  0
 end
 
 # The first problem of a stage, in the form the options ask for, on stderr, with exit status `status`. A problem in the
@@ -783,7 +778,7 @@ end
 # canonical path. A problem of the arguments (`<arguments>`) has no source lines to show.
 def reject(session: Session, problem: Problems.Problem, source: String, status: Int) -> Int
   show(session, problem, source)
-  return status
+  status
 end
 
 # Prints the problem as `reject` says, and leaves the status to the caller.
@@ -811,7 +806,7 @@ def render(session: Session, problem: Problems.Problem, source: String) -> Strin
     return Plain.without_source(shown)
   end
 
-  return Plain.format(shown, text)
+  Plain.format(shown, text)
 end
 
 # The text that the lines of a message come from. A std/ module is not a file of the working folder: it goes straight
@@ -825,14 +820,14 @@ def source_text(session: Session, file: String, root: Bool) -> String
     return text_of(Resolve.read_source(settings, file))
   end
 
-  return text_of(SourceReader.read_shown(file))
+  text_of(SourceReader.read_shown(file))
 end
 
 def text_of(read: SourceFile.Read) -> String
   case read
-    SourceFile.Read.Text(text) -> return text
-    SourceFile.Read.Invalid(_) -> return ""
-    SourceFile.Read.Unreadable(_) -> return ""
+    SourceFile.Read.Text(text) -> text
+    SourceFile.Read.Invalid(_) -> ""
+    SourceFile.Read.Unreadable(_) -> ""
   end
 end
 
@@ -884,14 +879,13 @@ def test(session: Session, words: List[String]) -> Int
   end
 
   case Opts.parse(driver.concat(words))
-    Opts.Parsed.Broken(message) ->
-      return emit(Reply.failed(2, "agentica: the test driver was started wrongly: #{message}\n"))
-    Opts.Parsed.Usage(message, shown) -> return finish(Report.usage(message, shown))
+    Opts.Parsed.Broken(message) -> emit(Reply.failed(2, "agentica: the test driver was started wrongly: #{message}\n"))
+    Opts.Parsed.Usage(message, shown) -> finish(Report.usage(message, shown))
     Opts.Parsed.Ready(ready) ->
       # The --deny-* flags after `test` are the driver's (ready.deny holds those in front of it too), and so is the
       # style: the builder follows them, as for `agentica --deny-native test`.
       settings = builder_settings(session.settings, ready.deny, ready.style, "test")
-      return finish(Driver.run(ready, settings))
+      finish(Driver.run(ready, settings))
   end
 end
 
@@ -907,5 +901,5 @@ def emit(reply: Reply.Reply) -> Int
     IO.warn(reply.err.slice(0, reply.err.length - 1))
   end
 
-  return reply.code
+  reply.code
 end

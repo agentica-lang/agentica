@@ -24,7 +24,7 @@ export def pick(name: String, matches: List[Symbol.Match], settings: Env.Setting
 
   places = distinct.map do |found: Symbol.Match| place(settings, found) end
   help = Diag.Help.Hint("write FILE:LINE:COL of one of: #{places.join(", ")}")
-  return Picked.Refused(
+  Picked.Refused(
     QueryOptions.at_arguments("QUERY-AMBIGUOUS-NAME", "#{name} names #{distinct.size} declarations", help),
   )
 end
@@ -36,8 +36,8 @@ export def not_found(name: String, problem: Problems.Problem) -> Problems.Proble
 
   note = "#{name} is a file; to ask about a place in it write #{name}:LINE:COL"
   case problem.help
-    Diag.Help.Hint(text) -> return problem.with(help: Diag.Help.Hint("#{text}; #{note}"))
-    Diag.Help.NoHelp -> return problem.with(help: Diag.Help.Hint(note))
+    Diag.Help.Hint(text) -> problem.with(help: Diag.Help.Hint("#{text}; #{note}"))
+    Diag.Help.NoHelp -> problem.with(help: Diag.Help.Hint(note))
   end
 end
 
@@ -50,12 +50,12 @@ def once(matches: List[Symbol.Match]) -> List[Symbol.Match]
     end
   end
 
-  return out
+  out
 end
 
 def same?(left: Symbol.Match, right: Symbol.Match) -> Bool
   same_place = left.file == right.file and left.name_span.start.offset == right.name_span.start.offset
-  return same_place and left.kind == right.kind
+  same_place and left.kind == right.kind
 end
 
 # `FILE:LINE:COL` of the name of the declaration; a builtin has no place, so its name stands for it.
@@ -63,5 +63,5 @@ def place(settings: Env.Settings, found: Symbol.Match) -> String
   return found.name if found.file == ""
 
   start = found.name_span.start
-  return "#{QueryFiles.display(settings, found.file, true)}:#{start.line}:#{start.column}"
+  "#{QueryFiles.display(settings, found.file, true)}:#{start.line}:#{start.column}"
 end

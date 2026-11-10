@@ -27,7 +27,7 @@ export def intern_run(pool: Pool.Pool, body: List[Ir.Instr], at: Int, count: Int
   found = Pool.find(pool, key)
   return Pool.Interned(pool: pool, id: found.unwrap!) if found.some?
 
-  return Pool.Interned(pool: Pool.add(pool, key, run_bytes(body, at, count), keys.size), id: pool.count)
+  Pool.Interned(pool: Pool.add(pool, key, run_bytes(body, at, count), keys.size), id: pool.count)
 end
 
 ## The run of one span in the source at index file.
@@ -36,14 +36,14 @@ export def intern_one(pool: Pool.Pool, file: Int, span: Source.Span) -> Pool.Int
   found = Pool.find(pool, key)
   return Pool.Interned(pool: pool, id: found.unwrap!) if found.some?
 
-  return Pool.Interned(pool: Pool.add(pool, key, span_bytes(file, span), 1), id: pool.count)
+  Pool.Interned(pool: Pool.add(pool, key, span_bytes(file, span), 1), id: pool.count)
 end
 
 # The key of a run is the keys of its spans joined with ";", so a run of one span has this key.
 def span_key(file: Int, span: Source.Span) -> String
   start = span.start
   stop = span.stop
-  return "#{file},#{start.line},#{start.column},#{stop.line},#{stop.column}"
+  "#{file},#{start.line},#{start.column},#{stop.line},#{stop.column}"
 end
 
 # The bytes of a run. Joining u32 lists is cheaper here than pushing each byte, which was measured slower.
@@ -56,7 +56,7 @@ def run_bytes(body: List[Ir.Instr], at: Int, count: Int) -> List[Int]
     end
   end
 
-  return entry
+  entry
 end
 
 # The five numbers of a span as u32, written out in one list: that costs about half of five calls of Wire.u32. Nearly
@@ -95,7 +95,7 @@ def span_bytes(file: Int, span: Source.Span) -> List[Int]
     ]
   end
 
-  return [
+  [
     file % 256,
     (file / 256) % 256,
     (file / 65_536) % 256,

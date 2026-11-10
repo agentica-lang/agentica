@@ -1365,7 +1365,7 @@ static bool case_twins(const env_pair *pairs, size_t count) {
 static const char *env_problem(agc_vm *vm, const agc_map *env, const env_pair **pairs, size_t *count) {
   *pairs = NULL;
   *count = 0;
-  if (!env || !env->size) return NULL;
+  if (!env->size) return NULL;
   const agc_value *keys = agc_map_keys(vm, env, 0);
   env_pair *found = agc_alloc(agc_size_mul(env->size, sizeof *found));
   for (size_t k = 0; k < env->size; k++) {
@@ -1388,7 +1388,7 @@ static const char *env_problem(agc_vm *vm, const agc_map *env, const env_pair **
 
 static CC_OWNS char *child_dir(agc_vm *vm, const agc_string *dir, bool *found) {
   *found = true;
-  if (!dir || (dir->bytes == 1 && dir->data[0] == '.')) return NULL;
+  if (dir->bytes == 1 && dir->data[0] == '.') return NULL;
   /* No raise here: spawn_child holds the resolved command. */
   char *path = agc_host_path_try(vm, dir);
   agc_fs_info info;
@@ -1422,7 +1422,7 @@ static const char *open_targets(agc_vm *vm, const agc_string *out, const agc_str
     {"process: cannot open the err file", "process: err does not refer to a regular file"},
   };
   for (size_t k = 0; k < 2; k++) {
-    if (!paths[k] || !paths[k]->bytes) continue;
+    if (!paths[k]->bytes) continue;
     if (k == 1 && files[0] >= 0 && agc_same_string(vm, out, err)) {
       files[1] = files[0];
       continue;
@@ -1477,15 +1477,15 @@ static bool begin_spawn(void *data, agc_io_job *job) {
   return true;
 }
 
-/* dir (NULL or "." keeps the VM's directory) is where the child starts; the command resolves before the child
-   changes directory (§10.4). captured keeps stdout and stderr in buffers (spawn_captured, spawn_channel). out and err
-   (Process.spawn only; NULL or empty: the pipe) are files for the child's stdout and stderr, opened last, so a spawn
+/* dir ("." keeps the VM's directory) is where the child starts; the command resolves before the child changes
+   directory (§10.4). captured keeps stdout and stderr in buffers (spawn_captured, spawn_channel). out and err
+   (Process.spawn only; empty: the pipe) are files for the child's stdout and stderr, opened last, so a spawn
    refused for its other arguments touches no file. */
 static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string *dir, int64_t timeout, bool captured,
                              bool channel, const agc_map *env, const agc_string *out, const agc_string *err,
                              bool group) {
   if (vm->rt->deny_run) return agc_error_value("denied: --deny-run turns off starting programs");
-  bool files = (out && out->bytes) || (err && err->bytes);
+  bool files = out->bytes || err->bytes;
   if (files && captured) return agc_error_value("process: out and err need Process.spawn");
   const agc_string *command = agc_as_string(vm, args[0]);
   const agc_list *list = agc_as_list(vm, args[1]);
@@ -1502,7 +1502,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
     valid = valid && no_nul(items[k]);
   }
   if (!valid) return agc_error_value("process: command must be nonempty and arguments cannot contain NUL");
-  if (dir && (dir->bytes == 0 || !no_nul(dir)))
+  if (dir->bytes == 0 || !no_nul(dir))
     return agc_error_value("process: chdir must be nonempty and cannot contain NUL");
   if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_PROCESS);
   const env_pair *pairs;
@@ -1510,7 +1510,7 @@ static agc_value spawn_child(agc_vm *vm, const agc_value *args, const agc_string
   const char *env_text = env_problem(vm, env, &pairs, &pair_count);
   if (env_text) return agc_error_value(env_text);
   if (files && vm->rt->deny_fs) return agc_error_value(AGC_DENIED_FS);
-  if (files && ((out && !no_nul(out)) || (err && !no_nul(err))))
+  if (files && (!no_nul(out) || !no_nul(err)))
     return agc_error_value("process: out and err cannot contain NUL");
   agc_process *pr = agc_alloc(sizeof(agc_process));
   pr->reader = agc_new_lock(vm);
@@ -1613,55 +1613,6 @@ static agc_value builtin_spawn_captured_options(agc_vm *vm, agc_value *args, uin
 static agc_value builtin_spawn_channel_options(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
   return spawn_options(vm, args, true, true);
-}
-
-/* The positional spawns, from before Process.Options: the base stage0 and the older seeds still call them, and the C
-   tests call the shortest. Remove them in the PR after the one that refreshed stage0 with Process.Options. */
-static agc_value builtin_spawn(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false, false, NULL, NULL, NULL, false);
-}
-
-static agc_value builtin_spawn_group(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  return spawn_child(vm, args, NULL, agc_as_int(vm, args[2]), false, false, agc_as_map(vm, args[3]),
-                     agc_as_string(vm, args[4]), agc_as_string(vm, args[5]), agc_as_bool(vm, args[6]));
-}
-
-static agc_value builtin_spawn_captured(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, false, NULL, NULL, NULL,
-                     false);
-}
-
-static agc_value builtin_spawn_captured_env(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, false,
-                     agc_as_map(vm, args[4]), NULL, NULL, false);
-}
-
-static agc_value builtin_spawn_captured_group(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, false,
-                     agc_as_map(vm, args[4]), NULL, NULL, agc_as_bool(vm, args[5]));
-}
-
-static agc_value builtin_spawn_channel(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, true, NULL, NULL, NULL,
-                     false);
-}
-
-static agc_value builtin_spawn_channel_env(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, true,
-                     agc_as_map(vm, args[4]), NULL, NULL, false);
-}
-
-static agc_value builtin_spawn_channel_group(agc_vm *vm, agc_value *args, uint32_t span) {
-  (void)span;
-  return spawn_child(vm, args, agc_as_string(vm, args[2]), agc_as_int(vm, args[3]), true, true,
-                     agc_as_map(vm, args[4]), NULL, NULL, agc_as_bool(vm, args[5]));
 }
 
 /* The child of a process value that is not closed. With several schedulers the I/O thread owns `closed`, so only the
@@ -1954,8 +1905,6 @@ static agc_value builtin_read_available(agc_vm *vm, agc_value *args, uint32_t sp
 }
 
 const agc_builtin agc_process_builtins[] = {
-  {"Process.spawn", 3, builtin_spawn, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"Process.spawn", 7, builtin_spawn_group, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.spawn.options", 3, builtin_spawn_options, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.spawn_captured.options", 3, builtin_spawn_captured_options, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false,
    false},
@@ -1968,13 +1917,7 @@ const agc_builtin agc_process_builtins[] = {
   {"Process.close_stdin", 2, builtin_close_stdin, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Process.wait", 2, builtin_wait, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Process.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"Process.spawn_captured", 4, builtin_spawn_captured, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"Process.spawn_captured", 5, builtin_spawn_captured_env, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"Process.spawn_captured", 6, builtin_spawn_captured_group, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.output", 2, builtin_output, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
-  {"Process.spawn_channel", 4, builtin_spawn_channel, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"Process.spawn_channel", 5, builtin_spawn_channel_env, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"Process.spawn_channel", 6, builtin_spawn_channel_group, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.channel_read_line", 2, builtin_channel_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.channel_send", 3, builtin_channel_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"Process.channel_close", 2, builtin_channel_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},

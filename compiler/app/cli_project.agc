@@ -28,7 +28,7 @@ export def run(style: String, workspace: Workspace.Workspace, work: Fn[String, R
 
   return Reply.Answer.Printed(Reply.printed("{\"ok\":true}\n")) if style == "json"
 
-  return Reply.Answer.Printed(Reply.printed(done.unwrap!))
+  Reply.Answer.Printed(Reply.printed(done.unwrap!))
 end
 
 ## The failure for a working folder with no manifest above it.
@@ -36,5 +36,5 @@ export def missing_manifest(dir: String) -> String
   file = Paths.join(dir, MANIFEST_FILE)
   message = "there is no #{MANIFEST_FILE} in this folder or above"
   help = Failure.hint("write #{MANIFEST_FILE} in the folder of the project, with a [dependencies] table")
-  return Failure.fail_file(file, "PKG-MANIFEST-MISSING", message, help)
+  Failure.fail_file(file, "PKG-MANIFEST-MISSING", message, help)
 end

@@ -43,7 +43,7 @@ end
 
 ## The part of a text that a span covers, without its offsets.
 export def range_of(span: Source.Span) -> Region
-  return Region(
+  Region(
     start: Position(line: span.start.line, column: span.start.column),
     stop: Position(line: span.stop.line, column: span.stop.column),
   )
@@ -57,7 +57,7 @@ export def of_problem(problem: Problems.Problem) -> Diagnostic
     Diag.Help.NoHelp -> help = ""
   end
 
-  return Diagnostic(
+  Diagnostic(
     code: problem.code,
     message: problem.message,
     file: problem.file,

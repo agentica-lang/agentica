@@ -71,7 +71,7 @@ export def answer(
   settings: Env.Settings,
   parses: Modules.Parses,
 ) -> Outcome
-  return search(name, roots, SymbolLink.link(roots, settings, parses))
+  search(name, roots, SymbolLink.link(roots, settings, parses))
 end
 
 ## The matches of `name` in `linked`, the program of `roots` (symbol_link.agc): as `answer`, for a caller that needs
@@ -83,7 +83,7 @@ export def search(name: String, roots: List[SymbolPaths.Root], linked: SymbolLin
   matches = declared(linked.modules, aliases, name).concat(builtin(name))
   return Outcome.Refused(not_found(name, linked)) if matches.size == 0
 
-  return Outcome.Found(Answer(matches: matches, skipped: linked.skipped))
+  Outcome.Found(Answer(matches: matches, skipped: linked.skipped))
 end
 
 ## The declaration of `module` whose name is written at `name_span`: a top-level declaration, a field or a variant, as
@@ -109,7 +109,7 @@ export def declared_at(module: Linker.LinkedModule, name_span: Source.Span) -> O
     end
   end
 
-  return none
+  none
 end
 
 # The aliases that the files of the roots import each module under, by the key of the module. The same alias can name
@@ -125,7 +125,7 @@ def aliases_of(modules: List[Linker.LinkedModule], roots: List[SymbolPaths.Root]
     end
   end
 
-  return by_key
+  by_key
 end
 
 # The aliases that the roots import the module `key` under, in the order they were found.
@@ -133,7 +133,7 @@ def aliases_for(aliases: Map[String, List[String]], key: String) -> List[String]
   found = aliases.get(key)
   return found.unwrap! if found.some?
 
-  return []
+  []
 end
 
 def declared(modules: List[Linker.LinkedModule], aliases: Map[String, List[String]], name: String) -> List[Match]
@@ -146,7 +146,7 @@ def declared(modules: List[Linker.LinkedModule], aliases: Map[String, List[Strin
     end
   end
 
-  return found
+  found
 end
 
 # The beginnings a name of a declaration can have: none (the name as the file declares it), and for an exported one the
@@ -163,7 +163,7 @@ def written_names(module: Linker.LinkedModule, exported: Bool, aliases: Map[Stri
     out = out.push("#{module.key.slice(0, module.key.length - 4)}.")
   end
 
-  return out
+  out
 end
 
 # The item, or its field or variant, that `name` names when the item is written `prefix` + its name.
@@ -178,20 +178,20 @@ def of_item(file: String, item: Model.Item, prefix: String, name: String) -> Lis
   member = name.slice(written.length + 1, name.length - written.length - 1)
   case item.detail
     Model.Detail.Struct(fields) ->
-      return fields.filter do |field: Model.Field| field.name == member end
+      fields.filter do |field: Model.Field| field.name == member end
         .map do |field: Model.Field| field_match(file, item, field) end
 
     Model.Detail.Enum(variants) ->
-      return variants.filter do |variant: Model.Variant| variant.name == member end
+      variants.filter do |variant: Model.Variant| variant.name == member end
         .map do |variant: Model.Variant| variant_match(file, item, variant) end
 
-    Model.Detail.Function(_, _) -> return []
-    Model.Detail.Plain -> return []
+    Model.Detail.Function(_, _) -> []
+    Model.Detail.Plain -> []
   end
 end
 
 def item_match(file: String, item: Model.Item) -> Match
-  return Match(
+  Match(
     kind: item.kind,
     name: item.name,
     owner: "",
@@ -206,7 +206,7 @@ def item_match(file: String, item: Model.Item) -> Match
 end
 
 def field_match(file: String, item: Model.Item, field: Model.Field) -> Match
-  return Match(
+  Match(
     kind: "field",
     name: field.name,
     owner: item.name,
@@ -221,7 +221,7 @@ def field_match(file: String, item: Model.Item, field: Model.Field) -> Match
 end
 
 def variant_match(file: String, item: Model.Item, variant: Model.Variant) -> Match
-  return Match(
+  Match(
     kind: "variant",
     name: variant.name,
     owner: item.name,
@@ -242,7 +242,7 @@ def builtin(name: String) -> List[Match]
 
   here = Source.Position(offset: 0, line: 0, column: 0)
   nowhere = Source.Span(start: here, stop: here)
-  return [
+  [
     Match(
       kind: "builtin",
       name: entry.unwrap!.name,
@@ -276,7 +276,7 @@ def not_found(name: String, linked: SymbolLink.Linked) -> Problems.Problem
     help = Diag.Help.Hint(hints.join("; "))
   end
 
-  return QueryOptions.at_arguments("QUERY-NOT-FOUND", "#{name} is not declared in the linked files", help)
+  QueryOptions.at_arguments("QUERY-NOT-FOUND", "#{name} is not declared in the linked files", help)
 end
 
 # Every name a query can write for a declaration, as the file declares it: `total`, `User.email`, `Option.Some`.
@@ -296,5 +296,5 @@ def candidates(modules: List[Linker.LinkedModule]) -> List[String]
     end
   end
 
-  return names
+  names
 end

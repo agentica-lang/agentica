@@ -43,7 +43,7 @@ def shown(text: String, mode: String) -> String
   end
 
   case Format.format_text(text, Format.default_settings())
-    Diag.Outcome.Done(output) -> return output
-    Diag.Outcome.Failed(problem) -> return Text.diagnostic_line(problem) + "\n"
+    Diag.Outcome.Done(output) -> output
+    Diag.Outcome.Failed(problem) -> Text.diagnostic_line(problem) + "\n"
   end
 end
