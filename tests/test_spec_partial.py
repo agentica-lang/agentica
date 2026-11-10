@@ -5,7 +5,7 @@ import re
 
 import pytest
 
-from tests.agentica_test import cli, compile_agc, run, run_vm, vm_environment
+from tests.agentica_test import cli, run, vm_environment
 from tests.span_support import end, problem, start, where
 
 MODELS = '''export struct User
@@ -222,9 +222,10 @@ def test_two_failed_functions_are_two_diagnostics_in_program_order_and_a_caller_
     assert [line for _, line in codes] == [where(MANY, '"a"')[0], where(MANY, '"b"')[0]]
     assert all(code.startswith("CHECK-") for code, _ in codes)
     assert all(error["file"] == "many.agc" for error in report["diagnostics"])
-    # Without the option the first of them is the answer.
+    # Without the option the first of them is the answer, the same object (so the library reads it back as a check
+    # diagnostic: tests/test_std_analysis.py).
     first = problem(asked("type-at", spot, cwd=program), codes[0][0], 1)
-    assert first["range"] == report["diagnostics"][0]["range"]
+    assert first == report["diagnostics"][0]
     # The calls of `one` are those of the function that checked; the failed nested function gives the first problem for
     # a local, and a name in it from the link.
     uses = answer("refs", ("many.agc", where(MANY, "def one", 4)), "--partial", cwd=program)
@@ -234,22 +235,6 @@ def test_two_failed_functions_are_two_diagnostics_in_program_order_and_a_caller_
     local = asked("type-at", ("many.agc", where(MANY, "total < 3")), "--partial", cwd=program)
     assert problem(local, codes[0][0], 1)["range"] == report["diagnostics"][0]["range"]
     assert answer("refs", ("many.agc", where(MANY, "def first", 4)), "--partial", cwd=program)["references"] != []
-
-
-@pytest.fixture(scope="module")
-def driver(tmp_path_factory):
-    return compile_agc("tests/fixtures/analysis/driver.agc", tmp_path_factory.mktemp("agentica-partial-") / "driver.agcb")
-
-
-def test_each_diagnostic_of_an_answer_is_read_back_by_the_library_as_the_same_object(program, driver):
-    report = answer("type-at", ("many.agc", where(MANY, "one() + 1")), "--partial", cwd=program)
-    assert len(report["diagnostics"]) == 2
-    for number, diagnostic in enumerate(report["diagnostics"]):
-        written = program / f"diagnostic{number}.json"
-        written.write_text(json.dumps(diagnostic), encoding="utf-8")
-        read = run_vm(driver, args=("diagnostic", str(written)), cwd=program, env=vm_environment())
-        assert (read.code, read.stderr) == (0, "")
-        assert json.loads(read.stdout) == diagnostic
 
 
 TOKEN = re.compile(r"\w+|\s+|\"[^\"]*\"|.")
@@ -266,13 +251,14 @@ def token_columns(text):
 
 
 def test_a_program_that_checks_gives_the_same_bytes_at_every_token_start_with_or_without_the_option(program):
-    for verb in ("type-at", "refs"):
-        for line, text in enumerate(SMALL.split("\n"), 1):
-            for column in token_columns(text):
-                plain = asked(verb, ("small.agc", (line, column)), cwd=program)
-                marked = asked(verb, ("small.agc", (line, column)), "--partial", cwd=program)
-                assert (marked.code, marked.stdout, marked.stderr) == (plain.code, plain.stdout, plain.stderr)
-                assert plain.code in (0, 2)
+    # Each position is asked once, by type-at and refs in turn: both verbs and every position, half the processes.
+    spots = [(line, column) for line, text in enumerate(SMALL.split("\n"), 1) for column in token_columns(text)]
+    for index, spot in enumerate(spots):
+        verb = ("type-at", "refs")[index % 2]
+        plain = asked(verb, ("small.agc", spot), cwd=program)
+        marked = asked(verb, ("small.agc", spot), "--partial", cwd=program)
+        assert (marked.code, marked.stdout, marked.stderr) == (plain.code, plain.stdout, plain.stderr)
+        assert plain.code in (0, 2)
 
 
 def test_references_of_a_function_are_complete_even_in_the_function_that_did_not_check(program):

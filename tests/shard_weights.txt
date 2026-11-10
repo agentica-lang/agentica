@@ -76,7 +76,7 @@ tests/test_spec_package_subdir.py 10 0 0 0
 tests/test_spec_package_workspace.py 3 0 0 0
 tests/test_spec_packages.py 11 0 0 0
 tests/test_spec_parser.py 3 0 0 0
-tests/test_spec_partial.py 21 0 0 0
+tests/test_spec_partial.py 7 0 0 0
 tests/test_spec_patterns.py 1 0 0 0
 tests/test_spec_refs.py 15 0 0 0
 tests/test_spec_regex_literal.py 1 0 0 0

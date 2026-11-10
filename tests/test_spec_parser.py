@@ -715,10 +715,9 @@ class TestSpecParser:
             Accept(body("_ = " + "(" * 900 + "1" + ")" * 900)),
             Accept(body("_ = 1" + " + 1" * 900)),
         ])
+        # Prefix operators and field chains at the limit and one past it: tests/test_frontend_parser.py (limit_shapes).
         self.check_rejected([
             Reject(body("x = " + "(" * 1000 + "1" + ")" * 1000), "PARSE-TOO-DEEP"),
-            Reject(body("x = " + "- " * 1000 + "1"), "PARSE-TOO-DEEP"),
-            Reject(body("x = a" + ".b" * 1000), "PARSE-TOO-DEEP"),
             Reject(body("if x\n" * 1000), "PARSE-TOO-DEEP"),
             Reject(body("x = 1" + " + 1" * 1000), "PARSE-TOO-DEEP", (2, 4001)),
         ])
