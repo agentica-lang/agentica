@@ -1,7 +1,7 @@
 """Shared assertions for language-spec tests."""
 
 import json
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 
 from tests.agentica_test import cli, run
@@ -17,6 +17,43 @@ def check_diagnostic(text: str, directory: Path) -> dict[str, object] | None:
     result = run(cli() + ["--json", "check", str(path)])
     assert result.code in (0, 1), result.stderr
     return json.loads(result.stderr) if result.code else None
+
+
+def _program_key(program: str | Mapping[str, str]) -> object:
+    return program if isinstance(program, str) else tuple(sorted(program.items()))
+
+
+def check_many(programs: Iterable[str | Mapping[str, str]], directory: Path, root: str = "main.agc") -> Check:
+    """Check every program with one `--json check` call and return a Check that looks their diagnostics up.
+
+    A program is its source text, or a map of file names to texts that holds ROOT. Each one goes in a folder of its
+    own under DIRECTORY with the name ROOT and is listed as a root of its own, so it gets the diagnostic that a
+    `--json check` of that file alone gives, file field included (tests/test_cli_check.py has the multi-file form).
+    One process instead of one per case is most of the time saved. The Check takes a program of the batch and ROOT,
+    and gives its diagnostic or None; any other program is a KeyError. A program listed twice is checked once.
+    """
+    roots = {}
+    for program in programs:
+        key = _program_key(program)
+        if key in roots:
+            continue
+        folder = directory / str(len(roots))
+        files = {root: program} if isinstance(program, str) else program
+        for name, text in files.items():
+            path = folder / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        roots[key] = str(folder / root)
+    result = run(cli() + ["--json", "check", *roots.values()])
+    assert result.code in (0, 1), result.stderr
+    found = {entry["file"]: entry.get("diagnostic") for entry in json.loads(result.stdout)["files"]}
+    diagnostics = {key: found[path] for key, path in roots.items()}
+
+    def check(program: str | Mapping[str, str], name: str = root) -> dict[str, object] | None:
+        assert name == root, name
+        return diagnostics[_program_key(program)]
+
+    return check
 
 
 def assert_program_diagnostic(check: Check, program: str, code: str | None) -> dict[str, object] | None:

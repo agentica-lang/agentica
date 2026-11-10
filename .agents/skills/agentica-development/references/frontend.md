@@ -179,7 +179,10 @@ is Ruby's when Ruby has one; another habit gets a diagnostic with a `help:`.
 
 Raise it with the stage helper (`Base.bail`, `Failure.problem`) and a span.
 Test the code and the location (`start`, `covers` from `--json check`), as in
-`tests/test_spec_checker_rest.py`.
+`tests/test_spec_checker_rest.py`. A table of programs is checked by one
+`check` call: a module fixture passes them all to `check_many`
+(`tests/spec_support.py`), and each case looks its diagnostic up, so it keeps
+its own test id.
 
 ### Add a builtin rule
 
