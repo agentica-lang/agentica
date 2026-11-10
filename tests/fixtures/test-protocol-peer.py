@@ -45,6 +45,9 @@ def run(vm, bytecode, count):
     try:
         child.stdin.write(b"from the peer\n")
         child.stdin.flush()
+        first = reader.readline()
+        if first == "" or json.loads(first).get("event") != "ready":
+            raise SystemExit("the run child did not answer ready: %r" % first)
         for index in range(count):
             channel.sendall(b"%d\n" % index)
             line = reader.readline()
