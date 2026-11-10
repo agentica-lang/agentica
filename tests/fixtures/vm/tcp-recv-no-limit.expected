@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 237,
+  "steps": 227,
   "stdout": [
     "error(\"network: timeout must be positive milliseconds\")",
     "error(\"network: timeout must be positive milliseconds\")",

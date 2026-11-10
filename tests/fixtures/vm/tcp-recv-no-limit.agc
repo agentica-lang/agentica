@@ -5,6 +5,10 @@ def wait_bytes(socket: Socket) -> Result[Bytes]
   return TCP.recv_bytes(socket, 16)
 end
 
+def wait_byte(socket: Socket) -> Result[Bytes]
+  return TCP.recv_bytes(socket, 1)
+end
+
 def text(result: Result[Bytes]) -> String = result.unwrap!.decode("UTF-8").unwrap!
 
 def main() -> Void
@@ -30,12 +34,10 @@ def main() -> Void
   Task.sleep(50)
   TCP.send_bytes(client, "max Int".bytes, 1000).unwrap!
   puts(text(Task.await(longest)))
-  first = Task.spawn(&wait_bytes, server)
-  second = Task.spawn(&wait_bytes, server)
+  first = Task.spawn(&wait_byte, server)
+  second = Task.spawn(&wait_byte, server)
   Task.sleep(50)
-  TCP.send_bytes(client, "a".bytes, 1000).unwrap!
-  Task.sleep(50)
-  TCP.send_bytes(client, "b".bytes, 1000).unwrap!
+  TCP.send_bytes(client, "ab".bytes, 1000).unwrap!
   IO.inspect([text(Task.await(first)), text(Task.await(second))].sort)
   cancelled = Task.spawn(&wait_bytes, server)
   Task.sleep(50)

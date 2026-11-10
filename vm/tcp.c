@@ -2090,7 +2090,6 @@ const agc_builtin agc_tcp_builtins[] = {
   {"TCP.send", 3, builtin_send, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"TCP.send_bytes.bytes", 3, builtin_send_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"TCP.recv_bytes.bytes", 3, builtin_recv_bytes, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
-  {"TCP.recv_bytes.bytes", 2, builtin_recv_bytes_unlimited, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"TCP.read_line", 2, builtin_read_line, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
   {"TLS.connect", 4, builtin_tls_connect, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"TLS.listen", 3, builtin_tls_listen, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
@@ -2106,6 +2105,7 @@ const agc_builtin agc_tcp_builtins[] = {
   {"HttpWire.drop_tls", 1, builtin_drop_tls, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.upgrade_tls", 4, builtin_upgrade_tls, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.upgrade_context", 4, builtin_upgrade_context, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"TCP.recv_bytes.bytes", 2, builtin_recv_bytes_unlimited, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
 };
 
 const size_t agc_tcp_builtin_count = sizeof agc_tcp_builtins / sizeof agc_tcp_builtins[0];
