@@ -1,5 +1,7 @@
-/* Zlib bytes and the streams of the Lazy steps (agc_zstep_*), with their
-   shared-VM interleavings, against independently generated vectors. */
+/* The Zlib rows and the streams of the Lazy steps (agc_zstep_*), with their
+   shared-VM interleavings, against independently generated vectors. The
+   one-shot calls and Zlib.crc32 are proven through the CLI against Python
+   (tests/test_vm_zlib.py, tests/test_vm_zlib_crc32.py). */
 #include "builtin_test.h"
 #include "../file_io.h"
 #include "../services.h"
@@ -29,40 +31,14 @@ typedef struct {
   size_t len, cap, largest;
 } sink;
 
-/* Python's zlib on "abc" and "" at levels 0, 6 and 9: the exact streams our
-   decoder must read and our encoder must write. The gzip and raw members
+/* Python's zlib on "abc" at levels 6 and 0 and on "" at 6: the exact streams
+   our decoder must read and our encoder must write. The gzip and raw members
    live in zlib_vectors.h. */
 static const uint8_t zlib_abc[] = {0x78, 0x9c, 0x4b, 0x4c, 0x4a, 0x06, 0x00, 0x02, 0x4d, 0x01, 0x27};
 static const uint8_t zlib_empty[] = {0x78, 0x9c, 0x03, 0x00, 0x00, 0x00, 0x00, 0x01};
 static const uint8_t zlib_abc_l0[] = {0x78, 0x01, 0x01, 0x03, 0x00, 0xfc, 0xff,
   0x61, 0x62, 0x63, 0x02, 0x4d, 0x01, 0x27};
 static const uint8_t abc_bytes[] = {0x61, 0x62, 0x63};
-
-/* A call of the named builtin on T of V: with a shared VM the interpreter
-   holds rt->sync across a shared row, so the test takes it the same way. No
-   Zlib call parks. */
-static agc_value call_on(agc_vm *v, agc_task *t, const char *name, uint32_t arity, agc_value *args) {
-  const agc_builtin *b = agc_test_row(name, arity);
-  bool shared = v->rt->shared;
-  if (shared) agc_sync_take(v);
-  t->state = AGC_TASK_RUNNING;
-  t->parking = false;
-  v->task = t;
-  agc_value result = b->fn(v, args, 0);
-  assert(!t->parking);
-  if (shared) agc_sync_drop(v);
-  return result;
-}
-
-static agc_value call(const char *name, uint32_t arity, agc_value *args) {
-  return call_on(&vm, vm.task, name, arity, args);
-}
-
-static agc_value ok(agc_value result) {
-  const agc_result *r = agc_as_result(&vm, result);
-  assert(r->ok);
-  return r->value;
-}
 
 static void check_error(agc_value result, const char *message) {
   const agc_result *r = agc_as_result(&vm, result);
@@ -78,13 +54,6 @@ static agc_value byte_list(const uint8_t *data, size_t n) {
   agc_value list = agc_list_value(agc_list_from_array(items, n));
   free(items);
   return list;
-}
-
-static agc_value bytes_of(const uint8_t *data, size_t n) { return agc_bytes_value(agc_make_bytes(data, n)); }
-
-static void check_bytes(agc_value value, const uint8_t *data, size_t n) {
-  const agc_bytes *got = agc_as_bytes(&vm, value);
-  assert(got->len == n && (n == 0 || memcmp(got->data, data, n) == 0));
 }
 
 static void fails(const char *name, uint32_t arity, agc_value *args, const char *code) {
@@ -116,166 +85,6 @@ static void test_table(void) {
            b->native == AGC_NATIVE_NONE && b->fn);
     assert(agc_find_builtin((const uint8_t *)expected[k].name, strlen(expected[k].name), expected[k].arity) == b);
   }
-}
-
-/* One-shot compression writes the independent streams byte for byte,
-   including the empty stream and the level corners. */
-static void test_oneshot_compress(void) {
-  agc_value data = bytes_of(abc_bytes, sizeof abc_bytes);
-  agc_value args[] = {data, agc_int(6), agc_int(1048576)};
-  check_bytes(ok(call("Zlib.deflate.bytes", 3, args)), zlib_abc, sizeof zlib_abc);
-  args[1] = agc_int(0);
-  check_bytes(ok(call("Zlib.deflate.bytes", 3, args)), zlib_abc_l0, sizeof zlib_abc_l0);
-  args[1] = agc_int(9);
-  const agc_bytes *l9 = agc_as_bytes(&vm, ok(call("Zlib.deflate.bytes", 3, args)));
-  assert(l9->len == sizeof zlib_abc);
-  assert(l9->data[0] == 0x78 && l9->data[1] == 0xda);
-  assert(memcmp(l9->data + 2, zlib_abc + 2, sizeof zlib_abc - 2) == 0);
-  agc_value empty = bytes_of(NULL, 0);
-  agc_value empty_args[] = {empty, agc_int(6), agc_int(1048576)};
-  check_bytes(ok(call("Zlib.deflate.bytes", 3, empty_args)), zlib_empty, sizeof zlib_empty);
-  /* Our gzip member is verified structurally: the fixed header bytes
-     (magic, method, flags, mtime, level-9 XFL), the raw body and the
-     CRC32/ISIZE trailer. The OS byte is excluded: zlib writes OS_CODE,
-     which is 3 on Unix but 10 on native Windows (zutil.h), so it is
-     host-dependent and no contract fixes it. */
-  agc_value gz_args[] = {data, agc_int(9), agc_int(1048576)};
-  const agc_bytes *gz = agc_as_bytes(&vm, ok(call("Zlib.gzip.bytes", 3, gz_args)));
-  assert(gz->len == 10 + sizeof zlib_vec_raw_abc + 8);
-  static const uint8_t gz_head[] = {0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x03};
-  static const uint8_t gz_tail[] = {0xc2, 0x41, 0x24, 0x35, 0x03, 0x00, 0x00, 0x00};
-  for (size_t k = 0; k < sizeof gz_head; k++) {
-    if (k == 9) continue; /* OS byte: host-dependent, see above. */
-    assert(gz->data[k] == gz_head[k]);
-  }
-  assert(memcmp(gz->data + 10, zlib_vec_raw_abc, sizeof zlib_vec_raw_abc) == 0);
-  assert(memcmp(gz->data + 10 + sizeof zlib_vec_raw_abc, gz_tail, sizeof gz_tail) == 0);
-  /* An exact output bound succeeds; one byte less fails without a partial. */
-  agc_value fit[] = {data, agc_int(6), agc_int(sizeof zlib_abc)};
-  check_bytes(ok(call("Zlib.deflate.bytes", 3, fit)), zlib_abc, sizeof zlib_abc);
-  agc_value tight[] = {data, agc_int(6), agc_int(sizeof zlib_abc - 1)};
-  check_error(call("Zlib.deflate.bytes", 3, tight), "zlib: output exceeds max_bytes");
-  agc_value bad_level[] = {data, agc_int(10), agc_int(100)};
-  check_error(call("Zlib.deflate.bytes", 3, bad_level), "zlib: level must be between 0 and 9");
-  bad_level[1] = agc_int(-1);
-  check_error(call("Zlib.deflate.bytes", 3, bad_level), "zlib: level must be between 0 and 9");
-  agc_value bad_max[] = {data, agc_int(6), agc_int(0)};
-  check_error(call("Zlib.deflate.bytes", 3, bad_max), "zlib: max_bytes must be between 1 and 1048576");
-  bad_max[2] = agc_int(1048577);
-  check_error(call("Zlib.deflate.bytes", 3, bad_max), "zlib: max_bytes must be between 1 and 1048576");
-  static uint8_t big[1048577] = {0};
-  agc_value huge = bytes_of(big, sizeof big);
-  agc_value big_args[] = {huge, agc_int(6), agc_int(1048576)};
-  check_error(call("Zlib.deflate.bytes", 3, big_args), "zlib: input exceeds 1048576 bytes");
-}
-
-/* One-shot decompression reads the independent streams strictly: one
-   stream only, with its checksum verified and every trailing byte refused. */
-static void test_oneshot_decode(void) {
-  agc_value args[] = {bytes_of(zlib_abc, sizeof zlib_abc), agc_int(1048576)};
-  check_bytes(ok(call("Zlib.inflate.bytes", 2, args)), abc_bytes, sizeof abc_bytes);
-  agc_value empty_args[] = {bytes_of(zlib_empty, sizeof zlib_empty), agc_int(1048576)};
-  assert(agc_as_bytes(&vm, ok(call("Zlib.inflate.bytes", 2, empty_args)))->len == 0);
-  agc_value gz[] = {bytes_of(zlib_vec_gzip_abc, sizeof zlib_vec_gzip_abc), agc_int(1048576)};
-  check_bytes(ok(call("Zlib.gunzip.bytes", 2, gz)), abc_bytes, sizeof abc_bytes);
-  /* An exact output bound succeeds; one byte less fails. */
-  agc_value fit[] = {bytes_of(zlib_abc, sizeof zlib_abc), agc_int(3)};
-  check_bytes(ok(call("Zlib.inflate.bytes", 2, fit)), abc_bytes, sizeof abc_bytes);
-  agc_value tight[] = {bytes_of(zlib_abc, sizeof zlib_abc), agc_int(2)};
-  check_error(call("Zlib.inflate.bytes", 2, tight), "zlib: output exceeds max_bytes");
-  /* Empty compressed input fails; truncation never succeeds. */
-  agc_value empty_in[] = {bytes_of(NULL, 0), agc_int(100)};
-  check_error(call("Zlib.inflate.bytes", 2, empty_in), "zlib: invalid compressed data");
-  check_error(call("Zlib.gunzip.bytes", 2, empty_in), "zlib: invalid compressed data");
-  agc_value half[] = {bytes_of(zlib_abc, sizeof zlib_abc / 2), agc_int(100)};
-  check_error(call("Zlib.inflate.bytes", 2, half), "zlib: truncated stream");
-  /* How a broken body surfaces (format or checksum) is the codec's own
-     business; a broken header, checksum and length each have their error. */
-  uint8_t broken[sizeof zlib_abc];
-  memcpy(broken, zlib_abc, sizeof broken);
-  broken[sizeof broken / 2] ^= 0x01;
-  agc_value corrupt[] = {bytes_of(broken, sizeof broken), agc_int(100)};
-  assert(!agc_as_result(&vm, call("Zlib.inflate.bytes", 2, corrupt))->ok);
-  memcpy(broken, zlib_abc, sizeof broken);
-  broken[0] ^= 0x01;
-  corrupt[0] = bytes_of(broken, sizeof broken);
-  check_error(call("Zlib.inflate.bytes", 2, corrupt), "zlib: invalid compressed data");
-  memcpy(broken, zlib_abc, sizeof broken);
-  broken[sizeof broken - 1] ^= 0x01;
-  corrupt[0] = bytes_of(broken, sizeof broken);
-  check_error(call("Zlib.inflate.bytes", 2, corrupt), "zlib: checksum mismatch");
-  uint8_t gz_broken[sizeof zlib_vec_gzip_abc];
-  memcpy(gz_broken, zlib_vec_gzip_abc, sizeof gz_broken);
-  gz_broken[sizeof gz_broken - 8] ^= 0x01;
-  agc_value gz_crc[] = {bytes_of(gz_broken, sizeof gz_broken), agc_int(100)};
-  check_error(call("Zlib.gunzip.bytes", 2, gz_crc), "zlib: checksum mismatch");
-  memcpy(gz_broken, zlib_vec_gzip_abc, sizeof gz_broken);
-  gz_broken[sizeof gz_broken - 1] ^= 0x01;
-  gz_crc[0] = bytes_of(gz_broken, sizeof gz_broken);
-  check_error(call("Zlib.gunzip.bytes", 2, gz_crc), "zlib: checksum mismatch");
-  /* Trailing bytes stay caller-owned in spirit: one-shot calls refuse them,
-     zeros and second members alike. */
-  static uint8_t trailed[sizeof zlib_abc + 1];
-  memcpy(trailed, zlib_abc, sizeof zlib_abc);
-  trailed[sizeof zlib_abc] = 0x00;
-  agc_value trailing[] = {bytes_of(trailed, sizeof trailed), agc_int(100)};
-  check_error(call("Zlib.inflate.bytes", 2, trailing), "zlib: trailing bytes after stream end");
-  static uint8_t doubled[2 * sizeof zlib_abc];
-  memcpy(doubled, zlib_abc, sizeof zlib_abc);
-  memcpy(doubled + sizeof zlib_abc, zlib_abc, sizeof zlib_abc);
-  agc_value concat[] = {bytes_of(doubled, sizeof doubled), agc_int(100)};
-  check_error(call("Zlib.inflate.bytes", 2, concat), "zlib: trailing bytes after stream end");
-  /* Each wrapper decodes only itself: gzip rejects zlib, zlib rejects gzip
-     and raw. */
-  agc_value wrapped[] = {bytes_of(zlib_vec_gzip_abc, sizeof zlib_vec_gzip_abc), agc_int(100)};
-  check_error(call("Zlib.inflate.bytes", 2, wrapped), "zlib: invalid compressed data");
-  agc_value zlib_in_gz[] = {bytes_of(zlib_abc, sizeof zlib_abc), agc_int(100)};
-  check_error(call("Zlib.gunzip.bytes", 2, zlib_in_gz), "zlib: invalid compressed data");
-  agc_value raw[] = {bytes_of(zlib_vec_raw_abc, sizeof zlib_vec_raw_abc), agc_int(100)};
-  check_error(call("Zlib.inflate.bytes", 2, raw), "zlib: invalid compressed data");
-  uint8_t bad_magic[sizeof zlib_vec_gzip_abc];
-  memcpy(bad_magic, zlib_vec_gzip_abc, sizeof bad_magic);
-  bad_magic[0] = 0x1e;
-  agc_value magic[] = {bytes_of(bad_magic, sizeof bad_magic), agc_int(100)};
-  check_error(call("Zlib.gunzip.bytes", 2, magic), "zlib: invalid compressed data");
-}
-
-/* Zlib.crc32 against the published check value: "123456789" from seed 0 is
-   3421780262. Empty input returns the seed unchanged (even all-ones: the
-   codec helper never sees the empty call, since zlib would reset it to
-   zero), and chaining after the previous result matches a single pass. */
-static void test_crc32(void) {
-  static const uint8_t digits[] = "123456789";
-  assert(agc_zlib_crc32(0, NULL, 0) == 0);
-  assert(agc_zlib_crc32(0xffffffffu, NULL, 0) == 0xffffffffu);
-  assert(agc_zlib_crc32(0, digits, sizeof digits - 1) == 3421780262u);
-  agc_value whole[] = {bytes_of(digits, sizeof digits - 1), agc_int(0)};
-  int64_t full = agc_as_int(&vm, ok(call("Zlib.crc32.bytes", 2, whole)));
-  assert(full == 3421780262LL);
-  /* Empty input returns the seed, including all-ones. */
-  agc_value empty0[] = {bytes_of(NULL, 0), agc_int(0)};
-  assert(agc_as_int(&vm, ok(call("Zlib.crc32.bytes", 2, empty0))) == 0);
-  agc_value empty_ones[] = {bytes_of(NULL, 0), agc_int(4294967295LL)};
-  assert(agc_as_int(&vm, ok(call("Zlib.crc32.bytes", 2, empty_ones))) == 4294967295LL);
-  /* Incremental: the second chunk chained after the first matches one pass. */
-  agc_value first[] = {bytes_of(digits, 3), agc_int(0)};
-  int64_t head = agc_as_int(&vm, ok(call("Zlib.crc32.bytes", 2, first)));
-  agc_value rest[] = {bytes_of(digits + 3, sizeof digits - 1 - 3), agc_int(head)};
-  assert(agc_as_int(&vm, ok(call("Zlib.crc32.bytes", 2, rest))) == full);
-  /* NUL and binary bytes hash like any other byte. */
-  static const uint8_t binary[] = {0x00, 0xff, 0x00, 0x80, 0x01};
-  agc_value bin[] = {bytes_of(binary, sizeof binary), agc_int(0)};
-  assert(agc_as_int(&vm, ok(call("Zlib.crc32.bytes", 2, bin))) ==
-         (int64_t)agc_zlib_crc32(0, binary, sizeof binary));
-  /* A bad seed and an over-long input are the call's errors. */
-  agc_value low_seed[] = {bytes_of(digits, 3), agc_int(-1)};
-  check_error(call("Zlib.crc32.bytes", 2, low_seed), "zlib: seed must be between 0 and 4294967295");
-  agc_value high_seed[] = {bytes_of(digits, 3), agc_int(4294967296LL)};
-  check_error(call("Zlib.crc32.bytes", 2, high_seed), "zlib: seed must be between 0 and 4294967295");
-  static uint8_t big[1048577] = {0};
-  agc_value huge = bytes_of(big, sizeof big);
-  agc_value big_args[] = {huge, agc_int(0)};
-  check_error(call("Zlib.crc32.bytes", 2, big_args), "zlib: input exceeds 1048576 bytes");
 }
 
 /* A List given to a Zlib row is a wrong tag: the type cannot give one, only hand-made bytecode can. */
@@ -399,9 +208,10 @@ static void test_zstep_vectors(void) {
   free(s.data);
 }
 
-/* Each wrapper round-trips a 300 KB mix of noise and zeros at levels 0, 6
-   and 9, in pieces around the 64 KiB quantum and with empty items between
-   them; no chunk passes the quantum. */
+/* Each wrapper round-trips a 300 KB mix of noise and zeros, in pieces around
+   the 64 KiB quantum and with empty items between them; no chunk passes the
+   quantum. One level per wrapper covers 0, 6 and 9: tests/test_vm_zlib.py
+   runs every level of every wrapper against Python. */
 static void test_zstep_round_trip(void) {
   enum { TOTAL = 300000 };
   static uint8_t plain[TOTAL];
@@ -413,21 +223,20 @@ static void test_zstep_round_trip(void) {
   size_t steps[] = {7, 65536, 65537, TOTAL};
   int64_t levels[] = {0, 6, 9};
   for (int64_t enc = 0; enc < 3; enc++)
-    for (size_t l = 0; l < 3; l++)
-      for (size_t k = 0; k < 4; k++) {
-        sink coded = {0}, back = {0};
-        agc_value error = agc_void();
-        agc_resource *r = agc_zstep_open(&vm, enc, levels[l], 0);
-        assert(pump(&vm, r, plain, TOTAL, steps[k], k == 0, &coded, &error) == AGC_ZSTEP_END);
-        agc_zstep_close(&vm, r);
-        r = agc_zstep_open(&vm, enc + 3, 0, TOTAL);
-        assert(pump(&vm, r, coded.data, coded.len, steps[3 - k], k == 1, &back, &error) == AGC_ZSTEP_END);
-        agc_zstep_close(&vm, r);
-        assert(back.len == TOTAL && memcmp(back.data, plain, TOTAL) == 0);
-        assert(k != 0 || back.largest == 65536);
-        free(coded.data);
-        free(back.data);
-      }
+    for (size_t k = 0; k < 4; k++) {
+      sink coded = {0}, back = {0};
+      agc_value error = agc_void();
+      agc_resource *r = agc_zstep_open(&vm, enc, levels[enc], 0);
+      assert(pump(&vm, r, plain, TOTAL, steps[k], k == 0, &coded, &error) == AGC_ZSTEP_END);
+      agc_zstep_close(&vm, r);
+      r = agc_zstep_open(&vm, enc + 3, 0, TOTAL);
+      assert(pump(&vm, r, coded.data, coded.len, steps[3 - k], k == 1, &back, &error) == AGC_ZSTEP_END);
+      agc_zstep_close(&vm, r);
+      assert(back.len == TOTAL && memcmp(back.data, plain, TOTAL) == 0);
+      assert(k != 0 || back.largest == 65536);
+      free(coded.data);
+      free(back.data);
+    }
 }
 
 /* max_bytes holds while streaming: an exact budget ends, one byte less
@@ -591,9 +400,6 @@ int main(void) {
   agc_vm_init(&vm, &program, stdout, stderr, INT64_MAX);
   vm.in_turn = true;
   test_table();
-  test_oneshot_compress();
-  test_oneshot_decode();
-  test_crc32();
   test_list_refused();
   test_zstep_check();
   test_zstep_vectors();
