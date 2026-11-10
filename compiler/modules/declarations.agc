@@ -52,6 +52,18 @@ export def name_span_of(decl: Ast.Decl) -> Source.Span
   end
 end
 
+## The span of the name of a declaration: of the name itself for a constant, a function, a struct, an enum, a type
+## alias or a module block, and of the whole declaration for a resource.
+export def declared_name_span(decl: Ast.Decl) -> Source.Span
+  case unwrap(decl)
+    Ast.Decl.Constant(node) -> node.name_span
+    Ast.Decl.Function(node) -> node.name_span
+    Ast.Decl.Struct(node) -> node.name_span
+    Ast.Decl.Enum(node) -> node.name_span
+    _ -> name_span_of(decl)
+  end
+end
+
 ## The name a struct, enum, alias, resource, function, constant or module block declares; "" for an import.
 export def name_of(decl: Ast.Decl) -> String
   case unwrap(decl)

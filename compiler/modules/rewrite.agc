@@ -733,6 +733,9 @@ def rewrite_construct(cx: Resolve.Context, node: Ast.Construct) -> Result[Ast.Ex
   elsif parts.size == 3 and exported_enum?(cx, parts[0], parts[1])
     name = try Resolve.resolve(cx, "#{parts[0]}.#{parts[1]}", Resolve.Want.Enum, node.span, false)
     return ok(variant(node.id, name, parts[2], [], try rewrite_named(cx, node.args), node.span))
+  elsif parts.size == 4 and block_enum?(cx, parts[0], parts[1], parts[2])
+    name = try Resolve.resolve(cx, "#{parts[0]}.#{parts[1]}.#{parts[2]}", Resolve.Want.Enum, node.span, false)
+    return ok(variant(node.id, name, parts[3], [], try rewrite_named(cx, node.args), node.span))
   end
 
   name = try Resolve.resolve(cx, node.type_name, Resolve.Want.Type, node.span, false)
@@ -743,4 +746,10 @@ end
 def exported_enum?(cx: Resolve.Context, alias: String, name: String) -> Bool
   target = cx.me.aliases.get(alias, "")
   target != "" and Resolve.exports_enum?(cx.modules[target], name)
+end
+
+# True when `Alias.Block.Name` is an enum that the module block `Block`, exported by the module under `Alias`, exports.
+def block_enum?(cx: Resolve.Context, alias: String, block: String, name: String) -> Bool
+  key = Resolve.aliased_block(cx, alias, block)
+  key != "" and Resolve.exports_enum?(cx.modules[key], name)
 end

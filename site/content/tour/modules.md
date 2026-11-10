@@ -260,7 +260,7 @@ def main() -> Void
 end
 ```
 
-The name of a block follows the rules of an import alias (`CHECK-REDEFINED-NAME`), a block sits at the top level with the structs and enums (a block inside a block is `PARSE-NESTED-MODULE`), and it holds no import, re-export or extern block. A block without `export` is private to its file, and a `main` inside a block never runs.
+The name of a block follows the rules of an import alias (`CHECK-REDEFINED-NAME`), a block sits at the top level with the structs and enums (a block inside a block is `PARSE-NESTED-MODULE`), and it holds no import, re-export or extern block. A block without `export` is private to its file. Inside a block, a name the file already declares or imports is `CHECK-SHADOWED-NAME` (one name means one thing), and `main` is `CHECK-MAIN`; two blocks may each have a `start`.
 
 ## The standard library
 

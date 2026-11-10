@@ -111,7 +111,7 @@ src/orders.agc:8:1 export def total(order: Order) -> Int
 src/orders.agc:14:1 def round_cents(value: Float) -> Int
 ```
 
-`outline` parses its file, so the imports need not exist. A file that re-exports a name (`export Url.parse`) is also linked, so the original declaration is listed with its doc. Each line starts with `file:line:column`, like `rg`, and private declarations are listed too. `--json` adds the `##` doc, the signature, `exported`, the spans and the fields or variants.
+`outline` parses its file, so the imports need not exist. A file that re-exports a name (`export Url.parse`) is also linked, so the original declaration is listed with its doc. Each line starts with `file:line:column`, like `rg`, and private declarations are listed too. `--json` adds the `##` doc, the signature, `exported`, the spans and the fields or variants; a module block (kind `module`) lists its declarations under `items`.
 
 ## Type at a position
 

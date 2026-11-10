@@ -251,13 +251,14 @@ then the constants, then `struct`, `enum`, type alias and `module` block
 declarations (exported or not, in any order among themselves), then `export
 def` functions, then private `def` functions (an extern block that declares a
 resource or a struct goes with the types, as a whole). `type` is contextual in
-an alias declaration and remains an ordinary name elsewhere. The order is a style rule only: a function may still
-call a function, use a struct declared later or read a constant in the same
-group. The first declaration that comes after a declaration of a later group is
-`CHECK-DECL-ORDER`, reported at the start of that declaration (at `export` or
-`import` when it has one), with help that says where it goes. The module linker
-checks it for each file before linking, so a file with a parse error reports
-`PARSE-` first and a file that imports another reports its own order first.
+an alias declaration and remains an ordinary name elsewhere. The order is a
+style rule only: a function may still call a function, use a struct declared
+later or read a constant in the same group. The first declaration that comes
+after a declaration of a later group is `CHECK-DECL-ORDER`, reported at the
+start of that declaration (at `export` or `import` when it has one), with help
+that says where it goes. The module linker checks it for each file before
+linking, so a file with a parse error reports `PARSE-` first and a file that
+imports another reports its own order first.
 
 A constant is `NAME = expression` or `NAME: Type = expression` at the top level,
 with `export` in front to make it visible to importers. `NAME` is a `TYPE_NAME`

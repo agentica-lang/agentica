@@ -613,6 +613,43 @@ def test_a_generic_struct_constant_is_read_back_from_its_entry(ws):
         assert json.loads(failed[0][2])["code"] == "CHECK-TYPE-MISMATCH"
 
 
+# A constant whose type is a struct of a module block of its own file.
+BLOCKED = '''export ORIGIN = Geo.Point(x: 0, y: 0)
+
+export module Geo
+  export struct Point
+    x: Int
+    y: Int
+  end
+
+  export struct Size
+    x: String
+  end
+end
+'''
+
+THROUGH_BLOCKED = '''import Gen from "gen"
+
+def main() -> Void
+  n: Int = Gen.ORIGIN.x
+  puts(n.to_s)
+end
+'''
+
+
+def test_a_constant_with_the_type_of_a_module_block_is_read_back_from_its_entry(ws):
+    (ws.project / "gen.agc").write_text(BLOCKED, encoding="utf-8")
+    (ws.project / "main.agc").write_text(THROUGH_BLOCKED, encoding="utf-8")
+    asked = {"source": THROUGH_BLOCKED, "needle": "ORIGIN.x"}
+    assert settled(ws, **asked)[0] == (0, '{"ok":true}\n', "")
+    # Only a run that takes the file as clean reads the type of ORIGIN from its entry, which names a struct of the
+    # block: the block is known when the file is vouched for.
+    tampered = [path for path in entries(ws) if b"#Geo5:Point" in path.read_bytes()]
+    assert len(tampered) == 1
+    tampered[0].write_bytes(tampered[0].read_bytes().replace(b"#Geo5:Point", b"#Geo4:Size"))
+    assert json.loads(answers(ws, **asked)[0][2])["code"] == "CHECK-TYPE-MISMATCH"
+
+
 # A module with a generic function: the stub keeps the signature with its type parameters, and the body goes.
 GENERIC_FUNCTION = '''export def first_or[T](xs: List[T], fallback: T) -> T
   if xs.length == 0

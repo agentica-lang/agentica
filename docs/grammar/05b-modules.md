@@ -199,8 +199,10 @@ end
   file it ranks with the structs and enums for `CHECK-DECL-ORDER`.
 - Scope is lexical: the body sees the imports of the file, its top-level
   declarations (private ones too) and the other blocks, and its own names
-  bare. A name the block declares hides a top-level name or alias of the same
-  name inside the block.
+  bare. One name means one thing in a scope, so a block may not declare a name
+  that the file declares or imports, or the name of a block
+  (`CHECK-SHADOWED-NAME`, at the name). Two blocks may declare the same name
+  (`A.start` and `B.start`): neither sees the other's names bare.
 - Outside the block (the rest of the file and importers) only its exported
   names are visible, written `Counter.start`, `Counter.Msg.Add(5)`,
   `Counter.LIMIT`, `Counter.Box[Int]`. A private name is `CHECK-IMPORT-NAME`, as
@@ -211,9 +213,9 @@ end
   and `import Agents from "agents"` reads `Agents.Counter.start(0)`,
   `Agents.Counter.Msg.Add(5)` and the type `Agents.Counter.Msg`. A block
   without `export` is private to its file.
-- A `main` inside a block never runs; only the root file's top-level `main`
-  does. There is no mutable module state, and `extern module` keeps its
-  meaning.
+- Only the root file's top-level `main` runs, so a block may not declare
+  `main` (`CHECK-MAIN`, at the name). There is no mutable module state, and
+  `extern module` keeps its meaning.
 
 #### Standard library and external libraries
 

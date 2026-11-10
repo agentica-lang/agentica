@@ -1219,6 +1219,13 @@ def construct_node(
   expr_at(node, cursor, ids)
 end
 
+# The construct `name(field: value, ...)` from `start`, with its "(" at `open`.
+def named_construct(e: Base.Env, start: Int, name: String, open: Int, ids: Int) -> Result[Base.ExprAt]
+  named = try parse_named_arguments(e, open + 1, ids)
+  close = try Base.expect(e, named.pos, "right-paren", "\")\"", false)
+  construct_node(e, start, name, named.nodes, named.ids, close)
+end
+
 def enum_constructor_node(
   e: Base.Env,
   start: Int,
@@ -1271,11 +1278,13 @@ def parse_qualified_member(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprA
       qualified = "#{qualified}.#{e.tokens[variant_pos].lexeme}"
       variant_pos = after_variant + 1
       after_variant = variant_pos + 1
+      if e.tokens[after_variant].kind == "left-paren" and named_argument_at?(e, after_variant + 1)
+        # Alias.Block.Enum.Variant(name: v): a construct, so the checker refuses the names as it does for Block.E.V.
+        return named_construct(e, pos, "#{qualified}.#{e.tokens[variant_pos].lexeme}", after_variant, ids)
+      end
     elsif following == "left-paren" and named_argument_at?(e, after_variant + 1)
       # Alias.Block.Struct(field: value): a struct of a module block.
-      named = try parse_named_arguments(e, after_variant + 1, ids)
-      close = try Base.expect(e, named.pos, "right-paren", "\")\"", false)
-      return construct_node(e, pos, "#{qualified}.#{e.tokens[variant_pos].lexeme}", named.nodes, named.ids, close)
+      return named_construct(e, pos, "#{qualified}.#{e.tokens[variant_pos].lexeme}", after_variant, ids)
     end
 
     args = Base.ExprsAt(nodes: no_args, pos: after_variant, ids: ids)

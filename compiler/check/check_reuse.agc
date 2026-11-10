@@ -100,14 +100,18 @@ def planned(
   Plan(stretches: joined(ordered), clean: Set.new(clean), constants: constants)
 end
 
-# The stretches with those that touch one another made one: a walk that kept its files leaves a few long stretches, so
-# the pieces that are copied and searched are few.
+# The stretches with those that touch or overlap one another made one: a walk that kept its files leaves a few long
+# stretches, so the pieces that are copied and searched are few. A module block has the ids of its file from the file's
+# first one, inside the file's stretch; the file and its blocks share their text and imports, so they are taken
+# together (analysis/cache.agc).
 def joined(ordered: List[Stretch]) -> List[Stretch]
   found: List[Stretch] = []
   for stretch in ordered
     last = found.size - 1
-    if last >= 0 and found[last].next == stretch.first
-      found = found.set(last, Stretch(first: found[last].first, next: stretch.next))
+    if last >= 0 and found[last].next >= stretch.first
+      if stretch.next > found[last].next
+        found = found.set(last, Stretch(first: found[last].first, next: stretch.next))
+      end
     else
       found = found.push(stretch)
     end
