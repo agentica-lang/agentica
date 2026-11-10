@@ -540,6 +540,7 @@ unsigned agc_gc_version(void);
 void agc_gc_allow_threads(void);
 bool agc_gc_thread_enter(void);
 void agc_gc_thread_leave(void);
+void agc_gc_blocking(void (*fn)(void *arg), void *arg);
 void agc_gc_pause(void);
 void agc_gc_resume(void);
 bool agc_gc_stats(agc_gc_info *info);
