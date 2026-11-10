@@ -1824,6 +1824,13 @@ static bool api_get_resource(an_env *env, an_term t, uint32_t type, void **state
   return false;
 }
 
+/* The thread is marked blocked for the collector while FN runs (agc_gc_blocking), so a C library that switches to a
+   stack of its own is never stopped there; a thread the collector does not know (the compute pool) runs FN as is. */
+static void api_blocking(an_env *env, void (*fn)(void *arg), void *arg) {
+  (void)env;
+  agc_gc_blocking(fn, arg);
+}
+
 static const an_api API = {
   AN_API_MAJOR,       AN_API_MINOR,     sizeof(an_api),   api_int,          api_get_int,      api_float,
   api_get_float,      api_bool,         api_get_bool,     api_void,         api_string,       api_get_string,
@@ -1831,5 +1838,5 @@ static const an_api API = {
   api_list_end,       api_list_cursor,  api_list_next,    api_map_from,     api_map_put,      api_map_get,
   api_map_cursor,     api_map_next,     api_none,         api_some,         api_get_optional, api_ok,
   api_error,          api_get_result,   api_raise,        api_badarg,       api_struct,       api_get_field,
-  api_enum,           api_get_variant,  api_get_payload,  api_resource_new, api_get_resource,
+  api_enum,           api_get_variant,  api_get_payload,  api_resource_new, api_get_resource, api_blocking,
 };

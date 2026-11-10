@@ -901,12 +901,13 @@ def test_every_shape_and_signature_of_the_query_is_what_the_lowering_writes(driv
 
 
 def test_the_api_versions_of_a_block_are_those_of_the_native_header():
-    """The least minor version of each feature is a constant of the compiler: the header's version is the highest."""
+    """The least minor version of each feature is a constant of the compiler, up to the header's version (1.3 added
+    an_blocking, which a block does not show)."""
     header = (ROOT / "vm" / "agentica_native.h").read_text(encoding="utf-8")
     shape = (ROOT / "compiler" / "check" / "native_shape.agc").read_text(encoding="utf-8")
     major, minor = (int(re.search(r"#define AN_API_%s (\d+)" % name, header).group(1)) for name in ("MAJOR", "MINOR"))
     constants = {name: int(value) for name, value in re.findall(r"^export (API_\w+) = (\d+)$", shape, re.M)}
-    assert (constants["API_MAJOR"], constants["API_MINOR_RESOURCES"]) == (major, minor)
+    assert constants["API_MAJOR"] == major and constants["API_MINOR_RESOURCES"] <= minor
     # The comment of the header says which minor version added what.
     assert constants["API_MINOR_TYPES"] == int(re.search(r"enums\s+(?:\*\s+)?\(1\.(\d)\)", header).group(1))
     assert constants["API_MINOR_RESOURCES"] == int(re.search(r"resources\s+(?:\*\s+)?\(1\.(\d)\)", header).group(1))

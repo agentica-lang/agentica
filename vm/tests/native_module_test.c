@@ -1,7 +1,7 @@
 /* Native modules (vm/native_module.c) through Native.call: each kind of value both ways, structs and enums, the
    failures the env holds, binding and bad bytecode, version and load refusals, dirty calls, resources (a close and a
    cancel during a dirty call, the end of the run), the type table at its cap, no_files, the module as a shared
-   library, and short calls and a first load on several threads. */
+   library, short calls and a first load on several threads, and an_blocking while another thread collects. */
 #include "../core.h"
 #include "../services.h"
 #include "io_harness.h"
@@ -20,6 +20,12 @@
 #endif
 #ifdef __linux__
 #include <sys/resource.h>
+#endif
+/* The collector is what an_blocking keeps away, so the case switches stacks only in a build that has it; TSan and
+   ASan (built without libgc) do not follow a stack switch either. */
+#if defined(__linux__) && !defined(AGC_NO_GC)
+#define SWITCH_STACK 1
+#include <ucontext.h>
 #endif
 
 #define THREADS 4
@@ -41,6 +47,13 @@ typedef struct {
   agc_vm vm;
   int64_t total;
 } worker;
+
+/* What the function of an_blocking reads and gives back: the borrowed bytes of the argument and their sum. */
+typedef struct {
+  const char *data;
+  size_t len;
+  uint64_t sum;
+} blocking_work;
 
 static agc_vm vm;
 /* Optional's None and Some, then the variants of enum Shape (Dot, Circle(Int), Rect(Point, Point)). */
@@ -807,6 +820,127 @@ static void test_threads(void) {
   assert(atomic_load(&racy_inits) == 1 && atomic_load(&racy_loads) == 1);
 }
 
+#define SWITCH_ROUNDS 64
+#define COROUTINE_STACK 65536
+
+/* The collecting thread runs collections only when the function of an_blocking asks for them, so it never starves
+   the scheduler of the test around the calls. */
+static uv_mutex_t gc_lock;
+static uv_cond_t gc_wake;
+static uint64_t gc_asked, gc_done;
+static bool gc_stop;
+
+/* Asks the other thread for two collections and waits for them, outside the collector's view. */
+static void wait_two_collections(void) {
+  uv_mutex_lock(&gc_lock);
+  gc_asked += 2;
+  uv_cond_broadcast(&gc_wake);
+  while (gc_done < gc_asked) uv_cond_wait(&gc_wake, &gc_lock);
+  uv_mutex_unlock(&gc_lock);
+}
+
+#ifdef SWITCH_STACK
+static ucontext_t caller_context, coroutine_context;
+static blocking_work *coroutine_work;
+
+/* Runs on a stack of its own, as a coroutine of a C library does, and goes back to the caller each round. */
+static void coroutine(void) {
+  for (int round = 0; round < SWITCH_ROUNDS; round++) {
+    for (size_t k = 0; k < coroutine_work->len; k++) coroutine_work->sum += (unsigned char)coroutine_work->data[k];
+    if (round == 0) wait_two_collections();
+    assert(swapcontext(&coroutine_context, &caller_context) == 0);
+  }
+}
+#endif
+
+static void blocking_body(void *arg) {
+  blocking_work *w = arg;
+#ifdef SWITCH_STACK
+  void *stack = malloc(COROUTINE_STACK);
+  assert(stack && getcontext(&coroutine_context) == 0);
+  coroutine_context.uc_stack.ss_sp = stack;
+  coroutine_context.uc_stack.ss_size = COROUTINE_STACK;
+  coroutine_context.uc_link = &caller_context;
+  coroutine_work = w;
+  makecontext(&coroutine_context, coroutine, 0);
+  for (int round = 0; round < SWITCH_ROUNDS; round++) assert(swapcontext(&caller_context, &coroutine_context) == 0);
+  free(stack);
+#else
+  for (int round = 0; round < SWITCH_ROUNDS; round++)
+    for (size_t k = 0; k < w->len; k++) w->sum += (unsigned char)w->data[k];
+  wait_two_collections();
+#endif
+}
+
+/* A copy of the argument made before an_blocking (kept only in this frame, which the collector still scans) comes
+   back after it; the call fails when the sum read during it is wrong. */
+static an_term blocking_copy(an_env *env, int argc, const an_term *argv) {
+  (void)argc;
+  blocking_work w = {NULL, 0, 0};
+  if (!an_get_string(env, argv[0], &w.data, &w.len)) return an_badarg(env, 0);
+  an_term copy = an_string(env, w.data, w.len);
+  uint64_t want = 0;
+  for (size_t k = 0; k < w.len; k++) want += (unsigned char)w.data[k];
+  an_blocking(env, blocking_body, &w);
+  if (w.sum != want * SWITCH_ROUNDS) return an_raise(env, "wrong sum");
+  return copy;
+}
+
+static const an_function blocking_functions[] = {{"copy", "(String) -> String", blocking_copy, AN_SHORT},
+                                                 {"copy", "(String) -> String", blocking_copy, AN_DIRTY}};
+static const an_module blocking_module = {1, 3, sizeof(an_module), "blocking", NULL, blocking_functions, 1, NULL,
+                                          0, NULL, 0};
+static const an_module blocking_dirty_module = {
+  1, 3, sizeof(an_module), "blocking_dirty", NULL, blocking_functions + 1, 1, NULL, 0, NULL, 0};
+
+static const an_module *init_blocking(const an_api *api) {
+  (void)api;
+  return &blocking_module;
+}
+static const an_module *init_blocking_dirty(const an_api *api) {
+  (void)api;
+  return &blocking_dirty_module;
+}
+
+static void collect(void *arg) {
+  (void)arg;
+  assert(agc_gc_thread_enter());
+  uv_mutex_lock(&gc_lock);
+  for (;;) {
+    while (!gc_stop && gc_done == gc_asked) uv_cond_wait(&gc_wake, &gc_lock);
+    if (gc_stop) break;
+    uv_mutex_unlock(&gc_lock);
+    agc_gc_collect();
+    uv_mutex_lock(&gc_lock);
+    gc_done++;
+    uv_cond_broadcast(&gc_wake);
+  }
+  uv_mutex_unlock(&gc_lock);
+  agc_gc_thread_leave();
+}
+
+/* A short and a dirty call each run an_blocking (on Linux, on a stack of its own) while another thread collects
+   meanwhile: no hang, and the argument and the copy made before it survive. */
+static void test_blocking(void) {
+  agc_native_register(&vm, "blocking", init_blocking);
+  agc_native_register(&vm, "blocking_dirty", init_blocking_dirty);
+  assert(uv_mutex_init(&gc_lock) == 0 && uv_cond_init(&gc_wake) == 0);
+  uv_thread_t thread;
+  assert(uv_thread_create(&thread, collect, NULL) == 0);
+  agc_value word = text("a string the collector must keep");
+  assert(same_text(call("module (String) -> String copy blocking", &word, 1), "a string the collector must keep"));
+  assert(same_text(dirty("compute module (String) -> String copy blocking_dirty", &word, 1),
+                   "a string the collector must keep"));
+  uv_mutex_lock(&gc_lock);
+  assert(gc_done == 4);
+  gc_stop = true;
+  uv_cond_broadcast(&gc_wake);
+  uv_mutex_unlock(&gc_lock);
+  assert(uv_thread_join(&thread) == 0);
+  uv_cond_destroy(&gc_wake);
+  uv_mutex_destroy(&gc_lock);
+}
+
 int main(int argc, char **argv) {
   (void)argc;
   agc_test_io_vm(&vm);
@@ -851,6 +985,7 @@ int main(int argc, char **argv) {
   test_no_files();
   test_shared_library(argv[0]);
   test_threads();
+  test_blocking();
   test_end_of_run();
   agc_test_settle_loop(&vm);
   return 0;

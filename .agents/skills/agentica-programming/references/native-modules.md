@@ -53,6 +53,11 @@ end
   makes one and gives its zeroed state, `an_get_resource` gives the state of a
   resource argument. A dirty function's getters give `false` for terms it
   made.
+- `an_blocking(env, fn, arg)` (API 1.3) runs `fn(arg)` out of the
+  collector's way, in short and dirty functions: wrap a C library call that
+  switches stacks (MariaDB Connector/C's non-blocking `_start`/`_cont`) in it.
+  `fn` may only read String and Bytes data of the arguments got before; no
+  terms, no API calls.
 - `[native.NAME] build = { sources = ["native/stats.c"], defines = [...],
   libs = ["m"] }` in `agentica.toml` builds the module with the system C
   compiler (`CC`, else `cc`; `gcc` on Windows) on a run, `compile`, `test` or

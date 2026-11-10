@@ -1,9 +1,10 @@
 /*
  * The C API of native modules (#1149): a shared library that exports agentica_native_init and calls the VM only
  * through the table of function pointers (an_api) that every call's env carries, so it links nothing from the
- * agentica binary. Values are opaque terms, read through checked getters. Version 1.2: short and dirty calls of
- * scalars, String, Bytes, List, Map, Optional, Result, the program's structs and enums (1.1) and the module's resources
- * (1.2). The VM half is vm/native_module.c; this header is the contract, and it includes nothing of the VM.
+ * agentica binary. Values are opaque terms, read through checked getters. Version 1.3: short and dirty calls of
+ * scalars, String, Bytes, List, Map, Optional, Result, the program's structs and enums (1.1), the module's resources
+ * (1.2) and an_blocking, for C libraries that switch stacks (1.3). The VM half is vm/native_module.c; this header is
+ * the contract, and it includes nothing of the VM.
  */
 #ifndef AGENTICA_NATIVE_H
 #define AGENTICA_NATIVE_H
@@ -19,7 +20,7 @@ extern "C" {
 /* The API this header describes. The VM loads a module of the same major version and a minor version up to its own:
    an_api and an_module only grow at their end, which is a minor bump. */
 #define AN_API_MAJOR 1
-#define AN_API_MINOR 2
+#define AN_API_MINOR 3
 
 #if defined(_WIN32)
 #define AN_EXPORT __declspec(dllexport)
@@ -163,6 +164,7 @@ typedef struct an_api {
   bool (*get_payload)(an_env *env, an_term t, uint32_t type, uint32_t k, an_term *out);
   void *(*resource_new)(an_env *env, uint32_t type, an_term *out);
   bool (*get_resource)(an_env *env, an_term t, uint32_t type, void **state);
+  void (*blocking)(an_env *env, void (*fn)(void *arg), void *arg);
 } an_api;
 
 /* The one export of a module: the VM calls it once per run (a process runs one program), at the first call, with the
@@ -304,6 +306,17 @@ static inline void *an_resource_new(an_env *env, uint32_t type, an_term *out) {
 }
 static inline bool an_get_resource(an_env *env, an_term t, uint32_t type, void **state) {
   return an_api_of(env)->get_resource(env, t, type, state);
+}
+
+/* Runs FN(ARG) out of the collector's way (API 1.3, an_api_of(env)->minor >= 3), in a short or a dirty call alike:
+   for a C library that switches to a stack of its own (a coroutine, as MariaDB Connector/C's non-blocking calls run),
+   where the collector must not stop the thread. FN may read the bytes that an_get_string and an_get_bytes gave for
+   arguments of this call before an_blocking (the VM keeps those arguments alive for the call), and nothing else of the
+   VM: it must not write GC memory, hold or make a term, or call any function of this API (an_blocking and an_raise
+   included); doing so is undefined. It runs on the calling thread, so in a short call it stalls that scheduler as
+   long as it runs: keep it as short as the call, and make a function that waits a compute def. */
+static inline void an_blocking(an_env *env, void (*fn)(void *arg), void *arg) {
+  an_api_of(env)->blocking(env, fn, arg);
 }
 
 /* Failures: the call fails with RUNTIME-NATIVE-ERROR once the function returns, with MESSAGE (copied now; NUL
