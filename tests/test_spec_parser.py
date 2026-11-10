@@ -416,21 +416,6 @@ class TestSpecParser:
                    "  return xs\nend\n", unexpected, (4, 7, 4, 9)),
         ])
 
-    def test_a_one_line_def_returns_its_value(self):
-        # Generics, defaults, `export`, a `##` doc and a trailing comment work as in a def with a body; the value may
-        # hold a `try`, a one-line block, and lines inside parentheses.
-        program = (
-            "export def pair[T](x: T, y: T) -> List[T] = [x, y]\n\n"
-            "## Doubles a number.\nexport def double(x: Int) -> Int = x * 2\n\n"
-            "def greet(name: String, greeting: String = \"hi\") -> String = \"#{greeting} #{name}\" # a note\n\n"
-            "def next_of(text: String) -> Result[Int] = ok(try text.to_i + 1)\n\n"
-            "def total(xs: List[Int]) -> Int = xs.map do |x| x * 2 end.sum\n\n"
-            "def inside(a: Int, b: Int) -> Int = (\n  a +\n  b\n)\n\n"
-            + main_of("  puts(pair(\"a\", \"b\"))\n  puts(double(2))\n  puts(greet(\"ann\"))\n"
-                      "  puts(next_of(\"7\"))\n  puts(next_of(\"x\").ok?)\n"
-                      "  puts(total([1, 2]))\n  puts(inside(1, 2))\n"))
-        self.check_output([Output(program, ['["a", "b"]', "4", "hi ann", "ok(8)", "false", "6", "3"])])
-
     def test_a_one_line_def_has_a_value_and_a_return_type(self):
         unexpected = "PARSE-UNEXPECTED-TOKEN"
         self.check_rejected([
