@@ -4,8 +4,8 @@ description: >-
   Review a PR or diff changing the Agentica C VM (vm/*.c, vm/*.h, vm/tests,
   the loader or interpreter) for memory safety, UB, hostile-bytecode safety,
   GC rules, scheduler semantics, hot-path efficiency, and a small layered
-  core. Investigates with gmem code tools, then proves suspicions with small
-  programs. Use for critic, security or safety reviews of VM/C PRs. Not for
+  core. Investigates with gmem code tools, then shows each suspicion with a
+  small program. Use for critic, security or safety reviews of VM/C PRs. Not for
   writing code, front-end-only changes, programs, or docs-only PRs.
 compatibility: >-
   Agentica repository checkout or worktree with git, gh, rg, ast-grep and make;
@@ -177,6 +177,12 @@ a finding.
   changes that were not needed (`documentation-writing`).
 
 ## Proving a finding
+
+By default run nothing: several agents share the machine. Write the program
+or C test in the report, with the one command that would prove the finding
+and how sure you are. Build and run only when the request says proofs may
+run (the owner allowed it for this PR); the rest of this section is for
+that case.
 
 Run only what the finding needs. Wrap every command in `timeout -k 10 300
 <cmd>`, with a memory limit when the system has one (600 seconds for builds).
