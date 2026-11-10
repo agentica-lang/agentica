@@ -14,8 +14,10 @@ OP.run!(result: Result[T]) -> T
 OP.usage(parser: Parser) -> String
 OP.help?(message: String) -> Bool
 OP.message(error_text: String) -> String
-Arg(name, help = "", kind = Kind.String, choices = [], metavar = "", min = none, max = none)
-Opt(name, short = "", kind = Kind.String, default = "", choices = [], help = "", metavar = "", min = none, max = none)
+Arg(name, help = "", kind = Kind.String, choices = [], metavar = "", min = none, max = none,
+    min_float = none, max_float = none)
+Opt(name, short = "", kind = Kind.String, default = "", choices = [], help = "", metavar = "", min = none, max = none,
+    min_float = none, max_float = none)
 Kind: Int, Float, String, Flag
 ```
 
@@ -35,8 +37,11 @@ Options(file: OP.string(p, "file"), port: OP.int(p, "port"),
   none. A Flag has no default or choices. `choices` compare as text.
 - `min: some(1), max: some(65535)` limit an Int option or argument (and its
   default); a value outside is `invalid value for --port: '0' is below the
-  minimum 1` (`does not fit an Int` for a number too big). On another kind,
-  or with `min` above `max`, they are a wrong specification.
+  minimum 1` (`does not fit an Int` for a number too big). A Float one takes
+  `min_float: some(0.0), max_float: some(1.0)` (an Int such as `some(0)` does
+  not fit). On another kind, with the min above the max, or a Float limit that
+  is not finite, they are a wrong specification. A Float value that is not
+  finite (`+inf.0`, `+nan.0`, `1e400`) is refused: `does not fit a Float`.
 - A word past the arguments is `unexpected argument`, unless `new` gets
   `rest`, its fifth argument (positional), such as `"FILE"`, shown as
   `[FILE...]` in the usage line. Then `OP.rest(p)` gives those words, after

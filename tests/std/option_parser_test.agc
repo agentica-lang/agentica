@@ -33,6 +33,37 @@ def limited() -> OP.Parser
   )
 end
 
+# Float limits on an argument and on options: both ends, a max alone and a negative min.
+def ranged() -> OP.Parser
+  return OP.new(
+    "gen",
+    "",
+    [Arg(name: "scale", kind: K.Float, min_float: some(0.5), max_float: some(4.0))],
+    [
+      Opt(name: "temp", kind: K.Float, default: "0.8", min_float: some(0.0), max_float: some(2.0)),
+      Opt(name: "top-p", kind: K.Float, max_float: some(1.0)),
+      Opt(name: "bias", kind: K.Float, min_float: some(-0.25)),
+      Opt(name: "eps", kind: K.Float, min_float: some(1e-7), max_float: some(0.1)),
+    ],
+  )
+end
+
+# The limits that a help row shows, read back as numbers: "[min: 0.0, max: 2.0]" gives [0.0, 2.0].
+def shown_limits(help: String, name: String) -> Result[List[Float]]
+  line = try help.split("\n").find do |text| text.include?(name) end
+  start = line.index_of("[min: ")
+  if start.none?
+    start = line.index_of("[max: ")
+  end
+  return error("no limits on #{line}") if start.none?
+  inside = line.slice(start.unwrap! + 1, line.length - start.unwrap! - 2)
+  numbers: List[Float] = []
+  for part in inside.split(", ")
+    numbers = numbers.push(try part.split(": ")[1].to_f)
+  end
+  return ok(numbers)
+end
+
 # The message names the option and says what is wrong, and the command line is the one that fails.
 def fails(args: List[String], part: String) -> Result[Void]
   parsed = OP.parse(parser(), args)
@@ -54,6 +85,7 @@ def main() -> Void
         ["-p=3000", "-v", "f"],
         ["-vp3000", "f"],
       ]
+
       for args in forms
         p = try OP.parse(parser(), args)
         try Test.eq(OP.string(p, "file"), "f")
@@ -130,6 +162,61 @@ def main() -> Void
       try Test.eq(OP.int(p, "offset"), -10)
       Test.eq(OP.int(p, "count"), 1)
     end,
+    Test.test("a Float limit refuses a value outside it and the edges are valid") do
+      for words in [["--temp", "2.5", "1"], ["--temp", "-1", "1"]]
+        failed = OP.parse(ranged(), words)
+        try Test.assert(failed.message.include?("invalid value for --temp: '#{words[1]}' is"), failed.message)
+      end
+      joined = OP.parse(ranged(), ["--temp=-0.1", "1"]).message
+      try Test.assert(joined.include?("'-0.1' is below the minimum 0.0"), joined)
+      above = OP.parse(ranged(), ["--temp", "2.5", "1"]).message
+      try Test.assert(above.include?("'2.5' is above the maximum 2.0"), above)
+      below = OP.parse(ranged(), ["--temp", "-1", "1"]).message
+      try Test.assert(below.include?("'-1' is below the minimum 0.0"), below)
+      small = OP.parse(ranged(), ["0.4"]).message
+      try Test.assert(small.include?("invalid value for <scale>: '0.4' is below the minimum 0.5"), small)
+      top = OP.parse(ranged(), ["--top-p", "1.0000001", "1"]).message
+      try Test.assert(top.include?("'1.0000001' is above the maximum 1.0"), top)
+      try Test.assert(OP.parse(ranged(), ["--bias", "-0.3", "1"]).message.include?("below the minimum -0.25"), "bias")
+      try Test.assert(OP.parse(ranged(), ["--temp", "nan", "1"]).message.include?("'nan' is not a Float"), "nan")
+      eps = OP.parse(ranged(), ["--eps", "0.10000001", "1"]).message
+      try Test.assert(eps.include?("above the maximum 0.1"), eps)
+      signed = OP.new("gen", "", [], [Opt(name: "zero", kind: K.Float, min_float: some(-0.0))])
+      try Test.eq(OP.float(try OP.parse(signed, ["--zero", "0"]), "zero"), 0.0)
+      words = ["0", "2.0", "-0.0", "1e-3"]
+      values = [0.0, 2.0, 0.0, 0.001]
+      for index in 0...words.size
+        p = try OP.parse(ranged(), ["--temp", words[index], "0.5"])
+        try Test.eq(OP.float(p, "temp"), values[index])
+      end
+      p = try OP.parse(ranged(), ["--top-p", "-5", "--bias=-0.25", "4"])
+      try Test.eq(OP.optional_float(p, "top-p"), some(-5.0))
+      try Test.eq(OP.float(p, "bias"), -0.25)
+      try Test.eq(OP.float(p, "scale"), 4.0)
+      Test.eq(OP.float(p, "temp"), 0.8)
+    end,
+    Test.test("a Float that is not finite is refused, with limits or without") do
+      for text in ["+nan.0", "+inf.0", "-inf.0", "1e400", "-1e400"]
+        limited_one = OP.parse(ranged(), ["--temp=#{text}", "1"]).message
+        try Test.assert(limited_one.include?("invalid value for --temp: '#{text}' does not fit a Float"), limited_one)
+        try fails(["--ratio=#{text}", "f"], "invalid value for --ratio: '#{text}' does not fit a Float")
+      end
+      for text in ["+nan.0", "+inf.0", "1e400"]
+        try fails(["--ratio", text, "f"], "'#{text}' does not fit a Float")
+      end
+      Test.assert(OP.parse(ranged(), ["+inf.0"]).message.include?("for <scale>: '+inf.0' does not fit a Float"), "arg")
+    end,
+    Test.test("the help shows the Float limits, and they read back as the specification has them") do
+      help = OP.usage(ranged())
+      try Test.assert(help.include?("  <scale>            [min: 0.5, max: 4.0]"), help)
+      try Test.eq(try shown_limits(help, "--temp"), [0.0, 2.0])
+      try Test.eq(try shown_limits(help, "--top-p"), [1.0])
+      try Test.eq(try shown_limits(help, "--bias"), [-0.25])
+      try Test.eq(try shown_limits(help, "--eps"), [1e-7, 0.1])
+      usage = OP.usage(parser())
+      jobs = try shown_limits(usage, "--jobs")
+      Test.eq(jobs, [1.0, 64.0])
+    end,
     Test.test("a number too big for an Int says so, and a word is still not an Int") do
       try fails(["--port", "99999999999999999999", "f"], "for --port: '99999999999999999999' does not fit an Int")
       try fails(["--port=-99999999999999999999", "f"], "'-99999999999999999999' does not fit an Int")
@@ -137,6 +224,8 @@ def main() -> Void
       Test.assert(!OP.parse(parser(), ["--port", "-", "f"]).ok?, "a lone minus is refused")
     end,
     Test.test("a wrong specification is an error of parse, with the option named") do
+      # 1e400 is too big for a Float, so it reads as an infinity, and an infinity minus itself is NaN.
+      infinite = try "1e400".to_f
       cases = [
         OP.new("tool", "", [], [Opt(name: "port", kind: K.Int, default: "x")]),
         OP.new("tool", "", [], [Opt(name: "a", short: "p"), Opt(name: "b", short: "p")]),
@@ -150,7 +239,19 @@ def main() -> Void
         OP.new("tool", "", [], [Opt(name: "one", short: "1")]),
         OP.new("tool", "", [], [Opt(name: "a b")]),
         OP.new("", "", [], []),
+        OP.new("tool", "", [], [Opt(name: "jobs", kind: K.Int, min_float: some(1.0))]),
+        OP.new("tool", "", [], [Opt(name: "temp", kind: K.Float, min: some(0))]),
+        OP.new("tool", "", [], [Opt(name: "temp", kind: K.Float, min_float: some(2.0), max_float: some(1.0))]),
+        OP.new("tool", "", [], [Opt(name: "name", max_float: some(1.0))]),
+        OP.new("tool", "", [], [Opt(name: "quiet", kind: K.Flag, min_float: some(0.0))]),
+        OP.new("tool", "", [Arg(name: "scale", kind: K.Int, max_float: some(1.0))]),
+        OP.new("tool", "", [], [Opt(name: "temp", kind: K.Float, max_float: some(infinite))]),
+        OP.new("tool", "", [], [Opt(name: "temp", kind: K.Float, min_float: some(infinite - infinite))]),
+        OP.new("tool", "", [], [Opt(name: "temp", kind: K.Float, default: "3.0", max_float: some(2.0))]),
+        OP.new("tool", "", [], [Opt(name: "temp", kind: K.Float, default: "+nan.0")]),
+        OP.new("tool", "", [], [Opt(name: "temp", kind: K.Float, min: some(0), min_float: some(0.0))]),
       ]
+
       # What each specification above must name in its error, in the same order.
       names = [
         "--port",
@@ -165,7 +266,19 @@ def main() -> Void
         "--one",
         "a b",
         "program name",
+        "--jobs has min_float or max_float but is not a Float",
+        "--temp has min or max but is not an Int: a Float has min_float and max_float",
+        "the min_float of --temp is above its max_float",
+        "--name has min_float or max_float",
+        "--quiet has min_float or max_float",
+        "<scale> has min_float or max_float",
+        "the min_float or max_float of --temp is not a finite number",
+        "the min_float or max_float of --temp is not a finite number",
+        "invalid default for --temp: '3.0' is above the maximum 2.0",
+        "invalid default for --temp: '+nan.0' does not fit a Float",
+        "--temp has min or max but is not an Int",
       ]
+
       for index in 0...cases.size
         failed = OP.parse(cases[index], [])
         try Test.assert(!failed.ok?, "the specification #{index} is refused")
@@ -195,6 +308,7 @@ def main() -> Void
         "      --level N         [choices: 1, 2]",
         "  -h, --help            show this help",
       ].join("\n")
+
       try Test.eq(OP.usage(parser()), expected)
       for args in [["--help"], ["f", "-h"], ["-vh"]]
         help = OP.parse(parser(), args)
