@@ -21,13 +21,13 @@ load16_le exported=False (data: Bytes, offset: Int, type: String) -> Result[Int]
       op Int text='+' @249:12-249:22
         local Int text='offset' @249:12-249:18
         int Int text='1' @249:21-249:22
-  return Result[Int] @250:3-250:39
-    call Result[Int] target='ok' @250:10-250:39
-      call Int target='Int.bit_or' @250:13-250:38
-        call Int target='Int.shift_left' @250:13-250:28
-          local Int text='b' @250:13-250:14
-          int Int text='8' @250:26-250:27
-        local Int text='a' @250:36-250:37
+  return Result[Int] @250:3-250:32
+    call Result[Int] target='ok' @250:3-250:32
+      call Int target='Int.bit_or' @250:6-250:31
+        call Int target='Int.shift_left' @250:6-250:21
+          local Int text='b' @250:6-250:7
+          int Int text='8' @250:19-250:20
+        local Int text='a' @250:29-250:30
 window exported=False (data: Bytes, offset: Int, n: Int, type: String) -> Result[Void]
   if - @220:3-223:1
     branch - @220:3-222:1
@@ -51,5 +51,5 @@ window exported=False (data: Bytes, offset: Int, n: Int, type: String) -> Result
               string String text=' is outside bytes of length ' @221:18-221:87
               call Int target='Bytes.length' @221:76-221:85
                 local Bytes text='data' @221:76-221:80
-  return Result[Void] @223:3-223:14
-    call Result[Void] target='ok' @223:10-223:14
+  return Result[Void] @223:3-223:7
+    call Result[Void] target='ok' @223:3-223:7
