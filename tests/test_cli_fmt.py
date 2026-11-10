@@ -154,12 +154,11 @@ def test_a_guard_is_written_back_as_a_guard_with_the_same_tree(tmp_path):
     guards = ('def f(xs: List[Int]) -> Int\n  for x in xs\n    next  if x < 0 # skip\n    # big ones end it\n'
               '    break if x > 9\n  end\n\n  return  0 if xs.any? do |x| x == 5 end\n'
               '  xs.each do |x| return if x == 1 end\n  case xs.size\n    1 -> return 2 if xs[0] == 2\n    _ -> puts(1)\n'
-              '  end\n\n  if xs.size == 3\n    return 3\n  end\n\n  return 1\nend\n')
+              '  end\n\n  return 1\nend\n')
     laid_out = guards.replace("next  if", "next if").replace("return  0", "return 0")
     lay_out(tmp_path, {"guards.agc": guards})
     before = fmt("--tree", "guards.agc", cwd=tmp_path)
     assert fmt(cwd=tmp_path).code == 0
-    # The 3-line `if` stays as it is.
     assert text(tmp_path, "guards.agc") == laid_out
     after = fmt("--tree", "guards.agc", cwd=tmp_path)
     assert (before.code, after.code, before.stdout) == (0, 0, after.stdout)
@@ -186,6 +185,123 @@ def test_a_guard_that_spans_lines_is_written_as_the_if_it_stands_for(tmp_path):
     assert text(tmp_path, "doc.agc") == (
         'def f(x: Int) -> String\n  if x > 0\n    return <<~A\n    a\n    b\n  A\n  end\n  return ""\nend\n')
     assert fmt("--check", cwd=tmp_path).stdout == ""
+
+
+# An `if` with one `return`, `break` or `next` becomes a guard, also in a loop, a `case` arm, a block and another `if`.
+# Each `if` after the first is kept: a comment on its `if` line, inside it or on its `end` line, an `else`, a second
+# statement, a statement of several lines (a heredoc).
+SPELLED = """def f(xs: List[Int], text: String) -> Int
+  if text == ""
+    return 0
+  end
+
+  for x in xs
+    if x < 0
+      next
+    end
+
+    if x > 9
+      break
+    end
+
+    if x == 5
+      if x == 5
+        return 5
+      end
+    end
+  end
+
+  case text.size
+    1 ->
+      if xs.size == 0
+        return 6
+      end
+    _ -> puts(2)
+  end
+
+  xs.each do |x|
+    if x == 1
+      return
+    end
+  end
+
+  if text == "a" # on the if line
+    return 1
+  end
+
+  if text == "b"
+    # inside
+    return 2
+  end
+
+  if text == "c"
+    return 3
+  end # on the end line
+  if text == "d"
+    return 3
+  else
+    puts(1)
+  end
+
+  if text == "e"
+    puts(4)
+    return 4
+  end
+
+  if text == "f"
+    return <<~A.size
+    one
+    two
+  A
+  end
+  return 8
+end
+"""
+GUARDED = """def f(xs: List[Int], text: String) -> Int
+  return 0 if text == ""
+
+  for x in xs
+    next if x < 0
+
+    break if x > 9
+
+    if x == 5
+      return 5 if x == 5
+    end
+  end
+
+  case text.size
+    1 -> return 6 if xs.size == 0
+    _ -> puts(2)
+  end
+
+  xs.each do |x| return if x == 1 end
+
+""" + SPELLED[SPELLED.index("  if text == \"a\""):]
+
+
+def test_an_if_with_one_return_break_or_next_becomes_a_guard_unless_something_keeps_it(tmp_path):
+    lay_out(tmp_path, {"spelled.agc": SPELLED})
+    before = fmt("--tree", "spelled.agc", cwd=tmp_path)
+    assert fmt(cwd=tmp_path).code == 0
+    assert text(tmp_path, "spelled.agc") == GUARDED
+    # Formatting again changes nothing, and the tree is the same.
+    assert fmt("--check", cwd=tmp_path).stdout == ""
+    assert fmt("--tree", "spelled.agc", cwd=tmp_path).stdout == before.stdout
+
+
+@pytest.mark.parametrize("size, guarded", [(95, True), (96, False)])
+def test_the_guard_and_the_if_meet_at_the_same_width(tmp_path, size, guarded):
+    # `  return 0 if text == "..."` is 24 characters plus the text: 119, the width, for 95, and 120 for 96. Both forms of
+    # the source give the guard at 119 and the `if` at 120.
+    value = "x" * size
+    guard = 'def f(text: String) -> Int\n  return 0 if text == "%s"\n  return 1\nend\n' % value
+    spelled = 'def f(text: String) -> Int\n  if text == "%s"\n    return 0\n  end\n  return 1\nend\n' % value
+    assert len('  return 0 if text == "%s"' % value) == 24 + size
+    lay_out(tmp_path, {"guard.agc": guard, "spelled.agc": spelled})
+    assert fmt(cwd=tmp_path).code == 0
+    expected = guard if guarded else spelled
+    assert (text(tmp_path, "guard.agc"), text(tmp_path, "spelled.agc")) == (expected, expected)
 
 
 def test_tree_is_the_same_before_and_after_formatting(tmp_path):

@@ -53,6 +53,8 @@ export struct Context
   dangling: Map[String, List[Comments.Attached]]
   heredocs: Map[Int, List[String]]
   externs: List[Extern]
+  # The lines that hold a comment, so that an `if` with a comment is never turned into a guard.
+  noted: Set[Int]
 end
 
 ## An `extern` block, copied whole: its first and last lines and offsets, and the comments that the attachment gave
@@ -133,6 +135,7 @@ export def context(text: String, tokens: List[Tokens.Token], attachment: Comment
     dangling: dangling,
     heredocs: heredoc_bodies(lines, kept),
     externs: externs,
+    noted: Set.new(attachment.comments.map do |placed: Comments.Attached| placed.comment.span.start.line end),
   )
 end
 
@@ -593,9 +596,10 @@ end
 
 # A guard (`return x if c`) stays one when it fits on its line, and is written as the `if` it stands for when it does
 # not or when it spans lines (a heredoc, a block of several lines): the parser takes a guard only when its `if` is on
-# the line where its statement starts.
+# the line where its statement starts. An `if` that could be a guard (`guardable?`) takes the same choice, so the two
+# forms meet at the same width and formatting again changes nothing.
 def if_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
-  if not node.guard
+  if not node.guard and not guardable?(c, node)
     return spelled_if_doc(c, node)
   end
 
@@ -758,7 +762,7 @@ def arm_doc(c: Context, arm: Ast.CaseArm) -> Docs.Doc
     end
   end
 
-  if arm.body.size == 1 and inline?(arm.body[0]) and after.size == 0
+  if arm.body.size == 1 and inline?(c, arm.body[0]) and after.size == 0
     stmt = arm.body[0]
     span = Ast.stmt_span(stmt)
     key = Comments.key_of(Comments.stmt_kind(stmt), span)
@@ -783,13 +787,36 @@ def dangling_end(c: Context, key: String) -> List[Docs.Doc]
   return [Docs.Doc.Indent([Docs.Doc.HardLine, sequence(c, items)])]
 end
 
-# A statement that may share the line of a `case` arm or of a one-line `do` block: a simple one, or a guard, which
-# writes itself out as an `if` on lines of its own when it does not fit.
-def inline?(stmt: Ast.Stmt) -> Bool
+# A statement that may share the line of a `case` arm or of a one-line `do` block: a simple one, or a guard (or an
+# `if` that becomes one), which writes itself out as an `if` on lines of its own when it does not fit.
+def inline?(c: Context, stmt: Ast.Stmt) -> Bool
   case stmt
-    Ast.Stmt.If(node) -> return node.guard
+    Ast.Stmt.If(node) -> return node.guard or guardable?(c, node)
     _ -> return simple?(stmt)
   end
+end
+
+# An `if c` whose body is one `return`, `break` or `next` of one line, with no `elsif` or `else` and no comment from
+# its `if` line to its `end` line: written as a guard when that fits on the line (if_doc).
+def guardable?(c: Context, node: Ast.IfStmt) -> Bool
+  if node.branches.size != 1 or node.else_body.some? or node.branches[0].body.size != 1
+    return false
+  end
+
+  stmt = node.branches[0].body[0]
+  case stmt
+    Ast.Stmt.Return(_) -> stmt = stmt
+    Ast.Stmt.Control(_) -> stmt = stmt
+    _ -> return false
+  end
+
+  span = Ast.stmt_span(stmt)
+  if tight(c, span).start.line != last_line(c, span)
+    return false
+  end
+
+  last = last_line(c, node.span)
+  return not (node.span.start.line..last).to_a.any? do |line: Int| c.noted.include?(line) end
 end
 
 def simple?(stmt: Ast.Stmt) -> Bool
@@ -1462,7 +1489,7 @@ def block_doc(c: Context, node: Ast.BlockLit) -> Docs.Doc
   end
 
   quiet = suffixes.size == 0 and above.size == 0
-  if quiet and node.body.size == 1 and inline?(node.body[0]) and c.dangling.get(key, []).size == 0
+  if quiet and node.body.size == 1 and inline?(c, node.body[0]) and c.dangling.get(key, []).size == 0
     stmt = node.body[0]
     stmt_key = Comments.key_of(Comments.stmt_kind(stmt), Ast.stmt_span(stmt))
     if c.leading.get(stmt_key, []).size == 0 and c.trailing.get(stmt_key, []).size == 0
