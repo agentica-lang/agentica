@@ -481,14 +481,27 @@ def test_a_socket_as_stdout_that_nobody_reads_yet_does_not_stop_a_timer_task(tmp
     check_rows(lines_of(out), 800)
 
 
+# (case, program, peer flags, the stream that gets the rows): the other stream stays empty. stdout and stderr on one
+# socket (--merge) get the rows of stderr as stdout; with --stdin-socket the socket of stdout is stdin too.
+SOCKET_EXITS = [
+    ("stdout", ROWS_PROGRAM, ["--socket"], "out"),
+    ("stderr", ERROR_ROWS_PROGRAM, ["--error-socket"], "err"),
+    ("merged", ERROR_ROWS_PROGRAM, ["--socket", "--merge"], "out"),
+    ("stdin-and-stdout", ROWS_PROGRAM, ["--socket", "--stdin-socket"], "out"),
+]
+
+
 @not_wine_socket
-def test_a_socket_as_stdout_read_only_after_the_exit_gets_every_row(tmp_path):
-    summary, out, err = run_case(tmp_path, "socket_exit", ROWS_PROGRAM % SOCKET_ROWS,
-                                 peer=["--socket", "--read-after-exit", "--pipe-size", str(SOCKET_BUFFER)])
+@pytest.mark.parametrize("name, program, flags, rows_on", SOCKET_EXITS, ids=[row[0] for row in SOCKET_EXITS])
+def test_a_socket_read_only_after_the_exit_gets_every_row(tmp_path, name, program, flags, rows_on):
+    summary, out, err = run_case(tmp_path, "socket_exit_" + name, program % SOCKET_ROWS,
+                                 peer=[*flags, "--read-after-exit", "--pipe-size", str(SOCKET_BUFFER)])
     assert summary["status"] == 0
-    assert summary["read_start"] >= summary["exit"], "the reader started after the exit"
-    check_rows(lines_of(out), SOCKET_ROWS)
-    assert err == ""
+    first_read = summary["first_error_at" if rows_on == "err" else "read_start"]
+    assert first_read >= summary["exit"], "the reader started after the exit"
+    streams = {"out": out, "err": err.encode("latin-1")}
+    check_rows(lines_of(streams.pop(rows_on)), SOCKET_ROWS)
+    assert streams.popitem()[1] == b""
 
 
 # Rows past a quarter of the socket's buffer come in a later turn: a Unix socket polls writable only while a quarter of
@@ -530,16 +543,6 @@ def test_a_socket_as_stdout_read_only_after_the_exit_gets_a_line_longer_than_the
 
 
 @not_wine_socket
-def test_a_socket_as_stderr_read_only_after_the_exit_gets_every_row(tmp_path):
-    summary, out, err = run_case(tmp_path, "socket_exit_err", ERROR_ROWS_PROGRAM % SOCKET_ROWS,
-                                 peer=["--error-socket", "--read-after-exit", "--pipe-size", str(SOCKET_BUFFER)])
-    assert summary["status"] == 0
-    check_rows(lines_of(err.encode("latin-1")), SOCKET_ROWS)
-    assert summary["first_error_at"] >= summary["exit"], "the reader started after the exit"
-    assert out == b""
-
-
-@not_wine_socket
 def test_a_socket_as_stdout_that_is_full_at_the_end_does_not_hold_the_exit_past_the_flush_limit(tmp_path):
     summary, _, err = run_case(tmp_path, "socket_full", FLOOD_PROGRAM,
                                peer=["--socket", "--read-after-exit", "--pipe-size", "4096"],
@@ -547,23 +550,6 @@ def test_a_socket_as_stdout_that_is_full_at_the_end_does_not_hold_the_exit_past_
     assert summary["status"] == 0
     assert 0.9 <= summary["exit"] <= 20, "the run waits for the flush limit, not for the reader"
     assert '"flush_timeout_ms":500' in err
-
-
-@not_wine_socket
-def test_stdout_and_stderr_on_one_socket_read_only_after_the_exit_get_every_row(tmp_path):
-    summary, out, _ = run_case(tmp_path, "socket_exit_merged", ERROR_ROWS_PROGRAM % SOCKET_ROWS,
-                               peer=["--socket", "--merge", "--read-after-exit", "--pipe-size", str(SOCKET_BUFFER)])
-    assert summary["status"] == 0
-    check_rows(lines_of(out), SOCKET_ROWS)
-
-
-@not_wine_socket
-def test_a_socket_as_stdin_and_stdout_read_only_after_the_exit_gets_every_row(tmp_path):
-    summary, out, _ = run_case(tmp_path, "socket_exit_inetd", ROWS_PROGRAM % SOCKET_ROWS,
-                               peer=["--socket", "--stdin-socket", "--read-after-exit", "--pipe-size",
-                                     str(SOCKET_BUFFER)])
-    assert summary["status"] == 0
-    check_rows(lines_of(out), SOCKET_ROWS)
 
 
 @not_wine_socket

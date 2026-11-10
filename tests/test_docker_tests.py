@@ -376,74 +376,42 @@ def test_make_rejects_unsupported_test_selector_combinations(arguments, message)
     assert message in result.stderr
 
 
-def test_missing_docker_fails_without_host_fallback(launcher):
-    result = launcher.run(env=launcher.environment(include_docker=False))
-    assert result.returncode != 0
-    assert "refusing to run it on the host" in result.stderr
-    assert launcher.calls() == []
+# Each way the launcher fails: (arguments, the variables of the fake docker, None when docker is not on PATH; the exit
+# code, None for any failure; the text of stderr; what the calls of docker show). "nothing": no call at all; "no
+# create": no container; "removed": the one `rm --force` names the container that `create` made.
+FAILURES = [
+    pytest.param((), None, None, "refusing to run it on the host", "nothing", id="docker-missing"),
+    pytest.param((), {"MOCK_IMAGE_MISSING": "1"}, None, "is missing: build it with make docker-test-image", "no create",
+                 id="image-missing"),
+    pytest.param((), {"MOCK_PREPARE_FAIL": "1"}, None, "could not prepare the disposable build volumes", "no create",
+                 id="volumes-fail"),
+    pytest.param(("--mode", "tests"), {}, 2, "", "nothing", id="mode-rejected"),
+    pytest.param((), {"MOCK_START_STATUS": "9"}, 9, "", "removed", id="start-fails"),
+    pytest.param((), {"MOCK_CREATE_FAIL": "1"}, None, "", "removed", id="create-fails"),
+    pytest.param((), {"MOCK_RM_FAIL": "1"}, None, "Docker could not remove the container it created", "removed",
+                 id="rm-fails"),
+    pytest.param(("--mode", "slow", "--timeout", "1"), {"MOCK_START_HANG": "1"}, None, "mode slow exceeded 1 seconds",
+                 "removed", id="timeout"),
+]
 
 
-def test_missing_image_fails_before_container_creation(launcher):
-    env = launcher.environment()
-    env["MOCK_IMAGE_MISSING"] = "1"
-    result = launcher.run(env=env)
-    assert result.returncode != 0
-    assert "is missing: build it with make docker-test-image" in result.stderr
-    assert not any(call[0] == "create" for call in launcher.calls())
-
-
-def test_failed_volume_preparation_stops_before_container_creation(launcher):
-    env = launcher.environment()
-    env["MOCK_PREPARE_FAIL"] = "1"
-    result = launcher.run(env=env)
-    assert result.returncode != 0
-    assert "could not prepare the disposable build volumes" in result.stderr
-    assert not any(call[0] == "create" for call in launcher.calls())
-
-
-def test_rejected_mode_is_refused_before_docker(launcher):
-    result = launcher.run("--mode", "tests")
-    assert result.returncode == 2
-    assert not launcher.log.exists()
-
-
-def test_container_start_failure_still_removes_the_owned_container(launcher):
-    env = launcher.environment()
-    env["MOCK_START_STATUS"] = "9"
-    result = launcher.run(env=env)
-    assert result.returncode == 9
-    assert_owned_container_removed(launcher.calls())
-
-
-def test_partial_container_creation_failure_attempts_exact_name_cleanup(launcher):
-    env = launcher.environment()
-    env["MOCK_CREATE_FAIL"] = "1"
-    result = launcher.run(env=env)
-    assert result.returncode != 0
-    calls = launcher.calls()
-    create = next(call for call in calls if call[0] == "create")
-    remove = next(call for call in calls if call[:2] == ["rm", "--force"])
-    name = create[create.index("--name") + 1]
-    assert remove[2] == name
-
-
-def test_container_cleanup_failure_is_a_hard_error(launcher):
-    env = launcher.environment()
-    env["MOCK_RM_FAIL"] = "1"
-    result = launcher.run(env=env)
-    assert result.returncode != 0
-    assert "Docker could not remove the container it created" in result.stderr
-
-
-def test_timeout_stops_client_and_removes_only_the_owned_container(launcher):
-    env = launcher.environment()
-    env["MOCK_START_HANG"] = "1"
-    result = launcher.run("--mode", "slow", "--timeout", "1", env=env)
-    assert result.returncode != 0
-    assert "mode slow exceeded 1 seconds" in result.stderr
-    calls = launcher.calls()
-    assert_owned_container_removed(calls)
-    assert len([call for call in calls if call[0] == "rm"]) == 1
+@pytest.mark.parametrize("arguments, mock, code, message, calls", FAILURES)
+def test_a_failure_stops_the_launcher_and_removes_only_the_container_it_made(launcher, arguments, mock, code, message,
+                                                                              calls):
+    env = launcher.environment(include_docker=mock is not None)
+    env.update(mock or {})
+    result = launcher.run(*arguments, env=env)
+    assert result.returncode == code if code is not None else result.returncode != 0, result.stderr
+    assert message in result.stderr
+    made = launcher.calls()
+    if calls == "nothing":
+        assert made == []
+    elif calls == "no create":
+        assert not any(call[0] == "create" for call in made)
+    else:
+        create = launcher.create()
+        name = create[create.index("--name") + 1]
+        assert [call for call in made if call[0] == "rm"] == [["rm", "--force", name]]
 
 
 def test_interruption_removes_only_the_owned_container(launcher):

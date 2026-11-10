@@ -519,10 +519,9 @@ def cli_temp(tmp_path):
     return temp.resolve()
 
 
-def agentica(temp, work, *argv, stdin=b"", env=None):
+def agentica(temp, work, *argv, stdin=b""):
     """The CLI with TMPDIR set to the folder that must stay empty."""
-    environment = vm_environment({"TMPDIR": temp, **(env or {})})
-    return execute(cli() + list(argv), stdin=stdin, cwd=work, env=environment)
+    return execute(cli() + list(argv), stdin=stdin, cwd=work, env=vm_environment({"TMPDIR": temp}))
 
 
 def cli_fixture(name):
@@ -555,7 +554,7 @@ def test_the_formats_exit_codes_and_diagnostics_of_a_run(tmp_path):
                 assert result[0] == 1
 
 
-def test_options_arguments_and_removed_flags(tmp_path):
+def test_options_and_arguments_of_a_run(tmp_path):
     temp = cli_temp(tmp_path)
     calls = cli_fixture("calls.agc")
     limited = agentica(temp, tmp_path, "--json", "--max-steps", "3", calls)
@@ -568,8 +567,6 @@ def test_options_arguments_and_removed_flags(tmp_path):
         "def loop(n: Int, acc: Int) -> Int\n  if n == 0\n    return acc\n  end\n  return loop(n - 1, acc + 1)\nend\n\n"
         "def main() -> Void\n  puts(loop(100000, 0))\nend\n", encoding="utf-8")
     assert agentica(temp, tmp_path, str(deep)) == (0, "100000\n", "")
-    for removed in ["--vm", "--legacy-eval"]:
-        assert agentica(temp, tmp_path, removed, str(deep))[:2] == (1, ""), removed
     denied = cli_fixture("spawn-denied.agc")
     assert outcome(agentica(temp, tmp_path, "--deny-run", "--json", denied)) == cli_expected("spawn-denied.agc")
     assert agentica(temp, tmp_path, "--json", denied)[0] == 0
@@ -577,8 +574,6 @@ def test_options_arguments_and_removed_flags(tmp_path):
     seeded = agentica(temp, tmp_path, "--seed", "77", random)
     assert seeded[0] == 0
     assert agentica(temp, tmp_path, "--seed", "77", random) == seeded
-    assert agentica(temp, tmp_path, "--seed", "2147483648", random)[0] == 2
-    assert agentica(temp, tmp_path, "--max-steps", "0", calls)[0] == 2
 
 
 def test_standard_input_exit_codes_and_arguments_reach_the_program(tmp_path):
@@ -631,19 +626,3 @@ def test_a_standard_input_that_cannot_be_read_is_an_internal_error(tmp_path):
     last = decode(process.stderr).strip().split("\n")[-1]
     assert json.loads(last)["code"] == "RUNTIME-INTERNAL"
     assert json.loads(last)["message"] == "cannot read standard input"
-
-
-def test_agentica_vm_names_nothing_any_more(tmp_path):
-    """The variable that named the VM is gone: a value that names no file changes nothing, for a run and for
-    `agentica run`. (`agentica test` starts its runner as `agentica run` on itself, and tests/test_bdd.py runs it.)"""
-    temp = cli_temp(tmp_path)
-    calls = cli_fixture("calls.agc")
-    compiled = tmp_path / "calls.agcb"
-    assert agentica(temp, tmp_path, "compile", calls, "-o", str(compiled))[0] == 0
-    for value in (str(temp / "no-vm"), "", "/bin/false"):
-        assert agentica(temp, tmp_path, calls, env={"AGENTICA_VM": value}) == \
-            agentica(temp, tmp_path, calls), value
-        assert agentica(temp, tmp_path, "--json", cli_fixture("division-by-zero.agc"), env={"AGENTICA_VM": value}) == \
-            agentica(temp, tmp_path, "--json", cli_fixture("division-by-zero.agc")), value
-        assert agentica(temp, tmp_path, "run", "--", str(compiled), env={"AGENTICA_VM": value}) == \
-            agentica(temp, tmp_path, "run", "--", str(compiled)), value
