@@ -80,7 +80,9 @@ release.
   check that the diff is only that file, run `make` again (it must build from
   the new file), and commit it.
 - (b) It cannot (a syntax or builtin that `compiler/` itself uses, or a new
-  bytecode format): split the change in two PRs. The first adds the
+  bytecode format): split the change in two PRs. Stage0 also compiles the
+  `std/` modules that `compiler/` imports and the prelude, so a new syntax
+  needs the refresh before any of them uses it too. The first adds the
   feature without using it in `compiler/` and refreshes stage0; the second uses
   it. To rename a builtin that `compiler/` calls, the first PR keeps the old
   name as a catalog row whose key is the new one, plus the old C key for the
