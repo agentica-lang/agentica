@@ -21,26 +21,40 @@ end
 
 def flat(text: String) -> String = text.split("\n").join(" | ")
 
-def extract(c: Case) -> Result[List[Int]]
+def options(limits: Limits) -> Archive.Options
+  Archive.Options(timeout_ms: limits.timeout_ms, max_output_bytes: limits.max_output_bytes)
+end
+
+def extract_zip(c: Case) -> Result[List[Int]]
   case c.options
-    some(limits) ->
-      options = Archive.Options(timeout_ms: limits.timeout_ms, max_output_bytes: limits.max_output_bytes)
-      return Archive.extract_zip(c.src, c.members, c.dest, options) if c.kind == "zip"
-      Archive.extract_tar(c.src, c.members, c.dest, options)
-    none ->
-      return Archive.extract_zip(c.src, c.members, c.dest) if c.kind == "zip"
-      Archive.extract_tar(c.src, c.members, c.dest)
+    some(limits) -> Archive.extract_zip(c.src, c.members, c.dest, options(limits))
+    none -> Archive.extract_zip(c.src, c.members, c.dest)
   end
 end
 
-def run_case(c: Case) -> String
-  if c.kind == "defaults"
-    o = Archive.Options()
-    return "#{c.label} #{o.timeout_ms} #{o.max_output_bytes}"
+def extract_tar(c: Case) -> Result[List[Int]]
+  case c.options
+    some(limits) -> Archive.extract_tar(c.src, c.members, c.dest, options(limits))
+    none -> Archive.extract_tar(c.src, c.members, c.dest)
   end
-  case extract(c)
-    ok(counts) -> "#{c.label} ok #{counts}"
-    error(message) -> "#{c.label} error #{flat(message)}"
+end
+
+def shown(label: String, result: Result[List[Int]]) -> String
+  case result
+    ok(counts) -> "#{label} ok #{counts}"
+    error(message) -> "#{label} error #{flat(message)}"
+  end
+end
+
+# A kind that is not one of the three is a broken case, never a TAR extraction.
+def run_case(c: Case) -> String
+  case c.kind
+    "zip" -> shown(c.label, extract_zip(c))
+    "tar" -> shown(c.label, extract_tar(c))
+    "defaults" ->
+      o = Archive.Options()
+      "#{c.label} #{o.timeout_ms} #{o.max_output_bytes}"
+    _ -> "bad case: unknown kind #{c.kind}"
   end
 end
 
