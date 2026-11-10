@@ -77,17 +77,19 @@ Invoke the `pr-reviewer` skill (via the Skill tool) and follow it to review GitH
 
 - **Trivial** (metadata only): no review. Every other PR gets one review.
   The reviewer picks light or full ("Depth" in `pr-reviewer`); add "Do a
-  light review." to the prompt for docs, a release or pin bump, tests only,
-  and generated or formatter output with its command in the PR body.
+  light review." after "comments on GitHub." in the prompt for docs, a
+  release or pin bump, tests only, and generated or formatter output with
+  its command in the PR body.
 - **VM C code, concurrency, the loader, I/O or anything security-sensitive:**
   the first review is a critic that invokes the `vm-c-critic` skill (memory
   safety, the park/wake protocol, ownership, untrusted input,
-  `docs/vm/14-core-invariants.md`) in place of the normal review; a large
-  PR that also changes much Agentica code gets both in parallel, and all
-  agreed fixes go to the author in one batch. A reviewer or critic never
-  edits the branch and runs nothing by default: it writes the program and
-  the command that would prove a finding. It builds and runs proofs, in its
-  own scratch worktree, only when the owner allows it for that PR. This
+  `docs/vm/14-core-invariants.md`) in place of the normal review; a PR
+  that also changes about 300 lines or more of Agentica code gets both in
+  parallel, and all agreed fixes go to the author in one batch. A reviewer
+  or critic never edits the branch and runs nothing by default: the critic
+  writes the program and the command that would prove a finding. It builds
+  and runs proofs ("Proving a finding" in `vm-c-critic`), in its own
+  scratch worktree, only when the owner allows it for that PR. This
   round is pass 1 for section 3: a review of the fixed head follows only
   after a critical or major.
 - Wait for each completion notice; never read agent transcripts.
@@ -123,8 +125,10 @@ Invoke the `pr-reviewer` skill (via the Skill tool) and follow it to review GitH
   Merge when `test` is green (plus `build` and Site examples when they run);
   master's Platforms run catches the rare gap.
 - Wait with one background call of the `watch-ci` skill when it is
-  installed (`--sha <head>`, `--require 'conformance (macos|windows)'` with
-  the label, `--merge` only when the owner asked for the merge). Without
+  installed (`--sha <head>`; with the label also `--require 'conformance
+  (macos|windows)'`, so the Platforms jobs must appear, and the green
+  verdict covers every check; `--merge` only when the owner asked for the
+  merge). Without
   it: one background loop on `gh run list --branch <b>` filtered by the head
   SHA, started from the main checkout (run the query once in the foreground
   first).
