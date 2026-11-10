@@ -197,14 +197,17 @@ texts.
   lock and the open state. The socket is read only while a reader waits, 4 KiB
   at a time (more when the request asks for more), so the VM reads at most about
   4 KiB past what the program asked. `recv_bytes` returns what is buffered, as
-  soon as there is one byte, and empty `Bytes` at EOF. `read_line` strips LF or
-  CRLF, returns a final line without a terminator at EOF (a lone CR stays), and
-  returns `network: end of input` on an empty EOF. A line over 1 MiB returns
-  `network: line exceeds 1048576 bytes` and closes the socket. Invalid UTF-8
-  returns `invalid UTF-8 at byte N` (N counts from the start of the line), and
-  the line is consumed. A read
-  error (`ECONNRESET`) returns `could not read from the stream`, and later reads
-  return it too. Bytes that arrived before the error are still returned.
+  soon as there is one byte, and empty `Bytes` at EOF. `recv_bytes` without a
+  timeout (the catalog form of two arguments) starts its job with no timer and
+  waits for the reader lock with the longest deadline (`INT64_MAX` ms), so
+  nothing but data, EOF, an error, a close or a cancel ends it. `read_line`
+  strips LF or CRLF, returns a final line without a terminator at EOF (a lone CR
+  stays), and returns `network: end of input` on an empty EOF. A line over 1 MiB
+  returns `network: line exceeds 1048576 bytes` and closes the socket. Invalid
+  UTF-8 returns `invalid UTF-8 at byte N` (N counts from the start of the line),
+  and the line is consumed. A read error (`ECONNRESET`) returns `could not read
+  from the stream`, and later reads return it too. Bytes that arrived before the
+  error are still returned.
 - **Writes.** `send` writes the UTF-8 bytes of its String with no size limit, as
   the grammar says. `send_bytes` checks the 1 MiB limit first. `send_bytes`,
   `recv_bytes` and the HttpWire byte rows take and give `Bytes`, under the

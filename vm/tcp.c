@@ -1719,8 +1719,10 @@ static bool begin_read(void *data, agc_io_job *job) {
 }
 
 /* A read as read_op takes it: the kind, the count and the body limit of HttpWire.read_head, whose rest goes back in
-   front of the input on the I/O thread (here at N = 1, else in begin_read). */
-static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, uint32_t span) {
+   front of the input on the I/O thread (here at N = 1, else in begin_read). UNLIMITED (a call with no timeout
+   argument) waits with no limit: the read has no timer, so nothing closes the socket while it waits, and a wait for
+   the read lock takes the longest deadline, INT64_MAX ms, which agc_handle_wait keeps whole. */
+static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, bool unlimited, uint32_t span) {
   req_kind kind = want->kind;
   if (kind == REQ_BYTES) {
     int64_t wanted = agc_as_int(vm, args[1]);
@@ -1738,7 +1740,8 @@ static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, uint3
     want->head_only = agc_as_bool(vm, args[1]);
     want->limit = (uint64_t)agc_http_max_body(vm, args[2], span);
   }
-  int64_t timeout = agc_as_int(vm, args[kind == REQ_LINE || kind == REQ_IDLE ? 1 : kind == REQ_BYTES ? 2 : 3]);
+  int64_t timeout =
+      unlimited ? INT64_MAX : agc_as_int(vm, args[kind == REQ_LINE || kind == REQ_IDLE ? 1 : kind == REQ_BYTES ? 2 : 3]);
   agc_socket *sk = agc_as_socket(vm, args[0]);
   agc_value result;
   if (!agc_stream_lock(vm, sk->reader, AGC_STREAM_NETWORK, &timeout, &result)) return result;
@@ -1761,24 +1764,29 @@ static agc_value read_op(agc_vm *vm, const agc_value *args, request *want, uint3
     memcpy(q->rest, rest, rest_len);
     q->rest_len = rest_len;
   }
-  park(vm, q, agc_handle_value(sk->reader), timeout, begin_read);
+  park(vm, q, agc_handle_value(sk->reader), unlimited ? -1 : timeout, begin_read);
   return agc_void();
 }
 
 static agc_value builtin_read_line(agc_vm *vm, agc_value *args, uint32_t span) {
-  return read_op(vm, args, &(request){.kind = REQ_LINE}, span);
+  return read_op(vm, args, &(request){.kind = REQ_LINE}, false, span);
 }
 
 /* TCP.recv_bytes: up to count bytes, as a Bytes. */
 static agc_value builtin_recv_bytes(agc_vm *vm, agc_value *args, uint32_t span) {
-  return read_op(vm, args, &(request){.kind = REQ_BYTES}, span);
+  return read_op(vm, args, &(request){.kind = REQ_BYTES}, false, span);
+}
+
+/* TCP.recv_bytes(socket, count): the same with no time limit. */
+static agc_value builtin_recv_bytes_unlimited(agc_vm *vm, agc_value *args, uint32_t span) {
+  return read_op(vm, args, &(request){.kind = REQ_BYTES}, true, span);
 }
 
 /* HttpWire.idle? (std-only): whether the socket's input holds no byte now and has not ended or failed, which std/http
    asks after a body, since a connection with anything more in its input is not kept. It takes no input and does not
    wait for any; the timeout is for the read lock. */
 static agc_value builtin_idle(agc_vm *vm, agc_value *args, uint32_t span) {
-  return read_op(vm, args, &(request){.kind = REQ_IDLE}, span);
+  return read_op(vm, args, &(request){.kind = REQ_IDLE}, false, span);
 }
 
 /* HttpWire.read_head (std-only): the next request head, parsed from the
@@ -1786,13 +1794,13 @@ static agc_value builtin_idle(agc_vm *vm, agc_value *args, uint32_t span) {
    there for the body or the next request. rest (the bytes a chunked body's
    last read took past its end) is put back first. */
 static agc_value builtin_read_head(agc_vm *vm, agc_value *args, uint32_t span) {
-  return read_op(vm, args, &(request){.kind = REQ_HEAD}, span);
+  return read_op(vm, args, &(request){.kind = REQ_HEAD}, false, span);
 }
 
 /* HttpWire.read_response (std-only): the next response head, read like
    read_head, with the framing rules of a response to HEAD when head_only. */
 static agc_value builtin_read_response(agc_vm *vm, agc_value *args, uint32_t span) {
-  return read_op(vm, args, &(request){.kind = REQ_RESPONSE}, span);
+  return read_op(vm, args, &(request){.kind = REQ_RESPONSE}, false, span);
 }
 
 /* HttpWire.clean_eof? (std-only): whether the end of input that a read has
@@ -2097,6 +2105,7 @@ const agc_builtin agc_tcp_builtins[] = {
   {"HttpWire.drop_tls", 1, builtin_drop_tls, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.upgrade_tls", 4, builtin_upgrade_tls, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"HttpWire.upgrade_context", 4, builtin_upgrade_context, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"TCP.recv_bytes.bytes", 2, builtin_recv_bytes_unlimited, AGC_NATIVE_NONE, AGC_COST_SIZE, true, false, false},
 };
 
 const size_t agc_tcp_builtin_count = sizeof agc_tcp_builtins / sizeof agc_tcp_builtins[0];

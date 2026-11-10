@@ -675,8 +675,9 @@ builtin TCP.remote_address forms=1
   TCP.remote_address(socket: Socket) -> String shape=(Opaque(Socket)) -> String rule=Plain impl="TCP.remote_address" effects=["network"] desc="Return the peer's IP address (\"127.0.0.1\", \"::1\") without the port, or \"\" when closed."
 builtin TCP.read_line forms=1
   TCP.read_line(socket: Socket, timeout_ms: Int) -> Result[String] shape=(Opaque(Socket), Int) -> Result(String) rule=Plain impl="TCP.read_line" effects=["network"] desc="Read a bounded UTF-8 line, removing its terminator."
-builtin TCP.recv_bytes forms=1
-  TCP.recv_bytes(socket: Socket, max_bytes: Int, timeout_ms: Int) -> Result[Bytes] shape=(Opaque(Socket), Int, Int) -> Result(Bytes) rule=Plain impl="TCP.recv_bytes.bytes" effects=["network"] desc="Read available bytes; empty Bytes indicate EOF."
+builtin TCP.recv_bytes forms=2
+  TCP.recv_bytes(socket: Socket, max_bytes: Int, timeout_ms: Int) -> Result[Bytes] shape=(Opaque(Socket), Int, Int) -> Result(Bytes) rule=Plain impl="TCP.recv_bytes.bytes" effects=["network"] desc="Read available bytes; empty Bytes indicate EOF; a timeout closes the socket."
+  TCP.recv_bytes(socket: Socket, max_bytes: Int) -> Result[Bytes] shape=(Opaque(Socket), Int) -> Result(Bytes) rule=Plain impl="TCP.recv_bytes.bytes" effects=["network"] desc="Read available bytes with no time limit; empty Bytes indicate EOF."
 builtin TCP.send forms=1
   TCP.send(socket: Socket, text: String, timeout_ms: Int) -> Result[Void] shape=(Opaque(Socket), String, Int) -> Result(Void) rule=Plain impl="TCP.send" effects=["network"] desc="Send UTF-8 text and flush."
 builtin TCP.send_bytes forms=1
