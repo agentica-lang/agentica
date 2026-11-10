@@ -83,20 +83,20 @@ export def parse(arguments: List[String]) -> Parsed
     return Parsed.Broken("--vm, --version and --agentica are required")
   end
 
-  return user_arguments(options, arguments.drop(at + 1))
+  user_arguments(options, arguments.drop(at + 1))
 end
 
 # One driver option with its value. An unknown name or a bad number leaves the options as they are, and the checks of
 # parse find what is missing.
 def option(options: Options, name: String, value: String) -> Options
   case name
-    "--vm" -> return options.with(vm: value)
-    "--version" -> return options.with(version: value)
-    "--agentica" -> return options.with(agentica: options.agentica.push(value))
-    "--style" -> return options.with(style: value)
-    "--seed" -> return options.with(seeded: true, seed: value.to_int.unwrap_or(0))
-    "--test-timeout-ms" -> return options.with(test_timeout_ms: value.to_int.unwrap_or(options.test_timeout_ms))
-    _ -> return options
+    "--vm" -> options.with(vm: value)
+    "--version" -> options.with(version: value)
+    "--agentica" -> options.with(agentica: options.agentica.push(value))
+    "--style" -> options.with(style: value)
+    "--seed" -> options.with(seeded: true, seed: value.to_int.unwrap_or(0))
+    "--test-timeout-ms" -> options.with(test_timeout_ms: value.to_int.unwrap_or(options.test_timeout_ms))
+    _ -> options
   end
 end
 
@@ -175,5 +175,5 @@ def user_arguments(options: Options, words: List[String]) -> Parsed
     end
   end
 
-  return Parsed.Ready(shown)
+  Parsed.Ready(shown)
 end

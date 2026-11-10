@@ -20,132 +20,132 @@ end
 ## The declaration inside an export, or the declaration itself.
 export def unwrap(decl: Ast.Decl) -> Ast.Decl
   case decl
-    Ast.Decl.Export(node) -> return node.declaration
-    _ -> return decl
+    Ast.Decl.Export(node) -> node.declaration
+    _ -> decl
   end
 end
 
 ## The span of a declaration (of the whole export, for an exported one).
 export def span_of(decl: Ast.Decl) -> Source.Span
   case decl
-    Ast.Decl.Import(node) -> return node.span
-    Ast.Decl.Reexport(node) -> return node.span
-    Ast.Decl.Export(node) -> return node.span
-    Ast.Decl.Function(node) -> return node.span
-    Ast.Decl.Struct(node) -> return node.span
-    Ast.Decl.Enum(node) -> return node.span
-    Ast.Decl.TypeAlias(node) -> return node.span
-    Ast.Decl.Resource(node) -> return node.span
-    Ast.Decl.Constant(node) -> return node.span
+    Ast.Decl.Import(node) -> node.span
+    Ast.Decl.Reexport(node) -> node.span
+    Ast.Decl.Export(node) -> node.span
+    Ast.Decl.Function(node) -> node.span
+    Ast.Decl.Struct(node) -> node.span
+    Ast.Decl.Enum(node) -> node.span
+    Ast.Decl.TypeAlias(node) -> node.span
+    Ast.Decl.Resource(node) -> node.span
+    Ast.Decl.Constant(node) -> node.span
   end
 end
 
 ## Returns the span of the name of a type alias, and the span of the whole declaration for any other one.
 export def name_span_of(decl: Ast.Decl) -> Source.Span
   case unwrap(decl)
-    Ast.Decl.TypeAlias(node) -> return node.name_span
-    _ -> return span_of(decl)
+    Ast.Decl.TypeAlias(node) -> node.name_span
+    _ -> span_of(decl)
   end
 end
 
 ## The name a struct, enum, alias, resource, function or constant declares; "" for an import.
 export def name_of(decl: Ast.Decl) -> String
   case unwrap(decl)
-    Ast.Decl.Function(node) -> return node.name
-    Ast.Decl.Struct(node) -> return node.name
-    Ast.Decl.Enum(node) -> return node.name
-    Ast.Decl.TypeAlias(node) -> return node.name
-    Ast.Decl.Resource(node) -> return node.name
-    Ast.Decl.Constant(node) -> return node.name
-    _ -> return ""
+    Ast.Decl.Function(node) -> node.name
+    Ast.Decl.Struct(node) -> node.name
+    Ast.Decl.Enum(node) -> node.name
+    Ast.Decl.TypeAlias(node) -> node.name
+    Ast.Decl.Resource(node) -> node.name
+    Ast.Decl.Constant(node) -> node.name
+    _ -> ""
   end
 end
 
 ## The kind of the declaration inside an export, or of the declaration itself.
 export def kind_of(decl: Ast.Decl) -> Kind
   case unwrap(decl)
-    Ast.Decl.Function(_) -> return Kind.Function
-    Ast.Decl.Struct(_) -> return Kind.Struct
-    Ast.Decl.Enum(_) -> return Kind.Enum
-    Ast.Decl.TypeAlias(_) -> return Kind.TypeAlias
-    Ast.Decl.Resource(_) -> return Kind.Resource
-    Ast.Decl.Constant(_) -> return Kind.Constant
-    _ -> return Kind.Import
+    Ast.Decl.Function(_) -> Kind.Function
+    Ast.Decl.Struct(_) -> Kind.Struct
+    Ast.Decl.Enum(_) -> Kind.Enum
+    Ast.Decl.TypeAlias(_) -> Kind.TypeAlias
+    Ast.Decl.Resource(_) -> Kind.Resource
+    Ast.Decl.Constant(_) -> Kind.Constant
+    _ -> Kind.Import
   end
 end
 
 ## True for a struct.
 export def struct?(kind: Kind) -> Bool
   case kind
-    Kind.Struct -> return true
-    _ -> return false
+    Kind.Struct -> true
+    _ -> false
   end
 end
 
 ## True for a function.
 export def function?(kind: Kind) -> Bool
   case kind
-    Kind.Function -> return true
-    _ -> return false
+    Kind.Function -> true
+    _ -> false
   end
 end
 
 ## True for an enum.
 export def enum?(kind: Kind) -> Bool
   case kind
-    Kind.Enum -> return true
-    _ -> return false
+    Kind.Enum -> true
+    _ -> false
   end
 end
 
 ## Whether the kind is a type alias.
 export def type_alias?(kind: Kind) -> Bool
   case kind
-    Kind.TypeAlias -> return true
-    _ -> return false
+    Kind.TypeAlias -> true
+    _ -> false
   end
 end
 
 ## True for a resource of an extern block.
 export def resource?(kind: Kind) -> Bool
   case kind
-    Kind.Resource -> return true
-    _ -> return false
+    Kind.Resource -> true
+    _ -> false
   end
 end
 
 ## True for a constant.
 export def constant?(kind: Kind) -> Bool
   case kind
-    Kind.Constant -> return true
-    _ -> return false
+    Kind.Constant -> true
+    _ -> false
   end
 end
 
 ## True for an import.
 export def import?(kind: Kind) -> Bool
   case kind
-    Kind.Import -> return true
-    _ -> return false
+    Kind.Import -> true
+    _ -> false
   end
 end
 
 ## True for an export, or a constant written with export.
 export def exported?(decl: Ast.Decl) -> Bool
   case decl
-    Ast.Decl.Export(_) -> return true
-    Ast.Decl.Constant(node) -> return node.exported
-    _ -> return false
+    Ast.Decl.Export(_) -> true
+    Ast.Decl.Constant(node) -> node.exported
+    _ -> false
   end
 end
 
 ## The text of the import line a help shows, for the path as written (quoted): the alias form, or the name list.
 export def import_line(written: String, decl: Ast.ImportDecl) -> String
   case decl.alias
-    some(alias) -> return "import #{alias} from #{written}"
+    some(alias) -> "import #{alias} from #{written}"
     none ->
       pieces = decl.names.map do |entry| entry_text(entry) end
-      return "import {#{pieces.join(", ")}} from #{written}"
+      "import {#{pieces.join(", ")}} from #{written}"
   end
 end
 
@@ -169,7 +169,7 @@ export def imports_of(declarations: List[Ast.Decl]) -> List[Ast.ImportDecl]
     end
   end
 
-  return found
+  found
 end
 
 ## The re-exports of a file, in order.
@@ -182,7 +182,7 @@ export def reexports_of(declarations: List[Ast.Decl]) -> List[Ast.ReexportDecl]
     end
   end
 
-  return found
+  found
 end
 
 ## CHECK-DECL-ORDER, in file, for the first declaration that comes after a later group. The groups are: imports and
@@ -216,38 +216,38 @@ export def check_order(file: String, declarations: List[Ast.Decl]) -> Result[Voi
     end
   end
 
-  return ok()
+  ok()
 end
 
 # A resource of an extern module block takes the place of a def, as its functions do, so the block ranks as one unit
 # with the functions; a resource of an extern block ranks with the types.
 def rank(decl: Ast.Decl) -> Int
   case decl
-    Ast.Decl.Import(_) -> return 0
-    Ast.Decl.Reexport(_) -> return 0
-    Ast.Decl.Constant(_) -> return 1
-    Ast.Decl.Struct(_) -> return 2
-    Ast.Decl.Enum(_) -> return 2
-    Ast.Decl.TypeAlias(_) -> return 2
-    Ast.Decl.Resource(node) -> return resource_rank(node, 4)
+    Ast.Decl.Import(_) -> 0
+    Ast.Decl.Reexport(_) -> 0
+    Ast.Decl.Constant(_) -> 1
+    Ast.Decl.Struct(_) -> 2
+    Ast.Decl.Enum(_) -> 2
+    Ast.Decl.TypeAlias(_) -> 2
+    Ast.Decl.Resource(node) -> resource_rank(node, 4)
     Ast.Decl.Export(node) ->
       case node.declaration
-        Ast.Decl.Struct(_) -> return 2
-        Ast.Decl.Enum(_) -> return 2
-        Ast.Decl.TypeAlias(_) -> return 2
-        Ast.Decl.Resource(inner) -> return resource_rank(inner, 3)
-        Ast.Decl.Function(inner) -> return function_rank(inner, 3)
-        _ -> return 3
+        Ast.Decl.Struct(_) -> 2
+        Ast.Decl.Enum(_) -> 2
+        Ast.Decl.TypeAlias(_) -> 2
+        Ast.Decl.Resource(inner) -> resource_rank(inner, 3)
+        Ast.Decl.Function(inner) -> function_rank(inner, 3)
+        _ -> 3
       end
 
-    Ast.Decl.Function(node) -> return function_rank(node, 4)
+    Ast.Decl.Function(node) -> function_rank(node, 4)
   end
 end
 
 def resource_rank(resource: Ast.ResourceDecl, plain: Int) -> Int
   return plain if resource.module != ""
 
-  return 2
+  2
 end
 
 # A function takes the rank of its kind (3 exported, 4 private), except one of an extern block that declares a
@@ -257,30 +257,30 @@ def function_rank(function: Ast.FunctionDecl, plain: Int) -> Int
     some(link) ->
       return 2 if link.with_types
 
-      return plain
-    none -> return plain
+      plain
+    none -> plain
   end
 end
 
 # Whether the declaration is the record that the parser made for an extern function.
 def record?(decl: Ast.Decl) -> Bool
   case decl
-    Ast.Decl.Struct(node) -> return node.record_of != ""
-    _ -> return false
+    Ast.Decl.Struct(node) -> node.record_of != ""
+    _ -> false
   end
 end
 
 def order_help(group: Int) -> String
   case group
-    0 -> return "imports come first, before any constant, struct, enum, type alias or function"
-    1 -> return "constants come right after the imports"
-    2 -> return "structs, enums, type aliases and resources come before functions"
-    _ -> return "exported functions come before private functions"
+    0 -> "imports come first, before any constant, struct, enum, type alias or function"
+    1 -> "constants come right after the imports"
+    2 -> "structs, enums, type aliases and resources come before functions"
+    _ -> "exported functions come before private functions"
   end
 end
 
 def entry_text(entry: Ast.ImportName) -> String
   return entry.name if entry.name == entry.local
 
-  return "#{entry.name} as #{entry.local}"
+  "#{entry.name} as #{entry.local}"
 end

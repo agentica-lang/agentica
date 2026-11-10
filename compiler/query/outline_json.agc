@@ -10,7 +10,7 @@ export def json(outlined: Model.Outline) -> Json
   file = outlined.file
   imports = outlined.imports.map do |declaration: Model.Import| import_json(file, declaration) end
   items = outlined.items.map do |item: Model.Item| DocJson.item_json(file, item, true) end
-  return JSON.object({
+  JSON.object({
     "version": JSON.from(outlined.version),
     "command": JSON.from("outline"),
     "file": JSON.from(file),
@@ -31,7 +31,7 @@ def import_json(file: String, declaration: Model.Import) -> Json
     })
   end
 
-  return JSON.object({
+  JSON.object({
     "path": JSON.from(declaration.path),
     "alias": DocJson.text_json(declaration.alias),
     "names": JSON.array(names),

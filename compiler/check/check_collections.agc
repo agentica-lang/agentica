@@ -16,36 +16,36 @@ import CheckTypes from "check_types"
 ## Checks a call of a Task, Channel, Map, Set, Profile or Native builtin by its rule. Any other rule is the caller's.
 export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]
   case rule
-    Model.Rule.TaskSpawn -> return check_spawn(cx, st, site, false)
-    Model.Rule.TaskSpawnOwning -> return check_spawn(cx, st, site, true)
-    Model.Rule.NativeClose -> return check_native_target(cx, st, site, false)
-    Model.Rule.NativeClosed -> return check_native_target(cx, st, site, true)
-    Model.Rule.TaskAwait -> return check_await(cx, st, site)
-    Model.Rule.TaskAwaitTimeout -> return check_await_timeout(cx, st, site)
-    Model.Rule.TaskMap -> return check_task_map(cx, st, site)
-    Model.Rule.TaskMonitor -> return check_monitor(cx, st, site)
-    Model.Rule.TaskTarget -> return check_target(cx, st, site, &Args.task_argument)
-    Model.Rule.AtsNew -> return check_ats_new(cx, st, site)
-    Model.Rule.AtsCall -> return check_ats_call(cx, st, site)
-    Model.Rule.ChannelNew -> return check_channel_new(cx, st, site)
-    Model.Rule.ChannelSend -> return check_channel_send(cx, st, site)
-    Model.Rule.ChannelRecv -> return check_channel_recv(cx, st, site)
-    Model.Rule.ChannelTarget -> return check_target(cx, st, site, &Args.channel_argument)
-    Model.Rule.ProfileMeasure -> return check_block_value(cx, st, site, T.Type.String, [])
+    Model.Rule.TaskSpawn -> check_spawn(cx, st, site, false)
+    Model.Rule.TaskSpawnOwning -> check_spawn(cx, st, site, true)
+    Model.Rule.NativeClose -> check_native_target(cx, st, site, false)
+    Model.Rule.NativeClosed -> check_native_target(cx, st, site, true)
+    Model.Rule.TaskAwait -> check_await(cx, st, site)
+    Model.Rule.TaskAwaitTimeout -> check_await_timeout(cx, st, site)
+    Model.Rule.TaskMap -> check_task_map(cx, st, site)
+    Model.Rule.TaskMonitor -> check_monitor(cx, st, site)
+    Model.Rule.TaskTarget -> check_target(cx, st, site, &Args.task_argument)
+    Model.Rule.AtsNew -> check_ats_new(cx, st, site)
+    Model.Rule.AtsCall -> check_ats_call(cx, st, site)
+    Model.Rule.ChannelNew -> check_channel_new(cx, st, site)
+    Model.Rule.ChannelSend -> check_channel_send(cx, st, site)
+    Model.Rule.ChannelRecv -> check_channel_recv(cx, st, site)
+    Model.Rule.ChannelTarget -> check_target(cx, st, site, &Args.channel_argument)
+    Model.Rule.ProfileMeasure -> check_block_value(cx, st, site, T.Type.String, [])
     Model.Rule.NativeMemoryBlock ->
       first = site.selected.parameters[0].type
-      return check_block_value(cx, st, site, first, [T.Type.Opaque("C.Pointer")])
-    Model.Rule.NativeStruct -> return check_native_struct(cx, st, site)
-    Model.Rule.NativeSynchronize -> return check_block_value(cx, st, site, T.Type.Opaque("Native.Mutex"), [])
-    Model.Rule.NativeCallback -> return check_native_callback(cx, st, site)
-    _ -> return check_map_rule(cx, st, site, rule)
+      check_block_value(cx, st, site, first, [T.Type.Opaque("C.Pointer")])
+    Model.Rule.NativeStruct -> check_native_struct(cx, st, site)
+    Model.Rule.NativeSynchronize -> check_block_value(cx, st, site, T.Type.Opaque("Native.Mutex"), [])
+    Model.Rule.NativeCallback -> check_native_callback(cx, st, site)
+    _ -> check_map_rule(cx, st, site, rule)
   end
 end
 
 ## True for a type that holds a Codec somewhere, walked as holds_handle? walks: IO.inspect refuses it, since a codec
 ## has no text of its own.
 export def holds_codec?(cx: State.Cx, type: T.Type) -> Bool
-  return holds?(cx, type) do |part: T.Type| T.is?(part, "Codec") end
+  holds?(cx, type) do |part: T.Type| T.is?(part, "Codec") end
 end
 
 # Task.spawn and Task.spawn_owning: a function of one parameter and the argument it gets; Task.spawn alone also has
@@ -76,7 +76,7 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
     )
   end
 
-  return ok(State.Out(st: handed.st, type: T.Type.Task(T.result(callback.type))))
+  ok(State.Out(st: handed.st, type: T.Type.Task(T.result(callback.type))))
 end
 
 # CHECK-TYPE-MISMATCH of a spawn whose function does not take as many parameters as the call has arguments after it.
@@ -97,15 +97,15 @@ def spawn_mismatch(cx: State.Cx, callback: State.Out, site: State.Site, owning: 
     return State.fail_help(cx, callback.st, "CHECK-TYPE-MISMATCH", message, span, spawn_argument_help(site.args[0]))
   end
 
-  return State.fail(cx, callback.st, "CHECK-TYPE-MISMATCH", message, span)
+  State.fail(cx, callback.st, "CHECK-TYPE-MISMATCH", message, span)
 end
 
 # The help of a one-parameter function given to Task.spawn alone: a reference gets its argument, a block loses its.
 def spawn_argument_help(callback: Ast.Expr) -> String
   case callback
     Ast.Expr.BlockLit(_) ->
-      return "a block with a parameter needs an argument: pass it through an Fn variable, or drop the parameter"
-    _ -> return "pass its argument: Task.spawn(&f, x)"
+      "a block with a parameter needs an argument: pass it through an Fn variable, or drop the parameter"
+    _ -> "pass its argument: Task.spawn(&f, x)"
   end
 end
 
@@ -113,13 +113,13 @@ end
 def spawn_found(type: T.Type) -> String
   return "a function with #{T.params(type).size} parameter(s)" if T.is?(type, "Fn")
 
-  return T.to_text(type)
+  T.to_text(type)
 end
 
 def c_pointer?(type: T.Type) -> Bool = T.is?(type, "Opaque") and T.name(type) == "C.Pointer"
 
 def handle?(cx: State.Cx, type: T.Type) -> Bool
-  return T.is?(type, "Opaque") and (HANDLES.include?(T.name(type)) or cx.resources.include?(T.name(type)))
+  T.is?(type, "Opaque") and (HANDLES.include?(T.name(type)) or cx.resources.include?(T.name(type)))
 end
 
 # True for a type Task.spawn_owning can hand over: a handle, a Channel or a C.Pointer, or a struct, enum, List, Map or
@@ -128,7 +128,7 @@ end
 # many times costs it once; the type arguments of a struct or enum are walked at each use, and a type variable in a
 # field or payload holds nothing.
 def holds_handle?(cx: State.Cx, type: T.Type) -> Bool
-  return holds?(cx, type) do |part: T.Type| handle?(cx, part) or c_pointer?(part) or T.is?(part, "Channel") end
+  holds?(cx, type) do |part: T.Type| handle?(cx, part) or c_pointer?(part) or T.is?(part, "Channel") end
 end
 
 # True when the type, or a type inside it (type_parts), passes found.
@@ -147,27 +147,27 @@ def holds?(cx: State.Cx, type: T.Type, found: Fn[T.Type, Bool]) -> Bool
     end
   end
 
-  return false
+  false
 end
 
 # The types inside a type that holds? walks next: the item of a Result, Optional or List, the key and value of a Map,
 # the type arguments of a struct or enum, and the fields or payloads of a struct or enum not seen yet.
 def type_parts(cx: State.Cx, type: T.Type, seen: Set[String]) -> List[T.Type]
   case type
-    T.Type.Result(item) -> return [item]
-    T.Type.Optional(item) -> return [item]
-    T.Type.List(item) -> return [item]
-    T.Type.Map(key, value) -> return [key, value]
+    T.Type.Result(item) -> [item]
+    T.Type.Optional(item) -> [item]
+    T.Type.List(item) -> [item]
+    T.Type.Map(key, value) -> [key, value]
     T.Type.Struct(name, args) ->
       return args if seen.include?(name) or !cx.structs.has_key?(name)
 
-      return args.concat(cx.structs[name].map do |field: Model.Named| field.type end)
+      args.concat(cx.structs[name].map do |field: Model.Named| field.type end)
     T.Type.Enum(name, args) ->
       return args if seen.include?(name) or !cx.enums.has_key?(name)
 
       payloads = cx.enums[name].variants.flat_map do |variant: Model.Variant| variant.payload end
-      return args.concat(payloads)
-    _ -> return []
+      args.concat(payloads)
+    _ -> []
   end
 end
 
@@ -197,7 +197,7 @@ def check_native_target(cx: State.Cx, st: State.St, site: State.Site, closed: Bo
 
   return ok(State.Out(st: target.st, type: T.Type.Bool)) if closed
 
-  return ok(State.Out(st: target.st, type: T.Type.Void))
+  ok(State.Out(st: target.st, type: T.Type.Void))
 end
 
 # Native.size_of(Type), Native.get_struct(pointer, offset, Type) and Native.put_struct(pointer, offset, value): the
@@ -245,8 +245,8 @@ def check_native_struct(cx: State.Cx, st: State.St, site: State.Site) -> Result[
       current = State.record_type(current, node.id, type)
       return ok(State.Out(st: current, type: T.Type.Int)) if name == "Native.size_of"
 
-      return ok(State.Out(st: current, type: type))
-    _ -> return error(not_c_struct(cx, current, name, "a value", Ast.expr_span(last)))
+      ok(State.Out(st: current, type: type))
+    _ -> error(not_c_struct(cx, current, name, "a value", Ast.expr_span(last)))
   end
 end
 
@@ -333,22 +333,22 @@ def check_native_callback(cx: State.Cx, st: State.St, site: State.Site) -> Resul
     )
   end
 
-  return ok(State.Out(st: given.st, type: wanted))
+  ok(State.Out(st: given.st, type: wanted))
 end
 
 # The function that the second argument of Native.callback names with &, unless it is a function of an extern block
 # (NATIVES); none for any other value.
 def callback_target(expr: Ast.Expr, natives: Set[String]) -> Optional[String]
   case expr
-    Ast.Expr.FunctionRef(node) if not natives.include?(node.name) -> return some(node.name)
-    _ -> return none
+    Ast.Expr.FunctionRef(node) if not natives.include?(node.name) -> some(node.name)
+    _ -> none
   end
 end
 
 def type_name?(expr: Ast.Expr) -> Bool
   case expr
-    Ast.Expr.TypeName(_) -> return true
-    _ -> return false
+    Ast.Expr.TypeName(_) -> true
+    _ -> false
   end
 end
 
@@ -356,7 +356,7 @@ def c_struct?(cx: State.Cx, type: T.Type) -> Bool = T.is?(type, "Struct") and cx
 
 # CHECK-TYPE-MISMATCH of a struct builtin of Native given something that is not a C struct of an extern block.
 def not_c_struct(cx: State.Cx, st: State.St, name: String, found: String, span: Source.Span) -> String
-  return State.fail_help(
+  State.fail_help(
     cx,
     st,
     "CHECK-TYPE-MISMATCH",
@@ -370,7 +370,7 @@ def check_await(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Ou
   target = try State.expr(cx, st, site.args[0], T.task_of(site.expected))
   return error(not_awaitable(cx, target, site)) if !T.is?(target.type, "Task")
 
-  return ok(State.Out(st: target.st, type: T.item(target.type)))
+  ok(State.Out(st: target.st, type: T.item(target.type)))
 end
 
 # CHECK-TYPE-MISMATCH of an await of something that is not a Task[R]; the TaskRef of Task.current has no result type to
@@ -383,7 +383,7 @@ def not_awaitable(cx: State.Cx, target: State.Out, site: State.Site) -> String
     return State.fail_help(cx, target.st, "CHECK-TYPE-MISMATCH", message, span, help)
   end
 
-  return State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", "Task.await requires a task", span)
+  State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", "Task.await requires a task", span)
 end
 
 # Task.await with a timeout gives Await[R]: Await.Done(value) or Await.TimedOut.
@@ -397,7 +397,7 @@ def check_await_timeout(cx: State.Cx, st: State.St, site: State.Site) -> Result[
   return error(not_awaitable(cx, target, site)) if !T.is?(target.type, "Task")
 
   timeout = try State.expr(cx, target.st, site.args[1], T.Type.Int)
-  return ok(State.Out(st: timeout.st, type: T.Type.Enum("Await", [T.item(target.type)])))
+  ok(State.Out(st: timeout.st, type: T.Type.Enum("Await", [T.item(target.type)])))
 end
 
 # Task.monitor(task, channel, wrap): a task of any result, a Channel[M], and a block or function that takes the
@@ -412,7 +412,7 @@ def check_monitor(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
 
   wrap = T.Type.Fn([T.Type.Struct("TaskDown", [])], T.item(channel.type))
   checked = try State.expr(cx, channel.st, site.args[2], wrap)
-  return ok(State.Out(st: checked.st, type: T.Type.Void))
+  ok(State.Out(st: checked.st, type: T.Type.Void))
 end
 
 # Task.map(items, limit, timeout_ms, f): the callback is a block (which gets the item type from the list) or a function
@@ -421,8 +421,8 @@ end
 def check_task_map(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   callback = site.args[3]
   case callback
-    Ast.Expr.BlockLit(block) -> return task_map_block(cx, st, site, block)
-    _ -> return task_map_function(cx, st, site, callback)
+    Ast.Expr.BlockLit(block) -> task_map_block(cx, st, site, block)
+    _ -> task_map_function(cx, st, site, callback)
   end
 end
 
@@ -439,7 +439,7 @@ def task_map_block(cx: State.Cx, st: State.St, site: State.Site, block: Ast.Bloc
     none,
   )
 
-  return task_map_result(cx, checked.st, checked.type, block.span)
+  task_map_result(cx, checked.st, checked.type, block.span)
 end
 
 def task_map_function(cx: State.Cx, st: State.St, site: State.Site, callback: Ast.Expr) -> Result[State.Out]
@@ -453,13 +453,13 @@ def task_map_function(cx: State.Cx, st: State.St, site: State.Site, callback: As
 
   items = try Args.list_argument(cx, checked.st, site, T.Type.List(T.params(checked.type)[0]))
   counts = try task_map_counts(cx, items.st, site)
-  return task_map_result(cx, counts.st, checked.type, span)
+  task_map_result(cx, counts.st, checked.type, span)
 end
 
 # limit and timeout_ms are Ints; their values are checked when the call runs.
 def task_map_counts(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   limit = try State.expr(cx, st, site.args[1], T.Type.Int)
-  return State.expr(cx, limit.st, site.args[2], T.Type.Int)
+  State.expr(cx, limit.st, site.args[2], T.Type.Int)
 end
 
 # The Result type the block must give: the item of the expected list when that is a Result, else Result[Unknown], which
@@ -467,7 +467,7 @@ end
 def task_map_block_result(expected: T.Type) -> T.Type
   return T.item(expected) if T.is?(expected, "List") and T.is?(T.item(expected), "Result")
 
-  return T.Type.Result(T.Type.Unknown)
+  T.Type.Result(T.Type.Unknown)
 end
 
 # The call gives a list of the callback's Results; a callback that gives anything else is CHECK-TYPE-MISMATCH.
@@ -475,7 +475,7 @@ def task_map_result(cx: State.Cx, st: State.St, callback: T.Type, span: Source.S
   result = T.result(callback)
   return error(State.mismatch(cx, st, T.Type.Result(T.Type.Var("T")), result, span)) if !T.is?(result, "Result")
 
-  return ok(State.Out(st: st, type: T.Type.List(result)))
+  ok(State.Out(st: st, type: T.Type.List(result)))
 end
 
 # ATS.new needs the table type from its context. The resolved type has passed the value rule already; the check here
@@ -503,7 +503,7 @@ def check_ats_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
     return error(CheckTypes.ats_value_failure(cx, st, T.value(site.expected), span))
   end
 
-  return ok(State.Out(st: st, type: site.expected))
+  ok(State.Out(st: st, type: site.expected))
 end
 
 # An ATS builtin other than ATS.new: argument 0 is an ATS[K, V], the K and V of the row become the table's key and
@@ -526,7 +526,7 @@ def check_ats_call(cx: State.Cx, st: State.St, site: State.Site) -> Result[State
     index += 1
   end
 
-  return ok(State.Out(st: current, type: CheckTypes.substitute(site.selected.result, found)))
+  ok(State.Out(st: current, type: CheckTypes.substitute(site.selected.result, found)))
 end
 
 # Channel.new needs the channel type from its context.
@@ -550,20 +550,20 @@ def check_channel_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[St
     return error(State.mismatch(cx, capacity.st, site.expected, T.Type.Channel(T.Type.Var("T")), span))
   end
 
-  return ok(State.Out(st: capacity.st, type: site.expected))
+  ok(State.Out(st: capacity.st, type: site.expected))
 end
 
 def check_channel_send(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   target = try Args.channel_argument(cx, st, site)
   value = try State.expr(cx, target.st, site.args[1], T.item(target.type))
   timeout = try State.expr(cx, value.st, site.args[2], T.Type.Int)
-  return ok(State.Out(st: timeout.st, type: T.Type.Result(T.Type.Void)))
+  ok(State.Out(st: timeout.st, type: T.Type.Result(T.Type.Void)))
 end
 
 def check_channel_recv(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   target = try Args.channel_argument(cx, st, site)
   timeout = try State.expr(cx, target.st, site.args[1], T.Type.Int)
-  return ok(State.Out(st: timeout.st, type: T.Type.Result(T.item(target.type))))
+  ok(State.Out(st: timeout.st, type: T.Type.Result(T.item(target.type))))
 end
 
 # A builtin whose one argument is a target of a shape (a Task[R] or a Channel[T] of any item type), checked by
@@ -575,7 +575,7 @@ def check_target(
   argument: Fn[State.Cx, State.St, State.Site, Result[State.Out]],
 ) -> Result[State.Out]
   target = try argument.call(cx, st, site)
-  return ok(State.Out(st: target.st, type: site.selected.result))
+  ok(State.Out(st: target.st, type: site.selected.result))
 end
 
 # Profile.measure(label) do ... end, Native.memory_pointer(size) do |buf| ... end and Native.from_string(text) do |buf|
@@ -595,7 +595,7 @@ def check_block_value(
     Ast.Expr.BlockLit(block) ->
       known = some(params)
       checked = try Stmt.check_block_body(cx, leading.st, block, known, wanted, none)
-      return ok(State.Out(st: checked.st, type: T.result(checked.type)))
+      ok(State.Out(st: checked.st, type: T.result(checked.type)))
     _ ->
       checked = try State.expr(cx, leading.st, callback, T.Type.Unknown)
       if !T.is?(checked.type, "Fn") or !T.same_all?(T.params(checked.type), params)
@@ -610,7 +610,7 @@ def check_block_value(
         )
       end
 
-      return ok(State.Out(st: checked.st, type: T.result(checked.type)))
+      ok(State.Out(st: checked.st, type: T.result(checked.type)))
   end
 end
 
@@ -618,33 +618,33 @@ end
 def block_parameters(params: List[T.Type]) -> String
   return "with no parameters" if params.size == 0
 
-  return "that takes #{params.map do |param: T.Type| T.to_text(param) end.join(", ")}"
+  "that takes #{params.map do |param: T.Type| T.to_text(param) end.join(", ")}"
 end
 
 def check_map_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]
   case rule
-    Model.Rule.MapHas -> return check_map_has(cx, st, site)
+    Model.Rule.MapHas -> check_map_has(cx, st, site)
     Model.Rule.MapKeys ->
       target = try Args.map_argument(cx, st, site, T.Type.Unknown)
-      return ok(State.Out(st: target.st, type: T.Type.List(T.key(target.type))))
+      ok(State.Out(st: target.st, type: T.Type.List(T.key(target.type))))
     Model.Rule.MapValues ->
       target = try Args.map_argument(cx, st, site, T.Type.Unknown)
-      return ok(State.Out(st: target.st, type: T.Type.List(T.value(target.type))))
-    Model.Rule.MapGet -> return check_map_get(cx, st, site, false)
-    Model.Rule.MapGetDefault -> return check_map_get(cx, st, site, true)
-    Model.Rule.MapDelete -> return check_map_delete(cx, st, site)
+      ok(State.Out(st: target.st, type: T.Type.List(T.value(target.type))))
+    Model.Rule.MapGet -> check_map_get(cx, st, site, false)
+    Model.Rule.MapGetDefault -> check_map_get(cx, st, site, true)
+    Model.Rule.MapDelete -> check_map_delete(cx, st, site)
     Model.Rule.MapSize ->
       target = try Args.map_argument(cx, st, site, T.Type.Unknown)
-      return ok(State.Out(st: target.st, type: T.Type.Int))
-    Model.Rule.MapPut -> return check_map_put(cx, st, site)
-    _ -> return check_set_rule(cx, st, site, rule)
+      ok(State.Out(st: target.st, type: T.Type.Int))
+    Model.Rule.MapPut -> check_map_put(cx, st, site)
+    _ -> check_set_rule(cx, st, site, rule)
   end
 end
 
 def check_map_has(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   target = try Args.map_argument(cx, st, site, T.Type.Unknown)
   key = try State.expr(cx, target.st, site.args[1], T.key(target.type))
-  return ok(State.Out(st: key.st, type: T.Type.Bool))
+  ok(State.Out(st: key.st, type: T.Type.Bool))
 end
 
 # Map.get gives a Result; with a default it gives the value. The value type of the map may come from the expected type,
@@ -677,39 +677,39 @@ def check_map_get(cx: State.Cx, st: State.St, site: State.Site, with_default: Bo
     return ok(State.Out(st: default.st, type: T.value(target.type)))
   end
 
-  return ok(State.Out(st: current, type: T.Type.Optional(T.value(target.type))))
+  ok(State.Out(st: current, type: T.Type.Optional(T.value(target.type))))
 end
 
 def check_map_delete(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   target = try Args.map_argument(cx, st, site, T.only_map(site.expected))
   key = try State.expr(cx, target.st, site.args[1], T.key(target.type))
-  return ok(State.Out(st: key.st, type: target.type))
+  ok(State.Out(st: key.st, type: target.type))
 end
 
 def check_map_put(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   target = try Args.map_argument(cx, st, site, T.Type.Unknown)
   key = try State.expr(cx, target.st, site.args[1], T.key(target.type))
   value = try State.expr(cx, key.st, site.args[2], T.value(target.type))
-  return ok(State.Out(st: value.st, type: target.type))
+  ok(State.Out(st: value.st, type: target.type))
 end
 
 def check_set_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]
   case rule
-    Model.Rule.SetNew -> return check_set_new(cx, st, site)
-    Model.Rule.SetAdd -> return check_set_add(cx, st, site)
+    Model.Rule.SetNew -> check_set_new(cx, st, site)
+    Model.Rule.SetAdd -> check_set_add(cx, st, site)
     Model.Rule.SetInclude ->
       target = try Args.set_argument(cx, st, site, T.Type.Unknown)
       element = try State.expr(cx, target.st, site.args[1], T.item(target.type))
-      return ok(State.Out(st: element.st, type: T.Type.Bool))
+      ok(State.Out(st: element.st, type: T.Type.Bool))
     Model.Rule.SetQuery ->
       target = try Args.set_argument(cx, st, site, T.Type.Unknown)
-      return ok(State.Out(st: target.st, type: site.selected.result))
+      ok(State.Out(st: target.st, type: site.selected.result))
     Model.Rule.SetToA ->
       target = try Args.set_argument(cx, st, site, T.Type.Unknown)
-      return ok(State.Out(st: target.st, type: T.Type.List(T.item(target.type))))
-    Model.Rule.SetCombine -> return check_set_combine(cx, st, site, false)
-    Model.Rule.SetSubset -> return check_set_combine(cx, st, site, true)
-    _ -> return error(State.fail(cx, st, "CHECK-INTERNAL", "unsupported builtin rule", site.node.span))
+      ok(State.Out(st: target.st, type: T.Type.List(T.item(target.type))))
+    Model.Rule.SetCombine -> check_set_combine(cx, st, site, false)
+    Model.Rule.SetSubset -> check_set_combine(cx, st, site, true)
+    _ -> error(State.fail(cx, st, "CHECK-INTERNAL", "unsupported builtin rule", site.node.span))
   end
 end
 
@@ -754,14 +754,14 @@ def check_set_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
     )
   end
 
-  return ok(State.Out(st: list.st, type: T.Type.Set(element)))
+  ok(State.Out(st: list.st, type: T.Type.Set(element)))
 end
 
 # Set.add and Set.delete: the element has the element type.
 def check_set_add(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   target = try Args.set_argument(cx, st, site, T.only_set(site.expected))
   element = try State.expr(cx, target.st, site.args[1], T.item(target.type))
-  return ok(State.Out(st: element.st, type: target.type))
+  ok(State.Out(st: element.st, type: target.type))
 end
 
 # Set.union, intersection, difference (a set) and subset? (a Bool): the second set has the type of the first.
@@ -775,5 +775,5 @@ def check_set_combine(cx: State.Cx, st: State.St, site: State.Site, subset: Bool
   other = try State.expr(cx, target.st, site.args[1], target.type)
   return ok(State.Out(st: other.st, type: T.Type.Bool)) if subset
 
-  return ok(State.Out(st: other.st, type: target.type))
+  ok(State.Out(st: other.st, type: target.type))
 end

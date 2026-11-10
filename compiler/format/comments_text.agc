@@ -12,14 +12,14 @@ import Comments from "comments"
 ## The comments of `text` and their places, one per line.
 export def attach_text(text: String) -> String
   case Lexer.lex_with_comments(text)
-    Diag.Outcome.Failed(problem) -> return Text.diagnostic_line(problem)
+    Diag.Outcome.Failed(problem) -> Text.diagnostic_line(problem)
     Diag.Outcome.Done(scanned) ->
       case Parser.parse(scanned.tokens, 0)
-        Diag.Outcome.Failed(problem) -> return Text.diagnostic_line(problem)
+        Diag.Outcome.Failed(problem) -> Text.diagnostic_line(problem)
         Diag.Outcome.Done(program) ->
           attachment = Comments.attach(program, scanned.tokens, scanned.comments)
           lines = attachment.comments.map do |placed: Comments.Attached| line_of(attachment, placed) end
-          return lines.join("\n")
+          lines.join("\n")
       end
   end
 end
@@ -34,7 +34,7 @@ def line_of(attachment: Comments.Attachment, placed: Comments.Attached) -> Strin
   at = place_text(placed.comment.span.start)
   role = Comments.role_name(placed.role)
   text = Text.quote(placed.comment.text)
-  return "#{at} #{role} #{node.kind} #{place_text(node.span.start)}#{keyword} #{text}"
+  "#{at} #{role} #{node.kind} #{place_text(node.span.start)}#{keyword} #{text}"
 end
 
 def place_text(position: Source.Position) -> String = "#{position.line}:#{position.column}"

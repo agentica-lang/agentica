@@ -23,7 +23,7 @@ export def quote(text: String) -> String
 
   parts = parts.push(text.slice(segment, codes.size - segment))
   parts = parts.push("\"")
-  return parts.join("")
+  parts.join("")
 end
 
 ## A span as offset:line:column-offset:line:column.
@@ -31,17 +31,17 @@ export def span_text(span: Source.Span) -> String = "#{position_text(span.start)
 
 ## The ERROR line of a diagnostic: code, span, message and help (- when there is none).
 export def diagnostic_line(problem: Diag.Diagnostic) -> String
-  return "ERROR #{problem.code} #{span_text(problem.span)} #{quote(problem.message)} #{help_text(problem.help)}"
+  "ERROR #{problem.code} #{span_text(problem.span)} #{quote(problem.message)} #{help_text(problem.help)}"
 end
 
 def escaped(code: Int) -> String
   case code
-    34 -> return "\\\""
-    92 -> return "\\\\"
-    10 -> return "\\n"
-    13 -> return "\\r"
-    9 -> return "\\t"
-    _ -> return "\\u{#{Unicode.hex_text(code)}}"
+    34 -> "\\\""
+    92 -> "\\\\"
+    10 -> "\\n"
+    13 -> "\\r"
+    9 -> "\\t"
+    _ -> "\\u{#{Unicode.hex_text(code)}}"
   end
 end
 
@@ -49,7 +49,7 @@ def position_text(position: Source.Position) -> String = "#{position.offset}:#{p
 
 def help_text(help: Diag.Help) -> String
   case help
-    Diag.Help.NoHelp -> return "-"
-    Diag.Help.Hint(text) -> return quote(text)
+    Diag.Help.NoHelp -> "-"
+    Diag.Help.Hint(text) -> quote(text)
   end
 end

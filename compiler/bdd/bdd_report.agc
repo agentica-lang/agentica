@@ -15,18 +15,18 @@ end
 
 ## The report of a usage error. It is located at `<arguments>`.
 export def usage(message: String, options: Opts.Options) -> Ending
-  return one_error("<arguments>", "RUNTIME-BDD-USAGE", message, options)
+  one_error("<arguments>", "RUNTIME-BDD-USAGE", message, options)
 end
 
 ## The report of an infrastructure error, located at the start of `file`.
 export def infrastructure(message: String, file: String, options: Opts.Options) -> Ending
-  return one_error(file, "RUNTIME-BDD-INFRA", message, options)
+  one_error(file, "RUNTIME-BDD-INFRA", message, options)
 end
 
 ## A problem with no place of its own: the start of the file, and RUNTIME-BDD-INFRA when no code is needed.
 export def located(file: String, code: String, message: String) -> Problems.Problem
   start = Source.Position(offset: 0, line: 1, column: 1)
-  return Problems.problem(file, "", code, message, Source.Span(start: start, stop: start), Diag.Help.NoHelp)
+  Problems.problem(file, "", code, message, Source.Span(start: start, stop: start), Diag.Help.NoHelp)
 end
 
 # The report of a run that ends with this one file error: exit code 2, no scenario. The text report has no seed; the
@@ -68,5 +68,5 @@ def one_error(file: String, code: String, message: String, options: Opts.Options
   end
 
   line = "FAIL #{file}#{separator}#{file}:1:1 [#{code}] #{message}\n"
-  return Ending(code: 2, text: "#{line}0 passed, 0 failed, 0 skipped, 0 not executed, 1 file errors\n")
+  Ending(code: 2, text: "#{line}0 passed, 0 failed, 0 skipped, 0 not executed, 1 file errors\n")
 end

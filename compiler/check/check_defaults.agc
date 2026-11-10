@@ -33,7 +33,7 @@ export def check_parameters(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) 
     index += 1
   end
 
-  return ok(true)
+  ok(true)
 end
 
 ## Checks the default of each parameter against the parameter's type, in order. The types are recorded by node id, and
@@ -52,14 +52,14 @@ export def check_types(cx: State.Cx, st: State.St, node: Ast.FunctionDecl, types
     index += 1
   end
 
-  return ok(current)
+  ok(current)
 end
 
 ## CHECK-DEFAULT-VALUE at the first field default that is not a constant.
 export def check_field_value(cx: State.Cx, st: State.St, field: Ast.FieldDecl) -> Result[Bool]
   case field.default
-    some(value) -> return check_value(cx, st, value, false, "remove the default")
-    none -> return ok(true)
+    some(value) -> check_value(cx, st, value, false, "remove the default")
+    none -> ok(true)
   end
 end
 
@@ -80,11 +80,11 @@ export def check_field_types(cx: State.Cx, st: State.St, node: Ast.StructDecl) -
     index += 1
   end
 
-  return ok(current)
+  ok(current)
 end
 
 def order_failure(cx: State.Cx, st: State.St, param: Ast.Param) -> String
-  return State.fail_help(
+  State.fail_help(
     cx,
     st,
     "CHECK-DEFAULT-ORDER",
@@ -121,7 +121,7 @@ def check_value(cx: State.Cx, st: State.St, value: Ast.Expr, param: Bool, remedy
     _ -> what = what
   end
 
-  return error(
+  error(
     State.fail_help(
       cx,
       st,
@@ -134,7 +134,7 @@ def check_value(cx: State.Cx, st: State.St, value: Ast.Expr, param: Bool, remedy
 end
 
 def blanked_failure(cx: State.Cx, st: State.St, site: State.ConstSite) -> String
-  return State.fail(
+  State.fail(
     cx.with(file: site.file),
     st,
     "CHECK-DEFAULT-VALUE",
@@ -151,13 +151,13 @@ def acceptable?(value: Ast.Expr, param: Bool) -> Bool = constant?(value) or (par
 # parser reads a bare none as a call with no arguments): a value that the call site can build with no code of its own.
 def constant?(value: Ast.Expr) -> Bool
   case value
-    Ast.Expr.Literal(_) -> return true
-    Ast.Expr.Unary(node) -> return node.op == "minus" and number?(node.operand)
-    Ast.Expr.ListLit(node) -> return node.elements.size == 0
-    Ast.Expr.MapLit(node) -> return node.entries.size == 0
-    Ast.Expr.EnumConstructor(node) -> return node.args.size == 0 and node.named.size == 0
-    Ast.Expr.Call(node) -> return node.name == "none" and !node.parenthesized and node.args.size == 0
-    _ -> return false
+    Ast.Expr.Literal(_) -> true
+    Ast.Expr.Unary(node) -> node.op == "minus" and number?(node.operand)
+    Ast.Expr.ListLit(node) -> node.elements.size == 0
+    Ast.Expr.MapLit(node) -> node.entries.size == 0
+    Ast.Expr.EnumConstructor(node) -> node.args.size == 0 and node.named.size == 0
+    Ast.Expr.Call(node) -> node.name == "none" and !node.parenthesized and node.args.size == 0
+    _ -> false
   end
 end
 
@@ -165,8 +165,8 @@ end
 # has none).
 def empty_construct?(value: Ast.Expr) -> Bool
   case value
-    Ast.Expr.Construct(node) -> return node.args.size == 0
-    _ -> return false
+    Ast.Expr.Construct(node) -> node.args.size == 0
+    _ -> false
   end
 end
 
@@ -174,12 +174,12 @@ def number?(value: Ast.Expr) -> Bool
   case value
     Ast.Expr.Literal(node) ->
       case node.value
-        Ast.LitValue.Whole(_) -> return true
-        Ast.LitValue.Huge(_) -> return true
-        Ast.LitValue.Real(_) -> return true
-        _ -> return false
+        Ast.LitValue.Whole(_) -> true
+        Ast.LitValue.Huge(_) -> true
+        Ast.LitValue.Real(_) -> true
+        _ -> false
       end
 
-    _ -> return false
+    _ -> false
   end
 end

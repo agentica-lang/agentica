@@ -44,7 +44,7 @@ export def add(settings: Env.Settings, style: String, words: List[String]) -> Re
   asked = request_of(words)
   return Reply.Answer.Printed(Reply.failed(2, asked.message)) if !asked.ok?
 
-  return CliProject.run(style, settings.workspace) do |dir: String| add_to(settings, dir, asked.unwrap!) end
+  CliProject.run(style, settings.workspace) do |dir: String| add_to(settings, dir, asked.unwrap!) end
 end
 
 ## Runs `update`. `words` are the ones after the command: none for every package, or the name of a dependency.
@@ -59,7 +59,7 @@ export def update(settings: Env.Settings, style: String, words: List[String]) ->
     name = words[0]
   end
 
-  return CliProject.run(style, settings.workspace) do |dir: String| update_in(settings, dir, name) end
+  CliProject.run(style, settings.workspace) do |dir: String| update_in(settings, dir, name) end
 end
 
 # NAME URL, then --tag TAG or --ref COMMIT (one of them), and --subdir DIR when the package is a folder of the
@@ -105,21 +105,21 @@ def request_of(words: List[String]) -> Result[Request]
   return error("agentica: #{problem}\n") if problem != ""
 
   source = GitSource.Source(git: words[1], subdir: subdir, tag: tag, ref: ref, path: "")
-  return ok(Request(name: words[0], source: source))
+  ok(Request(name: words[0], source: source))
 end
 
 # The value of an option, "" when it was not given.
 def option_of(options: Map[String, String], flag: String) -> String
   return options[flag] if options.has_key?(flag)
 
-  return ""
+  ""
 end
 
 def add_to(settings: Env.Settings, dir: String, request: Request) -> Result[String]
   project = try Project.find_to_write(settings.workspace, dir)
   case project
-    Project.Project.Bare -> return error(CliProject.missing_manifest(dir))
-    Project.Project.Declared(found) -> return add_in(settings, found, request)
+    Project.Project.Bare -> error(CliProject.missing_manifest(dir))
+    Project.Project.Declared(found) -> add_in(settings, found, request)
   end
 end
 
@@ -142,7 +142,7 @@ def add_in(settings: Env.Settings, found: Project.Found, request: Request) -> Re
   try save(settings, found.lock.file, Lock.encode(packages, artifacts), "")
   try save(settings, file, edited, LOCK_WRITTEN)
   try refresh_deps(settings, found, packages)
-  return ok(report(found.lock, resolved, request.name))
+  ok(report(found.lock, resolved, request.name))
 end
 
 # The fetch takes a while, and the edit is of the text read before it: a manifest changed meanwhile is not overwritten.
@@ -152,7 +152,7 @@ def unchanged(settings: Env.Settings, file: String, text: String) -> Result[Void
 
   message = "#{file} changed while the packages were fetched"
   help = Failure.hint("nothing was written; run the command again")
-  return error(Failure.fail_file(file, "PKG-WRITE", message, help))
+  error(Failure.fail_file(file, "PKG-WRITE", message, help))
 end
 
 # The manifest as the edit made it, which must be the old one and one more dependency: an odd layout (the table written
@@ -163,21 +163,21 @@ def added_manifest(old: Manifest.Manifest, edited: String, request: Request) -> 
 
   message = "cannot add #{request.name} to #{old.file}"
   help = Failure.hint("write the line by hand: #{request.name} = { git = \"...\", tag = \"...\" } in [dependencies]")
-  return error(Failure.fail_key(old.file, "dependencies", "PKG-MANIFEST-EDIT", message, help))
+  error(Failure.fail_key(old.file, "dependencies", "PKG-MANIFEST-EDIT", message, help))
 end
 
 def one_more?(old: Manifest.Manifest, manifest: Manifest.Manifest, request: Request) -> Bool
   entry = Manifest.find(manifest, request.name)
   return false if manifest.dependencies.size != old.dependencies.size + 1 or !entry.ok?
 
-  return GitSource.same?(entry.unwrap!.source, request.source)
+  GitSource.same?(entry.unwrap!.source, request.source)
 end
 
 def update_in(settings: Env.Settings, dir: String, name: String) -> Result[String]
   project = try Project.find_to_write(settings.workspace, dir)
   case project
-    Project.Project.Bare -> return error(CliProject.missing_manifest(dir))
-    Project.Project.Declared(found) -> return update_found(settings, found, name)
+    Project.Project.Bare -> error(CliProject.missing_manifest(dir))
+    Project.Project.Declared(found) -> update_found(settings, found, name)
   end
 end
 
@@ -199,7 +199,7 @@ def update_found(settings: Env.Settings, found: Project.Found, name: String) -> 
   end
 
   try refresh_deps(settings, found, packages)
-  return ok(report(found.lock, resolved, ""))
+  ok(report(found.lock, resolved, ""))
 end
 
 # Writes the packages of the new lock to deps/ and removes those the old lock had and the new one lacks. Only a project
@@ -211,7 +211,7 @@ def refresh_deps(settings: Env.Settings, found: Project.Found, packages: List[Lo
   done = PackageDeps.sync(settings, found.lock.file, deps, ordered, old)
   return error(Failure.add_help(done.message, DEPS_PENDING)) if !done.ok?
 
-  return ok()
+  ok()
 end
 
 # Replaces the file whole (SaveFile.replace leaves the old one as it was if a step fails). A file that cannot be
@@ -224,7 +224,7 @@ def save(settings: Env.Settings, file: String, text: String, later: String) -> R
     return error(Failure.fail_file(file, "PKG-WRITE", message, Failure.hint("#{written.message}#{later}")))
   end
 
-  return ok()
+  ok()
 end
 
 # What changed in the lock, one line each in the order of the new lock: added, updated (another commit, pin or
@@ -264,5 +264,5 @@ def report(old: Lock.Lock, resolved: PackageResolve.Resolved, added: String) -> 
   end
 
   lines = lines.concat(CliInstall.overridden_lines(packages, resolved.asked))
-  return "#{lines.join("\n")}\n"
+  "#{lines.join("\n")}\n"
 end

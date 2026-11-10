@@ -45,7 +45,7 @@ export def check_prelude_call(cx: State.Cx, st: State.St, site: State.Site) -> R
 
   try check_limits(cx, bound, form, row, site.node.span)
   found = bound.st.with(bodies: bound.st.bodies.put(site.node.id, body_of(row, bound.types)))
-  return ok(State.Out(st: found, type: CheckTypes.substitute(form.result, bound.types)))
+  ok(State.Out(st: found, type: CheckTypes.substitute(form.result, bound.types)))
 end
 
 # One argument: a block is checked with the parameter types known so far and the result the parameter says, any other
@@ -87,7 +87,7 @@ def check_argument(
     spans = spans.put(name, span)
   end
 
-  return ok(Bound(st: checked.st, types: learned, spans: spans))
+  ok(Bound(st: checked.st, types: learned, spans: spans))
 end
 
 # A block given for a parameter of type Fn[...]: its parameters are the types the Fn has, all known by now (the
@@ -114,7 +114,7 @@ def check_block(
     result = settled
   end
 
-  return Stmt.check_block_in(cx, bound.st, block, some(params), result, none, step)
+  Stmt.check_block_in(cx, bound.st, block, some(params), result, none, step)
 end
 
 # The result a block gives when its Fn's result still has an open variable. A Result there is one the body decides,
@@ -127,7 +127,7 @@ def block_result(form: Model.Builtin, template: T.Type, expected: T.Type) -> T.T
     return expected
   end
 
-  return T.Type.Result(T.Type.Unknown)
+  T.Type.Result(T.Type.Unknown)
 end
 
 # CHECK-TYPE-MISMATCH at the argument that bound a limited variable to a type the row does not allow.
@@ -162,7 +162,7 @@ def check_limits(
     end
   end
 
-  return ok(true)
+  ok(true)
 end
 
 # CHECK-TYPE-MISMATCH at the argument that bound an equality variable to a type that == does not compare.
@@ -182,7 +182,7 @@ def check_equality(
     message += ": #{why}"
   end
 
-  return error(
+  error(
     State.fail_help(
       cx,
       bound.st,
@@ -204,26 +204,26 @@ def body_of(row: Model.PreludeRow, types: Map[String, T.Type]) -> String
   tag = T.tag(types[row.selector])
   return "#{row.module}::#{row.bodies[""]}" if !row.bodies.has_key?(tag)
 
-  return "#{row.module}::#{row.bodies[tag]}"
+  "#{row.module}::#{row.bodies[tag]}"
 end
 
 # The type variables written in a type.
 def free_variables(type: T.Type) -> List[String]
   case type
-    T.Type.Var(name) -> return [name]
-    T.Type.Result(item) -> return free_variables(item)
-    T.Type.Optional(item) -> return free_variables(item)
-    T.Type.Task(item) -> return free_variables(item)
-    T.Type.Channel(item) -> return free_variables(item)
-    T.Type.Lazy(item) -> return free_variables(item)
-    T.Type.Codec(item) -> return free_variables(item)
-    T.Type.List(item) -> return free_variables(item)
-    T.Type.Set(item) -> return free_variables(item)
-    T.Type.Map(key, value) -> return free_variables(key).concat(free_variables(value))
-    T.Type.ATS(key, value) -> return free_variables(key).concat(free_variables(value))
-    T.Type.Fn(params, result) -> return free_variables_of(params).concat(free_variables(result))
-    T.Type.Enum(_, args) -> return free_variables_of(args)
-    _ -> return []
+    T.Type.Var(name) -> [name]
+    T.Type.Result(item) -> free_variables(item)
+    T.Type.Optional(item) -> free_variables(item)
+    T.Type.Task(item) -> free_variables(item)
+    T.Type.Channel(item) -> free_variables(item)
+    T.Type.Lazy(item) -> free_variables(item)
+    T.Type.Codec(item) -> free_variables(item)
+    T.Type.List(item) -> free_variables(item)
+    T.Type.Set(item) -> free_variables(item)
+    T.Type.Map(key, value) -> free_variables(key).concat(free_variables(value))
+    T.Type.ATS(key, value) -> free_variables(key).concat(free_variables(value))
+    T.Type.Fn(params, result) -> free_variables_of(params).concat(free_variables(result))
+    T.Type.Enum(_, args) -> free_variables_of(args)
+    _ -> []
   end
 end
 
@@ -233,5 +233,5 @@ def free_variables_of(types: List[T.Type]) -> List[String]
     names = names.concat(free_variables(type))
   end
 
-  return names
+  names
 end

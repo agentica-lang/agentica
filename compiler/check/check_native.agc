@@ -94,7 +94,7 @@ export def check_all(
     end
   end
 
-  return ok(current)
+  ok(current)
 end
 
 # The library of each resource of an extern module block, by linked name.
@@ -109,7 +109,7 @@ def resource_owners(modules: List[Linker.LinkedModule]) -> Map[String, String]
     end
   end
 
-  return found
+  found
 end
 
 # The field types of each struct and the payload types of each enum of the program, by linked name.
@@ -133,7 +133,7 @@ def written_types(modules: List[Linker.LinkedModule]) -> Map[String, Written]
     end
   end
 
-  return found
+  found
 end
 
 def check_function(cx: State.Cx, walk: Walk, node: Ast.FunctionDecl, library: String, program: Program) -> Result[Walk]
@@ -142,7 +142,7 @@ def check_function(cx: State.Cx, walk: Walk, node: Ast.FunctionDecl, library: St
     current = try check_ref(cx, current, param.type, false, library, program)
   end
 
-  return check_ref(cx, current, node.result, true, library, program)
+  check_ref(cx, current, node.result, true, library, program)
 end
 
 # The walk with the type written at ref resolved, recorded at its id and checked, together with the user types it
@@ -216,7 +216,7 @@ def check_ref(
     end
   end
 
-  return ok(current)
+  ok(current)
 end
 
 # Whether the type is a struct or an enum of the program with no type arguments: a struct whose fields the program
@@ -225,9 +225,9 @@ def user_type?(cx: State.Cx, type: T.Type) -> Bool
   return false if T.args(type).size > 0
 
   case type
-    T.Type.Struct(name, _) -> return cx.field_sites.has_key?(name)
-    T.Type.Enum(name, _) -> return !ENUMS.has_key?(name)
-    _ -> return false
+    T.Type.Struct(name, _) -> cx.field_sites.has_key?(name)
+    T.Type.Enum(name, _) -> !ENUMS.has_key?(name)
+    _ -> false
   end
 end
 
@@ -252,7 +252,7 @@ def user_type(
   end
 
   crossed = try bare_name(cx, walk.with(st: st, seen: walk.seen.add(name)), ref, name)
-  return ok(Reached(walk: crossed, types: types))
+  ok(Reached(walk: crossed, types: types))
 end
 
 # The walk with the user type or resource NAME known by its bare name, or CHECK-NATIVE-TYPE at ref when another one
@@ -272,5 +272,5 @@ def bare_name(cx: State.Cx, walk: Walk, ref: Ast.TypeRef, name: String) -> Resul
     )
   end
 
-  return ok(walk.with(named: walk.named.put(bare, name)))
+  ok(walk.with(named: walk.named.put(bare, name)))
 end

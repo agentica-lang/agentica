@@ -82,7 +82,7 @@ export def find(cache: Cache, loaded: Modules.Loaded) -> Found
   root = cache.roots[key]
   return Found.Hit(root) if root.fingerprint == fingerprint(loaded) and same_texts?(root.loaded, loaded)
 
-  return Found.Miss
+  Found.Miss
 end
 
 ## The root of a program that `loaded` gave and that linked and checked, or failed to check. `before` is the root that
@@ -108,7 +108,7 @@ export def solved(
     Checker.Checking.Failed(_) -> good = good
   end
 
-  return Root(
+  Root(
     loaded: loaded,
     fingerprint: fingerprint(loaded),
     linked: linked,
@@ -126,7 +126,7 @@ export def held(cache: Cache, loaded: Modules.Loaded) -> Optional[Root] = root_o
 export def root_of(cache: Cache, key: String) -> Optional[Root]
   return some(cache.roots[key]) if cache.roots.has_key?(key)
 
-  return none
+  none
 end
 
 ## A cache that holds `root` and the files it was made from, and nothing else. Their ids do not overlap, since one
@@ -135,24 +135,24 @@ end
 export def alone(root: Root) -> Cache
   # The counters (checks, parsed, reused) restart at 0 on purpose: they count the work of one session's refreshes.
   start = reaching(empty(), root.loaded)
-  return start.with(roots: {root.loaded.order[0]: root.with(used: 1)}, clock: 1)
+  start.with(roots: {root.loaded.order[0]: root.with(used: 1)}, clock: 1)
 end
 
 ## What the checker may take from the last good program of the root of `loaded`, when some of its modules are
 ## unchanged since.
 export def reusing(cache: Cache, loaded: Modules.Loaded) -> Optional[Checker.Reusing]
   case held(cache, loaded)
-    none -> return none
+    none -> none
     some(root) ->
       case root.good
-        none -> return none
+        none -> none
         some(good) ->
           return none if good.loaded.root_dir != loaded.root_dir
 
           clean = unchanged(good, loaded)
           return none if clean.size == 0
 
-          return some(Checker.Reusing(earlier: good.earlier, clean: clean))
+          some(Checker.Reusing(earlier: good.earlier, clean: clean))
       end
   end
 end
@@ -174,13 +174,13 @@ export def reaching(cache: Cache, loaded: Modules.Loaded) -> Cache
     end
   end
 
-  return cache.with(parses: Modules.Parses(kept: kept, top: top))
+  cache.with(parses: Modules.Parses(kept: kept, top: top))
 end
 
 ## `cache` with no parsed file but those of `loaded`, which was parsed from id 0: the ids of the other files may
 ## overlap its own now.
 export def restart(cache: Cache, loaded: Modules.Loaded) -> Cache
-  return reaching(cache.with(parses: Modules.no_parses()), loaded)
+  reaching(cache.with(parses: Modules.no_parses()), loaded)
 end
 
 ## Whether the highest id in use is above twice the ids that the parsed files hold.
@@ -190,7 +190,7 @@ export def crowded?(cache: Cache) -> Bool
     live += Ast.next_free_id(file.program) - file.first_id
   end
 
-  return cache.parses.top > live * 2
+  cache.parses.top > live * 2
 end
 
 ## `cache` with `root` as the root that `loaded` made, the latest used. Roots over the limit and the files that no root
@@ -199,7 +199,7 @@ end
 export def remember(cache: Cache, root: Root, loaded: Modules.Loaded, computed: Bool, reused: Int) -> Cache
   clock = cache.clock + 1
   roots = trimmed(cache.roots.put(loaded.order[0], root.with(used: clock)))
-  return pruned(
+  pruned(
     cache.with(
       roots: roots,
       clock: clock,
@@ -213,7 +213,7 @@ end
 def counted(count: Int, one: Bool) -> Int
   return count + 1 if one
 
-  return count
+  count
 end
 
 # The roots without the least recently used ones beyond MAX_ROOTS.
@@ -225,7 +225,7 @@ def trimmed(roots: Map[String, Root]) -> Map[String, Root]
     roots = roots.delete(key)
   end
 
-  return roots
+  roots
 end
 
 # Keeps the parsed files that some root reaches; top is recomputed, since the file with the highest ids may be gone.
@@ -245,7 +245,7 @@ def pruned(cache: Cache) -> Cache
     end
   end
 
-  return cache.with(parses: Modules.Parses(kept: kept, top: top))
+  cache.with(parses: Modules.Parses(kept: kept, top: top))
 end
 
 # What a program is made of apart from the texts: the root folder and, for each module in order, its key, file (the
@@ -259,7 +259,7 @@ def fingerprint(loaded: Modules.Loaded) -> String
     parts = parts.push(describe(loaded.modules[key]))
   end
 
-  return parts.join("")
+  parts.join("")
 end
 
 # The shape of each module, by key: what describes it apart from its text, and the keys it imports.
@@ -270,7 +270,7 @@ def shapes(loaded: Modules.Loaded) -> Map[String, String]
     found = found.put(key, describe(module) + module.imports.map do |name: String| CheckCache.piece(name) end.join(""))
   end
 
-  return found
+  found
 end
 
 # The modules of `loaded` that have the text and the shape they have in `good`, and import only such modules.
@@ -294,7 +294,7 @@ def unchanged(good: Good, loaded: Modules.Loaded) -> Set[String]
     end
   end
 
-  return Set.new(loaded.order.filter do |key: String| clean[key] end)
+  Set.new(loaded.order.filter do |key: String| clean[key] end)
 end
 
 def describe(module: Modules.Module) -> String
@@ -311,7 +311,7 @@ def describe(module: Modules.Module) -> String
     pieces = pieces.push(local).push(module.named[local].target).push(module.named[local].name)
   end
 
-  return pieces.map do |text: String| CheckCache.piece(text) end.join("")
+  pieces.map do |text: String| CheckCache.piece(text) end.join("")
 end
 
 def same_texts?(kept: Modules.Loaded, loaded: Modules.Loaded) -> Bool
@@ -319,5 +319,5 @@ def same_texts?(kept: Modules.Loaded, loaded: Modules.Loaded) -> Bool
     return false if kept.modules[key].text != loaded.modules[key].text
   end
 
-  return true
+  true
 end

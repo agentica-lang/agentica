@@ -52,7 +52,7 @@ end
 ## Settings for a stdlib/ folder and an environment. The version is "": a program that writes .agcb files sets it
 ## with `with(version: ...)`, and the writer refuses an empty one.
 export def settings(workspace: Workspace.Workspace, stdlib: String, env: Env) -> Settings
-  return Settings(
+  Settings(
     std: StdProvider.Folder(stdlib),
     embedded_bdd: false,
     env: env,
@@ -68,7 +68,7 @@ end
 ## Settings for the std/ sources of the binary (FrontEnd.std_source), with the version the headers name and whether
 ## it carries the compiled BDD programs.
 export def embedded_settings(workspace: Workspace.Workspace, env: Env, version: String, embedded_bdd: Bool) -> Settings
-  return Settings(
+  Settings(
     std: StdProvider.Embedded,
     embedded_bdd: embedded_bdd,
     env: env,

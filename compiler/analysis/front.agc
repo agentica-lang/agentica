@@ -45,20 +45,20 @@ end
 ## of the program. The linker reads it again; every problem names `path` as it was given.
 export def read_root(workspace: Workspace.Workspace, path: String) -> Root
   case workspace.read_text.call(path)
-    SourceFile.Read.Unreadable(message) -> return Root.Unreadable(message)
-    SourceFile.Read.Invalid(at) -> return Root.Invalid(stage_problem(path, SourceFile.invalid_utf8(at)))
-    SourceFile.Read.Text(_) -> return Root.Readable
+    SourceFile.Read.Unreadable(message) -> Root.Unreadable(message)
+    SourceFile.Read.Invalid(at) -> Root.Invalid(stage_problem(path, SourceFile.invalid_utf8(at)))
+    SourceFile.Read.Text(_) -> Root.Readable
   end
 end
 
 ## The problem of a stage that has no file of its own (the lexer and the parser), put in `file`.
 export def stage_problem(file: String, problem: Diag.Diagnostic) -> Problems.Problem
-  return Problems.problem(file, "", problem.code, problem.message, problem.span, problem.help)
+  Problems.problem(file, "", problem.code, problem.message, problem.span, problem.help)
 end
 
 ## The problem of a linker failure: the diagnostic in its file, or at a key of agentica.toml or agentica.lock.
 export def link_problem(failure: Failure.Failure) -> Problems.Problem
-  return stage_problem(failure.file, failure.diagnostic).with(key_path: failure.key_path)
+  stage_problem(failure.file, failure.diagnostic).with(key_path: failure.key_path)
 end
 
 ## Links the file at `path` and checks it.
@@ -82,8 +82,8 @@ export def query_cached(cache: Cache.Cache, path: String, settings: Env.Settings
     Cache.Found.Hit(root) ->
       return link_reusing(cache, walked.unwrap!, settings) if strict_failure?(root, settings)
 
-      return stored_outcome(root)
-    Cache.Found.Miss -> return link_reusing(cache, walked.unwrap!, settings)
+      stored_outcome(root)
+    Cache.Found.Miss -> link_reusing(cache, walked.unwrap!, settings)
   end
 end
 
@@ -114,8 +114,8 @@ export def query_checked(cache: Cache.Cache, path: String, settings: Env.Setting
     Linker.Linking.Failed(failure) ->
       return query_cached(cache, path, settings) if stand_in?(loaded, failure.file)
 
-      return Outcome.Rejected(link_problem(failure))
-    Linker.Linking.Done(program) -> return skipped(cache, path, settings, loaded, program)
+      Outcome.Rejected(link_problem(failure))
+    Linker.Linking.Done(program) -> skipped(cache, path, settings, loaded, program)
   end
 end
 
@@ -138,8 +138,8 @@ export def refresh(cache: Cache.Cache, path: String, settings: Env.Settings) -> 
   end
 
   case Cache.find(cache, loaded)
-    Cache.Found.Hit(root) -> return Cache.remember(reaching, root, loaded, false, 0)
-    Cache.Found.Miss -> return solve(cache, reaching, loaded, settings)
+    Cache.Found.Hit(root) -> Cache.remember(reaching, root, loaded, false, 0)
+    Cache.Found.Miss -> solve(cache, reaching, loaded, settings)
   end
 end
 
@@ -153,8 +153,8 @@ export def style_problem(linked: Linker.Linked) -> Optional[Problems.Problem] = 
 
 def front(path: String, settings: Env.Settings, main_required: Bool) -> Outcome
   case Linker.link_file(path, settings)
-    Linker.Linking.Failed(failure) -> return Outcome.Rejected(link_problem(failure))
-    Linker.Linking.Done(linked) -> return check(linked, settings, main_required)
+    Linker.Linking.Failed(failure) -> Outcome.Rejected(link_problem(failure))
+    Linker.Linking.Done(linked) -> check(linked, settings, main_required)
   end
 end
 
@@ -162,10 +162,10 @@ end
 # `cache` what its unchanged modules left (Cache.reusing).
 def link_reusing(cache: Cache.Cache, loaded: Modules.Loaded, settings: Env.Settings) -> Outcome
   case Linker.link_loaded(loaded, settings)
-    Linker.Linking.Failed(failure) -> return Outcome.Rejected(link_problem(failure))
+    Linker.Linking.Failed(failure) -> Outcome.Rejected(link_problem(failure))
     Linker.Linking.Done(program) ->
       rechecked = check_reusing(Cache.reusing(cache, loaded), program, settings)
-      return checked_outcome(program, rechecked.checking, NO_STYLED)
+      checked_outcome(program, rechecked.checking, NO_STYLED)
   end
 end
 
@@ -177,8 +177,8 @@ def check_reusing(
   settings: Env.Settings,
 ) -> Checker.Rechecked
   case reusing
-    some(found) -> return Checker.check_query_reusing(program, settings, found)
-    none -> return Checker.Rechecked(checking: Checker.check_query(program, settings), taken: 0)
+    some(found) -> Checker.check_query_reusing(program, settings, found)
+    none -> Checker.Rechecked(checking: Checker.check_query(program, settings), taken: 0)
   end
 end
 
@@ -186,13 +186,13 @@ end
 # with the parsed files of this walk. A program that does not link leaves `cache` as it was.
 def solve(cache: Cache.Cache, reaching: Cache.Cache, loaded: Modules.Loaded, settings: Env.Settings) -> Cache.Cache
   case Linker.link_loaded(loaded, settings)
-    Linker.Linking.Failed(_) -> return cache
+    Linker.Linking.Failed(_) -> cache
     Linker.Linking.Done(program) ->
       reusing = Cache.reusing(cache, loaded)
       rechecked = check_reusing(reusing, program, settings)
       style = style_after(rechecked.checking, program, NO_STYLED)
       root = Cache.solved(loaded, program, rechecked.checking, style, Cache.held(cache, loaded))
-      return Cache.remember(reaching, root, loaded, true, rechecked.taken)
+      Cache.remember(reaching, root, loaded, true, rechecked.taken)
   end
 end
 
@@ -221,14 +221,14 @@ def skipped(
     Checker.Checking.Failed(problem) ->
       return query_cached(cache, path, settings) if stand_in?(loaded, problem.file)
 
-      return Outcome.Rejected(problem)
+      Outcome.Rejected(problem)
     Checker.Checking.Done(checked) ->
       # A module read from its stub keeps its text, so the style rules see every file; one whose entry says its text
       # follows the rule is not lexed again.
       styled = styled_files(loaded)
       enter_checked(loaded, checked, settings, styled)
 
-      return checked_outcome(program, checking, styled)
+      checked_outcome(program, checking, styled)
   end
 end
 
@@ -243,18 +243,18 @@ def styled_files(loaded: Modules.Loaded) -> Set[String]
     end
   end
 
-  return Set.new(files)
+  Set.new(files)
 end
 
 # Whether some stub of the walk is not vouched for: its module is parsed from a stub but its bodies are not known to be
 # fine for this tree.
 def unvouched?(loaded: Modules.Loaded) -> Bool
-  return loaded.modules.values.any? do |module: Modules.Module| module.stubbed and !module.clean end
+  loaded.modules.values.any? do |module: Modules.Module| module.stubbed and !module.clean end
 end
 
 # Whether `file` is one that the walk parsed from a stub: a problem there could come from the stub, so it is not given.
 def stand_in?(loaded: Modules.Loaded, file: String) -> Bool
-  return (
+  (
     loaded.stubs > 0 and
     loaded.modules.values.any? do |module: Modules.Module| module.stubbed and module.file == file end
   )
@@ -316,18 +316,18 @@ def coded_constants(
     found = found.put(name, try TypeCode.encode(checked.constant_types[linked], keys))
   end
 
-  return ok(found)
+  ok(found)
 end
 
 def check(linked: Linker.Linked, settings: Env.Settings, main_required: Bool) -> Outcome
   return checked_outcome(linked, Checker.check(linked, settings), NO_STYLED) if main_required
 
-  return checked_outcome(linked, Checker.check_query(linked, settings), NO_STYLED)
+  checked_outcome(linked, Checker.check_query(linked, settings), NO_STYLED)
 end
 
 # A program that checked still has to follow the style rules of its project (check_style.agc).
 def checked_outcome(linked: Linker.Linked, checking: Checker.Checking, styled: Set[String]) -> Outcome
-  return finished(linked, checking, style_after(checking, linked, styled))
+  finished(linked, checking, style_after(checking, linked, styled))
 end
 
 # The outcome for a root that the cache holds: its style problem was found when it was made, from the same texts and
@@ -337,18 +337,18 @@ def stored_outcome(root: Cache.Root) -> Outcome = finished(root.linked, root.che
 # The style problem of `linked`, looked for only when it checked: a type error is reported first.
 def style_after(checking: Checker.Checking, linked: Linker.Linked, styled: Set[String]) -> Optional[Problems.Problem]
   case checking
-    Checker.Checking.Failed(_) -> return none
-    Checker.Checking.Done(_) -> return Style.first_problem(linked, styled)
+    Checker.Checking.Failed(_) -> none
+    Checker.Checking.Done(_) -> Style.first_problem(linked, styled)
   end
 end
 
 def finished(linked: Linker.Linked, checking: Checker.Checking, style: Optional[Problems.Problem]) -> Outcome
   case checking
-    Checker.Checking.Failed(problem) -> return Outcome.Rejected(problem)
+    Checker.Checking.Failed(problem) -> Outcome.Rejected(problem)
     Checker.Checking.Done(checked) ->
       case style
-        some(problem) -> return Outcome.Rejected(problem)
-        none -> return Outcome.Done(Checked(linked: linked, checked: checked))
+        some(problem) -> Outcome.Rejected(problem)
+        none -> Outcome.Done(Checked(linked: linked, checked: checked))
       end
   end
 end
@@ -358,7 +358,7 @@ end
 # since the checker stops at the first problem and reports an unread name after the rest of its function.
 def strict_failure?(root: Cache.Root, settings: Env.Settings) -> Bool
   case root.checking
-    Checker.Checking.Failed(problem) -> return !settings.unused and problem.code == "CHECK-UNUSED-VARIABLE"
-    Checker.Checking.Done(_) -> return false
+    Checker.Checking.Failed(problem) -> !settings.unused and problem.code == "CHECK-UNUSED-VARIABLE"
+    Checker.Checking.Done(_) -> false
   end
 end

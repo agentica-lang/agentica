@@ -83,5 +83,5 @@ end
 
 ## The suggestion of `rule` in `file`, at `span`.
 export def at(file: String, rule: Rule, span: Source.Span) -> Problems.Problem
-  return Problems.problem(file, "", rule.code, rule.message, span, Diag.Help.Hint(rule.help))
+  Problems.problem(file, "", rule.code, rule.message, span, Diag.Help.Hint(rule.help))
 end

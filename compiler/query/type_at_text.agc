@@ -17,7 +17,7 @@ export def text(found: Model.TypeAt) -> String
   return "#{head}\n#{builtin_lines(found.signatures)}" if found.definition.size == 0
 
   definition = found.definition[0]
-  return "#{head}\n#{definition.file}:#{start(definition.name_range)} #{definition.kind} #{definition.name}\n"
+  "#{head}\n#{definition.file}:#{start(definition.name_range)} #{definition.kind} #{definition.name}\n"
 end
 
 # `line:column-line:column`, the end exclusive.
@@ -30,10 +30,10 @@ def first_line(text: String) -> String
   lines = text.split("\n")
   return "#{lines[0]} ..." if lines.size > 1
 
-  return text
+  text
 end
 
 # One `builtin SIGNATURE` line for each form of the builtin; nothing for an answer that is not a builtin.
 def builtin_lines(signatures: List[String]) -> String
-  return signatures.map do |line: String| "builtin #{line}\n" end.join("")
+  signatures.map do |line: String| "builtin #{line}\n" end.join("")
 end

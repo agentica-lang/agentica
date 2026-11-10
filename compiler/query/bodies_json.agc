@@ -10,7 +10,7 @@ import DocJson from "../docs/doc_json"
 ## The object of the answer.
 export def json(found: Model.Bodies) -> Json
   functions = found.functions.map do |function: Model.Body| function_json(found.file, function) end
-  return JSON.object({
+  JSON.object({
     "version": JSON.from(found.version),
     "command": JSON.from("bodies"),
     "file": JSON.from(found.file),
@@ -33,7 +33,7 @@ def function_json(file: String, function: Model.Body) -> Json
     })
   end
 
-  return JSON.object({
+  JSON.object({
     "name": JSON.from(function.name),
     "linked": JSON.from(function.linked),
     "exported": JSON.from(function.exported),
@@ -48,7 +48,7 @@ end
 
 # The object of one node, with its children.
 def node_json(node: Model.Node) -> Json
-  return JSON.object({
+  JSON.object({
     "kind": JSON.from(node.kind),
     "type": type_json(node.type),
     "range": DiagnosticJson.range(node.range),
@@ -60,7 +60,7 @@ def node_json(node: Model.Node) -> Json
 end
 
 def type_json(type: Model.TypeShape) -> Json
-  return JSON.object({
+  JSON.object({
     "kind": JSON.from(type.kind),
     "name": JSON.from(type.name),
     "args": JSON.array(type.args.map(&type_json)),

@@ -99,12 +99,12 @@ end
 ## answer.
 export def check(cache: Cache.Cache, settings: Env.Settings, path: String) -> Verdict
   case Front.read_root(settings.workspace, path)
-    Front.Root.Unreadable(_) -> return Verdict.Unreadable
-    Front.Root.Invalid(problem) -> return Verdict.Rejected(problem)
+    Front.Root.Unreadable(_) -> Verdict.Unreadable
+    Front.Root.Invalid(problem) -> Verdict.Rejected(problem)
     Front.Root.Readable ->
       case Front.query_checked(cache, path, settings)
-        Front.Outcome.Rejected(problem) -> return Verdict.Rejected(problem)
-        Front.Outcome.Done(_) -> return Verdict.Passed
+        Front.Outcome.Rejected(problem) -> Verdict.Rejected(problem)
+        Front.Outcome.Done(_) -> Verdict.Passed
       end
   end
 end
@@ -119,20 +119,19 @@ export def checked(cache: Cache.Cache, settings: Env.Settings, path: String) -> 
     Verdict.Rejected(problem) -> diagnostics = [DiagnosticModel.of_problem(named(settings, problem, path))]
   end
 
-  return Convert.checked(QueryFiles.display(settings, path, true), diagnostics)
+  Convert.checked(QueryFiles.display(settings, path, true), diagnostics)
 end
 
 ## The outline of `file`, which is lexed and parsed only: its imports need not exist. `buffered` is true when the
 ## Workspace of the `settings` holds a buffer as `file` (a `std/` name is then a path of the disk).
 export def outline(settings: Env.Settings, file: String, buffered: Bool) -> Outlined
   case QueryFiles.read(settings, file, buffered)
-    SourceFile.Read.Unreadable(_) -> return Outlined.Unreadable
-    SourceFile.Read.Invalid(at) -> return Outlined.Rejected(Front.stage_problem(file, SourceFile.invalid_utf8(at)))
+    SourceFile.Read.Unreadable(_) -> Outlined.Unreadable
+    SourceFile.Read.Invalid(at) -> Outlined.Rejected(Front.stage_problem(file, SourceFile.invalid_utf8(at)))
     SourceFile.Read.Text(text) ->
       case Outline.of_file(settings, file, text)
-        Diag.Outcome.Failed(problem) -> return Outlined.Rejected(Front.stage_problem(file, problem))
-        Diag.Outcome.Done(found) ->
-          return Outlined.Done(Convert.outline(QueryFiles.display(settings, file, buffered), found))
+        Diag.Outcome.Failed(problem) -> Outlined.Rejected(Front.stage_problem(file, problem))
+        Diag.Outcome.Done(found) -> Outlined.Done(Convert.outline(QueryFiles.display(settings, file, buffered), found))
       end
   end
 end
@@ -142,16 +141,16 @@ end
 export def native_modules(cache: Cache.Cache, settings: Env.Settings, path: String) -> Natived
   settings = for_query(settings)
   case Front.read_root(settings.workspace, path)
-    Front.Root.Unreadable(_) -> return Natived.Unreadable
-    Front.Root.Invalid(problem) -> return Natived.Rejected(problem)
+    Front.Root.Unreadable(_) -> Natived.Unreadable
+    Front.Root.Invalid(problem) -> Natived.Rejected(problem)
     Front.Root.Readable ->
       case Front.query_cached(cache, path, settings)
-        Front.Outcome.Rejected(problem) -> return Natived.Rejected(problem)
+        Front.Outcome.Rejected(problem) -> Natived.Rejected(problem)
         Front.Outcome.Done(front) ->
           name = QueryFiles.display(settings, path, true)
           case NativeModules.of_program(name, front.linked, front.checked)
-            Diag.Outcome.Failed(problem) -> return Natived.Rejected(Front.stage_problem(path, problem))
-            Diag.Outcome.Done(found) -> return Natived.Done(found)
+            Diag.Outcome.Failed(problem) -> Natived.Rejected(Front.stage_problem(path, problem))
+            Diag.Outcome.Done(found) -> Natived.Done(found)
           end
       end
   end
@@ -162,11 +161,11 @@ end
 export def bodies(cache: Cache.Cache, settings: Env.Settings, path: String) -> Bodied
   settings = for_query(settings)
   case Front.read_root(settings.workspace, path)
-    Front.Root.Unreadable(_) -> return Bodied.Unreadable
-    Front.Root.Invalid(problem) -> return Bodied.Rejected(problem)
+    Front.Root.Unreadable(_) -> Bodied.Unreadable
+    Front.Root.Invalid(problem) -> Bodied.Rejected(problem)
     Front.Root.Readable ->
       case Front.query_cached(cache, path, settings)
-        Front.Outcome.Rejected(problem) -> return Bodied.Rejected(problem)
+        Front.Outcome.Rejected(problem) -> Bodied.Rejected(problem)
         Front.Outcome.Done(front) ->
           name = QueryFiles.display(settings, path, true)
           modules = front.linked.modules.map do |module: Linker.LinkedModule|
@@ -178,7 +177,7 @@ export def bodies(cache: Cache.Cache, settings: Env.Settings, path: String) -> B
             Model.BodyModule(prefix: module.prefix, file: shown)
           end
 
-          return Bodied.Done(Bodies.of_program(name, modules, front.linked, front.checked))
+          Bodied.Done(Bodies.of_program(name, modules, front.linked, front.checked))
       end
   end
 end
@@ -188,9 +187,9 @@ end
 export def type_at(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
   settings = for_query(settings)
   case position_front(cache, settings, asked, true)
-    Fronted.Unreadable -> return Typed.Unreadable
-    Fronted.Rejected(problem) -> return Typed.Rejected(problem)
-    Fronted.Done(front) -> return located(settings, asked, front)
+    Fronted.Unreadable -> Typed.Unreadable
+    Fronted.Rejected(problem) -> Typed.Rejected(problem)
+    Fronted.Done(front) -> located(settings, asked, front)
   end
 end
 
@@ -204,16 +203,16 @@ end
 export def type_at_partial(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Typed
   settings = for_query(settings)
   case partial_front(cache, settings, asked)
-    Partly.Unreadable -> return Typed.Unreadable
-    Partly.Rejected(problem) -> return Typed.Rejected(problem)
+    Partly.Unreadable -> Typed.Unreadable
+    Partly.Rejected(problem) -> Typed.Rejected(problem)
     Partly.Done(found) ->
       return located(settings, asked, found.front) if found.problems.size == 0
 
       case PartialAt.answer(found.front.linked, found.front.checked, found.failed, asked)
-        Diag.Outcome.Failed(problem) -> return Typed.Rejected(unanswered(found, asked, problem))
+        Diag.Outcome.Failed(problem) -> Typed.Rejected(unanswered(found, asked, problem))
         Diag.Outcome.Done(answered) ->
           marked = typed_model(settings, asked, answered)
-          return Typed.Done(marked.with(partial: true, diagnostics: diagnostics(settings, found.problems, asked.file)))
+          Typed.Done(marked.with(partial: true, diagnostics: diagnostics(settings, found.problems, asked.file)))
       end
   end
 end
@@ -228,21 +227,19 @@ end
 export def refs_partial(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Referenced
   settings = for_query(settings)
   case partial_front(cache, settings, asked)
-    Partly.Unreadable -> return Referenced.Unreadable
-    Partly.Rejected(problem) -> return Referenced.Rejected(problem)
+    Partly.Unreadable -> Referenced.Unreadable
+    Partly.Rejected(problem) -> Referenced.Rejected(problem)
     Partly.Done(found) ->
       return referenced(settings, asked, found.front, []) if found.problems.size == 0
 
       case Refs.answer(found.front.linked, found.front.checked, asked)
-        Diag.Outcome.Failed(problem) -> return Referenced.Rejected(unanswered(found, asked, problem))
+        Diag.Outcome.Failed(problem) -> Referenced.Rejected(unanswered(found, asked, problem))
         Diag.Outcome.Done(answered) ->
           return Referenced.Rejected(found.problems[0]) if Refs.needs_types?(answered)
 
           query = "#{asked.file}:#{asked.line}:#{asked.column}"
           marked = Convert.refs(query, answered, [], file_names(settings, answered))
-          return Referenced.Done(
-            marked.with(partial: true, diagnostics: diagnostics(settings, found.problems, asked.file)),
-          )
+          Referenced.Done(marked.with(partial: true, diagnostics: diagnostics(settings, found.problems, asked.file)))
       end
   end
 end
@@ -253,9 +250,9 @@ end
 export def refs(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Referenced
   settings = for_query(settings)
   case position_front(cache, settings, asked, false)
-    Fronted.Unreadable -> return Referenced.Unreadable
-    Fronted.Rejected(problem) -> return Referenced.Rejected(problem)
-    Fronted.Done(front) -> return referenced(settings, asked, front, [])
+    Fronted.Unreadable -> Referenced.Unreadable
+    Fronted.Rejected(problem) -> Referenced.Rejected(problem)
+    Fronted.Done(front) -> referenced(settings, asked, front, [])
   end
 end
 
@@ -275,22 +272,22 @@ export def refs_at(
   return refs(cache, settings, asked) if paths.size == 0
 
   case Front.read_root(settings.workspace, asked.file)
-    Front.Root.Unreadable(_) -> return Referenced.Unreadable
-    Front.Root.Invalid(problem) -> return Referenced.Rejected(problem)
+    Front.Root.Unreadable(_) -> Referenced.Unreadable
+    Front.Root.Invalid(problem) -> Referenced.Rejected(problem)
     Front.Root.Readable ->
       case SymbolPaths.expand_from(settings.workspace, asked.file, paths, usage)
-        SymbolPaths.Expanded.Refused(problem) -> return Referenced.Rejected(problem)
+        SymbolPaths.Expanded.Refused(problem) -> Referenced.Rejected(problem)
         SymbolPaths.Expanded.Files(roots) ->
           linked = SymbolLink.link(roots, settings, cache.parses)
           case linked.program
-            none -> return Referenced.Rejected(linked.skipped[0].problem)
+            none -> Referenced.Rejected(linked.skipped[0].problem)
             some(program) ->
               # The file of the position is the first root: when it is left out there is nothing to ask about.
               return Referenced.Rejected(linked.skipped[0].problem) if program.modules[0].key != roots[0].key
 
               case Front.query_linked(program, settings)
-                Front.Outcome.Rejected(problem) -> return Referenced.Rejected(named_in(settings, problem, roots))
-                Front.Outcome.Done(front) -> return referenced(settings, asked, front, linked.skipped)
+                Front.Outcome.Rejected(problem) -> Referenced.Rejected(named_in(settings, problem, roots))
+                Front.Outcome.Done(front) -> referenced(settings, asked, front, linked.skipped)
               end
           end
       end
@@ -313,15 +310,15 @@ export def refs_named(
   return Referenced.Rejected(QueryOptions.refusal("missing NAME or FILE:LINE:COL", usage)) if name == ""
 
   case SymbolPaths.expand(settings.workspace, paths, buffer, usage)
-    SymbolPaths.Expanded.Refused(problem) -> return Referenced.Rejected(problem)
+    SymbolPaths.Expanded.Refused(problem) -> Referenced.Rejected(problem)
     SymbolPaths.Expanded.Files(roots) ->
       linked = SymbolLink.link(roots, settings, cache.parses)
       case Symbol.search(name, roots, linked)
-        Symbol.Outcome.Refused(problem) -> return Referenced.Rejected(RefsName.not_found(name, problem))
+        Symbol.Outcome.Refused(problem) -> Referenced.Rejected(RefsName.not_found(name, problem))
         Symbol.Outcome.Found(found) ->
           case RefsName.pick(name, found.matches, settings)
-            RefsName.Picked.Refused(problem) -> return Referenced.Rejected(problem)
-            RefsName.Picked.One(match) -> return referenced_by_name(settings, name, match, linked, roots)
+            RefsName.Picked.Refused(problem) -> Referenced.Rejected(problem)
+            RefsName.Picked.One(match) -> referenced_by_name(settings, name, match, linked, roots)
           end
       end
   end
@@ -343,13 +340,13 @@ export def symbol(
   return Found.Rejected(QueryOptions.refusal("missing NAME", usage)) if name == ""
 
   case SymbolPaths.expand(settings.workspace, paths, buffer, usage)
-    SymbolPaths.Expanded.Refused(problem) -> return Found.Rejected(problem)
+    SymbolPaths.Expanded.Refused(problem) -> Found.Rejected(problem)
     SymbolPaths.Expanded.Files(roots) ->
       case Symbol.answer(name, roots, settings, cache.parses)
-        Symbol.Outcome.Refused(problem) -> return Found.Rejected(problem)
+        Symbol.Outcome.Refused(problem) -> Found.Rejected(problem)
         Symbol.Outcome.Found(found) ->
           named = found.with(matches: found.matches.map do |match: Symbol.Match| shown(settings, match) end)
-          return Found.Done(Convert.symbols(name, named))
+          Found.Done(Convert.symbols(name, named))
       end
   end
 end
@@ -359,7 +356,7 @@ end
 export def named(settings: Env.Settings, problem: Problems.Problem, source: String) -> Problems.Problem
   return problem.with(file: source) if root?(problem.file, source, settings)
 
-  return problem
+  problem
 end
 
 ## Whether a file that a problem names is the root file typed as `typed`. The Workspace answers for the canonical path
@@ -368,7 +365,7 @@ export def root?(named: String, typed: String, settings: Env.Settings) -> Bool
   return true if named == typed
 
   real = settings.workspace.real_path.call(typed)
-  return real.ok? and real.unwrap! == named
+  real.ok? and real.unwrap! == named
 end
 
 ## The QUERY-USAGE problem of a file that cannot be read, in that file.
@@ -376,19 +373,19 @@ export def unreadable(path: String) -> Problems.Problem = QueryFiles.unreadable(
 
 ## The QUERY-USAGE problem of a question that is wrong in itself, such as a position below line 1, put in `path`.
 export def refused(message: String, path: String) -> Problems.Problem
-  return QueryOptions.refusal(message, "").with(file: path)
+  QueryOptions.refusal(message, "").with(file: path)
 end
 
 # `skipping` is true for a question that reads only the root file's nodes (`type-at`), which may use the cache of
 # checked modules (Front.query_checked); `refs` reads the other files too.
 def position_front(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked, skipping: Bool) -> Fronted
   case Front.read_root(settings.workspace, asked.file)
-    Front.Root.Unreadable(_) -> return Fronted.Unreadable
-    Front.Root.Invalid(problem) -> return Fronted.Rejected(problem)
+    Front.Root.Unreadable(_) -> Fronted.Unreadable
+    Front.Root.Invalid(problem) -> Fronted.Rejected(problem)
     Front.Root.Readable ->
       case asked_front(cache, settings, asked.file, skipping)
-        Front.Outcome.Rejected(problem) -> return Fronted.Rejected(problem)
-        Front.Outcome.Done(front) -> return Fronted.Done(front)
+        Front.Outcome.Rejected(problem) -> Fronted.Rejected(problem)
+        Front.Outcome.Done(front) -> Fronted.Done(front)
       end
   end
 end
@@ -396,17 +393,17 @@ end
 def asked_front(cache: Cache.Cache, settings: Env.Settings, file: String, skipping: Bool) -> Front.Outcome
   return Front.query_checked(cache, file, settings) if skipping
 
-  return Front.query_cached(cache, file, settings)
+  Front.query_cached(cache, file, settings)
 end
 
 def partial_front(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosition.Asked) -> Partly
   case Front.read_root(settings.workspace, asked.file)
-    Front.Root.Unreadable(_) -> return Partly.Unreadable
-    Front.Root.Invalid(problem) -> return Partly.Rejected(problem)
+    Front.Root.Unreadable(_) -> Partly.Unreadable
+    Front.Root.Invalid(problem) -> Partly.Rejected(problem)
     Front.Root.Readable ->
       case Partial.query_file(cache, asked.file, settings)
-        Partial.Outcome.Rejected(problem) -> return Partly.Rejected(problem)
-        Partial.Outcome.Done(found) -> return Partly.Done(found)
+        Partial.Outcome.Rejected(problem) -> Partly.Rejected(problem)
+        Partial.Outcome.Done(found) -> Partly.Done(found)
       end
   end
 end
@@ -416,20 +413,20 @@ end
 def unanswered(found: Partial.Recovered, asked: QueryPosition.Asked, missed: Diag.Diagnostic) -> Problems.Problem
   return found.problems[0] if PartialAt.unclear?(found.front.linked, found.failed, asked)
 
-  return Front.stage_problem(asked.file, missed)
+  Front.stage_problem(asked.file, missed)
 end
 
 def located(settings: Env.Settings, asked: QueryPosition.Asked, front: Front.Checked) -> Typed
   case TypeAt.answer(front.linked, front.checked, asked)
-    Diag.Outcome.Failed(problem) -> return Typed.Rejected(Front.stage_problem(asked.file, problem))
-    Diag.Outcome.Done(found) -> return Typed.Done(typed_model(settings, asked, found))
+    Diag.Outcome.Failed(problem) -> Typed.Rejected(Front.stage_problem(asked.file, problem))
+    Diag.Outcome.Done(found) -> Typed.Done(typed_model(settings, asked, found))
   end
 end
 
 def typed_model(settings: Env.Settings, asked: QueryPosition.Asked, found: TypeAt.Answer) -> Model.TypeAt
   name = QueryFiles.display(settings, asked.file, true)
   home = QueryFiles.display(settings, TypeAt.definition_file(found), true)
-  return Convert.type_at(name, asked, found, home)
+  Convert.type_at(name, asked, found, home)
 end
 
 # The problems as the answer gives them: the file of the question as it was typed.
@@ -438,7 +435,7 @@ def diagnostics(
   problems: List[Problems.Problem],
   source: String,
 ) -> List[DiagnosticModel.Diagnostic]
-  return problems.map do |problem: Problems.Problem| DiagnosticModel.of_problem(named(settings, problem, source)) end
+  problems.map do |problem: Problems.Problem| DiagnosticModel.of_problem(named(settings, problem, source)) end
 end
 
 def referenced(
@@ -448,10 +445,10 @@ def referenced(
   skipped: List[SymbolLink.Skipped],
 ) -> Referenced
   case Refs.answer(front.linked, front.checked, asked)
-    Diag.Outcome.Failed(problem) -> return Referenced.Rejected(Front.stage_problem(asked.file, problem))
+    Diag.Outcome.Failed(problem) -> Referenced.Rejected(Front.stage_problem(asked.file, problem))
     Diag.Outcome.Done(found) ->
       query = "#{asked.file}:#{asked.line}:#{asked.column}"
-      return Referenced.Done(Convert.refs(query, found, skipped, file_names(settings, found)))
+      Referenced.Done(Convert.refs(query, found, skipped, file_names(settings, found)))
   end
 end
 
@@ -464,13 +461,13 @@ def referenced_by_name(
   roots: List[SymbolPaths.Root],
 ) -> Referenced
   case linked.program
-    none -> return Referenced.Rejected(linked.skipped[0].problem)
+    none -> Referenced.Rejected(linked.skipped[0].problem)
     some(program) ->
       case Front.query_linked(program, settings)
-        Front.Outcome.Rejected(problem) -> return Referenced.Rejected(named_in(settings, problem, roots))
+        Front.Outcome.Rejected(problem) -> Referenced.Rejected(named_in(settings, problem, roots))
         Front.Outcome.Done(front) ->
           found = Refs.of_match(front.linked, front.checked, match)
-          return Referenced.Done(Convert.refs(name, found, linked.skipped, file_names(settings, found)))
+          Referenced.Done(Convert.refs(name, found, linked.skipped, file_names(settings, found)))
       end
   end
 end
@@ -483,7 +480,7 @@ def named_in(settings: Env.Settings, problem: Problems.Problem, roots: List[Symb
     return problem.with(file: root.typed) if root?(problem.file, root.typed, settings)
   end
 
-  return problem
+  problem
 end
 
 # The name that the answer gives each file it mentions.
@@ -501,14 +498,14 @@ def file_names(settings: Env.Settings, found: Refs.Answer) -> Map[String, String
     end
   end
 
-  return names
+  names
 end
 
 # The match with the name its answer gives its file; a builtin has none.
 def shown(settings: Env.Settings, match: Symbol.Match) -> Symbol.Match
   return match if match.file == ""
 
-  return match.with(file: QueryFiles.display(settings, match.file, true))
+  match.with(file: QueryFiles.display(settings, match.file, true))
 end
 
 # The settings of a query: an import or a variable that nothing uses yet is not an error in the file asked about,

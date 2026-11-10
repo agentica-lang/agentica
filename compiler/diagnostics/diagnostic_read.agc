@@ -15,7 +15,7 @@ export def read(text: String) -> Result[Model.Diagnostic]
     end
   end
 
-  return ok(
+  ok(
     Model.Diagnostic(
       code: try string(root, "code"),
       message: try string(root, "message"),
@@ -40,17 +40,17 @@ def string(object: Json, key: String) -> Result[String] = JSON.string(try JSON.g
 def note(object: Json, key: String) -> Result[String]
   return ok("") if !has?(object, key)
 
-  return string(object, key)
+  string(object, key)
 end
 
 def range_of(object: Json) -> Result[Model.Region]
   range = try JSON.get(object, "range")
-  return ok(Model.Region(start: try position(range, "start"), stop: try position(range, "end")))
+  ok(Model.Region(start: try position(range, "start"), stop: try position(range, "end")))
 end
 
 def position(object: Json, key: String) -> Result[Model.Position]
   at = try JSON.get(object, key)
   line = try JSON.int(try JSON.get(at, "line"))
   column = try JSON.int(try JSON.get(at, "column"))
-  return ok(Model.Position(line: line, column: column))
+  ok(Model.Position(line: line, column: column))
 end

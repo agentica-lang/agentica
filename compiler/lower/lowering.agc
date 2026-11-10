@@ -73,7 +73,7 @@ export def lower(linked: Linker.Linked, checked: Checker.Checked) -> Lowered
   result = run(linked, checked)
   return Lowered.Done(result.unwrap!) if result.ok?
 
-  return Lowered.Failed(Failure.unpack(result.message))
+  Lowered.Failed(Failure.unpack(result.message))
 end
 
 def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
@@ -249,7 +249,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
 
   sources = modules.map do |module: Linker.LinkedModule| source_of(module) end
   kept_sources = used_sources(sources, files)
-  return ok(
+  ok(
     Ir.Program(
       sources: kept_sources,
       structs: tables.structs,
@@ -266,7 +266,7 @@ end
 def source_of(module: Linker.LinkedModule) -> Ir.SourceFile
   return Ir.SourceFile(file: module.file, name: module.name, text: "") if module.file.starts_with?(PRELUDE_PREFIX)
 
-  return Ir.SourceFile(file: module.file, name: module.name, text: module.text)
+  Ir.SourceFile(file: module.file, name: module.name, text: module.text)
 end
 
 # Every span in a function of the prelude becomes the first character of its file: the file has no text, and the VM
@@ -285,11 +285,11 @@ def pin_prelude_spans(functions: List[Ir.Function], sources: List[Ir.SourceFile]
     end
   end
 
-  return found
+  found
 end
 
 def pin_instr(instr: Ir.Instr, pinned: Source.Span) -> Ir.Instr
-  return instr.with(spans: instr.spans.map do |_span: Source.Span| pinned end)
+  instr.with(spans: instr.spans.map do |_span: Source.Span| pinned end)
 end
 
 # The functions that have default values, by name, with the file each is declared in. A default that names a constant
@@ -312,7 +312,7 @@ def fills_of(
     end
   end
 
-  return fills
+  fills
 end
 
 # The structs that have fields with a default value, by name, with the file each is declared in.
@@ -337,7 +337,7 @@ def field_fills_of(
     end
   end
 
-  return fills
+  fills
 end
 
 # Lowers one function into a new table whose index is the next to fill, and adds the blocks it made.
@@ -354,9 +354,7 @@ def add_function(
   here = cx.with(file: file, index: index)
   inner = Lowering.fresh(index, table.blocks, table.block_count)
   done = try Stmt.lower_function(here, inner, name, params, [], body, span, false)
-  return ok(
-    Table(functions: table.functions.push(done.function), blocks: done.fx.blocks, block_count: done.fx.block_count),
-  )
+  ok(Table(functions: table.functions.push(done.function), blocks: done.fx.blocks, block_count: done.fx.block_count))
 end
 
 def scan_all(
@@ -397,7 +395,7 @@ def scan_all(
     written = written.concat(declared_names(decl, watched))
   end
 
-  return Scanned(
+  Scanned(
     function_scans: function_scans,
     constant_scans: constant_scans,
     written: written,
@@ -432,7 +430,7 @@ def hoisted_regexes(functions: List[Located], scans: List[Scans.Scan]) -> List[L
     at += 1
   end
 
-  return found
+  found
 end
 
 # The scan with the scans of the hoisted regex constants after those of the declared constants.
@@ -447,7 +445,7 @@ def with_hoisted(scanned: Scanned, hoisted: List[LocatedConst], watched: Set[Str
     )
   end
 
-  return out
+  out
 end
 
 # The watched type names the field types of a struct and the payload types of an enum write.
@@ -469,7 +467,7 @@ def declared_names(decl: Ast.Decl, watched: Set[String]) -> List[String]
     _ -> found = found
   end
 
-  return found
+  found
 end
 
 # The types the checker recorded at the type names used as a value: those of the JSON targets, an alias resolved and a
@@ -486,7 +484,7 @@ def json_targets(types: List[Types.Type], ids: List[Int]) -> List[Types.Type]
     end
   end
 
-  return found
+  found
 end
 
 # The builtin records that the called builtins build from a Fields default (Builtins.default_records).
@@ -500,7 +498,7 @@ def called_records(scans: List[Scans.Scan]) -> Set[String]
     end
   end
 
-  return found
+  found
 end
 
 # The watched struct and enum names that the type of some expression mentions. The type of a covered expression is
@@ -519,17 +517,17 @@ def mentioned_in(types: List[Types.Type], covered: Set[Int], watched: Set[String
     id += 1
   end
 
-  return found.to_a
+  found.to_a
 end
 
 # found with the watched name of the top of the type of a covered expression added (a type of another shape, which the
 # checker does not give one, is walked whole).
 def top_names(type: Types.Type, watched: Set[String], found: Set[String]) -> Set[String]
   case type
-    Types.Type.Optional(_) -> return only("Optional", watched, found)
-    Types.Type.List(_) -> return found
-    Types.Type.Result(_) -> return found
-    _ -> return names_in(type, watched, found)
+    Types.Type.Optional(_) -> only("Optional", watched, found)
+    Types.Type.List(_) -> found
+    Types.Type.Result(_) -> found
+    _ -> names_in(type, watched, found)
   end
 end
 
@@ -537,20 +535,20 @@ end
 # (some(some(...)), [[...]]) hold one another, so a list made at each level grows with the depth.
 def names_in(type: Types.Type, watched: Set[String], found: Set[String]) -> Set[String]
   case type
-    Types.Type.Struct(name, args) -> return names_in_all(args, watched, only(name, watched, found))
-    Types.Type.Enum(name, args) -> return names_in_all(args, watched, only(name, watched, found))
-    Types.Type.List(item) -> return names_in(item, watched, found)
-    Types.Type.Set(item) -> return names_in(item, watched, found)
-    Types.Type.Result(item) -> return names_in(item, watched, found)
-    Types.Type.Optional(item) -> return names_in(item, watched, only("Optional", watched, found))
-    Types.Type.Task(item) -> return names_in(item, watched, found)
-    Types.Type.Channel(item) -> return names_in(item, watched, found)
-    Types.Type.Lazy(item) -> return names_in(item, watched, found)
-    Types.Type.Codec(item) -> return names_in(item, watched, only("Codec.Info", watched, found))
-    Types.Type.Map(key, value) -> return names_in(value, watched, names_in(key, watched, found))
-    Types.Type.ATS(key, value) -> return names_in(value, watched, names_in(key, watched, found))
-    Types.Type.Fn(params, result) -> return names_in(result, watched, names_in_all(params, watched, found))
-    _ -> return found
+    Types.Type.Struct(name, args) -> names_in_all(args, watched, only(name, watched, found))
+    Types.Type.Enum(name, args) -> names_in_all(args, watched, only(name, watched, found))
+    Types.Type.List(item) -> names_in(item, watched, found)
+    Types.Type.Set(item) -> names_in(item, watched, found)
+    Types.Type.Result(item) -> names_in(item, watched, found)
+    Types.Type.Optional(item) -> names_in(item, watched, only("Optional", watched, found))
+    Types.Type.Task(item) -> names_in(item, watched, found)
+    Types.Type.Channel(item) -> names_in(item, watched, found)
+    Types.Type.Lazy(item) -> names_in(item, watched, found)
+    Types.Type.Codec(item) -> names_in(item, watched, only("Codec.Info", watched, found))
+    Types.Type.Map(key, value) -> names_in(value, watched, names_in(key, watched, found))
+    Types.Type.ATS(key, value) -> names_in(value, watched, names_in(key, watched, found))
+    Types.Type.Fn(params, result) -> names_in(result, watched, names_in_all(params, watched, found))
+    _ -> found
   end
 end
 
@@ -559,13 +557,13 @@ def names_in_all(types: List[Types.Type], watched: Set[String], found: Set[Strin
     found = names_in(type, watched, found)
   end
 
-  return found
+  found
 end
 
 def only(name: String, watched: Set[String], found: Set[String]) -> Set[String]
   return found.add(name) if watched.include?(name) and !found.include?(name)
 
-  return found
+  found
 end
 
 # What a read of each constant becomes: the literal of a scalar constant, else its slot.
@@ -579,7 +577,7 @@ def reads_of(plan: Const.Plan) -> Map[String, Lowering.Read]
     reads = reads.put(name, Lowering.Read.Slot(plan.slots[name]))
   end
 
-  return reads
+  reads
 end
 
 # The files in the order the lowering first emits an instruction of each: the root, then the file of each function,
@@ -617,7 +615,7 @@ def source_order(
     end
   end
 
-  return files
+  files
 end
 
 # The file each constant is declared in, by name.
@@ -627,7 +625,7 @@ def constant_files(constants: List[LocatedConst]) -> Map[String, String]
     files = files.put(entry.constant.name, entry.file)
   end
 
-  return files
+  files
 end
 
 # The source files in the order of files.
@@ -637,7 +635,7 @@ def used_sources(sources: List[Ir.SourceFile], files: List[String]) -> List[Ir.S
     by_file = by_file.put(source.file, source)
   end
 
-  return files.map do |file: String| by_file[file] end
+  files.map do |file: String| by_file[file] end
 end
 
 # `<start>`: a step, then for each kept constant a call of its function and a store of the result in its slot, then a
@@ -663,5 +661,5 @@ def start_function(
   body = body.push(Ir.instr("tail-call", [0, main_index], 0, [span]))
   body = body.push(Ir.Instr(op: "const", args: [0], imm: Ir.Imm.Void, name: "", file: 0, spans: [span]))
   body = body.push(Ir.instr("return", [0], 0, [span]))
-  return Ir.Function(name: "<start>", params: 0, captures: 0, slots: 1, body: body, file: 0, span: span)
+  Ir.Function(name: "<start>", params: 0, captures: 0, slots: 1, body: body, file: 0, span: span)
 end

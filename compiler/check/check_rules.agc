@@ -37,7 +37,7 @@ export def check_builtin_call(
   form = selected.unwrap!
   try check_block_target(cx, st, node, form)
   site = State.Site(node: node, args: node.args, selected: form, expected: expected)
-  return check_rule(cx, st, site, form.rule)
+  check_rule(cx, st, site, form.rule)
 end
 
 ## CHECK-TYPE-MISMATCH unless the type can be printed or interpolated (it has to_s).
@@ -56,12 +56,12 @@ export def ensure_printable(cx: State.Cx, st: State.St, type: T.Type, span: Sour
     )
   end
 
-  return ok(true)
+  ok(true)
 end
 
 ## Type.codec: the codec of the struct or enum named by the type name, which must be a type JSON.decode takes.
 export def check_codec_of(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[T.Type]
-  return ok(T.Type.Codec(try json_target(cx, st, node, "codec requires a struct or enum name")))
+  ok(T.Type.Codec(try json_target(cx, st, node, "codec requires a struct or enum name")))
 end
 
 # CHECK-ARITY: no form of the builtin takes this many arguments. The note is the signature of every form. A call
@@ -95,7 +95,7 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Built
     State.hint_of(old_form_help(name, node)),
   )
 
-  return Failure.pack(base.with(callee: Builtins.signature(entry)))
+  Failure.pack(base.with(callee: Builtins.signature(entry)))
 end
 
 # The help for a call in a form that a builtin had before (TLS.listen with the PEM paths before contexts, 19a, and the
@@ -111,7 +111,7 @@ def old_form_help(name: String, node: Ast.Call) -> String
     )
   end
 
-  return ""
+  ""
 end
 
 # True for a call that a method call became: its first argument is the typed receiver.
@@ -119,8 +119,8 @@ def method_form?(node: Ast.Call) -> Bool
   return false if node.args.size == 0
 
   case node.args[0]
-    Ast.Expr.Typed(_) -> return true
-    _ -> return false
+    Ast.Expr.Typed(_) -> true
+    _ -> false
   end
 end
 
@@ -149,7 +149,7 @@ def block_without_target(cx: State.Cx, st: State.St, node: Ast.Call, entry: Mode
     _ -> return ok(true)
   end
 
-  return ok(true)
+  ok(true)
 end
 
 # A block as the last argument needs a function as the last parameter.
@@ -175,14 +175,14 @@ def check_block_target(cx: State.Cx, st: State.St, node: Ast.Call, form: Model.B
     _ -> return ok(true)
   end
 
-  return ok(true)
+  ok(true)
 end
 
 # The message of a block given to a builtin that takes none. Task.spawn takes a block, but alone.
 def block_target_message(name: String) -> String
   return "Task.spawn got a function reference and a block: it takes one of them, not both" if name == "Task.spawn"
 
-  return "\"#{name}\" does not take a block: its last parameter is not a function"
+  "\"#{name}\" does not take a block: its last parameter is not a function"
 end
 
 # The help of a block given to a builtin that takes none: each_slice returns the slices, which each then walks, and
@@ -200,30 +200,30 @@ def block_target_help(name: String) -> String
     return "Task.spawn takes a block or a function reference, not both: Task.spawn do ... end or Task.spawn(&f, arg)"
   end
 
-  return "a block is only allowed when the last parameter is a function (Fn[...])"
+  "a block is only allowed when the last parameter is a function (Fn[...])"
 end
 
 # The rule of the builtin, which says how its arguments are checked and what type the call has.
 def check_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]
   case rule
-    Model.Rule.Plain -> return check_plain(cx, st, site)
-    Model.Rule.Show -> return check_show(cx, st, site)
-    Model.Rule.Identity -> return check_identity(cx, st, site)
-    Model.Rule.Ok -> return check_ok(cx, st, site)
-    Model.Rule.OkVoid -> return ok(State.Out(st: st, type: T.Type.Result(T.Type.Void)))
-    Model.Rule.Error -> return check_error(cx, st, site)
-    Model.Rule.OptionalSome -> return check_some(cx, st, site)
-    Model.Rule.OptionalNone -> return check_none(cx, st, site)
-    Model.Rule.JsonDecode -> return check_json_type(cx, st, site, true)
-    Model.Rule.JsonSchema -> return check_json_type(cx, st, site, false)
-    Model.Rule.JsonEncode -> return check_json_encode(cx, st, site, false)
-    Model.Rule.JsonFrom -> return check_json_encode(cx, st, site, true)
-    Model.Rule.CodecDecode -> return check_codec_decode(cx, st, site)
-    Model.Rule.CodecEncode -> return check_codec_encode(cx, st, site)
-    Model.Rule.CodecMembers -> return check_codec_members(cx, st, site)
-    Model.Rule.TestEq -> return check_test_eq(cx, st, site)
-    Model.Rule.Prelude -> return PreludeCalls.check_prelude_call(cx, st, site)
-    _ -> return check_result_rule(cx, st, site, rule)
+    Model.Rule.Plain -> check_plain(cx, st, site)
+    Model.Rule.Show -> check_show(cx, st, site)
+    Model.Rule.Identity -> check_identity(cx, st, site)
+    Model.Rule.Ok -> check_ok(cx, st, site)
+    Model.Rule.OkVoid -> ok(State.Out(st: st, type: T.Type.Result(T.Type.Void)))
+    Model.Rule.Error -> check_error(cx, st, site)
+    Model.Rule.OptionalSome -> check_some(cx, st, site)
+    Model.Rule.OptionalNone -> check_none(cx, st, site)
+    Model.Rule.JsonDecode -> check_json_type(cx, st, site, true)
+    Model.Rule.JsonSchema -> check_json_type(cx, st, site, false)
+    Model.Rule.JsonEncode -> check_json_encode(cx, st, site, false)
+    Model.Rule.JsonFrom -> check_json_encode(cx, st, site, true)
+    Model.Rule.CodecDecode -> check_codec_decode(cx, st, site)
+    Model.Rule.CodecEncode -> check_codec_encode(cx, st, site)
+    Model.Rule.CodecMembers -> check_codec_members(cx, st, site)
+    Model.Rule.TestEq -> check_test_eq(cx, st, site)
+    Model.Rule.Prelude -> PreludeCalls.check_prelude_call(cx, st, site)
+    _ -> check_result_rule(cx, st, site, rule)
   end
 end
 
@@ -245,14 +245,14 @@ def check_plain(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Ou
     index += 1
   end
 
-  return ok(State.Out(st: current, type: form.result))
+  ok(State.Out(st: current, type: form.result))
 end
 
 # puts and print: any value that can be printed.
 def check_show(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   out = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   try ensure_printable(cx, out.st, out.type, Ast.expr_span(site.args[0]))
-  return ok(State.Out(st: out.st, type: T.Type.Void))
+  ok(State.Out(st: out.st, type: T.Type.Void))
 end
 
 # IO.inspect: any value, except one whose type holds a Codec, which has no inspect (a codec is a record of the name
@@ -273,14 +273,14 @@ def check_identity(cx: State.Cx, st: State.St, site: State.Site) -> Result[State
     )
   end
 
-  return ok(out)
+  ok(out)
 end
 
 # ok(value): the type is built from the value's checked type, which top_names (lowering.agc) and matches_expected?
 # (check_expr.agc) rely on.
 def check_ok(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   out = try State.expr(cx, st, site.args[0], T.only_result_item(site.expected))
-  return ok(State.Out(st: out.st, type: T.Type.Result(out.type)))
+  ok(State.Out(st: out.st, type: T.Type.Result(out.type)))
 end
 
 # error(message) needs the Result type from its context, except while a block is probed for its result type.
@@ -309,14 +309,14 @@ def check_error(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Ou
     )
   end
 
-  return ok(State.Out(st: message.st, type: expected))
+  ok(State.Out(st: message.st, type: expected))
 end
 
 # some(value): the expected Optional gives the value its expected type. The type is built from the value's checked
 # type, which top_names (lowering.agc) and matches_expected? (check_expr.agc) rely on.
 def check_some(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   out = try State.expr(cx, st, site.args[0], T.only_optional_item(site.expected))
-  return ok(State.Out(st: out.st, type: T.Type.Optional(out.type)))
+  ok(State.Out(st: out.st, type: T.Type.Optional(out.type)))
 end
 
 # none needs the Optional type from its context, except while a block is probed for its result type, as error(...)
@@ -343,7 +343,7 @@ def check_none(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out
     )
   end
 
-  return ok(State.Out(st: st, type: expected))
+  ok(State.Out(st: st, type: expected))
 end
 
 # JSON.decode(source, Type) and JSON.schema(Type): the type argument is a struct or enum name whose fields or payloads
@@ -362,7 +362,7 @@ def check_json_type(cx: State.Cx, st: State.St, site: State.Site, decode: Bool) 
   current = State.record_type(current, Ast.expr_id(target), type)
   return ok(State.Out(st: current, type: T.Type.Result(type))) if decode
 
-  return ok(State.Out(st: current, type: T.Type.Json))
+  ok(State.Out(st: current, type: T.Type.Json))
 end
 
 # codec.decode(source): JSON.decode into the struct of the codec, from JSON text or a Json value. The receiver of a
@@ -370,13 +370,13 @@ end
 def check_codec_decode(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   codec = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   current = try check_decode_source(cx, codec.st, site.args[1])
-  return ok(State.Out(st: current, type: T.Type.Result(T.item(codec.type))))
+  ok(State.Out(st: current, type: T.Type.Result(T.item(codec.type))))
 end
 
 # codec.members: the fields of the struct of the codec, as T.members gives them.
 def check_codec_members(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   codec = try State.expr(cx, st, site.args[0], T.Type.Unknown)
-  return ok(State.Out(st: codec.st, type: site.selected.result))
+  ok(State.Out(st: codec.st, type: site.selected.result))
 end
 
 # codec.encode(value) and codec.from(value): a value of the struct of the codec, which can be written as JSON because
@@ -384,7 +384,7 @@ end
 def check_codec_encode(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   codec = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   value = try State.expr(cx, codec.st, site.args[1], T.item(codec.type))
-  return ok(State.Out(st: value.st, type: site.selected.result))
+  ok(State.Out(st: value.st, type: site.selected.result))
 end
 
 # The source of a decode, which is JSON text (String) or a Json value.
@@ -394,7 +394,7 @@ def check_decode_source(cx: State.Cx, st: State.St, source: Ast.Expr) -> Result[
     return error(decode_source_mismatch(cx, out.st, out.type, Ast.expr_span(source)))
   end
 
-  return ok(out.st)
+  ok(out.st)
 end
 
 # The struct or enum a JSON type argument names, which must be a name whose fields or payloads can all be decoded. A
@@ -408,10 +408,10 @@ def json_type(cx: State.Cx, st: State.St, target: Ast.Expr, decode: Bool) -> Res
         refusal = "JSON.schema requires a struct or enum name"
       end
 
-      return json_target(cx, st, node, refusal)
+      json_target(cx, st, node, refusal)
     _ ->
       message = "JSON type argument requires a struct or enum name"
-      return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", message, Ast.expr_span(target)))
+      error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", message, Ast.expr_span(target)))
   end
 end
 
@@ -420,7 +420,7 @@ def decode_source_mismatch(cx: State.Cx, st: State.St, actual: T.Type, span: Sou
   found = T.to_text(actual)
   message = "expected String or Json, found #{found}"
   base = Failure.problem(cx.file, st.signature, "CHECK-TYPE-MISMATCH", message, span, State.hint_of(""))
-  return Failure.pack(base.with(expected: "String or Json", actual: found))
+  Failure.pack(base.with(expected: "String or Json", actual: found))
 end
 
 # The type a JSON target names. refusal is the CHECK-TYPE-MISMATCH message for a List or Map target, or "" when the
@@ -445,7 +445,7 @@ def json_target(cx: State.Cx, st: State.St, node: Ast.TypeName, refusal: String)
     )
   end
 
-  return ok(type)
+  ok(type)
 end
 
 # True for a List or Map JSON target, which only JSON.decode takes.
@@ -469,7 +469,7 @@ def json_refusal_help(cx: State.Cx, type: T.Type, verb: String) -> String
     return "JSON has no byte type; decode a String and convert it with Base64.strict_decode64(text)"
   end
 
-  return "JSON has no byte type; use a String field and decode it with Base64.strict_decode64(text)"
+  "JSON has no byte type; use a String field and decode it with Base64.strict_decode64(text)"
 end
 
 # JSON.encode and JSON.from: any value that can be written as JSON. In a generic body a type with type variables is
@@ -505,7 +505,7 @@ def check_json_encode(cx: State.Cx, st: State.St, site: State.Site, from: Bool) 
 
   return ok(State.Out(st: out.st, type: T.Type.Json)) if from
 
-  return ok(State.Out(st: out.st, type: T.Type.String))
+  ok(State.Out(st: out.st, type: T.Type.String))
 end
 
 # CHECK-JSON-FIELD-PLACE when a JSON builtin's target or argument has a JsonField that is not the direct type of a
@@ -514,7 +514,7 @@ def json_field_place(cx: State.Cx, st: State.St, type: T.Type, kind: String, spa
   place = CheckTypes.json_field_place(cx, type, false, kind, "")
   return ok() if place == ""
 
-  return error(
+  error(
     State.fail_help(
       cx,
       st,
@@ -548,28 +548,28 @@ def check_test_eq(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
     )
   end
 
-  return ok(State.Out(st: wanted.st, type: T.Type.Result(T.Type.Void)))
+  ok(State.Out(st: wanted.st, type: T.Type.Result(T.Type.Void)))
 end
 
 def check_result_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]
   case rule
     Model.Rule.TestResult ->
       target = try Args.result_argument(cx, st, site, T.Type.Unknown)
-      return ok(State.Out(st: target.st, type: T.Type.Result(T.Type.Void)))
+      ok(State.Out(st: target.st, type: T.Type.Result(T.Type.Void)))
     Model.Rule.ResultOk ->
       target = try Args.result_argument(cx, st, site, T.Type.Unknown)
-      return ok(State.Out(st: target.st, type: T.Type.Bool))
+      ok(State.Out(st: target.st, type: T.Type.Bool))
     Model.Rule.ResultMessage ->
       target = try Args.result_argument(cx, st, site, T.Type.Unknown)
-      return ok(State.Out(st: target.st, type: T.Type.String))
+      ok(State.Out(st: target.st, type: T.Type.String))
     Model.Rule.ResultUnwrap ->
       target = try Args.result_argument(cx, st, site, T.result_of(site.expected))
-      return ok(State.Out(st: target.st, type: T.item(target.type)))
+      ok(State.Out(st: target.st, type: T.item(target.type)))
     Model.Rule.ResultDefault ->
       default = try State.expr(cx, st, site.args[1], site.expected)
       target = try Args.result_argument(cx, default.st, site, T.Type.Result(default.type))
-      return ok(State.Out(st: target.st, type: default.type))
-    _ -> return check_other_rule(cx, st, site, rule)
+      ok(State.Out(st: target.st, type: default.type))
+    _ -> check_other_rule(cx, st, site, rule)
   end
 end
 
@@ -577,27 +577,27 @@ end
 def check_other_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -> Result[State.Out]
   return Lists.check_list_rule(cx, st, site, rule) if list_rule?(rule)
 
-  return Collections.check_collection_rule(cx, st, site, rule)
+  Collections.check_collection_rule(cx, st, site, rule)
 end
 
 def list_rule?(rule: Model.Rule) -> Bool
   case rule
-    Model.Rule.ListSize -> return true
-    Model.Rule.ListReverse -> return true
-    Model.Rule.ListSort -> return true
-    Model.Rule.ListSortBy -> return true
-    Model.Rule.ListConcat -> return true
-    Model.Rule.ListCount -> return true
-    Model.Rule.ListAt -> return true
-    Model.Rule.ListAppend -> return true
-    Model.Rule.ListSet -> return true
-    Model.Rule.ListRepeat -> return true
-    Model.Rule.ListMap -> return true
-    Model.Rule.ListFilter -> return true
-    Model.Rule.ListReduce -> return true
-    Model.Rule.ListEach -> return true
-    Model.Rule.ListAny -> return true
-    Model.Rule.ListAll -> return true
-    _ -> return false
+    Model.Rule.ListSize -> true
+    Model.Rule.ListReverse -> true
+    Model.Rule.ListSort -> true
+    Model.Rule.ListSortBy -> true
+    Model.Rule.ListConcat -> true
+    Model.Rule.ListCount -> true
+    Model.Rule.ListAt -> true
+    Model.Rule.ListAppend -> true
+    Model.Rule.ListSet -> true
+    Model.Rule.ListRepeat -> true
+    Model.Rule.ListMap -> true
+    Model.Rule.ListFilter -> true
+    Model.Rule.ListReduce -> true
+    Model.Rule.ListEach -> true
+    Model.Rule.ListAny -> true
+    Model.Rule.ListAll -> true
+    _ -> false
   end
 end

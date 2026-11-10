@@ -7,11 +7,11 @@ export def flag?(expr: Ast.Expr) -> Bool
   case expr
     Ast.Expr.Literal(node) ->
       case node.value
-        Ast.LitValue.Flag(_) -> return true
-        _ -> return false
+        Ast.LitValue.Flag(_) -> true
+        _ -> false
       end
 
-    _ -> return false
+    _ -> false
   end
 end
 
@@ -20,21 +20,21 @@ export def text?(expr: Ast.Expr) -> Bool
   case expr
     Ast.Expr.Literal(node) ->
       case node.value
-        Ast.LitValue.Text(_) -> return true
-        _ -> return false
+        Ast.LitValue.Text(_) -> true
+        _ -> false
       end
 
-    Ast.Expr.Interpolation(_) -> return true
-    _ -> return false
+    Ast.Expr.Interpolation(_) -> true
+    _ -> false
   end
 end
 
 ## Whether the expression is `to_s` on a value, written `n.to_s` or `n.to_s()`.
 export def to_s?(expr: Ast.Expr) -> Bool
   case expr
-    Ast.Expr.FieldAccess(node) -> return node.name == "to_s"
-    Ast.Expr.MethodCall(node) -> return node.name == "to_s" and node.args.size == 0
-    _ -> return false
+    Ast.Expr.FieldAccess(node) -> node.name == "to_s"
+    Ast.Expr.MethodCall(node) -> node.name == "to_s" and node.args.size == 0
+    _ -> false
   end
 end
 
@@ -58,13 +58,13 @@ export def plus_operands(expr: Ast.Expr) -> List[Ast.Expr]
     end
   end
 
-  return [left].concat(rights.reverse)
+  [left].concat(rights.reverse)
 end
 
 ## The name a variable read has, `none` for any other expression.
 export def read_name(expr: Ast.Expr) -> Optional[String]
   case expr
-    Ast.Expr.Name(node) -> return some(node.name)
-    _ -> return none
+    Ast.Expr.Name(node) -> some(node.name)
+    _ -> none
   end
 end

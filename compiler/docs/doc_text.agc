@@ -18,18 +18,17 @@ export def text(module: String, documented: Model.Module) -> String
     blocks = blocks.concat(item_blocks(item))
   end
 
-  return "#{blocks.join("\n\n")}\n"
+  "#{blocks.join("\n\n")}\n"
 end
 
 ## One list line per field or variant: `signature` and, when it has a doc, a dash and the doc. `agentica help std/`
 ## prints the same lines.
 export def part_lines(detail: Model.Detail) -> List[String]
   case detail
-    Model.Detail.Struct(fields) ->
-      return fields.map do |field: Model.Field| part_line(field_signature(field), field.doc) end
-    Model.Detail.Enum(variants) -> return variants.map do |variant: Model.Variant| variant_line(variant) end
-    Model.Detail.Function(_, _) -> return []
-    Model.Detail.Plain -> return []
+    Model.Detail.Struct(fields) -> fields.map do |field: Model.Field| part_line(field_signature(field), field.doc) end
+    Model.Detail.Enum(variants) -> variants.map do |variant: Model.Variant| variant_line(variant) end
+    Model.Detail.Function(_, _) -> []
+    Model.Detail.Plain -> []
   end
 end
 
@@ -46,26 +45,26 @@ def item_blocks(item: Model.Item) -> List[String]
     blocks = blocks.push(parts.join("\n"))
   end
 
-  return blocks
+  blocks
 end
 
 # `name: Type`, with ` = default` as written when the field has one.
 def field_signature(field: Model.Field) -> String
   typed = "#{field.name}: #{field.type}"
   case field.default
-    some(written) -> return "#{typed} = #{written}"
-    none -> return typed
+    some(written) -> "#{typed} = #{written}"
+    none -> typed
   end
 end
 
 def variant_line(variant: Model.Variant) -> String
-  return part_line(Signature.variant_text(variant.name, variant.payload), variant.doc)
+  part_line(Signature.variant_text(variant.name, variant.payload), variant.doc)
 end
 
 # A doc of several lines continues under the dash, indented.
 def part_line(signature: String, doc: Optional[String]) -> String
   case doc
-    some(text) -> return "- `#{signature}` - #{text.split("\n").join("\n  ")}"
-    none -> return "- `#{signature}`"
+    some(text) -> "- `#{signature}` - #{text.split("\n").join("\n  ")}"
+    none -> "- `#{signature}`"
   end
 end

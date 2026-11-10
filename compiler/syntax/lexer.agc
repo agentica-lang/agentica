@@ -294,8 +294,8 @@ end
 ## Lexes a source text into its tokens, or the first `LEX-` diagnostic.
 export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
   case lex_with_comments(text)
-    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
-    Diag.Outcome.Done(scanned) -> return Diag.Outcome.Done(scanned.tokens)
+    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
+    Diag.Outcome.Done(scanned) -> Diag.Outcome.Done(scanned.tokens)
   end
 end
 
@@ -305,12 +305,12 @@ export def lex_with_comments(text: String) -> Diag.Outcome[Scanned]
   input = new_input(text)
   first = Lexed(tokens: [], comments: [], delimiters: [], index: 0, line: 1, line_start: 0)
   case lex_from(input, first, -1)
-    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
     Diag.Outcome.Done(lexed) ->
       here = Source.position(lexed.index, lexed.line, lexed.line_start)
       case finish(input, lexed.tokens, lexed.delimiters, here)
-        Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
-        Diag.Outcome.Done(tokens) -> return Diag.Outcome.Done(Scanned(tokens: tokens, comments: lexed.comments))
+        Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
+        Diag.Outcome.Done(tokens) -> Diag.Outcome.Done(Scanned(tokens: tokens, comments: lexed.comments))
       end
   end
 end
@@ -616,7 +616,7 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
     return Diag.Outcome.Failed(unterminated(delimiters[stop_depth - 1].start, here))
   end
 
-  return Diag.Outcome.Done(
+  Diag.Outcome.Done(
     Lexed(
       tokens: tokens,
       comments: comments,
@@ -638,7 +638,7 @@ def new_input(text: String) -> Input
     lines = text.split("\n")
   end
 
-  return Input(text: text, chars: chars.concat(["", "", ""]), size: chars.size, lines: lines, by_lines: by_lines)
+  Input(text: text, chars: chars.concat(["", "", ""]), size: chars.size, lines: lines, by_lines: by_lines)
 end
 
 # The end of the text: a last NL at statement level, then EOF, unless a
@@ -657,7 +657,7 @@ def finish(
   opening = innermost_bracket(delimiters)
   return Diag.Outcome.Failed(unclosed(delimiters[opening], here)) if opening >= 0
 
-  return Diag.Outcome.Done(closed.push(token(input.text, "EOF", Tokens.Value.NoValue, here, here)))
+  Diag.Outcome.Done(closed.push(token(input.text, "EOF", Tokens.Value.NoValue, here, here)))
 end
 
 # The offset where the comment or doc text that is at `from` ends: the line break, or the end of the text. A line
@@ -665,7 +665,7 @@ end
 def line_end(input: Input, from: Int, line: Int, line_start: Int) -> Int
   return line_start + input.lines[line - 1].length if input.by_lines
 
-  return skip_until(input.chars, from, LINE_ENDS)
+  skip_until(input.chars, from, LINE_ENDS)
 end
 
 # The DOC token of a scanned `##` block; its span ends where the block ends.
@@ -673,7 +673,7 @@ def doc_token(input: Input, scan: DocScan, first: Int, line: Int, line_start: In
   block = Tokens.DocBlock(text: scan.text, next: scan.next)
   start = Source.position(first, line, line_start)
   stop = Source.position(scan.stop, scan.line, scan.line_start)
-  return token(input.text, "DOC", Tokens.Value.Doc(block), start, stop)
+  token(input.text, "DOC", Tokens.Value.Doc(block), start, stop)
 end
 
 # A name that starts with an upper-case letter: it takes no `?` or `!` and is never a keyword.
@@ -685,7 +685,7 @@ def type_name_token(input: Input, first: Int, line: Int, column_base: Int) -> To
   end
 
   lexeme = input.text.slice(first, stop - first)
-  return Tokens.Token(
+  Tokens.Token(
     kind: "type-name",
     lexeme: lexeme,
     value: Tokens.Value.Text(lexeme),
@@ -732,7 +732,7 @@ def scan_number(input: Input, first: Int, line: Int, line_start: Int) -> Diag.Ou
     return Diag.Outcome.Done(token(input.text, "float", Tokens.Value.Real(digits.to_f!), start, stop))
   end
 
-  return Diag.Outcome.Done(token(input.text, "integer", integer_value(digits), start, stop))
+  Diag.Outcome.Done(token(input.text, "integer", integer_value(digits), start, stop))
 end
 
 # A hex, binary or octal integer: `0x`, `0b` or `0o` (either case) and digits of that base, with a `_` only between two
@@ -787,7 +787,7 @@ def scan_radix(input: Input, first: Int, line: Int, line_start: Int) -> Diag.Out
   end
 
   prefix = input.text.slice(first, 2).downcase
-  return Diag.Outcome.Done(token(input.text, "integer", radix_value(digits, base, prefix), start, end_at))
+  Diag.Outcome.Done(token(input.text, "integer", radix_value(digits, base, prefix), start, end_at))
 end
 
 # Scans one piece of a string literal. It starts after the opening `"`, or
@@ -863,7 +863,7 @@ def scan_string(
     end
   end
 
-  return Diag.Outcome.Failed(unterminated(string_start, Source.position(index, line, line_start)))
+  Diag.Outcome.Failed(unterminated(string_start, Source.position(index, line, line_start)))
 end
 
 # The diagnostic for the `\` at `index`: it ends the text, or the next
@@ -885,7 +885,7 @@ def bad_escape(input: Input, index: Int, line: Int, line_start: Int) -> Diag.Dia
   end
 
   # The message is a backslash followed by the escaped character, such as: unsupported escape \q
-  return Diag.fail(
+  Diag.fail(
     "LEX-INVALID-ESCAPE",
     "unsupported escape \\#{input.chars[index + 1]}",
     span(escape_start, stop),
@@ -898,13 +898,13 @@ end
 def piece_token(input: Input, piece: StringPiece, first: Int, line: Int, line_start: Int) -> Tokens.Token
   start = Source.position(first, line, line_start)
   stop = Source.position(piece.token_end, line, line_start)
-  return token(input.text, piece.kind, Tokens.Value.Text(piece.value), start, stop)
+  token(input.text, piece.kind, Tokens.Value.Text(piece.value), start, stop)
 end
 
 # The token of an operator or bracket of the table, from `index`.
 def operator_token(op: Op, index: Int, line: Int, column_base: Int) -> Tokens.Token
   stop = index + op.width
-  return Tokens.Token(
+  Tokens.Token(
     kind: op.kind,
     lexeme: op.lexeme,
     value: op.value,
@@ -922,7 +922,7 @@ def unmatched(delimiters: List[Frame], index: Int, char: String, line: Int, colu
     help = Diag.Help.Hint("blocks end with \"end\", not \"}\"")
   end
 
-  return Diag.fail(
+  Diag.fail(
     "LEX-UNMATCHED-DELIMITER",
     "unmatched #{char} delimiter",
     span(
@@ -949,7 +949,7 @@ def close_brace(
   end
 
   closing = operator_token(SINGLE_OPS.get("}", NO_OP), index, line, 1 - line_start)
-  return Diag.Outcome.Done(Progress(tokens: tokens.push(closing), delimiters: pop(delimiters), index: index + 1))
+  Diag.Outcome.Done(Progress(tokens: tokens.push(closing), delimiters: pop(delimiters), index: index + 1))
 end
 
 # One string piece, from the `"` or the `}` at `index`: its token, and the frames
@@ -963,7 +963,7 @@ def scan_piece(
   line_start: Int,
 ) -> Diag.Outcome[Progress]
   case scan_string(input, delimiters, index, line, line_start)
-    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
     Diag.Outcome.Done(piece) ->
       frames = delimiters
       if input.chars[index] == "}"
@@ -974,7 +974,7 @@ def scan_piece(
         frames = open_frame(frames, "#", piece.start)
       end
 
-      return Diag.Outcome.Done(
+      Diag.Outcome.Done(
         Progress(
           tokens: tokens.push(piece_token(input, piece, index, line, line_start)),
           delimiters: frames,
@@ -990,7 +990,7 @@ def heredoc_opener?(chars: List[String], index: Int) -> Bool
   third = chars[index + 2]
   return true if third == "~" or HEREDOC_UPPER.include?(third)
 
-  return third == "-" and HEREDOC_UPPER.include?(chars[index + 3])
+  third == "-" and HEREDOC_UPPER.include?(chars[index + 3])
 end
 
 # The heredoc `<<~NAME` at `index` (25.10): its string tokens, which stand where the opener stands, and where the lexer
@@ -1028,7 +1028,7 @@ def scan_heredoc(
 
   name = input.text.slice(index + 3, name_stop - index - 3)
   case heredoc_body(input, name, resume, line, line_start, opener)
-    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
     Diag.Outcome.Done(body) ->
       # A template of one line has no string literal to write instead: it is `<%= ... %>` with no tag-free form.
       return Diag.Outcome.Failed(heredoc_one_line(opener)) if body.lines.size < 2 and name != EAG_HEREDOC
@@ -1040,9 +1040,8 @@ def scan_heredoc(
       end
 
       case heredoc_tokens(input, tokens, delimiters, body.lines, opener)
-        Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
-        Diag.Outcome.Done(made) ->
-          return Diag.Outcome.Done(Heredoc(tokens: made, index: name_stop, resume: body.resume))
+        Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
+        Diag.Outcome.Done(made) -> Diag.Outcome.Done(Heredoc(tokens: made, index: name_stop, resume: body.resume))
       end
   end
 end
@@ -1110,7 +1109,7 @@ def heredoc_body(
     end
   end
 
-  return Diag.Outcome.Failed(unterminated_heredoc(opener, name))
+  Diag.Outcome.Failed(unterminated_heredoc(opener, name))
 end
 
 # The token of an `<<~EAG` heredoc: its lexeme is the opener, and its value the lines as written with the indentation
@@ -1124,7 +1123,7 @@ def eag_token(input: Input, lines: List[BodyLine], opener: Source.Span) -> Token
   end
 
   value = Tokens.Value.Eag(Tokens.EagBody(lines: written, indent: common_indent(lines)))
-  return token(input.text, "eag", value, opener.start, opener.stop)
+  token(input.text, "eag", value, opener.start, opener.stop)
 end
 
 # The string tokens of a heredoc: the text of its body lines with the common indentation removed, one `\n` after each
@@ -1151,7 +1150,7 @@ def heredoc_tokens(
     kind = "interp-end"
   end
 
-  return Diag.Outcome.Done(pending.tokens.push(heredoc_piece(input, opener, kind, pending.parts)))
+  Diag.Outcome.Done(pending.tokens.push(heredoc_piece(input, opener, kind, pending.parts)))
 end
 
 # The fewest leading spaces of the lines that have text; blank lines do not count, and they become empty lines.
@@ -1166,7 +1165,7 @@ def common_indent(lines: List[BodyLine]) -> Int
 
   return 0 if indent < 0
 
-  return indent
+  indent
 end
 
 # One body line: its text after `indent` spaces is added to the pending text, cut at each `#{`, whose tokens come from
@@ -1233,11 +1232,11 @@ def heredoc_line(
   end
 
   parts = parts.push(input.text.slice(segment, body.stop - segment)).push("\n")
-  return Diag.Outcome.Done(Pending(tokens: tokens, parts: parts, pieces: pieces))
+  Diag.Outcome.Done(Pending(tokens: tokens, parts: parts, pieces: pieces))
 end
 
 def heredoc_piece(input: Input, opener: Source.Span, kind: String, parts: List[String]) -> Tokens.Token
-  return token(input.text, kind, Tokens.Value.Text(parts.join("")), opener.start, opener.stop)
+  token(input.text, kind, Tokens.Value.Text(parts.join("")), opener.start, opener.stop)
 end
 
 # Whether a / at offset starts a regex: no token before it ends an expression, so it cannot be a division. `//`, `/*`
@@ -1253,7 +1252,7 @@ def regex_start?(tokens: List[Tokens.Token], ahead: String, offset: Int) -> Bool
   last = tokens[tokens.size - 1]
   return false if (last.kind == "divide" or last.kind == "multiply") and last.span.stop.offset == offset
 
-  return !ENDS_EXPRESSION.include?(last.kind)
+  !ENDS_EXPRESSION.include?(last.kind)
 end
 
 # A regex literal `/body/flags` from its opening slash. The body is the pattern as written: a backslash is read with
@@ -1302,7 +1301,7 @@ def scan_regex(input: Input, first: Int, line: Int, line_start: Int) -> Diag.Out
     stop += 1
   end
 
-  return Diag.Outcome.Done(
+  Diag.Outcome.Done(
     Tokens.Token(
       kind: "regex",
       lexeme: input.text.slice(first, stop - first),
@@ -1314,11 +1313,11 @@ end
 
 # Whether the `]` at index is the first character of the class that opens at class_start, so literal text.
 def class_head?(chars: List[String], class_start: Int, index: Int) -> Bool
-  return index == class_start + 1 or (index == class_start + 2 and chars[class_start + 1] == "^")
+  index == class_start + 1 or (index == class_start + 2 and chars[class_start + 1] == "^")
 end
 
 def slash_in_class(start: Source.Position, stop: Source.Position) -> Diag.Diagnostic
-  return Diag.fail(
+  Diag.fail(
     "LEX-UNTERMINATED-REGEX",
     "a / inside [...] ends the regex literal",
     span(start, stop),
@@ -1327,7 +1326,7 @@ def slash_in_class(start: Source.Position, stop: Source.Position) -> Diag.Diagno
 end
 
 def unterminated_regex(start: Source.Position, stop: Source.Position) -> Diag.Diagnostic
-  return Diag.fail(
+  Diag.fail(
     "LEX-UNTERMINATED-REGEX",
     "unterminated regex literal",
     span(start, stop),
@@ -1339,7 +1338,7 @@ def unterminated_regex(start: Source.Position, stop: Source.Position) -> Diag.Di
 end
 
 def regex_interpolation(input: Input, index: Int, line: Int, line_start: Int) -> Diag.Diagnostic
-  return Diag.fail(
+  Diag.fail(
     "LEX-REGEX-INTERPOLATION",
     "a regex literal cannot interpolate",
     span(Source.position(index, line, line_start), Source.position(index + 2, line, line_start)),
@@ -1349,7 +1348,7 @@ end
 
 def regex_flag(flag: String, at: Source.Position) -> Diag.Diagnostic
   stop = Source.Position(offset: at.offset + 1, line: at.line, column: at.column + 1)
-  return Diag.fail(
+  Diag.fail(
     "LEX-REGEX-FLAG",
     "unknown or repeated regex flag \"#{flag}\"",
     span(at, stop),
@@ -1358,11 +1357,11 @@ def regex_flag(flag: String, at: Source.Position) -> Diag.Diagnostic
 end
 
 def lone_carriage_return(at: Source.Position) -> Diag.Diagnostic
-  return Diag.fail("LEX-UNEXPECTED-CHAR", "unexpected carriage return", span(at, at), Diag.Help.NoHelp)
+  Diag.fail("LEX-UNEXPECTED-CHAR", "unexpected carriage return", span(at, at), Diag.Help.NoHelp)
 end
 
 def unterminated_heredoc(opener: Source.Span, name: String) -> Diag.Diagnostic
-  return Diag.fail(
+  Diag.fail(
     "LEX-UNTERMINATED-HEREDOC",
     "unterminated heredoc",
     opener,
@@ -1373,7 +1372,7 @@ end
 # A tab in the leading whitespace of a body line or of the end line, at the tab.
 def heredoc_indent(at: Source.Position) -> Diag.Diagnostic
   stop = Source.Position(offset: at.offset + 1, line: at.line, column: at.column + 1)
-  return Diag.fail(
+  Diag.fail(
     "LEX-HEREDOC-INDENT",
     "a tab in the indentation of a heredoc",
     span(at, stop),
@@ -1384,7 +1383,7 @@ def heredoc_indent(at: Source.Position) -> Diag.Diagnostic
 end
 
 def heredoc_one_line(opener: Source.Span) -> Diag.Diagnostic
-  return Diag.fail(
+  Diag.fail(
     "LEX-HEREDOC-ONE-LINE",
     "a heredoc needs two or more lines of text",
     opener,
@@ -1396,7 +1395,7 @@ end
 
 # `<<NAME`, `<<-NAME`: only the squiggly form exists.
 def heredoc_form(at: Source.Span) -> Diag.Diagnostic
-  return Diag.fail(
+  Diag.fail(
     "LEX-UNEXPECTED-CHAR",
     "only the squiggly heredoc <<~NAME exists",
     at,
@@ -1409,7 +1408,7 @@ end
 
 # `<<~` that no capital name follows: `<<~text`, `<<~'TEXT'`.
 def heredoc_name(at: Source.Span) -> Diag.Diagnostic
-  return Diag.fail(
+  Diag.fail(
     "LEX-UNEXPECTED-CHAR",
     "a heredoc name is written in capitals",
     at,
@@ -1449,7 +1448,7 @@ def scan_doc(input: Input, from: Int, line: Int, line_start: Int) -> DocScan
     end
   end
 
-  return DocScan(
+  DocScan(
     stop: index,
     line: current_line,
     line_start: current_start,
@@ -1459,7 +1458,7 @@ def scan_doc(input: Input, from: Int, line: Int, line_start: Int) -> DocScan
 end
 
 def block_head?(tokens: List[Tokens.Token], head_at: Int) -> Bool
-  return head_at < tokens.size and BLOCK_HEADS.include?(tokens[head_at].kind)
+  head_at < tokens.size and BLOCK_HEADS.include?(tokens[head_at].kind)
 end
 
 # True for a type name in an annotation (`-> Void`, `a: Int`), not a value such as `Color.Red`: a leading dot after a
@@ -1469,7 +1468,7 @@ def ends_in_type?(tokens: List[Tokens.Token]) -> Bool
   return false if size < 2 or tokens[size - 1].kind != "type-name"
 
   before = tokens[size - 2].kind
-  return before == "arrow" or before == "colon"
+  before == "arrow" or before == "colon"
 end
 
 # Whether the first line that is not a plain `#` comment line starts, after its indentation, with a dot and a name
@@ -1497,17 +1496,17 @@ def dot_follows?(chars: List[String], from: Int) -> Bool
     index += 1
   end
 
-  return false
+  false
 end
 
 def ends_with_newline?(tokens: List[Tokens.Token]) -> Bool = tokens.size > 0 and tokens[tokens.size - 1].kind == "NL"
 
 def in_interpolation?(delimiters: List[Frame]) -> Bool
-  return delimiters.size > 0 and delimiters[delimiters.size - 1].kind == "#"
+  delimiters.size > 0 and delimiters[delimiters.size - 1].kind == "#"
 end
 
 def statement_level?(delimiters: List[Frame]) -> Bool
-  return delimiters.size == 0 or delimiters[delimiters.size - 1].kind == "kw"
+  delimiters.size == 0 or delimiters[delimiters.size - 1].kind == "kw"
 end
 
 # The stack index of the innermost `#` frame, or -1. O(1): the top frame
@@ -1515,7 +1514,7 @@ end
 def innermost_interpolation(delimiters: List[Frame]) -> Int
   return -1 if delimiters.size == 0
 
-  return delimiters[delimiters.size - 1].inside
+  delimiters[delimiters.size - 1].inside
 end
 
 # The stack index of the innermost frame that is not a block, or -1. Walks the
@@ -1528,7 +1527,7 @@ def innermost_bracket(delimiters: List[Frame]) -> Int
     index -= 1
   end
 
-  return -1
+  -1
 end
 
 # Pushes a frame. The new frame is its own innermost `#` frame when it is one,
@@ -1539,7 +1538,7 @@ def open_frame(delimiters: List[Frame], kind: String, start: Source.Position) ->
     inside = delimiters.size
   end
 
-  return delimiters.push(Frame(kind: kind, start: start, inside: inside))
+  delimiters.push(Frame(kind: kind, start: start, inside: inside))
 end
 
 def pop(delimiters: List[Frame]) -> List[Frame] = delimiters.take(delimiters.size - 1)
@@ -1548,7 +1547,7 @@ def pop(delimiters: List[Frame]) -> List[Frame] = delimiters.take(delimiters.siz
 def frame_on_top(delimiters: List[Frame], depth: Int) -> Frame
   return ROOT if depth == 0
 
-  return delimiters[depth - 1]
+  delimiters[depth - 1]
 end
 
 def unclosed(frame: Frame, here: Source.Position) -> Diag.Diagnostic
@@ -1562,7 +1561,7 @@ def unclosed(frame: Frame, here: Source.Position) -> Diag.Diagnostic
     )
   end
 
-  return Diag.fail("LEX-UNCLOSED-DELIMITER", "unclosed #{frame.kind} delimiter", span(frame.start, here), help)
+  Diag.fail("LEX-UNCLOSED-DELIMITER", "unclosed #{frame.kind} delimiter", span(frame.start, here), help)
 end
 
 def blank?(char: String) -> Bool = char == " " or char == "\t"
@@ -1573,7 +1572,7 @@ def newline?(char: String) -> Bool = char == "\n" or char == "\r"
 def at(chars: List[String], size: Int, index: Int) -> String
   return chars[index] if index < size
 
-  return ""
+  ""
 end
 
 def skip_blanks(chars: List[String], size: Int, from: Int) -> Int
@@ -1582,7 +1581,7 @@ def skip_blanks(chars: List[String], size: Int, from: Int) -> Int
     index += 1
   end
 
-  return index
+  index
 end
 
 # Index of the first character from `from` that is not in `members` (`size` at
@@ -1594,7 +1593,7 @@ def skip_in(chars: List[String], from: Int, members: Set[String]) -> Int
     index += 1
   end
 
-  return index
+  index
 end
 
 # Index of the first character from `from` that is in `stops` (`size` at the
@@ -1605,7 +1604,7 @@ def skip_until(chars: List[String], from: Int, stops: Set[String]) -> Int
     index += 1
   end
 
-  return index
+  index
 end
 
 def only_blanks?(chars: List[String], from: Int, stop: Int) -> Bool
@@ -1616,11 +1615,11 @@ def only_blanks?(chars: List[String], from: Int, stop: Int) -> Bool
     index += 1
   end
 
-  return true
+  true
 end
 
 def doc_marker?(chars: List[String], size: Int, index: Int) -> Bool
-  return index + 1 < size and chars[index] == "#" and chars[index + 1] == "#"
+  index + 1 < size and chars[index] == "#" and chars[index + 1] == "#"
 end
 
 def next_line_start(chars: List[String], size: Int, index: Int) -> Int
@@ -1630,7 +1629,7 @@ def next_line_start(chars: List[String], size: Int, index: Int) -> Int
 
   return index + 2 if chars[index] == "\r" and at(chars, size, index + 1) == "\n"
 
-  return -1
+  -1
 end
 
 def line_after_doc(chars: List[String], size: Int, index: Int) -> String
@@ -1644,7 +1643,7 @@ def line_after_doc(chars: List[String], size: Int, index: Int) -> String
 
   return "comment" if chars[found] == "#"
 
-  return "code"
+  "code"
 end
 
 def span(start: Source.Position, stop: Source.Position) -> Source.Span = Source.Span(start: start, stop: stop)
@@ -1656,7 +1655,7 @@ def token(
   start: Source.Position,
   stop: Source.Position,
 ) -> Tokens.Token
-  return Tokens.Token(
+  Tokens.Token(
     kind: kind,
     lexeme: text.slice(start.offset, stop.offset - start.offset),
     value: value,
@@ -1665,7 +1664,7 @@ def token(
 end
 
 def unterminated(start: Source.Position, stop: Source.Position) -> Diag.Diagnostic
-  return Diag.fail("LEX-UNTERMINATED-STRING", "unterminated string", span(start, stop), Diag.Help.NoHelp)
+  Diag.fail("LEX-UNTERMINATED-STRING", "unterminated string", span(start, stop), Diag.Help.NoHelp)
 end
 
 # Where the digits of an exponent start when an `e` or `E` at `index` begins one (`e5`, `E-5`, `e+5`), else -1.
@@ -1679,7 +1678,7 @@ def exponent_start(chars: List[String], index: Int) -> Int
 
   return digits if DIGITS.include?(chars[digits])
 
-  return -1
+  -1
 end
 
 def invalid_separator?(chars: List[String], from: Int, stop: Int) -> Bool
@@ -1696,7 +1695,7 @@ def invalid_separator?(chars: List[String], from: Int, stop: Int) -> Bool
     index += 1
   end
 
-  return false
+  false
 end
 
 def strip_zeros(digits: String) -> String
@@ -1705,14 +1704,14 @@ def strip_zeros(digits: String) -> String
     start += 1
   end
 
-  return digits.slice(start, digits.length - start)
+  digits.slice(start, digits.length - start)
 end
 
 def integer_value(digits: String) -> Tokens.Value
   parsed = digits.to_i
   return Tokens.Value.Whole(parsed.unwrap!) if parsed.ok?
 
-  return Tokens.Value.Huge(strip_zeros(digits))
+  Tokens.Value.Huge(strip_zeros(digits))
 end
 
 # The value of the digits of a radix literal: a Whole when it fits an Int, else the Huge of its decimal digits, the
@@ -1735,7 +1734,7 @@ def radix_value(digits: List[Int], base: Int, prefix: String) -> Tokens.Value
     value = value * base + digit
   end
 
-  return Tokens.Value.Whole(value)
+  Tokens.Value.Whole(value)
 end
 
 # The decimal digits of a number given by its digits in another base: a little-endian list of decimal digits is
@@ -1760,7 +1759,7 @@ def decimal_text(digits: List[Int], base: Int) -> String
     decimal = grown
   end
 
-  return decimal.reverse.map do |place: Int| place.to_s end.join("")
+  decimal.reverse.map do |place: Int| place.to_s end.join("")
 end
 
 def unexpected_character(character: String, start: Source.Position, stop: Source.Position) -> Diag.Diagnostic
@@ -1779,5 +1778,5 @@ def unexpected_character(character: String, start: Source.Position, stop: Source
     )
   end
 
-  return Diag.fail("LEX-UNEXPECTED-CHAR", message, span(start, stop), help)
+  Diag.fail("LEX-UNEXPECTED-CHAR", message, span(start, stop), help)
 end

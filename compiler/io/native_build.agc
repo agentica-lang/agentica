@@ -81,13 +81,13 @@ end
 ## PKG-NATIVE-UNBUILT warning of an optional module that was not built, once a run.
 export def builder(noted: Bool, warned: Fn[String, Void]) -> Fn[Workspace.BuildRequest, Workspace.Built]
   memo: ATS[String, String] = ATS.new()
-  return builder_of() do |request: Workspace.BuildRequest| remembered(memo, request, noted, warned) end
+  builder_of() do |request: Workspace.BuildRequest| remembered(memo, request, noted, warned) end
 end
 
 ## The builder of `compile` under `flag` (a --deny-* flag or --sandbox), whose program may not open native code: it
 ## starts no compiler and fails at the build table, so nothing names a module that was not built.
 export def refusing(flag: String) -> Fn[Workspace.BuildRequest, Workspace.Built]
-  return builder_of() do |request: Workspace.BuildRequest| refused(request, flag) end
+  builder_of() do |request: Workspace.BuildRequest| refused(request, flag) end
 end
 
 # The identity of a function value: a block can only be written as the block of a call.
@@ -95,7 +95,7 @@ def builder_of(f: Fn[Workspace.BuildRequest, Workspace.Built]) -> Fn[Workspace.B
 
 def refused(request: Workspace.BuildRequest, flag: String) -> Workspace.Built
   message = "#{flag} refuses native code, so the module is not built"
-  return Workspace.Built.Failed(fail(request, message, "run without #{flag} to build and use the module"))
+  Workspace.Built.Failed(fail(request, message, "run without #{flag} to build and use the module"))
 end
 
 # The answer kept for the library (`L` and its path, `F` and the packed failure, or `U` and the reason an optional
@@ -125,7 +125,7 @@ def remembered(
   end
 
   ATS.put(memo, name, text)
-  return answer(text)
+  answer(text)
 end
 
 def answer(text: String) -> Workspace.Built
@@ -136,7 +136,7 @@ def answer(text: String) -> Workspace.Built
     return Workspace.Built.Unbuilt(rest)
   end
 
-  return Workspace.Built.Failed(rest)
+  Workspace.Built.Failed(rest)
 end
 
 def attempt(request: Workspace.BuildRequest, noted: Bool) -> Result[String]
@@ -175,7 +175,7 @@ def attempt(request: Workspace.BuildRequest, noted: Bool) -> Result[String]
   end
 
   _ = File.close(lock, FILE_TIMEOUT_MS)
-  return built
+  built
 end
 
 # The handle of the lock file of one key, locked: one build of a key runs at a time, and the others wait for it and
@@ -217,7 +217,7 @@ def locked(request: Workspace.BuildRequest, path: String, user: Int) -> Result[F
     Task.sleep(LOCK_PAUSE_MS)
   end
 
-  return error(fail(request, "cannot lock #{path}", ""))
+  error(fail(request, "cannot lock #{path}", ""))
 end
 
 # One line of the key for each search variable that is set.
@@ -230,7 +230,7 @@ def search_lines() -> List[String]
     end
   end
 
-  return lines
+  lines
 end
 
 # Removes the temporary folders of builds that died, once they are an hour old. A build is bounded by
@@ -262,7 +262,7 @@ def compiler_words(system: String) -> List[String]
 
   return ["gcc"] if system == "windows"
 
-  return ["cc"]
+  ["cc"]
 end
 
 # The first line the compiler prints for one question (`--version`, `-dumpmachine`), which names it in the key.
@@ -274,7 +274,7 @@ def first_line(request: Workspace.BuildRequest, compiler: List[String], question
   end
 
   lines = ran.stdout.split("\n")
-  return ok(lines[0].strip)
+  ok(lines[0].strip)
 end
 
 # Runs the compiler words with `arguments` in the package folder; standard input is closed at once.
@@ -305,13 +305,13 @@ def run(request: Workspace.BuildRequest, compiler: List[String], arguments: List
   return error(fail(request, "the C compiler did not finish: #{waited.message}", "")) if !waited.ok?
 
   out = output.unwrap!
-  return ok(Ran(status: waited.unwrap!, stdout: out.stdout, stderr: out.stderr))
+  ok(Ran(status: waited.unwrap!, stdout: out.stdout, stderr: out.stderr))
 end
 
 def header_text(request: Workspace.BuildRequest) -> Result[String]
   case FrontEnd.std_source(HEADER)
-    ok(text) -> return ok(text)
-    error(_) -> return error(fail(request, "this agentica binary carries no #{HEADER_NAME}", ""))
+    ok(text) -> ok(text)
+    error(_) -> error(fail(request, "this agentica binary carries no #{HEADER_NAME}", ""))
   end
 end
 
@@ -319,7 +319,7 @@ end
 def key_digests(request: Workspace.BuildRequest) -> Result[List[String]]
   return ok(request.contents.map do |bytes: Bytes| OpenSSL.Digest.sha256_hexdigest(bytes) end) if request.pinned != ""
 
-  return file_digests(request)
+  file_digests(request)
 end
 
 # The SHA-256 of each file of native/ in the package folder, in the order of the request.
@@ -332,7 +332,7 @@ def file_digests(request: Workspace.BuildRequest) -> Result[List[String]]
     end
   end
 
-  return ok(found)
+  ok(found)
 end
 
 # Makes the `native-build` folder private to this user (or checks it) and gives the user id (-1 on Windows).
@@ -344,7 +344,7 @@ def private_base(request: Workspace.BuildRequest, base: String) -> Result[Int]
   made = CacheFiles.private_folder(base, user.unwrap!)
   return error(fail(request, "cannot use the build cache: #{made.message}", "remove the folder #{base}")) if !made.ok?
 
-  return user
+  user
 end
 
 # The library of an entry that exists: a regular file (never a link) in a folder private to this user (the compiler
@@ -363,12 +363,12 @@ def verified(request: Workspace.BuildRequest, entry: String, name: String, user:
     return error(fail(request, "the build cache entry is not the one its receipt names", help))
   end
 
-  return ok(library)
+  ok(library)
 end
 
 def regular?(path: String) -> Bool
   info = File.lstat(path, FILE_TIMEOUT_MS)
-  return info.ok? and info.unwrap!.kind == "file"
+  info.ok? and info.unwrap!.kind == "file"
 end
 
 # Builds in a new private folder and renames it into place. A concurrent build of the same key that renamed first is
@@ -401,7 +401,7 @@ def compile(
     IO.warn("built native #{request.library}: #{library}")
   end
 
-  return ok(library)
+  ok(library)
 end
 
 # The header, the compiler run and the receipt, all in `folder`.
@@ -454,7 +454,7 @@ def compile_in(
   receipt = CacheFiles.write_private(Paths.join(folder, RECEIPT), OpenSSL.Digest.hexencode(digest.unwrap!).bytes)
   return error(fail(request, "cannot write the build cache", "")) if !receipt.ok?
 
-  return ok()
+  ok()
 end
 
 # The request to compile: the one given for a package read in place; for a fetched package, the same with its root at
@@ -473,7 +473,7 @@ def source_of(request: Workspace.BuildRequest, folder: String) -> Result[Workspa
     end
   end
 
-  return ok(request.with(root: root))
+  ok(request.with(root: root))
 end
 
 # The folders that hold `files` (relative paths joined by "/"), each once, a folder before those inside it.
@@ -489,7 +489,7 @@ def copy_folders(files: List[String]) -> List[String]
     end
   end
 
-  return found
+  found
 end
 
 # What the compiler said, with the folder of the private copy of a fetched package named by the package folder it was
@@ -497,7 +497,7 @@ end
 def in_package(text: String, copy: String, root: String) -> String
   return text if copy == root
 
-  return text.replace(copy, root)
+  text.replace(copy, root)
 end
 
 # The start of the compiler's standard error, where its first error is, in at most MAX_SHOWN characters.
@@ -505,14 +505,14 @@ def shown(text: String) -> String
   trimmed = text.strip
   return trimmed if trimmed.length <= MAX_SHOWN
 
-  return "#{trimmed.slice(0, MAX_SHOWN)}..."
+  "#{trimmed.slice(0, MAX_SHOWN)}..."
 end
 
 # The text as IO.warn prints it: it adds the line feed that ends the compiler's last line.
 def without_line_end(text: String) -> String
   return text.slice(0, text.length - 1) if text.ends_with?("\n")
 
-  return text
+  text
 end
 
 # A new private folder in `base` that only this build uses.
@@ -526,11 +526,11 @@ def make_temp(request: Workspace.BuildRequest, base: String) -> Result[String]
     end
   end
 
-  return error(fail(request, "cannot make a folder in the build cache: #{failure}", ""))
+  error(fail(request, "cannot make a folder in the build cache: #{failure}", ""))
 end
 
 def fail(request: Workspace.BuildRequest, message: String, help: String) -> String
   return Failure.fail_key(request.file, request.key, "PKG-NATIVE-BUILD", message, Diag.Help.NoHelp) if help == ""
 
-  return Failure.fail_key(request.file, request.key, "PKG-NATIVE-BUILD", message, Failure.hint(help))
+  Failure.fail_key(request.file, request.key, "PKG-NATIVE-BUILD", message, Failure.hint(help))
 end

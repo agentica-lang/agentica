@@ -38,20 +38,20 @@ export def rewrite_declarations(cx: Resolve.Context) -> Result[List[Ast.Decl]]
     end
   end
 
-  return ok(out)
+  ok(out)
 end
 
 def rewrite_decl(cx: Resolve.Context, decl: Ast.Decl) -> Result[Ast.Decl]
   case decl
-    Ast.Decl.Function(node) -> return rewrite_function(cx, node)
-    Ast.Decl.Struct(node) -> return rewrite_struct(cx, node)
-    Ast.Decl.Enum(node) -> return rewrite_enum(cx, node)
+    Ast.Decl.Function(node) -> rewrite_function(cx, node)
+    Ast.Decl.Struct(node) -> rewrite_struct(cx, node)
+    Ast.Decl.Enum(node) -> rewrite_enum(cx, node)
     Ast.Decl.TypeAlias(node) ->
       target = try rewrite_payload(cx, node.type_parameters, node.target)
-      return ok(Ast.Decl.TypeAlias(node.with(name: Resolve.identity(cx, node.name), target: target)))
-    Ast.Decl.Resource(node) -> return rewrite_resource(cx, node)
-    Ast.Decl.Constant(node) -> return rewrite_constant(cx, node)
-    _ -> return ok(decl)
+      ok(Ast.Decl.TypeAlias(node.with(name: Resolve.identity(cx, node.name), target: target)))
+    Ast.Decl.Resource(node) -> rewrite_resource(cx, node)
+    Ast.Decl.Constant(node) -> rewrite_constant(cx, node)
+    _ -> ok(decl)
   end
 end
 
@@ -63,7 +63,7 @@ def rewrite_resource(cx: Resolve.Context, node: Ast.ResourceDecl) -> Result[Ast.
     module = try native_target(cx, module)
   end
 
-  return ok(Ast.Decl.Resource(node.with(name: Resolve.identity(cx, node.name), module: module)))
+  ok(Ast.Decl.Resource(node.with(name: Resolve.identity(cx, node.name), module: module)))
 end
 
 # The type parameters of a generic function stay as written in its signature and its body (annotations, block
@@ -80,7 +80,7 @@ def rewrite_function(outer: Resolve.Context, node: Ast.FunctionDecl) -> Result[A
   result = try rewrite_type(cx, node.result)
   body = try rewrite_stmts(cx, node.body)
   native = try rewrite_native(cx, node.native)
-  return ok(
+  ok(
     Ast.Decl.Function(
       node.with(name: Resolve.identity(cx, node.name), params: params, result: result, body: body, native: native),
     ),
@@ -91,8 +91,8 @@ end
 # name it says for this system, or the PKG- failure when it says none; any other library stays as written.
 def rewrite_native(cx: Resolve.Context, native: Optional[Ast.Native]) -> Result[Optional[Ast.Native]]
   case native
-    some(found) -> return ok(some(found.with(library: try native_target(cx, found.library))))
-    none -> return ok(native)
+    some(found) -> ok(some(found.with(library: try native_target(cx, found.library))))
+    none -> ok(native)
   end
 end
 
@@ -102,18 +102,18 @@ def native_target(cx: Resolve.Context, library: String) -> Result[String]
   natives = cx.me.origin.natives
   return ok(library) if !natives.has_key?(library)
 
-  return target_text(cx, library, natives[library])
+  target_text(cx, library, natives[library])
 end
 
 # A module with a `build` table is built here, when a file first uses it, so a program that never names it never
 # starts the compiler; the Workspace keeps what it built for the rest of the run.
 def target_text(cx: Resolve.Context, library: String, target: NativeLibrary.Target) -> Result[String]
   case target
-    NativeLibrary.Target.File(path) -> return ok(path)
-    NativeLibrary.Target.System(name) -> return ok(name)
+    NativeLibrary.Target.File(path) -> ok(path)
+    NativeLibrary.Target.System(name) -> ok(name)
     NativeLibrary.Target.Build(request) ->
-      return target_text(cx, library, NativeLibrary.build_target(cx.settings.workspace, request, library))
-    NativeLibrary.Target.Unusable(failure) -> return error(failure)
+      target_text(cx, library, NativeLibrary.build_target(cx.settings.workspace, request, library))
+    NativeLibrary.Target.Unusable(failure) -> error(failure)
   end
 end
 
@@ -121,9 +121,7 @@ end
 def rewrite_constant(cx: Resolve.Context, node: Ast.ConstDecl) -> Result[Ast.Decl]
   type = try rewrite_optional_type(cx, node.type)
   value = try rewrite_expr(cx, node.value)
-  return ok(
-    Ast.Decl.Constant(node.with(name: Resolve.identity(cx, node.name), type: type, value: value, exported: false)),
-  )
+  ok(Ast.Decl.Constant(node.with(name: Resolve.identity(cx, node.name), type: type, value: value, exported: false)))
 end
 
 # A field type goes through rewrite_payload so that a type parameter of a generic struct keeps its name.
@@ -135,7 +133,7 @@ def rewrite_struct(cx: Resolve.Context, node: Ast.StructDecl) -> Result[Ast.Decl
     fields = fields.push(field.with(type: type, default: default))
   end
 
-  return ok(Ast.Decl.Struct(node.with(name: Resolve.identity(cx, node.name), fields: fields)))
+  ok(Ast.Decl.Struct(node.with(name: Resolve.identity(cx, node.name), fields: fields)))
 end
 
 def rewrite_enum(cx: Resolve.Context, node: Ast.EnumDecl) -> Result[Ast.Decl]
@@ -149,7 +147,7 @@ def rewrite_enum(cx: Resolve.Context, node: Ast.EnumDecl) -> Result[Ast.Decl]
     variants = variants.push(variant.with(payload_types: payload))
   end
 
-  return ok(Ast.Decl.Enum(node.with(name: Resolve.identity(cx, node.name), variants: variants)))
+  ok(Ast.Decl.Enum(node.with(name: Resolve.identity(cx, node.name), variants: variants)))
 end
 
 # A type that is a type parameter of the struct, enum or generic alias (T) stays as it is, in a field, a payload or an
@@ -165,7 +163,7 @@ def rewrite_payload(cx: Resolve.Context, parameters: List[String], type: Ast.Typ
     args = args.push(try rewrite_payload(cx, parameters, arg))
   end
 
-  return ok(type.with(name: name, args: args))
+  ok(type.with(name: name, args: args))
 end
 
 def rewrite_type(cx: Resolve.Context, type: Ast.TypeRef) -> Result[Ast.TypeRef]
@@ -179,13 +177,13 @@ def rewrite_type(cx: Resolve.Context, type: Ast.TypeRef) -> Result[Ast.TypeRef]
     args = args.push(try rewrite_type(cx, arg))
   end
 
-  return ok(type.with(name: name, args: args))
+  ok(type.with(name: name, args: args))
 end
 
 def rewrite_optional_type(cx: Resolve.Context, type: Optional[Ast.TypeRef]) -> Result[Optional[Ast.TypeRef]]
   case type
-    some(found) -> return ok(some(try rewrite_type(cx, found)))
-    none -> return ok(type)
+    some(found) -> ok(some(try rewrite_type(cx, found)))
+    none -> ok(type)
   end
 end
 
@@ -195,7 +193,7 @@ def rewrite_stmts(cx: Resolve.Context, stmts: List[Ast.Stmt]) -> Result[List[Ast
     out = out.push(try rewrite_stmt(cx, stmt))
   end
 
-  return ok(out)
+  ok(out)
 end
 
 def rewrite_stmt(cx: Resolve.Context, stmt: Ast.Stmt) -> Result[Ast.Stmt]
@@ -203,22 +201,22 @@ def rewrite_stmt(cx: Resolve.Context, stmt: Ast.Stmt) -> Result[Ast.Stmt]
     Ast.Stmt.Binding(node) ->
       type = try rewrite_optional_type(cx, node.type)
       value = try rewrite_expr(cx, node.value)
-      return ok(Ast.Stmt.Binding(node.with(type: type, value: value)))
+      ok(Ast.Stmt.Binding(node.with(type: type, value: value)))
     Ast.Stmt.Return(node) ->
       value = try rewrite_optional_expr(cx, node.value)
-      return ok(Ast.Stmt.Return(node.with(value: value)))
-    Ast.Stmt.Expression(node) -> return ok(Ast.Stmt.Expression(node.with(value: try rewrite_expr(cx, node.value))))
-    Ast.Stmt.If(node) -> return rewrite_if(cx, node)
+      ok(Ast.Stmt.Return(node.with(value: value)))
+    Ast.Stmt.Expression(node) -> ok(Ast.Stmt.Expression(node.with(value: try rewrite_expr(cx, node.value))))
+    Ast.Stmt.If(node) -> rewrite_if(cx, node)
     Ast.Stmt.While(node) ->
       condition = try rewrite_expr(cx, node.condition)
       body = try rewrite_stmts(cx, node.body)
-      return ok(Ast.Stmt.While(node.with(condition: condition, body: body)))
+      ok(Ast.Stmt.While(node.with(condition: condition, body: body)))
     Ast.Stmt.For(node) ->
       iterable = try rewrite_expr(cx, node.iterable)
       body = try rewrite_stmts(cx, node.body)
-      return ok(Ast.Stmt.For(node.with(iterable: iterable, body: body)))
-    Ast.Stmt.Control(_) -> return ok(stmt)
-    Ast.Stmt.Case(node) -> return ok(Ast.Stmt.Case(try rewrite_case(cx, node)))
+      ok(Ast.Stmt.For(node.with(iterable: iterable, body: body)))
+    Ast.Stmt.Control(_) -> ok(stmt)
+    Ast.Stmt.Case(node) -> ok(Ast.Stmt.Case(try rewrite_case(cx, node)))
   end
 end
 
@@ -236,7 +234,7 @@ def rewrite_if(cx: Resolve.Context, node: Ast.IfStmt) -> Result[Ast.Stmt]
     none -> else_body = node.else_body
   end
 
-  return ok(Ast.Stmt.If(node.with(branches: branches, else_body: else_body)))
+  ok(Ast.Stmt.If(node.with(branches: branches, else_body: else_body)))
 end
 
 def rewrite_case(cx: Resolve.Context, node: Ast.CaseStmt) -> Result[Ast.CaseStmt]
@@ -249,7 +247,7 @@ def rewrite_case(cx: Resolve.Context, node: Ast.CaseStmt) -> Result[Ast.CaseStmt
     arms = arms.push(arm.with(pattern: pattern, guard: guard, body: body))
   end
 
-  return ok(node.with(value: value, arms: arms))
+  ok(node.with(value: value, arms: arms))
 end
 
 # A variant pattern names its enum, and so does each variant nested in its slots.
@@ -265,15 +263,15 @@ def rewrite_pattern(cx: Resolve.Context, pattern: Ast.Pattern) -> Result[Ast.Pat
         end
       end
 
-      return ok(Ast.Pattern.Variant(node.with(enum_name: name, slots: slots)))
-    _ -> return ok(pattern)
+      ok(Ast.Pattern.Variant(node.with(enum_name: name, slots: slots)))
+    _ -> ok(pattern)
   end
 end
 
 def rewrite_optional_expr(cx: Resolve.Context, expr: Optional[Ast.Expr]) -> Result[Optional[Ast.Expr]]
   case expr
-    some(found) -> return ok(some(try rewrite_expr(cx, found)))
-    none -> return ok(expr)
+    some(found) -> ok(some(try rewrite_expr(cx, found)))
+    none -> ok(expr)
   end
 end
 
@@ -283,7 +281,7 @@ def rewrite_exprs(cx: Resolve.Context, exprs: List[Ast.Expr]) -> Result[List[Ast
     out = out.push(try rewrite_expr(cx, expr))
   end
 
-  return ok(out)
+  ok(out)
 end
 
 def rewrite_named(cx: Resolve.Context, args: List[Ast.NamedArg]) -> Result[List[Ast.NamedArg]]
@@ -292,27 +290,27 @@ def rewrite_named(cx: Resolve.Context, args: List[Ast.NamedArg]) -> Result[List[
     out = out.push(arg.with(value: try rewrite_expr(cx, arg.value)))
   end
 
-  return ok(out)
+  ok(out)
 end
 
 def rewrite_expr(cx: Resolve.Context, expr: Ast.Expr) -> Result[Ast.Expr]
   case expr
-    Ast.Expr.Literal(_) -> return ok(expr)
-    Ast.Expr.Name(_) -> return ok(expr)
-    Ast.Expr.TypeName(node) -> return rewrite_type_name(cx, node)
-    Ast.Expr.Call(node) -> return rewrite_call(cx, node)
+    Ast.Expr.Literal(_) -> ok(expr)
+    Ast.Expr.Name(_) -> ok(expr)
+    Ast.Expr.TypeName(node) -> rewrite_type_name(cx, node)
+    Ast.Expr.Call(node) -> rewrite_call(cx, node)
     Ast.Expr.EnumConstructor(node) ->
       name = try Resolve.resolve(cx, node.enum_name, Resolve.Want.Enum, node.span, false)
       args = try rewrite_exprs(cx, node.args)
-      return ok(Ast.Expr.EnumConstructor(node.with(enum_name: name, args: args)))
+      ok(Ast.Expr.EnumConstructor(node.with(enum_name: name, args: args)))
     Ast.Expr.FunctionRef(node) ->
       name = try Resolve.resolve(cx, node.name, Resolve.Want.Function, node.span, false)
-      return ok(Ast.Expr.FunctionRef(node.with(name: name)))
-    Ast.Expr.Construct(node) -> return rewrite_construct(cx, node)
-    Ast.Expr.RegexLit(node) -> return ok(Ast.Expr.RegexLit(rewrite_regex(cx, node)))
-    Ast.Expr.EagLit(node) -> return rewrite_eag(cx, node)
-    Ast.Expr.Case(node) -> return ok(Ast.Expr.Case(try rewrite_case(cx, node)))
-    _ -> return rewrite_compound(cx, expr)
+      ok(Ast.Expr.FunctionRef(node.with(name: name)))
+    Ast.Expr.Construct(node) -> rewrite_construct(cx, node)
+    Ast.Expr.RegexLit(node) -> ok(Ast.Expr.RegexLit(rewrite_regex(cx, node)))
+    Ast.Expr.EagLit(node) -> rewrite_eag(cx, node)
+    Ast.Expr.Case(node) -> ok(Ast.Expr.Case(try rewrite_case(cx, node)))
+    _ -> rewrite_compound(cx, expr)
   end
 end
 
@@ -325,7 +323,7 @@ def rewrite_eag(cx: Resolve.Context, node: Ast.EagLit) -> Result[Ast.Expr]
   end
 
   call = try rewrite_expr(cx, node.call)
-  return ok(Ast.Expr.EagLit(node.with(call: call)))
+  ok(Ast.Expr.EagLit(node.with(call: call)))
 end
 
 # The call inside a regex literal names std/regex's compile when the file imports std/regex in any form; it stays ""
@@ -339,11 +337,11 @@ def rewrite_regex(cx: Resolve.Context, node: Ast.RegexLit) -> Ast.RegexLit
       case unwrap.target
         Ast.Expr.Call(call) ->
           target = Ast.Expr.Call(call.with(name: name))
-          return node.with(call: Ast.Expr.MethodCall(unwrap.with(target: target)))
-        _ -> return node
+          node.with(call: Ast.Expr.MethodCall(unwrap.with(target: target)))
+        _ -> node
       end
 
-    _ -> return node
+    _ -> node
   end
 end
 
@@ -351,14 +349,14 @@ end
 # families (Parser.pipe_insert), so the linker gives the parser's PARSE-PIPE-TARGET.
 def bad_pipe_target?(cx: Resolve.Context, node: Ast.Call) -> Bool
   parts = node.name.split(".")
-  return node.piped and parts.size == 3 and !Resolve.family?(cx, parts[0])
+  node.piped and parts.size == 3 and !Resolve.family?(cx, parts[0])
 end
 
 # PARSE-PIPE-TARGET at the right side of |>, as the parser reports it.
 def pipe_target_failure(cx: Resolve.Context, span: Source.Span) -> String
   site = Failure.Site(file: cx.me.file, span: span)
   help = Failure.hint(Parser.PIPE_TARGET_HINT)
-  return Failure.fail_at(site, Parser.PIPE_TARGET_CODE, Parser.PIPE_TARGET_MESSAGE, help)
+  Failure.fail_at(site, Parser.PIPE_TARGET_CODE, Parser.PIPE_TARGET_MESSAGE, help)
 end
 
 # x |> try A.B.c() of no family is reported with its try, as the parser reports x |> try f; a try before the whole
@@ -366,14 +364,14 @@ end
 def rewrite_try(cx: Resolve.Context, node: Ast.TryExpr) -> Result[Ast.Expr]
   return error(pipe_target_failure(cx, node.span)) if bad_piped_try?(cx, node)
 
-  return ok(Ast.Expr.Try(node.with(operand: try rewrite_expr(cx, node.operand))))
+  ok(Ast.Expr.Try(node.with(operand: try rewrite_expr(cx, node.operand))))
 end
 
 def bad_piped_try?(cx: Resolve.Context, node: Ast.TryExpr) -> Bool
   case node.operand
     Ast.Expr.Call(call) ->
-      return bad_pipe_target?(cx, call) and node.span.start.offset > Ast.expr_span(call.args[0]).stop.offset
-    _ -> return false
+      bad_pipe_target?(cx, call) and node.span.start.offset > Ast.expr_span(call.args[0]).stop.offset
+    _ -> false
   end
 end
 
@@ -401,7 +399,7 @@ def rewrite_call(cx: Resolve.Context, node: Ast.Call) -> Result[Ast.Expr]
     args = [try native_load_library(cx, args[0], name), args[1]]
   end
 
-  return ok(Ast.Expr.Call(node.with(name: name, args: args)))
+  ok(Ast.Expr.Call(node.with(name: name, args: args)))
 end
 
 # Type.members and Type.codec, written without parentheses and not piped, on a type of this file or one it imports by
@@ -418,7 +416,7 @@ def rewrite_members(cx: Resolve.Context, node: Ast.Call, written: String, member
   )
 
   name_span = member_span(cx, node, size, member)
-  return ok(
+  ok(
     Ast.Expr.FieldAccess(
       Ast.FieldAccess(id: node.id, target: receiver, name: member, name_span: name_span, span: node.span),
     ),
@@ -439,22 +437,22 @@ def native_load_library(cx: Resolve.Context, arg: Ast.Expr, caller: String) -> R
             return error(native_load_failure(cx, arg, message, Parser.EXTERN_LIBRARY_HELP))
           end
 
-          return ok(Ast.Expr.Literal(node.with(value: Ast.LitValue.Text(try native_target(cx, library)))))
-        _ -> return error(literal_required(cx, arg, caller))
+          ok(Ast.Expr.Literal(node.with(value: Ast.LitValue.Text(try native_target(cx, library)))))
+        _ -> error(literal_required(cx, arg, caller))
       end
 
-    _ -> return error(literal_required(cx, arg, caller))
+    _ -> error(literal_required(cx, arg, caller))
   end
 end
 
 def literal_required(cx: Resolve.Context, arg: Ast.Expr, caller: String) -> String
   help = "write the library as a \"...\" string, such as \"libm.so.6\""
-  return native_load_failure(cx, arg, "the library of #{caller} is a string literal", help)
+  native_load_failure(cx, arg, "the library of #{caller} is a string literal", help)
 end
 
 def native_load_failure(cx: Resolve.Context, arg: Ast.Expr, message: String, help: String) -> String
   site = Failure.Site(file: cx.me.file, span: Ast.expr_span(arg))
-  return Failure.fail_at(site, "CHECK-NATIVE-LOAD", message, Failure.hint(help))
+  Failure.fail_at(site, "CHECK-NATIVE-LOAD", message, Failure.hint(help))
 end
 
 # NAME.x on a constant: a field access when written with no parentheses and no arguments (a block is an argument), a
@@ -483,7 +481,7 @@ def rewrite_constant_member(
   end
 
   args = try rewrite_exprs(cx, node.args)
-  return ok(
+  ok(
     Ast.Expr.MethodCall(
       Ast.MethodCall(id: node.id, target: receiver, name: member, name_span: name_span, args: args, span: node.span),
     ),
@@ -505,7 +503,7 @@ def member_span(cx: Resolve.Context, node: Ast.Call, length: Int, member: String
 
   first = member_position(cx.me.text, after, found.unwrap!, start.line, start.column + length)
   last = Source.Position(offset: first.offset + member.length, line: first.line, column: first.column + member.length)
-  return Source.Span(start: first, stop: last)
+  Source.Span(start: first, stop: last)
 end
 
 # The position `gap` characters after `from`, where `from` is at `line` and `column`: each line break in between moves
@@ -525,7 +523,7 @@ def member_position(text: String, from: Int, gap: Int, line: Int, column: Int) -
     at += 1
   end
 
-  return Source.Position(offset: from + gap, line: row, column: col)
+  Source.Position(offset: from + gap, line: row, column: col)
 end
 
 # The expressions that only rewrite their parts, in the order of their fields.
@@ -534,19 +532,19 @@ def rewrite_compound(cx: Resolve.Context, expr: Ast.Expr) -> Result[Ast.Expr]
     Ast.Expr.Invoke(node) ->
       target = try rewrite_expr(cx, node.target)
       args = try rewrite_exprs(cx, node.args)
-      return ok(Ast.Expr.Invoke(node.with(target: target, args: args)))
+      ok(Ast.Expr.Invoke(node.with(target: target, args: args)))
     Ast.Expr.Update(node) ->
       target = try rewrite_expr(cx, node.target)
       args = try rewrite_named(cx, node.args)
-      return ok(Ast.Expr.Update(node.with(target: target, args: args, visible: some(cx.visible))))
-    Ast.Expr.ListLit(node) -> return ok(Ast.Expr.ListLit(node.with(elements: try rewrite_exprs(cx, node.elements))))
-    Ast.Expr.MapLit(node) -> return rewrite_map(cx, node)
+      ok(Ast.Expr.Update(node.with(target: target, args: args, visible: some(cx.visible))))
+    Ast.Expr.ListLit(node) -> ok(Ast.Expr.ListLit(node.with(elements: try rewrite_exprs(cx, node.elements))))
+    Ast.Expr.MapLit(node) -> rewrite_map(cx, node)
     Ast.Expr.FieldAccess(node) ->
       if family_member(cx, node.target) != ""
         return member_call(cx, node.target, node.id, node.name, [], false, node.span)
       end
 
-      return ok(Ast.Expr.FieldAccess(node.with(target: try rewrite_expr(cx, node.target))))
+      ok(Ast.Expr.FieldAccess(node.with(target: try rewrite_expr(cx, node.target))))
     Ast.Expr.MethodCall(node) ->
       if family_member(cx, node.target) != ""
         return member_call(cx, node.target, node.id, node.name, node.args, true, node.span)
@@ -554,20 +552,20 @@ def rewrite_compound(cx: Resolve.Context, expr: Ast.Expr) -> Result[Ast.Expr]
 
       target = try rewrite_expr(cx, node.target)
       args = try rewrite_exprs(cx, node.args)
-      return ok(Ast.Expr.MethodCall(node.with(target: target, args: args)))
-    Ast.Expr.Interpolation(node) -> return rewrite_interpolation(cx, node)
-    Ast.Expr.BlockLit(node) -> return rewrite_block(cx, node)
+      ok(Ast.Expr.MethodCall(node.with(target: target, args: args)))
+    Ast.Expr.Interpolation(node) -> rewrite_interpolation(cx, node)
+    Ast.Expr.BlockLit(node) -> rewrite_block(cx, node)
     Ast.Expr.Index(node) ->
       target = try rewrite_expr(cx, node.target)
       index = try rewrite_expr(cx, node.index)
-      return ok(Ast.Expr.Index(node.with(target: target, index: index)))
-    Ast.Expr.Try(node) -> return rewrite_try(cx, node)
-    Ast.Expr.Unary(node) -> return ok(Ast.Expr.Unary(node.with(operand: try rewrite_expr(cx, node.operand))))
+      ok(Ast.Expr.Index(node.with(target: target, index: index)))
+    Ast.Expr.Try(node) -> rewrite_try(cx, node)
+    Ast.Expr.Unary(node) -> ok(Ast.Expr.Unary(node.with(operand: try rewrite_expr(cx, node.operand))))
     Ast.Expr.Binary(node) ->
       left = try rewrite_expr(cx, node.left)
       right = try rewrite_expr(cx, node.right)
-      return ok(Ast.Expr.Binary(node.with(left: left, right: right)))
-    _ -> return ok(expr)
+      ok(Ast.Expr.Binary(node.with(left: left, right: right)))
+    _ -> ok(expr)
   end
 end
 
@@ -583,8 +581,8 @@ def family_member(cx: Resolve.Context, target: Ast.Expr) -> String
         return node.name
       end
 
-      return ""
-    _ -> return ""
+      ""
+    _ -> ""
   end
 end
 
@@ -603,7 +601,7 @@ def member_call(
   name = "#{family_member(cx, target)}.#{method}"
   try Resolve.resolve(cx, name, Resolve.Want.Function, Ast.expr_span(target), false)
   call = Ast.Call(id: id, name: name, args: args, piped: false, parenthesized: parenthesized, span: span)
-  return rewrite_call(cx, call)
+  rewrite_call(cx, call)
 end
 
 def rewrite_map(cx: Resolve.Context, node: Ast.MapLit) -> Result[Ast.Expr]
@@ -614,7 +612,7 @@ def rewrite_map(cx: Resolve.Context, node: Ast.MapLit) -> Result[Ast.Expr]
     entries = entries.push(entry.with(key: key, value: value))
   end
 
-  return ok(Ast.Expr.MapLit(node.with(entries: entries)))
+  ok(Ast.Expr.MapLit(node.with(entries: entries)))
 end
 
 def rewrite_interpolation(cx: Resolve.Context, node: Ast.Interpolation) -> Result[Ast.Expr]
@@ -626,7 +624,7 @@ def rewrite_interpolation(cx: Resolve.Context, node: Ast.Interpolation) -> Resul
     end
   end
 
-  return ok(Ast.Expr.Interpolation(node.with(parts: parts)))
+  ok(Ast.Expr.Interpolation(node.with(parts: parts)))
 end
 
 def rewrite_block(cx: Resolve.Context, node: Ast.BlockLit) -> Result[Ast.Expr]
@@ -636,7 +634,7 @@ def rewrite_block(cx: Resolve.Context, node: Ast.BlockLit) -> Result[Ast.Expr]
   end
 
   body = try rewrite_stmts(cx, node.body)
-  return ok(Ast.Expr.BlockLit(node.with(params: params, body: body)))
+  ok(Ast.Expr.BlockLit(node.with(params: params, body: body)))
 end
 
 # Enum.Variant, written without parentheses, is a variant of an enum of this file, one imported by name or a builtin
@@ -677,7 +675,7 @@ def rewrite_type_name(cx: Resolve.Context, node: Ast.TypeName) -> Result[Ast.Exp
   end
 
   name = try Resolve.resolve(cx, node.name, Resolve.Want.Type, node.span, true)
-  return ok(Ast.Expr.TypeName(node.with(name: name)))
+  ok(Ast.Expr.TypeName(node.with(name: name)))
 end
 
 # The span of the member in `Alias.NAME`, so that a rename of the constant keeps the alias (as for `Alias.f(...)`).
@@ -685,7 +683,7 @@ end
 def member_only(node: Ast.TypeName, member: String) -> Source.Span
   stop = node.span.stop
   start = Source.Position(offset: stop.offset - member.length, line: stop.line, column: stop.column - member.length)
-  return Source.Span(start: start, stop: stop)
+  Source.Span(start: start, stop: stop)
 end
 
 def variant(
@@ -696,7 +694,7 @@ def variant(
   named: List[Ast.NamedArg],
   span: Source.Span,
 ) -> Ast.Expr
-  return Ast.Expr.EnumConstructor(
+  Ast.Expr.EnumConstructor(
     Ast.EnumConstructor(
       id: id,
       enum_name: enum_name,
@@ -728,10 +726,10 @@ def rewrite_construct(cx: Resolve.Context, node: Ast.Construct) -> Result[Ast.Ex
 
   name = try Resolve.resolve(cx, node.type_name, Resolve.Want.Type, node.span, false)
   args = try rewrite_named(cx, node.args)
-  return ok(Ast.Expr.Construct(node.with(type_name: name, args: args)))
+  ok(Ast.Expr.Construct(node.with(type_name: name, args: args)))
 end
 
 def exported_enum?(cx: Resolve.Context, alias: String, name: String) -> Bool
   target = cx.me.aliases.get(alias, "")
-  return target != "" and Resolve.exports_enum?(cx.modules[target], name)
+  target != "" and Resolve.exports_enum?(cx.modules[target], name)
 end

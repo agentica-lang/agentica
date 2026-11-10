@@ -39,7 +39,7 @@ export def innermost(module: Linker.LinkedModule, types: List[T.Type], offset: I
     end
   end
 
-  return best
+  best
 end
 
 ## Whether the span, which ends before its last character, holds the character at `offset`.
@@ -75,18 +75,18 @@ def roots(module: Linker.LinkedModule, offset: Int) -> List[Walk.Node]
     end
   end
 
-  return out
+  out
 end
 
 def default_of(default: Optional[Ast.Expr]) -> List[Walk.Node]
   case default
-    some(value) -> return [Walk.Node.Expr(value)]
-    none -> return []
+    some(value) -> [Walk.Node.Expr(value)]
+    none -> []
   end
 end
 
 # A node the checker gave no type, such as the name of a type in a position it does not check, is not an answer.
 def typed?(types: List[T.Type], expr: Ast.Expr) -> Bool
   id = Ast.expr_id(expr)
-  return id < types.size and !T.unknown?(types[id])
+  id < types.size and !T.unknown?(types[id])
 end

@@ -147,7 +147,7 @@ export def render(doc: Doc, width: Int) -> String
     lines = lines.take(lines.size - 1)
   end
 
-  return lines.join("\n") + "\n"
+  lines.join("\n") + "\n"
 end
 
 # Pushes the parts so that the first is on top.
@@ -159,7 +159,7 @@ def push_all(stack: List[Command], indent: Int, flat: Bool, parts: List[Doc]) ->
     at -= 1
   end
 
-  return out
+  out
 end
 
 # One step of a fill: its first item flat if it fits, then its first separator flat if the item after it fits too,
@@ -194,7 +194,7 @@ def fill(stack: List[Command], indent: Int, flat: Bool, parts: List[Doc], room: 
 
   rest = stack.push(Command(indent: indent, flat: flat, doc: Doc.Fill(parts.drop(2))))
   rest = rest.push(Command(indent: indent, flat: separator_flat, doc: parts[1]))
-  return rest.push(Command(indent: indent, flat: item_flat, doc: item))
+  rest.push(Command(indent: indent, flat: item_flat, doc: item))
 end
 
 # Whether `next`, laid out flat, and what follows it on the stack up to the next line break fit in `room` columns. A
@@ -250,14 +250,14 @@ def fits(next: Command, stack: List[Command], room: Int) -> Bool
     end
   end
 
-  return true
+  true
 end
 
 # The column after what the current line holds, counting the indent it will get.
 def column(out: Output) -> Int
   return out.indent if out.line == ""
 
-  return out.line.length
+  out.line.length
 end
 
 # Writes text on the current line, putting its indent first when the line is still empty.
@@ -269,7 +269,7 @@ def write(out: Output, text: String) -> Output
     line = spaces(out.indent)
   end
 
-  return out.with(line: line + text)
+  out.with(line: line + text)
 end
 
 # Ends the current line: its suffixes first (one that would pass the width goes above the line, except on the last line
@@ -306,7 +306,7 @@ def newline(out: Output, indent: Int, width: Int) -> Output
     lines = lines.concat(wrap(below, width - margin.length).map do |part: String| margin + part end)
   end
 
-  return Output(lines: lines, line: "", indent: indent, suffixes: [], afters: [], belows: [], measured: false)
+  Output(lines: lines, line: "", indent: indent, suffixes: [], afters: [], belows: [], measured: false)
 end
 
 def indent_of(line: String) -> String
@@ -315,7 +315,7 @@ def indent_of(line: String) -> String
     at += 1
   end
 
-  return spaces(at)
+  spaces(at)
 end
 
 # The line without the spaces at its end.
@@ -325,7 +325,7 @@ def trim_end(line: String) -> String
     stop -= 1
   end
 
-  return line.slice(0, stop)
+  line.slice(0, stop)
 end
 
 def spaces(count: Int) -> String = List.repeat(" ", count).join("")
@@ -345,7 +345,7 @@ def comment(out: Output, text: String, indent: Int, width: Int) -> Output
     written = write(newline(written, indent, width), part)
   end
 
-  return written
+  written
 end
 
 # The lines of a comment that fit in `room` columns, each with the marker of the comment (`#` and the spaces after it).
@@ -378,7 +378,7 @@ def wrap(text: String, room: Int) -> List[String]
     end
   end
 
-  return rows.push(row).map do |words_of: List[String]| marker + words_of.join(" ") end
+  rows.push(row).map do |words_of: List[String]| marker + words_of.join(" ") end
 end
 
 # The `#` that starts a comment and the spaces after it.
@@ -388,5 +388,5 @@ def marker_of(text: String) -> String
     at += 1
   end
 
-  return text.slice(0, at)
+  text.slice(0, at)
 end

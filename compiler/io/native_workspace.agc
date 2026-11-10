@@ -12,7 +12,7 @@ NATIVE_TIMEOUT_MS = 30_000
 ## The workspace of this machine, with `std_source` as the reader of the std/ sources and `native_artifact`
 ## verifying the cache.
 export def workspace_with(std_source: Fn[String, Result[String]]) -> Workspace.Workspace
-  return Host.workspace_with(std_source).with(native_artifact: &native_cached)
+  Host.workspace_with(std_source).with(native_artifact: &native_cached)
 end
 
 ## The workspace of this machine for a run with `--stdlib DIR`.
@@ -24,5 +24,5 @@ def no_std_source(name: String) -> Result[String] = error("this workspace carrie
 # network use. The caller matched the manifest row against the lock; this only verifies the cache object.
 def native_cached(request: Workspace.NativeRequest) -> Result[String]
   context = NativeArtifact.Context(file: request.file, key: request.key)
-  return Engine.cached(request.cache_root, request.sha256, request.member, context, NATIVE_TIMEOUT_MS)
+  Engine.cached(request.cache_root, request.sha256, request.member, context, NATIVE_TIMEOUT_MS)
 end

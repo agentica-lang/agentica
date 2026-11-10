@@ -15,20 +15,19 @@ import Report from "bdd_report"
 export def file(path: String, settings: Env.Settings, unreadable: String, cached: Bool) -> Pipeline.Compiled
   plan = BytecodeCache.plan(settings, path, cached)
   case BytecodeCache.lookup(plan, settings)
-    BytecodeCache.Lookup.Hit(bytes) -> return Pipeline.Compiled.Bytes(bytes)
-    BytecodeCache.Lookup.Miss -> return missed(path, settings, unreadable, plan)
+    BytecodeCache.Lookup.Hit(bytes) -> Pipeline.Compiled.Bytes(bytes)
+    BytecodeCache.Lookup.Miss -> missed(path, settings, unreadable, plan)
   end
 end
 
 def missed(path: String, settings: Env.Settings, unreadable: String, plan: BytecodeCache.Plan) -> Pipeline.Compiled
   case Front.read_root(settings.workspace, path)
-    Front.Root.Unreadable(_) ->
-      return Pipeline.Compiled.Rejected(Report.located(path, "RUNTIME-BDD-INFRA", unreadable))
-    Front.Root.Invalid(problem) -> return Pipeline.Compiled.Rejected(problem)
+    Front.Root.Unreadable(_) -> Pipeline.Compiled.Rejected(Report.located(path, "RUNTIME-BDD-INFRA", unreadable))
+    Front.Root.Invalid(problem) -> Pipeline.Compiled.Rejected(problem)
     Front.Root.Readable ->
       case Front.check_file(path, settings)
-        Front.Outcome.Rejected(problem) -> return Pipeline.Compiled.Rejected(problem)
-        Front.Outcome.Done(front) -> return Pipeline.build_cached(front, settings, plan)
+        Front.Outcome.Rejected(problem) -> Pipeline.Compiled.Rejected(problem)
+        Front.Outcome.Done(front) -> Pipeline.build_cached(front, settings, plan)
       end
   end
 end

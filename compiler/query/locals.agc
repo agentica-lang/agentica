@@ -92,7 +92,7 @@ export def find(module: Linker.LinkedModule, bound: Map[Int, List[T.Type]], offs
     end
   end
 
-  return none
+  none
 end
 
 ## The names in `module` that stand for `target`, a local `find` gave, in the order of the walk: every use of it, and
@@ -116,7 +116,7 @@ export def uses(module: Linker.LinkedModule, bound: Map[Int, List[T.Type]], targ
     end
   end
 
-  return []
+  []
 end
 
 # A found local is answered only with a type; a discard has none and is kept, so the caller can tell it from a position
@@ -126,8 +126,8 @@ def typed(found: Optional[Found]) -> Optional[Found]
     some(at) ->
       return none if at.local.kind != "discard" and T.unknown?(at.local.type)
 
-      return found
-    none -> return found
+      found
+    none -> found
   end
 end
 
@@ -135,17 +135,17 @@ end
 def function_found(ask: Query, node: Ast.FunctionDecl) -> Optional[Found]
   bound = bind_parameters(ask, parameters_of(ask, node.params), {})
   case bound.found
-    some(_) -> return bound.found
-    none -> return walk(ask, Step.Block(node.body), bound.scope)
+    some(_) -> bound.found
+    none -> walk(ask, Step.Block(node.body), bound.scope)
   end
 end
 
 def parameters_of(ask: Query, params: List[Ast.Param]) -> List[Local]
-  return params.map do |param: Ast.Param| parameter(ask, param.id, param.name, param.span, param.name_span) end
+  params.map do |param: Ast.Param| parameter(ask, param.id, param.name, param.span, param.name_span) end
 end
 
 def block_parameters_of(ask: Query, params: List[Ast.BlockParam]) -> List[Local]
-  return params.map do |param: Ast.BlockParam| parameter(ask, param.id, param.name, param.span, param.name_span) end
+  params.map do |param: Ast.BlockParam| parameter(ask, param.id, param.name, param.span, param.name_span) end
 end
 
 # The parameters of a function or a block, in order: the one the position is on, or the scope with all of them. The
@@ -162,11 +162,11 @@ def bind_parameters(ask: Query, params: List[Local], scope: Map[String, Local]) 
     inner = declare(inner, local)
   end
 
-  return stop(inner)
+  stop(inner)
 end
 
 def discard(local: Local) -> Local
-  return Local(kind: "discard", name: local.name, span: local.span, name_span: local.name_span, type: local.type)
+  Local(kind: "discard", name: local.name, span: local.span, name_span: local.name_span, type: local.type)
 end
 
 # Follows the position down the tree. Each step goes into a smaller part of the tree, so the loop ends.
@@ -186,14 +186,14 @@ def walk(ask: Query, first: Step, first_scope: Map[String, Local]) -> Optional[F
     end
   end
 
-  return none
+  none
 end
 
 def advance(ask: Query, step: Step, scope: Map[String, Local]) -> Move
   case step
-    Step.Block(stmts) -> return scan(ask, stmts, scope)
-    Step.Stmt(stmt) -> return into_statement(ask, stmt, scope)
-    Step.Expr(expr) -> return into_expression(ask, expr, scope)
+    Step.Block(stmts) -> scan(ask, stmts, scope)
+    Step.Stmt(stmt) -> into_statement(ask, stmt, scope)
+    Step.Expr(expr) -> into_expression(ask, expr, scope)
   end
 end
 
@@ -202,7 +202,7 @@ def go(step: Step, scope: Map[String, Local]) -> Move = Move(step: some(step), s
 def stop(scope: Map[String, Local]) -> Move = Move(step: none, scope: scope, found: none)
 
 def hit(scope: Map[String, Local], local: Local, site: Source.Span) -> Move
-  return Move(step: none, scope: scope, found: some(Found(local: local, site: site)))
+  Move(step: none, scope: scope, found: some(Found(local: local, site: site)))
 end
 
 # The statement of the block that holds the position; the bindings of the statements before it are in scope.
@@ -219,14 +219,14 @@ def scan(ask: Query, stmts: List[Ast.Stmt], scope: Map[String, Local]) -> Move
     here = declared_by(ask, here, stmt)
   end
 
-  return stop(here)
+  stop(here)
 end
 
 # A statement that comes before the position introduces a name when it is a binding of a name not in scope.
 def declared_by(ask: Query, scope: Map[String, Local], stmt: Ast.Stmt) -> Map[String, Local]
   case stmt
-    Ast.Stmt.Binding(node) -> return declare(scope, introduced(ask, scope, node))
-    _ -> return scope
+    Ast.Stmt.Binding(node) -> declare(scope, introduced(ask, scope, node))
+    _ -> scope
   end
 end
 
@@ -235,24 +235,18 @@ def introduced(ask: Query, scope: Map[String, Local], node: Ast.Binding) -> Loca
   existing = scope.get(node.name)
   return existing.unwrap! if existing.some?
 
-  return Local(
-    kind: "local",
-    name: node.name,
-    span: node.span,
-    name_span: node.name_span,
-    type: bound_type(ask, node.id, 0),
-  )
+  Local(kind: "local", name: node.name, span: node.span, name_span: node.name_span, type: bound_type(ask, node.id, 0))
 end
 
 # `_` binds nothing and is never in scope.
 def declare(scope: Map[String, Local], local: Local) -> Map[String, Local]
   return scope if local.name == "_"
 
-  return scope.put(local.name, local)
+  scope.put(local.name, local)
 end
 
 def parameter(ask: Query, id: Int, name: String, span: Source.Span, name_span: Source.Span) -> Local
-  return Local(kind: "parameter", name: name, span: span, name_span: name_span, type: bound_type(ask, id, 0))
+  Local(kind: "parameter", name: name, span: span, name_span: name_span, type: bound_type(ask, id, 0))
 end
 
 # The type the checker recorded for the `index`th name the node `id` introduced; Unknown when there is none.
@@ -263,7 +257,7 @@ def bound_type(ask: Query, id: Int, index: Int) -> T.Type
   types = found.unwrap!
   return types[index] if index < types.size
 
-  return T.Type.Unknown
+  T.Type.Unknown
 end
 
 # Goes into the statement that holds the position, to the part that holds it: a value, a condition, a body, or the name
@@ -275,21 +269,21 @@ def into_statement(ask: Query, stmt: Ast.Stmt, scope: Map[String, Local]) -> Mov
         return hit(scope, introduced(ask, scope, node), node.name_span)
       end
 
-      return go(Step.Expr(node.value), scope)
-    Ast.Stmt.Return(node) -> return into_optional(node.value, scope)
-    Ast.Stmt.Expression(node) -> return go(Step.Expr(node.value), scope)
-    Ast.Stmt.If(node) -> return into_if(ask, node, scope)
-    Ast.Stmt.While(node) -> return into_part(ask, node.condition, node.body, scope)
-    Ast.Stmt.For(node) -> return into_for(ask, node, scope)
-    Ast.Stmt.Case(node) -> return into_case(ask, node, scope)
-    Ast.Stmt.Control(_) -> return stop(scope)
+      go(Step.Expr(node.value), scope)
+    Ast.Stmt.Return(node) -> into_optional(node.value, scope)
+    Ast.Stmt.Expression(node) -> go(Step.Expr(node.value), scope)
+    Ast.Stmt.If(node) -> into_if(ask, node, scope)
+    Ast.Stmt.While(node) -> into_part(ask, node.condition, node.body, scope)
+    Ast.Stmt.For(node) -> into_for(ask, node, scope)
+    Ast.Stmt.Case(node) -> into_case(ask, node, scope)
+    Ast.Stmt.Control(_) -> stop(scope)
   end
 end
 
 def into_optional(value: Optional[Ast.Expr], scope: Map[String, Local]) -> Move
   case value
-    some(found) -> return go(Step.Expr(found), scope)
-    none -> return stop(scope)
+    some(found) -> go(Step.Expr(found), scope)
+    none -> stop(scope)
   end
 end
 
@@ -297,7 +291,7 @@ end
 def into_part(ask: Query, head: Ast.Expr, body: List[Ast.Stmt], scope: Map[String, Local]) -> Move
   return go(Step.Expr(head), scope) if reaches?(head, ask.offset)
 
-  return go(Step.Block(body), scope)
+  go(Step.Block(body), scope)
 end
 
 # A condition when the position is in it, else the body of the branch that holds the position, else the else body.
@@ -311,8 +305,8 @@ def into_if(ask: Query, node: Ast.IfStmt, scope: Map[String, Local]) -> Move
   end
 
   case node.else_body
-    some(body) -> return go(Step.Block(body), scope)
-    none -> return stop(scope)
+    some(body) -> go(Step.Block(body), scope)
+    none -> stop(scope)
   end
 end
 
@@ -323,11 +317,11 @@ def into_for(ask: Query, node: Ast.ForStmt, scope: Map[String, Local]) -> Move
 
   return go(Step.Expr(node.iterable), scope) if reaches?(node.iterable, ask.offset)
 
-  return go(Step.Block(node.body), declare(scope, variable))
+  go(Step.Block(node.body), declare(scope, variable))
 end
 
 def loop_variable(ask: Query, node: Ast.ForStmt) -> Local
-  return Local(
+  Local(
     kind: "loop",
     name: node.variable,
     span: node.variable_span,
@@ -344,7 +338,7 @@ def into_case(ask: Query, node: Ast.CaseStmt, scope: Map[String, Local]) -> Move
     return into_arm(ask, arm, scope) if At.holds?(arm.span, ask.offset)
   end
 
-  return stop(scope)
+  stop(scope)
 end
 
 def into_arm(ask: Query, arm: Ast.CaseArm, scope: Map[String, Local]) -> Move
@@ -361,7 +355,7 @@ def into_arm(ask: Query, arm: Ast.CaseArm, scope: Map[String, Local]) -> Move
     none -> inner = inner
   end
 
-  return go(Step.Block(arm.body), inner)
+  go(Step.Block(arm.body), inner)
 end
 
 # The names a pattern binds, nested patterns included. A worklist needs no recursion for a deep pattern; the order
@@ -381,7 +375,7 @@ def pattern_locals(ask: Query, pattern: Ast.Pattern) -> List[Local]
     at += 1
   end
 
-  return out
+  out
 end
 
 # The names in the slots of one variant pattern. The type of the name at a slot is the payload type at its position.
@@ -401,7 +395,7 @@ def slot_locals(ask: Query, node: Ast.VariantPattern) -> List[Local]
     index += 1
   end
 
-  return out
+  out
 end
 
 def nested_patterns(node: Ast.VariantPattern) -> List[Ast.Pattern]
@@ -413,7 +407,7 @@ def nested_patterns(node: Ast.VariantPattern) -> List[Ast.Pattern]
     end
   end
 
-  return out
+  out
 end
 
 # Visits every step below `first` once. A step only adds steps that lie below it, so the loop ends; the worklist
@@ -429,15 +423,15 @@ def sweep(ask: Query, target: Local, first: Step, scope: Map[String, Local]) -> 
     at += 1
   end
 
-  return hits
+  hits
 end
 
 def visit_step(ask: Query, target: Local, pending: Pending) -> Visit
   scope = pending.scope
   case pending.step
-    Step.Block(stmts) -> return visit_block(ask, stmts, scope)
-    Step.Stmt(stmt) -> return visit_statement(ask, target, stmt, scope)
-    Step.Expr(expr) -> return visit_expression(ask, target, expr, scope)
+    Step.Block(stmts) -> visit_block(ask, stmts, scope)
+    Step.Stmt(stmt) -> visit_statement(ask, target, stmt, scope)
+    Step.Expr(expr) -> visit_expression(ask, target, expr, scope)
   end
 end
 
@@ -449,7 +443,7 @@ def visit_block(ask: Query, stmts: List[Ast.Stmt], scope: Map[String, Local]) ->
     here = declared_by(ask, here, stmt)
   end
 
-  return Visit(hits: [], next: next)
+  Visit(hits: [], next: next)
 end
 
 def visit_statement(ask: Query, target: Local, stmt: Ast.Stmt, scope: Map[String, Local]) -> Visit
@@ -462,17 +456,17 @@ def visit_statement(ask: Query, target: Local, stmt: Ast.Stmt, scope: Map[String
         hits = [node.name_span]
       end
 
-      return Visit(hits: hits, next: [pending_expr(node.value, scope)])
-    Ast.Stmt.Return(node) -> return below(optional_expr(node.value, scope))
-    Ast.Stmt.Expression(node) -> return below([pending_expr(node.value, scope)])
-    Ast.Stmt.If(node) -> return below(if_parts(node, scope))
+      Visit(hits: hits, next: [pending_expr(node.value, scope)])
+    Ast.Stmt.Return(node) -> below(optional_expr(node.value, scope))
+    Ast.Stmt.Expression(node) -> below([pending_expr(node.value, scope)])
+    Ast.Stmt.If(node) -> below(if_parts(node, scope))
     Ast.Stmt.While(node) ->
-      return below([pending_expr(node.condition, scope), Pending(step: Step.Block(node.body), scope: scope)])
+      below([pending_expr(node.condition, scope), Pending(step: Step.Block(node.body), scope: scope)])
     Ast.Stmt.For(node) ->
       inner = declare(scope, loop_variable(ask, node))
-      return below([pending_expr(node.iterable, scope), Pending(step: Step.Block(node.body), scope: inner)])
-    Ast.Stmt.Case(node) -> return below(case_parts(ask, node, scope))
-    Ast.Stmt.Control(_) -> return below([])
+      below([pending_expr(node.iterable, scope), Pending(step: Step.Block(node.body), scope: inner)])
+    Ast.Stmt.Case(node) -> below(case_parts(ask, node, scope))
+    Ast.Stmt.Control(_) -> below([])
   end
 end
 
@@ -482,8 +476,8 @@ def pending_expr(expr: Ast.Expr, scope: Map[String, Local]) -> Pending = Pending
 
 def optional_expr(value: Optional[Ast.Expr], scope: Map[String, Local]) -> List[Pending]
   case value
-    some(found) -> return [pending_expr(found, scope)]
-    none -> return []
+    some(found) -> [pending_expr(found, scope)]
+    none -> []
   end
 end
 
@@ -494,8 +488,8 @@ def if_parts(node: Ast.IfStmt, scope: Map[String, Local]) -> List[Pending]
   end
 
   case node.else_body
-    some(body) -> return out.push(Pending(step: Step.Block(body), scope: scope))
-    none -> return out
+    some(body) -> out.push(Pending(step: Step.Block(body), scope: scope))
+    none -> out
   end
 end
 
@@ -511,7 +505,7 @@ def case_parts(ask: Query, node: Ast.CaseStmt, scope: Map[String, Local]) -> Lis
     out = out.concat(optional_expr(arm.guard, inner)).push(Pending(step: Step.Block(arm.body), scope: inner))
   end
 
-  return out
+  out
 end
 
 def visit_expression(ask: Query, target: Local, expr: Ast.Expr, scope: Map[String, Local]) -> Visit
@@ -519,19 +513,19 @@ def visit_expression(ask: Query, target: Local, expr: Ast.Expr, scope: Map[Strin
     Ast.Expr.Name(node) ->
       return Visit(hits: [node.span], next: []) if scope.has_key?(node.name) and stands_for?(scope[node.name], target)
 
-      return below([])
+      below([])
     Ast.Expr.BlockLit(node) ->
       inner = bind_parameters(ask, block_parameters_of(ask, node.params), scope).scope
-      return below([Pending(step: Step.Block(node.body), scope: inner)])
-    Ast.Expr.Case(node) -> return below(case_parts(ask, node, scope))
-    _ -> return below(Walk.children(Walk.Node.Expr(expr)).map do |child: Walk.Node| child_step(child, scope) end)
+      below([Pending(step: Step.Block(node.body), scope: inner)])
+    Ast.Expr.Case(node) -> below(case_parts(ask, node, scope))
+    _ -> below(Walk.children(Walk.Node.Expr(expr)).map do |child: Walk.Node| child_step(child, scope) end)
   end
 end
 
 def child_step(child: Walk.Node, scope: Map[String, Local]) -> Pending
   case child
-    Walk.Node.Expr(part) -> return pending_expr(part, scope)
-    Walk.Node.Stmt(part) -> return Pending(step: Step.Stmt(part), scope: scope)
+    Walk.Node.Expr(part) -> pending_expr(part, scope)
+    Walk.Node.Stmt(part) -> Pending(step: Step.Stmt(part), scope: scope)
   end
 end
 
@@ -546,10 +540,10 @@ def into_expression(ask: Query, expr: Ast.Expr, scope: Map[String, Local]) -> Mo
       found = scope.get(node.name)
       return hit(scope, found.unwrap!, node.span) if found.some? and At.holds?(node.span, ask.offset)
 
-      return stop(scope)
-    Ast.Expr.BlockLit(node) -> return into_block(ask, node, scope)
-    Ast.Expr.Case(node) -> return into_case(ask, node, scope)
-    _ -> return into_child(ask, expr, scope)
+      stop(scope)
+    Ast.Expr.BlockLit(node) -> into_block(ask, node, scope)
+    Ast.Expr.Case(node) -> into_case(ask, node, scope)
+    _ -> into_child(ask, expr, scope)
   end
 end
 
@@ -557,8 +551,8 @@ end
 def into_block(ask: Query, node: Ast.BlockLit, scope: Map[String, Local]) -> Move
   bound = bind_parameters(ask, block_parameters_of(ask, node.params), scope)
   case bound.found
-    some(_) -> return bound
-    none -> return go(Step.Block(node.body), bound.scope)
+    some(_) -> bound
+    none -> go(Step.Block(node.body), bound.scope)
   end
 end
 
@@ -571,14 +565,14 @@ def into_child(ask: Query, expr: Ast.Expr, scope: Map[String, Local]) -> Move
     end
   end
 
-  return stop(scope)
+  stop(scope)
 end
 
 # Whether the character at `offset` is in the expression or in the value piped into it: `x |> f(y)` is a call whose
 # span starts at `f`, with `x` as its first argument, and each step of a chain starts earlier than its own span.
 def reaches?(expr: Ast.Expr, offset: Int) -> Bool
   span = Ast.expr_span(expr)
-  return reach_start(expr) <= offset and offset < span.stop.offset
+  reach_start(expr) <= offset and offset < span.stop.offset
 end
 
 def reach_start(expr: Ast.Expr) -> Int
@@ -599,5 +593,5 @@ def reach_start(expr: Ast.Expr) -> Int
     end
   end
 
-  return start
+  start
 end

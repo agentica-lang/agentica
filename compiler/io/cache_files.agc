@@ -68,7 +68,7 @@ export def site(settings: Env.Settings, real: String) -> Result[Site]
     beside = false
   end
 
-  return ok(
+  ok(
     Site(
       build: build_dir,
       beside: beside,
@@ -91,7 +91,7 @@ export def private_kind(path: String, kind: String, user: Int) -> Result[Void]
     return error("#{path} is not private to this user")
   end
 
-  return ok()
+  ok()
 end
 
 # The user id of this process, which no builtin gives: the owner of a file made now with `create_private`, in the first
@@ -120,7 +120,7 @@ export def own_user() -> Result[Int]
     end
   end
 
-  return error("cannot find out the user of this process")
+  error("cannot find out the user of this process")
 end
 
 # A folder that exists must pass private_kind; one that does not is made with `Dir.mkdir_private`, one level only (the
@@ -145,7 +145,7 @@ export def private_folder(path: String, user: Int) -> Result[Bool]
     return ok(false)
   end
 
-  return ok(true)
+  ok(true)
 end
 
 # A new file that only this user can use. `create_private` fails on a name that exists and never follows a link.
@@ -162,7 +162,7 @@ export def write_private(path: String, data: Bytes) -> Result[Void]
     rest = rest.drop(PIECE)
   end
 
-  return File.close(out, IO_TIMEOUT_MS)
+  File.close(out, IO_TIMEOUT_MS)
 end
 
 # Puts `data` at `target` through the new private file `temporary` (beside the target, named with TEMP_MARK). A rename
@@ -182,7 +182,7 @@ export def install(temporary: String, data: Bytes, target: String) -> Bool
     return false
   end
 
-  return true
+  true
 end
 
 # Removes a temporary file of this run. Only this run opens it, but on Windows a scanner (an antivirus or an indexer)
@@ -258,7 +258,7 @@ def inputs_digest(settings: Env.Settings, project: Project.Project) -> Result[St
       parts = parts.concat(workspace_parts(workspace, manifest))
   end
 
-  return ok(digest(parts.join("\n").bytes))
+  ok(digest(parts.join("\n").bytes))
 end
 
 # The workspace of the project (packages/members.agc): the manifest that holds the table, and the manifest of each
@@ -278,7 +278,7 @@ def workspace_parts(workspace: Workspace.Workspace, found: Project.Found) -> Lis
     end
   end
 
-  return parts
+  parts
 end
 
 # "-" for a file that is not there.
@@ -286,5 +286,5 @@ def file_digest(workspace: Workspace.Workspace, path: String) -> String
   read = workspace.read_bytes.call(path)
   return "-" if !read.ok?
 
-  return digest(read.unwrap!)
+  digest(read.unwrap!)
 end

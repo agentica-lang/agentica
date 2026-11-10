@@ -11,12 +11,12 @@ import Source from "../syntax/source"
 export def limit(program: Ir.Program, file: Int, what: String, span: Source.Span) -> String
   message = "the program has too many #{what} for the VM"
   found = Failure.problem(program.sources[file].file, "", "BYTECODE-LIMIT", message, span, Diag.Help.NoHelp)
-  return Failure.pack(found)
+  Failure.pack(found)
 end
 
 ## BYTECODE-INTERNAL: the IR holds something the writer cannot write. Lowering never gives such an IR; the failure is
 ## reported at the span of the program, with a message of the writer's own.
 export def internal(program: Ir.Program, message: String) -> String
   found = Failure.problem(program.sources[0].file, "", "BYTECODE-INTERNAL", message, program.span, Diag.Help.NoHelp)
-  return Failure.pack(found)
+  Failure.pack(found)
 end

@@ -104,14 +104,14 @@ export def lower(
 
   body = body.push(Ir.instr("return", [count], index, [span]))
   name = function.name
-  return ok(Ir.Function(name: name, params: count, captures: 0, slots: slots, body: body, file: index, span: span))
+  ok(Ir.Function(name: name, params: count, captures: 0, slots: slots, body: body, file: index, span: span))
 end
 
 ## The signature of a callback of an extern block that Native.callback gets: "CODES NAME".
 export def callback_signature(decl: Ast.ResourceDecl) -> String
   case decl.callback
-    some(callback) -> return "#{callback.codes} #{Types.display_name(decl.name)}"
-    none -> return ""
+    some(callback) -> "#{callback.codes} #{Types.display_name(decl.name)}"
+    none -> ""
   end
 end
 
@@ -119,7 +119,7 @@ end
 ## signature, for Native.size_of, get_struct and put_struct: the VM lays it out as it lays out a struct argument.
 export def struct_layout(cx: Lowering.Cx, name: String, structs: Map[String, Ast.StructDecl]) -> Result[String]
   decl = structs[name]
-  return indexed(cx, decl.layout, nested_structs(name, structs), name, decl.span)
+  indexed(cx, decl.layout, nested_structs(name, structs), name, decl.span)
 end
 
 # The signature of a function of a native module, after any "compute ": "module TYPES(PARAMS) -> RESULT NAME LIBRARY".
@@ -150,12 +150,12 @@ def module_signature(
     end
   end
 
-  return ok("module #{blocks.join("")}#{signature.text} #{native.symbol} #{native.library}")
+  ok("module #{blocks.join("")}#{signature.text} #{native.symbol} #{native.library}")
 end
 
 # Whether the function has out parameters: one of the codes is a capital (no other code holds one).
 def record?(native: Ast.Native) -> Bool
-  return native.codes.split("").any? do |code: String| "ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains?(code) end
+  native.codes.split("").any? do |code: String| "ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains?(code) end
 end
 
 # The codes of the signature with the index of each struct after its {. The structs come in the order of their {: the C
@@ -184,7 +184,7 @@ def indexed_codes(
     names = names.concat(nested_structs(param.type.name, structs))
   end
 
-  return indexed(cx, native.codes, names, function.name, function.span)
+  indexed(cx, native.codes, names, function.name, function.span)
 end
 
 # The codes with the index of the struct names, in order, after each {; LOWER-INTERNAL when they do not match.
@@ -201,7 +201,7 @@ def indexed(cx: Lowering.Cx, codes: String, names: List[String], owner: String, 
     at += 1
   end
 
-  return ok(out)
+  ok(out)
 end
 
 # The struct of this name, then the structs of its fields in order, each before its own; none when it is not a struct.
@@ -213,5 +213,5 @@ def nested_structs(name: String, structs: Map[String, Ast.StructDecl]) -> List[S
     names = names.concat(nested_structs(field.type.name, structs))
   end
 
-  return names
+  names
 end

@@ -89,7 +89,7 @@ end
 export def read(workspace: Workspace.Workspace, file: String) -> Result[Manifest]
   reading = Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID")
   text = try Reader.read_text(workspace, reading)
-  return parse(file, text)
+  parse(file, text)
 end
 
 ## Reads the manifest text, which is said to come from file. The writer checks the text it is about to save with this.
@@ -102,7 +102,7 @@ export def parse(file: String, text: String) -> Result[Manifest]
   natives = try natives_of(reading, root)
   style = try style_of(reading, root)
   try tool_of(reading, root)
-  return ok(
+  ok(
     Manifest(
       file: file,
       name: name,
@@ -132,7 +132,7 @@ export def require_package(manifest: Manifest) -> Result[Void]
     end
   end
 
-  return ok()
+  ok()
 end
 
 ## The dependency with this name, or an error.
@@ -141,7 +141,7 @@ export def find(manifest: Manifest, name: String) -> Result[Dependency]
     return ok(dependency) if dependency.name == name
   end
 
-  return error("#{name} is not a dependency")
+  error("#{name} is not a dependency")
 end
 
 ## The local names of the dependencies, in the order of the file.
@@ -156,7 +156,7 @@ export def has_downloaded(manifest: Manifest) -> Bool
     end
   end
 
-  return false
+  false
 end
 
 # The project's own name, a package name too. "" when the file has none.
@@ -167,7 +167,7 @@ def optional_name(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Res
   problem = GitSource.name_problem(name)
   return error(Reader.fail_help(reading, "name", "not a package name", problem)) if problem != ""
 
-  return ok(name)
+  ok(name)
 end
 
 # [dependencies]: a name and an inline table each, in the order of the file.
@@ -185,7 +185,7 @@ def dependencies_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> R
     found = found.push(dependency)
   end
 
-  return ok(found)
+  ok(found)
 end
 
 # One dependency: a git source (`git`, exactly one of `tag` and `ref`, and an optional `subdir`) or a `path`, and an
@@ -204,7 +204,7 @@ def dependency_of(reading: Reader.Reading, name: String, value: Toml.Value, path
   end
 
   source = try git_source_of(reading, entries, path)
-  return ok(Dependency(name: name, source: source, override: override))
+  ok(Dependency(name: name, source: source, override: override))
 end
 
 # A dependency that is a folder on this machine: `path` and nothing of a git source.
@@ -221,7 +221,7 @@ def path_source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], pa
   problem = GitSource.path_problem(folder)
   return error(Reader.fail_help(reading, here, "not a path", problem)) if problem != ""
 
-  return ok(GitSource.Source(git: "", subdir: "", tag: "", ref: "", path: folder))
+  ok(GitSource.Source(git: "", subdir: "", tag: "", ref: "", path: folder))
 end
 
 # A dependency that is a git source.
@@ -260,7 +260,7 @@ def git_source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], pat
     end
   end
 
-  return ok(GitSource.Source(git: git, subdir: subdir, tag: tag, ref: ref, path: ""))
+  ok(GitSource.Source(git: git, subdir: subdir, tag: tag, ref: ref, path: ""))
 end
 
 # [native.NAME]: for each library a table of systems, each with `file`, `system` or a download, an optional `build`,
@@ -311,7 +311,7 @@ def natives_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result
     found = found.push(NativeLibrary(name: name, places: places, build: build, optional: optional))
   end
 
-  return ok(found)
+  ok(found)
 end
 
 # One system of a library: exactly one of `file`, `system`, or the downloaded triple
@@ -367,7 +367,7 @@ def place_of(reading: Reader.Reading, system: String, value: Toml.Value, path: S
   end
 
   names = try system_names(reading, entries["system"], Reader.child(path, "system"))
-  return ok(Place(system: system, file: "", names: names, url: "", sha256: "", member: ""))
+  ok(Place(system: system, file: "", names: names, url: "", sha256: "", member: ""))
 end
 
 # `system`: a name or an absolute path, or a list of them (1 to MAX_CANDIDATES), kept as written. A failure in a list
@@ -385,10 +385,10 @@ def system_names(reading: Reader.Reading, value: Toml.Value, path: String) -> Re
         names = names.push(try system_name(reading, items[index], Reader.item(path, index)))
       end
 
-      return ok(names)
+      ok(names)
     _ ->
       name = try system_name(reading, value, path)
-      return ok([name])
+      ok([name])
   end
 end
 
@@ -397,7 +397,7 @@ def system_name(reading: Reader.Reading, value: Toml.Value, path: String) -> Res
   problem = system_problem(name)
   return error(Reader.fail_help(reading, path, "not a library name", problem)) if problem != ""
 
-  return ok(name)
+  ok(name)
 end
 
 # A file of the native/ folder, in plain folder names (the rules of a subdir), so the hash covers it.
@@ -414,7 +414,7 @@ def file_problem(file: String) -> String
     return "a native file is not Thumbs.db or desktop.ini, which the package leaves out"
   end
 
-  return ""
+  ""
 end
 
 # A candidate is an absolute path (of any system: the manifest reads the same on every machine, so a Windows path is
@@ -438,7 +438,7 @@ def system_problem(name: String) -> String
     )
   end
 
-  return ""
+  ""
 end
 
 # [style]: `max_line_width`, a positive integer (0 when there is none), and `blank_line_after_end`, a boolean (false
@@ -461,7 +461,7 @@ def style_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[S
     style = style.with(blank_line_after_end: on)
   end
 
-  return ok(style)
+  ok(style)
 end
 
 # [tool]: a table of tables, one per tool (`[tool.cchecker]`), as pyproject.toml has. Agentica reads nothing inside a
@@ -474,5 +474,5 @@ def tool_of(reading: Reader.Reading, root: Map[String, Toml.Value]) -> Result[Vo
     try Reader.table(reading, tools[name], Reader.child("tool", name))
   end
 
-  return ok()
+  ok()
 end

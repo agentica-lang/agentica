@@ -18,8 +18,8 @@ end
 ## Lowers a checked program and writes its bytes. The header names `settings.version`.
 export def build(front: Front.Checked, settings: Env.Settings) -> Compiled
   case Lowering.lower(front.linked, front.checked)
-    Lowering.Lowered.Failed(problem) -> return Compiled.Rejected(problem)
-    Lowering.Lowered.Done(program) -> return written(Writer.write(program, settings.version))
+    Lowering.Lowered.Failed(problem) -> Compiled.Rejected(problem)
+    Lowering.Lowered.Done(program) -> written(Writer.write(program, settings.version))
   end
 end
 
@@ -28,24 +28,24 @@ end
 export def build_cached(front: Front.Checked, settings: Env.Settings, plan: BytecodeCache.Plan) -> Compiled
   built = build(front, settings)
   case built
-    Compiled.Rejected(_) -> return built
+    Compiled.Rejected(_) -> built
     Compiled.Bytes(bytes) ->
       BytecodeCache.store(plan, settings, front.linked.modules, bytes)
-      return built
+      built
   end
 end
 
 ## Compiles the file at `path` to the bytes of its .agcb.
 export def compile(path: String, settings: Env.Settings) -> Compiled
   case Front.check_file(path, settings)
-    Front.Outcome.Rejected(problem) -> return Compiled.Rejected(problem)
-    Front.Outcome.Done(front) -> return build(front, settings)
+    Front.Outcome.Rejected(problem) -> Compiled.Rejected(problem)
+    Front.Outcome.Done(front) -> build(front, settings)
   end
 end
 
 def written(result: Writer.Written) -> Compiled
   case result
-    Writer.Written.Failed(problem) -> return Compiled.Rejected(problem)
-    Writer.Written.Done(bytes) -> return Compiled.Bytes(bytes)
+    Writer.Written.Failed(problem) -> Compiled.Rejected(problem)
+    Writer.Written.Done(bytes) -> Compiled.Bytes(bytes)
   end
 end

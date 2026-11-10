@@ -61,7 +61,7 @@ export def item(declared: DocModel.Item) -> Model.Item
     DocModel.Detail.Plain -> parameters = parameters
   end
 
-  return Model.Item(
+  Model.Item(
     kind: declared.kind,
     name: declared.name,
     name_range: DiagnosticModel.range_of(declared.name_span),
@@ -79,12 +79,12 @@ end
 
 ## The answer of `check` for `file`, the name the answer gives it: passed when there is no diagnostic.
 export def checked(file: String, diagnostics: List[DiagnosticModel.Diagnostic]) -> Model.Checked
-  return Model.Checked(version: CHECKED_VERSION, file: file, passed: diagnostics.size == 0, diagnostics: diagnostics)
+  Model.Checked(version: CHECKED_VERSION, file: file, passed: diagnostics.size == 0, diagnostics: diagnostics)
 end
 
 ## The outline `outlined` of the file that the answer calls `file`.
 export def outline(file: String, outlined: Outline.Outline) -> Model.Outline
-  return Model.Outline(
+  Model.Outline(
     version: OUTLINE_VERSION,
     file: file,
     doc: text(outlined.doc),
@@ -105,7 +105,7 @@ export def type_at(file: String, asked: Position.Asked, found: TypeAt.Answer, ho
     none -> help = help
   end
 
-  return Model.TypeAt(
+  Model.TypeAt(
     version: TYPE_AT_VERSION,
     position: Model.Place(file: file, line: asked.line, column: asked.column),
     kind: found.kind,
@@ -122,7 +122,7 @@ end
 
 ## The answer `found` for `query`. Each match and skipped file is already named as the answer names it.
 export def symbols(query: String, found: Symbol.Answer) -> Model.Symbols
-  return Model.Symbols(
+  Model.Symbols(
     version: SYMBOL_VERSION,
     query: query,
     matches: found.matches.map do |match: Symbol.Match| symbol(match) end,
@@ -144,7 +144,7 @@ export def refs(
     none -> definition = definition
   end
 
-  return Model.Refs(
+  Model.Refs(
     version: REFS_VERSION,
     query: query,
     definition: definition,
@@ -168,7 +168,7 @@ end
 export def text(value: Optional[String]) -> String = value.unwrap_or("")
 
 def skipped_of(left: SymbolLink.Skipped) -> Model.Skipped
-  return Model.Skipped(file: left.file, diagnostic: DiagnosticModel.of_problem(left.problem))
+  Model.Skipped(file: left.file, diagnostic: DiagnosticModel.of_problem(left.problem))
 end
 
 # `alias` is the empty text for an import with a list of names.
@@ -177,7 +177,7 @@ def import_of(declaration: Ast.ImportDecl) -> Model.Import
     Model.ImportName(name: name.name, local: name.local, range: DiagnosticModel.range_of(name.span))
   end
 
-  return Model.Import(
+  Model.Import(
     path: declaration.path,
     alias: text(declaration.alias),
     names: names,
@@ -199,7 +199,7 @@ def symbol(match: Symbol.Match) -> Model.Symbol
       signatures = Builtins.signature(entry).split("\n")
   end
 
-  return Model.Symbol(
+  Model.Symbol(
     kind: match.kind,
     name: match.name,
     owner: match.owner,
@@ -218,9 +218,9 @@ end
 
 def definition_of(definition: Optional[Definitions.Definition], home: String) -> List[Model.Definition]
   case definition
-    none -> return []
+    none -> []
     some(found) ->
-      return [
+      [
         Model.Definition(
           kind: found.kind,
           name: found.name,

@@ -40,7 +40,7 @@ export def check_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Ty
     try check_pipe_method(cx, out.st, node, entry.unwrap!)
   end
 
-  return ok(out)
+  ok(out)
 end
 
 ## Checks Enum.Variant(args): the arguments against the payload types, with the enum's type arguments taken from the
@@ -118,7 +118,7 @@ export def check_enum_constructor(
 
   substitutions = expected_substitutions("Enum", found.name, found.parameters, expected)
   inferred = try infer_arguments(cx, st, payload.unwrap!, args, substitutions)
-  return finish_constructor(cx, inferred.st, found, variant_name, inferred.substitutions, span, expected)
+  finish_constructor(cx, inferred.st, found, variant_name, inferred.substitutions, span, expected)
 end
 
 ## Checks Type(name: value, ...): a struct, or Enum.Variant(name: value) written as a construction, which a variant
@@ -129,7 +129,7 @@ export def check_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expe
     return check_enum_constructor(cx, st, parts[0], parts[1], [], node.args.size, node.span, expected)
   end
 
-  return check_struct_construct(cx, st, node, expected)
+  check_struct_construct(cx, st, node, expected)
 end
 
 ## Checks target.with(name: value, ...): the target is a struct, every name is one of its fields, given once, with a
@@ -165,7 +165,7 @@ export def check_struct_update(cx: State.Cx, st: State.St, node: Ast.StructUpdat
   end
 
   fields = try check_named_fields(cx, target.st, name, Types.fields_of(cx, target.type), node.args, [], {})
-  return ok(State.Out(st: fields.st, type: target.type))
+  ok(State.Out(st: fields.st, type: target.type))
 end
 
 ## The field of that name in the list, or an error.
@@ -174,7 +174,7 @@ export def find_field(fields: List[Model.Named], name: String) -> Result[Model.N
     return ok(field) if field.name == name
   end
 
-  return error("no such field")
+  error("no such field")
 end
 
 # The text of the source between the start of an expression, including a piped receiver, and its end.
@@ -184,36 +184,36 @@ def extent_text(cx: State.Cx, node: Ast.Expr) -> String
 
   start = extent_start(node)
   stop = Ast.expr_span(node).stop.offset
-  return text.unwrap!.slice(start, stop - start)
+  text.unwrap!.slice(start, stop - start)
 end
 
 # The offset where an expression starts: a piped call starts where its receiver does, and so does a try of one.
 def extent_start(node: Ast.Expr) -> Int
   case node
-    Ast.Expr.Call(call) -> return call_start(call)
-    Ast.Expr.Try(attempt) -> return try_start(attempt)
-    _ -> return Ast.expr_span(node).start.offset
+    Ast.Expr.Call(call) -> call_start(call)
+    Ast.Expr.Try(attempt) -> try_start(attempt)
+    _ -> Ast.expr_span(node).start.offset
   end
 end
 
 def call_start(call: Ast.Call) -> Int
   return extent_start(call.args[0]) if call.piped
 
-  return call.span.start.offset
+  call.span.start.offset
 end
 
 def try_start(attempt: Ast.TryExpr) -> Int
   inner = extent_start(attempt.operand)
   return inner if inner < attempt.span.start.offset
 
-  return attempt.span.start.offset
+  attempt.span.start.offset
 end
 
 def piped?(node: Ast.Expr) -> Bool
   case node
-    Ast.Expr.Call(call) -> return call.piped
-    Ast.Expr.Try(attempt) -> return piped?(attempt.operand)
-    _ -> return false
+    Ast.Expr.Call(call) -> call.piped
+    Ast.Expr.Try(attempt) -> piped?(attempt.operand)
+    _ -> false
   end
 end
 
@@ -228,7 +228,7 @@ def check_pipe_method(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.B
   method = Names.pipe_method_name(cx, kind, entry.name)
   return ok(true) if method == ""
 
-  return error(
+  error(
     State.fail_help(
       cx,
       st,
@@ -269,18 +269,18 @@ def pipe_help(cx: State.Cx, node: Ast.Call, method: String) -> String
     text = "#{text} do ... end"
   end
 
-  return text
+  text
 end
 
 def simple_receiver?(node: Ast.Expr) -> Bool
   case node
-    Ast.Expr.Name(_) -> return true
-    Ast.Expr.Literal(_) -> return true
-    Ast.Expr.Call(_) -> return true
-    Ast.Expr.MethodCall(_) -> return true
-    Ast.Expr.FieldAccess(_) -> return true
-    Ast.Expr.Index(_) -> return true
-    _ -> return false
+    Ast.Expr.Name(_) -> true
+    Ast.Expr.Literal(_) -> true
+    Ast.Expr.Call(_) -> true
+    Ast.Expr.MethodCall(_) -> true
+    Ast.Expr.FieldAccess(_) -> true
+    Ast.Expr.Index(_) -> true
+    _ -> false
   end
 end
 
@@ -316,7 +316,7 @@ def check_plain_call(cx: State.Cx, st: State.St, node: Ast.Call, expected: T.Typ
     index += 1
   end
 
-  return ok(State.Out(st: current, type: signature.result))
+  ok(State.Out(st: current, type: signature.result))
 end
 
 # A call of a generic function. Each call has its own type variables: the signature is a template, and the arguments
@@ -395,7 +395,7 @@ def check_generic_call(
 
   spans = node.args.map do |arg: Ast.Expr| Ast.expr_span(arg) end
   current = try Types.check_json_needs(cx, current, node.name, found, templates, spans, node.span)
-  return ok(State.Out(st: current, type: Types.substitute(signature.result, found)))
+  ok(State.Out(st: current, type: Types.substitute(signature.result, found)))
 end
 
 # The parameter type with the variables found so far put in, or Unknown while one is open: an argument is then checked
@@ -403,13 +403,13 @@ end
 def known_part(template: T.Type, found: Map[String, T.Type]) -> T.Type
   return T.Type.Unknown if Types.open_variables?(template, found)
 
-  return Types.substitute(template, found)
+  Types.substitute(template, found)
 end
 
 def block_literal?(node: Ast.Expr) -> Bool
   case node
-    Ast.Expr.BlockLit(_) -> return true
-    _ -> return false
+    Ast.Expr.BlockLit(_) -> true
+    _ -> false
   end
 end
 
@@ -419,19 +419,19 @@ end
 def needs_expected?(cx: State.Cx, node: Ast.Expr) -> Bool
   case node
     Ast.Expr.ListLit(list) ->
-      return list.elements.size == 0 or list.elements.any? do |item: Ast.Expr| needs_expected?(cx, item) end
+      list.elements.size == 0 or list.elements.any? do |item: Ast.Expr| needs_expected?(cx, item) end
     Ast.Expr.MapLit(map) ->
-      return map.entries.size == 0 or map.entries.any? do |entry: Ast.MapEntry| needs_expected?(cx, entry.value) end
+      map.entries.size == 0 or map.entries.any? do |entry: Ast.MapEntry| needs_expected?(cx, entry.value) end
     Ast.Expr.Call(call) ->
       set_of_empty = call.name == "Set.new" and call.args.size == 1 and needs_expected?(cx, call.args[0])
-      return call.name == "error" or call.name == "none" or set_of_empty
+      call.name == "error" or call.name == "none" or set_of_empty
     Ast.Expr.EnumConstructor(variant) ->
       definition = cx.enums.get(variant.enum_name)
-      return variant.args.size == 0 and definition.some? and definition.unwrap!.parameters.size > 0
+      variant.args.size == 0 and definition.some? and definition.unwrap!.parameters.size > 0
     Ast.Expr.FunctionRef(ref) ->
       signature = cx.functions.get(ref.name)
-      return signature.some? and signature.unwrap!.type_parameters.size > 0
-    _ -> return false
+      signature.some? and signature.unwrap!.type_parameters.size > 0
+    _ -> false
   end
 end
 
@@ -445,7 +445,7 @@ def check_closed_argument(
 ) -> Result[State.St]
   out = try State.expr(cx, st, arg, Types.substitute(template, found))
   try Types.unify(cx, out.st, template, out.type, found, Ast.expr_span(arg))
-  return ok(out.st)
+  ok(out.st)
 end
 
 # The block of a call, against the Fn parameter type. Its parameter types are the ones known; one still open must be
@@ -471,8 +471,8 @@ def check_generic_block(
     Ast.Expr.BlockLit(block) ->
       out = try Stmt.check_block_in(cx, st, block, some(params), result, none, false)
       learned = try Types.unify(cx, out.st, template, out.type, found, block.span)
-      return ok(Inferred(st: out.st, substitutions: learned))
-    _ -> return error(State.fail(cx, st, "CHECK-INTERNAL", "a block argument is not a block", Ast.expr_span(node)))
+      ok(Inferred(st: out.st, substitutions: learned))
+    _ -> error(State.fail(cx, st, "CHECK-INTERNAL", "a block argument is not a block", Ast.expr_span(node)))
   end
 end
 
@@ -489,7 +489,7 @@ def uninferred_failure(
     unset = signature.type_parameters
   end
 
-  return State.fail_help(
+  State.fail_help(
     cx,
     st,
     "CHECK-ENUM-TYPE-INFERENCE",
@@ -525,7 +525,7 @@ def check_void_arguments(
     )
   end
 
-  return ok(true)
+  ok(true)
 end
 
 # A function with defaults says the range of arguments it takes.
@@ -539,7 +539,7 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, signature: State.S
 
   message = "\"#{name}\" expects #{wanted}, found #{node.args.size}"
   callee = "#{name}(#{T.list_text(signature.params)}) -> #{T.to_text(signature.result)}"
-  return State.fail_callee(cx, st, "CHECK-ARITY", message, node.span, callee)
+  State.fail_callee(cx, st, "CHECK-ARITY", message, node.span, callee)
 end
 
 # The help of an unknown function: a name of another language, a module that needs an import, or a close name. A
@@ -559,13 +559,13 @@ def unknown_function_help(cx: State.Cx, name: String) -> String
     return "import HTTP from \"std/http\""
   end
 
-  return Help.near(name, cx.functions.keys, CALLABLE_NAMES)
+  Help.near(name, cx.functions.keys, CALLABLE_NAMES)
 end
 
 # True when the program declares or imports a struct or an enum of that name; an imported one is keyed @N::Name.
 def program_type?(cx: State.Cx, name: String) -> Bool
   suffix = "::#{name}"
-  return cx.structs.keys.concat(cx.enums.keys).any? do |key: String| key == name or key.ends_with?(suffix) end
+  cx.structs.keys.concat(cx.enums.keys).any? do |key: String| key == name or key.ends_with?(suffix) end
 end
 
 def unknown_enum_help(name: String) -> String
@@ -575,7 +575,7 @@ def unknown_enum_help(name: String) -> String
     return "an Optional is written some(value) or none"
   end
 
-  return ""
+  ""
 end
 
 # The payload types of a variant of the enum, or an error when it has no such variant.
@@ -584,7 +584,7 @@ def variant_payload(definition: Model.EnumDef, name: String) -> Result[List[T.Ty
     return ok(variant.payload) if variant.name == name
   end
 
-  return error("no such variant")
+  error("no such variant")
 end
 
 # The type arguments the context already gives: an expected type of the same kind ("Enum" or "Struct") and name, with
@@ -600,7 +600,7 @@ def expected_substitutions(
     return Types.bindings(parameters, args)
   end
 
-  return {}
+  {}
 end
 
 # Each argument against its payload type with the type variables filled in as far as they are known; an empty
@@ -642,14 +642,14 @@ def infer_arguments(
     index += 1
   end
 
-  return ok(Inferred(st: current, substitutions: found))
+  ok(Inferred(st: current, substitutions: found))
 end
 
 def empty_collection?(node: Ast.Expr) -> Bool
   case node
-    Ast.Expr.ListLit(list) -> return list.elements.size == 0
-    Ast.Expr.MapLit(map) -> return map.entries.size == 0
-    _ -> return false
+    Ast.Expr.ListLit(list) -> list.elements.size == 0
+    Ast.Expr.MapLit(map) -> map.entries.size == 0
+    _ -> false
   end
 end
 
@@ -679,7 +679,7 @@ def finish_constructor(
 
   args = definition.parameters.map do |parameter: String| substitutions[parameter] end
   type = try State.ensure(cx, st, T.Type.Enum(definition.name, args), expected, span)
-  return ok(State.Out(st: st, type: type))
+  ok(State.Out(st: st, type: type))
 end
 
 # Type(name: value, ...) for a struct. A generic struct takes its type arguments from the field values, left to right
@@ -737,7 +737,7 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expe
 
   return ok(State.Out(st: checked.st, type: T.Type.Struct(name, []))) if parameters.size == 0
 
-  return finish_struct(cx, checked, name, parameters, node.span, expected)
+  finish_struct(cx, checked, name, parameters, node.span, expected)
 end
 
 # The generic struct type with its arguments, once every type parameter has been found.
@@ -765,7 +765,7 @@ def finish_struct(
 
   args = parameters.map do |parameter: String| checked.substitutions[parameter] end
   type = try State.ensure(cx, checked.st, T.Type.Struct(name, args), expected, span)
-  return ok(State.Out(st: checked.st, type: type))
+  ok(State.Out(st: checked.st, type: type))
 end
 
 # The `name: value` pairs of a construction or an update: each name is a field of the struct, given once, with a value
@@ -826,11 +826,11 @@ def check_named_fields(
     end
   end
 
-  return ok(Fields(st: current, seen: seen, substitutions: found))
+  ok(Fields(st: current, seen: seen, substitutions: found))
 end
 
 def empty_field_failure(cx: State.Cx, st: State.St, name: String, span: Source.Span) -> String
-  return State.fail_help(
+  State.fail_help(
     cx,
     st,
     "CHECK-ENUM-TYPE-INFERENCE",
@@ -844,7 +844,7 @@ end
 # is not linked, every struct is visible.
 def updatable?(cx: State.Cx, visible: Optional[List[String]], name: String) -> Bool
   case visible
-    some(names) -> return RECORDS.has_key?(name) or names.any? do |item: String| item == name end
-    none -> return true
+    some(names) -> RECORDS.has_key?(name) or names.any? do |item: String| item == name end
+    none -> true
   end
 end

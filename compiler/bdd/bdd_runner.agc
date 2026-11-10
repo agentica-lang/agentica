@@ -82,7 +82,7 @@ export def config_text(
     lines = lines.push(JSON.encode(parts))
   end
 
-  return "#{lines.join("\n")}\n"
+  "#{lines.join("\n")}\n"
 end
 
 ## Runs the runner `program` on `config_file` with `agentica run` of the binary of the options, waits for it, and reads
@@ -119,7 +119,7 @@ export def run(options: Opts.Options, program: Program, config_file: String, rep
     return Ran.Failed("the BDD runner failed with exit code #{code.unwrap!}: #{message_line(stderr)}")
   end
 
-  return read_report(code.unwrap!, report_file)
+  read_report(code.unwrap!, report_file)
 end
 
 # Waits as long as the run takes: a wait that times out is repeated.
@@ -129,14 +129,14 @@ def wait_for(child: Process) -> Result[Int]
     waited = Process.wait(child, WAIT_SLICE)
   end
 
-  return waited
+  waited
 end
 
 def read_report(code: Int, report_file: String) -> Ran
   case SourceReader.read(report_file)
-    SourceFile.Read.Text(text) -> return Ran.Reported(code, text)
-    SourceFile.Read.Invalid(_) -> return Ran.Failed("the BDD runner wrote a report that is not UTF-8")
-    SourceFile.Read.Unreadable(message) -> return Ran.Failed("the BDD runner wrote no report: #{message}")
+    SourceFile.Read.Text(text) -> Ran.Reported(code, text)
+    SourceFile.Read.Invalid(_) -> Ran.Failed("the BDD runner wrote a report that is not UTF-8")
+    SourceFile.Read.Unreadable(message) -> Ran.Failed("the BDD runner wrote no report: #{message}")
   end
 end
 
@@ -157,7 +157,7 @@ def message_line(text: String) -> String
     index += 1
   end
 
-  return lines.drop(first).take(2).join(" ")
+  lines.drop(first).take(2).join(" ")
 end
 
 # `PLACE:LINE:COLUMN error[CODE]` and nothing after it.
@@ -169,11 +169,11 @@ def diagnostic_header?(line: String) -> Bool
   code = line.slice(marker.unwrap! + 7, line.length - marker.unwrap! - 8)
   return false if place.size < 3 or code == "" or place.take(place.size - 2).join(":") == ""
 
-  return number?(place[place.size - 1]) and number?(place[place.size - 2]) and code_text?(code)
+  number?(place[place.size - 1]) and number?(place[place.size - 2]) and code_text?(code)
 end
 
 def number?(text: String) -> Bool
-  return text.length > 0 and text.to_int.ok? and !text.starts_with?("-") and !text.starts_with?("+")
+  text.length > 0 and text.to_int.ok? and !text.starts_with?("-") and !text.starts_with?("+")
 end
 
 def code_text?(text: String) -> Bool
@@ -182,5 +182,5 @@ def code_text?(text: String) -> Bool
     return false if !((point >= 65 and point <= 90) or (point >= 48 and point <= 57) or point == 45)
   end
 
-  return true
+  true
 end

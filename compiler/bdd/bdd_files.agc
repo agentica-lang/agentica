@@ -22,7 +22,7 @@ export def write_bytes(path: String, bytes: Bytes) -> Result[Void]
     rest = rest.drop(PIECE_BYTES)
   end
 
-  return File.close(out, IO_TIMEOUT)
+  File.close(out, IO_TIMEOUT)
 end
 
 ## Writes text to a new file with mode 0600, as write_bytes does.
@@ -44,5 +44,5 @@ export def write_text(path: String, text: String) -> Result[Void]
     at += size
   end
 
-  return File.close(out, IO_TIMEOUT)
+  File.close(out, IO_TIMEOUT)
 end

@@ -25,12 +25,12 @@ end
 ## the base of its imports and of agentica.toml; when it does not exist, an import fails. `windows` is true on a
 ## Windows host.
 export def buffer(workspace: Workspace.Workspace, windows: Bool, file: String, read: SourceFile.Read) -> Buffer
-  return Buffer(names: names_for(workspace, windows, file), read: read)
+  Buffer(names: names_for(workspace, windows, file), read: read)
 end
 
 ## `buffers` with `added`, which replaces the buffer of the same file.
 export def put(buffers: List[Buffer], added: Buffer) -> List[Buffer]
-  return without_key(buffers, added.names.key).push(added)
+  without_key(buffers, added.names.key).push(added)
 end
 
 ## `buffers` without the buffer of `file`, if it has one: the buffer whose file has the same canonical name now, or
@@ -38,7 +38,7 @@ end
 ## since).
 export def remove(buffers: List[Buffer], workspace: Workspace.Workspace, windows: Bool, file: String) -> List[Buffer]
   key = names_for(workspace, windows, file).key
-  return buffers.filter do |held: Buffer|
+  buffers.filter do |held: Buffer|
     held.names.key != key and held.names.typed != file and held.names.absolute != file
   end
 end
@@ -46,13 +46,13 @@ end
 ## Whether some buffer is the file `file` names, whichever way it is spelled.
 export def holds?(buffers: List[Buffer], workspace: Workspace.Workspace, windows: Bool, file: String) -> Bool
   key = names_for(workspace, windows, file).key
-  return buffers.any? do |held: Buffer| held.names.key == key end
+  buffers.any? do |held: Buffer| held.names.key == key end
 end
 
 ## `workspace` with the content of every buffer. A read of a buffer's file, or of its absolute or canonical path, gives
 ## the buffer; `file_exists` says yes and `real_path` gives the canonical path even when the disk has no such file.
 export def over(workspace: Workspace.Workspace, buffers: List[Buffer]) -> Workspace.Workspace
-  return workspace.with(
+  workspace.with(
     read_text: as_reader() do |path: String| read_buffer(workspace, buffers, path) end,
     file_exists: as_check() do |path: String| find(buffers, path).size > 0 or workspace.file_exists.call(path) end,
     real_path: as_resolver() do |path: String| real_buffer(workspace, buffers, path) end,
@@ -86,11 +86,11 @@ def names_for(workspace: Workspace.Workspace, windows: Bool, file: String) -> Na
   parent = workspace.real_path.call(folder)
   return Names(typed: file, absolute: absolute, key: absolute) if !parent.ok?
 
-  return Names(typed: file, absolute: absolute, key: Paths.join(parent.unwrap!, Paths.last_part(slashed)))
+  Names(typed: file, absolute: absolute, key: Paths.join(parent.unwrap!, Paths.last_part(slashed)))
 end
 
 def without_key(buffers: List[Buffer], key: String) -> List[Buffer]
-  return buffers.filter do |held: Buffer| held.names.key != key end
+  buffers.filter do |held: Buffer| held.names.key != key end
 end
 
 # The buffer for `path`: none or one in a list.
@@ -99,14 +99,14 @@ def find(buffers: List[Buffer], path: String) -> List[Buffer]
     return [held] if path == held.names.typed or path == held.names.absolute or path == held.names.key
   end
 
-  return []
+  []
 end
 
 def read_buffer(workspace: Workspace.Workspace, buffers: List[Buffer], path: String) -> SourceFile.Read
   found = find(buffers, path)
   return found[0].read if found.size > 0
 
-  return workspace.read_text.call(path)
+  workspace.read_text.call(path)
 end
 
 def real_buffer(workspace: Workspace.Workspace, buffers: List[Buffer], path: String) -> Result[String]
@@ -114,5 +114,5 @@ def real_buffer(workspace: Workspace.Workspace, buffers: List[Buffer], path: Str
   held = find(buffers, path)
   return found if found.ok? or held.size == 0
 
-  return ok(held[0].names.key)
+  ok(held[0].names.key)
 end

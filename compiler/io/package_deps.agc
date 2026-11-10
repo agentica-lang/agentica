@@ -83,7 +83,7 @@ export def sync(
     end
   end
 
-  return ok()
+  ok()
 end
 
 ## Writes the locked package from `source` (its cache folder) into `deps`, the deps/ folder of the project, unless its
@@ -105,7 +105,7 @@ export def put(
   # A staging folder that cannot be removed stays hidden in deps/ and does not change the answer. After a swap
   # only the empty parent is left.
   _ = Path.remove(parent, FS_TIMEOUT_MS)
-  return done
+  done
 end
 
 # Whether deps/<name> is a folder (never a link) whose .agc files hash to the lock. Anything else, a failed look
@@ -119,15 +119,15 @@ def up_to_date?(workspace: Workspace.Workspace, deps: String, locked: Lock.Locke
   return false if !seen.ok? or !folder?(seen.unwrap!)
 
   case PackageHash.hash_folder(workspace, target)
-    PackageHash.Hashed.Hash(found) -> return found == locked.hash
-    _ -> return false
+    PackageHash.Hashed.Hash(found) -> found == locked.hash
+    _ -> false
   end
 end
 
 def folder?(kind: Kind) -> Bool
   case kind
-    Kind.Folder -> return true
-    _ -> return false
+    Kind.Folder -> true
+    _ -> false
   end
 end
 
@@ -154,7 +154,7 @@ def sweep(workspace: Workspace.Workspace, deps: String) -> Result[Void]
     end
   end
 
-  return ok()
+  ok()
 end
 
 # The paths to copy: the .agc files of the hash, and the manifest.
@@ -166,7 +166,7 @@ def chosen(
 ) -> Result[List[String]]
   listing = PackageHash.list_files(workspace, source)
   case listing
-    PackageHash.Listing.Stopped(reason) -> return error(unreadable(place, source, locked, reason))
+    PackageHash.Listing.Stopped(reason) -> error(unreadable(place, source, locked, reason))
     PackageHash.Listing.Files(paths) ->
       entries = workspace.list_folder.call(source)
       return error(PackageFetch.fail(place, "PKG-FETCH", "", "cannot read #{source}", entries.message)) if !entries.ok?
@@ -178,24 +178,24 @@ def chosen(
         end
       end
 
-      return ok(chosen)
+      ok(chosen)
   end
 end
 
 def unreadable(place: PackageFetch.Place, source: String, locked: Lock.Locked, reason: PackageHash.Hashed) -> String
   case reason
     PackageHash.Hashed.Link(path) ->
-      return PackageFetch.fail(place, "PKG-SYMLINK", "", "#{locked.name} has a symbolic link named #{path}", "")
+      PackageFetch.fail(place, "PKG-SYMLINK", "", "#{locked.name} has a symbolic link named #{path}", "")
     PackageHash.Hashed.Unreadable(message) ->
-      return PackageFetch.fail(place, "PKG-FETCH", "", "cannot read #{source}", message)
-    PackageHash.Hashed.Hash(_) -> return PackageFetch.fail(place, "PKG-FETCH", "", "cannot read #{source}", "")
+      PackageFetch.fail(place, "PKG-FETCH", "", "cannot read #{source}", message)
+    PackageHash.Hashed.Hash(_) -> PackageFetch.fail(place, "PKG-FETCH", "", "cannot read #{source}", "")
   end
 end
 
 def regular?(kind: Workspace.EntryKind) -> Bool
   case kind
-    Workspace.EntryKind.File -> return true
-    _ -> return false
+    Workspace.EntryKind.File -> true
+    _ -> false
   end
 end
 
@@ -207,12 +207,12 @@ def prepare(workspace: Workspace.Workspace, deps: String) -> Result[Void]
       made = Dir.mkdir(deps, FS_TIMEOUT_MS)
       return error(write_failure(deps, "cannot make #{deps}", made.message)) if !made.ok?
 
-      return ok()
-    Kind.Folder -> return ok()
+      ok()
+    Kind.Folder -> ok()
     Kind.Link ->
       help = Failure.hint("install writes only inside deps/; make it a folder")
-      return error(Failure.fail_file(deps, "PKG-SYMLINK", "#{deps} is a symbolic link", help))
-    Kind.Other -> return error(write_failure(deps, "#{deps} is not a folder", "remove it, then run install again"))
+      error(Failure.fail_file(deps, "PKG-SYMLINK", "#{deps} is a symbolic link", help))
+    Kind.Other -> error(write_failure(deps, "#{deps} is not a folder", "remove it, then run install again"))
   end
 end
 
@@ -231,7 +231,7 @@ def kind_of(workspace: Workspace.Workspace, path: String) -> Result[Kind]
     end
   end
 
-  return ok(Kind.Absent)
+  ok(Kind.Absent)
 end
 
 # A new folder that only this process uses: mkdir_private fails when the name exists, so two commands never share one.
@@ -245,7 +245,7 @@ def make_stage(deps: String) -> Result[String]
     failure = made.message
   end
 
-  return error(write_failure(deps, "cannot make a folder in #{deps}", failure))
+  error(write_failure(deps, "cannot make a folder in #{deps}", failure))
 end
 
 def unique() -> String = "#{System.pid()}-#{Random.int(0, 999_999_999)}"
@@ -282,7 +282,7 @@ def stage_and_swap(
       return error(write_failure(stage, "cannot read the copy of #{locked.name}", message))
   end
 
-  return swap(workspace, deps, stage, locked.name)
+  swap(workspace, deps, stage, locked.name)
 end
 
 def copy(workspace: Workspace.Workspace, source: String, stage: String, path: String) -> Result[Void]
@@ -297,7 +297,7 @@ def copy(workspace: Workspace.Workspace, source: String, stage: String, path: St
   written = SaveFile.bytes(to, read.unwrap!, FS_TIMEOUT_MS)
   return error(write_failure(to, "cannot write #{to}", written.message)) if !written.ok?
 
-  return ok()
+  ok()
 end
 
 # The old folder, a link or a file of that name is moved aside first (Path.rename never replaces), the staged folder
@@ -331,7 +331,7 @@ def swap(workspace: Workspace.Workspace, deps: String, stage: String, name: Stri
     _ = Path.remove(backup, FS_TIMEOUT_MS)
   end
 
-  return ok()
+  ok()
 end
 
 # Takes the folder (or link, or file) of a dropped package out of deps/ by a rename, then removes it. Path.remove does
@@ -352,16 +352,16 @@ def remove(workspace: Workspace.Workspace, deps: String, name: String) -> Result
 
   # An old folder that cannot be removed is only a spare hidden folder.
   _ = Path.remove(backup, FS_TIMEOUT_MS)
-  return ok()
+  ok()
 end
 
 def absent?(kind: Kind) -> Bool
   case kind
-    Kind.Absent -> return true
-    _ -> return false
+    Kind.Absent -> true
+    _ -> false
   end
 end
 
 def write_failure(file: String, message: String, reason: String) -> String
-  return Failure.fail_file(file, "PKG-WRITE", message, Failure.hint(reason))
+  Failure.fail_file(file, "PKG-WRITE", message, Failure.hint(reason))
 end
