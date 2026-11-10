@@ -7,7 +7,7 @@ program #107 107:1:108-721:29:1
         type: type-ref #2 166:4:29-167:4:30 name="T"
       result: type-ref #5 172:4:35-179:4:42 name="List"
         arg: type-ref #4 177:4:40-178:4:41 name="T"
-      body: return-stmt #9 182:4:45-188:4:51
+      body: return-stmt #9 182:4:45-188:4:51 implicit
         value: list-lit #8 182:4:45-188:4:51
           element: name-ref #6 183:4:46-184:4:47 name="x"
           element: name-ref #7 186:4:49-187:4:50 name="y"
@@ -15,7 +15,7 @@ program #107 107:1:108-721:29:1
     param: param #13 201:6:12-207:6:18 name="x"
       type: type-ref #12 204:6:15-207:6:18 name="Int"
     result: type-ref #14 212:6:23-215:6:26 name="Int"
-    body: return-stmt #18 218:6:29-223:6:34
+    body: return-stmt #18 218:6:29-223:6:34 implicit
       value: binary #17 218:6:29-223:6:34 op=multiply op-span=220:6:31-221:6:32
         left: name-ref #15 218:6:29-219:6:30 name="x"
         right: literal #16 222:6:33-223:6:34 value=int:2
@@ -26,7 +26,7 @@ program #107 107:1:108-721:29:1
       type: type-ref #22 259:8:35-265:8:41 name="String"
       default: literal #23 268:8:44-272:8:48 value=string:"hi"
     result: type-ref #25 277:8:53-283:8:59 name="String"
-    body: return-stmt #29 286:8:62-307:8:83
+    body: return-stmt #29 286:8:62-307:8:83 implicit
       value: interpolation #28 286:8:62-307:8:83
         part: name-ref #26 289:8:65-297:8:73 name="greeting"
         part: text " "
@@ -36,7 +36,7 @@ program #107 107:1:108-721:29:1
       type: type-ref #31 348:10:19-354:10:25 name="String"
     result: type-ref #34 359:10:30-370:10:41 name="Result"
       arg: type-ref #33 366:10:37-369:10:40 name="Int"
-    body: return-stmt #41 373:10:44-396:10:67
+    body: return-stmt #41 373:10:44-396:10:67 implicit
       value: call #40 373:10:44-396:10:67 name="ok" piped=false
         arg: binary #39 376:10:47-395:10:66 op=plus op-span=392:10:63-393:10:64
           left: try-expr #37 376:10:47-391:10:62
@@ -48,7 +48,7 @@ program #107 107:1:108-721:29:1
       type: type-ref #44 412:12:15-421:12:24 name="List"
         arg: type-ref #43 417:12:20-420:12:23 name="Int"
     result: type-ref #46 426:12:29-429:12:32 name="Int"
-    body: return-stmt #55 432:12:35-463:12:66
+    body: return-stmt #55 432:12:35-463:12:66 implicit
       value: field-access #54 432:12:35-463:12:66 name="sum"
         target: method-call #53 432:12:35-459:12:62 name="map"
           target: name-ref #47 432:12:35-434:12:37 name="xs"
@@ -63,7 +63,7 @@ program #107 107:1:108-721:29:1
     param: param #60 484:14:20-490:14:26 name="b"
       type: type-ref #59 487:14:23-490:14:26 name="Int"
     result: type-ref #61 495:14:31-498:14:34 name="Int"
-    body: return-stmt #65 505:15:3-512:16:4
+    body: return-stmt #65 505:15:3-512:16:4 implicit
       value: binary #64 505:15:3-512:16:4 op=plus op-span=507:15:5-508:15:6
         left: name-ref #62 505:15:3-506:15:4 name="a"
         right: name-ref #63 511:16:3-512:16:4 name="b"

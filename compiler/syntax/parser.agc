@@ -2245,6 +2245,11 @@ def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) 
   body = try parse_block(e, head, result.ids, 0)
   close = try expect_end(e, body.pos)
   stop = try expect_statement_end(e, close, "a newline after end")
+  statements = body.nodes
+  if result.node.name != "Void" or result.node.args.size != 0
+    statements = tail_returns(statements)
+  end
+
   node = Ast.Decl.Function(
     Ast.FunctionDecl(
       id: body.ids,
@@ -2254,7 +2259,7 @@ def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) 
       type_parameter_spans: type_parameters.spans,
       params: params.nodes,
       result: result.node,
-      body: body.nodes,
+      body: statements,
       doc: doc,
       native: none,
       span: Base.span_from(e, pos, stop),
@@ -2264,10 +2269,49 @@ def parse_function_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) 
   return decl_at(node, stop, body.ids)
 end
 
-# def name(params) -> Type = value NL: a function whose body is `return value`, marked `expression` so that the
-# formatter keeps the form. The value starts on the line of `=` and may go on as any expression does. A Void function
-# has no value to return, and a `case` or an `if` is a statement: both are written in a def with a body.
-# The signature ends at the `=`.
+# The body of a def whose result is not written `Void`, with its last expression made the value: an expression
+# statement at the end becomes a `return` marked implicit, which checks and lowers as the `return` written out. The
+# rule goes into the branches of a last `if` that has an `else` and into the arms of a last `case`, at any depth. An
+# `if` without `else` gives no value on one path, and a `try` gives the ok value and not the Result the def returns,
+# so both stay statements: the def then fails with CHECK-MISSING-RETURN as when nothing gives the value. The test of
+# `Void` reads the written name, so a def whose result is an alias of Void is not one (the checker ignores the value
+# there).
+def tail_returns(statements: List[Ast.Stmt]) -> List[Ast.Stmt]
+  return statements if statements.size == 0
+
+  last = statements.size - 1
+  return statements.set(last, tail_return(statements[last]))
+end
+
+def tail_return(statement: Ast.Stmt) -> Ast.Stmt
+  case statement
+    Ast.Stmt.Expression(node) ->
+      case node.value
+        Ast.Expr.Try(_) -> return statement
+        _ ->
+          span = Ast.expr_span(node.value)
+          return Ast.Stmt.Return(Ast.Return(id: node.id, value: some(node.value), span: span, implicit: true))
+      end
+
+    Ast.Stmt.If(node) ->
+      case node.else_body
+        some(body) ->
+          branches = node.branches.map do |branch: Ast.IfBranch| branch.with(body: tail_returns(branch.body)) end
+          return Ast.Stmt.If(node.with(branches: branches, else_body: some(tail_returns(body))))
+        none -> return statement
+      end
+
+    Ast.Stmt.Case(node) ->
+      arms = node.arms.map do |arm: Ast.CaseArm| arm.with(body: tail_returns(arm.body)) end
+      return Ast.Stmt.Case(node.with(arms: arms))
+    _ -> return statement
+  end
+end
+
+# def name(params) -> Type = value NL: a function whose body is the value, an implicit `return` (tail_returns), marked
+# `expression` so that the formatter keeps the form. The value starts on the line of `=` and may go on as any
+# expression does. A Void function has no value to return, and a `case` or an `if` is a statement: both are written
+# in a def with a body. The signature ends at the `=`.
 def parse_one_line_def(e: Base.Env, pos: Int, shape: FunctionShape, doc: Optional[String]) -> Result[DeclAt]
   result = shape.result.node
   assign = shape.result.pos
@@ -2297,7 +2341,7 @@ def parse_one_line_def(e: Base.Env, pos: Int, shape: FunctionShape, doc: Optiona
   value = try parse_expression(e, at, shape.result.ids)
   stop = try expect_statement_end(e, value.pos, "a newline after the value of the function")
   span = Ast.expr_span(value.node)
-  body = [Ast.Stmt.Return(Ast.Return(id: value.ids, value: some(value.node), span: span))]
+  body = [Ast.Stmt.Return(Ast.Return(id: value.ids, value: some(value.node), span: span, implicit: true))]
   node = Ast.Decl.Function(
     Ast.FunctionDecl(
       id: value.ids + 1,

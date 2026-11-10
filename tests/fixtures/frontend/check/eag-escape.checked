@@ -82,7 +82,7 @@ program #78 0:1:1-293:16:1
       param: param #2 935:27:24-948:27:37 name="value"
         type: type-ref #1 942:27:31-948:27:37 name="String"
       result: type-ref #3 953:27:42-959:27:48 name="String"
-      body: return-stmt #6 962:27:51-980:27:69
+      body: return-stmt #6 962:27:51-980:27:69 implicit
         value: call #5 962:27:51-980:27:69 name="@3::escape" piped=false type=String
           arg: name-ref #4 974:27:63-979:27:68 name="value" type=String
   module "std/html.agc"

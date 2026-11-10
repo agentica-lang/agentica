@@ -13,7 +13,8 @@
 ## without node ids and spans, which the layout moves, and without the `guard` mark of an `if` and the `expression`
 ## mark of a one-line `def`, since the layout writes a guard or a one-line def too long for its line as the `if` or
 ## the `def` with a body that it stands for, and writes a def whose body is one `return value` as a one-line def when
-## it fits. Then one line with the words of every comment in order, since a long comment is wrapped into more lines.
+## it fits. The `implicit` mark of a `return` goes too: the last expression of a def and its `return` written out are
+## one tree. Then one line with the words of every comment in order, since a long comment is wrapped into more lines.
 
 import Style from "../check/check_style"
 import Diag from "../diagnostics/diagnostic"
@@ -186,10 +187,15 @@ def without_places(line: String) -> String
   return kept.join("")
 end
 
-# The line without the mark of a form that the layout may turn into another: ` guard` on an `if-stmt` line and
-# ` expression` on a `function-decl` line (parse_text.agc writes each last on its line).
+# The line without the mark of a form that the layout may turn into another: ` guard` on an `if-stmt` line,
+# ` expression` on a `function-decl` line and ` implicit` on a `return-stmt` line (parse_text.agc writes each last on
+# its line).
 def without_marks(line: String) -> String
   return line.slice(0, line.length - " guard".length) if line.ends_with?(" guard") and line.contains?("if-stmt ")
+
+  if line.ends_with?(" implicit") and line.contains?("return-stmt ")
+    return line.slice(0, line.length - " implicit".length)
+  end
 
   if line.ends_with?(" expression") and line.contains?("function-decl ")
     return line.slice(0, line.length - " expression".length)

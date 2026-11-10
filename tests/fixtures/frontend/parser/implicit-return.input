@@ -1,0 +1,29 @@
+# The last expression of a def that is not written Void is an implicit return: at the end of the body, of each branch
+# of a last `if` with `else` and of each arm of a last `case`. An `if` without `else`, a `try` and the last expression
+# of a Void def stay statements.
+def sign(x: Int) -> String
+  if x > 0
+    "plus"
+  elsif x < 0
+    case x
+      -1 -> "minus one"
+      _ -> return "minus"
+    end
+  else
+    "zero"
+  end
+end
+
+def open_ended(x: Int) -> Int
+  if x > 0
+    x
+  end
+end
+
+def tried() -> Result[Int]
+  try load()
+end
+
+def main() -> Void
+  puts(sign(1))
+end

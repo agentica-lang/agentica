@@ -17,6 +17,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - One-line def: `def double(x: Int) -> Int = x * 2` is the def whose body is
   `return x * 2`. Not for `Void` functions. One-line defs may follow each other
   with no blank line, as constants can.
+- The last expression of a function is its value, and so is the last
+  expression of each branch of a last `if` with `else` and of each arm of a
+  last `case`. `return` stays for early exits. A `Void` function still drops
+  its last value.
 
 ### Changed
 
@@ -26,6 +30,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica fmt` writes a `def` whose body is one `return value` as a one-line
   def when it fits and holds no comment, so `fmt --check` flags such defs in
   existing projects until they are formatted.
+- A function that ends with a value of the wrong type is now
+  `CHECK-TYPE-MISMATCH` at that value, not `CHECK-MISSING-RETURN` (or
+  `CHECK-UNUSED-VALUE` and `CHECK-UNUSED-RESULT` for some calls). One that ends
+  with a `Void` call is still `CHECK-MISSING-RETURN`, now at the call.
+- `agentica fmt` writes a one-line def too long for its line with its value as
+  the last line of the body, without `return`.
 
 ## [0.28.0] - 2026-11-10
 

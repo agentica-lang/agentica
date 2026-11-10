@@ -548,7 +548,7 @@ program #6 0:1:1-71:5:1
       param: param #539 9406:213:36-9418:213:48 name="text"
         type: type-ref #538 9412:213:42-9418:213:48 name="String"
       result: type-ref #540 9423:213:53-9430:213:60 name="@3::Context"
-      body: return-stmt #545 9433:213:63-9455:213:85
+      body: return-stmt #545 9433:213:63-9455:213:85 implicit
         value: call #544 9433:213:63-9455:213:85 name="@3::send" piped=false
           arg: name-ref #541 9438:213:68-9441:213:71 name="ctx"
           arg: interpolation #543 9443:213:73-9454:213:84
@@ -560,7 +560,7 @@ program #6 0:1:1-71:5:1
       param: param #551 9542:216:37-9554:216:49 name="text"
         type: type-ref #550 9548:216:43-9554:216:49 name="String"
       result: type-ref #552 9559:216:54-9566:216:61 name="@3::Context"
-      body: return-stmt #556 9569:216:64-9584:216:79
+      body: return-stmt #556 9569:216:64-9584:216:79 implicit
         value: call #555 9569:216:64-9584:216:79 name="@3::send" piped=false
           arg: name-ref #553 9574:216:69-9577:216:72 name="ctx"
           arg: name-ref #554 9579:216:74-9583:216:78 name="text"
@@ -2186,7 +2186,7 @@ program #6 0:1:1-71:5:1
       param: param #2178 26449:686:14-26461:686:26 name="ctx"
         type: type-ref #2177 26454:686:19-26461:686:26 name="@3::Context"
       result: type-ref #2179 26466:686:31-26470:686:35 name="Bool"
-      body: return-stmt #2184 26473:686:38-26501:686:66
+      body: return-stmt #2184 26473:686:38-26501:686:66 implicit
         value: field-access #2183 26473:686:38-26501:686:66 name="closed?"
           target: field-access #2182 26473:686:38-26493:686:58 name="closing"
             target: field-access #2181 26473:686:38-26485:686:50 name="scenario"
@@ -2195,7 +2195,7 @@ program #6 0:1:1-71:5:1
       param: param #2187 26516:688:14-26528:688:26 name="text"
         type: type-ref #2186 26522:688:20-26528:688:26 name="String"
       result: type-ref #2188 26533:688:31-26537:688:35 name="Bool"
-      body: return-stmt #2194 26540:688:38-26567:688:65
+      body: return-stmt #2194 26540:688:38-26567:688:65 implicit
         value: method-call #2193 26540:688:38-26567:688:65 name="include?"
           target: field-access #2191 26540:688:38-26555:688:53 name="to_a"
             target: field-access #2190 26540:688:38-26550:688:48 name="bytes"
@@ -2238,7 +2238,7 @@ program #6 0:1:1-71:5:1
         type: type-ref #2228 27138:699:24-27144:699:30 name="String"
       result: type-ref #2231 27149:699:35-27158:699:44 name="List"
         arg: type-ref #2230 27154:699:40-27157:699:43 name="Int"
-      body: return-stmt #2241 27161:699:47-27212:699:98
+      body: return-stmt #2241 27161:699:47-27212:699:98 implicit
         value: method-call #2240 27161:699:47-27212:699:98 name="map"
           target: field-access #2234 27161:699:47-27176:699:62 name="to_a"
             target: field-access #2233 27161:699:47-27171:699:57 name="bytes"
@@ -2453,11 +2453,11 @@ program #6 0:1:1-71:5:1
               arg: literal #2437 29249:755:17-29250:755:18 value=int:1
     declaration: function-decl #2446 29263:759:1-29295:760:1 name="@3::idle_ms" expression
       result: type-ref #2443 29280:759:18-29283:759:21 name="Int"
-      body: return-stmt #2445 29286:759:24-29294:759:32
+      body: return-stmt #2445 29286:759:24-29294:759:32 implicit
         value: literal #2444 29286:759:24-29294:759:32 value=int:86400000
     declaration: function-decl #2450 29296:761:1-29324:762:1 name="@3::send_ms" expression
       result: type-ref #2447 29313:761:18-29316:761:21 name="Int"
-      body: return-stmt #2449 29319:761:24-29323:761:28
+      body: return-stmt #2449 29319:761:24-29323:761:28 implicit
         value: literal #2448 29319:761:24-29323:761:28 value=int:5000
     declaration: function-decl #2461 29325:763:1-29420:764:1 name="@3::record_text" expression
       param: param #2454 29341:763:17-29366:763:42 name="fields"
@@ -2465,7 +2465,7 @@ program #6 0:1:1-71:5:1
           arg: type-ref #2451 29353:763:29-29359:763:35 name="String"
           arg: type-ref #2452 29361:763:37-29365:763:41 name="Json"
       result: type-ref #2455 29371:763:47-29377:763:53 name="String"
-      body: return-stmt #2460 29380:763:56-29419:763:95
+      body: return-stmt #2460 29380:763:56-29419:763:95 implicit
         value: interpolation #2459 29380:763:56-29419:763:95
           part: call #2458 29383:763:59-29415:763:91 name="JSON.encode" piped=false
             arg: call #2457 29395:763:71-29414:763:90 name="JSON.object" piped=false
@@ -2473,15 +2473,15 @@ program #6 0:1:1-71:5:1
           part: text "\n"
     declaration: function-decl #2465 29421:765:1-29474:766:1 name="@3::ended_text" expression
       result: type-ref #2462 29441:765:21-29447:765:27 name="String"
-      body: return-stmt #2464 29450:765:30-29473:765:53
+      body: return-stmt #2464 29450:765:30-29473:765:53 implicit
         value: literal #2463 29450:765:30-29473:765:53 value=string:"process: end of input"
     declaration: function-decl #2469 29475:767:1-29539:768:1 name="@3::timed_out_text" expression
       result: type-ref #2466 29499:767:25-29505:767:31 name="String"
-      body: return-stmt #2468 29508:767:34-29538:767:64
+      body: return-stmt #2468 29508:767:34-29538:767:64 implicit
         value: literal #2467 29508:767:34-29538:767:64 value=string:"process: operation timed out"
     declaration: function-decl #2473 29540:769:1-29608:770:1 name="@3::over_text" expression
       result: type-ref #2470 29559:769:20-29565:769:26 name="String"
-      body: return-stmt #2472 29568:769:29-29607:769:68
+      body: return-stmt #2472 29568:769:29-29607:769:68 implicit
         value: literal #2471 29568:769:29-29607:769:68 value=string:"process: output exceeds 1048576 bytes"
   module "assertions.agc"
     declaration: function-decl #21 65:4:8-284:8:1 name="@4::verify"
@@ -2516,7 +2516,7 @@ program #6 0:1:1-71:5:1
         type: type-ref #7 501:17:14-511:17:24 name="@5::QueueState"
     declaration: function-decl #16 551:21:8-599:22:1 name="@5::new" expression
       result: type-ref #11 564:21:21-574:21:31 name="@5::QueueState"
-      body: return-stmt #15 577:21:34-598:21:55
+      body: return-stmt #15 577:21:34-598:21:55 implicit
         value: construct #14 577:21:34-598:21:55 type="@5::QueueState"
           arg: named-arg #13 588:21:45-597:21:54 name="items"
             value: list-lit #12 595:21:52-597:21:54
@@ -2526,7 +2526,7 @@ program #6 0:1:1-71:5:1
       param: param #21 682:24:32-695:24:45 name="value"
         type: type-ref #20 689:24:39-695:24:45 name="String"
       result: type-ref #22 700:24:50-710:24:60 name="@5::QueueState"
-      body: return-stmt #29 713:24:63-759:24:109
+      body: return-stmt #29 713:24:63-759:24:109 implicit
         value: construct #28 713:24:63-759:24:109 type="@5::QueueState"
           arg: named-arg #27 724:24:74-758:24:108 name="items"
             value: call #26 731:24:81-758:24:108 name="List.append" piped=false
@@ -2582,7 +2582,7 @@ program #6 0:1:1-71:5:1
       param: param #80 1326:39:17-1339:39:30 name="q"
         type: type-ref #79 1329:39:20-1339:39:30 name="@5::QueueState"
       result: type-ref #81 1344:39:35-1347:39:38 name="Int"
-      body: return-stmt #85 1350:39:41-1368:39:59
+      body: return-stmt #85 1350:39:41-1368:39:59 implicit
         value: call #84 1350:39:41-1368:39:59 name="List.size" piped=false
           arg: field-access #83 1360:39:51-1367:39:58 name="items"
             target: name-ref #82 1360:39:51-1361:39:52 name="q"
@@ -2590,7 +2590,7 @@ program #6 0:1:1-71:5:1
       param: param #89 1434:42:19-1447:42:32 name="q"
         type: type-ref #88 1437:42:22-1447:42:32 name="@5::QueueState"
       result: type-ref #90 1452:42:37-1456:42:41 name="Bool"
-      body: return-stmt #95 1459:42:44-1471:42:56
+      body: return-stmt #95 1459:42:44-1471:42:56 implicit
         value: binary #94 1459:42:44-1471:42:56 op=equal op-span=1467:42:52-1469:42:54
           left: call #92 1459:42:44-1466:42:51 name="@5::size" piped=false
             arg: name-ref #91 1464:42:49-1465:42:50 name="q"

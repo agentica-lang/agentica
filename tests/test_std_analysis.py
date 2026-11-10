@@ -1088,6 +1088,39 @@ def test_bodies_resolve_calls_bindings_patterns_and_mark_what_they_do_not_cover(
         {"line": 45, "column": 3}, {"line": 45, "column": 11}, {"line": 45, "column": 15})
 
 
+# The same def with its values given by `return` and as the last expressions (#1287).
+EXPLICIT_RETURNS = """def sign(n: Int) -> String
+  if n > 0
+    return "plus"
+  else
+    case n
+      0 -> return "zero"
+      _ -> return "minus"
+    end
+  end
+end
+"""
+
+
+def test_bodies_show_a_last_expression_as_the_return_it_stands_for(driver, project):
+    implicit = EXPLICIT_RETURNS.replace("return ", "")
+    write_files(project, {"explicit.agc": EXPLICIT_RETURNS, "implicit.agc": implicit})
+    _answer, explicit_functions = bodies_of(driver, project, "explicit.agc")
+    _answer, implicit_functions = bodies_of(driver, project, "implicit.agc")
+
+    def without_ranges(node):
+        return {**{key: value for key, value in node.items() if key not in ("range", "children")},
+                "children": [without_ranges(child) for child in node["children"]]}
+
+    explicit_body = explicit_functions["sign"]["body"]
+    implicit_body = implicit_functions["sign"]["body"]
+    assert [without_ranges(node) for node in implicit_body] == [without_ranges(node) for node in explicit_body]
+    # A `return` with no keyword covers its value: `"plus"` on line 3.
+    plus = implicit_body[0]["children"][0]["children"][1]["children"][0]
+    assert (plus["kind"], plus["range"]["start"], plus["range"]["end"]) == (
+        "return", {"line": 3, "column": 5}, {"line": 3, "column": 11})
+
+
 def test_bodies_give_the_diagnostic_of_a_file_that_does_not_check_or_cannot_be_read(driver, project):
     out, err = library(driver, project, "bodies", "type_error.agc")
     assert (out, json.loads(err)["code"]) == ("", "CHECK-TYPE-MISMATCH")
