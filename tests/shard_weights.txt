@@ -85,8 +85,8 @@ tests/test_spec_style.py 5 0 0 0
 tests/test_spec_symbol.py 4 0 0 0
 tests/test_spec_type_at.py 16 0 0 0
 tests/test_std_analysis.py 40 39 65 0
-tests/test_std_archive.py 10 0 0 0
-tests/test_std_archive_zip.py 30 0 0 0
+tests/test_std_archive.py 3 0 0 0
+tests/test_std_archive_zip.py 3 0 0 0
 tests/test_std_cache.py 1 0 0 0
 tests/test_std_html.py 1 0 0 0
 tests/test_std_option_parser.py 2 0 0 0
