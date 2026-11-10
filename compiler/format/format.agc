@@ -12,8 +12,8 @@
 ## The normal form (`tree_text`, what `agentica fmt --tree` prints) is the parse text of the tree (parse_text.agc)
 ## without node ids and spans, which the layout moves, and without the `guard` mark of an `if` and the `expression`
 ## mark of a one-line `def`, since the layout writes a guard or a one-line def too long for its line as the `if` or
-## the `def` with a body that it stands for. Then one line with the words of every comment in
-## order, since a long comment is wrapped into more lines.
+## the `def` with a body that it stands for, and writes a def whose body is one `return value` as a one-line def when
+## it fits. Then one line with the words of every comment in order, since a long comment is wrapped into more lines.
 
 import Style from "../check/check_style"
 import Diag from "../diagnostics/diagnostic"

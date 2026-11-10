@@ -468,19 +468,21 @@ def test_a_one_line_def_stays_one_when_it_fits(tmp_path):
     assert fmt("--tree", "defs.agc", cwd=tmp_path).stdout == before.stdout
 
 
+@pytest.mark.parametrize("source_form", ["one line", "body"])
 @pytest.mark.parametrize("prefix, size, one_line", [
     ("", 97, True), ("", 98, False), ("export ", 90, True), ("export ", 91, False),
 ])
-def test_a_one_line_def_and_its_body_form_meet_at_the_width(tmp_path, prefix, size, one_line):
+def test_a_one_line_def_and_its_body_form_meet_at_the_width(tmp_path, source_form, prefix, size, one_line):
     # `def f() -> String = "..."` is 22 characters plus the text: 119, the width, for 97, and 120 for 98; `export `
-    # takes 7 more.
+    # takes 7 more. The source form does not matter: only the width decides.
     value = "x" * size
     short = '%sdef f() -> String = "%s"\n' % (prefix, value)
+    body = '%sdef f() -> String\n  return "%s"\nend\n' % (prefix, value)
     assert len(short) - 1 == len(prefix) + 22 + size
-    lay_out(tmp_path, {"short.agc": short})
+    lay_out(tmp_path, {"short.agc": short if source_form == "one line" else body})
     before = fmt("--tree", "short.agc", cwd=tmp_path)
     assert fmt(cwd=tmp_path).code == 0
-    expected = short if one_line else '%sdef f() -> String\n  return "%s"\nend\n' % (prefix, value)
+    expected = short if one_line else body
     assert text(tmp_path, "short.agc") == expected
     assert fmt("--check", cwd=tmp_path).stdout == ""
     assert fmt("--tree", "short.agc", cwd=tmp_path).stdout == before.stdout
@@ -539,9 +541,10 @@ def test_consecutive_one_line_defs_keep_their_layout_and_a_long_one_gets_empty_l
 
 # A def whose body is one `return value` is written as a one-line def when that fits on its line: with a `##` doc and
 # `export` too, with comment lines right before it and right after its `end`, and when the source spreads the value
-# over lines that the layout joins. It keeps its body when a comment sits from its `def` line to its `end` line, when
-# the value takes lines of its own (a pipe chain of two or more `|>`), when it does not fit, when the body is anything
-# else (two statements, a guard), and for a Void function (`main` included). The empty lines are kept as found.
+# over lines that the layout joins (arguments, a `.name` line, a `do` block that fits), and for `try`. It keeps its body
+# when a comment sits from its `def` line to its `end` line, when the value takes lines of its own (a pipe chain of two
+# or more `|>`, a `case`), when it does not fit, when the body is anything else (two statements, a guard, a bare
+# `return`), and for a Void function (`main` included). The empty lines are kept as found.
 BODIES = """## Doubles a number.
 export def double(x: Int) -> Int
   return x * 2
@@ -577,6 +580,19 @@ def spread(a: Int, b: Int) -> Int
   )
 end
 
+def parsed(x: String) -> Result[Int]
+  return try parse(x)
+end
+
+def doubled(xs: List[Int]) -> List[Int]
+  return xs.map do |x| x * 2 end
+end
+
+def summed(xs: List[Int]) -> Int
+  return xs
+    .sum
+end
+
 def piped(xs: List[Int]) -> List[Int]
   return xs |> twice() |> twice()
 end
@@ -590,12 +606,22 @@ def guarded(x: Int) -> Int
   return 0 if x < 0
 end
 
+def sign(x: Int) -> Int
+  return case x
+    0 -> 0
+    _ -> 1
+  end
+end
+
 def long_name(first_argument: Int, second_argument: Int) -> Int
   return first_argument * second_argument + first_argument * 20000
 end
 
 def say(text: String) -> Void
-  puts(text)
+  return puts(text)
+end
+
+def nothing() -> Int
   return
 end
 
@@ -627,6 +653,12 @@ end # on the end line
 
 def spread(a: Int, b: Int) -> Int = add(a, b)
 
+def parsed(x: String) -> Result[Int] = try parse(x)
+
+def doubled(xs: List[Int]) -> List[Int] = xs.map do |x| x * 2 end
+
+def summed(xs: List[Int]) -> Int = xs.sum
+
 def piped(xs: List[Int]) -> List[Int]
   return (
     xs
@@ -644,12 +676,22 @@ def guarded(x: Int) -> Int
   return 0 if x < 0
 end
 
+def sign(x: Int) -> Int
+  return case x
+    0 -> 0
+    _ -> 1
+  end
+end
+
 def long_name(first_argument: Int, second_argument: Int) -> Int
   return first_argument * second_argument + first_argument * 20000
 end
 
 def say(text: String) -> Void
-  puts(text)
+  return puts(text)
+end
+
+def nothing() -> Int
   return
 end
 
