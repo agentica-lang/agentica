@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `std/option_parser`: `min_float` and `max_float` limit a `Float` option or
+  argument, as `min` and `max` limit an `Int` one, with the same messages and
+  help.
 - Guards: `return x if c`, `return if c`, `break if c` and `next if c` run as
   the `if` written out. No other statement takes a modifier.
 - Native API 1.3: `an_blocking` runs a C library call that switches stacks
@@ -28,6 +31,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   no longer counts the start of the file's child VM. A child that fails or
   takes over 30 seconds before its first test is a file error instead of that
   test's failure.
+- `std/option_parser`: a Float option or argument refuses a value that is not
+  finite (`+inf.0`, `+nan.0`, `1e400`): `does not fit a Float`.
 - **Breaking:** `Process.spawn`, `Process.spawn_captured` and
   `Process.spawn_channel` take their options as one `Process.Options` record
   (`timeout_ms`, `chdir`, `env`, `out`, `err`, `pgroup`) instead of positional
