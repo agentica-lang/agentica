@@ -154,7 +154,7 @@ def test_a_guard_is_written_back_as_a_guard_with_the_same_tree(tmp_path):
     guards = ('def f(xs: List[Int]) -> Int\n  for x in xs\n    next  if x < 0 # skip\n    # big ones end it\n'
               '    break if x > 9\n  end\n\n  return  0 if xs.any? do |x| x == 5 end\n'
               '  xs.each do |x| return if x == 1 end\n  case xs.size\n    1 -> return 2 if xs[0] == 2\n    _ -> puts(1)\n'
-              '  end\n\n  return 1\nend\n')
+              '  end\n\n  1\nend\n')
     laid_out = guards.replace("next  if", "next if").replace("return  0", "return 0")
     lay_out(tmp_path, {"guards.agc": guards})
     before = fmt("--tree", "guards.agc", cwd=tmp_path)
@@ -166,8 +166,8 @@ def test_a_guard_is_written_back_as_a_guard_with_the_same_tree(tmp_path):
 
 def test_a_guard_too_long_for_its_line_is_written_as_the_if_it_stands_for(tmp_path):
     message = "x" * 90
-    long = 'def f(text: String) -> Result[Int]\n  return error("%s") if text.empty?\n  return ok(1)\nend\n' % message
-    spelled = ('def f(text: String) -> Result[Int]\n  if text.empty?\n    return error("%s")\n  end\n  return ok(1)\nend\n'
+    long = 'def f(text: String) -> Result[Int]\n  return error("%s") if text.empty?\n  ok(1)\nend\n' % message
+    spelled = ('def f(text: String) -> Result[Int]\n  if text.empty?\n    return error("%s")\n  end\n  ok(1)\nend\n'
                % message)
     lay_out(tmp_path, {"long.agc": long})
     before = fmt("--tree", "long.agc", cwd=tmp_path)
@@ -180,10 +180,10 @@ def test_a_guard_too_long_for_its_line_is_written_as_the_if_it_stands_for(tmp_pa
 
 def test_a_guard_that_spans_lines_is_written_as_the_if_it_stands_for(tmp_path):
     # A heredoc value takes the lines below its guard, which is one line, so it becomes the `if` even though it fits.
-    lay_out(tmp_path, {"doc.agc": 'def f(x: Int) -> String\n  return <<~A if x > 0\n    a\n    b\n  A\n  return ""\nend\n'})
+    lay_out(tmp_path, {"doc.agc": 'def f(x: Int) -> String\n  return <<~A if x > 0\n    a\n    b\n  A\n  ""\nend\n'})
     assert fmt(cwd=tmp_path).code == 0
     assert text(tmp_path, "doc.agc") == (
-        'def f(x: Int) -> String\n  if x > 0\n    return <<~A\n    a\n    b\n  A\n  end\n  return ""\nend\n')
+        'def f(x: Int) -> String\n  if x > 0\n    return <<~A\n    a\n    b\n  A\n  end\n  ""\nend\n')
     assert fmt("--check", cwd=tmp_path).stdout == ""
 
 
@@ -254,7 +254,7 @@ SPELLED = """def f(xs: List[Int], text: String) -> Int
     two
   A
   end
-  return 8
+  8
 end
 """
 GUARDED = """def f(xs: List[Int], text: String) -> Int
@@ -294,11 +294,11 @@ def test_an_if_whose_statement_fmt_writes_on_one_line_is_a_guard_on_the_first_ru
     # The block takes three lines in the source and one in the output: the guard comes at once, so a second run of
     # `fmt` finds nothing to change.
     source = ("def f(n: Int) -> Fn[Int, Int]\n  if n > 0\n    return keep() do |x: Int|\n      x + n\n    end\n  end\n"
-              "  return keep() do |x: Int| x end\nend\n")
+              "  keep() do |x: Int| x end\nend\n")
     lay_out(tmp_path, {"block.agc": source})
     assert fmt(cwd=tmp_path).code == 0
     assert text(tmp_path, "block.agc") == ("def f(n: Int) -> Fn[Int, Int]\n  return keep() do |x: Int| x + n end if n > 0\n"
-                                           "  return keep() do |x: Int| x end\nend\n")
+                                           "  keep() do |x: Int| x end\nend\n")
     assert fmt("--check", cwd=tmp_path).stdout == ""
 
 
@@ -335,7 +335,7 @@ def g(xs: List[Int], c: Bool) -> List[Int]
     )
   end
   # after the end
-  return xs
+  xs
 end
 """
 VALUES_FORMATTED = """def f(xs: List[Int], c: Bool) -> List[Int]
@@ -367,7 +367,7 @@ def g(xs: List[Int], c: Bool) -> List[Int]
   # before the if
   return f(xs, c) if not c
   # after the end
-  return xs
+  xs
 end
 """
 
@@ -386,8 +386,8 @@ def test_the_guard_and_the_if_meet_at_the_same_width(tmp_path, size, guarded):
     # `  return 0 if text == "..."` is 24 characters plus the text: 119, the width, for 95, and 120 for 96. Both forms of
     # the source give the guard at 119 and the `if` at 120.
     value = "x" * size
-    guard = 'def f(text: String) -> Int\n  return 0 if text == "%s"\n  return 1\nend\n' % value
-    spelled = 'def f(text: String) -> Int\n  if text == "%s"\n    return 0\n  end\n  return 1\nend\n' % value
+    guard = 'def f(text: String) -> Int\n  return 0 if text == "%s"\n  1\nend\n' % value
+    spelled = 'def f(text: String) -> Int\n  if text == "%s"\n    return 0\n  end\n  1\nend\n' % value
     assert len('  return 0 if text == "%s"' % value) == 24 + size
     lay_out(tmp_path, {"guard.agc": guard, "spelled.agc": spelled})
     assert fmt(cwd=tmp_path).code == 0
@@ -475,8 +475,8 @@ def test_a_one_line_def_stays_one_when_it_fits(tmp_path):
 ])
 def test_a_one_line_def_and_its_body_form_meet_at_the_width(tmp_path, source_form, prefix, size, one_line):
     # `def f() -> String = "..."` is 22 characters plus the text: 119, the width, for 97, and 120 for 98; `export `
-    # takes 7 more. The source form does not matter: only the width decides. A body keeps its `return` or its lack of
-    # one.
+    # takes 7 more. The source form does not matter: only the width decides, and a body gives its value without
+    # `return`.
     value = "x" * size
     short = '%sdef f() -> String = "%s"\n' % (prefix, value)
     body = '%sdef f() -> String\n  return "%s"\nend\n' % (prefix, value)
@@ -484,9 +484,7 @@ def test_a_one_line_def_and_its_body_form_meet_at_the_width(tmp_path, source_for
     lay_out(tmp_path, {"short.agc": short if source_form == "one line" else body})
     before = fmt("--tree", "short.agc", cwd=tmp_path)
     assert fmt(cwd=tmp_path).code == 0
-    expected = short if one_line else body
-    if not one_line and source_form == "one line":
-        expected = '%sdef f() -> String\n  "%s"\nend\n' % (prefix, value)
+    expected = short if one_line else '%sdef f() -> String\n  "%s"\nend\n' % (prefix, value)
     assert text(tmp_path, "short.agc") == expected
     assert fmt("--check", cwd=tmp_path).stdout == ""
     assert fmt("--tree", "short.agc", cwd=tmp_path).stdout == before.stdout
@@ -548,7 +546,8 @@ def test_consecutive_one_line_defs_keep_their_layout_and_a_long_one_gets_empty_l
 # over lines that the layout joins (arguments, a `.name` line, a `do` block that fits), and for `try`. It keeps its body
 # when a comment sits from its `def` line to its `end` line, when the value takes lines of its own (a pipe chain of two
 # or more `|>`, a `case`), when it does not fit, when the body is anything else (two statements, a guard, a bare
-# `return`), and for a Void function (`main` included). The empty lines are kept as found.
+# `return`), and for a Void function (`main` included). The empty lines are kept as found. A body that stays gives its
+# value without `return` (#1287), but for a `case` value and in a Void function.
 BODIES = """## Doubles a number.
 export def double(x: Int) -> Int
   return x * 2
@@ -643,16 +642,16 @@ def quadruple(x: Int) -> Int = x * 4
 # a note after
 
 def noted(x: Int) -> Int # on the def line
-  return x
+  x
 end
 
 def inside(x: Int) -> Int
   # inside
-  return x
+  x
 end
 
 def at_end(x: Int) -> Int
-  return x
+  x
 end # on the end line
 
 def spread(a: Int, b: Int) -> Int = add(a, b)
@@ -664,7 +663,7 @@ def doubled(xs: List[Int]) -> List[Int] = xs.map do |x| x * 2 end
 def summed(xs: List[Int]) -> Int = xs.sum
 
 def piped(xs: List[Int]) -> List[Int]
-  return (
+  (
     xs
     |> twice()
     |> twice()
@@ -673,7 +672,7 @@ end
 
 def two(x: Int) -> Int
   y = x + 1
-  return y
+  y
 end
 
 def guarded(x: Int) -> Int
@@ -688,7 +687,7 @@ def sign(x: Int) -> Int
 end
 
 def long_name(first_argument: Int, second_argument: Int) -> Int
-  return first_argument * second_argument + first_argument * 20000
+  first_argument * second_argument + first_argument * 20000
 end
 
 def say(text: String) -> Void
@@ -714,50 +713,82 @@ def test_a_def_whose_body_is_one_return_is_written_as_a_one_line_def(tmp_path):
     assert fmt("--tree", "bodies.agc", cwd=tmp_path).stdout == before.stdout
 
 
-# The last expression of a def gives its value (#1287). `fmt` writes back what the source wrote: a value with no
-# `return` stays so, in the body, in the branches of an `if` and in the arms of a `case`, and a `return` stays too; a
-# pipe chain with no `return` keeps its parentheses. The `implicit` mark is not in `--tree`, so the two forms of a def
-# are one tree.
-IMPLICIT = """def sign(x: Int) -> String
+# The last expression of a def gives its value (#1287), so `fmt` drops a `return` where the parser reads the bare value
+# as one: the last statement, and the last of each branch of a last `if` with `else` and of each arm of a last `case`,
+# at any depth. Comments stay where they were. A `return` stays for a guard, before the end, in an `if` without
+# `else`, in a block, for a `try` value (a last `try` is a statement), for a `case` value (a bare `case` is a statement),
+# when it has no value, and in a Void function. The `implicit` mark is not in `--tree`, so both forms are one tree.
+EXPLICIT = """def sign(x: Int) -> String
+  return "none" if x == 100
   if x > 0
-    "plus"
+    return "plus"
   elsif x < 0
     return "minus"
   else
+    # before
     case x
-      0 -> "zero"
-      _ -> "other"
+      0 -> return "zero"
+      _ ->
+        y = x
+        return "other #{y}" # on the line
     end
   end
 end
 
 def piped(xs: List[Int]) -> List[Int]
   ys = xs
-  (
+  return (
     ys
     |> twice()
     |> twice()
   )
 end
 
-def main() -> Void
-  puts(sign(1))
+def open_if(x: Int) -> Int
+  y = x
+  if x > 0
+    puts(y)
+    return 1
+  end
+end
+
+def kept(x: Int) -> Int
+  ys = [x].map do |v: Int| return v end
+  return case x
+    0 -> 0
+    _ -> ys[0]
+  end
+end
+
+def parsed(text: String) -> Result[Int]
+  n = try parse(text)
+  return try check(n)
+end
+
+def nothing() -> Int
+  x = 1
+  return
+end
+
+def say(text: String) -> Void
+  puts(text)
+  return
 end
 """
+IMPLICIT = (EXPLICIT.replace('    return "plus"', '    "plus"').replace('return "minus"', '"minus"')
+            .replace('-> return "zero"', '-> "zero"').replace('return "other', '"other')
+            .replace("  return (\n    ys", "  (\n    ys"))
 
 
-def test_a_last_expression_and_a_return_are_written_back_as_they_were(tmp_path):
-    lay_out(tmp_path, {"implicit.agc": IMPLICIT})
-    before = fmt("--tree", "implicit.agc", cwd=tmp_path)
+@pytest.mark.parametrize("source", [EXPLICIT, IMPLICIT], ids=["explicit", "implicit"])
+def test_a_last_return_is_written_as_the_value_it_gives(tmp_path, source):
+    lay_out(tmp_path, {"tail.agc": source})
+    before = fmt("--tree", "tail.agc", cwd=tmp_path)
     assert before.code == 0, before.stderr
     assert fmt(cwd=tmp_path).code == 0
-    assert text(tmp_path, "implicit.agc") == IMPLICIT
+    assert text(tmp_path, "tail.agc") == IMPLICIT
     assert fmt("--check", cwd=tmp_path).stdout == ""
-    explicit = IMPLICIT.replace('    "plus"', '    return "plus"').replace("  (\n    ys", "  return (\n    ys")
-    lay_out(tmp_path, {"implicit.agc": explicit})
-    assert fmt(cwd=tmp_path).code == 0
-    assert text(tmp_path, "implicit.agc") == explicit
-    assert fmt("--tree", "implicit.agc", cwd=tmp_path).stdout == before.stdout
+    assert fmt("--tree", "tail.agc", cwd=tmp_path).stdout == before.stdout
 
 
 # A one-line def whose value is a `try` and that does not fit is written with `return`: a `try` at the end of a body

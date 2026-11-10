@@ -434,7 +434,12 @@ end
 # A def with its body: also a one-line def that does not stay one (one_line_form).
 def function_doc(c: Context, node: Ast.FunctionDecl) -> Docs.Doc
   key = Comments.key_of("FunctionDecl", node.span)
-  items = statement_items(c, node.body).concat(dangling_items(c, key))
+  stmts = node.body
+  if node.result.name != "Void" or node.result.args.size != 0
+    stmts = tail_values(stmts)
+  end
+
+  items = statement_items(c, stmts).concat(dangling_items(c, key))
   return Docs.Doc.Concat([Docs.Doc.Group(signature_doc(c, node)), body(c, items), Docs.Doc.HardLine, text("end")])
 end
 
@@ -905,6 +910,46 @@ def guard_shaped?(c: Context, node: Ast.IfStmt) -> Bool
 
   last = last_line(c, node.span)
   return not (node.span.start.line..last).to_a.any? do |line: Int| c.noted.include?(line) end
+end
+
+# The body of a def whose result is not written `Void`, with each `return value` that the parser would read back
+# from the bare value (its tail_returns) marked implicit, so that statement_doc writes the value without `return`:
+# the last statement, and the last of each branch of a last `if` with `else` and of each arm of a last `case`, at any
+# depth. The mark keeps the node and its span, so its comments stay where they were. A `try` value keeps `return`
+# (statement_doc), and so does a `case` value: written bare, it would read back as a `case` statement.
+def tail_values(stmts: List[Ast.Stmt]) -> List[Ast.Stmt]
+  return stmts if stmts.size == 0
+
+  last = stmts.size - 1
+  return stmts.set(last, tail_value(stmts[last]))
+end
+
+def tail_value(stmt: Ast.Stmt) -> Ast.Stmt
+  case stmt
+    Ast.Stmt.Return(node) ->
+      case node.value
+        some(value) ->
+          case value
+            Ast.Expr.Case(_) -> return stmt
+            _ -> return Ast.Stmt.Return(node.with(implicit: true))
+          end
+
+        none -> return stmt
+      end
+
+    Ast.Stmt.If(node) ->
+      case node.else_body
+        some(body) ->
+          branches = node.branches.map do |branch: Ast.IfBranch| branch.with(body: tail_values(branch.body)) end
+          return Ast.Stmt.If(node.with(branches: branches, else_body: some(tail_values(body))))
+        none -> return stmt
+      end
+
+    Ast.Stmt.Case(node) ->
+      arms = node.arms.map do |arm: Ast.CaseArm| arm.with(body: tail_values(arm.body)) end
+      return Ast.Stmt.Case(node.with(arms: arms))
+    _ -> return stmt
+  end
 end
 
 # A `try` value: a one-line def can give it, but a `try` at the end of a body is a statement and gives no value (the

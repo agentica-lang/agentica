@@ -91,8 +91,10 @@ Change style only in code you touch. Restyle untouched code separately.
 - A function whose body is one value is a one-line def
   (`def double(n: Int) -> Int = n * 2`); `agentica fmt` writes it so when it
   fits and holds no comment.
-- Guard-return bad cases early, with a guard (`return error("empty") if
-  text.empty?`, `next if line == ""`). Nest `if`, `for`, `while` and `case` at
+- End a function with its value, not `return value`; `return` is for early
+  exits (`agentica fmt` drops a last `return`). Guard-return bad cases early,
+  with a guard (`return error("empty") if text.empty?`,
+  `next if line == ""`). Nest `if`, `for`, `while` and `case` at
   most three levels.
 - Return a struct/enum, not parallel lists, fixed-key maps or magic codes.
 - Use `for` for totals/results, collection methods for transforms. Blocks
