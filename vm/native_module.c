@@ -49,8 +49,13 @@
 #define STAGED_TAG 0x5354u
 /* The size of a block of a dirty call's arena; a bigger request gets a block of its own. */
 #define CHUNK_BYTES 65536
-/* How long a short call may take in the builds of AGC_LEAF_CHECK before they warn, once per function. */
+/* How long a short call may take (its CPU time where known, note_time) in the builds of AGC_LEAF_CHECK before they
+   warn, once per function. */
 #define SLOW_NS 1000000u
+/* A short call that took this long by the clock warns whatever its CPU time (note_time): it blocked or slept, which no
+   turn of other threads explains (those measured 4 to 16 ms on a loaded machine). A short call that blocks or sleeps
+   for less is not reported. */
+#define STALL_NS 100000000u
 
 /* The kinds of type a signature names; KINDS has the names and how many type arguments each takes of all but the last
    two, a struct and an enum of the program, which a signature names by the bare name of a type block. */
@@ -996,15 +1001,23 @@ static void run_module(void *arg) {
   call->result = call->fn->row->fn(call->env, (int)call->fn->arity, call->argv);
 }
 
-/* The time of one call of FN, NS: the profile's counts (one scheduler), and in the builds of AGC_LEAF_CHECK one warning
-   per short function that took over SLOW_NS, ten times the about 100 microseconds that a short call may take. Those
-   builds only test, so the line goes straight to the C stream. */
-static void note_time(agc_vm *vm, agc_native_fn *fn, uint64_t ns) {
+/* The time of one call of FN, NS (wall time): the profile's counts (one scheduler), and in the builds of
+   AGC_LEAF_CHECK one warning per short function that took over SLOW_NS, ten times the about 100 microseconds that a
+   short call may take. Where the thread's CPU time before the call is known (CPU_BEFORE; NULL for a dirty call or
+   where agc_thread_cpu_ns does not answer), a call under STALL_NS is judged by the CPU time it used: its wall time
+   also counts the turns of other threads and processes (a busy machine, a shared CI runner: a few ms per turn) and
+   the waits on a lock that another scheduler holds. So a call that blocks or sleeps under STALL_NS is not reported;
+   one that blocks for STALL_NS or more still warns. Those builds
+   only test, so the line goes straight to the C stream. */
+static void note_time(agc_vm *vm, agc_native_fn *fn, uint64_t ns, const uint64_t *cpu_before) {
   if (AGC_PROFILE_REPORTS(vm)) {
     fn->calls++;
     fn->ns += ns;
   }
-  if (AGC_LEAF_CHECK && !fn->dirty && ns > SLOW_NS && !atomic_exchange(&fn->warned, true))
+  if (!AGC_LEAF_CHECK || fn->dirty || ns <= SLOW_NS) return;
+  uint64_t cpu_ns;
+  if (ns < STALL_NS && cpu_before && agc_thread_cpu_ns(&cpu_ns)) ns = cpu_ns - *cpu_before;
+  if (ns > SLOW_NS && !atomic_exchange(&fn->warned, true))
     fprintf(stderr, "agentica: warning: the short native function %s took %" PRIu64 " us; declare it compute def\n",
             fn->row->name, ns / 1000u);
 }
@@ -1051,9 +1064,11 @@ agc_native_outcome agc_native_call(agc_vm *vm, agc_native_fn *fn, const agc_valu
   an_env env = {&API, vm, fn, held, holds, NULL, NULL, NULL};
   module_call made = {fn, &env, terms, {{0, 0}}};
   bool timed = AGC_PROFILE_REPORTS(vm) || AGC_LEAF_CHECK;
+  uint64_t cpu_ns = 0;
+  bool cpu_known = AGC_LEAF_CHECK && agc_thread_cpu_ns(&cpu_ns);
   uint64_t began = timed ? agc_trace_now() : 0;
   agc_ffi_refusing_callbacks(run_module, &made);
-  if (timed) note_time(vm, fn, agc_trace_now() - began);
+  if (timed) note_time(vm, fn, agc_trace_now() - began, cpu_known ? &cpu_ns : NULL);
   agc_native_outcome out = {value_of(made.result), env.code, env.message};
   if (!out.code) check_result(vm, fn, &out);
   return out;
@@ -1266,7 +1281,7 @@ void agc_native_dirty_run(agc_native_dirty *d) {
 
 agc_native_outcome agc_native_dirty_done(agc_vm *vm, agc_native_dirty *d, bool take) {
   agc_native_outcome out = {agc_void(), NULL, NULL};
-  if (d->ran) note_time(vm, d->fn, d->ns);
+  if (d->ran) note_time(vm, d->fn, d->ns, NULL);
   if (!take || d->code) {
     drop_staged(d);
     if (take) {
