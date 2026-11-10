@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import TARGET_OS, WINDOWS, cli, host_only, run, tool, vm_environment
+from tests.agentica_test import WINDOWS, cli, host_only, run, tool, vm_environment
 from tests.package_support import assert_at_key, dependency, git, lock_entry, remotes, ws  # noqa: F401
 from tests.test_vm_native import NATIVE_CALLS
 
@@ -158,6 +158,7 @@ def test_a_compiler_that_cannot_start_is_pkg_native_build_at_the_build_table(ws)
 
 
 SWITCHER_C = """#define _GNU_SOURCE
+#define _XOPEN_SOURCE 700
 #include "agentica_native.h"
 #include <stdlib.h>
 #include <ucontext.h>
@@ -243,7 +244,7 @@ end
 # heap of 1 MiB, so collections land while C is on its own stack: the program ends with every copy intact. With the
 # function called without an_blocking, the run dies of SIGSEGV.
 @NATIVE_CALLS
-@host_only(TARGET_OS != "linux", "the module switches stacks with ucontext, which only Linux builds without warnings")
+@host_only(WINDOWS, "the module switches stacks with ucontext, which Windows does not have")
 def test_a_short_call_that_switches_stacks_under_an_blocking_runs_beside_the_collector(ws):
     tool("cc")
     (ws.project / "native").mkdir()
