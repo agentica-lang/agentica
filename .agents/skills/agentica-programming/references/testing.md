@@ -67,7 +67,9 @@ for a test function with parameters, type parameters or another result;
   those; `Fn`, `Task`, handles, `TestCase` and two different types are
   `CHECK-TYPE-MISMATCH`. Maps compare in any key order and sets in any element
   order; Floats by IEEE 754 (NaN is not equal to itself); a `Json` as its
-  canonical text (sorted keys).
+  canonical text (sorted keys). A `Bytes` shows as `<Bytes N hex>` (the first
+  32 bytes); to read a mismatch as text, compare
+  `String.from_bytes(b).unwrap!` with a String.
 - `Test.ok?(r)` and `Test.error?(r)` check a Result's tag;
   `Test.assert(cond, message)` fails with `message`.
 - A failed assertion counts against its test even when its Result is
@@ -93,6 +95,9 @@ for a test function with parameters, type parameters or another result;
   spawn in a test. The next test still runs after a crash.
 - Each test's `Random` generator is seeded from the run's seed and the test's
   name, so values do not depend on the other tests.
+- Test the functional core in process: feed request bytes to the function the
+  server calls, pass the clock as an argument (no sleep), and compare laws to a
+  `Map` model. One smoke test of the real binary covers the I/O loop.
 
 ## Running tests
 
@@ -111,6 +116,9 @@ for a test function with parameters, type parameters or another result;
   (a file error with the same code). `System.exit`, a step limit or a timeout in
   a test ends the file's run: the rest is not executed. A front-end error in a
   test file is a file error; the other files still run.
+- A file runs with `--max-steps` 1,000,000 x (the tests it runs + 1), shared by
+  its tests (`RUNTIME-STEP-LIMIT` ends the file), so `--only` lowers it:
+  measure a heavy test with `Profile.steps`.
 - A passed test's output is dropped; a failed one shows the last 64 Ki
   characters. Stdout is limited to 1 MiB per test and stderr to 1 MiB for the
   whole file: past a limit the running test (or the file) fails with

@@ -104,3 +104,17 @@ an enum and `case`. Command: enum variants applied with `reduce`. Decorator: a
 function taking and returning an `Fn` (`def wrap(f: Fn[A, B]) -> Fn[A, B]`
 returns the block). Observer: a struct holding a `List[Fn[...]]`, called with
 `map`.
+
+Composition root: `main` builds the collaborators (tables, stores, the clock)
+and passes them in; a function never builds what it calls. Boundary: write the
+body as `Result[T]` with `try`, and convert once where the caller needs another
+type:
+
+```ruby
+def handler(call: Call) -> Reply
+  case body(call)
+    ok(reply) -> reply
+    error(message) -> fail(call, message)
+  end
+end
+```

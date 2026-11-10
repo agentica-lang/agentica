@@ -124,12 +124,13 @@ expressions and operators. Builtin methods and `to_s`: `builtins.md`.
   `RUNTIME-KEY-NOT-FOUND`, a bad list index `RUNTIME-INDEX-OUT-OF-RANGE`).
   Strings cannot be indexed (`CHECK-NOT-INDEXABLE`: use `s.at(i)`).
 - `&name` references a top-level function without capturing locals: `f: Fn[Int,
-  Int] = &double`, then `f.call(21)`. An `Fn` field of a struct is called by its
-  name: `store.put(a, b)` is `store.put.call(a, b)`. A block is also a function
-  value and captures locals. Function values go in containers, fields,
-  parameters and returns; signatures must match exactly. Bare function names are
-  not values. There are no standalone lambdas, equality or JSON encoding;
-  inspect prints `<Fn>`.
+  Int] = &double`, then `f.call(21)`. A builtin cannot be referenced with `&`
+  yet: wrap it, `def now_ms() -> Int = Time.now_ms()`. An `Fn` field of a
+  struct is called by its name: `store.put(a, b)` is `store.put.call(a, b)`. A
+  block is also a function value and captures locals. Function values go in
+  containers, fields, parameters and returns; signatures must match exactly.
+  Bare function names are not values. There are no standalone lambdas,
+  equality or JSON encoding; inspect prints `<Fn>`.
 
 Operators, from highest to lowest precedence:
 

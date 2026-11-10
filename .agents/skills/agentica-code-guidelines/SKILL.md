@@ -68,6 +68,8 @@ Change style only in code you touch. Restyle untouched code separately.
   `import {a, B} from "path"` for one or two frequent names. Constants read
   through the alias too (`Mod.LIMIT`); import one by name only when used
   often.
+- An import alias is the file's name in CamelCase: `import HashScan from
+  "hashes/scan"`.
 - Add a descriptive local type alias when a composite/qualified type recurs;
   don't alias a short, clear type.
 - The first `##` block, then a blank line, is the module doc. Document as
@@ -97,6 +99,8 @@ Change style only in code you touch. Restyle untouched code separately.
   `next if line == ""`). Nest `if`, `for`, `while` and `case` at
   most three levels.
 - Return a struct/enum, not parallel lists, fixed-key maps or magic codes.
+- A Bool argument that picks a behavior, or a String with a fixed set of
+  values, is an enum: `expire_ms(5, Unit.Seconds)`, not `expire_ms(5, true)`.
 - Use `for` for totals/results, collection methods for transforms. Blocks
   cannot assign outer variables (`CHECK-CAPTURED-ASSIGNMENT`). Rebind only
   loop state; a new meaning gets a new name.
@@ -143,6 +147,8 @@ Change style only in code you touch. Restyle untouched code separately.
   Don't swallow errors with `unwrap_or` unless the default is right; explain it.
 - Handle errors at the boundary (`main`, request handler) with `IO.warn`; an
   enum for caller-visible outcomes, `error(msg)` for human-readable failures.
+- A parser returns `Result[T]`, not a struct with a `valid` or `refused`
+  field.
 
 ## Strings and collections
 

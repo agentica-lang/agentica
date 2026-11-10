@@ -519,7 +519,7 @@ def main() -> Void
 end
 ```
 
-Write error text in lowercase, without a final period, and include the bad value (`error("port out of range: 70000")`). Handle errors at the edge of the program, such as `main` or a request handler:
+Write error text in lowercase, without a final period, and include the bad value (`error("port out of range: 70000")`). Handle errors at the edge of the program, such as `main` or a request handler. A parser returns a `Result[T]`, not a struct with a `valid` or `refused` field:
 
 ```agentica {mode="check"}
 # good
