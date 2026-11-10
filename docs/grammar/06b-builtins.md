@@ -289,8 +289,8 @@ flags is in [Command line](../../site/content/cli.md#options).
 
 Calls nest at most 10000 deep in each task; a deeper call is
 `RUNTIME-STACK-OVERFLOW` at the call. A tail call (`return f(...)` to a user
-function) replaces the caller's frame and does not count, so deep tail recursion
-runs. A call inside a larger expression, such as `return 1 + f(n - 1)`, and a
+function, or `f(...)` as the last expression that gives the function's value)
+replaces the caller's frame and does not count, so deep tail recursion runs. A call inside a larger expression, such as `return 1 + f(n - 1)`, and a
 call of a builtin are not tail calls.
 
 ### The bytecode cache

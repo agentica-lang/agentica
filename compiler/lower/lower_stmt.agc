@@ -176,8 +176,20 @@ def lower_return(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Return, saved: Int)
   case node.value
     some(value) ->
       # The last expression of a def whose result is an alias of Void (check_stmt.agc, implicit_return): a statement,
-      # after which the def ends with its Void return, as a def written `Void` does.
+      # after which the def ends with its Void return, as a def written `Void` does. A call of a Void function of the
+      # program is the tail call that `return g()` gives there: `fmt` writes that `return` as the bare call when it
+      # does not see the alias (one imported from another file), and the recursion must not grow the stack.
       if node.implicit and Types.is?(cx.types[node.id], "Void")
+        case tail_call(cx, value)
+          some(found) ->
+            if Types.is?(Lowering.type_of(cx, value), "Void")
+              out = try Expr.lower_call(cx, fx, found, -1, true, false, true)
+              return ok(out.fx.with(next: saved))
+            end
+
+          none -> fx = fx
+        end
+
         out = try Expr.lower_expression(cx, fx, value, -1, true, false)
         return ok(out.fx.with(next: saved))
       end

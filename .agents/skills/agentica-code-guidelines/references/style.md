@@ -18,7 +18,7 @@ def total(prices: List[Int]) -> Int
     sum += price
   end
 
-  return sum
+  sum
 end
 ```
 
@@ -31,7 +31,7 @@ export def total(prices: List[Int]) -> Int
     sum += price
   end
 
-  return sum
+  sum
 end
 ```
 
@@ -47,7 +47,7 @@ def total(xs: List[Int]) -> Int
     sum += x
   end
 
-  return sum
+  sum
 end
 ```
 
@@ -59,7 +59,7 @@ def total(xs: List[Int]) -> Int
     sum += x
   end
 
-  return sum
+  sum
 end
 
 def doubled(xs: List[Int]) -> List[Int] = xs.map do |x| x * 2 end
@@ -81,7 +81,7 @@ def shout(text: String) -> String = text.upcase
 def wrap(text: String, mark: String) -> String = "#{mark}#{text}#{mark}"
 
 def banner(text: String) -> String
-  return (
+  (
     text
     |> trim_all()
     |> shout()
@@ -99,11 +99,15 @@ def parse(text: String) -> Result[Int] = text.trim.to_i
 def check(n: Int) -> Result[Int]
   return error("negative: #{n}") if n < 0
 
-  return ok(n)
+  ok(n)
 end
 
 def load(text: String) -> Result[Int]
-  return text |> try parse() |> check()
+  (
+    text
+    |> try parse()
+    |> check()
+  )
 end
 ```
 
@@ -122,8 +126,8 @@ end
 
 def area(shape: Shape) -> Int
   case shape
-    Shape.Circle(r) -> return r * r * 3
-    _ -> return 0
+    Shape.Circle(r) -> r * r * 3
+    _ -> 0
   end
 end
 ```
@@ -137,8 +141,8 @@ end
 
 def area(shape: Shape) -> Int
   case shape
-    Shape.Circle(r) -> return r * r * 3
-    Shape.Dot -> return 0
+    Shape.Circle(r) -> r * r * 3
+    Shape.Dot -> 0
   end
 end
 ```
@@ -154,10 +158,10 @@ end
 
 def describe(r: Result[Reading]) -> String
   case r
-    ok(Reading.Value(n)) if n < 0 -> return "negative #{n}"
-    ok(Reading.Value(n)) -> return "value #{n}"
-    ok(_) -> return "missing"
-    error(message) -> return message
+    ok(Reading.Value(n)) if n < 0 -> "negative #{n}"
+    ok(Reading.Value(n)) -> "value #{n}"
+    ok(_) -> "missing"
+    error(message) -> message
   end
 end
 ```
@@ -175,6 +179,6 @@ def double_text(text: String) -> Int = text.to_i! * 2
 # good
 def double_text(text: String) -> Result[Int]
   n = try text.to_i
-  return ok(n * 2)
+  ok(n * 2)
 end
 ```

@@ -28,7 +28,7 @@ def area(
   shape: Shape,
   scale: Int, # after a parameter
 ) -> Int # after the result type
-  return scale
+  scale
 end
 
 def empty() -> Void

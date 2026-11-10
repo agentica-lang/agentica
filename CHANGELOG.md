@@ -50,6 +50,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   with a `Void` call is still `CHECK-MISSING-RETURN`, now at the call.
 - `agentica fmt` writes a one-line def too long for its line with its value as
   the last line of the body, without `return`.
+- `agentica fmt` drops the `return` of a function's last value (also in the
+  branches of a last `if` with `else` and the arms of a last `case`), so
+  `fmt --check` flags these `return`s in existing projects until they are
+  formatted.
 
 ## [0.28.0] - 2026-11-10
 

@@ -40,7 +40,7 @@ tail
 PROGRAM = '''import EAG from "std/eag"
 
 def render(title: String, names: List[String], n: Int, flag: Bool) -> String
-  return <<~EAG
+  <<~EAG
 %s  EAG
 end
 
@@ -162,7 +162,7 @@ PLAIN = ESCAPED.replace("<%@ escape &EAG.html_escape %>\n", "")
 def test_an_escape_directive_applies_to_output_tags_and_not_to_raw_tags(tmp_path):
     source = PROGRAM % indented(ESCAPED)
     source = source.replace("def main()", "def plain(title: String, names: List[String], n: Int, flag: Bool) -> String\n"
-                            "  return <<~EAG\n%s  EAG\nend\n\ndef main()" % indented(PLAIN))
+                            "  <<~EAG\n%s  EAG\nend\n\ndef main()" % indented(PLAIN))
     source = source.replace("  puts(render(\"U\", [], 0, false))\n", "  puts(plain(\"T&<\", [\"a<\", \"b\"], 2, true))\n")
     path = write(tmp_path, source)
     result = run(cli() + [str(path)], env=vm_environment())

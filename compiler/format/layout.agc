@@ -60,6 +60,8 @@ export struct Context
   noted: Set[Int]
   # The width of a line, which decides before the layout whether a one-line def stays one (one_line_form).
   width: Int
+  # The type aliases of the file whose target is Void (void_aliases): a def with such a result keeps its last `return`.
+  void_aliases: List[String] = []
 end
 
 ## An `extern` block, copied whole: its first and last lines and offsets, and the comments that the attachment gave
@@ -151,6 +153,7 @@ end
 
 ## The document of a file.
 export def program_doc(c: Context, program: Ast.Program) -> Docs.Doc
+  c = c.with(void_aliases: void_aliases(program.declarations))
   items: List[Item] = []
   if program.module_doc.some? and c.tokens.size > 0 and c.tokens[0].kind == "DOC"
     token = c.tokens[0]
@@ -321,7 +324,7 @@ end
 def one_line_body?(c: Context, node: Ast.FunctionDecl) -> Bool
   return false if node.native.some? or node.body.size != 1 or not written?(node.result.span)
 
-  return false if node.result.name == "Void" and node.result.args.size == 0
+  return false if void_result?(c, node.result)
 
   case node.body[0]
     Ast.Stmt.Return(stmt) -> return false if stmt.value.none?
@@ -431,7 +434,12 @@ end
 # A def with its body: also a one-line def that does not stay one (one_line_form).
 def function_doc(c: Context, node: Ast.FunctionDecl) -> Docs.Doc
   key = Comments.key_of("FunctionDecl", node.span)
-  items = statement_items(c, node.body).concat(dangling_items(c, key))
+  stmts = node.body
+  if not void_result?(c, node.result)
+    stmts = tail_values(stmts)
+  end
+
+  items = statement_items(c, stmts).concat(dangling_items(c, key))
   Docs.Doc.Concat([Docs.Doc.Group(signature_doc(c, node)), body(c, items), Docs.Doc.HardLine, text("end")])
 end
 
@@ -613,10 +621,74 @@ def statement_items(c: Context, stmts: List[Ast.Stmt]) -> List[Item]
       doc = Docs.Doc.Measure([doc])
     end
 
-    items = items.concat(node_items_of(c, key, span.start.line, last_line(c, span), doc, simple?(stmt)))
+    lines = grouped_lines(c, stmt, span)
+    items = items.concat(node_items_of(c, key, lines.start.line, lines.stop.line, doc, simple?(stmt)))
   end
 
   items
+end
+
+# The span of a statement from its first token to its last. The span of an implicit `return` is its value's, which
+# may start after the value does (a pipe chain has the span of its last call) and leaves out the parentheses around
+# it (`(` on a line of its own before a pipe chain), so both are added back: else the empty line before the value
+# would be lost on the next run.
+def grouped_lines(c: Context, stmt: Ast.Stmt, span: Source.Span) -> Source.Span
+  tight_span = tight(c, span)
+  case stmt
+    Ast.Stmt.Return(node) ->
+      return tight_span if not node.implicit
+
+      case node.value
+        some(value) ->
+          first = value_start(value)
+          if first.offset < tight_span.start.offset
+            tight_span = tight_span.with(start: first)
+          end
+
+        none -> return tight_span
+      end
+
+    _ -> return tight_span
+  end
+
+  before = token_index(c, tight_span.start.offset) - 1
+  after = token_index(c, tight_span.stop.offset)
+  start = tight_span.start
+  stop = tight_span.stop
+  while before >= 0 and after < c.tokens.size and c.tokens[before].kind == "left-paren"
+    break if c.tokens[after].kind != "right-paren"
+
+    start = c.tokens[before].span.start
+    stop = c.tokens[after].span.stop
+    before -= 1
+    after += 1
+  end
+
+  tight_span.with(start: start, stop: stop)
+end
+
+# Where an expression starts in the source: a piped call starts at the value piped into it, and a node whose span
+# starts at its first operand starts where that operand does.
+def value_start(expr: Ast.Expr) -> Source.Position
+  own = Ast.expr_span(expr).start
+  inner = own
+  case expr
+    Ast.Expr.Call(call) ->
+      if call.piped and call.args.size > 0
+        inner = value_start(call.args[0])
+      end
+
+    Ast.Expr.Try(node) -> inner = value_start(node.operand)
+    Ast.Expr.Binary(node) -> inner = value_start(node.left)
+    Ast.Expr.MethodCall(node) -> inner = value_start(node.target)
+    Ast.Expr.FieldAccess(node) -> inner = value_start(node.target)
+    Ast.Expr.Index(node) -> inner = value_start(node.target)
+    _ -> inner = own
+  end
+
+  return inner if inner.offset < own.offset
+
+  own
 end
 
 # A statement. `forced` says that it is an item of a body, where a pipe chain of two or more `|>` that is the whole
@@ -897,6 +969,81 @@ def guard_shaped?(c: Context, node: Ast.IfStmt) -> Bool
 
   last = last_line(c, node.span)
   not (node.span.start.line..last).to_a.any? do |line: Int| c.noted.include?(line) end
+end
+
+# The body of a def whose result is not written `Void`, with each `return value` that the parser would read back
+# from the bare value (its tail_returns) marked implicit, so that statement_doc writes the value without `return`:
+# the last statement, and the last of each branch of a last `if` with `else` and of each arm of a last `case`, at any
+# depth. The mark keeps the node and its span, so its comments stay where they were. A `try` value keeps `return`
+# (statement_doc), and so does a `case` value: written bare, it would read back as a `case` statement.
+def tail_values(stmts: List[Ast.Stmt]) -> List[Ast.Stmt]
+  return stmts if stmts.size == 0
+
+  last = stmts.size - 1
+  stmts.set(last, tail_value(stmts[last]))
+end
+
+def tail_value(stmt: Ast.Stmt) -> Ast.Stmt
+  case stmt
+    Ast.Stmt.Return(node) ->
+      case node.value
+        some(value) ->
+          case value
+            Ast.Expr.Case(_) -> stmt
+            _ -> Ast.Stmt.Return(node.with(implicit: true))
+          end
+
+        none -> stmt
+      end
+
+    Ast.Stmt.If(node) ->
+      case node.else_body
+        some(body) ->
+          branches = node.branches.map do |branch: Ast.IfBranch| branch.with(body: tail_values(branch.body)) end
+          Ast.Stmt.If(node.with(branches: branches, else_body: some(tail_values(body))))
+        none -> stmt
+      end
+
+    Ast.Stmt.Case(node) ->
+      arms = node.arms.map do |arm: Ast.CaseArm| arm.with(body: tail_values(arm.body)) end
+      Ast.Stmt.Case(node.with(arms: arms))
+    _ -> stmt
+  end
+end
+
+# The names of the type aliases of the file that stand for Void, directly or through another such alias. In a def
+# whose result is one, the checker reads the last expression as a statement, so `return 5` (a CHECK-TYPE-MISMATCH)
+# written as `5` would check: the def keeps its `return`. An alias imported from another file is not seen here.
+def void_aliases(decls: List[Ast.Decl]) -> List[String]
+  aliases = decls.flat_map do |decl: Ast.Decl| alias_of(decl) end
+  found = ["Void"]
+  grown = true
+  while grown
+    grown = false
+    for node in aliases
+      if not found.include?(node.name) and node.target.args.size == 0 and found.include?(node.target.name)
+        found = found.push(node.name)
+        grown = true
+      end
+    end
+  end
+
+  found.drop(1)
+end
+
+# A result written `Void`, or an alias of Void declared in the file, with type arguments or not (`type V[T] = Void`).
+def void_result?(c: Context, result: Ast.TypeRef) -> Bool
+  return result.args.size == 0 if result.name == "Void"
+
+  c.void_aliases.include?(result.name)
+end
+
+def alias_of(decl: Ast.Decl) -> List[Ast.TypeAliasDecl]
+  case decl
+    Ast.Decl.Export(node) -> alias_of(node.declaration)
+    Ast.Decl.TypeAlias(node) -> [node]
+    _ -> []
+  end
 end
 
 # A `try` value: a one-line def can give it, but a `try` at the end of a body is a statement and gives no value (the
