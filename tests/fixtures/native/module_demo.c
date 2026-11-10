@@ -199,6 +199,18 @@ static an_term nothing(an_env *env, int argc, const an_term *argv) {
   return an_void(env);
 }
 
+/* A short function that breaks the rule: it keeps the CPU busy for N ms (clock, the process's CPU time, so a turn
+   of other threads does not shorten it) and gives N. The builds of AGC_LEAF_CHECK warn about it. */
+static an_term spin(an_env *env, int argc, const an_term *argv) {
+  int64_t ms;
+  (void)argc;
+  if (!an_get_int(env, argv[0], &ms) || ms < 0 || ms > 1000) return an_badarg(env, 0);
+  clock_t start = clock();
+  while ((double)(clock() - start) * 1000.0 < (double)ms * CLOCKS_PER_SEC) {
+  }
+  return an_int(env, ms);
+}
+
 /* Module bugs that the VM reports: text that is not UTF-8, a Map key that is no key, a result of the wrong type. */
 static an_term bad_text(an_env *env, int argc, const an_term *argv) {
   (void)argc;
@@ -487,6 +499,7 @@ static const an_function functions[] = {
   {"copy", "(Bytes) -> Bytes", copy, AN_SHORT},
   {"empty", "() -> Bytes", empty, AN_SHORT},
   {"nothing", "() -> Void", nothing, AN_SHORT},
+  {"spin", "(Int) -> Int", spin, AN_SHORT},
   {"bad_text", "() -> String", bad_text, AN_SHORT},
   {"bad_key", "() -> Map[String, Int]", bad_key, AN_SHORT},
   {"lie", "() -> Int", lie, AN_SHORT},

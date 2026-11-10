@@ -2,9 +2,12 @@
  * The Linux and macOS side of the coarse clock (agc_coarse_clock_ms in core.h): Linux's CLOCK_MONOTONIC_COARSE, the
  * monotonic clock as of the last tick, read from the vDSO without touching the clock source, used where an exact read
  * is a system call, and the hook that makes libuv's loop clock that clock too (agc_uv_clock_getres). macOS has no
- * such clock. The Windows side is vm/clock_windows.c. Core layer.
+ * such clock. Both have the CPU clock of a thread (agc_thread_cpu_ns). The Windows side is vm/clock_windows.c. Core
+ * layer.
  */
 #ifndef _WIN32
+/* macOS declares CLOCK_THREAD_CPUTIME_ID only for _DARWIN_C_SOURCE under _POSIX_C_SOURCE. */
+#define _DARWIN_C_SOURCE
 #include "core.h"
 
 #include <errno.h>
@@ -115,4 +118,18 @@ bool agc_coarse_clock_ms(uint64_t *now_ms, uint64_t *tick_ms) {
 
 uint64_t agc_loop_clock_tick_ms(void) { return 0; }
 #endif
+
+/* CLOCK_THREAD_CPUTIME_ID, the scheduler's exact count of the thread's run time, not getrusage(RUSAGE_THREAD), whose
+   times Linux samples at the tick (whole ticks of 1 to 10 ms). */
+bool agc_thread_cpu_ns(uint64_t *ns) {
+#ifdef CLOCK_THREAD_CPUTIME_ID
+  struct timespec ts;
+  if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts) != 0) return false;
+  *ns = (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
+  return true;
+#else
+  (void)ns;
+  return false;
+#endif
+}
 #endif
