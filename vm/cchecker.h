@@ -1,5 +1,5 @@
 /* Copyright 2026 Johanderson Mogollon. Apache License 2.0 (cchecker's license), as the rest of the project (LICENSE).
- * A copy of include/cchecker.h of cchecker 0.4.0, the release that CCHECKER_VERSION of mk/vm-test.mk pins: to move to
+ * A copy of include/cchecker.h of cchecker 0.6.0, the release that CCHECKER_VERSION of mk/vm-test.mk pins: to move to
  * a new release, replace this file with the one of that release. Only the comments are split to fit vm/'s header rule.
  */
 /* Annotations for cchecker, the rule checker for C (https://github.com/agentica-lang/cchecker).
@@ -14,7 +14,8 @@
  *   CC_HOT                      the function never allocates and makes no system call
  *   CC_OWNS                     the place owns the memory its pointer points to: a local variable or a parameter
  *                               frees it or hands it on on every path; a function returns an owned pointer; a
- *                               store into a CC_OWNS field (or global) hands it on
+ *                               store into a CC_OWNS field (or global) hands it on; on a struct parameter passed
+ *                               by value, the function owns its CC_OWNS fields, and a caller hands them on
  *   CC_FREES                    on a parameter: the function frees what the caller passes there
  *   CC_OWNS_OUT                 on a parameter that points to a pointer (`char **out`): the function may hand an
  *                               owned pointer out to the caller through it (`*out = p`); the caller owns what the
