@@ -20,9 +20,7 @@ end
 ## once. The candidates of a refusal are named with the files as an answer names them.
 export def pick(name: String, matches: List[Symbol.Match], settings: Env.Settings) -> Picked
   distinct = once(matches)
-  if distinct.size == 1
-    return Picked.One(distinct[0])
-  end
+  return Picked.One(distinct[0]) if distinct.size == 1
 
   places = distinct.map do |found: Symbol.Match| place(settings, found) end
   help = Diag.Help.Hint("write FILE:LINE:COL of one of: #{places.join(", ")}")
@@ -34,9 +32,7 @@ end
 ## The refusal of `symbol` for `name`, with a note when the word ends in `.agc`: a file is not a name, and the position
 ## form takes `FILE:LINE:COL`.
 export def not_found(name: String, problem: Problems.Problem) -> Problems.Problem
-  if problem.code != "QUERY-NOT-FOUND" or !name.ends_with?(".agc")
-    return problem
-  end
+  return problem if problem.code != "QUERY-NOT-FOUND" or !name.ends_with?(".agc")
 
   note = "#{name} is a file; to ask about a place in it write #{name}:LINE:COL"
   case problem.help
@@ -64,9 +60,7 @@ end
 
 # `FILE:LINE:COL` of the name of the declaration; a builtin has no place, so its name stands for it.
 def place(settings: Env.Settings, found: Symbol.Match) -> String
-  if found.file == ""
-    return found.name
-  end
+  return found.name if found.file == ""
 
   start = found.name_span.start
   return "#{QueryFiles.display(settings, found.file, true)}:#{start.line}:#{start.column}"

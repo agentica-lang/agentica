@@ -11,9 +11,7 @@ import Unused from "check_unused"
 ## not lenient. The scope of every name is the function (or constant) that introduced it, which is why the state holds
 ## no name of another one.
 export def check(cx: State.Cx, st: State.St) -> Result[Bool]
-  if st.locals.size == 0 or cx.lenient.include?(cx.file)
-    return ok(true)
-  end
+  return ok(true) if st.locals.size == 0 or cx.lenient.include?(cx.file)
 
   first = -1
   for key in st.locals.keys
@@ -22,9 +20,7 @@ export def check(cx: State.Cx, st: State.St) -> Result[Bool]
     end
   end
 
-  if first < 0
-    return ok(true)
-  end
+  return ok(true) if first < 0
 
   local = st.locals[first]
   return error(
@@ -65,25 +61,17 @@ def variable_help(cx: State.Cx, st: State.St, key: Int, local: State.Local, keep
   end
 
   # Removing a name whose value holds a `try` would drop the error that the `try` returns to the caller.
-  if try?(local.value)
-    return "write #{text} as a statement, without the name, or #{keep}"
-  end
+  return "write #{text} as a statement, without the name, or #{keep}" if try?(local.value)
 
-  if has_try?(local.value)
-    return "discard it with _ = #{text} to keep its try, or #{keep}"
-  end
+  return "discard it with _ = #{text} to keep its try, or #{keep}" if has_try?(local.value)
 
   if T.is?(local.type, "Result") and local.value.some?
     return "#{Unused.handle_result_help(text, local.tryable)}, or #{keep}"
   end
 
-  if st.writes.include?(key)
-    return "it is only updated, never read; remove it, or #{keep}"
-  end
+  return "it is only updated, never read; remove it, or #{keep}" if st.writes.include?(key)
 
-  if call?(local.value)
-    return "remove it, keep the call as a statement if it has effects, or #{keep}"
-  end
+  return "remove it, keep the call as a statement if it has effects, or #{keep}" if call?(local.value)
 
   return "remove it, or #{keep}"
 end

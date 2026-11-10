@@ -42,9 +42,7 @@ end
 
 # A note the diagnostic does not have is left out of the object.
 def note(object: Json, key: String) -> Result[String]
-  if !has?(object, key)
-    return ok("")
-  end
+  return ok("") if !has?(object, key)
 
   return string(object, key)
 end

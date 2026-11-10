@@ -39,9 +39,7 @@ export def answer(
       case Position.locate(linked.modules[0].text, asked.line, asked.column)
         Position.Located.Outside(_) -> return typed
         Position.Located.At(offset) ->
-          if !in_failed?(linked, failed, offset)
-            return typed
-          end
+          return typed if !in_failed?(linked, failed, offset)
 
           return named(linked, checked, offset, typed)
       end
@@ -64,9 +62,7 @@ def in_failed?(linked: Linker.Linked, failed: List[String], offset: Int) -> Bool
   for declaration in linked.modules[0].declarations
     case declaration
       Ast.Decl.Function(node) ->
-        if At.holds?(node.span, offset) and failed.any? do |name: String| name == node.name end
-          return true
-        end
+        return true if At.holds?(node.span, offset) and failed.any? do |name: String| name == node.name end
 
       _ -> next
     end
@@ -117,9 +113,7 @@ def builtin_of(definition: Optional[Definitions.Definition], site: Sites.Site) -
     some(_) -> return none
     none ->
       entry = CatalogJson.public(site.target.name)
-      if entry.ok?
-        return some(entry.unwrap!)
-      end
+      return some(entry.unwrap!) if entry.ok?
 
       return none
   end

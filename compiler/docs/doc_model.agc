@@ -111,9 +111,7 @@ export def cleaned(doc: Optional[String]) -> Optional[String]
         last -= 1
       end
 
-      if first == last
-        return none
-      end
+      return none if first == last
 
       return some(lines.drop(first).take(last - first).join("\n"))
   end
@@ -127,9 +125,7 @@ export def summary(doc: Optional[String]) -> Optional[String]
     some(text) ->
       words: List[String] = []
       for line in text.split("\n")
-        if line.trim == ""
-          return some(words.join(" "))
-        end
+        return some(words.join(" ")) if line.trim == ""
 
         words = words.push(line.trim)
       end
@@ -157,9 +153,7 @@ end
 # its own in this file, so it takes the place of the name.
 def reexport_items(node: Ast.ReexportDecl, origins: Map[String, Item]) -> List[Item]
   found = origins.get(node.name)
-  if found.none?
-    return []
-  end
+  return [] if found.none?
 
   origin = found.unwrap!
   return [

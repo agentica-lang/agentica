@@ -42,9 +42,7 @@ end
 ## Runs `add`. `words` are the ones after the command: NAME URL, `--tag TAG` or `--ref COMMIT`, and `--subdir DIR`.
 export def add(settings: Env.Settings, style: String, words: List[String]) -> Reply.Answer
   asked = request_of(words)
-  if !asked.ok?
-    return Reply.Answer.Printed(Reply.failed(2, asked.message))
-  end
+  return Reply.Answer.Printed(Reply.failed(2, asked.message)) if !asked.ok?
 
   return CliProject.run(style, settings.workspace) do |dir: String| add_to(settings, dir, asked.unwrap!) end
 end
@@ -69,9 +67,7 @@ end
 # project is read, with the reason of the rule that the manifest applies. The commit is the whole id: git fetches no
 # abbreviation.
 def request_of(words: List[String]) -> Result[Request]
-  if words.size < 4 or words.size % 2 != 0
-    return error(Texts.usage_text())
-  end
+  return error(Texts.usage_text()) if words.size < 4 or words.size % 2 != 0
 
   options: Map[String, String] = {}
   for at in 1...(words.size / 2)
@@ -83,9 +79,7 @@ def request_of(words: List[String]) -> Result[Request]
     options = options.put(flag, words[at * 2 + 1])
   end
 
-  if options.has_key?("--tag") == options.has_key?("--ref")
-    return error(Texts.usage_text())
-  end
+  return error(Texts.usage_text()) if options.has_key?("--tag") == options.has_key?("--ref")
 
   tag = option_of(options, "--tag")
   ref = option_of(options, "--ref")
@@ -108,9 +102,7 @@ def request_of(words: List[String]) -> Result[Request]
     problem = GitSource.subdir_problem(subdir)
   end
 
-  if problem != ""
-    return error("agentica: #{problem}\n")
-  end
+  return error("agentica: #{problem}\n") if problem != ""
 
   source = GitSource.Source(git: words[1], subdir: subdir, tag: tag, ref: ref, path: "")
   return ok(Request(name: words[0], source: source))
@@ -118,9 +110,7 @@ end
 
 # The value of an option, "" when it was not given.
 def option_of(options: Map[String, String], flag: String) -> String
-  if options.has_key?(flag)
-    return options[flag]
-  end
+  return options[flag] if options.has_key?(flag)
 
   return ""
 end
@@ -158,9 +148,7 @@ end
 # The fetch takes a while, and the edit is of the text read before it: a manifest changed meanwhile is not overwritten.
 def unchanged(settings: Env.Settings, file: String, text: String) -> Result[Void]
   now = Reader.read_text(settings.workspace, Reader.Reading(file: file, code: "PKG-MANIFEST-INVALID"))
-  if now.ok? and now.unwrap! == text
-    return ok()
-  end
+  return ok() if now.ok? and now.unwrap! == text
 
   message = "#{file} changed while the packages were fetched"
   help = Failure.hint("nothing was written; run the command again")
@@ -171,9 +159,7 @@ end
 # as `dependencies = { ... }`, say) can make the edit fail to parse or land elsewhere, and nothing is saved then.
 def added_manifest(old: Manifest.Manifest, edited: String, request: Request) -> Result[Manifest.Manifest]
   parsed = Manifest.parse(old.file, edited)
-  if parsed.ok? and one_more?(old, parsed.unwrap!, request)
-    return ok(parsed.unwrap!)
-  end
+  return ok(parsed.unwrap!) if parsed.ok? and one_more?(old, parsed.unwrap!, request)
 
   message = "cannot add #{request.name} to #{old.file}"
   help = Failure.hint("write the line by hand: #{request.name} = { git = \"...\", tag = \"...\" } in [dependencies]")
@@ -182,9 +168,7 @@ end
 
 def one_more?(old: Manifest.Manifest, manifest: Manifest.Manifest, request: Request) -> Bool
   entry = Manifest.find(manifest, request.name)
-  if manifest.dependencies.size != old.dependencies.size + 1 or !entry.ok?
-    return false
-  end
+  return false if manifest.dependencies.size != old.dependencies.size + 1 or !entry.ok?
 
   return GitSource.same?(entry.unwrap!.source, request.source)
 end
@@ -225,9 +209,7 @@ def refresh_deps(settings: Env.Settings, found: Project.Found, packages: List[Lo
   old = found.lock.packages.map do |locked| locked.name end
   ordered = packages.sort_by do |locked| locked.name end
   done = PackageDeps.sync(settings, found.lock.file, deps, ordered, old)
-  if !done.ok?
-    return error(Failure.add_help(done.message, DEPS_PENDING))
-  end
+  return error(Failure.add_help(done.message, DEPS_PENDING)) if !done.ok?
 
   return ok()
 end

@@ -82,9 +82,7 @@ export def literal_value(value: Ast.Expr) -> Optional[Ir.Imm]
   case value
     Ast.Expr.Literal(node) -> return plain(node.value)
     Ast.Expr.Unary(node) ->
-      if node.op != "minus"
-        return none
-      end
+      return none if node.op != "minus"
 
       case node.operand
         Ast.Expr.Literal(inner) -> return negated(inner.value)
@@ -105,9 +103,7 @@ export def in_place(default: Ast.Expr, values: Map[String, Ast.Expr]) -> Ast.Exp
   case default
     Ast.Expr.ConstRef(node) ->
       found = values.get(node.name)
-      if found.some?
-        return respanned(found.unwrap!, node.span)
-      end
+      return respanned(found.unwrap!, node.span) if found.some?
 
       return default
 
@@ -172,9 +168,7 @@ def negated(value: Ast.LitValue) -> Optional[Ir.Imm]
     Ast.LitValue.Whole(number) -> return some(Ir.Imm.Int(0 - number))
     Ast.LitValue.Real(number) -> return some(Ir.Imm.Float(-number))
     Ast.LitValue.Huge(digits) ->
-      if digits == INT_MIN_DIGITS
-        return some(Ir.Imm.Int(INT_MIN))
-      end
+      return some(Ir.Imm.Int(INT_MIN)) if digits == INT_MIN_DIGITS
 
       return none
     _ -> return none

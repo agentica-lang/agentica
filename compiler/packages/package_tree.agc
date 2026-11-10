@@ -57,25 +57,17 @@ export def plan(listing: String) -> Plan
   total = 0
   folded: Map[String, String] = {}
   for record in listing.split(NUL)
-    if record == ""
-      next
-    end
+    next if record == ""
 
     line = parse(record)
-    if !line.ok?
-      return Plan.Refused(Fault(code: "PKG-FETCH", key: "git", message: line.message, help: ""))
-    end
+    return Plan.Refused(Fault(code: "PKG-FETCH", key: "git", message: line.message, help: "")) if !line.ok?
 
     found = line.unwrap!
     parts = found.path.split("/")
-    if skipped?(parts)
-      next
-    end
+    next if skipped?(parts)
 
     name = parts[parts.size - 1]
-    if !copied?(parts, name, found.mode)
-      next
-    end
+    next if !copied?(parts, name, found.mode)
 
     if LINK_MODES.include?(found.mode)
       message = "#{found.path} is a symbolic link or a submodule"
@@ -111,14 +103,10 @@ end
 # `MODE SP TYPE SP OID SP... SIZE TAB PATH`.
 def parse(record: String) -> Result[Line]
   tab = record.index_of("\t")
-  if tab.none?
-    return error("git ls-tree gave a line with no tab")
-  end
+  return error("git ls-tree gave a line with no tab") if tab.none?
 
   fields = record.slice(0, tab.unwrap!).split(" ").filter do |field: String| field != "" end
-  if fields.size != 4
-    return error("git ls-tree gave a line with #{fields.size} fields")
-  end
+  return error("git ls-tree gave a line with #{fields.size} fields") if fields.size != 4
 
   path = record.slice(tab.unwrap! + 1, record.length - tab.unwrap! - 1)
   # A gitlink has no size ("-"); it is refused by its mode before its size matters.
@@ -129,9 +117,7 @@ end
 # Whether the path is under a folder the hash leaves out.
 def skipped?(parts: List[String]) -> Bool
   for index in 0...(parts.size - 1)
-    if PackageHash.skipped_folder?(parts[index], index == 0)
-      return true
-    end
+    return true if PackageHash.skipped_folder?(parts[index], index == 0)
   end
 
   return false
@@ -157,9 +143,7 @@ end
 # normally let a tree hold `.` or `..`, but a fetch need not check objects: this is defence in depth.
 def safe?(parts: List[String]) -> Bool
   for part in parts
-    if part == "" or part == "." or part == ".." or part.contains?("\\") or part.contains?(":")
-      return false
-    end
+    return false if part == "" or part == "." or part == ".." or part.contains?("\\") or part.contains?(":")
   end
 
   return true

@@ -106,9 +106,7 @@ def walked_children(node: AstWalk.Node) -> List[AstWalk.Node]
           case access.target
             Ast.Expr.TypeName(_) ->
               # Type.codec reads the type at run time, so its name counts as a type used as a value.
-              if access.name == "codec"
-                return AstWalk.children(node)
-              end
+              return AstWalk.children(node) if access.name == "codec"
 
               return []
             _ -> return AstWalk.children(node)
@@ -131,10 +129,7 @@ def see_expr(found: Scan, expr: Ast.Expr, watched: Set[String]) -> Scan
       # Type.codec: its type, a Codec of the struct or enum, is recorded here, not at the type name, whose id the
       # linker made past the program's.
       case node.target
-        Ast.Expr.TypeName(_) ->
-          if node.name == "codec"
-            return found.with(type_ids: found.type_ids.push(node.id))
-          end
+        Ast.Expr.TypeName(_) -> return found.with(type_ids: found.type_ids.push(node.id)) if node.name == "codec"
 
         _ -> return found
       end
@@ -149,9 +144,7 @@ def see_expr(found: Scan, expr: Ast.Expr, watched: Set[String]) -> Scan
     Ast.Expr.BlockLit(node) -> return found.with(written: block_types(found.written, node, watched))
     Ast.Expr.Case(node) -> return found.with(written: arm_names(found.written, node.arms, watched))
     Ast.Expr.ListLit(node) ->
-      if node.elements.size > 0
-        return found.with(covered: found.covered.push(node.id))
-      end
+      return found.with(covered: found.covered.push(node.id)) if node.elements.size > 0
 
       return found
     _ -> return found
@@ -161,9 +154,7 @@ end
 # covered with the call added when it is some(x) or ok(x), whose type check_some and check_ok build around the type of
 # x. Both names are builtin constructors that nothing may redefine.
 def wrapping(covered: List[Int], node: Ast.Call) -> List[Int]
-  if (node.name == "some" or node.name == "ok") and node.args.size == 1
-    return covered.push(node.id)
-  end
+  return covered.push(node.id) if (node.name == "some" or node.name == "ok") and node.args.size == 1
 
   return covered
 end
@@ -177,9 +168,7 @@ def see_stmt(found: Scan, stmt: Ast.Stmt, watched: Set[String]) -> Scan
 end
 
 def named(written: List[String], name: String, watched: Set[String]) -> List[String]
-  if watched.include?(name)
-    return written.push(name)
-  end
+  return written.push(name) if watched.include?(name)
 
   return written
 end

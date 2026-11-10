@@ -268,17 +268,13 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
     Ast.Expr.Index(node) ->
       children = [expression(checked, node.target), expression(checked, node.index)]
       builtin = Builtins.index_builtin(types_at(checked, Ast.expr_id(node.target)))
-      if builtin != ""
-        return leaf("call", type, span).with(target: builtin, children: children)
-      end
+      return leaf("call", type, span).with(target: builtin, children: children) if builtin != ""
 
       return leaf("index", type, span).with(children: children)
     Ast.Expr.Try(node) -> return leaf("try", type, span).with(children: [expression(checked, node.operand)])
     Ast.Expr.Unary(node) ->
       operand = expression(checked, node.operand)
-      if node.op == "not"
-        return leaf("not", type, span).with(text: "!", children: [operand])
-      end
+      return leaf("not", type, span).with(text: "!", children: [operand]) if node.op == "not"
 
       # -9223372036854775808 only fits under its minus, so its digits have no type of their own: it is one literal.
       if operand.kind == "int" and operand.type.kind == "none"
@@ -287,9 +283,7 @@ def expression(checked: Checker.Checked, expr: Ast.Expr) -> Model.Node
 
       return leaf("neg", type, span).with(text: "-", children: [operand])
     Ast.Expr.Binary(node) ->
-      if node.op == "dot-dot" or node.op == "dot-dot-dot"
-        return other("range", span)
-      end
+      return other("range", span) if node.op == "dot-dot" or node.op == "dot-dot-dot"
 
       kind = "op"
       if node.op == "and" or node.op == "or"
@@ -378,9 +372,7 @@ end
 
 # The type the checker recorded for the node `id`, Unknown when it has none.
 def types_at(checked: Checker.Checked, id: Int) -> Types.Type
-  if id < 0 or id >= checked.types.size
-    return Types.Type.Unknown
-  end
+  return Types.Type.Unknown if id < 0 or id >= checked.types.size
 
   return checked.types[id]
 end
@@ -392,9 +384,7 @@ end
 # The type that the node `id` introduced at `at` (a parameter, a binding).
 def bound(checked: Checker.Checked, id: Int, at: Int) -> Model.TypeShape
   types = checked.bound.get(id, [])
-  if at >= types.size
-    return shape(Types.Type.Unknown)
-  end
+  return shape(Types.Type.Unknown) if at >= types.size
 
   return shape(types[at])
 end

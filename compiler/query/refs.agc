@@ -51,9 +51,7 @@ export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Positi
       here = Position.character(offset, asked.line, asked.column)
       case Locals.find(module, checked.bound, offset)
         some(found) ->
-          if found.local.kind == "discard"
-            return Diag.Outcome.Failed(Position.no_expression(asked, here))
-          end
+          return Diag.Outcome.Failed(Position.no_expression(asked, here)) if found.local.kind == "discard"
 
           return Diag.Outcome.Done(of_local(linked, checked, found.local))
         none -> return of_name(linked, checked, asked, offset, here)
@@ -168,9 +166,7 @@ end
 
 # The target that a match stands for: the linked name of the declaration, of its struct or its enum for a member.
 def target_of(modules: List[Linker.LinkedModule], found: Symbol.Match) -> Sites.Target
-  if found.kind == "builtin"
-    return Sites.named(found.name)
-  end
+  return Sites.named(found.name) if found.kind == "builtin"
 
   home = modules.filter do |module: Linker.LinkedModule| module.key == found.file end
   prefix = home[0].prefix
@@ -242,9 +238,7 @@ def function_at(module: Linker.LinkedModule, offset: Int) -> String
   for declaration in module.declarations
     case declaration
       Ast.Decl.Function(node) ->
-        if node.span.start.offset <= offset and offset < node.span.stop.offset
-          return T.display_name(node.name)
-        end
+        return T.display_name(node.name) if node.span.start.offset <= offset and offset < node.span.stop.offset
 
       _ -> next
     end

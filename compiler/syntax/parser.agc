@@ -334,9 +334,7 @@ def expect_statement_end(e: Base.Env, pos: Int, description: String) -> Result[I
     return error(unless_help(e, pos, "there is no unless: put the statement inside if not c ... end"))
   end
 
-  if e.depth > 0 and token.kind == "end"
-    return ok(pos)
-  end
+  return ok(pos) if e.depth > 0 and token.kind == "end"
 
   return Base.expect(e, pos, "NL", description, false)
 end
@@ -352,18 +350,14 @@ end
 
 # Only return, break and next take an `if` modifier (parse_statement_guard); no statement takes a `while` one.
 def modifier_help(keyword: String) -> String
-  if keyword == "if"
-    return "only return, break and next take an if modifier: put the statement inside if cond ... end"
-  end
+  return "only return, break and next take an if modifier: put the statement inside if cond ... end" if keyword == "if"
 
   return "there are no #{keyword} modifiers: put the statement inside #{keyword} cond ... end"
 end
 
 def expect_end(e: Base.Env, pos: Int) -> Result[Int]
   kind = e.tokens[pos].kind
-  if kind == "end"
-    return ok(pos + 1)
-  end
+  return ok(pos + 1) if kind == "end"
 
   if kind == "EOF"
     return error(Base.bail(e, pos, "PARSE-UNCLOSED-BLOCK", "unclosed block, expected \"end\"", Diag.Help.NoHelp))
@@ -405,9 +399,7 @@ def parse_expression(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   inner = try Base.enter(e, pos)
   left = try parse_climb(inner, pos, ids, 1)
   kind = e.tokens[left.pos].kind
-  if kind != "dot-dot" and kind != "dot-dot-dot"
-    return ok(left)
-  end
+  return ok(left) if kind != "dot-dot" and kind != "dot-dot-dot"
 
   right = try parse_climb(inner, left.pos + 1, left.ids, 1)
   after = e.tokens[right.pos].kind
@@ -457,17 +449,13 @@ end
 def piped_call(left: Ast.Expr, node: Ast.Expr) -> Optional[Ast.Expr]
   case node
     Ast.Expr.Call(call) ->
-      if call.piped or !call.parenthesized
-        return none
-      end
+      return none if call.piped or !call.parenthesized
 
       return some(pipe_node(call.id, call.name, List.concat([left], call.args), call.span))
     Ast.Expr.MethodCall(call) ->
       case call.target
         Ast.Expr.TypeName(type_name) ->
-          if type_name.name.split(".").size != 2
-            return none
-          end
+          return none if type_name.name.split(".").size != 2
 
           return some(pipe_node(call.id, "#{type_name.name}.#{call.name}", List.concat([left], call.args), call.span))
         _ -> return none
@@ -482,9 +470,7 @@ def pipe_node(id: Int, name: String, args: List[Ast.Expr], span: Source.Span) ->
 end
 
 def chained_message(level: Int) -> String
-  if level == 3
-    return "equality does not chain; combine two comparisons with \"and\""
-  end
+  return "equality does not chain; combine two comparisons with \"and\"" if level == 3
 
   return "comparison does not chain; write \"a < b and b < c\""
 end
@@ -509,9 +495,7 @@ def parse_climb(e: Base.Env, pos: Int, ids: Int, minimum: Int) -> Result[Base.Ex
   while true
     kind = e.tokens[cursor].kind
     level = LEVELS.get(kind, 0)
-    if level == 0 or level < minimum
-      return ok(Base.ExprAt(node: left, pos: cursor, ids: next_id))
-    end
+    return ok(Base.ExprAt(node: left, pos: cursor, ids: next_id)) if level == 0 or level < minimum
 
     operand_env = e
     if level != 3 and level != 4
@@ -612,9 +596,7 @@ def block_name_help(name: String) -> String
     return "there are no standalone lambdas: pass a block to a call (xs.map do |x| ... end) or use &name"
   end
 
-  if name == "loop"
-    return "there is no loop; use while true ... end, or a while condition"
-  end
+  return "there is no loop; use while true ... end, or a while condition" if name == "loop"
 
   return "to call a function, add parentheses: #{name}() do ... end; an if condition ends with a newline, not do"
 end
@@ -865,9 +847,7 @@ end
 
 def parse_expression_list(e: Base.Env, pos: Int, ids: Int, terminator: String) -> Result[Base.ExprsAt]
   nodes: List[Ast.Expr] = []
-  if e.tokens[pos].kind == terminator
-    return ok(Base.ExprsAt(nodes: nodes, pos: pos, ids: ids))
-  end
+  return ok(Base.ExprsAt(nodes: nodes, pos: pos, ids: ids)) if e.tokens[pos].kind == terminator
 
   inner = Base.with_blocks(e, true)
   cursor = pos
@@ -893,9 +873,7 @@ end
 
 def parse_named_arguments(e: Base.Env, pos: Int, ids: Int) -> Result[NamedArgsAt]
   nodes: List[Ast.NamedArg] = []
-  if e.tokens[pos].kind == "right-paren"
-    return ok(NamedArgsAt(nodes: nodes, pos: pos, ids: ids))
-  end
+  return ok(NamedArgsAt(nodes: nodes, pos: pos, ids: ids)) if e.tokens[pos].kind == "right-paren"
 
   cursor = pos
   next_id = ids
@@ -966,9 +944,7 @@ end
 # The position of the value after `name:` at pos; PARSE-UNEXPECTED-TOKEN with a help text for anything else.
 def expect_update_argument(e: Base.Env, pos: Int) -> Result[Int]
   named = Base.plain_name?(e.tokens[pos])
-  if named and Base.kind_at(e, pos + 1) == "colon"
-    return ok(pos + 2)
-  end
+  return ok(pos + 2) if named and Base.kind_at(e, pos + 1) == "colon"
 
   help = "name each field to change, as in value.with(age: 31)"
   if named
@@ -1363,9 +1339,7 @@ end
 # alias written in capitals; the linker decides the rest.
 def updates_constant?(e: Base.Env, name: Tokens.Token, dot: Int) -> Bool
   member = e.tokens[dot + 1]
-  if member.kind != "name" or member.lexeme != "with" or e.tokens[dot + 2].kind != "left-paren"
-    return false
-  end
+  return false if member.kind != "name" or member.lexeme != "with" or e.tokens[dot + 2].kind != "left-paren"
 
   return e.tokens[dot + 3].kind == "name" and e.tokens[dot + 4].kind == "colon" and Base.constant_name?(name.lexeme)
 end
@@ -1381,13 +1355,9 @@ def parse_construct(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   end
 
   if e.tokens[after].kind == "dot"
-    if updates_constant?(e, name, after)
-      return expr_at(bare, after, ids)
-    end
+    return expr_at(bare, after, ids) if updates_constant?(e, name, after)
 
-    if e.tokens[after + 1].kind == "type-name"
-      return parse_qualified_member(e, pos, ids)
-    end
+    return parse_qualified_member(e, pos, ids) if e.tokens[after + 1].kind == "type-name"
 
     return parse_module_call(e, pos, ids)
   end
@@ -1407,21 +1377,15 @@ end
 def parse_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   token = e.tokens[pos]
   kind = token.kind
-  if kind == "name"
-    return parse_name_primary(e, pos, ids)
-  end
+  return parse_name_primary(e, pos, ids) if kind == "name"
 
   if kind == "integer" or kind == "float" or kind == "string"
     return expr_at(literal_node(token, Base.literal_value(token), ids), pos + 1, ids)
   end
 
-  if kind == "regex"
-    return ok(Base.ExprAt(node: regex_node(token, ids), pos: pos + 1, ids: ids + 4))
-  end
+  return ok(Base.ExprAt(node: regex_node(token, ids), pos: pos + 1, ids: ids + 4)) if kind == "regex"
 
-  if kind == "eag"
-    return parse_eag(e, pos, ids)
-  end
+  return parse_eag(e, pos, ids) if kind == "eag"
 
   if kind == "left-paren"
     inner = try parse_expression(Base.with_blocks(e, true), pos + 1, ids)
@@ -1429,33 +1393,21 @@ def parse_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     return ok(Base.ExprAt(node: inner.node, pos: close, ids: inner.ids))
   end
 
-  if kind == "type-name"
-    return parse_construct(e, pos, ids)
-  end
+  return parse_construct(e, pos, ids) if kind == "type-name"
 
-  if kind == "interp-start"
-    return parse_interpolation(e, pos, ids)
-  end
+  return parse_interpolation(e, pos, ids) if kind == "interp-start"
 
   if kind == "true" or kind == "false"
     return expr_at(literal_node(token, Ast.LitValue.Flag(kind == "true"), ids), pos + 1, ids)
   end
 
-  if kind == "nil"
-    return expr_at(literal_node(token, Ast.LitValue.Nothing, ids), pos + 1, ids)
-  end
+  return expr_at(literal_node(token, Ast.LitValue.Nothing, ids), pos + 1, ids) if kind == "nil"
 
-  if kind == "ampersand"
-    return parse_function_ref(e, pos, ids)
-  end
+  return parse_function_ref(e, pos, ids) if kind == "ampersand"
 
-  if kind == "left-bracket"
-    return parse_list_literal(e, pos, ids)
-  end
+  return parse_list_literal(e, pos, ids) if kind == "left-bracket"
 
-  if kind == "left-brace"
-    return parse_map_literal(e, pos, ids)
-  end
+  return parse_map_literal(e, pos, ids) if kind == "left-brace"
 
   return error(
     Base.bail(
@@ -1512,9 +1464,7 @@ def primary_help(e: Base.Env, pos: Int) -> Diag.Help
     return Base.hint("a / after a name is division; a call needs parentheses to take a regex, as in puts(/x/)")
   end
 
-  if token.kind != "divide" and token.kind != "multiply"
-    return Diag.Help.NoHelp
-  end
+  return Diag.Help.NoHelp if token.kind != "divide" and token.kind != "multiply"
 
   before = ""
   if pos > 0 and adjacent?(e.tokens[pos - 1], token)
@@ -1532,9 +1482,7 @@ def primary_help(e: Base.Env, pos: Int) -> Diag.Help
     )
   end
 
-  if token.kind == "divide" and after == "divide"
-    return Base.hint("comments start with #, not //")
-  end
+  return Base.hint("comments start with #, not //") if token.kind == "divide" and after == "divide"
 
   if (token.kind == "divide" and after == "multiply") or (token.kind == "multiply" and before == "divide")
     return Base.hint("comments start with #, not /* */")
@@ -1592,21 +1540,13 @@ def parse_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
     )
   end
 
-  if kind == "if"
-    return parse_if(inner, pos, ids)
-  end
+  return parse_if(inner, pos, ids) if kind == "if"
 
-  if kind == "while"
-    return parse_while(inner, pos, ids)
-  end
+  return parse_while(inner, pos, ids) if kind == "while"
 
-  if kind == "for"
-    return parse_for(inner, pos, ids)
-  end
+  return parse_for(inner, pos, ids) if kind == "for"
 
-  if kind == "case"
-    return parse_case(inner, pos, ids)
-  end
+  return parse_case(inner, pos, ids) if kind == "case"
 
   return parse_simple_statement(inner, pos, ids)
 end
@@ -1782,9 +1722,7 @@ end
 def assignment_help(node: Ast.Expr) -> Diag.Help
   case node
     Ast.Expr.TypeName(found) ->
-      if Base.constant_name?(found.name)
-        return Base.hint("constants are set at the top level and never change")
-      end
+      return Base.hint("constants are set at the top level and never change") if Base.constant_name?(found.name)
 
       return Diag.Help.NoHelp
     _ -> return Diag.Help.NoHelp
@@ -1792,9 +1730,7 @@ def assignment_help(node: Ast.Expr) -> Diag.Help
 end
 
 def keyword_message(name: String) -> String
-  if name == "break" or name == "next"
-    return "\"#{name}\" stands alone on its line"
-  end
+  return "\"#{name}\" stands alone on its line" if name == "break" or name == "next"
 
   return "\"#{name}\" is not a keyword"
 end
@@ -1849,9 +1785,7 @@ def parse_expression_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.S
     end
 
     if !statement_end?(e, value.pos)
-      if foreign_keyword?(name)
-        return error(Base.unexpected_help(e, pos, keyword_message(name), keyword_help(name)))
-      end
+      return error(Base.unexpected_help(e, pos, keyword_message(name), keyword_help(name))) if foreign_keyword?(name)
 
       return error(
         Base.unexpected(
@@ -1875,9 +1809,7 @@ end
 # an expression.
 def parse_simple_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   token = e.tokens[pos]
-  if token.kind == "return"
-    return parse_return(e, pos, ids)
-  end
+  return parse_return(e, pos, ids) if token.kind == "return"
 
   if token.kind == "name"
     following = Base.kind_at(e, pos + 1)
@@ -1888,13 +1820,9 @@ def parse_simple_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtA
       return parse_loop_control(e, pos, ids)
     end
 
-    if following == "assign" or following == "colon"
-      return parse_binding(e, pos, ids)
-    end
+    return parse_binding(e, pos, ids) if following == "assign" or following == "colon"
 
-    if COMPOUND_OPERATORS.get(following, "") != ""
-      return parse_compound(e, pos, ids)
-    end
+    return parse_compound(e, pos, ids) if COMPOUND_OPERATORS.get(following, "") != ""
   end
 
   return parse_expression_statement(e, pos, ids)
@@ -2066,9 +1994,7 @@ def parse_case_body(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtsAt]
 end
 
 def parse_arm_body(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtsAt]
-  if e.tokens[pos].kind == "NL"
-    return parse_case_body(e, pos + 1, ids)
-  end
+  return parse_case_body(e, pos + 1, ids) if e.tokens[pos].kind == "NL"
 
   first = try parse_simple_statement(Base.with_depth(e, 0), pos, ids)
   rest = try parse_case_body(e, first.pos, first.ids)
@@ -2077,9 +2003,7 @@ end
 
 # The optional `if condition` between a pattern and ->. Its ids come after the pattern and before the body.
 def parse_guard(e: Base.Env, pos: Int, ids: Int) -> Result[GuardAt]
-  if e.tokens[pos].kind != "if"
-    return ok(GuardAt(node: none, pos: pos, ids: ids))
-  end
+  return ok(GuardAt(node: none, pos: pos, ids: ids)) if e.tokens[pos].kind != "if"
 
   condition = try parse_expression(e, pos + 1, ids)
   return ok(GuardAt(node: some(condition.node), pos: condition.pos, ids: condition.ids))
@@ -2100,9 +2024,7 @@ def parse_case_node(e: Base.Env, pos: Int, ids: Int) -> Result[CaseAt]
     cursor = Base.skip_newlines(e, cursor)
     kind = e.tokens[cursor].kind
     if kind == "end"
-      if arms.size == 0
-        return error(Base.unexpected(e, cursor, "case requires at least one arm"))
-      end
+      return error(Base.unexpected(e, cursor, "case requires at least one arm")) if arms.size == 0
 
       looping = false
     elsif kind == "EOF"
@@ -2144,9 +2066,7 @@ end
 # The value of an assignment or a return: a case, which gives a value here, or an expression. A case is not an
 # expression anywhere else, so parse_expression still refuses the word.
 def parse_value(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
-  if e.tokens[pos].kind != "case"
-    return parse_expression(e, pos, ids)
-  end
+  return parse_expression(e, pos, ids) if e.tokens[pos].kind != "case"
 
   parsed = try parse_case_node(e, pos, ids)
   return ok(Base.ExprAt(node: Ast.Expr.Case(parsed.node), pos: parsed.pos, ids: parsed.ids))
@@ -2441,9 +2361,7 @@ end
 def declares_types?(e: Base.Env, pos: Int) -> Bool
   at = pos
   while at < e.size and e.tokens[at].kind != "end"
-    if resource_start?(e, at) or callback_start?(e, at) or e.tokens[at].kind == "struct"
-      return true
-    end
+    return true if resource_start?(e, at) or callback_start?(e, at) or e.tokens[at].kind == "struct"
 
     at += 1
   end
@@ -2505,9 +2423,7 @@ def kept_free(decl: Ast.Decl) -> String
   case decl
     Ast.Decl.Resource(node) ->
       # The VM (vm/ffi.c) reads the & and passes the address of the pointer.
-      if node.by_ref
-        return "&#{node.free}"
-      end
+      return "&#{node.free}" if node.by_ref
 
       return node.free
     _ -> return ""
@@ -2557,13 +2473,9 @@ def parse_resource(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], block
 
   after_free = try expect_c_name(e, after_colon, "the C name of the free function or C.Function")
   free = e.tokens[after_colon].lexeme
-  if free.ends_with?("?") or free.ends_with?("!")
-    return error(c_name_failure(e, after_colon, free))
-  end
+  return error(c_name_failure(e, after_colon, free)) if free.ends_with?("?") or free.ends_with?("!")
 
-  if block.symbols.include?(free)
-    return error(free_failure(e, after_colon, free))
-  end
+  return error(free_failure(e, after_colon, free)) if block.symbols.include?(free)
 
   try one_free_word(e, after_free)
   stop = try expect_statement_end(e, after_free, "a newline after the resource")
@@ -2610,9 +2522,7 @@ end
 # The position after a C name at pos: a name (with a ? or ! left for the caller to reject) or a type-name, which is
 # only a name that starts with a capital letter.
 def expect_c_name(e: Base.Env, pos: Int, description: String) -> Result[Int]
-  if Base.kind_at(e, pos) == "type-name"
-    return ok(pos + 1)
-  end
+  return ok(pos + 1) if Base.kind_at(e, pos) == "type-name"
 
   return Base.expect(e, pos, "name", description, true)
 end
@@ -2822,9 +2732,7 @@ end
 
 # The code of a field of a C struct: of its C type, or the layout code of a struct of the block; "" for any other type.
 def struct_field_code(type: Ast.TypeRef, block: ExternBlock) -> String
-  if type.args.size > 0
-    return ""
-  end
+  return "" if type.args.size > 0
 
   return STRUCT_FIELD_CODES.get(type.name, block.structs.get(type.name, ""))
 end
@@ -2912,9 +2820,7 @@ def parse_extern_function(
 ) -> Result[ExternAt]
   after_name = try Base.expect(e, pos + 1, "name", "a function name", true)
   name = e.tokens[pos + 1].lexeme
-  if name.ends_with?("?") or name.ends_with?("!")
-    return error(c_name_failure(e, pos + 1, name))
-  end
+  return error(c_name_failure(e, pos + 1, name)) if name.ends_with?("?") or name.ends_with?("!")
 
   after_open = try Base.expect(e, after_name, "left-paren", "\"(\"", false)
   params = try parse_parameters(e, after_open, ids, true)
@@ -3041,9 +2947,7 @@ def parse_extern_function(
     else
       code = taken.code
       if code == "c" and (index > 0 or !callee)
-        if index != params.nodes.size - 1
-          return error(function_failure(param.type))
-        end
+        return error(function_failure(param.type)) if index != params.nodes.size - 1
 
         code = "e"
         free_params = free_params.push(param)
@@ -3173,9 +3077,7 @@ end
 # One member of an `extern module "NAME"` block at pos (after its doc and export): a resource or a [compute] def. A
 # callback or a struct is PARSE-EXTERN-MODULE at its first word: the types that cross are the program's own.
 def parse_module_member(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], block: ExternBlock) -> Result[DeclAt]
-  if resource_start?(e, pos)
-    return parse_module_resource(e, pos, ids, doc, block)
-  end
+  return parse_module_resource(e, pos, ids, doc, block) if resource_start?(e, pos)
 
   if callback_start?(e, pos) or e.tokens[pos].kind == "struct"
     return error(
@@ -3194,9 +3096,7 @@ def parse_module_member(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], 
     at += 1
   end
 
-  if e.tokens[at].kind != "def"
-    return error(Base.found(e, at, "def, compute def or end in an extern module block"))
-  end
+  return error(Base.found(e, at, "def, compute def or end in an extern module block")) if e.tokens[at].kind != "def"
 
   return parse_module_function(e, pos, at, ids, doc, block)
 end
@@ -3387,14 +3287,10 @@ end
 # `def thing_new(free: C.Function) -> Thing` calls thing_new by name; a call through a pointer that makes such a
 # resource takes two. (A def with out parameters has its free function last, so its first parameter is not it.)
 def callee?(params: ParamsAt, result: Ast.TypeRef, block: ExternBlock) -> Bool
-  if params.nodes.size == 0 or params.outs[0]
-    return false
-  end
+  return false if params.nodes.size == 0 or params.outs[0]
 
   first = params.nodes[0].type
-  if first.name != FUNCTION_TYPE or first.args.size > 0
-    return false
-  end
+  return false if first.name != FUNCTION_TYPE or first.args.size > 0
 
   return params.nodes.size > 1 or block.resources.get(result.name, "") != FUNCTION_TYPE
 end
@@ -3425,9 +3321,7 @@ def free_function(made: List[Ast.TypeRef], free_params: List[Ast.Param]) -> Resu
     )
   end
 
-  if made.size == 0 and free_params.size == 1
-    return error(function_failure(free_params[0].type))
-  end
+  return error(function_failure(free_params[0].type)) if made.size == 0 and free_params.size == 1
 
   return ok()
 end
@@ -3441,9 +3335,7 @@ def symbol_string(e: Base.Env, at: Int) -> Result[Int]
     stop = interpolation_end(e, at) + 1
   end
 
-  if kind == "string" and !Base.heredoc?(e.tokens[at]) and c_name?(Base.token_text(e.tokens[at]))
-    return ok(stop)
-  end
+  return ok(stop) if kind == "string" and !Base.heredoc?(e.tokens[at]) and c_name?(Base.token_text(e.tokens[at]))
 
   if kind != "string" and kind != "interp-start"
     return error(Base.found(e, at, "the C name of the function as a string"))
@@ -3461,9 +3353,7 @@ end
 
 # A C identifier: letters, digits and _, not starting with a digit. The VM reads the name up to a space.
 def c_name?(text: String) -> Bool
-  if text == "" or DIGITS.include?(text.slice(0, 1))
-    return false
-  end
+  return false if text == "" or DIGITS.include?(text.slice(0, 1))
 
   return text.split("").all? do |char: String| C_NAME_CHARS.include?(char) end
 end
@@ -3550,9 +3440,7 @@ end
 def other_side?(params: ParamsAt, index: Int) -> Bool
   at = 0
   while at < index
-    if params.nodes[at].name == params.nodes[index].name and params.outs[at] != params.outs[index]
-      return true
-    end
+    return true if params.nodes[at].name == params.nodes[index].name and params.outs[at] != params.outs[index]
 
     at += 1
   end
@@ -3574,9 +3462,7 @@ def record_name(name: String) -> String
   pieces = name.split("_").filter do |piece: String| piece != "" end
   words = pieces.map do |piece: String| piece.slice(0, 1).upcase + piece.slice(1, piece.size - 1) end
   joined = words.join("")
-  if joined == "" or !"ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains?(joined.slice(0, 1))
-    return ""
-  end
+  return "" if joined == "" or !"ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains?(joined.slice(0, 1))
 
   return joined
 end
@@ -3639,9 +3525,7 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
 end
 
 def optional_callback?(ref: Ast.TypeRef, block: ExternBlock) -> Bool
-  if ref.name != "Optional" or ref.args.size != 1
-    return false
-  end
+  return false if ref.name != "Optional" or ref.args.size != 1
 
   inner = ref.args[0]
   return inner.args.size == 0 and block.callbacks.include?(inner.name)
@@ -3711,13 +3595,9 @@ end
 
 def starts_member?(e: Base.Env, pos: Int, member: String) -> Bool
   kind = e.tokens[pos].kind
-  if member == "field"
-    return kind == "name"
-  end
+  return kind == "name" if member == "field"
 
-  if member == "variant"
-    return kind == "type-name"
-  end
+  return kind == "type-name" if member == "variant"
 
   if member == "extern"
     return (
@@ -3758,9 +3638,7 @@ def take_doc(e: Base.Env, pos: Int, member: String) -> Result[DocAt]
 end
 
 def documented(e: Base.Env, pos: Int, member: String) -> Result[DocAt]
-  if e.tokens[pos].kind == "DOC"
-    return take_doc(e, pos, member)
-  end
+  return take_doc(e, pos, member) if e.tokens[pos].kind == "DOC"
 
   return ok(DocAt(doc: none, pos: pos))
 end
@@ -3821,9 +3699,7 @@ end
 def parse_type_parameters(e: Base.Env, pos: Int) -> Result[TypeParametersAt]
   names: List[String] = []
   spans: List[Source.Span] = []
-  if e.tokens[pos].kind != "left-bracket"
-    return ok(TypeParametersAt(names: names, spans: spans, pos: pos))
-  end
+  return ok(TypeParametersAt(names: names, spans: spans, pos: pos)) if e.tokens[pos].kind != "left-bracket"
 
   cursor = try Base.expect(e, pos + 1, "type-name", "a type parameter", false)
   names = names.push(e.tokens[pos + 1].lexeme)
@@ -3862,9 +3738,7 @@ def parse_enum_decl(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> R
     end
   end
 
-  if variants.size == 0
-    return error(Base.unexpected(e, cursor, "an enum must declare at least one variant"))
-  end
+  return error(Base.unexpected(e, cursor, "an enum must declare at least one variant")) if variants.size == 0
 
   close = try expect_end(e, cursor)
   stop = try expect_statement_end(e, close, "a newline after end")
@@ -3908,21 +3782,13 @@ end
 def parse_exportable(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   kind = e.tokens[pos].kind
   absent: Optional[String] = none
-  if kind == "def"
-    return parse_function_decl(e, pos, ids, absent)
-  end
+  return parse_function_decl(e, pos, ids, absent) if kind == "def"
 
-  if kind == "struct"
-    return parse_struct_decl(e, pos, ids, absent)
-  end
+  return parse_struct_decl(e, pos, ids, absent) if kind == "struct"
 
-  if kind == "enum"
-    return parse_enum_decl(e, pos, ids, absent)
-  end
+  return parse_enum_decl(e, pos, ids, absent) if kind == "enum"
 
-  if kind == "name" and e.tokens[pos].lexeme == "type"
-    return parse_type_alias_decl(e, pos, ids, absent)
-  end
+  return parse_type_alias_decl(e, pos, ids, absent) if kind == "name" and e.tokens[pos].lexeme == "type"
 
   return error(Base.unexpected(e, pos, "export requires def, struct, enum, type, or a constant"))
 end
@@ -3969,9 +3835,7 @@ def constant_suggestion(text: String) -> String
   end
 
   snake = out.join("").upcase
-  if Base.constant_name?(snake)
-    return snake
-  end
+  return snake if Base.constant_name?(snake)
 
   return ""
 end
@@ -4038,13 +3902,9 @@ end
 
 def parse_declaration(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) -> Result[DeclAt]
   kind = e.tokens[pos].kind
-  if kind == "export" and constant_start?(e, pos + 1)
-    return parse_constant_decl(e, pos + 1, pos, ids, doc, true)
-  end
+  return parse_constant_decl(e, pos + 1, pos, ids, doc, true) if kind == "export" and constant_start?(e, pos + 1)
 
-  if constant_start?(e, pos)
-    return parse_constant_decl(e, pos, pos, ids, doc, false)
-  end
+  return parse_constant_decl(e, pos, pos, ids, doc, false) if constant_start?(e, pos)
 
   if kind == "export"
     parsed = try parse_exportable(e, pos + 1, ids)
@@ -4055,17 +3915,11 @@ def parse_declaration(e: Base.Env, pos: Int, ids: Int, doc: Optional[String]) ->
     return decl_at(node, parsed.pos, parsed.ids)
   end
 
-  if kind == "def"
-    return parse_function_decl(e, pos, ids, doc)
-  end
+  return parse_function_decl(e, pos, ids, doc) if kind == "def"
 
-  if kind == "struct"
-    return parse_struct_decl(e, pos, ids, doc)
-  end
+  return parse_struct_decl(e, pos, ids, doc) if kind == "struct"
 
-  if kind == "name" and e.tokens[pos].lexeme == "type"
-    return parse_type_alias_decl(e, pos, ids, doc)
-  end
+  return parse_type_alias_decl(e, pos, ids, doc) if kind == "name" and e.tokens[pos].lexeme == "type"
 
   return parse_enum_decl(e, pos, ids, doc)
 end
@@ -4118,9 +3972,7 @@ def interpolation_end(e: Base.Env, start: Int) -> Int
       depth += 1
     elsif kind == "interp-end"
       depth -= 1
-      if depth == 0
-        return at
-      end
+      return at if depth == 0
     end
 
     at += 1
@@ -4134,9 +3986,7 @@ def top_level_help(kind: String) -> String
     return "this end closes nothing: each def, if, while, for, case, struct, enum and do block needs exactly one end"
   end
 
-  if kind == "else" or kind == "elsif"
-    return "this else has no matching if"
-  end
+  return "this else has no matching if" if kind == "else" or kind == "elsif"
 
   return (
     "statements go inside a function: def main() -> Void ... end; " +
@@ -4156,9 +4006,7 @@ def parse_import(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   end
 
   message = "expected a module alias or \"{\", found #{Base.describe(e.tokens[pos + 1])}"
-  if kind == "string"
-    return error(Base.unexpected_help(e, pos + 1, message, "write import Alias from \"path\""))
-  end
+  return error(Base.unexpected_help(e, pos + 1, message, "write import Alias from \"path\"")) if kind == "string"
 
   return error(Base.unexpected(e, pos + 1, message))
 end
@@ -4219,14 +4067,10 @@ end
 
 # The position after the name token with this text (from, as). help is "" for none.
 def expect_word(e: Base.Env, at: Int, word: String, help: String) -> Result[Int]
-  if e.tokens[at].kind == "name" and e.tokens[at].lexeme == word
-    return ok(at + 1)
-  end
+  return ok(at + 1) if e.tokens[at].kind == "name" and e.tokens[at].lexeme == word
 
   message = "expected #{word}, found #{Base.describe(e.tokens[at])}"
-  if help == ""
-    return error(Base.unexpected(e, at, message))
-  end
+  return error(Base.unexpected(e, at, message)) if help == ""
 
   return error(Base.unexpected_help(e, at, message, help))
 end
@@ -4302,9 +4146,7 @@ end
 # A name or a type name; a name may end in ? or !, as a function does.
 def import_word(e: Base.Env, at: Int, description: String) -> Result[Int]
   kind = Base.kind_at(e, at)
-  if kind == "name" or kind == "type-name"
-    return ok(at + 1)
-  end
+  return ok(at + 1) if kind == "name" or kind == "type-name"
 
   return error(Base.found(e, at, description))
 end
@@ -4323,9 +4165,7 @@ end
 def parse_reexport(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   alias = e.tokens[pos + 1]
   kind = Base.kind_at(e, pos + 3)
-  if kind != "name" and kind != "type-name"
-    return error(Base.found(e, pos + 3, "a name to re-export"))
-  end
+  return error(Base.found(e, pos + 3, "a name to re-export")) if kind != "name" and kind != "type-name"
 
   member = e.tokens[pos + 3]
   stop = try Base.expect(e, pos + 4, "NL", "a newline after export", false)

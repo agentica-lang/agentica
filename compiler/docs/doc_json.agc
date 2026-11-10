@@ -94,9 +94,7 @@ end
 
 ## The text, or null when it is empty.
 export def text_json(text: String) -> Json
-  if text == ""
-    return JSON.null()
-  end
+  return JSON.null() if text == ""
 
   return JSON.from(text)
 end

@@ -42,9 +42,7 @@ end
 ## one lowercase letter followed by lowercase letters, digits, `_` and `-`, at most 64 characters.
 export def name_problem(name: String) -> String
   letters = name.split("")
-  if letters.size == 0 or letters.size > MAX_NAME
-    return "a package name has 1 to #{MAX_NAME} characters"
-  end
+  return "a package name has 1 to #{MAX_NAME} characters" if letters.size == 0 or letters.size > MAX_NAME
 
   if !NAME_FIRST.include?(letters[0]) or !letters.all? do |letter| NAME_REST.include?(letter) end
     return "a package name starts with a lowercase letter and holds only lowercase letters, digits, _ and -"
@@ -62,14 +60,10 @@ end
 ## Why text is not the git URL of a package, or "". It is `https://host/owner/repo` or `https://host/owner/repo.git`:
 ## https only, a lowercase host with no port and no user name, and exactly an owner and a repository.
 export def git_problem(url: String) -> String
-  if !url.starts_with?(HTTPS)
-    return "a git URL starts with #{HTTPS}"
-  end
+  return "a git URL starts with #{HTTPS}" if !url.starts_with?(HTTPS)
 
   parts = identity(url).slice(HTTPS.length, identity(url).length - HTTPS.length).split("/")
-  if parts.size != 3
-    return "a git URL is #{HTTPS}host/owner/repo"
-  end
+  return "a git URL is #{HTTPS}host/owner/repo" if parts.size != 3
 
   host = parts[0]
   if host == "" or host.starts_with?(".") or host.ends_with?(".") or host.contains?("..")
@@ -101,9 +95,7 @@ end
 ## it can be a part of a stored file name; it does not start with `.` or `-`. At most 128 characters.
 export def tag_problem(tag: String) -> String
   letters = tag.split("")
-  if letters.size == 0 or letters.size > MAX_TAG
-    return "a tag has 1 to #{MAX_TAG} characters"
-  end
+  return "a tag has 1 to #{MAX_TAG} characters" if letters.size == 0 or letters.size > MAX_TAG
 
   if letters[0] == "." or letters[0] == "-" or !letters.all? do |letter| TAG_CHARACTERS.include?(letter) end
     return "a tag holds letters, digits, . _ + and -, and does not start with . or -"
@@ -119,18 +111,12 @@ end
 ## characters: the cache folder `<commit>@<subdir>` is one path component, which a file system limits to 255 bytes, and
 ## a SHA-256 commit takes 64 of them.
 export def subdir_problem(subdir: String) -> String
-  if subdir.length == 0 or subdir.length > MAX_SUBDIR
-    return "a subdir has 1 to #{MAX_SUBDIR} characters"
-  end
+  return "a subdir has 1 to #{MAX_SUBDIR} characters" if subdir.length == 0 or subdir.length > MAX_SUBDIR
 
   for part in subdir.split("/")
-    if part == ""
-      return "a subdir is folder names joined by /, with no empty part, no leading / and no final /"
-    end
+    return "a subdir is folder names joined by /, with no empty part, no leading / and no final /" if part == ""
 
-    if part.starts_with?(".")
-      return "a subdir has no hidden folder and no . or .. part"
-    end
+    return "a subdir has no hidden folder and no . or .. part" if part.starts_with?(".")
 
     if !part.split("").all? do |letter| SEGMENT_CHARACTERS.include?(letter) end
       return "the folders of a subdir hold only letters, digits, . _ and -"
@@ -140,9 +126,7 @@ export def subdir_problem(subdir: String) -> String
       return "the folders of a subdir do not end in . and are not a Windows device name such as con"
     end
 
-    if part.upcase.downcase == "agc_libs"
-      return "a subdir has no agc_libs folder, which a package leaves out"
-    end
+    return "a subdir has no agc_libs folder, which a package leaves out" if part.upcase.downcase == "agc_libs"
   end
 
   return ""
@@ -187,9 +171,7 @@ end
 
 ## The URL without a final `.git`: two spellings of one repository have one identity.
 export def identity(url: String) -> String
-  if url.ends_with?(".git")
-    return url.slice(0, url.length - 4)
-  end
+  return url.slice(0, url.length - 4) if url.ends_with?(".git")
 
   return url
 end
@@ -203,9 +185,7 @@ end
 
 ## The pin as written: the tag, or the ref.
 export def pin(source: Source) -> String
-  if source.tag != ""
-    return source.tag
-  end
+  return source.tag if source.tag != ""
 
   return source.ref
 end
@@ -213,9 +193,7 @@ end
 ## The part of a stored file name after `@`: the tag, or the first 12 characters of the commit, so that two machines
 ## that pin one commit with different refs store the same name.
 export def version_label(source: Source, commit: String) -> String
-  if source.tag != ""
-    return source.tag
-  end
+  return source.tag if source.tag != ""
 
   return commit.slice(0, SHORT_COMMIT)
 end
@@ -228,18 +206,14 @@ end
 
 ## The source as the text of a message: the URL, the folder when there is one, and the pin.
 export def describe(source: Source) -> String
-  if source.path != ""
-    return "the path #{source.path}"
-  end
+  return "the path #{source.path}" if source.path != ""
 
   place = source.git
   if source.subdir != ""
     place = "#{source.git} (folder #{source.subdir})"
   end
 
-  if source.tag != ""
-    return "#{place} at tag #{source.tag}"
-  end
+  return "#{place} at tag #{source.tag}" if source.tag != ""
 
   return "#{place} at ref #{source.ref}"
 end

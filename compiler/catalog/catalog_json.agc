@@ -11,9 +11,7 @@ import {PRELUDE_ONLY, PUBLIC_NAMES} from "builtins"
 ## The public builtin called `name`, or an error: a name in a std-only module (`HttpWire.service`) or a prelude-only
 ## helper is not a public name, and neither is one that the catalog lacks.
 export def public(name: String) -> Result[Model.Builtin]
-  if Builtins.std_only_name?(name) or PRELUDE_ONLY.include?(name)
-    return error("not a public builtin")
-  end
+  return error("not a public builtin") if Builtins.std_only_name?(name) or PRELUDE_ONLY.include?(name)
 
   return Builtins.lookup(name).to_result("unknown builtin")
 end
@@ -30,9 +28,7 @@ end
 ## the checker's alias tables, so the caller passes it); a form has it as `ruby`, or null. `name` and `signature` stay
 ## the name of the builtin.
 export def builtin(entry: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> Json
-  if entry.alternatives.size == 0
-    return form_json(entry, ruby)
-  end
+  return form_json(entry, ruby) if entry.alternatives.size == 0
 
   forms = [entry].concat(entry.alternatives)
   return JSON.object({
@@ -69,9 +65,7 @@ def parameter_json(parameter: Model.Named) -> Json
 end
 
 def text_or_null(text: String) -> Json
-  if text == ""
-    return JSON.null()
-  end
+  return JSON.null() if text == ""
 
   return JSON.from(text)
 end

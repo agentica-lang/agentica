@@ -75,16 +75,12 @@ end
 
 def list_folder(path: String) -> Result[List[Workspace.Entry]]
   names = Dir.list(path, STAT_TIMEOUT_MS)
-  if !names.ok?
-    return error(names.message)
-  end
+  return error(names.message) if !names.ok?
 
   entries: List[Workspace.Entry] = []
   for name in names.unwrap!
     info = File.lstat(Paths.join(path, name), STAT_TIMEOUT_MS)
-    if !info.ok?
-      return error(info.message)
-    end
+    return error(info.message) if !info.ok?
 
     entries = entries.push(Workspace.Entry(name: name, kind: entry_kind(info.unwrap!.kind)))
   end
@@ -109,9 +105,7 @@ end
 # At most the first `limit` bytes of the file (no limit when it is negative), read in chunks of 256 KiB.
 def read_prefix(path: String, limit: Int) -> Result[Bytes]
   opened = File.open(path, "read", STAT_TIMEOUT_MS)
-  if !opened.ok?
-    return error(opened.message)
-  end
+  return error(opened.message) if !opened.ok?
 
   handle = opened.unwrap!
   parts: List[Bytes] = []
@@ -151,9 +145,7 @@ end
 
 def variable(name: String) -> String
   value = System.env(name)
-  if value.ok?
-    return value.unwrap!
-  end
+  return value.unwrap! if value.ok?
 
   return ""
 end

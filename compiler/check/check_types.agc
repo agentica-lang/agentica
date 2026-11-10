@@ -48,9 +48,7 @@ end
 ## of a Result or Task). The first problem is CHECK-VOID-TYPE, CHECK-MAP-KEY-TYPE, CHECK-SET-ELEMENT-TYPE or
 ## CHECK-UNKNOWN-TYPE.
 export def resolve_type(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) -> Result[ResolvedType]
-  if !contains_alias?(cx, ref)
-    return resolve_expanded(cx, st, ref, completion)
-  end
+  return resolve_expanded(cx, st, ref, completion) if !contains_alias?(cx, ref)
 
   expanded = try expand_alias(cx, st, ref, [], State.nesting_limit(), ref.span)
   return resolve_expanded(cx, st, expanded.ref, completion)
@@ -70,9 +68,7 @@ end
 ## parameter may be a Map key or a Set element here (as in the files of the prelude): it stands for any type, so the
 ## key rule is judged where the alias is used, on the expanded type.
 export def alias_scope(cx: State.Cx, decl: Ast.TypeAliasDecl) -> State.Cx
-  if decl.type_parameters.size == 0
-    return cx
-  end
+  return cx if decl.type_parameters.size == 0
 
   return cx.with(type_params: decl.type_parameters, prelude: true)
 end
@@ -151,9 +147,7 @@ export def encode_needs(cx: State.Cx, type: ResolvedType) -> Optional[List[Resol
     strings = strings.put(name, Types.Type.String)
   end
 
-  if !encodable?(cx, substitute(type, strings))
-    return none
-  end
+  return none if !encodable?(cx, substitute(type, strings))
 
   return some(variable_needs(type, []))
 end
@@ -201,9 +195,7 @@ end
 ## found with the need, unless it holds the same type already.
 export def add_need(found: List[ResolvedType], need: ResolvedType) -> List[ResolvedType]
   text = Types.to_text(need)
-  if found.any? do |known: ResolvedType| Types.to_text(known) == text end
-    return found
-  end
+  return found if found.any? do |known: ResolvedType| Types.to_text(known) == text end
 
   return found.push(need)
 end
@@ -221,9 +213,7 @@ end
 ## only where it is checked later: in the target of a generic alias (cx.prelude), whose uses are checked expanded. A
 ## generic enum checks its arguments only with data?, which accepts a variable, so a payload ATS[String, T] is refused.
 export def ats_value?(cx: State.Cx, type: ResolvedType) -> Bool
-  if Types.is?(type, "Nil") or !data?(cx, type)
-    return false
-  end
+  return false if Types.is?(type, "Nil") or !data?(cx, type)
 
   return cx.prelude or !has_variables?(type)
 end
@@ -295,9 +285,7 @@ end
 
 ## The names of the type variables written in the type, in order, with repeats.
 export def variable_names(type: ResolvedType) -> List[String]
-  if Types.is?(type, "Var")
-    return [Types.name(type)]
-  end
+  return [Types.name(type)] if Types.is?(type, "Var")
 
   names: List[String] = []
   for part in parts(type)
@@ -329,9 +317,7 @@ export def learn(
   substitutions: Map[String, ResolvedType],
 ) -> Map[String, ResolvedType]
   if Types.is?(template, "Var")
-    if substitutions.has_key?(Types.name(template)) or has_unknown?(actual)
-      return substitutions
-    end
+    return substitutions if substitutions.has_key?(Types.name(template)) or has_unknown?(actual)
 
     return substitutions.put(Types.name(template), actual)
   end
@@ -399,9 +385,7 @@ end
 export def fields_of(cx: State.Cx, type: ResolvedType) -> List[Model.Named]
   name = Types.name(type)
   parameters = cx.struct_params.get(name, [])
-  if parameters.size == 0 or parameters.size != Types.args(type).size
-    return cx.structs[name]
-  end
+  return cx.structs[name] if parameters.size == 0 or parameters.size != Types.args(type).size
 
   substitutions = bindings(parameters, Types.args(type))
   return cx.structs[name].map do |field: Model.Named| field.with(type: substitute(field.type, substitutions)) end
@@ -437,9 +421,7 @@ export def unify(
 end
 
 def contains_alias?(cx: State.Cx, ref: TypeRef) -> Bool
-  if !cx.type_params.any? do |item: String| item == ref.name end and cx.aliases.has_key?(ref.name)
-    return true
-  end
+  return true if !cx.type_params.any? do |item: String| item == ref.name end and cx.aliases.has_key?(ref.name)
 
   return ref.args.any? do |arg: TypeRef| contains_alias?(cx, arg) end
 end
@@ -561,9 +543,7 @@ end
 
 def alias_arity_text(name: String, decl: Ast.TypeAliasDecl, ref: TypeRef) -> String
   shown = Types.display_name(name)
-  if decl.type_parameters.size == 0
-    return "type alias #{shown} takes no type arguments"
-  end
+  return "type alias #{shown} takes no type arguments" if decl.type_parameters.size == 0
 
   return "type alias #{shown} #{expects_text(decl.type_parameters.size, ref.args.size)}"
 end
@@ -579,9 +559,7 @@ def replace_parameters(ref: TypeRef, parameters: List[String], args: List[TypeRe
   if ref.args.size == 0
     index = 0
     while index < parameters.size
-      if parameters[index] == ref.name
-        return args[index]
-      end
+      return args[index] if parameters[index] == ref.name
 
       index += 1
     end
@@ -650,9 +628,7 @@ def check_unused_arguments(
 end
 
 def uses_name?(ref: TypeRef, name: String) -> Bool
-  if ref.args.size == 0
-    return ref.name == name
-  end
+  return ref.name == name if ref.args.size == 0
 
   return ref.args.any? do |arg: TypeRef| uses_name?(arg, name) end
 end
@@ -689,9 +665,7 @@ end
 def resolve_expanded(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool) -> Result[ResolvedType]
   name = ref.name
   args = ref.args
-  if args.size == 0
-    return resolve_plain(cx, st, ref, completion)
-  end
+  return resolve_plain(cx, st, ref, completion) if args.size == 0
 
   if name == "Result" and args.size == 1
     return ok(Types.Type.Result(try resolve_expanded(cx, st, args[0], true)))
@@ -789,9 +763,7 @@ end
 def resolve_ats(cx: State.Cx, st: State.St, args: List[TypeRef]) -> Result[ResolvedType]
   map = try resolve_map(cx, st, args)
   value = Types.value(map)
-  if !ats_value?(cx, value)
-    return error(ats_value_failure(cx, st, value, args[1].span))
-  end
+  return error(ats_value_failure(cx, st, value, args[1].span)) if !ats_value?(cx, value)
 
   return ok(Types.Type.ATS(Types.key(map), value))
 end
@@ -911,9 +883,7 @@ def inside?(cx: State.Cx, type: ResolvedType, found: Fn[ResolvedType, Bool]) -> 
   while at < pending.size
     current = pending[at]
     at += 1
-    if found.call(current)
-      return true
-    end
+    return true if found.call(current)
 
     if Types.is?(current, "Map") or Types.is?(current, "ATS")
       pending = pending.push(Types.key(current)).push(Types.value(current))
@@ -951,9 +921,7 @@ def place_walk(
 ) -> Placed
   if json_field?(type)
     if !direct
-      if owner == ""
-        return Placed(place: kind, seen: seen)
-      end
+      return Placed(place: kind, seen: seen) if owner == ""
 
       return Placed(place: "#{kind} in #{owner}", seen: seen)
     end
@@ -972,24 +940,18 @@ def place_walk(
     # direct type here and placed by the fields below, which see it in the place of the parameter.
     for argument in Types.args(type)
       found = place_walk(cx, argument, json_field?(argument), "type argument", owner, seen)
-      if found.place != ""
-        return found
-      end
+      return found if found.place != ""
 
       seen = found.seen
     end
 
-    if seen.has_key?(key)
-      return Placed(place: "", seen: seen)
-    end
+    return Placed(place: "", seen: seen) if seen.has_key?(key)
 
     seen = seen.put(key, true)
     place = Types.display_name(Types.name(type))
     for field in place_fields(cx, type)
       found = place_walk(cx, field.type, true, "struct field", "#{place}.#{field.name}", seen)
-      if found.place != ""
-        return found
-      end
+      return found if found.place != ""
 
       seen = found.seen
     end
@@ -1006,18 +968,14 @@ end
 def place_enum(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Placed
   for argument in Types.args(type)
     found = place_walk(cx, argument, false, "type argument", "", seen)
-    if found.place != ""
-      return found
-    end
+    return found if found.place != ""
 
     seen = found.seen
   end
 
   name = Types.name(type)
   key = "Enum:#{name}"
-  if seen.has_key?(key)
-    return Placed(place: "", seen: seen)
-  end
+  return Placed(place: "", seen: seen) if seen.has_key?(key)
 
   seen = seen.put(key, true)
   definition = cx.enums[name]
@@ -1030,9 +988,7 @@ def place_enum(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Pla
     owner = "#{Types.display_name(name)}.#{variant.name}"
     for payload in variant.payload
       found = place_walk(cx, substitute(payload, stand), false, "payload", owner, seen)
-      if found.place != ""
-        return found
-      end
+      return found if found.place != ""
 
       seen = found.seen
     end
@@ -1051,9 +1007,7 @@ end
 # stand-ins of place_fields tell apart, so Box[Int] and Box[JsonField[Int]] are walked once each.
 def place_key(type: ResolvedType) -> String
   name = Types.name(type)
-  if Types.args(type).size == 0
-    return "Struct:#{name}"
-  end
+  return "Struct:#{name}" if Types.args(type).size == 0
 
   marks = ""
   for argument in Types.args(type)
@@ -1074,9 +1028,7 @@ end
 def place_fields(cx: State.Cx, type: ResolvedType) -> List[Model.Named]
   name = Types.name(type)
   parameters = cx.struct_params.get(name, [])
-  if parameters.size == 0 or parameters.size != Types.args(type).size
-    return cx.structs[name]
-  end
+  return cx.structs[name] if parameters.size == 0 or parameters.size != Types.args(type).size
 
   stand: Map[String, ResolvedType] = {}
   index = 0
@@ -1103,9 +1055,7 @@ end
 
 # The refused walk found, with why as its reason when no part deeper in it gave one.
 def refused_at(found: Walk, why: String) -> Walk
-  if found.why != ""
-    return found
-  end
+  return found if found.why != ""
 
   return found.with(why: why)
 end
@@ -1113,14 +1063,10 @@ end
 # refused_at for the field at index of the struct: the declaration of the field goes with the reason. A struct with no
 # site (a builtin record) gives the reason alone.
 def refused_in_field(cx: State.Cx, found: Walk, name: String, index: Int, why: String) -> Walk
-  if found.why != ""
-    return found
-  end
+  return found if found.why != ""
 
   sites = cx.field_sites.get(name)
-  if !sites.some? or index >= sites.unwrap!.spans.size
-    return found.with(why: why)
-  end
+  return found.with(why: why) if !sites.some? or index >= sites.unwrap!.spans.size
 
   site = sites.unwrap!
   return found.with(why: why, file: site.file, field: some(site.spans[index]))
@@ -1130,17 +1076,13 @@ def encode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Wa
   if primitive?(type) or Types.is?(type, "Json")
     return passed(seen)
   elsif json_field?(type) or Types.is?(type, "Optional")
-    if json_null_item?(type)
-      return refused(seen)
-    end
+    return refused(seen) if json_null_item?(type)
 
     return encode_walk(cx, json_item(type), seen)
   elsif Types.is?(type, "List")
     return encode_walk(cx, Types.item(type), seen)
   elsif Types.is?(type, "Map")
-    if !Types.is?(Types.key(type), "String")
-      return refused(seen)
-    end
+    return refused(seen) if !Types.is?(Types.key(type), "String")
 
     return encode_walk(cx, Types.value(type), seen)
   elsif Types.is?(type, "Struct")
@@ -1156,29 +1098,21 @@ def decode_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Wa
   if Types.is?(type, "Int") or Types.is?(type, "Float") or Types.is?(type, "Bool") or Types.is?(type, "String")
     return passed(seen)
   elsif json_field?(type) or Types.is?(type, "Optional")
-    if json_null_item?(type)
-      return refused(seen)
-    end
+    return refused(seen) if json_null_item?(type)
 
     return decode_walk(cx, json_item(type), seen)
   elsif Types.is?(type, "List")
     return decode_walk(cx, Types.item(type), seen)
   elsif Types.is?(type, "Map")
-    if !Types.is?(Types.key(type), "String")
-      return refused(seen)
-    end
+    return refused(seen) if !Types.is?(Types.key(type), "String")
 
     return decode_walk(cx, Types.value(type), seen)
   elsif Types.is?(type, "Struct")
-    if Types.args(type).size != 0
-      return refused(seen)
-    end
+    return refused(seen) if Types.args(type).size != 0
 
     return struct_walk(cx, type, seen, 1)
   elsif Types.is?(type, "Enum")
-    if Types.args(type).size != 0
-      return refused(seen)
-    end
+    return refused(seen) if Types.args(type).size != 0
 
     return enum_walk(cx, type, seen, 1)
   end
@@ -1191,23 +1125,17 @@ end
 # payload once for each key, with a stand-in for each parameter. A builtin enum other than JsonField, which the callers
 # handle, has no JSON form.
 def enum_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test: Int) -> Walk
-  if !user_enum?(cx, type)
-    return refused(seen)
-  end
+  return refused(seen) if !user_enum?(cx, type)
 
   for argument in Types.args(type)
     found = test_walk(cx, argument, seen, test)
-    if !found.passes
-      return found
-    end
+    return found if !found.passes
 
     seen = found.seen
   end
 
   key = "Enum:#{walk_key(type)}"
-  if seen.has_key?(key)
-    return passed(seen)
-  end
+  return passed(seen) if seen.has_key?(key)
 
   seen = seen.put(key, true)
   definition = cx.enums[Types.name(type)]
@@ -1215,9 +1143,7 @@ def enum_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test: I
   for variant in definition.variants
     for payload in variant.payload
       found = test_walk(cx, substitute(payload, stand), seen, test)
-      if !found.passes
-        return found
-      end
+      return found if !found.passes
 
       seen = found.seen
     end
@@ -1228,9 +1154,7 @@ end
 
 # T of a JsonField[T] or an Optional[T].
 def json_item(type: ResolvedType) -> ResolvedType
-  if json_field?(type)
-    return Types.args(type)[0]
-  end
+  return Types.args(type)[0] if json_field?(type)
 
   return Types.item(type)
 end
@@ -1261,17 +1185,13 @@ def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equal: 
     return data_walk(cx, Types.item(type), seen, equal)
   elsif Types.is?(type, "Map")
     key = data_walk(cx, Types.key(type), seen, equal)
-    if !key.passes
-      return key
-    end
+    return key if !key.passes
 
     return data_walk(cx, Types.value(type), key.seen, equal)
   elsif Types.is?(type, "Set")
     return passed(seen)
   elsif Types.is?(type, "Result")
-    if Types.is?(Types.item(type), "Void")
-      return passed(seen)
-    end
+    return passed(seen) if Types.is?(Types.item(type), "Void")
 
     return data_walk(cx, Types.item(type), seen, equal)
   elsif Types.is?(type, "Optional")
@@ -1297,25 +1217,19 @@ def struct_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test:
   if test == 0
     for argument in Types.args(type)
       found = encode_walk(cx, argument, seen)
-      if !found.passes
-        return found
-      end
+      return found if !found.passes
 
       seen = found.seen
     end
   end
 
   key = walk_key(type)
-  if seen.has_key?(key)
-    return passed(seen)
-  end
+  return passed(seen) if seen.has_key?(key)
 
   seen = seen.put(key, true)
   for field in stand_in_fields(cx, type)
     found = test_walk(cx, field.type, seen, test)
-    if !found.passes
-      return found
-    end
+    return found if !found.passes
 
     seen = found.seen
   end
@@ -1325,9 +1239,7 @@ end
 
 # encode_walk for test 0, decode_walk for test 1.
 def test_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], test: Int) -> Walk
-  if test == 0
-    return encode_walk(cx, type, seen)
-  end
+  return encode_walk(cx, type, seen) if test == 0
 
   return decode_walk(cx, type, seen)
 end
@@ -1336,9 +1248,7 @@ end
 # (stand_ins) tell apart, so the walks of W[Int] and W[Nil] do not stop one another.
 def walk_key(type: ResolvedType) -> String
   name = Types.name(type)
-  if Types.args(type).size == 0
-    return name
-  end
+  return name if Types.args(type).size == 0
 
   marks = ""
   for argument in Types.args(type)
@@ -1361,17 +1271,13 @@ def nominal_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equa
     builtin_void = Types.is?(argument, "Void") and ENUMS.has_key?(name)
     if !builtin_void
       found = data_walk(cx, argument, seen, equal)
-      if !found.passes
-        return found
-      end
+      return found if !found.passes
 
       seen = found.seen
     end
   end
 
-  if seen.has_key?(key)
-    return passed(seen)
-  end
+  return passed(seen) if seen.has_key?(key)
 
   seen = seen.put(key, true)
   place = Types.display_name(name)
@@ -1398,9 +1304,7 @@ def nominal_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equa
   for variant in definition.variants
     for payload in variant.payload
       found = data_walk(cx, substitute(payload, stand), seen, equal)
-      if !found.passes
-        return refused_at(found, "variant #{place}.#{variant.name} holds #{Types.to_text(payload)}")
-      end
+      return refused_at(found, "variant #{place}.#{variant.name} holds #{Types.to_text(payload)}") if !found.passes
 
       seen = found.seen
     end
@@ -1416,9 +1320,7 @@ end
 def stand_in_fields(cx: State.Cx, type: ResolvedType) -> List[Model.Named]
   name = Types.name(type)
   parameters = cx.struct_params.get(name, [])
-  if parameters.size == 0 or parameters.size != Types.args(type).size
-    return cx.structs[name]
-  end
+  return cx.structs[name] if parameters.size == 0 or parameters.size != Types.args(type).size
 
   stand = stand_ins(parameters, Types.args(type))
   return cx.structs[name].map do |field: Model.Named| field.with(type: substitute(field.type, stand)) end
@@ -1444,9 +1346,7 @@ end
 
 def substitution(type: ResolvedType, name: String, substitutions: Map[String, ResolvedType]) -> ResolvedType
   found = substitutions.get(name)
-  if found.some?
-    return found.unwrap!
-  end
+  return found.unwrap! if found.some?
 
   return type
 end
@@ -1520,9 +1420,7 @@ def binding_span(
   names = Set.new(variable_names(need))
   index = 0
   while index < templates.size and index < spans.size
-    if variable_names(templates[index]).any? do |name: String| names.include?(name) end
-      return spans[index]
-    end
+    return spans[index] if variable_names(templates[index]).any? do |name: String| names.include?(name) end
 
     index += 1
   end
@@ -1535,9 +1433,7 @@ def variable_needs(type: ResolvedType, found: List[ResolvedType]) -> List[Resolv
   if Types.is?(type, "Var")
     return add_need(found, type)
   elsif Types.is?(type, "Optional") or json_field?(type)
-    if Types.is?(json_item(type), "Var")
-      return add_need(found, type)
-    end
+    return add_need(found, type) if Types.is?(json_item(type), "Var")
 
     return variable_needs(json_item(type), found)
   elsif Types.is?(type, "List")

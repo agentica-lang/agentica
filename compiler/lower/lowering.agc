@@ -71,9 +71,7 @@ end
 ## Lowers a linked program that the checker accepted.
 export def lower(linked: Linker.Linked, checked: Checker.Checked) -> Lowered
   result = run(linked, checked)
-  if result.ok?
-    return Lowered.Done(result.unwrap!)
-  end
+  return Lowered.Done(result.unwrap!) if result.ok?
 
   return Lowered.Failed(Failure.unpack(result.message))
 end
@@ -265,9 +263,7 @@ end
 
 # A file of the prelude is only a name in the program: no text, so no program can show its lines.
 def source_of(module: Linker.LinkedModule) -> Ir.SourceFile
-  if module.file.starts_with?(PRELUDE_PREFIX)
-    return Ir.SourceFile(file: module.file, name: module.name, text: "")
-  end
+  return Ir.SourceFile(file: module.file, name: module.name, text: "") if module.file.starts_with?(PRELUDE_PREFIX)
 
   return Ir.SourceFile(file: module.file, name: module.name, text: module.text)
 end
@@ -552,9 +548,7 @@ def names_in_all(types: List[Types.Type], watched: Set[String], found: Set[Strin
 end
 
 def only(name: String, watched: Set[String], found: Set[String]) -> Set[String]
-  if watched.include?(name) and !found.include?(name)
-    return found.add(name)
-  end
+  return found.add(name) if watched.include?(name) and !found.include?(name)
 
   return found
 end

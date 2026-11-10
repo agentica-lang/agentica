@@ -51,9 +51,7 @@ end
 ## the programs it compiles are written for, and its provider of the `std/` sources (the files of a folder, or the
 ## binary).
 export def run(options: Opts.Options, settings: Env.Settings) -> Report.Ending
-  if options.steps.size > 1
-    return Report.usage("one --steps program; import the other files from it", options)
-  end
+  return Report.usage("one --steps program; import the other files from it", options) if options.steps.size > 1
 
   found = File.stat(options.vm, IO_TIMEOUT)
   if !found.ok? or found.unwrap!.kind != "file"
@@ -62,14 +60,10 @@ export def run(options: Opts.Options, settings: Env.Settings) -> Report.Ending
   end
 
   temporary = RunDir.temporary_directory()
-  if !temporary.ok?
-    return Report.infrastructure(temporary.message, RunDir.temporary_candidates()[0], options)
-  end
+  return Report.infrastructure(temporary.message, RunDir.temporary_candidates()[0], options) if !temporary.ok?
 
   claimed = RunDir.claim(temporary.unwrap!)
-  if !claimed.ok?
-    return Report.infrastructure(claimed.message, temporary.unwrap!, options)
-  end
+  return Report.infrastructure(claimed.message, temporary.unwrap!, options) if !claimed.ok?
 
   run_directory = claimed.unwrap!
   RunDir.sweep(temporary.unwrap!, run_directory)
@@ -97,9 +91,7 @@ def inside(directory: String, options: Opts.Options, settings: Env.Settings, tem
     Pipeline.Compiled.Bytes(bytes) ->
       file = "#{directory}/runner.agcb"
       written = write_bytes(file, bytes)
-      if !written.ok?
-        return Report.infrastructure(written.message, temporary, options)
-      end
+      return Report.infrastructure(written.message, temporary, options) if !written.ok?
 
       return ended(prepare_and_run(directory, options, settings, Runner.Program.File(file)), options, temporary)
   end
@@ -107,9 +99,7 @@ end
 
 # The ending of a run, or the infrastructure error that stopped it.
 def ended(ran: Result[Report.Ending], options: Opts.Options, temporary: String) -> Report.Ending
-  if !ran.ok?
-    return Report.infrastructure(ran.message, temporary, options)
-  end
+  return Report.infrastructure(ran.message, temporary, options) if !ran.ok?
 
   return ran.unwrap!
 end
@@ -117,9 +107,7 @@ end
 def compile_runner(directory: String, settings: Env.Settings) -> Pipeline.Compiled
   source = "#{directory}/runner.agc"
   written = write_text(source, RUNNER_ROOT)
-  if !written.ok?
-    return Pipeline.Compiled.Rejected(Report.located(source, "RUNTIME-BDD-INFRA", written.message))
-  end
+  return Pipeline.Compiled.Rejected(Report.located(source, "RUNTIME-BDD-INFRA", written.message)) if !written.ok?
 
   return Compile.file(source, settings, "cannot read the runner", false)
 end
@@ -221,9 +209,7 @@ end
 # The nearest `steps.agc` for one path, or "" when there is none. A path that cannot be resolved has none.
 def steps_near(path: String, here: String) -> String
   resolved = Path.resolve(path)
-  if !resolved.ok?
-    return ""
-  end
+  return "" if !resolved.ok?
 
   folder = resolved.unwrap!
   info = File.stat(folder, IO_TIMEOUT)
@@ -240,14 +226,10 @@ def steps_near(path: String, here: String) -> String
   while folder != ""
     file = Paths.join(folder, DEFAULT_STEPS_FILE)
     found = File.stat(file, IO_TIMEOUT)
-    if found.ok? and found.unwrap!.kind == "file"
-      return file
-    end
+    return file if found.ok? and found.unwrap!.kind == "file"
 
     parent = Paths.directory_of(folder)
-    if !inside or folder == here or parent == folder
-      return ""
-    end
+    return "" if !inside or folder == here or parent == folder
 
     folder = parent
   end
@@ -266,9 +248,7 @@ def empty_path(given: List[String]) -> String
 end
 
 def empty_message(given: List[String]) -> String
-  if given.size == 0
-    return "no .feature or *_test.agc files found: neither specs/ nor test/ exists"
-  end
+  return "no .feature or *_test.agc files found: neither specs/ nor test/ exists" if given.size == 0
 
   return "no .feature or *_test.agc files found"
 end

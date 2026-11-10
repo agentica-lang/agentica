@@ -118,14 +118,10 @@ end
 
 # How many values an option takes, or -1 when it is not one.
 def values(word: String) -> Int
-  if word == "--steps"
-    return 1
-  end
+  return 1 if word == "--steps"
 
   found = ONCE.get(word)
-  if found.some?
-    return found.unwrap!
-  end
+  return found.unwrap! if found.some?
 
   return -1
 end
@@ -154,9 +150,7 @@ end
 
 def max_steps(options: Options, value: String) -> Applied
   digits = without_leading_zeros(value)
-  if !digits?(value) or digits == "0"
-    return Applied.Refused("--max-steps needs a positive integer")
-  end
+  return Applied.Refused("--max-steps needs a positive integer") if !digits?(value) or digits == "0"
 
   return Applied.Changed(options.with(max_steps: digits))
 end
@@ -180,41 +174,31 @@ def schedulers(options: Options, value: String) -> Applied
 end
 
 def jit(options: Options, value: String) -> Applied
-  if !JIT_MODES.include?(value)
-    return Applied.Refused("--jit needs off, on or always")
-  end
+  return Applied.Refused("--jit needs off, on or always") if !JIT_MODES.include?(value)
 
   return Applied.Changed(options.with(jit: value))
 end
 
 # The file that the run writes the LCOV of its lines to (vm/cover.c); the VM opens it, relative to the working folder.
 def coverage(options: Options, value: String) -> Applied
-  if value == ""
-    return Applied.Refused("--coverage needs a file name")
-  end
+  return Applied.Refused("--coverage needs a file name") if value == ""
 
   return Applied.Changed(options.with(coverage: value))
 end
 
 # The flag passes the text as it was typed (a leading zero stays).
 def flush_timeout(options: Options, value: String) -> Applied
-  if !digits?(value)
-    return Applied.Refused("--flush-timeout needs a non-negative integer")
-  end
+  return Applied.Refused("--flush-timeout needs a non-negative integer") if !digits?(value)
 
   return Applied.Changed(options.with(flush_timeout: value))
 end
 
 # Not empty, and only the digits 0 to 9.
 def digits?(text: String) -> Bool
-  if text.length == 0
-    return false
-  end
+  return false if text.length == 0
 
   for character in text.split("")
-    if !DIGITS.contains?(character)
-      return false
-    end
+    return false if !DIGITS.contains?(character)
   end
 
   return true

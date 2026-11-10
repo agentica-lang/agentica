@@ -145,9 +145,7 @@ def dispatch(session: Session) -> Int
     usable = rest.size == 3 and rest[1] == "-o" and !session.options.dump and !session.options.dump_ir
   end
 
-  if !usable
-    return emit(Reply.failed(2, Texts.usage_text()))
-  end
+  return emit(Reply.failed(2, Texts.usage_text())) if !usable
 
   return program(building(session, first), first, rest)
 end
@@ -205,9 +203,7 @@ end
 
 # `help`: the builtins from the catalog, or a module of `std/` as `doc` reads it.
 def help(session: Session, words: List[String]) -> Int
-  if HelpStd.asks?(words)
-    return answered(session, HelpStd.run(words, session.options.style, session.settings), "")
-  end
+  return answered(session, HelpStd.run(words, session.options.style, session.settings), "") if HelpStd.asks?(words)
 
   return emit(Help.help(words, session.options.style))
 end
@@ -219,9 +215,7 @@ end
 
 # `install`: it takes no word; the project is the one of the working folder.
 def install(session: Session, words: List[String]) -> Int
-  if words.size != 0
-    return emit(Reply.failed(2, Texts.usage_text()))
-  end
+  return emit(Reply.failed(2, Texts.usage_text())) if words.size != 0
 
   return answered(session, Install.run(session.settings, session.options.style), "")
 end
@@ -238,9 +232,7 @@ def answered(session: Session, answer: Reply.Answer, source: String) -> Int
         status = 2
       end
 
-      if source == ""
-        return reject(session, problem, problem.file, status)
-      end
+      return reject(session, problem, problem.file, status) if source == ""
 
       return reject(session, problem, source, status)
   end
@@ -261,9 +253,7 @@ def query(session: Session, verb: String, words: List[String]) -> Int
       case QueryFiles.pick(asked, usage)
         QueryFiles.Picked.Refused(problem) -> return answered(styled, Reply.Answer.Rejected(problem), "")
         QueryFiles.Picked.File(file) ->
-          if verb != "outline"
-            return position(styled, file, asked, usage)
-          end
+          return position(styled, file, asked, usage) if verb != "outline"
 
           if asked.stdin == ""
             return answered(styled, CliQuery.outline(file, asked.style, false, styled.settings), file)
@@ -283,9 +273,7 @@ def symbol(session: Session, words: List[String]) -> Int
     QueryOptions.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
     QueryOptions.Parsed.Ready(asked) ->
       styled = session.with(options: session.options.with(style: asked.style))
-      if asked.stdin == ""
-        return answered(styled, CliQuery.symbol(asked, styled.settings), "")
-      end
+      return answered(styled, CliQuery.symbol(asked, styled.settings), "") if asked.stdin == ""
 
       return with_buffer(styled, asked.stdin) do |buffered: Session|
         answered(buffered, CliQuery.symbol(asked, buffered.settings), asked.stdin)
@@ -331,9 +319,7 @@ def position(session: Session, word: String, options: QueryOptions.Query, usage:
   case QueryPosition.parse(word, usage)
     QueryPosition.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
     QueryPosition.Parsed.Ready(asked) ->
-      if options.stdin == ""
-        return answered(session, type_at(session, asked, options.partial), asked.file)
-      end
+      return answered(session, type_at(session, asked, options.partial), asked.file) if options.stdin == ""
 
       return with_buffer(session, asked.file) do |read: Session|
         answered(read, type_at(read, asked, options.partial), asked.file)
@@ -352,9 +338,7 @@ end
 # `--ai` may stand among the paths, as for the query commands; `--stdin` after a path would check the disk while the
 # caller means the buffer, so it is a usage error.
 def check(session: Session, words: List[String]) -> Int
-  if words.any? do |word: String| word == "--stdin" end
-    return emit(Reply.failed(2, Texts.usage_text()))
-  end
+  return emit(Reply.failed(2, Texts.usage_text())) if words.any? do |word: String| word == "--stdin" end
 
   case QueryOptions.parse(words, session.options.style, CliCheck.usage(), false)
     QueryOptions.Parsed.Refused(problem) -> return answered(session, Reply.Answer.Rejected(problem), "")
@@ -373,15 +357,11 @@ end
 # FMT-USAGE, status 2.
 def fmt(session: Session, words: List[String]) -> Int
   if words.size > 0 and words[0] == "--tree"
-    if words.size != 2
-      return fmt_usage(session, "--tree takes one FILE")
-    end
+    return fmt_usage(session, "--tree takes one FILE") if words.size != 2
 
     return fmt_tree(session, words[1])
   elsif words.size > 0 and words[0] == "-"
-    if words.size != 1
-      return fmt_usage(session, "- reads one file from standard input and takes no PATH")
-    end
+    return fmt_usage(session, "- reads one file from standard input and takes no PATH") if words.size != 1
 
     return fmt_stdin(session)
   end
@@ -543,9 +523,7 @@ end
 # 1 for a change found by `--check`, a file that does not parse or a bad manifest, 2 for a file that cannot be read or
 # written.
 def fmt_file(session: Session, file: String, settings: Result[Format.Settings], checking: Bool) -> Int
-  if !settings.ok?
-    return reject(session, Front.link_problem(Failure.unpack_failure(settings.message)), file, 1)
-  end
+  return reject(session, Front.link_problem(Failure.unpack_failure(settings.message)), file, 1) if !settings.ok?
 
   case SourceReader.read(file)
     SourceFile.Read.Unreadable(_) ->
@@ -608,9 +586,7 @@ def report(session: Session, entries: List[CliCheck.Entry]) -> Int
     show_entry(session, entry)
   end
 
-  if failed == 0
-    return emit(Reply.printed(CliCheck.ok_text(entries.size)))
-  end
+  return emit(Reply.printed(CliCheck.ok_text(entries.size))) if failed == 0
 
   return emit(Reply.failed(CliCheck.status(entries), CliCheck.failed_text(failed, entries.size)))
 end
@@ -633,9 +609,7 @@ end
 # agentica.toml resolve from there. Anything but one file name is a usage error, before the input is read; an option
 # (`check --stdin --json`) is not a file name.
 def check_stdin(session: Session, files: List[String]) -> Int
-  if files.size != 1 or !QueryOptions.file_name?(files[0])
-    return emit(Reply.failed(2, Texts.usage_text()))
-  end
+  return emit(Reply.failed(2, Texts.usage_text())) if files.size != 1 or !QueryOptions.file_name?(files[0])
 
   return with_buffer(session, files[0]) do |buffered: Session| program(buffered, "check", files) end
 end
@@ -704,9 +678,7 @@ def verdict(session: Session, source: String, found: Core.Verdict) -> Int
     Core.Verdict.Unreadable -> return emit(Reply.failed(2, "agentica: cannot read #{source}\n"))
     Core.Verdict.Rejected(problem) -> return reject(session, problem, source, 1)
     Core.Verdict.Passed ->
-      if session.options.style == "json"
-        return emit(Reply.printed("{\"ok\":true}\n"))
-      end
+      return emit(Reply.printed("{\"ok\":true}\n")) if session.options.style == "json"
 
       return emit(Reply.printed("check ok\n"))
   end
@@ -732,9 +704,7 @@ def checked(session: Session, verb: String, rest: List[String], front: Front.Che
   case Pipeline.build_cached(front, session.settings, plan)
     Pipeline.Compiled.Rejected(problem) -> return reject(session, problem, source, 1)
     Pipeline.Compiled.Bytes(bytes) ->
-      if verb == "compile"
-        return save(rest[2], bytes)
-      end
+      return save(rest[2], bytes) if verb == "compile"
 
       return start(session, rest, bytes)
   end
@@ -826,9 +796,7 @@ def render(session: Session, problem: Problems.Problem, source: String) -> Strin
   style = session.options.style
   root = Core.root?(problem.file, source, session.settings)
   shown = Core.named(session.settings, problem, source)
-  if style == "json"
-    return JSON.encode(DiagnosticJson.json(shown))
-  end
+  return JSON.encode(DiagnosticJson.json(shown)) if style == "json"
 
   text = ""
   if Problems.at_source?(problem) and !QueryOptions.arguments?(problem)
@@ -875,9 +843,7 @@ end
 def test(session: Session, words: List[String]) -> Int
   options = session.options
   binary = session.settings.self_path
-  if binary == ""
-    return emit(Reply.failed(2, Texts.test_without_binary_text()))
-  end
+  return emit(Reply.failed(2, Texts.test_without_binary_text())) if binary == ""
 
   # The test files run in VMs that the driver starts, which do not get the flags, so they are refused instead of being
   # dropped without a word. Those VMs inherit AGENTICA_SCHEDULERS and AGENTICA_JIT, which set them for all of them.
@@ -885,9 +851,7 @@ def test(session: Session, words: List[String]) -> Int
     return emit(Reply.failed(2, "agentica: test does not take --schedulers; set AGENTICA_SCHEDULERS instead\n"))
   end
 
-  if options.jit != ""
-    return emit(Reply.failed(2, "agentica: test does not take --jit; set AGENTICA_JIT instead\n"))
-  end
+  return emit(Reply.failed(2, "agentica: test does not take --jit; set AGENTICA_JIT instead\n")) if options.jit != ""
 
   if options.coverage != ""
     return emit(Reply.failed(2, "agentica: test does not take --coverage FILE; use agentica test --coverage\n"))

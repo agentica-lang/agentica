@@ -13,9 +13,7 @@ import Model from "doc_model"
 ## The item of the original declaration of each name that `program`, the parse of the file at `path`, re-exports. It is
 ## empty for a file that re-exports nothing, and for one that does not link.
 export def of_file(settings: Env.Settings, path: String, program: Ast.Program) -> Map[String, Model.Item]
-  if Declarations.reexports_of(program.declarations).size == 0
-    return {}
-  end
+  return {} if Declarations.reexports_of(program.declarations).size == 0
 
   case Linker.link_file(path, settings)
     Linker.Linking.Done(linked) -> return of_linked(linked)
@@ -40,9 +38,7 @@ def of_linked(linked: Linker.Linked) -> Map[String, Model.Item]
     target = root.reexported[name]
     own = T.display_name(target)
     prefix = target.slice(0, target.length - own.length)
-    if !files.has_key?(prefix)
-      next
-    end
+    next if !files.has_key?(prefix)
 
     if !built.has_key?(prefix)
       built = built.put(prefix, items_by_name(files[prefix]))

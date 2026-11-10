@@ -42,9 +42,7 @@ export def written(code: Int) -> String
     32 -> return "#\\space"
     127 -> return "#\\rubout"
     _ ->
-      if code < 65_536
-        return "#\\u#{hex(code, 4)}"
-      end
+      return "#\\u#{hex(code, 4)}" if code < 65_536
 
       return "#\\U#{hex(code, 8)}"
   end
@@ -100,13 +98,9 @@ def written_character(ranges: List[Int], code: Int, character: String) -> String
     13 -> return "\\r"
     27 -> return "\\e"
     _ ->
-      if (code > 32 and code < 127) or blank?(code) or in_ranges?(ranges, code, 0, ranges.size / 2)
-        return character
-      end
+      return character if (code > 32 and code < 127) or blank?(code) or in_ranges?(ranges, code, 0, ranges.size / 2)
 
-      if code < 65_536
-        return "\\u#{hex(code, 4)}"
-      end
+      return "\\u#{hex(code, 4)}" if code < 65_536
 
       return "\\U#{hex(code, 8)}"
   end

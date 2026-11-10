@@ -47,9 +47,7 @@ end
 export def failure_text(workspace: Workspace.Workspace, root_dir: String, failure: Failure.Failure) -> String
   shown = Text.quote(Paths.stored_file(workspace, root_dir, failure.file))
   line = "#{Text.diagnostic_line(failure.diagnostic)} file=#{shown}"
-  if failure.key_path != ""
-    return "#{line} key=#{Text.quote(failure.key_path)}"
-  end
+  return "#{line} key=#{Text.quote(failure.key_path)}" if failure.key_path != ""
 
   return line
 end
@@ -90,9 +88,7 @@ end
 # The folder of the canonical root file, "" when the file cannot be resolved.
 def root_dir_of(workspace: Workspace.Workspace, path: String) -> String
   real = workspace.real_path.call(path)
-  if real.ok?
-    return Paths.directory_of(real.unwrap!)
-  end
+  return Paths.directory_of(real.unwrap!) if real.ok?
 
   return ""
 end

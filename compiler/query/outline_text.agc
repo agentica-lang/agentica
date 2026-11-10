@@ -20,9 +20,7 @@ export def text(outlined: Model.Outline) -> String
     lines = lines.concat(member_lines(file, item))
   end
 
-  if lines.size == 0
-    return ""
-  end
+  return "" if lines.size == 0
 
   return "#{lines.join("\n")}\n"
 end
@@ -39,18 +37,14 @@ export def declaration_text(kind: String, exported: Bool, signature: String) -> 
     head = "def #{head}"
   end
 
-  if exported
-    return "export #{head}"
-  end
+  return "export #{head}" if exported
 
   return head
 end
 
 ## `field Struct.name: Type`, with ` = default` as written when `default` is not "".
 export def field_text(owner: String, name: String, type: String, default: String) -> String
-  if default != ""
-    return "field #{owner}.#{name}: #{type} = #{default}"
-  end
+  return "field #{owner}.#{name}: #{type} = #{default}" if default != ""
 
   return "field #{owner}.#{name}: #{type}"
 end
@@ -62,18 +56,14 @@ end
 
 # `import Models from "models"` or `import {A, B as C} from "models"`.
 def import_text(declaration: Model.Import) -> String
-  if declaration.alias != ""
-    return "import #{declaration.alias} from \"#{declaration.path}\""
-  end
+  return "import #{declaration.alias} from \"#{declaration.path}\"" if declaration.alias != ""
 
   names = declaration.names.map do |name: Model.ImportName| imported_name(name) end
   return "import {#{names.join(", ")}} from \"#{declaration.path}\""
 end
 
 def imported_name(name: Model.ImportName) -> String
-  if name.local == name.name
-    return name.name
-  end
+  return name.name if name.local == name.name
 
   return "#{name.name} as #{name.local}"
 end

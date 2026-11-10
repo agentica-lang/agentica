@@ -62,9 +62,7 @@ export def unchecked_text(text: String, settings: Settings) -> Diag.Outcome[Stri
           attachment = Comments.attach(program, scanned.tokens, scanned.comments)
           context = Layout.context(input, scanned.tokens, attachment)
           output = Docs.render(Layout.program_doc(context, program), settings.width)
-          if settings.blank_line_after_end
-            return Diag.Outcome.Done(with_blank_lines(output))
-          end
+          return Diag.Outcome.Done(with_blank_lines(output)) if settings.blank_line_after_end
 
           return Diag.Outcome.Done(output)
       end
@@ -93,9 +91,7 @@ def with_blank_lines(output: String) -> String
     Diag.Outcome.Failed(_) -> return output
     Diag.Outcome.Done(tokens) ->
       after = Set.new(Style.missing_lines(output, tokens).map do |token: Tokens.Token| token.span.start.line end)
-      if after.size == 0
-        return output
-      end
+      return output if after.size == 0
 
       lines: List[String] = []
       number = 1
@@ -123,9 +119,7 @@ def checked(input: String, output: String) -> Diag.Outcome[String]
           message = "the formatted text does not parse: #{problem.code} at #{at.line}:#{at.column}"
           return Diag.Outcome.Failed(internal(message))
         Diag.Outcome.Done(after) ->
-          if before == after
-            return Diag.Outcome.Done(output)
-          end
+          return Diag.Outcome.Done(output) if before == after
 
           message = "the formatted text changes the tree at: #{first_change(before, after)}"
           return Diag.Outcome.Failed(internal(message))
@@ -148,9 +142,7 @@ def first_change(before: String, after: String) -> String
     at += 1
   end
 
-  if at < old.size
-    return old[at].strip
-  end
+  return old[at].strip if at < old.size
 
   return "the end of the file"
 end
@@ -197,9 +189,7 @@ end
 
 # The line of an `if` without its ` guard` mark (parse_text.agc writes it last on the `if-stmt` line).
 def without_guard(line: String) -> String
-  if line.ends_with?(" guard") and line.contains?("if-stmt ")
-    return line.slice(0, line.length - " guard".length)
-  end
+  return line.slice(0, line.length - " guard".length) if line.ends_with?(" guard") and line.contains?("if-stmt ")
 
   return line
 end
@@ -227,15 +217,11 @@ def span_end(chars: List[String], at: Int) -> Int
   cursor = at
   for separator in [":", ":", "-", ":", ":", ""]
     stop = digits_from(chars, cursor)
-    if stop == cursor
-      return -1
-    end
+    return -1 if stop == cursor
 
     cursor = stop
     if separator != ""
-      if cursor >= chars.size or chars[cursor] != separator
-        return -1
-      end
+      return -1 if cursor >= chars.size or chars[cursor] != separator
 
       cursor += 1
     end

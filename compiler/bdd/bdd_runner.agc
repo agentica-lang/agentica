@@ -101,9 +101,7 @@ export def run(options: Opts.Options, program: Program, config_file: String, rep
   end
 
   spawned = Process.spawn_captured(options.vm, words, ".", START_TIMEOUT)
-  if !spawned.ok?
-    return Ran.Failed("cannot start the BDD runner: #{spawned.message}")
-  end
+  return Ran.Failed("cannot start the BDD runner: #{spawned.message}") if !spawned.ok?
 
   child = spawned.unwrap!
   _ = Process.close_stdin(child, IO_TIMEOUT)
@@ -147,9 +145,7 @@ end
 # runner ended.
 def message_line(text: String) -> String
   lines = text.split("\n").filter do |line: String| line != "" end
-  if lines.size == 0
-    return "no diagnostic"
-  end
+  return "no diagnostic" if lines.size == 0
 
   first = 0
   index = 0
@@ -167,15 +163,11 @@ end
 # `PLACE:LINE:COLUMN error[CODE]` and nothing after it.
 def diagnostic_header?(line: String) -> Bool
   marker = line.index_of(" error[")
-  if marker.none? or !line.ends_with?("]")
-    return false
-  end
+  return false if marker.none? or !line.ends_with?("]")
 
   place = line.slice(0, marker.unwrap!).split(":")
   code = line.slice(marker.unwrap! + 7, line.length - marker.unwrap! - 8)
-  if place.size < 3 or code == "" or place.take(place.size - 2).join(":") == ""
-    return false
-  end
+  return false if place.size < 3 or code == "" or place.take(place.size - 2).join(":") == ""
 
   return number?(place[place.size - 1]) and number?(place[place.size - 2]) and code_text?(code)
 end
@@ -187,9 +179,7 @@ end
 def code_text?(text: String) -> Bool
   for character in text.split("")
     point = String.code(character)
-    if !((point >= 65 and point <= 90) or (point >= 48 and point <= 57) or point == 45)
-      return false
-    end
+    return false if !((point >= 65 and point <= 90) or (point >= 48 and point <= 57) or point == 45)
   end
 
   return true

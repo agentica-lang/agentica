@@ -65,9 +65,7 @@ export def build(program: Ir.Program, struct_index: Map[String, Int], enum_index
     index += 1
   end
 
-  if pool.count > MAX_U16
-    return error(Failure.limit(program, 0, "JSON field types", program.span))
-  end
+  return error(Failure.limit(program, 0, "JSON field types", program.span)) if pool.count > MAX_U16
 
   decodable_types: List[Types.Type] = []
   for entry in program.structs
@@ -157,9 +155,7 @@ def nesting(type: Types.Type) -> Int
     Types.Type.List(item) -> return 1 + nesting(item)
     Types.Type.Map(_, item) -> return 1 + nesting(item)
     Types.Type.Enum(name, args) ->
-      if name == "JsonField"
-        return 1 + nesting(args[0])
-      end
+      return 1 + nesting(args[0]) if name == "JsonField"
 
       return 0
     Types.Type.Optional(item) -> return 1 + nesting(item)

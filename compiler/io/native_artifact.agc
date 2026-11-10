@@ -119,9 +119,7 @@ def fail(context: NativeArtifact.Context, code: String, key: String, message: St
     path = Reader.child(context.key, key)
   end
 
-  if help == ""
-    return Failure.fail_key(context.file, path, code, message, Diag.Help.NoHelp)
-  end
+  return Failure.fail_key(context.file, path, code, message, Diag.Help.NoHelp) if help == ""
 
   return Failure.fail_key(context.file, path, code, message, Failure.hint(help))
 end
@@ -177,9 +175,7 @@ end
 
 def time_left(deadline: Int, context: NativeArtifact.Context) -> Result[Int]
   left = deadline - Time.monotonic_ms()
-  if left <= 0
-    return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
-  end
+  return error(fail(context, "PKG-FETCH", "", "the operation timed out", "")) if left <= 0
 
   return ok(left)
 end
@@ -200,33 +196,23 @@ def probe_member(
   context: NativeArtifact.Context,
 ) -> Probe
   left = deadline - Time.monotonic_ms()
-  if left <= 0
-    return Probe.Broken(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
-  end
+  return Probe.Broken(fail(context, "PKG-FETCH", "", "the operation timed out", "")) if left <= 0
 
   payload = NativeArtifact.payload_path(root, sha, digest, canonical)
   receipt = NativeArtifact.receipt_path(root, sha, digest)
-  if !is_dir?(NativeArtifact.member_dir(root, sha, digest), left)
-    return Probe.Missing
-  end
+  return Probe.Missing if !is_dir?(NativeArtifact.member_dir(root, sha, digest), left)
 
   left = deadline - Time.monotonic_ms()
-  if left <= 0
-    return Probe.Broken(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
-  end
+  return Probe.Broken(fail(context, "PKG-FETCH", "", "the operation timed out", "")) if left <= 0
 
   case File.read_text(receipt, left)
     ok(text) ->
       left = deadline - Time.monotonic_ms()
-      if left <= 0
-        return Probe.Broken(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
-      end
+      return Probe.Broken(fail(context, "PKG-FETCH", "", "the operation timed out", "")) if left <= 0
 
       case File.sha256(payload, left)
         ok(found) ->
-          if text.trim == OpenSSL.Digest.hexencode(found)
-            return Probe.Present(payload)
-          end
+          return Probe.Present(payload) if text.trim == OpenSSL.Digest.hexencode(found)
 
           message = "the cached file is not the one its receipt names"
           return Probe.Broken(fail(context, "PKG-HASH-MISMATCH", "member", message, ""))
@@ -243,9 +229,7 @@ end
 
 def archive_state(archive: String, sha: String, deadline: Int, context: NativeArtifact.Context) -> ArchiveSeen
   left = deadline - Time.monotonic_ms()
-  if left <= 0
-    return ArchiveSeen.Broken(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
-  end
+  return ArchiveSeen.Broken(fail(context, "PKG-FETCH", "", "the operation timed out", "")) if left <= 0
 
   case File.stat(archive, left)
     ok(info) ->
@@ -255,15 +239,11 @@ def archive_state(archive: String, sha: String, deadline: Int, context: NativeAr
       end
 
       left = deadline - Time.monotonic_ms()
-      if left <= 0
-        return ArchiveSeen.Broken(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
-      end
+      return ArchiveSeen.Broken(fail(context, "PKG-FETCH", "", "the operation timed out", "")) if left <= 0
 
       case File.sha256(archive, left)
         ok(found) ->
-          if OpenSSL.Digest.hexencode(found) == sha
-            return ArchiveSeen.Ready
-          end
+          return ArchiveSeen.Ready if OpenSSL.Digest.hexencode(found) == sha
 
           message = "the cached archive is not the one its sha256 names"
           return ArchiveSeen.Broken(fail(context, "PKG-HASH-MISMATCH", "sha256", message, ""))
@@ -373,9 +353,7 @@ def follow_redirect(
   context: NativeArtifact.Context,
 ) -> Result[String]
   locations = HTTP.header_values(headers, "location")
-  if locations.size != 1
-    return error(fail(context, "PKG-FETCH", "url", "the redirect holds no single location", ""))
-  end
+  return error(fail(context, "PKG-FETCH", "url", "the redirect holds no single location", "")) if locations.size != 1
 
   next_url = ""
   case NativeArtifact.resolve_location(current, locations[0])
@@ -391,13 +369,9 @@ def follow_redirect(
     return error(fail(context, "PKG-FETCH", "url", "the redirect target is not an allowed URL", ""))
   end
 
-  if seen.has_key?(next_url)
-    return error(fail(context, "PKG-FETCH", "url", "the redirects loop", ""))
-  end
+  return error(fail(context, "PKG-FETCH", "url", "the redirects loop", "")) if seen.has_key?(next_url)
 
-  if redirects >= MAX_REDIRECTS
-    return error(fail(context, "PKG-FETCH", "url", "too many redirects", ""))
-  end
+  return error(fail(context, "PKG-FETCH", "url", "too many redirects", "")) if redirects >= MAX_REDIRECTS
 
   return ok(next_url)
 end
@@ -417,15 +391,11 @@ def publish_file(
     ok(_) -> return ok(target)
     error(_) ->
       left = deadline - Time.monotonic_ms()
-      if left <= 0
-        return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
-      end
+      return error(fail(context, "PKG-FETCH", "", "the operation timed out", "")) if left <= 0
 
       case File.sha256(target, left)
         ok(found) ->
-          if OpenSSL.Digest.hexencode(found) == sha
-            return ok(target)
-          end
+          return ok(target) if OpenSSL.Digest.hexencode(found) == sha
 
           message = "the cached archive is not the one its sha256 names"
           return error(fail(context, "PKG-HASH-MISMATCH", "sha256", message, ""))
@@ -484,16 +454,12 @@ def publish_member(
   payload = Paths.join(dest, canonical)
   left = try time_left(deadline, context)
   found = File.sha256(payload, left)
-  if !found.ok?
-    return error(fail(context, "PKG-NATIVE-ARCHIVE", "member", "the file is not a supported archive", ""))
-  end
+  return error(fail(context, "PKG-NATIVE-ARCHIVE", "member", "the file is not a supported archive", "")) if !found.ok?
 
   receipt = Paths.join(tmp, "receipt")
   left = try time_left(deadline, context)
   wrote = File.write_text(receipt, OpenSSL.Digest.hexencode(found.unwrap!), left)
-  if !wrote.ok?
-    return error(fail(context, "PKG-FETCH", "member", "the cache cannot be written", ""))
-  end
+  return error(fail(context, "PKG-FETCH", "member", "the cache cannot be written", "")) if !wrote.ok?
 
   target = NativeArtifact.member_dir(root, sha, digest)
   left = try time_left(deadline, context)
@@ -521,14 +487,10 @@ def extract_member(
 ) -> Result[List[Int]]
   zipped = zip_magic?(archive, deadline)
   left = deadline - Time.monotonic_ms()
-  if left <= 0
-    return error("the operation timed out")
-  end
+  return error("the operation timed out") if left <= 0
 
   fresh = Archive.Options(timeout_ms: left, max_output_bytes: options.max_output_bytes)
-  if zipped
-    return Archive.extract_zip(archive, [canonical], dest, fresh)
-  end
+  return Archive.extract_zip(archive, [canonical], dest, fresh) if zipped
 
   return Archive.extract_tar(archive, [canonical], dest, fresh)
 end
@@ -537,9 +499,7 @@ end
 # answers false, so the caller keeps the TAR path and reports its error.
 def zip_magic?(archive: String, deadline: Int) -> Bool
   left = deadline - Time.monotonic_ms()
-  if left <= 0
-    return false
-  end
+  return false if left <= 0
 
   case File.open(archive, "read", left)
     ok(handle) ->
@@ -552,9 +512,7 @@ def zip_magic?(archive: String, deadline: Int) -> Bool
       case File.read_bytes(handle, 4, left)
         ok(first) ->
           close_quiet(handle, deadline)
-          if first.size < 4
-            return false
-          end
+          return false if first.size < 4
 
           return first[0] == 80 and first[1] == 75 and first[2] == 3 and first[3] == 4
         error(_) ->
@@ -586,9 +544,7 @@ def make_parents(path: String, deadline: Int, context: NativeArtifact.Context) -
   left = try time_left(deadline, context)
   info = File.stat(path, left)
   if info.ok?
-    if info.unwrap!.kind == "directory"
-      return ok()
-    end
+    return ok() if info.unwrap!.kind == "directory"
 
     return error(fail(context, "PKG-FETCH", "", "the cache holds a file where a folder goes", ""))
   end
@@ -599,22 +555,16 @@ def make_parents(path: String, deadline: Int, context: NativeArtifact.Context) -
   end
 
   left = deadline - Time.monotonic_ms()
-  if left <= 0
-    return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
-  end
+  return error(fail(context, "PKG-FETCH", "", "the operation timed out", "")) if left <= 0
 
   case Dir.mkdir(path, left)
     ok(_) -> return ok()
     error(_) ->
       # A concurrent fetch may have made it first: keep the winner when it is a real folder.
       fresh = deadline - Time.monotonic_ms()
-      if fresh <= 0
-        return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
-      end
+      return error(fail(context, "PKG-FETCH", "", "the operation timed out", "")) if fresh <= 0
 
-      if is_dir?(path, fresh)
-        return ok()
-      end
+      return ok() if is_dir?(path, fresh)
 
       message = "the cache folder cannot be made"
       return error(fail(context, "PKG-FETCH", "", message, ""))
@@ -627,9 +577,7 @@ def make_temp(parent: String, deadline: Int, context: NativeArtifact.Context) ->
   failure = "no free name"
   for attempt in 0...TEMP_TRIES
     left = deadline - Time.monotonic_ms()
-    if left <= 0
-      return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
-    end
+    return error(fail(context, "PKG-FETCH", "", "the operation timed out", "")) if left <= 0
 
     name = Paths.join(parent, ".tmp-#{System.pid()}-#{attempt}-#{Random.int(0, 999999999)}")
     case Dir.mkdir_private(name, left)

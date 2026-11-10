@@ -108,9 +108,7 @@ def walk(workspace: Workspace.Workspace, folder: String) -> Result[List[String]]
     here = pending[at]
     at += 1
     listed = workspace.list_folder.call(here)
-    if !listed.ok?
-      return error(here)
-    end
+    return error(here) if !listed.ok?
 
     project = listed.unwrap!.any? do |entry| entry.name == MANIFEST_FILE end
     for entry in listed.unwrap!
@@ -142,9 +140,7 @@ end
 
 # The path of `name` in `folder`; the working folder adds no "./" to what it holds.
 def child(folder: String, name: String) -> String
-  if folder == DEFAULT_PATH
-    return name
-  end
+  return name if folder == DEFAULT_PATH
 
   return Paths.join(folder, name)
 end
@@ -165,9 +161,7 @@ def root_of(workspace: Workspace.Workspace, typed: String) -> Root
 end
 
 def with_root(roots: List[Root], root: Root) -> List[Root]
-  if roots.any? do |known: Root| known.key == root.key end
-    return roots
-  end
+  return roots if roots.any? do |known: Root| known.key == root.key end
 
   return roots.push(root)
 end

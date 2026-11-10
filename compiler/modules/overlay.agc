@@ -82,9 +82,7 @@ def names_for(workspace: Workspace.Workspace, windows: Bool, file: String) -> Na
   end
 
   found = workspace.real_path.call(absolute)
-  if found.ok?
-    return Names(typed: file, absolute: absolute, key: found.unwrap!)
-  end
+  return Names(typed: file, absolute: absolute, key: found.unwrap!) if found.ok?
 
   folder = Paths.directory_of(slashed)
   if folder == ""
@@ -92,9 +90,7 @@ def names_for(workspace: Workspace.Workspace, windows: Bool, file: String) -> Na
   end
 
   parent = workspace.real_path.call(folder)
-  if !parent.ok?
-    return Names(typed: file, absolute: absolute, key: absolute)
-  end
+  return Names(typed: file, absolute: absolute, key: absolute) if !parent.ok?
 
   return Names(typed: file, absolute: absolute, key: Paths.join(parent.unwrap!, Paths.last_part(slashed)))
 end
@@ -106,9 +102,7 @@ end
 # The buffer for `path`: none or one in a list.
 def find(buffers: List[Buffer], path: String) -> List[Buffer]
   for held in buffers
-    if path == held.names.typed or path == held.names.absolute or path == held.names.key
-      return [held]
-    end
+    return [held] if path == held.names.typed or path == held.names.absolute or path == held.names.key
   end
 
   return []
@@ -116,9 +110,7 @@ end
 
 def read_buffer(workspace: Workspace.Workspace, buffers: List[Buffer], path: String) -> SourceFile.Read
   found = find(buffers, path)
-  if found.size > 0
-    return found[0].read
-  end
+  return found[0].read if found.size > 0
 
   return workspace.read_text.call(path)
 end
@@ -126,9 +118,7 @@ end
 def real_buffer(workspace: Workspace.Workspace, buffers: List[Buffer], path: String) -> Result[String]
   found = workspace.real_path.call(path)
   held = find(buffers, path)
-  if found.ok? or held.size == 0
-    return found
-  end
+  return found if found.ok? or held.size == 0
 
   return ok(held[0].names.key)
 end

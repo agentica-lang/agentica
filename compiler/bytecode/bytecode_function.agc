@@ -88,9 +88,7 @@ end
 
 # 1 for a function lowered from a file of the prelude, else 0: the VM reports an error in it at the user's call.
 def prelude_flag(program: Ir.Program, function: Ir.Function) -> Int
-  if Ir.prelude_file?(program, function.file)
-    return 1
-  end
+  return 1 if Ir.prelude_file?(program, function.file)
 
   return 0
 end
@@ -108,9 +106,7 @@ def operands(
 ) -> Result[Operands]
   op = instr.op
   args = instr.args
-  if !OPCODES.has_key?(op)
-    return error(Failure.internal(program, "unknown opcode #{op}"))
-  end
+  return error(Failure.internal(program, "unknown opcode #{op}")) if !OPCODES.has_key?(op)
 
   if NEEDS.has_key?(op) and args.size < NEEDS[op]
     return error(Failure.internal(program, "#{op} needs at least #{NEEDS[op]} operands and has #{args.size}"))
@@ -146,9 +142,7 @@ end
 
 # A wide operand is a 32-bit index that the VM reads from the last two, low half first.
 def wide_operands(program: Ir.Program, tables: Tables, op: String, a: Int, index: Int) -> Result[Operands]
-  if index < 0
-    return error(Failure.internal(program, "a negative index in #{op}"))
-  end
+  return error(Failure.internal(program, "a negative index in #{op}")) if index < 0
 
   return ok(plain(tables, a, index % 65_536, index / 65_536))
 end
@@ -157,9 +151,7 @@ end
 def const_operands(program: Ir.Program, tables: Tables, instr: Ir.Instr) -> Result[Operands]
   key = constant_key(instr.imm)
   found = Pool.find(tables.constants, key)
-  if found.some?
-    return wide_operands(program, tables, instr.op, instr.args[0], found.unwrap!)
-  end
+  return wide_operands(program, tables, instr.op, instr.args[0], found.unwrap!) if found.some?
 
   added = Pool.add(tables.constants, key, constant_bytes(instr.imm), 1)
   return wide_operands(program, tables.with(constants: added), instr.op, instr.args[0], tables.constants.count)
@@ -172,14 +164,10 @@ def update_operands(program: Ir.Program, tables: Tables, args: List[Int]) -> Res
   fields = positions.map do |position: Int| position.to_s end.join(",")
   key = "#{args[2]}:#{fields}"
   found = Pool.find(tables.updates, key)
-  if found.some?
-    return ok(plain(tables, args[0], args[1], found.unwrap!))
-  end
+  return ok(plain(tables, args[0], args[1], found.unwrap!)) if found.some?
 
   updates = tables.updates
-  if updates.count >= MAX_U16
-    return error(Failure.limit(program, 0, "struct updates", program.span))
-  end
+  return error(Failure.limit(program, 0, "struct updates", program.span)) if updates.count >= MAX_U16
 
   entry = Wire.u32(args[2]).concat(Wire.u32(positions.size))
   for position in positions
@@ -195,9 +183,7 @@ def builtin_operands(program: Ir.Program, tables: Tables, instr: Ir.Instr) -> Re
   args = instr.args
   key = "#{args[1]}:#{instr.name}"
   found = Pool.find(tables.builtins, key)
-  if found.some?
-    return wide_operands(program, tables, instr.op, args[0], found.unwrap!)
-  end
+  return wide_operands(program, tables, instr.op, args[0], found.unwrap!) if found.some?
 
   bytes = Wire.string(instr.name).concat(Wire.u32(args[1]))
   added = Pool.add(tables.builtins, key, bytes, 1)
@@ -318,9 +304,7 @@ def constant_bytes(imm: Ir.Imm) -> List[Int]
 end
 
 def flag_bytes(flag: Bool) -> List[Int]
-  if flag
-    return [3]
-  end
+  return [3] if flag
 
   return [2]
 end

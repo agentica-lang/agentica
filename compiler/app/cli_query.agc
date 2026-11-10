@@ -84,9 +84,7 @@ export def outline(file: String, style: String, buffered: Bool, settings: Env.Se
     Core.Outlined.Unreadable -> return Reply.Answer.Rejected(QueryFiles.unreadable(file, OUTLINE_USAGE))
     Core.Outlined.Rejected(problem) -> return Reply.Answer.Rejected(problem)
     Core.Outlined.Done(found) ->
-      if style == "json"
-        return Reply.Answer.Printed(Reply.printed("#{JSON.encode(OutlineJson.json(found))}\n"))
-      end
+      return Reply.Answer.Printed(Reply.printed("#{JSON.encode(OutlineJson.json(found))}\n")) if style == "json"
 
       return Reply.Answer.Printed(Reply.printed(OutlineText.text(found)))
   end
@@ -109,9 +107,7 @@ export def type_at(asked: QueryPosition.Asked, style: String, partial: Bool, set
     Core.Typed.Unreadable -> return Reply.Answer.Rejected(QueryFiles.unreadable(asked.file, TYPE_AT_USAGE))
     Core.Typed.Rejected(problem) -> return Reply.Answer.Rejected(problem)
     Core.Typed.Done(found) ->
-      if style == "json"
-        return Reply.Answer.Printed(Reply.printed("#{JSON.encode(TypeAtJson.json(found))}\n"))
-      end
+      return Reply.Answer.Printed(Reply.printed("#{JSON.encode(TypeAtJson.json(found))}\n")) if style == "json"
 
       text = TypeAtText.text(found)
       return Reply.Answer.Printed(Reply.Reply(code: 0, out: text, err: partial_text(found.diagnostics)))
@@ -152,9 +148,7 @@ export def refs_at(
   partial: Bool,
   settings: Env.Settings,
 ) -> Reply.Answer
-  if partial
-    return refs_reply(Core.refs_partial(Cache.empty(), settings, asked), style, asked.file)
-  end
+  return refs_reply(Core.refs_partial(Cache.empty(), settings, asked), style, asked.file) if partial
 
   return refs_reply(Core.refs_at(Cache.empty(), settings, asked, paths, REFS_USAGE), style, asked.file)
 end
@@ -185,9 +179,7 @@ export def symbol(asked: QueryOptions.Query, settings: Env.Settings) -> Reply.An
   case Core.symbol(Cache.empty(), settings, name, asked.words.drop(1), asked.stdin, SYMBOL_USAGE)
     Core.Found.Rejected(problem) -> return Reply.Answer.Rejected(problem)
     Core.Found.Done(found) ->
-      if asked.style == "json"
-        return Reply.Answer.Printed(Reply.printed("#{JSON.encode(SymbolJson.json(found))}\n"))
-      end
+      return Reply.Answer.Printed(Reply.printed("#{JSON.encode(SymbolJson.json(found))}\n")) if asked.style == "json"
 
       return Reply.Answer.Printed(
         Reply.Reply(code: 0, out: SymbolText.text(found), err: SymbolText.skipped_text(found)),
@@ -228,9 +220,7 @@ def refs_reply(found: Core.Referenced, style: String, file: String) -> Reply.Ans
     Core.Referenced.Unreadable -> return Reply.Answer.Rejected(QueryFiles.unreadable(file, REFS_USAGE))
     Core.Referenced.Rejected(problem) -> return Reply.Answer.Rejected(problem)
     Core.Referenced.Done(answer) ->
-      if style == "json"
-        return Reply.Answer.Printed(Reply.printed("#{JSON.encode(RefsJson.json(answer))}\n"))
-      end
+      return Reply.Answer.Printed(Reply.printed("#{JSON.encode(RefsJson.json(answer))}\n")) if style == "json"
 
       return Reply.Answer.Printed(
         Reply.Reply(

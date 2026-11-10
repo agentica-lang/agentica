@@ -164,9 +164,7 @@ def check_name(cx: State.Cx, st: State.St, node: Ast.NameRef) -> Result[State.Ou
   end
 
   binding = State.lookup(st, node.name)
-  if binding.some?
-    return ok(State.Out(st: State.read(st, binding.unwrap!), type: binding.unwrap!.type))
-  end
+  return ok(State.Out(st: State.read(st, binding.unwrap!), type: binding.unwrap!.type)) if binding.some?
 
   if cx.functions.has_key?(node.name) or ENTRIES.has_key?(node.name)
     return error(
@@ -181,9 +179,7 @@ end
 # The help of an unknown name: a close name in scope, or the name another language uses.
 def name_help(cx: State.Cx, st: State.St, name: String) -> String
   guess = Help.near(name, State.visible_names(cx, st), [])
-  if guess != ""
-    return guess
-  end
+  return guess if guess != ""
 
   return Help.foreign(cx.help, name)
 end
@@ -191,9 +187,7 @@ end
 # A constant is read after its initializer was checked, because the constants are checked in dependency order.
 def check_const_ref(cx: State.Cx, st: State.St, node: Ast.ConstRef) -> Result[State.Out]
   type = cx.constants.get(node.name)
-  if type.none?
-    return error(State.fail(cx, st, "CHECK-INTERNAL", "constant read before it was checked", node.span))
-  end
+  return error(State.fail(cx, st, "CHECK-INTERNAL", "constant read before it was checked", node.span)) if type.none?
 
   return ok(State.Out(st: st, type: type.unwrap!))
 end
@@ -223,9 +217,7 @@ def check_function_ref(cx: State.Cx, st: State.St, node: Ast.FunctionRef, expect
 
   signature = entry.unwrap!
   type = T.Type.Fn(signature.params, signature.result)
-  if signature.type_parameters.size == 0
-    return ok(State.Out(st: st, type: type))
-  end
+  return ok(State.Out(st: st, type: type)) if signature.type_parameters.size == 0
 
   found = CheckTypes.learn(type, expected, {})
   unresolved = signature.type_parameters.filter do |name: String| !found.has_key?(name) end
@@ -507,9 +499,7 @@ def check_unary(cx: State.Cx, st: State.St, node: Ast.Unary) -> Result[State.Out
 end
 
 def unary_operand(cx: State.Cx, st: State.St, node: Ast.Unary) -> Result[State.Out]
-  if node.op == "minus" and min_literal?(node.operand)
-    return ok(State.Out(st: st, type: T.Type.Int))
-  end
+  return ok(State.Out(st: st, type: T.Type.Int)) if node.op == "minus" and min_literal?(node.operand)
 
   out = try State.expr_completion(cx, st, node.operand, T.Type.Unknown)
   if T.is?(out.type, "Void")
@@ -542,9 +532,7 @@ end
 
 # -5.abs is -(5.abs): the help says to write (-5).abs.
 def void_negation_help(node: Ast.Unary) -> String
-  if node.op != "minus"
-    return ""
-  end
+  return "" if node.op != "minus"
 
   case node.operand
     Ast.Expr.MethodCall(call) ->
@@ -615,9 +603,7 @@ def binary_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
       return plus_type(cx, sides, node)
     "minus" -> return arithmetic_type(cx, sides, node)
     "multiply" ->
-      if T.is?(sides.left, "String") or T.is?(sides.right, "String")
-        return repeat_type(cx, sides, node)
-      end
+      return repeat_type(cx, sides, node) if T.is?(sides.left, "String") or T.is?(sides.right, "String")
 
       return arithmetic_type(cx, sides, node)
     "divide" -> return arithmetic_type(cx, sides, node)
@@ -642,9 +628,7 @@ end
 
 # Both sides have one type. with_to_s adds to the String help that to_s makes a String of the number.
 def same_types(cx: State.Cx, sides: Sides, node: Ast.Binary, with_to_s: Bool) -> Result[Bool]
-  if T.same?(sides.left, sides.right)
-    return ok(true)
-  end
+  return ok(true) if T.same?(sides.left, sides.right)
 
   left = T.to_text(sides.left)
   right = T.to_text(sides.right)
@@ -710,9 +694,7 @@ end
 
 # `s * n` repeats a String n times, as Ruby's String#*: a String first and an Int count second, never two Strings.
 def repeat_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
-  if T.is?(sides.left, "String") and T.is?(sides.right, "Int")
-    return ok(T.Type.String)
-  end
+  return ok(T.Type.String) if T.is?(sides.left, "String") and T.is?(sides.right, "Int")
 
   left = T.to_text(sides.left)
   right = T.to_text(sides.right)
@@ -808,9 +790,7 @@ end
 # The note on the field that blocks ==, when the field is declared in the file being checked: a note holds a span and
 # no file, so a field of another file is left to the message.
 def field_labels(cx: State.Cx, gap: CheckTypes.Gap) -> List[Failure.Label]
-  if gap.file != cx.file or !gap.field.some?
-    return []
-  end
+  return [] if gap.file != cx.file or !gap.field.some?
 
   return [Failure.Label(span: gap.field.unwrap!, text: "this field has no equality")]
 end

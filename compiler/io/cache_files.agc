@@ -85,9 +85,7 @@ end
 # check, and a folder that other users can write is out of scope.
 export def private_kind(path: String, kind: String, user: Int) -> Result[Void]
   info = try File.lstat(path, IO_TIMEOUT_MS)
-  if info.kind != kind
-    return error("#{path} is not a #{kind}")
-  end
+  return error("#{path} is not a #{kind}") if info.kind != kind
 
   if user >= 0 and (info.user_id != user or info.mode.bit_and(GROUP_OTHER_WRITE) != 0)
     return error("#{path} is not private to this user")
@@ -102,9 +100,7 @@ end
 # between the create and the stat, which is a setting of the user's. -1 on Windows, where `user_id` is always 0 and
 # means nothing.
 export def own_user() -> Result[Int]
-  if System.os() == "windows"
-    return ok(-1)
-  end
+  return ok(-1) if System.os() == "windows"
 
   name = try RandomName.hex()
   places = ["/var/tmp", "/tmp"]
@@ -120,9 +116,7 @@ export def own_user() -> Result[Int]
       _ = File.close(made.unwrap!, IO_TIMEOUT_MS)
       info = File.lstat(made_at, IO_TIMEOUT_MS)
       _ = Path.remove(made_at, IO_TIMEOUT_MS)
-      if info.ok?
-        return ok(info.unwrap!.user_id)
-      end
+      return ok(info.unwrap!.user_id) if info.ok?
     end
   end
 
@@ -145,9 +139,7 @@ export def private_folder(path: String, user: Int) -> Result[Bool]
 
   made = Dir.mkdir_private(path, IO_TIMEOUT_MS)
   if !made.ok?
-    if !File.lstat(path, IO_TIMEOUT_MS).ok?
-      return error(made.message)
-    end
+    return error(made.message) if !File.lstat(path, IO_TIMEOUT_MS).ok?
 
     try private_kind(path, "directory", user)
     return ok(false)
@@ -205,9 +197,7 @@ export def discard(path: String) -> Void
   end
 
   for attempt in 0...tries
-    if Path.remove(path, IO_TIMEOUT_MS).ok?
-      return
-    end
+    return if Path.remove(path, IO_TIMEOUT_MS).ok?
 
     if attempt + 1 < tries
       Task.sleep(DISCARD_PAUSE_MS)
@@ -227,9 +217,7 @@ end
 # Removes the temporary files that a run left (it died between the write and the rename) once they are an hour old.
 export def sweep(folder: String) -> Void
   names = Dir.list(folder, IO_TIMEOUT_MS)
-  if !names.ok?
-    return
-  end
+  return if !names.ok?
 
   now = Time.now_ms() / 1000
   for name in names.unwrap!
@@ -298,9 +286,7 @@ end
 # "-" for a file that is not there.
 def file_digest(workspace: Workspace.Workspace, path: String) -> String
   read = workspace.read_bytes.call(path)
-  if !read.ok?
-    return "-"
-  end
+  return "-" if !read.ok?
 
   return digest(read.unwrap!)
 end

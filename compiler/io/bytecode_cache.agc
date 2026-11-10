@@ -110,17 +110,13 @@ end
 ## that was not started by the binary (no `self_path`, or a stdlib/ folder instead of the embedded std/ sources), for a
 ## root that cannot be resolved and for a project whose manifest or lock is not good: the front end then says why.
 export def plan(settings: Env.Settings, root: String, wanted: Bool) -> Plan
-  if !wanted or settings.self_path == ""
-    return Plan.Off
-  end
+  return Plan.Off if !wanted or settings.self_path == ""
 
   case settings.std
     Env.StdProvider.Folder(_) -> return Plan.Off
     Env.StdProvider.Embedded ->
       made = entry_for(settings, root)
-      if made.ok?
-        return Plan.On(made.unwrap!)
-      end
+      return Plan.On(made.unwrap!) if made.ok?
 
       return Plan.Off
   end
@@ -132,9 +128,7 @@ export def lookup(plan: Plan, settings: Env.Settings) -> Lookup
     Plan.Off -> return Lookup.Miss
     Plan.On(entry) ->
       found = read_entry(entry, settings)
-      if found.ok?
-        return Lookup.Hit(found.unwrap!)
-      end
+      return Lookup.Hit(found.unwrap!) if found.ok?
 
       return Lookup.Miss
   end
@@ -149,15 +143,11 @@ export def store(plan: Plan, settings: Env.Settings, modules: List[Linker.Linked
     Plan.On(entry) ->
       sources = modules.filter do |module: Linker.LinkedModule| !Resolve.embedded?(module.key) end
       probes = probe_lines(settings, entry.libs_dir, sources)
-      if !probes.ok?
-        return false
-      end
+      return false if !probes.ok?
 
       lines = sources.map do |module: Linker.LinkedModule| source_line(module) end
       libraries = library_lines(settings.workspace, sources, built_libraries(settings, sources))
-      if !libraries.ok?
-        return false
-      end
+      return false if !libraries.ok?
 
       lines = lines.concat(libraries.unwrap!)
       text = [entry.key, "program #{CacheFiles.digest(program)}"].concat(lines).concat(probes.unwrap!).join("\n")
@@ -192,9 +182,7 @@ def library_lines(
   end
 
   for path in paths.uniq
-    if !plain?(path)
-      return error("the path has a line feed, a tab or a NUL")
-    end
+    return error("the path has a line feed, a tab or a NUL") if !plain?(path)
 
     if workspace.directory_exists.call(path)
       lines = lines.push("#{TREE_WORD}#{names_digest(workspace, path)} #{path}")
@@ -212,9 +200,7 @@ end
 def built_libraries(settings: Env.Settings, modules: List[Linker.LinkedModule]) -> List[String]
   base = Paths.join(PackageCache.root(settings.env), "native-build/")
   found: List[String] = []
-  if base == "native-build/"
-    return found
-  end
+  return found if base == "native-build/"
 
   for module in modules
     for decl in module.declarations
@@ -254,9 +240,7 @@ end
 # while the front end works makes the next lookup miss instead of keeping the old program under the new key.
 def entry_for(settings: Env.Settings, root: String) -> Result[Entry]
   real = try settings.workspace.real_path.call(root)
-  if real.contains?("\n")
-    return error("the path has a line feed")
-  end
+  return error("the path has a line feed") if real.contains?("\n")
 
   site = try CacheFiles.site(settings, real)
   # A test file compiled for `agentica test` gets a `main` that a run does not (Settings.test_file), so the two have
@@ -324,18 +308,12 @@ end
 
 # The line for one place. A path with a line feed or a tab would break the lines; it keeps the entry from being made.
 def probe(workspace: Workspace.Workspace, path: String) -> Result[String]
-  if !plain?(path)
-    return error("the path has a line feed, a tab or a NUL")
-  end
+  return error("the path has a line feed, a tab or a NUL") if !plain?(path)
 
-  if !workspace.file_exists.call(path)
-    return ok("#{ABSENT_WORD}#{path}")
-  end
+  return ok("#{ABSENT_WORD}#{path}") if !workspace.file_exists.call(path)
 
   real = try workspace.real_path.call(path)
-  if !plain?(real)
-    return error("the path has a line feed, a tab or a NUL")
-  end
+  return error("the path has a line feed, a tab or a NUL") if !plain?(real)
 
   return ok("#{PRESENT_WORD}#{path}\t#{real}")
 end
@@ -360,9 +338,7 @@ def read_whole(handle: FileHandle, entry: Entry, settings: Env.Settings) -> Resu
   size = try text_size(head)
   bytes = try read_exact(handle, size)
   text = try String.from_bytes(bytes)
-  if !text.starts_with?("#{entry.key}\nprogram ")
-    return error("the entry is for another build or program")
-  end
+  return error("the entry is for another build or program") if !text.starts_with?("#{entry.key}\nprogram ")
 
   # The key has no line feed inside a line, so its lines are the first ones of the text, then the program line.
   lines = text.split("\n").drop(entry.key.split("\n").size)
@@ -384,9 +360,7 @@ def text_size(head: Bytes) -> Result[Int]
   end
 
   size = try text.slice(HEAD_WORD.length, HEAD_DIGITS).to_int
-  if size < 0 or size > MAX_TEXT_BYTES
-    return error("the head of the entry is wrong")
-  end
+  return error("the head of the entry is wrong") if size < 0 or size > MAX_TEXT_BYTES
 
   return ok(size)
 end
@@ -414,36 +388,26 @@ def check_lines(workspace: Workspace.Workspace, lines: List[String]) -> Result[V
 end
 
 def check_source(workspace: Workspace.Workspace, line: String) -> Result[Void]
-  if line.length <= SOURCE_WORD.length + DIGEST_CHARS + 1
-    return error("a line of the entry is wrong")
-  end
+  return error("a line of the entry is wrong") if line.length <= SOURCE_WORD.length + DIGEST_CHARS + 1
 
   wanted = line.slice(SOURCE_WORD.length, DIGEST_CHARS)
   from = SOURCE_WORD.length + DIGEST_CHARS + 1
   path = line.slice(from, line.length - from)
   # A path with a NUL is a contract error of the File calls, which would end the front end.
-  if path.contains?(String.from_code(0))
-    return error("a line of the entry is wrong")
-  end
+  return error("a line of the entry is wrong") if path.contains?(String.from_code(0))
 
   read = try workspace.read_bytes.call(path)
-  if CacheFiles.digest(read) != wanted
-    return error("#{path} changed")
-  end
+  return error("#{path} changed") if CacheFiles.digest(read) != wanted
 
   return ok()
 end
 
 def check_tree(workspace: Workspace.Workspace, line: String) -> Result[Void]
-  if line.length <= TREE_WORD.length + DIGEST_CHARS + 1
-    return error("a line of the entry is wrong")
-  end
+  return error("a line of the entry is wrong") if line.length <= TREE_WORD.length + DIGEST_CHARS + 1
 
   from = TREE_WORD.length + DIGEST_CHARS + 1
   path = line.slice(from, line.length - from)
-  if path.contains?(String.from_code(0))
-    return error("a line of the entry is wrong")
-  end
+  return error("a line of the entry is wrong") if path.contains?(String.from_code(0))
 
   if names_digest(workspace, path) != line.slice(TREE_WORD.length, DIGEST_CHARS)
     return error("the native files of #{path} changed")
@@ -455,14 +419,10 @@ end
 # `PATH<TAB>REAL`: the path must still lead to the same file.
 def check_present(workspace: Workspace.Workspace, rest: String) -> Result[Void]
   parts = rest.split("\t")
-  if parts.size != 2 or parts[0].contains?(String.from_code(0))
-    return error("a line of the entry is wrong")
-  end
+  return error("a line of the entry is wrong") if parts.size != 2 or parts[0].contains?(String.from_code(0))
 
   real = try workspace.real_path.call(parts[0])
-  if real != parts[1]
-    return error("#{parts[0]} leads somewhere else")
-  end
+  return error("#{parts[0]} leads somewhere else") if real != parts[1]
 
   return ok()
 end
@@ -471,9 +431,7 @@ end
 # size and time, is not run): the magic, and the version text after the format number and the length.
 def made_by?(program: Bytes, version: String) -> Bool
   wanted = version.bytes
-  if program.size < VERSION_AT + wanted.size or program[8] != wanted.size
-    return false
-  end
+  return false if program.size < VERSION_AT + wanted.size or program[8] != wanted.size
 
   magic = String.from_bytes(program.take(MAGIC.length))
   found = String.from_bytes(program.take(VERSION_AT + wanted.size).drop(VERSION_AT))
@@ -486,9 +444,7 @@ def read_exact(handle: FileHandle, count: Int) -> Result[Bytes]
   left = count
   while left > 0
     got = try File.read_bytes(handle, piece(left), CacheFiles.IO_TIMEOUT_MS)
-    if got.size == 0
-      return error("the entry ends too soon")
-    end
+    return error("the entry ends too soon") if got.size == 0
 
     pieces = pieces.push(got)
     left -= got.size
@@ -498,9 +454,7 @@ def read_exact(handle: FileHandle, count: Int) -> Result[Bytes]
 end
 
 def piece(left: Int) -> Int
-  if left < CacheFiles.PIECE
-    return left
-  end
+  return left if left < CacheFiles.PIECE
 
   return CacheFiles.PIECE
 end
@@ -513,9 +467,7 @@ def read_rest(handle: FileHandle) -> Result[Bytes]
   while !finished
     got = try File.read_bytes(handle, CacheFiles.PIECE, CacheFiles.IO_TIMEOUT_MS)
     total += got.size
-    if total > MAX_PROGRAM_BYTES
-      return error("the program of the entry is too large")
-    end
+    return error("the program of the entry is too large") if total > MAX_PROGRAM_BYTES
 
     finished = got.size == 0
     pieces = pieces.push(got)
@@ -530,15 +482,11 @@ end
 # (the rename then fails) never gets an entry; the run is not affected. A `_build/` made by the cache gets a
 # .gitignore of its own, so the bytecode is not committed by mistake.
 def publish(entry: Entry, text: String, program: Bytes) -> Bool
-  if !prepare_folder(entry).ok?
-    return false
-  end
+  return false if !prepare_folder(entry).ok?
 
   CacheFiles.sweep(entry.folder)
   suffix = RandomName.hex()
-  if !suffix.ok?
-    return false
-  end
+  return false if !suffix.ok?
 
   body = text.bytes
   data = Bytes.concat([head(body.size).bytes, body, program])

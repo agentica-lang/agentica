@@ -769,9 +769,7 @@ end
 
 ## True when the last argument of a call is a block (do ... end), which picks the block form of a builtin (File.open).
 export def block_call?(call: Call) -> Bool
-  if call.args.size == 0
-    return false
-  end
+  return false if call.args.size == 0
 
   case call.args[call.args.size - 1]
     Expr.BlockLit(_) -> return true

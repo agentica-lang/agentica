@@ -184,9 +184,7 @@ end
 
 ## The register to compute into: want when there is one (a register of 0 or more), else a new one.
 export def target(fx: Fx, want: Int) -> Out
-  if want >= 0
-    return Out(fx: fx, slot: want)
-  end
+  return Out(fx: fx, slot: want) if want >= 0
 
   taken = alloc(fx)
   return Out(fx: taken, slot: taken.next - 1)
@@ -195,9 +193,7 @@ end
 ## The state after a value is in dst: the registers go back to saved when the caller gave a register to fill (want),
 ## else only dst stays taken.
 export def release(fx: Fx, saved: Int, want: Int, dst: Int) -> Fx
-  if want >= 0
-    return fx.with(next: saved)
-  end
+  return fx.with(next: saved) if want >= 0
 
   return fx.with(next: dst + 1)
 end
@@ -262,9 +258,7 @@ end
 ## Fails with LOWER-UNSUPPORTED unless the expression has a type the VM can hold. void allows Void; type is the type to
 ## test (the checker's, or a TypedTarget's).
 export def require_type(cx: Cx, expr: Ast.Expr, void: Bool, type: Types.Type) -> Result[Bool]
-  if vm_type?(cx, type) or (void and Types.is?(type, "Void"))
-    return ok(true)
-  end
+  return ok(true) if vm_type?(cx, type) or (void and Types.is?(type, "Void"))
 
   what = "this expression"
   if !Types.unknown?(type)
@@ -276,9 +270,7 @@ end
 
 def fn_type?(cx: Cx, params: List[Types.Type], result: Types.Type) -> Bool
   for param in params
-    if !vm_type?(cx, param)
-      return false
-    end
+    return false if !vm_type?(cx, param)
   end
 
   return Types.is?(result, "Void") or vm_type?(cx, result)

@@ -147,9 +147,7 @@ end
 
 ## Structural equality: compiler/ does not use == on enums until stage0 lowers it.
 export def same?(a: Type, b: Type) -> Bool
-  if tag(a) != tag(b)
-    return false
-  end
+  return false if tag(a) != tag(b)
 
   case a
     Type.Opaque(found) -> return found == name(b)
@@ -173,15 +171,11 @@ end
 
 ## True when the two lists have the same length and equal types in order.
 export def same_all?(a: List[Type], b: List[Type]) -> Bool
-  if a.size != b.size
-    return false
-  end
+  return false if a.size != b.size
 
   index = 0
   while index < a.size
-    if !same?(a[index], b[index])
-      return false
-    end
+    return false if !same?(a[index], b[index])
 
     index += 1
   end
@@ -191,72 +185,56 @@ end
 
 ## Result[type], or Unknown when there is no type: the expected type of the operand of try.
 export def result_of(type: Type) -> Type
-  if unknown?(type)
-    return type
-  end
+  return type if unknown?(type)
 
   return Type.Result(type)
 end
 
 ## Task[type], or Unknown when there is no type.
 export def task_of(type: Type) -> Type
-  if unknown?(type)
-    return type
-  end
+  return type if unknown?(type)
 
   return Type.Task(type)
 end
 
 ## List[type], or Unknown when there is no type.
 export def list_of(type: Type) -> Type
-  if unknown?(type)
-    return type
-  end
+  return type if unknown?(type)
 
   return Type.List(type)
 end
 
 ## The type itself when it is a List, else Unknown: the expected type that a list operation passes on.
 export def only_list(type: Type) -> Type
-  if is?(type, "List")
-    return type
-  end
+  return type if is?(type, "List")
 
   return Type.Unknown
 end
 
 ## The type itself when it is a Map, else Unknown.
 export def only_map(type: Type) -> Type
-  if is?(type, "Map")
-    return type
-  end
+  return type if is?(type, "Map")
 
   return Type.Unknown
 end
 
 ## The type itself when it is a Set, else Unknown.
 export def only_set(type: Type) -> Type
-  if is?(type, "Set")
-    return type
-  end
+  return type if is?(type, "Set")
 
   return Type.Unknown
 end
 
 ## The item of a Result, else Unknown: the expected type of the value inside a Result.
 export def only_result_item(type: Type) -> Type
-  if is?(type, "Result")
-    return item(type)
-  end
+  return item(type) if is?(type, "Result")
 
   return Type.Unknown
 end
 
 ## The item of an Optional, else Unknown: the expected type of the value inside some(...).
 export def only_optional_item(type: Type) -> Type
-  if is?(type, "Optional")
-    return item(type)
-  end
+  return item(type) if is?(type, "Optional")
 
   return Type.Unknown
 end
@@ -264,9 +242,7 @@ end
 ## The name as the user wrote it: the linker gives a name from another file the prefix "@N::" to keep it unique, and
 ## messages leave it out.
 export def display_name(name: String) -> String
-  if not name.starts_with?("@")
-    return name
-  end
+  return name if not name.starts_with?("@")
 
   digits_end = 1
   while digits_end < name.length and digit?(name.at(digits_end))
@@ -349,9 +325,7 @@ end
 
 # A struct with no type arguments prints as Struct(Name), a generic one as Struct(Name, [Int]).
 def struct_debug(name: String, args: List[Type]) -> String
-  if args.size == 0
-    return "Struct(#{name})"
-  end
+  return "Struct(#{name})" if args.size == 0
 
   return "Struct(#{name}, [#{debug_list(args)}])"
 end
@@ -361,9 +335,7 @@ def debug_list(types: List[Type]) -> String
 end
 
 def generic_text(name: String, args: List[Type], written: Map[String, String]) -> String
-  if args.size == 0
-    return written_name(name, written)
-  end
+  return written_name(name, written) if args.size == 0
 
   return "#{written_name(name, written)}[#{list_text_as(args, written)}]"
 end
@@ -375,14 +347,10 @@ end
 # The name with the alias that `written` has for the linked name or, failing that, for its prefix.
 def written_name(name: String, written: Map[String, String]) -> String
   bare = display_name(name)
-  if written.size == 0 or bare == name
-    return bare
-  end
+  return bare if written.size == 0 or bare == name
 
   alias = written.get(name, written.get(name.slice(0, name.length - bare.length), ""))
-  if alias == ""
-    return bare
-  end
+  return bare if alias == ""
 
   return "#{alias}.#{bare}"
 end

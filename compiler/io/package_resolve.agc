@@ -177,9 +177,7 @@ end
 
 # Records that the package `wanted.by` asked for a source of an overridden name other than the one that won.
 def note_asked(asked: Map[String, List[String]], winner: Lock.Locked, wanted: Wanted) -> Map[String, List[String]]
-  if GitSource.same?(winner.source, wanted.source)
-    return asked
-  end
+  return asked if GitSource.same?(winner.source, wanted.source)
 
   names: List[String] = []
   if asked.has_key?(wanted.name)
@@ -197,9 +195,7 @@ def collect_manifest(
 ) -> Map[String, Found_artifact]
   for library in manifest.natives
     for place in library.places
-      if place.url == ""
-        next
-      end
+      next if place.url == ""
 
       here = Reader.child("native", library.name)
       row = Reader.child(here, place.system)
@@ -226,9 +222,7 @@ end
 
 # One name must stand for one source in a build, whoever asks for it.
 def agree(locked: Lock.Locked, wanted: Wanted) -> Result[Void]
-  if GitSource.same?(locked.source, wanted.source)
-    return ok()
-  end
+  return ok() if GitSource.same?(locked.source, wanted.source)
 
   asked = GitSource.describe(wanted.source)
   message = "#{wanted.name} is #{asked}, but another package has it at #{GitSource.describe(locked.source)}"
@@ -308,9 +302,7 @@ def asked_by(
   end
 
   file = Paths.join(folder, MANIFEST_FILE)
-  if !settings.workspace.file_exists.call(file)
-    return ok([])
-  end
+  return ok([]) if !settings.workspace.file_exists.call(file)
 
   manifest = try Manifest.read(settings.workspace, file)
   try Manifest.require_package(manifest)

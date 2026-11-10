@@ -29,9 +29,7 @@ export def first_problem(linked: Linker.Linked, styled: Set[String]) -> Optional
   for module in linked.modules
     if module.max_line_width > 0
       wide = line_too_long(module.file, module.text, module.max_line_width)
-      if !wide.none?
-        return wide
-      end
+      return wide if !wide.none?
     end
 
     if module.blank_line_after_end and !styled.include?(module.file)
@@ -98,9 +96,7 @@ def problem_in(file: String, text: String) -> Optional[Failure.Problem]
   case Lexer.lex(text)
     Diag.Outcome.Done(tokens) ->
       missing_ends = missing_lines(text, tokens)
-      if missing_ends.size == 0
-        return none
-      end
+      return none if missing_ends.size == 0
 
       return some(missing(file, missing_ends[0]))
     # A file that linked lexes again, so this arm does not happen.

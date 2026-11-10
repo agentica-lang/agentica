@@ -97,9 +97,7 @@ end
 # The name that `import {name}` of the declaration binds, `none` when it does not import `name`.
 def bound_as(item: Ast.ImportDecl, name: String) -> Optional[String]
   for imported in item.names
-    if imported.name == name
-      return some(imported.local)
-    end
+    return some(imported.local) if imported.name == name
   end
 
   return none
@@ -116,9 +114,7 @@ def of_expr(expr: Ast.Expr) -> List[Mention]
 end
 
 def qualified(name: String, span: Source.Span) -> List[Mention]
-  if name.contains?(".")
-    return [Mention(name: name, span: span)]
-  end
+  return [Mention(name: name, span: span)] if name.contains?(".")
 
   return []
 end

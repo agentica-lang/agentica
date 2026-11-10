@@ -14,9 +14,7 @@ export def text(found: Model.TypeAt) -> String
   end
 
   head = "#{found.position.file}:#{range(found.range)} #{first_line(found.text)}: #{type}"
-  if found.definition.size == 0
-    return "#{head}\n#{builtin_lines(found.signatures)}"
-  end
+  return "#{head}\n#{builtin_lines(found.signatures)}" if found.definition.size == 0
 
   definition = found.definition[0]
   return "#{head}\n#{definition.file}:#{start(definition.name_range)} #{definition.kind} #{definition.name}\n"
@@ -34,9 +32,7 @@ end
 # The text up to its first line break, with "..." when more follows: a block spans lines and the answer is one line.
 def first_line(text: String) -> String
   lines = text.split("\n")
-  if lines.size > 1
-    return "#{lines[0]} ..."
-  end
+  return "#{lines[0]} ..." if lines.size > 1
 
   return text
 end

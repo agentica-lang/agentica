@@ -25,14 +25,10 @@ export def check_regex(cx: State.Cx, st: State.St, node: Ast.RegexLit) -> Result
 
   # The body alone first, so the place in the message counts the characters of the body as written.
   body = Regex.compile(node.body)
-  if !body.ok?
-    return error(invalid(cx, st, node, body.message))
-  end
+  return error(invalid(cx, st, node, body.message)) if !body.ok?
 
   whole = Regex.compile(pattern_of(node))
-  if !whole.ok?
-    return error(invalid(cx, st, node, whole.message))
-  end
+  return error(invalid(cx, st, node, whole.message)) if !whole.ok?
 
   return State.expr(cx, st, node.call, T.Type.Unknown)
 end

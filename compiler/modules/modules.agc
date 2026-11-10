@@ -354,9 +354,7 @@ def take_cached(walk: Walk, key: String, text: String, entry: Optional[CheckCach
     some(found) ->
       if walk.stubs and found.stub != ""
         stub = parse_source(key, found.stub, walk.next_id)
-        if stub.ok?
-          return ok(Taken(program: stub.unwrap!, first_id: walk.next_id, fresh: true, stubbed: true))
-        end
+        return ok(Taken(program: stub.unwrap!, first_id: walk.next_id, fresh: true, stubbed: true)) if stub.ok?
       end
 
     none -> entry = entry
@@ -383,9 +381,7 @@ end
 
 # Each step reads one import of the file on top of the stack, or finishes that file.
 def run(settings: Env.Settings, walk: Walk) -> Result[Walk]
-  if walk.stack.size == 0
-    return ok(walk)
-  end
+  return ok(walk) if walk.stack.size == 0
 
   following = try step(settings, walk)
   return run(settings, following)
@@ -393,13 +389,9 @@ end
 
 def step(settings: Env.Settings, walk: Walk) -> Result[Walk]
   frame = walk.stack[walk.stack.size - 1]
-  if frame.next >= frame.imports.size
-    return finish(walk, frame)
-  end
+  return finish(walk, frame) if frame.next >= frame.imports.size
 
-  if frame.pending != ""
-    return bind_names(settings, walk, frame, frame.imports[frame.next])
-  end
+  return bind_names(settings, walk, frame, frame.imports[frame.next]) if frame.pending != ""
 
   return read_import(settings, walk, frame, frame.imports[frame.next])
 end
@@ -495,9 +487,7 @@ end
 # can be read in this walk; else as it is, to be checked in full.
 def vouched_clean(walk: Walk, module: Module) -> Module
   names = CheckCache.constant_names(module.program)
-  if names.size != module.held.size
-    return module
-  end
+  return module if names.size != module.held.size
 
   prefixes = {module.key: module.prefix}
   if names.size > 0
@@ -508,14 +498,10 @@ def vouched_clean(walk: Walk, module: Module) -> Module
 
   types: Map[String, T.Type] = {}
   for name in names
-    if !module.held.has_key?(name)
-      return module
-    end
+    return module if !module.held.has_key?(name)
 
     type = TypeCode.decode(module.held[name], prefixes)
-    if !type.ok?
-      return module
-    end
+    return module if !type.ok?
 
     types = types.put(module.prefix + name, type.unwrap!)
   end
@@ -589,9 +575,7 @@ end
 
 # An alias import is done once read; a name list waits for its file (pending).
 def after_read(frame: Frame, aliases: Map[String, String], target: String, decl: Ast.ImportDecl) -> Frame
-  if decl.names.size == 0
-    return frame.with(aliases: aliases, next: frame.next + 1)
-  end
+  return frame.with(aliases: aliases, next: frame.next + 1) if decl.names.size == 0
 
   return frame.with(aliases: aliases, pending: target)
 end
@@ -827,17 +811,13 @@ end
 
 # A file that came from the Kept files lies below the next id, so only a parsed one moves it.
 def max_of(a: Int, b: Int) -> Int
-  if a > b
-    return a
-  end
+  return a if a > b
 
   return b
 end
 
 def counted(parsed: Int, fresh: Bool) -> Int
-  if fresh
-    return parsed + 1
-  end
+  return parsed + 1 if fresh
 
   return parsed
 end
@@ -849,9 +829,7 @@ def collect(settings: Env.Settings, file: String, declarations: List[Ast.Decl]) 
   public: Map[String, Declarations.Kind] = {}
   for wrapped in declarations
     kind = Declarations.kind_of(wrapped)
-    if Declarations.import?(kind)
-      next
-    end
+    next if Declarations.import?(kind)
 
     name = Declarations.name_of(wrapped)
     if names.has_key?(name) or BARE_NAMES.include?(name) or RESERVED.include?(name)

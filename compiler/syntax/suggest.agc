@@ -65,18 +65,14 @@ def nearest(name: String, ordered: List[String], limit: Int) -> Optional[String]
     end
   end
 
-  if best_distance > limit
-    return none
-  end
+  return none if best_distance > limit
 
   return some(best)
 end
 
 # One row of the table per character of the left word; the answer is the end of the last row.
 def last_row(left: List[String], right: List[String], index: Int, previous: List[Int]) -> Int
-  if index > left.size
-    return previous[right.size]
-  end
+  return previous[right.size] if index > left.size
 
   return last_row(left, right, index + 1, next_row(left[index - 1], right, index, previous))
 end

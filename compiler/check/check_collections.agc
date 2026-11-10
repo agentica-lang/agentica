@@ -59,9 +59,7 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
     return error(spawn_mismatch(cx, callback, site, owning, wanted))
   end
 
-  if wanted == 0
-    return ok(State.Out(st: callback.st, type: T.Type.Task(T.result(callback.type))))
-  end
+  return ok(State.Out(st: callback.st, type: T.Type.Task(T.result(callback.type)))) if wanted == 0
 
   handed = try State.expr(cx, callback.st, site.args[1], T.params(callback.type)[0])
   if owning and !holds_handle?(cx, handed.type)
@@ -113,9 +111,7 @@ end
 
 # What a spawn was given in place of its function, for the message.
 def spawn_found(type: T.Type) -> String
-  if T.is?(type, "Fn")
-    return "a function with #{T.params(type).size} parameter(s)"
-  end
+  return "a function with #{T.params(type).size} parameter(s)" if T.is?(type, "Fn")
 
   return T.to_text(type)
 end
@@ -145,9 +141,7 @@ def holds?(cx: State.Cx, type: T.Type, found: Fn[T.Type, Bool]) -> Bool
   while at < todo.size
     current = todo[at]
     at += 1
-    if found.call(current)
-      return true
-    end
+    return true if found.call(current)
 
     todo = todo.concat(type_parts(cx, current, seen))
     if T.is?(current, "Struct") or T.is?(current, "Enum")
@@ -167,15 +161,11 @@ def type_parts(cx: State.Cx, type: T.Type, seen: Set[String]) -> List[T.Type]
     T.Type.List(item) -> return [item]
     T.Type.Map(key, value) -> return [key, value]
     T.Type.Struct(name, args) ->
-      if seen.include?(name) or !cx.structs.has_key?(name)
-        return args
-      end
+      return args if seen.include?(name) or !cx.structs.has_key?(name)
 
       return args.concat(cx.structs[name].map do |field: Model.Named| field.type end)
     T.Type.Enum(name, args) ->
-      if seen.include?(name) or !cx.enums.has_key?(name)
-        return args
-      end
+      return args if seen.include?(name) or !cx.enums.has_key?(name)
 
       payloads = cx.enums[name].variants.flat_map do |variant: Model.Variant| variant.payload end
       return args.concat(payloads)
@@ -207,9 +197,7 @@ def check_native_target(cx: State.Cx, st: State.St, site: State.Site, closed: Bo
     )
   end
 
-  if closed
-    return ok(State.Out(st: target.st, type: T.Type.Bool))
-  end
+  return ok(State.Out(st: target.st, type: T.Type.Bool)) if closed
 
   return ok(State.Out(st: target.st, type: T.Type.Void))
 end
@@ -253,15 +241,11 @@ def check_native_struct(cx: State.Cx, st: State.St, site: State.Site) -> Result[
     Ast.Expr.TypeName(node) ->
       ref = Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span)
       type = try CheckTypes.resolve_type(cx, current, ref, false)
-      if !c_struct?(cx, type)
-        return error(not_c_struct(cx, current, name, T.to_text(type), node.span))
-      end
+      return error(not_c_struct(cx, current, name, T.to_text(type), node.span)) if !c_struct?(cx, type)
 
       # The lowering reads the struct from the type name's own type, so an alias gives the struct it names.
       current = State.record_type(current, node.id, type)
-      if name == "Native.size_of"
-        return ok(State.Out(st: current, type: T.Type.Int))
-      end
+      return ok(State.Out(st: current, type: T.Type.Int)) if name == "Native.size_of"
 
       return ok(State.Out(st: current, type: type))
     _ -> return error(not_c_struct(cx, current, name, "a value", Ast.expr_span(last)))
@@ -388,9 +372,7 @@ end
 
 def check_await(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   target = try State.expr(cx, st, site.args[0], T.task_of(site.expected))
-  if !T.is?(target.type, "Task")
-    return error(not_awaitable(cx, target, site))
-  end
+  return error(not_awaitable(cx, target, site)) if !T.is?(target.type, "Task")
 
   return ok(State.Out(st: target.st, type: T.item(target.type)))
 end
@@ -416,9 +398,7 @@ def check_await_timeout(cx: State.Cx, st: State.St, site: State.Site) -> Result[
   end
 
   target = try State.expr(cx, st, site.args[0], context)
-  if !T.is?(target.type, "Task")
-    return error(not_awaitable(cx, target, site))
-  end
+  return error(not_awaitable(cx, target, site)) if !T.is?(target.type, "Task")
 
   timeout = try State.expr(cx, target.st, site.args[1], T.Type.Int)
   return ok(State.Out(st: timeout.st, type: T.Type.Enum("Await", [T.item(target.type)])))
@@ -489,9 +469,7 @@ end
 # The Result type the block must give: the item of the expected list when that is a Result, else Result[Unknown], which
 # says the body decides the inner type.
 def task_map_block_result(expected: T.Type) -> T.Type
-  if T.is?(expected, "List") and T.is?(T.item(expected), "Result")
-    return T.item(expected)
-  end
+  return T.item(expected) if T.is?(expected, "List") and T.is?(T.item(expected), "Result")
 
   return T.Type.Result(T.Type.Unknown)
 end
@@ -499,9 +477,7 @@ end
 # The call gives a list of the callback's Results; a callback that gives anything else is CHECK-TYPE-MISMATCH.
 def task_map_result(cx: State.Cx, st: State.St, callback: T.Type, span: Source.Span) -> Result[State.Out]
   result = T.result(callback)
-  if !T.is?(result, "Result")
-    return error(State.mismatch(cx, st, T.Type.Result(T.Type.Var("T")), result, span))
-  end
+  return error(State.mismatch(cx, st, T.Type.Result(T.Type.Var("T")), result, span)) if !T.is?(result, "Result")
 
   return ok(State.Out(st: st, type: T.Type.List(result)))
 end
@@ -644,9 +620,7 @@ end
 
 # How the help of check_block_value names the parameters of the block: "with no parameters", "that takes C.Pointer".
 def block_parameters(params: List[T.Type]) -> String
-  if params.size == 0
-    return "with no parameters"
-  end
+  return "with no parameters" if params.size == 0
 
   return "that takes #{params.map do |param: T.Type| T.to_text(param) end.join(", ")}"
 end
@@ -803,9 +777,7 @@ def check_set_combine(cx: State.Cx, st: State.St, site: State.Site, subset: Bool
 
   target = try Args.set_argument(cx, st, site, context)
   other = try State.expr(cx, target.st, site.args[1], target.type)
-  if subset
-    return ok(State.Out(st: other.st, type: T.Type.Bool))
-  end
+  return ok(State.Out(st: other.st, type: T.Type.Bool)) if subset
 
   return ok(State.Out(st: other.st, type: target.type))
 end

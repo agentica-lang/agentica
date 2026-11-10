@@ -12,9 +12,7 @@ import GitSource from "git_source"
 ## leave no place for it: an unset HOME, or a relative or unset LOCALAPPDATA.
 export def root(env: Env.Env) -> String
   if env.windows
-    if Paths.absolute?(env.local_app_data, true)
-      return Paths.join(env.local_app_data, "agentica/cache/pkg")
-    end
+    return Paths.join(env.local_app_data, "agentica/cache/pkg") if Paths.absolute?(env.local_app_data, true)
 
     return ""
   elsif env.xdg_cache_home.starts_with?("/")

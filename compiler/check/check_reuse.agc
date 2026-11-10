@@ -80,14 +80,10 @@ def planned(
   clean: List[String] = []
   constants: Map[String, T.Type] = {}
   for module in linked.modules
-    if !wanted.include?(module.key) or !earlier.has_key?(module.key)
-      next
-    end
+    next if !wanted.include?(module.key) or !earlier.has_key?(module.key)
 
     old = earlier[module.key]
-    if old.first_id != module.first_id or old.next_id != module.next_id
-      next
-    end
+    next if old.first_id != module.first_id or old.next_id != module.next_id
 
     found = constants_of(module, old_constants)
     if found.ok?
@@ -169,9 +165,7 @@ def placed(linked: Linker.Linked, before: Linker.Linked, stretches: List[Stretch
   local = id
   shift = 0
   if before.receivers >= 0 and id >= before.receivers
-    if linked.receivers < 0
-      return -1
-    end
+    return -1 if linked.receivers < 0
 
     local = id - before.receivers
     shift = linked.receivers

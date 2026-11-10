@@ -251,9 +251,7 @@ def rank(decl: Ast.Decl) -> Int
 end
 
 def resource_rank(resource: Ast.ResourceDecl, plain: Int) -> Int
-  if resource.module != ""
-    return plain
-  end
+  return plain if resource.module != ""
 
   return 2
 end
@@ -263,9 +261,7 @@ end
 def function_rank(function: Ast.FunctionDecl, plain: Int) -> Int
   case function.native
     some(link) ->
-      if link.with_types
-        return 2
-      end
+      return 2 if link.with_types
 
       return plain
     none -> return plain
@@ -290,9 +286,7 @@ def order_help(group: Int) -> String
 end
 
 def entry_text(entry: Ast.ImportName) -> String
-  if entry.name == entry.local
-    return entry.name
-  end
+  return entry.name if entry.name == entry.local
 
   return "#{entry.name} as #{entry.local}"
 end

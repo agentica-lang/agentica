@@ -110,9 +110,7 @@ def remembered(
 ) -> Workspace.Built
   name = [request.file, request.key, request.root, request.system].join("\n")
   kept = ATS.get(memo, name)
-  if kept.ok?
-    return answer(kept.unwrap!)
-  end
+  return answer(kept.unwrap!) if kept.ok?
 
   text = ""
   case attempt(request, noted)
@@ -168,9 +166,7 @@ def attempt(request: Workspace.BuildRequest, noted: Bool) -> Result[String]
   sweep(base)
   entry = Paths.join(base, OpenSSL.Digest.sha256_hexdigest(key.bytes))
   name = NativeBuild.output_name(request.library, request.system)
-  if File.lstat(entry, FILE_TIMEOUT_MS).ok?
-    return verified(request, entry, name, user)
-  end
+  return verified(request, entry, name, user) if File.lstat(entry, FILE_TIMEOUT_MS).ok?
 
   lock = try locked(request, "#{entry}.lock", user)
   built = ok("")
@@ -196,9 +192,7 @@ def locked(request: Workspace.BuildRequest, path: String, user: Int) -> Result[F
   if !opened.ok?
     # A read handle: on Windows LockFileEx refuses a handle opened only to append.
     opened = File.open(path, "read", FILE_TIMEOUT_MS)
-    if !opened.ok?
-      return error(fail(request, "cannot open the lock file #{path}: #{opened.message}", help))
-    end
+    return error(fail(request, "cannot open the lock file #{path}: #{opened.message}", help)) if !opened.ok?
 
     if !CacheFiles.private_kind(path, "file", user).ok?
       _ = File.close(opened.unwrap!, FILE_TIMEOUT_MS)
@@ -215,9 +209,7 @@ def locked(request: Workspace.BuildRequest, path: String, user: Int) -> Result[F
       return error(fail(request, "cannot lock #{path}: #{taken.message}", ""))
     end
 
-    if taken.unwrap!
-      return ok(handle)
-    end
+    return ok(handle) if taken.unwrap!
 
     if Time.monotonic_ms() > deadline
       _ = File.close(handle, FILE_TIMEOUT_MS)
@@ -248,9 +240,7 @@ end
 # of a build can lose its folder here; its rename then fails and the build is PKG-NATIVE-BUILD, never a half entry.
 def sweep(base: String) -> Void
   names = Dir.list(base, FILE_TIMEOUT_MS)
-  if !names.ok?
-    return
-  end
+  return if !names.ok?
 
   now = Time.now_ms() / 1000
   for name in names.unwrap!
@@ -269,14 +259,10 @@ def compiler_words(system: String) -> List[String]
   set = System.env("CC")
   if set.ok?
     words = set.unwrap!.split(" ").filter do |word: String| word != "" end
-    if words.size > 0
-      return words
-    end
+    return words if words.size > 0
   end
 
-  if system == "windows"
-    return ["gcc"]
-  end
+  return ["gcc"] if system == "windows"
 
   return ["cc"]
 end
@@ -317,9 +303,7 @@ def run(request: Workspace.BuildRequest, compiler: List[String], arguments: List
 
   waited = Process.wait(child, START_TIMEOUT_MS)
   Process.close(child)
-  if !waited.ok?
-    return error(fail(request, "the C compiler did not finish: #{waited.message}", ""))
-  end
+  return error(fail(request, "the C compiler did not finish: #{waited.message}", "")) if !waited.ok?
 
   out = output.unwrap!
   return ok(Ran(status: waited.unwrap!, stdout: out.stdout, stderr: out.stderr))
@@ -334,9 +318,7 @@ end
 
 # The SHA-256 of each file of native/, in the order of the request: of the bytes it carries for a fetched package.
 def key_digests(request: Workspace.BuildRequest) -> Result[List[String]]
-  if request.pinned != ""
-    return ok(request.contents.map do |bytes: Bytes| OpenSSL.Digest.sha256_hexdigest(bytes) end)
-  end
+  return ok(request.contents.map do |bytes: Bytes| OpenSSL.Digest.sha256_hexdigest(bytes) end) if request.pinned != ""
 
   return file_digests(request)
 end
@@ -357,15 +339,11 @@ end
 # Makes the `native-build` folder private to this user (or checks it) and gives the user id (-1 on Windows).
 def private_base(request: Workspace.BuildRequest, base: String) -> Result[Int]
   user = CacheFiles.own_user()
-  if !user.ok?
-    return error(fail(request, "cannot use the build cache: #{user.message}", ""))
-  end
+  return error(fail(request, "cannot use the build cache: #{user.message}", "")) if !user.ok?
 
   _ = Dir.mkdir(request.cache_root, FILE_TIMEOUT_MS)
   made = CacheFiles.private_folder(base, user.unwrap!)
-  if !made.ok?
-    return error(fail(request, "cannot use the build cache: #{made.message}", "remove the folder #{base}"))
-  end
+  return error(fail(request, "cannot use the build cache: #{made.message}", "remove the folder #{base}")) if !made.ok?
 
   return user
 end
@@ -438,9 +416,7 @@ def compile_in(
   digests: List[String],
 ) -> Result[Void]
   include = Paths.join(folder, INCLUDE_FOLDER)
-  if !Dir.mkdir_private(include, FILE_TIMEOUT_MS).ok?
-    return error(fail(request, "cannot write the build cache", ""))
-  end
+  return error(fail(request, "cannot write the build cache", "")) if !Dir.mkdir_private(include, FILE_TIMEOUT_MS).ok?
 
   if !CacheFiles.write_private(Paths.join(include, HEADER_NAME), header.bytes).ok?
     return error(fail(request, "cannot write the build cache", ""))
@@ -471,17 +447,13 @@ def compile_in(
   # A file that changed while the compiler read it is not the one the key names: store nothing. The copy of a fetched
   # package is private, and it is not part of the entry.
   if request.pinned != ""
-    if !Path.remove(source.root, FILE_TIMEOUT_MS).ok?
-      return error(fail(request, "cannot write the build cache", ""))
-    end
+    return error(fail(request, "cannot write the build cache", "")) if !Path.remove(source.root, FILE_TIMEOUT_MS).ok?
   elsif try file_digests(request) != digests
     return error(fail(request, "a file of native/ changed during the build", "run again to build the new files"))
   end
 
   receipt = CacheFiles.write_private(Paths.join(folder, RECEIPT), OpenSSL.Digest.hexencode(digest.unwrap!).bytes)
-  if !receipt.ok?
-    return error(fail(request, "cannot write the build cache", ""))
-  end
+  return error(fail(request, "cannot write the build cache", "")) if !receipt.ok?
 
   return ok()
 end
@@ -489,15 +461,11 @@ end
 # The request to compile: the one given for a package read in place; for a fetched package, the same with its root at
 # a private copy in `folder` of the files it carries.
 def source_of(request: Workspace.BuildRequest, folder: String) -> Result[Workspace.BuildRequest]
-  if request.pinned == ""
-    return ok(request)
-  end
+  return ok(request) if request.pinned == ""
 
   root = Paths.join(folder, COPY_FOLDER)
   for made in [root].concat(copy_folders(request.files).map do |inner: String| Paths.join(root, inner) end)
-    if !Dir.mkdir_private(made, FILE_TIMEOUT_MS).ok?
-      return error(fail(request, "cannot write the build cache", ""))
-    end
+    return error(fail(request, "cannot write the build cache", "")) if !Dir.mkdir_private(made, FILE_TIMEOUT_MS).ok?
   end
 
   for index in 0...request.files.size
@@ -528,9 +496,7 @@ end
 # What the compiler said, with the folder of the private copy of a fetched package named by the package folder it was
 # copied from, so `native/x.c:3:1: error` points at a file the user can open (the copy is removed after the build).
 def in_package(text: String, copy: String, root: String) -> String
-  if copy == root
-    return text
-  end
+  return text if copy == root
 
   return text.replace(copy, root)
 end
@@ -538,18 +504,14 @@ end
 # The start of the compiler's standard error, where its first error is, in at most MAX_SHOWN characters.
 def shown(text: String) -> String
   trimmed = text.strip
-  if trimmed.length <= MAX_SHOWN
-    return trimmed
-  end
+  return trimmed if trimmed.length <= MAX_SHOWN
 
   return "#{trimmed.slice(0, MAX_SHOWN)}..."
 end
 
 # The text as IO.warn prints it: it adds the line feed that ends the compiler's last line.
 def without_line_end(text: String) -> String
-  if text.ends_with?("\n")
-    return text.slice(0, text.length - 1)
-  end
+  return text.slice(0, text.length - 1) if text.ends_with?("\n")
 
   return text
 end
@@ -569,9 +531,7 @@ def make_temp(request: Workspace.BuildRequest, base: String) -> Result[String]
 end
 
 def fail(request: Workspace.BuildRequest, message: String, help: String) -> String
-  if help == ""
-    return Failure.fail_key(request.file, request.key, "PKG-NATIVE-BUILD", message, Diag.Help.NoHelp)
-  end
+  return Failure.fail_key(request.file, request.key, "PKG-NATIVE-BUILD", message, Diag.Help.NoHelp) if help == ""
 
   return Failure.fail_key(request.file, request.key, "PKG-NATIVE-BUILD", message, Failure.hint(help))
 end

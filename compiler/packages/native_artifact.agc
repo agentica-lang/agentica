@@ -64,17 +64,13 @@ end
 ## Whether the hash names 32 bytes in 64 lowercase hex digits. The archive check compares it after the download, so a
 ## row with a short, long or uppercase hash fails here, before any network use.
 export def valid_sha?(sha: String) -> Bool
-  if sha.length != SHA_HEX_LENGTH
-    return false
-  end
+  return false if sha.length != SHA_HEX_LENGTH
 
   for c in String.split(sha, "")
     code = String.code(c)
     digit = code >= 48 and code <= 57
     lower = code >= 97 and code <= 102
-    if not digit and not lower
-      return false
-    end
+    return false if not digit and not lower
   end
 
   return true
@@ -84,41 +80,27 @@ end
 ## path, drive letter, UNC share, backslash, colon or NUL byte, and no empty, "." or ".." segment. The spelling after
 ## the strip is canonical: "./lib.so" and "lib.so" name one member.
 export def canonical_member(member: String) -> Result[String]
-  if member == ""
-    return error("a member must not be empty")
-  end
+  return error("a member must not be empty") if member == ""
 
-  if member.bytesize > NAME_LIMIT_BYTES
-    return error("a member is longer than 1024 bytes")
-  end
+  return error("a member is longer than 1024 bytes") if member.bytesize > NAME_LIMIT_BYTES
 
   path = member
   if String.starts_with?(path, "./")
     path = String.slice(path, 2, String.length(path) - 2)
   end
 
-  if path == "" or path == "."
-    return error("a member must name a file, not the root")
-  end
+  return error("a member must name a file, not the root") if path == "" or path == "."
 
-  if String.starts_with?(path, "/")
-    return error("a member must be a relative path")
-  end
+  return error("a member must be a relative path") if String.starts_with?(path, "/")
 
   for b in path.bytes
-    if b == 0
-      return error("a member must not hold a NUL byte")
-    end
+    return error("a member must not hold a NUL byte") if b == 0
 
-    if b == 92 or b == 58
-      return error("a member must not hold a backslash or a colon")
-    end
+    return error("a member must not hold a backslash or a colon") if b == 92 or b == 58
   end
 
   for seg in String.split(path, "/")
-    if seg == "" or seg == "." or seg == ".."
-      return error("a member must be a safe relative path")
-    end
+    return error("a member must be a safe relative path") if seg == "" or seg == "." or seg == ".."
   end
 
   return ok(path)
@@ -162,18 +144,12 @@ end
 ## port and bracket rules are std/http's, which rechecks before it sends.
 export def url_allowed?(url: String) -> Bool
   parsed = parse_url(url)
-  if !parsed.ok?
-    return false
-  end
+  return false if !parsed.ok?
 
   parts = parsed.unwrap!
-  if parts.scheme == "https"
-    return true
-  end
+  return true if parts.scheme == "https"
 
-  if parts.scheme == "http" and (parts.host == "127.0.0.1" or parts.host == "::1")
-    return true
-  end
+  return true if parts.scheme == "http" and (parts.host == "127.0.0.1" or parts.host == "::1")
 
   return false
 end
@@ -183,9 +159,7 @@ end
 export def downgrade?(current: String, next: String) -> Bool
   current_parts = parse_url(current)
   next_parts = parse_url(next)
-  if !current_parts.ok? or !next_parts.ok?
-    return false
-  end
+  return false if !current_parts.ok? or !next_parts.ok?
 
   return current_parts.unwrap!.scheme == "https" and next_parts.unwrap!.scheme == "http"
 end
@@ -194,14 +168,10 @@ end
 ## a positive budget before it sends anything, so a fetch that already wrote `total` bytes stops without further
 ## I/O. The engine passes TOTAL_BODY_BYTES; tests pass tiny totals to prove the arithmetic without huge fixtures.
 export def hop_budget(consumed: Int, total: Int) -> Result[Int]
-  if total <= 0 or consumed < 0
-    return error("the budget is not usable")
-  end
+  return error("the budget is not usable") if total <= 0 or consumed < 0
 
   remaining = total - consumed
-  if remaining <= 0
-    return error("the budget is spent")
-  end
+  return error("the budget is spent") if remaining <= 0
 
   return ok(remaining)
 end
@@ -219,14 +189,10 @@ end
 ## for the engine to pack with the caller's file and key, without the secrets a Location may carry.
 export def resolve_location(current: String, location: String) -> Result[String]
   bare = String.slice(location, 0, first_index(location, "#"))
-  if bare == ""
-    return error("the redirect holds no usable location")
-  end
+  return error("the redirect holds no usable location") if bare == ""
 
   for b in bare.bytes
-    if b < 32 or b == 127
-      return error("the redirect holds no usable location")
-    end
+    return error("the redirect holds no usable location") if b < 32 or b == 127
   end
 
   if has_scheme?(bare)
@@ -260,17 +226,13 @@ end
 # Whether the text starts with a scheme (`name://` of letters, digits, "+" "-" and ".").
 def has_scheme?(text: String) -> Bool
   stop = first_index(text, "://")
-  if stop == 0 or stop == String.length(text)
-    return false
-  end
+  return false if stop == 0 or stop == String.length(text)
 
   for c in String.split(String.slice(text, 0, stop), "")
     code = String.code(c)
     letter = (code >= 65 and code <= 90) or (code >= 97 and code <= 122)
     rest = (code >= 48 and code <= 57) or code == 43 or code == 45 or code == 46
-    if not letter and not rest
-      return false
-    end
+    return false if not letter and not rest
   end
 
   return stop < String.length(text) - 3
@@ -278,9 +240,7 @@ end
 
 def split_query(target: String) -> Halves
   stop = first_index(target, "?")
-  if stop == String.length(target)
-    return Halves(before: target, after: "")
-  end
+  return Halves(before: target, after: "") if stop == String.length(target)
 
   return Halves(before: String.slice(target, 0, stop), after: String.slice(target, stop, String.length(target) - stop))
 end
@@ -288,9 +248,7 @@ end
 def current_folder(target: String) -> String
   bare = split_query(target).before
   parts = String.split(bare, "/")
-  if parts.size <= 1
-    return "/"
-  end
+  return "/" if parts.size <= 1
 
   kept = parts.take(parts.size - 1)
   return kept.join("/") + "/"
@@ -299,14 +257,10 @@ end
 def normalize_path(path: String) -> Result[String]
   kept: List[String] = []
   for seg in String.split(path, "/")
-    if seg == "" or seg == "."
-      next
-    end
+    next if seg == "" or seg == "."
 
     if seg == ".."
-      if kept.size == 0
-        return error("the redirect climbs past the root")
-      end
+      return error("the redirect climbs past the root") if kept.size == 0
 
       kept = kept.take(kept.size - 1)
       next
@@ -328,25 +282,17 @@ end
 
 def parse_url(url: String) -> Result[Parts]
   for b in url.bytes
-    if b < 32 or b == 127
-      return error("the URL holds a control character")
-    end
+    return error("the URL holds a control character") if b < 32 or b == 127
   end
 
   stop = first_index(url, "://")
-  if stop == String.length(url)
-    return error("the URL must start with http:// or https://")
-  end
+  return error("the URL must start with http:// or https://") if stop == String.length(url)
 
   scheme = String.downcase(String.slice(url, 0, stop))
-  if scheme != "http" and scheme != "https"
-    return error("the URL must start with http:// or https://")
-  end
+  return error("the URL must start with http:// or https://") if scheme != "http" and scheme != "https"
 
   rest = String.slice(url, stop + 3, String.length(url) - stop - 3)
-  if String.contains?(rest, "#")
-    return error("the URL must not hold a fragment")
-  end
+  return error("the URL must not hold a fragment") if String.contains?(rest, "#")
 
   slash = first_index(rest, "/")
   query = first_index(rest, "?")
@@ -360,20 +306,14 @@ def parse_url(url: String) -> Result[Parts]
     target = "/#{target}"
   end
 
-  if String.contains?(authority, "@")
-    return error("the URL must not hold user info")
-  end
+  return error("the URL must not hold user info") if String.contains?(authority, "@")
 
   for b in authority.bytes
-    if b < 33 or b > 126
-      return error("the URL holds a bad authority")
-    end
+    return error("the URL holds a bad authority") if b < 33 or b > 126
   end
 
   parsed = try split_authority(authority)
-  if parsed.host == ""
-    return error("the URL must hold a host")
-  end
+  return error("the URL must hold a host") if parsed.host == ""
 
   return ok(Parts(scheme: scheme, authority: authority, host: parsed.host, target: target))
 end
@@ -381,19 +321,13 @@ end
 def split_authority(authority: String) -> Result[HostPort]
   if String.starts_with?(authority, "[")
     close = first_index(authority, "]")
-    if close == String.length(authority)
-      return error("the URL holds a bad host")
-    end
+    return error("the URL holds a bad host") if close == String.length(authority)
 
     host = String.slice(authority, 1, close - 1)
-    if not String.contains?(host, ":")
-      return error("the URL holds a bad host")
-    end
+    return error("the URL holds a bad host") if not String.contains?(host, ":")
 
     after = String.slice(authority, close + 1, String.length(authority) - close - 1)
-    if after != "" and (after == ":" or not String.starts_with?(after, ":"))
-      return error("the URL holds a bad port")
-    end
+    return error("the URL holds a bad port") if after != "" and (after == ":" or not String.starts_with?(after, ":"))
 
     port = ""
     if after != ""
@@ -408,9 +342,7 @@ def split_authority(authority: String) -> Result[HostPort]
     colon = first_index(authority, ":")
     host = String.slice(authority, 0, colon)
     port = String.slice(authority, colon + 1, String.length(authority) - colon - 1)
-    if port == ""
-      return error("the URL holds a bad port")
-    end
+    return error("the URL holds a bad port") if port == ""
 
     try check_port(port)
     return ok(HostPort(host: String.downcase(host), port: port))
@@ -420,25 +352,17 @@ def split_authority(authority: String) -> Result[HostPort]
 end
 
 def check_port(port: String) -> Result[Void]
-  if port == ""
-    return ok()
-  end
+  return ok() if port == ""
 
-  if port.length > 5
-    return error("the URL holds a bad port")
-  end
+  return error("the URL holds a bad port") if port.length > 5
 
   for c in String.split(port, "")
     code = String.code(c)
-    if code < 48 or code > 57
-      return error("the URL holds a bad port")
-    end
+    return error("the URL holds a bad port") if code < 48 or code > 57
   end
 
   number = String.to_int!(port)
-  if number < 1 or number > 65535
-    return error("the URL holds a bad port")
-  end
+  return error("the URL holds a bad port") if number < 1 or number > 65535
 
   return ok()
 end

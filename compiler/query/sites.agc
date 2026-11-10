@@ -130,16 +130,12 @@ export def imported(module: Linker.LinkedModule, offset: Int) -> Optional[Target
         for entry in node.names
           on_name = holds?(entry.span, offset) or holds?(entry.local_span, offset)
           linked = module.named.get(entry.local)
-          if on_name and linked.some?
-            return some(named(linked.unwrap!))
-          end
+          return some(named(linked.unwrap!)) if on_name and linked.some?
         end
 
       Ast.Decl.Reexport(node) ->
         linked = module.reexported.get(node.name)
-        if holds?(node.name_span, offset) and linked.some?
-          return some(named(linked.unwrap!))
-        end
+        return some(named(linked.unwrap!)) if holds?(node.name_span, offset) and linked.some?
 
       _ -> next
     end
@@ -291,9 +287,7 @@ def defined(scan: Scan, target: Target, span: Source.Span) -> List[Site]
 end
 
 def placed(scan: Scan, target: Target, kind: String, span: Source.Span, reach: Source.Span) -> List[Site]
-  if scan.wanted != "" and scan.wanted != target.key
-    return []
-  end
+  return [] if scan.wanted != "" and scan.wanted != target.key
 
   return [Site(target: target, kind: kind, span: span, reach: reach, function: scan.function)]
 end
@@ -353,15 +347,11 @@ def expression_sites(scan: Scan, expr: Ast.Expr) -> List[Site]
       )
     Ast.Expr.Update(node) -> return field_sites(scan, struct_of(scan, node.target), node.args, "construct")
     Ast.Expr.FieldAccess(node) ->
-      if glue?(node.span, node.name_span)
-        return []
-      end
+      return [] if glue?(node.span, node.name_span)
 
       return access_sites(scan, node.id, node.target, node.name, node.name_span)
     Ast.Expr.MethodCall(node) ->
-      if glue?(node.span, node.name_span)
-        return []
-      end
+      return [] if glue?(node.span, node.name_span)
 
       if State.field_call?(scan.resolved, node.id)
         return field_read_sites(scan, node.target, node.name, node.name_span)
@@ -388,9 +378,7 @@ end
 
 # `x.name`: a method that resolved to a builtin, else a field of the struct that the target is.
 def access_sites(scan: Scan, id: Int, target: Ast.Expr, name: String, name_span: Source.Span) -> List[Site]
-  if scan.resolved.has_key?(id)
-    return builtin_method_sites(scan, id, name_span)
-  end
+  return builtin_method_sites(scan, id, name_span) if scan.resolved.has_key?(id)
 
   return field_read_sites(scan, target, name, name_span)
 end
@@ -398,24 +386,18 @@ end
 # The read of a struct field of the program, or the call of an Fn field (`x.name(args)`).
 def field_read_sites(scan: Scan, target: Ast.Expr, name: String, name_span: Source.Span) -> List[Site]
   owner = struct_of(scan, target)
-  if !scan.declared.include?(owner)
-    return []
-  end
+  return [] if !scan.declared.include?(owner)
 
   return placed(scan, member("field", owner, name), "read", name_span, name_span)
 end
 
 def builtin_method_sites(scan: Scan, id: Int, name_span: Source.Span) -> List[Site]
   found = scan.resolved.get(id)
-  if found.none?
-    return []
-  end
+  return [] if found.none?
 
   case found.unwrap!
     State.Resolved.Call(name, _) ->
-      if CatalogJson.public(name).ok?
-        return placed(scan, named(name), "call", name_span, name_span)
-      end
+      return placed(scan, named(name), "call", name_span, name_span) if CatalogJson.public(name).ok?
 
       return []
     _ -> return []
@@ -425,9 +407,7 @@ end
 # The linked name of the struct that the checker gave the expression as its type; "" when there is none.
 def struct_of(scan: Scan, target: Ast.Expr) -> String
   id = Ast.expr_id(target)
-  if id < scan.types.size
-    return T.name(scan.types[id])
-  end
+  return T.name(scan.types[id]) if id < scan.types.size
 
   return ""
 end
@@ -435,19 +415,13 @@ end
 # The name of a function (a call, a `&f`) or of a builtin, written from `start`.
 def name_sites(scan: Scan, name: String, start: Source.Position, kind: String) -> List[Site]
   user = scan.declared.include?(name)
-  if !user and !CatalogJson.public(name).ok?
-    return []
-  end
+  return [] if !user and !CatalogJson.public(name).ok?
 
   parts = written(scan.text, start)
-  if parts.size == 0
-    return []
-  end
+  return [] if parts.size == 0
 
   whole = Source.Span(start: parts[0].start, stop: parts[parts.size - 1].stop)
-  if user
-    return placed(scan, named(name), kind, parts[parts.size - 1], whole)
-  end
+  return placed(scan, named(name), kind, parts[parts.size - 1], whole) if user
 
   # A builtin is named with its namespace (`File.read`), which is part of the name.
   return placed(scan, named(name), kind, whole, whole)
@@ -461,14 +435,10 @@ end
 # The same, reading only the names that end by offset `limit`: `Models.User.members` holds the type `Models.User`
 # and then a method, which the text read from the start of the type would take for part of the type name.
 def bounded_type_sites(scan: Scan, name: String, start: Source.Position, limit: Int, kind: String) -> List[Site]
-  if !scan.declared.include?(name) and !(scan.builtin_types and RESERVED.include?(name))
-    return []
-  end
+  return [] if !scan.declared.include?(name) and !(scan.builtin_types and RESERVED.include?(name))
 
   parts = written(scan.text, start).select do |part: Source.Span| part.stop.offset <= limit end
-  if parts.size == 0
-    return []
-  end
+  return [] if parts.size == 0
 
   last = parts[parts.size - 1]
   return placed(scan, named(name), kind, last, Source.Span(start: parts[0].start, stop: last.stop))
@@ -478,9 +448,7 @@ end
 # variant the last. A position on the module alias or the enum selects the enum.
 def enum_part_sites(scan: Scan, enum_name: String, variant_name: String, span: Source.Span, kind: String) -> List[Site]
   parts = written(scan.text, span.start)
-  if !scan.declared.include?(enum_name) or parts.size < 2
-    return []
-  end
+  return [] if !scan.declared.include?(enum_name) or parts.size < 2
 
   enum_part = parts[parts.size - 2]
   variant_part = parts[parts.size - 1]
@@ -493,9 +461,7 @@ end
 # The names of `name: value` pairs, which start at the name.
 def field_sites(scan: Scan, owner: String, args: List[Ast.NamedArg], kind: String) -> List[Site]
   out: List[Site] = []
-  if !scan.declared.include?(owner)
-    return out
-  end
+  return out if !scan.declared.include?(owner)
 
   for arg in args
     span = Source.Span(start: arg.span.start, stop: after(arg.span.start, arg.name.length))
@@ -592,9 +558,7 @@ end
 
 # Adds the span from `from` to `to` (excluded), counted from `start`, when it holds a character.
 def piece(parts: List[Source.Span], start: Source.Position, from: Int, to: Int) -> List[Source.Span]
-  if to <= from
-    return parts
-  end
+  return parts if to <= from
 
   span = Source.Span(start: after(start, from), stop: after(start, to))
   return parts.push(span)
