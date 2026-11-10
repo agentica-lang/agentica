@@ -256,6 +256,32 @@ static an_term area(an_env *env, int argc, const an_term *argv) {
 }
 
 /* Circle(n) for n > 0, else Dot; Rect from (0, 0) to (n, n) when it is a Circle already. */
+/* Reads back what it makes, one bit per check: bits 0 to 4 are set when an Int, a Float, a Bool, none and a variant
+   without a payload read back; bits 5 to 7 when a String, some and a variant with a payload do NOT. A dirty call gives
+   0xff (only those last three are staged) and a short call 0x1f. The argument only binds the Shape type. */
+static an_term read_made(an_env *env, int argc, const an_term *argv) {
+  int64_t n = 0;
+  double x = 0;
+  bool b = false, some = true, some_too = false;
+  uint32_t variant = 99, other;
+  const char *data;
+  size_t len;
+  an_term value, seven = an_int(env, 7);
+  (void)argc;
+  (void)argv;
+  int64_t bits = 0;
+  if (an_get_int(env, seven, &n) && n == 7) bits |= 1;
+  if (an_get_float(env, an_float(env, 1.5), &x) && x == 1.5) bits |= 2;
+  if (an_get_bool(env, an_bool(env, true), &b) && b) bits |= 4;
+  if (an_get_optional(env, an_none(env), &some, &value) && !some) bits |= 8;
+  if (an_get_variant(env, an_enum(env, SHAPE_TYPE, SHAPE_DOT, NULL), SHAPE_TYPE, &variant) && variant == SHAPE_DOT)
+    bits |= 16;
+  if (!an_get_string(env, an_string(env, "x", 1), &data, &len)) bits |= 32;
+  if (!an_get_optional(env, an_some(env, seven), &some_too, &value)) bits |= 64;
+  if (!an_get_variant(env, an_enum(env, SHAPE_TYPE, SHAPE_CIRCLE, &seven), SHAPE_TYPE, &other)) bits |= 128;
+  return an_int(env, bits);
+}
+
 static an_term grow(an_env *env, int argc, const an_term *argv) {
   uint32_t variant;
   int64_t n;
@@ -480,6 +506,8 @@ static const an_function functions[] = {
   {"dirty_grow", "(Shape, Int) -> Shape", grow, AN_DIRTY},
   {"dirty_points", "(Int) -> List[Point]", points, AN_DIRTY},
   {"dirty_bad_text", "() -> String", bad_text, AN_DIRTY},
+  {"read_made", "(Shape) -> Int", read_made, AN_SHORT},
+  {"dirty_read_made", "(Shape) -> Int", read_made, AN_DIRTY},
   {"counter", "(Int) -> Counter", make_counter, AN_SHORT},
   {"bump", "(Counter) -> Int", bump, AN_SHORT},
   {"wait_gate", "(Counter) -> Int", wait_gate, AN_DIRTY},

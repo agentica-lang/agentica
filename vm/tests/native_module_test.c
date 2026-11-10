@@ -494,6 +494,15 @@ static void test_dirty(void) {
                  "dirty_grow demo",
                  grown, 2));
   assert(square->variant == 4 && field(square->payload[1], 0) == 3);
+  // Which made terms a dirty call reads back (agentica_native.h, AN_DIRTY): scalars, none and a variant without a
+  // payload; a String, some and a variant with a payload are staged, so their getters give false.
+  agc_value dot = agc_enum_value(agc_new_enum(2, 0));
+  const char *shape = "{E0=Dot | Circle(Int) | Rect(Point, Point)}{S0=x: Int, y: Int}(Shape) -> Int ";
+  char signature[160];
+  snprintf(signature, sizeof signature, "compute module %sdirty_read_made demo", shape);
+  assert(agc_as_int(&vm, dirty(signature, &dot, 1)) == 0xff);
+  snprintf(signature, sizeof signature, "module %sread_made demo", shape);
+  assert(agc_as_int(&vm, call(signature, &dot, 1)) == 0x1f);
   agc_value three = agc_int(3);
   const agc_list *list =
       agc_as_list(&vm, dirty("compute module {S0=x: Int, y: Int}(Int) -> List[Point] dirty_points demo", &three, 1));
