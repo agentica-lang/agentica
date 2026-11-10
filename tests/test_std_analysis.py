@@ -908,6 +908,9 @@ def test_the_api_versions_of_a_block_are_those_of_the_native_header():
     major, minor = (int(re.search(r"#define AN_API_%s (\d+)" % name, header).group(1)) for name in ("MAJOR", "MINOR"))
     constants = {name: int(value) for name, value in re.findall(r"^export (API_\w+) = (\d+)$", shape, re.M)}
     assert constants["API_MAJOR"] == major and constants["API_MINOR_RESOURCES"] <= minor
+    # The header comment names each minor version up to the header's own.
+    comment = header[:header.index("*/")]
+    assert max(int(n) for n in re.findall(r"\(1\.(\d+)\)", comment)) == minor
     # The comment of the header says which minor version added what.
     assert constants["API_MINOR_TYPES"] == int(re.search(r"enums\s+(?:\*\s+)?\(1\.(\d)\)", header).group(1))
     assert constants["API_MINOR_RESOURCES"] == int(re.search(r"resources\s+(?:\*\s+)?\(1\.(\d)\)", header).group(1))

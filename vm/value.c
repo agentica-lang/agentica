@@ -11,11 +11,13 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifndef AGC_NO_GC
 /* A call of agc_gc_blocking, for the function that GC_do_blocking runs. */
 typedef struct {
   void (*fn)(void *arg);
   void *arg;
 } blocking_call;
+#endif
 
 #ifdef AGC_NO_GC
 const char *__asan_default_options(void); // NOLINT(readability-identifier-naming,misc-use-internal-linkage)

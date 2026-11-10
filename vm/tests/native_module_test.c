@@ -822,6 +822,7 @@ static void test_threads(void) {
 
 #define SWITCH_ROUNDS 64
 #define COROUTINE_STACK 65536
+#define FILLER_STRINGS 4096
 
 /* The collecting thread runs collections only when the function of an_blocking asks for them, so it never starves
    the scheduler of the test around the calls. */
@@ -830,10 +831,10 @@ static uv_cond_t gc_wake;
 static uint64_t gc_asked, gc_done;
 static bool gc_stop;
 
-/* Asks the other thread for two collections and waits for them, outside the collector's view. */
-static void wait_two_collections(void) {
+/* Asks the other thread for N collections and waits for them. */
+static void wait_collections(uint64_t n) {
   uv_mutex_lock(&gc_lock);
-  gc_asked += 2;
+  gc_asked += n;
   uv_cond_broadcast(&gc_wake);
   while (gc_done < gc_asked) uv_cond_wait(&gc_wake, &gc_lock);
   uv_mutex_unlock(&gc_lock);
@@ -847,7 +848,7 @@ static blocking_work *coroutine_work;
 static void coroutine(void) {
   for (int round = 0; round < SWITCH_ROUNDS; round++) {
     for (size_t k = 0; k < coroutine_work->len; k++) coroutine_work->sum += (unsigned char)coroutine_work->data[k];
-    if (round == 0) wait_two_collections();
+    if (round == 0) wait_collections(2);
     assert(swapcontext(&coroutine_context, &caller_context) == 0);
   }
 }
@@ -868,7 +869,7 @@ static void blocking_body(void *arg) {
 #else
   for (int round = 0; round < SWITCH_ROUNDS; round++)
     for (size_t k = 0; k < w->len; k++) w->sum += (unsigned char)w->data[k];
-  wait_two_collections();
+  wait_collections(2);
 #endif
 }
 
@@ -883,6 +884,12 @@ static an_term blocking_copy(an_env *env, int argc, const an_term *argv) {
   for (size_t k = 0; k < w.len; k++) want += (unsigned char)w.data[k];
   an_blocking(env, blocking_body, &w);
   if (w.sum != want * SWITCH_ROUNDS) return an_raise(env, "wrong sum");
+  /* One more collection, then strings of the copy's size: libgc sweeps lazily, so a copy freed by mistake would only
+     show once its block is given out again, with other bytes. */
+  wait_collections(1);
+  char filler[64];
+  memset(filler, 'X', sizeof filler);
+  for (int k = 0; k < FILLER_STRINGS; k++) (void)an_string(env, filler, w.len < sizeof filler ? w.len : sizeof filler);
   return copy;
 }
 
@@ -920,7 +927,8 @@ static void collect(void *arg) {
 }
 
 /* A short and a dirty call each run an_blocking (on Linux, on a stack of its own) while another thread collects
-   meanwhile: no hang, and the argument and the copy made before it survive. */
+   meanwhile: no hang, and the argument and the copy made before it survive the collections and the reuse of freed
+   blocks. */
 static void test_blocking(void) {
   agc_native_register(&vm, "blocking", init_blocking);
   agc_native_register(&vm, "blocking_dirty", init_blocking_dirty);
@@ -932,7 +940,7 @@ static void test_blocking(void) {
   assert(same_text(dirty("compute module (String) -> String copy blocking_dirty", &word, 1),
                    "a string the collector must keep"));
   uv_mutex_lock(&gc_lock);
-  assert(gc_done == 4);
+  assert(gc_done == 6);
   gc_stop = true;
   uv_cond_broadcast(&gc_wake);
   uv_mutex_unlock(&gc_lock);

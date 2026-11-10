@@ -310,9 +310,12 @@ static inline bool an_get_resource(an_env *env, an_term t, uint32_t type, void *
 
 /* Runs FN(ARG) out of the collector's way (API 1.3, an_api_of(env)->minor >= 3), in a short or a dirty call alike:
    for a C library that switches to a stack of its own (a coroutine, as MariaDB Connector/C's non-blocking calls run),
-   where the collector must not stop the thread. FN may read the bytes that an_get_string and an_get_bytes gave for
-   arguments of this call before an_blocking (the VM keeps those arguments alive for the call), and nothing else of the
-   VM: it must not write GC memory, hold or make a term, or call any function of this API (an_blocking and an_raise
+   where the collector must not stop the thread. FN may use the module's own memory, the state of a resource that
+   an_get_resource or an_resource_new gave in this call (C memory the call holds), and read the bytes that
+   an_get_string and an_get_bytes gave for arguments of this call before an_blocking (the VM keeps those arguments
+   alive until the call returns, no longer: data that a C library keeps across calls, such as the query of a _start
+   that a later _cont finishes, is copied into the resource state or other malloc memory). Nothing else of the VM: FN
+   must not write GC memory, hold or make a term, or call any function of this API (an_blocking and an_raise
    included); doing so is undefined. It runs on the calling thread, so in a short call it stalls that scheduler as
    long as it runs: keep it as short as the call, and make a function that waits a compute def. */
 static inline void an_blocking(an_env *env, void (*fn)(void *arg), void *arg) {

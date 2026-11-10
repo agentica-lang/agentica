@@ -56,8 +56,11 @@ end
 - `an_blocking(env, fn, arg)` (API 1.3) runs `fn(arg)` out of the
   collector's way, in short and dirty functions: wrap a C library call that
   switches stacks (MariaDB Connector/C's non-blocking `_start`/`_cont`) in it.
-  `fn` may only read String and Bytes data of the arguments got before; no
-  terms, no API calls.
+  `fn` may use the module's own memory, the resource state the call got,
+  and read String and Bytes data of the arguments got before; no terms, no
+  write to GC memory, no API calls. The argument data lasts until the call
+  returns: copy what a library keeps across calls (a `_start` that a later
+  `_cont` finishes) into the resource state or other `malloc` memory.
 - `[native.NAME] build = { sources = ["native/stats.c"], defines = [...],
   libs = ["m"] }` in `agentica.toml` builds the module with the system C
   compiler (`CC`, else `cc`; `gcc` on Windows) on a run, `compile`, `test` or
