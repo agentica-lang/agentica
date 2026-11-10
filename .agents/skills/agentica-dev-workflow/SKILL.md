@@ -75,15 +75,21 @@ agent call (a small model for docs-only, a stronger one for code):
 Invoke the `pr-reviewer` skill (via the Skill tool) and follow it to review GitHub pull request #N in the repository at /home/sonic182/apps/agentica (agentica-lang/agentica). Do not modify local files, switch branches, commit, push, run tests or programs, or post comments on GitHub. Skip large regenerated files (goldens such as `.expected`, `.linked` and `.checked`, `tests/fixtures/cli/forms.json`, the frozen manifests, `bootstrap/stage0.agcb`, locks, binary fixtures): run `git diff --stat` first and read only the files that matter, but still read a small hand-edited golden and flag a golden change with no matching source change. Return the full review report as your final answer.
 ```
 
-- **Trivial** (metadata only): no review. **Docs-only or small:** one review.
+- **Trivial** (metadata only): no review. Every other PR gets one review.
+  The reviewer picks light or full ("Depth" in `pr-reviewer`); add "Do a
+  light review." to the prompt for docs, a release or pin bump, tests only,
+  and generated or formatter output with its command in the PR body.
 - **VM C code, concurrency, the loader, I/O or anything security-sensitive:**
-  the first round runs two agents in parallel: the normal review above and
-  one critic that invokes the `vm-c-critic` skill (memory safety, the
-  park/wake protocol, ownership, untrusted input,
-  `docs/vm/14-core-invariants.md`) in its own scratch worktree, never
-  editing the branch. Send all agreed fixes from both to the author in one
-  batch. This round is pass 1 for section 3: a normal review of the fixed
-  head follows only if either agent found a critical or major.
+  the first review is a critic that invokes the `vm-c-critic` skill (memory
+  safety, the park/wake protocol, ownership, untrusted input,
+  `docs/vm/14-core-invariants.md`) in place of the normal review; a large
+  PR that also changes much Agentica code gets both in parallel, and all
+  agreed fixes go to the author in one batch. A reviewer or critic never
+  edits the branch and runs nothing by default: it writes the program and
+  the command that would prove a finding. It builds and runs proofs, in its
+  own scratch worktree, only when the owner allows it for that PR. This
+  round is pass 1 for section 3: a review of the fixed head follows only
+  after a critical or major.
 - Wait for each completion notice; never read agent transcripts.
 
 ## 3. Fix and repeat
@@ -107,17 +113,21 @@ Invoke the `pr-reviewer` skill (via the Skill tool) and follow it to review GitH
 - **Platforms** (`platforms.yml`: Linux x86_64 and ARM64, Windows, macOS
   Intel and ARM) runs on a PR only with the `platforms` label, and always on
   pushes to master. Add the label only when the PR changes C code (`vm/`,
-  the VM build in the Makefile), a few seconds after opening the PR (a label
-  at creation starts two runs), and wait for all five systems. A master run
-  that fails after a merge without the label is fixed in a new PR at once.
+  the VM build in the Makefile) or is a release bump (`agentica-release`),
+  a few seconds after opening the PR (a label at creation starts two runs),
+  and wait for all five systems. A master run that fails after a merge
+  without the label is fixed in a new PR at once.
 - **Agentica code** (`compiler/`, `stdlib/`, their Python tests and goldens,
   docs, the site) never gets the label, also when its tests touch processes,
   files or paths: do not wait for the macOS and Windows jobs.
   Merge when `test` is green (plus `build` and Site examples when they run);
   master's Platforms run catches the rare gap.
-- Wait with one background loop on `gh run list --branch <b>` filtered by the
-  head SHA, started from the main checkout (run the query once in the
-  foreground first).
+- Wait with one background call of the `watch-ci` skill when it is
+  installed (`--sha <head>`, `--require 'conformance (macos|windows)'` with
+  the label, `--merge` only when the owner asked for the merge). Without
+  it: one background loop on `gh run list --branch <b>` filtered by the head
+  SHA, started from the main checkout (run the query once in the foreground
+  first).
 - A timing assertion of `vm/tests/loop_test.c` can flake on macOS: rerun once
   with `gh run rerun ID --failed` and say so. Read other
   failures with `gh run view ID --log-failed`; native Windows finds bugs Wine
