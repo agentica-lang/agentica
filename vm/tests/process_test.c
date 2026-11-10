@@ -1,5 +1,6 @@
 /* Native child processes: literal arguments, inherited environment, pipes, private channel and guard cleanup. */
 #include "builtin_test.h"
+#include "test_support.h"
 #include "../services.h"
 #include "../process_os.h"
 #include "chan_spawn.h"
@@ -30,19 +31,13 @@ static agc_value text(const char *s) {
   return agc_string_value(agc_make_string(s, strlen(s), 0));
 }
 
-/* The entry of a name with the fewest arguments, whatever the order of the table: for a spawn it is the arity without
-   `env`, which these tests call. */
+/* The entry of a name in the process or duplex table (each name has one arity there). */
 static const agc_builtin *first_builtin(const char *name) {
-  const agc_builtin *found = NULL;
-  for (size_t k = 0; k < agc_process_builtin_count; k++) {
-    const agc_builtin *b = &agc_process_builtins[k];
-    if (strcmp(b->name, name) == 0 && (!found || b->arity < found->arity)) found = b;
-  }
-  for (size_t k = 0; k < agc_duplex_builtin_count; k++) {
-    const agc_builtin *b = &agc_duplex_builtins[k];
-    if (strcmp(b->name, name) == 0 && (!found || b->arity < found->arity)) found = b;
-  }
-  return found;
+  for (size_t k = 0; k < agc_process_builtin_count; k++)
+    if (strcmp(agc_process_builtins[k].name, name) == 0) return &agc_process_builtins[k];
+  for (size_t k = 0; k < agc_duplex_builtin_count; k++)
+    if (strcmp(agc_duplex_builtins[k].name, name) == 0) return &agc_duplex_builtins[k];
+  return NULL;
 }
 
 static agc_value call(const char *name, agc_value *args) {
@@ -75,8 +70,8 @@ static void init(void) {
 /* Starts `command` as a captured child that exits with 3 and returns its status, or -1 when it does not start. */
 static int64_t status_of(const char *command) {
   agc_value rest[] = {text("--exit")};
-  agc_value args[] = {text(command), agc_list_value(agc_list_from_array(rest, 1)), text("."), agc_int(5000)};
-  const agc_result *r = agc_as_result(&vm, agc_test_call(&vm, task, first_builtin("Process.spawn_captured"), args));
+  agc_value args[] = {text(command), agc_list_value(agc_list_from_array(rest, 1)), agc_test_process_options(text("."))};
+  const agc_result *r = agc_as_result(&vm, call("Process.spawn_captured.options", args));
   if (!r->ok) return -1;
   agc_value handle[] = {r->value, agc_int(5000)};
   int64_t status = agc_as_int(&vm, ok(call("Process.wait", handle)));
@@ -299,19 +294,6 @@ static int next_fd(void) {
   return fd;
 }
 
-/* A Process.Options of 6 fields as the catalog lays it out (timeout_ms, chdir, env, out, err, pgroup), with the
-   given value in slot 1, `chdir`. */
-static agc_value options_with(agc_value chdir) {
-  agc_struct *o = agc_new_struct(0, 6);
-  o->fields[0] = agc_int(5000);
-  o->fields[1] = chdir;
-  o->fields[2] = agc_map_value(agc_new_map());
-  o->fields[3] = text("");
-  o->fields[4] = text("");
-  o->fields[5] = agc_bool(false);
-  return agc_struct_value(o);
-}
-
 /* Hostile bytecode can hand the `.options` spawns any value where the record goes: a non-struct, a struct of another
    size, or a field of the wrong kind each fail with RUNTIME-INTERNAL before the spawn allocates or opens anything. */
 static void options_shape_tests(const char *self) {
@@ -319,7 +301,7 @@ static void options_shape_tests(const char *self) {
                                      "Process.spawn_channel.options"};
   agc_struct *five = agc_new_struct(0, 5);
   for (uint32_t k = 0; k < 5; k++) five->fields[k] = agc_int(0);
-  agc_value shapes[] = {agc_int(5), agc_struct_value(five), options_with(agc_int(1))};
+  agc_value shapes[] = {agc_int(5), agc_struct_value(five), agc_test_process_options(agc_int(1))};
   agc_value words[] = {text("--wait")};
   int before = next_fd();
   /* Out of a turn a failure longjmps to vm.fail, where agc_test_fails catches it (in a turn it goes to vm.turn). */
@@ -333,16 +315,17 @@ static void options_shape_tests(const char *self) {
   vm.in_turn = true;
   assert(next_fd() == before);
   /* The well-formed record starts the child: the shapes above were refused for their shape alone. */
-  agc_value args[] = {text(self), agc_list_value(agc_list_from_array(words, 1)), options_with(text("."))};
+  agc_value args[] = {text(self), agc_list_value(agc_list_from_array(words, 1)), agc_test_process_options(text("."))};
   agc_value handle[] = {ok(call("Process.spawn.options", args))};
   call("Process.close", handle);
 }
 
-/* Starts this program again in `mode` (with one more word when `extra` is given) with Process.spawn_channel or
-   Process.spawn_captured, and returns the handle. */
+/* Starts this program again in `mode` (with one more word when `extra` is given) with the `.options` key of
+   Process.spawn_channel or Process.spawn_captured, and returns the handle. */
 static agc_value start(const char *builtin, const char *self, const char *mode, const char *extra) {
   agc_value words[] = {text(mode), text(extra ? extra : "")};
-  agc_value args[] = {text(self), agc_list_value(agc_list_from_array(words, extra ? 2 : 1)), text("."), agc_int(5000)};
+  agc_value args[] = {text(self), agc_list_value(agc_list_from_array(words, extra ? 2 : 1)),
+                      agc_test_process_options(text("."))};
   return ok(call(builtin, args));
 }
 
@@ -429,7 +412,7 @@ static void start_leaf(const char *self, const char *mark) {
   assert(chan_spawn(&loop, &leaf, self, "--leaf", mark, &ends, ends.child_count, false, UV_PROCESS_DETACHED, NULL) == 0);
   uv_os_unsetenv(AGC_CHANNEL_ENV);
 #else
-  start("Process.spawn_channel", self, "--leaf", mark);
+  start("Process.spawn_channel.options", self, "--leaf", mark);
 #endif
 }
 
@@ -557,7 +540,7 @@ static int child(int argc, char **argv) {
     size_t size = sizeof self;
     assert(uv_exepath(self, &size) == 0);
     start_leaf(self, argv[2]);
-    agc_value plain = start("Process.spawn_captured", self, "--isolated", NULL);
+    agc_value plain = start("Process.spawn_captured.options", self, "--isolated", NULL);
     agc_value args[] = {plain, agc_int(5000)};
     int64_t status = agc_as_int(&vm, ok(call("Process.wait", args)));
     args[0] = text(status == 0 ? "isolated\n" : "inherited\n");
@@ -606,8 +589,8 @@ static void refused_with(agc_value result, const char *message) {
 static void byte_key_tests(const char *self) {
   static const char sent[] = "\x00\xff" "a\n";
   agc_value words[] = {text("--echo"), text("space \"quoted\""), text("")};
-  agc_value args[] = {text(self), agc_list_value(agc_list_from_array(words, 3)), text("."), agc_int(5000)};
-  agc_value handle = ok(call("Process.spawn_captured", args));
+  agc_value args[] = {text(self), agc_list_value(agc_list_from_array(words, 3)), agc_test_process_options(text("."))};
+  agc_value handle = ok(call("Process.spawn_captured.options", args));
   args[0] = handle;
   args[2] = agc_int(5000);
   args[1] = agc_bytes_value(agc_make_bytes((const uint8_t *)sent, 4));
@@ -661,8 +644,8 @@ static void in_callback(const char *name, agc_value *args, const char *code) {
    reaped (Process.wait ran its exit callback) does not park, so its close works inside the callback. */
 static void callback_close_tests(const char *self) {
   agc_value words[] = {text("--wait")};
-  agc_value args[] = {text(self), agc_list_value(agc_list_from_array(words, 1)), agc_int(5000)};
-  agc_value handle[] = {ok(call("Process.spawn", args)), agc_int(5000)};
+  agc_value args[] = {text(self), agc_list_value(agc_list_from_array(words, 1)), agc_test_process_options(text("."))};
+  agc_value handle[] = {ok(call("Process.spawn.options", args)), agc_int(5000)};
   in_callback("Process.close", handle, "RUNTIME-NATIVE-CALLBACK");
   assert(agc_as_process(&vm, handle[0])->state->native);
   call("Process.close", handle);
@@ -671,7 +654,7 @@ static void callback_close_tests(const char *self) {
 
   words[0] = text("--exit");
   args[1] = agc_list_value(agc_list_from_array(words, 1));
-  handle[0] = ok(call("Process.spawn", args));
+  handle[0] = ok(call("Process.spawn.options", args));
   assert(agc_as_int(&vm, ok(call("Process.wait", handle))) == 3);
   in_callback("Process.close", handle, "nothing");
   assert(!agc_as_process(&vm, handle[0])->state->native);
@@ -704,10 +687,10 @@ static void stuck_stderr_test(const char *self) {
   vm.rt->err.file = stuck;
   assert(agc_output_on_file(&vm.rt->err));
   agc_value words[] = {text("--stderr"), text("ff")};
-  agc_value args[] = {text(self), agc_list_value(agc_list_from_array(words, 1)), agc_int(5000)};
-  agc_value handle[] = {ok(call("Process.spawn", args)), agc_int(300)};
+  agc_value args[] = {text(self), agc_list_value(agc_list_from_array(words, 1)), agc_test_process_options(text("."))};
+  agc_value handle[] = {ok(call("Process.spawn.options", args)), agc_int(300)};
   args[1] = agc_list_value(agc_list_from_array(words, 2));
-  agc_value other[] = {ok(call("Process.spawn", args)), agc_int(5000)};
+  agc_value other[] = {ok(call("Process.spawn.options", args)), agc_int(5000)};
   fails(call("Process.wait", handle), "process: operation timed out");
   static unsigned char got[1 << 20];
   size_t total = 0, want = junk + (size_t)2 * STDERR_BYTES;
@@ -761,7 +744,7 @@ static void refusal_tests(const char *self) {
    close and what still comes back, a line over the limit, a timeout, a child that ends, a parent that vanishes, and
    a channel that is not offered. */
 static void channel_tests(const char *self) {
-  agc_value handle = start("Process.spawn_channel", self, "--lines", NULL);
+  agc_value handle = start("Process.spawn_channel.options", self, "--lines", NULL);
   ok(send_line(handle, text("one\n")));
   ok(send_line(handle, text("two\n")));
   agc_value args[] = {handle, agc_int(5000)};
@@ -770,12 +753,12 @@ static void channel_tests(const char *self) {
   assert(exit_status(handle) == 0);
   close_process(handle);
 
-  handle = start("Process.spawn_channel", self, "--flood", NULL);
+  handle = start("Process.spawn_channel.options", self, "--flood", NULL);
   fails(read_line(handle, 10000), "process: line exceeds 1048576 bytes");
   fails(read_line(handle, 100), "process: channel is closed");
   close_process(handle);
 
-  handle = start("Process.spawn_channel", self, "--wait", NULL);
+  handle = start("Process.spawn_channel.options", self, "--wait", NULL);
   agc_string *big = agc_new_string(1048577, 0);
   memset(big->data, 'y', big->bytes);
   fails(send_line(handle, agc_string_value(big)), "process: send exceeds 1048576 bytes");
@@ -784,7 +767,7 @@ static void channel_tests(const char *self) {
   fails(send_line(handle, text("late\n")), "process: channel is closed");
   close_process(handle);
 
-  handle = start("Process.spawn_channel", self, "--exit", NULL);
+  handle = start("Process.spawn_channel.options", self, "--exit", NULL);
   fails(read_line(handle, 5000), "process: end of input");
   assert(exit_status(handle) == 3);
   close_process(handle);
@@ -794,7 +777,7 @@ static void channel_tests(const char *self) {
   assert(uv_os_tmpdir(base, &base_size) == 0);
   snprintf(mark, sizeof mark, "%s/agc-leaf-%ld.txt", base, (long)uv_os_getpid());
   remove(mark);
-  handle = start("Process.spawn_channel", self, "--middle", mark);
+  handle = start("Process.spawn_channel.options", self, "--middle", mark);
   equal(ok(read_line(handle, 10000)), "isolated");
   equal(ok(read_line(handle, 10000)), "ready");
   assert(exit_status(handle) == 0);
@@ -817,8 +800,8 @@ int main(int argc, char **argv) {
   init();
   agc_resource *spare = agc_register(&vm, NULL, NULL);
   agc_value rest[] = {text("--wait")};
-  agc_value args[] = {text(self), agc_list_value(agc_list_from_array(rest, 1)), agc_int(5000), agc_int(5000)};
-  ok(call("Process.spawn", args));
+  agc_value args[] = {text(self), agc_list_value(agc_list_from_array(rest, 1)), agc_test_process_options(text("."))};
+  ok(call("Process.spawn.options", args));
   agc_unregister(&vm, spare);
   bool closed = agc_io_close(&vm);
   if (!closed) uv_print_all_handles(agc_io_uv(&vm), stderr);
@@ -829,8 +812,8 @@ int main(int argc, char **argv) {
   agc_value words[] = {text("--echo"), text("space \"quoted\""), text("")};
   args[0] = text(self);
   args[1] = agc_list_value(agc_list_from_array(words, 3));
-  args[2] = text(".");
-  agc_value handle = ok(call("Process.spawn_captured", args));
+  args[2] = agc_test_process_options(text("."));
+  agc_value handle = ok(call("Process.spawn_captured.options", args));
   args[0] = handle;
   args[1] = text("hello\r\n\xC3\xB1\xF0\x9F\x99\x82\n");
   args[2] = agc_int(5000);
@@ -855,9 +838,8 @@ int main(int argc, char **argv) {
   agc_value exit_words[] = {text("--exit"), text(pid_file)};
   args[0] = text(self);
   args[1] = agc_list_value(agc_list_from_array(exit_words, 2));
-  args[2] = text(".");
-  args[3] = agc_int(5000);
-  handle = ok(call("Process.spawn_captured", args));
+  args[2] = agc_test_process_options(text("."));
+  handle = ok(call("Process.spawn_captured.options", args));
   wait_ended(pid_file);
   remove(pid_file);
   args[0] = handle;
@@ -872,9 +854,8 @@ int main(int argc, char **argv) {
   agc_value leak_words[] = {rest[0], text(number)};
   args[0] = text(self);
   args[1] = agc_list_value(agc_list_from_array(leak_words, 2));
-  args[2] = text(".");
-  args[3] = agc_int(5000);
-  handle = ok(call("Process.spawn_captured", args));
+  args[2] = agc_test_process_options(text("."));
+  handle = ok(call("Process.spawn_captured.options", args));
   args[0] = handle;
   args[1] = agc_int(5000);
   assert(agc_as_int(&vm, ok(call("Process.wait", args))) == 0);
@@ -885,8 +866,8 @@ int main(int argc, char **argv) {
   rest[0] = text("--channel");
   args[0] = text(self);
   args[1] = agc_list_value(agc_list_from_array(rest, 1));
-  args[2] = text(".");
-  handle = ok(call("Process.spawn_channel", args));
+  args[2] = agc_test_process_options(text("."));
+  handle = ok(call("Process.spawn_channel.options", args));
   args[0] = handle;
   args[1] = text("private \xC3\xB1\xF0\x9F\x99\x82\n");
   args[2] = agc_int(5000);
