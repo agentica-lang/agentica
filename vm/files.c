@@ -658,7 +658,7 @@ static int open_for(op *o, bool reading, bool append) {
 int agc_files_open_output(agc_vm *vm, const agc_string *given, bool *refused) {
   *refused = !path_string(given);
   if (*refused) return -1;
-  char *path = agc_host_path(vm, given);
+  char *path = agc_host_path_try(vm, given);
   if (!path) {
     errno = EINVAL;
     return -1;

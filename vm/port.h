@@ -761,7 +761,7 @@ static inline void agc_file_unlock(FILE *f) {
    back (agc_sync_reset). */
 CC_JUMP_RELEASES CC_ACQUIRES(vm->rt->sync->mutex) void agc_sync_take_shared(agc_vm *vm);
 CC_JUMP_RELEASES CC_RELEASES(vm->rt->sync->mutex) void agc_sync_drop_shared(agc_vm *vm);
-_Noreturn void agc_sync_missing(agc_vm *vm);
+CC_JUMPS _Noreturn void agc_sync_missing(agc_vm *vm);
 
 CC_JUMP_RELEASES CC_ACQUIRES(vm->rt->sync->mutex) static inline void agc_sync_take(agc_vm *vm) {
   if (__builtin_expect(vm->rt->shared, 0)) agc_sync_take_shared(vm);
@@ -827,7 +827,7 @@ void agc_mutex_unlease(agc_vm *vm, struct agc_mutex_lease *lease);
 void agc_task_wake(agc_vm *vm, agc_task *t, const char *by);
 bool agc_task_waiting(const agc_task *t);
 void agc_task_parking(agc_vm *vm);
-_Noreturn void agc_task_refuse_wait(agc_vm *vm);
+CC_JUMPS _Noreturn void agc_task_refuse_wait(agc_vm *vm);
 /* The first step of a builtin that parks on a job made from malloc'd copies (a compute call, a KDF call, a TLS
    context): what would fail the park fails here, before the copies exist, so none leaks. A callback of native code
    cannot park (RUNTIME-NATIVE-CALLBACK with MESSAGE at SPAN), and the loop is made, which fails when it cannot start. */
@@ -866,7 +866,7 @@ void agc_task_clear_nested(agc_task *t);
    goes to the shared queue. */
 void agc_task_nested_boundary(agc_vm *vm);
 /* Raises again an outcome that agc_task_run_nested kept, as it was: the same failure and stack, or the same exit. */
-_Noreturn void agc_raise(agc_vm *vm, const agc_outcome *failed);
+CC_JUMPS _Noreturn void agc_raise(agc_vm *vm, const agc_outcome *failed);
 void agc_task_enqueue(agc_task **head, agc_task **tail, agc_task *t);
 void agc_task_wake_all(agc_vm *vm, agc_task **head, agc_task **tail, const char *by);
 /* Spawns the body of one test of Test.run as a child of the caller: the task is its own test, with its own stream. */
@@ -1010,14 +1010,16 @@ void agc_charge(agc_vm *vm, uint64_t units);
 void agc_charge_bytes(agc_vm *vm, size_t bytes);
 uint64_t agc_value_units(agc_value v);
 /* CODE and MESSAGE are kept by pointer in the outcome, which the driver reads after the longjmp, not copied: pass a
-   literal, static data or GC memory, never a stack buffer. agc_fail_text keeps the string object instead. */
-_Noreturn void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span);
-_Noreturn void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint32_t span);
+   literal, static data or GC memory, never a stack buffer. agc_fail_text keeps the string object instead.
+   CC_JUMPS on the raises (these four, agc_raise, agc_sync_missing, agc_task_refuse_wait): each jumps to the
+   scheduler's catch, so cchecker checks what a path to one holds. */
+CC_JUMPS _Noreturn void agc_fail(agc_vm *vm, const char *code, const char *message, uint32_t span);
+CC_JUMPS _Noreturn void agc_fail_text(agc_vm *vm, const char *code, const agc_string *message, uint32_t span);
 /* __fail_arg: fails at argument number `argument` of the call a prelude function was given (agc_fail's rule for the
    span), or at the call when there is no such argument span. */
-_Noreturn void agc_fail_argument(agc_vm *vm, const char *code, const agc_string *message, int64_t argument,
-                                 uint32_t span);
-_Noreturn void agc_exit(agc_vm *vm, int64_t code);
+CC_JUMPS _Noreturn void agc_fail_argument(agc_vm *vm, const char *code, const agc_string *message,
+                                          int64_t argument, uint32_t span);
+CC_JUMPS _Noreturn void agc_exit(agc_vm *vm, int64_t code);
 size_t agc_stack_members(const agc_program *program, const agc_stack *stack, agc_json_member out[3]);
 bool agc_write(agc_vm *vm, agc_output *out, const agc_string *text, bool newline);
 bool agc_output_waiting(const agc_vm *vm, const agc_output *out);
