@@ -212,8 +212,9 @@ jobs:
         run: test "$(nproc)" -ge 4
       - name: make test
         run: make test JOBS=6 SHARD=${{ matrix.shard }}/2
+      # The two static checks run even when a test failed, so one CI round reports both.
       - name: Every file of compiler/ checks, line width and style rules included (agentica check compiler)
-        if: matrix.shard == 2
+        if: ${{ !cancelled() && matrix.shard == 2 }}
         run: make check-compiler
       - name: Filesystem removal regressions in Actions-owned scratch
         if: matrix.shard == 2
@@ -223,7 +224,7 @@ jobs:
       - if: matrix.shard == 1
         run: make vm-latency
       - name: The layout of compiler/ and stdlib/ (agentica fmt --check)
-        if: matrix.shard == 1
+        if: ${{ !cancelled() && matrix.shard == 1 }}
         run: make fmt-check
 
   # The slow tier (make test-slow), the modules split in two: the first shard holds tests/test_vm_multicore.py, which takes

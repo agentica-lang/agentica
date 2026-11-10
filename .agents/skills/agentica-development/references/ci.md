@@ -173,9 +173,9 @@ proof). These are the rules they do not show.
 - **Four schedulers.** A VM runs on one scheduler per core unless its test
   pins a count, and the Linux runners have four cores, so `make test` in the
   fast shards already runs the TCP, TLS, HTTP, process and BDD modules on four
-  schedulers; the fast jobs fail when `nproc` is below four. `make
-  test-multicore-modules` pins four on any machine (Platforms runs it), `make
-  test-shared` pins one.
+  schedulers; the fast jobs fail when `nproc` is below four.
+  `make test-multicore-modules` pins four on any machine (Platforms runs it),
+  `make test-shared` pins one.
 - The vendored check is the last build step of `checks`: it rebuilds
   `build/vm/release/obj` with other flags, so nothing that builds may run after
   it.
