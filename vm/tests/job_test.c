@@ -1,7 +1,8 @@
 /*
- * A job on the loop (docs/vm/16-architecture.md §16.5): the timer against the completion in both orders, a cancel, and
- * the requests that a second thread sends through the inbox (a queued START, a queued finish, the `more` path, close
- * and poll), and the compute calls of a scheduler thread that bypass the I/O thread (the direct path). The pool work is held by a semaphore, so the test and not the clock decides which event comes first.
+ * A job on the loop (docs/vm/16-architecture.md §16.5): the timer against the completion in both orders, a cancel, the
+ * requests a second thread sends through the inbox (queued START and finish, `more`, close, poll), and the direct
+ * compute path. The work waits on a semaphore while a timer fires, or ends before the test fires the timer
+ * (agc_test_fire_timers), so the test and not the clock decides which event comes first.
  */
 #include "../core.h"
 #include "io_harness.h"
@@ -195,6 +196,8 @@ static void pump_until_idle(void) { agc_test_pump_until_idle(&vm); }
 
 static uint64_t armed_timers(void) { return agc_test_armed_timers(&vm); }
 
+static uint64_t fire_timers(void) { return agc_test_fire_timers(&vm); }
+
 /* The timer wins while the work is still blocked: the task takes the timeout and the job stays, because the work is
    still using its data. The work then ends: its end changes nothing, and the data is dropped once, after it finished. */
 static void test_timer_before_completion(void) {
@@ -211,15 +214,14 @@ static void test_timer_before_completion(void) {
   dropped = 0;
 }
 
-/* The work ends first: the task gets the result, and a timer that fires before the task runs changes nothing. */
+/* The work ends first: the task gets the result, and a timer that fires before the task runs changes nothing. The
+   test fires the timer once the task is woken: with a short timeout, a late pool or loop thread let it win first. */
 static void test_completion_before_timer(void) {
   gate *g = new_gate();
   uv_sem_post(&g->go);
-  agc_task *task = park_on(g, 10);
+  agc_task *task = park_on(g, 60000);
   wait_woken(task);
-  uint64_t due = agc_clock_ms() + 30;
-  while (agc_clock_ms() < due) {}
-  agc_io_poll(&vm, false);
+  assert(fire_timers() == 1);
   assert(take(task) == 107);
   settle_loop();
   assert(dropped == 0 && finished_calls == 1);

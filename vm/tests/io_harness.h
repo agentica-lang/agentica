@@ -138,6 +138,24 @@ static inline uint64_t agc_test_armed_timers(agc_vm *vm) {
   return count;
 }
 
+/* Makes an armed timer due now, with its own callback. timer_cb is a private libuv field: checked in the vendored
+   libuv 1.53.0, where both uv/unix.h and uv/win.h have it (UV_TIMER_PRIVATE_FIELDS). */
+static inline void agc_test_fire_timer(uv_handle_t *handle, void *arg) {
+  if (handle->type != UV_TIMER || !uv_is_active(handle)) return;
+  uv_timer_t *timer = (uv_timer_t *)handle;
+  assert(uv_timer_start(timer, timer->timer_cb, 0, 0) == 0);
+  *(uint64_t *)arg += 1;
+}
+
+/* Fires the armed job timers on the loop now, whatever their deadline, so the test and not the clock orders a timer
+   against another event; gives how many there were. */
+static inline uint64_t agc_test_fire_timers(agc_vm *vm) {
+  uint64_t count = 0;
+  uv_walk(agc_io_uv(vm), agc_test_fire_timer, &count);
+  (void)agc_io_poll(vm, false);
+  return count;
+}
+
 /* Runs the loop until the I/O role hands a detached job to the schedulers (the run queue's nudge), and takes the
    nudge. */
 static inline void agc_test_wait_for_hand_over(agc_vm *vm) {
