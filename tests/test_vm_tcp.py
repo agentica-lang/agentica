@@ -819,15 +819,23 @@ end
 """
 
 
-@pytest.mark.skipif(TARGET_OS == "windows", reason="the CPU time of a child needs resource.getrusage")
+def children_cpu_seconds():
+    """The CPU time of this process's ended children, or None where Python has no resource module (Windows)."""
+    try:
+        import resource
+    except ImportError:
+        return None
+    usage = resource.getrusage(resource.RUSAGE_CHILDREN)
+    return usage.ru_utime + usage.ru_stime
+
+
 def test_reads_without_a_timeout_wait_for_idle_python_clients_without_using_the_cpu(tmp_path, adopt):
     """Many tasks wait in TCP.recv_bytes with no timeout while their Python clients stay idle: no timer closes a
-    socket, the waits cost no CPU (a busy loop would cost about the idle time), and each ends with the client's byte
-    or, for a client that closes, with empty Bytes."""
-    import resource
+    socket, the waits cost no CPU (a busy loop would cost about the idle time; measured where Python can), and each
+    ends with the client's byte or, for a client that closes, with empty Bytes."""
     count, idle_seconds = 20, 2.0
     vm = adopt(start_vm(compile_text(IDLE_PROGRAM % count, "idle", tmp_path)))
-    before = resource.getrusage(resource.RUSAGE_CHILDREN)
+    before = children_cpu_seconds()
     port = int(vm.next_line())
     clients = [socket.create_connection(("127.0.0.1", port), timeout=scaled(10)) for _ in range(count)]
     try:
@@ -843,6 +851,6 @@ def test_reads_without_a_timeout_wait_for_idle_python_clients_without_using_the_
     finally:
         for client in clients:
             client.close()
-    after = resource.getrusage(resource.RUSAGE_CHILDREN)
-    cpu = (after.ru_utime - before.ru_utime) + (after.ru_stime - before.ru_stime)
-    assert cpu < idle_seconds / 2, cpu
+    if before is not None:
+        cpu = children_cpu_seconds() - before
+        assert cpu < idle_seconds / 2, cpu
