@@ -43,7 +43,7 @@ export def parse(word: String, usage: String) -> Parsed
     return Parsed.Refused(QueryOptions.refusal("#{word} is not FILE:LINE:COL, from line 1 and column 1", usage))
   end
 
-  return Parsed.Ready(Asked(file: file, line: line, column: column))
+  Parsed.Ready(Asked(file: file, line: line, column: column))
 end
 
 ## Where `line` and `column` fall in `text`. A column on the line break, or past it, is outside, at the end of its
@@ -65,18 +65,18 @@ export def locate(text: String, line: Int, column: Int) -> Located
     return Located.Outside(point(start + lines[line - 1].length, line, lines[line - 1].length + 1))
   end
 
-  return Located.At(start + column - 1)
+  Located.At(start + column - 1)
 end
 
 ## The span of the one character at `line` and `column`, which is at `offset`.
 export def character(offset: Int, line: Int, column: Int) -> Source.Span
   here = Source.Position(offset: offset, line: line, column: column)
-  return Source.Span(start: here, stop: Source.Position(offset: offset + 1, line: line, column: column + 1))
+  Source.Span(start: here, stop: Source.Position(offset: offset + 1, line: line, column: column + 1))
 end
 
 ## QUERY-NO-EXPRESSION for the position `asked`: it is on no expression or name. `span` is where the diagnostic points.
 export def no_expression(asked: Asked, span: Source.Span) -> Diag.Diagnostic
-  return Diag.fail(
+  Diag.fail(
     "QUERY-NO-EXPRESSION",
     "no expression at line #{asked.line}, column #{asked.column}",
     span,
@@ -87,7 +87,7 @@ end
 # The empty span at the end of a line.
 def point(offset: Int, line: Int, column: Int) -> Source.Span
   here = Source.Position(offset: offset, line: line, column: column)
-  return Source.Span(start: here, stop: here)
+  Source.Span(start: here, stop: here)
 end
 
 # The value of a run of digits, or 0 for anything else: a position starts at 1, so 0 stands for "not a number".
@@ -96,5 +96,5 @@ def number(text: String) -> Int
 
   return 0 if !text.split("").all? do |character: String| character.code >= 48 and character.code <= 57 end
 
-  return text.to_i!
+  text.to_i!
 end

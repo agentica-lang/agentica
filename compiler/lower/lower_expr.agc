@@ -38,19 +38,19 @@ export def lower_expression(
     Ast.Expr.Call(node) ->
       return lower_optional(cx, fx, node, want, void, true, false) if known and optional_call?(node)
 
-      return lower_call(cx, fx, node, want, void, known and ok_call?(node), false)
+      lower_call(cx, fx, node, want, void, known and ok_call?(node), false)
     Ast.Expr.Binary(node) ->
       try typed(cx, expr, known)
-      return lower_binary(cx, fx, node, want)
+      lower_binary(cx, fx, node, want)
     Ast.Expr.Name(node) ->
       try typed(cx, expr, known)
-      return lower_name(fx, node, want)
+      lower_name(fx, node, want)
     Ast.Expr.Literal(node) ->
       try typed(cx, expr, known)
-      return lower_literal(cx, fx, node, want)
+      lower_literal(cx, fx, node, want)
     Ast.Expr.ConstRef(node) ->
       try typed(cx, expr, known)
-      return lower_const_read(cx, fx, node, want)
+      lower_const_read(cx, fx, node, want)
     Ast.Expr.RegexLit(node) ->
       # A literal in a function body is a constant that lowering.agc made for it; in a constant it is its call.
       hoisted = Scans.regex_constant(node)
@@ -58,49 +58,49 @@ export def lower_expression(
         return lower_const_read(cx, fx, Ast.ConstRef(id: node.id, name: hoisted, span: node.span), want)
       end
 
-      return lower_expression(cx, fx, node.call, want, false, known)
-    Ast.Expr.EagLit(node) -> return lower_expression(cx, fx, node.call, want, false, known)
-    Ast.Expr.Unary(node) -> return lower_unary_checked(cx, fx, expr, node, want, known)
-    Ast.Expr.FieldAccess(node) -> return lower_field_checked(cx, fx, expr, node, want, void, known)
-    Ast.Expr.MethodCall(node) -> return lower_method_checked(cx, fx, expr, node, want, void, known)
+      lower_expression(cx, fx, node.call, want, false, known)
+    Ast.Expr.EagLit(node) -> lower_expression(cx, fx, node.call, want, false, known)
+    Ast.Expr.Unary(node) -> lower_unary_checked(cx, fx, expr, node, want, known)
+    Ast.Expr.FieldAccess(node) -> lower_field_checked(cx, fx, expr, node, want, void, known)
+    Ast.Expr.MethodCall(node) -> lower_method_checked(cx, fx, expr, node, want, void, known)
     Ast.Expr.Typed(node) ->
       try Lowering.require_type(cx, node.target, false, node.type)
-      return lower_expression(cx, fx, node.target, want, false, false)
-    Ast.Expr.TypeName(node) -> return lower_type_name(cx, fx, node, want)
-    Ast.Expr.Interpolation(node) -> return lower_interpolation(cx, fx, node, want)
+      lower_expression(cx, fx, node.target, want, false, false)
+    Ast.Expr.TypeName(node) -> lower_type_name(cx, fx, node, want)
+    Ast.Expr.Interpolation(node) -> lower_interpolation(cx, fx, node, want)
     Ast.Expr.Try(node) ->
       try Lowering.require_type(cx, expr, void, Lowering.type_of(cx, expr))
-      return lower_try(cx, fx, node, want)
+      lower_try(cx, fx, node, want)
     Ast.Expr.Invoke(node) ->
       try Lowering.require_type(cx, expr, void, Lowering.type_of(cx, expr))
-      return lower_invoke(cx, fx, node, want)
+      lower_invoke(cx, fx, node, want)
     Ast.Expr.ListLit(node) ->
       try typed(cx, expr, known)
-      return Data.lower_list(cx, fx, node, want)
+      Data.lower_list(cx, fx, node, want)
     Ast.Expr.MapLit(node) ->
       try typed(cx, expr, known)
-      return Data.lower_map(cx, fx, node, want)
+      Data.lower_map(cx, fx, node, want)
     Ast.Expr.EnumConstructor(node) ->
       try typed(cx, expr, known)
-      return Data.lower_enum(cx, fx, node.enum_name, node.variant_name, node.args, node.span, want, false)
+      Data.lower_enum(cx, fx, node.enum_name, node.variant_name, node.args, node.span, want, false)
     Ast.Expr.Construct(node) ->
       try typed(cx, expr, known)
-      return Data.lower_struct(cx, fx, node, want)
+      Data.lower_struct(cx, fx, node, want)
     Ast.Expr.Update(node) ->
       try typed(cx, expr, known)
-      return Data.lower_update(cx, fx, node, want)
+      Data.lower_update(cx, fx, node, want)
     Ast.Expr.Index(node) ->
       try typed(cx, expr, known)
-      return lower_index(cx, fx, node, want)
+      lower_index(cx, fx, node, want)
     Ast.Expr.FunctionRef(node) ->
       try typed(cx, expr, known)
-      return lower_function_ref(cx, fx, node, want)
+      lower_function_ref(cx, fx, node, want)
     Ast.Expr.BlockLit(node) ->
       try typed(cx, expr, known)
-      return lower_block_lit(cx, fx, node, want)
+      lower_block_lit(cx, fx, node, want)
     Ast.Expr.Case(node) ->
       try typed(cx, expr, known)
-      return cx.case_value.call(cx, fx, node, want)
+      cx.case_value.call(cx, fx, node, want)
   end
 end
 
@@ -222,7 +222,7 @@ export def lower_call(
     return ok(Lowering.Out(fx: fx.with(next: saved), slot: want))
   end
 
-  return ok(Lowering.Out(fx: fx.with(next: base + 1), slot: base))
+  ok(Lowering.Out(fx: fx.with(next: base + 1), slot: base))
 end
 
 # The methods of a codec. A codec is a Codec.Info record at run time (Type.codec, Data.lower_codec): its name is the
@@ -262,12 +262,12 @@ def lower_codec(
     return ok(Lowering.Out(fx: fx.with(next: saved), slot: want))
   end
 
-  return ok(Lowering.Out(fx: fx.with(next: base + 1), slot: base))
+  ok(Lowering.Out(fx: fx.with(next: base + 1), slot: base))
 end
 
 # A call of the builtin some or none.
 def optional_call?(node: Ast.Call) -> Bool
-  return (node.name == "some" or node.name == "none") and Builtins.ref(node.name, node.args.size).ok?
+  (node.name == "some" or node.name == "none") and Builtins.ref(node.name, node.args.size).ok?
 end
 
 # A call of the builtin ok with a value.
@@ -298,7 +298,7 @@ def lower_optional(
   out = try Data.lower_enum(cx, fx, "Optional", variant, node.args, node.span, want, true)
   return ok(out.with(fx: Lowering.emit_at(out.fx, "return", [out.slot], node.span))) if tail
 
-  return ok(out)
+  ok(out)
 end
 
 # The value of a lower_codec call, in a new register: a method of a codec, whose receiver is the first argument.
@@ -324,7 +324,7 @@ def codec_value(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Call, key: String) -
     fx = Lowering.emit_at(fx, "field", [base + 1, base + 1, CODEC_NAME], node.span)
   end
 
-  return ok(Lowering.Out(fx: Lowering.emit_builtin(fx, base, key, count, spans), slot: base))
+  ok(Lowering.Out(fx: Lowering.emit_builtin(fx, base, key, count, spans), slot: base))
 end
 
 # The value of parameter param of a call: the argument that fills it, or its default value. A function with defaults
@@ -340,7 +340,7 @@ def lower_argument(
   source = Defaults.argument_for(shape, node.args.size, param)
   return lower_expression(cx, fx, node.args[source], fx.next - 1, false, false) if source >= 0
 
-  return lower_default(cx, fx, node, fill.unwrap!, param)
+  lower_default(cx, fx, node, fill.unwrap!, param)
 end
 
 # The same for a builtin form with defaults: the default is the one of the parameter in its catalog row.
@@ -355,7 +355,7 @@ def lower_builtin_argument(
   source = Defaults.argument_for(shape, node.args.size, param)
   return lower_expression(cx, fx, node.args[source], fx.next - 1, false, false) if source >= 0
 
-  return lower_builtin_default(cx, fx, node, form.parameters[param].default)
+  lower_builtin_default(cx, fx, node, form.parameters[param].default)
 end
 
 # The spans of a builtin call for the VM: the call's, then each argument's, in the order of the parameters; a default
@@ -376,7 +376,7 @@ def builtin_spans(node: Ast.Call, shape: Defaults.Shape) -> List[Source.Span]
     param += 1
   end
 
-  return spans
+  spans
 end
 
 # The default of a builtin parameter, a constant built the way its literal is (an empty Bytes as `"".bytes`).
@@ -386,7 +386,7 @@ def lower_builtin_default(
   node: Ast.Call,
   value: Model.Default,
 ) -> Result[Lowering.Out]
-  return Data.lower_catalog_default(cx, fx, value, node.id, node.span, fx.next - 1)
+  Data.lower_catalog_default(cx, fx, value, node.id, node.span, fx.next - 1)
 end
 
 # A default is an expression of the file that declares the function, so it is lowered with that file's index (the
@@ -402,8 +402,8 @@ def lower_default(
     some(value) ->
       here = cx.with(file: fill.file, index: fill.index)
       out = try lower_expression(here, fx.with(file: fill.index), value, fx.next - 1, false, false)
-      return ok(Lowering.Out(fx: out.fx.with(file: fx.file), slot: out.slot))
-    none -> return error(Lowering.internal(cx, "lower: a missing argument has no default", node.span))
+      ok(Lowering.Out(fx: out.fx.with(file: fx.file), slot: out.slot))
+    none -> error(Lowering.internal(cx, "lower: a missing argument has no default", node.span))
   end
 end
 
@@ -411,13 +411,13 @@ end
 def typed(cx: Lowering.Cx, expr: Ast.Expr, known: Bool) -> Result[Bool]
   return ok(true) if known
 
-  return Lowering.require_type(cx, expr, false, Lowering.type_of(cx, expr))
+  Lowering.require_type(cx, expr, false, Lowering.type_of(cx, expr))
 end
 
 def type_name?(expr: Ast.Expr) -> Bool
   case expr
-    Ast.Expr.TypeName(_) -> return true
-    _ -> return false
+    Ast.Expr.TypeName(_) -> true
+    _ -> false
   end
 end
 
@@ -434,7 +434,7 @@ def emit_layout(cx: Lowering.Cx, fx: Lowering.Fx, type: Types.Type, span: Source
     return error(Lowering.internal(cx, "lower: no C struct layout or callback for #{Types.to_text(type)}", span))
   end
 
-  return ok(Lowering.emit_const(fx, fx.next - 1, Ir.Imm.Text(layout), span))
+  ok(Lowering.emit_const(fx, fx.next - 1, Ir.Imm.Text(layout), span))
 end
 
 # The key of a Task.await: Task.await_result when the task's result is a Result, because the VM turns a crash into an
@@ -451,7 +451,7 @@ def await_key(cx: Lowering.Cx, node: Ast.Call, checked: Bool, count: Int) -> Res
 
   return ok("Task.await_result") if Types.is?(type, "Result")
 
-  return ok("Task.await")
+  ok("Task.await")
 end
 
 def lower_name(fx: Lowering.Fx, node: Ast.NameRef, want: Int) -> Result[Lowering.Out]
@@ -462,7 +462,7 @@ def lower_name(fx: Lowering.Fx, node: Ast.NameRef, want: Int) -> Result[Lowering
     return ok(Lowering.Out(fx: fx, slot: want))
   end
 
-  return ok(Lowering.Out(fx: fx, slot: slot))
+  ok(Lowering.Out(fx: fx, slot: slot))
 end
 
 def lower_literal(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Literal, want: Int) -> Result[Lowering.Out]
@@ -478,7 +478,7 @@ def lower_literal(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Literal, want: Int
 
   fx = Lowering.step(fx, node.span)
   made = Lowering.target(fx, want)
-  return ok(Lowering.Out(fx: Lowering.emit_const(made.fx, made.slot, value, node.span), slot: made.slot))
+  ok(Lowering.Out(fx: Lowering.emit_const(made.fx, made.slot, value, node.span), slot: made.slot))
 end
 
 # A read of a module constant: the literal itself, or the slot of the Globals table the entry filled.
@@ -493,7 +493,7 @@ def lower_const_read(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.ConstRef, want:
     Lowering.Read.Slot(slot) -> fx = Lowering.emit_at(made.fx, "global", [made.slot, slot], node.span)
   end
 
-  return ok(Lowering.Out(fx: fx, slot: made.slot))
+  ok(Lowering.Out(fx: fx, slot: made.slot))
 end
 
 # A type name as a value (JSON.decode(Person, text)): the name as a string, for a struct the VM can decode. The type
@@ -515,7 +515,7 @@ def lower_type_name(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.TypeName, want: 
   fx = Lowering.step(fx, node.span)
   made = Lowering.target(fx, want)
   fx = Lowering.emit_const(made.fx, made.slot, Ir.Imm.Text(name), node.span)
-  return ok(Lowering.Out(fx: fx, slot: made.slot))
+  ok(Lowering.Out(fx: fx, slot: made.slot))
 end
 
 # -9223372036854775808 is the only negative literal whose positive part does not fit an Int, so it is one `const`.
@@ -540,13 +540,13 @@ def lower_unary_checked(
   end
 
   try typed(cx, expr, known)
-  return lower_unary(cx, fx, node, want)
+  lower_unary(cx, fx, node, want)
 end
 
 def lower_min_int(fx: Lowering.Fx, node: Ast.Unary, literal: Ast.Literal, want: Int) -> Result[Lowering.Out]
   fx = Lowering.step(Lowering.step(fx, node.span), literal.span)
   made = Lowering.target(fx, want)
-  return ok(Lowering.Out(fx: Lowering.emit_const(made.fx, made.slot, Ir.Imm.Int(INT_MIN), node.span), slot: made.slot))
+  ok(Lowering.Out(fx: Lowering.emit_const(made.fx, made.slot, Ir.Imm.Int(INT_MIN), node.span), slot: made.slot))
 end
 
 def lower_unary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Unary, want: Int) -> Result[Lowering.Out]
@@ -563,7 +563,7 @@ def lower_unary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Unary, want: Int) ->
   end
 
   fx = Lowering.emit_at(operand.fx, op, [made.slot, operand.slot], node.op_span)
-  return ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
+  ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
 end
 
 def lower_binary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, want: Int) -> Result[Lowering.Out]
@@ -630,7 +630,7 @@ def lower_binary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, want: Int) 
     end
   end
 
-  return ok(Lowering.Out(fx: Lowering.release(fx, saved, want, dst), slot: dst))
+  ok(Lowering.Out(fx: Lowering.release(fx, saved, want, dst), slot: dst))
 end
 
 # An operator on two Bytes is a call of a builtin: the VM's `eq`, `ne` and `concat` do not take a Bytes (the value
@@ -645,7 +645,7 @@ def lower_bytes_operator(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, dst
   window = try bytes_call(cx, fx, key, node.left, node.right, node.op_span)
   return ok(Lowering.emit_at(window.fx, "not", [dst, window.slot], node.op_span)) if node.op == "not-equal"
 
-  return ok(Lowering.emit_at(window.fx, "move", [dst, window.slot], node.op_span))
+  ok(Lowering.emit_at(window.fx, "move", [dst, window.slot], node.op_span))
 end
 
 # True for a type whose == is the deep equality of the VM: anything but a primitive or a Range, which `eq` compares
@@ -655,7 +655,7 @@ def deep_equality?(type: Types.Type) -> Bool
     return false if Types.is?(type, flat)
   end
 
-  return true
+  true
 end
 
 # == and != on two values that `eq` does not take call a builtin of the deep equality of the VM: Optional.equal for
@@ -674,7 +674,7 @@ def lower_deep_equality(
     op = "not"
   end
 
-  return ok(Lowering.emit_at(window.fx, op, [dst, window.slot], node.op_span))
+  ok(Lowering.emit_at(window.fx, op, [dst, window.slot], node.op_span))
 end
 
 # The call of a builtin on two operands: both are lowered into consecutive new registers, and the call leaves its
@@ -693,7 +693,7 @@ def bytes_call(
   right_at = Lowering.alloc(left.fx)
   right = try lower_expression(cx, right_at, second, right_at.next - 1, false, false)
   spans = [span, Ast.expr_span(first), Ast.expr_span(second)]
-  return ok(Lowering.Out(fx: Lowering.emit_builtin(right.fx, window, key, 2, spans), slot: window))
+  ok(Lowering.Out(fx: Lowering.emit_builtin(right.fx, window, key, 2, spans), slot: window))
 end
 
 def lower_field(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.FieldAccess, want: Int) -> Result[Lowering.Out]
@@ -703,7 +703,7 @@ def lower_field(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.FieldAccess, want: I
   source = try lower_expression(cx, made.fx, node.target, -1, false, false)
   info = cx.structs[Types.name(Lowering.static_type(cx, node.target))]
   fx = Lowering.emit_at(source.fx, "field", [made.slot, source.slot, info.positions[node.name]], node.span)
-  return ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
+  ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
 end
 
 def lower_index(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.IndexAccess, want: Int) -> Result[Lowering.Out]
@@ -726,7 +726,7 @@ def lower_index(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.IndexAccess, want: I
   end
 
   fx = Lowering.emit_at(index.fx, op, [made.slot, items.slot, index.slot], Ast.expr_span(node.index))
-  return ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
+  ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
 end
 
 def lower_try(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.TryExpr, want: Int) -> Result[Lowering.Out]
@@ -741,7 +741,7 @@ def lower_try(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.TryExpr, want: Int) ->
   end
 
   fx = Lowering.emit_at(operand.fx, op, [made.slot, operand.slot], node.span)
-  return ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
+  ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
 end
 
 # A string with #{...} parts: the first part goes to the result register, each later one to a new register that is
@@ -768,15 +768,15 @@ def lower_interpolation(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Interpolatio
     end
   end
 
-  return ok(Lowering.Out(fx: Lowering.release(fx, saved, want, dst), slot: dst))
+  ok(Lowering.Out(fx: Lowering.release(fx, saved, want, dst), slot: dst))
 end
 
 def lower_part(cx: Lowering.Cx, fx: Lowering.Fx, part: Ast.Part, slot: Int, span: Source.Span) -> Result[Lowering.Fx]
   case part
-    Ast.Part.Text(text) -> return ok(Lowering.emit_const(fx, slot, Ir.Imm.Text(text), span))
+    Ast.Part.Text(text) -> ok(Lowering.emit_const(fx, slot, Ir.Imm.Text(text), span))
     Ast.Part.Code(code) ->
       out = try lower_expression(cx, fx, code, slot, false, false)
-      return text_of(out.fx, Lowering.static_type(cx, code), slot, span)
+      text_of(out.fx, Lowering.static_type(cx, code), slot, span)
   end
 end
 
@@ -784,12 +784,12 @@ end
 def text_of(fx: Lowering.Fx, type: Types.Type, slot: Int, span: Source.Span) -> Result[Lowering.Fx]
   return ok(fx) if Types.is?(type, "String")
 
-  return ok(Lowering.emit_at(fx, "to-text", [slot, slot], span))
+  ok(Lowering.emit_at(fx, "to-text", [slot, slot], span))
 end
 
 def lower_function_ref(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.FunctionRef, want: Int) -> Result[Lowering.Out]
   fx = Lowering.step(fx, node.span)
-  return ok(lower_closure(fx, cx.functions[node.name], [], node.span, want))
+  ok(lower_closure(fx, cx.functions[node.name], [], node.span, want))
 end
 
 # A block: the names it reads that are in scope here are copied into the registers just before a `closure` instruction,
@@ -806,7 +806,7 @@ def lower_block_lit(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.BlockLit, want: 
   index = fx.block_count
   fx = try cx.block.call(cx, fx, node, captured)
   slots = captured.map do |name: String| Lowering.lookup(fx, name) end
-  return ok(lower_closure(fx, index, slots, node.span, want))
+  ok(lower_closure(fx, index, slots, node.span, want))
 end
 
 def lower_invoke(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Invoke, want: Int) -> Result[Lowering.Out]
@@ -815,7 +815,7 @@ def lower_invoke(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Invoke, want: Int) 
   fx = Lowering.alloc(fx)
   base = fx.next - 1
   target = try lower_expression(cx, fx, node.target, base, false, false)
-  return finish_invoke(cx, target.fx, node.args, node.span, saved, base, want)
+  finish_invoke(cx, target.fx, node.args, node.span, saved, base, want)
 end
 
 # `s.name(args)` for an Fn field: the field is read into the callee register, then called as `.call(args)` is.
@@ -827,13 +827,13 @@ def lower_field_call(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.MethodCall, wan
   source = try lower_expression(cx, fx, node.target, -1, false, false)
   info = cx.structs[Types.name(Lowering.static_type(cx, node.target))]
   fx = Lowering.emit_at(source.fx, "field", [base, source.slot, info.positions[node.name]], node.name_span)
-  return finish_invoke(cx, fx.with(next: base + 1), node.args, node.span, saved, base, want)
+  finish_invoke(cx, fx.with(next: base + 1), node.args, node.span, saved, base, want)
 end
 
 def field_call?(resolved: State.Resolved) -> Bool
   case resolved
-    State.Resolved.FieldCall -> return true
-    _ -> return false
+    State.Resolved.FieldCall -> true
+    _ -> false
   end
 end
 
@@ -862,7 +862,7 @@ def finish_invoke(
     return ok(Lowering.Out(fx: fx.with(next: saved), slot: want))
   end
 
-  return ok(Lowering.Out(fx: fx.with(next: base + 1), slot: base))
+  ok(Lowering.Out(fx: fx.with(next: base + 1), slot: base))
 end
 
 # A closure with at most one captured register is built in the result register itself; otherwise the registers are
@@ -897,7 +897,7 @@ def lower_closure(fx: Lowering.Fx, index: Int, slots: List[Int], span: Source.Sp
     return Lowering.Out(fx: fx.with(next: saved), slot: want)
   end
 
-  return Lowering.Out(fx: fx.with(next: base + 1), slot: base)
+  Lowering.Out(fx: fx.with(next: base + 1), slot: base)
 end
 
 # The resolution of a method call, or of a field access that names a builtin: it takes the type check of the call
@@ -920,7 +920,7 @@ def lower_method_checked(
   end
 
   try typed(cx, expr, known)
-  return error(Lowering.unsupported(cx, "this expression", node.span))
+  error(Lowering.unsupported(cx, "this expression", node.span))
 end
 
 def lower_field_checked(
@@ -939,7 +939,7 @@ def lower_field_checked(
   end
 
   try typed(cx, expr, known)
-  return lower_field(cx, fx, node, want)
+  lower_field(cx, fx, node, want)
 end
 
 # What the synthetic node of the checker becomes. The receiver is checked already, with the type the resolution
@@ -958,13 +958,12 @@ def lower_resolved(
   case resolved
     State.Resolved.Self(type) ->
       try Lowering.require_type(cx, receiver, false, type)
-      return lower_expression(cx, fx, receiver, want, false, false)
-    State.Resolved.Text(type) -> return lower_text(cx, fx, receiver, type, span, want)
-    State.Resolved.Inspect(type) -> return lower_inspect(cx, fx, receiver, type, span, want)
-    State.Resolved.Members(fields) -> return Data.lower_members(cx, fx, fields, span, want)
-    State.Resolved.Codec(name, fields) -> return Data.lower_codec(cx, fx, name, fields, span, want)
-    State.Resolved.FieldCall ->
-      return error(Lowering.internal(cx, "a field call is lowered with its method call", span))
+      lower_expression(cx, fx, receiver, want, false, false)
+    State.Resolved.Text(type) -> lower_text(cx, fx, receiver, type, span, want)
+    State.Resolved.Inspect(type) -> lower_inspect(cx, fx, receiver, type, span, want)
+    State.Resolved.Members(fields) -> Data.lower_members(cx, fx, fields, span, want)
+    State.Resolved.Codec(name, fields) -> Data.lower_codec(cx, fx, name, fields, span, want)
+    State.Resolved.FieldCall -> error(Lowering.internal(cx, "a field call is lowered with its method call", span))
     State.Resolved.Call(name, type) ->
       literal = literal_text(receiver)
       if name == "String.bytes" and args.empty? and literal.some?
@@ -981,7 +980,7 @@ def lower_resolved(
         span: span,
       )
 
-      return lower_call(cx, fx, call, want, void, true, false)
+      lower_call(cx, fx, call, want, void, true, false)
   end
 end
 
@@ -990,11 +989,11 @@ def literal_text(expr: Ast.Expr) -> Optional[Ast.Literal]
   case expr
     Ast.Expr.Literal(node) ->
       case node.value
-        Ast.LitValue.Text(_) -> return some(node)
-        _ -> return none
+        Ast.LitValue.Text(_) -> some(node)
+        _ -> none
       end
 
-    _ -> return none
+    _ -> none
   end
 end
 
@@ -1009,7 +1008,7 @@ def lower_literal_bytes(fx: Lowering.Fx, span: Source.Span, literal: Ast.Literal
 
   fx = Lowering.step(Lowering.step(fx, span), literal.span)
   made = Lowering.target(fx, want)
-  return ok(Lowering.Out(fx: Lowering.emit_const(made.fx, made.slot, Ir.Imm.Bytes(text), span), slot: made.slot))
+  ok(Lowering.Out(fx: Lowering.emit_const(made.fx, made.slot, Ir.Imm.Bytes(text), span), slot: made.slot))
 end
 
 # to_s on a value: the interpolation of one part.
@@ -1027,7 +1026,7 @@ def lower_text(
   try Lowering.require_type(cx, receiver, false, type)
   out = try lower_expression(cx, made.fx, receiver, made.slot, false, false)
   fx = try text_of(out.fx, type, made.slot, span)
-  return ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
+  ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
 end
 
 def lower_inspect(
@@ -1044,7 +1043,7 @@ def lower_inspect(
   try Lowering.require_type(cx, receiver, false, type)
   operand = try lower_expression(cx, made.fx, receiver, -1, false, false)
   fx = Lowering.emit_at(operand.fx, "inspect", [made.slot, operand.slot], span)
-  return ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
+  ok(Lowering.Out(fx: Lowering.release(fx, saved, want, made.slot), slot: made.slot))
 end
 
 # The names a block's body reads, in the order of their first read: the walk collects every name and sorts them by
@@ -1074,12 +1073,12 @@ def referenced_names(body: List[Ast.Stmt]) -> List[String]
     end
   end
 
-  return names
+  names
 end
 
 def push_name(reads: List[Ast.NameRef], expr: Ast.Expr) -> List[Ast.NameRef]
   case expr
-    Ast.Expr.Name(read) -> return reads.push(read)
-    _ -> return reads
+    Ast.Expr.Name(read) -> reads.push(read)
+    _ -> reads
   end
 end

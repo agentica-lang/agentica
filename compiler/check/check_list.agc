@@ -15,17 +15,17 @@ export def check_list_rule(cx: State.Cx, st: State.St, site: State.Site, rule: M
   case rule
     Model.Rule.ListSize ->
       out = try Args.list_argument(cx, st, site, T.Type.Unknown)
-      return ok(State.Out(st: out.st, type: T.Type.Int))
-    Model.Rule.ListReverse -> return Args.list_argument(cx, st, site, T.only_list(site.expected))
-    Model.Rule.ListSort -> return check_sort(cx, st, site)
-    Model.Rule.ListSortBy -> return check_sort_by(cx, st, site)
-    Model.Rule.ListConcat -> return check_concat(cx, st, site)
-    Model.Rule.ListCount -> return check_count(cx, st, site, false)
-    Model.Rule.ListAt -> return check_count(cx, st, site, true)
-    Model.Rule.ListAppend -> return check_append(cx, st, site, false)
-    Model.Rule.ListSet -> return check_append(cx, st, site, true)
-    Model.Rule.ListRepeat -> return check_repeat(cx, st, site)
-    _ -> return check_callback_rule(cx, st, site, rule)
+      ok(State.Out(st: out.st, type: T.Type.Int))
+    Model.Rule.ListReverse -> Args.list_argument(cx, st, site, T.only_list(site.expected))
+    Model.Rule.ListSort -> check_sort(cx, st, site)
+    Model.Rule.ListSortBy -> check_sort_by(cx, st, site)
+    Model.Rule.ListConcat -> check_concat(cx, st, site)
+    Model.Rule.ListCount -> check_count(cx, st, site, false)
+    Model.Rule.ListAt -> check_count(cx, st, site, true)
+    Model.Rule.ListAppend -> check_append(cx, st, site, false)
+    Model.Rule.ListSet -> check_append(cx, st, site, true)
+    Model.Rule.ListRepeat -> check_repeat(cx, st, site)
+    _ -> check_callback_rule(cx, st, site, rule)
   end
 end
 
@@ -34,8 +34,8 @@ export def annotated_parameter(cx: State.Cx, st: State.St, block: Ast.BlockLit, 
   return ok(T.Type.Unknown) if block.params.size <= index
 
   case block.params[index].type
-    some(annotation) -> return CheckTypes.resolve_type(cx, st, annotation, false)
-    none -> return ok(T.Type.Unknown)
+    some(annotation) -> CheckTypes.resolve_type(cx, st, annotation, false)
+    none -> ok(T.Type.Unknown)
   end
 end
 
@@ -55,15 +55,15 @@ def check_sort(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out
     )
   end
 
-  return ok(target)
+  ok(target)
 end
 
 # List.sort_by: the key function is a block (which gives the element type of the list) or a function value.
 def check_sort_by(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   callback = site.args[1]
   case callback
-    Ast.Expr.BlockLit(block) -> return sort_by_block(cx, st, site, block)
-    _ -> return sort_by_function(cx, st, site, callback)
+    Ast.Expr.BlockLit(block) -> sort_by_block(cx, st, site, block)
+    _ -> sort_by_function(cx, st, site, callback)
   end
 end
 
@@ -72,13 +72,13 @@ def sort_by_block(cx: State.Cx, st: State.St, site: State.Site, block: Ast.Block
   target = try Args.list_argument(cx, st, site, T.list_of(annotated))
   key = try Stmt.check_block_body(cx, target.st, block, some([T.item(target.type)]), T.Type.Unknown, none)
   try check_sort_key(cx, key.st, key.type, block.span)
-  return ok(State.Out(st: key.st, type: target.type))
+  ok(State.Out(st: key.st, type: target.type))
 end
 
 def sort_by_function(cx: State.Cx, st: State.St, site: State.Site, callback: Ast.Expr) -> Result[State.Out]
   key = try State.expr(cx, st, callback, T.Type.Unknown)
   try check_sort_key(cx, key.st, key.type, Ast.expr_span(callback))
-  return Args.list_argument(cx, key.st, site, T.Type.List(T.params(key.type)[0]))
+  Args.list_argument(cx, key.st, site, T.Type.List(T.params(key.type)[0]))
 end
 
 # The key function takes one parameter and gives an Int, a Float or a String.
@@ -92,7 +92,7 @@ def check_sort_key(cx: State.Cx, st: State.St, callback: T.Type, span: Source.Sp
     return error(State.fail(cx, st, "CHECK-TYPE-MISMATCH", "sort_by keys must be Int, Float or String", span))
   end
 
-  return ok(true)
+  ok(true)
 end
 
 # List.concat: both lists have one type; an empty literal takes the type of the other side.
@@ -107,7 +107,7 @@ def check_concat(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.O
 
   target = try Args.list_argument(cx, current, site, context)
   second = try State.expr(cx, target.st, site.args[1], target.type)
-  return ok(State.Out(st: second.st, type: target.type))
+  ok(State.Out(st: second.st, type: target.type))
 end
 
 # List.take, List.drop and List.at: a list and an Int; at gives the element.
@@ -121,7 +121,7 @@ def check_count(cx: State.Cx, st: State.St, site: State.Site, at: Bool) -> Resul
   count = try State.expr(cx, target.st, site.args[1], T.Type.Int)
   return ok(State.Out(st: count.st, type: T.item(target.type))) if at
 
-  return ok(State.Out(st: count.st, type: target.type))
+  ok(State.Out(st: count.st, type: target.type))
 end
 
 # List.append and List.set: the value has the element type; an empty literal takes it from the value.
@@ -143,7 +143,7 @@ def check_append(cx: State.Cx, st: State.St, site: State.Site, set: Bool) -> Res
   end
 
   checked = try State.expr(cx, current, value, T.item(target.type))
-  return ok(State.Out(st: checked.st, type: target.type))
+  ok(State.Out(st: checked.st, type: target.type))
 end
 
 def check_repeat(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
@@ -154,7 +154,7 @@ def check_repeat(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.O
 
   element = try State.expr(cx, st, site.args[0], context)
   count = try State.expr(cx, element.st, site.args[1], T.Type.Int)
-  return ok(State.Out(st: count.st, type: T.Type.List(element.type)))
+  ok(State.Out(st: count.st, type: T.Type.List(element.type)))
 end
 
 # List.map, filter, reduce, each, any? and all?: the callback is a block (which gets the element type) or a function
@@ -178,7 +178,7 @@ def check_callback_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Mode
     )
   end
 
-  return callback_result(cx, checked.st, site, rule, callback, checked.type)
+  callback_result(cx, checked.st, site, rule, callback, checked.type)
 end
 
 # A callback that is not a block. The reference of a generic function (filter(&yes)) is a value only where the Fn type
@@ -197,15 +197,15 @@ def callback_value(
   end
 
   list = try Args.list_argument(cx, st, site, T.Type.Unknown)
-  return State.expr(cx, list.st, callback, T.Type.Fn([T.item(list.type)], result))
+  State.expr(cx, list.st, callback, T.Type.Fn([T.item(list.type)], result))
 end
 
 def generic_reference?(cx: State.Cx, node: Ast.Expr) -> Bool
   case node
     Ast.Expr.FunctionRef(ref) ->
       signature = cx.functions.get(ref.name)
-      return signature.some? and signature.unwrap!.type_parameters.size > 0
-    _ -> return false
+      signature.some? and signature.unwrap!.type_parameters.size > 0
+    _ -> false
   end
 end
 
@@ -233,7 +233,7 @@ def block_callback(
 
   return reduce_block(cx, list.st, site, block, element) if reduces?(rule)
 
-  return Stmt.check_block_body(cx, list.st, block, some([element]), block_result(rule), receiver)
+  Stmt.check_block_body(cx, list.st, block, some([element]), block_result(rule), receiver)
 end
 
 def reduce_block(
@@ -249,31 +249,31 @@ def reduce_block(
   end
 
   accumulator = try State.expr(cx, st, site.args[1], start)
-  return Stmt.check_block_body(cx, accumulator.st, block, some([accumulator.type, element]), accumulator.type, none)
+  Stmt.check_block_body(cx, accumulator.st, block, some([accumulator.type, element]), accumulator.type, none)
 end
 
 # The result a block of the rule must give: Bool for filter, any? and all?, Void for each, none known for map.
 def block_result(rule: Model.Rule) -> T.Type
   case rule
-    Model.Rule.ListFilter -> return T.Type.Bool
-    Model.Rule.ListAny -> return T.Type.Bool
-    Model.Rule.ListAll -> return T.Type.Bool
-    Model.Rule.ListEach -> return T.Type.Void
-    _ -> return T.Type.Unknown
+    Model.Rule.ListFilter -> T.Type.Bool
+    Model.Rule.ListAny -> T.Type.Bool
+    Model.Rule.ListAll -> T.Type.Bool
+    Model.Rule.ListEach -> T.Type.Void
+    _ -> T.Type.Unknown
   end
 end
 
 def reduces?(rule: Model.Rule) -> Bool
   case rule
-    Model.Rule.ListReduce -> return true
-    _ -> return false
+    Model.Rule.ListReduce -> true
+    _ -> false
   end
 end
 
 def each?(rule: Model.Rule) -> Bool
   case rule
-    Model.Rule.ListEach -> return true
-    _ -> return false
+    Model.Rule.ListEach -> true
+    _ -> false
   end
 end
 
@@ -303,7 +303,7 @@ def callback_result(
 
   return reduce_result(cx, current, site, callback, params[0], result) if reduces?(rule)
 
-  return plain_result(cx, current, rule, span, element, result)
+  plain_result(cx, current, rule, span, element, result)
 end
 
 def reduce_result(
@@ -323,7 +323,7 @@ def reduce_result(
     current = initial.st
   end
 
-  return ok(State.Out(st: current, type: result))
+  ok(State.Out(st: current, type: result))
 end
 
 def plain_result(
@@ -337,35 +337,35 @@ def plain_result(
   case rule
     Model.Rule.ListFilter ->
       try require_type(cx, st, T.Type.Bool, result, span)
-      return ok(State.Out(st: st, type: T.Type.List(element)))
+      ok(State.Out(st: st, type: T.Type.List(element)))
     Model.Rule.ListAny ->
       try require_type(cx, st, T.Type.Bool, result, span)
-      return ok(State.Out(st: st, type: T.Type.Bool))
+      ok(State.Out(st: st, type: T.Type.Bool))
     Model.Rule.ListAll ->
       try require_type(cx, st, T.Type.Bool, result, span)
-      return ok(State.Out(st: st, type: T.Type.Bool))
+      ok(State.Out(st: st, type: T.Type.Bool))
     Model.Rule.ListEach ->
       try require_type(cx, st, T.Type.Void, result, span)
-      return ok(State.Out(st: st, type: T.Type.Void))
-    _ -> return map_result(cx, st, span, result)
+      ok(State.Out(st: st, type: T.Type.Void))
+    _ -> map_result(cx, st, span, result)
   end
 end
 
 def map_result(cx: State.Cx, st: State.St, span: Source.Span, result: T.Type) -> Result[State.Out]
   return error(State.fail(cx, st, "CHECK-VOID-VALUE", "map callbacks must return data", span)) if T.is?(result, "Void")
 
-  return ok(State.Out(st: st, type: T.Type.List(result)))
+  ok(State.Out(st: st, type: T.Type.List(result)))
 end
 
 def require_type(cx: State.Cx, st: State.St, expected: T.Type, actual: T.Type, span: Source.Span) -> Result[Bool]
   return error(State.mismatch(cx, st, expected, actual, span)) if !T.same?(expected, actual)
 
-  return ok(true)
+  ok(true)
 end
 
 def block?(node: Ast.Expr) -> Bool
   case node
-    Ast.Expr.BlockLit(_) -> return true
-    _ -> return false
+    Ast.Expr.BlockLit(_) -> true
+    _ -> false
   end
 end

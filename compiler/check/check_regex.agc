@@ -30,7 +30,7 @@ export def check_regex(cx: State.Cx, st: State.St, node: Ast.RegexLit) -> Result
   whole = Regex.compile(pattern_of(node))
   return error(invalid(cx, st, node, whole.message)) if !whole.ok?
 
-  return State.expr(cx, st, node.call, T.Type.Unknown)
+  State.expr(cx, st, node.call, T.Type.Unknown)
 end
 
 # The name the linker gave the call of the literal: the linked `compile` of std/regex, or "" without an import.
@@ -38,11 +38,11 @@ def function_of(node: Ast.RegexLit) -> String
   case node.call
     Ast.Expr.MethodCall(unwrap) ->
       case unwrap.target
-        Ast.Expr.Call(call) -> return call.name
-        _ -> return ""
+        Ast.Expr.Call(call) -> call.name
+        _ -> ""
       end
 
-    _ -> return ""
+    _ -> ""
   end
 end
 
@@ -54,17 +54,17 @@ def pattern_of(node: Ast.RegexLit) -> String
           case call.args[0]
             Ast.Expr.Literal(text) ->
               case text.value
-                Ast.LitValue.Text(pattern) -> return pattern
-                _ -> return node.body
+                Ast.LitValue.Text(pattern) -> pattern
+                _ -> node.body
               end
 
-            _ -> return node.body
+            _ -> node.body
           end
 
-        _ -> return node.body
+        _ -> node.body
       end
 
-    _ -> return node.body
+    _ -> node.body
   end
 end
 
@@ -88,7 +88,7 @@ def invalid(cx: State.Cx, st: State.St, node: Ast.RegexLit, message: String) -> 
     end
   end
 
-  return State.fail_help(
+  State.fail_help(
     cx,
     st,
     "CHECK-INVALID-REGEX",

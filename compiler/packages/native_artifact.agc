@@ -73,7 +73,7 @@ export def valid_sha?(sha: String) -> Bool
     return false if not digit and not lower
   end
 
-  return true
+  true
 end
 
 ## The member with one leading "./" stripped, when it is a safe relative path of at most 1024 bytes: no absolute
@@ -103,7 +103,7 @@ export def canonical_member(member: String) -> Result[String]
     return error("a member must be a safe relative path") if seg == "" or seg == "." or seg == ".."
   end
 
-  return ok(path)
+  ok(path)
 end
 
 ## The hex SHA-256 of the canonical member UTF-8 bytes: the key of its cache object. The hex of the pathname would
@@ -116,23 +116,23 @@ export def native_base(cache_root: String) -> String = Paths.join(cache_root, "n
 
 ## Where the archive with this SHA-256 lives: `<root>/native/<sha>/archive`.
 export def archive_path(cache_root: String, sha: String) -> String
-  return Paths.join(Paths.join(native_base(cache_root), sha), "archive")
+  Paths.join(Paths.join(native_base(cache_root), sha), "archive")
 end
 
 ## Where the object of one member lives: `<root>/native/<sha>/m/<digest>`.
 export def member_dir(cache_root: String, sha: String, digest: String) -> String
-  return Paths.join(Paths.join(Paths.join(native_base(cache_root), sha), "m"), digest)
+  Paths.join(Paths.join(Paths.join(native_base(cache_root), sha), "m"), digest)
 end
 
 ## Where the extracted member of a member object lives: `<...>/payload/<member>`, in archive spelling, so the shared
 ## library keeps its file extension for the system loader.
 export def payload_path(cache_root: String, sha: String, digest: String, canonical: String) -> String
-  return Paths.join(Paths.join(member_dir(cache_root, sha, digest), "payload"), canonical)
+  Paths.join(Paths.join(member_dir(cache_root, sha, digest), "payload"), canonical)
 end
 
 ## Where the receipt of a member object lives: `<...>/receipt`, holding the hex SHA-256 of the member bytes.
 export def receipt_path(cache_root: String, sha: String, digest: String) -> String
-  return Paths.join(member_dir(cache_root, sha, digest), "receipt")
+  Paths.join(member_dir(cache_root, sha, digest), "receipt")
 end
 
 ## Whether the URL may be fetched: https anywhere, or http to a loopback literal (127.0.0.1 or [::1]) for hermetic
@@ -147,7 +147,7 @@ export def url_allowed?(url: String) -> Bool
 
   return true if parts.scheme == "http" and (parts.host == "127.0.0.1" or parts.host == "::1")
 
-  return false
+  false
 end
 
 ## Whether following `next` from `current` drops from https to http. Both URLs passed `url_allowed?` first; an
@@ -157,7 +157,7 @@ export def downgrade?(current: String, next: String) -> Bool
   next_parts = parse_url(next)
   return false if !current_parts.ok? or !next_parts.ok?
 
-  return current_parts.unwrap!.scheme == "https" and next_parts.unwrap!.scheme == "http"
+  current_parts.unwrap!.scheme == "https" and next_parts.unwrap!.scheme == "http"
 end
 
 ## The body budget left for the next hop of a fetch: `total` minus the bytes every hop wrote so far. A hop needs
@@ -169,13 +169,13 @@ export def hop_budget(consumed: Int, total: Int) -> Result[Int]
   remaining = total - consumed
   return error("the budget is spent") if remaining <= 0
 
-  return ok(remaining)
+  ok(remaining)
 end
 
 ## Whether the status is a redirect the engine follows with a GET: 301, 302, 303, 307 or 308, each with exactly one
 ## Location header.
 export def redirect_status?(status: Int) -> Bool
-  return status == 301 or status == 302 or status == 303 or status == 307 or status == 308
+  status == 301 or status == 302 or status == 303 or status == 307 or status == 308
 end
 
 ## The redirect target of `location` against `current`: an absolute URL passes through, a scheme-relative
@@ -211,7 +211,7 @@ export def resolve_location(current: String, location: String) -> Result[String]
   folder = current_folder(parsed.target)
   raw = split_query("#{folder}#{merged.before}")
   fixed = try normalize_path(raw.before)
-  return ok("#{parsed.scheme}://#{parsed.authority}#{fixed}#{raw.after}")
+  ok("#{parsed.scheme}://#{parsed.authority}#{fixed}#{raw.after}")
 end
 
 # A scheme-relative target (`//host/path`) with the scheme of the current URL, for the normal URL policy to judge.
@@ -229,14 +229,14 @@ def has_scheme?(text: String) -> Bool
     return false if not letter and not rest
   end
 
-  return stop < String.length(text) - 3
+  stop < String.length(text) - 3
 end
 
 def split_query(target: String) -> Halves
   stop = first_index(target, "?")
   return Halves(before: target, after: "") if stop == String.length(target)
 
-  return Halves(before: String.slice(target, 0, stop), after: String.slice(target, stop, String.length(target) - stop))
+  Halves(before: String.slice(target, 0, stop), after: String.slice(target, stop, String.length(target) - stop))
 end
 
 def current_folder(target: String) -> String
@@ -245,7 +245,7 @@ def current_folder(target: String) -> String
   return "/" if parts.size <= 1
 
   kept = parts.take(parts.size - 1)
-  return kept.join("/") + "/"
+  kept.join("/") + "/"
 end
 
 def normalize_path(path: String) -> Result[String]
@@ -263,7 +263,7 @@ def normalize_path(path: String) -> Result[String]
     kept = kept.push(seg)
   end
 
-  return ok("/" + kept.join("/"))
+  ok("/" + kept.join("/"))
 end
 
 def canonical_url(parts: Parts) -> String = "#{parts.scheme}://#{parts.authority}#{parts.target}"
@@ -305,7 +305,7 @@ def parse_url(url: String) -> Result[Parts]
   parsed = try split_authority(authority)
   return error("the URL must hold a host") if parsed.host == ""
 
-  return ok(Parts(scheme: scheme, authority: authority, host: parsed.host, target: target))
+  ok(Parts(scheme: scheme, authority: authority, host: parsed.host, target: target))
 end
 
 def split_authority(authority: String) -> Result[HostPort]
@@ -338,7 +338,7 @@ def split_authority(authority: String) -> Result[HostPort]
     return ok(HostPort(host: String.downcase(host), port: port))
   end
 
-  return ok(HostPort(host: String.downcase(authority), port: ""))
+  ok(HostPort(host: String.downcase(authority), port: ""))
 end
 
 def check_port(port: String) -> Result[Void]
@@ -354,5 +354,5 @@ def check_port(port: String) -> Result[Void]
   number = String.to_int!(port)
   return error("the URL holds a bad port") if number < 1 or number > 65535
 
-  return ok()
+  ok()
 end

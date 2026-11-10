@@ -45,14 +45,14 @@ export def add_main(file: String, program: Ast.Program) -> Result[Ast.Program]
     try check_test(file, test)
   end
 
-  return ok(with_main(program, tests))
+  ok(with_main(program, tests))
 end
 
 # CHECK-TEST-MAIN at a `main` of a file with test functions.
 def no_main(file: String, main: Optional[Ast.FunctionDecl]) -> Result[Void]
   case main
     some(declared) ->
-      return error(
+      error(
         fail(
           file,
           declared.span,
@@ -61,7 +61,7 @@ def no_main(file: String, main: Optional[Ast.FunctionDecl]) -> Result[Void]
           "remove main: agentica test runs the test_ functions",
         ),
       )
-    none -> return ok()
+    none -> ok()
   end
 end
 
@@ -91,17 +91,17 @@ def check_test(file: String, function: Ast.FunctionDecl) -> Result[Void]
     )
   end
 
-  return ok()
+  ok()
 end
 
 def result_void?(result: Ast.TypeRef) -> Bool
   return false if result.name != "Result" or result.args.size != 1
 
-  return result.args[0].name == "Void" and result.args[0].args.size == 0
+  result.args[0].name == "Void" and result.args[0].args.size == 0
 end
 
 def fail(file: String, span: Source.Span, code: String, message: String, help: String) -> String
-  return Failure.fail_at(Failure.Site(file: file, span: span), code, message, Diag.Help.Hint(help))
+  Failure.fail_at(Failure.Site(file: file, span: span), code, message, Diag.Help.Hint(help))
 end
 
 # The program with `main` after its declarations. Each node is numbered after its children and the siblings before it
@@ -136,14 +136,14 @@ def with_main(program: Ast.Program, tests: List[Ast.FunctionDecl]) -> Ast.Progra
     span: span,
   )
 
-  return program.with(id: next_id + 4, declarations: program.declarations.push(Ast.Decl.Function(main)))
+  program.with(id: next_id + 4, declarations: program.declarations.push(Ast.Decl.Function(main)))
 end
 
 def call(id: Int, name: String, args: List[Ast.Expr], span: Source.Span) -> Ast.Call
-  return Ast.Call(id: id, name: name, args: args, piped: false, parenthesized: true, span: span)
+  Ast.Call(id: id, name: name, args: args, piped: false, parenthesized: true, span: span)
 end
 
 # The name a report shows for the test function `name`: the name without `test_`, with each `_` a space.
 def test_name(name: String) -> String
-  return name.slice(TEST_PREFIX.length, name.length - TEST_PREFIX.length).replace("_", " ")
+  name.slice(TEST_PREFIX.length, name.length - TEST_PREFIX.length).replace("_", " ")
 end

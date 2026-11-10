@@ -103,12 +103,12 @@ end
 ## the same way in every stage.
 ## The context for the start of a file.
 export def make_env(tokens: List[Tokens.Token]) -> Env
-  return Env(tokens: tokens, size: tokens.size, allow_blocks: true, depth: 0, brace_at: -1, brace_form: "", nesting: 0)
+  Env(tokens: tokens, size: tokens.size, allow_blocks: true, depth: 0, brace_at: -1, brace_form: "", nesting: 0)
 end
 
 ## The same context, with `do` blocks allowed or not. Headers of case, while and for do not allow them.
 export def with_blocks(e: Env, allow: Bool) -> Env
-  return Env(
+  Env(
     tokens: e.tokens,
     size: e.size,
     allow_blocks: allow,
@@ -121,7 +121,7 @@ end
 
 ## The same context for the body of a block or a case arm.
 export def with_depth(e: Env, depth: Int) -> Env
-  return Env(
+  Env(
     tokens: e.tokens,
     size: e.size,
     allow_blocks: e.allow_blocks,
@@ -134,7 +134,7 @@ end
 
 ## The context for the body of a do block, remembering a `{` that follows the block head.
 export def with_block_body(e: Env, brace_at: Int, brace_form: String) -> Env
-  return Env(
+  Env(
     tokens: e.tokens,
     size: e.size,
     allow_blocks: true,
@@ -149,7 +149,7 @@ end
 export def kind_at(e: Env, index: Int) -> String
   return e.tokens[index].kind if index < e.size
 
-  return e.tokens[e.size - 1].kind
+  e.tokens[e.size - 1].kind
 end
 
 ## True for the name of a module constant: capitals, digits and `_`, starting with a capital, at least two characters
@@ -166,13 +166,13 @@ export def constant_name?(text: String) -> Bool
     index += 1
   end
 
-  return true
+  true
 end
 
 ## The span from the start of the token at start to the end of the last token before pos, that is, the last consumed
 ## token.
 export def span_from(e: Env, start: Int, pos: Int) -> Source.Span
-  return Source.Span(start: e.tokens[start].span.start, stop: e.tokens[pos - 1].span.stop)
+  Source.Span(start: e.tokens[start].span.start, stop: e.tokens[pos - 1].span.stop)
 end
 
 ## How a token is named in "found ..." messages. The lexeme is shown in the form of `written_text` (unicode.agc).
@@ -185,7 +185,7 @@ export def describe(token: Tokens.Token) -> String
 
   return "\"}\"" if token.kind == "interp-middle" or token.kind == "interp-end"
 
-  return Unicode.written_text(token.lexeme)
+  Unicode.written_text(token.lexeme)
 end
 
 ## Reads back the failure that pack wrote.
@@ -207,7 +207,7 @@ export def unpack(text: String) -> Diag.Diagnostic
 
   start = Source.Position(offset: parts[1].to_i!, line: parts[2].to_i!, column: parts[3].to_i!)
   stop = Source.Position(offset: parts[4].to_i!, line: parts[5].to_i!, column: parts[6].to_i!)
-  return Diag.fail(parts[0], body.slice(0, size), Source.Span(start: start, stop: stop), help)
+  Diag.fail(parts[0], body.slice(0, size), Source.Span(start: start, stop: stop), help)
 end
 
 ## A help text.
@@ -215,7 +215,7 @@ export def hint(text: String) -> Diag.Help = Diag.Help.Hint(text)
 
 ## The failure for a span that is not the span of one token.
 export def bail_span(code: String, message: String, span: Source.Span, help: Diag.Help) -> String
-  return pack(code, message, span, help)
+  pack(code, message, span, help)
 end
 
 ## The failure for the token at at. A doc comment token always gives PARSE-DETACHED-DOC, except for
@@ -224,7 +224,7 @@ export def bail(e: Env, at: Int, code: String, message: String, help: Diag.Help)
   token = e.tokens[at]
   return detached_doc(token) if token.kind == "DOC" and code != "PARSE-MISSING-BLANK-LINE"
 
-  return pack(code, message, token.span, help)
+  pack(code, message, token.span, help)
 end
 
 ## The PARSE-DETACHED-DOC failure for the doc token at at.
@@ -232,17 +232,17 @@ export def bail_detached(e: Env, at: Int) -> String = detached_doc(e.tokens[at])
 
 ## A PARSE-UNEXPECTED-TOKEN failure without help.
 export def unexpected(e: Env, at: Int, message: String) -> String
-  return bail(e, at, "PARSE-UNEXPECTED-TOKEN", message, Diag.Help.NoHelp)
+  bail(e, at, "PARSE-UNEXPECTED-TOKEN", message, Diag.Help.NoHelp)
 end
 
 ## A PARSE-UNEXPECTED-TOKEN failure with a help text.
 export def unexpected_help(e: Env, at: Int, message: String, help: String) -> String
-  return bail(e, at, "PARSE-UNEXPECTED-TOKEN", message, hint(help))
+  bail(e, at, "PARSE-UNEXPECTED-TOKEN", message, hint(help))
 end
 
 ## "expected X, found Y" for the token at at.
 export def found(e: Env, at: Int, expected: String) -> String
-  return unexpected(e, at, "expected #{expected}, found #{describe(e.tokens[at])}")
+  unexpected(e, at, "expected #{expected}, found #{describe(e.tokens[at])}")
 end
 
 ## The context `levels` deeper than e; PARSE-TOO-DEEP when that passes nesting_limit. enter adds one level, deepen adds
@@ -250,7 +250,7 @@ end
 export def deepen(e: Env, pos: Int, levels: Int) -> Result[Env]
   return error(too_deep(e, pos)) if e.nesting + levels > NESTING_LIMIT
 
-  return ok(
+  ok(
     Env(
       tokens: e.tokens,
       size: e.size,
@@ -269,7 +269,7 @@ export def enter(e: Env, pos: Int) -> Result[Env] = deepen(e, pos, 1)
 ## A failure for a state the grammar functions cannot reach, so that no code path needs a bare string error:
 ## PARSE-UNEXPECTED-TOKEN at the token at pos.
 export def impossible(e: Env, pos: Int) -> String
-  return unexpected(e, pos, "the parser cannot continue at #{describe(e.tokens[pos])}")
+  unexpected(e, pos, "the parser cannot continue at #{describe(e.tokens[pos])}")
 end
 
 ## True for a name token without a ? or ! suffix: the names of fields, parameters and bindings.
@@ -281,7 +281,7 @@ export def expect(e: Env, pos: Int, kind: String, description: String, suffix: B
   token = e.tokens[pos]
   return ok(pos + 1) if token.kind == kind and !(kind == "name" and !suffix and decorated?(token.lexeme))
 
-  return error(found(e, pos, description))
+  error(found(e, pos, description))
 end
 
 ## The position of the first token at or after pos that is not NL.
@@ -291,14 +291,14 @@ export def skip_newlines(e: Env, pos: Int) -> Int
     cursor += 1
   end
 
-  return cursor
+  cursor
 end
 
 ## The text of a token whose value is a string.
 export def token_text(token: Tokens.Token) -> String
   case token.value
-    Tokens.Value.Text(text) -> return text
-    _ -> return ""
+    Tokens.Value.Text(text) -> text
+    _ -> ""
   end
 end
 
@@ -309,11 +309,11 @@ export def heredoc?(token: Tokens.Token) -> Bool = token.lexeme.starts_with?("<<
 ## The literal value of an integer, float or string token.
 export def literal_value(token: Tokens.Token) -> Ast.LitValue
   case token.value
-    Tokens.Value.Whole(number) -> return Ast.LitValue.Whole(number)
-    Tokens.Value.Huge(digits) -> return Ast.LitValue.Huge(digits)
-    Tokens.Value.Real(number) -> return Ast.LitValue.Real(number)
-    Tokens.Value.Text(text) -> return Ast.LitValue.Text(text)
-    _ -> return Ast.LitValue.Nothing
+    Tokens.Value.Whole(number) -> Ast.LitValue.Whole(number)
+    Tokens.Value.Huge(digits) -> Ast.LitValue.Huge(digits)
+    Tokens.Value.Real(number) -> Ast.LitValue.Real(number)
+    Tokens.Value.Text(text) -> Ast.LitValue.Text(text)
+    _ -> Ast.LitValue.Nothing
   end
 end
 
@@ -346,7 +346,7 @@ export def parse_type(e: Env, pos: Int, ids: Int) -> Result[TypeAt]
   end
 
   node = Ast.TypeRef(id: next_id, name: name, args: args, span: span_from(e, pos, cursor))
-  return ok(TypeAt(node: node, pos: cursor, ids: next_id + 1))
+  ok(TypeAt(node: node, pos: cursor, ids: next_id + 1))
 end
 
 ## Parses the pattern of a case arm.
@@ -391,7 +391,7 @@ export def parse_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
     )
   end
 
-  return error(unexpected(e, pos, "expected a pattern"))
+  error(unexpected(e, pos, "expected a pattern"))
 end
 
 ## Whether the tokens at pos start a case arm, that is, a pattern, an optional `if` guard and ->. A case body ends
@@ -402,7 +402,7 @@ export def case_arm_start?(e: Env, pos: Int) -> Bool
 
   return guard_arrow(e, stop + 1) >= 0 if kind_at(e, stop) == "if"
 
-  return kind_at(e, stop) == "arrow"
+  kind_at(e, stop) == "arrow"
 end
 
 def kind?(e: Env, pos: Int, kind: String) -> Bool = e.tokens[pos].kind == kind
@@ -421,11 +421,11 @@ def pack(code: String, message: String, span: Source.Span, help: Diag.Help) -> S
     Diag.Help.NoHelp -> flag = "0"
   end
 
-  return "#{code}\n#{fields.join("\n")}\n#{flag}\n#{message.length}\n#{rest}"
+  "#{code}\n#{fields.join("\n")}\n#{flag}\n#{message.length}\n#{rest}"
 end
 
 def detached_doc(token: Tokens.Token) -> String
-  return pack(
+  pack(
     "PARSE-DETACHED-DOC",
     "a doc comment must be followed by a declaration, field or variant on the next line",
     token.span,
@@ -438,7 +438,7 @@ end
 
 # The PARSE-TOO-DEEP failure at the token at pos.
 def too_deep(e: Env, pos: Int) -> String
-  return bail(
+  bail(
     e,
     pos,
     "PARSE-TOO-DEEP",
@@ -476,13 +476,13 @@ def parse_slot(e: Env, pos: Int, ids: Int) -> Result[SlotAt]
     return nested_slot(e, pos, ids)
   end
 
-  return error(found(e, pos, "a pattern binding or _"))
+  error(found(e, pos, "a pattern binding or _"))
 end
 
 def nested_slot(e: Env, pos: Int, ids: Int) -> Result[SlotAt]
   inner = try enter(e, pos)
   parsed = try parse_pattern(inner, pos, ids)
-  return ok(SlotAt(slot: Ast.Slot.Nested(parsed.node), pos: parsed.pos, ids: parsed.ids))
+  ok(SlotAt(slot: Ast.Slot.Nested(parsed.node), pos: parsed.pos, ids: parsed.ids))
 end
 
 # The slots of the parentheses that open at pos: one or more, separated by commas.
@@ -508,7 +508,7 @@ def parse_slots(e: Env, pos: Int, ids: Int, empty_help: String) -> Result[SlotsA
   end
 
   cursor = try expect(e, cursor, "right-paren", ")", false)
-  return ok(SlotsAt(slots: slots, pos: cursor, ids: next_id))
+  ok(SlotsAt(slots: slots, pos: cursor, ids: next_id))
 end
 
 def pattern_node(
@@ -520,7 +520,7 @@ def pattern_node(
   start: Int,
   cursor: Int,
 ) -> Ast.Pattern
-  return Ast.Pattern.Variant(
+  Ast.Pattern.Variant(
     Ast.VariantPattern(
       id: id,
       enum_name: enum_name,
@@ -534,15 +534,15 @@ end
 # A negative literal pattern is a single literal with the negated value (an Int too big for Int keeps its digits).
 def literal_pattern(e: Env, ids: Int, value: Ast.LitValue, start: Int, cursor: Int) -> Result[PatternAt]
   node = Ast.Pattern.Literal(Ast.LiteralPattern(id: ids, value: value, span: span_from(e, start, cursor)))
-  return ok(PatternAt(node: node, pos: cursor, ids: ids + 1))
+  ok(PatternAt(node: node, pos: cursor, ids: ids + 1))
 end
 
 def negated(value: Ast.LitValue) -> Ast.LitValue
   case value
-    Ast.LitValue.Whole(number) -> return Ast.LitValue.Whole(0 - number)
-    Ast.LitValue.Huge(digits) -> return Ast.LitValue.Huge("-#{digits}")
-    Ast.LitValue.Real(number) -> return Ast.LitValue.Real(-number)
-    _ -> return value
+    Ast.LitValue.Whole(number) -> Ast.LitValue.Whole(0 - number)
+    Ast.LitValue.Huge(digits) -> Ast.LitValue.Huge("-#{digits}")
+    Ast.LitValue.Real(number) -> Ast.LitValue.Real(-number)
+    _ -> value
   end
 end
 
@@ -551,7 +551,7 @@ def constructor_pattern?(e: Env, pos: Int) -> Bool
   lexeme = e.tokens[pos].lexeme
   return true if lexeme == "none"
 
-  return (lexeme == "ok" or lexeme == "error" or lexeme == "some") and kind?(e, pos + 1, "left-paren")
+  (lexeme == "ok" or lexeme == "error" or lexeme == "some") and kind?(e, pos + 1, "left-paren")
 end
 
 def parse_name_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
@@ -596,7 +596,7 @@ def parse_name_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
     )
   end
 
-  return error(unexpected(e, pos, "expected a pattern"))
+  error(unexpected(e, pos, "expected a pattern"))
 end
 
 def variant_help(enum_name: String, variant_name: String) -> String
@@ -604,7 +604,7 @@ def variant_help(enum_name: String, variant_name: String) -> String
     return "write #{enum_name}.#{variant_name}(_) to match without binding the value"
   end
 
-  return "a variant without payload has no parentheses: #{enum_name}.#{variant_name}"
+  "a variant without payload has no parentheses: #{enum_name}.#{variant_name}"
 end
 
 def parse_variant_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
@@ -647,7 +647,7 @@ def parse_variant_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
   end
 
   node = pattern_node(e, next_id, enum_name, variant_name, slots, pos, cursor)
-  return ok(PatternAt(node: node, pos: cursor, ids: next_id + 1))
+  ok(PatternAt(node: node, pos: cursor, ids: next_id + 1))
 end
 
 # The case_arm_start? helpers look ahead without consuming; they return the index after the pattern, or -1.
@@ -664,7 +664,7 @@ def variant_head_end(e: Env, index: Int) -> Int
 
   return -1 if segments < 2
 
-  return at
+  at
 end
 
 # One item of a pattern at `at`: a leaf ends at `next`; a variant with parentheses `opens` a list of slots, and `next`
@@ -694,7 +694,7 @@ def scan_item(e: Env, at: Int, inside: Bool) -> Scanned
     end
   end
 
-  return Scanned(next: -1, opens: false)
+  Scanned(next: -1, opens: false)
 end
 
 # The index after the pattern that starts at `start`, or -1. One pass over the tokens with a count of open
@@ -729,7 +729,7 @@ def pattern_end(e: Env, start: Int) -> Int
     end
   end
 
-  return -1
+  -1
 end
 
 # The index of the `->` that ends a guard on its line, or -1. A guard is an expression, so no `->` is inside it.
@@ -746,5 +746,5 @@ def guard_arrow(e: Env, from: Int) -> Int
     cursor += 1
   end
 
-  return -1
+  -1
 end

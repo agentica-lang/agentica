@@ -56,13 +56,13 @@ export def expand(workspace: Workspace.Workspace, paths: List[String], buffer: S
     roots = [root_of(workspace, buffer)]
   end
 
-  return with_paths(workspace, roots, asked, usage)
+  with_paths(workspace, roots, asked, usage)
 end
 
 ## The roots of the position form of `refs`: `file`, the file of the position, first, then the files of `paths`, which
 ## may be none (the folder `.` is not a default here: the file alone is linked).
 export def expand_from(workspace: Workspace.Workspace, file: String, paths: List[String], usage: String) -> Expanded
-  return with_paths(workspace, [root_of(workspace, file)], paths, usage)
+  with_paths(workspace, [root_of(workspace, file)], paths, usage)
 end
 
 # `roots` and then the files of `asked`, in order and without repeats.
@@ -78,7 +78,7 @@ def with_paths(workspace: Workspace.Workspace, roots: List[Root], asked: List[St
     end
   end
 
-  return Expanded.Files(found)
+  Expanded.Files(found)
 end
 
 def files_of(workspace: Workspace.Workspace, path: String, usage: String) -> Listed
@@ -95,7 +95,7 @@ def files_of(workspace: Workspace.Workspace, path: String, usage: String) -> Lis
     return Listed.Files([path])
   end
 
-  return Listed.Refused(QueryOptions.refusal("cannot read #{path}", usage))
+  Listed.Refused(QueryOptions.refusal("cannot read #{path}", usage))
 end
 
 # Every `*.agc` file under `folder`, listed folder by folder with a worklist. The error is the folder that cannot be
@@ -135,14 +135,14 @@ def walk(workspace: Workspace.Workspace, folder: String) -> Result[List[String]]
     end
   end
 
-  return ok(files)
+  ok(files)
 end
 
 # The path of `name` in `folder`; the working folder adds no "./" to what it holds.
 def child(folder: String, name: String) -> String
   return name if folder == DEFAULT_PATH
 
-  return Paths.join(folder, name)
+  Paths.join(folder, name)
 end
 
 # A path without the separators that end it, which the Workspace does not take (the root folder keeps its one).
@@ -152,16 +152,16 @@ def trimmed(path: String) -> String
     kept = kept.slice(0, kept.length - 1)
   end
 
-  return kept
+  kept
 end
 
 # A file that the disk (or the buffer) cannot resolve keeps its typed path as its key.
 def root_of(workspace: Workspace.Workspace, typed: String) -> Root
-  return Root(typed: typed, key: workspace.real_path.call(typed).unwrap_or(typed))
+  Root(typed: typed, key: workspace.real_path.call(typed).unwrap_or(typed))
 end
 
 def with_root(roots: List[Root], root: Root) -> List[Root]
   return roots if roots.any? do |known: Root| known.key == root.key end
 
-  return roots.push(root)
+  roots.push(root)
 end

@@ -42,7 +42,7 @@ export def unknown_import_help(key: String, exports: Map[String, Declarations.Ki
   end
 
   case Suggest.closest_among(member, exports.keys, [])
-    some(name) -> return Diag.Help.Hint("did you mean \"#{name}\"?")
-    none -> return Diag.Help.NoHelp
+    some(name) -> Diag.Help.Hint("did you mean \"#{name}\"?")
+    none -> Diag.Help.NoHelp
   end
 end

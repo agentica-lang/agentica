@@ -24,9 +24,9 @@ end
 ## starts again: its locals do not live across calls). `locals` are the names of the function.
 export def suggestions(file: String, stmt: Ast.Stmt, path: List[Int], locals: Locals) -> List[Problems.Problem]
   case stmt
-    Ast.Stmt.Binding(node) -> return appended(file, node, path, locals)
-    Ast.Stmt.If(node) -> return branches(file, node)
-    _ -> return []
+    Ast.Stmt.Binding(node) -> appended(file, node, path, locals)
+    Ast.Stmt.If(node) -> branches(file, node)
+    _ -> []
   end
 end
 
@@ -39,7 +39,7 @@ def appended(file: String, node: Ast.Binding, path: List[Int], locals: Locals) -
   return [] if path.size == 0 or operands.size < 2 or Shape.read_name(operands[0]) != some(node.name)
 
   case nearest(locals.origins.get(node.name, []), node.span.start.offset)
-    none -> return []
+    none -> []
     some(origin) ->
       pieces = operands.drop(1)
       texts = pieces.any? do |piece: Ast.Expr| Shape.text?(piece) or Shape.to_s?(piece) end
@@ -47,7 +47,7 @@ def appended(file: String, node: Ast.Binding, path: List[Int], locals: Locals) -
         return [Rules.at(file, Rules.STRING_APPEND, node.span)]
       end
 
-      return []
+      []
   end
 end
 
@@ -60,14 +60,14 @@ def nearest(origins: List[Origin], before: Int) -> Optional[Origin]
     end
   end
 
-  return best
+  best
 end
 
 # Whether `origin` is later than `best`, or there is no `best` yet.
 def closer?(best: Optional[Origin], origin: Origin) -> Bool
   case best
-    some(held) -> return held.offset < origin.offset
-    none -> return true
+    some(held) -> held.offset < origin.offset
+    none -> true
   end
 end
 
@@ -85,20 +85,20 @@ def branches(file: String, node: Ast.IfStmt) -> List[Problems.Problem]
     found = found.push(Rules.at(file, if_chain(node), Ast.expr_span(first)))
   end
 
-  return found
+  found
 end
 
 # Without an `else`, the `case` needs a `_` arm for every other value: say so.
 def if_chain(node: Ast.IfStmt) -> Rules.Rule
   return Rules.IF_CHAIN if node.else_body.some?
 
-  return Rules.IF_CHAIN.with(help: "use `case value` with one arm for each literal and add a `_` arm for the rest")
+  Rules.IF_CHAIN.with(help: "use `case value` with one arm for each literal and add a `_` arm for the rest")
 end
 
 def negated?(condition: Ast.Expr) -> Bool
   case condition
-    Ast.Expr.Unary(node) -> return node.op == "not"
-    _ -> return false
+    Ast.Expr.Unary(node) -> node.op == "not"
+    _ -> false
   end
 end
 
@@ -112,7 +112,7 @@ def on_one_value?(node: Ast.IfStmt) -> Bool
   first = tested(node.branches[0].condition)
   return false if arms < 3 or first.none?
 
-  return node.branches.all? do |branch: Ast.IfBranch| tested(branch.condition) == first end
+  node.branches.all? do |branch: Ast.IfBranch| tested(branch.condition) == first end
 end
 
 # The variable that `name == literal` tests, `none` for any other condition.
@@ -122,10 +122,10 @@ def tested(condition: Ast.Expr) -> Optional[String]
       return none if node.op != "equal"
 
       case node.right
-        Ast.Expr.Literal(_) -> return Shape.read_name(node.left)
-        _ -> return none
+        Ast.Expr.Literal(_) -> Shape.read_name(node.left)
+        _ -> none
       end
 
-    _ -> return none
+    _ -> none
   end
 end

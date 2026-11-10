@@ -23,7 +23,7 @@ export def check(cx: State.Cx, st: State.St) -> Result[Bool]
   return ok(true) if first < 0
 
   local = st.locals[first]
-  return error(
+  error(
     State.fail_help(
       cx,
       st,
@@ -37,20 +37,20 @@ end
 
 def label(origin: State.Origin) -> String
   case origin
-    State.Origin.Variable -> return "the variable"
-    State.Origin.ForVariable -> return "the for variable"
-    State.Origin.BlockParameter -> return "the block parameter"
-    State.Origin.PatternBinding -> return "the pattern name"
+    State.Origin.Variable -> "the variable"
+    State.Origin.ForVariable -> "the for variable"
+    State.Origin.BlockParameter -> "the block parameter"
+    State.Origin.PatternBinding -> "the pattern name"
   end
 end
 
 def help(cx: State.Cx, st: State.St, key: Int, local: State.Local) -> String
   keep = "name it _#{local.name} if it is unused on purpose"
   case local.origin
-    State.Origin.ForVariable -> return "write for _ in #{value_text(cx, local.value)}, or #{keep}"
-    State.Origin.BlockParameter -> return "write _ in its place (|_, i|), or #{keep}"
-    State.Origin.PatternBinding -> return "write _ to match without binding the value, or #{keep}"
-    State.Origin.Variable -> return variable_help(cx, st, key, local, keep)
+    State.Origin.ForVariable -> "write for _ in #{value_text(cx, local.value)}, or #{keep}"
+    State.Origin.BlockParameter -> "write _ in its place (|_, i|), or #{keep}"
+    State.Origin.PatternBinding -> "write _ to match without binding the value, or #{keep}"
+    State.Origin.Variable -> variable_help(cx, st, key, local, keep)
   end
 end
 
@@ -73,7 +73,7 @@ def variable_help(cx: State.Cx, st: State.St, key: Int, local: State.Local, keep
 
   return "remove it, keep the call as a statement if it has effects, or #{keep}" if call?(local.value)
 
-  return "remove it, or #{keep}"
+  "remove it, or #{keep}"
 end
 
 # True when the value is a `try` itself.
@@ -81,11 +81,11 @@ def try?(value: Optional[Ast.Expr]) -> Bool
   case value
     some(found) ->
       case found
-        Ast.Expr.Try(_) -> return true
-        _ -> return false
+        Ast.Expr.Try(_) -> true
+        _ -> false
       end
 
-    none -> return false
+    none -> false
   end
 end
 
@@ -106,8 +106,8 @@ def has_try?(value: Optional[Ast.Expr]) -> Bool
         end
       end
 
-      return false
-    none -> return false
+      false
+    none -> false
   end
 end
 
@@ -115,19 +115,19 @@ def call?(value: Optional[Ast.Expr]) -> Bool
   case value
     some(found) ->
       case found
-        Ast.Expr.Call(_) -> return true
-        Ast.Expr.MethodCall(_) -> return true
-        _ -> return false
+        Ast.Expr.Call(_) -> true
+        Ast.Expr.MethodCall(_) -> true
+        _ -> false
       end
 
-    none -> return false
+    none -> false
   end
 end
 
 # The source text of the value, or `...` when there is none.
 def value_text(cx: State.Cx, value: Optional[Ast.Expr]) -> String
   case value
-    some(found) -> return Unused.value_text(cx, found)
-    none -> return "..."
+    some(found) -> Unused.value_text(cx, found)
+    none -> "..."
   end
 end

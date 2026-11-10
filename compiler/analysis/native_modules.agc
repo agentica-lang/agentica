@@ -57,7 +57,7 @@ export def of_program(
     return Diag.Outcome.Failed(Diag.fail("CHECK-INTERNAL", built.message, root.parsed.span, Diag.Help.NoHelp))
   end
 
-  return Diag.Outcome.Done(Model.NativeModules(version: NATIVE_MODULES_VERSION, file: file, blocks: built.unwrap!))
+  Diag.Outcome.Done(Model.NativeModules(version: NATIVE_MODULES_VERSION, file: file, blocks: built.unwrap!))
 end
 
 def program_of(linked: Linker.Linked, checked: Checker.Checked) -> Program
@@ -81,7 +81,7 @@ def program_of(linked: Linker.Linked, checked: Checker.Checked) -> Program
     end
   end
 
-  return Program(types: checked.types, structs: structs, enums: enums, functions: functions)
+  Program(types: checked.types, structs: structs, enums: enums, functions: functions)
 end
 
 def blocks_of(root: Linker.LinkedModule, program: Program) -> Result[List[Model.NativeBlock]]
@@ -98,7 +98,7 @@ def blocks_of(root: Linker.LinkedModule, program: Program) -> Result[List[Model.
     end
   end
 
-  return ok(found.order.map do |library: String| block_of(found, library) end)
+  ok(found.order.map do |library: String| block_of(found, library) end)
 end
 
 # The blocks with the member `decl` added when it is a function or resource of an extern module block.
@@ -106,8 +106,8 @@ def member(found: Found, program: Program, decl: Ast.Decl, placed: Placed) -> Re
   case decl
     Ast.Decl.Function(node) ->
       case node.native
-        some(native) if native.module -> return function_in(found, program, node, native.library, placed)
-        _ -> return ok(found)
+        some(native) if native.module -> function_in(found, program, node, native.library, placed)
+        _ -> ok(found)
       end
 
     Ast.Decl.Resource(node) ->
@@ -122,10 +122,8 @@ def member(found: Found, program: Program, decl: Ast.Decl, placed: Placed) -> Re
         range: DiagnosticModel.range_of(placed.span),
       )
 
-      return ok(
-        opened(found, node.module, placed.span).with(resources: found.resources.put(node.module, known.push(made))),
-      )
-    _ -> return ok(found)
+      ok(opened(found, node.module, placed.span).with(resources: found.resources.put(node.module, known.push(made))))
+    _ -> ok(found)
   end
 end
 
@@ -177,7 +175,7 @@ def function_in(
     end
   end
 
-  return ok(
+  ok(
     opened_block.with(
       functions: found.functions.put(library, found.functions.get(library, []).push(function)),
       types: found.types.put(library, known),
@@ -188,8 +186,8 @@ end
 # `dirty` for a `compute def`, which runs on the compute pool, else `short`.
 def mode_of(node: Ast.FunctionDecl) -> String
   case node.native
-    some(native) if native.compute -> return "dirty"
-    _ -> return "short"
+    some(native) if native.compute -> "dirty"
+    _ -> "short"
   end
 end
 
@@ -204,7 +202,7 @@ def type_of(crossing: NativeShape.Crossing) -> Model.NativeType
     Model.NativeMember(name: member.name, types: member.types)
   end
 
-  return Model.NativeType(kind: kind, name: Types.display_name(crossing.name), members: members, shape: crossing.shape)
+  Model.NativeType(kind: kind, name: Types.display_name(crossing.name), members: members, shape: crossing.shape)
 end
 
 # `found` with the block of `library` known, and its span grown to hold `span`.
@@ -216,19 +214,19 @@ def opened(found: Found, library: String, span: Source.Span) -> Found
 
   known = found.spans.get(library, span)
   grown = Source.Span(start: earlier(known.start, span.start), stop: later(known.stop, span.stop))
-  return found.with(order: order, spans: found.spans.put(library, grown))
+  found.with(order: order, spans: found.spans.put(library, grown))
 end
 
 def earlier(a: Source.Position, b: Source.Position) -> Source.Position
   return b if b.offset < a.offset
 
-  return a
+  a
 end
 
 def later(a: Source.Position, b: Source.Position) -> Source.Position
   return b if b.offset > a.offset
 
-  return a
+  a
 end
 
 # The finished block of `library`: its API version is the least one that has what it declares.
@@ -245,7 +243,7 @@ def block_of(found: Found, library: String) -> Model.NativeBlock
     minor = NativeShape.API_MINOR_RESOURCES
   end
 
-  return Model.NativeBlock(
+  Model.NativeBlock(
     library: library,
     range: DiagnosticModel.range_of(found.spans[library]),
     api_major: NativeShape.API_MAJOR,

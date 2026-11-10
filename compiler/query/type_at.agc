@@ -54,7 +54,7 @@ end
 export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Position.Asked) -> Diag.Outcome[Answer]
   module = linked.modules[0]
   case Position.locate(module.text, asked.line, asked.column)
-    Position.Located.Outside(span) -> return nothing(asked, span)
+    Position.Located.Outside(span) -> nothing(asked, span)
     Position.Located.At(offset) ->
       here = Position.character(offset, asked.line, asked.column)
       token = kind_at(module.text, offset)
@@ -65,7 +65,7 @@ export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Positi
         some(local) ->
           return nothing(asked, here) if local.local.kind == "discard"
 
-          return Diag.Outcome.Done(local_answer(linked, local))
+          Diag.Outcome.Done(local_answer(linked, local))
         none ->
           # A type is before the expressions: the parameters of a block are inside the block, which holds the position.
           if type_token?(module.text, token, offset)
@@ -73,7 +73,7 @@ export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Positi
             return Diag.Outcome.Done(found[0]) if found.size > 0
           end
 
-          return expression_answer(linked, checked, asked, offset, here)
+          expression_answer(linked, checked, asked, offset, here)
       end
   end
 end
@@ -107,14 +107,14 @@ export def written_prefixes(linked: Linker.Linked) -> Map[String, String]
     end
   end
 
-  return written
+  written
 end
 
 ## The file of the definition of `answered`; "" when the answer has none.
 export def definition_file(answered: Answer) -> String
   case answered.definition
-    some(definition) -> return definition.file
-    none -> return ""
+    some(definition) -> definition.file
+    none -> ""
   end
 end
 
@@ -128,7 +128,7 @@ def prefix_of(name: String) -> String = name.slice(0, name.length - T.display_na
 # The kind of the token that holds the character at `offset`; "" for none, a line break and the end included.
 def kind_at(text: String, offset: Int) -> String
   case Lexer.lex(text)
-    Diag.Outcome.Failed(_) -> return ""
+    Diag.Outcome.Failed(_) -> ""
     Diag.Outcome.Done(tokens) ->
       for token in tokens
         if token.span.start.offset > offset
@@ -138,7 +138,7 @@ def kind_at(text: String, offset: Int) -> String
         end
       end
 
-      return ""
+      ""
   end
 end
 
@@ -148,10 +148,10 @@ def type_answer(linked: Linker.Linked, checked: Checker.Checked, offset: Int) ->
   module = linked.modules[0]
   sites = Sites.of_types(module, checked, Sites.declared_names(linked.modules))
   case Sites.innermost(sites, offset)
-    none -> return []
+    none -> []
     some(site) ->
       text = source_text(module.text, site.reach)
-      return [
+      [
         Answer(
           kind: "type",
           span: site.reach,
@@ -169,7 +169,7 @@ end
 def type_token?(text: String, token: String, offset: Int) -> Bool
   return true if token == "type-name"
 
-  return token == "dot" and offset + 1 < text.length and CAPITALS.include?(text.at(offset + 1))
+  token == "dot" and offset + 1 < text.length and CAPITALS.include?(text.at(offset + 1))
 end
 
 def expression_answer(
@@ -180,8 +180,8 @@ def expression_answer(
   here: Source.Span,
 ) -> Diag.Outcome[Answer]
   case At.innermost(linked.modules[0], checked.types, offset)
-    none -> return nothing(asked, here)
-    some(expr) -> return Diag.Outcome.Done(found(linked, checked, expr, offset))
+    none -> nothing(asked, here)
+    some(expr) -> Diag.Outcome.Done(found(linked, checked, expr, offset))
   end
 end
 
@@ -189,7 +189,7 @@ end
 def local_answer(linked: Linker.Linked, at: Locals.Found) -> Answer
   module = linked.modules[0]
   type = T.to_text_as(at.local.type, written_prefixes(linked))
-  return Answer(
+  Answer(
     kind: "name",
     span: at.site,
     text: source_text(module.text, at.site),
@@ -200,7 +200,7 @@ def local_answer(linked: Linker.Linked, at: Locals.Found) -> Answer
 end
 
 def nothing(asked: Position.Asked, span: Source.Span) -> Diag.Outcome[Answer]
-  return Diag.Outcome.Failed(Position.no_expression(asked, span))
+  Diag.Outcome.Failed(Position.no_expression(asked, span))
 end
 
 def found(linked: Linker.Linked, checked: Checker.Checked, expr: Ast.Expr, offset: Int) -> Answer
@@ -219,7 +219,7 @@ def found(linked: Linker.Linked, checked: Checker.Checked, expr: Ast.Expr, offse
     none -> kind = kind
   end
 
-  return Answer(
+  Answer(
     kind: kind,
     span: span,
     text: source_text(module.text, span),
@@ -237,13 +237,13 @@ def builtin_of(
   definition: Optional[Definitions.Definition],
 ) -> Optional[Model.Builtin]
   case definition
-    some(_) -> return none
+    some(_) -> none
     none ->
       case expr
-        Ast.Expr.Call(node) -> return public(node.name)
-        Ast.Expr.MethodCall(node) -> return resolved(checked, node.id)
-        Ast.Expr.FieldAccess(node) -> return resolved(checked, node.id)
-        _ -> return none
+        Ast.Expr.Call(node) -> public(node.name)
+        Ast.Expr.MethodCall(node) -> resolved(checked, node.id)
+        Ast.Expr.FieldAccess(node) -> resolved(checked, node.id)
+        _ -> none
       end
   end
 end
@@ -255,8 +255,8 @@ def resolved(checked: Checker.Checked, id: Int) -> Optional[Model.Builtin]
   return none if found.none?
 
   case found.unwrap!
-    State.Resolved.Call(name, _) -> return public(name)
-    _ -> return none
+    State.Resolved.Call(name, _) -> public(name)
+    _ -> none
   end
 end
 
@@ -264,7 +264,7 @@ def public(name: String) -> Optional[Model.Builtin]
   entry = CatalogJson.public(name)
   return some(entry.unwrap!) if entry.ok?
 
-  return none
+  none
 end
 
 # The text of a span; empty when the span does not lie in the text.
@@ -272,22 +272,22 @@ def source_text(text: String, span: Source.Span) -> String
   size = span.stop.offset - span.start.offset
   return "" if span.start.offset < 0 or size < 0 or span.stop.offset > text.length
 
-  return text.slice(span.start.offset, size)
+  text.slice(span.start.offset, size)
 end
 
 # Whether the position is on a name: an expression that is a name, or the name part of one that has a name in it.
 def on_name?(expr: Ast.Expr, text: String, offset: Int) -> Bool
   case expr
-    Ast.Expr.Name(_) -> return true
-    Ast.Expr.ConstRef(_) -> return true
-    Ast.Expr.TypeName(_) -> return true
-    Ast.Expr.FunctionRef(_) -> return true
-    Ast.Expr.FieldAccess(node) -> return At.holds?(node.name_span, offset)
-    Ast.Expr.MethodCall(node) -> return At.holds?(node.name_span, offset)
-    Ast.Expr.Call(node) -> return on_head?(text, node.span, offset)
-    Ast.Expr.EnumConstructor(node) -> return on_head?(text, node.span, offset)
-    Ast.Expr.Construct(node) -> return on_head?(text, node.span, offset)
-    _ -> return false
+    Ast.Expr.Name(_) -> true
+    Ast.Expr.ConstRef(_) -> true
+    Ast.Expr.TypeName(_) -> true
+    Ast.Expr.FunctionRef(_) -> true
+    Ast.Expr.FieldAccess(node) -> At.holds?(node.name_span, offset)
+    Ast.Expr.MethodCall(node) -> At.holds?(node.name_span, offset)
+    Ast.Expr.Call(node) -> on_head?(text, node.span, offset)
+    Ast.Expr.EnumConstructor(node) -> on_head?(text, node.span, offset)
+    Ast.Expr.Construct(node) -> on_head?(text, node.span, offset)
+    _ -> false
   end
 end
 
@@ -307,5 +307,5 @@ def on_head?(text: String, span: Source.Span, offset: Int) -> Bool
     head += 1
   end
 
-  return start <= offset and offset < start + head
+  start <= offset and offset < start + head
 end

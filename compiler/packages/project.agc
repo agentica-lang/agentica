@@ -75,7 +75,7 @@ export def find(workspace: Workspace.Workspace, root_dir: String) -> Result[Proj
 
   lock = try Lock.read(workspace, empty.file)
   try check_dependencies(lock, manifest, members, false)
-  return ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: lock, members: members)))
+  ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: lock, members: members)))
 end
 
 ## Finds the project of the commands that write the lock (`add`, `update`). The manifest is read as `find` reads it,
@@ -93,14 +93,14 @@ export def find_to_write(workspace: Workspace.Workspace, root_dir: String) -> Re
     lock = try Lock.read(workspace, lock.file)
   end
 
-  return ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: lock, members: members)))
+  ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: lock, members: members)))
 end
 
 ## The local names of the dependencies of the root project, in the order of the manifest.
 export def direct_names(project: Project) -> List[String]
   case project
-    Project.Bare -> return []
-    Project.Declared(found) -> return Manifest.names(found.manifest)
+    Project.Bare -> []
+    Project.Declared(found) -> Manifest.names(found.manifest)
   end
 end
 
@@ -108,8 +108,8 @@ end
 ## folder of the root file.
 export def library_dir(project: Project, root_dir: String) -> String
   case project
-    Project.Bare -> return root_dir
-    Project.Declared(found) -> return found.dir
+    Project.Bare -> root_dir
+    Project.Declared(found) -> found.dir
   end
 end
 
@@ -118,14 +118,14 @@ end
 export def folder_of(dir: String, members: Members.Members, locked: Lock.Locked) -> String
   return Members.folder_of(members, locked.source) if locked.member
 
-  return path_folder(dir, locked.source.path)
+  path_folder(dir, locked.source.path)
 end
 
 ## The folder that a `path` names, for the root manifest in `dir`.
 export def path_folder(dir: String, path: String) -> String
   return path if Paths.rooted?(path)
 
-  return Paths.join(dir, path)
+  Paths.join(dir, path)
 end
 
 ## Checks that each `path` dependency of the root manifest names a folder with an agentica.toml, as a workspace member
@@ -143,7 +143,7 @@ export def check_paths(workspace: Workspace.Workspace, dir: String, manifest: Ma
     end
   end
 
-  return ok()
+  ok()
 end
 
 ## Checks the dependencies of a manifest against the lock: each must be in the lock, with the same source and pin. A
@@ -201,7 +201,7 @@ export def check_dependencies(
     end
   end
 
-  return ok()
+  ok()
 end
 
 ## Whether the file `key` (a canonical path) follows the style keys of the manifest in `style_dir` ("" when no manifest
@@ -219,7 +219,7 @@ export def styled?(workspace: Workspace.Workspace, style_dir: String, key: Strin
     here = Paths.directory_of(here)
   end
 
-  return true
+  true
 end
 
 ## The folder with an agentica.toml that is the nearest to dir, going up; "" when there is none.
@@ -234,14 +234,14 @@ export def nearest_manifest(workspace: Workspace.Workspace, dir: String) -> Stri
     here = parent
   end
 
-  return ""
+  ""
 end
 
 def stale(file: String, path: String, message: String) -> String
   help = Failure.hint("make #{LOCK_FILE} list the source and the pin that the manifest names")
-  return Failure.fail_key(file, path, "PKG-LOCK-STALE", message, help)
+  Failure.fail_key(file, path, "PKG-LOCK-STALE", message, help)
 end
 
 def conflict(file: String, path: String, message: String) -> String
-  return Failure.fail_key(file, path, "PKG-SOURCE-CONFLICT", message, Failure.hint(CONFLICT_HELP))
+  Failure.fail_key(file, path, "PKG-SOURCE-CONFLICT", message, Failure.hint(CONFLICT_HELP))
 end

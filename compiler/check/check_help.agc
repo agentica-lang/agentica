@@ -23,7 +23,7 @@ end
 
 ## The tables of this run.
 export def tables() -> Tables
-  return Tables(
+  Tables(
     modules: Data.method_modules(),
     aliases: Data.method_aliases(),
     foreign_names: Data.foreign_names(),
@@ -73,7 +73,7 @@ export def conversion(expected: Types.Type, actual: Types.Type) -> String
   options = Types.Type.Struct("Process.Options", [])
   return PROCESS_OPTIONS_HELP if Types.same?(expected, options) and !Types.is?(actual, "Struct")
 
-  return convert_help(expected, actual)
+  convert_help(expected, actual)
 end
 
 ## The help for a name another language has but Agentica does not, or for a builtin that moved into a family, or "".
@@ -81,7 +81,7 @@ export def foreign(tables: Tables, name: String) -> String
   found = tables.foreign_names.get(name)
   return found.unwrap! if found.some?
 
-  return moved(name)
+  moved(name)
 end
 
 ## The help for Module.fn of a builtin module that moved into a family (Digest.sha256 is OpenSSL.Digest.sha256), or
@@ -94,22 +94,22 @@ export def moved(name: String) -> String
   written = "#{member.unwrap!}.#{parts[1]}"
   return "#{parts[0]} is #{member.unwrap!} now: use #{written}" if ENTRIES.has_key?(written)
 
-  return "#{parts[0]} is #{member.unwrap!} now: its functions are written #{member.unwrap!}.NAME"
+  "#{parts[0]} is #{member.unwrap!} now: its functions are written #{member.unwrap!}.NAME"
 end
 
 ## The "did you mean" help for the closest of the candidates and the shared names, or "". A builtin that has a Ruby
 ## method form is offered in it (`s.strip`, not `String.trim`).
 export def near(name: String, candidates: List[String], shared: List[String]) -> String
   case Suggest.closest_among(name, candidates, shared)
-    some(found) -> return "did you mean \"#{RubyForm.shown(found)}\"?"
-    none -> return ""
+    some(found) -> "did you mean \"#{RubyForm.shown(found)}\"?"
+    none -> ""
   end
 end
 
 ## The field names alone, as "fields: a, b".
 export def field_list(fields: List[Model.Named]) -> String
   names = fields.map do |field: Model.Named| field.name end
-  return "fields: #{names.join(", ")}"
+  "fields: #{names.join(", ")}"
 end
 
 ## The help of a missing or unknown field: a guess if one is close, then the field names.
@@ -119,7 +119,7 @@ export def field_help(name: String, fields: List[Model.Named]) -> String
   guess = near(name, names, [])
   return all if guess == ""
 
-  return "#{guess} #{all}"
+  "#{guess} #{all}"
 end
 
 # What a failed unwrap suggests, by the type that was expected.
@@ -132,7 +132,7 @@ def unwrap_form(expected: Types.Type) -> String
     return "gets!"
   end
 
-  return "such as s.to_i!"
+  "such as s.to_i!"
 end
 
 def convert_help(expected: Types.Type, actual: Types.Type) -> String
@@ -154,5 +154,5 @@ def convert_help(expected: Types.Type, actual: Types.Type) -> String
     return "convert it with x.to_i!, which truncates"
   end
 
-  return ""
+  ""
 end

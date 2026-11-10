@@ -230,7 +230,7 @@ export def no_types(count: Int) -> List[Types.Type]
     left -= size
   end
 
-  return types
+  types
 end
 
 ## The state at the start of a function: no names, no types.
@@ -239,7 +239,7 @@ export def fresh() -> St
   no_reads: Set[Int] = Set.new([])
   no_writes: Set[Int] = Set.new([])
   no_assigning: Set[Int] = Set.new([])
-  return St(
+  St(
     types: [],
     resolved: {},
     vars: {},
@@ -268,25 +268,25 @@ export def use_json(st: St, use: JsonUse) -> St = st.with(json_uses: st.json_use
 
 ## The failure of a diagnostic with a help text.
 export def fail_help(cx: Cx, st: St, code: String, message: String, span: Source.Span, help: String) -> String
-  return Failure.pack(Failure.problem(cx.file, st.signature, code, message, span, Diag.Help.Hint(help)))
+  Failure.pack(Failure.problem(cx.file, st.signature, code, message, span, Diag.Help.Hint(help)))
 end
 
 ## The failure of a diagnostic with no help.
 export def fail(cx: Cx, st: St, code: String, message: String, span: Source.Span) -> String
-  return Failure.pack(Failure.problem(cx.file, st.signature, code, message, span, Diag.Help.NoHelp))
+  Failure.pack(Failure.problem(cx.file, st.signature, code, message, span, Diag.Help.NoHelp))
 end
 
 ## The failure of a diagnostic whose help may be absent ("" is no help).
 export def fail_maybe(cx: Cx, st: St, code: String, message: String, span: Source.Span, help: String) -> String
   return fail(cx, st, code, message, span) if help == ""
 
-  return fail_help(cx, st, code, message, span, help)
+  fail_help(cx, st, code, message, span, help)
 end
 
 ## The failure of a diagnostic with the signature of the callee as a note.
 export def fail_callee(cx: Cx, st: St, code: String, message: String, span: Source.Span, callee: String) -> String
   base = Failure.problem(cx.file, st.signature, code, message, span, Diag.Help.NoHelp)
-  return Failure.pack(base.with(callee: callee))
+  Failure.pack(base.with(callee: callee))
 end
 
 ## The failure of a type mismatch: "expected T, found U" with the types as notes and the conversion help.
@@ -300,7 +300,7 @@ export def mismatch(cx: Cx, st: St, expected: Types.Type, actual: Types.Type, sp
     hint_of(Help.conversion(expected, actual)),
   )
 
-  return Failure.pack(base.with(expected: Types.to_text(expected), actual: Types.to_text(actual)))
+  Failure.pack(base.with(expected: Types.to_text(expected), actual: Types.to_text(actual)))
 end
 
 ## actual, or the failure of a mismatch when there is an expected type and it differs.
@@ -309,22 +309,22 @@ export def ensure(cx: Cx, st: St, actual: Types.Type, expected: Types.Type, span
     return error(mismatch(cx, st, expected, actual, span))
   end
 
-  return ok(actual)
+  ok(actual)
 end
 
 ## Checks an expression through the hook, where a Void value is an error.
 export def expr(cx: Cx, st: St, node: Ast.Expr, expected: Types.Type) -> Result[Out]
-  return cx.expression.call(cx, st, node, expected, false)
+  cx.expression.call(cx, st, node, expected, false)
 end
 
 ## Checks an expression where a Void value is allowed (a statement, a completion).
 export def expr_completion(cx: Cx, st: St, node: Ast.Expr, expected: Types.Type) -> Result[Out]
-  return cx.expression.call(cx, st, node, expected, true)
+  cx.expression.call(cx, st, node, expected, true)
 end
 
 ## Checks an expression where a Void value is allowed only when completion is true.
 export def expr_completion_if(cx: Cx, st: St, node: Ast.Expr, expected: Types.Type, completion: Bool) -> Result[Out]
-  return cx.expression.call(cx, st, node, expected, completion)
+  cx.expression.call(cx, st, node, expected, completion)
 end
 
 ## The state with the type of a node recorded.
@@ -339,7 +339,7 @@ export def record_bound(st: St, id: Int, types: List[Types.Type]) -> St = st.wit
 
 ## The state with the resolution of a node recorded.
 export def record_resolved(st: St, id: Int, resolved: Resolved) -> St
-  return st.with(resolved: st.resolved.put(id, resolved))
+  st.with(resolved: st.resolved.put(id, resolved))
 end
 
 ## Whether the node `id` was resolved to a call of an `Fn` field (`store.put(a, b)`).
@@ -348,8 +348,8 @@ export def field_call?(resolved: Map[Int, Resolved], id: Int) -> Bool
   return false if found.none?
 
   case found.unwrap!
-    Resolved.FieldCall -> return true
-    _ -> return false
+    Resolved.FieldCall -> true
+    _ -> false
   end
 end
 
@@ -369,9 +369,9 @@ export def try_allowed?(st: St) -> Bool
   return true if st.step
 
   case st.result
-    Slot.Known(type) -> return Types.is?(type, "Result")
-    Slot.InferResult -> return true
-    Slot.Infer -> return false
+    Slot.Known(type) -> Types.is?(type, "Result")
+    Slot.InferResult -> true
+    Slot.Infer -> false
   end
 end
 
@@ -379,7 +379,7 @@ end
 ## or function name, and no shadowing. `_` binds nothing: it can repeat and it is never in scope to be read. The name
 ## is not watched by CHECK-UNUSED-VARIABLE (a parameter of a function).
 export def introduce(cx: Cx, st: St, name: String, type: Types.Type, span: Source.Span, immutable: Bool) -> Result[St]
-  return introduce_slot(cx, st, name, type, span, immutable, -1)
+  introduce_slot(cx, st, name, type, span, immutable, -1)
 end
 
 ## `introduce` for a name that CHECK-UNUSED-VARIABLE watches: it must be read before the function ends, unless it
@@ -401,34 +401,34 @@ export def introduce_local(
   key = shown.start.offset
   introduced = try introduce_slot(cx, st, name, type, span, immutable, key)
   local = Local(name: name, span: shown, origin: origin, type: type, value: value, tryable: try_allowed?(introduced))
-  return ok(introduced.with(locals: introduced.locals.put(key, local)))
+  ok(introduced.with(locals: introduced.locals.put(key, local)))
 end
 
 ## The state after the name of `binding` was read, unless it is the name that is being assigned.
 export def read(st: St, binding: Binding) -> St
   return st if binding.slot < 0 or st.reads.include?(binding.slot) or st.assigning.include?(binding.slot)
 
-  return st.with(reads: st.reads.add(binding.slot))
+  st.with(reads: st.reads.add(binding.slot))
 end
 
 ## The state at the start of the assignment to `binding`: it is set again, and a read of it in the value is no use.
 export def assigning(st: St, binding: Binding) -> St
   return st if binding.slot < 0
 
-  return st.with(writes: st.writes.add(binding.slot), assigning: st.assigning.add(binding.slot))
+  st.with(writes: st.writes.add(binding.slot), assigning: st.assigning.add(binding.slot))
 end
 
 ## The state at the end of the assignment to `binding`.
 export def assigned(st: St, binding: Binding) -> St
   return st if binding.slot < 0
 
-  return st.with(assigning: st.assigning.delete(binding.slot))
+  st.with(assigning: st.assigning.delete(binding.slot))
 end
 
 ## The state with no name to watch: the start of a function or of a constant.
 export def forget_locals(st: St) -> St
   no_reads: Set[Int] = Set.new([])
-  return st.with(locals: {}, reads: no_reads, writes: no_reads, assigning: no_reads)
+  st.with(locals: {}, reads: no_reads, writes: no_reads, assigning: no_reads)
 end
 
 ## CHECK-REDEFINED-NAME for ok, error, some and none, which are builtin constructors.
@@ -437,7 +437,7 @@ export def reserve_constructor(cx: Cx, st: St, name: String, span: Source.Span) 
     return error(fail(cx, st, "CHECK-REDEFINED-NAME", "\"#{name}\" is a builtin constructor", span))
   end
 
-  return ok(true)
+  ok(true)
 end
 
 ## CHECK-REDEFINED-NAME for the names a local may not take: ok, error, some, none, puts, print, gets and gets!.
@@ -456,20 +456,20 @@ export def reserve_local(cx: Cx, st: St, name: String, span: Source.Span) -> Res
     )
   end
 
-  return ok(true)
+  ok(true)
 end
 
 ## The names a program may use as a value or a call, for the did-you-mean help: names in scope, functions, public
 ## builtins.
 export def visible_names(cx: Cx, st: St) -> List[String]
-  return st.vars.keys.concat(cx.functions.keys).concat(CALLABLE_NAMES)
+  st.vars.keys.concat(cx.functions.keys).concat(CALLABLE_NAMES)
 end
 
 ## A Diag.Help for a help text that may be absent ("" is absent).
 export def hint_of(text: String) -> Diag.Help
   return Diag.Help.NoHelp if text == ""
 
-  return Diag.Help.Hint(text)
+  Diag.Help.Hint(text)
 end
 
 def introduce_slot(
@@ -512,5 +512,5 @@ def introduce_slot(
   end
 
   binding = Binding(type: type, immutable: immutable, level: st.depth, slot: slot)
-  return ok(st.with(vars: st.vars.put(name, binding)))
+  ok(st.with(vars: st.vars.put(name, binding)))
 end

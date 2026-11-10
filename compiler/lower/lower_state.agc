@@ -107,7 +107,7 @@ end
 
 ## The state at the start of a function in file index: nothing emitted, no names, no registers.
 export def fresh(file: Int, blocks: Map[Int, Ir.Function], block_count: Int) -> Fx
-  return Fx(
+  Fx(
     code: [],
     next: 0,
     high: 0,
@@ -125,22 +125,22 @@ end
 ## The failure of a form the VM does not support: LOWER-UNSUPPORTED "the VM does not support WHAT yet".
 export def unsupported(cx: Cx, what: String, span: Source.Span) -> String
   message = "the VM does not support #{what} yet"
-  return Failure.pack(Failure.problem(cx.file, "", "LOWER-UNSUPPORTED", message, span, Diag.Help.NoHelp))
+  Failure.pack(Failure.problem(cx.file, "", "LOWER-UNSUPPORTED", message, span, Diag.Help.NoHelp))
 end
 
 ## The failure for a program the lowering cannot make sense of.
 export def internal(cx: Cx, message: String, span: Source.Span) -> String
-  return Failure.pack(Failure.problem(cx.file, "", "LOWER-INTERNAL", message, span, Diag.Help.NoHelp))
+  Failure.pack(Failure.problem(cx.file, "", "LOWER-INTERNAL", message, span, Diag.Help.NoHelp))
 end
 
 ## The state with an instruction emitted. The spans are those the VM reports an error or a stack frame at.
 export def emit(fx: Fx, op: String, args: List[Int], spans: List[Source.Span]) -> Fx
-  return fx.with(code: fx.code.push(Ir.instr(op, args, fx.file, spans)))
+  fx.with(code: fx.code.push(Ir.instr(op, args, fx.file, spans)))
 end
 
 ## The state with an instruction that has one span.
 export def emit_at(fx: Fx, op: String, args: List[Int], span: Source.Span) -> Fx
-  return fx.with(code: fx.code.push(Ir.instr(op, args, fx.file, [span])))
+  fx.with(code: fx.code.push(Ir.instr(op, args, fx.file, [span])))
 end
 
 ## The state with a `step` for a node.
@@ -149,14 +149,14 @@ export def step(fx: Fx, span: Source.Span) -> Fx = fx.with(code: fx.code.push(Ir
 ## The state with a `const` of a value.
 export def emit_const(fx: Fx, dst: Int, value: Ir.Imm, span: Source.Span) -> Fx
   made = Ir.Instr(op: "const", args: [dst], imm: value, name: "", file: fx.file, spans: [span])
-  return fx.with(code: fx.code.push(made))
+  fx.with(code: fx.code.push(made))
 end
 
 ## The state with a `call-builtin` of a name and the number of its arguments. spans is the call's span and then each
 ## argument's.
 export def emit_builtin(fx: Fx, base: Int, name: String, count: Int, spans: List[Source.Span]) -> Fx
   made = Ir.Instr(op: "call-builtin", args: [base, count], imm: Ir.Imm.Void, name: name, file: fx.file, spans: spans)
-  return fx.with(code: fx.code.push(made))
+  fx.with(code: fx.code.push(made))
 end
 
 ## The state with a label placed here.
@@ -173,7 +173,7 @@ export def alloc(fx: Fx) -> Fx
     high = next
   end
 
-  return fx.with(next: next, high: high)
+  fx.with(next: next, high: high)
 end
 
 ## The register to compute into: want when there is one (a register of 0 or more), else a new one.
@@ -181,7 +181,7 @@ export def target(fx: Fx, want: Int) -> Out
   return Out(fx: fx, slot: want) if want >= 0
 
   taken = alloc(fx)
-  return Out(fx: taken, slot: taken.next - 1)
+  Out(fx: taken, slot: taken.next - 1)
 end
 
 ## The state after a value is in dst: the registers go back to saved when the caller gave a register to fill (want),
@@ -189,7 +189,7 @@ end
 export def release(fx: Fx, saved: Int, want: Int, dst: Int) -> Fx
   return fx.with(next: saved) if want >= 0
 
-  return fx.with(next: dst + 1)
+  fx.with(next: dst + 1)
 end
 
 ## The register of a name in scope, or -1.
@@ -201,47 +201,47 @@ export def type_of(cx: Cx, expr: Ast.Expr) -> Types.Type = cx.types[Ast.expr_id(
 ## The type of an expression, or the type a TypedTarget carries.
 export def static_type(cx: Cx, expr: Ast.Expr) -> Types.Type
   case expr
-    Ast.Expr.Typed(node) -> return node.type
-    _ -> return type_of(cx, expr)
+    Ast.Expr.Typed(node) -> node.type
+    _ -> type_of(cx, expr)
   end
 end
 
 ## True when the VM has a representation for values of the type.
 export def vm_type?(cx: Cx, type: Types.Type) -> Bool
   case type
-    Types.Type.List(item) -> return vm_type?(cx, item)
-    Types.Type.Map(_, value) -> return vm_type?(cx, value)
-    Types.Type.ATS(_, value) -> return vm_type?(cx, value)
-    Types.Type.Set(_) -> return true
-    Types.Type.Result(item) -> return Types.is?(item, "Void") or vm_type?(cx, item)
+    Types.Type.List(item) -> vm_type?(cx, item)
+    Types.Type.Map(_, value) -> vm_type?(cx, value)
+    Types.Type.ATS(_, value) -> vm_type?(cx, value)
+    Types.Type.Set(_) -> true
+    Types.Type.Result(item) -> Types.is?(item, "Void") or vm_type?(cx, item)
     # An Optional is a value of the builtin enum Optional (Program.OPTIONAL).
-    Types.Type.Optional(item) -> return cx.user_types.get("Optional", "") == "Enum" and vm_type?(cx, item)
-    Types.Type.Task(item) -> return Types.is?(item, "Void") or vm_type?(cx, item)
-    Types.Type.Channel(item) -> return vm_type?(cx, item)
-    Types.Type.Lazy(item) -> return vm_type?(cx, item)
+    Types.Type.Optional(item) -> cx.user_types.get("Optional", "") == "Enum" and vm_type?(cx, item)
+    Types.Type.Task(item) -> Types.is?(item, "Void") or vm_type?(cx, item)
+    Types.Type.Channel(item) -> vm_type?(cx, item)
+    Types.Type.Lazy(item) -> vm_type?(cx, item)
     # A codec is a Codec.Info record at run time (T.codec).
-    Types.Type.Codec(_) -> return true
-    Types.Type.Struct(name, _) -> return cx.user_types.get(name, "") == "Struct"
-    Types.Type.Enum(name, _) -> return cx.user_types.get(name, "") == "Enum"
-    Types.Type.Fn(params, result) -> return fn_type?(cx, params, result)
+    Types.Type.Codec(_) -> true
+    Types.Type.Struct(name, _) -> cx.user_types.get(name, "") == "Struct"
+    Types.Type.Enum(name, _) -> cx.user_types.get(name, "") == "Enum"
+    Types.Type.Fn(params, result) -> fn_type?(cx, params, result)
     # The checker makes an opaque type only from OPAQUE_TYPES (a builtin handle, TestCase, C.Pointer) or a resource of
     # an extern block (cx.resources): the VM has them all.
-    Types.Type.Opaque(_) -> return true
-    Types.Type.Int -> return true
-    Types.Type.Float -> return true
-    Types.Type.Bool -> return true
-    Types.Type.Nil -> return true
-    Types.Type.String -> return true
-    Types.Type.Range -> return true
-    Types.Type.Bytes -> return true
-    Types.Type.Json -> return true
+    Types.Type.Opaque(_) -> true
+    Types.Type.Int -> true
+    Types.Type.Float -> true
+    Types.Type.Bool -> true
+    Types.Type.Nil -> true
+    Types.Type.String -> true
+    Types.Type.Range -> true
+    Types.Type.Bytes -> true
+    Types.Type.Json -> true
     # A type variable stands for a value of the VM: the functions of the prelude are written for any type, and so is
     # a generic function of the program (its body is checked once, whatever the type argument), and the default of a
     # field of a generic struct (`items: List[T] = []`), which the checker types with the variable. No other variable
     # reaches the lowering: a use of a generic struct, enum or function has its arguments put in, and a builtin
     # signature is instantiated at each call.
-    Types.Type.Var(_) -> return true
-    _ -> return false
+    Types.Type.Var(_) -> true
+    _ -> false
   end
 end
 
@@ -255,7 +255,7 @@ export def require_type(cx: Cx, expr: Ast.Expr, void: Bool, type: Types.Type) ->
     what = "values of type #{Types.to_text(type)}"
   end
 
-  return error(unsupported(cx, what, Ast.expr_span(expr)))
+  error(unsupported(cx, what, Ast.expr_span(expr)))
 end
 
 def fn_type?(cx: Cx, params: List[Types.Type], result: Types.Type) -> Bool
@@ -263,5 +263,5 @@ def fn_type?(cx: Cx, params: List[Types.Type], result: Types.Type) -> Bool
     return false if !vm_type?(cx, param)
   end
 
-  return Types.is?(result, "Void") or vm_type?(cx, result)
+  Types.is?(result, "Void") or vm_type?(cx, result)
 end

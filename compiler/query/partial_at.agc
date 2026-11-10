@@ -34,14 +34,14 @@ export def answer(
 ) -> Diag.Outcome[TypeAt.Answer]
   typed = TypeAt.answer(linked, checked, asked)
   case typed
-    Diag.Outcome.Done(_) -> return typed
+    Diag.Outcome.Done(_) -> typed
     Diag.Outcome.Failed(_) ->
       case Position.locate(linked.modules[0].text, asked.line, asked.column)
-        Position.Located.Outside(_) -> return typed
+        Position.Located.Outside(_) -> typed
         Position.Located.At(offset) ->
           return typed if !in_failed?(linked, failed, offset)
 
-          return named(linked, checked, offset, typed)
+          named(linked, checked, offset, typed)
       end
   end
 end
@@ -52,8 +52,8 @@ end
 export def unclear?(linked: Linker.Linked, failed: List[String], asked: Position.Asked) -> Bool
   module = linked.modules[0]
   case Position.locate(module.text, asked.line, asked.column)
-    Position.Located.Outside(_) -> return false
-    Position.Located.At(offset) -> return in_failed?(linked, failed, offset) and TypeAt.on_token?(module.text, offset)
+    Position.Located.Outside(_) -> false
+    Position.Located.At(offset) -> in_failed?(linked, failed, offset) and TypeAt.on_token?(module.text, offset)
   end
 end
 
@@ -68,7 +68,7 @@ def in_failed?(linked: Linker.Linked, failed: List[String], offset: Int) -> Bool
     end
   end
 
-  return false
+  false
 end
 
 # The answer for the written name at `offset`, or `missed` when no name is written there.
@@ -84,10 +84,10 @@ def named(
   end
 
   case Sites.innermost(sites, offset)
-    none -> return missed
+    none -> missed
     some(site) ->
       definition = Refs.definition_of(linked.modules, site.target)
-      return Diag.Outcome.Done(
+      Diag.Outcome.Done(
         TypeAt.Answer(
           kind: kind_of(definition, site),
           span: site.reach,
@@ -103,18 +103,18 @@ end
 # `builtin` for a name that no file declares and the catalog knows, else `name`.
 def kind_of(definition: Optional[Definitions.Definition], site: Sites.Site) -> String
   case builtin_of(definition, site)
-    some(_) -> return "builtin"
-    none -> return "name"
+    some(_) -> "builtin"
+    none -> "name"
   end
 end
 
 def builtin_of(definition: Optional[Definitions.Definition], site: Sites.Site) -> Optional[Model.Builtin]
   case definition
-    some(_) -> return none
+    some(_) -> none
     none ->
       entry = CatalogJson.public(site.target.name)
       return some(entry.unwrap!) if entry.ok?
 
-      return none
+      none
   end
 end

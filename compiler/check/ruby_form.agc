@@ -27,7 +27,7 @@ export def method_key(name: String) -> String
   taken = Tables.method_aliases().get(key)
   return "" if taken.some? and taken.unwrap! != name
 
-  return key
+  key
 end
 
 ## The receiver kind of a builtin whose first parameter has this type: its tag (`String`, `List`, ...), but Mutex for
@@ -35,7 +35,7 @@ end
 export def parameter_kind(type: Types.Type) -> String
   return "Mutex" if Types.is?(type, "Opaque") and Types.name(type) == "Native.Mutex"
 
-  return Types.tag(type)
+  Types.tag(type)
 end
 
 ## The method name of the Ruby form of the builtin `name` (`strip` for `String.trim`), or "".
@@ -43,13 +43,13 @@ export def method_name(name: String) -> String
   key = method_key(name)
   return "" if key == ""
 
-  return key.slice(key.index_of(".").unwrap! + 1, key.length - key.index_of(".").unwrap! - 1)
+  key.slice(key.index_of(".").unwrap! + 1, key.length - key.index_of(".").unwrap! - 1)
 end
 
 ## True when `method` is a Ruby name of the builtin `name` on the receiver `kind`: its Ruby form, or a synonym of it
 ## (`length` and `size`).
 export def ruby_name?(kind: String, method: String, name: String) -> Bool
-  return method_name(name) == method or synonym?("#{kind}.#{method}")
+  method_name(name) == method or synonym?("#{kind}.#{method}")
 end
 
 ## The signature of one form of a builtin in its Ruby form, `s.strip() -> String` or `list.push(value: T) -> List[T]`,
@@ -63,7 +63,7 @@ export def signature_as(form: Model.Builtin, method: String) -> String
 
   rest = form.parameters.drop(1).map do |parameter: Model.Named| Builtins.parameter_text(parameter) end
 
-  return "#{form.parameters[0].name}.#{method}(#{rest.join(", ")}) -> #{Types.to_text(form.result)}"
+  "#{form.parameters[0].name}.#{method}(#{rest.join(", ")}) -> #{Types.to_text(form.result)}"
 end
 
 ## True when `method` is a way to write the builtin `name` as a method: its Ruby name or a synonym of it, on any kind.
@@ -77,7 +77,7 @@ export def written_as?(name: String, method: String) -> Bool
     return true if key.ends_with?(".#{method}") and target.some? and target.unwrap! == name
   end
 
-  return false
+  false
 end
 
 ## The Ruby form of a builtin name as a suggestion: `s.strip` for `String.trim`; `name` when it has none.
@@ -86,7 +86,7 @@ export def shown(name: String) -> String
   entry = ENTRIES.get(name)
   return name if method == "" or entry.none?
 
-  return "#{entry.unwrap!.parameters[0].name}.#{method}"
+  "#{entry.unwrap!.parameters[0].name}.#{method}"
 end
 
 ## True when the alias key `Kind.method` is a second Ruby name (`List.collect`, `String.size`): accepted, and never
@@ -104,5 +104,5 @@ def by_builtin() -> Map[String, String]
     end
   end
 
-  return found
+  found
 end

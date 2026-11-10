@@ -135,7 +135,7 @@ export def context(text: String, tokens: List[Tokens.Token], attachment: Comment
     end
   end
 
-  return Context(
+  Context(
     lines: lines,
     tokens: kept,
     starts: starts,
@@ -177,7 +177,7 @@ export def program_doc(c: Context, program: Ast.Program) -> Docs.Doc
     items = items.push(comment_item(placed.comment))
   end
 
-  return sequence(c, items)
+  sequence(c, items)
 end
 
 # ---- Items, blank lines and comments ----
@@ -210,7 +210,7 @@ def sequence(c: Context, items: List[Item]) -> Docs.Doc
     at += 1
   end
 
-  return Docs.Doc.Concat(parts)
+  Docs.Doc.Concat(parts)
 end
 
 # Whether two declarations that follow each other need an empty line that the source may lack: both are one-line defs
@@ -220,13 +220,13 @@ def gap_between?(before: Item, item: Item) -> Bool = item.one_line and before.on
 # Whether the line right before `first` is blank and comes after `last`.
 def blank_before?(c: Context, first: Int, last: Int) -> Bool
   above = first - 1
-  return above > last and above >= 1 and above <= c.lines.size and c.lines[above - 1].strip == ""
+  above > last and above >= 1 and above <= c.lines.size and c.lines[above - 1].strip == ""
 end
 
 # The items of a node: its leading comments, the node with its comments after code, and the comments alone on their
 # lines after it.
 def node_items(c: Context, key: String, first: Int, last: Int, doc: Docs.Doc) -> List[Item]
-  return node_items_of(c, key, first, last, doc, false)
+  node_items_of(c, key, first, last, doc, false)
 end
 
 # `node_items`, where `spread` says that `doc` is a measured simple statement.
@@ -244,12 +244,12 @@ def node_items_of(c: Context, key: String, first: Int, last: Int, doc: Docs.Doc,
 
   shown = Docs.Doc.Concat([doc].concat(suffixes))
   items = items.push(Item(first: first, last: last, doc: shown, spread: spread, closing: false))
-  return items.concat(below)
+  items.concat(below)
 end
 
 def comment_item(comment: Tokens.Comment) -> Item
   line = comment.span.start.line
-  return Item(first: line, last: line, doc: Docs.Doc.Comment(comment.text), spread: false, closing: false)
+  Item(first: line, last: line, doc: Docs.Doc.Comment(comment.text), spread: false, closing: false)
 end
 
 # A comment alone at the end of its body.
@@ -272,26 +272,26 @@ def around(c: Context, key: String) -> Around
     end
   end
 
-  return Around(before: before, after: after)
+  Around(before: before, after: after)
 end
 
 def commented(c: Context, key: String, doc: Docs.Doc) -> Docs.Doc
   found = around(c, key)
   return doc if found.before.size == 0 and found.after.size == 0
 
-  return Docs.Doc.Concat(found.before.push(doc).concat(found.after))
+  Docs.Doc.Concat(found.before.push(doc).concat(found.after))
 end
 
 # The dangling comments of a node, each on its own line, as the items of an empty body.
 def dangling_items(c: Context, key: String) -> List[Item]
-  return c.dangling.get(key, []).map do |placed: Comments.Attached| closing_item(placed.comment) end
+  c.dangling.get(key, []).map do |placed: Comments.Attached| closing_item(placed.comment) end
 end
 
 # A body two spaces deeper, from the line after its header; nothing for an empty body.
 def body(c: Context, items: List[Item]) -> Docs.Doc
   return Docs.Doc.Concat([]) if items.size == 0
 
-  return Docs.Doc.Indent([Docs.Doc.HardLine, sequence(c, items)])
+  Docs.Doc.Indent([Docs.Doc.HardLine, sequence(c, items)])
 end
 
 # ---- Declarations ----
@@ -311,7 +311,7 @@ def decl_items(c: Context, decl: Ast.Decl) -> List[Item]
   items = node_items(c, key, first, last_line(c, span), doc)
   at = c.leading.get(key, []).size
   one_line = one_line_def?(decl)
-  return items.set(at, items[at].with(one_line: one_line, gap: one_line and form.none?))
+  items.set(at, items[at].with(one_line: one_line, gap: one_line and form.none?))
 end
 
 # A def with a body that can be a one-line def: it returns a value (not Void, so never `main`), its body is one
@@ -329,15 +329,15 @@ def one_line_body?(c: Context, node: Ast.FunctionDecl) -> Bool
   end
 
   last = last_line(c, node.span)
-  return not (node.span.start.line..last).to_a.any? do |line: Int| c.noted.include?(line) end
+  not (node.span.start.line..last).to_a.any? do |line: Int| c.noted.include?(line) end
 end
 
 # A one-line def of the source, exported or not.
 def one_line_def?(decl: Ast.Decl) -> Bool
   case decl
-    Ast.Decl.Export(node) -> return one_line_def?(node.declaration)
-    Ast.Decl.Function(node) -> return node.expression
-    _ -> return false
+    Ast.Decl.Export(node) -> one_line_def?(node.declaration)
+    Ast.Decl.Function(node) -> node.expression
+    _ -> false
   end
 end
 
@@ -349,7 +349,7 @@ end
 # lines around it.
 def one_line_form(c: Context, decl: Ast.Decl, column: Int) -> Optional[Docs.Doc]
   case decl
-    Ast.Decl.Export(node) -> return one_line_form(c, node.declaration, column + EXPORT.length)
+    Ast.Decl.Export(node) -> one_line_form(c, node.declaration, column + EXPORT.length)
     Ast.Decl.Function(node) ->
       return none if not node.expression and not one_line_body?(c, node)
 
@@ -357,20 +357,20 @@ def one_line_form(c: Context, decl: Ast.Decl, column: Int) -> Optional[Docs.Doc]
       line = Docs.render(doc, UNLIMITED).strip
       return none if line.include?("\n") or column + line.length > c.width
 
-      return some(doc)
-    _ -> return none
+      some(doc)
+    _ -> none
   end
 end
 
 def has_doc?(decl: Ast.Decl) -> Bool
   case decl
-    Ast.Decl.Export(node) -> return node.doc.some?
-    Ast.Decl.Function(node) -> return node.doc.some?
-    Ast.Decl.Struct(node) -> return node.doc.some?
-    Ast.Decl.Enum(node) -> return node.doc.some?
-    Ast.Decl.TypeAlias(node) -> return node.doc.some?
-    Ast.Decl.Constant(node) -> return node.doc.some?
-    _ -> return false
+    Ast.Decl.Export(node) -> node.doc.some?
+    Ast.Decl.Function(node) -> node.doc.some?
+    Ast.Decl.Struct(node) -> node.doc.some?
+    Ast.Decl.Enum(node) -> node.doc.some?
+    Ast.Decl.TypeAlias(node) -> node.doc.some?
+    Ast.Decl.Constant(node) -> node.doc.some?
+    _ -> false
   end
 end
 
@@ -378,42 +378,39 @@ end
 # stays one (one_line_form).
 def decl_doc(c: Context, decl: Ast.Decl, form: Optional[Docs.Doc]) -> Docs.Doc
   case decl
-    Ast.Decl.Import(node) -> return import_doc(c, node)
-    Ast.Decl.Reexport(node) -> return text("export #{node.alias}.#{node.name}")
-    Ast.Decl.Export(node) -> return Docs.Doc.Concat([text(EXPORT), decl_doc(c, node.declaration, form)])
+    Ast.Decl.Import(node) -> import_doc(c, node)
+    Ast.Decl.Reexport(node) -> text("export #{node.alias}.#{node.name}")
+    Ast.Decl.Export(node) -> Docs.Doc.Concat([text(EXPORT), decl_doc(c, node.declaration, form)])
     Ast.Decl.Function(node) ->
       case form
-        some(line) -> return line
-        none -> return function_doc(c, node)
+        some(line) -> line
+        none -> function_doc(c, node)
       end
 
-    Ast.Decl.Struct(node) -> return struct_doc(c, node)
-    Ast.Decl.Enum(node) -> return enum_doc(c, node)
+    Ast.Decl.Struct(node) -> struct_doc(c, node)
+    Ast.Decl.Enum(node) -> enum_doc(c, node)
     Ast.Decl.TypeAlias(node) ->
-      return Docs.Doc.Concat([
-        text("type #{node.name}#{type_parameters(node.type_parameters)} = "),
-        type_doc(c, node.target),
-      ])
-    Ast.Decl.Resource(node) -> return text(source(c, node.span))
-    Ast.Decl.Constant(node) -> return constant_doc(c, node)
+      Docs.Doc.Concat([text("type #{node.name}#{type_parameters(node.type_parameters)} = "), type_doc(c, node.target)])
+    Ast.Decl.Resource(node) -> text(source(c, node.span))
+    Ast.Decl.Constant(node) -> constant_doc(c, node)
   end
 end
 
 def import_doc(c: Context, node: Ast.ImportDecl) -> Docs.Doc
   path = import_path(c, node)
   case node.alias
-    some(alias) -> return text("import #{alias} from #{path}")
+    some(alias) -> text("import #{alias} from #{path}")
     none ->
       names = node.names.map do |entry: Ast.ImportName| import_name(entry) end
       packed = shared_line?(node.names.map do |entry: Ast.ImportName| entry.span.start.line end)
-      return Docs.Doc.Concat([packed_list(text("import {"), names, text("}"), [], packed), text(" from #{path}")])
+      Docs.Doc.Concat([packed_list(text("import {"), names, text("}"), [], packed), text(" from #{path}")])
   end
 end
 
 def import_name(entry: Ast.ImportName) -> Docs.Doc
   return text(entry.name) if entry.local == entry.name
 
-  return text("#{entry.name} as #{entry.local}")
+  text("#{entry.name} as #{entry.local}")
 end
 
 # The path of an import as written: its last string token.
@@ -428,14 +425,14 @@ def import_path(c: Context, node: Ast.ImportDecl) -> String
     at += 1
   end
 
-  return found
+  found
 end
 
 # A def with its body: also a one-line def that does not stay one (one_line_form).
 def function_doc(c: Context, node: Ast.FunctionDecl) -> Docs.Doc
   key = Comments.key_of("FunctionDecl", node.span)
   items = statement_items(c, node.body).concat(dangling_items(c, key))
-  return Docs.Doc.Concat([Docs.Doc.Group(signature_doc(c, node)), body(c, items), Docs.Doc.HardLine, text("end")])
+  Docs.Doc.Concat([Docs.Doc.Group(signature_doc(c, node)), body(c, items), Docs.Doc.HardLine, text("end")])
 end
 
 # `def name(params) -> Type`.
@@ -448,12 +445,12 @@ def signature_doc(c: Context, node: Ast.FunctionDecl) -> List[Docs.Doc]
 
   return head if not written?(node.result.span)
 
-  return head.concat([text(" -> "), type_doc(c, node.result)])
+  head.concat([text(" -> "), type_doc(c, node.result)])
 end
 
 # `def name(params) -> Type = value`, for a one-line def.
 def one_line_doc(c: Context, node: Ast.FunctionDecl) -> Docs.Doc
-  return Docs.Doc.Concat([Docs.Doc.Group(signature_doc(c, node)), text(" = "), expression_value_doc(c, node.body[0])])
+  Docs.Doc.Concat([Docs.Doc.Group(signature_doc(c, node)), text(" = "), expression_value_doc(c, node.body[0])])
 end
 
 # The value after `=` of a one-line def (`def name() -> Type = value`), laid out as the value of its `return` in a
@@ -463,23 +460,23 @@ def expression_value_doc(c: Context, stmt: Ast.Stmt) -> Docs.Doc
   case stmt
     Ast.Stmt.Return(node) ->
       case node.value
-        some(value) -> return commented(c, key, value_doc(c, value, true))
-        none -> return statement_doc(c, stmt, true)
+        some(value) -> commented(c, key, value_doc(c, value, true))
+        none -> statement_doc(c, stmt, true)
       end
 
-    _ -> return statement_doc(c, stmt, true)
+    _ -> statement_doc(c, stmt, true)
   end
 end
 
 def param_doc(c: Context, param: Ast.Param) -> Docs.Doc
   parts = [text("#{param.name}: "), type_doc(c, param.type)].concat(default_doc(c, param.default))
-  return commented(c, Comments.key_of("Param", param.span), Docs.Doc.Concat(parts))
+  commented(c, Comments.key_of("Param", param.span), Docs.Doc.Concat(parts))
 end
 
 def default_doc(c: Context, value: Optional[Ast.Expr]) -> List[Docs.Doc]
   case value
-    some(expr) -> return [text(" = "), expr_doc(c, expr, false)]
-    none -> return []
+    some(expr) -> [text(" = "), expr_doc(c, expr, false)]
+    none -> []
   end
 end
 
@@ -492,7 +489,7 @@ def struct_doc(c: Context, node: Ast.StructDecl) -> Docs.Doc
 
   items = items.concat(dangling_items(c, key))
   head = text("struct #{node.name}#{type_parameters(node.type_parameters)}")
-  return Docs.Doc.Concat([head, body(c, items), Docs.Doc.HardLine, text("end")])
+  Docs.Doc.Concat([head, body(c, items), Docs.Doc.HardLine, text("end")])
 end
 
 def field_items(c: Context, field: Ast.FieldDecl) -> List[Item]
@@ -505,7 +502,7 @@ def field_items(c: Context, field: Ast.FieldDecl) -> List[Item]
 
   parts = parts.concat([text("#{field.name}: "), type_doc(c, field.type)]).concat(default_doc(c, field.default))
   key = Comments.key_of("FieldDecl", field.span)
-  return node_items(c, key, first, last_line(c, field.span), Docs.Doc.Concat(parts))
+  node_items(c, key, first, last_line(c, field.span), Docs.Doc.Concat(parts))
 end
 
 def enum_doc(c: Context, node: Ast.EnumDecl) -> Docs.Doc
@@ -517,7 +514,7 @@ def enum_doc(c: Context, node: Ast.EnumDecl) -> Docs.Doc
 
   items = items.concat(dangling_items(c, key))
   head = text("enum #{node.name}#{type_parameters(node.type_parameters)}")
-  return Docs.Doc.Concat([head, body(c, items), Docs.Doc.HardLine, text("end")])
+  Docs.Doc.Concat([head, body(c, items), Docs.Doc.HardLine, text("end")])
 end
 
 def variant_items(c: Context, variant: Ast.EnumVariant) -> List[Item]
@@ -536,7 +533,7 @@ def variant_items(c: Context, variant: Ast.EnumVariant) -> List[Item]
   end
 
   key = Comments.key_of("EnumVariant", variant.span)
-  return node_items(c, key, first, last_line(c, variant.span), Docs.Doc.Concat(parts))
+  node_items(c, key, first, last_line(c, variant.span), Docs.Doc.Concat(parts))
 end
 
 def constant_doc(c: Context, node: Ast.ConstDecl) -> Docs.Doc
@@ -551,13 +548,13 @@ def constant_doc(c: Context, node: Ast.ConstDecl) -> Docs.Doc
     none -> parts = parts
   end
 
-  return Docs.Doc.Concat(parts.concat([text(" = "), expr_doc(c, node.value, false)]))
+  Docs.Doc.Concat(parts.concat([text(" = "), expr_doc(c, node.value, false)]))
 end
 
 def type_parameters(names: List[String]) -> String
   return "" if names.size == 0
 
-  return "[#{names.join(", ")}]"
+  "[#{names.join(", ")}]"
 end
 
 def type_doc(c: Context, type: Ast.TypeRef) -> Docs.Doc
@@ -567,7 +564,7 @@ def type_doc(c: Context, type: Ast.TypeRef) -> Docs.Doc
     doc = Docs.Doc.Concat([doc, text("["), join(args, [text(", ")]), text("]")])
   end
 
-  return commented(c, Comments.key_of("TypeRef", type.span), doc)
+  commented(c, Comments.key_of("TypeRef", type.span), doc)
 end
 
 # An `extern` block as written, with the comments before and after it.
@@ -601,7 +598,7 @@ def extern_items(c: Context, block: Extern) -> List[Item]
     end
   end
 
-  return items.concat(suffixes)
+  items.concat(suffixes)
 end
 
 # ---- Statements ----
@@ -619,25 +616,25 @@ def statement_items(c: Context, stmts: List[Ast.Stmt]) -> List[Item]
     items = items.concat(node_items_of(c, key, span.start.line, last_line(c, span), doc, simple?(stmt)))
   end
 
-  return items
+  items
 end
 
 # A statement. `forced` says that it is an item of a body, where a pipe chain of two or more `|>` that is the whole
 # value of the statement always breaks; the body of a one-line `do` block or of a `case` arm keeps the fit rule.
 def statement_doc(c: Context, stmt: Ast.Stmt, forced: Bool) -> Docs.Doc
   case stmt
-    Ast.Stmt.Binding(node) -> return binding_doc(c, node, forced)
+    Ast.Stmt.Binding(node) -> binding_doc(c, node, forced)
     Ast.Stmt.Return(node) ->
       case node.value
         some(value) ->
           return value_doc(c, value, forced) if node.implicit and not try?(value)
 
-          return Docs.Doc.Concat([text("return "), value_doc(c, value, forced)])
-        none -> return text("return")
+          Docs.Doc.Concat([text("return "), value_doc(c, value, forced)])
+        none -> text("return")
       end
 
-    Ast.Stmt.Expression(node) -> return value_doc(c, node.value, forced)
-    Ast.Stmt.If(node) -> return if_doc(c, node)
+    Ast.Stmt.Expression(node) -> value_doc(c, node.value, forced)
+    Ast.Stmt.If(node) -> if_doc(c, node)
     Ast.Stmt.While(node) ->
       key = Comments.key_of("WhileStmt", node.span)
       items = statement_items(c, node.body).concat(dangling_items(c, key))
@@ -647,15 +644,15 @@ def statement_doc(c: Context, stmt: Ast.Stmt, forced: Bool) -> Docs.Doc
         text(optional_do(c, node.condition)),
       ])
 
-      return Docs.Doc.Concat([head, body(c, items), Docs.Doc.HardLine, text("end")])
+      Docs.Doc.Concat([head, body(c, items), Docs.Doc.HardLine, text("end")])
     Ast.Stmt.For(node) ->
       key = Comments.key_of("ForStmt", node.span)
       items = statement_items(c, node.body).concat(dangling_items(c, key))
       iterable = expr_doc(c, node.iterable, false)
       head = Docs.Doc.Concat([text("for #{node.variable} in "), iterable, text(optional_do(c, node.iterable))])
-      return Docs.Doc.Concat([head, body(c, items), Docs.Doc.HardLine, text("end")])
-    Ast.Stmt.Control(node) -> return text(node.kind)
-    Ast.Stmt.Case(node) -> return case_doc(c, node)
+      Docs.Doc.Concat([head, body(c, items), Docs.Doc.HardLine, text("end")])
+    Ast.Stmt.Control(node) -> text(node.kind)
+    Ast.Stmt.Case(node) -> case_doc(c, node)
   end
 end
 
@@ -674,13 +671,8 @@ def binding_doc(c: Context, node: Ast.Binding, forced: Bool) -> Docs.Doc
 
   case node.type
     some(type) ->
-      return Docs.Doc.Concat([
-        text("#{node.name}: "),
-        type_doc(c, type),
-        text(" = "),
-        value_doc(c, node.value, forced),
-      ])
-    none -> return Docs.Doc.Concat([text("#{node.name} = "), value_doc(c, node.value, forced)])
+      Docs.Doc.Concat([text("#{node.name}: "), type_doc(c, type), text(" = "), value_doc(c, node.value, forced)])
+    none -> Docs.Doc.Concat([text("#{node.name} = "), value_doc(c, node.value, forced)])
   end
 end
 
@@ -694,7 +686,7 @@ def if_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
   guard = guard_doc(c, node)
   return spelled_if_doc(c, node) if not node.guard and not one_line?(guard)
 
-  return Docs.Doc.Group([Docs.Doc.IfBreak([spelled_if_doc(c, node)], [guard])])
+  Docs.Doc.Group([Docs.Doc.IfBreak([spelled_if_doc(c, node)], [guard])])
 end
 
 # The one-line form of an `if` with one branch of one statement: `statement if condition`. The statement is laid out
@@ -703,7 +695,7 @@ end
 # in a body.
 def guard_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
   branch = node.branches[0]
-  return Docs.Doc.Concat([statement_doc(c, branch.body[0], true), text(" if "), expr_doc(c, branch.condition, false)])
+  Docs.Doc.Concat([statement_doc(c, branch.body[0], true), text(" if "), expr_doc(c, branch.condition, false)])
 end
 
 # `if`, its `elsif` branches and its `else`. A comment before `elsif` or `else` stays just before the keyword, at the
@@ -759,12 +751,12 @@ def spelled_if_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
     none -> parts = parts
   end
 
-  return Docs.Doc.Concat(parts.concat([Docs.Doc.HardLine, text("end")]))
+  Docs.Doc.Concat(parts.concat([Docs.Doc.HardLine, text("end")]))
 end
 
 # The dangling comments tagged `keyword` that start after `low` and before `high`.
 def tagged(dangling: List[Comments.Attached], keyword: String, low: Int, high: Int) -> List[Comments.Attached]
-  return dangling.select do |placed: Comments.Attached|
+  dangling.select do |placed: Comments.Attached|
     offset = placed.comment.span.start.offset
     placed.keyword == keyword and offset > low and offset < high
   end
@@ -776,13 +768,13 @@ def keyword_comments(placed: List[Comments.Attached]) -> List[Docs.Doc]
     parts = parts.concat([Docs.Doc.HardLine, Docs.Doc.Comment(one.comment.text)])
   end
 
-  return parts
+  parts
 end
 
 # The dangling comments that go at the end of the last body: before `end`, or with no keyword.
 def end_items(dangling: List[Comments.Attached]) -> List[Item]
   kept = dangling.select do |placed: Comments.Attached| placed.keyword == "end" or placed.keyword == "" end
-  return kept.map do |placed: Comments.Attached| closing_item(placed.comment) end
+  kept.map do |placed: Comments.Attached| closing_item(placed.comment) end
 end
 
 # The offset of the `else` of an `if`: its `else` token, outside the blocks nested in it.
@@ -803,7 +795,7 @@ def else_offset(c: Context, node: Ast.IfStmt) -> Int
     at += 1
   end
 
-  return found
+  found
 end
 
 def case_doc(c: Context, node: Ast.CaseStmt) -> Docs.Doc
@@ -816,7 +808,7 @@ def case_doc(c: Context, node: Ast.CaseStmt) -> Docs.Doc
 
   items = items.concat(dangling_items(c, key))
   head = Docs.Doc.Concat([text("case "), expr_doc(c, node.value, false), text(optional_do(c, node.value))])
-  return Docs.Doc.Concat([head, body(c, items), Docs.Doc.HardLine, text("end")])
+  Docs.Doc.Concat([head, body(c, items), Docs.Doc.HardLine, text("end")])
 end
 
 # " do" when the source writes the optional `do` after the header expression of a `while`, `for` or `case`.
@@ -824,7 +816,7 @@ def optional_do(c: Context, header: Ast.Expr) -> String
   at = token_index(c, tight(c, Ast.expr_span(header)).stop.offset)
   return " do" if at < c.tokens.size and c.tokens[at].kind == "do"
 
-  return ""
+  ""
 end
 
 # An arm: `pattern -> statement` on one line when its body is one simple statement that fits, else the body on the
@@ -870,22 +862,22 @@ def arm_doc(c: Context, arm: Ast.CaseArm) -> Docs.Doc
   end
 
   items = statement_items(c, arm.body).concat(dangling_items(c, arm_key))
-  return Docs.Doc.Concat(above.push(text(head)).concat(after).push(body(c, items)))
+  Docs.Doc.Concat(above.push(text(head)).concat(after).push(body(c, items)))
 end
 
 def dangling_end(c: Context, key: String) -> List[Docs.Doc]
   items = dangling_items(c, key)
   return [] if items.size == 0
 
-  return [Docs.Doc.Indent([Docs.Doc.HardLine, sequence(c, items)])]
+  [Docs.Doc.Indent([Docs.Doc.HardLine, sequence(c, items)])]
 end
 
 # A statement that may share the line of a `case` arm or of a one-line `do` block: a simple one, or a guard (or an
 # `if` that becomes one), which writes itself out as an `if` on lines of its own when it does not fit.
 def inline?(c: Context, stmt: Ast.Stmt) -> Bool
   case stmt
-    Ast.Stmt.If(node) -> return node.guard or guardable?(c, node)
-    _ -> return simple?(stmt)
+    Ast.Stmt.If(node) -> node.guard or guardable?(c, node)
+    _ -> simple?(stmt)
   end
 end
 
@@ -894,7 +886,7 @@ end
 def guardable?(c: Context, node: Ast.IfStmt) -> Bool
   return false if not guard_shaped?(c, node)
 
-  return one_line?(guard_doc(c, node))
+  one_line?(guard_doc(c, node))
 end
 
 # The shape of `guardable?`: one branch of one `return`, `break` or `next`, no `else`, no comment.
@@ -904,15 +896,15 @@ def guard_shaped?(c: Context, node: Ast.IfStmt) -> Bool
   return false if not exit?(node.branches[0].body[0])
 
   last = last_line(c, node.span)
-  return not (node.span.start.line..last).to_a.any? do |line: Int| c.noted.include?(line) end
+  not (node.span.start.line..last).to_a.any? do |line: Int| c.noted.include?(line) end
 end
 
 # A `try` value: a one-line def can give it, but a `try` at the end of a body is a statement and gives no value (the
 # parser's tail_returns), so a body written for that def keeps `return`.
 def try?(value: Ast.Expr) -> Bool
   case value
-    Ast.Expr.Try(_) -> return true
-    _ -> return false
+    Ast.Expr.Try(_) -> true
+    _ -> false
   end
 end
 
@@ -924,19 +916,19 @@ def one_line?(doc: Docs.Doc) -> Bool = not Docs.render(doc, UNLIMITED).strip.inc
 # A `return`, `break` or `next`: the statements that take a guard.
 def exit?(stmt: Ast.Stmt) -> Bool
   case stmt
-    Ast.Stmt.Return(_) -> return true
-    Ast.Stmt.Control(_) -> return true
-    _ -> return false
+    Ast.Stmt.Return(_) -> true
+    Ast.Stmt.Control(_) -> true
+    _ -> false
   end
 end
 
 def simple?(stmt: Ast.Stmt) -> Bool
   case stmt
-    Ast.Stmt.Binding(_) -> return true
-    Ast.Stmt.Return(_) -> return true
-    Ast.Stmt.Expression(_) -> return true
-    Ast.Stmt.Control(_) -> return true
-    _ -> return false
+    Ast.Stmt.Binding(_) -> true
+    Ast.Stmt.Return(_) -> true
+    Ast.Stmt.Expression(_) -> true
+    Ast.Stmt.Control(_) -> true
+    _ -> false
   end
 end
 
@@ -946,63 +938,62 @@ end
 # entry or an operand of a broken expression), where a line break needs no parentheses of its own.
 def expr_doc(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
   key = Comments.key_of(Comments.expr_kind(expr), Ast.expr_span(expr))
-  return commented(c, key, bare(c, expr, bracketed))
+  commented(c, key, bare(c, expr, bracketed))
 end
 
 def bare(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
   case expr
-    Ast.Expr.Literal(node) -> return lone(literal(c, node.span), node.span, c, bracketed)
-    Ast.Expr.Name(node) -> return text(node.name)
+    Ast.Expr.Literal(node) -> lone(literal(c, node.span), node.span, c, bracketed)
+    Ast.Expr.Name(node) -> text(node.name)
     Ast.Expr.Call(node) ->
       return pipe_doc(c, expr, bracketed, false) if node.piped
 
-      return call_doc(c, node)
+      call_doc(c, node)
     Ast.Expr.EnumConstructor(node) ->
       name = text("#{node.enum_name}.#{node.variant_name}")
       return name if node.args.size == 0 and not source(c, node.span).ends_with?(")")
 
-      return Docs.Doc.Concat([name, arguments(c, node.args, Comments.key_of("EnumConstructor", node.span))])
-    Ast.Expr.FunctionRef(node) -> return text("&#{node.name}")
+      Docs.Doc.Concat([name, arguments(c, node.args, Comments.key_of("EnumConstructor", node.span))])
+    Ast.Expr.FunctionRef(node) -> text("&#{node.name}")
     Ast.Expr.Construct(node) ->
       named = node.args.map do |arg: Ast.NamedArg| named_doc(c, arg) end
       dangling = dangling_comments(c, Comments.key_of("Construct", node.span))
-      return listed(text("#{node.type_name}("), named, text(")"), dangling)
+      listed(text("#{node.type_name}("), named, text(")"), dangling)
     Ast.Expr.ListLit(node) ->
       elements = node.elements.map do |element: Ast.Expr| expr_doc(c, element, true) end
       starts = node.elements.map do |element: Ast.Expr| Ast.expr_span(element).start.line end
       packed = shared_line?(starts) and node.elements.all? do |element: Ast.Expr| atomic?(c, element) end
       dangling = dangling_comments(c, Comments.key_of("ListLit", node.span))
-      return packed_list(text("["), elements, text("]"), dangling, packed)
+      packed_list(text("["), elements, text("]"), dangling, packed)
     Ast.Expr.MapLit(node) ->
       entries = node.entries.map do |entry: Ast.MapEntry| entry_doc(c, entry) end
       starts = node.entries.map do |entry: Ast.MapEntry| entry.span.start.line end
       packed = shared_line?(starts) and node.entries.all? do |entry: Ast.MapEntry| atomic_entry?(c, entry) end
       dangling = dangling_comments(c, Comments.key_of("MapLit", node.span))
-      return packed_list(text("{"), entries, text("}"), dangling, packed)
-    Ast.Expr.Interpolation(node) -> return lone(literal(c, node.span), node.span, c, bracketed)
-    Ast.Expr.EagLit(node) -> return lone(literal(c, node.span), node.span, c, bracketed)
-    Ast.Expr.BlockLit(node) -> return block_doc(c, node)
-    Ast.Expr.Case(node) -> return case_doc(c, node)
+      packed_list(text("{"), entries, text("}"), dangling, packed)
+    Ast.Expr.Interpolation(node) -> lone(literal(c, node.span), node.span, c, bracketed)
+    Ast.Expr.EagLit(node) -> lone(literal(c, node.span), node.span, c, bracketed)
+    Ast.Expr.BlockLit(node) -> block_doc(c, node)
+    Ast.Expr.Case(node) -> case_doc(c, node)
     Ast.Expr.Try(node) ->
       return pipe_doc(c, expr, bracketed, false) if piped?(node.operand)
 
-      return Docs.Doc.Concat([text("try "), operand(c, node.operand, UNARY_LEVEL)])
+      Docs.Doc.Concat([text("try "), operand(c, node.operand, UNARY_LEVEL)])
     Ast.Expr.Unary(node) ->
       operator = source(c, node.op_span)
       if operator.length > 1
         operator = operator + " "
       end
 
-      return Docs.Doc.Concat([text(operator), operand(c, node.operand, UNARY_LEVEL)])
-    Ast.Expr.Binary(node) -> return binary_doc(c, node, bracketed)
-    Ast.Expr.TypeName(node) ->
-      return type_doc(c, Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span))
-    Ast.Expr.MethodCall(_) -> return chain_doc(c, expr, bracketed)
-    Ast.Expr.FieldAccess(_) -> return chain_doc(c, expr, bracketed)
-    Ast.Expr.Invoke(_) -> return chain_doc(c, expr, bracketed)
-    Ast.Expr.Update(_) -> return chain_doc(c, expr, bracketed)
-    Ast.Expr.Index(_) -> return chain_doc(c, expr, bracketed)
-    _ -> return text(source(c, Ast.expr_span(expr)))
+      Docs.Doc.Concat([text(operator), operand(c, node.operand, UNARY_LEVEL)])
+    Ast.Expr.Binary(node) -> binary_doc(c, node, bracketed)
+    Ast.Expr.TypeName(node) -> type_doc(c, Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span))
+    Ast.Expr.MethodCall(_) -> chain_doc(c, expr, bracketed)
+    Ast.Expr.FieldAccess(_) -> chain_doc(c, expr, bracketed)
+    Ast.Expr.Invoke(_) -> chain_doc(c, expr, bracketed)
+    Ast.Expr.Update(_) -> chain_doc(c, expr, bracketed)
+    Ast.Expr.Index(_) -> chain_doc(c, expr, bracketed)
+    _ -> text(source(c, Ast.expr_span(expr)))
   end
 end
 
@@ -1013,14 +1004,14 @@ def atomic?(c: Context, expr: Ast.Expr) -> Bool
   return false if c.leading.get(key, []).size > 0 or c.trailing.get(key, []).size > 0
 
   case expr
-    Ast.Expr.Literal(node) -> return not source(c, node.span).starts_with?("<<~")
-    Ast.Expr.Name(_) -> return true
-    Ast.Expr.TypeName(_) -> return true
-    Ast.Expr.FunctionRef(_) -> return true
-    Ast.Expr.FieldAccess(node) -> return atomic?(c, node.target)
-    Ast.Expr.Unary(node) -> return atomic?(c, node.operand)
-    Ast.Expr.EnumConstructor(node) -> return node.args.size == 0
-    _ -> return false
+    Ast.Expr.Literal(node) -> not source(c, node.span).starts_with?("<<~")
+    Ast.Expr.Name(_) -> true
+    Ast.Expr.TypeName(_) -> true
+    Ast.Expr.FunctionRef(_) -> true
+    Ast.Expr.FieldAccess(node) -> atomic?(c, node.target)
+    Ast.Expr.Unary(node) -> atomic?(c, node.operand)
+    Ast.Expr.EnumConstructor(node) -> node.args.size == 0
+    _ -> false
   end
 end
 
@@ -1033,13 +1024,13 @@ def shared_line?(starts: List[Int]) -> Bool
     at += 1
   end
 
-  return false
+  false
 end
 
 def atomic_entry?(c: Context, entry: Ast.MapEntry) -> Bool
   key = Comments.key_of("MapEntry", entry.span)
   quiet = c.leading.get(key, []).size == 0 and c.trailing.get(key, []).size == 0
-  return quiet and atomic?(c, entry.key) and atomic?(c, entry.value)
+  quiet and atomic?(c, entry.key) and atomic?(c, entry.value)
 end
 
 # A literal as written. A heredoc keeps its opener here and its body after the line.
@@ -1049,7 +1040,7 @@ def literal(c: Context, span: Source.Span) -> Docs.Doc
     return Docs.Doc.Concat([text(written), Docs.Doc.After(c.heredocs.get(span.start.offset, []))])
   end
 
-  return text(written)
+  text(written)
 end
 
 # A string that cannot break, outside brackets: on the next line in parentheses when it does not fit after what comes
@@ -1057,7 +1048,7 @@ end
 def lone(doc: Docs.Doc, span: Source.Span, c: Context, bracketed: Bool) -> Docs.Doc
   return doc if bracketed or source(c, span).starts_with?("<<~")
 
-  return wrapped([doc], false)
+  wrapped([doc], false)
 end
 
 # The value of a statement: an expression, with a pipe chain of two or more `|>` forced to break when `forced`. A
@@ -1073,7 +1064,7 @@ def value_doc(c: Context, expr: Ast.Expr, forced: Bool) -> Docs.Doc
     return commented(c, key, pipe_doc(c, expr, false, true))
   end
 
-  return expr_doc(c, expr, false)
+  expr_doc(c, expr, false)
 end
 
 # Whether `expr`, the whole value of a statement, is a method chain written with a `.` that starts a line (the parser
@@ -1105,38 +1096,38 @@ def dotted?(c: Context, expr: Ast.Expr) -> Bool
     current = receiver
   end
 
-  return found
+  found
 end
 
 # The level of an expression, for the parentheses: a binary operator's, a range's (0), a pipe's, a prefix's or a
 # postfix or primary expression's.
 def level(expr: Ast.Expr) -> Int
   case expr
-    Ast.Expr.Binary(node) -> return LEVELS.get(node.op, 0)
+    Ast.Expr.Binary(node) -> LEVELS.get(node.op, 0)
     Ast.Expr.Call(node) ->
       return PIPE_LEVEL if node.piped
 
-      return POSTFIX_LEVEL
+      POSTFIX_LEVEL
     Ast.Expr.Try(node) ->
       return PIPE_LEVEL if piped?(node.operand)
 
-      return UNARY_LEVEL
-    Ast.Expr.Unary(_) -> return UNARY_LEVEL
-    _ -> return POSTFIX_LEVEL
+      UNARY_LEVEL
+    Ast.Expr.Unary(_) -> UNARY_LEVEL
+    _ -> POSTFIX_LEVEL
   end
 end
 
 def piped_try?(expr: Ast.Expr) -> Bool
   case expr
-    Ast.Expr.Try(node) -> return piped?(node.operand)
-    _ -> return false
+    Ast.Expr.Try(node) -> piped?(node.operand)
+    _ -> false
   end
 end
 
 def piped?(expr: Ast.Expr) -> Bool
   case expr
-    Ast.Expr.Call(node) -> return node.piped
-    _ -> return false
+    Ast.Expr.Call(node) -> node.piped
+    _ -> false
   end
 end
 
@@ -1149,8 +1140,8 @@ def clarify?(op: String, child: Ast.Expr) -> Bool
 
       return true if comparison?(op) and comparison?(node.op)
 
-      return LEVELS.get(op, 0) == 7 and LEVELS.get(node.op, 0) == 7 and op != node.op
-    _ -> return false
+      LEVELS.get(op, 0) == 7 and LEVELS.get(node.op, 0) == 7 and op != node.op
+    _ -> false
   end
 end
 
@@ -1158,8 +1149,8 @@ def comparison?(op: String) -> Bool = LEVELS.get(op, 0) == 3 or LEVELS.get(op, 0
 
 def binary?(expr: Ast.Expr) -> Bool
   case expr
-    Ast.Expr.Binary(_) -> return true
-    _ -> return false
+    Ast.Expr.Binary(_) -> true
+    _ -> false
   end
 end
 
@@ -1167,7 +1158,7 @@ end
 def clear(c: Context, expr: Ast.Expr, minimum: Int, force: Bool) -> Docs.Doc
   return operand(c, expr, POSTFIX_LEVEL + 1) if force
 
-  return operand(c, expr, minimum)
+  operand(c, expr, minimum)
 end
 
 # An operand that needs the level `minimum`: in parentheses when it is looser. Inside them, or inside the operator's
@@ -1175,7 +1166,7 @@ end
 def operand(c: Context, expr: Ast.Expr, minimum: Int) -> Docs.Doc
   return expr_doc(c, expr, true) if level(expr) >= minimum
 
-  return Docs.Doc.Group([
+  Docs.Doc.Group([
     text("("),
     Docs.Doc.Indent([Docs.Doc.SoftLine, expr_doc(c, expr, true)]),
     Docs.Doc.SoftLine,
@@ -1188,7 +1179,7 @@ end
 def wrapped(parts: List[Docs.Doc], bracketed: Bool) -> Docs.Doc
   return Docs.Doc.Group(parts) if bracketed
 
-  return Docs.Doc.Group([
+  Docs.Doc.Group([
     Docs.Doc.IfBreak([text("(")], []),
     Docs.Doc.Indent([Docs.Doc.SoftLine].concat(parts)),
     Docs.Doc.SoftLine,
@@ -1249,7 +1240,7 @@ def binary_doc(c: Context, node: Ast.Binary, bracketed: Bool) -> Docs.Doc
     at -= 1
   end
 
-  return wrapped([first].concat(parts), bracketed)
+  wrapped([first].concat(parts), bracketed)
 end
 
 # A pipe chain, `x |> f() |> g()`, with each `|>` at the start of its line when it breaks, as the repo writes it. With
@@ -1293,7 +1284,7 @@ def pipe_doc(c: Context, expr: Ast.Expr, bracketed: Bool, forced: Bool) -> Docs.
     parts = parts.concat([Docs.Doc.Line, stage])
   end
 
-  return wrapped(parts, bracketed)
+  wrapped(parts, bracketed)
 end
 
 # A call by name: `f(args)`, `puts x` without parentheses, and a trailing `do` block.
@@ -1317,7 +1308,7 @@ def call_doc_keyed(c: Context, node: Ast.Call, key: String) -> Docs.Doc
   return Docs.Doc.Concat([text(node.name)].concat(block)) if args.size == 0
 
   shown = args.map do |arg: Ast.Expr| expr_doc(c, arg, true) end
-  return Docs.Doc.Concat([text(node.name + " "), join(shown, [text(", ")])].concat(block))
+  Docs.Doc.Concat([text(node.name + " "), join(shown, [text(", ")])].concat(block))
 end
 
 # The name of a call as the source wrote it: the parser reads `Result.Ok(x)` and `Result.Err(x)` as the calls `ok`
@@ -1332,7 +1323,7 @@ def call_name(c: Context, node: Ast.Call) -> String
     return "Result.Err"
   end
 
-  return node.name
+  node.name
 end
 
 # The arguments of a call. A sole argument that is a list or map literal hugs the parentheses, `Set.new([`, and
@@ -1341,7 +1332,7 @@ def arguments(c: Context, args: List[Ast.Expr], key: String) -> Docs.Doc
   shown = args.map do |arg: Ast.Expr| expr_doc(c, arg, true) end
   return Docs.Doc.Concat([text("("), shown[0], text(")")]) if args.size == 1 and huggable?(c, args[0])
 
-  return listed(text("("), shown, text(")"), dangling_comments(c, key))
+  listed(text("("), shown, text(")"), dangling_comments(c, key))
 end
 
 def huggable?(c: Context, expr: Ast.Expr) -> Bool
@@ -1349,20 +1340,20 @@ def huggable?(c: Context, expr: Ast.Expr) -> Bool
   return false if c.leading.get(key, []).size > 0 or c.trailing.get(key, []).size > 0
 
   case expr
-    Ast.Expr.ListLit(node) -> return node.elements.size > 0
-    Ast.Expr.MapLit(node) -> return node.entries.size > 0
-    _ -> return false
+    Ast.Expr.ListLit(node) -> node.elements.size > 0
+    Ast.Expr.MapLit(node) -> node.entries.size > 0
+    _ -> false
   end
 end
 
 def named_doc(c: Context, arg: Ast.NamedArg) -> Docs.Doc
   doc = Docs.Doc.Concat([text("#{arg.name}: "), expr_doc(c, arg.value, false)])
-  return commented(c, Comments.key_of("NamedArg", arg.span), doc)
+  commented(c, Comments.key_of("NamedArg", arg.span), doc)
 end
 
 def entry_doc(c: Context, entry: Ast.MapEntry) -> Docs.Doc
   doc = Docs.Doc.Concat([expr_doc(c, entry.key, true), text(": "), expr_doc(c, entry.value, false)])
-  return commented(c, Comments.key_of("MapEntry", entry.span), doc)
+  commented(c, Comments.key_of("MapEntry", entry.span), doc)
 end
 
 # A method chain: the receiver, then each `.name(args)`, `.name`, `.call(args)`, `.with(...)` or `[index]`. A chain
@@ -1446,19 +1437,19 @@ def chain_of(c: Context, expr: Ast.Expr, bracketed: Bool, open: Bool) -> Docs.Do
 
   return Docs.Doc.Group(start.push(Docs.Doc.Indent(rest))) if open
 
-  return wrapped(start.push(Docs.Doc.Indent(rest)), bracketed)
+  wrapped(start.push(Docs.Doc.Indent(rest)), bracketed)
 end
 
 def link_of(c: Context, expr: Ast.Expr) -> Optional[Link]
   case expr
-    Ast.Expr.MethodCall(node) -> return some(method_link(c, node))
-    Ast.Expr.FieldAccess(node) -> return some(Link(doc: text(".#{node.name}"), block: [], call: false, breaks: true))
+    Ast.Expr.MethodCall(node) -> some(method_link(c, node))
+    Ast.Expr.FieldAccess(node) -> some(Link(doc: text(".#{node.name}"), block: [], call: false, breaks: true))
     Ast.Expr.Invoke(node) ->
       shown = Docs.Doc.Concat([text(".call"), arguments(c, node.args, Comments.key_of("Invoke", node.span))])
-      return some(Link(doc: shown, block: [], call: true, breaks: true))
+      some(Link(doc: shown, block: [], call: true, breaks: true))
     Ast.Expr.Update(node) ->
       named = node.args.map do |arg: Ast.NamedArg| named_doc(c, arg) end
-      return some(Link(doc: listed(text(".with("), named, text(")"), []), block: [], call: true, breaks: true))
+      some(Link(doc: listed(text(".with("), named, text(")"), []), block: [], call: true, breaks: true))
     Ast.Expr.Index(node) ->
       inner = Docs.Doc.Group([
         text("["),
@@ -1467,31 +1458,31 @@ def link_of(c: Context, expr: Ast.Expr) -> Optional[Link]
         text("]"),
       ])
 
-      return some(Link(doc: inner, block: [], call: false, breaks: false))
-    _ -> return none
+      some(Link(doc: inner, block: [], call: false, breaks: false))
+    _ -> none
   end
 end
 
 # Whether `expr` is one link of a chain: a call, a field, `.call`, `.with` or an index.
 def link?(expr: Ast.Expr) -> Bool
   case expr
-    Ast.Expr.MethodCall(_) -> return true
-    Ast.Expr.FieldAccess(_) -> return true
-    Ast.Expr.Invoke(_) -> return true
-    Ast.Expr.Update(_) -> return true
-    Ast.Expr.Index(_) -> return true
-    _ -> return false
+    Ast.Expr.MethodCall(_) -> true
+    Ast.Expr.FieldAccess(_) -> true
+    Ast.Expr.Invoke(_) -> true
+    Ast.Expr.Update(_) -> true
+    Ast.Expr.Index(_) -> true
+    _ -> false
   end
 end
 
 def target_of(expr: Ast.Expr) -> Ast.Expr
   case expr
-    Ast.Expr.MethodCall(node) -> return node.target
-    Ast.Expr.FieldAccess(node) -> return node.target
-    Ast.Expr.Invoke(node) -> return node.target
-    Ast.Expr.Update(node) -> return node.target
-    Ast.Expr.Index(node) -> return node.target
-    _ -> return expr
+    Ast.Expr.MethodCall(node) -> node.target
+    Ast.Expr.FieldAccess(node) -> node.target
+    Ast.Expr.Invoke(node) -> node.target
+    Ast.Expr.Update(node) -> node.target
+    Ast.Expr.Index(node) -> node.target
+    _ -> expr
   end
 end
 
@@ -1517,7 +1508,7 @@ def method_link(c: Context, node: Ast.MethodCall) -> Link
   end
 
   shown = Docs.Doc.Concat([name, arguments(c, args, Comments.key_of("MethodCall", node.span))])
-  return Link(doc: shown, block: block, call: true, breaks: true)
+  Link(doc: shown, block: block, call: true, breaks: true)
 end
 
 # `do |params| body end`: on one line when the body is one simple statement with no comments and it fits, else with
@@ -1568,53 +1559,53 @@ def block_doc(c: Context, node: Ast.BlockLit) -> Docs.Doc
   # A body on its own lines breaks every group around the block, so the items next to it go on lines of their own.
   items = above.concat(statement_items(c, node.body)).concat(dangling_items(c, key))
   parts = [Docs.Doc.BreakParent, text(head)].concat(suffixes)
-  return Docs.Doc.Concat(parts.concat([body(c, items), Docs.Doc.HardLine, text("end")]))
+  Docs.Doc.Concat(parts.concat([body(c, items), Docs.Doc.HardLine, text("end")]))
 end
 
 # Whether a document starts with the break of a multi-line block body (`block_doc`).
 def broken?(doc: Docs.Doc) -> Bool
   case doc
-    Docs.Doc.BreakParent -> return true
-    Docs.Doc.Concat(parts) -> return parts.size > 0 and broken?(parts[0])
-    _ -> return false
+    Docs.Doc.BreakParent -> true
+    Docs.Doc.Concat(parts) -> parts.size > 0 and broken?(parts[0])
+    _ -> false
   end
 end
 
 # The document without the break it starts with.
 def unbroken(doc: Docs.Doc) -> Docs.Doc
   case doc
-    Docs.Doc.BreakParent -> return Docs.Doc.Concat([])
+    Docs.Doc.BreakParent -> Docs.Doc.Concat([])
     Docs.Doc.Concat(parts) ->
       return doc if parts.size == 0
 
-      return Docs.Doc.Concat([unbroken(parts[0])].concat(parts.drop(1)))
-    _ -> return doc
+      Docs.Doc.Concat([unbroken(parts[0])].concat(parts.drop(1)))
+    _ -> doc
   end
 end
 
 # A block parameter as text; it has no layout of its own.
 def block_param(c: Context, param: Ast.BlockParam) -> String
   case param.type
-    some(type) -> return "#{param.name}: #{type_text(type)}"
-    none -> return param.name
+    some(type) -> "#{param.name}: #{type_text(type)}"
+    none -> param.name
   end
 end
 
 def type_text(type: Ast.TypeRef) -> String
   return type.name if type.args.size == 0
 
-  return "#{type.name}[#{type.args.map do |arg: Ast.TypeRef| type_text(arg) end.join(", ")}]"
+  "#{type.name}[#{type.args.map do |arg: Ast.TypeRef| type_text(arg) end.join(", ")}]"
 end
 
 # The dangling comments of an empty list, call or literal.
 def dangling_comments(c: Context, key: String) -> List[Tokens.Comment]
-  return c.dangling.get(key, []).map do |placed: Comments.Attached| placed.comment end
+  c.dangling.get(key, []).map do |placed: Comments.Attached| placed.comment end
 end
 
 # Items between brackets: on one line when they fit, else one per line, two spaces deeper, with a trailing comma
 # (47.5 rules 2 and 14). An empty list keeps its dangling comments inside, each on its own line.
 def listed(open: Docs.Doc, items: List[Docs.Doc], close: Docs.Doc, dangling: List[Tokens.Comment]) -> Docs.Doc
-  return packed_list(open, items, close, dangling, false)
+  packed_list(open, items, close, dangling, false)
 end
 
 # Like `listed`; a `packed` list that breaks fills each line with as many items as fit, as a table of literals is
@@ -1657,7 +1648,7 @@ def packed_list(
   end
 
   inner = [Docs.Doc.SoftLine, joined, Docs.Doc.IfBreak([text(",")], [])]
-  return Docs.Doc.Group([open, Docs.Doc.Indent(inner), Docs.Doc.SoftLine, close])
+  Docs.Doc.Group([open, Docs.Doc.Indent(inner), Docs.Doc.SoftLine, close])
 end
 
 # ---- Helpers ----
@@ -1676,7 +1667,7 @@ def join(items: List[Docs.Doc], separator: List[Docs.Doc]) -> Docs.Doc
     at += 1
   end
 
-  return Docs.Doc.Concat(parts)
+  Docs.Doc.Concat(parts)
 end
 
 # A node the parser made without text of its own has an empty span.
@@ -1700,7 +1691,7 @@ def source(c: Context, span: Source.Span) -> String
     parts = parts.push(c.lines[last - 1].slice(0, span.stop.column - 1))
   end
 
-  return parts.join("\n")
+  parts.join("\n")
 end
 
 # The span cut at its last token.
@@ -1712,7 +1703,7 @@ def tight(c: Context, span: Source.Span) -> Source.Span
 
   return span if at < 0 or c.tokens[at].span.stop.offset <= span.start.offset
 
-  return span.with(stop: c.tokens[at].span.stop)
+  span.with(stop: c.tokens[at].span.stop)
 end
 
 # The line of the last token of a span.
@@ -1731,7 +1722,7 @@ def token_index(c: Context, offset: Int) -> Int
     end
   end
 
-  return low
+  low
 end
 
 def trim_end(line: String) -> String
@@ -1740,20 +1731,20 @@ def trim_end(line: String) -> String
     stop -= 1
   end
 
-  return line.slice(0, stop)
+  line.slice(0, stop)
 end
 
 def decl_span(decl: Ast.Decl) -> Source.Span
   case decl
-    Ast.Decl.Import(node) -> return node.span
-    Ast.Decl.Reexport(node) -> return node.span
-    Ast.Decl.Export(node) -> return node.span
-    Ast.Decl.Function(node) -> return node.span
-    Ast.Decl.Struct(node) -> return node.span
-    Ast.Decl.Enum(node) -> return node.span
-    Ast.Decl.TypeAlias(node) -> return node.span
-    Ast.Decl.Resource(node) -> return node.span
-    Ast.Decl.Constant(node) -> return node.span
+    Ast.Decl.Import(node) -> node.span
+    Ast.Decl.Reexport(node) -> node.span
+    Ast.Decl.Export(node) -> node.span
+    Ast.Decl.Function(node) -> node.span
+    Ast.Decl.Struct(node) -> node.span
+    Ast.Decl.Enum(node) -> node.span
+    Ast.Decl.TypeAlias(node) -> node.span
+    Ast.Decl.Resource(node) -> node.span
+    Ast.Decl.Constant(node) -> node.span
   end
 end
 
@@ -1766,7 +1757,7 @@ def doc_first(c: Context, offset: Int) -> Int
 
   # A doc without its token cannot happen; keep the node's own line.
   at = token_index(c, offset)
-  return c.tokens[at].span.start.line
+  c.tokens[at].span.start.line
 end
 
 # The last line of the `##` block that starts at `first`.
@@ -1776,7 +1767,7 @@ def doc_last(c: Context, first: Int) -> Int
     last += 1
   end
 
-  return last
+  last
 end
 
 # The lines of the `##` block that starts at `first`, as written, each followed by a line break.
@@ -1789,7 +1780,7 @@ def doc_lines(c: Context, first: Int) -> List[Docs.Doc]
     line += 1
   end
 
-  return parts
+  parts
 end
 
 # The body of each heredoc by the offset of its opener: its lines after the line of the opener (after the end line of
@@ -1824,7 +1815,7 @@ def heredoc_bodies(lines: List[String], tokens: List[Tokens.Token]) -> Map[Int, 
     end
   end
 
-  return bodies
+  bodies
 end
 
 def heredoc_name(opener: String) -> String
@@ -1833,7 +1824,7 @@ def heredoc_name(opener: String) -> String
     at += 1
   end
 
-  return opener.slice(3, at - 3)
+  opener.slice(3, at - 3)
 end
 
 # The `extern` blocks: from a top-level `extern` followed by a string, or by the word module and a string, to the first
@@ -1876,7 +1867,7 @@ def extern_blocks(lines: List[String], tokens: List[Tokens.Token]) -> List[Exter
     end
   end
 
-  return blocks
+  blocks
 end
 
 # The index of the extern block that holds `offset`, or -1.
@@ -1888,5 +1879,5 @@ def extern_at(blocks: List[Extern], offset: Int) -> Int
     at += 1
   end
 
-  return -1
+  -1
 end

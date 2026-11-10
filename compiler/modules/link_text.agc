@@ -17,8 +17,8 @@ import Workspace from "workspace"
 ## goldens are in tests/fixtures/frontend/modules/.
 export def link_text(path: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
-    Linker.Linking.Done(linked) -> return program_lines(linked, {}).join("\n")
-    Linker.Linking.Failed(failure) -> return root_failure_text(settings.workspace, path, failure)
+    Linker.Linking.Done(linked) -> program_lines(linked, {}).join("\n")
+    Linker.Linking.Failed(failure) -> root_failure_text(settings.workspace, path, failure)
   end
 end
 
@@ -32,14 +32,14 @@ export def ids_text(path: String, settings: Env.Settings) -> String
         "module #{Text.quote(module.name)} first=#{module.first_id} next=#{module.next_id}"
       end
 
-      return lines.join("\n")
-    Linker.Linking.Failed(failure) -> return root_failure_text(settings.workspace, path, failure)
+      lines.join("\n")
+    Linker.Linking.Failed(failure) -> root_failure_text(settings.workspace, path, failure)
   end
 end
 
 ## The ERROR line of the failure of linking the root file at `path`.
 export def root_failure_text(workspace: Workspace.Workspace, path: String, failure: Failure.Failure) -> String
-  return failure_text(workspace, root_dir_of(workspace, path), failure)
+  failure_text(workspace, root_dir_of(workspace, path), failure)
 end
 
 ## The ERROR line of a link failure, with the file it is in, and ` key="path"` for a failure at a key of agentica.toml
@@ -49,7 +49,7 @@ export def failure_text(workspace: Workspace.Workspace, root_dir: String, failur
   line = "#{Text.diagnostic_line(failure.diagnostic)} file=#{shown}"
   return "#{line} key=#{Text.quote(failure.key_path)}" if failure.key_path != ""
 
-  return line
+  line
 end
 
 ## The lines of the linked program. notes is the text added to the line of a node, by id (see ParseText.Margin).
@@ -72,7 +72,7 @@ export def program_lines(linked: Linker.Linked, notes: Map[Int, String]) -> List
     end
   end
 
-  return lines
+  lines
 end
 
 def module_lines(out: List[String], module: Linker.LinkedModule, notes: Map[Int, String]) -> List[String]
@@ -82,7 +82,7 @@ def module_lines(out: List[String], module: Linker.LinkedModule, notes: Map[Int,
     lines = ParseText.print_decl(lines, at, "declaration", decl)
   end
 
-  return lines
+  lines
 end
 
 # The folder of the canonical root file, "" when the file cannot be resolved.
@@ -90,5 +90,5 @@ def root_dir_of(workspace: Workspace.Workspace, path: String) -> String
   real = workspace.real_path.call(path)
   return Paths.directory_of(real.unwrap!) if real.ok?
 
-  return ""
+  ""
 end

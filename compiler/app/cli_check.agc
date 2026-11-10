@@ -34,7 +34,7 @@ export def status(entries: List[Entry]) -> Int
     return 1
   end
 
-  return 0
+  0
 end
 
 ## The `--ai` text of a problem of `file` with the file in place of its `check failed: 1 error` heading, which the last
@@ -42,7 +42,7 @@ end
 export def headed(file: String, text: String) -> String
   return text if !text.starts_with?(AI_HEADING)
 
-  return "#{file}:#{text.slice(AI_HEADING.length, text.length - AI_HEADING.length)}"
+  "#{file}:#{text.slice(AI_HEADING.length, text.length - AI_HEADING.length)}"
 end
 
 ## The line of a run in which every file passed.
@@ -55,7 +55,7 @@ export def failed_text(failed: Int, total: Int) -> String = "check failed: #{fai
 export def files_text(count: Int) -> String
   return "1 file" if count == 1
 
-  return "#{count} files"
+  "#{count} files"
 end
 
 ## The JSON document of a run: `ok`, the number of files `checked` and `failed`, and `files`, an entry for each file in
@@ -71,35 +71,31 @@ export def json_text(entries: List[Entry]) -> String
     "files": JSON.array(files),
   })
 
-  return "#{JSON.encode(document)}\n"
+  "#{JSON.encode(document)}\n"
 end
 
 def json_entry(entry: Entry) -> Map[String, Json]
   case entry
-    Entry.Passed(file) -> return {"file": JSON.from(file), "ok": JSON.from(true)}
+    Entry.Passed(file) -> {"file": JSON.from(file), "ok": JSON.from(true)}
     Entry.Unreadable(file) ->
-      return {
-        "file": JSON.from(file),
-        "ok": JSON.from(false),
-        "diagnostic": DiagnosticJson.json(Core.unreadable(file)),
-      }
+      {"file": JSON.from(file), "ok": JSON.from(false), "diagnostic": DiagnosticJson.json(Core.unreadable(file))}
     Entry.Failed(file, problem) ->
-      return {"file": JSON.from(file), "ok": JSON.from(false), "diagnostic": DiagnosticJson.json(problem)}
+      {"file": JSON.from(file), "ok": JSON.from(false), "diagnostic": DiagnosticJson.json(problem)}
   end
 end
 
 def unreadable?(entry: Entry) -> Bool
   case entry
-    Entry.Unreadable(_) -> return true
-    Entry.Passed(_) -> return false
-    Entry.Failed(_, _) -> return false
+    Entry.Unreadable(_) -> true
+    Entry.Passed(_) -> false
+    Entry.Failed(_, _) -> false
   end
 end
 
 def passed?(entry: Entry) -> Bool
   case entry
-    Entry.Passed(_) -> return true
-    Entry.Unreadable(_) -> return false
-    Entry.Failed(_, _) -> return false
+    Entry.Passed(_) -> true
+    Entry.Unreadable(_) -> false
+    Entry.Failed(_, _) -> false
   end
 end

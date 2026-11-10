@@ -15,8 +15,8 @@ import Origins from "doc_origins"
 ## The parsed program of the module in `text`, or the first lexer or parser diagnostic. `agentica outline` shares it.
 export def parse(text: String) -> Diag.Outcome[Ast.Program]
   case Lexer.lex(text)
-    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
-    Diag.Outcome.Done(tokens) -> return Parser.parse(tokens, 0)
+    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
+    Diag.Outcome.Done(tokens) -> Parser.parse(tokens, 0)
   end
 end
 
@@ -24,8 +24,8 @@ end
 ## Only a module that re-exports something reads its imports (doc_origins.agc).
 export def of_file(settings: Env.Settings, path: String, text: String) -> Diag.Outcome[Model.Module]
   case parse(text)
-    Diag.Outcome.Failed(problem) -> return Diag.Outcome.Failed(problem)
+    Diag.Outcome.Failed(problem) -> Diag.Outcome.Failed(problem)
     Diag.Outcome.Done(program) ->
-      return Diag.Outcome.Done(Model.of_program(program, text, Origins.of_file(settings, path, program)))
+      Diag.Outcome.Done(Model.of_program(program, text, Origins.of_file(settings, path, program)))
   end
 end

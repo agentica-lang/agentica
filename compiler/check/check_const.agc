@@ -55,7 +55,7 @@ export def check_all(cx: State.Cx, st: State.St, modules: List[Linker.LinkedModu
     end
   end
 
-  return ok(current)
+  ok(current)
 end
 
 # The constants of std/regex come first: a regex literal in a constant calls its compile, which reads them, and the
@@ -74,7 +74,7 @@ def collect(modules: List[Linker.LinkedModule], kept: Set[String]) -> List[Entry
     end
   end
 
-  return found
+  found
 end
 
 def check_one(done: Done, entry: Entry) -> Result[Done]
@@ -93,7 +93,7 @@ def check_one(done: Done, entry: Entry) -> Result[Done]
     type = declared
   end
 
-  return ok(
+  ok(
     Done(
       cx: done.cx.with(constants: done.cx.constants.put(entry.decl.name, type)),
       st: out.st,
@@ -143,11 +143,11 @@ def order_of(cx: State.Cx, st: State.St, entries: List[Entry]) -> Result[List[In
     start += 1
   end
 
-  return ok(emitted)
+  ok(emitted)
 end
 
 def begin_visit(entries: List[Entry], index: Int) -> Visit
-  return Visit(index: index, reads: AstWalk.references(entries[index].decl.value), next: 0)
+  Visit(index: index, reads: AstWalk.references(entries[index].decl.value), next: 0)
 end
 
 # CHECK-CONSTANT-CYCLE at the read that closes the cycle, in the file of the constant that reads it. The help lists the
@@ -165,7 +165,7 @@ def cycle_failure(cx: State.Cx, st: State.St, entries: List[Entry], stack: List[
 
   around = names.drop(first).push(read.name).map do |name: String| T.display_name(name) end
   here = cx.with(file: entries[stack[stack.size - 1].index].file)
-  return State.fail_help(
+  State.fail_help(
     here,
     st,
     "CHECK-CONSTANT-CYCLE",
@@ -178,7 +178,7 @@ end
 # The value rules on a checked initializer. A node is visited after its children, in source order; a while is refused
 # before its body. A block is allowed only as an argument of a builtin.
 def validate(cx: State.Cx, st: State.St, root: Ast.Expr) -> Result[Bool]
-  return visit(cx, st, AstWalk.Node.Expr(root), false)
+  visit(cx, st, AstWalk.Node.Expr(root), false)
 end
 
 def visit(cx: State.Cx, st: State.St, node: AstWalk.Node, block_allowed: Bool) -> Result[Bool]
@@ -190,13 +190,13 @@ def visit(cx: State.Cx, st: State.St, node: AstWalk.Node, block_allowed: Bool) -
   end
 
   try refuse_form(cx, st, node, entry)
-  return check_data(cx, st, node, block_allowed)
+  check_data(cx, st, node, block_allowed)
 end
 
 def has_entry?(entry: Optional[Model.Builtin]) -> Bool = entry.some?
 
 def refuse(cx: State.Cx, st: State.St, span: Source.Span, what: String, help: String) -> String
-  return State.fail_help(cx, st, "CHECK-CONSTANT-EXPRESSION", what, span, help)
+  State.fail_help(cx, st, "CHECK-CONSTANT-EXPRESSION", what, span, help)
 end
 
 def refuse_early(cx: State.Cx, st: State.St, node: AstWalk.Node, block_allowed: Bool) -> Result[Bool]
@@ -204,7 +204,7 @@ def refuse_early(cx: State.Cx, st: State.St, node: AstWalk.Node, block_allowed: 
     AstWalk.Node.Stmt(stmt) ->
       case stmt
         Ast.Stmt.While(found) ->
-          return error(
+          error(
             refuse(
               cx,
               st,
@@ -213,7 +213,7 @@ def refuse_early(cx: State.Cx, st: State.St, node: AstWalk.Node, block_allowed: 
               "loop with for over a range or a collection, or use a builtin such as reduce",
             ),
           )
-        _ -> return ok(true)
+        _ -> ok(true)
       end
 
     AstWalk.Node.Expr(expr) ->
@@ -231,8 +231,8 @@ def refuse_early(cx: State.Cx, st: State.St, node: AstWalk.Node, block_allowed: 
             )
           end
 
-          return ok(true)
-        _ -> return ok(true)
+          ok(true)
+        _ -> ok(true)
       end
   end
 end
@@ -240,16 +240,16 @@ end
 # The builtin a call, method call or field access names: not a call of a function of the program.
 def builtin_of(cx: State.Cx, st: State.St, node: AstWalk.Node) -> Optional[Model.Builtin]
   case node
-    AstWalk.Node.Stmt(_) -> return none
+    AstWalk.Node.Stmt(_) -> none
     AstWalk.Node.Expr(expr) ->
       case expr
         Ast.Expr.Call(found) ->
           return none if cx.functions.has_key?(found.name)
 
-          return entry_named(cx, found.name)
-        Ast.Expr.MethodCall(found) -> return entry_resolved(cx, st, found.id)
-        Ast.Expr.FieldAccess(found) -> return entry_resolved(cx, st, found.id)
-        _ -> return none
+          entry_named(cx, found.name)
+        Ast.Expr.MethodCall(found) -> entry_resolved(cx, st, found.id)
+        Ast.Expr.FieldAccess(found) -> entry_resolved(cx, st, found.id)
+        _ -> none
       end
   end
 end
@@ -258,7 +258,7 @@ def entry_named(cx: State.Cx, name: String) -> Optional[Model.Builtin]
   found = ENTRIES.get(name)
   return some(found.unwrap!) if found.some?
 
-  return none
+  none
 end
 
 def entry_resolved(cx: State.Cx, st: State.St, id: Int) -> Optional[Model.Builtin]
@@ -266,15 +266,15 @@ def entry_resolved(cx: State.Cx, st: State.St, id: Int) -> Optional[Model.Builti
   return none if resolved.none?
 
   case resolved.unwrap!
-    State.Resolved.Call(name, _) -> return entry_named(cx, name)
-    _ -> return none
+    State.Resolved.Call(name, _) -> entry_named(cx, name)
+    _ -> none
   end
 end
 
 def refuse_form(cx: State.Cx, st: State.St, node: AstWalk.Node, entry: Optional[Model.Builtin]) -> Result[Bool]
   case node
-    AstWalk.Node.Stmt(_) -> return ok(true)
-    AstWalk.Node.Expr(expr) -> return refuse_expr(cx, st, expr, entry)
+    AstWalk.Node.Stmt(_) -> ok(true)
+    AstWalk.Node.Expr(expr) -> refuse_expr(cx, st, expr, entry)
   end
 end
 
@@ -282,7 +282,7 @@ def refuse_expr(cx: State.Cx, st: State.St, expr: Ast.Expr, entry: Optional[Mode
   span = Ast.expr_span(expr)
   case expr
     Ast.Expr.FunctionRef(_) ->
-      return error(
+      error(
         refuse(
           cx,
           st,
@@ -292,7 +292,7 @@ def refuse_expr(cx: State.Cx, st: State.St, expr: Ast.Expr, entry: Optional[Mode
         ),
       )
     Ast.Expr.Invoke(_) ->
-      return error(
+      error(
         refuse(
           cx,
           st,
@@ -314,8 +314,8 @@ def refuse_expr(cx: State.Cx, st: State.St, expr: Ast.Expr, entry: Optional[Mode
         )
       end
 
-      return refuse_effects(cx, st, span, entry)
-    _ -> return refuse_effects(cx, st, span, entry)
+      refuse_effects(cx, st, span, entry)
+    _ -> refuse_effects(cx, st, span, entry)
   end
 end
 
@@ -334,8 +334,8 @@ def refuse_effects(cx: State.Cx, st: State.St, span: Source.Span, entry: Optiona
         )
       end
 
-      return ok(true)
-    none -> return ok(true)
+      ok(true)
+    none -> ok(true)
   end
 end
 
@@ -343,12 +343,12 @@ end
 # the constant.
 def check_data(cx: State.Cx, st: State.St, node: AstWalk.Node, block_allowed: Bool) -> Result[Bool]
   case node
-    AstWalk.Node.Stmt(_) -> return ok(true)
+    AstWalk.Node.Stmt(_) -> ok(true)
     AstWalk.Node.Expr(expr) ->
       type = st.types[Ast.expr_id(expr)]
       return ok(true) if T.unknown?(type) or (block_allowed and block?(expr)) or CheckTypes.data?(cx, type)
 
-      return error(
+      error(
         State.fail_help(
           cx,
           st,
@@ -363,8 +363,7 @@ end
 
 def data_help(type: T.Type) -> String
   return "a constant's value must be data: write nil, not a Void call" if T.is?(type, "Void")
-
-  return (
+  (
     "a constant holds numbers, text, collections, structs and enums of those; " +
     "functions, tasks, channels, handles and tables are not data"
   )
@@ -372,7 +371,7 @@ end
 
 def block?(expr: Ast.Expr) -> Bool
   case expr
-    Ast.Expr.BlockLit(_) -> return true
-    _ -> return false
+    Ast.Expr.BlockLit(_) -> true
+    _ -> false
   end
 end

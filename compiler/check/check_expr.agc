@@ -63,7 +63,7 @@ export def check_expression(
   end
 
   recorded = State.record_type(checked.st, Ast.expr_id(node), checked.type)
-  return ok(State.Out(st: recorded.with(nest: st.nest), type: actual))
+  ok(State.Out(st: recorded.with(nest: st.nest), type: actual))
 end
 
 # True when the type of the node is the expected type without a look: some(x) against Optional[T], ok(x) against
@@ -79,9 +79,9 @@ def matches_expected?(node: Ast.Expr, expected: T.Type) -> Bool
         return known_item?(expected, "Optional")
       end
 
-      return call.name == "ok" and known_item?(expected, "Result")
-    Ast.Expr.ListLit(list) -> return list.elements.size > 0 and known_item?(expected, "List")
-    _ -> return false
+      call.name == "ok" and known_item?(expected, "Result")
+    Ast.Expr.ListLit(list) -> list.elements.size > 0 and known_item?(expected, "List")
+    _ -> false
   end
 end
 
@@ -94,13 +94,13 @@ def int_min_digits() -> String = "9223372036854775808"
 # The type of the node by its kind, before the Void and expected-type checks.
 def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Type) -> Result[State.Out]
   case node
-    Ast.Expr.Literal(found) -> return check_literal(cx, st, found)
-    Ast.Expr.Name(found) -> return check_name(cx, st, found)
-    Ast.Expr.Unary(found) -> return check_unary(cx, st, found)
-    Ast.Expr.Binary(found) -> return check_binary(cx, st, found)
-    Ast.Expr.Call(found) -> return Calls.check_call(cx, st, found, expected)
+    Ast.Expr.Literal(found) -> check_literal(cx, st, found)
+    Ast.Expr.Name(found) -> check_name(cx, st, found)
+    Ast.Expr.Unary(found) -> check_unary(cx, st, found)
+    Ast.Expr.Binary(found) -> check_binary(cx, st, found)
+    Ast.Expr.Call(found) -> Calls.check_call(cx, st, found, expected)
     Ast.Expr.EnumConstructor(found) ->
-      return Calls.check_enum_constructor(
+      Calls.check_enum_constructor(
         cx,
         st,
         found.enum_name,
@@ -110,36 +110,36 @@ def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Ty
         found.span,
         expected,
       )
-    Ast.Expr.FunctionRef(found) -> return check_function_ref(cx, st, found, expected)
-    Ast.Expr.Invoke(found) -> return check_invoke(cx, st, found)
-    Ast.Expr.Try(found) -> return check_try(cx, st, found, expected)
-    Ast.Expr.Construct(found) -> return Calls.check_construct(cx, st, found, expected)
-    Ast.Expr.Update(found) -> return Calls.check_struct_update(cx, st, found)
-    Ast.Expr.ListLit(found) -> return check_list(cx, st, found, expected)
-    Ast.Expr.MapLit(found) -> return check_map(cx, st, found, expected)
-    Ast.Expr.FieldAccess(found) -> return Methods.check_field_access(cx, st, found, expected)
-    Ast.Expr.MethodCall(found) -> return Methods.check_method(cx, st, found, expected)
-    Ast.Expr.Typed(found) -> return ok(State.Out(st: st, type: found.type))
-    Ast.Expr.BlockLit(found) -> return check_block_lit(cx, st, found, expected)
-    Ast.Expr.Interpolation(found) -> return check_interpolation(cx, st, found)
-    Ast.Expr.Index(found) -> return check_index(cx, st, found)
-    Ast.Expr.TypeName(found) -> return check_type_name(cx, st, found)
-    Ast.Expr.ConstRef(found) -> return check_const_ref(cx, st, found)
-    Ast.Expr.RegexLit(found) -> return CheckRegex.check_regex(cx, st, found)
-    Ast.Expr.EagLit(found) -> return State.expr(cx, st, found.call, T.Type.Unknown)
-    Ast.Expr.Case(found) -> return Statements.check_case_value(cx, st, found, expected)
+    Ast.Expr.FunctionRef(found) -> check_function_ref(cx, st, found, expected)
+    Ast.Expr.Invoke(found) -> check_invoke(cx, st, found)
+    Ast.Expr.Try(found) -> check_try(cx, st, found, expected)
+    Ast.Expr.Construct(found) -> Calls.check_construct(cx, st, found, expected)
+    Ast.Expr.Update(found) -> Calls.check_struct_update(cx, st, found)
+    Ast.Expr.ListLit(found) -> check_list(cx, st, found, expected)
+    Ast.Expr.MapLit(found) -> check_map(cx, st, found, expected)
+    Ast.Expr.FieldAccess(found) -> Methods.check_field_access(cx, st, found, expected)
+    Ast.Expr.MethodCall(found) -> Methods.check_method(cx, st, found, expected)
+    Ast.Expr.Typed(found) -> ok(State.Out(st: st, type: found.type))
+    Ast.Expr.BlockLit(found) -> check_block_lit(cx, st, found, expected)
+    Ast.Expr.Interpolation(found) -> check_interpolation(cx, st, found)
+    Ast.Expr.Index(found) -> check_index(cx, st, found)
+    Ast.Expr.TypeName(found) -> check_type_name(cx, st, found)
+    Ast.Expr.ConstRef(found) -> check_const_ref(cx, st, found)
+    Ast.Expr.RegexLit(found) -> CheckRegex.check_regex(cx, st, found)
+    Ast.Expr.EagLit(found) -> State.expr(cx, st, found.call, T.Type.Unknown)
+    Ast.Expr.Case(found) -> Statements.check_case_value(cx, st, found, expected)
   end
 end
 
 def check_literal(cx: State.Cx, st: State.St, node: Ast.Literal) -> Result[State.Out]
   case node.value
-    Ast.LitValue.Whole(_) -> return ok(State.Out(st: st, type: T.Type.Int))
+    Ast.LitValue.Whole(_) -> ok(State.Out(st: st, type: T.Type.Int))
     Ast.LitValue.Huge(_) ->
-      return error(State.fail(cx, st, "CHECK-INT-RANGE", "Int literal is outside the signed 64-bit range", node.span))
-    Ast.LitValue.Real(_) -> return ok(State.Out(st: st, type: T.Type.Float))
-    Ast.LitValue.Text(_) -> return ok(State.Out(st: st, type: T.Type.String))
-    Ast.LitValue.Flag(_) -> return ok(State.Out(st: st, type: T.Type.Bool))
-    Ast.LitValue.Nothing -> return ok(State.Out(st: st, type: T.Type.Nil))
+      error(State.fail(cx, st, "CHECK-INT-RANGE", "Int literal is outside the signed 64-bit range", node.span))
+    Ast.LitValue.Real(_) -> ok(State.Out(st: st, type: T.Type.Float))
+    Ast.LitValue.Text(_) -> ok(State.Out(st: st, type: T.Type.String))
+    Ast.LitValue.Flag(_) -> ok(State.Out(st: st, type: T.Type.Bool))
+    Ast.LitValue.Nothing -> ok(State.Out(st: st, type: T.Type.Nil))
   end
 end
 
@@ -169,7 +169,7 @@ def check_name(cx: State.Cx, st: State.St, node: Ast.NameRef) -> Result[State.Ou
   end
 
   help = name_help(cx, st, node.name)
-  return error(State.fail_maybe(cx, st, "CHECK-UNKNOWN-NAME", "unknown name \"#{node.name}\"", node.span, help))
+  error(State.fail_maybe(cx, st, "CHECK-UNKNOWN-NAME", "unknown name \"#{node.name}\"", node.span, help))
 end
 
 # The help of an unknown name: a close name in scope, or the name another language uses.
@@ -177,7 +177,7 @@ def name_help(cx: State.Cx, st: State.St, name: String) -> String
   guess = Help.near(name, State.visible_names(cx, st), [])
   return guess if guess != ""
 
-  return Help.foreign(cx.help, name)
+  Help.foreign(cx.help, name)
 end
 
 # A constant is read after its initializer was checked, because the constants are checked in dependency order.
@@ -185,11 +185,11 @@ def check_const_ref(cx: State.Cx, st: State.St, node: Ast.ConstRef) -> Result[St
   type = cx.constants.get(node.name)
   return error(State.fail(cx, st, "CHECK-INTERNAL", "constant read before it was checked", node.span)) if type.none?
 
-  return ok(State.Out(st: st, type: type.unwrap!))
+  ok(State.Out(st: st, type: type.unwrap!))
 end
 
 def check_type_name(cx: State.Cx, st: State.St, node: Ast.TypeName) -> Result[State.Out]
-  return error(
+  error(
     State.fail_maybe(
       cx,
       st,
@@ -231,7 +231,7 @@ def check_function_ref(cx: State.Cx, st: State.St, node: Ast.FunctionRef, expect
   end
 
   current = try CheckTypes.check_json_needs(cx, st, node.name, found, [], [], node.span)
-  return ok(State.Out(st: current, type: CheckTypes.substitute(type, found)))
+  ok(State.Out(st: current, type: CheckTypes.substitute(type, found)))
 end
 
 # target.call(args): the target is a function value and the arguments match its parameters.
@@ -241,7 +241,7 @@ def check_invoke(cx: State.Cx, st: State.St, node: Ast.Invoke) -> Result[State.O
     return error(State.fail(cx, target.st, "CHECK-TYPE-MISMATCH", ".call requires a function value", node.span))
   end
 
-  return Methods.apply_function(cx, target.st, target.type, node.args, node.span)
+  Methods.apply_function(cx, target.st, target.type, node.args, node.span)
 end
 
 # try needs a function, or a block, that returns a Result (a block with an inferred result qualifies only when it must
@@ -276,7 +276,7 @@ def check_try(cx: State.Cx, st: State.St, node: Ast.TryExpr, expected: T.Type) -
     after = after.with(step_tries: after.step_tries.add(node.id))
   end
 
-  return ok(State.Out(st: after, type: T.item(out.type)))
+  ok(State.Out(st: after, type: T.item(out.type)))
 end
 
 def check_interpolation(cx: State.Cx, st: State.St, node: Ast.Interpolation) -> Result[State.Out]
@@ -291,7 +291,7 @@ def check_interpolation(cx: State.Cx, st: State.St, node: Ast.Interpolation) -> 
     end
   end
 
-  return ok(State.Out(st: current, type: T.Type.String))
+  ok(State.Out(st: current, type: T.Type.String))
 end
 
 # A block where a function is expected, or anywhere a type is not demanded.
@@ -311,7 +311,7 @@ def check_block_lit(cx: State.Cx, st: State.St, node: Ast.BlockLit, expected: T.
     )
   end
 
-  return Statements.check_block_body(cx, st, node, some(T.params(expected)), T.result(expected), none)
+  Statements.check_block_body(cx, st, node, some(T.params(expected)), T.result(expected), none)
 end
 
 # The type of a list with items is built from the first item's checked type or the expected item that every item
@@ -357,7 +357,7 @@ def check_list(cx: State.Cx, st: State.St, node: Ast.ListLit, expected: T.Type) 
     index += 1
   end
 
-  return ok(State.Out(st: current, type: T.Type.List(element)))
+  ok(State.Out(st: current, type: T.Type.List(element)))
 end
 
 def check_map(cx: State.Cx, st: State.St, node: Ast.MapLit, expected: T.Type) -> Result[State.Out]
@@ -415,7 +415,7 @@ def check_map(cx: State.Cx, st: State.St, node: Ast.MapLit, expected: T.Type) ->
     index += 1
   end
 
-  return ok(State.Out(st: current, type: T.Type.Map(key.type, value.type)))
+  ok(State.Out(st: current, type: T.Type.Map(key.type, value.type)))
 end
 
 def check_index(cx: State.Cx, st: State.St, node: Ast.IndexAccess) -> Result[State.Out]
@@ -431,7 +431,7 @@ def check_index(cx: State.Cx, st: State.St, node: Ast.IndexAccess) -> Result[Sta
     return ok(State.Out(st: index.st, type: T.Type.Int))
   end
 
-  return error(
+  error(
     State.fail_maybe(
       cx,
       target.st,
@@ -457,7 +457,7 @@ def index_help(target: T.Type) -> String
     return "sets have no positions: s.include?(x) tests membership, s.to_a gives a list in insertion order"
   end
 
-  return ""
+  ""
 end
 
 # - and not. -9223372036854775808 is the one literal that only fits under a minus.
@@ -491,7 +491,7 @@ def check_unary(cx: State.Cx, st: State.St, node: Ast.Unary) -> Result[State.Out
     )
   end
 
-  return ok(State.Out(st: operand.st, type: T.Type.Bool))
+  ok(State.Out(st: operand.st, type: T.Type.Bool))
 end
 
 def unary_operand(cx: State.Cx, st: State.St, node: Ast.Unary) -> Result[State.Out]
@@ -511,18 +511,18 @@ def unary_operand(cx: State.Cx, st: State.St, node: Ast.Unary) -> Result[State.O
     )
   end
 
-  return ok(out)
+  ok(out)
 end
 
 def min_literal?(node: Ast.Expr) -> Bool
   case node
     Ast.Expr.Literal(found) ->
       case found.value
-        Ast.LitValue.Huge(digits) -> return digits == int_min_digits()
-        _ -> return false
+        Ast.LitValue.Huge(digits) -> digits == int_min_digits()
+        _ -> false
       end
 
-    _ -> return false
+    _ -> false
   end
 end
 
@@ -535,14 +535,14 @@ def void_negation_help(node: Ast.Unary) -> String
       case call.target
         Ast.Expr.Literal(literal) ->
           case literal.value
-            Ast.LitValue.Whole(n) -> return "-#{n}.#{call.name} is -(#{n}.#{call.name}); write (-#{n}).#{call.name}"
-            _ -> return ""
+            Ast.LitValue.Whole(n) -> "-#{n}.#{call.name} is -(#{n}.#{call.name}); write (-#{n}).#{call.name}"
+            _ -> ""
           end
 
-        _ -> return ""
+        _ -> ""
       end
 
-    _ -> return ""
+    _ -> ""
   end
 end
 
@@ -562,7 +562,7 @@ def check_sides(cx: State.Cx, st: State.St, node: Ast.Binary) -> Result[Sides]
   end
 
   right = try State.expr(cx, left.st, node.right, wanted)
-  return ok(Sides(st: right.st, left: left.type, right: right.type))
+  ok(Sides(st: right.st, left: left.type, right: right.type))
 end
 
 # The ids of the method calls and field accesses along the target chain of an expression.
@@ -582,13 +582,13 @@ def chain_ids(node: Ast.Expr) -> List[Int]
     end
   end
 
-  return ids
+  ids
 end
 
 def check_binary(cx: State.Cx, st: State.St, node: Ast.Binary) -> Result[State.Out]
   sides = try check_sides(cx, st, node)
   type = try binary_type(cx, sides, node)
-  return ok(State.Out(st: sides.st, type: type))
+  ok(State.Out(st: sides.st, type: type))
 end
 
 # The result type of the operator, or the first rule it breaks.
@@ -596,30 +596,30 @@ def binary_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
   case node.op
     "plus" ->
       try same_types(cx, sides, node, true)
-      return plus_type(cx, sides, node)
-    "minus" -> return arithmetic_type(cx, sides, node)
+      plus_type(cx, sides, node)
+    "minus" -> arithmetic_type(cx, sides, node)
     "multiply" ->
       return repeat_type(cx, sides, node) if T.is?(sides.left, "String") or T.is?(sides.right, "String")
 
-      return arithmetic_type(cx, sides, node)
-    "divide" -> return arithmetic_type(cx, sides, node)
-    "modulo" -> return modulo_type(cx, sides, node)
-    "less" -> return comparison_type(cx, sides, node)
-    "less-equal" -> return comparison_type(cx, sides, node)
-    "greater" -> return comparison_type(cx, sides, node)
-    "greater-equal" -> return comparison_type(cx, sides, node)
-    "dot-dot" -> return range_type(cx, sides, node)
-    "dot-dot-dot" -> return range_type(cx, sides, node)
-    "equal" -> return equality_type(cx, sides, node)
-    "not-equal" -> return equality_type(cx, sides, node)
-    "and" -> return logical_type(cx, sides, node)
-    "or" -> return logical_type(cx, sides, node)
-    _ -> return error(State.fail(cx, sides.st, "CHECK-INTERNAL", "unsupported operator", node.op_span))
+      arithmetic_type(cx, sides, node)
+    "divide" -> arithmetic_type(cx, sides, node)
+    "modulo" -> modulo_type(cx, sides, node)
+    "less" -> comparison_type(cx, sides, node)
+    "less-equal" -> comparison_type(cx, sides, node)
+    "greater" -> comparison_type(cx, sides, node)
+    "greater-equal" -> comparison_type(cx, sides, node)
+    "dot-dot" -> range_type(cx, sides, node)
+    "dot-dot-dot" -> range_type(cx, sides, node)
+    "equal" -> equality_type(cx, sides, node)
+    "not-equal" -> equality_type(cx, sides, node)
+    "and" -> logical_type(cx, sides, node)
+    "or" -> logical_type(cx, sides, node)
+    _ -> error(State.fail(cx, sides.st, "CHECK-INTERNAL", "unsupported operator", node.op_span))
   end
 end
 
 def type_error(cx: State.Cx, sides: Sides, node: Ast.Binary, message: String, help: String) -> String
-  return State.fail_maybe(cx, sides.st, "CHECK-TYPE-MISMATCH", message, node.op_span, help)
+  State.fail_maybe(cx, sides.st, "CHECK-TYPE-MISMATCH", message, node.op_span, help)
 end
 
 # Both sides have one type. with_to_s adds to the String help that to_s makes a String of the number.
@@ -642,7 +642,7 @@ def same_types(cx: State.Cx, sides: Sides, node: Ast.Binary, with_to_s: Bool) ->
     Failure.Label(span: Ast.expr_span(node.right), text: "this is #{right}"),
   ]
 
-  return error(Failure.pack(base.with(expected: left, actual: right, labels: labels)))
+  error(Failure.pack(base.with(expected: left, actual: right, labels: labels)))
 end
 
 def same_help(sides: Sides, with_to_s: Bool) -> String
@@ -665,7 +665,7 @@ def same_help(sides: Sides, with_to_s: Bool) -> String
     )
   end
 
-  return ""
+  ""
 end
 
 def plus_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
@@ -677,7 +677,7 @@ def plus_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
     return ok(T.Type.Bytes)
   end
 
-  return error(
+  error(
     type_error(
       cx,
       sides,
@@ -695,7 +695,7 @@ def repeat_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
   left = T.to_text(sides.left)
   right = T.to_text(sides.right)
   message = "\"*\" repeats a String by an Int count, found #{left} * #{right}"
-  return error(type_error(cx, sides, node, message, "write the String first and an Int count second: \"ab\" * 3"))
+  error(type_error(cx, sides, node, message, "write the String first and an Int count second: \"ab\" * 3"))
 end
 
 def arithmetic_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
@@ -704,7 +704,7 @@ def arithmetic_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Ty
     return error(type_error(cx, sides, node, "arithmetic expects two numbers, found #{T.to_text(sides.left)}", ""))
   end
 
-  return ok(sides.left)
+  ok(sides.left)
 end
 
 def modulo_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
@@ -720,7 +720,7 @@ def modulo_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
     )
   end
 
-  return ok(T.Type.Int)
+  ok(T.Type.Int)
 end
 
 def comparison_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
@@ -734,7 +734,7 @@ def comparison_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Ty
     return error(type_error(cx, sides, node, "comparison expects two numbers, found #{T.to_text(sides.left)}", help))
   end
 
-  return ok(T.Type.Bool)
+  ok(T.Type.Bool)
 end
 
 def range_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
@@ -750,7 +750,7 @@ def range_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
     )
   end
 
-  return ok(T.Type.Range)
+  ok(T.Type.Range)
 end
 
 def equality_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
@@ -780,7 +780,7 @@ def equality_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type
     return error(Failure.pack(base.with(labels: field_labels(cx, gap))))
   end
 
-  return ok(T.Type.Bool)
+  ok(T.Type.Bool)
 end
 
 # The note on the field that blocks ==, when the field is declared in the file being checked: a note holds a span and
@@ -788,7 +788,7 @@ end
 def field_labels(cx: State.Cx, gap: CheckTypes.Gap) -> List[Failure.Label]
   return [] if gap.file != cx.file or !gap.field.some?
 
-  return [Failure.Label(span: gap.field.unwrap!, text: "this field has no equality")]
+  [Failure.Label(span: gap.field.unwrap!, text: "this field has no equality")]
 end
 
 def logical_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
@@ -804,5 +804,5 @@ def logical_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
     )
   end
 
-  return ok(T.Type.Bool)
+  ok(T.Type.Bool)
 end

@@ -12,7 +12,7 @@ import Workspace from "workspace"
 ## The text after the last "/" of a path.
 export def last_part(text: String) -> String
   parts = text.split("/")
-  return parts[parts.size - 1]
+  parts[parts.size - 1]
 end
 
 ## The folder of a file path: everything before the last "/" (empty for a name alone, "/" for a file in the root
@@ -23,14 +23,14 @@ export def directory_of(path: String) -> String
 
   return "/" if tail + 1 == path.length
 
-  return path.slice(0, path.length - tail - 1)
+  path.slice(0, path.length - tail - 1)
 end
 
 ## Two path parts joined by one "/".
 export def join(base: String, rest: String) -> String
   return base + rest if base.ends_with?("/")
 
-  return "#{base}/#{rest}"
+  "#{base}/#{rest}"
 end
 
 ## Whether a path starts at "/", an absolute Windows drive path or a UNC share. A drive needs an ASCII letter,
@@ -43,7 +43,7 @@ export def rooted?(path: String) -> Bool
   drive = String.code(path.at(0))
   separator = path.at(2)
   letter = (drive >= 65 and drive <= 90) or (drive >= 97 and drive <= 122)
-  return letter and path.at(1) == ":" and (separator == "/" or separator == "\\")
+  letter and path.at(1) == ":" and (separator == "/" or separator == "\\")
 end
 
 ## A root that does not depend on the working directory. Elsewhere it starts with "/". On Windows it is a drive path
@@ -52,7 +52,7 @@ end
 export def absolute?(path: String, on_windows: Bool) -> Bool
   return path.starts_with?("\\") or rooted?(path) if on_windows
 
-  return path.starts_with?("/")
+  path.starts_with?("/")
 end
 
 ## The path a file is stored under in the program and in the .agcb, and printed by the text forms. root_dir is the
@@ -83,7 +83,7 @@ export def stored_name(root_dir: String, file: String) -> String
   # but those).
   return "./#{stored}" if stored.starts_with?("std/")
 
-  return stored
+  stored
 end
 
 ## The stored name of the file of a failure. The root file of a failure is the path as given (Path.resolve keeps
@@ -94,7 +94,7 @@ export def stored_file(workspace: Workspace.Workspace, root_dir: String, file: S
   real = workspace.real_path.call(file)
   return stored_name(root_dir, real.unwrap!) if real.ok?
 
-  return stored_name(root_dir, file)
+  stored_name(root_dir, file)
 end
 
 ## The file an import names: "util" is "util.agc". A path that names a file with an extension, or no module at all, is
@@ -137,7 +137,7 @@ export def module_file(decl: Ast.ImportDecl, site: Failure.Site) -> Result[Strin
     )
   end
 
-  return error(
+  error(
     refuse(
       site,
       "a module file name has no dot apart from .agc",
@@ -155,7 +155,7 @@ export def validate_library_path(path: String, site: Failure.Site) -> Result[Voi
     return error(invalid_library_path(site)) if part == "" or part == "." or part == ".." or part.contains?(":")
   end
 
-  return ok()
+  ok()
 end
 
 ## The std/ path that a relative import of a std/ module names: `path` is the folder of the importing module (a key,
@@ -175,7 +175,7 @@ export def inside_std(path: String, site: Failure.Site) -> Result[String]
 
   named = kept.join("/")
   try validate_library_path(named, site)
-  return ok(named)
+  ok(named)
 end
 
 ## The parts of a canonical path, with no empty part.
@@ -193,7 +193,7 @@ export def folded(path: String) -> String
     end
   end
 
-  return kept.join("/")
+  kept.join("/")
 end
 
 ## True when file is below the folder root: every part of root begins the parts of file.
@@ -206,21 +206,21 @@ export def inside?(root: String, file: String) -> Bool
     return false if base[index] != target[index]
   end
 
-  return true
+  true
 end
 
 def invalid_library_path(site: Failure.Site) -> String
-  return Failure.fail_at(site, "CHECK-IMPORT-PATH", "invalid library path", Diag.Help.NoHelp)
+  Failure.fail_at(site, "CHECK-IMPORT-PATH", "invalid library path", Diag.Help.NoHelp)
 end
 
 def refuse(site: Failure.Site, message: String, help: String) -> String
-  return Failure.fail_at(site, "CHECK-IMPORT-PATH", message, Failure.hint(help))
+  Failure.fail_at(site, "CHECK-IMPORT-PATH", message, Failure.hint(help))
 end
 
 # A name has text and no dot: "models" is a module name, "models.rb" is not.
 def module_name?(text: String) -> Bool
   name = last_part(text)
-  return name != "" and !name.contains?(".")
+  name != "" and !name.contains?(".")
 end
 
 # The path without a final ".ext".
@@ -228,5 +228,5 @@ def without_extension(path: String) -> String
   pieces = last_part(path).split(".")
   return path if pieces.size == 1
 
-  return path.slice(0, path.length - pieces[pieces.size - 1].length - 1)
+  path.slice(0, path.length - pieces[pieces.size - 1].length - 1)
 end

@@ -14,7 +14,7 @@ export def json(problem: Problems.Problem) -> Json = object(Model.of_problem(pro
 ## The JSON object of a warning: the object of the problem with `"warning": true`. A warning is not an error: the
 ## command goes on (a native module that was not built, io/native_build.agc).
 export def warning(problem: Problems.Problem) -> Json
-  return JSON.object(fields_of(Model.of_problem(problem)).put("warning", JSON.from(true)))
+  JSON.object(fields_of(Model.of_problem(problem)).put("warning", JSON.from(true)))
 end
 
 ## The JSON object of a diagnostic.
@@ -26,7 +26,7 @@ export def range(part: Model.Region) -> Json = JSON.object({"start": position(pa
 ## The `shape` of an answer from a program that does not check (docs/future/39-semantic-cli.md, 39.6): `partial` is
 ## true and `diagnostics` holds its problems. A complete answer leaves both keys out.
 export def partial(shape: Map[String, Json], diagnostics: List[Model.Diagnostic]) -> Map[String, Json]
-  return (
+  (
     shape.put("partial", JSON.from(true))
       .put("diagnostics", JSON.array(diagnostics.map do |found: Model.Diagnostic| object(found) end))
   )
@@ -59,14 +59,14 @@ def fields_of(diagnostic: Model.Diagnostic) -> Map[String, Json]
     fields = fields.put("labels", JSON.array(labels))
   end
 
-  return fields
+  fields
 end
 
 # A note that the diagnostic does not have is the empty text.
 def note(fields: Map[String, Json], key: String, text: String) -> Map[String, Json]
   return fields if text == ""
 
-  return fields.put(key, JSON.from(text))
+  fields.put(key, JSON.from(text))
 end
 
 def position(at: Model.Position) -> Json = JSON.object({"line": JSON.from(at.line), "column": JSON.from(at.column)})

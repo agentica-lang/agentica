@@ -15,7 +15,7 @@ CHUNK_BYTES = 262_144
 ## The workspace of this machine, with `std_source` as the reader of the std/ sources (`FrontEnd.std_source` in the
 ## front end, `Std.source` in a program that embeds the core as `std/internal/compiler`).
 export def workspace_with(std_source: Fn[String, Result[String]]) -> Workspace.Workspace
-  return Workspace.Workspace(
+  Workspace.Workspace(
     read_text: &SourceReader.read,
     file_exists: &file_exists,
     directory_exists: &directory_exists,
@@ -38,7 +38,7 @@ export def workspace() -> Workspace.Workspace = workspace_with(&no_std_source)
 ## The environment of this process.
 export def process_env() -> Env.Env
   os = System.os()
-  return Env.Env(
+  Env.Env(
     agentica_path: variable("AGENTICA_PATH"),
     xdg_data_home: variable("XDG_DATA_HOME"),
     xdg_cache_home: variable("XDG_CACHE_HOME"),
@@ -57,12 +57,12 @@ def resolve_path(path: String) -> Result[String] = Path.resolve(path)
 
 def file_exists(path: String) -> Bool
   info = File.stat(path, STAT_TIMEOUT_MS)
-  return info.ok? and info.unwrap!.kind != "directory"
+  info.ok? and info.unwrap!.kind != "directory"
 end
 
 def directory_exists(path: String) -> Bool
   info = File.stat(path, STAT_TIMEOUT_MS)
-  return info.ok? and info.unwrap!.kind == "directory"
+  info.ok? and info.unwrap!.kind == "directory"
 end
 
 def list_folder(path: String) -> Result[List[Workspace.Entry]]
@@ -77,15 +77,15 @@ def list_folder(path: String) -> Result[List[Workspace.Entry]]
     entries = entries.push(Workspace.Entry(name: name, kind: entry_kind(info.unwrap!.kind)))
   end
 
-  return ok(entries)
+  ok(entries)
 end
 
 def entry_kind(kind: String) -> Workspace.EntryKind
   case kind
-    "directory" -> return Workspace.EntryKind.Directory
-    "file" -> return Workspace.EntryKind.File
-    "link" -> return Workspace.EntryKind.Link
-    _ -> return Workspace.EntryKind.Other
+    "directory" -> Workspace.EntryKind.Directory
+    "file" -> Workspace.EntryKind.File
+    "link" -> Workspace.EntryKind.Link
+    _ -> Workspace.EntryKind.Other
   end
 end
 
@@ -124,18 +124,18 @@ def read_prefix(path: String, limit: Int) -> Result[Bytes]
   end
 
   _ = File.close(handle, STAT_TIMEOUT_MS)
-  return ok(Bytes.concat(parts))
+  ok(Bytes.concat(parts))
 end
 
 # The verified local path of the downloaded member named by the request, from the cache alone and without
 # any network use. The caller matched the manifest row against the lock; this only verifies the cache object.
 def no_native(request: Workspace.NativeRequest) -> Result[String]
-  return error("native artifacts are not available in this workspace")
+  error("native artifacts are not available in this workspace")
 end
 
 def variable(name: String) -> String
   value = System.env(name)
   return value.unwrap! if value.ok?
 
-  return ""
+  ""
 end

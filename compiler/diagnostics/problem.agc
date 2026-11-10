@@ -42,7 +42,7 @@ export def problem(
   span: Source.Span,
   help: Diag.Help,
 ) -> Problem
-  return Problem(
+  Problem(
     file: file,
     key_path: "",
     code: code,
@@ -79,7 +79,7 @@ export def pack(found: Problem) -> String
   end
 
   parts = fields.map do |field: String| "#{field.length}\n#{field}" end
-  return parts.join("")
+  parts.join("")
 end
 
 ## Reads back the problem that pack wrote.
@@ -105,7 +105,7 @@ export def unpack(text: String) -> Problem
     help = Diag.Help.Hint(fields[6])
   end
 
-  return Problem(
+  Problem(
     file: fields[0],
     key_path: fields[1],
     code: fields[2],
@@ -122,26 +122,26 @@ end
 
 def span_text(span: Source.Span) -> String
   numbers = [span.start.offset, span.start.line, span.start.column, span.stop.offset, span.stop.line, span.stop.column]
-  return numbers.map do |number: Int| number.to_s end.join(",")
+  numbers.map do |number: Int| number.to_s end.join(",")
 end
 
 def read_span(text: String) -> Source.Span
   numbers = text.split(",").map do |part: String| part.to_i! end
   start = Source.Position(offset: numbers[0], line: numbers[1], column: numbers[2])
   stop = Source.Position(offset: numbers[3], line: numbers[4], column: numbers[5])
-  return Source.Span(start: start, stop: stop)
+  Source.Span(start: start, stop: stop)
 end
 
 def help_flag(help: Diag.Help) -> String
   case help
-    Diag.Help.Hint(_) -> return "1"
-    Diag.Help.NoHelp -> return "0"
+    Diag.Help.Hint(_) -> "1"
+    Diag.Help.NoHelp -> "0"
   end
 end
 
 def help_text(help: Diag.Help) -> String
   case help
-    Diag.Help.Hint(text) -> return text
-    Diag.Help.NoHelp -> return ""
+    Diag.Help.Hint(text) -> text
+    Diag.Help.NoHelp -> ""
   end
 end

@@ -12,9 +12,9 @@ import Shape from "shape"
 ## its own. `aliases` are the module aliases that the file imports.
 export def suggestions(file: String, expr: Ast.Expr, chained: Bool, aliases: Set[String]) -> List[Problems.Problem]
   case expr
-    Ast.Expr.Binary(node) -> return binary(file, node, chained)
-    Ast.Expr.Call(node) -> return single_pipe(file, node, chained).concat(nested_call(file, node, chained, aliases))
-    _ -> return []
+    Ast.Expr.Binary(node) -> binary(file, node, chained)
+    Ast.Expr.Call(node) -> single_pipe(file, node, chained).concat(nested_call(file, node, chained, aliases))
+    _ -> []
   end
 end
 
@@ -32,7 +32,7 @@ export def step?(node: Ast.Call, aliases: Set[String]) -> Bool
     return aliases.include?(parts[0]) and member.slice(0, 1) != member.slice(0, 1).upcase
   end
 
-  return parts.size == 1
+  parts.size == 1
 end
 
 def binary(file: String, node: Ast.Binary, chained: Bool) -> List[Problems.Problem]
@@ -45,7 +45,7 @@ def binary(file: String, node: Ast.Binary, chained: Bool) -> List[Problems.Probl
     found = found.push(Rules.at(file, Rules.TO_S_CONCAT, node.span))
   end
 
-  return found
+  found
 end
 
 # A `+` chain with a piece of literal text and a `to_s` call: the join that interpolation writes better. Two Strings
@@ -54,14 +54,14 @@ def joins_text?(node: Ast.Binary) -> Bool
   operands = Shape.plus_operands(Ast.Expr.Binary(node))
   literal = operands.any? do |piece: Ast.Expr| Shape.text?(piece) end
   converted = operands.any? do |piece: Ast.Expr| Shape.to_s?(piece) end
-  return literal and converted
+  literal and converted
 end
 
 # `x |> f()` where x is not itself the result of a pipe.
 def single_pipe(file: String, node: Ast.Call, chained: Bool) -> List[Problems.Problem]
   return [] if !node.piped or chained or node.args.size == 0 or piped_call?(node.args[0])
 
-  return [Rules.at(file, Rules.SINGLE_PIPE, node.span)]
+  [Rules.at(file, Rules.SINGLE_PIPE, node.span)]
 end
 
 # `h(f(g(x)))`: a call whose first argument is a call whose first argument is a call, which a pipe writes from the
@@ -75,23 +75,23 @@ def nested_call(file: String, node: Ast.Call, chained: Bool, aliases: Set[String
     Ast.Expr.Call(middle) ->
       return [Rules.at(file, Rules.NESTED_CALL, node.span)] if step?(middle, aliases) and call?(middle.args[0])
 
-      return []
-    _ -> return []
+      []
+    _ -> []
   end
 end
 
 def call?(expr: Ast.Expr) -> Bool
   case expr
-    Ast.Expr.Call(_) -> return true
-    _ -> return false
+    Ast.Expr.Call(_) -> true
+    _ -> false
   end
 end
 
 # Whether the expression is a piped call, as `x |> try f()` is too.
 def piped_call?(expr: Ast.Expr) -> Bool
   case expr
-    Ast.Expr.Call(node) -> return node.piped
-    Ast.Expr.Try(wrapper) -> return piped_call?(wrapper.operand)
-    _ -> return false
+    Ast.Expr.Call(node) -> node.piped
+    Ast.Expr.Try(wrapper) -> piped_call?(wrapper.operand)
+    _ -> false
   end
 end

@@ -31,7 +31,7 @@ export def type_text(type: Ast.TypeRef) -> String
     end
   end
 
-  return parts.join("")
+  parts.join("")
 end
 
 ## `name(a: Int, b: Int = 2) -> Int`, or `name[T](a: T) -> T` for a generic function. `text` is the source of the
@@ -39,44 +39,44 @@ end
 export def function_text(declaration: Ast.FunctionDecl, text: String) -> String
   parameters = declaration.params.map do |parameter: Ast.Param| parameter_text(parameter, text) end
   names = parameters_text(declaration.type_parameters)
-  return "#{declaration.name}#{names}(#{parameters.join(", ")}) -> #{type_text(declaration.result)}"
+  "#{declaration.name}#{names}(#{parameters.join(", ")}) -> #{type_text(declaration.result)}"
 end
 
 ## `callback Name(a: Int, p: C.Pointer) -> Int`: a callback of an extern block, with the Agentica types its function
 ## takes and returns.
 export def callback_text(name: String, callback: Ast.Callback) -> String
   parameters = callback.params.map do |parameter: Ast.Param| "#{parameter.name}: #{type_text(parameter.type)}" end
-  return "callback #{name}(#{parameters.join(", ")}) -> #{type_text(callback.result)}"
+  "callback #{name}(#{parameters.join(", ")}) -> #{type_text(callback.result)}"
 end
 
 ## `struct Name` or `struct Name[T, U]`.
 export def struct_text(declaration: Ast.StructDecl) -> String
-  return "struct #{declaration.name}#{parameters_text(declaration.type_parameters)}"
+  "struct #{declaration.name}#{parameters_text(declaration.type_parameters)}"
 end
 
 ## `enum Name` or `enum Name[T, U]`.
 export def enum_text(declaration: Ast.EnumDecl) -> String
-  return "enum #{declaration.name}#{parameters_text(declaration.type_parameters)}"
+  "enum #{declaration.name}#{parameters_text(declaration.type_parameters)}"
 end
 
 ## `Name` or `Name(Int, String)`: a variant with the types of its payload, as written.
 export def variant_text(name: String, payload: List[String]) -> String
   return name if payload.size == 0
 
-  return "#{name}(#{payload.join(", ")})"
+  "#{name}(#{payload.join(", ")})"
 end
 
 ## `type Name = Target` or `type Name[T] = Target`.
 export def alias_text(declaration: Ast.TypeAliasDecl) -> String
   names = parameters_text(declaration.type_parameters)
-  return "type #{declaration.name}#{names} = #{type_text(declaration.target)}"
+  "type #{declaration.name}#{names} = #{type_text(declaration.target)}"
 end
 
 ## `NAME: Type`, or `NAME` when the constant has no written type.
 export def constant_text(declaration: Ast.ConstDecl) -> String
   case declaration.type
-    some(type) -> return "#{declaration.name}: #{type_text(type)}"
-    none -> return declaration.name
+    some(type) -> "#{declaration.name}: #{type_text(type)}"
+    none -> declaration.name
   end
 end
 
@@ -84,10 +84,10 @@ end
 ## after its last character, so the slice is the expression exactly as written.
 export def default_text(default: Optional[Ast.Expr], text: String) -> Optional[String]
   case default
-    none -> return none
+    none -> none
     some(value) ->
       span = Ast.expr_span(value)
-      return some(text.slice(span.start.offset, span.stop.offset - span.start.offset))
+      some(text.slice(span.start.offset, span.stop.offset - span.start.offset))
   end
 end
 
@@ -105,14 +105,14 @@ def closing(args: List[Ast.TypeRef]) -> List[Piece]
     at -= 1
   end
 
-  return pieces
+  pieces
 end
 
 def parameter_text(parameter: Ast.Param, text: String) -> String
   typed = "#{parameter.name}: #{type_text(parameter.type)}"
   case default_text(parameter.default, text)
-    some(written) -> return "#{typed} = #{written}"
-    none -> return typed
+    some(written) -> "#{typed} = #{written}"
+    none -> typed
   end
 end
 
@@ -120,5 +120,5 @@ end
 def parameters_text(names: List[String]) -> String
   return "" if names.size == 0
 
-  return "[#{names.join(", ")}]"
+  "[#{names.join(", ")}]"
 end

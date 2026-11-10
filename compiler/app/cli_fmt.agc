@@ -36,11 +36,11 @@ export def usage() -> String = USAGE
 ## is.
 export def verdict(text: String, settings: Format.Settings) -> Verdict
   case Format.format_text(text, settings)
-    Diag.Outcome.Failed(problem) -> return Verdict.Refused(problem)
+    Diag.Outcome.Failed(problem) -> Verdict.Refused(problem)
     Diag.Outcome.Done(output) ->
       return Verdict.Same if output == text
 
-      return Verdict.Changed(output)
+      Verdict.Changed(output)
   end
 end
 
@@ -54,7 +54,7 @@ export def manifest_dir(workspace: Workspace.Workspace, path: String) -> String
   real = workspace.real_path.call(path)
   return Project.nearest_manifest(workspace, real.unwrap!) if real.ok?
 
-  return ""
+  ""
 end
 
 ## The settings of the files that follow the manifest in the folder `found` ("" for none: the default settings). A
@@ -68,5 +68,5 @@ export def settings_of(workspace: Workspace.Workspace, found: String) -> Result[
     width = manifest.max_line_width
   end
 
-  return ok(Format.Settings(width: width, blank_line_after_end: manifest.blank_line_after_end))
+  ok(Format.Settings(width: width, blank_line_after_end: manifest.blank_line_after_end))
 end

@@ -102,7 +102,7 @@ export def read(workspace: Workspace.Workspace, file: String) -> Result[Lock]
     end
   end
 
-  return ok(Lock(file: file, packages: packages, artifacts: artifacts))
+  ok(Lock(file: file, packages: packages, artifacts: artifacts))
 end
 
 ## The text of a lock with these packages and artifacts: `version = 1`, then one `[[package]]` for each,
@@ -130,7 +130,7 @@ export def encode(packages: List[Locked], artifacts: List[Artifact]) -> String
   end
 
   # The keys are fixed and every value is a string or the version, so std/toml has no reason to refuse them.
-  return Toml.encode(root).unwrap!
+  Toml.encode(root).unwrap!
 end
 
 ## Whether the files of the package are read in place, with no fetch, no cache and no hash: a workspace member or a
@@ -143,7 +143,7 @@ export def find(lock: Lock, name: String) -> Result[Locked]
     return ok(locked) if locked.name == name
   end
 
-  return error("#{name} is not in the lock")
+  error("#{name} is not in the lock")
 end
 
 ## The locked artifact for this package, library and system, or an error. package is "" for the project root.
@@ -152,7 +152,7 @@ export def find_artifact(lock: Lock, package: String, library: String, system: S
     return ok(artifact) if artifact.package == package and artifact.library == library and artifact.system == system
   end
 
-  return error("#{package} #{library} #{system} is not in the lock")
+  error("#{package} #{library} #{system} is not in the lock")
 end
 
 ## `name@version` for the messages and the stored names of a package's files: the tag, the first characters of the
@@ -162,7 +162,7 @@ export def label(locked: Locked) -> String
 
   return "#{locked.name}@path" if GitSource.local?(locked.source)
 
-  return "#{locked.name}@#{GitSource.version_label(locked.source, locked.commit)}"
+  "#{locked.name}@#{GitSource.version_label(locked.source, locked.commit)}"
 end
 
 # The keys of a package, in the order of 05b: name, git, subdir (when there is one), tag or ref, then commit and hash,
@@ -173,7 +173,7 @@ def package_table(locked: Locked) -> Toml.Value
     keys = keys.put("override", Toml.Value.Bool(true))
   end
 
-  return Toml.Value.Table(keys)
+  Toml.Value.Table(keys)
 end
 
 def package_keys(locked: Locked) -> Map[String, Toml.Value]
@@ -196,13 +196,13 @@ def package_keys(locked: Locked) -> Map[String, Toml.Value]
   keys = keys.put(pin_key, pin)
   return keys.put("workspace", Toml.Value.Bool(true)) if locked.member
 
-  return keys.put("commit", Toml.Value.Str(locked.commit)).put("hash", Toml.Value.Str(locked.hash))
+  keys.put("commit", Toml.Value.Str(locked.commit)).put("hash", Toml.Value.Str(locked.hash))
 end
 
 # The sort key of a native artifact row: one alias on one system of one package.
 def sort_key(artifact: Artifact) -> String
   sep = String.from_code(0)
-  return "#{artifact.package}#{sep}#{artifact.library}#{sep}#{artifact.system}"
+  "#{artifact.package}#{sep}#{artifact.library}#{sep}#{artifact.system}"
 end
 
 # The keys of a native artifact, in a fixed order: package, library, system, url, sha256, member.
@@ -216,7 +216,7 @@ def artifact_table(artifact: Artifact) -> Toml.Value
     "member": Toml.Value.Str(artifact.member),
   }
 
-  return Toml.Value.Table(keys)
+  Toml.Value.Table(keys)
 end
 
 # The identity of a native artifact row: one alias on one system of one package.
@@ -263,11 +263,10 @@ def artifact_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Res
 
   member = try text_of(reading, entries, path, "member")
   case NativeArtifact.canonical_member(member)
-    ok(_) ->
-      return ok(Artifact(package: package, library: library, system: system, url: url, sha256: sha, member: member))
+    ok(_) -> ok(Artifact(package: package, library: library, system: system, url: url, sha256: sha, member: member))
     error(_) ->
       message = "the member is not a safe relative path"
-      return error(Reader.fail_help(reading, Reader.child(path, "member"), "not a member", message))
+      error(Reader.fail_help(reading, Reader.child(path, "member"), "not a member", message))
   end
 end
 
@@ -308,7 +307,7 @@ def package_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Resu
     return error(Reader.fail(reading, Reader.child(path, "hash"), "a hash is sha256: and 64 lowercase hex digits"))
   end
 
-  return ok(Locked(name: name, source: source, commit: commit, hash: hash, member: false, override: override))
+  ok(Locked(name: name, source: source, commit: commit, hash: hash, member: false, override: override))
 end
 
 # A workspace member: `workspace = true`, a subdir (the member's folder) and neither a commit nor a hash.
@@ -336,7 +335,7 @@ def member_of(
     end
   end
 
-  return ok(Locked(name: name, source: source, commit: "", hash: "", member: true, override: override))
+  ok(Locked(name: name, source: source, commit: "", hash: "", member: true, override: override))
 end
 
 # A package that is a local folder: `path` and neither a git source nor a commit and a hash.
@@ -359,7 +358,7 @@ def path_of(
   return error(Reader.fail_help(reading, Reader.child(path, "path"), "not a path", problem)) if problem != ""
 
   source = GitSource.Source(git: "", subdir: "", tag: "", ref: "", path: folder)
-  return ok(Locked(name: name, source: source, commit: "", hash: "", member: false, override: override))
+  ok(Locked(name: name, source: source, commit: "", hash: "", member: false, override: override))
 end
 
 # `override = true`, or false when the key is left out.
@@ -373,7 +372,7 @@ def override_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path:
     return error(Reader.fail_help(reading, here, "override is true", help))
   end
 
-  return ok(true)
+  ok(true)
 end
 
 def source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: String) -> Result[GitSource.Source]
@@ -404,11 +403,11 @@ def source_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: S
   problem = GitSource.ref_problem(ref)
   return error(Reader.fail_help(reading, Reader.child(path, "ref"), "not a ref", problem)) if problem != ""
 
-  return ok(GitSource.Source(git: git, subdir: subdir, tag: "", ref: ref, path: ""))
+  ok(GitSource.Source(git: git, subdir: subdir, tag: "", ref: ref, path: ""))
 end
 
 def text_of(reading: Reader.Reading, entries: Map[String, Toml.Value], path: String, key: String) -> Result[String]
-  return Reader.text(reading, entries[key], Reader.child(path, key))
+  Reader.text(reading, entries[key], Reader.child(path, key))
 end
 
 def hex?(text: String) -> Bool = text.split("").all? do |letter| HEX.include?(letter) end

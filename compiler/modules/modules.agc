@@ -196,7 +196,7 @@ export def linked_name(modules: Map[String, Module], module: Module, name: Strin
     return modules[origin.target].prefix + origin.name
   end
 
-  return module.prefix + name
+  module.prefix + name
 end
 
 ## Loads the root file and everything it imports. A failure is a packed failure (link_failure.agc): CHECK-IMPORT-*,
@@ -208,7 +208,7 @@ export def load(root: String, settings: Env.Settings) -> Result[Loaded] = load_w
 ## without `parses`.
 export def load_with(root: String, settings: Env.Settings, parses: Parses) -> Result[Loaded]
   finished = try load_root(settings, empty_walk(false, parses), root)
-  return ok(loaded_of(finished))
+  ok(loaded_of(finished))
 end
 
 ## Like `load`, using the check cache of the workspace (check_cache.agc): each file but the root gets its digest and
@@ -219,7 +219,7 @@ end
 export def load_checked(root: String, settings: Env.Settings, stubs: Bool) -> Result[Loaded]
   use = settings.workspace.check_cache.on
   finished = try load_root(settings, empty_walk(false, no_parses()).with(cached: use, stubs: use and stubs), root)
-  return ok(loaded_of(finished))
+  ok(loaded_of(finished))
 end
 
 ## Loads several roots into one set of modules: a file that two roots reach is read, parsed and entered once, and every
@@ -241,25 +241,19 @@ export def load_roots(roots: List[String], settings: Env.Settings, parses: Parse
     end
   end
 
-  return Roots(loaded: loaded_of(walk), entries: entries)
+  Roots(loaded: loaded_of(walk), entries: entries)
 end
 
 # The modules a walk finished, as `Loaded`.
 def loaded_of(walk: Walk) -> Loaded
-  return Loaded(
-    order: walk.order,
-    modules: walk.done,
-    root_dir: walk.root_dir,
-    parsed: walk.parsed,
-    stubs: walk.stubbed,
-  )
+  Loaded(order: walk.order, modules: walk.done, root_dir: walk.root_dir, parsed: walk.parsed, stubs: walk.stubbed)
 end
 
 # The walk before any file, over the trees of `parses`. `prefixed` is true when the root files get a "@N::" prefix too
 # (load_roots); load keeps the names of its one root.
 def empty_walk(prefixed: Bool, parses: Parses) -> Walk
   build = Resolve.Build(libs_dir: "", scope: Packages.scope_of(Project.Project.Bare))
-  return Walk(
+  Walk(
     stack: [],
     seen: {},
     done: {},
@@ -328,7 +322,7 @@ def load_root(settings: Env.Settings, walk: Walk, root: String) -> Result[Walk]
   )
 
   entered = try enter(settings, walk.with(root_dir: root_dir, build: build), first, taken.fresh)
-  return run(settings, entered)
+  run(settings, entered)
 end
 
 # The tree of the file `key` with `text`: the kept one when its text is the same and it was read the same way
@@ -339,7 +333,7 @@ def take(kept: Map[String, Kept], next_id: Int, key: String, file: String, text:
   end
 
   program = try parse_source(file, text, next_id)
-  return ok(Taken(program: program, first_id: next_id, fresh: true, stubbed: false))
+  ok(Taken(program: program, first_id: next_id, fresh: true, stubbed: false))
 end
 
 # The tree of an imported file for a walk that uses the check cache: the stub of its entry when the walk takes stubs
@@ -356,21 +350,21 @@ def take_cached(walk: Walk, key: String, text: String, entry: Optional[CheckCach
     none -> entry = entry
   end
 
-  return take(walk.kept, walk.next_id, key, key, text, false)
+  take(walk.kept, walk.next_id, key, key, text, false)
 end
 
 def start_span() -> Source.Span
   start = Source.Position(offset: 0, line: 1, column: 1)
-  return Source.Span(start: start, stop: start)
+  Source.Span(start: start, stop: start)
 end
 
 def parse_source(file: String, text: String, first_id: Int) -> Result[Ast.Program]
   case Lexer.lex(text)
-    Diag.Outcome.Failed(problem) -> return error(Failure.from_stage(file, problem))
+    Diag.Outcome.Failed(problem) -> error(Failure.from_stage(file, problem))
     Diag.Outcome.Done(tokens) ->
       case Parser.parse(tokens, first_id)
-        Diag.Outcome.Failed(problem) -> return error(Failure.from_stage(file, problem))
-        Diag.Outcome.Done(program) -> return ok(program)
+        Diag.Outcome.Failed(problem) -> error(Failure.from_stage(file, problem))
+        Diag.Outcome.Done(program) -> ok(program)
       end
   end
 end
@@ -380,7 +374,7 @@ def run(settings: Env.Settings, walk: Walk) -> Result[Walk]
   return ok(walk) if walk.stack.size == 0
 
   following = try step(settings, walk)
-  return run(settings, following)
+  run(settings, following)
 end
 
 def step(settings: Env.Settings, walk: Walk) -> Result[Walk]
@@ -389,7 +383,7 @@ def step(settings: Env.Settings, walk: Walk) -> Result[Walk]
 
   return bind_names(settings, walk, frame, frame.imports[frame.next]) if frame.pending != ""
 
-  return read_import(settings, walk, frame, frame.imports[frame.next])
+  read_import(settings, walk, frame, frame.imports[frame.next])
 end
 
 def finish(walk: Walk, frame: Frame) -> Result[Walk]
@@ -406,7 +400,7 @@ def finish(walk: Walk, frame: Frame) -> Result[Walk]
     end
   end
 
-  return ok(
+  ok(
     walk.with(
       stack: walk.stack.take(walk.stack.size - 1),
       seen: walk.seen.put(module.key, 0),
@@ -467,7 +461,7 @@ def bind_reexports(walk: Walk, module: Module) -> Result[Module]
     reexports = reexports.put(decl.name, origin)
   end
 
-  return ok(module.with(public: public, reexports: reexports))
+  ok(module.with(public: public, reexports: reexports))
 end
 
 # What to do about a re-exported name that is already taken: the alias of the file is the usual cause.
@@ -476,7 +470,7 @@ def clash_help(module: Module, name: String) -> String
     return "an import alias of this file has that name; rename the alias, as in import V from \"path\""
   end
 
-  return "another declaration or re-export of this file has that name"
+  "another declaration or re-export of this file has that name"
 end
 
 # `module`, which its entry vouches for, as a clean module if the entry types every constant it declares and the types
@@ -502,7 +496,7 @@ def vouched_clean(walk: Walk, module: Module) -> Module
     types = types.put(module.prefix + name, type.unwrap!)
   end
 
-  return module.with(clean: true, constants: types)
+  module.with(clean: true, constants: types)
 end
 
 # What describes a file apart from its text, for its tree digest: its key, its package, the keys its aliases name and
@@ -520,7 +514,7 @@ def shape_of(module: Module) -> String
     pieces = pieces.push(local).push(module.named[local].target).push(module.named[local].name)
   end
 
-  return pieces.map do |text: String| CheckCache.piece(text) end.join("")
+  pieces.map do |text: String| CheckCache.piece(text) end.join("")
 end
 
 # One import of the file on top: the alias, the path, then the file it names (read and entered unless it was seen). The
@@ -566,14 +560,14 @@ def read_import(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impo
     return ok(known)
   end
 
-  return load_file(settings, known, found, site)
+  load_file(settings, known, found, site)
 end
 
 # An alias import is done once read; a name list waits for its file (pending).
 def after_read(frame: Frame, aliases: Map[String, String], target: String, decl: Ast.ImportDecl) -> Frame
   return frame.with(aliases: aliases, next: frame.next + 1) if decl.names.size == 0
 
-  return frame.with(aliases: aliases, pending: target)
+  frame.with(aliases: aliases, pending: target)
 end
 
 # The names of the import at next, once its file is loaded: each must be an export, keep the case rule of its kind, and
@@ -585,7 +579,7 @@ def bind_names(settings: Env.Settings, walk: Walk, frame: Frame, decl: Ast.Impor
     named = try bind_name(settings, frame, target, entry, named)
   end
 
-  return ok(replace_top(walk, frame.with(named: named, next: frame.next + 1, pending: "")))
+  ok(replace_top(walk, frame.with(named: named, next: frame.next + 1, pending: "")))
 end
 
 def bind_name(
@@ -632,7 +626,7 @@ def bind_name(
     )
   end
 
-  return ok(named.put(entry.local, Named(target: target.key, name: entry.name)))
+  ok(named.put(entry.local, Named(target: target.key, name: entry.name)))
 end
 
 # A struct, enum or type alias is renamed to a type name (a capital first letter), a function to a lowercase one, a
@@ -644,19 +638,17 @@ def rename_ok?(local: String, kind: Declarations.Kind) -> Bool
     return !Declarations.type_name?(local)
   end
 
-  return Declarations.type_name?(local)
+  Declarations.type_name?(local)
 end
 
 def rename_help(kind: Declarations.Kind) -> String
   case kind
-    Declarations.Kind.Struct -> return "a struct is renamed to another type name, which starts with a capital letter"
-    Declarations.Kind.Enum -> return "an enum is renamed to another type name, which starts with a capital letter"
-    Declarations.Kind.TypeAlias ->
-      return "a type alias is renamed to another type name, which starts with a capital letter"
-    Declarations.Kind.Resource ->
-      return "a resource is renamed to another type name, which starts with a capital letter"
-    Declarations.Kind.Constant -> return "a constant is renamed to another constant name, in capitals with underscores"
-    _ -> return "a function is renamed to another lowercase name"
+    Declarations.Kind.Struct -> "a struct is renamed to another type name, which starts with a capital letter"
+    Declarations.Kind.Enum -> "an enum is renamed to another type name, which starts with a capital letter"
+    Declarations.Kind.TypeAlias -> "a type alias is renamed to another type name, which starts with a capital letter"
+    Declarations.Kind.Resource -> "a resource is renamed to another type name, which starts with a capital letter"
+    Declarations.Kind.Constant -> "a constant is renamed to another constant name, in capitals with underscores"
+    _ -> "a function is renamed to another lowercase name"
   end
 end
 
@@ -694,27 +686,27 @@ def load_file(settings: Env.Settings, walk: Walk, found: Resolve.Resolution, sit
     tested: false,
   )
 
-  return enter(settings, walk, parsed, taken.fresh)
+  enter(settings, walk, parsed, taken.fresh)
 end
 
 # The text of the root file: CHECK-IMPORT-IO at its start with the system's message, or LEX-INVALID-UTF8.
 def root_text(workspace: Workspace.Workspace, root: String, file: String) -> Result[String]
   case workspace.read_text.call(root)
-    SourceFile.Read.Text(text) -> return ok(text)
-    SourceFile.Read.Invalid(at) -> return error(Failure.from_stage(file, SourceFile.invalid_utf8(at)))
+    SourceFile.Read.Text(text) -> ok(text)
+    SourceFile.Read.Invalid(at) -> error(Failure.from_stage(file, SourceFile.invalid_utf8(at)))
     SourceFile.Read.Unreadable(message) ->
       site = Failure.Site(file: file, span: start_span())
-      return error(Failure.fail_at(site, "CHECK-IMPORT-IO", message, Diag.Help.NoHelp))
+      error(Failure.fail_at(site, "CHECK-IMPORT-IO", message, Diag.Help.NoHelp))
   end
 end
 
 # The text of an imported file: CHECK-IMPORT-IO at the import, or LEX-INVALID-UTF8 in the imported file.
 def imported_text(settings: Env.Settings, key: String, site: Failure.Site) -> Result[String]
   case Resolve.read_source(settings, key)
-    SourceFile.Read.Text(text) -> return ok(text)
-    SourceFile.Read.Invalid(at) -> return error(Failure.from_stage(key, SourceFile.invalid_utf8(at)))
+    SourceFile.Read.Text(text) -> ok(text)
+    SourceFile.Read.Invalid(at) -> error(Failure.from_stage(key, SourceFile.invalid_utf8(at)))
     SourceFile.Read.Unreadable(_) ->
-      return error(Failure.fail_at(site, "CHECK-IMPORT-IO", "cannot read import", Diag.Help.NoHelp))
+      error(Failure.fail_at(site, "CHECK-IMPORT-IO", "cannot read import", Diag.Help.NoHelp))
   end
 end
 
@@ -767,7 +759,7 @@ def enter(settings: Env.Settings, walk: Walk, parsed: Parsed, fresh: Bool) -> Re
     pending: "",
   )
 
-  return ok(
+  ok(
     walk.with(
       stack: walk.stack.push(frame),
       seen: walk.seen.put(key, 1),
@@ -782,24 +774,24 @@ end
 # The types of the constants that an entry holds, empty when there is no entry.
 def held(entry: Optional[CheckCache.Entry]) -> Map[String, String]
   case entry
-    some(found) -> return found.constants
-    none -> return {}
+    some(found) -> found.constants
+    none -> {}
   end
 end
 
 # The tree digest that an entry vouches for, "" when there is no entry.
 def vouched(entry: Optional[CheckCache.Entry]) -> String
   case entry
-    some(found) -> return found.tree
-    none -> return ""
+    some(found) -> found.tree
+    none -> ""
   end
 end
 
 # Whether an entry says that the text follows the style rule blank_line_after_end, false when there is no entry.
 def styled(entry: Optional[CheckCache.Entry]) -> Bool
   case entry
-    some(found) -> return found.styled
-    none -> return false
+    some(found) -> found.styled
+    none -> false
   end
 end
 
@@ -807,13 +799,13 @@ end
 def max_of(a: Int, b: Int) -> Int
   return a if a > b
 
-  return b
+  b
 end
 
 def counted(parsed: Int, fresh: Bool) -> Int
   return parsed + 1 if fresh
 
-  return parsed
+  parsed
 end
 
 # The names a file declares, and those it exports; a repeated name, a builtin name or a reserved type name is
@@ -843,5 +835,5 @@ def collect(settings: Env.Settings, file: String, declarations: List[Ast.Decl]) 
     end
   end
 
-  return ok(Collected(names: names, public: public))
+  ok(Collected(names: names, public: public))
 end

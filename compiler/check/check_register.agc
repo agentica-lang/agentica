@@ -23,7 +23,7 @@ export def register(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[
   try check_alias_targets(found, modules)
   found = try register_enum_variants(found, modules)
   found = try register_functions(found, modules)
-  return ok(found)
+  ok(found)
 end
 
 ## CHECK-MAIN unless the program declares main() -> Void. Only the modules whose key is in `roots` count (a `main` of
@@ -52,7 +52,7 @@ export def check_main(
 
   return ok(true) if found or !required
 
-  return error(
+  error(
     State.fail(
       cx.with(file: modules[0].file),
       st,
@@ -80,7 +80,7 @@ def register_resources(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Resu
     end
   end
 
-  return ok(found)
+  ok(found)
 end
 
 # The Fn type of the function of a callback, by its name; any other resource leaves the context as it is. Two
@@ -100,8 +100,8 @@ def register_callback(cx: State.Cx, st: State.St, node: Ast.ResourceDecl) -> Res
       refs = callback.params.map do |param: Ast.Param| param.type end
       params = try Types.resolve_all(cx, st, refs)
       result = try Types.resolve_type(cx, st, callback.result, true)
-      return ok(cx.with(callbacks: cx.callbacks.put(node.name, T.Type.Fn(params, result))))
-    none -> return ok(cx)
+      ok(cx.with(callbacks: cx.callbacks.put(node.name, T.Type.Fn(params, result))))
+    none -> ok(cx)
   end
 end
 
@@ -121,7 +121,7 @@ def register_aliases(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result
     end
   end
 
-  return ok(found)
+  ok(found)
 end
 
 def check_alias_targets(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[Bool]
@@ -136,7 +136,7 @@ def check_alias_targets(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Res
     end
   end
 
-  return ok(true)
+  ok(true)
 end
 
 # The first function of the module called main; a prefixed name (a root of several roots) counts by its own name.
@@ -149,7 +149,7 @@ def main_of(module: Linker.LinkedModule) -> Optional[Ast.FunctionDecl]
     end
   end
 
-  return none
+  none
 end
 
 def main_signature(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Result[Bool]
@@ -158,7 +158,7 @@ def main_signature(cx: State.Cx, st: State.St, node: Ast.FunctionDecl) -> Result
     return error(State.fail(cx, st, "CHECK-MAIN", "main must take no parameters and return Void", node.span))
   end
 
-  return ok(true)
+  ok(true)
 end
 
 # The enum names, with their type parameters and no variants yet.
@@ -174,13 +174,13 @@ def register_enum_names(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Res
     end
   end
 
-  return ok(found)
+  ok(found)
 end
 
 def register_enum_name(cx: State.Cx, st: State.St, node: Ast.EnumDecl) -> Result[State.Cx]
   try check_new_name(cx, st, node.name, node.span)
   try check_type_parameters(cx, st, node.type_parameters, [], "enum", node.span)
-  return ok(
+  ok(
     cx.with(
       enums: cx.enums.put(node.name, Model.EnumDef(name: node.name, parameters: node.type_parameters, variants: [])),
     ),
@@ -234,19 +234,19 @@ def check_type_parameters(
     index += 1
   end
 
-  return ok(true)
+  ok(true)
 end
 
 def span_at(spans: List[Source.Span], index: Int, fallback: Source.Span) -> Source.Span
   return spans[index] if index < spans.size
 
-  return fallback
+  fallback
 end
 
 def article(owner: String) -> String
   return "an" if owner == "enum"
 
-  return "a"
+  "a"
 end
 
 # CHECK-REDEFINED-NAME when a declared type name is reserved or already taken.
@@ -262,7 +262,7 @@ def check_new_name(cx: State.Cx, st: State.St, name: String, span: Source.Span) 
     return error(State.fail(cx, st, "CHECK-REDEFINED-NAME", "\"#{T.display_name(name)}\" is already defined", span))
   end
 
-  return ok(true)
+  ok(true)
 end
 
 # The struct names first, with no fields, so a field may name a struct declared later; then the fields.
@@ -294,7 +294,7 @@ def register_structs(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result
     end
   end
 
-  return ok(found)
+  ok(found)
 end
 
 # The fields of one struct, resolved with the struct's type parameters in scope.
@@ -332,7 +332,7 @@ def register_fields(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[
     c_structs = c_structs.add(node.name)
   end
 
-  return ok(
+  ok(
     cx.with(
       structs: cx.structs.put(node.name, fields),
       field_sites: cx.field_sites.put(node.name, State.FieldSite(file: cx.file, spans: spans)),
@@ -348,7 +348,7 @@ def with_field_failure(cx: State.Cx, st: State.St, type: T.Type, span: Source.Sp
     message = "a field named \"with\" cannot have a type parameter as its type, since it could be a function"
   end
 
-  return State.fail_help(
+  State.fail_help(
     cx,
     st,
     "CHECK-REDEFINED-NAME",
@@ -370,7 +370,7 @@ def register_enum_variants(cx: State.Cx, modules: List[Linker.LinkedModule]) -> 
     end
   end
 
-  return ok(found)
+  ok(found)
 end
 
 # The variants of one enum, resolved with the enum's type parameters in scope.
@@ -397,7 +397,7 @@ def register_variants(cx: State.Cx, st: State.St, node: Ast.EnumDecl) -> Result[
   end
 
   definition = Model.EnumDef(name: node.name, parameters: node.type_parameters, variants: variants)
-  return ok(cx.with(enums: cx.enums.put(node.name, definition)))
+  ok(cx.with(enums: cx.enums.put(node.name, definition)))
 end
 
 def register_functions(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result[State.Cx]
@@ -413,7 +413,7 @@ def register_functions(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Resu
     end
   end
 
-  return ok(found)
+  ok(found)
 end
 
 # The type names a file writes without a dot: the structs, enums, aliases and resources it declares, and the ones it
@@ -439,7 +439,7 @@ def type_names(cx: State.Cx, module: Linker.LinkedModule) -> Set[String]
     end
   end
 
-  return names
+  names
 end
 
 def register_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl, types: Set[String]) -> Result[State.Cx]
@@ -492,7 +492,7 @@ def register_function(cx: State.Cx, st: State.St, node: Ast.FunctionDecl, types:
     natives = natives.add(node.name)
   end
 
-  return ok(cx.with(functions: cx.functions.put(node.name, signature), natives: natives))
+  ok(cx.with(functions: cx.functions.put(node.name, signature), natives: natives))
 end
 
 # CHECK-REDEFINED-NAME at a type parameter named like a type the file can write: it would hide that type.
@@ -515,7 +515,7 @@ def check_hidden_types(cx: State.Cx, st: State.St, node: Ast.FunctionDecl, types
     index += 1
   end
 
-  return ok(true)
+  ok(true)
 end
 
 # CHECK-ENUM-TYPE-INFERENCE at a type parameter that no parameter type and no result type mentions: no call could tell
@@ -553,5 +553,5 @@ def check_inferable(
     index += 1
   end
 
-  return ok(true)
+  ok(true)
 end

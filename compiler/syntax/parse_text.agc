@@ -34,12 +34,12 @@ export def parse_text_from(text: String, first_id: Int) -> String = print_from(t
 ## Like parse_text_from, and also gives Ast.next_free_id of the Program, so the next file can continue the numbering.
 export def print_from(text: String, first_id: Int) -> Printed
   case Lexer.lex(text)
-    Diag.Outcome.Failed(problem) -> return Printed(text: Text.diagnostic_line(problem), next_id: first_id)
+    Diag.Outcome.Failed(problem) -> Printed(text: Text.diagnostic_line(problem), next_id: first_id)
     Diag.Outcome.Done(tokens) ->
       case Parser.parse(tokens, first_id)
-        Diag.Outcome.Failed(problem) -> return Printed(text: Text.diagnostic_line(problem), next_id: first_id)
+        Diag.Outcome.Failed(problem) -> Printed(text: Text.diagnostic_line(problem), next_id: first_id)
         Diag.Outcome.Done(program) ->
-          return Printed(text: print_program(program).join("\n"), next_id: Ast.next_free_id(program))
+          Printed(text: print_program(program).join("\n"), next_id: Ast.next_free_id(program))
       end
   end
 end
@@ -62,14 +62,14 @@ export def head(at: Margin, role: String, kind: String, id: Int, span: Source.Sp
   end
 
   # "##{...}" writes a literal "#" and then the node number relative to the base, such as: Foo #3 1:1-1:4
-  return "#{at.indent}#{label}#{kind} ##{id - at.base} #{Text.span_text(span)}#{attrs}#{extra}"
+  "#{at.indent}#{label}#{kind} ##{id - at.base} #{Text.span_text(span)}#{attrs}#{extra}"
 end
 
 ## The label followed by the quoted text of an optional string, or the empty string when it is absent.
 export def text_attr(label: String, doc: Optional[String]) -> String
   case doc
-    some(text) -> return label + Text.quote(text)
-    none -> return ""
+    some(text) -> label + Text.quote(text)
+    none -> ""
   end
 end
 
@@ -91,20 +91,20 @@ export def print_program(program: Ast.Program) -> List[String]
     lines = print_decl(lines, Margin(indent: "  ", base: 0, notes: {}), "declaration", decl)
   end
 
-  return lines
+  lines
 end
 
 ## Prints a declaration and everything under it, one line per node, after the lines already in out.
 export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Decl) -> List[String]
   child = deeper(at)
   case decl
-    Ast.Decl.Import(node) -> return out.push(head(at, role, "import-decl", node.id, node.span, import_attrs(node)))
+    Ast.Decl.Import(node) -> out.push(head(at, role, "import-decl", node.id, node.span, import_attrs(node)))
     Ast.Decl.Reexport(node) ->
       attrs = " alias=#{Text.quote(node.alias)} name=#{Text.quote(node.name)}"
-      return out.push(head(at, role, "reexport-decl", node.id, node.span, attrs))
+      out.push(head(at, role, "reexport-decl", node.id, node.span, attrs))
     Ast.Decl.Export(node) ->
       lines = out.push(head(at, role, "export-decl", node.id, node.span, doc_attr(node.doc)))
-      return print_decl(lines, child, "declaration", node.declaration)
+      print_decl(lines, child, "declaration", node.declaration)
     Ast.Decl.Function(node) ->
       attrs = name_attr(node.name)
       if node.type_parameters.size > 0
@@ -123,7 +123,7 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
       end
 
       lines = print_type(lines, child, "result", node.result)
-      return print_stmts(lines, child, "body", node.body)
+      print_stmts(lines, child, "body", node.body)
     Ast.Decl.Struct(node) ->
       attrs = name_attr(node.name)
       if node.type_parameters.size > 0
@@ -145,7 +145,7 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
         lines = print_field(lines, child, field)
       end
 
-      return lines
+      lines
     Ast.Decl.Constant(node) ->
       exported = ""
       if node.exported
@@ -157,7 +157,7 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
       )
 
       lines = print_optional_type(lines, child, "type", node.type)
-      return print_expr(lines, child, "value", node.value)
+      print_expr(lines, child, "value", node.value)
     Ast.Decl.Enum(node) ->
       parameters = node.type_parameters.map do |name| Text.quote(name) end
       lines = out.push(
@@ -175,7 +175,7 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
         lines = print_variant(lines, child, variant)
       end
 
-      return lines
+      lines
     Ast.Decl.Resource(node) ->
       attrs = "#{name_attr(node.name)} free=#{Text.quote(node.free)}"
       if node.by_ref
@@ -198,7 +198,7 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
         none -> attrs += doc_attr(node.doc)
       end
 
-      return out.push(head(at, role, "resource-decl", node.id, node.span, attrs))
+      out.push(head(at, role, "resource-decl", node.id, node.span, attrs))
     Ast.Decl.TypeAlias(node) ->
       attrs = name_attr(node.name)
       if node.type_parameters.size > 0
@@ -207,7 +207,7 @@ export def print_decl(out: List[String], at: Margin, role: String, decl: Ast.Dec
       end
 
       lines = out.push(head(at, role, "type-alias-decl", node.id, node.span, attrs + doc_attr(node.doc)))
-      return print_type(lines, child, "target", node.target)
+      print_type(lines, child, "target", node.target)
   end
 end
 
@@ -240,8 +240,8 @@ def native_attr(name: String, native: Optional[Ast.Native]) -> String
         extra += " out=#{Text.quote(out.name)} free=#{Text.quote(out.free)}"
       end
 
-      return " library=#{Text.quote(link.library)} codes=#{Text.quote(link.codes)}#{extra}"
-    none -> return ""
+      " library=#{Text.quote(link.library)} codes=#{Text.quote(link.codes)}#{extra}"
+    none -> ""
   end
 end
 
@@ -249,12 +249,12 @@ def name_attr(name: String) -> String = " name=#{Text.quote(name)}"
 
 def value_text(value: Ast.LitValue) -> String
   case value
-    Ast.LitValue.Whole(number) -> return "int:#{number}"
-    Ast.LitValue.Huge(digits) -> return "int:#{digits}"
-    Ast.LitValue.Real(number) -> return "float:bits:#{Float.to_bits(number)}"
-    Ast.LitValue.Text(text) -> return "string:#{Text.quote(text)}"
-    Ast.LitValue.Flag(flag) -> return "bool:#{flag}"
-    Ast.LitValue.Nothing -> return "nil"
+    Ast.LitValue.Whole(number) -> "int:#{number}"
+    Ast.LitValue.Huge(digits) -> "int:#{digits}"
+    Ast.LitValue.Real(number) -> "float:bits:#{Float.to_bits(number)}"
+    Ast.LitValue.Text(text) -> "string:#{Text.quote(text)}"
+    Ast.LitValue.Flag(flag) -> "bool:#{flag}"
+    Ast.LitValue.Nothing -> "nil"
   end
 end
 
@@ -262,8 +262,8 @@ def visible_attr(visible: Optional[List[String]]) -> String
   case visible
     some(names) ->
       quoted = names.map do |name| Text.quote(name) end
-      return " visible=#{list_text(quoted)}"
-    none -> return ""
+      " visible=#{list_text(quoted)}"
+    none -> ""
   end
 end
 
@@ -271,7 +271,7 @@ def list_text(items: List[String]) -> String = "[#{items.join(",")}]"
 
 def print_type(out: List[String], at: Margin, role: String, type: Ast.TypeRef) -> List[String]
   lines = out.push(head(at, role, "type-ref", type.id, type.span, name_attr(type.name)))
-  return print_types(lines, deeper(at), "arg", type.args)
+  print_types(lines, deeper(at), "arg", type.args)
 end
 
 def print_types(out: List[String], at: Margin, role: String, types: List[Ast.TypeRef]) -> List[String]
@@ -280,13 +280,13 @@ def print_types(out: List[String], at: Margin, role: String, types: List[Ast.Typ
     lines = print_type(lines, at, role, type)
   end
 
-  return lines
+  lines
 end
 
 def print_optional_type(out: List[String], at: Margin, role: String, type: Optional[Ast.TypeRef]) -> List[String]
   case type
-    some(found) -> return print_type(out, at, role, found)
-    none -> return out
+    some(found) -> print_type(out, at, role, found)
+    none -> out
   end
 end
 
@@ -296,7 +296,7 @@ def print_exprs(out: List[String], at: Margin, role: String, items: List[Ast.Exp
     lines = print_expr(lines, at, role, item)
   end
 
-  return lines
+  lines
 end
 
 def print_stmts(out: List[String], at: Margin, role: String, items: List[Ast.Stmt]) -> List[String]
@@ -305,7 +305,7 @@ def print_stmts(out: List[String], at: Margin, role: String, items: List[Ast.Stm
     lines = print_stmt(lines, at, role, item)
   end
 
-  return lines
+  lines
 end
 
 def print_named_args(out: List[String], at: Margin, items: List[Ast.NamedArg]) -> List[String]
@@ -314,30 +314,30 @@ def print_named_args(out: List[String], at: Margin, items: List[Ast.NamedArg]) -
     lines = out_named(lines, at, item)
   end
 
-  return lines
+  lines
 end
 
 def out_named(out: List[String], at: Margin, item: Ast.NamedArg) -> List[String]
   lines = out.push(head(at, "arg", "named-arg", item.id, item.span, name_attr(item.name)))
-  return print_expr(lines, deeper(at), "value", item.value)
+  print_expr(lines, deeper(at), "value", item.value)
 end
 
 def print_part(out: List[String], at: Margin, part: Ast.Part) -> List[String]
   case part
-    Ast.Part.Text(text) -> return out.push("#{at.indent}part: text #{Text.quote(text)}")
-    Ast.Part.Code(code) -> return print_expr(out, at, "part", code)
+    Ast.Part.Text(text) -> out.push("#{at.indent}part: text #{Text.quote(text)}")
+    Ast.Part.Code(code) -> print_expr(out, at, "part", code)
   end
 end
 
 def print_block_param(out: List[String], at: Margin, param: Ast.BlockParam) -> List[String]
   lines = out.push(head(at, "param", "block-param", param.id, param.span, name_attr(param.name)))
-  return print_optional_type(lines, deeper(at), "type", param.type)
+  print_optional_type(lines, deeper(at), "type", param.type)
 end
 
 def print_map_entry(out: List[String], at: Margin, entry: Ast.MapEntry) -> List[String]
   lines = out.push(head(at, "entry", "map-entry", entry.id, entry.span, ""))
   lines = print_expr(lines, deeper(at), "key", entry.key)
-  return print_expr(lines, deeper(at), "value", entry.value)
+  print_expr(lines, deeper(at), "value", entry.value)
 end
 
 def op_attrs(op: String, op_span: Source.Span) -> String = " op=#{op} op-span=#{Text.span_text(op_span)}"
@@ -353,23 +353,22 @@ def print_call_like(
   args: List[Ast.Expr],
 ) -> List[String]
   lines = out.push(head(at, role, kind, id, span, attrs))
-  return print_exprs(lines, deeper(at), "arg", args)
+  print_exprs(lines, deeper(at), "arg", args)
 end
 
 def print_expr(out: List[String], at: Margin, role: String, expr: Ast.Expr) -> List[String]
   child = deeper(at)
   case expr
     Ast.Expr.Literal(node) ->
-      return out.push(head(at, role, "literal", node.id, node.span, " value=#{value_text(node.value)}"))
-    Ast.Expr.Name(node) -> return out.push(head(at, role, "name-ref", node.id, node.span, name_attr(node.name)))
+      out.push(head(at, role, "literal", node.id, node.span, " value=#{value_text(node.value)}"))
+    Ast.Expr.Name(node) -> out.push(head(at, role, "name-ref", node.id, node.span, name_attr(node.name)))
     Ast.Expr.TypeName(node) ->
       lines = out.push(head(at, role, "type-expression", node.id, node.span, name_attr(node.name)))
-      return print_types(lines, child, "arg", node.args)
-    Ast.Expr.ConstRef(node) -> return out.push(head(at, role, "const-ref", node.id, node.span, name_attr(node.name)))
-    Ast.Expr.FunctionRef(node) ->
-      return out.push(head(at, role, "function-ref", node.id, node.span, name_attr(node.name)))
+      print_types(lines, child, "arg", node.args)
+    Ast.Expr.ConstRef(node) -> out.push(head(at, role, "const-ref", node.id, node.span, name_attr(node.name)))
+    Ast.Expr.FunctionRef(node) -> out.push(head(at, role, "function-ref", node.id, node.span, name_attr(node.name)))
     Ast.Expr.Call(node) ->
-      return print_call_like(
+      print_call_like(
         out,
         at,
         role,
@@ -391,19 +390,19 @@ def print_expr(out: List[String], at: Margin, role: String, expr: Ast.Expr) -> L
         node.args,
       )
 
-      return print_named_args(lines, child, node.named)
+      print_named_args(lines, child, node.named)
     Ast.Expr.Invoke(node) ->
       lines = out.push(head(at, role, "invoke", node.id, node.span, ""))
       lines = print_expr(lines, child, "target", node.target)
-      return print_exprs(lines, child, "arg", node.args)
+      print_exprs(lines, child, "arg", node.args)
     Ast.Expr.Construct(node) ->
       lines = out.push(head(at, role, "construct", node.id, node.span, " type=#{Text.quote(node.type_name)}"))
-      return print_named_args(lines, child, node.args)
+      print_named_args(lines, child, node.args)
     Ast.Expr.Update(node) ->
       lines = out.push(head(at, role, "struct-update", node.id, node.span, visible_attr(node.visible)))
       lines = print_expr(lines, child, "target", node.target)
-      return print_named_args(lines, child, node.args)
-    _ -> return print_container_expr(out, at, role, expr)
+      print_named_args(lines, child, node.args)
+    _ -> print_container_expr(out, at, role, expr)
   end
 end
 
@@ -412,67 +411,67 @@ def print_container_expr(out: List[String], at: Margin, role: String, expr: Ast.
   case expr
     Ast.Expr.ListLit(node) ->
       lines = out.push(head(at, role, "list-lit", node.id, node.span, ""))
-      return print_exprs(lines, child, "element", node.elements)
+      print_exprs(lines, child, "element", node.elements)
     Ast.Expr.MapLit(node) ->
       lines = out.push(head(at, role, "map-lit", node.id, node.span, ""))
       for entry in node.entries
         lines = print_map_entry(lines, child, entry)
       end
 
-      return lines
+      lines
     Ast.Expr.FieldAccess(node) ->
       lines = out.push(head(at, role, "field-access", node.id, node.span, name_attr(node.name)))
-      return print_expr(lines, child, "target", node.target)
+      print_expr(lines, child, "target", node.target)
     Ast.Expr.MethodCall(node) ->
       lines = out.push(head(at, role, "method-call", node.id, node.span, name_attr(node.name)))
       lines = print_expr(lines, child, "target", node.target)
-      return print_exprs(lines, child, "arg", node.args)
+      print_exprs(lines, child, "arg", node.args)
     Ast.Expr.Interpolation(node) ->
       lines = out.push(head(at, role, "interpolation", node.id, node.span, ""))
       for part in node.parts
         lines = print_part(lines, child, part)
       end
 
-      return lines
+      lines
     Ast.Expr.BlockLit(node) ->
       lines = out.push(head(at, role, "block-lit", node.id, node.span, ""))
       for param in node.params
         lines = print_block_param(lines, child, param)
       end
 
-      return print_stmts(lines, child, "body", node.body)
+      print_stmts(lines, child, "body", node.body)
     Ast.Expr.Index(node) ->
       lines = out.push(head(at, role, "index-access", node.id, node.span, ""))
       lines = print_expr(lines, child, "target", node.target)
-      return print_expr(lines, child, "index", node.index)
+      print_expr(lines, child, "index", node.index)
     Ast.Expr.Try(node) ->
       lines = out.push(head(at, role, "try-expr", node.id, node.span, ""))
-      return print_expr(lines, child, "operand", node.operand)
+      print_expr(lines, child, "operand", node.operand)
     Ast.Expr.Unary(node) ->
       lines = out.push(head(at, role, "unary", node.id, node.span, op_attrs(node.op, node.op_span)))
-      return print_expr(lines, child, "operand", node.operand)
+      print_expr(lines, child, "operand", node.operand)
     Ast.Expr.Binary(node) ->
       lines = out.push(head(at, role, "binary", node.id, node.span, op_attrs(node.op, node.op_span)))
       lines = print_expr(lines, child, "left", node.left)
-      return print_expr(lines, child, "right", node.right)
+      print_expr(lines, child, "right", node.right)
     Ast.Expr.RegexLit(node) ->
       # The call is made from the body and flags, so the text form shows only those.
       attrs = " body=#{Text.quote(node.body)} flags=#{Text.quote(node.flags)}"
-      return out.push(head(at, role, "regex-lit", node.id, node.span, attrs))
+      out.push(head(at, role, "regex-lit", node.id, node.span, attrs))
     Ast.Expr.EagLit(node) ->
       lines = out.push(head(at, role, "eag-lit", node.id, node.span, ""))
-      return print_expr(lines, child, "call", node.call)
-    Ast.Expr.Case(node) -> return print_case(out, at, role, "case-expr", node)
+      print_expr(lines, child, "call", node.call)
+    Ast.Expr.Case(node) -> print_case(out, at, role, "case-expr", node)
     # print_expr handles every other variant before it calls this one.
-    _ -> return out
+    _ -> out
   end
 end
 
 def print_pattern(out: List[String], at: Margin, role: String, pattern: Ast.Pattern) -> List[String]
   case pattern
-    Ast.Pattern.Wildcard(node) -> return out.push(head(at, role, "wildcard-pattern", node.id, node.span, ""))
+    Ast.Pattern.Wildcard(node) -> out.push(head(at, role, "wildcard-pattern", node.id, node.span, ""))
     Ast.Pattern.Literal(node) ->
-      return out.push(head(at, role, "literal-pattern", node.id, node.span, " value=#{value_text(node.value)}"))
+      out.push(head(at, role, "literal-pattern", node.id, node.span, " value=#{value_text(node.value)}"))
     Ast.Pattern.Variant(node) ->
       names = node.slots.map do |slot| slot_text(slot) end
       lines = out.push(
@@ -493,23 +492,23 @@ def print_pattern(out: List[String], at: Margin, role: String, pattern: Ast.Patt
         end
       end
 
-      return lines
+      lines
   end
 end
 
 # A name is quoted, `_` is -, and a nested pattern is * (its own line follows the variant, in the order of the slots).
 def slot_text(slot: Ast.Slot) -> String
   case slot
-    Ast.Slot.Bind(name, _) -> return Text.quote(name)
-    Ast.Slot.Skip -> return "-"
-    Ast.Slot.Nested(_) -> return "*"
+    Ast.Slot.Bind(name, _) -> Text.quote(name)
+    Ast.Slot.Skip -> "-"
+    Ast.Slot.Nested(_) -> "*"
   end
 end
 
 def print_branch(out: List[String], at: Margin, branch: Ast.IfBranch) -> List[String]
   lines = out.push(head(at, "branch", "if-branch", branch.id, branch.span, ""))
   lines = print_expr(lines, deeper(at), "condition", branch.condition)
-  return print_stmts(lines, deeper(at), "body", branch.body)
+  print_stmts(lines, deeper(at), "body", branch.body)
 end
 
 def print_arm(out: List[String], at: Margin, arm: Ast.CaseArm) -> List[String]
@@ -520,7 +519,7 @@ def print_arm(out: List[String], at: Margin, arm: Ast.CaseArm) -> List[String]
     none -> lines = lines
   end
 
-  return print_stmts(lines, deeper(at), "body", arm.body)
+  print_stmts(lines, deeper(at), "body", arm.body)
 end
 
 def print_stmt(out: List[String], at: Margin, role: String, stmt: Ast.Stmt) -> List[String]
@@ -529,7 +528,7 @@ def print_stmt(out: List[String], at: Margin, role: String, stmt: Ast.Stmt) -> L
     Ast.Stmt.Binding(node) ->
       lines = out.push(head(at, role, "binding", node.id, node.span, name_attr(node.name)))
       lines = print_optional_type(lines, child, "type", node.type)
-      return print_expr(lines, child, "value", node.value)
+      print_expr(lines, child, "value", node.value)
     Ast.Stmt.Return(node) ->
       extra = ""
       if node.implicit
@@ -538,13 +537,13 @@ def print_stmt(out: List[String], at: Margin, role: String, stmt: Ast.Stmt) -> L
 
       lines = out.push(head(at, role, "return-stmt", node.id, node.span, extra))
       case node.value
-        some(value) -> return print_expr(lines, child, "value", value)
-        none -> return lines
+        some(value) -> print_expr(lines, child, "value", value)
+        none -> lines
       end
 
     Ast.Stmt.Expression(node) ->
       lines = out.push(head(at, role, "expr-stmt", node.id, node.span, ""))
-      return print_expr(lines, child, "value", node.value)
+      print_expr(lines, child, "value", node.value)
     Ast.Stmt.If(node) ->
       extra = ""
       if node.guard
@@ -559,20 +558,20 @@ def print_stmt(out: List[String], at: Margin, role: String, stmt: Ast.Stmt) -> L
       case node.else_body
         some(body) ->
           lines = lines.push("#{child.indent}else:")
-          return print_stmts(lines, deeper(child), "body", body)
-        none -> return lines
+          print_stmts(lines, deeper(child), "body", body)
+        none -> lines
       end
 
     Ast.Stmt.While(node) ->
       lines = out.push(head(at, role, "while-stmt", node.id, node.span, ""))
       lines = print_expr(lines, child, "condition", node.condition)
-      return print_stmts(lines, child, "body", node.body)
+      print_stmts(lines, child, "body", node.body)
     Ast.Stmt.For(node) ->
       lines = out.push(head(at, role, "for-stmt", node.id, node.span, " variable=#{Text.quote(node.variable)}"))
       lines = print_expr(lines, child, "iterable", node.iterable)
-      return print_stmts(lines, child, "body", node.body)
-    Ast.Stmt.Control(node) -> return out.push(head(at, role, "loop-control", node.id, node.span, " kind=#{node.kind}"))
-    Ast.Stmt.Case(node) -> return print_case(out, at, role, "case-stmt", node)
+      print_stmts(lines, child, "body", node.body)
+    Ast.Stmt.Control(node) -> out.push(head(at, role, "loop-control", node.id, node.span, " kind=#{node.kind}"))
+    Ast.Stmt.Case(node) -> print_case(out, at, role, "case-stmt", node)
   end
 end
 
@@ -583,15 +582,15 @@ def print_case(out: List[String], at: Margin, role: String, kind: String, node: 
     lines = print_arm(lines, deeper(at), arm)
   end
 
-  return lines
+  lines
 end
 
 def print_param(out: List[String], at: Margin, param: Ast.Param) -> List[String]
   lines = out.push(head(at, "param", "param", param.id, param.span, name_attr(param.name)))
   lines = print_type(lines, deeper(at), "type", param.type)
   case param.default
-    some(value) -> return print_expr(lines, deeper(at), "default", value)
-    none -> return lines
+    some(value) -> print_expr(lines, deeper(at), "default", value)
+    none -> lines
   end
 end
 
@@ -599,8 +598,8 @@ def print_field(out: List[String], at: Margin, field: Ast.FieldDecl) -> List[Str
   lines = out.push(head(at, "field", "field-decl", field.id, field.span, name_attr(field.name) + doc_attr(field.doc)))
   lines = print_type(lines, deeper(at), "type", field.type)
   case field.default
-    some(value) -> return print_expr(lines, deeper(at), "default", value)
-    none -> return lines
+    some(value) -> print_expr(lines, deeper(at), "default", value)
+    none -> lines
   end
 end
 
@@ -609,17 +608,17 @@ def print_variant(out: List[String], at: Margin, variant: Ast.EnumVariant) -> Li
     head(at, "variant", "enum-variant", variant.id, variant.span, name_attr(variant.name) + doc_attr(variant.doc)),
   )
 
-  return print_types(lines, deeper(at), "payload", variant.payload_types)
+  print_types(lines, deeper(at), "payload", variant.payload_types)
 end
 
 # ` path="x" alias="Mod"`, or ` path="x" names=[...]` with each name and its span, and `as` with the local name for a
 # rename.
 def import_attrs(node: Ast.ImportDecl) -> String
   case node.alias
-    some(alias) -> return " path=#{Text.quote(node.path)} alias=#{Text.quote(alias)}"
+    some(alias) -> " path=#{Text.quote(node.path)} alias=#{Text.quote(alias)}"
     none ->
       texts = node.names.map do |entry| import_name_text(entry) end
-      return " path=#{Text.quote(node.path)} names=[#{texts.join(",")}]"
+      " path=#{Text.quote(node.path)} names=[#{texts.join(",")}]"
   end
 end
 
@@ -629,5 +628,5 @@ def import_name_text(entry: Ast.ImportName) -> String
     text += " as #{Text.quote(entry.local)}@#{Text.span_text(entry.local_span)}"
   end
 
-  return text
+  text
 end

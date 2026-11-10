@@ -61,7 +61,7 @@ export def parse(arguments: List[String], style: String, usage: String, partial_
     at += 1
   end
 
-  return Parsed.Ready(query)
+  Parsed.Ready(query)
 end
 
 ## Whether `word` looks like an option: it starts with "-" and has more than one character. A lone "-" is a file name.
@@ -78,17 +78,17 @@ export def arguments?(problem: Problems.Problem) -> Bool = problem.file == ARGUM
 ## name alone, as the plain form does. The JSON form keeps the span of `refusal`.
 export def unplaced(problem: Problems.Problem) -> Problems.Problem
   origin = Source.Position(offset: 0, line: 0, column: 0)
-  return problem.with(span: Source.Span(start: origin, stop: origin))
+  problem.with(span: Source.Span(start: origin, stop: origin))
 end
 
 ## The QUERY-USAGE diagnostic with `message`, and `usage` as its help.
 export def refusal(message: String, usage: String) -> Problems.Problem
-  return at_arguments("QUERY-USAGE", message, Diag.Help.Hint(usage))
+  at_arguments("QUERY-USAGE", message, Diag.Help.Hint(usage))
 end
 
 ## A QUERY- diagnostic about the words of the command line, located at the pseudo-file `<arguments>`.
 export def at_arguments(code: String, message: String, help: Diag.Help) -> Problems.Problem
   start = Source.Position(offset: 0, line: 1, column: 1)
   span = Source.Span(start: start, stop: start)
-  return Problems.problem(ARGUMENTS, "", code, message, span, help)
+  Problems.problem(ARGUMENTS, "", code, message, span, help)
 end

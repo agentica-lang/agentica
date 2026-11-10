@@ -66,7 +66,7 @@ export def attach(settings: Env.Settings, base: State.Cx, st: State.St) -> Resul
     end
   end
 
-  return ok(Attached(st: grown, modules: modules))
+  ok(Attached(st: grown, modules: modules))
 end
 
 # The functions of each file that the program calls, by file stem, in the order the calls were checked.
@@ -87,7 +87,7 @@ def wanted_functions(keys: List[String]) -> Map[String, List[String]]
     end
   end
 
-  return found
+  found
 end
 
 # One file: read, parsed from first_id, and cut down to the functions wanted, which get their prelude names.
@@ -111,7 +111,7 @@ def load(settings: Env.Settings, module: String, functions: List[String], first_
     return error(problem(file, "CHECK-UNKNOWN-NAME", "the prelude file lacks a function the catalog names"))
   end
 
-  return ok(
+  ok(
     Linker.LinkedModule(
       key: "std/prelude/#{module}.agc",
       file: file,
@@ -136,30 +136,30 @@ end
 
 def read(settings: Env.Settings, key: String, file: String) -> Result[String]
   case Resolve.read_source(settings, key)
-    SourceFile.Read.Text(text) -> return ok(text)
-    SourceFile.Read.Invalid(at) -> return error(staged(file, SourceFile.invalid_utf8(at)))
-    SourceFile.Read.Unreadable(_) -> return error(problem(file, "CHECK-IMPORT-IO", "cannot read the prelude file"))
+    SourceFile.Read.Text(text) -> ok(text)
+    SourceFile.Read.Invalid(at) -> error(staged(file, SourceFile.invalid_utf8(at)))
+    SourceFile.Read.Unreadable(_) -> error(problem(file, "CHECK-IMPORT-IO", "cannot read the prelude file"))
   end
 end
 
 def parse(file: String, text: String, first_id: Int) -> Result[Ast.Program]
   case Lexer.lex(text)
-    Diag.Outcome.Failed(found) -> return error(staged(file, found))
+    Diag.Outcome.Failed(found) -> error(staged(file, found))
     Diag.Outcome.Done(tokens) ->
       case Parser.parse(tokens, first_id)
-        Diag.Outcome.Failed(found) -> return error(staged(file, found))
-        Diag.Outcome.Done(program) -> return ok(program)
+        Diag.Outcome.Failed(found) -> error(staged(file, found))
+        Diag.Outcome.Done(program) -> ok(program)
       end
   end
 end
 
 # A problem of the lexer or the parser in a prelude file.
 def staged(file: String, found: Diag.Diagnostic) -> String
-  return Failure.pack(Failure.problem(file, "", found.code, found.message, found.span, found.help))
+  Failure.pack(Failure.problem(file, "", found.code, found.message, found.span, found.help))
 end
 
 def problem(file: String, code: String, message: String) -> String
   start = Source.Position(offset: 0, line: 1, column: 1)
   span = Source.Span(start: start, stop: start)
-  return Failure.pack(Failure.problem(file, "", code, message, span, Diag.Help.NoHelp))
+  Failure.pack(Failure.problem(file, "", code, message, span, Diag.Help.NoHelp))
 end

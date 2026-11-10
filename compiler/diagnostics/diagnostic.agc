@@ -24,5 +24,5 @@ end
 
 ## Returns a diagnostic with the code, message, span and help.
 export def fail(code: String, message: String, span: Source.Span, help: Help) -> Diagnostic
-  return Diagnostic(code: code, message: message, span: span, help: help)
+  Diagnostic(code: code, message: message, span: span, help: help)
 end

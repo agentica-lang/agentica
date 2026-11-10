@@ -22,8 +22,8 @@ import Checker from "checker"
 ## The goldens in tests/fixtures/frontend/check/ hold it.
 export def check_text(path: String, settings: Env.Settings) -> String
   case Linker.link_file(path, settings)
-    Linker.Linking.Failed(failure) -> return LinkText.root_failure_text(settings.workspace, path, failure)
-    Linker.Linking.Done(linked) -> return checked_text(linked, settings)
+    Linker.Linking.Failed(failure) -> LinkText.root_failure_text(settings.workspace, path, failure)
+    Linker.Linking.Done(linked) -> checked_text(linked, settings)
   end
 end
 
@@ -46,18 +46,18 @@ export def problem_text(workspace: Workspace.Workspace, root_dir: String, proble
     line = "#{line} labels=[#{labels.join(", ")}]"
   end
 
-  return "#{line} file=#{Text.quote(Paths.stored_file(workspace, root_dir, problem.file))}"
+  "#{line} file=#{Text.quote(Paths.stored_file(workspace, root_dir, problem.file))}"
 end
 
 ## The text form of a program that checked: what `agentica --dump` prints.
 export def program_text(linked: Linker.Linked, checked: Checker.Checked) -> String
-  return LinkText.program_lines(linked, notes_of(checked)).concat(order_lines(checked)).join("\n")
+  LinkText.program_lines(linked, notes_of(checked)).concat(order_lines(checked)).join("\n")
 end
 
 def checked_text(linked: Linker.Linked, settings: Env.Settings) -> String
   case Checker.check(linked, settings)
-    Checker.Checking.Done(checked) -> return program_text(linked, checked)
-    Checker.Checking.Failed(problem) -> return problem_text(settings.workspace, linked.root_dir, problem)
+    Checker.Checking.Done(checked) -> program_text(linked, checked)
+    Checker.Checking.Failed(problem) -> problem_text(settings.workspace, linked.root_dir, problem)
   end
 end
 
@@ -66,7 +66,7 @@ def order_lines(checked: Checker.Checked) -> List[String]
   return [] if checked.constants.size == 0
 
   names = checked.constants.map do |name: String| Text.quote(name) end
-  return ["constant-order [#{names.join(",")}]"]
+  ["constant-order [#{names.join(",")}]"]
 end
 
 # The text added to the lines, by node id: the type, then the resolution.
@@ -91,28 +91,28 @@ def notes_of(checked: Checker.Checked) -> Map[Int, String]
     notes = notes.put(id, "#{text} resolved=#{resolved_text(checked.resolved[id])}")
   end
 
-  return notes
+  notes
 end
 
 def resolved_text(resolved: State.Resolved) -> String
   case resolved
-    State.Resolved.Self(type) -> return "self(#{T.debug_text(type)})"
-    State.Resolved.Text(type) -> return "text(#{T.debug_text(type)})"
-    State.Resolved.Inspect(type) -> return "inspect(#{T.debug_text(type)})"
-    State.Resolved.Call(name, type) -> return "call(#{Text.quote(name)}, #{T.debug_text(type)})"
-    State.Resolved.Members(fields) -> return members_text(fields)
-    State.Resolved.Codec(name, fields) -> return "codec(#{Text.quote(name)}, #{members_text(fields)})"
-    State.Resolved.FieldCall -> return "field-call"
+    State.Resolved.Self(type) -> "self(#{T.debug_text(type)})"
+    State.Resolved.Text(type) -> "text(#{T.debug_text(type)})"
+    State.Resolved.Inspect(type) -> "inspect(#{T.debug_text(type)})"
+    State.Resolved.Call(name, type) -> "call(#{Text.quote(name)}, #{T.debug_text(type)})"
+    State.Resolved.Members(fields) -> members_text(fields)
+    State.Resolved.Codec(name, fields) -> "codec(#{Text.quote(name)}, #{members_text(fields)})"
+    State.Resolved.FieldCall -> "field-call"
   end
 end
 
 def members_text(fields: List[Model.Named]) -> String
   names = fields.map do |field: Model.Named| field.name end
-  return "members(#{names.join(", ")})"
+  "members(#{names.join(", ")})"
 end
 
 def note(label: String, text: String) -> String
   return "" if text == ""
 
-  return label + Text.quote(text)
+  label + Text.quote(text)
 end

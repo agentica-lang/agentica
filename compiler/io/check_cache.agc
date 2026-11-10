@@ -55,7 +55,7 @@ export def attach(settings: Env.Settings, root: String, wanted: Bool) -> Env.Set
   planned = plan(settings, root, wanted)
   return settings if !planned.ok?
 
-  return settings.with(workspace: settings.workspace.with(check_cache: port(planned.unwrap!)))
+  settings.with(workspace: settings.workspace.with(check_cache: port(planned.unwrap!)))
 end
 
 ## The plan for the root file `root` (as typed).
@@ -63,8 +63,8 @@ export def plan(settings: Env.Settings, root: String, wanted: Bool) -> Result[Pl
   return error("the cache is off") if !wanted or settings.self_path == ""
 
   case settings.std
-    Env.StdProvider.Folder(_) -> return error("the front end reads a stdlib folder")
-    Env.StdProvider.Embedded -> return planned(settings, root)
+    Env.StdProvider.Folder(_) -> error("the front end reads a stdlib folder")
+    Env.StdProvider.Embedded -> planned(settings, root)
   end
 end
 
@@ -79,7 +79,7 @@ def planned(settings: Env.Settings, root: String) -> Result[Plan]
   folder = Paths.join(site.build, CHECK_FOLDER)
   present = try folders_present(site.build, folder, user)
   head = [FORMAT, "version #{settings.version}", site.binary, site.inputs].join("\n")
-  return ok(
+  ok(
     Plan(
       build: site.build,
       folder: folder,
@@ -101,13 +101,13 @@ def folders_present(build: String, folder: String, user: Int) -> Result[Bool]
 
   try CacheFiles.private_kind(build, "directory", user)
   try CacheFiles.private_kind(folder, "directory", user)
-  return ok(true)
+  ok(true)
 end
 
 # The check cache a Workspace holds: reads and writes of the entries of `plan`. A block is a function value only as the
 # block of a call, so the helpers below hand it back.
 def port(plan: Plan) -> Workspace.CheckCache
-  return Workspace.CheckCache(
+  Workspace.CheckCache(
     on: true,
     read: as_reader() do |key: String| read_entry(plan, key) end,
     write: as_writer() do |key: String, text: String| write_entry(plan, key, text) end,
@@ -122,7 +122,7 @@ def as_writer(f: Fn[String, String, Bool]) -> Fn[String, String, Bool] = f
 # folder (AGENTICA_BUILD_DIR) do not replace each other's entries for a file they both import.
 def entry_path(plan: Plan, key: String) -> String
   name = CacheFiles.digest((CheckCache.piece(plan.inputs) + key).bytes).slice(0, NAME_CHARS)
-  return Paths.join(plan.folder, "#{name}#{ENTRY_END}")
+  Paths.join(plan.folder, "#{name}#{ENTRY_END}")
 end
 
 # The text of the entry for `key` when the file is a regular file of this user that no one else can write, was made
@@ -136,7 +136,7 @@ def read_entry(plan: Plan, key: String) -> Result[String]
   wanted = "#{plan.head}\n"
   return error("the entry is for another build or project") if !text.starts_with?(wanted)
 
-  return ok(text.slice(wanted.length, text.length - wanted.length))
+  ok(text.slice(wanted.length, text.length - wanted.length))
 end
 
 # Replaces the entry for `key`. The entry is written to a new private file beside its place and renamed there; a
@@ -151,7 +151,7 @@ def write_entry(plan: Plan, key: String, text: String) -> Bool
 
   path = entry_path(plan, key)
   temporary = "#{path}#{CacheFiles.TEMP_MARK}#{suffix.unwrap!}"
-  return CacheFiles.install(temporary, "#{plan.head}\n#{text}".bytes, path)
+  CacheFiles.install(temporary, "#{plan.head}\n#{text}".bytes, path)
 end
 
 # Both folders must be ones this program may trust, or be made now. The .gitignore goes in `_build/` when the cache
@@ -163,5 +163,5 @@ def prepare(plan: Plan) -> Result[Void]
   end
 
   try CacheFiles.private_folder(plan.folder, plan.user)
-  return ok()
+  ok()
 end

@@ -38,7 +38,7 @@ export def receiver_kind(type: T.Type) -> String
     return word
   end
 
-  return ""
+  ""
 end
 
 ## The builtin that method name of that kind stands for, "self", or "" when there is none: an alias first (size, to_i,
@@ -47,7 +47,7 @@ export def resolve_method(cx: State.Cx, kind: String, name: String) -> String
   alias = cx.help.aliases.get("#{kind}.#{name}")
   return alias.unwrap! if alias.some?
 
-  return catalog_method(cx, kind, name)
+  catalog_method(cx, kind, name)
 end
 
 ## The methods a receiver kind has, as Ruby names them: its aliases and the builtins of its module, without
@@ -76,7 +76,7 @@ export def method_names(cx: State.Cx, kind: String) -> List[String]
     end
   end
 
-  return unique
+  unique
 end
 
 ## The method name a builtin is written as in method form, for the help of CHECK-PIPE-METHOD: String.upcase is upcase,
@@ -84,7 +84,7 @@ end
 export def pipe_method_name(cx: State.Cx, kind: String, name: String) -> String
   return RubyForm.method_name(name) if RubyForm.method_key(name).starts_with?("#{kind}.")
 
-  return ""
+  ""
 end
 
 ## The help for a method name another language has, or "".
@@ -107,7 +107,7 @@ export def foreign_method_help(cx: State.Cx, kind: String, name: String) -> Stri
     return "a Lazy runs only in a terminal; collect it first with try lz.to_a (or lz.first(n)), then call .#{name}"
   end
 
-  return renamed_help(cx, kind, name)
+  renamed_help(cx, kind, name)
 end
 
 # True when Lazy has a step with that name: a method that takes a Lazy and returns one (not the source produce).
@@ -116,7 +116,7 @@ def lazy_step?(name: String) -> Bool
   return false if entry.none?
 
   row = entry.unwrap!
-  return T.is?(row.result, "Lazy") and row.parameters.size > 0 and T.is?(row.parameters[0].type, "Lazy")
+  T.is?(row.result, "Lazy") and row.parameters.size > 0 and T.is?(row.parameters[0].type, "Lazy")
 end
 
 # The builtin of the kind's module with that name whose first parameter has the kind, or "".
@@ -129,7 +129,7 @@ def catalog_method(cx: State.Cx, kind: String, name: String) -> String
 
   return entry.unwrap!.name if RubyForm.parameter_kind(entry.unwrap!.parameters[0].type) == kind
 
-  return ""
+  ""
 end
 
 # The names of the module's builtins that are methods of the kind.
@@ -144,12 +144,12 @@ def module_methods(cx: State.Cx, kind: String, prefix: String) -> List[String]
     end
   end
 
-  return names
+  names
 end
 
 # True when a String has the method, or a foreign String method has help.
 def string_method?(cx: State.Cx, name: String) -> Bool
-  return resolve_method(cx, "String", name) != "" or cx.help.kind_methods.has_key?("String.#{name}")
+  resolve_method(cx, "String", name) != "" or cx.help.kind_methods.has_key?("String.#{name}")
 end
 
 # A method of a String that a Result does not have: unwrap the Result first.
@@ -158,13 +158,13 @@ def result_help(cx: State.Cx, name: String) -> String
   text = "this is a Result; unwrap it first with r.unwrap! (use gets! to read a line without a Result)"
   return "#{text}, then: #{string_help}" if string_help != ""
 
-  return text
+  text
 end
 
 # True when `name` is a Ruby name of the method it resolves to (`strip`, not `trim`), or has no builtin (`to_s`).
 def ruby_method?(cx: State.Cx, kind: String, name: String) -> Bool
   resolved = resolve_method(cx, kind, name)
-  return RubyForm.method_name(resolved) == "" or RubyForm.ruby_name?(kind, name, resolved)
+  RubyForm.method_name(resolved) == "" or RubyForm.ruby_name?(kind, name, resolved)
 end
 
 # A method another language names differently: the Ruby names of the methods of that kind that it stands for, if
@@ -188,5 +188,5 @@ def renamed_help(cx: State.Cx, kind: String, name: String) -> String
 
   return "" if found.size == 0
 
-  return "use #{found.uniq.map do |written: String| ".#{written}" end.join(" or ")}"
+  "use #{found.uniq.map do |written: String| ".#{written}" end.join(" or ")}"
 end

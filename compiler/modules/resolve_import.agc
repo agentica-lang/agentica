@@ -48,12 +48,12 @@ export def read_source(settings: Env.Settings, key: String) -> SourceFile.Read
   return workspace.read_text.call(key) if !embedded?(key)
 
   case settings.std
-    Env.StdProvider.Folder(folder) -> return workspace.read_text.call(std_file(folder, key))
+    Env.StdProvider.Folder(folder) -> workspace.read_text.call(std_file(folder, key))
     Env.StdProvider.Embedded ->
       text = workspace.std_source.call(std_path(key))
       return SourceFile.Read.Text(text.unwrap!) if text.ok?
 
-      return SourceFile.Read.Unreadable(text.message)
+      SourceFile.Read.Unreadable(text.message)
   end
 end
 
@@ -63,7 +63,7 @@ end
 export def search_roots(settings: Env.Settings, libs_dir: String) -> Result[List[String]]
   here = Source.position(0, 1, 0)
   site = Failure.Site(file: libs_dir, span: Source.Span(start: here, stop: here))
-  return library_roots(settings, libs_dir, site)
+  library_roots(settings, libs_dir, site)
 end
 
 ## Finds the module that the import path file (already ending in .agc) names, from the importer. A failure is
@@ -87,7 +87,7 @@ export def resolve_import(
     return resolve_import(settings, build, importer, named, site)
   end
 
-  return beside(settings.workspace, build, importer, file, site)
+  beside(settings.workspace, build, importer, file, site)
 end
 
 ## The key of the std/ module that the import path `file` names, for a file that is not part of std/ (a program, or
@@ -95,7 +95,7 @@ end
 ## stdlib/MODULES, which the binary embeds and which lists the files of the stdlib/ folder (a test checks that they are
 ## the same list). The modules of std/internal/ are private to std/: this refuses them as it refuses a missing module.
 export def standard(settings: Env.Settings, file: String, site: Failure.Site) -> Result[String]
-  return standard_for(settings, file, site, false)
+  standard_for(settings, file, site, false)
 end
 
 # `standard`, where `from_std` says the importing module is a std/ module, which may import std/internal/.
@@ -110,7 +110,7 @@ def standard_for(settings: Env.Settings, file: String, site: Failure.Site, from_
     return error(io_failure(site, "unknown standard library module"))
   end
 
-  return ok(file)
+  ok(file)
 end
 
 # The path of the source of a std/ module under stdlib/: the key without its std/.
@@ -124,12 +124,12 @@ def std_file(folder: String, key: String) -> String
     return Paths.join(Paths.join(folder, "../compiler"), core)
   end
 
-  return Paths.join(folder, std_path(key))
+  Paths.join(folder, std_path(key))
 end
 
 # A module of std/ or pkg/ libraries, which belongs to no package.
 def plain(build: Build, key: String) -> Resolution
-  return Resolution(key: key, origin: Packages.library_origin(), name: "", scope: build.scope)
+  Resolution(key: key, origin: Packages.library_origin(), name: "", scope: build.scope)
 end
 
 # A pkg/ import: a package the importing manifest declares, which shadows the library roots for its name, else a
@@ -145,11 +145,11 @@ def pkg(
   case try Packages.match_import(build.scope, importer.origin, file, site)
     Packages.Match.Library ->
       key = try library(settings, build.libs_dir, file, site)
-      return ok(plain(build, key))
+      ok(plain(build, key))
     Packages.Match.Package(name, rest) ->
       located = try Packages.open_package(settings.workspace, build.scope, name, rest, site)
       scope = build.scope.with(opened: located.opened)
-      return ok(Resolution(key: located.file, origin: located.origin, name: located.name, scope: scope))
+      ok(Resolution(key: located.file, origin: located.origin, name: located.name, scope: scope))
   end
 end
 
@@ -179,21 +179,21 @@ def beside(
     origin = Packages.file_origin(workspace, build.scope, origin, target)
   end
 
-  return ok(Resolution(key: target, origin: origin, name: name, scope: build.scope))
+  ok(Resolution(key: target, origin: origin, name: name, scope: build.scope))
 end
 
 def io_failure(site: Failure.Site, message: String) -> String
-  return Failure.fail_at(site, "CHECK-IMPORT-IO", message, Diag.Help.NoHelp)
+  Failure.fail_at(site, "CHECK-IMPORT-IO", message, Diag.Help.NoHelp)
 end
 
 def io_failure_help(site: Failure.Site, message: String, help: Diag.Help) -> String
-  return Failure.fail_at(site, "CHECK-IMPORT-IO", message, help)
+  Failure.fail_at(site, "CHECK-IMPORT-IO", message, help)
 end
 
 def std_exists?(settings: Env.Settings, file: String) -> Bool
   case settings.std
-    Env.StdProvider.Folder(folder) -> return settings.workspace.file_exists.call(std_file(folder, file))
-    Env.StdProvider.Embedded -> return settings.workspace.std_source.call(std_path(file)).ok?
+    Env.StdProvider.Folder(folder) -> settings.workspace.file_exists.call(std_file(folder, file))
+    Env.StdProvider.Embedded -> settings.workspace.std_source.call(std_path(file)).ok?
   end
 end
 
@@ -205,7 +205,7 @@ def library(settings: Env.Settings, libs_dir: String, file: String, site: Failur
     return contained(settings.workspace, root, candidate, site) if settings.workspace.file_exists.call(candidate)
   end
 
-  return error(io_failure(site, "cannot find library module"))
+  error(io_failure(site, "cannot find library module"))
 end
 
 # The search roots of pkg/: agc_libs/ next to the manifest, or to the root file when there is none, AGENTICA_PATH, the
@@ -236,7 +236,7 @@ def library_roots(settings: Env.Settings, libs_dir: String, site: Failure.Site) 
   roots = first.concat(configured).concat(user_roots(settings.env, on_windows))
   return ok(roots) if on_windows
 
-  return ok(roots.concat(["/usr/local/share/agentica/lib", "/usr/share/agentica/lib"]))
+  ok(roots.concat(["/usr/local/share/agentica/lib", "/usr/share/agentica/lib"]))
 end
 
 # Elsewhere, XDG_DATA_HOME when it is absolute, else ~/.local/share; an unset HOME leaves the user root out (the
@@ -253,7 +253,7 @@ def user_roots(env: Env.Env, on_windows: Bool) -> List[String]
 
   return [] if env.home == ""
 
-  return [Paths.join(env.home, ".local/share/agentica/lib")]
+  [Paths.join(env.home, ".local/share/agentica/lib")]
 end
 
 # Links are resolved before the check, so a link out of the root is refused.
@@ -266,7 +266,7 @@ def contained(workspace: Workspace.Workspace, root: String, candidate: String, s
     return error(Failure.fail_at(site, "CHECK-IMPORT-PATH", "library path escapes its root", Diag.Help.NoHelp))
   end
 
-  return ok(target.unwrap!)
+  ok(target.unwrap!)
 end
 
 # The file next to the importing one. A missing last part is accepted and a missing folder is refused
@@ -305,7 +305,7 @@ def relative(
     return error(io_failure_help(site, "cannot read import", help))
   end
 
-  return ok(target.unwrap!)
+  ok(target.unwrap!)
 end
 
 # The help of a relative import that found no file: that an import is relative to the importing file, and the path
@@ -337,7 +337,7 @@ def tried_help(
     end
   end
 
-  return Diag.Help.Hint(text)
+  Diag.Help.Hint(text)
 end
 
 # `Paths.folded` drops the "/" that a rooted path starts with: put it back, as `like` has it.
@@ -345,11 +345,11 @@ def folded_from(like: String, path: String) -> String
   folded = Paths.folded(path)
   return "/#{folded}" if like.starts_with?("/")
 
-  return folded
+  folded
 end
 
 def base_name(importer: Importer) -> String
   return "project" if importer.origin.root == ""
 
-  return "package"
+  "package"
 end

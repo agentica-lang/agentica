@@ -13,13 +13,13 @@ import {PRELUDE_ONLY, PUBLIC_NAMES} from "builtins"
 export def public(name: String) -> Result[Model.Builtin]
   return error("not a public builtin") if Builtins.std_only_name?(name) or PRELUDE_ONLY.include?(name)
 
-  return Builtins.lookup(name).to_result("unknown builtin")
+  Builtins.lookup(name).to_result("unknown builtin")
 end
 
 ## Every public builtin, in name order, each as `builtin` gives it.
 export def catalog(ruby: Fn[Model.Builtin, String]) -> Json
   # `unwrap!` cannot fail: PUBLIC_NAMES are keys of the same ENTRIES that `Builtins.lookup` reads.
-  return JSON.array(PUBLIC_NAMES.sort.map do |name: String| builtin(Builtins.lookup(name).unwrap!, ruby) end)
+  JSON.array(PUBLIC_NAMES.sort.map do |name: String| builtin(Builtins.lookup(name).unwrap!, ruby) end)
 end
 
 ## The JSON of a builtin: one object for a builtin with one form, else the name, the description and the effects of
@@ -31,7 +31,7 @@ export def builtin(entry: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> Jso
   return form_json(entry, ruby) if entry.alternatives.size == 0
 
   forms = [entry].concat(entry.alternatives)
-  return JSON.object({
+  JSON.object({
     "name": JSON.from(entry.name),
     "description": JSON.from(entry.description),
     "effects": strings(entry.effects),
@@ -42,7 +42,7 @@ end
 def form_json(form: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> Json
   parameters = form.parameters.map do |parameter: Model.Named| parameter_json(parameter) end
 
-  return JSON.object({
+  JSON.object({
     "name": JSON.from(form.name),
     "arity": JSON.from(form.parameters.size),
     "parameters": JSON.array(parameters),
@@ -61,13 +61,13 @@ def parameter_json(parameter: Model.Named) -> Json
     fields = fields.put("default", JSON.from(Builtins.default_text(parameter.default)))
   end
 
-  return JSON.object(fields)
+  JSON.object(fields)
 end
 
 def text_or_null(text: String) -> Json
   return JSON.null() if text == ""
 
-  return JSON.from(text)
+  JSON.from(text)
 end
 
 def strings(items: List[String]) -> Json = JSON.array(items.map do |item: String| JSON.from(item) end)
