@@ -197,8 +197,8 @@ export def parameter_text(parameter: Model.Named) -> String
   return "#{typed} = #{default_text(parameter.default)}"
 end
 
-## A default as the source writes it: 6, 0.5, "x", true, nil, [], {}, "".bytes, none or Enum.Variant; "" for no
-## default.
+## A default as the source writes it: 6, 0.5, "x", true, nil, [], {}, "".bytes, none, Enum.Variant or Record(); ""
+## for no default.
 export def default_text(value: Model.Default) -> String
   case value
     Model.Default.Absent -> return ""
@@ -212,6 +212,7 @@ export def default_text(value: Model.Default) -> String
     Model.Default.EmptyBytes -> return "\"\".bytes"
     Model.Default.None -> return "none"
     Model.Default.Variant(name) -> return name
+    Model.Default.Fields(name) -> return "#{name}()"
   end
 end
 
@@ -293,6 +294,23 @@ export def default_enums() -> Set[String]
   end
 
   return Set.new(names)
+end
+
+## The builtin records that a call of the builtin named `name` may build from a Fields default (Process.Options for
+## Process.spawn), or none: the lowering keeps them in the tables of a program that calls it, because a call that
+## leaves the argument out builds the record with no expression that names it.
+export def default_records(name: String) -> List[String]
+  return [] if !ENTRIES.has_key?(name)
+
+  found: List[String] = []
+  for parameter in ENTRIES[name].parameters
+    case parameter.default
+      Model.Default.Fields(record) -> found = found.push(record)
+      _ -> found = found
+    end
+  end
+
+  return found
 end
 
 # True for the `none` default.
@@ -396,6 +414,7 @@ def default_fits?(parameter: Model.Named) -> Bool
     Model.Default.EmptyBytes -> return Types.is?(type, "Bytes")
     Model.Default.None -> return Types.is?(type, "Optional")
     Model.Default.Variant(name) -> return variant_fits?(type, name)
+    Model.Default.Fields(name) -> return fields_fit?(type, name)
   end
 end
 
@@ -409,6 +428,13 @@ def variant_fits?(type: Types.Type, name: String) -> Bool
   return ENUMS[parts[0]].variants.any? do |variant: Model.Variant|
     variant.name == parts[1] and variant.payload.size == 0
   end
+end
+
+# True when the type is the builtin record of that name and each of its fields has a default.
+def fields_fit?(type: Types.Type, name: String) -> Bool
+  return false if !Types.is?(type, "Struct") or Types.name(type) != name or !RECORDS.has_key?(name)
+
+  return RECORDS[name].all? do |field: Model.Named| default_present?(field.default) end
 end
 
 # "an" before a vowel, else "a".

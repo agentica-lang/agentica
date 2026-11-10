@@ -1,4 +1,4 @@
-program #115 0:1:1-988:56:1
+program #117 0:1:1-1017:56:1
   module "valid-1.agc"
     declaration: struct-decl #2 0:1:1-32:4:1 name="Job"
       field: field-decl #1 13:2:3-28:3:1 name="socket"
@@ -64,7 +64,7 @@ program #115 0:1:1-988:56:1
         type: type-ref #60 541:42:19-553:42:31 name="List"
           arg: type-ref #59 546:42:24-552:42:30 name="Socket"
       result: type-ref #62 558:42:36-562:42:40 name="Void"
-    declaration: function-decl #114 568:45:1-987:55:1 name="main"
+    declaration: function-decl #116 568:45:1-1016:55:1 name="main"
       result: type-ref #64 582:45:15-586:45:19 name="Void"
       body: binding #70 589:46:3-638:47:1 name="socket"
         value: field-access #69 598:46:12-637:46:51 name="unwrap!" type=Opaque(Socket) resolved=call("Result.unwrap!", Result(Opaque(Socket)))
@@ -90,28 +90,30 @@ program #115 0:1:1-988:56:1
               arg: literal #82 757:49:38-760:49:41 value=string:"x" type=String
               arg: literal #83 762:49:43-768:49:49 value=string:"read" type=String
               arg: literal #84 770:49:51-772:49:53 value=int:10 type=Int
-      body: expr-stmt #96 785:50:3-847:51:1
-        value: call #95 785:50:3-846:50:64 name="Task.spawn_owning" piped=false type=Task(Void)
+      body: expr-stmt #98 785:50:3-876:51:1
+        value: call #97 785:50:3-875:50:93 name="Task.spawn_owning" piped=false type=Task(Void)
           arg: function-ref #89 803:50:21-809:50:27 name="watch" type=Fn([Opaque(Process)], Void)
-          arg: field-access #94 811:50:29-845:50:63 name="unwrap!" type=Opaque(Process) resolved=call("Result.unwrap!", Result(Opaque(Process)))
-            target: call #93 811:50:29-837:50:55 name="Process.spawn" piped=false type=Result(Opaque(Process))
+          arg: field-access #96 811:50:29-874:50:92 name="unwrap!" type=Opaque(Process) resolved=call("Result.unwrap!", Result(Opaque(Process)))
+            target: call #95 811:50:29-866:50:84 name="Process.spawn" piped=false type=Result(Opaque(Process))
               arg: literal #90 825:50:43-828:50:46 value=string:"x" type=String
               arg: list-lit #91 830:50:48-832:50:50 type=List(String)
-              arg: literal #92 834:50:52-836:50:54 value=int:10 type=Int
-      body: binding #101 849:51:3-883:52:1 name="ch"
-        type: type-ref #98 853:51:7-865:51:19 name="Channel"
-          arg: type-ref #97 861:51:15-864:51:18 name="Int"
-        value: call #100 868:51:22-882:51:36 name="Channel.new" piped=false type=Channel(Int)
-          arg: literal #99 880:51:34-881:51:35 value=int:4 type=Int
-      body: binding #108 885:52:3-940:53:1 name="_fed"
-        type: type-ref #104 891:52:9-908:52:26 name="Task"
-          arg: type-ref #103 896:52:14-907:52:25 name="Result"
-            arg: type-ref #102 903:52:21-906:52:24 name="Int"
-        value: call #107 911:52:29-939:52:57 name="Task.spawn_owning" piped=false type=Task(Result(Int))
-          arg: function-ref #105 929:52:47-934:52:52 name="feed" type=Fn([Channel(Int)], Result(Int))
-          arg: name-ref #106 936:52:54-938:52:56 name="ch" type=Channel(Int)
-      body: expr-stmt #113 942:53:3-983:54:1
-        value: call #112 942:53:3-982:53:43 name="Task.spawn_owning" piped=false type=Task(Result(Int))
-          arg: function-ref #109 960:53:21-965:53:26 name="feed" type=Fn([Channel(Int)], Result(Int))
-          arg: call #111 967:53:28-981:53:42 name="Channel.new" piped=false type=Channel(Int)
-            arg: literal #110 979:53:40-980:53:41 value=int:2 type=Int
+              arg: construct #94 834:50:52-865:50:83 type="Process.Options" type=Struct(Process.Options)
+                arg: named-arg #93 850:50:68-864:50:82 name="timeout_ms"
+                  value: literal #92 862:50:80-864:50:82 value=int:10 type=Int
+      body: binding #103 878:51:3-912:52:1 name="ch"
+        type: type-ref #100 882:51:7-894:51:19 name="Channel"
+          arg: type-ref #99 890:51:15-893:51:18 name="Int"
+        value: call #102 897:51:22-911:51:36 name="Channel.new" piped=false type=Channel(Int)
+          arg: literal #101 909:51:34-910:51:35 value=int:4 type=Int
+      body: binding #110 914:52:3-969:53:1 name="_fed"
+        type: type-ref #106 920:52:9-937:52:26 name="Task"
+          arg: type-ref #105 925:52:14-936:52:25 name="Result"
+            arg: type-ref #104 932:52:21-935:52:24 name="Int"
+        value: call #109 940:52:29-968:52:57 name="Task.spawn_owning" piped=false type=Task(Result(Int))
+          arg: function-ref #107 958:52:47-963:52:52 name="feed" type=Fn([Channel(Int)], Result(Int))
+          arg: name-ref #108 965:52:54-967:52:56 name="ch" type=Channel(Int)
+      body: expr-stmt #115 971:53:3-1012:54:1
+        value: call #114 971:53:3-1011:53:43 name="Task.spawn_owning" piped=false type=Task(Result(Int))
+          arg: function-ref #111 989:53:21-994:53:26 name="feed" type=Fn([Channel(Int)], Result(Int))
+          arg: call #113 996:53:28-1010:53:42 name="Channel.new" piped=false type=Channel(Int)
+            arg: literal #112 1008:53:40-1009:53:41 value=int:2 type=Int

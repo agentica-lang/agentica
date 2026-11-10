@@ -11,29 +11,38 @@ agentica --deny-run tool.agc
 ```
 
 - Timeouts are positive milliseconds and include the wait for the handle's lock. A timeout during stream I/O kills and closes the program; a timeout while waiting for the lock keeps it; a timed-out wait for exit does not terminate it.
-- Arguments go to the program as they are. No shell is involved. Every waiting function takes a timeout in milliseconds, and the spawn functions default it to 30000. `Process.spawn_captured` and `Process.spawn_channel` also default `dir` to `"."`; arguments fill from the left, so a timeout cannot be given without `dir`.
+- Arguments go to the program as they are. No shell is involved. Every waiting function takes a timeout in milliseconds; the spawn functions take theirs in [Process.Options](#processoptions), 30000 by default.
 - A program you start belongs to the task that started it and stops when that task ends, however it ends. Programs still running stop when yours ends. [Task.spawn_owning](/library/concurrency/task/#taskspawn_owning) gives one to a new task.
+
+## Process.Options
+
+```signature
+Process.Options(timeout_ms: Int = 30000, chdir: String = ".", env: Map[String, String] = {}, out: String = "", err: String = "", pgroup: Bool = false)
+```
+
+The options of `Process.spawn`, `Process.spawn_captured` and `Process.spawn_channel`, their last argument, which defaults to `Process.Options()`. Give only the fields you need: `Process.Options(chdir: "build", err: "err.txt")`. The fields are Ruby's `spawn` options (`chdir:`, `out:`, `err:`, `pgroup:`), plus `timeout_ms` and `env` (Ruby passes the environment as the first argument). A timeout or a folder in the place of the options is `CHECK-TYPE-MISMATCH`.
 
 ## Process.spawn
 
 ```signature
-Process.spawn(command: String, args: List[String], timeout_ms: Int = 30000, env: Map[String, String] = {}, out: String = "", err: String = "", pgroup: Bool = false) -> Result[Process]
+Process.spawn(command: String, args: List[String], options: Process.Options = Process.Options()) -> Result[Process]
 ```
 
 Starts a program with your program's environment, plus the variables of `env`.
 
+- The program starts in the folder `chdir` (`"."`, the default, is the current one). An empty `chdir` or one with a NUL byte gives `error("process: chdir must be nonempty and cannot contain NUL")`, and one that is not a folder `error("process: directory is unavailable")`. The command is found from the current folder, not from `chdir`.
 - A name with no `/` (`"echo"`) is looked up in each `PATH` folder, in order. The current folder is never added and empty entries are skipped; a relative entry such as `bin` is looked up under the current folder, as in the shell.
 - A command with `/` is a path (on Windows `\` and a drive such as `C:` too), relative to the current folder: run a local program as `"./tool"`.
-- `env` sets variables for that program only, on top of a copy of your environment: a pair replaces the variable of the same name (Windows ignores case, also of letters like `Ä`, and a map with two names that differ only in case is an `error`), and an empty value is a value. Your own environment does not change, and a `PATH` in `env` does not change how the command is found: your `PATH` resolves it, and only the program sees the new one. An empty name, a name with `=`, or a NUL byte in a name or value is an `error`, and so are `AGENTICA_CHANNEL`, `AGENTICA_VM_METRICS`, `AGENTICA_VM_METRICS_FILE` and `UV_USE_IO_URING`, which the VM owns. `spawn_captured` and `spawn_channel` take `env` after `timeout_ms`.
+- `env` sets variables for that program only, on top of a copy of your environment: a pair replaces the variable of the same name (Windows ignores case, also of letters like `Ä`, and a map with two names that differ only in case is an `error`), and an empty value is a value. Your own environment does not change, and a `PATH` in `env` does not change how the command is found: your `PATH` resolves it, and only the program sees the new one. An empty name, a name with `=`, or a NUL byte in a name or value is an `error`, and so are `AGENTICA_CHANNEL`, `AGENTICA_VM_METRICS`, `AGENTICA_VM_METRICS_FILE` and `UV_USE_IO_URING`, which the VM owns.
 - A name not found, or one that names a directory, gives `error("process: executable is unavailable")`. A file that cannot run (no execute permission) is an error from `spawn`.
 - An empty command, or a NUL byte in the command or an argument, gives `error("process: command must be nonempty and arguments cannot contain NUL")`.
-- `out` and `err`, when not empty, are files that get the program's standard output and error, with no shell and without the 1 MiB limit of a read or a captured stream (Ruby's `spawn(cmd, out: path)`). Each is created or truncated, on Unix with mode 0666 less where the umask clears bits, as `File.write_text` and a shell's `>` make it; a file that exists keeps its mode. A relative path starts at the current folder. `out` and `err` naming one file share it, as `> file 2>&1` does. A stream sent to a file is not readable: `read_line` gives the end of output at once, and nothing is forwarded to your standard error. A folder, the descriptor behind your standard output or error (`/proc/self/fd/5`), one of the program's own internal pipes, or on Windows a path starting `\\.\` or `\\?\` gives `error("process: out does not refer to a regular file")` (or `err`), as the `File` calls refuse them. A file that cannot be opened (a missing parent folder, no permission) gives an error that starts with `process: cannot open the out file` (or `err`) and names the system error. Either way no program starts. A NUL byte gives `error("process: out and err cannot contain NUL")`, and `--deny-fs` turns them off. The files are opened just before the start, so a start that then fails (a file that cannot run) may leave them created or truncated, as a shell's `>` does.
-- `pgroup: true` (also the last parameter of `spawn_captured` and `spawn_channel`) starts the program in its own process group, as a new session on Linux and macOS. Unlike Ruby's `pgroup: true`, the new session leaves the program with no controlling terminal, so a prompt on `/dev/tty` fails. As for any group of its own, a Ctrl-C or hangup of the terminal reaches it only through your program's stop of its children, and a `SIGKILL` of your program leaves the group running. A stop of the program while it runs (`close`, a stream timeout, the end of the run, a signal to your program) signals the whole group, so the programs it started end with it: a compiler driver and its `cc1`, or `sh` and its `sleep`. After a `SIGTERM` the group gets `SIGKILL` when the grace ends, even if the program itself has already exited. A descendant left behind by a program that exited on its own, before any stop, is not stopped. A program started without `pgroup` is stopped alone, and its own children can outlive it. On Windows `pgroup` changes nothing: the program is stopped alone.
+- `out` and `err`, when not empty, are files that get the program's standard output and error, with no shell and without the 1 MiB limit of a read or a captured stream (Ruby's `spawn(cmd, out: path)`). Each is created or truncated, on Unix with mode 0666 less where the umask clears bits, as `File.write_text` and a shell's `>` make it; a file that exists keeps its mode. A relative path starts at the current folder. `out` and `err` naming one file share it, as `> file 2>&1` does. A stream sent to a file is not readable: `read_line` gives the end of output at once, and nothing is forwarded to your standard error. A folder, the descriptor behind your standard output or error (`/proc/self/fd/5`), one of the program's own internal pipes, or on Windows a path starting `\\.\` or `\\?\` gives `error("process: out does not refer to a regular file")` (or `err`), as the `File` calls refuse them. A file that cannot be opened (a missing parent folder, no permission) gives an error that starts with `process: cannot open the out file` (or `err`) and names the system error. Either way no program starts. A NUL byte gives `error("process: out and err cannot contain NUL")`, and `--deny-fs` turns them off. The files are opened just before the start, so a start that then fails (a file that cannot run) may leave them created or truncated, as a shell's `>` does. Only `Process.spawn` takes them: `spawn_captured` and `spawn_channel` give `error("process: out and err need Process.spawn")`.
+- `pgroup: true` (also for `spawn_captured` and `spawn_channel`) starts the program in its own process group, as a new session on Linux and macOS. Unlike Ruby's `pgroup: true`, the new session leaves the program with no controlling terminal, so a prompt on `/dev/tty` fails. As for any group of its own, a Ctrl-C or hangup of the terminal reaches it only through your program's stop of its children, and a `SIGKILL` of your program leaves the group running. A stop of the program while it runs (`close`, a stream timeout, the end of the run, a signal to your program) signals the whole group, so the programs it started end with it: a compiler driver and its `cc1`, or `sh` and its `sleep`. After a `SIGTERM` the group gets `SIGKILL` when the grace ends, even if the program itself has already exited. A descendant left behind by a program that exited on its own, before any stop, is not stopped. A program started without `pgroup` is stopped alone, and its own children can outlive it. On Windows `pgroup` changes nothing: the program is stopped alone.
 - Windows: only `.exe` and `.com` run (`PATHEXT` is not read; a suffixless name tries `.exe` first; use `cmd.exe` by name for a shell). These fail: a name ending in a dot, a space, `.cmd` or `.bat`; one starting with `\\?\` or `\\.\`; a `:` that is not a drive.
 
 ```agentica {mode="check"}
 def main() -> Void
-  p = Process.spawn("echo", ["hello"], 1000).unwrap!
+  p = Process.spawn("echo", ["hello"]).unwrap!
   puts(Process.read_line(p, 1000))
   puts(Process.wait(p, 1000))
 end
@@ -46,7 +55,7 @@ ok(0)
 
 ```agentica {mode="check"}
 def main() -> Void
-  p = Process.spawn("sh", ["-c", "echo $GREETING"], 1000, {"GREETING": "hello"}).unwrap!
+  p = Process.spawn("sh", ["-c", "echo $GREETING"], Process.Options(env: {"GREETING": "hello"})).unwrap!
   puts(Process.read_line(p, 1000))
 end
 ```
@@ -57,7 +66,8 @@ ok("hello")
 
 ```agentica {mode="check"}
 def main() -> Void
-  p = Process.spawn("sh", ["-c", "echo report; echo warning >&2"], 1000, {}, "out.txt", "err.txt").unwrap!
+  options = Process.Options(out: "out.txt", err: "err.txt")
+  p = Process.spawn("sh", ["-c", "echo report; echo warning >&2"], options).unwrap!
   puts(Process.wait(p, 1000))
   puts(File.read_text("out.txt"))
 end
@@ -79,7 +89,7 @@ Write to the program's standard input, and flush. A send takes at most 1048576 b
 
 ```agentica {mode="check"}
 def main() -> Void
-  p = Process.spawn("cat", [], 1000).unwrap!
+  p = Process.spawn("cat", []).unwrap!
   _ = Process.send(p, "ping\n", 1000)
   puts(Process.read_line(p, 1000))
   Process.close(p)
@@ -112,7 +122,7 @@ Closes the program's input, so it sees the end of input. It flushes first, and c
 
 ```agentica {mode="check"}
 def main() -> Void
-  p = Process.spawn("wc", ["-l"], 1000).unwrap!
+  p = Process.spawn("wc", ["-l"]).unwrap!
   _ = Process.send(p, "a\nb\n", 1000)
   _ = Process.close_stdin(p, 1000)
   puts(Process.read_line(p, 1000).unwrap!.strip)
@@ -148,10 +158,10 @@ Its standard error goes to yours, unless started with `Process.spawn_captured` o
 ## Process.spawn_captured
 
 ```signature
-Process.spawn_captured(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000, env: Map[String, String] = {}, pgroup: Bool = false) -> Result[Process]
+Process.spawn_captured(command: String, args: List[String], options: Process.Options = Process.Options()) -> Result[Process]
 ```
 
-Starts a program in the folder `dir` (`"."`, the default, is the current one; an empty, NUL or non-directory `dir` is an error) and keeps its output. The command is found as for `Process.spawn`, from the current folder, not from `dir`.
+Starts a program as `Process.spawn` does, in the folder `chdir`, and keeps its output.
 
 - Standard output and error are read all the time into buffers of 1 MiB each, so the program never blocks on a full pipe and its standard error is never printed. `read_line` and `read_bytes` read standard output as usual.
 - Past 1 MiB of waiting standard output, or of standard error, the rest is dropped and every read of standard output gives `error("process: output exceeds 1048576 bytes")`. `Process.read_bytes(p, 0, timeout)` gives it at once, to check without waiting.
@@ -167,7 +177,7 @@ Waits until a captured program has closed its standard output and error, then gi
 
 ```agentica {mode="check"}
 def main() -> Void
-  p = Process.spawn_captured("sh", ["-c", "echo one; echo two; echo oops >&2"], ".", 1000).unwrap!
+  p = Process.spawn_captured("sh", ["-c", "echo one; echo two; echo oops >&2"]).unwrap!
   puts(Process.read_line(p, 1000))
   out = Process.output(p, 1000).unwrap!
   puts(out.stdout)
@@ -189,7 +199,7 @@ false
 ## Process.spawn_channel
 
 ```signature
-Process.spawn_channel(command: String, args: List[String], dir: String = ".", timeout_ms: Int = 30000, env: Map[String, String] = {}, pgroup: Bool = false) -> Result[Process]
+Process.spawn_channel(command: String, args: List[String], options: Process.Options = Process.Options()) -> Result[Process]
 ```
 
 Like `Process.spawn_captured`, and also opens a private channel to the program, apart from its standard input, output and error. It carries lines of text both ways, on Linux, macOS and Windows.
@@ -218,7 +228,7 @@ Process.channel_close(p: Process, timeout_ms: Int) -> Result[Void]
 ```agentica {mode="check"}
 def main() -> Void
   script = "read line <&3; echo \"got $line\" >&3"
-  p = Process.spawn_channel("sh", ["-c", script], ".", 1000).unwrap!
+  p = Process.spawn_channel("sh", ["-c", script]).unwrap!
   _ = Process.channel_send(p, "hello\n", 1000)
   puts(Process.channel_read_line(p, 1000))
   Process.close(p)
@@ -245,7 +255,7 @@ Gives, and removes, the standard output of a captured program that has arrived s
 ```agentica {mode="check"}
 def main() -> Void
   script = "echo working; echo done >&3"
-  p = Process.spawn_channel("sh", ["-c", script], ".", 1000).unwrap!
+  p = Process.spawn_channel("sh", ["-c", script]).unwrap!
   puts(Process.channel_read_line(p, 1000))
   puts(Process.read_available(p, 1000))
   Process.close(p)

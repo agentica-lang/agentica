@@ -180,7 +180,7 @@ end
 def remove_temp(temp: String) -> Void
   if System.os() == "windows"
     pattern = Paths.join(temp, "*").replace("/", "\\")
-    spawned = Process.spawn_captured("attrib", ["-R", "/S", "/D", pattern], ".", FS_TIMEOUT_MS)
+    spawned = Process.spawn_captured("attrib", ["-R", "/S", "/D", pattern], Process.Options(timeout_ms: FS_TIMEOUT_MS))
     if spawned.ok?
       child = spawned.unwrap!
       _ = Process.wait(child, FS_TIMEOUT_MS)

@@ -33,7 +33,7 @@ def main() -> Void
   args = System.args()
   f = File.open(args[0], "write", 1000).unwrap!
   File.write(f, "buffered", 1000).unwrap!
-  p = Process.spawn(args[1], ["-c", args[2]], 1000).unwrap!
+  p = Process.spawn(args[1], ["-c", args[2]], Process.Options(timeout_ms: 1000)).unwrap!
   puts(Process.read_line(p, 5000).unwrap!)
   IO.flush()
   Task.sleep(30000)

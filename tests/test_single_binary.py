@@ -43,9 +43,9 @@ SEED = (
 STDIN_AND_ARGS = (
     'def main() -> Void\n  puts("args #{System.args()}")\n  puts("line #{IO.gets()}")\n  System.exit(3)\nend\n')
 SPAWN_CALL = (
-    'Process.spawn_captured("cmd", ["/c", "echo child"], ".", 5000)'
+    'Process.spawn_captured("cmd", ["/c", "echo child"], Process.Options(timeout_ms: 5000))'
     if TARGET_OS == "windows"
-    else 'Process.spawn_captured("sh", ["-c", "echo child"], ".", 5000)'
+    else 'Process.spawn_captured("sh", ["-c", "echo child"], Process.Options(timeout_ms: 5000))'
 )
 # The start of the error of a Process start under --deny-run, which programs may test.
 DENIED = "denied: --deny-run"

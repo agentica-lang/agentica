@@ -19,7 +19,7 @@ PEER = FIXTURES / "process-peer.js"
 PROGRAM = """\
 def main() -> Void
   args = System.args()
-  p = Result.unwrap!(Process.%s(args[0], [args[1], "hold"]%s, 5000))
+  p = Result.unwrap!(Process.%s(args[0], [args[1], "hold"], Process.Options(timeout_ms: 5000)))
   _ = Process.read_line(p, 5000)
   Process.close(p)
   Task.sleep(1500)
@@ -27,9 +27,9 @@ end
 """
 
 
-def exit_line(tmp_path, spawn, extra):
+def exit_line(tmp_path, spawn):
     source = tmp_path / "stop.agc"
-    source.write_text(PROGRAM % (spawn, extra), encoding="utf-8")
+    source.write_text(PROGRAM % spawn, encoding="utf-8")
     bytecode = compile_agc(source, tmp_path / "stop.agcb")
     trace = tmp_path / "trace.txt"
     env = {"AGENTICA_VM_TRACE": "proc", "AGENTICA_VM_TRACE_FILE": trace}
@@ -44,8 +44,8 @@ def exit_line(tmp_path, spawn, extra):
 
 
 def test_a_plain_child_stopped_by_close_reports_raw_status_1_and_sigkill(tmp_path):
-    assert exit_line(tmp_path, "spawn", "") == (1, 9)
+    assert exit_line(tmp_path, "spawn") == (1, 9)
 
 
 def test_a_captured_child_stopped_by_close_reports_raw_status_1_and_sigterm(tmp_path):
-    assert exit_line(tmp_path, "spawn_captured", ', "."') == (1, 15)
+    assert exit_line(tmp_path, "spawn_captured") == (1, 15)

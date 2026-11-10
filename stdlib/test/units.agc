@@ -75,7 +75,7 @@ end
 
 def list(settings: Settings, path: String, bytecode: String) -> Listed
   where = Report.Span(file: path, line: 1, column: 1, end_column: 1)
-  spawned = Process.spawn_channel(settings.vm, args(settings, bytecode, 1000000, "list"), ".", 30000)
+  spawned = Process.spawn_channel(settings.vm, args(settings, bytecode, 1000000, "list"))
   return broken(Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where), "") if not spawned.ok?
   p = spawned.unwrap!
   _ = Process.close_stdin(p, 5000)
@@ -154,12 +154,7 @@ end
 
 def run_child(settings: Settings, path: String, bytecode: String, chosen: List[UnitTest]) -> Report.FileResult
   where = Report.Span(file: path, line: 1, column: 1, end_column: 1)
-  spawned = Process.spawn_channel(
-    settings.vm,
-    args(settings, bytecode, 1000000 * (chosen.size + 1), "run"),
-    ".",
-    30000,
-  )
+  spawned = Process.spawn_channel(settings.vm, args(settings, bytecode, 1000000 * (chosen.size + 1), "run"))
 
   if not spawned.ok?
     return Report.file_error(path, "tests", Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where))

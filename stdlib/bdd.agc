@@ -471,7 +471,8 @@ def start(ctx: Context, path: String) -> Context
   # No --max-steps: the program runs as `agentica FILE.agc` does. A runaway program ends with its scenario, whose
   # deadline and `within N milliseconds` steps are the limits.
   args = settings.agentica.drop(1).concat(flags).concat([file]).concat(ctx.scenario.arguments)
-  spawned = Process.spawn_captured(settings.agentica[0], args, settings.base, 30000, ctx.scenario.env)
+  options = Process.Options(chdir: settings.base, env: ctx.scenario.env)
+  spawned = Process.spawn_captured(settings.agentica[0], args, options)
   if not spawned.ok?
     if spawned.message == "process: executable is unavailable"
       halt(ctx, "RUNTIME-BDD-INFRA", "Agentica executable is unavailable")

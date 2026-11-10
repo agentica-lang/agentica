@@ -20,16 +20,16 @@ PY_PEER = FIXTURES / "process-peer.py"
 
 
 def spawn(node, mode, extra=""):
-    return '  p = Result.unwrap!(Process.spawn(%s, [%s, "%s"%s], 5000))\n' % (agc_literal(node), agc_literal(PEER), mode, extra)
+    return '  p = Result.unwrap!(Process.spawn(%s, [%s, "%s"%s], Process.Options(timeout_ms: 5000)))\n' % (agc_literal(node), agc_literal(PEER), mode, extra)
 
 
 def captured(node, mode, body, prefix=""):
-    return ('%sdef main() -> Void\n  p = Result.unwrap!(Process.spawn_captured(%s, [%s, "%s"], ".", 5000))\n%s\nend\n\n'
+    return ('%sdef main() -> Void\n  p = Result.unwrap!(Process.spawn_captured(%s, [%s, "%s"], Process.Options(timeout_ms: 5000)))\n%s\nend\n\n'
             % (prefix, agc_literal(node), agc_literal(PEER), mode, body))
 
 
 def probe(node, pid):
-    return ('Process.wait(Result.unwrap!(Process.spawn(%s, [%s, "probe", %s], 5000)), 5000)'
+    return ('Process.wait(Result.unwrap!(Process.spawn(%s, [%s, "probe", %s], Process.Options(timeout_ms: 5000))), 5000)'
             % (agc_literal(node), agc_literal(PEER), pid))
 
 
@@ -96,15 +96,15 @@ def test_cli_capability_guards_execution_while_check_and_help_work_without_it(tm
 def test_unavailable_and_malformed_commands_return_errors_without_a_child(tmp_path):
     assert output(
         tmp_path,
-        'def main() -> Void\n  IO.inspect(Result.ok?(Process.spawn("agentica-nonexistent-command-5l", [], 1000)))\n'
-        '  IO.inspect(Result.ok?(Process.spawn("", [], 1000)))\n  nul = String.from_code(0)\n'
-        '  IO.inspect(Result.ok?(Process.spawn("node", [nul], 1000)))\nend\n\n') == "false\nfalse\nfalse\n"
+        'def main() -> Void\n  IO.inspect(Result.ok?(Process.spawn("agentica-nonexistent-command-5l", [], Process.Options(timeout_ms: 1000))))\n'
+        '  IO.inspect(Result.ok?(Process.spawn("", [], Process.Options(timeout_ms: 1000))))\n  nul = String.from_code(0)\n'
+        '  IO.inspect(Result.ok?(Process.spawn("node", [nul], Process.Options(timeout_ms: 1000))))\nend\n\n') == "false\nfalse\nfalse\n"
 
 
 def test_a_bare_command_is_searched_in_path(tmp_path):
     node = tool("node")
     name = os.path.splitext(os.path.basename(node))[0]
-    text = ('def main() -> Void\n  p = Result.unwrap!(Process.spawn(%s, [%s, "args", "x"], 5000))\n'
+    text = ('def main() -> Void\n  p = Result.unwrap!(Process.spawn(%s, [%s, "args", "x"], Process.Options(timeout_ms: 5000)))\n'
             '  puts(Result.unwrap!(Process.read_line(p, 5000)))\n  Result.unwrap!(Process.wait(p, 5000))\nend\n\n'
             % (agc_literal(name), agc_literal(PEER)))
     result = cli_run(write(tmp_path, "program.agc", text))
@@ -121,7 +121,7 @@ def test_a_bare_command_is_not_looked_for_in_the_working_directory_or_an_empty_p
     else:
         (here / "tool").write_text("#!/bin/sh\necho 7\n")
         (here / "tool").chmod(0o755)
-    text = ('def main() -> Void\n  started = Process.spawn("tool", ["-e", "console.log(7)"], 5000)\n'
+    text = ('def main() -> Void\n  started = Process.spawn("tool", ["-e", "console.log(7)"], Process.Options(timeout_ms: 5000))\n'
             '  puts(started.ok?)\n  if started.ok?\n    puts(Result.unwrap!(Process.read_line(started.unwrap!, 5000)))\n'
             '  end\nend\n\n')
     program_file = write(tmp_path, "program.agc", text)
@@ -281,11 +281,13 @@ def test_closing_a_plain_child_returns_only_after_it_is_gone_even_when_it_ignore
     assert output(tmp_path, program(node, "stubborn", body)) == "ok(1)\n"
 
 
-def python_child(mode, words=(), dir=None, timeout=5000):
-    """Program text that starts the Python peer in `mode` (captured in `dir`, else plain) and prints its first line."""
+def python_child(mode, words=(), dir=None, timeout=5000, kind="spawn_captured"):
+    """Program text that starts the Python peer in `mode` (with `kind` in `dir`, else plain) and prints its first
+    line."""
     arguments = ", ".join([agc_literal(PY_PEER), '"%s"' % mode] + [agc_literal(word) for word in words])
-    start = ('Process.spawn_captured(%s, [%s], %s, %d)' % (agc_literal(PYTHON), arguments, agc_literal(dir), timeout)
-             if dir else 'Process.spawn(%s, [%s], %d)' % (agc_literal(PYTHON), arguments, timeout))
+    chdir = ", chdir: %s" % agc_literal(dir) if dir else ""
+    start = "Process.%s(%s, [%s], Process.Options(timeout_ms: %d%s))" % (
+        kind if dir else "spawn", agc_literal(PYTHON), arguments, timeout, chdir)
     return ('def main() -> Void\n  started = %s\n  if !started.ok?\n    puts("not started")\n    return\n  end\n'
             '  p = Result.unwrap!(started)\n  puts(Result.unwrap!(Process.read_line(p, 5000)))\n'
             '  Process.close(p)\nend\n\n' % start)
@@ -299,14 +301,15 @@ def test_arguments_reach_an_independent_python_child_unchanged(tmp_path):
     assert json.loads(out) == WORDS
 
 
-def test_the_child_starts_in_the_given_directory_and_a_bad_directory_is_an_error(tmp_path):
+@pytest.mark.parametrize("kind", ["spawn", "spawn_captured", "spawn_channel"])
+def test_the_child_starts_in_the_chdir_folder_and_a_bad_one_is_an_error(tmp_path, kind):
     directory = tmp_path / "dir ñ 🙂"
     directory.mkdir()
-    out = output(tmp_path, python_child("cwd", dir=str(directory)))
+    out = output(tmp_path, python_child("cwd", dir=str(directory), kind=kind))
     assert os.path.samefile(out.strip("\n"), directory)
     (tmp_path / "file").write_text("x")
     for bad in (tmp_path / "file", tmp_path / "missing"):
-        assert output(tmp_path, python_child("cwd", dir=str(bad))) == "not started\n"
+        assert output(tmp_path, python_child("cwd", dir=str(bad), kind=kind)) == "not started\n"
 
 
 def test_the_spawns_leave_out_the_timeout_and_the_directory(tmp_path):
@@ -337,7 +340,7 @@ def test_the_child_environment_is_inherited_without_the_vm_private_entries(tmp_p
 
 def test_a_very_long_argument_is_an_error_where_the_system_limits_the_command_line_else_it_arrives(tmp_path):
     word = "x" * 40000
-    text = ('def main() -> Void\n  p = Process.spawn(%s, [%s, "args", %s], 5000)\n  puts(p.ok?)\n'
+    text = ('def main() -> Void\n  p = Process.spawn(%s, [%s, "args", %s], Process.Options(timeout_ms: 5000))\n  puts(p.ok?)\n'
             '  if p.ok?\n    puts(String.length(Result.unwrap!(Process.read_line(p.unwrap!, 5000))))\n'
             '    Process.close(p.unwrap!)\n  end\nend\n\n' % (agc_literal(PYTHON), agc_literal(PY_PEER), agc_literal(word)))
     out = output(tmp_path, text)
@@ -349,8 +352,8 @@ def test_a_file_that_cannot_run_is_an_error_and_the_next_spawn_still_works(tmp_p
     bad = tmp_path / "bad.exe"
     bad.write_text("#!/nonexistent/interpreter\n")
     bad.chmod(0o755)
-    text = ('def main() -> Void\n  IO.inspect(Result.ok?(Process.spawn(%s, [], 5000)))\n%s'
-            % (agc_literal(bad), "  puts(Result.unwrap!(Process.read_line(Result.unwrap!(Process.spawn(%s, [%s, \"args\"], 5000)), 5000)))\nend\n\n"
+    text = ('def main() -> Void\n  IO.inspect(Result.ok?(Process.spawn(%s, [], Process.Options(timeout_ms: 5000))))\n%s'
+            % (agc_literal(bad), "  puts(Result.unwrap!(Process.read_line(Result.unwrap!(Process.spawn(%s, [%s, \"args\"], Process.Options(timeout_ms: 5000))), 5000)))\nend\n\n"
                % (agc_literal(PYTHON), agc_literal(PY_PEER))))
     assert output(tmp_path, text) == "false\n[]\n"
 
@@ -358,7 +361,7 @@ def test_a_file_that_cannot_run_is_an_error_and_the_next_spawn_still_works(tmp_p
 def streams_to(count, out, err, command=None, read="Process.read_line(p, 5000)"):
     """Program text that starts the Python peer in streams mode with `out` and `err` (Agentica expressions) as the
     files, then prints `read` and the exit code, or the error of the spawn."""
-    start = 'Process.spawn(%s, [%s, "streams", "%d"], 5000, {}, %s, %s)' % (
+    start = 'Process.spawn(%s, [%s, "streams", "%d"], Process.Options(timeout_ms: 5000, out: %s, err: %s))' % (
         command or agc_literal(PYTHON), agc_literal(PY_PEER), count, out, err)
     return ('def main() -> Void\n  started = %s\n  if !started.ok?\n    puts(started.message)\n    return\n  end\n'
             '  p = started.unwrap!\n  IO.inspect(%s)\n  IO.inspect(Process.wait(p, 5000))\n'
@@ -388,6 +391,29 @@ def test_out_and_err_send_the_streams_to_files_created_or_truncated(tmp_path):
     assert err.read_bytes() == b"err\n"
 
 
+@pytest.mark.parametrize("kind", ["spawn_captured", "spawn_channel"])
+def test_out_and_err_are_only_for_process_spawn(tmp_path, kind):
+    target = tmp_path / "out.txt"
+    for field in ("out", "err"):
+        text = ('def main() -> Void\n  started = Process.%s(%s, [%s, "args"], Process.Options(%s: %s))\n'
+                '  puts(started.message)\nend\n\n' % (kind, agc_literal(PYTHON), agc_literal(PY_PEER), field,
+                                                       agc_literal(target)))
+        assert output(tmp_path, text) == "process: out and err need Process.spawn\n"
+    assert not target.exists()
+
+
+def test_options_layout_matches_the_vm_reader():
+    """vm/process.c reads Process.Options by position (OPTION_*): the catalog's field order must be the same."""
+    root = FIXTURES.parent.parent
+    catalog = (root / "compiler/catalog/builtins_data.agc").read_text(encoding="utf-8")
+    record = re.search(r'name: "Process\.Options",\n    fields: \[(.*?)\n    \],', catalog, re.S).group(1)
+    fields = re.findall(r'name: "([a-z_]+)"', record)
+    reader = (root / "vm/process.c").read_text(encoding="utf-8")
+    names = re.search(r"enum \{ (OPTION_[A-Z_, ]+) \};", reader).group(1).split(", ")
+    assert names[-1] == "OPTION_FIELDS"
+    assert [name.removeprefix("OPTION_").lower() for name in names[:-1]] == fields
+
+
 def test_an_out_or_err_file_that_cannot_be_opened_is_an_error_and_no_child_runs(tmp_path):
     late = tmp_path / "late.txt"
     for out, err, expected in [
@@ -407,8 +433,8 @@ def test_an_out_or_err_file_that_cannot_be_opened_is_an_error_and_no_child_runs(
 
 
 @host_only(TARGET_OS == "windows", "Windows has no process groups that a stop signals; pgroup stops the child alone")
-@pytest.mark.parametrize("start", ['Process.spawn(%s, [%s, "family"], 5000, {}, "", "", %s)',
-                                   'Process.spawn_captured(%s, [%s, "family"], ".", 5000, {}, %s)'],
+@pytest.mark.parametrize("start", ['Process.spawn(%s, [%s, "family"], Process.Options(timeout_ms: 5000, pgroup: %s))',
+                                   'Process.spawn_captured(%s, [%s, "family"], Process.Options(timeout_ms: 5000, pgroup: %s))'],
                          ids=["spawn", "captured"])
 def test_closing_a_child_started_with_pgroup_stops_its_own_children(tmp_path, start):
     """The Python peer starts a grandchild and waits. With pgroup, close signals the child's whole process group
@@ -436,7 +462,7 @@ def stopped_family(tmp_path, ending, *mode):
     and returns at once, or just returns: either way the end of the run comes inside the child's 1 s grace."""
     stop = "  Process.close(p)\n" if ending == "close" else ""
     words = ", ".join(agc_literal(word) for word in ("family",) + mode)
-    text = ('def main() -> Void\n  p = Result.unwrap!(Process.spawn_captured(%s, [%s, %s], ".", 5000, {}, true))\n'
+    text = ('def main() -> Void\n  p = Result.unwrap!(Process.spawn_captured(%s, [%s, %s], Process.Options(timeout_ms: 5000, pgroup: true)))\n'
             '  puts(Result.unwrap!(Process.read_line(p, 5000)))\n%send\n\n' % (agc_literal(PYTHON), agc_literal(PY_PEER),
                                                                                words, stop))
     return output(tmp_path, text).strip()

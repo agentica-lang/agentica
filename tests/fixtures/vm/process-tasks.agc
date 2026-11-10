@@ -1,5 +1,5 @@
 def echo(word: String) -> String
-  p = Result.unwrap!(Process.spawn("cat", [], 5000))
+  p = Result.unwrap!(Process.spawn("cat", [], Process.Options(timeout_ms: 5000)))
   Result.unwrap!(Process.send(p, "#{word}\n", 5000))
   line = Result.unwrap!(Process.read_line(p, 5000))
   Process.close(p)
@@ -20,7 +20,7 @@ end
 def main() -> Void
   a = Task.spawn(&echo, "alpha")
   b = Task.spawn(&echo, "beta")
-  p = Result.unwrap!(Process.spawn("cat", [], 5000))
+  p = Result.unwrap!(Process.spawn("cat", [], Process.Options(timeout_ms: 5000)))
   reader = Task.spawn(&drain, p)
   data = String.join(List.repeat("abcdefgh", 65536), "")
   IO.inspect(Process.send(p, data, 5000))

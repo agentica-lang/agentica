@@ -101,7 +101,7 @@ end
 ENV_PROGRAM = """\
 def main() -> Void
   puts("own #{Result.unwrap!(System.env("AGENTICA_VM_METRICS"))} #{Result.unwrap!(System.env("AGENTICA_VM_METRICS_FILE"))}")
-  p = Result.unwrap!(Process.spawn_captured("env", [], ".", 5000))
+  p = Result.unwrap!(Process.spawn_captured("env", [], Process.Options(timeout_ms: 5000)))
   out = Result.unwrap!(Process.output(p, 10000))
   for line in out.stdout.split("\\n")
     if line.starts_with?("AGENTICA_VM_METRICS") or line.starts_with?("OTHER_VARIABLE=")

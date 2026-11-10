@@ -1065,7 +1065,7 @@ MULTICORE_CHILDREN = {"AGENTICA_SCHEDULERS": SCHEDULERS}
 PROC_FAN = r"""def echo(n: Int) -> String
   first = "import sys; x = sys.stdin.readline().strip(); print('got-' + x, flush=True); "
   script = first + "sys.stderr.write('err-' + x + '\\n'); sys.exit(7)"
-  p = Process.spawn_captured(System.args()[0], ["-c", script], ".", 20000).unwrap!
+  p = Process.spawn_captured(System.args()[0], ["-c", script], Process.Options(timeout_ms: 20000)).unwrap!
   sent = Process.send(p, "#{n}\n", 20000)
   line = Process.read_line(p, 20000)
   status = Process.wait(p, 20000)
@@ -1075,7 +1075,7 @@ PROC_FAN = r"""def echo(n: Int) -> String
 end
 
 def plain(n: Int) -> String
-  p = Process.spawn(System.args()[0], ["-c", "import sys; sys.exit(#{n})"], 20000).unwrap!
+  p = Process.spawn(System.args()[0], ["-c", "import sys; sys.exit(#{n})"], Process.Options(timeout_ms: 20000)).unwrap!
   status = Process.wait(p, 20000)
   Process.close(p)
   return "#{status}"
@@ -1134,12 +1134,12 @@ end
 
 def watch(pid: String) -> Process
   args = System.args()
-  return Process.spawn(args[0], [args[1], args[2], "watch", pid], 5000).unwrap!
+  return Process.spawn(args[0], [args[1], args[2], "watch", pid], Process.Options(timeout_ms: 5000)).unwrap!
 end
 
 def main() -> Void
   args = System.args()
-  p = Process.spawn_captured(args[0], [args[1], args[2], "quiet"], ".", 5000).unwrap!
+  p = Process.spawn_captured(args[0], [args[1], args[2], "quiet"], Process.Options(timeout_ms: 5000)).unwrap!
   r = Task.spawn(&reader, p)
   w = Task.spawn(&waiter, p)
   s = Task.spawn(&sender, p)
@@ -1153,7 +1153,7 @@ def main() -> Void
   IO.inspect(Process.read_line(p, 100))
   Process.close(p)
   IO.inspect(Process.wait(p, 100))
-  owned = Process.spawn(args[0], [args[1], args[2], "sleep"], 5000).unwrap!
+  owned = Process.spawn(args[0], [args[1], args[2], "sleep"], Process.Options(timeout_ms: 5000)).unwrap!
   pid = Process.read_line(owned, 20000).unwrap!
   o = Task.spawn_owning(&reader, owned)
   Task.sleep(20)
@@ -1185,11 +1185,11 @@ PROC_DEADLINE = r"""def main() -> Void
   k = 0
   while k < 16
     pause = "0.0#{2 + k % 4}"
-    p = Process.spawn(args[0], [args[1], args[2].replace("PAUSE", pause)], 5000).unwrap!
+    p = Process.spawn(args[0], [args[1], args[2].replace("PAUSE", pause)], Process.Options(timeout_ms: 5000)).unwrap!
     got = "#{Process.wait(p, 30)}"
     waits = waits.put(got, waits.get(got, 0) + 1)
     Process.close(p)
-    q = Process.spawn_captured(args[0], [args[1], args[3].replace("PAUSE", pause)], ".", 5000).unwrap!
+    q = Process.spawn_captured(args[0], [args[1], args[3].replace("PAUSE", pause)], Process.Options(timeout_ms: 5000)).unwrap!
     line = "#{Process.read_line(q, 30)}"
     if line != "ok(\"hi\")"
       line = "#{line} then #{Process.read_line(q, 1000)}"
@@ -1247,8 +1247,8 @@ end
 
 def main() -> Void
   args = System.args()
-  plain = Process.spawn(args[0], [args[1], args[2], "sleep"], 5000).unwrap!
-  captured = Process.spawn_captured(args[0], [args[1], args[2], "sleep"], ".", 5000).unwrap!
+  plain = Process.spawn(args[0], [args[1], args[2], "sleep"], Process.Options(timeout_ms: 5000)).unwrap!
+  captured = Process.spawn_captured(args[0], [args[1], args[2], "sleep"], Process.Options(timeout_ms: 5000)).unwrap!
   pids = "#{Process.read_line(plain, 20000).unwrap!} #{Process.read_line(captured, 20000).unwrap!}"
   Task.spawn(&read, plain)
   Task.spawn(&wait, captured)
@@ -1320,7 +1320,7 @@ def send_batch(b: Batch) -> Result[Void]
 end
 
 def parent(binary: String, bytecode: String) -> Void
-  p = Process.spawn_channel(binary, ["run", "--", bytecode, binary, bytecode, "child"], ".", 5000).unwrap!
+  p = Process.spawn_channel(binary, ["run", "--", bytecode, binary, bytecode, "child"], Process.Options(timeout_ms: 5000)).unwrap!
   senders = [0, 100, 200, 300].map do |from|
     Task.spawn(&send_batch, Batch(p: p, from: from))
   end
@@ -1378,11 +1378,11 @@ end
 
 def main() -> Void
   args = System.args()
-  p = Process.spawn(args[0], [args[1], args[2], "cat"], 5000).unwrap!
+  p = Process.spawn(args[0], [args[1], args[2], "cat"], Process.Options(timeout_ms: 5000)).unwrap!
   pid = Process.read_line(p, 20000).unwrap!
   t = Task.spawn_owning(&parent, p)
   puts(Task.await(t).ok?)
-  watcher = Process.spawn(args[0], [args[1], args[2], "watch", pid], 5000).unwrap!
+  watcher = Process.spawn(args[0], [args[1], args[2], "watch", pid], Process.Options(timeout_ms: 5000)).unwrap!
   IO.inspect(Process.read_line(watcher, 20000))
   puts(Task.pending_count())
 end
@@ -1426,14 +1426,14 @@ end
 
 def main() -> Void
   args = System.args()
-  p = Process.spawn_channel(args[0], [args[1], args[2], "channel"], ".", 5000).unwrap!
+  p = Process.spawn_channel(args[0], [args[1], args[2], "channel"], Process.Options(timeout_ms: 5000)).unwrap!
   r = Task.spawn(&reader, p)
   s = Task.spawn(&sender, p)
   puts(Process.read_line(p, 30000).unwrap!)
   Process.close(p)
   puts(Task.await(r))
   puts(Task.await(s))
-  q = Process.spawn_channel(args[0], [args[1], args[2], "channel"], ".", 5000).unwrap!
+  q = Process.spawn_channel(args[0], [args[1], args[2], "channel"], Process.Options(timeout_ms: 5000)).unwrap!
   t = Task.spawn_owning(&holder, q)
   puts(Task.await(t).ok?)
   Process.close(q)
@@ -1470,7 +1470,7 @@ SPAWN_AT_END = r"""def spawner(dir: String) -> Int
   args = System.args()
   n = 0
   while n < 100000
-    _ = Process.spawn(args[0], [args[1], args[2], "record", dir], 5000)
+    _ = Process.spawn(args[0], [args[1], args[2], "record", dir], Process.Options(timeout_ms: 5000))
     n = n + 1
   end
   return n
@@ -1559,7 +1559,7 @@ def main() -> Void
       Test.eq(total, 204)
     end,
     Test.test("a child process") do
-      p = try Process.spawn_captured(PYTHON, ["-c", "print('hi')"], ".", 20000)
+      p = try Process.spawn_captured(PYTHON, ["-c", "print('hi')"], Process.Options(timeout_ms: 20000))
       line = try Process.read_line(p, 5000)
       Process.close(p)
       Test.eq(line, "hi")
@@ -2244,7 +2244,7 @@ def main() -> Void
     TCP.close(near)
     TCP.close_listener(server)
 
-    child = Process.spawn(python, ["-c", "import time; time.sleep(60)"], 5000).unwrap!
+    child = Process.spawn(python, ["-c", "import time; time.sleep(60)"], Process.Options(timeout_ms: 5000)).unwrap!
     _ = Task.await(Task.spawn_owning(&own_process, child))
     seen = tally(seen, "wait", "#{Process.wait(child, 1000)}")
     round = round + 1

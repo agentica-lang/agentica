@@ -206,10 +206,17 @@ SINGLE_FILE = [
                '  _ = File.each_line("a.txt") do |line|\n    puts(line)\n    ok()\n  end\n'
                '  puts(File.foreach("a.txt").first(1))\n  puts(File.foreach("a.txt", 4096).first(1))\n'
                '  puts(File.foreach("a.txt").write_lines("b.txt"))\n'), None, None),
-    ("the process starts may leave out the timeout, and the captured ones the directory too",
-     main_with('  _ = Process.spawn("ls", ["-l"])\n  _ = Process.spawn("ls", [], 50)\n'
-               '  _ = Process.spawn_captured("ls", [])\n  _ = Process.spawn_captured("ls", [], "d")\n'
-               '  _ = Process.spawn_channel("ls", [], "d", 50)\n  _ = Process.spawn_channel("ls", [])\n'), None, None),
+    ("the process starts may leave out Process.Options, and Process.Options any field",
+     main_with('  _ = Process.spawn("ls", ["-l"])\n  _ = Process.spawn("ls", [], Process.Options(timeout_ms: 50))\n'
+               '  _ = Process.spawn_captured("ls", [])\n  _ = Process.spawn_captured("ls", [], Process.Options(chdir: "d"))\n'
+               '  _ = Process.spawn_channel("ls", [], Process.Options(chdir: "d", timeout_ms: 50))\n'
+               '  _ = Process.spawn_channel("ls", [])\n'), None, None),
+    ("Process.Options is a type any file may name, and each field has a default",
+     'def start(options: Process.Options) -> Result[Process]\n  return Process.spawn("ls", [], options)\nend\n\n'
+     + main_with('  o: Process.Options = Process.Options(env: {"A": "1"}, out: "o.txt", err: "e.txt", pgroup: true)\n'
+                 '  puts(o.chdir)\n  _ = start(o.with(chdir: "/"))\n'), None, None),
+    ("Process.Options has no dir field: it is chdir",
+     main_with('  o = Process.Options(dir: "d")\n'), "CHECK-UNKNOWN-FIELD", 'dir: "d"'),
     ("Process.spawn_captured still needs its command and arguments",
      main_with('  c = Process.spawn_captured("ls")\n'), "CHECK-ARITY", 'Process.spawn_captured("ls")'),
     ("TlsClientOptions may leave out every field, and HttpClientOptions its tls, which is none",
@@ -428,8 +435,8 @@ def test_programs_of_several_files(title, files, code, file, text, agentica_chec
     assert_multi_file_case(agentica_check, files, code, file, text, assert_exact_span)
 
 
-# The forms before contexts, and a context where its Optional goes, carry a help: (title, program, code, text the range
-# covers). Only the presence of the help is asserted, not its text.
+# The forms before contexts and before Process.Options, and a context where its Optional goes, carry a help: (title,
+# program, code, text the range covers). Only the presence of the help is asserted, not its text.
 HELPED = [
     ("a TlsContext where HttpClientOptions takes its Optional",
      main_with('  c = TLS.client_context(TlsClientOptions()).unwrap!\n  a = HttpClientOptions(tls: c)\n'),
@@ -438,13 +445,23 @@ HELPED = [
      main_with('  a = HttpClientOptions(tls: "ca.pem")\n'), "CHECK-TYPE-MISMATCH", '"ca.pem"'),
     ("a CA file where TLS.connect takes a TlsContext",
      main_with('  a = TLS.connect("h", 1, "", 50)\n'), "CHECK-TYPE-MISMATCH", '""'),
+    ("a timeout where the spawns take Process.Options",
+     main_with('  a = Process.spawn("ls", [], 5000)\n'), "CHECK-TYPE-MISMATCH", "5000"),
+    ("a directory where the spawns take Process.Options",
+     main_with('  a = Process.spawn_captured("ls", [], "d")\n'), "CHECK-TYPE-MISMATCH", '"d"'),
+    ("a folder and a timeout where the spawns take Process.Options",
+     main_with('  a = Process.spawn_captured("git", ["status"], ".", 5000)\n'), "CHECK-ARITY",
+     'Process.spawn_captured("git", ["status"], ".", 5000)'),
+    ("a timeout and an env map where Process.spawn takes Process.Options",
+     main_with('  a = Process.spawn("sh", [], 1000, {"A": "b"})\n'), "CHECK-ARITY",
+     'Process.spawn("sh", [], 1000, {"A": "b"})'),
     ("TLS.listen with the PEM paths",
      main_with('  a = TLS.listen("h", 0, "c.pem", "k.pem")\n'), "CHECK-ARITY", 'TLS.listen("h", 0, "c.pem", "k.pem")'),
 ]
 
 
 @pytest.mark.parametrize(("title", "program", "code", "text"), HELPED, ids=[case[0] for case in HELPED])
-def test_old_tls_forms_have_a_help(title, program, code, text, agentica_check):
+def test_old_forms_have_a_help(title, program, code, text, agentica_check):
     found = assert_program_diagnostic(agentica_check, program, code)
     assert_exact_span(program, found["range"], text)
     assert found.get("help"), found

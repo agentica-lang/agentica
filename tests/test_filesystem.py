@@ -601,8 +601,8 @@ def test_file_calls_cannot_reopen_the_vms_own_pipes_so_a_later_spawn_does_not_de
       path = "@FD_ROOT@/" + name
       read = File.read_text(path, 100).ok?
       append = File.open(path, "append", 100).ok?
-      out = Process.spawn("true", [], 1000, {}, path)
-      err = Process.spawn("true", [], 1000, {}, "", path)
+      out = Process.spawn("true", [], Process.Options(timeout_ms: 1000, out: path))
+      err = Process.spawn("true", [], Process.Options(timeout_ms: 1000, err: path))
       IO.inspect([read, append, out.ok?, err.ok?])
       info = File.stat(path, 100)
       if info.ok? and info.unwrap!.kind == "fifo"
@@ -610,7 +610,7 @@ def test_file_calls_cannot_reopen_the_vms_own_pipes_so_a_later_spawn_does_not_de
       end
     end
   end
-  p = Process.spawn("true", [], 1000).unwrap!
+  p = Process.spawn("true", [], Process.Options(timeout_ms: 1000)).unwrap!
   IO.inspect(Process.wait(p, 1000))
 end
 """, peer="clean", schedulers="1")

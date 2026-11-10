@@ -18,6 +18,11 @@ import Failure from "link_failure"
 import Modules from "modules"
 import Resolve from "resolve_import"
 
+# The builtin types with a module name that is no family, which any file may name: C.Pointer, the type of a C pointer
+# (the extern blocks of native code), Native.Mutex, the lock of a native library, and Process.Options, the options of
+# the spawns. The types of a family are family_member's.
+MODULE_TYPES = Set.new(["C.Pointer", "Native.Mutex", "Process.Options"])
+
 ## What the linker knows while it rewrites one file: the settings, every module, the file itself, the linked names of
 ## the user structs the file may update (StructUpdate.visible), and ids, the number of node ids of the program (the
 ## receiver of a rewritten NAME.method(...) takes the id ids + the id of the call). type_parameters are the type
@@ -267,12 +272,10 @@ def std_record?(alias: String, member: String, want: Want) -> Bool
   end
 end
 
-# A builtin type with a module name that is no family, which any file may name: C.Pointer, the type of a C pointer (the
-# extern blocks of native code) and Native.Mutex, the lock of a native library. The types of a family are
-# family_member's.
+# True for one of MODULE_TYPES where a type is wanted.
 def builtin_type?(alias: String, member: String, want: Want) -> Bool
   case want
-    Want.Type -> return (alias == "C" and member == "Pointer") or (alias == "Native" and member == "Mutex")
+    Want.Type -> return MODULE_TYPES.include?("#{alias}.#{member}")
     _ -> return false
   end
 end

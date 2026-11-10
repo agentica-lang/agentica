@@ -50,9 +50,9 @@ end
 
 def spawn_shell(script: String, channel: Bool) -> Void
   args = ["-c", script]
-  spawned = Process.spawn_captured("sh", args, ".", 5000)
+  spawned = Process.spawn_captured("sh", args, Process.Options(timeout_ms: 5000))
   if channel
-    spawned = Process.spawn_channel("sh", args, ".", 5000)
+    spawned = Process.spawn_channel("sh", args, Process.Options(timeout_ms: 5000))
   end
   p = spawned.unwrap!
   puts(Process.output(p, 5000).unwrap!.stdout)
@@ -66,7 +66,7 @@ def spawning() -> Void
 end
 
 def ask(peer_program: String, peer: String, mode: String) -> Void
-  p = Process.spawn_channel(peer_program, [peer, "child", mode], ".", 5000).unwrap!
+  p = Process.spawn_channel(peer_program, [peer, "child", mode], Process.Options(timeout_ms: 5000)).unwrap!
   _ = Process.close_stdin(p, 1000)
   if mode == "echo"
     done("send", Process.channel_send(p, "hello\n", 2000))
@@ -114,14 +114,14 @@ def ask(peer_program: String, peer: String, mode: String) -> Void
 end
 
 def plain(peer_program: String, peer: String) -> Void
-  p = Process.spawn_captured(peer_program, [peer, "child", "plain"], ".", 5000).unwrap!
+  p = Process.spawn_captured(peer_program, [peer, "child", "plain"], Process.Options(timeout_ms: 5000)).unwrap!
   show("read", Process.channel_read_line(p, 300))
   done("send", Process.channel_send(p, "x\n", 300))
   done("close", Process.channel_close(p, 300))
   puts("exit: #{Process.wait(p, 3000).inspect}")
   show("printed", Process.read_available(p, 3000))
   Process.close(p)
-  q = Process.spawn(peer_program, ["--version"], 1000).unwrap!
+  q = Process.spawn(peer_program, ["--version"], Process.Options(timeout_ms: 1000)).unwrap!
   show("not captured", Process.read_available(q, 300))
   Process.close(q)
 end

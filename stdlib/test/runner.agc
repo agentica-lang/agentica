@@ -384,7 +384,7 @@ end
 
 # The list child sends the patterns of BDD.run in order on its channel and exits, so the channel is read until it ends.
 def list_steps(config: Config, where: Report.Span) -> Listing
-  spawned = Process.spawn_channel(config.vm, vm_args(config, 1000000, "list", ""), ".", 30000)
+  spawned = Process.spawn_channel(config.vm, vm_args(config, 1000000, "list", ""))
   return Listing.Broken(Report.error_at("RUNTIME-BDD-INFRA", spawned.message, where)) if not spawned.ok?
   p = spawned.unwrap!
   _ = Process.close_stdin(p, 5000)
@@ -519,7 +519,7 @@ def run_child(
   cover: String,
 ) -> Run
   count = item.steps.size
-  spawned = Process.spawn_channel(config.vm, vm_args(config, 1000000 * (count + 1), "scenario", cover), ".", 30000)
+  spawned = Process.spawn_channel(config.vm, vm_args(config, 1000000 * (count + 1), "scenario", cover))
   if not spawned.ok?
     return Run(failed_at: 0, verdict: failure("RUNTIME-BDD-INFRA", spawned.message, item.steps[0].span))
   end
