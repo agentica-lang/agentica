@@ -26,3 +26,7 @@
 58:17 trailing Return 58:10 "# m"
 66:5 leading ExprStmt 67:5 "# c"
 67:13 trailing ExprStmt 67:5 "# d"
+71:1 leading FunctionDecl 73:1 "# The only statement of an `if` body, with a comment line before it and a comment after it (#1330): the file was"
+72:1 leading FunctionDecl 73:1 "# refused with FMT-INTERNAL."
+75:5 leading ExprStmt 76:5 "# c"
+76:13 trailing ExprStmt 76:5 "# d"

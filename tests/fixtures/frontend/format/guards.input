@@ -1,0 +1,147 @@
+# A guard is written back as a guard; one too long for its line, or whose value takes the lines below it (a heredoc),
+# is written as the `if` it stands for.
+def f(xs: List[Int]) -> Int
+  for x in xs
+    next  if x < 0 # skip
+    # big ones end it
+    break if x > 9
+  end
+
+  return  0 if xs.any? do |x| x == 5 end
+  xs.each do |x| return if x == 1 end
+  case xs.size
+    1 -> return 2 if xs[0] == 2
+    _ -> puts(1)
+  end
+
+  1
+end
+
+def f(text: String) -> Result[Int]
+  return error("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx") if text.empty?
+  ok(1)
+end
+
+def f(x: Int) -> String
+  return <<~A if x > 0
+    a
+    b
+  A
+  ""
+end
+
+# An `if` with one `return`, `break` or `next` becomes a guard, also in a loop, a `case` arm, a block and another `if`.
+# Each `if` after the first is kept: a comment on its `if` line, inside it or on its `end` line, an `else`, a second
+# statement, a statement of several lines (a heredoc).
+def f(xs: List[Int], text: String) -> Int
+  if text == ""
+    return 0
+  end
+
+  for x in xs
+    if x < 0
+      next
+    end
+
+    if x > 9
+      break
+    end
+
+    if x == 5
+      if x == 5
+        return 5
+      end
+    end
+  end
+
+  case text.size
+    1 ->
+      if xs.size == 0
+        return 6
+      end
+    _ -> puts(2)
+  end
+
+  xs.each do |x|
+    if x == 1
+      return
+    end
+  end
+
+  if text == "a" # on the if line
+    return 1
+  end
+
+  if text == "b"
+    # inside
+    return 2
+  end
+
+  if text == "c"
+    return 3
+  end # on the end line
+  if text == "d"
+    return 3
+  else
+    puts(1)
+  end
+
+  if text == "e"
+    puts(4)
+    return 4
+  end
+
+  if text == "f"
+    return <<~A.size
+    one
+    two
+  A
+  end
+  8
+end
+
+# The block takes three lines here and one in the output: the guard comes on the first run.
+def f(n: Int) -> Fn[Int, Int]
+  if n > 0
+    return keep() do |x: Int|
+      x + n
+    end
+  end
+  keep() do |x: Int| x end
+end
+
+# A pipe chain of two or more `|>` breaks as the value of a `return`, so it keeps the `if`, and a guard with one
+# becomes the `if`. A method chain with leading dots joins when it fits, as in a body, so it becomes a guard; when it
+# does not fit, the `if` keeps it broken. Comments on the lines around the `if` stay where they are, and a call that
+# the source spreads over lines but that fits is joined into the guard.
+def f(xs: List[Int], c: Bool) -> List[Int]
+  if c
+    return xs |> twice() |> twice()
+  end
+
+  return xs |> twice() |> twice() if not c
+end
+
+def g(xs: List[Int], c: Bool) -> List[Int]
+  if c
+    return xs
+      .map(inc)
+      .select(odd)
+  end
+
+  if xs.size > 1
+    return xs
+      .map(increment_every_item_of_the_list_by_one)
+      .select(keep_only_the_odd_items_of_the_list_and_drop_the_rest)
+  end
+
+  # before the if
+  if not c
+    return f(
+      xs,
+      c,
+    )
+  end
+  # after the end
+  xs
+end

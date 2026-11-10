@@ -1,0 +1,25 @@
+# The guard and the `if` meet at the width: `  return 0 if text == "..."` is 119 columns with 95 characters of text and
+# 120 with 96. Both forms of the source give the guard at 119 and the `if` at 120.
+def f(text: String) -> Int
+  return 0 if text == "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  1
+end
+
+def f(text: String) -> Int
+  return 0 if text == "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  1
+end
+
+def f(text: String) -> Int
+  if text == "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    return 0
+  end
+  1
+end
+
+def f(text: String) -> Int
+  if text == "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    return 0
+  end
+  1
+end

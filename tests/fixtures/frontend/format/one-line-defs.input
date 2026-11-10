@@ -1,0 +1,135 @@
+# A def may follow an import with no empty line, so one written with a body gets none there either.
+import HTTP from "std/http"
+def long_name(first_argument: Int, second_argument: Int) -> Int = first_argument * second_argument + first_argument * 20000
+
+# A one-line def stays one when it fits. A one-line def too long for its line (an exported one with a `##` doc too),
+# or whose value takes lines of its own (a pipe chain of two or more `|>`), is written as the def with a body that it
+# stands for: the value is its last line, with no `return`. A trailing comment stays on the line, and a value spread
+# over lines inside parentheses or with a leading `.` is joined when it fits.
+
+## The product, scaled.
+export def scaled_product(first_argument: Int, second_argument: Int) -> Int = first_argument * second_argument * 7000000
+
+def double(x: Int) -> Int = x * 2 # twice
+
+def inside(a: Int, b: Int) -> Int = (
+  a +
+  b
+)
+
+def summed(xs: List[Int]) -> Int = xs
+  .sum
+
+def piped(xs: List[Int]) -> List[Int] = xs |> twice() |> twice()
+
+def long_name(first_argument: Int, second_argument: Int) -> Int = first_argument * second_argument + first_argument * 20000
+
+# One-line defs may follow each other with no empty line, and `fmt` keeps the author's choice. One that is too long
+# for its line is written with a body, and gets the empty lines of a declaration on both sides, so the output still
+# parses; its neighbours stay one line.
+
+## One.
+export def one() -> Int = 1
+def two() -> Int = 2
+# a note
+def three() -> Int = 3
+def long_name(first_argument: Int, second_argument: Int) -> Int = first_argument * second_argument + first_argument * 20000
+def four() -> Int = 4
+
+def five() -> Int = 5
+
+# A def whose body is one `return value` is written as a one-line def when that fits on its line: with a `##` doc and
+# `export` too, with comment lines right before it and right after its `end`, and when the source spreads the value
+# over lines that the layout joins (arguments, a `.name` line, a `do` block that fits), and for `try`. It keeps its
+# body when a comment sits from its `def` line to its `end` line, when the value takes lines of its own (a pipe chain
+# of two or more `|>`, a `case`), when it does not fit, when the body is anything else (two statements, a guard, a bare
+# `return`), and for a Void function (`main` included). The empty lines are kept as found. A body that stays gives
+# its value without `return` (#1287), but for a `case` value and in a Void function.
+
+## Doubles a number.
+export def double(x: Int) -> Int
+  return x * 2
+end
+
+def triple(x: Int) -> Int
+  return x * 3
+end
+
+# a note before
+def quadruple(x: Int) -> Int
+  return x * 4
+end
+# a note after
+
+def noted(x: Int) -> Int # on the def line
+  return x
+end
+
+def inside(x: Int) -> Int
+  # inside
+  return x
+end
+
+def at_end(x: Int) -> Int
+  return x
+end # on the end line
+
+def spread(a: Int, b: Int) -> Int
+  return add(
+    a,
+    b,
+  )
+end
+
+def parsed(x: String) -> Result[Int]
+  return try parse(x)
+end
+
+def doubled(xs: List[Int]) -> List[Int]
+  return xs.map do |x| x * 2 end
+end
+
+def summed(xs: List[Int]) -> Int
+  return xs
+    .sum
+end
+
+def piped(xs: List[Int]) -> List[Int]
+  return xs |> twice() |> twice()
+end
+
+def two(x: Int) -> Int
+  y = x + 1
+  return y
+end
+
+def guarded(x: Int) -> Int
+  return 0 if x < 0
+end
+
+def sign(x: Int) -> Int
+  return case x
+    0 -> 0
+    _ -> 1
+  end
+end
+
+def long_name(first_argument: Int, second_argument: Int) -> Int
+  return first_argument * second_argument + first_argument * 20000
+end
+
+def say(text: String) -> Void
+  return puts(text)
+end
+
+def nothing() -> Int
+  return
+end
+
+def main() -> Void
+  puts(double(2))
+end
+
+# A one-line def whose value is a `try` and that does not fit is written with `return`: a `try` at the end of a body
+# is a statement, so the bare value would not give it.
+def f() -> Result[Int] = try long_call(1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111)

@@ -1,0 +1,2 @@
+1:1 leading FunctionDecl 3:1 "# The guard and the `if` meet at the width: `  return 0 if text == \"...\"` is 119 columns with 95 characters of text and"
+2:1 leading FunctionDecl 3:1 "# 120 with 96. Both forms of the source give the guard at 119 and the `if` at 120."
