@@ -403,7 +403,7 @@ def place(outline: Outline, marks: Marks, comment: Tokens.Comment) -> Attached
     return Attached(comment: comment, node: enclosing, role: Role.Leading, keyword: "")
   end
 
-  by_order(comment, enclosing, preceding, following, Role.Trailing, Role.Leading)
+  by_order(comment, enclosing, body_end(outline, preceding), following, Role.Trailing, Role.Leading)
 end
 
 # The first of `first` and `second` that exists, with its role; else dangling on `enclosing`.
@@ -478,6 +478,17 @@ def last_statement(outline: Outline, node: Int) -> Int
   return last if last >= 0 and statement?(outline.nodes[last].kind)
 
   -1
+end
+
+# The node a comment after code trails when `node` is the node before it. An `if` branch or a `case` arm ends with its
+# last statement, so a comment after that statement on its line lies past the branch and finds the branch as the node
+# before it; it trails that statement, since the layout writes the comments of a branch on its head line, before the
+# body. Any other node is itself.
+def body_end(outline: Outline, node: Int) -> Int
+  last = last_statement(outline, node)
+  return last if last >= 0
+
+  node
 end
 
 # Whether `following` is the value of `enclosing`, a statement that is one value with no body.
