@@ -27,9 +27,7 @@ TABLE = {
   "pipe": 5,
 }
 
-def short(a: Int, b: Int) -> Int
-  return a + b
-end
+def short(a: Int, b: Int) -> Int = a + b
 
 def a_function_with_a_long_header(first_parameter: String, second_parameter: List[Int], third: Map[String, Int]) -> Int
   return first_parameter.length

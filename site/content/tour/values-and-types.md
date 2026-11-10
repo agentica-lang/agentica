@@ -28,9 +28,7 @@ A `##` line is a doc comment, placed directly above a `def`, `struct`, `enum`, f
 ```agentica
 # An ordinary comment: nothing reads it.
 ## Adds two numbers.
-def add(a: Int, b: Int) -> Int
-  return a + b
-end
+def add(a: Int, b: Int) -> Int = a + b
 
 def main() -> Void
   puts(add(2, 3)) # a note after code

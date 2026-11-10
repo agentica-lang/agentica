@@ -44,9 +44,7 @@ struct Box[T]
   item: Optional[T]
 end
 
-def greet(name: String, title: Optional[String] = none) -> String
-  return "#{title.unwrap_or("Mx")} #{name}"
-end
+def greet(name: String, title: Optional[String] = none) -> String = "#{title.unwrap_or("Mx")} #{name}"
 
 def first_or_none[T](xs: List[T]) -> Optional[T]
   return none if xs.length == 0

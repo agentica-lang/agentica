@@ -23,9 +23,7 @@ struct User
   age: Int
 end
 
-def is_adult(user: User) -> Bool
-  return user.age >= 18
-end
+def is_adult(user: User) -> Bool = user.age >= 18
 
 def main() -> Void
   users = [

@@ -273,9 +273,7 @@ Lazy.write_lines(lazy: Lazy[String], path: String, timeout_ms: Int = 30000) -> R
 Writes each item and a line feed to a file, created or truncated, and gives `ok()` at the end. The file opens before the first item is pulled (a failed open pulls nothing) and is flushed and closed before the terminal returns, whatever ended it; a crash or cancel of the task closes it at the task's end. Lines are buffered and written 64 KiB at a time. What was written before an error stays in the file. `timeout_ms` bounds the open, each write and the close. A bad timeout or path, a failed open, write or close, and a line over 1 MiB end the terminal with that error. A line holding a line feed reads back as two lines with `File.foreach`.
 
 ```agentica {mode="check"}
-def amount(line: String) -> Result[Int]
-  return line.split(",")[1].to_i
-end
+def amount(line: String) -> Result[Int] = line.split(",")[1].to_i
 
 def main() -> Void
   done = (
@@ -317,9 +315,7 @@ ok([[104, 105, 33]])
 A failed `try` in any block of a `Lazy` method (a step, `Lazy.produce`, a terminal), whatever the block's result type, ends the pipeline: no later item is pulled, a file the run opened is closed, and the terminal returns the error. A `try` that succeeds gives its value, so the block still gives a plain item. A block nested in that block, such as the block of a `List.map`, follows the usual rule: `try` there needs a block that returns a `Result` (`CHECK-TRY-CONTEXT`).
 
 ```agentica
-def parse(text: String) -> Result[Int]
-  return text.to_i
-end
+def parse(text: String) -> Result[Int] = text.to_i
 
 def main() -> Void
   words = ["1", "2", "x", "4"]

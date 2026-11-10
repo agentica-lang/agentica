@@ -187,17 +187,11 @@ A block is a value only when it is passed to a call, so a helper that takes a bl
 ```agentica
 import Cache from "std/cache"
 
-def block0[R](f: Fn[R]) -> Fn[R]
-  return f
-end
+def block0[R](f: Fn[R]) -> Fn[R] = f
 
-def block1[A, R](f: Fn[A, R]) -> Fn[A, R]
-  return f
-end
+def block1[A, R](f: Fn[A, R]) -> Fn[A, R] = f
 
-def block2[A, B, R](f: Fn[A, B, R]) -> Fn[A, B, R]
-  return f
-end
+def block2[A, B, R](f: Fn[A, B, R]) -> Fn[A, B, R] = f
 
 def table_get(table: ATS[String, String], key: String) -> Optional[String]
   found = table.get(key)

@@ -77,9 +77,7 @@ struct User
   name: String
 end
 
-def body_as[T](body: String, codec: Codec[T]) -> Result[T]
-  return codec.decode(body)
-end
+def body_as[T](body: String, codec: Codec[T]) -> Result[T] = codec.decode(body)
 
 def main() -> Void
   user = body_as("{\"name\": \"Ana\"}", User.codec).unwrap!

@@ -13,18 +13,14 @@ A table that does not depend on the arguments is a module constant.
 
 ```ruby
 # bad
-def vowel?(c: String) -> Bool
-  return c == "a" or c == "e" or c == "i" or c == "o" or c == "u"
-end
+def vowel?(c: String) -> Bool = c == "a" or c == "e" or c == "i" or c == "o" or c == "u"
 ```
 
 ```ruby
 # good
 VOWELS = Set.new(["a", "e", "i", "o", "u"])
 
-def vowel?(c: String) -> Bool
-  return VOWELS.include?(c)
-end
+def vowel?(c: String) -> Bool = VOWELS.include?(c)
 ```
 
 A key-to-value `if` chain is a `Map` constant read with `get`:

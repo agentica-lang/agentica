@@ -21,6 +21,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `agentica fmt` writes an `if` whose only body is one `return`, `break` or
   `next` as a guard when it fits on the line, so `fmt --check` flags these
   `if`s in existing projects until they are formatted.
+- `agentica fmt` writes a `def` whose body is one `return value` as a one-line
+  def when it fits and holds no comment, so `fmt --check` flags such defs in
+  existing projects until they are formatted.
 
 ## [0.28.0] - 2026-11-10
 

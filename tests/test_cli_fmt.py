@@ -23,7 +23,7 @@ ENDS_BLANK = ('def main() -> Void\n  xs = [1, 2, 3]\n  xs.each do |x|\n    puts(
               '    puts("a")\n  end\n\n  puts(1)\nend\n')
 # Two or more `|>` go one stage per line and close with a `)` alone, a wrapped statement is followed by an empty line,
 # a single `|>` stays on its line, and the last statement of a block gets no empty line after it.
-PIPES_HEAD = 'def twice(n: Int) -> Int\n  return n * 2\nend\n\ndef main() -> Void\n'
+PIPES_HEAD = 'def twice(n: Int) -> Int = n * 2\n\ndef main() -> Void\n'
 PIPES = (PIPES_HEAD + '  n = 3\n  total = n |> twice() |> twice()\n  one = n |> twice()\n  puts(total + one)\nend\n')
 PIPES_LAID_OUT = (PIPES_HEAD + '  n = 3\n  total = (\n    n\n    |> twice()\n    |> twice()\n  )\n\n'
                   '  one = n |> twice()\n  puts(total + one)\nend\n')
@@ -413,18 +413,14 @@ def test_a_wrong_call_is_fmt_usage_with_status_2(tmp_path):
     assert text(tmp_path, "good.agc") == FORMATTED
 
 
-# `fmt` keeps each form of a def: a one-line def stays one when it fits, and a def with a body stays one. A one-line
-# def too long for its line (an exported one with a `##` doc too), or whose value takes lines of its own (a pipe chain
-# of two or more `|>`), is written as the def with a body that it stands for. A trailing comment stays on the line,
-# and a value spread over lines inside parentheses or with a leading `.` is joined when it fits.
+# A one-line def stays one when it fits. A one-line def too long for its line (an exported one with a `##` doc too),
+# or whose value takes lines of its own (a pipe chain of two or more `|>`), is written as the def with a body that it
+# stands for. A trailing comment stays on the line, and a value spread over lines inside parentheses or with a leading
+# `.` is joined when it fits.
 ONE_LINE_DEFS = """## The product, scaled.
 export def scaled_product(first_argument: Int, second_argument: Int) -> Int = first_argument * second_argument * 7000000
 
 def double(x: Int) -> Int = x * 2 # twice
-
-def triple(x: Int) -> Int
-  return x * 3
-end
 
 def inside(a: Int, b: Int) -> Int = (
   a +
@@ -444,10 +440,6 @@ export def scaled_product(first_argument: Int, second_argument: Int) -> Int
 end
 
 def double(x: Int) -> Int = x * 2 # twice
-
-def triple(x: Int) -> Int
-  return x * 3
-end
 
 def inside(a: Int, b: Int) -> Int = a + b
 
@@ -543,3 +535,134 @@ def test_consecutive_one_line_defs_keep_their_layout_and_a_long_one_gets_empty_l
     assert text(tmp_path, "defs.agc") == formatted
     assert fmt("--check", cwd=tmp_path).stdout == ""
     assert fmt("--tree", "defs.agc", cwd=tmp_path).stdout == before.stdout
+
+
+# A def whose body is one `return value` is written as a one-line def when that fits on its line: with a `##` doc and
+# `export` too, with comment lines right before it and right after its `end`, and when the source spreads the value
+# over lines that the layout joins. It keeps its body when a comment sits from its `def` line to its `end` line, when
+# the value takes lines of its own (a pipe chain of two or more `|>`), when it does not fit, when the body is anything
+# else (two statements, a guard), and for a Void function (`main` included). The empty lines are kept as found.
+BODIES = """## Doubles a number.
+export def double(x: Int) -> Int
+  return x * 2
+end
+
+def triple(x: Int) -> Int
+  return x * 3
+end
+
+# a note before
+def quadruple(x: Int) -> Int
+  return x * 4
+end
+# a note after
+
+def noted(x: Int) -> Int # on the def line
+  return x
+end
+
+def inside(x: Int) -> Int
+  # inside
+  return x
+end
+
+def at_end(x: Int) -> Int
+  return x
+end # on the end line
+
+def spread(a: Int, b: Int) -> Int
+  return add(
+    a,
+    b,
+  )
+end
+
+def piped(xs: List[Int]) -> List[Int]
+  return xs |> twice() |> twice()
+end
+
+def two(x: Int) -> Int
+  y = x + 1
+  return y
+end
+
+def guarded(x: Int) -> Int
+  return 0 if x < 0
+end
+
+def long_name(first_argument: Int, second_argument: Int) -> Int
+  return first_argument * second_argument + first_argument * 20000
+end
+
+def say(text: String) -> Void
+  puts(text)
+  return
+end
+
+def main() -> Void
+  puts(double(2))
+end
+"""
+BODIES_FORMATTED = """## Doubles a number.
+export def double(x: Int) -> Int = x * 2
+
+def triple(x: Int) -> Int = x * 3
+
+# a note before
+def quadruple(x: Int) -> Int = x * 4
+# a note after
+
+def noted(x: Int) -> Int # on the def line
+  return x
+end
+
+def inside(x: Int) -> Int
+  # inside
+  return x
+end
+
+def at_end(x: Int) -> Int
+  return x
+end # on the end line
+
+def spread(a: Int, b: Int) -> Int = add(a, b)
+
+def piped(xs: List[Int]) -> List[Int]
+  return (
+    xs
+    |> twice()
+    |> twice()
+  )
+end
+
+def two(x: Int) -> Int
+  y = x + 1
+  return y
+end
+
+def guarded(x: Int) -> Int
+  return 0 if x < 0
+end
+
+def long_name(first_argument: Int, second_argument: Int) -> Int
+  return first_argument * second_argument + first_argument * 20000
+end
+
+def say(text: String) -> Void
+  puts(text)
+  return
+end
+
+def main() -> Void
+  puts(double(2))
+end
+"""
+
+
+def test_a_def_whose_body_is_one_return_is_written_as_a_one_line_def(tmp_path):
+    lay_out(tmp_path, {"bodies.agc": BODIES})
+    before = fmt("--tree", "bodies.agc", cwd=tmp_path)
+    assert fmt(cwd=tmp_path).code == 0
+    assert text(tmp_path, "bodies.agc") == BODIES_FORMATTED
+    assert fmt("--check", cwd=tmp_path).stdout == ""
+    assert fmt("--tree", "bodies.agc", cwd=tmp_path).stdout == before.stdout

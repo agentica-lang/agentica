@@ -618,9 +618,7 @@ A middleware is a function from a `Handler` to a `Handler`: it wraps the next ha
 ```agentica
 import HTTP from "std/http"
 
-def handler(f: HTTP.Handler) -> HTTP.Handler
-  return f
-end
+def handler(f: HTTP.Handler) -> HTTP.Handler = f
 
 def hello(request: HttpRequest) -> Result[HttpResponse]
   return ok(HttpResponse(status: 200, headers: [], body: "hello".bytes))
@@ -637,9 +635,7 @@ def log_answer(next: HTTP.Handler, request: HttpRequest) -> Result[HttpResponse]
 end
 
 # Logs the request line and the status of the answer; an error of the next handler passes through unchanged.
-def logged(next: HTTP.Handler) -> HTTP.Handler
-  return handler() do |request| log_answer(next, request) end
-end
+def logged(next: HTTP.Handler) -> HTTP.Handler = handler() do |request| log_answer(next, request) end
 
 def authorized(next: HTTP.Handler, request: HttpRequest) -> Result[HttpResponse]
   if HTTP.header_values(request.headers, "authorization").empty?
@@ -650,9 +646,7 @@ def authorized(next: HTTP.Handler, request: HttpRequest) -> Result[HttpResponse]
 end
 
 # Answers 401 to a request without an Authorization header, and does not call the next handler.
-def guarded(next: HTTP.Handler) -> HTTP.Handler
-  return handler() do |request| authorized(next, request) end
-end
+def guarded(next: HTTP.Handler) -> HTTP.Handler = handler() do |request| authorized(next, request) end
 
 def main() -> Void
   app = logged(guarded(&hello))
@@ -913,9 +907,7 @@ def echo(ws: HTTP.WebSocket) -> Result[Void]
   return ok()
 end
 
-def home(request: HttpRequest) -> Result[HttpResponse]
-  return ok(HttpResponse(status: 200, headers: [], body: "home".bytes))
-end
+def home(request: HttpRequest) -> Result[HttpResponse] = ok(HttpResponse(status: 200, headers: [], body: "home".bytes))
 
 def route(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   return ok(HTTP.Answer.Upgrade(try HTTP.accept_websocket(request, &echo))) if request.path == "/echo"

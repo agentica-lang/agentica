@@ -12,9 +12,7 @@ The project is hosted on [GitHub](https://github.com/agentica-lang/agentica).
 TAX_PERCENT = 21
 
 ## Returns the price with the tax added.
-def with_tax(cents: Int) -> Int
-  return cents + (cents * TAX_PERCENT) / 100
-end
+def with_tax(cents: Int) -> Int = cents + (cents * TAX_PERCENT) / 100
 
 def main() -> Void
   prices = [250, 1_000, 99]

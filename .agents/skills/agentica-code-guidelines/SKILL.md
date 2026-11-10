@@ -88,6 +88,8 @@ Change style only in code you touch. Restyle untouched code separately.
 - Prefer four or fewer parameters; group more in a struct, and give its
   optional fields defaults so a caller names only what differs. Put options
   last with defaults (`CHECK-DEFAULT-ORDER`).
+- A function whose body is one value is a one-line def
+  (`def double(n: Int) -> Int = n * 2`); `agentica fmt` writes it so.
 - Guard-return bad cases early, with a guard (`return error("empty") if
   text.empty?`, `next if line == ""`). Nest `if`, `for`, `while` and `case` at
   most three levels.

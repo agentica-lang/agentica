@@ -62,9 +62,7 @@ def total(xs: List[Int]) -> Int
   return sum
 end
 
-def doubled(xs: List[Int]) -> List[Int]
-  return xs.map do |x| x * 2 end
-end
+def doubled(xs: List[Int]) -> List[Int] = xs.map do |x| x * 2 end
 ```
 
 ## Pipes
@@ -76,17 +74,11 @@ Instead of rebinding `out = f(out)` three times:
 
 ```ruby
 # good
-def trim_all(text: String) -> String
-  return text
-end
+def trim_all(text: String) -> String = text
 
-def shout(text: String) -> String
-  return text.upcase
-end
+def shout(text: String) -> String = text.upcase
 
-def wrap(text: String, mark: String) -> String
-  return "#{mark}#{text}#{mark}"
-end
+def wrap(text: String, mark: String) -> String = "#{mark}#{text}#{mark}"
 
 def banner(text: String) -> String
   return (
@@ -102,9 +94,7 @@ end
 
 ```ruby
 # good
-def parse(text: String) -> Result[Int]
-  return text.trim.to_i
-end
+def parse(text: String) -> Result[Int] = text.trim.to_i
 
 def check(n: Int) -> Result[Int]
   return error("negative: #{n}") if n < 0
@@ -178,9 +168,7 @@ Return a Result and pass it up with `try`. The halting form is for a bug.
 
 ```ruby
 # bad
-def double_text(text: String) -> Int
-  return text.to_i! * 2
-end
+def double_text(text: String) -> Int = text.to_i! * 2
 ```
 
 ```ruby
