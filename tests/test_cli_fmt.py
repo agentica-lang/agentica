@@ -489,3 +489,42 @@ def test_a_one_line_def_and_its_body_form_meet_at_the_width(tmp_path, size, one_
     assert text(tmp_path, "short.agc") == expected
     assert fmt("--check", cwd=tmp_path).stdout == ""
     assert fmt("--tree", "short.agc", cwd=tmp_path).stdout == before.stdout
+
+
+# One-line defs may follow each other with no empty line, and `fmt` keeps the author's choice. One that is too long
+# for its line is written with a body, and gets the empty lines of a declaration on both sides, so the output still
+# parses; its neighbours stay one line.
+CONSECUTIVE = """## One.
+export def one() -> Int = 1
+def two() -> Int = 2
+# a note
+def three() -> Int = 3
+def long_name(first_argument: Int, second_argument: Int) -> Int = first_argument * second_argument + first_argument * 20000
+def four() -> Int = 4
+
+def five() -> Int = 5
+"""
+CONSECUTIVE_FORMATTED = """## One.
+export def one() -> Int = 1
+def two() -> Int = 2
+# a note
+def three() -> Int = 3
+
+def long_name(first_argument: Int, second_argument: Int) -> Int
+  return first_argument * second_argument + first_argument * 20000
+end
+
+def four() -> Int = 4
+
+def five() -> Int = 5
+"""
+
+
+def test_consecutive_one_line_defs_keep_their_layout_and_a_long_one_gets_empty_lines(tmp_path):
+    lay_out(tmp_path, {"defs.agc": CONSECUTIVE})
+    before = fmt("--tree", "defs.agc", cwd=tmp_path)
+    assert before.code == 0, before.stderr
+    assert fmt(cwd=tmp_path).code == 0
+    assert text(tmp_path, "defs.agc") == CONSECUTIVE_FORMATTED
+    assert fmt("--check", cwd=tmp_path).stdout == ""
+    assert fmt("--tree", "defs.agc", cwd=tmp_path).stdout == before.stdout

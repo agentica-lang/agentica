@@ -3894,6 +3894,43 @@ def constant_follows?(e: Base.Env, at: Int) -> Bool
   return constant_start?(e, cursor)
 end
 
+# Whether a one-line def starts at `at`, after its doc block and `export`: a `def` whose signature, outside its
+# parentheses and brackets, has `->` and then `=` before the end of its line.
+def one_line_def_follows?(e: Base.Env, at: Int) -> Bool
+  cursor = at
+  if Base.kind_at(e, cursor) == "DOC"
+    cursor += 2
+  end
+
+  if Base.kind_at(e, cursor) == "export"
+    cursor += 1
+  end
+
+  return false if Base.kind_at(e, cursor) != "def"
+
+  depth = 0
+  arrow = false
+  cursor += 1
+  while cursor < e.size
+    kind = e.tokens[cursor].kind
+    if kind == "left-paren" or kind == "left-bracket"
+      depth += 1
+    elsif kind == "right-paren" or kind == "right-bracket"
+      depth -= 1
+    elsif depth == 0 and kind == "arrow"
+      arrow = true
+    elsif depth == 0 and kind == "assign"
+      return arrow
+    elsif depth == 0 and (kind == "NL" or kind == "EOF")
+      return false
+    end
+
+    cursor += 1
+  end
+
+  return false
+end
+
 # The name in UPPER_SNAKE_CASE for a CamelCase one (MaxDepth is MAX_DEPTH), or "" when the result is still not a
 # constant name (a single letter).
 def constant_suggestion(text: String) -> String
@@ -4263,13 +4300,14 @@ def parse_reexport(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
 end
 
 # The blank line rule: right after a declaration other than an import, the next token must not start a declaration, an
-# import or a doc block (PARSE-MISSING-BLANK-LINE), before the newlines are skipped. The first doc block of a file,
-# followed by a blank line, is the module doc.
+# import or a doc block (PARSE-MISSING-BLANK-LINE), before the newlines are skipped. A constant may follow a constant,
+# and a one-line def a one-line def. The first doc block of a file, followed by a blank line, is the module doc.
 def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
   declarations: List[Ast.Decl] = []
   module_doc: Optional[String] = none
   after_declaration = false
   after_constant = false
+  after_one_line = false
   cursor = 0
   next_id = first_id
   looping = true
@@ -4278,7 +4316,8 @@ def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
     if (
       after_declaration and
       (declaration_start?(e, cursor) or kind == "import" or kind == "DOC") and
-      !(after_constant and constant_follows?(e, cursor))
+      !(after_constant and constant_follows?(e, cursor)) and
+      !(after_one_line and one_line_def_follows?(e, cursor))
     )
       return error(
         Base.bail(
@@ -4295,6 +4334,7 @@ def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
     kind = e.tokens[cursor].kind
     after_declaration = false
     after_constant = false
+    after_one_line = false
     if kind == "EOF"
       looping = false
     elsif (
@@ -4329,6 +4369,7 @@ def parse_program(e: Base.Env, first_id: Int) -> Result[Ast.Program]
       next_id = parsed.ids
       after_declaration = true
       after_constant = constant?(parsed.node)
+      after_one_line = one_line_def?(parsed.node)
     else
       return error(
         Base.bail(
@@ -4351,6 +4392,15 @@ end
 def constant?(decl: Ast.Decl) -> Bool
   case decl
     Ast.Decl.Constant(_) -> return true
+    _ -> return false
+  end
+end
+
+# A one-line def (`def name() -> Type = value`), exported or not.
+def one_line_def?(decl: Ast.Decl) -> Bool
+  case decl
+    Ast.Decl.Function(node) -> return node.expression
+    Ast.Decl.Export(node) -> return one_line_def?(node.declaration)
     _ -> return false
   end
 end
