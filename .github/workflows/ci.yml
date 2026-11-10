@@ -184,7 +184,9 @@ jobs:
           overwrite: true
 
   # `make test`, the modules split in two (SHARD=I/N of mk/test.mk), and the checks that need the CPU or the C test
-  # programs, put where the time is short.
+  # programs, put where the time is short. A VM runs on one scheduler per core unless the test pins a count, so on this
+  # four-core runner `make test` runs the TCP, TLS, HTTP, process and BDD modules on four schedulers: the first step
+  # fails if the runner gets fewer cores (then put `make test-multicore-modules` back here).
   tests-fast:
     name: fast tests (${{ matrix.shard }}/2)
     needs: build
@@ -206,11 +208,14 @@ jobs:
         with:
           artifact: release-build
           targets: dist/agentica build/vm/release/bootstrap/agentica vm-test-binaries
+      - name: The runner has four cores or more
+        run: test "$(nproc)" -ge 4
       - name: make test
         run: make test JOBS=6 SHARD=${{ matrix.shard }}/2
-      - name: The TCP, TLS, HTTP, process and BDD modules with every VM on four schedulers
-        if: matrix.shard == 2
-        run: make test-multicore-modules
+      # The two static checks run even when a test failed, so one CI round reports both.
+      - name: Every file of compiler/ checks, line width and style rules included (agentica check compiler)
+        if: ${{ !cancelled() && matrix.shard == 2 }}
+        run: make check-compiler
       - name: Filesystem removal regressions in Actions-owned scratch
         if: matrix.shard == 2
         run: make test-remove-actions
@@ -218,6 +223,9 @@ jobs:
           AGENTICA_ACTIONS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
       - if: matrix.shard == 1
         run: make vm-latency
+      - name: The layout of compiler/ and stdlib/ (agentica fmt --check)
+        if: ${{ !cancelled() && matrix.shard == 1 }}
+        run: make fmt-check
 
   # The slow tier (make test-slow), the modules split in two: the first shard holds tests/test_vm_multicore.py, which takes
   # the longest by far. The second shard also runs the timing cases of Task.map, which need the CPU alone (so they come
@@ -271,7 +279,7 @@ jobs:
   # The checks of the binary and the sources that are short each. The vendored check is the last build step: it rebuilds
   # build/vm/release/obj with other flags, so nothing that builds may run after it (here: only dup-check, which builds nothing).
   checks:
-    name: C tests, BDD, layout, fixed point, JIT goldens, smoke, stage0, vendored libraries, copy-paste
+    name: C tests, layout, fixed point, JIT goldens, stage0, vendored libraries, copy-paste
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -293,10 +301,8 @@ jobs:
         with:
           artifact: release-build
           targets: dist/agentica build/vm/release/bootstrap/agentica vm-test-binaries
-      - name: Run the C tests, then the BDD specs on the Actions runner
-        run: make -j"$(nproc)" vm-test test-bdd
-        env:
-          AGENTICA_ACTIONS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
+      - name: Run the C tests
+        run: make -j"$(nproc)" vm-test
       # The loop of --jit off must not move silently (tools/layout_check.py). HEAD^1 is the base branch tip, so this compares
       # what the merge changes. An intended change carries the `layout-change` label, which accepts only the exit code 4 of
       # the check (build/layout-check.rc: make itself exits 2). The label is read here, not from the event, so adding it and
@@ -322,12 +328,6 @@ jobs:
         run: make fixed-point
       - name: The goldens and their --max-steps sweeps with the JIT compiling every function it can, then half the golden shards with the JIT off
         run: make vm-jit-test
-      - name: Example smoke runs
-        run: make smoke
-      - name: The layout of compiler/ and stdlib/ (agentica fmt --check)
-        run: make fmt-check
-      - name: Every file of compiler/ checks, line width and style rules included (agentica check compiler)
-        run: make check-compiler
       # A PR that changes bootstrap/stage0.agcb must carry the stage2 that the base branch's stage0 builds from the PR's
       # compiler/. HEAD is the merge commit on pull_request, so HEAD^1 is the base tip. The sums go to the job summary.
       # It runs before the vendored check, which rebuilds the objects with other flags. When only this check failed, the

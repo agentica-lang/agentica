@@ -214,5 +214,5 @@ the programming skill or the site).
 - Tests: `tests/test_bdd.py`, `tests/test_bdd_integration.py` (both through the
   CLI), `tests/test_unit_test.py` with `tests/fixtures/unit/` (the timeout case
   is slow: the 30 s deadline has no flag), the `bdd-*`, `test-report-*` and
-  `test-child` goldens, `tests/std/`; `make test-bdd` runs `tests/bdd/specs`
-  with `tests/bdd/handlers.agc`.
+  `test-child` goldens, `tests/std/`. `tests/bdd/specs` with
+  `tests/bdd/handlers.agc` runs in `test_bdd.py` and `test_bdd_integration.py`.

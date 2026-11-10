@@ -80,14 +80,6 @@ def _actions_scratch() -> tuple[Path, Path, Path, dict[str, str]]:
     return scratch, sentinel, runner_temp, environment
 
 
-def _run_bdd(repository: Path, product: Path, environment: dict[str, str]) -> int:
-    return _run(
-        [str(product), "test", "tests/bdd/specs/", "--steps", "tests/bdd/handlers.agc"],
-        cwd=repository,
-        env=environment,
-    )
-
-
 def _run_filesystem_tests(repository: Path, vm_build: Path, environment: dict[str, str]) -> int:
     if os.name == "nt":
         # tests/conftest.py turns any skip into a failure: a native Windows
@@ -145,8 +137,8 @@ def main(argv: list[str] | None = None) -> int:
     """Run destructive regressions only on an ephemeral Actions runner."""
     arguments = sys.argv[1:] if argv is None else argv
     mode = arguments[0] if arguments else "all"
-    if mode not in ("all", "bdd"):
-        print("usage: run_remove_actions.py [all|bdd]", file=sys.stderr)
+    if mode != "all":
+        print("usage: run_remove_actions.py [all]", file=sys.stderr)
         return 2
     try:
         scratch, sentinel, runner_temp, environment = _actions_scratch()
@@ -163,10 +155,7 @@ def main(argv: list[str] | None = None) -> int:
 
     status = 0
     try:
-        if mode == "bdd":
-            status = _run_bdd(repository, product, environment)
-        else:
-            status = _run_filesystem_tests(repository, vm_build, environment)
+        status = _run_filesystem_tests(repository, vm_build, environment)
     except AssertionError as exc:
         print(f"test-remove-actions: isolated test timed out: {exc}", file=sys.stderr)
         status = 1

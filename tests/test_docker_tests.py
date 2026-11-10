@@ -204,7 +204,7 @@ def test_launcher_requires_container_boundaries_and_runs_probe_only(launcher):
 
 
 def test_destructive_modes_are_networkless_and_marked_for_the_installed_root(launcher):
-    for mode in ("files", "bdd", "windows-wine-tests"):
+    for mode in ("files", "windows-wine-tests"):
         launcher.log.unlink(missing_ok=True)
         result = launcher.run("--mode", mode)
         assert result.returncode == 0, result.stderr
@@ -226,7 +226,6 @@ def test_each_group_runs_its_own_command(launcher):
         "fast": ("make -j\"$jobs\" test",),
         "slow": ("make -j\"$jobs\" test-slow",),
         "files": ("build/vm/release/tree-test", "python3 -m pytest", "tests/test_vm_os_remove.py", "tests/test_bdd_cleanup.py"),
-        "bdd": ("tests/bdd/specs/",),
         "windows-wine-tests": ("tests/test_windows_filesystem_safety.py",),
     }
     for mode, markers in expected.items():

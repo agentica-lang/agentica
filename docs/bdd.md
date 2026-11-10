@@ -13,7 +13,6 @@ is a fixed Agentica program embedded in `agentica`. The user guide is
 make
 dist/agentica test tests/bdd/specs/ --steps tests/bdd/handlers.agc
 dist/agentica --ai test tests/bdd/specs/json-lines.feature
-make test-bdd
 ```
 
 `make` builds the binary, which carries the driver and the runner.

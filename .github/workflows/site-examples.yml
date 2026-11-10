@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - 'site/content/**'
-      - 'tests/test_site_examples.py'
       - '.github/workflows/site-examples.yml'
   workflow_dispatch:
 

@@ -28,6 +28,8 @@ VALID_EXAMPLES = [
     ("result.agc", "42\nempty count\n0\n"),
     ("json.agc", '{"name":"Ana","age":25}\nhello, Ana\nmissing name\n'),
     ("tasks.agc", "Probar Agentica\n"),
+    ("dispatch.agc", "42\n"),
+    ("queue.agc", "first\nsecond\n"),
     ("inventory.agc", "apple\nkiwi\n"),
     ("strings.agc", "AGENTICA, HELLO\n8\n5\nAgentica, world\n"),
     ("blocks.agc", "cocoa: 3.0\ntea: 4.0\nunits: 15\nany empty: true\n"),

@@ -53,7 +53,7 @@ stay.
 - `make test TESTS="tests/test_vm_bits.py tests/test_spec_checker.py"`: a
   subset. `make test` alone runs everything (`JOBS=8` sets the workers).
 - `make vm-test`: the C tests. `make test-cli`: the command line tests.
-  `make smoke`; `make site` before merging a site change.
+  `make site` before merging a site change.
 - `dist/agentica file.agc` runs a program; `... check file.agc` checks;
   `dist/agentica run -- file.agcb` runs compiled bytecode.
 - `make test-slow`: the `@slow` cases (sets `AGENTICA_TEST_SLOW=1`); CI only.
