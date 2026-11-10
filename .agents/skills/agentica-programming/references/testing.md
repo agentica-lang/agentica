@@ -95,6 +95,9 @@ for a test function with parameters, type parameters or another result;
   spawn in a test. The next test still runs after a crash.
 - Each test's `Random` generator is seeded from the run's seed and the test's
   name, so values do not depend on the other tests.
+- Test the functional core in process: feed request bytes to the function the
+  server calls, pass the clock as an argument (no sleep), and compare laws to a
+  `Map` model. One smoke test of the real binary covers the I/O loop.
 
 ## Running tests
 
