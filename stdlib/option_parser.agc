@@ -16,8 +16,9 @@
 ## - `--` ends the options; every later word is a positional argument, as is a lone `-`.
 ## - `--help` or `-h` asks for the usage text: `parse` then returns an error for which `help?` is true.
 ## - An option given twice keeps its last value.
-## - An `Int` option or argument may have a range: `min` and `max` (each `some(n)` or `none`). A value outside it is
-##   refused as any other bad value is, and the help shows it (`[min: 0, max: 65535]`).
+## - An `Int` option or argument may have a range: `min` and `max` (each `some(n)` or `none`); a `Float` one has
+##   `min_float` and `max_float` (`some(0.0)`). A value outside it is refused as any other bad value is, and the help
+##   shows it (`[min: 0, max: 65535]`).
 ## - On and off is a `String` option with `choices: ["on", "off"]`, read with `OP.string(p, "stats") == "on"`: there
 ##   is no Bool kind, because a `Flag` takes no value and a value that is one of two words is what `choices` says.
 ##
@@ -41,8 +42,8 @@ export enum Kind
 end
 
 ## A positional argument. All are required, in the order of the list given to `new`. `metavar` is the name shown in
-## the usage line (default: `name`). `choices` are compared as text. `min` and `max` limit an `Int` argument
-## (`none`: no limit).
+## the usage line (default: `name`). `choices` are compared as text. `min` and `max` limit an `Int` argument, and
+## `min_float` and `max_float` a `Float` one (`none`: no limit).
 export struct Arg
   name: String
   help: String = ""
@@ -51,13 +52,15 @@ export struct Arg
   metavar: String = ""
   min: Optional[Int] = none
   max: Optional[Int] = none
+  min_float: Optional[Float] = none
+  max_float: Optional[Float] = none
 end
 
 ## An option. `name` is the long name (`--port`), `short` one character (`-p`) or "". `default` is a String
 ## converted by `kind` (it applies when the option is not given; "" means no default, and a `Flag` has none).
 ## `choices` are compared as text. `metavar` is the value name shown in the help (default: the choices as `a|b`,
-## else `name` in capitals). `min` and `max` limit an `Int` option (`none`: no limit); they also apply to the
-## default.
+## else `name` in capitals). `min` and `max` limit an `Int` option, and `min_float` and `max_float` a `Float` one
+## (`none`: no limit); they also apply to the default.
 export struct Opt
   name: String
   short: String = ""
@@ -68,6 +71,8 @@ export struct Opt
   metavar: String = ""
   min: Optional[Int] = none
   max: Optional[Int] = none
+  min_float: Optional[Float] = none
+  max_float: Optional[Float] = none
 end
 
 ## The interface of a program, built by `new`.
@@ -102,6 +107,8 @@ struct Slot
   metavar: String
   min: Optional[Int]
   max: Optional[Int]
+  min_float: Optional[Float]
+  max_float: Optional[Float]
   positional: Bool
   flag: Bool
 end
@@ -179,6 +186,8 @@ export def usage(parser: Parser) -> String
     metavar: "",
     min: none,
     max: none,
+    min_float: none,
+    max_float: none,
     positional: false,
     flag: true,
   )
@@ -303,6 +312,15 @@ def int_kind?(kind: Kind) -> Bool
   end
 end
 
+def float_kind?(kind: Kind) -> Bool
+  case kind
+    Kind.Float -> return true
+    Kind.Int -> return false
+    Kind.String -> return false
+    Kind.Flag -> return false
+  end
+end
+
 def flag_kind?(kind: Kind) -> Bool
   case kind
     Kind.Flag -> return true
@@ -325,6 +343,8 @@ def slots_unchecked(parser: Parser) -> List[Slot]
       metavar: arg.metavar,
       min: arg.min,
       max: arg.max,
+      min_float: arg.min_float,
+      max_float: arg.max_float,
       positional: true,
       flag: flag_kind?(arg.kind),
     )
@@ -341,6 +361,8 @@ def slots_unchecked(parser: Parser) -> List[Slot]
       metavar: opt.metavar,
       min: opt.min,
       max: opt.max,
+      min_float: opt.min_float,
+      max_float: opt.max_float,
       positional: false,
       flag: flag_kind?(opt.kind),
     )
@@ -396,16 +418,36 @@ def check_slot(parser: Parser, slot: Slot) -> Result[Void]
     return bad_spec(parser, "the flag #{label(slot)} has no default or choices")
   end
   if (slot.min.some? or slot.max.some?) and !int_kind?(slot.kind)
-    return bad_spec(parser, "#{label(slot)} has min or max but is not an Int")
+    hint = ""
+    if float_kind?(slot.kind)
+      hint = ": a Float has min_float and max_float"
+    end
+    return bad_spec(parser, "#{label(slot)} has min or max but is not an Int#{hint}")
   end
   if slot.min.some? and slot.max.some? and slot.min.unwrap! > slot.max.unwrap!
     return bad_spec(parser, "the min of #{label(slot)} is above its max")
+  end
+  if (slot.min_float.some? or slot.max_float.some?) and !float_kind?(slot.kind)
+    return bad_spec(parser, "#{label(slot)} has min_float or max_float but is not a Float")
+  end
+  if !finite?(slot.min_float) or !finite?(slot.max_float)
+    return bad_spec(parser, "the min_float or max_float of #{label(slot)} is not a finite number")
+  end
+  if slot.min_float.some? and slot.max_float.some? and slot.min_float.unwrap! > slot.max_float.unwrap!
+    return bad_spec(parser, "the min_float of #{label(slot)} is above its max_float")
   end
   return ok() if slot.default.empty? or slot.flag
   case store(empty_parsed(), slot, slot.default)
     ok(_) -> return ok()
     error(message) -> return bad_spec(parser, "invalid default for #{label(slot)}: #{message}")
   end
+end
+
+# Whether a Float limit or value is absent or a finite number: an infinity minus itself is NaN, and NaN minus itself
+# too.
+def finite?(limit: Optional[Float]) -> Bool
+  return true if limit.none?
+  return limit.unwrap! - limit.unwrap! == 0.0
 end
 
 def bad_spec(parser: Parser, message: String) -> Result[Void]
@@ -595,6 +637,15 @@ def store(parsed: Parsed, slot: Slot, text: String) -> Result[Parsed]
     Kind.Float ->
       number = text.to_f
       return error("'#{text}' is not a Float") if !number.ok?
+      # to_f reads what Float#to_s writes (`+inf.0`, `+nan.0`) and gives an infinity for a number too big (`1e400`):
+      # none of them is a value a limit can hold.
+      return error("'#{text}' does not fit a Float") if !finite?(some(number.unwrap!))
+      if slot.min_float.some? and number.unwrap! < slot.min_float.unwrap!
+        return error("'#{text}' is below the minimum #{slot.min_float.unwrap!}")
+      end
+      if slot.max_float.some? and number.unwrap! > slot.max_float.unwrap!
+        return error("'#{text}' is above the maximum #{slot.max_float.unwrap!}")
+      end
       return ok(parsed.with(floats: parsed.floats.put(slot.name, number.unwrap!)))
     Kind.Flag -> return ok(parsed)
   end
@@ -658,6 +709,12 @@ def notes(slot: Slot) -> List[String]
   end
   if slot.max.some?
     limits = limits.push("max: #{slot.max.unwrap!}")
+  end
+  if slot.min_float.some?
+    limits = limits.push("min: #{slot.min_float.unwrap!}")
+  end
+  if slot.max_float.some?
+    limits = limits.push("max: #{slot.max_float.unwrap!}")
   end
   if !limits.empty?
     found = found.push("[#{limits.join(", ")}]")
