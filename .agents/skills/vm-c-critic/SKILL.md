@@ -197,7 +197,7 @@ Exit 124 means a timeout: retry once, then report it.
   prove a concrete bug. Never `make SANITIZE=1` or `GC_STRESS=1`, or the
   `vm-sanitize-*` and `vm-gc-stress` targets.
 - Never run the full `make test`, full golden or vm-diff sweeps,
-  `make vm-sanitize-test`, fuzzing or `make smoke`. Run localized tests, for
+  `make vm-sanitize-test` or fuzzing. Run localized tests, for
   example `make test TESTS="tests/test_vm_stdout.py"`. CI covers the rest.
 - Scratch worktrees and programs live outside the repo (the job's tmp
   directory); remove them at the end. Never `pkill -f`; leave no background

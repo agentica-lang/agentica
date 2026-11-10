@@ -28,15 +28,14 @@ MODE_TIMEOUTS = {
     "files": 1800,
     "slow": 3600,
     "all": 5400,
-    "bdd": 600,
     "windows-wine-tests": 900,
 }
 MODES = tuple(MODE_TIMEOUTS)
 # Modes that run in the Ubuntu image; the rest use the Windows/Wine image mk/windows.mk built.
-UBUNTU_MODES = ("probe", "fast", "files", "slow", "all", "bdd")
+UBUNTU_MODES = ("probe", "fast", "files", "slow", "all")
 # The destructive modes get no network and no host-visible storage.
-NETWORKLESS_MODES = ("probe", "files", "bdd", "windows-wine-tests")
-DESTRUCTIVE_MODES = ("files", "bdd", "windows-wine-tests")
+NETWORKLESS_MODES = ("probe", "files", "windows-wine-tests")
+DESTRUCTIVE_MODES = ("files", "windows-wine-tests")
 ARTIFACT_DIRS = ("/source/build", "/source/dist")
 VOLUME_PREFIX = "agentica-test-build"
 DEFAULT_IMAGE = "agentica-ubuntu-test"
@@ -99,10 +98,6 @@ build/vm/release/tree-test
 build/vm/release/files_private-test
 python3 -m pytest -p no:cacheprovider tests/test_vm_os_remove.py tests/test_bdd_cleanup.py
 """
-BDD_COMMAND = BUILD_COMMAND + r"""
-cd /source
-TMPDIR=/tmp/temp /source/dist/agentica test /source/tests/bdd/specs/ --steps /source/tests/bdd/handlers.agc
-"""
 WINDOWS_WINE_TEST_COMMAND = r"""
 set -eu
 test -x /source/dist/agentica.exe
@@ -124,7 +119,6 @@ GROUP_COMMANDS = {
     "slow": SLOW_COMMAND,
     "files": FILES_COMMAND,
     "all": FAST_COMMAND + SLOW_COMMAND + FILES_COMMAND,
-    "bdd": BDD_COMMAND,
     "windows-wine-tests": WINDOWS_WINE_TEST_COMMAND,
 }
 

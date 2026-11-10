@@ -53,7 +53,7 @@ clean:
 # One file per area, included in this order (vm.mk first: it defines the build mode that the others read):
 #   mk/vm.mk         the C VM: sources, build modes, third-party libraries, system or vendored libgc, OpenSSL and zlib
 #   mk/bootstrap.mk  stage0 to stage3, the embedded data, dist/agentica, fixed-point, stage0-check
-#   mk/test.mk       the Python test runner and groups, conformance, goldens, smoke, fmt-check, check-compiler,
+#   mk/test.mk       the Python test runner and groups, conformance, goldens, fmt-check, check-compiler,
 #                    dup-check, the Docker test image
 #   mk/vm-test.mk    the C tests and the VM checks: sanitizers, TSan, GC stress, fuzz, multicore, lint, layers
 #   mk/windows.mk    the Windows cross build and check in Docker (llvm-mingw and Wine)

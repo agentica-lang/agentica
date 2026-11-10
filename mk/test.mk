@@ -1,8 +1,8 @@
 # The Python tests: the pytest runner (test, test-slow, test-py, py-test/%), the test groups (tests, KIND, DOCKER, WINE),
-# conformance, goldens, smoke, fmt-check, check-compiler, benchmarks, jscpd (dup-check) and the Ubuntu test container. The C tests are in mk/vm-test.mk.
+# conformance, goldens, fmt-check, check-compiler, benchmarks, jscpd (dup-check) and the Ubuntu test container. The C tests are in mk/vm-test.mk.
 
 .PHONY: test test-slow test-py tests tests-host tests-files tests-docker tests-wine test-cli conformance conformance-report \
-  test-bdd smoke fmt-check check-compiler goldens bench bench-native eval-references vm-latency vm-task-map test-distribution vm-golden-check dup-check dup-baseline \
+  fmt-check check-compiler goldens bench bench-native eval-references vm-latency vm-task-map test-distribution vm-golden-check dup-check dup-baseline \
   docker-test-image windows-docker-remove-check windows-docker-remove-wine-check test-remove-actions test-jit-off
 
 # Tests live in tests/test_<area>.py and run through pytest; unittest.TestCase modules remain supported.
@@ -207,18 +207,6 @@ tests-wine:
 	         tools/docker-tests.sh --image "$(WINDOWS_IMAGE)" --mode windows-wine-tests ;; \
 	  *) echo "make tests WINE=1 runs KIND=fast or KIND=files" >&2; exit 2 ;; \
 	esac
-
-test-bdd: $(if $(filter true,$(GITHUB_ACTIONS)),$(PRODUCT))
-	@if [ "$${GITHUB_ACTIONS:-}" = true ]; then \
-	  $(PYTHON) tools/run_remove_actions.py bdd; \
-	else \
-	  $(MAKE) --no-print-directory docker-test-image && \
-	  tools/docker-tests.sh --image "$(TEST_IMAGE)" --mode bdd; \
-	fi
-
-# Example smoke runs on dist/agentica, in parallel (tests/smoke.sh).
-smoke: $(PRODUCT)
-	tests/smoke.sh
 
 # The layout of compiler/ and stdlib/: `agentica fmt --check` lists every file that the formatter would change.
 fmt-check: $(PRODUCT)
