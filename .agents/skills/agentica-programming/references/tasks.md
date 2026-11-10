@@ -17,8 +17,8 @@ task.id -> Int
 ```
 
 Start tasks before awaiting them to overlap I/O. A task calls a named function
-with one argument or none (pass a struct for several values) and has its own
-variables.
+with one argument or none (a struct for several values, built by the caller: the
+task only uses it) and has its own variables.
 Await returns the cached value and can repeat. `false`, `nil` and error Results
 are normal values. `Task[R]` has no constructor, equality, fields or
 JSON encoding. `Task.spawn do ... end` runs a

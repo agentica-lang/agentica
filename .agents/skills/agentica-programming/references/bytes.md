@@ -35,11 +35,21 @@ s.encode(encoding) -> Result[Bytes]
   byte order mark (big-endian without one) and write one; the other forms keep a
   mark as U+FEFF. Errors are strict and end with `at byte N` (decode) or `at
   index N` (encode); an unknown name is an error too. For UTF-8, use `s.bytes`
-  and `String.from_bytes`.
+  and `String.from_bytes`. `latin-1` maps each byte to one character and back:
+  `b.decode("latin-1").unwrap!` and `s.encode("latin-1")` round-trip any bytes
+  (for example inside an `error(...)` text).
 
 - `==` and `!=` compare length and bytes. They are not constant time: compare
   MACs and tokens with `OpenSSL.HMAC.secure_compare`. There is no `<`, and
   `b == "s"` is `CHECK-TYPE-MISMATCH`.
+- Name a byte by its character, not its code:
+
+  ```ruby
+  DIGITS = "0".code.."9".code
+
+  def digit?(b: Bytes, i: Int) -> Bool = DIGITS.include?(b[i])
+  ```
+
 - A `Bytes` is a `Map` key, an `ATS` key or a `Set` item.
 - Not JSON: `JSON.encode(b)` is `CHECK-NOT-ENCODABLE`, and a `Bytes` field of a
   decode target is `CHECK-NOT-DECODABLE`. Write it as Base64 text first.

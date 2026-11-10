@@ -143,6 +143,8 @@ Change style only in code you touch. Restyle untouched code separately.
   Don't swallow errors with `unwrap_or` unless the default is right; explain it.
 - Handle errors at the boundary (`main`, request handler) with `IO.warn`; an
   enum for caller-visible outcomes, `error(msg)` for human-readable failures.
+- A parser returns `Result[T]`, not a struct with a `valid` or `refused`
+  field.
 
 ## Strings and collections
 
