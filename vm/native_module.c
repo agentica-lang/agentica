@@ -53,8 +53,9 @@
    warn, once per function. */
 #define SLOW_NS 1000000u
 /* A short call that took this long by the clock warns whatever its CPU time (note_time): it blocked or slept, which no
-   turn of other threads explains. */
-#define STALL_NS 1000000000u
+   turn of other threads explains (those measured 4 to 16 ms on a loaded machine). A short call that blocks or sleeps
+   for less is not reported. */
+#define STALL_NS 100000000u
 
 /* The kinds of type a signature names; KINDS has the names and how many type arguments each takes of all but the last
    two, a struct and an enum of the program, which a signature names by the bare name of a type block. */
@@ -1005,7 +1006,8 @@ static void run_module(void *arg) {
    short call may take. Where the thread's CPU time before the call is known (CPU_BEFORE; NULL for a dirty call or
    where agc_thread_cpu_ns does not answer), a call under STALL_NS is judged by the CPU time it used: its wall time
    also counts the turns of other threads and processes (a busy machine, a shared CI runner: a few ms per turn) and
-   the waits on a lock that another scheduler holds. A call that blocks for STALL_NS or more still warns. Those builds
+   the waits on a lock that another scheduler holds. So a call that blocks or sleeps under STALL_NS is not reported;
+   one that blocks for STALL_NS or more still warns. Those builds
    only test, so the line goes straight to the C stream. */
 static void note_time(agc_vm *vm, agc_native_fn *fn, uint64_t ns, const uint64_t *cpu_before) {
   if (AGC_PROFILE_REPORTS(vm)) {

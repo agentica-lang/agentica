@@ -4,8 +4,13 @@
    `add`, `points` and `crunch`. It links nothing but the C library: every VM call goes through the env. */
 /* The header next to the VM's sources, so this file builds with no -I (a module of a package gets the header of the
    binary it runs in). */
+/* nanosleep and clock_gettime (nap, spin) under -std=c11. */
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE 200809L
+#endif
 #include "../../../vm/agentica_native.h"
 
+#include <errno.h>
 #include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -199,17 +204,45 @@ static an_term nothing(an_env *env, int argc, const an_term *argv) {
   return an_void(env);
 }
 
-/* A short function that breaks the rule: it keeps the CPU busy for N ms (clock, the process's CPU time, so a turn
-   of other threads does not shorten it) and gives N. The builds of AGC_LEAF_CHECK warn about it. */
+#ifndef _WIN32
+/* The CPU time of the calling thread in ns where the system declares its clock, else of the process (macOS under
+   _POSIX_C_SOURCE); 0 if the clock fails, which ends a spin at once. */
+static uint64_t cpu_ns(void) {
+#ifdef CLOCK_THREAD_CPUTIME_ID
+  struct timespec ts;
+  if (clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts) != 0) return 0;
+  return (uint64_t)ts.tv_sec * 1000000000u + (uint64_t)ts.tv_nsec;
+#else
+  clock_t c = clock();
+  return c == (clock_t)-1 ? 0 : (uint64_t)((double)c * 1e9 / CLOCKS_PER_SEC);
+#endif
+}
+
+/* A short function that breaks the rule: it keeps the CPU busy for N ms of its thread's CPU time and gives N. The
+   builds of AGC_LEAF_CHECK warn about it. */
 static an_term spin(an_env *env, int argc, const an_term *argv) {
   int64_t ms;
   (void)argc;
   if (!an_get_int(env, argv[0], &ms) || ms < 0 || ms > 1000) return an_badarg(env, 0);
-  clock_t start = clock();
-  while ((double)(clock() - start) * 1000.0 < (double)ms * CLOCKS_PER_SEC) {
+  uint64_t start = cpu_ns();
+  if (start)
+    while (cpu_ns() - start < (uint64_t)ms * 1000000u) {
+    }
+  return an_int(env, ms);
+}
+
+/* A short function that sleeps N ms and gives N: a wait under STALL_NS (vm/native_module.c) that the builds of
+   AGC_LEAF_CHECK do not report, since they judge such a call by its CPU time. */
+static an_term nap(an_env *env, int argc, const an_term *argv) {
+  int64_t ms;
+  (void)argc;
+  if (!an_get_int(env, argv[0], &ms) || ms < 0 || ms > 1000) return an_badarg(env, 0);
+  struct timespec ts = {(time_t)(ms / 1000), (long)(ms % 1000) * 1000000L};
+  while (nanosleep(&ts, &ts) != 0 && errno == EINTR) {
   }
   return an_int(env, ms);
 }
+#endif
 
 /* Module bugs that the VM reports: text that is not UTF-8, a Map key that is no key, a result of the wrong type. */
 static an_term bad_text(an_env *env, int argc, const an_term *argv) {
@@ -499,7 +532,10 @@ static const an_function functions[] = {
   {"copy", "(Bytes) -> Bytes", copy, AN_SHORT},
   {"empty", "() -> Bytes", empty, AN_SHORT},
   {"nothing", "() -> Void", nothing, AN_SHORT},
+#ifndef _WIN32
   {"spin", "(Int) -> Int", spin, AN_SHORT},
+  {"nap", "(Int) -> Int", nap, AN_SHORT},
+#endif
   {"bad_text", "() -> String", bad_text, AN_SHORT},
   {"bad_key", "() -> Map[String, Int]", bad_key, AN_SHORT},
   {"lie", "() -> Int", lie, AN_SHORT},
