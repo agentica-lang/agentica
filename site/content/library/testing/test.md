@@ -9,9 +9,7 @@ description: Unit tests in the style of ExUnit, with assertions that return a Re
 ```agentica {mode="check"}
 def parse_port(text: String) -> Result[Int]
   n = try text.strip.to_i
-  if n < 1 or n > 65535
-    return error("port out of range: #{n}")
-  end
+  return error("port out of range: #{n}") if n < 1 or n > 65535
 
   return ok(n)
 end
@@ -33,9 +31,7 @@ A `*_test.agc` file may also have no `main`. Then its top-level functions whose 
 ```agentica {mode="check"}
 def parse_port(text: String) -> Result[Int]
   n = try text.strip.to_i
-  if n < 1 or n > 65535
-    return error("port out of range: #{n}")
-  end
+  return error("port out of range: #{n}") if n < 1 or n > 65535
 
   return ok(n)
 end

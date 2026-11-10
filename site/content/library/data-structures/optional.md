@@ -49,9 +49,7 @@ def greet(name: String, title: Optional[String] = none) -> String
 end
 
 def first_or_none[T](xs: List[T]) -> Optional[T]
-  if xs.length == 0
-    return none
-  end
+  return none if xs.length == 0
 
   return some(xs[0])
 end
@@ -134,9 +132,7 @@ The type comes from an annotation, a return type, a parameter or a field. A bare
 def find(names: List[String], wanted: String) -> Optional[Int]
   index = 0
   for name in names
-    if name == wanted
-      return some(index)
-    end
+    return some(index) if name == wanted
 
     index += 1
   end
@@ -246,9 +242,7 @@ Gives `ok(value)`, or `error(message)` for `none`, so `try` can pass the error o
 ```agentica
 def first_even(numbers: List[Int]) -> Optional[Int]
   for n in numbers
-    if n % 2 == 0
-      return some(n)
-    end
+    return some(n) if n % 2 == 0
   end
 
   return none

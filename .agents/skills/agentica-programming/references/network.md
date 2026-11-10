@@ -312,9 +312,7 @@ app started sends the pieces and closes the channel (`tasks.md`).
 ```ruby
 def produce(events: Channel[Bytes]) -> Void
   for n in 1..3
-    if not Result.ok?(events.send("data: #{n}\n\n".bytes, 5000))
-      break
-    end
+    break if not Result.ok?(events.send("data: #{n}\n\n".bytes, 5000))
     Task.sleep(100)
   end
   events.close

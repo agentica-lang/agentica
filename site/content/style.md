@@ -118,9 +118,7 @@ Say it positively. Put the positive case first and do not pair a negated test wi
 ```agentica {mode="check"}
 # good
 def describe(visible: Bool) -> String
-  if visible
-    return "shown"
-  end
+  return "shown" if visible
 
   return "hidden"
 end
@@ -225,13 +223,9 @@ struct Parcel
 end
 
 def ship(parcel: Parcel) -> Int
-  if parcel.weight <= 0 or parcel.width <= 0
-    return 0
-  end
+  return 0 if parcel.weight <= 0 or parcel.width <= 0
 
-  if parcel.rush
-    return parcel.weight * 3
-  end
+  return parcel.weight * 3 if parcel.rush
 
   return parcel.weight * 2
 end
@@ -545,9 +539,7 @@ Write error text in lowercase, without a final period, and include the bad value
 # good
 def parse_port(text: String) -> Result[Int]
   n = try text.to_i
-  if n < 1 or n > 65535
-    return error("port out of range: #{n}")
-  end
+  return error("port out of range: #{n}") if n < 1 or n > 65535
 
   return ok(n)
 end

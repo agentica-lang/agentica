@@ -20,9 +20,7 @@ early).
 ```ruby
 def parse_port(text: String) -> Result[Int]
   n = try text.strip.to_i
-  if n < 1 or n > 65535
-    return error("port out of range: #{n}")
-  end
+  return error("port out of range: #{n}") if n < 1 or n > 65535
 
   return ok(n)
 end

@@ -167,10 +167,7 @@ def write_events(events: Channel[LogEvent]) -> Result[Void]
   while true
     case events.recv(1000)
       ok(event) -> try File.append_text("app.log", Logger.format_json(event) + "\n", 1000)
-      error(_) ->
-        if events.closed? and events.empty?
-          break
-        end
+      error(_) -> break if events.closed? and events.empty?
     end
   end
 

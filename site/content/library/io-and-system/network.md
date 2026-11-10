@@ -211,9 +211,7 @@ def starttls(host: String, context: TlsContext) -> Result[Socket]
   try reply(plain)
   try TCP.send(plain, "STARTTLS\r\n", 5000)
   ready = try reply(plain)
-  if !ready.start_with?("220")
-    return error(ready)
-  end
+  return error(ready) if !ready.start_with?("220")
 
   return TLS.upgrade(plain, context, host, 5000)
 end
@@ -432,9 +430,7 @@ def main() -> Void
   total = 0
   while true
     piece = HTTP.read_body(conn, 4096).unwrap!
-    if piece.empty?
-      break
-    end
+    break if piece.empty?
 
     total = total + piece.size
   end
@@ -559,9 +555,7 @@ end
 
 def produce(pieces: Channel[Bytes]) -> Void
   for n in 1..4
-    if not Result.ok?(pieces.send("part #{n}\n".bytes, 5000))
-      break
-    end
+    break if not Result.ok?(pieces.send("part #{n}\n".bytes, 5000))
   end
 
   pieces.close
@@ -600,17 +594,11 @@ def echo(ws: HTTP.WebSocket) -> Result[Void]
 end
 
 def route(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
-  if request.path == "/ws"
-    return ok(HTTP.Answer.Upgrade(try HTTP.accept_websocket(request, &echo)))
-  end
+  return ok(HTTP.Answer.Upgrade(try HTTP.accept_websocket(request, &echo))) if request.path == "/ws"
 
-  if request.path == "/file"
-    return ok(file())
-  end
+  return ok(file()) if request.path == "/file"
 
-  if request.path == "/upload"
-    return upload(body)
-  end
+  return upload(body) if request.path == "/upload"
 
   return HTTP.app(&page).call(request, body)
 end
@@ -823,9 +811,7 @@ import HTTP from "std/http"
 
 def produce(events: Channel[Bytes]) -> Void
   for n in 1..3
-    if not Result.ok?(events.send("data: tick #{n}\n\n".bytes, 5000))
-      break
-    end
+    break if not Result.ok?(events.send("data: tick #{n}\n\n".bytes, 5000))
 
     Task.sleep(100)
   end
@@ -918,10 +904,7 @@ end
 def echo(ws: HTTP.WebSocket) -> Result[Void]
   while true
     case ws.incoming.recv(60000)
-      ok(message) ->
-        if not try relay(ws, message)
-          return ok()
-        end
+      ok(message) -> return ok() if not try relay(ws, message)
 
       error(_) -> return ok()
     end
@@ -935,9 +918,7 @@ def home(request: HttpRequest) -> Result[HttpResponse]
 end
 
 def route(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
-  if request.path == "/echo"
-    return ok(HTTP.Answer.Upgrade(try HTTP.accept_websocket(request, &echo)))
-  end
+  return ok(HTTP.Answer.Upgrade(try HTTP.accept_websocket(request, &echo))) if request.path == "/echo"
 
   return HTTP.app(&home).call(request, body)
 end

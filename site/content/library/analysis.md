@@ -65,9 +65,7 @@ end
 
 def check_from(entries: ATS[String, Analysis.Entry], session: Analysis.Session, path: String) -> Analysis.Checked
   found = entries.get(path)
-  if found.ok?
-    return Analysis.check(Analysis.adopt(session, found.unwrap!), path)
-  end
+  return Analysis.check(Analysis.adopt(session, found.unwrap!), path) if found.ok?
   return Analysis.check(session, path)
 end
 ```

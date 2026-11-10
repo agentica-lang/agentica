@@ -43,9 +43,7 @@ PRICES = {"tea": 3, "cocoa": 5}
 FRUITS = Set.new(["kiwi", "apple"])
 
 def kind(name: String) -> String
-  if FRUITS.include?(name)
-    return "fruit"
-  end
+  return "fruit" if FRUITS.include?(name)
 
   return "drink"
 end

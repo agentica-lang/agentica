@@ -201,9 +201,7 @@ added
 
 ```agentica
 def sign(n: Int) -> String
-  if n < 0
-    return "negative"
-  end
+  return "negative" if n < 0
 
   return "not negative"
 end

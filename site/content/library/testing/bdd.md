@@ -178,9 +178,7 @@ Ends the step and its scenario as skipped, with the reason in the report: the la
 import BDD from "std/bdd"
 
 def need_postgres(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  if System.env("POSTGRES_URL").ok?
-    return ctx
-  end
+  return ctx if System.env("POSTGRES_URL").ok?
 
   return BDD.skip(ctx, "POSTGRES_URL is not set")
 end

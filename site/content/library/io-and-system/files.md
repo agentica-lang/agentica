@@ -261,9 +261,7 @@ Calls the block with each line, without its line ending (LF and CRLF; a last lin
 ```agentica {mode="check"}
 def main() -> Void
   r = File.each_line("notes.txt", 4096, 1000) do |line|
-    if line.starts_with?("#")
-      return error("comment found: #{line}")
-    end
+    return error("comment found: #{line}") if line.starts_with?("#")
 
     ok()
   end

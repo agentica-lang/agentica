@@ -43,18 +43,14 @@ end
 
 ## Writes one line.
 export def write_line(stream: Stream, text: String) -> Result[Void]
-  if fputs("#{text}\n", stream) < 0
-    return error("cannot write to the stream")
-  end
+  return error("cannot write to the stream") if fputs("#{text}\n", stream) < 0
 
   return ok()
 end
 
 ## Pushes the buffered text to the file.
 export def flush(stream: Stream) -> Result[Void]
-  if fflush(stream) != 0
-    return error("cannot flush the stream")
-  end
+  return error("cannot flush the stream") if fflush(stream) != 0
 
   return ok()
 end
@@ -96,9 +92,7 @@ A C function that fills memory its caller gives it, such as `getcwd`, gets an [o
 ## The working directory, or an error when it is longer than 4095 bytes.
 export def cwd() -> Result[String]
   return Native.memory_pointer(4096) do |buf|
-    if Native.null?(getcwd(buf, 4096))
-      return error("the working directory is longer than 4095 bytes")
-    end
+    return error("the working directory is longer than 4095 bytes") if Native.null?(getcwd(buf, 4096))
 
     ok(Native.get_string(buf, 0))
   end
@@ -128,9 +122,7 @@ end
 
 def main() -> Void
   written = append_to("/tmp/agentica-log.txt") do |stream|
-    if fputs("started\n", stream) < 0
-      return error("cannot write the log")
-    end
+    return error("cannot write the log") if fputs("started\n", stream) < 0
 
     ok()
   end
@@ -172,9 +164,7 @@ export def open_file(path: String, options: OpenOptions) -> Result[Int]
   end
 
   fd = open(path, flags, options.mode)
-  if fd < 0
-    return error("cannot open #{path}")
-  end
+  return error("cannot open #{path}") if fd < 0
 
   return ok(fd)
 end
@@ -186,9 +176,7 @@ export def set_close_on_exec(fd: Int, on: Bool = true) -> Result[Void]
     flag = FD_CLOEXEC
   end
 
-  if fcntl_set(fd, F_SETFD, flag) < 0
-    return error("cannot set close-on-exec on #{fd}")
-  end
+  return error("cannot set close-on-exec on #{fd}") if fcntl_set(fd, F_SETFD, flag) < 0
 
   return ok()
 end
@@ -202,9 +190,7 @@ export def write_fields(fd: Int, fields: List[String]) -> Result[Void]
     written = dprintf2(fd, "%s\t%s\n", fields[0], fields[1])
   end
 
-  if written < 0
-    return error("cannot write #{fields.length} fields to #{fd}")
-  end
+  return error("cannot write #{fields.length} fields to #{fd}") if written < 0
 
   return ok()
 end
