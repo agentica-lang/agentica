@@ -4,7 +4,7 @@
 
 ## The builtin module that holds the methods of each receiver kind.
 export def method_modules() -> Map[String, String]
-  return {
+  {
     "ATS": "ATS",
     "Bytes": "Bytes",
     "Channel": "Channel",
@@ -26,7 +26,7 @@ end
 
 ## The method names that are another builtin; `self` means the method returns the receiver.
 export def method_aliases() -> Map[String, String]
-  return {
+  {
     "ATS.length": "ATS.size",
     "Bytes.size": "Bytes.length",
     "Float.to_i": "Float.to_int",
@@ -74,7 +74,7 @@ end
 ## (`map`, `reduce`, `find`, `include?`, `size`). Every other alias is the Ruby name of a builtin that has a different
 ## name here (`strip` for `String.trim`, `select` for `List.filter`, `key?` for `Map.has_key?`), and the texts show it.
 export def ruby_synonyms() -> List[String]
-  return [
+  [
     "ATS.length", "Bytes.size", "Lazy.collect", "Lazy.detect", "Lazy.inject", "List.collect", "List.detect",
     "List.inject", "List.length", "List.member?", "Map.include?", "Map.length", "Map.member?", "Range.length",
     "Range.member?", "Set.length", "Set.member?", "String.size",
@@ -83,7 +83,7 @@ end
 
 ## The help for a name used as a function or type that another language has.
 export def foreign_names() -> Map[String, String]
-  return {
+  {
     "Array.new": "use a list literal with a type: xs: List[Int] = []",
     "Crypto.sha256": "use OpenSSL.Digest.sha256(data), or OpenSSL.Digest.sha256_hexdigest(data) for the hex text",
     "Enumerator.new": (
@@ -175,7 +175,7 @@ end
 ## The builtin modules that moved into a family, with the member that holds their functions now: Digest.sha256 is
 ## OpenSSL.Digest.sha256.
 export def moved_modules() -> Map[String, String]
-  return {
+  {
     "CMAC": "OpenSSL.CMAC",
     "Cipher": "OpenSSL.Cipher",
     "Digest": "OpenSSL.Digest",
@@ -188,7 +188,7 @@ end
 
 ## The Agentica methods that a foreign method name stands for.
 export def foreign_methods() -> Map[String, List[String]]
-  return {
+  {
     "contains": ["contains?", "include?"],
     "endswith": ["end_with?"],
     "include": ["include?"],
@@ -210,7 +210,7 @@ end
 
 ## The help for a method another language has, by receiver kind.
 export def foreign_kind_methods() -> Map[String, String]
-  return {
+  {
     "Bytes.each_byte": "use b.each do |byte| ... end",
     "Bytes.getbyte": "use b.at(i), or b[i], which halts on a bad index",
     "Bytes.inject": "Bytes has no reduce; use b.to_a.reduce(0) do |acc, x| ... end",
