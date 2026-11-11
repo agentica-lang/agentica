@@ -44,6 +44,7 @@ FILES = {
         "  puts(x)\nend\n"),
     "twice.agc": "def main() -> Void\n  puts(\"x\")\nend\n\ndef main() -> Void\nend\n",
     "helped.agc": "def main() -> Void\n  values = []\nend\n",
+    "lazy_concat.agc": "def main() -> Void\n  steps = [1].lazy.concat([2])\nend\n",
     "missing_import.agc": 'import Nothing from "nothing"\n\ndef main() -> Void\n  puts("x")\nend\n',
     "std_error.agc": 'import Queue from "std/queue"\n\ndef main() -> Void\n  puts(Queue.nope())\nend\n',
     "lib/util.agc": (
@@ -58,7 +59,7 @@ BINARY_FILES = {"invalid.agc": b'def main() -> Void\n  puts("a\xff\xe2\x82b")\ne
 
 # What the stages and the runtime can say about a program, run in the three forms of a diagnostic.
 PROGRAMS = ["ok.agc", "lex.agc", "parse.agc", "tab.agc", "crlf.agc", "unicode.agc", "multiline.agc", "labels.agc",
-            "twice.agc", "helped.agc", "missing_import.agc", "std_error.agc", "sub/bad.agc", "sub/boom.agc",
+            "twice.agc", "helped.agc", "lazy_concat.agc", "missing_import.agc", "std_error.agc", "sub/bad.agc", "sub/boom.agc",
             "invalid.agc", "divide.agc", "absent.agc"]
 
 # `help NAME` in both forms: builtins; Ruby names, synonyms and the names of other languages, which answer with the
@@ -78,7 +79,7 @@ OPTIONS = [
     ["--max-steps", "10", "help", "String.to_int", "--json"], ["--ai", "help", "strip"], ["--ai", "help", "push"],
     ["--ai", "help", "Json.get"], ["--ai", "help", "Nope.frobnicate"],
     ["help", "std/nope"], ["help", "std"], ["--json", "help", "std/queue."], ["help", "HttpWire.service"], ["help", "__fail_arg"], ["help", "Native.string_at"],
-    ["help", "List.concat"], ["help", "concat"],
+    ["help", "List.concat"], ["--json", "help", "List.concat"], ["help", "concat"],
     ["--max-steps"], ["--max-steps", "x", "ok.agc"], ["--max-steps", "0", "ok.agc"], ["--max-steps", "007", "ok.agc"],
     ["--max-steps", "-1", "ok.agc"], ["--max-steps", "1.5", "ok.agc"], ["--max-steps", "#e3", "ok.agc"],
     ["--max-steps", "1", "check", "loop.agc"],
