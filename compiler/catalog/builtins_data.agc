@@ -47,14 +47,16 @@ export RECORDS: List[Model.Record] = [
       Model.Named(name: "group_id", type: Types.Type.Int),
     ],
   ),
+  # The records of HttpWire, which std/http re-exports (HTTP.Header, HTTP.Request, ...). vm/http_fields.c makes
+  # HttpWire.Header and vm/http_wire.c HttpWire.Head, HttpWire.ResponseHead, HttpWire.Chunk and HttpWire.Reply by name.
   Model.Record(
-    name: "Header",
+    name: "HttpWire.Header",
     fields: [Model.Named(name: "name", type: Types.Type.String), Model.Named(name: "value", type: Types.Type.String)],
   ),
   # vm/value.h names these field positions (AGC_HTTP_OPTIONS_FIELDS, AGC_HTTP_OPTION_PROXY and AGC_HTTP_OPTION_TLS):
   # keep them in step.
   Model.Record(
-    name: "HttpClientOptions",
+    name: "HttpWire.ClientOptions",
     fields: [
       Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       Model.Named(name: "idle_timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
@@ -69,26 +71,26 @@ export RECORDS: List[Model.Record] = [
     ],
   ),
   Model.Record(
-    name: "HttpRequest",
+    name: "HttpWire.Request",
     fields: [
       Model.Named(name: "method", type: Types.Type.String),
       Model.Named(name: "target", type: Types.Type.String),
       Model.Named(name: "path", type: Types.Type.String),
-      Model.Named(name: "headers", type: Types.Type.List(Types.Type.Struct("Header", []))),
+      Model.Named(name: "headers", type: Types.Type.List(Types.Type.Struct("HttpWire.Header", []))),
       Model.Named(name: "body", type: Types.Type.Bytes),
       Model.Named(name: "remote_addr", type: Types.Type.String, default: Model.Default.Text("")),
     ],
   ),
   Model.Record(
-    name: "HttpResponse",
+    name: "HttpWire.Response",
     fields: [
       Model.Named(name: "status", type: Types.Type.Int),
-      Model.Named(name: "headers", type: Types.Type.List(Types.Type.Struct("Header", []))),
+      Model.Named(name: "headers", type: Types.Type.List(Types.Type.Struct("HttpWire.Header", []))),
       Model.Named(name: "body", type: Types.Type.Bytes),
     ],
   ),
   Model.Record(
-    name: "HttpServerOptions",
+    name: "HttpWire.ServerOptions",
     fields: [
       Model.Named(name: "request_timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
       Model.Named(name: "idle_timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
@@ -120,7 +122,7 @@ export RECORDS: List[Model.Record] = [
       Model.Named(name: "method", type: Types.Type.String),
       Model.Named(name: "target", type: Types.Type.String),
       Model.Named(name: "path", type: Types.Type.String),
-      Model.Named(name: "headers", type: Types.Type.List(Types.Type.Struct("Header", []))),
+      Model.Named(name: "headers", type: Types.Type.List(Types.Type.Struct("HttpWire.Header", []))),
       Model.Named(name: "length", type: Types.Type.Int),
       Model.Named(name: "chunked", type: Types.Type.Bool),
       Model.Named(name: "expect_continue", type: Types.Type.Bool),
@@ -140,7 +142,10 @@ export RECORDS: List[Model.Record] = [
       Model.Named(name: "head", type: Types.Type.String),
       Model.Named(name: "body", type: Types.Type.Bytes),
       Model.Named(name: "deadline", type: Types.Type.Int),
-      Model.Named(name: "reply", type: Types.Type.Channel(Types.Type.Result(Types.Type.Struct("HttpResponse", [])))),
+      Model.Named(
+        name: "reply",
+        type: Types.Type.Channel(Types.Type.Result(Types.Type.Struct("HttpWire.Response", []))),
+      ),
       Model.Named(name: "worker", type: Types.Type.Int),
       Model.Named(name: "kept", type: Types.Type.Bool),
     ],
@@ -150,10 +155,10 @@ export RECORDS: List[Model.Record] = [
     fields: [Model.Named(name: "head", type: Types.Type.String), Model.Named(name: "closes", type: Types.Type.Bool)],
   ),
   Model.Record(
-    name: "HttpWire.Response",
+    name: "HttpWire.ResponseHead",
     fields: [
       Model.Named(name: "status", type: Types.Type.Int),
-      Model.Named(name: "headers", type: Types.Type.List(Types.Type.Struct("Header", []))),
+      Model.Named(name: "headers", type: Types.Type.List(Types.Type.Struct("HttpWire.Header", []))),
       Model.Named(name: "length", type: Types.Type.Int),
       Model.Named(name: "chunked", type: Types.Type.Bool),
       Model.Named(name: "until_close", type: Types.Type.Bool),
@@ -283,13 +288,13 @@ export ENUMS: List[Model.EnumDef] = [
 ]
 
 ## The handle types a task can be given with Task.spawn_owning.
-export HANDLE_TYPES: List[String] = ["Socket", "Listener", "HttpServer", "FileHandle", "Process"]
+export HANDLE_TYPES: List[String] = ["Socket", "Listener", "HttpWire.Server", "FileHandle", "Process"]
 
 ## The builtin types with no structure: handles, TestCase, TlsContext, C.Pointer (a C pointer of native code),
 ## TaskRef (the running task, from Task.current) and Native.Mutex (the lock of a native library).
 export OPAQUE_TYPES: List[String] = [
-  "Socket", "Listener", "HttpClient", "HttpServer", "FileHandle", "Process", "TestCase", "TlsContext", "C.Pointer",
-  "TaskRef", "Native.Mutex",
+  "Socket", "Listener", "HttpWire.Client", "HttpWire.Server", "FileHandle", "Process", "TestCase", "TlsContext",
+  "C.Pointer", "TaskRef", "Native.Mutex",
 ]
 
 ## The type names no declaration or import alias may take.
@@ -307,14 +312,6 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "FileInfo",
   "Float",
   "Fn",
-  "Header",
-  "HttpClient",
-  "HttpClientOptions",
-  "HttpRequest",
-  "HttpResponse",
-  "HttpServer",
-  "HttpServerOptions",
-  "HttpWire",
   "IO",
   "Int",
   "JSON",
@@ -372,7 +369,17 @@ export STD_ONLY_IMPORTS: Map[String, List[String]] = {
 ## The builtin types that moved into a std-only family, with their new name there. A std module re-exports each one,
 ## so a program writes the alias of that module: LogEvent is LogRegistry.Event, which std/logger re-exports as
 ## Logger.Event.
-export MOVED_TYPES: Map[String, String] = {"LogEvent": "LogRegistry.Event", "LogLevel": "LogRegistry.Level"}
+export MOVED_TYPES: Map[String, String] = {
+  "LogEvent": "LogRegistry.Event",
+  "LogLevel": "LogRegistry.Level",
+  "Header": "HttpWire.Header",
+  "HttpClient": "HttpWire.Client",
+  "HttpClientOptions": "HttpWire.ClientOptions",
+  "HttpRequest": "HttpWire.Request",
+  "HttpResponse": "HttpWire.Response",
+  "HttpServer": "HttpWire.Server",
+  "HttpServerOptions": "HttpWire.ServerOptions",
+}
 
 ROWS_1: List[Model.Builtin] = [
   Model.Builtin(
@@ -1023,7 +1030,7 @@ ROWS_9: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "HttpWire.accept",
-    parameters: [Model.Named(name: "server", type: Types.Type.Opaque("HttpServer"))],
+    parameters: [Model.Named(name: "server", type: Types.Type.Opaque("HttpWire.Server"))],
     result: Types.Type.Result(Types.Type.Opaque("Socket")),
     rule: Model.Rule.Plain,
     implementation: "HttpWire.accept",
@@ -1034,7 +1041,10 @@ ROWS_9: List[Model.Builtin] = [
   Model.Builtin(
     name: "HttpWire.awaited?",
     parameters: [
-      Model.Named(name: "reply", type: Types.Type.Channel(Types.Type.Result(Types.Type.Struct("HttpResponse", [])))),
+      Model.Named(
+        name: "reply",
+        type: Types.Type.Channel(Types.Type.Result(Types.Type.Struct("HttpWire.Response", []))),
+      ),
     ],
     result: Types.Type.Bool,
     rule: Model.Rule.Plain,
@@ -1098,7 +1108,7 @@ ROWS_10: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "HttpWire.close_server",
-    parameters: [Model.Named(name: "server", type: Types.Type.Opaque("HttpServer"))],
+    parameters: [Model.Named(name: "server", type: Types.Type.Opaque("HttpWire.Server"))],
     result: Types.Type.Void,
     rule: Model.Rule.Plain,
     implementation: "HttpWire.close_server",
@@ -1119,7 +1129,7 @@ ROWS_10: List[Model.Builtin] = [
   Model.Builtin(
     name: "HttpWire.connect_tls",
     parameters: [
-      Model.Named(name: "client", type: Types.Type.Opaque("HttpClient")),
+      Model.Named(name: "client", type: Types.Type.Opaque("HttpWire.Client")),
       Model.Named(name: "host", type: Types.Type.String),
       Model.Named(name: "port", type: Types.Type.Int),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
@@ -1148,7 +1158,7 @@ ROWS_10: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "HttpWire.drop_tls",
-    parameters: [Model.Named(name: "client", type: Types.Type.Opaque("HttpClient"))],
+    parameters: [Model.Named(name: "client", type: Types.Type.Opaque("HttpWire.Client"))],
     result: Types.Type.Void,
     rule: Model.Rule.Plain,
     implementation: "HttpWire.drop_tls",
@@ -1159,7 +1169,7 @@ ROWS_10: List[Model.Builtin] = [
   Model.Builtin(
     name: "HttpWire.upgrade_tls",
     parameters: [
-      Model.Named(name: "client", type: Types.Type.Opaque("HttpClient")),
+      Model.Named(name: "client", type: Types.Type.Opaque("HttpWire.Client")),
       Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
       Model.Named(name: "host", type: Types.Type.String),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
@@ -1194,7 +1204,7 @@ ROWS_10: List[Model.Builtin] = [
       Model.Named(name: "port", type: Types.Type.Int),
       Model.Named(name: "method", type: Types.Type.String),
       Model.Named(name: "target", type: Types.Type.String),
-      Model.Named(name: "headers", type: Types.Type.List(Types.Type.Struct("Header", []))),
+      Model.Named(name: "headers", type: Types.Type.List(Types.Type.Struct("HttpWire.Header", []))),
       Model.Named(name: "body", type: Types.Type.Bytes),
       Model.Named(name: "max_body_bytes", type: Types.Type.Int),
     ],
@@ -1211,8 +1221,8 @@ ROWS_10: List[Model.Builtin] = [
   Model.Builtin(
     name: "HttpWire.encode_response",
     parameters: [
-      Model.Named(name: "request", type: Types.Type.Struct("HttpRequest", [])),
-      Model.Named(name: "response", type: Types.Type.Struct("HttpResponse", [])),
+      Model.Named(name: "request", type: Types.Type.Struct("HttpWire.Request", [])),
+      Model.Named(name: "response", type: Types.Type.Struct("HttpWire.Response", [])),
       Model.Named(name: "now_ms", type: Types.Type.Int),
     ],
     result: Types.Type.Result(Types.Type.Struct("HttpWire.Reply", [])),
@@ -1253,7 +1263,7 @@ ROWS_10: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "HttpWire.jobs",
-    parameters: [Model.Named(name: "client", type: Types.Type.Opaque("HttpClient"))],
+    parameters: [Model.Named(name: "client", type: Types.Type.Opaque("HttpWire.Client"))],
     result: Types.Type.Channel(Types.Type.Struct("HttpWire.Job", [])),
     rule: Model.Rule.Plain,
     implementation: "HttpWire.jobs",
@@ -1266,7 +1276,7 @@ ROWS_10: List[Model.Builtin] = [
 ROWS_11: List[Model.Builtin] = [
   Model.Builtin(
     name: "HttpWire.local_port",
-    parameters: [Model.Named(name: "server", type: Types.Type.Opaque("HttpServer"))],
+    parameters: [Model.Named(name: "server", type: Types.Type.Opaque("HttpWire.Server"))],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
     implementation: "HttpWire.local_port",
@@ -1276,8 +1286,8 @@ ROWS_11: List[Model.Builtin] = [
   ),
   Model.Builtin(
     name: "HttpWire.options",
-    parameters: [Model.Named(name: "client", type: Types.Type.Opaque("HttpClient"))],
-    result: Types.Type.Struct("HttpClientOptions", []),
+    parameters: [Model.Named(name: "client", type: Types.Type.Opaque("HttpWire.Client"))],
+    result: Types.Type.Struct("HttpWire.ClientOptions", []),
     rule: Model.Rule.Plain,
     implementation: "HttpWire.options",
     effects: [],
@@ -1310,7 +1320,7 @@ ROWS_11: List[Model.Builtin] = [
       Model.Named(name: "max_body_bytes", type: Types.Type.Int),
       Model.Named(name: "timeout_ms", type: Types.Type.Int),
     ],
-    result: Types.Type.Result(Types.Type.Struct("HttpWire.Response", [])),
+    result: Types.Type.Result(Types.Type.Struct("HttpWire.ResponseHead", [])),
     rule: Model.Rule.Plain,
     implementation: "HttpWire.read_response",
     effects: ["network"],
@@ -1325,9 +1335,9 @@ ROWS_11: List[Model.Builtin] = [
     parameters: [
       Model.Named(name: "listener", type: Types.Type.Opaque("Listener")),
       Model.Named(name: "max_connections", type: Types.Type.Int),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Opaque("HttpServer")], Types.Type.Void)),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Opaque("HttpWire.Server")], Types.Type.Void)),
     ],
-    result: Types.Type.Opaque("HttpServer"),
+    result: Types.Type.Opaque("HttpWire.Server"),
     rule: Model.Rule.Plain,
     implementation: "HttpWire.server",
     effects: ["network"],
@@ -1338,10 +1348,10 @@ ROWS_11: List[Model.Builtin] = [
     name: "HttpWire.service",
     parameters: [
       Model.Named(name: "jobs", type: Types.Type.Channel(Types.Type.Struct("HttpWire.Job", []))),
-      Model.Named(name: "options", type: Types.Type.Struct("HttpClientOptions", [])),
-      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Opaque("HttpClient")], Types.Type.Void)),
+      Model.Named(name: "options", type: Types.Type.Struct("HttpWire.ClientOptions", [])),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Opaque("HttpWire.Client")], Types.Type.Void)),
     ],
-    result: Types.Type.Opaque("HttpClient"),
+    result: Types.Type.Opaque("HttpWire.Client"),
     rule: Model.Rule.Plain,
     implementation: "HttpWire.service",
     effects: ["concurrency"],
@@ -1354,7 +1364,7 @@ ROWS_11: List[Model.Builtin] = [
   Model.Builtin(
     name: "HttpWire.spawn",
     parameters: [
-      Model.Named(name: "server", type: Types.Type.Opaque("HttpServer")),
+      Model.Named(name: "server", type: Types.Type.Opaque("HttpWire.Server")),
       Model.Named(name: "socket", type: Types.Type.Opaque("Socket")),
       Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Opaque("Socket")], Types.Type.Void)),
     ],
@@ -1370,7 +1380,7 @@ ROWS_11: List[Model.Builtin] = [
 ROWS_12: List[Model.Builtin] = [
   Model.Builtin(
     name: "HttpWire.wait",
-    parameters: [Model.Named(name: "server", type: Types.Type.Opaque("HttpServer"))],
+    parameters: [Model.Named(name: "server", type: Types.Type.Opaque("HttpWire.Server"))],
     result: Types.Type.Result(Types.Type.Void),
     rule: Model.Rule.Plain,
     implementation: "HttpWire.wait",

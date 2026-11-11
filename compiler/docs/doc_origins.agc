@@ -41,7 +41,7 @@ def builtin_items(path: String, program: Ast.Program) -> Map[String, Model.Item]
   for decl in Declarations.reexports_of(program.declarations)
     target = "#{decl.alias}.#{decl.name}"
     if STD_ONLY.has_key?(decl.alias) and !aliases.include?(decl.alias)
-      if RECORDS.has_key?(target) or ENUMS.has_key?(target)
+      if Builtins.type_named?(target)
         items = items.put(decl.name, builtin_item(decl.name, target))
       end
     end
@@ -82,13 +82,15 @@ def of_linked(linked: Linker.Linked) -> Map[String, Model.Item]
   origins
 end
 
-# The item of a builtin record or enum that a std/ module re-exports as `name`. Its spans are placeholders: the item
-# takes the place of the `export` line (Model.reexport_items). Types print with the builtin names, which a value
-# and a message show too.
+# The item of a builtin record, enum or opaque type that a std/ module re-exports as `name`. Its spans are
+# placeholders: the item takes the place of the `export` line (Model.reexport_items). Types print with the builtin
+# names, which a value and a message show too.
 def builtin_item(name: String, target: String) -> Model.Item
   at = Source.Position(offset: 0, line: 1, column: 1)
   span = Source.Span(start: at, stop: at)
-  if RECORDS.has_key?(target)
+  if !RECORDS.has_key?(target) and !ENUMS.has_key?(target)
+    return builtin_shape("resource", name, span, "The builtin handle `#{target}`.", Model.Detail.Plain)
+  elsif RECORDS.has_key?(target)
     fields = RECORDS[target].map do |field: Catalog.Named|
       default: Optional[String] = none
       if Builtins.default_present?(field.default)

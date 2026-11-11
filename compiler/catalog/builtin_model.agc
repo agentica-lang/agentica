@@ -128,7 +128,7 @@ export struct Builtin
   alternatives: List[Builtin]
 end
 
-## A builtin record type, such as HttpRequest, with its fields in declaration order.
+## A builtin record type, such as HttpWire.Request, with its fields in declaration order.
 export struct Record
   name: String
   fields: List[Named]

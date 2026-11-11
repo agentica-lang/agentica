@@ -107,18 +107,19 @@ export NATIVE_LAYOUTS = Set.new(["Native.size_of", "Native.get_struct", "Native.
 
 ## The builtin records the VM can build as structs, in the order the struct table lists the ones a program uses.
 export BUILTIN_STRUCTS = [
-  "FileInfo", "Header", "HttpRequest", "HttpResponse", "HttpClientOptions", "HttpServerOptions", "ProcessOutput",
-  "LogRegistry.Event", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Reply", "HttpWire.Job", "HttpWire.Response",
-  "StructMember", "Codec.Info", "TlsClientOptions", "TlsServerOptions", "TaskDown", "Process.Options",
+  "FileInfo", "HttpWire.Header", "HttpWire.Request", "HttpWire.Response", "HttpWire.ClientOptions",
+  "HttpWire.ServerOptions", "ProcessOutput", "LogRegistry.Event", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Reply",
+  "HttpWire.Job", "HttpWire.ResponseHead", "StructMember", "Codec.Info", "TlsClientOptions", "TlsServerOptions",
+  "TaskDown", "Process.Options",
 ]
 
 ## The builtin structs that another one has a field of: using the key also puts these in the table.
 export STRUCT_NEEDS: Map[String, List[String]] = {
-  "HttpResponse": ["Header"],
-  "HttpRequest": ["Header"],
-  "HttpWire.Head": ["Header"],
-  "HttpWire.Job": ["HttpResponse", "Header"],
-  "HttpWire.Response": ["Header"],
+  "HttpWire.Response": ["HttpWire.Header"],
+  "HttpWire.Request": ["HttpWire.Header"],
+  "HttpWire.Head": ["HttpWire.Header"],
+  "HttpWire.Job": ["HttpWire.Response", "HttpWire.Header"],
+  "HttpWire.ResponseHead": ["HttpWire.Header"],
   "Codec.Info": ["StructMember"],
 }
 

@@ -138,7 +138,7 @@ export def alias_constant_identity(cx: Context, name: String) -> String
 end
 
 ## True when the name is a type that the file declares or imports by name (a struct, enum, type alias or resource), or
-## a builtin record such as HttpResponse.
+## a builtin record such as FileInfo.
 export def declared_type?(cx: Context, name: String) -> Bool
   return right_kind?(cx.me.names[name], Want.Type) if cx.me.names.has_key?(name)
 
@@ -284,12 +284,13 @@ def first_function(member: String) -> String
   found.sort[0]
 end
 
-# A builtin record or enum of a std-only module, such as HttpWire.Head or LogRegistry.Level: a type that only std/
-# can name, so it reserves no name in user programs (the std/ module may re-export it).
+# A builtin record, enum or opaque type of a std-only module, such as HttpWire.Head, LogRegistry.Level or
+# HttpWire.Client: a type that only std/ can name, so it reserves no name in user programs (the std/ module may
+# re-export it).
 def std_record?(alias: String, member: String, want: Want) -> Bool
   name = "#{alias}.#{member}"
   case want
-    Want.Type -> STD_ONLY.has_key?(alias) and (RECORDS.has_key?(name) or ENUMS.has_key?(name))
+    Want.Type -> STD_ONLY.has_key?(alias) and Builtins.type_named?(name)
     Want.Enum -> STD_ONLY.has_key?(alias) and ENUMS.has_key?(name)
     Want.Function -> false
   end

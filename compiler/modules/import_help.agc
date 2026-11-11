@@ -30,7 +30,7 @@ export def unknown_import_help(key: String, exports: Map[String, Declarations.Ki
   other = OTHER_FORMS.any? do |name| name == member end
   if key == "std/http.agc" and removed
     return Diag.Help.Hint(
-      "a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text.bytes))",
+      "a handler returns its whole response: return ok(HTTP.Response(status: 200, headers: [], body: text.bytes))",
     )
   elsif key == "std/http.agc" and whole
     return Diag.Help.Hint("HTTP.serve replaces it: HTTP.serve(host, port, HTTP.app(&handle), options)")
