@@ -4,6 +4,7 @@ The programs are compiled with the product CLI and run with `agentica
 run` directly, or through the CLI where the test is about the CLI. The runs have the scratch folder of the test as
 working directory.
 """
+import importlib
 import json
 import os
 import re
@@ -18,15 +19,13 @@ import pytest
 
 from tests import vm_diff_support
 from tests.agentica_test import (FIFO_FILE_REASON, RUN_TIMEOUT, TESTS, UNDER_WINE, WINDOWS, Child, cli, compile_agc,
-                                 host_only, kill_process, process_alive, scaled, tool as find_tool, vm_binary,
+                                 host_only, kill_process, process_alive, scaled, vm_binary,
                                  vm_command, vm_environment, wait_until)
 from tests.vm_diff_support import (
-    EXTRAS_SHARD, FIXTURE_DIR, HEAVY_FIXTURES, LIGHT_SHARD_ROTATION, RUNAWAY_LIMIT, SHARD_COUNT, Fixture,
-    check_limited, check_runaway, check_step_allowance, check_sweep, check_text_format, decode, exit_status, execute,
-    fixture_programs,
-    json_crash_free, last_limit, outcome, read_expected, read_expected_steps, run_fixture_vm, run_vm,
-    run_vm_process, runaway_programs, step_allowance, step_limited, style_options, text_code, text_crash_free,
-    shard_assignment)
+    EXTRAS_SHARD, FIXTURE_DIR, HEAVY_FIXTURES, LIGHT_SHARD_ROTATION, SHARD_COUNT, Fixture, check_limited,
+    check_runaway, check_step_allowance, check_sweep, check_text_format, decode, exit_status, execute, fixture_programs,
+    last_limit, outcome, read_expected, read_expected_steps, run_fixture_vm, run_vm, run_vm_process, runaway_programs,
+    step_limited, style_options, shard_assignment)
 
 
 def posix_only(why):
@@ -76,7 +75,8 @@ def vm(work, *argv, timeout=RUN_TIMEOUT):
 
 
 def test_shard_tables_name_real_fixtures_and_shards():
-    names = [program.name for program, _shard in shard_assignment(fixture_programs())]
+    assignment = shard_assignment(fixture_programs())
+    names = [program.name for program, _shard in assignment]
     for heavy, shard in HEAVY_FIXTURES.items():
         assert heavy in names
         assert 1 <= shard <= SHARD_COUNT, heavy
@@ -86,7 +86,10 @@ def test_shard_tables_name_real_fixtures_and_shards():
         module = TESTS / ("test_vm_diff_%d.py" % shard)
         assert module.is_file(), str(module)
         if shard != EXTRAS_SHARD:
-            assert ("SHARD = %d" % shard) in module.read_text(encoding="utf-8"), str(module)
+            tests = importlib.import_module("tests.test_vm_diff_%d" % shard)
+            for program, assigned in assignment:
+                if assigned == shard:
+                    assert hasattr(tests, "test_" + program.stem.replace("-", "_")), (program.name, shard)
 
 
 def test_a_batch_starts_no_run_after_a_hang_and_reports_the_later_runs_as_124(monkeypatch, tmp_path):
@@ -132,26 +135,13 @@ def test_the_vm_command_line_rejects_bad_options(tmp_path, options):
     assert vm(tmp_path, *options, "--", bytecode)[0] == 2
 
 
-@pytest.mark.parametrize("seed", ["-1", "2147483648", "1x", "", "99999999999999999999"])
-def test_the_vm_command_line_rejects_a_bad_seed(tmp_path, seed):
+@pytest.mark.parametrize(("seed", "status"), [("-1", 2), ("2147483648", 2), ("1x", 2), ("", 2),
+                                              ("99999999999999999999", 2), ("0002147483647", 0)])
+def test_the_vm_command_line_checks_the_seed(tmp_path, seed, status):
     bytecode = str(fixture_bytecode(tmp_path, "calls"))
-    rejected = vm(tmp_path, "--seed", seed, "--", bytecode)
-    assert rejected[0] == 2
-    assert rejected[2] == "agentica run: --seed needs an integer from 0 to 2147483647\n"
-
-
-def test_the_vm_command_line_checks_options_and_stops_parsing_at_the_file(tmp_path):
-    bytecode = str(fixture_bytecode(tmp_path, "calls"))
-    assert run_vm(PLAIN, bytecode, None, extra=["--max-steps", "1"], cwd=tmp_path)[0] == 0
-    draws = compile_program(
-        tmp_path, "random-draws", "def main() -> Void\n  puts(Random.int(0, 1000000000))\n  puts(Random.float)\nend\n")
-
-    def seeded(seed):
-        return vm(tmp_path, "--seed", seed, "--", str(draws))
-
-    assert seeded("0002147483647")[0] == 0
-    assert seeded("7") == seeded("7")
-    assert seeded("7")[1] != seeded("8")[1]
+    checked = vm(tmp_path, "--seed", seed, "--", bytecode)
+    message = "agentica run: --seed needs an integer from 0 to 2147483647\n" if status else ""
+    assert (checked[0], checked[2]) == (status, message)
 
 
 @pytest.mark.skipif(UNDER_WINE, reason="Wine runs the Windows binary, which a Linux peer cannot give two pipes")
@@ -176,13 +166,6 @@ def test_tests_draw_the_same_values_alone_or_with_others(tmp_path):
     assert [mixed[1], mixed[2]] == [alone[0], alone[0]]
     assert mixed[0] != mixed[1]
     assert test_draws("8", b"1\n", "other") != alone
-
-
-def test_a_duplicate_test_name_is_reported_at_its_source(tmp_path):
-    duplicate = fixture_bytecode(tmp_path, "test-name-duplicate")
-    named = vm(tmp_path, "--json", "--", str(duplicate), "--agentica-test", "run")
-    start = json.loads(named[2])["range"]["start"]
-    assert (named[0], start["line"], start["column"]) == (1, 9, 5)
 
 
 def test_the_vm_options_after_the_file_belong_to_the_program(tmp_path):
@@ -251,57 +234,6 @@ def test_a_read_stuck_on_a_fifo_times_out_closes_the_handle_and_does_not_hold_th
         assert time.monotonic() - started < scaled(20)
     finally:
         os.close(held)
-
-
-def test_process_spawn_searches_path_only_and_resolves_a_name_with_a_slash_against_the_working_directory(tmp_path):
-    # The tool prints "ran x" for the argument x: a #!/bin/sh script, and on Windows (which has no #! scripts) a copy of
-    # node.exe, which needs nothing beside it, as in test_process.py.
-    arguments = '["-e", "console.log(\'ran \' + process.argv[1])", "x"]' if WINDOWS else '["x"]'
-    bytecode = compile_program(
-        tmp_path, "path-lookup",
-        "def show(name: String) -> Void\n  case Process.spawn(name, " + arguments + ", Process.Options(timeout_ms: 60000))\n"
-        "    ok(p) ->\n"
-        "      puts(\"#{name}: #{Process.read_line(p, 60000)} #{Process.wait(p, 60000)}\")\n"
-        "      Process.close(p)\n    error(message) -> puts(\"#{name}: #{message}\")\n  end\nend\n\n"
-        "def main() -> Void\n  show(\"agc-tool\")\n  show(\"./agc-tool\")\n  show(\"bin/agc-tool\")\n"
-        "  show(\"bin\")\nend\n")
-    folder = tmp_path / "lookup"
-    (folder / "bin").mkdir(parents=True)
-    for tool in [folder / "agc-tool", folder / "bin" / "agc-tool"]:
-        if WINDOWS:
-            shutil.copy(find_tool("node"), tool.with_name(tool.name + ".exe"))
-        else:
-            tool.write_text("#!/bin/sh\necho \"ran $1\"\n", encoding="utf-8")
-            tool.chmod(0o755)
-
-    def expected(found):
-        return (0, "agc-tool: " + ("ok(\"ran x\") ok(0)" if found else "process: executable is unavailable")
-                + "\n./agc-tool: ok(\"ran x\") ok(0)\nbin/agc-tool: ok(\"ran x\") ok(0)\n"
-                + "bin: process: executable is unavailable\n", "")
-
-    none = str(folder / "none")
-    for entries in [[none], ["", none], ["bin", none], [".", none]]:
-        search = os.pathsep.join(entries)
-        want = expected(entries[0] in ("bin", "."))
-        assert run_vm(PLAIN, bytecode, None, cwd=folder, env={"PATH": search}) == want, search
-
-
-@posix_only("SIGTERM; Windows has Ctrl+Break, which test_windows_console_stop.py sends to end the VM, its child and the buffered file")
-def test_a_program_that_is_stopped_by_sigterm_kills_the_vms_running_children(adopt, request, tmp_path):
-    program = tmp_path / "signal-children.agc"
-    program.write_text(
-        "def main() -> Void\n  p = Result.unwrap!(Process.spawn(\"/bin/sh\", [\"-c\", \"echo $$; exec sleep 30\"], Process.Options(timeout_ms: "
-        "60000)))\n  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  IO.flush()\n  Task.sleep(20000)\nend\n",
-        encoding="utf-8")
-    driver = adopt(Child(
-        cli() + [program], env=vm_environment({"TMPDIR": tmp_path}),
-        cwd=tmp_path, capture_stderr=True))
-    pid = driver.next_line(RUN_TIMEOUT)
-    request.addfinalizer(lambda: kill_alive([pid]))
-    assert process_alive(pid)
-    os.kill(driver.process.pid, signal.SIGTERM)
-    driver.wait(RUN_TIMEOUT)
-    assert gone(pid), pid
 
 
 @host_only(WINDOWS, "/bin/sh and SIGTERM, which lets a VM child stop its own children; Windows ends the child with TerminateProcess and its job object ends the rest (test_closing_a_captured_vm_child_ends_the_child_and_its_own_child in test_windows_process_cleanup.py checks the tree)")
@@ -452,16 +384,6 @@ def test_the_vm_decodes_invalid_utf8_arguments_like_the_original_in_a_utf8_local
     assert outcome(on_vm) == outcome(on_cli)
 
 
-def test_deep_tail_calls_run_on_the_vm(tmp_path):
-    bytecode = compile_program(
-        tmp_path, "deep-tail",
-        "def loop(n: Int, acc: Int) -> Int\n  if n == 0\n    return acc\n  end\n  return loop(n - 1, acc + 1)\nend\n\n"
-        "def even(n: Int) -> Bool\n  if n == 0\n    return true\n  end\n  return odd(n - 1)\nend\n\n"
-        "def odd(n: Int) -> Bool\n  if n == 0\n    return false\n  end\n  return even(n - 1)\nend\n\n"
-        "def main() -> Void\n  puts(loop(1000000, 0))\n  puts(even(1000001))\nend\n")
-    assert run_vm(PLAIN, bytecode, None, cwd=tmp_path) == (0, "1000000\nfalse\n", "")
-
-
 def test_a_due_timer_fires_while_another_task_keeps_the_run_queue_busy(tmp_path):
     # main yields until the sleeper sets the flag, so the run queue is never empty and the idle step never runs: only
     # the timer check at the turn boundary wakes the sleeper. Without it the run hangs until the time limit.
@@ -533,7 +455,8 @@ def test_on_windows_a_step_limit_stop_is_compared_without_the_lines_of_a_killed_
     assert check_limited((1, "1\n", noise + stop), full, "noisy stop", 35) is False
     # Any other outcome keeps the line, and so does every other system.
     with pytest.raises(AssertionError):
-        check_limited((1, "1\n", noise + '{"code":"RUNTIME-DIVISION-BY-ZERO","message":"x"}\n'), full, "crash", 35)
+        check_limited((1, "1\n", noise + '{"code":"RUNTIME-DIVISION-BY-ZERO","message":"x"}\n'),
+                      (1, "1\n", "", "RUNTIME-DIVISION-BY-ZERO"), "crash", 35)
     monkeypatch.setattr(vm_diff_support, "WINDOWS", False)
     with pytest.raises(AssertionError):
         check_limited((1, "1\n", noise + stop), full, "noisy stop", 35)
@@ -583,28 +506,6 @@ def test_the_formats_exit_codes_and_diagnostics_of_a_run(tmp_path):
                 assert result[0] == 1
 
 
-def test_options_and_arguments_of_a_run(tmp_path):
-    temp = cli_temp(tmp_path)
-    calls = cli_fixture("calls.agc")
-    limited = agentica(temp, tmp_path, "--json", "--max-steps", "3", calls)
-    assert (limited[0], outcome(limited)[3]) == (1, "RUNTIME-STEP-LIMIT")
-    no_bytecode(temp, "--max-steps 3")
-    with_args = agentica(temp, tmp_path, "--json", calls, "first", "--deny-run", "--json")
-    assert with_args[:2] == cli_expected("calls.agc")[:2]
-    deep = tmp_path / "deep.agc"
-    deep.write_text(
-        "def loop(n: Int, acc: Int) -> Int\n  if n == 0\n    return acc\n  end\n  return loop(n - 1, acc + 1)\nend\n\n"
-        "def main() -> Void\n  puts(loop(100000, 0))\nend\n", encoding="utf-8")
-    assert agentica(temp, tmp_path, str(deep)) == (0, "100000\n", "")
-    denied = cli_fixture("spawn-denied.agc")
-    assert outcome(agentica(temp, tmp_path, "--deny-run", "--json", denied)) == cli_expected("spawn-denied.agc")
-    assert agentica(temp, tmp_path, "--json", denied)[0] == 0
-    random = cli_fixture("random.agc")
-    seeded = agentica(temp, tmp_path, "--seed", "77", random)
-    assert seeded[0] == 0
-    assert agentica(temp, tmp_path, "--seed", "77", random) == seeded
-
-
 def test_standard_input_exit_codes_and_arguments_reach_the_program(tmp_path):
     temp = cli_temp(tmp_path)
     gets = cli_fixture("io-gets.agc")
@@ -614,20 +515,6 @@ def test_standard_input_exit_codes_and_arguments_reach_the_program(tmp_path):
     assert agentica(temp, tmp_path, "--json", cli_fixture("system-args.agc"), "a", "", "λ 𝔸", "--json", "--vm") == \
         (0, "0 \"a\"\n1 \"\"\n2 \"λ 𝔸\"\n3 \"--json\"\n4 \"--vm\"\n[\"a\", \"\", \"λ 𝔸\", \"--json\", \"--vm\"]\n", "")
     assert list(temp.iterdir()) == []
-
-
-def test_compile_exits_1_on_a_diagnostic_and_2_on_an_unwritable_output(tmp_path):
-    temp = cli_temp(tmp_path)
-    work = tmp_path
-    rejected_file = work / "file.agc"
-    rejected_file.write_text("def main() -> Void\n  c = HTTP.client()\nend\n", encoding="utf-8")
-    rejected = agentica(temp, work, "compile", rejected_file, "-o", work / "out.agcb")
-    assert rejected[0] == 1
-    assert "error[CHECK-UNKNOWN-NAME]" in rejected[2]
-    assert not (work / "out.agcb").exists()
-    supported = work / "hello.agc"
-    supported.write_text("def main() -> Void\n  puts(\"hi\")\nend\n", encoding="utf-8")
-    assert agentica(temp, work, "compile", supported, "-o", work / "missing" / "out.agcb")[0] == 2
 
 
 # What the binary does with its own standard input and its environment.

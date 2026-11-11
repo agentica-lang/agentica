@@ -333,18 +333,19 @@ def run_vm(fixture, bytecode, limit, style="json", root=(), extra=(), timeout=RU
     return run_vm_process(fixture, options, bytecode, [*fixture.args, *extra], timeout, cwd, env)
 
 
-def run_fixture_vm(fixture, bytecode, limit, work):
+def run_fixture_vm(fixture, bytecode, limit, work, flags=(), env=None):
     """A fixture run as the golden is taken: --json, the fixtures as source root, @tmp as a fresh folder."""
+    root = source_root_options() + list(flags)
     if fixture.uses_tmp:
         directory = fresh_tmp(work)
         try:
-            options = deny_options(fixture) + limit_options(limit) + style_options("json") + source_root_options()
+            options = deny_options(fixture) + limit_options(limit) + style_options("json") + root
             result = untmp(directory, run_vm_process(fixture, options, bytecode, tmp_args(fixture, directory),
-                                                     cwd=work))
+                                                     cwd=work, env=env))
         finally:
             shutil.rmtree(directory, ignore_errors=True)
     else:
-        result = run_vm(fixture, bytecode, limit, root=source_root_options(), cwd=work)
+        result = run_vm(fixture, bytecode, limit, root=root, cwd=work, env=env)
     return unfixture(result)
 
 
@@ -804,41 +805,11 @@ class VmCase(TestCase):
             self._scratch = self.make_temp_dir("agentica-vm-").resolve()
         return self._scratch
 
-    def bytecode_of(self, program, name=None):
-        """Compile a program with the CLI into the scratch folder; returns the .agcb path."""
-        return compile_agc(program, self.work_dir() / ((name or program.stem) + ".agcb"))
-
-    def check_limited(self, on_vm, full, name, limit, note=""):
-        return check_limited(on_vm, full, name, limit, note)
-
-    def check_sweep(self, results, limits, full, name, note=""):
-        return check_sweep(results, limits, full, name, note)
-
-    def check_step_allowance(self, limited, expected_steps, name):
-        return check_step_allowance(limited, expected_steps, name)
-
     def check_fixture(self, program):
         return check_fixture(program, self.work_dir())
 
     def check_runaway(self, program):
         return check_runaway(program, self.work_dir())
-
-
-def shard_case(shard):
-    """The TestCase of one shard: a test method for each of its fixtures. Shard 8 runs only the extras."""
-    methods = {}
-    for program, assigned in shard_assignment(fixture_programs()):
-        if assigned == shard:
-            methods["test_" + program.stem.replace("-", "_")] = _fixture_method(program)
-
-    def set_up_class(cls):
-        super(cls, cls).setUpClass()
-        if SAMPLED_SWEEP:
-            sys.stderr.write("vm-diff shard %d: sampled --max-steps sweep, AGENTICA_SWEEP_SEED=%d\n"
-                             % (shard, SWEEP_SEED))
-        vm_binary()
-
-    return type("Shard%d" % shard, (VmCase,), {**methods, "setUpClass": classmethod(set_up_class)})
 
 
 def _fixture_method(program):
