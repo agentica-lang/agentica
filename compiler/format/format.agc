@@ -2,7 +2,7 @@
 ##
 ## It lexes the text with its comments, parses it, attaches the comments (comments.agc), lays the tree out
 ## (layout.agc) and prints the document in the width (doc.agc). A file that does not lex or parse is refused with
-## that diagnostic. Then it checks its own work: the output must parse to the same normal form as the input (47.7),
+## that diagnostic. Then it checks its own work: the output must parse to the same normal form as the input,
 ## with the same words of comments in the same order, or the file is refused with FMT-INTERNAL and nothing is written.
 ##
 ## With `blank_line_after_end`, every bare `end` gets the empty line after it that CHECK-BLANK-LINE-AFTER-END asks

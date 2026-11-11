@@ -3,7 +3,7 @@
 ## `symbol` gives the declaration (symbol_json.agc, same fields), a local included, with the kind of the binding.
 ## Each reference is `{kind, function, span}`, the `span` being the name alone and `function` null at the top level.
 ## `skipped` is as for `symbol`. A span is `{file, range}` with the `file` the command answers with. An answer from a
-## program that does not check (39.6) adds `partial` (true) and `diagnostics`.
+## program that does not check adds `partial` (true) and `diagnostics`.
 
 import Model from "../analysis/model"
 import DiagnosticJson from "../diagnostics/diagnostic_json"

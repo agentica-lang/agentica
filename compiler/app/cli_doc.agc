@@ -1,5 +1,5 @@
-## `agentica doc PATH [--json]`: the exported API of one module with its `##` docs (docs/grammar/06b-builtins.md,
-## 32.5). PATH is a source file, read through the Workspace, or a `std/` module name, read from the provider of the
+## `agentica doc PATH [--json]`: the exported API of one module with its `##` docs (docs/grammar/04-lexical.md).
+## PATH is a source file, read through the Workspace, or a `std/` module name, read from the provider of the
 ## settings (the copy the binary carries). The module is only lexed and parsed (docs/doc.agc), so it never needs its
 ## imports.
 

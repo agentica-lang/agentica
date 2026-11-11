@@ -284,7 +284,7 @@ def init_repository(place: Place, scratch: Scratch, locked: Lock.Locked) -> Resu
 end
 
 # The url is passed as written: git's own url.<base>.insteadOf settings apply to it, and the lock keeps what the
-# manifest says (45.6).
+# manifest says.
 def fetch_pin(place: Place, scratch: Scratch, locked: Lock.Locked) -> Result[Void]
   wanted = "refs/tags/#{locked.source.tag}"
   if locked.source.tag == ""

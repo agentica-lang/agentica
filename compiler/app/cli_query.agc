@@ -8,7 +8,7 @@
 ## paths together and list the ones that do not link, and `refs` checks the program too.
 ##
 ## With `--partial`, `type-at` and `refs FILE:LINE:COL` (alone: not with a NAME or PATH...) also answer from a program
-## in which some functions do not check (39.6): the answer has `partial` and `diagnostics` in the JSON form, one line
+## in which some functions do not check: the answer has `partial` and `diagnostics` in the JSON form, one line
 ## on stderr for each diagnostic in the text form, and the exit status is 0. A program that checks gets the answer it
 ## gets without the option. `outline` takes the option and has nothing to add: it never checks.
 ##

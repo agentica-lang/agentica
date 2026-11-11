@@ -4,7 +4,7 @@
 ## give the type at a position with `type-at`, list the references to a name with `refs`, write the packages of the
 ## lock to deps/ with `install`, change the packages with `add` and `update`, or start the tests.
 ##
-## `run` takes everything it cannot know from outside (docs/vm/08-loader-and-cli.md §9, "Front-end inputs"): the
+## `run` takes everything it cannot know from outside (docs/vm/08-loader-and-cli.md §9): the
 ## settings (the Agentica version, the provider of the `std/` sources, the path of the binary that `agentica test`
 ## starts again), the words the user typed and `hand_off`, the function that runs a compiled program and gives back its
 ## exit status (front_end_cli.agc hands the bytes to C).

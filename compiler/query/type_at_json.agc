@@ -3,7 +3,7 @@
 ## its `kind`, its `name`, the `name_span` of the name, its `signature` and its `doc` (the whole `##` text or null).
 ## `help` is null, or the object of `agentica help NAME --json` for a `builtin` answer, which has no definition. A
 ## span is `{file, range}` with the `file` the command answers with. An answer from a program that does not check
-## (39.6) adds `partial` (true) and `diagnostics`, and has a `type` of null where only the link knows the name.
+## adds `partial` (true) and `diagnostics`, and has a `type` of null where only the link knows the name.
 
 import Model from "../analysis/model"
 import DiagnosticJson from "../diagnostics/diagnostic_json"
