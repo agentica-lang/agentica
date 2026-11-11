@@ -366,8 +366,11 @@ def modifier_help(keyword: String) -> String
   "there are no #{keyword} modifiers: put the statement inside #{keyword} cond ... end"
 end
 
+# `end = 1` or `end: Int` closes the block before it, so the reserved word is named here.
 def expect_end(e: Base.Env, pos: Int) -> Result[Int]
   kind = e.tokens[pos].kind
+  return error(Base.reserved_name(e, pos, "a name")) if kind == "end" and Base.reserved_name_at?(e, pos)
+
   return ok(pos + 1) if kind == "end"
 
   if kind == "EOF"
@@ -1559,6 +1562,8 @@ end
 def parse_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   inner = try Base.enter(e, pos)
   kind = e.tokens[pos].kind
+  return error(Base.reserved_name(e, pos, "a name")) if Base.reserved_name_at?(e, pos)
+
   if (
     kind == "name" and
     e.tokens[pos].lexeme == "type" and
@@ -2033,6 +2038,25 @@ def parse_arm_body(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtsAt]
   ok(Base.StmtsAt(nodes: List.concat([first.node], rest.nodes), pos: rest.pos, ids: rest.ids))
 end
 
+# The pattern of an arm: one pattern, or several separated by commas as an or-pattern, whose id comes after theirs.
+def parse_arm_pattern(e: Base.Env, pos: Int, ids: Int) -> Result[Base.PatternAt]
+  first = try Base.parse_pattern(e, pos, ids)
+  return ok(first) if e.tokens[first.pos].kind != "comma"
+
+  patterns = [first.node]
+  cursor = first.pos
+  next_id = first.ids
+  while e.tokens[cursor].kind == "comma"
+    parsed = try Base.parse_pattern(e, cursor + 1, next_id)
+    patterns = patterns.push(parsed.node)
+    cursor = parsed.pos
+    next_id = parsed.ids
+  end
+
+  node = Ast.Pattern.Or(Ast.OrPattern(id: next_id, patterns: patterns, span: Base.span_from(e, pos, cursor)))
+  ok(Base.PatternAt(node: node, pos: cursor, ids: next_id + 1))
+end
+
 # The optional `if condition` between a pattern and ->. Its ids come after the pattern and before the body.
 def parse_guard(e: Base.Env, pos: Int, ids: Int) -> Result[GuardAt]
   return ok(GuardAt(node: none, pos: pos, ids: ids)) if e.tokens[pos].kind != "if"
@@ -2063,7 +2087,7 @@ def parse_case_node(e: Base.Env, pos: Int, ids: Int) -> Result[CaseAt]
       return error(unclosed_case(e, cursor))
     else
       arm_start = cursor
-      pattern = try Base.parse_pattern(e, cursor, next_id)
+      pattern = try parse_arm_pattern(e, cursor, next_id)
       guard = try parse_guard(e, pattern.pos, pattern.ids)
       arrow = try Base.expect(e, guard.pos, "arrow", "->", false)
       body = try parse_arm_body(e, arrow, guard.ids)
@@ -3817,6 +3841,8 @@ def parse_struct(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], generic
       fields = fields.push(field.node)
       cursor = field.pos
       next_id = field.ids
+    elsif Base.reserved_name_at?(e, cursor)
+      return error(Base.reserved_name(e, cursor, "a field name"))
     else
       return error(Base.found(e, cursor, "a field name or \"end\""))
     end

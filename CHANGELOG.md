@@ -15,6 +15,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Module blocks: `module Name ... end` holds several named modules in one file;
   `export module` makes one importable (`import {Counter} from "agents"`);
   `symbol`, `refs` and `type-at` find the names inside them (`Counter.start`).
+- A `case` arm takes several patterns: `"ex", "px" -> ...`.
+- `+` joins two lists: `[1] + [2]`.
+- A struct field may be named `error`, `ok`, `some` or `none`.
+- A reserved word used as a name (`def edge(end: Int)`) is `PARSE-RESERVED-WORD`,
+  with another name as the help.
 
 ## [0.29.0] - 2026-11-10
 

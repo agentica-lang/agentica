@@ -599,6 +599,10 @@ def lower_binary(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.Binary, want: Int) 
     fx = Lowering.place(right.fx, end_label)
   elsif Types.is?(Lowering.type_of(cx, node.left), "Bytes")
     fx = try lower_bytes_operator(cx, fx, node, dst)
+  elsif op == "plus" and Types.is?(Lowering.type_of(cx, node.left), "List")
+    # xs + ys is List.concat: a new list, both operands unchanged.
+    window = try bytes_call(cx, fx, "List.concat", node.left, node.right, node.op_span)
+    fx = Lowering.emit_at(window.fx, "move", [dst, window.slot], node.op_span)
   elsif op == "multiply" and Types.is?(Lowering.type_of(cx, node.left), "String")
     # String * Int is a call: the VM checks the count and the size of the result (String.multiply, vm/strings.c).
     window = try bytes_call(cx, fx, "String.multiply", node.left, node.right, node.op_span)

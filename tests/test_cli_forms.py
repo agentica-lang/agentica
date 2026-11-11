@@ -38,7 +38,7 @@ FILES = {
     "tab.agc": 'def main() -> Void\n\tx: Int = "a"\n\tputs(x)\nend\n',
     "crlf.agc": 'def main() -> Void\r\n  x: Int = "a"\r\n  puts(x)\r\nend\r\n',
     "unicode.agc": 'def main() -> Void\n  puts("héllo")\n  x: Int = "éé"\nend\n',
-    "multiline.agc": 'def main() -> Void\n  x = [1, 2,\n    3] + "s"\nend\n',
+    "multiline.agc": 'def main() -> Void\n  x = [1, 2,\n    3] - "s"\nend\n',
     "labels.agc": (
         "def add(a: Int, b: Int) -> Int\n  return a + b\nend\n\ndef main() -> Void\n  x = add(1, \"two\")\n"
         "  puts(x)\nend\n"),

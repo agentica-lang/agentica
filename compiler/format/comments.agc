@@ -171,6 +171,7 @@ export def pattern_kind(pattern: Ast.Pattern) -> String
     Ast.Pattern.Wildcard(_) -> "WildcardPattern"
     Ast.Pattern.Literal(_) -> "LiteralPattern"
     Ast.Pattern.Variant(_) -> "VariantPattern"
+    Ast.Pattern.Or(_) -> "OrPattern"
   end
 end
 
@@ -663,6 +664,7 @@ end
 def pattern_children(pattern: Ast.Pattern) -> List[Part]
   case pattern
     Ast.Pattern.Variant(node) -> nested(node.slots)
+    Ast.Pattern.Or(node) -> node.patterns.map do |inner: Ast.Pattern| Part.Pattern(inner) end
     _ -> []
   end
 end

@@ -297,7 +297,8 @@ def register_structs(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result
   ok(found)
 end
 
-# The fields of one struct, resolved with the struct's type parameters in scope.
+# The fields of one struct, resolved with the struct's type parameters in scope. A field may be named like a builtin
+# constructor (`error`, `ok`, `some`, `none`): it is read through a value and built with a label, so it hides nothing.
 def register_fields(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[State.Cx]
   here = cx.with(type_params: node.type_parameters)
   seen: Set[String] = Set.new([])
@@ -305,7 +306,6 @@ def register_fields(cx: State.Cx, st: State.St, node: Ast.StructDecl) -> Result[
   spans: List[Source.Span] = []
   defaulted: Set[String] = Set.new([])
   for field in node.fields
-    try State.reserve_constructor(cx, st, field.name, field.span)
     if seen.include?(field.name)
       return error(State.fail(cx, st, "CHECK-REDEFINED-NAME", "duplicate field \"#{field.name}\"", field.span))
     end

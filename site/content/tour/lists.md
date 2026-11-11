@@ -69,7 +69,7 @@ end
 
 ## Add and change
 
-Lists never change in place. `push` gives a new list with one more element. `set` gives a new list with one element replaced.
+Lists never change in place. `push` gives a new list with one more element. `set` gives a new list with one element replaced. `+` joins two lists into a new one.
 
 ```agentica
 def main() -> Void
@@ -77,7 +77,7 @@ def main() -> Void
   xs = xs.push(3)
   xs = xs.set(0, 10)
   puts(xs)
-  puts(xs.concat([4, 5]))
+  puts(xs + [4, 5])
 end
 ```
 

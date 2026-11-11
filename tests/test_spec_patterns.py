@@ -134,6 +134,27 @@ SINGLE_FILE = [
     ("an arm after a guarded arm of a case that is the body of an arm",
      main_with("  n = 3\n  case n\n    1 ->\n      case n\n        _ if n > 5 -> puts(0)\n"
                "        _ -> puts(1)\n      end\n    _ -> puts(2)\n  end\n"), None, None),
+    # Several patterns in one arm.
+    ("an arm of several patterns covers each variant it names",
+     case_of(["Shape.Dot, Shape.Circle(_) -> puts(0)", "Shape.Pair(_, _), Shape.Boxed(_) if 1 > 2 -> puts(1)",
+              "Shape.Pair(_, _), Shape.Boxed(_) -> puts(2)"]), None, None),
+    ("an arm of several patterns binds no names",
+     case_of(["Shape.Dot, Shape.Circle(r) -> puts(0)", "_ -> puts(1)"]), "CHECK-CASE-ARM-BINDING",
+     "Shape.Dot, Shape.Circle(r)"),
+    ("a pattern that an earlier arm covers is unreachable at its own span",
+     case_of(["Shape.Dot -> puts(0)", "Shape.Circle(_), Shape.Dot -> puts(1)", "_ -> puts(2)"]),
+     "CHECK-UNREACHABLE-CASE-ARM", "Shape.Dot"),
+    ("a literal repeated in one arm is a duplicate at its own span",
+     main_with("  n = 3\n  case n\n    1, 2, 1 -> puts(1)\n    _ -> puts(2)\n  end\n"),
+     "CHECK-UNREACHABLE-CASE-ARM", "1"),
+    ("a pattern after a catch-all of the same arm is unreachable",
+     main_with("  n = 3\n  case n\n    _, 1 -> puts(1)\n  end\n"), "CHECK-UNREACHABLE-CASE-ARM", "1"),
+    ("each pattern of an arm has the type of the value",
+     main_with("  n = 3\n  case n\n    1, \"a\" -> puts(1)\n    _ -> puts(2)\n  end\n"), "CHECK-PATTERN-TYPE",
+     '"a"'),
+    ("the patterns of an arm stay on its line",
+     main_with("  n = 3\n  case n\n    1,\n      2 -> puts(1)\n    _ -> puts(2)\n  end\n"),
+     "PARSE-UNEXPECTED-TOKEN", Starts("\n")),
     # A case that gives a value: after `=`, `+=` or `return`, and as the last line of a block.
     ("a case gives the value of an assignment, an annotated assignment and a compound assignment",
      main_with("  n = 3\n  a = case n\n    3 ->\n      base = n * 2\n      base + 1\n    _ -> 0\n  end\n"
@@ -246,6 +267,16 @@ RUNS = [
      + main_with("  case next_value(5)\n    0 -> puts(\"zero\")\n    _ if 1 > 2 -> puts(\"never\")\n"
                  "    _ -> puts(\"other\")\n  end\n", ""),
      ["evaluated", "other"]),
+    ("an arm of several patterns matches when any of them does, in a statement and as a value",
+     main_with("  for option in [\"ex\", \"px\", \"exat\", \"keep\"]\n    case option\n"
+               "      \"ex\", \"px\" -> puts(\"ttl\")\n      \"exat\", \"pxat\" if option.size > 3 -> puts(\"at\")\n"
+               "      _ -> puts(\"other\")\n    end\n  end\n"
+               "  shapes = [Shape.Dot, Shape.Circle(1), Shape.Boxed(Option.Some(2)), Shape.Boxed(Option.None),\n"
+               "            Shape.Pair(1, 2)]\n"
+               "  puts(shapes.map do |shape|\n    case shape\n      Shape.Dot, Shape.Circle(_) -> \"small\"\n"
+               "      Shape.Boxed(Option.Some(2)), Shape.Pair(1, _) -> \"two or pair\"\n      _ -> \"other\"\n"
+               "    end\n  end)\n"),
+     ["ttl", "ttl", "at", "other", '["small", "small", "two or pair", "other", "two or pair"]']),
 ]
 
 # Several files: (title, files, code, file of the diagnostic, text the range covers).

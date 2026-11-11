@@ -8,12 +8,21 @@
 
 import Diag from "../diagnostics/diagnostic"
 import Ast from "ast"
+import Lexer from "lexer"
 import Source from "source"
 import Tokens from "token"
 import Unicode from "unicode"
 
 LITERAL_KINDS = Set.new(["integer", "float", "string", "true", "false", "nil"])
 export NESTING_LIMIT = 1000
+
+# A name to suggest in place of a reserved word written where a name goes (`end` as the end of a range).
+RESERVED_RENAMES = {
+  "end": "last", "in": "inside", "case": "kind", "def": "definition", "do": "action", "return": "result",
+  "for": "target", "if": "condition", "try": "attempt", "else": "other", "elsif": "alternative", "while": "pending",
+  "import": "imported", "export": "exported", "struct": "record", "enum": "choice", "and": "both", "or": "either",
+  "not": "negated", "true": "yes", "false": "no", "nil": "empty",
+}
 
 ## What a parse function reads and never changes: the tokens, the context of the construct being parsed, and the
 ## nesting level. depth is the block depth (0 outside a do block body), allow_blocks tells whether `do` after a call
@@ -276,12 +285,30 @@ end
 export def plain_name?(token: Tokens.Token) -> Bool = token.kind == "name" and !decorated?(token.lexeme)
 
 ## The position after the token at pos when it has the kind. A name that ends in ? or ! is refused unless suffix is
-## true, which only function and method names allow.
+## true, which only function and method names allow. A reserved word where a name goes is named as one, with another
+## name as the help.
 export def expect(e: Env, pos: Int, kind: String, description: String, suffix: Bool) -> Result[Int]
   token = e.tokens[pos]
   return ok(pos + 1) if token.kind == kind and !(kind == "name" and !suffix and decorated?(token.lexeme))
 
+  return error(reserved_name(e, pos, description)) if kind == "name" and reserved?(token)
+
   error(found(e, pos, description))
+end
+
+## PARSE-RESERVED-WORD at the reserved word at pos, written where a name goes, with another name as the help.
+export def reserved_name(e: Env, pos: Int, description: String) -> String
+  word = e.tokens[pos].lexeme
+  other = RESERVED_RENAMES.get(word, "#{word}_value")
+  message = "expected #{description}, found the reserved word \"#{word}\""
+  help = "\"#{word}\" is a reserved word and cannot be a name; choose another, such as #{other}"
+  bail(e, pos, "PARSE-RESERVED-WORD", message, hint(help))
+end
+
+## True when the token at pos is a reserved word that `=` or `:` follows, as a local or a field would be written.
+export def reserved_name_at?(e: Env, pos: Int) -> Bool
+  following = kind_at(e, pos + 1)
+  reserved?(e.tokens[pos]) and (following == "assign" or following == "colon")
 end
 
 ## The position of the first token at or after pos that is not NL.
@@ -400,10 +427,15 @@ export def parse_pattern(e: Env, pos: Int, ids: Int) -> Result[PatternAt]
   error(unexpected(e, pos, "expected a pattern"))
 end
 
-## Whether the tokens at pos start a case arm, that is, a pattern, an optional `if` guard and ->. A case body ends
-## there, because arms have no closing token. A guard is looked for up to the end of its line.
+## Whether the tokens at pos start a case arm, that is, one or more patterns separated by commas, an optional `if`
+## guard and ->. A case body ends there, because arms have no closing token. A guard is looked for up to the end of its
+## line.
 export def case_arm_start?(e: Env, pos: Int) -> Bool
   stop = pattern_end(e, pos)
+  while stop >= 0 and kind_at(e, stop) == "comma"
+    stop = pattern_end(e, stop + 1)
+  end
+
   return false if stop < 0
 
   return guard_arrow(e, stop + 1) >= 0 if kind_at(e, stop) == "if"
@@ -454,6 +486,9 @@ def too_deep(e: Env, pos: Int) -> String
 end
 
 def decorated?(lexeme: String) -> Bool = lexeme.ends_with?("?") or lexeme.ends_with?("!")
+
+# A keyword token has its word as its kind.
+def reserved?(token: Tokens.Token) -> Bool = token.kind == token.lexeme and Lexer.keyword?(token.lexeme)
 
 # One payload slot: a name binds the value, `_` drops it, and a literal, a variant, ok(...), error(...), some(...) or
 # none is a nested pattern. A nested variant counts one level of nesting, which bounds the calls of the parser on a

@@ -500,6 +500,13 @@ def print_pattern(out: List[String], at: Margin, role: String, pattern: Ast.Patt
       end
 
       lines
+    Ast.Pattern.Or(node) ->
+      lines = out.push(head(at, role, "or-pattern", node.id, node.span, ""))
+      for inner in node.patterns
+        lines = print_pattern(lines, deeper(at), "alternative", inner)
+      end
+
+      lines
   end
 end
 

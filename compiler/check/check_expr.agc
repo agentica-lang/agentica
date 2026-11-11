@@ -555,9 +555,12 @@ def check_sides(cx: State.Cx, st: State.St, node: Ast.Binary) -> Result[Sides]
   end
 
   # A collection, Optional, Result, struct or enum on the left of == gives its type to the right side, so that
-  # `x == none`, `xs == []`, `r == ok(1)` and `m == {}` check. Other types keep the mismatch at the operator.
+  # `x == none`, `xs == []`, `r == ok(1)` and `m == {}` check. Other types keep the mismatch at the operator. A list on
+  # the left of + does the same, so that `xs + []` checks.
   wanted = T.Type.Unknown
   if (node.op == "equal" or node.op == "not-equal") and EXPECTING_SIDES.include?(T.tag(left.type))
+    wanted = left.type
+  elsif node.op == "plus" and T.is?(left.type, "List")
     wanted = left.type
   end
 
@@ -675,6 +678,9 @@ def plus_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
     return ok(T.Type.String)
   elsif T.is?(sides.left, "Bytes") and T.is?(sides.right, "Bytes")
     return ok(T.Type.Bytes)
+  elsif T.is?(sides.left, "List") and T.is?(sides.right, "List")
+    # A new list with the items of both, as Ruby's Array#+ (same_types made the item types one).
+    return ok(sides.left)
   end
 
   error(
@@ -682,7 +688,7 @@ def plus_type(cx: State.Cx, sides: Sides, node: Ast.Binary) -> Result[T.Type]
       cx,
       sides,
       node,
-      "\"+\" expects two numbers, two strings or two Bytes, found #{T.to_text(sides.left)}",
+      "\"+\" expects two numbers, two strings, two Bytes or two lists, found #{T.to_text(sides.left)}",
       "",
     ),
   )

@@ -65,6 +65,10 @@ def struct enum case do import export end if elsif else while for in return try
 true false nil and or not
 ```
 
+A reserved word where a name goes (a parameter, a function, a field, a local
+before `=` or `:`, a loop variable, a block parameter or a method after a dot)
+is `PARSE-RESERVED-WORD` at the word, with another name as the help.
+
 `break` and `next` are not reserved words: they can name variables, and as
 statements they are loop control. `with` is not reserved either: it means a
 struct update only after a `.` and before `(` (§5), and it can still name
@@ -88,7 +92,8 @@ such as `OpenSSL.Cipher.aes_256_gcm_encrypt` (§6, "Minimal builtin functions"),
 so `Cipher` or `Digest` inside a family reserve nothing.
 `HTTP` is not reserved: it is the usual alias of `std/http`. `ok`, `error`,
 `some` and `none` are names, but cannot be declared as functions, variables,
-parameters, loop variables or fields (`CHECK-REDEFINED-NAME`). The same holds
+parameters or loop variables (`CHECK-REDEFINED-NAME`); a struct field may have
+them, since it is read through a value (`reply.error`). The same holds
 for `puts`, `print`, `gets` and `gets!` as variables, parameters, loop variables
 and pattern bindings.
 
