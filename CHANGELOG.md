@@ -10,6 +10,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `std/socks`: `Socks.connect(proxy, host, port, timeout_ms)` opens a TCP
+  connection through a SOCKS5 proxy (`socks5://`, `socks5h://`, with an optional
+  login); the HTTP client takes those URLs as its `proxy`, and
+  `HTTP.proxy_from_env` reads `ALL_PROXY`.
 - `TCP.recv_bytes(socket, max_bytes)` without a timeout waits with no limit,
   for a server that keeps an idle client connected.
 - Module blocks: `module Name ... end` holds several named modules in one file;
