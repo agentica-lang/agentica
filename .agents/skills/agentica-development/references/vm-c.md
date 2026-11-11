@@ -1,10 +1,64 @@
-# VM C rules: style, failure and exit, Boehm GC
+# VM C rules: writing, style, failure, Boehm GC, a change step by step
 
 Read before writing or reviewing C in `vm/`.
 
 Read first: `references/vm.md` (the trust model and the layers).
 
-**C style.** C11. `make vm-lint` (clang-tidy, `.clang-tidy`) and
+## Writing rules
+
+Each rule names one place in the VM that follows it.
+
+- **Sizes and indexes.** Size sums and products go through `agc_size_add` and
+  `agc_size_mul` (`vm/value.c:349`), which end the run with the out-of-memory
+  exit on overflow; the loader's sums use `uint64_t`. An Int argument is
+  checked for a negative value first, then compared as `uint64_t` with what is
+  left (`builtin_slice`, `vm/bytes.c:70`); never cast a negative `int64_t` to
+  `size_t`. Int arithmetic uses `__builtin_*_overflow` (`vm/interp.c:953`).
+- **No undefined behavior.** Shift an unsigned value by a count checked below
+  64 (`builtin_int_shift_left`, `vm/numbers.c:186`). Read a value's bytes as
+  another type with `memcpy` (`agc_value_word`, `vm/value.h:50`), never a
+  pointer cast or a union of another member. Zero a union with `memset`
+  (`vm/ffi.c:2011`): `{0}` sets only its first member.
+- **Check bytecode once, in the loader.** Every register, index, count and jump
+  target of a `.agcb` is checked in `vm/loader.c` (`check_register`,
+  `vm/loader.c:169`), so the interpreter reads registers without a check
+  (`vm/interp.c:1452`). A new operand or section gets its loader check and a
+  `vm/tests/loader_test.c` assert, not a test on the hot path. Values still go
+  through the checked accessors (`agc_as_*`), which stop a wrong tag in
+  `agc_wrong_tag`.
+- **A failure the program can reach is a value or a diagnostic.** A bad
+  argument, an OS error, a closed handle or a refused `--deny-*` is the
+  builtin's error value (`agc_error_value`, `vm/tcp.c:321`) or its documented
+  `RUNTIME-` code through `agc_fail`; never `abort`, `assert` or `exit`.
+  `abort()` is only for a broken internal rule that the caller checked first
+  (`agc_list_set`, `vm/list.c:375`). Out of memory and a thread that cannot
+  start end with one line and status 70 (`agc_out_of_memory`,
+  `agc_thread_start_failed`).
+- **No C recursion whose depth a value decides.** Printing, comparing, hashing
+  and JSON walk nested values with an explicit stack in `agc_alloc` memory
+  (`compound_debug`, `vm/text.c:305`;
+  `docs/vm/05-values-execution-builtins.md` §7.3). Depth bounded by a constant
+  or `log n` takes `// NOLINT(misc-no-recursion)` on the function line (`put`,
+  `vm/map.c:239`). The lint sees recursion within one file only.
+- **Hold no `malloc` memory across a raise.** `agc_fail` `longjmp`s past every
+  `free`. Run each check that can raise before the first `malloc`, and while
+  you hold one call only helpers that never raise (`guard_of`,
+  `vm/process.c:893`; `agc_host_path_try`, not `agc_host_path`). A `malloc`'d
+  request is freed on every way out: a raise, a cancelled task, a detached job
+  and the end of the run; a libuv request also gets its `uv_*_req_cleanup`
+  (`vm/file_io.c`). cchecker checks this from the marks (`CC_OWNS`,
+  `CC_JUMPS`; "cchecker" in `references/ci.md`).
+- **The hot path allocates nothing it can avoid.** Scratch space starts in a
+  C-stack array and moves to `agc_alloc` memory only when it grows
+  (`agc_equal`, `vm/equal.c:271`). Flags read on the hot path are plain
+  `bool`s, not bit-fields.
+- **Process-wide setup runs before threads exist**, in `agc_launch_init`
+  before `agc_init` starts the collector's threads, and its result is kept
+  (`agc_jit_mem_sync_register`, `vm/launch.c:435`).
+
+## C style
+
+C11. `make vm-lint` (clang-tidy, `.clang-tidy`) and
 `tests/test_vm_style.py` check the rules marked *checked*.
 
 - File order: includes, macros, every `struct`/`typedef`/`enum`/`union`
@@ -24,27 +78,17 @@ Read first: `references/vm.md` (the trust model and the layers).
 - No prototypes of `static` functions: define each helper before its first use,
   so files read bottom-up and the `agc_*` functions usually come last
   (*checked*); only unavoidable mutual recursion may have one.
-- No value-driven C recursion (`docs/vm/05-values-execution-builtins.md` §7.3;
-  *checked* by
-  `misc-no-recursion` within one file only: recursion across files through
-  `agc_*` calls is not caught). Depth bounded by a constant or `log n` (HAMT
-  levels) is allowed with `// NOLINT(misc-no-recursion)` on the function line.
-- Size arithmetic goes through `agc_size_add`/`agc_size_mul`; the loader's
-  index and size sums use `uint64_t`.
 - Every `vm/*.c`, `vm/*.h` and `vm/tests/*.c` file starts with a header comment,
   except the generated `vm/unicode_data.c`. A source file's header is 3 to 8
   lines of text: what the file is, its main functions or builtin family, its
   layer, and where its design lives in `docs/vm/`, as `vm/agentica.c` does. A C
   test's header is 1 to 4 lines on what it tests. A legal header may come before
   it. *Checked* by `tests/test_vm_style.py`.
-- Comments are welcome where the C is complex or not obvious, and they say why,
-  not what: an invariant, an ownership or lifetime rule, GC reachability (why a
-  pointer is still alive after an allocation), an order that is not obvious, a
-  protocol or an OpenSSL or libuv quirk, the RFC section the code follows, or
-  the check that rejects hostile input (a length, offset or count from a `.agcb`
-  or the wire). Use short `/* */` block comments. Never narrate obvious code and
-  never leave commented-out code. Tool markers (`// NOLINT(...)`, `/* fall
-  through */`) are not comments in this sense.
+- Comments say why where the C is not obvious: an invariant, an ownership or
+  lifetime rule, GC reachability (why a pointer is still alive after an
+  allocation), an order, a protocol or library quirk, the RFC section, or the
+  check that rejects hostile input. Short `/* */` blocks; no narration, no
+  commented-out code. Tool markers (`// NOLINT(...)`) are not comments.
 - Only `value.c` and the inline constructors and accessors of `value.h` read the
   value union (`docs/vm/05-values-execution-builtins.md` §5.2), besides the two
   inline word helpers (`agc_value_word`, `agc_word_value`) that list leaves use
@@ -60,7 +104,9 @@ a pass or a false report on prototypes, `#if` branches or `\`+newline literals).
 The `_WIN32` and macOS branches are not linted: CI runs `make vm-lint` on Linux
 only.
 
-**Platform code (Linux, macOS, Windows).** One behavior, one copy; only the
+## Platform code (Linux, macOS, Windows)
+
+One behavior, one copy; only the
 operating system call differs. The adapter shape (a plain header, one file per
 system family, each guarded whole) and the list of older code to move behind
 one are in `docs/vm/15-layers.md` §15.3.
@@ -79,45 +125,103 @@ one are in `docs/vm/15-layers.md` §15.3.
   Move the operation behind an adapter in the same PR, and add the new file to
   `VM_SRC` in `mk/vm.mk`, `vm/tools/check-layers.sh` and
   `references/repo-map.md`.
-- Tests of the shared behavior go in an area of `tools/conformance.py` (the
-  conformance matrix of `platforms.yml`; a test module in no area fails
-  `tests/test_conformance.py`), so they run on every system, and on Windows also
-  in `WINDOWS_TEST_MODULES` for the local Wine check. A test of one system's
-  adapter skips elsewhere with `host_only(...)` and a reason that names the
-  capability; any other skip fails the report.
+- Tests of the shared behavior run on every system (an area of
+  `tools/conformance.py`; on Windows also `WINDOWS_TEST_MODULES` for the local
+  Wine check); a test of one system's adapter is `host_only` elsewhere
+  (`references/ci.md`, "Conformance matrix").
 
-**Failure and exit** (`docs/vm/05-values-execution-builtins.md` §6.2).
-`agc_fail` `longjmp`s to `agc_vm_run`, so call it only from interpreter or
-builtin code on the VM's own C stack. It keeps CODE and MESSAGE by pointer, so
-pass a literal, static data or GC memory, never a stack buffer. `System.exit`
-calls `agc_exit`, which records `AGC_EXITED` and the code and `longjmp`s the
-same way. Only the driver (`vm/launch.c`, with `agentica.c`) prints and exits:
-it flushes stdout and maps the code (1..255 as is, anything else 0). SIGPIPE is
-ignored and every write is checked.
+## Failure and exit
 
-**Boehm GC** (`docs/vm/05-values-execution-builtins.md` §5.3).
+`docs/vm/05-values-execution-builtins.md` §6.2. `agc_fail` `longjmp`s to
+`agc_vm_run`, so call it only from interpreter or builtin code on the VM's own
+C stack. It keeps CODE and MESSAGE by pointer, so pass a literal, static data
+or GC memory, never a stack buffer (`agc_fail_text` takes a String).
+`System.exit` calls `agc_exit`, which records `AGC_EXITED` and the code and
+`longjmp`s the same way. Only the driver (`vm/launch.c`, with `agentica.c`)
+prints and exits: it flushes stdout and maps the code (1..255 as is, anything
+else 0). SIGPIPE is ignored and every write is checked.
+
+## Boehm GC
+
+`docs/vm/05-values-execution-builtins.md` §5.3.
+
 - Allocate only through `agc_alloc` (objects that hold `agc_value`s) and
   `agc_alloc_atomic` (strings, byte buffers, the leaf blocks of Int and Float
   lists; not zeroed under Boehm, so never expose an unfilled tail), or
   `load_alloc` in the loader. They switch to `calloc` under `AGC_NO_GC` and
   route out-of-memory to the handler. Only `value.c` calls `GC_*` or includes
   `gc.h`.
+- Roots: an object stays alive only while a pointer to it (or into it) is on
+  the stack or in the registers of a thread the collector knows, in static data
+  or in another GC object. It never sees `malloc` memory, an atomic object, a
+  `_Thread_local`, a libuv or OpenSSL struct, or a hidden pointer (tagged,
+  XORed or kept as an integer). C that keeps an object only there keeps it
+  reachable from the runtime as well (a task, a register, the registry of
+  `agc_register`) for as long. No packed struct holds a pointer: the collector
+  reads aligned words. Frames hold register offsets, not pointers, because the
+  register array moves when it grows.
+- Threads: both libgc modes have thread support (`vm/value.c` defines
+  `GC_THREADS` before `gc.h`); `agc_init` sets
+  `GC_set_all_interior_pointers(1)` before `GC_INIT` so they agree. The
+  collector starts no marker threads until `agc_gc_allow_threads`, which a run
+  with N > 1 and the C tests call. Pool threads stay off GC memory (`malloc`
+  only); a thread that touches the heap calls `agc_gc_thread_enter` first and
+  `agc_gc_thread_leave` before it ends.
+- C that may switch stacks runs under `agc_gc_blocking` (`vm/value.c:200`,
+  `GC_do_blocking`): the collector scans that thread's stack only down to the
+  call, so the function touches no GC memory. One lost object on macOS x86_64
+  is under investigation (#1328; `references/vm-build.md`, Gotchas).
+- No GC finalizer for an OS resource (a descriptor, a libuv handle, a process):
+  `close` or the owner's end frees it (`references/vm-io.md`). The one
+  finalizer, `TlsContext`'s (`vm/value.c:457`), is registered with
+  `GC_REGISTER_FINALIZER_NO_ORDER` (the macro that matches the GC-debug build)
+  and runs between turns (`agc_gc_finalize_pending`), never inside an
+  allocation. OOM and abort
+  handlers only `write(2)` and `_Exit(70)`.
 - Under `AGC_NO_GC`, `agc_fuzz_one` frees every block after each mutant
   (`agc_release_all`), so never cache an `agc_alloc` pointer in a static. It
   also sets a 256 MB budget (`agc_set_alloc_limit`): an allocation past it
   longjmps out of the mutant and `agc_fuzz_one` returns 2. yyjson allocates
   through `agc_alloc_atomic` under `AGC_NO_GC` for this reason; anything else
   outside the agc heap (a libuv loop) must be closed on that path too.
-- Never keep a GC pointer in `malloc` memory, an atomic object or a
-  `_Thread_local`; never tag pointers. Frames hold register offsets, not
-  pointers, because the register array moves when it grows. No GC finalizers
-  for OS resources. OOM and abort handlers only `write(2)` and `_Exit(70)`.
-- `AGENTICA_GC` picks the libgc (`docs/vm/11-build-ci-supply-chain.md`,
-  `vm-build.md`). The mode is not remembered: pass it to every make command or
-  export it. Both builds have thread support (`vm/value.c` defines `GC_THREADS`
-  before `gc.h`). The collector starts no marker threads until
-  `agc_gc_allow_threads`, which a run with N > 1 and the C tests call, so N=1
-  has none. Keep pool threads off GC memory (they use `malloc` only); a thread
-  that touches the heap calls `agc_gc_thread_enter` first and
-  `agc_gc_thread_leave` before it ends. `agc_init` sets
-  `GC_set_all_interior_pointers(1)` before `GC_INIT` so both builds agree.
+
+## A C change, step by step
+
+Build only what the issue asks; a new kind or subsystem needs a program that
+uses it (`docs/vm/14-core-invariants.md` §14.6).
+
+**A new value kind** (as `AGC_T_TLS_CONTEXT` and `AGC_T_MUTEX` were added):
+
+1. Front end: the type in `OPAQUE_TYPES` (or `RECORDS`, `ENUMS`) of
+   `compiler/catalog/builtins_data.agc`, with its catalog golden; `vm_type?`
+   (`compiler/lower/lower_state.agc`) accepts it.
+2. `vm/value.h`: the tag at the end of `agc_tag`, and the struct with a comment
+   on who owns what it points to. The constructor and the checked accessor go
+   inline in `value.h` for a hot kind, in `value.c` for a service resource.
+3. Each place that switches on tags (`rg -n AGC_T_MUTEX vm/` lists those of the
+   last kind): the text form in `agc_scalar_text` (`vm/text.c`); equality in
+   `vm/equal.c`, or none, which `equality?` (`check_types.agc`) then refuses;
+   a map or set key in `agc_key_hash` only if the language allows it; for a
+   kind a task owns, `handle_tag` (`vm/task.c`), `agc_owned_of` (`vm/loop.c`)
+   and the checker's `holds_handle?`.
+4. Its builtins (below), a C test of its invariants, and a golden of its text
+   form and of each runtime code.
+
+**A builtin in C**: `references/vm-builtins.md`. New rows go at the end of
+their table (a C test may index a table by position); a row that may park also
+goes in `agc_jit_parking` (`vm/jit/jit.c`, sorted).
+
+**An opcode**: `references/vm-lowering.md` ("Widen the subset"), and the JIT
+part of `references/vm-core.md` if the opcode gets compiled code.
+
+**Before the PR** (the commands: `references/vm-build.md`):
+
+- `make`, `make vm-test` (one test: `make build/vm/release/<name>-test`),
+  `make vm-golden-check FIXTURES="..."` for the touched fixtures, `make
+  vm-lint`, `make vm-layers` and `make dup-check`.
+- `make cchecker` when ownership, locks or raises change (`references/ci.md`).
+- Shared state: `make vm-tsan` and `make test-shared`
+  (`references/vm-tasks.md`). The turn loop of `vm/interp.c`: `make
+  layout-check`.
+- The PR gets the `platforms` label (`references/ci.md`, "Conformance
+  matrix") and a `vm-c-critic` review (`agentica-dev-workflow`).

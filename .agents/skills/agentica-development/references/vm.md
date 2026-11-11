@@ -26,7 +26,8 @@ may include; §15.4: which declaration goes in which header). `make vm-layers`
 checks the direction and the third-party header places. A new `vm/*.c` file
 goes in `VM_SRC` (a driver file with a `main`, such as `launch.c` and
 `agentica.c`, has its own rule) and in one list of `vm/tools/check-layers.sh`.
-A `vm/tests/*.c` file includes what it uses.
+An exemption there names an exact path and its reason, never a bare basename
+glob. A `vm/tests/*.c` file includes what it uses.
 
 ## Rules every change keeps
 
@@ -60,7 +61,7 @@ A file that loads may still compute wrong values or end with `RUNTIME-INTERNAL`.
 
 | Reference | When |
 |---|---|
-| `vm-c.md` | any C in `vm/`: C style, failure and exit, Boehm GC rules |
+| `vm-c.md` | any C in `vm/`: writing rules, C style, failure and exit, Boehm GC, the steps of a C change |
 | `vm-core.md` | values, lists, maps, strings, text forms, the interpreter, builtin tables, the loader, JSON, diagnostics, tracing |
 | `vm-io.md` | the libuv loop and registry, stdin, stdout, stderr, `File`, `Dir`, `Path` |
 | `vm-tasks.md` | the scheduler, cancellation, `Channel`, the `Test` builtins, the latency test |
