@@ -1,5 +1,5 @@
 /* The channel pair of the system (agc_chan_pair): the contract with libuv and the system, checked with a plain C
-   child that reads descriptor 3 and writes descriptor 4 (3 again on POSIX) with read() and write(). */
+   child that reads descriptor 3 and writes descriptor 4 with read() and write(). */
 #ifdef _WIN32
 #include <fcntl.h>
 #include <io.h>
@@ -70,7 +70,7 @@ static unsigned char pattern(size_t at) { return (unsigned char)(at * 31 + (at >
 
 /* The child: reads descriptor 3 to its end, checks the bytes and answers with how many it saw. */
 static int child(void) {
-  int answer_fd = strchr(agc_chan_value(), ',') ? 4 : 3;
+  int answer_fd = 4;
 #ifdef _WIN32
   _setmode(3, _O_BINARY);
   _setmode(answer_fd, _O_BINARY);
@@ -159,9 +159,11 @@ static void got(uv_stream_t *stream, ssize_t n, const uv_buf_t *buf) {
   }
 }
 
+/* As the VM does (vm/duplex.c): the close after the queued writes is the end of input. A POSIX pipe has no
+   shutdown(2), so libuv says ENOTSOCK there once the writes are out. */
 static void shutdown_done(uv_shutdown_t *req, int status) {
   link_state *s = req->data;
-  assert(status == 0);
+  assert(status == 0 || status == UV_ENOTSOCK);
   s->shut = true;
   uv_close((uv_handle_t *)&s->to, NULL);
 }
@@ -197,11 +199,9 @@ static void probe(const char *self) {
   assert(uv_pipe_init(&loop, &s->from, 0) == 0);
   assert(uv_pipe_open(&s->to, ends.write) == 0);
   assert(uv_pipe_open(&s->from, ends.read) == 0);
-#ifdef _WIN32
   /* libuv must see the direction of each end: a write end that looked readable could not be shut down for good. */
   assert(uv_is_writable((uv_stream_t *)&s->to) && !uv_is_readable((uv_stream_t *)&s->to));
   assert(uv_is_readable((uv_stream_t *)&s->from) && !uv_is_writable((uv_stream_t *)&s->from));
-#endif
   s->to.data = s;
   s->from.data = s;
   s->write.data = s;

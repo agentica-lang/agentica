@@ -81,8 +81,8 @@ for a test function with parameters, type parameters or another result;
   task it is `RUNTIME-TEST-RUN`. `Test.run` never returns; run directly it
   prints `run this file with agentica test` and exits 2.
 - Under `agentica test` the runner talks to the file on a channel of its own
-  (descriptor 3), so the file's stdin and stdout are its own. The runner closes
-  stdin at once (`IO.gets` is an end-of-input error). Print anything with
+  (descriptors 3 and 4), so the file's stdin and stdout are its own. The runner
+  closes stdin at once (`IO.gets` is an end-of-input error). Print anything with
   `puts`/`print`/`IO.inspect`: it is shown only under a failed test.
 - A task crash outside every test (say, in a task `main` started) that nothing
   awaited fails the whole file (exit 1 with the crash summary).

@@ -202,12 +202,7 @@ false
 Process.spawn_channel(command: String, args: List[String], options: Process.Options = Process.Options()) -> Result[Process]
 ```
 
-Like `Process.spawn_captured`, and also opens a private channel to the program, apart from its standard input, output and error. It carries lines of text both ways, on Linux, macOS and Windows.
-
-| System | Channel | The program sees |
-|---|---|---|
-| Linux, macOS | a socket pair | descriptor 3, `AGENTICA_CHANNEL=3` |
-| Windows | a pipe each way | reads 3, writes 4, `AGENTICA_CHANNEL=3,4` |
+Like `Process.spawn_captured`, and also opens a private channel to the program, apart from its standard input, output and error. It carries lines of text both ways, on Linux, macOS and Windows: a pipe each way, so the program reads descriptor 3, writes descriptor 4 and sees `AGENTICA_CHANNEL=3,4`.
 
 `Process.spawn` and `Process.spawn_captured` remove that variable from what they pass on, so a program sees only a channel its own parent opened. Its standard input and output stay free.
 
@@ -227,7 +222,7 @@ Process.channel_close(p: Process, timeout_ms: Int) -> Result[Void]
 
 ```agentica {mode="check"}
 def main() -> Void
-  script = "read line <&3; echo \"got $line\" >&3"
+  script = "read line <&3; echo \"got $line\" >&4"
   p = Process.spawn_channel("sh", ["-c", script]).unwrap!
   _ = Process.channel_send(p, "hello\n", 1000)
   puts(Process.channel_read_line(p, 1000))
@@ -254,7 +249,7 @@ Gives, and removes, the standard output of a captured program that has arrived s
 
 ```agentica {mode="check"}
 def main() -> Void
-  script = "echo working; echo done >&3"
+  script = "echo working; echo done >&4"
   p = Process.spawn_channel("sh", ["-c", script]).unwrap!
   puts(Process.channel_read_line(p, 1000))
   puts(Process.read_available(p, 1000))
@@ -276,7 +271,7 @@ Process.parent_send(text: String, timeout_ms: Int) -> Result[Void]
 
 The program's side of the channel its parent opened with `Process.spawn_channel`, with the rules of `channel_read_line` and `channel_send`. The timeout must be positive, and a timeout closes the channel for good. Without a channel: `error("process: no parent channel")`.
 
-- The VM takes the channel at start-up only when `AGENTICA_CHANNEL` has the system's value (`3`, or `3,4` on Windows). Unix: descriptor 3 must be a socket or a FIFO open for reading and writing. Windows: 3 a readable pipe, 4 a writable one. Anything else (a regular file, a device, a one-way FIFO) is left alone: no channel.
+- The VM takes the channel at start-up only when `AGENTICA_CHANNEL` is `3,4` and descriptor 3 is open for reading and 4 for writing, each a pipe, a FIFO or a socket (on Windows a pipe). On Linux and macOS it also takes `3` with one socket or FIFO open both ways on descriptor 3, the form of earlier versions. Anything else (a regular file, a device, a pipe the wrong way round) is left alone: no channel.
 - The program's own children do not inherit the descriptors or the variable.
 
 These calls are for runner code such as `agentica test`. A test that calls them can break the protocol between the runner and its file, and nothing stops it.

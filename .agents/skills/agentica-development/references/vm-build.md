@@ -87,12 +87,12 @@ make compile-commands                # compile_commands.json (gitignored) with t
     of every VM run of the fixture (`system-env.env`); a program reads only the
     names it lists and never prints the whole environment.
   - `.channel`: the golden run goes through `tests/fixtures/channel-run.py`
-    (`channel-run.js` with Node on Windows), which hands a socket to the VM as
-    fd 3 (`AGENTICA_CHANNEL=3`), sends the first line of the file and one more
-    after each line the VM sends back, and prints the child's stdout as it is
-    and each channel line as `channel> ` and the line. The `test-*` fixtures use
-    it; a fixture of the `agentica test` modes (`--agentica-test run`) without a
-    `.channel` file is the no-channel case (`test-no-channel`).
+    (`channel-run.js` with Node on Windows), which hands the VM a channel at
+    fds 3 and 4 (`AGENTICA_CHANNEL=3,4`), sends the first line of the file and
+    one more after each line the VM sends back, and prints the child's stdout as
+    it is and each channel line as `channel> ` and the line. The `test-*`
+    fixtures use it; a fixture of the `agentica test` modes (`--agentica-test
+    run`) without a `.channel` file is the no-channel case (`test-no-channel`).
   - `spawn-denied` name prefix: runs with `--deny-run`. A `process-` fixture's
     children must be on every CI runner (`/bin/sh`, `cat`, `sleep`) and must
     end or be closed.
