@@ -1,4 +1,4 @@
-## The text form of `agentica outline` (docs/future/39-semantic-cli.md, 39.2): one line per declaration, so the
+## The text form of `agentica outline` (docs/grammar/06b-builtins.md): one line per declaration, so the
 ## output reads like `rg`: `file:line:column` first, then the declaration as it is written in the source. A struct's
 ## fields and an enum's variants follow their declaration, each at the position of its name. Docs are in the JSON form
 ## only.

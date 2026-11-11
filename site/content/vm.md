@@ -4,7 +4,7 @@ weight: 7
 description: How Agentica runs your program, the bytecode VM called Aurora, and the libraries it is built on.
 ---
 
-Every program runs on Aurora, a bytecode VM written in C11. The VM is part of the `agentica` binary; bytecode files end in `.agcb`. The reasons behind these choices are in [Design decisions](/design/).
+Every program runs on Aurora, a bytecode VM written in C11. The VM is part of the `agentica` binary; bytecode files end in `.agcb`.
 
 ## From source to bytecode
 
@@ -19,19 +19,20 @@ Bytecode runs only on the VM of the same Agentica version.
 
 ## Inside the VM
 
-- **Values.** Every value is 16 bytes: a tag and a number, boolean or pointer. Handles hold the only mutable state.
+- **Values.** Values never change in place; handles (tasks, channels, files, sockets, processes) hold the only mutable state.
 - **Loader.** A `.agcb` file is untrusted. The loader checks all of it before anything runs (version, strings, indexes, registers, jump targets, a step check in every loop and every calling function). A file over 256 MiB is `agentica run: cannot read <file>`, any other bad file `agentica run: invalid bytecode: <reason>`; both exit with code 2.
-- **Interpreter.** One loop runs instructions. Calls push frames on the task's own stack; with the JIT, up to 256 nested calls between compiled functions also sit on the C stack. A tail call (`return f(...)` to a user function) reuses the frame.
-- **I/O and waits.** A blocking call (file, socket, `Task.sleep`) parks only its own task. A waiting `Channel.send` or `recv` parks its task until a value or a slot is ready. A timed `Task.await` waits on the task and a timer, and the first to wake decides.
+- **Interpreter.** One loop runs instructions. Calls push frames on the task's own stack. A tail call (`return f(...)` to a user function) reuses the frame.
+- **Tasks.** Tasks run in turns of 2000 steps on `--schedulers N` threads (one per logical core by default), so a busy loop does not starve the others.
+- **I/O and waits.** A blocking call (file, socket, `Task.sleep`) parks only its own task. A print goes into a 64 KiB buffer per stream, so a slow reader stalls only the tasks that print. The end-of-run flush waits at most 30 s by default (`--flush-timeout`). A waiting `Channel.send` or `recv` parks its task until a value or a slot is ready. A timed `Task.await` waits on the task and a timer, and the first to wake decides.
 - **JIT.** A JIT for x86-64 and arm64 (Linux and macOS), on by default (`--jit off` turns it off), compiles hot functions with loops, and small functions without a loop that they call. Supported arithmetic, reads, text operations and jumps run as machine code, and a call between compiled functions is a native call. Other machines (Windows on ARM) run the interpreter.
 - **Limits.** `--max-steps N` stops a program with `RUNTIME-STEP-LIMIT` after N steps across all tasks (no limit by default). Calls nest at most 10,000 deep per task, then `RUNTIME-STACK-OVERFLOW` with the call stack (a repeated function on one line with its count). A tail call adds no depth.
 - **Maps and lists.** `Map` is a persistent HAMT that keeps insertion order; `Map.put` copies only the path to its key. `List` is a persistent vector of 32 children per node plus a small tail: indexing takes at most four steps for a million items, n pushes cost O(n), and a list of only Ints or only Floats keeps 8 bytes per item. `take`, `drop` and `reverse` are O(n), `sort` O(n log n).
-- **JSON.** `JSON.parse` uses yyjson, and the VM's own encoder writes. A parsed object keeps each key once and encodes keys sorted, so `JSON.encode(JSON.parse(text))` is canonical.
-- **Standard modules.** The `std/` modules are written in Agentica, embedded in the binary and linked into your bytecode like your own modules. Tasks and schedulers are in [Design decisions](/design/#green-tasks-on-schedulers).
+- **JSON.** A parsed object keeps each key once and encodes keys sorted, so `JSON.encode(JSON.parse(text))` is canonical.
+- **Standard modules.** The `std/` modules are written in Agentica, embedded in the binary and linked into your bytecode like your own modules.
 
 ## What it is built on
 
-Pinned git submodules in `vm/third_party/`, all built into the release binary, which needs no system library beyond the C library. A default Linux `make` links the system OpenSSL 3 and libgc instead (see [Getting started](/getting-started/)). The release archives ship the license notices in `licenses/`.
+Pinned git submodules in `vm/third_party/`, all built into the release binary, which needs no system library beyond the C library. A default Linux `make` links the system OpenSSL 3, libgc and zlib instead (see [Getting started](/getting-started/)). The release archives ship the license notices in `licenses/`.
 
 | Library | Purpose | License |
 |---|---|---|
@@ -44,7 +45,3 @@ Pinned git submodules in `vm/third_party/`, all built into the release binary, w
 | zlib | DEFLATE, zlib and gzip codec for `Zlib` | zlib license |
 
 The Unicode tables (case mapping, printing) are generated from the Unicode Character Database into the VM source, under the Unicode License v3.
-
-## Learn more
-
-The [VM design documents](../../docs/vm/README.md) in the repository give the reasons behind each choice.

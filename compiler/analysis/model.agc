@@ -1,4 +1,4 @@
-## The answers of the semantic queries (docs/future/39-semantic-cli.md, 39.5) as plain data: structs of Strings, Ints,
+## The answers of the semantic queries (docs/grammar/06b-builtins.md) as plain data: structs of Strings, Ints,
 ## Bools and lists, with no enum. They are the shapes of the `--json` forms, so the command line prints exactly what
 ## `std/analysis` returns (the printers in query/ take these structs). An absent value is the empty text, or an empty
 ## list for a value that is a struct; the JSON form writes `null` for the empty text of `doc`, `alias` and `default`.
@@ -104,7 +104,7 @@ end
 ## `type`). `definition` holds the declaration of what the expression names, and is empty when it names none.
 ## `help` is the object of `agentica help NAME --json` for a builtin (JSON null otherwise), and `signatures` holds the
 ## signature of each form of that builtin. `partial` is true for an answer from a program that does not check
-## (docs/future/39-semantic-cli.md, 39.6): `diagnostics` are its problems, and `type` is "" when the answer is known
+## (docs/grammar/06b-builtins.md): `diagnostics` are its problems, and `type` is "" when the answer is known
 ## from the link alone, such as a name in a function that did not check. A complete answer has `partial` false and no
 ## diagnostics.
 export struct TypeAt

@@ -1,4 +1,4 @@
-## The one file a query command reads, and the name it answers with (docs/future/39-semantic-cli.md, 39.4). Everything
+## The one file a query command reads, and the name it answers with (docs/grammar/06b-builtins.md). Everything
 ## goes through the Workspace of the settings, so a test or `--stdin` can stand in for the disk.
 ##
 ## The file is the word of the command line or, with `--stdin FILE`, that FILE. A `std/` name (`std/queue`) is a module

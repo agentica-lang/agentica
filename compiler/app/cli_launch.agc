@@ -1,4 +1,4 @@
-## The shape of the hand-off of a compiled program (docs/future/35-self-hosting.md, 35.3, "Front-end inputs").
+## The shape of the hand-off of a compiled program (docs/vm/08-loader-and-cli.md §9).
 
 ## A compiled program to run: the bytes of its .agcb, the options of the VM that runs it (`--max-steps`, `--seed`,
 ## `--flush-timeout`, `--schedulers`, `--jit`, `--coverage FILE`, the `--deny-*` flags and `--sandbox` as given,

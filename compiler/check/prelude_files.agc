@@ -1,4 +1,4 @@
-## The compiler prelude (docs/future/25-ruby-typed-idioms.md 25.6): the methods written in Agentica in stdlib/prelude/
+## The compiler prelude (docs/vm/03-ir-and-bytecode.md §4.7): the methods written in Agentica in stdlib/prelude/
 ## (List.find, List.group_by ...). The checker (check_prelude.agc) records, for each call of such a method, which
 ## function runs it. Here the files of those functions are read, parsed and checked once the program is, and only the
 ## functions the program calls are kept, so a program that calls none pays nothing. The functions are then part of the

@@ -10,17 +10,13 @@ Actions self-hosted runner.
 
 ### 46.1 Today
 
-The VM has one stop path, and a program cannot take part in it: one `sigaction`
-handler covers SIGINT, SIGTERM and SIGHUP (`agc_io_watch_stop`, `vm/loop.c`),
-the run ends as an exit with code 128 + signal, and `agc_launch_settle` kills
-the children, flushes and raises the signal again with its default action
+The VM has one stop path for SIGINT, SIGTERM and SIGHUP, and a program cannot
+take part in it: no builtin reports a signal and no task sees one
 (`docs/vm/14-core-invariants.md` §14.4, `docs/vm/10-io-scheduler.md` §10.2.2).
-No builtin reports a signal and no task sees one. The VM signals only the
-children it started; `Process.close` and the end of the run signal only the
-child's pid (descendants are not reached); `Process.wait` returns 128 + signal
-for a killed child. The VM has no `uv_signal_t` watcher for the stop signals,
-and a new one must respect `private_pipe` in `vm/files.c` and libuv's shared
-signal lock. A grandchild re-parented to a VM running as PID 1 stays a zombie
+The VM signals only the children it started, by pid (descendants are not
+reached). A new `uv_signal_t` watcher for the stop signals must respect
+`private_pipe` in `vm/files.c` and libuv's shared signal lock. A grandchild
+re-parented to a VM running as PID 1 stays a zombie
 (`docker run --init` avoids this).
 
 ### 46.2 Goals
@@ -73,9 +69,8 @@ signal that arrives before the call, and a subscription queues it from the
 moment it is made.
 
 **The name `Signal` is a risk, and the 46a PR makes the final choice** (with a
-spike on the enum parameter). `tests/fixtures/vm/http-server-close.agc` has a
-`struct Signal` (a user type with a builtin name is `CHECK-REDEFINED-NAME`, so
-the reserved name is breaking and the fixture is renamed); no builtin takes an
+spike on the enum parameter). A user type with a builtin name is
+`CHECK-REDEFINED-NAME`, so the reserved name is breaking; no builtin takes an
 enum as a parameter today; and a builtin enum that shares its name with a
 function namespace has no precedent (`Signal.channel(...)` would be read as a
 constructor). (A) keep `Signal.channel` and `Signal.number` and make the
@@ -201,10 +196,7 @@ as the tick; `start_new_session=True` becomes `Process.spawn_group`,
 `os.killpg` becomes `Process.signal_group`, and `os.kill` on each listener
 becomes `System.signal(pid, sig, comm)`. The program subscribes before the child
 starts, for the whole run. A signal before the subscription takes the default
-path. Missing outside this design: `File.copy` that keeps the mode, an
-`exists?` check, `System.hostname`, and reaping orphans as PID 1 (document
-`docker run --init`; the VM would need `waitpid` on pids it does not own, a
-separate decision).
+path.
 
 ### 46.5 Phases
 
@@ -217,11 +209,3 @@ separate decision).
   the end-of-run group kill.
 - **46d: graceful HTTP stop.** A drain in `std/http` (stop accepting, wait for
   the handlers up to a deadline), in Agentica, after 46b by the owner's order.
-
-Tests are hermetic and Linux only: a handled TERM runs the cleanup and exits 0;
-TERM is forwarded to a `spawn_group` child; a second TERM is ignored; QUIT exits
-131 as a normal exit, leaves no children and writes no core file; a child that
-ignores TERM is killed with its group after the deadline; a signal to a pid
-carries the right name and a wrong name is an error that leaves the process
-alive; INT ignored at start gives the `ignored` error and stays ignored; the
-USR1, USR2 and QUIT cases are new next to `tests/test_vm_stop.py`.

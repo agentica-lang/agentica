@@ -116,7 +116,7 @@ export struct ModuleDecl
   span: Source.Span
 end
 
-## A module constant: [export] NAME[: Type] = value (docs/future/44-module-constants.md). Unlike the other declarations
+## A module constant: [export] NAME[: Type] = value (docs/grammar/06-semantics.md). Unlike the other declarations
 ## it is not wrapped by an ExportDecl: exported says whether `export` was written, and the span starts at it. The
 ## linker clears exported.
 export struct ConstDecl
@@ -686,7 +686,7 @@ export struct RegexLit
   span: Source.Span
 end
 
-## An `<<~EAG` template (docs/future/51-templates.md): `call` is the expression that builds its text, which the parser
+## An `<<~EAG` template (docs/grammar/04-lexical.md): `call` is the expression that builds its text, which the parser
 ## makes from the body (eag.agc) with tokens that keep their places in the template. The literal stands for it in the
 ## tree so that the linker can ask for the import of std/eag and the formatter can print the template as written.
 ## `span` is the opener. The nodes of `call` take the ids before the literal's own.

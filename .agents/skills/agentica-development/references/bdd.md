@@ -47,7 +47,7 @@ the programming skill or the site).
   files are found in the same walk (entry `kind`: `tests`, `feature`, `""`);
   default paths `specs/` and `test/` (a missing default is skipped; nothing
   found, or a `--only` that matches no name, is `CHECK-BDD-EMPTY`).
-- Test functions (#983): `compile_test` compiles with `Settings.test_file`
+- Test functions: `compile_test` compiles with `Settings.test_file`
   true (`check` sets it for a `*_test.agc` name; nothing else does), and
   `modules/test_main.agc` adds the `main` of a root file with `test_*`
   functions and none (fresh trees only, ids from the Program's on) before the

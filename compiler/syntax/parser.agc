@@ -4026,7 +4026,7 @@ def parse_exportable(e: Base.Env, pos: Int, ids: Int) -> Result[DeclAt]
   error(Base.unexpected(e, pos, "export requires def, struct, enum, type, module, or a constant"))
 end
 
-# A constant starts with a type-name token followed by `=` or `:` (docs/future/44-module-constants.md 44.3). The name
+# A constant starts with a type-name token followed by `=` or `:` (docs/grammar/06-semantics.md). The name
 # is checked when it is parsed, so `Limit = 1` is PARSE-CONSTANT-NAME and not a statement.
 def constant_start?(e: Base.Env, at: Int) -> Bool
   following = Base.kind_at(e, at + 1)

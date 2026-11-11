@@ -15,7 +15,7 @@ import Writer from "bytecode_writer"
 # lower.agc, and BYTECODE- ones). No file is written for a failure. The flags are those of link.agc and apply to the
 # roots after them: `--stdlib=DIR` (the default is stdlib), `--agentica-path=V`, `--xdg-data-home=V`,
 # `--xdg-cache-home=V`, `--home=V`, `--local-app-data=V`; and `--version=V`, the Agentica version of the header, which
-# a root needs (the front end gets it as an input, 35.3).
+# a root needs (the front end gets it as an input).
 def main() -> Void
   stdlib = "stdlib"
   env = Host.process_env()

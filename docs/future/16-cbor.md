@@ -3,9 +3,9 @@
 Issue #994, on demand: it starts when a real program needs it (a disk cache, or
 messages between Agentica processes). The counterpart of Erlang's
 `term_to_binary` and `binary_to_term`: a typed binary form of Agentica values,
-in CBOR ([RFC 8949](https://www.rfc-editor.org/rfc/rfc8949)). Generic structs
-and the JSON form of enums are built; issue #748 mentions `Term` only for
-`JsonField` (a `Term` writes `JsonField` as a plain generic enum).
+in CBOR ([RFC 8949](https://www.rfc-editor.org/rfc/rfc8949)). Issue #748
+mentions `Term` only for `JsonField` (a `Term` writes `JsonField` as a plain
+generic enum).
 
 ### 16.1 Motivation
 

@@ -1,4 +1,4 @@
-## CHECK-UNUSED-IMPORT: an import alias that its file never uses is an error (docs/future/26-strict-diagnostics.md,
+## CHECK-UNUSED-IMPORT: an import alias that its file never uses is an error (docs/grammar/05b-modules.md,
 ## 26.1). The linker is the stage that sees the aliases, so it reads the names a file writes, in the tree the parser
 ## gave, once the rewrite of the file succeeded.
 ##

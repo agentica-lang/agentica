@@ -248,4 +248,4 @@ A library whose API is a struct of function pointers, such as onnxruntime, is wr
 
 ## Shipping it in a package
 
-A package names the library for each system in `[native.NAME]` of its `agentica.toml`. Its `extern` block then opens it with `extern "NAME"`. See [Packages](/tour/modules/#packages) for the form, the lock and the error codes. Document the wrapper file as the API of the package.
+A package names the library for each system in `[native.NAME]` of its `agentica.toml`. Its `extern` block then opens it with `extern "NAME"`. See the [modules reference](/reference/modules/) for the form, the lock and the error codes. Document the wrapper file as the API of the package.

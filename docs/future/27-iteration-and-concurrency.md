@@ -1,26 +1,11 @@
 ## 27. Iteration and concurrent collections
 
-Built: `Task.map`, channels, `Task.await` with a timeout, `File.each_line` and
-`Lazy[T]` (the grammar's "Lightweight tasks", "Channels" and "`Lazy[T]`", and
-the library pages). This file keeps what was decided against, so it is not
-proposed again, and what is open.
-
-The rules: one way to do each thing, values immutable with no shared mutable
-state (the exceptions are the `std/logger` registry and the `ATS` tables),
-static types, and users that are LLM agents, who do best with one obvious form
-and an error whose help shows it. The concurrency primitives are a small set of
-C builtins (`Task.spawn`, `Task.await`, `Task.sleep`, `Channel`, `Task.map`);
-higher-level helpers are written in Agentica in the compiler prelude over them,
-each with its own spec and the one-way test.
-
-### 27.4 Later (`Lazy[T]`)
-
-An Elixir-style `transform` on `Lazy[T]` (an accumulator, 0 to n items out per
-item in, and a halt), if a program needs it, would return a std builtin struct
-from its block, such as `Lazy.Step(emit: [row], state: key, halt: false)`. It is
-not built. Generators stay decided against (below): a task that sends into a
-channel is the producer, and a `Lazy` is a recipe of fixed steps, not a producer
-with `yield`.
+What was decided against in tasks and streams, so it is not proposed again, and
+what is open. The principles are in `docs/grammar/01-overview.md` §2; values
+have no shared mutable state except the `std/logger` registry and the `ATS`
+tables. The concurrency primitives are a small set of C builtins (`Task.spawn`,
+`Task.await`, `Task.sleep`, `Channel`, `Task.map`); higher-level helpers are
+written in Agentica in the compiler prelude over them.
 
 ### 27.5 Decided against
 
@@ -67,8 +52,8 @@ Each of these is decided; it gets a help that names the Agentica form.
 - **Public locks and threads:** `Mutex`, `Monitor`, `ConditionVariable`,
   semaphores, `Thread.new`, Ruby's `SizedQueue`.
   - With no shared mutable state there is nothing to lock (the `std/logger`
-    registry is the one planned exception, and only the Logger functions read
-    it); a lock held across a wait is also the classic deadlock, and agents get
+    registry is the one exception, and only the Logger functions read it); a
+    lock held across a wait is also the classic deadlock, and agents get
     lock order wrong.
   - `Thread` is `Task`, and `SizedQueue` (a bounded, blocking queue) is
     `Channel`.

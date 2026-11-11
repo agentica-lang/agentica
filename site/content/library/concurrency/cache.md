@@ -167,9 +167,11 @@ Dropping a generation deletes its entries one by one (the table of `ATS` has no 
 
 ## The byte count is exact
 
-Every entry has an id and its size is recorded under that id. A task that removes an entry (`delete`, a replacing `put`, an expired read, `cleanup`) first adds minus its size to the id with `ATS.add`; only the task whose add makes 0 gives the bytes back, so two tasks that remove the same entry cannot subtract twice and none is lost. A task reserves the size of a new entry with `ATS.add` before it stores it and takes back its own reservation when the entry is not stored. The byte count of a generation goes away with the generation.
+The byte count stays exact when tasks race on the same entries: no size is counted twice or lost. Its limits:
 
-A task that was stopped for two drops and then writes to a table that has been reused takes its own entry out again when it wakes. Until then, the entry is readable in that table and uncounted, and if the task is cancelled in between, it stays until that table is dropped: that stale window is a stall that spans a rotation, not a single read. A rotation that stalls for longer than the lease is the same case: another task takes it over. Until the stalled one sees that at its next beat, it removes only entries of dropped generations, never those of the generation the new owner started, and if it still publishes, the cache skips a generation instead of going back to an older one. A skip drops the old generation early, and the table it skipped keeps its dropped entries, uncounted and unread, until a later drop empties it. A task cancelled between reserving the bytes of an entry and storing it leaves its reservation counted until that generation is dropped. A drop beats its heart as it empties the table; one whose task did not beat for two seconds on the cache's clock (it was cancelled) is taken over by one other task, chosen with `ATS.add`, and only the current generation can be dropped.
+- A task cancelled in the middle of a write can leave one uncounted entry, readable until a later drop of its table.
+- A task cancelled between reserving the bytes of an entry and storing it leaves that reservation counted until its generation is dropped.
+- Only the current generation can be dropped. A drop that stalls (its task did not beat for two seconds on the cache's clock, as when it was cancelled) is taken over by one other task; the cache may then skip a generation, and the table it skipped keeps its entries uncounted and unread until a later drop empties it.
 
 ## Writing another cache
 

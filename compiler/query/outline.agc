@@ -1,5 +1,5 @@
-## `agentica outline` as a stage (docs/future/39-semantic-cli.md, 39.3): the text of one file in, its imports and
-## top-level declarations out, or the first lexer or parser diagnostic. The file is only lexed and parsed (39.6), so a
+## `agentica outline` as a stage (docs/grammar/06b-builtins.md): the text of one file in, its imports and
+## top-level declarations out, or the first lexer or parser diagnostic. The file is only lexed and parsed, so a
 ## missing import cannot make it fail, except that a file which re-exports a name is linked to find the original
 ## declaration (docs/doc_origins.agc). The declarations are the items of `agentica doc` (docs/doc_model.agc), private
 ## ones included, so the signatures, docs and summaries of the two commands cannot drift.

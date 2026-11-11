@@ -15,7 +15,7 @@ does not make obvious:
   Map key or Set item hashes its bytes with the tag as SipHash domain, so it
   never equals a String of the same bytes. `to_s` is `<Bytes 3>`; inspect adds
   the first 32 bytes in hex. No JSON form (the encoder fails with
-  `RUNTIME-INTERNAL`) and no bytecode constant holds one.
+  `RUNTIME-INTERNAL`).
 - **List.** Opaque: `struct agc_list` lives in `vm/list.c` and the private
   `vm/list_impl.h`, and every other file uses the API of `value.h` (§17.4,
   [17-lists.md](17-lists.md)). Only a builder writes a list, and only before it
@@ -109,7 +109,7 @@ does not make obvious:
   `GC_INITIAL_HEAP_SIZE` wins when set), and libgc collects only when that
   space is used up. libgc counts pointer-free bytes at a quarter, so a server
   whose heap is mostly text collected every 2 MB without it, with every thread
-  stopped (#1179).
+  stopped.
 
 ### 5.4 Shared small values
 
@@ -119,7 +119,7 @@ and `empty_set` (the Map and the Set are one `agc_map` under two tags),
 `empty_string` and the 128 one-character ASCII Strings (`chars[128]`).
 `agc_small_string` (`vm/value.c`) returns the shared String for no bytes or one
 ASCII byte, else a new one; the other paths read the table directly. Callers:
-`rg agc_small_string vm/`. Numbers: `docs/vm-benchmarks.md`.
+`rg agc_small_string vm/`.
 
 Why it is safe:
 
@@ -162,8 +162,8 @@ objects, stack and roots only at 8-byte aligned offsets. Alternatives weighed:
   keeps alignment, but every container manages two arrays and rebuilds an
   `agc_value` on every read.
 
-The direction, if memory or speed ever asks (issue #396): use the static types,
-which make most tags redundant. Unboxed `List[Int]` and `List[Float]` are built
+The direction, if memory or speed ever asks: use the static types, which make
+most tags redundant, as the unboxed `List[Int]` and `List[Float]` do
 (`docs/vm/17-lists.md` §17.12). Typed registers belong to the JIT (§6.4).
 Compact struct fields would store an `Int`, `Float` or `Bool` field in 8 bytes
 with no tag and a pointer field as a bare aligned pointer, and a read rebuilds
@@ -248,8 +248,8 @@ At startup the VM sets `GC_set_oom_fn` and `GC_set_abort_func`. Their handlers
 allocate nothing, write one fixed line with `write(2)`
 (`agentica: out of memory`, or `agentica: internal GC error` for an abort)
 and call `_Exit(70)`. There are no atexit handlers and no stdio flush, so
-buffered stdout is lost. The VM keeps no list of children, so it does not kill
-them: they see EOF or `EPIPE` and end by themselves (10.4). libgc warnings are
+buffered stdout is lost. The handlers do not stop the children either: they
+see EOF or `EPIPE` and end by themselves (10.4). libgc warnings are
 ignored (`GC_set_warn_proc`), so they never reach the program's stderr.
 
 ### 6.4 JIT

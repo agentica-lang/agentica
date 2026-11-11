@@ -1,4 +1,4 @@
-## Fills the package cache from the lock (docs/future/45-packages.md, 45.8). One locked package goes into the folder of
+## Fills the package cache from the lock (docs/grammar/05b-modules.md). One locked package goes into the folder of
 ## its commit: a depth-1 fetch of the tag (or of the commit) into a bare repository made for the purpose, with no hooks
 ## and no working tree, so nothing of the package runs. The files of the commit are read from its tree with `git
 ## ls-tree` and `git cat-file`, so `.gitattributes` does not change the bytes; only the `.agc` files and the manifest
@@ -284,7 +284,7 @@ def init_repository(place: Place, scratch: Scratch, locked: Lock.Locked) -> Resu
 end
 
 # The url is passed as written: git's own url.<base>.insteadOf settings apply to it, and the lock keeps what the
-# manifest says (45.6).
+# manifest says.
 def fetch_pin(place: Place, scratch: Scratch, locked: Lock.Locked) -> Result[Void]
   wanted = "refs/tags/#{locked.source.tag}"
   if locked.source.tag == ""

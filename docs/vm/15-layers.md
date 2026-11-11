@@ -1,7 +1,6 @@
 ## 15. VM layers
 
-**Status:** built; the rest of the layers is issue #998. It follows
-[§16](16-architecture.md).
+It follows [§16](16-architecture.md); the rest of the layers is issue #998.
 
 The C VM has three layers (core, services, adapters) with one-way dependencies,
 a driver that wires them, one port between the services and the core, one header
@@ -38,7 +37,7 @@ A new `vm/*.c` file goes in one of them.
     `agc_size_mul`, `agc_out_of_memory`)
 
 - **Layer:** **Driver** (not a layer: it wires them)
-  - **What:** `agentica.c`, `launch.c`, `builtin_tables.c` (§15.6 V2), the
+  - **What:** `agentica.c`, `launch.c`, `builtin_tables.c` (§15.6), the
     fuzz harness and the libFuzzer entry point
   - **May use:** everything
 
@@ -235,10 +234,10 @@ release objects locally too, to cover code that a configuration turns off.
 ### 15.6 Violations found
 
 Places where the core names a service, or a layer reaches past the port (rule
-7 of §15.5 checks them with `nm`). V1 to V5 are fixed; the others are accepted.
+7 of §15.5 checks them with `nm`). Each one below is accepted.
+`agc_builtin_tables` keeps its order, since `agc_find_builtin` returns the first
+match.
 
-- **V1 to V5, fixed.** `agc_builtin_tables` (V2) keeps the old order, since
-  `agc_find_builtin` returns the first match.
 - **V6, accepted for now:** `testing.c` (`cancel_leftovers`, `unobserved_of`,
   `observe_test`) walks `caller->children` and `rt->crashes` and reads
   `t->test`. They only read, and every change goes through `agc_task_cancel` and

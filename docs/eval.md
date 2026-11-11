@@ -81,13 +81,6 @@ python3 tests/eval/run.py --check-references
 # A model run: 3 reps per task and arm
 python3 tests/eval/run.py --agent pi --model fireworks/accounts/fireworks/models/deepseek-v4p1-flash --pass-env FIREWORKS_API_KEY --arms skill typed-python --reps 3 --jobs 4
 
-# The 6c round: one command per model, from a worktree pinned to the release
-# tag (git worktree add ../agentica-6c TAG) so that master can move on; TAG is
-# the first release with the query-command counts, the skill-nocli arm and
-# --max-cost
-python3 tests/eval/run.py --agent pi --model fireworks/accounts/fireworks/models/deepseek-v4p1-flash --pass-env FIREWORKS_API_KEY --arms skill typed-python skill-nocli --arm-tasks skill-nocli=t9-inventory-orders,t11-gradebook,t12-member-ids,t13-transfer-variant,t14-price-lookup --reps 3 --jobs 2 --max-cost 1.1
-python3 tests/eval/run.py --agent pi --model fireworks/accounts/fireworks/models/glm-5p3-flash --pass-env FIREWORKS_API_KEY --arms skill typed-python skill-nocli --arm-tasks skill-nocli=t9-inventory-orders,t11-gradebook,t12-member-ids,t13-transfer-variant,t14-price-lookup --reps 3 --jobs 2 --max-cost 0.75
-
 # Summarize a finished run, and count the diagnostics the agents saw
 python3 tests/eval/run.py --summarize tests/eval/results/<run directory>
 python3 tests/eval/diagnostics.py
@@ -136,14 +129,13 @@ The Docker sandbox works like this:
 - `--agent claude` needs `--image` with the Claude CLI and Python. The default
   image has Pi only.
 
-If you change `tests/eval/Dockerfile`, remove the old image
-(`docker rmi agentica-eval:local`). The runner also rebuilds the default image
-by itself, and prints a line saying so, in two cases: `mypy --version` exits 126
-or 127 in it (typed arm), or it cannot run a hello program with
-`dist/runtime/bin/agentica` (any Agentica arm; an image from before `libgc1` and
-`libssl3t64` were added fails this way). Any other failure of the probes stops
-the run with a message, and an image given with `--image` is never rebuilt: the
-runner stops and asks you to rebuild it.
+If you change `tests/eval/Dockerfile`, remove the old image (`docker rmi
+agentica-eval:local`). The runner also rebuilds the default image by itself, and
+prints a line saying so, in two cases: `mypy --version` exits 126 or 127 in it
+(typed arm), or it cannot run a hello program with `dist/runtime/bin/agentica`
+(any Agentica arm). Any other failure of the probes stops the run with a
+message, and an image given with `--image` is never rebuilt: the runner stops
+and asks you to rebuild it.
 
 ### The typed Python arm
 
@@ -199,8 +191,7 @@ by weakening its options.
   fails the checker for the same reasons the Agentica start fails
   `agentica check`.
 - The untyped `python` arm stays for comparison with the early rounds. It is not
-  part of the typed-Python pilot. Its workspace no longer gets the Agentica
-  binaries.
+  part of the typed-Python pilot. Its workspace has no Agentica binaries.
 
 ### Query-command counts
 
@@ -258,18 +249,9 @@ With 3 reps, that is 15 extra runs per model.
 
 ### The full 6c round
 
-Issue #1009 tracks it. The Agentica `skill` arm and the typed Python arm run
-with the same model and budget, with enough reps per cell that the spread
-between reps is smaller than the differences reported (round 1 had too few).
-Measure hidden tests passed, tokens, repair attempts (failing check or run
-calls; the Python checker's runs count as check calls on both sides) and time,
-and separate type errors from logic errors. Round 13 ran it with 3 reps and
-stays open. It also counts the query-command calls of each run, with the
-`skill-nocli` arm on the tasks that cross a program. Keep the commands in the
-skill if agents call them and the arm with them is not worse. If agents never
-call them, change how the skill presents them before the next round, not the
-commands. The same issue holds the measurement of `--ai` and labels against
-plain text on the `binary` arm.
+Issue #1009 tracks it: the Agentica `skill` arm against the typed Python arm,
+with the same model and budget, and the measurement of `--ai` and labels
+against plain text on the `binary` arm.
 
 ### The budget cap
 
@@ -387,74 +369,20 @@ The full tables of rounds 1 to 12 are in git history.
 
 ### Round 13: the 6c round (2026-10-22)
 
-The first full 6c round, from the worktree pinned to tag 0.8.1 (`5a65383`,
-skill commit `95b86f4`), with the `skill`, `typed-python` and `skill-nocli`
-arms, 3 reps. Pi 1.3.0, `mypy` 2.3.1, agent network allowed (`agent_network`
-true; 12 `net_commands`, all on t18). `--check-references` passed all 60 runs.
-The runs went in parallel (`--jobs 2` for both models), so seconds are rough. Pi
-1.3.0 means tokens are not comparable with rounds 1 to 12; the arms in this
-round are. The round cost $1.52 of the $2.
+The first full 6c round: tag 0.8.1, the `skill`, `typed-python` and
+`skill-nocli` arms, 3 reps, DeepSeek V4.1 flash (13 tasks; the budget cap
+stopped it) and GLM 5.3 flash (20 tasks). With 3 reps these are directions, not
+claims; the raw tables are in git history.
 
-- **DeepSeek V4.1 flash** (`--max-cost 1.1`, $1.039): the cap stopped it with
-  45 runs not started, so it has t1, t2 and t10 to t20 only (13 tasks, 39 runs
-  per arm), and `skill-nocli` on t11 to t14 (12 runs).
-- **GLM 5.3 flash** (`--max-cost 0.75`, $0.481): complete, 20 tasks, 60 runs per
-  arm, and `skill-nocli` on its 5 tasks (15 runs).
-
-Per run, `skill` against `typed-python` on the tasks both ran:
-
-| Model | Arm | Passed | Tokens in | Context | Tokens out | Cost | Turns | Seconds | Failing runs |
-|---|---|---|---|---|---|---|---|---|---|
-| DeepSeek | `skill` | 38/39 | 22,170 | 152,073 | 5,792 | $0.0144 | 9.6 | 59 | 0.10 |
-| DeepSeek | `typed-python` | 39/39 | 8,176 | 32,412 | 4,426 | $0.0079 | 5.7 | 41 | 0.05 |
-| GLM | `skill` | 58/60 | 9,302 | 91,885 | 2,858 | $0.0053 | 11.8 | 40 | 0.92 |
-| GLM | `typed-python` | 53/60 | 2,824 | 19,227 | 1,474 | $0.0017 | 6.0 | 22 | 0.28 |
-
-"Tokens in" is the uncached input only. "Context" is what the agent read: the
-input plus the cache reads (Pi reported no cache writes). The cache reads are
-most of it, so "tokens in" understates the gap between the arms.
-
-Cost over the same runs (39 per arm for DeepSeek, 60 for GLM), split as Pi
-reports it:
-
-| Model | Arm | Input | Cache read | Output | Total |
-|---|---|---|---|---|---|
-| DeepSeek | `skill` | $0.259 | $0.030 | $0.271 | $0.561 |
-| DeepSeek | `typed-python` | $0.096 | $0.006 | $0.207 | $0.308 |
-| GLM | `skill` | $0.084 | $0.149 | $0.086 | $0.318 |
-| GLM | `typed-python` | $0.025 | $0.030 | $0.044 | $0.099 |
-
-- **The commands were not used.** `query_runs` is 0 in all 225 Pi runs. In the
-  raw logs (`agent.jsonl`), none of the 1,040 bash calls runs `outline`,
-  `type-at`, `symbol` or `refs`, no call names `queries.md` or `analysis.md`,
-  and `skill-nocli` refused 0 calls (`refused_queries` 0). The round cannot
-  show the value of the semantic CLI: the measure is inconclusive.
-  The skill names them (`SKILL.md` step 5 and the `references/queries.md`
-  row), so how it presents them is what to change before the next round.
-- **`skill` against `skill-nocli`** (shared tasks: DeepSeek t11 to t14, GLM t9
-  and t11 to t14): 12/12 and 15/15 pass in both arms. Since no run used the
-  commands, the arms differ only by noise. DeepSeek `skill-nocli` took 25,251
-  tokens, 9.5 turns, 5.6 reads and 77 s per run against 22,748, 8.2, 5.0 and
-  50 s; GLM took 11,416 tokens, 9.2 turns, 5.1 reads and 34 s against 11,438,
-  9.1, 4.4 and 37 s.
-- **Pass rates are close.** DeepSeek missed one `skill` run and no
-  `typed-python` run; GLM passed more in Agentica (58 against 53). All failures
-  are logic errors on hidden cases; none is a syntax, check or run-time
-  failure. Agentica: DeepSeek t19 once (0/8); GLM t6 twice (7/8). Typed Python:
-  none for DeepSeek; GLM seven (t6 three times, t2, t16, t18 and t19 once).
+- **The query commands were not used.** No run called `outline`, `type-at`,
+  `symbol` or `refs`, so the round cannot show the value of the semantic CLI;
+  how the skill presents them is what to change before the next round.
+- **Pass rates are close.** DeepSeek 38/39 `skill` against 39/39
+  `typed-python`; GLM 58/60 against 53/60. Every failure is a logic error on a
+  hidden case.
 - **Agentica costs more per run:** 1.8 times (DeepSeek) and 3.1 times (GLM),
-  with 4.7 and 4.8 times the context, 1.3 and 1.9 times the output tokens,
-  1.7 and 2.0 times the turns, and 1.4 and 1.8 times the seconds. The failing
-  check or run calls per run are also higher (GLM 0.92 against 0.28). Counted
-  as input plus output without the cache reads, the gap looks like 2.2 and 2.8
-  times the tokens; that figure leaves most of the context out.
-- **Most of the extra cost is on the input side.** Input and cache reads are
-  75% (DeepSeek) and 81% (GLM) of what `skill` costs more than `typed-python`.
-  The context, not the output, is what to cut.
-- **DeepSeek stopped for budget:** runs go in task-name order (t1, t10 to t19,
-  t2, t20, then t3 to t9), so the larger tasks ran first and t3 to t9 have no
-  DeepSeek run.
-- With 3 reps, and 13 tasks for DeepSeek, these are directions, not claims.
+  with 4.7 and 4.8 times the context. Input and cache reads are 75% and 81% of
+  the extra cost, so the context, not the output, is what to cut.
 
 ## Diagnostics
 
@@ -462,7 +390,7 @@ reports it:
 rounds 5 to 8 the top codes were `PARSE-UNEXPECTED-TOKEN`, `CHECK-UNKNOWN-NAME`,
 `CHECK-TYPE-MISMATCH`, `CHECK-MISSING-RETURN` and `CHECK-UNKNOWN-METHOD`, mostly
 Python and Ruby habits, not logic errors (`len(s)`, `s.length`, `x.to_i`,
-`print(x)`, `x += 1`; check the grammar for what the language accepts now). In
+`print(x)`, `x += 1`; check the grammar for what the language accepts). In
 rounds 2 to 4, agents fixed failing runs after reading the code and the span, so
 the diagnostics worked as a repair signal.
 
@@ -471,8 +399,7 @@ the diagnostics worked as a repair signal.
 - Accuracy on harder tasks. These tasks do not need sorting or building a list,
   and most of them pass.
 - Strong models. Only small and cheap ones ran (DeepSeek, GLM, gpt-oss, and
-  Nemotron in part). A Sonnet round is postponed, because isolating `claude -p`
-  from the global configuration is not solved.
+  Nemotron in part).
 - Whether `--ai` or `--json` help. They were not measured.
 - Whether Agentica beats typed Python with confidence. The round 10 pilot points
   that way for two of three models, with 3 reps per cell. The full comparison is
