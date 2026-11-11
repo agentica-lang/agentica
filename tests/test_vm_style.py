@@ -9,6 +9,8 @@ string or character literals, so a brace inside any of them does not count.
 import re
 from pathlib import Path
 
+from tests.agentica_test import require
+
 VM_DIR = Path(__file__).resolve().parents[1] / "vm"
 
 # Generated tables, not hand-written C.
@@ -316,8 +318,12 @@ def c_strings(text):
 
 
 def test_every_memory_abort_of_the_vendored_bdwgc_is_reviewed_and_mapped_as_reviewed():
+    # A worktree without the submodule has no bdwgc sources: a skip there (the pre-commit hook runs this), a failure in
+    # CI, which checks the submodules out.
+    sources = sorted((VM_DIR / "third_party" / "bdwgc").glob("*.c"))
+    require(sources, "vm/third_party/bdwgc is not checked out: git submodule update --init vm/third_party/bdwgc")
     aborts = set()
-    for source in (VM_DIR / "third_party" / "bdwgc").glob("*.c"):
+    for source in sources:
         text = source.read_text(encoding="utf-8", errors="replace")
         aborts.update(re.findall(r'\bABORT(?:_ARG\d)?\(\s*"((?:[^"\\]|\\.)*)"', text))
     assert {message for message in aborts if GC_MEMORY_WORDS.search(message)} == set(GC_MEMORY_ABORTS)
