@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-enum { CHAR, CLASS, ANY, ANY_NL, SPLIT, JUMP, SAVE, ASSERT, MATCH };
+enum { ONE_CHAR, CLASS, ANY, ANY_NL, SPLIT, JUMP, SAVE, ASSERT, MATCH };
 enum { TEST, FIRST, ALL };
 
 static agc_vm vm;
@@ -102,8 +102,8 @@ static size_t length(agc_value v) { return agc_list_len(agc_as_list(&vm, v)); }
 
 static int64_t item(agc_value v, size_t k) { return agc_as_int(&vm, agc_list_get(agc_as_list(&vm, v), k)); }
 
-/* `a+$`: SAVE 0, CHAR a, SPLIT 1 3, ASSERT END_TEXT, SAVE 1, MATCH. */
-static const int64_t plus_ops[] = {SAVE, CHAR, SPLIT, ASSERT, SAVE, MATCH};
+/* `a+$`: SAVE 0, ONE_CHAR a, SPLIT 1 3, ASSERT END_TEXT, SAVE 1, MATCH. */
+static const int64_t plus_ops[] = {SAVE, ONE_CHAR, SPLIT, ASSERT, SAVE, MATCH};
 static const int64_t plus_xs[] = {0, 'a', 1, 1, 1, 0};
 static const int64_t plus_ys[] = {0, 0, 3, 0, 0, 0};
 
@@ -131,7 +131,8 @@ static void test_a_long_skip_yields(void) {
   assert(s);
   memset(s, '.', n);
   memcpy(s + n - 2, "ab", 2);
-  static const int64_t ops[] = {SAVE, CHAR, CHAR, SAVE, MATCH}, xs[] = {0, 'a', 'b', 1, 0}, ys[] = {0, 0, 0, 0, 0};
+  static const int64_t ops[] = {SAVE, ONE_CHAR, ONE_CHAR, SAVE, MATCH}, xs[] = {0, 'a', 'b', 1, 0},
+                       ys[] = {0, 0, 0, 0, 0};
   program p = {ops, xs, ys, 5, no_classes(), 2};
   size_t resumes;
   agc_value result = drive(text_of(s, n, n), &p, TEST, false, &resumes);
@@ -147,10 +148,10 @@ static void test_a_long_literal_prefix_is_found_in_linear_time(void) {
   static int64_t ops[N], xs[N], ys[N];
   ops[0] = SAVE;
   for (int k = 1; k <= LETTERS; k++) {
-    ops[k] = CHAR;
+    ops[k] = ONE_CHAR;
     xs[k] = 'a';
   }
-  ops[LETTERS + 1] = CHAR;
+  ops[LETTERS + 1] = ONE_CHAR;
   xs[LETTERS + 1] = 'b';
   ops[LETTERS + 2] = SAVE;
   xs[LETTERS + 2] = 1;
@@ -191,7 +192,7 @@ static void test_a_huge_result_list_is_built_over_many_resumes(void) {
 /* ALL with `x*` on "xéx": 0-1 and 2-3, in characters; the empty matches at 1 and 3 start where a match ended, so
    they are dropped. */
 static void test_all_follows_the_go_rules(void) {
-  static const int64_t ops[] = {SAVE, SPLIT, CHAR, JUMP, SAVE, MATCH}, xs[] = {0, 2, 'x', 1, 1, 0},
+  static const int64_t ops[] = {SAVE, SPLIT, ONE_CHAR, JUMP, SAVE, MATCH}, xs[] = {0, 2, 'x', 1, 1, 0},
                        ys[] = {0, 4, 0, 0, 0, 0};
   program p = {ops, xs, ys, 6, no_classes(), 2};
   size_t resumes;
@@ -229,7 +230,7 @@ static void test_hostile_programs_are_refused(void) {
   static const int64_t assert_out[] = {0, 'a', 1, 6, 1, 0};
   static const int64_t code_out[] = {0, 0x110000, 1, 1, 1, 0};
   static const int64_t class_op[] = {SAVE, CLASS, SPLIT, ASSERT, SAVE, MATCH};
-  static const int64_t falls_off[] = {SAVE, CHAR, SPLIT, ASSERT, SAVE, CHAR};
+  static const int64_t falls_off[] = {SAVE, ONE_CHAR, SPLIT, ASSERT, SAVE, ONE_CHAR};
   program cases[] = {
     {plus_ops, plus_xs, plus_ys, 0, no_classes(), 2},
     {bad_op, plus_xs, plus_ys, 6, no_classes(), 2},
