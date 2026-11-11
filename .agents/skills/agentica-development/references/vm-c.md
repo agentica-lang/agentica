@@ -9,7 +9,7 @@ Read first: `references/vm.md` (the trust model and the layers).
 Each rule names one place in the VM that follows it.
 
 - **Sizes and indexes.** Size sums and products go through `agc_size_add` and
-  `agc_size_mul` (`vm/value.c:364`), which end the run with the out-of-memory
+  `agc_size_mul` (`vm/value.c:365`), which end the run with the out-of-memory
   exit on overflow; the loader's sums use `uint64_t`. An Int argument is
   checked for a negative value first, then compared as `uint64_t` with what is
   left (`builtin_slice`, `vm/bytes.c:70`); never cast a negative `int64_t` to
@@ -167,14 +167,14 @@ else 0). SIGPIPE is ignored and every write is checked.
   with N > 1 and the C tests call. Pool threads stay off GC memory (`malloc`
   only); a thread that touches the heap calls `agc_gc_thread_enter` first and
   `agc_gc_thread_leave` before it ends.
-- C that may switch stacks runs under `agc_gc_blocking` (`vm/value.c:215`,
+- C that may switch stacks runs under `agc_gc_blocking` (`vm/value.c:216`,
   `GC_do_blocking`): the collector scans that thread's stack only down to the
   call, so the function touches no GC memory. It calls `GC_do_blocking` from a
   noinline frame that saves the callee-saved registers first (#1328;
   `references/vm-build.md`, Gotchas).
 - No GC finalizer for an OS resource (a descriptor, a libuv handle, a process):
   `close` or the owner's end frees it (`references/vm-io.md`). The one
-  finalizer, `TlsContext`'s (`vm/value.c:472`), is registered with
+  finalizer, `TlsContext`'s (`vm/value.c:473`), is registered with
   `GC_REGISTER_FINALIZER_NO_ORDER` (the macro that matches the GC-debug build)
   and runs between turns (`agc_gc_finalize_pending`), never inside an
   allocation. OOM and abort
