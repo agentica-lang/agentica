@@ -83,3 +83,7 @@ What the files cannot see, or how they must run:
   compiles with `dist/agentica` and the programs run on that binary. Modules
   that skip under `AGENTICA_VM_BINARY` (`tests/test_vm_task_map.py`) are checked
   by removing the fix, rebuilding and running them once.
+- A test of a system's own path must reach it on that system: UCRT's `fflush`
+  returns at once on an empty buffer, so a Windows flush test fills the buffer
+  first (`vm/tests/stdio_flush_test.c`). Read the Windows job's output before
+  calling such a test done.

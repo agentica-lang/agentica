@@ -52,19 +52,10 @@ make compile-commands                # compile_commands.json (gitignored) with t
   sanitizer build). `tests/test_vm_diff_8.py` checks the CLI against the
   goldens.
 
-- Each mode compiles `vm/*.c`, `vm/tests/*.c` and the drivers once into
-  `$(VM_BUILD)/obj/` with `-MMD -MP`, and every binary links from them
-  (`VM_LINK`); a new `vm/*.c` file goes in `VM_SRC` only.
-  `$(VM_BUILD)/obj-flags` recompiles the mode when the compile line or the
-  compiler's `--version` changes. Compiles run through `$(CCACHE)` when ccache
-  is on `PATH` and its cache dir is writable; `CCACHE=` turns it off (use it
-  when a ccache setup fails). `CCACHE_BASEDIR` is the checkout and the `-g`
-  modes map the checkout to `.` (`DEBUG_MAP`), so worktrees share hits.
-  Third-party `-g` objects built earlier or restored from the CI cache keep
-  their absolute paths until their key changes.
-  `build/vm/<mode>/obj/tests/*_test.o` are `.SECONDARY`, so a second `make
-  vm-test` recompiles nothing. `SANITIZE` may come from the environment;
-  `build/vm/flags` relinks when the flags change.
+- Each mode compiles once into `$(VM_BUILD)/obj/` and links every binary from
+  there, through ccache when it is there (`CCACHE=` turns it off when a ccache
+  setup fails); the header of `mk/vm.mk` says how. A new `vm/*.c` file goes in
+  `VM_SRC` only.
 - Golden tests (`docs/vm/README.md` §1, `docs/vm/12-testing-and-pr-plan.md`
   §12.1): `tests/test_vm_diff_1.py` … `test_vm_diff_8.py` (unittest) run each
   fixture of `tests/fixtures/vm/` on the VM and compare exit code, stdout,
@@ -196,9 +187,21 @@ for picohttpparser, the TLS tests for OpenSSL (a 3.5.x tag).
   stat` has a 32-bit `st_size`, so Windows uses `_fstat64`. Windows opens
   files through libuv (`vm/file_io.c`, UTF-16 underneath), never through
   `open` (ANSI code page).
+- Two libgc builds: Linux links the system libgc, macOS and Windows the
+  vendored bdwgc (`AGENTICA_GC_DEFAULT` in `mk/vm.mk`), so a GC fault may show
+  on one family only; build Linux with `AGENTICA_GC=vendored` to compare. The
+  mode is not remembered: pass it to every make command or export it.
 - libgc without `NO_EXECUTE_PERMISSION` maps writable and executable pages, and
   macOS on arm64 aborts with `Cannot allocate executable pages` as soon as the
   heap grows (the loader test does).
+- Windows has no `ucontext`: a test whose native module switches stacks is
+  `host_only` there (`tests/test_spec_package_native_build.py`).
+- #1328 (open): with `an_blocking` around a stack switch, macOS x86_64 lost one
+  object in 1 run of 49. The suspected cause, not yet shown, is the x86_64 red
+  zone below the stack pointer, which bdwgc on Darwin may not scan for a
+  running thread. The case reports a wrong count there as a known issue
+  instead of failing; read the issue before
+  touching `agc_gc_blocking` or the thread registration of `vm/value.c`.
 - `.gitattributes` keeps LF on checkout (GitHub's Windows runners set
   `core.autocrlf`). Git detects files with NUL bytes as binary; a binary
   fixture without them needs a `binary` line there.

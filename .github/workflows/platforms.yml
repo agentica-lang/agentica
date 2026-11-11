@@ -6,8 +6,10 @@ name: Platforms
 # summary that fails when an area has no passed case, a module did not finish, or a case was skipped for a reason that is
 # not on the reviewed list (host-only: pairs in HOST_ONLY_ALLOWED; known-issue: numbers in KNOWN_ISSUES). A last job,
 # `conformance all-systems`, puts the five summaries side by side and fails when a case ran on no system.
-# Pull requests run these jobs only with the `platforms` label (adding it starts a run); pushes to master and manual
-# runs always do.
+# Pushes to master and manual runs always run all five. A pull request runs all five with the `platforms` label, or only
+# the systems of its `platform:windows-x86_64`, `platform:macos-x86_64` and `platform:macos-arm64` labels (Linux has
+# no label of its own: ci.yml tests it); with none of these labels it runs nothing. Adding one of these labels starts a
+# run; another label never starts or cancels one.
 on:
   pull_request:
     types: [opened, synchronize, reopened, labeled]
@@ -25,9 +27,10 @@ permissions:
   contents: read
 
 # An unrelated label gets its own group, so it never cancels a real run;
-# master runs are never cancelled, so every merge is tested.
+# master runs are never cancelled, so every merge is tested. The label list is
+# the same as in the `if` of the `systems` job.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.action == 'labeled' && github.event.label.name != 'platforms' && github.run_id || 'main' }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.action == 'labeled' && !contains(fromJSON('["platforms", "platform:windows-x86_64", "platform:macos-x86_64", "platform:macos-arm64"]'), github.event.label.name) && github.run_id || 'main' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # The runners can be slow: every deadline of the tests is multiplied by this, as in ci.yml (references/ci.md). Linux
@@ -37,38 +40,49 @@ env:
   AGENTICA_TEST_TIMEOUT_SCALE: '4'
 
 jobs:
+  # Picks the systems from the event and the labels; `conformance` runs this matrix. The job runs only when the event
+  # may select a system: the `"platform` prefilter also matches `platforms`, and the step does the exact match.
+  systems:
+    if: github.event_name != 'pull_request' || contains(toJSON(github.event.pull_request.labels.*.name), '"platform') && (github.event.action != 'labeled' || contains(fromJSON('["platforms", "platform:windows-x86_64", "platform:macos-x86_64", "platform:macos-arm64"]'), github.event.label.name))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+      count: ${{ steps.pick.outputs.count }}
+      all: ${{ steps.pick.outputs.all }}
+    steps:
+      - id: pick
+        env:
+          ALL: ${{ github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'platforms') }}
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+        shell: python3 {0}
+        run: |
+          import json, os
+          systems = [
+              {"platform": "linux-x86_64", "runner": "ubuntu-latest", "make": "make", "python": "python3", "shell": "bash"},
+              {"platform": "linux-arm64", "runner": "ubuntu-24.04-arm", "make": "make", "python": "python3", "shell": "bash"},
+              {"platform": "windows-x86_64", "runner": "windows-2025", "make": "make", "python": "python", "shell": "msys2 {0}"},
+              {"platform": "macos-x86_64", "runner": "macos-15-intel", "make": "gmake", "python": "python3", "shell": "bash"},
+              {"platform": "macos-arm64", "runner": "macos-latest", "make": "gmake", "python": "python3", "shell": "bash"},
+          ]
+          # Linux has no label of its own (ci.yml tests Linux x86_64; Linux ARM64 runs with `platforms`).
+          labelled = {"windows-x86_64", "macos-x86_64", "macos-arm64"}
+          if os.environ["ALL"] != "true":
+              names = {label.removeprefix("platform:") for label in json.loads(os.environ["LABELS"] or "[]")}
+              systems = [s for s in systems if s["platform"] in labelled & names]
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              out.write(f"matrix={json.dumps({'include': systems})}\n")
+              out.write(f"count={len(systems)}\n")
+              out.write(f"all={'true' if len(systems) == 5 else 'false'}\n")
+          print("systems:", ", ".join(s["platform"] for s in systems) or "none")
+
   conformance:
     name: conformance ${{ matrix.platform }}
-    if: (github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'platforms') && (github.event.action != 'labeled' || github.event.label.name == 'platforms'))
+    needs: systems
+    if: needs.systems.outputs.count != '0'
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - platform: linux-x86_64
-            runner: ubuntu-latest
-            make: make
-            python: python3
-            shell: bash
-          - platform: linux-arm64
-            runner: ubuntu-24.04-arm
-            make: make
-            python: python3
-            shell: bash
-          - platform: windows-x86_64
-            runner: windows-2025
-            make: make
-            python: python
-            shell: msys2 {0}
-          - platform: macos-x86_64
-            runner: macos-15-intel
-            make: gmake
-            python: python3
-            shell: bash
-          - platform: macos-arm64
-            runner: macos-latest
-            make: gmake
-            python: python3
-            shell: bash
+      matrix: ${{ fromJSON(needs.systems.outputs.matrix) }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     env:
@@ -247,11 +261,12 @@ jobs:
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'mk/*.mk', 'vm/**/*.c', 'vm/**/*.h') }}
 
   # The five summaries side by side: a case that no system ran (host-only or open gap on all of them) proves nothing,
-  # and one job cannot see that.
+  # and one job cannot see that. It runs only when all five systems were picked: on a subset (`platform:<system>`
+  # labels) a case the other systems cover would look unrun, so the check would fail for no reason.
   summary:
     name: conformance all-systems
-    needs: conformance
-    if: ${{ !cancelled() && needs.conformance.result != 'skipped' }}
+    needs: [systems, conformance]
+    if: ${{ !cancelled() && needs.conformance.result != 'skipped' && needs.systems.outputs.all == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
