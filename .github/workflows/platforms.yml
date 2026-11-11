@@ -123,9 +123,9 @@ jobs:
       - name: Linux packages (system libgc and OpenSSL, ccache, libsqlite3-0), when the image lacks them
         if: runner.os == 'Linux'
         run: |
-          command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc && pkg-config --atleast-version=1.2.0 zlib || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev zlib1g-dev pkg-config; }
-          command -v ccache >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends ccache; }
-          dpkg -s libsqlite3-0 >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libsqlite3-0; }
+          command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc && pkg-config --atleast-version=1.2.0 zlib || { .github/scripts/apt-install.sh libssl-dev libgc-dev zlib1g-dev pkg-config; }
+          command -v ccache >/dev/null || { .github/scripts/apt-install.sh ccache; }
+          dpkg -s libsqlite3-0 >/dev/null 2>&1 || { .github/scripts/apt-install.sh libsqlite3-0; }
       - if: runner.os == 'macOS' && env.AGENTICA_OPENSSL == 'system'
         run: brew install make openssl@3 pkg-config ccache
       - if: runner.os == 'macOS' && env.AGENTICA_OPENSSL == 'vendored'
