@@ -200,6 +200,8 @@ Channel.close(channel: Channel[T]) -> Void
 Channel.closed?(channel: Channel[T]) -> Bool
 Channel.empty?(channel: Channel[T]) -> Bool
 Channel.lazy(channel: Channel[T], timeout_ms: Int) -> Lazy[T]   # lazy.md
+Channel.address(channel: Channel[T]) -> Address[T]
+Address.send(address: Address[T], value: T, timeout_ms: Int) -> Result[Void]
 ```
 
 A channel is a bounded queue that tasks send into and receive from. All but
@@ -291,6 +293,18 @@ There is no `select`. A handle sent over a channel stays owned by the task that
 opened it, which must outlive its users, or hand it over with
 `Task.spawn_owning`.
 
+Addresses. `ch.address` is an `Address[T]`: a send-only name of the channel
+that is data, so an `ATS` value, a list, a map value, a struct field, an enum
+payload or a message can hold it, where a channel cannot go. `addr.send(v,
+1000)` is `Channel.send` (same waits and errors); `error("address: gone")` once
+the channel was collected; no `recv`. Two addresses of one channel are `==`;
+`puts` prints `<Address N>`. Not JSON, not a map key or set element, not in a
+constant. It is not a handle: to give a task its own socket or channel and also
+a shared channel, pass `Link(socket: s, results: results.address)` to
+`Task.spawn_owning`; only the socket is handed over, `results` stays open. A
+registry by name is a constant table:
+`NAMES: ATS[String, Address[Msg]] = ATS.new()` (below).
+
 A counter or a cache that several tasks update goes in an `ATS` table (below);
 other shared state belongs to one owner task that receives messages on a
 channel. Apart from `ATS` tables and the `std/logger` registry there is no
@@ -331,9 +345,15 @@ it shares it, never copies it. All but `new` are methods: `hits.add("home",
 1)`. `hits: ATS[String, Int] = ATS.new()`, else `CHECK-EXPECTED-TYPE`. Keys are
 `Int`, `String` or `Bytes` (`CHECK-MAP-KEY-TYPE`); `V` is data with no `Fn`,
 `Task`, `Channel`, handle or table anywhere inside, and not `Nil`
-(`CHECK-ATS-VALUE`). A table may be a struct field or a `Task.spawn` argument;
-no task owns it, and there is no size limit or expiry. No `==`, text or JSON;
-use `to_map` to see it.
+(`CHECK-ATS-VALUE`); an `Address` is data, so it may be a value. A table may be
+a struct field or a `Task.spawn` argument; no task owns it, and there is no size
+limit or expiry. No `==`, text or JSON; use `to_map` to see it.
+
+A constant may be a table when `ATS.new()` is its whole initializer and its type
+is written: `HITS: ATS[String, Int] = ATS.new()` is made once per run, before
+`main`, and every task and every file that imports it shares it. A table
+anywhere else in a constant (`[ATS.new()]`, another constant's table) is
+`CHECK-CONSTANT-TYPE`.
 
 Each call is atomic on any scheduler; there are no multi-key transactions and no
 block-based update. `add` is the one atomic read-modify-write (`Int` values

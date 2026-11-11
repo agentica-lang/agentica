@@ -11,7 +11,9 @@ language and the checker:
 - A handle (a file, a socket, a listener, a process or a `std/http` server)
   belongs to the task that opened it, and it is closed when that task ends, in
   any way. `Task.spawn_owning(&f, handle)` is the one way to hand a handle over;
-  an argument that holds no handle is `CHECK-NOT-A-HANDLE`.
+  an argument that holds no handle is `CHECK-NOT-A-HANDLE`. An `Address` is
+  data, not a handle: a channel passed as its address in that argument is
+  shared, not handed over.
 - A runtime error in a task other than `main` is a crash that ends only that
   task. `Task.await` of a crashed or cancelled task returns `error(text)` when
   the result type is a `Result`, and halts with `RUNTIME-TASK-CRASHED` or
@@ -39,6 +41,15 @@ same channel. The functions, the timeouts, the order of waiters, the ownership
 of a channel and the checker rules (the type `T`, the expected type of
 `Channel.new`, what `puts`, `==` and JSON do with a channel) are in the
 [`Channel` page](../../site/content/library/concurrency/channel.md).
+
+`channel.address` gives an `Address[T]`: a send-only reference to the channel
+that is data, so a table, a map, a list, a struct, an enum payload or a
+message can hold it, and `==` compares which channel it names. It has `send`
+only, so the channel's owner stays its one reader, and it does not keep the
+channel alive. It cannot be JSON-encoded (`CHECK-NOT-ENCODABLE`), be a map key
+or set element (`CHECK-MAP-KEY-TYPE`, `CHECK-SET-ELEMENT-TYPE`) or be in a
+constant (`CHECK-CONSTANT-TYPE`). Its sends and errors are on the `Channel`
+page.
 
 ### Shared tables (ATS)
 

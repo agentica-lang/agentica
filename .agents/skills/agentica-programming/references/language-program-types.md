@@ -33,7 +33,10 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
   a `def` call, `&name`, a block outside a builtin's argument, `while`,
   effectful builtins (`puts`, `IO.*`, `File.*`, `Time.*`, `Random.*`, `Task.*`,
   `Channel.*`). The value needs a data type (`CHECK-CONSTANT-TYPE` for
-  `Channel`, `Task`, `ATS`, `Fn`, handles, `Void`).
+  `Channel`, `Address`, `Task`, `ATS`, `Fn`, handles, `Void`). One exception:
+  a whole initializer `ATS.new()` with its type written is a constant table,
+  one per run, shared by every task and importer
+  (`NAMES: ATS[String, Address[Msg]] = ATS.new()`; `tasks.md`).
 - Other constants than scalar literals are built once, in dependency order,
   before `main`, and only if `main` can reach a reader. An initializer error
   (`BAD = [1][5]`) stops the program before `main`.
@@ -88,6 +91,8 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
 - Opaque, with no constructor or `==`: `Process`, `Lazy[T]` (`lazy.md`),
   `Task[R]`, `TaskRef`, `Channel[T]`, `ATS[K, V]` (`tasks.md`), `Socket`,
   `Listener`, `HttpClient`, `HttpServer`, `Codec[T]` (`json.md`).
+- `Address[T]`: a channel's send-only address (`ch.address`), data with `==`
+  and text, no JSON, not a map key (`tasks.md`).
 - Builtin enums, reserved: `Await[T]` (`Await.Done(value)`, `Await.TimedOut`;
   `tasks.md`), `JsonField[T]` (`Absent`, `Null`, `Value(x)`; `json.md`),
   `LogLevel` (`Debug`, `Info`, `Warning`, `Error`; `logger.md`) and `TaskExit`

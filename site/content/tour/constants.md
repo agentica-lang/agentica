@@ -92,7 +92,7 @@ def main() -> Void
 end
 ```
 
-- Its type is numbers, text, lists, maps, sets, ranges, `Result`, or structs and enums of those. A channel, task or function is `CHECK-CONSTANT-TYPE`.
+- Its type is numbers, text, lists, maps, sets, ranges, `Result`, or structs and enums of those. A channel, task or function is `CHECK-CONSTANT-TYPE`. The one exception is a whole initializer `ATS.new()`, a table that every task shares ([a constant table](/library/concurrency/ats/#a-constant-table)).
 - Nothing assigns to a constant: `LIMIT = 2` in a function is `PARSE-INVALID-ASSIGNMENT-TARGET`.
 
 ## Share a constant between files

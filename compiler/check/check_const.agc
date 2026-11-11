@@ -2,7 +2,8 @@
 ## initialization order, a cycle is CHECK-CONSTANT-CYCLE, then each initializer is checked in that order with no
 ## locals in scope and its type recorded for the reads, and the value rules are applied to the checked tree: no call of
 ## a function of the program, no function value, no while, no builtin with effects (CHECK-CONSTANT-EXPRESSION), and
-## only data types (CHECK-CONSTANT-TYPE).
+## only data types with no Address inside (CHECK-CONSTANT-TYPE). The one exception is a whole initializer ATS.new(),
+## a constant table.
 
 import Model from "../catalog/builtin_model"
 import {ENTRIES} from "../catalog/builtins"
