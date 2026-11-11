@@ -23,7 +23,9 @@ Actor.done(state: S) -> Actor.Step[S]
 
 Starts the actor in a task of its own. The task runs `init`, then takes the messages of the inbox in the order they came and gives each to `handle` with the state. The handler ends with `Actor.continue(state)` to keep going with that state, or `Actor.done(state)` to end the actor: it then handles no more messages and runs `terminate` with the last state. `capacity` is how many messages the inbox holds before `cast` and `call` wait for room (1 to 1048576, else `RUNTIME-INVALID-COUNT`).
 
-The task owns the inbox, so the inbox closes when the actor ends in any way: it stopped, gave `done`, crashed or was cancelled. A runtime error in a handler is a crash of the actor's task (see [Task](/library/concurrency/task/)): its diagnostic prints at once, `terminate` does not run, and the messages left in the inbox are lost.
+The task owns the inbox, so the inbox closes when the actor ends in any way: it stopped, gave `done`, crashed or was cancelled. A runtime error in a handler is a crash of the actor's task (see [Task](/library/concurrency/task/)): its diagnostic prints at once, `terminate` does not run, and the messages left in the inbox are lost. A crash that nothing observes fails the run when `main` returns (`1 task crash was not observed`); `Actor.stop`, `Task.await(actor.task)` or a `Task.monitor` of `actor.task` observes it.
+
+The actor's task is a child of the task that calls `start`: a crash or cancel of that task cancels the actor too. Start a long-lived actor from `main` or a supervisor.
 
 A `Ref` has three fields: `address`, `inbox` (the `Channel[M]`) and `task`. Send through `address`. The `inbox` is there only for `Task.monitor`: never receive from it, which would take a message from the actor.
 
@@ -35,7 +37,7 @@ Actor.call(address: Address[M], timeout_ms: Int, make: Fn[Channel[R], M]) -> Res
 Actor.reply(channel: Channel[R], value: R) -> Void
 ```
 
-`cast` puts a message in the inbox and returns; it waits at most `timeout_ms` for room when the inbox is full. `call` makes a reply channel, builds the message around it with the block, sends it and waits for the answer, all within `timeout_ms`. The handler answers with `Actor.reply(channel, value)`, which never waits. Each call has its own reply channel, so an answer that comes after its call timed out never reaches a later call.
+`cast` puts a message in the inbox and returns; it waits at most `timeout_ms` for room when the inbox is full. `call` makes a reply channel, builds the message around it with the block, sends it and waits for the answer, all within `timeout_ms`. The handler answers with `Actor.reply(channel, value)`, which never waits. Each call has its own reply channel, so an answer that comes after its call timed out never reaches a later call. A `timeout_ms` of 0 tries once: `cast` sends only when there is room, and `call(address, 0)` still puts the message in the inbox, then gives `actor: timeout`. Give `call` a timeout above 0; a negative one is `RUNTIME-INVALID-DURATION`.
 
 Errors: `error("actor: timeout")` when the inbox stays full or the answer does not come in time, and `error("address: gone")` when the actor has ended. A call whose actor crashes or ends before it answers waits for its timeout. A call to the actor's own address from its handler, or two actors that call each other, wait for their timeouts too, since an actor handles one message at a time; send the work to another task instead.
 
@@ -86,7 +88,7 @@ error("address: gone")
 Actor.stop(actor: Actor.Ref[S, M], timeout_ms: Int) -> Result[Void]
 ```
 
-Closes the inbox and waits at most `timeout_ms` for the actor to end: it handles the messages already in its inbox (so a call that is waiting there gets its answer), runs `terminate` and ends. A `cast` or `call` after the close gives `error("address: gone")`. An actor still running after `timeout_ms` is cancelled and `stop` gives `error("actor: timeout")`. An actor that crashed gives its `task crashed: ...` error, and stopping it observes the crash. Stopping an actor that has ended gives how it ended.
+Closes the inbox and waits at most `timeout_ms` for the actor to end: it handles the messages already in its inbox (so a call that is waiting there gets its answer), runs `terminate` and ends. A `cast` or `call` after the close gives `error("address: gone")`. An actor still running after `timeout_ms` is cancelled and `stop` gives `error("actor: timeout")`. An actor that crashed gives its `task crashed: ...` error, and stopping it observes the crash. Stopping an actor that has ended gives how it ended. `timeout_ms` must be above 0, else `RUNTIME-INVALID-DURATION`.
 
 Only the holder of the `Ref` can stop the actor. To stop it through an address, give the message enum a `Stop` variant whose handler gives `Actor.done(state)`.
 
@@ -110,7 +112,8 @@ module Counter
     actor = Actor.start(Actor.Behaviour(init: block0() do initial end, handle: &handle))
     return ok() if NAMES.put_new(name, actor.address)
 
-    Actor.stop(actor, 1000)
+    _ = Actor.stop(actor, 1000)
+    error("counter: #{name} is taken")
   end
 
   export def add(name: String, n: Int) -> Result[Void]
@@ -144,6 +147,7 @@ end
 
 def main() -> Void
   _ = Counter.start("visits", 100)
+  puts(Counter.start("visits", 0))
   _ = Counter.add("visits", 5)
   puts(Counter.get("visits"))
   puts(Counter.stop("visits"))
@@ -152,6 +156,7 @@ end
 ```
 
 ```output
+error("counter: visits is taken")
 ok(105)
 ok()
 false
@@ -159,7 +164,7 @@ false
 
 ## Monitors and timers
 
-There is no `select`: whatever an actor waits for comes in as a variant of its message enum. `Task.monitor(task, actor.inbox) do |down| Msg.Down(down) end` sends a notice into the inbox when the task ends. A timer is a task that sleeps, then casts to the address.
+There is no `select`: whatever an actor waits for comes in as a variant of its message enum. `Task.monitor(task, actor.inbox) do |down| Msg.Down(down) end` sends a notice into the inbox when the task ends; a notice that finds the inbox full is dropped, so give it room. A timer is a task that sleeps, then casts to the address.
 
 ```agentica
 import Actor from "std/actor"

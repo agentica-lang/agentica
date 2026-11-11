@@ -56,7 +56,8 @@ export def continue[S](state: S) -> Step[S] = Step.Continue(state)
 ## The step that ends the actor with `state`: it runs `terminate` and handles no more messages.
 export def done[S](state: S) -> Step[S] = Step.Done(state)
 
-## Answers a `call`. It never waits: a caller that gave up has a full or forgotten channel, and the value is dropped.
+## Answers a `call`. It never waits: the answer to a caller that gave up stays in a channel nobody reads, and a second
+## answer to one call finds the channel full and is dropped.
 export def reply[R](channel: Channel[R], value: R) -> Void
   _ = channel.send(value, 0)
 end

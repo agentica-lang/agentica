@@ -405,7 +405,14 @@ the `Ref`; there are no methods.
   ...` error. Only the `Ref` holder can stop: to stop by address, add a `Stop`
   variant whose handler gives `Actor.done(state)`.
 - A crash in a handler ends the actor (its diagnostic prints, `terminate` does
-  not run, queued messages are lost).
+  not run, queued messages are lost). A crash nothing observes fails the run
+  when `main` returns: observe it with `Actor.stop`, `Task.await(ref.task)` or
+  `Task.monitor(ref.task, ...)`. A monitor notice into a full inbox is dropped.
+- The actor is a child of the task that calls `start`: a crash or cancel of
+  that task cancels it. Start long-lived actors from `main` or a supervisor.
+- `timeout_ms` of `stop` must be above 0 (`RUNTIME-INVALID-DURATION`); give
+  `call` one above 0 too: `call(addr, 0)` still enqueues the message, then
+  gives `actor: timeout`.
 - Names: a module keeps `NAMES: ATS[String, Address[Msg]] = ATS.new()` (a
   constant goes before the enum in a module block) and wraps `cast` and `call`
   in its own functions, so callers never see `Msg`.

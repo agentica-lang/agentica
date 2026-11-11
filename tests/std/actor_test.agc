@@ -42,9 +42,10 @@ def handle(p: Probe, count: Int, msg: Msg) -> Actor.Step[Int]
       Actor.reply(reply, count)
       Actor.continue(count)
     Msg.Divide(by) -> Actor.continue(count / by)
+    # A nap answers its length, not the count, so a late answer that reached a later call would show.
     Msg.Nap(ms, reply) ->
       Task.sleep(ms)
-      Actor.reply(reply, count)
+      Actor.reply(reply, ms)
       Actor.continue(count)
     Msg.Down(_) -> Actor.continue(count + 1)
     Msg.Quit -> Actor.done(count)
