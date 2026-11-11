@@ -480,7 +480,7 @@ static bool begin_send(void *data, agc_io_job *job) {
 }
 
 /* The shutdown waits for the queued writes, then shutdown_done closes the write end. One that fails on the spot
-   (ENOTCONN when the peer is gone) has nothing to wait for: the end closes at once. */
+   (a stream libuv no longer takes as writable) has nothing to wait for: the end closes at once. */
 static void shut_write(agc_duplex *d) {
   d->write_closed = true;
   d->refs++;

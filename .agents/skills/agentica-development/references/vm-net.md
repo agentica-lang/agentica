@@ -106,8 +106,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - Parent side: `agc_duplex_new` over the parent's two pipe ends.
     `agc_duplex_close_write` closes the write end in `shutdown_done`, after the
     queued writes, whatever the status (`ENOTSOCK` on a POSIX pipe): the close
-    is the end of input every system delivers. A `uv_shutdown` that
-    fails on the spot (`ENOTCONN` when the peer is gone) closes it at once.
+    is the end of input every system delivers. A `uv_shutdown` that fails on
+    the spot (a stream libuv no longer takes as writable) closes it at once.
   - Child side: `agc_parent_take` (called by `agc_launch_vm`) passes
     `AGENTICA_CHANNEL` to `agc_chan_take`, which takes `3,4` (fd 3 readable,
     fd 4 writable, each a FIFO or a socket; on Windows pipes) and on POSIX

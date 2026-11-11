@@ -732,7 +732,7 @@ static void stuck_stderr_test(const char *self) {
 static int probe_socket(const char *self, const char *mode) {
   int link[2];
   assert(uv_socketpair(SOCK_STREAM, 0, link, 0, 0) == 0);
-  int twin = dup(link[0]);
+  int twin = fcntl(link[0], F_DUPFD_CLOEXEC, 3);
   assert(twin >= 0);
   agc_chan_ends ends = {link[0], twin, {link[1], -1}, 1};
   return probe_with(self, mode, "3", ends, 1, false);
