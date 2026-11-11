@@ -18,7 +18,8 @@ Each rule names one place in the VM that follows it.
   64 (`builtin_int_shift_left`, `vm/numbers.c:186`). Read a value's bytes as
   another type with `memcpy` (`agc_value_word`, `vm/value.h:50`), never a
   pointer cast or a union of another member. Zero a union with `memset`
-  (`vm/ffi.c:2011`): `{0}` sets only its first member.
+  (`vm/ffi.c:2012`): `{0}` sets only its first member (*checked* for the
+  `typedef union` types of `vm/`).
 - **Check bytecode once, in the loader.** Every register, index, count and jump
   target of a `.agcb` is checked in `vm/loader.c` (`check_register`,
   `vm/loader.c:169`), so the interpreter reads registers without a check

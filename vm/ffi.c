@@ -1672,7 +1672,8 @@ static agc_value struct_value(const agc_c_struct *layout, const uint8_t *base) {
 // cchecker: ignore CC-OWN-LEAK: the copy of a C.String goes out in the value, which free_copies frees after the call
 static agc_c_value c_argument(agc_vm *vm, agc_c_type type, const agc_c_struct *layout, agc_value v, uint8_t *bytes,
                               uint8_t *memory) {
-  agc_c_value out = {0};
+  agc_c_value out;
+  memset(&out, 0, sizeof out);
   switch (type) {
     INT_CASES: int_store(type, agc_as_int(vm, v), &out); break;
     case AGC_C_DOUBLE: out.d = agc_as_float(vm, v); break;
@@ -2229,7 +2230,8 @@ static agc_value builtin_native_call(agc_vm *vm, agc_value *args, uint32_t span)
       if (e->structs[k]) used += STRUCT_ROUND(e->structs[k]->size);
     }
   }
-  agc_c_value out = {0};
+  agc_c_value out;
+  memset(&out, 0, sizeof out);
   if (e->result_struct) out.p = structs + used;
   native_site site = {.vm = vm, .span = span, .outer = current_site};
   current_site = &site;
