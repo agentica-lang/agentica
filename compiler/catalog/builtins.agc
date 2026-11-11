@@ -94,6 +94,16 @@ export def moved_type(name: String) -> String
   "#{name} is #{wrapper[1]}.#{parts[1]} now: import #{wrapper[1]} from \"#{wrapper[0]}\""
 end
 
+## The help for a moved type written in an import list (import {HttpResponse} from "std/http"): the import list form
+## of the new name, or "" for another name.
+export def moved_import(name: String) -> String
+  return "" if !MOVED.has_key?(name)
+
+  parts = MOVED[name].split(".")
+  wrapper = STD_ONLY[parts[0]]
+  "#{name} is #{wrapper[1]}.#{parts[1]} now: import {#{parts[1]}} from \"#{wrapper[0]}\""
+end
+
 ## Whether a program may not declare an enum of this name: a std-only family with a record of its own
 ## (LogRegistry.Event). After linking, a construction of that record and of a variant Event of the program's enum would
 ## be the same text, so the enum stays reserved; a struct or a type alias of the name is free.

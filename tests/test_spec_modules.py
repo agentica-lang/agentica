@@ -401,7 +401,8 @@ class TestModuleRules:
                   ("  x = close_clien(1)\n", "CHECK-UNKNOWN-NAME"),
                   ("  x = HTTP.exchang(1)\n", "CHECK-IMPORT-NAME")]
         # The family name and the old HTTP type names reserve nothing: a user struct may take them.
-        names = ["HttpWire", "HttpResponse", "HttpRequest", "HttpServer", "HttpServerOptions", "Header"]
+        names = ["HttpWire", "HttpResponse", "HttpRequest", "HttpClient", "HttpServer", "HttpClientOptions",
+                 "HttpServerOptions", "Header"]
         http = 'import HTTP from "std/http"\ndef main() -> Void\n  puts(HTTP.proxy_from_env("x"))\n'
         results = self.checks(
             [({"root.agc": text, "lib.agc": call, "libs/wire.agc": call},
@@ -410,10 +411,8 @@ class TestModuleRules:
                              '  HTTP.close_client(Result.unwrap!(HTTP.client()))\nend\n\n'},
                 "root.agc", None)]
             + [({"root.agc": http + body + "end\n\n"}, "root.agc", None) for body, _code in bodies]
-            + [({"root.agc": "struct %s\n  n: Int\nend\n\n" % name + MAIN}, "root.agc", None) for name in names]
-            + [({"root.agc": "enum HttpWire\n  Plain\nend\n\n" + MAIN}, "root.agc", None)])
-        roots_checked, clean, body_checked, names_checked, family_enum = (
-            results[:3], results[3], results[4:7], results[7:-1], results[-1])
+            + [({"root.agc": "struct %s\n  n: Int\nend\n\n" % name + MAIN}, "root.agc", None) for name in names])
+        roots_checked, clean, body_checked, names_checked = results[:3], results[3], results[4:7], results[7:]
         for (name, _text), checked in zip(roots, roots_checked):
             self.assert_rejected(checked, "CHECK-UNKNOWN-NAME", file=name)
         assert clean[1] is None
@@ -423,8 +422,21 @@ class TestModuleRules:
             assert "HttpWire" not in json.dumps(problem)
         for name, checked in zip(names, names_checked):
             assert checked[1] is None, (name, checked[1])
-        # An enum named HttpWire would clash with the family's records, so it stays an error.
-        self.assert_rejected(family_enum, "CHECK-REDEFINED-NAME")
+
+    def test_the_old_http_names_are_free_beside_std_http_and_an_enum_http_wire_is_not(self):
+        """A struct, an enum and a type alias may take the freed HTTP names next to HTTP.Header(...) and
+        HTTP.Response(...) of the same root. An enum HttpWire stays CHECK-REDEFINED-NAME, with a help: its variants
+        would clash with the builtin records HttpWire.Request(...) and the rest."""
+        free = ('import HTTP from "std/http"\n\nstruct HttpWire\n  n: Int\nend\n\nenum Header\n  Name(String)\nend\n\n'
+                "type HttpResponse = Int\n\n"
+                "def main() -> Void\n  puts(HTTP.proxy_from_env(\"x\"))\n  h = HTTP.Header(name: \"a\", value: \"b\")\n"
+                "  r = HTTP.Response(status: 200, headers: [h], body: \"\".bytes)\n  code: HttpResponse = r.status\n"
+                "  puts(HttpWire(n: code).n)\n  puts(Header.Name(h.name))\nend\n\n")
+        self.assert_cases([
+            ({"root.agc": free}, None, None, None, False),
+            ({"root.agc": "enum HttpWire\n  Plain\nend\n\n" + MAIN}, "CHECK-REDEFINED-NAME", ((1, 1), (4, 1)), None,
+             True),
+        ])
 
     def test_the_http_wire_records_are_types_only_std_can_name_and_reserve_no_user_name(self):
         uses = [("def main() -> Void\n  heads: List[HttpWire.Head] = []\nend\n\n", 2),
