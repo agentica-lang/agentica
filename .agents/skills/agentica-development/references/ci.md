@@ -37,9 +37,8 @@ release's `zig` install and `strip`). A new check gets a target first (in
   only if valid". It runs in both tiers: the fast tier replays the same few
   examples, the slow tier draws many from a seed it prints (`hypothesis seed
   N`). One VM serves every example of a run (a server, or a program that reads
-  cases from stdin), as in `tests/test_prop_http.py`. A failure prints the
-  shrunk input and a `@reproduce_failure` line to put on the test; a slow-tier
-  seed replays with
+  cases from stdin), as in `tests/test_prop_http.py`. A slow-tier seed replays
+  with
   `PYTEST_ADDOPTS=--hypothesis-seed=N make test-slow TESTS=...`.
 - Timeouts, three layers, all stretched by `AGENTICA_TEST_TIMEOUT_SCALE`
   (default 1; CI sets 4): one test (SIGALRM, 120 s, 900 s for `@slow`;
@@ -152,17 +151,15 @@ proof). These are the rules they do not show.
   the `tsan-native` jobs run one count each (`TSAN_NATIVE_SCHEDULERS`, about 8
   minutes each), and `vm-tsan-run` leaves those modules out. When the VM under
   test is that binary, `shared_library` of `tests/test_vm_native.py` builds each
-  peer with clang and `-fsanitize=thread`, so a race in a peer's C fails the run
-  (#1160); the target sets `AGENTICA_TSAN_PEERS=1`, which makes the module fail
+  peer with clang and `-fsanitize=thread`, so a race in a peer's C fails the
+  run; the target sets `AGENTICA_TSAN_PEERS=1`, which makes the module fail
   at import if the peers would be built without TSan. A library that TSan itself
   loads, such as the finalization hook, passes `sanitize=False`. An intended
   race stays out of the peers that the run loads: behind a `Native.mutex()`
   (`peer_racy_add`) or in a program of its own (the TSan control
   `tsan_finalize_control.c`). A change under `tests/fixtures/native/` or to
   `examples/ffi/*.c` runs the C half.
-- **Check names.** `test` and `vm-sanitizers` are the checks to name in a
-  branch protection rule or a merge gate; the other jobs are not (a shard job
-  is `fast tests (1/2)` and so on).
+- **Check names:** `agentica-dev-workflow` §4.
 - **Shards.** `tools/shard_tests.py` splits the modules longest first with the
   seconds of `tests/shard_weights.txt` (a module that is not listed counts as 1
   s). The weights come from a CI run: when a module gets slow or a new one is
@@ -267,10 +264,9 @@ clang-tidy. A run takes 3 to 5 minutes. Its docs are in that clone
 
 ## Conformance matrix (`platforms.yml`)
 
-The header of `platforms.yml` says what it runs. On a PR, `platforms` (all
-systems) is for C code (`vm/`, the VM build) and release bumps; a
-`platform:<system>` label (Windows and the two macOS) runs that system alone,
-for a PR that fixes or checks one system. Not in the matrix: the Docker
+The header of `platforms.yml` says what it runs; which label a PR takes:
+`agentica-dev-workflow` §4. No step checks or
+regenerates the frozen `vm/unicode_data.c`. Not in the matrix: the Docker
 and Wine groups, the slow tier, sanitizers, fuzz and gc-stress (`ci.yml`,
 `fuzz.yml`). A new `tests/test_*.py` must be in an area of
 `tools/conformance.py` or in `EXCLUDED` with a reason
@@ -300,13 +296,11 @@ The Windows jobs set up MSYS2 with `.github/actions/msys2`, not
 60 s and 180 s) because the MSYS2 servers answer 504 now and then, and each
 attempt uses its own `location`, since the action refuses a folder that exists.
 
-A flaky test on one system (the Windows flakes #1335 and #1332): open an
-experiment PR with that system's `platform:<system>` label, marked do-not-merge,
-that runs a script looping the suspect command many times, alone and then under
-load (several loops at once beside other test loops). The cause showed only
-under load (16 of 2880 runs). Close the PR when the cause is found. If a case
-cannot be reproduced, make its failure message carry what the next case needs
-(the exit code, the folder contents), as #1388 did.
+A flaky test on one system: open a do-not-merge experiment PR with that
+system's `platform:<system>` label that loops the suspect command alone, then
+under load (several loops beside other test loops); causes often show only
+under load. If it cannot be reproduced, make the failure message carry what the
+next case needs (exit code, folder contents).
 
 ## Caches and `master` pushes
 
@@ -315,6 +309,13 @@ cannot be reproduced, make its failure message carry what the next case needs
   it on `master`; the PR `checks` job only restores it (a PR can restore only
   caches of its merge ref or `master`). On a miss, the vendored check skips.
 - The release sets `CCACHE=`, because PR jobs can write to a shared cache.
+- Every job except `test` links the system OpenSSL, sanitizer and GC-stress
+  builds included: a cold sanitizer OpenSSL build took an hour on the shared
+  runner. `vendored-check` (`mk/vm-test.mk`) says what a vendored binary may
+  not import.
+- The third-party objects follow content stamps (`make -s
+  vm-third-party-key`) and rebuild only when the key changes; CI does not cache
+  them, since ccache rebuilds them in under a second.
 - A `master` push runs no PR checks: only `dup-check`, `warm-third-party` and
   `coverage` (`make coverage`: the C tests and the goldens on a gcc coverage
   build; the LCOV and HTML report of `vm/` is the artifact `vm-coverage`). A
@@ -348,8 +349,15 @@ with vendored libgc, OpenSSL and zlib (Linux: pinned `zig cc` against glibc
 targets; the Linux jobs also run the full golden sweep, `test-distribution` and
 the examples.
 
-- A change of a glibc or macOS floor, or of the allowed DLLs, goes in
-  `tools/release-check.sh`.
+- `make release-check` (`tools/release-check.sh`) checks the binary in its own
+  format: the architecture, the libraries it imports (no `libssl`,
+  `libcrypto`, `libgc` or `libz`, on the binary and on the unpacked archive),
+  the glibc floor (`objdump -T`, OpenSSL's symbols included) or the Mach-O
+  `minos` (a link target, not proof that every API is safe on macOS 12), and
+  the hardening. A change of a floor or of the allowed DLLs goes there.
+- `ZIG_VERSION` and `ZIG_SHA256` pin the Linux compiler; macOS builds use
+  `MACOSX_DEPLOYMENT_TARGET=12.0`. The `collect` job checks that exactly the
+  five archives of `VERSION` exist and writes `SHA256SUMS`.
 - A `zig cc` link takes a helper it lacks from zig's `compiler_rt`, one object
   that also defines a stack protector with a constant canary, which then
   replaces glibc's. On Linux arm64 `__clear_cache` was such a helper, so
@@ -362,11 +370,12 @@ the examples.
 - `tools/release.py smoke` (`python -I`) runs the extracted binary from a path
   with spaces and non-ASCII letters, with a system-only `PATH`. TLS is covered
   by the OpenSSL version line only.
-- `publish` runs only for a tag push equal to `VERSION`, and creates the GitHub
-  Release with empty notes. A manual `workflow_dispatch` only uploads artifacts.
+- `publish` runs only for a tag push equal to `VERSION`, after all five
+  builds pass, and creates the GitHub Release with empty notes.
 
 Before merging a change to `release.yml`, the packaging tools or the binary
-format, dispatch a dry run: `gh workflow run release.yml --ref BRANCH`.
+format, dispatch a dry run: `gh workflow run release.yml --ref BRANCH` (it only
+uploads; `agentica-release`).
 
 `VERSION` (one line, no `v`) is the single source of the version: C gets it as
 `AGC_VERSION`, the front end as `Settings.version` (`--version V`), and each

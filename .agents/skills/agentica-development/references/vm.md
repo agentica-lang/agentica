@@ -1,9 +1,5 @@
 # Bytecode VM development
 
-The VM's codename is Aurora (Aurora VM). Only the docs use it: the binary,
-the `AGENTICA_VM_*` variables, the `agc_` prefix, `.agcb` and `vm/` keep
-their names.
-
 `docs/vm/` is the contract (`docs/vm/README.md` gives the file for each
 section). When this guide and `docs/vm/` disagree, `docs/vm/` wins.
 
@@ -31,21 +27,11 @@ glob. A `vm/tests/*.c` file includes what it uses.
 
 ## Rules every change keeps
 
-**Goldens, not parity** (`docs/vm/README.md` §1). The VM is the reference: each
-fixture's golden holds its exit code, stdout, program stderr (`IO.warn`) and
-diagnostic code; a runaway program stops with `RUNTIME-STEP-LIMIT` under
-`--max-steps`. Network, process and protocol work is tested with goldens and
-independent Node/Python peers: where the VM must talk to a real implementation,
-use one whose library does the protocol work (Node's `http` for HTTP streaming,
-since Python's `http.server` does not decode chunked request bodies); for raw or
-hostile cases, use the language the test file already uses. A new golden gets
-hand-checked expected output; a regenerated one needs a reviewed diff. Error
-strings a program prints are program data: when a library message changes,
-switch the fixtures that print it to printing only ok or error in the same PR,
-or update their goldens on purpose. Message text, spans, stderr wording, OS
-error text, exact step counts and the step-limit span may change, but VM
-messages must stay clear for agents. Lowering may optimize (inline, fold
-constants, move or merge `STEP`s) as long as the goldens hold.
+**Goldens, not parity** (`docs/vm/README.md` §1). Peers for protocol work use a
+library that does the protocol (Node's `http` for chunked bodies: Python's
+`http.server` does not decode them); raw or hostile cases use the test file's
+language. When a library message changes, switch the fixtures that print it to
+ok or error, or update their goldens on purpose.
 
 **Trust model.** A `.agcb` is untrusted. Whatever it contains, the VM has no
 memory errors or undefined behavior, does nothing its own `--deny-*` flags turn

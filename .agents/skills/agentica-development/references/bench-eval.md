@@ -51,11 +51,9 @@ compares the GC time of a WebSocket broadcast sent as `Text` and as
   `pair` rows at its end (`docs/vm/08-loader-and-cli.md` §9) say what to fuse
   or open-code.
 - Profile CPU time with `perf` when the steps do not explain the wall time:
-  `Profile` and the step report do not count time inside builtins. Write a
-  tiny program that repeats the hot operation (seconds, not minutes). Use a
+  `Profile` and the step report do not count time inside builtins. Use a
   local `make` build of `dist/agentica`, since release archives are stripped.
-  Then `perf record -g dist/agentica prog.agc` and `perf report --no-children
-  --sort dso,symbol`. Common entries:
+  Common entries:
   - `GC_malloc_kind` and other libgc symbols: allocation.
   - `__tls_get_addr`: libgc linked as a shared library (thread-local lookups).
   - `__snprintf_chk`: number to text.

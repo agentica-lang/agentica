@@ -1,7 +1,6 @@
 # Front-end recipes and gotchas
 
-Read before editing `compiler/`. Every language change is made there with a
-golden (the rule is in `AGENTS.md`).
+Read before editing `compiler/`.
 
 ## The front end in Agentica
 
@@ -54,13 +53,10 @@ diagnostic: `Lexer.lex` returns `Diag.Outcome`, and other stages may use
 
 ### Pure core, one port
 
-The pure folders (the AGENTS.md rule) may import only the `std/` modules on
-`PURE_STD_MODULES` of the test; a new std module is forbidden by default. When a
-stage needs the machine, it calls a function of `Workspace`
-(`modules/workspace.agc`), a record of function values that travels in
-`Env.Settings.workspace`. `io/host.agc` builds the real `Workspace` and
-`process_env`; a test can build one over an in-memory tree. A new need of the
-machine is a new `Workspace` field, built in `io/host.agc`.
+The pure folders (AGENTS.md) may import only the `std/` modules on
+`PURE_STD_MODULES` of the test. `Workspace` travels in
+`Env.Settings.workspace`; a test can build one over an in-memory tree. A new
+need of the machine is a new `Workspace` field, built in `io/host.agc`.
 
 The entry programs (`syntax/lex.agc`, `syntax/parse.agc`, `modules/link.agc`,
 `check/check.agc`, `lower/lower.agc`, `bytecode/bytecode.agc`,
@@ -147,7 +143,7 @@ copy).
   `type Name[T]` wins in the checked file) and to the linker
   (`compiler/modules/resolve.agc`, for the modules a file imports). If they
   differ, a module's signature means two things to two importers ("expected
-  Address[Int], found Address[Int]", seen in the review of #1375). So a new
+  Address[Int], found Address[Int]"). So a new
   builtin type name has one resolution order that both use, or refuses user
   declarations of the name (`CHECK-REDEFINED-NAME`). Add spec cases for an
   alias, a struct and an imported module (`tests/test_spec_<area>.py`).

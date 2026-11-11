@@ -32,14 +32,10 @@ edits, say so and review the PR head through a scratch worktree instead.
 
 ## Tools
 
-Use the gmem tools when listed (`code_diff` with `base: origin/<base>` and
-`root: <worktree>`, `code_outline`, `find_symbol`, `code_imports`), else `git
-diff origin/<base>...HEAD`, `rg` and `ast-grep run --lang c -p 'memcpy($D, $S,
-$N)' vm/` for call sites and casts. Read a symbol's exact line range; for a
-deleted symbol use `git show origin/<base>:<path>`. The gmem tools index
-definitions and includes, never uses, and an empty result is not proof of
-absence: confirm with `rg`. Pass the worktree as `root`, or the line ranges
-will not match the diff.
+Pass the worktree as `root` to the gmem tools, or the line ranges will not
+match the diff. They index definitions, never uses: an empty result is not
+proof of absence, so confirm with `rg`. Call sites and casts: `ast-grep run
+--lang c -p 'memcpy($D, $S, $N)' vm/`.
 
 ## Workflow
 

@@ -117,7 +117,7 @@ The design (trie, unboxed Int and Float leaves, builders, costs) is
 - A signature that starts with `compute ` runs on the compute pool
   (`vm/compute.c`, `agc_io_compute` in `vm/loop.c`), and the task parks.
 - `native_module.c`: a signature whose word after any `compute ` is `module `
-  is a function of a native module (`vm/agentica_native.h`, #1149):
+  is a function of a native module (`vm/agentica_native.h`):
   `"module TYPES CANON SYMBOL LIBRARY"`, CANON the canonical Agentica type
   (`(Int, String) -> List[Int]`) and TYPES a `{S<index>=SHAPE}` or
   `{E<index>=SHAPE}` per struct or enum it reaches (`lower_native.agc`), each

@@ -9,53 +9,53 @@ Read first: `references/vm.md` (the trust model and the layers).
 Each rule names one place in the VM that follows it.
 
 - **Sizes and indexes.** Size sums and products go through `agc_size_add` and
-  `agc_size_mul` (`vm/value.c:365`), which end the run with the out-of-memory
+  `agc_size_mul` (`vm/value.c`), which end the run with the out-of-memory
   exit on overflow; the loader's sums use `uint64_t`. An Int argument is
   checked for a negative value first, then compared as `uint64_t` with what is
-  left (`builtin_slice`, `vm/bytes.c:70`); never cast a negative `int64_t` to
-  `size_t`. Int arithmetic uses `__builtin_*_overflow` (`vm/interp.c:953`).
+  left (`builtin_slice`, `vm/bytes.c`); never cast a negative `int64_t` to
+  `size_t`. Int arithmetic uses `__builtin_*_overflow` (`vm/interp.c`).
 - **No undefined behavior.** Shift an unsigned value by a count checked below
-  64 (`builtin_int_shift_left`, `vm/numbers.c:186`). Read a value's bytes as
-  another type with `memcpy` (`agc_value_word`, `vm/value.h:50`), never a
+  64 (`builtin_int_shift_left`, `vm/numbers.c`). Read a value's bytes as
+  another type with `memcpy` (`agc_value_word`, `vm/value.h`), never a
   pointer cast or a union of another member. Zero a union with `memset`
-  (`vm/ffi.c:2012`): `{0}` sets only its first member (*checked* for the
+  (`vm/ffi.c`): `{0}` sets only its first member (*checked* for the
   `typedef union` types of `vm/`).
 - **Check bytecode once, in the loader.** Every register, index, count and jump
   target of a `.agcb` is checked in `vm/loader.c` (`check_register`,
-  `vm/loader.c:169`), so the interpreter reads registers without a check
-  (`vm/interp.c:1452`). A new operand or section gets its loader check and a
+  `vm/loader.c`), so the interpreter reads registers without a check
+  (`vm/interp.c`). A new operand or section gets its loader check and a
   `vm/tests/loader_test.c` assert, not a test on the hot path. Values still go
   through the checked accessors (`agc_as_*`), which stop a wrong tag in
   `agc_wrong_tag`.
 - **A failure the program can reach is a value or a diagnostic.** A bad
   argument, an OS error, a closed handle or a refused `--deny-*` is the
-  builtin's error value (`agc_error_value`, `vm/tcp.c:321`) or its documented
+  builtin's error value (`agc_error_value`, `vm/tcp.c`) or its documented
   `RUNTIME-` code through `agc_fail`; never `abort`, `assert` or `exit`.
   `abort()` is only for a broken internal rule that the caller checked first
-  (`agc_list_set`, `vm/list.c:375`). Out of memory and a thread that cannot
+  (`agc_list_set`, `vm/list.c`). Out of memory and a thread that cannot
   start end with one line and status 70 (`agc_out_of_memory`,
   `agc_thread_start_failed`).
 - **No C recursion whose depth a value decides.** Printing, comparing, hashing
   and JSON walk nested values with an explicit stack in `agc_alloc` memory
-  (`compound_debug`, `vm/text.c:305`;
+  (`compound_debug`, `vm/text.c`;
   `docs/vm/05-values-execution-builtins.md` §7.3). Depth bounded by a constant
   or `log n` takes `// NOLINT(misc-no-recursion)` on the function line (`put`,
-  `vm/map.c:239`). The lint sees recursion within one file only.
+  `vm/map.c`). The lint sees recursion within one file only.
 - **Hold no `malloc` memory across a raise.** `agc_fail` `longjmp`s past every
   `free`. Run each check that can raise before the first `malloc`, and while
   you hold one call only helpers that never raise (`guard_of`,
-  `vm/process.c:893`; `agc_host_path_try`, not `agc_host_path`). A `malloc`'d
+  `vm/process.c`; `agc_host_path_try`, not `agc_host_path`). A `malloc`'d
   request is freed on every way out: a raise, a cancelled task, a detached job
   and the end of the run; a libuv request also gets its `uv_*_req_cleanup`
   (`vm/file_io.c`). cchecker checks this from the marks (`CC_OWNS`,
   `CC_JUMPS`; "cchecker" in `references/ci.md`).
 - **The hot path allocates nothing it can avoid.** Scratch space starts in a
   C-stack array and moves to `agc_alloc` memory only when it grows
-  (`agc_equal`, `vm/equal.c:271`). Flags read on the hot path are plain
+  (`agc_equal`, `vm/equal.c`). Flags read on the hot path are plain
   `bool`s, not bit-fields.
 - **Process-wide setup runs before threads exist**, in `agc_launch_init`
   before `agc_init` starts the collector's threads, and its result is kept
-  (`agc_jit_mem_sync_register`, `vm/launch.c:435`).
+  (`agc_jit_mem_sync_register`, `vm/launch.c`).
 
 ## C style
 
@@ -168,14 +168,14 @@ else 0). SIGPIPE is ignored and every write is checked.
   with N > 1 and the C tests call. Pool threads stay off GC memory (`malloc`
   only); a thread that touches the heap calls `agc_gc_thread_enter` first and
   `agc_gc_thread_leave` before it ends.
-- C that may switch stacks runs under `agc_gc_blocking` (`vm/value.c:216`,
+- C that may switch stacks runs under `agc_gc_blocking` (`vm/value.c`,
   `GC_do_blocking`): the collector scans that thread's stack only down to the
   call, so the function touches no GC memory. It calls `GC_do_blocking` from a
-  noinline frame that saves the callee-saved registers first (#1328;
-  `references/vm-build.md`, Gotchas).
+  noinline frame that saves the callee-saved registers first
+  (`references/vm-build.md`, Gotchas).
 - No GC finalizer for an OS resource (a descriptor, a libuv handle, a process):
   `close` or the owner's end frees it (`references/vm-io.md`). The one
-  finalizer, `TlsContext`'s (`vm/value.c:473`), is registered with
+  finalizer, `TlsContext`'s (`vm/value.c`), is registered with
   `GC_REGISTER_FINALIZER_NO_ORDER` (the macro that matches the GC-debug build)
   and runs between turns (`agc_gc_finalize_pending`), never inside an
   allocation. OOM and abort
