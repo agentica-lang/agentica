@@ -423,6 +423,9 @@ block            = "do", [ "|", block_param, { ",", block_param }, "|" ],
                    block_body, "end" ;
 block_param      = NAME, [ ":", type ] ;
 block_body       = NL, { statement } | simple_statement ;
+lambda           = "->", [ "(", block_param, { ",", block_param }, ")" ],
+                   "{", lambda_body, "}" ;
+lambda_body      = NL, { statement } | simple_statement ;
 
 primary          = literal
                  | "&", ( NAME | TYPE_NAME, ".", [ TYPE_NAME, "." ], NAME )
@@ -433,6 +436,7 @@ primary          = literal
                  | qualified_type
                  | list_literal
                  | map_literal
+                 | lambda
                  | "(", expression, ")" ;
 
 arguments        = expression, { ",", expression }, [ "," ] ;
@@ -454,6 +458,11 @@ an import alias: `s.length`, `IO.gets!`, `while !IO.eof? do`, `Util.reset`. So
 `f = Util.helper` calls `helper`; write `&Util.helper` for the function value.
 `&name` references a declared top-level function without captures, and
 `&Time.now_ms` or `&Int.to_s` a builtin (06-semantics.md, "Function values").
+A lambda, `->(x) { x + 1 }`, is a block that no call takes; one without
+parameters has no parentheses (`-> { 42 }`), and its body is always in braces.
+`->() { ... }`, `->x { ... }`, `->(x) do ... end`, `lambda { ... }`,
+`lambda do ... end`, `proc do ... end` and `fn(x: Int) ...` are
+`PARSE-UNEXPECTED-TOKEN`, with a help that shows the lambda.
 A bare `Enum.Variant` of an enum in the same file is that nullary variant, and
 `M.Enum.Variant` through an import alias is one too.
 

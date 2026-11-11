@@ -1468,7 +1468,7 @@ def call_doc_keyed(c: Context, node: Ast.Call, key: String) -> Docs.Doc
   block: List[Docs.Doc] = []
   if args.size > 0
     case args[args.size - 1]
-      Ast.Expr.BlockLit(_) ->
+      Ast.Expr.BlockLit(lit) if !lit.lambda ->
         block = [text(" "), expr_doc(c, args[args.size - 1], false)]
         args = args.take(args.size - 1)
       _ -> block = block
@@ -1664,7 +1664,7 @@ def method_link(c: Context, node: Ast.MethodCall) -> Link
   block: List[Docs.Doc] = []
   if args.size > 0
     case args[args.size - 1]
-      Ast.Expr.BlockLit(_) ->
+      Ast.Expr.BlockLit(lit) if !lit.lambda ->
         block = [text(" "), expr_doc(c, args[args.size - 1], false)]
         args = args.take(args.size - 1)
       _ -> block = block
@@ -1683,13 +1683,20 @@ def method_link(c: Context, node: Ast.MethodCall) -> Link
   Link(doc: shown, block: block, call: true, breaks: true)
 end
 
-# `do |params| body end`: on one line when the body is one simple statement with no comments and it fits, else with
-# the body on the lines below.
+# `do |params| body end`, or a lambda `->(params) { body }`: on one line when the body is one simple statement with no
+# comments and it fits, else with the body on the lines below.
 def block_doc(c: Context, node: Ast.BlockLit) -> Docs.Doc
   key = Comments.key_of("BlockLit", node.span)
+  params = node.params.map do |param: Ast.BlockParam| block_param(c, param) end
   head = "do"
-  if node.params.size > 0
-    params = node.params.map do |param: Ast.BlockParam| block_param(c, param) end
+  close = "end"
+  if node.lambda
+    head = "-> {"
+    close = "}"
+    if params.size > 0
+      head = "->(#{params.join(", ")}) {"
+    end
+  elsif params.size > 0
     head = "do |#{params.join(", ")}|"
   end
 
@@ -1723,7 +1730,7 @@ def block_doc(c: Context, node: Ast.BlockLit) -> Docs.Doc
         text(head),
         Docs.Doc.Indent([Docs.Doc.Line, statement_doc(c, stmt, false)]),
         Docs.Doc.Line,
-        text("end"),
+        text(close),
       ])
     end
   end
@@ -1731,7 +1738,7 @@ def block_doc(c: Context, node: Ast.BlockLit) -> Docs.Doc
   # A body on its own lines breaks every group around the block, so the items next to it go on lines of their own.
   items = above.concat(statement_items(c, node.body)).concat(dangling_items(c, key))
   parts = [Docs.Doc.BreakParent, text(head)].concat(suffixes)
-  Docs.Doc.Concat(parts.concat([body(c, items), Docs.Doc.HardLine, text("end")]))
+  Docs.Doc.Concat(parts.concat([body(c, items), Docs.Doc.HardLine, text(close)]))
 end
 
 # Whether a document starts with the break of a multi-line block body (`block_doc`).

@@ -125,14 +125,14 @@ def method_form?(node: Ast.Call) -> Bool
 end
 
 # CHECK-BLOCK-TARGET when the call has one argument more than a form takes and that last argument is a block, so the
-# block was meant for a function parameter the form does not have.
+# block was meant for a function parameter the form does not have. A lambda there is an argument like any value.
 def block_without_target(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Builtin) -> Result[Bool]
   return ok(true) if node.args.size == 0
 
   last = node.args[node.args.size - 1]
   without = Builtins.form_without_block(entry, node.args.size - 1)
   case last
-    Ast.Expr.BlockLit(block) ->
+    Ast.Expr.BlockLit(block) if !block.lambda ->
       if without.ok?
         return error(
           State.fail_help(
@@ -158,7 +158,7 @@ def check_block_target(cx: State.Cx, st: State.St, node: Ast.Call, form: Model.B
 
   last = node.args[node.args.size - 1]
   case last
-    Ast.Expr.BlockLit(block) ->
+    Ast.Expr.BlockLit(block) if !block.lambda ->
       if !T.is?(form.parameters[form.parameters.size - 1].type, "Fn")
         return error(
           State.fail_help(

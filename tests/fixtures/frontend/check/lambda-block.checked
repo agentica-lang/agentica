@@ -1,0 +1,1 @@
+ERROR CHECK-LAMBDA-BLOCK 42:2:24-62:2:44 "a lambda is passed where a block goes" "write it as a block after the call: [1, 2].map do |x| ... end" signature="main() -> Void" file="lambda-block.agc"

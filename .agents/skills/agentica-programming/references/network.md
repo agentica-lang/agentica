@@ -243,9 +243,8 @@ return `HTTP.Answer.Upgrade`, `.Stream` or `.Whole`, or call
 - `HTTP.Handler` is `Fn[HTTP.Request, Result[HTTP.Response]]`, and `HTTP.App`
   is `Fn[HTTP.Request, HTTP.RequestBody, Result[HTTP.Answer]]`. A middleware is
   a function `Handler -> Handler` that calls `next.call(request)` or answers
-  itself. A block cannot be returned directly, so a helper
-  `def handler(f: HTTP.Handler) -> HTTP.Handler` turns a block into the value;
-  keep the block to one call and put the work in a named `step`. Stack them:
+  itself. It returns a lambda, `->(request) { step(next, request) }`; keep
+  the lambda to one call and put the work in a named `step`. Stack them:
   `logged(guarded(&hello))`. An `App` middleware is `App -> App`.
 - `serve` (TCP) and `serve_tls` (a server `TlsContext`) return at once and
   serve in the background. Port 0 picks a free port (`local_port`). Each

@@ -1,0 +1,13 @@
+def main() -> Void
+  base = 10
+  inc = -> (x: Int)   {x + base}
+  answer = ->   { 42 }
+  sign = ->(x: Int) {
+    # a guard
+    if x < 0
+      return "negative"
+    end
+    "not negative"
+  }
+  puts(sign.call(inc.call(answer.call())))
+end

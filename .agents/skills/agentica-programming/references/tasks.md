@@ -416,9 +416,8 @@ the `Ref`; there are no methods.
 - Names: a module keeps `NAMES: ATS[String, Address[Msg]] = ATS.new()` (a
   constant goes before the enum in a module block) and wraps `cast` and `call`
   in its own functions, so callers never see `Msg`.
-- `init: block0() do initial end` needs a helper `def block0[R](f: Fn[R]) ->
-  Fn[R] = f` (a block is a value only as an argument), or a named `&init`.
-  Annotate `b: Actor.Behaviour[Int, Msg] = ...` when blocks take parameters.
+- `init: -> { initial }` is a lambda, or use a named `&init`. Annotate
+  `b: Actor.Behaviour[Int, Msg] = ...` when lambdas take parameters.
 
 ## Supervisors (`std/supervisor`)
 

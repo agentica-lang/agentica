@@ -1,0 +1,33 @@
+struct Gen
+  make: Fn[Int, Int]
+end
+
+def apply(f: Fn[Int, Int], n: Int) -> Int = f.call(n)
+
+def main() -> Void
+  gen = Gen(
+    make: ->(seed) {
+      next = seed + 1
+      next * 2
+    },
+  )
+
+  fs = [
+    ->(x: Int) { x },
+    ->(x: Int) {
+      y = x + 1
+      y
+    },
+  ]
+
+  puts(
+    apply(
+      ->(x) {
+        z = x * 3
+        z
+      },
+      gen.make(1),
+    ) +
+    fs.size,
+  )
+end

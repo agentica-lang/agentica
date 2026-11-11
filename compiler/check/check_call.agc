@@ -177,8 +177,8 @@ export def find_field(fields: List[Model.Named], name: String) -> Result[Model.N
   error("no such field")
 end
 
-# The text of the source between the start of an expression, including a piped receiver, and its end.
-def extent_text(cx: State.Cx, node: Ast.Expr) -> String
+## The text of the source between the start of an expression, including a piped receiver, and its end.
+export def extent_text(cx: State.Cx, node: Ast.Expr) -> String
   text = cx.texts.get(cx.file)
   return "" if text.none?
 
@@ -253,7 +253,7 @@ def pipe_help(cx: State.Cx, node: Ast.Call, method: String) -> String
   index = 1
   while index < node.args.size
     case node.args[index]
-      Ast.Expr.BlockLit(_) -> block = true
+      Ast.Expr.BlockLit(found) if !found.lambda -> block = true
       _ -> plain = plain.push(extent_text(cx, node.args[index]))
     end
 
@@ -327,7 +327,8 @@ end
 #   2. the expected type of the call, matched with the result type, for the variables still open;
 #   3. the arguments that need an expected type ([], {}, error(...), Option.None, &f of a generic function ...),
 #      against their parameter type, and they bind nothing;
-#   4. the block, which may bind the variables its annotated parameters and its result show.
+#   4. the lambdas among the other arguments, from left to right, then the block: each may bind the variables its
+#      annotated parameters and its result show.
 # A step 3 argument whose parameter type is still open waits for the block, and is checked after it.
 def check_generic_call(
   cx: State.Cx,
@@ -341,13 +342,13 @@ def check_generic_call(
   current = st
   found: Map[String, T.Type] = {}
   waiting: List[Int] = []
-  block = -1
+  blocks: List[Int] = []
   index = 0
   while index < count
     template = signature.params[Defaults.param_of(shape, count, index)]
     arg = node.args[index]
-    if index == count - 1 and block_literal?(arg) and T.is?(template, "Fn")
-      block = index
+    if block_literal?(arg) and T.is?(template, "Fn")
+      blocks = blocks.push(index)
     elsif needs_expected?(cx, arg)
       waiting = waiting.push(index)
     else
@@ -370,7 +371,7 @@ def check_generic_call(
     end
   end
 
-  if block >= 0
+  for block in blocks
     template = signature.params[Defaults.param_of(shape, count, block)]
     after = try check_generic_block(cx, current, node.args[block], template, found)
     current = after.st
