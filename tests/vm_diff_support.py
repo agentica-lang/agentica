@@ -28,8 +28,9 @@ import pytest
 from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
 
-from tests.agentica_test import (FIXTURES, ROOT, RUN_TIMEOUT, UNDER_WINE, WINDOWS, TestCase, _kill_and_collect,
-                                 channel_peer, compile_agc, scaled, vm_binary, vm_command, vm_environment)
+from tests.agentica_test import (FIXTURES, ROOT, RUN_TIMEOUT, SWEEP_WORKERS, UNDER_WINE, WINDOWS, TestCase,
+                                 _kill_and_collect, channel_peer, compile_agc, env_number, scaled, vm_binary,
+                                 vm_command, vm_environment)
 
 FIXTURE_DIR = FIXTURES / "vm"
 RUNAWAY_DIR = FIXTURE_DIR / "step-limited"
@@ -59,10 +60,6 @@ SWEEP_MODE = os.environ.get("AGENTICA_SWEEP", "")
 if SWEEP_MODE not in ("", "full", "sampled", "ends"):
     raise RuntimeError("AGENTICA_SWEEP must be full, sampled or ends, not %r" % SWEEP_MODE)
 SAMPLED_SWEEP = SWEEP_MODE == "sampled"
-SWEEP_WORKERS = os.environ.get("AGENTICA_SWEEP_WORKERS", "4")
-if not SWEEP_WORKERS.isascii() or not SWEEP_WORKERS.isdigit() or int(SWEEP_WORKERS) < 1:
-    raise RuntimeError("AGENTICA_SWEEP_WORKERS must be a positive number, not %r" % SWEEP_WORKERS)
-SWEEP_WORKERS = int(SWEEP_WORKERS)
 # Fixtures whose every run is costly (1000 file rounds; fixed sleeps): they get the `ends` sweep in every mode but
 # full (the weekly sweep and the release), as the stop of a Task.map and of an HTTP client under --max-steps is swept by
 # task-map-steps and http-client; only the full sweep stops a Task.map item that holds a buffered file.
@@ -754,11 +751,9 @@ def _head_sha():
 
 
 def _sweep_seed():
-    given = os.environ.get("AGENTICA_SWEEP_SEED")
-    if given:
-        if not given.isascii() or not given.isdigit():
-            raise RuntimeError("AGENTICA_SWEEP_SEED must be a natural number, not %r" % given)
-        return int(given)
+    given = env_number("AGENTICA_SWEEP_SEED")
+    if given is not None:
+        return given
     if SAMPLED_SWEEP:
         sha = os.environ.get("GITHUB_SHA") or _head_sha()
         if sha and re.match(r"[0-9a-f]{8}", sha):

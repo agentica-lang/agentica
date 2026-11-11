@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import compile_text, run_vm, vm_environment
+from tests.agentica_test import SWEEP_WORKERS, compile_text, run_vm, vm_environment
 
 MODES = ("off", "on", "always")
 # The machines whose binary has an emitter (platform.machine(), lowercased): arm64 except on Windows, which has none.
@@ -557,7 +557,7 @@ def runs(bytecode, *flags, env=None, schedulers=1):
         result = run_vm(bytecode, "--jit", mode, "--schedulers", str(schedulers), *flags, env=vm_environment(env))
         return result.code, result.stdout, result.stderr
 
-    with ThreadPoolExecutor(max_workers=len(MODES)) as pool:
+    with ThreadPoolExecutor(max_workers=min(len(MODES), SWEEP_WORKERS)) as pool:
         return dict(zip(MODES, pool.map(run_mode, MODES)))
 
 
@@ -1629,7 +1629,7 @@ def test_compiled_loops_run_builtins_map_reads_lists_and_blocks_without_leaving(
     # Limits below the two tasks' steps stop the run inside the loop, in either task.
     steps = sum(int(line.split("steps ")[1]) for line in full[1].splitlines() if " steps " in line)
     limits = list(range(steps // 20, steps * 19 // 20, steps // 15))
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with ThreadPoolExecutor(max_workers=max(1, SWEEP_WORKERS // len(MODES))) as pool:
         stops = list(pool.map(lambda limit: assert_same(bytecode, "--json", "--max-steps", str(limit)), limits))
     for limit, (code, _, stderr) in zip(limits, stops):
         assert code == 1 and '"RUNTIME-STEP-LIMIT"' in stderr, (limit, stderr)
