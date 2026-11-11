@@ -154,9 +154,8 @@ List.lazy(list: List[A]) -> Lazy[A]                      # a recipe; steps run i
   budget. `find` to `max_by` are written in Agentica: O(n), 4 to 28 steps per
   element (`performance.md`); a runtime error in one is reported at your call.
 - `reject` is `CHECK-UNKNOWN-METHOD` (use `xs.select do |x| !cond end`). A List
-  has `include?` (also `member?`), not `contains?`. A range has no `map` or
-  `select`: `(1..5).to_a.map do ... end`. A block after `each_slice` is
-  `CHECK-BLOCK-TARGET`: `xs.each_slice(2).each do |pair| ... end`.
+  has `include?` (also `member?`), not `contains?`. A block after `each_slice`
+  is `CHECK-BLOCK-TARGET`: `xs.each_slice(2).each do |pair| ... end`.
 - Callback types must match exactly. A callback given as `&name`, a `Fn`
   variable or a block with typed parameters (`do |x: Int|`) types empty lists
   and empty reduce starts.
@@ -214,7 +213,14 @@ Range.each(r: Range, f: Fn[Int, Void]) -> Void
 Range.first(r: Range) -> Result[Int]                     # error("the range is empty") when empty
 Range.last(r: Range) -> Result[Int]                      # last included value: (1...5).last is ok(4)
 Range.lazy(r: Range) -> Lazy[Int]                        # (1..n).lazy.select do ... end.first(3) (lazy.md)
+Range.map(r: Range, f: Fn[Int, B]) -> List[B]            # as (1..5).to_a.map, without the list first
 ```
+
+- A range has the Enumerable methods of List with Int values: `map`,
+  `select`, `flat_map`, `reduce`, `sum`, `min`, `max` (O(1), `Optional[Int]`),
+  `min_by`, `max_by`, `find`, `find_index`, `any?`, `all?`, `each_with_index`,
+  `each_slice`, `partition`, `group_by`, `take_while`, `drop_while`. No
+  `take`, `drop` or `reject`.
 
 - An end before the start is an empty range. Ranges bind looser than every other
   operator (`0...n + 1` is `0...(n + 1)`) and do not chain. Method calls need

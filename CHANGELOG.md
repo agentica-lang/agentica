@@ -21,6 +21,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A reserved word used as a name (`def edge(end: Int)`) is `PARSE-RESERVED-WORD`,
   with another name as the help.
 - A builtin is a function value: `&Time.now_ms`, `[1, 2].map(&Int.to_s)`.
+- A range has the Enumerable methods of List: `(0...n).map`, `select`, `sum`,
+  `reduce`, `min`, `max` and more.
 
 ## [0.29.0] - 2026-11-10
 

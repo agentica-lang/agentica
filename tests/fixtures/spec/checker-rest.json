@@ -10057,6 +10057,22 @@
         "  _y: Optional[Int] = xs.index(2)",
         "  _z: Optional[Int] = [[1]].index([1])",
         "  _za: Optional[Int] = xs.find_index do |x| x > 1 end",
+        "  r = 0...4",
+        "  _ra: List[String] = r.map do |x| x.to_s end",
+        "  _rb: List[Int] = r.select do |x| x > 1 end",
+        "  _rc: Int = r.reduce(0) do |total, x| total + x end",
+        "  _rl: Int = r.inject(0) do |total, x| total - x end",
+        "  _rd: Int = r.sum",
+        "  _re: Optional[Int] = r.min",
+        "  _rf: Optional[Int] = r.max_by do |x| \"k#{x}\" end",
+        "  _rg: Result[Int] = r.detect do |x| x > 1 end",
+        "  _rh: Map[Int, List[Int]] = r.group_by do |x| x % 2 end",
+        "  _ri: List[Int] = r.collect do |x| x end",
+        "  _rk: List[Int] = r.flat_map do |x| [x, x] end",
+        "  _rj: Bool = r.any? do |x| x > 1 end and r.all? do |x| x >= 0 end",
+        "  r.each_with_index do |x, i|",
+        "    puts(x + i)",
+        "  end",
         "end",
         "",
         ""
@@ -10066,7 +10082,7 @@
     {
       "program": [
         "def main() -> Void",
-        "  puts((1..2).select do |x| x > 1 end)",
+        "  puts((1..2).reject do |x| x > 1 end)",
         "end",
         "",
         ""
@@ -10076,13 +10092,13 @@
         2,
         8
       ],
-      "covers": "(1..2).select do |x| x > 1 end",
+      "covers": "(1..2).reject do |x| x > 1 end",
       "help": true
     },
     {
       "program": [
         "def main() -> Void",
-        "  puts((1..2).collect do |x| x end)",
+        "  puts((1..2).take(1))",
         "end",
         "",
         ""
@@ -10092,13 +10108,13 @@
         2,
         8
       ],
-      "covers": "(1..2).collect do |x| x end",
+      "covers": "(1..2).take(1)",
       "help": true
     },
     {
       "program": [
         "def main() -> Void",
-        "  puts((1..2).detect do |x| x > 1 end)",
+        "  puts((1..2).drop(1))",
         "end",
         "",
         ""
@@ -10108,23 +10124,23 @@
         2,
         8
       ],
-      "covers": "(1..2).detect do |x| x > 1 end",
+      "covers": "(1..2).drop(1)",
       "help": true
     },
     {
       "program": [
         "def main() -> Void",
-        "  puts((1..2).inject(0) do |a, x| a + x end)",
+        "  puts((1..2).group_by do |x| 1.5 end)",
         "end",
         "",
         ""
       ],
-      "code": "CHECK-UNKNOWN-METHOD",
+      "code": "CHECK-TYPE-MISMATCH",
       "start": [
         2,
-        8
+        24
       ],
-      "covers": "(1..2).inject(0) do |a, x| a + x end",
+      "covers": "do |x| 1.5 end",
       "help": true
     },
     {
@@ -10147,34 +10163,33 @@
     {
       "program": [
         "def main() -> Void",
-        "  puts((1..5).map do |x| x end)",
+        "  puts((1..5).min_by do |x| true end)",
         "end",
         "",
         ""
       ],
-      "code": "CHECK-UNKNOWN-METHOD",
+      "code": "CHECK-TYPE-MISMATCH",
       "start": [
         2,
-        8
+        22
       ],
-      "covers": "(1..5).map do |x| x end",
+      "covers": "do |x| true end",
       "help": true
     },
     {
       "program": [
         "def main() -> Void",
-        "  puts((1..5).sum)",
+        "  puts((1..5).select do |x| x end)",
         "end",
         "",
         ""
       ],
-      "code": "CHECK-UNKNOWN-METHOD",
+      "code": "CHECK-TYPE-MISMATCH",
       "start": [
         2,
-        8
+        29
       ],
-      "covers": "(1..5).sum",
-      "help": true
+      "covers": "x"
     },
     {
       "program": [
