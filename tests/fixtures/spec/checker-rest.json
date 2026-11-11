@@ -12806,7 +12806,7 @@
     },
     {
       "program": [
-        "TABLE: ATS[String, Int] = ATS.new()",
+        "TABLE: List[ATS[String, Int]] = [ATS.new()]",
         "",
         "def main() -> Void",
         "end",
@@ -12814,7 +12814,7 @@
         ""
       ],
       "code": "CHECK-CONSTANT-TYPE",
-      "start": [1, 27],
+      "start": [1, 34],
       "covers": "ATS.new()"
     },
     {
