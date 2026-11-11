@@ -1,5 +1,6 @@
 """Style rules of the C sources in vm/: no type definition after the first function, no prototype of a static
-function, and a header comment of the right length in every file.
+function, a header comment of the right length in every file, and no union zeroed with a brace initializer.
+Also: the libgc messages that vm/value.c reads.
 
 The scanner below finds the top-level declarations of a C file well enough for
 these rules. It skips preprocessor lines (with continuations), comments and
@@ -240,3 +241,45 @@ def test_every_vm_c_file_starts_with_a_header_comment_of_the_right_length():
     assert "tests/map_test.c" in files
     problems = [p for f in files for p in header_problems(f, (VM_DIR / f).read_text(encoding="utf-8"))]
     assert problems == [], "\n".join(problems)
+
+
+# A union type of vm/ (typedef union { ... } name;): the members are flat, so the first "}" closes it.
+UNION_TYPEDEF = re.compile(r"typedef\s+union\s*\w*\s*\{[^}]*\}\s*(\w+)\s*;")
+
+
+def union_brace_problems(texts):
+    """`name x = {...}` for a union type of TEXTS (file -> source). C11 sets only the first member of a union from a
+    brace initializer, so the other bytes are unset: a union is zeroed with memset (vm/ffi.c)."""
+    names = {m.group(1) for text in texts.values() for m in UNION_TYPEDEF.finditer(text)}
+    if not names:
+        return []
+    initialized = re.compile(r"\b(%s)\s+\w+(\s*\[[^]]*\])?\s*=\s*\{" % "|".join(sorted(names)))
+    return ["vm/%s:%d: %s zeroed with a brace initializer: only its first member is set; use memset"
+            % (f, n, m.group(1))
+            for f, text in texts.items()
+            for n, line in enumerate(text.splitlines(), 1)
+            for m in [initialized.search(line)] if m]
+
+
+def test_no_union_is_zeroed_with_a_brace_initializer():
+    assert union_brace_problems({"u.h": "typedef union {\n  int i;\n  long l;\n} word;\n",
+                                 "u.c": "word a;\nword b = {0};\nword c[2] = {{0}};\n"}) == [
+        "vm/u.c:2: word zeroed with a brace initializer: only its first member is set; use memset",
+        "vm/u.c:3: word zeroed with a brace initializer: only its first member is set; use memset"]
+    texts = {f: (VM_DIR / f).read_text(encoding="utf-8") for f in header_files()}
+    assert "ffi_os.h" in texts
+    problems = union_brace_problems(texts)
+    assert problems == [], "\n".join(problems)
+
+
+# The libgc abort messages that on_gc_abort (vm/value.c) ends with the out-of-memory line are libgc's text, sent one by
+# one by vm/tests/gc_thread_test.c. An update of the vendored bdwgc that rewords one fails here instead of turning that
+# case back into "internal GC error".
+def test_the_messages_of_the_c_test_are_aborts_of_the_vendored_bdwgc():
+    test = (VM_DIR / "tests" / "gc_thread_test.c").read_text(encoding="utf-8")
+    sent = re.findall(r'gc_abort_ends_with\("([^"]+)", "agentica: out of memory\\n"\)', test)
+    assert len(sent) >= 3, sent
+    aborts = set()
+    for source in (VM_DIR / "third_party" / "bdwgc").glob("*.c"):
+        aborts.update(re.findall(r'ABORT\("([^"]+)"\)', source.read_text(encoding="utf-8", errors="replace")))
+    assert [message for message in sent if message not in aborts] == []

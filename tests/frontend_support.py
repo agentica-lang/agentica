@@ -275,7 +275,9 @@ class StageTestCase(GoldenTestCase):
 
     @classmethod
     def _compile_stage(cls):
-        directory = Path(tempfile.mkdtemp(prefix="agentica-frontend-"))
+        # Under the run's temporary root (tests/temp_roots.py), so a run killed before the class cleanup leaves it
+        # where the sweep of stale roots removes it, not loose in the system temp folder.
+        directory = Path(tempfile.mkdtemp(prefix="agentica-frontend-", dir=os.environ.get("PYTEST_DEBUG_TEMPROOT")))
         cls.addClassCleanup(shutil.rmtree, directory, ignore_errors=True)
         cls.stage_dir = directory
         cls.bytecode = compile_agc(ROOT / "compiler" / cls.ENTRY, directory / "stage.agcb")
@@ -338,7 +340,10 @@ def pytest_stage_fixtures(stage_case, pytest, fixture_name="stage"):
             stage_case.setUpClass()
             yield stage_case
         finally:
+            # unittest runs the class cleanups after tearDownClass; outside a suite nobody does, and the stage folder
+            # of _compile_stage (about 9 MB) stayed behind after every run.
             stage_case.tearDownClass()
+            stage_case.doClassCleanups()
 
     @pytest.fixture(name=fixture_name)
     def stage_instance(request):
