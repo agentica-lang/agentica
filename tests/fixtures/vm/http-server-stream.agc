@@ -103,18 +103,18 @@ def quiet(feed: Feed) -> Void
   end
 end
 
-def stream_with(hub: Hub, job: Fn[Feed, Void], status: Int, headers: List[Header]) -> Result[HTTP.StreamResponse]
+def stream_with(hub: Hub, job: Fn[Feed, Void], status: Int, headers: List[HTTP.Header]) -> Result[HTTP.StreamResponse]
   body: Channel[Bytes] = Channel.new(2)
   Task.spawn(job, Feed(hub: hub, body: body))
   return ok(HTTP.StreamResponse(status: status, headers: headers, body: body))
 end
 
 def stream(hub: Hub, job: Fn[Feed, Void], status: Int) -> Result[HTTP.StreamResponse]
-  return stream_with(hub, job, status, [Header(name: TYPE, value: "text/plain")])
+  return stream_with(hub, job, status, [HTTP.Header(name: TYPE, value: "text/plain")])
 end
 
 # A block is the only way to make a handler that holds the hub.
-def handler_of(f: Fn[HttpRequest, Result[HTTP.StreamResponse]]) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
+def handler_of(f: Fn[HTTP.Request, Result[HTTP.StreamResponse]]) -> Fn[HTTP.Request, Result[HTTP.StreamResponse]]
   return f
 end
 
@@ -123,18 +123,18 @@ def app_of(f: HTTP.App) -> HTTP.App
 end
 
 # The body read first (a body that cannot be read is refused as HTTP.app does), then the stream of the route.
-def stream_answer(route: Fn[HttpRequest, Result[HTTP.StreamResponse]], request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+def stream_answer(route: Fn[HTTP.Request, Result[HTTP.StreamResponse]], request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   case HTTP.read_all(body, 1024)
     ok(_) -> return ok(HTTP.Answer.Stream(try route.call(request)))
     error(message) -> return ok(HTTP.body_refusal(message))
   end
 end
 
-def streamed(route: Fn[HttpRequest, Result[HTTP.StreamResponse]]) -> HTTP.App
+def streamed(route: Fn[HTTP.Request, Result[HTTP.StreamResponse]]) -> HTTP.App
   return app_of() do |request, body| stream_answer(route, request, body) end
 end
 
-def routes(hub: Hub) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
+def routes(hub: Hub) -> Fn[HTTP.Request, Result[HTTP.StreamResponse]]
   return handler_of() do |request|
     case request.path
       "/gated" -> return stream(hub, &gated, 200)
@@ -144,8 +144,8 @@ def routes(hub: Hub) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
       "/binary" -> return stream(hub, &binary, 200)
       "/binary-whole" -> return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(Bytes.from_list([255, 0, 128]).unwrap!)))
       "/large" -> return stream(hub, &large, 200)
-      "/length" -> return stream_with(hub, &head_only, 200, [Header(name: "Content-Length", value: "3")])
-      "/framing" -> return stream_with(hub, &head_only, 200, [Header(name: "Transfer-Encoding", value: "chunked")])
+      "/length" -> return stream_with(hub, &head_only, 200, [HTTP.Header(name: "Content-Length", value: "3")])
+      "/framing" -> return stream_with(hub, &head_only, 200, [HTTP.Header(name: "Transfer-Encoding", value: "chunked")])
       "/quiet" -> return stream(hub, &quiet, 200)
       "/nobody" -> return stream(hub, &head_only, 204)
       "/whole" -> return ok(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole("whole text\n".bytes)))
@@ -217,7 +217,7 @@ def main() -> Void
   # request_timeout_ms bounds the send of a whole piece: the one of 512 KiB waits for main to read it, which a slow
   # machine with small socket buffers can take long to do (1.4 s was too short on the macOS x86_64 runners, #1189).
   # No case waits for this timeout to fire, so it matches the 5 s of the client's reads.
-  options = HttpServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
+  options = HTTP.ServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
   server = HTTP.serve("127.0.0.1", 0, streamed(routes(hub)), options).unwrap!
   port = HTTP.local_port(server)
 

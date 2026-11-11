@@ -5,12 +5,12 @@ import HTTP from "std/http"
 # framing) still gets its answer, and a request with a body gets none (it used to get a 400 for a valid request).
 # Under /keep the body is read as usual.
 
-def answer(request: HttpRequest) -> Result[HttpResponse]
+def answer(request: HTTP.Request) -> Result[HTTP.Response]
   said = "#{request.method} #{request.path} #{request.body.size}"
-  return ok(HttpResponse(status: 200, headers: [], body: said.bytes))
+  return ok(HTTP.Response(status: 200, headers: [], body: said.bytes))
 end
 
-def route(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+def route(request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   if request.path == "/cut"
     Task.cancel(body.done)
     ended: Channel[Bytes] = Channel.new(1)

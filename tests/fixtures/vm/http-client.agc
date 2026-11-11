@@ -40,7 +40,7 @@ def main() -> Void
   pool = Result.unwrap!(HTTP.client())
   base = "http://127.0.0.1:#{port}"
   first = Result.unwrap!(HTTP.get(pool, base + "/a?b=1#frag"))
-  second = HTTP.request(pool, "DELETE", base, "".bytes, [Header(name: "X-Id", value: "7")])
+  second = HTTP.request(pool, "DELETE", base, "".bytes, [HTTP.Header(name: "X-Id", value: "7")])
   third = HTTP.post(pool, base + "/form", "ping\r\n".bytes)
   fourth = HTTP.get(pool, base + "/again")
   fifth = Result.unwrap!(HTTP.get(pool, base + "/binary"))

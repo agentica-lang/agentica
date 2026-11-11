@@ -182,7 +182,7 @@ agc_value agc_http_head_value(agc_vm *vm, const uint8_t *buf, size_t len, uint64
   return agc_result_value(true, agc_struct_value(h));
 }
 
-/* The HttpWire.Response of the response head at the start of buf, with the
+/* The HttpWire.ResponseHead of the response head at the start of buf, with the
    framing rules of docs/vm/10-io-http.md §10.7.1: a response to HEAD, a 204
    and a 304 have no body (one announced on a 204 or 304 stops the connection
    from being kept), a body that runs to the end of input stops it too, and a
@@ -211,7 +211,7 @@ agc_value agc_http_response_value(agc_vm *vm, const uint8_t *buf, size_t len, bo
   if (head.frame == AGC_HTTP_FRAME_CLOSE) closes = true;
   if (head.frame == AGC_HTTP_FRAME_LENGTH && head.length > limit)
     return agc_http_error_result("http: ", agc_http_error_text(AGC_HTTP_ERR_TOO_LARGE));
-  agc_struct *r = agc_new_struct(agc_builtin_struct(vm, "HttpWire.Response", response_fields, 8), 8);
+  agc_struct *r = agc_new_struct(agc_builtin_struct(vm, "HttpWire.ResponseHead", response_fields, 8), 8);
   r->fields[0] = agc_int(head.status);
   r->fields[1] = header_values(vm, &head);
   r->fields[2] = agc_int(head.frame == AGC_HTTP_FRAME_LENGTH ? (int64_t)head.length : 0);

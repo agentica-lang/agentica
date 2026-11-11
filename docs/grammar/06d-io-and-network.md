@@ -13,7 +13,10 @@ the protocol is in [`docs/vm/10-io-http.md`](https://github.com/agentica-lang/ag
 
 HTTP is the `std/http` library, imported with `import HTTP from "std/http"`; any
 alias works. It calls the internal module `HttpWire`, which no other module can
-name (`CHECK-UNKNOWN-NAME`). A complete program is in
+name (`CHECK-UNKNOWN-NAME`). Its builtin records and handles are re-exported
+as `HTTP.Request`, `HTTP.Response`, `HTTP.Header`, `HTTP.ClientOptions`,
+`HTTP.ServerOptions`, `HTTP.Client` and `HTTP.Server` (§5b, "Re-exports") and
+reserve no name. A complete program is in
 [`examples/http_server.agc`](../../examples/http_server.agc).
 
 ### Logging (`std/logger`)

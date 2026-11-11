@@ -110,7 +110,7 @@ struct agc_conn {
   request *opener, *reader, *writer, *accepts, *accepts_tail, *handshakes;
   /* The TLS config of the TlsContext that TLS.connect or TLS.listen took, with a count of the net's own. */
   agc_tls_config *config;
-  /* An HttpClient's lazy context (HttpWire.connect_tls), instead of `config`: the net holds one count on it, and waits
+  /* An HTTP client's lazy context (HttpWire.connect_tls), instead of `config`: the net holds one count on it, and waits
      in its list (next_waiter) while it is built. */
   tls_shared *shared;
   net *next_waiter;
@@ -153,7 +153,7 @@ static const char socket_closed[] = "network: socket is closed";
 static const char listener_closed[] = "network: listener is closed";
 static const char write_failed[] = "could not write to the stream";
 
-/* The TLS client context of an HttpClient (#394): built once, on a pool thread, when the first https connection of the
+/* The TLS client context of an HTTP client (#394): built once, on a pool thread, when the first https connection of the
    client needs it, then used by every later connection, so the CA file is read once per client. Counts (`refs`): the
    client's (HttpWire.drop_tls gives it back), one per net that names it, and one for a build in progress; the last
    one frees it, on whatever thread gives it back. An SSL takes its own count on the SSL_CTX (SSL_new), so a session
@@ -667,7 +667,7 @@ agc_value agc_tls_load_error(agc_vm *vm, const char *what, const char *path, con
 }
 
 /* The files of a context are read when it is built (TLS.client_context), so only the lazy system-trust context of an
-   HttpClient can fail here before the handshake: that is a setup failure. */
+   HttpWire.Client can fail here before the handshake: that is a setup failure. */
 static agc_value secure_error(agc_vm *vm, const net *n) {
   const agc_tls_failure *f = &n->failure;
   if (n->parent) return agc_tls_failure_error(vm, "network: TLS accept failed", f);
@@ -1430,7 +1430,7 @@ static tls_shared *client_context(agc_vm *vm, agc_http_client *c) {
 }
 
 /* Opens a client socket to NAME:PORT, which the net then owns. CONFIG is the TLS config with a count for the net
-   (TLS.connect); CLIENT, when not NULL, is the HttpClient whose lazy context the net takes a count on
+   (TLS.connect); CLIENT, when not NULL, is the HttpWire.Client whose lazy context the net takes a count on
    (HttpWire.connect_tls). Neither: TCP. */
 static agc_value connect_net(agc_vm *vm, agc_loop *io, CC_OWNS char *name, int64_t port, agc_tls_config *config,
                              agc_http_client *client, int64_t timeout) {
@@ -1598,10 +1598,10 @@ static bool begin_upgrade(void *data, agc_io_job *job) {
 static const char upgrade_role[] = "TLS.upgrade with a server TlsContext takes the host \"\"";
 
 /* The checks and the start of an upgrade of SK to TLS, for TLS.upgrade (CONTEXT, a TlsContext) and HttpWire.upgrade_tls
-   (CLIENT, an HttpClient whose shared system-trust context is used; CONTEXT is then NULL). A server context with a host
-   is a bug in the program, reported first. The checks of the arguments leave the socket as it was; after them the plain
-   socket is the request's (its resource is gone, so the program sees it closed), and the handshake runs on a new TLS
-   socket under the timeout, which closes it. */
+   (CLIENT, an HTTP client whose shared system-trust context is used; CONTEXT is then NULL). A server context with a
+   host is a bug in the program, reported first. The checks of the arguments leave the socket as it was; after them the
+   plain socket is the request's (its resource is gone, so the program sees it closed), and the handshake runs on a new
+   TLS socket under the timeout, which closes it. */
 static agc_value upgrade_socket(agc_vm *vm, agc_socket *sk, agc_tls_context *context, agc_http_client *client,
                                 const agc_string *host, int64_t timeout, uint32_t span) {
   bool server = context && context->server;

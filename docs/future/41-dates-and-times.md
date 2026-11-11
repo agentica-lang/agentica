@@ -27,7 +27,7 @@ hundred interpreted steps counted against `--max-steps`.
 ### 41.2 Types
 
 Four builtin value types, declared like the builtin records `FileInfo` and
-`HttpServerOptions`:
+`HttpWire.ServerOptions`:
 
 ```text
 Date(year: Int, month: Int, day: Int)
@@ -70,9 +70,10 @@ with it. The same holds today for `Toml.Value.Int` and `Toml.Value.Bool`, and
 it keeps `Toml.Value.DateTime` valid when §41 lands. The checker must not start
 reserving variant names: a variant named `Date` or `DateTime` checks ok.
 
-Construction. Builtin records can be constructed today: `Header(name: "a",
-value: "b")` checks. For dates that is wrong: `Date(year: 2026, month: 13, day:
-1)` would check and then break every function that reads it. The types part adds
+Construction. Builtin records can be constructed today:
+`HTTP.Header(name: "a", value: "b")` checks. For dates that is wrong:
+`Date(year: 2026, month: 13, day: 1)` would check and then break every function
+that reads it. The types part adds
 a checker rule: constructing `Date`, `TimeOfDay`, `NaiveDateTime` or `DateTime`
 is `CHECK-NOT-CONSTRUCTIBLE` (a new code), with the help "use `Time.date`,
 `Time.time_of_day`, `Time.naive` or `Time.datetime`". Reading fields stays

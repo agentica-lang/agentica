@@ -156,17 +156,17 @@ HTTPS_GOODBYE_PROGRAM = """\
 import HTTP from "std/http"
 
 struct Call
-  pool: HttpClient
+  pool: HTTP.Client
   url: String
 end
 
-def hang(call: Call) -> Result[HttpResponse]
+def hang(call: Call) -> Result[HTTP.Response]
   return HTTP.get(call.pool, call.url)
 end
 
 def main() -> Void
   base = "https://localhost:#{Result.unwrap!(IO.gets())}"
-  options = HttpClientOptions(timeout_ms: 20000, idle_timeout_ms: 20000, max_connections: 4, max_body_bytes: 1024, tls: some(TLS.client_context(TlsClientOptions(ca_file: "#{System.args()[0]}/ca.pem")).unwrap!))
+  options = HTTP.ClientOptions(timeout_ms: 20000, idle_timeout_ms: 20000, max_connections: 4, max_body_bytes: 1024, tls: some(TLS.client_context(TlsClientOptions(ca_file: "#{System.args()[0]}/ca.pem")).unwrap!))
   pool = Result.unwrap!(HTTP.client(options))
   puts(String.from_bytes(Result.unwrap!(HTTP.get(pool, "#{base}/a")).body).unwrap!)
   Task.spawn(&hang, Call(pool: pool, url: "#{base}/hang"))
@@ -178,15 +178,15 @@ SHARED_CONTEXT_PROGRAM = """\
 import HTTP from "std/http"
 
 struct Call
-  pool: HttpClient
+  pool: HTTP.Client
   url: String
 end
 
-def get(call: Call) -> Result[HttpResponse]
+def get(call: Call) -> Result[HTTP.Response]
   return HTTP.get(call.pool, call.url)
 end
 
-def show(r: Result[HttpResponse]) -> String
+def show(r: Result[HTTP.Response]) -> String
   case r
     ok(response) -> return String.from_bytes(response.body).unwrap!
     error(message) -> return message
@@ -197,13 +197,13 @@ def main() -> Void
   base = "https://localhost:#{Result.unwrap!(IO.gets())}"
   ca = System.args()[1]
   tls = Result.unwrap!(TLS.client_context(TlsClientOptions(ca_file: ca)))
-  options = HttpClientOptions(tls: some(tls), timeout_ms: 20000)
+  options = HTTP.ClientOptions(tls: some(tls), timeout_ms: 20000)
   pool = Result.unwrap!(HTTP.client(options))
   puts(show(HTTP.get(pool, base + "/first")))
   # The context read its CA file when it was built: spoiling the file changes nothing for it, three connections at
   # once here and a second client that shares it. A new context reads the file again and fails.
   Result.unwrap!(File.write_text(ca, "not a certificate", 5000))
-  calls: List[Task[Result[HttpResponse]]] = []
+  calls: List[Task[Result[HTTP.Response]]] = []
   for _ in 0...3
     calls = calls.push(Task.spawn(&get, Call(pool: pool, url: base + "/again")))
   end
@@ -216,7 +216,7 @@ def main() -> Void
   puts(String.starts_with?(TLS.client_context(TlsClientOptions(ca_file: ca)).message, "network: cannot load ca_file"))
   # A client with no context builds one with the system trust (SSL_CERT_FILE here) for its first https connection
   # and shares it with the next.
-  plain = Result.unwrap!(HTTP.client(HttpClientOptions(timeout_ms: 20000)))
+  plain = Result.unwrap!(HTTP.client(HTTP.ClientOptions(timeout_ms: 20000)))
   puts(show(HTTP.get(plain, base + "/system")))
   puts(show(HTTP.get(plain, base + "/system")))
   HTTP.close_client(pool)
@@ -229,15 +229,15 @@ WAITERS_PROGRAM = """\
 import HTTP from "std/http"
 
 struct Call
-  pool: HttpClient
+  pool: HTTP.Client
   url: String
 end
 
-def get(call: Call) -> Result[HttpResponse]
+def get(call: Call) -> Result[HTTP.Response]
   return HTTP.get(call.pool, call.url)
 end
 
-def show(r: Result[HttpResponse]) -> String
+def show(r: Result[HTTP.Response]) -> String
   case r
     ok(response) -> return String.from_bytes(response.body).unwrap!
     error(message) -> return message
@@ -253,7 +253,7 @@ def main() -> Void
   # quarters of it after the first: before the first one's deadline they only have to join the waiters, after it the
   # test writes the FIFO and the build, the connects, the handshakes and the requests run, so that side gets the most.
   timeout = String.to_int!(System.args()[1])
-  pool = Result.unwrap!(HTTP.client(HttpClientOptions(timeout_ms: timeout)))
+  pool = Result.unwrap!(HTTP.client(HTTP.ClientOptions(timeout_ms: timeout)))
   first = Task.spawn(&get, Call(pool: pool, url: base + "/first"))
   Task.sleep(timeout / 4 * 3)
   calls = [Task.spawn(&get, Call(pool: pool, url: base + "/a")), Task.spawn(&get, Call(pool: pool, url: base + "/b"))]
@@ -269,17 +269,17 @@ CLOSE_IN_HANDSHAKE_PROGRAM = """\
 import HTTP from "std/http"
 
 struct Call
-  pool: HttpClient
+  pool: HTTP.Client
   url: String
 end
 
-def get(call: Call) -> Result[HttpResponse]
+def get(call: Call) -> Result[HTTP.Response]
   return HTTP.get(call.pool, call.url)
 end
 
 def main() -> Void
   listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
-  options = HttpClientOptions(tls: some(TLS.client_context(TlsClientOptions(ca_file: "#{System.args()[0]}/ca.pem")).unwrap!), timeout_ms: 5000)
+  options = HTTP.ClientOptions(tls: some(TLS.client_context(TlsClientOptions(ca_file: "#{System.args()[0]}/ca.pem")).unwrap!), timeout_ms: 5000)
   pool = Result.unwrap!(HTTP.client(options))
   call = Task.spawn(&get, Call(pool: pool, url: "https://127.0.0.1:#{TCP.local_port(listener)}/"))
   # The server never answers the ClientHello: the client's connection is in its handshake when the client closes.
@@ -892,7 +892,7 @@ def test_a_dropped_context_stays_valid_for_its_listener_and_sockets(tmp_path):
 @pytest.mark.parametrize("name, call, file, covers", [
     ("a server context to TLS.connect", 'TLS.connect("localhost", 1, server, 1000)', "main.agc", "server"),
     ("a client context to TLS.listen", 'TLS.listen("127.0.0.1", 0, client)', "main.agc", "client"),
-    ("a server context in HttpClientOptions.tls", "HTTP.client(HttpClientOptions(tls: some(server)))", "std/http.agc",
+    ("a server context in HTTP.ClientOptions.tls", "HTTP.client(HTTP.ClientOptions(tls: some(server)))", "std/http.agc",
      None),
     ("a server context with a host to TLS.upgrade",
      'TLS.upgrade(TCP.connect("127.0.0.1", TCP.local_port(TCP.listen("127.0.0.1", 0).unwrap!), 1000).unwrap!, '
@@ -921,10 +921,10 @@ def test_a_context_of_the_wrong_role_is_runtime_tls_context_role_at_its_argument
 # std/http speaks only HTTP/1.1, so a context whose alpn could agree on another protocol halts each of its paths at
 # the argument that carries the context, in std/http; ["http/1.1"] is taken.
 @pytest.mark.parametrize("name, call, covers", [
-    ("HTTP.client", 'HTTP.client(HttpClientOptions(tls: some(client(["h2", "http/1.1"]))))', "options"),
-    ("HTTP.start", 'HTTP.start("https://localhost:1", HttpClientOptions(tls: some(client(["h2"]))))', "context"),
+    ("HTTP.client", 'HTTP.client(HTTP.ClientOptions(tls: some(client(["h2", "http/1.1"]))))', "options"),
+    ("HTTP.start", 'HTTP.start("https://localhost:1", HTTP.ClientOptions(tls: some(client(["h2"]))))', "context"),
     ("HTTP.serve_tls", 'HTTP.serve_tls("127.0.0.1", 0, server(["h2"]), HTTP.app(&answer))', "listener"),
-    ("HTTP.client on http/1.1", 'HTTP.client(HttpClientOptions(tls: some(client(["http/1.1"])))).ok?', None),
+    ("HTTP.client on http/1.1", 'HTTP.client(HTTP.ClientOptions(tls: some(client(["http/1.1"])))).ok?', None),
 ])
 def test_an_alpn_other_than_http_1_1_is_runtime_tls_context_alpn_in_std_http(tmp_path, name, call, covers):
     program = tmp_path / "main.agc"
@@ -936,8 +936,8 @@ def test_an_alpn_other_than_http_1_1_is_runtime_tls_context_alpn_in_std_http(tmp
         "  dir = System.args()[0]\n"
         '  options = TlsServerOptions(cert_file: "#{dir}/server.pem", key_file: "#{dir}/server-key.pem", alpn: alpn)\n'
         "  return TLS.server_context(options).unwrap!\nend\n\n"
-        "def answer(request: HttpRequest) -> Result[HttpResponse]\n"
-        "  return ok(HttpResponse(status: 200, headers: [], body: request.path.bytes))\nend\n\n"
+        "def answer(request: HTTP.Request) -> Result[HTTP.Response]\n"
+        "  return ok(HTTP.Response(status: 200, headers: [], body: request.path.bytes))\nend\n\n"
         f"def main() -> Void\n  IO.inspect({call})\nend\n", encoding="utf-8")
     result = run(cli() + ["--json", "main.agc", CERTS], cwd=tmp_path, env=vm_environment())
     if covers is None:

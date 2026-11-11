@@ -801,7 +801,7 @@ bool agc_task_end_turn(agc_vm *vm, agc_task *t, agc_turn_result r, bool ran) {
 
 /* The wait of a scheduler whose run queue is empty. With no timer it is agc_io_poll(vm, true), and a loop with nothing
    alive means a stall. With a timer the loop runs once until the nearest deadline at most, alive or not, unless every
-   armed timer is weak (`weak_timers`, an HttpClient's tasks): those only end idle waits that no other task depends on,
+   armed timer is weak (`weak_timers`, an HTTP client's tasks): those only end idle waits that no other task depends on,
    so the run still stalls when the loop has nothing alive. A pending channel wait starts its clock first, so it bounds
    the wait. */
 static bool idle_wait(agc_vm *vm) {
@@ -1288,7 +1288,7 @@ agc_task *agc_task_spawn_owning(agc_vm *vm, agc_task *parent, agc_value fn, agc_
   return child;
 }
 
-/* Runs fn(arg) as the owner of handle under a service root, the task tree of an HttpClient (HttpWire.service). The
+/* Runs fn(arg) as the owner of handle under a service root, the task tree of an HttpWire.Client (HttpWire.service). The
    seed comes from the task's id, not from the caller's stream, so making a client does not change the caller's
    Random values. */
 agc_task *agc_task_service(agc_vm *vm, agc_value fn, agc_value handle, agc_value arg, uint32_t span) {

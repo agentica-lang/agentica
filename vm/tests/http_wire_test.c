@@ -165,7 +165,7 @@ int main(void) {
   agc_struct_def structs[] = {
       {agc_make_string("HttpWire.Chunk", 14, 14), 13, false, agc_test_field_names(chunk_fields, 13), NULL, NULL},
       {agc_make_string("HttpWire.Head", 13, 13), 10, false, agc_test_field_names(head_fields, 10), NULL, NULL},
-      {agc_make_string("Header", 6, 6), 2, false, agc_test_field_names(header_fields, 2), NULL, NULL}};
+      {agc_make_string("HttpWire.Header", 15, 15), 2, false, agc_test_field_names(header_fields, 2), NULL, NULL}};
   agc_program program;
   memset(&program, 0, sizeof program);
   program.struct_count = 3;

@@ -94,8 +94,9 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   without one; any other charset is an error). The server never
   answers 400 for the content of a body, only for its framing.
   `Content-Encoding` stays raw.
-- **The app returns its answer**, `Fn[HttpRequest, RequestBody, Result[Answer]]`
-  (a `Handler`, `Fn[HttpRequest, Result[HttpResponse]]`, under `HTTP.app`).
+- **The app returns its answer**,
+  `Fn[HttpWire.Request, RequestBody, Result[Answer]]` (a `Handler`,
+  `Fn[HttpWire.Request, Result[HttpWire.Response]]`, under `HTTP.app`).
   An `error` becomes a 500 (10.7.3). The returned `Result` is used, so
   `CHECK-UNUSED-RESULT` applies.
 - **Response framing** is always `Content-Length`, never chunked, never
@@ -112,10 +113,10 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   refuses user `Host`, `Content-Length`, `Transfer-Encoding` and `Connection`
   headers, and CR, LF and control bytes. It writes a large body while it reads
   the response, so an early 413 cannot deadlock the call.
-- **Pool.** `HttpClient` keeps idle keep-alive connections per scheme, host and
-  port, at most `max_connections` per origin. A connection is leased for one
-  call, and goes back to the pool only when the response was complete and
-  neither side asked to close.
+- **Pool.** `HttpWire.Client` keeps idle keep-alive connections per scheme,
+  host and port, at most `max_connections` per origin. A connection is leased
+  for one call, and goes back to the pool only when the response was complete
+  and neither side asked to close.
 - **Server.** One task per connection, and requests on one connection run one at
   a time. `Upgrade` and `CONNECT` get 501 (a WebSocket handshake is the one
   `Upgrade` that reaches the app, 10.7.2). At most `max_connections` connections
@@ -126,9 +127,10 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   HTTP. The linker gives `CHECK-UNKNOWN-NAME` for a qualified `HttpWire.f` in
   any module not embedded from `stdlib/`, and `help` leaves it out. The loader
   does not guard it: a crafted `.agcb` gets nothing `TCP` and `TLS` do not give
-  (the trust model of §1). `HttpWire` is a reserved name.
-- **TLS** takes a `TlsContext` (10.3): `HttpClientOptions.tls` a client one
-  (`none`: system trust), and `serve_tls` a server one.
+  (the trust model of §1). `HttpWire` is not a reserved name, but an
+  `enum HttpWire` is `CHECK-REDEFINED-NAME`.
+- **TLS** takes a `TlsContext` (10.3): `HttpWire.ClientOptions.tls` a client
+  one (`none`: system trust), and `serve_tls` a server one.
 
 #### 10.7.1 The client
 
@@ -139,8 +141,8 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
   crash, cancel or end reaches it, `Task.pending_count` leaves its tasks out,
   `Test.test` does not see them as leftovers, and their timers do not keep a
   stalled run waiting (the stall checks count only the other timers). The owner
-  owns `jobs`, so its end closes the channel. The `HttpClient` value holds the
-  channel and the options; it prints `<HttpClient>`.
+  owns `jobs`, so its end closes the channel. The `HttpWire.Client` value holds
+  the channel and the options; it prints `<HttpWire.Client>`.
 - `HTTP.request` parses the URL and builds the head with `encode_request`
   (`vm/http_wire.c`), which adds `Host` (the port only when it is not the
   scheme's default; an IPv6 host in brackets) and `Content-Length`, and refuses
@@ -219,7 +221,7 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
 - A connection is kept only after a complete exchange with no
   `Connection: close` on either side, a framed body, the whole request written
   and nothing after the response: `buffered` must be 0 and `ended` false on
-  `HttpWire.Response` (after a head with no body), and after a body on
+  `HttpWire.ResponseHead` (after a head with no body), and after a body on
   `HttpWire.idle?`, which does not wait for input. Bytes there are a server bug
   or a response nobody asked for, and the next call must not read them; an
   input that has already ended (`ended`: the end of input, a TCP FIN under TLS,

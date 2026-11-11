@@ -173,10 +173,10 @@ size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
   if (agc_is(v, AGC_T_PROCESS)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Process>");
   if (agc_is(v, AGC_T_SOCKET)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Socket>");
   if (agc_is(v, AGC_T_LISTENER)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Listener>");
-  if (agc_is(v, AGC_T_HTTP_CLIENT)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<HttpClient>");
+  if (agc_is(v, AGC_T_HTTP_CLIENT)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<HttpWire.Client>");
   if (agc_is(v, AGC_T_TLS_CONTEXT)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<TlsContext>");
   if (agc_is(v, AGC_T_TEST)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<TestCase>");
-  if (agc_is(v, AGC_T_HTTP_SERVER)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<HttpServer>");
+  if (agc_is(v, AGC_T_HTTP_SERVER)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<HttpWire.Server>");
   if (agc_is(v, AGC_T_CHANNEL)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Channel>");
   if (agc_is(v, AGC_T_LAZY)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Lazy>");
   if (agc_is(v, AGC_T_ATS)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<ATS>");

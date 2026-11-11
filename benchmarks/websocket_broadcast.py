@@ -60,7 +60,7 @@ def prepared(ws: HTTP.WebSocket) -> Result[Void]
   return wait_go(ws)
 end
 
-def app(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+def app(request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   options = HTTP.WebSocketOptions(outgoing_queue: 256, idle_ms: 600000)
   if request.path == "/prepared"
     return ok(HTTP.Answer.Upgrade(try HTTP.accept_websocket(request, &prepared, options)))
@@ -76,7 +76,7 @@ def main() -> Void
   end
 
   subscribers = System.args()[0].to_i!
-  options = HttpServerOptions(max_connections: subscribers + 16, idle_timeout_ms: 600000, request_timeout_ms: 600000)
+  options = HTTP.ServerOptions(max_connections: subscribers + 16, idle_timeout_ms: 600000, request_timeout_ms: 600000)
   server = HTTP.serve("127.0.0.1", 0, &app, options).unwrap!
   puts(HTTP.local_port(server))
   IO.flush()

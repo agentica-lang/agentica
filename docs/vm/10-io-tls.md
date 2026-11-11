@@ -26,14 +26,15 @@ reads no `openssl.cnf`, so both builds behave the same.
   scheduler thread. So a bad file fails the context build, never a connect or
   a listen. Both roles load the chain and key the same way (`use_identity` in
   `vm/tls_openssl.c`). A context of the wrong role (a server context for
-  `TLS.connect` or `HttpClientOptions.tls`, a client one for `TLS.listen`) is a
-  program bug: `RUNTIME-TLS-CONTEXT-ROLE` at the context argument.
+  `TLS.connect` or `HttpWire.ClientOptions.tls`, a client one for
+  `TLS.listen`) is a program bug: `RUNTIME-TLS-CONTEXT-ROLE` at the context
+  argument.
 - **Setup.** `TLS.connect` checks the timeout, port and host as `TCP.connect`
   does, and `TLS.listen` as `TCP.listen` does; neither reads a file. The
-  connect timeout covers the lookup, connect and handshake. An `HttpClient`
-  without a context (`HttpWire.connect_tls`) builds one system-trust context
-  lazily, in a pool job, the first time it connects, and its connections share
-  it.
+  connect timeout covers the lookup, connect and handshake. An
+  `HttpWire.Client` without a context (`HttpWire.connect_tls`) builds one
+  system-trust context lazily, in a pool job, the first time it connects, and
+  its connections share it.
 - **Upgrade.** `TLS.upgrade` (STARTTLS) makes a new TLS socket, whose role is
   the context's; a server context with a host is `RUNTIME-TLS-CONTEXT-ROLE` at
   the host. After the argument checks, the plain socket's resource lets its
@@ -143,7 +144,7 @@ reads no `openssl.cnf`, so both builds behave the same.
 - **Close.** `TCP.close` and a timeout send `close_notify` with one
   `uv_try_write` when the handshake finished and no write is pending, then close
   as TCP does. At the end of the run the same single write goes to each finished
-  TLS socket (§10.2.2), and `HttpClient` connections get it too (10.7.1).
+  TLS socket (§10.2.2), and `HttpWire.Client` connections get it too (10.7.1).
 - **Messages.** Only the `Result` error kind is fixed. A verify failure's detail
   reads `certificate verify failed: <X.509 text>` (the tests match it); other
   details are OpenSSL's text.

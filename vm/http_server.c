@@ -1,5 +1,5 @@
 /*
- * The HttpServer task group builtins, called only by
+ * The HttpWire.Server task group builtins, called only by
  * stdlib/http.agc: server, accept, spawn, close_server, wait and local_port.
  * std/http reads the requests and writes the responses itself. Service layer.
  * Design: docs/vm/10-io-http.md §10.7.2.

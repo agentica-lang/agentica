@@ -7,17 +7,17 @@ struct Stats
   max: Int
 end
 
-def json_response(status: Int, body: String) -> HttpResponse
-  return HttpResponse(status: status, headers: [Header(name: "Content-Type", value: "application/json")], body: body.bytes)
+def json_response(status: Int, body: String) -> HTTP.Response
+  return HTTP.Response(status: status, headers: [HTTP.Header(name: "Content-Type", value: "application/json")], body: body.bytes)
 end
 
-def failure(status: Int, message: String) -> HttpResponse
+def failure(status: Int, message: String) -> HTTP.Response
   return json_response(status, JSON.encode({"error": message}))
 end
 
-def not_allowed(allow: String) -> HttpResponse
-  headers = [Header(name: "Content-Type", value: "application/json"), Header(name: "Allow", value: allow)]
-  return HttpResponse(status: 405, headers: headers, body: JSON.encode({"error": "method not allowed"}).bytes)
+def not_allowed(allow: String) -> HTTP.Response
+  headers = [HTTP.Header(name: "Content-Type", value: "application/json"), HTTP.Header(name: "Allow", value: allow)]
+  return HTTP.Response(status: 405, headers: headers, body: JSON.encode({"error": "method not allowed"}).bytes)
 end
 
 def integers(root: Json) -> Result[List[Int]]
@@ -33,7 +33,7 @@ def integers(root: Json) -> Result[List[Int]]
   return ok(numbers)
 end
 
-def stats_response(body: String) -> HttpResponse
+def stats_response(body: String) -> HTTP.Response
   root = JSON.parse(body)
   if !root.ok?
     return failure(400, "invalid json")
@@ -86,7 +86,7 @@ def greeting_for(name: String) -> String
   return JSON.encode({"greeting": "hello, #{name}"})
 end
 
-def handle(request: HttpRequest) -> Result[HttpResponse]
+def handle(request: HTTP.Request) -> Result[HTTP.Response]
   path = request.path
   if path == "/health"
     if request.method != "GET"

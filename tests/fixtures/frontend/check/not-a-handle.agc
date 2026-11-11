@@ -30,12 +30,6 @@ end
 def accept_one(l: Listener) -> Void
 end
 
-def host(s: HttpServer) -> Void
-end
-
-def pool(client: HttpClient) -> Void
-end
-
 def job(j: Job) -> Void
 end
 

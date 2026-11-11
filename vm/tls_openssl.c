@@ -29,7 +29,7 @@
 #define HTTP1_WIRE "\x08http/1.1"
 
 /* A config is shared by counts (agc_tls_config_ref): a TlsContext value, each socket or listener made from it and an
-   HttpClient's lazy context each hold one, on any thread; the last agc_tls_config_free frees it. An SSL takes its own
+   HTTP client's lazy context each hold one, on any thread; the last agc_tls_config_free frees it. An SSL takes its own
    count on the SSL_CTX (SSL_new). */
 struct agc_tls_config {
   _Atomic size_t refs;

@@ -3,9 +3,21 @@
 ## Import it with `import HTTP from "std/http"`. Every call is whole: it returns after the whole response arrived, and
 ## every body is `Bytes`, as it came over the wire; `text` decodes one as UTF-8. Status codes such as 404 or 500 are
 ## normal responses. A bad URL, a refused connection, a timeout or a body over the limit is an `error` result.
+##
+## `HTTP.Request`, `HTTP.Response`, `HTTP.Header`, `HTTP.ClientOptions`, `HTTP.ServerOptions`, `HTTP.Client` and
+## `HTTP.Server` are the builtin types `HttpWire.Request`, `HttpWire.Response`, and so on: the signatures below, a
+## printed value and a diagnostic show those names.
 
 import WebSocketWire from "std/internal/websocket"
 import URI from "std/uri"
+
+export HttpWire.Request
+export HttpWire.Response
+export HttpWire.Header
+export HttpWire.ClientOptions
+export HttpWire.ServerOptions
+export HttpWire.Client
+export HttpWire.Server
 
 READ_BYTES = 65536
 # Chunked framing is read in small pieces, so the decoder sees the bytes of a chunk's framing and no more.
@@ -125,9 +137,9 @@ struct Proxy
 end
 
 struct Service
-  server: HttpServer
+  server: HttpWire.Server
   app: App
-  options: HttpServerOptions
+  options: HttpWire.ServerOptions
   ended: Task[Result[Void]]
 end
 
@@ -154,7 +166,7 @@ struct Watch
 end
 
 struct Incoming
-  request: HttpRequest
+  request: HttpWire.Request
   rest: Bytes
 end
 
@@ -231,12 +243,12 @@ end
 
 # busy holds the reply channel of each worker's last job, not the job, so a large body is not kept alive.
 struct Pool
-  client: HttpClient
-  options: HttpClientOptions
+  client: HttpWire.Client
+  options: HttpWire.ClientOptions
   jobs: Channel[HttpWire.Job]
   origins: Map[String, Origin]
   inboxes: Map[Int, Channel[HttpWire.Job]]
-  busy: Map[Int, Channel[Result[HttpResponse]]]
+  busy: Map[Int, Channel[Result[HttpWire.Response]]]
   next_id: Int
 end
 
@@ -245,8 +257,8 @@ end
 struct Worker
   id: Int
   # The client, for the TLS context its https connections share (HttpWire.connect_tls).
-  client: HttpClient
-  options: HttpClientOptions
+  client: HttpWire.Client
+  options: HttpWire.ClientOptions
   jobs: Channel[HttpWire.Job]
   inbox: Channel[HttpWire.Job]
   # The first job without its head and body, with this worker's id: the message that says the worker is gone.
@@ -260,12 +272,12 @@ end
 
 struct Done
   socket: Result[Socket]
-  answer: Result[HttpResponse]
+  answer: Result[HttpWire.Response]
   kept: Bool
 end
 
 struct Attempt
-  answer: Result[HttpResponse]
+  answer: Result[HttpWire.Response]
   kept: Bool
   retry: Bool
 end
@@ -278,7 +290,7 @@ end
 
 # A response read, or why not; started is true once any byte of it came, which rules out a retry.
 struct Received
-  response: Result[HttpResponse]
+  response: Result[HttpWire.Response]
   kept: Bool
   started: Bool
 end
@@ -298,7 +310,7 @@ export struct Download
   ## The response status, however high: 404 and 500 are normal responses, as with `get`.
   status: Int
   ## The response headers.
-  headers: List[Header]
+  headers: List[HttpWire.Header]
   ## How many body bytes went to the file.
   bytes_written: Int
 end
@@ -316,7 +328,7 @@ export struct Connection
   port: Int
   ## The options it was opened with: `timeout_ms` is the time of each call, and `max_body_bytes` the largest request
   ## body. A `proxy` has no user info here, so printing a connection shows no password.
-  options: HttpClientOptions
+  options: HttpWire.ClientOptions
   ## The `Proxy-Authorization` value of the proxy's user info ("" with none), alone in a channel that holds one value:
   ## a channel prints as `<Channel>`, where a field would print the login.
   login: Channel[String]
@@ -331,7 +343,7 @@ export struct ResponseHead
   ## The status, however high: 404 and 500 are normal responses. An interim `1xx` head is read past.
   status: Int
   ## The response headers.
-  headers: List[Header]
+  headers: List[HttpWire.Header]
 end
 
 ## A response whose body arrives on a channel, from `open`: the `status` and `headers` of the head, the `body` channel
@@ -344,7 +356,7 @@ end
 ## belongs to the task and is never reused.
 export struct Stream
   status: Int
-  headers: List[Header]
+  headers: List[HttpWire.Header]
   body: Channel[Bytes]
   done: Task[Result[Void]]
 end
@@ -357,7 +369,7 @@ export struct StreamResponse
   ## The status, 200 to 599, and not 204 or 304 unless the body is already closed and empty.
   status: Int
   ## The response headers. The server adds `Transfer-Encoding: chunked` or `Content-Length`: the handler sets neither.
-  headers: List[Header]
+  headers: List[HttpWire.Header]
   ## The pieces of the body, as `Bytes` of any content (an empty one is skipped).
   body: Channel[Bytes]
   ## The size of the whole body in bytes, when the handler knows it (a file). The head then says `Content-Length` and
@@ -371,7 +383,7 @@ end
 
 ## A route that takes the request whole: the request in, the whole response out. `app` makes an `App` from it. A
 ## middleware is a function from a `Handler` to a `Handler`.
-export type Handler = Fn[HttpRequest, Result[HttpResponse]]
+export type Handler = Fn[HttpWire.Request, Result[HttpWire.Response]]
 
 ## The body of a request as it arrives, on a channel, for an `App`: the `pieces` channel (`Bytes` of any content, up
 ## to 64 KiB each, never empty, a chunked body already decoded) and the `done` task that feeds it. The task closes the
@@ -436,7 +448,7 @@ end
 ## What `accept_websocket` decides for a request, for an `Answer.Upgrade`: `Reply` answers it as a whole response (and
 ## the connection serves the next request), `Accept` upgrades it. Make an `Accept` with `accept_websocket`.
 export enum Upgrade
-  Reply(HttpResponse)
+  Reply(HttpWire.Response)
   Accept(WebSocketSession, WebSocketOptions, String, String)
 end
 
@@ -444,7 +456,7 @@ end
 ## whose body arrives on a channel. `Upgrade` is what `accept_websocket` makes: its
 ## `Accept` runs a WebSocket on the connection, and its `Reply` (a request that is no handshake) is sent as `Whole`.
 export enum Answer
-  Whole(HttpResponse)
+  Whole(HttpWire.Response)
   Stream(StreamResponse)
   Upgrade(Upgrade)
 end
@@ -452,7 +464,7 @@ end
 ## The function that `serve` and `serve_tls` call for each request: the request with an empty `body`, the
 ## `RequestBody` that carries the body as it arrives, and the `Answer` out. A route that wants the body whole calls
 ## `read_all`; `app` makes an `App` from a `Handler`. A middleware is a function from an `App` to an `App`.
-export type App = Fn[HttpRequest, RequestBody, Result[Answer]]
+export type App = Fn[HttpWire.Request, RequestBody, Result[Answer]]
 
 # Where a connection is: `phase` is IDLE, READING, SPENT or OVER. While READING, `framing` says how the body ends,
 # `left` is what a body with a length still owes (for a body that runs to the end of input, what it has given),
@@ -484,7 +496,7 @@ struct Feed
 end
 
 ## Creates a client that keeps connections open and reuses them. `options` is optional and defaults to
-## `HttpClientOptions()`: 30 s timeouts, up to 4 connections, 1 MiB bodies, the system CA certificates and no proxy
+## `HTTP.ClientOptions()`: 30 s timeouts, up to 4 connections, 1 MiB bodies, the system CA certificates and no proxy
 ## (set `tls: some(context)` to use a client context of `TLS.client_context` instead of the system certificates).
 ## Every number in `options` must be positive, `max_connections` at most 65536 and `max_body_bytes` at most 64 MiB, or
 ## the result is an error. With a `proxy` (`http://host:port`, an origin with no path) every `http://` request goes
@@ -494,7 +506,7 @@ end
 ## error that names the proxy). A `proxy` that is not an `http://` origin is an error here. The user info of the
 ## `proxy` (`http://user:password@host:8080`, percent-decoded) is sent to the proxy as `Proxy-Authorization: Basic`,
 ## and a `407` from it is an error that names the proxy and not the credentials. Close the client with `close_client`.
-export def client(options: HttpClientOptions = HttpClientOptions()) -> Result[HttpClient]
+export def client(options: HttpWire.ClientOptions = HttpWire.ClientOptions()) -> Result[HttpWire.Client]
   try check_options(
     options.timeout_ms,
     options.idle_timeout_ms,
@@ -508,7 +520,7 @@ export def client(options: HttpClientOptions = HttpClientOptions()) -> Result[Ht
   ok(HttpWire.service(jobs, options) do |own| supervise_pool(own) end)
 end
 
-## The proxy that the environment names for `url`, to pass as `HttpClientOptions(proxy: ...)`, or `""` when there is
+## The proxy that the environment names for `url`, to pass as `HTTP.ClientOptions(proxy: ...)`, or `""` when there is
 ## none. It is the only call that reads the environment: a client never does, so nothing changes until a program asks.
 ## It follows curl. An `http://` URL reads `http_proxy` and an `https://` URL `https_proxy`; the lower-case name wins
 ## over `HTTP_PROXY` or `HTTPS_PROXY`, even when it is set and empty (which means no proxy). `HTTP_PROXY` is ignored
@@ -537,36 +549,44 @@ end
 
 ## Closes the client and its connections. A call still in flight fails with `http: client is closed`; its request
 ## is not sent, unless a connection had already started sending it.
-export def close_client(pool: HttpClient) -> Void
+export def close_client(pool: HttpWire.Client) -> Void
   Channel.close(HttpWire.jobs(pool))
 end
 
 ## Sends a `GET` request to `url` and returns the response, whose `body` is `Bytes`.
-export def get(pool: HttpClient, url: String) -> Result[HttpResponse] = request(pool, "GET", url, NO_BYTES)
+export def get(pool: HttpWire.Client, url: String) -> Result[HttpWire.Response] = request(pool, "GET", url, NO_BYTES)
 
 ## Sends a `POST` request to `url` with the `Bytes` `body` and `headers`, which default to none, as Ruby's
 ## `Net::HTTP.post(uri, data, header)` does. Send text as `"...".bytes`.
-export def post(pool: HttpClient, url: String, body: Bytes, headers: List[Header] = []) -> Result[HttpResponse]
+export def post(
+  pool: HttpWire.Client,
+  url: String,
+  body: Bytes,
+  headers: List[HttpWire.Header] = [],
+) -> Result[HttpWire.Response]
   request(pool, "POST", url, body, headers)
 end
 
 ## Sends a `GET` request to `url` on a client of its own and returns the response, like Ruby's
 ## `Net::HTTP.get_response(uri)`. It is the call for one request: it makes a client with `options` (default
-## `HttpClientOptions()`), makes the call and closes the client, and with it the connection, before it returns. Many
+## `HTTP.ClientOptions()`), makes the call and closes the client, and with it the connection, before it returns. Many
 ## requests to the same hosts belong on one `HTTP.client()` with `get`, which reuses connections.
-export def get_response(url: String, options: HttpClientOptions = HttpClientOptions()) -> Result[HttpResponse]
+export def get_response(
+  url: String,
+  options: HttpWire.ClientOptions = HttpWire.ClientOptions(),
+) -> Result[HttpWire.Response]
   request_once("GET", url, NO_BYTES, [], options)
 end
 
 ## Sends a `POST` request on a client of its own, as `get_response` does for `GET`: the `Bytes` `body`, `headers`
-## (default none) and `options` (default `HttpClientOptions()`), then the client is closed. Like Ruby's
+## (default none) and `options` (default `HTTP.ClientOptions()`), then the client is closed. Like Ruby's
 ## `Net::HTTP.post(uri, data, header)`, and the pooled `post` for many requests.
 export def post_response(
   url: String,
   body: Bytes,
-  headers: List[Header] = [],
-  options: HttpClientOptions = HttpClientOptions(),
-) -> Result[HttpResponse]
+  headers: List[HttpWire.Header] = [],
+  options: HttpWire.ClientOptions = HttpWire.ClientOptions(),
+) -> Result[HttpWire.Response]
   request_once("POST", url, body, headers, options)
 end
 
@@ -574,12 +594,12 @@ end
 ## The client adds `Host` and `Content-Length` itself, so `headers` may not set them, nor `Transfer-Encoding` or
 ## `Connection`. The `body` is `Bytes` of at most `max_body_bytes` (`"".bytes` sends none); `headers` default to none.
 export def request(
-  pool: HttpClient,
+  pool: HttpWire.Client,
   method: String,
   url: String,
   body: Bytes,
-  headers: List[Header] = [],
-) -> Result[HttpResponse]
+  headers: List[HttpWire.Header] = [],
+) -> Result[HttpWire.Response]
   where = try parse_url(url)
   options = HttpWire.options(pool)
   # The pool connects to `via` (the proxy, or the target's host) and keys its connections by it.
@@ -596,7 +616,7 @@ export def request(
   )
 
   deadline = Time.monotonic_ms() + options.timeout_ms
-  reply: Channel[Result[HttpResponse]] = Channel.new(1)
+  reply: Channel[Result[HttpWire.Response]] = Channel.new(1)
   job = HttpWire.Job(
     origin: "#{via.scheme}://#{via.host}:#{via.port}",
     scheme: via.scheme,
@@ -630,7 +650,7 @@ end
 ## redirect follow, and the connection is not pooled: it closes when the download ends. The pool gives the TLS
 ## context and its certificates for `https`, whose verification stays on.
 export def download(
-  pool: HttpClient,
+  pool: HttpWire.Client,
   url: String,
   path: String,
   options: DownloadOptions = DownloadOptions(),
@@ -679,7 +699,7 @@ end
 ## when the response had a body that was read to its end (`read_body` gave an empty piece) and the server did not
 ## close it. A response body is at most 256 MiB, the limit of `download`: a longer one is an `error`. Close it with
 ## `finish`. For whole requests use `get_response` or the pooled client instead.
-export def start(origin: String, options: HttpClientOptions = HttpClientOptions()) -> Result[Connection]
+export def start(origin: String, options: HttpWire.ClientOptions = HttpWire.ClientOptions()) -> Result[Connection]
   try check_options(
     options.timeout_ms,
     options.idle_timeout_ms,
@@ -706,7 +726,7 @@ export def send_request(
   method: String,
   target: String,
   body: Bytes,
-  headers: List[Header] = [],
+  headers: List[HttpWire.Header] = [],
 ) -> Result[ResponseHead]
   exchange = try take_exchange(conn)
   if exchange.phase == READING
@@ -783,8 +803,8 @@ export def open(
   method: String,
   url: String,
   body: Bytes,
-  headers: List[Header] = [],
-  options: HttpClientOptions = HttpClientOptions(),
+  headers: List[HttpWire.Header] = [],
+  options: HttpWire.ClientOptions = HttpWire.ClientOptions(),
 ) -> Result[Stream]
   try check_options(
     options.timeout_ms,
@@ -825,16 +845,16 @@ export def upload(
   url: String,
   body: Channel[Bytes],
   length: Int = -1,
-  headers: List[Header] = [],
-  options: HttpClientOptions = HttpClientOptions(),
-) -> Result[HttpResponse]
+  headers: List[HttpWire.Header] = [],
+  options: HttpWire.ClientOptions = HttpWire.ClientOptions(),
+) -> Result[HttpWire.Response]
   answer = upload_whole(method, url, body, length, headers, options)
   body.close
   answer
 end
 
 ## Returns every value of the header `name`, ignoring case, in order.
-export def header_values(headers: List[Header], name: String) -> List[String]
+export def header_values(headers: List[HttpWire.Header], name: String) -> List[String]
   wanted = String.downcase(name)
   found: List[String] = []
   for header in headers
@@ -851,7 +871,7 @@ end
 ## that is not valid in its charset is an `error` result, with the offset for a charset other than UTF-8, and any
 ## other charset is an `error` that names it: those (Shift_JIS, GB18030, KOI8-R) are for the `agentica-lang/charset`
 ## package.
-export def text(body: Bytes, headers: List[Header] = []) -> Result[String]
+export def text(body: Bytes, headers: List[HttpWire.Header] = []) -> Result[String]
   charset = charset_of(headers)
   if charset == "" or UTF8_CHARSETS.include?(charset.replace("_", "-"))
     case String.from_bytes(body)
@@ -903,7 +923,7 @@ end
 ## own should compare it with `header_values(request.headers, "origin")` before it accepts. It is an `error` when
 ## `options` is out of range.
 export def accept_websocket(
-  request: HttpRequest,
+  request: HttpWire.Request,
   session: WebSocketSession,
   options: WebSocketOptions = WebSocketOptions(),
 ) -> Result[Upgrade]
@@ -935,14 +955,14 @@ end
 ## that wants less counts the bytes or calls `read_all`. The connection serves the next request only when the body was
 ## read whole by the time `app` returned (a body that had all arrived counts, read or not); otherwise the answer says
 ## `Connection: close`, and an upgrade is refused. The server sets no limit on the time of `app`. `options` is optional
-## and defaults to `HttpServerOptions()`: 30 s `request_timeout_ms` and `idle_timeout_ms`, 128 connections and 1 MiB
+## and defaults to `HTTP.ServerOptions()`: 30 s `request_timeout_ms` and `idle_timeout_ms`, 128 connections and 1 MiB
 ## bodies.
 export def serve(
   host: String,
   port: Int,
   app: App,
-  options: HttpServerOptions = HttpServerOptions(),
-) -> Result[HttpServer]
+  options: HttpWire.ServerOptions = HttpWire.ServerOptions(),
+) -> Result[HttpWire.Server]
   try check_options(
     options.request_timeout_ms,
     options.idle_timeout_ms,
@@ -956,14 +976,14 @@ export def serve(
 end
 
 ## Like `serve`, but over TLS, with the certificate and key of `tls`, a server context. `options` is optional and
-## defaults to `HttpServerOptions()`.
+## defaults to `HTTP.ServerOptions()`.
 export def serve_tls(
   host: String,
   port: Int,
   tls: TlsContext,
   app: App,
-  options: HttpServerOptions = HttpServerOptions(),
-) -> Result[HttpServer]
+  options: HttpWire.ServerOptions = HttpWire.ServerOptions(),
+) -> Result[HttpWire.Server]
   try check_options(
     options.request_timeout_ms,
     options.idle_timeout_ms,
@@ -1014,13 +1034,13 @@ export def whole(data: Bytes) -> Channel[Bytes]
 end
 
 ## Returns the port the server listens on.
-export def local_port(server: HttpServer) -> Int = HttpWire.local_port(server)
+export def local_port(server: HttpWire.Server) -> Int = HttpWire.local_port(server)
 
 ## Returns `ok()` once the server and its tasks are done.
-export def wait(server: HttpServer) -> Result[Void] = HttpWire.wait(server)
+export def wait(server: HttpWire.Server) -> Result[Void] = HttpWire.wait(server)
 
 ## Stops accepting, closes every connection and cancels the running handlers. Calling it again does nothing.
-export def close_server(server: HttpServer) -> Void
+export def close_server(server: HttpWire.Server) -> Void
   HttpWire.close_server(server)
 end
 
@@ -1030,9 +1050,9 @@ def request_once(
   method: String,
   url: String,
   body: Bytes,
-  headers: List[Header],
-  options: HttpClientOptions,
-) -> Result[HttpResponse]
+  headers: List[HttpWire.Header],
+  options: HttpWire.ClientOptions,
+) -> Result[HttpWire.Response]
   pool = try client(options)
   response = request(pool, method, url, body, headers)
   close_client(pool)
@@ -1047,7 +1067,7 @@ end
 # What the request line says of the target: the path with its query, or, through a proxy, the whole URL (RFC 9112
 # 3.2.2, absolute-form), whose authority is the one the `Host` header has. An `https` request is inside a CONNECT
 # tunnel and is written as it is with no proxy.
-def request_target(options: HttpClientOptions, where: Target) -> String
+def request_target(options: HttpWire.ClientOptions, where: Target) -> String
   return where.target if options.proxy == "" or where.scheme == "https"
 
   "http://#{host_authority(where.host, where.port)}#{where.target}"
@@ -1074,14 +1094,14 @@ end
 # Where a request to `where` connects, as the pool names it: the host itself, or the proxy of the options for `http`.
 # An `https` request keeps the target's origin, so a pool keeps one tunnel per target (a client has one proxy): the
 # connection opens the tunnel itself (`connect_https`).
-def connect_target(where: Target, options: HttpClientOptions) -> Result[Target]
+def connect_target(where: Target, options: HttpWire.ClientOptions) -> Result[Target]
   return ok(where) if options.proxy == "" or where.scheme == "https"
 
   proxy_target(options)
 end
 
 # The proxy of the options: an `http://host:port` origin.
-def proxy_target(options: HttpClientOptions) -> Result[Target]
+def proxy_target(options: HttpWire.ClientOptions) -> Result[Target]
   proxy = try proxy_of(options)
   ok(proxy.target)
 end
@@ -1089,7 +1109,7 @@ end
 # The proxy of the options and its login. The user info is cut out of the URL before `parse_url` sees it, which refuses
 # it; the last `@` ends it, so a password may hold a raw one. Both parts are percent-decoded, and the URL is not
 # kept or quoted anywhere after this: an error names neither the user info nor the URL.
-def proxy_of(options: HttpClientOptions) -> Result[Proxy]
+def proxy_of(options: HttpWire.ClientOptions) -> Result[Proxy]
   url = options.proxy
   split = first_of(url, "://")
   return error(BAD_PROXY) if split == String.length(url)
@@ -1155,7 +1175,11 @@ end
 # The headers of a request that goes through the proxy of `options`: the ones given, and the login of the proxy's user
 # info unless the caller set `Proxy-Authorization` itself. Only the proxy gets it: the header is part of this request,
 # which a forward proxy reads and does not pass on. A connection keeps its login apart: see `connection_headers`.
-def with_login(options: HttpClientOptions, scheme: String, headers: List[Header]) -> List[Header]
+def with_login(
+  options: HttpWire.ClientOptions,
+  scheme: String,
+  headers: List[HttpWire.Header],
+) -> List[HttpWire.Header]
   # An `https` request is inside the tunnel, where the target reads it: the login went with the CONNECT only.
   return headers if options.proxy == "" or scheme == "https"
 
@@ -1167,7 +1191,7 @@ end
 
 # The headers of a request on `conn`, with the login its options no longer hold. Only the call that holds the
 # connection's exchange (or owns the connection) reads the login, so taking it and putting it back is safe.
-def connection_headers(conn: Connection, headers: List[Header]) -> List[Header]
+def connection_headers(conn: Connection, headers: List[HttpWire.Header]) -> List[HttpWire.Header]
   return headers if conn.scheme == "https"
 
   case conn.login.recv(0)
@@ -1178,10 +1202,10 @@ def connection_headers(conn: Connection, headers: List[Header]) -> List[Header]
   end
 end
 
-def add_login(login: String, headers: List[Header]) -> List[Header]
+def add_login(login: String, headers: List[HttpWire.Header]) -> List[HttpWire.Header]
   return headers if login == "" or not header_values(headers, "proxy-authorization").empty?
 
-  List.append(headers, Header(name: "Proxy-Authorization", value: login))
+  List.append(headers, HttpWire.Header(name: "Proxy-Authorization", value: login))
 end
 
 # Whether the request on `conn` carried a login.
@@ -1196,7 +1220,7 @@ end
 
 # The error of a `407` from the proxy of `options`: it names the proxy, never the credentials. `offered` says whether
 # the request carried a login.
-def proxy_denied(options: HttpClientOptions, offered: Bool) -> String
+def proxy_denied(options: HttpWire.ClientOptions, offered: Bool) -> String
   case proxy_of(options)
     ok(proxy) ->
       name = proxy_name(proxy.target)
@@ -1208,7 +1232,7 @@ def proxy_denied(options: HttpClientOptions, offered: Bool) -> String
 end
 
 # `proxy_denied` for the options of a client, whose user info is still in `proxy`.
-def client_denied(options: HttpClientOptions) -> String
+def client_denied(options: HttpWire.ClientOptions) -> String
   case proxy_of(options)
     ok(proxy) -> proxy_denied(options, proxy.login != "")
     error(message) -> message
@@ -1216,7 +1240,11 @@ def client_denied(options: HttpClientOptions) -> String
 end
 
 # The answer of a pooled request, or the proxy's error when the proxy answered `407`.
-def unless_denied(options: HttpClientOptions, scheme: String, answer: Result[HttpResponse]) -> Result[HttpResponse]
+def unless_denied(
+  options: HttpWire.ClientOptions,
+  scheme: String,
+  answer: Result[HttpWire.Response],
+) -> Result[HttpWire.Response]
   case answer
     ok(response) ->
       return error(client_denied(options)) if proxy_asked?(options, scheme, response.status)
@@ -1228,7 +1256,7 @@ end
 
 # True for a `407` answered by the proxy of `options` to an `http` request, which is an error for the call, not a
 # response. Inside a tunnel (`https`) a 407 is the target's own answer.
-def proxy_asked?(options: HttpClientOptions, scheme: String, status: Int) -> Bool
+def proxy_asked?(options: HttpWire.ClientOptions, scheme: String, status: Int) -> Bool
   status == 407 and options.proxy != "" and scheme == "http"
 end
 
@@ -1383,7 +1411,7 @@ def ipv4_number(text: String) -> Int
   total
 end
 
-def check_proxy(options: HttpClientOptions) -> Result[Void]
+def check_proxy(options: HttpWire.ClientOptions) -> Result[Void]
   return ok() if options.proxy == ""
 
   try proxy_target(options)
@@ -1392,7 +1420,7 @@ end
 
 # The connection to the host of `where`, idle and with no request yet. Its options keep the proxy without the user
 # info, which only the header of each request needs.
-def connect_to(where: Target, options: HttpClientOptions) -> Result[Connection]
+def connect_to(where: Target, options: HttpWire.ClientOptions) -> Result[Connection]
   via = try connect_target(where, options)
   socket = try open_socket(via, options)
   login: Channel[String] = Channel.new(1)
@@ -1422,7 +1450,7 @@ end
 
 # The socket of `start`: TLS with the context of `options.tls` for `https` (one with the system trust, built for this
 # connection, when it names none), TCP for `http`.
-def open_socket(where: Target, options: HttpClientOptions) -> Result[Socket]
+def open_socket(where: Target, options: HttpWire.ClientOptions) -> Result[Socket]
   return tunnel_context(where, options) if where.scheme == "https" and options.proxy != ""
 
   if where.scheme == "https"
@@ -1438,7 +1466,7 @@ end
 
 # The result of connecting to `where`, which is the proxy when the options have one: a failure names the proxy, so the
 # caller does not take it for the target being down.
-def reaching(connected: Result[Socket], options: HttpClientOptions, where: Target) -> Result[Socket]
+def reaching(connected: Result[Socket], options: HttpWire.ClientOptions, where: Target) -> Result[Socket]
   case connected
     ok(socket) -> ok(socket)
     error(message) ->
@@ -1450,7 +1478,7 @@ end
 
 # A TLS connection of a client's pool: on the context of `options.tls`, or on the client's shared system-trust context
 # when it names none (HttpWire.connect_tls builds it once per client).
-def connect_tls(client: HttpClient, host: String, port: Int, timeout_ms: Int) -> Result[Socket]
+def connect_tls(client: HttpWire.Client, host: String, port: Int, timeout_ms: Int) -> Result[Socket]
   case HttpWire.options(client).tls
     some(context) -> HttpWire.connect_context(host, port, context, timeout_ms)
     none -> HttpWire.connect_tls(client, host, port, timeout_ms)
@@ -1460,7 +1488,7 @@ end
 # An `https` connection of a client's pool or of a download: TLS to the host, or, with a proxy in the options, a
 # CONNECT tunnel through the proxy with TLS inside it, on the same context as without a proxy (the client's shared
 # system trust, or the one of `options.tls`).
-def connect_https(client: HttpClient, host: String, port: Int, timeout_ms: Int) -> Result[Socket]
+def connect_https(client: HttpWire.Client, host: String, port: Int, timeout_ms: Int) -> Result[Socket]
   options = HttpWire.options(client)
   return connect_tls(client, host, port, timeout_ms) if options.proxy == ""
 
@@ -1472,8 +1500,8 @@ end
 
 # TLS inside the tunnel `socket` to `host`, on the context of `options.tls` or the client's shared one.
 def upgrade_client(
-  client: HttpClient,
-  options: HttpClientOptions,
+  client: HttpWire.Client,
+  options: HttpWire.ClientOptions,
   socket: Socket,
   host: String,
   deadline: Int,
@@ -1487,7 +1515,7 @@ end
 
 # The `https` socket of `start`, `open` and `upload` through a proxy: the tunnel, then TLS inside it on the context of
 # `options.tls`, or on one with the system trust built for this connection (as without a proxy).
-def tunnel_context(where: Target, options: HttpClientOptions) -> Result[Socket]
+def tunnel_context(where: Target, options: HttpWire.ClientOptions) -> Result[Socket]
   # The context is built first, so that its failure never leaves a tunnel socket behind.
   context = try tunnel_trust(options)
   deadline = Time.monotonic_ms() + options.timeout_ms
@@ -1497,7 +1525,7 @@ def tunnel_context(where: Target, options: HttpClientOptions) -> Result[Socket]
   closing_on_error(upgraded, socket, options, where.host, where.port)
 end
 
-def tunnel_trust(options: HttpClientOptions) -> Result[TlsContext]
+def tunnel_trust(options: HttpWire.ClientOptions) -> Result[TlsContext]
   case options.tls
     some(context) -> ok(context)
     none -> TLS.client_context(TlsClientOptions())
@@ -1510,7 +1538,7 @@ end
 def closing_on_error(
   answer: Result[Socket],
   socket: Socket,
-  options: HttpClientOptions,
+  options: HttpWire.ClientOptions,
   host: String,
   port: Int,
 ) -> Result[Socket]
@@ -1539,7 +1567,7 @@ end
 # A CONNECT tunnel to `host:port` through the proxy of `options`, as a plain socket the proxy now relays: CONNECT
 # with the proxy's login (RFC 9110 9.3.6), then the head of the answer. A 2xx opens the tunnel; any other status is
 # an error that names the proxy (a 407 as for an `http` request) and never the login or the answer's body.
-def tunnel(options: HttpClientOptions, host: String, port: Int, deadline: Int) -> Result[Socket]
+def tunnel(options: HttpWire.ClientOptions, host: String, port: Int, deadline: Int) -> Result[Socket]
   proxy = try proxy_of(options)
   left = deadline - Time.monotonic_ms()
   return error(TIMED_OUT) if left <= 0
@@ -1611,7 +1639,7 @@ def send_encoded(conn: Connection, request: String, head_only: Bool, body: Bytes
 end
 
 # The head sent, the body after it, and the response head read (a HEAD request has no body in its answer).
-def sent_request(conn: Connection, head: String, head_only: Bool, body: Bytes) -> Result[HttpWire.Response]
+def sent_request(conn: Connection, head: String, head_only: Bool, body: Bytes) -> Result[HttpWire.ResponseHead]
   deadline = Time.monotonic_ms() + conn.options.timeout_ms
   try TCP.send_bytes(conn.socket, head_bytes(head), try time_left(conn.socket, deadline))
   at = 0
@@ -1625,7 +1653,7 @@ end
 
 # Where the connection stands after a head: reading its body, which a response with no body makes an empty one that
 # `finished_exchange` settles at once.
-def exchange_of(head: HttpWire.Response) -> Exchange
+def exchange_of(head: HttpWire.ResponseHead) -> Exchange
   framing = BY_LENGTH
   if head.chunked
     framing = BY_CHUNKS
@@ -1737,9 +1765,9 @@ def upload_whole(
   url: String,
   body: Channel[Bytes],
   length: Int,
-  headers: List[Header],
-  options: HttpClientOptions,
-) -> Result[HttpResponse]
+  headers: List[HttpWire.Header],
+  options: HttpWire.ClientOptions,
+) -> Result[HttpWire.Response]
   try check_options(
     options.timeout_ms,
     options.idle_timeout_ms,
@@ -1782,8 +1810,8 @@ def uploaded(
   method: String,
   body: Channel[Bytes],
   length: Int,
-  headers: List[Header],
-) -> Result[HttpResponse]
+  headers: List[HttpWire.Header],
+) -> Result[HttpWire.Response]
   timeout = conn.options.timeout_ms
   head = try HttpWire.encode_request(
     conn.scheme,
@@ -1812,7 +1840,7 @@ def uploaded(
 end
 
 # The response of an upload, whole, from its head on.
-def upload_answer(conn: Connection, response: HttpWire.Response) -> Result[HttpResponse]
+def upload_answer(conn: Connection, response: HttpWire.ResponseHead) -> Result[HttpWire.Response]
   if proxy_asked?(conn.options, conn.scheme, response.status)
     end_connection(conn)
     return error(proxy_denied(conn.options, offered?(conn)))
@@ -1821,7 +1849,7 @@ def upload_answer(conn: Connection, response: HttpWire.Response) -> Result[HttpR
   try take_exchange(conn)
   put_exchange(conn, finished_exchange(conn, exchange_of(response)))
   whole = try read_whole(conn, conn.options.max_body_bytes)
-  ok(HttpResponse(status: response.status, headers: response.headers, body: whole))
+  ok(HttpWire.Response(status: response.status, headers: response.headers, body: whole))
 end
 
 # Sends each piece of the channel as it comes: as chunks, until the channel closes and then the last chunk, or with a
@@ -1885,7 +1913,7 @@ def check_options(
 end
 
 # The charset parameter of the first Content-Type header, in lowercase and unquoted; "" when there is none.
-def charset_of(headers: List[Header]) -> String
+def charset_of(headers: List[HttpWire.Header]) -> String
   types = header_values(headers, "content-type")
   return "" if List.size(types) == 0
   parameters = String.split(List.at(types, 0), ";")
@@ -1976,7 +2004,7 @@ def parse_url(url: String) -> Result[Target]
   ok(Target(scheme: scheme, host: String.downcase(host), port: port, target: target))
 end
 
-def start_server(listener: Listener, app: App, options: HttpServerOptions) -> HttpServer
+def start_server(listener: Listener, app: App, options: HttpWire.ServerOptions) -> HttpWire.Server
   # The `done` of every request with no body. It ends here, in the caller's task: `close_server` cancels the
   # server's tasks, and a task of its own could end cancelled before it ran.
   ended = Task.spawn(&no_body)
@@ -2015,7 +2043,7 @@ end
 
 # A request up to its body: the head read and checked against `max_body_bytes` as the largest body, and `100 Continue`
 # sent when the client waits for it.
-def start_request(socket: Socket, rest: Bytes, first_ms: Int, options: HttpServerOptions) -> Result[Reading]
+def start_request(socket: Socket, rest: Bytes, first_ms: Int, options: HttpWire.ServerOptions) -> Result[Reading]
   first = rest
   if first.empty?
     first = try TCP.recv_bytes(socket, 1, first_ms)
@@ -2045,10 +2073,10 @@ def read_head(socket: Socket, rest: Bytes, deadline: Int, max_body_bytes: Int) -
 end
 
 # The response, with `Connection: close` added unless the body of the request was read whole.
-def closing_unless(response: HttpResponse, whole: Bool) -> HttpResponse
+def closing_unless(response: HttpWire.Response, whole: Bool) -> HttpWire.Response
   return response if whole
-  headers = response.headers.push(Header(name: "Connection", value: "close"))
-  HttpResponse(status: response.status, headers: headers, body: response.body)
+  headers = response.headers.push(HttpWire.Header(name: "Connection", value: "close"))
+  HttpWire.Response(status: response.status, headers: headers, body: response.body)
 end
 
 # One request, whose body goes to the app as it arrives: a task feeds it on a channel, and the answer goes out as a
@@ -2062,7 +2090,7 @@ def answer_app(reading: Reading, service: Service) -> Sent
   options = service.options
   socket = reading.socket
   head = reading.head
-  request = HttpRequest(
+  request = HttpWire.Request(
     method: head.method,
     target: head.target,
     path: head.path,
@@ -2133,11 +2161,11 @@ end
 # to change protocols, so an `Accept` is refused with a 500 and a `Reply` closes after it.
 def send_answer(
   socket: Socket,
-  request: HttpRequest,
+  request: HttpWire.Request,
   result: Result[Answer],
   whole: Bool,
   rest: Bytes,
-  options: HttpServerOptions,
+  options: HttpWire.ServerOptions,
 ) -> Sent
   timeout = options.request_timeout_ms
   incoming = Incoming(request: request, rest: rest)
@@ -2168,7 +2196,7 @@ end
 # The streamed response, with `Connection: close` added unless the body of the request was read whole.
 def stream_closing_unless(response: StreamResponse, whole: Bool) -> StreamResponse
   return response if whole
-  headers = response.headers.push(Header(name: "Connection", value: "close"))
+  headers = response.headers.push(HttpWire.Header(name: "Connection", value: "close"))
   StreamResponse(status: response.status, headers: headers, body: response.body, length: response.length)
 end
 
@@ -2176,11 +2204,11 @@ def serving(f: App) -> App = f
 
 # The answer of `app(handler)`: the body read whole (the `body_refusal` of its error when it cannot be), then the
 # handler's response.
-def whole_answer(handler: Handler, max_body_bytes: Int, request: HttpRequest, body: RequestBody) -> Result[Answer]
+def whole_answer(handler: Handler, max_body_bytes: Int, request: HttpWire.Request, body: RequestBody) -> Result[Answer]
   return ok(Answer.Whole(closing_answer(413))) if announced_length(request.headers) > max_body_bytes
   case read_all(body, max_body_bytes)
     ok(data) ->
-      whole = HttpRequest(
+      whole = HttpWire.Request(
         method: request.method,
         target: request.target,
         path: request.path,
@@ -2195,14 +2223,14 @@ def whole_answer(handler: Handler, max_body_bytes: Int, request: HttpRequest, bo
 end
 
 # The `Content-Length` of a request, 0 without one. The head reader has already checked it, so it is digits.
-def announced_length(headers: List[Header]) -> Int
+def announced_length(headers: List[HttpWire.Header]) -> Int
   values = header_values(headers, "content-length")
   return 0 if values.empty? or not plain?(values[0], true)
   String.to_int!(values[0])
 end
 
-def closing_answer(status: Int) -> HttpResponse
-  HttpResponse(status: status, headers: [Header(name: "Connection", value: "close")], body: NO_BYTES)
+def closing_answer(status: Int) -> HttpWire.Response
+  HttpWire.Response(status: status, headers: [HttpWire.Header(name: "Connection", value: "close")], body: NO_BYTES)
 end
 
 # Checked when accept_websocket runs, so a bad number is an error there, not a hang later.
@@ -2223,7 +2251,7 @@ def check_websocket_options(options: WebSocketOptions) -> Result[Void]
 end
 
 # The answer to a request that is not a WebSocket handshake, when it is not: 426 for another version, 400 otherwise.
-def handshake_problem(request: HttpRequest) -> Optional[HttpResponse]
+def handshake_problem(request: HttpWire.Request) -> Optional[HttpWire.Response]
   headers = request.headers
   return some(handshake_refusal(400, "a WebSocket handshake is a GET", [])) if request.method != "GET"
 
@@ -2232,7 +2260,7 @@ def handshake_problem(request: HttpRequest) -> Optional[HttpResponse]
   end
 
   if not listed?(headers, "sec-websocket-version", WS_VERSION)
-    version = [Header(name: "Sec-WebSocket-Version", value: WS_VERSION)]
+    version = [HttpWire.Header(name: "Sec-WebSocket-Version", value: WS_VERSION)]
     return some(handshake_refusal(426, "unsupported WebSocket version", version))
   end
 
@@ -2244,12 +2272,12 @@ def handshake_problem(request: HttpRequest) -> Optional[HttpResponse]
   none
 end
 
-def handshake_refusal(status: Int, reason: String, headers: List[Header]) -> HttpResponse
-  HttpResponse(status: status, headers: headers, body: reason.bytes)
+def handshake_refusal(status: Int, reason: String, headers: List[HttpWire.Header]) -> HttpWire.Response
+  HttpWire.Response(status: status, headers: headers, body: reason.bytes)
 end
 
 # True when a header called `name` lists `token`, in any of its lines.
-def listed?(headers: List[Header], name: String, token: String) -> Bool
+def listed?(headers: List[HttpWire.Header], name: String, token: String) -> Bool
   for value in header_values(headers, name)
     return true if WebSocketWire.has_token?(value, token)
   end
@@ -2257,14 +2285,14 @@ def listed?(headers: List[Header], name: String, token: String) -> Bool
   false
 end
 
-def accepted(request: HttpRequest, session: WebSocketSession, options: WebSocketOptions) -> Upgrade
+def accepted(request: HttpWire.Request, session: WebSocketSession, options: WebSocketOptions) -> Upgrade
   key = header_values(request.headers, "sec-websocket-key")[0].strip
   protocol = agreed_protocol(request.headers, options.protocols)
   Upgrade.Accept(session, options, WebSocketWire.accept_key(key), protocol)
 end
 
 # The first protocol of the server's list that the client offered, or "".
-def agreed_protocol(headers: List[Header], ours: List[String]) -> String
+def agreed_protocol(headers: List[HttpWire.Header], ours: List[String]) -> String
   offered: List[String] = []
   for value in header_values(headers, "sec-websocket-protocol")
     for name in value.split(",")
@@ -2281,7 +2309,7 @@ def agreed_protocol(headers: List[Header], ours: List[String]) -> String
   ""
 end
 
-def answer_upgrade(socket: Socket, incoming: Incoming, upgrade: Upgrade, options: HttpServerOptions) -> Sent
+def answer_upgrade(socket: Socket, incoming: Incoming, upgrade: Upgrade, options: HttpWire.ServerOptions) -> Sent
   case upgrade
     Upgrade.Reply(response) ->
       keep = reply_whole(socket, incoming.request, response, options.request_timeout_ms)
@@ -2320,7 +2348,7 @@ def run_websocket(
   limits: WebSocketOptions,
   key: String,
   protocol: String,
-  options: HttpServerOptions,
+  options: HttpWire.ServerOptions,
 ) -> Void
   case TCP.send(socket, switching_head(key, protocol), options.request_timeout_ms)
     ok(_) -> run_session(socket, rest, session, limits, protocol, options.request_timeout_ms)
@@ -2954,7 +2982,7 @@ def drain(socket: Socket, deadline: Int) -> Void
 end
 
 # Sends a whole response; true when the connection stays. A response that cannot be sent gets a 500 and a close.
-def reply_whole(socket: Socket, request: HttpRequest, response: HttpResponse, timeout: Int) -> Bool
+def reply_whole(socket: Socket, request: HttpWire.Request, response: HttpWire.Response, timeout: Int) -> Bool
   case write_response(socket, request, response, timeout)
     ok(keep) -> return keep
     error(message) ->
@@ -2969,11 +2997,16 @@ end
 # A streamed response. A body that is already closed is the whole body, which goes out with Content-Length as for a
 # whole response. Otherwise the head goes now, with chunked framing (or with the Content-Length of `length` and no
 # framing), and each piece follows as it arrives.
-def answer_stream(socket: Socket, incoming: Incoming, response: StreamResponse, options: HttpServerOptions) -> Sent
+def answer_stream(
+  socket: Socket,
+  incoming: Incoming,
+  response: StreamResponse,
+  options: HttpWire.ServerOptions,
+) -> Sent
   request = incoming.request
   timeout = options.request_timeout_ms
   ready = take_ready(response.body)
-  head_only = HttpResponse(status: response.status, headers: response.headers, body: NO_BYTES)
+  head_only = HttpWire.Response(status: response.status, headers: response.headers, body: NO_BYTES)
   length = response.length.unwrap_or(UNSIZED)
   case HttpWire.encode_response(request, head_only, Time.now_ms())
     ok(reply) ->
@@ -3047,7 +3080,13 @@ def send_all(socket: Socket, data: Bytes, timeout: Int) -> Result[Void]
   ok()
 end
 
-def invalid_stream(socket: Socket, request: HttpRequest, body: Channel[Bytes], reason: String, timeout: Int) -> Sent
+def invalid_stream(
+  socket: Socket,
+  request: HttpWire.Request,
+  body: Channel[Bytes],
+  reason: String,
+  timeout: Int,
+) -> Sent
   IO.warn("http: invalid response: #{reason}")
   body.close
   failed(socket, request, timeout)
@@ -3097,7 +3136,7 @@ def stream_out(
   first: List[Bytes],
   reply: HttpWire.Reply,
   length: Int,
-  options: HttpServerOptions,
+  options: HttpWire.ServerOptions,
 ) -> Sent
   timeout = options.request_timeout_ms
   if not Result.ok?(TCP.send_bytes(socket, head_bytes(stream_head(reply.head, length)), timeout))
@@ -3299,7 +3338,12 @@ end
 
 # Writes one whole response with Content-Length. ok(false) when the request or the response asked to close: the
 # connection then closes as in linger.
-def write_response(socket: Socket, request: HttpRequest, response: HttpResponse, timeout: Int) -> Result[Bool]
+def write_response(
+  socket: Socket,
+  request: HttpWire.Request,
+  response: HttpWire.Response,
+  timeout: Int,
+) -> Result[Bool]
   case HttpWire.encode_response(request, response, Time.now_ms())
     ok(reply) -> send_response(socket, request, response, reply, timeout)
     error(reason) -> error("http: invalid response: #{reason}")
@@ -3308,8 +3352,8 @@ end
 
 def send_response(
   socket: Socket,
-  request: HttpRequest,
-  response: HttpResponse,
+  request: HttpWire.Request,
+  response: HttpWire.Response,
   reply: HttpWire.Reply,
   timeout: Int,
 ) -> Result[Bool]
@@ -3331,17 +3375,17 @@ def send_response(
   ok(true)
 end
 
-def failed(socket: Socket, request: HttpRequest, timeout: Int) -> Void
+def failed(socket: Socket, request: HttpWire.Request, timeout: Int) -> Void
   _ = write_response(
     socket,
     request,
-    HttpResponse(status: 500, headers: [Header(name: "Connection", value: "close")], body: NO_BYTES),
+    HttpWire.Response(status: 500, headers: [HttpWire.Header(name: "Connection", value: "close")], body: NO_BYTES),
     timeout,
   )
 end
 
 # The worker answers by the deadline; the grace only covers its last steps.
-def wait_reply(reply: Channel[Result[HttpResponse]], deadline: Int) -> Result[HttpResponse]
+def wait_reply(reply: Channel[Result[HttpWire.Response]], deadline: Int) -> Result[HttpWire.Response]
   case reply.recv(larger(deadline - Time.monotonic_ms(), 0) + REPLY_GRACE_MS)
     ok(answer) -> answer
     error(_) -> error(TIMED_OUT)
@@ -3351,7 +3395,7 @@ end
 # The client's service task (HttpWire.service runs it, and it owns jobs). It awaits the owner as a Result task, so a
 # crash of the owner is observed here, not reported as unobserved. After a crash the client is closed: later calls
 # get "http: client is closed", the workers are cancelled with the owner, and calls in flight time out.
-def supervise_pool(client: HttpClient) -> Void
+def supervise_pool(client: HttpWire.Client) -> Void
   jobs = HttpWire.jobs(client)
   options = HttpWire.options(client)
   pool = Pool(client: client, options: options, jobs: jobs, origins: {}, inboxes: {}, busy: {}, next_id: 1)
@@ -3602,7 +3646,7 @@ def run_job(worker: Worker, socket: Result[Socket], job: HttpWire.Job) -> Done
   end
 end
 
-def ok_status?(answer: Result[HttpResponse], status: Int) -> Bool
+def ok_status?(answer: Result[HttpWire.Response], status: Int) -> Bool
   case answer
     ok(response) -> response.status == status
     error(_) -> false
@@ -3715,7 +3759,7 @@ end
 # A connection is kept only when nothing follows the response in its input and the input has not ended: bytes there
 # are a server bug or a response nobody asked for, and the next call must not read them; after an end of input the
 # next call would fail. The body is the bytes the framing carries, whatever they hold.
-def read_response_body(answer: Pending, head: HttpWire.Response) -> Received
+def read_response_body(answer: Pending, head: HttpWire.ResponseHead) -> Received
   whole: Result[Whole] = error("")
   if head.chunked
     whole = read_chunked_body(answer)
@@ -3728,7 +3772,7 @@ def read_response_body(answer: Pending, head: HttpWire.Response) -> Received
   end
   case whole
     ok(done) ->
-      response = HttpResponse(status: head.status, headers: head.headers, body: done.body)
+      response = HttpWire.Response(status: head.status, headers: head.headers, body: done.body)
       Received(response: ok(response), kept: done.kept and not head.closes, started: true)
     error(message) -> failed_read(message, true)
   end
@@ -3809,7 +3853,7 @@ end
 
 # One download connection: on a new socket, which closes when the download ends, since the pool only runs
 # whole-response calls. The pool gives the TLS context and its certificates for https.
-def connect_download(pool: HttpClient, where: Target, deadline: Int) -> Result[Socket]
+def connect_download(pool: HttpWire.Client, where: Target, deadline: Int) -> Result[Socket]
   left = deadline - Time.monotonic_ms()
   return error(TIMED_OUT) if left <= 0
   return connect_https(pool, where.host, where.port, left) if where.scheme == "https"
@@ -3873,13 +3917,13 @@ def fail_download(socket: Socket, out: FileHandle, deadline: Int, message: Strin
 end
 
 # The response head of a download, with the download budget as the body limit.
-def download_head(socket: Socket, budget: Int, deadline: Int) -> Result[HttpWire.Response]
+def download_head(socket: Socket, budget: Int, deadline: Int) -> Result[HttpWire.ResponseHead]
   read_head_of(socket, false, budget, deadline)
 end
 
 # The head of the final response (after at most MAX_INTERIM interim ones), with the framing of a response to HEAD when
 # `head_only`, and `budget` as the largest body the head may announce.
-def read_head_of(socket: Socket, head_only: Bool, budget: Int, deadline: Int) -> Result[HttpWire.Response]
+def read_head_of(socket: Socket, head_only: Bool, budget: Int, deadline: Int) -> Result[HttpWire.ResponseHead]
   interim = 0
   while true
     case time_left(socket, deadline)
@@ -3900,7 +3944,7 @@ def read_head_of(socket: Socket, head_only: Bool, budget: Int, deadline: Int) ->
 end
 
 # Streams the body framing of head into the file and counts its bytes.
-def save_body(socket: Socket, out: FileHandle, head: HttpWire.Response, budget: Int, deadline: Int) -> Result[Int]
+def save_body(socket: Socket, out: FileHandle, head: HttpWire.ResponseHead, budget: Int, deadline: Int) -> Result[Int]
   return save_chunked(socket, out, budget, deadline) if head.chunked
   return save_until_close(socket, out, budget, deadline) if head.until_close
   save_length(socket, out, head.length, budget, deadline)

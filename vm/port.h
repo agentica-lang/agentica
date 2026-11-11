@@ -563,7 +563,7 @@ struct agc_task {
   agc_nested_stack **nested;
   /* The monitors of this task (Task.monitor), newest first, fired and cleared when it settles. */
   agc_monitor *monitors;
-  /* The timers of this task do not keep a stalled run waiting: a task of an HttpClient's tree (agc_task_service) and
+  /* The timers of this task do not keep a stalled run waiting: a task of an HTTP client's tree (agc_task_service) and
      its descendants. The task of a monitor's wrap is a service task without it, since a program may wait for it. */
   bool weak_timers;
   /* The Native.Mutex this task waits for (in its FIFO, or woken to take it), and the ones it holds, newest first

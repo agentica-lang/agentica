@@ -4,11 +4,11 @@ import HTTP from "std/http"
 # "http: client is closed", and the server sees no connection.
 
 struct Call
-  pool: HttpClient
+  pool: HTTP.Client
   url: String
 end
 
-def post(call: Call) -> Result[HttpResponse]
+def post(call: Call) -> Result[HTTP.Response]
   return HTTP.post(call.pool, call.url, "do not send".bytes)
 end
 

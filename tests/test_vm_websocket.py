@@ -225,11 +225,11 @@ def failing(ws: HTTP.WebSocket) -> Result[Void]
   return error("the session failed")
 end
 
-def plain(request: HttpRequest) -> Result[HttpResponse]
-  return ok(HttpResponse(status: 200, headers: [], body: "plain #{request.path}".bytes))
+def plain(request: HTTP.Request) -> Result[HTTP.Response]
+  return ok(HTTP.Response(status: 200, headers: [], body: "plain #{request.path}".bytes))
 end
 
-def route(request: HttpRequest) -> Result[HTTP.Upgrade]
+def route(request: HTTP.Request) -> Result[HTTP.Upgrade]
   if request.path == "/echo"
     return HTTP.accept_websocket(request, &echo)
   end
@@ -321,12 +321,12 @@ def route(request: HttpRequest) -> Result[HTTP.Upgrade]
   return ok(HTTP.Upgrade.Reply(try plain(request)))
 end
 
-def app(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+def app(request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   return ok(HTTP.Answer.Upgrade(try route(request)))
 end
 
 def main() -> Void
-  options = HttpServerOptions(request_timeout_ms: WRITE_MS, idle_timeout_ms: 10000, max_connections: 16)
+  options = HTTP.ServerOptions(request_timeout_ms: WRITE_MS, idle_timeout_ms: 10000, max_connections: 16)
   server = Result.unwrap!(HTTP.serve("127.0.0.1", 0, &app, options))
   certs = System.args()[0]
   secure = Result.unwrap!(HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, &app, options))

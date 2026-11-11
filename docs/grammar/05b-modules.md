@@ -81,12 +81,11 @@ It must not be the name of a declaration of the file, of an alias, of another
 imported name (in the same list or in another import line, and the same name
 from the same module twice), of a builtin function such as `puts` or `ok`, or of
 a reserved type name such as `Int` or `JSON`; each is `CHECK-REDEFINED-NAME`,
-located at the name in the braces (at the new name of a rename). The std-only
-name `HttpWire` is reserved too, so it can be neither an alias nor an imported
-name. A name that the module does not export, or that is
-private, is `CHECK-IMPORT-NAME` at the name, with a `did you mean` help over the
-exports only. These checks run when the file is loaded, so they are reported at
-the import, before any use of the name. A name used as the wrong kind (an
+located at the name in the braces (at the new name of a rename). A name that
+the module does not export, or that is private, is `CHECK-IMPORT-NAME` at the
+name, with a `did you mean` help over the exports only. These checks run when
+the file is loaded, so they are reported at the import, before any use of the
+name. A name used as the wrong kind (an
 imported struct as the enum of a pattern) is `CHECK-TYPE-MISMATCH`, as with an
 alias.
 
@@ -132,11 +131,13 @@ and a dot only for a re-export, so there is no clash with `export def`,
   `Web.LIMIT`.
 - Inside the file the name is still `Url.parse`: a re-export adds no local
   name.
-- A `std/` module may also re-export a builtin record or enum of a std-only
-  module (`HttpWire`, `LogRegistry`, `RegexEngine`), which needs no import:
-  `export LogRegistry.Event` in `std/logger` makes `Logger.Event` that builtin
-  record. Outside `std/` such a re-export is `CHECK-UNKNOWN-NAME` at the
-  module name; a name of the module that is no record or enum is
+- A `std/` module may also re-export a builtin record, enum or handle type of a
+  std-only module (`HttpWire`, `LogRegistry`, `RegexEngine`), which needs no
+  import: `export LogRegistry.Event` in `std/logger` makes `Logger.Event` that
+  builtin record, and `export HttpWire.Client` in `std/http` makes
+  `HTTP.Client` that handle. Outside `std/` such a re-export is
+  `CHECK-UNKNOWN-NAME` at the module name; a name of the module that is no
+  record, enum or handle type is
   `CHECK-IMPORT-NAME` at the name.
 - Re-exports come with the imports, may follow each other and the imports
   directly, and after a declaration need the blank line

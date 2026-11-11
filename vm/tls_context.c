@@ -2,7 +2,7 @@
  * TLS.client_context and TLS.server_context: a TlsContext, the TLS config of
  * one role built once from its options record (the CA file, or a certificate
  * chain and key, read and checked when it is built) and shared by every socket,
- * listener and HttpClient made from it; and the role check of the calls that
+ * listener and HttpWire.Client made from it; and the role check of the calls that
  * take one. The build is one pool job, so it parks only its task. Service layer.
  * Design: docs/vm/10-io-tls.md §10.3 (Contexts).
  */

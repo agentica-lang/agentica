@@ -1,5 +1,6 @@
-struct HttpRequest
-  n: Int
+enum HttpWire
+  Plain
+  Head
 end
 
 def main() -> Void

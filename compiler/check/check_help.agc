@@ -47,7 +47,7 @@ export def conversion(expected: Types.Type, actual: Types.Type) -> String
     return "this is #{Types.to_text(actual)}; turn it into a Result with .to_result(\"message\")"
   end
 
-  # A value where an Optional of its type goes (HttpClientOptions(tls: context)).
+  # A value where an Optional of its type goes (HTTP.ClientOptions(tls: context)).
   if Types.is?(expected, "Optional") and Types.same?(Types.item(expected), actual)
     return "this is #{Types.to_text(actual)}; wrap it with some(...) for #{Types.to_text(expected)}"
   end
@@ -61,7 +61,7 @@ export def conversion(expected: Types.Type, actual: Types.Type) -> String
     )
   end
 
-  # A PEM path where an optional context goes (HttpClientOptions(tls: "ca.pem"), the ca_file before contexts).
+  # A PEM path where an optional context goes (HTTP.ClientOptions(tls: "ca.pem"), the ca_file before contexts).
   optional_context = Types.is?(expected, "Optional") and Types.same?(Types.item(expected), context)
   if optional_context and Types.same?(actual, Types.Type.String)
     return (
