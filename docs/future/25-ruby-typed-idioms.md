@@ -93,9 +93,8 @@ picks between literals.
 
 - `format` is checker-handled and variadic: a catalog entry covers the name
   reservation and `agentica help format`. Only the function name is reserved: a
-  user `def
-  format` is `CHECK-REDEFINED-NAME` (breaking); variables, parameters and fields
-  named `format` stay valid.
+  user `def format` is `CHECK-REDEFINED-NAME` (breaking); variables, parameters
+  and fields named `format` stay valid.
 - The first argument must be a plain one-line string literal, without `#{...}`
   and not a heredoc: `CHECK-FORMAT-LITERAL`.
 - A bad conversion (unknown type or flag, a trailing `%`, `precision` on `d`,

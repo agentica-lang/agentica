@@ -206,9 +206,11 @@ errors, limits, the half close); this section is the design behind them.
   4 one that grants writing; it duplicates both without inheritance and closes
   the originals. In any other case, such as a regular file, a character device
   or a pipe the wrong way round, nothing is touched (the descriptors stay as
-  they were) and the child-side builtins return `error("process: no parent
-  channel")`. The libuv handle is attached on first use, so a program that never
-  uses the channel never starts a read.
+  they were) and the child-side builtins return
+  `error("process: no parent channel")`; a one-way descriptor in the wrong place
+  is refused because it would park `Test.run` forever. The libuv handle is
+  attached on first use, so a program that never uses the channel never starts a
+  read.
 - **Locks and waits.** A parent-side `Process` has two more lock records,
   `channel.reader` and `channel.writer`, so a `channel_read_line` parked on a
   silent child blocks neither `Process.read_line` nor `send` (§14.1); the child
@@ -225,8 +227,9 @@ errors, limits, the half close); this section is the design behind them.
   `channel_read_line`, and every later one that finds no complete line fails;
   lines already in the buffer are still delivered first, and the channel stays
   open. So a child that prints for ever, and never sends its record, is found at
-  1 MiB and not at the runner's deadline. The error texts are in `vm/process.c`
-  and `vm/duplex.c`.
+  1 MiB and not at the runner's deadline. A reset peer counts as the end of
+  input for `channel_read_line`. The error texts are in `vm/process.c` and
+  `vm/duplex.c`.
 - **Half close.** `channel_close` is the `uv_shutdown` of the first bullet. A
   `uv_shutdown` that fails on the spot (`ENOTCONN` when the peer is gone) is
   ignored, since the write side is closed either way.

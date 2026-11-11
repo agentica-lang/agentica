@@ -345,6 +345,9 @@ end
   `Time.now()`, or a difference of two `DateTime` values. The wall clock can
   jump, so the difference can be negative or wrong. `Time.us_between` is for
   calendar differences (days until a due date), not for how long code runs.
+- `Time.monotonic_ns` reads the clock `Time.monotonic_ms` reads, in
+  nanoseconds because short work is invisible in milliseconds; not `uv_hrtime`,
+  since a second clock path would let the two builtins disagree.
 - No `elapsed` helper: it would be `Time.monotonic_ms() - start` with a name and
   would hide which clock it reads (`stdlib/test/runner.agc` writes the
   subtraction).

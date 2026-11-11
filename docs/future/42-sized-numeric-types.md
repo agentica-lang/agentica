@@ -458,6 +458,10 @@ its task, measured with the benchmark script, and the list items are the limit.
   `Float.to_bits32` and `Float.from_bits32` are removed, in one breaking change.
 - **Step 4: typed storage, if measured.** §42.12.
 
+Tests: `strtof` against exact rounding on every release target, the Windows
+UCRT included; subnormal `Float32` results against exact rational rounding; the
+Python peer computes with `fractions.Fraction`, never through a `double`.
+
 ### 42.15 Breaking changes
 
 - **Reserved names (step 1).** `Int8` to `UInt64`, `Float32`, `Int64` and

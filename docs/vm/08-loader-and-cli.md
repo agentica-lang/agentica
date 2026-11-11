@@ -233,18 +233,17 @@ stages.
   compiler.
 - **What a front end may hand over, and trust.** The front end that C loads is
   fully trusted: it runs with the user's rights and, through the options it
-  hands over, can drop the user's `--deny-*` flags. That is why `--front-end
-  FILE` is for the build and the tests only and has the same standing as the
-  binary itself. The options it may pass are exactly `--ai`, `--json`, the
-  `--deny-*` flags, `--sandbox`, `--max-steps N`, `--seed N`,
-  `--flush-timeout MS`, `--schedulers N`, `--jit MODE`, `--source-root DIR`
-  and `--coverage FILE`, each once; no positional word, no `--version`.
+  hands over, can drop the user's `--deny-*` flags. That is why
+  `--front-end FILE` is for the build and the tests only and has the same
+  standing as the binary itself. The options it may pass are exactly `--ai`,
+  `--json`, the `--deny-*` flags, `--sandbox`, `--max-steps N`, `--seed N`,
+  `--flush-timeout MS`, `--schedulers N`, `--jit MODE`, `--source-root DIR` and
+  `--coverage FILE`, each once; no positional word, no `--version`.
   `--driver-pid` and `--embedded` are refused (exit 2): only the process that
   started this one can say so, and only `agentica run` starts an embedded
-  program. The hand-off takes
-  at most 64 option words and 1,048,576 argument words
-  (`AGC_FRONT_END_MAX_OPTIONS`, `AGC_FRONT_END_MAX_ARGUMENTS`). The file of
-  `--front-end` is opened with `O_NONBLOCK` and must be a regular file of at
+  program. The hand-off takes at most 64 option words and 1,048,576 argument
+  words (`AGC_FRONT_END_MAX_OPTIONS`, `AGC_FRONT_END_MAX_ARGUMENTS`). The file
+  of `--front-end` is opened with `O_NONBLOCK` and must be a regular file of at
   most 256 MiB, so a named pipe is refused at once.
 - **Shared by the two runs.** `vm/launch.c` holds the option parser, seeds, the
   trace file, the creation of a runtime, the `SIGPIPE` setting and the one exit

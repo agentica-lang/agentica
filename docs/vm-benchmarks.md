@@ -118,7 +118,7 @@ front end runs in the interpreter otherwise).
 
 Every mode printed the same output, and the three self-compiles wrote the same
 bytes. The `always` ratio of the self-compile is 0.79. Why `on` leaves some
-loops out: §6.4, "Why the policy".
+loops out: `docs/vm/05-values-execution-builtins.md` §6.4, "Why the policy".
 
 - **Slower rows.** Under `on`, `channel-pingpong` and `maps` are within the
   noise. Under `always`, `logger-disabled` (1.35) leaves compiled code four

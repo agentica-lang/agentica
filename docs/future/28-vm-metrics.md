@@ -104,16 +104,16 @@ host or per program value; message text; the step limit.
 
 ### 28.4 How a snapshot is taken
 
-Each **scheduler thread** owns the VM state and its hook counters; the
-**metrics thread** owns the sockets, the file and the text format, and runs no
-Agentica code, never allocates GC memory and never calls Boehm. Neither reads
-the other's plain data: the metrics thread asks, and each scheduler answers
-between turns, only while someone asks, so the stall check and the end of the
-run are as without metrics. A late snapshot is never served as current (a
-`503`; file mode skips that write). The end of the run waits for the last file
-only for a bounded time: the exit code and output are right, but the last file
-may be missing or old. A run killed by a signal or by the out-of-memory handler
-writes no last file; the periodic writes cover it.
+Each **scheduler thread** owns the VM state and its hook counters; the **metrics
+thread** owns the sockets, the file and the text format, and runs no Agentica
+code, never allocates GC memory and never calls Boehm. Neither reads the other's
+plain data: the metrics thread asks, and each scheduler answers between turns,
+only while someone asks, so the stall check and the end of the run are as
+without metrics. A late snapshot is never served as current: no answer in 4
+seconds is a `503` (file mode skips that write). The end of the run waits at
+most 1 second for the last file: the exit code and output are right, but the
+last file may be missing or old. A run killed by a signal or by the
+out-of-memory handler writes no last file; the periodic writes cover it.
 
 ### 28.5 How it is exported
 
@@ -201,14 +201,14 @@ Not in v1: a per-category heap walk, hooks into libuv's and OpenSSL's
 allocators, heap snapshots, per-task Prometheus labels.
 
 **Cost.** The per-task add is hot-path work that rule 4 drops: it must pass the
-overhead gate (a CPU-heavy program of at least 10
-seconds with metrics off, the endpoint idle, and the endpoint scraped every
-second; expected overhead about 0, about 0 and below 2%), or change rule 4
-first, with the reason. **Open:** how the allocation path finds the running
-task's counter (`agc_alloc` takes no scheduler, and `vm/` has no mutable
-globals): a new parameter on the allocation functions, a thread-local variable
-(one documented exception), or counting in the callers that have the scheduler,
-which misses allocations made deeper in helpers.
+overhead gate (a CPU-heavy program of at least 10 seconds with metrics off, the
+endpoint idle, and the endpoint scraped every second; expected overhead about 0,
+about 0 and below 2%), or change rule 4 first, with the reason. **Open:** how
+the allocation path finds the running task's counter (`agc_alloc` takes no
+scheduler, and `vm/` has no mutable globals): a new parameter on the allocation
+functions, a thread-local variable (one documented exception), or counting in
+the callers that have the scheduler, which misses allocations made deeper in
+helpers.
 
 ### 28.9 Tracing and metrics
 
