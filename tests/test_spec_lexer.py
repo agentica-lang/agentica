@@ -222,6 +222,9 @@ CLEAN = [
     ("while with do then a statement in a block inside parentheses",
      program(MAIN, "  puts([1].map do |x|", "    y = x", "    while y > 5 do", "      y -= 1", "    end", "    y",
              "  end)", "end")),
+    ("case and for heads split over lines with do, in a block inside parentheses",
+     program(MAIN, "  puts([1].map do |x|", "    y = case [", "      x,", "    ][0] do", "      1 -> 2", "      _ -> 3",
+             "    end", "    for z in [", "      y,", "    ] do", "      puts(z)", "    end", "    x", "  end)", "end")),
     # An empty file lexes and parses with no error; `check` does not need a main.
     ("empty file", ""),
 ]

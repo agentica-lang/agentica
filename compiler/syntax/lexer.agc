@@ -339,10 +339,10 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
   resume = NO_RESUME
   # The index in `tokens` of the first token of the statement being lexed, for the block-head test of a leading dot.
   head_at = tokens.size
-  # The depth and line of the frame of the last `while`, `for` or `case` head (-1 when none): a `do` that ends the
-  # line of that head (`while c do`) belongs to the head and opens no second frame, since one `end` closes both.
+  # The depth of the frame of the `while`, `for` or `case` head being lexed (-1 when none): a `do` that ends a line
+  # of that head (`while c do`) belongs to it and opens no second frame, since one `end` closes both. The head lasts
+  # until the line break of its statement, so a head split inside brackets (`case [`, `x,`, `][0] do`) keeps it.
   head_depth = -1
-  head_line = 0
   # The column of a character is its offset plus this, a sum where the line start would need a subtraction and an
   # addition; it changes where `line_start` does.
   column_base = 1 - line_start
@@ -372,12 +372,11 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
         action = WORD_ACTIONS.get(lexeme, 0)
         if action > 0
           kind = lexeme
-          if action == 2 and lexeme == "do" and depth == head_depth and line == head_line and head_do?(chars, stop)
+          if action == 2 and lexeme == "do" and depth == head_depth and head_do?(chars, stop)
             head_depth = -1
           elsif action == 2 and !modifier?(tokens, lexeme)
             if lexeme == "while" or lexeme == "for" or lexeme == "case"
               head_depth = depth + 1
-              head_line = line
             end
 
             top = Frame(kind: "kw", start: start, inside: top.inside)
@@ -563,6 +562,7 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
             )
 
             head_at = tokens.size
+            head_depth = -1
           end
         end
 
