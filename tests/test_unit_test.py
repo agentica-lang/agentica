@@ -4,7 +4,6 @@ Each case runs the CLI as a child on the fixtures of tests/fixtures/unit/ and co
 and --ai formats. The report of a hung test needs the test deadline, which the CLI does not set (30 s), so that case is
 slow.
 """
-import json
 import time
 from pathlib import Path
 
@@ -62,7 +61,7 @@ class UnitTest(TestCase):
         """Returns (exit code, parsed report); stderr must stay empty."""
         result = self.agentica_test("--json", *arguments, cwd=cwd, env=env)
         self.assertEqual(result.stderr, "")
-        return result.code, json.loads(result.stdout)
+        return result.code, result.json()
 
     def test_a_test_file_reports_each_outcome_with_captured_output_only_for_failed_tests(self):
         status, report = self.json_test(fixture("outcomes_test.agc"))
@@ -148,7 +147,7 @@ class UnitTest(TestCase):
 
         def draws(number, *arguments):
             result = run(cli() + ["--seed", number, "test", "--json", *arguments], env=vm_environment())
-            return [(item["name"], field(item, "actual")) for item in report_cases(json.loads(result.stdout))]
+            return [(item["name"], field(item, "actual")) for item in report_cases(result.json())]
 
         everything = draws("7", seed)
         alone = draws("7", "--only", "second", seed)
@@ -165,7 +164,7 @@ class UnitTest(TestCase):
             usage_status, report = self.json_test(*arguments, seed)
             self.assertEqual((usage_status, file_codes(report)), (2, [("", "RUNTIME-BDD-USAGE")]))
         usage = run(cli() + ["--seed", "5", "test", "--json", "--only", ""], env=vm_environment())
-        self.assertEqual(json.loads(usage.stdout)["seed"], 5)
+        self.assertEqual(usage.json()["seed"], 5)
 
     def test_a_file_that_fails_before_its_tests_run_is_a_file_error_that_shows_what_it_printed(self):
         status, report = self.json_test(fixture("lists"))
@@ -275,7 +274,7 @@ class UnitTest(TestCase):
             '      """\n      false\n\n      """\n', encoding="utf-8")
         result = self.agentica_test("--json", "--deny-env", "test", "specs", cwd=directory, flags=["--deny-env"])
         self.assertEqual((result.code, result.stderr), (1, ""))
-        report = json.loads(result.stdout)
+        report = result.json()
         failed = [item for item in report_cases(report) if item["status"] == "failed"]
         self.assertEqual([item["name"] for item in failed], ["reads HOME"])
         self.assertEqual(failed[0]["error"]["code"], "RUNTIME-TEST-ERROR")
