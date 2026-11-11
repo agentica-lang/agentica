@@ -29,7 +29,7 @@ tar -xzf agentica-VERSION-linux-x86_64.tar.gz   # Windows: Expand-Archive
 
 ### Build from source
 
-Needs a C11 compiler and `make`; on Linux also `libssl-dev`, `libgc-dev` and `pkg-config` (OpenSSL 3, libgc 8.2 or newer). The build starts from the checked-in `bootstrap/stage0.agcb` and needs no other tool. It also runs on macOS (Xcode command line tools) and Windows (MSYS2 UCRT64 with GCC).
+Needs a C11 compiler and `make`; on Linux also `libssl-dev`, `libgc-dev`, `zlib1g-dev` and `pkg-config` (OpenSSL 3, libgc 8.2 or newer, zlib). The build starts from the checked-in `bootstrap/stage0.agcb` and needs no other tool. It also runs on macOS (Xcode command line tools) and Windows (MSYS2 UCRT64 with GCC).
 
 ```sh
 git clone https://github.com/agentica-lang/agentica.git
@@ -38,7 +38,7 @@ git submodule update --init
 make    # writes dist/agentica
 ```
 
-A default build links the system OpenSSL, so `dist/agentica` runs only where it is installed; the release archive is portable. `AGENTICA_GC=vendored` and `AGENTICA_OPENSSL=vendored` build the bundled copies, each on its own (only OpenSSL needs Perl 5 and a few minutes). Pass them to every `make` command, or export them.
+A default build links the system OpenSSL, so `dist/agentica` runs only where it is installed; the release archive is portable. `AGENTICA_GC=vendored`, `AGENTICA_OPENSSL=vendored` and `AGENTICA_ZLIB=vendored` build the bundled copies, each on its own (only OpenSSL needs Perl 5 and a few minutes). Pass them to every `make` command, or export them.
 
 ## Hello, world
 

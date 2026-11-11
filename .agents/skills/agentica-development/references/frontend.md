@@ -225,7 +225,7 @@ cmp /tmp/old.out /tmp/new.out
 Add generated inputs (CRLF, bare CR, non-ASCII, bad escapes, unclosed brackets,
 interpolation), and every prefix of one construct-rich text, which covers each
 end-of-text position. Finish with `make fixed-point` and `make goldens`, which
-must leave `git status` clean. Record the result in `docs/vm-benchmarks.md`.
+must leave `git status` clean. Put the result in the PR body.
 
 ## Refreeze: `tools/refreeze.py`
 

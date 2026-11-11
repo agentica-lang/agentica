@@ -11,8 +11,8 @@ each runner (`exe` is `agentica FILE.agc`, `vm` is `agentica run` on bytecode)
 against the CPython twins in `benchmarks/python/`, checks that every runner
 prints the same output, and times start-up and the front end of `dist/agentica`
 apart. It is outside `make test` and CI. `AGENTICA_JIT=off` in the environment
-sets the JIT mode of every run (`on` by default); record new numbers in
-`docs/vm-benchmarks.md`. For where the time goes, `AGENTICA_VM_TRACE=profile`
+sets the JIT mode of every run (`on` by default); new numbers go in the PR
+body. For where the time goes, `AGENTICA_VM_TRACE=profile`
 (`references/vm-build.md`).
 
 Guards for a change near their paths (compare against a VM built from master,
@@ -38,8 +38,8 @@ ns per call with the loop included; it builds
 A new program needs `def scale() -> Int` returning 1 (the script rewrites it for
 `--size`), a deterministic checksum line, and a Python twin that takes the size
 as `argv[1]`. The HTTP sanity check is apart: `python3
-benchmarks/http_bench.py`; record numbers only from an idle machine, in the last
-section of `docs/vm-benchmarks.md`. `python3 benchmarks/websocket_broadcast.py`
+benchmarks/http_bench.py`; record numbers only from an idle machine
+(`docs/vm-benchmarks.md`, "HTTP sanity check"). `python3 benchmarks/websocket_broadcast.py`
 compares the GC time of a WebSocket broadcast sent as `Text` and as
 `HTTP.prepare`.
 
@@ -74,7 +74,7 @@ compares the GC time of a WebSocket broadcast sent as `Text` and as
 - Find the structural cost before editing call sites: in the lexer, moving the
   per-token work (tables built once, one lookup for a keyword, a block opener
   or `end`, no closure per character) beat inlining one call
-  (`docs/vm-benchmarks.md`, "Speed pass, second part").
+  (`docs/vm-benchmarks.md`, "Tried and dropped", "The lexer").
 - A change that must keep the output: `make fixed-point`, `make goldens` (it
   must leave `git status` clean), and for a front-end stage the differential
   run against master in `references/frontend.md`.
