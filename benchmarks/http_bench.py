@@ -29,7 +29,7 @@ CLIENT_TIMEOUT = 600.0
 CLIENT = """import HTTP from "std/http"
 
 struct Job
-  pool: HttpClient
+  pool: HTTP.Client
   url: String
   count: Int
 end
@@ -48,7 +48,7 @@ def main() -> Void
   args = System.args()
   connections = args[1].to_i!
   each = args[2].to_i!
-  options = HttpClientOptions(timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: connections, max_body_bytes: 1048576)
+  options = HTTP.ClientOptions(timeout_ms: 30000, idle_timeout_ms: 30000, max_connections: connections, max_body_bytes: 1048576)
   pool = HTTP.client(options).unwrap!
   tasks: List[Task[Int]] = []
   for k in 0...connections

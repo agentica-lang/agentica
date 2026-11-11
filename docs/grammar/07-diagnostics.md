@@ -352,9 +352,9 @@ is a rule:
 - `HTTP.respond(writer, ...)`, `HTTP.begin`, `HTTP.write`, `HTTP.write_bytes`
   with the import (`CHECK-IMPORT-NAME`)
   Help: a handler that returns its whole response: `return
-  ok(HttpResponse(status: 200, headers: [], body: text.bytes))`
+  ok(HTTP.Response(status: 200, headers: [], body: text.bytes))`
 - `Request` or `HttpWriter` as a type (`CHECK-UNKNOWN-TYPE`)
-  Help: `def handle(request: HttpRequest) -> Result[HttpResponse]`
+  Help: `def handle(request: HTTP.Request) -> Result[HTTP.Response]`
 - a type alias cycle (`CHECK-TYPE-ALIAS-CYCLE`)
   Help: break the cycle; aliases expand to the type they name, so `type Names =
   List[String]` is valid

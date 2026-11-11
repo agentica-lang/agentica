@@ -139,7 +139,7 @@ void agc_timers_disarm(agc_vm *vm, agc_task *t) {
   unclaim(vm, t);
 }
 
-/* True when some armed timer is not a weak one (`weak_timers`, the tasks of an HttpClient's tree): the stall checks
+/* True when some armed timer is not a weak one (`weak_timers`, the tasks of an HTTP client's tree): the stall checks
    wait for those only. A timer is counted as armed before it is counted as weak and stops being weak before it stops
    being armed, and the weak count is read first, so a change in between can only make this true, which delays a stall
    to the next check. The relaxed loads are enough only because of the two callers: stalled() runs once every run queue

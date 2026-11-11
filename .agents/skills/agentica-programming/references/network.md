@@ -1,11 +1,16 @@
 # TCP, TLS and HTTP
 
-`TCP`, `TLS`, `Socket`, `Listener`, `HttpClient`, `Header`, `HttpResponse` and
-`HttpClientOptions` are reserved. Handles are opaque (no constructor, equality,
-fields or JSON). A handle belongs
+`TCP`, `TLS`, `Socket` and `Listener` are reserved. Handles are opaque (no
+constructor, equality, fields or JSON). A handle belongs
 to the task that opened it and closes when that task or the run ends
 (`tasks.md`). A server loop gives each connection its own task with
 `Task.spawn_owning(&serve, socket)`, so a crash closes only that connection.
+
+The HTTP types are `HTTP.Request`, `HTTP.Response`, `HTTP.Header`,
+`HTTP.ClientOptions`, `HTTP.ServerOptions` and the handles `HTTP.Client` and
+`HTTP.Server`, builtin types that `std/http` re-exports (also
+`import {Request, Response} from "std/http"`). A value prints with the builtin
+name: `HttpWire.Response(...)`, `<HttpWire.Client>`.
 
 No flag is needed for network access. With `--deny-net` (or `--sandbox`) every
 DNS lookup, connect and listen, `std/http` included, returns an error starting
@@ -94,33 +99,33 @@ HTTP is an Agentica library: `import HTTP from "std/http"`. Without it, `HTTP.`
 calls are `CHECK-UNKNOWN-NAME` and the help shows the import.
 
 ```text
-HTTP.client(options: HttpClientOptions = HttpClientOptions()) -> Result[HttpClient]
-HTTP.close_client(client: HttpClient) -> Void
+HTTP.client(options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Client]
+HTTP.close_client(client: HTTP.Client) -> Void
 HTTP.proxy_from_env(url: String) -> String
-HTTP.get(client: HttpClient, url: String) -> Result[HttpResponse]
-HTTP.post(client: HttpClient, url: String, body: Bytes, headers: List[Header] = []) -> Result[HttpResponse]
-HTTP.request(client: HttpClient, method: String, url: String, body: Bytes, headers: List[Header] = []) -> Result[HttpResponse]
-HTTP.get_response(url: String, options: HttpClientOptions = HttpClientOptions()) -> Result[HttpResponse]
-HTTP.post_response(url: String, body: Bytes, headers: List[Header] = [], options: HttpClientOptions = HttpClientOptions()) -> Result[HttpResponse]
-HTTP.text(body: Bytes, headers: List[Header] = []) -> Result[String]
-HTTP.header_values(headers: List[Header], name: String) -> List[String]
-HTTP.download(client: HttpClient, url: String, path: String, options: DownloadOptions = DownloadOptions()) -> Result[Download]
-HTTP.start(origin: String, options: HttpClientOptions = HttpClientOptions()) -> Result[HTTP.Connection]
-HTTP.send_request(conn: HTTP.Connection, method: String, target: String, body: Bytes, headers: List[Header] = []) -> Result[HTTP.ResponseHead]
+HTTP.get(client: HTTP.Client, url: String) -> Result[HTTP.Response]
+HTTP.post(client: HTTP.Client, url: String, body: Bytes, headers: List[HTTP.Header] = []) -> Result[HTTP.Response]
+HTTP.request(client: HTTP.Client, method: String, url: String, body: Bytes, headers: List[HTTP.Header] = []) -> Result[HTTP.Response]
+HTTP.get_response(url: String, options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Response]
+HTTP.post_response(url: String, body: Bytes, headers: List[HTTP.Header] = [], options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Response]
+HTTP.text(body: Bytes, headers: List[HTTP.Header] = []) -> Result[String]
+HTTP.header_values(headers: List[HTTP.Header], name: String) -> List[String]
+HTTP.download(client: HTTP.Client, url: String, path: String, options: DownloadOptions = DownloadOptions()) -> Result[Download]
+HTTP.start(origin: String, options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Connection]
+HTTP.send_request(conn: HTTP.Connection, method: String, target: String, body: Bytes, headers: List[HTTP.Header] = []) -> Result[HTTP.ResponseHead]
 HTTP.read_body(conn: HTTP.Connection, max_bytes: Int = 65536) -> Result[Bytes]
 HTTP.finish(conn: HTTP.Connection) -> Void
-HTTP.open(method: String, url: String, body: Bytes, headers: List[Header] = [], options: HttpClientOptions = HttpClientOptions()) -> Result[HTTP.Stream]
-HTTP.upload(method: String, url: String, body: Channel[Bytes], length: Int = -1, headers: List[Header] = [], options: HttpClientOptions = HttpClientOptions()) -> Result[HttpResponse]
+HTTP.open(method: String, url: String, body: Bytes, headers: List[HTTP.Header] = [], options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Stream]
+HTTP.upload(method: String, url: String, body: Channel[Bytes], length: Int = -1, headers: List[HTTP.Header] = [], options: HTTP.ClientOptions = HTTP.ClientOptions()) -> Result[HTTP.Response]
 
-Header(name: String, value: String)
-HttpResponse(status: Int, headers: List[Header], body: Bytes)
+HTTP.Header(name: String, value: String)
+HTTP.Response(status: Int, headers: List[HTTP.Header], body: Bytes)
 DownloadOptions(timeout_ms: Int = 30000, max_total_bytes: Int = 268435456)
-Download(status: Int, headers: List[Header], bytes_written: Int)
-HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, proxy: String = "", tls: Optional[TlsContext] = none)
+Download(status: Int, headers: List[HTTP.Header], bytes_written: Int)
+HTTP.ClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 4, max_body_bytes: Int = 1048576, proxy: String = "", tls: Optional[TlsContext] = none)
 ```
 
 - Every call is whole: it returns after the full body is read, as `Bytes` of at
-  most `max_body_bytes`, with any content. `HttpClientOptions()`, the default,
+  most `max_body_bytes`, with any content. `HTTP.ClientOptions()`, the default,
   gives a 30 s timeout, a 30 s idle timeout, 4 connections per origin, a 1 MiB
   body limit and system CA trust (`tls: some(context)` takes a client context
   instead). Options must be positive (`max_body_bytes` at most 64 MiB). One
@@ -129,7 +134,7 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
   and opens a `CONNECT` tunnel for `https://`; user info in it is sent as
   `Proxy-Authorization: Basic` to the proxy only, and no error shows it. A
   client never reads the environment: pass
-  `HttpClientOptions(proxy: HTTP.proxy_from_env(url))` (curl's rules, `""` is
+  `HTTP.ClientOptions(proxy: HTTP.proxy_from_env(url))` (curl's rules, `""` is
   none).
 - One connection that you drive yourself (Ruby's `Net::HTTP.start`):
   `HTTP.start(origin)` connects (an origin with no path),
@@ -173,8 +178,8 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
   it with `HTTP.text(response.body, response.headers)`, which decodes the
   `charset` of `Content-Type` (UTF-8 without one) when `b.decode` knows it
   (UTF-8, UTF-16, UTF-32, ASCII, Latin-1, ISO-8859-15, Windows-1252); a body
-  invalid in its charset, or another charset, is an error. `HttpResponse` is not
-  JSON encodable. The body of a request in a server handler is `Bytes` too:
+  invalid in its charset, or another charset, is an error. `HTTP.Response` is
+  not JSON encodable. The body of a request in a server handler is `Bytes` too:
   `HTTP.text(request.body, request.headers)`.
 - Names that do not exist: `response.text`, `header_timeout_ms`
   (`request_timeout_ms`), and `read`, `trailers`, `close_body`,
@@ -183,31 +188,31 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
 ## HTTP server (`std/http`)
 
 ```text
-HTTP.serve(host: String, port: Int, app: HTTP.App, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
-HTTP.serve_tls(host: String, port: Int, tls: TlsContext, app: HTTP.App, options: HttpServerOptions = HttpServerOptions()) -> Result[HttpServer]
+HTTP.serve(host: String, port: Int, app: HTTP.App, options: HTTP.ServerOptions = HTTP.ServerOptions()) -> Result[HTTP.Server]
+HTTP.serve_tls(host: String, port: Int, tls: TlsContext, app: HTTP.App, options: HTTP.ServerOptions = HTTP.ServerOptions()) -> Result[HTTP.Server]
 HTTP.app(handler: HTTP.Handler, max_body_bytes: Int = 1048576) -> HTTP.App
-HTTP.local_port(server: HttpServer) -> Int
-HTTP.wait(server: HttpServer) -> Result[Void]
-HTTP.close_server(server: HttpServer) -> Void
-HTTP.Answer: Whole(HttpResponse), Stream(HTTP.StreamResponse), Upgrade(HTTP.Upgrade)
+HTTP.local_port(server: HTTP.Server) -> Int
+HTTP.wait(server: HTTP.Server) -> Result[Void]
+HTTP.close_server(server: HTTP.Server) -> Void
+HTTP.Answer: Whole(HTTP.Response), Stream(HTTP.StreamResponse), Upgrade(HTTP.Upgrade)
 
 HTTP.RequestBody(pieces: Channel[Bytes], done: Task[Result[Void]])
 HTTP.read_all(body: HTTP.RequestBody, max_bytes: Int) -> Result[Bytes]
 HTTP.body_refusal(message: String) -> HTTP.Answer
 HTTP.whole(data: Bytes) -> Channel[Bytes]
-HTTP.accept_websocket(request: HttpRequest, session: HTTP.WebSocketSession, options: HTTP.WebSocketOptions = HTTP.WebSocketOptions()) -> Result[HTTP.Upgrade]
+HTTP.accept_websocket(request: HTTP.Request, session: HTTP.WebSocketSession, options: HTTP.WebSocketOptions = HTTP.WebSocketOptions()) -> Result[HTTP.Upgrade]
 HTTP.WebSocket(incoming: Channel[HTTP.Message], outgoing: Channel[HTTP.Message], protocol: String)
 HTTP.Message: Text(String), Binary(Bytes), Ping(Bytes), Pong(Bytes), Close(Int, String), Prepared(Bytes)
 HTTP.prepare(message: HTTP.Message) -> HTTP.Message
 HTTP.WebSocketOptions(max_message_bytes: Int = 1048576, idle_ms: Int = 0, ping_ms: Int = 0, close_ms: Int = 5000, protocols: List[String] = [], outgoing_queue: Int = 8)
 
-HttpRequest(method: String, target: String, path: String, headers: List[Header], body: Bytes,
+HTTP.Request(method: String, target: String, path: String, headers: List[HTTP.Header], body: Bytes,
             remote_addr: String = "")
-HTTP.StreamResponse(status: Int, headers: List[Header], body: Channel[Bytes], length: Optional[Int] = none)
-HttpServerOptions(request_timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 128, max_body_bytes: Int = 1048576)
+HTTP.StreamResponse(status: Int, headers: List[HTTP.Header], body: Channel[Bytes], length: Optional[Int] = none)
+HTTP.ServerOptions(request_timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_connections: Int = 128, max_body_bytes: Int = 1048576)
 ```
 
-`serve` takes an app, `Fn[HttpRequest, HTTP.RequestBody, Result[HTTP.Answer]]`
+`serve` takes an app, `Fn[HTTP.Request, HTTP.RequestBody, Result[HTTP.Answer]]`
 (`HTTP.App`): the request (empty `body`) and the body on a channel in, a whole
 response, a stream or a WebSocket upgrade out. A route that takes the request
 whole is a `Handler`, made an app with `HTTP.app`:
@@ -215,12 +220,12 @@ whole is a `Handler`, made an app with `HTTP.app`:
 ```ruby
 import HTTP from "std/http"
 
-def handle(request: HttpRequest) -> Result[HttpResponse]
+def handle(request: HTTP.Request) -> Result[HTTP.Response]
   if request.method == "GET" and request.path == "/"
-    return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; charset=utf-8")], body: "hello\n".bytes))
+    return ok(HTTP.Response(status: 200, headers: [HTTP.Header(name: "Content-Type", value: "text/plain; charset=utf-8")], body: "hello\n".bytes))
   end
 
-  ok(HttpResponse(status: 404, headers: [], body: "not found\n".bytes))
+  ok(HTTP.Response(status: 404, headers: [], body: "not found\n".bytes))
 end
 
 def main() -> Void
@@ -235,8 +240,8 @@ One app serves every kind of route on one port: branch on `request.path` and
 return `HTTP.Answer.Upgrade`, `.Stream` or `.Whole`, or call
 `HTTP.app(&page).call(request, body)` for a plain `Handler`.
 
-- `HTTP.Handler` is `Fn[HttpRequest, Result[HttpResponse]]`, and `HTTP.App`
-  is `Fn[HttpRequest, HTTP.RequestBody, Result[HTTP.Answer]]`. A middleware is
+- `HTTP.Handler` is `Fn[HTTP.Request, Result[HTTP.Response]]`, and `HTTP.App`
+  is `Fn[HTTP.Request, HTTP.RequestBody, Result[HTTP.Answer]]`. A middleware is
   a function `Handler -> Handler` that calls `next.call(request)` or answers
   itself. A block cannot be returned directly, so a helper
   `def handler(f: HTTP.Handler) -> HTTP.Handler` turns a block into the value;
@@ -261,7 +266,7 @@ return `HTTP.Answer.Upgrade`, `.Stream` or `.Whole`, or call
   body, closes the connection and writes `http: handler error: <message>` or
   `http: invalid response: <reason>` on stderr. A runtime error ends only its
   connection (the run exits 1 at the end, as for any unobserved task crash).
-- `HttpServerOptions()` gives a 30 s `request_timeout_ms` (each step of a
+- `HTTP.ServerOptions()` gives a 30 s `request_timeout_ms` (each step of a
   request, not the app), a 30 s `idle_timeout_ms` between requests, 128
   connections at once (more wait) and a 1 MiB body limit. Bad requests never
   reach the app: the server answers 400, 413, 417, 431, 501 or 505 itself and
@@ -289,7 +294,7 @@ def store(body: HTTP.RequestBody) -> Result[HTTP.Answer]
   end
 
   try Task.await(body.done)
-  ok(HTTP.Answer.Whole(HttpResponse(status: 200, headers: [], body: "#{total}".bytes)))
+  ok(HTTP.Answer.Whole(HTTP.Response(status: 200, headers: [], body: "#{total}".bytes)))
 end
 ```
 
@@ -297,7 +302,7 @@ end
   whether the whole body arrived (an `error`: the client left, a bad chunk, a
   timeout, past the cap). The channel holds 8 pieces, so a slow app backs up
   the socket.
-- `max_body_bytes` of `HttpServerOptions` (1 MiB, at most 256 MiB) caps every
+- `max_body_bytes` of `HTTP.ServerOptions` (1 MiB, at most 256 MiB) caps every
   body: a larger `Content-Length` is a 413 before the app runs and before
   `100 Continue`. Raise it for uploads; `HTTP.app` keeps its own limit
   (1 MiB unless given), so a route under it that takes more raises both.
@@ -326,10 +331,10 @@ def produce(events: Channel[Bytes]) -> Void
   events.close
 end
 
-def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+def handle(request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   events: Channel[Bytes] = Channel.new(8)
   Task.spawn(&produce, events)
-  headers = [Header(name: "Content-Type", value: "text/event-stream")]
+  headers = [HTTP.Header(name: "Content-Type", value: "text/event-stream")]
   ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: headers, body: events)))
 end
 ```

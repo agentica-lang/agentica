@@ -11,9 +11,9 @@ struct Priced
   total: Int
 end
 
-def quote(client: HttpClient, base: String, item: String, quantity: Int) -> String
+def quote(client: HTTP.Client, base: String, item: String, quantity: Int) -> String
   body = JSON.encode(Order(name: item, qty: quantity))
-  headers = [Header(name: "Content-Type", value: "text/plain")]
+  headers = [HTTP.Header(name: "Content-Type", value: "text/plain")]
   response = HTTP.post(client, base + "/quotes", body.bytes, headers).unwrap!
   reply = JSON.decode(HTTP.text(response.body, response.headers).unwrap!, Priced)
   if !reply.ok?

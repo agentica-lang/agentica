@@ -2909,16 +2909,16 @@ def test_the_front_end_runs_a_source_file_on_several_schedulers(tmp_path):
 HTTP_LOAD = r"""import HTTP from "std/http"
 
 struct Load
-  pool: HttpClient
+  pool: HTTP.Client
   base: String
   requests: Int
 end
 
-def handle(request: HttpRequest) -> Result[HttpResponse]
+def handle(request: HTTP.Request) -> Result[HTTP.Response]
   if request.path == "/slow"
     Task.sleep(300)
   end
-  return ok(HttpResponse(status: 200, headers: [], body: request.path.bytes))
+  return ok(HTTP.Response(status: 200, headers: [], body: request.path.bytes))
 end
 
 def load(l: Load) -> Int
@@ -2958,7 +2958,7 @@ end
 # CLIENTS tasks send REQUESTS requests each, beside callers that Task.map cancels at their 50 ms deadline while their
 # requests wait on the server; every request of the load tasks gets its own path back.
 def phase(base: String, clients: Int, requests: Int) -> Int
-  pool = HTTP.client(HttpClientOptions(max_connections: 8, timeout_ms: 20000)).unwrap!
+  pool = HTTP.client(HTTP.ClientOptions(max_connections: 8, timeout_ms: 20000)).unwrap!
   l = Load(pool: pool, base: base, requests: requests)
   tasks = (1..clients).to_a.map do |_|
     Task.spawn(&load, l)
@@ -2982,14 +2982,14 @@ def main() -> Void
   certs = args[0]
   clients = args[1].to_i!
   requests = args[2].to_i!
-  options = HttpServerOptions(request_timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 8, max_body_bytes: 1024)
+  options = HTTP.ServerOptions(request_timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 8, max_body_bytes: 1024)
   plain = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options).unwrap!
   secure = HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, HTTP.app(&handle), options).unwrap!
   puts(phase("http://127.0.0.1:#{HTTP.local_port(plain)}", clients, requests))
   puts(phase("https://localhost:#{HTTP.local_port(secure)}", clients, requests))
   # The server closes under load: each caller sends GETs until one fails. Answers came before the close (so it came
   # during the load), every caller then gets an error (none hangs), and wait returns.
-  pool = HTTP.client(HttpClientOptions(max_connections: 8, timeout_ms: 20000)).unwrap!
+  pool = HTTP.client(HTTP.ClientOptions(max_connections: 8, timeout_ms: 20000)).unwrap!
   l = Load(pool: pool, base: "https://localhost:#{HTTP.local_port(secure)}", requests: 0)
   callers = (1..clients).to_a.map do |_|
     Task.spawn(&until_closed, l)
@@ -3042,12 +3042,12 @@ def test_http_clients_on_several_schedulers_against_one_server_with_cancels_and_
 # queued (the release ends it), and the backlog connection is closed with the listener, never handed out.
 HTTP_QUEUED = r"""import HTTP from "std/http"
 
-def handle(request: HttpRequest) -> Result[HttpResponse]
-  return ok(HttpResponse(status: 200, headers: [], body: "never".bytes))
+def handle(request: HTTP.Request) -> Result[HTTP.Response]
+  return ok(HTTP.Response(status: 200, headers: [], body: "never".bytes))
 end
 
 def main() -> Void
-  options = HttpServerOptions(request_timeout_ms: 60000, idle_timeout_ms: 60000, max_connections: 1, max_body_bytes: 64)
+  options = HTTP.ServerOptions(request_timeout_ms: 60000, idle_timeout_ms: 60000, max_connections: 1, max_body_bytes: 64)
   server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options).unwrap!
   port = HTTP.local_port(server)
   held = TCP.connect("127.0.0.1", port, 5000).unwrap!
@@ -3086,7 +3086,7 @@ HTTP_WAIT_BUSY = r"""import HTTP from "std/http"
 # Connects to the port in the path to say that it started, then spins until the close of the server cancels it. Each
 # round reverses 10,000 characters: real time in few steps, without parking, so the step budget of `agentica test`
 # lasts seconds with or without the JIT, far past the close (a loop of additions spent it in 3.5 ms under --jit on).
-def spin(request: HttpRequest) -> Result[HttpResponse]
+def spin(request: HTTP.Request) -> Result[HTTP.Response]
   port = String.to_int!(String.slice(request.path, 1, String.length(request.path) - 1))
   signal = try TCP.connect("127.0.0.1", port, 5000)
   text = List.repeat("ab", 5000).join("")
@@ -3095,7 +3095,7 @@ def spin(request: HttpRequest) -> Result[HttpResponse]
     n = n + text.reverse.length
   end
   TCP.close(signal)
-  return ok(HttpResponse(status: 200, headers: [], body: "#{n}".bytes))
+  return ok(HTTP.Response(status: 200, headers: [], body: "#{n}".bytes))
 end
 
 def main() -> Void

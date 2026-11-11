@@ -5,12 +5,12 @@ struct Wiring
   go: Channel[Bool]
 end
 
-def handle(request: HttpRequest) -> Result[HttpResponse]
-  return ok(HttpResponse(status: 200, headers: [], body: "served".bytes))
+def handle(request: HTTP.Request) -> Result[HTTP.Response]
+  return ok(HTTP.Response(status: 200, headers: [], body: "served".bytes))
 end
 
 def host(ports: Channel[Int]) -> Void
-  options = HttpServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 4, max_body_bytes: 64)
+  options = HTTP.ServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 4, max_body_bytes: 64)
   server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options).unwrap!
   _ = ports.send(HTTP.local_port(server), 5000)
   _ = HTTP.wait(server)
@@ -24,12 +24,12 @@ def supervisor(wiring: Wiring) -> Result[Int]
   return ok(1 / zero)
 end
 
-def fetch(url: String) -> Result[HttpResponse]
-  pool = HTTP.client(HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)).unwrap!
+def fetch(url: String) -> Result[HTTP.Response]
+  pool = HTTP.client(HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)).unwrap!
   return HTTP.get(pool, url)
 end
 
-def show(label: String, outcome: Result[HttpResponse]) -> Void
+def show(label: String, outcome: Result[HTTP.Response]) -> Void
   case outcome
     ok(response) -> puts("#{label}: #{response.status} #{HTTP.text(response.body, response.headers).unwrap!}")
     error(_) -> puts("#{label}: refused")

@@ -1,4 +1,4 @@
-program #80 0:1:1-709:54:1
+program #66 0:1:1-585:47:1
   module "valid-5.agc"
     declaration: struct-decl #2 0:1:1-32:4:1 name="Job"
       field: field-decl #1 13:2:3-28:3:1 name="socket"
@@ -47,36 +47,22 @@ program #80 0:1:1-709:54:1
       param: param #44 389:30:16-400:30:27 name="l"
         type: type-ref #43 392:30:19-400:30:27 name="Listener"
       result: type-ref #45 405:30:32-409:30:36 name="Void"
-    declaration: function-decl #50 415:33:1-451:35:1 name="host"
-      param: param #48 424:33:10-437:33:23 name="s"
-        type: type-ref #47 427:33:13-437:33:23 name="HttpServer"
-      result: type-ref #49 442:33:28-446:33:32 name="Void"
-    declaration: function-decl #54 452:36:1-493:38:1 name="pool"
-      param: param #52 461:36:10-479:36:28 name="client"
-        type: type-ref #51 469:36:18-479:36:28 name="HttpClient"
-      result: type-ref #53 484:36:33-488:36:37 name="Void"
-    declaration: function-decl #58 494:39:1-522:41:1 name="job"
-      param: param #56 502:39:9-508:39:15 name="j"
-        type: type-ref #55 505:39:12-508:39:15 name="Job"
-      result: type-ref #57 513:39:20-517:39:24 name="Void"
-    declaration: function-decl #63 523:42:1-567:44:1 name="many"
-      param: param #61 532:42:10-553:42:31 name="sockets"
-        type: type-ref #60 541:42:19-553:42:31 name="List"
-          arg: type-ref #59 546:42:24-552:42:30 name="Socket"
-      result: type-ref #62 558:42:36-562:42:40 name="Void"
-    declaration: function-decl #77 568:45:1-683:49:1 name="hand"
-      param: param #65 577:45:10-588:45:21 name="l"
-        type: type-ref #64 580:45:13-588:45:21 name="Listener"
-      param: param #67 590:45:23-603:45:36 name="s"
-        type: type-ref #66 593:45:26-603:45:36 name="HttpServer"
-      result: type-ref #68 608:45:41-612:45:45 name="Void"
-      body: expr-stmt #72 615:46:3-649:47:1
-        value: call #71 615:46:3-648:46:36 name="Task.spawn_owning" piped=false type=Task(Void)
-          arg: function-ref #69 633:46:21-644:46:32 name="accept_one" type=Fn([Opaque(Listener)], Void)
-          arg: name-ref #70 646:46:34-647:46:35 name="l" type=Opaque(Listener)
-      body: expr-stmt #76 651:47:3-679:48:1
-        value: call #75 651:47:3-678:47:30 name="Task.spawn_owning" piped=false type=Task(Void)
-          arg: function-ref #73 669:47:21-674:47:26 name="host" type=Fn([Opaque(HttpServer)], Void)
-          arg: name-ref #74 676:47:28-677:47:29 name="s" type=Opaque(HttpServer)
-    declaration: function-decl #79 684:50:1-708:53:1 name="main"
-      result: type-ref #78 698:50:15-702:50:19 name="Void"
+    declaration: function-decl #50 415:33:1-443:35:1 name="job"
+      param: param #48 423:33:9-429:33:15 name="j"
+        type: type-ref #47 426:33:12-429:33:15 name="Job"
+      result: type-ref #49 434:33:20-438:33:24 name="Void"
+    declaration: function-decl #55 444:36:1-488:38:1 name="many"
+      param: param #53 453:36:10-474:36:31 name="sockets"
+        type: type-ref #52 462:36:19-474:36:31 name="List"
+          arg: type-ref #51 467:36:24-473:36:30 name="Socket"
+      result: type-ref #54 479:36:36-483:36:40 name="Void"
+    declaration: function-decl #63 489:39:1-559:42:1 name="hand"
+      param: param #57 498:39:10-509:39:21 name="l"
+        type: type-ref #56 501:39:13-509:39:21 name="Listener"
+      result: type-ref #58 514:39:26-518:39:30 name="Void"
+      body: expr-stmt #62 521:40:3-555:41:1
+        value: call #61 521:40:3-554:40:36 name="Task.spawn_owning" piped=false type=Task(Void)
+          arg: function-ref #59 539:40:21-550:40:32 name="accept_one" type=Fn([Opaque(Listener)], Void)
+          arg: name-ref #60 552:40:34-553:40:35 name="l" type=Opaque(Listener)
+    declaration: function-decl #65 560:43:1-584:46:1 name="main"
+      result: type-ref #64 574:43:15-578:43:19 name="Void"

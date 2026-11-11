@@ -7,11 +7,11 @@ struct Stats
   max: Int
 end
 
-def text_response(status: Int, body: String) -> HttpResponse
-  return HttpResponse(status: status, headers: [Header(name: "Content-Type", value: "text/plain")], body: body.bytes)
+def text_response(status: Int, body: String) -> HTTP.Response
+  return HTTP.Response(status: status, headers: [HTTP.Header(name: "Content-Type", value: "text/plain")], body: body.bytes)
 end
 
-def stats_response(body: String) -> HttpResponse
+def stats_response(body: String) -> HTTP.Response
   root = JSON.parse(body).unwrap!
   items = JSON.list(JSON.get(root, "values").unwrap!).unwrap!
   numbers: List[Int] = []
@@ -24,7 +24,7 @@ def stats_response(body: String) -> HttpResponse
   return text_response(200, JSON.encode(stats))
 end
 
-def handle(request: HttpRequest) -> Result[HttpResponse]
+def handle(request: HTTP.Request) -> Result[HTTP.Response]
   path = request.path
   if path == "/health" && request.method == "GET"
     return ok(text_response(200, JSON.encode({"status": "ok"})))

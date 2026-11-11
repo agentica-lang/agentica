@@ -1,4 +1,4 @@
-import {Color as HttpRequest} from "lib"
+import {Color as FileInfo} from "lib"
 
 def main() -> Void
 end

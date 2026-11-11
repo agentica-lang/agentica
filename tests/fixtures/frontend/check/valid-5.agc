@@ -30,21 +30,14 @@ end
 def accept_one(l: Listener) -> Void
 end
 
-def host(s: HttpServer) -> Void
-end
-
-def pool(client: HttpClient) -> Void
-end
-
 def job(j: Job) -> Void
 end
 
 def many(sockets: List[Socket]) -> Void
 end
 
-def hand(l: Listener, s: HttpServer) -> Void
+def hand(l: Listener) -> Void
   Task.spawn_owning(&accept_one, l)
-  Task.spawn_owning(&host, s)
 end
 
 def main() -> Void

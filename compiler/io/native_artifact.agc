@@ -256,9 +256,9 @@ def archive_state(archive: String, sha: String, deadline: Int, context: NativeAr
   end
 end
 
-def open_pool(deadline: Int, context: NativeArtifact.Context) -> Result[HttpClient]
+def open_pool(deadline: Int, context: NativeArtifact.Context) -> Result[HTTP.Client]
   left = try time_left(deadline, context)
-  options = HttpClientOptions(timeout_ms: left, idle_timeout_ms: 30000, max_connections: 1, max_body_bytes: 1048576)
+  options = HTTP.ClientOptions(timeout_ms: left, idle_timeout_ms: 30000, max_connections: 1, max_body_bytes: 1048576)
   case HTTP.client(options)
     ok(pool) -> ok(pool)
     error(_) -> error(fail(context, "PKG-FETCH", "url", "cannot open the download client", ""))
@@ -347,7 +347,7 @@ end
 
 def follow_redirect(
   current: String,
-  headers: List[Header],
+  headers: List[HTTP.Header],
   seen: Map[String, Bool],
   redirects: Int,
   context: NativeArtifact.Context,

@@ -1,6 +1,6 @@
 import HTTP from "std/http"
 
-def handle(request: HttpRequest) -> Result[HttpResponse]
+def handle(request: HTTP.Request) -> Result[HTTP.Response]
   if request.path == "/hang"
     at = request.target.index_of("?").unwrap!
     side = String.to_int!(request.target.slice(at + 1, request.target.length - at - 1))
@@ -10,17 +10,17 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
   else
     Task.sleep(300)
   end
-  return ok(HttpResponse(status: 200, headers: [], body: "slow #{request.path}".bytes))
+  return ok(HTTP.Response(status: 200, headers: [], body: "slow #{request.path}".bytes))
 end
 
-def fetch(url: String) -> Result[HttpResponse]
-  pool = HTTP.client(HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)).unwrap!
+def fetch(url: String) -> Result[HTTP.Response]
+  pool = HTTP.client(HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)).unwrap!
   return HTTP.get(pool, url)
 end
 
 def main() -> Void
   side = TCP.listen("127.0.0.1", 0).unwrap!
-  options = HttpServerOptions(request_timeout_ms: 100, idle_timeout_ms: 100, max_connections: 2, max_body_bytes: 64)
+  options = HTTP.ServerOptions(request_timeout_ms: 100, idle_timeout_ms: 100, max_connections: 2, max_body_bytes: 64)
   server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options).unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
   IO.inspect(fetch(base + "/slow").unwrap!.body)

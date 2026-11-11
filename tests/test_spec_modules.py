@@ -86,6 +86,22 @@ class TestModuleRules:
             assert Path(problem["file"]) == directory / file
         return problem
 
+    def assert_cases(self, cases):
+        """Check (files, code, span, file of the error, whether a help is due) cases from root.agc: code None
+        checks clean, and span ((line, column), (line, column)) is the whole range when given."""
+        results = self.checks([(files, "root.agc", None) for files, _code, _span, _file, _help in cases])
+        for (files, code, span, file, help), checked in zip(cases, results):
+            if code is None:
+                assert checked[1] is None, checked[1]
+                continue
+            problem = self.assert_rejected(checked, code, file=file)
+            if span is not None:
+                found = problem["range"]
+                assert ((found["start"]["line"], found["start"]["column"]),
+                        (found["end"]["line"], found["end"]["column"])) == span, files
+            if help:
+                assert problem.get("help"), files
+
     def test_reserved_library_namespaces_reject_traversal_and_keep_the_import_span(self):
         cases = [("std/../queue", "CHECK-IMPORT-PATH"), ("std//queue", "CHECK-IMPORT-PATH"),
                  ("std/missing", "CHECK-IMPORT-IO"), ("pkg/../outside", "CHECK-IMPORT-PATH"),
@@ -334,18 +350,7 @@ class TestModuleRules:
              "CHECK-IMPORT-NAME", ((4, 20), (4, 33)), None, True),
             ({"root.agc": 'import {LogEvent} from "std/logger"\n\n' + MAIN}, "CHECK-IMPORT-NAME", None, None, True),
         ]
-        results = self.checks([(files, "root.agc", None) for files, _code, _span, _file, _help in cases])
-        for (files, code, span, file, help), checked in zip(cases, results):
-            if code is None:
-                assert checked[1] is None, checked[1]
-                continue
-            problem = self.assert_rejected(checked, code, file=file)
-            if span is not None:
-                found = problem["range"]
-                assert ((found["start"]["line"], found["start"]["column"]),
-                        (found["end"]["line"], found["end"]["column"])) == span, files
-            if help:
-                assert problem.get("help"), files
+        self.assert_cases(cases)
 
     def test_a_struct_or_alias_may_be_named_like_a_std_only_family_with_records_and_an_enum_may_not(self):
         """A struct or a type alias may be named LogRegistry, beside std/logger and a Logger.Event(...) of the root. An
@@ -395,7 +400,9 @@ class TestModuleRules:
         bodies = [("  x = HttpWir.client(1)\n", "CHECK-UNKNOWN-NAME"),
                   ("  x = close_clien(1)\n", "CHECK-UNKNOWN-NAME"),
                   ("  x = HTTP.exchang(1)\n", "CHECK-IMPORT-NAME")]
-        names = ["HttpWire", "HttpResponse", "HttpRequest", "HttpServer", "HttpServerOptions"]
+        # The family name and the old HTTP type names reserve nothing: a user struct may take them.
+        names = ["HttpWire", "HttpResponse", "HttpRequest", "HttpClient", "HttpServer", "HttpClientOptions",
+                 "HttpServerOptions", "Header"]
         http = 'import HTTP from "std/http"\ndef main() -> Void\n  puts(HTTP.proxy_from_env("x"))\n'
         results = self.checks(
             [({"root.agc": text, "lib.agc": call, "libs/wire.agc": call},
@@ -405,8 +412,7 @@ class TestModuleRules:
                 "root.agc", None)]
             + [({"root.agc": http + body + "end\n\n"}, "root.agc", None) for body, _code in bodies]
             + [({"root.agc": "struct %s\n  n: Int\nend\n\n" % name + MAIN}, "root.agc", None) for name in names])
-        roots_checked, clean, body_checked, names_checked = (
-            results[:3], results[3], results[4:7], results[7:])
+        roots_checked, clean, body_checked, names_checked = results[:3], results[3], results[4:7], results[7:]
         for (name, _text), checked in zip(roots, roots_checked):
             self.assert_rejected(checked, "CHECK-UNKNOWN-NAME", file=name)
         assert clean[1] is None
@@ -415,17 +421,61 @@ class TestModuleRules:
             # The hint must not name the internal HttpWire type, which the user never wrote.
             assert "HttpWire" not in json.dumps(problem)
         for name, checked in zip(names, names_checked):
-            self.assert_rejected(checked, "CHECK-REDEFINED-NAME")
+            assert checked[1] is None, (name, checked[1])
+
+    def test_the_old_http_names_are_free_beside_std_http_and_an_enum_http_wire_is_not(self):
+        """A struct, an enum and a type alias may take the freed HTTP names next to HTTP.Header(...) and
+        HTTP.Response(...) of the same root. An enum HttpWire stays CHECK-REDEFINED-NAME, with a help: its variants
+        would clash with the builtin records HttpWire.Request(...) and the rest."""
+        free = ('import HTTP from "std/http"\n\nstruct HttpWire\n  n: Int\nend\n\nenum Header\n  Name(String)\nend\n\n'
+                "type HttpResponse = Int\n\n"
+                "def main() -> Void\n  puts(HTTP.proxy_from_env(\"x\"))\n  h = HTTP.Header(name: \"a\", value: \"b\")\n"
+                "  r = HTTP.Response(status: 200, headers: [h], body: \"\".bytes)\n  code: HttpResponse = r.status\n"
+                "  puts(HttpWire(n: code).n)\n  puts(Header.Name(h.name))\nend\n\n")
+        self.assert_cases([
+            ({"root.agc": free}, None, None, None, False),
+            ({"root.agc": "enum HttpWire\n  Plain\nend\n\n" + MAIN}, "CHECK-REDEFINED-NAME", ((1, 1), (4, 1)), None,
+             True),
+        ])
 
     def test_the_http_wire_records_are_types_only_std_can_name_and_reserve_no_user_name(self):
         uses = [("def main() -> Void\n  heads: List[HttpWire.Head] = []\nend\n\n", 2),
-                ("def f(chunk: HttpWire.Chunk) -> Void\nend\n\n" + MAIN, 1)]
+                ("def f(chunk: HttpWire.Chunk) -> Void\nend\n\n" + MAIN, 1),
+                ("def f(r: HttpWire.Request) -> Void\nend\n\n" + MAIN, 1)]
         own = "struct Head\n  n: Int\nend\n\nstruct Chunk\n  n: Int\nend\n\n" + MAIN
         results = self.checks([({"root.agc": text}, "root.agc", None) for text, _line in uses]
                               + [({"root.agc": own}, "root.agc", None)])
-        for (_text, line), checked in zip(uses, results[:2]):
+        for (_text, line), checked in zip(uses, results[:3]):
             self.assert_rejected(checked, "CHECK-UNKNOWN-NAME", line=line)
-        assert results[2][1] is None
+        assert results[3][1] is None
+
+    def test_std_http_exports_its_records_and_handles_and_the_old_names_are_unknown_with_a_help(self):
+        """std/http re-exports the builtin HttpWire records and handles as HTTP.Request, HTTP.Response, HTTP.Header,
+        HTTP.ClientOptions, HTTP.ServerOptions, HTTP.Client and HTTP.Server (import HTTP, or import {Request, ...}).
+        The old names (HttpRequest, Header, HttpClient, ...) are unknown, with a help that names the new ones."""
+        uses = ('import HTTP from "std/http"\nimport {Request, Response, Header, Client} from "std/http"\n\n'
+                "def handle(request: Request) -> Result[HTTP.Response]\n"
+                '  return ok(Response(status: 200, headers: [Header(name: "a", value: request.path)], body: "".bytes))\n'
+                "end\n\n"
+                "def pool(c: Client, s: HTTP.Server) -> HTTP.ClientOptions\n  return HTTP.ClientOptions()\nend\n\n"
+                "def main() -> Void\n  _o = HTTP.ServerOptions(max_connections: 1)\n  _h: HTTP.Header = Header(name: \"a\", "
+                "value: \"\").with(value: \"b\")\nend\n\n")
+        http = 'import HTTP from "std/http"\n\n'
+        # (files, code, span, file of the error, whether a help is due): each old name has the help.
+        cases = [
+            ({"root.agc": uses}, None, None, None, False),
+            ({"root.agc": "def f(r: HttpRequest) -> Void\nend\n\n" + MAIN}, "CHECK-UNKNOWN-TYPE", ((1, 10), (1, 21)),
+             None, True),
+            ({"root.agc": "def f(c: HttpClient) -> Void\nend\n\n" + MAIN}, "CHECK-UNKNOWN-TYPE", ((1, 10), (1, 20)),
+             None, True),
+            ({"root.agc": http + 'def main() -> Void\n  puts(HTTP.proxy_from_env("x"))\n  h = Header(name: "a", value: "b")\n'
+              "end\n\n"}, "CHECK-UNKNOWN-TYPE", None, None, True),
+            ({"root.agc": 'import Lib from "lib"\n\ndef main() -> Void\n  Lib.f()\nend\n\n',
+              "lib.agc": "export def f() -> Void\n  o: HttpServerOptions = 1\nend\n"}, "CHECK-UNKNOWN-TYPE",
+             ((2, 6), (2, 23)), "lib.agc", True),
+            ({"root.agc": 'import {HttpResponse} from "std/http"\n\n' + MAIN}, "CHECK-IMPORT-NAME", None, None, True),
+        ]
+        self.assert_cases(cases)
 
     def test_a_type_after_a_function_is_out_of_order_at_the_type(self):
         problem = self.check({"root.agc": "def main() -> Void\nend\n\nstruct Late\n  n: Int\nend\n\n"})

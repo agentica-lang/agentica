@@ -78,7 +78,7 @@ def check_spawn(cx: State.Cx, st: State.St, site: State.Site, owning: Bool) -> R
         "CHECK-NOT-A-HANDLE",
         "Task.spawn_owning gives a handle to the new task, but the argument is #{T.to_text(handed.type)}",
         Ast.expr_span(site.args[1]),
-        "pass a FileHandle, Socket, Listener, Process, HttpServer, Channel, resource or owned buffer, or a value " +
+        "pass a FileHandle, Socket, Listener, Process, HTTP.Server, Channel, resource or owned buffer, or a value " +
         "that holds one; Task.spawn passes any other value",
       ),
     )

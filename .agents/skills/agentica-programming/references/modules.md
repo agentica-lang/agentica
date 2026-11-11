@@ -61,7 +61,7 @@ the enum. A bare function still needs parentheses.
   has no alias, so `Models.` is unavailable for it.
 - An imported name joins the file's names. It cannot equal a declaration, an
   alias, another imported name (the same name twice too), a builtin function
-  (`puts`, `ok`) or a reserved type (`Int`, `JSON`, `HttpWire`):
+  (`puts`, `ok`) or a reserved type (`Int`, `JSON`):
   `CHECK-REDEFINED-NAME` at the name (at the new name of a rename).
 - A name the module does not export, or keeps private, is `CHECK-IMPORT-NAME` at
   the name in the braces, with a `did you mean` help; it is reported at the

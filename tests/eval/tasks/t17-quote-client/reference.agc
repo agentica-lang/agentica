@@ -27,9 +27,9 @@ def failure_text(body: String) -> String
   return "error: #{message.unwrap!}"
 end
 
-def quote(client: HttpClient, base: String, item: String, quantity: Int) -> String
+def quote(client: HTTP.Client, base: String, item: String, quantity: Int) -> String
   body = JSON.encode(Quote(item: item, quantity: quantity))
-  headers = [Header(name: "Content-Type", value: "application/json")]
+  headers = [HTTP.Header(name: "Content-Type", value: "application/json")]
   sent = HTTP.post(client, base + "/quote", body.bytes, headers)
   if !sent.ok?
     return "error: no response"

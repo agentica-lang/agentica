@@ -21,6 +21,16 @@ OTHER_FORMS = [
   "UpgradeHandler",
 ]
 
+## The help of CHECK-IMPORT-NAME for a name of an import list ({member}): a moved type gets the import list form of
+## its new name (import {Response} from "std/http"), any other name the help of unknown_import_help.
+export def unknown_listed_help(key: String, exports: Map[String, Declarations.Kind], member: String) -> Diag.Help
+  if key.starts_with?("std/") and Builtins.moved_import(member) != ""
+    return Diag.Help.Hint(Builtins.moved_import(member))
+  end
+
+  unknown_import_help(key, exports, member)
+end
+
 ## The help of CHECK-IMPORT-NAME for member, which the module key does not export: the fixed texts for the removed
 ## std/http functions and std/logger error, the new name of a builtin type that moved into a std/ module (LogEvent),
 ## or the did-you-mean over the exports (a private name is never suggested).
@@ -30,7 +40,7 @@ export def unknown_import_help(key: String, exports: Map[String, Declarations.Ki
   other = OTHER_FORMS.any? do |name| name == member end
   if key == "std/http.agc" and removed
     return Diag.Help.Hint(
-      "a handler returns its whole response: return ok(HttpResponse(status: 200, headers: [], body: text.bytes))",
+      "a handler returns its whole response: return ok(HTTP.Response(status: 200, headers: [], body: text.bytes))",
     )
   elsif key == "std/http.agc" and whole
     return Diag.Help.Hint("HTTP.serve replaces it: HTTP.serve(host, port, HTTP.app(&handle), options)")

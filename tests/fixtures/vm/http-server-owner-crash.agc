@@ -1,28 +1,28 @@
 import HTTP from "std/http"
 
-def handle(request: HttpRequest) -> Result[HttpResponse]
+def handle(request: HTTP.Request) -> Result[HTTP.Response]
   at = request.target.index_of("?").unwrap!
   side = String.to_int!(request.target.slice(at + 1, request.target.length - at - 1))
   socket = TCP.connect("127.0.0.1", side, 5000).unwrap!
   TCP.send(socket, "handling\n", 5000).unwrap!
   Task.sleep(60000)
   puts("never: the handler woke up")
-  return ok(HttpResponse(status: 200, headers: [], body: "late".bytes))
+  return ok(HTTP.Response(status: 200, headers: [], body: "late".bytes))
 end
 
-def fetch(url: String) -> Result[HttpResponse]
-  pool = HTTP.client(HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)).unwrap!
+def fetch(url: String) -> Result[HTTP.Response]
+  pool = HTTP.client(HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)).unwrap!
   return HTTP.get(pool, url)
 end
 
-def explode(server: HttpServer) -> Result[Int]
+def explode(server: HTTP.Server) -> Result[Int]
   zero = HTTP.local_port(server) * 0
   return ok(10 / zero)
 end
 
 def main() -> Void
   side = TCP.listen("127.0.0.1", 0).unwrap!
-  options = HttpServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 4, max_body_bytes: 64)
+  options = HTTP.ServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 4, max_body_bytes: 64)
   server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options).unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
   pending = Task.spawn(&fetch, base + "/hang?#{TCP.local_port(side)}")

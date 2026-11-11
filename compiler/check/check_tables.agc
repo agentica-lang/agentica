@@ -102,7 +102,7 @@ export def foreign_names() -> Map[String, String]
     "Hash.new": "use a map literal with a type: m: Map[String, Int] = {}",
     "HttpWriter": (
       "a std/http handler returns its whole response: " +
-      "return ok(HttpResponse(status: 200, headers: [], body: text.bytes))"
+      "return ok(HTTP.Response(status: 200, headers: [], body: text.bytes))"
     ),
     "Int.parse": "use s.to_i (a Result) or s.to_i!",
     "Int.to_float": "use n.to_f",
@@ -149,7 +149,7 @@ export def foreign_names() -> Map[String, String]
     ),
     "None": "use nil",
     "Parallel.map": "use Task.map(items, limit, timeout_ms) do |x| ... end, where the block gives a Result",
-    "Request": "a std/http handler takes an HttpRequest: def handle(request: HttpRequest) -> Result[HttpResponse]",
+    "Request": "a std/http handler takes an HTTP.Request: def handle(request: HTTP.Request) -> Result[HTTP.Response]",
     "Set.empty": "write Set.new([]) where the type is known: seen: Set[Int] = Set.new([])",
     "SizedQueue.new": "use Channel.new(capacity): ch: Channel[Int] = Channel.new(8)",
     "String.to_bytes": "use s.bytes",

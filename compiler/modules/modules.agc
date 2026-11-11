@@ -12,7 +12,7 @@
 ## of their ids. Nothing but the checker's tables reads a node id, so the program means the same.
 
 import Builtins from "../catalog/builtins"
-import {BARE_NAMES, ENUMS, RECORDS, RESERVED, STD_ONLY} from "../catalog/builtins"
+import {BARE_NAMES, ENUMS, OPAQUE_TYPES, RECORDS, RESERVED, STD_ONLY} from "../catalog/builtins"
 import Diag from "../diagnostics/diagnostic"
 import Packages from "../packages/package_import"
 import PackageCache from "../packages/package_cache"
@@ -610,8 +610,8 @@ def free_reexport(module: Module, public: Map[String, Declarations.Kind], decl: 
 end
 
 # The kind of the builtin type that `export Family.Name` re-exports, where Family is a std-only family: a record is a
-# struct and an enum an enum. Only std/ may name the family (CHECK-UNKNOWN-NAME, as for a call of it), and only a type
-# of it (CHECK-IMPORT-NAME).
+# struct, an enum an enum and an opaque type (HttpWire.Client) a resource. Only std/ may name the family
+# (CHECK-UNKNOWN-NAME, as for a call of it), and only a type of it (CHECK-IMPORT-NAME).
 def builtin_reexport(module: Module, decl: Ast.ReexportDecl) -> Result[Declarations.Kind]
   name = "#{decl.alias}.#{decl.name}"
   if !Resolve.embedded?(module.key)
@@ -627,6 +627,8 @@ def builtin_reexport(module: Module, decl: Ast.ReexportDecl) -> Result[Declarati
     return ok(Declarations.Kind.Struct)
   elsif ENUMS.has_key?(name)
     return ok(Declarations.Kind.Enum)
+  elsif OPAQUE_TYPES.include?(name)
+    return ok(Declarations.Kind.Resource)
   end
 
   error(
@@ -634,7 +636,7 @@ def builtin_reexport(module: Module, decl: Ast.ReexportDecl) -> Result[Declarati
       Failure.Site(file: module.file, span: decl.name_span),
       "CHECK-IMPORT-NAME",
       "#{name} is no builtin type",
-      Failure.hint("a std/ module re-exports only a record or an enum of #{decl.alias}"),
+      Failure.hint("a std/ module re-exports only a record, an enum or a handle type of #{decl.alias}"),
     ),
   )
 end
@@ -779,7 +781,7 @@ def bind_name(
         Failure.Site(file: file, span: entry.span),
         "CHECK-IMPORT-NAME",
         "unknown or private imported name",
-        ImportHelp.unknown_import_help(target.key, target.public, entry.name),
+        ImportHelp.unknown_listed_help(target.key, target.public, entry.name),
       ),
     )
   end
@@ -993,7 +995,8 @@ def counted(parsed: Int, fresh: Bool) -> Int
 end
 
 # The names a file declares, and those it exports; a repeated name, a builtin name, a reserved type name or an enum
-# named like a std-only family with records (Builtins.record_family?) is CHECK-REDEFINED-NAME at the declaration name.
+# named like a std-only family with records (Builtins.record_family?) is CHECK-REDEFINED-NAME at the declaration (the
+# span of Declarations.name_span_of).
 def collect(file: String, declarations: List[Ast.Decl]) -> Result[Collected]
   names: Map[String, Declarations.Kind] = {}
   public: Map[String, Declarations.Kind] = {}
@@ -1002,14 +1005,22 @@ def collect(file: String, declarations: List[Ast.Decl]) -> Result[Collected]
     next if Declarations.import?(kind)
 
     name = Declarations.name_of(wrapped)
-    reserved = RESERVED.include?(name) or (Declarations.enum?(kind) and Builtins.record_family?(name))
-    if names.has_key?(name) or BARE_NAMES.include?(name) or reserved
+    family_enum = Declarations.enum?(kind) and Builtins.record_family?(name)
+    if names.has_key?(name) or BARE_NAMES.include?(name) or RESERVED.include?(name) or family_enum
+      help = Diag.Help.NoHelp
+      if family_enum
+        help = Failure.hint(
+          "#{name} is a builtin family with records of its own, so an enum may not have the name: its variants " +
+          "would clash with them; a struct or a type alias may",
+        )
+      end
+
       return error(
         Failure.fail_at(
           Failure.Site(file: file, span: Declarations.name_span_of(wrapped)),
           "CHECK-REDEFINED-NAME",
           "duplicate or reserved declaration",
-          Diag.Help.NoHelp,
+          help,
         ),
       )
     end

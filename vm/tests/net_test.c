@@ -436,8 +436,8 @@ static void declare_head_records(void) {
   structs[0] =
       (agc_struct_def){agc_make_string("HttpWire.Head", 13, 13), 10, false, agc_test_field_names(head_fields, 10),
                        NULL, NULL};
-  structs[1] =
-      (agc_struct_def){agc_make_string("Header", 6, 6), 2, false, agc_test_field_names(header_fields, 2), NULL, NULL};
+  structs[1] = (agc_struct_def){agc_make_string("HttpWire.Header", 15, 15), 2, false,
+                                agc_test_field_names(header_fields, 2), NULL, NULL};
   program.struct_count = 2;
   program.structs = structs;
   vm.rt->program = &program;
@@ -677,7 +677,7 @@ static void test_cancelled_tls_connect_past_its_deadline(bool std) {
   agc_test_settle_loop(&vm);
 }
 
-/* An HttpClient as http_service.c lays it out, with no pool behind it: HttpWire.upgrade_tls only reads its lazy
+/* An HttpWire.Client as http_service.c lays it out, with no pool behind it: HttpWire.upgrade_tls only reads its lazy
    context. */
 static agc_value new_client(bool dropped) {
   agc_http_client *c = agc_alloc(sizeof *c);

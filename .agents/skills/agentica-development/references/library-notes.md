@@ -101,7 +101,9 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   payload. Handles cannot be constructed, compared or JSON encoded.
 - TCP and TLS are C builtins (`vm/tcp.c`, `vm/tls_openssl.c`); HTTP is
   `std/http` in Agentica over the std-only `HttpWire` builtins (`vm/http_*.c`),
-  imported as `HTTP`; the server runs each connection as a task in the
+  imported as `HTTP`, which re-exports its records and handles
+  (`HTTP.Request`, `HTTP.Response`, `HTTP.Header`, `HTTP.Client`, ...); the
+  server runs each connection as a task in the
   server's task group. See `references/vm-net.md`.
 - tests/test_vm_tcp.py, test_vm_tls.py and test_vm_http.py use independent Node
   and Python standard-library peers and checked-in localhost certificates.
@@ -290,7 +292,8 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   do the same job. A type of one reaches users through a re-export of its std
   module (`export LogRegistry.Event`, `bind_reexports` in `modules.agc`), so
   it reserves no name; a type that moved there goes in `MOVED_TYPES`
-  (`builtins_data.agc`) for the old-name help.
+  (`builtins_data.agc`) for the old-name help. A std-only family with records
+  of its own reserves its name for enums (`Builtins.record_family?`).
 - Not retroactive: existing builtins, JSON included, stay as they are.
 
 ## Comments and style in stdlib/
