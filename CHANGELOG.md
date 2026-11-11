@@ -13,6 +13,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Lambdas: `->(x) { x + 1 }` is a function value that can be kept in a
   variable, a field, a list or a map, or passed as an argument; `-> { 42 }`
   takes no parameters.
+- A block or lambda parameter without an annotation or an `Fn` type takes its
+  type from its uses in the body when they allow only one
+  (`->(x) { x + 1 }`, `puts(Actor.call(a, 1000) do |reply| Msg.Get(reply) end)`).
 - A program may name a type `Header`, `HttpRequest`, `HttpResponse`,
   `HttpClient`, `HttpServer`, `HttpClientOptions`, `HttpServerOptions` or
   `HttpWire` (an enum `HttpWire` stays an error).

@@ -9,6 +9,7 @@ import Source from "../syntax/source"
 import T from "../syntax/types"
 import DefaultChecks from "check_defaults"
 import Flow from "check_flow"
+import Infer from "check_infer"
 import State from "check_state"
 import Types from "check_types"
 import Unused from "check_unused"
@@ -1119,16 +1120,56 @@ def block_parameter_type(
     return ok(context)
   end
 
-  error(
-    State.fail_help(
-      cx,
-      st,
-      "CHECK-BLOCK-TYPE",
-      "the type of #{block_noun(block)} parameter \"#{param.name}\" is not known here",
-      param.span,
-      block_type_help(block, param.name),
-    ),
-  )
+  inferred(cx, st, block, param)
+end
+
+# The type of a parameter that has neither an annotation nor a type from the context: the one type its uses in the
+# body leave (Infer), else CHECK-BLOCK-TYPE with the annotation to write.
+def inferred(cx: State.Cx, st: State.St, block: Ast.BlockLit, param: Ast.BlockParam) -> Result[T.Type]
+  noun = block_noun(block)
+  message = "the type of #{noun} parameter \"#{param.name}\" is not known here"
+  help = block_type_help(block, param.name)
+  case Infer.param_type(cx, st, block.body, param.name)
+    Infer.Guess.Found(type) -> return ok(type)
+    Infer.Guess.Open -> message = message
+    Infer.Guess.Several(types) ->
+      message += ": its uses allow #{spoken(types, "or")}"
+      help = annotation_help(block, param.name, types)
+    Infer.Guess.Conflict(types) ->
+      message = "the uses of #{noun} parameter \"#{param.name}\" need different types: #{spoken(types, "and")}"
+      help = annotation_help(block, param.name, [types[0]])
+  end
+
+  error(State.fail_help(cx, st, "CHECK-BLOCK-TYPE", message, param.span, help))
+end
+
+# The types as words: "Int, Float or String".
+def spoken(types: List[T.Type], last: String) -> String
+  text = T.to_text(types[0])
+  index = 1
+  while index < types.size
+    joiner = ", "
+    if index == types.size - 1
+      joiner = " #{last} "
+    end
+
+    text += joiner + T.to_text(types[index])
+    index += 1
+  end
+
+  text
+end
+
+# The help that shows the parameter annotated with each type.
+def annotation_help(block: Ast.BlockLit, name: String, types: List[T.Type]) -> String
+  forms = types.map do |type: T.Type| annotated_form(block, name, T.to_text(type)) end
+  "annotate it, as in #{forms.join(" or ")}"
+end
+
+def annotated_form(block: Ast.BlockLit, name: String, type: String) -> String
+  return "->(#{name}: #{type}) { ... }" if block.lambda
+
+  "do |#{name}: #{type}| ... end"
 end
 
 # What the source calls the block literal: "lambda" for ->(x) { ... }, "block" for do |x| ... end.

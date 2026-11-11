@@ -644,8 +644,9 @@ of the caller do not mix:
    `map`, bind it first: `f: Fn[Int, Bool] = &name`.
 4. The lambdas among the other arguments, from left to right, then the block,
    the last argument. Their parameter types come from the `Fn` parameter; one
-   that is still open must be annotated (`do |x: Int|`, `->(x: Int)`), which
-   binds it, else `CHECK-BLOCK-TYPE`. The result binds the open parameters of
+   that is still open comes from an annotation (`do |x: Int|`, `->(x: Int)`)
+   or from its uses in the body (see Blocks), which binds it, else
+   `CHECK-BLOCK-TYPE`. The result binds the open parameters of
    the `Fn` result (`R` in `Result[R]`); a result that does not fit is
    `CHECK-TYPE-MISMATCH`. A step 3 argument whose parameter type is
    still open waits for the block. A step 3 argument binds nothing: with
@@ -899,8 +900,17 @@ total = xs.reduce(0) do |sum, x| sum + x end
   which is never a block; a block in such a header needs parentheses.
 - **Parameter types** come from the expected `Fn` or the builtin's rule
   (`xs.map` gives `x` the element type), or from annotations such as `do |x:
-  Int|`. With neither, `CHECK-BLOCK-TYPE`. A wrong number of parameters is
-  `CHECK-ARITY`.
+  Int|`. With neither, the uses of the parameter in the body give its type
+  when they leave exactly one. A use names a set of types: an argument of a
+  typed parameter (a function, a builtin with one form, a variant payload, a
+  struct field, `y: T = x`) its type; `x.name` every receiver kind or struct
+  that has `name` (none when a generic one does, or for `to_s` and
+  `inspect`); an operator with a literal the literal's type (`x * 2` Int or
+  String, `%` and ranges Int); `and`, `or` and `!` Bool. Other uses name
+  none. With no set, several types left (`x * 2`) or none (`x + 1` and
+  `x.upcase`), `CHECK-BLOCK-TYPE` at the parameter, with the annotation in its
+  help. The body is then checked as if annotated. A wrong number of parameters
+  is `CHECK-ARITY`.
 - **Result.** `return` leaves the block, not the function. Without `return`, the
   last expression statement is the value. For `map` and `sort_by` the result
   type comes from the body, where every `return` and the last expression must
@@ -941,7 +951,8 @@ half: Fn[String, Result[Int]] = ->(s) {
 
 - The rules of a block hold: parameter types from the expected `Fn` (an
   annotated variable, a parameter, a field, a list or map item, a return type)
-  or from annotations (`->(x: Int) { ... }`), else `CHECK-BLOCK-TYPE`; the
+  or from annotations (`->(x: Int) { ... }`) or from their uses in the body
+  (`->(x) { x + 1 }` takes an Int), else `CHECK-BLOCK-TYPE`; the
   result from the expected `Fn` or else from the body; `try` only with a known
   `Result` result (`CHECK-TRY-CONTEXT`); capture by value; `return` leaves the
   lambda. A lambda where a type other than `Fn` is expected is

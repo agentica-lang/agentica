@@ -58,8 +58,9 @@ def test_a_lambda_is_a_function_value(checked, body):
 
 
 REJECTED = [
-    # A parameter with neither an annotation nor an expected type.
-    ("  inc = ->(x) { x + 1 }\n  puts(inc.call(1))", "CHECK-BLOCK-TYPE", "x"),
+    # A parameter with neither an annotation, an expected type nor a use that names its type
+    # (tests/test_spec_block_inference.py).
+    ('  show = ->(x) { "#{x}" }\n  puts(show.call(1))', "CHECK-BLOCK-TYPE", "x"),
     # A lambda where something else is expected, or with the wrong number of parameters.
     ("  n: Int = -> { 1 }\n  puts(n)", "CHECK-TYPE-MISMATCH", "-> { 1 }"),
     ("  f: Fn[Int, Int] = ->(a, b) { a }\n  puts(f.call(1))", "CHECK-ARITY", "->(a, b) { a }"),

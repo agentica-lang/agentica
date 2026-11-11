@@ -41,7 +41,7 @@ Actor.reply(channel: Channel[R], value: R) -> Void
 
 Errors: `error("actor: timeout")` when the inbox stays full or the answer does not come in time, and `error("address: gone")` when the actor has ended. A call whose actor crashes or ends before it answers waits for its timeout. A call to the actor's own address from its handler, or two actors that call each other, wait for their timeouts too, since an actor handles one message at a time; send the work to another task instead.
 
-The type of the answer comes from the expected type: the result type of the function that returns the call, or an annotation. Where there is none (inside `puts` or an interpolation), write the type of the block's parameter: `do |reply: Channel[Int]| Msg.Get(reply) end`.
+The type of the answer comes from the expected type (the result type of the function that returns the call, or an annotation), or else from the block: in `Msg.Get(reply)` the variant's payload makes `reply` a `Channel[Int]`, so `puts(Actor.call(address, 1000) do |reply| Msg.Get(reply) end)` works too.
 
 ```agentica
 import Actor from "std/actor"

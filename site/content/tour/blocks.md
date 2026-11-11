@@ -127,7 +127,7 @@ end
 
 ## Lambdas
 
-A block always follows a call. A function value of its own, to keep in a variable, a field or a list, is a lambda: `->(x) { ... }`, with the body in braces over one line or several. Its parameter types come from the `Fn` type it is given, or from annotations. A lambda without parameters drops the parentheses: `-> { 42 }`.
+A block always follows a call. A function value of its own, to keep in a variable, a field or a list, is a lambda: `->(x) { ... }`, with the body in braces over one line or several. Its parameter types come from the `Fn` type it is given, from annotations, or from their uses in the body: in `->(x) { x + 1 }` the `+ 1` makes `x` an `Int`. When the uses leave no single type, as `x * 2` (an `Int`, or a `String` to repeat), annotate: `->(x: Int) { x * 2 }` (`CHECK-BLOCK-TYPE` otherwise). A lambda without parameters drops the parentheses: `-> { 42 }`.
 
 ```agentica
 def main() -> Void

@@ -21,6 +21,7 @@ check/check_defaults.agc
 check/check_expr.agc
 check/check_flow.agc
 check/check_help.agc
+check/check_infer.agc
 check/check_list.agc
 check/check_method.agc
 check/check_names.agc
