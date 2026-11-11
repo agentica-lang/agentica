@@ -70,8 +70,7 @@ The design (trie, unboxed Int and Float leaves, builders, costs) is
   cells by `seq` (a bitmap or a sorted merge, never a key lookup).
 - Cost: O(log32 n) amortized, `AGC_COST_NONE` like `Map.put`; the rebuild of the
   key list charges its length as turn cost. `MAP` and `Map.put` share
-  `agc_map_put`. HAMT recursion is bounded by 14 levels; nested maps print
-  through the explicit-stack printer, never C recursion.
+  `agc_map_put`. HAMT recursion is bounded by 14 levels.
 - Sets are the same `agc_map` with nil values under `AGC_T_SET`
   (`agc_set_value`, `agc_as_set`); nothing else reads their layout. `Set.add`,
   `Set.new` and `union` use `agc_map_add_hash`, which returns the input map for
@@ -306,8 +305,7 @@ Core layer; the design (modes, native calls, exits, helper contract) is
   `docs/vm/02-reference-behavior.md` §2.3 before touching `agc_write_form`.
 - Lists can share items, so the text of a list can be exponential in the code
   that built it (`a1 = [a0, a0]`, `a2 = [a1, a1]`, ...). Printing then ends in
-  the out-of-memory exit, as the trust model allows. Never print or compare
-  nested values with C recursion.
+  the out-of-memory exit, as the trust model allows.
 - `--max-steps` bounds instructions, not bytes: string ops cost in proportion to
   their size.
 - Strings: `agc_string` keeps the byte and code point counts. Build every
