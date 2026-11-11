@@ -20,14 +20,17 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
 
-from tests.agentica_test import (FIXTURES, ROOT, RUN_TIMEOUT, UNDER_WINE, WINDOWS, TestCase, _kill_and_collect,
-                                 channel_peer, compile_agc, scaled, vm_binary, vm_command, vm_environment)
+from tests.agentica_test import (FIXTURES, ROOT, RUN_TIMEOUT, SWEEP_WORKERS, UNDER_WINE, WINDOWS, TestCase,
+                                 _kill_and_collect, channel_peer, compile_agc, env_number, scaled, vm_binary,
+                                 vm_command, vm_environment)
 
 FIXTURE_DIR = FIXTURES / "vm"
 RUNAWAY_DIR = FIXTURE_DIR / "step-limited"
@@ -345,17 +348,19 @@ def run_fixture_vm(fixture, bytecode, limit, work):
     return unfixture(result)
 
 
-def vm_batch(fixture, bytecode, option_lists, work):
-    """Run the VM once for each list of options, with the fixture's stdin as a file; after the first run that hangs
-    (124 or 137) the others are skipped and reported as 124."""
-    results = []
-    hung = False
+def vm_batch(fixture, bytecode, option_lists, work, workers):
+    """Run the VM once for each list of options, at most `workers` runs at a time, with the fixture's stdin as a file;
+    after the first run that hangs (124 or 137) the later runs are not started and are reported as 124."""
     stdin_path = Path(work) / "stdin"
     stdin_path.write_bytes(fixture.input)
-    for options in option_lists:
-        if hung:
-            results.append((124, "", ""))
-            continue
+    first_hung = len(option_lists)
+    lock = threading.Lock()
+
+    def run_one(index, options):
+        nonlocal first_hung
+        with lock:
+            if index > first_hung:
+                return 124, "", ""
         directory = fresh_tmp(work) if fixture.uses_tmp else None
         try:
             args = tmp_args(fixture, directory) if directory else fixture.args
@@ -368,6 +373,19 @@ def vm_batch(fixture, bytecode, option_lists, work):
                 shutil.rmtree(directory, ignore_errors=True)
         if result[0] == TIMEOUT:
             result = (124, "", "")
+        if result[0] in (124, 137):
+            with lock:
+                first_hung = min(first_hung, index)
+        return result
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        raw = list(pool.map(run_one, range(len(option_lists)), option_lists))
+    results = []
+    hung = False
+    for result in raw:
+        if hung:
+            results.append((124, "", ""))
+            continue
         hung = result[0] in (124, 137)
         results.append(unfixture(result))
     return results
@@ -576,7 +594,8 @@ def check_fixture(program, work):
     results = vm_batch(
         fixture, bytecode,
         [style_options("json")] + [style_options(style) for style in text_styles]
-        + [limit_options(limit) + style_options("json") for limit in limits], work)
+        + [limit_options(limit) + style_options("json") for limit in limits], work,
+        1 if name in KERNEL_TIMED_FIXTURES else SWEEP_WORKERS)
     seen = outcome(results[0])
     assert seen == full, "%s\n  got:      %r\n  expected: %r" % (name, seen, full)
     for style, on_vm in zip(text_styles, results[1:]):
@@ -732,11 +751,9 @@ def _head_sha():
 
 
 def _sweep_seed():
-    given = os.environ.get("AGENTICA_SWEEP_SEED")
-    if given:
-        if not given.isascii() or not given.isdigit():
-            raise RuntimeError("AGENTICA_SWEEP_SEED must be a natural number, not %r" % given)
-        return int(given)
+    given = env_number("AGENTICA_SWEEP_SEED")
+    if given is not None:
+        return given
     if SAMPLED_SWEEP:
         sha = os.environ.get("GITHUB_SHA") or _head_sha()
         if sha and re.match(r"[0-9a-f]{8}", sha):

@@ -89,6 +89,20 @@ def test_shard_tables_name_real_fixtures_and_shards():
             assert ("SHARD = %d" % shard) in module.read_text(encoding="utf-8"), str(module)
 
 
+def test_a_batch_starts_no_run_after_a_hang_and_reports_the_later_runs_as_124(monkeypatch, tmp_path):
+    started = []
+
+    def fake_run(fixture, options, bytecode, args, **_):
+        started.append(options[-1])
+        return (vm_diff_support.TIMEOUT, "", "") if options[-1] == "hang" else (0, options[-1], "")
+
+    monkeypatch.setattr(vm_diff_support, "run_vm_process", fake_run)
+    results = vm_diff_support.vm_batch(vm_diff_support.Fixture(), "x.agcb",
+                                       [["first"], ["hang"], ["third"], ["fourth"]], tmp_path, 1)
+    assert started == ["first", "hang"]
+    assert results == [(0, "first", ""), (124, "", ""), (124, "", ""), (124, "", "")]
+
+
 @pytest.mark.parametrize("name", ["imports", "io-gets", "enums-case"])
 def test_compile_gives_the_same_bytes_every_time(tmp_path, name):
     program = FIXTURE_DIR / (name + ".agc")
