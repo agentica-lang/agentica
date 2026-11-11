@@ -46,8 +46,13 @@ rules live in `AGENTS.md` and `agentica-development`.
   interpreter or scheduler hot path: an interleaved A/B against master with
   medians (`references/bench-eval.md` of agentica-development), numbers in
   the PR body. Critics and reviewers do not time.
-- A local pre-commit hook (untracked) may run `make dup-check` on staged `vm/`
-  or `tests/` files and block new clones; refactor them (CI fails on them too).
+- A local pre-commit hook (untracked) may run the style tests, `make dup-check`
+  on staged `vm/` or `tests/` files, and the CI fmt check
+  (`agentica fmt --check`) on staged `compiler/` and `stdlib/` `.agc` files. It
+  blocks new clones and unformatted files, like `make fmt-check`; refactor or
+  format them (CI fails on them too). The formatter is the staged front end,
+  compiled once per formatter change by the existing `dist/agentica` and cached
+  in `.git/agentica-hook`.
   Never bypass the hook (`--no-verify`, `core.hooksPath`); install the missing
   tool instead.
 - Untracked folders are per worktree: `tools/jscpd/node_modules` (`make
