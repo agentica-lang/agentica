@@ -117,6 +117,35 @@ export def declared_at(module: Linker.LinkedModule, name_span: Source.Span) -> O
   none
 end
 
+## The field or variant `name` of `module` whose name is written at `name_span`, as `answer` lists it, or `none`. The
+## members of a builtin type that a std/ module re-exports all take the place of the type's name, so `name` tells them
+## apart.
+export def member_at(module: Linker.LinkedModule, name_span: Source.Span, name: String) -> Optional[Match]
+  at = name_span.start.offset
+  file = Linker.home_key(module)
+  for item in items_of(module)
+    case item.detail
+      Model.Detail.Struct(fields) ->
+        for field in fields
+          return some(field_match(file, item, field)) if field.name_span.start.offset == at and field.name == name
+        end
+
+      Model.Detail.Enum(variants) ->
+        for variant in variants
+          if variant.name_span.start.offset == at and variant.name == name
+            return some(variant_match(file, item, variant))
+          end
+        end
+
+      Model.Detail.Function(_, _) -> next
+      Model.Detail.Module(_) -> next
+      Model.Detail.Plain -> next
+    end
+  end
+
+  none
+end
+
 # The aliases that the files of the roots import each module under, by the key of the module. The same alias can name
 # different modules in different files, so a name through it lists a match for each.
 def aliases_of(modules: List[Linker.LinkedModule], roots: List[SymbolPaths.Root]) -> Map[String, List[String]]

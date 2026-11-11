@@ -342,7 +342,12 @@ def defined(modules: List[Linker.LinkedModule], target: Sites.Target) -> Optiona
     none -> none
     some(declared) ->
       same = modules.filter do |module: Linker.LinkedModule| module.file == declared.file end
-      Symbol.declared_at(At.holder(same, declared.name_span.start.offset), declared.name_span)
+      holder = At.holder(same, declared.name_span.start.offset)
+      if declared.kind == "field" or declared.kind == "variant"
+        return Symbol.member_at(holder, declared.name_span, declared.name)
+      end
+
+      Symbol.declared_at(holder, declared.name_span)
   end
 end
 

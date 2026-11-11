@@ -18,6 +18,9 @@ export REEXPORTED_TYPES: Map[String, String] = {
 # A `written` map whose key "" (no linked name or prefix is empty) asks to_text_as for the builtin names.
 KEEP_BUILTIN: Map[String, String] = {"": ""}
 
+# The characters that may continue a name: a type name next to one of them is part of a longer name.
+NAME_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_?!"
+
 ## A resolved type. Opaque holds the name of a handle or other builtin type with no structure (Socket, Process,
 ## TestCase, C.Pointer), or the linked name of a resource of an extern block. Struct and Enum hold the linked name and
 ## carry their type arguments (none for a plain struct or enum). Var is a type variable of a builtin signature, a
@@ -280,16 +283,34 @@ end
 export def written_type(name: String) -> String = REEXPORTED_TYPES.get(name, display_name(name))
 
 ## Source text with each re-exported builtin type written by its written name: the default `HttpWire.ClientOptions()`
-## of a std/ signature prints as `HTTP.ClientOptions()`. Longer names go first, so HttpWire.ClientOptions is never
-## taken for HttpWire.Client.
+## of a std/ signature prints as `HTTP.ClientOptions()`. Only a whole name outside a string literal is a type: the
+## default `"HttpWire.Client"` stays as written.
 export def written_types_in(text: String) -> String
-  names = REEXPORTED_TYPES.keys.sort_by do |name: String| -name.length end
-  shown = text
-  for name in names
-    shown = shown.replace(name, REEXPORTED_TYPES[name])
+  pieces: List[String] = []
+  quoted = false
+  at = 0
+  while at < text.length
+    character = text.at(at)
+    if quoted and character == "\\" and at + 1 < text.length
+      pieces = pieces.push(text.slice(at, 2))
+      at += 2
+      next
+    elsif quoted or character == "\""
+      quoted = quoted != (character == "\"")
+    else
+      name = type_name_at(text, at)
+      if name != ""
+        pieces = pieces.push(REEXPORTED_TYPES[name])
+        at += name.length
+        next
+      end
+    end
+
+    pieces = pieces.push(character)
+    at += 1
   end
 
-  shown
+  pieces.join("")
 end
 
 ## The type as the messages print it: Int, List[String], Map[String, Int], Fn[Int, Void], Point, Option[Int],
@@ -401,6 +422,20 @@ def reexported_name(name: String, written: Map[String, String]) -> String
   return name if !REEXPORTED_TYPES.has_key?(name) or written.has_key?("")
 
   written.get(name, REEXPORTED_TYPES[name])
+end
+
+# The re-exported builtin type written as a whole name at `at` of `text` (not the start of `HttpWire.ClientOptions`
+# for HttpWire.Client, nor the end of `My.HttpWire.Client`), or "".
+def type_name_at(text: String, at: Int) -> String
+  return "" if at > 0 and (NAME_CHARACTERS.include?(text.at(at - 1)) or text.at(at - 1) == ".")
+
+  for name in REEXPORTED_TYPES.keys
+    stop = at + name.length
+    next if stop > text.length or text.slice(at, name.length) != name
+    return name if stop == text.length or !NAME_CHARACTERS.include?(text.at(stop))
+  end
+
+  ""
 end
 
 def digit?(character: String) -> Bool

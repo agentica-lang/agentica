@@ -858,3 +858,8 @@ def test_a_builtin_type_that_std_re_exports_is_found_by_its_written_names(tmp_pa
                        ("server.agc", *where(SERVER, "Request(method"), "construct", "main")], name
     body = told("HTTP.Request.body", "server.agc", cwd=tmp_path)
     assert ("server.agc", *where(SERVER, "body))"), "read", "handle") in places(body)
+    assert (body["definition"]["kind"], body["definition"]["name"]) == ("field", "body")
+    # By position, on the type and on a read of its field, the definition is the same, and no builtin name shows.
+    for needle, found in (("Request(method", report), ("body))", body)):
+        at = answer(("server.agc", where(SERVER, needle)), cwd=tmp_path)
+        assert (at["definition"], at["builtin"]) == (found["definition"], None), needle

@@ -65,10 +65,11 @@ def test_every_builtin_type_a_std_module_re_exports_has_its_written_name():
     families = {family: (path, alias) for family, path, alias in
                 re.findall(r'"(\w+)": \["([^"]+)", "(\w+)"\]', table("catalog/builtins_data.agc", "STD_ONLY_IMPORTS"))}
     exported = {}
-    for path in sorted((ROOT / "stdlib").glob("*.agc")):
+    for path in sorted((ROOT / "stdlib").rglob("*.agc")):
+        std_path = "std/" + path.relative_to(ROOT / "stdlib").with_suffix("").as_posix()
         for family, member in re.findall(r"^export (\w+)\.(\w+)$", path.read_text(encoding="utf-8"), flags=re.M):
             if family in families:
-                assert families[family][0] == "std/" + path.stem, (family, path)
+                assert families[family][0] == std_path, (family, path)
                 exported["%s.%s" % (family, member)] = "%s.%s" % (families[family][1], member)
     assert written == exported
     moved = re.findall(r'"\w+": "([^"]+)"', table("catalog/builtins_data.agc", "MOVED_TYPES"))
