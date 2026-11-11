@@ -313,6 +313,8 @@ class TestSpecParser:
             Reject(main_of("  in += 1\n"), "PARSE-RESERVED-WORD", (2, 3, 2, 5)),
             Reject(main_of("  case some(1)\n    some(end) -> puts(1)\n    none -> puts(0)\n  end\n"),
                    "PARSE-RESERVED-WORD", (3, 10, 3, 13)),
+            Reject(main_of("  case some(1)\n    none -> puts(0)\n    some(end) -> puts(1)\n  end\n"),
+                   "PARSE-RESERVED-WORD", (4, 10, 4, 13)),
             Reject(main_of("  x = JSON.true(1)\n"), "PARSE-RESERVED-WORD", (2, 12, 2, 16)),
             Reject(main_of("  f = &JSON.end\n"), "PARSE-RESERVED-WORD", (2, 13, 2, 16)),
             Reject(main_of("  n = [1].end\n"), "PARSE-RESERVED-WORD", (2, 11, 2, 14)),

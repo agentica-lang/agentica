@@ -1,0 +1,13 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 43,
+  "stdout": [
+    "expected <Bytes 5 \"+OK\\r\\n\">; actual <Bytes 11 \"+OK\\r\\n\\x00\\xFF\\e\\\"\\\\\\t\">",
+    "expected []; actual [<Bytes 11 \"+OK\\r\\n\\x00\\xFF\\e\\\"\\\\\\t\">]",
+    "expected <Bytes 0 \"\">; actual <Bytes 36 \"0123456789abcdefghijklmnopqrstuv\"...>",
+    "<Bytes 11 2b4f4b0d0a00ff1b225c09>",
+    ""
+  ],
+  "stderr": []
+}

@@ -103,7 +103,7 @@ export def foreign_method_help(cx: State.Cx, kind: String, name: String) -> Stri
     end
 
     return "#{kind} methods are eager; #{name} is a step of Lazy: call .lazy first: #{receiver}.lazy.#{name}(...)"
-  elsif kind == "Lazy" and catalog_method(cx, "List", name) != ""
+  elsif kind == "Lazy" and shown_method(cx, "List", name) != ""
     return "a Lazy runs only in a terminal; collect it first with try lz.to_a (or lz.first(n)), then call .#{name}"
   end
 
@@ -132,14 +132,22 @@ def catalog_method(cx: State.Cx, kind: String, name: String) -> String
   ""
 end
 
-# The names of the module's builtins that are methods of the kind. A builtin written as an operator (List.concat is
-# `+`) is no method a help offers.
+# A method that a help may offer: catalog_method, less a builtin written as an operator (List.concat is `+`), which
+# still resolves in a call but no text shows.
+def shown_method(cx: State.Cx, kind: String, name: String) -> String
+  found = catalog_method(cx, kind, name)
+  return "" if OPERATOR_ONLY.include?(found)
+
+  found
+end
+
+# The names of the module's builtins that are methods of the kind, as a help offers them.
 def module_methods(cx: State.Cx, kind: String, prefix: String) -> List[String]
   names: List[String] = []
   for key in ENTRIES.keys
-    if key.starts_with?(prefix) and !OPERATOR_ONLY.include?(key)
+    if key.starts_with?(prefix)
       name = key.slice(prefix.length, key.length - prefix.length)
-      if catalog_method(cx, kind, name) != ""
+      if shown_method(cx, kind, name) != ""
         names = names.push(name)
       end
     end

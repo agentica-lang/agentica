@@ -1,8 +1,8 @@
 /*
  * Text and debug forms: agc_text (the print form), agc_debug (the inspect
  * form), agc_test_text (the inspect form with a Json at any depth as its
- * canonical text, for Test.eq), agc_concat, and agc_write_form, the one
- * escaper for String debug output. Core layer. Design:
+ * canonical text and a Bytes as quoted text, for Test.eq), agc_concat, and
+ * agc_write_form, the one escaper for String debug output. Core layer. Design:
  * docs/vm/02-reference-behavior.md §2.3 and §2.4.
  */
 #include "core.h"
@@ -10,10 +10,15 @@
 #include <inttypes.h>
 #include <string.h>
 
-/* The inspect form of a Bytes shows this many bytes in hex, then "..." when there are more. */
+/* The inspect and test forms of a Bytes show this many bytes, then "..." when there are more. */
 #define BYTES_SHOWN 32
-/* "<Bytes ", a size_t, a space, the hex, "..." and ">". */
-#define BYTES_FORM (7 + 20 + 1 + 2 * BYTES_SHOWN + 3 + 1)
+/* "<Bytes ", a size_t, a space, the shown bytes (two hex digits each, or two quotes and at most four characters each
+   when quoted), "..." and ">". */
+#define BYTES_FORM (7 + 20 + 1 + 2 + 4 * BYTES_SHOWN + 3 + 1)
+
+/* How bytes_form writes a Bytes: its size alone (to_s), the first bytes in hex (inspect), or as quoted text (test
+   messages). */
+typedef enum { BYTES_SIZE, BYTES_HEX, BYTES_QUOTED } bytes_style;
 
 typedef struct {
   agc_string *s;
@@ -108,18 +113,46 @@ agc_string *agc_concat(const agc_string *a, const agc_string *b) {
   return s;
 }
 
-/* The text of a Bytes: "<Bytes N>" for to_s, and with hex, the inspect form "<Bytes N 616263>" that shows the first
-   BYTES_SHOWN bytes. Raw bytes are not text and may not be UTF-8, so neither form holds them. */
-static size_t bytes_form(const agc_bytes *b, bool hex, char out[BYTES_FORM]) {
+/* One byte of the quoted form, with the escapes of agc_write_form: the short escapes by name (\n, \e, \", ...),
+   printable ASCII as itself, any other byte as \xHH in upper-case hex. At most four characters. */
+static size_t quoted_byte(uint8_t c, char *out) {
+  static const char digits[] = "0123456789ABCDEF";
+  const char *named = short_escape(c);
+  if (named) {
+    out[0] = named[0];
+    out[1] = named[1];
+    return 2;
+  }
+  if (c >= 0x20 && c < 0x7f) {
+    out[0] = (char)c;
+    return 1;
+  }
+  out[0] = '\\';
+  out[1] = 'x';
+  out[2] = digits[c >> 4];
+  out[3] = digits[c & 15];
+  return 4;
+}
+
+/* The text of a Bytes: "<Bytes N>" for to_s, the inspect form "<Bytes N 616263>" with the first BYTES_SHOWN bytes in
+   hex, and the test form <Bytes 7 "+OK\r\n\x00\xFF"> with them quoted. Raw bytes are not text and may not be UTF-8,
+   so no form holds them as they are: every form is ASCII. */
+static size_t bytes_form(const agc_bytes *b, bytes_style style, char out[BYTES_FORM]) {
   static const char digits[] = "0123456789abcdef";
   size_t n = (size_t)snprintf(out, BYTES_FORM, "<Bytes %zu", b->len);
-  if (hex && b->len) {
+  if (style == BYTES_QUOTED || (style == BYTES_HEX && b->len)) {
     size_t shown = b->len < BYTES_SHOWN ? b->len : BYTES_SHOWN;
     out[n++] = ' ';
+    if (style == BYTES_QUOTED) out[n++] = '"';
     for (size_t k = 0; k < shown; k++) {
-      out[n++] = digits[b->data[k] >> 4];
-      out[n++] = digits[b->data[k] & 15];
+      if (style == BYTES_QUOTED) {
+        n += quoted_byte(b->data[k], out + n);
+      } else {
+        out[n++] = digits[b->data[k] >> 4];
+        out[n++] = digits[b->data[k] & 15];
+      }
     }
+    if (style == BYTES_QUOTED) out[n++] = '"';
     if (shown < b->len) {
       memcpy(out + n, "...", 3);
       n += 3;
@@ -204,7 +237,7 @@ static void append_item(agc_vm *vm, builder *b, agc_value v, bool json, bool *is
     b->s->chars += chars;
   } else if (agc_is(v, AGC_T_BYTES)) {
     char form[BYTES_FORM];
-    append(b, form, bytes_form(agc_as_bytes(vm, v), true, form));
+    append(b, form, bytes_form(agc_as_bytes(vm, v), json ? BYTES_QUOTED : BYTES_HEX, form));
   } else {
     char text[AGC_SCALAR_TEXT];
     append(b, text, agc_scalar_text(vm, v, text));
@@ -364,7 +397,7 @@ static agc_string *compound_debug(agc_vm *vm, agc_value root, bool json, bool *i
    as a String there is quoted. */
 static agc_string *bytes_text(agc_vm *vm, agc_value v) {
   char form[BYTES_FORM];
-  size_t n = bytes_form(agc_as_bytes(vm, v), false, form);
+  size_t n = bytes_form(agc_as_bytes(vm, v), BYTES_SIZE, form);
   return agc_make_string(form, n, n);
 }
 
@@ -389,7 +422,7 @@ static agc_string *debug_text(agc_vm *vm, agc_value v, bool json, bool *is_void)
   }
   if (agc_is(v, AGC_T_BYTES)) {
     char form[BYTES_FORM];
-    size_t n = bytes_form(agc_as_bytes(vm, v), true, form);
+    size_t n = bytes_form(agc_as_bytes(vm, v), json ? BYTES_QUOTED : BYTES_HEX, form);
     return agc_make_string(form, n, n);
   }
   if (!agc_is(v, AGC_T_STRING)) {
@@ -431,6 +464,6 @@ bool agc_text_checked(agc_vm *vm, agc_value v, agc_string **text) {
   return true;
 }
 
-/* The inspect form, except that a Json at any depth is its canonical text,
-   for Test.eq's expected and actual. */
+/* The inspect form, except that a Json at any depth is its canonical text and a Bytes is quoted text (most protocol
+   bytes are text), for Test.eq's expected and actual. */
 agc_string *agc_test_text(agc_vm *vm, agc_value v) { return debug_text(vm, v, true, NULL); }

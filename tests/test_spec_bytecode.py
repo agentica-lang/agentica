@@ -9,6 +9,7 @@ import json
 import textwrap
 
 from tests.agentica_test import cli, run, vm_environment
+from tests.spec_support import covered
 
 MAP_ENTRIES = ", ".join("%d: %d" % (key, key) for key in range(257))
 # Close to the parser's nesting limit, so the type is deep but still parses.
@@ -42,6 +43,23 @@ def assert_fails(text, code, tmp_path):
     diagnostic = json.loads(result.stderr)
     assert diagnostic.get("code") == code, result.stderr
     return result.stdout
+
+
+def test_a_builtin_function_value_reports_its_error_at_the_call(tmp_path):
+    """A builtin taken as a value runs through a generated wrapper; its runtime error still points at the caller."""
+    text = source("""
+        def main() -> Void
+          parse = &String.to_i!
+          puts(parse.call("42") + 1)
+          puts(parse.call("x"))
+        end
+    """)
+    result = run_program(text, tmp_path, "--json")
+    assert (result.code, result.stdout) == (1, "43\n"), result.stderr
+    diagnostic = json.loads(result.stderr)
+    assert diagnostic["code"] == "RUNTIME-INVALID-NUMBER"
+    assert diagnostic["file"].endswith("program.agc")
+    assert covered(text, diagnostic["range"]) == 'parse.call("x")'
 
 
 def test_task_await_takes_the_result_entry_only_for_a_result(tmp_path):
