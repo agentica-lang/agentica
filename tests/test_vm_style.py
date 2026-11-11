@@ -272,14 +272,63 @@ def test_no_union_is_zeroed_with_a_brace_initializer():
     assert problems == [], "\n".join(problems)
 
 
-# The libgc abort messages that on_gc_abort (vm/value.c) ends with the out-of-memory line are libgc's text, sent one by
-# one by vm/tests/gc_thread_test.c. An update of the vendored bdwgc that rewords one fails here instead of turning that
-# case back into "internal GC error".
-def test_the_messages_of_the_c_test_are_aborts_of_the_vendored_bdwgc():
-    test = (VM_DIR / "tests" / "gc_thread_test.c").read_text(encoding="utf-8")
-    sent = re.findall(r'gc_abort_ends_with\("([^"]+)", "agentica: out of memory\\n"\)', test)
-    assert len(sent) >= 3, sent
+# Every abort of the vendored bdwgc whose text speaks of memory, space or allocation, reviewed: True when it means the
+# system refused memory, which on_gc_abort (vm/value.c) ends with the out-of-memory line, False for a fault, which
+# stays "internal GC error". An update of bdwgc that adds or rewords one fails here until this table is reviewed.
+GC_MEMORY_ABORTS = {
+    "Cannot allocate executable pages": True,
+    "Could not allocate memory for procedure stack": True,
+    "Could not map memory for procedure stack": True,
+    "Failed to allocate freelist for new kind": True,
+    "Failed to allocate memory for the initial thread": True,
+    "Failed to allocate memory for thread registering": True,
+    "Insufficient memory for address map": True,
+    "Insufficient memory for back edges": True,
+    "Insufficient memory for heap sections": True,
+    "Insufficient memory for main local_mark_stack": True,
+    "Insufficient space for /proc pagemap buffer": True,
+    "Insufficient space for /proc read": True,
+    "Insufficient space for /proc/self/maps buffer": True,
+    "Insufficient space for initial table allocation": True,
+    "Not enough memory to process remapping": True,
+    "Bad VirtualAlloc result": False,
+    "Deallocating excessively large block.  Too large an allocation?": False,
+    "Duplicate large block deallocation": False,
+    "Failed to create key for local allocator": False,
+    "Failed to set thread specific allocation pointers": False,
+    "GC_init_gcj_malloc: bad index": False,
+    "GC_unix_get_mem: Memory returned by mmap is not aligned to HBLKSIZE.": False,
+    "Invalid pointer passed to realloc()": False,
+    "MAKE_BACK_GRAPH: Out of in-progress space: ": False,
+    "Needed too much space for back edges: adjust ": False,
+    "Redirected malloc() called during GC init": False,
+    "Too many GC-allocated memory sections: Increase MAX_HEAP_SECTS": False,
+    "VirtualAlloc remapping failed": False,
+    "mach_port_allocate failed (exception port)": False,
+    "mach_port_allocate failed (reply port)": False,
+    "munmap failed (for procedure stack space)": False,
+}
+GC_MEMORY_WORDS = re.compile(r"memory|space|alloc", re.I)
+
+
+def c_strings(text):
+    return re.findall(r'"((?:[^"\\]|\\.)*)"', text)
+
+
+def test_every_memory_abort_of_the_vendored_bdwgc_is_reviewed_and_mapped_as_reviewed():
     aborts = set()
     for source in (VM_DIR / "third_party" / "bdwgc").glob("*.c"):
-        aborts.update(re.findall(r'ABORT\("([^"]+)"\)', source.read_text(encoding="utf-8", errors="replace")))
-    assert [message for message in sent if message not in aborts] == []
+        text = source.read_text(encoding="utf-8", errors="replace")
+        aborts.update(re.findall(r'\bABORT(?:_ARG\d)?\(\s*"((?:[^"\\]|\\.)*)"', text))
+    assert {message for message in aborts if GC_MEMORY_WORDS.search(message)} == set(GC_MEMORY_ABORTS)
+
+    value = (VM_DIR / "value.c").read_text(encoding="utf-8")
+    prefixes = tuple(c_strings(re.search(r"prefixes\[\] = \{(.*?)\};", value, re.S).group(1)))
+    assert {message: message.startswith(prefixes) for message in GC_MEMORY_ABORTS} == GC_MEMORY_ABORTS
+    assert all(any(message.startswith(prefix) for message in GC_MEMORY_ABORTS) for prefix in prefixes), prefixes
+
+    # vm/tests/gc_thread_test.c sends one message of each prefix and expects the out-of-memory line.
+    test = (VM_DIR / "tests" / "gc_thread_test.c").read_text(encoding="utf-8")
+    sent = c_strings(re.search(r"out_of_memory\[\] = \{(.*?)\};", test, re.S).group(1))
+    assert all(GC_MEMORY_ABORTS.get(message) for message in sent), sent
+    assert all(any(message.startswith(prefix) for message in sent) for prefix in prefixes), sent

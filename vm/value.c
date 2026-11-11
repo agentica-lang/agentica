@@ -73,11 +73,15 @@ static const char gc_error_line[] = "agentica: internal GC error\n";
    allocate memory for thread registering"), the heap section list. Under a low ulimit -v that is plain out of memory,
    so those messages, which start with one of these, end with the out-of-memory line; any other abort is a fault.
    The prefixes are libgc's own text, the same in the vendored bdwgc and in a system libgc from GC_MIN (mk/vm.mk) on.
-   vm/tests/gc_thread_test.c sends libgc's exact messages, and tests/test_vm_style.py checks that the vendored
-   bdwgc still has them, so an update of bdwgc that changes the text fails there instead of turning silently into
-   "internal GC error". */
+   tests/test_vm_style.py lists every abort of the vendored bdwgc that speaks of memory, space or allocation and
+   whether it is out of memory here, so an update of bdwgc that adds or rewords one fails there for a review instead
+   of turning silently into "internal GC error"; vm/tests/gc_thread_test.c sends some of them to this function.
+   One of them writes a line of its own first: ABORT_ARG1("Insufficient space for /proc/self/maps buffer", ...)
+   (os_dep.c) prints the message with the size it asked for, so stderr then has that line before ours. */
 static bool gc_abort_is_out_of_memory(const char *message) {
-  static const char *const prefixes[] = {"Insufficient memory", "Insufficient space", "Failed to allocate"};
+  static const char *const prefixes[] = {"Insufficient memory",       "Insufficient space",   "Failed to allocate",
+                                         "Could not allocate memory", "Could not map memory", "Cannot allocate",
+                                         "Not enough memory"};
   for (size_t k = 0; message && k < sizeof prefixes / sizeof prefixes[0]; k++)
     if (strncmp(message, prefixes[k], strlen(prefixes[k])) == 0) return true;
   return false;

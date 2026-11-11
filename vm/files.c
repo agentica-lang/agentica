@@ -1430,6 +1430,9 @@ agc_value agc_system_error(agc_vm *vm, const char *what, int err) {
 }
 
 static agc_value common_error(agc_vm *vm, const op *o) {
+  /* ENOMEM, from a buffer the job could not get or from the system call, is out of memory as in the collector: the
+     usual line and status 70, not an error the program (or the CLI reading a source) would take for a bad file. */
+  if (o->err == ENOMEM) agc_out_of_memory();
   size_t path_len = o->path ? strlen(o->path) : 0;
   switch (o->status) {
     case FS_NOT_REGULAR: return error_of(not_regular);
