@@ -815,23 +815,23 @@ def test_on_compiles_a_function_without_a_loop_only_for_compiled_callers(tmp_pat
 
 LOGGER_LOOP = """import Logger from "std/logger"
 
-def shown(event: LogEvent) -> Void
+def shown(event: Logger.Event) -> Void
   puts("shown #{event.message}")
 end
 
 def main() -> Void
-  Logger.set_level(LogLevel.Info)
+  Logger.set_level(Logger.Level.Info)
   _ = Logger.detach("console")
-  _ = Logger.attach("shown", LogLevel.Debug, &shown)
+  _ = Logger.attach("shown", Logger.Level.Debug, &shown)
   i = 0
   total = 0
   while i < 3000
     Logger.debug("tick #{i}")
     if i == 2990
-      Logger.set_level(LogLevel.Debug)
+      Logger.set_level(Logger.Level.Debug)
     end
     if i == 2994
-      Logger.set_level(LogLevel.Info)
+      Logger.set_level(Logger.Level.Info)
     end
     total = (total * 31 + i % 7) % 1000003
     total = (total + i * i % 97 + i % 13) % 1000003

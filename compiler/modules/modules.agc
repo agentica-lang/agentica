@@ -11,7 +11,8 @@
 ## gets ids above every id the earlier files hold, so the ids of one walk have gaps and the files are not in the order
 ## of their ids. Nothing but the checker's tables reads a node id, so the program means the same.
 
-import {BARE_NAMES, RESERVED} from "../catalog/builtins"
+import Builtins from "../catalog/builtins"
+import {BARE_NAMES, ENUMS, RECORDS, RESERVED, STD_ONLY} from "../catalog/builtins"
 import Diag from "../diagnostics/diagnostic"
 import Packages from "../packages/package_import"
 import PackageCache from "../packages/package_cache"
@@ -32,6 +33,10 @@ import Resolve from "resolve_import"
 import TestMain from "test_main"
 import TypeCode from "type_code"
 import Workspace from "workspace"
+
+## The target of a re-export of a builtin type (`export LogRegistry.Event` in std/): no module has this key, and the
+## name of the origin is the builtin's own (LogRegistry.Event).
+export BUILTIN = ""
 
 ## A name bound by import {Name} from "path" (or {Name as Local}): the key of the module that exports it and the
 ## exported name.
@@ -216,10 +221,18 @@ export def no_parses() -> Parses = Parses(kept: {}, top: 0)
 export def linked_name(modules: Map[String, Module], module: Module, name: String) -> String
   if module.reexports.has_key?(name)
     origin = module.reexports[name]
+    return origin.name if origin.target == BUILTIN
+
     return modules[origin.target].prefix + origin.name
   end
 
   module.prefix + name
+end
+
+## The help for a std-only family (STD_ONLY) named outside std/: the std module to import in its place.
+export def std_only_help(family: String) -> String
+  wrapper = STD_ONLY[family]
+  "#{family} is internal to #{wrapper[0]}; use import #{wrapper[1]} from \"#{wrapper[0]}\""
 end
 
 ## Loads the root file and everything it imports. A failure is a packed failure (link_failure.agc): CHECK-IMPORT-*,
@@ -526,11 +539,21 @@ end
 # The re-exports of `module` (`export Alias.name`), in the order of the file: the alias must be an import of the file,
 # the module it names must export the name, and the name must be free among the declarations, the import aliases and
 # the other re-exports of the file (CHECK-IMPORT-NAME, CHECK-REDEFINED-NAME). The name joins the exports with the kind
-# of the original, and reexports keeps where the original is, so an importer reads the declaration itself.
+# of the original, and reexports keeps where the original is, so an importer reads the declaration itself. A std/
+# module may also re-export a builtin record or enum of a std-only family (`export LogRegistry.Event`): its users then
+# write Logger.Event, and the family stays internal to std/.
 def bind_reexports(walk: Walk, module: Module) -> Result[Module]
   public = module.public
   reexports = module.reexports
   for decl in Declarations.reexports_of(module.program.declarations)
+    if !module.aliases.has_key?(decl.alias) and STD_ONLY.has_key?(decl.alias)
+      kind = try builtin_reexport(module, decl)
+      try free_reexport(module, public, decl)
+      public = public.put(decl.name, kind)
+      reexports = reexports.put(decl.name, Named(target: BUILTIN, name: "#{decl.alias}.#{decl.name}"))
+      next
+    end
+
     if !module.aliases.has_key?(decl.alias)
       return error(
         Failure.fail_at(
@@ -555,17 +578,7 @@ def bind_reexports(walk: Walk, module: Module) -> Result[Module]
       )
     end
 
-    if public.has_key?(decl.name) or module.names.has_key?(decl.name) or module.aliases.has_key?(decl.name)
-      return error(
-        Failure.fail_at(
-          at_name,
-          "CHECK-REDEFINED-NAME",
-          "duplicate or reserved re-exported name",
-          Failure.hint(clash_help(module, decl.name)),
-        ),
-      )
-    end
-
+    try free_reexport(module, public, decl)
     origin = Named(target: target.key, name: decl.name)
     if target.reexports.has_key?(decl.name)
       origin = target.reexports[decl.name]
@@ -576,6 +589,54 @@ def bind_reexports(walk: Walk, module: Module) -> Result[Module]
   end
 
   ok(module.with(public: public, reexports: reexports))
+end
+
+# CHECK-REDEFINED-NAME when the re-exported name is taken among the declarations, the import aliases and the exports
+# of the file so far.
+def free_reexport(module: Module, public: Map[String, Declarations.Kind], decl: Ast.ReexportDecl) -> Result[Bool]
+  name = decl.name
+  if public.has_key?(name) or module.names.has_key?(name) or module.aliases.has_key?(name)
+    return error(
+      Failure.fail_at(
+        Failure.Site(file: module.file, span: decl.name_span),
+        "CHECK-REDEFINED-NAME",
+        "duplicate or reserved re-exported name",
+        Failure.hint(clash_help(module, name)),
+      ),
+    )
+  end
+
+  ok(true)
+end
+
+# The kind of the builtin type that `export Family.Name` re-exports, where Family is a std-only family: a record is a
+# struct and an enum an enum. Only std/ may name the family (CHECK-UNKNOWN-NAME, as for a call of it), and only a type
+# of it (CHECK-IMPORT-NAME).
+def builtin_reexport(module: Module, decl: Ast.ReexportDecl) -> Result[Declarations.Kind]
+  name = "#{decl.alias}.#{decl.name}"
+  if !Resolve.embedded?(module.key)
+    return error(
+      Failure.fail_at(
+        Failure.Site(file: module.file, span: decl.alias_span),
+        "CHECK-UNKNOWN-NAME",
+        "unknown name \"#{decl.alias}\"",
+        Failure.hint(std_only_help(decl.alias)),
+      ),
+    )
+  elsif RECORDS.has_key?(name)
+    return ok(Declarations.Kind.Struct)
+  elsif ENUMS.has_key?(name)
+    return ok(Declarations.Kind.Enum)
+  end
+
+  error(
+    Failure.fail_at(
+      Failure.Site(file: module.file, span: decl.name_span),
+      "CHECK-IMPORT-NAME",
+      "#{name} is no builtin type",
+      Failure.hint("a std/ module re-exports only a record or an enum of #{decl.alias}"),
+    ),
+  )
 end
 
 # What to do about a re-exported name that is already taken: the alias of the file is the usual cause.
@@ -931,8 +992,8 @@ def counted(parsed: Int, fresh: Bool) -> Int
   parsed
 end
 
-# The names a file declares, and those it exports; a repeated name, a builtin name or a reserved type name is
-# CHECK-REDEFINED-NAME at the declaration name.
+# The names a file declares, and those it exports; a repeated name, a builtin name, a reserved type name or an enum
+# named like a std-only family with records (Builtins.record_family?) is CHECK-REDEFINED-NAME at the declaration name.
 def collect(file: String, declarations: List[Ast.Decl]) -> Result[Collected]
   names: Map[String, Declarations.Kind] = {}
   public: Map[String, Declarations.Kind] = {}
@@ -941,7 +1002,8 @@ def collect(file: String, declarations: List[Ast.Decl]) -> Result[Collected]
     next if Declarations.import?(kind)
 
     name = Declarations.name_of(wrapped)
-    if names.has_key?(name) or BARE_NAMES.include?(name) or RESERVED.include?(name)
+    reserved = RESERVED.include?(name) or (Declarations.enum?(kind) and Builtins.record_family?(name))
+    if names.has_key?(name) or BARE_NAMES.include?(name) or reserved
       return error(
         Failure.fail_at(
           Failure.Site(file: file, span: Declarations.name_span_of(wrapped)),

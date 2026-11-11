@@ -152,7 +152,7 @@ def json_test(*args, before=(), timeout=None):
     limit = {"timeout": timeout} if timeout else {}
     result = run(cli() + [*before, "test", "--json", *args], env=vm_environment(), **limit)
     assert result.stderr == ""
-    return json.loads(result.stdout)
+    return result.json()
 
 
 def suite(tmp_path, files):
@@ -607,7 +607,7 @@ def test_a_temporary_directory_others_can_write_to_without_the_sticky_bit_is_ref
 
     def status_and_code():
         result = run(cli() + ["test", "--json", directory], env=vm_environment({"TMPDIR": temporary}))
-        report = json.loads(result.stdout)
+        report = result.json()
         return [result.code, report["files"][0]["error"]["code"]]
 
     os.chmod(temporary, 0o777)

@@ -1,6 +1,4 @@
-import errno
 import json
-import socket
 import subprocess
 import sys
 
@@ -16,12 +14,7 @@ def start(vm, bytecode, mode, channel=True):
 
 def finish(child, channel):
     if channel is not None:
-        try:
-            channel.shutdown(socket.SHUT_WR)
-        except OSError as error:
-            # macOS refuses the shutdown of a socket whose other end is already closed; there is no one to tell.
-            if error.errno != errno.ENOTCONN:
-                raise
+        channel.end_input()
     child.stdin.close()
     out = child.stdout.read()
     err = child.stderr.read()

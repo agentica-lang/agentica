@@ -17,6 +17,7 @@
 #else
 #include <errno.h>
 #include <fcntl.h>
+#include <sys/socket.h>
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
@@ -367,16 +368,13 @@ static void direct_exited(uv_process_t *p, int64_t status, int signal) {
   uv_close((uv_handle_t *)p, NULL);
 }
 
-/* Starts this program in `mode` (--probe or --take) with libuv directly, giving it a fresh channel pair (none when
-   `with_ends` is false, the two ends swapped when `swap`) and `value` as AGENTICA_CHANNEL (unset when NULL). Returns
-   its exit status: 0 it took a channel (and for --take, that the take left what it promises), 1 it was refused with
-   "process: no parent channel", 2 anything else. */
-static int probe_child(const char *self, const char *mode, const char *value, bool with_ends, bool swap) {
-  agc_chan_ends ends;
-  assert(agc_chan_pair(&ends) == 0);
+/* Starts this program in `mode` (--probe or --take) with libuv directly, giving it the first `count` child ends of
+   `ends` (swapped when `swap`), which it closes here with the parent's, and `value` as AGENTICA_CHANNEL (unset when
+   NULL). Returns its exit status: 0 it took a channel (and for --take, that the take left what it promises), 1 it was
+   refused with "process: no parent channel", 2 anything else. */
+static int probe_with(const char *self, const char *mode, const char *value, agc_chan_ends ends, int count, bool swap) {
   uv_loop_t loop;
   assert(uv_loop_init(&loop) == 0);
-  int count = with_ends ? ends.child_count : 0;
   char kept[64];
   size_t room = sizeof kept;
   bool had = uv_os_getenv(AGC_CHANNEL_ENV, kept, &room) == 0;
@@ -395,6 +393,13 @@ static int probe_child(const char *self, const char *mode, const char *value, bo
   agc_fs_close(ends.write);
   assert(uv_loop_close(&loop) == 0);
   return direct_code;
+}
+
+/* probe_with over a fresh channel pair: all its child ends, or none when `with_ends` is false. */
+static int probe_child(const char *self, const char *mode, const char *value, bool with_ends, bool swap) {
+  agc_chan_ends ends;
+  assert(agc_chan_pair(&ends) == 0);
+  return probe_with(self, mode, value, ends, with_ends ? ends.child_count : 0, swap);
 }
 
 /* Starts the leaf that leaves a mark when its parent's end of the channel goes away, and keeps the parent's ends open
@@ -476,7 +481,7 @@ static int child(int argc, char **argv) {
 #ifdef _WIN32
       int done = _write(4, block, (unsigned)n);
 #else
-      long done = write(3, block, n);
+      long done = write(4, block, n);
 #endif
       if (done <= 0) return 0;
       left -= (size_t)done;
@@ -503,12 +508,12 @@ static int child(int argc, char **argv) {
   if (strcmp(argv[1], "--take") == 0) {
     /* The contract of agc_chan_take: the descriptors it was given are gone, and the two it returns are distinct, above
        the standard streams and (where the system has it) close-on-exec, so that no spawn passes them on. */
+    const char *marker = getenv(AGC_CHANNEL_ENV);
     int in = -1, out = -1;
-    assert(agc_chan_take(ignore_fd, NULL, &in, &out));
+    assert(marker && agc_chan_take(marker, ignore_fd, NULL, &in, &out));
     assert(fd_absent(3));
-#ifdef _WIN32
-    assert(fd_absent(4));
-#else
+    if (strcmp(marker, "3,4") == 0) assert(fd_absent(4));
+#ifndef _WIN32
     assert((fcntl(in, F_GETFD) & FD_CLOEXEC) && (fcntl(out, F_GETFD) & FD_CLOEXEC));
 #endif
     assert(in > 2 && out > 2 && in != out);
@@ -721,23 +726,34 @@ static void stuck_stderr_test(const char *self) {
 }
 #endif
 
-/* A child that is given something other than its channel takes nothing: the marker of the other system, a marker
-   with no descriptors, and (where there are two) the descriptors the wrong way round. A valid channel is the control. */
+#ifndef _WIN32
+/* The form of earlier versions, which a parent that is no VM may still pass: marker "3" and one socket on descriptor
+   3. The parent's two ends are descriptors of its own socket end. */
+static int probe_socket(const char *self, const char *mode) {
+  int link[2];
+  assert(uv_socketpair(SOCK_STREAM, 0, link, 0, 0) == 0);
+  int twin = dup(link[0]);
+  assert(twin >= 0);
+  agc_chan_ends ends = {link[0], twin, {link[1], -1}, 1};
+  return probe_with(self, mode, "3", ends, 1, false);
+}
+#endif
+
+/* A child that is given something other than its channel takes nothing: the one-socket marker "3" over the two pipes
+   (that form needs one end open both ways), a marker with no descriptors, and the descriptors the wrong way round. A
+   valid channel is the control, and on POSIX so is "3" over one socket. */
 static void refusal_tests(const char *self) {
   const char *mine = agc_chan_value();
-  const char *other = strchr(mine, ',') ? "3" : "3,4";
   assert(probe_child(self, "--probe", mine, true, false) == 0);
   assert(probe_child(self, "--take", mine, true, false) == 0);
-  assert(probe_child(self, "--probe", other, true, false) == 1);
+  assert(probe_child(self, "--probe", "3", true, false) == 1);
   assert(probe_child(self, "--probe", mine, false, false) == 1);
   assert(probe_child(self, "--probe", NULL, true, false) == 1);
-  agc_chan_ends ends;
-  assert(agc_chan_pair(&ends) == 0);
-  bool two = ends.child_count == 2;
-  agc_fs_close(ends.read);
-  agc_fs_close(ends.write);
-  for (int k = 0; k < ends.child_count; k++) agc_fs_close(ends.child[k]);
-  if (two) assert(probe_child(self, "--probe", mine, true, true) == 1);
+  assert(probe_child(self, "--probe", mine, true, true) == 1);
+#ifndef _WIN32
+  assert(probe_socket(self, "--probe") == 0);
+  assert(probe_socket(self, "--take") == 0);
+#endif
 }
 
 /* The channel contract with children that are this program: lines in both directions, the end of input after a half

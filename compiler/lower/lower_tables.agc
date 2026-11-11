@@ -35,13 +35,13 @@ export VM_BUILTINS = Set.new([
   "Dir.mkdir_private", "Path.cwd", "Path.join", "Path.resolve", "Path.real", "Path.remove", "Path.rename", "ATS.new",
   "ATS.put", "ATS.put_new", "ATS.get", "ATS.has_key?", "ATS.delete", "ATS.add", "ATS.size", "ATS.keys", "ATS.to_map",
   "Task.spawn", "Task.spawn_owning", "Task.await", "Task.sleep", "Channel.new", "Channel.send", "Channel.recv",
-  "Channel.close", "Channel.closed?", "Channel.empty?", "Process.spawn.options", "Process.send",
-  "Process.send_bytes.bytes", "Process.read_line", "Process.read_bytes.bytes", "Process.close_stdin", "Process.wait",
-  "Process.close", "TCP.connect", "TCP.listen", "TCP.accept", "TCP.local_port", "TCP.remote_address",
+  "Channel.close", "Channel.closed?", "Channel.empty?", "Channel.address", "Address.send", "Process.spawn.options",
+  "Process.send", "Process.send_bytes.bytes", "Process.read_line", "Process.read_bytes.bytes", "Process.close_stdin",
+  "Process.wait", "Process.close", "TCP.connect", "TCP.listen", "TCP.accept", "TCP.local_port", "TCP.remote_address",
   "TCP.close_listener", "TCP.send", "TLS.alpn", "TCP.send_bytes.bytes", "TCP.recv_bytes.bytes", "TCP.read_line",
   "TCP.close", "TLS.connect", "TLS.listen", "TLS.client_context", "TLS.server_context", "TLS.upgrade",
   "HttpWire.service", "HttpWire.awaited?", "HttpWire.jobs", "HttpWire.options", "HttpWire.clean_eof?",
-  "HttpWire.connect_tls", "HttpWire.connect_context", "HttpWire.drop_tls", "HttpWire.upgrade_tls",
+  "HttpWire.connect_tls", "HttpWire.connect_context", "HttpWire.drop_tls", "HttpWire.upgrade_tls", "DNS.lookup",
   "HttpWire.upgrade_context", "HttpWire.chunked", "HttpWire.chunk.bytes", "HttpWire.chunk_read", "HttpWire.idle?",
   "HttpWire.read_head.bytes", "HttpWire.read_response", "HttpWire.encode_request", "HttpWire.encode_response",
   "HttpWire.error_answer", "HttpWire.close_write", "HttpWire.server", "HttpWire.accept", "HttpWire.spawn",
@@ -108,8 +108,8 @@ export NATIVE_LAYOUTS = Set.new(["Native.size_of", "Native.get_struct", "Native.
 ## The builtin records the VM can build as structs, in the order the struct table lists the ones a program uses.
 export BUILTIN_STRUCTS = [
   "FileInfo", "Header", "HttpRequest", "HttpResponse", "HttpClientOptions", "HttpServerOptions", "ProcessOutput",
-  "LogEvent", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Reply", "HttpWire.Job", "HttpWire.Response", "StructMember",
-  "Codec.Info", "TlsClientOptions", "TlsServerOptions", "TaskDown", "Process.Options",
+  "LogRegistry.Event", "HttpWire.Head", "HttpWire.Chunk", "HttpWire.Reply", "HttpWire.Job", "HttpWire.Response",
+  "StructMember", "Codec.Info", "TlsClientOptions", "TlsServerOptions", "TaskDown", "Process.Options",
 ]
 
 ## The builtin structs that another one has a field of: using the key also puts these in the table.

@@ -9,9 +9,10 @@ A channel is a bounded queue: one task sends values, another receives them. See 
 - `Channel[T]` holds values of one type, any type a variable can have: a task handle, a socket, a file or another channel is allowed, and `Channel[Void]` is `CHECK-VOID-TYPE`.
 - A channel is a handle: passing it to a function or task shares it. `Channel` is a reserved name: a user `struct`, `enum` or import alias named `Channel` is `CHECK-REDEFINED-NAME`.
 - `puts`, `print`, interpolation and `==` on a channel are `CHECK-TYPE-MISMATCH`, `.to_s` is `CHECK-UNKNOWN-METHOD`, and a struct with a channel field is `CHECK-NOT-ENCODABLE` as JSON. `IO.inspect` prints `<Channel>`.
-- `send`, `recv` and `close` carry the `concurrency` effect; `new`, `closed?` and `empty?` carry none.
+- `send`, `recv`, `close` and `Address.send` carry the `concurrency` effect; `new`, `closed?`, `empty?` and `address` carry none.
 - There is no `select`, no `for x in channel`, and no unbounded or unbuffered channel.
-- `send`, `recv`, `close`, `closed?` and `empty?` also work as methods: `jobs.send(5, 1000)` is `Channel.send(jobs, 5, 1000)`.
+- `send`, `recv`, `close`, `closed?`, `empty?` and `address` also work as methods: `jobs.send(5, 1000)` is `Channel.send(jobs, 5, 1000)`.
+- A channel's [address](#channeladdress) is data that names it: a table, a message or a constant table can hold it where the channel itself cannot go.
 
 ## Channel.new
 
@@ -155,6 +156,49 @@ Channel.empty?(channel: Channel[T]) -> Bool
 
 `true` when no value is left to receive: the buffer is empty and no value is reserved for a woken receiver. Once a channel is closed no value arrives, so `closed? and empty?` says the stream ended, and it stays `true`. Ask `closed?` first: a value and the close can both come between an `empty?` that is `true` and a `closed?` after it. After a `recv` error, `closed? and empty?` tells the end of the stream from a timeout.
 
+## Channel.address
+
+```signature
+Channel.address(channel: Channel[T]) -> Address[T]
+```
+
+A send-only reference to the channel, as a pid is in Erlang. The channel stays a handle with one reader; its address is data:
+
+- An [ATS](/library/concurrency/ats/) value, a `List` item, a `Map` value, a struct field, an enum payload and a message can hold it, and a [constant table](/library/concurrency/ats/#a-constant-table) of addresses is a registry by name.
+- `==` is `true` for two addresses of one channel. `puts` and `IO.inspect` print `<Address N>`, where `N` counts the addresses of the run from 1.
+- It is not JSON-encodable (`CHECK-NOT-ENCODABLE`), not a `Map` key or `Set` element (`CHECK-MAP-KEY-TYPE`, `CHECK-SET-ELEMENT-TYPE`), and not allowed in a constant (`CHECK-CONSTANT-TYPE`).
+- It does not keep the channel alive, and it is not a handle: `Task.spawn_owning` does not hand it over ([one handle owned, one channel shared](#one-handle-owned-one-channel-shared)).
+- `Address` is not a reserved name: a user `struct Address` is allowed, and `Address[T]` with one type argument is always this type, so a generic struct, enum or alias named `Address` is `CHECK-REDEFINED-NAME`.
+
+## Address.send
+
+```signature
+Address.send(address: Address[T], value: T, timeout_ms: Int) -> Result[Void]
+```
+
+[`Channel.send`](#channelsend) to the channel of the address, with the same waits, timeouts and errors: `error("channel: closed")` once the channel is closed. `error("address: gone")` once nothing else reaches the channel and the collector has freed it, so no task can receive from it any more. A send from another run is `RUNTIME-ADDRESS-CONTEXT`. There is no `recv` on an address.
+
+```agentica
+def main() -> Void
+  inbox: Channel[Int] = Channel.new(4)
+  names: ATS[String, Address[Int]] = ATS.new()
+  names.put("counter", inbox.address)
+  to = names.get("counter").unwrap!
+  puts(to == inbox.address)
+  puts(to.send(7, 1000).ok?)
+  puts(inbox.recv(0).unwrap!)
+  inbox.close
+  puts(to.send(8, 1000).message)
+end
+```
+
+```output
+true
+true
+7
+channel: closed
+```
+
 ## A producer and a consumer
 
 The receive loop: on an error, `closed? and empty?` says whether the stream ended, else it was a timeout and the loop receives again. The producer closes on every path: `send_all` holds the `try`s, so `produce` always reaches `jobs.close`.
@@ -238,6 +282,41 @@ Ownership rules:
 - A channel never handed over has no owner: only `close` closes it. `Task.spawn(&f, jobs)` does not make an owner.
 - The first `Task.spawn_owning` can come from any task. After that only the owner can hand it on; any other task, or any task once it is closed, stops with `RUNTIME-HANDLE-NOT-OWNED`. Any task can still call `Channel.close`.
 - There is one owner. For several producers, use the next pattern.
+
+## One handle owned, one channel shared
+
+`Task.spawn_owning` hands over every handle in its argument, so a channel in that argument closes when the task ends. To give a task its own handle (a socket, a channel of its own) and also a channel that other tasks keep using, put the shared channel's address in the argument: an address is data, so the shared channel stays open.
+
+```agentica
+struct Link
+  jobs: Channel[Int]
+  results: Address[Int]
+end
+
+def serve(link: Link) -> Result[Int]
+  n = try link.jobs.recv(1000)
+  try link.results.send(n * 10, 1000)
+  ok(n)
+end
+
+def main() -> Void
+  results: Channel[Int] = Channel.new(4)
+  jobs: Channel[Int] = Channel.new(1)
+  _ = jobs.send(4, 0)
+  worker = Task.spawn_owning(&serve, Link(jobs: jobs, results: results.address))
+  puts(Task.await(worker).ok?)
+  puts(jobs.closed?)
+  puts(results.closed?)
+  puts(results.recv(0).unwrap!)
+end
+```
+
+```output
+true
+true
+false
+40
+```
 
 ## Several sources
 

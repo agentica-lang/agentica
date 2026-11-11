@@ -155,7 +155,7 @@ end
 def rewrite_payload(cx: Resolve.Context, parameters: List[String], type: Ast.TypeRef) -> Result[Ast.TypeRef]
   name = type.name
   if type.args.size > 0 or !parameters.any? do |parameter| parameter == type.name end
-    name = try Resolve.resolve(cx, type.name, Resolve.Want.Type, type.span, false)
+    name = try Resolve.resolve_type(cx, type.name, type.args.size, type.span)
   end
 
   args: List[Ast.TypeRef] = []
@@ -169,7 +169,7 @@ end
 def rewrite_type(cx: Resolve.Context, type: Ast.TypeRef) -> Result[Ast.TypeRef]
   name = type.name
   if type.args.size > 0 or !cx.type_parameters.any? do |parameter| parameter == type.name end
-    name = try Resolve.resolve(cx, type.name, Resolve.Want.Type, type.span, false)
+    name = try Resolve.resolve_type(cx, type.name, type.args.size, type.span)
   end
 
   args: List[Ast.TypeRef] = []

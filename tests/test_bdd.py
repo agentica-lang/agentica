@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.agentica_test import (ROOT, TESTS, UNDER_WINE, binary, cli, front_end_command, report_cases, run,
+from tests.agentica_test import (ROOT, TESTS, UNDER_WINE, Result, binary, cli, front_end_command, report_cases, run,
                                  tool, vm_environment, write_files)
 
 # Paths are written with "/" on every system, as the driver reports them (it joins and resolves with "/").
@@ -46,7 +46,7 @@ def assert_unwritable_temporary_is_an_infrastructure_error(bdd, scratch, tempora
     and the text of the system for the refusal (`system_text`), and leaves the folder empty."""
     result = bdd.agentica_test("--json", scratch / "missing.feature", env={"TMPDIR": temporary}, cwd=scratch)
     assert (result.code, result.stderr) == (2, "")
-    problem = file_error(json.loads(result.stdout))
+    problem = file_error(result.json())
     assert problem["code"] == "RUNTIME-BDD-INFRA"
     assert ("cannot make a private directory in %s" % temporary) in problem["message"]
     assert system_text in problem["message"]
@@ -99,8 +99,8 @@ class BddCli:
     def json_test(self, *args, **options):
         """Returns (exit code, parsed report); stderr must stay empty."""
         result = self.agentica_test("--json", *args, **options)
-        assert result.stderr == ""
-        return result.code, json.loads(result.stdout)
+        assert result.stderr == "", result
+        return result.code, result.json()
 
     def make_suite(self, files, prefix="agentica-bdd-"):
         """A resolved temp dir holding the given files (name -> text); removed when the test ends."""
@@ -118,6 +118,11 @@ def bdd(tmp_path):
     """The `agentica test` helper of this module, with a per-test scratch folder."""
     return BddCli(tmp_path)
 
+
+def test_a_report_that_is_not_json_fails_with_the_exit_code_and_both_streams():
+    # A Windows run of `agentica test --json` once printed nothing; the failure must name the exit code (#1098).
+    with pytest.raises(AssertionError, match=r"exit code: 3\nstdout: ''\nstderr: 'gone'"):
+        Result(3, "", "gone").json()
 
 def test_the_custom_suite_passes_in_the_three_formats_with_outline_names_and_quiet_handlers(bdd):
     status, report = bdd.json_test(CUSTOM, CUSTOM, "--steps", HANDLERS)
@@ -472,7 +477,7 @@ def test_without_paths_specs_and_test_are_searched_and_the_empty_message_says_wh
             os.mkdir(scratch / folder)
         result = bdd.agentica_test("--json", cwd=scratch)
         assert result.code == 1
-        problem = file_error(json.loads(result.stdout))
+        problem = file_error(result.json())
         assert (problem["code"], problem["file"]) == ("CHECK-BDD-EMPTY", (scratch / "specs").as_posix() + "/")
         messages.append(problem["message"])
     assert messages == ["no .feature or *_test.agc files found: neither specs/ nor test/ exists",
@@ -676,7 +681,7 @@ def test_a_report_of_several_mib_arrives_whole(bdd):
     result = bdd.agentica_test("--json", directory)
     assert (result.code, result.stderr) == (0, "")
     assert len(result.stdout) > 1048576 + 400000
-    report = json.loads(result.stdout)
+    report = result.json()
     assert [item["name"] for item in report_cases(report)] == names
 
 
@@ -685,7 +690,7 @@ def test_the_temporary_directory_is_tmpdir_when_it_is_a_folder_else_a_system_one
     os.mkdir(scratch / "empty")
     for given in (scratch / "file", scratch / "missing", ""):
         result = bdd.agentica_test("--json", scratch / "empty", env={"TMPDIR": given}, cwd=scratch)
-        assert (result.code, json.loads(result.stdout)["files"][0]["error"]["code"]) == (1, "CHECK-BDD-EMPTY"), str(given)
+        assert (result.code, result.json()["files"][0]["error"]["code"]) == (1, "CHECK-BDD-EMPTY"), str(given)
     assert sorted(os.listdir(scratch)) == ["empty", "file"]
 
 
@@ -778,7 +783,7 @@ def test_a_crashed_runner_is_reported_with_the_error_not_the_last_stack_frame(bd
         "    main at runner.agc:11:8"])
     result = bdd.agentica_test("--json", os.path.join(directory, "a.feature"), binary_path=fake, env=env)
     assert result.code == 2
-    error = json.loads(result.stdout)["files"][0]["error"]
+    error = result.json()["files"][0]["error"]
     assert error["code"] == "RUNTIME-BDD-INFRA"
     assert re.search("RUNTIME-INDEX-OUT-OF-RANGE", error["message"])
 
@@ -794,7 +799,7 @@ def test_the_infrastructure_message_names_the_runners_final_diagnostic_not_an_ea
         "  = stack, innermost first:"])
     result = bdd.agentica_test("--json", os.path.join(directory, "a.feature"), binary_path=fake, env=env)
     assert result.code == 2
-    message = file_error(json.loads(result.stdout))["message"]
+    message = file_error(result.json())["message"]
     assert re.search("RUNTIME-INDEX-OUT-OF-RANGE", message)
     assert not re.search("DIVISION-BY-ZERO", message)
 

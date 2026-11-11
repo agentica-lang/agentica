@@ -284,8 +284,8 @@ ONE_SCHEDULER = {"AGENTICA_SCHEDULERS": "1"}
 def run_vm_process(fixture, options, bytecode, args, timeout=RUN_TIMEOUT, cwd=None, env=None, stdin_path=None):
     """One VM run as (status, stdout, stderr); the status is TIMEOUT when it outlives `timeout` seconds.
 
-    A fixture with a channel runs through tests/fixtures/channel-run.py, which hands the VM a socket as descriptor 3, or
-    on Windows through channel-run.js, which hands it two pipes at descriptors 3 and 4.
+    A fixture with a channel runs through tests/fixtures/channel-run.py, or on Windows channel-run.js: each hands the VM
+    the channel at descriptors 3 and 4.
     """
     prefix = [*channel_peer("channel-run"), fixture.channel] if fixture.channel else []
     argv = prefix + [*vm_command(), *options, "--", bytecode, *args]

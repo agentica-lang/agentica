@@ -31,8 +31,8 @@ except ImportError:
     fcntl = None
 
 from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, WINDOWS, cli, compile_agc,
-                                 compile_text, host_only, kill_process, process_alive, run, scaled, vm_command,
-                                 vm_environment, wait_readable, wait_until)
+                                 compile_text, host_only, kill_process, process_alive, require, run, scaled, tool,
+                                 vm_binary, vm_command, vm_environment, wait_readable, wait_until)
 from tests import vm_diff_support as diff
 
 SCHEDULERS = os.environ.get("AGENTICA_VM_TEST_SCHEDULER_COUNT", "4")
@@ -707,6 +707,80 @@ def test_a_start_under_a_low_ulimit_v_ends_with_one_line_and_status_70(tmp_path)
             assert REFUSED.fullmatch(result.stderr), (mb, words, result)
             refused.append(result.stderr)
     assert any(line.startswith("agentica: cannot start") for line in refused), refused
+
+
+# A malloc that refuses one size with ENOMEM (glibc's __libc_malloc for every other), and a read() that fails one size
+# with ENOMEM as a FUSE server or a /proc file can, for the reads below.
+REFUSING_SHIM = r"""#define _GNU_SOURCE
+#include <dlfcn.h>
+#include <errno.h>
+#include <stddef.h>
+#include <unistd.h>
+
+void *__libc_malloc(size_t size);
+
+void *malloc(size_t size) {
+  if (size == 777777) {
+    errno = ENOMEM;
+    return NULL;
+  }
+  return __libc_malloc(size);
+}
+
+ssize_t read(int fd, void *buf, size_t size) {
+  static ssize_t (*real)(int, void *, size_t);
+  if (!real) real = (ssize_t (*)(int, void *, size_t))dlsym(RTLD_NEXT, "read");
+  if (size == 555555) {
+    errno = ENOMEM;
+    return -1;
+  }
+  return real(fd, buf, size);
+}
+"""
+
+
+@pytest.mark.skipif(not TARGET_OS.startswith("linux") or OTHER_BUILD,
+                    reason="host-only: LD_PRELOAD of a glibc malloc; a sanitizer or GC stress build has its own malloc")
+def test_a_read_that_gets_no_memory_ends_with_the_out_of_memory_line(tmp_path):
+    """A read whose buffer the VM cannot get is out of memory, status 70 and the usual line, as in the collector; not
+    a `cannot read` error that the program, or the CLI reading a source, would report as unreadable. A read() that
+    fails with ENOMEM is an OS error like any other: the builtin's error value."""
+    # make vm-sanitize-test builds dist/agentica with ASan, whose own malloc LD_PRELOAD does not replace.
+    if b"__asan_init" in vm_binary().read_bytes():
+        pytest.skip("an ASan build has its own malloc, which LD_PRELOAD does not replace")
+    shim = tmp_path / "refuse.so"
+    source = tmp_path / "refuse.c"
+    source.write_text(REFUSING_SHIM, encoding="utf-8")
+    subprocess.run([tool("cc"), "-shared", "-fPIC", "-o", str(shim), str(source), "-ldl"], check=True,
+                   timeout=scaled(60))
+    data = tmp_path / "data.txt"
+    data.write_text("hello\n", encoding="utf-8")
+    program = tmp_path / "read.agc"
+    program.write_text(
+        "def main() -> Void\n"
+        "  args = System.args()\n"
+        "  handle = File.open(args[0]).unwrap!\n"
+        "  if args[1] == \"buffer\"\n"
+        "    puts(File.read_bytes(handle, 777777).ok?)\n"
+        "  else\n"
+        "    puts(File.read_bytes(handle, 555555).ok?)\n"
+        "  end\n"
+        "end\n",
+        encoding="utf-8",
+    )
+    bytecode = compile_agc(program, tmp_path / "read.agcb")
+
+    def read(case):
+        return run([*vm_command(), "--", bytecode, str(data), case], env=vm_environment({"LD_PRELOAD": str(shim)}),
+                   timeout=scaled(60))
+
+    result = read("buffer")
+    # A read that succeeds never met the preloaded malloc: a skip locally, a failure in CI. Without the fix the read
+    # gives an error, `false`.
+    require((result.code, result.stdout) != (0, "true\n"), "LD_PRELOAD did not replace malloc: %r" % (result,))
+    assert (result.code, result.stdout, result.stderr) == (70, "", "agentica: out of memory\n")
+    result = read("call")
+    assert (result.code, result.stdout) == (0, "false\n"), result
 
 
 RALLIES = """\

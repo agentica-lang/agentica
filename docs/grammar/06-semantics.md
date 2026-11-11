@@ -29,12 +29,13 @@ programs are valid and how they run.
   can be monitored, cancelled and identified, not awaited
 - `Await[T]`: Builtin enum of a timed `Task.await`: `Await.Done(value)` or
   `Await.TimedOut`; matched with `case` like a user enum
-- `LogLevel`: Builtin enum of `std/logger`: `LogLevel.Debug`, `LogLevel.Info`,
-  `LogLevel.Warning` and `LogLevel.Error`, in that order; matched with `case`
-  like a user enum
-- `LogEvent`: Builtin record of `std/logger` that a log handler receives:
-  `level: LogLevel`, `message: String`, `fields: Map[String, String]`, `time_ms:
-  Int` and `task: Int`; it is not JSON-decodable
+- `Logger.Level`: Builtin enum `LogRegistry.Level`, which `std/logger`
+  re-exports: `Logger.Level.Debug`, `Logger.Level.Info`, `Logger.Level.Warning`
+  and `Logger.Level.Error`, in that order; matched with `case` like a user enum
+- `Logger.Event`: Builtin record `LogRegistry.Event`, which `std/logger`
+  re-exports, that a log handler receives: `level: Logger.Level`, `message:
+  String`, `fields: Map[String, String]`, `time_ms: Int` and `task: Int`; it is
+  not JSON-decodable
 - `StructMember`: Builtin record of `Type.members`: `name: String` and `type:
   String`, the field name and its type written as source
 - `TaskExit`: Builtin enum of how a task ended: `TaskExit.Ok`,
@@ -45,6 +46,10 @@ programs are valid and how they run.
   is not JSON-decodable
 - `Channel[T]`: Opaque bounded queue of `T` values that tasks send into and
   receive from
+- `Address[T]`: Send-only reference to a `Channel[T]` (`channel.address`); it
+  is data, not a handle. `Address` is not reserved: written with one type
+  argument it is this builtin, so a program may still declare its own
+  `struct Address`, but not a generic one (section 6c)
 - `Enum[T, ...]`: User-declared nominal sum type
 - Declared struct: Nominal type with typed, immutable fields
 
@@ -67,7 +72,8 @@ nullable wildcard: `name: String = nil` is invalid; use `Optional[T]`.
   is an error.
 - Ordering operators take two numbers of one type. `==` and `!=` take two
   values of one type that has equality: a primitive type, `Range` (equal when
-  start, end and kind match), `Bytes` (the same length and bytes), and `List`,
+  start, end and kind match), `Bytes` (the same length and bytes), `Address`
+  (equal when they name the same channel), and `List`,
   `Map`, `Set`, `Optional`, `Result`, structs and enums whose parts have
   equality. Lists are equal when they have the same length and equal items in
   order; maps when they have the same keys with equal values, and sets the same
@@ -158,9 +164,19 @@ initializer, not only the result, has a data type: numbers, `String`, `Bool`,
 `Nil`, `Bytes`, `List`, `Map`, `Set`, `Range`, `Result`, `Optional` and `JSON`
 of data types, and structs and enums whose fields and payloads are data; a
 function, `Channel`, task, handle or `ATS` table type (and `Void`) is
-`CHECK-CONSTANT-TYPE`, located at the expression. `Channel.new` has no
-effects, but it makes a value with identity and state, which is why the type
-rule exists.
+`CHECK-CONSTANT-TYPE`, located at the expression, and so is a type that holds
+an `Address` (an address names a channel of the running program, and no
+channel exists before `main`). `Channel.new` has no effects, but it makes a
+value with identity and state, which is why the type rule exists.
+
+One initializer is exempt from the type rule: a whole initializer `ATS.new()`,
+a constant table (`NAMES: ATS[String, Address[Msg]] = ATS.new()`). The
+annotation gives its type (without one it is `CHECK-EXPECTED-TYPE`), and
+`ATS[K, V]` keeps its own rules (`CHECK-ATS-VALUE`). A table is already shared
+and atomic and has no owner, so the constant only gives it a name: there is
+one table per declaration per run, shared by every task and every file that
+imports it. A table anywhere else in an initializer (`[ATS.new()]`, a struct
+field, another constant's table) stays `CHECK-CONSTANT-TYPE`.
 
 A scalar literal constant is part of the bytecode. Every other constant is built
 once, in dependency order, before `main` starts, and only if a function that
@@ -268,7 +284,7 @@ default is `CHECK-DEFAULT-ORDER`, located at that parameter.
 
 A default is a constant: an `Int`, `Float` or `String` literal (a minus sign is
 allowed before a number, and a string has no `#{...}`), `true`, `false`, `nil`,
-`none`, `[]`, `{}`, or a nullary enum variant (`Level.Info`, `LogLevel.Info` for
+`none`, `[]`, `{}`, or a nullary enum variant (`Level.Info`, `TaskExit.Ok` for
 a builtin enum, or `Models.Level.Info` through an import alias). A parameter
 may also default to a struct built with no arguments, `options: Options =
 Options()`: each field takes its own default, and a field without one is
@@ -488,7 +504,7 @@ name.
 
 `Type.members` lists the fields of a struct type, in declaration order, as a
 `List[StructMember]`. `StructMember` is a builtin record, reserved like
-`LogEvent`, with two `String` fields: `name`, the field name, and `type`, its
+`TaskDown`, with two `String` fields: `name`, the field name, and `type`, its
 type written as source (`Int`, `List[String]`, `Map[String, Int]`,
 `Result[Int]`, `Address`, `Shape[String]`). The text is the checker's printed
 form: an alias is expanded (`type Id = Int` gives `Int`) and a struct or enum

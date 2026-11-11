@@ -1,6 +1,5 @@
 import os
 import selectors
-import socket
 import sys
 
 from child_channel import launch
@@ -34,7 +33,7 @@ def feed(channel, pending):
         if pending:
             channel.sendall(pending.pop(0))
         if not pending:
-            channel.shutdown(socket.SHUT_WR)
+            channel.end_input()
     except OSError:
         pending.clear()
 

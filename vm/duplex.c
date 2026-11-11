@@ -1,6 +1,6 @@
 /*
  * The private child channel: a libuv stream to read and one to write (two
- * descriptors of one socket on POSIX, two pipes on Windows), with line reads
+ * pipes; a child may also get one socket, duplicated), with line reads
  * and writes, for a child process that talks to its parent. The I/O thread
  * owns the streams and the buffer; with several schedulers a call posts its
  * step there and parks. Service layer. The system part is duplex_os.h.
@@ -85,11 +85,6 @@ static void unref(agc_duplex *d) {
 
 static void handle_closed(uv_handle_t *h) { unref(PIPE_OWNER(h)); }
 
-static void shutdown_done(uv_shutdown_t *req, int status) {
-  (void)status;
-  unref(OWNER(req, shutdown_req));
-}
-
 static agc_duplex *make(agc_loop *io, int rd_fd, int wr_fd) {
   agc_duplex *d = calloc(1, sizeof(agc_duplex));
   if (!d) agc_out_of_memory();
@@ -128,6 +123,16 @@ static void close_end(uv_pipe_t *pipe, bool *live, int *fd) {
     agc_fs_close(*fd);
     *fd = -1;
   }
+}
+
+/* The writes queued before the shutdown are out. The write end closes now, whatever the status: the close is the
+   end of input that every system delivers (a pipe has no shutdown(2), ENOTSOCK; and on macOS the shutdown of a
+   socket's write side did not always reach the child, #1392). A close of the channel already closed it. */
+static void shutdown_done(uv_shutdown_t *req, int status) {
+  (void)status;
+  agc_duplex *d = OWNER(req, shutdown_req);
+  close_end(&d->wr_pipe, &d->wr_live, &d->wr_fd);
+  unref(d);
 }
 
 static void unlink_request(request *q) {
@@ -200,6 +205,30 @@ void agc_duplex_release(agc_duplex *d) {
   agc_duplex_shut(d);
   unref(d);
 }
+
+/* The two pipes of a channel, the same on every system. The child's ends are blocking, like those of stdin and
+   stdout, so a child that is no VM can read and write them with plain calls; the parent's ends are the non-blocking
+   ones that libuv drives. uv_pipe makes all four close-on-exec (not inheritable on Windows): the spawn puts the
+   child's two in its slots 3 and 4. */
+int agc_chan_pair(agc_chan_ends *ends) {
+  int into[2], outof[2];
+  int rc = uv_pipe(into, 0, UV_NONBLOCK_PIPE);
+  if (rc) return rc;
+  rc = uv_pipe(outof, UV_NONBLOCK_PIPE, 0);
+  if (rc) {
+    agc_fs_close(into[0]);
+    agc_fs_close(into[1]);
+    return rc;
+  }
+  ends->read = outof[0];
+  ends->write = into[1];
+  ends->child[0] = into[0];
+  ends->child[1] = outof[1];
+  ends->child_count = 2;
+  return 0;
+}
+
+const char *agc_chan_value(void) { return "3,4"; }
 
 /* On the I/O thread: from the spawn of the child that gets the channel. */
 agc_duplex *agc_duplex_new(agc_loop *io, int read_fd, int write_fd) {
@@ -450,10 +479,15 @@ static bool begin_send(void *data, agc_io_job *job) {
   return true;
 }
 
+/* The shutdown waits for the queued writes, then shutdown_done closes the write end. One that fails on the spot
+   (ENOTCONN when the peer is gone) has nothing to wait for: the end closes at once. */
 static void shut_write(agc_duplex *d) {
   d->write_closed = true;
   d->refs++;
-  if (uv_shutdown(&d->shutdown_req, (uv_stream_t *)&d->wr_pipe, shutdown_done)) d->refs--;
+  if (uv_shutdown(&d->shutdown_req, (uv_stream_t *)&d->wr_pipe, shutdown_done)) {
+    d->refs--;
+    close_end(&d->wr_pipe, &d->wr_live, &d->wr_fd);
+  }
 }
 
 static bool begin_shut(void *data, agc_io_job *job) {
@@ -554,9 +588,9 @@ static void forget_inherited(int fd, void *data) {
 
 void agc_parent_take(agc_vm *vm) {
   const char *marker = getenv(AGC_CHANNEL_ENV);
-  if (!marker || strcmp(marker, agc_chan_value()) != 0) return;
+  if (!marker) return;
   int read_fd, write_fd;
-  if (!agc_chan_take(forget_inherited, vm, &read_fd, &write_fd)) return;
+  if (!agc_chan_take(marker, forget_inherited, vm, &read_fd, &write_fd)) return;
   uv_os_unsetenv(AGC_CHANNEL_ENV);
   agc_duplex *d = make(agc_io_loop(vm), read_fd, write_fd);
   vm->rt->parent = agc_register(vm, d, release_parent);

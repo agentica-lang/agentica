@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `DNS.lookup(host)` gives the IPv4 and IPv6 addresses of a host name from the
+  system resolver.
 - `TCP.recv_bytes(socket, max_bytes)` without a timeout waits with no limit,
   for a server that keeps an idle client connected.
 - Module blocks: `module Name ... end` holds several named modules in one file;
@@ -20,10 +22,23 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A struct field may be named `error`, `ok`, `some` or `none`.
 - A reserved word used as a name (`def edge(end: Int)`) is `PARSE-RESERVED-WORD`,
   with another name as the help.
+- A constant may be a table: `NAMES: ATS[String, Int] = ATS.new()`, one per run,
+  shared by every task and importer.
+- `channel.address` gives an `Address[T]`, a send-only reference that is data.
+- `std/actor`: actors, tasks that own their state, with `cast`, `call` and `stop`.
+- `std/supervisor`: starts actors and starts again one that crashes (one for one).
 - A builtin is a function value: `&Time.now_ms`, `[1, 2].map(&Int.to_s)`.
 - A range has the Enumerable methods of List: `(0...n).map`, `select`, `sum`,
   `reduce`, `min`, `max` and more.
 - `Test.eq` shows a `Bytes` as quoted text (`<Bytes 7 "+OK\r\n\x00\xFF">`).
+- A program may name a type or alias `RegexEngine` or `Std`, and a struct or
+  type alias `LogRegistry` (an enum of that name stays an error).
+
+### Changed
+
+- **Breaking:** `LogEvent` and `LogLevel` are `Logger.Event` and `Logger.Level`
+  of `std/logger`; the old names are unknown, with a help. A value prints as
+  `LogRegistry.Event(...)` and `LogRegistry.Level.Info`.
 
 ### Fixed
 
@@ -32,6 +47,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Under a low `ulimit -v`, a run whose collector or scheduler thread gets no
   memory ends with `agentica: out of memory` or the thread line (status 70),
   not `internal GC error` or an abort.
+- A file builtin that runs out of memory for its buffer also ends with
+  `agentica: out of memory`, not a `cannot read` error.
 
 ## [0.29.0] - 2026-11-10
 

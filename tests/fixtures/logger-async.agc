@@ -1,6 +1,6 @@
 import Logger from "std/logger"
 
-def write_events(events: Channel[LogEvent]) -> Result[Void]
+def write_events(events: Channel[Logger.Event]) -> Result[Void]
   while true
     case events.recv(1000)
       ok(event) ->
@@ -15,9 +15,9 @@ def write_events(events: Channel[LogEvent]) -> Result[Void]
 end
 
 def main() -> Void
-  events: Channel[LogEvent] = Channel.new(64)
+  events: Channel[Logger.Event] = Channel.new(64)
   writer = Task.spawn_owning(&write_events, events)
-  _ = Logger.attach("file", LogLevel.Info) do |event|
+  _ = Logger.attach("file", Logger.Level.Info) do |event|
     _ = events.send(event, 1000)
   end
   Logger.info("server started")

@@ -200,6 +200,8 @@ Channel.close(channel: Channel[T]) -> Void
 Channel.closed?(channel: Channel[T]) -> Bool
 Channel.empty?(channel: Channel[T]) -> Bool
 Channel.lazy(channel: Channel[T], timeout_ms: Int) -> Lazy[T]   # lazy.md
+Channel.address(channel: Channel[T]) -> Address[T]
+Address.send(address: Address[T], value: T, timeout_ms: Int) -> Result[Void]
 ```
 
 A channel is a bounded queue that tasks send into and receive from. All but
@@ -291,6 +293,20 @@ There is no `select`. A handle sent over a channel stays owned by the task that
 opened it, which must outlive its users, or hand it over with
 `Task.spawn_owning`.
 
+Addresses. `ch.address` is an `Address[T]`: a send-only name of the channel
+that is data, so an `ATS` value, a list, a map value, a struct field, an enum
+payload or a message can hold it, where a channel cannot go. `addr.send(v,
+1000)` is `Channel.send` (same waits and errors); `error("address: gone")` once
+the channel was collected; no `recv`. Two addresses of one channel are `==`;
+`puts` prints `<Address N>`. Not JSON, not a map key or set element, not in a
+constant. It is not a handle: to give a task its own socket or channel and also
+a shared channel, pass `Link(socket: s, results: results.address)` to
+`Task.spawn_owning`; only the socket is handed over, `results` stays open. A
+registry by name is a constant table:
+`NAMES: ATS[String, Address[Msg]] = ATS.new()` (below). Your own
+`struct Address` (no type parameters) is fine; a generic struct, enum or alias
+named `Address` is `CHECK-REDEFINED-NAME`.
+
 A counter or a cache that several tasks update goes in an `ATS` table (below);
 other shared state belongs to one owner task that receives messages on a
 channel. Apart from `ATS` tables and the `std/logger` registry there is no
@@ -307,7 +323,7 @@ its capacity gives backpressure and `recv` is `next`.
 - Long-lived workers, producer and consumer, flows of unknown length, results in
   the order they end: tasks and a `Channel`.
 - Shared state: an `ATS` table (counter, cache) or one owner task receiving
-  messages on a channel.
+  messages: an actor (`std/actor`, below).
 - Each line of a big file in bounded memory: `File.each_line`.
 - An endless sequence or a source too big for a list: `Lazy` (`lazy.md`).
 
@@ -331,9 +347,15 @@ it shares it, never copies it. All but `new` are methods: `hits.add("home",
 1)`. `hits: ATS[String, Int] = ATS.new()`, else `CHECK-EXPECTED-TYPE`. Keys are
 `Int`, `String` or `Bytes` (`CHECK-MAP-KEY-TYPE`); `V` is data with no `Fn`,
 `Task`, `Channel`, handle or table anywhere inside, and not `Nil`
-(`CHECK-ATS-VALUE`). A table may be a struct field or a `Task.spawn` argument;
-no task owns it, and there is no size limit or expiry. No `==`, text or JSON;
-use `to_map` to see it.
+(`CHECK-ATS-VALUE`); an `Address` is data, so it may be a value. A table may be
+a struct field or a `Task.spawn` argument; no task owns it, and there is no size
+limit or expiry. No `==`, text or JSON; use `to_map` to see it.
+
+A constant may be a table when `ATS.new()` is its whole initializer and its type
+is written: `HITS: ATS[String, Int] = ATS.new()` is made once per run, before
+`main`, and every task and every file that imports it shares it. A table
+anywhere else in a constant (`[ATS.new()]`, another constant's table) is
+`CHECK-CONSTANT-TYPE`.
 
 Each call is atomic on any scheduler; there are no multi-key transactions and no
 block-based update. `add` is the one atomic read-modify-write (`Int` values
@@ -344,3 +366,91 @@ value even when two tasks miss at once. `keys` and `to_map` are snapshots; a key
 deleted and put again goes to the end. Sort `keys` before printing when tasks
 fill the table, since their order follows the schedule. In BDD, a table made in
 `main` and captured by step blocks starts fresh in each scenario.
+
+## Actors (`std/actor`)
+
+```text
+import Actor from "std/actor"
+Actor.start(b: Actor.Behaviour[S, M], options: Actor.Options = Actor.Options()) -> Actor.Ref[S, M]
+Actor.Behaviour(init: Fn[S], handle: Fn[S, M, Actor.Step[S]], terminate: Optional[Fn[S, Void]] = none)
+Actor.Options(capacity: Int = 1024)
+Actor.continue(state: S) -> Actor.Step[S]
+Actor.done(state: S) -> Actor.Step[S]
+Actor.cast(address: Address[M], message: M, timeout_ms: Int = 5000) -> Result[Void]
+Actor.call(address: Address[M], timeout_ms: Int, make: Fn[Channel[R], M]) -> Result[R]
+Actor.reply(channel: Channel[R], value: R) -> Void
+Actor.stop(actor: Actor.Ref[S, M], timeout_ms: Int) -> Result[Void]
+```
+
+An actor is a task that owns its state `S` and handles the messages `M` (your
+enum) of one inbox, one at a time. The handler ends with
+`Actor.continue(state)`, or `Actor.done(state)` to end the actor (then
+`terminate` runs). A `Ref` has `address` (the `Address[M]` to send to),
+`inbox` (only for `Task.monitor(task, actor.inbox) do |d| Msg.Down(d) end`;
+never `recv` from it) and `task`. `cast` and `call` take the address, `stop`
+the `Ref`; there are no methods.
+
+- `call` builds the message around a new reply channel and waits:
+  `Actor.call(addr, 1000) do |reply| Msg.Get(reply) end`; the handler answers
+  with `Actor.reply(reply, value)`. The answer type comes from the expected
+  type (the function's `Result[Int]`); with none, in `puts` or `#{}`, write
+  `do |reply: Channel[Int]|` (else `CHECK-BLOCK-TYPE`).
+- Errors: `error("actor: timeout")` (inbox full or no answer in time) and
+  `error("address: gone")` (the actor ended). A call whose actor crashes, a
+  call to its own address from a handler, and two actors calling each other
+  end with the timeout.
+- `stop` closes the inbox, lets the actor handle what is in it, run
+  `terminate` and end, and waits at most `timeout_ms`; then it cancels the
+  actor and gives `actor: timeout`. A crashed actor gives its `task crashed:
+  ...` error. Only the `Ref` holder can stop: to stop by address, add a `Stop`
+  variant whose handler gives `Actor.done(state)`.
+- A crash in a handler ends the actor (its diagnostic prints, `terminate` does
+  not run, queued messages are lost). A crash nothing observes fails the run
+  when `main` returns: observe it with `Actor.stop`, `Task.await(ref.task)` or
+  `Task.monitor(ref.task, ...)`. A monitor notice into a full inbox is dropped.
+- The actor is a child of the task that calls `start`: a crash or cancel of
+  that task cancels it. Start long-lived actors from `main` or a supervisor.
+- `timeout_ms` of `stop` must be above 0 (`RUNTIME-INVALID-DURATION`); give
+  `call` one above 0 too: `call(addr, 0)` still enqueues the message, then
+  gives `actor: timeout`.
+- Names: a module keeps `NAMES: ATS[String, Address[Msg]] = ATS.new()` (a
+  constant goes before the enum in a module block) and wraps `cast` and `call`
+  in its own functions, so callers never see `Msg`.
+- `init: block0() do initial end` needs a helper `def block0[R](f: Fn[R]) ->
+  Fn[R] = f` (a block is a value only as an argument), or a named `&init`.
+  Annotate `b: Actor.Behaviour[Int, Msg] = ...` when blocks take parameters.
+
+## Supervisors (`std/supervisor`)
+
+```text
+import Supervisor from "std/supervisor"
+Supervisor.child(name: String, b: Actor.Behaviour[S, M], register: Fn[Address[M], Void]) -> Supervisor.Child
+Supervisor.start(children: List[Supervisor.Child], options: Supervisor.Options = Supervisor.Options()) -> Supervisor.Ref
+Supervisor.Options(max_restarts: Int = 3, within_ms: Int = 5000)
+Supervisor.stop(supervisor: Supervisor.Ref, timeout_ms: Int) -> Result[Void]
+```
+
+A supervisor starts its children (actors) in list order and starts again one
+that crashes (one for one); `start` returns once each started once. The
+register block gets the address of each new actor, in a task of its own:
+`do |address| names.put("visits", address) end` (required; a child nobody
+reaches by name gives `do |_address| nil end`). After a restart the name holds
+the new address; an old address gives `address: gone`, so look the name up on
+each call.
+
+- Only a crash restarts; a child that gives `Actor.done` stays down. A failed
+  start (crash in `init`, or a register block that crashes or runs over 5 s)
+  counts as a crash. `max_restarts` >= 0 and `within_ms` > 0, else `start`
+  halts (`RUNTIME-UNWRAP-ERROR`).
+- The limit is per child: more than `max_restarts` crashes within `within_ms`,
+  or more than `max_restarts` failed starts in a row (no time window), and the
+  supervisor stops the others in reverse order and crashes:
+  `RUNTIME-UNWRAP-ERROR`, message `supervisor: NAME crashed N times in M ms`
+  (`1 time` for one), or `supervisor: NAME failed to start N times in a row`.
+  Unobserved (no `stop`, `Task.await(sup.task)` or monitor), it fails the run.
+- `stop` stops the children in reverse order within `timeout_ms` (above 0)
+  and gives the first child's stop error; after a give-up it gives the give-up
+  error, and out of time `supervisor: timeout` (and cancels). Once the time is
+  used up, the children left are cancelled without `terminate`.
+- The supervisor is a child of the task that calls `start`: start it from
+  `main`.

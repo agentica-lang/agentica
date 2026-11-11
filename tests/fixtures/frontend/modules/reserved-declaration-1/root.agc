@@ -1,4 +1,4 @@
-enum LogLevel
+enum TaskExit
   Loud
 end
 

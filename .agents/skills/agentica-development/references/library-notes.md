@@ -115,8 +115,9 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   No builtin calls a handler: `dispatch` in `logger.agc` takes the handlers of
   an event (`LogRegistry.handlers(rank)`, a copy) and calls them in the logging
   task. Ranks are Ints (debug 0 to error 3), so no row mentions an enum.
-- `LogEvent` is a builtin record and `LogLevel` a builtin enum
-  (`compiler/catalog/builtins_data.agc`). A builtin record with an enum field
+- `LogRegistry.Event` is a builtin record and `LogRegistry.Level` a builtin
+  enum (`compiler/catalog/builtins_data.agc`); `logger.agc` re-exports them as
+  `Logger.Event` and `Logger.Level`. A builtin record with an enum field
   has no JSON types (`compiler/lower/lower_program.agc` skips it as not
   decodable), because the bytecode writer's type section (`bytecode_types.agc`)
   has no Enum clause.
@@ -281,11 +282,14 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
   goes in the compiler prelude (`stdlib/prelude/*.agc`, `references/stages.md`).
   Only prelude functions may call `__fail_arg` and `__float_fixed`. A
   concurrency helper that needs the scheduler is a C builtin.
-- `HttpWire` and `LogRegistry` are std-only builtin modules: the linker lets
-  only modules embedded from `stdlib/` call them (`std_only_name?` in
+- `HttpWire`, `LogRegistry` and `RegexEngine` are std-only builtin modules:
+  the linker lets only modules embedded from `stdlib/` name them (`STD_ONLY` in
   `compiler/catalog/builtins.agc`), and user code gets `CHECK-UNKNOWN-NAME`
   with the std module to import. A public raw layer would be a second way to
-  do the same job.
+  do the same job. A type of one reaches users through a re-export of its std
+  module (`export LogRegistry.Event`, `bind_reexports` in `modules.agc`), so
+  it reserves no name; a type that moved there goes in `MOVED_TYPES`
+  (`builtins_data.agc`) for the old-name help.
 - Not retroactive: existing builtins, JSON included, stay as they are.
 
 ## Comments and style in stdlib/

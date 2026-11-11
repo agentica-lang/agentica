@@ -8,8 +8,10 @@ import Types from "../syntax/types"
 ## PreludeRow says which): the arguments are matched against the type variables of the row.
 export enum Rule
   Plain
+  AddressSend
   AtsCall
   AtsNew
+  ChannelAddress
   ChannelNew
   ChannelRecv
   ChannelSend
@@ -138,7 +140,7 @@ export struct Variant
   payload: List[Types.Type]
 end
 
-## An enum with its type parameters and variants in declaration order. The builtin enums (Await, LogLevel) and, in the
+## An enum with its type parameters and variants in declaration order. The builtin enums (Await, TaskExit) and, in the
 ## checker, the enums of the program have this shape.
 export struct EnumDef
   name: String

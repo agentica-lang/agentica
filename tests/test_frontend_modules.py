@@ -277,6 +277,17 @@ def test_a_root_file_that_cannot_be_read_is_check_import_io_at_the_start_of_the_
     assert re.search(r"^ERROR CHECK-IMPORT-IO 0:1:1-0:1:1 ", output)
 
 
+def test_a_std_module_re_exports_only_a_record_or_an_enum_of_a_std_only_family(stage):
+    # export LogRegistry.attach names a function of the family: CHECK-IMPORT-NAME at the name, in the std/ module.
+    directory = stage.temp_dir()
+    write_files(directory, {
+        "stdlib/bad.agc": "export LogRegistry.attach\n",
+        "root.agc": 'import Bad from "std/bad"\n\ndef main() -> Void\nend\n',
+    })
+    output = stage.link([(DEFAULT_ENV, "root.agc")], directory, stdlib=directory / "stdlib")["root.agc"]
+    assert re.search(r"^ERROR CHECK-IMPORT-NAME \d+:1:20-\d+:1:26 ", output), output
+
+
 def test_a_file_above_the_root_folder_is_printed_with_dotdot_parts(stage):
     # Resolution allows "../", and the stored name of such a file keeps the .. part.
     output = stage.link_tree({"above/app/root.agc": SHARED_ROOT, "above/shared/x.agc": SHARED_X}, "above/app/root.agc")

@@ -1,11 +1,11 @@
 """Both sides of the parent/child channel of the VM, on every system.
 
 fixtures/child-channel.agc is the program; fixtures/child-channel-peer.js is the independent peer (Node): it drives
-the child side, and it is the child the parent side spawns. The peer opens the channel the way the system does, one
-socket pair at descriptor 3, or one pipe per direction at 3 and 4 on Windows. The cases that need a shell or a
-FIFO are in test_vm_child_channel_posix.py, together with the check that a plain child inherits nothing (the
-`spawning` mode); vm/tests/process_test.c checks that, and the take itself, in C. The refusal of a descriptor that is
-a file or a device is there for descriptor 3, and here for 3 and 4 as a file on Windows.
+the child side, and it is the child the parent side spawns. The peer opens the channel as the VM does, one pipe per
+direction at descriptors 3 and 4 (marker "3,4"). The cases that need a shell or a FIFO, and the one-socket form "3",
+are in test_vm_child_channel_posix.py, together with the check that a plain child inherits nothing (the `spawning`
+mode); vm/tests/process_test.c checks that, and the take itself, in C. The refusal of a descriptor that is a file or
+a device is there for descriptor 3 behind "3", and here for 3 and 4 as a file behind "3,4".
 """
 import json
 import os
@@ -64,10 +64,9 @@ def test_child_side_lines_partial_lines_eof_timeouts_and_no_channel(bytecode, no
         assert answer[name]["stdout"] == bare, name
     for name in ("serve", "cut", "idle", "bare", "bare_marker_only", "bare_marker_pair_only"):
         assert answer[name]["exit"] == 0, (name, answer[name]["stderr"])
-    if os.name == "nt":
-        # Descriptors 3 and 4 that are a file are no channel (the POSIX forms: test_vm_child_channel_posix.py).
-        refused = lines('read: error("process: no parent channel")', 'send: error("process: no parent channel")', "ready")
-        assert (answer["pinned"]["exit"], answer["pinned"]["stdout"], answer["pinned"]["content"]) == (0, refused, "")
+    # Descriptors 3 and 4 that are a file are no channel (the one-socket form: test_vm_child_channel_posix.py).
+    refused = lines('read: error("process: no parent channel")', 'send: error("process: no parent channel")', "ready")
+    assert (answer["pinned"]["exit"], answer["pinned"]["stdout"], answer["pinned"]["content"]) == (0, refused, "")
 
 
 def test_parent_side_send_read_available_close_timeouts_and_limits(bytecode, node):

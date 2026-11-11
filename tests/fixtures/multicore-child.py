@@ -9,8 +9,7 @@ only, which imports nothing of the tests.
     record DIR     writes a count that grows every 50 ms to DIR/<its process id>, for ever
 
 The tests run it on the base interpreter, never a venv's launcher, so os.getpid() is the id of the VM's child.
-The channel is the descriptor that AGENTICA_CHANNEL names first: "3" (a socket) on POSIX, "3,4" (the read pipe, then
-the write pipe) on Windows.
+The channel is "3,4": the child reads descriptor 3 and writes descriptor 4.
 """
 import os
 import sys
@@ -68,7 +67,7 @@ def main(mode, *rest):
             time.sleep(0.02)
         print("gone", flush=True)
     elif mode == "channel":
-        os.read(int(os.environ["AGENTICA_CHANNEL"].split(",")[0]), 1)
+        os.read(3, 1)
         print("started", flush=True)
         time.sleep(60)
     elif mode == "record":

@@ -42,5 +42,8 @@ void agc_tls_context_check(agc_vm *vm, agc_value context, bool server, const cha
 /* RUNTIME-TLS-CONTEXT-ALPN at span AT unless CONFIG (NULL for plain TCP) agrees on no protocol but HTTP/1.1, the
    only one std/http speaks (vm/tls_context.c): HTTP.client, HTTP.start and HTTP.serve_tls ask it. */
 void agc_tls_http1_check(agc_vm *vm, const agc_tls_config *config, uint32_t at);
+/* The error Result "WHAT", then the host, the port (none when PORT is negative) and ERR, a libuv error: the text of a
+   getaddrinfo failure (UV_EAI_*), else the system error that agc_system_error prints (vm/tcp.c). */
+agc_value agc_host_error(agc_vm *vm, const char *what, const char *host, int64_t port, int err);
 
 #endif

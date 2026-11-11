@@ -150,7 +150,20 @@ if threading.current_thread() is threading.main_thread():
     if hasattr(signal, "SIGHUP"):
         signal.signal(signal.SIGHUP, _terminate)
 
-Result = namedtuple("Result", "code stdout stderr")
+
+class Result(namedtuple("Result", "code stdout stderr")):
+    """What a run gave: its exit code and both streams as text."""
+
+    __slots__ = ()
+
+    def json(self):
+        """stdout decoded as JSON. Output that does not decode fails with the exit code and both streams: a Windows run
+        once printed nothing at all, and the code is the clue (#1098)."""
+        try:
+            return json.loads(self.stdout)
+        except json.JSONDecodeError as problem:
+            raise AssertionError("stdout is not JSON (%s)\nexit code: %r\nstdout: %r\nstderr: %r" % (
+                problem, self.code, self.stdout, self.stderr)) from None
 
 
 def slow(item):
@@ -323,8 +336,8 @@ def tool(name):
 
 def channel_peer(name):
     """The command that runs the independent peer of the child channel called `name` (a file of tests/fixtures without
-    its extension): the Python one, and on Windows the Node one, since only Node can give a child the two pipes at
-    descriptors 3 and 4 that the Windows channel is (docs/vm/10-io-processes.md, 10.4). The choice follows the host: a
+    its extension): the Python one, and on Windows the Node one, since there only Node can give a child the two pipes
+    at descriptors 3 and 4 that the channel is (docs/vm/10-io-processes.md, 10.4). The choice follows the host: a
     Windows build run under Wine on Linux has no peer (the cases skip with `UNDER_WINE`, which sees the target)."""
     if os.name == "nt":
         return [tool("node"), str(FIXTURES / (name + ".js"))]

@@ -234,6 +234,8 @@ extern const agc_builtin agc_duplex_builtins[];
 extern const size_t agc_duplex_builtin_count;
 extern const agc_builtin agc_tcp_builtins[];
 extern const size_t agc_tcp_builtin_count;
+extern const agc_builtin agc_dns_builtins[];
+extern const size_t agc_dns_builtin_count;
 extern const agc_builtin agc_http_service_builtins[];
 extern const size_t agc_http_service_builtin_count;
 extern const agc_builtin agc_tls_context_builtins[];

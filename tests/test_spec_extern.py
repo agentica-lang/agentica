@@ -1172,7 +1172,7 @@ end
     ("def f(h: Holder) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 18)),
     ("def f(j: List[Job]) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 21)),
     ("def f(s: Set[Int]) -> Int", "CHECK-NATIVE-TYPE", (20, 12), (20, 20)),
-    ("def f(n: Int) -> LogLevel", "CHECK-NATIVE-TYPE", (20, 20), (20, 28)),
+    ("def f(n: Int) -> TaskExit", "CHECK-NATIVE-TYPE", (20, 20), (20, 28)),
     ("def f(n: Int) -> Fn[Int, Int]", "CHECK-NATIVE-TYPE", (20, 20), (20, 32)),
     ("def f(m: Map[Float, Int]) -> Int", "CHECK-MAP-KEY-TYPE", (20, 16), (20, 21)),
 ], NATIVE_TYPES)

@@ -114,6 +114,7 @@ def register_aliases(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result
         Ast.Decl.TypeAlias(node) ->
           here = found.with(file: module.file)
           try check_new_name(here, st, node.name, node.name_span)
+          try check_address_name(here, st, node.name, node.type_parameters, node.name_span)
           try check_type_parameters(here, st, node.type_parameters, [], "type alias", node.span)
           found = here.with(aliases: here.aliases.put(node.name, node))
         _ -> st = st
@@ -179,6 +180,7 @@ end
 
 def register_enum_name(cx: State.Cx, st: State.St, node: Ast.EnumDecl) -> Result[State.Cx]
   try check_new_name(cx, st, node.name, node.span)
+  try check_address_name(cx, st, node.name, node.type_parameters, node.span)
   try check_type_parameters(cx, st, node.type_parameters, [], "enum", node.span)
   ok(
     cx.with(
@@ -249,6 +251,22 @@ def article(owner: String) -> String
   "a"
 end
 
+# CHECK-REDEFINED-NAME for a struct, enum or alias named Address with type parameters. Address is not reserved (a
+# `struct Address` is common), but Address[M] with one type argument is always the builtin (check_types.agc and the
+# linker's Resolve.resolve_type), so a generic one of the program could never be named.
+def check_address_name(
+  cx: State.Cx,
+  st: State.St,
+  name: String,
+  parameters: List[String],
+  span: Source.Span,
+) -> Result[Bool]
+  return ok(true) if T.display_name(name) != "Address" or parameters.size == 0
+
+  help = "Address[T] is the builtin address of a channel; give the generic type another name"
+  error(State.fail_help(cx, st, "CHECK-REDEFINED-NAME", "a generic type cannot be named Address", span, help))
+end
+
 # CHECK-REDEFINED-NAME when a declared type name is reserved or already taken.
 def check_new_name(cx: State.Cx, st: State.St, name: String, span: Source.Span) -> Result[Bool]
   if (
@@ -275,6 +293,7 @@ def register_structs(cx: State.Cx, modules: List[Linker.LinkedModule]) -> Result
         Ast.Decl.Struct(node) ->
           here = found.with(file: module.file)
           try check_new_name(here, st, node.name, node.span)
+          try check_address_name(here, st, node.name, node.type_parameters, node.span)
           try check_type_parameters(here, st, node.type_parameters, [], "struct", node.span)
           found = here.with(
             structs: found.structs.put(node.name, []),

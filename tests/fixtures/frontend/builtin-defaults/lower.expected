@@ -1,7 +1,7 @@
 == probe.agc
 program 0:1:1-5:1 entry=0 globals=0
 source 0 "probe.agc" chars=76
-enum "LogLevel" v0="Debug"/0 v1="Info"/0 v2="Warning"/0 v3="Error"/0
+enum "LogRegistry.Level" v0="Debug"/0 v1="Info"/0 v2="Warning"/0 v3="Error"/0
 fn0 "main" params=0 captures=0 slots=9 entry @ 0:1:1-5:1
     step @ 0:2:3-3:1
     step @ 0:2:3-2:21

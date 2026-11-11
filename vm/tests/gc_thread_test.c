@@ -151,8 +151,10 @@ static void collect_beside_a_held_heap(void) {
 #endif
 
 #if !defined(_WIN32) && !defined(AGC_NO_GC)
-/* The abort function agc_init sets, called with MESSAGE in a child: it must exit 70 with LINE alone on stderr. */
+/* The abort function agc_init sets, called with MESSAGE in a child: it must exit 70 with LINE alone on stderr. The
+   function is read before the fork: GC_get_abort_func takes libgc's lock, which a child must not wait on. */
 static void gc_abort_ends_with(const char *message, const char *line) {
+  GC_abort_func on_abort = GC_get_abort_func();
   int out[2];
   assert(pipe(out) == 0);
   fflush(NULL);
@@ -160,7 +162,7 @@ static void gc_abort_ends_with(const char *message, const char *line) {
   assert(pid >= 0);
   if (pid == 0) {
     dup2(out[1], 2);
-    GC_get_abort_func()(message);
+    on_abort(message);
     _exit(0);
   }
   close(out[1]);
@@ -176,12 +178,18 @@ static void gc_abort_ends_with(const char *message, const char *line) {
   assert(strcmp(text, line) == 0);
 }
 
-/* libgc's aborts for memory the system refused are the out-of-memory line (#1384); any other stays a GC fault. */
+/* libgc's aborts for memory the system refused are the out-of-memory line (#1384), one per prefix of on_gc_abort; any
+   other stays a GC fault. */
 static void gc_aborts(void) {
-  gc_abort_ends_with("Insufficient memory for main local_mark_stack", "agentica: out of memory\n");
-  gc_abort_ends_with("Failed to allocate memory for thread registering", "agentica: out of memory\n");
-  gc_abort_ends_with("Insufficient space for /proc read", "agentica: out of memory\n");
+  static const char *const out_of_memory[] = {
+      "Insufficient memory for main local_mark_stack",  "Insufficient space for /proc read",
+      "Failed to allocate memory for thread registering", "Could not allocate memory for procedure stack",
+      "Could not map memory for procedure stack",       "Not enough memory to process remapping"};
+  for (size_t k = 0; k < sizeof out_of_memory / sizeof out_of_memory[0]; k++)
+    gc_abort_ends_with(out_of_memory[k], "agentica: out of memory\n");
+  gc_abort_ends_with("Failed to create key for local allocator", "agentica: internal GC error\n");
   gc_abort_ends_with("Too many heap sections", "agentica: internal GC error\n");
+  gc_abort_ends_with("Cannot allocate executable pages", "agentica: internal GC error\n");
   gc_abort_ends_with("Insufficient", "agentica: internal GC error\n");
 }
 #endif

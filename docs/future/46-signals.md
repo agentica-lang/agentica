@@ -53,7 +53,7 @@ Signal.channel(signals: List[Signal]) -> Result[Channel[Signal]]
 Signal.number(sig: Signal) -> Int
 ```
 
-`Signal` is a builtin enum with no payloads, like `LogLevel`: `Signal.Term`,
+`Signal` is a builtin enum with no payloads, like `TaskExit`: `Signal.Term`,
 `Signal.Int`, `Signal.Hup`, `Signal.Usr1`, `Signal.Usr2`, `Signal.Quit` and
 `Signal.Kill`.
 

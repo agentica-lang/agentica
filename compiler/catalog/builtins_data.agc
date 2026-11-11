@@ -7,9 +7,10 @@ import Model from "builtin_model"
 
 ## Every builtin, sorted by name; the Zlib rows, the ATS rows, the Base64 and hex rows, the digest rows, the HMAC rows,
 ## the OpenSSL.Random rows, the OpenSSL.HMAC.secure_compare row, the Bytes rows, the Cipher and CMAC rows, the AES-GCM
-## and KDF rows, the Optional rows, the text codec rows, the task monitor rows, the Native.Mutex rows, the RSA row and
-## then the Range Enumerable rows are appended last, in contract order, so the positions of the existing rows never
-## shift. A builtin of a family (FAMILIES) is named Family.Member.fn, such as OpenSSL.Cipher.aes_256_gcm_encrypt.
+## and KDF rows, the Optional rows, the text codec rows, the task monitor rows, the Native.Mutex rows, the RSA row, the
+## Range Enumerable rows and then the DNS row are appended last, in contract order, so the positions of the existing
+## rows never shift. A builtin of a family (FAMILIES) is named Family.Member.fn, such as
+## OpenSSL.Cipher.aes_256_gcm_encrypt.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
 BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
 BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
@@ -163,9 +164,9 @@ export RECORDS: List[Model.Record] = [
     ],
   ),
   Model.Record(
-    name: "LogEvent",
+    name: "LogRegistry.Event",
     fields: [
-      Model.Named(name: "level", type: Types.Type.Enum("LogLevel", [])),
+      Model.Named(name: "level", type: Types.Type.Enum("LogRegistry.Level", [])),
       Model.Named(name: "message", type: Types.Type.String),
       Model.Named(name: "fields", type: Types.Type.Map(Types.Type.String, Types.Type.String)),
       Model.Named(name: "time_ms", type: Types.Type.Int),
@@ -262,7 +263,7 @@ export ENUMS: List[Model.EnumDef] = [
     ],
   ),
   Model.EnumDef(
-    name: "LogLevel",
+    name: "LogRegistry.Level",
     parameters: [],
     variants: [
       Model.Variant(name: "Debug", payload: []),
@@ -323,9 +324,6 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "Lazy",
   "List",
   "Listener",
-  "LogEvent",
-  "LogLevel",
-  "LogRegistry",
   "Map",
   "Math",
   "Nil",
@@ -337,11 +335,9 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "Profile",
   "Random",
   "Range",
-  "RegexEngine",
   "Result",
   "Set",
   "Socket",
-  "Std",
   "String",
   "StructMember",
   "System",
@@ -374,7 +370,39 @@ export STD_ONLY_IMPORTS: Map[String, List[String]] = {
   "RegexEngine": ["std/regex", "Regex"],
 }
 
+## The builtin types that moved into a std-only family, with their new name there. A std module re-exports each one,
+## so a program writes the alias of that module: LogEvent is LogRegistry.Event, which std/logger re-exports as
+## Logger.Event.
+export MOVED_TYPES: Map[String, String] = {"LogEvent": "LogRegistry.Event", "LogLevel": "LogRegistry.Level"}
+
 ROWS_1: List[Model.Builtin] = [
+  Model.Builtin(
+    name: "Address.send",
+    parameters: [
+      Model.Named(name: "address", type: Types.Type.Address(Types.Type.Var("T"))),
+      Model.Named(name: "value", type: Types.Type.Var("T")),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.Void),
+    rule: Model.Rule.AddressSend,
+    implementation: "Address.send",
+    effects: ["concurrency"],
+    description: (
+      "Send to the channel of the address as Channel#send does; error(\"address: gone\") once the channel is " +
+      "collected; VM only."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Channel.address",
+    parameters: [Model.Named(name: "channel", type: Types.Type.Channel(Types.Type.Var("T")))],
+    result: Types.Type.Address(Types.Type.Var("T")),
+    rule: Model.Rule.ChannelAddress,
+    implementation: "Channel.address",
+    effects: [],
+    description: "A send-only reference to the channel, which is data and does not keep the channel alive; VM only.",
+    alternatives: [],
+  ),
   Model.Builtin(
     name: "Channel.close",
     parameters: [Model.Named(name: "channel", type: Types.Type.Channel(Types.Type.Var("T")))],
@@ -2709,7 +2737,7 @@ ROWS_24: List[Model.Builtin] = [
     parameters: [
       Model.Named(name: "name", type: Types.Type.String),
       Model.Named(name: "rank", type: Types.Type.Int),
-      Model.Named(name: "handler", type: Types.Type.Fn([Types.Type.Struct("LogEvent", [])], Types.Type.Void)),
+      Model.Named(name: "handler", type: Types.Type.Fn([Types.Type.Struct("LogRegistry.Event", [])], Types.Type.Void)),
     ],
     result: Types.Type.Result(Types.Type.Void),
     rule: Model.Rule.Plain,
@@ -2747,7 +2775,7 @@ ROWS_25: List[Model.Builtin] = [
   Model.Builtin(
     name: "LogRegistry.handlers",
     parameters: [Model.Named(name: "rank", type: Types.Type.Int)],
-    result: Types.Type.List(Types.Type.Fn([Types.Type.Struct("LogEvent", [])], Types.Type.Void)),
+    result: Types.Type.List(Types.Type.Fn([Types.Type.Struct("LogRegistry.Event", [])], Types.Type.Void)),
     rule: Model.Rule.Plain,
     implementation: "LogRegistry.handlers",
     effects: ["logging"],
@@ -2757,7 +2785,7 @@ ROWS_25: List[Model.Builtin] = [
   Model.Builtin(
     name: "LogRegistry.install_default",
     parameters: [
-      Model.Named(name: "handler", type: Types.Type.Fn([Types.Type.Struct("LogEvent", [])], Types.Type.Void)),
+      Model.Named(name: "handler", type: Types.Type.Fn([Types.Type.Struct("LogRegistry.Event", [])], Types.Type.Void)),
     ],
     result: Types.Type.Void,
     rule: Model.Rule.Plain,
@@ -4058,7 +4086,7 @@ ROWS_34: List[Model.Builtin] = [
     implementation: "Process.spawn_channel.options",
     effects: ["subprocess"],
     description: (
-      "Like spawn_captured, plus a channel to the child: fd 3 and AGENTICA_CHANNEL=3 in the child; VM only."
+      "Like spawn_captured, plus a channel: the child reads fd 3, writes fd 4, has AGENTICA_CHANNEL=3,4; VM only."
     ),
     alternatives: [],
   ),
@@ -6883,6 +6911,22 @@ ROWS_71: List[Model.Builtin] = [
     implementation: "",
     effects: [],
     description: "List the values before the first one f rejects; f is not called after it; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "DNS.lookup",
+    parameters: [
+      Model.Named(name: "host", type: Types.Type.String),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+    ],
+    result: Types.Type.Result(Types.Type.List(Types.Type.String)),
+    rule: Model.Rule.Plain,
+    implementation: "DNS.lookup",
+    effects: ["network"],
+    description: (
+      "Resolve a host name with the system resolver: every IPv4 and IPv6 address as text, in its order, without " +
+      "duplicates; an IP literal gives itself."
+    ),
     alternatives: [],
   ),
 ]

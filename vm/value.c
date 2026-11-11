@@ -19,6 +19,13 @@ typedef struct {
 } blocking_call;
 #endif
 
+/* A weak reference (agc_weak_new). Under Boehm it is a pointer-free block, so the collector never reads the word as a
+   reference, and the word holds the pointer hidden (GC_HIDE_POINTER) besides; Boehm writes 0 into it once the object is
+   unreachable (a disappearing link). */
+struct agc_weak {
+  uintptr_t hidden;
+};
+
 #ifdef AGC_NO_GC
 const char *__asan_default_options(void); // NOLINT(readability-identifier-naming,misc-use-internal-linkage)
 const char *__asan_default_options(void) { return "detect_leaks=0:allocator_may_return_null=1"; }
@@ -73,11 +80,15 @@ static const char gc_error_line[] = "agentica: internal GC error\n";
    allocate memory for thread registering"), the heap section list. Under a low ulimit -v that is plain out of memory,
    so those messages, which start with one of these, end with the out-of-memory line; any other abort is a fault.
    The prefixes are libgc's own text, the same in the vendored bdwgc and in a system libgc from GC_MIN (mk/vm.mk) on.
-   vm/tests/gc_thread_test.c sends libgc's exact messages, and tests/test_vm_style.py checks that the vendored
-   bdwgc still has them, so an update of bdwgc that changes the text fails there instead of turning silently into
-   "internal GC error". */
+   tests/test_vm_style.py lists every abort of the vendored bdwgc that speaks of memory, space or allocation and
+   whether it is out of memory here, so an update of bdwgc that adds or rewords one fails there for a review instead
+   of turning silently into "internal GC error"; vm/tests/gc_thread_test.c sends some of them to this function.
+   An abort through ABORT_ARGn writes a line of its own first, the message with its arguments (the size asked for the
+   /proc/self/maps buffer, the size of the E2K procedure stack), so stderr then has that line before ours.
+   "Cannot allocate executable pages" is not here: the system refused PROT_EXEC (a W^X policy), not memory. */
 static bool gc_abort_is_out_of_memory(const char *message) {
-  static const char *const prefixes[] = {"Insufficient memory", "Insufficient space", "Failed to allocate"};
+  static const char *const prefixes[] = {"Insufficient memory",       "Insufficient space",   "Failed to allocate",
+                                         "Could not allocate memory", "Could not map memory", "Not enough memory"};
   for (size_t k = 0; message && k < sizeof prefixes / sizeof prefixes[0]; k++)
     if (strncmp(message, prefixes[k], strlen(prefixes[k])) == 0) return true;
   return false;
@@ -288,6 +299,37 @@ void agc_gc_measure(void) {
 void agc_gc_collect(void) {
 #ifndef AGC_NO_GC
   GC_gcollect();
+#endif
+}
+
+#ifndef AGC_NO_GC
+/* Reads the link under the collector's lock (GC_call_with_alloc_lock): the collector clears links after it has marked,
+   with that lock held and the other threads running, so a read without it could see the pointer of an object the
+   collection has already found unreachable. A pointer read under the lock is on this thread's stack before the next
+   collection marks, so it stays live. */
+static void *reveal(void *data) {
+  const agc_weak *w = data;
+  return w->hidden ? (void *)GC_REVEAL_POINTER(w->hidden) : NULL;
+}
+#endif
+
+agc_weak *agc_weak_new(void *object) {
+  agc_weak *w = agc_alloc_atomic(sizeof *w);
+#ifdef AGC_NO_GC
+  w->hidden = (uintptr_t)object;
+#else
+  w->hidden = GC_HIDE_POINTER(object);
+  /* The macro, as GC_REGISTER_FINALIZER_NO_ORDER: under GC_DEBUG (the GC-stress build) it passes the block's base. */
+  if (GC_GENERAL_REGISTER_DISAPPEARING_LINK((void **)&w->hidden, object) == GC_NO_MEMORY) agc_out_of_memory();
+#endif
+  return w;
+}
+
+void *agc_weak_get(agc_weak *w) {
+#ifdef AGC_NO_GC
+  return (void *)w->hidden;
+#else
+  return GC_call_with_alloc_lock(reveal, w);
 #endif
 }
 
@@ -535,6 +577,13 @@ agc_value agc_mutex_value(void *mutex) {
   return v;
 }
 
+agc_value agc_address_value(const void *address) {
+  agc_value v;
+  v.tag = AGC_T_ADDRESS;
+  v.as.p = (void *)address;
+  return v;
+}
+
 agc_value agc_c_pointer_value(void *pointer) {
   agc_value v;
   v.tag = AGC_T_C_POINTER;
@@ -701,6 +750,11 @@ void *agc_as_ats(agc_vm *vm, agc_value v) {
 
 void *agc_as_mutex(agc_vm *vm, agc_value v) {
   if (v.tag != AGC_T_MUTEX) agc_wrong_tag(vm);
+  return v.as.p;
+}
+
+const void *agc_as_address(agc_vm *vm, agc_value v) {
+  if (v.tag != AGC_T_ADDRESS) agc_wrong_tag(vm);
   return v.as.p;
 }
 

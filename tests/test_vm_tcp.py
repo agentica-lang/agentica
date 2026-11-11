@@ -854,3 +854,28 @@ def test_reads_without_a_timeout_wait_for_idle_python_clients_without_using_the_
     if before is not None:
         cpu = children_cpu_seconds() - before
         assert cpu < idle_seconds / 2, cpu
+
+
+DNS_PROGRAM = """\
+def main() -> Void
+  IO.inspect(DNS.lookup("localhost"))
+  IO.inspect(DNS.lookup("localhost", 5000))
+end
+"""
+
+NODE_LOOKUP = ("require('dns').lookup('localhost', {all: true, hints: 0, verbatim: true}, (error, found) => "
+               "{ if (error) throw error; console.log(JSON.stringify(found.map(item => item.address))) })")
+
+
+def test_dns_lookup_of_localhost_gives_the_addresses_python_and_node_get_from_the_system_resolver(tmp_path, node):
+    # The resolver's order without duplicates; an IPv6 scope id is not part of the text.
+    seen = []
+    for *_, address in socket.getaddrinfo("localhost", None, type=socket.SOCK_STREAM):
+        text = address[0].split("%")[0]
+        if text not in seen:
+            seen.append(text)
+    node_seen = json.loads(run([node, "-e", NODE_LOOKUP]).stdout)
+    assert node_seen == seen
+    result = run_text(tmp_path, "dns", DNS_PROGRAM)
+    assert (result.code, result.stderr) == (0, ""), result
+    assert result.stdout == ("ok(%s)\n" % json.dumps(seen)) * 2

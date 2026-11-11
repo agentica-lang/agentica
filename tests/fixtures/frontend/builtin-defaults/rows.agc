@@ -70,12 +70,12 @@ def main() -> Void
   text = Types.Type.String
   number = Types.Type.Int
   each_line = Types.Type.Fn([Types.Type.String], Types.Type.Void)
-  level = Types.Type.Enum("LogLevel", [])
+  level = Types.Type.Enum("LogRegistry.Level", [])
   await = Types.Type.Enum("Await", [Types.Type.Int])
   x = required("x", number)
   one = optional("b", number, Model.Default.Whole(1))
   timeout = optional("timeout_ms", number, Model.Default.Whole(1000))
-  info = optional("level", level, Model.Default.Variant("LogLevel.Info"))
+  info = optional("level", level, Model.Default.Variant("LogRegistry.Level.Info"))
 
   show(plain("Row.fn_last", [required("path", text), timeout, required("f", each_line)]))
   show(plain("Row.plain", [required("path", text), timeout]))
@@ -94,7 +94,7 @@ def main() -> Void
   show(plain("Row.wrong_type", [x, optional("b", number, Model.Default.Text("x"))]))
   show(plain("Row.wrong_list", [x, optional("a", Types.Type.Map(text, number), Model.Default.EmptyList)]))
   show(plain("Row.variant_ok", [x, info]))
-  show(plain("Row.variant_missing", [x, optional("level", level, Model.Default.Variant("LogLevel.Nope"))]))
+  show(plain("Row.variant_missing", [x, optional("level", level, Model.Default.Variant("LogRegistry.Level.Nope"))]))
   show(plain("Row.variant_payload", [x, optional("done", await, Model.Default.Variant("Await.Done"))]))
   show(plain("Row.variant_other_enum", [x, optional("level", level, Model.Default.Variant("Await.TimedOut"))]))
   show(plain("Row.variant_unknown_enum", [x, optional("l", Types.Type.Enum("Nope", []), Model.Default.Variant("Nope.A"))]))
@@ -108,7 +108,7 @@ def main() -> Void
     Model.Default.Nothing,
     Model.Default.EmptyList,
     Model.Default.EmptyMap,
-    Model.Default.Variant("LogLevel.Info"),
+    Model.Default.Variant("LogRegistry.Level.Info"),
   ]
   puts(every.map do |default: Model.Default| "[#{Builtins.default_text(default)}]" end.join(" "))
 end

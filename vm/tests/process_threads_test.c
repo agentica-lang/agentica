@@ -257,7 +257,7 @@ static void test_a_wait_cancelled_past_its_deadline(void) {
 static void test_the_channel_through_posted_steps(void) {
   assert(agc_io_share(&vm, false));
   child = ok_of(step(call(one, "Process.spawn_channel.options", 3, agc_test_str("sh"),
-                          sh("read x <&3; echo \"got:$x\" >&3; read y <&3 || echo end >&3"),
+                          sh("read x <&3; echo \"got:$x\" >&4; read y <&3 || echo end >&4"),
                           agc_test_process_options(agc_test_str(".")), agc_void())));
   assert(agc_as_result(&vm, step(call(one, "Process.channel_send", 3, child, agc_test_str("hi\n"), agc_int(5000),
                                       agc_void())))->ok);

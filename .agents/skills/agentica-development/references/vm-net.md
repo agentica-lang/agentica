@@ -62,6 +62,14 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   select callback reads the config, so each accepted connection's `net` holds
   its own count on it. `advance` stores the selected name once, in the atomic
   `net.alpn`, for `TLS.alpn`.
+- `vm/dns.c`: `DNS.lookup` is one external job: its START step calls
+  `agc_io_getaddrinfo` on the I/O thread and the callback copies the addresses
+  as text before `agc_io_ready`. At the deadline (`pause`) or a cancel
+  (`cancel`) a lookup still queued in the pool is cancelled; one that runs
+  cannot be, and the job ends without it. A pool thread may then still write
+  into the request, so `drop` of a started lookup only marks it, and the
+  callback frees it (the `vm/tcp.c` pattern). Errors go through
+  `agc_host_error` (`vm/tcp.c`), as `TCP.connect` reports them.
 - `vm/tls_context.c`: `TLS.client_context`/`TLS.server_context` build a
   `TlsContext` (a refcounted `agc_tls_config`, freed by a GC finalizer run on
   demand) in one pool job; `agc_tls_context_check` checks the role
@@ -80,11 +88,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Child channel
 
-- `vm/duplex.c`: an `agc_duplex` is one bidirectional libuv pipe over a socket
-  end (one socket on Unix, a pipe per direction on Windows; `duplex_os.h`, see
-  `references/vm-io.md`), with an `agc_inbuf` (lines, 1 MiB), at most one reader
-  and one writer request, and a reference count (owner, each request, the pipe
-  handle, the shutdown request).
+- `vm/duplex.c`: an `agc_duplex` is a libuv pipe handle to read and one to
+  write (a pipe per direction, or a child's one socket duplicated;
+  `duplex_os.h`, see `references/vm-io.md`), with an `agc_inbuf` (lines,
+  1 MiB), at most one reader and one writer request, and a reference count
+  (owner, each request, the pipe handles, the shutdown request).
   - Jobs are `external` with the call's timeout. A read parks until a line
     is buffered; a send parks only when the pipe is full. `request_expired`
     closes the whole channel (`agc_duplex_shut`): a timeout ends the channel
@@ -95,16 +103,18 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   - `agc_duplex_overflow` (called by `process.c` when stdout or stderr is
     cut) stores the output-exceeds error and readies a pending reader. Lines
     already buffered still come first.
-  - Parent side: `agc_duplex_new` over the parent's socket end.
-    `agc_duplex_close_write` ignores a `uv_shutdown` that fails on the spot
-    (`ENOTCONN` when the peer is gone).
-  - Child side: `agc_parent_take` (called by `agc_launch_vm`) takes the
-    descriptors only when `AGENTICA_CHANNEL` is exactly `agc_chan_value()`
-    (`3`, or `3,4` on Windows) and `agc_chan_take` accepts them. On POSIX fd 3
-    must be a socket or a FIFO opened `O_RDWR`: a one-way FIFO fails the read
-    start and parks `Test.run` forever. On Windows fd 3 must grant reading and
-    fd 4 writing. The variable is removed, and the duplex becomes
-    `vm->parent`.
+  - Parent side: `agc_duplex_new` over the parent's two pipe ends.
+    `agc_duplex_close_write` closes the write end in `shutdown_done`, after the
+    queued writes, whatever the status (`ENOTSOCK` on a POSIX pipe): the close
+    is the end of input every system delivers (#1392). A `uv_shutdown` that
+    fails on the spot (`ENOTCONN` when the peer is gone) closes it at once.
+  - Child side: `agc_parent_take` (called by `agc_launch_vm`) passes
+    `AGENTICA_CHANNEL` to `agc_chan_take`, which takes `3,4` (fd 3 readable,
+    fd 4 writable, each a FIFO or a socket; on Windows pipes) and on POSIX
+    also `3` (one socket or FIFO opened `O_RDWR` on fd 3, duplicated). A
+    one-way end in the wrong place fails the read start and would park
+    `Test.run` forever, so it is refused. The variable is removed, and the
+    duplex becomes `vm->parent`.
   - `Process.parent_read_line` and `Process.parent_send` take a positive
     timeout and the `vm->parent_locks` pair. With no channel they fail with
     `process: no parent channel`. `process: the channel is in use` comes only
@@ -150,11 +160,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     (`docs/vm/10-io-processes.md`, `docs/vm/14-core-invariants.md` §14.4);
     `unlink_child` clears `proc.g`, so a release after the guard is freed never
     reaches it.
-  - Channel children (`Process.spawn_channel`): `agc_chan_pair` (a
-    `uv_socketpair`, or on Windows two `uv_pipe` pairs with blocking child
-    ends) on stdio slots 3 and
-    4. `child_env` rebuilds the environment on every spawn and adds
-    `AGENTICA_CHANNEL=` for channel spawns only. The parent end is an
+  - Channel children (`Process.spawn_channel`): `agc_chan_pair` (two
+    `uv_pipe` pairs with blocking child ends) on stdio slots 3 and 4.
+    `child_env` rebuilds the environment on every spawn and adds
+    `AGENTICA_CHANNEL=3,4` for channel spawns only. The parent end is an
     `agc_duplex` in `proc.channel`, which `shut` closes with the pipes.
     `read_available` drains stdout with non-blocking reads under the same
     cut rules (the held-back UTF-8 tail included, §10.4). The spawn trace

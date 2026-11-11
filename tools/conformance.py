@@ -69,7 +69,8 @@ WINDOWS_ONLY_MODULES = frozenset({
 # tests/test_vm_native.py, where Windows waits only on sockets, and the SIGTERM grace of a child at the end of the run
 # that tests/test_vm_crypto.py uses to hold the run open); macOS lacks non-UTF-8 names, a way to limit the CPUs of a
 # process, an RLIMIT_NPROC that limits threads (tests/test_vm_native.py) and a ulimit -v that limits the address space
-# (tests/test_vm_multicore.py); the other systems lack the Windows-only modules above.
+# (tests/test_vm_multicore.py); neither loads an LD_PRELOAD library in front of glibc's getaddrinfo
+# (tests/test_vm_dns.py); the other systems lack the Windows-only modules above.
 # Golden fixtures named -posix or -windows are allowed by name (host_only_fixture).
 _NEEDS_POSIX = frozenset({
     "tests/test_bdd_integration.py", "tests/test_bdd_posix.py", "tests/test_check_stdin.py", "tests/test_cli_fmt.py",
@@ -82,10 +83,11 @@ _NEEDS_POSIX = frozenset({
     "tests/test_vm_os.py", "tests/test_vm_stdout.py", "tests/test_vm_stop.py", "tests/test_vm_lazy_io.py",
     "tests/test_vm_multicore.py", "tests/test_bytecode_cache.py", "tests/test_check_cache.py",
     "tests/test_cli_coverage.py", "tests/test_vm_native.py", "tests/test_vm_http_proxy.py", "tests/test_vm_crypto.py",
+    "tests/test_vm_dns.py",
 })
 _NEEDS_LINUX = frozenset({
     "tests/test_vm_diff_8.py", "tests/test_single_binary.py", "tests/test_vm_file_open_block.py", "tests/test_vm_native.py",
-    "tests/test_vm_multicore.py",
+    "tests/test_vm_multicore.py", "tests/test_vm_dns.py",
 })
 HOST_ONLY_ALLOWED = {
     "linux-x86_64": WINDOWS_ONLY_MODULES,
@@ -117,7 +119,8 @@ AREAS = {
     "spec": (
         "the rules of the language through `check`: lexer, parser, checker, modules, bytecode",
         [
-            "tests/test_spec_alias.py", "tests/test_spec_bytecode.py", "tests/test_spec_checker_defaults.py",
+            "tests/test_spec_address.py", "tests/test_spec_alias.py", "tests/test_spec_bytecode.py",
+            "tests/test_spec_checker_defaults.py",
             "tests/test_spec_checker.py", "tests/test_spec_checker_rest.py", "tests/test_spec_diagnostic.py",
             "tests/test_spec_lexer.py", "tests/test_spec_main.py", "tests/test_spec_modules.py", "tests/test_spec_regex_literal.py",
             "tests/test_spec_eag.py", "tests/test_spec_implicit_return.py",
@@ -146,7 +149,7 @@ AREAS = {
         "std/ modules, standard streams and native calls: analysis, binary, toml, prelude, logger, clock, crypto, "
         "stdout and stderr, extern functions",
         [
-            "tests/test_std_analysis.py", "tests/test_std_archive.py", "tests/test_std_archive_zip.py",
+            "tests/test_std_actor.py", "tests/test_std_analysis.py", "tests/test_std_archive.py", "tests/test_std_archive_zip.py",
             "tests/test_std_binary.py", "tests/test_std_cache.py", "tests/test_std_cookie.py", "tests/test_std_html.py", "tests/test_std_mime.py",
             "tests/test_std_option_parser.py",
             "tests/test_std_regex.py", "tests/test_std_toml.py", "tests/test_std_uri.py", "tests/test_std_utc.py",
@@ -184,8 +187,9 @@ AREAS = {
     ),
     "network": (
         "TCP, TLS and HTTP, client and server, against independent peers",
-        ["tests/test_vm_tcp.py", "tests/test_vm_tls.py", "tests/test_vm_http.py", "tests/test_vm_http_download.py",
-         "tests/test_vm_websocket.py", "tests/test_vm_http_proxy.py", "tests/test_prop_http.py"],
+        ["tests/test_vm_tcp.py", "tests/test_vm_dns.py", "tests/test_vm_tls.py", "tests/test_vm_http.py",
+         "tests/test_vm_http_download.py", "tests/test_vm_websocket.py", "tests/test_vm_http_proxy.py",
+         "tests/test_prop_http.py"],
     ),
     "multicore": (
         "programs on four schedulers: the goldens, races between schedulers, the I/O thread",
@@ -215,6 +219,7 @@ EXCLUDED = {
     "tests/test_coverage_tool.py": "tools/coverage.py: needs gcc/gcov and clang with llvm-cov; Linux `make test`",
     "tests/test_layout_check.py": "tools/layout_check.py, a binutils check of the Linux x86-64 build that ci.yml runs",
     "tests/test_site_examples.py": "the code blocks of the site, checked with the site build",
+    "tests/test_ci_apt_mirror.py": ".github/scripts/apt-mirror.sh, a temporary bash script that the Linux CI jobs run",
     "tests/test_site_versions.py": "tools/site_versions.py, the multi-version site build that pages.yml runs on Linux",
     "tests/test_frontend_bytecode.py": "frozen goldens of the front end stages; the spec and golden areas run it live",
     "tests/test_frontend_catalog.py": "frozen goldens of the front end stages; the spec and golden areas run it live",

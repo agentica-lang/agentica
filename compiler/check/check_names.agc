@@ -30,6 +30,7 @@ export def receiver_kind(type: T.Type) -> String
     word == "Range" or
     word == "Bytes" or
     word == "Channel" or
+    word == "Address" or
     word == "Lazy" or
     word == "Codec" or
     word == "ATS" or

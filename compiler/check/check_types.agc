@@ -222,16 +222,17 @@ export def ats_value_failure(cx: State.Cx, st: State.St, type: ResolvedType, spa
   )
 end
 
-## True for a type that has to_s: the data types. Numbers, Bool, String, nil, Json, ranges, and lists, maps, sets,
-## Results, structs and enums of those. A type variable is one only in the files of the prelude: in the body of a
-## generic function it stands for any type, which could be an Fn.
+## True for a type that has to_s: the data types. Numbers, Bool, String, nil, Json, ranges, addresses, and lists,
+## maps, sets, Results, structs and enums of those. A type variable is one only in the files of the prelude: in the
+## body of a generic function it stands for any type, which could be an Fn.
 export def data?(cx: State.Cx, type: ResolvedType) -> Bool = data_walk(cx, type, {}, false).passes
 
 ## True for a type that == and != compare: a data type (data?) with no Json inside. Numbers, Bool, String, nil,
-## ranges, Bytes, and lists, maps, sets, Optionals, Results, structs and enums of those. A group of structs and enums
-## that hold one another is judged as a whole, so the answer does not depend on where the walk starts. As in data?, a
-## type variable passes only in the files of the prelude, where == on it lowers to Value.equal. List#include? needs it
-## (include in stdlib/prelude/list.agc); its equality limit checks the item type at the call site (check_prelude.agc).
+## ranges, Bytes, addresses, and lists, maps, sets, Optionals, Results, structs and enums of those. A group of structs
+## and enums that hold one another is judged as a whole, so the answer does not depend on where the walk starts. As in
+## data?, a type variable passes only in the files of the prelude, where == on it lowers to Value.equal. List#include?
+## needs it (include in stdlib/prelude/list.agc); its equality limit checks the item type at the call site
+## (check_prelude.agc).
 export def equality?(cx: State.Cx, type: ResolvedType) -> Bool = data_walk(cx, type, {}, true).passes
 
 ## Why a type that equality? refuses has no equality: a type variable of a generic function, else the innermost
@@ -250,6 +251,7 @@ export def has_variables?(type: ResolvedType) -> Bool
     Types.Type.Optional(item) -> has_variables?(item)
     Types.Type.Task(item) -> has_variables?(item)
     Types.Type.Channel(item) -> has_variables?(item)
+    Types.Type.Address(item) -> has_variables?(item)
     Types.Type.Lazy(item) -> has_variables?(item)
     Types.Type.Codec(item) -> has_variables?(item)
     Types.Type.List(item) -> has_variables?(item)
@@ -335,6 +337,7 @@ export def substitute(type: ResolvedType, substitutions: Map[String, ResolvedTyp
     Types.Type.Optional(item) -> Types.Type.Optional(substitute(item, substitutions))
     Types.Type.Task(item) -> Types.Type.Task(substitute(item, substitutions))
     Types.Type.Channel(item) -> Types.Type.Channel(substitute(item, substitutions))
+    Types.Type.Address(item) -> Types.Type.Address(substitute(item, substitutions))
     Types.Type.Lazy(item) -> Types.Type.Lazy(substitute(item, substitutions))
     Types.Type.Codec(item) -> Types.Type.Codec(substitute(item, substitutions))
     Types.Type.List(item) -> Types.Type.List(substitute(item, substitutions))
@@ -659,6 +662,9 @@ def resolve_expanded(cx: State.Cx, st: State.St, ref: TypeRef, completion: Bool)
     return ok(Types.Type.Task(try resolve_expanded(cx, st, args[0], true)))
   elsif name == "Channel" and args.size == 1
     return ok(Types.Type.Channel(try resolve_expanded(cx, st, args[0], false)))
+  elsif name == "Address" and args.size == 1
+    # Not a reserved name, since a program's own `struct Address` is common; with one type argument it is the builtin.
+    return ok(Types.Type.Address(try resolve_expanded(cx, st, args[0], false)))
   elsif name == "Lazy" and args.size == 1
     return ok(Types.Type.Lazy(try resolve_expanded(cx, st, args[0], false)))
   elsif name == "Codec" and args.size == 1
@@ -800,7 +806,7 @@ def resolve_generic(cx: State.Cx, st: State.St, ref: TypeRef) -> Result[Resolved
   end
 
   candidates = cx.structs.keys.concat(cx.enums.keys)
-  help = Help.foreign(cx.help, name)
+  help = Help.foreign(cx.help, Types.display_name(name))
   if help == ""
     help = Help.near(name, candidates, shared_type_names(cx))
   end
@@ -979,7 +985,7 @@ def place_enum(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Pla
   Placed(place: "", seen: seen)
 end
 
-# True for an enum the program declares: not a builtin one (JsonField, LogLevel ...), which JSON handles on its own or
+# True for an enum the program declares: not a builtin one (JsonField, TaskExit ...), which JSON handles on its own or
 # not at all.
 def user_enum?(cx: State.Cx, type: ResolvedType) -> Bool
   cx.enums.has_key?(Types.name(type)) and !ENUMS.has_key?(Types.name(type))
@@ -1148,7 +1154,9 @@ end
 # in the whole call ("Struct:name"), not only the ones on the path (struct_walk says why that is sound), and a
 # recursive type ends.
 def data_walk(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool], equal: Bool) -> Walk
-  if primitive?(type) or Types.is?(type, "Range") or Types.is?(type, "Bytes")
+  # An Address names a channel without holding it: a value with no state, so it is data (check_const.agc keeps it out
+  # of a constant).
+  if primitive?(type) or Types.is?(type, "Range") or Types.is?(type, "Bytes") or Types.is?(type, "Address")
     return passed(seen)
   elsif Types.is?(type, "Json")
     return Walk(passes: !equal, seen: seen, why: "", file: "", field: none)
@@ -1373,6 +1381,7 @@ def parts(type: ResolvedType) -> List[ResolvedType]
     Types.Type.Optional(item) -> [item]
     Types.Type.Task(item) -> [item]
     Types.Type.Channel(item) -> [item]
+    Types.Type.Address(item) -> [item]
     Types.Type.Lazy(item) -> [item]
     Types.Type.Codec(item) -> [item]
     Types.Type.List(item) -> [item]

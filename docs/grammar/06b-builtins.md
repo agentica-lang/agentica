@@ -98,7 +98,7 @@ the checker enforces:
   `null`), Json, lists, String-keyed maps, `Optional`, structs and user enums of
   those, whose struct fields may also be `JsonField`. An instance of a generic
   struct or enum counts by its fields or payloads after substitution
-  (`Box[List[Int]]`, `Maybe[Int]`). Results, builtin enums (`LogLevel`) and
+  (`Box[List[Int]]`, `Maybe[Int]`). Results, builtin enums (`TaskExit`) and
   Int-keyed maps are `CHECK-NOT-ENCODABLE`. Untyped empty containers need an
   annotation.
 - A user enum is a tagged object `{"tag": "Rect", "values": [1.0, 2.0]}`: `tag`

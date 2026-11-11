@@ -2,6 +2,7 @@
 ## that imports this one.
 
 import Model from "../catalog/builtin_model"
+import Builtins from "../catalog/builtins"
 import Failure from "../diagnostics/problem"
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
@@ -919,6 +920,8 @@ def variant_mismatch(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, va
     help = "match an Optional with some(x) and none"
   elsif T.is?(value_type, "Result") and pattern.enum_name == "Optional"
     help = "match a Result with ok(x) and error(e)"
+  elsif Builtins.moved_type(T.display_name(pattern.enum_name)) != ""
+    help = Builtins.moved_type(T.display_name(pattern.enum_name))
   end
 
   return State.fail_help(cx, st, "CHECK-PATTERN-TYPE", message, pattern.span, help) if help != ""

@@ -8,6 +8,7 @@ ATS.put
 ATS.put_new
 ATS.size
 ATS.to_map
+Address.send
 Base64.decode64.bytes
 Base64.encode64.bytes
 Base64.strict_decode64.bytes
@@ -25,12 +26,14 @@ Bytes.plus
 Bytes.slice
 Bytes.take
 Bytes.to_a
+Channel.address
 Channel.close
 Channel.closed?
 Channel.empty?
 Channel.new
 Channel.recv
 Channel.send
+DNS.lookup
 Dir.list
 Dir.mkdir
 Dir.mkdir_private
