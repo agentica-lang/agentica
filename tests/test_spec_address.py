@@ -5,6 +5,8 @@ A rule case is `(program, code, covered text)`: the code of the diagnostic and t
 A program that must check clean has no code. A module case is a main file and `m.agc`.
 """
 
+from pathlib import Path
+
 import pytest
 
 from tests.spec_support import assert_rule, check_many
@@ -62,6 +64,9 @@ RULES = {
     "a generic struct cannot be named Address": (
         "struct Address[T]\n  v: T\nend\n\n" + main("puts(1)"), "CHECK-REDEFINED-NAME",
         "struct Address[T]\n  v: T\nend\n"),
+    "a generic enum cannot be named Address": (
+        "enum Address[T]\n  One(T)\nend\n\n" + main("puts(1)"), "CHECK-REDEFINED-NAME",
+        "enum Address[T]\n  One(T)\nend\n"),
     "a generic alias cannot be named Address": (
         "type Address[T] = List[T]\n\n" + main("puts(1)"), "CHECK-REDEFINED-NAME", "Address"),
     "a table in a struct of a constant": (
@@ -83,14 +88,14 @@ LIB = (
 
 GENERIC_LIB = "export type Address[T] = List[T]\n\nexport def first(a: Address[Int]) -> Int = a[0]\n"
 
-# A module case is (m.agc, main.agc, code, covered text in main.agc).
+# A module case is (m.agc, main.agc, code, covered text in the file the diagnostic names).
 MODULE_RULES = {
     "an exported table and an address in a signature": (
         LIB,
         'import M from "m"\nimport {NAMES} from "m"\n\n'
         + main(INBOX, 'NAMES.put("inbox", inbox.address)', '_ = M.tell("inbox", 1)', "puts(M.street())"), None, None),
     "an imported module cannot declare a generic Address": (
-        GENERIC_LIB, 'import M from "m"\n\n' + main("puts(M.first([1]))"), "CHECK-REDEFINED-NAME", None),
+        GENERIC_LIB, 'import M from "m"\n\n' + main("puts(M.first([1]))"), "CHECK-REDEFINED-NAME", "Address"),
 }
 
 
@@ -111,4 +116,6 @@ def test_address_and_constant_table_rules(batch, name):
 @pytest.mark.parametrize("name", list(MODULE_RULES))
 def test_addresses_across_modules(batch, name):
     lib, program, code, text = MODULE_RULES[name]
-    assert_rule(batch({"m.agc": lib, "main.agc": program}), program, code, text)
+    found = batch({"m.agc": lib, "main.agc": program})
+    in_lib = found is not None and Path(found["file"]).name == "m.agc"
+    assert_rule(found, lib if in_lib else program, code, text)
