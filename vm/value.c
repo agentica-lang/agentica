@@ -192,6 +192,22 @@ static void *run_blocking(void *data) {
   call->fn(call->arg);
   return NULL;
 }
+
+/* GC_do_blocking with the caller's callee-saved registers stored in this frame. libgc 8.2 records the low end of a
+   blocked thread's stack scan as the frame address of GC_do_blocking; when the compiler inlines the register save of
+   GC_with_callee_saves_pushed into it (clang on macOS, where libgc has no getcontext), the saves land below that
+   address and are not scanned, so a value the caller keeps only in a register (an an_term across an_blocking) can be
+   collected (#1328). This frame is above GC_do_blocking's, so the scan covers its saves; the asm after the call keeps
+   it from becoming a tail call, which would drop the frame. GC_do_blocking must stay an out-of-line call into libgc:
+   with libgc in the same LTO unit it would be inlined here and the bug would come back. bdwgc commit 68622845ad fixes
+   this by marking GC_with_callee_saves_pushed noinline; no release has it yet (8.2.12 is the newest): drop this
+   function once the vendored bdwgc and the minimum system libgc (GC_MIN in mk/vm.mk) include it. */
+__attribute__((noinline)) static void *blocking_with_registers_saved(blocking_call *call) {
+  __builtin_unwind_init();
+  void *result = GC_do_blocking(run_blocking, call);
+  __asm__ volatile("" : : "r"(result) : "memory");
+  return result;
+}
 #endif
 
 /* Runs FN(ARG) with this thread marked blocked: the collector does not stop it with a signal and scans its stack only
@@ -206,7 +222,7 @@ void agc_gc_blocking(void (*fn)(void *arg), void *arg) {
     return;
   }
   blocking_call call = {fn, arg};
-  (void)GC_do_blocking(run_blocking, &call);
+  (void)blocking_with_registers_saved(&call);
 #endif
 }
 
