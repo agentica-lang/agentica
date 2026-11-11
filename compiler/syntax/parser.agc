@@ -323,11 +323,17 @@ def expect_head_end(e: Base.Env, pos: Int, description: String, form: String) ->
   Base.expect(e, pos, "NL", description, false)
 end
 
-# Inside a do block body a statement may also end at `end` on the same line; the end is not consumed
-# (expect_statement_end).
+# Inside a do block body a statement may also end at `end` on the same line, and inside a lambda body at `}`; the
+# closer is not consumed (expect_statement_end).
 def statement_end?(e: Base.Env, pos: Int) -> Bool
   kind = e.tokens[pos].kind
-  kind == "NL" or (e.depth > 0 and kind == "end")
+  kind == "NL" or body_closer?(e, kind)
+end
+
+# Whether a token of kind `kind` closes the body being parsed on the line of its last statement: `end` in a do block
+# body (depth 1), `}` in a lambda body (depth 2).
+def body_closer?(e: Base.Env, kind: String) -> Bool
+  (e.depth == 1 and kind == "end") or (e.depth == 2 and kind == "right-brace")
 end
 
 def expect_statement_end(e: Base.Env, pos: Int, description: String) -> Result[Int]
@@ -347,7 +353,7 @@ def expect_statement_end(e: Base.Env, pos: Int, description: String) -> Result[I
     return error(unless_help(e, pos, "there is no unless: put the statement inside if not c ... end"))
   end
 
-  return ok(pos) if e.depth > 0 and token.kind == "end"
+  return ok(pos) if body_closer?(e, token.kind)
 
   Base.expect(e, pos, "NL", description, false)
 end
@@ -378,6 +384,65 @@ def expect_end(e: Base.Env, pos: Int) -> Result[Int]
   end
 
   error(Base.found(e, pos, "\"end\""))
+end
+
+# ->(params) { body }: a lambda, a block that no call takes. Its parameters are a block's, in parentheses, and a
+# lambda without parameters has no parentheses (-> { ... }). The body is a block body (depth 2) that ends at the `}`,
+# which may follow a statement on its line.
+def parse_lambda(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
+  cursor = pos + 1
+  params: List[Ast.BlockParam] = []
+  next_id = ids
+  kind = e.tokens[cursor].kind
+  if kind == "left-paren" and Base.kind_at(e, cursor + 1) == "right-paren"
+    return error(Base.unexpected_help(e, cursor, "a lambda without parameters has no parentheses", "write -> { ... }"))
+  elsif kind == "left-paren"
+    parsed = try parse_block_params(e, cursor + 1, next_id, "right-paren", "\")\" after the lambda parameters")
+    params = parsed.params
+    cursor = parsed.pos
+    next_id = parsed.ids
+  elsif kind == "name"
+    return error(
+      Base.unexpected_help(
+        e,
+        cursor,
+        "the parameters of a lambda are in parentheses",
+        "write ->(#{e.tokens[cursor].lexeme}) { ... }",
+      ),
+    )
+  end
+
+  if e.tokens[cursor].kind == "do"
+    return error(
+      Base.unexpected_help(
+        e,
+        cursor,
+        "the body of a lambda is in braces, found \"do\"",
+        "write ->(x) { ... }, over several lines if needed; do ... end follows a call",
+      ),
+    )
+  end
+
+  if e.tokens[cursor].kind != "left-brace"
+    return error(
+      Base.unexpected_help(
+        e,
+        cursor,
+        "expected \"{\" to start the body of the lambda, found #{Base.describe(e.tokens[cursor])}",
+        "a -> where no value ends before it starts a lambda, ->(x) { ... }; the -> of a case arm follows its " +
+        "pattern, and the -> of a def follows its parameters, on the same line",
+      ),
+    )
+  end
+
+  open = cursor + 1
+  body = try parse_block(Base.with_block_body(e, -1, ""), open, next_id, 2)
+  close = try Base.expect(e, body.pos, "right-brace", "\"}\" to end the lambda", false)
+  node = Ast.Expr.BlockLit(
+    Ast.BlockLit(id: body.ids, params: params, body: body.nodes, lambda: true, span: Base.span_from(e, pos, close)),
+  )
+
+  expr_at(node, close, body.ids)
 end
 
 def expr_at(node: Ast.Expr, pos: Int, ids: Int) -> Result[Base.ExprAt]
@@ -606,9 +671,7 @@ def block_target?(target: Ast.Expr) -> Bool
 end
 
 def block_name_help(name: String) -> String
-  if name == "lambda" or name == "proc"
-    return "there are no standalone lambdas: pass a block to a call (xs.map do |x| ... end) or use &name"
-  end
+  return "a function value is a lambda: f = ->(x) { ... }" if name == "lambda" or name == "proc"
 
   return "there is no loop; use while true ... end, or a while condition" if name == "loop"
 
@@ -782,8 +845,9 @@ def target_name(target: Ast.Expr) -> String
   end
 end
 
-# The parameters of a do block, after the first |, up to and including the closing |.
-def parse_block_params(e: Base.Env, pos: Int, ids: Int) -> Result[BlockParamsAt]
+# The parameters of a do block after the first |, up to and including the closing | (`closer` is "pipe"), or those of a
+# lambda after its `(`, up to and including the `)`.
+def parse_block_params(e: Base.Env, pos: Int, ids: Int, closer: String, closer_text: String) -> Result[BlockParamsAt]
   params: List[Ast.BlockParam] = []
   cursor = pos
   next_id = ids
@@ -814,7 +878,7 @@ def parse_block_params(e: Base.Env, pos: Int, ids: Int) -> Result[BlockParamsAt]
     if e.tokens[cursor].kind == "comma"
       cursor += 1
     else
-      cursor = try Base.expect(e, cursor, "pipe", "\"|\" after the block parameters", false)
+      cursor = try Base.expect(e, cursor, closer, closer_text, false)
       looping = false
     end
   end
@@ -833,7 +897,7 @@ def parse_block_lit(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   params: List[Ast.BlockParam] = []
   next_id = ids
   if e.tokens[cursor].kind == "pipe"
-    parsed = try parse_block_params(e, cursor + 1, next_id)
+    parsed = try parse_block_params(e, cursor + 1, next_id, "pipe", "\"|\" after the block parameters")
     params = parsed.params
     cursor = parsed.pos
     next_id = parsed.ids
@@ -853,7 +917,7 @@ def parse_block_lit(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   body = try parse_block(Base.with_block_body(e, brace_at, form), cursor, next_id, 1)
   close = try expect_end(e, body.pos)
   node = Ast.Expr.BlockLit(
-    Ast.BlockLit(id: body.ids, params: params, body: body.nodes, span: Base.span_from(e, pos, close)),
+    Ast.BlockLit(id: body.ids, params: params, body: body.nodes, lambda: false, span: Base.span_from(e, pos, close)),
   )
 
   expr_at(node, close, body.ids)
@@ -1169,25 +1233,19 @@ def lambda_name?(lexeme: String) -> Bool
   lexeme == "fn" or lexeme == "func" or lexeme == "function" or lexeme == "lambda" or lexeme == "proc"
 end
 
-# A name, a call name(args), or the bare calls gets, gets! and none. fn(x: Int), lambda(x: Int) and the like are an
-# error with help: there are no lambdas.
+# Whether the tokens at `paren` read like typed parameters, `(x: Int`, and not like the arguments of a call.
+def lambda_params?(e: Base.Env, paren: Int) -> Bool
+  typed = Base.kind_at(e, paren + 1) == "name" and Base.kind_at(e, paren + 2) == "colon"
+  e.tokens[paren].kind == "left-paren" and typed
+end
+
+# A name, a call name(args), or the bare calls gets, gets! and none. fn(x: Int), lambda(x: Int), lambda { ... } and the
+# like are an error whose help shows the lambda ->(x) { ... }.
 def parse_name_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   token = e.tokens[pos]
   paren = pos + 1
-  if (
-    lambda_name?(token.lexeme) and
-    e.tokens[paren].kind == "left-paren" and
-    Base.kind_at(e, paren + 1) == "name" and
-    Base.kind_at(e, paren + 2) == "colon"
-  )
-    return error(
-      Base.unexpected_help(
-        e,
-        pos,
-        "there are no standalone lambdas",
-        "pass a block to a call (xs.map do |x: Int| ... end), or declare a function with def and use &name",
-      ),
-    )
+  if lambda_name?(token.lexeme) and (lambda_params?(e, paren) or e.tokens[paren].kind == "left-brace")
+    return error(Base.unexpected_help(e, pos, "a lambda is written with ->", "write ->(x: Int) { ... }"))
   end
 
   if e.tokens[paren].kind == "left-paren"
@@ -1457,6 +1515,8 @@ def parse_primary(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
 
   return parse_map_literal(e, pos, ids) if kind == "left-brace"
 
+  return parse_lambda(e, pos, ids) if kind == "lambda-arrow"
+
   error(
     Base.bail(
       e,
@@ -1492,7 +1552,7 @@ end
 def primary_help(e: Base.Env, pos: Int) -> Diag.Help
   token = e.tokens[pos]
   if token.kind == "do"
-    return Base.hint("a block must follow a call, as in xs.map do |x| ... end; there are no standalone lambdas")
+    return Base.hint("a block must follow a call, as in xs.map do |x| ... end; a function value is ->(x) { ... }")
   end
 
   if token.kind == "less" and pos > 0 and e.tokens[pos - 1].kind == "less" and adjacent?(e.tokens[pos - 1], token)
@@ -1541,8 +1601,8 @@ def stmt_at(node: Ast.Stmt, pos: Int, ids: Int) -> Result[Base.StmtAt]
   ok(Base.StmtAt(node: node, pos: pos, ids: ids + 1))
 end
 
-# Statements up to end, elsif, else or the end of the file. depth is the block depth of the body (0, or 1 in a do
-# block).
+# Statements up to end, elsif, else or the end of the file, or up to the `}` of a lambda body. depth is the block depth
+# of the body (0, 1 in a do block, 2 in a lambda).
 def parse_block(e: Base.Env, pos: Int, ids: Int, depth: Int) -> Result[Base.StmtsAt]
   inner = Base.with_depth(e, depth)
   nodes: List[Ast.Stmt] = []
@@ -1552,7 +1612,7 @@ def parse_block(e: Base.Env, pos: Int, ids: Int, depth: Int) -> Result[Base.Stmt
   while looping
     cursor = Base.skip_newlines(e, cursor)
     kind = e.tokens[cursor].kind
-    if kind == "end" or kind == "elsif" or kind == "else" or kind == "EOF"
+    if kind == "end" or kind == "elsif" or kind == "else" or kind == "EOF" or (depth == 2 and kind == "right-brace")
       looping = false
     else
       parsed = try parse_statement(inner, cursor, next_id)
@@ -1859,7 +1919,14 @@ def parse_simple_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtA
     following = Base.kind_at(e, pos + 1)
     if (
       (token.lexeme == "break" or token.lexeme == "next") and
-      (following == "NL" or following == "end" or following == "EOF" or following == "if" or unless_at?(e, pos + 1))
+      (
+        following == "NL" or
+        following == "end" or
+        following == "EOF" or
+        following == "if" or
+        unless_at?(e, pos + 1) or
+        body_closer?(e, following)
+      )
     )
       return parse_loop_control(e, pos, ids)
     end

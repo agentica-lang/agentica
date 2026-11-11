@@ -108,9 +108,11 @@ def spawn_mismatch(cx: State.Cx, callback: State.Out, site: State.Site, owning: 
   State.fail(cx, callback.st, "CHECK-TYPE-MISMATCH", message, span)
 end
 
-# The help of a one-parameter function given to Task.spawn alone: a reference gets its argument, a block loses its.
+# The help of a one-parameter function given to Task.spawn alone: a reference or a lambda gets its argument, a block
+# loses its.
 def spawn_argument_help(callback: Ast.Expr) -> String
   case callback
+    Ast.Expr.BlockLit(found) if found.lambda -> "pass its argument: Task.spawn(->(x) { ... }, x)"
     Ast.Expr.BlockLit(_) ->
       "a block with a parameter needs an argument: pass it through an Fn variable, or drop the parameter"
     _ -> "pass its argument: Task.spawn(&f, x)"

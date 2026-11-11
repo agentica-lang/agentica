@@ -204,11 +204,11 @@ section for the area you are changing.
   name such as `None`. `Help.conversion` (`check_help.agc`) explains a
   `Result[T]` found where `T` is expected. `foreign_kind_methods` maps a
   (receiver kind, method name) pair to a help text. Other habits (`'`, `//`,
-  `elif`, `let`, `match`, lambdas, `loop do`) are hints in the lexer and parser
-  (`rg 'bail' compiler/syntax/`; `bail` takes a help). Tests assert the code and
-  a regexp on the help, never the full text. For an unknown plain name the
-  checker prefers did-you-mean over `foreign_names`, so `next` near a visible
-  `nexts` still suggests `nexts`.
+  `elif`, `let`, `match`, `lambda do`, `loop do`) are hints in the lexer and
+  parser (`rg 'bail' compiler/syntax/`; `bail` takes a help). Tests assert the
+  code and a regexp on the help, never the full text. For an unknown plain name
+  the checker prefers did-you-mean over `foreign_names`, so `next` near a
+  visible `nexts` still suggests `nexts`.
 - `break`/`next` are contextual: the parser makes a `LoopControl` node only when
   the name is followed by NL, `end` or EOF. The checker's loop depth is reset
   per function and per block, so they cannot cross a block.

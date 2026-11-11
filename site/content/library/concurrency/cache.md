@@ -184,16 +184,10 @@ An implementation returns a `Cache.Store` whose functions follow this contract, 
 - `cleanup` removes every expired entry and gives how many; it gives 0 when the cache has no time to live.
 - `bytes` gives the bytes of the entries, counted as the implementation counts `max_bytes`.
 
-A block is a value only when it is passed to a call, so a helper that takes a block and returns it (`def block1[A, R](f: Fn[A, R]) -> Fn[A, R]`) is how a function value holds the state of the cache. This one keeps everything in a table, with no limit, and counts entries where a cache with a byte limit counts bytes:
+Each field is a [lambda](/tour/blocks/#lambdas) that holds the state of the cache. This one keeps everything in a table, with no limit, and counts entries where a cache with a byte limit counts bytes:
 
 ```agentica
 import Cache from "std/cache"
-
-def block0[R](f: Fn[R]) -> Fn[R] = f
-
-def block1[A, R](f: Fn[A, R]) -> Fn[A, R] = f
-
-def block2[A, B, R](f: Fn[A, B, R]) -> Fn[A, B, R] = f
 
 def table_get(table: ATS[String, String], key: String) -> Optional[String]
   found = table.get(key)
@@ -211,13 +205,13 @@ end
 def table_cache() -> Cache.Store
   table: ATS[String, String] = ATS.new()
   Cache.Store(
-    get: block1() do |key| table_get(table, key) end,
-    put: block2() do |key, value| table.put(key, value) end,
-    put_new: block2() do |key, value| table.put_new(key, value) end,
-    delete: block1() do |key| table.delete(key) end,
-    clear: block0() do table_clear(table) end,
-    cleanup: block0() do 0 end,
-    bytes: block0() do table.size end,
+    get: ->(key) { table_get(table, key) },
+    put: ->(key, value) { table.put(key, value) },
+    put_new: ->(key, value) { table.put_new(key, value) },
+    delete: ->(key) { table.delete(key) },
+    clear: -> { table_clear(table) },
+    cleanup: -> { 0 },
+    bytes: -> { table.size },
   )
 end
 

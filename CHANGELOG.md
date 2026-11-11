@@ -10,6 +10,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Lambdas: `->(x) { x + 1 }` is a function value that can be kept in a
+  variable, a field, a list or a map, or passed as an argument; `-> { 42 }`
+  takes no parameters.
 - A program may name a type `Header`, `HttpRequest`, `HttpResponse`,
   `HttpClient`, `HttpServer`, `HttpClientOptions`, `HttpServerOptions` or
   `HttpWire` (an enum `HttpWire` stays an error).

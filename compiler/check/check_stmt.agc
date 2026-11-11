@@ -1069,7 +1069,7 @@ def block_parameter_types(
             cx,
             st,
             "CHECK-ARITY",
-            "this block takes #{types.size} parameter(s), found #{block.params.size}",
+            "this #{block_noun(block)} takes #{types.size} parameter(s), found #{block.params.size}",
             block.span,
           ),
         )
@@ -1081,7 +1081,7 @@ def block_parameter_types(
   out: List[T.Type] = []
   index = 0
   while index < block.params.size
-    out = out.push(try block_parameter_type(cx, st, block.params[index], known, index))
+    out = out.push(try block_parameter_type(cx, st, block, block.params[index], known, index))
     index += 1
   end
 
@@ -1092,6 +1092,7 @@ end
 def block_parameter_type(
   cx: State.Cx,
   st: State.St,
+  block: Ast.BlockLit,
   param: Ast.BlockParam,
   known: Optional[List[T.Type]],
   index: Int,
@@ -1123,11 +1124,25 @@ def block_parameter_type(
       cx,
       st,
       "CHECK-BLOCK-TYPE",
-      "the type of block parameter \"#{param.name}\" is not known here",
+      "the type of #{block_noun(block)} parameter \"#{param.name}\" is not known here",
       param.span,
-      "annotate it, as in do |#{param.name}: Int| ... end",
+      block_type_help(block, param.name),
     ),
   )
+end
+
+# What the source calls the block literal: "lambda" for ->(x) { ... }, "block" for do |x| ... end.
+def block_noun(block: Ast.BlockLit) -> String
+  return "lambda" if block.lambda
+
+  "block"
+end
+
+# The help of CHECK-BLOCK-TYPE: annotate the parameter, or for a lambda give it an Fn type where it is kept.
+def block_type_help(block: Ast.BlockLit, name: String) -> String
+  return "annotate it, as in ->(#{name}: Int) { ... }, or give the variable an Fn type" if block.lambda
+
+  "annotate it, as in do |#{name}: Int| ... end"
 end
 
 # The statements of a block: all but the last are statements; the last one, an expression, is the value of the block.

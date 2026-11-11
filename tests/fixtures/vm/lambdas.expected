@@ -1,0 +1,25 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 266,
+  "stdout": [
+    "103",
+    "15",
+    "42",
+    "next 2",
+    "5",
+    "-1",
+    "[3, 6]",
+    "81",
+    "6",
+    "8",
+    "negative",
+    "not negative",
+    "42",
+    "[\"1st\", \"2st\"]",
+    "ok(42)",
+    "error(\"cannot convert \\\"x\\\" to Int\")",
+    ""
+  ],
+  "stderr": []
+}

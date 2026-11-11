@@ -3,6 +3,7 @@
 ## (CHECK-TOO-DEEP), checks the node by its kind, records the type by node id, and refuses a Void value that is not a
 ## completion.
 
+import Model from "../catalog/builtin_model"
 import {ENTRIES} from "../catalog/builtins"
 import Failure from "../diagnostics/problem"
 import Ast from "../syntax/ast"
@@ -17,6 +18,7 @@ import Rules from "check_rules"
 import State from "check_state"
 import Statements from "check_stmt"
 import CheckTypes from "check_types"
+import Defaults from "defaults"
 
 # The types whose left side of == gives the right side its expected type (check_sides).
 EXPECTING_SIDES = Set.new(["List", "Map", "Set", "Optional", "Result", "Struct", "Enum"])
@@ -100,7 +102,13 @@ def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Ty
     Ast.Expr.Name(found) -> check_name(cx, st, found)
     Ast.Expr.Unary(found) -> check_unary(cx, st, found)
     Ast.Expr.Binary(found) -> check_binary(cx, st, found)
-    Ast.Expr.Call(found) -> Calls.check_call(cx, st, found, expected)
+    Ast.Expr.Call(found) ->
+      out = try Calls.check_call(cx, st, found, expected)
+      if last_lambda?(found.args)
+        try call_lambda_block(cx, out.st, found)
+      end
+
+      ok(out)
     Ast.Expr.EnumConstructor(found) ->
       Calls.check_enum_constructor(
         cx,
@@ -120,7 +128,13 @@ def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Ty
     Ast.Expr.ListLit(found) -> check_list(cx, st, found, expected)
     Ast.Expr.MapLit(found) -> check_map(cx, st, found, expected)
     Ast.Expr.FieldAccess(found) -> Methods.check_field_access(cx, st, found, expected)
-    Ast.Expr.MethodCall(found) -> Methods.check_method(cx, st, found, expected)
+    Ast.Expr.MethodCall(found) ->
+      out = try Methods.check_method(cx, st, found, expected)
+      if last_lambda?(found.args) and method_takes_block?(cx, out.st, found)
+        try lambda_block(cx, out.st, receiver_text(cx, found.target) + ".#{found.name}", found.args)
+      end
+
+      ok(out)
     Ast.Expr.Typed(found) -> ok(State.Out(st: st, type: found.type))
     Ast.Expr.BlockLit(found) -> check_block_lit(cx, st, found, expected)
     Ast.Expr.Interpolation(found) -> check_interpolation(cx, st, found)
@@ -315,10 +329,118 @@ def check_interpolation(cx: State.Cx, st: State.St, node: Ast.Interpolation) -> 
   ok(State.Out(st: current, type: T.Type.String))
 end
 
-# A block where a function is expected, or anywhere a type is not demanded.
+# Whether the last argument is a lambda; the lambda checks below run only then, so a call without one pays nothing.
+def last_lambda?(args: List[Ast.Expr]) -> Bool
+  return false if args.size == 0
+
+  case args[args.size - 1]
+    Ast.Expr.BlockLit(found) -> found.lambda
+    _ -> false
+  end
+end
+
+# CHECK-LAMBDA-BLOCK for a call by name whose last argument is a lambda, when its last parameter is a function. A
+# function of the program keeps its parentheses before a block (run() do ... end), and a piped call shows its value.
+def call_lambda_block(cx: State.Cx, st: State.St, node: Ast.Call) -> Result[Bool]
+  return ok(true) if !takes_block?(cx, node.name, node.args.size)
+
+  skip = 0
+  name = T.display_name(node.name)
+  if node.piped
+    skip = 1
+    name = receiver_text(cx, node.args[0]) + " |> " + name
+  end
+
+  if node.args.size - skip == 1 and !node.name.contains?(".")
+    name = "#{name}()"
+  end
+
+  lambda_block(cx, st, name, node.args.drop(skip))
+end
+
+# CHECK-LAMBDA-BLOCK at the lambda that ends `args`, the arguments the source shows of the call `name`: the call takes
+# a block there, the one way to write a function in that place. A parameter of a generic type (`some`, `push`) takes
+# no block, so the callers ask first (takes_block?). `.call(...)` is an Invoke, which takes no block, so it never
+# comes here.
+def lambda_block(cx: State.Cx, st: State.St, name: String, args: List[Ast.Expr]) -> Result[Bool]
+  case args[args.size - 1]
+    Ast.Expr.BlockLit(found) ->
+      call = name
+      if args.size > 1
+        call = "#{name}(...)"
+      end
+
+      head = "do"
+      if found.params.size > 0
+        names = found.params.map do |param: Ast.BlockParam| param.name end
+        head = "do |#{names.join(", ")}|"
+      end
+
+      error(
+        State.fail_help(
+          cx,
+          st,
+          "CHECK-LAMBDA-BLOCK",
+          "a lambda is passed where a block goes",
+          found.span,
+          "write it as a block after the call: #{call} #{head} ... end",
+        ),
+      )
+    _ -> ok(true)
+  end
+end
+
+# The receiver of a method call as the source writes it, for a help; "" when it is long or spans lines.
+def receiver_text(cx: State.Cx, target: Ast.Expr) -> String
+  text = Calls.extent_text(cx, target)
+  return "" if text.length > 40 or text.contains?("\n")
+
+  text
+end
+
+# Whether the last of `count` arguments of the call `name` goes to a parameter declared as a function: one of the
+# program's functions, or a form of a builtin with that many parameters.
+def takes_block?(cx: State.Cx, name: String, count: Int) -> Bool
+  return false if count == 0
+
+  case cx.functions.get(name)
+    some(signature) ->
+      shape = signature.shape
+      return false if count < shape.required or count > shape.total
+
+      return T.is?(signature.params[Defaults.param_of(shape, count, count - 1)], "Fn")
+    none -> count = count
+  end
+
+  case ENTRIES.get(name)
+    some(entry) ->
+      forms = [entry].concat(entry.alternatives)
+      forms.any? do |form: Model.Builtin| last_takes_function?(form, count) end
+    none -> false
+  end
+end
+
+def last_takes_function?(form: Model.Builtin, count: Int) -> Bool
+  form.parameters.size == count and T.is?(form.parameters[count - 1].type, "Fn")
+end
+
+# takes_block? for a method call: the builtin it resolved to, whose first parameter is the receiver. A call of a field
+# of type Fn takes no block.
+def method_takes_block?(cx: State.Cx, st: State.St, node: Ast.MethodCall) -> Bool
+  case st.resolved.get(node.id)
+    some(State.Resolved.Call(name, _)) -> takes_block?(cx, name, node.args.size + 1)
+    _ -> false
+  end
+end
+
+# A block or a lambda where a function is expected, or anywhere a type is not demanded.
 def check_block_lit(cx: State.Cx, st: State.St, node: Ast.BlockLit, expected: T.Type) -> Result[State.Out]
   if T.unknown?(expected)
     return Statements.check_block_body(cx, st, node, none, T.Type.Unknown, none)
+  elsif !T.is?(expected, "Fn") and node.lambda
+    return error(
+      State.fail(cx, st, "CHECK-TYPE-MISMATCH", "expected #{T.to_text(expected)}, found a lambda", node.span),
+    )
   elsif !T.is?(expected, "Fn")
     return error(
       State.fail_help(

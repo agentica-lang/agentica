@@ -20,8 +20,12 @@
 - The lexer emits one `NL` token for each newline outside those delimiters,
   including blank and comment lines. Inside a block that is itself within
   `(...)`, `[...]` or `{...}`, newlines are emitted too, so a multi-line block
-  can be an argument. The parser ignores extra `NL` tokens between declarations
-  and statements.
+  can be an argument, and so they are inside the `{...}` body of a lambda. The
+  parser ignores extra `NL` tokens between declarations and statements.
+- A `->` after a token that can end an expression (a name, a literal, a closing
+  bracket, `end`) is the arrow of a `def` result or a `case` arm; anywhere
+  else it starts a lambda (`->(x) { ... }`), and the `{` after it, or after
+  its `(...)`, opens the lambda's body.
 - If the file does not end with a newline, the lexer adds one before `EOF`.
 - A line whose first token is a `.` followed by a lowercase name (`.map`,
   `.with(`; not `.Type` or a number) continues the expression of the line
