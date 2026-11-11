@@ -11,6 +11,8 @@ from tests.agentica_test import (FIXTURES, PYTHON, WINDOWS, Child, compile_agc, 
                                  vm_environment)
 
 PEER = FIXTURES / "http-proxy-peer.py"
+BAD_PROXY = ("http: the proxy must be http://host:8080 or http://user:pass@host:8080, with no path or query, or a "
+             "socks5:// or socks5h:// URL")
 
 PROGRAM = """\
 import HTTP from "std/http"
@@ -152,9 +154,9 @@ def test_requests_go_to_the_proxy_in_absolute_form_on_one_pooled_connection(tmp_
         "true",
         "true",
         "true",
-        "http: the proxy must be http://host:8080 or http://user:pass@host:8080, with no path or query",
-        "http: the proxy must be http://host:8080 or http://user:pass@host:8080, with no path or query",
-        "http: the proxy must be http://host:8080 or http://user:pass@host:8080, with no path or query",
+        BAD_PROXY,
+        BAD_PROXY,
+        BAD_PROXY,
         '200 hello from A /hello?direct via=[]',
     ]
     seen = [peer.next_line() for _ in range(12)]
@@ -307,7 +309,6 @@ def test_the_user_info_of_the_proxy_is_its_basic_login_and_a_407_names_the_proxy
     granted = ["200 hello from A /hello?good", "200 got 3 bytes: abc", "download 200", "open 200", "200 got 7 bytes: 0123456",
                "start 200"]
     bad_login = "http: the proxy user info must be user:password in percent-encoding, and the user cannot hold a colon"
-    bad_proxy = "http: the proxy must be http://host:8080 or http://user:pass@host:8080, with no path or query"
     lines = output_lines(result.stdout)
     # A printed connection holds its proxy without the user info (the login is in a channel, which prints opaque).
     shown = lines[lines.index("-- printing a connection shows no password, and the origin never got a Proxy-Authorization header") + 1]
@@ -335,8 +336,8 @@ def test_the_user_info_of_the_proxy_is_its_basic_login_and_a_407_names_the_proxy
         bad_login,
         bad_login,
         bad_login,
-        bad_proxy,
-        bad_proxy,
+        BAD_PROXY,
+        BAD_PROXY,
         "-- a proxy that is down",
         "true",
     ]
@@ -371,7 +372,8 @@ end
 """
 
 # Every variable that proxy_from_env reads: a run starts from none of them, whatever the caller's shell has.
-ENV_NAMES = ("http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY", "no_proxy", "NO_PROXY", "REQUEST_METHOD")
+ENV_NAMES = ("http_proxy", "HTTP_PROXY", "https_proxy", "HTTPS_PROXY", "all_proxy", "ALL_PROXY", "no_proxy", "NO_PROXY",
+             "REQUEST_METHOD")
 
 # (environment, [(url, the proxy it gets)]): one VM run for each environment.
 ENV_CASES = [
@@ -449,11 +451,28 @@ ENV_CASES = [
     ),
     # Another scheme is returned as it is.
     ({"http_proxy": "socks5://p:1080"}, [("http://example.com/", "socks5://p:1080")]),
+    # ALL_PROXY is read when neither name of the scheme is set, even an empty one; no_proxy still applies, and under CGI
+    # it stands in for the HTTP_PROXY that is not trusted.
+    (
+        {"ALL_PROXY": "socks5h://all:1080", "http_proxy": "", "NO_PROXY": "skip.test"},
+        [("http://example.com/", ""), ("https://example.com/", "socks5h://all:1080"), ("https://skip.test/", "")],
+    ),
+    (
+        {"ALL_PROXY": "all:1", "HTTPS_PROXY": "http://s:2"},
+        [("http://example.com/", "http://all:1"), ("https://example.com/", "http://s:2")],
+    ),
+    (
+        {"REQUEST_METHOD": "GET", "HTTP_PROXY": "http://evil:2", "ALL_PROXY": "socks5://all:1"},
+        [("http://example.com/", "" if WINDOWS else "socks5://all:1")],
+    ),
 ]
 
 
 # Two names of one variable that differ only by case: Windows has one variable for both, so these run on POSIX only.
 ENV_CASES_BY_CASE = [
+    # all_proxy wins over ALL_PROXY too.
+    ({"all_proxy": "socks5h://lower:1", "ALL_PROXY": "socks5h://upper:2"},
+     [("http://example.com/", "socks5h://lower:1")]),
     # The lower-case name wins over the upper-case one, even when it is set and empty.
     (
         {"http_proxy": "http://lower:1", "HTTP_PROXY": "http://upper:2", "https_proxy": "",
@@ -700,7 +719,7 @@ def test_https_goes_through_a_proxy_in_a_connect_tunnel(tmp_path, adopt):
         refused,
         "true",
         "true",
-        "http: the proxy must be http://host:8080 or http://user:pass@host:8080, with no path or query",
+        BAD_PROXY,
         "-- a proxy that stalls, and a 200 with junk after its head",
         "http: the tunnel to 127.0.0.1:7 through the proxy 127.0.0.1:%s failed: network: operation timed out" % proxy,
         junk,

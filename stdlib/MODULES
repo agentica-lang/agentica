@@ -25,6 +25,7 @@ prelude/range.agc
 prelude/string.agc
 queue.agc
 regex.agc
+socks.agc
 test/child.agc
 test/coverage.agc
 test/report.agc
@@ -35,3 +36,4 @@ uri.agc
 utc.agc
 internal/archive_zip.agc
 internal/websocket.agc
+internal/socks.agc

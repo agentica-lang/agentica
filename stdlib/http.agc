@@ -4,6 +4,7 @@
 ## every body is `Bytes`, as it came over the wire; `text` decodes one as UTF-8. Status codes such as 404 or 500 are
 ## normal responses. A bad URL, a refused connection, a timeout or a body over the limit is an `error` result.
 
+import SocksWire from "std/internal/socks"
 import WebSocketWire from "std/internal/websocket"
 import URI from "std/uri"
 
@@ -93,7 +94,10 @@ STREAM_EARLY = 2
 # The most bytes of a piece in one chunk, and of one TCP.send_bytes (1 MiB at most, with the chunk framing around it).
 CHUNK_BYTES = 524288
 SEND_BYTES = 1048576
-BAD_PROXY = "http: the proxy must be http://host:8080 or http://user:pass@host:8080, with no path or query"
+BAD_PROXY = (
+  "http: the proxy must be http://host:8080 or http://user:pass@host:8080, with no path or query, or a socks5:// or " +
+  "socks5h:// URL"
+)
 # Said without the user info: an error never repeats the credentials.
 BAD_LOGIN = "http: the proxy user info must be user:password in percent-encoding, and the user cannot hold a colon"
 NO_BODY = "a 204 or 304 response cannot have a body"
@@ -491,9 +495,11 @@ end
 ## through that forward proxy in absolute form (`GET http://host/path HTTP/1.1`, `Host` still the target's), the
 ## connections are pooled by the proxy. An `https://` request opens a `CONNECT host:port` tunnel through the proxy,
 ## one per target, and speaks TLS inside it, verified against the target (a non-2xx answer to the `CONNECT` is an
-## error that names the proxy). A `proxy` that is not an `http://` origin is an error here. The user info of the
-## `proxy` (`http://user:password@host:8080`, percent-decoded) is sent to the proxy as `Proxy-Authorization: Basic`,
-## and a `407` from it is an error that names the proxy and not the credentials. Close the client with `close_client`.
+## error that names the proxy). The user info of the `proxy` (`http://user:password@host:8080`, percent-decoded) is
+## sent to the proxy as `Proxy-Authorization: Basic`, and a `407` from it is an error that names the proxy and not the
+## credentials. A `socks5://` or `socks5h://` proxy (`std/socks`) carries each connection instead, one per target, and
+## the requests inside are written as with no proxy. Any other `proxy` is an error here. Close the client with
+## `close_client`.
 export def client(options: HttpClientOptions = HttpClientOptions()) -> Result[HttpClient]
   try check_options(
     options.timeout_ms,
@@ -513,9 +519,10 @@ end
 ## It follows curl. An `http://` URL reads `http_proxy` and an `https://` URL `https_proxy`; the lower-case name wins
 ## over `HTTP_PROXY` or `HTTPS_PROXY`, even when it is set and empty (which means no proxy). `HTTP_PROXY` is ignored
 ## when `REQUEST_METHOD` is set, as in a CGI program, where a request's `Proxy` header becomes it (httpoxy); on
-## Windows, whose names do not differ by case, an `http://` URL then gets no proxy. `ALL_PROXY` is not read. A value
-## with no `://` is read as `http://` (`proxy.example:8080`), and one with another scheme is returned as it is, so the
-## client that gets it says it is not an `http://` origin.
+## Windows, whose names do not differ by case, an `http://` URL then gets no proxy. When neither name of the scheme is
+## set, `all_proxy` (or `ALL_PROXY`) gives the proxy, such as `socks5h://proxy:1080`. A value with no `://` is read as
+## `http://` (`proxy.example:8080`), and one with another scheme is returned as it is, so the client that gets it says
+## whether it takes it.
 ##
 ## `no_proxy` (or `NO_PROXY`) is a list, separated by commas or spaces, that says where no proxy is used, and the
 ## result is then `""`: `*` is every host; `example.com` and `.example.com` are that domain and its subdomains; an
@@ -1048,7 +1055,7 @@ end
 # 3.2.2, absolute-form), whose authority is the one the `Host` header has. An `https` request is inside a CONNECT
 # tunnel and is written as it is with no proxy.
 def request_target(options: HttpClientOptions, where: Target) -> String
-  return where.target if options.proxy == "" or where.scheme == "https"
+  return where.target if not forward_proxy?(options) or where.scheme == "https"
 
   "http://#{host_authority(where.host, where.port)}#{where.target}"
 end
@@ -1071,14 +1078,18 @@ def host_authority(host: String, port: Int) -> String
   "#{name}:#{port}"
 end
 
-# Where a request to `where` connects, as the pool names it: the host itself, or the proxy of the options for `http`.
-# An `https` request keeps the target's origin, so a pool keeps one tunnel per target (a client has one proxy): the
-# connection opens the tunnel itself (`connect_https`).
+# Where a request to `where` connects, as the pool names it: the host itself, or the forward proxy of the options for
+# `http`. An `https` request, and any request through a SOCKS proxy, keeps the target's origin, so a pool keeps one
+# tunnel per target (a client has one proxy): the connection opens the tunnel itself (`tunnel`).
 def connect_target(where: Target, options: HttpClientOptions) -> Result[Target]
-  return ok(where) if options.proxy == "" or where.scheme == "https"
+  return ok(where) if not forward_proxy?(options) or where.scheme == "https"
 
   proxy_target(options)
 end
+
+# True when the options name a forward proxy (`http://`), which reads each `http` request. A SOCKS proxy only relays
+# the bytes of a connection, so the requests through it are written as with no proxy.
+def forward_proxy?(options: HttpClientOptions) -> Bool = options.proxy != "" and not SocksWire.socks?(options.proxy)
 
 # The proxy of the options: an `http://host:port` origin.
 def proxy_target(options: HttpClientOptions) -> Result[Target]
@@ -1157,7 +1168,7 @@ end
 # which a forward proxy reads and does not pass on. A connection keeps its login apart: see `connection_headers`.
 def with_login(options: HttpClientOptions, scheme: String, headers: List[Header]) -> List[Header]
   # An `https` request is inside the tunnel, where the target reads it: the login went with the CONNECT only.
-  return headers if options.proxy == "" or scheme == "https"
+  return headers if not forward_proxy?(options) or scheme == "https"
 
   case proxy_of(options)
     ok(proxy) -> add_login(proxy.login, headers)
@@ -1229,7 +1240,7 @@ end
 # True for a `407` answered by the proxy of `options` to an `http` request, which is an error for the call, not a
 # response. Inside a tunnel (`https`) a 407 is the target's own answer.
 def proxy_asked?(options: HttpClientOptions, scheme: String, status: Int) -> Bool
-  status == 407 and options.proxy != "" and scheme == "http"
+  status == 407 and forward_proxy?(options) and scheme == "http"
 end
 
 # `host:port` of a target as an error shows it: an IPv6 literal in brackets and the port always there.
@@ -1242,7 +1253,9 @@ def proxy_name(where: Target) -> String
   "#{name}:#{where.port}"
 end
 
-# The proxy of the environment for a URL scheme (`http` or `https`), as `http://host:port` text, or "".
+# The proxy of the environment for a URL scheme (`http` or `https`), as `http://host:port` text, or "". With neither
+# name of the scheme set, `all_proxy` or `ALL_PROXY` gives it (curl), whose CGI case is the one of `https`: a request
+# header makes no `ALL_PROXY`.
 def proxy_of_scheme(scheme: String) -> String
   lower = "http_proxy"
   upper = "HTTP_PROXY"
@@ -1258,7 +1271,11 @@ def proxy_of_scheme(scheme: String) -> String
     return ""
   end
 
-  value = String.trim(env_value(lower, upper, trusted))
+  value = ""
+  case env_set(lower, upper, trusted)
+    some(found) -> value = String.trim(found)
+    none -> value = String.trim(env_value("all_proxy", "ALL_PROXY", true))
+  end
   return value if value == "" or String.contains?(value, "://")
 
   "http://#{value}"
@@ -1267,12 +1284,20 @@ end
 # The variable `lower`, else `upper` when `upper_read`: the lower-case one wins, empty or not, as in curl. ""
 # when unset.
 def env_value(lower: String, upper: String, upper_read: Bool) -> String
-  case System.env(lower)
-    ok(value) -> value
-    error(_) ->
-      return "" if not upper_read
+  Optional.unwrap_or(env_set(lower, upper, upper_read), "")
+end
 
-      Result.unwrap_or(System.env(upper), "")
+# `env_value`, or none when neither variable is set.
+def env_set(lower: String, upper: String, upper_read: Bool) -> Optional[String]
+  case System.env(lower)
+    ok(value) -> some(value)
+    error(_) ->
+      return none if not upper_read
+
+      case System.env(upper)
+        ok(value) -> some(value)
+        error(_) -> none
+      end
   end
 end
 
@@ -1386,7 +1411,11 @@ end
 def check_proxy(options: HttpClientOptions) -> Result[Void]
   return ok() if options.proxy == ""
 
-  try proxy_target(options)
+  if SocksWire.socks?(options.proxy)
+    _ = try SocksWire.parse(options.proxy)
+  else
+    _ = try proxy_target(options)
+  end
   ok()
 end
 
@@ -1397,12 +1426,15 @@ def connect_to(where: Target, options: HttpClientOptions) -> Result[Connection]
   socket = try open_socket(via, options)
   login: Channel[String] = Channel.new(1)
   kept = options
-  if options.proxy != ""
+  if forward_proxy?(options)
     proxy = try proxy_of(options)
     _ = login.send(proxy.login, 0)
     kept = options.with(proxy: "http://#{host_authority(proxy.target.host, proxy.target.port)}")
   else
     _ = login.send("", 0)
+    if options.proxy != ""
+      kept = options.with(proxy: SocksWire.public_url(try SocksWire.parse(options.proxy)))
+    end
   end
 
   cell: Channel[Exchange] = Channel.new(1)
@@ -1433,16 +1465,26 @@ def open_socket(where: Target, options: HttpClientOptions) -> Result[Socket]
         return HttpWire.connect_context(where.host, where.port, context, options.timeout_ms)
     end
   end
-  reaching(TCP.connect(where.host, where.port, options.timeout_ms), options, where)
+  plain_socket(options, where, options.timeout_ms)
 end
 
-# The result of connecting to `where`, which is the proxy when the options have one: a failure names the proxy, so the
-# caller does not take it for the target being down.
+# A plain connection to `where`: to the host itself, which is the forward proxy when the options have one, or through
+# the SOCKS proxy of the options.
+def plain_socket(options: HttpClientOptions, where: Target, timeout_ms: Int) -> Result[Socket]
+  if options.proxy != "" and SocksWire.socks?(options.proxy)
+    return tunnel(options, where.host, where.port, Time.monotonic_ms() + timeout_ms)
+  end
+
+  reaching(TCP.connect(where.host, where.port, timeout_ms), options, where)
+end
+
+# The result of connecting to `where`, which is the forward proxy when the options have one: a failure names the proxy,
+# so the caller does not take it for the target being down.
 def reaching(connected: Result[Socket], options: HttpClientOptions, where: Target) -> Result[Socket]
   case connected
     ok(socket) -> ok(socket)
     error(message) ->
-      return error(message) if options.proxy == ""
+      return error(message) if not forward_proxy?(options)
 
       error("http: cannot reach the proxy #{proxy_name(where)}: #{message}")
   end
@@ -1520,6 +1562,7 @@ def closing_on_error(
       TCP.close(socket)
       return error(message) if message != BEFORE_TLS
 
+      return error(socks_failed(options, tunnel_name(host, port), message)) if SocksWire.socks?(options.proxy)
       case proxy_of(options)
         ok(proxy) -> error(tunnel_failed(proxy, tunnel_name(host, port), message))
         error(_) -> error(message)
@@ -1531,6 +1574,17 @@ def tunnel_name(host: String, port: Int) -> String
   proxy_name(Target(scheme: "https", host: host, port: port, target: "/"))
 end
 
+# An error after the SOCKS proxy of `options` opened the connection to `target`, told with the proxy and the target,
+# never with the login.
+def socks_failed(options: HttpClientOptions, target: String, message: String) -> String
+  case SocksWire.parse(options.proxy)
+    ok(proxy) ->
+      name = SocksWire.name_of(proxy.host, proxy.port)
+      "http: the connection to #{target} through the proxy #{name} failed: #{message}"
+    error(_) -> message
+  end
+end
+
 # An error after the CONNECT went out, told with the proxy and the target, never with the login.
 def tunnel_failed(proxy: Proxy, target: String, message: String) -> String
   "http: the tunnel to #{target} through the proxy #{proxy_name(proxy.target)} failed: #{message}"
@@ -1540,9 +1594,14 @@ end
 # with the proxy's login (RFC 9110 9.3.6), then the head of the answer. A 2xx opens the tunnel; any other status is
 # an error that names the proxy (a 407 as for an `http` request) and never the login or the answer's body.
 def tunnel(options: HttpClientOptions, host: String, port: Int, deadline: Int) -> Result[Socket]
-  proxy = try proxy_of(options)
   left = deadline - Time.monotonic_ms()
   return error(TIMED_OUT) if left <= 0
+
+  if SocksWire.socks?(options.proxy)
+    socks = try SocksWire.parse(options.proxy)
+    return SocksWire.connect(socks, host, port, left)
+  end
+  proxy = try proxy_of(options)
 
   socket = try reaching(TCP.connect(proxy.target.host, proxy.target.port, left), options, proxy.target)
   target = tunnel_name(host, port)
@@ -3614,7 +3673,7 @@ def connect(worker: Worker, job: HttpWire.Job) -> Result[Socket]
   return error(TIMED_OUT) if left <= 0
   return connect_https(worker.client, job.host, job.port, left) if job.scheme == "https"
   where = Target(scheme: job.scheme, host: job.host, port: job.port, target: "/")
-  reaching(TCP.connect(job.host, job.port, left), HttpWire.options(worker.client), where)
+  plain_socket(HttpWire.options(worker.client), where, left)
 end
 
 def idempotent?(method: String) -> Bool
@@ -3813,7 +3872,7 @@ def connect_download(pool: HttpClient, where: Target, deadline: Int) -> Result[S
   left = deadline - Time.monotonic_ms()
   return error(TIMED_OUT) if left <= 0
   return connect_https(pool, where.host, where.port, left) if where.scheme == "https"
-  reaching(TCP.connect(where.host, where.port, left), HttpWire.options(pool), where)
+  plain_socket(HttpWire.options(pool), where, left)
 end
 
 # Opens the destination exclusively, then streams the response into it. Every error below closes both handles;
