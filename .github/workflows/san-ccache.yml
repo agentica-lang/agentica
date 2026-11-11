@@ -1,7 +1,7 @@
 name: san-ccache
 
 # Temporary trial for #1380 (never merged): the steps of the tsan-build job of ci.yml with ccache and actions/cache, to
-# compare a cold and a warm cache with the times of that job in CI.
+# compare a cold and a warm cache with the times of that job in CI (warm run).
 on:
   push:
     branches: [san-trial]
