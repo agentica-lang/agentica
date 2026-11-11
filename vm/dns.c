@@ -22,7 +22,7 @@
    `dropped`, and `resolved` frees it. `started` and `dropped` are read and written on the I/O thread only. */
 typedef struct {
   agc_loop *io;
-  char *host;
+  CC_OWNS char *host;
   uv_getaddrinfo_t req;
   agc_io_job *job;
   bool started, dropped;
@@ -143,6 +143,7 @@ static agc_value expired(agc_vm *vm, void *data, agc_value context) {
 
 /* I/O thread (§16.5), like `resolved`, or the caller's thread before the job exists, when `started` is still false. A
    started lookup is freed by its callback. */
+// cchecker: ignore CC-OWN-LEAK: a started lookup goes to `resolved`, which libuv always calls and which frees it
 static void drop(CC_FREES void *data) {
   lookup *q = data;
   if (q->started) {
@@ -163,11 +164,13 @@ static agc_value builtin_lookup(agc_vm *vm, agc_value *args, uint32_t span) {
   if (timeout <= 0) return agc_stream_bad_timeout(AGC_STREAM_NETWORK);
   if (host->bytes == 0) return agc_error_value("network: the host name is empty");
   agc_task_check_park(vm, "a callback of native code cannot wait for DNS.lookup", span);
+  /* It may raise, so it comes before the allocations. */
+  agc_loop *io = agc_io_loop(vm);
   char *name = agc_cstr(host);
   if (!name) return agc_error_value("network: host cannot contain NUL");
   CC_OWNS lookup *q = calloc(1, sizeof *q);
   if (!q) agc_out_of_memory();
-  q->io = agc_io_loop(vm);
+  q->io = io;
   q->host = name;
   (void)agc_io_start_then(vm, &lookup_io, q, agc_void(), timeout, begin);
   return agc_void();
