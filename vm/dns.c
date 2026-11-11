@@ -16,14 +16,16 @@
 #define LOOKUP(ptr) ((lookup *)(void *)((char *)(ptr) - offsetof(lookup, req)))
 
 /* One lookup. The builtin fills `io` and `host`; the I/O thread owns the rest until the job's wait ends
-   (agc_io_ready), and only then does `done` read `status` and the addresses, or `drop` free them. `started` says that
-   `req` is libuv's until its callback, which `pause` needs to know before it cancels. */
+   (agc_io_ready), and only then does `done` read `status` and the addresses. `started` says that `req` is libuv's until
+   its callback: a pool thread may still be inside getaddrinfo, writing into `req`, after the job gave up (its deadline
+   or a Task.cancel), and libuv calls `resolved` even after a uv_cancel. So a `drop` of a started lookup only sets
+   `dropped`, and `resolved` frees it. `started` and `dropped` are read and written on the I/O thread only. */
 typedef struct {
   agc_loop *io;
   char *host;
   uv_getaddrinfo_t req;
   agc_io_job *job;
-  bool started;
+  bool started, dropped;
   int status;
   size_t count;
   char (*addresses)[ADDRESS_TEXT];
@@ -50,6 +52,12 @@ static bool address_text(const struct sockaddr *a, char *text) {
 static void resolved(uv_getaddrinfo_t *req, int status, struct addrinfo *res) {
   lookup *q = LOOKUP(req);
   q->started = false;
+  /* The job is gone (and maybe freed): nobody reads the answer. */
+  if (q->dropped) {
+    uv_freeaddrinfo(res);
+    free_lookup(q);
+    return;
+  }
   q->status = status;
   size_t total = 0;
   for (const struct addrinfo *a = res; a; a = a->ai_next) total++;
@@ -88,10 +96,21 @@ static bool begin(void *data, agc_io_job *job) {
 }
 
 /* The deadline passed: a lookup that still waits for a pool thread leaves the queue (its callback then comes with
-   UV_EAI_CANCELED); one that runs goes on to its end, which ends the job's wait. I/O thread. */
+   UV_EAI_CANCELED), so it frees its slow-I/O slot at once. One that runs cannot be stopped (uv_cancel says UV_EBUSY):
+   it goes on on its pool thread, and its callback finds it dropped. I/O thread. */
 static void stop(void *data) {
   lookup *q = data;
   if (q->started) (void)uv_cancel((uv_req_t *)&q->req);
+}
+
+/* Task.cancel, or the deadline of a detached job: the same stop. The wait can always be given up, since `drop` leaves a
+   running lookup to its callback. I/O thread. */
+static bool cancel(agc_vm *vm, void *data, agc_value context, bool deadline) {
+  (void)vm;
+  (void)context;
+  (void)deadline;
+  stop(data);
+  return true;
 }
 
 static agc_value done(agc_vm *vm, void *data, agc_value context) {
@@ -114,7 +133,7 @@ static agc_value done(agc_vm *vm, void *data, agc_value context) {
   return result;
 }
 
-/* It reads nothing of the lookup: the getaddrinfo may still be running, and the job's wait ends only with it. */
+/* It reads nothing of the lookup: the getaddrinfo may still be running (`drop` then leaves it to `resolved`). */
 static agc_value expired(agc_vm *vm, void *data, agc_value context) {
   (void)vm;
   (void)data;
@@ -122,9 +141,18 @@ static agc_value expired(agc_vm *vm, void *data, agc_value context) {
   return agc_stream_timed_out(AGC_STREAM_NETWORK);
 }
 
-static void drop(CC_FREES void *data) { free_lookup(data); }
+/* I/O thread (§16.5), like `resolved`, or the caller's thread before the job exists, when `started` is still false. A
+   started lookup is freed by its callback. */
+static void drop(CC_FREES void *data) {
+  lookup *q = data;
+  if (q->started) {
+    q->dropped = true;
+    return;
+  }
+  free_lookup(q);
+}
 
-static const agc_io_kind lookup_io = {NULL, done, expired, drop, true, "dns", NULL, false, stop};
+static const agc_io_kind lookup_io = {NULL, done, expired, drop, true, "dns", cancel, false, stop};
 
 /* DNS.lookup(host, timeout_ms). Every check that can raise or refuse comes before the copy of the name. */
 static agc_value builtin_lookup(agc_vm *vm, agc_value *args, uint32_t span) {

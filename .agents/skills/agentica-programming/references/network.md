@@ -9,8 +9,8 @@ to the task that opened it and closes when that task or the run ends
 
 No flag is needed for network access. With `--deny-net` (or `--sandbox`) every
 DNS lookup, connect and listen, `std/http` included, returns an error starting
-`denied: --deny-net` before any DNS query. With `--deny-fs`, a TLS call that names a
-file returns `denied: --deny-fs`.
+`denied: --deny-net` before any DNS query. With `--deny-fs`, a TLS call that
+names a file returns `denied: --deny-fs`.
 
 ```text
 DNS.lookup(host: String, timeout_ms: Int = 30000) -> Result[List[String]]

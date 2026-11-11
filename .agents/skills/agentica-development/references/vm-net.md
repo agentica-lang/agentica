@@ -64,9 +64,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   `net.alpn`, for `TLS.alpn`.
 - `vm/dns.c`: `DNS.lookup` is one external job: its START step calls
   `agc_io_getaddrinfo` on the I/O thread and the callback copies the addresses
-  as text before `agc_io_ready`, so `done` and `drop` never meet a running
-  lookup. At the deadline `pause` cancels a lookup still queued in the pool;
-  one that runs ends the job's wait when it finishes. Errors go through
+  as text before `agc_io_ready`. At the deadline (`pause`) or a cancel
+  (`cancel`) a lookup still queued in the pool is cancelled; one that runs
+  cannot be, and the job ends without it. A pool thread may then still write
+  into the request, so `drop` of a started lookup only marks it, and the
+  callback frees it (the `vm/tcp.c` pattern). Errors go through
   `agc_host_error` (`vm/tcp.c`), as `TCP.connect` reports them.
 - `vm/tls_context.c`: `TLS.client_context`/`TLS.server_context` build a
   `TlsContext` (a refcounted `agc_tls_config`, freed by a GC finalizer run on
