@@ -123,6 +123,7 @@ jobs:
       - name: Linux packages (system libgc and OpenSSL, ccache, libsqlite3-0), when the image lacks them
         if: runner.os == 'Linux'
         run: |
+          bash .github/scripts/apt-mirror.sh
           command -v pkg-config >/dev/null && pkg-config --atleast-version=3.0.0 openssl && pkg-config --atleast-version=8.2.0 bdw-gc && pkg-config --atleast-version=1.2.0 zlib || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libssl-dev libgc-dev zlib1g-dev pkg-config; }
           command -v ccache >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends ccache; }
           dpkg -s libsqlite3-0 >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y --no-install-recommends libsqlite3-0; }
