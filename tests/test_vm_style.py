@@ -240,6 +240,8 @@ def test_every_vm_c_file_starts_with_a_header_comment_of_the_right_length():
     assert "tests/map_test.c" in files
     problems = [p for f in files for p in header_problems(f, (VM_DIR / f).read_text(encoding="utf-8"))]
     assert problems == [], "\n".join(problems)
+
+
 # A union type of vm/ (typedef union { ... } name;): the members are flat, so the first "}" closes it.
 UNION_TYPEDEF = re.compile(r"typedef\s+union\s*\w*\s*\{[^}]*\}\s*(\w+)\s*;")
 
@@ -256,6 +258,7 @@ def union_brace_problems(texts):
             for f, text in texts.items()
             for n, line in enumerate(text.splitlines(), 1)
             for m in [initialized.search(line)] if m]
+
 
 def test_no_union_is_zeroed_with_a_brace_initializer():
     assert union_brace_problems({"u.h": "typedef union {\n  int i;\n  long l;\n} word;\n",
