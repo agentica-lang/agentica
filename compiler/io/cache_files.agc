@@ -221,7 +221,7 @@ export def sweep(folder: String) -> Void
 
   now = Time.now_ms() / 1000
   for name in names.unwrap!
-    if name.contains?(TEMP_MARK)
+    if name.include?(TEMP_MARK)
       path = Paths.join(folder, name)
       info = File.lstat(path, IO_TIMEOUT_MS)
       if info.ok? and info.unwrap!.kind == "file" and now - info.unwrap!.modified_seconds > STALE_TEMP_SECONDS

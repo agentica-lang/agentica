@@ -243,7 +243,7 @@ end
 # commit it names), is the entry's fault, while a later failure of git (ls-tree, a damaged repository) is git's.
 def check_subdir(place: Place, scratch: Scratch, tree: String) -> Result[Void]
   kind = try git_at(place, scratch, "subdir", inside(scratch, ["cat-file", "-t", tree]))
-  if String.from_bytes(kind).unwrap_or("").trim != "tree"
+  if String.from_bytes(kind).unwrap_or("").strip != "tree"
     return error(fail(place, "PKG-FETCH", "subdir", "#{tree} is not a folder", ""))
   end
 
@@ -323,7 +323,7 @@ end
 def peel(place: Place, scratch: Scratch) -> Result[String]
   arguments = ["rev-parse", "--verify", "--quiet", "#{PINNED}^{commit}"]
   peeled = try git_text(place, scratch, inside(scratch, arguments))
-  ok(peeled.trim)
+  ok(peeled.strip)
 end
 
 def copy_blobs(place: Place, scratch: Scratch, blobs: List[Tree.Blob]) -> Result[Void]
@@ -433,7 +433,7 @@ def git_text(place: Place, scratch: Scratch, arguments: List[String]) -> Result[
 end
 
 def brief(errors: String) -> String
-  text = errors.trim
+  text = errors.strip
   return text.slice(0, HELP_LIMIT) if text.length > HELP_LIMIT
 
   text

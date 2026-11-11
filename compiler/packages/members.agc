@@ -103,11 +103,11 @@ end
 # The path of dir below root_dir, written with "/": "" when dir is not below it.
 def relative_to(root_dir: String, dir: String) -> String
   prefix = root_dir
-  if !prefix.ends_with?("/")
+  if !prefix.end_with?("/")
     prefix = "#{prefix}/"
   end
 
-  return "" if !dir.starts_with?(prefix)
+  return "" if !dir.start_with?(prefix)
 
   dir.slice(prefix.length, dir.length - prefix.length)
 end

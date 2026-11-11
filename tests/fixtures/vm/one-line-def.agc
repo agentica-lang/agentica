@@ -7,7 +7,7 @@ def double(x: Int) -> Int = x * 2
 
 def greet(name: String, greeting: String = "hi") -> String = "#{greeting} #{name}" # a trailing comment
 
-def next_of(text: String) -> Result[Int] = ok(try text.to_int + 1)
+def next_of(text: String) -> Result[Int] = ok(try text.to_i + 1)
 
 def total(xs: List[Int]) -> Int = xs.map do |x| double(x) end.sum
 

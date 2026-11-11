@@ -156,7 +156,7 @@ export def list_files(workspace: Workspace.Workspace, root: String) -> Listing
 end
 
 ## Whether a file name is a source file of a package: it ends in `.agc`, in any case.
-export def source_file?(name: String) -> Bool = fold(name).ends_with?(".agc")
+export def source_file?(name: String) -> Bool = fold(name).end_with?(".agc")
 
 ## Whether a path of the package (parts joined by "/") is under its native/ folder, whose files are all part of the
 ## package. The name is compared without regard to case, as agc_libs is.
@@ -180,14 +180,14 @@ end
 export def native_root?(path: String) -> Bool = fold(path) == NATIVE_FOLDER
 
 ## Whether a file name under native/ is left out: a dotfile (.DS_Store) or one that Windows adds.
-export def native_junk?(name: String) -> Bool = name.starts_with?(".") or NATIVE_JUNK.include?(fold(name))
+export def native_junk?(name: String) -> Bool = name.start_with?(".") or NATIVE_JUNK.include?(fold(name))
 
 ## Whether a folder is left out of the hash, and cannot be imported: a hidden one or _build at any depth, or agc_libs
 ## or deps at the root of the package (`top`). The names are folded, as for agc_libs, because a case-insensitive file
 ## system opens `_BUILD/x.agc` as `_build/x.agc`. The walks of a project (check, test) compare _build and deps exactly.
 export def skipped_folder?(name: String, top: Bool) -> Bool
   folded = fold(name)
-  name.starts_with?(".") or folded == BUILD_FOLDER or (top and (folded == LIBS_FOLDER or folded == DEPS_FOLDER))
+  name.start_with?(".") or folded == BUILD_FOLDER or (top and (folded == LIBS_FOLDER or folded == DEPS_FOLDER))
 end
 
 ## Whether a folder is agc_libs, in any case.

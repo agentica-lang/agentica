@@ -52,7 +52,7 @@ end
 def main() -> Void
   p = Process.spawn({agc_literal(PYTHON)}, [{agc_literal(FIXTURES / "process-peer.py")}, "hold"], Process.Options(timeout_ms: {ms(5000)})).unwrap!
   pid = Process.read_line(p, {ms(5000)}).unwrap!
-  publish("program-pid.txt", String.from_int(System.pid()))
+  publish("program-pid.txt", System.pid().to_s)
   publish("pid.txt", pid)
   puts("ready")
   IO.flush()
@@ -627,7 +627,7 @@ def test_a_handler_that_prints_for_ever_fails_at_the_output_limit_long_before_th
     directory = suite(tmp_path, {
         "steps.agc": ('import BDD from "std/bdd"\n\ndef main() -> Void\n'
                       '  BDD.run([BDD.step("the handler prints for ever") do |ctx, _|\n'
-                      '    chunk = String.join(List.repeat("x", 100000), "")\n'
+                      '    chunk = List.repeat("x", 100000).join("")\n'
                       "    while true\n      puts(chunk)\n      Task.sleep(5)\n    end\n"
                       "    ctx\n  end])\nend\n"),
         "endless.feature": "Feature: Endless\nScenario: endless\nGiven the handler prints for ever\n"})
@@ -641,7 +641,7 @@ def test_a_handler_that_prints_for_ever_fails_at_the_output_limit_long_before_th
 def test_a_step_program_that_prints_for_ever_while_it_lists_its_steps_fails_at_the_output_limit(tmp_path):
     directory = suite(tmp_path, {
         "steps.agc": ('import BDD from "std/bdd"\n\ndef main() -> Void\n'
-                      '  chunk = String.join(List.repeat("x", 100000), "")\n'
+                      '  chunk = List.repeat("x", 100000).join("")\n'
                       "  while true\n    puts(chunk)\n    Task.sleep(5)\n  end\n"
                       "  BDD.run([])\nend\n"),
         "listing.feature": "Feature: Listing\nScenario: never runs\nGiven something\n"})
@@ -659,17 +659,17 @@ def test_programs_under_test_output_without_a_flush_wrong_output_the_output_limi
     write_files(directory, {
         "buffered.agc": BUFFERED_PROGRAM,
         "output.agc": OUTPUT_PROGRAM,
-        "oversized.agc": 'def main() -> Void\n  puts(String.join(List.repeat("x", 1048576), ""))\nend\n',
-        "flood.agc": 'def main() -> Void\n  IO.warn(String.join(List.repeat("x", 1048576), ""))\n  _ = IO.gets()\nend\n',
+        "oversized.agc": 'def main() -> Void\n  puts(List.repeat("x", 1048576).join(""))\nend\n',
+        "flood.agc": 'def main() -> Void\n  IO.warn(List.repeat("x", 1048576).join(""))\n  _ = IO.gets()\nend\n',
         "where.agc": "def main() -> Void\n  puts(Path.cwd().unwrap!)\nend\n",
         "json.agc": JSON_PROGRAM,
-        "quotes.agc": 'def main() -> Void\n  puts(String.join(List.repeat("\\"", 300000), ""))\nend\n',
+        "quotes.agc": 'def main() -> Void\n  puts(List.repeat("\\"", 300000).join(""))\nend\n',
         "steps.agc": ('import BDD from "std/bdd"\n\ndef main() -> Void\n'
                       '  BDD.run([BDD.step("the handler floods stdout") do |ctx, _|\n'
-                      '    puts(String.join(List.repeat(String.join(List.repeat("x", 1000), ""), 1100), "\\n"))\n'
+                      '    puts(List.repeat(List.repeat("x", 1000).join(""), 1100).join("\\n"))\n'
                       "    ctx\n  end,\n"
                       '  BDD.step("the handler fails with a huge message") do |ctx, _|\n'
-                      '    BDD.assert(ctx, false, String.join(List.repeat("xxxxxxxxxx", 110000), ""))\n'
+                      '    BDD.assert(ctx, false, List.repeat("xxxxxxxxxx", 110000).join(""))\n'
                       "  end])\nend\n"),
         "lifecycle.feature": (
             "Feature: Lifecycle\n"

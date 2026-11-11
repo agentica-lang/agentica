@@ -148,7 +148,7 @@ def main() -> Void
   certs = System.args()[0]
   port = System.args()[2]
   # The deadline of each call, scaled: a TLS handshake with the Python server can take seconds on a loaded runner.
-  limit = String.to_int!(System.args()[4])
+  limit = System.args()[4].to_i!
   secure = Result.unwrap!(HTTP.client(options(limit, 1, 1000, certs + "/ca.pem")))
   show(HTTP.get(secure, "https://localhost:#{port}/hello"))
   show(HTTP.get(secure, "https://LOCALHOST:#{port}/hello"))
@@ -283,7 +283,7 @@ def main() -> Void
   certs = System.args()[0]
   port = System.args()[2]
   # The deadline of each call, scaled: a TLS handshake with the Python server can take seconds on a loaded runner.
-  limit = String.to_int!(System.args()[4])
+  limit = System.args()[4].to_i!
   origin = "https://localhost:#{port}"
   conn = Result.unwrap!(HTTP.start(origin, options(limit, 1, 1000, certs + "/ca.pem")))
   hello = Result.unwrap!(HTTP.send_request(conn, "GET", "/hello", "".bytes))
@@ -452,7 +452,7 @@ end
 RAW_PROGRAM = """\
 def main() -> Void
   raw = "http://127.0.0.1:#{System.args()[3]}"
-  limit = String.to_int!(System.args()[4])
+  limit = System.args()[4].to_i!
   upload = "x"
   while String.length(upload) < 4194304
     upload = upload + upload

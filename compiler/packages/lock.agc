@@ -298,12 +298,12 @@ def package_of(reading: Reader.Reading, value: Toml.Value, path: String) -> Resu
   problem = GitSource.commit_problem(commit)
   return error(Reader.fail_help(reading, Reader.child(path, "commit"), "not a commit", problem)) if problem != ""
 
-  if source.ref != "" and !commit.starts_with?(source.ref)
+  if source.ref != "" and !commit.start_with?(source.ref)
     return error(Reader.fail(reading, Reader.child(path, "commit"), "the commit does not start with the ref"))
   end
 
   hash = try text_of(reading, entries, path, "hash")
-  if hash.length != HASH_LENGTH or !hash.starts_with?(HASH_PREFIX) or !hex?(hash.slice(HASH_PREFIX.length, 64))
+  if hash.length != HASH_LENGTH or !hash.start_with?(HASH_PREFIX) or !hex?(hash.slice(HASH_PREFIX.length, 64))
     return error(Reader.fail(reading, Reader.child(path, "hash"), "a hash is sha256: and 64 lowercase hex digits"))
   end
 

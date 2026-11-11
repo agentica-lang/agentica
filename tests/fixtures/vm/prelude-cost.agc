@@ -8,7 +8,7 @@ def main() -> Void
   numbers = (1..2000).to_a
   words = numbers.map do |n| "w#{n % 100}" end
   keys = numbers.map do |n| (n * 7919) % 2003 end
-  floats = numbers.map do |n| Float.from_int(n) end
+  floats = numbers.map do |n| n.to_f end
   counts = numbers.tally
   total = 0
   total += numbers.find do |n| n == 2000 end.unwrap!

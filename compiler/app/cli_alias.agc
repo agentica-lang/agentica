@@ -45,10 +45,10 @@ end
 export def kind_hints(name: String) -> Map[String, String]
   hints = Tables.foreign_kind_methods()
   found: Map[String, String] = {}
-  return found if name.contains?(".")
+  return found if name.include?(".")
 
   for key in hints.keys.sort
-    if key.ends_with?(".#{name}")
+    if key.end_with?(".#{name}")
       found = found.put(key, hints[key])
     end
   end
@@ -99,7 +99,7 @@ def from_method_names(method: String, kind: String, modules: Map[String, String]
   ending = ".#{method}"
   found: List[String] = []
   for candidate in PUBLIC_NAMES.sort
-    if candidate.ends_with?(ending) and (kind == "" or candidate.starts_with?("#{modules[kind]}."))
+    if candidate.end_with?(ending) and (kind == "" or candidate.start_with?("#{modules[kind]}."))
       found = found.push(candidate)
     end
   end

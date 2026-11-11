@@ -436,112 +436,112 @@ program #24 0:1:1-225:9:1
           value: invoke #426 7382:206:5-7401:206:24
             target: name-ref #424 7382:206:5-7389:206:12 name="handler"
             arg: name-ref #425 7395:206:18-7400:206:23 name="event"
-    declaration: function-decl #453 7644:212:1-7786:215:1 name="@2::plain?"
+    declaration: function-decl #453 7644:212:1-7785:215:1 name="@2::plain?"
       param: param #431 7655:212:12-7667:212:24 name="text"
         type: type-ref #430 7661:212:18-7667:212:24 name="String"
       result: type-ref #432 7672:212:29-7676:212:33 name="Bool"
-      body: return-stmt #452 7679:213:3-7781:213:105 implicit
-        value: binary #451 7679:213:3-7781:213:105 op=and op-span=7743:213:67-7746:213:70
-          left: binary #445 7679:213:3-7742:213:66 op=and op-span=7720:213:44-7723:213:47
-            left: binary #441 7679:213:3-7719:213:43 op=and op-span=7695:213:19-7698:213:22
+      body: return-stmt #452 7679:213:3-7780:213:104 implicit
+        value: binary #451 7679:213:3-7780:213:104 op=and op-span=7742:213:66-7745:213:69
+          left: binary #445 7679:213:3-7741:213:65 op=and op-span=7719:213:43-7722:213:46
+            left: binary #441 7679:213:3-7718:213:42 op=and op-span=7695:213:19-7698:213:22
               left: binary #436 7679:213:3-7694:213:18 op=greater op-span=7691:213:15-7692:213:16
                 left: field-access #434 7679:213:3-7690:213:14 name="length"
                   target: name-ref #433 7679:213:3-7683:213:7 name="text"
                 right: literal #435 7693:213:17-7694:213:18 value=int:0
-              right: unary #440 7699:213:23-7719:213:43 op=not op-span=7699:213:23-7700:213:24
-                operand: method-call #439 7700:213:24-7719:213:43 name="contains?"
+              right: unary #440 7699:213:23-7718:213:42 op=not op-span=7699:213:23-7700:213:24
+                operand: method-call #439 7700:213:24-7718:213:42 name="include?"
                   target: name-ref #437 7700:213:24-7704:213:28 name="text"
-                  arg: literal #438 7715:213:39-7718:213:42 value=string:"="
-            right: unary #444 7724:213:48-7742:213:66 op=not op-span=7724:213:48-7725:213:49
-              operand: call #443 7725:213:49-7742:213:66 name="@2::line_break?" piped=false
-                arg: name-ref #442 7737:213:61-7741:213:65 name="text"
-          right: binary #450 7747:213:71-7781:213:105 op=equal op-span=7765:213:89-7767:213:91
-            left: call #447 7747:213:71-7764:213:88 name="JSON.encode" piped=false
-              arg: name-ref #446 7759:213:83-7763:213:87 name="text"
-            right: interpolation #449 7768:213:92-7781:213:105
+                  arg: literal #438 7714:213:38-7717:213:41 value=string:"="
+            right: unary #444 7723:213:47-7741:213:65 op=not op-span=7723:213:47-7724:213:48
+              operand: call #443 7724:213:48-7741:213:65 name="@2::line_break?" piped=false
+                arg: name-ref #442 7736:213:60-7740:213:64 name="text"
+          right: binary #450 7746:213:70-7780:213:104 op=equal op-span=7764:213:88-7766:213:90
+            left: call #447 7746:213:70-7763:213:87 name="JSON.encode" piped=false
+              arg: name-ref #446 7758:213:82-7762:213:86 name="text"
+            right: interpolation #449 7767:213:91-7780:213:104
               part: text "\""
-              part: name-ref #448 7773:213:97-7777:213:101 name="text"
+              part: name-ref #448 7772:213:96-7776:213:100 name="text"
               part: text "\""
-    declaration: function-decl #471 7945:218:1-8145:225:1 name="@2::one_line"
-      param: param #455 7958:218:14-7970:218:26 name="text"
-        type: type-ref #454 7964:218:20-7970:218:26 name="String"
-      result: type-ref #456 7975:218:31-7981:218:37 name="String"
-      body: return-stmt #470 7990:220:5-8136:222:50 implicit
-        value: method-call #469 7990:220:5-8136:222:50 name="replace"
-          target: method-call #465 7990:220:5-8086:221:50 name="replace"
-            target: method-call #461 7990:220:5-8036:220:51 name="replace"
-              target: name-ref #457 7990:220:5-7994:220:9 name="text"
-              arg: call #459 8003:220:18-8024:220:39 name="String.from_code" piped=false
-                arg: literal #458 8020:220:35-8023:220:38 value=int:133
-              arg: literal #460 8026:220:41-8035:220:50 value=string:"\\u0085"
-            arg: call #463 8052:221:16-8074:221:38 name="String.from_code" piped=false
-              arg: literal #462 8069:221:33-8073:221:37 value=int:8232
-            arg: literal #464 8076:221:40-8085:221:49 value=string:"\\u2028"
-          arg: call #467 8102:222:16-8124:222:38 name="String.from_code" piped=false
-            arg: literal #466 8119:222:33-8123:222:37 value=int:8233
-          arg: literal #468 8126:222:40-8135:222:49 value=string:"\\u2029"
-    declaration: function-decl #490 8146:226:1-8330:233:1 name="@2::line_break?"
-      param: param #473 8162:226:17-8174:226:29 name="text"
-        type: type-ref #472 8168:226:23-8174:226:29 name="String"
-      result: type-ref #474 8179:226:34-8183:226:38 name="Bool"
-      body: return-stmt #489 8192:228:5-8321:230:43 implicit
-        value: binary #488 8192:228:5-8321:230:43 op=or op-span=8276:229:44-8278:229:46
-          left: binary #483 8192:228:5-8275:229:43 op=or op-span=8230:228:43-8232:228:45
-            left: method-call #478 8192:228:5-8229:228:42 name="contains?"
-              target: name-ref #475 8192:228:5-8196:228:9 name="text"
-              arg: call #477 8207:228:20-8228:228:41 name="String.from_code" piped=false
-                arg: literal #476 8224:228:37-8227:228:40 value=int:133
-            right: method-call #482 8237:229:5-8275:229:43 name="contains?"
-              target: name-ref #479 8237:229:5-8241:229:9 name="text"
-              arg: call #481 8252:229:20-8274:229:42 name="String.from_code" piped=false
-                arg: literal #480 8269:229:37-8273:229:41 value=int:8232
-          right: method-call #487 8283:230:5-8321:230:43 name="contains?"
-            target: name-ref #484 8283:230:5-8287:230:9 name="text"
-            arg: call #486 8298:230:20-8320:230:42 name="String.from_code" piped=false
-              arg: literal #485 8315:230:37-8319:230:41 value=int:8233
-    declaration: function-decl #514 8331:234:1-8509:238:1 name="@2::message_token"
-      param: param #492 8349:234:19-8364:234:34 name="message"
-        type: type-ref #491 8358:234:28-8364:234:34 name="String"
-      result: type-ref #493 8369:234:39-8375:234:45 name="String"
-      body: if-stmt #509 8378:235:3-8472:236:1 guard
-        branch: if-branch #508 8378:235:3-8471:235:96
-          condition: binary #507 8396:235:21-8471:235:96 op=and op-span=8443:235:68-8446:235:71
-            left: binary #502 8396:235:21-8442:235:67 op=and op-span=8412:235:37-8415:235:40
-              left: call #497 8396:235:21-8411:235:36 name="@2::plain?" piped=false
-                arg: name-ref #496 8403:235:28-8410:235:35 name="message"
-              right: unary #501 8416:235:41-8442:235:67 op=not op-span=8416:235:41-8417:235:42
-                operand: method-call #500 8417:235:42-8442:235:67 name="starts_with?"
-                  target: name-ref #498 8417:235:42-8424:235:49 name="message"
-                  arg: literal #499 8438:235:63-8441:235:66 value=string:" "
-            right: unary #506 8447:235:72-8471:235:96 op=not op-span=8447:235:72-8448:235:73
-              operand: method-call #505 8448:235:73-8471:235:96 name="ends_with?"
-                target: name-ref #503 8448:235:73-8455:235:80 name="message"
-                arg: literal #504 8467:235:92-8470:235:95 value=string:" "
-          body: return-stmt #495 8378:235:3-8392:235:17
-            value: name-ref #494 8385:235:10-8392:235:17 name="message"
-      body: return-stmt #513 8474:236:3-8504:236:33 implicit
-        value: call #512 8474:236:3-8504:236:33 name="@2::one_line" piped=false
-          arg: call #511 8483:236:12-8503:236:32 name="JSON.encode" piped=false
-            arg: name-ref #510 8495:236:24-8502:236:31 name="message"
-    declaration: function-decl #533 8510:239:1-8639:243:1 name="@2::field_token"
-      param: param #516 8526:239:17-8538:239:29 name="text"
-        type: type-ref #515 8532:239:23-8538:239:29 name="String"
-      result: type-ref #517 8543:239:34-8549:239:40 name="String"
-      body: if-stmt #528 8552:240:3-8605:241:1 guard
-        branch: if-branch #527 8552:240:3-8604:240:55
-          condition: binary #526 8567:240:18-8604:240:55 op=and op-span=8580:240:31-8583:240:34
-            left: call #521 8567:240:18-8579:240:30 name="@2::plain?" piped=false
-              arg: name-ref #520 8574:240:25-8578:240:29 name="text"
-            right: unary #525 8584:240:35-8604:240:55 op=not op-span=8584:240:35-8585:240:36
-              operand: method-call #524 8585:240:36-8604:240:55 name="contains?"
-                target: name-ref #522 8585:240:36-8589:240:40 name="text"
-                arg: literal #523 8600:240:51-8603:240:54 value=string:" "
-          body: return-stmt #519 8552:240:3-8563:240:14
-            value: name-ref #518 8559:240:10-8563:240:14 name="text"
-      body: return-stmt #532 8607:241:3-8634:241:30 implicit
-        value: call #531 8607:241:3-8634:241:30 name="@2::one_line" piped=false
-          arg: call #530 8616:241:12-8633:241:29 name="JSON.encode" piped=false
-            arg: name-ref #529 8628:241:24-8632:241:28 name="text"
+    declaration: function-decl #471 7944:218:1-8144:225:1 name="@2::one_line"
+      param: param #455 7957:218:14-7969:218:26 name="text"
+        type: type-ref #454 7963:218:20-7969:218:26 name="String"
+      result: type-ref #456 7974:218:31-7980:218:37 name="String"
+      body: return-stmt #470 7989:220:5-8135:222:50 implicit
+        value: method-call #469 7989:220:5-8135:222:50 name="replace"
+          target: method-call #465 7989:220:5-8085:221:50 name="replace"
+            target: method-call #461 7989:220:5-8035:220:51 name="replace"
+              target: name-ref #457 7989:220:5-7993:220:9 name="text"
+              arg: call #459 8002:220:18-8023:220:39 name="String.from_code" piped=false
+                arg: literal #458 8019:220:35-8022:220:38 value=int:133
+              arg: literal #460 8025:220:41-8034:220:50 value=string:"\\u0085"
+            arg: call #463 8051:221:16-8073:221:38 name="String.from_code" piped=false
+              arg: literal #462 8068:221:33-8072:221:37 value=int:8232
+            arg: literal #464 8075:221:40-8084:221:49 value=string:"\\u2028"
+          arg: call #467 8101:222:16-8123:222:38 name="String.from_code" piped=false
+            arg: literal #466 8118:222:33-8122:222:37 value=int:8233
+          arg: literal #468 8125:222:40-8134:222:49 value=string:"\\u2029"
+    declaration: function-decl #490 8145:226:1-8326:233:1 name="@2::line_break?"
+      param: param #473 8161:226:17-8173:226:29 name="text"
+        type: type-ref #472 8167:226:23-8173:226:29 name="String"
+      result: type-ref #474 8178:226:34-8182:226:38 name="Bool"
+      body: return-stmt #489 8191:228:5-8317:230:42 implicit
+        value: binary #488 8191:228:5-8317:230:42 op=or op-span=8273:229:43-8275:229:45
+          left: binary #483 8191:228:5-8272:229:42 op=or op-span=8228:228:42-8230:228:44
+            left: method-call #478 8191:228:5-8227:228:41 name="include?"
+              target: name-ref #475 8191:228:5-8195:228:9 name="text"
+              arg: call #477 8205:228:19-8226:228:40 name="String.from_code" piped=false
+                arg: literal #476 8222:228:36-8225:228:39 value=int:133
+            right: method-call #482 8235:229:5-8272:229:42 name="include?"
+              target: name-ref #479 8235:229:5-8239:229:9 name="text"
+              arg: call #481 8249:229:19-8271:229:41 name="String.from_code" piped=false
+                arg: literal #480 8266:229:36-8270:229:40 value=int:8232
+          right: method-call #487 8280:230:5-8317:230:42 name="include?"
+            target: name-ref #484 8280:230:5-8284:230:9 name="text"
+            arg: call #486 8294:230:19-8316:230:41 name="String.from_code" piped=false
+              arg: literal #485 8311:230:36-8315:230:40 value=int:8233
+    declaration: function-decl #514 8327:234:1-8503:238:1 name="@2::message_token"
+      param: param #492 8345:234:19-8360:234:34 name="message"
+        type: type-ref #491 8354:234:28-8360:234:34 name="String"
+      result: type-ref #493 8365:234:39-8371:234:45 name="String"
+      body: if-stmt #509 8374:235:3-8466:236:1 guard
+        branch: if-branch #508 8374:235:3-8465:235:94
+          condition: binary #507 8392:235:21-8465:235:94 op=and op-span=8438:235:67-8441:235:70
+            left: binary #502 8392:235:21-8437:235:66 op=and op-span=8408:235:37-8411:235:40
+              left: call #497 8392:235:21-8407:235:36 name="@2::plain?" piped=false
+                arg: name-ref #496 8399:235:28-8406:235:35 name="message"
+              right: unary #501 8412:235:41-8437:235:66 op=not op-span=8412:235:41-8413:235:42
+                operand: method-call #500 8413:235:42-8437:235:66 name="start_with?"
+                  target: name-ref #498 8413:235:42-8420:235:49 name="message"
+                  arg: literal #499 8433:235:62-8436:235:65 value=string:" "
+            right: unary #506 8442:235:71-8465:235:94 op=not op-span=8442:235:71-8443:235:72
+              operand: method-call #505 8443:235:72-8465:235:94 name="end_with?"
+                target: name-ref #503 8443:235:72-8450:235:79 name="message"
+                arg: literal #504 8461:235:90-8464:235:93 value=string:" "
+          body: return-stmt #495 8374:235:3-8388:235:17
+            value: name-ref #494 8381:235:10-8388:235:17 name="message"
+      body: return-stmt #513 8468:236:3-8498:236:33 implicit
+        value: call #512 8468:236:3-8498:236:33 name="@2::one_line" piped=false
+          arg: call #511 8477:236:12-8497:236:32 name="JSON.encode" piped=false
+            arg: name-ref #510 8489:236:24-8496:236:31 name="message"
+    declaration: function-decl #533 8504:239:1-8632:243:1 name="@2::field_token"
+      param: param #516 8520:239:17-8532:239:29 name="text"
+        type: type-ref #515 8526:239:23-8532:239:29 name="String"
+      result: type-ref #517 8537:239:34-8543:239:40 name="String"
+      body: if-stmt #528 8546:240:3-8598:241:1 guard
+        branch: if-branch #527 8546:240:3-8597:240:54
+          condition: binary #526 8561:240:18-8597:240:54 op=and op-span=8574:240:31-8577:240:34
+            left: call #521 8561:240:18-8573:240:30 name="@2::plain?" piped=false
+              arg: name-ref #520 8568:240:25-8572:240:29 name="text"
+            right: unary #525 8578:240:35-8597:240:54 op=not op-span=8578:240:35-8579:240:36
+              operand: method-call #524 8579:240:36-8597:240:54 name="include?"
+                target: name-ref #522 8579:240:36-8583:240:40 name="text"
+                arg: literal #523 8593:240:50-8596:240:53 value=string:" "
+          body: return-stmt #519 8546:240:3-8557:240:14
+            value: name-ref #518 8553:240:10-8557:240:14 name="text"
+      body: return-stmt #532 8600:241:3-8627:241:30 implicit
+        value: call #531 8600:241:3-8627:241:30 name="@2::one_line" piped=false
+          arg: call #530 8609:241:12-8626:241:29 name="JSON.encode" piped=false
+            arg: name-ref #529 8621:241:24-8625:241:28 name="text"
   module "std/utc.agc"
     declaration: struct-decl #14 778:12:8-1098:28:1 name="@3::Parts"
       field: field-decl #1 832:14:3-842:15:1 name="year" doc="The year; negative before year 0."

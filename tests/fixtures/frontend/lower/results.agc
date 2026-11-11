@@ -1,5 +1,5 @@
 def parse(text: String) -> Result[Int]
-  n = try text.to_int
+  n = try text.to_i
   if n < 0
     return error("negative")
   end

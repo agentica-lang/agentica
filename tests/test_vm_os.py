@@ -104,7 +104,7 @@ def main() -> Void
   p = Result.unwrap!(Process.spawn_captured("env", [], Process.Options(timeout_ms: 5000)))
   out = Result.unwrap!(Process.output(p, 10000))
   for line in out.stdout.split("\\n")
-    if line.starts_with?("AGENTICA_VM_METRICS") or line.starts_with?("OTHER_VARIABLE=")
+    if line.start_with?("AGENTICA_VM_METRICS") or line.start_with?("OTHER_VARIABLE=")
       puts(line)
     end
   end

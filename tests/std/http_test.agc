@@ -84,7 +84,7 @@ def main() -> Void
       try Test.eq(HTTP.text(undefined, windows).message, "http: invalid Windows-1252 at byte 1")
       try Test.eq(HTTP.text(Bytes.from_list([255, 254, 104, 0, 233, 0]).unwrap!, utf16).unwrap!, "hé")
       try Test.eq(HTTP.text("caf".bytes, koi8).ok?, false)
-      Test.eq(String.starts_with?(HTTP.text("caf".bytes, koi8).message, "http: charset koi8-r is not supported"), true)
+      Test.eq(HTTP.text("caf".bytes, koi8).message.start_with?("http: charset koi8-r is not supported"), true)
     end,
     Test.test("text reads the charset of the first Content-Type header") do
       type = "content-type"
@@ -166,7 +166,7 @@ def main() -> Void
       HTTP.close_client(pool)
       HTTP.close_server(server)
       try HTTP.wait(server)
-      try Test.eq(String.starts_with?(kept.message, "filesystem: cannot open file for writing"), true)
+      try Test.eq(kept.message.start_with?("filesystem: cannot open file for writing"), true)
       try Test.eq(try File.read_text("download-kept.bin", 5000), "old")
       Path.remove("download-kept.bin", 5000)
     end

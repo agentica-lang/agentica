@@ -6,7 +6,7 @@ enum Command[T]
 end
 
 def parse_command(line: String) -> Result[Command[Int]]
-  words = String.split(String.trim(line), " ")
+  words = String.split(line.strip, " ")
   if List.size(words) == 1
     word = List.at(words, 0)
     if word == "show"
@@ -17,7 +17,7 @@ def parse_command(line: String) -> Result[Command[Int]]
   end
   if List.size(words) == 2
     operation = List.at(words, 0)
-    amount_result = String.to_int(List.at(words, 1))
+    amount_result = List.at(words, 1).to_i
     case amount_result do
       Result.Ok(amount) ->
         if amount < 0 or amount > 1000000
@@ -47,16 +47,16 @@ def main() -> Void
         case command do
           Command.Credit(amount) ->
             balance = balance + amount
-            puts("balance: " + String.from_int(balance))
+            puts("balance: " + balance.to_s)
           Command.Debit(amount) ->
             if amount > balance
               puts("error")
             else
               balance = balance - amount
-              puts("balance: " + String.from_int(balance))
+              puts("balance: " + balance.to_s)
             end
           Command.Show ->
-            puts("balance: " + String.from_int(balance))
+            puts("balance: " + balance.to_s)
           Command.Reset ->
             balance = 0
             puts("balance: 0")
@@ -65,5 +65,5 @@ def main() -> Void
         puts("error")
     end
   end
-  puts("final: " + String.from_int(balance))
+  puts("final: " + balance.to_s)
 end

@@ -282,7 +282,7 @@ def test_the_combined_json_module_example_runs_through_the_cli(scratch):
 def test_imported_generic_enums_resolve_constructors_and_exhaustive_patterns(workspace, scratch):
     assert output_of(workspace, scratch, {
         "option.agc": "export enum Option[T]\n  Some(T)\n  None\nend\n\n",
-        "root.agc": "import Domain from \"option\"\ndef main() -> Void\n  value: Domain.Option[Int] = Domain.Option.Some(7)\n  case value do\n    Domain.Option.Some(item) ->\n      puts(String.from_int(item))\n    Domain.Option.None ->\n      puts(\"empty\")\n  end\n  empty: Domain.Option[String] = Domain.Option.None()\n  case empty do\n    Domain.Option.Some(item) ->\n      puts(item)\n    Domain.Option.None ->\n      puts(\"none\")\n  end\nend\n\n"}) == "7\nnone\n"
+        "root.agc": "import Domain from \"option\"\ndef main() -> Void\n  value: Domain.Option[Int] = Domain.Option.Some(7)\n  case value do\n    Domain.Option.Some(item) ->\n      puts(item.to_s)\n    Domain.Option.None ->\n      puts(\"empty\")\n  end\n  empty: Domain.Option[String] = Domain.Option.None()\n  case empty do\n    Domain.Option.Some(item) ->\n      puts(item)\n    Domain.Option.None ->\n      puts(\"none\")\n  end\nend\n\n"}) == "7\nnone\n"
 
 
 def test_help_does_not_know_the_internal_http_wire_builtins(scratch):

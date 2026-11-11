@@ -742,7 +742,7 @@ def parse_number(src: Src, pos: Int) -> Result[Parsed]
   if negative
     sign = "-"
   end
-  value = String.to_int(sign + digits)
+  value = (sign + digits).to_i
   return error(place(src, pos, "integer out of the 64-bit range")) if !value.ok?
   ok(Parsed(value: Value.Int(value.unwrap!), pos: stop))
 end
@@ -1022,7 +1022,7 @@ def float_text(x: Float) -> String
   elsif x == Float.from_bits(-4503599627370496)
     return "-inf"
   end
-  String.from_float(x)
+  x.to_s
 end
 
 def hex_digit(n: Int) -> String = String.slice("0123456789ABCDEF", n, 1)

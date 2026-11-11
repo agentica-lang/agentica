@@ -9,7 +9,7 @@ def classify(age: Int) -> String
 end
 
 def classify_text(text: String) -> Result[String]
-  age = try String.to_int(text)
+  age = try text.to_i
   ok(classify(age))
 end
 

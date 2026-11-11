@@ -69,7 +69,7 @@ export def gone?(message: String) -> Bool
   (
     message == "process: end of input" or
     message == "process: channel is closed" or
-    message.starts_with?("could not write to the stream")
+    message.start_with?("could not write to the stream")
   )
 end
 

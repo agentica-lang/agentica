@@ -58,7 +58,7 @@ export def line_text(lines: List[String], number: Int) -> String
   return "" if number < 1 or number > lines.size
 
   text = lines[number - 1]
-  return text.slice(0, text.length - 1) if text.ends_with?("\r")
+  return text.slice(0, text.length - 1) if text.end_with?("\r")
 
   text
 end

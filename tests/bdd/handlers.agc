@@ -6,7 +6,7 @@ end
 
 def expect_number(ctx: BDD.Context, args: List[String]) -> BDD.Context
   actual = Result.unwrap!(JSON.int(Result.unwrap!(BDD.get(ctx, "number"))))
-  return BDD.assert(ctx, actual == String.to_int!(args[0]), "wrong scenario value")
+  return BDD.assert(ctx, actual == args[0].to_i!, "wrong scenario value")
 end
 
 def expect_fresh(ctx: BDD.Context, args: List[String]) -> BDD.Context

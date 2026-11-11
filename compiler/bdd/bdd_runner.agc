@@ -176,7 +176,7 @@ end
 # `PLACE:LINE:COLUMN error[CODE]` and nothing after it.
 def diagnostic_header?(line: String) -> Bool
   marker = line.index_of(" error[")
-  return false if marker.none? or !line.ends_with?("]")
+  return false if marker.none? or !line.end_with?("]")
 
   place = line.slice(0, marker.unwrap!).split(":")
   code = line.slice(marker.unwrap! + 7, line.length - marker.unwrap! - 8)
@@ -186,7 +186,7 @@ def diagnostic_header?(line: String) -> Bool
 end
 
 def number?(text: String) -> Bool
-  text.length > 0 and text.to_int.ok? and !text.starts_with?("-") and !text.starts_with?("+")
+  text.length > 0 and text.to_i.ok? and !text.start_with?("-") and !text.start_with?("+")
 end
 
 def code_text?(text: String) -> Bool

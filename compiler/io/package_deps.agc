@@ -145,7 +145,7 @@ def sweep(workspace: Workspace.Workspace, deps: String) -> Result[Void]
 
   now = Time.now_ms() / 1000
   for entry in listed.unwrap!
-    if entry.name.starts_with?(".tmp-") or entry.name.starts_with?(".old-")
+    if entry.name.start_with?(".tmp-") or entry.name.start_with?(".old-")
       path = Paths.join(deps, entry.name)
       info = File.lstat(path, FS_TIMEOUT_MS)
       if info.ok? and now - info.unwrap!.modified_seconds > LEFTOVER_SECONDS

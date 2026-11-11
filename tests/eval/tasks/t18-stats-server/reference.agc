@@ -51,7 +51,7 @@ end
 
 def is_integer(text: String) -> Bool
   digits = text
-  if text.starts_with?("-")
+  if text.start_with?("-")
     digits = text.slice(1, text.length - 1)
   end
   if digits == ""
@@ -68,7 +68,7 @@ end
 
 def query_name(query: String) -> String
   for pair in query.split("&")
-    if pair.starts_with?("name=") && pair.length > 5
+    if pair.start_with?("name=") && pair.length > 5
       return pair.slice(5, pair.length - 5)
     end
   end
@@ -106,7 +106,7 @@ def handle(request: HTTP.Request) -> Result[HTTP.Response]
       return ok(not_allowed("GET"))
     end
     return ok(json_response(200, greeting(request.target)))
-  elsif path.starts_with?("/double/")
+  elsif path.start_with?("/double/")
     if request.method != "GET"
       return ok(not_allowed("GET"))
     end

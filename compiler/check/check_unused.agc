@@ -65,7 +65,7 @@ end
 export def value_text(cx: State.Cx, value: Ast.Expr) -> String
   span = Ast.expr_span(value)
   text = cx.texts.get(cx.file).unwrap_or("").slice(span.start.offset, span.stop.offset - span.start.offset)
-  return "..." if text.length > MAX_VALUE_TEXT or text.contains?("\n")
+  return "..." if text.length > MAX_VALUE_TEXT or text.include?("\n")
 
   text
 end
@@ -111,7 +111,7 @@ def unused_result?(value: Ast.Expr, resolved: Optional[State.Resolved], entry: O
   return false if entry.none?
 
   found = entry.unwrap!
-  found.effects.size == 0 and !takes_function?(found) and !found.name.ends_with?("!")
+  found.effects.size == 0 and !takes_function?(found) and !found.name.end_with?("!")
 end
 
 def struct_update?(value: Ast.Expr) -> Bool
@@ -144,7 +144,7 @@ end
 def unused_subject(name: String) -> String
   return "this expression" if name == ""
 
-  return name.split("::").last if name.starts_with?("@") and name.contains?("::")
+  return name.split("::").last if name.start_with?("@") and name.include?("::")
 
   name
 end

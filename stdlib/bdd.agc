@@ -166,7 +166,7 @@ end
 ## `AGENTICA_VM_METRICS`, `AGENTICA_VM_METRICS_FILE`, `UV_USE_IO_URING`) cannot be set.
 export def given_env(ctx: Context, name: String, value: String) -> Context
   not_started(ctx, "the environment")
-  if name == "" or name.contains?("=") or has_nul?(name) or has_nul?(value)
+  if name == "" or name.include?("=") or has_nul?(name) or has_nul?(value)
     halt(
       ctx,
       "RUNTIME-BDD-CONTEXT",
@@ -578,7 +578,7 @@ def compare_includes(ctx: Context, actual: String, expected: String) -> Context
   if expected == ""
     halt(ctx, "RUNTIME-BDD-CONTEXT", "the text an includes step looks for must not be empty")
   end
-  checked = Test.assert(actual.contains?(expected), "the output does not include the text")
+  checked = Test.assert(actual.include?(expected), "the output does not include the text")
   compare(ctx, checked, "text including #{expected.inspect}", actual.inspect)
 end
 

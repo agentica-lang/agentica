@@ -66,7 +66,7 @@ export def collect(parts: String, left_out: List[String]) -> Run
   merged: Map[String, Source] = {}
   broken: List[Broken] = []
   read_any = false
-  names = listed.unwrap!.filter do |name: String| name.ends_with?(".info") end.sort
+  names = listed.unwrap!.filter do |name: String| name.end_with?(".info") end.sort
   for name in names
     read = read_part("#{parts}/#{name}")
     if read.ok?
@@ -97,7 +97,7 @@ export def failed?(run: Run) -> Bool = run.problem != ""
 ## A path as the report names it: relative to the working directory when it is inside it.
 export def shown(path: String) -> String
   here = Path.cwd().unwrap_or("")
-  return path.slice(here.length + 1, path.length - here.length - 1) if here != "" and path.starts_with?("#{here}/")
+  return path.slice(here.length + 1, path.length - here.length - 1) if here != "" and path.start_with?("#{here}/")
 
   path
 end
@@ -109,7 +109,7 @@ export def parse(text: String) -> Result[List[Source]]
   open = false
   for line in text.split("\n")
     # TN (a test name) is valid LCOV that the VM does not write; it changes no count.
-    if line == "" or line.starts_with?("TN:")
+    if line == "" or line.start_with?("TN:")
       next
     elsif line == "end_of_record" and open
       found = found.push(current)
@@ -249,10 +249,10 @@ def with_field(source: Source, key: String, value: String) -> Result[Source]
   comma = value.index_of(",").unwrap_or(-1)
   return error("not an LCOV line: #{key}:#{value}") if comma < 0
 
-  number = try value.slice(0, comma).to_int
+  number = try value.slice(0, comma).to_i
   name = value.slice(comma + 1, value.length - comma - 1)
   if key == "DA"
-    count = try name.to_int
+    count = try name.to_i
     return ok(source.with(lines: source.lines.put(number, source.lines.get(number, 0) + count)))
   elsif key == "FN"
     return ok(add_function(source, Function(name: name, line: number, calls: 0)))

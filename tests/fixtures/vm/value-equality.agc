@@ -82,7 +82,7 @@ def main() -> Void
   puts("long ints #{ints == count_up(100)} #{ints == ints.set(99, -1)} #{ints == zeroed} #{zeroed == ints.set(40, 0)}")
   shared = "#{ints == ints.set(40, 40)} #{count_up(100).set(70, 1) == ints} #{ints.take(65) == count_up(65)}"
   puts("shared leaves #{shared}")
-  fs = ints.map do |i| Float.from_int(i) end
+  fs = ints.map do |i| i.to_f end
   with_nan = fs.set(70, nan)
   puts("long floats #{fs == fs} #{with_nan == with_nan} #{fs == with_nan} #{with_nan != fs.set(70, nan)}")
   points = {"a": Box(item: [1]), "b": Box(item: [2]), "c": Box(item: [3])}

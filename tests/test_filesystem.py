@@ -1012,7 +1012,7 @@ def test_file_replace_keeps_the_mode_writes_through_a_link_and_a_reader_never_se
     sealed.chmod(0o555)
     try:
         output = run_program("""def main() -> Void
-  puts(File.replace(System.args()[0], "lost".bytes).message.contains?(".agc-"))
+  puts(File.replace(System.args()[0], "lost".bytes).message.include?(".agc-"))
 end
 """, args=[kept])
         assert output == "true\n"

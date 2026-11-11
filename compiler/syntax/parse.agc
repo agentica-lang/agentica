@@ -9,7 +9,7 @@ def main() -> Void
   first_id = 0
   continuing = false
   for path in System.args()
-    if path.starts_with?("--first-id=")
+    if path.start_with?("--first-id=")
       first_id = path.slice(11, path.length - 11).to_i!
       next
     end

@@ -61,7 +61,7 @@ export def check(module: Modules.Module, modules: Map[String, Modules.Module], u
   for item in written.concat(of_blocks(module.program))
     if item.role == Role.Module
       libraries = libraries.push(item.name)
-    elsif item.name.contains?(".") or item.role == Role.Variant
+    elsif item.name.include?(".") or item.role == Role.Variant
       heads = heads.push(item.name.split(".")[0])
     end
   end
@@ -286,7 +286,7 @@ end
 # A type and its arguments. A bare name that is a type parameter in scope is no alias.
 def of_type(found: List[Written], type: Ast.TypeRef, parameters: List[String]) -> List[Written]
   out = found
-  if type.name.contains?(".") or !parameters.include?(type.name)
+  if type.name.include?(".") or !parameters.include?(type.name)
     out = out.push(Written(name: type.name, role: Role.Type, span: type.span, member: ""))
   end
 
@@ -352,7 +352,7 @@ def typed_name(found: List[Written], node: Ast.TypeName, parameters: List[String
     return of_type(found, Ast.TypeRef(id: node.id, name: node.name, args: node.args, span: node.span), parameters)
   end
 
-  return found if !node.name.contains?(".") and parameters.include?(node.name)
+  return found if !node.name.include?(".") and parameters.include?(node.name)
 
   found.push(Written(name: node.name, role: Role.Type, span: node.span, member: ""))
 end

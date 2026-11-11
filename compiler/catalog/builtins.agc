@@ -41,7 +41,7 @@ export OPAQUE_TYPES = Set.new(DATA_OPAQUE_TYPES)
 FAMILY_TYPE_NAMES = RECORDS.keys
   .concat(ENUMS.keys)
   .concat(DATA_OPAQUE_TYPES)
-  .filter do |name: String| name.contains?(".") and DATA_FAMILIES.include?(name.split(".")[0]) end
+  .filter do |name: String| name.include?(".") and DATA_FAMILIES.include?(name.split(".")[0]) end
 
 export FAMILY_TYPES = Set.new(FAMILY_TYPE_NAMES)
 
@@ -69,8 +69,8 @@ end
 ## The builtin families (builtins_data.agc), each with its members: Family.Member is a group of functions, the rows
 ## named Family.Member.fn, or a builtin type of that name. Members are sorted by name.
 export FAMILY_MEMBERS: Map[String, List[String]] = DATA_FAMILIES.reduce(EMPTY_FAMILIES) do |found, family|
-  functions = ENTRIES.keys.filter do |name: String| name.starts_with?("#{family}.") and name.split(".").size == 3 end
-  types = FAMILY_TYPE_NAMES.filter do |name: String| name.starts_with?("#{family}.") end
+  functions = ENTRIES.keys.filter do |name: String| name.start_with?("#{family}.") and name.split(".").size == 3 end
+  types = FAMILY_TYPE_NAMES.filter do |name: String| name.start_with?("#{family}.") end
   found.put(family, functions.concat(types).map do |name: String| name.split(".")[1] end.uniq.sort)
 end
 
@@ -82,7 +82,7 @@ export CALLABLE_NAMES = PUBLIC_NAMES.filter do |name|
   parts.size < 3 or (FAMILY_MEMBERS.has_key?(parts[0]) and !FAMILY_TYPES.include?("#{parts[0]}.#{parts[1]}"))
 end
 
-export BARE_NAMES = Set.new(ENTRIES.keys.filter do |name| !name.contains?(".") end)
+export BARE_NAMES = Set.new(ENTRIES.keys.filter do |name| !name.include?(".") end)
 
 ## The help for a builtin type that moved into a std-only family (MOVED_TYPES), written as the alias of the std module
 ## that re-exports it (LogEvent is Logger.Event now), or "" for another name.
@@ -108,7 +108,7 @@ end
 ## (LogRegistry.Event). After linking, a construction of that record and of a variant Event of the program's enum would
 ## be the same text, so the enum stays reserved; a struct or a type alias of the name is free.
 export def record_family?(name: String) -> Bool
-  STD_ONLY.has_key?(name) and RECORDS.keys.any? do |record| record.starts_with?("#{name}.") end
+  STD_ONLY.has_key?(name) and RECORDS.keys.any? do |record| record.start_with?("#{name}.") end
 end
 
 ## Whether a builtin record, enum or opaque type has this name (HttpWire.Request, LogRegistry.Level, HttpWire.Client).
@@ -468,7 +468,7 @@ end
 # True for "Enum.Variant" when the type is that builtin enum and the variant exists with no payload.
 def variant_fits?(type: Types.Type, name: String) -> Bool
   parts = default_variant(name)
-  if !name.contains?(".") or !Types.is?(type, "Enum") or Types.name(type) != parts[0] or !ENUMS.has_key?(parts[0])
+  if !name.include?(".") or !Types.is?(type, "Enum") or Types.name(type) != parts[0] or !ENUMS.has_key?(parts[0])
     return false
   end
 
@@ -484,7 +484,7 @@ end
 
 # "an" before a vowel, else "a".
 def article(word: String) -> String
-  return "an" if "AEIOU".contains?(word.slice(0, 1))
+  return "an" if "AEIOU".include?(word.slice(0, 1))
 
   "a"
 end

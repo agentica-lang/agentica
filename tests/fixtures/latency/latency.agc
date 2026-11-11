@@ -15,7 +15,7 @@ def sorter(n: Int) -> Int
 end
 
 def concat(n: Int) -> Int
-  big = String.join(List.repeat("x", n), "")
+  big = List.repeat("x", n).join("")
   small = "a"
   while true
     _t = small + big

@@ -68,7 +68,7 @@ end
 def main() -> Void
   args = System.args()
   copy_private(args[1], args[2] + "/child.agcb")
-  words = ["run", "--driver-pid", String.from_int(System.pid()), "--", args[2] + "/child.agcb", args[3], args[4]]
+  words = ["run", "--driver-pid", System.pid().to_s, "--", args[2] + "/child.agcb", args[3], args[4]]
   p = Result.unwrap!(Process.spawn_captured(args[0], words, Process.Options(timeout_ms: 5000)))
   puts(Result.unwrap!(Process.read_line(p, 20000)))
   puts(Result.unwrap!(Process.read_line(p, 20000)))

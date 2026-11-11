@@ -264,7 +264,7 @@ end
 
 # A file of the prelude is only a name in the program: no text, so no program can show its lines.
 def source_of(module: Linker.LinkedModule) -> Ir.SourceFile
-  return Ir.SourceFile(file: module.file, name: module.name, text: "") if module.file.starts_with?(PRELUDE_PREFIX)
+  return Ir.SourceFile(file: module.file, name: module.name, text: "") if module.file.start_with?(PRELUDE_PREFIX)
 
   Ir.SourceFile(file: module.file, name: module.name, text: module.text)
 end
@@ -277,7 +277,7 @@ def pin_prelude_spans(functions: List[Ir.Function], sources: List[Ir.SourceFile]
   pinned = Source.Span(start: start, stop: start)
   found: List[Ir.Function] = []
   for function in functions
-    if sources[function.file].file.starts_with?(PRELUDE_PREFIX)
+    if sources[function.file].file.start_with?(PRELUDE_PREFIX)
       body = function.body.map do |instr: Ir.Instr| pin_instr(instr, pinned) end
       found = found.push(function.with(body: body, span: pinned))
     else

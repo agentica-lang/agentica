@@ -12,7 +12,7 @@ def main() -> Void
     text = "#{round}: #{base}, #{base}"
     parts = text.split(", ")
     words = parts.map do |part|
-      part.trim.upcase
+      part.strip.upcase
     end
     joined = words.join(" | ")
     swapped = joined.replace("É", "e").downcase

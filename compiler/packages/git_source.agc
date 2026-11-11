@@ -58,13 +58,13 @@ export def device_name?(name: String) -> Bool = WINDOWS_DEVICES.include?(name.sp
 ## Why text is not the git URL of a package, or "". It is `https://host/owner/repo` or `https://host/owner/repo.git`:
 ## https only, a lowercase host with no port and no user name, and exactly an owner and a repository.
 export def git_problem(url: String) -> String
-  return "a git URL starts with #{HTTPS}" if !url.starts_with?(HTTPS)
+  return "a git URL starts with #{HTTPS}" if !url.start_with?(HTTPS)
 
   parts = identity(url).slice(HTTPS.length, identity(url).length - HTTPS.length).split("/")
   return "a git URL is #{HTTPS}host/owner/repo" if parts.size != 3
 
   host = parts[0]
-  if host == "" or host.starts_with?(".") or host.ends_with?(".") or host.contains?("..")
+  if host == "" or host.start_with?(".") or host.end_with?(".") or host.include?("..")
     return "the host of a git URL is a lowercase name such as github.com"
   end
 
@@ -73,7 +73,7 @@ export def git_problem(url: String) -> String
   end
 
   for segment in [parts[1], parts[2]]
-    if segment == "" or segment == "." or segment == ".." or segment.starts_with?("-")
+    if segment == "" or segment == "." or segment == ".." or segment.start_with?("-")
       return "the owner and the repository of a git URL are not empty, . or .. and do not start with -"
     end
 
@@ -81,7 +81,7 @@ export def git_problem(url: String) -> String
       return "the owner and the repository of a git URL hold only letters, digits, . _ and -"
     end
 
-    if segment.ends_with?(".") or WINDOWS_DEVICES.include?(segment.split(".")[0].downcase)
+    if segment.end_with?(".") or WINDOWS_DEVICES.include?(segment.split(".")[0].downcase)
       return "the owner and the repository of a git URL do not end in . and are not a Windows device name such as con"
     end
   end
@@ -114,13 +114,13 @@ export def subdir_problem(subdir: String) -> String
   for part in subdir.split("/")
     return "a subdir is folder names joined by /, with no empty part, no leading / and no final /" if part == ""
 
-    return "a subdir has no hidden folder and no . or .. part" if part.starts_with?(".")
+    return "a subdir has no hidden folder and no . or .. part" if part.start_with?(".")
 
     if !part.split("").all? do |letter| SEGMENT_CHARACTERS.include?(letter) end
       return "the folders of a subdir hold only letters, digits, . _ and -"
     end
 
-    if part.ends_with?(".") or WINDOWS_DEVICES.include?(part.split(".")[0].downcase)
+    if part.end_with?(".") or WINDOWS_DEVICES.include?(part.split(".")[0].downcase)
       return "the folders of a subdir do not end in . and are not a Windows device name such as con"
     end
 
@@ -167,7 +167,7 @@ end
 
 ## The URL without a final `.git`: two spellings of one repository have one identity.
 export def identity(url: String) -> String
-  return url.slice(0, url.length - 4) if url.ends_with?(".git")
+  return url.slice(0, url.length - 4) if url.end_with?(".git")
 
   url
 end

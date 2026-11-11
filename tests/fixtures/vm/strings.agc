@@ -34,6 +34,6 @@ def main() -> Void
   IO.print("io print\n")
   IO.warn("to stderr")
   IO.warn(42)
-  puts(String.from_int(-9223372036854775807 - 1))
-  puts(String.from_float(0.1 + 0.2))
+  puts((-9223372036854775807 - 1).to_s)
+  puts((0.1 + 0.2).to_s)
 end

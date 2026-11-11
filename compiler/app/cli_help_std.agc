@@ -28,7 +28,7 @@ USAGE = "usage: agentica help std/MODULE[.NAME] [--json]"
 ## starts with `std/`, with or without a trailing `--json`. No builtin name is written that way.
 export def asks?(words: List[String]) -> Bool
   rest = unflagged(words)
-  rest.size == 2 and (rest[1] == "std" or rest[1].starts_with?("std/"))
+  rest.size == 2 and (rest[1] == "std" or rest[1].start_with?("std/"))
 end
 
 ## Runs `agentica help std/...` for `words`, the words from `help` on, in the style `--json` or `--ai` gave in front of
@@ -173,7 +173,7 @@ def shortened(summary: String) -> String
   end
 
   head = sentence.slice(0, cut)
-  while head.ends_with?(":") or head.ends_with?(",") or head.ends_with?(";")
+  while head.end_with?(":") or head.end_with?(",") or head.end_with?(";")
     head = head.slice(0, head.length - 1)
   end
 

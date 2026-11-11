@@ -15,7 +15,7 @@ export def root(env: Env.Env) -> String
     return Paths.join(env.local_app_data, "agentica/cache/pkg") if Paths.absolute?(env.local_app_data, true)
 
     return ""
-  elsif env.xdg_cache_home.starts_with?("/")
+  elsif env.xdg_cache_home.start_with?("/")
     return Paths.join(env.xdg_cache_home, "agentica/pkg")
   elsif env.home != ""
     return Paths.join(env.home, ".cache/agentica/pkg")

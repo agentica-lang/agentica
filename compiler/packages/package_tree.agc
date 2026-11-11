@@ -143,7 +143,7 @@ end
 # normally let a tree hold `.` or `..`, but a fetch need not check objects: this is defence in depth.
 def safe?(parts: List[String]) -> Bool
   for part in parts
-    return false if part == "" or part == "." or part == ".." or part.contains?("\\") or part.contains?(":")
+    return false if part == "" or part == "." or part == ".." or part.include?("\\") or part.include?(":")
   end
 
   true

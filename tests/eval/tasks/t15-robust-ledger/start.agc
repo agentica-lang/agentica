@@ -16,7 +16,7 @@ def main() -> Void
   summary = Summary(balances: balances, total: 0)
   while !IO.eof?()
     line = IO.gets!().strip
-    if line == "" || line.starts_with?("#")
+    if line == "" || line.start_with?("#")
       next
     end
     summary = apply_line(summary, line)

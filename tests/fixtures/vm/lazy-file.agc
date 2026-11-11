@@ -17,7 +17,7 @@ end
 
 def parse_all(path: String) -> Result[Void]
   return lines(path).map do |line| line.strip end.each do |line|
-    n = try String.to_int(line)
+    n = try line.to_i
     puts("  #{n} + 1 = #{n + 1}")
     ok()
   end
@@ -49,7 +49,7 @@ def main() -> Void
   dir: String = System.args()[0]
   numbers = put(dir, "numbers.txt", "1\n2\n\n3\n")
   words = put(dir, "words.txt", "7\nx\n9\n")
-  long = put(dir, "long.txt", String.join(List.repeat("z", 2000), ""))
+  long = put(dir, "long.txt", List.repeat("z", 2000).join(""))
   bad = at(dir, "bad.bin")
   out = Result.unwrap!(File.open(bad, "write", 60000))
   Result.unwrap!(File.write_bytes(out, Bytes.from_list([97, 10, 255, 10]).unwrap!, 60000))

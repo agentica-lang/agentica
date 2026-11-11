@@ -308,7 +308,7 @@ end
 ## Whether the library of an extern block or of Native.load is a name the system loader searches for or an absolute
 ## path. A relative path would resolve against the working directory, while imports resolve against the source file:
 ## until a later phase decides, it is refused.
-export def library_name?(name: String) -> Bool = name != "" and (!name.contains?("/") or name.starts_with?("/"))
+export def library_name?(name: String) -> Bool = name != "" and (!name.include?("/") or name.start_with?("/"))
 
 def brace_help(form: String) -> String = "blocks have no braces: write \"#{form}\" ... \"end\""
 
@@ -1085,11 +1085,11 @@ def regex_node(token: Tokens.Token, ids: Int) -> Ast.Expr
   flags = token.lexeme.slice(body.length + 2, token.lexeme.length - body.length - 2)
   # In a fixed order, so /a/mi and /a/im are the same pattern, (?is)a.
   mapped = ""
-  if flags.contains?("i")
+  if flags.include?("i")
     mapped = "i"
   end
 
-  if flags.contains?("m")
+  if flags.include?("m")
     mapped = mapped + "s"
   end
 
@@ -2653,7 +2653,7 @@ def parse_resource(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], block
 
   after_free = try expect_c_name(e, after_colon, "the C name of the free function or C.Function")
   free = e.tokens[after_colon].lexeme
-  return error(c_name_failure(e, after_colon, free)) if free.ends_with?("?") or free.ends_with?("!")
+  return error(c_name_failure(e, after_colon, free)) if free.end_with?("?") or free.end_with?("!")
 
   return error(free_failure(e, after_colon, free)) if block.symbols.include?(free)
 
@@ -3000,7 +3000,7 @@ def parse_extern_function(
 ) -> Result[ExternAt]
   after_name = try Base.expect(e, pos + 1, "name", "a function name", true)
   name = e.tokens[pos + 1].lexeme
-  return error(c_name_failure(e, pos + 1, name)) if name.ends_with?("?") or name.ends_with?("!")
+  return error(c_name_failure(e, pos + 1, name)) if name.end_with?("?") or name.end_with?("!")
 
   after_open = try Base.expect(e, after_name, "left-paren", "\"(\"", false)
   params = try parse_parameters(e, after_open, ids, true)
@@ -3434,7 +3434,7 @@ end
 # PARSE-EXTERN-TYPE at a C type anywhere in a type of a native module function: a module takes and returns Agentica
 # values. The parser's nesting limit bounds the depth.
 def agentica_type(ref: Ast.TypeRef) -> Result[Void]
-  if ref.name.starts_with?("C.")
+  if ref.name.start_with?("C.")
     return error(
       Base.bail_span(
         "PARSE-EXTERN-TYPE",
@@ -3570,7 +3570,7 @@ end
 # PARSE-EXTERN-OUT: at the type for C.String and C.Bytes (who frees what C writes there is not known) and C.Function
 # (an out function pointer is a C.Pointer), and at the name for `result`, which the C result takes unless it is Void.
 def out_field(param: Ast.Param, taken: ExternType, result: String) -> Result[Ast.FieldDecl]
-  if taken.code.starts_with?("{")
+  if taken.code.start_with?("{")
     return error(
       Base.bail_span(
         "PARSE-EXTERN-OUT",
@@ -3642,7 +3642,7 @@ def record_name(name: String) -> String
   pieces = name.split("_").filter do |piece: String| piece != "" end
   words = pieces.map do |piece: String| piece.slice(0, 1).upcase + piece.slice(1, piece.size - 1) end
   joined = words.join("")
-  return "" if joined == "" or !"ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains?(joined.slice(0, 1))
+  return "" if joined == "" or !"ABCDEFGHIJKLMNOPQRSTUVWXYZ".include?(joined.slice(0, 1))
 
   joined
 end
@@ -3692,7 +3692,7 @@ def extern_type(ref: Ast.TypeRef, result: Bool, block: ExternBlock, ids: Int) ->
     )
   end
 
-  if code.starts_with?("{")
+  if code.start_with?("{")
     return ok(ExternType(code: code, type: ref, ids: ids))
   elsif code == "r" and result
     wrapped = Ast.TypeRef(id: ids, name: "Result", args: [ref], span: ref.span)

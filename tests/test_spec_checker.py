@@ -108,7 +108,7 @@ def test_only_an_fn_field_can_be_called_like_a_method(tmp_path):
 def test_pipe_calls_user_functions_and_builtins(tmp_path):
     bodies = (
         "  n: Int = 1 |> add(2) |> add(3)\n  puts(n)",
-        '  r: Result[Int] = " 4 ".trim |> parse()\n  puts(r.unwrap!)',
+        '  r: Result[Int] = " 4 ".strip |> parse()\n  puts(r.unwrap!)',
     )
     for body in bodies:
         assert_clean(PIPE_HELPERS + main_with(body), tmp_path)
@@ -125,7 +125,7 @@ def test_pipe_into_a_builtin_with_a_method_form_is_pipe_method(tmp_path):
     tried = (METHOD_PIPE_HELPERS + "def h() -> Result[String]\n  z = 1 |> try g() |> String.from_int()\n"
              "  return ok(z)\nend\n\n")
     cases = [
-        main_with('  s = "a,b"\n  xs = s.trim |> String.split(",")\n  puts(xs.size)'),
+        main_with('  s = "a,b"\n  xs = s.strip |> String.split(",")\n  puts(xs.size)'),
         main_with('  n = "a" + "b" |> String.length()'),
         METHOD_PIPE_HELPERS + main_with("  z = 1 |> f() |> String.from_int()"),
         tried + main_with("  puts(1)"),

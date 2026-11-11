@@ -14,7 +14,7 @@ end
 
 def main() -> Void
   puts(first_line("queue.agc"))
-  puts(first_line("prelude/list.agc").starts_with?("##"))
+  puts(first_line("prelude/list.agc").start_with?("##"))
   puts(first_line("bdd/gherkin.agc").length() > 0)
   # Only the exact path in stdlib/ names a source.
   for path in ["nope.agc", "queue", "std/queue.agc", "./queue.agc", "/queue.agc", "stdlib/queue.agc", ""]

@@ -72,7 +72,7 @@ end
 # folders. A root that cannot be resolved, or has a line feed in its path, has no plan.
 def planned(settings: Env.Settings, root: String) -> Result[Plan]
   real = try settings.workspace.real_path.call(root)
-  return error("the path has a line feed") if real.contains?("\n")
+  return error("the path has a line feed") if real.include?("\n")
 
   site = try CacheFiles.site(settings, real)
   user = try CacheFiles.own_user()
@@ -134,7 +134,7 @@ def read_entry(plan: Plan, key: String) -> Result[String]
   try CacheFiles.private_kind(path, "file", plan.user)
   text = try File.read_text(path, CacheFiles.IO_TIMEOUT_MS)
   wanted = "#{plan.head}\n"
-  return error("the entry is for another build or project") if !text.starts_with?(wanted)
+  return error("the entry is for another build or project") if !text.start_with?(wanted)
 
   ok(text.slice(wanted.length, text.length - wanted.length))
 end

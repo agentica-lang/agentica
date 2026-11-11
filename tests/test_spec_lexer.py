@@ -281,7 +281,7 @@ RUNS = [
      INC + program(MAIN, "  puts(1 |> inc())", "end"),
      "2\n"),
     ("function names take ? and ! with or without a space before the parentheses",
-     SUFFIX_DEFS + program(MAIN, '  s = "abc"', '  puts(String.contains?(s, "b"))',
+     SUFFIX_DEFS + program(MAIN, '  s = "abc"', '  puts(s.include?("b"))',
                            '  puts(String.contains? (s, "b"))', "  puts(ready?())", "  puts(save!(1)!=2)", "end"),
      "true\ntrue\ntrue\ntrue\n"),
     ("blank and comment lines emit NL without changing parsing",

@@ -4,7 +4,7 @@ def run_tool() -> Result[Void]
   puts(try Process.read_line(p, 5000))
   code = try Process.wait(p, 5000)
   Process.close(p)
-  return error("tool exited with code " + String.from_int(code)) if code != 0
+  return error("tool exited with code " + code.to_s) if code != 0
   ok()
 end
 

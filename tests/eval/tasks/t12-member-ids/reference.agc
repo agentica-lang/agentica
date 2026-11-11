@@ -27,7 +27,7 @@ def bad_command() -> Void
 end
 
 def valid_id(text: String, prefix: String) -> Bool
-  if !text.starts_with?(prefix) || text.length <= 2
+  if !text.start_with?(prefix) || text.length <= 2
     return false
   end
   digits = text.slice(2, text.length - 2)

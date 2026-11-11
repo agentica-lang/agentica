@@ -748,7 +748,7 @@ end
 # `name = name + value`: the token after the name tells them apart.
 def binding_doc(c: Context, node: Ast.Binding, forced: Bool) -> Docs.Doc
   at = token_index(c, node.name_span.start.offset) + 1
-  if at < c.tokens.size and c.tokens[at].kind.ends_with?("-assign")
+  if at < c.tokens.size and c.tokens[at].kind.end_with?("-assign")
     case node.value
       Ast.Expr.Binary(binary) ->
         operator = source(c, c.tokens[at].span)
@@ -1123,7 +1123,7 @@ def bare(c: Context, expr: Ast.Expr, bracketed: Bool) -> Docs.Doc
       call_doc(c, node)
     Ast.Expr.EnumConstructor(node) ->
       name = text("#{node.enum_name}.#{node.variant_name}")
-      return name if node.args.size == 0 and not source(c, node.span).ends_with?(")")
+      return name if node.args.size == 0 and not source(c, node.span).end_with?(")")
 
       Docs.Doc.Concat([name, arguments(c, node.args, Comments.key_of("EnumConstructor", node.span))])
     Ast.Expr.FunctionRef(node) -> text("&#{node.name}")
@@ -1176,7 +1176,7 @@ def atomic?(c: Context, expr: Ast.Expr) -> Bool
   return false if c.leading.get(key, []).size > 0 or c.trailing.get(key, []).size > 0
 
   case expr
-    Ast.Expr.Literal(node) -> not source(c, node.span).starts_with?("<<~")
+    Ast.Expr.Literal(node) -> not source(c, node.span).start_with?("<<~")
     Ast.Expr.Name(_) -> true
     Ast.Expr.TypeName(_) -> true
     Ast.Expr.FunctionRef(_) -> true
@@ -1208,7 +1208,7 @@ end
 # A literal as written. A heredoc keeps its opener here and its body after the line.
 def literal(c: Context, span: Source.Span) -> Docs.Doc
   written = source(c, span)
-  if written.starts_with?("<<~")
+  if written.start_with?("<<~")
     return Docs.Doc.Concat([text(written), Docs.Doc.After(c.heredocs.get(span.start.offset, []))])
   end
 
@@ -1218,7 +1218,7 @@ end
 # A string that cannot break, outside brackets: on the next line in parentheses when it does not fit after what comes
 # before it, as the repo writes a long message.
 def lone(doc: Docs.Doc, span: Source.Span, c: Context, bracketed: Bool) -> Docs.Doc
-  return doc if bracketed or source(c, span).starts_with?("<<~")
+  return doc if bracketed or source(c, span).start_with?("<<~")
 
   wrapped([doc], false)
 end
@@ -1936,7 +1936,7 @@ end
 # The last line of the `##` block that starts at `first`.
 def doc_last(c: Context, first: Int) -> Int
   last = first
-  while last < c.lines.size and c.lines[last].strip.starts_with?("##")
+  while last < c.lines.size and c.lines[last].strip.start_with?("##")
     last += 1
   end
 
@@ -1964,7 +1964,7 @@ def heredoc_bodies(lines: List[String], tokens: List[Tokens.Token]) -> Map[Int, 
   for token in tokens
     start = token.span.start
     opener = lines[start.line - 1].slice(start.column - 1, lines[start.line - 1].length - start.column + 1)
-    if opener.starts_with?("<<~") and not bodies.has_key?(start.offset)
+    if opener.start_with?("<<~") and not bodies.has_key?(start.offset)
       name = heredoc_name(opener)
       first = start.line + 1
       if resume_line > start.line
@@ -1993,7 +1993,7 @@ end
 
 def heredoc_name(opener: String) -> String
   at = 3
-  while at < opener.length and "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".contains?(opener.slice(at, 1))
+  while at < opener.length and "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".include?(opener.slice(at, 1))
     at += 1
   end
 

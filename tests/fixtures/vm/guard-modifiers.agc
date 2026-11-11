@@ -2,7 +2,7 @@
 
 def parse(text: String) -> Result[Int]
   return error("empty") if text.empty?
-  return text.to_int
+  return text.to_i
 end
 
 def first_big(xs: List[Int]) -> Int
@@ -33,7 +33,7 @@ def main() -> Void
   log("")
   log("shown")
   for line in ["# a", "b", "__END__", "c"]
-    next if line.starts_with?("#")
+    next if line.start_with?("#")
     break if line == "__END__"
     puts(line)
   end

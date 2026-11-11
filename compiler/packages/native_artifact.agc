@@ -85,13 +85,13 @@ export def canonical_member(member: String) -> Result[String]
   return error("a member is longer than 1024 bytes") if member.bytesize > NAME_LIMIT_BYTES
 
   path = member
-  if String.starts_with?(path, "./")
+  if path.start_with?("./")
     path = String.slice(path, 2, String.length(path) - 2)
   end
 
   return error("a member must name a file, not the root") if path == "" or path == "."
 
-  return error("a member must be a relative path") if String.starts_with?(path, "/")
+  return error("a member must be a relative path") if path.start_with?("/")
 
   for b in path.bytes
     return error("a member must not hold a NUL byte") if b == 0
@@ -197,12 +197,12 @@ export def resolve_location(current: String, location: String) -> Result[String]
   end
 
   parsed = try parse_url(current)
-  if String.starts_with?(bare, "//")
+  if bare.start_with?("//")
     checked = try parse_url(scheme_relative_url(parsed.scheme, bare))
     return ok(canonical_url(checked))
   end
 
-  if String.starts_with?(bare, "/")
+  if bare.start_with?("/")
     merged = split_query(bare)
     return ok("#{parsed.scheme}://#{parsed.authority}#{merged.before}#{merged.after}")
   end
@@ -282,7 +282,7 @@ def parse_url(url: String) -> Result[Parts]
   return error("the URL must start with http:// or https://") if scheme != "http" and scheme != "https"
 
   rest = String.slice(url, stop + 3, String.length(url) - stop - 3)
-  return error("the URL must not hold a fragment") if String.contains?(rest, "#")
+  return error("the URL must not hold a fragment") if rest.include?("#")
 
   slash = first_index(rest, "/")
   query = first_index(rest, "?")
@@ -292,11 +292,11 @@ def parse_url(url: String) -> Result[Parts]
 
   authority = String.slice(rest, 0, slash)
   target = String.slice(rest, slash, String.length(rest) - slash)
-  if not String.starts_with?(target, "/")
+  if not target.start_with?("/")
     target = "/#{target}"
   end
 
-  return error("the URL must not hold user info") if String.contains?(authority, "@")
+  return error("the URL must not hold user info") if authority.include?("@")
 
   for b in authority.bytes
     return error("the URL holds a bad authority") if b < 33 or b > 126
@@ -309,15 +309,15 @@ def parse_url(url: String) -> Result[Parts]
 end
 
 def split_authority(authority: String) -> Result[HostPort]
-  if String.starts_with?(authority, "[")
+  if authority.start_with?("[")
     close = first_index(authority, "]")
     return error("the URL holds a bad host") if close == String.length(authority)
 
     host = String.slice(authority, 1, close - 1)
-    return error("the URL holds a bad host") if not String.contains?(host, ":")
+    return error("the URL holds a bad host") if not host.include?(":")
 
     after = String.slice(authority, close + 1, String.length(authority) - close - 1)
-    return error("the URL holds a bad port") if after != "" and (after == ":" or not String.starts_with?(after, ":"))
+    return error("the URL holds a bad port") if after != "" and (after == ":" or not after.start_with?(":"))
 
     port = ""
     if after != ""
@@ -328,7 +328,7 @@ def split_authority(authority: String) -> Result[HostPort]
     return ok(HostPort(host: String.downcase(host), port: port))
   end
 
-  if String.contains?(authority, ":")
+  if authority.include?(":")
     colon = first_index(authority, ":")
     host = String.slice(authority, 0, colon)
     port = String.slice(authority, colon + 1, String.length(authority) - colon - 1)
@@ -351,7 +351,7 @@ def check_port(port: String) -> Result[Void]
     return error("the URL holds a bad port") if code < 48 or code > 57
   end
 
-  number = String.to_int!(port)
+  number = port.to_i!
   return error("the URL holds a bad port") if number < 1 or number > 65535
 
   ok()

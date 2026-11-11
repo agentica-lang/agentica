@@ -322,7 +322,7 @@ end
 ## a field would be written.
 export def reserved_name_at?(e: Env, pos: Int) -> Bool
   following = kind_at(e, pos + 1)
-  assigned = following == "assign" or following == "colon" or following.ends_with?("-assign")
+  assigned = following == "assign" or following == "colon" or following.end_with?("-assign")
   reserved?(e.tokens[pos]) and assigned
 end
 
@@ -346,7 +346,7 @@ end
 
 ## Whether a `string` token is a heredoc (25.10). The lexer gives a heredoc the lexeme of its opener, `<<~NAME`, and
 ## a string literal the lexeme of its quotes, so the parser tells them apart with no field on the token.
-export def heredoc?(token: Tokens.Token) -> Bool = token.lexeme.starts_with?("<<~")
+export def heredoc?(token: Tokens.Token) -> Bool = token.lexeme.start_with?("<<~")
 
 ## The literal value of an integer, float or string token.
 export def literal_value(token: Tokens.Token) -> Ast.LitValue
@@ -503,7 +503,7 @@ def too_deep(e: Env, pos: Int) -> String
   )
 end
 
-def decorated?(lexeme: String) -> Bool = lexeme.ends_with?("?") or lexeme.ends_with?("!")
+def decorated?(lexeme: String) -> Bool = lexeme.end_with?("?") or lexeme.end_with?("!")
 
 # A keyword token has its word as its kind.
 def reserved?(token: Tokens.Token) -> Bool = token.kind == token.lexeme and Lexer.keyword?(token.lexeme)

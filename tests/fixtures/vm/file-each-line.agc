@@ -17,7 +17,7 @@ def put_bytes(dir: String, name: String, bytes: List[Int]) -> String
 end
 
 def run(ch: String, n: Int) -> String
-  return String.join(List.repeat(ch, n), "")
+  return List.repeat(ch, n).join("")
 end
 
 def show(line: String) -> Result[Void]

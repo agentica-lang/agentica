@@ -212,7 +212,7 @@ def probe_member(
 
       case File.sha256(payload, left)
         ok(found) ->
-          return Probe.Present(payload) if text.trim == OpenSSL.Digest.hexencode(found)
+          return Probe.Present(payload) if text.strip == OpenSSL.Digest.hexencode(found)
 
           message = "the cached file is not the one its receipt names"
           Probe.Broken(fail(context, "PKG-HASH-MISMATCH", "member", message, ""))
@@ -438,14 +438,12 @@ def publish_member(
   extracted = extract_member(archive, canonical, dest, options, deadline)
   if !extracted.ok?
     message = Result.message(extracted)
-    if String.contains?(message, "member not found")
+    if message.include?("member not found")
       hint = "name a file the archive holds"
       return error(fail(context, "PKG-NATIVE-MISSING", "member", "the archive holds no file for the member", hint))
     end
 
-    if String.contains?(message, "timed out")
-      return error(fail(context, "PKG-FETCH", "", "the operation timed out", ""))
-    end
+    return error(fail(context, "PKG-FETCH", "", "the operation timed out", "")) if message.include?("timed out")
 
     help = "only plain, gzipped TAR and ZIP archives are supported"
     return error(fail(context, "PKG-NATIVE-ARCHIVE", "member", "the file is not a supported archive", help))

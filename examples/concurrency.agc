@@ -11,6 +11,6 @@ end
 def main() -> Void
   first = Task.spawn(&double, Work(value: 21, delay: 10))
   second = Task.spawn(&double, Work(value: 7, delay: 0))
-  puts(String.from_int(Task.await(first)))
-  puts(String.from_int(Task.await(second)))
+  puts(Task.await(first).to_s)
+  puts(Task.await(second).to_s)
 end

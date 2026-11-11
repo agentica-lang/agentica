@@ -1,7 +1,7 @@
 def main() -> Void
   counts: Map[String, Int] = {}
   while not IO.eof?()
-    line = String.trim(IO.gets!())
+    line = IO.gets!().strip
     if String.length(line) > 0
       for word in String.split(String.downcase(line), " ")
         if Map.has_key?(counts, word)
@@ -13,6 +13,6 @@ def main() -> Void
     end
   end
   for word in Map.keys(counts)
-    puts(word + " " + String.from_int(counts[word]))
+    puts(word + " " + counts[word].to_s)
   end
 end

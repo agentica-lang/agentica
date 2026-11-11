@@ -155,7 +155,7 @@ end
 
 # Whether the function has out parameters: one of the codes is a capital (no other code holds one).
 def record?(native: Ast.Native) -> Bool
-  native.codes.split("").any? do |code: String| "ABCDEFGHIJKLMNOPQRSTUVWXYZ".contains?(code) end
+  native.codes.split("").any? do |code: String| "ABCDEFGHIJKLMNOPQRSTUVWXYZ".include?(code) end
 end
 
 # The codes of the signature with the index of each struct after its {. The structs come in the order of their {: the C

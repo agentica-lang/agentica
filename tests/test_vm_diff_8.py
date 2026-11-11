@@ -326,7 +326,7 @@ def test_a_signal_caught_while_the_vm_is_blocked_is_not_lost_when_the_last_child
         tmp_path, "signal-pending",
         "def main() -> Void\n  p = Result.unwrap!(" + spawn + ")\n"
         "  puts(Result.unwrap!(Process.read_line(p, 60000)))\n  IO.flush()\n"
-        "  puts(String.join(List.repeat(\"x\", 1048576), \"\"))\n  puts(\"survived\")\nend\n")
+        "  puts(List.repeat(\"x\", 1048576).join(\"\"))\n  puts(\"survived\")\nend\n")
     arguments = [sys.executable, "import os,time;print(os.getpid(),flush=True);time.sleep(30)"] if windows else []
     # Nothing reads the VM's stdout after the first line, so its 1 MiB write blocks: the state under test.
     child = adopt(Child([*vm_command(), "--", bytecode, *arguments], env=vm_environment(),

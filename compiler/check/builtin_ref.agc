@@ -45,7 +45,7 @@ export def find(name: String) -> Found
   if parts.size == 2 and (entry.none? or !PUBLIC_NAMES.include?(name))
     # A method of a kind whose builtins live in another module: `&Json.get` is JSON.get.
     for candidate in PUBLIC_NAMES
-      if candidate.ends_with?(".#{parts[1]}") and RubyForm.method_key(candidate) == name
+      if candidate.end_with?(".#{parts[1]}") and RubyForm.method_key(candidate) == name
         return usable(ENTRIES[candidate], name, parts[1])
       end
     end
@@ -121,7 +121,7 @@ end
 # value, and no type variable (no generic builtin has the plain rule).
 def writable?(type: T.Type) -> Bool
   case type
-    T.Type.Opaque(name) -> !name.contains?(".")
+    T.Type.Opaque(name) -> !name.include?(".")
     T.Type.Task(_) -> false
     T.Type.Channel(_) -> false
     T.Type.Lazy(_) -> false
@@ -129,8 +129,8 @@ def writable?(type: T.Type) -> Bool
     T.Type.ATS(_, _) -> false
     T.Type.Unknown -> false
     T.Type.Var(_) -> false
-    T.Type.Struct(name, args) -> !name.contains?("@") and args.all? do |arg: T.Type| writable?(arg) end
-    T.Type.Enum(name, args) -> !name.contains?("@") and args.all? do |arg: T.Type| writable?(arg) end
+    T.Type.Struct(name, args) -> !name.include?("@") and args.all? do |arg: T.Type| writable?(arg) end
+    T.Type.Enum(name, args) -> !name.include?("@") and args.all? do |arg: T.Type| writable?(arg) end
     T.Type.Result(item) -> writable?(item)
     T.Type.Optional(item) -> writable?(item)
     T.Type.List(item) -> writable?(item)

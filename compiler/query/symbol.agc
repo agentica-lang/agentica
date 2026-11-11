@@ -188,7 +188,7 @@ def written_names(
         end
       end
     end
-  elsif module.key.starts_with?("std/") and module.key.ends_with?(".agc")
+  elsif module.key.start_with?("std/") and module.key.end_with?(".agc")
     out = out.push("#{module.key.slice(0, module.key.length - 4)}.")
   end
 
@@ -208,7 +208,7 @@ def of_item(file: String, item: Model.Item, prefix: String, name: String) -> Lis
   written = "#{prefix}#{item.name}"
   if written == name
     return [item_match(file, item)]
-  elsif !name.starts_with?("#{written}.")
+  elsif !name.start_with?("#{written}.")
     return []
   end
 

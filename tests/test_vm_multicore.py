@@ -2458,7 +2458,7 @@ def hand_on(up: Channel[Channel[Int]]) -> Result[Int]
 end
 
 def ended_middle(e: Ending) -> Result[Channel[Int]]
-  if e.kind.starts_with?("map")
+  if e.kind.start_with?("map")
     _results = Task.map([e.up], 1, 200, &hand_on)
     return e.up.recv(5000)
   end
@@ -2471,7 +2471,7 @@ end
 def ending(e: Ending) -> Result[Int]
   inner = try ended_middle(e)
   try e.down.send(inner, 5000)
-  if e.kind.ends_with?("crash")
+  if e.kind.end_with?("crash")
     return crash()
   end
   Task.sleep(60000)
@@ -2512,7 +2512,7 @@ def main() -> Void
       listener = TCP.listen("127.0.0.1", 0).unwrap!
       waiting = TCP.connect("127.0.0.1", TCP.local_port(listener), 5000).unwrap!
       owner = start(kind, listener)
-      if kind.starts_with?("cancel")
+      if kind.start_with?("cancel")
         Task.sleep(2)
         Task.cancel(owner)
       end
@@ -2525,7 +2525,7 @@ def main() -> Void
   end
   for kind in ["map-cancel", "map-crash", "middle-cancel", "middle-crash"]
     rounds = 100
-    if kind.starts_with?("map")
+    if kind.start_with?("map")
       rounds = 20
     end
     round = 0
@@ -2534,7 +2534,7 @@ def main() -> Void
       down: Channel[Channel[Int]] = Channel.new(1)
       owner = Task.spawn(&ending, Ending(kind: kind, up: up, down: down))
       inner = down.recv(5000).unwrap!
-      if kind.ends_with?("cancel")
+      if kind.end_with?("cancel")
         Task.cancel(owner)
       end
       _ = Task.await(owner)
@@ -3087,7 +3087,7 @@ HTTP_WAIT_BUSY = r"""import HTTP from "std/http"
 # round reverses 10,000 characters: real time in few steps, without parking, so the step budget of `agentica test`
 # lasts seconds with or without the JIT, far past the close (a loop of additions spent it in 3.5 ms under --jit on).
 def spin(request: HTTP.Request) -> Result[HTTP.Response]
-  port = String.to_int!(String.slice(request.path, 1, String.length(request.path) - 1))
+  port = String.slice(request.path, 1, String.length(request.path) - 1).to_i!
   signal = try TCP.connect("127.0.0.1", port, 5000)
   text = List.repeat("ab", 5000).join("")
   n = 0

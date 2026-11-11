@@ -32,7 +32,7 @@ end
 
 def parse_each(path: String) -> Result[Void]
   return File.each_line(path, 1024, 60000) do |line|
-    n = try String.to_int(line)
+    n = try line.to_i
     puts("  #{n} + 1 = #{n + 1}")
     ok()
   end
@@ -52,7 +52,7 @@ end
 
 def wait_each(path: String) -> Result[Void]
   return File.each_line(path, 1024, 60000) do |line|
-    n = try String.to_int(line)
+    n = try line.to_i
     Task.sleep(1)
     puts("  #{n} doubled by a task: #{Task.await(Task.spawn(&double, n))}")
     ok()
@@ -77,7 +77,7 @@ def main() -> Void
     puts("  saw #{line}")
     ok()
   end)
-  long = String.join(List.repeat("z", 2000), "")
+  long = List.repeat("z", 2000).join("")
   report("a line over the buffer ends the call", File.each_line(put(dir, "long.txt", long), 1024, 60000) do |_|
     ok()
   end)
