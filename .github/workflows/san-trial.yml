@@ -1,0 +1,58 @@
+name: san-trial
+
+# Temporary trial for #1380 (never merged): the ASan+UBSan binary on x86-64 and arm64 against HWASan+UBSan on arm64,
+# the same build, C tests and vm-sanitize-test modules in one job each.
+on:
+  push:
+    branches: [san-trial]
+
+permissions:
+  contents: read
+
+env:
+  AGENTICA_TEST_TIMEOUT_SCALE: '4'
+
+jobs:
+  trial:
+    name: ${{ matrix.kind }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            kind: address
+          - os: ubuntu-24.04-arm
+            kind: address
+          - os: ubuntu-24.04-arm
+            kind: hwaddress
+    env:
+      AGENTICA_REQUIRE_VM: '1'
+      AGENTICA_SWEEP: sampled
+      SANITIZE: '1'
+      SANITIZE_KIND: ${{ matrix.kind }}
+      HWASAN_OPTIONS: detect_leaks=0:allocator_may_return_null=1
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: ./.github/actions/setup
+        with:
+          sanitizers: 'true'
+      - name: Tools
+        run: |
+          clang --version; nproc; uname -r
+          command -v ccache || echo "no ccache"
+          ls "$(clang -print-resource-dir)"/lib/linux/ | grep -E 'hwasan|asan' || ls -R "$(clang -print-resource-dir)"/lib | grep -E 'hwasan|asan' || true
+      - name: Build
+        run: make -j"$(nproc)" vm-sanitize-build
+      - name: C tests
+        if: ${{ !cancelled() }}
+        run: make -j"$(nproc)" vm-test
+      - name: vm-sanitize-test, all modules
+        if: ${{ !cancelled() }}
+        run: make vm-sanitize-test
+      - name: ccache install time
+        if: ${{ !cancelled() && matrix.os == 'ubuntu-latest' }}
+        run: time sudo apt-get install -y --no-install-recommends ccache || { time sudo apt-get update; time sudo apt-get install -y --no-install-recommends ccache; }
