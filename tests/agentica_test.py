@@ -30,8 +30,9 @@ FIXTURES = TESTS / "fixtures"
 PYTHON = sys.executable
 
 # The programs the tests run keep their bytecode in a folder of this process (removed at its end), not in `_build/`
-# next to the fixtures. tests/test_bytecode_cache.py sets the variable itself where the cache is what it tests.
-_CACHE_DIR = tempfile.mkdtemp(prefix="agentica-test-cache-")
+# next to the fixtures. tests/test_bytecode_cache.py sets the variable itself where the cache is what it tests. Under
+# the run's temporary root when pytest set one (tests/temp_roots.py), so a killed run leaves it where the sweep goes.
+_CACHE_DIR = tempfile.mkdtemp(prefix="agentica-test-cache-", dir=os.environ.get("PYTEST_DEBUG_TEMPROOT"))
 os.environ.setdefault("AGENTICA_BUILD_DIR", _CACHE_DIR)
 atexit.register(shutil.rmtree, _CACHE_DIR, ignore_errors=True)
 
@@ -226,7 +227,7 @@ class TestCase(unittest.TestCase):
 
     def make_temp_dir(self, prefix="agentica-"):
         """A fresh directory, removed when the test ends (also after a failure)."""
-        path = Path(tempfile.mkdtemp(prefix=prefix)).resolve()
+        path = Path(tempfile.mkdtemp(prefix=prefix, dir=os.environ.get("PYTEST_DEBUG_TEMPROOT"))).resolve()
         self.addCleanup(shutil.rmtree, path, ignore_errors=True)
         return path
 
