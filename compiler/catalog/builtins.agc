@@ -9,6 +9,7 @@ import {
   ENUMS as DATA_ENUMS,
   FAMILIES as DATA_FAMILIES,
   HANDLE_TYPES,
+  MOVED_TYPES,
   OPAQUE_TYPES as DATA_OPAQUE_TYPES,
   RECORDS as DATA_RECORDS,
   RESERVED_TYPE_NAMES,
@@ -49,6 +50,8 @@ export RESERVED = Set.new(RESERVED_TYPE_NAMES)
 
 export STD_ONLY = STD_ONLY_IMPORTS
 
+export MOVED = MOVED_TYPES
+
 export PRELUDE: Map[String, Model.PreludeRow] = PRELUDE_ROWS.reduce(EMPTY_PRELUDE) do |found, row|
   found.put(row.name, row)
 end
@@ -80,6 +83,24 @@ export CALLABLE_NAMES = PUBLIC_NAMES.filter do |name|
 end
 
 export BARE_NAMES = Set.new(ENTRIES.keys.filter do |name| !name.contains?(".") end)
+
+## The help for a builtin type that moved into a std-only family (MOVED_TYPES), written as the alias of the std module
+## that re-exports it (LogEvent is Logger.Event now), or "" for another name.
+export def moved_type(name: String) -> String
+  return "" if !MOVED.has_key?(name)
+
+  parts = MOVED[name].split(".")
+  wrapper = STD_ONLY[parts[0]]
+  "#{name} is #{wrapper[1]}.#{parts[1]} now: import #{wrapper[1]} from \"#{wrapper[0]}\""
+end
+
+## The enum and the variant of a default written "Enum.Variant": the variant is after the last dot, so the enum may
+## be a member of a family (LogRegistry.Level.Info).
+export def default_variant(name: String) -> List[String]
+  parts = name.split(".")
+  variant = parts[parts.size - 1]
+  [name.slice(0, name.length - variant.length - 1), variant]
+end
 
 ## True when the name is Family.Member.fn, a function of a member of a builtin family.
 export def member_function?(name: String) -> Bool
@@ -424,8 +445,8 @@ end
 
 # True for "Enum.Variant" when the type is that builtin enum and the variant exists with no payload.
 def variant_fits?(type: Types.Type, name: String) -> Bool
-  parts = name.split(".")
-  if parts.size != 2 or !Types.is?(type, "Enum") or Types.name(type) != parts[0] or !ENUMS.has_key?(parts[0])
+  parts = default_variant(name)
+  if !name.contains?(".") or !Types.is?(type, "Enum") or Types.name(type) != parts[0] or !ENUMS.has_key?(parts[0])
     return false
   end
 
@@ -449,7 +470,7 @@ end
 # The enum of a default variant, or "".
 def variant_enum(value: Model.Default) -> String
   case value
-    Model.Default.Variant(name) -> name.split(".")[0]
+    Model.Default.Variant(name) -> default_variant(name)[0]
     _ -> ""
   end
 end

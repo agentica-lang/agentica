@@ -35,6 +35,6 @@ def main() -> Void
     Option.Some(n) -> puts(n)
     Option.None -> puts("none")
   end
-  level = LogLevel.Warning
+  level = TaskExit.Crashed
   puts(level.to_s)
 end

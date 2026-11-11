@@ -1,4 +1,4 @@
-struct LogEvent
+struct Bytes
   n: Int
 end
 

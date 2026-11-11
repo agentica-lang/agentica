@@ -288,7 +288,7 @@ export def lower_catalog_default(
       return ok(State.Out(fx: State.emit_const(made.fx, made.slot, Ir.Imm.Bytes(""), span), slot: made.slot))
     Model.Default.None -> return lower_enum(cx, fx, "Optional", "None", [], span, want, true)
     Model.Default.Variant(name) ->
-      parts = name.split(".")
+      parts = Builtins.default_variant(name)
       return lower_enum(cx, fx, parts[0], parts[1], [], span, want, false)
     Model.Default.Fields(name) ->
       return lower_struct(cx, fx, Ast.Construct(id: id, type_name: name, args: [], span: span), want)

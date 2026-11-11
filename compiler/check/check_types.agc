@@ -985,7 +985,7 @@ def place_enum(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Pla
   Placed(place: "", seen: seen)
 end
 
-# True for an enum the program declares: not a builtin one (JsonField, LogLevel ...), which JSON handles on its own or
+# True for an enum the program declares: not a builtin one (JsonField, TaskExit ...), which JSON handles on its own or
 # not at all.
 def user_enum?(cx: State.Cx, type: ResolvedType) -> Bool
   cx.enums.has_key?(Types.name(type)) and !ENUMS.has_key?(Types.name(type))

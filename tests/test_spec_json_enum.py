@@ -86,9 +86,9 @@ end
     ),
     (
         "encode refuses a builtin enum",
-        "def main() -> Void\n  puts(JSON.encode(LogLevel.Info))\nend\n",
+        "def main() -> Void\n  puts(JSON.encode(TaskExit.Ok))\nend\n",
         "CHECK-NOT-ENCODABLE",
-        "LogLevel.Info",
+        "TaskExit.Ok",
     ),
     (
         "decode refuses an enum with a payload that cannot be decoded",

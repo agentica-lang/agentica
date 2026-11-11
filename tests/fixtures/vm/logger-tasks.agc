@@ -1,6 +1,6 @@
 import Logger from "std/logger"
 
-def show(event: LogEvent) -> Void
+def show(event: Logger.Event) -> Void
   IO.warn("task #{event.task}: #{event.message} #{event.fields}")
 end
 
@@ -28,7 +28,7 @@ end
 
 def main() -> Void
   _ = Logger.detach("console")
-  _ = Logger.attach("lines", LogLevel.Info, &show)
+  _ = Logger.attach("lines", Logger.Level.Info, &show)
   tasks = [Task.spawn(&worker, 10), Task.spawn(&worker, 11), Task.spawn(&worker, 12)]
   for task in tasks
     puts(Task.await(task))
@@ -40,8 +40,8 @@ def main() -> Void
     puts(Task.await(task))
   end
 
-  _ = Logger.attach("lines", LogLevel.Info, &show)
-  _ = Logger.attach("boom", LogLevel.Error) do |event|
+  _ = Logger.attach("lines", Logger.Level.Info, &show)
+  _ = Logger.attach("boom", Logger.Level.Error) do |event|
     IO.warn("boom handler for #{event.message}")
     n = event.task - event.task
     IO.warn("#{1 / n}")

@@ -702,6 +702,11 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expe
 
   fields = cx.structs.get(name)
   if fields.none?
+    help = Help.foreign(cx.help, T.display_name(name))
+    if help == ""
+      help = Help.near(name, cx.structs.keys, [])
+    end
+
     return error(
       State.fail_maybe(
         cx,
@@ -709,7 +714,7 @@ def check_struct_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expe
         "CHECK-UNKNOWN-TYPE",
         "\"#{T.display_name(name)}\" is not a declared struct",
         node.span,
-        Help.near(name, cx.structs.keys, []),
+        help,
       ),
     )
   end

@@ -284,12 +284,14 @@ def first_function(member: String) -> String
   found.sort[0]
 end
 
-# A builtin record of a std-only module, such as HttpWire.Head: a type that only std/ can name, so it reserves no name
-# in user programs.
+# A builtin record or enum of a std-only module, such as HttpWire.Head or LogRegistry.Level: a type that only std/
+# can name, so it reserves no name in user programs (the std/ module may re-export it).
 def std_record?(alias: String, member: String, want: Want) -> Bool
+  name = "#{alias}.#{member}"
   case want
-    Want.Type -> STD_ONLY.has_key?(alias) and RECORDS.has_key?("#{alias}.#{member}")
-    _ -> false
+    Want.Type -> STD_ONLY.has_key?(alias) and (RECORDS.has_key?(name) or ENUMS.has_key?(name))
+    Want.Enum -> STD_ONLY.has_key?(alias) and ENUMS.has_key?(name)
+    Want.Function -> false
   end
 end
 
@@ -316,9 +318,8 @@ def function_wanted?(want: Want) -> Bool
 end
 
 def std_only_failure(cx: Context, alias: String, member: String, span: Source.Span) -> String
-  wrapper = STD_ONLY[alias]
-  help = "#{alias} is internal to #{wrapper[0]}; use import #{wrapper[1]} from \"#{wrapper[0]}\""
-  Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "unknown function \"#{alias}.#{member}\"", Failure.hint(help))
+  help = Failure.hint(Modules.std_only_help(alias))
+  Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "unknown function \"#{alias}.#{member}\"", help)
 end
 
 def alias_help(alias: String, member: String, hint: Bool) -> String
@@ -334,6 +335,8 @@ def alias_help(alias: String, member: String, hint: Bool) -> String
     return "an Optional is written some(value) or none"
   elsif alias == "Math"
     return "Math has only Math.sqrt; write pi as 3.141592653589793 and e as 2.718281828459045"
+  elsif Builtins.moved_type(alias) != ""
+    return Builtins.moved_type(alias)
   elsif RESERVED.include?(alias)
     return "#{alias} is a builtin name, so it is no import alias, and it has no such constant or type"
   elsif hint

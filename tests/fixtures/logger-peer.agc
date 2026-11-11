@@ -11,9 +11,9 @@ def main() -> Void
     puts(Logger.time_text(line.to_i!))
   end
 
-  Logger.set_level(LogLevel.Debug)
+  Logger.set_level(Logger.Level.Debug)
   _ = Logger.detach("console")
-  _ = Logger.attach("json", LogLevel.Debug, &Logger.stderr_json)
+  _ = Logger.attach("json", Logger.Level.Debug, &Logger.stderr_json)
   Logger.info("plain")
   Logger.warning("quote \" backslash \\ newline \n tab \t", {"k": "café"})
   Logger.err("unicode 世界 and DEL " + String.from_code(127))

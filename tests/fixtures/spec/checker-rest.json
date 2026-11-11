@@ -12187,7 +12187,7 @@
       "code": null
     }
   ],
-  "Std.source takes a path and gives a Result[String]; Std is a reserved type name": [
+  "Std.source takes a path and gives a Result[String]; a program may declare its own Std": [
     {
       "program": [
         "def main() -> Void",
@@ -12234,10 +12234,10 @@
         "end",
         "",
         "def main() -> Void",
+        "  puts(Std(name: \"mine\").name)",
         "end"
       ],
-      "code": "CHECK-REDEFINED-NAME",
-      "start": [1, 1]
+      "code": null
     },
     {
       "program": [
@@ -12258,16 +12258,6 @@
       "code": "CHECK-UNUSED-RESULT",
       "start": [2, 3],
       "covers": "Std.source(\"queue.agc\")"
-    },
-    {
-      "program": [
-        "import Std from \"./x\"",
-        "",
-        "def main() -> Void",
-        "end"
-      ],
-      "code": "CHECK-REDEFINED-NAME",
-      "start": [1, 1]
     }
   ],
   "Zlib compresses Bytes and Lazy streams of Bytes, with defaults": [

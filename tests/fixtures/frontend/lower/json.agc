@@ -19,7 +19,7 @@ end
 
 struct Skipped
   items: List[Item]
-  status: LogLevel
+  status: TaskExit
 end
 
 def main() -> Void
@@ -27,7 +27,7 @@ def main() -> Void
   puts(item.ok?)
   plain = JSON.decode("{}", Plain)
   puts(plain.ok?)
-  s = Skipped(items: [], status: LogLevel.Info)
+  s = Skipped(items: [], status: TaskExit.Ok)
   puts(JSON.encode(plain.unwrap!))
   puts(s.items.size)
 end

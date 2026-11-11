@@ -83,7 +83,7 @@ def stale_names(texts, declared=frozenset()):
             if len(namespace) == 1 or namespace in declared or namespace in IGNORED_NAMESPACES:
                 continue
             if second[0].isupper():
-                # Family.Member or Family.Member.fn; another Type.Name is an enum variant or a type (LogLevel.Info,
+                # Family.Member or Family.Member.fn; another Type.Name is an enum variant or a type (TaskExit.Ok,
                 # C.Pointer), which the checker owns.
                 member = "%s.%s" % (namespace, second)
                 if namespace in families and member not in members:
