@@ -7,6 +7,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 #endif
+#include <errno.h>
 #include <stdbool.h>
 #include <string.h>
 #include <stdlib.h>
@@ -111,6 +112,58 @@ static void exited(uv_process_t *p, int64_t status, int signal) {
    alive. Issue #410 (macOS arm64 only, a few runs in a hundred) ends with every byte written and the write side shut
    but no answer, no end of file and no exit: the child's phase and count, the bytes waiting at the parent's read end
    and, on macOS, the child's stack tell a lost end of file from a lost answer or a child that never read. */
+/* Experiment (#1392, never merged): the child's phase now. */
+static child_progress read_progress(const char *path) {
+  child_progress p = {CHILD_NOT_STARTED, 0};
+  FILE *f = fopen(path, "rb");
+  if (f) {
+    if (fread(&p, sizeof p, 1, f) != 1) p = (child_progress){CHILD_NOT_STARTED, 0};
+    fclose(f);
+  }
+  return p;
+}
+
+/* Experiment (#1392): after a hang, who holds which descriptor, and whether a second shutdown, then closing the
+   parent's last end, wakes the child. A child that wakes on the second shutdown lost the wakeup of the first. */
+static void probe_hang(link_state *s) {
+#ifndef _WIN32
+  char command[160];
+  snprintf(command, sizeof command, "lsof -w -a -p %d,%d -d 0-20 2>&1 | head -n 40 >&2", (int)uv_os_getpid(),
+           s->process.pid);
+  if (system(command) != 0) fprintf(stderr, "EXP lsof failed\n");
+#ifdef SO_NREAD
+  int pending = -1;
+  socklen_t size = sizeof pending;
+  if (getsockopt(s->read_fd, SOL_SOCKET, SO_NREAD, &pending, &size) != 0) pending = -1;
+  fprintf(stderr, "EXP parent read end fd %d: SO_NREAD %d\n", s->read_fd, pending);
+#endif
+  int rc = shutdown(s->read_fd, SHUT_WR);
+  fprintf(stderr, "EXP second shutdown(SHUT_WR) rc %d errno %d\n", rc, rc ? errno : 0);
+  for (int k = 0; k < 20; k++) {
+    child_progress p = read_progress(s->progress);
+    if (p.phase != CHILD_READING) {
+      fprintf(stderr, "EXP WOKE after the second shutdown: phase %lld after %d ms\n", p.phase, k * 100);
+      return;
+    }
+    uv_sleep(100);
+  }
+  fprintf(stderr, "EXP still reading 2 s after the second shutdown; closing the parent's read end\n");
+  close(s->read_fd);
+  for (int k = 0; k < 20; k++) {
+    child_progress p = read_progress(s->progress);
+    if (p.phase != CHILD_READING) {
+      fprintf(stderr, "EXP WOKE after the close: phase %lld after %d ms\n", p.phase, k * 100);
+      return;
+    }
+    uv_sleep(100);
+  }
+  fprintf(stderr, "EXP still reading 2 s after the close\n");
+  if (system(command) != 0) fprintf(stderr, "EXP lsof failed\n");
+#else
+  (void)s;
+#endif
+}
+
 static void expired(uv_timer_t *timer) {
   link_state *s = timer->data;
   fprintf(stderr,
@@ -136,6 +189,7 @@ static void expired(uv_timer_t *timer) {
   snprintf(command, sizeof command, "sample %d 1 2>&1 | head -n 60 >&2", s->process.pid);
   if (exit_status == -1 && system(command) != 0) fprintf(stderr, "pipe pair test: sample failed\n");
 #endif
+  if (exit_status == -1) probe_hang(s);
   if (exit_status == -1) uv_process_kill(&s->process, SIGKILL);
   remove(s->progress);
   exit(1);
@@ -190,7 +244,8 @@ static void probe(const char *self) {
   assert(chan_spawn(&loop, &s->process, self, "--child", s->progress, &ends, ends.child_count, false, 0, exited) == 0);
   assert(uv_timer_init(&loop, &s->deadline) == 0);
   s->deadline.data = s;
-  assert(uv_timer_start(&s->deadline, expired, DEADLINE_MS, 0) == 0);
+  const char *given = getenv("EXP_DEADLINE_MS");
+  assert(uv_timer_start(&s->deadline, expired, given ? (uint64_t)atoll(given) : DEADLINE_MS, 0) == 0);
   uv_unref((uv_handle_t *)&s->deadline);
 
   assert(uv_pipe_init(&loop, &s->to, 0) == 0);
