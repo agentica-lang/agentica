@@ -7,7 +7,7 @@
 ## C passes its version, path and whether it carries compiled BDD programs, and
 ## grants the std/ sources that it carries. An ordinary VM run, as `make` does
 ## for bootstrap stages, adds `--stdlib DIR`, so the front end reads std/ from
-## that folder (docs/future/35-self-hosting.md, 35.3).
+## that folder (docs/vm/08-loader-and-cli.md §9).
 
 import Host from "../io/host"
 import NativeWorkspace from "../io/native_workspace"

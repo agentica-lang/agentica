@@ -10,13 +10,8 @@ The network runs on Windows as on Linux: TCP, TLS and `std/http` (client and
 server) use the same libuv sockets and the same C helpers, with no Windows-only
 HTTP code.
 
-The release (`release.yml`, 11) builds one native archive per system on a
-runner of that system. Every binary links libgc, libuv, yyjson, picohttpparser,
-zlib and OpenSSL statically (the three `vendored` modes). The system libraries
-that remain are the C library of each system: glibc (at most 2.28 symbols),
-libSystem on macOS, and on Windows the system DLLs with the Universal C Runtime,
-which is part of Windows 10. `tools/release-check.sh` fails on a wrong
-architecture, a library outside that list or missing hardening.
+The release links every third-party library statically; the build modes and
+the release are in §11.
 
 Each submodule under `vm/third_party/` is pinned to a release commit and
 upgraded only by a reviewed PR; `git submodule status` shows the pin.
@@ -24,10 +19,9 @@ upgraded only by a reviewed PR; `git submodule status` shows the pin.
 - **C compiler:** C11, gcc or clang. Windows: MSYS2 UCRT64 gcc. No MSVC: it
   lacks `__builtin_*_overflow`, and one compiler family keeps one Makefile.
 - **libc:** dynamic. A static glibc breaks NSS, and macOS forbids a static libc.
-- **Boehm GC** (`bdwgc`): with `AGENTICA_GC=vendored` (the release, the
-  GC-stress build, and the default off Linux) `make` compiles its single-file
-  amalgamation (`extra/gc.c`) and links it statically. The Linux default,
-  `system`, links the distro's libgc 8.2.0 or newer dynamically (11).
+- **Boehm GC** (`bdwgc`): the vendored mode compiles its single-file
+  amalgamation (`extra/gc.c`); the system mode needs libgc 8.2.0 or newer
+  (§11).
 - **yyjson:** only the reader is built, with the writer, file API, JSON Pointer
   and extensions disabled. The reader does not recurse and is fuzzed on
   OSS-Fuzz. It allocates with `malloc` and holds no GC pointers. In the
@@ -47,14 +41,12 @@ upgraded only by a reviewed PR; `git submodule status` shows the pin.
   `$(VM_BUILD)/ffi/`, with the `ffi.h` and `fficonfig.h` that its configure
   script would write made by `mk/vm.mk`, and linked statically. Only
   `vm/ffi_libffi.c` includes `ffi.h`.
-- **zlib:** with `AGENTICA_ZLIB=vendored` (the release, and the default off
-  Linux) only the codec side is built, without configure and without the `gz*`
-  file API. The Linux default, `system`, links the distro's zlib 1.2.0 or newer
-  (11). Only `vm/zlib_codec.c` includes `zlib.h` (15.5).
-- **OpenSSL 3.5 LTS:** linked statically in the release
-  (`AGENTICA_OPENSSL=vendored`, 10.0); the default, `system`, links the system
-  OpenSSL 3.0 or newer dynamically, so a fresh checkout does not spend minutes
-  building OpenSSL. Only the adapter files (`vm/tls_openssl.c`,
+- **zlib:** the vendored mode builds only the codec side, without configure and
+  without the `gz*` file API; the system mode needs zlib 1.2.0 or newer (§11).
+  Only `vm/zlib_codec.c` includes `zlib.h` (15.5).
+- **OpenSSL 3.5 LTS** in the release; the system mode takes OpenSSL 3.0 or
+  newer, so a fresh checkout does not spend minutes building OpenSSL (§11,
+  10.0). Only the adapter files (`vm/tls_openssl.c`,
   `vm/digest_openssl.c`, `vm/tls_trust*.c`) include OpenSSL headers (10.3). A
   feature that only 3.5 has (Argon2id, `OSSL_set_max_threads`) is not always
   there: adding one means raising `OSSL_MIN` of `mk/vm.mk` and the `#error` in
@@ -77,11 +69,8 @@ and `NOTICE` with the third-party licenses.
 
 ### 10.0 Building and linking OpenSSL
 
-`AGENTICA_OPENSSL` picks `system` (the default) or `vendored` (the pinned
-submodule, statically). The stamp, the mode flags and the CI split are in §11.
-`vm/tls_openssl.c` stops with `#error` on an older OpenSSL or on LibreSSL. The
-release uses `vendored`, so the shipped VM needs only glibc's own libraries and
-runs on any glibc 2.28 system.
+The modes (`AGENTICA_OPENSSL`) are in §11. `vm/tls_openssl.c` stops with
+`#error` on an older OpenSSL or on LibreSSL.
 
 The vendored build (`mk/vm.mk`, `OSSL_OPTS`):
 
@@ -109,8 +98,6 @@ The vendored build (`mk/vm.mk`, `OSSL_OPTS`):
   reviewed change of its own.
 - Rejected: loading OpenSSL with `dlopen` only when a program uses TLS. It is
   more complex, and the static build costs only about 6 MB more.
-- `make vendored-check` fails if the binary loads OpenSSL, libgc or
-  `msys-2.0.dll`.
 
 ### 10.1 Event loop: libuv, not libevent
 

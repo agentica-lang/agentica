@@ -79,12 +79,11 @@ systems get none.
   error after a partial line returns the error, not the partial line. `wait`
   returns when the child has exited and its stderr is at EOF. A timed-out read
   or write closes the process. A timed-out `wait` leaves the child running.
-- **Stderr** is read all the time, and each chunk goes to the program's stderr
-  buffer at once, so it keeps its order with `IO.warn`. While that buffer holds
-  more than 64 KiB, the VM stops reading until it is down to 32 KiB: the child
-  waits on its pipe, and so does `wait`, but nothing else in the VM. If the
-  write fails (`/dev/full`, say), the rest is read and dropped, and the child is
-  kept.
+- **Stderr** is read all the time and forwarded to the program's stderr in
+  order with `IO.warn`, with the stop and resume bounds of §10.2.2 ("A child's
+  stderr"): the child waits on its pipe, and so does `wait`, but nothing else in
+  the VM. If the write fails (`/dev/full`, say), the rest is read and dropped,
+  and the child is kept.
 - **Close.** `Process.close`, a timed-out read or write, the end of the run
   (step 1 of §14.4) and a stop signal share one close: a running child gets
   `SIGKILL`, and libuv's exit callback reaps it (no `waitpid`, no sleep). A
@@ -153,14 +152,14 @@ systems get none.
   in milliseconds. A failed `SIGTERM` in `Process.close` is
   `RUNTIME-PROCESS-CLOSE`.
 
-**As built (the child channel).** Descriptors separate from stdin, stdout
+**The child channel.** Descriptors separate from stdin, stdout
 and stderr (two pipes, one per direction) carry the protocol of
 `agentica test` and of BDD children, so a test or a step program owns its own
 stdin and stdout. The builtins are in `vm/process.c`; the child side and the
 shared duplex stream are in `vm/duplex.c`, a service (`docs/vm/15-layers.md`),
 with the system part in `vm/duplex_os.h`. The signatures are in
-`site/content/library/io-and-system/process.md`. Every system uses a pipe per
-direction (below).
+`site/content/library/io-and-system/process.md`, with the user rules (lines,
+errors, limits, the half close); this section is the design behind them.
 
 - **A pipe per direction.** `agc_chan_pair` makes two pipes like the ones of
   stdin and stdout (`uv_pipe`; the child's ends blocking, the parent's ends
@@ -178,12 +177,8 @@ direction (below).
   The child's write end is not overlapped, so libuv queues writes to it on a
   worker thread: a child stuck in a large `parent_send` waits until the parent
   reads or closes the channel, as a child does with a full stdout pipe.
-- **Lines.** The stream is text lines in both directions, as in the other
-  `Process` streams: `\n` ends a line, a trailing `\r` is removed, and invalid
-  UTF-8 is an error. Unlike the other streams, a last line without `\n` is no
-  line: it gives `error("process: line cut off")`.
 - **Environment.** Every spawn builds the child's environment from the VM's own:
-  `AGENTICA_CHANNEL` is always removed, `UV_USE_IO_URING` is removed as before
+  `AGENTICA_CHANNEL` is always removed, `UV_USE_IO_URING` is removed
   (§10.2.2), and only `spawn_channel` adds `AGENTICA_CHANNEL=3,4`. So a parent
   that spawns without the pipes never passes an inherited marker on, and a
   grandchild sees neither the marker nor descriptors 3 and 4 unless
@@ -197,23 +192,23 @@ direction (below).
   `AGENTICA_VM_METRICS_FILE` are also removed from a child's environment
   (`metrics_env`), so a child VM or a BDD runner never fights for the metrics
   port or file; `System.env` still shows them to the program.
-- **Child start.** `agc_parent_take` runs in `agentica.c` before the program
-  does. The variable names the form, and a VM never guesses from another one.
-  For `3,4` on POSIX, `fstat` must say FIFO or socket for both descriptors and
-  `fcntl(F_GETFL)` must say 3 is open for reading and 4 for writing (or either
-  both ways, as node's socket pairs are). POSIX also takes `3`: one socket or
-  FIFO open both ways on descriptor 3, duplicated once (a parent that is not a
-  VM may pass it). The VM moves the descriptors with `F_DUPFD_CLOEXEC`, closes
-  the originals, forgets them in the table of inherited files (so no `File`
-  call can reach them), removes the variable from its own environment, and
-  keeps the streams until the end of the run. On Windows it takes only `3,4`,
-  with descriptor 3 a pipe that grants reading and 4 one that grants writing;
-  it duplicates both without inheritance and closes the originals. In any
-  other case, such as a regular file, a character device or a pipe the wrong
-  way round, nothing is touched (the descriptors stay as they were) and the
-  child-side builtins return `error("process: no parent channel")`. The libuv
-  handle is attached on first use, so a program that never uses the channel
-  never starts a read.
+- **Child start.** `agc_parent_take` runs from `agc_launch_vm` (`vm/launch.c`)
+  before the program does. The variable names the form, and a VM never guesses
+  from another one. For `3,4` on POSIX, `fstat` must say FIFO or socket for both
+  descriptors and `fcntl(F_GETFL)` must say 3 is open for reading and 4 for
+  writing (or either both ways, as node's socket pairs are). POSIX also takes
+  `3`: one socket or FIFO open both ways on descriptor 3, duplicated once (a
+  parent that is not a VM may pass it). The VM moves the descriptors with
+  `F_DUPFD_CLOEXEC`, closes the originals, forgets them in the table of
+  inherited files (so no `File` call can reach them), removes the variable from
+  its own environment, and keeps the streams until the end of the run. On
+  Windows it takes only `3,4`, with descriptor 3 a pipe that grants reading and
+  4 one that grants writing; it duplicates both without inheritance and closes
+  the originals. In any other case, such as a regular file, a character device
+  or a pipe the wrong way round, nothing is touched (the descriptors stay as
+  they were) and the child-side builtins return `error("process: no parent
+  channel")`. The libuv handle is attached on first use, so a program that never
+  uses the channel never starts a read.
 - **Locks and waits.** A parent-side `Process` has two more lock records,
   `channel.reader` and `channel.writer`, so a `channel_read_line` parked on a
   silent child blocks neither `Process.read_line` nor `send` (§14.1); the child
@@ -224,53 +219,33 @@ direction (below).
   the lock. `Process.parent_read_line(timeout_ms)` and
   `Process.parent_send(text, timeout_ms)` take a timeout like their parent-side
   twins; there is no untimed form.
-- **Timeouts and errors.** A timed-out `channel_read_line` or `channel_send`
-  closes the channel and only the channel: the process keeps running, so the
-  parent can still call `read_available`, `output`, `wait` and `close`. Later
-  channel calls return `error("process: channel is closed")`, on the child side
-  too. At the end of the child's output `channel_read_line` returns
-  `error("process: end of input")` (a reset peer counts as the end); a last
-  line that ends without its LF (the child exited or died in the middle of a
-  line) is not a line: it is dropped and `channel_read_line` returns
-  `error("process: line cut off")`, then the end of input; a line over
-  1 MiB closes the channel; `channel_send` takes at most 1 MiB. A cut of stdout
-  or stderr (more than 1 MiB unread, as in Reading) also wakes a pending
-  `channel_read_line`, and makes every later one that finds no complete line
-  fail with `error("process: output exceeds 1048576 bytes")`; lines already in
-  the buffer are still delivered first, and the channel stays open. So a child
-  that prints for ever, and never sends its record, is found at 1 MiB and not at
-  the runner's deadline. The error texts are in `vm/process.c` and
-  `vm/duplex.c`.
-- **Half close.** `channel_close(p, timeout_ms)` shuts the write side only
-  (`uv_shutdown`): the child reads the end of its input, and the parent can
-  still read what the child sends. It is idempotent, also after the peer has
-  exited: a `uv_shutdown` that fails on the spot (it gives `ENOTCONN` when the
-  peer is gone) is ignored, since the write side is closed either way.
-- **`read_available`.** Returns, as a `String`, the stdout the VM has captured
-  since the last call and consumes it. It never waits for more output:
-  `timeout_ms` bounds only the wait for the reader lock. Before it answers, it
+- **Timeouts and errors.** A timed-out channel read or send closes the channel
+  and only the channel: the process keeps running. A cut of stdout or stderr
+  (more than 1 MiB unread, as in Reading) also wakes a pending
+  `channel_read_line`, and every later one that finds no complete line fails;
+  lines already in the buffer are still delivered first, and the channel stays
+  open. So a child that prints for ever, and never sends its record, is found at
+  1 MiB and not at the runner's deadline. The error texts are in `vm/process.c`
+  and `vm/duplex.c`.
+- **Half close.** `channel_close` is the `uv_shutdown` of the first bullet. A
+  `uv_shutdown` that fails on the spot (`ENOTCONN` when the peer is gone) is
+  ignored, since the write side is closed either way.
+- **`read_available`** never waits for more output. Before it answers, it
   drains the stdout pipe with non-blocking reads, at most 2 MiB per call, so
   everything the child wrote to stdout before it wrote a channel line is in the
   text once that line has been read. That is the whole ordering rule between the
   two streams: a child that flushes its stdout before it sends a channel record
   (the VM does, in `Test.run` and in `BDD`) gets that output attributed to that
-  record. It returns `error("process: output exceeds 1048576 bytes")` once
-  stdout or stderr was cut (more than 1 MiB unread), and `error("process: output
-  is not captured")` on a `spawn` handle. Bytes that end in the middle of a
-  UTF-8 character (up to three) stay in the buffer for the next call, unless the
-  stream has ended or failed.
+  record. Bytes that end in the middle of a UTF-8 character (up to three) stay
+  in the buffer for the next call, unless the stream has ended or failed.
 - **Close.** The channel handle closes with the process (`shut`), after the
   pipes. A pending channel read or write wakes with
   `process: channel is closed`.
-- **`Test.run` and the BDD children** use the child side. `Test.run` must be
-  called from `main`'s own task (`vm->task == vm->rt->main`): a call from a test
-  or any other task is `RUNTIME-TEST-RUN`. After the name checks, a call with no
-  channel under `--agentica-test list|run` (`agc_parent_open`) is
-  `RUNTIME-TEST-RUN` too. In run mode, an index line that is not a plain index
-  naming a test, or that cannot be read as a UTF-8 line, is a
-  `RUNTIME-BDD-INFRA` fail record ("invalid test index") and exit 1. It flushes
-  stdout (`agc_drain`) before each record, then sends the record as one JSON
-  line with `agc_parent_send`. The core has no protocol mode: stdout is an
+- **`Test.run` and the BDD children** use the child side; the protocol is in
+  `docs/bdd.md`. `Test.run` checks `main`'s own task with
+  `vm->task == vm->rt->main` and the channel with `agc_parent_open`, flushes
+  stdout with `agc_drain` before each record, and sends it with
+  `agc_parent_send`. The core has no protocol mode: stdout is an
   ordinary stream and stdin is the program's. Nothing keeps a test from calling
   the child-side builtins, which can lose or add a line (accepted, as in the
   grammar's test rules); the only guard is that a second request in a direction

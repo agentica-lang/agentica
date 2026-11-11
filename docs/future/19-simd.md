@@ -15,15 +15,12 @@ measured faster than AVX2.
    `contains?`, `split`, `replace`), and ASCII `upcase`/`downcase`.
 2. The JSON encoder (`vm/json_value.c`): scanning a string for quotes,
    backslashes and control characters before escaping.
-3. Comparing and copying: call libc `memcpy`, `memcmp` and `memchr` in place of
-   hand-written byte loops. glibc already picks AVX2 or AVX-512 versions at run
-   time, so this needs no build change and can land at any time.
-4. Sorting `List[Int]` and `List[Float]` with an AVX-512 sort (for example
+3. Sorting `List[Int]` and `List[Float]` with an AVX-512 sort (for example
    Intel's x86-simd-sort, BSD-3-Clause, which fits the dependency policy).
    The unboxed Int and Float lists (`docs/vm/17-lists.md` §17.12) hold raw
    8-byte numbers, so a vector sort can work on them. Today
    `List.sort` sorts `(key, item)` entries with a scalar merge.
-5. HTTP head parsing: picohttpparser (`vm/http_pico.c`, behind
+4. HTTP head parsing: picohttpparser (`vm/http_pico.c`, behind
    `vm/http_parse.h`, `docs/vm/10-io-http.md` 10.6) has an SSE4.2 path that the
    baseline build leaves off. Enable it with run-time dispatch like the other
    routines, only if the server measurement shows time in header parsing.
@@ -40,8 +37,6 @@ flooding), and the GC.
   and kept in the read-only runtime data.
 - Opt-in flags for local builds skip the run-time choice:
   `make MARCH=x86-64-v3` (AVX2) or `MARCH=x86-64-v4` (AVX-512).
-- Every SIMD routine keeps its scalar version. The C tests and the differential
-  tests run both: a test-only switch forces the scalar path, so each path is
-  checked on the same inputs (non-ASCII text, invalid UTF-8, lengths around the
-  vector width).
+- Every SIMD routine keeps its scalar version, and the tests check both paths
+  on the same inputs.
 

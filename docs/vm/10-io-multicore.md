@@ -47,7 +47,7 @@ The multicore model (threads, queues and ownership) is in §16
   task got there, so for the job path the waker never writes the register; a
   retry park runs the builtin again. The re-check of the wait condition belongs
   to each builtin.
-- **Channels (17b).** A channel's waiter lists change under `rt->sync`, the one
+- **Channels.** A channel's waiter lists change under `rt->sync`, the one
   coarse lock (§16.9), never held across a park. Ring growth copies the slots
   under the lock: an accepted exception, bounded by the capacity and charged as
   turn cost. The lock orders the write of a value before its read on another

@@ -4,7 +4,7 @@
 ## give the type at a position with `type-at`, list the references to a name with `refs`, write the packages of the
 ## lock to deps/ with `install`, change the packages with `add` and `update`, or start the tests.
 ##
-## `run` takes everything it cannot know from outside (docs/future/35-self-hosting.md, 35.3, "Front-end inputs"): the
+## `run` takes everything it cannot know from outside (docs/vm/08-loader-and-cli.md §9, "Front-end inputs"): the
 ## settings (the Agentica version, the provider of the `std/` sources, the path of the binary that `agentica test`
 ## starts again), the words the user typed and `hand_off`, the function that runs a compiled program and gives back its
 ## exit status (front_end_cli.agc hands the bytes to C).
@@ -712,7 +712,7 @@ def start(session: Session, rest: List[String], bytes: Bytes) -> Int
 end
 
 # `--dump-ir`: the lowered program in the text form of lower_text.agc. It is not the `format-ir` of the former front
-# end, which dropped what the bytecode needs (the status note of step 8a in docs/future/35-self-hosting.md says why).
+# end, which dropped what the bytecode needs.
 def dump_ir(session: Session, source: String, front: Front.Checked) -> Int
   case Lowering.lower(front.linked, front.checked)
     Lowering.Lowered.Failed(problem) -> reject(session, problem, source, 1)

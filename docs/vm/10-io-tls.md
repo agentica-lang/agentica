@@ -156,9 +156,9 @@ reads no `openssl.cnf`, so both builds behave the same.
   peers in `tests/fixtures/` (certificates from
   `tests/fixtures/tls/make-certs.sh`).
 
-### 10.3.1 TCP (as built)
+### 10.3.1 TCP
 
-**As built.** `vm/tcp.c` holds the `TCP` builtins, on Linux, macOS and Windows;
+`vm/tcp.c` holds the `TCP` builtins, on Linux, macOS and Windows;
 other systems get none. `vm/stream.c` holds what they share with `vm/process.c`:
 the input buffer, the write path, the lock-or-timeout helper and the `network:`
 texts.

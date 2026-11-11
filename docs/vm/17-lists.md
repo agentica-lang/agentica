@@ -1,14 +1,11 @@
 ## 17. Faster lists: a persistent vector behind `List`
 
-**Status:** built: the API over the flat array, the trie behind it, and the
-unboxed leaves of Int and Float lists (§17.12). The code is `vm/list.c` and
-`vm/list_impl.h`.
+The code is `vm/list.c` and `vm/list_impl.h`.
 
 ### 17.1 Goal and non-goals
 
 **Goal.** `xs = xs.push(x)` in a loop costs O(n) in total, and `xs[i]`,
-`List.at` and `List.set` cost O(log32 n). The flat array copied the whole list
-on every `List.append` (numbers: `docs/vm-benchmarks.md`, "Lists").
+`List.at` and `List.set` cost O(log32 n).
 
 **Unchanged.** The `List` API and its meaning: no language change, builtin,
 opcode or `.agcb` change, and the same output, diagnostic codes, spans
@@ -73,12 +70,11 @@ HAMT (`HAMT_BITS 5`, `vm/map.c`). `struct agc_list` and the node types live in
   32, the whole trie at once: one array per branch level, then one array of the
   `tail_off(n)` items. The leaves are 32-item slices of that array, so a build
   makes about 15 allocations for a million items. Separate leaves took six times
-  as long as the flat array for a million items, which is why leaves are slices
-  (`docs/vm-benchmarks.md`, "Bulk builds and memory"). `finish` aborts unless
-  exactly n items were pushed; that is a C bug, not a program error. Every node
-  a builder writes was created by that builder after it began, so writing in
-  place is safe. A later `set` copies the leaf it changes, so the array lives as
-  long as a list shares one of its leaves.
+  as long as the flat array for a million items, which is why leaves are slices.
+  `finish` aborts unless exactly n items were pushed; that is a C bug, not a
+  program error. Every node a builder writes was created by that builder after
+  it began, so writing in place is safe. A later `set` copies the leaf it
+  changes, so the array lives as long as a list shares one of its leaves.
 - **Unknown count.** `filter`, and `Task.map` (results arrive out of order),
   fill a flat staging array and call `agc_list_from_array(items, n)` at the end,
   so the result is right-sized
@@ -195,26 +191,24 @@ vm-latency`, run alone, must still pass its 250 ms limit.
   `make vm-gc-stress`): every boundary length of §17.2, built both ways, with
   persistence of old versions, `slice`, `concat`, `reverse` and the shared
   leaves of `agc_list_repeat`. Golden: `tests/fixtures/vm/list-vector.agc`.
-- **Benchmark gates** (`make bench`; numbers in `docs/vm-benchmarks.md`;
-  programs `benchmarks/programs/list-build.agc` and `list-bulk.agc`): 160,000
-  pushes in a loop run in under 1 s, and 2n pushes take under 2.5 times as long
-  as n; bulk builds take at most 1.3 times the flat array's time; `maze-bfs` is
-  a no-regression check. Before blaming the list code for a loop slowdown, time
-  the program with another link layout: the same interpreter ran 15 to 20%
-  apart on loops with no list operation.
+- **Benchmark gates** (`make bench`; programs
+  `benchmarks/programs/list-build.agc` and `list-bulk.agc`): 160,000 pushes in a
+  loop run in under 1 s, and 2n pushes take under 2.5 times as long as n;
+  `maze-bfs` is a no-regression check. Before blaming the list code for a loop
+  slowdown, time the program with another link layout: the same interpreter ran
+  15 to 20% apart on loops with no list operation.
 
 ### 17.10 Decisions
 
-Decided on 2026-10-14: `append`, `set` and a small `concat` cost 0 turn units
+`append`, `set` and a small `concat` cost 0 turn units
 (§17.5); `list-build` is the gate of the list benchmark claim; `take`, `drop`
 and a large `concat` stay O(n) with no RRB (§17.11 says what shares leaves).
 
-### 17.11 Bulk operations after the trie
+### 17.11 Bulk operations
 
-Timing each operation on a million items against the flat array and CPython
-3.13 showed that the trie was cheap. The rest of the time went to the collector
-(a collection scans every live array of 16-byte values) and to per-item work in
-`sort` and `split` (`docs/vm-benchmarks.md`, "Bulk operations after the trie").
+The cost of bulk operations is in the collector (a collection scans every live
+array of 16-byte values) and in per-item work in `sort` and `split`, not in the
+trie.
 
 - **Shared leaves.** `builder_begin` can take the first leaves of another list
   instead of allocating them; only the branches (1.6% of the items) are rebuilt.
@@ -242,9 +236,9 @@ Timing each operation on a million items against the flat array and CPython
 
 ### 17.12 Unboxed numeric leaves
 
-Step 3 of the faster lists
-([§5.5](05-values-execution-builtins.md#55-why-a-value-is-16-bytes)). The owner
-decided on 2026-10-15 that the VM decides the kind, not the front end: the
+See also
+[§5.5](05-values-execution-builtins.md#55-why-a-value-is-16-bytes). The VM
+decides the kind, not the front end: the
 static types already say that a `List[Int]` holds only Ints, so the list code
 looks at the values it is given. Passing the checker's element type would need a
 new operand or builtin argument, a loader change, and a type for every list that
@@ -325,8 +319,8 @@ and the sort of Strings are unchanged.
 
 **Costs.** A numeric item takes 8 bytes instead of 16, so a list of at most 32
 items is 24 + 8k bytes. Step counts, turn costs and the `.agcb` format do not
-change. The numbers are in [`docs/vm-benchmarks.md`](../vm-benchmarks.md),
-"Unboxed numeric leaves".
+change. The boxed path has one more branch: a scattered `sort` of strings
+measured about 5% slower, which was accepted.
 
 **Left as it was.** `filter` still stages `agc_value`s before `from_array` packs
 the result. Registers, calls, structs, maps and Json values stay `agc_value`.

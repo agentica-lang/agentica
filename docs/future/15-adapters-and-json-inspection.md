@@ -1,8 +1,6 @@
 ## 15. JSON inspection
 
-Planned, with no issue yet: an enum form of `JSON.kind` for JSON of unknown
-shape. Calling `Fn` fields without `.call`, the JSON form of enums, generic
-structs and optional JSON fields are built.
+Issue #1115: an enum form of `JSON.kind` for JSON of unknown shape.
 
 ### 15.2 `JsonValue`
 

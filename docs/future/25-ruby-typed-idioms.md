@@ -4,34 +4,8 @@ Decisions behind the Ruby forms of the language. Built forms live in the
 grammar and the programming skill; planned ones live in their issue, with the
 spec below: standalone lambdas (§25.5, #979) and `format` (§25.11, #982).
 
-Agentica is "Ruby with types" for LLM agents. Accept a form when it is real Ruby
-(or a typed version of it) or makes Agentica consistent with itself, keeping
-static checking and immutable values. A form from another language is not
-accepted: its hint names the Agentica form. A newly accepted form is checked
-with a second model in an evaluation round. Two limits do not move: no OOP (no
-classes, inheritance or user methods on user types) and immutable values.
-
-**Principle: one way to do each thing.** Strictness wins, so agents are precise.
-A Ruby form is added only when it does not create a second way to write
-something the language already has; otherwise the parser or the checker gives a
-diagnostic whose help shows the canonical form.
-
-**Principle: no warnings.** A diagnostic is an error or it does not exist
-(`docs/grammar/07-diagnostics.md`). A warning means "wrong, but allowed", a
-second accepted way; agents ignore warnings; and each stage returns its output
-or exactly one diagnostic. A new check is an error with a stable code, and only
-when the case is almost always a mistake and the fix is local and mechanical.
-Nothing turns a check off: the discard `_` and a name that starts with `_` are
-the one way to drop a value or keep a name on purpose. Deprecation warnings may
-be considered only after 1.0.
-
-The test for a method or form: it fails when it only renames or negates an
-existing call, its callback, or a statement (an alias, `reject` for `filter`
-with `!`, `unless` for `if !`), or re-spells one call or statement. A method
-passes when the composition it replaces needs a loop, several calls, or a seed
-value or typed accumulator the caller would otherwise choose. So `sum`, `find`,
-`each_with_index`, `flat_map` and `Map.each` pass; `reject` and the `Range`
-Enumerable methods (each is `to_a` and then one `List` call) fail.
+The principles (Ruby with types, one way, no warnings, the method test) are in
+`docs/grammar/01-overview.md` §2.
 
 ### 25.5 Standalone lambdas
 
@@ -75,9 +49,7 @@ reserved word.
   `->(x) { ... }`, `lambda { |x| ... }`, `proc do ... end`, `Proc.new`, and
   `fn(x: Int) ...`.
 
-**Lowering:** the same closure as a block passed to a call; no VM change. The
-`getter`/`putter` helpers that adapters need today, because a block can only be
-the last argument of a call, go away.
+**Lowering:** the same closure as a block passed to a call; no VM change.
 
 ### 25.11 `format`
 
@@ -119,9 +91,9 @@ picks between literals.
 
 **Checker rules:**
 
-- `format` is checker-handled and variadic: a catalog entry in
-  `compiler/catalog/builtins_data.agc` covers the name reservation and
-  `agentica help format`. Only the function name is reserved: a user `def
+- `format` is checker-handled and variadic: a catalog entry covers the name
+  reservation and `agentica help format`. Only the function name is reserved: a
+  user `def
   format` is `CHECK-REDEFINED-NAME` (breaking); variables, parameters and fields
   named `format` stay valid.
 - The first argument must be a plain one-line string literal, without `#{...}`
@@ -135,35 +107,13 @@ picks between literals.
 - `sprintf(...)`, `"%d" % x` and `String.format(...)` get a help that shows
   `format(...)`.
 
-**Where the code lives.** Padding, decimal and hex text are Agentica code in the
-compiler prelude (`stdlib/prelude/format.agc`); lowering turns each call into a
-concatenation of the literal parts and one prelude call per conversion, so no
-format string is parsed at run time. One part is a builtin: the prelude-only
-`__float_fixed(x: Float, digits: Int) -> String` (digits 0 to 50, otherwise
-`RUNTIME-INVALID-COUNT`), because correct decimal rounding of a binary `Float`
-needs exact arithmetic (the VM calls `snprintf` with `%.*f`). Outside prelude
-modules it is `CHECK-UNKNOWN-NAME`.
-
-### 25.12 To evaluate later (Part B)
-
-None is planned. Each needs its own spec, a real program that asks for it, and
-must pass the one-way principle first.
-
-- **`then` and `tap`** (`x.then do |v| ... end`): methods on every type with a
-  generic result, which the method rule (methods come from the receiver type's
-  module) does not have. Needs a builtin rule for "any type" methods, as `to_s`
-  and `inspect` have.
-- **Safe navigation `&.`** (`user&.address&.city`): `nil` is not a value of
-  every type, so there is nothing to navigate; it would work on `Optional[T]`.
-  Open: whether a `T?` spelling comes at all, and how `&.` relates to
-  `Optional[T]` and to `JsonField`.
-- **Destructuring** (`a, b = pair`, block parameters `|(k, v)|`, multiple return
-  values). Tuples are issue #986. Open: whether lists can be destructured with
-  a length check.
-- **Declarative hygienic macros** (`macro_rules!`-style): only if real cases
-  appear that blocks, functions and the items above do not cover. If it ever
-  comes: expansion before the checker, hygienic names, spans at the call site,
-  and never procedural macros.
+**Format strings are not parsed at run time.** Padding, decimal and hex text
+are Agentica code in the compiler prelude, and each call becomes a
+concatenation of the literal parts and one prelude call per conversion. One
+part is a builtin, prelude-only (`CHECK-UNKNOWN-NAME` elsewhere): fixed-point
+text of a `Float` (digits 0 to 50, otherwise `RUNTIME-INVALID-COUNT`), because
+correct decimal rounding of a binary `Float` needs exact arithmetic (the VM
+calls `snprintf` with `%.*f`).
 
 ### 25.13 Decided against (Part C)
 
@@ -206,7 +156,7 @@ one exists.
 - **`unless` and modifiers on other statements** (`puts(x) if v`,
   `x += 1 if c`): second ways to write `if`. The parser gives
   `PARSE-UNEXPECTED-TOKEN`. Only `return`, `break` and `next` take an `if`
-  guard (#1288).
+  guard.
 - **New method aliases** (`select`, `collect`, `detect`, `inject`) and **second
   ways** (`reject`, the `Range` Enumerable methods, the block form of
   `each_slice`): each gets `CHECK-UNKNOWN-METHOD` (or `CHECK-BLOCK-TARGET`) with

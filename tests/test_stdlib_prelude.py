@@ -1,4 +1,4 @@
-"""The compiler prelude: methods written in Agentica in stdlib/prelude/ (25.6).
+"""The compiler prelude: methods written in Agentica in stdlib/prelude/ (docs/vm/03-ir-and-bytecode.md §4.7).
 
 Three checks cover the table and source files, avoid quadratic builtin use, and
 compare prelude behavior against Python peers on random lists and strings.

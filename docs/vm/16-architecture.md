@@ -1,9 +1,8 @@
 ## 16. VM architecture
 
-**Status:** decided by the owner on 2026-10-13. This is the one
-picture of the threads, the queues and who owns what. The VM runs one scheduler
-per logical core by default; with N = 1 the scheduler and the loop share one
-thread (§16.9).
+This is the one picture of the threads, the queues and who owns what. The VM
+runs one scheduler per logical core by default; with N = 1 the scheduler and the
+loop share one thread (§16.9).
 
 The model has one loop, one run queue and no home scheduler for a task. A BEAM
 style design (one loop, run queue and resource registry per scheduler, a home
@@ -82,8 +81,7 @@ in this model; §16.6 maps each to the component that enforces it.
   the `done` half, on a scheduler. The `done` half of a job, which builds GC
   values from those bytes, runs on the scheduler that resumes the task. TLS
   crypto runs on the I/O thread beside the socket state it reads and writes
-  (`vm/tcp.c`), so a slow handshake delays the loop. Moving it to the schedulers
-  is a later step (§16.10).
+  (`vm/tcp.c`), so a slow handshake delays the loop (§16.10).
 - **No dispatcher thread.** Schedulers pull work; nobody pushes a task at a
   chosen scheduler.
 
@@ -106,10 +104,9 @@ the end it returns NULL even if tasks are left: the run is over. The rules:
   This holds for the push path only. A waker that finds the task still PARKING
   does not push (§10.2.3). There the state CAS from PARKING to WOKEN must be
   `acq_rel`, so the task sees the outcome (§16.5) and what else the waker wrote.
-- **Single-consumer queues** (the I/O thread's inbox, and one inbox for each I/O
-  thread if there are K of them, §16.10) are taken whole in one lock (`first =
-  last = NULL`). The consumer handles the whole list in that turn, outside the
-  lock. It keeps no remainder.
+- **Single-consumer queues** (the I/O thread's inbox) are taken whole in one
+  lock (`first = last = NULL`). The consumer handles the whole list in that
+  turn, outside the lock. It keeps no remainder.
 - **The global run queue has N consumers**, so a scheduler pops one task under
   the lock, never the whole list and never a batch. Taking more would leave the
   other schedulers idle with work waiting.
@@ -162,7 +159,7 @@ needs backpressure.
 
 ### 16.5 Ownership and lifetime
 
-The rules below are invariants (§16.11 lists what is open).
+The rules below are invariants (§16.11 gives the choices behind some of them).
 
 - **A job is `malloc` memory owned by a GC resource.** `start_job` in
   `vm/loop.c` allocates it with its `uv_work_t` and `uv_timer_t`, and registers
@@ -239,7 +236,7 @@ so a task can have two wakers at once.
   under that task's lock (§10.2.3).
 - **Stdin read that another task already started:** woken by the scheduler that
   ends that read's job. The list is the input's FIFO, under `rt->sync`.
-- **Channel** (`send` or `recv`, 17b): woken by the scheduler of the task that
+- **Channel** (`send` or `recv`): woken by the scheduler of the task that
   sends, receives or closes. Also ended by the deadline (a timer) or by a
   cancel. The list is the channel's waiter lists, under `rt->sync`.
 
@@ -307,7 +304,7 @@ talking to each other.
   §16.10). A wake crosses threads (a push and a condvar signal before a
   scheduler runs the task); with `--schedulers 1` there is no hop.
 
-### 16.9 As built
+### 16.9 The model in the code
 
 At N = 1 the model is almost what exists: tasks, turns, jobs with their
 `agc_io_kind` halves, detached jobs, the handle lock FIFO, the owners and the
@@ -607,23 +604,16 @@ one exit path are as in §16.1 to §16.6. What differs:
   registers are in §10.2.3, GC.
 - **The exit path runs on the I/O thread** (`agc_launch_end`, `vm/launch.c`).
 
-### 16.10 Later iterations
+### 16.10 Decided against
 
-Only if measurements ask for them (no issue). Wakes with the single global run
-queue already use a runnext slot and a short spin (§16.9, "Wakes between
-schedulers").
+K I/O threads, per-scheduler run queues with work stealing, and TLS crypto on
+the schedulers: not planned unless a measurement shows one is needed (#1114).
+Wakes with the single global run queue use a runnext slot and a short spin
+(§16.9, "Wakes between schedulers").
 
-- **K I/O threads**, K configurable. Each handle is fixed to one loop when it is
-  created, with one inbox per I/O thread; ready tasks still go to the global run
-  queue.
-- **Per-scheduler local queues with work stealing.** Wakes then go to a global
-  inject queue.
-- **TLS crypto on the schedulers.** It runs on the I/O thread with the socket
-  state (§16.2), so a TLS-heavy server can make the loop its limit.
+### 16.11 Decisions
 
-### 16.11 Open
-
-Decided and built, with the rule that holds:
+Each with the rule that holds:
 
 - **Detached jobs** (§16.9, §10.2.2). A cancelled outcome counts as detached:
   the task gives up the wait, the job has no owner and runs to its end
@@ -650,19 +640,3 @@ Decided and built, with the rule that holds:
   owns a connection's `agc_conn.in` and its request slots (a process's too); a
   read request gets its line or bytes as a `malloc`'d copy cut on the I/O
   thread.
-
-Open:
-
-- At N > 1 a read of bytes that are already buffered still posts a request, and
-  how the schedulers lock `rt->in` between them is open (stdin is appended to
-  `rt->in.buf` on a scheduler, §16.2). On the polled file path, `expired` moves
-  `o->st->buf` while the I/O thread may still run `ready`, `step` and
-  `send_rest`, so the poller pause must complete first.
-- **The blocking fallback at the end of the run.** What stays open is the
-  blocking fallback (one scheduler only, §16.9, "`--schedulers N`"). A scheduler
-  can be blocked in a stdout write that holds the stream lock (a full pipe),
-  while the I/O thread's flush of that stream waits for the same lock. The
-  second stop signal is one way out (the write gets `EINTR`, §14.4), but a
-  process signal may not be delivered to that thread. Another is `pthread_kill`
-  on the schedulers. Whether the flush takes the lock with a limit is open.
-  Streams on the loop do not have this problem (§10.2.2).

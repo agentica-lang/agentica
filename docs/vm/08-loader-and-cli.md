@@ -17,9 +17,8 @@ branch.
   file ends right after the entry. The exception is the front end that the
   single binary loads itself (the carried one, or the file of `--front-end`):
   its Agentica version may differ, and every other check applies to it. The
-  format version is the binary's (6) or, until `bootstrap/stage0.agcb` is
-  refreshed, the previous one (5, with no prelude flag), which the first binary
-  of the bootstrap still writes.
+  format version is the binary's (6) or the previous one (5, with no prelude
+  flag, §4.6).
 - **Strings**: valid UTF-8 with no surrogates. Character counts are computed.
 - **Spans**: the source exists, `start <= end`, and each line is within the
   source's line count and each column within the line's length plus 1.
@@ -178,10 +177,8 @@ driver of `agentica test`, for the runner and the programs under test.
   that VM's child end, on all three.
 - On a break (`SIGINT`, `SIGTERM` or `SIGHUP` to the process that runs
   `agentica test`), `agc_launch_settle` calls `agc_processes_stop`
-  (`vm/process.c`) before anything else (14.4). A child that the driver started
-  with `Process.spawn_captured` gets `SIGTERM`, and `SIGKILL` if it is still
-  running after a grace of 1 second (`GRACE_MS`); the stop then waits at most 1
-  more second (`REAP_MS`). A plain child gets `SIGKILL` at once. Ctrl-C also
+  (`vm/process.c`) before anything else (14.4), which stops the children as
+  §10.4 ("Close") says. Ctrl-C also
   reaches the children, which end on that first signal without the file flush;
   the driver sends no second signal of its own, so its flush is not cut short
   (10.2.2). Last, the process flushes and raises the signal again with its
