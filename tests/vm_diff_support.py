@@ -23,6 +23,7 @@ import tempfile
 import unittest
 
 import pytest
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
 
@@ -57,6 +58,7 @@ SWEEP_MODE = os.environ.get("AGENTICA_SWEEP", "")
 if SWEEP_MODE not in ("", "full", "sampled", "ends"):
     raise RuntimeError("AGENTICA_SWEEP must be full, sampled or ends, not %r" % SWEEP_MODE)
 SAMPLED_SWEEP = SWEEP_MODE == "sampled"
+SWEEP_WORKERS = int(os.environ.get("AGENTICA_SWEEP_WORKERS", "4"))
 # Fixtures whose every run is costly (1000 file rounds; fixed sleeps): they get the `ends` sweep in every mode but
 # full (the weekly sweep and the release), as the stop of a Task.map and of an HTTP client under --max-steps is swept by
 # task-map-steps and http-client; only the full sweep stops a Task.map item that holds a buffered file.
@@ -345,17 +347,13 @@ def run_fixture_vm(fixture, bytecode, limit, work):
     return unfixture(result)
 
 
-def vm_batch(fixture, bytecode, option_lists, work):
+def vm_batch(fixture, bytecode, option_lists, work, workers=SWEEP_WORKERS):
     """Run the VM once for each list of options, with the fixture's stdin as a file; after the first run that hangs
     (124 or 137) the others are skipped and reported as 124."""
-    results = []
-    hung = False
     stdin_path = Path(work) / "stdin"
     stdin_path.write_bytes(fixture.input)
-    for options in option_lists:
-        if hung:
-            results.append((124, "", ""))
-            continue
+
+    def run_one(options):
         directory = fresh_tmp(work) if fixture.uses_tmp else None
         try:
             args = tmp_args(fixture, directory) if directory else fixture.args
@@ -366,8 +364,16 @@ def vm_batch(fixture, bytecode, option_lists, work):
         finally:
             if directory:
                 shutil.rmtree(directory, ignore_errors=True)
-        if result[0] == TIMEOUT:
-            result = (124, "", "")
+        return (124, "", "") if result[0] == TIMEOUT else result
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        raw = list(pool.map(run_one, option_lists))
+    results = []
+    hung = False
+    for result in raw:
+        if hung:
+            results.append((124, "", ""))
+            continue
         hung = result[0] in (124, 137)
         results.append(unfixture(result))
     return results
@@ -576,7 +582,8 @@ def check_fixture(program, work):
     results = vm_batch(
         fixture, bytecode,
         [style_options("json")] + [style_options(style) for style in text_styles]
-        + [limit_options(limit) + style_options("json") for limit in limits], work)
+        + [limit_options(limit) + style_options("json") for limit in limits], work,
+        1 if name in KERNEL_TIMED_FIXTURES else SWEEP_WORKERS)
     seen = outcome(results[0])
     assert seen == full, "%s\n  got:      %r\n  expected: %r" % (name, seen, full)
     for style, on_vm in zip(text_styles, results[1:]):
