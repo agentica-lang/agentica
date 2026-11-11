@@ -110,7 +110,13 @@ def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Ty
       end
 
       takes = takes_block?(cx, found.name, found.args.size)
-      try lambda_block(cx, out.st, takes, T.display_name(found.name), found.args, skip)
+      name = T.display_name(found.name)
+      if found.args.size - skip == 1 and !name.contains?(".")
+        # A function of the program keeps its parentheses before a block: run() do ... end.
+        name = "#{name}()"
+      end
+
+      try lambda_block(cx, out.st, takes, name, found.args, skip)
       ok(out)
     Ast.Expr.EnumConstructor(found) ->
       Calls.check_enum_constructor(
@@ -134,7 +140,7 @@ def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Ty
     Ast.Expr.MethodCall(found) ->
       out = try Methods.check_method(cx, st, found, expected)
       takes = method_takes_block?(cx, out.st, found)
-      try lambda_block(cx, out.st, takes, ".#{found.name}", found.args, 0)
+      try lambda_block(cx, out.st, takes, receiver_text(cx, found.target) + ".#{found.name}", found.args, 0)
       ok(out)
     Ast.Expr.Typed(found) -> ok(State.Out(st: st, type: found.type))
     Ast.Expr.BlockLit(found) -> check_block_lit(cx, st, found, expected)
@@ -370,6 +376,14 @@ def lambda_block(
       )
     _ -> ok(true)
   end
+end
+
+# The receiver of a method call as the source writes it, for a help; "" when it is long or spans lines.
+def receiver_text(cx: State.Cx, target: Ast.Expr) -> String
+  text = Calls.extent_text(cx, target)
+  return "" if text.length > 40 or text.contains?("\n")
+
+  text
 end
 
 # Whether the last of `count` arguments of the call `name` goes to a parameter declared as a function: one of the

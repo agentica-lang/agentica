@@ -144,7 +144,7 @@ end
 [3, 4]
 ```
 
-Where a call takes a block, the block is the one way to write it: `xs.map(->(x: Int) { x + 1 })` is an error whose help shows `xs.map do |x| x + 1 end`.
+Where a call takes a block, the block is the one way to write it: `xs.map(->(x: Int) { x + 1 })` is an error whose help shows `xs.map do |x| ... end`.
 
 ## Chains over several lines
 

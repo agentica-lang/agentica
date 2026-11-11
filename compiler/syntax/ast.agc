@@ -811,11 +811,12 @@ end
 export def next_free_id(program: Program) -> Int = program.id + 1
 
 ## True when the last argument of a call is a block (do ... end), which picks the block form of a builtin (File.open).
+## A lambda there is an argument like any value.
 export def block_call?(call: Call) -> Bool
   return false if call.args.size == 0
 
   case call.args[call.args.size - 1]
-    Expr.BlockLit(_) -> true
+    Expr.BlockLit(found) -> !found.lambda
     _ -> false
   end
 end

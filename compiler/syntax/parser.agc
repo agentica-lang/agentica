@@ -423,7 +423,19 @@ def parse_lambda(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     )
   end
 
-  open = try Base.expect(e, cursor, "left-brace", "\"{\" to start the body of the lambda", false)
+  if e.tokens[cursor].kind != "left-brace"
+    return error(
+      Base.unexpected_help(
+        e,
+        cursor,
+        "expected \"{\" to start the body of the lambda, found #{Base.describe(e.tokens[cursor])}",
+        "a -> where no value ends before it starts a lambda, ->(x) { ... }; the -> of a case arm follows its " +
+        "pattern, and the -> of a def follows its parameters, on the same line",
+      ),
+    )
+  end
+
+  open = cursor + 1
   body = try parse_block(Base.with_block_body(e, -1, ""), open, next_id, 2)
   close = try Base.expect(e, body.pos, "right-brace", "\"}\" to end the lambda", false)
   node = Ast.Expr.BlockLit(

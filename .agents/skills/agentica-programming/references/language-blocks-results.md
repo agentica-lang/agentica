@@ -115,12 +115,11 @@ none -> Optional[T]
 
 ## Design patterns
 
-Strategy: an `Fn` parameter (`&name` or a block). Factory: a function
-returning `Result[T]`. Builder: field defaults and `.with(...)`. State machine:
-an enum and `case`. Command: enum variants applied with `reduce`. Decorator: a
-function taking and returning an `Fn` (`def wrap(f: Fn[A, B]) -> Fn[A, B]`
-returns the block). Observer: a struct holding a `List[Fn[...]]`, called with
-`map`.
+Strategy: an `Fn` parameter (`&name` or a block). Factory: a function returning
+`Result[T]`. Builder: field defaults and `.with(...)`. State machine: an enum
+and `case`. Command: enum variants applied with `reduce`. Decorator: a function
+taking and returning an `Fn` (it returns a lambda that calls `f`). Observer: a
+struct holding a `List[Fn[...]]`, called with `map`.
 
 Composition root: `main` builds the collaborators (tables, stores, the clock,
 such as `&Time.now_ms`) and passes them in; a function never builds what it

@@ -1,9 +1,10 @@
 """Lambdas, `->(x) { ... }`, through `agentica --json check`: where a lambda is a function value, how its parameters get
 their types, the one-way rule against a lambda where a block goes, and the forms of other languages. Each case asserts
 the code and the source text its range covers, never the message. The values a lambda gives at run time are the VM
-golden tests/fixtures/vm/lambdas.agc.
+golden tests/fixtures/vm/lambdas.agc, which prints what its Python and Node peers print.
 """
 
+from tests.agentica_test import FIXTURES, PYTHON, cli, run, tool, vm_environment
 from tests.spec_support import Batch, assert_rule
 
 BATCH = Batch("program.agc")
@@ -97,3 +98,12 @@ CONSTANT = "FNS = [->(x: Int) { x }]\n\ndef main() -> Void\n  puts(FNS.size)\nen
 @table("program", [CONSTANT])
 def test_a_lambda_is_not_constant_data(checked, program):
     assert_rule(checked(program), program, "CHECK-CONSTANT-EXPRESSION", "->(x: Int) { x }")
+
+
+def test_the_fixture_prints_what_the_python_and_node_peers_print():
+    result = run(cli() + [str(FIXTURES / "vm" / "lambdas.agc")], env=vm_environment())
+    assert result.code == 0, result.stderr
+    python = run([PYTHON, str(FIXTURES / "lambdas-peer.py")])
+    node = run([tool("node"), str(FIXTURES / "lambdas-peer.js")])
+    assert (python.code, node.code) == (0, 0)
+    assert result.stdout == python.stdout == node.stdout

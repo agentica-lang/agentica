@@ -177,8 +177,8 @@ export def find_field(fields: List[Model.Named], name: String) -> Result[Model.N
   error("no such field")
 end
 
-# The text of the source between the start of an expression, including a piped receiver, and its end.
-def extent_text(cx: State.Cx, node: Ast.Expr) -> String
+## The text of the source between the start of an expression, including a piped receiver, and its end.
+export def extent_text(cx: State.Cx, node: Ast.Expr) -> String
   text = cx.texts.get(cx.file)
   return "" if text.none?
 
@@ -253,7 +253,7 @@ def pipe_help(cx: State.Cx, node: Ast.Call, method: String) -> String
   index = 1
   while index < node.args.size
     case node.args[index]
-      Ast.Expr.BlockLit(_) -> block = true
+      Ast.Expr.BlockLit(found) if !found.lambda -> block = true
       _ -> plain = plain.push(extent_text(cx, node.args[index]))
     end
 

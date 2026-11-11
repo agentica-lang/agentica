@@ -109,7 +109,7 @@ module Counter
   end
 
   export def start(name: String, initial: Int) -> Result[Void]
-    actor = Actor.start(Actor.Behaviour(init: block0() do initial end, handle: &handle))
+    actor = Actor.start(Actor.Behaviour(init: -> { initial }, handle: &handle))
     return ok() if NAMES.put_new(name, actor.address)
 
     _ = Actor.stop(actor, 1000)
@@ -141,8 +141,6 @@ module Counter
       Msg.Stop -> Actor.done(count)
     end
   end
-
-  def block0[R](f: Fn[R]) -> Fn[R] = f
 end
 
 def main() -> Void
