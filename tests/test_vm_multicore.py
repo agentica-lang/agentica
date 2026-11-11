@@ -14,7 +14,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import signal
 import socket
 import ssl
@@ -108,18 +107,7 @@ def golden_outcome(path, tmp_path, flags, env=None):
         pytest.skip(reason)
     fixture = diff.Fixture.of(path)
     bytecode = diff.compile_agc(path, tmp_path / (path.stem + ".agcb"))
-    root = diff.source_root_options() + flags
-    if fixture.uses_tmp:
-        directory = diff.fresh_tmp(tmp_path)
-        try:
-            result = diff.untmp(directory, diff.run_vm_process(
-                fixture, diff.deny_options(fixture) + diff.style_options("json") + root, bytecode,
-                diff.tmp_args(fixture, directory), cwd=tmp_path, env=env))
-        finally:
-            shutil.rmtree(directory, ignore_errors=True)
-    else:
-        result = diff.run_vm(fixture, bytecode, 0, root=root, cwd=tmp_path, env=env)
-    return diff.outcome(diff.unfixture(result))
+    return diff.outcome(diff.run_fixture_vm(fixture, bytecode, 0, tmp_path, flags, env))
 
 
 @pytest.mark.parametrize("path", fixture_cases())

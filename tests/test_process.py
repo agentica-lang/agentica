@@ -144,6 +144,32 @@ def test_a_bare_command_is_not_looked_for_in_the_working_directory_or_an_empty_p
     assert spawned("." + sep + old) == "true\n7\n"  # a relative entry resolves against the working directory
 
 
+def test_a_name_with_a_slash_resolves_against_the_working_directory_and_a_directory_does_not_run(tmp_path):
+    here = tmp_path / "here"
+    (here / "bin").mkdir(parents=True)
+    for runnable in [here / "tool", here / "bin" / "tool"]:
+        if os.name == "nt":
+            shutil.copy(tool("node"), runnable.with_name("tool.exe"))
+        else:
+            runnable.write_text("#!/bin/sh\necho 7\n")
+            runnable.chmod(0o755)
+    text = ('def show(name: String) -> Void\n'
+            '  case Process.spawn(name, ["-e", "console.log(7)"], Process.Options(timeout_ms: 5000))\n'
+            '    ok(p) -> puts("#{name}: #{Process.read_line(p, 5000)} #{Process.wait(p, 5000)}")\n'
+            '    error(message) -> puts("#{name}: #{message}")\n  end\nend\n\n'
+            'def main() -> Void\n  show("tool")\n  show("./tool")\n  show("bin/tool")\n  show("bin")\nend\n\n')
+    program_file = write(tmp_path, "program.agc", text)
+    name = next((key for key in os.environ if key.upper() == "PATH"), "PATH")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    for entries in [[str(elsewhere)], ["bin", str(elsewhere)], [".", str(elsewhere)]]:
+        result = cli_run(program_file, env={name: os.pathsep.join(entries)}, cwd=here)
+        found = entries[0] != str(elsewhere)
+        assert tuple(result) == (0, "tool: " + ('ok("7") ok(0)' if found else "process: executable is unavailable")
+                                 + '\n./tool: ok("7") ok(0)\nbin/tool: ok("7") ok(0)\n'
+                                 + "bin: process: executable is unavailable\n", ""), entries
+
+
 def test_permission_literal_argv_and_inherited_task_capability(tmp_path):
     node = tool("node")
     text = program(node, "args", "  puts(Result.unwrap!(Process.read_line(p, 5000)))\n  IO.inspect(Process.wait(p, 5000))",

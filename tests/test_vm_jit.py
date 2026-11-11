@@ -87,7 +87,8 @@ FAILURES = {
 }
 
 # A task in a long compiled loop is cancelled between two of its turns.
-CANCEL = """def spin(n: Int) -> Int
+CANCELLED = {
+    "cancel": ("""def spin(n: Int) -> Int
   i = 0
   while i < n
     i = i + 1
@@ -102,7 +103,99 @@ def main() -> Void
   puts("cancelled")
   puts(Task.await(t))
 end
-"""
+""", "always", ["main", "spin"], "5000\ncancelled\n", False),
+    # The spawned task's compiled loop runs a filter over a long list: the turns end inside the block calls, and the
+    # cancel lands there, between two of its turns.
+    "block_cancel": ("""def scan(rounds: Int) -> Int
+  items: List[Int] = []
+  n = 0
+  while n < 20000
+    items = items.push(n)
+    n += 1
+  end
+  total = 0
+  r = 0
+  while r < rounds
+    total += items.filter do |x| (x + r) % 5 == 0 end.size
+    r += 1
+  end
+  return total
+end
+
+def main() -> Void
+  t = Task.spawn(&scan, 1000000)
+  puts(scan(3))
+  Task.cancel(t)
+  puts("cancelled")
+  puts(Task.await(t))
+end
+""", "on", ["block@block_cancel.agc:11:27", "scan"], "12000\ncancelled\n", False),
+    # The spawned task's loop reaches a chain of a billion tail calls in compiled code; main's own loop runs meanwhile,
+    # and its cancel lands between two turns of the chain.
+    "tail_cancel": ("""def chain(n: Int, acc: Int) -> Int
+  if n == 0
+    return acc
+  end
+  return chain(n - 1, (acc + n) % 1000003)
+end
+
+def churn(rounds: Int) -> Int
+  total = 0
+  r = 0
+  while r < rounds
+    n = 10
+    if r >= 150
+      n = 1000000000
+    end
+    total = (total + chain(n, r)) % 1000003
+    r += 1
+  end
+  return total
+end
+
+def warm(rounds: Int) -> Int
+  total = 0
+  r = 0
+  while r < rounds
+    total = (total + chain(10, r)) % 1000003
+    r += 1
+  end
+  return total
+end
+
+def main() -> Void
+  t = Task.spawn(&churn, 1000000)
+  puts(warm(400))
+  Task.cancel(t)
+  puts("cancelled")
+  puts(Task.await(t))
+end
+""", "on", ["chain", "churn", "warm"], None, True),
+    # The spawned task's compiled loop calls a block a billion times; main's own loop runs meanwhile, and its cancel
+    # lands between two turns of the spawned one, inside the block or the loop.
+    "call_value_cancel": ("""def spin(rounds: Int, f: Fn[Int, Int]) -> Int
+  total = 0
+  r = 0
+  while r < rounds
+    total = (total + f.call(r)) % 1000003
+    r += 1
+  end
+  return total
+end
+
+def churn(rounds: Int) -> Int
+  return spin(rounds) do |x| x % 7 end
+end
+
+def main() -> Void
+  t = Task.spawn(&churn, 1000000000)
+  puts(spin(300000) do |x| x % 5 end)
+  Task.cancel(t)
+  puts("cancelled")
+  puts(Task.await(t))
+end
+""", "on", ["block@call_value_cancel.agc:12:23", "block@call_value_cancel.agc:17:21", "spin"], None, False),
+}
 
 
 # spin is called 96 times, below the threshold of `on` (100 entries), and its last call runs for many turns: the
@@ -282,8 +375,8 @@ end
 """
 
 
-# twice has no loop, so `on` keeps it in the interpreter however often it runs: each entry would run two instructions
-# in compiled code and pay for the entry, the exit and the RETURN in the interpreter. `always` compiles it.
+# twice and thrice have no loop. `on` compiles twice because main's compiled loop calls it, while thrice stays in the
+# interpreter however often it runs, since only noisy, whose loop prints, calls it. `always` compiles both.
 LOOP_FREE = """def twice(x: Int) -> Int
   return x + x
 end
@@ -628,7 +721,11 @@ def sched_turns(bytecode, tmp_path):
 
 def compiled(bytecode, tmp_path, mode="always"):
     """The functions the jit trace says were compiled in a run with --jit MODE."""
-    lines = jit_trace(bytecode, tmp_path, mode)
+    return compiled_in(jit_trace(bytecode, tmp_path, mode))
+
+
+def compiled_in(lines):
+    """The functions that the jit trace LINES say were compiled."""
     return sorted(line.split("function=")[1].split()[0] for line in lines if " jit compile " in line)
 
 
@@ -643,11 +740,11 @@ def tail_call_exits(bytecode, tmp_path, mode):
 
 
 def assert_compiled_without_exits(bytecode, tmp_path, want, forbidden):
-    """With `on` and `always`, the functions of WANT[mode] are compiled (none off x86-64), and no exit to the turn loop
-    is at an opcode that FORBIDDEN(op) holds for."""
+    """With `on` and `always`, the functions of WANT[mode] are compiled (none on a host without an emitter), and no exit
+    to the turn loop is at an opcode that FORBIDDEN(op) holds for."""
     for mode in ("on", "always"):
         lines = jit_trace(bytecode, tmp_path, mode)
-        names = sorted(line.split("function=")[1].split()[0] for line in lines if " jit compile " in line)
+        names = compiled_in(lines)
         assert names == (want[mode] if jit_host() else []), (mode, names)
         exits = [line for line in lines if " jit exit op=" in line and forbidden(line.split("op=")[1].split()[0])]
         assert exits == [], (mode, exits)
@@ -670,8 +767,7 @@ end
         code, stdout, _ = assert_same(bytecode, *style)
         assert code == 0 and stdout == "447\n", (style, stdout)
     lines = jit_trace(bytecode, tmp_path, "always")
-    compiled_functions = sorted(line.split("function=")[1].split()[0] for line in lines if " jit compile " in line)
-    assert compiled_functions == (["block@call-bridge.agc:9:23", "descend", "main"] if jit_host() else [])
+    assert compiled_in(lines) == (["block@call-bridge.agc:9:23", "descend", "main"] if jit_host() else [])
     transitions = [line for line in lines if " jit exit op=call " in line or " jit exit op=return " in line]
     assert transitions == [], transitions
 
@@ -717,11 +813,17 @@ end
         assert status == 1 and stdout == "before\n" and code in stderr, (style, stderr)
 
 
-def test_a_task_cancelled_in_a_compiled_loop_stops_as_in_the_interpreter(tmp_path):
-    bytecode = compile_text(CANCEL, "cancel", tmp_path)
-    assert compiled(bytecode, tmp_path) == (["main", "spin"] if jit_host() else [])
+@pytest.mark.parametrize("case", sorted(CANCELLED))
+def test_a_task_cancelled_in_compiled_code_stops_as_in_the_interpreter(tmp_path, case):
+    source, mode, functions, printed, tail_calls = CANCELLED[case]
+    bytecode = compile_text(source, case, tmp_path)
+    assert compiled(bytecode, tmp_path, mode) == (functions if jit_host() else [])
+    if tail_calls:
+        for exits_mode in ("on", "always"):
+            assert tail_call_exits(bytecode, tmp_path, exits_mode) == (0, 0), exits_mode
     status, stdout, stderr = assert_same(bytecode, "--json")
-    assert status == 1 and stdout == "5000\ncancelled\n" and "RUNTIME-TASK-CANCELLED" in stderr, stderr
+    assert status == 1 and "RUNTIME-TASK-CANCELLED" in stderr, stderr
+    assert stdout == printed if printed else stdout.endswith("\ncancelled\n"), stdout
 
 
 def test_on_compiles_a_function_at_a_turn_that_starts_in_its_loop(tmp_path):
@@ -1635,24 +1737,6 @@ def test_compiled_loops_run_builtins_map_reads_lists_and_blocks_without_leaving(
         assert code == 1 and '"RUNTIME-STEP-LIMIT"' in stderr, (limit, stderr)
 
 
-def test_a_failure_inside_a_compiled_block_matches_the_interpreter(tmp_path):
-    # The block fails at the 300th pass of main's compiled loop, inside the native frame of map: the diagnostic, its
-    # span (in the block) and the stack (main, map, the block) must not depend on the tier.
-    bytecode = compile_text("""def main() -> Void
-  puts("before")
-  total = 0
-  i = 0
-  while i < 1000
-    total += [i, i + 1, i + 2].map do |v| v * 3 / (300 - i) end.size
-    i += 1
-  end
-  puts(total)
-end
-""", "block_failure", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["block@block_failure.agc:6:36", "main"] if jit_host() else [])
-    assert_same_failure(bytecode, "RUNTIME-DIVISION-BY-ZERO")
-
-
 def test_unwrap_of_none_in_native_calls_fails_as_in_the_interpreter(tmp_path):
     # `unwrap!` on an Optional is the prelude's unwrap, whose none arm calls __fail_arg, a direct builtin: under `on`
     # unwrap gets code and runs as a native call of get, itself a native call of main's loop. At the 700th pass it
@@ -1683,38 +1767,6 @@ end
     want = ["@prelude::optional::unwrap", "get", "main", "maybe"] if jit_host() else []
     assert compiled(bytecode, tmp_path, "on") == want
     assert_same_failure(bytecode, "RUNTIME-UNWRAP-NONE", "get", "main")
-
-
-def test_a_task_cancelled_inside_a_long_block_call_stops_as_in_the_interpreter(tmp_path):
-    # The spawned task's compiled loop runs a filter over a long list: the turns end inside the block calls, and the
-    # cancel lands there, between two of its turns.
-    bytecode = compile_text("""def scan(rounds: Int) -> Int
-  items: List[Int] = []
-  n = 0
-  while n < 20000
-    items = items.push(n)
-    n += 1
-  end
-  total = 0
-  r = 0
-  while r < rounds
-    total += items.filter do |x| (x + r) % 5 == 0 end.size
-    r += 1
-  end
-  return total
-end
-
-def main() -> Void
-  t = Task.spawn(&scan, 1000000)
-  puts(scan(3))
-  Task.cancel(t)
-  puts("cancelled")
-  puts(Task.await(t))
-end
-""", "block_cancel", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["block@block_cancel.agc:11:27", "scan"] if jit_host() else [])
-    status, stdout, stderr = assert_same(bytecode, "--json")
-    assert status == 1 and stdout == "12000\ncancelled\n" and "RUNTIME-TASK-CANCELLED" in stderr, stderr
 
 
 # Two tasks whose compiled loop (work) makes block calls of every kind over 300 items: map, filter, reduce, any? and
@@ -1784,9 +1836,22 @@ def test_block_calls_of_every_kind_start_their_block_again_in_compiled_code(tmp_
     assert_max_steps_sweep(bytecode, steps)
 
 
-# A block that compiled code calls natively fails (a division by zero in round 400): every tier fails at the block's
-# division with the same span and stack (the block, scan, main), its frame on top of the map's native frame.
-BLOCK_FAILS = """def scan(items: List[Int], rounds: Int) -> Int
+# A block that compiled code calls natively fails, inside the native frame of map: every tier fails at the block's
+# division with the same span and stack. Under `on` the loop that calls map is main's (the 300th pass fails) or scan's
+# (round 400 fails, the stack is the block, scan, main).
+BLOCK_FAILURES = {
+    "block_failure": ("""def main() -> Void
+  puts("before")
+  total = 0
+  i = 0
+  while i < 1000
+    total += [i, i + 1, i + 2].map do |v| v * 3 / (300 - i) end.size
+    i += 1
+  end
+  puts(total)
+end
+""", ["block@block_failure.agc:6:36", "main"], ()),
+    "block_fails": ("""def scan(items: List[Int], rounds: Int) -> Int
   total = 0
   r = 0
   while r < rounds
@@ -1801,14 +1866,17 @@ def main() -> Void
   puts("before")
   puts(scan(items, 1000))
 end
-"""
+""", ["block@block_fails.agc:5:24", "scan"], ("scan", "main")),
+}
 
 
-def test_a_block_called_natively_fails_as_in_the_interpreter(tmp_path):
-    bytecode = compile_text(BLOCK_FAILS, "block_fails", tmp_path)
-    on = compiled(bytecode, tmp_path, "on")
-    assert all(name in on for name in ("block@block_fails.agc:5:24", "scan")) if jit_host() else on == [], on
-    assert_same_failure(bytecode, "RUNTIME-DIVISION-BY-ZERO", "scan", "main")
+@pytest.mark.parametrize("case", sorted(BLOCK_FAILURES))
+def test_a_block_called_natively_fails_as_in_the_interpreter(tmp_path, case):
+    source, functions, stack = BLOCK_FAILURES[case]
+    bytecode = compile_text(source, case, tmp_path)
+    on = [name for name in compiled(bytecode, tmp_path, "on") if not name.startswith("@prelude::")]
+    assert on == (functions if jit_host() else []), on
+    assert_same_failure(bytecode, "RUNTIME-DIVISION-BY-ZERO", *stack)
 
 
 # down recurses through map's block until the depth limit: compiled code starts each map and calls its block, until a
@@ -2097,55 +2165,6 @@ end
     assert_same_failure(bytecode, "RUNTIME-DIVISION-BY-ZERO", "fall", "drive", "main")
 
 
-def test_a_task_cancelled_in_a_long_compiled_tail_call_loop_stops_as_in_the_interpreter(tmp_path):
-    # The spawned task's loop reaches a chain of a billion tail calls in compiled code; main's own loop runs meanwhile,
-    # and its cancel lands between two turns of the chain.
-    bytecode = compile_text("""def chain(n: Int, acc: Int) -> Int
-  if n == 0
-    return acc
-  end
-  return chain(n - 1, (acc + n) % 1000003)
-end
-
-def churn(rounds: Int) -> Int
-  total = 0
-  r = 0
-  while r < rounds
-    n = 10
-    if r >= 150
-      n = 1000000000
-    end
-    total = (total + chain(n, r)) % 1000003
-    r += 1
-  end
-  return total
-end
-
-def warm(rounds: Int) -> Int
-  total = 0
-  r = 0
-  while r < rounds
-    total = (total + chain(10, r)) % 1000003
-    r += 1
-  end
-  return total
-end
-
-def main() -> Void
-  t = Task.spawn(&churn, 1000000)
-  puts(warm(400))
-  Task.cancel(t)
-  puts("cancelled")
-  puts(Task.await(t))
-end
-""", "tail_cancel", tmp_path)
-    assert compiled(bytecode, tmp_path, "on") == (["chain", "churn", "warm"] if jit_host() else [])
-    for mode in ("on", "always"):
-        assert tail_call_exits(bytecode, tmp_path, mode) == (0, 0), mode
-    status, stdout, stderr = assert_same(bytecode, "--json")
-    assert status == 1 and stdout.endswith("\ncancelled\n") and "RUNTIME-TASK-CANCELLED" in stderr, stderr
-
-
 def test_a_self_tail_call_is_a_loop_that_on_compiles(tmp_path):
     # main has no loop and chain's only loop is its self tail call, which `on` counts as a loop: chain compiles at its
     # entries and its million tail calls run as a jump in its code. is_even and is_odd tail-call each other a million
@@ -2235,8 +2254,7 @@ end
     assert (result.code, result.stdout, result.stderr) == (off.code, off.stdout, off.stderr)
     assert off.code == 0 and off.stdout.count("\n") == 2, off.stderr
     lines = trace.read_text(encoding="utf-8").splitlines() if trace.exists() else []
-    compiled_functions = [line.split("function=")[1].split()[0] for line in lines if " jit compile " in line]
-    assert compiled_functions == ([first] if jit_host() else []), lines
+    assert compiled_in(lines) == ([first] if jit_host() else []), lines
     spent = [line.split(" jit ")[1] for line in lines if " jit budget " in line]
     if jit_host():
         assert len(spent) == 1 and spent[0].startswith("budget spent=work ") and f" work={budget} " in spent[0], spent
@@ -2378,37 +2396,6 @@ def test_a_failure_in_a_called_function_value_matches_the_interpreter(tmp_path, 
     assert_same_failure(bytecode, code, *stack)
 
 
-def test_a_task_cancelled_in_a_long_loop_of_function_value_calls_stops_as_in_the_interpreter(tmp_path):
-    # The spawned task's compiled loop calls a block a billion times; main's own loop runs meanwhile, and its cancel
-    # lands between two turns of the spawned one, inside the block or the loop.
-    bytecode = compile_text("""def spin(rounds: Int, f: Fn[Int, Int]) -> Int
-  total = 0
-  r = 0
-  while r < rounds
-    total = (total + f.call(r)) % 1000003
-    r += 1
-  end
-  return total
-end
-
-def churn(rounds: Int) -> Int
-  return spin(rounds) do |x| x % 7 end
-end
-
-def main() -> Void
-  t = Task.spawn(&churn, 1000000000)
-  puts(spin(300000) do |x| x % 5 end)
-  Task.cancel(t)
-  puts("cancelled")
-  puts(Task.await(t))
-end
-""", "call_value_cancel", tmp_path)
-    want = ["block@call_value_cancel.agc:12:23", "block@call_value_cancel.agc:17:21", "spin"]
-    assert compiled(bytecode, tmp_path, "on") == (want if jit_host() else [])
-    status, stdout, stderr = assert_same(bytecode, "--json")
-    assert status == 1 and stdout.endswith("\ncancelled\n") and "RUNTIME-TASK-CANCELLED" in stderr, stderr
-
-
 def test_a_bad_jit_mode_is_refused(tmp_path):
     bytecode = compile_text("def main() -> Void\n  puts(1)\nend\n", "plain", tmp_path)
     result = run_vm(bytecode, "--jit", "fast", env=vm_environment())
@@ -2429,6 +2416,6 @@ def test_the_jit_mode_of_the_environment_reaches_the_vm(tmp_path):
     trace = tmp_path / "env.trace"
     run_vm(bytecode, env=vm_environment({"AGENTICA_VM_TRACE": "jit", "AGENTICA_VM_TRACE_FILE": trace}))
     lines = trace.read_text(encoding="utf-8").splitlines() if trace.exists() else []
-    functions = sorted(line.split("function=")[1].split()[0] for line in lines if " jit compile " in line)
+    functions = compiled_in(lines)
     jit_on = (os.environ.get("AGENTICA_JIT") or "on") in ("on", "always")
     assert ("spin" in functions) == (jit_host() and jit_on), (os.environ.get("AGENTICA_JIT"), functions)
