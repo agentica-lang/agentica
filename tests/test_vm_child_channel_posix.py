@@ -1,8 +1,9 @@
 """The POSIX side of the child channel: descriptors pinned to a file, a device, a FIFO, and a shell child.
 
-fixtures/child-channel.agc is the program; fixtures/child-channel-peer.py drives its child side. They need fcntl,
-mkfifo and sh, so the module runs on Linux and macOS; test_vm_child_channel.py has the cases of every system. Where
-/proc exists the peer also reads where descriptor 3 of the child points.
+fixtures/child-channel.agc is the program; fixtures/child-channel-peer.py drives its child side, the pinned cases with
+the one-socket marker "3" (the form of earlier versions, which a VM still takes from a parent that is no VM). They need
+fcntl, mkfifo and sh, so the module runs on Linux and macOS; test_vm_child_channel.py has the cases of every system.
+Where /proc exists the peer also reads where descriptor 3 of the child points.
 """
 import json
 import os
@@ -13,7 +14,7 @@ from tests.agentica_test import FIXTURES, PYTHON, compile_agc, run, vm_binary
 
 PEER = FIXTURES / "child-channel-peer.py"
 pytestmark = pytest.mark.skipif(
-    os.name != "posix", reason="host-only: descriptor 3 pinned to a file, a device or a FIFO, and a shell child; the Windows channel is two pipes chosen by the marker 3,4, and test_vm_child_channel.py refuses a file there")
+    os.name != "posix", reason="host-only: the one-socket marker 3 with descriptor 3 pinned to a file, a device or a FIFO (a POSIX form only), and a shell child; test_vm_child_channel.py refuses a file behind 3,4 on every system")
 
 
 def lines(*items):
@@ -30,7 +31,7 @@ def test_a_pinned_descriptor_is_refused_unless_it_is_a_channel_and_a_shell_child
     result = run([PYTHON, PEER, vm_binary(), bytecode])
     assert result.code == 0, result.stderr
     answer = json.loads(result.stdout)
-    spawned = "unset\nclosed\n\n3\nsocket\n\n"
+    spawned = "unset\nclosed\n\n3,4\npipes\n\n"
     assert answer["spawning"]["stdout"] == spawned
     assert answer["spawning_marker_only"]["stdout"] == spawned
     assert answer["spawning"]["exit"] == 0

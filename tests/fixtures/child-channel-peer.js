@@ -3,14 +3,13 @@
 //   node child-channel-peer.js VM BYTECODE        drives the child side: spawns the VM as the child, prints JSON
 //   node child-channel-peer.js child MODE         is the child the parent side spawns
 //
-// The channel is one socket pair at descriptor 3 where the system has one (marker "3"), and one pipe per direction
-// at descriptors 3 (to the child) and 4 (from the child) on Windows (marker "3,4"), the form node itself gives
-// when it asks for two extra pipes.
+// The channel is one pipe per direction at descriptors 3 (to the child) and 4 (from the child), marker "3,4", the
+// form node itself gives when it asks for two extra pipes.
 "use strict";
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const { MARKER, WINDOWS, launch, writeAll } = require("./child_channel.js");
+const { MARKER, launch, writeAll } = require("./child_channel.js");
 
 // ---- the parent side: this program drives a VM that is the child ----
 
@@ -59,9 +58,9 @@ function held(vm, bytecode, mode, options) {
   return finish(peer, Date.now());
 }
 
-// Windows: descriptors 3 and 4 that are a file, behind the marker "3,4" (the POSIX form, with the descriptor 3 of a
-// file, a device or a FIFO, is in child-channel-peer.py): the child must refuse them as a channel. (fs.openSync("NUL")
-// does not give the device here: it makes a file called NUL, so a device has no stand-in in this peer.)
+// Descriptors 3 and 4 that are a file, behind the marker "3,4" (a device, a FIFO and the one-socket form "3" are in
+// child-channel-peer.py): the child must refuse them as a channel. (On Windows fs.openSync("NUL") does not give the
+// device: it makes a file called NUL, so a device has no stand-in in this peer.)
 async function pinned(vm, bytecode) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), "agentica-pinned-"));
   try {
@@ -82,12 +81,12 @@ async function pinned(vm, bytecode) {
 
 async function drive(vm, bytecode) {
   const answer = {};
-  if (WINDOWS) answer.pinned = await pinned(vm, bytecode);
+  answer.pinned = await pinned(vm, bytecode);
   answer.serve = await serve(vm, bytecode);
   answer.cut = await cut(vm, bytecode);
   answer.idle = await held(vm, bytecode, "idle");
   answer.bare = await held(vm, bytecode, "bare", { marker: null });
-  // The marker of the other system and no descriptor behind it.
+  // A marker, the one-socket form or the pair, and no descriptor behind it.
   answer.bare_marker_only = await held(vm, bytecode, "bare", { channel: false, marker: "3" });
   answer.bare_marker_pair_only = await held(vm, bytecode, "bare", { channel: false, marker: "3,4" });
   return answer;
@@ -98,12 +97,10 @@ async function drive(vm, bytecode) {
 // The descriptors the marker names, or null when this program was not given a channel.
 function ends() {
   const marker = process.env[MARKER];
-  if (marker === "3") return { read: 3, write: 3 };
-  if (marker === "3,4") return { read: 3, write: 4 };
-  return null;
+  return marker === "3,4" ? { read: 3, write: 4 } : null;
 }
 
-// The errors that mean the other end is gone: a socket reset, or a broken or closed pipe on Windows.
+// The errors that mean the other end is gone: a broken pipe, a socket reset, or a closed pipe on Windows.
 const ENDED = new Set(["EOF", "EPIPE", "ECONNRESET", "ERROR_BROKEN_PIPE"]);
 
 // Reads one line (with its "\n") from the descriptor; null is the end of input. Any other error is thrown.
@@ -138,7 +135,7 @@ function asChild(mode) {
     return;
   }
   const channel = ends();
-  if (channel === null) throw new Error("child mode " + mode + " needs the channel, and AGENTICA_CHANNEL is not 3 or 3,4");
+  if (channel === null) throw new Error("child mode " + mode + " needs the channel, and AGENTICA_CHANNEL is not 3,4");
   if (mode === "echo") {
     const data = readLine(channel.read);
     if (data === null) return;

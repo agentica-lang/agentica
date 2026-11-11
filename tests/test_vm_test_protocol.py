@@ -10,8 +10,8 @@ from tests.agentica_test import FIXTURES, UNDER_WINE, channel_peer, compile_agc,
 def test_peer_drives_a_test_file_over_the_child_channel(tmp_path):
     """Check indexes, records, free stdin and stdout.
 
-    The peer is Python where the channel is a socket pair, and Node on Windows, where it is two pipes at descriptors 3
-    and 4 that Python cannot give to a child (tests/fixtures/child_channel.js)."""
+    The peer is Python, and Node on Windows, where Python cannot give a child the two pipes at descriptors 3 and 4
+    (tests/fixtures/child_channel.js)."""
     bytecode = compile_agc(FIXTURES / "test-protocol-peer.agc", tmp_path / "test-protocol-peer.agcb")
     result = run([*channel_peer("test-protocol-peer"), vm_binary(), bytecode])
     assert result.code == 0, result.stderr

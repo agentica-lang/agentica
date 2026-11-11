@@ -354,7 +354,7 @@ def test_the_spawns_leave_out_the_timeout_and_the_directory(tmp_path):
 def test_the_child_environment_is_inherited_without_the_vm_private_entries(tmp_path):
     # Windows names are case-insensitive, so a differently cased private name must go too; elsewhere it is another variable.
     channel = "Agentica_Channel" if TARGET_OS == "windows" else "AGENTICA_CHANNEL"
-    # Only the value of the system ("3", and "3,4" on Windows) would be adopted as a channel (vm/duplex.c,
+    # Only "3,4" (and on POSIX the one-socket "3") would be adopted as a channel (vm/duplex.c,
     # agc_parent_take); the child must not see the name at all. The metrics values are ones that would start nothing if a child did see them.
     env = {"PROBE_TEXT": "ñ 🙂 = x", channel: "7", "AGENTICA_VM_METRICS": "0",
            "AGENTICA_VM_METRICS_FILE": "/nonexistent/agentica-metrics-must-not-open"}

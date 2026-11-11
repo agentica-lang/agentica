@@ -1,9 +1,9 @@
 // Starts a VM as the child of a Node peer with a child channel (docs/vm/10-io-processes.md, 10.4): the common part of
 // child-channel-peer.js, test-protocol-peer.js and channel-run.js (the Node twin of child_channel.py).
 //
-// The channel is one socket pair at descriptor 3 where the system has one (marker "3"), and one pipe per direction at
-// descriptors 3 (to the child) and 4 (from the child) on Windows (marker "3,4"), the form node itself gives when it
-// asks for two extra pipes: libuv hands the CRT of a Windows child its descriptor table in lpReserved2.
+// The channel is one pipe per direction at descriptors 3 (to the child) and 4 (from the child), marker "3,4", the form
+// node itself gives when it asks for two extra pipes (a socket pair each on POSIX; on Windows libuv hands the CRT of
+// the child its descriptor table in lpReserved2).
 //
 // The order of stdout and channel. Two Node streams over two pipes say nothing about which byte was written first: both
 // are read by libuv from one completion port, but libuv asks for the next read of a pipe only after it has handled the
@@ -118,7 +118,7 @@ function stdoutFile() {
 // of the peer (a file, NUL) that the child gets at 3, 4, ... in place of the channel pipes, to see them refused.
 function launch(
   argv,
-  { channel = true, marker = WINDOWS ? "3,4" : "3", stdin = "ignore", stderr = "pipe", stdout = "pipe", pins = [] } = {}
+  { channel = true, marker = "3,4", stdin = "ignore", stderr = "pipe", stdout = "pipe", pins = [] } = {}
 ) {
   const env = Object.assign({}, process.env);
   delete env[MARKER];
@@ -126,8 +126,7 @@ function launch(
   const [written, read] = stdout === "file" ? stdoutFile() : [null, null];
   const stdio = [stdin, stdout === "file" ? written : "pipe", stderr];
   stdio.push(...pins);
-  if (channel) stdio.push("pipe");
-  if (channel && WINDOWS) stdio.push("pipe");
+  if (channel) stdio.push("pipe", "pipe");
   let child;
   try {
     child = spawn(argv[0], argv.slice(1), { stdio, env });
@@ -161,7 +160,7 @@ function launch(
     })
   );
   const toChild = channel ? child.stdio[3] : null;
-  const fromChild = channel ? child.stdio[WINDOWS ? 4 : 3] : null;
+  const fromChild = channel ? child.stdio[4] : null;
   if (toChild) toChild.on("error", () => {});
   return {
     child,
@@ -169,9 +168,9 @@ function launch(
     toChild,
     fromChild,
     send: (data) => new Promise((resolve) => toChild.write(data, () => resolve())),
-    // The end of input: a half close of the socket, or on Windows the close of the pipe the child reads. The data
-    // sent before it has been written, since send waits for its write.
-    endInput: () => new Promise((resolve) => (WINDOWS ? resolve(toChild.destroy()) : toChild.end(resolve))),
+    // The end of input: the close of the end the child reads. The data sent before it has been written, since send
+    // waits for its write.
+    endInput: () => new Promise((resolve) => resolve(toChild.destroy())),
     line: fromChild ? reader(fromChild) : null,
     close: () => {
       if (toChild) toChild.destroy();

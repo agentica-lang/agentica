@@ -125,14 +125,12 @@ cleanup) with these differences.
 
 ## Channels
 
-Linux and macOS (Windows in progress). `spawn_channel` works like
-`spawn_captured` and also opens a channel: a bidirectional socket pair, separate
-from the child's stdin, stdout and stderr, that carries text lines both ways.
-The child finds it on descriptor 3 with `AGENTICA_CHANNEL=3`. On Windows the
-channel is a pipe per direction: the child reads descriptor 3, writes descriptor
-4, and the variable is `AGENTICA_CHANNEL=3,4`. `spawn` and `spawn_captured`
-remove that variable from the child's environment even if your program
-inherited it.
+Linux, macOS and Windows. `spawn_channel` works like `spawn_captured` and
+also opens a channel, separate from the child's stdin, stdout and stderr, that
+carries text lines both ways: a pipe per direction. The child reads descriptor
+3, writes descriptor 4, and finds `AGENTICA_CHANNEL=3,4`. `spawn` and
+`spawn_captured` remove that variable from the child's environment even if your
+program inherited it.
 
 - `channel_read_line` reads like `read_line` (at most 1 MiB, LF or CRLF removed,
   strict UTF-8, `error("process: end of input")` at the end; unlike `read_line`, a
@@ -159,9 +157,10 @@ inherited it.
   `Process.parent_send(text, timeout_ms)` use the channel the parent opened,
   with the same rules and errors; with no channel they return `error("process:
   no parent channel")`. A timeout closes the channel for good. The VM takes the
-  channel at startup only when `AGENTICA_CHANNEL` has the system's value and
-  descriptor 3 is a socket or a FIFO opened for reading and writing, then hides
-  it, so your own children never inherit it. These calls are for runner code:
+  channel at startup only when `AGENTICA_CHANNEL` is `3,4` with descriptor 3
+  open for reading and 4 for writing (on Linux and macOS also `3` with one
+  socket or FIFO open both ways), then hides it, so your own
+  children never inherit it. These calls are for runner code:
   under `agentica test`, `Test.run` and the BDD step programs use the channel
   (`testing.md`), and a test or step calling them can break the protocol.
 
