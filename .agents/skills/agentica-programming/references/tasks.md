@@ -433,7 +433,7 @@ Supervisor.stop(supervisor: Supervisor.Ref, timeout_ms: Int) -> Result[Void]
 A supervisor starts its children (actors) in list order and starts again one
 that crashes (one for one); `start` returns once each started once. The
 register block gets the address of each new actor, in a task of its own:
-`do |address| NAMES.put("visits", address) end` (required; a child nobody
+`do |address| names.put("visits", address) end` (required; a child nobody
 reaches by name gives `do |_address| nil end`). After a restart the name holds
 the new address; an old address gives `address: gone`, so look the name up on
 each call.
