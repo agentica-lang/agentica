@@ -299,6 +299,31 @@ class TestSpecParser:
             Reject(main_of(body + "\n"), "PARSE-UNEXPECTED-TOKEN", (line,)) for body, line in HABITS
         ])
 
+    def test_a_reserved_word_where_a_name_goes_is_named_at_the_word(self):
+        self.check_rejected([
+            Reject("def edge(xs: List[Int], end: Int) -> Int\n  return 1\nend\n\n", "PARSE-RESERVED-WORD",
+                   (1, 25, 1, 28)),
+            Reject("def case() -> Int\n  return 1\nend\n\n", "PARSE-RESERVED-WORD", (1, 5, 1, 9)),
+            Reject("struct Range2\n  end: Int\nend\n\n", "PARSE-RESERVED-WORD", (2, 3, 2, 6)),
+            Reject("struct Step\n  do: Int\nend\n\n", "PARSE-RESERVED-WORD", (2, 3, 2, 5)),
+            Reject(main_of("  in = 1\n"), "PARSE-RESERVED-WORD", (2, 3, 2, 5)),
+            Reject(main_of("  end: Int = 1\n"), "PARSE-RESERVED-WORD", (2, 3, 2, 6)),
+            Reject(main_of("  for if in [1]\n    puts(1)\n  end\n"), "PARSE-RESERVED-WORD", (2, 7, 2, 9)),
+            Reject(main_of("  [1].each do |end| puts(1) end\n"), "PARSE-RESERVED-WORD", (2, 16, 2, 19)),
+            Reject(main_of("  in += 1\n"), "PARSE-RESERVED-WORD", (2, 3, 2, 5)),
+            Reject(main_of("  case some(1)\n    some(end) -> puts(1)\n    none -> puts(0)\n  end\n"),
+                   "PARSE-RESERVED-WORD", (3, 10, 3, 13)),
+            Reject(main_of("  x = JSON.true(1)\n"), "PARSE-RESERVED-WORD", (2, 12, 2, 16)),
+            Reject(main_of("  f = &JSON.end\n"), "PARSE-RESERVED-WORD", (2, 13, 2, 16)),
+            Reject(main_of("  n = [1].end\n"), "PARSE-RESERVED-WORD", (2, 11, 2, 14)),
+        ])
+
+    def test_a_literal_pattern_slot_is_not_a_reserved_word(self):
+        self.check_accepted([
+            Accept(main_of("  case some(true)\n    some(true) -> puts(1)\n    some(false) -> puts(2)\n"
+                           "    _ -> puts(0)\n  end\n")),
+        ])
+
     def test_a_heredoc_is_a_string_but_not_a_pattern_or_an_import_path(self):
         heredoc = "<<~A\n      a\n      b\n  A\n"
         self.check_output([

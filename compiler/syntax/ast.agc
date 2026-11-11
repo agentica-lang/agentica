@@ -398,6 +398,15 @@ export enum Pattern
   Wildcard(WildcardPattern)
   Literal(LiteralPattern)
   Variant(VariantPattern)
+  Or(OrPattern)
+end
+
+## Several patterns of one case arm, `"ex", "px" ->`: the arm matches when one of them does. Only the top of an arm
+## has one, and its patterns bind no names.
+export struct OrPattern
+  id: Int
+  patterns: List[Pattern]
+  span: Source.Span
 end
 
 ## The pattern _.
@@ -762,6 +771,24 @@ export def pattern_span(pattern: Pattern) -> Source.Span
     Pattern.Wildcard(node) -> node.span
     Pattern.Literal(node) -> node.span
     Pattern.Variant(node) -> node.span
+    Pattern.Or(node) -> node.span
+  end
+end
+
+## The patterns a case arm tries in order: those of an or-pattern, or the pattern alone.
+export def alternatives(pattern: Pattern) -> List[Pattern]
+  case pattern
+    Pattern.Or(node) -> node.patterns
+    _ -> [pattern]
+  end
+end
+
+## Whether a pattern binds a name anywhere in it.
+export def binds?(pattern: Pattern) -> Bool
+  case pattern
+    Pattern.Variant(node) -> node.slots.any? do |slot: Slot| slot_binds?(slot) end
+    Pattern.Or(node) -> node.patterns.any? do |inner: Pattern| binds?(inner) end
+    _ -> false
   end
 end
 
@@ -789,5 +816,13 @@ export def block_call?(call: Call) -> Bool
   case call.args[call.args.size - 1]
     Expr.BlockLit(_) -> true
     _ -> false
+  end
+end
+
+def slot_binds?(slot: Slot) -> Bool
+  case slot
+    Slot.Bind(_, _) -> true
+    Slot.Skip -> false
+    Slot.Nested(inner) -> binds?(inner)
   end
 end

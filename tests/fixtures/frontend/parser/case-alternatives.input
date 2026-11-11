@@ -1,0 +1,14 @@
+def ttl(option: String, r: Result[Int]) -> Int
+  case option
+    "ex", "px" -> return 1
+    "exat", "pxat" if option.size > 3 ->
+      puts(option)
+      return 2
+    _ -> return 0
+  end
+
+  case r
+    ok(1), ok(2), error("x") -> return 3
+    _ -> return 4
+  end
+end

@@ -2,7 +2,7 @@
 ## ...); "" is no kind. A method is resolved to the full name of a builtin, such as String.length, or to "self" when it
 ## returns the receiver (to_s on a String).
 
-import {ENTRIES} from "../catalog/builtins"
+import {ENTRIES, OPERATOR_ONLY} from "../catalog/builtins"
 import RubyForm from "ruby_form"
 import T from "../syntax/types"
 import State from "check_state"
@@ -133,11 +133,12 @@ def catalog_method(cx: State.Cx, kind: String, name: String) -> String
   ""
 end
 
-# The names of the module's builtins that are methods of the kind.
+# The names of the module's builtins that are methods of the kind. A builtin written as an operator (List.concat is
+# `+`) is no method a help offers.
 def module_methods(cx: State.Cx, kind: String, prefix: String) -> List[String]
   names: List[String] = []
   for key in ENTRIES.keys
-    if key.starts_with?(prefix)
+    if key.starts_with?(prefix) and !OPERATOR_ONLY.include?(key)
       name = key.slice(prefix.length, key.length - prefix.length)
       if catalog_method(cx, kind, name) != ""
         names = names.push(name)

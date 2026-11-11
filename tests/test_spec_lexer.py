@@ -163,7 +163,7 @@ DIAGNOSTICS = [
     ("stray leading dot after a map field type", "struct P\n  a: Map[String, Int]\n  .x\nend\n",
      "PARSE-UNEXPECTED-TOKEN", (3, 3, 3, 4), None),
     ("keyword method name after a leading dot", program(MAIN, "  x = [1]", "    .end", "end"),
-     "PARSE-UNEXPECTED-TOKEN", (3, 6, 3, 9), None),
+     "PARSE-RESERVED-WORD", (3, 6, 3, 9), None),
     ("leading dot after the end of an if", program(MAIN, "  if true", "    puts(1)", "  end", "  .size", "end"),
      "PARSE-UNEXPECTED-TOKEN", (5, 3, 5, 4), None),
     ("leading dot after an operator", program(MAIN, "  x = 1 +", "  .size", "end"),

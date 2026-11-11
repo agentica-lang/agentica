@@ -291,6 +291,9 @@ struct Input
   by_lines: Bool
 end
 
+## Whether `word` is a reserved word, which the lexer gives a token of its own kind and never a name.
+export def keyword?(word: String) -> Bool = WORD_ACTIONS.get(word, 0) > 0
+
 ## Lexes a source text into its tokens, or the first `LEX-` diagnostic.
 export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
   case lex_with_comments(text)

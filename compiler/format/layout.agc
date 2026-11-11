@@ -910,7 +910,8 @@ end
 # An arm: `pattern -> statement` on one line when its body is one simple statement that fits, else the body on the
 # lines below. The pattern and the guard are copied: the guard must stay on the line of its pattern.
 def arm_doc(c: Context, arm: Ast.CaseArm) -> Docs.Doc
-  head = source(c, tight(c, Ast.pattern_span(arm.pattern)))
+  patterns = Ast.alternatives(arm.pattern)
+  head = patterns.map do |pattern: Ast.Pattern| source(c, tight(c, Ast.pattern_span(pattern))) end.join(", ")
   case arm.guard
     some(guard) -> head = "#{head} if #{source(c, tight(c, Ast.expr_span(guard)))}"
     none -> head = head
@@ -919,7 +920,14 @@ def arm_doc(c: Context, arm: Ast.CaseArm) -> Docs.Doc
   head = head + " ->"
   arm_key = Comments.key_of("CaseArm", arm.span)
   # The pattern and the guard are copied as text, so their comments go above the arm or after the arrow.
-  keys = [Comments.key_of(Comments.pattern_kind(arm.pattern), Ast.pattern_span(arm.pattern))]
+  if patterns.size > 1
+    patterns = [arm.pattern].concat(patterns)
+  end
+
+  keys = patterns.map do |pattern: Ast.Pattern|
+    Comments.key_of(Comments.pattern_kind(pattern), Ast.pattern_span(pattern))
+  end
+
   case arm.guard
     some(guard) -> keys = keys.push(Comments.key_of(Comments.expr_kind(guard), Ast.expr_span(guard)))
     none -> keys = keys

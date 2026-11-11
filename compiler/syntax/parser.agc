@@ -366,8 +366,11 @@ def modifier_help(keyword: String) -> String
   "there are no #{keyword} modifiers: put the statement inside #{keyword} cond ... end"
 end
 
+# `end = 1` or `end: Int` closes the block before it, so the reserved word is named here.
 def expect_end(e: Base.Env, pos: Int) -> Result[Int]
   kind = e.tokens[pos].kind
+  return error(Base.reserved_name(e, pos, "a name")) if kind == "end" and Base.reserved_name_at?(e, pos)
+
   return ok(pos + 1) if kind == "end"
 
   if kind == "EOF"
@@ -677,7 +680,7 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     if kind == "dot"
       links += 1
       inner = try Base.deepen(e, cursor, links)
-      after_name = try Base.expect(e, cursor + 1, "name", "a field or method name", true)
+      after_name = try Base.expect_used(e, cursor + 1, "a field or method name")
       name = e.tokens[cursor + 1].lexeme
       if e.tokens[after_name].kind == "left-paren" and name == "with"
         # `with` is only special before `(` after a dot; `x.with` still reads a field.
@@ -1142,11 +1145,11 @@ def parse_function_ref(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   name = ""
   if e.tokens[cursor].kind == "type-name"
     dot = try Base.expect(e, cursor + 1, "dot", "a dot", false)
-    stop = try Base.expect(e, dot, "name", "a function name", true)
+    stop = try Base.expect_used(e, dot, "a function name")
     name = "#{e.tokens[cursor].lexeme}.#{e.tokens[dot].lexeme}"
     cursor = stop
   else
-    stop = try Base.expect(e, cursor, "name", "a function name", true)
+    stop = try Base.expect_used(e, cursor, "a function name")
     name = e.tokens[cursor].lexeme
     cursor = stop
   end
@@ -1339,7 +1342,7 @@ end
 def parse_module_call(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   name = e.tokens[pos].lexeme
   member_pos = pos + 2
-  after_member = try Base.expect(e, member_pos, "name", "a function name", true)
+  after_member = try Base.expect_used(e, member_pos, "a function name")
   member = e.tokens[member_pos]
   parenthesized = e.tokens[after_member].kind == "left-paren"
   args = Base.ExprsAt(nodes: [], pos: after_member, ids: ids)
@@ -1559,6 +1562,8 @@ end
 def parse_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtAt]
   inner = try Base.enter(e, pos)
   kind = e.tokens[pos].kind
+  return error(Base.reserved_name(e, pos, "a name")) if Base.reserved_name_at?(e, pos)
+
   if (
     kind == "name" and
     e.tokens[pos].lexeme == "type" and
@@ -2033,6 +2038,30 @@ def parse_arm_body(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtsAt]
   ok(Base.StmtsAt(nodes: List.concat([first.node], rest.nodes), pos: rest.pos, ids: rest.ids))
 end
 
+# The pattern of an arm: one pattern, or several separated by commas as an or-pattern, whose id comes after theirs.
+def parse_arm_pattern(e: Base.Env, pos: Int, ids: Int) -> Result[Base.PatternAt]
+  first = try Base.parse_pattern(e, pos, ids)
+  return ok(first) if e.tokens[first.pos].kind != "comma"
+
+  patterns = [first.node]
+  cursor = first.pos
+  next_id = first.ids
+  while e.tokens[cursor].kind == "comma"
+    if e.tokens[cursor + 1].kind == "NL"
+      help = "the patterns of an arm stay on its line, as its guard does: join the lines, or write one arm each"
+      return error(Base.unexpected_help(e, cursor + 1, "expected a pattern after \",\"", help))
+    end
+
+    parsed = try Base.parse_pattern(e, cursor + 1, next_id)
+    patterns = patterns.push(parsed.node)
+    cursor = parsed.pos
+    next_id = parsed.ids
+  end
+
+  node = Ast.Pattern.Or(Ast.OrPattern(id: next_id, patterns: patterns, span: Base.span_from(e, pos, cursor)))
+  ok(Base.PatternAt(node: node, pos: cursor, ids: next_id + 1))
+end
+
 # The optional `if condition` between a pattern and ->. Its ids come after the pattern and before the body.
 def parse_guard(e: Base.Env, pos: Int, ids: Int) -> Result[GuardAt]
   return ok(GuardAt(node: none, pos: pos, ids: ids)) if e.tokens[pos].kind != "if"
@@ -2063,7 +2092,7 @@ def parse_case_node(e: Base.Env, pos: Int, ids: Int) -> Result[CaseAt]
       return error(unclosed_case(e, cursor))
     else
       arm_start = cursor
-      pattern = try Base.parse_pattern(e, cursor, next_id)
+      pattern = try parse_arm_pattern(e, cursor, next_id)
       guard = try parse_guard(e, pattern.pos, pattern.ids)
       arrow = try Base.expect(e, guard.pos, "arrow", "->", false)
       body = try parse_arm_body(e, arrow, guard.ids)
@@ -3817,6 +3846,8 @@ def parse_struct(e: Base.Env, pos: Int, ids: Int, doc: Optional[String], generic
       fields = fields.push(field.node)
       cursor = field.pos
       next_id = field.ids
+    elsif Base.reserved_name_at?(e, cursor)
+      return error(Base.reserved_name(e, cursor, "a field name"))
     else
       return error(Base.found(e, cursor, "a field name or \"end\""))
     end

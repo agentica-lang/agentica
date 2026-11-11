@@ -31,6 +31,12 @@ struct ArmDone
   arms: Arms
 end
 
+# Where a pattern of an arm is reported: the arm, or the pattern itself when the arm has several.
+struct Spot
+  span: Source.Span
+  several: Bool
+end
+
 # An arm body checked: the state, and in a case that gives a value the type of its last expression.
 struct Body
   st: State.St
@@ -570,11 +576,11 @@ def case_arms(cx: State.Cx, st: State.St, node: Ast.CaseStmt, start: Arms) -> Re
   current = value.st
   arms = start
   for arm in node.arms
-    if arms.wildcard or (names.ok? and all_covered?(names.unwrap!, arms.covered))
+    if exhausted?(arms, names)
       return error(State.fail(cx, current, "CHECK-UNREACHABLE-CASE-ARM", "case arm is unreachable", arm.span))
     end
 
-    checked = try check_arm(cx, current, arm, value_type, arms)
+    checked = try check_arm(cx, current, arm, value_type, arms, names)
     current = checked.st
     arms = checked.arms
   end
@@ -586,35 +592,82 @@ def case_arms(cx: State.Cx, st: State.St, node: Ast.CaseStmt, start: Arms) -> Re
   ok(CaseDone(st: current, type: arms.type))
 end
 
-# A guarded arm covers nothing: it may fail at run time, so it adds no variant, no literal and no catch-all to `arms`.
-def check_arm(cx: State.Cx, st: State.St, arm: Ast.CaseArm, value_type: T.Type, arms: Arms) -> Result[ArmDone]
-  case arm.pattern
-    Ast.Pattern.Wildcard(_) ->
-      body = try arm_body(cx, st, arm, arms)
-      ok(ArmDone(st: body.st, arms: arms.with(wildcard: arms.wildcard or !guarded?(arm), type: body.type)))
-    Ast.Pattern.Literal(pattern) -> check_literal_arm(cx, st, arm, pattern, value_type, arms)
-    Ast.Pattern.Variant(pattern) -> check_variant_arm(cx, st, arm, pattern, value_type, arms)
-  end
+# True when the arms so far match every value: a catch-all, or every variant of the enum.
+def exhausted?(arms: Arms, names: Result[List[String]]) -> Bool
+  arms.wildcard or (names.ok? and all_covered?(names.unwrap!, arms.covered))
 end
 
-def check_literal_arm(
+# Each pattern of the arm is checked in order against what the arms before it (and the patterns before it in the arm)
+# cover, so an unreachable or duplicate pattern of an or-pattern is reported at its own span. A guarded arm covers
+# nothing: it may fail at run time, so it adds no variant, no literal and no catch-all to `arms`.
+def check_arm(
   cx: State.Cx,
   st: State.St,
   arm: Ast.CaseArm,
-  pattern: Ast.LiteralPattern,
   value_type: T.Type,
   arms: Arms,
+  names: Result[List[String]],
 ) -> Result[ArmDone]
-  try check_literal(cx, st, pattern, value_type)
-  if arms.literals.any? do |seen: Ast.LitValue| same_literal?(seen, pattern.value) end
-    return error(State.fail(cx, st, "CHECK-UNREACHABLE-CASE-ARM", "duplicate literal case arm", arm.span))
+  patterns = Ast.alternatives(arm.pattern)
+  several = patterns.size > 1
+  if several and Ast.binds?(arm.pattern)
+    return error(
+      State.fail(
+        cx,
+        st,
+        "CHECK-CASE-ARM-BINDING",
+        "a case arm with several patterns cannot bind names",
+        Ast.pattern_span(arm.pattern),
+      ),
+    )
   end
 
-  body = try arm_body(cx, st, arm, arms)
-  seen = arms.with(type: body.type)
-  return ok(ArmDone(st: body.st, arms: seen)) if guarded?(arm)
+  current = State.enter(st)
+  seen = arms
+  for pattern in patterns
+    span = arm.span
+    if several
+      span = Ast.pattern_span(pattern)
+      if exhausted?(seen, names)
+        return error(State.fail(cx, current, "CHECK-UNREACHABLE-CASE-ARM", "case pattern is unreachable", span))
+      end
+    end
 
-  ok(ArmDone(st: body.st, arms: seen.with(literals: arms.literals.push(pattern.value))))
+    matched = try check_pattern(cx, current, pattern, value_type, seen, Spot(span: span, several: several))
+    current = matched.st
+    seen = matched.arms
+  end
+
+  body = try check_arm_body(cx, current, arm, arms)
+  left = State.leave(body.st, st)
+  return ok(ArmDone(st: left, arms: arms.with(type: body.type))) if guarded?(arm)
+
+  ok(ArmDone(st: left, arms: seen.with(type: body.type)))
+end
+
+# One pattern at the top of an arm: its type, whether an earlier pattern already matches the same values (reported at
+# the spot), and what it covers. A variant introduces its names in the scope of the arm.
+def check_pattern(
+  cx: State.Cx,
+  st: State.St,
+  pattern: Ast.Pattern,
+  value_type: T.Type,
+  arms: Arms,
+  spot: Spot,
+) -> Result[ArmDone]
+  case pattern
+    Ast.Pattern.Wildcard(_) -> ok(ArmDone(st: st, arms: arms.with(wildcard: true)))
+    Ast.Pattern.Literal(literal) ->
+      try check_literal(cx, st, literal, value_type)
+      if arms.literals.any? do |seen: Ast.LitValue| same_literal?(seen, literal.value) end
+        return error(duplicate(cx, st, "literal", "case arm", spot))
+      end
+
+      ok(ArmDone(st: st, arms: arms.with(literals: arms.literals.push(literal.value))))
+    Ast.Pattern.Variant(variant) -> check_variant(cx, st, variant, value_type, arms, spot)
+    # The parser makes an or-pattern only at the top of an arm, out of the other kinds.
+    Ast.Pattern.Or(_) -> ok(ArmDone(st: st, arms: arms))
+  end
 end
 
 # A literal pattern needs a primitive value of its own type (CHECK-PATTERN-TYPE), at the top of an arm or nested.
@@ -635,30 +688,37 @@ def check_literal(cx: State.Cx, st: State.St, pattern: Ast.LiteralPattern, value
   ok(true)
 end
 
-def check_variant_arm(
+def check_variant(
   cx: State.Cx,
   st: State.St,
-  arm: Ast.CaseArm,
   pattern: Ast.VariantPattern,
   value_type: T.Type,
   arms: Arms,
+  spot: Spot,
 ) -> Result[ArmDone]
   payload = payload_types(cx, pattern, value_type)
   return error(variant_mismatch(cx, st, pattern, value_type)) if !payload.ok?
 
   if arms.covered.any? do |name: String| name == pattern.variant_name end
-    return error(State.fail(cx, st, "CHECK-UNREACHABLE-CASE-ARM", "duplicate enum variant arm", arm.span))
+    return error(duplicate(cx, st, "enum variant", "arm", spot))
   end
 
-  types = payload.unwrap!
-  bound = try bind_pattern(cx, State.enter(st), pattern, types)
-  body = try check_arm_body(cx, bound, arm, arms)
-  left = State.leave(body.st, st)
-  seen = arms.with(type: body.type)
-  # Only an arm that cannot fail covers its variant: no guard, and nothing but names and _ in the payload.
-  return ok(ArmDone(st: left, arms: seen)) if guarded?(arm) or !irrefutable?(pattern)
+  bound = try bind_pattern(cx, st, pattern, payload.unwrap!)
+  # Only a pattern that cannot fail covers its variant: nothing but names and _ in the payload.
+  return ok(ArmDone(st: bound, arms: arms)) if !irrefutable?(pattern)
 
-  ok(ArmDone(st: left, arms: seen.with(covered: arms.covered.push(pattern.variant_name))))
+  ok(ArmDone(st: bound, arms: arms.with(covered: arms.covered.push(pattern.variant_name))))
+end
+
+# CHECK-UNREACHABLE-CASE-ARM for a pattern that an earlier one already matches: "duplicate literal case arm" for an arm
+# of one pattern, "duplicate literal pattern" for one of the patterns of an arm.
+def duplicate(cx: State.Cx, st: State.St, kind: String, unit: String, spot: Spot) -> String
+  noun = unit
+  if spot.several
+    noun = "pattern"
+  end
+
+  State.fail(cx, st, "CHECK-UNREACHABLE-CASE-ARM", "duplicate #{kind} #{noun}", spot.span)
 end
 
 def guarded?(arm: Ast.CaseArm) -> Bool = arm.guard.some?
@@ -732,6 +792,7 @@ def check_nested(cx: State.Cx, st: State.St, inner: Ast.Pattern, type: T.Type) -
 
       bind_pattern(cx, st, pattern, payload.unwrap!)
     Ast.Pattern.Wildcard(_) -> ok(st)
+    Ast.Pattern.Or(_) -> ok(st)
   end
 end
 
@@ -787,11 +848,6 @@ def arm_without_value(cx: State.Cx, st: State.St, span: Source.Span) -> String
     span,
     "a case that gives a value ends every arm with the expression it gives; compute the value in a name first",
   )
-end
-
-def arm_body(cx: State.Cx, st: State.St, arm: Ast.CaseArm, arms: Arms) -> Result[Body]
-  inner = try check_arm_body(cx, State.enter(st), arm, arms)
-  ok(Body(st: State.leave(inner.st, st), type: inner.type))
 end
 
 # The payload types of a variant pattern: Ok and Err of a Result, Some and None of an Optional, or the variant of the

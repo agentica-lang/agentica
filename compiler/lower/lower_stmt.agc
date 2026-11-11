@@ -512,6 +512,7 @@ def lower_test(cx: Lowering.Cx, fx: Lowering.Fx, pattern: Ast.Pattern, value: In
   case pattern
     Ast.Pattern.Wildcard(_) -> ok(fx)
     Ast.Pattern.Literal(node) -> lower_literal_test(cx, fx, node, value, skip)
+    Ast.Pattern.Or(node) -> lower_or_test(cx, fx, node, value, skip)
     Ast.Pattern.Variant(node) ->
       fx = Lowering.alloc(fx)
       slot = fx.next - 1
@@ -531,6 +532,25 @@ def lower_test(cx: Lowering.Cx, fx: Lowering.Fx, pattern: Ast.Pattern, value: In
 
       test_nested(cx, fx, node, value, skip)
   end
+end
+
+# An or-pattern tries its patterns in order: a pattern that fails jumps to the next one, the last to skip, and one that
+# matches jumps past the rest. Each pattern reuses the registers of the one before, since none binds a name.
+def lower_or_test(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.OrPattern, value: Int, skip: Int) -> Result[Lowering.Fx]
+  fx = Lowering.new_label(fx)
+  matched = fx.labels - 1
+  free = fx.next
+  last = node.patterns.size - 1
+  for pattern in node.patterns.take(last)
+    fx = Lowering.new_label(fx)
+    next_pattern = fx.labels - 1
+    fx = try lower_test(cx, fx, pattern, value, next_pattern)
+    fx = Lowering.emit_at(fx.with(next: free), "jump", [matched], Ast.pattern_span(pattern))
+    fx = Lowering.place(fx, next_pattern)
+  end
+
+  fx = try lower_test(cx, fx, node.patterns[last], value, skip)
+  ok(Lowering.place(fx.with(next: free), matched))
 end
 
 # Tests the nested patterns of a variant: each is read from its payload position into a register and tested there. The
@@ -608,7 +628,7 @@ def bind_payload(cx: Lowering.Cx, fx: Lowering.Fx, pattern: Ast.Pattern, value: 
             fx = fx.with(vars: fx.vars.put(name, target))
             fx = read_payload(fx, node, target, value, item)
           Ast.Slot.Nested(inner) ->
-            if binds?(inner)
+            if Ast.binds?(inner)
               fx = Lowering.alloc(fx)
               part = fx.next - 1
               fx = read_payload(fx, node, part, value, item)
@@ -625,22 +645,6 @@ def bind_payload(cx: Lowering.Cx, fx: Lowering.Fx, pattern: Ast.Pattern, value: 
   end
 
   ok(fx)
-end
-
-# Whether a pattern binds a name anywhere in it.
-def binds?(pattern: Ast.Pattern) -> Bool
-  case pattern
-    Ast.Pattern.Variant(node) -> node.slots.any? do |slot: Ast.Slot| slot_binds?(slot) end
-    _ -> false
-  end
-end
-
-def slot_binds?(slot: Ast.Slot) -> Bool
-  case slot
-    Ast.Slot.Bind(_, _) -> true
-    Ast.Slot.Skip -> false
-    Ast.Slot.Nested(inner) -> binds?(inner)
-  end
 end
 
 # The guard of an arm, after its names are bound: the next arm is tried when it is false. Its registers are free after

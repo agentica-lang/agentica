@@ -7124,7 +7124,7 @@
       "callee": "String.to_int(s: String) -> Result[Int]"
     }
   ],
-  "Result constructor names cannot be declared by users": [
+  "Result constructor names cannot be declared by users, but struct fields may have them": [
     {
       "program": [
         "def main() -> Void",
@@ -7176,15 +7176,19 @@
       "program": [
         "struct Box",
         "  ok: Int",
+        "  error: String",
+        "  some: Bool",
+        "  none: Bool",
         "end",
         "",
         "def main() -> Void",
-        "",
+        "  box = Box(ok: 1, error: \"e\", some: true, none: false)",
+        "  puts(box.with(error: \"f\").error)",
         "end",
         "",
         ""
       ],
-      "code": "CHECK-REDEFINED-NAME"
+      "code": null
     },
     {
       "program": [
@@ -9006,6 +9010,38 @@
     }
   ],
   "maps and the Map and List modules": [
+    {
+      "program": [
+        "def main() -> Void",
+        "  xs = [1, 2] + [3]",
+        "  names: List[String] = [\"a\"] + []",
+        "  xs += [4]",
+        "  puts(xs + names.map do |name| name.size end)",
+        "end",
+        ""
+      ],
+      "code": null
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts([1] + [\"a\"])",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "covers": "\"a\""
+    },
+    {
+      "program": [
+        "def main() -> Void",
+        "  puts([1] + 2)",
+        "end",
+        ""
+      ],
+      "code": "CHECK-TYPE-MISMATCH",
+      "covers": "2"
+    },
     {
       "program": [
         "def main() -> Void",

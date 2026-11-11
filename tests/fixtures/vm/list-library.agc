@@ -25,6 +25,10 @@ def main() -> Void
   puts(List.concat(xs, [7, 8]))
   puts(xs.concat(empty))
   puts(empty.concat(empty))
+  joined = xs + [7, 8] + []
+  joined += empty + [9]
+  puts(joined)
+  puts(xs)
   puts(List.take(xs, 2))
   puts(xs.take(0))
   puts(xs.take(9223372036854775807))
