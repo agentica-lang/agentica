@@ -1133,17 +1133,37 @@ def inferred(cx: State.Cx, st: State.St, block: Ast.BlockLit, param: Ast.BlockPa
     Infer.Guess.Found(type) -> return ok(type)
     Infer.Guess.Open -> message = message
     Infer.Guess.Several(types) ->
-      message += ": its uses allow #{spoken(types, "or")}"
-      help = annotation_help(block, param.name, types)
+      named = writable(types)
+      if named.size > 0
+        message += ": its uses allow #{spoken(named, "or")}"
+        help = annotation_help(block, param.name, named)
+      end
+
     Infer.Guess.Conflict(types) ->
-      message = "the uses of #{noun} parameter \"#{param.name}\" need different types: #{spoken(types, "and")}"
-      help = annotation_help(block, param.name, [types[0]])
+      named = writable(types)
+      if named.size > 0
+        message = "the uses of #{noun} parameter \"#{param.name}\" need different types: #{spoken(named, "and")}"
+        help = annotation_help(block, param.name, named)
+      end
   end
 
   error(State.fail_help(cx, st, "CHECK-BLOCK-TYPE", message, param.span, help))
 end
 
-# The types as words: "Int, Float or String".
+# The types a message shows: not the builtin records (Codec.Info, HttpWire.Request ...), which a use counts so that
+# the set stays complete but a program does not write by those names, and at most four.
+def writable(types: List[T.Type]) -> List[T.Type]
+  out: List[T.Type] = []
+  for type in types
+    if out.size < 4 and !(T.is?(type, "Struct") and Builtins.RECORDS.has_key?(T.name(type)))
+      out = out.push(type)
+    end
+  end
+
+  out
+end
+
+# The types as words: "Int, Float or String"; types is not empty.
 def spoken(types: List[T.Type], last: String) -> String
   text = T.to_text(types[0])
   index = 1

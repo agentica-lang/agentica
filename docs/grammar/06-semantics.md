@@ -904,8 +904,8 @@ total = xs.reduce(0) do |sum, x| sum + x end
   when they leave exactly one. A use names a set of types: an argument of a
   typed parameter (a function, a builtin with one form, a variant payload, a
   struct field, `y: T = x`) its type; `x.name` every receiver kind or struct
-  that has `name` (none when a generic one does, or for `to_s` and
-  `inspect`); an operator with a literal the literal's type (`x * 2` Int or
+  that has `name`, builtin records included (none when a generic one does,
+  when nothing has it, or for `to_s` and `inspect`); an operator with a literal the literal's type (`x * 2` Int or
   String, `%` and ranges Int); `and`, `or` and `!` Bool. Other uses name
   none. With no set, several types left (`x * 2`) or none (`x + 1` and
   `x.upcase`), `CHECK-BLOCK-TYPE` at the parameter, with the annotation in its

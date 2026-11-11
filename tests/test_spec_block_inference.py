@@ -22,6 +22,10 @@ struct Point
   top: Int
 end
 
+struct Box
+  top: Int
+end
+
 def twice(n: Int) -> Int = n * 2
 
 def make[T](body: Fn[T, Int]) -> Int = 0
@@ -61,6 +65,11 @@ VALID = [
     "  puts(Actor.call(actor.address, 1000) do |reply| Msg.Get(reply) end)",
     # A block of a generic call: the body fixes T.
     "  puts(make() do |x| twice(x) end)",
+    # A struct field in a construction, !, a use in a nested block and in an interpolation.
+    "  at = ->(n) { Point(left_edge: n, top: 0) }\n  puts(at.call(1))",
+    "  flip = ->(x) { !x }\n  puts(flip.call(true))",
+    "  add = ->(x) { [1].map do |n| n + twice(x) end }\n  puts(add.call(1))",
+    '  show = ->(x) { "#{x + 1}" }\n  puts(show.call(1))',
     # An annotation still wins.
     "  g = ->(x: Float) { x }\n  puts(g.call(1.0))",
 ]
@@ -76,6 +85,13 @@ REJECTED = [
     ("  f = ->(x) { puts(x) }\n  puts(f)", "CHECK-BLOCK-TYPE", "x"),
     # size is a method of String, List, Map ...: a type that cannot be named.
     ("  f = ->(x) { x.size }\n  puts(f)", "CHECK-BLOCK-TYPE", "x"),
+    # A field that two structs have.
+    ("  f = ->(p) { p.top }\n  puts(f)\n  puts(Box(top: 1))", "CHECK-BLOCK-TYPE", "p"),
+    # A method or field nothing has: no constraint, then the body's own error.
+    ("  f = ->(x) { x.frobnicate }\n  puts(f)", "CHECK-BLOCK-TYPE", "x"),
+    ("  puts(make() do |x| x.lenght end)", "CHECK-BLOCK-TYPE", "x"),
+    ("  f = ->(x) {\n    puts(x + 1)\n    x.lenght\n  }\n  puts(f)", "CHECK-UNKNOWN-METHOD", "x.lenght"),
+    ("  f = ->(x) { x.upcase + x.lenght }\n  puts(f)", "CHECK-UNKNOWN-METHOD", "x.lenght"),
     # Ambiguous: Int * 2 or String * 2.
     ("  f = ->(x) { x * 2 }\n  puts(f)", "CHECK-BLOCK-TYPE", "x"),
     # Uses that need different types.

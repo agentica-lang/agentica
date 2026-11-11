@@ -46,12 +46,13 @@ export def param_type(cx: State.Cx, st: State.St, body: List[Ast.Stmt], name: St
   left: List[T.Type] = []
   narrowed = false
   seen: List[T.Type] = []
+  structs = cx.structs.keys.sort
   work: List[Walk.Node] = body.map do |stmt: Ast.Stmt| Walk.Node.Stmt(stmt) end
   at = 0
   while at < work.size
     node = work[at]
     at += 1
-    for allows in uses(cx, st, node, name)
+    for allows in uses(cx, st, structs, node, name)
       case allows
         Allows.OneOf(types) ->
           seen = add_new(seen, types)
@@ -79,7 +80,7 @@ export def param_type(cx: State.Cx, st: State.St, body: List[Ast.Stmt], name: St
 end
 
 # What the node says about `name` when the name is one of its direct parts.
-def uses(cx: State.Cx, st: State.St, node: Walk.Node, name: String) -> List[Allows]
+def uses(cx: State.Cx, st: State.St, structs: List[String], node: Walk.Node, name: String) -> List[Allows]
   case node
     Walk.Node.Stmt(stmt) ->
       case stmt
@@ -87,21 +88,21 @@ def uses(cx: State.Cx, st: State.St, node: Walk.Node, name: String) -> List[Allo
         _ -> []
       end
 
-    Walk.Node.Expr(expr) -> expr_uses(cx, expr, name)
+    Walk.Node.Expr(expr) -> expr_uses(cx, structs, expr, name)
   end
 end
 
-def expr_uses(cx: State.Cx, expr: Ast.Expr, name: String) -> List[Allows]
+def expr_uses(cx: State.Cx, structs: List[String], expr: Ast.Expr, name: String) -> List[Allows]
   case expr
     Ast.Expr.Call(call) -> call_uses(cx, call, name)
     Ast.Expr.EnumConstructor(variant) -> variant_uses(cx, variant, name)
     Ast.Expr.Construct(construct) -> construct_uses(cx, construct, name)
     Ast.Expr.MethodCall(call) ->
-      return [member_use(cx, call.name)] if named?(call.target, name)
+      return [member_use(cx, structs, call.name)] if named?(call.target, name)
 
       []
     Ast.Expr.FieldAccess(access) ->
-      return [member_use(cx, access.name)] if named?(access.target, name)
+      return [member_use(cx, structs, access.name)] if named?(access.target, name)
 
       []
     Ast.Expr.Binary(binary) -> binary_uses(binary, name)
@@ -217,10 +218,12 @@ def slot(type: T.Type) -> Allows
   Allows.OneOf([type])
 end
 
-# x.name or x.name(...): the receiver kinds that have a method of that name and the structs that have a field of that
-# name. A generic one among them (List, Result, a generic struct ...) takes types that cannot all be named, and every
-# data value has to_s and inspect, so then the use allows any type.
-def member_use(cx: State.Cx, name: String) -> Allows
+# x.name or x.name(...): the receiver kinds that have a method of that name and the structs (builtin records included)
+# that have a field of that name, `structs` being the sorted keys of cx.structs. A generic one among them (List,
+# Result, a generic struct ...) takes types that cannot all be named, and every data value has to_s and inspect, so
+# then the use allows any type. A name that nothing has is a typo, which the check of the body reports with its
+# did-you-mean (CHECK-UNKNOWN-METHOD), so it is no constraint either.
+def member_use(cx: State.Cx, structs: List[String], name: String) -> Allows
   return Allows.Any if name == "to_s" or name == "inspect"
 
   out: List[T.Type] = []
@@ -233,13 +236,15 @@ def member_use(cx: State.Cx, name: String) -> Allows
     end
   end
 
-  for key in cx.structs.keys.sort
+  for key in structs
     if cx.structs[key].any? do |field: Model.Named| field.name == name end
       return Allows.Any if generic_struct?(cx, key)
 
       out = out.push(T.Type.Struct(key, []))
     end
   end
+
+  return Allows.Any if out.size == 0
 
   Allows.OneOf(out)
 end
