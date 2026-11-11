@@ -8,6 +8,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- Lambdas: `->(x) { x + 1 }` is a function value that can be kept in a
+  variable, a field, a list or a map, or passed as an argument; `-> { 42 }`
+  takes no parameters.
+
 ### Changed
 
 - **Breaking:** the child channel of `Process.spawn_channel` is a pipe per
