@@ -1,5 +1,5 @@
-## The data and path rules of the native artifact cache (docs/grammar/05b-modules.md, docs/future/45-packages.md
-## 45.10): what a source row holds (the URL of the archive, its expected SHA-256, the member to use), where an archive
+## The data and path rules of the native artifact cache (docs/grammar/05b-modules.md):
+## what a source row holds (the URL of the archive, its expected SHA-256, the member to use), where an archive
 ## and each selected member live under the cache root, and the pure checks on source rows and redirect targets. This
 ## module never touches the machine: the engine in io/native_artifact.agc does the downloads, the hashes and the
 ## renames, and packs every failure with the file and key the caller names. Cache objects are immutable and

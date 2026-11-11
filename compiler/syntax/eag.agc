@@ -1,4 +1,4 @@
-## The expansion of an `<<~EAG` template (docs/future/51-templates.md): the lines of its body, as the lexer kept them,
+## The expansion of an `<<~EAG` template (docs/grammar/04-lexical.md): the lines of its body, as the lexer kept them,
 ## in the tokens of an expression that builds its text, so that the parser and the checker see ordinary code.
 ##
 ## The body is text with tags. `<%= code %>` inserts the value of `code`, as `"#{code}"` does, `<% code %>` is a

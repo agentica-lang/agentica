@@ -1,4 +1,4 @@
-## Module constants in the checker (docs/future/44-module-constants.md 44.5 to 44.7). The constants are put in
+## Module constants in the checker (docs/grammar/06-semantics.md). The constants are put in
 ## initialization order, a cycle is CHECK-CONSTANT-CYCLE, then each initializer is checked in that order with no
 ## locals in scope and its type recorded for the reads, and the value rules are applied to the checked tree: no call of
 ## a function of the program, no function value, no while, no builtin with effects (CHECK-CONSTANT-EXPRESSION), and

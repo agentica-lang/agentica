@@ -470,7 +470,7 @@ def native_load_failure(cx: Resolve.Context, arg: Ast.Expr, message: String, hel
 end
 
 # NAME.x on a constant: a field access when written with no parentheses and no arguments (a block is an argument), a
-# method call otherwise (docs/future/44-module-constants.md 44.3). The receiver is the name alone, with an id past the
+# method call otherwise (docs/grammar/06-semantics.md). The receiver is the name alone, with an id past the
 # ids of the program, since the call has only one.
 def rewrite_constant_member(
   cx: Resolve.Context,

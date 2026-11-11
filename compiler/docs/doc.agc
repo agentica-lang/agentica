@@ -1,5 +1,5 @@
 ## `agentica doc` as a stage: the text of one module in, its documented API out, or the first lexer or parser
-## diagnostic. It lexes and parses only (docs/future/32-doc-comments.md, 32.5): it does not resolve the imports or
+## diagnostic. It lexes and parses only (docs/grammar/06b-builtins.md): it does not resolve the imports or
 ## check the module, so a missing dependency cannot make it fail; the exception is a module that re-exports a name,
 ## which is linked to find the original declaration (doc_origins.agc). The text is read by the caller
 ## (app/cli_doc.agc), which holds the Workspace.

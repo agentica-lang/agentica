@@ -1,4 +1,4 @@
-## The text form of `agentica refs` (docs/future/39-semantic-cli.md, 39.2): the definition first, then one line for
+## The text form of `agentica refs` (docs/grammar/06b-builtins.md): the definition first, then one line for
 ## each reference, so the output reads like `rg`. Each line starts with `file:line:column` of the name: `definition
 ## field User.email: String`, `read in total`, `construct` (at the top level). A builtin has no definition line. The
 ## roots that were left out are one line each, `skipped FILE: CODE`, for stderr (symbol_text.agc).
