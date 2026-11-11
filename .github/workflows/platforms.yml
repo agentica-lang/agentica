@@ -84,7 +84,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.systems.outputs.matrix) }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 90
+    timeout-minutes: 120
     env:
       AGENTICA_REQUIRE_VM: '1'
       # Linux builds with the system libgc and OpenSSL, as ci.yml does (ci.yml and the release check the vendored link
@@ -169,96 +169,23 @@ jobs:
           key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'mk/*.mk', 'vm/**/*.c', 'vm/**/*.h') }}
           restore-keys: ccache-${{ runner.os }}-${{ runner.arch }}-
 
-      - name: C tests (builds the VM from the sources)
-        run: make vm-test
-      - name: The vendored OpenSSL is linked statically
-        if: env.AGENTICA_OPENSSL == 'vendored'
-        run: ${{ matrix.make }} vendored-check
-      - name: First binary of the bootstrap (linked with stage0) passes the native contracts alone
-        run: ${{ matrix.make }} bootstrap-smoke PYTHON=${{ matrix.python }}
-      - name: Build from bootstrap/stage0.agcb and fixed point (stage2 == stage3, the binary compiles stage2)
+      # Windows flake experiment (never merged): only the build and tools/exp-win.py.
+      - name: Build
         id: build
-        run: ${{ matrix.make }} fixed-point
-
-      - name: "Area cli: options, diagnostics, run, compile, test, modules, the single binary"
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: ${{ matrix.make }} conformance-area/cli PYTHON=${{ matrix.python }}
-      - name: "Area spec: the rules of the language through check"
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: ${{ matrix.make }} conformance-area/spec PYTHON=${{ matrix.python }}
-      - name: "Area golden: the builtins and the VM against the golden outputs (sampled sweep, set by the make target)"
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: ${{ matrix.make }} conformance-area/golden PYTHON=${{ matrix.python }}
-      - name: "Area library: std modules and the standard streams"
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: ${{ matrix.make }} conformance-area/library PYTHON=${{ matrix.python }}
-      - name: "Area files: files, directories, paths, metadata and locks"
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: ${{ matrix.make }} conformance-area/files PYTHON=${{ matrix.python }}
-      - name: "Area files, destructive cases, in the scratch of this runner"
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: ${{ matrix.make }} test-remove-actions PYTHON=${{ matrix.python }}
-        env:
-          AGENTICA_ACTIONS_RUNNER_ENVIRONMENT: ${{ runner.environment }}
-      - name: "Area processes: Process, the private channel, stop signals"
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: ${{ matrix.make }} conformance-area/processes PYTHON=${{ matrix.python }}
-      - name: "Area tasks: tasks, channels and timers"
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: ${{ matrix.make }} conformance-area/tasks PYTHON=${{ matrix.python }}
-      - name: "Area network: TCP, TLS and HTTP against independent peers"
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: ${{ matrix.make }} conformance-area/network PYTHON=${{ matrix.python }}
-      - name: "Area multicore: programs on four schedulers (tests/test_vm_multicore.py)"
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: ${{ matrix.make }} conformance-area/multicore PYTHON=${{ matrix.python }}
-      # ci.yml runs this step on Linux x86_64.
-      - name: The TCP, TLS, HTTP, process and BDD modules with every VM on four schedulers
-        if: ${{ !cancelled() && steps.build.outcome == 'success' && matrix.platform != 'linux-x86_64' }}
-        run: ${{ matrix.make }} test-multicore-modules PYTHON=${{ matrix.python }}
-      - name: Evidence report (fails when an area has no passed case or a skip has no host-only reason)
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        run: ${{ matrix.make }} conformance-report PYTHON=${{ matrix.python }} CONFORMANCE_PLATFORM=${{ matrix.platform }}
+        run: ${{ matrix.make }} -j4
+      - name: "Windows flakes #1335 #1098 #1332"
+        run: |
+          set -o pipefail
+          poetry run python tools/exp-win.py dist/agentica.exe 2>&1 | tee build/exp-win.txt
+      - name: Results
+        if: ${{ !cancelled() }}
+        run: |
+          { echo '```'; cat build/exp-win.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v7
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        with:
-          name: conformance-${{ matrix.platform }}
-          path: build/conformance/summary.json
-          if-no-files-found: error
-
-      # The JIT on macOS ARM, which ci.yml has no runner for (its jit-arm64 job is Linux ARM64): the areas above ran
-      # with `on`, the default, and this runs the goldens and tests/test_vm_multicore.py with AGENTICA_JIT=always (four
-      # schedulers compile and run code at once). So the macos-arm64 status that `conformance all-systems` sums up is
-      # conformance plus the JIT. The real guard that the binary compiles at all is tests/test_vm_jit.py in the golden
-      # area: its jit_host() asserts that the jit trace shows a loop compiled on every machine with an emitter. The
-      # binary has no hardened runtime (the release signs it ad hoc), so code pages are sealed with plain mprotect,
-      # without MAP_JIT; macos-latest is a floating image, so a new macOS that refused that would fail here first.
-      - name: "JIT: the goldens and their --max-steps sweeps with AGENTICA_JIT=always, then half the shards with the JIT off"
-        if: ${{ !cancelled() && steps.build.outcome == 'success' && matrix.platform == 'macos-arm64' }}
-        run: ${{ matrix.make }} vm-jit-test
-        env:
-          AGENTICA_SWEEP: sampled
-
-      - run: if command -v ccache >/dev/null; then ccache --show-stats; fi
-        if: ${{ !cancelled() }}
-      - uses: actions/cache/save@v6
-        with:
-          path: |
-            build/vm/release/uv
-            build/vm/release/libuv.a
-            build/vm/release/third-party-flags
-            build/vm/release/yyjson.o
-            build/vm/release/picohttpparser.o
-            build/vm/release/zlib
-            build/vm/release/libzlib.a
-            build/vm/gc.o
-            build/vm/gc-flags
-          key: native-deps-release-${{ hashFiles('build/native-deps-key') }}
-      - uses: actions/cache/save@v6
         if: ${{ !cancelled() }}
         with:
-          path: build/ccache
-          key: ccache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Makefile', 'mk/*.mk', 'vm/**/*.c', 'vm/**/*.h') }}
+          name: exp-win-${{ matrix.platform }}
+          path: build/exp-win.txt
 
   # The five summaries side by side: a case that no system ran (host-only or open gap on all of them) proves nothing,
   # and one job cannot see that. It runs only when all five systems were picked: on a subset (`platform:<system>`
