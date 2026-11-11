@@ -944,7 +944,8 @@ half: Fn[String, Result[Int]] = ->(s) {
   or from annotations (`->(x: Int) { ... }`), else `CHECK-BLOCK-TYPE`; the
   result from the expected `Fn` or else from the body; `try` only with a known
   `Result` result (`CHECK-TRY-CONTEXT`); capture by value; `return` leaves the
-  lambda. A lambda where no `Fn` is expected is `CHECK-TYPE-MISMATCH`.
+  lambda. A lambda where a type other than `Fn` is expected is
+  `CHECK-TYPE-MISMATCH`.
 - A lambda has no name, so it cannot call itself: the variable it is assigned
   to does not exist inside it (`CHECK-UNKNOWN-NAME`); recursion uses `def`.
 - **One way.** A lambda written as the last argument of a call whose last

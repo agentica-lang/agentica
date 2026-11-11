@@ -1919,7 +1919,14 @@ def parse_simple_statement(e: Base.Env, pos: Int, ids: Int) -> Result[Base.StmtA
     following = Base.kind_at(e, pos + 1)
     if (
       (token.lexeme == "break" or token.lexeme == "next") and
-      (following == "NL" or following == "end" or following == "EOF" or following == "if" or unless_at?(e, pos + 1))
+      (
+        following == "NL" or
+        following == "end" or
+        following == "EOF" or
+        following == "if" or
+        unless_at?(e, pos + 1) or
+        body_closer?(e, following)
+      )
     )
       return parse_loop_control(e, pos, ids)
     end

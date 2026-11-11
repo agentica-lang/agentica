@@ -104,19 +104,10 @@ def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Ty
     Ast.Expr.Binary(found) -> check_binary(cx, st, found)
     Ast.Expr.Call(found) ->
       out = try Calls.check_call(cx, st, found, expected)
-      skip = 0
-      if found.piped
-        skip = 1
+      if last_lambda?(found.args)
+        try call_lambda_block(cx, out.st, found)
       end
 
-      takes = takes_block?(cx, found.name, found.args.size)
-      name = T.display_name(found.name)
-      if found.args.size - skip == 1 and !name.contains?(".")
-        # A function of the program keeps its parentheses before a block: run() do ... end.
-        name = "#{name}()"
-      end
-
-      try lambda_block(cx, out.st, takes, name, found.args, skip)
       ok(out)
     Ast.Expr.EnumConstructor(found) ->
       Calls.check_enum_constructor(
@@ -139,8 +130,10 @@ def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Ty
     Ast.Expr.FieldAccess(found) -> Methods.check_field_access(cx, st, found, expected)
     Ast.Expr.MethodCall(found) ->
       out = try Methods.check_method(cx, st, found, expected)
-      takes = method_takes_block?(cx, out.st, found)
-      try lambda_block(cx, out.st, takes, receiver_text(cx, found.target) + ".#{found.name}", found.args, 0)
+      if last_lambda?(found.args) and method_takes_block?(cx, out.st, found)
+        try lambda_block(cx, out.st, receiver_text(cx, found.target) + ".#{found.name}", found.args)
+      end
+
       ok(out)
     Ast.Expr.Typed(found) -> ok(State.Out(st: st, type: found.type))
     Ast.Expr.BlockLit(found) -> check_block_lit(cx, st, found, expected)
@@ -336,25 +329,44 @@ def check_interpolation(cx: State.Cx, st: State.St, node: Ast.Interpolation) -> 
   ok(State.Out(st: current, type: T.Type.String))
 end
 
-# CHECK-LAMBDA-BLOCK for a lambda written as the last argument of a call whose last parameter is a function (`takes`):
-# the call takes a block there, the one way to write a function in that place. A parameter of a generic type (`some`,
-# `push`) takes no block, so a lambda is its argument. `skip` is the number of arguments the source does not show (the
-# piped value of `x |> f(...)`). `.call(...)` is an Invoke, which takes no block, so it never comes here.
-def lambda_block(
-  cx: State.Cx,
-  st: State.St,
-  takes: Bool,
-  name: String,
-  args: List[Ast.Expr],
-  skip: Int,
-) -> Result[Bool]
-  return ok(true) if !takes or args.size <= skip
+# Whether the last argument is a lambda; the lambda checks below run only then, so a call without one pays nothing.
+def last_lambda?(args: List[Ast.Expr]) -> Bool
+  return false if args.size == 0
 
   case args[args.size - 1]
-    Ast.Expr.BlockLit(found) if found.lambda ->
-      shown = args.size - 1 - skip
+    Ast.Expr.BlockLit(found) -> found.lambda
+    _ -> false
+  end
+end
+
+# CHECK-LAMBDA-BLOCK for a call by name whose last argument is a lambda, when its last parameter is a function. A
+# function of the program keeps its parentheses before a block (run() do ... end), and a piped call shows its value.
+def call_lambda_block(cx: State.Cx, st: State.St, node: Ast.Call) -> Result[Bool]
+  return ok(true) if !takes_block?(cx, node.name, node.args.size)
+
+  skip = 0
+  name = T.display_name(node.name)
+  if node.piped
+    skip = 1
+    name = receiver_text(cx, node.args[0]) + " |> " + name
+  end
+
+  if node.args.size - skip == 1 and !node.name.contains?(".")
+    name = "#{name}()"
+  end
+
+  lambda_block(cx, st, name, node.args.drop(skip))
+end
+
+# CHECK-LAMBDA-BLOCK at the lambda that ends `args`, the arguments the source shows of the call `name`: the call takes
+# a block there, the one way to write a function in that place. A parameter of a generic type (`some`, `push`) takes
+# no block, so the callers ask first (takes_block?). `.call(...)` is an Invoke, which takes no block, so it never
+# comes here.
+def lambda_block(cx: State.Cx, st: State.St, name: String, args: List[Ast.Expr]) -> Result[Bool]
+  case args[args.size - 1]
+    Ast.Expr.BlockLit(found) ->
       call = name
-      if shown > 0
+      if args.size > 1
         call = "#{name}(...)"
       end
 

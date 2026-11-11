@@ -66,6 +66,8 @@ REJECTED = [
     # try needs a known Result type, and a lambda cannot name itself.
     ('  f = ->(s: String) { try s.to_i }\n  puts(f.call("1"))', "CHECK-TRY-CONTEXT", "try s.to_i"),
     ("  f = ->(n: Int) { f.call(n) }\n  puts(f.call(1))", "CHECK-UNKNOWN-NAME", "f"),
+    # break and next cannot leave a lambda.
+    ("  f = ->(x: Int) { next }\n  puts(f.call(1))", "CHECK-LOOP-CONTROL", "next"),
     # A lambda dropped as a statement.
     ("  ->(x: Int) { x }", "CHECK-UNUSED-VALUE", "->(x: Int) { x }"),
     # One way: where a block goes, the lambda is that block.
