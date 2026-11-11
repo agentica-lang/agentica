@@ -347,24 +347,29 @@ class TestModuleRules:
             if help:
                 assert problem.get("help"), files
 
-    def test_a_root_type_named_like_a_std_only_family_leaves_the_std_modules_alone(self):
-        """The root file may declare an enum, a struct or an alias named LogRegistry, even with an Event variant: inside
-        std/logger, LogRegistry.Event(...) is still the builtin record, and the root's own variant is the root's."""
+    def test_a_struct_or_alias_may_be_named_like_a_std_only_family_with_records_and_an_enum_may_not(self):
+        """A struct or a type alias may be named LogRegistry, beside std/logger and a Logger.Event(...) of the root. An
+        enum of that name stays CHECK-REDEFINED-NAME: once linked, its variant Event(...) and the builtin record
+        LogRegistry.Event(...) would be the same name."""
         use = 'import Logger from "std/logger"\n\n'
-        main = 'def main() -> Void\n  Logger.info("x")\n  Logger.log(Logger.Level.Warning, "w")\n'
-        roots = [
-            use + "enum LogRegistry\n  Level\n  Event(Int)\nend\n\n" + main
-            + "  puts(LogRegistry.Event(3))\n  puts(LogRegistry.Level)\nend\n\n",
+        event = '  e = Logger.Event(level: Logger.Level.Info, message: "m", fields: {}, time_ms: 0, task: 1)\n'
+        main = 'def main() -> Void\n  Logger.info("x")\n' + event + "  Logger.stderr_text(e)\n"
+        free = [
             use + "struct LogRegistry\n  n: Int\nend\n\n" + main + "  puts(LogRegistry(n: 1).n)\nend\n\n",
             use + "type LogRegistry = Int\n\n" + main + "  x: LogRegistry = 1\n  puts(x)\nend\n\n",
         ]
-        for checked in self.checks([({"root.agc": root}, "root.agc", None) for root in roots]):
+        enum = use + "enum LogRegistry\n  Level\n  Event(Int)\nend\n\n" + main + "end\n\n"
+        results = self.checks([({"root.agc": root}, "root.agc", None) for root in free + [enum]])
+        for checked in results[:-1]:
             assert checked[1] is None, checked[1]
+        found = self.assert_rejected(results[-1], "CHECK-REDEFINED-NAME")["range"]
+        assert ((found["start"]["line"], found["start"]["column"]),
+                (found["end"]["line"], found["end"]["column"])) == ((3, 1), (7, 1))
 
     def test_the_names_of_the_std_only_families_and_the_old_log_types_are_free_for_a_program(self):
-        """LogEvent, LogLevel, LogRegistry, RegexEngine and Std reserve no name: a program may declare them, and an
-        import alias may be Std, while std/regex and std/logger, which call the builtins, still work beside them. A
-        call of RegexEngine outside std/ is still CHECK-UNKNOWN-NAME."""
+        """LogEvent, LogLevel, LogRegistry (not as an enum), RegexEngine and Std reserve no name: a program may declare
+        them, and an import alias may be Std, while std/regex and std/logger, which call the builtins, still work beside
+        them. A call of RegexEngine outside std/ is still CHECK-UNKNOWN-NAME."""
         declarations = ("struct LogEvent\n  n: Int\nend\n\nenum LogLevel\n  Loud\nend\n\n"
                         "struct LogRegistry\n  n: Int\nend\n\nstruct RegexEngine\n  n: Int\nend\n\n")
         search = '  x = RegexEngine.search("a", [8], [0], [0], [], 2, 0)\n'

@@ -122,12 +122,10 @@ export def check_enum_constructor(
 end
 
 ## Checks Type(name: value, ...): a struct, or Enum.Variant(name: value) written as a construction, which a variant
-## does not take. A builtin record of a std-only family (LogRegistry.Event) keeps its dotted name, and the root file
-## may declare an enum of the family's name, which only the root sees: in another file the name is the record.
+## does not take.
 export def check_construct(cx: State.Cx, st: State.St, node: Ast.Construct, expected: T.Type) -> Result[State.Out]
   parts = node.type_name.split(".")
-  record = cx.structs.has_key?(node.type_name) and cx.file != cx.root
-  if parts.size == 2 and cx.enums.has_key?(parts[0]) and !record
+  if parts.size == 2 and cx.enums.has_key?(parts[0])
     return check_enum_constructor(cx, st, parts[0], parts[1], [], node.args.size, node.span, expected)
   end
 

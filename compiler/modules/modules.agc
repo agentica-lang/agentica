@@ -11,6 +11,7 @@
 ## gets ids above every id the earlier files hold, so the ids of one walk have gaps and the files are not in the order
 ## of their ids. Nothing but the checker's tables reads a node id, so the program means the same.
 
+import Builtins from "../catalog/builtins"
 import {BARE_NAMES, ENUMS, RECORDS, RESERVED, STD_ONLY} from "../catalog/builtins"
 import Diag from "../diagnostics/diagnostic"
 import Packages from "../packages/package_import"
@@ -991,8 +992,8 @@ def counted(parsed: Int, fresh: Bool) -> Int
   parsed
 end
 
-# The names a file declares, and those it exports; a repeated name, a builtin name or a reserved type name is
-# CHECK-REDEFINED-NAME at the declaration name.
+# The names a file declares, and those it exports; a repeated name, a builtin name, a reserved type name or an enum
+# named like a std-only family with records (Builtins.record_family?) is CHECK-REDEFINED-NAME at the declaration name.
 def collect(file: String, declarations: List[Ast.Decl]) -> Result[Collected]
   names: Map[String, Declarations.Kind] = {}
   public: Map[String, Declarations.Kind] = {}
@@ -1001,7 +1002,8 @@ def collect(file: String, declarations: List[Ast.Decl]) -> Result[Collected]
     next if Declarations.import?(kind)
 
     name = Declarations.name_of(wrapped)
-    if names.has_key?(name) or BARE_NAMES.include?(name) or RESERVED.include?(name)
+    reserved = RESERVED.include?(name) or (Declarations.enum?(kind) and Builtins.record_family?(name))
+    if names.has_key?(name) or BARE_NAMES.include?(name) or reserved
       return error(
         Failure.fail_at(
           Failure.Site(file: file, span: Declarations.name_span_of(wrapped)),
