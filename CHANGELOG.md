@@ -27,6 +27,12 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   logger types as a program does (`HTTP.Request`, `Logger.Event`), and
   `symbol` and `refs` find them by those names.
 
+### Fixed
+
+- A guard (`return x if c`), a `case` or a `while`/`for ... do` inside a `do`
+  block within `[...]`, `(...)` or `{...}` no longer fails with
+  `LEX-UNMATCHED-DELIMITER` or a parse error, so `agentica fmt` can write it.
+
 ## [0.30.0] - 2026-11-11
 
 ### Added
