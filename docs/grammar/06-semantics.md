@@ -48,7 +48,7 @@ programs are valid and how they run.
 - `Address[T]`: Send-only reference to a `Channel[T]` (`channel.address`); it
   is data, not a handle. `Address` is not reserved: written with one type
   argument it is this builtin, so a program may still declare its own
-  `struct Address`
+  `struct Address`, but not a generic one (section 6c)
 - `Enum[T, ...]`: User-declared nominal sum type
 - Declared struct: Nominal type with typed, immutable fields
 

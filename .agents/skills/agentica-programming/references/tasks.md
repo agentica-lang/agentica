@@ -303,7 +303,9 @@ constant. It is not a handle: to give a task its own socket or channel and also
 a shared channel, pass `Link(socket: s, results: results.address)` to
 `Task.spawn_owning`; only the socket is handed over, `results` stays open. A
 registry by name is a constant table:
-`NAMES: ATS[String, Address[Msg]] = ATS.new()` (below).
+`NAMES: ATS[String, Address[Msg]] = ATS.new()` (below). Your own
+`struct Address` (no type parameters) is fine; a generic struct, enum or alias
+named `Address` is `CHECK-REDEFINED-NAME`.
 
 A counter or a cache that several tasks update goes in an `ATS` table (below);
 other shared state belongs to one owner task that receives messages on a

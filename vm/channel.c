@@ -232,6 +232,7 @@ static agc_value builtin_send(agc_vm *vm, agc_value *args, uint32_t span) {
    identity. The row is shared, so two schedulers never make two. */
 static agc_value builtin_address(agc_vm *vm, agc_value *args, uint32_t span) {
   (void)span;
+  agc_sync_assert(vm);
   agc_channel *c = agc_as_channel(vm, args[0]);
   if (!c->address) {
     address *a = agc_alloc(sizeof *a);
@@ -244,7 +245,9 @@ static agc_value builtin_address(agc_vm *vm, agc_value *args, uint32_t span) {
 }
 
 /* Address.send: Channel.send on the address's channel while it lives. A parked sender holds its channel
-   (agc_task.channel), so the retry after its wake finds it again. */
+   (agc_task.channel), so the retry after its wake finds it again. The row is shared: the weak read takes the
+   collector's alloc lock while rt->sync is held (the order every allocation under rt->sync already takes), and
+   send_value needs rt->sync, as Channel.send does. */
 static agc_value builtin_address_send(agc_vm *vm, agc_value *args, uint32_t span) {
   const address *a = agc_as_address(vm, args[0]);
   if (a->rt != vm->rt) agc_fail(vm, "RUNTIME-ADDRESS-CONTEXT", "the address belongs to another run", span + 1);

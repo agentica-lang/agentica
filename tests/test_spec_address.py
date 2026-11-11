@@ -59,6 +59,16 @@ RULES = {
         + main(INBOX, "t = Task.spawn_owning(&f, inbox.address)"), "CHECK-NOT-A-HANDLE", "inbox.address"),
     "Address is not reserved": (
         "struct Address\n  street: String\nend\n\n" + main('puts(Address(street: "Main").street)'), None, None),
+    "a generic struct cannot be named Address": (
+        "struct Address[T]\n  v: T\nend\n\n" + main("puts(1)"), "CHECK-REDEFINED-NAME",
+        "struct Address[T]\n  v: T\nend\n"),
+    "a generic alias cannot be named Address": (
+        "type Address[T] = List[T]\n\n" + main("puts(1)"), "CHECK-REDEFINED-NAME", "Address"),
+    "a table in a struct of a constant": (
+        "BB: Box = Box(t: ATS.new())\n\nstruct Box\n  t: ATS[String, Int]\nend\n\n" + main("puts(1)"),
+        "CHECK-CONSTANT-TYPE", "ATS.new()"),
+    "a constant table through a generic alias": (
+        "AA: Tab[Int] = ATS.new()\n\ntype Tab[V] = ATS[String, V]\n\n" + main('AA.put("a", 1)'), None, None),
 }
 
 LIB = (
@@ -71,10 +81,16 @@ LIB = (
     "export def street() -> String = Address(street: \"Main\").street\n"
 )
 
+GENERIC_LIB = "export type Address[T] = List[T]\n\nexport def first(a: Address[Int]) -> Int = a[0]\n"
+
+# A module case is (m.agc, main.agc, code, covered text in main.agc).
 MODULE_RULES = {
     "an exported table and an address in a signature": (
+        LIB,
         'import M from "m"\nimport {NAMES} from "m"\n\n'
         + main(INBOX, 'NAMES.put("inbox", inbox.address)', '_ = M.tell("inbox", 1)', "puts(M.street())"), None, None),
+    "an imported module cannot declare a generic Address": (
+        GENERIC_LIB, 'import M from "m"\n\n' + main("puts(M.first([1]))"), "CHECK-REDEFINED-NAME", None),
 }
 
 
@@ -82,7 +98,7 @@ MODULE_RULES = {
 def batch(tmp_path_factory):
     """The programs of the rule tables, checked by one `check` call."""
     programs = [rule[0] for rule in RULES.values()]
-    programs += [{"m.agc": LIB, "main.agc": rule[0]} for rule in MODULE_RULES.values()]
+    programs += [{"m.agc": rule[0], "main.agc": rule[1]} for rule in MODULE_RULES.values()]
     return check_many(programs, tmp_path_factory.mktemp("address"))
 
 
@@ -94,5 +110,5 @@ def test_address_and_constant_table_rules(batch, name):
 
 @pytest.mark.parametrize("name", list(MODULE_RULES))
 def test_addresses_across_modules(batch, name):
-    program, code, text = MODULE_RULES[name]
-    assert_rule(batch({"m.agc": LIB, "main.agc": program}), program, code, text)
+    lib, program, code, text = MODULE_RULES[name]
+    assert_rule(batch({"m.agc": lib, "main.agc": program}), program, code, text)

@@ -168,7 +168,7 @@ A send-only reference to the channel, as a pid is in Erlang. The channel stays a
 - `==` is `true` for two addresses of one channel. `puts` and `IO.inspect` print `<Address N>`, where `N` counts the addresses of the run from 1.
 - It is not JSON-encodable (`CHECK-NOT-ENCODABLE`), not a `Map` key or `Set` element (`CHECK-MAP-KEY-TYPE`, `CHECK-SET-ELEMENT-TYPE`), and not allowed in a constant (`CHECK-CONSTANT-TYPE`).
 - It does not keep the channel alive, and it is not a handle: `Task.spawn_owning` does not hand it over ([one handle owned, one channel shared](#one-handle-owned-one-channel-shared)).
-- `Address` is not a reserved name: a user `struct Address` is allowed, and `Address[T]` with one type argument is always this type.
+- `Address` is not a reserved name: a user `struct Address` is allowed, and `Address[T]` with one type argument is always this type, so a generic struct, enum or alias named `Address` is `CHECK-REDEFINED-NAME`.
 
 ## Address.send
 

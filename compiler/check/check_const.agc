@@ -366,7 +366,7 @@ def check_data(cx: State.Cx, st: State.St, node: AstWalk.Node, block_allowed: Bo
           cx,
           st,
           "CHECK-CONSTANT-TYPE",
-          "a constant expression must have a data type, found #{T.to_text(type)}",
+          data_message(cx, type),
           Ast.expr_span(expr),
           data_help(cx, type),
         ),
@@ -378,6 +378,13 @@ end
 # a constant that keeps addresses is a table of them (ATS[String, Address[M]]), filled while the program runs.
 def constant_data?(cx: State.Cx, type: T.Type) -> Bool
   CheckTypes.data?(cx, type) and !Collections.holds_address?(cx, type)
+end
+
+# A data type refused here holds an Address (constant_data?).
+def data_message(cx: State.Cx, type: T.Type) -> String
+  return "a constant cannot hold an Address, found #{T.to_text(type)}" if CheckTypes.data?(cx, type)
+
+  "a constant expression must have a data type, found #{T.to_text(type)}"
 end
 
 def data_help(cx: State.Cx, type: T.Type) -> String

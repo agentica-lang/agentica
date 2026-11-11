@@ -179,6 +179,10 @@ else 0). SIGPIPE is ignored and every write is checked.
   and runs between turns (`agc_gc_finalize_pending`), never inside an
   allocation. OOM and abort
   handlers only `write(2)` and `_Exit(70)`.
+- `agc_weak` (`vm/value.c`) is the one weak reference: register it with
+  `GC_GENERAL_REGISTER_DISAPPEARING_LINK` (the plain
+  `GC_general_register_disappearing_link` clears a live object's link in the
+  GC-debug build) and read it under `GC_call_with_alloc_lock`.
 - Under `AGC_NO_GC`, `agc_fuzz_one` frees every block after each mutant
   (`agc_release_all`), so never cache an `agc_alloc` pointer in a static. It
   also sets a 256 MB budget (`agc_set_alloc_limit`): an allocation past it

@@ -603,14 +603,28 @@ static agc_value (*volatile lost_address_fn)(void) = lost_address;
 static void (*volatile scrub_stack_fn)(void) = scrub_stack;
 
 /* Once the collector frees the channel, a send through its address is "address: gone": the address does not keep the
-   channel alive. The deterministic form of the case, which a program cannot pin (when a collection runs). */
+   channel alive. The deterministic form of the case, which a program cannot pin (when a collection runs). The scan is
+   conservative, so a stray word on some ABI may keep one channel alive: of several lost channels, at least one must
+   go, and each one still alive must still take the send. */
 static void test_address_gone(void) {
-  agc_value a = lost_address_fn();
-  scrub_stack_fn();
+  enum { LOST = 8 };
+  agc_value lost[LOST];
+  for (int k = 0; k < LOST; k++) {
+    lost[k] = lost_address_fn();
+    scrub_stack_fn();
+  }
   /* The jmp_buf of the last failure lives in the static vm and may still hold a pointer in a saved register. */
   memset(&vm.fail, 0, sizeof vm.fail);
-  for (int round = 0; round < 3; round++) agc_gc_collect();
-  assert(failed(send_to(main_task, a, 1, 0), "address: gone"));
+  for (int round = 0; round < 5; round++) agc_gc_collect();
+  int gone = 0;
+  for (int k = 0; k < LOST; k++) {
+    agc_value r = send_to(main_task, lost[k], 1, 0);
+    if (!sent(r)) {
+      assert(failed(r, "address: gone"));
+      gone++;
+    }
+  }
+  assert(gone > 0);
 }
 #endif
 

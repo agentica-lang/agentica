@@ -49,7 +49,9 @@ only, so the channel's owner stays its one reader, and it does not keep the
 channel alive. It cannot be JSON-encoded (`CHECK-NOT-ENCODABLE`), be a map key
 or set element (`CHECK-MAP-KEY-TYPE`, `CHECK-SET-ELEMENT-TYPE`) or be in a
 constant (`CHECK-CONSTANT-TYPE`). Its sends and errors are on the `Channel`
-page.
+page. `Address` is not reserved: a program may declare a `struct`, `enum` or
+alias named `Address` with no type parameters, but one with type parameters is
+`CHECK-REDEFINED-NAME`, since `Address[T]` always names the builtin.
 
 ### Shared tables (ATS)
 
