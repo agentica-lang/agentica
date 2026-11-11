@@ -71,7 +71,7 @@ Read only what the task needs.
 | `compression.md` | Zlib bytes and Lazy byte streams (deflate, zlib, gzip) |
 | `archive.md` | `std/archive` (explicit-allowlist TAR extraction into a new directory) |
 | `processes.md` | Process, `IO.read_bytes`, flush, `System.env/os/pid` |
-| `network.md` | TCP, TLS, HTTP client and server |
+| `network.md` | TCP, TLS, `std/socks` (SOCKS5), HTTP client and server |
 | `tasks.md` | Task, `Task.map`, Channel, ATS tables, timeouts, cancel, monitors, who owns state, `std/actor`, `std/supervisor` |
 | `lazy.md` | Lazy pipelines, endless sources, big files |
 | `testing.md` | unit tests (`Test`, `*_test.agc`) |

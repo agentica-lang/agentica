@@ -122,10 +122,17 @@ HttpClientOptions(timeout_ms: Int = 30000, idle_timeout_ms: Int = 30000, max_con
   `timeout_ms` covers the whole call.
   `proxy: "http://host:port"` sends `http://` requests through a forward proxy
   and opens a `CONNECT` tunnel for `https://`; user info in it is sent as
-  `Proxy-Authorization: Basic` to the proxy only, and no error shows it. A
-  client never reads the environment: pass
-  `HttpClientOptions(proxy: HTTP.proxy_from_env(url))` (curl's rules, `""` is
-  none).
+  `Proxy-Authorization: Basic` to the proxy only, and no error shows it.
+  `proxy: "socks5h://user:pass@host:1080"` (or `socks5://`, which resolves the
+  name here) carries each connection through a SOCKS5 proxy, as
+  `Socks.connect` does. A client never reads the environment: pass
+  `HttpClientOptions(proxy: HTTP.proxy_from_env(url))` (curl's rules,
+  `ALL_PROXY` included, `""` is none).
+- `import Socks from "std/socks"`:
+  `Socks.connect(proxy, host, port, timeout_ms) -> Result[Socket]` is
+  `TCP.connect` through a SOCKS5 proxy URL (`socks5://` or `socks5h://`, port
+  1080 by default, `user:password@` percent-encoded). Errors start with
+  `socks:` and name the proxy and the target, never the login.
 - One connection that you drive yourself (Ruby's `Net::HTTP.start`):
   `HTTP.start(origin)` connects (an origin with no path),
   `HTTP.send_request(conn, method, target, body)` returns at the response head
