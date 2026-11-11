@@ -390,13 +390,13 @@ agentica test [PATH...] [--steps FILE]
 - **Scenario child.** Started with `--json` (so a crash leaves its diagnostic as
   the last stderr line) and `--max-steps` of 1,000,000 times the number of
   steps plus one. The list child is the same with `list` and a 30-second limit.
-- **Protocol.** One JSON record per line, on the child channel: a bidirectional
-  socket pair of its own, opened by `Process.spawn_channel` and found by the
-  child on descriptor 3 (`docs/vm/10-io-processes.md` §10.4). A record is plain
-  JSON with no marker and no token. The child's stdin is closed at once, and its
-  stdout and stderr are the program's own, so nothing a handler prints can pass
-  for a record. The child flushes its stdout before it sends a record. The
-  runner sends a step only after the previous one ended.
+- **Protocol.** One JSON record per line, on the child channel: a pipe per
+  direction of its own, opened by `Process.spawn_channel` and found by the
+  child on descriptors 3 and 4 (`docs/vm/10-io-processes.md` §10.4). A record
+  is plain JSON with no marker and no token. The child's stdin is closed at
+  once, and its stdout and stderr are the program's own, so nothing a handler
+  prints can pass for a record. The child flushes its stdout before it sends a
+  record. The runner sends a step only after the previous one ended.
 
 - **Direction:** runner to child
   - **Record:** settings, once (`base`, `agentica`, `seeded`, `seed`)
@@ -510,7 +510,7 @@ over 30 seconds is `RUNTIME-TEST-TIMEOUT`, and the rest of the file does not
 run.
 
 The runner starts the file with `--agentica-test list` or `--agentica-test run`
-and a child channel (`Process.spawn_channel`, descriptor 3,
+and a child channel (`Process.spawn_channel`, descriptors 3 and 4,
 `docs/vm/10-io-processes.md` §10.4). The records and the test indexes travel on
 the channel, as plain JSON lines with no marker and no token. The test's own
 stdin and stdout are free: the runner closes the child's stdin at once, so

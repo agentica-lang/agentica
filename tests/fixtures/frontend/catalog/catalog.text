@@ -540,7 +540,7 @@ builtin Process.spawn forms=1
 builtin Process.spawn_captured forms=1
   Process.spawn_captured(command: String, args: List[String], options: Process.Options = Process.Options()) -> Result[Process] shape=(String, List(String), Struct(Process.Options) = Process.Options()) -> Result(Opaque(Process)) rule=Plain impl="Process.spawn_captured.options" effects=["subprocess"] desc="Start an executable with Process.Options and stdout and stderr kept in 1 MiB buffers; out or err is an error; VM only."
 builtin Process.spawn_channel forms=1
-  Process.spawn_channel(command: String, args: List[String], options: Process.Options = Process.Options()) -> Result[Process] shape=(String, List(String), Struct(Process.Options) = Process.Options()) -> Result(Opaque(Process)) rule=Plain impl="Process.spawn_channel.options" effects=["subprocess"] desc="Like spawn_captured, plus a channel to the child: fd 3 and AGENTICA_CHANNEL=3 in the child; VM only."
+  Process.spawn_channel(command: String, args: List[String], options: Process.Options = Process.Options()) -> Result[Process] shape=(String, List(String), Struct(Process.Options) = Process.Options()) -> Result(Opaque(Process)) rule=Plain impl="Process.spawn_channel.options" effects=["subprocess"] desc="Like spawn_captured, plus a channel: the child reads fd 3, writes fd 4, has AGENTICA_CHANNEL=3,4; VM only."
 builtin Process.wait forms=1
   Process.wait(p: Process, timeout_ms: Int) -> Result[Int] shape=(Opaque(Process), Int) -> Result(Int) rule=Plain impl="Process.wait" effects=["subprocess"] desc="Wait for exit and stderr forwarding; timeout preserves the child."
 builtin Profile.measure forms=1

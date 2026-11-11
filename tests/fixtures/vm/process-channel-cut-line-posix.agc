@@ -15,11 +15,11 @@ end
 
 def main() -> Void
   # Whole line, then the exit.
-  ask("printf 'whole\\n' >&3")
+  ask("printf 'whole\\n' >&4")
   # Bytes without an LF, then the exit.
-  ask("printf 'cut' >&3")
+  ask("printf 'cut' >&4")
   # A million bytes without an LF, as in a send that was refused after its write began.
-  ask("head -c 1000000 /dev/zero | tr '\\0' x >&3")
+  ask("head -c 1000000 /dev/zero | tr '\\0' x >&4")
   # The child dies in the middle of a line.
-  ask("printf 'cut' >&3; kill -KILL $$")
+  ask("printf 'cut' >&4; kill -KILL $$")
 end
