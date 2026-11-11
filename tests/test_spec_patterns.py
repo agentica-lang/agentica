@@ -295,6 +295,19 @@ MODULES = [
                               "    Models.Shape.Boxed(Gone.Some(n)) -> puts(n)\n    Models.Shape.Boxed(_) -> puts(0)\n"
                               "  end\n", "")},
      "CHECK-PATTERN-TYPE", "root.agc", "Gone.Some(n)"),
+    ("the patterns of one arm name an imported enum, which only they use",
+     {"models.agc": "export enum Shape\n  Dot\n  Circle(Int)\n  Square(Int)\nend\n\n"
+                    "export def make() -> Shape = Shape.Dot\n",
+      "root.agc": 'import {Shape, make} from "models"\n\n'
+                  + main_with("  case make()\n    Shape.Dot, Shape.Circle(_) -> puts(1)\n"
+                              "    Shape.Square(_) -> puts(2)\n  end\n", "")},
+     None, None, None),
+    ("a pattern of one arm that writes an import alias without its member",
+     {"models.agc": "export enum Shape\n  Dot\n  Circle(Int)\nend\n\n",
+      "root.agc": 'import Models from "models"\n\n'
+                  + main_with("  s = Models.Shape.Dot\n  case s\n    Models.Shape.Circle(_), Models.Dot -> puts(1)\n"
+                              "    _ -> puts(2)\n  end\n", "")},
+     "CHECK-IMPORT-NAME", "root.agc", "Models"),
 ]
 
 
