@@ -22,11 +22,12 @@ MIN_CAPACITY = 64
 
 # A Down names the child and its run, the count of its starts, so the end notice of an older run is told apart. A Retry
 # starts a child again after a failed start: it goes through the inbox so that a Stop is read between two starts. A
-# Stop carries the monotonic time by which the stop must be over.
+# Stop carries the monotonic time by which the stop must be over and the channel for the result of the children's
+# stops, which then never mixes with a crash of the supervisor itself.
 enum Msg
   Down(Int, Int, TaskDown)
   Retry(Int)
-  Stop(Int)
+  Stop(Int, Channel[Result[Void]])
 end
 
 ## A child of a supervisor; `child` makes one.
@@ -37,8 +38,8 @@ end
 
 ## What `start` takes besides the children.
 export struct Options
-  ## A child that crashes more than this many times within `within_ms` makes the supervisor give up. Counted per child;
-  ## 0 or more.
+  ## A child that crashes more than this many times within `within_ms`, or fails to start more than this many times in
+  ## a row, makes the supervisor give up. Counted per child; 0 or more.
   max_restarts: Int = 3
   ## Above 0.
   within_ms: Int = 5000
@@ -57,12 +58,14 @@ struct Plan
   ready: Channel[Bool]
 end
 
-# The running children by position: how to stop each one (none when it is down), which start it is, and when it
-# crashed lately.
+# The running children by position: how to stop each one (none when it is down), which start it is, when it crashed
+# lately, and how many of its starts failed in a row. The count in a row has no time window: a register block that
+# always runs out its 5 s fails slower than `within_ms` may age the crashes out.
 struct State
   stops: List[Optional[Fn[Int, Result[Void]]]]
   runs: List[Int]
   crashes: List[List[Int]]
+  failed: List[Int]
 end
 
 ## A child that runs `behaviour` and calls `register` with the address of each new actor, in a task of its own, for at
@@ -98,19 +101,27 @@ end
 ## Stops the children in reverse order, each as `Actor.stop` does, then the supervisor, all within `timeout_ms`, and
 ## gives the first error of a child's stop. A child still running when the time is over is cancelled, and so are the
 ## ones after it, without `terminate`; a supervisor still running then is cancelled with its children, and `stop` gives
-## `supervisor: timeout`. A supervisor that gave up gives `supervisor: NAME crashed N times in M ms`.
+## `supervisor: timeout`. A child's error may also come from a crash while it handles the messages left in its inbox. A
+## supervisor that gave up gives its reason: `supervisor: NAME crashed N times in M ms` or `supervisor: NAME failed to
+## start N times in a row`.
 export def stop(supervisor: Ref, timeout_ms: Int) -> Result[Void]
   deadline = Time.monotonic_ms + timeout_ms
-  _ = supervisor.address.send(Msg.Stop(deadline), timeout_ms)
+  answer: Channel[Result[Void]] = Channel.new(1)
+  _ = supervisor.address.send(Msg.Stop(deadline, answer), timeout_ms)
   case Task.await(supervisor.task, max_of(deadline - Time.monotonic_ms, 1))
-    Await.Done(result) -> reason(result)
+    Await.Done(result) ->
+      case answer.recv(0)
+        ok(children) -> children
+        error(_) -> reason(result)
+      end
     Await.TimedOut ->
       Task.cancel(supervisor.task)
       error("supervisor: timeout")
   end
 end
 
-# A supervisor that gave up crashed with its reason as the message: give the reason alone.
+# The end of a supervisor that did not answer a Stop: one that gave up crashed with its reason as the message, which is
+# given alone.
 def reason(result: Result[Void]) -> Result[Void]
   return result if result.ok?
 
@@ -178,7 +189,7 @@ def run(plan: Plan) -> Result[Void]
     crashes = crashes.push([])
   end
 
-  state = State(stops: stops, runs: runs, crashes: crashes)
+  state = State(stops: stops, runs: runs, crashes: crashes, failed: runs)
   for index in 0...plan.children.size
     state = bring_up(plan, state, index)
   end
@@ -190,7 +201,10 @@ def run(plan: Plan) -> Result[Void]
         case message
           Msg.Down(index, run, down) -> state = ended(plan, state, index, run, down)
           Msg.Retry(index) -> state = bring_up(plan, state, index)
-          Msg.Stop(deadline) -> return stop_all(state, deadline)
+          Msg.Stop(deadline, answer) ->
+            result = stop_all(state, deadline)
+            _ = answer.send(result, 0)
+            return result
         end
       error(_) -> nil
     end
@@ -209,16 +223,24 @@ def ended(plan: Plan, state: State, index: Int, run: Int, down: TaskDown) -> Sta
   end
 end
 
-# Starts a child. A failed start counts as a crash, and a Retry in the inbox tries again.
+# Starts a child. A failed start counts as a crash, and one more in a row; a Retry in the inbox tries again.
 def bring_up(plan: Plan, state: State, index: Int) -> State
   run = state.runs[index] + 1
   current = state.with(runs: state.runs.set(index, run))
   case plan.children[index].start.call(plan.inbox, index, run)
-    ok(stop_child) -> current.with(stops: current.stops.set(index, some(stop_child)))
+    ok(stop_child) ->
+      current.with(stops: current.stops.set(index, some(stop_child)), failed: current.failed.set(index, 0))
     error(_) ->
-      failed = crashed(plan, current, index)
+      in_row = current.failed[index] + 1
+      counted = crashed(plan, current.with(failed: current.failed.set(index, in_row)), index)
+      if in_row > plan.options.max_restarts
+        give_up(plan, counted, index, "failed to start #{times(in_row)} in a row")
+      end
+
+      # The send cannot find the inbox full: a child that failed to start has no monitor, so this Retry is its one
+      # message, and the inbox has room for two per child besides 64 for stops.
       _ = plan.inbox.send(Msg.Retry(index), 0)
-      failed
+      counted
   end
 end
 
@@ -228,16 +250,20 @@ def crashed(plan: Plan, state: State, index: Int) -> State
   recent = state.crashes[index].select do |at| now - at < plan.options.within_ms end.push(now)
   stopped = state.with(stops: state.stops.set(index, none), crashes: state.crashes.set(index, recent))
   if recent.size > plan.options.max_restarts
-    _ = stop_all(stopped, Time.monotonic_ms + GIVE_UP_STOP_MS)
-    name = plan.children[index].name
-    halt("supervisor: #{name} crashed #{times(recent.size)} in #{plan.options.within_ms} ms")
+    give_up(plan, stopped, index, "crashed #{times(recent.size)} in #{plan.options.within_ms} ms")
   end
 
   stopped
 end
 
+# Stops the other children and crashes the supervisor with the reason of child `index`.
+def give_up(plan: Plan, state: State, index: Int, what: String) -> Void
+  _ = stop_all(state, Time.monotonic_ms + GIVE_UP_STOP_MS)
+  halt("supervisor: #{plan.children[index].name} #{what}")
+end
+
 # Stops the running children in reverse order by the monotonic `deadline` and gives the first error. Once the time is
-# used up, each child left gets 1 ms, so it is cancelled.
+# used up, each child left gets 1 ms, so it is usually cancelled.
 def stop_all(state: State, deadline: Int) -> Result[Void]
   first: Result[Void] = ok()
   for found in state.stops.reverse

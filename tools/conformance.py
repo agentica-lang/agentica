@@ -216,6 +216,7 @@ EXCLUDED = {
     "tests/test_coverage_tool.py": "tools/coverage.py: needs gcc/gcov and clang with llvm-cov; Linux `make test`",
     "tests/test_layout_check.py": "tools/layout_check.py, a binutils check of the Linux x86-64 build that ci.yml runs",
     "tests/test_site_examples.py": "the code blocks of the site, checked with the site build",
+    "tests/test_ci_apt_mirror.py": ".github/scripts/apt-mirror.sh, a temporary bash script that the Linux CI jobs run",
     "tests/test_site_versions.py": "tools/site_versions.py, the multi-version site build that pages.yml runs on Linux",
     "tests/test_frontend_bytecode.py": "frozen goldens of the front end stages; the spec and golden areas run it live",
     "tests/test_frontend_catalog.py": "frozen goldens of the front end stages; the spec and golden areas run it live",
