@@ -1,4 +1,4 @@
-## The names of the compiler prelude (stdlib/prelude/, docs/future/25-ruby-typed-idioms.md 25.6). The checker reads the
+## The names of the compiler prelude (stdlib/prelude/, docs/vm/03-ir-and-bytecode.md §4.7). The checker reads the
 ## prelude files, the linker must not take them for a user file and lowering flags them, so the names live in the first
 ## stage that needs them.
 

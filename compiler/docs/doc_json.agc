@@ -1,4 +1,4 @@
-## The JSON form of `agentica doc` (docs/future/32-doc-comments.md, 32.5). Each key means the same wherever it appears:
+## The JSON form of `agentica doc`. Each key means the same wherever it appears:
 ## `doc` is the whole text of the `##` block or null, `summary` its first paragraph or null, `span` the declaration
 ## with its `file`, every type a string as written. `agentica outline` writes its items with `item_json` too.
 

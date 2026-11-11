@@ -1,4 +1,4 @@
-## The text form of `agentica symbol` (docs/future/39-semantic-cli.md, 39.2): one line per match, as `outline` prints
+## The text form of `agentica symbol` (docs/grammar/06b-builtins.md): one line per match, as `outline` prints
 ## the declaration, so the output reads like `rg`: `file:line:column` first, at the start of the declaration (of the
 ## name for a field or a variant). A builtin has no place: its lines are `builtin` and the signature of each form.
 ## Docs are in the JSON form only. The roots that were left out are one line each, `skipped FILE: CODE`, for stderr.

@@ -1,7 +1,7 @@
 ## The lowering: takes a linked and checked program and gives the VM IR (ir.agc), or the first
 ## LOWER- problem. The function table is, in this order: the declared functions in program order, the kept constants in
 ## initialization order, `<start>` when the program has constant slots, then the blocks in the order they were found
-## (docs/future/44-module-constants.md 44.7).
+## (docs/grammar/06-semantics.md).
 ##
 ## Recursion: lowering an expression or a statement takes at most 3 VM frames for each level of the tree (most shapes
 ## take 1 or 2, because many calls are tail calls), and the checker allows 1,000 levels (CHECK-TOO-DEEP), so it uses

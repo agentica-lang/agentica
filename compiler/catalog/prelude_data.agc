@@ -1,5 +1,5 @@
 ## The prelude table, as data: for each catalog row marked Rule.Prelude, the file of its body, the types its variables
-## may take and the function that serves each type (docs/future/25-ruby-typed-idioms.md 25.6). The bodies are in
+## may take and the function that serves each type. The bodies are in
 ## stdlib/prelude/. Edited by hand; tests/test_stdlib_prelude.py checks that every body exists and that this table and
 ## the catalog agree.
 

@@ -60,7 +60,7 @@ STRING_STOPS = Set.new(["\"", "#", "\\", "\n", "\r", ""])
 ## Where the plain text of a heredoc line ends: `#`, `\`, a line break, or the sentinel. A `"` is plain text there.
 HEREDOC_STOPS = Set.new(["#", "\\", "\n", "\r", ""])
 
-## The name of the heredoc whose body is a template (docs/future/51-templates.md): the lexer keeps its lines as written
+## The name of the heredoc whose body is a template (docs/grammar/04-lexical.md): the lexer keeps its lines as written
 ## in one `eag` token and the parser expands it (eag.agc).
 export EAG_HEREDOC = "EAG"
 
@@ -303,7 +303,7 @@ export def lex(text: String) -> Diag.Outcome[List[Tokens.Token]]
 end
 
 ## Lexes a source text like `lex`, and also gives its plain comments, which `lex` drops: the side list that the
-## formatter attaches to the tree (docs/future/47-formatter.md, 47.4). The tokens are the ones `lex` gives.
+## formatter attaches to the tree. The tokens are the ones `lex` gives.
 export def lex_with_comments(text: String) -> Diag.Outcome[Scanned]
   input = new_input(text)
   first = Lexed(tokens: [], comments: [], delimiters: [], index: 0, line: 1, line_start: 0)
@@ -343,8 +343,8 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
   # addition; it changes where `line_start` does.
   column_base = 1 - line_start
   # The arms for names, operators, brackets and line breaks (nine of ten tokens) do their work in place: a call
-  # costs a few VM steps, and the lexer makes a token every 5 characters or so (docs/vm-benchmarks.md, "Speed
-  # pass, second part"). The arms for strings, numbers and docs call a function: they are rare.
+  # costs a few VM steps, and the lexer makes a token every 5 characters or so (docs/vm-benchmarks.md, "The
+  # lexer"). The arms for strings, numbers and docs call a function: they are rare.
   # An arm may read up to `index + 2` with no bounds test: the sentinels after the text (see Input) cover it.
   while index < size
     char = chars[index]

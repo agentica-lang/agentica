@@ -1,4 +1,4 @@
-## The plain comments of a file attached to its tree (docs/future/47-formatter.md, 47.4), the first step of the
+## The plain comments of a file attached to its tree, the first step of the
 ## formatter. The lexer keeps the comments in a side list (`Lexer.lex_with_comments`), so the tree, the checker and
 ## the later stages never see them; this pass gives each comment one node and one role, before any layout.
 ##

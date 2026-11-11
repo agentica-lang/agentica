@@ -20,7 +20,7 @@ export struct Env
 end
 
 ## Where the std/ sources come from: the files of a stdlib/ folder (an ordinary run of the front end, with `--stdlib`),
-## or the copy the binary carries, read with FrontEnd.std_source (docs/future/35-self-hosting.md, 35.3).
+## or the copy the binary carries, read with FrontEnd.std_source (docs/vm/08-loader-and-cli.md §9).
 export enum StdProvider
   Folder(String)
   Embedded
