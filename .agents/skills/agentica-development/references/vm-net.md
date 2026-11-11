@@ -154,12 +154,12 @@ Design, error texts, ends per system and the user rules:
 ## HTTP
 
 - The head adapter and body decoder (`vm/http_parse.h`, `vm/http_pico.c`,
-  `vm/http_body.c`; §10.6, §10.6.1). The rules of §10.6 apply. Tests check
+  `vm/http_body.c`; §10.6). The rules of §10.6 apply. Tests check
   codes, not messages.
   - Head parsing runs our pre-scan and start-line checks, then picohttpparser
     (`vm/third_party/picohttpparser`, tag v1.4, built at the baseline without
     `-msse4.2`), then our token, value, obs-fold, Host and status checks
-    (§10.6.1). Only `vm/http_pico.c` includes `picohttpparser.h`. It runs
+    (§10.6). Only `vm/http_pico.c` includes `picohttpparser.h`. It runs
     without `last_len` and only when new bytes complete a line. The head is
     limited to an 8192-byte start line plus 64 KiB of headers. A -1 becomes a
     400 or a client error `Result`.
