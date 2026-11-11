@@ -9,6 +9,7 @@ import pytest
 
 from tests.agentica_test import cli, run, vm_environment
 from tests.span_support import end, problem, start, where
+from tests.test_spec_type_at import AGENTS, AGENTS_USER, LIMITS, write_agents
 
 MODELS = '''export LIMIT = 10
 
@@ -770,3 +771,31 @@ def test_type_members_is_a_use_of_the_type_name_alone(tmp_path):
         (where(main, "User.members", 0), where(main, "User.members", 4)),
         (where(main, "Models.User.members", 7), where(main, "Models.User.members", 11)),
     ]
+
+
+def test_a_name_inside_a_module_block_is_found_by_position_and_by_name_with_the_uses_in_the_order_of_the_text(tmp_path):
+    write_agents(tmp_path)
+    local = answer(("agents.agc", where(AGENTS, "total = n")), cwd=tmp_path)
+    assert (local["definition"]["kind"], local["definition"]["module"]) == ("local", "agents.agc")
+    assert places(local) == [("agents.agc", *where(AGENTS, "total >"), "binding", "clamp"),
+                             ("agents.agc", *where(AGENTS, "total\n  end"), "binding", "clamp")]
+    # A file and its blocks are several modules, which another file is linked between; the uses of a file still come
+    # in the order of its text, asked from inside a block or outside.
+    limit = [("agents.agc", *where(AGENTS, "LIMIT if"), "value", "clamp"),
+             ("agents.agc", *where(AGENTS, "LIMIT\n"), "value", "clamp"),
+             ("agents.agc", *where(AGENTS, "+ LIMIT)", 2), "value", "main"),
+             ("limits.agc", *where(LIMITS, "+ LIMIT", 2), "value", "cap")]
+    for needle, inside in (("+ LIMIT)", 2), ("LIMIT if", 0)):
+        report = answer(("agents.agc", where(AGENTS, needle, inside)), cwd=tmp_path)
+        assert (report["definition"]["module"], places(report)) == ("limits.agc", limit), needle
+    # An exported function of a block, by each name that writes it and by position: its file is the definition's.
+    uses = told("Counter.start", ".", cwd=tmp_path)
+    assert as_set(told("Agents.Counter.start", ".", cwd=tmp_path)) == as_set(uses)
+    assert as_set(told(spot("user.agc", AGENTS_USER, "Counter.start", 8), ".", cwd=tmp_path)) == as_set(uses)
+    assert uses["definition"] == symbol_match("Counter.start", ".", cwd=tmp_path)
+    assert (uses["definition"]["module"], start(uses["definition"]["name_span"])) == ("agents.agc",
+                                                                                      where(AGENTS, "start(initial"))
+    assert [(found[0], found[4]) for found in places(uses)] == [("agents.agc", "peek"), ("agents.agc", "main"),
+                                                                 ("user.agc", "main")]
+    block = ask("Counter", "agents.agc", cwd=tmp_path, style="--ai")
+    assert block.stdout == "agents.agc:%d:%d definition module Counter\n" % where(AGENTS, "Counter\n")

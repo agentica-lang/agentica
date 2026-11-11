@@ -890,3 +890,71 @@ def test_a_query_answers_a_file_with_an_unused_variable_and_check_still_refuses_
     done = run(cli() + ["--json", "type-at", "user.agc:%d:%d" % where(user, "Draft.f")], env=vm_environment(),
                cwd=program)
     assert problem(done, "CHECK-UNUSED-VARIABLE", 1)["file"].endswith("draft.agc")
+
+
+# Module blocks (docs/grammar/05b-modules.md): a block of agents.agc is a module of its own, which the queries answer
+# from and name by the file that holds it. `refs` and `symbol` (tests/test_spec_refs.py, tests/test_spec_symbol.py)
+# and std/analysis (tests/test_std_analysis.py) ask the same files.
+AGENTS = '''import {LIMIT, cap} from "limits"
+
+export module Counter
+  export struct State
+    count: Int
+  end
+
+  export def start(initial: Int) -> State = State(count: clamp(initial))
+
+  def clamp(n: Int) -> Int
+    total = n
+    return LIMIT if total > LIMIT
+
+    total
+  end
+end
+
+module Hidden
+  export def peek() -> Int = Counter.start(1).count
+end
+
+def main() -> Void
+  state = Counter.start(cap(12))
+  puts(state.count + Hidden.peek() + LIMIT)
+end
+'''
+LIMITS = "export LIMIT = 10\n\nexport def cap(n: Int) -> Int = n + LIMIT\n"
+AGENTS_USER = '''import Agents from "agents"
+
+def main() -> Void
+  state = Agents.Counter.start(2)
+  puts(state.count)
+end
+'''
+
+
+def write_agents(directory):
+    for name, text in (("agents.agc", AGENTS), ("limits.agc", LIMITS), ("user.agc", AGENTS_USER)):
+        (directory / name).write_text(text, encoding="utf-8")
+
+
+def test_a_position_inside_a_module_block_is_answered_and_its_types_are_written_as_each_place_writes_them(tmp_path):
+    write_agents(tmp_path)
+    local = answer(("agents.agc", where(AGENTS, "total = n")), cwd=tmp_path)
+    assert (local["kind"], local["type"], local["definition"]["kind"]) == ("name", "Int", "local")
+    assert (local["definition"]["file"], start(local["definition"]["name_span"])) == ("agents.agc",
+                                                                                      where(AGENTS, "total = n"))
+    # Inside its block a type is bare; the rest of the file writes it through the block, an importer through its alias.
+    state = where(AGENTS, "State\n")
+    cases = [(("agents.agc", where(AGENTS, "State(count")), "State", "agents.agc", state),
+             (("agents.agc", where(AGENTS, "-> State =", 3)), "State", "agents.agc", state),
+             (("agents.agc", where(AGENTS, "state =")), "Counter.State", "agents.agc", where(AGENTS, "state =")),
+             (("user.agc", where(AGENTS_USER, "Counter.start", 8)), "Agents.Counter.State", "agents.agc",
+              where(AGENTS, "start(initial"))]
+    for position, type_text, file, defined in cases:
+        report = answer(position, cwd=tmp_path)
+        assert (report["type"], report["definition"]["file"]) == (type_text, file), position
+        assert start(report["definition"]["name_span"]) == defined, position
+    # With --partial, a name in a function of a block that failed to check gets its definition from the link.
+    broken = AGENTS.replace("total = n\n", 'total = n + "x"\n')
+    (tmp_path / "broken.agc").write_text(broken, encoding="utf-8")
+    partial = answer(("broken.agc", where(broken, "LIMIT if")), "--partial", cwd=tmp_path)
+    assert (partial["partial"], partial["kind"], partial["definition"]["file"]) == (True, "name", "limits.agc")

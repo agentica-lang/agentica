@@ -130,6 +130,7 @@ def load(settings: Env.Settings, module: String, functions: List[String], first_
       blank_line_after_end: false,
       max_line_width: 0,
       stubbed: false,
+      block: "",
     ),
   )
 end

@@ -34,11 +34,11 @@ end
 
 # `field User.email: String` and `variant Shape.Circle(Float)` through the owner; `function make(name: String) -> User`
 # and `parameter user: User` through the signature; the kind and the name for what a signature adds nothing to (a
-# struct, an enum, a type alias, a resource, a constant).
+# struct, an enum, a type alias, a resource, a constant, a module block).
 def described(found: Model.Symbol) -> String
   if found.kind == "field" or found.kind == "variant"
     return "#{found.kind} #{found.owner}.#{found.signature}"
-  elsif ["struct", "enum", "alias", "resource", "constant"].any? do |kind: String| kind == found.kind end
+  elsif ["struct", "enum", "alias", "resource", "constant", "module"].any? do |kind: String| kind == found.kind end
     return "#{found.kind} #{found.name}"
   end
 

@@ -52,7 +52,8 @@ end
 ## program is the parse of the stub of that entry rather than of the text, tree the tree digest of this walk, and clean
 ## whether the two are the same and the entry types every constant, so the bodies and constants need no check:
 ## constants then has the type of each constant by its linked name. tested says that the file was read as the root of a
-## test file (Settings.test_file), so its tree may hold the `main` of its test functions (test_main.agc).
+## test file (Settings.test_file), so its tree may hold the `main` of its test functions (test_main.agc). block is the
+## name of the module block this module is (`enter_block`), "" for a file.
 export struct Module
   key: String
   file: String
@@ -77,6 +78,7 @@ export struct Module
   clean: Bool
   constants: Map[String, T.Type]
   tested: Bool
+  block: String
 end
 
 ## Every module of a program. order lists the keys with the root first, each file before the files its imports read; a
@@ -480,6 +482,7 @@ def enter_block(walk: Walk, file: Module, block: Ast.ModuleDecl) -> Result[Walk]
     clean: false,
     constants: {},
     tested: false,
+    block: block.name,
   )
 
   ok(walk.with(seen: walk.seen.put(key, 0), done: walk.done.put(key, module), order: walk.order.push(key)))
@@ -866,6 +869,7 @@ def enter(settings: Env.Settings, walk: Walk, parsed: Parsed, fresh: Bool) -> Re
     clean: false,
     constants: {},
     tested: parsed.tested,
+    block: "",
   )
 
   frame = Frame(

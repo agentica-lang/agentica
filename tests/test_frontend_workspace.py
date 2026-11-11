@@ -2,12 +2,13 @@
 
 fixtures/frontend/workspace/end-to-end.agc builds a Workspace over an in-memory table of files and goes through the
 linker, the checker, the lowering and the writer, for a program with a sibling module, a package from deps/ and a std/
-module from std_source, and writes the .agcb, which the test then runs with the CLI. (An import that the Workspace
-cannot read is CHECK-IMPORT-IO: tests/test_frontend_modules.py.)
+module from std_source, and writes the .agcb, which the test then runs with the CLI. Then it links a file whose import
+the table lacks, which is CHECK-IMPORT-IO.
 
 The case is the dynamic proof for reads: its table is keyed under a folder of the test, where the test has
 written garbage at every path of the tree (main.agc, util.agc, the manifest, the lock and the package), so a stage that
-read the disk, even with a fallback to the Workspace, would parse the garbage and fail. It does not see a call that
+read the disk, even with a fallback to the Workspace, would parse the garbage and fail; and a module that links at the
+path of the missing import, so a read of the disk there would not fail. It does not see a call that
 reads nothing (a File.stat with its answer ignored, or a pure Path call), nor a stage that asks the Workspace first and
 the disk after it: tests/test_style_core_purity.py is the static half, and covers the calls it knows.
 """
@@ -28,10 +29,11 @@ GARBAGE = "}}} nothing the front end reads {{{\n"
 
 
 def write_decoys(root):
-    """Garbage at every path that the fixture keeps in memory, under `root`."""
+    """Garbage at every path that the fixture keeps in memory, under `root`, and a module where it has none."""
     for relative in [
         "project/src/main.agc",
         "project/src/util.agc",
+        "project/src/broken.agc",
         "project/agentica.toml",
         "project/agentica.lock",
         "project/deps/greet/greet.agc",
@@ -39,6 +41,7 @@ def write_decoys(root):
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(GARBAGE, encoding="utf-8")
+    (root / "project/src/missing.agc").write_text("export def n() -> Int = 1\n", encoding="utf-8")
 
 
 # Both variants run on a Linux host with forward slashes only; no backslash path is tried.
@@ -62,8 +65,9 @@ def test_the_whole_pure_core_compiles_a_program_over_an_in_memory_workspace(tmp_
     arguments = [base, version, COMMIT, GIT, GREET, package_hash(package), str(out)]
     result = run(cli() + [str(END_TO_END)] + arguments + (["windows"] if windows else []), cwd=tmp_path)
     assert result.code == 0, result.stderr
-    # "ok" is the end of the pipeline; a stage that failed prints its code and the file instead.
-    assert result.stdout.splitlines() == ["ok"]
+    # "ok" is the end of the pipeline; a stage that failed prints its code and the file instead. The import that only
+    # the disk has fails at the file that imports it.
+    assert result.stdout.splitlines() == ["ok", f"LINK CHECK-IMPORT-IO {base}/project/src/broken.agc"]
 
     # The bytes link the four files into one program that does what main says: 9 capped to 5, doubled, greeted.
     ran = run(cli() + ["run", "--", str(out)], cwd=tmp_path)

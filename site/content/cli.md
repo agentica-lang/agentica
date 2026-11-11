@@ -124,7 +124,7 @@ src/orders.agc:22:9-22:19 user.email: String
 src/models.agc:4:3 field email
 ```
 
-Line and column count from 1, in code points (an emoji is one column). The first line is the type of the expression and its span; the next is its definition (for a builtin, its signature). `type-at` checks the file and what it imports, but needs no `main`. A type of another file is written through the import alias (`Models.User`). A local, a parameter or a loop variable has a type and a definition at its binding. A type name in an annotation or a type argument (`Models.User`) has `kind` `type` and the struct, enum or alias it names as its definition; a builtin type (`Int`, `List`) has none. A builtin (`split` in `xs.split(",")`) has no definition; with `--json` it has `kind` `builtin` and the object of `agentica help NAME --json` under `help`.
+Line and column count from 1, in code points (an emoji is one column). The first line is the type of the expression and its span; the next is its definition (for a builtin, its signature). `type-at` checks the file and what it imports, but needs no `main`. A type of another file is written through the import alias (`Models.User`), and one of a module block through the block's name (`Counter.State`, or `Agents.Counter.State` through an alias), except inside its own block. A local, a parameter or a loop variable has a type and a definition at its binding. A type name in an annotation or a type argument (`Models.User`) has `kind` `type` and the struct, enum or alias it names as its definition; a builtin type (`Int`, `List`) has none. A builtin (`split` in `xs.split(",")`) has no definition; with `--json` it has `kind` `builtin` and the object of `agentica help NAME --json` under `help`.
 
 ## Find a name
 
@@ -136,7 +136,7 @@ agentica symbol Models.User.email src/    # PATH is a file or a folder, default 
 src/models.agc:4:3 field User.email: String
 ```
 
-NAME is written as the code writes it: `total`, `User.email`, `Level.Info`, `Models.User` through the import alias of a file under PATH, `std/queue.pop` or a builtin (`Map.get`). A bare name lists every module that declares it, private declarations too. The files under PATH are linked together; one that does not link is listed under `skipped` and the others still answer. `--json` adds `kind`, `module`, `exported`, `signature`, `doc` and the spans to each match.
+NAME is written as the code writes it: `total`, `User.email`, `Level.Info`, `Models.User` through the import alias of a file under PATH, `Counter.start` or `Agents.Counter.start` for an export of a module block, `std/queue.pop` or a builtin (`Map.get`). A bare name lists every module that declares it, private declarations too (a private name of a module block is found bare only). The files under PATH are linked together; one that does not link is listed under `skipped` and the others still answer. `--json` adds `kind`, `module`, `exported`, `signature`, `doc` and the spans to each match.
 
 ## Find references
 

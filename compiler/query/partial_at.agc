@@ -41,7 +41,7 @@ export def answer(
         Position.Located.At(offset) ->
           return typed if !in_failed?(linked, failed, offset)
 
-          named(linked, checked, offset, typed)
+          named(At.focus(linked, offset), checked, offset, typed)
       end
   end
 end
@@ -57,9 +57,9 @@ export def unclear?(linked: Linker.Linked, failed: List[String], asked: Position
   end
 end
 
-# Whether `offset` is in a function of the root file that did not check.
+# Whether `offset` is in a function of the root file, or of one of its module blocks, that did not check.
 def in_failed?(linked: Linker.Linked, failed: List[String], offset: Int) -> Bool
-  for declaration in linked.modules[0].declarations
+  for declaration in At.focus(linked, offset).modules[0].declarations
     case declaration
       Ast.Decl.Function(node) ->
         return true if At.holds?(node.span, offset) and failed.any? do |name: String| name == node.name end

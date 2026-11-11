@@ -101,6 +101,8 @@ class Batch:
 
         PROGRAM is a template that the first value of a row fills (by default that value is the program), or a
         function of the row's values. The test builds its program the same way and looks it up in the fixture.
+        A row is a value or a tuple of values, never a `pytest.param`: that is a tuple of (values, marks, id), so
+        PROGRAM would be built from the wrong values.
         """
         build = program if callable(program) else lambda first, *_: program % first
         self.programs.extend(build(*(row if isinstance(row, tuple) else (row,))) for row in rows)

@@ -13,9 +13,11 @@ import Diag from "../diagnostics/diagnostic"
 import Problems from "../diagnostics/problem"
 import Model from "../docs/doc_model"
 import Signature from "../docs/signature"
+import Declarations from "../modules/declarations"
 import Env from "../modules/link_env"
 import Linker from "../modules/linker"
 import Modules from "../modules/modules"
+import Ast from "../syntax/ast"
 import Source from "../syntax/source"
 import Suggest from "../syntax/suggest"
 import QueryOptions from "query_options"
@@ -33,9 +35,9 @@ end
 
 ## One declaration found. `kind` is `function`, `struct`, `enum`, `alias`, `constant`, `field`, `variant` or `builtin`.
 ## `name` is the name alone (`email`), `owner` the struct or enum of a field or a variant ("" otherwise). `file` is the
-## key of the module (`display` of query_files.agc names it in an answer), "" for a builtin, which has no place; so
-## do its spans. `exported` is the flag of the declaration, or of the struct or enum of a member. `signature` and `doc`
-## are the ones `type-at` gives the definition.
+## key of the file (Linker.home_key, which a module block shares; `display` of query_files.agc names it in an answer),
+## "" for a builtin, which has no place; so do its spans. `exported` is the flag of the declaration, or of the struct
+## or enum of a member. `signature` and `doc` are the ones `type-at` gives the definition.
 export struct Match
   kind: String
   name: String
@@ -87,21 +89,22 @@ export def search(name: String, roots: List[SymbolPaths.Root], linked: SymbolLin
 end
 
 ## The declaration of `module` whose name is written at `name_span`: a top-level declaration, a field or a variant, as
-## `answer` lists it (the `file` is the key of the module). `none` when the span is no declaration's name.
+## `answer` lists it (the `file` is the key of its file). `none` when the span is no declaration's name.
 export def declared_at(module: Linker.LinkedModule, name_span: Source.Span) -> Optional[Match]
   at = name_span.start.offset
+  file = Linker.home_key(module)
   for item in Model.declared(module.parsed, module.text)
-    return some(item_match(module.key, item)) if item.name_span.start.offset == at
+    return some(item_match(file, item)) if item.name_span.start.offset == at
 
     case item.detail
       Model.Detail.Struct(fields) ->
         for field in fields
-          return some(field_match(module.key, item, field)) if field.name_span.start.offset == at
+          return some(field_match(file, item, field)) if field.name_span.start.offset == at
         end
 
       Model.Detail.Enum(variants) ->
         for variant in variants
-          return some(variant_match(module.key, item, variant)) if variant.name_span.start.offset == at
+          return some(variant_match(file, item, variant)) if variant.name_span.start.offset == at
         end
 
       Model.Detail.Function(_, _) -> next
@@ -141,8 +144,8 @@ def declared(modules: List[Linker.LinkedModule], aliases: Map[String, List[Strin
   found: List[Match] = []
   for module in modules
     for item in Model.declared(module.parsed, module.text)
-      for written in written_names(module, item.exported, aliases)
-        found = found.concat(of_item(module.key, item, written, name))
+      for written in written_names(modules, module, item.exported, aliases)
+        found = found.concat(of_item(Linker.home_key(module), item, written, name))
       end
     end
   end
@@ -151,20 +154,43 @@ def declared(modules: List[Linker.LinkedModule], aliases: Map[String, List[Strin
 end
 
 # The beginnings a name of a declaration can have: none (the name as the file declares it), and for an exported one the
-# alias of a root file (`Models.`) and `std/NAME.` for a module of the standard library.
-def written_names(module: Linker.LinkedModule, exported: Bool, aliases: Map[String, List[String]]) -> List[String]
+# alias of a root file (`Models.`, or `Counter.` for a module block), `std/NAME.` for a module of the standard library,
+# and for a module block that its file exports, each beginning of the file with the name of the block
+# (`Agents.Counter.`).
+def written_names(
+  modules: List[Linker.LinkedModule],
+  module: Linker.LinkedModule,
+  exported: Bool,
+  aliases: Map[String, List[String]],
+) -> List[String]
   out = [""]
   return out if !exported
 
-  for alias in aliases_for(aliases, module.key).uniq
+  for alias in aliases_for(aliases, module.key)
     out = out.push("#{alias}.")
   end
 
-  if module.key.starts_with?("std/") and module.key.ends_with?(".agc")
+  if module.block != ""
+    for file in modules
+      if file.key == Linker.home_key(module) and exports_block?(file, module.block)
+        for written in written_names(modules, file, true, aliases).drop(1)
+          out = out.push("#{written}#{module.block}.")
+        end
+      end
+    end
+  elsif module.key.starts_with?("std/") and module.key.ends_with?(".agc")
     out = out.push("#{module.key.slice(0, module.key.length - 4)}.")
   end
 
-  out
+  out.uniq
+end
+
+# Whether `file` exports its module block `name`.
+def exports_block?(file: Linker.LinkedModule, name: String) -> Bool
+  file.parsed.declarations.any? do |decl: Ast.Decl|
+    block = Declarations.module?(Declarations.kind_of(decl)) and Declarations.name_of(decl) == name
+    block and Declarations.exported?(decl)
+  end
 end
 
 # The item, or its field or variant, that `name` names when the item is written `prefix` + its name.
