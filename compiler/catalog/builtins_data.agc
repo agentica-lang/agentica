@@ -4096,7 +4096,7 @@ ROWS_34: List[Model.Builtin] = [
     implementation: "Process.spawn_channel.options",
     effects: ["subprocess"],
     description: (
-      "Like spawn_captured, plus a channel to the child: fd 3 and AGENTICA_CHANNEL=3 in the child; VM only."
+      "Like spawn_captured, plus a channel: the child reads fd 3, writes fd 4, has AGENTICA_CHANNEL=3,4; VM only."
     ),
     alternatives: [],
   ),

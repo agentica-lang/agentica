@@ -86,10 +86,10 @@ callbacks only set flags and queue the task. Only `vm/loop.c`,
 - Platform adapters (`vm/process_os.h`, `vm/duplex_os.h`, each with `*_posix.c`
   and `*_windows.c`) own the command search rules of `Process.spawn` (what
   counts as a path, the PATH split and quotes, the `.exe`/`.com` allowlist with
-  no PATHEXT, the names refused) and the ends of a child channel (the
-  `AGENTICA_CHANNEL` value each system understands). `duplex.c` keeps framing,
-  limits, locks and timeouts. The read of a child's stdout beside libuv for
-  `Process.read_available` is POSIX only.
+  no PATHEXT, the names refused) and the ends of a child channel (two pipes,
+  `AGENTICA_CHANNEL=3,4`, and the one-socket `3` that POSIX still takes).
+  `duplex.c` keeps framing, limits, locks and timeouts. The read of a child's
+  stdout beside libuv for `Process.read_available` is POSIX only.
 - `vm/files.c`: the `File`, `Dir` and `Path` builtins (`agc_file_builtins`,
   shared with Windows; `docs/vm/02-reference-behavior.md` §2.8). `vm/file_io.c`
   is the synchronous libuv filesystem adapter, with no VM state, run in pool
