@@ -38,14 +38,8 @@ if [ "${1:-/}" = "/" ] && [ "$(id -u)" -ne 0 ]; then
   sudo_cmd=(sudo)
 fi
 
-# The trailing slash is optional (the arm64 runner writes
-# `URIs: http://ports.ubuntu.com/ubuntu-ports` without it). What follows the
-# path must be a slash, whitespace or the end of the line, so `/ubuntu` never
-# matches the start of `/ubuntu-ports`. The inner group keeps the whitespace
-# (empty for a slash or the end), because the mirrors already end in `/`:
-# this way no URI gets a double slash or loses its separator.
-archive_re='https?://([A-Za-z0-9-]+\.)*ubuntu\.com/ubuntu(/|([[:space:]]|$))'
-ports_re='https?://ports\.ubuntu\.com/ubuntu-ports(/|([[:space:]]|$))'
+archive_re='https?://([A-Za-z0-9-]+\.)*ubuntu\.com/ubuntu/'
+ports_re='https?://ports\.ubuntu\.com/ubuntu-ports/'
 
 shopt -s nullglob
 files=()
@@ -66,8 +60,8 @@ trap 'rm -f "$tmp"' EXIT
 
 for f in "${files[@]}"; do
   sed -E \
-    -e "s#${archive_re}#${archive_target}\\3#g" \
-    -e "s#${ports_re}#${ports_mirror}\\2#g" "$f" >"$tmp"
+    -e "s#${archive_re}#${archive_target}#g" \
+    -e "s#${ports_re}#${ports_mirror}#g" "$f" >"$tmp"
   # Several Canonical URLs collapse into one mirror: keep the first line per
   # URL so the mirror list does not name it three times.
   if [ "$(basename "$f")" = "apt-mirrors.txt" ]; then
