@@ -22,13 +22,14 @@ target (42.4, 42.16).
 - **Memory.** A type alone does not shrink a `List[UInt8]`: stored as 64-bit
   numbers it costs 8 bytes per item. The memory gain needs typed storage that
   uses the element width (§42.12); the types are the input that storage needs.
-  (`Bytes` is built and covers the byte case.)
+  `Bytes` covers the byte case.
 - **Binary protocols and files.** `std/binary` reads and writes numbers as
   `Int`, so the width is only a convention in the function name and a run-time
   range check (`value 70000 does not fit in u16`). With `UInt16` the range is in
   the type.
-- **FFI** (issue #534). C has `int32_t`, `uint8_t` and `float`; a native
-  signature needs those widths.
+- **Native values.** The FFI has its own `C.Int32`, `C.UInt8` and the like
+  for signatures, but a program value that a native call returns is an `Int`
+  or a `Float` again; sized types keep the width in the program.
 - **Interop.** CBOR's integer major types cover -2^64 to 2^64 - 1
   (`16-cbor.md` maps `Int` only); other systems use `uint64` IDs and 32-bit
   floats in their data.
@@ -124,8 +125,7 @@ there is no implicit conversion.
   with a correctly rounded `strtof`. Reason: the Agentica front end cannot round
   decimal text exactly, and rounding through binary64 first can give the wrong
   binary32 in a tie (the same reason as §42.9). The text is a new constant kind
-  of `.agcb` (§42.11). The implementation PR tests `strtof` against exact
-  rounding on every release target, the Windows UCRT included.
+  of `.agcb` (§42.11).
 - **No integer literal becomes a `Float`.** `x: Float = 1` stays
   `CHECK-TYPE-MISMATCH`. Reason: that is today's rule (§6); contextual typing
   applies to sized integers and to float literals, not to the change of kind.
@@ -289,10 +289,9 @@ there is no implicit conversion.
   to binary32. For `+`, `-`, `*`, `/` and `sqrt`, that gives the correctly
   rounded binary32 result, because binary64 has at least 2p + 2 bits where p =
   24 is the precision of binary32 (53 is at least 50). This is Figueroa's result
-  on double rounding (1995). The condition is stated for normal results, so the
-  implementation PR tests subnormal results against exact rational rounding.
-  Each `Float32` value is stored as a double that holds a binary32 value, and a
-  new opcode `ROUND_F32` rounds the result after each float operation (§42.11).
+  on double rounding (1995). The condition is stated for normal results. Each
+  `Float32` value is stored as a double that holds a binary32 value, and a new
+  opcode `ROUND_F32` rounds the result after each float operation (§42.11).
   Reason: one routine rounds all operations, and no separate float32 arithmetic
   is needed in C.
 - **Overflow.** A result above the `Float32` range is an infinity, not an error,
@@ -366,7 +365,6 @@ there is no implicit conversion.
   explicit conversion at the call site (`try n.to_uint16`). `read_frame_length`
   still returns `Result[Int]`, since a length is a count (below). This is
   breaking, and the module's design already names the move.
-- `Bytes` is its own type (#805).
 - **Range (§12.1).** Stays `Int` only (recommended). Reason: a range over a
   sized type has no natural end type, and `for` over `Int` is the common loop. A
   program converts the bounds: `for i in 0...b.to_int`.
@@ -403,8 +401,7 @@ With (C), the operations are:
   `UInt16` and `UInt32`, the lowering emits the 64-bit operation and then one
   new opcode, `FIT`, with the kind as an operand. `FIT` halts with
   `RUNTIME-INTEGER-OVERFLOW` when the value is outside the kind's range. Reason:
-  one check for six types, against six opcodes for each operator. The name `FIT`
-  is a placeholder for the implementation PR.
+  one check for six types, against six opcodes for each operator.
 - **`UInt64`: unsigned opcodes.** `ADD_U`, `SUB_U`, `MUL_U`, `DIV_U`, `MOD_U`,
   `LT_U` and `LE_U`, seven new opcodes. Reason: the signed 64-bit operations are
   wrong above 2^63.
@@ -417,9 +414,7 @@ With (C), the operations are:
   paths compare by tag. A `UInt64` value compares as unsigned, so
   `18446744073709551615` sorts after `1`, as `UInt64` comparisons do (§42.7).
 - **Hot path.** The `Int` code is unchanged. A sized operation adds one compare
-  and branch. This is an estimate and is not measured. `make bench` runs an
-  integer loop before and after step 1, and the numbers go in
-  `docs/vm-benchmarks.md`.
+  and branch. This is an estimate and is not measured.
 - **Opcodes are appended.** New opcodes at the end of the list do not change the
   encoding of existing `.agcb` files, and the loader rejects only opcodes it
   does not know. So they do not change the format version.
@@ -429,10 +424,7 @@ With (C), the operations are:
   decimal text (§42.5): the binary64 constant kind would round twice. So the
   format version is bumped (the current one is in
   `docs/vm/03-ir-and-bytecode.md`; the order against §41 is the order the two
-  land in). The writer of the Agentica compiler emits that version, so the
-  two-step `stage0` refresh of the development skill's `references/ci.md`
-  applies: the old `stage0` compiles the new compiler, which then compiles
-  itself.
+  land in).
 - **GC.** The sized values are not pointers, like `Int`. No change to the
   collector's setup.
 
@@ -457,34 +449,26 @@ program that reads a 10 MB file into a `List[UInt8]` has a peak RSS too high for
 its task, measured with the benchmark script, and the list items are the limit.
 ### 42.13 Phasing
 
-Each step is one or more PRs. Each PR holds its own contracts, with its own
-tests and docs, so a later PR never carries a check that an earlier one
-should have made. Tests for each step: VM goldens, an independent Python peer
-(unbounded integers masked to the width; for Float32 the exact result by
-`fractions.Fraction`, never through a `double`), and checker goldens that assert
-code and span.
-
-- **Step 1: integer types.** Sub-PRs, in order: **1a** the types, reserved
-  names, literals in context, same-type arithmetic, comparisons, `FIT` and the
-  unsigned opcodes, and printing; **1b** the conversions, the bit methods and
-  the wrap methods, with their catalog rows and `numbers.c` rows; **1c** JSON
-  (struct fields, schema, decode with paths) and map keys. No storage change.
+- **Step 1: integer types.** The types, reserved names, literals in context,
+  arithmetic, comparisons, printing, conversions, bit and wrap methods, JSON and
+  map keys. No storage change.
 - **Step 2: Float32.** Type, literals (with `CHECK-FLOAT-RANGE`), `ROUND_F32`,
-  the printing routine, `strtof` for text and JSON, and `Float32.to_bits` and
-  `from_bits`.
+  printing, text and JSON, and `Float32.to_bits` and `from_bits`.
 - **Step 3: binary API.** `std/binary` moves to the sized types (§42.10);
-  `Float.to_bits32` and `Float.from_bits32` are removed. This is one breaking
-  PR, as the module's design requires, and it is followed by a re-measure of the
-  `binary` arm of the evaluation rounds.
+  `Float.to_bits32` and `Float.from_bits32` are removed, in one breaking change.
 - **Step 4: typed storage, if measured.** §42.12.
+
+Tests: `strtof` against exact rounding on every release target, the Windows
+UCRT included; subnormal `Float32` results against exact rational rounding; the
+Python peer computes with `fractions.Fraction`, never through a `double`.
 
 ### 42.15 Breaking changes
 
 - **Reserved names (step 1).** `Int8` to `UInt64`, `Float32`, `Int64` and
   `Float64` become reserved. A user `struct` with one of those names is
-  `CHECK-REDEFINED-NAME`. `CHANGELOG.md` marks it **Breaking:**.
+  `CHECK-REDEFINED-NAME`.
 - **Binary API (step 3).** The `std/binary` readers and writers take and return
-  the sized types. `CHANGELOG.md` marks it **Breaking:**.
+  the sized types.
 - **Float bit builtins (step 3).** `Float.to_bits32` and `Float.from_bits32` are
   removed in favour of `Float32.to_bits` and `from_bits`. `Float.to_bits`
   changes only if the owner decides on `UInt64` (§42.17).

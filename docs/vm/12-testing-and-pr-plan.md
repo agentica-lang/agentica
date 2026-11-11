@@ -32,19 +32,8 @@
   `tests/test_vm_http.py`. Filesystem fixtures get a fresh scratch directory per
   run. Network and process peers use standard libraries only (AGENTS.md).
 
-### 12.2 PR plan
-
-All items are done; git history keeps the PR list.
-
-### 12.3 Plan for HTTP and TlsContext
-
-Built. Testing follows §12.1: timing-free goldens, timeout tests in
-`tests/test_vm_http.py`, and standard-library-only peers.
-
 ## 13. Open questions
 
-- **Heap cap.** `--max-steps` does not bound memory (§1); a hostile or runaway
-  file can reach the out-of-memory exit (§6.3). A cap such as `--max-heap N`
-  via `GC_set_max_heap_size` is undecided. yyjson uses libc `malloc` outside the
-  GC heap, so any cap must also bound it, for example with a counting
-  `yyjson_alc` passed to `yyjson_read_opts`. No GitHub issue yet.
+- **Heap cap** (#1113). `--max-steps` does not bound memory (§1); a hostile or
+  runaway file can reach the out-of-memory exit (§6.3). yyjson uses libc
+  `malloc` outside the GC heap, so a cap must also bound it.

@@ -58,7 +58,7 @@ agentica [--ai|--json] [--seed N] test [PATH...] [--steps FILE] [--only TEXT] [-
   must pass both. If nothing is kept, the run fails with `CHECK-BDD-EMPTY`.
 - **`--jobs N`** (once, a whole number from 1 to 1024; otherwise
   `RUNTIME-BDD-USAGE`) runs up to `N` test files at the same time, each in its
-  own child as before. The default is 1, one file after another. Scenarios and
+  own child. The default is 1, one file after another. Scenarios and
   tests of one file never overlap, and the report lists the files in the same
   order whatever `N` is. The step program is listed once, before any file runs.
   Files that share a port, a path or a database need `--jobs 1`, and a high `N`

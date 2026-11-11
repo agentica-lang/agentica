@@ -1,9 +1,6 @@
 ### 10.6 HTTP parsing
 
-HTTP on the VM uses whole messages. Every body is `Bytes`: the client's
-request and response bodies, and the request body and response body of a
-handler. Streaming waits for channels (10.7). The rules of this
-section are fixed by the hostile-case tests (10.7.4).
+The rules of this section are fixed by the hostile-case tests (10.7.4).
 
 - Well-formed messages give the status, headers and body, as an ok `Result`.
 - Malformed or hostile input is rejected. A server answers with an error status
@@ -35,9 +32,11 @@ section are fixed by the hostile-case tests (10.7.4).
     (400). The method is token characters only (400). `CONNECT` is 501.
   - Responses: `HTTP/1.1` only, status 100 to 599. 101 is rejected. At most 15
     interim responses are accepted, and the 16th fails. Responses fail as client
-    error `Result`s.
+    error `Result`s. A head with status 100 to 199 is returned without framing,
+    and the caller counts the interim responses.
 - The body decoder (`vm/http_body.c`) is our own incremental state machine, set
-  up with the framing and `max_body_bytes`. It gives 413 over the limit, 431 for
+  up with the framing and `max_body_bytes`; a `Content-Length` body is reserved
+  whole after the limit check. It gives 413 over the limit, 431 for
   an over-long chunk-size or trailer line and for trailers over their limits,
   and 400 for any other malformed body. Chunk sizes accumulate with saturation.
   Trailers are checked (token names, value bytes, the line, block and count
@@ -49,12 +48,6 @@ section are fixed by the hostile-case tests (10.7.4).
   tests: the C unit test `vm/tests/http_parse_test.c`, and the socket cases of
   `tests/test_vm_http.py`, sent by Python raw-socket peers
   (`tests/fixtures/http-peer.py`, `tests/fixtures/http-server-peer.py`).
-
-#### 10.6.1 As built
-
-A response head with status 100 to 199 is returned without framing, and the
-caller counts the interim responses. A `Content-Length` body is reserved whole
-after the limit check.
 
 ### 10.7 HTTP on the VM: the hybrid split
 
@@ -137,7 +130,7 @@ libuv sockets (`vm/tcp.c`, `vm/net.h`) and has no platform code of its own.
 - **TLS** takes a `TlsContext` (10.3): `HttpClientOptions.tls` a client one
   (`none`: system trust), and `serve_tls` a server one.
 
-#### 10.7.1 As built: the client (20a)
+#### 10.7.1 The client
 
 
 - The client is `std/http` code on `TCP`, `TLS`, `Channel` and `Task`.
@@ -259,7 +252,7 @@ Properties of the client that no test checks:
 - The client's work is bytecode, so it spends the step budget of
   `--max-steps`.
 
-#### 10.7.2 As built: the server (20c)
+#### 10.7.2 The server
 
 - `vm/http_wire.c` holds the functions that take bytes or records and return
   records (`HttpWire.Chunk`, `HttpWire.Reply`). These, with
@@ -515,6 +508,6 @@ the call: `HTTP.text` refuses it. A connection that fails is never pooled.
   `HttpWire.service` each get `CHECK-UNKNOWN-NAME` with the `std/http` help
   (the `check` spec tests of the modules rules).
 - **Performance** is not a CI gate: `benchmarks/http_bench.py` against
-  `examples/http_server.agc`. The numbers go in `docs/vm-benchmarks.md`.
+  `examples/http_server.agc` (`docs/vm-benchmarks.md`).
 
 [task-rules]: ../../site/content/library/concurrency/task.md
