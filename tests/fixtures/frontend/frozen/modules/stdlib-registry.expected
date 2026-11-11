@@ -1,3 +1,4 @@
+std/actor.agc
 std/analysis.agc
 std/archive.agc
 std/bdd.agc
