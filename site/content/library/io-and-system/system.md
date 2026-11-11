@@ -145,7 +145,7 @@ false
 Time.now_ms() -> Int
 ```
 
-Wall-clock time in milliseconds since 1970. It can jump when the system clock changes.
+Wall-clock time in milliseconds since 1970. It can jump when the system clock changes. `&Time.now_ms` is the clock as a value (`Fn[Int]`), to pass to code that a test gives a fixed clock.
 
 ```agentica
 def main() -> Void

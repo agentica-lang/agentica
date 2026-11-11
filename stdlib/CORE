@@ -12,6 +12,7 @@ catalog/builtins.agc
 catalog/builtins_data.agc
 catalog/catalog_json.agc
 catalog/prelude_data.agc
+check/builtin_ref.agc
 check/check_args.agc
 check/check_call.agc
 check/check_collections.agc

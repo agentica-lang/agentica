@@ -1,6 +1,7 @@
 """Default values of parameters and of struct fields (`NAME: type = expression`), through the product CLI.
 
-A builtin row can give defaults too; `Zlib.crc32(data, seed = 0)` is the one that does, so its cases are here.
+A builtin row can give defaults too; `Zlib.crc32(data, seed = 0)` is the one that does, so its cases are here, with
+the function values of builtins (`&Zlib.crc32` takes every parameter, as `&join` does).
 
 Each case writes a program (one file, or several for the import-alias rules) and runs `--json check FILE`. A rejected
 program is asserted by its diagnostic code and the source text its range covers; a good one checks clean. Message and
@@ -252,8 +253,29 @@ SINGLE_FILE = [
      "CHECK-TYPE-MISMATCH", '"s"'),
     ("the block of File.open gets a FileHandle",
      main_with('  puts(File.open("a.txt") do |f|\n    ok(File.read_text(f))\n  end)\n'), "CHECK-TYPE-MISMATCH", "f"),
-    ("a builtin has no function value, defaults or not",
-     main_with("  f = &Zlib.crc32\n"), "CHECK-UNKNOWN-NAME", "&Zlib.crc32"),
+    # Function values of builtins (&Time.now_ms, &Int.to_s).
+    ("a builtin function is a function value of its type",
+     main_with("  f: Fn[Int] = &Time.now_ms\n  puts(f.call())\n"), None, None),
+    ("a builtin method is a function value that takes the receiver first",
+     main_with('  puts([1, 2].map(&Int.to_s))\n  f: Fn[String, String] = &String.strip\n  puts(f.call(" a "))\n'),
+     None, None),
+    ("a method of a type whose builtins live in another module is written with the type",
+     main_with('  f: Fn[Json, String, Result[Json]] = &Json.get\n  puts(f.call(JSON.parse("{}").unwrap!, "a"))\n'),
+     None, None),
+    ("a function value of a builtin has the type of the builtin",
+     main_with("  f: Fn[String] = &Time.now_ms\n  puts(f.call())\n"), "CHECK-TYPE-MISMATCH", "&Time.now_ms"),
+    ("a builtin with defaults is a function value of every parameter",
+     main_with('  f: Fn[Bytes, Int, Result[Int]] = &Zlib.crc32\n  puts(f.call("ab".bytes, 0))\n'), None, None),
+    ("a function value of a builtin with defaults takes every argument",
+     main_with('  f = &Zlib.crc32\n  puts(f.call("ab".bytes))\n'), "CHECK-ARITY", 'f.call("ab".bytes)'),
+    ("a builtin of several forms is no function value",
+     main_with('  f = &File.open\n'), "CHECK-UNKNOWN-NAME", "&File.open"),
+    ("a builtin with a rule of its own is no function value",
+     main_with('  f = &List.map\n'), "CHECK-UNKNOWN-NAME", "&List.map"),
+    ("a builtin method is a function value only under its Ruby name",
+     main_with('  f = &String.trim\n'), "CHECK-UNKNOWN-NAME", "&String.trim"),
+    ("a function value of an unknown builtin is an unknown name",
+     main_with('  f = &Time.nope\n'), "CHECK-UNKNOWN-NAME", "&Time.nope"),
     ("main takes no parameters, defaults included",
      'def main(a: Int = 1) -> Void\n  puts(a)\nend\n\n', "CHECK-MAIN", None),
     ("a block parameter takes no default",

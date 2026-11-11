@@ -842,6 +842,14 @@ maps, parameters, returns and fields. A bare function name is not a value.
 Functions have no equality, fields, indexing or JSON encoding; `IO.inspect`
 prints `<Fn>`.
 
+A builtin is a function value too: `&Time.now_ms` is `Fn[Int]`, and a method
+written on its type, `&Int.to_s`, takes the receiver first (`Fn[Int, String]`).
+It takes every parameter, those with a default included (`&Zlib.crc32` is
+`Fn[Bytes, Int, Result[Int]]`). Only a builtin with one form, no rule of its own
+and no type parameter can be one, written as Ruby writes it (`&String.strip`,
+not `&String.trim`); any other (`&File.open`, `&List.map`, `&puts`) is
+`CHECK-UNKNOWN-NAME` with a help: pass a block that calls it.
+
 A field of type `Fn` is called through the struct, without `.call`:
 `store.put(a, b)` is `store.put.call(a, b)`. The arguments are checked against
 the parameters of the field's type (`CHECK-ARITY`, `CHECK-TYPE-MISMATCH`), the
