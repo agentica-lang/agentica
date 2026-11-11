@@ -21,18 +21,19 @@ import Logger from "std/logger"
 def main() -> Void
   puts(Util.twice(2).to_s)
   puts(Shared.name())
-  _ = Logger.attach("boom", LogLevel.Info, &Util.boom)
+  _ = Logger.attach("boom", Logger.Level.Info, &Util.boom)
   Logger.info("go")
 end
 """
 
-UTIL = """import Shared from "../../shared/x"
+UTIL = """import Logger from "std/logger"
+import Shared from "../../shared/x"
 
 export def twice(n: Int) -> Int
   return n * 2
 end
 
-export def boom(event: LogEvent) -> Void
+export def boom(event: Logger.Event) -> Void
   puts(Shared.fail().to_s)
 end
 """

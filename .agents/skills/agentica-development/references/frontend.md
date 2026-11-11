@@ -131,7 +131,7 @@ copy).
   compile them (the two-step refresh in `references/ci.md`).
 - Builtin defaults: a catalog parameter may have
   `default: Model.Default.Whole(0)` (`Model.Named`; also `Real`, `Text`, `Flag`,
-  `Nothing`, `EmptyList`, `EmptyMap`, `EmptyBytes`, `Variant("LogLevel.Info")`).
+  `Nothing`, `EmptyList`, `EmptyMap`, `EmptyBytes`, `Variant("TaskExit.Ok")`).
   `lower_call` fills the omitted arguments (`lower_builtin_default`) and emits
   `call-builtin` with the full count, so the VM never sees a short call. A
   default is only for a Plain or Prelude row with no alternatives

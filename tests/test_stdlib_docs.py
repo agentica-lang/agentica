@@ -3,8 +3,8 @@
 The check reads the source text, so it needs no front end: a doc block is a run of lines that start with `##`
 (docs/grammar/04-lexical.md). The module doc is the first block of the file when only blank lines and `#` comments
 come before it and a blank line follows it. An export is a top-level line that starts with `export`, and its doc is the
-block on the lines directly above it. The parser rejects any other doc block (`PARSE-DETACHED-DOC`), which the
-examples and goldens check.
+block on the lines directly above it; a re-export (`export Alias.Name`) takes no doc, since its doc is the original's.
+The parser rejects any other doc block (`PARSE-DETACHED-DOC`), which the examples and goldens check.
 """
 import re
 
@@ -13,7 +13,7 @@ import pytest
 from tests.agentica_test import ROOT
 
 STDLIB = ROOT / "stdlib"
-EXPORT = re.compile(r"^export\s")
+EXPORT = re.compile(r"^export\s(?![A-Z][A-Za-z0-9_]*\.)")
 
 
 def doc_text(lines):

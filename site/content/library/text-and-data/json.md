@@ -17,7 +17,7 @@ Two ways to work with JSON:
 JSON.encode(value: T) -> String
 ```
 
-Writes compact JSON. It takes numbers, `Bool`, `String`, `nil`, `Json`, lists, maps with `String` keys, structs, [enums](#enums) and [Optionals](#optional-values) of those. Struct fields keep their declaration order and map entries their insertion order. An instance of a generic struct or enum counts by its fields or payloads after substitution (`Box[List[Int]]`). `Result` values, builtin enums such as `LogLevel` and `Int`-keyed maps are `CHECK-NOT-ENCODABLE`, and an untyped empty container needs an annotation. A non-finite `Float` stops the program with `RUNTIME-JSON-ENCODE`; it is never written as `null`. A `JsonField` field (see [optional and nullable fields](#optional-and-nullable-fields)) writes nothing when it is `Absent`.
+Writes compact JSON. It takes numbers, `Bool`, `String`, `nil`, `Json`, lists, maps with `String` keys, structs, [enums](#enums) and [Optionals](#optional-values) of those. Struct fields keep their declaration order and map entries their insertion order. An instance of a generic struct or enum counts by its fields or payloads after substitution (`Box[List[Int]]`). `Result` values, builtin enums such as `TaskExit` and `Int`-keyed maps are `CHECK-NOT-ENCODABLE`, and an untyped empty container needs an annotation. A non-finite `Float` stops the program with `RUNTIME-JSON-ENCODE`; it is never written as `null`. A `JsonField` field (see [optional and nullable fields](#optional-and-nullable-fields)) writes nothing when it is `Absent`.
 
 A parsed object writes its keys sorted by UTF-8 bytes, so `JSON.encode(JSON.parse(x))` is canonical: texts that differ only in whitespace, key order or repeated keys give the same text, while `1` and `1.0` stay different.
 

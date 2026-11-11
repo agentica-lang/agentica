@@ -29,6 +29,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A range has the Enumerable methods of List: `(0...n).map`, `select`, `sum`,
   `reduce`, `min`, `max` and more.
 - `Test.eq` shows a `Bytes` as quoted text (`<Bytes 7 "+OK\r\n\x00\xFF">`).
+- A program may name a type or alias `RegexEngine` or `Std`, and a struct or
+  type alias `LogRegistry` (an enum of that name stays an error).
+
+### Changed
+
+- **Breaking:** `LogEvent` and `LogLevel` are `Logger.Event` and `Logger.Level`
+  of `std/logger`; the old names are unknown, with a help. A value prints as
+  `LogRegistry.Event(...)` and `LogRegistry.Level.Info`.
 
 ### Fixed
 

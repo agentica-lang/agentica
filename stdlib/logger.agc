@@ -1,12 +1,18 @@
 ## An Elixir-style logger with four levels, one global level and named handlers.
 ##
-## Import it with `import Logger from "std/logger"`. The levels are the builtin enum `LogLevel`
-## (`Debug < Info < Warning < Error`) and a handler receives the builtin record `LogEvent`. The first call of any
+## Import it with `import Logger from "std/logger"`. The levels are the enum `Logger.Level`
+## (`Debug < Info < Warning < Error`) and a handler receives the record `Logger.Event`. The first call of any
 ## function here installs a handler named `console` (`stderr_text`, level `info`). Handlers run in order,
 ## synchronously, in the task that logs, so a line is written when the call returns. A handler error is the error of
 ## the task that logged. The registry lives in the VM and belongs to one run.
+##
+## `Logger.Level` and `Logger.Event` are the builtin types `LogRegistry.Level` and `LogRegistry.Event`: the signatures
+## below, a printed value and a diagnostic show those names.
 
 import UTC from "std/utc"
+
+export LogRegistry.Level
+export LogRegistry.Event
 
 struct JsonLine
   time: String
@@ -26,7 +32,7 @@ end
 export def debug(message: String, fields: Map[String, String] = {}) -> Void
   if LogRegistry.floor() <= 0
     if ready() <= 0
-      dispatch(LogLevel.Debug, 0, message, fields)
+      dispatch(LogRegistry.Level.Debug, 0, message, fields)
     end
   end
 end
@@ -35,7 +41,7 @@ end
 export def info(message: String, fields: Map[String, String] = {}) -> Void
   if LogRegistry.floor() <= 1
     if ready() <= 1
-      dispatch(LogLevel.Info, 1, message, fields)
+      dispatch(LogRegistry.Level.Info, 1, message, fields)
     end
   end
 end
@@ -44,7 +50,7 @@ end
 export def warning(message: String, fields: Map[String, String] = {}) -> Void
   if LogRegistry.floor() <= 2
     if ready() <= 2
-      dispatch(LogLevel.Warning, 2, message, fields)
+      dispatch(LogRegistry.Level.Warning, 2, message, fields)
     end
   end
 end
@@ -54,13 +60,13 @@ end
 export def err(message: String, fields: Map[String, String] = {}) -> Void
   if LogRegistry.floor() <= 3
     if ready() <= 3
-      dispatch(LogLevel.Error, 3, message, fields)
+      dispatch(LogRegistry.Level.Error, 3, message, fields)
     end
   end
 end
 
 ## Logs a message, with optional fields, at a level given as a value.
-export def log(level: LogLevel, message: String, fields: Map[String, String] = {}) -> Void
+export def log(level: LogRegistry.Level, message: String, fields: Map[String, String] = {}) -> Void
   rank = rank_of(level)
   if rank >= ready()
     dispatch(level, rank, message, fields)
@@ -69,23 +75,23 @@ end
 
 ## Returns true only when a call at `level` would reach a handler: the level is at or above the global level and at or
 ## above the lowest level of the attached handlers. Guard costly fields with it.
-export def enabled?(level: LogLevel) -> Bool
+export def enabled?(level: LogRegistry.Level) -> Bool
   rank = rank_of(level)
   rank >= ready() and rank >= LogRegistry.lowest()
 end
 
 ## Returns the global level, `info` until `set_level` changes it.
-export def level() -> LogLevel = level_of(ready())
+export def level() -> LogRegistry.Level = level_of(ready())
 
 ## Sets the global level. A call below it makes no event at all.
-export def set_level(level: LogLevel) -> Void
+export def set_level(level: LogRegistry.Level) -> Void
   _ = ready()
   LogRegistry.set_level(rank_of(level))
 end
 
 ## Attaches a handler under a name, for events at `level` or above. The handler is a function (`&Logger.stderr_json`)
 ## or a block. A name already in use is an error result.
-export def attach(name: String, level: LogLevel, handler: Fn[LogEvent, Void]) -> Result[Void]
+export def attach(name: String, level: LogRegistry.Level, handler: Fn[LogRegistry.Event, Void]) -> Result[Void]
   _ = ready()
   LogRegistry.attach(name, rank_of(level), handler)
 end
@@ -103,19 +109,19 @@ export def handlers() -> List[String]
 end
 
 ## Writes `format_text(event)` to stderr as one line.
-export def stderr_text(event: LogEvent) -> Void
+export def stderr_text(event: LogRegistry.Event) -> Void
   IO.warn(format_text(event))
 end
 
 ## Writes `format_json(event)` to stderr as one line.
-export def stderr_json(event: LogEvent) -> Void
+export def stderr_json(event: LogRegistry.Event) -> Void
   IO.warn(format_json(event))
 end
 
 ## Returns the text line of an event: `TIME LEVEL MESSAGE key=value ...`, with the time in UTC.
 ## A message or field that is empty, has a space (for a field), `=`, a quote, a backslash or a control character is
 ## written as a JSON string, so a line is always one line.
-export def format_text(event: LogEvent) -> String
+export def format_text(event: LogRegistry.Event) -> String
   parts = [time_text(event.time_ms), level_name(event.level).upcase, message_token(event.message)]
   for key in event.fields.keys
     parts = parts.push("#{field_token(key)}=#{field_token(event.fields.get(key, ""))}")
@@ -125,7 +131,7 @@ end
 
 ## Returns the JSON line of an event: the keys `time`, `level`, `msg`, `fields` and `task`. The fields are nested, so a
 ## field named `level` never clashes with a fixed key.
-export def format_json(event: LogEvent) -> String
+export def format_json(event: LogRegistry.Event) -> String
   one_line(
     JSON.encode(
       JsonLine(
@@ -143,32 +149,32 @@ end
 ## A year outside 0 to 9999 is written with its sign and at least four digits.
 export def time_text(ms: Int) -> String = UTC.iso8601(ms, 3)
 
-# The ranks are the order of LogLevel: debug 0, info 1, warning 2, error 3. LogRegistry stores ranks, not enums,
+# The ranks are the order of Level: debug 0, info 1, warning 2, error 3. LogRegistry stores ranks, not enums,
 # so its rows need no enum type.
-def rank_of(level: LogLevel) -> Int
+def rank_of(level: LogRegistry.Level) -> Int
   case level
-    LogLevel.Debug -> 0
-    LogLevel.Info -> 1
-    LogLevel.Warning -> 2
-    LogLevel.Error -> 3
+    LogRegistry.Level.Debug -> 0
+    LogRegistry.Level.Info -> 1
+    LogRegistry.Level.Warning -> 2
+    LogRegistry.Level.Error -> 3
   end
 end
 
-def level_of(rank: Int) -> LogLevel
+def level_of(rank: Int) -> LogRegistry.Level
   case rank
-    0 -> LogLevel.Debug
-    1 -> LogLevel.Info
-    2 -> LogLevel.Warning
-    _ -> LogLevel.Error
+    0 -> LogRegistry.Level.Debug
+    1 -> LogRegistry.Level.Info
+    2 -> LogRegistry.Level.Warning
+    _ -> LogRegistry.Level.Error
   end
 end
 
-def level_name(level: LogLevel) -> String
+def level_name(level: LogRegistry.Level) -> String
   case level
-    LogLevel.Debug -> "debug"
-    LogLevel.Info -> "info"
-    LogLevel.Warning -> "warning"
-    LogLevel.Error -> "error"
+    LogRegistry.Level.Debug -> "debug"
+    LogRegistry.Level.Info -> "info"
+    LogRegistry.Level.Warning -> "warning"
+    LogRegistry.Level.Error -> "error"
   end
 end
 
@@ -185,10 +191,17 @@ end
 
 # The event takes its handlers here, so a handler that attaches or detaches another does not change this event.
 # The event is made only when some handler accepts it.
-def dispatch(level: LogLevel, rank: Int, message: String, fields: Map[String, String]) -> Void
+def dispatch(level: LogRegistry.Level, rank: Int, message: String, fields: Map[String, String]) -> Void
   accepting = LogRegistry.handlers(rank)
   return if accepting.size == 0
-  event = LogEvent(level: level, message: message, fields: fields, time_ms: Time.now_ms(), task: LogRegistry.task_id())
+  event = LogRegistry.Event(
+    level: level,
+    message: message,
+    fields: fields,
+    time_ms: Time.now_ms(),
+    task: LogRegistry.task_id(),
+  )
+
   for handler in accepting
     handler.call(event)
   end

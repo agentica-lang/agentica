@@ -29,12 +29,13 @@ programs are valid and how they run.
   can be monitored, cancelled and identified, not awaited
 - `Await[T]`: Builtin enum of a timed `Task.await`: `Await.Done(value)` or
   `Await.TimedOut`; matched with `case` like a user enum
-- `LogLevel`: Builtin enum of `std/logger`: `LogLevel.Debug`, `LogLevel.Info`,
-  `LogLevel.Warning` and `LogLevel.Error`, in that order; matched with `case`
-  like a user enum
-- `LogEvent`: Builtin record of `std/logger` that a log handler receives:
-  `level: LogLevel`, `message: String`, `fields: Map[String, String]`, `time_ms:
-  Int` and `task: Int`; it is not JSON-decodable
+- `Logger.Level`: Builtin enum `LogRegistry.Level`, which `std/logger`
+  re-exports: `Logger.Level.Debug`, `Logger.Level.Info`, `Logger.Level.Warning`
+  and `Logger.Level.Error`, in that order; matched with `case` like a user enum
+- `Logger.Event`: Builtin record `LogRegistry.Event`, which `std/logger`
+  re-exports, that a log handler receives: `level: Logger.Level`, `message:
+  String`, `fields: Map[String, String]`, `time_ms: Int` and `task: Int`; it is
+  not JSON-decodable
 - `StructMember`: Builtin record of `Type.members`: `name: String` and `type:
   String`, the field name and its type written as source
 - `TaskExit`: Builtin enum of how a task ended: `TaskExit.Ok`,
@@ -283,7 +284,7 @@ default is `CHECK-DEFAULT-ORDER`, located at that parameter.
 
 A default is a constant: an `Int`, `Float` or `String` literal (a minus sign is
 allowed before a number, and a string has no `#{...}`), `true`, `false`, `nil`,
-`none`, `[]`, `{}`, or a nullary enum variant (`Level.Info`, `LogLevel.Info` for
+`none`, `[]`, `{}`, or a nullary enum variant (`Level.Info`, `TaskExit.Ok` for
 a builtin enum, or `Models.Level.Info` through an import alias). A parameter
 may also default to a struct built with no arguments, `options: Options =
 Options()`: each field takes its own default, and a field without one is
@@ -503,7 +504,7 @@ name.
 
 `Type.members` lists the fields of a struct type, in declaration order, as a
 `List[StructMember]`. `StructMember` is a builtin record, reserved like
-`LogEvent`, with two `String` fields: `name`, the field name, and `type`, its
+`TaskDown`, with two `String` fields: `name`, the field name, and `type`, its
 type written as source (`Int`, `List[String]`, `Map[String, Int]`,
 `Result[Int]`, `Address`, `Shape[String]`). The text is the checker's printed
 form: an alias is expanded (`type Id = Int` gives `Int`) and a struct or enum

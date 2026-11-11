@@ -1,4 +1,4 @@
-struct LogRegistry
+struct Channel
   n: Int
 end
 

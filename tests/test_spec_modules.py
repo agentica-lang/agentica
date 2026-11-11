@@ -303,35 +303,88 @@ class TestModuleRules:
         self.assert_rejected(http, "CHECK-IMPORT-NAME")
         self.assert_rejected(logger, "CHECK-IMPORT-NAME")
 
-    def test_log_registry_is_internal_to_std_logger_its_types_are_reserved_and_logger_has_no_error(self):
-        declarations = ["struct LogEvent\n  n: Int\nend\n\n", "enum LogLevel\n  Loud\nend\n\n",
-                        "struct LogRegistry\n  n: Int\nend\n\n"]
-        results = self.checks(
-            [({"root.agc": "def main() -> Void\n  x = LogRegistry.level()\nend\n\n"}, "root.agc", None),
-             ({"root.agc": 'import Logger from "std/logger"\ndef main() -> Void\n  Logger.error("x")\nend\n\n'},
-              "root.agc", None),
-             ({"root.agc": 'import Logger from "std/logger"\ndef main() -> Void\n  Logger.err("x")\n'
-                           '  level: LogLevel = Logger.level()\n'
-                           '  event = LogEvent(level: level, message: "m", fields: {}, time_ms: 0, task: 1)\n'
-                           '  Logger.stderr_text(event)\nend\n\n'}, "root.agc", None)]
-            + [({"root.agc": declaration + MAIN}, "root.agc", None) for declaration in declarations])
-        registry, error, clean = results[:3]
-        self.assert_rejected(registry, "CHECK-UNKNOWN-NAME")
-        self.assert_rejected(error, "CHECK-IMPORT-NAME")
-        assert clean[1] is None
-        for declaration, checked in zip(declarations, results[3:]):
-            self.assert_rejected(checked, "CHECK-REDEFINED-NAME")
+    def test_std_logger_exports_its_event_and_level_and_log_registry_stays_internal(self):
+        """std/logger re-exports the builtin LogRegistry.Event and LogRegistry.Level as Logger.Event and Logger.Level
+        (import Logger, or import {Event, Level}). LogRegistry is internal to std/, as a call, a type or a re-export,
+        and the old names LogEvent and LogLevel are unknown, with a help that names the new ones."""
+        uses = ('import Logger from "std/logger"\nimport {Event, Level} from "std/logger"\n\n'
+                "def shown(event: Logger.Event) -> Void\n  puts(event.message)\nend\n\n"
+                "def rank(level: Level) -> Int\n  case level\n    Logger.Level.Debug -> 0\n    Level.Info -> 1\n"
+                "    _ -> 2\n  end\nend\n\n"
+                "def main() -> Void\n  _ = Logger.attach(\"shown\", Logger.Level.Debug, &shown)\n"
+                "  event: Event = Logger.Event(level: Logger.level(), message: \"m\", fields: {}, time_ms: 0, task: 1)\n"
+                "  shown(event)\n  puts(rank(event.level))\nend\n\n")
+        logger = 'import Logger from "std/logger"\n\n'
+        in_lib = 'import Lib from "lib"\n\ndef main() -> Void\n  Lib.f()\nend\n\n'
+        # (files, code, span, file of the error, whether the help must name the new type)
+        cases = [
+            ({"root.agc": uses}, None, None, None, False),
+            ({"root.agc": "def main() -> Void\n  x = LogRegistry.level()\nend\n\n"}, "CHECK-UNKNOWN-NAME",
+             ((2, 7), (2, 26)), None, False),
+            ({"root.agc": "def f(e: LogRegistry.Event) -> Void\nend\n\n" + MAIN}, "CHECK-UNKNOWN-NAME",
+             ((1, 10), (1, 27)), None, False),
+            ({"root.agc": "export LogRegistry.Event\n\n" + MAIN}, "CHECK-UNKNOWN-NAME", ((1, 8), (1, 19)), None, False),
+            ({"root.agc": logger + 'def main() -> Void\n  Logger.error("x")\nend\n\n'}, "CHECK-IMPORT-NAME", None, None,
+             False),
+            ({"root.agc": "def f(e: LogEvent) -> Void\nend\n\n" + MAIN}, "CHECK-UNKNOWN-TYPE", ((1, 10), (1, 18)), None,
+             True),
+            ({"root.agc": in_lib, "lib.agc": "export def f() -> Void\n  e: LogEvent = 1\nend\n"}, "CHECK-UNKNOWN-TYPE",
+             ((2, 6), (2, 14)), "lib.agc", True),
+            ({"root.agc": logger + "def main() -> Void\n  Logger.set_level(LogLevel.Info)\nend\n\n"},
+             "CHECK-IMPORT-NAME", ((4, 20), (4, 33)), None, True),
+            ({"root.agc": 'import {LogEvent} from "std/logger"\n\n' + MAIN}, "CHECK-IMPORT-NAME", None, None, True),
+        ]
+        results = self.checks([(files, "root.agc", None) for files, _code, _span, _file, _help in cases])
+        for (files, code, span, file, help), checked in zip(cases, results):
+            if code is None:
+                assert checked[1] is None, checked[1]
+                continue
+            problem = self.assert_rejected(checked, code, file=file)
+            if span is not None:
+                found = problem["range"]
+                assert ((found["start"]["line"], found["start"]["column"]),
+                        (found["end"]["line"], found["end"]["column"])) == span, files
+            if help:
+                assert problem.get("help"), files
 
-    def test_regex_engine_is_internal_to_std_regex_and_its_name_is_reserved(self):
+    def test_a_struct_or_alias_may_be_named_like_a_std_only_family_with_records_and_an_enum_may_not(self):
+        """A struct or a type alias may be named LogRegistry, beside std/logger and a Logger.Event(...) of the root. An
+        enum of that name stays CHECK-REDEFINED-NAME: once linked, its variant Event(...) and the builtin record
+        LogRegistry.Event(...) would be the same name."""
+        use = 'import Logger from "std/logger"\n\n'
+        event = '  e = Logger.Event(level: Logger.Level.Info, message: "m", fields: {}, time_ms: 0, task: 1)\n'
+        main = 'def main() -> Void\n  Logger.info("x")\n' + event + "  Logger.stderr_text(e)\n"
+        free = [
+            use + "struct LogRegistry\n  n: Int\nend\n\n" + main + "  puts(LogRegistry(n: 1).n)\nend\n\n",
+            use + "type LogRegistry = Int\n\n" + main + "  x: LogRegistry = 1\n  puts(x)\nend\n\n",
+        ]
+        enum = use + "enum LogRegistry\n  Level\n  Event(Int)\nend\n\n" + main + "end\n\n"
+        results = self.checks([({"root.agc": root}, "root.agc", None) for root in free + [enum]])
+        for checked in results[:-1]:
+            assert checked[1] is None, checked[1]
+        found = self.assert_rejected(results[-1], "CHECK-REDEFINED-NAME")["range"]
+        assert ((found["start"]["line"], found["start"]["column"]),
+                (found["end"]["line"], found["end"]["column"])) == ((3, 1), (7, 1))
+
+    def test_the_names_of_the_std_only_families_and_the_old_log_types_are_free_for_a_program(self):
+        """LogEvent, LogLevel, LogRegistry (not as an enum), RegexEngine and Std reserve no name: a program may declare
+        them, and an import alias may be Std, while std/regex and std/logger, which call the builtins, still work beside
+        them. A call of RegexEngine outside std/ is still CHECK-UNKNOWN-NAME."""
+        declarations = ("struct LogEvent\n  n: Int\nend\n\nenum LogLevel\n  Loud\nend\n\n"
+                        "struct LogRegistry\n  n: Int\nend\n\nstruct RegexEngine\n  n: Int\nend\n\n")
         search = '  x = RegexEngine.search("a", [8], [0], [0], [], 2, 0)\n'
-        call, imported, declared = self.checks(
-            [({"root.agc": "def main() -> Void\n" + search + "end\n\n"}, "root.agc", None),
-             ({"root.agc": 'import Lib from "lib"\ndef main() -> Void\n  Lib.go()\nend\n\n',
-               "lib.agc": "export def go() -> Void\n" + search + "end\n\n"}, "root.agc", None),
-             ({"root.agc": "struct RegexEngine\n  n: Int\nend\n\n" + MAIN}, "root.agc", None)])
-        self.assert_rejected(call, "CHECK-UNKNOWN-NAME", line=2)
-        self.assert_rejected(imported, "CHECK-UNKNOWN-NAME", line=2, file="lib.agc")
-        self.assert_rejected(declared, "CHECK-REDEFINED-NAME", line=1)
+        free, aliased, engine = self.checks([
+            ({"root.agc": 'import Logger from "std/logger"\nimport Regex from "std/regex"\n\n' + declarations
+              + 'def main() -> Void\n  puts(Regex.match?("aa", Regex.compile("a+").unwrap!))\n  Logger.info("x")\n'
+              + "  puts(RegexEngine(n: 1).n + LogEvent(n: 2).n)\n  puts(LogLevel.Loud)\nend\n\n"},
+             "root.agc", None),
+            ({"root.agc": 'import Std from "lib"\n\ndef main() -> Void\n  puts(Std.source(1))\nend\n\n',
+              "lib.agc": "export def source(n: Int) -> Int = n\n"}, "root.agc", None),
+            ({"root.agc": 'import Lib from "lib"\ndef main() -> Void\n  Lib.go()\nend\n\n',
+              "lib.agc": "export def go() -> Void\n" + search + "end\n\n"}, "root.agc", None)])
+        assert free[1] is None, free[1]
+        assert aliased[1] is None, aliased[1]
+        assert start(self.assert_rejected(engine, "CHECK-UNKNOWN-NAME", file="lib.agc")) == (2, 7)
 
     def test_http_wire_is_internal_to_std_http_for_user_files_relative_imports_and_pkg_modules(self):
         call = 'export def go() -> Void\n  HttpWire.options(HttpWire.service(1, 1, 1))\nend\n\n'

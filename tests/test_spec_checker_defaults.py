@@ -161,7 +161,7 @@ SINGLE_FILE = [
      'enum Mode\n  Fast\nend\n\ndef f(a: Mode = Mode.Gone) -> Int\n  return 1\nend\n\n' + main_with("  puts(f())\n"),
      "CHECK-UNKNOWN-VARIANT", "Mode.Gone"),
     ("a builtin enum variant is a default",
-     'def f(level: LogLevel = LogLevel.Info) -> Int\n  return 1\nend\n\n' + main_with("  puts(f())\n"), None, None),
+     'def f(exit: TaskExit = TaskExit.Ok) -> Int\n  return 1\nend\n\n' + main_with("  puts(f())\n"), None, None),
     ("a call takes between the required and the total number of arguments: too few",
      JOIN + main_with("  puts(join())\n"), "CHECK-ARITY", "join()"),
     ("a call takes between the required and the total number of arguments: too many",

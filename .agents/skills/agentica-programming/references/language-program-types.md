@@ -94,11 +94,12 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
 - `Address[T]`: a channel's send-only address (`ch.address`), data with `==`
   and text, no JSON, not a map key (`tasks.md`).
 - Builtin enums, reserved: `Await[T]` (`Await.Done(value)`, `Await.TimedOut`;
-  `tasks.md`), `JsonField[T]` (`Absent`, `Null`, `Value(x)`; `json.md`),
-  `LogLevel` (`Debug`, `Info`, `Warning`, `Error`; `logger.md`) and `TaskExit`
-  (`Ok`, `Crashed`, `Cancelled`; `tasks.md`).
+  `tasks.md`), `JsonField[T]` (`Absent`, `Null`, `Value(x)`; `json.md`) and
+  `TaskExit` (`Ok`, `Crashed`, `Cancelled`; `tasks.md`). `std/logger` exports
+  the builtin `Logger.Level` (`Debug`, `Info`, `Warning`, `Error`) and
+  `Logger.Event` (`logger.md`); they reserve no name.
 - Builtin records: `Header`, `HttpRequest`, `HttpResponse`, `HttpClientOptions`,
-  `HttpServerOptions`, `FileInfo`, `ProcessOutput`, `LogEvent`, `StructMember`,
+  `HttpServerOptions`, `FileInfo`, `ProcessOutput`, `StructMember`,
   `TaskDown`.
 - Type names start uppercase; variables, functions and fields start lowercase
   or `_`.

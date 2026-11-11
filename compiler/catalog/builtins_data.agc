@@ -163,9 +163,9 @@ export RECORDS: List[Model.Record] = [
     ],
   ),
   Model.Record(
-    name: "LogEvent",
+    name: "LogRegistry.Event",
     fields: [
-      Model.Named(name: "level", type: Types.Type.Enum("LogLevel", [])),
+      Model.Named(name: "level", type: Types.Type.Enum("LogRegistry.Level", [])),
       Model.Named(name: "message", type: Types.Type.String),
       Model.Named(name: "fields", type: Types.Type.Map(Types.Type.String, Types.Type.String)),
       Model.Named(name: "time_ms", type: Types.Type.Int),
@@ -262,7 +262,7 @@ export ENUMS: List[Model.EnumDef] = [
     ],
   ),
   Model.EnumDef(
-    name: "LogLevel",
+    name: "LogRegistry.Level",
     parameters: [],
     variants: [
       Model.Variant(name: "Debug", payload: []),
@@ -323,9 +323,6 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "Lazy",
   "List",
   "Listener",
-  "LogEvent",
-  "LogLevel",
-  "LogRegistry",
   "Map",
   "Math",
   "Nil",
@@ -337,11 +334,9 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "Profile",
   "Random",
   "Range",
-  "RegexEngine",
   "Result",
   "Set",
   "Socket",
-  "Std",
   "String",
   "StructMember",
   "System",
@@ -373,6 +368,11 @@ export STD_ONLY_IMPORTS: Map[String, List[String]] = {
   "LogRegistry": ["std/logger", "Logger"],
   "RegexEngine": ["std/regex", "Regex"],
 }
+
+## The builtin types that moved into a std-only family, with their new name there. A std module re-exports each one,
+## so a program writes the alias of that module: LogEvent is LogRegistry.Event, which std/logger re-exports as
+## Logger.Event.
+export MOVED_TYPES: Map[String, String] = {"LogEvent": "LogRegistry.Event", "LogLevel": "LogRegistry.Level"}
 
 ROWS_1: List[Model.Builtin] = [
   Model.Builtin(
@@ -2736,7 +2736,7 @@ ROWS_24: List[Model.Builtin] = [
     parameters: [
       Model.Named(name: "name", type: Types.Type.String),
       Model.Named(name: "rank", type: Types.Type.Int),
-      Model.Named(name: "handler", type: Types.Type.Fn([Types.Type.Struct("LogEvent", [])], Types.Type.Void)),
+      Model.Named(name: "handler", type: Types.Type.Fn([Types.Type.Struct("LogRegistry.Event", [])], Types.Type.Void)),
     ],
     result: Types.Type.Result(Types.Type.Void),
     rule: Model.Rule.Plain,
@@ -2774,7 +2774,7 @@ ROWS_25: List[Model.Builtin] = [
   Model.Builtin(
     name: "LogRegistry.handlers",
     parameters: [Model.Named(name: "rank", type: Types.Type.Int)],
-    result: Types.Type.List(Types.Type.Fn([Types.Type.Struct("LogEvent", [])], Types.Type.Void)),
+    result: Types.Type.List(Types.Type.Fn([Types.Type.Struct("LogRegistry.Event", [])], Types.Type.Void)),
     rule: Model.Rule.Plain,
     implementation: "LogRegistry.handlers",
     effects: ["logging"],
@@ -2784,7 +2784,7 @@ ROWS_25: List[Model.Builtin] = [
   Model.Builtin(
     name: "LogRegistry.install_default",
     parameters: [
-      Model.Named(name: "handler", type: Types.Type.Fn([Types.Type.Struct("LogEvent", [])], Types.Type.Void)),
+      Model.Named(name: "handler", type: Types.Type.Fn([Types.Type.Struct("LogRegistry.Event", [])], Types.Type.Void)),
     ],
     result: Types.Type.Void,
     rule: Model.Rule.Plain,

@@ -806,7 +806,7 @@ def resolve_generic(cx: State.Cx, st: State.St, ref: TypeRef) -> Result[Resolved
   end
 
   candidates = cx.structs.keys.concat(cx.enums.keys)
-  help = Help.foreign(cx.help, name)
+  help = Help.foreign(cx.help, Types.display_name(name))
   if help == ""
     help = Help.near(name, candidates, shared_type_names(cx))
   end
@@ -985,7 +985,7 @@ def place_enum(cx: State.Cx, type: ResolvedType, seen: Map[String, Bool]) -> Pla
   Placed(place: "", seen: seen)
 end
 
-# True for an enum the program declares: not a builtin one (JsonField, LogLevel ...), which JSON handles on its own or
+# True for an enum the program declares: not a builtin one (JsonField, TaskExit ...), which JSON handles on its own or
 # not at all.
 def user_enum?(cx: State.Cx, type: ResolvedType) -> Bool
   cx.enums.has_key?(Types.name(type)) and !ENUMS.has_key?(Types.name(type))

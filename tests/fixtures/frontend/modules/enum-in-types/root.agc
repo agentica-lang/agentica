@@ -10,7 +10,7 @@ def main() -> Void
   x = Local.Plain(1)
   y = A.Opt.Some(1)
   z = Await.TimedOut
-  w = LogLevel.Debug
+  w = TaskExit.Ok
   case y
     A.Opt.Some(v) -> puts(v)
     A.Opt.Nope -> puts(0)

@@ -2,7 +2,7 @@ program 0:1:1-41:1 entry=2 globals=0
 source 0 "enums.agc" chars=642
 enum "Option" v0="Some"/1 v1="None"/0
 enum "Tree" v2="Leaf"/0 v3="Node"/3
-enum "LogLevel" v4="Debug"/0 v5="Info"/0 v6="Warning"/0 v7="Error"/0
+enum "TaskExit" v4="Ok"/0 v5="Crashed"/0 v6="Cancelled"/0
 fn0 "depth" params=1 captures=0 slots=7 @ 0:11:1-23:1
     step @ 0:12:3-22:1
     step @ 0:12:8-12:9
@@ -136,7 +136,7 @@ fn2 "main" params=0 captures=0 slots=5 entry @ 0:31:1-41:1
   L0:
     step @ 0:38:3-39:1
     step @ 0:38:11-38:27
-    enum r1 r1 v6 @ 0:38:11-38:27
+    enum r1 r1 v5 @ 0:38:11-38:27
     step @ 0:39:3-40:1
     step @ 0:39:3-39:19
     step @ 0:39:8-39:18

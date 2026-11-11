@@ -2,6 +2,7 @@
 ## that depend only on types or names. A help is a String, and "" means there is none.
 
 import Model from "../catalog/builtin_model"
+import Builtins from "../catalog/builtins"
 import {ENTRIES} from "../catalog/builtins"
 import RubyForm from "ruby_form"
 import Suggest from "../syntax/suggest"
@@ -80,6 +81,8 @@ end
 export def foreign(tables: Tables, name: String) -> String
   found = tables.foreign_names.get(name)
   return found.unwrap! if found.some?
+
+  return Builtins.moved_type(name) if Builtins.moved_type(name) != ""
 
   moved(name)
 end

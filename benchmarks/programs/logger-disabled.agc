@@ -37,7 +37,7 @@ def main() -> Void
   end
   disabled = Time.monotonic_ms() - started
 
-  Logger.set_level(LogLevel.Debug)
+  Logger.set_level(Logger.Level.Debug)
   started = Time.monotonic_ms()
   i = 0
   while i < calls
