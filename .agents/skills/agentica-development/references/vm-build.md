@@ -196,12 +196,13 @@ for picohttpparser, the TLS tests for OpenSSL (a 3.5.x tag).
   heap grows (the loader test does).
 - Windows has no `ucontext`: a test whose native module switches stacks is
   `host_only` there (`tests/test_spec_package_native_build.py`).
-- #1328 (open): with `an_blocking` around a stack switch, macOS x86_64 lost one
-  object in 1 run of 49. The suspected cause, not yet shown, is the x86_64 red
-  zone below the stack pointer, which bdwgc on Darwin may not scan for a
-  running thread. The case reports a wrong count there as a known issue
-  instead of failing; read the issue before
-  touching `agc_gc_blocking` or the thread registration of `vm/value.c`.
+- libgc 8.2 records a blocked thread's stack start as the frame address of
+  `GC_do_blocking`. Built by clang without `getcontext` (macOS), it inlines
+  the save of the callee-saved registers below that address, so a value kept
+  only in a register across `an_blocking` was collected (#1328, macOS x86_64).
+  `agc_gc_blocking` saves the registers in a frame of its own first. Linux
+  shows the bug with the vendored libgc built by clang with `-DNO_GETCONTEXT`
+  added to `GC_COMPILE` (`mk/vm.mk`).
 - `.gitattributes` keeps LF on checkout (GitHub's Windows runners set
   `core.autocrlf`). Git detects files with NUL bytes as binary; a binary
   fixture without them needs a `binary` line there.

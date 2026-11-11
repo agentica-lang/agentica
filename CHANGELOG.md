@@ -21,6 +21,11 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A reserved word used as a name (`def edge(end: Int)`) is `PARSE-RESERVED-WORD`,
   with another name as the help.
 
+### Fixed
+
+- On macOS x86_64, a native function that calls `an_blocking` could get back a
+  collected value it made before the call.
+
 ## [0.29.0] - 2026-11-10
 
 ### Added
