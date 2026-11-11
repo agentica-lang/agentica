@@ -484,6 +484,7 @@ def pattern_sites(scan: Scan, pattern: Ast.Pattern) -> List[Site]
           end
         end
 
+      Ast.Pattern.Or(node) -> work = work.concat(node.patterns)
       _ -> work = work
     end
 

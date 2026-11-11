@@ -1,0 +1,1 @@
+ERROR CHECK-CASE-ARM-BINDING 69:4:5-82:4:18 "a case arm with several patterns cannot bind names" - signature="main() -> Void" file="err-case-arm-binding.agc"

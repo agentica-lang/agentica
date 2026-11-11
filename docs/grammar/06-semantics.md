@@ -58,7 +58,8 @@ nullable wildcard: `name: String = nil` is invalid; use `Optional[T]`.
 ### Operators
 
 - `+`, `-`, `*` and `/` take two operands of one numeric type; `+` also
-  concatenates `String`s and `Bytes`, and `s * n` repeats a `String` `n`
+  concatenates `String`s, `Bytes` and two lists of one type (a new list), and
+  `s * n` repeats a `String` `n`
   (an `Int`) times; a negative `n`, or a result over 256 MiB, is
   `RUNTIME-INVALID-COUNT`. Integer `/` truncates toward zero, and `%`
   takes integers only, with `a = (a / b) * b + (a % b)`. Division by zero is
@@ -354,6 +355,14 @@ its own arm. The arm runs when the pattern matches and the condition is `true`;
 otherwise the case goes on with the next arm. The parser looks for the guard of
 an arm up to the first `->` of its line, so a guard stays on the line of its
 pattern.
+
+An arm may list several patterns on its line, separated by commas: `"ex", "px"
+-> ttl(value)`. The arm runs when one of them matches, tried left to right, and
+its guard applies to all of them. Such an arm binds no names
+(`CHECK-CASE-ARM-BINDING`, at the patterns): write `_` in the slots, or one arm
+per pattern. Each pattern counts on its own for exhaustiveness and
+reachability, so a pattern that an earlier arm or an earlier pattern of the
+same arm already covers is `CHECK-UNREACHABLE-CASE-ARM` at that pattern.
 
 Enum values need every variant, unless there is a catch-all `_`. `Result[T]`
 matches as `Result.Ok(value)` and `Result.Err(message)`, or as `ok` and `error`;

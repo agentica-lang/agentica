@@ -1,0 +1,8 @@
+def ttl(option: String) -> Int
+  case option
+    # the relative options
+    "ex", "px" -> 1 # seconds or milliseconds
+    "exat", "pxat" if option.size > 3 -> 2
+    _ -> 0
+  end
+end

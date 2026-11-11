@@ -60,6 +60,8 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
 - `PARSE-UNEXPECTED-TOKEN`: the parser expected something else. The help says
   when you wrote braces for a block, `//` or `/*` for a comment, or
   `value.with()` / `value.with(31)` (name each field).
+- `PARSE-RESERVED-WORD`: a reserved word (`end`, `in`, `do`, `case`, ...) where
+  a name goes; pick another name (`last` for `end`).
 - `PARSE-UNCLOSED-BLOCK`: a `def`, `if`, `case`, loop or `do` block with no
   `end` before the end of the file (the span is the end of the file: look for
   the block never closed). A block left open before the next `def` is
@@ -111,7 +113,9 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   statement, or has no body; end it with the expression it gives.
 - `CHECK-PATTERN-TYPE`, `CHECK-NON-EXHAUSTIVE-CASE`,
   `CHECK-UNREACHABLE-CASE-ARM`: a pattern that does not fit the value; a `case`
-  missing variants or `_`; an arm already covered.
+  missing variants or `_`; an arm or a pattern already covered.
+- `CHECK-CASE-ARM-BINDING`: an arm of several patterns (`a, b ->`) binds a
+  name; write `_`, or one arm per pattern.
 - `CHECK-MAP-KEY-TYPE`, `CHECK-SET-ELEMENT-TYPE`: a `Map` or `ATS` key or a
   `Set` element that is not `Int`, `String` or `Bytes`.
 - `CHECK-ATS-VALUE`: an `ATS[K, V]` whose `V` is `Nil`, a type parameter, or

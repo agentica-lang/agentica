@@ -135,7 +135,7 @@ end
 def flatten(tree: Tree) -> List[Int]
   case tree
     Tree.Leaf(value) -> [value]
-    Tree.Node(children) -> children.reduce([]) do |all, child| all.concat(flatten(child)) end
+    Tree.Node(children) -> children.reduce([]) do |all, child| all + flatten(child) end
   end
 end
 

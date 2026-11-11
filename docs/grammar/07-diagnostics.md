@@ -208,6 +208,11 @@ is a rule:
   Help: break the loop; the help lists the constants around it, `A -> B -> A`
 - `case x` with `LIMIT -> ...` (`PARSE-UNEXPECTED-TOKEN`)
   Help: a constant is not a pattern; compare with `if x == LIMIT`
+- `def edge(xs: List[Int], end: Int)`, `in = 1` or a field `do: Int`
+  (`PARSE-RESERVED-WORD`)
+  Help: the word is reserved and cannot be a name; another, such as `last`
+- `some(x), none -> ...` (`CHECK-CASE-ARM-BINDING`)
+  Help: none; an arm of several patterns binds no names
 - `LIMIT = 2` or `LIMIT += 1` inside a function
   (`PARSE-INVALID-ASSIGNMENT-TARGET`)
   Help: constants are set at the top level and never change; use a local with a

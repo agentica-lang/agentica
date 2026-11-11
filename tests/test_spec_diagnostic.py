@@ -22,9 +22,9 @@ CASES = {
         "CHECK-TYPE-MISMATCH", (2, 12),
         ["2 |   return a * b", "  |          - ^ -", "  |              <label>", "  |          <label>"], True),
     "a label on an earlier line comes with its own source line": (
-        'def main() -> Void\n  x = [1, 2,\n    3] + "s"\nend\n',
+        'def main() -> Void\n  x = [1, 2,\n    3] - "s"\nend\n',
         "CHECK-TYPE-MISMATCH", (3, 8),
-        ["2 |   x = [1, 2,", "  |       ------", "  |       <label>", '3 |     3] + "s"', "  |        ^ ---",
+        ["2 |   x = [1, 2,", "  |       ------", "  |       <label>", '3 |     3] - "s"', "  |        ^ ---",
          "  |          <label>"], False),
     "a CRLF line ends before the CR": (
         'def main() -> Void\r\n  x: Int = "a"\r\n  puts(x)\r\nend\r\n',

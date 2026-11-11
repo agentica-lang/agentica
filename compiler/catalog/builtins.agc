@@ -55,8 +55,12 @@ end
 
 export PRELUDE_ONLY = Set.new(DATA_PRELUDE_ONLY)
 
+## Builtins that a program writes as an operator: `xs + ys` is List.concat. The name still checks, because the
+## compiler's own source calls it and stage0 must compile that source, but no user text (help, did-you-mean) shows it.
+export OPERATOR_ONLY = Set.new(["List.concat"])
+
 export PUBLIC_NAMES = ENTRIES.keys.filter do |name|
-  !STD_ONLY.has_key?(name.split(".")[0]) and !PRELUDE_ONLY.include?(name)
+  !STD_ONLY.has_key?(name.split(".")[0]) and !PRELUDE_ONLY.include?(name) and !OPERATOR_ONLY.include?(name)
 end
 
 ## The builtin families (builtins_data.agc), each with its members: Family.Member is a group of functions, the rows
