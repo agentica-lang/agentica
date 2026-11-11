@@ -99,8 +99,9 @@ behind them.
 
 - The Linux jobs of `ci.yml` run on every pull request that changes more than
   docs. `platforms.yml` (Linux x86-64 and arm64, Windows UCRT64, macOS Intel and
-  arm64) runs on pull requests that carry the `platforms` label and on pushes to
-  `master`: `make vm-test`, the fixed point, then the areas of
+  arm64) runs on pushes to `master` and on pull requests that carry the
+  `platforms` label (all systems) or a `platform:<system>` label (that system
+  alone): `make vm-test`, the fixed point, then the areas of
   `tools/conformance.py`, with a report that fails when an area has no passed
   case or a case is skipped for a reason not on the reviewed list. No step
   checks or regenerates the frozen `vm/unicode_data.c`.
