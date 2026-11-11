@@ -23,8 +23,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- On macOS x86_64, a native function that calls `an_blocking` could get back a
-  collected value it made before the call.
+- On macOS x86_64, a native function that calls `an_blocking` could find a
+  value it made before the call collected.
 
 ## [0.29.0] - 2026-11-10
 
