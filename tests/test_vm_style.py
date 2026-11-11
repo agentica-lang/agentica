@@ -277,8 +277,8 @@ def test_no_union_is_zeroed_with_a_brace_initializer():
 # Every abort of the vendored bdwgc whose text speaks of memory, space or allocation, reviewed: True when it means the
 # system refused memory, which on_gc_abort (vm/value.c) ends with the out-of-memory line, False for a fault, which
 # stays "internal GC error". An update of bdwgc that adds or rewords one fails here until this table is reviewed.
+# The regex sees only a literal first argument, not the aborts built by ABORT_ON_REMAP_FAIL (os_dep.c), "... failed".
 GC_MEMORY_ABORTS = {
-    "Cannot allocate executable pages": True,
     "Could not allocate memory for procedure stack": True,
     "Could not map memory for procedure stack": True,
     "Failed to allocate freelist for new kind": True,
@@ -294,6 +294,7 @@ GC_MEMORY_ABORTS = {
     "Insufficient space for initial table allocation": True,
     "Not enough memory to process remapping": True,
     "Bad VirtualAlloc result": False,
+    "Cannot allocate executable pages": False,
     "Deallocating excessively large block.  Too large an allocation?": False,
     "Duplicate large block deallocation": False,
     "Failed to create key for local allocator": False,

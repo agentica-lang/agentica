@@ -184,12 +184,12 @@ static void gc_aborts(void) {
   static const char *const out_of_memory[] = {
       "Insufficient memory for main local_mark_stack",  "Insufficient space for /proc read",
       "Failed to allocate memory for thread registering", "Could not allocate memory for procedure stack",
-      "Could not map memory for procedure stack",       "Cannot allocate executable pages",
-      "Not enough memory to process remapping"};
+      "Could not map memory for procedure stack",       "Not enough memory to process remapping"};
   for (size_t k = 0; k < sizeof out_of_memory / sizeof out_of_memory[0]; k++)
     gc_abort_ends_with(out_of_memory[k], "agentica: out of memory\n");
   gc_abort_ends_with("Failed to create key for local allocator", "agentica: internal GC error\n");
   gc_abort_ends_with("Too many heap sections", "agentica: internal GC error\n");
+  gc_abort_ends_with("Cannot allocate executable pages", "agentica: internal GC error\n");
   gc_abort_ends_with("Insufficient", "agentica: internal GC error\n");
 }
 #endif
