@@ -53,8 +53,12 @@ rules live in `AGENTS.md` and `agentica-development`.
 - Untracked folders are per worktree: `tools/jscpd/node_modules` (`make
   dup-check` runs `npm ci` into it), `.venv`, build output. Never symlink them
   from the main checkout: `npm ci` empties a symlinked target, and the
-  Makefile refuses one. Tests may use the main checkout's venv read-only
-  through `PYTHON=`.
+  Makefile refuses one. A new worktree has no pytest environment: pass the
+  main checkout's venv read-only through `PYTHON=`, or run `poetry install
+  --only test --no-root` in the worktree and delete that virtualenv when you
+  remove the worktree.
+- The main checkout's `dist/agentica` can be stale: run `dist/agentica
+  --version` before you use it for anything.
 - Agents of one session share the scratchpad folder: write a PR body to
   `pr-body-<branch>.md`, never a generic name, and pass the PR number to
   every `gh pr edit` and `gh pr view`. Repeat both rules in agent prompts.
@@ -115,13 +119,16 @@ Invoke the `pr-reviewer` skill (via the Skill tool) and follow it to review GitH
 - **Platforms** (`platforms.yml`: Linux x86_64 and ARM64, Windows, macOS
   Intel and ARM) runs on a PR only with the `platforms` label, and always on
   pushes to master. Add the label only when the PR changes C code (`vm/`,
-  the VM build in the Makefile) or is a release bump (`agentica-release`),
-  a few seconds after opening the PR (a label at creation starts two runs),
-  and wait for all five systems. A master run that fails after a merge
+  the VM build in the Makefile), changes how tests start processes or build
+  command lines or paths (test helpers, batching), or is a release bump
+  (`agentica-release`), a few seconds after opening the PR (a label at
+  creation starts two runs), and wait for all five systems. Example: #1360
+  batched 904 paths into one command line and broke Windows (`WinError 206`),
+  unseen because Platforms had not run. A master run that fails after a merge
   without the label is fixed in a new PR at once.
 - **Agentica code** (`compiler/`, `stdlib/`, their Python tests and goldens,
-  docs, the site) never gets the label, also when its tests touch processes,
-  files or paths: do not wait for the macOS and Windows jobs.
+  docs, the site) otherwise never gets the label, also when its tests touch
+  files: do not wait for the macOS and Windows jobs.
   Merge when `test` is green (plus `build` and Site examples when they run);
   master's Platforms run catches the rare gap.
 - Wait with one background call of the `watch-ci` skill when it is
