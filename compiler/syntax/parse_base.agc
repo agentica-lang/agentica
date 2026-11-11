@@ -305,10 +305,25 @@ export def reserved_name(e: Env, pos: Int, description: String) -> String
   bail(e, pos, "PARSE-RESERVED-WORD", message, hint(help))
 end
 
-## True when the token at pos is a reserved word that `=` or `:` follows, as a local or a field would be written.
+## The position after a name that refers to something declared elsewhere: a field or method after a dot, a module
+## function, a function reference. A reserved word there names nothing, so the help does not suggest a rename.
+export def expect_used(e: Env, pos: Int, description: String) -> Result[Int]
+  if reserved?(e.tokens[pos])
+    word = e.tokens[pos].lexeme
+    message = "expected #{description}, found the reserved word \"#{word}\""
+    help = "\"#{word}\" is a reserved word, so no function, field or method has that name"
+    return error(bail(e, pos, "PARSE-RESERVED-WORD", message, hint(help)))
+  end
+
+  expect(e, pos, "name", description, true)
+end
+
+## True when the token at pos is a reserved word that `=`, `:` or a compound assignment (`+=`) follows, as a local or
+## a field would be written.
 export def reserved_name_at?(e: Env, pos: Int) -> Bool
   following = kind_at(e, pos + 1)
-  reserved?(e.tokens[pos]) and (following == "assign" or following == "colon")
+  assigned = following == "assign" or following == "colon" or following.ends_with?("-assign")
+  reserved?(e.tokens[pos]) and assigned
 end
 
 ## The position of the first token at or after pos that is not NL.
@@ -433,6 +448,9 @@ end
 export def case_arm_start?(e: Env, pos: Int) -> Bool
   stop = pattern_end(e, pos)
   while stop >= 0 and kind_at(e, stop) == "comma"
+    # Patterns split over lines start an arm too, so that the arm's parser can say they stay on one line.
+    return true if kind_at(e, stop + 1) == "NL"
+
     stop = pattern_end(e, stop + 1)
   end
 
@@ -516,6 +534,9 @@ def parse_slot(e: Env, pos: Int, ids: Int) -> Result[SlotAt]
   if kind == "minus" and (kind_at(e, pos + 1) == "integer" or kind_at(e, pos + 1) == "float")
     return nested_slot(e, pos, ids)
   end
+
+  # true, false and nil are literal patterns above; any other reserved word is a binding that cannot be one.
+  return error(reserved_name(e, pos, "a pattern binding or _")) if reserved?(token)
 
   error(found(e, pos, "a pattern binding or _"))
 end

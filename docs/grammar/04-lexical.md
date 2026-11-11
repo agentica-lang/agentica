@@ -66,8 +66,10 @@ true false nil and or not
 ```
 
 A reserved word where a name goes (a parameter, a function, a field, a local
-before `=` or `:`, a loop variable, a block parameter or a method after a dot)
-is `PARSE-RESERVED-WORD` at the word, with another name as the help.
+before `=`, `:` or `+=`, a loop variable, a block parameter or a pattern
+binding) is `PARSE-RESERVED-WORD` at the word, with another name as the help.
+After a dot or `&` (`JSON.true`, `xs.end`) it is the same code, and the help
+says that no function, field or method has that name.
 
 `break` and `next` are not reserved words: they can name variables, and as
 statements they are loop control. `with` is not reserved either: it means a

@@ -841,6 +841,12 @@
   "stdout": "j.get(key: String) -> Result[Json]\nRead an object member; wrong kind or missing key returns an error.\n",
   "written": []
  },
+ "[[\"help\", \"List.concat\"], {}]": {
+  "code": 2,
+  "stderr": "agentica: unknown builtin List.concat; join two lists with +: xs + ys is a new list, and both stay as they were\n",
+  "stdout": "",
+  "written": []
+ },
  "[[\"help\", \"List.group_by\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
@@ -1031,6 +1037,12 @@
   "code": 0,
   "stderr": "",
   "stdout": "`Lazy.collect` is written `.map`\nlazy.map(f: Fn[A, B]) -> Lazy[B]\nLazy step: f applied to each item.\n\n`List.collect` is written `.map`\nlist.map(f: Fn[A, B]) -> List[B]\nMap each element in order without changing the input; O(n).\n\nRange.collect: a range has no map; use (1..5).to_a.map do |x| ... end\n",
+  "written": []
+ },
+ "[[\"help\", \"concat\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "Bytes.concat(parts: List[Bytes]) -> Bytes\nJoin the parts in order in one copy; prefer it to + in a loop.\n\nList.concat: join two lists with +: xs + ys is a new list, and both stay as they were\n\nString.concat: strings are immutable; join two strings with + and assign the result: a = a + b\n",
   "written": []
  },
  "[[\"help\", \"contains\", \"--json\"], {}]": {

@@ -58,8 +58,8 @@ nullable wildcard: `name: String = nil` is invalid; use `Optional[T]`.
 ### Operators
 
 - `+`, `-`, `*` and `/` take two operands of one numeric type; `+` also
-  concatenates `String`s, `Bytes` and two lists of one type (`List.concat`, a
-  new list), and `s * n` repeats a `String` `n`
+  concatenates `String`s, `Bytes` and two lists of one type (a new list), and
+  `s * n` repeats a `String` `n`
   (an `Int`) times; a negative `n`, or a result over 256 MiB, is
   `RUNTIME-INVALID-COUNT`. Integer `/` truncates toward zero, and `%`
   takes integers only, with `a = (a / b) * b + (a % b)`. Division by zero is

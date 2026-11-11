@@ -155,6 +155,9 @@ SINGLE_FILE = [
     ("the patterns of an arm stay on its line",
      main_with("  n = 3\n  case n\n    1,\n      2 -> puts(1)\n    _ -> puts(2)\n  end\n"),
      "PARSE-UNEXPECTED-TOKEN", Starts("\n")),
+    ("patterns split over lines after an arm with a one-line body",
+     main_with("  n = 3\n  case n\n    0 -> puts(0)\n    1,\n      2 -> puts(1)\n    _ -> puts(2)\n  end\n"),
+     "PARSE-UNEXPECTED-TOKEN", Starts("\n")),
     # A case that gives a value: after `=`, `+=` or `return`, and as the last line of a block.
     ("a case gives the value of an assignment, an annotated assignment and a compound assignment",
      main_with("  n = 3\n  a = case n\n    3 ->\n      base = n * 2\n      base + 1\n    _ -> 0\n  end\n"

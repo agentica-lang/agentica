@@ -118,7 +118,7 @@ xs.push(value: T) -> List[T]                             # near constant time: n
 List.set(list: List[T], index: Int, value: T) -> List[T] # 0..length-1, else RUNTIME-INDEX-OUT-OF-RANGE; O(log32 n)
 List.repeat(value: T, count: Int) -> List[T]             # count 0..1048576, else RUNTIME-INVALID-COUNT
 List.reverse(list: List[T]) -> List[T]
-a + b -> List[T]                                         # a new list (also List.concat); O(length of b) when b has at most 32 items, else O(a + b)
+a + b -> List[T]                                         # a new list; O(length of b) when b has at most 32 items, else O(a + b)
 List.take(list: List[T], count: Int) -> List[T]          # count above length is fine; negative halts (RUNTIME-INVALID-COUNT)
 List.drop(list: List[T], count: Int) -> List[T]          # same count rules as take
 List.at(list: List[T], index: Int) -> T                  # halts (RUNTIME-INDEX-OUT-OF-RANGE); O(log32 n)

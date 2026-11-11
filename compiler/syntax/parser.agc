@@ -680,7 +680,7 @@ def parse_postfix(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
     if kind == "dot"
       links += 1
       inner = try Base.deepen(e, cursor, links)
-      after_name = try Base.expect(e, cursor + 1, "name", "a field or method name", true)
+      after_name = try Base.expect_used(e, cursor + 1, "a field or method name")
       name = e.tokens[cursor + 1].lexeme
       if e.tokens[after_name].kind == "left-paren" and name == "with"
         # `with` is only special before `(` after a dot; `x.with` still reads a field.
@@ -1145,11 +1145,11 @@ def parse_function_ref(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   name = ""
   if e.tokens[cursor].kind == "type-name"
     dot = try Base.expect(e, cursor + 1, "dot", "a dot", false)
-    stop = try Base.expect(e, dot, "name", "a function name", true)
+    stop = try Base.expect_used(e, dot, "a function name")
     name = "#{e.tokens[cursor].lexeme}.#{e.tokens[dot].lexeme}"
     cursor = stop
   else
-    stop = try Base.expect(e, cursor, "name", "a function name", true)
+    stop = try Base.expect_used(e, cursor, "a function name")
     name = e.tokens[cursor].lexeme
     cursor = stop
   end
@@ -1342,7 +1342,7 @@ end
 def parse_module_call(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   name = e.tokens[pos].lexeme
   member_pos = pos + 2
-  after_member = try Base.expect(e, member_pos, "name", "a function name", true)
+  after_member = try Base.expect_used(e, member_pos, "a function name")
   member = e.tokens[member_pos]
   parenthesized = e.tokens[after_member].kind == "left-paren"
   args = Base.ExprsAt(nodes: [], pos: after_member, ids: ids)
@@ -2047,6 +2047,11 @@ def parse_arm_pattern(e: Base.Env, pos: Int, ids: Int) -> Result[Base.PatternAt]
   cursor = first.pos
   next_id = first.ids
   while e.tokens[cursor].kind == "comma"
+    if e.tokens[cursor + 1].kind == "NL"
+      help = "the patterns of an arm stay on its line, as its guard does: join the lines, or write one arm each"
+      return error(Base.unexpected_help(e, cursor + 1, "expected a pattern after \",\"", help))
+    end
+
     parsed = try Base.parse_pattern(e, cursor + 1, next_id)
     patterns = patterns.push(parsed.node)
     cursor = parsed.pos

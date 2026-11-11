@@ -20,7 +20,6 @@ List.first(list: List[A]) -> A
 List.last(list: List[A]) -> A
 List.append(list: List[T], value: T) -> List[T]
 List.set(list: List[T], index: Int, value: T) -> List[T]
-List.concat(a: List[T], b: List[T]) -> List[T]
 List.repeat(value: T, count: Int) -> List[T]
 List.reverse(list: List[T]) -> List[T]
 ```
@@ -30,7 +29,7 @@ List.reverse(list: List[T]) -> List[T]
 - `append` is near constant time, so n appends cost O(n). `reverse` is O(n).
 - `repeat` takes a count from 0 to 1048576; zero gives an empty list of the element type, and any other count is `RUNTIME-INVALID-COUNT`.
 - A negative or out-of-range index is `RUNTIME-INDEX-OUT-OF-RANGE` at the index argument.
-- `xs + ys` joins two lists of the same item type into a new one, as `concat` does; both lists stay as they were. It takes time in the size of `ys` when `ys` has 32 items or fewer. A longer `ys` copies both lists.
+- `xs + ys` joins two lists of the same item type into a new one; both lists stay as they were. It takes time in the size of `ys` when `ys` has 32 items or fewer. A longer `ys` copies both lists.
 
 ```agentica
 def main() -> Void

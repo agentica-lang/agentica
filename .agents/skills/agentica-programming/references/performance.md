@@ -146,6 +146,6 @@ with the profiler.
 
 Wall time of `tally`, `uniq` and `group_by` also grows with the number of
 distinct keys (the cost of the VM's `Map` and `Set` insert). The bodies avoid
-`concat`, `take`, `drop`, `reverse`, `sort`, `Map.keys` and `Map.values` inside
+list `+`, `take`, `drop`, `reverse`, `sort`, `Map.keys` and `Map.values` inside
 a loop, because an O(n) builtin in a loop is quadratic in time while its steps
 look linear: write your own loops the same way.
