@@ -1,4 +1,4 @@
 def main() -> Void
-  _x = Header(name: "a", value: "b").with(name: "c").with(value: "d")
+  _x = ProcessOutput(stdout: "a", stderr: "b", truncated: false).with(stdout: "c").with(stderr: "d")
 end
 

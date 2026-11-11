@@ -1,15 +1,15 @@
 import HTTP from "std/http"
 
-def reply(status: Int, body: String) -> Result[HttpResponse]
-  return ok(HttpResponse(status: status, headers: [Header(name: "X-Seen", value: "yes")], body: body.bytes))
+def reply(status: Int, body: String) -> Result[HTTP.Response]
+  return ok(HTTP.Response(status: status, headers: [HTTP.Header(name: "X-Seen", value: "yes")], body: body.bytes))
 end
 
-def handle(request: HttpRequest) -> Result[HttpResponse]
+def handle(request: HTTP.Request) -> Result[HTTP.Response]
   if request.path == "/fail"
     return error("the handler failed")
   end
   if request.path == "/unsendable"
-    return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Length", value: "3")], body: "abc".bytes))
+    return ok(HTTP.Response(status: 200, headers: [HTTP.Header(name: "Content-Length", value: "3")], body: "abc".bytes))
   end
   if request.path == "/empty"
     return reply(204, "")
@@ -18,7 +18,7 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
     return reply(304, "")
   end
   if request.path == "/close"
-    return ok(HttpResponse(status: 200, headers: [Header(name: "Connection", value: "close")], body: "bye".bytes))
+    return ok(HTTP.Response(status: 200, headers: [HTTP.Header(name: "Connection", value: "close")], body: "bye".bytes))
   end
   if request.path == "/large"
     return reply(200, "0123456789abcdefg")
@@ -27,13 +27,13 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
     return reply(404, "not found")
   end
   if request.path == "/binary"
-    return ok(HttpResponse(status: 200, headers: [], body: Bytes.from_list([255, 0, 128]).unwrap!))
+    return ok(HTTP.Response(status: 200, headers: [], body: Bytes.from_list([255, 0, 128]).unwrap!))
   end
   if request.path == "/latin1"
-    return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; charset=ISO-8859-1")], body: "caf".bytes + Bytes.from_list([233]).unwrap!))
+    return ok(HTTP.Response(status: 200, headers: [HTTP.Header(name: "Content-Type", value: "text/plain; charset=ISO-8859-1")], body: "caf".bytes + Bytes.from_list([233]).unwrap!))
   end
   if request.path == "/quoted"
-    return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; format=flowed; charset=\"UTF-8\"")], body: "ñandú".bytes))
+    return ok(HTTP.Response(status: 200, headers: [HTTP.Header(name: "Content-Type", value: "text/plain; format=flowed; charset=\"UTF-8\"")], body: "ñandú".bytes))
   end
   kind = HTTP.header_values(request.headers, "x-kind")
   # The body is Bytes: text when it is UTF-8, else its byte values.
@@ -41,7 +41,7 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
   return reply(200, "#{request.method} #{request.target} #{request.path} #{kind} [#{shown}]")
 end
 
-def show(r: Result[HttpResponse]) -> Void
+def show(r: Result[HTTP.Response]) -> Void
   case r
     ok(response) -> puts("#{response.status} #{HTTP.header_values(response.headers, "x-seen")} #{HTTP.header_values(response.headers, "content-length")} #{HTTP.header_values(response.headers, "connection")} [#{HTTP.text(response.body, response.headers).unwrap!}]")
     error(message) -> puts("error: #{message}")
@@ -71,21 +71,21 @@ def raw_body(port: Int, bytes: List[Int]) -> String
 end
 
 def main() -> Void
-  defaults = HttpServerOptions()
+  defaults = HTTP.ServerOptions()
   IO.inspect(defaults)
-  bad = HttpServerOptions(request_timeout_ms: 0, idle_timeout_ms: 1000, max_connections: 1, max_body_bytes: 16)
+  bad = HTTP.ServerOptions(request_timeout_ms: 0, idle_timeout_ms: 1000, max_connections: 1, max_body_bytes: 16)
   IO.inspect(HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), bad))
-  IO.inspect(HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), HttpServerOptions(request_timeout_ms: 1000, idle_timeout_ms: 1000, max_connections: 65537, max_body_bytes: 16)))
-  IO.inspect(HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), HttpServerOptions(request_timeout_ms: 1000, idle_timeout_ms: 1000, max_connections: 1, max_body_bytes: 268435457)))
-  options = HttpServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 16)
+  IO.inspect(HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), HTTP.ServerOptions(request_timeout_ms: 1000, idle_timeout_ms: 1000, max_connections: 65537, max_body_bytes: 16)))
+  IO.inspect(HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), HTTP.ServerOptions(request_timeout_ms: 1000, idle_timeout_ms: 1000, max_connections: 1, max_body_bytes: 268435457)))
+  options = HTTP.ServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 16)
   server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options).unwrap!
   IO.inspect(server)
   port = HTTP.local_port(server)
   base = "http://127.0.0.1:#{port}"
-  pool = HTTP.client(HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)).unwrap!
+  pool = HTTP.client(HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)).unwrap!
   show(HTTP.get(pool, base + "/hello?x=1"))
   show(HTTP.get(pool, base + "/again"))
-  show(HTTP.post(pool, base + "/form", "ñandú".bytes, [Header(name: "X-Kind", value: "a"), Header(name: "x-kind", value: "b")]))
+  show(HTTP.post(pool, base + "/form", "ñandú".bytes, [HTTP.Header(name: "X-Kind", value: "a"), HTTP.Header(name: "x-kind", value: "b")]))
   show(HTTP.request(pool, "HEAD", base + "/head", "".bytes))
   show(HTTP.get(pool, base + "/empty"))
   show(HTTP.get(pool, base + "/same"))
@@ -103,7 +103,7 @@ def main() -> Void
   show(HTTP.get(pool, base + "/fail"))
   show(HTTP.get(pool, base + "/unsendable"))
   show(HTTP.post(pool, base + "/over", "0123456789abcdefg".bytes))
-  small = HTTP.client(HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 16)).unwrap!
+  small = HTTP.client(HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 16)).unwrap!
   show(HTTP.get(small, base + "/large"))
   HTTP.close_client(small)
   show(HTTP.get(pool, base + "/still"))

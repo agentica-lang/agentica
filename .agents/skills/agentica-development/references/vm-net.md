@@ -203,8 +203,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   the open count and the queue of `accept` and `wait` jobs. Builtins change them
   only by posted steps; `closed` is atomic (§10.7.2). It runs at N > 1
   (`make test-multicore-modules`).
-  - The `HttpServer` holds a `server` and a group node (`agc_task_group`)
-    that runs std/http's accept loop.
+  - The `HttpWire.Server` holds a `server` and a group node
+    (`agc_task_group`) that runs std/http's accept loop.
     - `spawn` starts the connection task under the group with
     `agc_task_spawn_owning` (the socket goes to the task), marks it `hidden`,
     and sets an `end` hook that only frees the slot. `finish_task` closes the
@@ -218,9 +218,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   reuse and retry, and the crash accounting of `hidden` server connections are
   `docs/vm/10-io-http.md` (§10.6 to §10.7) and `docs/vm/10-io-scheduler.md`
   (`quiet_more`). The C side only gives `HttpWire` its bytes-in, string-out
-  helpers. Handlers cannot reach their own `HttpServer` (values are immutable,
-  and the handler is fixed before the server exists), so the self-close case is
-  a C test.
+  helpers. Handlers cannot reach their own `HttpWire.Server` (values are
+  immutable, and the handler is fixed before the server exists), so the
+  self-close case is a C test.
 
 ## OpenSSL and the build
 

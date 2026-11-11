@@ -81,10 +81,11 @@ code does not show:
 - `RUNTIME-INDEX-OUT-OF-RANGE` and `RUNTIME-KEY-NOT-FOUND` point at the index
   expression's span.
 
-The builtin record types (`FileInfo`, `Header`, `HttpRequest`, `HttpResponse`,
-`HttpClientOptions`, `HttpServerOptions`, `ProcessOutput`, `LogRegistry.Event`,
-`StructMember`) join the struct table only when the program names them or a
-checked type mentions them. Then they lower like user structs.
+The builtin record types (`FileInfo`, `HttpWire.Header`, `HttpWire.Request`,
+`HttpWire.Response`, `HttpWire.ClientOptions`, `HttpWire.ServerOptions`,
+`ProcessOutput`, `LogRegistry.Event`, `StructMember`) join the struct table
+only when the program names them or a checked type mentions them. Then they
+lower like user structs.
 
 ### 3.4 Closure conversion
 

@@ -15,7 +15,7 @@ PEER = FIXTURES / "http-proxy-peer.py"
 PROGRAM = """\
 import HTTP from "std/http"
 
-def show(r: Result[HttpResponse]) -> Void
+def show(r: Result[HTTP.Response]) -> Void
   case r
     ok(response) ->
       body = Result.unwrap_or(String.from_bytes(response.body), "<not UTF-8>")
@@ -24,14 +24,14 @@ def show(r: Result[HttpResponse]) -> Void
   end
 end
 
-def shown_error(r: Result[HttpClient]) -> Void
+def shown_error(r: Result[HTTP.Client]) -> Void
   case r
     ok(_) -> puts("a client was made")
     error(message) -> puts(message)
   end
 end
 
-def answered(r: Result[HttpResponse]) -> String
+def answered(r: Result[HTTP.Response]) -> String
   case r
     ok(_) -> return "answered"
     error(message) -> return message
@@ -66,14 +66,14 @@ def main() -> Void
   proxy = "http://127.0.0.1:#{args[0]}"
   a = "http://127.0.0.1:#{args[1]}"
   b = "http://127.0.0.1:#{args[2]}"
-  options = HttpClientOptions(proxy: proxy)
+  options = HTTP.ClientOptions(proxy: proxy)
   pool = HTTP.client(options).unwrap!
   show(HTTP.get(pool, "#{a}/hello"))
   show(HTTP.get(pool, "#{b}/hello?x=1"))
   show(HTTP.post(pool, "http://localhost:#{args[1]}/echo", "ping".bytes))
   # A second client with another proxy shares nothing with the first; an IPv6 literal on the default port has neither
   # the port in its Host nor in the absolute form.
-  pool_two = HTTP.client(HttpClientOptions(proxy: "http://127.0.0.1:#{args[4]}")).unwrap!
+  pool_two = HTTP.client(HTTP.ClientOptions(proxy: "http://127.0.0.1:#{args[4]}")).unwrap!
   show(HTTP.get(pool_two, "#{a}/hello?two"))
   show(HTTP.get(pool, "#{a}/hello?one"))
   HTTP.close_client(pool_two)
@@ -95,7 +95,7 @@ def main() -> Void
   HTTP.finish(conn)
   # A proxy that is down: the error names it, whichever call reaches for it.
   down = "127.0.0.1:#{args[5]}"
-  gone = HttpClientOptions(proxy: "http://#{down}")
+  gone = HTTP.ClientOptions(proxy: "http://#{down}")
   case HTTP.get_response("#{a}/hello", gone)
     ok(_) -> puts("answered")
     error(message) -> puts(names_proxy(message, down))
@@ -111,9 +111,9 @@ def main() -> Void
     error(message) -> puts(names_proxy(message, down))
   end
 
-  shown_error(HTTP.client(HttpClientOptions(proxy: "ftp://127.0.0.1:1")))
-  shown_error(HTTP.client(HttpClientOptions(proxy: "http://127.0.0.1:1?x=1")))
-  shown_error(HTTP.client(HttpClientOptions(proxy: "http://127.0.0.1:1/path")))
+  shown_error(HTTP.client(HTTP.ClientOptions(proxy: "ftp://127.0.0.1:1")))
+  shown_error(HTTP.client(HTTP.ClientOptions(proxy: "http://127.0.0.1:1?x=1")))
+  shown_error(HTTP.client(HTTP.ClientOptions(proxy: "http://127.0.0.1:1/path")))
   show(HTTP.get_response("#{a}/hello?direct"))
 end
 """
@@ -183,14 +183,14 @@ def test_requests_go_to_the_proxy_in_absolute_form_on_one_pooled_connection(tmp_
 AUTH_PROGRAM = """\
 import HTTP from "std/http"
 
-def show(r: Result[HttpResponse]) -> Void
+def show(r: Result[HTTP.Response]) -> Void
   case r
     ok(response) -> puts("#{response.status} #{Result.unwrap_or(String.from_bytes(response.body), "<not UTF-8>")}")
     error(message) -> puts(message)
   end
 end
 
-def shown(r: Result[HttpClient]) -> Void
+def shown(r: Result[HTTP.Client]) -> Void
   case r
     ok(_) -> puts("a client was made")
     error(message) -> puts(message)
@@ -204,7 +204,7 @@ end
 
 # The same five calls, each ending in the one line it prints: a response or the error of the call.
 def calls(proxy: String, a: String, dir: String, tag: String) -> Void
-  options = HttpClientOptions(proxy: proxy)
+  options = HTTP.ClientOptions(proxy: proxy)
   pool = HTTP.client(options).unwrap!
   show(HTTP.get(pool, "#{a}/hello?#{tag}"))
   HTTP.close_client(pool)
@@ -241,33 +241,33 @@ def main() -> Void
   dir = args[2]
   calls("http://us%40er:p%3Ass%2Fw@#{locked}", a, dir, "good")
   puts("-- the first colon ends the user, a later one is the password")
-  show(HTTP.get_response("#{a}/hello?colon", HttpClientOptions(proxy: "http://us%40er:p:ss%2Fw@#{locked}")))
+  show(HTTP.get_response("#{a}/hello?colon", HTTP.ClientOptions(proxy: "http://us%40er:p:ss%2Fw@#{locked}")))
   puts("-- a wrong password")
   calls("http://us%40er:hunter2@#{locked}", a, dir, "wrong")
   puts("-- no user info")
   calls("http://#{locked}", a, dir, "none")
   puts("-- a 407 ends the pooled connection")
-  pool = HTTP.client(HttpClientOptions(proxy: "http://#{locked}")).unwrap!
+  pool = HTTP.client(HTTP.ClientOptions(proxy: "http://#{locked}")).unwrap!
   show(HTTP.get(pool, "#{a}/hello?first"))
   show(HTTP.get(pool, "#{a}/hello?second"))
   HTTP.close_client(pool)
   puts("-- the caller's own header wins")
-  mine = [Header(name: "Proxy-Authorization", value: args[3])]
-  show(HTTP.post_response("#{a}/echo", "mine".bytes, mine, HttpClientOptions(proxy: "http://#{locked}")))
+  mine = [HTTP.Header(name: "Proxy-Authorization", value: args[3])]
+  show(HTTP.post_response("#{a}/echo", "mine".bytes, mine, HTTP.ClientOptions(proxy: "http://#{locked}")))
   puts("-- printing a connection shows no password, and the origin never got a Proxy-Authorization header")
-  conn = HTTP.start(a, HttpClientOptions(proxy: "http://us%40er:p%3Ass%2Fw@#{locked}")).unwrap!
+  conn = HTTP.start(a, HTTP.ClientOptions(proxy: "http://us%40er:p%3Ass%2Fw@#{locked}")).unwrap!
   IO.inspect(conn)
   HTTP.finish(conn)
   show(HTTP.get_response("#{a}/seen"))
   puts("-- a bad login or a bad proxy never quotes the user info")
-  shown(HTTP.client(HttpClientOptions(proxy: "http://%zz:hunter2@127.0.0.1:1")))
-  shown(HTTP.client(HttpClientOptions(proxy: "http://a%3Ab:hunter2@127.0.0.1:1")))
-  shown(HTTP.client(HttpClientOptions(proxy: "http://@127.0.0.1:1")))
-  shown(HTTP.client(HttpClientOptions(proxy: "http://:hunter2@127.0.0.1:1")))
-  shown(HTTP.client(HttpClientOptions(proxy: "http://us:hunter2@127.0.0.1:1/path")))
-  shown(HTTP.client(HttpClientOptions(proxy: "ftp://us:hunter2@127.0.0.1:1")))
+  shown(HTTP.client(HTTP.ClientOptions(proxy: "http://%zz:hunter2@127.0.0.1:1")))
+  shown(HTTP.client(HTTP.ClientOptions(proxy: "http://a%3Ab:hunter2@127.0.0.1:1")))
+  shown(HTTP.client(HTTP.ClientOptions(proxy: "http://@127.0.0.1:1")))
+  shown(HTTP.client(HTTP.ClientOptions(proxy: "http://:hunter2@127.0.0.1:1")))
+  shown(HTTP.client(HTTP.ClientOptions(proxy: "http://us:hunter2@127.0.0.1:1/path")))
+  shown(HTTP.client(HTTP.ClientOptions(proxy: "ftp://us:hunter2@127.0.0.1:1")))
   puts("-- a proxy that is down")
-  case HTTP.get_response("#{a}/hello", HttpClientOptions(proxy: "http://us:hunter2@127.0.0.1:#{args[4]}"))
+  case HTTP.get_response("#{a}/hello", HTTP.ClientOptions(proxy: "http://us:hunter2@127.0.0.1:#{args[4]}"))
     ok(_) -> puts("answered")
     error(message) -> puts(String.starts_with?(message, "http: cannot reach the proxy 127.0.0.1:#{args[4]}: "))
   end
@@ -497,7 +497,7 @@ import HTTP from "std/http"
 def main() -> Void
   args = System.args()
   for url in ["http://127.0.0.1:#{args[0]}/hello", "http://127.0.0.1:#{args[1]}/hello"]
-    options = HttpClientOptions(proxy: HTTP.proxy_from_env(url))
+    options = HTTP.ClientOptions(proxy: HTTP.proxy_from_env(url))
     case HTTP.get_response(url, options)
       ok(response) -> puts("#{response.status} via=#{HTTP.header_values(response.headers, "via")}")
       error(message) -> puts(message)
@@ -508,7 +508,7 @@ end
 
 
 def test_the_proxy_of_the_environment_is_the_proxy_option_of_a_client(tmp_path, adopt):
-    """The value of proxy_from_env goes straight into HttpClientOptions: the origin that no_proxy names is reached
+    """The value of proxy_from_env goes straight into HTTP.ClientOptions: the origin that no_proxy names is reached
     directly, the other through the proxy."""
     peer = adopt(Child([PYTHON, PEER], stdin=True))
     proxy, first, second, _proxy_two, _locked = peer.next_line().split()[:5]
@@ -527,7 +527,7 @@ def test_the_proxy_of_the_environment_is_the_proxy_option_of_a_client(tmp_path, 
 TUNNEL_PROGRAM = """\
 import HTTP from "std/http"
 
-def show(r: Result[HttpResponse]) -> Void
+def show(r: Result[HTTP.Response]) -> Void
   case r
     ok(response) -> puts("#{response.status} #{Result.unwrap_or(String.from_bytes(response.body), "<not UTF-8>")}")
     error(message) -> puts(message)
@@ -552,14 +552,14 @@ def count(stream: HTTP.Stream) -> Int
 end
 
 # Whether the call failed with the error that names the proxy that could not be reached (its text has more lines).
-def names_down(r: Result[HttpResponse], gone: String) -> Bool
+def names_down(r: Result[HTTP.Response], gone: String) -> Bool
   case r
     ok(_) -> return false
     error(message) -> return String.starts_with?(message, "http: cannot reach the proxy #{gone}: ")
   end
 end
 
-def started(origin: String, options: HttpClientOptions, path: String) -> Void
+def started(origin: String, options: HTTP.ClientOptions, path: String) -> Void
   case HTTP.start(origin, options)
     ok(conn) ->
       case HTTP.send_request(conn, "GET", path, "".bytes)
@@ -573,7 +573,7 @@ def started(origin: String, options: HttpClientOptions, path: String) -> Void
 end
 
 # Every call of the client over a tunnel to C or D, and the line it prints.
-def calls(options: HttpClientOptions, c: String, d: String, dir: String, tag: String) -> Void
+def calls(options: HTTP.ClientOptions, c: String, d: String, dir: String, tag: String) -> Void
   pool = HTTP.client(options).unwrap!
   show(HTTP.get(pool, "#{c}/hello?#{tag}"))
   show(HTTP.get(pool, "#{c}/hello?#{tag}2"))
@@ -604,40 +604,40 @@ def main() -> Void
   d = "https://127.0.0.1:#{args[3]}"
   dir = args[4]
   context = TLS.client_context(TlsClientOptions(ca_file: args[5])).unwrap!
-  calls(HttpClientOptions(proxy: "http://#{proxy}", tls: some(context)), c, d, dir, "ctx")
-  calls(HttpClientOptions(proxy: "http://#{proxy}"), c, d, dir, "sys")
+  calls(HTTP.ClientOptions(proxy: "http://#{proxy}", tls: some(context)), c, d, dir, "ctx")
+  calls(HTTP.ClientOptions(proxy: "http://#{proxy}"), c, d, dir, "sys")
   puts("-- the locked proxy")
   login = "http://us%40er:p%3Ass%2Fw@#{locked}"
-  show(HTTP.get_response("#{c}/hello?locked", HttpClientOptions(proxy: login, tls: some(context))))
-  started(c, HttpClientOptions(proxy: login, tls: some(context)), "/hello?locked")
-  show(HTTP.get_response("#{c}/hello?system", HttpClientOptions(proxy: login)))
-  show(HTTP.get_response("#{c}/hello", HttpClientOptions(proxy: "http://#{locked}", tls: some(context))))
-  started(c, HttpClientOptions(proxy: "http://#{locked}", tls: some(context)), "/hello")
-  show(HTTP.get_response("#{c}/hello", HttpClientOptions(proxy: "http://us%40er:hunter2@#{locked}", tls: some(context))))
+  show(HTTP.get_response("#{c}/hello?locked", HTTP.ClientOptions(proxy: login, tls: some(context))))
+  started(c, HTTP.ClientOptions(proxy: login, tls: some(context)), "/hello?locked")
+  show(HTTP.get_response("#{c}/hello?system", HTTP.ClientOptions(proxy: login)))
+  show(HTTP.get_response("#{c}/hello", HTTP.ClientOptions(proxy: "http://#{locked}", tls: some(context))))
+  started(c, HTTP.ClientOptions(proxy: "http://#{locked}", tls: some(context)), "/hello")
+  show(HTTP.get_response("#{c}/hello", HTTP.ClientOptions(proxy: "http://us%40er:hunter2@#{locked}", tls: some(context))))
   puts("-- a 407 of the origin is a response, and no login reaches it")
-  show(HTTP.get_response("#{c}/407", HttpClientOptions(proxy: login, tls: some(context))))
-  show(HTTP.get_response("#{c}/seen", HttpClientOptions(tls: some(context))))
+  show(HTTP.get_response("#{c}/407", HTTP.ClientOptions(proxy: login, tls: some(context))))
+  show(HTTP.get_response("#{c}/seen", HTTP.ClientOptions(tls: some(context))))
   puts("-- the target is verified inside the tunnel")
   strict = TLS.client_context(TlsClientOptions(ca_file: args[7])).unwrap!
-  case HTTP.get_response("#{c}/hello", HttpClientOptions(proxy: "http://#{proxy}", tls: some(strict)))
+  case HTTP.get_response("#{c}/hello", HTTP.ClientOptions(proxy: "http://#{proxy}", tls: some(strict)))
     ok(_) -> puts("answered")
     error(message) -> puts(String.contains?(message, "proxy"))
   end
 
   puts("-- a refused tunnel, a proxy that is down, a bad proxy")
-  refused = HttpClientOptions(proxy: "http://#{proxy}", tls: some(context))
+  refused = HTTP.ClientOptions(proxy: "http://#{proxy}", tls: some(context))
   show(HTTP.get_response("https://127.0.0.1:9/", refused))
   started("https://127.0.0.1:9", refused, "/")
-  down = HttpClientOptions(proxy: "http://127.0.0.1:#{args[6]}", tls: some(context))
+  down = HTTP.ClientOptions(proxy: "http://127.0.0.1:#{args[6]}", tls: some(context))
   puts(names_down(HTTP.get_response("#{c}/hello", down), "127.0.0.1:#{args[6]}"))
   case HTTP.start(c, down)
     ok(_) -> puts("started")
     error(message) -> puts(String.starts_with?(message, "http: cannot reach the proxy 127.0.0.1:#{args[6]}: "))
   end
 
-  show(HTTP.get_response("#{c}/hello", HttpClientOptions(proxy: "ftp://#{proxy}", tls: some(context))))
+  show(HTTP.get_response("#{c}/hello", HTTP.ClientOptions(proxy: "ftp://#{proxy}", tls: some(context))))
   puts("-- a proxy that stalls, and a 200 with junk after its head")
-  stalled = HttpClientOptions(proxy: "http://#{proxy}", tls: some(context), timeout_ms: 500)
+  stalled = HTTP.ClientOptions(proxy: "http://#{proxy}", tls: some(context), timeout_ms: 500)
   show(HTTP.get_response("https://127.0.0.1:7/", stalled))
   show(HTTP.get_response("https://127.0.0.1:8/", refused))
   started("https://127.0.0.1:8", refused, "/")

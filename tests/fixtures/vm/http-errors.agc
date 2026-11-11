@@ -1,7 +1,7 @@
 import HTTP from "std/http"
 
-def options(connections: Int, body: Int) -> HttpClientOptions
-  return HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: connections, max_body_bytes: body)
+def options(connections: Int, body: Int) -> HTTP.ClientOptions
+  return HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: connections, max_body_bytes: body)
 end
 
 def serve(listener: Listener) -> Void
@@ -33,7 +33,7 @@ def main() -> Void
   for url in ["ftp://x/", "http://", "http://u@h/", "http://h:/", "http://h:0/", "http://h:123456/", "http://[::1/", "http://[example.com]/", "http://h x/"]
     IO.inspect(HTTP.get(pool, url))
   end
-  IO.inspect(HTTP.request(pool, "GET", "http://127.0.0.1:#{port}/", "".bytes, [Header(name: "Host", value: "x")]))
+  IO.inspect(HTTP.request(pool, "GET", "http://127.0.0.1:#{port}/", "".bytes, [HTTP.Header(name: "Host", value: "x")]))
   IO.inspect(HTTP.request(pool, "BAD METHOD", "http://127.0.0.1:#{port}/", "".bytes))
   IO.inspect(HTTP.post(pool, "http://127.0.0.1:#{port}/", "this body is over the limit".bytes))
   IO.inspect(HTTP.get(pool, "http://127.0.0.1:#{port}/big"))

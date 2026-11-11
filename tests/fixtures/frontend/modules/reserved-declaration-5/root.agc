@@ -1,4 +1,4 @@
-struct Header
+struct ProcessOutput
   n: Int
 end
 

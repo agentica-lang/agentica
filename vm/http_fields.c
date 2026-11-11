@@ -1,7 +1,7 @@
 /*
  * Header fields and message bytes that the HTTP client and server share: the
  * byte buffer (agc_http_put), the header writer with its checks, the kept
- * fields and their List[Header], and the connection-close checks. Service
+ * fields and their List[HttpWire.Header], and the connection-close checks. Service
  * layer. Design: docs/vm/10-io-http.md §10.7.
  */
 #include "http_fields.h"
@@ -129,7 +129,7 @@ static agc_string *latin1(const uint8_t *data, size_t len) {
 }
 
 agc_value agc_http_header_list(agc_vm *vm, const agc_http_fields *f) {
-  uint32_t header_type = agc_builtin_struct(vm, "Header", header_fields, 2);
+  uint32_t header_type = agc_builtin_struct(vm, "HttpWire.Header", header_fields, 2);
   agc_list_builder headers;
   agc_list_builder_sized(&headers, f->count);
   size_t at = 0;

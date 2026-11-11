@@ -1,9 +1,9 @@
 /*
  * HttpWire.service, jobs, options and awaited?, for stdlib/http.agc only: the
- * task tree of an HttpClient. service runs f(client), the owner task, in a
+ * task tree of an HttpWire.Client. service runs f(client), the owner task, in a
  * service root (agc_task_service): no caller's crash, cancel or end reaches it,
  * Task.pending_count and Test.test do not see it, and it owns the jobs channel.
- * The HttpClient holds the channel, the options and the TLS context of its
+ * The HttpWire.Client holds the channel, the options and the TLS context of its
  * https connections (vm/tcp.c).
  * Service layer. Design: docs/vm/10-io-http.md §10.7.1.
  */

@@ -152,8 +152,8 @@ in a PR that rewrites the goldens.
 - Debug form: `nil`, `true`, Int, Float (2.2), String (2.3), `[a, b]`, `{k: v}`
   in insertion order, `Name(f: v, ...)` in declaration order, `Enum.Variant` or
   `Enum.Variant(a, b)`, `ok(v)`, `ok()` for Void, `error("msg")`, and the handle
-  forms `<Json>`, `<Fn>`, `<Task>`, `<Socket>`, `<Listener>`, `<HttpClient>`,
-  `<FileHandle>`, `<Process>`.
+  forms `<Json>`, `<Fn>`, `<Task>`, `<Socket>`, `<Listener>`,
+  `<HttpWire.Client>`, `<FileHandle>`, `<Process>`.
 - Struct and enum names print as declared: an imported `Point` prints `Point(x:
   1)`, not the linker's `@2::` identity. A field-less struct prints `Name()`; a
   nullary variant prints `Enum.Variant`, even when written `Enum.Variant()`. The

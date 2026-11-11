@@ -264,20 +264,20 @@ typedef struct {
   int64_t port;
 } agc_listener;
 
-/* An HttpClient: the jobs channel of its owner task and its HttpClientOptions (vm/http_service.c), and the system-trust
-   TLS context that its https connections share when the options name no TlsContext (vm/tcp.c's, opaque here: made by
-   the first HttpWire.connect_tls, given back by HttpWire.drop_tls, which sets tls_dropped; both under rt->sync). The
-   service task drops it once the client is closed and its pool has ended; a client never closed keeps it until the run
-   ends. */
+/* An HttpWire.Client: the jobs channel of its owner task and its HttpWire.ClientOptions (vm/http_service.c), and the
+   system-trust TLS context that its https connections share when the options name no TlsContext (vm/tcp.c's, opaque
+   here: made by the first HttpWire.connect_tls, given back by HttpWire.drop_tls, which sets tls_dropped; both under
+   rt->sync). The service task drops it once the client is closed and its pool has ended; a client never closed keeps
+   it until the run ends. */
 typedef struct {
   agc_value jobs, options;
   void *tls;
   bool tls_dropped;
 } agc_http_client;
 
-/* HttpClientOptions as the record of compiler/catalog/builtins_data.agc lays it out: timeout_ms, idle_timeout_ms,
-   max_connections, max_body_bytes, proxy, tls (Optional[TlsContext]). HttpWire.service checks the shape, since the
-   std-only rule lives in the front end and bytecode can call the builtin with any struct. */
+/* HttpWire.ClientOptions as the record of compiler/catalog/builtins_data.agc lays it out: timeout_ms,
+   idle_timeout_ms, max_connections, max_body_bytes, proxy, tls (Optional[TlsContext]). HttpWire.service checks the
+   shape, since the std-only rule lives in the front end and bytecode can call the builtin with any struct. */
 #define AGC_HTTP_OPTIONS_FIELDS 6
 #define AGC_HTTP_OPTION_PROXY 4
 #define AGC_HTTP_OPTION_TLS 5

@@ -8,6 +8,7 @@ import pytest
 from tests.spec_support import assert_rule
 
 MAIN = "def main() -> Void\n"
+HTTP = 'import HTTP from "std/http"\n\n'
 
 CLEAN = [
     # The type in every position: a parameter, a result, a field, an item, a Result, a Map value, a Set element.
@@ -97,13 +98,13 @@ REFUSED = [
         "CHECK-NOT-DECODABLE",
         "Frame",
     ),
-    # An HttpResponse has a Bytes body, so JSON neither writes nor builds it.
+    # An HTTP.Response has a Bytes body, so JSON neither writes nor builds it.
     (
-        MAIN + '  r = HttpResponse(status: 200, headers: [], body: "a".bytes)\n  puts(JSON.encode(r))\nend\n',
+        HTTP + MAIN + '  r = HTTP.Response(status: 200, headers: [], body: "a".bytes)\n  puts(JSON.encode(r))\nend\n',
         "CHECK-NOT-ENCODABLE",
         "r",
     ),
-    (MAIN + '  puts(JSON.decode("{}", HttpResponse).ok?)\nend\n', "CHECK-NOT-DECODABLE", "HttpResponse"),
+    (HTTP + MAIN + '  puts(JSON.decode("{}", HTTP.Response).ok?)\nend\n', "CHECK-NOT-DECODABLE", "HTTP.Response"),
     # The help walk for a type with no Bytes ends: the code is the same as for a type that has one.
     (MAIN + "  puts(JSON.encode(1..2))\nend\n", "CHECK-NOT-ENCODABLE", "1..2"),
     (MAIN + '  puts(JSON.decode("{}", Int).ok?)\nend\n', "CHECK-NOT-DECODABLE", "Int"),

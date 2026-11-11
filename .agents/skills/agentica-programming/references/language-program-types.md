@@ -90,7 +90,7 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
   last type is the return; `Fn[Void]` takes no arguments.
 - Opaque, with no constructor or `==`: `Process`, `Lazy[T]` (`lazy.md`),
   `Task[R]`, `TaskRef`, `Channel[T]`, `ATS[K, V]` (`tasks.md`), `Socket`,
-  `Listener`, `HttpClient`, `HttpServer`, `Codec[T]` (`json.md`).
+  `Listener`, `HTTP.Client`, `HTTP.Server`, `Codec[T]` (`json.md`).
 - `Address[T]`: a channel's send-only address (`ch.address`), data with `==`
   and text, no JSON, not a map key (`tasks.md`).
 - Builtin enums, reserved: `Await[T]` (`Await.Done(value)`, `Await.TimedOut`;
@@ -98,9 +98,10 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
   `TaskExit` (`Ok`, `Crashed`, `Cancelled`; `tasks.md`). `std/logger` exports
   the builtin `Logger.Level` (`Debug`, `Info`, `Warning`, `Error`) and
   `Logger.Event` (`logger.md`); they reserve no name.
-- Builtin records: `Header`, `HttpRequest`, `HttpResponse`, `HttpClientOptions`,
-  `HttpServerOptions`, `FileInfo`, `ProcessOutput`, `StructMember`,
-  `TaskDown`.
+- Builtin records: `FileInfo`, `ProcessOutput`, `StructMember`, `TaskDown`.
+  `std/http` exports the builtin `HTTP.Header`, `HTTP.Request`,
+  `HTTP.Response`, `HTTP.ClientOptions` and `HTTP.ServerOptions`
+  (`network.md`); they reserve no name.
 - Type names start uppercase; variables, functions and fields start lowercase
   or `_`.
 

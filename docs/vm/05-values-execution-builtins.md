@@ -69,10 +69,11 @@ does not make obvious:
 - `FIELD`, `PAYLOAD` and `STRUCT_WITH` check against the value's own size, not
   only the tables (4.2). The C creators of a record go through
   `agc_builtin_struct`, which checks the name, the count and the field names.
-- A builtin that reads a builtin record (`Header`, `HttpRequest`,
-  `HttpResponse`, `FileInfo`, `ProcessOutput`) finds its struct by exact name
-  and fields (`agc_builtin_struct`, `vm/builtins.c`). If the struct is missing,
-  it fails with `RUNTIME-INTERNAL`. The loader does not check these records.
+- A builtin that reads a builtin record (`HttpWire.Header`, `HttpWire.Request`,
+  `HttpWire.Response`, `FileInfo`, `ProcessOutput`) finds its struct by exact
+  name and fields (`agc_builtin_struct`, `vm/builtins.c`). If the struct is
+  missing, it fails with `RUNTIME-INTERNAL`. The loader does not check these
+  records.
 - Every String constructor validates UTF-8 (no overlongs, no surrogates, at most
   U+10FFFF) or decodes with U+FFFD: argv, `Dir.list`, stdin, process and socket
   text, JSON `\u` escapes.

@@ -1,4 +1,4 @@
-import Header from "lib"
+import FileInfo from "lib"
 def main() -> Void
 end
 

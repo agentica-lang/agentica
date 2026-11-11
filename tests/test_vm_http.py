@@ -35,7 +35,7 @@ PRELUDE = """\
 import HTTP from "std/http"
 
 struct Fetch
-  pool: HttpClient
+  pool: HTTP.Client
   url: String
 end
 
@@ -45,8 +45,8 @@ struct Producer
   close: Bool
 end
 
-def options(timeout: Int, connections: Int, body: Int, ca: String) -> HttpClientOptions
-  return HttpClientOptions(timeout_ms: timeout, idle_timeout_ms: 5000, max_connections: connections, max_body_bytes: body, tls: some(TLS.client_context(TlsClientOptions(ca_file: ca)).unwrap!))
+def options(timeout: Int, connections: Int, body: Int, ca: String) -> HTTP.ClientOptions
+  return HTTP.ClientOptions(timeout_ms: timeout, idle_timeout_ms: 5000, max_connections: connections, max_body_bytes: body, tls: some(TLS.client_context(TlsClientOptions(ca_file: ca)).unwrap!))
 end
 
 # A body as text; one that is not UTF-8 says so, since these shows print text.
@@ -62,7 +62,7 @@ def short(body: Bytes) -> String
   return text
 end
 
-def show(r: Result[HttpResponse]) -> Void
+def show(r: Result[HTTP.Response]) -> Void
   case r
     ok(response) -> puts("#{response.status} #{short(response.body)} #{String.length(decoded(response.body))}")
     error(message) -> puts(String.replace(message, "\\n", " | "))
@@ -106,7 +106,7 @@ def main() -> Void
   latin = Result.unwrap!(HTTP.get(pool, plain + "/latin1"))
   puts("#{latin.body.size} #{latin.body[3]} #{HTTP.text(latin.body, latin.headers).ok?}")
   first = Result.unwrap!(HTTP.get(pool, plain + "/port")).body
-  show(HTTP.post(pool, plain + "/post", "a=1&b=ñ".bytes, [Header(name: "X-Kind", value: "form")]))
+  show(HTTP.post(pool, plain + "/post", "a=1&b=ñ".bytes, [HTTP.Header(name: "X-Kind", value: "form")]))
   puts(Result.unwrap!(HTTP.get(pool, plain + "/port")).body == first)
   show(HTTP.get(pool, plain + "/close"))
   puts(Result.unwrap!(HTTP.get(pool, plain + "/port")).body != first)
@@ -115,10 +115,10 @@ def main() -> Void
   show(HTTP.request(pool, "DELETE", plain + "/item", "".bytes))
   HTTP.close_client(pool)
   show(HTTP.get_response(plain + "/chunked"))
-  show(HTTP.post_response(plain + "/post", "a=1&b=ñ".bytes, [Header(name: "X-Kind", value: "form")]))
-  show(HTTP.get_response(plain + "/slow", HttpClientOptions(timeout_ms: 200)))
+  show(HTTP.post_response(plain + "/post", "a=1&b=ñ".bytes, [HTTP.Header(name: "X-Kind", value: "form")]))
+  show(HTTP.get_response(plain + "/slow", HTTP.ClientOptions(timeout_ms: 200)))
   show(HTTP.get_response("ftp://127.0.0.1/"))
-  show(HTTP.get_response(plain + "/nothing", HttpClientOptions(max_body_bytes: 0)))
+  show(HTTP.get_response(plain + "/nothing", HTTP.ClientOptions(max_body_bytes: 0)))
   puts(Task.pending_count())
   slow = Result.unwrap!(HTTP.client(options(200, 1, 1000, "")))
   show(HTTP.get(slow, plain + "/slow"))
@@ -190,7 +190,7 @@ def why(started: Result[HTTP.Connection]) -> String
 end
 
 def answer(conn: HTTP.Connection, method: String, target: String, body: String, most: Int) -> String
-  case HTTP.send_request(conn, method, target, body.bytes, [Header(name: "X-Kind", value: "conn")])
+  case HTTP.send_request(conn, method, target, body.bytes, [HTTP.Header(name: "X-Kind", value: "conn")])
     ok(head) -> return "#{head.status} #{drain(conn, most)}"
     error(message) -> return "error: #{message}"
   end
@@ -365,7 +365,7 @@ def main() -> Void
   fast = options(5000, 1, 1000, "")
   chunked = Result.unwrap!(HTTP.open("GET", plain + "/chunked", "".bytes, [], fast))
   puts("#{chunked.status} #{HTTP.header_values(chunked.headers, "transfer-encoding")} #{text_of(chunked)} #{ended(chunked)}")
-  form = Result.unwrap!(HTTP.open("POST", plain + "/post", "a=1&b=ñ".bytes, [Header(name: "X-Kind", value: "form")], fast))
+  form = Result.unwrap!(HTTP.open("POST", plain + "/post", "a=1&b=ñ".bytes, [HTTP.Header(name: "X-Kind", value: "form")], fast))
   puts("#{form.status} #{text_of(form)} #{ended(form)}")
   missing = Result.unwrap!(HTTP.open("GET", plain + "/nothing", "".bytes))
   puts("#{missing.status} #{text_of(missing)} #{ended(missing)}")
@@ -415,7 +415,7 @@ def upload_to(path: String, method: String, pieces: List[Bytes], length: Int, ti
   plain = "http://127.0.0.1:#{System.args()[1]}"
   into: Channel[Bytes] = Channel.new(2)
   Task.spawn(&produce, Producer(pieces: pieces, into: into, close: close))
-  case HTTP.upload(method, plain + path, into, length, [Header(name: "X-Kind", value: "up")], options(timeout, 1, 1000, ""))
+  case HTTP.upload(method, plain + path, into, length, [HTTP.Header(name: "X-Kind", value: "up")], options(timeout, 1, 1000, ""))
     ok(response) -> return "#{response.status} #{decoded(response.body)}"
     error(message) -> return "error: #{message}"
   end
@@ -476,13 +476,13 @@ end
 SERVER_PROGRAM = """\
 import HTTP from "std/http"
 
-def handle(request: HttpRequest) -> Result[HttpResponse]
+def handle(request: HTTP.Request) -> Result[HTTP.Response]
   if request.path == "/big"
     big = "x"
     while String.length(big) < 8388608
       big = big + big
     end
-    return ok(HttpResponse(status: 200, headers: [], body: big.bytes))
+    return ok(HTTP.Response(status: 200, headers: [], body: big.bytes))
   end
   if request.path == "/latin1"
     sent = request.headers.detect do |h| h.name == "x-in" end
@@ -490,7 +490,7 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
     if sent.ok?
       seen = sent.unwrap!.value
     end
-    return ok(HttpResponse(status: 200, headers: [Header(name: "X-Out", value: "café " + seen)], body: "in #{seen} #{seen.length}".bytes))
+    return ok(HTTP.Response(status: 200, headers: [HTTP.Header(name: "X-Out", value: "café " + seen)], body: "in #{seen} #{seen.length}".bytes))
   end
   if request.path == "/long"
     # 5000 characters are 5000 bytes on the wire but 10000 in the UTF-8 head String: under the 8192 of a line.
@@ -498,21 +498,21 @@ def handle(request: HttpRequest) -> Result[HttpResponse]
     while String.length(big) < 5000
       big = big + big
     end
-    return ok(HttpResponse(status: 200, headers: [Header(name: "X-Out", value: String.slice(big, 0, 5000))], body: "".bytes))
+    return ok(HTTP.Response(status: 200, headers: [HTTP.Header(name: "X-Out", value: String.slice(big, 0, 5000))], body: "".bytes))
   end
   if request.path == "/wide"
-    return ok(HttpResponse(status: 200, headers: [Header(name: "X-Out", value: "\u0100")], body: "".bytes))
+    return ok(HTTP.Response(status: 200, headers: [HTTP.Header(name: "X-Out", value: "\u0100")], body: "".bytes))
   end
   if request.path == "/split"
-    return ok(HttpResponse(status: 200, headers: [Header(name: "X-Out", value: "a\\r\\nX-Evil: 1")], body: "".bytes))
+    return ok(HTTP.Response(status: 200, headers: [HTTP.Header(name: "X-Out", value: "a\\r\\nX-Evil: 1")], body: "".bytes))
   end
   # The body is Bytes: its text when it is UTF-8, else its byte values.
   shown = Result.unwrap_or(HTTP.text(request.body, request.headers), "bytes #{request.body.to_a}")
-  return ok(HttpResponse(status: 200, headers: [], body: "#{request.method} #{request.path} #{shown}".bytes))
+  return ok(HTTP.Response(status: 200, headers: [], body: "#{request.method} #{request.path} #{shown}".bytes))
 end
 
 def main() -> Void
-  options = HttpServerOptions(request_timeout_ms: 2000, idle_timeout_ms: 10000, max_connections: 2, max_body_bytes: 1024)
+  options = HTTP.ServerOptions(request_timeout_ms: 2000, idle_timeout_ms: 10000, max_connections: 2, max_body_bytes: 1024)
   server = Result.unwrap!(HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options))
   certs = System.args()[0]
   secure = Result.unwrap!(HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, HTTP.app(&handle), options))
@@ -552,11 +552,11 @@ def drained(body: HTTP.RequestBody, pause: Int) -> List[Bytes]
   return all
 end
 
-def answer(status: Int, text: String) -> Result[HttpResponse]
-  return ok(HttpResponse(status: status, headers: [], body: text.bytes))
+def answer(status: Int, text: String) -> Result[HTTP.Response]
+  return ok(HTTP.Response(status: status, headers: [], body: text.bytes))
 end
 
-def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HttpResponse]
+def handle(request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Response]
   if request.path == "/early"
     puts("/early")
     IO.flush()
@@ -599,12 +599,12 @@ def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HttpResponse]
   return answer(200, "#{request.path} #{shown} #{done}")
 end
 
-def app(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+def app(request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   return ok(HTTP.Answer.Whole(try handle(request, body)))
 end
 
 def main() -> Void
-  options = HttpServerOptions(request_timeout_ms: 2000, idle_timeout_ms: 10000, max_connections: 8, max_body_bytes: 4194304)
+  options = HTTP.ServerOptions(request_timeout_ms: 2000, idle_timeout_ms: 10000, max_connections: 8, max_body_bytes: 4194304)
   server = Result.unwrap!(HTTP.serve("127.0.0.1", 0, &app, options))
   certs = System.args()[0]
   secure = Result.unwrap!(HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, &app, options))
@@ -702,7 +702,7 @@ end
 
 def stream(feed: Feed, job: Fn[Feed, Void]) -> Result[HTTP.StreamResponse]
   Task.spawn(job, feed)
-  headers = [Header(name: "Content-Type", value: "text/event-stream")]
+  headers = [HTTP.Header(name: "Content-Type", value: "text/event-stream")]
   return ok(HTTP.StreamResponse(status: 200, headers: headers, body: feed.body))
 end
 
@@ -711,11 +711,11 @@ def sized_stream(feed: Feed, job: Fn[Feed, Void], length: Int) -> Result[HTTP.St
   return ok(HTTP.StreamResponse(status: 200, headers: [], body: feed.body, length: some(length)))
 end
 
-def handler_of(f: Fn[HttpRequest, Result[HTTP.StreamResponse]]) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
+def handler_of(f: Fn[HTTP.Request, Result[HTTP.StreamResponse]]) -> Fn[HTTP.Request, Result[HTTP.StreamResponse]]
   return f
 end
 
-def routes(said: Channel[String]) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
+def routes(said: Channel[String]) -> Fn[HTTP.Request, Result[HTTP.StreamResponse]]
   return handler_of() do |request|
     body: Channel[Bytes] = Channel.new(2)
     feed = Feed(said: said, body: body)
@@ -730,11 +730,11 @@ def routes(said: Channel[String]) -> Fn[HttpRequest, Result[HTTP.StreamResponse]
     end
     if request.path == "/latin1-chunked"
       Task.spawn(&three, feed)
-      return ok(HTTP.StreamResponse(status: 200, headers: [Header(name: "X-Out", value: "café")], body: feed.body))
+      return ok(HTTP.StreamResponse(status: 200, headers: [HTTP.Header(name: "X-Out", value: "café")], body: feed.body))
     end
     if request.path == "/latin1-sized"
       Task.spawn(&three, feed)
-      return ok(HTTP.StreamResponse(status: 200, headers: [Header(name: "X-Out", value: "café")], body: feed.body, length: some(3)))
+      return ok(HTTP.StreamResponse(status: 200, headers: [HTTP.Header(name: "X-Out", value: "café")], body: feed.body, length: some(3)))
     end
     if request.path == "/sized"
       return sized_stream(feed, &sized, 8)
@@ -789,7 +789,7 @@ def app_of(f: HTTP.App) -> HTTP.App
 end
 
 # The body read first (a body that cannot be read is refused as HTTP.app does), then the stream of the route.
-def stream_answer(route: Fn[HttpRequest, Result[HTTP.StreamResponse]], request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+def stream_answer(route: Fn[HTTP.Request, Result[HTTP.StreamResponse]], request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   case HTTP.read_all(body, 1024)
     ok(_) -> return ok(HTTP.Answer.Stream(try route.call(request)))
     error(message) -> return ok(HTTP.body_refusal(message))
@@ -803,7 +803,7 @@ end
 
 def main() -> Void
   said: Channel[String] = Channel.new(8)
-  options = HttpServerOptions(request_timeout_ms: 300, idle_timeout_ms: 300, max_connections: 8, max_body_bytes: 1024)
+  options = HTTP.ServerOptions(request_timeout_ms: 300, idle_timeout_ms: 300, max_connections: 8, max_body_bytes: 1024)
   server = Result.unwrap!(HTTP.serve("127.0.0.1", 0, streamed(said), options))
   certs = System.args()[0]
   secure = Result.unwrap!(HTTP.serve_tls("127.0.0.1", 0, TLS.server_context(TlsServerOptions(cert_file: certs + "/server.pem", key_file: certs + "/server-key.pem")).unwrap!, streamed(said), options))
@@ -1351,9 +1351,9 @@ LATIN1_CLIENT_PROGRAM = """\
 import HTTP from "std/http"
 
 def main() -> Void
-  options = HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 1024, tls: none)
+  options = HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 1024, tls: none)
   client = Result.unwrap!(HTTP.client(options))
-  reply = Result.unwrap!(HTTP.request(client, "GET", "http://127.0.0.1:" + System.args()[0] + "/", "".bytes, [Header(name: "X-Name", value: "caf\u00e9")]))
+  reply = Result.unwrap!(HTTP.request(client, "GET", "http://127.0.0.1:" + System.args()[0] + "/", "".bytes, [HTTP.Header(name: "X-Name", value: "caf\u00e9")]))
   back = reply.headers.detect do |h| h.name == "x-back" end.unwrap!.value
   puts("#{back} #{back.length}")
 end
@@ -1528,16 +1528,16 @@ def test_error_answer_arrives_and_the_lingering_close_stops_reading_after_a_byte
 REMOTE_ADDR_PROGRAM = """\
 import HTTP from "std/http"
 
-def plain(request: HttpRequest) -> Result[HttpResponse]
-  return ok(HttpResponse(status: 200, headers: [], body: request.remote_addr.bytes))
+def plain(request: HTTP.Request) -> Result[HTTP.Response]
+  return ok(HTTP.Response(status: 200, headers: [], body: request.remote_addr.bytes))
 end
 
-def stream(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+def stream(request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   try HTTP.read_all(body, 1024)
   return ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: [], body: HTTP.whole(request.remote_addr.bytes))))
 end
 
-def upload(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+def upload(request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   try HTTP.read_all(body, 1024)
   return ok(HTTP.Answer.Whole(try plain(request)))
 end
@@ -1596,8 +1596,8 @@ def test_every_kind_of_server_gives_the_handler_the_clients_address_without_the_
 SERVE_PROGRAM = """\
 import HTTP from "std/http"
 
-def page(request: HttpRequest) -> Result[HttpResponse]
-  return ok(HttpResponse(status: 200, headers: [], body: "page #{request.method} #{request.path} #{request.body.size}".bytes))
+def page(request: HTTP.Request) -> Result[HTTP.Response]
+  return ok(HTTP.Response(status: 200, headers: [], body: "page #{request.method} #{request.path} #{request.body.size}".bytes))
 end
 
 # 1000 bytes of the digit n.
@@ -1638,7 +1638,7 @@ def store(body: HTTP.RequestBody) -> Result[HTTP.Answer]
   try Task.await(body.done)
   puts("stored #{total}")
   IO.flush()
-  return ok(HTTP.Answer.Whole(HttpResponse(status: 200, headers: [], body: "stored #{total}".bytes)))
+  return ok(HTTP.Answer.Whole(HTTP.Response(status: 200, headers: [], body: "stored #{total}".bytes)))
 end
 
 # Counts the body as it arrives and says how `done` ended, then answers 200 whatever happened.
@@ -1658,7 +1658,7 @@ def count(body: HTTP.RequestBody) -> HTTP.Answer
   end
   puts("counted #{total} #{done}")
   IO.flush()
-  return HTTP.Answer.Whole(HttpResponse(status: 200, headers: [], body: "counted".bytes))
+  return HTTP.Answer.Whole(HTTP.Response(status: 200, headers: [], body: "counted".bytes))
 end
 
 def echo(ws: HTTP.WebSocket) -> Result[Void]
@@ -1677,7 +1677,7 @@ def echo(ws: HTTP.WebSocket) -> Result[Void]
   return ok()
 end
 
-def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+def handle(request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   if request.path == "/ws"
     return ok(HTTP.Answer.Upgrade(try HTTP.accept_websocket(request, &echo)))
   end
@@ -1691,7 +1691,7 @@ def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   end
 
   if request.path == "/early"
-    return ok(HTTP.Answer.Whole(HttpResponse(status: 401, headers: [], body: "no".bytes)))
+    return ok(HTTP.Answer.Whole(HTTP.Response(status: 401, headers: [], body: "no".bytes)))
   end
 
   if request.path == "/count"
@@ -1706,7 +1706,7 @@ def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
 end
 
 def main() -> Void
-  options = HttpServerOptions(
+  options = HTTP.ServerOptions(
     request_timeout_ms: 5000,
     idle_timeout_ms: 10000,
     max_connections: 16,

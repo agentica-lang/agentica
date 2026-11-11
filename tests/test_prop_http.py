@@ -20,18 +20,18 @@ HEADER_ECHO_PROGRAM = """\
 import HTTP from "std/http"
 
 # The request body, read as UTF-8, goes back as the value of X-Out.
-def handle(request: HttpRequest) -> Result[HttpResponse]
+def handle(request: HTTP.Request) -> Result[HTTP.Response]
   value = try String.from_bytes(request.body)
-  return ok(HttpResponse(status: 200, headers: [Header(name: "X-Out", value: value)], body: "".bytes))
+  return ok(HTTP.Response(status: 200, headers: [HTTP.Header(name: "X-Out", value: value)], body: "".bytes))
 end
 
 def main() -> Void
-  options = HttpServerOptions(request_timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 4, max_body_bytes: 65536)
+  options = HTTP.ServerOptions(request_timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 4, max_body_bytes: 65536)
   server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options).unwrap!
   port = HTTP.local_port(server)
   puts(port)
   IO.flush()
-  client = HTTP.client(HttpClientOptions(timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 1, max_body_bytes: 65536, tls: none)).unwrap!
+  client = HTTP.client(HTTP.ClientOptions(timeout_ms: 10000, idle_timeout_ms: 10000, max_connections: 1, max_body_bytes: 65536, tls: none)).unwrap!
   # Each line is a case number and the hex of one value. The answer repeats the number, then the status and the hex of
   # the X-Out the client read (or "-"), or "error" and why the request failed.
   while !IO.eof?

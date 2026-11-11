@@ -32,18 +32,18 @@ def backed_up(feed: Feed) -> Void
   feed.body.close
 end
 
-def routes(said: Channel[String]) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
+def routes(said: Channel[String]) -> Fn[HTTP.Request, Result[HTTP.StreamResponse]]
   return handler_of() do |_|
     body: Channel[Bytes] = Channel.new(2)
     Task.spawn(&backed_up, Feed(said: said, body: body))
     return ok(
-      HTTP.StreamResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain")], body: body),
+      HTTP.StreamResponse(status: 200, headers: [HTTP.Header(name: "Content-Type", value: "text/plain")], body: body),
     )
   end
 end
 
 # A block is the only way to make a handler that holds the channel.
-def handler_of(f: Fn[HttpRequest, Result[HTTP.StreamResponse]]) -> Fn[HttpRequest, Result[HTTP.StreamResponse]]
+def handler_of(f: Fn[HTTP.Request, Result[HTTP.StreamResponse]]) -> Fn[HTTP.Request, Result[HTTP.StreamResponse]]
   return f
 end
 
@@ -52,14 +52,14 @@ def app_of(f: HTTP.App) -> HTTP.App
 end
 
 # The body read first (a body that cannot be read is refused as HTTP.app does), then the stream of the route.
-def stream_answer(route: Fn[HttpRequest, Result[HTTP.StreamResponse]], request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+def stream_answer(route: Fn[HTTP.Request, Result[HTTP.StreamResponse]], request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   case HTTP.read_all(body, 1024)
     ok(_) -> return ok(HTTP.Answer.Stream(try route.call(request)))
     error(message) -> return ok(HTTP.body_refusal(message))
   end
 end
 
-def streamed(route: Fn[HttpRequest, Result[HTTP.StreamResponse]]) -> HTTP.App
+def streamed(route: Fn[HTTP.Request, Result[HTTP.StreamResponse]]) -> HTTP.App
   return app_of() do |request, body| stream_answer(route, request, body) end
 end
 
@@ -78,7 +78,7 @@ end
 
 def main() -> Void
   said: Channel[String] = Channel.new(1)
-  options = HttpServerOptions(request_timeout_ms: 400, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
+  options = HTTP.ServerOptions(request_timeout_ms: 400, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
   server = HTTP.serve("127.0.0.1", 0, streamed(routes(said)), options).unwrap!
   socket = TCP.connect("127.0.0.1", HTTP.local_port(server), 5000).unwrap!
   TCP.send(socket, "GET / HTTP/1.1\r\nHost: x\r\n\r\n", 5000).unwrap!

@@ -4,7 +4,7 @@ import HTTP from "std/http"
 # sees the slow call and the call after it, not the POST of the cancelled task.
 
 struct Call
-  pool: HttpClient
+  pool: HTTP.Client
   url: String
 end
 
@@ -36,7 +36,7 @@ def serve(listener: Listener) -> List[String]
   return log
 end
 
-def get(call: Call) -> Result[HttpResponse]
+def get(call: Call) -> Result[HTTP.Response]
   return HTTP.get(call.pool, call.url)
 end
 
@@ -44,7 +44,7 @@ def main() -> Void
   listener = Result.unwrap!(TCP.listen("127.0.0.1", 0))
   base = "http://127.0.0.1:#{TCP.local_port(listener)}"
   server = Task.spawn(&serve, listener)
-  pool = Result.unwrap!(HTTP.client(HttpClientOptions(max_connections: 1, timeout_ms: 5000)))
+  pool = Result.unwrap!(HTTP.client(HTTP.ClientOptions(max_connections: 1, timeout_ms: 5000)))
   first = Task.spawn(&get, Call(pool: pool, url: base + "/slow"))
   Task.sleep(100)
   puts(Task.map([1], 1, 200) do |_| HTTP.post(pool, base + "/queued", "x".bytes) end)

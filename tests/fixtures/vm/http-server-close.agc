@@ -12,31 +12,31 @@ def linger(signal: Signal) -> Void
   puts("never: #{signal.word} read #{line}")
 end
 
-def side_of(request: HttpRequest) -> Int
+def side_of(request: HTTP.Request) -> Int
   at = request.target.index_of("?").unwrap!
   return String.to_int!(request.target.slice(at + 1, request.target.length - at - 1))
 end
 
-def handle(request: HttpRequest) -> Result[HttpResponse]
+def handle(request: HTTP.Request) -> Result[HTTP.Response]
   side = side_of(request)
   if request.path == "/left"
     Task.spawn(&linger, Signal(port: side, word: "left"))
-    return ok(HttpResponse(status: 200, headers: [], body: "returned".bytes))
+    return ok(HTTP.Response(status: 200, headers: [], body: "returned".bytes))
   end
   Task.spawn(&linger, Signal(port: side, word: "spawned"))
   socket = TCP.connect("127.0.0.1", side, 5000).unwrap!
   TCP.send(socket, "sleeping\n", 5000).unwrap!
   Task.sleep(60000)
   puts("never: the handler woke up")
-  return ok(HttpResponse(status: 200, headers: [], body: "late".bytes))
+  return ok(HTTP.Response(status: 200, headers: [], body: "late".bytes))
 end
 
-def fetch(url: String) -> Result[HttpResponse]
-  pool = HTTP.client(HttpClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)).unwrap!
+def fetch(url: String) -> Result[HTTP.Response]
+  pool = HTTP.client(HTTP.ClientOptions(timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)).unwrap!
   return HTTP.get(pool, url)
 end
 
-def show(r: Result[HttpResponse]) -> Void
+def show(r: Result[HTTP.Response]) -> Void
   case r
     ok(response) -> puts("#{response.status} #{HTTP.text(response.body, response.headers).unwrap!}")
     error(message) -> puts("error: #{message}")
@@ -46,7 +46,7 @@ end
 def main() -> Void
   side = TCP.listen("127.0.0.1", 0).unwrap!
   tail = "?#{TCP.local_port(side)}"
-  options = HttpServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 4, max_body_bytes: 64)
+  options = HTTP.ServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 4, max_body_bytes: 64)
   server = HTTP.serve("127.0.0.1", 0, HTTP.app(&handle), options).unwrap!
   base = "http://127.0.0.1:#{HTTP.local_port(server)}"
   show(Task.await(Task.spawn(&fetch, base + "/left" + tail)))

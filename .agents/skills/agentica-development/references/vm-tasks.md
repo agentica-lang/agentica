@@ -144,11 +144,11 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 - `Task.sleep` is a timer of the task. `sleep(0)` and fuzz sleeps yield.
   `Task.pending_count` counts ready, running and parked tasks: not tasks that
   returned or crashed, even unawaited ones.
-- `agc_task_service` (the `HttpClient` tree, `HttpWire.service`) spawns under a
-  root with no parent. Its tasks carry `service`, count as done when spawned (so
-  `Task.pending_count` leaves them out), have no test, and their timers count in
-  `rt->timers_weak`, which the stall checks ignore (`agc_timers_strong`;
-  `test_stall_beside_a_service`).
+- `agc_task_service` (the `HttpWire.Client` tree, `HttpWire.service`) spawns
+  under a root with no parent. Its tasks carry `service`, count as done when
+  spawned (so `Task.pending_count` leaves them out), have no test, and their
+  timers count in `rt->timers_weak`, which the stall checks ignore
+  (`agc_timers_strong`; `test_stall_beside_a_service`).
 
 ## Task.map (`vm/task_map.c`)
 

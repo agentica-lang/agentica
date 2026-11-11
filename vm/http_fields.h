@@ -1,6 +1,6 @@
 /*
  * Header fields and bytes that the HTTP client and server share: the byte
- * buffer, the header writer, the kept fields and List[Header], and the
+ * buffer, the header writer, the kept fields and List[HttpWire.Header], and the
  * connection-close checks. Service header. Design: docs/vm/10-io-http.md §10.7.
  */
 #ifndef AGC_HTTP_FIELDS_H

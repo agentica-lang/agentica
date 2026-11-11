@@ -69,6 +69,17 @@ def test_the_builtin_types_that_a_std_module_re_exports_are_listed_with_their_fi
     assert [variant["name"] for variant in level["variants"]] == ["Debug", "Info", "Warning", "Error"]
 
 
+def test_std_http_lists_its_builtin_records_and_handles(tmp_path):
+    # std/http re-exports the HttpWire records and the two handles: help lists them, a handle as a resource.
+    names = [item["name"] for item in json.loads(help_std(["std/http", "--json"], cwd=tmp_path).stdout)["items"]]
+    assert {"Request", "Response", "Header", "ClientOptions", "ServerOptions", "Client", "Server"} <= set(names)
+    response = json.loads(help_std(["std/http.Response"], "--json", cwd=tmp_path).stdout)
+    assert response["kind"] == "struct"
+    assert [field["name"] for field in response["fields"]] == ["status", "headers", "body"]
+    client = json.loads(help_std(["std/http.Client"], "--json", cwd=tmp_path).stdout)
+    assert client["kind"] == "resource"
+
+
 def test_a_struct_lists_its_fields(tmp_path):
     item = json.loads(help_std(["std/queue.QueueState"], "--json", cwd=tmp_path).stdout)
     assert item["kind"] == "struct" and "arity" not in item

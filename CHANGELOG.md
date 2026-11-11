@@ -31,12 +31,19 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `Test.eq` shows a `Bytes` as quoted text (`<Bytes 7 "+OK\r\n\x00\xFF">`).
 - A program may name a type or alias `RegexEngine` or `Std`, and a struct or
   type alias `LogRegistry` (an enum of that name stays an error).
+- A program may name a type `Header`, `HttpRequest`, `HttpResponse`,
+  `HttpClient`, `HttpServer`, `HttpClientOptions`, `HttpServerOptions` or
+  `HttpWire` (an enum `HttpWire` stays an error).
 
 ### Changed
 
 - **Breaking:** `LogEvent` and `LogLevel` are `Logger.Event` and `Logger.Level`
   of `std/logger`; the old names are unknown, with a help. A value prints as
   `LogRegistry.Event(...)` and `LogRegistry.Level.Info`.
+- **Breaking:** the HTTP types are `HTTP.Request`, `HTTP.Response`,
+  `HTTP.Header`, `HTTP.ClientOptions`, `HTTP.ServerOptions`, `HTTP.Client` and
+  `HTTP.Server` of `std/http`; the old names are unknown, with a help. A value
+  prints as `HttpWire.Response(...)` and `<HttpWire.Client>`.
 
 ### Fixed
 

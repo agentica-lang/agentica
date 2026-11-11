@@ -27,7 +27,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    255 elements (`MAX_CHUNK`) lower to `List.concat` and `Map.put`; the loader
    rejects `MAP` with more than 255 pairs. The type argument of `JSON.decode`
    and `JSON.schema` lowers to a String constant with the struct's linked name;
-   a struct without JSON field types, such as `Header` or a struct that
+   a struct without JSON field types, such as `HttpWire.Header` or a struct that
    contains one, is `LOWER-UNSUPPORTED`.
 2. `vm/builtins.c`: add the entry under that key and arity.
 3. Add a fixture to `tests/fixtures/vm/` for the happy path and for each

@@ -1,1 +1,1 @@
-ERROR CHECK-REDEFINED-NAME 0:1:1-27:2:1 "duplicate or reserved import alias" "HttpWire is a builtin type name, so it is no import alias; choose another alias" file="root.agc"
+ERROR CHECK-UNUSED-IMPORT 7:1:8-15:1:16 "the import alias \"HttpWire\" is never used" "remove import HttpWire from \"lib\"" file="root.agc"

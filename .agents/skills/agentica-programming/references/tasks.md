@@ -50,13 +50,13 @@ each task's values but not the interleaving: do not depend on cross-task order.
 `Task.sleep` takes nonnegative milliseconds (0 yields); a negative value is
 `RUNTIME-INVALID-DURATION` at the argument. `pending_count` counts tasks of this
 run that have not ended, not `main` and not the tasks `std/http` starts for an
-`HttpClient`.
+`HTTP.Client`.
 
 ## Handles and ownership
 
 A handle (file, socket, listener, process, `std/http` server) belongs to the
 task that opened it, and the VM closes it when that task returns, crashes or is
-cancelled (never an `HttpClient`; a channel has an owner only through
+cancelled (never an `HTTP.Client`; a channel has an owner only through
 `Task.spawn_owning`, below). Nothing passes to the parent: a handle opened in a
 helper and returned through `Task.await` is closed when the helper ends, so
 open a long-lived handle in the task that keeps it, such as `main`. Ownership
@@ -69,7 +69,7 @@ its owner closes it (then it gets the closed error).
 when it ends (a server takes its listener with it). Use it for a connection that
 a server loop passes to its own task; a crash then closes only that connection.
 The argument must be a `FileHandle`, `Socket`, `Listener`, `Process`,
-`HttpServer`, `Channel[T]`, native resource or owned buffer, or a struct, enum,
+`HTTP.Server`, `Channel[T]`, native resource or owned buffer, or a struct, enum,
 `List`, `Map` or `Result` whose type holds one (else `CHECK-NOT-A-HANDLE`). The
 new task gets the value and owns every handle in it, so an enum
 `Conn.Sqlite(db)` hands over `db`. A handle the caller does not own, one already

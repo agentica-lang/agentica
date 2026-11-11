@@ -19,14 +19,14 @@ def serve(listener: Listener) -> String
 end
 
 # Makes a client, hands it over and crashes: the client is not the crashed task's.
-def make_and_crash(clients: Channel[HttpClient]) -> Result[Void]
+def make_and_crash(clients: Channel[HTTP.Client]) -> Result[Void]
   _ = clients.send(Result.unwrap!(HTTP.client()), 5000)
   failed: Result[Int] = error("the maker crashes")
   Result.unwrap!(failed)
   return ok()
 end
 
-def get(pool: HttpClient, url: String) -> String
+def get(pool: HTTP.Client, url: String) -> String
   case HTTP.get(pool, url)
     ok(response) -> return "#{response.status} #{HTTP.text(response.body, response.headers).unwrap!}"
     error(message) -> return message
@@ -38,7 +38,7 @@ def main() -> Void
   url = "http://127.0.0.1:#{TCP.local_port(listener)}/"
   server = Task.spawn(&serve, listener)
   puts(Task.pending_count())
-  clients: Channel[HttpClient] = Channel.new(1)
+  clients: Channel[HTTP.Client] = Channel.new(1)
   maker = Task.spawn(&make_and_crash, clients)
   puts(not Result.ok?(Task.await(maker)))
   pool = Result.unwrap!(clients.recv(5000))

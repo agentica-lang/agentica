@@ -1,10 +1,10 @@
 import HTTP from "std/http"
 
-def handle(request: HttpRequest) -> Result[HttpResponse]
+def handle(request: HTTP.Request) -> Result[HTTP.Response]
   if request.method == "GET" and request.path == "/"
-    return ok(HttpResponse(status: 200, headers: [Header(name: "Content-Type", value: "text/plain; charset=utf-8")], body: "hello\n".bytes))
+    return ok(HTTP.Response(status: 200, headers: [HTTP.Header(name: "Content-Type", value: "text/plain; charset=utf-8")], body: "hello\n".bytes))
   end
-  ok(HttpResponse(status: 404, headers: [], body: "not found\n".bytes))
+  ok(HTTP.Response(status: 404, headers: [], body: "not found\n".bytes))
 end
 
 def main() -> Void

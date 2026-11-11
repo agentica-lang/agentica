@@ -11,15 +11,15 @@ def produce(events: Channel[Bytes]) -> Void
   events.close
 end
 
-def handle(request: HttpRequest, body: HTTP.RequestBody) -> Result[HTTP.Answer]
+def handle(request: HTTP.Request, body: HTTP.RequestBody) -> Result[HTTP.Answer]
   if request.method == "GET" and request.path == "/events"
     events: Channel[Bytes] = Channel.new(8)
     Task.spawn(&produce, events)
-    headers = [Header(name: "Content-Type", value: "text/event-stream"), Header(name: "Cache-Control", value: "no-cache")]
+    headers = [HTTP.Header(name: "Content-Type", value: "text/event-stream"), HTTP.Header(name: "Cache-Control", value: "no-cache")]
     return ok(HTTP.Answer.Stream(HTTP.StreamResponse(status: 200, headers: headers, body: events)))
   end
 
-  ok(HTTP.Answer.Whole(HttpResponse(status: 404, headers: [], body: "not found\n".bytes)))
+  ok(HTTP.Answer.Whole(HTTP.Response(status: 404, headers: [], body: "not found\n".bytes)))
 end
 
 def main() -> Void

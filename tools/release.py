@@ -324,11 +324,11 @@ end
 HTTP_LOOP = """\
 import HTTP from "std/http"
 
-def handle(request: HttpRequest) -> Result[HttpResponse]
+def handle(request: HTTP.Request) -> Result[HTTP.Response]
   if request.method == "GET" and request.path == "/"
-    return ok(HttpResponse(status: 200, headers: [], body: "hola ñandú".bytes))
+    return ok(HTTP.Response(status: 200, headers: [], body: "hola ñandú".bytes))
   end
-  return ok(HttpResponse(status: 404, headers: [], body: "no".bytes))
+  return ok(HTTP.Response(status: 404, headers: [], body: "no".bytes))
 end
 
 def main() -> Void
