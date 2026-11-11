@@ -3,6 +3,7 @@
 ## (CHECK-TOO-DEEP), checks the node by its kind, records the type by node id, and refuses a Void value that is not a
 ## completion.
 
+import Model from "../catalog/builtin_model"
 import {ENTRIES} from "../catalog/builtins"
 import Failure from "../diagnostics/problem"
 import Ast from "../syntax/ast"
@@ -17,6 +18,7 @@ import Rules from "check_rules"
 import State from "check_state"
 import Statements from "check_stmt"
 import CheckTypes from "check_types"
+import Defaults from "defaults"
 
 # The types whose left side of == gives the right side its expected type (check_sides).
 EXPECTING_SIDES = Set.new(["List", "Map", "Set", "Optional", "Result", "Struct", "Enum"])
@@ -107,7 +109,8 @@ def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Ty
         skip = 1
       end
 
-      try lambda_block(cx, out.st, T.display_name(found.name), found.args, skip)
+      takes = takes_block?(cx, found.name, found.args.size)
+      try lambda_block(cx, out.st, takes, T.display_name(found.name), found.args, skip)
       ok(out)
     Ast.Expr.EnumConstructor(found) ->
       Calls.check_enum_constructor(
@@ -130,7 +133,8 @@ def expression_inside(cx: State.Cx, st: State.St, node: Ast.Expr, expected: T.Ty
     Ast.Expr.FieldAccess(found) -> Methods.check_field_access(cx, st, found, expected)
     Ast.Expr.MethodCall(found) ->
       out = try Methods.check_method(cx, st, found, expected)
-      try lambda_block(cx, out.st, ".#{found.name}", found.args, 0)
+      takes = method_takes_block?(cx, out.st, found)
+      try lambda_block(cx, out.st, takes, ".#{found.name}", found.args, 0)
       ok(out)
     Ast.Expr.Typed(found) -> ok(State.Out(st: st, type: found.type))
     Ast.Expr.BlockLit(found) -> check_block_lit(cx, st, found, expected)
@@ -326,12 +330,19 @@ def check_interpolation(cx: State.Cx, st: State.St, node: Ast.Interpolation) -> 
   ok(State.Out(st: current, type: T.Type.String))
 end
 
-# CHECK-LAMBDA-BLOCK for a lambda written as the last argument of a call that took it: the call takes a block there,
-# the one way to write a function in that place (a block is a BlockLit last argument too, so the call checks alike).
-# `skip` is the number of arguments the source does not show (the piped value of `x |> f(...)`). `.call(...)` is an
-# Invoke, which takes no block, so it never comes here.
-def lambda_block(cx: State.Cx, st: State.St, name: String, args: List[Ast.Expr], skip: Int) -> Result[Bool]
-  return ok(true) if args.size <= skip
+# CHECK-LAMBDA-BLOCK for a lambda written as the last argument of a call whose last parameter is a function (`takes`):
+# the call takes a block there, the one way to write a function in that place. A parameter of a generic type (`some`,
+# `push`) takes no block, so a lambda is its argument. `skip` is the number of arguments the source does not show (the
+# piped value of `x |> f(...)`). `.call(...)` is an Invoke, which takes no block, so it never comes here.
+def lambda_block(
+  cx: State.Cx,
+  st: State.St,
+  takes: Bool,
+  name: String,
+  args: List[Ast.Expr],
+  skip: Int,
+) -> Result[Bool]
+  return ok(true) if !takes or args.size <= skip
 
   case args[args.size - 1]
     Ast.Expr.BlockLit(found) if found.lambda ->
@@ -358,6 +369,41 @@ def lambda_block(cx: State.Cx, st: State.St, name: String, args: List[Ast.Expr],
         ),
       )
     _ -> ok(true)
+  end
+end
+
+# Whether the last of `count` arguments of the call `name` goes to a parameter declared as a function: one of the
+# program's functions, or a form of a builtin with that many parameters.
+def takes_block?(cx: State.Cx, name: String, count: Int) -> Bool
+  return false if count == 0
+
+  case cx.functions.get(name)
+    some(signature) ->
+      shape = signature.shape
+      return false if count < shape.required or count > shape.total
+
+      return T.is?(signature.params[Defaults.param_of(shape, count, count - 1)], "Fn")
+    none -> count = count
+  end
+
+  case ENTRIES.get(name)
+    some(entry) ->
+      forms = [entry].concat(entry.alternatives)
+      forms.any? do |form: Model.Builtin| last_takes_function?(form, count) end
+    none -> false
+  end
+end
+
+def last_takes_function?(form: Model.Builtin, count: Int) -> Bool
+  form.parameters.size == count and T.is?(form.parameters[count - 1].type, "Fn")
+end
+
+# takes_block? for a method call: the builtin it resolved to, whose first parameter is the receiver. A call of a field
+# of type Fn takes no block.
+def method_takes_block?(cx: State.Cx, st: State.St, node: Ast.MethodCall) -> Bool
+  case st.resolved.get(node.id)
+    some(State.Resolved.Call(name, _)) -> takes_block?(cx, name, node.args.size + 1)
+    _ -> false
   end
 end
 

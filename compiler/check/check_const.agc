@@ -232,7 +232,17 @@ def refuse_early(cx: State.Cx, st: State.St, node: AstWalk.Node, block_allowed: 
     AstWalk.Node.Expr(expr) ->
       case expr
         Ast.Expr.BlockLit(found) ->
-          if !block_allowed
+          if !block_allowed and found.lambda
+            return error(
+              refuse(
+                cx,
+                st,
+                found.span,
+                "a lambda is not constant data",
+                "declare a function with def, or build the lambda where it is used",
+              ),
+            )
+          elsif !block_allowed
             return error(
               refuse(
                 cx,

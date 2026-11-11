@@ -40,6 +40,12 @@ VALID = [
     # A lambda that gives a lambda, and one in a case arm, after the arm's own ->.
     "  k: Fn[Int, Fn[Int, Int]] = ->(a) { ->(b) { a + b } }\n  puts(k.call(1).call(2))",
     "  n = xs.size\n  h = case n\n    0 -> ->(x: Int) { x }\n    _ -> ->(x: Int) { x * n }\n  end\n  puts(h.call(2))",
+    # A parameter of a generic type takes no block, so a lambda is its argument: some, ok, push, put.
+    "  o: Optional[Fn[Int, Int]] = some(->(x: Int) { x })\n  fs: List[Fn[Int, Int]] = []\n"
+    "  fs = fs.push(->(x: Int) { x + 1 })\n  m: Map[String, Fn[Int, Int]] = {}\n  m = m.put(\"k\", ->(x: Int) { x })\n"
+    "  puts(o.unwrap!.call(1) + fs[0].call(1) + m[\"k\"].call(1))",
+    # A lambda given to Task.spawn with its argument is not its last argument.
+    "  t = Task.spawn(->(x: Int) { x * 2 }, 21)\n  puts(Task.await(t))",
     # After an arm's -> a { is still a map literal.
     '  n = xs.size\n  m = case n\n    0 -> {"a": 1}\n    _ -> {"b": 2}\n  end\n  puts(m)',
 ]
@@ -65,6 +71,7 @@ REJECTED = [
     ("  puts(xs.map(->(x: Int) { x * 2 }))", "CHECK-LAMBDA-BLOCK", "->(x: Int) { x * 2 }"),
     ("  puts(last(1, ->(x: Int) { x }))", "CHECK-LAMBDA-BLOCK", "->(x: Int) { x }"),
     ("  t = Task.spawn(-> { 1 })\n  puts(Task.await(t))", "CHECK-LAMBDA-BLOCK", "-> { 1 }"),
+    ("  n = xs.size\n  puts(n |> last(->(x: Int) { x }))", "CHECK-LAMBDA-BLOCK", "->(x: Int) { x }"),
     # The forms of Ruby and other languages that the lambda replaces.
     ("  f = ->() { 1 }\n  puts(f.call())", "PARSE-UNEXPECTED-TOKEN", "("),
     ("  f = ->x { x }\n  puts(f)", "PARSE-UNEXPECTED-TOKEN", "x"),
@@ -82,3 +89,11 @@ REJECTED = [
 def test_lambda_rules(checked, body, code, text):
     program = HEAD % body
     assert_rule(checked(program), program, code, text)
+
+
+CONSTANT = "FNS = [->(x: Int) { x }]\n\ndef main() -> Void\n  puts(FNS.size)\nend\n"
+
+
+@table("program", [CONSTANT])
+def test_a_lambda_is_not_constant_data(checked, program):
+    assert_rule(checked(program), program, "CHECK-CONSTANT-EXPRESSION", "->(x: Int) { x }")

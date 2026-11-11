@@ -947,11 +947,13 @@ half: Fn[String, Result[Int]] = ->(s) {
   lambda. A lambda where no `Fn` is expected is `CHECK-TYPE-MISMATCH`.
 - A lambda has no name, so it cannot call itself: the variable it is assigned
   to does not exist inside it (`CHECK-UNKNOWN-NAME`); recursion uses `def`.
-- **One way.** A lambda written as the last argument of a call that takes it
-  is `CHECK-LAMBDA-BLOCK`: there the block is the one way
-  (`xs.map do |x| x * 2 end`). `.call(...)` takes no block, so
-  `f.call(1, ->(x: Int) { x })` is valid, as is a lambda kept in a variable
-  and passed by name (`xs.map(double)`).
+- **One way.** A lambda written as the last argument of a call whose last
+  parameter is declared as an `Fn` is `CHECK-LAMBDA-BLOCK`: there the block is
+  the one way (`xs.map do |x| x * 2 end`). A parameter of a generic type takes
+  no block, so `some(->(x: Int) { x })` and `fs.push(->(x: Int) { x })` are
+  valid; so is `f.call(1, ->(x: Int) { x })`, since `.call(...)` takes no
+  block, and a lambda kept in a variable and passed by name
+  (`xs.map(double)`).
 - In a generic call, a lambda that is not the last argument is checked after
   the arguments that have a type of their own, from left to right, as the
   block is (step 4 of "Generic functions").
