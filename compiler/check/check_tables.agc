@@ -6,6 +6,7 @@
 export def method_modules() -> Map[String, String]
   {
     "ATS": "ATS",
+    "Address": "Address",
     "Bytes": "Bytes",
     "Channel": "Channel",
     "Codec": "Codec",

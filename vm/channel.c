@@ -12,6 +12,15 @@ typedef struct {
   uint64_t seq;
 } entry;
 
+/* An Address[M] (channel.address): the number it prints, the run that made it, and its channel, held weakly so that an
+   address in a table or a message does not keep a dead actor's inbox and the values in it alive. Never written after
+   it is made, so any scheduler reads it without a lock. */
+typedef struct {
+  uint64_t id;
+  const agc_runtime *rt;
+  agc_weak *channel;
+} address;
+
 struct agc_channel {
   entry *ring;
   size_t slots, head, count, capacity;
@@ -22,9 +31,14 @@ struct agc_channel {
   bool closed, abandoned;
   agc_resource *state;
   agc_task *receivers, *receivers_tail, *senders, *senders_tail;
+  /* The channel's one address, made by its first channel.address; NULL before. */
+  const address *address;
 };
 
 static agc_value ok_void(void) { return agc_result_value(true, agc_void()); }
+
+/* A send through an address whose channel the collector has freed: no task can reach that channel any more. */
+static agc_value gone_error(void) { return agc_error_value("address: gone"); }
 
 /* std/http matches on this text (CHANNEL_CLOSED in stdlib/http.agc). */
 static agc_value closed_error(void) { return agc_error_value("channel: closed"); }
@@ -179,10 +193,8 @@ static agc_value builtin_new(agc_vm *vm, agc_value *args, uint32_t span) {
   return agc_channel_value(c);
 }
 
-static agc_value builtin_send(agc_vm *vm, agc_value *args, uint32_t span) {
-  agc_channel *c = agc_as_channel(vm, args[0]);
-  int64_t timeout = agc_as_int(vm, args[2]);
-  check_timeout(vm, timeout, span + 3);
+/* The send of Channel.send and Address.send, after the timeout is checked. */
+static agc_value send_value(agc_vm *vm, agc_channel *c, agc_value v, int64_t timeout) {
   agc_task *t = vm->task;
   if (resumed(t, c)) {
     leave_queue(vm, c, t);
@@ -193,7 +205,7 @@ static agc_value builtin_send(agc_vm *vm, agc_value *args, uint32_t span) {
     if (t->channel.reserved) {
       stop_waiting(t);
       c->reserved_slots--;
-      deliver(vm, c, args[1], true);
+      deliver(vm, c, v, true);
       offer_slot(vm, c);
       return ok_void();
     }
@@ -202,12 +214,49 @@ static agc_value builtin_send(agc_vm *vm, agc_value *args, uint32_t span) {
     stop_waiting(t);
     return closed_error();
   }
-  if (deliver(vm, c, args[1], false)) {
+  if (deliver(vm, c, v, false)) {
     stop_waiting(t);
     return ok_void();
   }
   return wait(vm, c, t, timeout, true);
 }
+
+static agc_value builtin_send(agc_vm *vm, agc_value *args, uint32_t span) {
+  agc_channel *c = agc_as_channel(vm, args[0]);
+  int64_t timeout = agc_as_int(vm, args[2]);
+  check_timeout(vm, timeout, span + 3);
+  return send_value(vm, c, args[1], timeout);
+}
+
+/* channel.address: made at the first call and kept, so every address of a channel is one object and == compares
+   identity. The row is shared, so two schedulers never make two. */
+static agc_value builtin_address(agc_vm *vm, agc_value *args, uint32_t span) {
+  (void)span;
+  agc_channel *c = agc_as_channel(vm, args[0]);
+  if (!c->address) {
+    address *a = agc_alloc(sizeof *a);
+    a->id = ++vm->rt->addresses;
+    a->rt = vm->rt;
+    a->channel = agc_weak_new(c);
+    c->address = a;
+  }
+  return agc_address_value(c->address);
+}
+
+/* Address.send: Channel.send on the address's channel while it lives. A parked sender holds its channel
+   (agc_task.channel), so the retry after its wake finds it again. */
+static agc_value builtin_address_send(agc_vm *vm, agc_value *args, uint32_t span) {
+  const address *a = agc_as_address(vm, args[0]);
+  if (a->rt != vm->rt) agc_fail(vm, "RUNTIME-ADDRESS-CONTEXT", "the address belongs to another run", span + 1);
+  int64_t timeout = agc_as_int(vm, args[2]);
+  check_timeout(vm, timeout, span + 3);
+  agc_channel *c = agc_weak_get(a->channel);
+  if (!c) return gone_error();
+  return send_value(vm, c, args[1], timeout);
+}
+
+/* The number an address prints with (<Address 1>), counted per run from 1. */
+uint64_t agc_address_id(agc_vm *vm, agc_value v) { return ((const address *)agc_as_address(vm, v))->id; }
 
 /* The receive of Channel.recv and of a Lazy over a channel (port.h). */
 agc_recv_status agc_channel_receive(agc_vm *vm, agc_channel *c, int64_t timeout, agc_value *out) {
@@ -339,6 +388,8 @@ const agc_builtin agc_channel_builtins[] = {
   {"Channel.close", 1, builtin_close, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Channel.closed?", 1, builtin_closed, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
   {"Channel.empty?", 1, builtin_empty, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Channel.address", 1, builtin_address, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
+  {"Address.send", 3, builtin_address_send, AGC_NATIVE_NONE, AGC_COST_NONE, true, false, false},
 };
 
 const size_t agc_channel_builtin_count = sizeof agc_channel_builtins / sizeof agc_channel_builtins[0];

@@ -375,6 +375,33 @@ export STD_ONLY_IMPORTS: Map[String, List[String]] = {
 
 ROWS_1: List[Model.Builtin] = [
   Model.Builtin(
+    name: "Address.send",
+    parameters: [
+      Model.Named(name: "address", type: Types.Type.Address(Types.Type.Var("T"))),
+      Model.Named(name: "value", type: Types.Type.Var("T")),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int),
+    ],
+    result: Types.Type.Result(Types.Type.Void),
+    rule: Model.Rule.AddressSend,
+    implementation: "Address.send",
+    effects: ["concurrency"],
+    description: (
+      "Send to the channel of the address as Channel#send does; error(\"address: gone\") once the channel is " +
+      "collected; VM only."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Channel.address",
+    parameters: [Model.Named(name: "channel", type: Types.Type.Channel(Types.Type.Var("T")))],
+    result: Types.Type.Address(Types.Type.Var("T")),
+    rule: Model.Rule.ChannelAddress,
+    implementation: "Channel.address",
+    effects: [],
+    description: "A send-only reference to the channel, which is data and does not keep the channel alive; VM only.",
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "Channel.close",
     parameters: [Model.Named(name: "channel", type: Types.Type.Channel(Types.Type.Var("T")))],
     result: Types.Type.Void,

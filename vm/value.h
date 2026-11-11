@@ -39,7 +39,7 @@ _Static_assert(AGC_SCALAR_TEXT >= 44, "range text needs 44 bytes");
 #define AGC_COST_BYTES 64
 
 typedef enum {
-  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY, AGC_T_C_POINTER, AGC_T_C_RESOURCE, AGC_T_ATS, AGC_T_BYTES, AGC_T_TLS_CONTEXT, AGC_T_MUTEX
+  AGC_T_VOID = 0, AGC_T_NIL, AGC_T_BOOL, AGC_T_INT, AGC_T_FLOAT, AGC_T_STRING, AGC_T_LIST, AGC_T_MAP, AGC_T_STRUCT, AGC_T_ENUM, AGC_T_RESULT, AGC_T_FN, AGC_T_RANGE, AGC_T_JSON, AGC_T_HANDLE, AGC_T_TASK, AGC_T_PROCESS, AGC_T_SOCKET, AGC_T_LISTENER, AGC_T_HTTP_CLIENT, AGC_T_TEST, AGC_T_HTTP_SERVER, AGC_T_CHANNEL, AGC_T_SET, AGC_T_LAZY, AGC_T_C_POINTER, AGC_T_C_RESOURCE, AGC_T_ATS, AGC_T_BYTES, AGC_T_TLS_CONTEXT, AGC_T_MUTEX, AGC_T_ADDRESS
 } agc_tag;
 
 typedef struct {
@@ -548,6 +548,12 @@ void agc_gc_measure(void);
 void agc_gc_collect(void);
 /* Runs the GC finalizers that are due (a TlsContext no value reaches); a scheduler calls it between turns. */
 void agc_gc_finalize_pending(void);
+/* A weak reference to a GC object (an Address's channel): it does not keep the object alive, and the collector clears
+   it once nothing else reaches the object, so agc_weak_get then gives NULL. The build without the collector never
+   frees, so there it stays set. */
+typedef struct agc_weak agc_weak;
+agc_weak *agc_weak_new(void *object);
+void *agc_weak_get(agc_weak *w);
 
 agc_value agc_result_value(bool ok, agc_value value);
 agc_value agc_optional_make(const agc_program *p, bool some, agc_value value);
@@ -569,6 +575,9 @@ agc_value agc_lazy_value(const void *node);
 agc_value agc_ats_value(void *table);
 /* A Native.Mutex (vm/mutex.c, which alone knows its struct). */
 agc_value agc_mutex_value(void *mutex);
+/* An Address[M] (vm/channel.c, which alone knows its struct): one immutable object per channel, so two addresses are
+   equal when they are the same object. */
+agc_value agc_address_value(const void *address);
 /* A C.Pointer of native code (vm/ffi.c), which may be NULL, and a resource. */
 agc_value agc_c_pointer_value(void *pointer);
 agc_value agc_c_resource_value(agc_c_resource *r);
@@ -585,6 +594,7 @@ agc_channel *agc_as_channel(agc_vm *vm, agc_value v);
 const void *agc_as_lazy(agc_vm *vm, agc_value v);
 void *agc_as_ats(agc_vm *vm, agc_value v);
 void *agc_as_mutex(agc_vm *vm, agc_value v);
+const void *agc_as_address(agc_vm *vm, agc_value v);
 void *agc_as_c_pointer(agc_vm *vm, agc_value v);
 agc_c_resource *agc_as_c_resource(agc_vm *vm, agc_value v);
 /* The constructors and checked accessors of the common value types are inline: the interpreter and the builtins

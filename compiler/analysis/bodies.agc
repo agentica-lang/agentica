@@ -398,6 +398,7 @@ def shape(type: Types.Type) -> Model.TypeShape
     Types.Type.Optional(item) -> builtin("Optional", [item])
     Types.Type.Task(item) -> builtin("Task", [item])
     Types.Type.Channel(item) -> builtin("Channel", [item])
+    Types.Type.Address(item) -> builtin("Address", [item])
     Types.Type.Lazy(item) -> builtin("Lazy", [item])
     Types.Type.Codec(item) -> builtin("Codec", [item])
     Types.Type.List(item) -> builtin("List", [item])

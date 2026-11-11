@@ -102,7 +102,8 @@ static bool scalar_tag(uint32_t tag) {
     case AGC_T_FLOAT:
     case AGC_T_STRING:
     case AGC_T_BYTES:
-    case AGC_T_RANGE: return true;
+    case AGC_T_RANGE:
+    case AGC_T_ADDRESS: return true;
     default: return false;
   }
 }
@@ -119,6 +120,8 @@ static bool scalar_equal(agc_vm *vm, agc_value a, agc_value b) {
       const agc_range *x = agc_as_range(vm, a), *y = agc_as_range(vm, b);
       return x->start == y->start && x->end == y->end && x->exclusive == y->exclusive;
     }
+    /* A channel has one address object (vm/channel.c), so equal addresses are the same object. */
+    case AGC_T_ADDRESS: return agc_as_address(vm, a) == agc_as_address(vm, b);
     default: return true;
   }
 }

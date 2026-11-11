@@ -12,6 +12,7 @@ import Ast from "../syntax/ast"
 import AstWalk from "../syntax/ast_walk"
 import Source from "../syntax/source"
 import T from "../syntax/types"
+import Collections from "check_collections"
 import State from "check_state"
 import CheckTypes from "check_types"
 import Variables from "check_variables"
@@ -86,7 +87,10 @@ def check_one(done: Done, entry: Entry) -> Result[Done]
   end
 
   out = try State.expr(here, State.forget_locals(done.st), entry.decl.value, declared)
-  try validate(here, out.st, entry.decl.value)
+  if !table?(here, out.st, entry.decl.value)
+    try validate(here, out.st, entry.decl.value)
+  end
+
   try Variables.check(here, out.st)
   type = out.type
   if !T.unknown?(declared)
@@ -100,6 +104,14 @@ def check_one(done: Done, entry: Entry) -> Result[Done]
       order: done.order.push(entry.decl.name),
     ),
   )
+end
+
+# True when the whole initializer is ATS.new(): the one value with state a constant may hold, as an ATS table is
+# already shared, atomic and owned by no task. ATS.new takes its type from the annotation (CHECK-EXPECTED-TYPE
+# without one), and a table anywhere else in an initializer stays CHECK-CONSTANT-TYPE.
+def table?(cx: State.Cx, st: State.St, value: Ast.Expr) -> Bool
+  entry = builtin_of(cx, st, AstWalk.Node.Expr(value))
+  entry.some? and entry.unwrap!.name == "ATS.new"
 end
 
 # The entries in initialization order, as indexes. To visit a constant, first visit the constants its initializer
@@ -346,7 +358,7 @@ def check_data(cx: State.Cx, st: State.St, node: AstWalk.Node, block_allowed: Bo
     AstWalk.Node.Stmt(_) -> ok(true)
     AstWalk.Node.Expr(expr) ->
       type = st.types[Ast.expr_id(expr)]
-      return ok(true) if T.unknown?(type) or (block_allowed and block?(expr)) or CheckTypes.data?(cx, type)
+      return ok(true) if T.unknown?(type) or (block_allowed and block?(expr)) or constant_data?(cx, type)
 
       error(
         State.fail_help(
@@ -355,14 +367,25 @@ def check_data(cx: State.Cx, st: State.St, node: AstWalk.Node, block_allowed: Bo
           "CHECK-CONSTANT-TYPE",
           "a constant expression must have a data type, found #{T.to_text(type)}",
           Ast.expr_span(expr),
-          data_help(type),
+          data_help(cx, type),
         ),
       )
   end
 end
 
-def data_help(type: T.Type) -> String
+# A data type with no Address inside. An address is data, but it names a channel, and no channel exists before main:
+# a constant that keeps addresses is a table of them (ATS[String, Address[M]]), filled while the program runs.
+def constant_data?(cx: State.Cx, type: T.Type) -> Bool
+  CheckTypes.data?(cx, type) and !Collections.holds_address?(cx, type)
+end
+
+def data_help(cx: State.Cx, type: T.Type) -> String
   return "a constant's value must be data: write nil, not a Void call" if T.is?(type, "Void")
+  return "a constant table is the whole initializer: NAMES: ATS[String, Int] = ATS.new()" if T.is?(type, "ATS")
+  if CheckTypes.data?(cx, type)
+    return "an address names a channel of the running program: keep it in a constant table, ATS[String, Address[M]]"
+  end
+
   (
     "a constant holds numbers, text, collections, structs and enums of those; " +
     "functions, tasks, channels, handles and tables are not data"
