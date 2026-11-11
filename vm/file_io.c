@@ -279,7 +279,10 @@ int agc_fs_list(const char *path, char **names, size_t *size, size_t *count) {
         while (next < *size + len && next <= SIZE_MAX / 2) next *= 2;
         if (next < *size + len) next = *size + len;
         char *grown = realloc(*names, next);
-        if (!grown) { result = UV_ENOMEM; break; }
+        if (!grown) {
+          uv_fs_req_cleanup(&req);
+          return AGC_FS_LIST_NO_MEMORY;
+        }
         *names = grown;
         cap = next;
       }

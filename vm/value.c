@@ -80,11 +80,15 @@ static const char gc_error_line[] = "agentica: internal GC error\n";
    allocate memory for thread registering"), the heap section list. Under a low ulimit -v that is plain out of memory,
    so those messages, which start with one of these, end with the out-of-memory line; any other abort is a fault.
    The prefixes are libgc's own text, the same in the vendored bdwgc and in a system libgc from GC_MIN (mk/vm.mk) on.
-   vm/tests/gc_thread_test.c sends libgc's exact messages, and tests/test_vm_style.py checks that the vendored
-   bdwgc still has them, so an update of bdwgc that changes the text fails there instead of turning silently into
-   "internal GC error". */
+   tests/test_vm_style.py lists every abort of the vendored bdwgc that speaks of memory, space or allocation and
+   whether it is out of memory here, so an update of bdwgc that adds or rewords one fails there for a review instead
+   of turning silently into "internal GC error"; vm/tests/gc_thread_test.c sends some of them to this function.
+   An abort through ABORT_ARGn writes a line of its own first, the message with its arguments (the size asked for the
+   /proc/self/maps buffer, the size of the E2K procedure stack), so stderr then has that line before ours.
+   "Cannot allocate executable pages" is not here: the system refused PROT_EXEC (a W^X policy), not memory. */
 static bool gc_abort_is_out_of_memory(const char *message) {
-  static const char *const prefixes[] = {"Insufficient memory", "Insufficient space", "Failed to allocate"};
+  static const char *const prefixes[] = {"Insufficient memory",       "Insufficient space",   "Failed to allocate",
+                                         "Could not allocate memory", "Could not map memory", "Not enough memory"};
   for (size_t k = 0; message && k < sizeof prefixes / sizeof prefixes[0]; k++)
     if (strncmp(message, prefixes[k], strlen(prefixes[k])) == 0) return true;
   return false;

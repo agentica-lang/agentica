@@ -36,6 +36,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Under a low `ulimit -v`, a run whose collector or scheduler thread gets no
   memory ends with `agentica: out of memory` or the thread line (status 70),
   not `internal GC error` or an abort.
+- A file builtin that runs out of memory for its buffer also ends with
+  `agentica: out of memory`, not a `cannot read` error.
 
 ## [0.29.0] - 2026-11-10
 
