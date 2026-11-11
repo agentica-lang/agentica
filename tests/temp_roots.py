@@ -133,7 +133,8 @@ def assign_root(config: pytest.Config) -> None:
     pytest-of-<user>/pytest-current link, and the cleanup of another run can fail on it at the end of the session
     (FileNotFoundError in cleanup_dead_symlinks after all cases passed). A root per user, checkout and module set
     keeps the links apart. pyproject.toml keeps at most one numbered folder in it (tmp_path_retention_count), and
-    only the folders of the tests that failed (tmp_path_retention_policy): a passed test's folder goes when it ends,
+    only the folders of the tests whose call failed (tmp_path_retention_policy; a setup error loses its folder too):
+    a passed test's folder goes when it ends,
     and a run that passes leaves nothing of its own, so several worktrees running make test do not fill a small
     /tmp. Roots do not pile up: the sweep removes those of this user untouched for a day, which are the roots of
     deleted worktrees and the leftovers of killed runs (the stage folders of tests/frontend_support.py live in the
