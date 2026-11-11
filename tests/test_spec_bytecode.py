@@ -99,6 +99,27 @@ def test_a_returned_call_is_a_tail_call_and_a_nested_call_is_not(tmp_path):
     """)
     assert_prints(loop, "1000000\n", tmp_path)
 
+    mutual = source("""
+        def even(n: Int) -> Bool
+          if n == 0
+            return true
+          end
+          return odd(n - 1)
+        end
+
+        def odd(n: Int) -> Bool
+          if n == 0
+            return false
+          end
+          return even(n - 1)
+        end
+
+        def main() -> Void
+          puts(even(1000001))
+        end
+    """)
+    assert_prints(mutual, "false\n", tmp_path)
+
     nested = source("""
         def sum(n: Int) -> Int
           if n == 0

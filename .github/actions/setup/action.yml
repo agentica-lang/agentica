@@ -38,9 +38,6 @@ runs:
     - if: ${{ inputs.tools == 'true' }}
       shell: bash
       run: poetry install --only test --no-root
-    - name: Temporary apt mirrors (Canonical's archive is down)
-      shell: bash
-      run: bash .github/scripts/apt-mirror.sh
     - shell: bash
       env:
         SANITIZERS: ${{ inputs.sanitizers }}

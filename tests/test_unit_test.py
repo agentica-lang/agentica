@@ -123,7 +123,8 @@ class UnitTest(TestCase):
         status, report = self.json_test(fixture("stops_test.agc"), fixture("names_test.agc"))
         self.assertEqual(status, 1)
         names = report["files"][0]
-        self.assertEqual((names["error"]["code"], start_line(names["error"])), ("RUNTIME-TEST-NAME", 6))
+        start = names["error"]["range"]["start"]
+        self.assertEqual((names["error"]["code"], start["line"], start["column"]), ("RUNTIME-TEST-NAME", 6, 5))
         stops = report_cases(report)
         self.assertEqual([item["status"] for item in stops], ["passed", "failed", "not_executed"])
         self.assertEqual(field(stops[1], "code"), "RUNTIME-BDD-PREMATURE-EXIT")
