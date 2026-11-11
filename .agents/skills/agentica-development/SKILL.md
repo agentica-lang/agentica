@@ -6,7 +6,7 @@ description: >-
   the C11 bytecode VM (vm/ with the Boehm GC, runtime libraries, loader
   safety, golden tests). Covers where code goes, how to add tokens, AST nodes,
   syntax, diagnostics, builtins, opcodes and tests, the gotchas of this repo,
-  and the VM build, CI, release, site, benchmarks and copy-paste check. Use
+  and the VM build, CI, site, benchmarks and copy-paste check. Use
   when working in the agentica repository on compiler/, vm/, tests/, site/,
   the Makefile or CI. Don't use for writing Agentica programs
   (agentica-programming), for the grammar documents alone, or for other C

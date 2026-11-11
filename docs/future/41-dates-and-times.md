@@ -1,14 +1,14 @@
 ## 41. Dates and times
 
 Issue #985, designed and not scheduled. The types are checker changes in
-`compiler/` (owner, 2026-10-15). `Time.monotonic_ns` has landed; `std/utc`
-(`UTC.parts`, `UTC.iso8601`) is the stopgap until the `Time` functions replace
-it. They differ: microseconds, not milliseconds; a year outside 1 to 9999 is an
-error, where `std/utc` writes it with its sign; and `Time.format` always writes
-six fraction digits, where `UTC.iso8601` takes a count (0 to 9). No grammar
-syntax is added: new builtin types and new functions of the existing `Time`
-module. Every name is a proposal for the owner to review. The precision is
-microseconds (owner, 2026-10-15; 41.8).
+`compiler/` (owner, 2026-10-15). `std/utc` (`UTC.parts`, `UTC.iso8601`) is the
+stopgap until the `Time` functions replace it. They differ: microseconds, not
+milliseconds; a year outside 1 to 9999 is an error, where `std/utc` writes it
+with its sign; and `Time.format` always writes six fraction digits, where
+`UTC.iso8601` takes a count (0 to 9). No grammar syntax is added: new builtin
+types and new functions of the existing `Time` module. Every name is a proposal
+for the owner to review. The precision is microseconds (owner, 2026-10-15;
+41.8).
 
 Programs compute with dates and times (a due date, a log timestamp, an expiry, a
 time from a JSON API), and have only `Time.now_ms()` and `Time.monotonic_ms()`
@@ -61,9 +61,8 @@ and no nested builtin record in lowering.
 Reserved names. Like `Await` (a builtin enum), the names `Date`, `TimeOfDay`,
 `NaiveDateTime` and `DateTime` become reserved. A user `struct`, `enum`, type
 parameter or import alias with one of these names is `CHECK-REDEFINED-NAME`.
-The implementation PR marks this **Breaking:** in `CHANGELOG.md`. No migration
-path or compatibility workaround is added: the language has no external users
-yet.
+This is a breaking change, with no migration path or compatibility workaround:
+the language has no external users yet.
 
 Enum variants are not reserved. A variant is always written with its enum
 (`Toml.Value.DateTime`), so a variant named like a builtin type does not clash
@@ -347,14 +346,9 @@ end
   `Time.now()`, or a difference of two `DateTime` values. The wall clock can
   jump, so the difference can be negative or wrong. `Time.us_between` is for
   calendar differences (days until a due date), not for how long code runs.
-- `Time.monotonic_ns() -> Int` (landed): nanoseconds from an arbitrary origin
-  that never goes backward, from the clock `Time.monotonic_ms` reads
-  (`clock_gettime(CLOCK_MONOTONIC)` on POSIX, `QueryPerformanceCounter` on
-  Windows, split into seconds and a remainder before scaling, since multiplying
-  the raw count by 10^9 overflows an Int after about 15 minutes at 10 MHz). Why
-  nanoseconds: short work is invisible in milliseconds. Why not `uv_hrtime`: a
-  second clock path would let the two builtins disagree (the owner may prefer
-  libuv). It is a builtin because it touches the OS clock.
+- `Time.monotonic_ns` reads the clock `Time.monotonic_ms` reads, in
+  nanoseconds because short work is invisible in milliseconds; not `uv_hrtime`,
+  since a second clock path would let the two builtins disagree.
 - No `elapsed` helper: it would be `Time.monotonic_ms() - start` with a name and
   would hide which clock it reads (`stdlib/test/runner.agc` writes the
   subtraction).
@@ -371,10 +365,8 @@ time always comes from `Time.now_ms()`, which is in range, and the vectors cover
 the edges.
 
 The text changes with this. The time has six fraction digits
-(`2026-10-12T10:15:02.345000Z`), where the logger shows three. The logger's
-examples and its "with milliseconds" are updated in the implementation PR, and
-the owner decides the digits (41.20). The grammar's logging section is updated
-there too.
+(`2026-10-12T10:15:02.345000Z`), where the logger shows three; the owner decides
+the digits (41.20).
 
 ### 41.16 Later
 

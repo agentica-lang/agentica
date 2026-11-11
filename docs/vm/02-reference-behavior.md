@@ -171,9 +171,7 @@ in a PR that rewrites the goldens.
   the call stack of the failing task (6.1). Only the code is contract. The
   `--ai` and `--json` shapes are pinned by `tests/test_vm_stack.py` and the
   `stack-trace-*` goldens in `tests/fixtures/vm/step-limited/`.
-- `--json` keys, in order: `code`, `file`, `message`, `range`, `spawned_at`,
-  `stack`, `stack_omitted`, `task` (the last four only when they apply). Each
-  stack object has `column`, `file`, `function`, `line`, `repeat` and `tail`.
+- `--json` keys and their order: `docs/grammar/07-diagnostics.md` §7.
 - A frame is `name at file:line:column`, with ` (N times)` for a merged run and
   ` (after a tail call)`. A cut stack shows `... N frames not shown ...` after
   the 15th line, counting frames, and a task ends with `task spawned at

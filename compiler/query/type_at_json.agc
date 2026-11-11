@@ -1,9 +1,9 @@
-## The JSON form of `agentica type-at` (docs/future/39-semantic-cli.md, 39.5): `{version, command, position, kind,
+## The JSON form of `agentica type-at` (docs/grammar/06b-builtins.md): `{version, command, position, kind,
 ## text, type, span, definition, help}`. `definition` is null or the span of the declaration (`{file, range}`) with
 ## its `kind`, its `name`, the `name_span` of the name, its `signature` and its `doc` (the whole `##` text or null).
 ## `help` is null, or the object of `agentica help NAME --json` for a `builtin` answer, which has no definition. A
 ## span is `{file, range}` with the `file` the command answers with. An answer from a program that does not check
-## (39.6) adds `partial` (true) and `diagnostics`, and has a `type` of null where only the link knows the name.
+## adds `partial` (true) and `diagnostics`, and has a `type` of null where only the link knows the name.
 
 import Model from "../analysis/model"
 import DiagnosticJson from "../diagnostics/diagnostic_json"

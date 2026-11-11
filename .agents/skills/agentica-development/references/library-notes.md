@@ -247,7 +247,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 - `std/regex` (`stdlib/regex.agc`): the parser to a `Node` tree and the
   compiler to the parallel `ops`/`xs`/`ys` lists of `Program` are Agentica;
   `x*` with a nullable `x` compiles as `(x+)?`, as in Go (issue 46123). The
-  Pike VM is the std-only builtin `RegexEngine.search` (`vm/regex.c`, 48c), a
+  Pike VM is the std-only builtin `RegexEngine.search` (`vm/regex.c`), a
   stepper that checks the program on every call (a direct call may pass any
   lists) and returns flat capture lists; `find_all`'s Go empty-match rules run
   in C too. Match values are built in Agentica.
@@ -256,7 +256,7 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 - `tests/test_std_regex.py` compares with Python `re` (`re.ASCII`, Go's
   empty-match rules applied to its spans).
 - The front end imports `std/regex` (`compiler/check/check_regex.agc`, listed
-  in `stdlib/CORE`) to check regex literals (48b), so `compile`, its errors and
+  in `stdlib/CORE`) to check regex literals, so `compile`, its errors and
   any builtin it calls are part of the front end: a change there needs the
   stage0 refresh of `references/ci.md`.
 
@@ -282,8 +282,9 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 - Library code that is generic over the builtin type variables, or called as a
   method on a builtin type (`xs.find do ... end`), cannot be a `std/` module: it
   goes in the compiler prelude (`stdlib/prelude/*.agc`, `references/stages.md`).
-  Only prelude functions may call `__fail_arg` and `__float_fixed`. A
-  concurrency helper that needs the scheduler is a C builtin.
+  Only prelude functions may call the `PRELUDE_ONLY` builtins
+  (`prelude_data.agc`). A concurrency helper that needs the scheduler is a C
+  builtin.
 - `HttpWire`, `LogRegistry` and `RegexEngine` are std-only builtin modules:
   the linker lets only modules embedded from `stdlib/` name them (`STD_ONLY` in
   `compiler/catalog/builtins.agc`), and user code gets `CHECK-UNKNOWN-NAME`
@@ -297,9 +298,6 @@ tasks, TCP, TLS and HTTP, files and paths, processes. VM internals are in
 
 ## Comments and style in stdlib/
 
-As in `references/frontend.md` ("Comments and style"): a module `##` doc block
-and a `##` doc on every exported `def`, `struct` and `enum` you add or touch
-(as `stdlib/queue.agc`), none on code you do not touch. A `#` comment names a
-VM behavior that the code copies. Lines are at most 119 characters
-(`stdlib/agentica.toml`, `tests/test_style_line_width.py`: std/ files are
-library files, which `CHECK-LINE-TOO-LONG` does not cover).
+As in `references/frontend.md` ("Comments and style"). Lines are at most 119
+characters, checked by `tests/test_style_line_width.py`, not by
+`CHECK-LINE-TOO-LONG`.

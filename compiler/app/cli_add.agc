@@ -1,5 +1,5 @@
 ## `agentica add NAME URL --tag TAG` (or `--ref COMMIT`, and `--subdir DIR`) and `agentica update [NAME]`
-## (docs/future/45-packages.md, 45.9). Both work on the project of the working folder, resolve its packages
+## (docs/grammar/05b-modules.md). Both work on the project of the working folder, resolve its packages
 ## (io/package_resolve.agc: git runs for the pins that are new or asked to move), fill the cache, write agentica.lock
 ## and refresh deps/ (io/package_deps.agc: every package of the new lock is written, and a package the old lock had
 ## and the new one lacks is removed). `add` also puts the dependency in agentica.toml, with one line added and nothing

@@ -63,23 +63,17 @@ callbacks only set flags and queue the task. Only `vm/loop.c`,
 
 ## Stop, flush and exit
 
-- The one exit path (`docs/vm/10-io-scheduler.md` §10.2.2, "End of run";
-  `agc_launch_settle` then `agc_launch_exit`): `agc_processes_stop` kills the
-  children; `agc_io_children_stopped` acts on a second signal; `agc_io_goodbye`
-  calls each resource's `goodbye` hook (TCP sends TLS `close_notify`); stdout
-  and stderr flush; `agc_io_flush_files` closes the files and waits for their
-  flush jobs under a fresh `setjmp`; then `_exit`. Nothing else is joined or
-  drained. The flush wait is `uv_run` ONCE until the flush-limit timer (30000
-  ms, `--flush-timeout` or `AGENTICA_FLUSH_TIMEOUT_MS`), which sets
-  `rt->flush_expired` for the warning line.
-- Stop signals: `agc_io_watch_stop` handles `SIGINT`, `SIGTERM` and `SIGHUP`
-  (not one inherited as ignored), with a `SIGALRM` backstop armed only after a
-  second signal. The global `stop` (`NOLINT`) holds lock-free atomics: first
-  signal, second, and `held` until the children are stopped. `check_stop` in
-  `vm/task.c` ends the run between turns, before a wait and before a stall
-  error, through `agc_stop` in `vm/interp.c`; `agc_write` and `agc_flush` also
-  call it on `EINTR`. A second signal ends the VM at once, except while `held`.
-  A driven VM whose driver is gone takes that path on its first signal.
+Order and rules: `docs/vm/10-io-scheduler.md` §10.2.2, "End of run", and
+`docs/vm/14-core-invariants.md` §14.4. The functions, in order:
+`agc_launch_settle`, `agc_launch_exit`, `agc_processes_stop`,
+`agc_io_children_stopped`, `agc_io_goodbye`, the stream flush,
+`agc_io_flush_files` (under a fresh `setjmp`), `_exit`.
+
+- `agc_io_watch_stop` handles the stop signals. The global `stop` (`NOLINT`)
+  holds lock-free atomics: first signal, second, and `held` until the children
+  are stopped; a second signal ends the VM at once, except while `held`.
+- `check_stop` (`vm/task.c`) ends the run between turns through `agc_stop`
+  (`vm/interp.c`); `agc_write` and `agc_flush` also call it on `EINTR`.
 
 ## Files (`vm/files.c` and its adapters)
 
@@ -181,44 +175,19 @@ callbacks only set flags and queue the task. Only `vm/loop.c`,
 
 ## Output (`vm/output.c`)
 
+Design (the ring, the FIFO of writers, the write modes per system, one target
+with one buffer, the notice modes): `docs/vm/10-io-scheduler.md` §10.2.2,
+"stdout and stderr".
+
 - The only writer of stdout and stderr: `agc_write`, `agc_output_waiting`,
-  `agc_drain` (for `IO.flush`) and `agc_flush` (`docs/vm/10-io-scheduler.md`
-  §10.2.2). `output.c` has no OS branch: `vm/stdio_posix.c` and
-  `vm/stdio_windows.c` pick the write mode (`agc_write_mode`: DISK, POLL, STREAM
-  or THREAD), whether two descriptors are one target, and the in-memory stream
-  of a notice.
-- Per stream, `agc_output` (`vm->rt->out`, `err`) has a 64 KiB ring
-  (`AGC_OUTPUT_BUFFER`) and a FIFO of waiting writers. A print with nobody ahead
-  of it is copied and returns. Otherwise the task keeps a pointer to its text in
-  `task->output` and parks (retry; `agc_output_waiting` tells the builtin to
-  pass no text), and the head is woken when its whole text fits. A print longer
-  than the ring copies in pieces and holds the stream.
-- `agc_output_open` (from `main`, after `agc_input_open`) reopens a pipe, FIFO
-  or terminal through `agc_fd_reopen`, or duplicates a socket, and writes from
-  an `agc_poller`. On macOS each write is guarded by `poll` and cut to
-  `PIPE_BUF` or `SO_SNDLOWAT`. A regular file, a block device, or a device epoll
-  refuses (`/dev/null`) drains by a pool job. Any other descriptor stays on the
-  blocking `fwrite` of its `FILE`.
-- When stderr is the same file as stdout (`st_dev`, `st_ino`), both share one
-  ring and FIFO. A write error sets `failed`, drops the data and the notices,
-  and wakes the waiters.
-- `agc_output_forward` takes a child's stderr on the I/O thread into the notice
-  queue. It uses only the room the FIFO head does not need (`spare`), so a
-  waiting print goes first. Past `AGC_FORWARD_BOUND` queued it waits
-  (`agc_forward_wait`) until the queue drops to `AGC_FORWARD_RESUME` or the
-  stream closes. `sent` and `own_end` are stream positions: a failure that lost
-  only forwarded bytes does not fail the run.
-- `agc_output_busy` keeps `flushing()` waiting while a buffer holds data: it
-  pumps queued notices with force and kicks the writer, since no task will
-  finish a cut print. After a stop signal it makes one non-blocking write per
-  stream and stops waiting. The trace has `output_start` and `output_done` per
-  run of data.
-- VM notices go through `agc_notice_begin` and `agc_notice_end`, in one of three
-  modes: `AGC_NOTICE_QUEUED` (crash diagnostics and the unobserved summary; a
-  queue of at most 1 MiB), `AGC_NOTICE_KEPT` (the failed run's diagnostic;
-  queued even at the limit, but never inside a print that holds the stream, and
-  before the end-of-run wait), and `AGC_NOTICE_FINAL` (flush warnings;
-  non-blocking writes, and what a stuck pipe refuses is dropped).
+  `agc_drain` (for `IO.flush`) and `agc_flush`. `output.c` has no OS branch:
+  `vm/stdio_posix.c` and `vm/stdio_windows.c` pick `agc_write_mode`.
+- `agc_output_forward` (a child's stderr, on the I/O thread) uses only the
+  `spare` room and waits past `AGC_FORWARD_BOUND`; a failure that lost only
+  forwarded bytes does not fail the run.
+- `agc_output_busy` keeps `flushing()` waiting while a buffer holds data.
+- VM notices go through `agc_notice_begin` and `agc_notice_end`
+  (`AGC_NOTICE_QUEUED`, `AGC_NOTICE_KEPT`, `AGC_NOTICE_FINAL`).
 
 ## Gotchas
 

@@ -57,7 +57,6 @@ ok()
 ## Streams
 
 ```signature
-File.chunks(path: String, size: Int = 65536, timeout_ms: Int = 30000) -> Lazy[Bytes]
 lazy.deflate(level: Int = 6, raw: Bool = false) -> Lazy[Bytes]
 lazy.inflate(raw: Bool = false, max_bytes: Int = 1073741824) -> Lazy[Bytes]
 lazy.gzip(level: Int = 6) -> Lazy[Bytes]
@@ -65,7 +64,7 @@ lazy.gunzip(max_bytes: Int = 1073741824) -> Lazy[Bytes]
 lazy.write_bytes(path: String, timeout_ms: Int = 30000) -> Result[Int]
 ```
 
-A stream is a `Lazy[Bytes]` of byte chunks. `File.chunks` reads a regular file in chunks of `size` bytes (1 to 16777216), the four steps compress or decompress the chunks that pass, and `write_bytes` writes them to a file, created or truncated, and returns the bytes written. Memory stays bounded by a chunk, so a file far over the 1 MiB cap of the bytes calls converts without being held in memory.
+A stream is a `Lazy[Bytes]` of byte chunks. [`File.chunks`](/library/data-structures/lazy/#filechunks) reads a regular file in chunks, the four steps compress or decompress the chunks that pass, and `write_bytes` writes them to a file, created or truncated, and returns the bytes written. Memory stays bounded by a chunk, so a file far over the 1 MiB cap of the bytes calls converts without being held in memory.
 
 ```agentica {mode="check"}
 def main() -> Void

@@ -1,4 +1,4 @@
-## The JSON form of `agentica outline` (docs/future/39-semantic-cli.md, 39.5): `{version, command, file, doc, imports,
+## The JSON form of `agentica outline` (docs/grammar/06b-builtins.md): `{version, command, file, doc, imports,
 ## items}`. Each item is the item of `agentica doc` (docs/doc_json.agc) with `exported` and the `name_span` of the item
 ## and of each field and variant. A span is `{file, range}` with the `file` the command answers with.
 

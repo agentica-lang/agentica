@@ -1,5 +1,5 @@
-## The download and member-cache engine for native artifacts (docs/grammar/05b-modules.md, docs/future/45-packages.md
-## 45.10): `fetch` and `cached` over the data rules of packages/native_artifact.agc. `fetch` returns the verified local
+## The download and member-cache engine for native artifacts (docs/grammar/05b-modules.md):
+## `fetch` and `cached` over the data rules of packages/native_artifact.agc. `fetch` returns the verified local
 ## path of the selected member, downloading the archive once per SHA-256 and extracting each member into its own
 ## immutable object; `cached` answers from the cache alone and never touches the network. Every failure is a packed
 ## failure at the caller's file and key (link_failure.agc, fail_key): precise key paths, generic messages that never

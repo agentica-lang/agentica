@@ -354,19 +354,8 @@ the caller. A channel never handed over is closed only by `Channel.close`.
   Rust. The core changes for bugs, platforms and speed.
 - Each new core concept replaces something, or justifies itself against §14.1 to
   §14.5: how it waits, times out, is cancelled, ends and owns its handles. If it
-  needs a second way for any of them, it does not go in.
-
-Plans to re-check with this rule before they start:
-
-- **VM layers, rest (#998; the first part is §15):** does each layer replace
-  code, or only add a boundary?
-- **VM metrics (#992, `docs/future/28-vm-metrics.md`):** it adds a metrics
-  thread and hooks in the core. Could a dump at exit, or an outside reader of
-  the VM's state, do the job? The memory diagnosis adds one add on the
-  allocation path while nobody asks: it must pass the overhead check or change
-  rule 4 of the design first.
-- **K I/O threads, local run queues with work stealing (§16.10):** only if
-  measurements ask. Does the model of §16 stop being enough, and does the
-  change keep one way to wake a task and one place for each handle?
+  needs a second way for any of them, it does not go in. A planned subsystem
+  (the rest of the VM layers, #998; VM metrics, #992) passes this rule before
+  it starts.
 
 [task-rules]: ../../site/content/library/concurrency/task.md

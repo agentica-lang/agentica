@@ -40,7 +40,7 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    the libuv pool and may only do system calls on that request; `done`
    and `expired` run on the interpreter thread and return the value
    (built only from work that ran: a cancelled job's `work` may be skipped,
-   as the `ran` flag set at `vm/ffi.c:1908` records); `drop` frees a request
+   as the `ran` flag in `vm/ffi.c` records); `drop` frees a request
    whose timeout already fired; the optional
    `cancel` half (last field, external kinds only) says whether a
    detached job (its task was cancelled) may end through `drop`, at

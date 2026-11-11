@@ -265,12 +265,9 @@ Details that code and tests rely on:
   and `GLOBAL` of such a slot is `RUNTIME-INTERNAL` (only a hand-made file can
   do it, or a `GLOBAL_SET` of a `Void`, which unsets the slot again). Neither
   instruction charges cost beyond the `STEP`s of its function. `GLOBAL_SET` is
-  the only instruction that writes to the loaded program. The loader allows it
-  only in the entry function, which has no backward jump (4.6) and cannot be
-  called when the table is not empty, so each `GLOBAL_SET` runs at most once, in
-  the main task, before the entry hands over to `main`. `10-io-multicore.md`
-  §10.2.3 and `16-architecture.md` §16.7 say why that makes the table safe to
-  share.
+  the only instruction that writes to the loaded program; the loader's Globals
+  rules (§8) make each one run at most once, before `main`, and
+  `10-io-multicore.md` §10.2.3 says why that makes the table safe to share.
 - An error in `TRY` returns from the frame like `RETURN`. An error in a `TRY` of
   the entry function is `RUNTIME-INTERNAL` (the checker allows `try` only in
   functions that return Result).
@@ -460,8 +457,7 @@ header and the entry.
   `docs/future/41-dates-and-times.md`.
 - The C loader is the only reader of this format and has no compatibility
   shims, with one exception: it still reads format 5, which has no prelude flag
-  (`AGC_FORMAT_PREVIOUS`). The checked-in `bootstrap/stage0.agcb` writes format
-  6, so a later change can remove it.
+  (`AGC_FORMAT_PREVIOUS`).
 
 ### 4.7 The prelude
 

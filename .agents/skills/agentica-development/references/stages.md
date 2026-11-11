@@ -255,9 +255,9 @@ run it: `plain`, `limited` (for a variable only some types may take) or `chosen`
 (one function per type of the variable). The body is a `def` in
 `stdlib/prelude/<file>.agc` that names its type variables (`A`, `B`, `K`, `V`)
 in annotations. Adding one takes the row (sorted by name in
-`builtins_data.agc`), the `prelude_data.agc` entry, the body, and the tests of
-25.6: a spec case per rule, a VM golden, and a step count in
-`tests/fixtures/vm/prelude-cost.agc`.
+`builtins_data.agc`), the `prelude_data.agc` entry, the body, and the tests
+(`docs/vm/03-ir-and-bytecode.md` §4.7): a spec case per rule, a VM golden, and
+a step count in `tests/fixtures/vm/prelude-cost.agc`.
 
 - `Rule.Prelude` (`check_prelude.agc`) checks the arguments left to right, binds
   the type variables (a block gets the types known so far), checks the limits

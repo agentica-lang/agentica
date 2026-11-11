@@ -15,8 +15,8 @@ end refuses that form. `[test]` means a repo test enforces the rule. Unmarked
 rules are review-only.
 
 - `references/style.md`: bad/good examples for these rules.
-- `references/performance.md`: measured costs; speed work requires profiling
-  and measurement.
+- `references/performance.md`: bad/good code for speed; the costs are in
+  agentica-programming `references/performance.md`.
 - `site/content/style.md`: the short version for people, on the site; change
   it together with these rules.
 

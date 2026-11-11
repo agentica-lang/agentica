@@ -89,58 +89,36 @@ behind them.
 - Runner images are pinned. The submodules are pinned to release tags and
   upgraded only by a reviewed PR that bumps the submodule.
 - `agentica run --version` prints the versions of libgc, yyjson, libuv and
-  OpenSSL. Rule: rebuild and release after any High or Critical advisory for
-  one of the five.
+  OpenSSL. Rule: rebuild and release after any High or Critical advisory for a
+  library the release links statically.
 - The release links OpenSSL statically, so a fix reaches users only through a
   submodule bump and a new release. Only development and CI builds use the
   distro's OpenSSL.
 
 ### CI
 
-- The Linux jobs of `ci.yml` run on every pull request that changes more than
-  docs. `platforms.yml` (Linux x86-64 and arm64, Windows UCRT64, macOS Intel and
-  arm64) runs on pushes to `master` and on pull requests that carry the
-  `platforms` label (all systems) or a `platform:<system>` label (that system
-  alone): `make vm-test`, the fixed point, then the areas of
-  `tools/conformance.py`, with a report that fails when an area has no passed
-  case or a case is skipped for a reason not on the reviewed list. No step
-  checks or regenerates the frozen `vm/unicode_data.c`.
+The jobs, their triggers and caches are in the development skill's
+`references/ci.md`. The decisions behind them:
+
 - `.gitattributes` checks every text file out with LF (`.agcb` files are
   binary), so Windows sees the same sources, spans and output as Linux.
-- Every CI job except the `test` job links the system OpenSSL, including the
-  sanitizer and GC-stress builds; a cold sanitizer OpenSSL build took an hour on
-  the shared runner, so no job builds an instrumented OpenSSL. Pull request jobs
-  also link the system libgc and zlib. The `warm-third-party` job on `master`,
-  the weekly `sweep.yml` and the release use `vendored`, so the vendored `gc.o`
-  and zlib stay built and tested; `vendored-check` fails when `readelf -d` shows
-  `libgc` or `libz`. `warm-third-party` also builds the vendored release-mode
-  OpenSSL into a cache keyed by the hash of `make -s vm-openssl-key
-  AGENTICA_OPENSSL=vendored`; the `test` job restores it (a pull request can
-  restore only its own caches or `master`'s) and runs the TLS and HTTP tests
-  against it.
-- The third-party objects follow content stamps (`make -s vm-third-party-key`)
-  that hold the mode, the compile lines, the compiler and `ar` versions, and
-  each submodule's commit, diff and untracked files. They rebuild only when the
-  key changes, and CI does not cache them, since ccache rebuilds them in under a
-  second.
+- CI links the system OpenSSL, the sanitizer and GC-stress builds included: a
+  cold sanitizer OpenSSL build took an hour on the shared runner, so no job
+  builds an instrumented OpenSSL. Jobs on `master`, the weekly sweep and the
+  release use `vendored`, so the vendored libgc and zlib stay built and tested;
+  `make vendored-check` (`mk/vm-test.mk`) checks that each is linked statically.
+- The third-party objects follow content stamps (`make -s vm-third-party-key`).
+  They rebuild only when the key changes, and CI does not cache them, since
+  ccache rebuilds them in under a second.
 - The release (`release.yml`) builds five packages, each on a runner of its own
-  system, with vendored OpenSSL and libgc: `linux-x86_64` and `linux-arm64` with
-  the pinned `zig cc` against glibc 2.28 (`ZIG_VERSION` and `ZIG_SHA256` pin the
-  compiler), `windows-x86_64` (MSYS2 UCRT64 GCC), `macos-x86_64` and
-  `macos-arm64` (Apple clang, `MACOSX_DEPLOYMENT_TARGET=12.0`). `make
-  release-check` (`tools/release-check.sh`) checks the binary in its own format:
-  its architecture, the libraries it imports (the release fails when
-  `readelf -d` shows `libssl`, `libcrypto`, `libgc` or `libz`, on the binary and
-  on the unpacked archive), the glibc floor (`objdump -T`, OpenSSL's symbols
-  included) or the Mach-O `minos` (a link target, not proof that every API is
-  safe on macOS 12), and the hardening of the format. On macOS the program is
-  stripped and signed ad hoc, which Apple silicon needs to start it; there is no
-  Developer ID signature and no notarization. `make release-package` writes
-  `agentica-VERSION-PLATFORM.(tar.gz|zip)` (`tools/release.py`; the same binary
-  gives the same archive bytes, but the binary itself is not reproducible), and
-  `make release-smoke` extracts it into a folder with spaces and non-ASCII
-  letters outside the checkout and runs it with a `PATH` of system folders only.
-  The `collect` job checks that exactly the five archives of `VERSION` exist and
-  writes `SHA256SUMS`; `publish` runs only for a tag that is the `VERSION` file
-  and only after all five builds pass. A manual run publishes nothing. The
-  archive ships `licenses/openssl/LICENSE.txt`.
+  system, with every third-party library linked statically. The C library stays
+  dynamic: glibc with at most 2.28 symbols (the pinned `zig cc`), libSystem with
+  `MACOSX_DEPLOYMENT_TARGET=12.0` (a link target, not proof that every API is
+  safe on macOS 12), and the Universal C Runtime of Windows 10. A static glibc
+  breaks NSS, and macOS forbids a static libc. `make release-check`
+  (`tools/release-check.sh`) fails on a wrong architecture, an imported library
+  outside that list, a newer glibc symbol or missing hardening. On macOS the
+  binary is signed ad hoc, which Apple silicon needs to start it; there is no
+  Developer ID signature and no notarization. The same binary gives the same
+  archive bytes, but the binary itself is not reproducible. A tag publishes
+  only after all five builds pass; a manual run publishes nothing.

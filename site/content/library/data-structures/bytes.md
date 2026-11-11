@@ -49,11 +49,7 @@ true
 
 ## bytes
 
-```signature
-String.bytes(s: String) -> Bytes
-```
-
-The UTF-8 bytes of the text. `Bytes` has no `chars`: `s.bytes.to_a` is the list of integers.
+`s.bytes` ([String.bytes](/library/text-and-data/string/#bytes)) gives the UTF-8 bytes of the text. `Bytes` has no `chars`: `s.bytes.to_a` is the list of integers.
 
 ## decode
 

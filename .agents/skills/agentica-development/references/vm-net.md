@@ -35,8 +35,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   `direct_over` while the claim is held. The send holds the writer lock without
   a job (`agc_handle_hold`), so another task's send waits instead of overtaking
   the rest that a partial send parks with. A WebSocket upgrade head clears
-  `direct` in `head_value`, so std/http's frames queue on the I/O thread
-  (#1191). A close or release posts `release_step` through `agc_loop_call`.
+  `direct` in `head_value`, so std/http's frames queue on the I/O thread. A
+  close or release posts `release_step` through `agc_loop_call`.
   `finish` copies what the `done` half needs into the request, and
   `request_done` reads only that and posts `drop_request`. `users` changes only
   on the I/O thread (the first count, `own`, excepted). The `net` fields `id`
@@ -88,49 +88,33 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Child channel
 
-- `vm/duplex.c`: an `agc_duplex` is a libuv pipe handle to read and one to
-  write (a pipe per direction, or a child's one socket duplicated;
-  `duplex_os.h`, see `references/vm-io.md`), with an `agc_inbuf` (lines,
-  1 MiB), at most one reader and one writer request, and a reference count
-  (owner, each request, the pipe handles, the shutdown request).
-  - Jobs are `external` with the call's timeout. A read parks until a line
-    is buffered; a send parks only when the pipe is full. `request_expired`
-    closes the whole channel (`agc_duplex_shut`): a timeout ends the channel
-    and nothing else. `ECONNRESET` on a read is end of input.
-  - With more than one scheduler, every read, send and shut runs as a
-    request whose steps run on the I/O thread (`posted`); the scheduler reads
-    only the result.
-  - `agc_duplex_overflow` (called by `process.c` when stdout or stderr is
-    cut) stores the output-exceeds error and readies a pending reader. Lines
-    already buffered still come first.
-  - Parent side: `agc_duplex_new` over the parent's two pipe ends.
-    `agc_duplex_close_write` closes the write end in `shutdown_done`, after the
-    queued writes, whatever the status (`ENOTSOCK` on a POSIX pipe): the close
-    is the end of input every system delivers. A `uv_shutdown` that fails on
-    the spot (a stream libuv no longer takes as writable) closes it at once.
-  - Child side: `agc_parent_take` (called by `agc_launch_vm`) passes
-    `AGENTICA_CHANNEL` to `agc_chan_take`, which takes `3,4` (fd 3 readable,
-    fd 4 writable, each a FIFO or a socket; on Windows pipes) and on POSIX
-    also `3` (one socket or FIFO opened `O_RDWR` on fd 3, duplicated). A
-    one-way end in the wrong place fails the read start and would park
-    `Test.run` forever, so it is refused. The variable is removed, and the
-    duplex becomes `vm->parent`.
-  - `Process.parent_read_line` and `Process.parent_send` take a positive
-    timeout and the `vm->parent_locks` pair. With no channel they fail with
-    `process: no parent channel`. `process: the channel is in use` comes only
-    when a request in that direction is already pending, so a test's call
-    never shares a buffer with `Test.run`'s retry request (those park with
-    `task->retry` and no timeout), or while a send that a native callback
-    started and was refused for still writes (`sending`).
+Design and ends per system: `docs/vm/10-io-processes.md` §10.4. Error texts:
+`vm/process.c` and `vm/duplex.c`. User rules: the site process page
+(`site/content/library/io-and-system/process.md`). Code map:
+
+- `vm/duplex.c` (`agc_duplex`; OS ends in `duplex_os.h`, see
+  `references/vm-io.md`): at most one reader and one writer request, and a
+  reference count (owner, each request, the pipe handles, the shutdown
+  request). Jobs are `external` with the call's timeout; `request_expired`
+  shuts the whole channel (`agc_duplex_shut`). With more than one scheduler
+  every step runs on the I/O thread (`posted`).
+- `agc_duplex_overflow` (from `process.c`) readies a pending reader with the
+  output-exceeds error; buffered lines still come first.
+- Parent side: `agc_duplex_new`; `agc_duplex_close_write` closes the write
+  end in `shutdown_done`, whatever the status.
+- Child side: `agc_parent_take` (called by `agc_launch_vm`) passes
+  `AGENTICA_CHANNEL` to `agc_chan_take`; the duplex becomes `vm->parent`.
+- `Process.parent_read_line` and `Process.parent_send` take the
+  `vm->parent_locks` pair. "channel is in use" comes only when a request in
+  that direction is pending, so a test's call never shares a buffer with
+  `Test.run`'s retry request or a native callback's send (`sending`).
 
 ## Processes
 
 - `vm/process.c` (`agc_process_builtins`; §10.4), on libuv. `--deny-run` turns
   it off.
-  - `own_env` filters `AGENTICA_CHANNEL` and `UV_USE_IO_URING` (the latter
-    only with `drop_uring_env`); `metrics_env` also filters the metrics
-    variables. Windows comparisons are case-insensitive. The first spawn marks
-    descriptors above 2 close-on-exec (`agc_each_fd`).
+  - `own_env` and `metrics_env` filter the environment (§10.4). The first
+    spawn marks descriptors above 2 close-on-exec (`agc_each_fd`).
   - Executable lookup: `PATH` only for a bare name, never the working
     directory; a name with `/` is relative to the working directory.
     `uv_spawn` gets the absolute path and never verbatim arguments. All three
@@ -160,14 +144,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
     (`docs/vm/10-io-processes.md`, `docs/vm/14-core-invariants.md` §14.4);
     `unlink_child` clears `proc.g`, so a release after the guard is freed never
     reaches it.
-  - Channel children (`Process.spawn_channel`): `agc_chan_pair` (two
-    `uv_pipe` pairs with blocking child ends) on stdio slots 3 and 4.
-    `child_env` rebuilds the environment on every spawn and adds
-    `AGENTICA_CHANNEL=3,4` for channel spawns only. The parent end is an
-    `agc_duplex` in `proc.channel`, which `shut` closes with the pipes.
-    `read_available` drains stdout with non-blocking reads under the same
-    cut rules (the held-back UTF-8 tail included, §10.4). The spawn trace
-    line has `channel=`.
+  - Channel children: `agc_chan_pair`, `child_env`; `proc.channel` holds the
+    parent's `agc_duplex`, which `shut` closes with the pipes (§10.4).
   - Pool threads start with `SIGINT`, `SIGTERM` and `SIGHUP` blocked
     (`agc_io_start` does it around `uv_queue_work`). Keep that for any new
     work in the libuv pool. Boehm's marker threads do not block them, so the
@@ -177,12 +155,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 ## HTTP
 
 - The head adapter and body decoder (`vm/http_parse.h`, `vm/http_pico.c`,
-  `vm/http_body.c`; §10.6, §10.6.1). The rules of §10.6 apply. Tests check
+  `vm/http_body.c`; §10.6). The rules of §10.6 apply. Tests check
   codes, not messages.
   - Head parsing runs our pre-scan and start-line checks, then picohttpparser
     (`vm/third_party/picohttpparser`, tag v1.4, built at the baseline without
     `-msse4.2`), then our token, value, obs-fold, Host and status checks
-    (§10.6.1). Only `vm/http_pico.c` includes `picohttpparser.h`. It runs
+    (§10.6). Only `vm/http_pico.c` includes `picohttpparser.h`. It runs
     without `last_len` and only when new bytes complete a line. The head is
     limited to an 8192-byte start line plus 64 KiB of headers. A -1 becomes a
     400 or a client error `Result`.

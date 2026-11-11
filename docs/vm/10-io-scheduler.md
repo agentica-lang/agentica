@@ -1,4 +1,4 @@
-### 10.2 Rules for 7h
+### 10.2 Scheduler and loop rules
 
 The core rules (waiting, timeouts, cancelling, ending, handles) are in §14. This
 section says how the scheduler and the loop keep them.
@@ -81,7 +81,7 @@ section says how the scheduler and the loop keep them.
   never waits for a second Ctrl-D. `Task.await` and stdin reads park the caller
   with *retry*: on a wake (only a hint, 10.2.3) the waiter re-runs its builtin
   and gets the cached result.
-- **Await cycles (17b).** A task can receive its own handle over a channel, or
+- **Await cycles.** A task can receive its own handle over a channel, or
   hide it in a closure, so awaits can form a cycle. Each task waits on at most
   one task (`awaiting`). Before `Task.await` parks, it follows the chain from
   the target through `awaiting`. If the chain reaches the caller, the call fails
@@ -89,7 +89,7 @@ section says how the scheduler and the loop keep them.
   not park. A task that awaits its own handle is the shortest cycle. The walk
   costs one turn-cost unit per hop. It stops at a task with a timeout
   (`await_deadline` is set while it waits), since that task ends by itself.
-- **Await with a timeout (17c).** `Task.await(task, timeout_ms)` returns
+- **Await with a timeout.** `Task.await(task, timeout_ms)` returns
   `Await[T]` (`Await.Done(value)` or `Await.TimedOut`); `Task.await_result` has
   the same second arity for a `Result` target. `timeout_ms` of 0 or less is
   `RUNTIME-INVALID-DURATION` at that argument, checked first. A target that has
@@ -112,7 +112,7 @@ section says how the scheduler and the loop keep them.
   that task, unless it is a failure in `main` or one of the two codes above,
   which end the run. The text `task crashed: CODE at FILE:LINE:COLUMN: MESSAGE`
   joins the run's unobserved crashes. Crashes of `hidden` tasks (the HTTP
-  connection tasks of 20c) join only the first per test (or per run outside
+  server's connection tasks) join only the first per test (or per run outside
   `Test.run`); the others count as `quiet_more`, so the list stays bounded. The
   diagnostic goes to stderr with ` in a task` (`"task":true` in `--json`). The
   task ends like a cancelled one: its jobs, locks and FIFOs go, its running
@@ -143,7 +143,7 @@ section says how the scheduler and the loop keep them.
     for it.
   - A file that a detached job still holds closes when that job ends. A handle
     made outside a turn has no owner, and is closed when its result is dropped.
-- **Cancellation (20b).** The one way is `agc_task_cancel` (§14.3, §16.9 "A
+- **Cancellation.** The one way is `agc_task_cancel` (§14.3, §16.9 "A
   cancel is a claim"). A program cancels tasks only through a crash (which
   cancels the crashed task's descendants), `HTTP.close_server`, and the deadline
   of a `Task.map` item. Each task records its parent and its running children,
@@ -155,7 +155,7 @@ section says how the scheduler and the loop keep them.
   `error("task: cancelled")` for a `Result`). A task that cancels itself
   finishes its builtin and then ends. A cancel spends no step and charges one
   turn unit per cancelled task, to the caller.
-- **Task.map (17a, `vm/task_map.c`, core layer).** The builtin checks `limit` (1
+- **Task.map (`vm/task_map.c`, core layer).** The builtin checks `limit` (1
   to 1024, `RUNTIME-INVALID-COUNT`), then `timeout_ms` (above 0,
   `RUNTIME-INVALID-DURATION`), then the empty list. Otherwise it installs a
   stepper on the caller (`agc_task_stepper`), so the caller is the one task
@@ -300,7 +300,7 @@ section says how the scheduler and the loop keep them.
   handle is closed, and the next owner gets `file handle is closed`. A closing
   handle that a job still holds makes callers wait for the lock as for any other
   handle; once no job holds it, they get the closed error.
-- **Channel waits (17b, `vm/channel.c`).** A channel is a GC object: a ring
+- **Channel waits (`vm/channel.c`).** A channel is a GC object: a ring
   buffer, the capacity, a closed flag, and two FIFOs of waiting receivers and
   senders linked through `wait_next`. The ring starts with at most 8 slots and
   doubles up to the capacity (one turn-cost unit per slot copied), so
@@ -342,7 +342,7 @@ section says how the scheduler and the loop keep them.
     (`agc_channel_claim`); §14.5 has the rules. Mid-FIFO removal is O(n), as for
     the lock FIFO. A waiter whose timer fired before any wake still takes a
     value that reached the ring before it re-ran, instead of failing at once.
-- **Detached jobs (20b).** When its task is cancelled, a job is detached. It has
+- **Detached jobs.** When its task is cancelled, a job is detached. It has
   no task, is never abandoned with a close, and runs to its own end or deadline,
   keeping the handle's lock. Its `done` half runs and the result is dropped, not
   charged to the current task, and the lock passes to the head waiter. A handle

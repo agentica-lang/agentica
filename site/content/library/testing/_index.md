@@ -27,7 +27,7 @@ coverage: coverage/lcov.info
 Each test file and each scenario runs with [`--coverage FILE`](/cli/#options), and the runner adds their counts up. So the report counts what that option counts: your files and the packages read in place, not `std/` or fetched packages.
 
 - The test files and step programs that the run ran are left out, but the helper modules they import are counted. A program that a step starts, such as the one of "the Agentica program", is not counted.
-- Files are in name order and lines in line order, so `--jobs` does not change the report.
+- Files are in name order and lines in line order, so `--jobs` does not change the report. The counts add up the work of every task, so a program whose work does not depend on the order of its tasks gets the same counts with any `--schedulers`.
 - A run with failing tests still writes the report, and keeps the exit code of the tests.
 - A test file stopped at its timeout adds nothing. A part that is not LCOV is left out and named after the summary. Neither changes the exit code, unless every part is broken (below).
 - When there is no part, as in a run with no tests, nothing is written and an old `coverage/lcov.info` stays.

@@ -60,11 +60,6 @@ rule that a site page shows.
   written.
 - The programming skill is for agents and is not published.
 - Links to the GitHub repo are shown only when `params.repoPublic` is true.
-- When the language changes, update the matching site page too. A builtin or
-  `std/` module is documented only in its `library/` page; `docs/grammar/`
-  keeps the rules the checker enforces and points to that page.
-- Do not hard-wrap prose in `site/content/`: one line per paragraph or list
-  item. Hugo joins the lines anyway. Code blocks keep their own line breaks.
 
 ## Markdown and llms.txt
 

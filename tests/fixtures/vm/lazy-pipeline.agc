@@ -1,4 +1,4 @@
-# Lazy (docs/future/27-iteration-and-concurrency.md 27.4): every source, step and terminal once. The steps run only in
+# Lazy (docs/grammar/06b-builtins.md, `Lazy[T]`): every source, step and terminal once. The steps run only in
 # a terminal, one item at a time, and an endless source ends as soon as take, take_while, first or find has enough.
 def double(x: Int) -> Int
   return x * 2
