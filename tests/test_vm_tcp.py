@@ -11,7 +11,6 @@ import os
 import re
 import socket
 import struct
-import subprocess
 import sys
 import threading
 import time
@@ -19,7 +18,7 @@ import time
 import pytest
 
 from tests.agentica_test import (FIXTURES, TARGET_OS, TEST_SCHEDULERS, WAIT_SECONDS, Child, compile_text,
-                                 run, run_vm, scaled, start_vm, tool, vm_environment)
+                                 run, run_vm, scaled, start_vm, vm_environment)
 
 PEER = FIXTURES / "tcp-peer.js"
 
@@ -880,45 +879,3 @@ def test_dns_lookup_of_localhost_gives_the_addresses_python_and_node_get_from_th
     result = run_text(tmp_path, "dns", DNS_PROGRAM)
     assert (result.code, result.stderr) == (0, ""), result
     assert result.stdout == ("ok(%s)\n" % json.dumps(seen)) * 2
-
-
-# The shim's "slow" lookups sleep DNS_SHIM_MS on a pool thread: the first one is still running when its deadline
-# passes, the second when its task is cancelled. The program then stays alive past the end of both, when libuv calls
-# back into the given-up lookups (a use after free before the fix: a crash, or an ASan report).
-DNS_SHIM_PROGRAM = """\
-def slow() -> Void
-  IO.inspect(DNS.lookup("slow.cancelled", 10000))
-end
-
-def main() -> Void
-  IO.inspect(DNS.lookup("dup.test"))
-  IO.inspect(DNS.lookup("missing.test"))
-  IO.inspect(DNS.lookup("slow.expires", 200))
-  task = Task.spawn(&slow)
-  Task.sleep(100)
-  Task.cancel(task)
-  Task.sleep(1500)
-  IO.inspect(DNS.lookup("127.0.0.1"))
-  puts("end")
-end
-"""
-
-
-@pytest.mark.skipif(TARGET_OS != "linux", reason="the stand-in resolver is an LD_PRELOAD library")
-def test_dns_lookup_removes_duplicates_reports_not_found_and_survives_a_lookup_given_up_while_it_runs(tmp_path):
-    shim = tmp_path / "dns_shim.so"
-    subprocess.run([tool("cc"), "-shared", "-fPIC", "-O1", "-o", str(shim), str(FIXTURES / "dns_shim.c"), "-ldl"],
-                   check=True)
-    # An ASan VM checks that its runtime comes first among the loaded libraries; the shim only wraps getaddrinfo.
-    asan = ":".join(filter(None, [os.environ.get("ASAN_OPTIONS"), "verify_asan_link_order=0"]))
-    preload = ":".join(filter(None, [str(shim), os.environ.get("LD_PRELOAD")]))
-    result = run_text(tmp_path, "dns_shim", DNS_SHIM_PROGRAM,
-                      env={"LD_PRELOAD": preload, "DNS_SHIM_MS": "1000", "ASAN_OPTIONS": asan})
-    assert (result.code, result.stderr) == (0, ""), result
-    assert result.stdout.splitlines() == [
-        'ok(["127.0.0.2", "127.0.0.1"])',
-        'error("network: host not found\\n  host: missing.test\\n  system error: unknown node or service")',
-        'error("network: operation timed out")',
-        'ok(["127.0.0.1"])',
-        "end",
-    ]

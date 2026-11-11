@@ -1,4 +1,4 @@
-/* A stand-in resolver for DNS.lookup (tests/test_vm_tcp.py), loaded with LD_PRELOAD on Linux, so the tests need no
+/* A stand-in resolver for DNS.lookup (tests/test_vm_dns.py), loaded with LD_PRELOAD on Linux, so the tests need no
    DNS server. Only three kinds of name are answered here; every other name goes to the system's getaddrinfo:
    - "slow..." sleeps DNS_SHIM_MS milliseconds (default 1500) on the pool thread, then says EAI_NONAME;
    - "missing..." says EAI_NONAME at once;
