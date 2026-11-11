@@ -38,8 +38,10 @@ Read first: `references/vm.md` and `references/vm-c.md`.
    request (no GC pointers; strings through `agc_cstr` or a `malloc`'d
    copy), and calls `agc_io_start` with an `agc_io_kind`: `work` runs in
    the libuv pool and may only do system calls on that request; `done`
-   and `expired` run on the interpreter thread and return the value;
-   `drop` frees a request whose timeout already fired; the optional
+   and `expired` run on the interpreter thread and return the value
+   (built only from work that ran: a cancelled job's `work` may be skipped,
+   as the `ran` flag set at `vm/ffi.c:1907` records); `drop` frees a request
+   whose timeout already fired; the optional
    `cancel` half (last field, external kinds only) says whether a
    detached job (its task was cancelled) may end through `drop`, at
    the cancel or at its deadline; leave it NULL unless the request can
@@ -103,8 +105,8 @@ Rules for the C code:
 - Fail with the documented diagnostic code (its `site/content/library/`
   page), at the call span or `span + 1 + i` for argument `i`, with a clear
   message.
-- Every bounds check on an Int argument uses `__builtin_add_overflow` or
-  `x < 0 || x > n - y`; never cast a negative `int64_t` to `size_t` first.
+- Bounds, overflow, recursion and failures: the writing rules of
+  `references/vm-c.md`.
 - Strings reach the OS or a library only through `agc_cstr` (a `malloc`'d copy,
   NUL terminated, NULL on an embedded NUL so the caller returns its error
   message; the caller frees it, usually with its request). Every String
@@ -114,8 +116,6 @@ Rules for the C code:
 - Debug text of a String (`inspect`, and later map-key, `index_of` and
   conversion messages) always goes through `agc_write_form`; never write a
   second escaper.
-- No C recursion whose depth depends on a value (printing, `to_s`/`inspect`,
-  JSON): use an explicit stack allocated with `agc_alloc`.
 - Builtins never call the interpreter. Callback builtins are resumable
   native frames. A builtin must not keep `args` across anything that pushes a
   frame or grows registers.

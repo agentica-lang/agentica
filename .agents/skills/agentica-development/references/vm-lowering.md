@@ -14,11 +14,8 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 2. `compiler/lower/lower_*.agc`: lower the form. Emit one IR `step` per former
    AST entry, before the node's children (§3.3). Anything still out of the
    subset keeps failing with `LOWER-UNSUPPORTED` at its span; never miscompile.
-   `vm-type?` says which checked types the VM accepts (the scalars, `(Struct
-   name)` and `(Enum name ...)` declared in the program, `Json`, `List`, `Map`
-   and `Set` of accepted types, `Result` of accepted types or Void, and `Fn`
-   over accepted types with an accepted or Void result); a new value type widens
-   it.
+   `vm_type?` (`lower_state.agc`) says which checked types the VM accepts; a
+   new value type widens it (`references/vm-c.md`, "A C change").
 3. New opcode: append it to `OPCODES` in `compiler/bytecode/bytecode_tables.agc`
    and to `agc_opcode` in `vm/value.h` at the same position (a test compares
    them). An opcode lands with the lowering that emits it, or its PR names
@@ -45,7 +42,7 @@ Imports never reach the VM. The front end of the binary links them
 (`compiler/modules/linker.agc`) before `check`, so `lower` sees one program
 whose imported declarations carry `@N::` prefixes (display names drop them, the
 bytecode writer uses the display name). `lower` collects every `source` a span
-points to (`note-source!`, entry file first), and `vm/diag.c` prints
+points to (`used_sources` in `lowering.agc`), and `vm/diag.c` prints
 `p->sources[span->source]`, so a diagnostic in imported code shows that file.
 Block function names use only the file's base name, so two imported files may
 give equal `block@m.agc:2:17` names (the `same-basename` fixture); nothing looks
@@ -55,8 +52,8 @@ functions up by name.
 
 - Module constants (the rules are in the grammar's `Module constants`
   section): the Globals section is only a `u32` slot count (at most
-  65,535, else
-  `BYTECODE-LIMIT`; `ir-program-globals`). `GLOBAL a bx` reads slot `bx`
+  65,535, else `BYTECODE-LIMIT`; `bytecode_writer.agc`). `GLOBAL a bx` reads
+  slot `bx`
   into `R[a]` and `GLOBAL_SET a bx` writes it. The loader allows `GLOBAL_SET`
   only in the entry function, and only in a function with no backward jump, and
   when the count is above zero it rejects any `CALL`, `TAIL_CALL` or `CLOSURE`
@@ -114,8 +111,8 @@ functions up by name.
   enums need nothing special: type arguments exist only in the checker.
 - `case` reads a local scrutinee in place (no copy) because every test and
   payload read comes before any arm body runs. Arm bodies go through
-  `lower-block`, so the `for` element read (`after-step`) still lands after
-  the first statement's `step` when a `case` starts a loop body.
+  `lower_block`, so the `for` element read still lands after the first
+  statement's `step` when a `case` starts a loop body.
 - The checker accepts Int literal patterns outside 64 bits
   (`9223372036854775808 ->`); they never match, so the lowerer emits a plain
   jump to the next arm instead of a constant the writer cannot encode.
@@ -130,19 +127,19 @@ functions up by name.
   deep tail-recursion case lives in `tests/test_vm_diff_8.py`. The loader treats
   `TAIL_CALL` as a call for the termination rules.
 - Closures: a `block-lit` becomes an extra IR function after the declared
-  ones (`block@file:line:col`), lowered by a fresh `lower-function` context;
+  ones (`block@file:line:col`), lowered by a fresh `lower_function` context;
   its captures are the visible names its body (nested blocks included)
-  reads, found by `referenced-names`, a generic walk over the transparent
-  AST structs. Captures sit after the parameters; `closure` copies them
-  into the function value (a snapshot). The checker records every block's
-  `Fn` type in `#:types`, also when a `List` rule checks it directly. A
+  reads, found by `referenced_names`. Captures sit after the parameters;
+  `closure` copies them into the function value (a snapshot). The checker
+  records every block's `Fn` type in `Checked.types`, also when a `List` rule
+  checks it directly. A
   block's final expression statement is its value. `&name` is `closure`
   with no captures, `.call` is `call-value` (window base holds the
   function, result lands there).
 - Ranges: `AGC_T_RANGE` holds an atomic `agc_range` (start, end, exclusive);
   `agc_range_bounds` gives first, last included and non-empty without overflow.
   A `for` over a range literal lowers to a counter loop with no `RANGE`
-  (`lower-range-for`); over a Range value it reads `RANGE_BOUNDS` once into
+  (`lower_range_for`); over a Range value it reads `RANGE_BOUNDS` once into
   three slots. The loop variable is the counter slot, and the exit test (`eq`
   with the last value) runs before `add-i`, so the largest Int never overflows.
   The loop top is a `STEP` with the `for` span, so each iteration charges one
@@ -163,11 +160,11 @@ functions up by name.
   NUL); `agc_outcome` has `message_len`, and `vm/diag.c` prints by length.
   `agc_outcome.text` is never read: it keeps the String reachable while
   `message` points into its data, so do not remove it.
-- `SAME` (case literals) is `equal?`, not `=`: Float by `eqv?`, so `-0.0`
-  and `0.0` are different patterns.
+- `SAME` (case literals, `same_values` in `vm/interp.c`) differs from `==` on
+  Floats: NaN matches NaN, and `-0.0` and `0.0` are different patterns.
 - A loop body is the target of a backward jump, so it must start with a
-  `STEP`. `for` therefore emits its `list-get` right after the first body
-  statement's `step` (the `after-step` hook in `lower-statement`), and an
-  empty body lowers to just the iterable.
+  `STEP`. `for` therefore emits its element read right after the first body
+  statement's `step` (`lower_statement` puts what the loop asked for after
+  the step), and an empty body lowers to just the iterable.
 - The `for` iterable is copied into a hidden slot even when it is a local:
   the body may assign that local, and the loop iterates the old list.
