@@ -8,11 +8,12 @@ to the task that opened it and closes when that task or the run ends
 `Task.spawn_owning(&serve, socket)`, so a crash closes only that connection.
 
 No flag is needed for network access. With `--deny-net` (or `--sandbox`) every
-connect and listen, `std/http` included, returns an error starting `denied:
---deny-net` before any DNS lookup. With `--deny-fs`, a TLS call that names a
+DNS lookup, connect and listen, `std/http` included, returns an error starting
+`denied: --deny-net` before any DNS query. With `--deny-fs`, a TLS call that names a
 file returns `denied: --deny-fs`.
 
 ```text
+DNS.lookup(host: String, timeout_ms: Int = 30000) -> Result[List[String]]
 TCP.connect(host: String, port: Int, timeout_ms: Int) -> Result[Socket]
 TCP.listen(host: String, port: Int) -> Result[Listener]
 TCP.accept(listener: Listener, timeout_ms: Int) -> Result[Socket]
@@ -53,6 +54,10 @@ TlsServerOptions(cert_file: String, key_file: String, alpn: List[String] = [])
   resolves to, on one port (`localhost` takes `127.0.0.1` and `::1`); addresses
   the system cannot use are skipped.
 - `TCP.remote_address` is the peer's IP without the port, `""` once closed.
+- `DNS.lookup` asks the system resolver (hosts file included), as `TCP.connect`
+  does: every IPv4 and IPv6 address as text, in its order, no duplicates; an IP
+  literal gives itself. Not found is an error starting `network: host not
+  found`; an empty name, a NUL and a timeout are errors too.
 - TLS (1.2 or later) verifies certificates and hostnames; verification cannot be
   turned off. An empty `ca_file` uses system trust: `SSL_CERT_FILE`, else the
   platform store (Linux CA bundle, macOS Keychain, Windows ROOT store), read

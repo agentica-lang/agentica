@@ -8,7 +8,7 @@ for tool in rg nm; do command -v "$tool" >/dev/null || { bad "$tool is not insta
 obj="$(cd "${1:?usage: check-layers.sh OBJECT_DIR}" && pwd)"
 cd "$(dirname "$0")/.."
 core="value.c map.c list.c equal.c text.c unicode_data.c json_value.c interp.c task.c runq.c inbox.c compute.c sync.c timers.c task_map.c channel.c mutex.c loop.c input.c output.c stdio_posix.c stdio_windows.c poll_posix.c poll_windows.c clock_posix.c clock_windows.c random.c loader.c builtins.c diag.c trace.c profile.c cover.c jit/jit.c jit/emit_x64.c jit/emit_a64.c jit/mem_posix.c jit/mem_windows.c"
-services="strings.c bytes.c text_codec.c numbers.c crypto.c json.c json_typed.c files.c zlib.c tree.c stream.c lazy.c ats.c duplex.c process.c system.c tcp.c http_fields.c http_service.c http_server.c http_wire.c tls_context.c logger.c regex.c testing.c front_end.c ffi.c native_module.c"
+services="strings.c bytes.c text_codec.c numbers.c crypto.c json.c json_typed.c files.c zlib.c tree.c stream.c lazy.c ats.c duplex.c process.c system.c tcp.c dns.c http_fields.c http_service.c http_server.c http_wire.c tls_context.c logger.c regex.c testing.c front_end.c ffi.c native_module.c"
 adapters="tls_openssl.c tls_trust.c tls_trust_posix.c tls_trust_darwin.c tls_trust_windows.c digest_openssl.c zlib_codec.c http_pico.c http_body.c file_io.c file_windows.c process_posix.c process_windows.c duplex_posix.c duplex_windows.c system_posix.c system_windows.c net_posix.c net_windows.c ffi_libffi.c ffi_none.c"
 driver="launch.c agentica.c builtin_tables.c fuzz.c fuzz_libfuzzer.c"
 headers="value.h port.h core.h services.h net.h http_fields.h tls.h tls_trust.h digest.h zlib_codec.h http_parse.h trace.h list_impl.h launch.h embedded.h file_io.h process_os.h duplex_os.h system_os.h net_os.h ffi_os.h agentica_native.h cchecker.h jit/jit.h"
@@ -70,7 +70,7 @@ only 'picohttpparser\.h' "http_pico.c"
 only 'yyjson\.h' "json.c"
 only 'ffi\.h' "ffi_libffi.c"
 only 'zlib\.h' "zlib_codec.c"
-only 'uv\.h' "loop.c runq.c inbox.c compute.c sync.c stdio_windows.c poll_windows.c stream.c duplex.c process.c system.c tcp.c file_io.c file_windows.c duplex_posix.c duplex_windows.c system_posix.c net_windows.c launch.c"
+only 'uv\.h' "loop.c runq.c inbox.c compute.c sync.c stdio_windows.c poll_windows.c stream.c duplex.c process.c system.c tcp.c dns.c file_io.c file_windows.c duplex_posix.c duplex_windows.c system_posix.c net_windows.c launch.c"
 if found -n --max-depth 1 '^[A-Za-z_][\w \*]*\bagc_\w+\([^{]*\)\s*;\s*$' --glob '*.c' .; then bad "an agc_ prototype in a .c file"; fi
 if found -n --max-depth 1 '^\s*extern\b.*\bagc_|^[A-Za-z_][\w \*]*\bagc_\w+\s*\[[^\]]*\]\s*;' --glob '*.c' .; then bad "an agc_ variable declared in a .c file"; fi
 

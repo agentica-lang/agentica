@@ -27,6 +27,7 @@ const agc_builtin_table agc_builtin_tables[] = {
   {agc_system_builtins, &agc_system_builtin_count},
   {agc_duplex_builtins, &agc_duplex_builtin_count},
   {agc_tcp_builtins, &agc_tcp_builtin_count},
+  {agc_dns_builtins, &agc_dns_builtin_count},
   {agc_http_service_builtins, &agc_http_service_builtin_count},
   {agc_tls_context_builtins, &agc_tls_context_builtin_count},
   {agc_http_server_builtins, &agc_http_server_builtin_count},

@@ -10,6 +10,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `DNS.lookup(host)` gives the IPv4 and IPv6 addresses of a host name from the
+  system resolver.
 - `TCP.recv_bytes(socket, max_bytes)` without a timeout waits with no limit,
   for a server that keeps an idle client connected.
 - Module blocks: `module Name ... end` holds several named modules in one file;

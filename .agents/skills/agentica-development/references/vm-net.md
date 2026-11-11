@@ -62,6 +62,12 @@ Read first: `references/vm.md` and `references/vm-c.md`.
   select callback reads the config, so each accepted connection's `net` holds
   its own count on it. `advance` stores the selected name once, in the atomic
   `net.alpn`, for `TLS.alpn`.
+- `vm/dns.c`: `DNS.lookup` is one external job: its START step calls
+  `agc_io_getaddrinfo` on the I/O thread and the callback copies the addresses
+  as text before `agc_io_ready`, so `done` and `drop` never meet a running
+  lookup. At the deadline `pause` cancels a lookup still queued in the pool;
+  one that runs ends the job's wait when it finishes. Errors go through
+  `agc_host_error` (`vm/tcp.c`), as `TCP.connect` reports them.
 - `vm/tls_context.c`: `TLS.client_context`/`TLS.server_context` build a
   `TlsContext` (a refcounted `agc_tls_config`, freed by a GC finalizer run on
   demand) in one pool job; `agc_tls_context_check` checks the role
