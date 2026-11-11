@@ -136,10 +136,10 @@ one are in `docs/vm/15-layers.md` §15.3.
 `agc_vm_run`, so call it only from interpreter or builtin code on the VM's own
 C stack. It keeps CODE and MESSAGE by pointer, so pass a literal, static data
 or GC memory, never a stack buffer (`agc_fail_text` takes a String).
-`System.exit` calls `agc_exit`, which records `AGC_EXITED` and the code and `longjmp`s the
-same way. Only the driver (`vm/launch.c`, with `agentica.c`) prints and exits:
-it flushes stdout and maps the code (1..255 as is, anything else 0). SIGPIPE is
-ignored and every write is checked.
+`System.exit` calls `agc_exit`, which records `AGC_EXITED` and the code and
+`longjmp`s the same way. Only the driver (`vm/launch.c`, with `agentica.c`)
+prints and exits: it flushes stdout and maps the code (1..255 as is, anything
+else 0). SIGPIPE is ignored and every write is checked.
 
 ## Boehm GC
 
