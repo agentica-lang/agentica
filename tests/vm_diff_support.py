@@ -496,9 +496,21 @@ def check_step_allowance(limited, expected_steps, name):
         "%s takes more steps than its golden %s allows (over-charging)" % (name, expected_steps)
 
 
+# On Windows a step-limit stop can kill an MSYS2 child (sh, cat) while the MSYS2 runtime is still starting it, and the
+# child then writes the runtime's own line to the stderr it shares with the VM, such as "      1 [main] cat (1948)
+# child_copy: cygheap read copy failed, ...". That line is not the VM's output, so a step-limit stop is compared
+# without it (#1335).
+MSYS2_RUNTIME_LINE = re.compile(r"^ *\d+ \[[^\]\n]*\] \S+ \(?\d+\)? .*\n?", re.MULTILINE)
+
+
 def check_limited(on_vm, full, name, limit, note=""):
     """One sweep limit: the golden outcome, or a step-limit stop whose output is a prefix of the golden's."""
     seen = outcome(on_vm)
+    if WINDOWS:
+        status, stdout, stderr = on_vm
+        quiet = outcome((status, stdout, MSYS2_RUNTIME_LINE.sub("", stderr)))
+        if quiet[3] == "RUNTIME-STEP-LIMIT":
+            seen = quiet
     message = "%s --max-steps %s%s (exit 124/137 or timeout: the run timed out): %r" % (name, limit, note, seen)
     if seen != full:
         assert seen[0] == 1, message
