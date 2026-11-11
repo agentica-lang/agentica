@@ -16,6 +16,7 @@ import time
 
 import pytest
 
+from tests import vm_diff_support
 from tests.agentica_test import (FIFO_FILE_REASON, RUN_TIMEOUT, TESTS, UNDER_WINE, WINDOWS, Child, cli, compile_agc,
                                  host_only, kill_process, process_alive, scaled, tool as find_tool, vm_binary,
                                  vm_command, vm_environment, wait_until)
@@ -508,6 +509,20 @@ def test_a_crlf_program_under_a_non_ascii_path_gives_the_expected_outcome(tmp_pa
                          "CRLF program")
     limits = [1, expected_steps - 1, expected_steps, last_limit(expected_steps)]
     check_sweep([run_vm(PLAIN, bytecode, limit, cwd=tmp_path) for limit in limits], limits, full, "CRLF program")
+
+
+def test_on_windows_a_step_limit_stop_is_compared_without_the_lines_of_a_killed_msys2_child(monkeypatch):
+    full = (0, "1\n2\n", "", None)
+    noise = "      1 [main] cat (1948) child_copy: cygheap read copy failed, 0x800000000..0x800010450, done 0\n"
+    stop = '{"code":"RUNTIME-STEP-LIMIT","message":"execution step budget exhausted"}\n'
+    monkeypatch.setattr(vm_diff_support, "WINDOWS", True)
+    assert check_limited((1, "1\n", noise + stop), full, "noisy stop", 35) is False
+    # Any other outcome keeps the line, and so does every other system.
+    with pytest.raises(AssertionError):
+        check_limited((1, "1\n", noise + '{"code":"RUNTIME-DIVISION-BY-ZERO","message":"x"}\n'), full, "crash", 35)
+    monkeypatch.setattr(vm_diff_support, "WINDOWS", False)
+    with pytest.raises(AssertionError):
+        check_limited((1, "1\n", noise + stop), full, "noisy stop", 35)
 
 
 # Helpers to run the product CLI with a folder that must stay empty as its temporary directory.

@@ -136,8 +136,21 @@ def read_report(code: Int, report_file: String) -> Ran
   case SourceReader.read(report_file)
     SourceFile.Read.Text(text) -> Ran.Reported(code, text)
     SourceFile.Read.Invalid(_) -> Ran.Failed("the BDD runner wrote a report that is not UTF-8")
-    SourceFile.Read.Unreadable(message) -> Ran.Failed("the BDD runner wrote no report: #{message}")
+    SourceFile.Read.Unreadable(message) -> Ran.Failed(no_report(code, report_file, message))
   end
+end
+
+# A runner that ended with a normal code and an empty stderr but wrote no report was seen once on Windows (#1332) and
+# never reproduced, so the message says what the next case needs: the exit code and what the run folder holds.
+def no_report(code: Int, report_file: String, message: String) -> String
+  parts = report_file.split("/")
+  listed = Dir.list(parts.take(parts.size - 1).join("/"), IO_TIMEOUT)
+  folder = "the run folder cannot be listed: #{listed.message}"
+  if listed.ok?
+    folder = "the run folder holds: #{listed.unwrap!.sort.join(", ")}"
+  end
+
+  "the BDD runner ended with exit code #{code} and wrote no report (#{message}); #{folder}"
 end
 
 # What the runner said on stderr, in a line: the last diagnostic (the line that names its code and the one after it),

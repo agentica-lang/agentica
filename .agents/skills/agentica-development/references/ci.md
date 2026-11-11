@@ -300,6 +300,14 @@ The Windows jobs set up MSYS2 with `.github/actions/msys2`, not
 60 s and 180 s) because the MSYS2 servers answer 504 now and then, and each
 attempt uses its own `location`, since the action refuses a folder that exists.
 
+A flaky test on one system (the Windows flakes #1335 and #1332): open an
+experiment PR with that system's `platform:<system>` label, marked do-not-merge,
+that runs a script looping the suspect command many times, alone and then under
+load (several loops at once beside other test loops). The cause showed only
+under load (16 of 2880 runs). Close the PR when the cause is found. If a case
+cannot be reproduced, make its failure message carry what the next case needs
+(the exit code, the folder contents), as #1388 did.
+
 ## Caches and `master` pushes
 
 - The vendored release-mode OpenSSL is cached with `actions/cache` (key:
