@@ -1,4 +1,4 @@
-## What `agentica doc` knows about a module (docs/grammar/06b-builtins.md): the module doc and the exported
+## What `agentica doc` knows about a module (docs/future/32-doc-comments.md, 32.5): the module doc and the exported
 ## declarations in source order, each with its signature, its doc and, for a function, a struct or an enum, the parts
 ## the JSON form lists. It is built from the parsed program only: nothing is linked or checked.
 ##

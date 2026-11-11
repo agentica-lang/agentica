@@ -1,4 +1,4 @@
-## The writer of agentica.toml (docs/grammar/05b-modules.md): `add` puts one line in the text of the manifest and
+## The writer of agentica.toml (docs/future/45-packages.md, 45.9): `add` puts one line in the text of the manifest and
 ## leaves every other byte alone, so the comments, the blank lines, the order of the keys and the line endings of the
 ## user stay. The text is not parsed or encoded again (std/toml drops comments and regroups keys). The caller reads the
 ## new text back with Manifest.parse before it saves it, so an odd layout that this edit cannot handle is refused

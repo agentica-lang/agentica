@@ -1,4 +1,4 @@
-## `agentica type-at` as a stage (docs/grammar/06b-builtins.md): a linked and checked program and a position in
+## `agentica type-at` as a stage (docs/future/39-semantic-cli.md, 39.3): a linked and checked program and a position in
 ## its root file in, the type of the innermost expression there and its definition out, or QUERY-NO-EXPRESSION.
 ##
 ## A position must be on a token: a blank between tokens, a comment, the end of a line and anything past the end of the

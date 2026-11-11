@@ -1,4 +1,4 @@
-## Where the declaration of an expression is (docs/grammar/06b-builtins.md): the function a call names, the
+## Where the declaration of an expression is (docs/future/39-semantic-cli.md, 39.3): the function a call names, the
 ## variant of an enum constructor, the struct of a construction, the field of a field access, a constant. The
 ## names of the linked program are unique (`@N::name` for a file that is not the root), so one scan of its declarations
 ## finds the declaration. A builtin has no declaration here, so it has no definition. A local is not in the

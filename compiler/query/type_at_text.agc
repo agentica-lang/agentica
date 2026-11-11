@@ -1,7 +1,7 @@
-## The text form of `agentica type-at` (docs/grammar/06b-builtins.md): the span of the expression, then its
+## The text form of `agentica type-at` (docs/future/39-semantic-cli.md, 39.2): the span of the expression, then its
 ## source text and its type, and a second line for the definition, if there is one. Each line starts with
 ## `file:line:column`, like `rg`. A builtin has no place: its lines are `builtin` and the signature of each form. The
-## type of a name that only the link could answer (docs/grammar/06b-builtins.md) is written `?`.
+## type of a name that only the link could answer (docs/future/39-semantic-cli.md, 39.6) is written `?`.
 
 import Model from "../analysis/model"
 import DiagnosticModel from "../diagnostics/diagnostic_model"

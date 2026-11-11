@@ -1,6 +1,6 @@
 # Each prelude method once on 2,000 elements. The steps in prelude-cost.expected are the cost contract: a body that
 # loops more than once for each element, or calls an O(n) builtin inside a loop, changes them
-# (docs/vm/03-ir-and-bytecode.md §4.7). The steps are linear in the size (references/performance.md has them for
+# (docs/future/25-ruby-typed-idioms.md 25.6). The steps are linear in the size (references/performance.md has them for
 # 100,000 elements); a longer list would make the --max-steps sweep of the golden check run for minutes.
 # The steps do not show that the wall time of tally and uniq grows with the number of distinct keys: that is the
 # VM's Map and Set insert cost, the same as in a hand-written loop.

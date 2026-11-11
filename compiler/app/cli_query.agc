@@ -1,4 +1,4 @@
-## The query commands (docs/grammar/06b-builtins.md): `agentica outline FILE [--json] [--partial] [--stdin FILE]`,
+## The query commands (docs/future/39-semantic-cli.md): `agentica outline FILE [--json] [--partial] [--stdin FILE]`,
 ## `agentica type-at FILE:LINE:COL [--json] [--partial]` (reads FILE from standard input with `--stdin FILE:LINE:COL`),
 ## `agentica symbol NAME [PATH...] [--json] [--stdin FILE]` and `agentica refs NAME|FILE:LINE:COL [PATH...] [--json]
 ## [--partial]`, which takes `--stdin` as `type-at` for a position and as `symbol` for a name. A query reads its file

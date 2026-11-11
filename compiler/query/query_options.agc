@@ -1,4 +1,4 @@
-## The words of a query command (docs/grammar/06b-builtins.md) after the command, read by hand as `help` and
+## The words of a query command (docs/future/39-semantic-cli.md, 39.2) after the command, read by hand as `help` and
 ## `doc` read theirs: `--json`, `--ai`, `--stdin FILE` and, for the commands that answer from a program that does not
 ## check, `--partial` may stand among the arguments, in any order; every other word that starts with "-" and has more
 ## than one character is an unknown option. The options in front of the command were

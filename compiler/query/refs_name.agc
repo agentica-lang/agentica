@@ -1,4 +1,4 @@
-## The declaration that `agentica refs NAME` selects (docs/grammar/06b-builtins.md). The name is
+## The declaration that `agentica refs NAME` selects (docs/future/39-semantic-cli.md, 39.3 and 39.4). The name is
 ## resolved by `symbol` (symbol.agc), so the two commands read a name alike; `symbol` lists every match, and `refs`
 ## needs exactly one, since a list of references belongs to one declaration. Two or more are QUERY-AMBIGUOUS-NAME, with
 ## the place of each candidate as `FILE:LINE:COL`, which is the position form of the command.

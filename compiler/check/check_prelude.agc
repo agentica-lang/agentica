@@ -1,4 +1,4 @@
-## The rule of a call of a prelude function (Rule.Prelude, docs/vm/03-ir-and-bytecode.md §4.7), such as xs.find
+## The rule of a call of a prelude function (Rule.Prelude, docs/future/25-ruby-typed-idioms.md 25.6), such as xs.find
 ## do |x| ... end. The catalog row has the signature with type variables (A, B, K ...). The arguments are checked left
 ## to right: the receiver gives A, a block is checked with the parameter types the variables already have, and what the
 ## block gives binds the next variable. A variable the row limits (the key of group_by is an Int or a String) must end

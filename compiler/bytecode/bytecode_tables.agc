@@ -1,7 +1,7 @@
 ## The constants of the format: the version, the limits, and the opcode numbers with the
 ## groups of opcodes that share an operand layout. tests/test_frontend_bytecode.py checks OPCODES against vm/value.h.
 ## The Agentica version of the header is not here: it is an input of the front end (Settings in link_env.agc,
-## docs/vm/08-loader-and-cli.md §9).
+## docs/future/35-self-hosting.md, 35.3).
 
 ## The largest value of a u16 operand, and of every count the VM reads as a u16.
 export MAX_U16 = 65_535

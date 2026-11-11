@@ -1,4 +1,4 @@
-## Which local a position is on (docs/grammar/06b-builtins.md): a parameter of a function or a block, a
+## Which local a position is on (docs/future/39-semantic-cli.md, 39.3): a parameter of a function or a block, a
 ## binding, a `for` variable or a name in a `case` pattern, whether the position is on a use of the name or on the
 ## place that binds it. A local has no declaration in `LinkedModule.declarations`, and the linker keeps its name, so
 ## the binding is found the way the checker finds it: the scope at the position is rebuilt from the function down to

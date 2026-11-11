@@ -1,4 +1,4 @@
-## Resolves the packages of a project (docs/grammar/05b-modules.md): the list of lock entries for `add` and
+## Resolves the packages of a project (docs/future/45-packages.md, 45.9): the list of lock entries for `add` and
 ## `update`. It starts from the dependencies of the manifest and follows the manifest of each package it settles, so
 ## the result holds every package of the build, direct or not, and only those: a package that nothing asks for any more
 ## is dropped. A package is settled in one of two ways. A locked entry with the same source is kept (its files are put

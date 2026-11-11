@@ -1,5 +1,5 @@
 ## `agentica help std/MODULE[.NAME] [--json]`: what a module of the standard library exports, or one export, with its
-## `##` docs (docs/grammar/06b-builtins.md). The module is read as `agentica doc` reads it (cli_doc.agc): from
+## `##` docs (docs/future/32-doc-comments.md, 32.6). The module is read as `agentica doc` reads it (cli_doc.agc): from
 ## the copy the binary carries, lexed and parsed only. A MODULE lists its exports with their summaries; a NAME prints
 ## the signature, the whole doc and the fields or variants. A module or name that does not exist is QUERY-NOT-FOUND
 ## (exit 2), with a "did you mean" over the exports for a name.

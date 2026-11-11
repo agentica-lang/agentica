@@ -1,4 +1,4 @@
-## Runs the system `git` for the package commands (docs/grammar/05b-modules.md): the user's git config, SSH keys
+## Runs the system `git` for the package commands (docs/future/45-packages.md, 45.8): the user's git config, SSH keys
 ## and credential helpers apply, and the front end keeps no tokens of its own. The arguments go straight to git with no
 ## shell. Standard input is closed at once, so git never waits for text from this process (git may still ask on a
 ## terminal, which the deadline below ends).

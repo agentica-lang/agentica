@@ -141,7 +141,7 @@ export def block_name(modules: List[LinkedModule], module: LinkedModule) -> Stri
   ""
 end
 
-## Links several roots into one program with shared tables (docs/grammar/06b-builtins.md): a module that two
+## Links several roots into one program with shared tables (docs/future/39-semantic-cli.md, 39.8): a module that two
 ## roots reach is linked once, and every module, the roots too, has the prefix "@N::", so two roots may declare `main`.
 ## A root is a transaction. If its own file or a file it reaches does not lex, parse or link, the root is left out and
 ## none of its modules stays, but the modules an earlier root linked do; a module whose rewrite failed is remembered,

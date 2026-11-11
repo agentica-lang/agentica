@@ -1,4 +1,4 @@
-## `agentica symbol NAME [PATH...]` as a stage (docs/grammar/06b-builtins.md): where a name is
+## `agentica symbol NAME [PATH...]` as a stage (docs/future/39-semantic-cli.md, 39.3 and 39.4): where a name is
 ## defined, in every module linked from the files of `PATH...`, or QUERY-NOT-FOUND. The declarations, private ones too,
 ## are the items of `agentica doc` (docs/doc_model.agc), read from the file as the parser gave it, so a match has the
 ## signature, the `##` doc and the spans that `outline` and `type-at` give. A name is written as the code writes it:

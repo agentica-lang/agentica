@@ -1,4 +1,4 @@
-## The document of the formatter and its printer: a Wadler-style "prettier
+## The document of the formatter and its printer (docs/future/47-formatter.md, 47.5): a Wadler-style "prettier
 ## printer" (Wadler, "A prettier printer", 2003), in the family of Oppen's pretty printing and Prettier's doc builders.
 ##
 ## The layout builds a `Doc` from the tree, and `render` lays it out in a width. A `Group` is flat (its soft breaks are

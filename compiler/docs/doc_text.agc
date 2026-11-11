@@ -1,4 +1,4 @@
-## The Markdown form of `agentica doc` (docs/grammar/06b-builtins.md): a heading with the module path, the
+## The Markdown form of `agentica doc` (docs/future/32-doc-comments.md, 32.5): a heading with the module path, the
 ## module doc, then each exported declaration in source order as a heading with its signature, its doc, and the fields
 ## of a struct or the variants of an enum with their docs. An export without a doc is listed with its signature only.
 ## The docs are printed as written, with the `##` markers removed.

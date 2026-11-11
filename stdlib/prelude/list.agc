@@ -1,4 +1,4 @@
-## The List methods of the compiler prelude (docs/vm/03-ir-and-bytecode.md §4.7). Not a module: no program
+## The List methods of the compiler prelude (docs/future/25-ruby-typed-idioms.md 25.6). Not a module: no program
 ## imports it. The checker reads a call of xs.find do |x| ... end, picks the function here that the catalog row names,
 ## and the compiler adds it to the program (check/prelude_files.agc). A is the element type, B the type a callback
 ## gives, K a key that is an Int or a String; the checker has checked the call, so these names stand for the real

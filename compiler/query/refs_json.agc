@@ -1,4 +1,4 @@
-## The JSON form of `agentica refs` (docs/grammar/06b-builtins.md): `{version, command, query, definition,
+## The JSON form of `agentica refs` (docs/future/39-semantic-cli.md, 39.5): `{version, command, query, definition,
 ## builtin, references, skipped}`. `definition` is null for a builtin, which `builtin` names; else it is the match that
 ## `symbol` gives the declaration (symbol_json.agc, same fields), a local included, with the kind of the binding.
 ## Each reference is `{kind, function, span}`, the `span` being the name alone and `function` null at the top level.

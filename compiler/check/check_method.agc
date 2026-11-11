@@ -337,7 +337,7 @@ def method_names(cx: State.Cx, target: T.Type, kind: String) -> List[String]
 end
 
 # True for a File.foreach call written directly as the receiver: .each on it is the one job of File.each_line
-# (docs/grammar/06b-builtins.md, `Lazy[T]`, one way per job). A Lazy held in a variable is not followed.
+# (docs/future/27-iteration-and-concurrency.md 27.4, one way per job). A Lazy held in a variable is not followed.
 def foreach_call?(target: Ast.Expr) -> Bool
   case target
     Ast.Expr.Call(call) -> call.name == "File.foreach"

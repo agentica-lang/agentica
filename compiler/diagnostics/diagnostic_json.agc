@@ -23,7 +23,7 @@ export def object(diagnostic: Model.Diagnostic) -> Json = JSON.object(fields_of(
 ## The JSON object of a range: `start` and `end`, each with a `line` and a `column`.
 export def range(part: Model.Region) -> Json = JSON.object({"start": position(part.start), "end": position(part.stop)})
 
-## The `shape` of an answer from a program that does not check (docs/grammar/06b-builtins.md): `partial` is
+## The `shape` of an answer from a program that does not check (docs/future/39-semantic-cli.md, 39.6): `partial` is
 ## true and `diagnostics` holds its problems. A complete answer leaves both keys out.
 export def partial(shape: Map[String, Json], diagnostics: List[Model.Diagnostic]) -> Map[String, Json]
   (

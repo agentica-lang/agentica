@@ -1,4 +1,4 @@
-## The one-line signatures of `agentica doc` (docs/grammar/06b-builtins.md), printed from the syntax tree. A
+## The one-line signatures of `agentica doc` (docs/future/32-doc-comments.md, 32.5), printed from the syntax tree. A
 ## type is printed as written, so an import alias such as `Models.User` stays as it is. The function form is the one of
 ## `Builtins.form_signature` (catalog/builtins.agc): `add(a: Int, b: Int) -> Int`.
 ##

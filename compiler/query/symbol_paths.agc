@@ -1,4 +1,4 @@
-## The files a `symbol` query starts from (docs/grammar/06b-builtins.md): the `PATH...` of the command line,
+## The files a `symbol` query starts from (docs/future/39-semantic-cli.md, 39.4): the `PATH...` of the command line,
 ## each a file or a folder. A folder means every `*.agc` file under it, recursively, without hidden folders,
 ## `agc_libs/` and `_build/` folders and the `deps/` of a project (a folder beside an `agentica.toml`: the installed
 ## packages, not the project's own modules; name `deps/NAME` as a path to read one), in bytewise order of the path; a

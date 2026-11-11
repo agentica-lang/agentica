@@ -1,4 +1,4 @@
-## The layout of the formatter: the document of a parsed file, with its comments
+## The layout of the formatter (docs/future/47-formatter.md, 47.5): the document of a parsed file, with its comments
 ## where the attachment put them (47.4).
 ##
 ## The tree has no node for the text of a literal, so literals, interpolated strings, patterns and guards are copied

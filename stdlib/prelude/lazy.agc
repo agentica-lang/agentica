@@ -1,4 +1,4 @@
-## The Lazy methods of the compiler prelude (docs/grammar/06b-builtins.md, `Lazy[T]`). Not a module: no
+## The Lazy methods of the compiler prelude (docs/future/27-iteration-and-concurrency.md 27.4). Not a module: no
 ## program imports it. A Lazy is an immutable recipe: a source (a list, a range, Lazy.produce, File.foreach,
 ## File.chunks or ch.lazy) and the steps added after it. The functions here only give the generic signatures; the VM
 ## (vm/lazy.c) builds the recipe and runs it. A step returns a new Lazy and runs nothing. A terminal (to_a, first,

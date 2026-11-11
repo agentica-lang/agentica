@@ -1,4 +1,4 @@
-## Links the roots of a `symbol` or `refs` query (docs/grammar/06b-builtins.md) into one program with
+## Links the roots of a `symbol` or `refs` query (docs/future/39-semantic-cli.md, 39.6 and 39.8) into one program with
 ## `Linker.link_programs`: a file that does not lex, parse or link is left out and listed, and the others still
 ## answer. A file that several roots reach is linked once, so a folder costs about one link of its files together.
 

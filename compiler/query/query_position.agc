@@ -1,4 +1,4 @@
-## The position of a query (docs/grammar/06b-builtins.md): the word `FILE:LINE:COL` of the command line, and
+## The position of a query (docs/future/39-semantic-cli.md, 39.3): the word `FILE:LINE:COL` of the command line, and
 ## the place it names in the text of FILE. Line and column count from 1, in the units of the spans of the front end
 ## (the characters of the text); a column is an offset in its line.
 

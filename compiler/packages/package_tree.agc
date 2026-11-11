@@ -1,4 +1,4 @@
-## What the fetch copies from a commit (docs/grammar/05b-modules.md): the `.agc` files of the package, the files
+## What the fetch copies from a commit (docs/future/45-packages.md, 45.8): the `.agc` files of the package, the files
 ## of its native/ folder and its agentica.toml, chosen from the listing that `git ls-tree -r -z -l` gives. The rules of
 ## the hash decide which files count (package_hash.agc), so the copy holds what the hash covers and nothing else. This
 ## reads text and does no I/O.

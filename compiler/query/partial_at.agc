@@ -1,4 +1,4 @@
-## `agentica type-at --partial` for a program that does not check (docs/grammar/06b-builtins.md). Where the
+## `agentica type-at --partial` for a program that does not check (docs/future/39-semantic-cli.md, 39.6). Where the
 ## position is on an expression that checking typed, the answer is the one of `type-at`. Where it is not, such as a
 ## name in a function that failed to check, the answer comes from the link alone: the written name of a function, a
 ## type, a variant, a constant or a builtin, with its definition and no type. A position on a token of such a function

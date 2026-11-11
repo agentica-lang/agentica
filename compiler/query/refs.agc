@@ -1,4 +1,4 @@
-## `agentica refs` as a stage (docs/grammar/06b-builtins.md): a linked and checked program and a position in
+## `agentica refs` as a stage (docs/future/39-semantic-cli.md, 39.3): a linked and checked program and a position in
 ## its first file in, the declaration of the name there and every reference to it out, or QUERY-NO-EXPRESSION; or the
 ## program and a declaration found by name (`of_match`). The program is the files of the command line and what they
 ## import (Linker.link_programs), so a use in any of them is seen.

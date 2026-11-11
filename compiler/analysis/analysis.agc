@@ -1,4 +1,4 @@
-## The semantic queries, once: `check`, `outline`, `type-at`, `symbol` and `refs` of docs/grammar/06b-builtins.md.
+## The semantic queries, once: `check`, `outline`, `type-at`, `symbol` and `refs` of docs/future/39-semantic-cli.md.
 ## The command line (app/cli.agc, app/cli_query.agc) and `std/analysis` (stdlib/analysis.agc, which embeds this core)
 ## both call these functions, so the two cannot drift.
 ## Each one reads its files through the Workspace of the `settings`, which is where an unsaved buffer stands in for a
@@ -193,7 +193,7 @@ export def type_at(cache: Cache.Cache, settings: Env.Settings, asked: QueryPosit
   end
 end
 
-## `type_at` for a program that may not check (docs/grammar/06b-builtins.md, `--partial`). When it checks, the
+## `type_at` for a program that may not check (docs/future/39-semantic-cli.md, 39.6, `--partial`). When it checks, the
 ## answer is the one of `type_at`. When a function fails to check, the answer is marked `partial` and holds the
 ## `diagnostics` of those failures: a position in a function that checked gets its type and definition, and a name in
 ## one that did not gets its definition after linking and no type (`type` is ""). A file that does not link, one whose
@@ -217,7 +217,7 @@ export def type_at_partial(cache: Cache.Cache, settings: Env.Settings, asked: Qu
   end
 end
 
-## `refs` for a program that may not check (docs/grammar/06b-builtins.md, `--partial`). When it checks, the
+## `refs` for a program that may not check (docs/future/39-semantic-cli.md, 39.6, `--partial`). When it checks, the
 ## answer is the one of `refs`. When a function fails to check, the answer is marked `partial` and holds the
 ## `diagnostics` of those failures; it is complete for a function, struct, enum, alias, constant or variant (the
 ## linker resolves every use, in a function that failed too) and for a local of a function that checked. A field or a
@@ -473,7 +473,7 @@ def referenced_by_name(
 end
 
 # The problem with a file of the roots named as it was typed: the checker knows a root by its canonical path, and a
-# diagnostic keeps the name as typed (docs/grammar/06b-builtins.md), as `named` does for the one file of a
+# diagnostic keeps the name as typed (docs/future/39-semantic-cli.md, 39.4), as `named` does for the one file of a
 # check.
 def named_in(settings: Env.Settings, problem: Problems.Problem, roots: List[SymbolPaths.Root]) -> Problems.Problem
   for root in roots

@@ -2,7 +2,7 @@ import Cli from "app/front_end_cli"
 import Inputs from "app/front_end_inputs"
 
 # The front end of the `agentica` binary: the program that C loads from its own data (or from --front-end FILE), that
-# compiles what the user asks for in memory and hands the program to C to run. docs/vm/08-loader-and-cli.md §9,
+# compiles what the user asks for in memory and hands the program to C to run. docs/future/35-self-hosting.md, 35.3,
 # is the contract.
 #
 # Arguments: `--version V [--stdlib DIR] [--embedded-bdd] -- WORDS...`

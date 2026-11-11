@@ -1,4 +1,4 @@
-## The driver of the formatter: text in, formatted text or a diagnostic out.
+## The driver of the formatter (docs/future/47-formatter.md): text in, formatted text or a diagnostic out.
 ##
 ## It lexes the text with its comments, parses it, attaches the comments (comments.agc), lays the tree out
 ## (layout.agc) and prints the document in the width (doc.agc). A file that does not lex or parse is refused with

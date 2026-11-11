@@ -1,4 +1,4 @@
-## Linking and checking for the answers of a program that does not check (docs/grammar/06b-builtins.md, the
+## Linking and checking for the answers of a program that does not check (docs/future/39-semantic-cli.md, 39.6, the
 ## option `--partial`). A function whose body fails to check does not stop the run (`Checker.check_recovering`), so
 ## what the other functions have, the queries can still use. A program that does not link, or whose declarations do
 ## not check (their types, `main`, the constants), has nothing to answer from beyond the first problem.

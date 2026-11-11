@@ -1,4 +1,4 @@
-## Which expression a position is on (docs/grammar/06b-builtins.md): the innermost expression of a module whose
+## Which expression a position is on (docs/future/39-semantic-cli.md, 39.3): the innermost expression of a module whose
 ## span holds the position and that checking gave a type. It walks the tree with a worklist and no recursion, with the
 ## children of `syntax/ast_walk.agc`, so a deep tree cannot reach the limit of VM calls.
 

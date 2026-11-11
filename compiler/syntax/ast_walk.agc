@@ -1,5 +1,5 @@
 ## How the stages walk a tree without recursion: the children of a node in source order, and the reads of other
-## constants below the initializer of a constant (docs/grammar/06-semantics.md). The linker (unused imports), the
+## constants below the initializer of a constant (docs/future/44-module-constants.md). The linker (unused imports), the
 ## checker, lowering and the queries share it.
 
 import Ast from "ast"

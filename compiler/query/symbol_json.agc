@@ -1,4 +1,4 @@
-## The JSON form of `agentica symbol` (docs/grammar/06b-builtins.md): `{version, command, query, matches,
+## The JSON form of `agentica symbol` (docs/future/39-semantic-cli.md, 39.5): `{version, command, query, matches,
 ## skipped}`. A match is `{kind, name, module, exported, signature, doc, span, name_span}`, and a field adds `type` and
 ## `struct`, a variant `payload` and `enum`, a builtin `help` (the object of `agentica help NAME --json`) with
 ## `module`, `span` and `name_span` null. `doc` is the whole `##` text or null. A skipped root is `{file, diagnostic}`,

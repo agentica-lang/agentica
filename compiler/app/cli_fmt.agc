@@ -1,4 +1,4 @@
-## What `agentica fmt` says: the usage line, the settings of a file and what the
+## What `agentica fmt` says (docs/future/47-formatter.md): the usage line, the settings of a file and what the
 ## formatter makes of one file. Reading and writing the files and printing is cli.agc's, which owns the output.
 ##
 ## `fmt [PATH...]` rewrites the files that formatting changes, `fmt --check [PATH...]` lists them, one per line, and

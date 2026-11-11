@@ -1,4 +1,4 @@
-## Where a module names a declaration (docs/grammar/06b-builtins.md, `agentica refs`): the name of a call, of a
+## Where a module names a declaration (docs/future/39-semantic-cli.md, 39.3, `agentica refs`): the name of a call, of a
 ## `&function` value, of a type in an annotation or a construction, of a struct field in a read, a construction or a
 ## `with`, of a variant in a constructor or a `case` pattern, of a module constant, and of a builtin. Each place is a
 ## Site with the Target it stands for.
