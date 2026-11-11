@@ -101,24 +101,54 @@ def pytest_loop(label, node, reps, timeout):
         say("%s failure (exit %r):\n%s" % (label, code, tail))
 
 
+STEPS = ('import BDD from "std/bdd"\n\ndef main() -> Void\n  BDD.run([\n'
+         '  BDD.step("{int} is small") do |ctx, args|\n    BDD.assert(ctx, args[0].to_i! < 5, "too big")\n  end,\n  ])\nend\n')
+OUTLINE = ("Feature: Outline\n\n  Scenario Outline: row\n    Then <n> is small\n\n  Examples:\n"
+           "    | kind   | n |\n    | sqlite | 2 |\n    | sqlite | 9 |\n")
+NOISY = 'def main() -> Void\n  puts("x" * 3000)\n  IO.warn("warned")\n  System.exit(1)\nend\n'
+
+
+def lost_output_loop(label, command, minutes, cwd=None, env=None):
+    """Runs COMMAND until MINUTES pass; counts (exit code, stdout empty?, stderr empty?) and keeps the odd runs."""
+    counts = {}
+    deadline = time.monotonic() + minutes * 60
+    while time.monotonic() < deadline:
+        code, out, err = run(command, cwd=cwd, env=env)
+        key = (code, "out" if out else "NO-out", "err" if err else "NO-err")
+        counts[key] = counts.get(key, 0) + 1
+    say("%s: %r" % (label, sorted(counts.items(), key=str)))
+
+
 def main():
-    """Round 2: the cases at the same time, so each one runs under the load of the others, as in the CI suite."""
+    """Round 3: does a whole output vanish under load? The front end (check, test) and a plain program that prints on
+    both streams and exits 1, each in a loop of its own, all at the same time."""
     import threading
     binary = sys.argv[1]
-    bdd = "tests/test_bdd.py::test_a_failed_check_points_at_its_step_keyword_and_outline_rows_have_their_own_names"
-    kill = ("tests/test_bdd_integration.py::test_killing_the_driver_stops_the_runner_the_scenario_vm_and_the_program"
-            "_and_a_later_run_removes_its_folder")
-    jobs = [lambda: e1_process_close_crash(binary, 15), lambda: e1_process_close_crash(binary, 15),
-            lambda: pytest_loop("E3 #1332 bdd failed check A", bdd, 150, 600),
-            lambda: pytest_loop("E3 #1332 bdd failed check B", bdd, 150, 600),
-            lambda: pytest_loop("E4 #1098 kill the driver", kill, 40, 600),
-            lambda: pytest_loop("E5 #1098 check cache module", "tests/test_check_cache.py", 10, 1200)]
+    minutes = 25
+    project = Path(tempfile.mkdtemp(prefix="exp-cc-")) / "app"
+    project.mkdir()
+    (project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
+    (project / "main.agc").write_text(BROKEN_MAIN, encoding="utf-8")
+    (project / "lib.agc").write_text(LIB, encoding="utf-8")
+    suite = Path(tempfile.mkdtemp(prefix="exp-bdd-"))
+    (suite / "steps.agc").write_text(STEPS, encoding="utf-8")
+    (suite / "outline.feature").write_text(OUTLINE, encoding="utf-8")
+    noisy = suite / "noisy.agc"
+    noisy.write_text(NOISY, encoding="utf-8")
+    jobs = [lambda: lost_output_loop("E6 check", [binary, "--json", "check", "main.agc"], minutes, cwd=project),
+            lambda: lost_output_loop("E6 type-at", [binary, "--json", "type-at", "main.agc:4:3"], minutes, cwd=project),
+            lambda: lost_output_loop("E7 test --json", [binary, "test", "--json", str(suite / "outline.feature"),
+                                                        "--steps", str(suite / "steps.agc")], minutes),
+            lambda: lost_output_loop("E7 test --ai", [binary, "test", "--ai", str(suite / "outline.feature"),
+                                                      "--steps", str(suite / "steps.agc")], minutes),
+            lambda: lost_output_loop("E8 noisy program A", [binary, str(noisy)], minutes),
+            lambda: lost_output_loop("E8 noisy program B", [binary, str(noisy)], minutes),
+            lambda: e1_process_close_crash(binary, 10)]
     threads = [threading.Thread(target=job) for job in jobs]
     for thread in threads:
         thread.start()
     for thread in threads:
         thread.join()
-    e2_lost_diagnostic(binary, 100)
 
 
 if __name__ == "__main__":
