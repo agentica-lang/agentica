@@ -20,10 +20,11 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path, PureWindowsPath
 
@@ -58,7 +59,10 @@ SWEEP_MODE = os.environ.get("AGENTICA_SWEEP", "")
 if SWEEP_MODE not in ("", "full", "sampled", "ends"):
     raise RuntimeError("AGENTICA_SWEEP must be full, sampled or ends, not %r" % SWEEP_MODE)
 SAMPLED_SWEEP = SWEEP_MODE == "sampled"
-SWEEP_WORKERS = int(os.environ.get("AGENTICA_SWEEP_WORKERS", "4"))
+SWEEP_WORKERS = os.environ.get("AGENTICA_SWEEP_WORKERS", "4")
+if not SWEEP_WORKERS.isascii() or not SWEEP_WORKERS.isdigit() or int(SWEEP_WORKERS) < 1:
+    raise RuntimeError("AGENTICA_SWEEP_WORKERS must be a positive number, not %r" % SWEEP_WORKERS)
+SWEEP_WORKERS = int(SWEEP_WORKERS)
 # Fixtures whose every run is costly (1000 file rounds; fixed sleeps): they get the `ends` sweep in every mode but
 # full (the weekly sweep and the release), as the stop of a Task.map and of an HTTP client under --max-steps is swept by
 # task-map-steps and http-client; only the full sweep stops a Task.map item that holds a buffered file.
@@ -347,13 +351,19 @@ def run_fixture_vm(fixture, bytecode, limit, work):
     return unfixture(result)
 
 
-def vm_batch(fixture, bytecode, option_lists, work, workers=SWEEP_WORKERS):
-    """Run the VM once for each list of options, with the fixture's stdin as a file; after the first run that hangs
-    (124 or 137) the others are skipped and reported as 124."""
+def vm_batch(fixture, bytecode, option_lists, work, workers):
+    """Run the VM once for each list of options, at most `workers` runs at a time, with the fixture's stdin as a file;
+    after the first run that hangs (124 or 137) the later runs are not started and are reported as 124."""
     stdin_path = Path(work) / "stdin"
     stdin_path.write_bytes(fixture.input)
+    first_hung = len(option_lists)
+    lock = threading.Lock()
 
-    def run_one(options):
+    def run_one(index, options):
+        nonlocal first_hung
+        with lock:
+            if index > first_hung:
+                return 124, "", ""
         directory = fresh_tmp(work) if fixture.uses_tmp else None
         try:
             args = tmp_args(fixture, directory) if directory else fixture.args
@@ -364,10 +374,15 @@ def vm_batch(fixture, bytecode, option_lists, work, workers=SWEEP_WORKERS):
         finally:
             if directory:
                 shutil.rmtree(directory, ignore_errors=True)
-        return (124, "", "") if result[0] == TIMEOUT else result
+        if result[0] == TIMEOUT:
+            result = (124, "", "")
+        if result[0] in (124, 137):
+            with lock:
+                first_hung = min(first_hung, index)
+        return result
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        raw = list(pool.map(run_one, option_lists))
+        raw = list(pool.map(run_one, range(len(option_lists)), option_lists))
     results = []
     hung = False
     for result in raw:
