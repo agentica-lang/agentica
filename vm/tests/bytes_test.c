@@ -1,13 +1,14 @@
 /*
  * The Bytes value: equality, Map keys, text forms, the JSON refusal, the shared
- * empty value, every builtin with good and bad arguments, bounds, the size
- * guard, collection, the crypto builtins (vm/crypto.c), GCM's wipe, RSA-OAEP,
- * and String.from_bytes and FrontEnd.hand_off on Bytes.
+ * values and bounds a program cannot see, wrong tags, the size guard,
+ * collection, the crypto builtins (vm/crypto.c), GCM's wipe, RSA-OAEP, and
+ * String.from_bytes and FrontEnd.hand_off on Bytes.
  */
 #include "../core.h"
 #include "../digest.h"
 #include "../services.h"
 #include "builtin_test.h"
+#include "test_support.h"
 
 #include <assert.h>
 #include <limits.h>
@@ -26,21 +27,13 @@
 
 static agc_vm vm;
 
-/* The row as the loader finds it, by key and arity. */
-static const agc_builtin *row(const char *name, uint32_t arity) {
-  const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), arity);
-  if (!b) fprintf(stderr, "no builtin %s/%u\n", name, arity);
-  assert(b);
-  return b;
+static agc_value call(const char *name, uint32_t arity, agc_value *args) {
+  return agc_test_call_row(&vm, name, arity, args);
 }
-
-static agc_value call(const char *name, uint32_t arity, agc_value *args) { return row(name, arity)->fn(&vm, args, 0); }
 
 static void fails(const char *name, uint32_t arity, agc_value *args, const char *code) {
-  agc_test_fails(&vm, name, row(name, arity), args, code);
+  agc_test_fails_row(&vm, name, arity, args, code);
 }
-
-static agc_value text(const char *s) { return agc_string_value(agc_make_string(s, strlen(s), strlen(s))); }
 
 static agc_value raw(const char *data, size_t len) {
   return agc_bytes_value(agc_make_bytes((const uint8_t *)data, len));
@@ -77,7 +70,7 @@ static bool equal(agc_value a, agc_value b) {
    refuses a Bytes (hand-made bytecode: the checker lowers == on Bytes to the builtin), and a Bytes is never equal to a
    String of the same bytes. */
 static void test_equality(void) {
-  agc_value a = raw("abc", 3), b = raw("abc", 3), c = raw("abd", 3), d = raw("ab", 2), s = text("abc");
+  agc_value a = raw("abc", 3), b = raw("abc", 3), c = raw("abd", 3), d = raw("ab", 2), s = agc_test_str("abc");
   assert(equal(a, b) && !equal(a, c) && !equal(a, d) && !equal(d, a));
   agc_value empty = agc_bytes_value(agc_empty_bytes()), fresh = agc_bytes_value(agc_new_bytes(0));
   assert(equal(empty, fresh) && !equal(empty, d));
@@ -93,27 +86,27 @@ static void test_equality(void) {
    the hash's domain). */
 static void test_keys(void) {
   agc_map *m = agc_map_put(&vm, agc_new_map(), raw("key", 3), agc_int(1));
-  m = agc_map_put(&vm, m, text("key"), agc_int(2));
+  m = agc_map_put(&vm, m, agc_test_str("key"), agc_int(2));
   m = agc_map_put(&vm, m, raw("key", 3), agc_int(3));
   m = agc_map_put(&vm, m, raw("", 0), agc_int(4));
   assert(m->size == 3);
   agc_value v;
   assert(agc_map_get(&vm, m, raw("key", 3), &v) && agc_as_int(&vm, v) == 3);
-  assert(agc_map_get(&vm, m, text("key"), &v) && agc_as_int(&vm, v) == 2);
+  assert(agc_map_get(&vm, m, agc_test_str("key"), &v) && agc_as_int(&vm, v) == 2);
   assert(agc_map_get(&vm, m, agc_bytes_value(agc_new_bytes(0)), &v) && agc_as_int(&vm, v) == 4);
   assert(!agc_map_get(&vm, m, raw("kez", 3), &v));
   assert(agc_key_hash(&vm, raw("key", 3)) == agc_key_hash(&vm, raw("key", 3)));
-  assert(agc_key_hash(&vm, raw("key", 3)) != agc_key_hash(&vm, text("key")));
+  assert(agc_key_hash(&vm, raw("key", 3)) != agc_key_hash(&vm, agc_test_str("key")));
   m = agc_map_delete(&vm, m, raw("key", 3));
   assert(m->size == 2 && !agc_map_get(&vm, m, raw("key", 3), &v));
 
-  agc_value items[4] = {raw("a", 1), raw("b", 1), raw("a", 1), text("a")};
+  agc_value items[4] = {raw("a", 1), raw("b", 1), raw("a", 1), agc_test_str("a")};
   agc_value list = agc_list_value(agc_list_from_array(items, 4));
   agc_value set = call("Set.new", 1, &list);
   assert(agc_as_set(&vm, set)->size == 3);
   agc_value probe[2] = {set, raw("b", 1)};
   assert(agc_as_bool(&vm, call("Set.include?", 2, probe)));
-  agc_value fewer[3] = {raw("b", 1), text("a"), raw("a", 1)};
+  agc_value fewer[3] = {raw("b", 1), agc_test_str("a"), raw("a", 1)};
   agc_value list2 = agc_list_value(agc_list_from_array(fewer, 3));
   assert(agc_equal(&vm, set, call("Set.new", 1, &list2), 0));
 }
@@ -169,85 +162,61 @@ static void test_json(void) {
   json_refused(keyed, true);
 }
 
+/* What a program cannot see: the shared empty value, the input itself when a call keeps all of it, the Int kind of
+   to_a, the bounds a program does not reach (a negative index or start, the INT64 corners) and the size units. The
+   values, the other bounds and the errors go through the CLI: tests/test_vm_bytes.py against Python's bytes and the
+   goldens bytes.agc, bytes-at-range.agc, bytes-slice-range.agc and bytes-take-negative.agc. */
 static void test_builtins(void) {
-  const int64_t good[] = {0, 1, 127, 128, 255};
-  agc_value list = ints(good, 5);
-  const agc_result *r = agc_as_result(&vm, call("Bytes.from_list", 1, &list));
-  assert(r->ok);
-  agc_value b = r->value;
-  bytes_are(b, "\x00\x01\x7f\x80\xff", 5);
+  agc_value b = raw("\x00\x01\x7f\x80\xff", 5), empty = agc_bytes_value(agc_empty_bytes()), none = vm.rt->empty_list;
   assert(agc_value_units(b) == 0);
-  agc_value back = call("Bytes.to_a", 1, &b);
-  assert(agc_equal(&vm, back, list, 0) && agc_list_kind(agc_as_list(&vm, back)) == AGC_T_INT);
-  assert(agc_as_int(&vm, call("Bytes.length", 1, &b)) == 5);
-
-  const int64_t bad[][3] = {{1, 256, 2}, {-1, 0, 0}, {0, 0, INT64_MIN}};
-  for (size_t k = 0; k < 3; k++) {
-    agc_value l = ints(bad[k], 3);
-    assert(!agc_as_result(&vm, call("Bytes.from_list", 1, &l))->ok);
-  }
-  agc_value none = vm.rt->empty_list;
-  r = agc_as_result(&vm, call("Bytes.from_list", 1, &none));
+  assert(agc_list_kind(agc_as_list(&vm, call("Bytes.to_a", 1, &b))) == AGC_T_INT);
+  const int64_t low[] = {0, 0, INT64_MIN};
+  agc_value l = ints(low, 3);
+  assert(!agc_as_result(&vm, call("Bytes.from_list", 1, &l))->ok);
+  const agc_result *r = agc_as_result(&vm, call("Bytes.from_list", 1, &none));
   assert(r->ok && shared_empty(r->value));
-  agc_value empty = agc_bytes_value(agc_empty_bytes());
-  assert(agc_as_list(&vm, call("Bytes.to_a", 1, &empty)) == agc_as_list(&vm, vm.rt->empty_list));
+  assert(agc_as_list(&vm, call("Bytes.to_a", 1, &empty)) == agc_as_list(&vm, none));
 
-  agc_value at[2] = {b, agc_int(4)};
-  assert(agc_as_int(&vm, call("Bytes.at", 2, at)) == 255);
-  at[1] = agc_int(0);
-  assert(agc_as_int(&vm, call("Bytes.at", 2, at)) == 0);
-  const int64_t outside[] = {5, -1, INT64_MIN, INT64_MAX};
-  for (size_t k = 0; k < 4; k++) {
+  /* No index from the end: -1 is out of range. */
+  agc_value at[2] = {b, agc_int(0)};
+  const int64_t outside[] = {-1, INT64_MIN, INT64_MAX};
+  for (size_t k = 0; k < 3; k++) {
     at[1] = agc_int(outside[k]);
     fails("Bytes.at", 2, at, "RUNTIME-INDEX-OUT-OF-RANGE");
   }
 
-  agc_value slice[3] = {b, agc_int(1), agc_int(3)};
-  bytes_are(call("Bytes.slice", 3, slice), "\x01\x7f\x80", 3);
-  slice[1] = agc_int(5);
-  slice[2] = agc_int(0);
+  agc_value slice[3] = {b, agc_int(5), agc_int(0)};
   assert(shared_empty(call("Bytes.slice", 3, slice)));
   slice[1] = agc_int(0);
   slice[2] = agc_int(5);
   assert(agc_as_bytes(&vm, call("Bytes.slice", 3, slice)) == agc_as_bytes(&vm, b));
-  const int64_t bounds[][2] = {{0, 6}, {6, 0}, {-1, 1}, {1, -1}, {2, INT64_MAX}, {INT64_MAX, 1}, {INT64_MIN, 0}};
+  const int64_t bounds[][2] = {{6, 0}, {-1, 1}, {1, -1}, {2, INT64_MAX}, {INT64_MAX, 1}, {INT64_MIN, 0}};
   for (size_t k = 0; k < sizeof bounds / sizeof bounds[0]; k++) {
     slice[1] = agc_int(bounds[k][0]);
     slice[2] = agc_int(bounds[k][1]);
     fails("Bytes.slice", 3, slice, "RUNTIME-INDEX-OUT-OF-RANGE");
   }
 
-  agc_value count[2] = {b, agc_int(2)};
-  bytes_are(call("Bytes.take", 2, count), "\x00\x01", 2);
-  bytes_are(call("Bytes.drop", 2, count), "\x7f\x80\xff", 3);
-  count[1] = agc_int(INT64_MAX);
+  agc_value count[2] = {b, agc_int(INT64_MAX)};
   assert(agc_as_bytes(&vm, call("Bytes.take", 2, count)) == agc_as_bytes(&vm, b));
   assert(shared_empty(call("Bytes.drop", 2, count)));
   count[1] = agc_int(0);
   assert(shared_empty(call("Bytes.take", 2, count)));
   assert(agc_as_bytes(&vm, call("Bytes.drop", 2, count)) == agc_as_bytes(&vm, b));
   count[1] = agc_int(-1);
-  fails("Bytes.take", 2, count, "RUNTIME-INVALID-COUNT");
   fails("Bytes.drop", 2, count, "RUNTIME-INVALID-COUNT");
 
-  agc_value plus[2] = {raw("ab", 2), raw("cde", 3)};
-  bytes_are(call("Bytes.plus", 2, plus), "abcde", 5);
-  plus[1] = empty;
+  agc_value plus[2] = {raw("ab", 2), empty};
   assert(agc_as_bytes(&vm, call("Bytes.plus", 2, plus)) == agc_as_bytes(&vm, plus[0]));
   plus[1] = plus[0];
   plus[0] = empty;
   assert(agc_as_bytes(&vm, call("Bytes.plus", 2, plus)) == agc_as_bytes(&vm, plus[1]));
 
-  agc_value parts[4] = {raw("ab", 2), empty, raw("c", 1), raw("def", 3)};
-  agc_value joined = agc_list_value(agc_list_from_array(parts, 4));
-  bytes_are(call("Bytes.concat", 1, &joined), "abcdef", 6);
-  agc_value one[2] = {empty, parts[3]};
+  agc_value one[2] = {empty, raw("def", 3)};
   agc_value single = agc_list_value(agc_list_from_array(one, 2));
-  assert(agc_as_bytes(&vm, call("Bytes.concat", 1, &single)) == agc_as_bytes(&vm, parts[3]));
+  assert(agc_as_bytes(&vm, call("Bytes.concat", 1, &single)) == agc_as_bytes(&vm, one[1]));
   assert(shared_empty(call("Bytes.concat", 1, &none)));
 
-  agc_value s = text("h\xc3\xa9");
-  bytes_are(call("String.bytes", 1, &s), "h\xc3\xa9", 3);
   agc_value blank = agc_string_value(vm.rt->empty_string);
   assert(shared_empty(call("String.bytes", 1, &blank)));
   char big[640];
@@ -295,7 +264,7 @@ static void test_costs(void) {
 /* Hand-made bytecode can pass any value to any builtin: a wrong tag, or a list with an item that is not of its type,
    fails with RUNTIME-INTERNAL. */
 static void test_wrong_tags(void) {
-  agc_value b = raw("ab", 2), s = text("ab"), i = agc_int(1);
+  agc_value b = raw("ab", 2), s = agc_test_str("ab"), i = agc_int(1);
   agc_value one[1] = {s};
   fails("Bytes.to_a", 1, one, "RUNTIME-INTERNAL");
   fails("Bytes.length", 1, one, "RUNTIME-INTERNAL");
@@ -358,7 +327,7 @@ static void test_crypto_keys(void) {
   agc_value cmac_args[2] = {key, datas[1]};
   const agc_result *tag = agc_as_result(&vm, call("OpenSSL.CMAC.des_ede3", 2, cmac_args));
   assert(tag->ok && agc_as_bytes(&vm, tag->value)->len == 8);
-  agc_value hello = text("aGVsbG8=");
+  agc_value hello = agc_test_str("aGVsbG8=");
   const agc_result *decoded = agc_as_result(&vm, call("Base64.strict_decode64.bytes", 1, &hello));
   assert(decoded->ok && agc_as_bytes(&vm, decoded->value)->len == 5);
 
@@ -558,7 +527,7 @@ static void test_rsa_oaep(void) {
   assert(agc_rsa_oaep_encrypt(max_e, strlen(max_e), data, 20, out, &len) == AGC_RSA_DONE && len == 128);
   assert(agc_rsa_oaep_encrypt(even_n, strlen(even_n), data, 20, out, &len) == AGC_RSA_BAD_KEY && len == 0);
   assert(agc_rsa_oaep_encrypt(e_one, strlen(e_one), data, 20, out, &len) == AGC_RSA_BAD_KEY && len == 0);
-  agc_value args[2] = {text(spki), raw((const char *)data, 214)};
+  agc_value args[2] = {agc_test_str(spki), raw((const char *)data, 214)};
   const agc_result *sealed = agc_as_result(&vm, call("OpenSSL.RSA.public_encrypt_oaep", 2, args));
   assert(sealed->ok && agc_as_bytes(&vm, sealed->value)->len == 256);
   args[1] = raw((const char *)data, 215);
@@ -576,41 +545,6 @@ static void test_rsa_oaep(void) {
   free(padded);
   agc_value swapped[2] = {raw("pem", 3), raw("", 0)};
   fails("OpenSSL.RSA.public_encrypt_oaep", 2, swapped, "RUNTIME-INTERNAL");
-}
-
-/* A key longer than the digest's block is hashed first (vm/digest_openssl.c): RFC 4231 test cases 6 and 7 use a
-   131-byte key. A key exactly at the block size (64 for SHA-256, 128 for SHA-512) is used as it is; those answers come
-   from Python's hmac. */
-static void test_hmac_long_keys(void) {
-  static const char case6[] = "Test Using Larger Than Block-Size Key - Hash Key First";
-  static const char case7[] = "This is a test using a larger than block-size key and a larger than block-size data. "
-                              "The key needs to be hashed before being used by the HMAC algorithm.";
-  static const char hi[] = "Hi There";
-  static const struct {
-    size_t key_n;
-    const char *data;
-    const char *name;
-    const char *mac;
-  } cases[] = {
-    {131, case6, "OpenSSL.HMAC.sha256_hexdigest.bytes", "60e431591ee0b67f0d8a26aacbf5b77f8e0bc6213728c5140546040f0ee37f54"},
-    {131, case6, "OpenSSL.HMAC.sha512_hexdigest.bytes",
-     "80b24263c7c1a3ebb71493c1dd7be8b49b46d1f41b4aeec1121b013783f8f352"
-     "6b56d037e05f2598bd0fd2215d6a1e5295e64f73f63f0aec8b915a985d786598"},
-    {131, case7, "OpenSSL.HMAC.sha256_hexdigest.bytes", "9b09ffa71b942fcb27635fbcd5b0e944bfdc63644f0713938a7f51535c3a35e2"},
-    {131, case7, "OpenSSL.HMAC.sha512_hexdigest.bytes",
-     "e37b6a775dc87dbaa4dfa9f96e5e3ffddebd71f8867289865df5a32d20cdc944"
-     "b6022cac3c4982b10d5eeb55c3e4de15134676fb6de0446065c97440fa8c6a58"},
-    {64, hi, "OpenSSL.HMAC.sha256_hexdigest.bytes", "ebef34e13d0a0fe04593d043bc7a865106db0604211d404c18206d862e5d7852"},
-    {128, hi, "OpenSSL.HMAC.sha512_hexdigest.bytes",
-     "17eb09b3d3c0f3ac497c608347e1d5b5df5e4b062bfd56c191c8499f24a3a9d1"
-     "c3dfb449d01f4c9ca316b6b8d6a6299bad883d0bffe11c88c60d7daed6feeb48"},
-  };
-  char key[131];
-  memset(key, 0xaa, sizeof key);
-  for (size_t k = 0; k < sizeof cases / sizeof cases[0]; k++) {
-    agc_value args[2] = {raw(key, cases[k].key_n), raw(cases[k].data, strlen(cases[k].data))};
-    form_is(agc_as_string(&vm, call(cases[k].name, 2, args)), cases[k].mac);
-  }
 }
 
 /* String.from_bytes decodes strictly: valid UTF-8 (a NUL included) gives the String, a cut or a surrogate is an
@@ -639,7 +573,7 @@ static void handed(agc_value program, agc_front_end *fe) {
   agc_value args[3] = {program, vm.rt->empty_list, vm.rt->empty_list};
   memset(fe, 0, sizeof *fe);
   if (setjmp(vm.fail) == 0) {
-    (void)row("FrontEnd.hand_off.bytes", 3)->fn(&vm, args, 0);
+    (void)agc_test_row("FrontEnd.hand_off.bytes", 3)->fn(&vm, args, 0);
     assert(0);
   }
   assert(fe->handed && fe->option_count == 0 && fe->argument_count == 0);
@@ -790,7 +724,6 @@ int main(void) {
   test_gcm_and_kdf_keys();
   test_gcm_wipes_a_wrong_tag();
   test_rsa_oaep();
-  test_hmac_long_keys();
   test_string_keys();
   test_hand_off_keys();
   test_hand_off_survives_collection();

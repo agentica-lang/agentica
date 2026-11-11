@@ -47,10 +47,8 @@ static agc_value step(calling c) {
   return take(&c);
 }
 
-static agc_value text(const char *s) { return agc_string_value(agc_make_string(s, strlen(s), strlen(s))); }
-
 static agc_value sh(const char *script) {
-  agc_value args[] = {text("-c"), text(script)};
+  agc_value args[] = {agc_test_str("-c"), agc_test_str(script)};
   return agc_list_value(agc_list_from_array(args, 2));
 }
 
@@ -77,13 +75,13 @@ static bool error_is(agc_value v, const char *message) {
 static void wait_ms(unsigned ms) { uv_sleep(ms); }
 
 static void captured(const char *script) {
-  child = ok_of(step(call(one, "Process.spawn_captured.options", 3, text("sh"), sh(script),
-                          agc_test_process_options(text(".")), agc_void())));
+  child = ok_of(step(call(one, "Process.spawn_captured.options", 3, agc_test_str("sh"), sh(script),
+                          agc_test_process_options(agc_test_str(".")), agc_void())));
 }
 
 static void plain(const char *script) {
-  child = ok_of(step(call(one, "Process.spawn.options", 3, text("sh"), sh(script), agc_test_process_options(text(".")),
-                          agc_void())));
+  child = ok_of(step(call(one, "Process.spawn.options", 3, agc_test_str("sh"), sh(script),
+                          agc_test_process_options(agc_test_str(".")), agc_void())));
 }
 
 static agc_value read_line(agc_task *task, int64_t timeout) {
@@ -106,11 +104,6 @@ static void settle(void) {
   vm.rt->process_guard = NULL;
 }
 
-static void service_on_thread(void *arg) {
-  (void)arg;
-  agc_test_service(&vm);
-}
-
 static void detach_one(void *arg) {
   (void)arg;
   vm.task = one;
@@ -120,7 +113,7 @@ static void detach_one(void *arg) {
 
 static void end_detached_job(void) {
   agc_test_wait_for_hand_over(&vm);
-  on_thread(service_on_thread, NULL);
+  on_thread(agc_test_service, &vm);
 }
 
 /* Every step of a child is a request to the I/O thread: the spawn, a send, a read, the wait and the close park their
@@ -128,7 +121,8 @@ static void end_detached_job(void) {
 static void test_a_child_through_posted_steps(void) {
   assert(agc_io_share(&vm, false));
   captured("read x; echo got-$x; exit 5");
-  assert(agc_as_result(&vm, step(call(one, "Process.send", 3, child, text("7\n"), agc_int(5000), agc_void())))->ok);
+  agc_value sent = step(call(one, "Process.send", 3, child, agc_test_str("7\n"), agc_int(5000), agc_void()));
+  assert(agc_as_result(&vm, sent)->ok);
   assert(is_text(ok_of(read_line(one, 5000)), "got-7"));
   assert(agc_as_int(&vm, ok_of(wait_child(5000))) == 5);
   agc_value kept = child;
@@ -168,7 +162,8 @@ static void test_a_read_cancelled_from_another_thread(void) {
   assert(start(&reading));
   (void)agc_io_poll(&vm, false);
   on_thread(detach_one, NULL);
-  assert(agc_as_result(&vm, step(call(two, "Process.send", 3, child, text("go\n"), agc_int(5000), agc_void())))->ok);
+  agc_value sent = step(call(two, "Process.send", 3, child, agc_test_str("go\n"), agc_int(5000), agc_void()));
+  assert(agc_as_result(&vm, sent)->ok);
   end_detached_job();
   assert(is_text(ok_of(read_line(two, 5000)), "second"));
   close_child();
@@ -261,10 +256,10 @@ static void test_a_wait_cancelled_past_its_deadline(void) {
    and the end of input after the child exits. */
 static void test_the_channel_through_posted_steps(void) {
   assert(agc_io_share(&vm, false));
-  child = ok_of(step(call(one, "Process.spawn_channel.options", 3, text("sh"),
+  child = ok_of(step(call(one, "Process.spawn_channel.options", 3, agc_test_str("sh"),
                           sh("read x <&3; echo \"got:$x\" >&3; read y <&3 || echo end >&3"),
-                          agc_test_process_options(text(".")), agc_void())));
-  assert(agc_as_result(&vm, step(call(one, "Process.channel_send", 3, child, text("hi\n"), agc_int(5000),
+                          agc_test_process_options(agc_test_str(".")), agc_void())));
+  assert(agc_as_result(&vm, step(call(one, "Process.channel_send", 3, child, agc_test_str("hi\n"), agc_int(5000),
                                       agc_void())))->ok);
   agc_value line = step(call(one, "Process.channel_read_line", 2, child, agc_int(5000), agc_void(), agc_void()));
   assert(is_text(ok_of(line), "got:hi"));
@@ -294,7 +289,7 @@ static void spawn_in_callback(void *arg) {
   (void)arg;
   const agc_builtin *b = agc_find_builtin((const uint8_t *)"Process.spawn.options", strlen("Process.spawn.options"), 3);
   assert(b);
-  agc_value args[] = {text("sh"), sh("exit 0"), agc_test_process_options(text("."))};
+  agc_value args[] = {agc_test_str("sh"), sh("exit 0"), agc_test_process_options(agc_test_str("."))};
   vm.task = one;
   vm.in_turn = false;
   one->callbacks = 1;

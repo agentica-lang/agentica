@@ -4,6 +4,7 @@
    and a List given to a byte row. */
 #include "builtin_test.h"
 #include "test_program.h"
+#include "test_support.h"
 #include "../http_fields.h"
 #include "../services.h"
 
@@ -33,8 +34,6 @@ static agc_value byte_list(const char *text) {
   for (size_t k = 0; k < n; k++) agc_list_builder_push(&out, agc_int((uint8_t)text[k]));
   return agc_list_value(agc_list_builder_finish(&out));
 }
-
-static agc_value text(const char *s) { return agc_string_value(agc_make_string(s, strlen(s), strlen(s))); }
 
 static agc_value fresh(void) {
   agc_value limit = agc_int(1024);
@@ -95,15 +94,13 @@ static void test_unread(void) {
   agc_inbuf_free(&b);
 }
 
-static const agc_builtin *row(const char *name, uint32_t arity) {
-  return agc_find_builtin((const uint8_t *)name, strlen(name), arity);
-}
-
 static void fails(const char *name, uint32_t arity, agc_value *args) {
-  agc_test_fails(&vm, name, row(name, arity), args, "RUNTIME-INTERNAL");
+  agc_test_fails_row(&vm, name, arity, args, "RUNTIME-INTERNAL");
 }
 
-static agc_value call(const char *name, uint32_t arity, agc_value *args) { return row(name, arity)->fn(&vm, args, 0); }
+static agc_value call(const char *name, uint32_t arity, agc_value *args) {
+  return agc_test_call_row(&vm, name, arity, args);
+}
 
 /* HttpWire.chunk reads Bytes where they are: two chunks whose body splits a character. A List given to a byte row is a
    wrong tag; the TCP, HttpWire and Process rows check it before the handle. */
@@ -177,7 +174,7 @@ int main(void) {
   const agc_result *r = agc_as_result(&vm, chunk(fresh(), "1\r\na\r\n0\r\n\r\n"));
   assert(r->ok && agc_as_bool(&vm, agc_as_struct(&vm, r->value)->fields[0]));
   refused(with(3, agc_int(0)));
-  refused(with(9, text("abcdefghijklmnopqrstuvwxyz0123")));
+  refused(with(9, agc_test_str("abcdefghijklmnopqrstuvwxyz0123")));
   refused(with(10, agc_int(30)));
   refused(with(11, agc_int(2000)));
   refused(with(12, agc_int(0)));

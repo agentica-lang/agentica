@@ -5,6 +5,7 @@
  */
 #include "../core.h"
 #include "io_harness.h"
+#include "test_support.h"
 
 #include <assert.h>
 #include <stdlib.h>
@@ -33,7 +34,6 @@ typedef struct {
 
 static agc_vm vm;
 static int pipe_fds[2];
-static uint64_t ids;
 
 static void open_pipe(void) {
 #ifdef _WIN32
@@ -49,13 +49,6 @@ static void fresh(void) {
   open_pipe();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   agc_input_open(&vm, pipe_fds[0], false);
-}
-
-static agc_task *make_task(void) {
-  agc_task *t = agc_alloc(sizeof(agc_task));
-  t->id = ++ids;
-  t->state = AGC_TASK_RUNNING;
-  return t;
 }
 
 /* One call of gets by T: OK, EOF, or WAIT with the task parked as a scheduler would leave it. */
@@ -114,7 +107,7 @@ static void expect_the_pool_free(void) {
 
 static void test_readers_share_a_read_that_leaves_the_pool_free_and_each_gets_eof_once(void) {
   fresh();
-  agc_task *a = make_task(), *b = make_task(), *c = make_task();
+  agc_task *a = agc_test_task(), *b = agc_test_task(), *c = agc_test_task();
   agc_string *line;
   assert(gets_as(a, &line) == AGC_INPUT_WAIT);
   assert(gets_as(b, &line) == AGC_INPUT_WAIT);
@@ -146,7 +139,7 @@ static void test_readers_share_a_read_that_leaves_the_pool_free_and_each_gets_eo
 
 static void test_the_loop_closes_while_a_read_waits(void) {
   fresh();
-  agc_task *a = make_task();
+  agc_task *a = agc_test_task();
   agc_string *line;
   assert(gets_as(a, &line) == AGC_INPUT_WAIT);
   for (int round = 0; round < 20; round++) (void)agc_io_poll(&vm, false);
@@ -168,7 +161,7 @@ static void test_a_read_started_by_another_thread_ends_on_the_loop(void) {
   fresh();
   assert(agc_io_share(&vm, false));
   agc_input_watch(&vm);
-  reader_call c = {.task = make_task()};
+  reader_call c = {.task = agc_test_task()};
   agc_test_on_thread(gets_then_status, &c);
   assert(c.status == AGC_INPUT_WAIT);
   put("one\n");

@@ -5,6 +5,7 @@
 #include "../core.h"
 #include "../services.h"
 #include "io_harness.h"
+#include "test_support.h"
 
 #include <assert.h>
 #include <limits.h>
@@ -57,10 +58,8 @@ typedef struct {
 
 static agc_vm vm;
 
-static agc_value text(const char *s) { return agc_string_value(agc_make_string(s, strlen(s), strlen(s))); }
-
 static agc_value native_call(const char *signature, const agc_value *items, size_t n) {
-  agc_value args[2] = {text(signature), agc_list_value(agc_list_from_array(items, n))};
+  agc_value args[2] = {agc_test_str(signature), agc_list_value(agc_list_from_array(items, n))};
   return agc_ffi_builtins[0].fn(&vm, args, 0);
 }
 
@@ -99,7 +98,7 @@ static void test_calls(void) {
   /* The second call finds the prepared one; a wrong count or type still fails. */
   assert(agc_as_float(&vm, native_call("dd cos " LIBM, &zero, 1)) == 1.0);
   fails("dd cos " LIBM, NULL, 0, "RUNTIME-INTERNAL");
-  agc_value word = text("x");
+  agc_value word = agc_test_str("x");
   fails("dd cos " LIBM, &word, 1, "RUNTIME-INTERNAL");
   /* A C.Int32 takes 32 bits read as signed or unsigned: 2^32 is out. */
   agc_value big = agc_int(INT64_C(1) << 32);
@@ -119,14 +118,14 @@ static void test_calls(void) {
   agc_value minus = agc_float(-0.1);
   assert(agc_as_float(&vm, native_call("ff fabsf " LIBM, &minus, 1)) == (double)0.1f);
 #endif
-  agc_value s = text("h\xc3\xa9llo");
+  agc_value s = agc_test_str("h\xc3\xa9llo");
   assert(agc_as_int(&vm, native_call("ls strlen " LIBC, &s, 1)) == 6);
   fails("v no_such_function_here " LIBC, NULL, 0, "RUNTIME-NATIVE-LOAD");
 #ifndef _WIN32
   /* A variadic call: snprintf(NULL, 0, "%d-%s", 42, "ab") counts 5 characters; the UCRT has no snprintf to export. */
-  agc_value printed[5] = {agc_c_pointer_value(NULL), agc_int(0), text("%d-%s"), agc_int(42), text("ab")};
+  agc_value printed[5] = {agc_c_pointer_value(NULL), agc_int(0), agc_test_str("%d-%s"), agc_int(42), agc_test_str("ab")};
   assert(agc_as_int(&vm, native_call("ipls.is snprintf " LIBC, printed, 5)) == 5);
-  agc_value bare[3] = {agc_c_pointer_value(NULL), agc_int(0), text("abc")};
+  agc_value bare[3] = {agc_c_pointer_value(NULL), agc_int(0), agc_test_str("abc")};
   assert(agc_as_int(&vm, native_call("ipls. snprintf " LIBC, bare, 3)) == 3);
 #endif
   fails("v f libnot_there_at_all.so", NULL, 0, "RUNTIME-NATIVE-LOAD");
@@ -166,7 +165,7 @@ static void test_resources(void) {
   agc_value items[3] = {agc_int(97), agc_int(255), agc_int(0)};
   bytes = agc_list_value(agc_list_from_array(items, 3));
   fails("ly strlen " LIBC, &bytes, 1, "RUNTIME-INTERNAL");
-  bytes = text("ab");
+  bytes = agc_test_str("ab");
   fails("ly strlen " LIBC, &bytes, 1, "RUNTIME-INTERNAL");
 #endif
 }
@@ -175,7 +174,7 @@ static void test_resources(void) {
 /* The arguments of OUT_MEM: a block that C makes, or (FAIL) a NULL one. */
 static size_t mem_arguments(agc_value *items, bool fail) {
 #ifdef _WIN32
-  items[0] = text(fail ? "AGENTICA_FFI_TEST_NOT_SET" : "PATH");
+  items[0] = agc_test_str(fail ? "AGENTICA_FFI_TEST_NOT_SET" : "PATH");
   return 1;
 #else
   items[0] = agc_int(fail ? 3 : 16);
@@ -355,17 +354,17 @@ static agc_value call_row(const char *name, uint32_t arity, agc_value *args) { r
 /* Native.load: a library that opens is ok, and a name the loader cannot take is an error the program gets, an empty
    one or one with a NUL (which only hand-made bytecode holds) included; under no_files it opens nothing. */
 static void test_load(void) {
-  agc_value name = text(LIBM);
+  agc_value name = agc_test_str(LIBM);
   assert(agc_as_result(&vm, call_row("Native.load", 1, &name))->ok == AGC_FFI_BUILT);
   const char *bad[] = {"", "libnot_there_at_all.so"};
   for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) {
-    name = text(bad[k]);
+    name = agc_test_str(bad[k]);
     assert(!agc_as_result(&vm, call_row("Native.load", 1, &name))->ok);
   }
   name = agc_string_value(agc_make_string("a\0b", 3, 3));
   assert(!agc_as_result(&vm, call_row("Native.load", 1, &name))->ok);
   vm.rt->no_files = true;
-  name = text(LIBM);
+  name = agc_test_str(LIBM);
   read_fails("Native.load", 1, &name, "RUNTIME-NATIVE-DENIED");
   vm.rt->no_files = false;
 }
@@ -373,29 +372,29 @@ static void test_load(void) {
 /* Native.function?: a function the library exports is true; a missing function, a library that does not open, and an
    empty name or one with a NUL (hand-made bytecode) are false; under no_files it asks nothing. */
 static void test_function(void) {
-  agc_value args[2] = {text(LIBM), text("cos")};
+  agc_value args[2] = {agc_test_str(LIBM), agc_test_str("cos")};
   assert(agc_as_bool(&vm, call_row("Native.function?", 2, args)) == AGC_FFI_BUILT);
-  args[1] = text("no_such_function_here");
+  args[1] = agc_test_str("no_such_function_here");
   assert(!agc_as_bool(&vm, call_row("Native.function?", 2, args)));
-  args[1] = text("");
+  args[1] = agc_test_str("");
   assert(!agc_as_bool(&vm, call_row("Native.function?", 2, args)));
   args[1] = agc_string_value(agc_make_string("c\0s", 3, 3));
   assert(!agc_as_bool(&vm, call_row("Native.function?", 2, args)));
-  args[0] = text("libnot_there_at_all.so");
-  args[1] = text("cos");
+  args[0] = agc_test_str("libnot_there_at_all.so");
+  args[1] = agc_test_str("cos");
   assert(!agc_as_bool(&vm, call_row("Native.function?", 2, args)));
   /* A name over the cap is false without a lookup; at the cap the lookup runs. */
   char *long_name = malloc(5000);
   assert(long_name);
   memset(long_name, 'a', 5000);
-  args[0] = text(LIBM);
+  args[0] = agc_test_str(LIBM);
   args[1] = agc_string_value(agc_make_string(long_name, 5000, 5000));
   assert(!agc_as_bool(&vm, call_row("Native.function?", 2, args)));
   args[1] = agc_string_value(agc_make_string(long_name, 4096, 4096));
   assert(!agc_as_bool(&vm, call_row("Native.function?", 2, args)));
   free(long_name);
   vm.rt->no_files = true;
-  args[0] = text(LIBM);
+  args[0] = agc_test_str(LIBM);
   read_fails("Native.function?", 2, args, "RUNTIME-NATIVE-DENIED");
   vm.rt->no_files = false;
 }
@@ -655,7 +654,7 @@ static agc_value function_value(uint32_t function, uint32_t n) {
 }
 
 static void callback_fails(agc_value fn, const char *code) {
-  agc_value args[2] = {text("ii step"), fn};
+  agc_value args[2] = {agc_test_str("ii step"), fn};
   if (setjmp(vm.fail) == 0) {
     (void)row("Native.callback", 2)(&vm, args, 0);
     assert(!"the callback was made");
@@ -686,7 +685,7 @@ static void test_callbacks(void) {
   callback_fails(function_value(2, 0), "RUNTIME-INTERNAL");
   callback_fails(function_value(CAP + 3, 0), "RUNTIME-INTERNAL");
 #ifdef AGC_FFI
-  agc_value args[2] = {text("ii step"), function_value(0, 0)};
+  agc_value args[2] = {agc_test_str("ii step"), function_value(0, 0)};
   agc_c_resource *first = agc_as_c_resource(&vm, row("Native.callback", 2)(&vm, args, 0));
   assert(first->pointer);
   assert(agc_as_c_resource(&vm, row("Native.callback", 2)(&vm, args, 0))->pointer == first->pointer);

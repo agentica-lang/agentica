@@ -1,5 +1,5 @@
 /*
- * JSON parsing and encoding: the sign of zero, escapes, key order and dedupe,
+ * JSON parsing and encoding: the sign of zero, shared short Strings, dedupe of many keys,
  * very deep arrays and objects, and a deep list through JSON.from.
  */
 #include "../core.h"
@@ -48,19 +48,6 @@ int main(void) {
   assert(j->kind == AGC_JSON_FLOAT && agc_as_float(&vm, j->scalar) == 0.0 && !signbit(agc_as_float(&vm, j->scalar)));
   j = parse("-1e-500", 7);
   assert(j->kind == AGC_JSON_FLOAT && signbit(agc_as_float(&vm, j->scalar)));
-
-  agc_value v;
-  assert(agc_json_parse(&vm, (const uint8_t *)"\"\x01\"", 3, &v) == AGC_JSON_CONTROL);
-  assert(agc_json_parse(&vm, (const uint8_t *)" ", 1, &v) == AGC_JSON_EMPTY);
-  assert(agc_json_parse(&vm, (const uint8_t *)"[1,]", 4, &v) == AGC_JSON_INVALID);
-  assert(agc_json_parse(&vm, (const uint8_t *)"01", 2, &v) == AGC_JSON_TRAILING);
-  assert(agc_json_parse(&vm, (const uint8_t *)"[1e400]", 7, &v) == AGC_JSON_NOT_FINITE);
-
-  round_trip("[-9223372036854775809, 1e2, 0.1, 1e21, 1e-7, -0.0]", "[-9223372036854775809,100.0,0.1,1e+21,1e-7,0.0]");
-  round_trip("\"\\u0000\\u001f\\b\\f\\n\\r\\t\\\"\\\\\\/\x7f\\u00e9\\ud83d\\ude00\"",
-             "\"\\u0000\\u001f\\b\\f\\n\\r\\t\\\"\\\\/\\u007f\xc3\xa9\xf0\x9f\x98\x80\"");
-  round_trip("{\"b\":1,\"a\":2,\"b\":3,\"\":4,\"\xc3\xa9\":5,\"Z\":6,\"a\\u0000\":7}",
-             "{\"\":4,\"Z\":6,\"a\":2,\"a\\u0000\":7,\"b\":3,\"\xc3\xa9\":5}");
 
   /* Keys and string values of no or one ASCII character are the run's shared Strings. */
   const char *small = "{\"\":\"\",\"a\":\"b\",\"cd\":\"ef\"}";

@@ -2,6 +2,9 @@
 
 One VM program serves every route. The client writes frames by hand, so the tests send what a correct client never
 would and read the close codes the server answers with. Everything is on 127.0.0.1 with port 0.
+
+The server runs on the module's scheduler count (tests/agentica_test.py, TEST_SCHEDULERS): one per logical core in
+`make test` (CI checks that the runner has four or more), one in `make test-shared` and four in `make vm-tsan-run`.
 """
 import ssl
 import struct
@@ -15,7 +18,6 @@ from tests.agentica_test import FIXTURES, compile_agc, scaled, start_vm
 from tests.fixtures.websocket_client import BINARY, CLOSE, CONTINUATION, PING, PONG, TEXT, Client
 
 CERTS = FIXTURES / "tls"
-SCHEDULERS = [(), ("--schedulers", "4")]
 
 SERVER_PROGRAM = """\
 import HTTP from "std/http"
@@ -347,10 +349,10 @@ assert "WRITE_MS" in SERVER_PROGRAM
 SMALL_BUFFER = 65536
 
 
-def start_server(tmp_path, adopt, flags=()):
+def start_server(tmp_path, adopt):
     source = tmp_path / "websocket-server.agc"
     source.write_text(SERVER_PROGRAM.replace("WRITE_MS", str(WRITE_MS)), encoding="utf-8")
-    vm = adopt(start_vm(compile_agc(source, tmp_path / "websocket-server.agcb"), CERTS, flags=flags, stdin=True))
+    vm = adopt(start_vm(compile_agc(source, tmp_path / "websocket-server.agcb"), CERTS, stdin=True))
     port, tls_port = vm.next_line().split()
     return vm, int(port), int(tls_port)
 
@@ -370,12 +372,11 @@ def finish(vm):
     assert vm.next_line() == "ok()"
 
 
-@pytest.mark.parametrize("flags", SCHEDULERS, ids=["one-scheduler", "four-schedulers"])
-def test_messages_fragments_pings_and_both_close_handshakes_work_over_plain_and_tls_connections(tmp_path, adopt, flags):
+def test_messages_fragments_pings_and_both_close_handshakes_work_over_plain_and_tls_connections(tmp_path, adopt):
     """Text and binary messages (with the 7-bit, 16-bit and 64-bit lengths, up to the 1 MiB cap), a message split in fragments inside a
     character with a ping between them, the pong of the server, a ping from the server, the subprotocol, a close that
     the client starts and one the server starts, a plain request that keeps its connection, and wss."""
-    vm, port, tls_port = start_server(tmp_path, adopt, flags)
+    vm, port, tls_port = start_server(tmp_path, adopt)
     with Client(port, timeout=scaled(10)) as c:
         c.connect("/echo")
         for size in (5, 300, 70000, 1048576):
@@ -578,12 +579,11 @@ def test_idle_peers_are_dropped_pings_keep_a_live_one_and_a_lost_or_silent_peer_
     assert "http: websocket session error: the session failed" in vm.stderr_text()
 
 
-@pytest.mark.parametrize("flags", SCHEDULERS, ids=["one-scheduler", "four-schedulers"])
-def test_queued_messages_are_written_in_order_with_the_close_last_and_nothing_after_it(tmp_path, adopt, flags):
+def test_queued_messages_are_written_in_order_with_the_close_last_and_nothing_after_it(tmp_path, adopt):
     """A session that queues 1000 texts and pings faster than the writer takes them (a queue of 256, so the writer
     joins them into writes) gets every frame at the peer in order, a ping of the peer is answered meanwhile, the
     close frame is the last one, and what the session sends after its close is never written."""
-    vm, port, _ = start_server(tmp_path, adopt, flags)
+    vm, port, _ = start_server(tmp_path, adopt)
     with Client(port, timeout=scaled(20)) as c:
         c.connect("/burst")
         c.send(PING, b"early")
@@ -610,12 +610,11 @@ def test_queued_messages_are_written_in_order_with_the_close_last_and_nothing_af
     finish(vm)
 
 
-@pytest.mark.parametrize("flags", SCHEDULERS, ids=["one-scheduler", "four-schedulers"])
-def test_the_outgoing_queue_size_is_an_option_and_a_full_queue_still_makes_the_sender_fail(tmp_path, adopt, flags):
+def test_the_outgoing_queue_size_is_an_option_and_a_full_queue_still_makes_the_sender_fail(tmp_path, adopt):
     """With outgoing_queue 2 a session that queues big messages meanwhile the peer does not read is refused once the
     socket and the queue are full; with 1000 it queues all 400. Every message taken arrives whole and in order, and
     the close comes after them."""
-    vm, port, _ = start_server(tmp_path, adopt, flags)
+    vm, port, _ = start_server(tmp_path, adopt)
     taken = {}
     for path, limit in (("/fill-small", 400), ("/fill-big", 401)):
         with Client(port, timeout=scaled(30)) as c:
@@ -637,12 +636,11 @@ def test_the_outgoing_queue_size_is_an_option_and_a_full_queue_still_makes_the_s
     finish(vm)
 
 
-@pytest.mark.parametrize("flags", SCHEDULERS, ids=["one-scheduler", "four-schedulers"])
-def test_the_close_frame_of_the_reader_is_not_overtaken_by_the_close_the_server_adds_when_the_session_returns(tmp_path, adopt, flags):
+def test_the_close_frame_of_the_reader_is_not_overtaken_by_the_close_the_server_adds_when_the_session_returns(tmp_path, adopt):
     """The session of /echo returns the moment it hears the peer's close or a broken frame, while the writer sleeps or
     reads the wake: the answer must still be the echo of the peer's code, or the code of the broken frame, never the 1000
     the server adds for a session that returns. Eight clients at once, 2400 connections: it is a race between tasks."""
-    vm, port, _ = start_server(tmp_path, adopt, flags)
+    vm, port, _ = start_server(tmp_path, adopt)
     wrong = []
 
     def worker(worker_id):
@@ -677,12 +675,11 @@ def test_the_close_frame_of_the_reader_is_not_overtaken_by_the_close_the_server_
     finish(vm)
 
 
-@pytest.mark.parametrize("flags", SCHEDULERS, ids=["one-scheduler", "four-schedulers"])
-def test_a_close_of_the_session_queued_before_the_close_of_the_peer_is_our_close_and_nothing_follows_it(tmp_path, adopt, flags):
+def test_a_close_of_the_session_queued_before_the_close_of_the_peer_is_our_close_and_nothing_follows_it(tmp_path, adopt):
     """The writer is blocked in a write of 16 MB while the session queues A, its own close (4000) and B; the peer
     then closes without reading. The writer writes A and the close of the session, not B, and not an answer to the
     peer's close: the handshake is complete."""
-    vm, port, _ = start_server(tmp_path, adopt, flags)
+    vm, port, _ = start_server(tmp_path, adopt)
     with Client(port, timeout=scaled(30), receive_buffer=SMALL_BUFFER) as c:
         c.connect("/order")
         assert vm.next_line() == "queued"
@@ -714,11 +711,10 @@ def test_frames_that_cross_the_write_cap_arrive_whole_and_in_order(tmp_path, ado
     finish(vm)
 
 
-@pytest.mark.parametrize("flags", SCHEDULERS, ids=["one-scheduler", "four-schedulers"])
-def test_everything_the_session_queued_before_the_close_of_the_peer_goes_out_before_the_answer(tmp_path, adopt, flags):
+def test_everything_the_session_queued_before_the_close_of_the_peer_goes_out_before_the_answer(tmp_path, adopt):
     """The writer is blocked in a write of 16 MB while the session queues "A", five messages of 100 KB and 300 of 1 KB
     (about 800 KB, many writes); the peer then closes without reading. All of it arrives, in order, then the answer."""
-    vm, port, _ = start_server(tmp_path, adopt, flags)
+    vm, port, _ = start_server(tmp_path, adopt)
     with Client(port, timeout=scaled(30), receive_buffer=SMALL_BUFFER) as c:
         c.connect("/pile")
         assert vm.next_line() == "queued"

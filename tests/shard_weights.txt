@@ -116,14 +116,14 @@ tests/test_vm_diff_8.py 10 0 16 0
 tests/test_vm_equality.py 1 0 0 0
 tests/test_vm_file_lines.py 5 0 10 0
 tests/test_vm_file_sha256.py 1 0 0 0
-tests/test_vm_http.py 88 0 112 179
+tests/test_vm_http.py 37 0 69 133
 tests/test_vm_http_download.py 5 0 0 0
 tests/test_vm_http_proxy.py 6 0 12 25
 tests/test_vm_jit.py 21 0 65 0
 tests/test_vm_lazy_io.py 2 0 0 0
 tests/test_vm_logger.py 1 0 0 0
 tests/test_vm_monotonic.py 3 0 0 0
-tests/test_vm_multicore.py 70 204 119 218
+tests/test_vm_multicore.py 56 204 121 207
 tests/test_vm_native.py 32 1 55 0
 tests/test_vm_native_module.py 1 0 2 0
 tests/test_vm_os.py 1 0 2 0
@@ -135,6 +135,6 @@ tests/test_vm_style.py 1 0 0 0
 tests/test_vm_tcp.py 14 0 8 43
 tests/test_vm_tls.py 16 0 23 78
 tests/test_vm_trace.py 3 0 10 0
-tests/test_vm_websocket.py 15 0 35 89
+tests/test_vm_websocket.py 10 0 24 78
 tests/test_vm_zlib.py 4 0 0 0
 tests/test_vm_zlib_crc32.py 1 0 0 0

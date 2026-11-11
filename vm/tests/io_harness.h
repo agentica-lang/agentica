@@ -164,8 +164,9 @@ static inline void agc_test_wait_for_hand_over(agc_vm *vm) {
   assert(agc_runq_take_nudge(vm->rt->runq));
 }
 
-/* On the scheduler's thread: ends the jobs handed over, and finds none left. */
-static inline void agc_test_service(agc_vm *vm) {
+/* On the scheduler's thread: ends the jobs handed over, and finds none left. VM is the agc_vm, so that
+   agc_test_on_thread can run it. */
+static inline void agc_test_service(void *vm) {
   assert(agc_io_service(vm));
   assert(!agc_io_service(vm));
 }

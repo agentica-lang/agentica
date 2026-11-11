@@ -7,16 +7,16 @@
 #include "../services.h"
 #include "../trace.h"
 #include "builtin_test.h"
+#include "test_support.h"
 
 #include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
-enum { CHAR, CLASS, ANY, ANY_NL, SPLIT, JUMP, SAVE, ASSERT, MATCH };
+enum { ONE_CHAR, CLASS, ANY, ANY_NL, SPLIT, JUMP, SAVE, ASSERT, MATCH };
 enum { TEST, FIRST, ALL };
 
 static agc_vm vm;
-static uint64_t ids;
 static const agc_builtin *search;
 /* The last drive: the turn cost all its resumes charged, and the time of the slowest resume (printed when it is long,
    never asserted: shared runners are too noisy for a time bound). */
@@ -30,13 +30,6 @@ typedef struct {
   agc_value classes;
   int64_t ncap;
 } program;
-
-static agc_task *make_task(void) {
-  agc_task *t = agc_alloc(sizeof(agc_task));
-  t->id = ++ids;
-  t->state = AGC_TASK_RUNNING;
-  return t;
-}
 
 static agc_value ints(const int64_t *items, size_t n) {
   agc_list_builder b;
@@ -73,7 +66,7 @@ static void args_of(agc_value *args, agc_value text, const program *p, int64_t m
 static agc_value drive(agc_value text, const program *p, int64_t mode, bool collect, size_t *resumes) {
   agc_value args[7];
   args_of(args, text, p, mode);
-  agc_task *t = make_task();
+  agc_task *t = agc_test_task();
   vm.task = t;
   assert(agc_is(search->fn(&vm, args, 0), AGC_T_VOID) && t->stepper);
   *resumes = 0;
@@ -109,8 +102,8 @@ static size_t length(agc_value v) { return agc_list_len(agc_as_list(&vm, v)); }
 
 static int64_t item(agc_value v, size_t k) { return agc_as_int(&vm, agc_list_get(agc_as_list(&vm, v), k)); }
 
-/* `a+$`: SAVE 0, CHAR a, SPLIT 1 3, ASSERT END_TEXT, SAVE 1, MATCH. */
-static const int64_t plus_ops[] = {SAVE, CHAR, SPLIT, ASSERT, SAVE, MATCH};
+/* `a+$`: SAVE 0, ONE_CHAR a, SPLIT 1 3, ASSERT END_TEXT, SAVE 1, MATCH. */
+static const int64_t plus_ops[] = {SAVE, ONE_CHAR, SPLIT, ASSERT, SAVE, MATCH};
 static const int64_t plus_xs[] = {0, 'a', 1, 1, 1, 0};
 static const int64_t plus_ys[] = {0, 0, 3, 0, 0, 0};
 
@@ -138,7 +131,8 @@ static void test_a_long_skip_yields(void) {
   assert(s);
   memset(s, '.', n);
   memcpy(s + n - 2, "ab", 2);
-  static const int64_t ops[] = {SAVE, CHAR, CHAR, SAVE, MATCH}, xs[] = {0, 'a', 'b', 1, 0}, ys[] = {0, 0, 0, 0, 0};
+  static const int64_t ops[] = {SAVE, ONE_CHAR, ONE_CHAR, SAVE, MATCH}, xs[] = {0, 'a', 'b', 1, 0},
+                       ys[] = {0, 0, 0, 0, 0};
   program p = {ops, xs, ys, 5, no_classes(), 2};
   size_t resumes;
   agc_value result = drive(text_of(s, n, n), &p, TEST, false, &resumes);
@@ -154,10 +148,10 @@ static void test_a_long_literal_prefix_is_found_in_linear_time(void) {
   static int64_t ops[N], xs[N], ys[N];
   ops[0] = SAVE;
   for (int k = 1; k <= LETTERS; k++) {
-    ops[k] = CHAR;
+    ops[k] = ONE_CHAR;
     xs[k] = 'a';
   }
-  ops[LETTERS + 1] = CHAR;
+  ops[LETTERS + 1] = ONE_CHAR;
   xs[LETTERS + 1] = 'b';
   ops[LETTERS + 2] = SAVE;
   xs[LETTERS + 2] = 1;
@@ -198,7 +192,7 @@ static void test_a_huge_result_list_is_built_over_many_resumes(void) {
 /* ALL with `x*` on "xéx": 0-1 and 2-3, in characters; the empty matches at 1 and 3 start where a match ended, so
    they are dropped. */
 static void test_all_follows_the_go_rules(void) {
-  static const int64_t ops[] = {SAVE, SPLIT, CHAR, JUMP, SAVE, MATCH}, xs[] = {0, 2, 'x', 1, 1, 0},
+  static const int64_t ops[] = {SAVE, SPLIT, ONE_CHAR, JUMP, SAVE, MATCH}, xs[] = {0, 2, 'x', 1, 1, 0},
                        ys[] = {0, 4, 0, 0, 0, 0};
   program p = {ops, xs, ys, 6, no_classes(), 2};
   size_t resumes;
@@ -220,7 +214,7 @@ static void test_empty_loops_end(void) {
 static void refused(agc_value text, const program *p, int64_t mode) {
   agc_value args[7];
   args_of(args, text, p, mode);
-  vm.task = make_task();
+  vm.task = agc_test_task();
   agc_test_fails(&vm, "RegexEngine.search", search, args, "RUNTIME-INTERNAL");
 }
 
@@ -236,7 +230,7 @@ static void test_hostile_programs_are_refused(void) {
   static const int64_t assert_out[] = {0, 'a', 1, 6, 1, 0};
   static const int64_t code_out[] = {0, 0x110000, 1, 1, 1, 0};
   static const int64_t class_op[] = {SAVE, CLASS, SPLIT, ASSERT, SAVE, MATCH};
-  static const int64_t falls_off[] = {SAVE, CHAR, SPLIT, ASSERT, SAVE, CHAR};
+  static const int64_t falls_off[] = {SAVE, ONE_CHAR, SPLIT, ASSERT, SAVE, ONE_CHAR};
   program cases[] = {
     {plus_ops, plus_xs, plus_ys, 0, no_classes(), 2},
     {bad_op, plus_xs, plus_ys, 6, no_classes(), 2},
@@ -259,7 +253,7 @@ static void test_hostile_programs_are_refused(void) {
   agc_value args[7];
   args_of(args, text, &good, TEST);
   args[3] = ints(plus_ys, 5);
-  vm.task = make_task();
+  vm.task = agc_test_task();
   agc_test_fails(&vm, "RegexEngine.search", search, args, "RUNTIME-INTERNAL");
   /* Classes that are not sorted, disjoint [low, high] pairs of code points. */
   static const int64_t odd[] = {1, 2, 3}, reversed[] = {5, 4}, overlap[] = {1, 5, 5, 9}, unsorted[] = {7, 9, 1, 2},

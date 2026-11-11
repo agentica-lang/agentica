@@ -18,7 +18,8 @@ trace.
 
 Most error assertions check the shape of the failure (an error Result, the
 zlib or filesystem family); the exact text is checked where it is the
-contract of a cap, a bad argument or a refused file.
+contract of a cap, a bad argument, a refused file or a broken part of a
+one-shot stream. The one-shot encoders write Python's own bytes for "abc".
 """
 import gzip
 import hashlib
@@ -32,6 +33,28 @@ import pytest
 from tests.agentica_test import WINDOWS, cli, compile_agc, run, run_vm, vm_environment
 
 CAP_1MIB = 1048576
+
+
+def zlib_error(message):
+    return 'error("zlib: %s")\n' % message
+
+
+INVALID = zlib_error("invalid compressed data")
+CHECKSUM = zlib_error("checksum mismatch")
+TRUNCATED = zlib_error("truncated stream")
+TRAILING = zlib_error("trailing bytes after stream end")
+BROKEN = 'error("zlib: '
+
+# Python's zlib on b"abc" at levels 0, 6 and 9 and on b"" at 6, and its gzip
+# member of b"abc" at level 9 with mtime 0. Kept as bytes, not recomputed: a
+# Python built on zlib-ng writes other, equally valid streams.
+REFERENCE_DEFLATE = [
+    (b"abc", 0, "7801010300fcff616263024d0127"),
+    (b"abc", 6, "789c4b4c4a0600024d0127"),
+    (b"abc", 9, "78da4b4c4a0600024d0127"),
+    (b"", 6, "789c030000000001"),
+]
+REFERENCE_GZIP_ABC = bytes.fromhex("1f8b08000000000002ff4b4c4a0600c241243503000000")
 
 # One-shot bytes through files: argv is op, src, dst, max_out, level.
 BYTES_PEER = (
@@ -148,11 +171,40 @@ def test_zlib_inflate_rejects_an_empty_stream(bytes_peer, tmp_path):
     for op in ("inflate", "gunzip"):
         result, _ = bytes_case(bytes_peer, tmp_path, "empty-" + op, op, b"")
         assert result.code == 0, result.stderr
-        assert result.stdout.startswith("error("), result.stdout
+        assert result.stdout == INVALID, result.stdout
 
 
-@pytest.mark.parametrize("mutate", ["magic", "method", "flags", "payload", "adler", "truncated"])
-def test_zlib_inflate_rejects_a_broken_wrapper(bytes_peer, tmp_path, mutate):
+def test_zlib_bytes_write_the_reference_streams(bytes_peer, tmp_path):
+    for data, level, packed in REFERENCE_DEFLATE:
+        result, out = bytes_case(bytes_peer, tmp_path, "ref-%d" % level, "deflate", data, level=level)
+        assert (result.code, result.stdout, out.hex()) == (0, "ok\n", packed), result.stderr
+    # Byte 9 is the OS, which zlib sets from its build (3 on Unix, 10 on
+    # native Windows); the rest, XFL 2 of level 9 included, is fixed.
+    result, gz = bytes_case(bytes_peer, tmp_path, "ref-gz", "gzip", b"abc", level=9)
+    assert (result.code, result.stdout) == (0, "ok\n"), result.stderr
+    assert len(gz) == len(REFERENCE_GZIP_ABC)
+    assert gz[:9] == REFERENCE_GZIP_ABC[:9] and gz[10:] == REFERENCE_GZIP_ABC[10:], gz.hex()
+
+
+def test_zlib_bytes_take_an_exact_max(bytes_peer, tmp_path):
+    packed = bytes.fromhex(REFERENCE_DEFLATE[1][2])
+    result, out = bytes_case(bytes_peer, tmp_path, "fit-deflate", "deflate", b"abc", cap=len(packed))
+    assert (result.code, result.stdout, out) == (0, "ok\n", packed), result.stderr
+    result, _ = bytes_case(bytes_peer, tmp_path, "tight-deflate", "deflate", b"abc", cap=len(packed) - 1)
+    assert result.stdout == zlib_error("output exceeds max_bytes"), result.stdout
+    result, out = bytes_case(bytes_peer, tmp_path, "fit-inflate", "inflate", packed, cap=3)
+    assert (result.code, result.stdout, out) == (0, "ok\n", b"abc"), result.stderr
+    result, _ = bytes_case(bytes_peer, tmp_path, "tight-inflate", "inflate", packed, cap=2)
+    assert result.stdout == zlib_error("output exceeds max_bytes"), result.stdout
+
+
+# Each broken part has its error; how a broken body surfaces (BROKEN, any zlib
+# error) is zlib's own business.
+@pytest.mark.parametrize("mutate, printed", [
+    ("magic", INVALID), ("method", INVALID), ("flags", INVALID), ("payload", BROKEN), ("adler", CHECKSUM),
+    ("truncated", TRUNCATED),
+])
+def test_zlib_inflate_rejects_a_broken_wrapper(bytes_peer, tmp_path, mutate, printed):
     blob = bytearray(zlib.compress(b"hello world, hello world"))
     if mutate == "magic":
         blob[0] = 0x78 ^ 0x01
@@ -168,7 +220,7 @@ def test_zlib_inflate_rejects_a_broken_wrapper(bytes_peer, tmp_path, mutate):
         del blob[len(blob) // 2:]
     result, _ = bytes_case(bytes_peer, tmp_path, "wrapper-" + mutate, "inflate", bytes(blob))
     assert result.code == 0, result.stderr
-    assert result.stdout.startswith("error("), result.stdout
+    assert result.stdout.startswith(printed), result.stdout
 
 
 def break_gzip_member(mutate):
@@ -191,11 +243,14 @@ def break_gzip_member(mutate):
     return bytes(blob)
 
 
-@pytest.mark.parametrize("mutate", ["magic", "method", "flags", "payload", "crc", "isize", "truncated"])
-def test_zlib_gunzip_rejects_a_broken_member(bytes_peer, tmp_path, mutate):
+@pytest.mark.parametrize("mutate, printed", [
+    ("magic", INVALID), ("method", INVALID), ("flags", INVALID), ("payload", BROKEN), ("crc", CHECKSUM),
+    ("isize", CHECKSUM), ("truncated", TRUNCATED),
+])
+def test_zlib_gunzip_rejects_a_broken_member(bytes_peer, tmp_path, mutate, printed):
     result, _ = bytes_case(bytes_peer, tmp_path, "member-" + mutate, "gunzip", break_gzip_member(mutate))
     assert result.code == 0, result.stderr
-    assert result.stdout.startswith("error("), result.stdout
+    assert result.stdout.startswith(printed), result.stdout
 
 
 def test_zlib_bytes_reject_a_second_member_and_trailing_bytes(bytes_peer, tmp_path):
@@ -203,28 +258,23 @@ def test_zlib_bytes_reject_a_second_member_and_trailing_bytes(bytes_peer, tmp_pa
     both = first + gzip.compress(b"yo")
     for blob in (both, first + b"\x00", first + b"junk trailing"):
         result, _ = bytes_case(bytes_peer, tmp_path, "trail", "gunzip", blob)
-        assert result.code == 0, result.stderr
-        assert result.stdout.startswith("error("), result.stdout
+        assert (result.code, result.stdout) == (0, TRAILING), result.stderr
     wrapped = zlib.compress(b"hi")
     for blob in (wrapped + wrapped, wrapped + b"\x00"):
         result, _ = bytes_case(bytes_peer, tmp_path, "trail-zz", "inflate", blob)
-        assert result.code == 0, result.stderr
-        assert result.stdout.startswith("error("), result.stdout
+        assert (result.code, result.stdout) == (0, TRAILING), result.stderr
 
 
 def test_zlib_bytes_reject_the_wrong_wrapper(bytes_peer, tmp_path):
     result, _ = bytes_case(bytes_peer, tmp_path, "cross-gz", "inflate", gzip.compress(b"hi"))
-    assert result.code == 0, result.stderr
-    assert result.stdout.startswith("error("), result.stdout
+    assert (result.code, result.stdout) == (0, INVALID), result.stderr
     result, _ = bytes_case(bytes_peer, tmp_path, "cross-zz", "gunzip", zlib.compress(b"hi"))
-    assert result.code == 0, result.stderr
-    assert result.stdout.startswith("error("), result.stdout
+    assert (result.code, result.stdout) == (0, INVALID), result.stderr
     comp = zlib.compressobj(9, zlib.DEFLATED, -15)
     raw = comp.compress(b"hi") + comp.flush()
     for op in ("inflate", "gunzip"):
         result, _ = bytes_case(bytes_peer, tmp_path, "cross-raw-" + op, op, raw)
-        assert result.code == 0, result.stderr
-        assert result.stdout.startswith("error("), result.stdout
+        assert (result.code, result.stdout) == (0, INVALID), result.stderr
 
 
 def test_zlib_bytes_reject_a_bad_level(bytes_peer, tmp_path):
@@ -237,7 +287,7 @@ def test_zlib_bytes_reject_a_bad_level(bytes_peer, tmp_path):
     for level in ("-1", "10"):
         result = run_source(tmp_path, "level-%s.agc" % level, body % (level, level), [])
         assert result.code == 0, result.stderr
-        assert result.stdout.startswith("error("), result.stdout
+        assert result.stdout == zlib_error("level must be between 0 and 9") * 2, result.stdout
 
 
 def test_zlib_bytes_reject_input_past_1_mib(tmp_path):
@@ -250,7 +300,7 @@ def test_zlib_bytes_reject_input_past_1_mib(tmp_path):
     )
     result = run_source(tmp_path, "big.agc", body, [])
     assert result.code == 0, result.stderr
-    assert result.stdout.startswith("error("), result.stdout
+    assert result.stdout == zlib_error("input exceeds 1048576 bytes") * 2, result.stdout
 
 
 def test_zlib_bytes_reject_a_max_outside_its_bounds(tmp_path):
@@ -265,7 +315,7 @@ def test_zlib_bytes_reject_a_max_outside_its_bounds(tmp_path):
     for bound in ("0", "1048577"):
         result = run_source(tmp_path, "bound-%s.agc" % bound, body % ((bound,) * 4), [])
         assert result.code == 0, result.stderr
-        assert result.stdout.startswith("error("), result.stdout
+        assert result.stdout == zlib_error("max_bytes must be between 1 and 1048576") * 4, result.stdout
 
 
 def test_zlib_bytes_cut_output_past_its_cap(bytes_peer, tmp_path):

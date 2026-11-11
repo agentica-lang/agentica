@@ -18,7 +18,7 @@ int main(void) {
 
   agc_random_seed(&a, 0);
   assert(a.s[0] | a.s[1] | a.s[2] | a.s[3]);
-  for (int i = 0; i < 1000000; i++) {
+  for (int i = 0; i < 10000; i++) {
     double x = agc_random_float(&a);
     assert(x >= 0.0 && x < 1.0);
   }

@@ -7,6 +7,7 @@
 #endif
 #include "../core.h"
 #include "../services.h"
+#include "test_support.h"
 
 #include <assert.h>
 #include <string.h>
@@ -24,16 +25,8 @@ typedef struct {
 } open_path;
 
 static agc_vm vm;
-static uint64_t ids;
 static const agc_builtin *each_line;
 static char dir[4096];
-
-static agc_task *make_task(void) {
-  agc_task *t = agc_alloc(sizeof(agc_task));
-  t->id = ++ids;
-  t->state = AGC_TASK_RUNNING;
-  return t;
-}
 
 static bool count_one(int fd, void *data) {
   (void)fd;
@@ -127,7 +120,7 @@ static void warm_up(void) {
   int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0600);
   assert(fd >= 0 && write(fd, "w\n", 2) == 2);
   close(fd);
-  agc_task *t = make_task();
+  agc_task *t = agc_test_task();
   install(t, path, 1024, 5000);
   const agc_result *r = agc_as_result(&vm, drive(t));
   assert(r->ok);
@@ -137,7 +130,7 @@ static void warm_up(void) {
 static void test_arguments(void) {
   int64_t bad[] = {-1, 0, 1023, 16777217};
   for (size_t k = 0; k < sizeof bad / sizeof bad[0]; k++) {
-    agc_task *t = make_task();
+    agc_task *t = agc_test_task();
     vm.task = t;
     agc_value args[4] = {string_of("never-opened"), agc_int(bad[k]), agc_int(100), agc_void()};
     if (setjmp(vm.fail) == 0) {
@@ -154,7 +147,7 @@ static agc_task *park_on_fifo(const char *name, int64_t timeout, int *holder, ch
   assert(mkfifo(*path, 0600) == 0);
   *holder = open(*path, O_RDWR);
   assert(*holder >= 0);
-  agc_task *t = make_task();
+  agc_task *t = agc_test_task();
   install(t, *path, 1024, timeout);
   agc_step step = advance(t, agc_void());
   assert(step.kind == AGC_STEP_WAIT);
@@ -183,7 +176,7 @@ static void test_cancelled_reader(void) {
   size_t base = descriptors();
   agc_task *t = park_on_fifo("cancel.fifo", 60000, &holder, &path);
   park(t);
-  vm.task = make_task();
+  vm.task = agc_test_task();
   agc_task_cancel(&vm, t);
   assert(t->state == AGC_TASK_DONE && !t->parked && !t->owned);
   assert(descriptors() == base + 1 && opened(path) == 1);

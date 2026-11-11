@@ -5,6 +5,7 @@
 #include "../core.h"
 #include "../services.h"
 #include "io_harness.h"
+#include "test_support.h"
 
 #include "../../tests/fixtures/native/module_demo.c"
 
@@ -65,10 +66,8 @@ static agc_program program;
 static int inits, loads;
 static atomic_int racy_inits, racy_loads, ready;
 
-static agc_value text(const char *s) { return agc_string_value(agc_make_string(s, strlen(s), strlen(s))); }
-
 static agc_value call_on(agc_vm *on, const char *signature, const agc_value *items, size_t n) {
-  agc_value args[2] = {text(signature), agc_list_value(agc_list_from_array(items, n))};
+  agc_value args[2] = {agc_test_str(signature), agc_list_value(agc_list_from_array(items, n))};
   return agc_ffi_builtins[0].fn(on, args, 0);
 }
 
@@ -96,14 +95,14 @@ static agc_value ints(const int64_t *items, size_t n) {
 }
 
 static agc_value pair_map(void) {
-  agc_map *m = agc_map_put(&vm, agc_new_map(), text("b"), agc_int(2));
-  return agc_map_value(agc_map_put(&vm, m, text("a"), agc_int(1)));
+  agc_map *m = agc_map_put(&vm, agc_new_map(), agc_test_str("b"), agc_int(2));
+  return agc_map_value(agc_map_put(&vm, m, agc_test_str("a"), agc_int(1)));
 }
 
 static void test_values(void) {
   agc_value two[2] = {agc_int(40), agc_int(2)};
   assert(agc_as_int(&vm, call("module (Int, Int) -> Int add demo", two, 2)) == 42);
-  agc_value word = text("caf\xc3\xa9 ok");
+  agc_value word = agc_test_str("caf\xc3\xa9 ok");
   assert(same_text(call("module (String) -> String upcase demo", &word, 1), "CAF\xc3\xa9 OK"));
   const uint8_t raw[3] = {1, 2, 3};
   agc_value bytes = agc_bytes_value(agc_make_bytes(raw, 3));
@@ -119,17 +118,17 @@ static void test_values(void) {
   assert(agc_list_len(range) == 40 && agc_as_int(&vm, agc_list_get(range, 39)) == 39);
   agc_value seven = agc_int(7), found;
   const agc_map *row = agc_as_map(&vm, call("module (Int) -> Map[String, Int] row demo", &seven, 1));
-  assert(row->size == 3 && agc_map_get(&vm, row, text("square"), &found) && agc_as_int(&vm, found) == 49);
+  assert(row->size == 3 && agc_map_get(&vm, row, agc_test_str("square"), &found) && agc_as_int(&vm, found) == 49);
   /* The walk keeps the insertion order: b first. */
   agc_value map = pair_map();
   const agc_list *pairs = agc_as_list(&vm, call("module (Map[String, Int]) -> List[String] pairs demo", &map, 1));
   assert(agc_list_len(pairs) == 2 && same_text(agc_list_get(pairs, 0), "b=2") &&
          same_text(agc_list_get(pairs, 1), "a=1"));
-  agc_value ask[3] = {map, text("a"), agc_int(5)};
+  agc_value ask[3] = {map, agc_test_str("a"), agc_int(5)};
   const char *lookup_demo = "module (Map[String, Int], String) -> Optional[Int] lookup demo";
   agc_value hit = call(lookup_demo, ask, 2);
   assert(agc_as_enum(&vm, hit)->variant == 1 && agc_as_int(&vm, agc_as_enum(&vm, hit)->payload[0]) == 1);
-  ask[1] = text("z");
+  ask[1] = agc_test_str("z");
   assert(agc_as_enum(&vm, call(lookup_demo, ask, 2))->variant == 0);
   const char *put_demo = "module (Map[String, Int], String, Int) -> Map[String, Int] put demo";
   const agc_map *more = agc_as_map(&vm, call(put_demo, ask, 3));
@@ -137,7 +136,7 @@ static void test_values(void) {
   agc_value some = agc_optional_make(&program, true, agc_int(9)), none = agc_optional_make(&program, false, agc_void());
   assert(agc_as_int(&vm, call("module (Optional[Int]) -> Int or_zero demo", &some, 1)) == 9);
   assert(agc_as_int(&vm, call("module (Optional[Int]) -> Int or_zero demo", &none, 1)) == 0);
-  agc_value digits = text("123"), letters = text("12x");
+  agc_value digits = agc_test_str("123"), letters = agc_test_str("12x");
   agc_value parsed = call("module (String) -> Result[Int] parse demo", &digits, 1);
   assert(agc_as_result(&vm, parsed)->ok && agc_as_int(&vm, agc_as_result(&vm, parsed)->value) == 123);
   agc_value refused = call("module (String) -> Result[Int] parse demo", &letters, 1);
@@ -159,13 +158,13 @@ static void test_values(void) {
 
 /* What the env holds fails the call after C returns; what the bytecode gets wrong fails before C runs. */
 static void test_failures(void) {
-  agc_value mixed[2] = {agc_int(1), text("two")};
+  agc_value mixed[2] = {agc_int(1), agc_test_str("two")};
   agc_value list = agc_list_value(agc_list_from_array(mixed, 2));
   fails("module (List[Int]) -> Int sum demo", &list, 1, "RUNTIME-NATIVE-ERROR");
   fails("module () -> String bad_text demo", NULL, 0, "RUNTIME-NATIVE-ERROR");
   fails("module () -> Map[String, Int] bad_key demo", NULL, 0, "RUNTIME-NATIVE-ERROR");
   fails("module () -> Int lie demo", NULL, 0, "RUNTIME-NATIVE-ERROR");
-  agc_value two[2] = {agc_int(1), text("2")};
+  agc_value two[2] = {agc_int(1), agc_test_str("2")};
   fails("module (Int, Int) -> Int add demo", two, 2, "RUNTIME-INTERNAL");
   fails("module (Int, Int) -> Int add demo", two, 1, "RUNTIME-INTERNAL");
   agc_value not_optional = agc_enum_value(agc_new_enum(5, 0));
@@ -468,19 +467,19 @@ static agc_value native_close(agc_value v) { return agc_ffi_builtins[1].fn(&vm, 
 static void test_dirty(void) {
   agc_value two[2] = {agc_int(40), agc_int(2)};
   assert(agc_as_int(&vm, dirty("compute module (Int, Int) -> Int crunch demo", two, 2)) == 42);
-  agc_value word = text("caf\xc3\xa9 ok");
+  agc_value word = agc_test_str("caf\xc3\xa9 ok");
   assert(same_text(dirty("compute module (String) -> String dirty_upcase demo", &word, 1), "CAF\xc3\xa9 OK"));
   agc_value seven = agc_int(7), found;
   const agc_map *row = agc_as_map(&vm, dirty("compute module (Int) -> Map[String, Int] dirty_row demo", &seven, 1));
-  assert(row->size == 3 && agc_map_get(&vm, row, text("square"), &found) && agc_as_int(&vm, found) == 49);
+  assert(row->size == 3 && agc_map_get(&vm, row, agc_test_str("square"), &found) && agc_as_int(&vm, found) == 49);
   agc_value map = pair_map();
   const agc_list *pairs =
       agc_as_list(&vm, dirty("compute module (Map[String, Int]) -> List[String] dirty_pairs demo", &map, 1));
   assert(agc_list_len(pairs) == 2 && same_text(agc_list_get(pairs, 0), "b=2"));
-  agc_value ask[2] = {map, text("a")};
+  agc_value ask[2] = {map, agc_test_str("a")};
   agc_value hit = dirty("compute module (Map[String, Int], String) -> Optional[Int] dirty_lookup demo", ask, 2);
   assert(agc_as_enum(&vm, hit)->variant == 1 && agc_as_int(&vm, agc_as_enum(&vm, hit)->payload[0]) == 1);
-  agc_value letters = text("12x");
+  agc_value letters = agc_test_str("12x");
   agc_value refused = dirty("compute module (String) -> Result[Int] dirty_parse demo", &letters, 1);
   assert(!agc_as_result(&vm, refused)->ok && same_text(agc_as_result(&vm, refused)->value, "not a number"));
   dirty_fails("compute module (Result[Int]) -> Int dirty_unwrap demo", &refused, 1, "RUNTIME-NATIVE-ERROR");
@@ -710,9 +709,9 @@ static void test_dirty_calls_charge_on_the_scheduler(void) {
   char key[300];
   memset(key, 'k', sizeof key - 1);
   key[sizeof key - 1] = '\0';
-  agc_map *m = agc_map_put(&vm, agc_new_map(), text(key), agc_int(20));
+  agc_map *m = agc_map_put(&vm, agc_new_map(), agc_test_str(key), agc_int(20));
   key[0] = 'j';
-  agc_value map = agc_map_value(agc_map_put(&vm, m, text(key), agc_int(1)));
+  agc_value map = agc_map_value(agc_map_put(&vm, m, agc_test_str(key), agc_int(1)));
   agc_task *task = vm.task, *sentinel = agc_new_task(&vm);
   park("compute module (Map[String, Int]) -> Int gated_sum demo", &map, 1);
   wait_for_flag(&gate_was_entered);
@@ -793,7 +792,7 @@ static void test_shared_library(const char *argv0) {
   agc_value two[2] = {agc_int(20), agc_int(22)};
   assert(agc_as_int(&vm, call(signature, two, 2)) == 42);
   snprintf(signature, sizeof signature, "module (String) -> String upcase %s/%s", full, DEMO_FILE);
-  agc_value word = text("abc");
+  agc_value word = agc_test_str("abc");
   assert(same_text(call(signature, &word, 1), "ABC"));
   free(full);
   fails("module (Int, Int) -> Int add " LIBM, two, 2, "RUNTIME-NATIVE-LOAD");
@@ -970,7 +969,7 @@ static void test_blocking(void) {
   assert(uv_mutex_init(&gc_lock) == 0 && uv_cond_init(&gc_wake) == 0);
   uv_thread_t thread;
   assert(uv_thread_create(&thread, collect, NULL) == 0);
-  agc_value word = text("a string the collector must keep");
+  agc_value word = agc_test_str("a string the collector must keep");
   assert(same_text(call("module (String) -> String copy blocking", &word, 1), "a string the collector must keep"));
   assert(same_text(dirty("compute module (String) -> String copy blocking_dirty", &word, 1),
                    "a string the collector must keep"));

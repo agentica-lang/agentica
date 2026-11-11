@@ -4,6 +4,8 @@
  * churn), and deep nesting.
  */
 #include "../core.h"
+#include "builtin_test.h"
+#include "test_support.h"
 
 #include <assert.h>
 #include <stdio.h>
@@ -29,8 +31,6 @@ static int by_value(const void *a, const void *b) {
   return x < y ? -1 : x > y;
 }
 
-static agc_value text(const char *s) { return agc_string_value(agc_make_string(s, strlen(s), strlen(s))); }
-
 static void debug_is(agc_value v, const char *expected) {
   agc_string *d = agc_debug(&vm, v);
   if (d->bytes != strlen(expected) || memcmp(d->data, expected, d->bytes) != 0) {
@@ -40,9 +40,7 @@ static void debug_is(agc_value v, const char *expected) {
 }
 
 static agc_value call(const char *name, uint32_t arity, agc_value *args) {
-  const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), arity);
-  assert(b);
-  return b->fn(&vm, args, 0);
+  return agc_test_call_row(&vm, name, arity, args);
 }
 
 /* The Set, Map and List builtins return the run's shared empty values when nothing is left, and building on a shared
@@ -124,13 +122,13 @@ int main(void) {
   assert(agc_as_int(&vm, agc_map_keys(&vm, replaced, 0)[0]) == -50000);
 
   agc_map *words = agc_new_map();
-  words = agc_map_put(&vm, words, text("b"), agc_int(1));
-  words = agc_map_put(&vm, words, text(""), agc_int(2));
-  words = agc_map_put(&vm, words, text("a\"\n"), agc_int(3));
-  words = agc_map_put(&vm, words, text("b"), agc_int(4));
+  words = agc_map_put(&vm, words, agc_test_str("b"), agc_int(1));
+  words = agc_map_put(&vm, words, agc_test_str(""), agc_int(2));
+  words = agc_map_put(&vm, words, agc_test_str("a\"\n"), agc_int(3));
+  words = agc_map_put(&vm, words, agc_test_str("b"), agc_int(4));
   words = agc_map_put(&vm, words, agc_int(98), agc_int(5));
-  assert(words->size == 4 && get_int(words, text("b")) == 4 && get_int(words, text("")) == 2);
-  assert(!agc_map_get(&vm, words, text("a"), &missing));
+  assert(words->size == 4 && get_int(words, agc_test_str("b")) == 4 && get_int(words, agc_test_str("")) == 2);
+  assert(!agc_map_get(&vm, words, agc_test_str("a"), &missing));
   debug_is(agc_map_value(words), "{\"b\": 4, \"\": 2, \"a\\\"\\n\": 3, 98: 5}");
   debug_is(agc_map_value(agc_new_map()), "{}");
 
@@ -175,9 +173,9 @@ int main(void) {
   assert(agc_map_add_hash(&vm, agc_new_map(), 9, fresh, nothing)->size == 1);
 
   agc_map *members = agc_new_map();
-  members = agc_map_add_hash(&vm, members, agc_key_hash(&vm, text("b")), text("b"), nothing);
+  members = agc_map_add_hash(&vm, members, agc_key_hash(&vm, agc_test_str("b")), agc_test_str("b"), nothing);
   members = agc_map_add_hash(&vm, members, agc_key_hash(&vm, agc_int(3)), agc_int(3), nothing);
-  assert(agc_map_add_hash(&vm, members, agc_key_hash(&vm, text("b")), text("b"), nothing) == members);
+  assert(agc_map_add_hash(&vm, members, agc_key_hash(&vm, agc_test_str("b")), agc_test_str("b"), nothing) == members);
   debug_is(agc_set_value(members), "Set[\"b\", 3]");
   debug_is(agc_set_value(agc_new_map()), "Set[]");
 
@@ -280,7 +278,7 @@ int main(void) {
   assert(!agc_map_get_hash(&vm, cut, 0x0aaaaaaaaaaaaaaaULL, agc_int(0), &missing));
   agc_value *cut_keys = agc_map_keys(&vm, cut, 0);
   assert(agc_as_int(&vm, cut_keys[0]) == 99 && agc_as_int(&vm, cut_keys[1]) == -1 && agc_as_int(&vm, cut_keys[2]) == -2);
-  debug_is(agc_map_value(agc_map_delete(&vm, words, text(""))), "{\"b\": 4, \"a\\\"\\n\": 3, 98: 5}");
+  debug_is(agc_map_value(agc_map_delete(&vm, words, agc_test_str(""))), "{\"b\": 4, \"a\\\"\\n\": 3, 98: 5}");
 
   agc_value wrapped = agc_map_value(words);
   debug_is(agc_list_value(agc_list_from_array(&wrapped, 1)), "[{\"b\": 4, \"\": 2, \"a\\\"\\n\": 3, 98: 5}]");
