@@ -174,6 +174,7 @@ def test_the_library_answers_inside_a_module_block_with_the_bytes_the_command_li
     questions = [("type-at", *position("agents.agc", AGENTS, "State(count")),
                  ("refs", *position("agents.agc", AGENTS, "total = n")),
                  ("refs", *position("agents.agc", AGENTS, "LIMIT if")),
+                 ("refs", *position("agents.agc", AGENTS, "Counter\n")),
                  ("symbol", "Agents.Counter.start", "user.agc")]
     for command, file, *rest in questions:
         got = library(driver, project, command, file, *rest)

@@ -65,7 +65,8 @@ end
 ## under an alias. When two files re-export the same type, the alphabetically first alias is the one written. The first
 ## module may be a module block (At.focus): its own types are written bare, as it writes them, and those of the other
 ## blocks of its file through their names (`Counter.Msg`). A block of a file imported under an alias is written through
-## both (`Agents.Counter.Msg`), unless the root file names the block itself.
+## both (`Agents.Counter.Msg`), unless the root file names the block itself, and so is a block that such a file
+## re-exports (`export Agents.Counter`).
 export def written_prefixes(linked: Linker.Linked) -> Map[String, String]
   written: Map[String, String] = {}
   aliases = linked.modules[0].aliases
@@ -84,6 +85,26 @@ export def written_prefixes(linked: Linker.Linked) -> Map[String, String]
       inner = module.block != "" and Linker.home_key(module) == aliases[alias]
       if inner and !written.has_key?(module.prefix)
         written = written.put(module.prefix, "#{alias}.#{module.block}")
+      end
+    end
+  end
+
+  blocks: Map[String, String] = {}
+  for module in linked.modules
+    if module.block != ""
+      blocks = blocks.put(Linker.block_name(linked.modules, module), module.prefix)
+    end
+  end
+
+  for alias in aliases.keys.sort
+    for module in linked.modules
+      if module.key == aliases[alias]
+        for name in module.reexported.keys.sort
+          block = blocks.get(module.reexported[name])
+          if block.some? and !written.has_key?(block.unwrap!)
+            written = written.put(block.unwrap!, "#{alias}.#{name}")
+          end
+        end
       end
     end
   end

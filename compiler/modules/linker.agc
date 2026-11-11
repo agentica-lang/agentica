@@ -129,6 +129,18 @@ export def home_key(module: LinkedModule) -> String
   module.key.slice(0, module.key.length - module.block.length - 1)
 end
 
+## The linked name of the module block `module` among `modules` (`@2::Counter`: the prefix of its file and its name),
+## which `reexported` holds for a file that re-exports the block (`export Agents.Counter`); "" for a file.
+export def block_name(modules: List[LinkedModule], module: LinkedModule) -> String
+  return "" if module.block == ""
+
+  for file in modules
+    return "#{file.prefix}#{module.block}" if file.key == home_key(module)
+  end
+
+  ""
+end
+
 ## Links several roots into one program with shared tables (docs/future/39-semantic-cli.md, 39.8): a module that two
 ## roots reach is linked once, and every module, the roots too, has the prefix "@N::", so two roots may declare `main`.
 ## A root is a transaction. If its own file or a file it reaches does not lex, parse or link, the root is left out and

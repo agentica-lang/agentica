@@ -53,10 +53,13 @@ rules live in `AGENTS.md` and `agentica-development`.
 - Untracked folders are per worktree: `tools/jscpd/node_modules` (`make
   dup-check` runs `npm ci` into it), `.venv`, build output. Never symlink them
   from the main checkout: `npm ci` empties a symlinked target, and the
-  Makefile refuses one. A new worktree has no pytest environment: pass the
-  main checkout's venv read-only through `PYTHON=`, or run `poetry install
-  --only test --no-root` in the worktree and delete that virtualenv when you
-  remove the worktree.
+  Makefile refuses one. A new worktree has no pytest environment: use the
+  main checkout's venv read-only by activating it for the command,
+  `VIRTUAL_ENV=<main>/.venv PATH=<main>/.venv/bin:$PATH make test TESTS=...`
+  (`make test` runs pytest through `poetry run`, which takes the active venv;
+  `PYTHON=` alone does not reach it, and Poetry then makes a new virtualenv
+  for the worktree), or run `poetry install --only test --no-root` in the
+  worktree and delete that virtualenv when you remove the worktree.
 - The main checkout's `dist/agentica` can be stale: run `dist/agentica
   --version` before you use it for anything.
 - Agents of one session share the scratchpad folder: write a PR body to

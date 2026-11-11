@@ -135,9 +135,10 @@ JSON: `{version, command, query, definition, builtin, references, skipped}`.
 - `references`: `{kind, function, span}`, FILE's files first, then by position;
   `span` is the name alone. `kind` is `call`, `value` (`&f`, a constant), `type`
   (an annotation), `construct` (a struct construction, a `with`, or a variant
-  constructor), `read` (a field read), `pattern` (a variant in a `case` arm) or
-  `binding` (a use of a local, `x += 1` included); an open set. No references
-  is an empty list, exit 0.
+  constructor), `read` (a field read), `pattern` (a variant in a `case` arm),
+  `binding` (a use of a local, `x += 1` included) or `qualifier` (the name of a
+  module block before one of its names: `Counter` of `Counter.start(1)`); an
+  open set. No references is an empty list, exit 0.
 - `skipped`: files of `PATH...` that do not link, as for `symbol`.
 
 ## symbol

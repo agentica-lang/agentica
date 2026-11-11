@@ -9,7 +9,8 @@ import pytest
 
 from tests.agentica_test import cli, run, vm_environment
 from tests.span_support import end, problem, start, where
-from tests.test_spec_type_at import AGENTS, AGENTS_USER, LIMITS, write_agents
+from tests.test_spec_type_at import (AGENTS, AGENTS_NAMED, AGENTS_THROUGH, AGENTS_USER, LIMITS, TWINS,
+                                     write_agents)
 
 MODELS = '''export LIMIT = 10
 
@@ -797,5 +798,33 @@ def test_a_name_inside_a_module_block_is_found_by_position_and_by_name_with_the_
                                                                                       where(AGENTS, "start(initial"))
     assert [(found[0], found[4]) for found in places(uses)] == [("agents.agc", "peek"), ("agents.agc", "main"),
                                                                  ("user.agc", "main")]
-    block = ask("Counter", "agents.agc", cwd=tmp_path, style="--ai")
-    assert block.stdout == "agents.agc:%d:%d definition module Counter\n" % where(AGENTS, "Counter\n")
+
+
+def test_a_module_block_is_used_where_its_name_is_written_in_front_of_one_of_its_names(tmp_path):
+    write_agents(tmp_path, more=True)
+    by_name = told("Counter", ".", cwd=tmp_path)
+    by_position = told(spot("agents.agc", AGENTS, "Counter\n"), ".", cwd=tmp_path)
+    assert as_set(by_position) == as_set(by_name)
+    assert by_name["definition"] == symbol_match("Counter", ".", cwd=tmp_path)
+    # Its file, an alias import, a name import (`C`) and a re-export; the import lists and the re-export are not uses.
+    assert places(by_name) == [("agents.agc", *where(AGENTS, "Counter.start(1)"), "qualifier", "peek"),
+                               ("agents.agc", *where(AGENTS, "Counter.start(cap"), "qualifier", "main"),
+                               ("named.agc", *where(AGENTS_NAMED, "C.start"), "qualifier", "main"),
+                               ("through.agc", *where(AGENTS_THROUGH, "Counter.start"), "qualifier", "main"),
+                               ("user.agc", *where(AGENTS_USER, "Counter.start"), "qualifier", "main")]
+    assert end(by_name["references"][0]["span"]) == where(AGENTS, "Counter.start(1)", 7)
+    text = ask("Counter", "agents.agc", cwd=tmp_path, style="--ai")
+    assert text.stdout.split("\n")[0] == "agents.agc:%d:%d definition module Counter" % where(AGENTS, "Counter\n")
+
+
+def test_two_blocks_that_declare_one_name_keep_their_uses_apart(tmp_path):
+    (tmp_path / "twins.agc").write_text(TWINS, encoding="utf-8")
+    first = answer(("twins.agc", where(TWINS, "start() -> Int = 1")), cwd=tmp_path)
+    assert places(first) == [("twins.agc", *where(TWINS, "start() * 10"), "call", "main")]
+    block = answer(("twins.agc", where(TWINS, "B\n")), cwd=tmp_path)
+    assert places(block) == [("twins.agc", *where(TWINS, "B.start()"), "qualifier", "main")]
+    # A variant written through its block (`A.Kind.One`) is one use of the block, at its first part.
+    other = answer(("twins.agc", where(TWINS, "A\n")), cwd=tmp_path)
+    assert [start(found["span"]) for found in other["references"]] == [
+        where(TWINS, "A.start()"), where(TWINS, "A.Kind.One"), where(TWINS, "A.Kind.Two")]
+    problem(ask("start", "twins.agc", cwd=tmp_path), "QUERY-AMBIGUOUS-NAME", 2)

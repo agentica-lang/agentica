@@ -405,13 +405,13 @@ def test_text_form_lists_one_line_per_match_as_outline_does_and_the_skipped_root
 
 
 def test_a_name_of_a_module_block_is_written_through_the_block_and_its_file_is_the_one_that_holds_it(tmp_path):
-    """An export of a block is `Counter.start` in its file and `Agents.Counter.start` through the alias of an importer;
-    a private name is found bare, as its block writes it, and a private block is not reached through the alias."""
-    write_agents(tmp_path)
-    # Two roots that import the file under one alias name it once.
-    other = 'import Agents from "agents"\n\nexport def n() -> Int = Agents.Counter.start(1).count\n'
-    (tmp_path / "other.agc").write_text(other, encoding="utf-8")
+    """An export of a block is `Counter.start` in its file, `Agents.Counter.start` through the alias of an importer,
+    `C.start` after `import {Counter as C}` and `Facade.Counter.start` through a file that re-exports the block; a
+    private name is found bare, as its block writes it, and a private block is not reached through the alias."""
+    write_agents(tmp_path, more=True)
+    # user.agc and facade.agc both import the file as Agents: the name through it is one match.
     found = [("Counter.start", "agents.agc", "start(initial"), ("Agents.Counter.start", ".", "start(initial"),
+             ("C.start", "named.agc", "start(initial"), ("Facade.Counter.start", "through.agc", "start(initial"),
              ("Counter.State.count", "agents.agc", "count: Int"), ("clamp", "agents.agc", "clamp(n"),
              ("Hidden.peek", "agents.agc", "peek()")]
     for name, path, needle in found:

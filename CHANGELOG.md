@@ -12,10 +12,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - `TCP.recv_bytes(socket, max_bytes)` without a timeout waits with no limit,
   for a server that keeps an idle client connected.
-- `symbol`, `refs` and `type-at` find the names inside module blocks
-  (`Counter.start`), from the command line and `std/analysis`.
 - Module blocks: `module Name ... end` holds several named modules in one file;
-  `export module` makes one importable (`import {Counter} from "agents"`).
+  `export module` makes one importable (`import {Counter} from "agents"`);
+  `symbol`, `refs` and `type-at` find the names inside them (`Counter.start`).
 
 ## [0.29.0] - 2026-11-10
 

@@ -156,7 +156,7 @@ end
 # The beginnings a name of a declaration can have: none (the name as the file declares it), and for an exported one the
 # alias of a root file (`Models.`, or `Counter.` for a module block), `std/NAME.` for a module of the standard library,
 # and for a module block that its file exports, each beginning of the file with the name of the block
-# (`Agents.Counter.`).
+# (`Agents.Counter.`), and of a file that re-exports it with the name it has there.
 def written_names(
   modules: List[Linker.LinkedModule],
   module: Linker.LinkedModule,
@@ -171,10 +171,20 @@ def written_names(
   end
 
   if module.block != ""
+    linked = Linker.block_name(modules, module)
     for file in modules
       if file.key == Linker.home_key(module) and exports_block?(file, module.block)
         for written in written_names(modules, file, true, aliases).drop(1)
           out = out.push("#{written}#{module.block}.")
+        end
+      end
+
+      # A file that re-exports the block (`export Agents.Counter`) names it too.
+      for name in file.reexported.keys.sort
+        if file.reexported[name] == linked
+          for written in written_names(modules, file, true, aliases).drop(1)
+            out = out.push("#{written}#{name}.")
+          end
         end
       end
     end

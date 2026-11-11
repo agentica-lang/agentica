@@ -931,8 +931,23 @@ end
 '''
 
 
-def write_agents(directory):
-    for name, text in (("agents.agc", AGENTS), ("limits.agc", LIMITS), ("user.agc", AGENTS_USER)):
+# Two more importers of agents.agc: one names the block in its import list, one reaches it through a file that
+# re-exports it.
+AGENTS_NAMED = 'import {Counter as C} from "agents"\n\ndef main() -> Void\n  s = C.start(1)\n  puts(s.count)\nend\n'
+AGENTS_FACADE = 'import Agents from "agents"\n\nexport Agents.Counter\n'
+AGENTS_THROUGH = ('import Facade from "facade"\n\ndef main() -> Void\n  s = Facade.Counter.start(1)\n  puts(s.count)\n'
+                  "end\n")
+# Two blocks that declare the same name, and a struct of the file between them.
+TWINS = ("module A\n  export enum Kind\n    One\n    Two\n  end\n\n  export def start() -> Int = 1\nend\n\n"
+         "struct Gap\n  n: Int\nend\n\nmodule B\n  export def start() -> Int = 2\nend\n\n"
+         "def main() -> Void\n  puts(A.start() * 10 + B.start())\n  puts(A.Kind.One == A.Kind.Two)\nend\n")
+
+
+def write_agents(directory, more=False):
+    files = [("agents.agc", AGENTS), ("limits.agc", LIMITS), ("user.agc", AGENTS_USER)]
+    if more:
+        files += [("named.agc", AGENTS_NAMED), ("facade.agc", AGENTS_FACADE), ("through.agc", AGENTS_THROUGH)]
+    for name, text in files:
         (directory / name).write_text(text, encoding="utf-8")
 
 
@@ -958,3 +973,16 @@ def test_a_position_inside_a_module_block_is_answered_and_its_types_are_written_
     (tmp_path / "broken.agc").write_text(broken, encoding="utf-8")
     partial = answer(("broken.agc", where(broken, "LIMIT if")), "--partial", cwd=tmp_path)
     assert (partial["partial"], partial["kind"], partial["definition"]["file"]) == (True, "name", "limits.agc")
+
+
+def test_a_block_type_is_written_as_the_importer_names_the_block_and_a_position_between_blocks_is_the_files(tmp_path):
+    write_agents(tmp_path, more=True)
+    (tmp_path / "twins.agc").write_text(TWINS, encoding="utf-8")
+    for file, text, type_text in (("named.agc", AGENTS_NAMED, "C.State"),
+                                  ("through.agc", AGENTS_THROUGH, "Facade.Counter.State")):
+        assert answer((file, where(text, "s =")), cwd=tmp_path)["type"] == type_text, file
+    # The struct between two blocks is the file's own.
+    gap = answer(("twins.agc", where(TWINS, "Int\nend\n\nmodule B")), cwd=tmp_path)
+    assert (gap["kind"], gap["type"], gap["definition"]) == ("type", "Int", None)
+    blank = type_at(("twins.agc", where(TWINS, "\nstruct Gap")), cwd=tmp_path)
+    problem(blank, "QUERY-NO-EXPRESSION", 2)

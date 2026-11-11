@@ -150,7 +150,7 @@ src/orders.agc:22:14 read in total
 src/report.agc:31:5 construct in sample
 ```
 
-The first line is the declaration. Each other line is a use, with its kind (`call`, `value`, `type`, `construct`, `read`, `pattern` or `binding`) and the function it is in. The position can be on a use or on the declaration. Two fields with one name in two structs are never mixed. A name that several declarations answer to is `QUERY-AMBIGUOUS-NAME`; its help lists each one as `FILE:LINE:COL` for the position form. With `--json` the answer is one object, `{version, command, query, definition, builtin, references, skipped}`.
+The first line is the declaration. Each other line is a use, with its kind (`call`, `value`, `type`, `construct`, `read`, `pattern`, `binding`, or `qualifier` for the name of a module block written before one of its names, `Counter` of `Counter.start(1)`) and the function it is in. The position can be on a use or on the declaration. Two fields with one name in two structs are never mixed. A name that several declarations answer to is `QUERY-AMBIGUOUS-NAME`; its help lists each one as `FILE:LINE:COL` for the position form. With `--json` the answer is one object, `{version, command, query, definition, builtin, references, skipped}`.
 
 ## Options
 

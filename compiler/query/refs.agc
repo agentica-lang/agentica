@@ -11,6 +11,7 @@
 
 import Checker from "../check/checker"
 import Diag from "../diagnostics/diagnostic"
+import Declarations from "../modules/declarations"
 import Linker from "../modules/linker"
 import Ast from "../syntax/ast"
 import Source from "../syntax/source"
@@ -23,8 +24,9 @@ import Sites from "sites"
 import Symbol from "symbol"
 import TypeAt from "type_at"
 
-## One use of the declaration: its `kind` (`call`, `value`, `type`, `construct`, `read`, `pattern` or `binding`), the
-## `function` it is in ("" at the top level), the `file` (of its LinkedModule) and the `span` of the name.
+## One use of the declaration: its `kind` (`call`, `value`, `type`, `construct`, `read`, `pattern` or `binding`, and
+## `qualifier` for the name of a module block written in front of one of its names), the `function` it is in ("" at
+## the top level), the `file` (of its LinkedModule) and the `span` of the name.
 export struct Reference
   kind: String
   function: String
@@ -63,6 +65,8 @@ end
 ## The references to the declaration or builtin that `found` is, a match of `Symbol.answer` over the modules of
 ## `linked` (checked as `checked`). A builtin has no definition: `builtin` names it.
 export def of_match(linked: Linker.Linked, checked: Checker.Checked, found: Symbol.Match) -> Answer
+  return of_block(linked, checked, found) if found.kind == "module"
+
   defined = some(found)
   if found.kind == "builtin"
     defined = none
@@ -153,7 +157,12 @@ def of_name(
 
   own = Sites.of_module(root, checked, declared, "")
   case Sites.innermost(own, offset)
-    none -> Diag.Outcome.Failed(Position.no_expression(asked, here))
+    none ->
+      case block_at(linked, offset)
+        some(block) -> Diag.Outcome.Done(of_block(linked, checked, block))
+        none -> Diag.Outcome.Failed(Position.no_expression(asked, here))
+      end
+
     some(site) ->
       key = site.target.key
       found = used(root, own, key)
@@ -206,6 +215,74 @@ def in_order(modules: List[Linker.LinkedModule], found: List[Reference]) -> List
   end
 
   out
+end
+
+# The module block whose name the root file writes at `offset` (`Counter` of `module Counter`), as `symbol` lists it.
+def block_at(linked: Linker.Linked, offset: Int) -> Optional[Symbol.Match]
+  root = Linker.home_key(linked.modules[0])
+  for file in linked.modules
+    next if file.key != root
+
+    for declaration in file.parsed.declarations
+      case Declarations.unwrap(declaration)
+        Ast.Decl.Module(node) -> return Symbol.declared_at(file, node.name_span) if At.holds?(node.name_span, offset)
+        _ -> next
+      end
+    end
+  end
+
+  none
+end
+
+# A module block, `found`: the places that write its name in front of one of its own names (`Counter` of
+# `Counter.start(1)` and of `Agents.Counter.State`), kind `qualifier`, read from the sites of its declarations. A name
+# that the block writes bare and an import list that names the block are not references to it.
+def of_block(linked: Linker.Linked, checked: Checker.Checked, found: Symbol.Match) -> Answer
+  blocks = linked.modules.filter do |module: Linker.LinkedModule|
+    Linker.home_key(module) == found.file and module.block == found.name
+  end
+
+  uses: List[Reference] = []
+  if blocks.size > 0
+    declared = Sites.declared_names(linked.modules)
+    for module in linked.modules
+      for site in Sites.of_module(module, checked, declared, "")
+        case qualifier(module.text, site, blocks[0].prefix)
+          some(span) ->
+            uses = uses.push(Reference(kind: "qualifier", function: site.function, file: module.file, span: span))
+          none -> next
+        end
+      end
+    end
+  end
+
+  Answer(definition: some(found), builtin: "", references: in_order(linked.modules, uses))
+end
+
+# The part written just before the name of `site` (`Counter` of `Agents.Counter.start`) when the site names a top-level
+# declaration of the block with `prefix`, or `none`. A variant needs no case of its own: its enum is a site that
+# reaches from the first part (`Counter.Msg` of `Counter.Msg.Add`).
+def qualifier(text: String, site: Sites.Site, prefix: String) -> Optional[Source.Span]
+  # A definition is never qualified: its reach is the bare name.
+  return none if site.target.kind != "name" or !site.target.name.starts_with?(prefix)
+
+  reach = site.reach
+  written = text.slice(reach.start.offset, reach.stop.offset - reach.start.offset)
+  parts = written.split("(")[0].split("[")[0].split(".")
+  return none if parts.size < 2
+
+  index = parts.size - 2
+  name = parts[index]
+  skip = 0
+  if index > 0
+    skip = parts.take(index).join(".").length + 1
+  end
+
+  return none if name == "" or name.strip != name or written.slice(0, skip).contains?("\n")
+
+  start = Source.Position(offset: reach.start.offset + skip, line: reach.start.line, column: reach.start.column + skip)
+  stop = Source.Position(offset: start.offset + name.length, line: start.line, column: start.column + name.length)
+  some(Source.Span(start: start, stop: stop))
 end
 
 # The references among the sites of `module`: those of the target `key` that are not its definition.
