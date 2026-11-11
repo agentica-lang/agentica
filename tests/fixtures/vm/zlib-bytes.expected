@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 106,
+  "steps": 196,
   "stdout": [
     "deflate 13 round ok()",
     "empty deflate 8 round ok()",
@@ -12,6 +12,11 @@
     "zero max -> error(\"zlib: max_bytes must be between 1 and 1048576\")",
     "bad level -> error(\"zlib: level must be between 0 and 9\")",
     "small max -> error(\"zlib: output exceeds max_bytes\")",
+    "exact max -> ok(<Bytes 5 68656c6c6f>)",
+    "truncated -> error(\"zlib: truncated stream\")",
+    "trailing byte -> error(\"zlib: trailing bytes after stream end\")",
+    "bad adler -> error(\"zlib: checksum mismatch\")",
+    "bad crc -> error(\"zlib: checksum mismatch\")",
     ""
   ],
   "stderr": []

@@ -1,6 +1,7 @@
 # Zlib one-shot bytes: sizes and round trips of deflate/inflate (the zlib
-# wrapper) and gzip/gunzip; tests/test_vm_zlib.py checks the bytes against
-# Python's stdlib zlib and gzip.
+# wrapper) and gzip/gunzip, and the decoder's limits: an exact-fit max, a cut
+# stream, a trailing byte and a broken checksum. tests/test_vm_zlib.py checks
+# the bytes against Python's stdlib zlib and gzip.
 def main() -> Void
   data = "hello".bytes
   no_bytes = "".bytes
@@ -17,4 +18,14 @@ def main() -> Void
   puts("zero max -> #{Zlib.deflate(data, 6, 0)}")
   puts("bad level -> #{Zlib.deflate(data, 10)}")
   puts("small max -> #{Zlib.inflate(packed, 4)}")
+  puts("exact max -> #{Zlib.inflate(packed, 5)}")
+  puts("truncated -> #{Zlib.inflate(packed.take(packed.size - 1))}")
+  puts("trailing byte -> #{Zlib.inflate(packed + "x".bytes)}")
+  puts("bad adler -> #{Zlib.inflate(flip(packed, packed.size - 1))}")
+  puts("bad crc -> #{Zlib.gunzip(flip(gz, gz.size - 8))}")
+end
+
+# DATA with the byte at INDEX changed, to break a checksum.
+def flip(data: Bytes, index: Int) -> Bytes
+  data.take(index) + Bytes.from_list([(data[index] + 1) % 256]).unwrap! + data.drop(index + 1)
 end
