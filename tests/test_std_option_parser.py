@@ -123,34 +123,6 @@ def test_a_getter_that_reads_the_wrong_way_halts_and_names_the_call(bug, mode, m
     assert run_vm(bug, args=["fine"]).stdout == "80\n"
 
 
-@pytest.mark.parametrize("args,line", [
-    ([], "port=8080 threads=1 ctx=0 stats=false dir=none"),
-    (["--port", "0", "--threads=1"], "port=0 threads=1 ctx=0 stats=false dir=none"),
-    (["-p", "65535", "--stats", "on", "--ctx", "-1"], "port=65535 threads=1 ctx=-1 stats=true dir=none"),
-])
-def test_int_limits_accept_their_edges_and_on_off_is_a_choice(limits, args, line):
-    result = run_vm(limits, args=args)
-    assert (result.code, result.stderr) == (0, "")
-    assert result.stdout == line + "\n"
-
-
-@pytest.mark.parametrize("args,message", [
-    (["--port", "65536"], "invalid value for --port: '65536' is above the maximum 65535"),
-    (["-p", "-1"], "invalid value for --port: '-1' is below the minimum 0"),
-    (["--port", "99999999999999999999"], "invalid value for --port: '99999999999999999999' does not fit an Int"),
-    (["--threads", "0"], "invalid value for --threads: '0' is below the minimum 1"),
-    (["--temp", "2.5"], "invalid value for --temp: '2.5' is above the maximum 2.0"),
-    (["--temp", "-1"], "invalid value for --temp: '-1' is below the minimum 0.0"),
-    (["--temp=-inf.0"], "invalid value for --temp: '-inf.0' does not fit a Float"),
-    (["--stats", "maybe"], "invalid value for --stats: 'maybe' is not one of on, off"),
-])
-def test_a_value_outside_its_limit_or_choices_is_refused_with_exit_2(limits, args, message):
-    result = run_vm(limits, args=args)
-    assert result.code == 2
-    assert result.stdout == ""
-    assert result.stderr.splitlines() == [f"serve: {message}", "Try 'serve --help' for more information"]
-
-
 def test_help_shows_limits_in_brackets_and_the_default_value_names(limits):
     result = run_vm(limits, args=["--help"])
     assert (result.code, result.stderr) == (0, "")

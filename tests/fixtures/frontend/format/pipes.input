@@ -75,3 +75,14 @@ def closing_spaced(xs: List[Int]) -> Void
 
   # An empty line of the source stays.
 end
+
+# Two `|>` go one stage per line and close with a `)` alone, the wrapped statement is followed by an empty line, a
+# single `|>` stays on its line, and the last statement of a block gets no empty line after it.
+def twice(n: Int) -> Int = n * 2
+
+def main() -> Void
+  n = 3
+  total = n |> twice() |> twice()
+  one = n |> twice()
+  puts(total + one)
+end

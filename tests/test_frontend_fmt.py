@@ -4,7 +4,8 @@ The stage compiler/format/fmt.agc prints each file formatted, or the diagnostic 
 `--tree` it prints the normal form of 47.7. The goldens are the `.formatted` files beside the `.input` files of
 fixtures/frontend/format/, which also have the `.comments` goldens of test_frontend_format.py; tools/refreeze.py
 rewrites them. Every golden must format to itself and keep the normal form of its input, and a peer written here
-checks the shape of the text. The slow tier formats every `.agc` file of the repo twice.
+checks the shape of the text. The slow tier formats every `.agc` file of the repo twice, but those of compiler/ and
+stdlib/: `make fmt-check`, a step of CI, proves that each of them formats to itself.
 """
 import re
 
@@ -86,7 +87,8 @@ def test_a_file_that_does_not_parse_is_refused_with_its_diagnostic(fmt_stage):
 def test_every_file_of_the_repo_that_parses_formats_once_and_for_all(fmt_stage):
     skipped = {"build", "dist", "agc_libs", ".git"}
     paths = sorted(str(path.relative_to(ROOT)) for path in ROOT.glob("**/*.agc")
-                   if path.is_file() and not skipped.intersection(path.relative_to(ROOT).parts))
+                   if path.is_file() and not skipped.intersection(path.relative_to(ROOT).parts)
+                   and path.relative_to(ROOT).parts[0] not in ("compiler", "stdlib"))
     assert len(paths) > 1000
     first = fmt_stage.run_sections(paths, cwd=ROOT, timeout=scaled(3000))
     kept = {path: text for path, text in first.items() if not text.startswith("ERROR")}

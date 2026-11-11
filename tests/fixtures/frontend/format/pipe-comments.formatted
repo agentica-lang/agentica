@@ -99,3 +99,19 @@ def edges(users: List[User], conn: Conn) -> Void
   second = users + more |> count()
   return second
 end
+
+# After the first operand, between the stages and after a stage, in one chain: the file used to be refused with
+# FMT-INTERNAL.
+def twice(n: Int) -> Int = n * 2
+
+def main() -> Void
+  n = 3
+  total = (
+    n # first
+    # between
+    |> twice() # after one
+    |> twice()
+  )
+
+  puts(total)
+end

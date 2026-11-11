@@ -403,13 +403,10 @@ def test_text_form_lists_one_line_per_match_as_outline_does_and_the_skipped_root
     assert builtin.stdout.startswith("builtin String.split(")
 
 
+# The --stdin and unknown-option rows are QueryOptions.parse, which outline shares (tests/test_spec_outline.py).
 @pytest.mark.parametrize("words", [
     [],  # missing NAME
     [""],  # an empty NAME
-    ["--stdin"],  # --stdin without FILE
-    ["make", "--stdin", "--json"],  # an option is not the FILE of --stdin
-    ["make", "--stdin", "a.agc", "--stdin", "b.agc"],  # --stdin twice
-    ["make", "--unknown"],  # unknown option
     ["make", "absent.agc"],  # unreadable path
     ["make", "empty"],  # a folder with no *.agc file
 ])

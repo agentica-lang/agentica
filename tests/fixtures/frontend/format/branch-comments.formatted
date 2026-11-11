@@ -67,3 +67,12 @@ def main() -> Void
     puts(x) # d
   end
 end
+
+# The only statement of an `if` body, with a comment line before it and a comment after it (#1330): the file was
+# refused with FMT-INTERNAL.
+def main() -> Void
+  if true
+    # c
+    puts(1) # d
+  end
+end

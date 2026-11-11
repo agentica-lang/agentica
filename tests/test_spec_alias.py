@@ -2,10 +2,13 @@
 
 import json
 
-import pytest
-
 from tests.agentica_test import cli, output_lines, run, vm_environment
+from tests.spec_support import Batch
 
+# The programs of the tables, as main.agc; `checked(program)` gives the diagnostic of one, or None.
+BATCH = Batch()
+table = BATCH.table
+checked = BATCH.fixture()
 
 def assert_diagnostic(found: dict[str, object] | None, code: str, start: tuple[int, int]) -> None:
     assert found is not None
@@ -121,7 +124,7 @@ end
     assert agentica_check(text) is None
 
 
-@pytest.mark.parametrize(
+@table(
     ("text", "code", "start"),
     [
         ("type\n", "PARSE-UNEXPECTED-TOKEN", (1, 5)),
@@ -143,12 +146,12 @@ end
     ],
 )
 def test_malformed_alias_declarations_report_the_code_and_span(
-    text, code, start, agentica_check
+    text, code, start, checked
 ):
-    assert_diagnostic(agentica_check(text), code, start)
+    assert_diagnostic(checked(text), code, start)
 
 
-@pytest.mark.parametrize(
+@table(
     ("text", "code", "start"),
     [
         (
@@ -163,8 +166,8 @@ def test_malformed_alias_declarations_report_the_code_and_span(
         ),
     ],
 )
-def test_expanded_type_errors_point_to_the_alias_use(text, code, start, agentica_check):
-    assert_diagnostic(agentica_check(text), code, start)
+def test_expanded_type_errors_point_to_the_alias_use(text, code, start, checked):
+    assert_diagnostic(checked(text), code, start)
 
 
 def test_repeated_alias_expansion_is_bounded(agentica_check):
@@ -176,7 +179,11 @@ def test_repeated_alias_expansion_is_bounded(agentica_check):
     assert_diagnostic(agentica_check(text), "CHECK-TOO-DEEP", (17, 18))
 
 
-@pytest.mark.parametrize(
+def enum_alias(body, *_):
+    return "enum Shape\n  Circle(Int)\nend\n\ntype Figure = Shape\n\ndef main() -> Void\n" + body + "end\n\n"
+
+
+@table(
     ("body", "code", "start"),
     [
         (
@@ -193,18 +200,17 @@ def test_repeated_alias_expansion_is_bounded(agentica_check):
             (10, 5),
         ),
     ],
+    enum_alias,
 )
 def test_enum_aliases_are_not_variant_constructors_or_patterns(
-    body, code, start, agentica_check
+    body, code, start, checked
 ):
-    prefix = "enum Shape\n  Circle(Int)\nend\n\ntype Figure = Shape\n\n"
-    text = prefix + "def main() -> Void\n" + body + "end\n\n"
-    found = agentica_check(text)
+    found = checked(enum_alias(body))
     assert_diagnostic(found, code, start)
     assert "Shape.Circle" in json.dumps(found)
 
 
-@pytest.mark.parametrize(
+@table(
     ("text", "code"),
     [
         (
@@ -223,9 +229,9 @@ def test_enum_aliases_are_not_variant_constructors_or_patterns(
     ],
 )
 def test_alias_collision_unknown_target_constructor_and_arguments(
-    text, code, agentica_check
+    text, code, checked
 ):
-    found = agentica_check(text)
+    found = checked(text)
     assert found is not None
     assert found["code"] == code
 
@@ -274,20 +280,26 @@ def test_exported_generic_alias_imports_by_name_and_qualified_name(
     assert agentica_check(text) is None
 
 
-@pytest.mark.parametrize(
+MATRIX_PARAMETER = GENERIC + "def f(m: %s) -> Void\nend\n\n"
+
+
+@table(
     ("use", "start"),
     [
         ("Matrix", (3, 10)),
         ("Matrix[Int, Int]", (3, 10)),
         ("List[Matrix]", (3, 15)),
     ],
+    MATRIX_PARAMETER,
 )
-def test_generic_alias_needs_exactly_its_arguments(use, start, agentica_check):
-    text = GENERIC + f"def f(m: {use}) -> Void\nend\n\n"
-    assert_diagnostic(agentica_check(text), "CHECK-UNKNOWN-TYPE", start)
+def test_generic_alias_needs_exactly_its_arguments(use, start, checked):
+    assert_diagnostic(checked(MATRIX_PARAMETER % use), "CHECK-UNKNOWN-TYPE", start)
 
 
-@pytest.mark.parametrize(
+WITH_MAIN = "%sdef main() -> Void\nend\n\n"
+
+
+@table(
     ("text", "code", "start"),
     [
         ("type Box[T, T] = List[T]\n\n", "CHECK-REDEFINED-NAME", (1, 1)),
@@ -311,13 +323,17 @@ def test_generic_alias_needs_exactly_its_arguments(use, start, agentica_check):
         ("type B[T] = Map[Float, T]\n\n", "CHECK-MAP-KEY-TYPE", (1, 17)),
         ("type Ap[F] = F[Int]\n\n", "CHECK-UNKNOWN-TYPE", (1, 14)),
     ],
+    WITH_MAIN,
 )
-def test_generic_alias_declaration_errors(text, code, start, agentica_check):
-    found = agentica_check(text + "def main() -> Void\nend\n\n")
-    assert_diagnostic(found, code, start)
+def test_generic_alias_declaration_errors(text, code, start, checked):
+    assert_diagnostic(checked(WITH_MAIN % text), code, start)
 
 
-@pytest.mark.parametrize(
+def generic_enum_alias(body, *_):
+    return "enum Shape[T]\n  Circle(T)\nend\n\ntype Figure[T] = Shape[T]\n\ndef main() -> Void\n" + body + "end\n\n"
+
+
+@table(
     ("body", "code", "start"),
     [
         ("  figure = Figure.Circle(1)\n", "CHECK-UNKNOWN-TYPE", (8, 12)),
@@ -330,17 +346,17 @@ def test_generic_alias_declaration_errors(text, code, start, agentica_check):
             (10, 5),
         ),
     ],
+    generic_enum_alias,
 )
 def test_generic_enum_aliases_are_not_variant_constructors_or_patterns(
-    body, code, start, agentica_check
+    body, code, start, checked
 ):
-    prefix = "enum Shape[T]\n  Circle(T)\nend\n\ntype Figure[T] = Shape[T]\n\n"
-    found = agentica_check(prefix + "def main() -> Void\n" + body + "end\n\n")
+    found = checked(generic_enum_alias(body))
     assert_diagnostic(found, code, start)
     assert "Shape[T].Circle" in json.dumps(found)
 
 
-@pytest.mark.parametrize(
+@table(
     ("text", "code", "start"),
     [
         (
@@ -364,22 +380,25 @@ def test_generic_enum_aliases_are_not_variant_constructors_or_patterns(
             (3, 13),
         ),
     ],
+    WITH_MAIN,
 )
-def test_arguments_are_judged_where_the_parameter_lands(text, code, start, agentica_check):
-    found = agentica_check(text + "def main() -> Void\nend\n\n")
-    assert_diagnostic(found, code, start)
+def test_arguments_are_judged_where_the_parameter_lands(text, code, start, checked):
+    assert_diagnostic(checked(WITH_MAIN % text), code, start)
 
 
-@pytest.mark.parametrize(
+UNUSED_PARAMETER = "type Unused[T] = Int\n\ndef f(x: %s) -> Void\nend\n\ndef main() -> Void\nend\n\n"
+
+
+@table(
     ("use", "code", "start"),
     [
         ("Unused[Nope]", "CHECK-UNKNOWN-TYPE", (3, 17)),
         ("Unused[Map[List[Int], Int]]", "CHECK-MAP-KEY-TYPE", (3, 21)),
     ],
+    UNUSED_PARAMETER,
 )
-def test_argument_of_an_unused_parameter_is_still_checked(use, code, start, agentica_check):
-    text = f"type Unused[T] = Int\n\ndef f(x: {use}) -> Void\nend\n\ndef main() -> Void\nend\n\n"
-    assert_diagnostic(agentica_check(text), code, start)
+def test_argument_of_an_unused_parameter_is_still_checked(use, code, start, checked):
+    assert_diagnostic(checked(UNUSED_PARAMETER % use), code, start)
 
 
 def test_argument_of_an_unused_parameter_may_be_void(agentica_check):
@@ -387,44 +406,40 @@ def test_argument_of_an_unused_parameter_may_be_void(agentica_check):
     assert agentica_check(text) is None
 
 
+BOARD = (
+    "ORIGIN: Matrix[Int] = [[0]]\n\n"
+    "type Matrix[T] = List[List[T]]\n\n"
+    "type Row[T] = List[T]\n\n"
+    "struct Board\n  cells: Matrix[Int]\nend\n\n"
+    "def main() -> Void\n"
+    "  board = Board(cells: ORIGIN)\n"
+    "  sizes = [[1], [2]].map do |row: Row[Int]| row.size end\n"
+    "  puts(board.cells.size + sizes.size)\n"
+    "end\n\n"
+)
+
+
 def test_generic_alias_in_a_struct_field_a_constant_and_a_lambda(agentica_check):
-    text = (
-        "ORIGIN: Matrix[Int] = [[0]]\n\n"
-        "type Matrix[T] = List[List[T]]\n\n"
-        "type Row[T] = List[T]\n\n"
-        "struct Board\n  cells: Matrix[Int]\nend\n\n"
-        "def main() -> Void\n"
-        "  board = Board(cells: ORIGIN)\n"
-        "  sizes = [[1], [2]].map do |row: Row[Int]| row.size end\n"
-        "  puts(board.cells.size + sizes.size)\n"
-        "end\n\n"
-    )
-    assert agentica_check(text) is None
+    assert agentica_check(BOARD) is None
 
 
-@pytest.mark.parametrize(
+def board_with(old, new, *_):
+    return BOARD.replace(old, new)
+
+
+@table(
     ("old", "new", "start"),
     [
         ("ORIGIN: Matrix[Int] = [[0]]", 'ORIGIN: Matrix[Int] = [["a"]]', (1, 25)),
         ("Board(cells: ORIGIN)", 'Board(cells: [["a"]])', (12, 26)),
         ("row: Row[Int]", "row: Row[String]", (13, 11)),
     ],
+    board_with,
 )
 def test_generic_alias_types_are_enforced_in_fields_constants_and_lambdas(
-    old, new, start, agentica_check
+    old, new, start, checked
 ):
-    text = (
-        "ORIGIN: Matrix[Int] = [[0]]\n\n"
-        "type Matrix[T] = List[List[T]]\n\n"
-        "type Row[T] = List[T]\n\n"
-        "struct Board\n  cells: Matrix[Int]\nend\n\n"
-        "def main() -> Void\n"
-        "  board = Board(cells: ORIGIN)\n"
-        "  sizes = [[1], [2]].map do |row: Row[Int]| row.size end\n"
-        "  puts(board.cells.size + sizes.size)\n"
-        "end\n\n"
-    )
-    assert_diagnostic(agentica_check(text.replace(old, new)), "CHECK-TYPE-MISMATCH", start)
+    assert_diagnostic(checked(board_with(old, new)), "CHECK-TYPE-MISMATCH", start)
 
 
 def test_identity_alias_is_its_argument(agentica_check):

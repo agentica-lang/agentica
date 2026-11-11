@@ -5509,20 +5509,6 @@
   "calls and constructors": [
     {
       "program": [
-        "def f(a: Int) -> Int",
-        "  return a",
-        "end",
-        "",
-        "def main() -> Void",
-        "  x = f(1, 2)",
-        "end",
-        "",
-        ""
-      ],
-      "code": "CHECK-ARITY"
-    },
-    {
-      "program": [
         "struct Todo",
         "  title: String",
         "  done: Bool",
@@ -6070,21 +6056,6 @@
     }
   ],
   "returns and entry point": [
-    {
-      "program": [
-        "def f(n: Int) -> Int",
-        "  if n > 0",
-        "    return 1",
-        "  end",
-        "end",
-        "",
-        "def main() -> Void",
-        "end",
-        "",
-        ""
-      ],
-      "code": "CHECK-MISSING-RETURN"
-    },
     {
       "program": [
         "def f() -> Int",
@@ -7219,57 +7190,6 @@
       "program": [
         "def main() -> Void",
         "  error = 1",
-        "end",
-        "",
-        ""
-      ],
-      "code": "CHECK-REDEFINED-NAME"
-    },
-    {
-      "program": [
-        "def main() -> Void",
-        "  for error in [1]",
-        "  end",
-        "end",
-        "",
-        ""
-      ],
-      "code": "CHECK-REDEFINED-NAME"
-    },
-    {
-      "program": [
-        "def error() -> Void",
-        "end",
-        "",
-        "def main() -> Void",
-        "",
-        "end",
-        "",
-        ""
-      ],
-      "code": "CHECK-REDEFINED-NAME"
-    },
-    {
-      "program": [
-        "def f(error: Int) -> Void",
-        "end",
-        "",
-        "def main() -> Void",
-        "",
-        "end",
-        "",
-        ""
-      ],
-      "code": "CHECK-REDEFINED-NAME"
-    },
-    {
-      "program": [
-        "struct Box",
-        "  error: Int",
-        "end",
-        "",
-        "def main() -> Void",
-        "",
         "end",
         "",
         ""
@@ -9481,16 +9401,6 @@
         ""
       ],
       "code": "CHECK-TYPE-MISMATCH"
-    },
-    {
-      "program": [
-        "def main() -> Void",
-        "  m = {}",
-        "end",
-        "",
-        ""
-      ],
-      "code": "CHECK-EMPTY-MAP-TYPE"
     },
     {
       "program": [

@@ -49,18 +49,6 @@ SPAWN_CALL = (
 )
 # The start of the error of a Process start under --deny-run, which programs may test.
 DENIED = "denied: --deny-run"
-# One call of each family that a --deny-* flag turns off (a hermetic one: localhost, port 0), with its flag.
-FAMILIES = (
-    ("net", 'TCP.listen("127.0.0.1", 0)', "--deny-net"),
-    ("fs", 'File.read_text("main.agc", 5000)', "--deny-fs"),
-    ("env", 'System.env("PATH")', "--deny-env"),
-    ("run", SPAWN_CALL, "--deny-run"),
-)
-# Prints one line for each family: `NAME allowed`, or `NAME ` and the error.
-FAMILY_CALLS = "def main() -> Void\n" + "".join(
-    f"  {name} = {call}\n  if {name}.ok?\n    puts(\"{name} allowed\")\n  else\n"
-    f"    puts(\"{name} #{{{name}.message}}\")\n  end\n"
-    for name, call, _ in FAMILIES) + "end\n"
 SPAWN = (
     "def main() -> Void\n"
     f"  r = {SPAWN_CALL}\n"
@@ -298,30 +286,12 @@ def test_random_seed_is_the_seed_of_the_run_and_replays_it(tmp_path):
     assert agentica("--seed", seed, "seed.agc", cwd=directory).stdout == drawn.stdout
 
 
-@pytest.mark.parametrize("flag", [None, "--deny-net", "--deny-fs", "--deny-env", "--deny-run", "--sandbox"])
-def test_each_deny_flag_turns_its_family_into_an_error_result(tmp_path, flag):
-    """The check is in the VM builtins, so a source file and compiled bytecode get the same error Result, with a stable
-    prefix the program can test; the program goes on and exits 0. --sandbox is every --deny-* flag."""
-    directory = make_suite(tmp_path, {"main.agc": FAMILY_CALLS})
-    compiled = compile_agc(directory / "main.agc", directory / "main.agcb")
-    flags = [flag] if flag else []
-    for got in (agentica(*flags, "main.agc", cwd=directory), agentica("run", *flags, "--", compiled, cwd=directory)):
-        assert got.code == 0, got
-        lines = got.stdout.splitlines()
-        assert [line.split(" ")[0] for line in lines] == [name for name, _, _ in FAMILIES], got
-        for (name, _, family), line in zip(FAMILIES, lines):
-            if flag in (family, "--sandbox"):
-                assert line.startswith(f"{name} denied: {family}"), line
-            else:
-                assert "denied:" not in line, line
-
-
 # Every gated row a typed program can reach, with the flag that turns it off. The rows that take a FileHandle are left
 # out: only File.open makes one. The TLS rows name files, so --deny-fs alone turns them off too ("files"). The gate
 # fires before anything is resolved or opened, so nothing here connects.
 GATED = (
     ("File.open", 'File.open("x.txt", "r", 1000)', "--deny-fs"),
-    ("File.read_text", 'File.read_text("x.txt", 1000)', "--deny-fs"),
+    ("File.read_text", 'File.read_text("main.agc", 5000)', "--deny-fs"),
     ("File.sha256", 'File.sha256("x.txt", 1000)', "--deny-fs"),
     ("File.chunks", 'File.chunks("x.bin").to_a', "--deny-fs"),
     ("Lazy.write_bytes", '["a".bytes].lazy.write_bytes("x.bin")', "--deny-fs"),
@@ -354,29 +324,66 @@ GATED = (
      "files"),
     ("HttpWire.connect_tls", 'HTTP.get(Result.unwrap!(HTTP.client(HttpClientOptions())), "https://127.0.0.1:1/")',
      "--deny-net"),
+    ("System.env", 'System.env("PATH")', "--deny-env"),
+    ("Process.spawn_captured", SPAWN_CALL, "--deny-run"),
 )
+# One hermetic row of each family (localhost, port 0, the program's own file), which every run calls: under the flag of
+# another family it must work.
+PROBES = ("TCP.listen", "File.read_text", "System.env", "Process.spawn_captured")
+DENY_FLAGS = ("--deny-net", "--deny-fs", "--deny-env", "--deny-run")
 
 
-def test_every_gated_row_returns_the_error_of_its_flag(tmp_path):
-    """With --deny-fs --deny-net, every row is denied by its own flag (a TLS row by --deny-net, which comes first);
-    with --deny-fs alone and the argument `files`, the program runs only the rows that read files, and the TLS ones
-    are denied by --deny-fs."""
+def gated_program():
+    """Calls the rows whose flag is among the program's arguments (a "files" row: --deny-fs or --deny-net), the PROBES
+    and the rows of no flag; prints `NAME ok`, or `NAME ` and the error, for each."""
+    def condition(name, flag):
+        if flag is None or name in PROBES:
+            return "true"
+        wanted = ("--deny-fs", "--deny-net") if flag == "files" else (flag,)
+        return " or ".join(f'denied.include?("{word}")' for word in wanted)
+
     body = "".join(
-        f"  if all or {str(flag in ('files', None)).lower()}\n    r{k} = {call}\n    if r{k}.ok?\n"
+        f"  if {condition(name, flag)}\n    r{k} = {call}\n    if r{k}.ok?\n"
         f"      puts(\"{name} ok\")\n    else\n      puts(\"{name} #{{r{k}.message}}\")\n    end\n  end\n"
         for k, (name, call, flag) in enumerate(GATED))
-    source = 'import HTTP from "std/http"\n\ndef main() -> Void\n  all = System.args().size == 0\n' + body + "end\n"
-    directory = make_suite(tmp_path, {"main.agc": source})
-    for flags, words, files_flag in ((["--deny-fs", "--deny-net"], [], "--deny-net"), (["--deny-fs"], ["files"],
-                                                                                         "--deny-fs")):
-        got = agentica(*flags, "main.agc", *words, cwd=directory)
-        assert got.code == 0, got
-        expected = {name: files_flag if flag == "files" else flag for name, _, flag in GATED
-                    if not words or flag in ("files", None)}
-        lines = dict(line.split(" ", 1) for line in got.stdout.splitlines())
-        assert lines.keys() == expected.keys(), got
-        for name, flag in expected.items():
-            assert lines[name] == "ok" if flag is None else lines[name].startswith(f"denied: {flag}"), (name, got)
+    return 'import HTTP from "std/http"\n\ndef main() -> Void\n  denied = System.args()\n' + body + "end\n"
+
+
+def answer_of(name, flag, denied):
+    """What the row prints in a run with the flags `denied`: the flag that denies it, "ok" for a row of no flag or a
+    probe its flag does not turn off, or None for a row the run leaves out. A TLS row that names files is denied by
+    --deny-net when both flags are on, since that check comes first."""
+    if flag == "files":
+        flag = "--deny-net" if "--deny-net" in denied else "--deny-fs"
+    if flag in denied:
+        return flag
+    return "ok" if flag is None or name in PROBES else None
+
+
+@pytest.mark.parametrize("flags, denied", [
+    pytest.param(["--deny-net"], ["--deny-net"], id="deny-net"),
+    pytest.param(["--deny-fs"], ["--deny-fs"], id="deny-fs"),
+    pytest.param(["--deny-env"], ["--deny-env"], id="deny-env"),
+    pytest.param(["--deny-run"], ["--deny-run"], id="deny-run"),
+    pytest.param(["--sandbox"], list(DENY_FLAGS), id="sandbox"),
+    pytest.param(["run", "--sandbox", "--"], list(DENY_FLAGS), id="run-sandbox"),
+])
+def test_each_deny_flag_turns_its_gated_rows_into_an_error_result(tmp_path, flags, denied):
+    """The check is in the VM builtins, so a source file and compiled bytecode (`run`) get the same error Result, with
+    the stable prefix `denied: FLAG` the program can test; the program goes on and exits 0. A flag denies its own family
+    and no other one; --sandbox is every --deny-* flag. The program gets the flags of the run as its arguments."""
+    directory = make_suite(tmp_path, {"main.agc": gated_program()})
+    program = "main.agc"
+    if flags[0] == "run":
+        program = compile_agc(directory / "main.agc", directory / "main.agcb")
+    got = agentica(*flags, program, *denied, cwd=directory)
+    assert got.code == 0, got
+    expected = {name: answer_of(name, flag, denied) for name, _, flag in GATED}
+    lines = dict(line.split(" ", 1) for line in got.stdout.splitlines())
+    assert lines.keys() == {name for name, answer in expected.items() if answer is not None}, got
+    for name, line in lines.items():
+        answer = expected[name]
+        assert line == "ok" if answer == "ok" else line.startswith(f"denied: {answer}"), (name, got)
 
 
 def test_a_front_end_of_another_version_runs_but_a_program_of_another_version_does_not(tmp_path):
@@ -400,12 +407,11 @@ def test_a_front_end_of_another_version_runs_but_a_program_of_another_version_do
     assert got.stderr == "agentica: invalid bytecode: built for another Agentica version\n"
 
 
-@pytest.mark.parametrize("name", (STDLIB / "MODULES").read_text().split())
-def test_the_front_end_gets_the_embedded_std_sources(tmp_path, name):
-    work = tmp_path
-    front = front_end(work)
-    got = agentica("--front-end", front, "std", name)
-    assert (got.code, got.stdout) == (0, (STDLIB / name).read_text(encoding="utf-8"))
+def test_the_front_end_gets_the_embedded_std_sources(tmp_path):
+    front = front_end(tmp_path)
+    for name in (STDLIB / "MODULES").read_text().split():
+        got = agentica("--front-end", front, "std", name)
+        assert (got.code, got.stdout) == (0, (STDLIB / name).read_text(encoding="utf-8")), name
 
 
 def test_the_front_end_reports_a_missing_std_source(tmp_path):

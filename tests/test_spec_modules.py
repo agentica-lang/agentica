@@ -13,6 +13,7 @@ import pytest
 
 from tests.agentica_test import cli, run, vm_environment
 from tests.module_support import write_module_files
+from tests.spec_support import check_paths
 
 # No AGENTICA_PATH roots, no user data folder (XDG_DATA_HOME, or LOCALAPPDATA on Windows) and no package cache
 # (XDG_CACHE_HOME), so only the files of a case resolve.
@@ -50,34 +51,29 @@ class TestModuleRules:
         (directory, problem) in the same order, where problem is None for a program that checks clean.
 
         `files` is a name -> text map, or a folder that already exists. In `env`, {dir} stands for the folder.
+        The roots of one env are checked by one `--json check ROOT...` call, which gives each root the diagnostic of
+        a check of that root alone.
         """
         jobs = []
         for files, root, env in cases:
             directory = files if isinstance(files, Path) else self.files(files)
             env = {key: value.replace("{dir}", str(directory)) for key, value in (env or {}).items()}
-            jobs.append((directory, root, env))
-
-        def check(job):
-            directory, root, env = job
-            return run(cli() + ["--json", "check", str(directory / root)], cwd=self.cwd,
-                       env=vm_environment({**HERMETIC, **env}))
-
-        results = [check(job) for job in jobs]
-        return [(directory, self.problem_of(result)) for (directory, _root, _env), result in zip(jobs, results)]
+            jobs.append((directory, str(directory / root), tuple(sorted(env.items()))))
+        groups = {}
+        for _directory, path, env in jobs:
+            groups.setdefault(env, []).append(path)
+        problems = {}
+        for env, paths in groups.items():
+            found = check_paths(list(dict.fromkeys(paths)), cwd=self.cwd, env=vm_environment({**HERMETIC, **dict(env)}))
+            problems.update(((env, path), problem) for path, problem in found.items())
+        for problem in problems.values():
+            # Internal names (with the module mangling '@') must not reach a user in the message or the help.
+            assert "@" not in json.dumps({key: (problem or {}).get(key) for key in ("message", "help")})
+        return [(directory, problems[(env, path)]) for directory, path, env in jobs]
 
     def check(self, files, root="root.agc", env=None):
         """One check (see checks()): its (directory, problem)."""
         return self.checks([(files, root, env)])[0]
-
-    def problem_of(self, result):
-        if result.code == 0:
-            assert result.stdout == '{"ok":true}\n'
-            return None
-        assert result.code == 1, result.stderr
-        problem = json.loads(result.stderr)
-        # Internal names (with the module mangling '@') must not reach a user in the message or the help.
-        assert "@" not in json.dumps({key: problem.get(key) for key in ("message", "help")})
-        return problem
 
     def assert_rejected(self, checked, code, line=None, file=None):
         """The check fails with `code`, at `line`, and in `file` (a name of the folder) when given."""

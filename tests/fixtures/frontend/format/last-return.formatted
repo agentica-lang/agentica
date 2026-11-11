@@ -1,0 +1,85 @@
+# The last expression of a def gives its value (#1287), so `fmt` drops a `return` where the parser reads the bare value
+# as one: the last statement, and the last of each branch of a last `if` with `else` and of each arm of a last `case`,
+# at any depth. Comments and empty lines stay where they were, also the empty line before the `(` of a value. A
+# `return` stays for a guard, before the end, in an `if` without `else`, in a block, for a `try` value (a last `try` is
+# a statement), for a `case` value (a bare `case` is a statement), when it has no value, and in a Void function, also
+# one whose result is an alias of Void declared in the file, also through another alias or with type arguments (there
+# `5` would check where `return 5` does not); such a def is not made a one-line def either.
+def sign(x: Int) -> String
+  return "none" if x == 100
+  if x > 0
+    "plus"
+  elsif x < 0
+    "minus"
+  else
+    # before
+    case x
+      0 -> "zero"
+      _ ->
+        y = x
+        "other #{y}" # on the line
+    end
+  end
+end
+
+def piped(xs: List[Int]) -> List[Int]
+  ys = xs
+  return ys if ys.empty?
+
+  (
+    ys
+    |> twice()
+    |> twice()
+  )
+end
+
+def open_if(x: Int) -> Int
+  y = x
+  if x > 0
+    puts(y)
+    return 1
+  end
+end
+
+def kept(x: Int) -> Int
+  ys = [x].map do |v: Int| return v end
+  return case x
+    0 -> 0
+    _ -> ys[0]
+  end
+end
+
+def parsed(text: String) -> Result[Int]
+  n = try parse(text)
+  return try check(n)
+end
+
+def nothing() -> Int
+  x = 1
+  return
+end
+
+def say(text: String) -> Void
+  puts(text)
+  return
+end
+
+type Nothing = Void
+
+def noted(text: String) -> Nothing
+  puts(text)
+  return 5
+end
+
+type Later = Nothing
+
+type Box[T] = Void
+
+def chained() -> Later
+  return 5
+end
+
+def boxed() -> Box[Int]
+  puts("x")
+  return 5
+end

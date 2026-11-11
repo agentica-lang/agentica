@@ -11,6 +11,7 @@ from collections import namedtuple
 import pytest
 
 from tests.agentica_test import cli, output_lines, run, vm_environment
+from tests.spec_support import check_many
 
 # span: (line, column) of the start, (line, column, line, column) with the end too, (line,) for the line only,
 # or None when the rule is not about a position.
@@ -155,20 +156,24 @@ class TestSpecParser:
             results.append(run(cli() + [*command, str(directory / "main.agc")], env=vm_environment()))
         return results
 
+    def check_all(self, cases):
+        """The diagnostic of each case (main.agc with its files), or None, from one `--json check` call."""
+        self._temp_dir_count += 1
+        programs = [{"main.agc": case.text, **(case.files or {})} for case in cases]
+        check = check_many(programs, self._tmp_path / f"check-{self._temp_dir_count}")
+        return [check(program) for program in programs]
+
     def check_rejected(self, cases):
-        results = self.run_all([(case.text, case.files) for case in cases], "--json", "check")
-        for case, result in zip(cases, results):
-            if result.code != 1:
-                pytest.fail("expected %s, the program was not rejected: %s" % (case.code, result.stdout))
-            diagnostic = json.loads(result.stderr)
+        for case, diagnostic in zip(cases, self.check_all(cases)):
+            if diagnostic is None:
+                pytest.fail("expected %s, the program was not rejected" % case.code)
             assert (diagnostic["code"]) == (case.code), diagnostic.get("message")
             if case.span is not None:
                 assert (span_of(diagnostic)[:len(case.span)]) == (case.span), diagnostic.get("message")
 
     def check_accepted(self, cases):
-        results = self.run_all([(case.text, case.files) for case in cases], "--json", "check")
-        for case, result in zip(cases, results):
-            assert ((result.code, result.stdout)) == ((0, '{"ok":true}\n')), result.stderr
+        for diagnostic in self.check_all(cases):
+            assert diagnostic is None, diagnostic
 
     def check_output(self, cases):
         results = self.run_all([(case.text, case.files) for case in cases])
@@ -710,10 +715,9 @@ class TestSpecParser:
             Accept(body("_ = " + "(" * 900 + "1" + ")" * 900)),
             Accept(body("_ = 1" + " + 1" * 900)),
         ])
+        # Prefix operators and field chains at the limit and one past it: tests/test_frontend_parser.py (limit_shapes).
         self.check_rejected([
             Reject(body("x = " + "(" * 1000 + "1" + ")" * 1000), "PARSE-TOO-DEEP"),
-            Reject(body("x = " + "- " * 1000 + "1"), "PARSE-TOO-DEEP"),
-            Reject(body("x = a" + ".b" * 1000), "PARSE-TOO-DEEP"),
             Reject(body("if x\n" * 1000), "PARSE-TOO-DEEP"),
             Reject(body("x = 1" + " + 1" * 1000), "PARSE-TOO-DEEP", (2, 4001)),
         ])

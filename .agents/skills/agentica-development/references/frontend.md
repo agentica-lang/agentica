@@ -182,7 +182,9 @@ Test the code and the location (`start`, `covers` from `--json check`), as in
 `tests/test_spec_checker_rest.py`. A table of programs is checked by one
 `check` call: a module fixture passes them all to `check_many`
 (`tests/spec_support.py`), and each case looks its diagnostic up, so it keeps
-its own test id.
+its own test id. When a test builds its program from the row, `Batch.table`
+replaces `pytest.mark.parametrize` and takes the builder (as in
+`tests/test_spec_extern.py`).
 
 ### Add a builtin rule
 

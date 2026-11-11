@@ -436,8 +436,9 @@ def test_a_position_on_no_name_is_query_no_expression_at_the_position(program):
 def test_a_check_error_is_exit_1_with_its_code_and_a_mistake_in_the_words_is_query_usage(program):
     (program / "bad.agc").write_text('def f() -> Int\n  return "x"\nend\n', encoding="utf-8")
     assert problem(refs(("bad.agc", (2, 10)), cwd=program), "CHECK-TYPE-MISMATCH", 1)["file"] == "bad.agc"
+    # The --stdin and unknown-option rows of QueryOptions.parse are type-at's (tests/test_spec_type_at.py).
     for words in ([], [""], ["orders.agc:3"], ["orders.agc:0:3"], ["orders.agc:3:4", "extra"], ["total", "absent"],
-                  ["--stdin"], ["--unknown", "orders.agc:3:4"], ["absent.agc:1:1"], ["--stdin", "a.agc:1"]):
+                  ["absent.agc:1:1"], ["--stdin", "a.agc:1"]):
         result = run(cli() + ["--json", "refs", *words], env=vm_environment(), cwd=program, stdin="")
         diagnostic = problem(result, "QUERY-USAGE", 2)
         assert diagnostic["file"] == "<arguments>", words
