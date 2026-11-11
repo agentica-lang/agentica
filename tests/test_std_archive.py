@@ -134,7 +134,8 @@ extractor uses normalizes them, so forward, backslash, mixed and cache-root spel
 extract on every system with no host skip."""
     work = tmp_path
     pax_tar(work, "reg.tar", [("lib.so", b"hello lib")])
-    root = str(work)
+    (work / "dests").mkdir()
+    root = str(work / "dests")
     fwd = root.replace(os.sep, "/")
     dests = [
         ("fwd", fwd + "/d-fwd"),

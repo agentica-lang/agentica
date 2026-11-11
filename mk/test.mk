@@ -117,6 +117,30 @@ conformance-area/%: $(PRODUCT) FORCE
 	  AGENTICA_SWEEP="$$sweep" $(MAKE) --no-print-directory test-py AGENTICA_TEST_SLOW= JUNIT_DIR="$(CONFORMANCE_DIR)/$*" \
 	  JOBS=$(if $(filter tasks,$*),1,$(JOBS)) TESTS="$(shell $(PYTHON) tools/conformance.py modules $*)"
 
+# conformance-batch AREAS="cli spec ..." runs the modules of those areas as one pytest with JOBS xdist workers, which
+# hand out single tests, so no area waits for its slowest module before the next one starts; tools/conformance.py split
+# then writes the same files as conformance-area/AREA for each area. golden runs alone (its sampled sweep reaches the
+# whole process), and tasks keeps conformance-area/tasks (one module at a time). One limit guards the whole run: the
+# module limit times the number of modules.
+conformance-batch: $(PRODUCT) FORCE
+	@if [ -z "$(strip $(AREAS))" ]; then echo "make conformance-batch needs AREAS" >&2; exit 2; fi
+	@case " $(strip $(AREAS)) " in \
+	  *" tasks "*) echo "conformance-batch: run tasks with make conformance-area/tasks (one module at a time)" >&2; exit 2 ;; \
+	  " golden ") ;; \
+	  *" golden "*) echo "conformance-batch: run golden alone (its sampled sweep reaches the whole run)" >&2; exit 2 ;; \
+	esac
+	@modules="$$(for area in $(AREAS); do $(PYTHON) tools/conformance.py modules $$area; done)"; \
+	  sweep="$(if $(filter golden,$(AREAS)),sampled,$(AGENTICA_SWEEP))"; \
+	  batch="$(CONFORMANCE_DIR)/batch-$(firstword $(AREAS)).xml"; \
+	  limit=$$(( $(MODULE_LIMIT) * $$(echo $$modules | wc -w) )); \
+	  for area in $(AREAS); do rm -rf "$(CONFORMANCE_DIR)/$$area"; done; \
+	  mkdir -p "$(CONFORMANCE_DIR)"; rm -f "$$batch"; \
+	  guard=; if command -v timeout >/dev/null 2>&1; then guard="timeout -k 10 $$limit"; fi; \
+	  AGENTICA_SWEEP="$$sweep" AGENTICA_TEST_SLOW= $$guard $(PYTEST_RUNNER) $$modules -n $(JOBS) --dist worksteal \
+	    --junitxml="$$batch"; status=$$?; \
+	  $(PYTHON) tools/conformance.py split "$$batch" "$(CONFORMANCE_DIR)" --env "slow= sweep=$$sweep" $(AREAS) || status=1; \
+	  exit $$status
+
 conformance-report:
 	$(PYTHON) tools/conformance.py report "$(CONFORMANCE_DIR)" $(if $(CONFORMANCE_PLATFORM),--platform $(CONFORMANCE_PLATFORM))
 

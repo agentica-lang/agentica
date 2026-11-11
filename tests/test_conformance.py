@@ -164,3 +164,20 @@ def test_a_case_that_ran_on_no_system_fails_the_merge_of_the_summaries(tmp_path)
     assert ok, text
     (tmp_path / "macos-arm64" / "summary.json").unlink()
     assert not conformance.merge(tmp_path)[1]
+
+
+def test_a_batch_split_into_areas_gives_the_same_report_as_one_run_per_area(tmp_path):
+    per_area, batched = tmp_path / "per-area", tmp_path / "batched"
+    fill(per_area, failing="tests/test_cli_check.py")
+    fill_destructive(per_area, "linux-x86_64")
+    fill_destructive(batched, "linux-x86_64")
+    batches = {"golden": ["golden"], "rest": [area for area in conformance.AREAS if area != "golden"]}
+    for name, areas in batches.items():
+        cases = "".join(path.read_text().split("<testsuite>")[1].split("</testsuite>")[0]
+                        for area in areas for path in sorted((per_area / area).glob("*.xml")))
+        batch = tmp_path / f"batch-{name}.xml"
+        batch.write_text(f"<testsuites><testsuite>{cases}</testsuite></testsuites>")
+        env = (per_area / areas[0] / "env.txt").read_text()
+        assert conformance.split(batch, batched, areas, env) == []
+    assert conformance.report(batched, "linux-x86_64") == conformance.report(per_area, "linux-x86_64")
+    assert (batched / "summary.json").read_text() == (per_area / "summary.json").read_text()
