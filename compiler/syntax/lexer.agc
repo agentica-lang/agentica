@@ -368,7 +368,7 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
         action = WORD_ACTIONS.get(lexeme, 0)
         if action > 0
           kind = lexeme
-          if action == 2
+          if action == 2 and !modifier?(tokens, lexeme)
             top = Frame(kind: "kw", start: start, inside: top.inside)
             delimiters = delimiters.push(top)
             depth += 1
@@ -1503,6 +1503,16 @@ def dot_follows?(chars: List[String], from: Int) -> Bool
 end
 
 def ends_with_newline?(tokens: List[Tokens.Token]) -> Bool = tokens.size > 0 and tokens[tokens.size - 1].kind == "NL"
+
+# An `if` or `while` after an expression or a bare `return` is a modifier (`return x if c`) or a case guard
+# (`Some(x) if x > 0 ->`): it has no `end`, so it opens no block frame. A stray frame let the `end` of an enclosing
+# `do` pop it instead, and left that `do` frame over the `[`, `(` or `{` that its closing bracket needs.
+def modifier?(tokens: List[Tokens.Token], word: String) -> Bool
+  return false if (word != "if" and word != "while") or tokens.size == 0
+
+  last = tokens[tokens.size - 1].kind
+  last == "return" or ENDS_EXPRESSION.include?(last)
+end
 
 def in_interpolation?(delimiters: List[Frame]) -> Bool
   delimiters.size > 0 and delimiters[delimiters.size - 1].kind == "#"

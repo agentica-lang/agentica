@@ -185,6 +185,10 @@ DIAGNOSTICS = [
      "PARSE-DETACHED-DOC", (3, 3, 3, 9), None),
     ("doc line inside parentheses", program(MAIN, "  f(1,", "## doc", "2)", "end"),
      "PARSE-DETACHED-DOC", (3, 1, 3, 7), None),
+    # A modifier opens no block in the lexer, so the parser reports it, also in a block inside brackets.
+    ("while modifier in a block inside a list", program(MAIN, "  puts([[1].map do |x|", "    puts(x) while x > 0", "",
+                                                         "    x", "  end])", "end"),
+     "PARSE-UNEXPECTED-TOKEN", (3, 13, 3, 18), True),
 ]
 
 # Sources that check clean; the doc blocks here are attached to the declaration under them.
@@ -198,6 +202,16 @@ CLEAN = [
     ("leading-dot chain with a comment line and CRLF",
      "def main() -> Void\r\n  _xs = [1, 2]  # raw\r\n  # step\r\n    .map do |x| x end\r\nend\r\n"),
     ("doc lines with tabs", PRE + "  ## a\n\t## b\ndef main() -> Void\nend\n"),
+    # A guard (`return x if c`, `break if c`) or a case guard has no `end`: inside a block in brackets, the `end` of
+    # the block closes the block, and the bracket after it matches.
+    ("guard in a block inside a list",
+     "def ready() -> Result[Bool] = ok(true)\n\n"
+     + program(MAIN, "  Test.run([", '    Test.test("x") do', "      return ok() if not try ready()", "",
+               "      ok()", "    end,", "  ])", "end")),
+    ("guards in blocks inside parentheses and braces",
+     program(MAIN, "  puts([1].map do |x|", "    for y in [x]", "      break if y > 1", "    end", "",
+             "    return 0 if x > 1", "", "    x", "  end)", '  puts({"a": [1].map do |x|', "    case x",
+             "      1 if x > 0 -> 5", "      _ -> 0", "    end", "  end})", "end")),
     # An empty file lexes and parses with no error; `check` does not need a main.
     ("empty file", ""),
 ]
