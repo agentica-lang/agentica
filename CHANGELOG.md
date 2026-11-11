@@ -8,6 +8,18 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Breaking:** the child channel of `Process.spawn_channel` is a pipe per
+  direction on every system: a child that is not Agentica reads fd 3 and writes
+  fd 4 (`AGENTICA_CHANNEL=3,4`) on Linux and macOS too.
+
+### Fixed
+
+- A guard (`return x if c`) or a case guard inside a `do` block within `[...]`,
+  `(...)` or `{...}` no longer fails with `LEX-UNMATCHED-DELIMITER`, so
+  `agentica fmt` can write it.
+
 ## [0.30.0] - 2026-11-11
 
 ### Added
