@@ -115,6 +115,15 @@ bool agc_gc_heap_parse(const char *text, size_t *bytes) {
   return true;
 }
 
+#ifndef AGC_NO_GC
+/* #1328 experiment: the darwin stop-world scans a running thread from its exact rsp, so the 128-byte x86-64 red zone
+   is not scanned. AGC_EXP_REDZONE=1 lowers every scanned stack start by 128 bytes. */
+static void GC_CALLBACK below_red_zone(void **sp, void *thread) {
+  (void)thread;
+  *sp = (char *)*sp - 128;
+}
+#endif
+
 void agc_init(void) {
 #ifndef AGC_NO_GC
   if (GC_is_init_called()) return;
@@ -126,6 +135,7 @@ void agc_init(void) {
      reads GC_FREE_SPACE_DIVISOR from the environment, so a value set there still wins. */
   GC_set_free_space_divisor(FREE_SPACE_DIVISOR);
   GC_INIT();
+  if (getenv("AGC_EXP_REDZONE")) GC_set_sp_corrector(below_red_zone);
   GC_set_oom_fn(on_gc_oom);
   GC_set_abort_func(on_gc_abort);
   GC_set_warn_proc(GC_ignore_warn_proc);
