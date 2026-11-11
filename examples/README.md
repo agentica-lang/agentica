@@ -38,6 +38,9 @@ Run an example with `dist/agentica examples/<name>.agc`. The
   `Task.await`.
 - [`shared-cache.agc`](shared-cache.agc): tasks that share a cache and a counter
   in `ATS` tables.
+- [`actor.agc`](actor.agc): a counter actor from `std/actor`, reached by name
+  through a constant table of addresses, with `cast`, `call` and a `Stop`
+  message.
 - [`process-tool.agc`](process-tool.agc): run another program.
 - [`tcp_echo.agc`](tcp_echo.agc): a TCP echo: read a line from a socket and send
   it back.
