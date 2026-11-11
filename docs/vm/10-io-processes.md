@@ -169,10 +169,8 @@ direction (below).
   `AGENTICA_CHANNEL=3,4`. `channel_close` waits for the queued writes
   (`uv_shutdown`), then closes the parent's write end, and the child reads the
   end of its input; the parent keeps reading the other pipe. The close is the
-  end of input that every system delivers: a pipe has no `shutdown(2)`
-  (`ENOTSOCK`), and on macOS the `shutdown(SHUT_WR)` of one socket pair that
-  carried both directions (the layout before 0.31) did not always reach the
-  child (#1392).
+  end of input that every system delivers; a pipe has no `shutdown(2)`
+  (`ENOTSOCK`).
 - **Windows.** The CRT of the child rebuilds descriptors 3 and 4 from the
   `lpReserved2` block that libuv builds for each spawn, and libuv passes only
   those handles
@@ -203,17 +201,16 @@ direction (below).
   does. The variable names the form, and a VM never guesses from another one.
   For `3,4` on POSIX, `fstat` must say FIFO or socket for both descriptors and
   `fcntl(F_GETFL)` must say 3 is open for reading and 4 for writing (or either
-  both ways, as node's socket pairs are). POSIX also takes `3`, the one-socket
-  form of earlier versions that a parent that is no VM may still pass: a socket
-  or FIFO open both ways on descriptor 3, duplicated once for the second
-  direction. The VM moves the descriptors with `F_DUPFD_CLOEXEC`, closes the
-  originals, forgets them in the table of inherited files (so no `File` call
-  can reach them), removes the variable from its own environment, and keeps
-  the streams until the end of the run. On Windows it takes only `3,4`, with
-  descriptor 3 a pipe that grants reading and 4 one that grants writing; it
-  duplicates both without inheritance and closes the originals. In any other
-  case, such as a regular file, a character device or a pipe the wrong way
-  round, nothing is touched (the descriptors stay as they were) and the
+  both ways, as node's socket pairs are). POSIX also takes `3`: one socket or
+  FIFO open both ways on descriptor 3, duplicated once (a parent that is not a
+  VM may pass it). The VM moves the descriptors with `F_DUPFD_CLOEXEC`, closes
+  the originals, forgets them in the table of inherited files (so no `File`
+  call can reach them), removes the variable from its own environment, and
+  keeps the streams until the end of the run. On Windows it takes only `3,4`,
+  with descriptor 3 a pipe that grants reading and 4 one that grants writing;
+  it duplicates both without inheritance and closes the originals. In any
+  other case, such as a regular file, a character device or a pipe the wrong
+  way round, nothing is touched (the descriptors stay as they were) and the
   child-side builtins return `error("process: no parent channel")`. The libuv
   handle is attached on first use, so a program that never uses the channel
   never starts a read.

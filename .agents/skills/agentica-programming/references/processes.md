@@ -159,7 +159,7 @@ program inherited it.
   no parent channel")`. A timeout closes the channel for good. The VM takes the
   channel at startup only when `AGENTICA_CHANNEL` is `3,4` with descriptor 3
   open for reading and 4 for writing (on Linux and macOS also `3` with one
-  socket or FIFO open both ways, the earlier form), then hides it, so your own
+  socket or FIFO open both ways), then hides it, so your own
   children never inherit it. These calls are for runner code:
   under `agentica test`, `Test.run` and the BDD step programs use the channel
   (`testing.md`), and a test or step calling them can break the protocol.
