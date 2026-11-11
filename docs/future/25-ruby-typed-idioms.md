@@ -2,54 +2,10 @@
 
 Decisions behind the Ruby forms of the language. Built forms live in the
 grammar and the programming skill; planned ones live in their issue, with the
-spec below: standalone lambdas (§25.5, #979) and `format` (§25.11, #982).
+spec below: `format` (§25.11, #982).
 
 The principles (Ruby with types, one way, no warnings, the method test) are in
 `docs/grammar/01-overview.md` §2.
-
-### 25.5 Standalone lambdas
-
-```agentica
-inc = lambda do |x: Int| x + 1 end
-puts(inc.call(41))                      # 42
-
-check: Fn[String, Result[Int]] = lambda do |s|
-  n = try s.to_i
-  ok(n * 2)
-end
-```
-
-**Syntax:** a new primary expression, `"lambda", block`. `lambda` becomes a
-reserved word.
-
-**Checker rules:**
-
-- A lambda is a block without a call. Its value has type `Fn[A, ..., R]`, it
-  captures by value, and the block rules hold (`CHECK-CAPTURED-ASSIGNMENT`,
-  `CHECK-SHADOWED-NAME`, `return` leaves the lambda).
-- Parameters must be annotated, unless there is an expected `Fn` type (an
-  annotated variable, a parameter, a field, a return). With neither,
-  `CHECK-BLOCK-TYPE`, as for a block.
-- The result type comes from the expected `Fn` if there is one, or else from the
-  body, as for `map`. As for `map`, `try` needs a known result type, so it works
-  only with an expected `Fn` (the second example).
-- A lambda cannot call itself (it has no name); recursion uses `def`.
-- The strict rules hold inside a lambda as in a block: an unused parameter or
-  local is `CHECK-UNUSED-VARIABLE`, a statement after `return` is
-  `CHECK-UNREACHABLE-CODE`, and a dropped `Result` is `CHECK-UNUSED-RESULT`.
-- **One way:** a `lambda` literal written directly as the last argument of a
-  call that accepts a trailing block, whose last parameter is an `Fn`, is a
-  second way to write a trailing block. It does not apply to `.call(...)`, which
-  cannot take a block, so `g.call(1, lambda do |x: Int| x end)` is valid.
-  `xs.map(lambda do |x: Int| x * 2 end)` is `CHECK-BLOCK-TARGET` with a help
-  that shows `xs.map do |x| x * 2 end`. Lambdas stay valid wherever a trailing
-  block cannot go: assigned to a variable, a struct field, a list or map
-  element, a non-last argument, or a return value.
-- Not accepted, each with a help that shows `lambda do |x: Int| ... end`:
-  `->(x) { ... }`, `lambda { |x| ... }`, `proc do ... end`, `Proc.new`, and
-  `fn(x: Int) ...`.
-
-**Lowering:** the same closure as a block passed to a call; no VM change.
 
 ### 25.11 `format`
 

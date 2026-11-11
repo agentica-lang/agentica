@@ -38,7 +38,6 @@ Cache.bytes(cache: Cache.Store) -> Int
 - `bytes` is never above `max_bytes`.
 - Another implementation returns a `Cache.Store` with the same seven
   functions: an expired entry is a miss, a too-big `put` drops the old value,
-  `cleanup` gives 0 without a ttl, `bytes` counts as `max_bytes`. A block is a
-  value only when passed to a call, so a helper
-  `def block1[A, R](f: Fn[A, R]) -> Fn[A, R]` returns it to hold state (full
-  example on the site page).
+  `cleanup` gives 0 without a ttl, `bytes` counts as `max_bytes`. Each field
+  is a lambda that holds the state, `get: ->(key) { table_get(table, key) }`
+  (full example on the site page).

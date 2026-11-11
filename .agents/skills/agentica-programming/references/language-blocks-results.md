@@ -30,6 +30,23 @@ A block is a function written at the call site as the last argument: `xs.map do
   `map`, `reduce` or a `for` loop. Block parameters cannot reuse visible names.
 - A block is a `Fn[...]` value: return it, store it, pass it to `Task.spawn`.
 
+## Lambdas
+
+A lambda is a block that no call takes, for a function value of its own:
+`add = ->(x: Int) { x + base }`, `answer = -> { 42 }`.
+
+- Parentheses hold the parameters, and none means no parentheses (`-> { 1 }`,
+  never `->() { 1 }`). The body is always in braces, over one line or several;
+  never `->(x) do ... end`, `lambda`, `proc` or `->x`.
+- The block rules hold: parameter types from the expected `Fn` (an annotated
+  variable, parameter, field, list or map item, return type) or annotations,
+  else `CHECK-BLOCK-TYPE`; `try` needs a known `Result` result, so annotate:
+  `f: Fn[String, Result[Int]] = ->(s) { ... }`; `return` leaves the lambda.
+- Where a call takes a block, write the block: `xs.map(->(x) { ... })` is
+  `CHECK-LAMBDA-BLOCK`. `.call(...)` takes no block, so a lambda may be its
+  last argument. A lambda cannot call itself (use `def`), and one dropped as a
+  statement is `CHECK-UNUSED-VALUE`.
+
 ## Result and try
 
 ```text
@@ -98,12 +115,11 @@ none -> Optional[T]
 
 ## Design patterns
 
-Strategy: an `Fn` parameter (`&name` or a block). Factory: a function
-returning `Result[T]`. Builder: field defaults and `.with(...)`. State machine:
-an enum and `case`. Command: enum variants applied with `reduce`. Decorator: a
-function taking and returning an `Fn` (`def wrap(f: Fn[A, B]) -> Fn[A, B]`
-returns the block). Observer: a struct holding a `List[Fn[...]]`, called with
-`map`.
+Strategy: an `Fn` parameter (`&name` or a block). Factory: a function returning
+`Result[T]`. Builder: field defaults and `.with(...)`. State machine: an enum
+and `case`. Command: enum variants applied with `reduce`. Decorator: a function
+taking and returning an `Fn` (it returns a lambda that calls `f`). Observer: a
+struct holding a `List[Fn[...]]`, called with `map`.
 
 Composition root: `main` builds the collaborators (tables, stores, the clock,
 such as `&Time.now_ms`) and passes them in; a function never builds what it

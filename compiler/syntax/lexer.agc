@@ -147,6 +147,10 @@ BLOCK_HEADS = Set.new(["if", "elsif", "while", "case", "for"])
 ## The opener that each closing bracket needs on top of the frames.
 OPENERS = {")": "(", "]": "[", "}": "{"}
 
+## The frame of the `{` that opens the body of a lambda (`->(x) { ... }`). Its body holds statements, so a line break
+## inside it is a statement break, as in a block; a `}` closes it as it closes a map literal.
+LAMBDA_BODY = "->"
+
 ## The default of a table lookup that cannot miss.
 NO_OP = Op(kind: "", lexeme: "", value: Tokens.Value.NoValue, width: 1)
 
@@ -346,6 +350,10 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
   # The column of a character is its offset plus this, a sum where the line start would need a subtraction and an
   # addition; it changes where `line_start` does.
   column_base = 1 - line_start
+  # A lambda: the depth of the frame of its parameter list while it is open (-1 otherwise), and the index in `tokens`
+  # of the token right after that list once it closes, where a `{` opens the lambda's body.
+  params_depth = -1
+  body_at = -1
   # The arms for names, operators, brackets and line breaks (nine of ten tokens) do their work in place: a call
   # costs a few VM steps, and the lexer makes a token every 5 characters or so (docs/vm-benchmarks.md, "The
   # lexer"). The arms for strings, numbers and docs call a function: they are rare.
@@ -437,9 +445,16 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
         end
 
         stop = index + op.width
+        kind = op.kind
+        # A `->` where no expression ends just before it starts a lambda; after one (a case pattern, the parameter
+        # list of a def) it is the arrow, and so it is after the `if` of a case guard that lacks its condition.
+        if kind == "arrow" and (tokens.size == 0 or lambda_after?(tokens[tokens.size - 1].kind))
+          kind = "lambda-arrow"
+        end
+
         tokens = tokens.push(
           Tokens.Token(
-            kind: op.kind,
+            kind: kind,
             lexeme: op.lexeme,
             value: op.value,
             span: Source.Span(
@@ -461,7 +476,15 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
       CharClass.Opening ->
         op = SINGLE_OPS.get(char, NO_OP)
         opening = operator_token(op, index, line, column_base)
-        top = Frame(kind: op.lexeme, start: opening.span.start, inside: top.inside)
+        kind = op.lexeme
+        after_lambda = tokens.size > 0 and tokens[tokens.size - 1].kind == "lambda-arrow"
+        if char == "{" and (after_lambda or tokens.size == body_at)
+          kind = LAMBDA_BODY
+        elsif char == "(" and after_lambda
+          params_depth = depth + 1
+        end
+
+        top = Frame(kind: kind, start: opening.span.start, inside: top.inside)
         delimiters = delimiters.push(top)
         depth += 1
         tokens = tokens.push(opening)
@@ -472,6 +495,11 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
         end
 
         tokens = tokens.push(operator_token(SINGLE_OPS.get(char, NO_OP), index, line, column_base))
+        if depth == params_depth
+          params_depth = -1
+          body_at = tokens.size
+        end
+
         depth -= 1
         delimiters = delimiters.take(depth)
         top = frame_on_top(delimiters, depth)
@@ -541,7 +569,7 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
         end
 
         column_base = 1 - line_start
-        if top.kind == "kw"
+        if top.kind == "kw" or top.kind == LAMBDA_BODY
           # A line that starts with `.name` continues the line before, so its NL is dropped. It needs a token that
           # can end an expression just before (not an NL, so a blank line ends the statement, nor a `do` or an
           # operator), and the line is not the head of an `if`, `while`, `case` or `for` (a dot on the first line of
@@ -958,7 +986,8 @@ def close_brace(
 ) -> Diag.Outcome[Progress]
   return scan_piece(input, tokens, delimiters, index, line, line_start) if in_interpolation?(delimiters)
 
-  if delimiters.size == 0 or delimiters[delimiters.size - 1].kind != "{"
+  kind = frame_on_top(delimiters, delimiters.size).kind
+  if kind != "{" and kind != LAMBDA_BODY
     return Diag.Outcome.Failed(unmatched(delimiters, index, "}", line, 1 - line_start))
   end
 
@@ -1578,6 +1607,9 @@ end
 
 def pop(delimiters: List[Frame]) -> List[Frame] = delimiters.take(delimiters.size - 1)
 
+# Whether a `->` after a token of kind `before` starts a lambda.
+def lambda_after?(before: String) -> Bool = !ENDS_EXPRESSION.include?(before) and before != "if"
+
 # The last frame of a stack of `depth` frames, or ROOT.
 def frame_on_top(delimiters: List[Frame], depth: Int) -> Frame
   return ROOT if depth == 0
@@ -1589,14 +1621,18 @@ def unclosed(frame: Frame, here: Source.Position) -> Diag.Diagnostic
   return unterminated(frame.start, here) if frame.kind == "#"
 
   help = Diag.Help.NoHelp
+  opener = frame.kind
   if frame.kind == "{"
     help = Diag.Help.Hint(
       "add the missing \"}\" of a map literal; if \"{\" was meant to open a block, remove it: " +
       "blocks have no braces and end with \"end\"",
     )
+  elsif frame.kind == LAMBDA_BODY
+    opener = "{"
+    help = Diag.Help.Hint("add the missing \"}\" that ends the lambda")
   end
 
-  Diag.fail("LEX-UNCLOSED-DELIMITER", "unclosed #{frame.kind} delimiter", span(frame.start, here), help)
+  Diag.fail("LEX-UNCLOSED-DELIMITER", "unclosed #{opener} delimiter", span(frame.start, here), help)
 end
 
 def blank?(char: String) -> Bool = char == " " or char == "\t"

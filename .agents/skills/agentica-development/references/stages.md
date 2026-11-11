@@ -26,11 +26,14 @@ itself, because the `NL` tokens of a blank line and of a `#` comment line look
 the same.
 
 Token kinds are Strings, listed in `OPERATOR_KINDS` and `WORD_ACTIONS` of
-`compiler/syntax/lexer.agc`; a reserved word is its own kind. Two easy to get
+`compiler/syntax/lexer.agc`; a reserved word is its own kind. Three easy to get
 wrong:
 
 - `&&`, `||` and `!` are the kinds `and`, `or` and `not`; a `!` glued to a name
   stays in the name.
+- `->` is `arrow` after a token of `ENDS_EXPRESSION` (or after `if`), and
+  `lambda-arrow` anywhere else; the `{` right after it, or after its `(...)`,
+  opens the `LAMBDA_BODY` frame, where line breaks are statement breaks.
 - The parser desugars `x op= e` into `binding x #f (binary op ...)`, and reads
   `true`, `false` and `nil` from their kind, not from `value`.
 

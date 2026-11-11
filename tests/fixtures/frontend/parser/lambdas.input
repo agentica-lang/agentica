@@ -1,0 +1,14 @@
+def main() -> Void
+  c = 3
+  f: Fn[Int, Int] = ->(x) { x + c }
+  answer = -> { 42 }
+  g = ->(a: Int, b: Int) {
+    total = a + b
+    total * 2
+  }
+  h = case c
+    0 -> ->(x: Int) { x }
+    _ -> {"a": 1}
+  end
+  puts(f.call(answer.call()) + g.call(1, 2))
+end
