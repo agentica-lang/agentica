@@ -144,17 +144,15 @@ end
 
 ## Decorator
 
-A function takes an `Fn` and returns a new one. A block can only follow a call, so `wrap` returns it.
+A function takes an `Fn` and returns a new one, a lambda that calls it.
 
 ```agentica
-def wrap(f: Fn[Int, Int]) -> Fn[Int, Int] = f
-
 def logged(f: Fn[Int, Int]) -> Fn[Int, Int]
-  wrap() do |x: Int|
+  ->(x) {
     y = f.call(x)
     puts("f(#{x}) = #{y}")
     y
-  end
+  }
 end
 
 def main() -> Void

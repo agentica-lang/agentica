@@ -125,24 +125,26 @@ end
 23
 ```
 
-## Keep a block
+## Lambdas
 
-A block always follows a call; there are no standalone lambdas. To keep a block in a variable, pass it to a function that returns it:
+A block always follows a call. A function value of its own, to keep in a variable, a field or a list, is a lambda: `->(x) { ... }`, with the body in braces over one line or several. Its parameter types come from the `Fn` type it is given, or from annotations. A lambda without parameters drops the parentheses: `-> { 42 }`.
 
 ```agentica
-def keep(f: Fn[Int, Int]) -> Fn[Int, Int] = f
-
 def main() -> Void
-  add_one = keep() do |n| n + 1 end
-  puts(add_one.call(1))
-  puts([1, 2].map(add_one))
+  step = 2
+  add_step: Fn[Int, Int] = ->(n) { n + step }
+  answer = -> { 40 }
+  puts(add_step.call(answer.call()))
+  puts([1, 2].map(add_step))
 end
 ```
 
 ```output
-2
-[2, 3]
+42
+[3, 4]
 ```
+
+Where a call takes a block, the block is the one way to write it: `xs.map(->(x: Int) { x + 1 })` is an error whose help shows `xs.map do |x| x + 1 end`.
 
 ## Chains over several lines
 

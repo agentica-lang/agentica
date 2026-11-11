@@ -603,11 +603,12 @@ export struct Interpolation
   span: Source.Span
 end
 
-## do |params| body end.
+## do |params| body end, or a lambda ->(params) { body } (`lambda`): the same function value without a call.
 export struct BlockLit
   id: Int
   params: List[BlockParam]
   body: List[Stmt]
+  lambda: Bool
   span: Source.Span
 end
 

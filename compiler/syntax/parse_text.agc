@@ -441,7 +441,12 @@ def print_container_expr(out: List[String], at: Margin, role: String, expr: Ast.
 
       lines
     Ast.Expr.BlockLit(node) ->
-      lines = out.push(head(at, role, "block-lit", node.id, node.span, ""))
+      name = "block-lit"
+      if node.lambda
+        name = "lambda"
+      end
+
+      lines = out.push(head(at, role, name, node.id, node.span, ""))
       for param in node.params
         lines = print_block_param(lines, child, param)
       end

@@ -12,10 +12,25 @@ MAX_VALUE_TEXT = 60
 
 ## CHECK-UNUSED-RESULT when the dropped value is a Result, from any call (a Result[Void] too); it runs first, so a pure
 ## builtin that gives a Result, such as s.to_i, is this error and not CHECK-UNUSED-VALUE. Then CHECK-UNUSED-VALUE when
-## the value could only have been used for itself: a pure builtin, a to_s on a data value, a .with. Anything else, and
-## any Void value, is fine.
+## the value could only have been used for itself: a pure builtin, a to_s on a data value, a .with, a lambda. Anything
+## else, and any Void value, is fine.
 export def check_unused_value(cx: State.Cx, st: State.St, value: Ast.Expr, type: T.Type) -> Result[Bool]
   return ok(true) if T.is?(type, "Void")
+
+  case value
+    Ast.Expr.BlockLit(found) if found.lambda ->
+      return error(
+        State.fail_help(
+          cx,
+          st,
+          "CHECK-UNUSED-VALUE",
+          "the lambda is not used",
+          found.span,
+          "assign it to a name, as in f = ->(x: Int) { ... }, or pass it to a call",
+        ),
+      )
+    _ -> type = type
+  end
 
   resolved = resolution(st, value)
   name = call_name(value, resolved)

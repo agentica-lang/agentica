@@ -642,11 +642,12 @@ of the caller do not mix:
    the whole `Fn` type: the callback of `filter`, `any?`, `all?` and `each`,
    and the predicate of `find`, `partition` and `take_while`. Elsewhere, as in
    `map`, bind it first: `f: Fn[Int, Bool] = &name`.
-4. The block, the last argument. Its parameter types come from the `Fn`
-   parameter; one that is still open must be annotated in the block (`do |x:
-   Int|`), which binds it, else `CHECK-BLOCK-TYPE`. The block's result binds the
-   open parameters of the `Fn` result (`R` in `Result[R]`); a result that does
-   not fit is `CHECK-TYPE-MISMATCH`. A step 3 argument whose parameter type is
+4. The lambdas among the other arguments, from left to right, then the block,
+   the last argument. Their parameter types come from the `Fn` parameter; one
+   that is still open must be annotated (`do |x: Int|`, `->(x: Int)`), which
+   binds it, else `CHECK-BLOCK-TYPE`. The result binds the open parameters of
+   the `Fn` result (`R` in `Result[R]`); a result that does not fit is
+   `CHECK-TYPE-MISMATCH`. A step 3 argument whose parameter type is
    still open waits for the block. A step 3 argument binds nothing: with
    `def apply[A, B](x: A, f: Fn[A, B])`, the call `apply(3, &id)` leaves `B`
    open.
@@ -922,3 +923,36 @@ total = xs.reduce(0) do |sum, x| sum + x end
 - **Values.** A block has type `Fn[A, ..., R]` and works wherever a function
   value does, including as a BDD step. It shares the caller's step budget and
   call-depth limit. Blocks have no equality or JSON form.
+
+### Lambdas
+
+A lambda is a block that no call takes: `->(x) { ... }` is a function value
+that can go wherever a value does.
+
+```ruby
+c = 3
+add_c: Fn[Int, Int, Int] = ->(a, b) { a + b + c }
+answer = -> { 42 }
+half: Fn[String, Result[Int]] = ->(s) {
+  n = try s.to_i
+  ok(n / 2)
+}
+```
+
+- The rules of a block hold: parameter types from the expected `Fn` (an
+  annotated variable, a parameter, a field, a list or map item, a return type)
+  or from annotations (`->(x: Int) { ... }`), else `CHECK-BLOCK-TYPE`; the
+  result from the expected `Fn` or else from the body; `try` only with a known
+  `Result` result (`CHECK-TRY-CONTEXT`); capture by value; `return` leaves the
+  lambda. A lambda where no `Fn` is expected is `CHECK-TYPE-MISMATCH`.
+- A lambda has no name, so it cannot call itself: the variable it is assigned
+  to does not exist inside it (`CHECK-UNKNOWN-NAME`); recursion uses `def`.
+- **One way.** A lambda written as the last argument of a call that takes it
+  is `CHECK-LAMBDA-BLOCK`: there the block is the one way
+  (`xs.map do |x| x * 2 end`). `.call(...)` takes no block, so
+  `f.call(1, ->(x: Int) { x })` is valid, as is a lambda kept in a variable
+  and passed by name (`xs.map(double)`).
+- In a generic call, a lambda that is not the last argument is checked after
+  the arguments that have a type of their own, from left to right, as the
+  block is (step 4 of "Generic functions").
+- A lambda dropped as a statement is `CHECK-UNUSED-VALUE`.

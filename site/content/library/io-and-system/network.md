@@ -640,12 +640,10 @@ end
 
 `HTTP.Handler` is the type of a route that takes the request whole: `Fn[HttpRequest, Result[HttpResponse]]`. `HTTP.App` is the type of the app of `serve`. They are type aliases, so `&handle` is a `Handler` when `handle` has that shape, and a framework can hold, store and return handlers by that name.
 
-A middleware is a function from a `Handler` to a `Handler`: it wraps the next handler, and may change the request before it, or the response after it, or answer without calling it. A block must follow a call, so a small helper turns the block into the value (the same reason `keep` exists in the [tour](/tour/blocks/#keep-a-block)). Middlewares stack by calling one with another's result. A middleware of an `App` is a function from an `App` to an `App` in the same way.
+A middleware is a function from a `Handler` to a `Handler`: it wraps the next handler, and may change the request before it, or the response after it, or answer without calling it. A [lambda](/tour/blocks/#lambdas) that captures the next handler is the new one. Middlewares stack by calling one with another's result. A middleware of an `App` is a function from an `App` to an `App` in the same way.
 
 ```agentica
 import HTTP from "std/http"
-
-def handler(f: HTTP.Handler) -> HTTP.Handler = f
 
 def hello(request: HttpRequest) -> Result[HttpResponse]
   ok(HttpResponse(status: 200, headers: [], body: "hello".bytes))
@@ -662,7 +660,7 @@ def log_answer(next: HTTP.Handler, request: HttpRequest) -> Result[HttpResponse]
 end
 
 # Logs the request line and the status of the answer; an error of the next handler passes through unchanged.
-def logged(next: HTTP.Handler) -> HTTP.Handler = handler() do |request| log_answer(next, request) end
+def logged(next: HTTP.Handler) -> HTTP.Handler = ->(request) { log_answer(next, request) }
 
 def authorized(next: HTTP.Handler, request: HttpRequest) -> Result[HttpResponse]
   if HTTP.header_values(request.headers, "authorization").empty?
@@ -673,7 +671,7 @@ def authorized(next: HTTP.Handler, request: HttpRequest) -> Result[HttpResponse]
 end
 
 # Answers 401 to a request without an Authorization header, and does not call the next handler.
-def guarded(next: HTTP.Handler) -> HTTP.Handler = handler() do |request| authorized(next, request) end
+def guarded(next: HTTP.Handler) -> HTTP.Handler = ->(request) { authorized(next, request) }
 
 def main() -> Void
   app = logged(guarded(&hello))

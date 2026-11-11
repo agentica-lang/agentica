@@ -133,8 +133,9 @@ expressions and operators. Builtin methods and `to_s`: `builtins.md`.
   need a block. An `Fn` field of a struct is called by its name: `store.put(a,
   b)` is `store.put.call(a, b)`. A block is also a function value and captures
   locals. Function values go in containers, fields, parameters and returns;
-  signatures must match exactly. Bare function names are not values. There are
-  no standalone lambdas, equality or JSON encoding; inspect prints `<Fn>`.
+  signatures must match exactly. Bare function names are not values; a lambda
+  `->(x: Int) { x + 1 }` is (`language-blocks-results.md`). There is no
+  equality or JSON encoding; inspect prints `<Fn>`.
 
 Operators, from highest to lowest precedence:
 
