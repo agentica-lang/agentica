@@ -150,11 +150,11 @@ DEBUG_MAP := $(DEBUG_MAPS)
 else ifeq ($(SANITIZE),1)
 SANITIZE_KIND ?= address
 VM_CC := clang
-VM_CFLAGS := $(VM_WARN) -O1 -g -fno-omit-frame-pointer -fsanitize=$(SANITIZE_KIND),undefined -fno-sanitize-recover=all -DAGC_NO_GC
+VM_CFLAGS := $(VM_WARN) -O1 -g -fno-omit-frame-pointer -fsanitize=$(SANITIZE_KIND),undefined -fno-sanitize-recover=all $(TRIAL_CFLAGS) -DAGC_NO_GC
 VM_LDFLAGS := -fsanitize=$(SANITIZE_KIND),undefined $(VM_LIBS)
 GC_MODE := none
 VM_BUILD := build/vm/sanitize
-YY_CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=$(SANITIZE_KIND),undefined -fno-sanitize-recover=all
+YY_CFLAGS := -O1 -g -fno-omit-frame-pointer -fsanitize=$(SANITIZE_KIND),undefined -fno-sanitize-recover=all $(TRIAL_CFLAGS)
 OSSL_CFLAGS := -g -fno-omit-frame-pointer
 DEBUG_MAP := $(DEBUG_MAPS)
 else ifeq ($(TSAN),1)

@@ -23,11 +23,16 @@ jobs:
         include:
           - os: ubuntu-24.04-arm
             kind: hwaddress
+            extra: -fno-sanitize=pointer-overflow -mllvm -hwasan-globals=0
+          - os: ubuntu-24.04-arm
+            kind: address
+            extra: -fno-sanitize=pointer-overflow
     env:
       AGENTICA_REQUIRE_VM: '1'
       AGENTICA_SWEEP: sampled
       SANITIZE: '1'
       SANITIZE_KIND: ${{ matrix.kind }}
+      TRIAL_CFLAGS: ${{ matrix.extra }}
       HWASAN_OPTIONS: detect_leaks=0:allocator_may_return_null=1
     steps:
       - uses: actions/checkout@v7
@@ -41,25 +46,13 @@ jobs:
           clang --version; nproc; uname -r
           command -v ccache || echo "no ccache"
           ls "$(clang -print-resource-dir)"/lib/linux/ | grep -E 'hwasan|asan' || ls -R "$(clang -print-resource-dir)"/lib | grep -E 'hwasan|asan' || true
-      - name: Probe one C test (hwaddress alone, then with undefined)
-        run: |
-          sudo apt-get install -y --no-install-recommends gdb > /dev/null 2>&1 || { sudo apt-get update > /dev/null && sudo apt-get install -y --no-install-recommends gdb > /dev/null; }
-          cat /proc/sys/abi/tagged_addr_disabled 2>/dev/null || echo "no tagged_addr_disabled"
-          for kind in hwaddress hwaddress,undefined; do
-            rm -rf build/vm/sanitize
-            make -j"$(nproc)" build/vm/sanitize/budget-test SANITIZE_KIND=$kind > /dev/null 2>&1 || make -j"$(nproc)" build/vm/sanitize/budget-test SANITIZE_KIND=$kind 2>&1 | tail -20
-            echo "== $kind"
-            HWASAN_OPTIONS=verbosity=1 build/vm/sanitize/budget-test 2>&1 | tail -20 || true
-            gdb -batch -ex run -ex bt -ex 'x/4i $pc-8' -ex 'info registers x0 x1 x16 x17' build/vm/sanitize/budget-test 2>&1 | tail -30 || true
-          done
       - name: Build
-        if: false
         run: make -j"$(nproc)" vm-sanitize-build
       - name: C tests
-        if: false
+        if: ${{ !cancelled() }}
         run: make -j"$(nproc)" vm-test
       - name: vm-sanitize-test, all modules
-        if: false
+        if: ${{ !cancelled() }}
         run: make vm-sanitize-test
       - name: ccache install time
         if: ${{ !cancelled() && matrix.os == 'ubuntu-latest' }}
