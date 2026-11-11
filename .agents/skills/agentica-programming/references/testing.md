@@ -67,9 +67,8 @@ for a test function with parameters, type parameters or another result;
   those; `Fn`, `Task`, handles, `TestCase` and two different types are
   `CHECK-TYPE-MISMATCH`. Maps compare in any key order and sets in any element
   order; Floats by IEEE 754 (NaN is not equal to itself); a `Json` as its
-  canonical text (sorted keys). A `Bytes` shows as `<Bytes N hex>` (the first
-  32 bytes); to read a mismatch as text, compare
-  `String.from_bytes(b).unwrap!` with a String.
+  canonical text (sorted keys). A `Bytes` shows as quoted text, the first 32
+  bytes with the escapes of a String (`<Bytes 7 "+OK\r\n\x00\xFF">`).
 - `Test.ok?(r)` and `Test.error?(r)` check a Result's tag;
   `Test.assert(cond, message)` fails with `message`.
 - A failed assertion counts against its test even when its Result is

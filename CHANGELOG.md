@@ -23,6 +23,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A builtin is a function value: `&Time.now_ms`, `[1, 2].map(&Int.to_s)`.
 - A range has the Enumerable methods of List: `(0...n).map`, `select`, `sum`,
   `reduce`, `min`, `max` and more.
+- `Test.eq` shows a `Bytes` as quoted text (`<Bytes 7 "+OK\r\n\x00\xFF">`).
 
 ## [0.29.0] - 2026-11-10
 

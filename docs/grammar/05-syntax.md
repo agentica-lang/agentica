@@ -425,7 +425,7 @@ block_param      = NAME, [ ":", type ] ;
 block_body       = NL, { statement } | simple_statement ;
 
 primary          = literal
-                 | "&", ( NAME | TYPE_NAME, ".", NAME )
+                 | "&", ( NAME | TYPE_NAME, ".", [ TYPE_NAME, "." ], NAME )
                  | NAME, [ "(", [ arguments ], ")" ]
                  | TYPE_NAME, ".", TYPE_NAME, ".", TYPE_NAME, [ "(", [ arguments ], ")" ]
                  | TYPE_NAME, ".", TYPE_NAME, "(", [ arguments ], ")"

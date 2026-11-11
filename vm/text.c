@@ -113,14 +113,14 @@ agc_string *agc_concat(const agc_string *a, const agc_string *b) {
   return s;
 }
 
-/* One byte of the quoted form, as Ruby's String#inspect writes a binary string: printable ASCII as itself, `"` and
-   `\` escaped, \n, \r and \t by name, any other byte as \xHH. At most four characters. */
+/* One byte of the quoted form, with the escapes of agc_write_form: the short escapes by name (\n, \e, \", ...),
+   printable ASCII as itself, any other byte as \xHH in upper-case hex. At most four characters. */
 static size_t quoted_byte(uint8_t c, char *out) {
-  static const char digits[] = "0123456789abcdef";
-  char named = c == '\n' ? 'n' : c == '\r' ? 'r' : c == '\t' ? 't' : c == '"' ? '"' : c == '\\' ? '\\' : 0;
+  static const char digits[] = "0123456789ABCDEF";
+  const char *named = short_escape(c);
   if (named) {
-    out[0] = '\\';
-    out[1] = named;
+    out[0] = named[0];
+    out[1] = named[1];
     return 2;
   }
   if (c >= 0x20 && c < 0x7f) {
@@ -135,7 +135,7 @@ static size_t quoted_byte(uint8_t c, char *out) {
 }
 
 /* The text of a Bytes: "<Bytes N>" for to_s, the inspect form "<Bytes N 616263>" with the first BYTES_SHOWN bytes in
-   hex, and the test form <Bytes 7 "+OK\r\n\x00\xff"> with them quoted. Raw bytes are not text and may not be UTF-8,
+   hex, and the test form <Bytes 7 "+OK\r\n\x00\xFF"> with them quoted. Raw bytes are not text and may not be UTF-8,
    so no form holds them as they are: every form is ASCII. */
 static size_t bytes_form(const agc_bytes *b, bytes_style style, char out[BYTES_FORM]) {
   static const char digits[] = "0123456789abcdef";

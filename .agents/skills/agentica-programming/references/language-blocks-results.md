@@ -107,9 +107,8 @@ returns the block). Observer: a struct holding a `List[Fn[...]]`, called with
 
 Composition root: `main` builds the collaborators (tables, stores, the clock,
 such as `&Time.now_ms`) and passes them in; a function never builds what it
-calls. Boundary: write the
-body as `Result[T]` with `try`, and convert once where the caller needs another
-type:
+calls. Boundary: write the body as `Result[T]` with `try`, and convert once
+where the caller needs another type:
 
 ```ruby
 def handler(call: Call) -> Reply

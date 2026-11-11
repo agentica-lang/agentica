@@ -847,8 +847,9 @@ written on its type, `&Int.to_s`, takes the receiver first (`Fn[Int, String]`).
 It takes every parameter, those with a default included (`&Zlib.crc32` is
 `Fn[Bytes, Int, Result[Int]]`). Only a builtin with one form, no rule of its own
 and no type parameter can be one, written as Ruby writes it (`&String.strip`,
-not `&String.trim`); any other (`&File.open`, `&List.map`, `&puts`) is
-`CHECK-UNKNOWN-NAME` with a help: pass a block that calls it.
+not `&String.trim`); any other (`&File.open`, `&List.map`, `&puts`, a function
+of a family member such as `&OpenSSL.Digest.sha256`) is `CHECK-UNKNOWN-NAME`
+with a help: pass a block that calls it.
 
 A field of type `Fn` is called through the struct, without `.call`:
 `store.put(a, b)` is `store.put.call(a, b)`. The arguments are checked against

@@ -15,6 +15,8 @@ import Tables from "check_tables"
 ## The prelude file stem of the wrappers: no file of stdlib/prelude/ has this name.
 export REFS_MODULE = "builtin_refs"
 
+BLOCK_HELP = "pass a block that calls it instead, such as do |x| ... end, or wrap it in a def"
+
 ## A builtin a reference names: the builtin, and the method it is written with (`to_s` for `&Int.to_s`), or "" for a
 ## function (`&Time.now_ms`).
 export struct Ref
@@ -50,6 +52,9 @@ export def find(name: String) -> Found
   end
 
   return Found.Missing if entry.none? or !PUBLIC_NAMES.include?(name)
+
+  # A function of a family member (OpenSSL.Digest.sha256): the prelude file is not linked, so it cannot call one.
+  return Found.Refused(BLOCK_HELP) if parts.size == 3
 
   key = RubyForm.method_key(name)
   return usable(entry.unwrap!, name, parts[1]) if key == name
@@ -99,7 +104,7 @@ end
 def usable(entry: Model.Builtin, name: String, method: String) -> Found
   types = entry.parameters.map do |parameter: Model.Named| parameter.type end.push(entry.result)
   if entry.alternatives.size > 0 or !plain?(entry.rule) or !types.all? do |type: T.Type| writable?(type) end
-    return Found.Refused("pass a block that calls it instead, such as do |x| ... end, or wrap it in a def")
+    return Found.Refused(BLOCK_HELP)
   end
 
   Found.Builtin(Ref(builtin: entry, method: method))

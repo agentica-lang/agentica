@@ -1145,8 +1145,15 @@ def parse_function_ref(e: Base.Env, pos: Int, ids: Int) -> Result[Base.ExprAt]
   name = ""
   if e.tokens[cursor].kind == "type-name"
     dot = try Base.expect(e, cursor + 1, "dot", "a dot", false)
+    name = e.tokens[cursor].lexeme
+    # &Family.Member.fn: the function of a member of a builtin family (OpenSSL.Digest.sha256); the linker judges it.
+    if e.tokens[dot].kind == "type-name" and e.tokens[dot + 1].kind == "dot"
+      name = "#{name}.#{e.tokens[dot].lexeme}"
+      dot = try Base.expect(e, dot + 1, "dot", "a dot", false)
+    end
+
     stop = try Base.expect_used(e, dot, "a function name")
-    name = "#{e.tokens[cursor].lexeme}.#{e.tokens[dot].lexeme}"
+    name = "#{name}.#{e.tokens[dot].lexeme}"
     cursor = stop
   else
     stop = try Base.expect_used(e, cursor, "a function name")

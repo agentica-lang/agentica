@@ -112,7 +112,7 @@ static void test_keys(void) {
 }
 
 /* to_s is "<Bytes N>" (the bytes may not be text); inspect, and to_s inside another value, add the first 32 bytes in
-   hex and "..." past them. The test form (Test.eq) quotes the first 32 bytes as Ruby's String#inspect does. */
+   hex and "..." past them. The test form (Test.eq) quotes the first 32 bytes with the escapes of a String's form. */
 static void test_text(void) {
   agc_value abc = raw("abc", 3), empty = agc_bytes_value(agc_empty_bytes());
   form_is(agc_text(&vm, abc), "<Bytes 3>");
@@ -121,8 +121,8 @@ static void test_text(void) {
   form_is(agc_debug(&vm, empty), "<Bytes 0>");
   form_is(agc_test_text(&vm, abc), "<Bytes 3 \"abc\">");
   form_is(agc_test_text(&vm, empty), "<Bytes 0 \"\">");
-  agc_value reply = raw("+OK\r\n\x00\xff\"\\\t~ ", 12);
-  form_is(agc_test_text(&vm, reply), "<Bytes 12 \"+OK\\r\\n\\x00\\xff\\\"\\\\\\t~ \">");
+  agc_value reply = raw("+OK\r\n\x00\xff\x1b\a\"\\\t~ ", 14);
+  form_is(agc_test_text(&vm, reply), "<Bytes 14 \"+OK\\r\\n\\x00\\xFF\\e\\a\\\"\\\\\\t~ \">");
   /* The longest form: 32 bytes of four characters each, then "...". */
   char high[33];
   memset(high, 0x80, sizeof high);
@@ -130,7 +130,7 @@ static void test_text(void) {
           "<Bytes 33 \"\\x80\\x80\\x80\\x80\\x80\\x80\\x80\\x80\\x80\\x80\\x80\\x80\\x80\\x80\\x80\\x80"
           "\\x80\\x80\\x80\\x80\\x80\\x80\\x80\\x80\\x80\\x80\\x80\\x80\\x80\\x80\\x80\\x80\"...>");
   agc_value pair[1] = {raw("\x00\xff", 2)};
-  form_is(agc_test_text(&vm, agc_list_value(agc_list_from_array(pair, 1))), "[<Bytes 2 \"\\x00\\xff\">]");
+  form_is(agc_test_text(&vm, agc_list_value(agc_list_from_array(pair, 1))), "[<Bytes 2 \"\\x00\\xFF\">]");
   agc_string *checked;
   assert(agc_text_checked(&vm, abc, &checked));
   form_is(checked, "<Bytes 3>");
