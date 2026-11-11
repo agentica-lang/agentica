@@ -284,7 +284,8 @@ agc_weak *agc_weak_new(void *object) {
   w->hidden = (uintptr_t)object;
 #else
   w->hidden = GC_HIDE_POINTER(object);
-  if (GC_general_register_disappearing_link((void **)&w->hidden, object) == GC_NO_MEMORY) agc_out_of_memory();
+  /* The macro, as GC_REGISTER_FINALIZER_NO_ORDER: under GC_DEBUG (the GC-stress build) it passes the block's base. */
+  if (GC_GENERAL_REGISTER_DISAPPEARING_LINK((void **)&w->hidden, object) == GC_NO_MEMORY) agc_out_of_memory();
 #endif
   return w;
 }
