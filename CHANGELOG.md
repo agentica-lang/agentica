@@ -10,52 +10,49 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- `DNS.lookup(host)` gives the IPv4 and IPv6 addresses of a host name from the
-  system resolver.
-- `TCP.recv_bytes(socket, max_bytes)` without a timeout waits with no limit,
-  for a server that keeps an idle client connected.
-- Module blocks: `module Name ... end` holds several named modules in one file;
-  `export module` makes one importable (`import {Counter} from "agents"`);
-  `symbol`, `refs` and `type-at` find the names inside them (`Counter.start`).
-- A `case` arm takes several patterns: `"ex", "px" -> ...`.
-- `+` joins two lists: `[1] + [2]`.
-- A struct field may be named `error`, `ok`, `some` or `none`.
-- A reserved word used as a name (`def edge(end: Int)`) is `PARSE-RESERVED-WORD`,
-  with another name as the help.
-- A constant may be a table: `NAMES: ATS[String, Int] = ATS.new()`, one per run,
-  shared by every task and importer.
-- `channel.address` gives an `Address[T]`, a send-only reference that is data.
-- `std/actor`: actors, tasks that own their state, with `cast`, `call` and `stop`.
-- `std/supervisor`: starts actors and starts again one that crashes (one for one).
-- A builtin is a function value: `&Time.now_ms`, `[1, 2].map(&Int.to_s)`.
-- A range has the Enumerable methods of List: `(0...n).map`, `select`, `sum`,
-  `reduce`, `min`, `max` and more.
-- `Test.eq` shows a `Bytes` as quoted text (`<Bytes 7 "+OK\r\n\x00\xFF">`).
-- A program may name a type or alias `RegexEngine` or `Std`, and a struct or
-  type alias `LogRegistry` (an enum of that name stays an error).
 - A program may name a type `Header`, `HttpRequest`, `HttpResponse`,
   `HttpClient`, `HttpServer`, `HttpClientOptions`, `HttpServerOptions` or
   `HttpWire` (an enum `HttpWire` stays an error).
 
 ### Changed
 
-- **Breaking:** `LogEvent` and `LogLevel` are `Logger.Event` and `Logger.Level`
-  of `std/logger`; the old names are unknown, with a help. A value prints as
-  `LogRegistry.Event(...)` and `LogRegistry.Level.Info`.
 - **Breaking:** the HTTP types are `HTTP.Request`, `HTTP.Response`,
   `HTTP.Header`, `HTTP.ClientOptions`, `HTTP.ServerOptions`, `HTTP.Client` and
   `HTTP.Server` of `std/http`; the old names are unknown, with a help. A value
   prints as `HttpWire.Response(...)` and `<HttpWire.Client>`.
 
+## [0.30.0] - 2026-11-11
+
+### Added
+
+- `DNS.lookup(host)` gives the IPv4 and IPv6 addresses of a host name.
+- `TCP.recv_bytes(socket, max_bytes)` without a timeout waits with no limit.
+- Module blocks: `module Name ... end` holds several modules in one file, and
+  `export module` makes one importable.
+- A `case` arm takes several patterns: `"ex", "px" -> ...`.
+- `+` joins two lists: `[1] + [2]`.
+- A struct field may be named `error`, `ok`, `some` or `none`.
+- A reserved word used as a name is `PARSE-RESERVED-WORD`, with a help.
+- A constant may be a table (`ATS`), one per run, shared by every task.
+- `channel.address` gives an `Address[T]`, a send-only reference that is data.
+- `std/actor`: actors with `cast`, `call` and `stop`.
+- `std/supervisor`: starts actors and restarts one that crashes (one for one).
+- A builtin is a function value: `[1, 2].map(&Int.to_s)`.
+- A range has the Enumerable methods of List: `(0...n).map`, `sum` and more.
+- `Test.eq` shows a `Bytes` as quoted text.
+- A program may name a type `RegexEngine` or `Std`, and a struct `LogRegistry`.
+
+### Changed
+
+- **Breaking:** `LogEvent` and `LogLevel` are now `Logger.Event` and
+  `Logger.Level` of `std/logger`; a value prints as `LogRegistry.Level.Info`.
+
 ### Fixed
 
-- On macOS x86_64, a native function that calls `an_blocking` could find a
-  value it made before the call collected.
-- Under a low `ulimit -v`, a run whose collector or scheduler thread gets no
-  memory ends with `agentica: out of memory` or the thread line (status 70),
-  not `internal GC error` or an abort.
-- A file builtin that runs out of memory for its buffer also ends with
-  `agentica: out of memory`, not a `cannot read` error.
+- On macOS x86_64, a native call through `an_blocking` could lose a value to
+  the collector.
+- Running out of memory (a low `ulimit -v`) ends with `agentica: out of memory`,
+  not `internal GC error`, an abort or a `cannot read` error.
 
 ## [0.29.0] - 2026-11-10
 
@@ -1399,7 +1396,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.29.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.30.0...HEAD
+[0.30.0]: https://github.com/agentica-lang/agentica/compare/0.29.0...0.30.0
 [0.29.0]: https://github.com/agentica-lang/agentica/compare/0.28.0...0.29.0
 [0.28.0]: https://github.com/agentica-lang/agentica/compare/0.27.0...0.28.0
 [0.27.0]: https://github.com/agentica-lang/agentica/compare/0.26.2...0.27.0
