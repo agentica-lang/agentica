@@ -33,6 +33,7 @@ Channel.empty?
 Channel.new
 Channel.recv
 Channel.send
+DNS.lookup
 Dir.list
 Dir.mkdir
 Dir.mkdir_private

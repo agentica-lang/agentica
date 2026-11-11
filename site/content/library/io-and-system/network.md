@@ -1,15 +1,39 @@
 ---
 title: TCP, TLS and HTTP
 weight: 4
-description: TCP and TLS sockets and the HTTP/1.1 client and server of std/http.
+description: DNS lookups, TCP and TLS sockets and the HTTP/1.1 client and server of std/http.
 ---
 
 Network functions return a `Result` and take timeouts in milliseconds.
 
-- With `--deny-net` (or `--sandbox`), every connect and listen returns an error that begins with `denied: --deny-net`, before any DNS lookup. With `--deny-fs`, a TLS call that names a file (a CA file, a certificate or a key) returns `denied: --deny-fs`.
+- With `--deny-net` (or `--sandbox`), every DNS lookup, connect and listen returns an error that begins with `denied: --deny-net`, before any DNS query. With `--deny-fs`, a TLS call that names a file (a CA file, a certificate or a key) returns `denied: --deny-fs`.
 - Sockets, listeners, clients and servers are handles: `IO.inspect` prints `<Socket>`, they cannot be compared, and they close when the program ends.
 - A handle belongs to the task that opened it and closes when that task ends, so open it in the task that keeps it. [Task.spawn_owning](/library/concurrency/task/#taskspawn_owning) gives one to a new task.
 - Timeouts are positive milliseconds, up to the largest `Int`, taken as given: `0` or a negative one returns `network: timeout must be positive milliseconds`. A timeout covers the whole call, including the wait for another task using the same socket. After a timeout during active I/O the socket is closed, and later calls fail at once with `network: socket is closed`; a timeout while only waiting for a lock keeps it open.
+
+## DNS
+
+### DNS.lookup
+
+```signature
+DNS.lookup(host: String, timeout_ms: Int = 30000) -> Result[List[String]]
+```
+
+The addresses of a host name from the system resolver, the one `TCP.connect` uses, so the hosts file and the platform's DNS settings apply. Every IPv4 and IPv6 address comes as text (`"127.0.0.1"`, `"::1"`), in the resolver's order and without duplicates. An IP address gives itself, an IPv6 one in its short form. A name that does not resolve is an error that begins with `network: host not found`, followed by the host and the resolver's reason. An empty name or one that holds a NUL is an error, and so is a timeout (`network: operation timed out`). Only the task waits; a cancelled task stops waiting, and the lookup ends in the background.
+
+```agentica
+def main() -> Void
+  IO.inspect(DNS.lookup("127.0.0.1"))
+  IO.inspect(DNS.lookup("2001:DB8:0:0:0:0:0:1"))
+  IO.inspect(DNS.lookup(""))
+end
+```
+
+```output
+ok(["127.0.0.1"])
+ok(["2001:db8::1"])
+error("network: the host name is empty")
+```
 
 ## TCP
 

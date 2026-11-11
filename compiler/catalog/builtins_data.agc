@@ -7,9 +7,10 @@ import Model from "builtin_model"
 
 ## Every builtin, sorted by name; the Zlib rows, the ATS rows, the Base64 and hex rows, the digest rows, the HMAC rows,
 ## the OpenSSL.Random rows, the OpenSSL.HMAC.secure_compare row, the Bytes rows, the Cipher and CMAC rows, the AES-GCM
-## and KDF rows, the Optional rows, the text codec rows, the task monitor rows, the Native.Mutex rows, the RSA row and
-## then the Range Enumerable rows are appended last, in contract order, so the positions of the existing rows never
-## shift. A builtin of a family (FAMILIES) is named Family.Member.fn, such as OpenSSL.Cipher.aes_256_gcm_encrypt.
+## and KDF rows, the Optional rows, the text codec rows, the task monitor rows, the Native.Mutex rows, the RSA row, the
+## Range Enumerable rows and then the DNS row are appended last, in contract order, so the positions of the existing
+## rows never shift. A builtin of a family (FAMILIES) is named Family.Member.fn, such as
+## OpenSSL.Cipher.aes_256_gcm_encrypt.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
 BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
 BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
@@ -6910,6 +6911,22 @@ ROWS_71: List[Model.Builtin] = [
     implementation: "",
     effects: [],
     description: "List the values before the first one f rejects; f is not called after it; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "DNS.lookup",
+    parameters: [
+      Model.Named(name: "host", type: Types.Type.String),
+      Model.Named(name: "timeout_ms", type: Types.Type.Int, default: Model.Default.Whole(30000)),
+    ],
+    result: Types.Type.Result(Types.Type.List(Types.Type.String)),
+    rule: Model.Rule.Plain,
+    implementation: "DNS.lookup",
+    effects: ["network"],
+    description: (
+      "Resolve a host name with the system resolver: every IPv4 and IPv6 address as text, in its order, without " +
+      "duplicates; an IP literal gives itself."
+    ),
     alternatives: [],
   ),
 ]
