@@ -16,9 +16,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
-- A guard (`return x if c`) or a case guard inside a `do` block within `[...]`,
-  `(...)` or `{...}` no longer fails with `LEX-UNMATCHED-DELIMITER`, so
-  `agentica fmt` can write it.
+- A guard (`return x if c`), a `case` or a `while`/`for ... do` inside a `do`
+  block within `[...]`, `(...)` or `{...}` no longer fails with
+  `LEX-UNMATCHED-DELIMITER` or a parse error, so `agentica fmt` can write it.
 
 ## [0.30.0] - 2026-11-11
 

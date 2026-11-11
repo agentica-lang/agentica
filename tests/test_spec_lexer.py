@@ -212,6 +212,16 @@ CLEAN = [
      program(MAIN, "  puts([1].map do |x|", "    for y in [x]", "      break if y > 1", "    end", "",
              "    return 0 if x > 1", "", "    x", "  end)", '  puts({"a": [1].map do |x|', "    case x",
              "      1 if x > 0 -> 5", "      _ -> 0", "    end", "  end})", "end")),
+    # A `case` and a `while ... do` each close with one `end`, so a statement after them stays in the block.
+    ("case with one guard then a statement in a block inside a list",
+     program(MAIN, "  puts([[1].map do |x|", "    case x", '      1 if true -> puts("one")', '      _ -> puts("other")',
+             "    end", "    x", "  end])", "end")),
+    ("case with no guard then a statement in a block inside a list",
+     program(MAIN, "  puts([[1].map do |x|", "    case x", "      1 -> puts(1)", "      _ -> puts(2)", "    end", "    x",
+             "  end])", "end")),
+    ("while with do then a statement in a block inside parentheses",
+     program(MAIN, "  puts([1].map do |x|", "    y = x", "    while y > 5 do", "      y -= 1", "    end", "    y",
+             "  end)", "end")),
     # An empty file lexes and parses with no error; `check` does not need a main.
     ("empty file", ""),
 ]
