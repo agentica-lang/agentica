@@ -251,14 +251,16 @@ def token_columns(text):
 
 
 def test_a_program_that_checks_gives_the_same_bytes_at_every_token_start_with_or_without_the_option(program):
-    # Each position is asked once, by type-at and refs in turn: both verbs and every position, half the processes.
+    # Each position is asked by type-at and refs in turn, and every fifth one by both, so a sample of positions has
+    # both verbs with far fewer processes than every position twice.
     spots = [(line, column) for line, text in enumerate(SMALL.split("\n"), 1) for column in token_columns(text)]
     for index, spot in enumerate(spots):
-        verb = ("type-at", "refs")[index % 2]
-        plain = asked(verb, ("small.agc", spot), cwd=program)
-        marked = asked(verb, ("small.agc", spot), "--partial", cwd=program)
-        assert (marked.code, marked.stdout, marked.stderr) == (plain.code, plain.stdout, plain.stderr)
-        assert plain.code in (0, 2)
+        verbs = ("type-at", "refs") if index % 5 == 0 else (("type-at", "refs")[index % 2],)
+        for verb in verbs:
+            plain = asked(verb, ("small.agc", spot), cwd=program)
+            marked = asked(verb, ("small.agc", spot), "--partial", cwd=program)
+            assert (marked.code, marked.stdout, marked.stderr) == (plain.code, plain.stdout, plain.stderr), (verb, spot)
+            assert plain.code in (0, 2)
 
 
 def test_references_of_a_function_are_complete_even_in_the_function_that_did_not_check(program):

@@ -7,6 +7,7 @@ import pytest
 
 from tests.agentica_test import cli, run, unreadable, vm_environment
 from tests.span_support import end, problem, start, where
+from tests.test_spec_type_at import AGENTS, write_agents
 
 ROOT_USER = hasattr(os, "geteuid") and os.geteuid() == 0
 
@@ -401,6 +402,23 @@ def test_text_form_lists_one_line_per_match_as_outline_does_and_the_skipped_root
     assert variant.stdout == "models.agc:%d:%d variant Shape.Circle(Float)\n" % where(MODELS, "Circle(Float)")
     builtin = run(cli() + ["symbol", "String.split", "orders.agc"], env=vm_environment(), cwd=program)
     assert builtin.stdout.startswith("builtin String.split(")
+
+
+def test_a_name_of_a_module_block_is_written_through_the_block_and_its_file_is_the_one_that_holds_it(tmp_path):
+    """An export of a block is `Counter.start` in its file, `Agents.Counter.start` through the alias of an importer,
+    `C.start` after `import {Counter as C}` and `Facade.Counter.start` through a file that re-exports the block; a
+    private name is found bare, as its block writes it, and a private block is not reached through the alias."""
+    write_agents(tmp_path, more=True)
+    # user.agc and facade.agc both import the file as Agents: the name through it is one match.
+    found = [("Counter.start", "agents.agc", "start(initial"), ("Agents.Counter.start", ".", "start(initial"),
+             ("C.start", "named.agc", "start(initial"), ("Facade.Counter.start", "through.agc", "start(initial"),
+             ("Counter.State.count", "agents.agc", "count: Int"), ("clamp", "agents.agc", "clamp(n"),
+             ("Hidden.peek", "agents.agc", "peek()")]
+    for name, path, needle in found:
+        match = one(name, path, cwd=tmp_path)
+        assert (match["module"], start(match["name_span"])) == ("agents.agc", where(AGENTS, needle)), name
+    for name, path in (("Counter.clamp", "agents.agc"), ("Agents.Hidden.peek", "user.agc")):
+        problem(symbol(name, path, cwd=tmp_path), "QUERY-NOT-FOUND", 2)
 
 
 # The --stdin and unknown-option rows are QueryOptions.parse, which outline shares (tests/test_spec_outline.py).

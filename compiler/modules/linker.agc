@@ -25,6 +25,8 @@ import Rewrite from "rewrite"
 ## blank_line_after_end says that the manifest of its project asks for an empty line after every bare `end`, and
 ## max_line_width is the longest line it allows, 0 for no limit (check_style.agc). stubbed says that
 ## `declarations` come from the stub of the check cache (check_cache.agc), which blanks the value of a long constant.
+## block is the name of the module block this module is, "" for a file: a block is a module of its own, with the
+## `file` and `text` of the file that holds it, its own key (`home_key`) and `parsed` the block alone.
 export struct LinkedModule
   key: String
   file: String
@@ -43,6 +45,7 @@ export struct LinkedModule
   blank_line_after_end: Bool
   max_line_width: Int
   stubbed: Bool
+  block: String
 end
 
 ## A linked program: the root file as parsed (its id, span and module doc), the folder of the root file, the files with
@@ -116,6 +119,26 @@ export def program(linked: Linked) -> Ast.Program
     module_doc: linked.root.module_doc,
     span: linked.root.span,
   )
+end
+
+## The key of the file that holds `module`: its own key, or for a module block the key of its file
+## (Modules.block_key), so a query names the file and never the block.
+export def home_key(module: LinkedModule) -> String
+  return module.key if module.block == ""
+
+  module.key.slice(0, module.key.length - module.block.length - 1)
+end
+
+## The linked name of the module block `module` among `modules` (`@2::Counter`: the prefix of its file and its name),
+## which `reexported` holds for a file that re-exports the block (`export Agents.Counter`); "" for a file.
+export def block_name(modules: List[LinkedModule], module: LinkedModule) -> String
+  return "" if module.block == ""
+
+  for file in modules
+    return "#{file.prefix}#{module.block}" if file.key == home_key(module)
+  end
+
+  ""
 end
 
 ## Links several roots into one program with shared tables (docs/future/39-semantic-cli.md, 39.8): a module that two
@@ -331,6 +354,7 @@ def rewrite_module(
       blank_line_after_end: module.origin.blank_line_after_end,
       max_line_width: module.origin.max_line_width,
       stubbed: module.stubbed,
+      block: module.block,
     ),
   )
 end

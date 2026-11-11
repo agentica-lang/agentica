@@ -12,7 +12,7 @@ import pytest
 
 from tests.agentica_test import ROOT, cli, compile_agc, run, run_vm, vm_environment, write_files
 from tests.test_spec_partial import APP, BAD_DECLARATIONS, FIXED, MODELS as PARTIAL_MODELS
-from tests.test_spec_type_at import MODELS, ORDERS, where
+from tests.test_spec_type_at import AGENTS, MODELS, ORDERS, where, write_agents
 
 DRIVER = "tests/fixtures/analysis/driver.agc"
 UTIL = "export def twice(n: Int) -> Int\n  return n * 2\nend\n"
@@ -167,6 +167,19 @@ def test_the_library_answers_with_the_bytes_the_command_line_prints(driver, proj
     expected = asked(project, command, file, *rest)
     assert got == expected
     assert got != ("", "")
+
+
+def test_the_library_answers_inside_a_module_block_with_the_bytes_the_command_line_prints(driver, project):
+    write_agents(project)
+    questions = [("type-at", *position("agents.agc", AGENTS, "State(count")),
+                 ("refs", *position("agents.agc", AGENTS, "total = n")),
+                 ("refs", *position("agents.agc", AGENTS, "LIMIT if")),
+                 ("refs", *position("agents.agc", AGENTS, "Counter\n")),
+                 ("symbol", "Agents.Counter.start", "user.agc")]
+    for command, file, *rest in questions:
+        got = library(driver, project, command, file, *rest)
+        assert got == asked(project, command, file, *rest), command
+        assert '"agents.agc"' in got[0], command
 
 
 def test_the_library_outline_gives_the_default_of_a_field(driver, project):

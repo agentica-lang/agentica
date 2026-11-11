@@ -52,29 +52,9 @@ end
 
 ## The answer for `asked`, a position in the root file of `linked` (checked as `checked`), or QUERY-NO-EXPRESSION.
 export def answer(linked: Linker.Linked, checked: Checker.Checked, asked: Position.Asked) -> Diag.Outcome[Answer]
-  module = linked.modules[0]
-  case Position.locate(module.text, asked.line, asked.column)
+  case Position.locate(linked.modules[0].text, asked.line, asked.column)
     Position.Located.Outside(span) -> nothing(asked, span)
-    Position.Located.At(offset) ->
-      here = Position.character(offset, asked.line, asked.column)
-      token = kind_at(module.text, offset)
-      return nothing(asked, here) if token == ""
-
-      # A local comes first: on the name of a binding, the innermost expression would be the one around it.
-      case Locals.find(module, checked.bound, offset)
-        some(local) ->
-          return nothing(asked, here) if local.local.kind == "discard"
-
-          Diag.Outcome.Done(local_answer(linked, local))
-        none ->
-          # A type is before the expressions: the parameters of a block are inside the block, which holds the position.
-          if type_token?(module.text, token, offset)
-            found = type_answer(linked, checked, offset)
-            return Diag.Outcome.Done(found[0]) if found.size > 0
-          end
-
-          expression_answer(linked, checked, asked, offset, here)
-      end
+    Position.Located.At(offset) -> answer_at(At.focus(linked, offset), checked, asked, offset)
   end
 end
 
@@ -82,14 +62,49 @@ end
 ## written `Models.User`, as the root file writes it. Aliases are visited in order, so the first of two aliases for one
 ## file wins. A type that such a file re-exports (`export Models.User`) is written through the alias of the file that
 ## re-exports it, so the map holds its whole linked name too (`@2::User`), unless the root file imports its own file
-## under an alias. When two files re-export the same type, the alphabetically first alias is the one written.
+## under an alias. When two files re-export the same type, the alphabetically first alias is the one written. The first
+## module may be a module block (At.focus): its own types are written bare, as it writes them, and those of the other
+## blocks of its file through their names (`Counter.Msg`). A block of a file imported under an alias is written through
+## both (`Agents.Counter.Msg`), unless the root file names the block itself, and so is a block that such a file
+## re-exports (`export Agents.Counter`).
 export def written_prefixes(linked: Linker.Linked) -> Map[String, String]
   written: Map[String, String] = {}
   aliases = linked.modules[0].aliases
+  here = linked.modules[0].key
   for alias in aliases.keys.sort
     for module in linked.modules
-      if module.key == aliases[alias] and module.prefix != "" and !written.has_key?(module.prefix)
+      named = module.key == aliases[alias] and module.key != here
+      if named and module.prefix != "" and !written.has_key?(module.prefix)
         written = written.put(module.prefix, alias)
+      end
+    end
+  end
+
+  for alias in aliases.keys.sort
+    for module in linked.modules
+      inner = module.block != "" and Linker.home_key(module) == aliases[alias]
+      if inner and !written.has_key?(module.prefix)
+        written = written.put(module.prefix, "#{alias}.#{module.block}")
+      end
+    end
+  end
+
+  blocks: Map[String, String] = {}
+  for module in linked.modules
+    if module.block != ""
+      blocks = blocks.put(Linker.block_name(linked.modules, module), module.prefix)
+    end
+  end
+
+  for alias in aliases.keys.sort
+    for module in linked.modules
+      if module.key == aliases[alias]
+        for name in module.reexported.keys.sort
+          block = blocks.get(module.reexported[name])
+          if block.some? and !written.has_key?(block.unwrap!)
+            written = written.put(block.unwrap!, "#{alias}.#{name}")
+          end
+        end
       end
     end
   end
@@ -124,6 +139,35 @@ export def on_token?(text: String, offset: Int) -> Bool = kind_at(text, offset) 
 
 # The "@N::" in front of a linked name; "" for a name of the root file.
 def prefix_of(name: String) -> String = name.slice(0, name.length - T.display_name(name).length)
+
+# The answer at `offset`, a character of the root file; the first module of `linked` is the one that holds it.
+def answer_at(
+  linked: Linker.Linked,
+  checked: Checker.Checked,
+  asked: Position.Asked,
+  offset: Int,
+) -> Diag.Outcome[Answer]
+  module = linked.modules[0]
+  here = Position.character(offset, asked.line, asked.column)
+  token = kind_at(module.text, offset)
+  return nothing(asked, here) if token == ""
+
+  # A local comes first: on the name of a binding, the innermost expression would be the one around it.
+  case Locals.find(module, checked.bound, offset)
+    some(local) ->
+      return nothing(asked, here) if local.local.kind == "discard"
+
+      Diag.Outcome.Done(local_answer(linked, local))
+    none ->
+      # A type is before the expressions: the parameters of a block are inside the block, which holds the position.
+      if type_token?(module.text, token, offset)
+        found = type_answer(linked, checked, offset)
+        return Diag.Outcome.Done(found[0]) if found.size > 0
+      end
+
+      expression_answer(linked, checked, asked, offset, here)
+  end
+end
 
 # The kind of the token that holds the character at `offset`; "" for none, a line break and the end included.
 def kind_at(text: String, offset: Int) -> String

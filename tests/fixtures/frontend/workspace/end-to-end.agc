@@ -29,7 +29,9 @@ import Workspace from "../../../../compiler/modules/workspace"
 #   out      the file the bytes are written to
 #   windows  (optional) the paths are drive paths and Env.windows is true
 #
-# It prints "ok", or the code and file of the first problem of a stage.
+# It prints "ok", or the code and file of the first problem of a stage. Then it links broken.agc, whose import the
+# table lacks, and prints that failure: the test writes a module that links at its path of the disk, so the read must
+# fail through the Workspace.
 
 SAVE_TIMEOUT_MS = 10000
 
@@ -46,6 +48,14 @@ SRC
 UTIL = <<~SRC
   export def twice(n: Int) -> Int
     return n * 2
+  end
+SRC
+
+BROKEN = <<~SRC
+  import Missing from "missing"
+
+  def main() -> Void
+    puts(Missing.n())
   end
 SRC
 
@@ -92,6 +102,7 @@ def files_of(given: Given) -> Map[String, String]
   return {
     "#{base}/project/src/main.agc": MAIN,
     "#{base}/project/src/util.agc": UTIL,
+    "#{base}/project/src/broken.agc": BROKEN,
     "#{base}/project/agentica.toml": manifest,
     "#{base}/project/agentica.lock": lock,
     "#{base}/project/deps/greet/greet.agc": given.greet,
@@ -220,6 +231,10 @@ def main() -> Void
   end
   settings = Env.embedded_settings(in_memory(files_of(given)), env, given.version, false)
   puts(compile("#{given.base}/project/src/main.agc", given.out, settings))
+  case Linker.link_file("#{given.base}/project/src/broken.agc", settings)
+    Linker.Linking.Failed(failure) -> puts("LINK #{failure.diagnostic.code} #{failure.file}")
+    Linker.Linking.Done(_) -> puts("linked broken.agc")
+  end
 end
 
 # "ok" once the bytes are written, or the first problem of a stage.

@@ -75,8 +75,9 @@ type. Line 2, if any: the definition (on a builtin, `builtin` and its
 signature). On a field or method name the expression is the whole access
 (`user.email`). It checks the file and its imports but needs no `main` (a `main`
 with the wrong signature is still `CHECK-MAIN`). A type of another file is
-written as the file writes it (`Models.User` through the import alias). A type
-name in an annotation, a type argument or a field or variant payload has `kind`
+written as the file writes it (`Models.User` through the import alias; a type
+of a module block `Counter.State`, bare inside its block). A type name in an
+annotation, a type argument or a field or variant payload has `kind`
 `type`: the span is the name, and the definition is the struct, enum, alias or
 resource it names; a builtin type (`Int`, `List`) has none. `refs` lists these
 uses as `type`. A keyword of an expression (`try`, `do`, `and`, `!`) answers
@@ -134,9 +135,10 @@ JSON: `{version, command, query, definition, builtin, references, skipped}`.
 - `references`: `{kind, function, span}`, FILE's files first, then by position;
   `span` is the name alone. `kind` is `call`, `value` (`&f`, a constant), `type`
   (an annotation), `construct` (a struct construction, a `with`, or a variant
-  constructor), `read` (a field read), `pattern` (a variant in a `case` arm) or
-  `binding` (a use of a local, `x += 1` included); an open set. No references
-  is an empty list, exit 0.
+  constructor), `read` (a field read), `pattern` (a variant in a `case` arm),
+  `binding` (a use of a local, `x += 1` included) or `qualifier` (the name of a
+  module block before one of its names: `Counter` of `Counter.start(1)`); an
+  open set. No references is an empty list, exit 0.
 - `skipped`: files of `PATH...` that do not link, as for `symbol`.
 
 ## symbol
@@ -160,6 +162,9 @@ folder; default `.`). NAME is written as the code writes it:
   `import {make as mk} from "m"`, `symbol mk` is `QUERY-NOT-FOUND` and `symbol
   make` finds the declaration.
 - `User.email`, `Models.User.email`: a struct field. `Level.Info`: a variant.
+- `Counter.start`, `Agents.Counter.start`: an export of `module Counter`, in
+  its file or through the alias of an importer; a private name of a block is
+  found bare only.
 - `std/queue.pop`, `std/queue.Popped.value`: a linked `std/` module.
 - `Map.get`, `puts`: a builtin, with the `help` object and no place.
 

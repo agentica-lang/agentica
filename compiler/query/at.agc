@@ -42,6 +42,31 @@ export def innermost(module: Linker.LinkedModule, types: List[T.Type], offset: I
   best
 end
 
+## `linked` with the module that holds `offset` in its root file first, which is the module a query answers a position
+## from: a module block of the root file is a module of its own (Linker.LinkedModule), so a position inside one puts it
+## first. Elsewhere `linked` is as it was.
+export def focus(linked: Linker.Linked, offset: Int) -> Linker.Linked
+  root = Linker.home_key(linked.modules[0])
+  here = holder(linked.modules.filter do |module: Linker.LinkedModule| Linker.home_key(module) == root end, offset)
+  return linked if here.key == linked.modules[0].key
+
+  others = linked.modules.filter do |module: Linker.LinkedModule| module.key != here.key end
+  linked.with(modules: [here].concat(others))
+end
+
+## The module among `modules`, a file and its module blocks, whose own declarations hold `offset`: the block whose span
+## holds it, else the file.
+export def holder(modules: List[Linker.LinkedModule], offset: Int) -> Linker.LinkedModule
+  for module in modules
+    return module if module.block != "" and holds?(module.parsed.span, offset)
+  end
+
+  files = modules.filter do |module: Linker.LinkedModule| module.block == "" end
+  return files[0] if files.size > 0
+
+  modules[0]
+end
+
 ## Whether the span, which ends before its last character, holds the character at `offset`.
 export def holds?(span: Source.Span, offset: Int) -> Bool = span.start.offset <= offset and offset < span.stop.offset
 
