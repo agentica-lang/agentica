@@ -791,9 +791,16 @@ def text_of(fx: Lowering.Fx, type: Types.Type, slot: Int, span: Source.Span) -> 
   ok(Lowering.emit_at(fx, "to-text", [slot, slot], span))
 end
 
+# &name, or &Time.now_ms: a builtin is the prelude function that calls it, which the checker chose by the id of the
+# reference.
 def lower_function_ref(cx: Lowering.Cx, fx: Lowering.Fx, node: Ast.FunctionRef, want: Int) -> Result[Lowering.Out]
   fx = Lowering.step(fx, node.span)
-  ok(lower_closure(fx, cx.functions[node.name], [], node.span, want))
+  name = node.name
+  if cx.bodies.has_key?(node.id)
+    name = Names.prelude_name(cx.bodies[node.id])
+  end
+
+  ok(lower_closure(fx, cx.functions[name], [], node.span, want))
 end
 
 # A block: the names it reads that are in scope here are copied into the registers just before a `closure` instruction,

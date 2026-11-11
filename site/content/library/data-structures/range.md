@@ -26,7 +26,7 @@ end
 2
 ```
 
-Ranges bind looser than every other operator, so `0...n + 1` is `0...(n + 1)`. A method call on a range needs parentheses: `(1..5).to_a`. A range prints as `1..5` or `1...5`, and two ranges are equal when their start, end and kind match. `select`, `collect`, `detect` and `inject` on a range are `CHECK-UNKNOWN-METHOD`.
+Ranges bind looser than every other operator, so `0...n + 1` is `0...(n + 1)`. A method call on a range needs parentheses: `(1..5).to_a`. A range prints as `1..5` or `1...5`, and two ranges are equal when their start, end and kind match.
 
 ```agentica
 def main() -> Void
@@ -41,6 +41,39 @@ end
 1...5
 true
 false
+```
+
+## Enumerable methods
+
+```signature
+Range.map(range: Range, f: Fn[Int, B]) -> List[B]
+Range.select(range: Range, f: Fn[Int, Bool]) -> List[Int]
+Range.reduce(range: Range, initial: B, f: Fn[B, Int, B]) -> B
+Range.sum(range: Range) -> Int
+Range.min(range: Range) -> Optional[Int]
+Range.max(range: Range) -> Optional[Int]
+```
+
+A range has the Enumerable methods of a list: `map` (also `collect`), `select`, `flat_map`, `reduce` (also `inject`), `sum`, `min`, `max`, `min_by`, `max_by`, `find` (also `detect`), `find_index`, `any?`, `all?`, `each_with_index`, `each_slice`, `partition`, `group_by`, `take_while` and `drop_while`. Each gives what `.to_a` and the list method give, without building the list first, so it has no limit of 1048576 values; `min` and `max` read the ends of the range. They are written as on a list (the List page has the details of each); `take`, `drop` and `reject` are not methods of a range.
+
+```agentica
+def main() -> Void
+  puts((1..4).map do |n| n * n end)
+  puts((0...10).select do |n| n % 3 == 0 end)
+  puts((1..100).sum)
+  puts((1..5).reduce(1) do |product, n| product * n end)
+  puts((5..1).max)
+  puts((0...6).max_by do |n| (n - 2) * (n - 2) end)
+end
+```
+
+```output
+[1, 4, 9, 16]
+[0, 3, 6, 9]
+5050
+120
+none
+some(5)
 ```
 
 ## size

@@ -3,7 +3,7 @@
 ## of the builtins.
 
 import Builtins from "../catalog/builtins"
-import {CALLABLE_NAMES, PUBLIC_NAMES} from "../catalog/builtins"
+import {CALLABLE_NAMES, OPERATOR_ONLY, PUBLIC_NAMES} from "../catalog/builtins"
 import Model from "../catalog/builtin_model"
 import RubyForm from "../check/ruby_form"
 import CatalogJson from "../catalog/catalog_json"
@@ -49,7 +49,10 @@ end
 
 # The answer for a name that is no builtin: the hint of the checker for a name from another language that has one
 # (`int`, `Hash.new`: its targets could mislead), else the builtins it stands for, else the unknown-builtin error.
+# A builtin written as an operator (List.concat is `+`) answers with that operator.
 def renamed(name: String, as_json: Bool) -> Reply.Reply
+  return operator_form(name, as_json) if OPERATOR_ONLY.include?(name)
+
   found: List[String] = []
   if !Tables.foreign_names().has_key?(name)
     found = Alias.targets(name)
@@ -75,6 +78,24 @@ def renamed(name: String, as_json: Bool) -> Reply.Reply
   blocks = entries.map do |entry: Model.Builtin| block(name, entry) end
   notes = hints.keys.sort.map do |key: String| "#{key}: #{hints[key]}\n" end
   Reply.printed(blocks.concat(notes).join("\n"))
+end
+
+# "`List.concat` is written with an operator" and the checker's hint that names it; as JSON the alias shape with no
+# builtins and that hint.
+def operator_form(name: String, as_json: Bool) -> Reply.Reply
+  hint = Tables.foreign_kind_methods().get(name).unwrap_or("")
+  if as_json
+    hints: Map[String, String] = {}
+    answer = JSON.object({
+      "alias": JSON.from(name),
+      "builtins": JSON.array([]),
+      "hints": JSON.from(hints.put(name, hint)),
+    })
+
+    return Reply.printed("#{JSON.encode(answer)}\n")
+  end
+
+  Reply.printed("`#{name}` is written with an operator\n#{name}: #{hint}\n")
 end
 
 # The text of one builtin for the name asked: a line when the name is not how Ruby writes it, then the signature of

@@ -7,6 +7,8 @@ import {ENTRIES} from "../catalog/builtins"
 import Failure from "../diagnostics/problem"
 import Ast from "../syntax/ast"
 import T from "../syntax/types"
+import BuiltinRef from "builtin_ref"
+import {REFS_MODULE} from "builtin_ref"
 import Calls from "check_call"
 import Help from "check_help"
 import Methods from "check_method"
@@ -205,11 +207,7 @@ end
 # parameter of the enclosing function counts as fixed); the type is then the Fn type with them put in.
 def check_function_ref(cx: State.Cx, st: State.St, node: Ast.FunctionRef, expected: T.Type) -> Result[State.Out]
   entry = cx.functions.get(node.name)
-  if entry.none?
-    return error(
-      State.fail(cx, st, "CHECK-UNKNOWN-NAME", "a function reference requires a declared function", node.span),
-    )
-  end
+  return check_builtin_ref(cx, st, node) if entry.none?
 
   signature = entry.unwrap!
   type = T.Type.Fn(signature.params, signature.result)
@@ -232,6 +230,29 @@ def check_function_ref(cx: State.Cx, st: State.St, node: Ast.FunctionRef, expect
 
   current = try CheckTypes.check_json_needs(cx, st, node.name, found, [], [], node.span)
   ok(State.Out(st: current, type: CheckTypes.substitute(type, found)))
+end
+
+# &Time.now_ms or &Int.to_s (builtin_ref.agc): the Fn type of the builtin, and the prelude function that calls it
+# recorded by the id of the reference, as for a call of a prelude method.
+def check_builtin_ref(cx: State.Cx, st: State.St, node: Ast.FunctionRef) -> Result[State.Out]
+  case BuiltinRef.find(node.name)
+    BuiltinRef.Found.Missing ->
+      error(State.fail(cx, st, "CHECK-UNKNOWN-NAME", "a function reference requires a declared function", node.span))
+    BuiltinRef.Found.Refused(help) ->
+      error(
+        State.fail_help(
+          cx,
+          st,
+          "CHECK-UNKNOWN-NAME",
+          "#{T.display_name(node.name)} cannot be a function value",
+          node.span,
+          help,
+        ),
+      )
+    BuiltinRef.Found.Builtin(ref) ->
+      recorded = st.with(bodies: st.bodies.put(node.id, "#{REFS_MODULE}::#{node.name}"))
+      ok(State.Out(st: recorded, type: BuiltinRef.fn_type(ref)))
+  end
 end
 
 # target.call(args): the target is a function value and the arguments match its parameters.

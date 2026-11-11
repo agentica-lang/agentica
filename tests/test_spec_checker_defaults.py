@@ -1,19 +1,25 @@
 """Default values of parameters and of struct fields (`NAME: type = expression`), through the product CLI.
 
-A builtin row can give defaults too; `Zlib.crc32(data, seed = 0)` is the one that does, so its cases are here.
+A builtin row can give defaults too; `Zlib.crc32(data, seed = 0)` is the one that does, so its cases are here, with
+the function values of builtins (`&Zlib.crc32` takes every parameter, as `&join` does).
 
 Each case writes a program (one file, or several for the import-alias rules) and runs `--json check FILE`. A rejected
 program is asserted by its diagnostic code and the source text its range covers; a good one checks clean. Message and
 help texts are not asserted (AGENTS.md).
 """
+import json
+import re
+
 import pytest
 
+from tests.agentica_test import ROOT, cli, run
 from tests.spec_support import (
     assert_exact_span,
     assert_multi_file_case,
     assert_program_diagnostic,
     assert_single_file_case,
     check_many,
+    covered,
 )
 
 JOIN = 'def join(xs: List[String], sep: String = ", ") -> String\n  return xs.join(sep)\nend\n\n'
@@ -252,8 +258,31 @@ SINGLE_FILE = [
      "CHECK-TYPE-MISMATCH", '"s"'),
     ("the block of File.open gets a FileHandle",
      main_with('  puts(File.open("a.txt") do |f|\n    ok(File.read_text(f))\n  end)\n'), "CHECK-TYPE-MISMATCH", "f"),
-    ("a builtin has no function value, defaults or not",
-     main_with("  f = &Zlib.crc32\n"), "CHECK-UNKNOWN-NAME", "&Zlib.crc32"),
+    # Function values of builtins (&Time.now_ms, &Int.to_s).
+    ("a builtin function is a function value of its type",
+     main_with("  f: Fn[Int] = &Time.now_ms\n  puts(f.call())\n"), None, None),
+    ("a builtin method is a function value that takes the receiver first",
+     main_with('  puts([1, 2].map(&Int.to_s))\n  f: Fn[String, String] = &String.strip\n  puts(f.call(" a "))\n'),
+     None, None),
+    ("a method of a type whose builtins live in another module is written with the type",
+     main_with('  f: Fn[Json, String, Result[Json]] = &Json.get\n  puts(f.call(JSON.parse("{}").unwrap!, "a"))\n'),
+     None, None),
+    ("a function value of a builtin has the type of the builtin",
+     main_with("  f: Fn[String] = &Time.now_ms\n  puts(f.call())\n"), "CHECK-TYPE-MISMATCH", "&Time.now_ms"),
+    ("a builtin with defaults is a function value of every parameter",
+     main_with('  f: Fn[Bytes, Int, Result[Int]] = &Zlib.crc32\n  puts(f.call("ab".bytes, 0))\n'), None, None),
+    ("a function value of a builtin with defaults takes every argument",
+     main_with('  f = &Zlib.crc32\n  puts(f.call("ab".bytes))\n'), "CHECK-ARITY", 'f.call("ab".bytes)'),
+    ("a builtin of several forms is no function value",
+     main_with('  f = &File.open\n'), "CHECK-UNKNOWN-NAME", "&File.open"),
+    ("a builtin with a rule of its own is no function value",
+     main_with('  f = &List.map\n'), "CHECK-UNKNOWN-NAME", "&List.map"),
+    ("a builtin method is a function value only under its Ruby name",
+     main_with('  f = &String.trim\n'), "CHECK-UNKNOWN-NAME", "&String.trim"),
+    ("a function value of an unknown builtin is an unknown name",
+     main_with('  f = &Time.nope\n'), "CHECK-UNKNOWN-NAME", "&Time.nope"),
+    ("a function of a builtin family member is no function value",
+     main_with('  f = &OpenSSL.Digest.sha256\n'), "CHECK-UNKNOWN-NAME", "&OpenSSL.Digest.sha256"),
     ("main takes no parameters, defaults included",
      'def main(a: Int = 1) -> Void\n  puts(a)\nend\n\n', "CHECK-MAIN", None),
     ("a block parameter takes no default",
@@ -479,3 +508,36 @@ def test_old_forms_have_a_help(title, program, code, text, one_file):
     found = assert_program_diagnostic(one_file, program, code)
     assert_exact_span(program, found["range"], text)
     assert found.get("help"), found
+
+
+def builtin_names():
+    """Every public builtin (`agentica help --json`) and every method alias of one (check_tables.agc), sorted."""
+    listed = run(cli() + ["help", "--json"])
+    assert listed.code == 0, listed.stderr
+    names = {entry["name"] for entry in json.loads(listed.stdout)}
+    tables = (ROOT / "compiler" / "check" / "check_tables.agc").read_text(encoding="utf-8")
+    aliases = tables.split("def method_aliases()", 1)[1].split("\nend\n", 1)[0]
+    names.update(re.findall(r'^\s*"([A-Z]\w*\.[a-z_]\w*[?!]?)":', aliases, re.M))
+    return sorted(names)
+
+
+@pytest.mark.slow
+def test_every_builtin_is_a_function_value_or_refused_at_the_reference(tmp_path):
+    """A new builtin row cannot break the wrappers of <prelude>/builtin_refs.agc: each `&Name` checks clean or is
+    CHECK-UNKNOWN-NAME at the reference, and one program that takes every accepted one compiles and runs."""
+    names = builtin_names()
+    programs = {name: "def main() -> Void\n  _f = &%s\nend\n" % name for name in names}
+    check = check_many(programs.values(), tmp_path / "each")
+    accepted = []
+    for name, program in programs.items():
+        found = check(program)
+        if found is None:
+            accepted.append(name)
+        else:
+            assert (found["code"], covered(program, found["range"])) == ("CHECK-UNKNOWN-NAME", "&" + name), found
+    assert len(accepted) > 100, accepted
+    every = tmp_path / "every.agc"
+    every.write_text("def main() -> Void\n%s  puts(\"ok\")\nend\n" % "".join(
+        "  _f%d = &%s\n" % (number, name) for number, name in enumerate(accepted)), encoding="utf-8")
+    ran = run(cli() + [str(every)])
+    assert (ran.code, ran.stdout) == (0, "ok\n"), ran.stderr
