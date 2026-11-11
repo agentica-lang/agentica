@@ -2,7 +2,7 @@
  * Boehm with threads (docs/vm/10-io-multicore.md §10.2.3, "GC"): threads that libuv starts register with the
  * collector, allocate, and are scanned and stopped by collections that any of them starts. Each thread keeps its list
  * head only in a local variable, so a collector that missed its stack would free live nodes, and the list check after
- * would fail. Also: agc_init's heap divisor and floor. The sanitizer build has no collector: there only threads run.
+ * would fail. Also: agc_init's heap divisor and floor, and a collector abort's line. No collector under sanitizers.
  */
 #include "../value.h"
 
@@ -13,6 +13,9 @@
 #include <uv.h>
 #if !defined(_WIN32) && !defined(AGC_NO_GC)
 #include <gc.h>
+#include <string.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #endif
 #if defined(_WIN32) && !defined(AGC_NO_GC)
 #define GC_THREADS
@@ -147,8 +150,47 @@ static void collect_beside_a_held_heap(void) {
 }
 #endif
 
+#if !defined(_WIN32) && !defined(AGC_NO_GC)
+/* The abort function agc_init sets, called with MESSAGE in a child: it must exit 70 with LINE alone on stderr. */
+static void gc_abort_ends_with(const char *message, const char *line) {
+  int out[2];
+  assert(pipe(out) == 0);
+  fflush(NULL);
+  pid_t pid = fork();
+  assert(pid >= 0);
+  if (pid == 0) {
+    dup2(out[1], 2);
+    GC_get_abort_func()(message);
+    _exit(0);
+  }
+  close(out[1]);
+  char text[256];
+  size_t n = 0;
+  ssize_t got;
+  while (n < sizeof text - 1 && (got = read(out[0], text + n, sizeof text - 1 - n)) > 0) n += (size_t)got;
+  text[n] = 0;
+  close(out[0]);
+  int status = 0;
+  assert(waitpid(pid, &status, 0) == pid);
+  assert(WIFEXITED(status) && WEXITSTATUS(status) == 70);
+  assert(strcmp(text, line) == 0);
+}
+
+/* libgc's aborts for memory the system refused are the out-of-memory line (#1384); any other stays a GC fault. */
+static void gc_aborts(void) {
+  gc_abort_ends_with("Insufficient memory for main local_mark_stack", "agentica: out of memory\n");
+  gc_abort_ends_with("Failed to allocate memory for thread registering", "agentica: out of memory\n");
+  gc_abort_ends_with("Insufficient space for /proc read", "agentica: out of memory\n");
+  gc_abort_ends_with("Too many heap sections", "agentica: internal GC error\n");
+  gc_abort_ends_with("Insufficient", "agentica: internal GC error\n");
+}
+#endif
+
 int main(void) {
   agc_init();
+#if !defined(_WIN32) && !defined(AGC_NO_GC)
+  gc_aborts();
+#endif
 #ifndef AGC_NO_GC
   /* agc_init grows the heap with divisor 2 (vm/value.c) unless the environment names another. */
   if (!getenv("GC_FREE_SPACE_DIVISOR")) assert(GC_get_free_space_divisor() == 2);

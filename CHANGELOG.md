@@ -29,6 +29,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 - On macOS x86_64, a native function that calls `an_blocking` could find a
   value it made before the call collected.
+- Under a low `ulimit -v`, a run whose collector or scheduler thread gets no
+  memory ends with `agentica: out of memory` or the thread line (status 70),
+  not `internal GC error` or an abort.
 
 ## [0.29.0] - 2026-11-10
 

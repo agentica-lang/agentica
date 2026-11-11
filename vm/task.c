@@ -937,7 +937,9 @@ static void sched_turns(agc_vm *vm, void (*thread)(void *arg)) {
 static void sched_main(void *arg) {
   agc_vm *vm = arg;
   agc_io_thread_signals();
-  if (!agc_gc_thread_enter()) agc_internal_abort("cannot register a scheduler thread with the collector");
+  /* Registering reads the thread's stack bounds (pthread_getattr_np), which allocates: under a low ulimit -v it fails
+     as the thread start itself can, and ends the same way. */
+  if (!agc_gc_thread_enter()) agc_thread_start_failed("a scheduler thread", 0, SCHEDULERS_FIX);
   if (setjmp(vm->fail) == 0) {
     sched_turns(vm, sched_main);
   } else {
