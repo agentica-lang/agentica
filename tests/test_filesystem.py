@@ -15,7 +15,6 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import sys
 import threading
 import time
@@ -23,7 +22,7 @@ import time
 import pytest
 
 from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, PYTHON, ROOT, UNDER_WINE, WINDOWS, Child, cli, compile_agc,
-                                 host_only, output_lines, run, scaled, tool, vm_command, vm_environment)
+                                 host_only, output_lines, run, scaled, vm_command, vm_environment)
 from tests.test_vm_stdout import ROWS_PROGRAM, STUCK_ROWS
 from tests.windows_support import long_paths_enabled
 
@@ -1020,45 +1019,3 @@ end
         assert kept.read_text() == "kept" and [path.name for path in sealed.iterdir()] == ["kept.txt"]
     finally:
         sealed.chmod(0o755)
-
-
-# A malloc that refuses one size with ENOMEM (glibc's __libc_malloc for every other), for the out-of-memory read below.
-REFUSING_MALLOC = r"""#include <errno.h>
-#include <stddef.h>
-
-void *__libc_malloc(size_t size);
-
-void *malloc(size_t size) {
-  if (size == 777777) {
-    errno = ENOMEM;
-    return NULL;
-  }
-  return __libc_malloc(size);
-}
-"""
-
-
-@host_only(not sys.platform.startswith("linux") or UNDER_WINE, "LD_PRELOAD of a glibc malloc")
-@pytest.mark.skipif(bool(os.environ.get("AGENTICA_VM_BINARY") or os.environ.get("AGENTICA_TEST_EXECUTABLE")),
-                    reason="a sanitizer or other build has its own malloc")
-def test_a_read_that_gets_no_memory_ends_with_the_out_of_memory_line(tmp_path):
-    """A read whose buffer the system refuses (ENOMEM) is out of memory, status 70 and the usual line, as in the
-    collector; not a `cannot read` error that the program, or the CLI reading a source, would report as unreadable."""
-    shim = tmp_path / "refuse.so"
-    source = tmp_path / "refuse.c"
-    source.write_text(REFUSING_MALLOC, encoding="utf-8")
-    subprocess.run([tool("cc"), "-shared", "-fPIC", "-o", str(shim), str(source)], check=True, timeout=scaled(60))
-    data = tmp_path / "data.txt"
-    data.write_text("hello\n", encoding="utf-8")
-    program = tmp_path / "read.agc"
-    program.write_text(
-        "def main() -> Void\n"
-        "  handle = File.open(System.args()[0]).unwrap!\n"
-        "  puts(File.read_bytes(handle, 777777).ok?)\n"
-        "end\n",
-        encoding="utf-8",
-    )
-    bytecode = compile_agc(program, tmp_path / "read.agcb")
-    result = run([*vm_command(), "--", bytecode, str(data)], env=vm_environment({"LD_PRELOAD": str(shim)}),
-                 timeout=scaled(60))
-    assert (result.code, result.stdout, result.stderr) == (70, "", "agentica: out of memory\n")

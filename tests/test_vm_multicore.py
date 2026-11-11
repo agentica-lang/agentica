@@ -31,7 +31,7 @@ except ImportError:
     fcntl = None
 
 from tests.agentica_test import (FIFO_FILE_REASON, FIXTURES, PYTHON, TARGET_OS, UNDER_WINE, WINDOWS, cli, compile_agc,
-                                 compile_text, host_only, kill_process, process_alive, run, scaled, vm_command,
+                                 compile_text, host_only, kill_process, process_alive, run, scaled, tool, vm_command,
                                  vm_environment, wait_readable, wait_until)
 from tests import vm_diff_support as diff
 
@@ -707,6 +707,47 @@ def test_a_start_under_a_low_ulimit_v_ends_with_one_line_and_status_70(tmp_path)
             assert REFUSED.fullmatch(result.stderr), (mb, words, result)
             refused.append(result.stderr)
     assert any(line.startswith("agentica: cannot start") for line in refused), refused
+
+
+# A malloc that refuses one size with ENOMEM (glibc's __libc_malloc for every other), for the out-of-memory read below.
+REFUSING_MALLOC = r"""#include <errno.h>
+#include <stddef.h>
+
+void *__libc_malloc(size_t size);
+
+void *malloc(size_t size) {
+  if (size == 777777) {
+    errno = ENOMEM;
+    return NULL;
+  }
+  return __libc_malloc(size);
+}
+"""
+
+
+@pytest.mark.skipif(not TARGET_OS.startswith("linux") or OTHER_BUILD,
+                    reason="host-only: LD_PRELOAD of a glibc malloc; a sanitizer or GC stress build has its own malloc")
+def test_a_read_that_gets_no_memory_ends_with_the_out_of_memory_line(tmp_path):
+    """A read whose buffer the system refuses (ENOMEM) is out of memory, status 70 and the usual line, as in the
+    collector; not a `cannot read` error that the program, or the CLI reading a source, would report as unreadable."""
+    shim = tmp_path / "refuse.so"
+    source = tmp_path / "refuse.c"
+    source.write_text(REFUSING_MALLOC, encoding="utf-8")
+    subprocess.run([tool("cc"), "-shared", "-fPIC", "-o", str(shim), str(source)], check=True, timeout=scaled(60))
+    data = tmp_path / "data.txt"
+    data.write_text("hello\n", encoding="utf-8")
+    program = tmp_path / "read.agc"
+    program.write_text(
+        "def main() -> Void\n"
+        "  handle = File.open(System.args()[0]).unwrap!\n"
+        "  puts(File.read_bytes(handle, 777777).ok?)\n"
+        "end\n",
+        encoding="utf-8",
+    )
+    bytecode = compile_agc(program, tmp_path / "read.agcb")
+    result = run([*vm_command(), "--", bytecode, str(data)], env=vm_environment({"LD_PRELOAD": str(shim)}),
+                 timeout=scaled(60))
+    assert (result.code, result.stdout, result.stderr) == (70, "", "agentica: out of memory\n")
 
 
 RALLIES = """\
