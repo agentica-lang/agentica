@@ -26,6 +26,7 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   shared by every task and importer.
 - `channel.address` gives an `Address[T]`, a send-only reference that is data.
 - `std/actor`: actors, tasks that own their state, with `cast`, `call` and `stop`.
+- `std/supervisor`: starts actors and starts again one that crashes (one for one).
 - A builtin is a function value: `&Time.now_ms`, `[1, 2].map(&Int.to_s)`.
 - A range has the Enumerable methods of List: `(0...n).map`, `select`, `sum`,
   `reduce`, `min`, `max` and more.
@@ -38,6 +39,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - Under a low `ulimit -v`, a run whose collector or scheduler thread gets no
   memory ends with `agentica: out of memory` or the thread line (status 70),
   not `internal GC error` or an abort.
+- A file builtin that runs out of memory for its buffer also ends with
+  `agentica: out of memory`, not a `cannot read` error.
 
 ## [0.29.0] - 2026-11-10
 

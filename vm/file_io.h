@@ -63,6 +63,9 @@ int agc_fs_replace(const char *from, const char *to);
 int agc_fs_rename_noreplace(const char *from, const char *to);
 int agc_fs_remove_tree(const char *path, CC_OWNS_OUT char **failed);
 #endif
+/* 0; a negative result with errno set when the system call fails; or AGC_FS_LIST_NO_MEMORY, positive so no system
+   error matches it, when the names buffer could not grow. *names is the caller's to free in every case. */
+#define AGC_FS_LIST_NO_MEMORY 1
 int agc_fs_list(const char *path, char **names, size_t *size, size_t *count);
 CC_OWNS char *agc_fs_cwd(void);
 CC_OWNS char *agc_fs_realpath(const char *path);

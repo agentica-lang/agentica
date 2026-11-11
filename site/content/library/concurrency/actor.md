@@ -25,7 +25,7 @@ Starts the actor in a task of its own. The task runs `init`, then takes the mess
 
 The task owns the inbox, so the inbox closes when the actor ends in any way: it stopped, gave `done`, crashed or was cancelled. A runtime error in a handler is a crash of the actor's task (see [Task](/library/concurrency/task/)): its diagnostic prints at once, `terminate` does not run, and the messages left in the inbox are lost. A crash that nothing observes fails the run when `main` returns (`1 task crash was not observed`); `Actor.stop`, `Task.await(actor.task)` or a `Task.monitor` of `actor.task` observes it.
 
-The actor's task is a child of the task that calls `start`: a crash or cancel of that task cancels the actor too. Start a long-lived actor from `main` or a supervisor.
+The actor's task is a child of the task that calls `start`: a crash or cancel of that task cancels the actor too. Start a long-lived actor from `main` or a [supervisor](/library/concurrency/supervisor/).
 
 A `Ref` has three fields: `address`, `inbox` (the `Channel[M]`) and `task`. Send through `address`. The `inbox` is there only for `Task.monitor`: never receive from it, which would take a message from the actor.
 

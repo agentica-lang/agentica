@@ -53,7 +53,7 @@
 #define NO_DEADLINE ((int64_t)-1)
 typedef enum {
   FS_OK, FS_NOT_REGULAR, FS_TOO_BIG, FS_OPEN, FS_IS_DIR, FS_READ, FS_WRITE, FS_MISSING, FS_LINK, FS_EOF, FS_LONG_LINE,
-  FS_MKDIR, FS_RESOLVE, FS_REMOVE, FS_TREE_DEEP, FS_REFUSED, FS_LOCK, FS_NOT_LOCKABLE, FS_RENAME
+  FS_MKDIR, FS_RESOLVE, FS_REMOVE, FS_TREE_DEEP, FS_REFUSED, FS_LOCK, FS_NOT_LOCKABLE, FS_RENAME, FS_NO_MEMORY
 } fs_status;
 
 typedef enum {
@@ -463,6 +463,10 @@ static void fail_op(op *o, fs_status status, int err) {
   o->err = err;
 }
 
+/* A buffer of the job that the VM could not allocate. Its own status, not the errno: a system call's ENOMEM stays the
+   builtin's error value, and only this ends the run as out of memory (common_error). */
+static void no_memory(op *o) { fail_op(o, FS_NO_MEMORY, ENOMEM); }
+
 static bool write_target(const char *path) {
   agc_fs_info info;
   if (agc_fs_stat(path, &info, true) == 0) return !AGC_FS_ISDIR(info.mode);
@@ -705,7 +709,7 @@ static bool grow_out(op *o, size_t extra) {
 static void step_read_text(op *o) {
   for (;;) {
     if (o->out_len == o->out_cap && !grow_out(o, CHUNK)) {
-      fail_op(o, FS_READ, ENOMEM);
+      no_memory(o);
       return;
     }
     int64_t n = agc_fs_read(o->fd, o->out + o->out_len, o->out_cap - o->out_len);
@@ -733,7 +737,7 @@ static void work_read_text(op *o) {
   }
   o->out = malloc(o->count);
   if (!o->out) {
-    fail_op(o, FS_READ, ENOMEM);
+    no_memory(o);
   } else if (!read_all(fd, o->out, o->count, &o->out_len, &o->err)) {
     o->status = FS_READ;
   }
@@ -777,7 +781,7 @@ static void work_sha256(op *o) {
     agc_sha256_free(hash);
     free(buf);
     agc_fs_close(fd);
-    fail_op(o, FS_READ, ENOMEM);
+    no_memory(o);
     return;
   }
   bool ok = true;
@@ -810,7 +814,7 @@ static void work_sha256(op *o) {
   }
   o->out = malloc(AGC_SHA256_BYTES);
   if (!o->out) {
-    fail_op(o, FS_READ, ENOMEM);
+    no_memory(o);
     return;
   }
   memcpy(o->out, digest, AGC_SHA256_BYTES);
@@ -849,7 +853,11 @@ static void work_stat(op *o) {
 
 static void work_list(op *o) {
   char *names;
-  if (agc_fs_list(o->path, &names, &o->out_len, &o->count) != 0) fail_op(o, FS_OPEN, errno);
+  int rc = agc_fs_list(o->path, &names, &o->out_len, &o->count);
+  if (rc == AGC_FS_LIST_NO_MEMORY)
+    no_memory(o);
+  else if (rc != 0)
+    fail_op(o, FS_OPEN, errno);
   o->out = (uint8_t *)names;
   o->out_cap = o->out_len;
 }
@@ -876,7 +884,7 @@ static void work_mkdir(op *o) {
   for (size_t k = 0; k < len; k++) levels += o->path[k] == '/';
   size_t *chain = malloc(levels * sizeof(size_t));
   if (!chain) {
-    fail_op(o, FS_MKDIR, ENOMEM);
+    no_memory(o);
     o->fail_at = len;
     return;
   }
@@ -1130,7 +1138,7 @@ static void work_read_bytes(op *o) {
   file_state *st = o->st;
   o->out = malloc(o->count);
   if (!o->out) {
-    fail_op(o, FS_READ, ENOMEM);
+    no_memory(o);
     return;
   }
   size_t have = pending(st) < o->count ? pending(st) : o->count;
@@ -1163,26 +1171,29 @@ static bool read_more(file_state *st, size_t most, int *err, bool *eof) {
   }
 }
 
-static bool fill(file_state *st, int *err, bool *eof) {
+static bool fill(op *o, bool *eof) {
+  file_state *st = o->st;
   compact(st);
   if (st->end == st->cap) {
     size_t cap = st->cap ? st->cap * 2 : CHUNK;
     uint8_t *bigger = realloc(st->buf, cap);
     if (!bigger) {
-      *err = ENOMEM;
+      no_memory(o);
       return false;
     }
     st->buf = bigger;
     st->cap = cap;
   }
-  return read_more(st, SIZE_MAX, err, eof);
+  if (read_more(st, SIZE_MAX, &o->err, eof)) return true;
+  o->status = FS_READ;
+  return false;
 }
 
 static bool take_line(op *o, size_t len, size_t consume) {
   file_state *st = o->st;
   o->out = malloc(len ? len : 1);
   if (!o->out) {
-    fail_op(o, FS_READ, ENOMEM);
+    no_memory(o);
     return false;
   }
   if (len) memcpy(o->out, st->buf + st->start, len);
@@ -1220,10 +1231,7 @@ static void work_read_line(op *o) {
         return;
       case LINE_END: fail_op(o, FS_EOF, 0); return;
       case LINE_MORE:
-        if (!fill(st, &o->err, &eof)) {
-          o->status = FS_READ;
-          return;
-        }
+        if (!fill(o, &eof)) return;
         break;
     }
   }
@@ -1234,7 +1242,7 @@ static void work_read_block(op *o) {
   if (!st->buf) {
     st->buf = malloc(o->count + 1);
     if (!st->buf) {
-      fail_op(o, FS_READ, ENOMEM);
+      no_memory(o);
       return;
     }
     st->cap = o->count + 1;
@@ -1319,14 +1327,11 @@ static void step_read_bytes(op *o) {
   file_state *st = o->st;
   bool eof = false;
   while (pending(st) < o->count && !eof)
-    if (!fill(st, &o->err, &eof)) {
-      o->status = FS_READ;
-      return;
-    }
+    if (!fill(o, &eof)) return;
   size_t n = pending(st) < o->count ? pending(st) : o->count;
   o->out = malloc(n ? n : 1);
   if (!o->out) {
-    fail_op(o, FS_READ, ENOMEM);
+    no_memory(o);
     return;
   }
   if (n) memcpy(o->out, st->buf + st->start, n);
@@ -1430,6 +1435,10 @@ agc_value agc_system_error(agc_vm *vm, const char *what, int err) {
 }
 
 static agc_value common_error(agc_vm *vm, const op *o) {
+  /* A buffer the job could not get is out of memory as in the collector: the usual line and status 70, not an error the
+     program (or the CLI reading a source) would take for a bad file. A system call's ENOMEM is an OS error like any
+     other and stays the error value. */
+  if (o->status == FS_NO_MEMORY) agc_out_of_memory();
   size_t path_len = o->path ? strlen(o->path) : 0;
   switch (o->status) {
     case FS_NOT_REGULAR: return error_of(not_regular);
