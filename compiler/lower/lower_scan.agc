@@ -204,6 +204,12 @@ def pattern_names(written: List[String], pattern: Ast.Pattern, watched: Set[Stri
       end
 
       written
+    Ast.Pattern.Or(node) ->
+      for inner in node.patterns
+        written = pattern_names(written, inner, watched)
+      end
+
+      written
     _ -> written
   end
 end

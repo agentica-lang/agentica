@@ -48,6 +48,9 @@ expressions and operators. Builtin methods and `to_s`: `builtins.md`.
   (`CHECK-SHADOWED-NAME`). A bare name is not a top-level pattern. There are no
   struct or list patterns (`CHECK-PATTERN-TYPE` for a pattern that does not fit
   the value).
+- Several patterns on one arm's line: `"ex", "px" -> ttl(v)` runs when one
+  matches. Such an arm binds no names (`CHECK-CASE-ARM-BINDING`: use `_`), and
+  each pattern counts on its own for cover and `CHECK-UNREACHABLE-CASE-ARM`.
 - A guard, `pattern if condition -> ...`, must be Bool (`CHECK-TYPE-MISMATCH`),
   sees its arm's names, stays on the pattern's line, and when false `case` tries
   the next arm. A later arm may repeat a guarded arm's pattern. `_ if c ->` is
@@ -148,8 +151,9 @@ Operators, from highest to lowest precedence:
 | 10 | `..` `...` (ranges, no chaining) |
 
 - `+ - * /` take two numbers of one type; no implicit conversion (`2 * 1.5` is
-  `CHECK-TYPE-MISMATCH`: use `n.to_f` or `x.to_i!`). `+` also joins two Strings,
-  and `s * n` repeats a String (`"ab" * 3` is `"ababab"`; the Int comes second;
+  `CHECK-TYPE-MISMATCH`: use `n.to_f` or `x.to_i!`). `+` also joins two Strings
+  or two lists of one type (`[1] + [2]`, a new list), and `s * n` repeats a
+  String (`"ab" * 3` is `"ababab"`; the Int comes second;
   a negative `n` or a result over 256 MiB is `RUNTIME-INVALID-COUNT`).
 - `/` on Int truncates toward zero (`7 / 2` is `3`); `%` takes two Ints. A zero
   divisor is a runtime error, Float too (`RUNTIME-DIVISION-BY-ZERO`).

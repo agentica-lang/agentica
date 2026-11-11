@@ -224,6 +224,7 @@ export def foreign_kind_methods() -> Map[String, String]
     "Int.max": "use [a, b].max.unwrap!, or n.clamp(min, max) to keep n in a range",
     "Int.min": "use [a, b].min.unwrap!, or n.clamp(min, max) to keep n in a range",
     "Int.round": "an Int is already whole; ceil, floor and round are Float methods (x.round)",
+    "List.concat": "join two lists with +: xs + ys is a new list, and both stay as they were",
     "List.contains": "a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?",
     "List.contains?": "a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?",
     "List.count": "xs.size counts all elements; count those that pass a test with xs.select do |x| ... end.size",

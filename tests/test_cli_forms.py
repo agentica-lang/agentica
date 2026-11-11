@@ -38,7 +38,7 @@ FILES = {
     "tab.agc": 'def main() -> Void\n\tx: Int = "a"\n\tputs(x)\nend\n',
     "crlf.agc": 'def main() -> Void\r\n  x: Int = "a"\r\n  puts(x)\r\nend\r\n',
     "unicode.agc": 'def main() -> Void\n  puts("héllo")\n  x: Int = "éé"\nend\n',
-    "multiline.agc": 'def main() -> Void\n  x = [1, 2,\n    3] + "s"\nend\n',
+    "multiline.agc": 'def main() -> Void\n  x = [1, 2,\n    3] - "s"\nend\n',
     "labels.agc": (
         "def add(a: Int, b: Int) -> Int\n  return a + b\nend\n\ndef main() -> Void\n  x = add(1, \"two\")\n"
         "  puts(x)\nend\n"),
@@ -78,6 +78,7 @@ OPTIONS = [
     ["--max-steps", "10", "help", "String.to_int", "--json"], ["--ai", "help", "strip"], ["--ai", "help", "push"],
     ["--ai", "help", "Json.get"], ["--ai", "help", "Nope.frobnicate"],
     ["help", "std/nope"], ["help", "std"], ["--json", "help", "std/queue."], ["help", "HttpWire.service"], ["help", "__fail_arg"], ["help", "Native.string_at"],
+    ["help", "List.concat"], ["help", "concat"],
     ["--max-steps"], ["--max-steps", "x", "ok.agc"], ["--max-steps", "0", "ok.agc"], ["--max-steps", "007", "ok.agc"],
     ["--max-steps", "-1", "ok.agc"], ["--max-steps", "1.5", "ok.agc"], ["--max-steps", "#e3", "ok.agc"],
     ["--max-steps", "1", "check", "loop.agc"],

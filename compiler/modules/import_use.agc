@@ -387,6 +387,13 @@ def of_pattern(found: List[Written], pattern: Ast.Pattern) -> List[Written]
       end
 
       out
+    Ast.Pattern.Or(node) ->
+      out = found
+      for inner in node.patterns
+        out = of_pattern(out, inner)
+      end
+
+      out
     _ -> found
   end
 end

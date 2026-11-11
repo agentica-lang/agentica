@@ -17,7 +17,7 @@ import json
 import re
 import pytest
 
-from tests.agentica_test import FIXTURES
+from tests.agentica_test import FIXTURES, cli, run
 from tests.spec_support import check_many, covered
 
 GROUPS = json.loads((FIXTURES / "spec" / "checker-rest.json").read_text(encoding="utf-8"))
@@ -84,3 +84,25 @@ def test_a_json_field_in_a_list_of_an_imported_struct_is_misplaced(agentica_chec
     found = agentica_check(files, "root.agc")
     assert found is not None and found["code"] == "CHECK-JSON-FIELD-PLACE"
     assert covered(root, found["range"]) == "Models.Patch"
+
+
+def test_a_field_named_error_builds_reads_and_round_trips_through_json(tmp_path):
+    """A field never hides the error(...) constructor: it is read through a value and built with a label."""
+    program = tmp_path / "reply.agc"
+    program.write_text(
+        "struct Reply\n  ok: Bool\n  error: Optional[String]\nend\n\n"
+        "def main() -> Void\n"
+        '  reply = Reply(ok: false, error: some("busy"))\n'
+        "  text = JSON.encode(reply)\n"
+        "  puts(text)\n"
+        "  back = JSON.decode(text, Reply).unwrap!\n"
+        "  puts(back == reply)\n"
+        "  puts(back.error.unwrap!)\n"
+        '  failed: Result[Int] = error("still a constructor")\n'
+        "  puts(failed.ok?)\n"
+        "end\n",
+        encoding="utf-8",
+    )
+    result = run(cli() + [str(program)])
+    assert (result.code, result.stdout.splitlines()) == (
+        0, ['{"ok":false,"error":"busy"}', "true", "busy", "false"]), result.stderr

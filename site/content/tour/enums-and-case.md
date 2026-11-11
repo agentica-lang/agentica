@@ -288,6 +288,29 @@ def main() -> Void
 end
 ```
 
+## Several patterns in one arm
+
+Separate patterns with commas to share one arm. The arm runs when any of them matches. Such an arm binds no names: write `_` in the payload positions.
+
+```agentica
+def ttl?(option: String) -> Bool
+  case option
+    "ex", "px" -> true
+    _ -> false
+  end
+end
+
+def main() -> Void
+  puts(ttl?("px"))
+  puts(ttl?("nx"))
+end
+```
+
+```output
+true
+false
+```
+
 ## Patterns inside patterns
 
 In a payload position, a pattern can be a literal (also a negative number), a name, `_`, or another variant, `ok(...)`, `error(...)`, `some(...)` or `none`, at any depth.

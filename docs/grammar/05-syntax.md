@@ -350,7 +350,7 @@ for_statement    = "for", NAME, "in", expression, [ "do" ], NL,
 case_statement   = case_expression, NL ;
 case_expression  = "case", expression, [ "do" ], NL,
                    match_arm, { match_arm }, "end" ;
-match_arm        = pattern, [ "if", expression ], "->",
+match_arm        = pattern, { ",", pattern }, [ "if", expression ], "->",
                    ( NL, block | simple_statement, NL, block ) ;
 pattern          = "_" | literal | "-", INTEGER | "-", FLOAT
                  | variant_pattern ;

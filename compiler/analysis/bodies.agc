@@ -194,6 +194,9 @@ end
 def pattern(checked: Checker.Checked, found: Ast.Pattern, matched: Model.TypeShape) -> Model.Node
   case found
     Ast.Pattern.Wildcard(node) -> leaf("wildcard", Types.Type.Unknown, node.span).with(type: matched)
+    Ast.Pattern.Or(node) ->
+      children = node.patterns.map do |inner: Ast.Pattern| pattern(checked, inner, matched) end
+      leaf("alternatives", Types.Type.Unknown, node.span).with(type: matched, children: children)
     Ast.Pattern.Literal(node) ->
       leaf("literal", Types.Type.Unknown, node.span).with(type: matched, text: literal_text(node.value))
     Ast.Pattern.Variant(node) ->

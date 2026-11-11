@@ -120,18 +120,19 @@ Invoke the `pr-reviewer` skill (via the Skill tool) and follow it to review GitH
   examples** when the PR touches `site/content/`. Docs-only PRs
   skip `ci.yml` (an explicit docs-only exception) and do not wait for CI.
 - **Platforms** (`platforms.yml`: Linux x86_64 and ARM64, Windows, macOS
-  Intel and ARM) runs on a PR only with the `platforms` label, and always on
-  pushes to master. Add the label only when the PR changes C code (`vm/`,
-  the VM build in the Makefile), changes how tests start processes or build
-  command lines or paths (test helpers, batching), or is a release bump
-  (`agentica-release`), a few seconds after opening the PR (a label at
-  creation starts two runs), and wait for all five systems. Example: #1360
-  batched 904 paths into one command line and broke Windows (`WinError 206`),
-  unseen because Platforms had not run. A master run that fails after a merge
-  without the label is fixed in a new PR at once.
+  Intel and ARM) runs on a PR only with a label, and always on pushes to
+  master. `platforms` runs all five systems: add it only when the PR changes
+  C code (`vm/`, the VM build in the Makefile) or is a release bump
+  (`agentica-release`), and wait for all five. A `platform:windows-x86_64`,
+  `platform:macos-x86_64` or `platform:macos-arm64` label runs that system
+  alone, for a PR that fixes or checks one system (a test fix for a
+  macOS-only flake); `conformance all-systems` then does not run. Add a label
+  a few seconds after opening the PR (a label at creation starts two runs).
+  A master run that fails after a merge without the label is fixed in a new
+  PR at once.
 - **Agentica code** (`compiler/`, `stdlib/`, their Python tests and goldens,
-  docs, the site) otherwise never gets the label, also when its tests touch
-  files: do not wait for the macOS and Windows jobs.
+  docs, the site) never gets `platforms`, also when its tests touch
+  processes, files or paths: do not wait for the macOS and Windows jobs.
   Merge when `test` is green (plus `build` and Site examples when they run);
   master's Platforms run catches the rare gap.
 - Wait with one background call of the `watch-ci` skill when it is

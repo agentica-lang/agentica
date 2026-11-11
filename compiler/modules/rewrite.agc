@@ -264,6 +264,13 @@ def rewrite_pattern(cx: Resolve.Context, pattern: Ast.Pattern) -> Result[Ast.Pat
       end
 
       ok(Ast.Pattern.Variant(node.with(enum_name: name, slots: slots)))
+    Ast.Pattern.Or(node) ->
+      patterns: List[Ast.Pattern] = []
+      for inner in node.patterns
+        patterns = patterns.push(try rewrite_pattern(cx, inner))
+      end
+
+      ok(Ast.Pattern.Or(node.with(patterns: patterns)))
     _ -> ok(pattern)
   end
 end

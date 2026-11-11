@@ -1,0 +1,3 @@
+def edge(xs: List[Int], end: Int) -> Int
+  return xs[0]
+end

@@ -145,10 +145,11 @@ def pattern_mentions(pattern: Ast.Pattern) -> List[Mention]
     Ast.Pattern.Variant(variant) -> qualified(variant.enum_name, variant.span)
     Ast.Pattern.Wildcard(_) -> []
     Ast.Pattern.Literal(_) -> []
+    Ast.Pattern.Or(_) -> []
   end
 end
 
-# The patterns inside the slots of a variant pattern.
+# The patterns inside the slots of a variant pattern, or the patterns of an or-pattern.
 def nested_patterns(pattern: Ast.Pattern) -> List[Ast.Pattern]
   inner: List[Ast.Pattern] = []
   case pattern
@@ -160,6 +161,7 @@ def nested_patterns(pattern: Ast.Pattern) -> List[Ast.Pattern]
         end
       end
 
+    Ast.Pattern.Or(node) -> inner = node.patterns
     Ast.Pattern.Wildcard(_) -> inner = inner
     Ast.Pattern.Literal(_) -> inner = inner
   end
