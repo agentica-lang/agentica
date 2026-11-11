@@ -123,6 +123,8 @@ def run[S, M](setup: Setup[S, M]) -> Result[Void]
     end
   end
 
+  # Closed now, not when the task ends after terminate: a send in between would wait for an answer that never comes.
+  inbox.close
   case behaviour.terminate
     some(finish) -> finish.call(state)
     none -> nil

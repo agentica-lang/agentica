@@ -150,7 +150,20 @@ if threading.current_thread() is threading.main_thread():
     if hasattr(signal, "SIGHUP"):
         signal.signal(signal.SIGHUP, _terminate)
 
-Result = namedtuple("Result", "code stdout stderr")
+
+class Result(namedtuple("Result", "code stdout stderr")):
+    """What a run gave: its exit code and both streams as text."""
+
+    __slots__ = ()
+
+    def json(self):
+        """stdout decoded as JSON. Output that does not decode fails with the exit code and both streams: a Windows run
+        once printed nothing at all, and the code is the clue (#1098)."""
+        try:
+            return json.loads(self.stdout)
+        except json.JSONDecodeError as problem:
+            raise AssertionError("stdout is not JSON (%s)\nexit code: %r\nstdout: %r\nstderr: %r" % (
+                problem, self.code, self.stdout, self.stderr)) from None
 
 
 def slow(item):
