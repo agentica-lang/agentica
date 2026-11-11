@@ -215,8 +215,9 @@ end
 def main() -> Void
   hub = Hub(gate: Channel.new(1), said: Channel.new(4))
   # request_timeout_ms bounds the send of a whole piece: the one of 512 KiB waits for main to read it, which a slow
-  # machine with small socket buffers can take long to do.
-  options = HttpServerOptions(request_timeout_ms: 1400, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
+  # machine with small socket buffers can take long to do (1.4 s was too short on the macOS x86_64 runners, #1189).
+  # No case waits for this timeout to fire, so it matches the 5 s of the client's reads.
+  options = HttpServerOptions(request_timeout_ms: 5000, idle_timeout_ms: 5000, max_connections: 1, max_body_bytes: 64)
   server = HTTP.serve("127.0.0.1", 0, streamed(routes(hub)), options).unwrap!
   port = HTTP.local_port(server)
 
