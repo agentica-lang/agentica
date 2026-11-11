@@ -121,6 +121,20 @@ def test_a_dash_formats_the_standard_input_to_the_standard_output(tmp_path):
     assert json.loads(broken.stderr)["code"] == "LEX-UNCLOSED-DELIMITER"
 
 
+def test_a_guard_written_in_a_block_inside_a_list_formats_to_a_file_that_checks(tmp_path):
+    # fmt turns the `if ... return ... end` into `return ok() if ...`, which the lexer once refused inside `[...]`.
+    head = 'def ready() -> Result[Bool] = ok(true)\n\ndef main() -> Void\n  Test.run([\n    Test.test("x") do\n'
+    tail = '\n      ok()\n    end,\n  ])\nend\n'
+    block = head + "      if not ready().ok?\n        return ok()\n      end\n" + tail
+    guard = head + "      return ok() if not ready().ok?\n" + tail
+    lay_out(tmp_path, {"t.agc": block})
+    result = fmt("t.agc", cwd=tmp_path, json_style=True)
+    assert (result.code, result.stderr) == (0, "")
+    assert text(tmp_path, "t.agc") == guard
+    checked = run(cli() + ["check", "t.agc"], env=vm_environment(), cwd=tmp_path)
+    assert checked.code == 0, checked.stderr
+
+
 def test_tree_is_the_same_before_and_after_formatting(tmp_path):
     lay_out(tmp_path, {"bad.agc": UNFORMATTED, "good.agc": FORMATTED})
     before = fmt("--tree", "bad.agc", cwd=tmp_path)

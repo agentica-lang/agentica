@@ -18,7 +18,7 @@ OPERATOR_KINDS = {
 ## What a word does: 1 for a keyword, 2 for a keyword that opens a block (`end` closes it), 3 for `end`. A name is
 ## not in the map (0).
 WORD_ACTIONS = {
-  "import": 1, "export": 1, "def": 2, "struct": 2, "enum": 2, "case": 1, "do": 2, "end": 3, "if": 2, "elsif": 1,
+  "import": 1, "export": 1, "def": 2, "struct": 2, "enum": 2, "case": 2, "do": 2, "end": 3, "if": 2, "elsif": 1,
   "else": 1, "while": 2, "for": 2, "in": 1, "return": 1, "try": 1, "true": 1, "false": 1, "nil": 1, "and": 1, "or": 1,
   "not": 1,
 }
@@ -339,6 +339,10 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
   resume = NO_RESUME
   # The index in `tokens` of the first token of the statement being lexed, for the block-head test of a leading dot.
   head_at = tokens.size
+  # The depth of the frame of the `while`, `for` or `case` head being lexed (-1 when none): a `do` that ends a line
+  # of that head (`while c do`) belongs to it and opens no second frame, since one `end` closes both. The head lasts
+  # until the line break of its statement, so a head split inside brackets (`case [`, `x,`, `][0] do`) keeps it.
+  head_depth = -1
   # The column of a character is its offset plus this, a sum where the line start would need a subtraction and an
   # addition; it changes where `line_start` does.
   column_base = 1 - line_start
@@ -368,7 +372,13 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
         action = WORD_ACTIONS.get(lexeme, 0)
         if action > 0
           kind = lexeme
-          if action == 2
+          if action == 2 and lexeme == "do" and depth == head_depth and head_do?(chars, stop)
+            head_depth = -1
+          elsif action == 2 and !modifier?(tokens, lexeme)
+            if lexeme == "while" or lexeme == "for" or lexeme == "case"
+              head_depth = depth + 1
+            end
+
             top = Frame(kind: "kw", start: start, inside: top.inside)
             delimiters = delimiters.push(top)
             depth += 1
@@ -552,6 +562,7 @@ def lex_from(input: Input, state: Lexed, stop_depth: Int) -> Diag.Outcome[Lexed]
             )
 
             head_at = tokens.size
+            head_depth = -1
           end
         end
 
@@ -1503,6 +1514,27 @@ def dot_follows?(chars: List[String], from: Int) -> Bool
 end
 
 def ends_with_newline?(tokens: List[Tokens.Token]) -> Bool = tokens.size > 0 and tokens[tokens.size - 1].kind == "NL"
+
+# A `do` at `stop` that ends its line: only blanks, then a line break, a comment or the end of the text follow it.
+def head_do?(chars: List[String], stop: Int) -> Bool
+  at = stop
+  while chars[at] == " " or chars[at] == "\t"
+    at += 1
+  end
+
+  char = chars[at]
+  char == "\n" or char == "\r" or char == "#" or char == ""
+end
+
+# An `if` or `while` after an expression or a bare `return` is a modifier (`return x if c`) or a case guard
+# (`Some(x) if x > 0 ->`): it has no `end`, so it opens no block frame. A stray frame let the `end` of an enclosing
+# `do` pop it instead, and left that `do` frame over the `[`, `(` or `{` that its closing bracket needs.
+def modifier?(tokens: List[Tokens.Token], word: String) -> Bool
+  return false if (word != "if" and word != "while") or tokens.size == 0
+
+  last = tokens[tokens.size - 1].kind
+  last == "return" or ENDS_EXPRESSION.include?(last)
+end
 
 def in_interpolation?(delimiters: List[Frame]) -> Bool
   delimiters.size > 0 and delimiters[delimiters.size - 1].kind == "#"

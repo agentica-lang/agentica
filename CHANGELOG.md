@@ -8,6 +8,14 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.30.1] - 2026-11-11
+
+### Fixed
+
+- A guard (`return x if c`), a `case` or a `while`/`for ... do` inside a `do`
+  block within `[...]`, `(...)` or `{...}` no longer fails with
+  `LEX-UNMATCHED-DELIMITER` or a parse error, so `agentica fmt` can write it.
+
 ## [0.30.0] - 2026-11-11
 
 ### Added
@@ -1383,7 +1391,8 @@ First release of Agentica, a statically typed language designed for AI agents.
 - `main` returns `Void`; maps preserve insertion order and support fallible
   lookups.
 
-[unreleased]: https://github.com/agentica-lang/agentica/compare/0.30.0...HEAD
+[unreleased]: https://github.com/agentica-lang/agentica/compare/0.30.1...HEAD
+[0.30.1]: https://github.com/agentica-lang/agentica/compare/0.30.0...0.30.1
 [0.30.0]: https://github.com/agentica-lang/agentica/compare/0.29.0...0.30.0
 [0.29.0]: https://github.com/agentica-lang/agentica/compare/0.28.0...0.29.0
 [0.28.0]: https://github.com/agentica-lang/agentica/compare/0.27.0...0.28.0
