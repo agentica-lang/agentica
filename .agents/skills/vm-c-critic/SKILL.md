@@ -48,9 +48,10 @@ will not match the diff.
    nothing known.
 2. **Load the rules.** Read `AGENTS.md`. In
    `.agents/skills/agentica-development/references/` (later `vm.md`, `vm-c.md`
-   and `bench-eval.md` mean files there), read `vm.md` ("Trust model") and
-   `vm-c.md` (C style, failure and exit, Boehm GC), plus the `vm-*.md` file the
-   "Read next" table of `vm.md` names for the touched area. Read the touched
+   and `bench-eval.md` mean files there), read `vm.md` ("Trust model") and all
+   of `vm-c.md`, plus the `vm-*.md` file the "Read next" table of `vm.md` names
+   for the touched area. The rules live there only; this skill says where to
+   look and how to prove a breach. Read the touched
    sections of `docs/vm/14-core-invariants.md` (§14.1–§14.6) and
    `docs/vm/15-layers.md`, plus the area design doc.
 3. **Map the change** with `code_diff`, then cross-check with `git diff --stat`
@@ -65,116 +66,59 @@ will not match the diff.
 
 ## Checklist
 
-### Memory safety and undefined behavior
+Each line says where to look; the rule it checks is in the reference named.
+A change that breaks a rule is a finding; older code is not.
 
-- Bounds: every index read from a value, a register or bytecode is checked
-  before use. Look for off-by-one at the boundaries of the data structure
-  (31/32/33 in a 32-wide node, a list at its cap).
-- Fixed-width copies: `memcpy`, loops or struct copies of `N` items whose
-  source may hold fewer. Release builds can hide this; ASan finds it.
-- Size arithmetic goes through `agc_size_add` / `agc_size_mul`. Signed
-  overflow, shifts by ≥ 64 or by a negative count, and narrowing casts are UB
-  or silent bugs.
-- Strings: an `agc_string` is not NUL-terminated for libc unless the code made
-  it so; embedded NUL bytes must be rejected before libc calls.
-- `malloc` memory: freed on every path, including a `longjmp` from `agc_fail`
-  that skips the cleanup, a cancelled task, a detached job and the end of the
-  run. libuv requests get `uv_*_req_cleanup`.
-- Type punning goes through `memcpy`; the value union is read only where
-  `vm-c.md` says.
-
-### Hostile bytecode (trust model)
-
-A `.agcb` may contain anything. The VM must not crash, read out of bounds or
-loop past `--max-steps`.
-
-- Values reach builtins and opcodes through checked accessors (`agc_as_*`),
-  never by a raw tag assumption.
-- Indexes into function, span, enum, variant and type tables come from
-  loader-validated data, or are clamped at the use. Check the new loader
-  validation for every new section, field or opcode operand.
-- New opcodes keep the loader's termination rules, and new counts respect the
-  existing caps (16-bit operands, `AGC_MAX_LIST_COUNT`, and the list, map and
-  string bounds that `docs/vm/08-loader-and-cli.md` names).
-
-### Boehm GC
-
-Apply `vm-c.md` ("Boehm GC"). The critic also checks:
-
-- `agc_alloc_atomic` holding a pointer is a use-after-free waiting to happen.
-- No packed struct that holds a pointer (the GC scans only 8-byte aligned
-  words).
-- Pool-thread work touches only its op's `malloc` data. The GC values are
-  built in the `done` half on the loop thread.
-
-### Scheduler, tasks and the core rules (§14)
-
-For each new wait, job or handle, answer the five questions of §14: how it
-waits (§14.1), how it times out (§14.2), how it is cancelled (§14.3), how it
-ends (§14.4), and who owns its handles (§14.5). A second way for any of them is
-a finding.
-
-- Cancel while parked, crash in another task, `main` returning, `System.exit`,
-  the step limit and SIGTERM, all while the new job or wait is in flight: no
-  hang, no leak report, the right exit code.
-- Waiters: woken once, removed from every list on cancel (`unlink_task`), never
-  left in a list after the task ends. The stall check (`every task is waiting`)
-  must still be right.
-- Costs: `--max-steps` counts `STEP` instructions only; turn cost (`agc_charge`,
-  `AGC_COST_SIZE`) is separate. Work that grows with input must charge turn
-  cost. Report any path that does unbounded work for a constant charge, and any
-  long CPU builtin that blocks other tasks well past one turn.
-- Diagnostics: one code with a span. Diagnostic output changes (new JSON
-  keys, new lines) must not break their readers: `stdlib/test/child.agc`
-  (`vm_shape?`), `compiler/bdd/bdd_runner.agc`, the tests parsing `--json`.
-
-### Efficiency
-
-- Hot paths are `agc_run_turn` in `vm/interp.c`, `CALL` and `TAIL_CALL`,
-  `LIST_GET` and the arithmetic opcodes. Look for new branches, calls, frame
-  growth or allocation on them. Keep hot-path flags plain `bool`s, not
-  bit-fields.
-- Look for allocation per item where a bulk path exists, and for O(n) work
-  where the design promises O(1) or O(log n). Check builders, slices and copies.
-- Speed claims need numbers. Only when a PR claims one, compare it with
-  `origin/<base>` built in a scratch worktree: interleaved runs, medians
-  (`bench-eval.md`); code layout alone moves a binary by 20–35 %. Peak RSS
-  (`/usr/bin/time -v`) when memory is the claim.
-
-### Simplicity and architecture
-
-- §14.6 entry rule: no new `vm/` subsystem without a program that needs it
-  (`std/` code first, then a separate process); a new core concept must replace
-  something.
-- §15 layers: core, then services, then adapters, in one direction only.
-  `make vm-layers` must pass (Linux only), and only the listed files may include
-  `uv.h`, OpenSSL or private headers such as `list_impl.h`. An exemption added
-  to `vm/tools/check-layers.sh` needs a reason, and an exact path, not a bare
-  basename glob.
-- Platform code: what the diff adds against "Platform code" of `vm-c.md` is a
-  finding (a new `#ifdef` inside a shared function, two copies of one function
-  under `#ifdef`, one-system flags in a shared struct); not older code.
-- C style and comments: apply `vm-c.md` ("C style"). Its *checked* rules run in
-  `make vm-lint` and `tests/test_vm_style.py`; judge the rest by reading. A
-  comment that narrates obvious code, commented-out code, or complex code with
-  no reason comment (an invariant, a GC or ownership rule, a protocol quirk, a
-  hostile-input check) is a Nit. Do not flag a useful comment.
-- Duplication: flag the clones you see and suggest a shared helper; CI runs
-  `make dup-check`. Never fix a clone by adding it to the baseline.
-- Builtin tables: a C test may index a table by position, for example
-  `vm/tests/system_test.c` calls `agc_system_builtins[0]`. Add new rows at the
-  end.
-
-### Tests and docs
-
-- Each new behavior has a golden (`tests/fixtures/vm/`), a C test for an
-  invariant that goldens cannot reach, or an independent Node or Python peer for
-  network and OS behavior. Note when a test can only catch the bug under ASan.
-- No `.expected` file changes unless the PR says why. The step counts in goldens
-  must not move for a refactor.
-- Docs claims (CHANGELOG, `docs/vm/`, the skills, the site) must match what you
-  ran: report overclaims ("constant time" for an O(log n) path) and doc
-  changes that were not needed (`documentation-writing`).
+- **Memory and UB** (`vm-c.md`, "Writing rules"): each index from a value, a
+  register or bytecode, at the edges of the structure (31/32/33 in a 32-wide
+  node, a list at its cap); `memcpy`, loops and struct copies of `N` items
+  whose source may hold fewer (release builds hide these; ASan finds them);
+  sizes, shifts, casts, unions; an `agc_string` passed to libc; `malloc`
+  memory on each way out of the function, `agc_fail` included, and libuv
+  requests without their `uv_*_req_cleanup`.
+- **Hostile bytecode** (`vm.md`, "Trust model"; `vm-c.md`): each new section,
+  field and operand has its loader check and stays inside the caps of
+  `docs/vm/08-loader-and-cli.md`; each table index at a use comes from the
+  loader or is clamped; values reach C through `agc_as_*`.
+- **GC** (`vm-c.md`, "Boehm GC"): every place a GC pointer is stored, and what
+  keeps it alive while C holds it; pool-thread work touches only its request.
+- **Waits, jobs and handles** (`docs/vm/14-core-invariants.md`,
+  `vm-tasks.md`, `vm-io.md`): answer how it waits (§14.1), times out (§14.2),
+  is cancelled (§14.3), ends (§14.4) and who owns its handles (§14.5); a
+  second way for any of them is a finding. Walk a cancel while parked, a crash
+  in another task, `main` returning, `System.exit`, the step limit and SIGTERM
+  with the job in flight: no hang, no leak report, the right exit code.
+  Waiters are woken once and leave every list on cancel; the stall check still
+  holds.
+- **Shared state** (`vm-tasks.md`): each new field more than one thread reads,
+  its lock or atomic, and the row's `shared` mark.
+- **Costs** (`vm-builtins.md`): any path that does work growing with its input
+  for a constant charge, or a CPU builtin that holds the scheduler well past a
+  turn.
+- **Diagnostics** (`vm-core.md`, "Diagnostics"): one code with a span; a new
+  JSON key or line still reads in `stdlib/test/child.agc` (`vm_shape?`),
+  `compiler/bdd/bdd_runner.agc` and the tests that parse `--json`.
+- **Hot paths** (`vm-c.md`): `agc_run_turn` in `vm/interp.c`, `CALL`,
+  `TAIL_CALL`, `LIST_GET` and the arithmetic opcodes: new branches, calls,
+  frame growth or allocation. Elsewhere: allocation per item where a bulk path
+  exists, O(n) work where the design promises O(1) or O(log n). A speed claim
+  is compared with `origin/<base>` built in a scratch worktree, interleaved,
+  medians (`bench-eval.md`); code layout alone moves a binary by 20–35 %. Peak
+  RSS (`/usr/bin/time -v`) when memory is the claim.
+- **Size and layers** (`docs/vm/14-core-invariants.md` §14.6, `vm.md`, "Which
+  layer"): a new subsystem without a program that needs it; `make vm-layers`;
+  an exemption in `vm/tools/check-layers.sh`.
+- **Platform code and style** (`vm-c.md`): what the diff adds against
+  "Platform code" and "C style". The *checked* style rules run in `make
+  vm-lint` and `tests/test_vm_style.py`; judge the rest by reading. A missing
+  or narrating comment is a Nit; do not flag a useful comment. Clones: suggest
+  a shared helper (`make dup-check`), never a baseline entry.
+- **Tests and docs**: each new behavior has a golden, a C test for an
+  invariant goldens cannot reach, or an independent peer for network and OS
+  behavior (`vm.md`, `vm-tests.md`); say when only ASan can catch the bug. No
+  `.expected` change unless the PR says why, and no step count moves for a
+  refactor. Doc claims match what you ran: report overclaims and doc changes
+  that were not needed (`documentation-writing`).
 
 ## Proving a finding
 

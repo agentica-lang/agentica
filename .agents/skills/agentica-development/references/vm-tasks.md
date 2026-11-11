@@ -42,7 +42,15 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 - `agc_sync_assert` fails the run when a shared VM reaches a checked mutator
   without the lock; `agc_share` turns it on. `AGENTICA_VM_TEST_SHARED=1` does it
   for a whole run on one scheduler (`make test-shared` runs the binary modules
-  that way; `tests/test_vm_shared.py` covers the rarer paths).
+  that way; `tests/test_vm_shared.py` covers the rarer paths). A change to
+  state that more than one thread reads (the run queue, the inbox, a job, the
+  registry, an `_Atomic`, a row's `shared` mark) runs `make vm-tsan` and `make
+  test-shared` before the PR; a new threaded C test goes in `VM_TSAN_TESTS`
+  (`mk/vm-test.mk`).
+- A scheduler or the I/O thread never blocks without a deadline: stdin is read
+  through `agc_input_whole` and its port (`vm/input.c`), never by a blocking
+  read on the loop thread, and a push that skipped its wake is followed by
+  `agc_runq_kick` (`vm/core.h`), or the other schedulers sleep on.
 - A new builtin that touches shared state sets `shared` to true in its row.
   `vm/tests/sync_test.c` checks that the task, `Task.map`, channel, logger,
   process, duplex, TCP and HTTP rows are marked, that no String, number or JSON
