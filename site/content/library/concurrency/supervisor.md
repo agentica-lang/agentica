@@ -17,7 +17,7 @@ description: The std/supervisor module, a task that starts actors and starts aga
 Supervisor.child(name: String, behaviour: Actor.Behaviour[S, M], register: Fn[Address[M], Void]) -> Supervisor.Child
 ```
 
-A child that runs `behaviour` (see [Actor](/library/concurrency/actor/)) and calls `register` with the address of each new actor. The block runs in a task of its own, before the supervisor goes on. The block is required: a child that nobody reaches by name gives `do |_address| nil end`. A `List[Supervisor.Child]` holds children of any state and message type.
+A child that runs `behaviour` (see [Actor](/library/concurrency/actor/)) and calls `register` with the address of each new actor. The block runs in a task of its own, before the supervisor goes on, for at most 5 seconds: a block that crashes, or still runs then (it is cancelled), is a failed start. The block is required: a child that nobody reaches by name gives `do |_address| nil end`. A `List[Supervisor.Child]` holds children of any state and message type.
 
 ## Supervisor.start
 
@@ -26,9 +26,9 @@ Supervisor.start(children: List[Supervisor.Child], options: Supervisor.Options =
 Supervisor.Options(max_restarts: Int = 3, within_ms: Int = 5000)
 ```
 
-Starts the supervisor in a task of its own, which starts the children in list order, and returns once each one has started (and run its register block) once. A start fails when the actor's `init` crashes or the register block crashes; a failed start counts as a crash of that child, and the supervisor tries again within the limit.
+Starts the supervisor in a task of its own, which starts the children in list order, and returns once the first start of each one has run, or after 60 seconds. A start fails when the actor's `init` crashes or the register block fails; a failed start counts as a crash of that child, and the supervisor tries again within the limit, after it has read the messages that came before (so a `Supervisor.stop` is not held up by a child that keeps failing). `max_restarts` must be 0 or more and `within_ms` above 0, else `start` halts with `RUNTIME-UNWRAP-ERROR` (`supervisor: within_ms must be above 0, not 0`).
 
-The limit is per child: a child that crashes more than `max_restarts` times within `within_ms` milliseconds makes the supervisor give up. It stops the other children in reverse order and then crashes, so a give-up is never silent: its diagnostic is `RUNTIME-UNWRAP-ERROR` with the message `supervisor: NAME crashed N times in M ms`, a `Task.monitor` of `sup.task` sees `TaskExit.Crashed` with that code and message, and a give-up that nothing observes (`Supervisor.stop`, `Task.await(sup.task)` or a monitor) fails the run when `main` returns.
+The limit is per child: a child that crashes more than `max_restarts` times within `within_ms` milliseconds makes the supervisor give up. It stops the other children in reverse order, within 5 seconds, and then crashes, so a give-up is never silent: its diagnostic is `RUNTIME-UNWRAP-ERROR` with the message `supervisor: NAME crashed N times in M ms` (`1 time` for one), a `Task.monitor` of `sup.task` sees `TaskExit.Crashed` with that code and message, and a give-up that nothing observes (`Supervisor.stop`, `Task.await(sup.task)` or a monitor) fails the run when `main` returns.
 
 ## Supervisor.stop
 
@@ -36,7 +36,7 @@ The limit is per child: a child that crashes more than `max_restarts` times with
 Supervisor.stop(supervisor: Supervisor.Ref, timeout_ms: Int) -> Result[Void]
 ```
 
-Stops the children in reverse order, each as `Actor.stop` does (it handles its inbox and runs `terminate`), then the supervisor, all within `timeout_ms`, which must be above 0. A supervisor still running then is cancelled with its children, and `stop` gives `error("supervisor: timeout")`. A supervisor that gave up gives `error("supervisor: NAME crashed N times in M ms")`, and stopping it observes the crash.
+Stops the children in reverse order, each as `Actor.stop` does (it handles its inbox and runs `terminate`), then the supervisor, all within `timeout_ms`, which must be above 0, and gives the first error of a child's stop (`task crashed: ...` for a `terminate` that crashed). The children share the time in turn: once one has used it up, each child left gets 1 ms, so it is cancelled without `terminate`. A supervisor still running at the end is cancelled with its children, and `stop` gives `error("supervisor: timeout")`; a supervisor busy with a start waits for it (each start takes at most the 5 seconds of its register block). A supervisor that gave up gives `error("supervisor: NAME crashed N times in M ms")`, and stopping it observes the crash.
 
 ```agentica
 import Actor from "std/actor"

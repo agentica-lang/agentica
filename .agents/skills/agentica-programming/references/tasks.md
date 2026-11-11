@@ -439,13 +439,17 @@ the new address; an old address gives `address: gone`, so look the name up on
 each call.
 
 - Only a crash restarts; a child that gives `Actor.done` stays down. A failed
-  start (crash in `init` or the register block) counts as a crash.
+  start (crash in `init`, or a register block that crashes or runs over 5 s)
+  counts as a crash. `max_restarts` >= 0 and `within_ms` > 0, else `start`
+  halts (`RUNTIME-UNWRAP-ERROR`).
 - The limit is per child: more than `max_restarts` crashes within `within_ms`
   and the supervisor stops the others in reverse order and crashes:
-  `RUNTIME-UNWRAP-ERROR`, message `supervisor: NAME crashed N times in M ms`.
+  `RUNTIME-UNWRAP-ERROR`, message `supervisor: NAME crashed N times in M ms`
+  (`1 time` for one).
   Unobserved (no `stop`, `Task.await(sup.task)` or monitor), it fails the run.
-- `stop` stops the children in reverse order within `timeout_ms` (above 0);
-  it gives the give-up error after a give-up, `supervisor: timeout` (and
-  cancels) when out of time.
+- `stop` stops the children in reverse order within `timeout_ms` (above 0)
+  and gives the first child's stop error; after a give-up it gives the give-up
+  error, and out of time `supervisor: timeout` (and cancels). Once the time is
+  used up, the children left are cancelled without `terminate`.
 - The supervisor is a child of the task that calls `start`: start it from
   `main`.

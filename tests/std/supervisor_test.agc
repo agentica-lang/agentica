@@ -80,6 +80,23 @@ def ended(w: World, name: String) -> Result[Void]
   error("#{name} did not end")
 end
 
+def flaky_register(w: World, address: Address[Msg]) -> Void
+  register(w, "flaky", address)
+  if w.starts.get("flaky").unwrap_or(0) <= 80
+    _ = 1 / 0
+  end
+end
+
+def crash_once(w: World) -> Int
+  return 1 / 0 if w.starts.add("victim init", 1) == 1
+
+  0
+end
+
+def crash_on_stop(count: Int) -> Void
+  _ = count / 0
+end
+
 def block0[R](f: Fn[R]) -> Fn[R] = f
 
 def block1[A, R](f: Fn[A, R]) -> Fn[A, R] = f
@@ -105,8 +122,9 @@ def test_a_child_that_ends_without_a_crash_stays_down() -> Result[Void]
   try Test.eq(get(w, "other"), ok(2))
   try ended(w, "once")
   try Test.eq(get(w, "once"), error("address: gone"))
-  try Test.eq(w.starts.get("once"), ok(1))
-  Test.eq(Supervisor.stop(sup, 5000), ok())
+  # The supervisor handles the end notice of `once` before the stop, which comes after it in the inbox.
+  try Test.eq(Supervisor.stop(sup, 5000), ok())
+  Test.eq(w.starts.get("once"), ok(1))
 end
 
 def test_stop_stops_the_children_in_reverse_order() -> Result[Void]
@@ -142,4 +160,61 @@ def test_a_failed_start_counts_as_a_crash() -> Result[Void]
   failing = Supervisor.child("failing", behaviour) do |_address| w.starts.add("failing", 1 / 0) end
   sup = Supervisor.start([failing], Supervisor.Options(max_restarts: 1, within_ms: 60_000))
   Test.eq(Supervisor.stop(sup, 5000), error("supervisor: failing crashed 2 times in 60000 ms"))
+end
+
+def test_an_init_crash_counts_as_a_crash() -> Result[Void]
+  w = world()
+  behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(init: block0() do 1 / 0 end, handle: &handle)
+  failing = Supervisor.child("boom", behaviour) do |address| register(w, "boom", address) end
+  sup = Supervisor.start([failing], Supervisor.Options(max_restarts: 1, within_ms: 60_000))
+  downs: Channel[TaskDown] = Channel.new(1)
+  Task.monitor(sup.task, downs) do |down| down end
+  down = try downs.recv(5000)
+  try Test.eq(down.message, "supervisor: boom crashed 2 times in 60000 ms")
+  try Test.eq(w.starts.get("boom"), ok(2))
+  Test.eq(Supervisor.stop(sup, 5000), error("supervisor: boom crashed 2 times in 60000 ms"))
+end
+
+def test_a_crash_older_than_within_ms_no_longer_counts() -> Result[Void]
+  w = world()
+  sup = Supervisor.start([counter(w, "slow")], Supervisor.Options(max_restarts: 1, within_ms: 300))
+  for run in 1..3
+    try started(w, "slow", run)
+    Task.sleep(400)
+    try cast(w, "slow", Msg.Divide(0))
+  end
+
+  try started(w, "slow", 4)
+  Test.eq(Supervisor.stop(sup, 5000), ok())
+end
+
+# The first 80 starts of `flaky` fail while `victim` crashes once: each failed start leaves nothing in the inbox,
+# so the
+# crash of `victim` is not dropped and it starts again.
+def test_failed_starts_of_one_child_do_not_hide_the_crash_of_another() -> Result[Void]
+  w = world()
+  behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(init: block0() do 0 end, handle: &handle)
+  flaky = Supervisor.child("flaky", behaviour) do |address| flaky_register(w, address) end
+  victim_behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(init: block0() do crash_once(w) end, handle: &handle)
+  victim = Supervisor.child("victim", victim_behaviour) do |address| register(w, "victim", address) end
+  sup = Supervisor.start([flaky, victim], Supervisor.Options(max_restarts: 1000, within_ms: 60_000))
+  try started(w, "victim", 2)
+  try started(w, "flaky", 81)
+  try Test.eq(get(w, "victim"), ok(0))
+  Test.eq(Supervisor.stop(sup, 5000), ok())
+end
+
+def test_stop_gives_the_error_of_a_child_whose_terminate_crashes() -> Result[Void]
+  w = world()
+  behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(
+    init: block0() do 0 end,
+    handle: &handle,
+    terminate: some(block1() do |count| crash_on_stop(count) end),
+  )
+
+  bad = Supervisor.child("bad", behaviour) do |address| register(w, "bad", address) end
+  sup = Supervisor.start([bad, counter(w, "good")])
+  stopped = Supervisor.stop(sup, 5000)
+  try Test.assert(stopped.to_s.include?("task crashed: RUNTIME-DIVISION-BY-ZERO"), stopped.to_s)
+  Test.eq(w.stopped.get("good"), ok(1))
 end
