@@ -1,4 +1,4 @@
-"""The temporary roots of the test runs stay bounded: one run kept per root, and stale roots swept."""
+"""The temporary roots of the test runs stay bounded: only the last failed run kept per root, and stale roots swept."""
 
 import os
 import shutil
@@ -200,32 +200,74 @@ def test_sessions_that_start_together_keep_their_roots(tmp_path):
     assert all(time.time() - root.stat().st_mtime < 60 for root in roots)
 
 
-def test_sessions_keep_one_run_in_a_root_and_touch_it(tmp_path):
-    """Pytest sessions of the same module set leave one numbered folder, not three as pytest does by default."""
+def test_sessions_keep_only_the_failed_tests_of_the_last_run_and_touch_the_root(tmp_path):
+    """A passed test's folder goes when it ends and a passing run leaves no numbered folder; the last failing run
+    keeps the folder of its failed test alone, which a passing run leaves in place for debugging."""
     project = tmp_path / "project"
     project.mkdir()
     (project / "conftest.py").write_text(
         "from tests.temp_roots import assign_root\n\n\ndef pytest_configure(config):\n    assign_root(config)\n"
     )
-    (project / "test_inner.py").write_text("def test_it(tmp_path):\n    (tmp_path / 'f').write_text('x')\n")
+    (project / "test_inner.py").write_text(
+        "import os\n\n\n"
+        "def test_passes(tmp_path):\n    (tmp_path / 'f').write_text('x')\n\n\n"
+        "def test_fails_when_asked(tmp_path):\n    (tmp_path / 'f').write_text('x')\n"
+        "    assert os.environ.get('INNER_FAIL') != '1'\n"
+    )
     temp = tmp_path / "tmp"
     temp.mkdir()
     env = clean_env(temp)
 
-    def session():
+    def session(fail=False):
         done = subprocess.run(
             [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-c", str(ROOT / "pyproject.toml"),
              "--rootdir", str(project), str(project)],
-            env=env, capture_output=True, text=True, check=False, timeout=120,
+            env={**env, "INNER_FAIL": "1" if fail else "0"}, capture_output=True, text=True, check=False, timeout=120,
         )
-        assert done.returncode == 0, done.stdout + done.stderr
+        assert done.returncode == (1 if fail else 0), done.stdout + done.stderr
 
-    for _ in range(3):
-        session()
+    def kept():
+        return sorted(path.name for path in temp.glob("agc*/*/pytest-of-*/pytest-[0-9]*/*") if not path.is_symlink())
+
+    session()
+    session()
     roots = [root for owner in temp.glob("agc*") for root in owner.iterdir()]
     assert len(roots) == 1
-    assert len(list(roots[0].glob("pytest-of-*/pytest-[0-9]*"))) == 1
+    assert list(roots[0].glob("pytest-of-*/pytest-[0-9]*")) == []
+
+    session(fail=True)
+    assert kept() == ["test_fails_when_asked0"]
+    for fail in [True, False]:
+        session(fail=fail)
+        assert len(list(roots[0].glob("pytest-of-*/pytest-[0-9]*"))) == 1 and kept() == ["test_fails_when_asked0"]
 
     os.utime(roots[0], (NOW, NOW))
     session()
     assert time.time() - roots[0].stat().st_mtime < 60
+
+
+def test_the_pytest_stage_fixtures_remove_the_stage_folder(tmp_path):
+    """The class cleanups of a stage helper run when its module ends (frontend_support.pytest_stage_fixtures), so the
+    stage folder that _compile_stage registers is not left behind."""
+    project = tmp_path / "project"
+    project.mkdir()
+    made = tmp_path / "made"
+    (project / "test_stage.py").write_text(
+        "import os\nimport shutil\nfrom pathlib import Path\n\nimport pytest\n\n"
+        "from tests.frontend_support import PytestStageCase, pytest_stage_fixtures\n\n\n"
+        "class Stage(PytestStageCase):\n"
+        "    @classmethod\n"
+        "    def _compile_stage(cls):\n"
+        "        cls.stage_dir = Path(os.environ['STAGE_DIR'])\n"
+        "        cls.stage_dir.mkdir()\n"
+        "        cls.addClassCleanup(shutil.rmtree, cls.stage_dir, ignore_errors=True)\n\n\n"
+        "stage_class, stage = pytest_stage_fixtures(Stage, pytest)\n\n\n"
+        "def test_it(stage):\n    assert stage.stage_dir.is_dir()\n"
+    )
+    done = subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-c", str(ROOT / "pyproject.toml"),
+         "--rootdir", str(project), str(project)],
+        env={**clean_env(tmp_path), "STAGE_DIR": str(made)}, capture_output=True, text=True, check=False, timeout=120,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert not made.exists()

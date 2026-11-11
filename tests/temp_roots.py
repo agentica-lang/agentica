@@ -127,16 +127,19 @@ def _touch_root(root: Path) -> None:
 
 
 def assign_root(config: pytest.Config) -> None:
-    """Give each pytest run of a module its own temporary root, keep the last run in it and sweep the stale roots.
+    """Give each pytest run of a module its own temporary root, keep the last failed run in it and sweep stale roots.
 
     make test runs one pytest per module in parallel. With a shared root, every run replaces the same
     pytest-of-<user>/pytest-current link, and the cleanup of another run can fail on it at the end of the session
-    (FileNotFoundError in cleanup_dead_symlinks after all cases passed). A root per user, checkout and module set keeps
-    the links apart; pyproject.toml keeps one numbered folder in it (tmp_path_retention_count), the last run, for
-    debugging. Roots do not pile up: the sweep removes those of this user untouched for a day, which are the roots of
-    deleted worktrees. The sweep runs before this session creates its own root, so it never competes for it. pytest
-    reads the variable only at the first tmp_path, so setting it here is early enough, and child pytest runs inherit
-    it on purpose (they return here at once and sweep nothing).
+    (FileNotFoundError in cleanup_dead_symlinks after all cases passed). A root per user, checkout and module set
+    keeps the links apart. pyproject.toml keeps at most one numbered folder in it (tmp_path_retention_count), and
+    only the folders of the tests that failed (tmp_path_retention_policy): a passed test's folder goes when it ends,
+    and a run that passes leaves nothing of its own, so several worktrees running make test do not fill a small
+    /tmp. Roots do not pile up: the sweep removes those of this user untouched for a day, which are the roots of
+    deleted worktrees and the leftovers of killed runs (the stage folders of tests/frontend_support.py live in the
+    root too). The sweep runs before this session creates its own root, so it never competes for it. pytest reads
+    the variable only at the first tmp_path, so setting it here is early enough, and child pytest runs inherit it on
+    purpose (they return here at once and sweep nothing).
     """
     if config.option.basetemp is not None or "PYTEST_DEBUG_TEMPROOT" in os.environ:
         return
