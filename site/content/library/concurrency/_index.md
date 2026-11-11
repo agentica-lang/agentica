@@ -11,3 +11,4 @@ Tasks are lightweight and run on the VM's schedulers, one per logical core by de
 - Use an [ATS](/library/concurrency/ats/) table to share a counter or a cache that tasks update in place.
 - Use [Cache](/library/concurrency/cache/) (`std/cache`) to keep computed text that tasks share, within a byte budget.
 - Use an [Actor](/library/concurrency/actor/) (`std/actor`) for state that one task owns and other tasks reach with `cast` and `call`.
+- Use a [Supervisor](/library/concurrency/supervisor/) (`std/supervisor`) to start actors and start again one that crashes.
