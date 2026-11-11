@@ -5,6 +5,7 @@ name: san-trial
 on:
   push:
     branches: [san-trial]
+    paths: [.github/workflows/san-trial.yml]
 
 permissions:
   contents: read

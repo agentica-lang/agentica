@@ -1,0 +1,49 @@
+name: san-ccache
+
+# Temporary trial for #1380 (never merged): the steps of the tsan-build job of ci.yml with ccache and actions/cache, to
+# compare a cold and a warm cache with the times of that job in CI.
+on:
+  push:
+    branches: [san-trial]
+    paths: [.github/workflows/san-ccache.yml]
+
+permissions:
+  contents: read
+
+jobs:
+  tsan-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      AGENTICA_REQUIRE_VM: '1'
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 2G
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - uses: ./.github/actions/setup
+        with:
+          tools: 'false'
+          sanitizers: 'true'
+      - name: Install ccache
+        run: sudo apt-get install -y --no-install-recommends ccache || { sudo apt-get update && sudo apt-get install -y --no-install-recommends ccache; }
+      - uses: actions/cache/restore@v6
+        with:
+          path: .ccache
+          key: san-ccache-${{ github.run_id }}
+          restore-keys: san-ccache-
+      - run: ccache -z
+      - name: The front end stages that the TSan and GC stress binaries link
+        run: make -j"$(nproc)" build/stage/stage2.agcb build/stage/runner.agcb build/stage/steps.agcb
+      - name: vm-tsan, the threaded C tests under ThreadSanitizer (no libgc)
+        run: make -j"$(nproc)" vm-tsan
+      - name: Build the ThreadSanitizer binary and the GC stress binary and C tests
+        run: |
+          make -j"$(nproc)" build/vm/tsan/agentica TSAN=1 SANITIZE=0 GC_STRESS=0
+          make -j"$(nproc)" build/vm/gcstress/agentica vm-test-binaries GC_STRESS=1 SANITIZE=0
+      - run: ccache -s; du -sh .ccache
+      - uses: actions/cache/save@v6
+        with:
+          path: .ccache
+          key: san-ccache-${{ github.run_id }}
