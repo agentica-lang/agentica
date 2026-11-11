@@ -986,24 +986,13 @@ def close_brace(
 ) -> Diag.Outcome[Progress]
   return scan_piece(input, tokens, delimiters, index, line, line_start) if in_interpolation?(delimiters)
 
-  frames = delimiters
   kind = frame_on_top(delimiters, delimiters.size).kind
-  if kind == "kw"
-    # A guard (`return x if c`) opens a block frame that no `end` closes, so the `}` of a lambda body closes the block
-    # frames above it too.
-    below = innermost_bracket(delimiters)
-    if below >= 0 and delimiters[below].kind == LAMBDA_BODY
-      frames = delimiters.take(below + 1)
-      kind = LAMBDA_BODY
-    end
-  end
-
   if kind != "{" and kind != LAMBDA_BODY
     return Diag.Outcome.Failed(unmatched(delimiters, index, "}", line, 1 - line_start))
   end
 
   closing = operator_token(SINGLE_OPS.get("}", NO_OP), index, line, 1 - line_start)
-  Diag.Outcome.Done(Progress(tokens: tokens.push(closing), delimiters: pop(frames), index: index + 1))
+  Diag.Outcome.Done(Progress(tokens: tokens.push(closing), delimiters: pop(delimiters), index: index + 1))
 end
 
 # One string piece, from the `"` or the `}` at `index`: its token, and the frames
@@ -1593,8 +1582,7 @@ def innermost_interpolation(delimiters: List[Frame]) -> Int
 end
 
 # The stack index of the innermost frame that is not a block, or -1. Walks the
-# stack down to that frame, so only `finish` calls it, once per text, and a `}`
-# that finds a block frame on top.
+# stack, so only `finish` calls it, once per text.
 def innermost_bracket(delimiters: List[Frame]) -> Int
   index = delimiters.size - 1
   while index >= 0
