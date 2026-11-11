@@ -37,7 +37,7 @@ def e1_process_close_crash(binary, reps):
     samples = []
     for _ in range(reps):
         for limit in range(20, 116):
-            code, out, err = run([binary, "run", "--max-steps", str(limit), "--", str(program)], timeout=60)
+            code, out, err = run([binary, "run", "--json", "--max-steps", str(limit), "--", str(program)], timeout=60)
             counts["runs"] += 1
             if "RUNTIME-STEP-LIMIT" in err:
                 counts["step_limit"] += 1
@@ -102,16 +102,23 @@ def pytest_loop(label, node, reps, timeout):
 
 
 def main():
+    """Round 2: the cases at the same time, so each one runs under the load of the others, as in the CI suite."""
+    import threading
     binary = sys.argv[1]
-    e2_lost_diagnostic(binary, 200)
-    e1_process_close_crash(binary, 4)
-    pytest_loop("E3 #1332 bdd failed check",
-                "tests/test_bdd.py::test_a_failed_check_points_at_its_step_keyword_and_outline_rows_have_their_own_names",
-                40, 600)
-    pytest_loop("E4 #1098 kill the driver",
-                "tests/test_bdd_integration.py::test_killing_the_driver_stops_the_runner_the_scenario_vm_and_the_program_and_a_later_run_removes_its_folder",
-                15, 600)
-    pytest_loop("E5 #1098 check cache module", "tests/test_check_cache.py", 4, 1200)
+    bdd = "tests/test_bdd.py::test_a_failed_check_points_at_its_step_keyword_and_outline_rows_have_their_own_names"
+    kill = ("tests/test_bdd_integration.py::test_killing_the_driver_stops_the_runner_the_scenario_vm_and_the_program"
+            "_and_a_later_run_removes_its_folder")
+    jobs = [lambda: e1_process_close_crash(binary, 15), lambda: e1_process_close_crash(binary, 15),
+            lambda: pytest_loop("E3 #1332 bdd failed check A", bdd, 150, 600),
+            lambda: pytest_loop("E3 #1332 bdd failed check B", bdd, 150, 600),
+            lambda: pytest_loop("E4 #1098 kill the driver", kill, 40, 600),
+            lambda: pytest_loop("E5 #1098 check cache module", "tests/test_check_cache.py", 10, 1200)]
+    threads = [threading.Thread(target=job) for job in jobs]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    e2_lost_diagnostic(binary, 100)
 
 
 if __name__ == "__main__":
