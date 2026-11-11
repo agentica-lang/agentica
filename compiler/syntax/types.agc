@@ -1,5 +1,23 @@
 ## The types the checker works with, as an enum.
 
+## The builtin types that a std/ module re-exports, by their builtin name, with the name a program writes: the alias
+## that the module's docs import it as (STD_ONLY_IMPORTS of the catalog), then the member. Messages, `help`, `doc` and
+## the queries print the written name; a printed value keeps the builtin name.
+export REEXPORTED_TYPES: Map[String, String] = {
+  "HttpWire.Client": "HTTP.Client",
+  "HttpWire.ClientOptions": "HTTP.ClientOptions",
+  "HttpWire.Header": "HTTP.Header",
+  "HttpWire.Request": "HTTP.Request",
+  "HttpWire.Response": "HTTP.Response",
+  "HttpWire.Server": "HTTP.Server",
+  "HttpWire.ServerOptions": "HTTP.ServerOptions",
+  "LogRegistry.Event": "Logger.Event",
+  "LogRegistry.Level": "Logger.Level",
+}
+
+# A `written` map whose key "" (no linked name or prefix is empty) asks to_text_as for the builtin names.
+KEEP_BUILTIN: Map[String, String] = {"": ""}
+
 ## A resolved type. Opaque holds the name of a handle or other builtin type with no structure (Socket, Process,
 ## TestCase, C.Pointer), or the linked name of a resource of an extern block. Struct and Enum hold the linked name and
 ## carry their type arguments (none for a plain struct or enum). Var is a type variable of a builtin signature, a
@@ -257,13 +275,37 @@ export def display_name(name: String) -> String
   name
 end
 
-## The type as the messages print it: Int, List[String], Map[String, Int], Fn[Int, Void], Point, Option[Int].
+## The name of a struct, enum or other named type as a message prints it: display_name, and a builtin type that a std/
+## module re-exports by its written name (HttpWire.Request is HTTP.Request).
+export def written_type(name: String) -> String = REEXPORTED_TYPES.get(name, display_name(name))
+
+## Source text with each re-exported builtin type written by its written name: the default `HttpWire.ClientOptions()`
+## of a std/ signature prints as `HTTP.ClientOptions()`. Longer names go first, so HttpWire.ClientOptions is never
+## taken for HttpWire.Client.
+export def written_types_in(text: String) -> String
+  names = REEXPORTED_TYPES.keys.sort_by do |name: String| -name.length end
+  shown = text
+  for name in names
+    shown = shown.replace(name, REEXPORTED_TYPES[name])
+  end
+
+  shown
+end
+
+## The type as the messages print it: Int, List[String], Map[String, Int], Fn[Int, Void], Point, Option[Int],
+## HTTP.Request.
 export def to_text(type: Type) -> String = to_text_as(type, {})
+
+## The type as `to_text` prints it, but a re-exported builtin type keeps its builtin name (HttpWire.Request): the text
+## that runtime data holds (Type.members, a codec), which a printed value shows.
+export def builtin_text(type: Type) -> String = to_text_as(type, KEEP_BUILTIN)
 
 ## The type as `to_text` prints it, except that a struct or an enum of another file is written through the import alias
 ## of the file that asks: `written` maps the "@N::" prefix of a linked name to that alias, so `@1::User` prints as
 ## `Models.User` (`agentica type-at`). A linked name that `written` maps itself (a type that a file re-exports) is
-## written through that alias too. A prefix it does not map prints as the bare name.
+## written through that alias too. A prefix it does not map prints as the bare name. A re-exported builtin type
+## (REEXPORTED_TYPES) prints as the text `written` maps its builtin name to (`H.Request` for import H from "std/http",
+## `Request` for import {Request}), else by its written name.
 export def to_text_as(type: Type, written: Map[String, String]) -> String
   case type
     Type.Int -> "Int"
@@ -344,12 +386,21 @@ end
 # The name with the alias that `written` has for the linked name or, failing that, for its prefix.
 def written_name(name: String, written: Map[String, String]) -> String
   bare = display_name(name)
-  return bare if written.size == 0 or bare == name
+  return reexported_name(name, written) if bare == name
+  return bare if written.size == 0
 
   alias = written.get(name, written.get(name.slice(0, name.length - bare.length), ""))
   return bare if alias == ""
 
   "#{alias}.#{bare}"
+end
+
+# A name with no "@N::" prefix: a re-exported builtin type as `written` writes it, or by its written name; any other
+# name as it is.
+def reexported_name(name: String, written: Map[String, String]) -> String
+  return name if !REEXPORTED_TYPES.has_key?(name) or written.has_key?("")
+
+  written.get(name, REEXPORTED_TYPES[name])
 end
 
 def digit?(character: String) -> Bool

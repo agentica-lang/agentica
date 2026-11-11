@@ -262,7 +262,7 @@ HTTP is the `std/http` library, written in Agentica: `import HTTP from "std/http
 - Status codes such as 404 or 500 are normal responses. `error` results are a bad URL, a refused connection, a timeout, or a body over the limit. Protocol errors start with `http: `, connection errors keep their TCP or TLS text, and a timeout is `network: operation timed out`.
 - `GET`, `HEAD`, `OPTIONS`, `PUT` and `DELETE` are retried once on a new connection, within the same timeout, when the server had closed a reused connection and no response byte arrived. Other methods are never retried.
 - Header names must be HTTP tokens, values Latin-1 text without control characters.
-- `HTTP.Request`, `HTTP.Response`, `HTTP.Header`, `HTTP.ClientOptions`, `HTTP.ServerOptions`, `HTTP.Client` and `HTTP.Server` are builtin types that `std/http` re-exports, so `import {Request, Response} from "std/http"` binds them by name. A printed value and a diagnostic show the builtin names: a response prints as `HttpWire.Response(status: ...)` and a client as `<HttpWire.Client>`. They reserve no name: a program may declare its own `Header` or `HttpRequest`.
+- `HTTP.Request`, `HTTP.Response`, `HTTP.Header`, `HTTP.ClientOptions`, `HTTP.ServerOptions`, `HTTP.Client` and `HTTP.Server` are builtin types that `std/http` re-exports, so `import {Request, Response} from "std/http"` binds them by name. A diagnostic and `help` show the `HTTP.` names, and a printed value shows the builtin names: a response prints as `HttpWire.Response(status: ...)` and a client as `<HttpWire.Client>`. They reserve no name: a program may declare its own `Header` or `HttpRequest`.
 
 ### HTTP.client
 

@@ -1,10 +1,12 @@
 ## The one-line signatures of `agentica doc`, printed from the syntax tree. A
-## type is printed as written, so an import alias such as `Models.User` stays as it is. The function form is the one of
-## `Builtins.form_signature` (catalog/builtins.agc): `add(a: Int, b: Int) -> Int`.
+## type is printed as written, so an import alias such as `Models.User` stays as it is, except that a builtin type a
+## std/ module re-exports prints by the name a program writes (`HttpWire.Request` of std/http is `HTTP.Request`). The
+## function form is the one of `Builtins.form_signature` (catalog/builtins.agc): `add(a: Int, b: Int) -> Int`.
 ##
 ## Types nest as deep as the parser allows, so `type_text` walks them with a stack of pieces and not by recursion.
 
 import Ast from "../syntax/ast"
+import T from "../syntax/types"
 
 # One thing still to print: a type, or the text between types.
 enum Piece
@@ -23,7 +25,7 @@ export def type_text(type: Ast.TypeRef) -> String
     case piece
       Piece.Text(text) -> parts = parts.push(text)
       Piece.Node(node) ->
-        parts = parts.push(node.name)
+        parts = parts.push(T.REEXPORTED_TYPES.get(node.name, node.name))
         if node.args.size > 0
           parts = parts.push("[")
           work = work.concat(closing(node.args))
@@ -87,7 +89,7 @@ export def default_text(default: Optional[Ast.Expr], text: String) -> Optional[S
     none -> none
     some(value) ->
       span = Ast.expr_span(value)
-      some(text.slice(span.start.offset, span.stop.offset - span.start.offset))
+      some(T.written_types_in(text.slice(span.start.offset, span.stop.offset - span.start.offset)))
   end
 end
 

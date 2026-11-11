@@ -66,7 +66,8 @@ end
 ## module may be a module block (At.focus): its own types are written bare, as it writes them, and those of the other
 ## blocks of its file through their names (`Counter.Msg`). A block of a file imported under an alias is written through
 ## both (`Agents.Counter.Msg`), unless the root file names the block itself, and so is a block that such a file
-## re-exports (`export Agents.Counter`).
+## re-exports (`export Agents.Counter`). A builtin type that a std/ module re-exports maps to its whole text: the name
+## of an import list (`Request`), else the alias and the member (`H.Request`).
 export def written_prefixes(linked: Linker.Linked) -> Map[String, String]
   written: Map[String, String] = {}
   aliases = linked.modules[0].aliases
@@ -109,12 +110,23 @@ export def written_prefixes(linked: Linker.Linked) -> Map[String, String]
     end
   end
 
+  # A builtin type that a std/ module re-exports has no prefix: it is written as the root file imported it by name
+  # (`Request`), else through the alias of the std module (`HTTP.Request`).
+  named = linked.modules[0].named
+  for local in named.keys.sort
+    if T.REEXPORTED_TYPES.has_key?(named[local]) and !written.has_key?(named[local])
+      written = written.put(named[local], local)
+    end
+  end
+
   for alias in aliases.keys.sort
     for module in linked.modules
       if module.key == aliases[alias]
         for name in module.reexported.keys.sort
           original = module.reexported[name]
-          if !written.has_key?(original) and !written.has_key?(prefix_of(original))
+          if T.REEXPORTED_TYPES.has_key?(original) and !written.has_key?(original)
+            written = written.put(original, "#{alias}.#{name}")
+          elsif !written.has_key?(original) and !written.has_key?(prefix_of(original))
             written = written.put(original, alias)
           end
         end

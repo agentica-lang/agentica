@@ -23,6 +23,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** the child channel of `Process.spawn_channel` is a pipe per
   direction on every system: a child that is not Agentica reads fd 3 and writes
   fd 4 (`AGENTICA_CHANNEL=3,4`) on Linux and macOS too.
+- Diagnostics, `help`, `doc`, `outline` and `type-at` write the HTTP and
+  logger types as a program does (`HTTP.Request`, `Logger.Event`), and
+  `symbol` and `refs` find them by those names.
 
 ## [0.30.0] - 2026-11-11
 

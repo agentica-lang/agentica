@@ -986,3 +986,16 @@ def test_a_block_type_is_written_as_the_importer_names_the_block_and_a_position_
     assert (gap["kind"], gap["type"], gap["definition"]) == ("type", "Int", None)
     blank = type_at(("twins.agc", where(TWINS, "\nstruct Gap")), cwd=tmp_path)
     problem(blank, "QUERY-NO-EXPRESSION", 2)
+
+
+def test_a_builtin_type_that_std_re_exports_is_written_as_the_file_imports_it(tmp_path):
+    # HttpWire.Response is HTTP.Response of std/http: written through the file's alias, or by its name in an import
+    # list, renamed or not.
+    body = 'def main() -> Void\n  r = {make}(status: 1, headers: [], body: "".bytes)\n  puts(r.status)\nend\n'
+    files = {"aliased.agc": ('import H from "std/http"\n\n', "H.Response"),
+             "listed.agc": ('import {Response} from "std/http"\n\n', "Response"),
+             "renamed.agc": ('import {Response as Answer} from "std/http"\n\n', "Answer")}
+    for file, (head, written) in files.items():
+        text = head + body.replace("{make}", written)
+        (tmp_path / file).write_text(text, encoding="utf-8")
+        assert answer((file, where(text, "r =")), cwd=tmp_path)["type"] == written, file

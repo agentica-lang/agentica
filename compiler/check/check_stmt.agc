@@ -907,7 +907,7 @@ def variant_mismatch(cx: State.Cx, st: State.St, pattern: Ast.VariantPattern, va
       cx,
       st,
       "CHECK-UNKNOWN-VARIANT",
-      "enum \"#{T.display_name(pattern.enum_name)}\" has no variant \"#{pattern.variant_name}\"",
+      "enum \"#{T.written_type(pattern.enum_name)}\" has no variant \"#{pattern.variant_name}\"",
       pattern.span,
     )
   end
@@ -937,7 +937,7 @@ def pattern_text(pattern: Ast.VariantPattern) -> String
     "Optional.None" -> "none"
     "Result.Ok" -> "ok(...)"
     "Result.Err" -> "error(...)"
-    _ -> "#{T.display_name(pattern.enum_name)}.#{pattern.variant_name}"
+    _ -> "#{T.written_type(pattern.enum_name)}.#{pattern.variant_name}"
   end
 end
 

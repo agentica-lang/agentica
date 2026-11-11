@@ -27,13 +27,9 @@ export def of_file(settings: Env.Settings, path: String, program: Ast.Program) -
   end
 end
 
-def joined(found: Map[String, Model.Item], more: Map[String, Model.Item]) -> Map[String, Model.Item]
-  more.keys.reduce(found) do |all, name| all.put(name, more[name]) end
-end
-
-# The items of the builtin types that a std/ module re-exports from a std-only family it does not import. They need
-# no link, and a std/ module given by its std/ path does not link as a root.
-def builtin_items(path: String, program: Ast.Program) -> Map[String, Model.Item]
+## The items of the builtin types that a std/ module (`path` is its std/ path or key) re-exports from a std-only family
+## it does not import, by name. They need no link, and a std/ module given by its std/ path does not link as a root.
+export def builtin_items(path: String, program: Ast.Program) -> Map[String, Model.Item]
   return {} if !path.starts_with?("std/")
 
   aliases = Declarations.imports_of(program.declarations).map do |decl: Ast.ImportDecl| Declarations.alias_of(decl) end
@@ -48,6 +44,10 @@ def builtin_items(path: String, program: Ast.Program) -> Map[String, Model.Item]
   end
 
   items
+end
+
+def joined(found: Map[String, Model.Item], more: Map[String, Model.Item]) -> Map[String, Model.Item]
+  more.keys.reduce(found) do |all, name| all.put(name, more[name]) end
 end
 
 # The root file comes first in a linked program. The linked name of the original is its file's "@N::" prefix and its
@@ -83,8 +83,8 @@ def of_linked(linked: Linker.Linked) -> Map[String, Model.Item]
 end
 
 # The item of a builtin record, enum or opaque type that a std/ module re-exports as `name`. Its spans are
-# placeholders: the item takes the place of the `export` line (Model.reexport_items). Types print with the builtin
-# names, which a value and a message show too.
+# placeholders: the item takes the place of the `export` line (Model.reexport_items). Its field and payload types print
+# as a program writes them (`Logger.Level`, T.to_text); the doc names the builtin type, which a printed value shows.
 def builtin_item(name: String, target: String) -> Model.Item
   at = Source.Position(offset: 0, line: 1, column: 1)
   span = Source.Span(start: at, stop: at)
