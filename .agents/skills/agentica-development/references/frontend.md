@@ -142,6 +142,15 @@ copy).
   first, then the target with only the alias's own parameters in scope, then the
   arguments put in as a plain substitution (a name in the target is never an
   enum parameter of the use).
+- A builtin generic type name that is not in `RESERVED_TYPE_NAMES` must mean
+  the same to the checker (`CheckTypes.resolve_type`: aliases first, so a user
+  `type Name[T]` wins in the checked file) and to the linker
+  (`compiler/modules/resolve.agc`, for the modules a file imports). If they
+  differ, a module's signature means two things to two importers ("expected
+  Address[Int], found Address[Int]", seen in the review of #1375). So a new
+  builtin type name has one resolution order that both use, or refuses user
+  declarations of the name (`CHECK-REDEFINED-NAME`). Add spec cases for an
+  alias, a struct and an imported module (`tests/test_spec_<area>.py`).
 
 ## Common tasks
 
