@@ -47,7 +47,6 @@ static agc_value step(calling c) {
   return take(&c);
 }
 
-
 static agc_value sh(const char *script) {
   agc_value args[] = {agc_test_str("-c"), agc_test_str(script)};
   return agc_list_value(agc_list_from_array(args, 2));
@@ -81,8 +80,8 @@ static void captured(const char *script) {
 }
 
 static void plain(const char *script) {
-  child = ok_of(step(call(one, "Process.spawn.options", 3, agc_test_str("sh"), sh(script), agc_test_process_options(agc_test_str(".")),
-                          agc_void())));
+  child = ok_of(step(call(one, "Process.spawn.options", 3, agc_test_str("sh"), sh(script),
+                          agc_test_process_options(agc_test_str(".")), agc_void())));
 }
 
 static agc_value read_line(agc_task *task, int64_t timeout) {
@@ -122,7 +121,8 @@ static void end_detached_job(void) {
 static void test_a_child_through_posted_steps(void) {
   assert(agc_io_share(&vm, false));
   captured("read x; echo got-$x; exit 5");
-  assert(agc_as_result(&vm, step(call(one, "Process.send", 3, child, agc_test_str("7\n"), agc_int(5000), agc_void())))->ok);
+  agc_value sent = step(call(one, "Process.send", 3, child, agc_test_str("7\n"), agc_int(5000), agc_void()));
+  assert(agc_as_result(&vm, sent)->ok);
   assert(is_text(ok_of(read_line(one, 5000)), "got-7"));
   assert(agc_as_int(&vm, ok_of(wait_child(5000))) == 5);
   agc_value kept = child;
@@ -162,7 +162,8 @@ static void test_a_read_cancelled_from_another_thread(void) {
   assert(start(&reading));
   (void)agc_io_poll(&vm, false);
   on_thread(detach_one, NULL);
-  assert(agc_as_result(&vm, step(call(two, "Process.send", 3, child, agc_test_str("go\n"), agc_int(5000), agc_void())))->ok);
+  agc_value sent = step(call(two, "Process.send", 3, child, agc_test_str("go\n"), agc_int(5000), agc_void()));
+  assert(agc_as_result(&vm, sent)->ok);
   end_detached_job();
   assert(is_text(ok_of(read_line(two, 5000)), "second"));
   close_child();

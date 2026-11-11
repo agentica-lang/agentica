@@ -68,7 +68,6 @@ static agc_value step(calling c) {
   return take(&c);
 }
 
-
 static agc_value ok_of(agc_value v) {
   agc_result *r = agc_as_result(&vm, v);
   assert(r->ok);
@@ -464,7 +463,8 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   locked_call first = {&vm, vm.task, call("TCP.send", 3, socket_v, pattern(len), agc_int(60000), agc_void())};
   /* Every call is made before the sender starts: call() reads vm.task, which call_locked sets on the sender's
      thread. */
-  locked_call behind = {&other, second, call("TCP.send", 3, socket_v, agc_test_str("behind\n"), agc_int(60000), agc_void())};
+  locked_call behind = {&other, second,
+                        call("TCP.send", 3, socket_v, agc_test_str("behind\n"), agc_int(60000), agc_void())};
   uv_thread_t sender;
   assert(uv_thread_create(&sender, send_first, &first) == 0);
   struct pollfd p = {fd, POLLIN, 0};
@@ -501,7 +501,8 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   struct timeval give_up = {1, 0};
   assert(setsockopt(mine, SOL_SOCKET, SO_SNDTIMEO, &give_up, sizeof give_up) == 0);
   first.c = call("TCP.send", 3, socket_v, agc_test_str("first\n"), agc_int(60000), agc_void());
-  behind = (locked_call){&other, third, call("TCP.send", 3, socket_v, agc_test_str("second\n"), agc_int(60000), agc_void())};
+  behind = (locked_call){&other, third,
+                         call("TCP.send", 3, socket_v, agc_test_str("second\n"), agc_int(60000), agc_void())};
   assert(uv_thread_create(&sender, send_first, &first) == 0);
   /* The first send holds the lock: it is inside send(), which gives up after a second. */
   for (bool held = false; !held;) {
@@ -537,7 +538,8 @@ static void test_a_send_waits_for_a_direct_send_of_another_task(void) {
   on_thread(park_locked, &queued);
   agc_test_wait_woken(&vm, upgraded);
   ok_of(take(&queued.c));
-  queued.c = agc_test_call_of(&vm, upgraded, "TCP.send", 3, socket_v, agc_test_str("queued\n"), agc_int(60000), agc_void());
+  queued.c =
+      agc_test_call_of(&vm, upgraded, "TCP.send", 3, socket_v, agc_test_str("queued\n"), agc_int(60000), agc_void());
   on_thread(park_locked, &queued);
   assert(upgraded->parked != NULL);
   agc_test_wait_woken(&vm, upgraded);
@@ -652,8 +654,8 @@ static void test_cancelled_tls_connect_past_its_deadline(bool std) {
   agc_tls_config *config = agc_tls_client_config(CERTS "ca.pem", NULL, NULL, &f);
   assert(config);
   agc_value tls = agc_tls_context_value(config, release_config, false);
-  calling dial = call(std ? "HttpWire.connect_context" : "TLS.connect", 4, agc_test_str("127.0.0.1"), agc_int(port), tls,
-                      agc_int(3000));
+  calling dial = call(std ? "HttpWire.connect_context" : "TLS.connect", 4, agc_test_str("127.0.0.1"), agc_int(port),
+                      tls, agc_int(3000));
   assert(start(&dial));
   struct pollfd p = {silent, POLLIN, 0};
   while (poll(&p, 1, 10) == 0) {
@@ -675,7 +677,8 @@ static void test_cancelled_tls_connect_past_its_deadline(bool std) {
   agc_test_settle_loop(&vm);
 }
 
-/* An HttpClient as http_service.c lays it out, with no pool behind it: HttpWire.upgrade_tls only reads its lazy context. */
+/* An HttpClient as http_service.c lays it out, with no pool behind it: HttpWire.upgrade_tls only reads its lazy
+   context. */
 static agc_value new_client(bool dropped) {
   agc_http_client *c = agc_alloc(sizeof *c);
   memset(c, 0, sizeof *c);
@@ -703,7 +706,8 @@ static void test_upgrade_context_names_its_context_argument(void) {
   agc_tls_failure f;
   agc_tls_config *config = agc_tls_server_config(CERTS "server.pem", CERTS "server-key.pem", &f);
   assert(config);
-  agc_value args[4] = {socket_v, agc_tls_context_value(config, release_config, true), agc_test_str("localhost"), agc_int(1000)};
+  agc_value args[4] = {socket_v, agc_tls_context_value(config, release_config, true), agc_test_str("localhost"),
+                       agc_int(1000)};
   const char *name = "HttpWire.upgrade_context";
   const agc_builtin *b = agc_find_builtin((const uint8_t *)name, strlen(name), 4);
   assert(b);

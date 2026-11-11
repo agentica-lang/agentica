@@ -35,7 +35,6 @@ static agc_value byte_list(const char *text) {
   return agc_list_value(agc_list_builder_finish(&out));
 }
 
-
 static agc_value fresh(void) {
   agc_value limit = agc_int(1024);
   return find("HttpWire.chunked")->fn(&vm, &limit, 0);

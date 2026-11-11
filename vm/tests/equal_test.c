@@ -56,7 +56,6 @@ static void test_deep_values(void) {
   assert(!value_equal(nested_enum(depth, 7), nested_enum(depth, 8)));
 }
 
-
 /* A map of n keys whose values are one-item lists of a Json number (each compare encodes both, so it allocates), and
    a list of n two-field structs whose second field is a list. Under GC_STRESS the walk collects while pairs are on
    the work stack, which has grown past its inline part. */
@@ -113,8 +112,9 @@ static agc_value nested_maps(size_t depth, int64_t leaf) {
 static void test_nested_maps(void) {
   assert(value_equal(nested_maps(100, 1), nested_maps(100, 1)));
   assert(!value_equal(nested_maps(100, 1), nested_maps(100, 2)));
-  agc_map *one = agc_map_put(&vm, agc_new_map(), agc_test_str("a"), list_of((agc_value[]){agc_int(1), agc_test_str("x")}, 2));
-  agc_map *other = agc_map_put(&vm, agc_new_map(), agc_test_str("b"), list_of((agc_value[]){agc_int(1), agc_test_str("x")}, 2));
+  agc_value items = list_of((agc_value[]){agc_int(1), agc_test_str("x")}, 2);
+  agc_map *one = agc_map_put(&vm, agc_new_map(), agc_test_str("a"), items);
+  agc_map *other = agc_map_put(&vm, agc_new_map(), agc_test_str("b"), items);
   assert(!value_equal(agc_map_value(one), agc_map_value(other)));
 }
 

@@ -979,7 +979,6 @@ static void source_root_tests(void) {
   source_root_budget_tests();
 }
 
-
 /* The prelude flag of version 6: what the loader checks, and the span a
  * runtime error of a prelude function is reported at. Constant 0 is the Int 1 and constant 2 the String below, which
  * is both the code and the message of every __fail_arg call. */

@@ -35,7 +35,6 @@ static void fails(const char *name, uint32_t arity, agc_value *args, const char 
   agc_test_fails_row(&vm, name, arity, args, code);
 }
 
-
 static agc_value raw(const char *data, size_t len) {
   return agc_bytes_value(agc_make_bytes((const uint8_t *)data, len));
 }

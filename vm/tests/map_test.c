@@ -31,7 +31,6 @@ static int by_value(const void *a, const void *b) {
   return x < y ? -1 : x > y;
 }
 
-
 static void debug_is(agc_value v, const char *expected) {
   agc_string *d = agc_debug(&vm, v);
   if (d->bytes != strlen(expected) || memcmp(d->data, expected, d->bytes) != 0) {

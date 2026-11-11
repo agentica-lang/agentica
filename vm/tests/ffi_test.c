@@ -58,7 +58,6 @@ typedef struct {
 
 static agc_vm vm;
 
-
 static agc_value native_call(const char *signature, const agc_value *items, size_t n) {
   agc_value args[2] = {agc_test_str(signature), agc_list_value(agc_list_from_array(items, n))};
   return agc_ffi_builtins[0].fn(&vm, args, 0);

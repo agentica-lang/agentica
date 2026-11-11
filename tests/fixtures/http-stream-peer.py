@@ -282,7 +282,7 @@ def http10():
 
 
 def main():
-    # Eight connections, the server's max_connections.
+    # Eight connections at once: six to the plain server and two to the TLS server, under each server's own limit of 8.
     together(lambda: ticks("plain", plain()),
              lambda: ticks("tls", secure()),
              lambda: sized("plain-sized", plain()),
