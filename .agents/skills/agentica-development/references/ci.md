@@ -267,7 +267,10 @@ clang-tidy. A run takes 3 to 5 minutes. Its docs are in that clone
 
 ## Conformance matrix (`platforms.yml`)
 
-The header of `platforms.yml` says what it runs. Not in the matrix: the Docker
+The header of `platforms.yml` says what it runs. On a PR, `platforms` (all
+systems) is for C code (`vm/`, the VM build) and release bumps; a
+`platform:<system>` label (Windows and the two macOS) runs that system alone,
+for a PR that fixes or checks one system. Not in the matrix: the Docker
 and Wine groups, the slow tier, sanitizers, fuzz and gc-stress (`ci.yml`,
 `fuzz.yml`). A new `tests/test_*.py` must be in an area of
 `tools/conformance.py` or in `EXCLUDED` with a reason
