@@ -543,6 +543,7 @@ def names_in(type: Types.Type, watched: Set[String], found: Set[String]) -> Set[
     Types.Type.Optional(item) -> names_in(item, watched, only("Optional", watched, found))
     Types.Type.Task(item) -> names_in(item, watched, found)
     Types.Type.Channel(item) -> names_in(item, watched, found)
+    Types.Type.Address(item) -> names_in(item, watched, found)
     Types.Type.Lazy(item) -> names_in(item, watched, found)
     Types.Type.Codec(item) -> names_in(item, watched, only("Codec.Info", watched, found))
     Types.Type.Map(key, value) -> names_in(value, watched, names_in(key, watched, found))

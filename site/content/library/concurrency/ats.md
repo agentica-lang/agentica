@@ -6,12 +6,12 @@ description: Share a counter or a cache between tasks in one mutable table.
 
 An `ATS[K, V]` (Agentica Table Storage) is a table that tasks share and update in place, like Erlang's ETS. Values stay immutable; a table is the one shared place that changes. Use a [Channel](/library/concurrency/channel/) to pass messages, and a table for state that many tasks read and update, such as a counter or a cache.
 
-- A table is a handle: passing it to a function or task shares it, it is never copied. It may be a struct field, a list element, a `Map` value, or a `Task.spawn` argument or result, but not a value inside a table. A constant cannot hold one (`CHECK-CONSTANT-TYPE`). `ATS` is a reserved name: a user `struct`, `enum` or import alias named `ATS` is `CHECK-REDEFINED-NAME`.
-- Keys are `Int`, `String` or `Bytes`, as for a `Map`, else `CHECK-MAP-KEY-TYPE`. Values are data with no `Fn`, `Task`, `Channel`, handle, `Lazy` or table inside, and not `Nil`, else `CHECK-ATS-VALUE` at the value type. The test is deep: it looks through struct fields, list elements, enum payloads, `Map` values and `Result`, and refuses `Fn` because a block can capture a handle. A nested `Result[Void]` is allowed; `V` itself as `Void` is `CHECK-VOID-TYPE`. A type parameter is refused as `V` (a generic enum payload `ATS[String, T]`), since its uses would not be checked; a generic alias is checked where it is used.
+- A table is a handle: passing it to a function or task shares it, it is never copied. It may be a struct field, a list element, a `Map` value, or a `Task.spawn` argument or result, but not a value inside a table. A constant holds one only as its whole initializer, `ATS.new()` ([a constant table](#a-constant-table)); anywhere else in a constant it is `CHECK-CONSTANT-TYPE`. `ATS` is a reserved name: a user `struct`, `enum` or import alias named `ATS` is `CHECK-REDEFINED-NAME`.
+- Keys are `Int`, `String` or `Bytes`, as for a `Map`, else `CHECK-MAP-KEY-TYPE`. Values are data with no `Fn`, `Task`, `Channel`, handle, `Lazy` or table inside, and not `Nil`, else `CHECK-ATS-VALUE` at the value type. The test is deep: it looks through struct fields, list elements, enum payloads, `Map` values and `Result`, and refuses `Fn` because a block can capture a handle. A channel's [`Address`](/library/concurrency/channel/#channeladdress) is data, so a table can hold the addresses of channels. A nested `Result[Void]` is allowed; `V` itself as `Void` is `CHECK-VOID-TYPE`. A type parameter is refused as `V` (a generic enum payload `ATS[String, T]`), since its uses would not be checked; a generic alias is checked where it is used.
 - Each call is atomic, on any scheduler: a reader sees the table before or after a write, never half of it. No call takes a block, so no user code runs inside a call, and a call cannot deadlock or re-enter the table.
 - All but `new` also work as methods: `hits.add("home", 1)` is `ATS.add(hits, "home", 1)`.
 - `puts`, `print`, interpolation and `==` on a table are `CHECK-TYPE-MISMATCH`, `.to_s` is `CHECK-UNKNOWN-METHOD`, and a struct with a table field is `CHECK-NOT-ENCODABLE` as JSON. `IO.inspect` prints `<ATS>` without the contents. Use `to_map` to see them.
-- The garbage collector frees a table when nothing refers to it. It is not an OS resource, so the owner rule of handle ownership does not apply: the task that made it does not own it, its end does not close it, and `Task.spawn_owning` is not needed. There is no named global table: a task reaches a table only through a handle it was given. A table belongs to the run that made it, and a call from another run stops with `RUNTIME-ATS-CONTEXT`.
+- The garbage collector frees a table when nothing refers to it. It is not an OS resource, so the owner rule of handle ownership does not apply: the task that made it does not own it, its end does not close it, and `Task.spawn_owning` is not needed. A task reaches a table through a handle it was given or through a constant table. A table belongs to the run that made it, and a call from another run stops with `RUNTIME-ATS-CONTEXT`.
 - There is no size limit and no expiry; a bounded cache is [std/cache](/library/concurrency/cache/), a `std/` module on top of `ATS`, and an expiring one belongs in a module too. Not supported: ordered tables, duplicate keys, a block-based `update`, a compare-and-swap `replace`, and tables shared between OS processes.
 - `put`, `put_new`, `delete` and `add` carry the `concurrency` effect, which also keeps `CHECK-UNUSED-VALUE` away from an ignored `put_new` or `add`.
 - `get`, `put`, `put_new`, `has_key?`, `delete` and `add` take O(log n) in the table size, and `size` O(1). `keys` and `to_map` take their snapshot in O(1) without holding back other tasks, and build their list or map in O(n). A write that loses a race to another task builds its change again; each retry is charged to the task's step budget, so a task under heavy contention yields and cannot spin forever.
@@ -34,6 +34,34 @@ end
 ```agentica {expect="CHECK-ATS-VALUE"}
 def main() -> Void
   jobs: ATS[String, Task[Int]] = ATS.new()
+end
+```
+
+## A constant table
+
+A constant whose whole initializer is `ATS.new()`, with its type written, is a table made once per run before `main`, like every other constant. Every task of the run and every file that imports the constant share the one table, so it gives state per program with a static type, such as a registry of names to [addresses](/library/concurrency/channel/#channeladdress). Without the type it is `CHECK-EXPECTED-TYPE`; a table anywhere else in a constant (`[ATS.new()]`, a struct field, another constant's table) is `CHECK-CONSTANT-TYPE`.
+
+```agentica
+HITS: ATS[String, Int] = ATS.new()
+
+def visit(page: String) -> Int = HITS.add(page, 1)
+
+def main() -> Void
+  tasks = ["home", "home", "about"].map do |page| Task.spawn(&visit, page) end
+  tasks.each do |t| Task.await(t) end
+  puts(HITS.get("home").unwrap!)
+end
+```
+
+```output
+2
+```
+
+```agentica {expect="CHECK-CONSTANT-TYPE"}
+TABLES: List[ATS[String, Int]] = [ATS.new()]
+
+def main() -> Void
+  puts(TABLES.size)
 end
 ```
 

@@ -45,6 +45,10 @@ programs are valid and how they run.
   is not JSON-decodable
 - `Channel[T]`: Opaque bounded queue of `T` values that tasks send into and
   receive from
+- `Address[T]`: Send-only reference to a `Channel[T]` (`channel.address`); it
+  is data, not a handle. `Address` is not reserved: written with one type
+  argument it is this builtin, so a program may still declare its own
+  `struct Address`, but not a generic one (section 6c)
 - `Enum[T, ...]`: User-declared nominal sum type
 - Declared struct: Nominal type with typed, immutable fields
 
@@ -67,7 +71,8 @@ nullable wildcard: `name: String = nil` is invalid; use `Optional[T]`.
   is an error.
 - Ordering operators take two numbers of one type. `==` and `!=` take two
   values of one type that has equality: a primitive type, `Range` (equal when
-  start, end and kind match), `Bytes` (the same length and bytes), and `List`,
+  start, end and kind match), `Bytes` (the same length and bytes), `Address`
+  (equal when they name the same channel), and `List`,
   `Map`, `Set`, `Optional`, `Result`, structs and enums whose parts have
   equality. Lists are equal when they have the same length and equal items in
   order; maps when they have the same keys with equal values, and sets the same
@@ -158,9 +163,19 @@ initializer, not only the result, has a data type: numbers, `String`, `Bool`,
 `Nil`, `Bytes`, `List`, `Map`, `Set`, `Range`, `Result`, `Optional` and `JSON`
 of data types, and structs and enums whose fields and payloads are data; a
 function, `Channel`, task, handle or `ATS` table type (and `Void`) is
-`CHECK-CONSTANT-TYPE`, located at the expression. `Channel.new` has no
-effects, but it makes a value with identity and state, which is why the type
-rule exists.
+`CHECK-CONSTANT-TYPE`, located at the expression, and so is a type that holds
+an `Address` (an address names a channel of the running program, and no
+channel exists before `main`). `Channel.new` has no effects, but it makes a
+value with identity and state, which is why the type rule exists.
+
+One initializer is exempt from the type rule: a whole initializer `ATS.new()`,
+a constant table (`NAMES: ATS[String, Address[Msg]] = ATS.new()`). The
+annotation gives its type (without one it is `CHECK-EXPECTED-TYPE`), and
+`ATS[K, V]` keeps its own rules (`CHECK-ATS-VALUE`). A table is already shared
+and atomic and has no owner, so the constant only gives it a name: there is
+one table per declaration per run, shared by every task and every file that
+imports it. A table anywhere else in an initializer (`[ATS.new()]`, a struct
+field, another constant's table) stays `CHECK-CONSTANT-TYPE`.
 
 A scalar literal constant is part of the bytecode. Every other constant is built
 once, in dependency order, before `main` starts, and only if a function that

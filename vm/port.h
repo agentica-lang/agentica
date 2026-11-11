@@ -435,6 +435,8 @@ typedef struct {
      rt->sync), so that the end of a task never looks them up and cannot fail. */
   uint32_t down_struct, exit_ok, exit_crashed, exit_cancelled;
   bool down_found;
+  /* The addresses made so far (channel.address, vm/channel.c), under rt->sync: the last number given. */
+  uint64_t addresses;
   _Atomic int64_t steps_left;
   _Atomic uint64_t next_task_id;
   agc_log_registry log;

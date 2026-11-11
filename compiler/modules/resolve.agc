@@ -63,6 +63,15 @@ export def resolve(cx: Context, name: String, want: Want, span: Source.Span, hin
   ok(cx.me.prefix + name)
 end
 
+## The linked name of a type written with `arity` type arguments, as resolve with Want.Type. Address[M] is always the
+## builtin, as in the checker (check_types.agc): Address is not reserved, since a program's own `struct Address` is
+## common.
+export def resolve_type(cx: Context, name: String, arity: Int, span: Source.Span) -> Result[String]
+  return ok(name) if name == "Address" and arity == 1
+
+  resolve(cx, name, Want.Type, span, false)
+end
+
 ## True when the name is a builtin family (OpenSSL) in this file: its members are written Family.Member. An import
 ## alias of the same name wins, though a family name is reserved, so only std/ internals could take one.
 export def family?(cx: Context, name: String) -> Bool = FAMILY_MEMBERS.has_key?(name) and !cx.me.aliases.has_key?(name)

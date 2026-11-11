@@ -84,6 +84,7 @@ def written(type: T.Type, keys: Map[String, String], depth: Int) -> Result[Strin
     T.Type.Optional(item) -> ok("P" + try written(item, keys, depth + 1))
     T.Type.Task(item) -> ok("K" + try written(item, keys, depth + 1))
     T.Type.Channel(item) -> ok("C" + try written(item, keys, depth + 1))
+    T.Type.Address(item) -> ok("W" + try written(item, keys, depth + 1))
     T.Type.Lazy(item) -> ok("Z" + try written(item, keys, depth + 1))
     T.Type.Codec(item) -> ok("D" + try written(item, keys, depth + 1))
     T.Type.List(item) -> ok("L" + try written(item, keys, depth + 1))
@@ -136,7 +137,7 @@ def read_type(text: String, at: Int, depth: Int, prefixes: Map[String, String]) 
   return ok(Read(type: SIMPLE[letter], next: at + 1)) if SIMPLE.has_key?(letter)
 
   after = at + 1
-  if "RPKCZDLS".contains?(letter)
+  if "RPKCWZDLS".contains?(letter)
     item = try read_type(text, after, depth + 1, prefixes)
     return ok(Read(type: around(letter, item.type), next: item.next))
   end
@@ -185,6 +186,7 @@ def around(letter: String, item: T.Type) -> T.Type
     "P" -> T.Type.Optional(item)
     "K" -> T.Type.Task(item)
     "C" -> T.Type.Channel(item)
+    "W" -> T.Type.Address(item)
     "Z" -> T.Type.Lazy(item)
     "D" -> T.Type.Codec(item)
     "L" -> T.Type.List(item)

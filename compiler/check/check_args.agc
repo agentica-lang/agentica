@@ -31,6 +31,11 @@ export def channel_argument(cx: State.Cx, st: State.St, site: State.Site) -> Res
   shaped(cx, st, site, T.Type.Unknown, "Channel", T.Type.Channel(T.Type.Var("T")))
 end
 
+## Argument 0 as an Address[T].
+export def address_argument(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  shaped(cx, st, site, T.Type.Unknown, "Address", T.Type.Address(T.Type.Var("T")))
+end
+
 ## Argument 0 as a Task[R], or the TaskRef of Task.current, which the builtins of this argument take too (Task.cancel,
 ## Task.monitor, id); only an await needs the result type.
 export def task_argument(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]

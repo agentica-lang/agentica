@@ -218,6 +218,7 @@ export def vm_type?(cx: Cx, type: Types.Type) -> Bool
     Types.Type.Optional(item) -> cx.user_types.get("Optional", "") == "Enum" and vm_type?(cx, item)
     Types.Type.Task(item) -> Types.is?(item, "Void") or vm_type?(cx, item)
     Types.Type.Channel(item) -> vm_type?(cx, item)
+    Types.Type.Address(item) -> vm_type?(cx, item)
     Types.Type.Lazy(item) -> vm_type?(cx, item)
     # A codec is a Codec.Info record at run time (T.codec).
     Types.Type.Codec(_) -> true

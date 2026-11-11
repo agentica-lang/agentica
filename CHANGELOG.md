@@ -20,6 +20,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A struct field may be named `error`, `ok`, `some` or `none`.
 - A reserved word used as a name (`def edge(end: Int)`) is `PARSE-RESERVED-WORD`,
   with another name as the help.
+- A constant may be a table: `NAMES: ATS[String, Int] = ATS.new()`, one per run,
+  shared by every task and importer.
+- `channel.address` gives an `Address[T]`, a send-only reference that is data.
 - A builtin is a function value: `&Time.now_ms`, `[1, 2].map(&Int.to_s)`.
 - A range has the Enumerable methods of List: `(0...n).map`, `select`, `sum`,
   `reduce`, `min`, `max` and more.

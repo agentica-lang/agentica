@@ -79,8 +79,8 @@ static const plain_leaf plain_leaves[] = {
    whose call leaves the code once, however often they wait inside it. vm/tests/jit_test.c checks that the list is
    sorted and that each name is a row of the builtin tables. */
 const char *const agc_jit_parking[] = {
-    "Channel.recv", "Channel.send", "Dir.list", "Dir.mkdir", "Dir.mkdir_private", "File.append_text", "File.close",
-    "File.flush", "File.lstat", "File.open", "File.read_bytes.bytes", "File.read_line", "File.read_text",
+    "Address.send", "Channel.recv", "Channel.send", "Dir.list", "Dir.mkdir", "Dir.mkdir_private", "File.append_text",
+    "File.close", "File.flush", "File.lstat", "File.open", "File.read_bytes.bytes", "File.read_line", "File.read_text",
     "File.replace", "File.sha256.bytes", "File.stat", "File.try_lock", "File.write", "File.write_bytes.bytes",
     "File.write_text", "FrontEnd.stdin_bytes.bytes", "HttpWire.accept", "HttpWire.connect_context", "HttpWire.connect_tls", "HttpWire.idle?",
     "HttpWire.read_head.bytes", "HttpWire.read_response", "HttpWire.wait", "IO.eof?", "IO.gets", "IO.gets!", "IO.read",

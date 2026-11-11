@@ -215,6 +215,7 @@ def free_variables(type: T.Type) -> List[String]
     T.Type.Optional(item) -> free_variables(item)
     T.Type.Task(item) -> free_variables(item)
     T.Type.Channel(item) -> free_variables(item)
+    T.Type.Address(item) -> free_variables(item)
     T.Type.Lazy(item) -> free_variables(item)
     T.Type.Codec(item) -> free_variables(item)
     T.Type.List(item) -> free_variables(item)
