@@ -15,13 +15,13 @@ Logger.debug(message: String, fields: Map[String, String] = {}) -> Void
 Logger.info(message: String, fields: Map[String, String] = {}) -> Void
 Logger.warning(message: String, fields: Map[String, String] = {}) -> Void
 Logger.err(message: String, fields: Map[String, String] = {}) -> Void
-Logger.log(level: LogLevel, message: String, fields: Map[String, String] = {}) -> Void
-Logger.level() -> LogLevel
-Logger.set_level(level: LogLevel) -> Void
-Logger.enabled?(level: LogLevel) -> Bool
+Logger.log(level: Logger.Level, message: String, fields: Map[String, String] = {}) -> Void
+Logger.level() -> Logger.Level
+Logger.set_level(level: Logger.Level) -> Void
+Logger.enabled?(level: Logger.Level) -> Bool
 ```
 
-- The levels are the builtin enum `LogLevel`: `LogLevel.Debug < LogLevel.Info < LogLevel.Warning < LogLevel.Error`.
+- The levels are the enum `Logger.Level`: `Logger.Level.Debug < Logger.Level.Info < Logger.Level.Warning < Logger.Level.Error`.
 - The function for the last level is `err`, because `error` is reserved. The output still says `error`.
 - `fields` is optional and defaults to `{}`. So `Logger.info("started")` and `Logger.info("request done", {"path": "/items"})` are both calls.
 - The global level starts at `info`, and `set_level` changes it. Every call checks it first, and a call below it makes no event.
@@ -36,16 +36,16 @@ import Logger from "std/logger"
 def count_lines() -> Int = 3
 
 def main() -> Void
-  Logger.set_level(LogLevel.Debug)
-  puts(Logger.enabled?(LogLevel.Debug))
-  _ = Logger.attach("trace", LogLevel.Debug, &Logger.stderr_text)
-  puts(Logger.enabled?(LogLevel.Debug))
-  if Logger.enabled?(LogLevel.Debug)
+  Logger.set_level(Logger.Level.Debug)
+  puts(Logger.enabled?(Logger.Level.Debug))
+  _ = Logger.attach("trace", Logger.Level.Debug, &Logger.stderr_text)
+  puts(Logger.enabled?(Logger.Level.Debug))
+  if Logger.enabled?(Logger.Level.Debug)
     Logger.debug("lines", {"count": count_lines().to_s})
   end
 
-  Logger.set_level(LogLevel.Info)
-  puts(Logger.enabled?(LogLevel.Debug))
+  Logger.set_level(Logger.Level.Info)
+  puts(Logger.enabled?(Logger.Level.Debug))
 end
 ```
 
@@ -58,14 +58,14 @@ false
 ## Handlers
 
 ```signature
-Logger.attach(name: String, level: LogLevel, handler: Fn[LogEvent, Void]) -> Result[Void]
+Logger.attach(name: String, level: Logger.Level, handler: Fn[Logger.Event, Void]) -> Result[Void]
 Logger.detach(name: String) -> Result[Void]
 Logger.handlers() -> List[String]
 ```
 
-A handler is a function (such as `&Logger.stderr_json`) or a block. It takes a `LogEvent`, with these fields:
+A handler is a function (such as `&Logger.stderr_json`) or a block. It takes a `Logger.Event`, with these fields:
 
-- `level: LogLevel`
+- `level: Logger.Level`
 - `message: String`
 - `fields: Map[String, String]`
 - `time_ms: Int`: when the event was made
@@ -83,11 +83,11 @@ import Logger from "std/logger"
 
 def main() -> Void
   _ = Logger.detach("console")
-  _ = Logger.attach("audit", LogLevel.Warning) do |event| puts("audit: #{event.message}") end
+  _ = Logger.attach("audit", Logger.Level.Warning) do |event| puts("audit: #{event.message}") end
 
   Logger.info("not for the audit handler")
   Logger.err("cannot open the cache")
-  puts(Logger.attach("audit", LogLevel.Info, &Logger.stderr_text).message)
+  puts(Logger.attach("audit", Logger.Level.Info, &Logger.stderr_text).message)
   puts(Logger.handlers())
 end
 ```
@@ -101,10 +101,10 @@ a handler named "audit" is already attached
 ## Formats
 
 ```signature
-Logger.stderr_text(event: LogEvent) -> Void
-Logger.stderr_json(event: LogEvent) -> Void
-Logger.format_text(event: LogEvent) -> String
-Logger.format_json(event: LogEvent) -> String
+Logger.stderr_text(event: Logger.Event) -> Void
+Logger.stderr_json(event: Logger.Event) -> Void
+Logger.format_text(event: Logger.Event) -> String
+Logger.format_json(event: Logger.Event) -> String
 Logger.time_text(ms: Int) -> String
 ```
 
@@ -119,8 +119,8 @@ Logger.time_text(ms: Int) -> String
 import Logger from "std/logger"
 
 def main() -> Void
-  event = LogEvent(
-    level: LogLevel.Info,
+  event = Logger.Event(
+    level: Logger.Level.Info,
     message: "request done",
     fields: {"path": "/items", "status": "200"},
     time_ms: 1760523302345,
@@ -129,7 +129,7 @@ def main() -> Void
 
   puts(Logger.format_text(event))
   puts(Logger.format_json(event))
-  odd = LogEvent(level: LogLevel.Error, message: "a=b", fields: {"note": "two words"}, time_ms: 0, task: 2)
+  odd = Logger.Event(level: Logger.Level.Error, message: "a=b", fields: {"note": "two words"}, time_ms: 0, task: 2)
   puts(Logger.format_text(odd))
 end
 ```
@@ -148,7 +148,7 @@ There is no built-in file handler. A block that appends one line per event does 
 import Logger from "std/logger"
 
 def main() -> Void
-  _ = Logger.attach("file", LogLevel.Info) do |event|
+  _ = Logger.attach("file", Logger.Level.Info) do |event|
     _ = File.append_text("app.log", Logger.format_json(event) + "\n", 1000)
   end
 
@@ -161,7 +161,7 @@ A slow handler can hand each event to a task over a `Channel`. The writer is sta
 ```agentica {mode="check"}
 import Logger from "std/logger"
 
-def write_events(events: Channel[LogEvent]) -> Result[Void]
+def write_events(events: Channel[Logger.Event]) -> Result[Void]
   while true
     case events.recv(1000)
       ok(event) -> try File.append_text("app.log", Logger.format_json(event) + "\n", 1000)
@@ -173,9 +173,9 @@ def write_events(events: Channel[LogEvent]) -> Result[Void]
 end
 
 def main() -> Void
-  events: Channel[LogEvent] = Channel.new(64)
+  events: Channel[Logger.Event] = Channel.new(64)
   writer = Task.spawn_owning(&write_events, events)
-  _ = Logger.attach("file", LogLevel.Info) do |event| _ = events.send(event, 1000) end
+  _ = Logger.attach("file", Logger.Level.Info) do |event| _ = events.send(event, 1000) end
 
   Logger.info("server started")
   _ = Logger.detach("file")
@@ -189,7 +189,7 @@ end
 
 ## Rules
 
-- `LogEvent` and `LogLevel` are builtin types. Their names are reserved: a struct or enum with either name is `CHECK-REDEFINED-NAME`.
+- `Logger.Level` and `Logger.Event` are the builtin types `LogRegistry.Level` and `LogRegistry.Event`, which `std/logger` re-exports, so `import {Event, Level} from "std/logger"` binds them by name. A printed value and a diagnostic show the builtin names. They reserve no name: a program may declare its own `Event` or `LogEvent`.
 - Handlers and the global level live in the VM, and belong to one run. A child started with `Process.spawn` has its own. This registry is the language's only global state; `std/logger` reaches it through the internal module `LogRegistry`, which no other module can name (`CHECK-UNKNOWN-NAME`).
 - Not planned for `std/logger`: log files and rotation, syslog, sampling, per-module levels, `Json` field values, configuration through environment variables, and lazy log arguments (a block given to `attach` is a handler, not a lazy message). Not planned for tracing: a language-level trace, trace lines on stdout, counters inside the tracer, a flag to turn stack traces off, and a stack of the parent task at spawn time; VM tracing is a developer tool of the VM, not a language feature.
 - There are no flags and no per-task metadata. Pass `fields` on each call, as the optional second argument.

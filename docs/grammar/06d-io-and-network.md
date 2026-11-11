@@ -20,9 +20,10 @@ name (`CHECK-UNKNOWN-NAME`). A complete program is in
 
 `std/logger` is imported with `import Logger from "std/logger"`. It calls the
 internal module `LogRegistry`, which no other module can name
-(`CHECK-UNKNOWN-NAME`). `LogLevel` and `LogEvent` are builtin types and their
-names are reserved in every program (`CHECK-REDEFINED-NAME`). The levels,
-handlers and formats are in the
+(`CHECK-UNKNOWN-NAME`). Its builtin types `LogRegistry.Level` and
+`LogRegistry.Event` are re-exported as `Logger.Level` and `Logger.Event`
+(§5b, "Re-exports") and reserve no name. The levels, handlers and formats are
+in the
 [`Logger` page](../../site/content/library/io-and-system/logger.md).
 
 ### Files and paths

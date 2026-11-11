@@ -82,11 +82,10 @@ aliases or module names (`RESERVED_TYPE_NAMES` in
 `Bytes`, `Channel`, `Codec`, `Dir`, `File`, `FileHandle`, `FileInfo`, `Float`,
 `Fn`, `Header`, `HttpClient`, `HttpClientOptions`, `HttpRequest`,
 `HttpResponse`, `HttpServer`, `HttpServerOptions`, `HttpWire`, `IO`, `Int`,
-`JSON`, `Json`, `JsonField`, `Lazy`, `List`, `Listener`, `LogEvent`, `LogLevel`,
-`LogRegistry`, `Map`, `Math`, `Nil`, `OpenSSL`, `Optional`, `Path`, `Process`,
-`ProcessOutput`, `Profile`, `Random`, `Range`, `RegexEngine`, `Result`, `Set`,
-`Socket`, `Std`, `String`, `StructMember`, `System`, `TCP`, `TLS`, `Task`,
-`TaskDown`, `TaskExit`, `TaskRef`, `Test`, `TestCase`, `Time`,
+`JSON`, `Json`, `JsonField`, `Lazy`, `List`, `Listener`, `Map`, `Math`, `Nil`,
+`OpenSSL`, `Optional`, `Path`, `Process`, `ProcessOutput`, `Profile`, `Random`,
+`Range`, `Result`, `Set`, `Socket`, `String`, `StructMember`, `System`, `TCP`,
+`TLS`, `Task`, `TaskDown`, `TaskExit`, `TaskRef`, `Test`, `TestCase`, `Time`,
 `TlsClientOptions`, `TlsContext`, `TlsServerOptions`, `Void` and `Zlib`. A
 builtin family reserves only its own name: its members are written
 `Family.Member`, such as `OpenSSL.Cipher`, and its functions `Family.Member.fn`,

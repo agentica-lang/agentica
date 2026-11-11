@@ -82,7 +82,7 @@ code does not show:
   expression's span.
 
 The builtin record types (`FileInfo`, `Header`, `HttpRequest`, `HttpResponse`,
-`HttpClientOptions`, `HttpServerOptions`, `ProcessOutput`, `LogEvent`,
+`HttpClientOptions`, `HttpServerOptions`, `ProcessOutput`, `LogRegistry.Event`,
 `StructMember`) join the struct table only when the program names them or a
 checked type mentions them. Then they lower like user structs.
 
