@@ -1,19 +1,20 @@
 /*
- * The Channel builtins, called directly with hand-made tasks and no bytecode:
- * ring growth and its turn cost, wrap-around, capacity and waiter order, when a
- * channel counts as abandoned by its receiver, and when a wait's clock starts.
+ * The Channel builtins, called directly with hand-made tasks and no bytecode: ring growth and its turn cost,
+ * wrap-around, capacity and waiter order, when a channel counts as abandoned by its receiver, when a wait's clock
+ * starts, and addresses (one per channel, a send that waits, closed, another run, a channel the collector freed).
  */
 #include "../core.h"
 #include "test_support.h"
 
 #include <assert.h>
+#include <setjmp.h>
 #include <stdatomic.h>
 #include <string.h>
 #include <time.h>
 
 #if defined(__linux__) || defined(__APPLE__)
 
-enum { NEW, SEND, RECV, CLOSE, CLOSED, EMPTY, COUNT };
+enum { NEW, SEND, RECV, CLOSE, CLOSED, EMPTY, ADDRESS, ADDRESS_SEND, COUNT };
 
 static agc_vm vm;
 static agc_task *main_task;
@@ -541,15 +542,87 @@ static void test_abandoned(void) {
   assert(agc_channel_abandoned(&vm, agc_as_channel(&vm, timed)));
 }
 
+static agc_value address_of(agc_value ch) {
+  agc_value args[1] = {ch};
+  return now(main_task, ADDRESS, args);
+}
+
+static agc_value send_to(agc_task *t, agc_value address, int64_t value, int64_t timeout) {
+  agc_value args[3] = {address, agc_int(value), agc_int(timeout)};
+  return now(t, ADDRESS_SEND, args);
+}
+
+static void send_from_other_run(agc_value address) {
+  agc_runtime *mine = vm.rt;
+  agc_runtime other = *mine;
+  vm.rt = &other;
+  if (setjmp(vm.fail) == 0) {
+    (void)send_to(main_task, address, 1, 0);
+    assert(!"the send did not fail");
+  }
+  vm.rt = mine;
+  vm.task = main_task;
+  assert(strcmp(vm.outcome->code, "RUNTIME-ADDRESS-CONTEXT") == 0);
+}
+
+/* A channel keeps its one address, so == is identity, and the numbers count up per run. A send through an address
+   waits as Channel.send does, and its retry after the wake finds the channel again. A closed channel still answers
+   "channel: closed", and a send from another run stops. */
+static void test_address(void) {
+  agc_value ch = make_channel(1);
+  agc_value a = address_of(ch);
+  assert(agc_as_address(&vm, a) == agc_as_address(&vm, address_of(ch)));
+  agc_value b = address_of(make_channel(1));
+  assert(agc_address_id(&vm, b) == agc_address_id(&vm, a) + 1);
+  assert(sent(send_to(main_task, a, 1, 0)));
+  assert(failed(send_to(main_task, a, 2, 0), "channel: timed out"));
+  agc_task *t = agc_test_task();
+  agc_value args[3] = {a, agc_int(2), agc_int(5000)};
+  wait(t, ADDRESS_SEND, args);
+  assert(got(recv(main_task, ch, 0), 1));
+  assert(next_ready() == t);
+  settle();
+  assert(sent(now(t, ADDRESS_SEND, args)));
+  assert(got(recv(main_task, ch, 0), 2));
+  close_channel(ch);
+  assert(failed(send_to(main_task, a, 3, 0), "channel: closed"));
+  send_from_other_run(b);
+}
+
+#ifndef AGC_NO_GC
+/* The address of a channel that nothing else reaches; called through volatile pointers so the compiler cannot inline
+   them and leave the channel in this frame. */
+static agc_value lost_address(void) { return address_of(make_channel(1)); }
+
+static void scrub_stack(void) {
+  volatile char big[65536];
+  for (size_t k = 0; k < sizeof big; k++) big[k] = 0;
+}
+
+static agc_value (*volatile lost_address_fn)(void) = lost_address;
+static void (*volatile scrub_stack_fn)(void) = scrub_stack;
+
+/* Once the collector frees the channel, a send through its address is "address: gone": the address does not keep the
+   channel alive. The deterministic form of the case, which a program cannot pin (when a collection runs). */
+static void test_address_gone(void) {
+  agc_value a = lost_address_fn();
+  scrub_stack_fn();
+  /* The jmp_buf of the last failure lives in the static vm and may still hold a pointer in a saved register. */
+  memset(&vm.fail, 0, sizeof vm.fail);
+  for (int round = 0; round < 3; round++) agc_gc_collect();
+  assert(failed(send_to(main_task, a, 1, 0), "address: gone"));
+}
+#endif
+
 int main(void) {
   agc_test_deadline(300);
   agc_init();
   agc_io_init();
   agc_vm_init(&vm, NULL, stdout, stderr, INT64_MAX);
   main_task = vm.task;
-  static const char *names[COUNT] = {"Channel.new",   "Channel.send",    "Channel.recv",
-                                     "Channel.close", "Channel.closed?", "Channel.empty?"};
-  static const uint32_t arities[COUNT] = {1, 3, 2, 1, 1, 1};
+  static const char *names[COUNT] = {"Channel.new",    "Channel.send",    "Channel.recv",    "Channel.close",
+                                     "Channel.closed?", "Channel.empty?", "Channel.address", "Address.send"};
+  static const uint32_t arities[COUNT] = {1, 3, 2, 1, 1, 1, 1, 3};
   for (int k = 0; k < COUNT; k++) {
     calls[k] = agc_find_builtin((const uint8_t *)names[k], strlen(names[k]), arities[k]);
     assert(calls[k]);
@@ -577,6 +650,10 @@ int main(void) {
   test_abandoned();
   test_clock_starts_late();
   test_cancel_pending_wait();
+  test_address();
+#ifndef AGC_NO_GC
+  test_address_gone();
+#endif
   assert(agc_io_close(&vm));
   puts("channel tests passed");
   return 0;
