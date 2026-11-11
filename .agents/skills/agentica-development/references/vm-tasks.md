@@ -187,15 +187,9 @@ The ring, the reservations and the FIFOs of waiters are
 `docs/vm/10-io-scheduler.md` ("Channel waits"). Rules for the code:
 
 - A call that must wait parks with retry on the task's own timer
-  (`agc_task_park_within`; no job, so no I/O trace line). A retry is recognised
-  by `channel.channel == c`. A waiter is woken only by a reservation, a close or
-  its timer, so a retry with neither has timed out.
-- A value for a waiting receiver is reserved in the receiver task
-  (`channel.value`); a freed slot is reserved for the head sender
-  (`channel.reserved`, via `offer_slot`). The pops skip tasks that are no longer
-  parked (their timer won), and a woken waiter with a reservation does not
-  search the FIFO again. `agc_channel_leave` (from `unlink_task`) removes a
-  cancelled waiter and hands its reservation on.
+  (`agc_task_park_within`); a retry is recognised by `channel.channel == c`.
+  `agc_channel_leave` (from `unlink_task`) removes a cancelled waiter and hands
+  its reservation on.
 - Ownership: `agc_channel_claim` registers an entry, with no native object, the
   first time `Task.spawn_owning` hands the channel over. `shut` is the one
   close. It runs from `Channel.close` and from `agc_close_owned` at the owner's

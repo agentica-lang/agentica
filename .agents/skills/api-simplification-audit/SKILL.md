@@ -1,15 +1,13 @@
 ---
 name: api-simplification-audit
 description: >-
-  Audit Agentica's builtins and std/ modules for APIs that can be simpler,
-  mainly parameters that could take a default value (a required timeout_ms,
-  a max_bytes, an options struct with a common answer), in passes from a quick
-  signature scan to a full per-function proposal, and report the result as a
-  GitHub tracking issue split into small PRs. Use when asked to simplify
-  builtin or std signatures, find required arguments that should be optional,
-  or run an API defaults campaign. Only the audit and its report: adding a
-  default is agentica-development work, a general plan is
-  iterative-issue-planning, style is agentica-code-guidelines.
+  Audit Agentica builtins and std/ modules for parameters that could take a
+  default (a required timeout_ms, max_bytes, an options struct), from a
+  signature scan to per-function proposals, reported as a GitHub tracking
+  issue split into small PRs. Use when asked to simplify builtin or std
+  signatures or to find required arguments that should be optional. Only the
+  audit: adding a default is agentica-development work; style is
+  agentica-code-guidelines.
 ---
 
 # API simplification audit
@@ -23,10 +21,11 @@ per issue item, after the owner agrees.
 
 Check every proposal against these rules first; they decide its cost.
 
-- A default is a constant: an `Int`, `Float` or `String` literal, `true`,
-  `false`, `nil`, `none`, `[]`, `{}` or a nullary enum variant. It cannot read
-  another parameter or a module constant (docs/grammar/06-semantics.md,
-  "Default parameter values").
+- A default is a constant form: an `Int`, `Float` or `String` literal, `true`,
+  `false`, `nil`, `none`, `[]`, `{}`, a nullary enum variant, `Options()` (a
+  struct with no arguments), or a module constant whose value is one of those
+  but `Options()`. Never another parameter or a call
+  (docs/grammar/06-semantics.md, "Default parameter values").
 - After a parameter with a default, every parameter has one, except a last
   `Fn` parameter (so a block still fills it).
 - A **builtin** row takes defaults only when its rule is `Plain` or `Prelude`

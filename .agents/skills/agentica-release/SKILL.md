@@ -46,12 +46,9 @@ checkout) on a branch such as `release/<version>`. Change only:
      ```
 
    - Read the entries once: they must say what users see.
-3. `bootstrap/stage0.agcb`: refresh it before every release. Run
-   `make fixed-point stage0`, check the diff is only that one binary file,
-   run `make` again (it must build from the new stage0), and commit it. CI
-   rebuilds it from the base stage0 (`make stage0-check`) and must match. If
-   the old stage0 cannot compile `compiler/`, follow "Refreshing stage0" in
-   `.agents/skills/agentica-development/references/ci.md`.
+3. `bootstrap/stage0.agcb`: refresh it before every release ("Refreshing
+   stage0" (a) in `.agents/skills/agentica-development/references/ci.md`). CI
+   rebuilds it from the base stage0 (`make stage0-check`) and must match.
 
 Wrap every build in a memory cap (`agentica-dev-workflow` §1).
 

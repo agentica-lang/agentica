@@ -41,8 +41,7 @@ a pointer. Do not create files under `docs/` unless the user asks for one
 - `docs/grammar/`: the language contract (the site renders it).
 - `site/content/library/`: the only home of the builtin and `std/` reference.
 - `docs/vm/`: the VM design. `docs/bdd.md`: the contract for BDD.
-- GitHub issues: pending work. `docs/future/` keeps only the decisions of
-  planned features whose issue points there, and what was decided against.
+- GitHub issues: pending work (`docs/future/`: AGENTS.md).
 - `CHANGELOG.md` and the merged PR: shipped work.
 
 ## 3. Provable claims

@@ -45,4 +45,3 @@ total: 1631 cents
 - [Style guide](/style/): how to write simple code that is easy to read.
 - [Patterns](/patterns/): the common design patterns in Agentica.
 - [The Aurora VM](/vm/): how your program runs, and the libraries underneath.
-- [Design decisions](/design/): the main design decisions and why each was taken.

@@ -13,7 +13,7 @@ This map names a file only when it carries a contract or a placement rule.
 ```text
 Makefile, mk/     # the include order matters
 bootstrap/        # stage0.agcb (references/ci.md)
-compiler/         # the front end: one folder per context; a new file goes in the folder of its context; imports across folders are relative (`../syntax/types`); agentica.toml holds [style] (119 columns)
+compiler/         # the front end: one folder per context (placement and imports: frontend.md); agentica.toml holds [style] (119 columns)
   app/            # the command line (cli*.agc), the pipeline (pipeline.agc: shared by the CLI and the BDD driver), front_end_cli.agc; `test` calls the BDD driver in process, which starts `settings.self_path run ...`, so a later `run` word is a usage error
   analysis/       # the semantic queries, once: analysis.agc for the CLI and std/analysis; front.agc reads, links and checks for run, compile, test and the queries
   io/             # the adapter to the machine: the only stage code that reads files and the environment (host.agc builds the Workspace); package fetch and deps/, native artifacts and builds (native_build.agc runs the C compiler), bytecode and check caches (cache_files.agc: their shared safe-file rules), stdin buffer
@@ -25,8 +25,10 @@ compiler/         # the front end: one folder per context; a new file goes in th
   lower/          # the IR and lowering; lower_tables.agc holds VM_BUILTINS
   bytecode/       # the writer; bytecode_tables.agc holds the format and OPCODES (same order as agc_opcode in vm/value.h)
   docs/           # `agentica doc`
+  query/          # the printers of the query commands (frontend.md)
+  diagnostics/    # the diagnostic model and its printers; problem.agc: how a stage packs a failure (`Problem`)
   format/         # `agentica fmt`; refreeze stages `format` (attach.agc) and `fmt` (fmt.agc); goldens in tests/fixtures/frontend/format/
-  lint/           # `agentica lint` (#970): rules.agc (the LINT- codes), rule_*.agc (one per kind of node); pure, parse only (reads the builtin catalog as data)
+  lint/           # `agentica lint`: rules.agc (the LINT- codes), rule_*.agc (one per kind of node); pure, parse only (reads the builtin catalog as data)
   bdd/            # the `agentica test` driver (references/bdd.md)
   embedded/       # runner.agc and steps.agc: not stage inputs; compiled with stage2 and embedded in the binary
 vm/               # the C11 VM; layers and the "Read next" table in references/vm.md

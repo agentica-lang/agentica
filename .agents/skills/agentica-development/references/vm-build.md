@@ -16,8 +16,6 @@ make AGENTICA_GC=vendored            # libgc from the submodule, static (release
 make AGENTICA_OPENSSL=vendored       # OpenSSL from the submodule, static, built once per mode (needs Perl; a few minutes the first time; the release)
 make AGENTICA_ZLIB=vendored          # zlib from the submodule, static (release, non-Linux hosts)
 make -s vm-openssl-key AGENTICA_OPENSSL=vendored   # OpenSSL build key; CI caches by its hash (vm-third-party-key: the others)
-make fixed-point                     # stage2 == stage3, and dist/agentica compiling the front end gives stage2 again
-make stage0                          # refresh bootstrap/stage0.agcb (references/ci.md, "Refreshing stage0")
 make SANITIZE=1 && make vm-test SANITIZE=1   # clang ASan+UBSan, no GC (calloc, never free)
 AGENTICA_VM_TRACE=all AGENTICA_VM_TRACE_FILE=./t.trace dist/agentica run -- prog.agcb   # sched,io,proc,tls,loader,gc
 AGENTICA_VM_TRACE=profile dist/agentica check compiler/front_end.agc   # step profile at the end; folded stacks and Profile.measure: agentica-programming, references/performance.md
@@ -32,9 +30,7 @@ make vm-lint CLANG_TIDY=path         # clang-tidy 19+ over vm/*.c and vm/tests/*
 make compile-commands                # compile_commands.json (gitignored) with this mode's flags, for clangd and analyzers
 ```
 
-- CI runs `vm-sanitizers` only for the VM paths listed in the `changes` job
-  of `.github/workflows/ci.yml`; a new VM source or test file outside those
-  paths must be added there (`references/ci.md`).
+- The `changes` job decides when the C half runs: `references/ci.md`.
 - `agentica file.agc` runs in one process (`docs/vm/08-loader-and-cli.md` §9):
   the front end of the binary (`compiler/front_end.agc`) compiles in memory and
   hands the bytes to C with `FrontEnd.hand_off`; `vm/agentica.c` runs them in a
@@ -199,7 +195,7 @@ for picohttpparser, the TLS tests for OpenSSL (a 3.5.x tag).
 - libgc 8.2 records a blocked thread's stack start as the frame address of
   `GC_do_blocking`. Built by clang without `getcontext` (macOS), it inlines
   the save of the callee-saved registers below that address, so a value kept
-  only in a register across `an_blocking` was collected (#1328, macOS x86_64).
+  only in a register across `an_blocking` was collected (macOS x86_64).
   `agc_gc_blocking` saves the registers in a frame of its own first. Linux
   shows the bug with the vendored libgc built by clang with `-DNO_GETCONTEXT`
   added to `GC_COMPILE` (`mk/vm.mk`).

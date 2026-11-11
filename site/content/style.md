@@ -62,7 +62,7 @@ def main() -> Void
 end
 ```
 
-Put a blank line after the `end` of a block before the next statement. The examples on this site follow it, and `blank_line_after_end = true` under `[style]` in `agentica.toml` makes `agentica check` enforce it (see [packages](/tour/modules/#packages)).
+Put a blank line after the `end` of a block before the next statement. The examples on this site follow it, and `blank_line_after_end = true` under `[style]` in `agentica.toml` makes `agentica check` enforce it (see [the modules reference](/reference/modules/)).
 
 ## Naming
 
