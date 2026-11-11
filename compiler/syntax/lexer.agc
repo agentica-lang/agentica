@@ -1542,9 +1542,6 @@ def dot_follows?(chars: List[String], from: Int) -> Bool
   false
 end
 
-# Whether a `->` after a token of kind `before` starts a lambda.
-def lambda_after?(before: String) -> Bool = !ENDS_EXPRESSION.include?(before) and before != "if"
-
 def ends_with_newline?(tokens: List[Tokens.Token]) -> Bool = tokens.size > 0 and tokens[tokens.size - 1].kind == "NL"
 
 def in_interpolation?(delimiters: List[Frame]) -> Bool
@@ -1589,6 +1586,9 @@ def open_frame(delimiters: List[Frame], kind: String, start: Source.Position) ->
 end
 
 def pop(delimiters: List[Frame]) -> List[Frame] = delimiters.take(delimiters.size - 1)
+
+# Whether a `->` after a token of kind `before` starts a lambda.
+def lambda_after?(before: String) -> Bool = !ENDS_EXPRESSION.include?(before) and before != "if"
 
 # The last frame of a stack of `depth` frames, or ROOT.
 def frame_on_top(delimiters: List[Frame], depth: Int) -> Frame
