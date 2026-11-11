@@ -7,9 +7,9 @@ import Model from "builtin_model"
 
 ## Every builtin, sorted by name; the Zlib rows, the ATS rows, the Base64 and hex rows, the digest rows, the HMAC rows,
 ## the OpenSSL.Random rows, the OpenSSL.HMAC.secure_compare row, the Bytes rows, the Cipher and CMAC rows, the AES-GCM
-## and KDF rows, the Optional rows, the text codec rows, the task monitor rows, the Native.Mutex rows and then the RSA
-## row are appended last, in contract order, so the positions of the existing rows never shift. A builtin of a family
-## (FAMILIES) is named Family.Member.fn, such as OpenSSL.Cipher.aes_256_gcm_encrypt.
+## and KDF rows, the Optional rows, the text codec rows, the task monitor rows, the Native.Mutex rows, the RSA row and
+## then the Range Enumerable rows are appended last, in contract order, so the positions of the existing rows never
+## shift. A builtin of a family (FAMILIES) is named Family.Member.fn, such as OpenSSL.Cipher.aes_256_gcm_encrypt.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
 BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
 BUILTIN_GROUP_3 = ROWS_11.concat(ROWS_12.concat(ROWS_13.concat(ROWS_14.concat(ROWS_15))))
@@ -24,11 +24,12 @@ BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(R
 BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58.concat(ROWS_59.concat(ROWS_60))))
 BUILTIN_GROUP_13 = ROWS_61.concat(ROWS_62.concat(ROWS_63.concat(ROWS_64.concat(ROWS_65))))
 BUILTIN_GROUP_14 = ROWS_66.concat(ROWS_67.concat(ROWS_68.concat(ROWS_69.concat(ROWS_70))))
+BUILTIN_GROUP_15 = ROWS_71
 BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
 BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
 BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
 BUILTIN_GROUPS_4 = BUILTIN_GROUP_10.concat(BUILTIN_GROUP_11.concat(BUILTIN_GROUP_12))
-BUILTIN_GROUPS_5 = BUILTIN_GROUP_13.concat(BUILTIN_GROUP_14)
+BUILTIN_GROUPS_5 = BUILTIN_GROUP_13.concat(BUILTIN_GROUP_14.concat(BUILTIN_GROUP_15))
 export BUILTIN_ROWS: List[Model.Builtin] = BUILTIN_GROUPS_1.concat(BUILTIN_GROUPS_2).concat(
   BUILTIN_GROUPS_3.concat(BUILTIN_GROUPS_4.concat(BUILTIN_GROUPS_5)),
 )
@@ -6633,6 +6634,255 @@ ROWS_70: List[Model.Builtin] = [
       "SHA-1; at most the key size less 42 bytes; a bad PEM, a key that is not RSA or data too long is an error; " +
       "VM only."
     ),
+    alternatives: [],
+  ),
+]
+
+## The Enumerable rows of Range; appended last so the positions of the existing rows never shift.
+ROWS_71: List[Model.Builtin] = [
+  Model.Builtin(
+    name: "Range.all?",
+    parameters: [
+      Model.Named(name: "range", type: Types.Type.Range),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
+    ],
+    result: Types.Type.Bool,
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "True when f accepts every value (true for an empty range); f stops at the first false; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Range.any?",
+    parameters: [
+      Model.Named(name: "range", type: Types.Type.Range),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
+    ],
+    result: Types.Type.Bool,
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "True when f accepts a value; f stops at the first true; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Range.drop_while",
+    parameters: [
+      Model.Named(name: "range", type: Types.Type.Range),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
+    ],
+    result: Types.Type.List(Types.Type.Int),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "List the values from the first one f rejects on; f is not called after it; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Range.each_slice",
+    parameters: [Model.Named(name: "range", type: Types.Type.Range), Model.Named(name: "size", type: Types.Type.Int)],
+    result: Types.Type.List(Types.Type.List(Types.Type.Int)),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "Split into lists of size values, the last one shorter; size below 1 halts; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Range.each_with_index",
+    parameters: [
+      Model.Named(name: "range", type: Types.Type.Range),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int, Types.Type.Int], Types.Type.Void)),
+    ],
+    result: Types.Type.Void,
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "Call f on each value and its index from 0, in order; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Range.find",
+    parameters: [
+      Model.Named(name: "range", type: Types.Type.Range),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
+    ],
+    result: Types.Type.Result(Types.Type.Int),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: (
+      "The first value f accepts, else error(\"not found\"); f stops being called at the first " +
+      "true; O(n)."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Range.find_index",
+    parameters: [
+      Model.Named(name: "range", type: Types.Type.Range),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
+    ],
+    result: Types.Type.Optional(Types.Type.Int),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "The index of the first value f accepts, or none; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Range.flat_map",
+    parameters: [
+      Model.Named(name: "range", type: Types.Type.Range),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.List(Types.Type.Var("B")))),
+    ],
+    result: Types.Type.List(Types.Type.Var("B")),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "Join the lists f gives for each value, in order; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Range.group_by",
+    parameters: [
+      Model.Named(name: "range", type: Types.Type.Range),
+      Model.Named(name: "key", type: Types.Type.Fn([Types.Type.Int], Types.Type.Var("K"))),
+    ],
+    result: Types.Type.Map(Types.Type.Var("K"), Types.Type.List(Types.Type.Int)),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "Group the values by an Int or String key; keys in order of first appearance; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Range.map",
+    parameters: [
+      Model.Named(name: "range", type: Types.Type.Range),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Var("B"))),
+    ],
+    result: Types.Type.List(Types.Type.Var("B")),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "List what f gives for each value, in order; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Range.max",
+    parameters: [Model.Named(name: "range", type: Types.Type.Range)],
+    result: Types.Type.Optional(Types.Type.Int),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "The last value, or none for an empty range; O(1).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Range.max_by",
+    parameters: [
+      Model.Named(name: "range", type: Types.Type.Range),
+      Model.Named(name: "key", type: Types.Type.Fn([Types.Type.Int], Types.Type.Var("O"))),
+    ],
+    result: Types.Type.Optional(Types.Type.Int),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: (
+      "The value with the greatest Int, Float or String key, the first on ties, or none for an empty " +
+      "range; O(n)."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Range.min",
+    parameters: [Model.Named(name: "range", type: Types.Type.Range)],
+    result: Types.Type.Optional(Types.Type.Int),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "The first value, or none for an empty range; O(1).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Range.min_by",
+    parameters: [
+      Model.Named(name: "range", type: Types.Type.Range),
+      Model.Named(name: "key", type: Types.Type.Fn([Types.Type.Int], Types.Type.Var("O"))),
+    ],
+    result: Types.Type.Optional(Types.Type.Int),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: (
+      "The value with the least Int, Float or String key, the first on ties, or none for an empty " +
+      "range; O(n)."
+    ),
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Range.partition",
+    parameters: [
+      Model.Named(name: "range", type: Types.Type.Range),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
+    ],
+    result: Types.Type.List(Types.Type.List(Types.Type.Int)),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "Split into [accepted, rejected], each in order; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Range.reduce",
+    parameters: [
+      Model.Named(name: "range", type: Types.Type.Range),
+      Model.Named(name: "initial", type: Types.Type.Var("B")),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Var("B"), Types.Type.Int], Types.Type.Var("B"))),
+    ],
+    result: Types.Type.Var("B"),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "Fold left with f(accumulator, value); an empty range returns initial; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Range.select",
+    parameters: [
+      Model.Named(name: "range", type: Types.Type.Range),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
+    ],
+    result: Types.Type.List(Types.Type.Int),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "List the values f accepts, in order; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Range.sum",
+    parameters: [Model.Named(name: "range", type: Types.Type.Range)],
+    result: Types.Type.Int,
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "Add the values; an empty range gives 0; Int overflow halts; O(n).",
+    alternatives: [],
+  ),
+  Model.Builtin(
+    name: "Range.take_while",
+    parameters: [
+      Model.Named(name: "range", type: Types.Type.Range),
+      Model.Named(name: "f", type: Types.Type.Fn([Types.Type.Int], Types.Type.Bool)),
+    ],
+    result: Types.Type.List(Types.Type.Int),
+    rule: Model.Rule.Prelude,
+    implementation: "",
+    effects: [],
+    description: "List the values before the first one f rejects; f is not called after it; O(n).",
     alternatives: [],
   ),
 ]

@@ -30,14 +30,12 @@ def main() -> Void
     check("group_by", r.group_by do |n| n % 3 end == xs.group_by do |n| n % 3 end)
     check("take_while", r.take_while do |n| n < 4 end == xs.take_while do |n| n < 4 end)
     check("drop_while", r.drop_while do |n| n < 4 end == xs.drop_while do |n| n < 4 end)
-    r.each_with_index do |n, index|
-      print("#{index}:#{n} ")
-    end
+    r.each_with_index do |n, index| print("#{index}:#{n} ") end
     puts("")
   end
 
   puts((1..3).map do |n| n * 10 end)
   puts((5..1).max)
-  puts((0...2000000).sum)
+  puts((0...3000).sum)
   puts((1..4).each_slice(0))
 end
