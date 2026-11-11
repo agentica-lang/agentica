@@ -71,7 +71,8 @@ test-py:
 	  else \
 	    echo "SKIP the Python tests: $(POETRY) and system pytest are unavailable"; exit 0; \
 	  fi; \
-	  $(MAKE) --no-print-directory -k -O -j$(JOBS) PYTEST_RUNNER="$$pytest_runner" \
+	  modules=$(words $(PY_TESTS)); jobs=$(JOBS); [ "$$modules" -lt "$$jobs" ] && jobs=$$modules; \
+	  AGENTICA_TEST_JOBS=$$jobs $(MAKE) --no-print-directory -k -O -j$(JOBS) PYTEST_RUNNER="$$pytest_runner" \
 	    $(addprefix py-test/,$(PY_TESTS)) \
 	    || { echo "The Python tests failed" >&2; exit 1; }; \
 	fi

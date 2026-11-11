@@ -132,6 +132,31 @@ class TestTimeout(AssertionError):
 # The time limit of a run, as in the VM golden harness (tests/vm_diff_support.py).
 RUN_TIMEOUT = scaled(60)
 
+
+def env_number(name, least=0):
+    """The whole number in environment variable NAME, or None when it is unset or empty; a value below LEAST or not a
+    number raises."""
+    value = os.environ.get(name, "").strip()
+    if not value:
+        return None
+    if not value.isascii() or not value.isdigit() or int(value) < least:
+        raise RuntimeError("%s must be a whole number of at least %d, not %r" % (name, least, value))
+    return int(value)
+
+
+def _sweep_workers():
+    """How many VM runs one test may have at once: twice this process's cores (most runs wait on timers or sockets),
+    shared by the pytest processes that make (AGENTICA_TEST_JOBS) and xdist start, at most 4."""
+    given = env_number("AGENTICA_SWEEP_WORKERS", 1)
+    if given:
+        return given
+    cores = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1
+    peers = (env_number("AGENTICA_TEST_JOBS", 1) or 1) * (env_number("PYTEST_XDIST_WORKER_COUNT", 1) or 1)
+    return max(1, min(4, 2 * cores // peers))
+
+
+SWEEP_WORKERS = _sweep_workers()
+
 # `make test-slow` sets this. The two tiers are exclusive: with the flag only @slow cases run, without it
 # the @slow cases are skipped.
 SLOW = os.environ.get("AGENTICA_TEST_SLOW", "") not in ("", "0")
