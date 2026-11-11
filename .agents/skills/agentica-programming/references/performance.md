@@ -120,6 +120,20 @@ writes `/tmp/perf-PID.map`, so `perf report` names the compiled functions
   position used, eight ASCII bytes at a time (a forward scan is cheap, random
   access can cost O(n)).
 
+## Hot paths
+
+Rough numbers, measured on Agentica 0.29.0, x86-64 Linux.
+
+- Use `map.get(key, default)`, not `get` plus `unwrap_or`: no Optional is
+  built.
+- Do not build many small Bytes pieces in a hot loop. Precompute the fixed
+  pieces (a table of headers built once as a module constant) and join them
+  with one `Bytes.concat` at the end. `"...#{n}".bytes` builds a String, then
+  copies it (about 280 ns).
+- An immutable `Map#put` copies the nodes on the path (about 0.8 µs at 1,000
+  keys). `ATS` costs about twice a `Map` per operation: use it only for state
+  that tasks really share.
+
 ## Enumerable methods
 
 `find`, `find_index`, `each_with_index`, `flat_map`, `partition`, `take_while`,
