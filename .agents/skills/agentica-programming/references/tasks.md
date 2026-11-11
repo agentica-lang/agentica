@@ -419,3 +419,33 @@ the `Ref`; there are no methods.
 - `init: block0() do initial end` needs a helper `def block0[R](f: Fn[R]) ->
   Fn[R] = f` (a block is a value only as an argument), or a named `&init`.
   Annotate `b: Actor.Behaviour[Int, Msg] = ...` when blocks take parameters.
+
+## Supervisors (`std/supervisor`)
+
+```text
+import Supervisor from "std/supervisor"
+Supervisor.child(name: String, b: Actor.Behaviour[S, M], register: Fn[Address[M], Void]) -> Supervisor.Child
+Supervisor.start(children: List[Supervisor.Child], options: Supervisor.Options = Supervisor.Options()) -> Supervisor.Ref
+Supervisor.Options(max_restarts: Int = 3, within_ms: Int = 5000)
+Supervisor.stop(supervisor: Supervisor.Ref, timeout_ms: Int) -> Result[Void]
+```
+
+A supervisor starts its children (actors) in list order and starts again one
+that crashes (one for one); `start` returns once each started once. The
+register block gets the address of each new actor, in a task of its own:
+`do |address| NAMES.put("visits", address) end` (required; a child nobody
+reaches by name gives `do |_address| nil end`). After a restart the name holds
+the new address; an old address gives `address: gone`, so look the name up on
+each call.
+
+- Only a crash restarts; a child that gives `Actor.done` stays down. A failed
+  start (crash in `init` or the register block) counts as a crash.
+- The limit is per child: more than `max_restarts` crashes within `within_ms`
+  and the supervisor stops the others in reverse order and crashes:
+  `RUNTIME-UNWRAP-ERROR`, message `supervisor: NAME crashed N times in M ms`.
+  Unobserved (no `stop`, `Task.await(sup.task)` or monitor), it fails the run.
+- `stop` stops the children in reverse order within `timeout_ms` (above 0);
+  it gives the give-up error after a give-up, `supervisor: timeout` (and
+  cancels) when out of time.
+- The supervisor is a child of the task that calls `start`: start it from
+  `main`.
