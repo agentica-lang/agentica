@@ -1,0 +1,25 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 363,
+  "stdout": [
+    "<Address 1>",
+    "true",
+    "<Address 2>",
+    "false",
+    "Link(name: \"counter\", to: <Address 1>)",
+    "[Note.To(<Address 1>), Note.Nobody]",
+    "true",
+    "client: ok 1",
+    "client: ok 2",
+    "client: ok 3",
+    "client: ok 4",
+    "stop: sent",
+    "counter: ok 10",
+    "1",
+    "after the owner ended: channel: closed",
+    "unknown name: key \"nobody\" is not in the table",
+    ""
+  ],
+  "stderr": []
+}

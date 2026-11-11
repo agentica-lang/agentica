@@ -22,6 +22,7 @@ export enum Type
   Optional(Type)
   Task(Type)
   Channel(Type)
+  Address(Type)
   Lazy(Type)
   Codec(Type)
   List(Type)
@@ -53,6 +54,7 @@ export def tag(type: Type) -> String
     Type.Optional(_) -> "Optional"
     Type.Task(_) -> "Task"
     Type.Channel(_) -> "Channel"
+    Type.Address(_) -> "Address"
     Type.Lazy(_) -> "Lazy"
     Type.Codec(_) -> "Codec"
     Type.List(_) -> "List"
@@ -72,13 +74,15 @@ export def is?(type: Type, word: String) -> Bool = tag(type) == word
 ## True for no type (Unknown).
 export def unknown?(type: Type) -> Bool = tag(type) == "Unknown"
 
-## The element type of a List, Set, Result, Optional, Task, Channel, Lazy or Codec; Unknown for any other type.
+## The element type of a List, Set, Result, Optional, Task, Channel, Address, Lazy or Codec; Unknown for any other
+## type.
 export def item(type: Type) -> Type
   case type
     Type.Result(inner) -> inner
     Type.Optional(inner) -> inner
     Type.Task(inner) -> inner
     Type.Channel(inner) -> inner
+    Type.Address(inner) -> inner
     Type.Lazy(inner) -> inner
     Type.Codec(inner) -> inner
     Type.List(inner) -> inner
@@ -157,6 +161,7 @@ export def same?(a: Type, b: Type) -> Bool
     Type.Optional(inner) -> same?(inner, item(b))
     Type.Task(inner) -> same?(inner, item(b))
     Type.Channel(inner) -> same?(inner, item(b))
+    Type.Address(inner) -> same?(inner, item(b))
     Type.Lazy(inner) -> same?(inner, item(b))
     Type.Codec(inner) -> same?(inner, item(b))
     Type.List(inner) -> same?(inner, item(b))
@@ -279,6 +284,7 @@ export def to_text_as(type: Type, written: Map[String, String]) -> String
     Type.Optional(item) -> "Optional[#{to_text_as(item, written)}]"
     Type.Task(item) -> "Task[#{to_text_as(item, written)}]"
     Type.Channel(item) -> "Channel[#{to_text_as(item, written)}]"
+    Type.Address(item) -> "Address[#{to_text_as(item, written)}]"
     Type.Lazy(item) -> "Lazy[#{to_text_as(item, written)}]"
     Type.Codec(item) -> "Codec[#{to_text_as(item, written)}]"
     Type.List(item) -> "List[#{to_text_as(item, written)}]"
@@ -301,6 +307,7 @@ export def debug_text(type: Type) -> String
     Type.Optional(item) -> "Optional(#{debug_text(item)})"
     Type.Task(item) -> "Task(#{debug_text(item)})"
     Type.Channel(item) -> "Channel(#{debug_text(item)})"
+    Type.Address(item) -> "Address(#{debug_text(item)})"
     Type.Lazy(item) -> "Lazy(#{debug_text(item)})"
     Type.Codec(item) -> "Codec(#{debug_text(item)})"
     Type.List(item) -> "List(#{debug_text(item)})"

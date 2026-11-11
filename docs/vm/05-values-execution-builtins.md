@@ -93,6 +93,11 @@ does not make obvious:
   allocations: it runs at the start of a scheduler's next task. It is
   registered with `GC_REGISTER_FINALIZER_NO_ORDER`, the macro that matches
   `GC_MALLOC_ATOMIC` in the GC-debug build.
+- `agc_weak` (`vm/value.c`) is the one weak reference (an `Address`'s
+  channel). It is registered with `GC_GENERAL_REGISTER_DISAPPEARING_LINK`: the
+  plain `GC_general_register_disappearing_link` clears a live object's link in
+  the GC-debug build. It is read under `GC_call_with_alloc_lock`, since the
+  collector clears links with that lock held.
 - Roots (runtime, schedulers, program, tasks) live in GC objects reachable from
   the runtime struct, never in mutable static storage (10.2.3).
 - Heap growth: `agc_init` sets the free-space divisor to 2 (libgc's default is

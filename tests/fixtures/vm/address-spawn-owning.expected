@@ -1,0 +1,19 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 176,
+  "stdout": [
+    "worker: ok 1",
+    "jobs closed? true, results closed? false",
+    "worker: ok 2",
+    "jobs closed? true, results closed? false",
+    "ok(10)",
+    "ok(20)",
+    "owning both: ok 3",
+    "jobs closed? true, results closed? true",
+    "ok(30)",
+    "error(\"channel: closed\")",
+    ""
+  ],
+  "stderr": []
+}

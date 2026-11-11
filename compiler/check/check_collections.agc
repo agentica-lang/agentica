@@ -28,7 +28,9 @@ export def check_collection_rule(cx: State.Cx, st: State.St, site: State.Site, r
     Model.Rule.AtsNew -> check_ats_new(cx, st, site)
     Model.Rule.AtsCall -> check_ats_call(cx, st, site)
     Model.Rule.ChannelNew -> check_channel_new(cx, st, site)
-    Model.Rule.ChannelSend -> check_channel_send(cx, st, site)
+    Model.Rule.ChannelSend -> check_channel_send(cx, st, site, &Args.channel_argument)
+    Model.Rule.AddressSend -> check_channel_send(cx, st, site, &Args.address_argument)
+    Model.Rule.ChannelAddress -> check_channel_address(cx, st, site)
     Model.Rule.ChannelRecv -> check_channel_recv(cx, st, site)
     Model.Rule.ChannelTarget -> check_target(cx, st, site, &Args.channel_argument)
     Model.Rule.ProfileMeasure -> check_block_value(cx, st, site, T.Type.String, [])
@@ -46,6 +48,12 @@ end
 ## has no text of its own.
 export def holds_codec?(cx: State.Cx, type: T.Type) -> Bool
   holds?(cx, type) do |part: T.Type| T.is?(part, "Codec") end
+end
+
+## True for a type that holds an Address somewhere, walked as holds_handle? walks: a constant refuses it, since an
+## address belongs to the run that made it.
+export def holds_address?(cx: State.Cx, type: T.Type) -> Bool
+  holds?(cx, type) do |part: T.Type| T.is?(part, "Address") end
 end
 
 # Task.spawn and Task.spawn_owning: a function of one parameter and the argument it gets; Task.spawn alone also has
@@ -553,11 +561,23 @@ def check_channel_new(cx: State.Cx, st: State.St, site: State.Site) -> Result[St
   ok(State.Out(st: capacity.st, type: site.expected))
 end
 
-def check_channel_send(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
-  target = try Args.channel_argument(cx, st, site)
+# Channel.send and Address.send: the target (a Channel[T] or an Address[T], checked by `argument`), a T and a timeout.
+def check_channel_send(
+  cx: State.Cx,
+  st: State.St,
+  site: State.Site,
+  argument: Fn[State.Cx, State.St, State.Site, Result[State.Out]],
+) -> Result[State.Out]
+  target = try argument.call(cx, st, site)
   value = try State.expr(cx, target.st, site.args[1], T.item(target.type))
   timeout = try State.expr(cx, value.st, site.args[2], T.Type.Int)
   ok(State.Out(st: timeout.st, type: T.Type.Result(T.Type.Void)))
+end
+
+# channel.address: the Address[T] of a Channel[T].
+def check_channel_address(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
+  target = try Args.channel_argument(cx, st, site)
+  ok(State.Out(st: target.st, type: T.Type.Address(T.item(target.type))))
 end
 
 def check_channel_recv(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
