@@ -758,6 +758,9 @@ def scan_item(e: Env, at: Int, inside: Bool) -> Scanned
     elsif head >= 0
       return Scanned(next: head, opens: false)
     end
+  elsif inside and reserved?(token)
+    # A reserved word in a slot (`some(end)`) still makes the line an arm, so parse_slot can name the word.
+    return Scanned(next: at + 1, opens: false)
   end
 
   Scanned(next: -1, opens: false)

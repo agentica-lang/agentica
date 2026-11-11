@@ -52,6 +52,9 @@ export def method_aliases() -> Map[String, String]
     "Map.length": "Map.size",
     "Map.member?": "Map.has_key?",
     "Map.select": "Map.filter",
+    "Range.collect": "Range.map",
+    "Range.detect": "Range.find",
+    "Range.inject": "Range.reduce",
     "Range.length": "Range.size",
     "Range.member?": "Range.include?",
     "Set.length": "Set.size",
@@ -77,8 +80,8 @@ end
 export def ruby_synonyms() -> List[String]
   [
     "ATS.length", "Bytes.size", "Lazy.collect", "Lazy.detect", "Lazy.inject", "List.collect", "List.detect",
-    "List.inject", "List.length", "List.member?", "Map.include?", "Map.length", "Map.member?", "Range.length",
-    "Range.member?", "Set.length", "Set.member?", "String.size",
+    "List.inject", "List.length", "List.member?", "Map.include?", "Map.length", "Map.member?", "Range.collect",
+    "Range.detect", "Range.inject", "Range.length", "Range.member?", "Set.length", "Set.member?", "String.size",
   ]
 end
 
@@ -240,15 +243,8 @@ export def foreign_kind_methods() -> Map[String, String]
     "Optional.error?": "an Optional has some? and none?; o.none? tests for a missing value",
     "Optional.message": "an Optional has no message; o.to_result(\"message\") gives a Result that has one",
     "Optional.ok?": "an Optional has some? and none? (m.get(k) and s.index_of(part) give an Optional)",
-    "Range.collect": "a range has no map; use (1..5).to_a.map do |x| ... end",
-    "Range.detect": "a range has no find; use (1..5).to_a.find do |x| ... end",
     "Range.drop": "a range has no drop; use (1..5).to_a.drop(n)",
-    "Range.find": "a range has no find; use (1..5).to_a.find do |x| ... end",
-    "Range.inject": "a range has no reduce; use (1..5).to_a.reduce(0) do |acc, x| ... end",
-    "Range.map": "a range has no map; use (1..5).to_a.map do |x| ... end",
-    "Range.reject": "a range has no reject; use (1..5).to_a.select do |x| !cond end",
-    "Range.select": "a range has no select; use (1..5).to_a.select do |x| ... end",
-    "Range.sum": "a range has no sum; use (1..5).to_a.sum",
+    "Range.reject": "a range has no reject; use (1..5).select do |x| !cond end",
     "Range.take": "a range has no take; use (1..5).to_a.take(n)",
     "Set.contains": "use s.include?(x)",
     "Set.contains?": "use s.include?(x)",

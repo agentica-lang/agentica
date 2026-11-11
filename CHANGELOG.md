@@ -25,6 +25,15 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - `channel.address` gives an `Address[T]`, a send-only reference to a channel
   that is data: an `ATS` table, a message or a struct can hold it, and
   `Task.spawn_owning` does not hand it over.
+- A builtin is a function value: `&Time.now_ms`, `[1, 2].map(&Int.to_s)`.
+- A range has the Enumerable methods of List: `(0...n).map`, `select`, `sum`,
+  `reduce`, `min`, `max` and more.
+- `Test.eq` shows a `Bytes` as quoted text (`<Bytes 7 "+OK\r\n\x00\xFF">`).
+
+### Fixed
+
+- On macOS x86_64, a native function that calls `an_blocking` could find a
+  value it made before the call collected.
 
 ## [0.29.0] - 2026-11-10
 

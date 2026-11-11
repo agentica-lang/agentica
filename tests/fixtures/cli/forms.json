@@ -71,6 +71,12 @@
   "stdout": "",
   "written": []
  },
+ "[[\"--ai\", \"check\", \"lazy_concat.agc\"], {}]": {
+  "code": 1,
+  "stderr": "check failed: 1 error\n\n[CHECK-UNKNOWN-METHOD]\n  message: Lazy[Int] has no method \"concat\"\n  at: lazy_concat.agc:2:11\n  in: main() -> Void\n  source: steps = [1].lazy.concat([2])\n  help: Lazy[Int] methods: chunk_while, deflate, drop, drop_while, each, each_cons, each_slice, find, first, flat_map, gunzip, gzip, inflate, map, reduce, select, take, take_while, to_a, with_index, write_bytes, write_lines\n",
+  "stdout": "",
+  "written": []
+ },
  "[[\"--ai\", \"check\", \"lex.agc\"], {}]": {
   "code": 1,
   "stderr": "check failed: 1 error\n\n[LEX-UNTERMINATED-STRING]\n  message: unterminated string\n  at: lex.agc:2:8\n  source: puts(\"unterminated)\n",
@@ -293,6 +299,12 @@
   "stdout": "",
   "written": []
  },
+ "[[\"--json\", \"check\", \"lazy_concat.agc\"], {}]": {
+  "code": 1,
+  "stderr": "{\"code\":\"CHECK-UNKNOWN-METHOD\",\"file\":\"lazy_concat.agc\",\"function\":\"main() -> Void\",\"help\":\"Lazy[Int] methods: chunk_while, deflate, drop, drop_while, each, each_cons, each_slice, find, first, flat_map, gunzip, gzip, inflate, map, reduce, select, take, take_while, to_a, with_index, write_bytes, write_lines\",\"message\":\"Lazy[Int] has no method \\\"concat\\\"\",\"range\":{\"end\":{\"column\":31,\"line\":2},\"start\":{\"column\":11,\"line\":2}}}\n",
+  "stdout": "",
+  "written": []
+ },
  "[[\"--json\", \"check\", \"lex.agc\"], {}]": {
   "code": 1,
   "stderr": "{\"code\":\"LEX-UNTERMINATED-STRING\",\"file\":\"lex.agc\",\"message\":\"unterminated string\",\"range\":{\"end\":{\"column\":22,\"line\":2},\"start\":{\"column\":8,\"line\":2}}}\n",
@@ -372,6 +384,12 @@
   "written": [
    false
   ]
+ },
+ "[[\"--json\", \"help\", \"List.concat\"], {}]": {
+  "code": 0,
+  "stderr": "",
+  "stdout": "{\"alias\":\"List.concat\",\"builtins\":[],\"hints\":{\"List.concat\":\"join two lists with +: xs + ys is a new list, and both stay as they were\"}}\n",
+  "written": []
  },
  "[[\"--json\", \"help\", \"String.to_int\"], {}]": {
   "code": 0,
@@ -651,7 +669,7 @@
  },
  "[[\"check\", \".\"], {}]": {
   "code": 1,
-  "stderr": "crlf.agc:2:12 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n2 |   x: Int = \"a\"\n  |            ^^^\n  = help: convert it with s.to_i!\nhelped.agc:2:12 error[CHECK-EMPTY-LIST-TYPE]\nan empty list needs an expected type, for example \"List[Int]\"\n\n2 |   values = []\n  |            ^^\n  = help: annotate the variable: xs: List[Int] = []; a parameter, a field or a function result also gives the type\ninvalid.agc:2:10 error[LEX-INVALID-UTF8]\nsource file is not valid UTF-8\n\n2 |   puts(\"a���b\")\n  |          ^\n  = help: source files are UTF-8: save the file as UTF-8 text\nlabels.agc:6:14 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   x = add(1, \"two\")\n  |              ^^^^^\n  = help: convert it with s.to_i!\nlex.agc:2:8 error[LEX-UNTERMINATED-STRING]\nunterminated string\n\n2 |   puts(\"unterminated)\n  |        ^^^^^^^^^^^^^^\nlib/util.agc:6:10 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   return \"s\"\n  |          ^^^\n  = help: convert it with s.to_i!\nmissing_import.agc:1:1 error[CHECK-IMPORT-IO]\ncannot read import\n\n1 | import Nothing from \"nothing\"\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  = help: an import is relative to the importing file; no file at \"nothing.agc\"\nmultiline.agc:3:8 error[CHECK-TYPE-MISMATCH]\noperator expects two values of the same type, found List[Int] and String\n\n2 |   x = [1, 2,\n  |       ------\n  |       this is List[Int]\n3 |     3] - \"s\"\n  |        ^ ---\n  |          this is String\nparse.agc:2:8 error[PARSE-UNEXPECTED-TOKEN]\nexpected a newline after the statement; calls need parentheses, as in puts(...)\n\n2 |   puts \"hello\"\n  |        ^^^^^^^\nstd_error.agc:4:8 error[CHECK-IMPORT-NAME]\nunknown or private imported name\n\n4 |   puts(Queue.nope())\n  |        ^^^^^^^^^^^^\n<work>/lib/util.agc:6:10 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   return \"s\"\n  |          ^^^\n  = help: convert it with s.to_i!\n<work>/lib/util.agc:6:10 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   return \"s\"\n  |          ^^^\n  = help: convert it with s.to_i!\ntab.agc:2:11 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n2 | \tx: Int = \"a\"\n  | \t         ^^^\n  = help: convert it with s.to_i!\ntwice.agc:5:1 error[CHECK-REDEFINED-NAME]\nduplicate or reserved declaration\n\n5 | def main() -> Void\n  | ^^^^^^^^^^^^^^^^^^\nunicode.agc:3:12 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n3 |   x: Int = \"éé\"\n  |            ^^^^\n  = help: convert it with s.to_i!\ncheck failed: 15 of 19 files\n",
+  "stderr": "crlf.agc:2:12 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n2 |   x: Int = \"a\"\n  |            ^^^\n  = help: convert it with s.to_i!\nhelped.agc:2:12 error[CHECK-EMPTY-LIST-TYPE]\nan empty list needs an expected type, for example \"List[Int]\"\n\n2 |   values = []\n  |            ^^\n  = help: annotate the variable: xs: List[Int] = []; a parameter, a field or a function result also gives the type\ninvalid.agc:2:10 error[LEX-INVALID-UTF8]\nsource file is not valid UTF-8\n\n2 |   puts(\"a���b\")\n  |          ^\n  = help: source files are UTF-8: save the file as UTF-8 text\nlabels.agc:6:14 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   x = add(1, \"two\")\n  |              ^^^^^\n  = help: convert it with s.to_i!\nlazy_concat.agc:2:11 error[CHECK-UNKNOWN-METHOD]\nLazy[Int] has no method \"concat\"\n\n2 |   steps = [1].lazy.concat([2])\n  |           ^^^^^^^^^^^^^^^^^^^^\n  = help: Lazy[Int] methods: chunk_while, deflate, drop, drop_while, each, each_cons, each_slice, find, first, flat_map, gunzip, gzip, inflate, map, reduce, select, take, take_while, to_a, with_index, write_bytes, write_lines\nlex.agc:2:8 error[LEX-UNTERMINATED-STRING]\nunterminated string\n\n2 |   puts(\"unterminated)\n  |        ^^^^^^^^^^^^^^\nlib/util.agc:6:10 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   return \"s\"\n  |          ^^^\n  = help: convert it with s.to_i!\nmissing_import.agc:1:1 error[CHECK-IMPORT-IO]\ncannot read import\n\n1 | import Nothing from \"nothing\"\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  = help: an import is relative to the importing file; no file at \"nothing.agc\"\nmultiline.agc:3:8 error[CHECK-TYPE-MISMATCH]\noperator expects two values of the same type, found List[Int] and String\n\n2 |   x = [1, 2,\n  |       ------\n  |       this is List[Int]\n3 |     3] - \"s\"\n  |        ^ ---\n  |          this is String\nparse.agc:2:8 error[PARSE-UNEXPECTED-TOKEN]\nexpected a newline after the statement; calls need parentheses, as in puts(...)\n\n2 |   puts \"hello\"\n  |        ^^^^^^^\nstd_error.agc:4:8 error[CHECK-IMPORT-NAME]\nunknown or private imported name\n\n4 |   puts(Queue.nope())\n  |        ^^^^^^^^^^^^\n<work>/lib/util.agc:6:10 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   return \"s\"\n  |          ^^^\n  = help: convert it with s.to_i!\n<work>/lib/util.agc:6:10 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   return \"s\"\n  |          ^^^\n  = help: convert it with s.to_i!\ntab.agc:2:11 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n2 | \tx: Int = \"a\"\n  | \t         ^^^\n  = help: convert it with s.to_i!\ntwice.agc:5:1 error[CHECK-REDEFINED-NAME]\nduplicate or reserved declaration\n\n5 | def main() -> Void\n  | ^^^^^^^^^^^^^^^^^^\nunicode.agc:3:12 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n3 |   x: Int = \"éé\"\n  |            ^^^^\n  = help: convert it with s.to_i!\ncheck failed: 16 of 20 files\n",
   "stdout": "",
   "written": []
  },
@@ -688,6 +706,12 @@
  "[[\"check\", \"labels.agc\"], {}]": {
   "code": 1,
   "stderr": "labels.agc:6:14 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   x = add(1, \"two\")\n  |              ^^^^^\n  = help: convert it with s.to_i!\n",
+  "stdout": "",
+  "written": []
+ },
+ "[[\"check\", \"lazy_concat.agc\"], {}]": {
+  "code": 1,
+  "stderr": "lazy_concat.agc:2:11 error[CHECK-UNKNOWN-METHOD]\nLazy[Int] has no method \"concat\"\n\n2 |   steps = [1].lazy.concat([2])\n  |           ^^^^^^^^^^^^^^^^^^^^\n  = help: Lazy[Int] methods: chunk_while, deflate, drop, drop_while, each, each_cons, each_slice, find, first, flat_map, gunzip, gzip, inflate, map, reduce, select, take, take_while, to_a, with_index, write_bytes, write_lines\n",
   "stdout": "",
   "written": []
  },
@@ -777,7 +801,7 @@
  },
  "[[\"check\"], {}]": {
   "code": 1,
-  "stderr": "crlf.agc:2:12 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n2 |   x: Int = \"a\"\n  |            ^^^\n  = help: convert it with s.to_i!\nhelped.agc:2:12 error[CHECK-EMPTY-LIST-TYPE]\nan empty list needs an expected type, for example \"List[Int]\"\n\n2 |   values = []\n  |            ^^\n  = help: annotate the variable: xs: List[Int] = []; a parameter, a field or a function result also gives the type\ninvalid.agc:2:10 error[LEX-INVALID-UTF8]\nsource file is not valid UTF-8\n\n2 |   puts(\"a���b\")\n  |          ^\n  = help: source files are UTF-8: save the file as UTF-8 text\nlabels.agc:6:14 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   x = add(1, \"two\")\n  |              ^^^^^\n  = help: convert it with s.to_i!\nlex.agc:2:8 error[LEX-UNTERMINATED-STRING]\nunterminated string\n\n2 |   puts(\"unterminated)\n  |        ^^^^^^^^^^^^^^\nlib/util.agc:6:10 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   return \"s\"\n  |          ^^^\n  = help: convert it with s.to_i!\nmissing_import.agc:1:1 error[CHECK-IMPORT-IO]\ncannot read import\n\n1 | import Nothing from \"nothing\"\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  = help: an import is relative to the importing file; no file at \"nothing.agc\"\nmultiline.agc:3:8 error[CHECK-TYPE-MISMATCH]\noperator expects two values of the same type, found List[Int] and String\n\n2 |   x = [1, 2,\n  |       ------\n  |       this is List[Int]\n3 |     3] - \"s\"\n  |        ^ ---\n  |          this is String\nparse.agc:2:8 error[PARSE-UNEXPECTED-TOKEN]\nexpected a newline after the statement; calls need parentheses, as in puts(...)\n\n2 |   puts \"hello\"\n  |        ^^^^^^^\nstd_error.agc:4:8 error[CHECK-IMPORT-NAME]\nunknown or private imported name\n\n4 |   puts(Queue.nope())\n  |        ^^^^^^^^^^^^\n<work>/lib/util.agc:6:10 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   return \"s\"\n  |          ^^^\n  = help: convert it with s.to_i!\n<work>/lib/util.agc:6:10 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   return \"s\"\n  |          ^^^\n  = help: convert it with s.to_i!\ntab.agc:2:11 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n2 | \tx: Int = \"a\"\n  | \t         ^^^\n  = help: convert it with s.to_i!\ntwice.agc:5:1 error[CHECK-REDEFINED-NAME]\nduplicate or reserved declaration\n\n5 | def main() -> Void\n  | ^^^^^^^^^^^^^^^^^^\nunicode.agc:3:12 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n3 |   x: Int = \"éé\"\n  |            ^^^^\n  = help: convert it with s.to_i!\ncheck failed: 15 of 19 files\n",
+  "stderr": "crlf.agc:2:12 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n2 |   x: Int = \"a\"\n  |            ^^^\n  = help: convert it with s.to_i!\nhelped.agc:2:12 error[CHECK-EMPTY-LIST-TYPE]\nan empty list needs an expected type, for example \"List[Int]\"\n\n2 |   values = []\n  |            ^^\n  = help: annotate the variable: xs: List[Int] = []; a parameter, a field or a function result also gives the type\ninvalid.agc:2:10 error[LEX-INVALID-UTF8]\nsource file is not valid UTF-8\n\n2 |   puts(\"a���b\")\n  |          ^\n  = help: source files are UTF-8: save the file as UTF-8 text\nlabels.agc:6:14 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   x = add(1, \"two\")\n  |              ^^^^^\n  = help: convert it with s.to_i!\nlazy_concat.agc:2:11 error[CHECK-UNKNOWN-METHOD]\nLazy[Int] has no method \"concat\"\n\n2 |   steps = [1].lazy.concat([2])\n  |           ^^^^^^^^^^^^^^^^^^^^\n  = help: Lazy[Int] methods: chunk_while, deflate, drop, drop_while, each, each_cons, each_slice, find, first, flat_map, gunzip, gzip, inflate, map, reduce, select, take, take_while, to_a, with_index, write_bytes, write_lines\nlex.agc:2:8 error[LEX-UNTERMINATED-STRING]\nunterminated string\n\n2 |   puts(\"unterminated)\n  |        ^^^^^^^^^^^^^^\nlib/util.agc:6:10 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   return \"s\"\n  |          ^^^\n  = help: convert it with s.to_i!\nmissing_import.agc:1:1 error[CHECK-IMPORT-IO]\ncannot read import\n\n1 | import Nothing from \"nothing\"\n  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  = help: an import is relative to the importing file; no file at \"nothing.agc\"\nmultiline.agc:3:8 error[CHECK-TYPE-MISMATCH]\noperator expects two values of the same type, found List[Int] and String\n\n2 |   x = [1, 2,\n  |       ------\n  |       this is List[Int]\n3 |     3] - \"s\"\n  |        ^ ---\n  |          this is String\nparse.agc:2:8 error[PARSE-UNEXPECTED-TOKEN]\nexpected a newline after the statement; calls need parentheses, as in puts(...)\n\n2 |   puts \"hello\"\n  |        ^^^^^^^\nstd_error.agc:4:8 error[CHECK-IMPORT-NAME]\nunknown or private imported name\n\n4 |   puts(Queue.nope())\n  |        ^^^^^^^^^^^^\n<work>/lib/util.agc:6:10 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   return \"s\"\n  |          ^^^\n  = help: convert it with s.to_i!\n<work>/lib/util.agc:6:10 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n6 |   return \"s\"\n  |          ^^^\n  = help: convert it with s.to_i!\ntab.agc:2:11 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n2 | \tx: Int = \"a\"\n  | \t         ^^^\n  = help: convert it with s.to_i!\ntwice.agc:5:1 error[CHECK-REDEFINED-NAME]\nduplicate or reserved declaration\n\n5 | def main() -> Void\n  | ^^^^^^^^^^^^^^^^^^\nunicode.agc:3:12 error[CHECK-TYPE-MISMATCH]\nexpected Int, found String\n\n3 |   x: Int = \"éé\"\n  |            ^^^^\n  = help: convert it with s.to_i!\ncheck failed: 16 of 20 files\n",
   "stdout": "",
   "written": []
  },
@@ -842,9 +866,9 @@
   "written": []
  },
  "[[\"help\", \"List.concat\"], {}]": {
-  "code": 2,
-  "stderr": "agentica: unknown builtin List.concat; join two lists with +: xs + ys is a new list, and both stay as they were\n",
-  "stdout": "",
+  "code": 0,
+  "stderr": "",
+  "stdout": "`List.concat` is written with an operator\nList.concat: join two lists with +: xs + ys is a new list, and both stay as they were\n",
   "written": []
  },
  "[[\"help\", \"List.group_by\", \"--json\"], {}]": {
@@ -1030,13 +1054,13 @@
  "[[\"help\", \"collect\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"collect\",\"builtins\":[{\"arity\":2,\"description\":\"Lazy step: f applied to each item.\",\"effects\":[],\"name\":\"Lazy.map\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, B]\"}],\"result\":\"Lazy[B]\",\"ruby\":\"lazy.map(f: Fn[A, B]) -> Lazy[B]\",\"signature\":\"Lazy.map(lazy: Lazy[A], f: Fn[A, B]) -> Lazy[B]\"},{\"arity\":2,\"description\":\"Map each element in order without changing the input; O(n).\",\"effects\":[],\"name\":\"List.map\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, B]\"}],\"result\":\"List[B]\",\"ruby\":\"list.map(f: Fn[A, B]) -> List[B]\",\"signature\":\"List.map(list: List[A], f: Fn[A, B]) -> List[B]\"}],\"hints\":{\"Range.collect\":\"a range has no map; use (1..5).to_a.map do |x| ... end\"}}\n",
+  "stdout": "{\"alias\":\"collect\",\"builtins\":[{\"arity\":2,\"description\":\"Lazy step: f applied to each item.\",\"effects\":[],\"name\":\"Lazy.map\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, B]\"}],\"result\":\"Lazy[B]\",\"ruby\":\"lazy.map(f: Fn[A, B]) -> Lazy[B]\",\"signature\":\"Lazy.map(lazy: Lazy[A], f: Fn[A, B]) -> Lazy[B]\"},{\"arity\":2,\"description\":\"Map each element in order without changing the input; O(n).\",\"effects\":[],\"name\":\"List.map\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, B]\"}],\"result\":\"List[B]\",\"ruby\":\"list.map(f: Fn[A, B]) -> List[B]\",\"signature\":\"List.map(list: List[A], f: Fn[A, B]) -> List[B]\"},{\"arity\":2,\"description\":\"List what f gives for each value, in order; O(n).\",\"effects\":[],\"name\":\"Range.map\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"f\",\"type\":\"Fn[Int, B]\"}],\"result\":\"List[B]\",\"ruby\":\"range.map(f: Fn[Int, B]) -> List[B]\",\"signature\":\"Range.map(range: Range, f: Fn[Int, B]) -> List[B]\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"collect\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "`Lazy.collect` is written `.map`\nlazy.map(f: Fn[A, B]) -> Lazy[B]\nLazy step: f applied to each item.\n\n`List.collect` is written `.map`\nlist.map(f: Fn[A, B]) -> List[B]\nMap each element in order without changing the input; O(n).\n\nRange.collect: a range has no map; use (1..5).to_a.map do |x| ... end\n",
+  "stdout": "`Lazy.collect` is written `.map`\nlazy.map(f: Fn[A, B]) -> Lazy[B]\nLazy step: f applied to each item.\n\n`List.collect` is written `.map`\nlist.map(f: Fn[A, B]) -> List[B]\nMap each element in order without changing the input; O(n).\n\n`Range.collect` is written `.map`\nrange.map(f: Fn[Int, B]) -> List[B]\nList what f gives for each value, in order; O(n).\n",
   "written": []
  },
  "[[\"help\", \"concat\"], {}]": {
@@ -1072,13 +1096,13 @@
  "[[\"help\", \"detect\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"detect\",\"builtins\":[{\"arity\":2,\"description\":\"Terminal: the first item f accepts, else error(\\\"not found\\\") when the source ends.\",\"effects\":[],\"name\":\"Lazy.find\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Result[A]\",\"ruby\":\"lazy.find(f: Fn[A, Bool]) -> Result[A]\",\"signature\":\"Lazy.find(lazy: Lazy[A], f: Fn[A, Bool]) -> Result[A]\"},{\"arity\":2,\"description\":\"The first element f accepts, else error(\\\"not found\\\"); f stops being called at the first true; O(n).\",\"effects\":[],\"name\":\"List.find\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Result[A]\",\"ruby\":\"list.find(f: Fn[A, Bool]) -> Result[A]\",\"signature\":\"List.find(list: List[A], f: Fn[A, Bool]) -> Result[A]\"}],\"hints\":{\"Range.detect\":\"a range has no find; use (1..5).to_a.find do |x| ... end\"}}\n",
+  "stdout": "{\"alias\":\"detect\",\"builtins\":[{\"arity\":2,\"description\":\"Terminal: the first item f accepts, else error(\\\"not found\\\") when the source ends.\",\"effects\":[],\"name\":\"Lazy.find\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Result[A]\",\"ruby\":\"lazy.find(f: Fn[A, Bool]) -> Result[A]\",\"signature\":\"Lazy.find(lazy: Lazy[A], f: Fn[A, Bool]) -> Result[A]\"},{\"arity\":2,\"description\":\"The first element f accepts, else error(\\\"not found\\\"); f stops being called at the first true; O(n).\",\"effects\":[],\"name\":\"List.find\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Result[A]\",\"ruby\":\"list.find(f: Fn[A, Bool]) -> Result[A]\",\"signature\":\"List.find(list: List[A], f: Fn[A, Bool]) -> Result[A]\"},{\"arity\":2,\"description\":\"The first value f accepts, else error(\\\"not found\\\"); f stops being called at the first true; O(n).\",\"effects\":[],\"name\":\"Range.find\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"f\",\"type\":\"Fn[Int, Bool]\"}],\"result\":\"Result[Int]\",\"ruby\":\"range.find(f: Fn[Int, Bool]) -> Result[Int]\",\"signature\":\"Range.find(range: Range, f: Fn[Int, Bool]) -> Result[Int]\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"detect\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "`Lazy.detect` is written `.find`\nlazy.find(f: Fn[A, Bool]) -> Result[A]\nTerminal: the first item f accepts, else error(\"not found\") when the source ends.\n\n`List.detect` is written `.find`\nlist.find(f: Fn[A, Bool]) -> Result[A]\nThe first element f accepts, else error(\"not found\"); f stops being called at the first true; O(n).\n\nRange.detect: a range has no find; use (1..5).to_a.find do |x| ... end\n",
+  "stdout": "`Lazy.detect` is written `.find`\nlazy.find(f: Fn[A, Bool]) -> Result[A]\nTerminal: the first item f accepts, else error(\"not found\") when the source ends.\n\n`List.detect` is written `.find`\nlist.find(f: Fn[A, Bool]) -> Result[A]\nThe first element f accepts, else error(\"not found\"); f stops being called at the first true; O(n).\n\n`Range.detect` is written `.find`\nrange.find(f: Fn[Int, Bool]) -> Result[Int]\nThe first value f accepts, else error(\"not found\"); f stops being called at the first true; O(n).\n",
   "written": []
  },
  "[[\"help\", \"filter\", \"--json\"], {}]": {
@@ -1144,13 +1168,13 @@
  "[[\"help\", \"inject\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"inject\",\"builtins\":[{\"arity\":3,\"description\":\"Terminal: fold left from initial in order.\",\"effects\":[],\"name\":\"Lazy.reduce\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"initial\",\"type\":\"B\"},{\"name\":\"f\",\"type\":\"Fn[B, A, B]\"}],\"result\":\"Result[B]\",\"ruby\":\"lazy.reduce(initial: B, f: Fn[B, A, B]) -> Result[B]\",\"signature\":\"Lazy.reduce(lazy: Lazy[A], initial: B, f: Fn[B, A, B]) -> Result[B]\"},{\"arity\":3,\"description\":\"Fold left with f(accumulator, item); empty lists return initial; O(n).\",\"effects\":[],\"name\":\"List.reduce\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"initial\",\"type\":\"B\"},{\"name\":\"f\",\"type\":\"Fn[B, A, B]\"}],\"result\":\"B\",\"ruby\":\"list.reduce(initial: B, f: Fn[B, A, B]) -> B\",\"signature\":\"List.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B\"}],\"hints\":{\"Bytes.inject\":\"Bytes has no reduce; use b.to_a.reduce(0) do |acc, x| ... end\",\"Range.inject\":\"a range has no reduce; use (1..5).to_a.reduce(0) do |acc, x| ... end\"}}\n",
+  "stdout": "{\"alias\":\"inject\",\"builtins\":[{\"arity\":3,\"description\":\"Terminal: fold left from initial in order.\",\"effects\":[],\"name\":\"Lazy.reduce\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"initial\",\"type\":\"B\"},{\"name\":\"f\",\"type\":\"Fn[B, A, B]\"}],\"result\":\"Result[B]\",\"ruby\":\"lazy.reduce(initial: B, f: Fn[B, A, B]) -> Result[B]\",\"signature\":\"Lazy.reduce(lazy: Lazy[A], initial: B, f: Fn[B, A, B]) -> Result[B]\"},{\"arity\":3,\"description\":\"Fold left with f(accumulator, item); empty lists return initial; O(n).\",\"effects\":[],\"name\":\"List.reduce\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"initial\",\"type\":\"B\"},{\"name\":\"f\",\"type\":\"Fn[B, A, B]\"}],\"result\":\"B\",\"ruby\":\"list.reduce(initial: B, f: Fn[B, A, B]) -> B\",\"signature\":\"List.reduce(list: List[A], initial: B, f: Fn[B, A, B]) -> B\"},{\"arity\":3,\"description\":\"Fold left with f(accumulator, value); an empty range returns initial; O(n).\",\"effects\":[],\"name\":\"Range.reduce\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"initial\",\"type\":\"B\"},{\"name\":\"f\",\"type\":\"Fn[B, Int, B]\"}],\"result\":\"B\",\"ruby\":\"range.reduce(initial: B, f: Fn[B, Int, B]) -> B\",\"signature\":\"Range.reduce(range: Range, initial: B, f: Fn[B, Int, B]) -> B\"}],\"hints\":{\"Bytes.inject\":\"Bytes has no reduce; use b.to_a.reduce(0) do |acc, x| ... end\"}}\n",
   "written": []
  },
  "[[\"help\", \"inject\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "`Lazy.inject` is written `.reduce`\nlazy.reduce(initial: B, f: Fn[B, A, B]) -> Result[B]\nTerminal: fold left from initial in order.\n\n`List.inject` is written `.reduce`\nlist.reduce(initial: B, f: Fn[B, A, B]) -> B\nFold left with f(accumulator, item); empty lists return initial; O(n).\n\nBytes.inject: Bytes has no reduce; use b.to_a.reduce(0) do |acc, x| ... end\n\nRange.inject: a range has no reduce; use (1..5).to_a.reduce(0) do |acc, x| ... end\n",
+  "stdout": "`Lazy.inject` is written `.reduce`\nlazy.reduce(initial: B, f: Fn[B, A, B]) -> Result[B]\nTerminal: fold left from initial in order.\n\n`List.inject` is written `.reduce`\nlist.reduce(initial: B, f: Fn[B, A, B]) -> B\nFold left with f(accumulator, item); empty lists return initial; O(n).\n\n`Range.inject` is written `.reduce`\nrange.reduce(initial: B, f: Fn[B, Int, B]) -> B\nFold left with f(accumulator, value); an empty range returns initial; O(n).\n\nBytes.inject: Bytes has no reduce; use b.to_a.reduce(0) do |acc, x| ... end\n",
   "written": []
  },
  "[[\"help\", \"int\"], {}]": {
@@ -1269,26 +1293,26 @@
  },
  "[[\"help\", \"reject\", \"--json\"], {}]": {
   "code": 2,
-  "stderr": "agentica: unknown builtin reject; List.reject: use xs.select do |x| !cond end to keep the elements that fail the test; Range.reject: a range has no reject; use (1..5).to_a.select do |x| !cond end\n",
+  "stderr": "agentica: unknown builtin reject; List.reject: use xs.select do |x| !cond end to keep the elements that fail the test; Range.reject: a range has no reject; use (1..5).select do |x| !cond end\n",
   "stdout": "",
   "written": []
  },
  "[[\"help\", \"reject\"], {}]": {
   "code": 2,
-  "stderr": "agentica: unknown builtin reject; List.reject: use xs.select do |x| !cond end to keep the elements that fail the test; Range.reject: a range has no reject; use (1..5).to_a.select do |x| !cond end\n",
+  "stderr": "agentica: unknown builtin reject; List.reject: use xs.select do |x| !cond end to keep the elements that fail the test; Range.reject: a range has no reject; use (1..5).select do |x| !cond end\n",
   "stdout": "",
   "written": []
  },
  "[[\"help\", \"select\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"select\",\"builtins\":[{\"arity\":2,\"description\":\"Lazy step: keep the items whose predicate is true.\",\"effects\":[],\"name\":\"Lazy.filter\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Lazy[A]\",\"ruby\":\"lazy.select(f: Fn[A, Bool]) -> Lazy[A]\",\"signature\":\"Lazy.filter(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A]\"},{\"arity\":2,\"description\":\"Keep elements whose predicate is true, in order; O(n).\",\"effects\":[],\"name\":\"List.filter\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"List[A]\",\"ruby\":\"list.select(f: Fn[A, Bool]) -> List[A]\",\"signature\":\"List.filter(list: List[A], f: Fn[A, Bool]) -> List[A]\"},{\"arity\":2,\"description\":\"Keep the entries f accepts, in insertion order; O(n).\",\"effects\":[],\"name\":\"Map.filter\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"f\",\"type\":\"Fn[K, V, Bool]\"}],\"result\":\"Map[K, V]\",\"ruby\":\"map.select(f: Fn[K, V, Bool]) -> Map[K, V]\",\"signature\":\"Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]\"}],\"hints\":{\"Bytes.select\":\"Bytes has no select; use b.to_a.select do |x| ... end\",\"Range.select\":\"a range has no select; use (1..5).to_a.select do |x| ... end\"}}\n",
+  "stdout": "{\"alias\":\"select\",\"builtins\":[{\"arity\":2,\"description\":\"Lazy step: keep the items whose predicate is true.\",\"effects\":[],\"name\":\"Lazy.filter\",\"parameters\":[{\"name\":\"lazy\",\"type\":\"Lazy[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"Lazy[A]\",\"ruby\":\"lazy.select(f: Fn[A, Bool]) -> Lazy[A]\",\"signature\":\"Lazy.filter(lazy: Lazy[A], f: Fn[A, Bool]) -> Lazy[A]\"},{\"arity\":2,\"description\":\"Keep elements whose predicate is true, in order; O(n).\",\"effects\":[],\"name\":\"List.filter\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[A]\"},{\"name\":\"f\",\"type\":\"Fn[A, Bool]\"}],\"result\":\"List[A]\",\"ruby\":\"list.select(f: Fn[A, Bool]) -> List[A]\",\"signature\":\"List.filter(list: List[A], f: Fn[A, Bool]) -> List[A]\"},{\"arity\":2,\"description\":\"Keep the entries f accepts, in insertion order; O(n).\",\"effects\":[],\"name\":\"Map.filter\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"f\",\"type\":\"Fn[K, V, Bool]\"}],\"result\":\"Map[K, V]\",\"ruby\":\"map.select(f: Fn[K, V, Bool]) -> Map[K, V]\",\"signature\":\"Map.filter(map: Map[K, V], f: Fn[K, V, Bool]) -> Map[K, V]\"},{\"arity\":2,\"description\":\"List the values f accepts, in order; O(n).\",\"effects\":[],\"name\":\"Range.select\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"f\",\"type\":\"Fn[Int, Bool]\"}],\"result\":\"List[Int]\",\"ruby\":\"range.select(f: Fn[Int, Bool]) -> List[Int]\",\"signature\":\"Range.select(range: Range, f: Fn[Int, Bool]) -> List[Int]\"}],\"hints\":{\"Bytes.select\":\"Bytes has no select; use b.to_a.select do |x| ... end\"}}\n",
   "written": []
  },
  "[[\"help\", \"select\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "lazy.select(f: Fn[A, Bool]) -> Lazy[A]\nLazy step: keep the items whose predicate is true.\n\nlist.select(f: Fn[A, Bool]) -> List[A]\nKeep elements whose predicate is true, in order; O(n).\n\nmap.select(f: Fn[K, V, Bool]) -> Map[K, V]\nKeep the entries f accepts, in insertion order; O(n).\n\nBytes.select: Bytes has no select; use b.to_a.select do |x| ... end\n\nRange.select: a range has no select; use (1..5).to_a.select do |x| ... end\n",
+  "stdout": "lazy.select(f: Fn[A, Bool]) -> Lazy[A]\nLazy step: keep the items whose predicate is true.\n\nlist.select(f: Fn[A, Bool]) -> List[A]\nKeep elements whose predicate is true, in order; O(n).\n\nmap.select(f: Fn[K, V, Bool]) -> Map[K, V]\nKeep the entries f accepts, in insertion order; O(n).\n\nrange.select(f: Fn[Int, Bool]) -> List[Int]\nList the values f accepts, in order; O(n).\n\nBytes.select: Bytes has no select; use b.to_a.select do |x| ... end\n",
   "written": []
  },
  "[[\"help\", \"size\", \"--json\"], {}]": {

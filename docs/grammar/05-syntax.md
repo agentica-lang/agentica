@@ -425,7 +425,7 @@ block_param      = NAME, [ ":", type ] ;
 block_body       = NL, { statement } | simple_statement ;
 
 primary          = literal
-                 | "&", ( NAME | TYPE_NAME, ".", NAME )
+                 | "&", ( NAME | TYPE_NAME, ".", [ TYPE_NAME, "." ], NAME )
                  | NAME, [ "(", [ arguments ], ")" ]
                  | TYPE_NAME, ".", TYPE_NAME, ".", TYPE_NAME, [ "(", [ arguments ], ")" ]
                  | TYPE_NAME, ".", TYPE_NAME, "(", [ arguments ], ")"
@@ -452,8 +452,9 @@ Parentheses are required for every call. They may be dropped only for builtin
 methods, and for module functions without arguments, builtin or reached through
 an import alias: `s.length`, `IO.gets!`, `while !IO.eof? do`, `Util.reset`. So
 `f = Util.helper` calls `helper`; write `&Util.helper` for the function value.
-`&name` references a declared top-level function without captures. A bare
-`Enum.Variant` of an enum in the same file is that nullary variant, and
+`&name` references a declared top-level function without captures, and
+`&Time.now_ms` or `&Int.to_s` a builtin (06-semantics.md, "Function values").
+A bare `Enum.Variant` of an enum in the same file is that nullary variant, and
 `M.Enum.Variant` through an import alias is one too.
 
 A struct update `value.with(name: expr, ...)` is the one postfix form with named

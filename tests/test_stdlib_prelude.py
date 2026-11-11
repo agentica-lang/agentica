@@ -292,6 +292,82 @@ def test_optional_methods_agree_with_python_peer(tmp_path):
         assert result.stdout.splitlines() == optional_peer_lines(values), text
 
 
+def range_peer_lines(ranges):
+    """Compute the output of range_program() with Python: (start, end, inclusive) is start..end or start...end."""
+    lines = []
+    for start, end, inclusive in ranges:
+        values = list(range(start, end + 1 if inclusive else end))
+        total = 7
+        for value in values:
+            total = total * 2 + value
+        groups = {}
+        for value in values:
+            groups.setdefault(int(math.fmod(value, 3)), []).append(value)
+        prefix = next((at for at, value in enumerate(values) if value >= 4), len(values))
+        found = next((value for value in values if value > 3), None)
+        closest = pick([abs(value - 2) for value in values], lambda a, b: a < b)
+        lines += [
+            show([value * value for value in values]),
+            show([value for value in values if math.fmod(value, 3) == 0]),
+            show([part for value in values for part in (value, -value)]),
+            show(total),
+            show(sum(values)),
+            show(("some", values[0]) if values else ("none",)),
+            show(("some", values[-1]) if values else ("none",)),
+            show(("some", values[closest[1]]) if values else ("none",)),
+            show(("ok", found) if found is not None else ("error", "not found")),
+            show(first_index(values, lambda value: value == 5)),
+            show(any(value > 5 for value in values)),
+            show(all(value < 9 for value in values)),
+            show([values[at:at + 3] for at in range(0, len(values), 3)]),
+            show([[value for value in values if value % 2 == 0], [value for value in values if value % 2 != 0]]),
+            show(groups),
+            show(values[:prefix]),
+            show(values[prefix:]),
+        ]
+    return lines
+
+
+def range_program(ranges):
+    """Build one Agentica program of the Range methods whose output is checked against range_peer_lines()."""
+    items = ", ".join("%d%s%d" % (start, ".." if inclusive else "...", end) for start, end, inclusive in ranges)
+    return """\
+def main() -> Void
+  for r in [{items}]
+    puts(r.map do |n| n * n end.to_s)
+    puts(r.select do |n| n % 3 == 0 end.to_s)
+    puts(r.flat_map do |n| [n, -n] end.to_s)
+    puts(r.reduce(7) do |total, n| total * 2 + n end.to_s)
+    puts(r.sum.to_s)
+    puts(r.min.to_s)
+    puts(r.max.to_s)
+    puts(r.min_by do |n| (n - 2).abs end.to_s)
+    puts(r.find do |n| n > 3 end.to_s)
+    puts(r.find_index do |n| n == 5 end.to_s)
+    puts(r.any? do |n| n > 5 end.to_s)
+    puts(r.all? do |n| n < 9 end.to_s)
+    puts(r.each_slice(3).to_s)
+    puts(r.partition do |n| n % 2 == 0 end.to_s)
+    puts(r.group_by do |n| n % 3 end.to_s)
+    puts(r.take_while do |n| n < 4 end.to_s)
+    puts(r.drop_while do |n| n < 4 end.to_s)
+  end
+end
+""".format(items=items)
+
+
+def test_range_methods_agree_with_python_peer(tmp_path):
+    random.seed(1369)
+    for case in range(4):
+        ranges = [(random.randint(-6, 6), random.randint(-6, 12), random.choice([True, False])) for _ in range(5)]
+        path = tmp_path / ("range%d.agc" % case)
+        text = range_program(ranges)
+        path.write_text(text, encoding="utf-8")
+        result = run(cli() + [str(path)])
+        assert result.code == 0, result.stderr + text
+        assert result.stdout.splitlines() == range_peer_lines(ranges), text
+
+
 def slices(items, n):
     """Python peer of Lazy.each_slice: groups of n items, the last one shorter."""
     group = []

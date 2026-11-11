@@ -22,6 +22,8 @@ import {PRELUDE_PREFIX} from "../syntax/prelude_name"
 import Source from "../syntax/source"
 import SourceFile from "../syntax/source_file"
 import T from "../syntax/types"
+import BuiltinRef from "builtin_ref"
+import {REFS_MODULE} from "builtin_ref"
 import Register from "check_register"
 import State from "check_state"
 import Statements from "check_stmt"
@@ -90,17 +92,30 @@ def wanted_functions(keys: List[String]) -> Map[String, List[String]]
   found
 end
 
-# One file: read, parsed from first_id, and cut down to the functions wanted, which get their prelude names.
+# One file: read, parsed from first_id, and cut down to the functions wanted, which get their prelude names. The file
+# of the builtin references is not read but written: its function `ref_N` calls the builtin that functions[N] names.
 def load(settings: Env.Settings, module: String, functions: List[String], first_id: Int) -> Result[Linker.LinkedModule]
   file = "#{PRELUDE_PREFIX}#{module}.agc"
-  text = try read(settings, "std/prelude/#{module}.agc", file)
+  refs = module == REFS_MODULE
+  text = ""
+  if refs
+    text = BuiltinRef.source(functions)
+  else
+    text = try read(settings, "std/prelude/#{module}.agc", file)
+  end
+
   program = try parse(file, text, first_id)
   kept: List[Ast.Decl] = []
   for decl in program.declarations
     case decl
       Ast.Decl.Function(node) ->
-        if functions.any? do |name: String| name == node.name end
-          kept = kept.push(Ast.Decl.Function(node.with(name: Names.prelude_name("#{module}::#{node.name}"))))
+        name = node.name
+        if refs
+          name = functions[node.name.slice(4, node.name.length - 4).to_i!]
+        end
+
+        if functions.any? do |wanted: String| wanted == name end
+          kept = kept.push(Ast.Decl.Function(node.with(name: Names.prelude_name("#{module}::#{name}"))))
         end
 
       _ -> kept = kept

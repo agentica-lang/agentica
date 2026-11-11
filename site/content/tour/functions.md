@@ -168,7 +168,7 @@ end
 
 ## Function values
 
-`&name` is a function as a value. Its type is `Fn[...]`: the parameter types, then the result type. Call it with `.call(...)`.
+`&name` is a function as a value. Its type is `Fn[...]`: the parameter types, then the result type. Call it with `.call(...)`. A builtin with one form is a value too: `&Time.now_ms` is `Fn[Int]`, and a method takes its receiver first, so `[1, 2].map(&Int.to_s)` is `["1", "2"]`. A builtin with several forms or a rule of its own, such as `&List.map`, needs a block.
 
 ```agentica
 def double(n: Int) -> Int = n * 2

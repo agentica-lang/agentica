@@ -3,7 +3,7 @@ import selectors
 import socket
 import sys
 
-from child_channel import launch, read_ready
+from child_channel import launch
 
 PREFIX = b"channel> "
 # A test child (--agentica-test run) sends this before it reads its first index. The first line already went at the
@@ -12,9 +12,19 @@ PREFIX = b"channel> "
 READY = b'{"event":"ready"}'
 
 
-def drain(stream, out):
-    data = read_ready(stream)
-    if data:
+def pump(fd, out):
+    """Copies what the child's stdout holds now to `out`; False once it has ended.
+
+    The descriptor is non-blocking, so a read never waits: one select() can report the channel and stdout together,
+    and the channel's turn pumps stdout first, so the stdout key that follows can find the pipe empty. A blocking read
+    there waits for output the child never writes while it waits for the next index: the run hangs."""
+    while True:
+        try:
+            data = os.read(fd, 65536)
+        except BlockingIOError:
+            return True
+        if not data:
+            return False
         out.write(data)
         out.flush()
 
@@ -35,24 +45,24 @@ def main():
         pending = [line + b"\n" for line in source.read().split(b"\n") if line]
     out = sys.stdout.buffer
     child, channel = launch(command, stdin=None, stderr=None)
+    stdout = child.stdout.fileno()
+    os.set_blocking(stdout, False)
     selector = selectors.DefaultSelector()
     selector.register(channel, selectors.EVENT_READ, "channel")
-    selector.register(child.stdout, selectors.EVENT_READ, "stdout")
+    selector.register(stdout, selectors.EVENT_READ, "stdout")
     feed(channel, pending)
     buffer = b""
+    stdout_open = True
     open_streams = 2
     while open_streams:
         for key, _ in selector.select():
+            # Every key pumps stdout first, so the output written before a record goes out before it.
+            if stdout_open and not pump(stdout, out):
+                selector.unregister(stdout)
+                stdout_open = False
+                open_streams -= 1
             if key.data == "stdout":
-                data = os.read(child.stdout.fileno(), 65536)
-                if not data:
-                    selector.unregister(child.stdout)
-                    open_streams -= 1
-                else:
-                    out.write(data)
-                    out.flush()
                 continue
-            drain(child.stdout, out)
             try:
                 data = channel.recv(65536)
             except ConnectionResetError:
