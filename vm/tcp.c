@@ -634,11 +634,11 @@ static void drop_request(void *data) {
   settle(n);
 }
 
-static agc_value net_error(agc_vm *vm, const net *n, const char *what, int err) {
-  const char *host = n->host ? n->host : "";
+agc_value agc_host_error(agc_vm *vm, const char *what, const char *host, int64_t port, int err) {
   size_t size = agc_size_add(strlen(host), strlen(what) + 64);
   char *head = agc_alloc_atomic(size);
-  int len = snprintf(head, size, "%s\n  host: %s\n  port: %" PRId64, what, host, n->port);
+  int len = port < 0 ? snprintf(head, size, "%s\n  host: %s", what, host)
+                     : snprintf(head, size, "%s\n  host: %s\n  port: %" PRId64, what, host, port);
   if (len < 0) len = 0;
   /* getaddrinfo failures (UV_EAI_*, -3000 down to -3014 on every system) have no errno: libuv names them. */
   if (err > UV_EAI_ADDRFAMILY || err < UV_EAI_PROTOCOL) return agc_system_error(vm, head, agc_net_errno(err));
@@ -676,8 +676,9 @@ static agc_value secure_error(agc_vm *vm, const net *n) {
 }
 
 static agc_value open_failure(agc_vm *vm, const net *n, bool found, int err) {
-  if (n->listener) return net_error(vm, n, found ? "network: listen failed" : "network: host not found", err);
-  return net_error(vm, n, found ? "network: connection failed" : "network: host not found", err);
+  const char *host = n->host ? n->host : "";
+  const char *opened = n->listener ? "network: listen failed" : "network: connection failed";
+  return agc_host_error(vm, found ? opened : "network: host not found", host, n->port, err);
 }
 
 /* std/http matches the UPGRADE_UNREAD text (BEFORE_TLS in stdlib/http.agc) to name the proxy of a CONNECT tunnel. */

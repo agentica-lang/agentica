@@ -69,7 +69,8 @@ WINDOWS_ONLY_MODULES = frozenset({
 # tests/test_vm_native.py, where Windows waits only on sockets, and the SIGTERM grace of a child at the end of the run
 # that tests/test_vm_crypto.py uses to hold the run open); macOS lacks non-UTF-8 names, a way to limit the CPUs of a
 # process, an RLIMIT_NPROC that limits threads (tests/test_vm_native.py) and a ulimit -v that limits the address space
-# (tests/test_vm_multicore.py); the other systems lack the Windows-only modules above.
+# (tests/test_vm_multicore.py); neither loads an LD_PRELOAD library in front of glibc's getaddrinfo
+# (tests/test_vm_dns.py); the other systems lack the Windows-only modules above.
 # Golden fixtures named -posix or -windows are allowed by name (host_only_fixture).
 _NEEDS_POSIX = frozenset({
     "tests/test_bdd_integration.py", "tests/test_bdd_posix.py", "tests/test_check_stdin.py", "tests/test_cli_fmt.py",
@@ -82,10 +83,11 @@ _NEEDS_POSIX = frozenset({
     "tests/test_vm_os.py", "tests/test_vm_stdout.py", "tests/test_vm_stop.py", "tests/test_vm_lazy_io.py",
     "tests/test_vm_multicore.py", "tests/test_bytecode_cache.py", "tests/test_check_cache.py",
     "tests/test_cli_coverage.py", "tests/test_vm_native.py", "tests/test_vm_http_proxy.py", "tests/test_vm_crypto.py",
+    "tests/test_vm_dns.py",
 })
 _NEEDS_LINUX = frozenset({
     "tests/test_vm_diff_8.py", "tests/test_single_binary.py", "tests/test_vm_file_open_block.py", "tests/test_vm_native.py",
-    "tests/test_vm_multicore.py",
+    "tests/test_vm_multicore.py", "tests/test_vm_dns.py",
 })
 HOST_ONLY_ALLOWED = {
     "linux-x86_64": WINDOWS_ONLY_MODULES,
@@ -185,8 +187,9 @@ AREAS = {
     ),
     "network": (
         "TCP, TLS and HTTP, client and server, against independent peers",
-        ["tests/test_vm_tcp.py", "tests/test_vm_tls.py", "tests/test_vm_http.py", "tests/test_vm_http_download.py",
-         "tests/test_vm_websocket.py", "tests/test_vm_http_proxy.py", "tests/test_prop_http.py"],
+        ["tests/test_vm_tcp.py", "tests/test_vm_dns.py", "tests/test_vm_tls.py", "tests/test_vm_http.py",
+         "tests/test_vm_http_download.py", "tests/test_vm_websocket.py", "tests/test_vm_http_proxy.py",
+         "tests/test_prop_http.py"],
     ),
     "multicore": (
         "programs on four schedulers: the goldens, races between schedulers, the I/O thread",

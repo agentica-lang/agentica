@@ -54,11 +54,11 @@ vm-tsan:
 # binary (no libgc, the front end of the release build), so a race between schedulers or with the I/O thread fails it.
 # The module run also sets AGENTICA_TEST_EXECUTABLE to that binary, so the tests that run the command line (`agentica
 # test`, `check`) go through TSan too, not through the ASan binary that SANITIZE=1 makes of dist/agentica.
-# test-multicore also runs the TCP, TLS, HTTP, process, BDD, native-call and coverage modules with every VM on four
+# test-multicore also runs the TCP, DNS, TLS, HTTP, process, BDD, native-call and coverage modules with every VM on four
 # schedulers (AGENTICA_VM_TEST_MODULE_SCHEDULERS, read by tests/agentica_test.py); test-multicore-modules runs only
 # those.
 # vm-tsan-run runs them too, except the native-call module, which vm-tsan-native runs with TSan-built peers.
-VM_MULTICORE_MODULES := tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_websocket.py tests/test_vm_http_proxy.py tests/test_process.py \
+VM_MULTICORE_MODULES := tests/test_vm_tcp.py tests/test_vm_dns.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_websocket.py tests/test_vm_http_proxy.py tests/test_process.py \
   tests/test_process_lifecycle.py tests/test_bdd.py tests/test_vm_native.py tests/test_cli_coverage.py
 test-multicore: dist/agentica$(EXE)
 	@$(MAKE) --no-print-directory test-py TESTS="tests/test_vm_multicore.py"
@@ -241,7 +241,7 @@ sweep-full: vm-diff-build
 
 # The test modules that run against the built binary (make test-py runs them; the ASan job runs them on the sanitizer
 # binary). They need dist/agentica, which make builds first; without it a module skips locally and fails in CI.
-VM_PY_TESTS = $(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_single_binary.py tests/test_std_analysis.py tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_os.py tests/test_vm_tcp.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_websocket.py tests/test_vm_http_proxy.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_child_channel_posix.py tests/test_vm_channel.py tests/test_vm_trace.py tests/test_vm_multicore.py tests/test_vm_native.py tests/test_vm_native_module.py tests/test_vm_jit.py
+VM_PY_TESTS = $(VM_DIFF_TESTS) tests/test_vm_stack.py tests/test_single_binary.py tests/test_std_analysis.py tests/test_vm_stop.py tests/test_vm_stdout.py tests/test_vm_file_lines.py tests/test_vm_os.py tests/test_vm_tcp.py tests/test_vm_dns.py tests/test_vm_tls.py tests/test_vm_http.py tests/test_vm_websocket.py tests/test_vm_http_proxy.py tests/test_vm_test_protocol.py tests/test_vm_child_channel.py tests/test_vm_child_channel_posix.py tests/test_vm_channel.py tests/test_vm_trace.py tests/test_vm_multicore.py tests/test_vm_native.py tests/test_vm_native_module.py tests/test_vm_jit.py
 SANITIZE_JOBS ?= 4
 
 # The same modules with the shared-state locks on at one scheduler (AGENTICA_VM_TEST_SHARED=1, test-only; the module

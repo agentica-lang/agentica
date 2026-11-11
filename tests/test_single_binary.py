@@ -316,6 +316,7 @@ GATED = (
     ("Path.join", 'Path.join(["a", "b"])', None),
     ("TCP.connect", 'TCP.connect("127.0.0.1", 1, 1000)', "--deny-net"),
     ("TCP.listen", 'TCP.listen("127.0.0.1", 0)', "--deny-net"),
+    ("DNS.lookup", 'DNS.lookup("127.0.0.1")', "--deny-net"),
     ("TLS.client_context", 'TLS.client_context(TlsClientOptions(ca_file: "ca.pem"))', "files"),
     ("TLS.client_context.client_cert",
      'TLS.client_context(TlsClientOptions(cert_file: "cert.pem", key_file: "key.pem"))', "files"),
