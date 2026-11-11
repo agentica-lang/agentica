@@ -173,7 +173,7 @@ jobs:
       - name: Build
         id: build
         run: ${{ matrix.make }} -j4
-      - name: "#1328 variants V0-V3 (200 runs each, 2 at a time)"
+      - name: "#1328 variants V0-V3 and V5 (200-400 runs each, 2 at a time)"
         run: |
           set -o pipefail
           {
@@ -182,6 +182,7 @@ jobs:
             AGENTICA_JIT=off python3 tools/exp-1328.py V2-switcher-jit-off dist/agentica switcher 200 2
             AGC_EXP_REDZONE=1 python3 tools/exp-1328.py V3-switcher-redzone dist/agentica switcher 200 2
             AGC_EXP_REDZONE=1 python3 tools/exp-1328.py V3b-plain-redzone dist/agentica plain 200 2
+            AGC_EXP_SAVE_REGS=1 python3 tools/exp-1328.py V5-switcher-save-regs dist/agentica switcher 400 2
             python3 tools/exp-1328.py V0-again dist/agentica switcher 200 2
           } 2>&1 | tee build/exp-1328.txt
       - name: "#1328 rebuild with GC_ASSERTIONS"

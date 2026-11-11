@@ -202,6 +202,15 @@ static void *run_blocking(void *data) {
   call->fn(call->arg);
   return NULL;
 }
+
+/* #1328 experiment (AGC_EXP_SAVE_REGS=1): saves the callee-saved registers in this frame, above GC_do_blocking's, whose
+   own saves sit below the frame address it records as the blocked thread's stack bottom. */
+__attribute__((noinline)) static void *blocking_with_registers_saved(blocking_call *call) {
+  __builtin_unwind_init();
+  void *result = GC_do_blocking(run_blocking, call);
+  __asm__ volatile("" : : "r"(result) : "memory"); /* no tail call: this frame must stay under GC_do_blocking */
+  return result;
+}
 #endif
 
 /* Runs FN(ARG) with this thread marked blocked: the collector does not stop it with a signal and scans its stack only
@@ -216,7 +225,10 @@ void agc_gc_blocking(void (*fn)(void *arg), void *arg) {
     return;
   }
   blocking_call call = {fn, arg};
-  (void)GC_do_blocking(run_blocking, &call);
+  if (getenv("AGC_EXP_SAVE_REGS"))
+    (void)blocking_with_registers_saved(&call);
+  else
+    (void)GC_do_blocking(run_blocking, &call);
 #endif
 }
 
