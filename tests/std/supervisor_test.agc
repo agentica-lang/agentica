@@ -97,6 +97,18 @@ def crash_on_stop(count: Int) -> Void
   _ = count / 0
 end
 
+# A terminate that halts with a text like the supervisor's own reasons.
+def halt_on_stop(_count: Int) -> Void
+  failed: Result[Int] = error("supervisor: timeout")
+  _ = failed.unwrap!
+end
+
+# A register block that fails after 5 ms, so its failed starts are further apart than a `within_ms` of 1.
+def slow_failure(_address: Address[Msg]) -> Void
+  Task.sleep(5)
+  _ = 1 / 0
+end
+
 def block0[R](f: Fn[R]) -> Fn[R] = f
 
 def block1[A, R](f: Fn[A, R]) -> Fn[A, R] = f
@@ -188,9 +200,8 @@ def test_a_crash_older_than_within_ms_no_longer_counts() -> Result[Void]
   Test.eq(Supervisor.stop(sup, 5000), ok())
 end
 
-# The first 80 starts of `flaky` fail while `victim` crashes once: each failed start leaves nothing in the inbox,
-# so the
-# crash of `victim` is not dropped and it starts again.
+# The first 80 starts of `flaky` fail while `victim` crashes once. A failed start leaves only its Retry in the inbox,
+# no end notice, so the inbox stays far from full, the crash notice of `victim` is not dropped and it starts again.
 def test_failed_starts_of_one_child_do_not_hide_the_crash_of_another() -> Result[Void]
   w = world()
   behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(init: block0() do 0 end, handle: &handle)
@@ -217,4 +228,27 @@ def test_stop_gives_the_error_of_a_child_whose_terminate_crashes() -> Result[Voi
   stopped = Supervisor.stop(sup, 5000)
   try Test.assert(stopped.to_s.include?("task crashed: RUNTIME-DIVISION-BY-ZERO"), stopped.to_s)
   Test.eq(w.stopped.get("good"), ok(1))
+end
+
+def test_a_child_error_that_reads_like_a_supervisor_reason_stays_the_child_error() -> Result[Void]
+  behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(
+    init: block0() do 0 end,
+    handle: &handle,
+    terminate: some(block1() do |count| halt_on_stop(count) end),
+  )
+
+  sup = Supervisor.start([Supervisor.child("odd", behaviour) do |_address| nil end])
+  stopped = Supervisor.stop(sup, 5000)
+  Test.assert(stopped.to_s.include?("task crashed: RUNTIME-UNWRAP-ERROR"), stopped.to_s)
+end
+
+def test_failed_starts_in_a_row_make_the_supervisor_give_up_whatever_their_pace() -> Result[Void]
+  behaviour: Actor.Behaviour[Int, Msg] = Actor.Behaviour(init: block0() do 0 end, handle: &handle)
+  slow = Supervisor.child("slow", behaviour) do |address| slow_failure(address) end
+  sup = Supervisor.start([slow], Supervisor.Options(max_restarts: 2, within_ms: 1))
+  downs: Channel[TaskDown] = Channel.new(1)
+  Task.monitor(sup.task, downs) do |down| down end
+  down = try downs.recv(5000)
+  try Test.eq(down.message, "supervisor: slow failed to start 3 times in a row")
+  Test.eq(Supervisor.stop(sup, 5000), error("supervisor: slow failed to start 3 times in a row"))
 end
