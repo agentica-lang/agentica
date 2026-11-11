@@ -82,9 +82,11 @@ def program(tmp_path, name, text):
 # A fixture whose source names none of these runs one task whose only I/O is its prints (a run with
 # AGENTICA_VM_TRACE=sched,io shows one spawn and only output jobs). At four schedulers three of them stay idle, so a
 # short such run proves nothing its golden does not, and is left out. A run of SHORT_STEPS steps or more is kept: it
-# has several turns, so its task can move between schedulers, and the GC runs with the other schedulers parked.
-SHARED_WORK = re.compile(r"\b(Task|Channel|TCP|TLS|HTTP|Process|Child|File|Dir|Logger|Test|Time|KDF|Profile|ATS|System"
-                         r"|import|extern|compute)\b|\bIO\.(gets|read|eof|flush)")
+# has several turns, so its task can move between schedulers, and the GC runs with the other schedulers parked. The
+# list must grow with the I/O builtins: a new module or Lazy terminal that does I/O goes here.
+SHARED_WORK = re.compile(r"\b(Task|Channel|TCP|TLS|HTTP|HttpWire|Process|Child|File|Dir|Path|Native|FrontEnd|Logger"
+                         r"|LogRegistry|Test|Time|KDF|Profile|ATS|System|import|extern|compute|gets"
+                         r"|write_lines|write_bytes)\b|\bIO\.(gets|read|eof|flush)")
 SHORT_STEPS = 5000
 
 
