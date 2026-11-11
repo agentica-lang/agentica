@@ -377,6 +377,44 @@ def read_environment(directory: Path, area: str) -> dict[str, str]:
     return dict(word.split("=", 1) for word in path.read_text(encoding="utf-8").split() if "=" in word)
 
 
+def case_module(case: ElementTree.Element) -> str | None:
+    """The test module of a JUnit case, `tests/test_x.py`: from its classname, or from its name when collecting the
+    module failed (pytest then leaves the classname empty)."""
+    found = re.match(r"tests\.(test_\w+)", case.get("classname") or case.get("name", ""))
+    return f"tests/{found.group(1)}.py" if found else None
+
+
+def split(batch: Path, directory: Path, areas: list[str], environment: str) -> list[str]:
+    """Write the cases of one JUnit file, from one pytest run over several areas, as DIRECTORY/AREA/MODULE.xml with
+    the env.txt of each area, as `make conformance-area/AREA` writes them. A module with no case gets no file, so the
+    report says it did not finish. Returns the problems: no batch file, or a case of a module outside AREAS."""
+    for area in areas:
+        if area not in AREAS:
+            raise SystemExit(f"conformance.py: unknown area {area!r}; areas: {' '.join(AREAS)}")
+    if not batch.is_file():
+        return [f"no JUnit file {batch} (the run did not finish)"]
+    owner = {module: area for area in areas for module in AREAS[area][1]}
+    cases: dict[str, list[ElementTree.Element]] = {}
+    problems = []
+    for case in ElementTree.parse(batch).getroot().iter("testcase"):
+        module = case_module(case)
+        if module not in owner:
+            problems.append(f"a case outside {' '.join(areas)}: {case.get('classname')}::{case.get('name')}")
+            continue
+        cases.setdefault(module, []).append(case)
+    for area in areas:
+        (directory / area).mkdir(parents=True, exist_ok=True)
+        (directory / area / "env.txt").write_text(environment + "\n", encoding="utf-8")
+    for module, found in cases.items():
+        suite = ElementTree.Element("testsuite", name="pytest", tests=str(len(found)))
+        suite.extend(found)
+        root = ElementTree.Element("testsuites")
+        root.append(suite)
+        ElementTree.ElementTree(root).write(directory / owner[module] / f"{Path(module).stem}.xml", encoding="utf-8",
+                                            xml_declaration=True)
+    return problems
+
+
 def destructive_modules(platform_name: str) -> list[str]:
     return DESTRUCTIVE["windows" if platform_name.startswith("windows") else "posix"]
 
@@ -508,6 +546,11 @@ def main(argv: list[str]) -> int:
     reporter.add_argument("directory")
     reporter.add_argument("--platform", default=None)
     commands.add_parser("merge").add_argument("directory")
+    splitter = commands.add_parser("split")
+    splitter.add_argument("batch")
+    splitter.add_argument("directory")
+    splitter.add_argument("--env", required=True)
+    splitter.add_argument("areas", nargs="+")
     args = parser.parse_args(argv)
     if args.command == "modules":
         print(" ".join(modules(args.area)))
@@ -515,6 +558,11 @@ def main(argv: list[str]) -> int:
         print(" ".join(AREAS))
     elif args.command == "host":
         check_host(args.platform)
+    elif args.command == "split":
+        problems = split(Path(args.batch), Path(args.directory), args.areas, args.env)
+        for problem in problems:
+            print(f"conformance.py split: {problem}", file=sys.stderr)
+        return 1 if problems else 0
     else:
         if args.command == "merge":
             text, ok = merge(Path(args.directory))

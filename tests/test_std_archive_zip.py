@@ -743,7 +743,8 @@ def test_destination_spellings_with_backslashes_extract(tmp_path, driver):
     The forward and cacheroot spellings are the absolute destination."""
     work = tmp_path
     stored_case(work)
-    root = str(work)
+    (work / "dests").mkdir()
+    root = str(work / "dests")
     dests = {
         "fwd": root.replace(os.sep, "/") + "/d-fwd",
         "back": root + "\\d-back",
