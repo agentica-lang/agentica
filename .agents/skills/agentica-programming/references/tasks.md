@@ -323,7 +323,7 @@ its capacity gives backpressure and `recv` is `next`.
 - Long-lived workers, producer and consumer, flows of unknown length, results in
   the order they end: tasks and a `Channel`.
 - Shared state: an `ATS` table (counter, cache) or one owner task receiving
-  messages on a channel.
+  messages: an actor (`std/actor`, below).
 - Each line of a big file in bounded memory: `File.each_line`.
 - An endless sequence or a source too big for a list: `Lazy` (`lazy.md`).
 
@@ -366,3 +366,56 @@ value even when two tasks miss at once. `keys` and `to_map` are snapshots; a key
 deleted and put again goes to the end. Sort `keys` before printing when tasks
 fill the table, since their order follows the schedule. In BDD, a table made in
 `main` and captured by step blocks starts fresh in each scenario.
+
+## Actors (`std/actor`)
+
+```text
+import Actor from "std/actor"
+Actor.start(b: Actor.Behaviour[S, M], options: Actor.Options = Actor.Options()) -> Actor.Ref[S, M]
+Actor.Behaviour(init: Fn[S], handle: Fn[S, M, Actor.Step[S]], terminate: Optional[Fn[S, Void]] = none)
+Actor.Options(capacity: Int = 1024)
+Actor.continue(state: S) -> Actor.Step[S]
+Actor.done(state: S) -> Actor.Step[S]
+Actor.cast(address: Address[M], message: M, timeout_ms: Int = 5000) -> Result[Void]
+Actor.call(address: Address[M], timeout_ms: Int, make: Fn[Channel[R], M]) -> Result[R]
+Actor.reply(channel: Channel[R], value: R) -> Void
+Actor.stop(actor: Actor.Ref[S, M], timeout_ms: Int) -> Result[Void]
+```
+
+An actor is a task that owns its state `S` and handles the messages `M` (your
+enum) of one inbox, one at a time. The handler ends with
+`Actor.continue(state)`, or `Actor.done(state)` to end the actor (then
+`terminate` runs). A `Ref` has `address` (the `Address[M]` to send to),
+`inbox` (only for `Task.monitor(task, actor.inbox) do |d| Msg.Down(d) end`;
+never `recv` from it) and `task`. `cast` and `call` take the address, `stop`
+the `Ref`; there are no methods.
+
+- `call` builds the message around a new reply channel and waits:
+  `Actor.call(addr, 1000) do |reply| Msg.Get(reply) end`; the handler answers
+  with `Actor.reply(reply, value)`. The answer type comes from the expected
+  type (the function's `Result[Int]`); with none, in `puts` or `#{}`, write
+  `do |reply: Channel[Int]|` (else `CHECK-BLOCK-TYPE`).
+- Errors: `error("actor: timeout")` (inbox full or no answer in time) and
+  `error("address: gone")` (the actor ended). A call whose actor crashes, a
+  call to its own address from a handler, and two actors calling each other
+  end with the timeout.
+- `stop` closes the inbox, lets the actor handle what is in it, run
+  `terminate` and end, and waits at most `timeout_ms`; then it cancels the
+  actor and gives `actor: timeout`. A crashed actor gives its `task crashed:
+  ...` error. Only the `Ref` holder can stop: to stop by address, add a `Stop`
+  variant whose handler gives `Actor.done(state)`.
+- A crash in a handler ends the actor (its diagnostic prints, `terminate` does
+  not run, queued messages are lost). A crash nothing observes fails the run
+  when `main` returns: observe it with `Actor.stop`, `Task.await(ref.task)` or
+  `Task.monitor(ref.task, ...)`. A monitor notice into a full inbox is dropped.
+- The actor is a child of the task that calls `start`: a crash or cancel of
+  that task cancels it. Start long-lived actors from `main` or a supervisor.
+- `timeout_ms` of `stop` must be above 0 (`RUNTIME-INVALID-DURATION`); give
+  `call` one above 0 too: `call(addr, 0)` still enqueues the message, then
+  gives `actor: timeout`.
+- Names: a module keeps `NAMES: ATS[String, Address[Msg]] = ATS.new()` (a
+  constant goes before the enum in a module block) and wraps `cast` and `call`
+  in its own functions, so callers never see `Msg`.
+- `init: block0() do initial end` needs a helper `def block0[R](f: Fn[R]) ->
+  Fn[R] = f` (a block is a value only as an argument), or a named `&init`.
+  Annotate `b: Actor.Behaviour[Int, Msg] = ...` when blocks take parameters.
