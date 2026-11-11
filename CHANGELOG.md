@@ -20,8 +20,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `HTTP.Header`, `HTTP.ClientOptions`, `HTTP.ServerOptions`, `HTTP.Client` and
   `HTTP.Server` of `std/http`; the old names are unknown, with a help. A value
   prints as `HttpWire.Response(...)` and `<HttpWire.Client>`.
-### Changed
-
 - **Breaking:** the child channel of `Process.spawn_channel` is a pipe per
   direction on every system: a child that is not Agentica reads fd 3 and writes
   fd 4 (`AGENTICA_CHANNEL=3,4`) on Linux and macOS too.
