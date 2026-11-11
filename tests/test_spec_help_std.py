@@ -53,6 +53,22 @@ def test_a_parameter_default_and_a_variant_payload(tmp_path):
     assert (first["name"], first["payload"]) == ("Str", ["String"])
 
 
+def test_the_builtin_types_that_a_std_module_re_exports_are_listed_with_their_fields(tmp_path):
+    # std/logger re-exports LogRegistry.Event and LogRegistry.Level, which no file declares: help and doc list them.
+    names = [item["name"] for item in json.loads(help_std(["std/logger", "--json"], cwd=tmp_path).stdout)["items"]]
+    documented = json.loads(run(cli() + ["--json", "doc", "std/logger"], env=vm_environment(), cwd=tmp_path).stdout)
+    assert {"Event", "Level"} <= set(names)
+    assert names == [item["name"] for item in documented["items"]]
+    event = json.loads(help_std(["std/logger.Event"], "--json", cwd=tmp_path).stdout)
+    assert event["kind"] == "struct"
+    assert [(field["name"], field["type"]) for field in event["fields"]][:2] == [
+        ("level", "LogRegistry.Level"), ("message", "String"),
+    ]
+    level = json.loads(help_std(["std/logger.Level"], "--json", cwd=tmp_path).stdout)
+    assert level["kind"] == "enum"
+    assert [variant["name"] for variant in level["variants"]] == ["Debug", "Info", "Warning", "Error"]
+
+
 def test_a_struct_lists_its_fields(tmp_path):
     item = json.loads(help_std(["std/queue.QueueState"], "--json", cwd=tmp_path).stdout)
     assert item["kind"] == "struct" and "arity" not in item

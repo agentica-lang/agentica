@@ -806,7 +806,7 @@ def resolve_generic(cx: State.Cx, st: State.St, ref: TypeRef) -> Result[Resolved
   end
 
   candidates = cx.structs.keys.concat(cx.enums.keys)
-  help = Help.foreign(cx.help, name)
+  help = Help.foreign(cx.help, Types.display_name(name))
   if help == ""
     help = Help.near(name, candidates, shared_type_names(cx))
   end

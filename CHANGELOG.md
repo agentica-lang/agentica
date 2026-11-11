@@ -34,7 +34,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - **Breaking:** `LogEvent` and `LogLevel` are `Logger.Event` and `Logger.Level`
-  of `std/logger`; the old names are unknown, with a help.
+  of `std/logger`; the old names are unknown, with a help. A value prints as
+  `LogRegistry.Event(...)` and `LogRegistry.Level.Info`.
 
 ### Fixed
 

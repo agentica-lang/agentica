@@ -189,6 +189,7 @@ def start(linked: Linker.Linked) -> State.Cx
     const_sites: sites,
     type_params: [],
     file: linked.modules[0].file,
+    root: linked.modules[0].file,
     texts: texts,
     expression: &Expr.check_expression,
     prelude: false,

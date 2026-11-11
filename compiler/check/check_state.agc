@@ -118,14 +118,15 @@ end
 ## const_sites where each module constant is declared and its value, by linked name.
 ## type_params are the type parameters in scope (while the fields of a generic struct, the variants of a generic enum
 ## or the signature and body of a generic function are checked). file is the file of the declaration being checked,
-## texts the source of every file by name. expression checks an expression: the cycle between expressions and
-## statements goes through this field (check_expr.agc puts its own function here), because a module cannot import one
-## that imports it. prelude is true while the files of the compiler prelude are checked (check_prelude.agc): their type
-## variables are opaque types, and a Map key or Set element may be one. json_needs holds, by linked name, what each
-## generic function needs of its type arguments for the JSON.encode and JSON.from calls of its body and of the generic
-## functions it calls (checker.agc computes it before the bodies are checked): each is a type variable, or an Optional,
-## JsonField or Map key of one, that must be encodable once the variables are bound. lenient is the files in which a
-## name that nothing reads is no error (CHECK-UNUSED-VARIABLE): the roots of a query, as for an unused import.
+## root the root file, whose declarations keep their names, texts the source of every file by name. expression checks
+## an expression: the cycle between expressions and statements goes through this field (check_expr.agc puts its own
+## function here), because a module cannot import one that imports it. prelude is true while the files of the compiler
+## prelude are checked (check_prelude.agc): their type variables are opaque types, and a Map key or Set element may be
+## one. json_needs holds, by linked name, what each generic function needs of its type arguments for the JSON.encode
+## and JSON.from calls of its body and of the generic functions it calls (checker.agc computes it before the bodies are
+## checked): each is a type variable, or an Optional, JsonField or Map key of one, that must be encodable once the
+## variables are bound. lenient is the files in which a name that nothing reads is no error (CHECK-UNUSED-VARIABLE):
+## the roots of a query, as for an unused import.
 export struct Cx
   help: Help.Tables
   structs: Map[String, List[Model.Named]]
@@ -143,6 +144,7 @@ export struct Cx
   const_sites: Map[String, ConstSite]
   type_params: List[String]
   file: String
+  root: String
   texts: Map[String, String]
   expression: Fn[Cx, St, Ast.Expr, Types.Type, Bool, Result[Out]]
   prelude: Bool

@@ -1,5 +1,6 @@
 ## The help of an unknown import name: the "did you mean" of the linker.
 
+import Builtins from "../catalog/builtins"
 import Diag from "../diagnostics/diagnostic"
 import Suggest from "../syntax/suggest"
 import Declarations from "declarations"
@@ -21,7 +22,8 @@ OTHER_FORMS = [
 ]
 
 ## The help of CHECK-IMPORT-NAME for member, which the module key does not export: the fixed texts for the removed
-## std/http functions and std/logger error, or the did-you-mean over the exports (a private name is never suggested).
+## std/http functions and std/logger error, the new name of a builtin type that moved into a std/ module (LogEvent),
+## or the did-you-mean over the exports (a private name is never suggested).
 export def unknown_import_help(key: String, exports: Map[String, Declarations.Kind], member: String) -> Diag.Help
   removed = ["respond", "begin", "write", "write_bytes"].any? do |name| name == member end
   whole = WHOLE_FORMS.any? do |name| name == member end
@@ -39,6 +41,8 @@ export def unknown_import_help(key: String, exports: Map[String, Declarations.Ki
     )
   elsif key == "std/logger.agc" and member == "error"
     return Diag.Help.Hint("the function for the error level is Logger.err; error is a reserved name")
+  elsif key.starts_with?("std/") and Builtins.moved_type(member) != ""
+    return Diag.Help.Hint(Builtins.moved_type(member))
   end
 
   case Suggest.closest_among(member, exports.keys, [])

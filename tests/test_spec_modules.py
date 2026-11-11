@@ -315,26 +315,51 @@ class TestModuleRules:
                 "  event: Event = Logger.Event(level: Logger.level(), message: \"m\", fields: {}, time_ms: 0, task: 1)\n"
                 "  shown(event)\n  puts(rank(event.level))\nend\n\n")
         logger = 'import Logger from "std/logger"\n\n'
+        in_lib = 'import Lib from "lib"\n\ndef main() -> Void\n  Lib.f()\nend\n\n'
+        # (files, code, span, file of the error, whether the help must name the new type)
         cases = [
-            (uses, None, None),
-            ("def main() -> Void\n  x = LogRegistry.level()\nend\n\n", "CHECK-UNKNOWN-NAME", ((2, 7), (2, 26))),
-            ("def f(e: LogRegistry.Event) -> Void\nend\n\n" + MAIN, "CHECK-UNKNOWN-NAME", ((1, 10), (1, 27))),
-            ("export LogRegistry.Event\n\n" + MAIN, "CHECK-UNKNOWN-NAME", ((1, 8), (1, 19))),
-            (logger + 'def main() -> Void\n  Logger.error("x")\nend\n\n', "CHECK-IMPORT-NAME", None),
-            ("def f(e: LogEvent) -> Void\nend\n\n" + MAIN, "CHECK-UNKNOWN-TYPE", ((1, 10), (1, 18))),
-            (logger + "def main() -> Void\n  Logger.set_level(LogLevel.Info)\nend\n\n", "CHECK-IMPORT-NAME",
-             ((4, 20), (4, 33))),
+            ({"root.agc": uses}, None, None, None, False),
+            ({"root.agc": "def main() -> Void\n  x = LogRegistry.level()\nend\n\n"}, "CHECK-UNKNOWN-NAME",
+             ((2, 7), (2, 26)), None, False),
+            ({"root.agc": "def f(e: LogRegistry.Event) -> Void\nend\n\n" + MAIN}, "CHECK-UNKNOWN-NAME",
+             ((1, 10), (1, 27)), None, False),
+            ({"root.agc": "export LogRegistry.Event\n\n" + MAIN}, "CHECK-UNKNOWN-NAME", ((1, 8), (1, 19)), None, False),
+            ({"root.agc": logger + 'def main() -> Void\n  Logger.error("x")\nend\n\n'}, "CHECK-IMPORT-NAME", None, None,
+             False),
+            ({"root.agc": "def f(e: LogEvent) -> Void\nend\n\n" + MAIN}, "CHECK-UNKNOWN-TYPE", ((1, 10), (1, 18)), None,
+             True),
+            ({"root.agc": in_lib, "lib.agc": "export def f() -> Void\n  e: LogEvent = 1\nend\n"}, "CHECK-UNKNOWN-TYPE",
+             ((2, 6), (2, 14)), "lib.agc", True),
+            ({"root.agc": logger + "def main() -> Void\n  Logger.set_level(LogLevel.Info)\nend\n\n"},
+             "CHECK-IMPORT-NAME", ((4, 20), (4, 33)), None, True),
+            ({"root.agc": 'import {LogEvent} from "std/logger"\n\n' + MAIN}, "CHECK-IMPORT-NAME", None, None, True),
         ]
-        results = self.checks([({"root.agc": text}, "root.agc", None) for text, _code, _span in cases])
-        for (text, code, span), checked in zip(cases, results):
+        results = self.checks([(files, "root.agc", None) for files, _code, _span, _file, _help in cases])
+        for (files, code, span, file, help), checked in zip(cases, results):
             if code is None:
                 assert checked[1] is None, checked[1]
                 continue
-            problem = self.assert_rejected(checked, code)
+            problem = self.assert_rejected(checked, code, file=file)
             if span is not None:
                 found = problem["range"]
                 assert ((found["start"]["line"], found["start"]["column"]),
-                        (found["end"]["line"], found["end"]["column"])) == span, text
+                        (found["end"]["line"], found["end"]["column"])) == span, files
+            if help:
+                assert problem.get("help"), files
+
+    def test_a_root_type_named_like_a_std_only_family_leaves_the_std_modules_alone(self):
+        """The root file may declare an enum, a struct or an alias named LogRegistry, even with an Event variant: inside
+        std/logger, LogRegistry.Event(...) is still the builtin record, and the root's own variant is the root's."""
+        use = 'import Logger from "std/logger"\n\n'
+        main = 'def main() -> Void\n  Logger.info("x")\n  Logger.log(Logger.Level.Warning, "w")\n'
+        roots = [
+            use + "enum LogRegistry\n  Level\n  Event(Int)\nend\n\n" + main
+            + "  puts(LogRegistry.Event(3))\n  puts(LogRegistry.Level)\nend\n\n",
+            use + "struct LogRegistry\n  n: Int\nend\n\n" + main + "  puts(LogRegistry(n: 1).n)\nend\n\n",
+            use + "type LogRegistry = Int\n\n" + main + "  x: LogRegistry = 1\n  puts(x)\nend\n\n",
+        ]
+        for checked in self.checks([({"root.agc": root}, "root.agc", None) for root in roots]):
+            assert checked[1] is None, checked[1]
 
     def test_the_names_of_the_std_only_families_and_the_old_log_types_are_free_for_a_program(self):
         """LogEvent, LogLevel, LogRegistry, RegexEngine and Std reserve no name: a program may declare them, and an

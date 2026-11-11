@@ -5,6 +5,9 @@
 ## function here installs a handler named `console` (`stderr_text`, level `info`). Handlers run in order,
 ## synchronously, in the task that logs, so a line is written when the call returns. A handler error is the error of
 ## the task that logged. The registry lives in the VM and belongs to one run.
+##
+## `Logger.Level` and `Logger.Event` are the builtin types `LogRegistry.Level` and `LogRegistry.Event`: the signatures
+## below, a printed value and a diagnostic show those names.
 
 import UTC from "std/utc"
 
