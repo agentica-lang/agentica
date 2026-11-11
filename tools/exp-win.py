@@ -14,10 +14,12 @@ ROOT = Path(__file__).resolve().parent.parent
 CYGWIN_LINE = re.compile(r"^ *\d+ \[[^\]\n]*\] \S+ \(?\d+\)? ", re.M)
 
 
-def run(command, timeout=120, **kwargs):
+def run(command, timeout=120, piped=False, **kwargs):
+    """PIPED: stdin is a pipe closed at once with nothing written, as tests/agentica_test.py run() leaves it."""
     try:
         done = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace",
-                              timeout=timeout, stdin=subprocess.DEVNULL, **kwargs)
+                              timeout=timeout, stdin=None if piped else subprocess.DEVNULL,
+                              input="" if piped else None, **kwargs)
         return done.returncode, done.stdout, done.stderr
     except subprocess.TimeoutExpired as expired:
         return "timeout", str(expired.stdout or ""), str(expired.stderr or "")
@@ -95,7 +97,7 @@ def pytest_loop(label, node, reps, timeout):
         else:
             failed += 1
             if len(tails) < 3:
-                tails.append((code, (out + err)[-3000:]))
+                tails.append((code, (out + err)[-8000:]))
     say("%s: passed=%d failed=%d (%.0f s)" % (label, passed, failed, time.monotonic() - started))
     for code, tail in tails:
         say("%s failure (exit %r):\n%s" % (label, code, tail))
@@ -108,12 +110,12 @@ OUTLINE = ("Feature: Outline\n\n  Scenario Outline: row\n    Then <n> is small\n
 NOISY = 'def main() -> Void\n  puts("x" * 3000)\n  IO.warn("warned")\n  System.exit(1)\nend\n'
 
 
-def lost_output_loop(label, command, minutes, cwd=None, env=None):
+def lost_output_loop(label, command, minutes, cwd=None, env=None, piped=False):
     """Runs COMMAND until MINUTES pass; counts (exit code, stdout empty?, stderr empty?) and keeps the odd runs."""
     counts = {}
     deadline = time.monotonic() + minutes * 60
     while time.monotonic() < deadline:
-        code, out, err = run(command, cwd=cwd, env=env)
+        code, out, err = run(command, cwd=cwd, env=env, piped=piped)
         key = (code, "out" if out else "NO-out", "err" if err else "NO-err")
         counts[key] = counts.get(key, 0) + 1
     say("%s: %r" % (label, sorted(counts.items(), key=str)))
@@ -124,7 +126,7 @@ def main():
     both streams and exits 1, each in a loop of its own, all at the same time."""
     import threading
     binary = sys.argv[1]
-    minutes = 25
+    minutes = 20
     project = Path(tempfile.mkdtemp(prefix="exp-cc-")) / "app"
     project.mkdir()
     (project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
@@ -135,15 +137,24 @@ def main():
     (suite / "outline.feature").write_text(OUTLINE, encoding="utf-8")
     noisy = suite / "noisy.agc"
     noisy.write_text(NOISY, encoding="utf-8")
-    jobs = [lambda: lost_output_loop("E6 check", [binary, "--json", "check", "main.agc"], minutes, cwd=project),
-            lambda: lost_output_loop("E6 type-at", [binary, "--json", "type-at", "main.agc:4:3"], minutes, cwd=project),
-            lambda: lost_output_loop("E7 test --json", [binary, "test", "--json", str(suite / "outline.feature"),
-                                                        "--steps", str(suite / "steps.agc")], minutes),
-            lambda: lost_output_loop("E7 test --ai", [binary, "test", "--ai", str(suite / "outline.feature"),
-                                                      "--steps", str(suite / "steps.agc")], minutes),
-            lambda: lost_output_loop("E8 noisy program A", [binary, str(noisy)], minutes),
-            lambda: lost_output_loop("E8 noisy program B", [binary, str(noisy)], minutes),
-            lambda: e1_process_close_crash(binary, 10)]
+    # Round 4: as the test harness runs the binary: stdin a pipe closed at once, LC_ALL and LANG C.UTF-8, and for
+    # `test` a TMPDIR of its own.
+    env = dict(os.environ, LC_ALL="C.UTF-8", LANG="C.UTF-8")
+    test_env = dict(env, TMPDIR=tempfile.mkdtemp(prefix="exp-bdd-tmp-"))
+    feature = [str(suite / "outline.feature"), "--steps", str(suite / "steps.agc")]
+    jobs = [lambda: lost_output_loop("E9 check piped", [binary, "--json", "check", "main.agc"], minutes, cwd=project,
+                                     env=env, piped=True),
+            lambda: lost_output_loop("E9 type-at piped", [binary, "--json", "type-at", "main.agc:4:3"], minutes,
+                                     cwd=project, env=env, piped=True),
+            lambda: lost_output_loop("E10 test --json piped A", [binary, "test", "--json", *feature], minutes,
+                                     env=test_env, piped=True),
+            lambda: lost_output_loop("E10 test --json piped B", [binary, "test", "--json", *feature], minutes,
+                                     env=test_env, piped=True),
+            lambda: lost_output_loop("E11 noisy program piped", [binary, str(noisy)], minutes, env=env, piped=True),
+            lambda: lost_output_loop("E12 test --json devnull", [binary, "test", "--json", *feature], minutes,
+                                     env=test_env),
+            lambda: pytest_loop("E3 #1332 bdd failed check", "tests/test_bdd.py::test_a_failed_check_points_at_its_"
+                                "step_keyword_and_outline_rows_have_their_own_names", 400, 600)]
     threads = [threading.Thread(target=job) for job in jobs]
     for thread in threads:
         thread.start()
