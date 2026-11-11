@@ -167,7 +167,11 @@ Dropping a generation deletes its entries one by one (the table of `ATS` has no 
 
 ## The byte count is exact
 
-The byte count stays exact when tasks race on the same entries: no size is counted twice or lost. A task cancelled in the middle of a write can leave one uncounted entry, readable until its generation is dropped. A drop that stalls (its task did not beat for two seconds on the cache's clock, as when it was cancelled) is taken over by one other task.
+The byte count stays exact when tasks race on the same entries: no size is counted twice or lost. Its limits:
+
+- A task cancelled in the middle of a write can leave one uncounted entry, readable until a later drop of its table.
+- A task cancelled between reserving the bytes of an entry and storing it leaves that reservation counted until its generation is dropped.
+- Only the current generation can be dropped. A drop that stalls (its task did not beat for two seconds on the cache's clock, as when it was cancelled) is taken over by one other task; the cache may then skip a generation, and the table it skipped keeps its entries uncounted and unread until a later drop empties it.
 
 ## Writing another cache
 

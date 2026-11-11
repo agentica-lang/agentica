@@ -88,8 +88,9 @@ Read first: `references/vm.md` and `references/vm-c.md`.
 
 ## Child channel
 
-Design, error texts, ends per system and the user rules:
-`docs/vm/10-io-processes.md` §10.4. Code map:
+Design and ends per system: `docs/vm/10-io-processes.md` §10.4. Error texts:
+`vm/process.c` and `vm/duplex.c`. User rules: the site process page
+(`site/content/library/io-and-system/process.md`). Code map:
 
 - `vm/duplex.c` (`agc_duplex`; OS ends in `duplex_os.h`, see
   `references/vm-io.md`): at most one reader and one writer request, and a
