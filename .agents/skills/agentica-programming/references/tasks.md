@@ -442,10 +442,11 @@ each call.
   start (crash in `init`, or a register block that crashes or runs over 5 s)
   counts as a crash. `max_restarts` >= 0 and `within_ms` > 0, else `start`
   halts (`RUNTIME-UNWRAP-ERROR`).
-- The limit is per child: more than `max_restarts` crashes within `within_ms`
-  and the supervisor stops the others in reverse order and crashes:
+- The limit is per child: more than `max_restarts` crashes within `within_ms`,
+  or more than `max_restarts` failed starts in a row (no time window), and the
+  supervisor stops the others in reverse order and crashes:
   `RUNTIME-UNWRAP-ERROR`, message `supervisor: NAME crashed N times in M ms`
-  (`1 time` for one).
+  (`1 time` for one), or `supervisor: NAME failed to start N times in a row`.
   Unobserved (no `stop`, `Task.await(sup.task)` or monitor), it fails the run.
 - `stop` stops the children in reverse order within `timeout_ms` (above 0)
   and gives the first child's stop error; after a give-up it gives the give-up
