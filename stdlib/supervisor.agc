@@ -71,11 +71,7 @@ end
 ## A child that runs `behaviour` and calls `register` with the address of each new actor, in a task of its own, for at
 ## most 5 s. A child that nobody reaches by name gives `do |_address| nil end`.
 export def child[S, M](name: String, behaviour: Actor.Behaviour[S, M], register: Fn[Address[M], Void]) -> Child
-  begin: Fn[Channel[Msg], Int, Int, Result[Fn[Int, Result[Void]]]] = block3() do |inbox, index, run|
-    launch(behaviour, register, inbox, index, run)
-  end
-
-  Child(name: name, start: begin)
+  Child(name: name, start: ->(inbox, index, run) { launch(behaviour, register, inbox, index, run) })
 end
 
 ## Starts the supervisor in a task of its own, a child of the calling task, and returns once the first start of every
@@ -132,15 +128,7 @@ def reason(result: Result[Void]) -> Result[Void]
   end
 end
 
-# A block is a value only when it is passed to a call: these hand one back.
-def block3[A, B, C, R](f: Fn[A, B, C, R]) -> Fn[A, B, C, R] = f
-
-def stopper[S, M](actor: Actor.Ref[S, M]) -> Fn[Int, Result[Void]]
-  f: Fn[Int, Result[Void]] = block1() do |ms| Actor.stop(actor, ms) end
-  f
-end
-
-def block1[A, R](f: Fn[A, R]) -> Fn[A, R] = f
+def stopper[S, M](actor: Actor.Ref[S, M]) -> Fn[Int, Result[Void]] = ->(ms) { Actor.stop(actor, ms) }
 
 # Starts one run of a child in the supervisor's task, so the actor is a descendant of the supervisor. The register
 # block is the caller's code: it runs in a task, so its crash or a hang is a failed start of the child, not a crash or

@@ -482,7 +482,9 @@ static void out_frame(out_buffer *out, const agc_program *p, const agc_profile *
     case AGC_PROFILE_FUNCTION: {
       const agc_function *fn = &p->functions[id];
       out_name(out, fn->name->data, fn->name->bytes);
+      /* A block or lambda name (block@FILE:LINE:COL, lambda@...) already says where it is. */
       if (fn->name->bytes >= 6 && memcmp(fn->name->data, "block@", 6) == 0) return;
+      if (fn->name->bytes >= 7 && memcmp(fn->name->data, "lambda@", 7) == 0) return;
       const agc_span *at = &p->spans[fn->span];
       const agc_string *file = p->sources[at->source].name;
       char line[16];

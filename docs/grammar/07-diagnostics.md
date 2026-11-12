@@ -56,8 +56,9 @@ index 5 is outside a list of length 3
 
 A frame line is the function's declared name and the place it was running. For
 the innermost frame that is the place of the error, and for each caller it is
-the call it waits on. A block shows as `block`, a function from an imported file
-shows its name (the file is in the place), and the builtins that run a block
+the call it waits on. A block shows as `block` and a lambda as `lambda`, a
+function from an imported file shows its name (the file is in the place), and
+the builtins that run a block
 (`xs.map`) are skipped, since the frame below already points at the call. A
 frame that a tail call replaced is gone: the frame left ends with `(after a tail
 call)`, so a reader knows that callers are missing there. Neighbouring frames

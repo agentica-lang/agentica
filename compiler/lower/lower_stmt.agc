@@ -81,9 +81,9 @@ export def lower_function(
   ok(Built(function: made, fx: fx))
 end
 
-## Lowers a block literal as a function of the table (Cx.block). The block takes the next function index before its
-## body is lowered, so the blocks inside it come after it. The state it gives back is the
-## caller's, with the blocks and the index count updated.
+## Lowers a block literal as a function of the table (Cx.block), named block@FILE:LINE:COL (lambda@ for a lambda,
+## which a stack line shows). The block takes the next function index before its body is lowered, so the blocks
+## inside it come after it. The state it gives back is the caller's, with the blocks and the index count updated.
 export def lower_block_function(
   cx: Lowering.Cx,
   fx: Lowering.Fx,
@@ -91,7 +91,12 @@ export def lower_block_function(
   captured: List[String],
 ) -> Result[Lowering.Fx]
   index = fx.block_count
-  name = "block@#{Paths.last_part(cx.file)}:#{node.span.start.line}:#{node.span.start.column}"
+  kind = "block"
+  if node.lambda
+    kind = "lambda"
+  end
+
+  name = "#{kind}@#{Paths.last_part(cx.file)}:#{node.span.start.line}:#{node.span.start.column}"
   params = node.params.map do |param: Ast.BlockParam| param.name end
   inner = Lowering.fresh(cx.index, fx.blocks, index + 1)
   built = try lower_function(cx, inner, name, params, captured, node.body, node.span, true)

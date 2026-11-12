@@ -13,7 +13,7 @@ module Counter
   end
 
   export def start(name: String, initial: Int) -> Result[Actor.Ref[Int, Msg]]
-    actor = Actor.start(Actor.Behaviour(init: block0() do initial end, handle: &handle))
+    actor = Actor.start(Actor.Behaviour(init: -> { initial }, handle: &handle))
     return ok(actor) if NAMES.put_new(name, actor.address)
 
     _ = Actor.stop(actor, 1000)
@@ -45,9 +45,6 @@ module Counter
       Msg.Stop -> Actor.done(count)
     end
   end
-
-  # A block is a value only when it is passed to a call: this hands one back.
-  def block0[R](f: Fn[R]) -> Fn[R] = f
 end
 
 def visit(n: Int) -> Result[Void] = Counter.add("visits", n)

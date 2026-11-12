@@ -10,8 +10,8 @@
 #include <string.h>
 
 static const char in_task[] = " in a task";
-static const char block_prefix[] = "block@";
-static const char block_word[] = "block";
+/* The front end names a block block@FILE:LINE:COL and a lambda lambda@FILE:LINE:COL; a stack line shows the word. */
+static const char *const block_words[] = {"block", "lambda"};
 static const char cut_mark[] = "...";
 static const size_t stack_name_max = 256;
 
@@ -141,9 +141,13 @@ static name_view display_name(const agc_string *name) {
       view.len -= digits + 2;
     }
   }
-  if (view.len >= sizeof block_prefix - 1 && memcmp(view.text, block_prefix, sizeof block_prefix - 1) == 0) {
-    view.text = block_word;
-    view.len = sizeof block_word - 1;
+  for (size_t i = 0; i < sizeof block_words / sizeof block_words[0]; i++) {
+    size_t word = strlen(block_words[i]);
+    if (view.len > word && memcmp(view.text, block_words[i], word) == 0 && view.text[word] == '@') {
+      view.text = block_words[i];
+      view.len = word;
+      break;
+    }
   }
   return view;
 }

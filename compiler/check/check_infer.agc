@@ -25,13 +25,12 @@ PLAIN_KINDS = {
 }
 
 ## What the uses of a parameter say: Found(type) when they leave one type; Open when no use names a type; Several when
-## they leave more than one; Conflict when no type passes them all (types: the type of each use that disagrees, in
-## source order, without repeats).
+## they leave more than one; Conflict when no type passes them all.
 export enum Guess
   Found(T.Type)
   Open
   Several(List[T.Type])
-  Conflict(List[T.Type])
+  Conflict
 end
 
 # What one use allows: Any (no constraint) or OneOf(types), every type the use can take.
@@ -45,7 +44,6 @@ end
 export def param_type(cx: State.Cx, st: State.St, body: List[Ast.Stmt], name: String) -> Guess
   left: List[T.Type] = []
   narrowed = false
-  seen: List[T.Type] = []
   structs = cx.structs.keys.sort
   work: List[Walk.Node] = body.map do |stmt: Ast.Stmt| Walk.Node.Stmt(stmt) end
   at = 0
@@ -55,7 +53,6 @@ export def param_type(cx: State.Cx, st: State.St, body: List[Ast.Stmt], name: St
     for allows in uses(cx, st, structs, node, name)
       case allows
         Allows.OneOf(types) ->
-          seen = add_new(seen, types)
           if narrowed
             left = left.filter do |type: T.Type| has?(types, type) end
           else
@@ -76,7 +73,7 @@ export def param_type(cx: State.Cx, st: State.St, body: List[Ast.Stmt], name: St
   return Guess.Found(left[0]) if left.size == 1
   return Guess.Several(left) if left.size > 1
 
-  Guess.Conflict(seen)
+  Guess.Conflict
 end
 
 # What the node says about `name` when the name is one of its direct parts.
@@ -308,14 +305,3 @@ def named?(expr: Ast.Expr, name: String) -> Bool
 end
 
 def has?(types: List[T.Type], type: T.Type) -> Bool = types.any? do |known: T.Type| T.same?(known, type) end
-
-def add_new(seen: List[T.Type], types: List[T.Type]) -> List[T.Type]
-  out = seen
-  for type in types
-    if !has?(out, type)
-      out = out.push(type)
-    end
-  end
-
-  out
-end
