@@ -193,6 +193,14 @@ export def piped_method?(call: Ast.MethodCall) -> Bool
   call.span.start.offset >= Ast.expr_span(call.target).stop.offset
 end
 
+## The receiver of a method form in a help: the source text, in parentheses unless it is a simple expression that is
+## not a pipe, so `.name` binds to all of it (`(hs |> first()).run(...)`).
+export def receiver_text(cx: State.Cx, node: Ast.Expr) -> String
+  return extent_text(cx, node) if simple_receiver?(node) and !piped?(node)
+
+  "(#{extent_text(cx, node)})"
+end
+
 # The offset where an expression starts: a piped call starts where its receiver does, and so does a try of one.
 def extent_start(node: Ast.Expr) -> Int
   case node
@@ -253,10 +261,7 @@ end
 # receiver |> method(arguments) do ... end.
 def pipe_help(cx: State.Cx, node: Ast.Call, method: String) -> String
   left = node.args[0]
-  receiver = "(#{extent_text(cx, left)})"
-  if simple_receiver?(left) and !piped?(left)
-    receiver = extent_text(cx, left)
-  end
+  receiver = receiver_text(cx, left)
 
   plain: List[String] = []
   block = ""

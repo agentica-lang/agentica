@@ -478,3 +478,33 @@ def test_the_help_of_a_one_step_pipe_into_a_method_is_the_method_call(tmp_path):
         ("LINT-SINGLE-PIPE", where(source, "any?(")),
     ]
     assert found[0]["help"] != found[1]["help"]
+
+
+def test_a_function_imported_by_name_counts_as_a_function_of_the_file(tmp_path):
+    """The linker sends a piped bare name to a function the file imports by name, so lint treats it as the file's own:
+    a chain through it is left alone, and a one-step pipe into it gets the plain-call help."""
+    (tmp_path / "m2.agc").write_text(
+        "export def select(xs: List[Int], f: Fn[Int, Bool]) -> List[Int] = xs\n\n"
+        "export def double(n: Int) -> Int = n * 2\n",
+        encoding="utf-8",
+    )
+    chain = (
+        'import {select} from "m2"\n\n'
+        "def f(xs: List[Int]) -> Int\n"
+        "  return xs.map(->(x) { x * 2 }).select(->(x) { x > 2 }).sum\n"
+        "end\n"
+    )
+    assert suggested(tmp_path / "chain.agc", chain) == {}
+    helps = []
+    for name, header, call in [("plain", "", "shout()"), ("named", '{double}', "double()"),
+                               ("renamed", '{double as twice}', "twice()")]:
+        source = (f'import {header} from "m2"\n\n' if header else "") + (
+            "def shout(n: Int) -> Int = n\n\n"
+            f"def f() -> Int\n  return 3 |> {call}\nend\n"
+        )
+        path = tmp_path / f"{name}.agc"
+        path.write_text(source, encoding="utf-8")
+        found = report(lint_json(path.name, cwd=tmp_path), 0)["files"][0]["suggestions"]
+        assert [(s["code"], start(s)) for s in found] == [("LINT-SINGLE-PIPE", where(source, call))]
+        helps.append(found[0]["help"])
+    assert helps[0] == helps[1] == helps[2]

@@ -302,8 +302,8 @@ def unknown_piped(
   end
 
   field = Calls.find_field(fields, name)
-  receiver = Calls.extent_text(cx, target)
-  if receiver == "" or receiver.length > 40 or receiver.include?("\n")
+  receiver = Calls.receiver_text(cx, target)
+  if receiver == "" or receiver == "()" or receiver.length > 40 or receiver.include?("\n")
     receiver = "value"
   end
 

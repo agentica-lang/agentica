@@ -11,7 +11,7 @@ import Shape from "shape"
 ## The suggestions for `expr`. `chained` is true when it is the first operand of a pipe, of a `+` chain or of a call
 ## that is a step (step?): the expression above it judged the whole chain, so it must not be judged again as a chain of
 ## its own. `aliases` are the module aliases that the file imports, and `functions` the names of its top-level
-## functions.
+## functions and the names it imports by name.
 export def suggestions(
   file: String,
   expr: Ast.Expr,
@@ -65,7 +65,7 @@ end
 # end; 0 when no link does. A link is a method call, or a name without arguments as the last link only
 # (`.sum`): further
 # in it may be a struct field, which a pipe cannot name, and lint has no types to tell. A link named as a function of
-# the file gives 0 too, since the pipe step would call that function.
+# the file, or one it imports by name, gives 0 too, since the pipe step would call that function.
 def lambda_steps(expr: Ast.Expr, functions: Set[String]) -> Int
   links = 0
   steps = 0
@@ -140,8 +140,8 @@ def joins_text?(node: Ast.Binary) -> Bool
   literal and converted
 end
 
-# `x |> f()` where x is not itself the result of a pipe. A bare name that is no function of the file and no builtin
-# function is a method of x (the linker's rule), so the help shows the method call.
+# `x |> f()` where x is not itself the result of a pipe. A bare name that is no function of the file, none it imports
+# by name and no builtin function is a method of x (the linker's rule), so the help shows the method call.
 def single_pipe(file: String, node: Ast.Call, chained: Bool, functions: Set[String]) -> List[Problems.Problem]
   return [] if !node.piped or chained or node.args.size == 0 or piped_call?(node.args[0])
 

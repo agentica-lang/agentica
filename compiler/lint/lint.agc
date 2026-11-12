@@ -95,7 +95,8 @@ def module_aliases(program: Ast.Program) -> Set[String]
   found
 end
 
-# The names of the top-level functions of the file, `export` or not.
+# The names that a call by its bare name reaches in the file: its top-level functions, `export` or not, and the names
+# it imports by name (`import {select as pick}` binds pick). The linker sends a piped bare name to them before methods.
 def file_functions(program: Ast.Program) -> Set[String]
   found: Set[String] = Set.new([])
   for decl in program.declarations
@@ -107,6 +108,11 @@ def file_functions(program: Ast.Program) -> Set[String]
 
     case inner
       Ast.Decl.Function(node) -> found = found.add(node.name)
+      Ast.Decl.Import(node) ->
+        for imported in node.names
+          found = found.add(imported.local)
+        end
+
       _ -> next
     end
   end

@@ -113,6 +113,9 @@ PIPED_FIELDS = [
     ("  puts(h |> run(4))", "run(4)"),
     ("  puts(h |> to_s())", "to_s()"),
     ("  puts(h |> name())", "name()"),
+    # The receiver is a pipe itself.
+    ("  hs = [h]\n  puts(hs |> first() |> run(1))", "run(1)"),
+    ("  hs = [h]\n  puts(hs |> first() |> name())", "name()"),
 ]
 
 
