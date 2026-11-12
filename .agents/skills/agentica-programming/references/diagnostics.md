@@ -139,9 +139,9 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   package; only the root project's manifest may say them (the key path is
   `dependencies.<name>.override` or `.path`).
 - `PKG-AGENTICA-TOO-OLD`: the `agentica` key of the project's or a package's
-  `agentica.toml` asks for a newer Agentica than the one running (key path
-  `agentica`); install that version or pin a package version made for this
-  one.
+  `agentica.toml`, or the workspace root's, for a member, asks for a newer
+  Agentica than the one running (key path `agentica`); install that version or
+  pin a package version made for this one.
 - `QUERY-USAGE`, `QUERY-NOT-FOUND`, `QUERY-AMBIGUOUS-NAME` and
   `QUERY-NO-EXPRESSION`: a bad question to a query command, exit 2
   (`queries.md`).

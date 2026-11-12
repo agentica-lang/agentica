@@ -114,6 +114,22 @@ def test_the_version_is_checked_before_any_other_key_so_a_newer_manifest_reports
         assert_at_key(problem, "PKG-AGENTICA-TOO-OLD", manifest, "agentica")
 
 
+def test_a_bad_version_next_to_an_unknown_key_is_reported_at_the_version(ws):
+    manifest = ws.project / "agentica.toml"
+    prepend(manifest, 'agentica = ">=1.0.0"\nfeatures = []\n')
+    assert_at_key(agentica(ws, "check", "main.agc")[1], "PKG-MANIFEST-INVALID", manifest, "agentica")
+
+
+def test_broken_toml_before_a_newer_version_is_the_toml_error(ws):
+    # The version is read from the parsed file: a file that does not parse reports that, at its line.
+    manifest = ws.project / "agentica.toml"
+    prepend(manifest, "features = [\n" + key(newer()))
+    problem = agentica(ws, "check", "main.agc")[1]
+    assert problem["code"] == "PKG-MANIFEST-INVALID"
+    assert "key_path" not in problem
+    assert problem["range"]["start"]["line"] >= 1
+
+
 def test_the_version_of_the_project_is_checked_before_its_lock_and_a_package_before_its_dependencies(ws):
     # The lock no longer has greeter: a stale lock, after the version.
     ws.write_lock(lambda entries: entries.remove(next(e for e in entries if e["name"] == "greeter")))
@@ -240,7 +256,8 @@ def remotes(tmp_path):
 @pytest.mark.parametrize("package", ["greeter", "tools"])
 def test_install_refuses_a_package_that_needs_a_newer_agentica_and_writes_no_deps(tmp_path, remotes, package):
     ws = Workspace(tmp_path / "w")
-    needs = {package: key(newer())}
+    # features is a key of a later Agentica: the version is still what is reported.
+    needs = {package: key(newer()) + "features = []\n"}
     tools_files = {"bang.agc": BANG}
     if package == "tools":
         tools_files["agentica.toml"] = needs["tools"]
@@ -265,10 +282,42 @@ def test_install_refuses_a_package_that_needs_a_newer_agentica_and_writes_no_dep
 
 def test_add_refuses_a_package_that_needs_a_newer_agentica_and_writes_nothing(tmp_path, remotes):
     ws = Workspace(tmp_path / "w")
-    commit = remotes.publish(GREETER, {"bang.agc": BANG, "agentica.toml": key(newer())}, tag="v1")
+    commit = remotes.publish(GREETER, {"bang.agc": BANG, "agentica.toml": key(newer()) + "features = []\n"}, tag="v1")
     (ws.project / "agentica.toml").write_text('name = "app"\n', encoding="utf-8")
     _, problem = command(ws, remotes, "add", "greeter", remotes.url(GREETER), "--tag", "v1")
     assert_at_key(problem, "PKG-AGENTICA-TOO-OLD", ws.folder(remotes.url(GREETER), commit) / "agentica.toml",
                   "agentica")
     assert (ws.project / "agentica.toml").read_text(encoding="utf-8") == 'name = "app"\n'
     assert not (ws.project / "agentica.lock").exists()
+
+
+def workspace_member(ws, root_text, table_extra=""):
+    """Makes the project a member of a workspace whose root, the folder above it, has root_text before its table and
+    table_extra at the end of the table."""
+    root = ws.project.parent / "agentica.toml"
+    folder = ws.project.name
+    root.write_text(root_text + '\n[workspace]\nrepository = "https://example.test/owner/mono"\nmembers = ["%s"]\n'
+                    % folder + table_extra, encoding="utf-8")
+    return root
+
+
+def test_a_member_of_a_workspace_whose_root_needs_a_newer_agentica_is_refused(ws):
+    # The root's version is checked before its other keys, so an unknown key of a later Agentica does not hide it.
+    root = workspace_member(ws, key(newer()) + "features = []\n")
+    for problem in every_command(ws):
+        assert_at_key(problem, "PKG-AGENTICA-TOO-OLD", root, "agentica")
+    code, problem = agentica(ws, "install")
+    assert code == 1
+    assert_at_key(problem, "PKG-AGENTICA-TOO-OLD", root, "agentica")
+    workspace_member(ws, key(agentica_version()))
+    assert agentica(ws, "check", "main.agc") == (0, None)
+
+
+def test_a_member_reports_a_bad_version_of_the_root_and_a_newer_one_before_a_broken_table(ws):
+    root = workspace_member(ws, 'agentica = ">=1.0.0"\n')
+    assert_at_key(agentica(ws, "check", "main.agc")[1], "PKG-MANIFEST-INVALID", root, "agentica")
+    # An unknown key of [workspace] is a broken table, which the version of the root is checked before.
+    workspace_member(ws, key(newer()), table_extra="features = []\n")
+    assert_at_key(agentica(ws, "check", "main.agc")[1], "PKG-AGENTICA-TOO-OLD", root, "agentica")
+    workspace_member(ws, key(agentica_version()), table_extra="features = []\n")
+    assert_at_key(agentica(ws, "check", "main.agc")[1], "PKG-MANIFEST-INVALID", root, "workspace.features")
