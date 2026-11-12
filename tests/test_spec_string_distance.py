@@ -149,7 +149,10 @@ def test_string_distance_long_texts(tmp_path):
         + f'  a = "{a}"\n  b = "{b}"\n  long = "{long}"\n  changed = "{"".join(changed)}"\n'
         + "  puts(a.edit_distance(b))\n  puts(a.edit_distance(b, 3))\n  puts(a.jaro_winkler(b))\n"
         + "  puts(long.edit_distance(changed, 3))\n  puts(long.edit_distance(changed, 10))\n"
-        + "  puts(long.edit_distance(long + \"\"))\nend\n"
+        + "  puts(long.edit_distance(long + \"\"))\n"
+        # Each "a" of the first half scans about 1500 "b" of its window, so the budget runs out inside a window and the
+        # walk resumes there.
+        + '  puts(("a" * 1500 + "b" * 1500).jaro_winkler("b" * 1500 + "a" * 1500))\nend\n'
     )
     path = tmp_path / "long.agc"
     path.write_text(source, encoding="utf-8")
@@ -158,7 +161,10 @@ def test_string_distance_long_texts(tmp_path):
     out = result.stdout.split()
     assert out[:2] == [str(levenshtein(a, b)), "4"]
     assert math.isclose(float(out[2]), jaro_winkler(a, b), rel_tol=1e-12)
-    assert out[3:] == ["4", "5", "0"]
+    assert out[3:6] == ["4", "5", "0"]
+    halves = jaro_winkler("a" * 1500 + "b" * 1500, "b" * 1500 + "a" * 1500)
+    assert math.isclose(halves, 0.8328888888888889, rel_tol=1e-12)
+    assert math.isclose(float(out[6]), halves, rel_tol=1e-12)
 
 
 def test_string_distance_negative_max(tmp_path):
