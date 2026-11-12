@@ -45,13 +45,21 @@ def test_the_rule_enum_has_the_rules_of_the_builtin_table():
     assert_golden("".join(name + "\n" for name in names), FROZEN / "catalog" / "rules.expected")
 
 
-def test_the_highlighter_colors_the_reserved_type_names_and_no_other():
+def test_the_highlighter_needs_no_list_of_reserved_type_names():
+    # The site grammar scopes a type by its shape, so a new reserved name needs no docs-theme PR: a list of names in
+    # the grammar would have to be kept equal to RESERVED_TYPE_NAMES again.
     data = (ROOT / "compiler" / "catalog" / "builtins_data.agc").read_text(encoding="utf-8")
-    reserved = re.search(r"^export RESERVED_TYPE_NAMES: List\[String\] = \[(.*?)^\]", data, flags=re.M | re.S).group(1)
+    reserved_text = re.search(r"^export RESERVED_TYPE_NAMES: List\[String\] = \[(.*?)^\]", data, flags=re.M | re.S).group(1)
+    reserved = re.findall(r'"([^"]+)"', reserved_text)
     grammar_file = ROOT / "site" / "themes" / "docs-theme" / "highlight" / "agentica.tmLanguage.json"
-    grammar = json.loads(grammar_file.read_text(encoding="utf-8"))
-    colored = re.fullmatch(r"\\b\((.*)\)\\b", grammar["repository"]["builtin-types"]["match"]).group(1)
-    assert sorted(colored.split("|")) == sorted(re.findall(r'"([^"]+)"', reserved))
+    grammar_text = grammar_file.read_text(encoding="utf-8")
+    grammar = json.loads(grammar_text)
+    assert "builtin-types" not in grammar["repository"]
+    names = "|".join(re.escape(name) for name in reserved)
+    assert not re.search(r"(?:%s)\|(?:%s)" % (names, names), grammar_text)
+    # Each reserved name still gets a scope, from the type rules (a capitalized name is a type, ALL_CAPS a constant).
+    shapes = [re.compile(pattern["match"]) for pattern in grammar["repository"]["types"]["patterns"]]
+    assert [name for name in reserved if not any(shape.fullmatch(name) for shape in shapes)] == []
 
 
 def test_every_builtin_type_a_std_module_re_exports_has_its_written_name():

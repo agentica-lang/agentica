@@ -18,12 +18,13 @@ rule that a site page shows.
   `highlight/highlight.mjs --strict` colors every `agentica` and `signature`
   block, and fails on a block of another shape or a color class that no token
   matches.
-- The grammar is the theme's `highlight/agentica.tmLanguage.json`; it must
-  color exactly `RESERVED_TYPE_NAMES` (`tests/test_frontend_catalog.py`). A
-  change to that list needs a docs-theme PR, merged first, then a submodule
-  bump here. The `grammarChanges` field of the theme's
-  `highlight/package.json` says where the copy differs from agc-tmlanguage
-  (agentica-lang/agc-tmlanguage#13).
+- The grammar is the theme's `highlight/agentica.tmLanguage.json`. It scopes a
+  type by its shape (a capitalized name is a type, `ALL_CAPS` a constant) and
+  keeps no list of builtin names, so a new reserved name needs no change there;
+  `tests/test_frontend_catalog.py` fails if a list comes back. A grammar change
+  is a docs-theme PR, merged first, then a submodule bump here. The
+  `grammarChanges` field of the theme's `highlight/package.json` says where the
+  copy differs from agc-tmlanguage.
 - The site's own templates override the theme: `layouts/reference/list.html`
   (the spec index) and `layouts/_shortcodes/release.md`. `site/hugo.toml` sets
   the params and `_merge = "deep"`, which takes the theme's outputs.
