@@ -54,7 +54,7 @@ main.agc:2:10
 
 `error(message, kind:, code:, details:, cause:)` takes the other fields as named arguments after the message, each optional and in any order. `code:` takes an `Int` and `cause:` an `Error`, which the call stores as `some(...)`; `location` is never given. `Result.Err(...)` takes the same arguments.
 
-A kind is a dotted name: parts of `a-z`, `0-9` and `_`, each starting with a letter (`db`, `db.constraint`, `io.not_found`). A text literal given as `kind:` or to `is_a?` that is not one is `CHECK-ERROR-KIND`; a kind computed at run time is kept as it is. A caller branches on the kind or the code, never on the message text.
+A kind is a dotted name: parts of `a-z`, `0-9` and `_`, each starting with a letter (`db`, `db.constraint`, `io.not_found`). A text literal given as `kind:` (of `error(...)` or `Result.Err(...)`) or to `is_a?` / `kind_of?` that is not one is `CHECK-ERROR-KIND`. Nothing else is checked: a kind computed at run time and a kind set with `e.with(kind: ...)` are kept as they are. A caller branches on the kind or the code, never on the message text.
 
 ## is_a?
 

@@ -3,3 +3,5 @@ def insert(name: String) -> Result[Int]
 
   Result.Err("bad", details: {"name": name}, cause: base,)
 end
+
+def piped(name: String) -> Result[Int] = name |> error(kind: "db.piped", code: 3)

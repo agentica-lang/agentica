@@ -550,7 +550,8 @@ def piped_call(left: Ast.Expr, node: Ast.Expr) -> Optional[Ast.Expr]
     Ast.Expr.Call(call) ->
       return none if call.piped or !call.parenthesized
 
-      some(pipe_node(call.id, call.name, List.concat([left], call.args), call.span))
+      # The named arguments of error(...) stay with the call: "x" |> error(kind: "db") is error("x", kind: "db").
+      some(pipe_node(call.id, call.name, List.concat([left], call.args), call.span, call.named))
     Ast.Expr.MethodCall(call) ->
       case call.target
         Ast.Expr.TypeName(type_name) ->
@@ -564,8 +565,14 @@ def piped_call(left: Ast.Expr, node: Ast.Expr) -> Optional[Ast.Expr]
   end
 end
 
-def pipe_node(id: Int, name: String, args: List[Ast.Expr], span: Source.Span) -> Ast.Expr
-  Ast.Expr.Call(Ast.Call(id: id, name: name, args: args, piped: true, parenthesized: false, span: span))
+def pipe_node(
+  id: Int,
+  name: String,
+  args: List[Ast.Expr],
+  span: Source.Span,
+  named: List[Ast.NamedArg] = [],
+) -> Ast.Expr
+  Ast.Expr.Call(Ast.Call(id: id, name: name, args: args, piped: true, parenthesized: false, span: span, named: named))
 end
 
 def chained_message(level: Int) -> String
@@ -743,16 +750,7 @@ def attach_block(e: Base.Env, start: Int, target: Ast.Expr, cursor: Int, ids: In
 
       expr_at(node, block.pos, block.ids)
     Ast.Expr.Call(call) ->
-      node = Ast.Expr.Call(
-        Ast.Call(
-          id: block.ids,
-          name: call.name,
-          args: call.args.push(block.node),
-          piped: call.piped,
-          parenthesized: call.parenthesized,
-          span: span,
-        ),
-      )
+      node = Ast.Expr.Call(call.with(id: block.ids, args: call.args.push(block.node), span: span))
 
       expr_at(node, block.pos, block.ids)
     Ast.Expr.MethodCall(call) ->

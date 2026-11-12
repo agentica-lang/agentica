@@ -578,7 +578,7 @@ def children_of(part: Part, marks: Marks) -> List[Part]
     Part.Arm(node) -> [Part.Pattern(node.pattern)].concat(optional_expr(node.guard)).concat(stmts(node.body))
     Part.Pattern(pattern) -> pattern_children(pattern)
     Part.Expr(expr) -> expr_children(expr)
-    Part.Stage(node) -> exprs(node.args.drop(1))
+    Part.Stage(node) -> exprs(node.args.drop(1)).concat(named(node.named))
     Part.Named(node) -> [Part.Expr(node.value)]
     Part.Entry(node) -> [Part.Expr(node.key), Part.Expr(node.value)]
     Part.BlockParam(node) -> optional_type(node.type)

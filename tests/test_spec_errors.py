@@ -55,7 +55,9 @@ KINDS = [
     "  w: Result[Int] = Result.Err(\"x\", kind: \"io.not_found_2\")\n  puts(w)",
     "  case r\n    ok(n) -> puts(n)\n    error(e) if e.is_a?(\"db\") or e.kind_of?(\"db.constraint\") -> puts(e)\n"
     "    error(e) -> puts(e.is_a?(e.kind))\n  end",
-    # A computed kind is not checked.
+    # A pipe passes the message: "x" |> error(kind: ...) is error("x", kind: ...).
+    "  w: Result[Int] = \"x\" |> error(kind: \"db.x\", code: 1)\n  puts(w)",
+    # A computed kind is not checked, nor one set with .with.
     "  name = \"Not A Kind\"\n  w: Result[Int] = error(\"x\", kind: name)\n  puts(w)",
 ]
 
@@ -85,6 +87,9 @@ KINDS_REJECTED = [
     ("  w: Result[Int] = error(\"x\", details: {\"a\": 1})\n  puts(w)", "CHECK-TYPE-MISMATCH", "1"),
     ("  w: Result[Int] = error(\"x\", cause: \"y\")\n  puts(w)", "CHECK-TYPE-MISMATCH", "\"y\""),
     ("  w: Result[Int] = error(kind: \"x\", \"m\")\n  puts(w)", "PARSE-UNEXPECTED-TOKEN", "\"m\""),
+    ("  w: Result[Int] = \"x\" |> error(kind: \"Bad..Kind\", code: 1)\n  puts(w)", "CHECK-ERROR-KIND",
+     "\"Bad..Kind\""),
+    ("  w: Result[Int] = \"x\" |> error(kind: \"db\", nope: 3)\n  puts(w)", "CHECK-UNKNOWN-FIELD", "nope"),
     ("  puts(shout(text: \"x\"))", "PARSE-UNEXPECTED-TOKEN", ":"),
     ("  case r\n    ok(n) -> puts(n)\n    error(e) if e.is_a?(\"Db\") -> puts(e)\n    error(_) -> puts(1)\n  end",
      "CHECK-ERROR-KIND", "\"Db\""),

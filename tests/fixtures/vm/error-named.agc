@@ -55,6 +55,10 @@ def main() -> Void
     error(e) -> show("computed", e)
   end
 
+  # A pipe passes the message, and the named arguments stay with the call.
+  piped: Result[Int] = "from a pipe" |> error(kind: "db.piped", code: 3)
+  puts(piped)
+
   # Equality leaves the location out, so the same fields made elsewhere are equal.
   same: Result[Int] = error("unique failed", kind: "db.constraint", code: 19)
   puts(insert("taken") == same)

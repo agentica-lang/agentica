@@ -100,7 +100,7 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Built
 end
 
 # The help for a call in a form that a builtin had before (TLS.listen with the PEM paths before contexts, 19a, and the
-# spawns with positional options before Process.Options), or "".
+# spawns with positional options before Process.Options), the named form of error, or "".
 def old_form_help(name: String, node: Ast.Call) -> String
   spawns = ["Process.spawn", "Process.spawn_captured", "Process.spawn_channel"]
   return PROCESS_OPTIONS_HELP if spawns.include?(name) and node.args.size > 3
@@ -110,6 +110,11 @@ def old_form_help(name: String, node: Ast.Call) -> String
       "a TlsContext holds the PEM files: build one with " +
       "TLS.server_context(TlsServerOptions(cert_file: c, key_file: k))"
     )
+  end
+
+  # The callee lists the catalog forms, which have no named arguments.
+  if name == "error"
+    return "error takes the message first, then the named arguments: error(\"text\", kind:, code:, details:, cause:)"
   end
 
   ""
