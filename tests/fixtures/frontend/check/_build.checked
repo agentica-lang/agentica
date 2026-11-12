@@ -1,1 +1,0 @@
-ERROR CHECK-IMPORT-IO 0:1:1-0:1:1 "filesystem: path does not refer to a regular file" - file="/home/sonic182/apps/agentica-wt-line/tests/fixtures/frontend/check/_build/root.agc"
