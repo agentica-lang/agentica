@@ -297,7 +297,7 @@ def downloaded_target(
 
   case workspace.native_artifact.call(request)
     ok(path) -> Target.File(path)
-    error(packed) -> Target.Unusable(packed)
+    error(packed) -> Target.Unusable("#{packed}")
   end
 end
 

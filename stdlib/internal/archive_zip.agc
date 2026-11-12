@@ -931,7 +931,7 @@ def pump_deflated(st: Stream, entry: Entry, handle: FileHandle, deadline: Int, s
         return error("archive: CRC32 mismatch for #{entry.canon}: expected #{entry.crc}, got #{pump.crc}")
       end
       ok(st.with(buf: st.buf.drop(held.size), raw: raw))
-    error(message) -> error(inflate_error(message, entry.canon))
+    error(message) -> error(inflate_error("#{message}", entry.canon))
   end
 end
 

@@ -67,7 +67,7 @@ end
 export def cast[M](address: Address[M], message: M, timeout_ms: Int = 5000) -> Result[Void]
   case address.send(message, timeout_ms)
     ok(_) -> ok()
-    error(text) -> error(reason(text))
+    error(text) -> error(reason("#{text}"))
   end
 end
 

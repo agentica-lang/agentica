@@ -87,8 +87,8 @@ export def left(deadline: Int) -> Int
   remaining
 end
 
-## Builds an `Error` for the file `path`, at line 1 and column 1.
-export def located(code: String, message: String, path: String) -> Report.Error
+## Builds a `Failure` for the file `path`, at line 1 and column 1.
+export def located(code: String, message: String, path: String) -> Report.Failure
   Report.error_at(code, message, Report.Span(file: path, line: 1, column: 1, end_column: 1))
 end
 
@@ -107,7 +107,7 @@ end
 ## Reads the diagnostic a child wrote as the last line of `stderr`. A child that halts writes its `--json` diagnostic
 ## there, and a child with an unobserved task crash writes a summary, which becomes `RUNTIME-TASK-CRASHED`. Lines of
 ## task crashes are skipped. Returns an error when there is none.
-export def stderr_diagnostic(stderr: String, span: Report.Span) -> Result[Report.Error]
+export def stderr_diagnostic(stderr: String, span: Report.Span) -> Result[Report.Failure]
   lines = stderr.split("\n").filter do |line| line != "" and not vm_shape?(line, true) end
   return error("no diagnostic") if lines.size == 0
   last = lines[lines.size - 1]

@@ -206,7 +206,7 @@ end
 export def run![T](result: Result[T]) -> T
   case result
     ok(value) -> return value
-    error(text) -> finish(text)
+    error(text) -> finish("#{text}")
   end
   result.unwrap!
 end

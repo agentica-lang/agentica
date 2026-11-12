@@ -304,7 +304,7 @@ end
 export def parse(tokens: List[Tokens.Token], first_id: Int) -> Diag.Outcome[Ast.Program]
   case parse_program(Base.make_env(tokens), first_id)
     ok(program) -> Diag.Outcome.Done(program)
-    error(text) -> Diag.Outcome.Failed(Base.unpack(text))
+    error(text) -> Diag.Outcome.Failed(Base.unpack("#{text}"))
   end
 end
 

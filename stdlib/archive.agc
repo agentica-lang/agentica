@@ -630,7 +630,7 @@ def scan_all(src: String, gzip: Bool, scan: Scan, members: List[String]) -> Resu
       try check_end(done)
       try check_missing(done.ctx, members)
       ok(done.ctx.counts)
-    error(message) -> error(stream_error(message, src))
+    error(message) -> error(stream_error("#{message}", src))
   end
 end
 

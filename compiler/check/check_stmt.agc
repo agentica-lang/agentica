@@ -1282,7 +1282,7 @@ def final_case(cx: State.Cx, st: State.St, node: Ast.CaseStmt) -> Result[State.O
 
       ok(State.Out(st: State.record_type(done.st, node.id, done.type), type: done.type))
     error(problem) ->
-      return final_statement(cx, st, node) if inferred and void_mismatch?(problem)
+      return final_statement(cx, st, node) if inferred and void_mismatch?("#{problem}")
 
       error(problem)
   end

@@ -36,7 +36,7 @@ end
 
 enum Listing
   Ready(List[Match.Pattern])
-  Broken(Report.Error)
+  Broken(Report.Failure)
 end
 
 struct Entry
@@ -282,7 +282,7 @@ def run_entries(
       ok(result) -> results = results.push(result)
       error(message) ->
         entry = entries[at]
-        problem = Child.located("RUNTIME-BDD-INFRA", message, entry.path)
+        problem = Child.located("RUNTIME-BDD-INFRA", "#{message}", entry.path)
         results = results.push(Report.file_error(entry.path, entry.kind, problem))
     end
   end
@@ -662,7 +662,7 @@ end
 # After a failed step the child runs its after hooks (`BDD.after`) and then exits. What the hooks report arrives as
 # more fail records: they are added to the message, so the step's own failure stays the one shown. The wait ends with
 # the child, or at the scenario's deadline.
-def with_hook_problems(p: Process, failure: Report.Error, deadline: Int) -> Report.Error
+def with_hook_problems(p: Process, failure: Report.Failure, deadline: Int) -> Report.Failure
   message = failure.message
   hooks = false
   line = Process.channel_read_line(p, Child.left(deadline))
@@ -679,7 +679,7 @@ def with_hook_problems(p: Process, failure: Report.Error, deadline: Int) -> Repo
   if line.message == "process: operation timed out"
     message = "#{message}; #{late_text(hooks)}"
   end
-  Report.Error(
+  Report.Failure(
     code: failure.code,
     message: message,
     span: failure.span,
@@ -722,7 +722,7 @@ def late_text(hooks: Bool) -> String
   "the step program did not exit within the scenario's time limit"
 end
 
-def read_failure(p: Process, message: String, deadline: Int, span: Report.Span) -> Report.Error
+def read_failure(p: Process, message: String, deadline: Int, span: Report.Span) -> Report.Failure
   if message == "process: operation timed out"
     return Report.error_at("RUNTIME-BDD-TIMEOUT", "BDD operation timed out", span)
   end
@@ -738,15 +738,15 @@ def read_failure(p: Process, message: String, deadline: Int, span: Report.Span) 
   Report.error_at("RUNTIME-BDD-PREMATURE-EXIT", "step exited prematurely (exit code #{code.unwrap_or(-1)})", span)
 end
 
-def send_failure(p: Process, message: String, deadline: Int, span: Report.Span) -> Report.Error
+def send_failure(p: Process, message: String, deadline: Int, span: Report.Span) -> Report.Failure
   if message == "process: send exceeds 1048576 bytes"
     return Report.error_at("RUNTIME-BDD-IO", "the step line exceeds 1 MiB after JSON escaping", span)
   end
   read_failure(p, message, deadline, span)
 end
 
-def record_error(record: Json, span: Report.Span) -> Report.Error
-  Report.Error(
+def record_error(record: Json, span: Report.Span) -> Report.Failure
+  Report.Failure(
     code: Child.text_of(record, "code"),
     message: Child.text_of(record, "message"),
     span: span,
@@ -764,7 +764,7 @@ def resolved_of(outcome: Gherkin.Outcome[Match.Resolved]) -> Match.Resolved
   end
 end
 
-def unresolved(patterns: List[Match.Pattern], step: Gherkin.Step) -> Report.Error
+def unresolved(patterns: List[Match.Pattern], step: Gherkin.Step) -> Report.Failure
   case Match.resolve(patterns, step)
     Gherkin.Outcome.Failed(problem) -> Report.with_actual(from_diagnostic(problem), step.text.inspect)
     Gherkin.Outcome.Done(_) -> Report.error_at("RUNTIME-BDD-INFRA", "the step resolved on the second try", step.span)
@@ -799,6 +799,6 @@ def failure(code: String, message: String, span: Report.Span) -> Report.Verdict
   Report.Verdict.Fail(Report.error_at(code, message, span))
 end
 
-def from_diagnostic(problem: Gherkin.Diagnostic) -> Report.Error
+def from_diagnostic(problem: Gherkin.Diagnostic) -> Report.Failure
   Report.error_at(problem.code, problem.message, problem.span)
 end
