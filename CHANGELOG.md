@@ -30,6 +30,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   same name wins.
 - `agentica lint` suggests a pipe for a method chain of three or more steps
   that passes lambdas (`LINT-LAMBDA-CHAIN`).
+- `s.edit_distance(other)` (Levenshtein, in characters; `edit_distance(other,
+  max)` stops at `max + 1`) and `s.jaro_winkler(other)` (from 0.0 to 1.0).
 
 ### Changed
 
