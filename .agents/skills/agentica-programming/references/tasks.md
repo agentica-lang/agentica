@@ -130,6 +130,10 @@ waits or fails: a closed or full channel drops the notice, so give it room. A
 crash whose notice went in counts as observed. `wrap` runs in a task of its
 own.
 
+Size the inbox for every notice that can be pending at once, and monitor a
+task only after any setup step that can fail. A failed start that was already
+monitored leaves a stale notice, and a full inbox then drops a real crash.
+
 `Task.current` is the running task as a `TaskRef`: `Task.monitor`,
 `Task.cancel` and `.id` take it, but `Task.await` of it is
 `CHECK-TYPE-MISMATCH`.
