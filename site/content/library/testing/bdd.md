@@ -339,7 +339,7 @@ BDD.then_stdout_includes(ctx: BDD.Context, expected: String) -> BDD.Context
 BDD.then_stderr_includes(ctx: BDD.Context, expected: String) -> BDD.Context
 ```
 
-The built-in steps as functions, to combine in your own steps. Pass on the context `BDD.given_program` returns: it holds the program. `BDD.given_program` compiles a program once per run, the first time a scenario starts it, and later scenarios start that bytecode while the file's text is the same: a change during the run to a file it imports is not seen. A program that does not compile starts through `agentica FILE.agc`, which prints its diagnostic. `BDD.given_env` and `BDD.given_argument` come before `BDD.given_program` and return the context to pass to it.
+The built-in steps as functions, to combine in your own steps. Pass on the context `BDD.given_program` returns: it holds the program. `BDD.given_program` compiles a program once per run, the first time a scenario starts it, and later scenarios start that bytecode while the file's text and the variables that place packages and the C compiler (`AGENTICA_PATH`, `HOME`, `CC` and the like, from `BDD.given_env`) are the same: a change during the run to a file it imports is not seen. A program that does not compile starts through `agentica FILE.agc`, which prints its diagnostic. `BDD.given_env` and `BDD.given_argument` come before `BDD.given_program` and return the context to pass to it.
 
 `BDD.read_line` gives the next output line instead of comparing it, so a step can use it. It is an error when the output ended or no line came within `timeout_ms`; a timeout stops the program under test, as for `BDD.then_line`: every later read, send or exit check fails with `RUNTIME-BDD-IO`, so make it the last use of the program.
 

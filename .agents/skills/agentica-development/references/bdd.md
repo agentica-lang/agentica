@@ -188,9 +188,11 @@ the programming skill or the site).
   before a context exists.
 - `start` runs `agentica run -- BYTECODE` with the `--source-root` the front
   end would give: `compiled` builds it once per run in the run folder
-  (`programs` in the settings line), named by the SHA-256 of the real path and
-  the root file's text, with `agentica compile` (bytecode cache) to a name of
-  its own and a rename. A compile that fails leaves `NAME.failed`; that, an
+  (`programs` in the settings line), named by the SHA-256 of the real path, the
+  `COMPILE_ENV` variables the scenario sets and the root file's text, with
+  `agentica [--deny-*] compile` (the bytecode cache when no deny flag is given)
+  to a name of its own (`claimed`) and a rename. `COMPILE_ENV` mirrors the
+  variables of `inputs_digest` in `compiler/io/cache_files.agc`. A compile that fails leaves `NAME.failed`; that, an
   empty `programs` or any I/O error (`--deny-fs`) starts through
   `agentica FILE.agc` as before, so the front end prints the diagnostic.
 - `std/bdd/gherkin`: the English Gherkin subset with stable codes and the first
