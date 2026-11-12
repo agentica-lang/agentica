@@ -371,6 +371,27 @@ def test_a_change_of_the_library_path_misses(tmp_path):
     assert stamp(entry) != kept
 
 
+@host_only(WINDOWS, "the stand-in compiler is a shell script")
+def test_another_path_hits_unless_it_finds_another_c_compiler(src, tmp_path):
+    """The key holds the C compiler file a native build would run (`cc` found in PATH), not PATH: a venv-like folder
+    in front of PATH keeps the entry, and one whose `cc` shadows the system's misses."""
+    agentica(src, "main.agc", CC=None)
+    entry = only_entry(src / "_build" / "bytecode")
+    kept = stamp(entry)
+    venv = tmp_path / "venv"
+    venv.mkdir()
+    (venv / "python3").write_text("#!/bin/sh\n", encoding="utf-8")
+    (venv / "python3").chmod(0o755)
+    hit = agentica(src, "main.agc", CC=None, PATH=f"{venv}{os.pathsep}{os.environ['PATH']}")
+    assert (hit.code, hit.stdout) == (0, "one\n"), hit.stderr
+    assert stamp(entry) == kept
+    (venv / "cc").write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    (venv / "cc").chmod(0o755)
+    miss = agentica(src, "main.agc", CC=None, PATH=f"{venv}{os.pathsep}{os.environ['PATH']}")
+    assert (miss.code, miss.stdout) == (0, "one\n"), miss.stderr
+    assert stamp(entry) != kept
+
+
 def test_the_entries_of_a_project_go_to_its_root_and_a_manifest_that_appears_in_a_parent_folder_misses(src):
     inner = src / "inner"
     inner.mkdir()
