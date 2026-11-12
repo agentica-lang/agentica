@@ -152,10 +152,6 @@ copy).
   `enum`, `struct` and alias of that name next to a `std/` module that uses the
   builtin, and for the root file building the builtin record itself. The linker
   gives both forms one dotted name, so a check by file cannot tell them apart.
-- Diagnostic text never indexes a list that can be empty (`types[0]`): an
-  empty candidate set is no constraint or a plain diagnostic, since a runtime
-  error must not escape a stage. A rule that computes candidates gets a typo
-  spec case (`x.lenght`).
 
 ## Common tasks
 
@@ -194,15 +190,16 @@ is Ruby's when Ruby has one; another habit gets a diagnostic with a `help:`.
 Required for a lexer, parser, checker-rule or `fmt` change, before review: fixes
 made only for the reported input kept missing the cases next to it.
 
-- Generate programs from contexts × forms × wrappers (PR #1443's body has one:
-  12 contexts × 8 block forms × 17 chain kinds). For each program that `check`
-  accepts, `fmt` succeeds, its output checks, a second `fmt` gives the same
-  text, and `fmt --tree` prints the same for the input and the output.
-- A lexer frame change: put each block opener of `WORD_ACTIONS` (`if`,
-  `while`, `for`, `case`, `do`, `def`) both last in its block and followed by
-  another statement, inside `[]`, `()`, `{}` and nested `do` blocks. A
-  construct that is last in its block hides a frame imbalance.
-- Frozen corpus: rewrite the entries that now fail so they check again,
+- Generate programs from contexts × block forms × chain kinds (such as 12 × 8
+  × 17). For each program that `check` accepts, `fmt` succeeds, its output
+  checks, a second `fmt` gives the same text, and `fmt --tree` prints the same
+  for the input and the output.
+- A lexer frame change: put each block opener of `WORD_ACTIONS` (action 2)
+  both last in its block and followed by another statement, inside `[]`, `()`,
+  `{}` and nested `do` blocks: `if`, `while`, `for`, `case` and `do`. `def`,
+  `struct` and `enum` are top-level declarations, so they get only the first
+  two cases. A construct that is last in its block hides a frame imbalance.
+- Frozen corpus: rewrite the valid programs that now fail so they check again,
   refreeze every tier (no `--fast-only`), and compare the first diagnostic of
   every corpus program with a binary built from `origin/master`; the main
   checkout's `dist/agentica` may be stale. Manifest sizes hide a negative
@@ -218,6 +215,9 @@ Test the code and the location (`start`, `covers` from `--json check`), as in
 its own test id. When a test builds its program from the row, `Batch.table`
 replaces `pytest.mark.parametrize` and takes the builder (as in
 `tests/test_spec_extern.py`).
+
+The message never indexes a list that can be empty (`types[0]`). A rule that
+computes candidates gets a typo spec case (`x.lenght`).
 
 ### Add a builtin rule
 

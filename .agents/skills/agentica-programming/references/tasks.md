@@ -126,13 +126,11 @@ channel of an enum (there is no `select`). `TaskDown` is a builtin record:
 `TaskExit.Crashed` or `TaskExit.Cancelled`), and for a crash its diagnostic:
 `code` (the stable `RUNTIME-` code, to match on), `message`, `file`, `line`
 and `column` (`""` and `0` otherwise). The send never
-waits or fails: a closed or full channel drops the notice, so give it room. A
+waits or fails: a closed or full channel drops the notice, so give it room for
+every notice that can be pending at once. A
 crash whose notice went in counts as observed. `wrap` runs in a task of its
-own.
-
-Size the inbox for every notice that can be pending at once, and monitor a
-task only after any setup step that can fail. A failed start that was already
-monitored leaves a stale notice, and a full inbox then drops a real crash.
+own. Monitor a task after any setup step that can fail: a failed start leaves
+a stale notice in the inbox.
 
 `Task.current` is the running task as a `TaskRef`: `Task.monitor`,
 `Task.cancel` and `.id` take it, but `Task.await` of it is

@@ -106,8 +106,8 @@ Invoke the `pr-reviewer` skill (via the Skill tool) and follow it to review GitH
 - Do not ask which findings to fix: fix every critical and major plus the
   worthwhile minors; list skipped minors and why in the PR body.
 - A fix for a critical or major reruns the change's whole generator or
-  matrix before each push, not only the reported input: such fixes caused new
-  majors twice (#1415, #1439).
+  matrix before each push, not only the reported input: a spot fix can break
+  a case next to it.
 - After a pass with a critical or major: push, wait for green CI, new review.
   A pass with only minors: fix and merge without another review.
 - **Third-pass stop:** if the third review still has a critical or major,
