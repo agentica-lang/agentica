@@ -8,6 +8,19 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- A failed Result holds an `Error` record, whose `location` says where it was
+  made; `error(e)` passes one on as a Result of another type (#671).
+
+### Changed
+
+- **Breaking:** `error(e)` in a `case` binds an `Error` (kind, message, code,
+  details, cause, location), not a String: use `e.message` for the text, and
+  `error(e) if e.message == "x"` for `error("x") ->`; `"#{e}"` and `puts(e)`
+  still give the message, but `e.inspect` gives `error("boom")` (was
+  `"boom"`) and `JSON.encode(e)` gives the record (was `"boom"`).
+
 ## [0.31.0-alpha.1] - 2026-11-12
 
 ### Added
@@ -29,11 +42,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   that passes lambdas (`LINT-LAMBDA-CHAIN`).
 - `s.edit_distance(other)` (Levenshtein) and `s.jaro_winkler(other)`.
 - The nested builtin names are accepted next to the old ones: `File.Info`,
-  `File.Handle`, `JSON.Value`, `JSON.Field`, `Process.Output`, `TCP.Socket`,
-  `TCP.Listener`, `TLS.Context`, `TLS.ClientOptions`, `TLS.ServerOptions`,
-  `Test.Case` and `System.Profile` (#1182).
-- A failed Result holds an `Error` record, whose `location` says where it was
-  made; `error(e)` passes one on as a Result of another type (#671).
   `File.Handle`, `JSON.Value`, `TCP.Socket`, `TLS.Context`, `Test.Case` and
   more (#1182).
 
@@ -53,16 +61,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - **Breaking:** nothing chains after the `end` of a `do` block
   (`CHECK-CHAIN-AFTER-END`); use braces or bind the result first.
 - Diagnostics, `help`, `doc`, `outline` and `type-at` write the HTTP and
-  logger types as a program does (`HTTP.Request`, `Logger.Event`), and
-  `symbol` and `refs` find them by those names.
-- **Breaking:** `Error` is a reserved type name, for the builtin error
-  record: `struct Error`, `enum Error` or `type Error` is
-  `CHECK-REDEFINED-NAME`.
-- **Breaking:** `error(e)` in a `case` binds an `Error` (kind, message, code,
-  details, cause, location), not a String: use `e.message` for the text, and
-  `error(e) if e.message == "x"` for `error("x") ->`; `"#{e}"` and `puts(e)`
-  still give the message, but `e.inspect` gives `error("boom")` (was
-  `"boom"`) and `JSON.encode(e)` gives the record (was `"boom"`).
   logger types as a program does, and `symbol` and `refs` find them by those
   names.
 - **Breaking:** `Error` is a reserved type name, for the coming builtin error
