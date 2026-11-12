@@ -80,11 +80,14 @@ export struct SourceFile
 end
 
 ## The lowered program. globals is the number of slots of the module constants. entry is the index in functions of the
-## function the VM starts: `main`, or `<start>` when globals is above zero. The span is the root file's.
+## function the VM starts: `main`, or `<start>` when globals is above zero. The span is the root file's. written maps
+## the linker prefix of a std/ module ("@3::") to the alias the program imports it with ("HTTP"), so the bytecode names
+## its records and enums as written (HTTP.Download).
 export struct Program
   sources: List[SourceFile]
   structs: List[StructDef]
   enums: List[EnumDef]
+  written: Map[String, String] = {}
   functions: List[Function]
   entry: Int
   globals: Int

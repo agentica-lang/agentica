@@ -1,7 +1,7 @@
 {
   "exit": 0,
   "code": null,
-  "steps": 69,
+  "steps": 101,
   "stdout": [
     "HTTP.Header(name: \"a\", value: \"b\")",
     "HTTP.Header(name: \"a\", value: \"b\")",
@@ -12,6 +12,11 @@
     "Logger.Level.Warning",
     "[some(Logger.Level.Warning)]",
     "Logger.Event(level: Logger.Level.Info, message: \"m\", fields: {}, time_ms: 0, task: 1)",
+    "HTTP.Download(status: 200, headers: [HTTP.Header(name: \"a\", value: \"b\")], bytes_written: 3)",
+    "[some(HTTP.Message.Close(1000, \"bye\"))]",
+    "HTTP.DownloadOptions(timeout_ms: 5, max_total_bytes: 268435456)",
+    "Toml.Value.Array([Toml.Value.Int(1)])",
+    "Kind.Flag",
     ""
   ],
   "stderr": []

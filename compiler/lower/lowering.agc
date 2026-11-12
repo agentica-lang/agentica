@@ -254,6 +254,7 @@ def run(linked: Linker.Linked, checked: Checker.Checked) -> Result[Ir.Program]
       sources: kept_sources,
       structs: tables.structs,
       enums: tables.enums,
+      written: std_aliases(linked),
       functions: pin_prelude_spans(built, kept_sources),
       entry: entry,
       globals: plan.slots.size,
@@ -579,6 +580,33 @@ def reads_of(plan: Const.Plan) -> Map[String, Lowering.Read]
   end
 
   reads
+end
+
+# The alias of each std/ module that a file of the program imports with one (`import HTTP from "std/http"`), by the
+# linker prefix of the module. The root file comes first, then the other files in link order, and the first alias wins;
+# the imports that std/ modules make of each other do not count, so a user type and a std/ type that the program only
+# imports by name (`import {Download}`) keep their bare name.
+def std_aliases(linked: Linker.Linked) -> Map[String, String]
+  prefixes: Map[String, String] = {}
+  for module in linked.modules
+    if module.key.start_with?("std/") and module.prefix != ""
+      prefixes = prefixes.put(module.key, module.prefix)
+    end
+  end
+
+  written: Map[String, String] = {}
+  for module in linked.modules
+    if !module.key.start_with?("std/")
+      for alias in module.aliases.keys.sort
+        prefix = prefixes.get(module.aliases[alias], "")
+        if prefix != "" and !written.has_key?(prefix)
+          written = written.put(prefix, alias)
+        end
+      end
+    end
+  end
+
+  written
 end
 
 # The files in the order the lowering first emits an instruction of each: the root, then the file of each function,

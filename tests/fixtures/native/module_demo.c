@@ -265,7 +265,7 @@ static an_term lie(an_env *env, int argc, const an_term *argv) {
 }
 
 /* The rows of the type table. */
-enum { POINT_TYPE, SHAPE_TYPE };
+enum { POINT_TYPE, SHAPE_TYPE, PAIR_TYPE };
 enum { SHAPE_DOT, SHAPE_CIRCLE, SHAPE_RECT };
 
 /* Point(x: y, y: x). */
@@ -275,6 +275,15 @@ static an_term flip(an_env *env, int argc, const an_term *argv) {
   if (!an_get_field(env, argv[0], POINT_TYPE, 1, &fields[0]) || !an_get_field(env, argv[0], POINT_TYPE, 0, &fields[1]))
     return an_badarg(env, 0);
   return an_struct(env, POINT_TYPE, fields);
+}
+
+/* The Pair of std/uri with its name and value swapped: a std record crosses by its bare name. */
+static an_term swap_pair(an_env *env, int argc, const an_term *argv) {
+  an_term fields[2];
+  (void)argc;
+  if (!an_get_field(env, argv[0], PAIR_TYPE, 1, &fields[0]) || !an_get_field(env, argv[0], PAIR_TYPE, 0, &fields[1]))
+    return an_badarg(env, 0);
+  return an_struct(env, PAIR_TYPE, fields);
 }
 
 static bool get_xy(an_env *env, an_term point, int64_t *x, int64_t *y) {
@@ -512,6 +521,7 @@ static const an_resource_type resources[] = {
 static const an_type types[] = {
   {"Point", AN_STRUCT, "x: Int, y: Int"},
   {"Shape", AN_ENUM, "Dot | Circle(Int) | Rect(Point, Point)"},
+  {"Pair", AN_STRUCT, "name: String, value: String"},
 };
 
 static const an_function functions[] = {
@@ -541,6 +551,7 @@ static const an_function functions[] = {
   {"lie", "() -> Int", lie, AN_SHORT},
   {"crunch", "(Int, Int) -> Int", add, AN_DIRTY},
   {"flip", "(Point) -> Point", flip, AN_SHORT},
+  {"swap_pair", "(Pair) -> Pair", swap_pair, AN_SHORT},
   {"area", "(Shape) -> Int", area, AN_SHORT},
   {"grow", "(Shape, Int) -> Shape", grow, AN_SHORT},
   {"points", "(Int) -> List[Point]", points, AN_SHORT},

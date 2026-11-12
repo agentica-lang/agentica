@@ -59,7 +59,7 @@ end
 
 def main() -> Void
   puts(load("name = \"web\"\nport = 8080\n").unwrap!.port)       # 8080
-  puts(Toml.get(Toml.parse("[a]\nb = 1\n").unwrap!, "a.b"))     # ok(Value.Int(1))
+  puts(Toml.get(Toml.parse("[a]\nb = 1\n").unwrap!, "a.b"))     # ok(Toml.Value.Int(1))
   puts(Toml.parse("a = [1, 2\n"))                               # error("line 2, column 1: expected ',' or ']' in an array")
 end
 ```

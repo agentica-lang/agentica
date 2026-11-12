@@ -311,7 +311,7 @@ def test_the_user_info_of_the_proxy_is_its_basic_login_and_a_407_names_the_proxy
     lines = output_lines(result.stdout)
     # A printed connection holds its proxy without the user info (the login is in a channel, which prints opaque).
     shown = lines[lines.index("-- printing a connection shows no password, and the origin never got a Proxy-Authorization header") + 1]
-    assert shown.startswith("Connection(") and 'proxy: "http://127.0.0.1:%s"' % locked in shown, shown
+    assert shown.startswith("HTTP.Connection(") and 'proxy: "http://127.0.0.1:%s"' % locked in shown, shown
     assert "login: <Channel>" in shown, shown
     lines = [line if line != shown else "<INSPECT>" for line in lines]
     assert lines == [

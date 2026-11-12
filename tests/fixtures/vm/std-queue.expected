@@ -5,7 +5,7 @@
   "stdout": [
     "2",
     "ok(\"a\")",
-    "a QueueState(items: [\"b\"])",
+    "a Queue.QueueState(items: [\"b\"])",
     "error(\"queue is empty\")",
     "false",
     ""
