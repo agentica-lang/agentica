@@ -296,6 +296,39 @@ end
 -1
 ```
 
+## edit_distance and jaro_winkler
+
+```signature
+String.edit_distance(s: String, other: String) -> Int
+String.edit_distance(s: String, other: String, max: Int) -> Int
+String.jaro_winkler(s: String, other: String) -> Float
+```
+
+Both measure how close two texts are, in characters as `length` counts them, and give the same result in either order. They find the nearest name in a list, as a "did you mean" hint does.
+
+`edit_distance` is the Levenshtein distance: the fewest inserts, deletes and replacements of one character that turn `s` into `other`. It takes time in proportion to `s.length * other.length`, and memory in proportion to the shorter text. With `max`, the result stops at `max + 1`: once the distance is past `max`, the method gives `max + 1`. The work is then about `length * (2 * max + 1)` steps, with `length` the longer text's, and it ends early once the distance is past `max`, so a small `max` is fast on long texts. A negative `max` stops the program with `RUNTIME-INVALID-COUNT`.
+
+`jaro_winkler` is the Jaro-Winkler similarity, from `0.0` (nothing in common) to `1.0` (the same text), as Ruby's `DidYouMean::JaroWinkler` computes it: when the Jaro similarity is above `0.7`, each character of a common prefix of up to 4 adds a tenth of what is left to `1.0`. Two empty texts give `1.0`, and an empty text against another gives `0.0`.
+
+```agentica
+def main() -> Void
+  puts("kitten".edit_distance("sitting"))
+  puts("kitten".edit_distance("sitting", 2))
+  puts("café".edit_distance("cafe"))
+  puts("martha".jaro_winkler("marhta"))
+  names = ["length", "upcase", "reverse"]
+  puts(names.min_by do |name: String| name.edit_distance("lenght") end)
+end
+```
+
+```output
+3
+3
+1
+0.9611111111111111
+some("length")
+```
+
 ## to_i and to_f
 
 ```signature

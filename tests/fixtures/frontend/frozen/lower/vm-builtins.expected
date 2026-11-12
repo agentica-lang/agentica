@@ -305,6 +305,7 @@ String.code
 String.compare
 String.contains?
 String.downcase
+String.edit_distance
 String.encode
 String.ends_with?
 String.from_bytes.bytes
@@ -312,6 +313,7 @@ String.from_code
 String.from_float
 String.from_int
 String.index_of.optional
+String.jaro_winkler
 String.join
 String.length
 String.multiply

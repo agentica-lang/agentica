@@ -1,6 +1,6 @@
 /*
- * UTF-8 helpers over every code point, case mapping, KMP search, and the Int
- * and Float parsing edge cases.
+ * UTF-8 helpers over every code point, case mapping, KMP search, the Int and
+ * Float parsing edge cases, and the edit distance and Jaro-Winkler builtins.
  */
 #include "../core.h"
 #include "../services.h"
@@ -260,6 +260,99 @@ static void shared_strings(agc_vm *vm) {
   assert(rt->empty_string->bytes == 0 && rt->empty_string->chars == 0);
 }
 
+/* s.edit_distance(other), or with CAP >= 0 s.edit_distance(other, CAP), both ways round: the distance is symmetric. */
+static int64_t distance(agc_vm *vm, const char *s, const char *other, int64_t cap) {
+  agc_value args[3] = {str(s), str(other), agc_int(cap)};
+  int64_t d = agc_as_int(vm, call(vm, "String.edit_distance", cap < 0 ? 2 : 3, args));
+  args[0] = str(other);
+  args[1] = str(s);
+  assert(agc_as_int(vm, call(vm, "String.edit_distance", cap < 0 ? 2 : 3, args)) == d);
+  return d;
+}
+
+static double jaro_winkler(agc_vm *vm, const char *s, const char *other) {
+  agc_value args[2] = {str(s), str(other)};
+  double x = agc_as_float(vm, call(vm, "String.jaro_winkler", 2, args));
+  args[0] = str(other);
+  args[1] = str(s);
+  assert(agc_as_float(vm, call(vm, "String.jaro_winkler", 2, args)) == x);
+  assert(x >= 0.0 && x <= 1.0);
+  return x;
+}
+
+/* The whole Levenshtein table over code points, the reference for the banded walk. */
+static int64_t table_distance(const uint32_t *a, size_t n, const uint32_t *b, size_t m) {
+  size_t *row = malloc((m + 1) * sizeof *row);
+  assert(row);
+  for (size_t j = 0; j <= m; j++) row[j] = j;
+  for (size_t i = 1; i <= n; i++) {
+    size_t diag = row[0];
+    row[0] = i;
+    for (size_t j = 1; j <= m; j++) {
+      size_t up = row[j], v = diag + (a[i - 1] != b[j - 1]);
+      if (up + 1 < v) v = up + 1;
+      if (row[j - 1] + 1 < v) v = row[j - 1] + 1;
+      diag = up;
+      row[j] = v;
+    }
+  }
+  int64_t d = (int64_t)row[m];
+  free(row);
+  return d;
+}
+
+/* Empty texts, multibyte and combining characters (one character each, as length counts them), the max cut-off,
+   symmetry, Winkler's examples, and random texts against the whole table for each max. */
+static void distances(agc_vm *vm) {
+  assert(distance(vm, "", "", -1) == 0 && distance(vm, "", "", 0) == 0);
+  assert(distance(vm, "", "abc", -1) == 3 && distance(vm, "", "abc", 1) == 2);
+  assert(distance(vm, "kitten", "sitting", -1) == 3);
+  assert(distance(vm, "kitten", "sitting", 2) == 3 && distance(vm, "kitten", "sitting", 3) == 3);
+  assert(distance(vm, "kitten", "sitting", 0) == 1 && distance(vm, "kitten", "kitten", 0) == 0);
+  assert(distance(vm, "kitten", "sitting", INT64_MAX) == 3);
+  assert(distance(vm, "caf\xc3\xa9", "cafe", -1) == 1);
+  assert(distance(vm, "e\xcc\x81", "\xc3\xa9", -1) == 2);
+  assert(distance(vm, "\xf0\x9f\x91\x8d\xf0\x9f\x8f\xbd", "\xf0\x9f\x91\x8d", -1) == 1);
+  /* Common ends that stop inside a character: é (C3 A9) against è (C3 A8), and € (E2 82 AC) against ₭ (E2 82 AD). */
+  assert(distance(vm, "x\xc3\xa9y", "x\xc3\xa8y", -1) == 1 && distance(vm, "\xe2\x82\xac", "\xe2\x82\xad", 0) == 1);
+
+  assert(jaro_winkler(vm, "", "") == 1.0 && jaro_winkler(vm, "", "a") == 0.0);
+  assert(jaro_winkler(vm, "a", "a") == 1.0 && jaro_winkler(vm, "a", "b") == 0.0);
+  assert(jaro_winkler(vm, "abc", "xyz") == 0.0 && jaro_winkler(vm, "same", "same") == 1.0);
+  assert(fabs(jaro_winkler(vm, "MARTHA", "MARHTA") - 0.961) < 0.0005);
+  assert(fabs(jaro_winkler(vm, "DWAYNE", "DUANE") - 0.84) < 0.0005);
+  assert(fabs(jaro_winkler(vm, "DIXON", "DICKSONX") - 0.813) < 0.0005);
+  /* A Jaro similarity of 0.7 or less gets no prefix bonus: "ab" and "ac" share "a" and stay at 2/3. */
+  assert(fabs(jaro_winkler(vm, "ab", "ac") - 2.0 / 3.0) < 1e-12);
+  assert(fabs(jaro_winkler(vm, "\xc3\xa9t\xc3\xa9", "\xc3\xa9t\xc3\xa8") - jaro_winkler(vm, "ete", "etf")) < 1e-12);
+
+  static const char *pieces[] = {"a", "b", "\xc3\xa9", "\xe2\x82\xac", "\xf0\x9f\x98\x80", "\xcc\x81"};
+  static const uint32_t codes[] = {'a', 'b', 0xE9, 0x20AC, 0x1F600, 0x301};
+  unsigned seed = 1441;
+  for (size_t k = 0; k < 400; k++) {
+    char text[2][401];
+    uint32_t points[2][100];
+    size_t lengths[2];
+    for (size_t t = 0; t < 2; t++) {
+      seed = seed * 1103515245u + 12345u;
+      size_t length = (seed >> 16) % (k % 4 == 0 ? 100 : 12), bytes = 0;
+      for (size_t c = 0; c < length; c++) {
+        seed = seed * 1103515245u + 12345u;
+        size_t pick = (seed >> 16) % (2 + k % 5);
+        memcpy(text[t] + bytes, pieces[pick], strlen(pieces[pick]));
+        bytes += strlen(pieces[pick]);
+        points[t][c] = codes[pick];
+      }
+      text[t][bytes] = '\0';
+      lengths[t] = length;
+    }
+    int64_t want = table_distance(points[0], lengths[0], points[1], lengths[1]);
+    assert(distance(vm, text[0], text[1], -1) == want);
+    for (int64_t cap = 0; cap <= 6; cap++) assert(distance(vm, text[0], text[1], cap) == (want <= cap ? want : cap + 1));
+    (void)jaro_winkler(vm, text[0], text[1]);
+  }
+}
+
 int main(void) {
   agc_init();
   utf8_word_paths();
@@ -457,6 +550,7 @@ int main(void) {
   assert(agc_parse_float((const uint8_t *)"1.5\0", 4, &x) == AGC_NUMBER_INVALID);
 
   shared_strings(&vm);
+  distances(&vm);
 
   printf("string tests passed\n");
   return 0;

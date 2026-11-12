@@ -24,6 +24,8 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A call without arguments drops its `()` before a block: `run do ... end`,
   `xs.each do |x| ... end`, and a block in braces, `xs.map { |x| x * 2 }`;
   `agentica fmt` removes the empty `()` (`run() do` still parses).
+- `s.edit_distance(other)` (Levenshtein, in characters; `edit_distance(other,
+  max)` stops at `max + 1`) and `s.jaro_winkler(other)` (from 0.0 to 1.0).
 
 ### Changed
 

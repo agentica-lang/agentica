@@ -8,8 +8,8 @@ import Model from "builtin_model"
 ## Every builtin, sorted by name; the Zlib rows, the ATS rows, the Base64 and hex rows, the digest rows, the HMAC rows,
 ## the OpenSSL.Random rows, the OpenSSL.HMAC.secure_compare row, the Bytes rows, the Cipher and CMAC rows, the AES-GCM
 ## and KDF rows, the Optional rows, the text codec rows, the task monitor rows, the Native.Mutex rows, the RSA row, the
-## Range Enumerable rows and then the DNS row are appended last, in contract order, so the positions of the existing
-## rows never shift. A builtin of a family (FAMILIES) is named Family.Member.fn, such as
+## Range Enumerable rows, the DNS row and then the String distance rows are appended last, in contract order, so the
+## positions of the existing rows never shift. A builtin of a family (FAMILIES) is named Family.Member.fn, such as
 ## OpenSSL.Cipher.aes_256_gcm_encrypt.
 BUILTIN_GROUP_1 = ROWS_1.concat(ROWS_2.concat(ROWS_3.concat(ROWS_4.concat(ROWS_5))))
 BUILTIN_GROUP_2 = ROWS_6.concat(ROWS_7.concat(ROWS_8.concat(ROWS_9.concat(ROWS_10))))
@@ -25,7 +25,7 @@ BUILTIN_GROUP_11 = ROWS_51.concat(ROWS_52.concat(ROWS_53.concat(ROWS_54.concat(R
 BUILTIN_GROUP_12 = ROWS_56.concat(ROWS_57.concat(ROWS_58.concat(ROWS_59.concat(ROWS_60))))
 BUILTIN_GROUP_13 = ROWS_61.concat(ROWS_62.concat(ROWS_63.concat(ROWS_64.concat(ROWS_65))))
 BUILTIN_GROUP_14 = ROWS_66.concat(ROWS_67.concat(ROWS_68.concat(ROWS_69.concat(ROWS_70))))
-BUILTIN_GROUP_15 = ROWS_71
+BUILTIN_GROUP_15 = ROWS_71.concat(ROWS_72)
 BUILTIN_GROUPS_1 = BUILTIN_GROUP_1.concat(BUILTIN_GROUP_2.concat(BUILTIN_GROUP_3))
 BUILTIN_GROUPS_2 = BUILTIN_GROUP_4.concat(BUILTIN_GROUP_5.concat(BUILTIN_GROUP_6))
 BUILTIN_GROUPS_3 = BUILTIN_GROUP_7.concat(BUILTIN_GROUP_8.concat(BUILTIN_GROUP_9))
@@ -6936,6 +6936,54 @@ ROWS_71: List[Model.Builtin] = [
     description: (
       "Resolve a host name with the system resolver: every IPv4 and IPv6 address as text, in its order, without " +
       "duplicates; an IP literal gives itself."
+    ),
+    alternatives: [],
+  ),
+]
+
+## The String distance rows; appended last so the positions of the existing rows never shift.
+ROWS_72: List[Model.Builtin] = [
+  Model.Builtin(
+    name: "String.edit_distance",
+    parameters: [Model.Named(name: "s", type: Types.Type.String), Model.Named(name: "other", type: Types.Type.String)],
+    result: Types.Type.Int,
+    rule: Model.Rule.Plain,
+    implementation: "String.edit_distance",
+    effects: [],
+    description: (
+      "The Levenshtein distance in characters: the fewest inserts, deletes and replacements of one character that " +
+      "turn s into other; O(n * m) time, O(min(n, m)) memory; or, with max, max + 1 once it passes max."
+    ),
+    alternatives: [
+      Model.Builtin(
+        name: "String.edit_distance",
+        parameters: [
+          Model.Named(name: "s", type: Types.Type.String),
+          Model.Named(name: "other", type: Types.Type.String),
+          Model.Named(name: "max", type: Types.Type.Int),
+        ],
+        result: Types.Type.Int,
+        rule: Model.Rule.Plain,
+        implementation: "String.edit_distance",
+        effects: [],
+        description: (
+          "The Levenshtein distance, or max + 1 once it passes max, in about n * (2 * max + 1) steps; a negative " +
+          "max halts."
+        ),
+        alternatives: [],
+      ),
+    ],
+  ),
+  Model.Builtin(
+    name: "String.jaro_winkler",
+    parameters: [Model.Named(name: "s", type: Types.Type.String), Model.Named(name: "other", type: Types.Type.String)],
+    result: Types.Type.Float,
+    rule: Model.Rule.Plain,
+    implementation: "String.jaro_winkler",
+    effects: [],
+    description: (
+      "The Jaro-Winkler similarity in characters, from 0.0 to 1.0; a common prefix of up to 4 characters raises it " +
+      "when the Jaro similarity is above 0.7; two empty strings give 1.0."
     ),
     alternatives: [],
   ),
