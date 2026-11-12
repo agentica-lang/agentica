@@ -20,6 +20,7 @@ export enum Rule
   CodecEncode
   CodecMembers
   Error
+  ErrorKind
   Identity
   JsonDecode
   JsonEncode

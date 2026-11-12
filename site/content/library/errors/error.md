@@ -54,7 +54,15 @@ main.agc:2:10
 
 `error(message, kind:, code:, details:, cause:)` takes the other fields as named arguments after the message, each optional and in any order. `code:` takes an `Int` and `cause:` an `Error`, which the call stores as `some(...)`; `location` is never given. `Result.Err(...)` takes the same arguments.
 
-A kind is a dotted name: parts of `a-z`, `0-9` and `_`, each starting with a letter (`db`, `db.constraint`, `io.not_found`). A text literal given as `kind:` that is not one is `CHECK-ERROR-KIND`; a kind computed at run time is kept as it is. A caller branches on the kind or the code, never on the message text.
+A kind is a dotted name: parts of `a-z`, `0-9` and `_`, each starting with a letter (`db`, `db.constraint`, `io.not_found`). A text literal given as `kind:` or to `is_a?` that is not one is `CHECK-ERROR-KIND`; a kind computed at run time is kept as it is. A caller branches on the kind or the code, never on the message text.
+
+## is_a?
+
+```signature
+e.is_a?(family: String) -> Bool
+```
+
+True when the kind is `family` or starts with `family` and a dot, so `e.is_a?("db")` takes `db` and `db.constraint` but not `dbx`: the family plays the part of an exception class and its subclasses. `kind_of?` is the same method.
 
 ```agentica
 def insert(name: String) -> Result[Int]
@@ -66,7 +74,8 @@ end
 def main() -> Void
   case insert("taken")
     ok(id) -> puts(id)
-    error(e) if e.kind == "db.constraint" -> puts("duplicate, code #{e.code}")
+    error(e) if e.is_a?("db.constraint") -> puts("duplicate, code #{e.code}")
+    error(e) if e.is_a?("db") -> puts("database: #{e.message}")
     error(e) -> puts(e.message)
   end
 end

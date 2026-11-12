@@ -4310,6 +4310,19 @@ ROWS_36: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
+    name: "Error.is_a?",
+    parameters: [
+      Model.Named(name: "e", type: Types.Type.Struct("Error", [])),
+      Model.Named(name: "family", type: Types.Type.String),
+    ],
+    result: Types.Type.Bool,
+    rule: Model.Rule.ErrorKind,
+    implementation: "Error.is_a?",
+    effects: [],
+    description: "Whether the kind is the family or one of its dotted kinds: is_a?(\"db\") takes db.constraint.",
+    alternatives: [],
+  ),
+  Model.Builtin(
     name: "Result.message",
     parameters: [Model.Named(name: "r", type: Types.Type.Result(Types.Type.Var("T")))],
     result: Types.Type.String,

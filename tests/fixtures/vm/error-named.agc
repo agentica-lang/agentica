@@ -38,6 +38,15 @@ def main() -> Void
       puts(e)
   end
 
+  # is_a? takes the kind itself and its dotted kinds; kind_of? is the same method.
+  case insert("taken")
+    ok(id) -> puts(id)
+    error(e) ->
+      family = "db"
+      puts([e.is_a?("db"), e.is_a?(family), e.kind_of?("db.constraint"), e.is_a?("db.constraint.x")])
+      puts([e.is_a?("d"), e.is_a?("dbx"), e.is_a?("db.c"), e.is_a?("config")])
+  end
+
   # A computed kind is kept as it is; only a literal is checked.
   kind = "Any Text"
   computed: Result[Int] = error("x", kind: kind)

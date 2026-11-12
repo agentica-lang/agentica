@@ -213,6 +213,10 @@ def check_rule(cx: State.Cx, st: State.St, site: State.Site, rule: Model.Rule) -
     Model.Rule.Ok -> check_ok(cx, st, site)
     Model.Rule.OkVoid -> ok(State.Out(st: st, type: T.Type.Result(T.Type.Void)))
     Model.Rule.Error -> check_error(cx, st, site)
+    Model.Rule.ErrorKind ->
+      # e.is_a?("db"): a kind literal must be a dotted name, as in error(..., kind: ...).
+      try ErrorArgs.check_kind_literal(cx, st, site.args[site.args.size - 1])
+      check_plain(cx, st, site)
     Model.Rule.OptionalSome -> check_some(cx, st, site)
     Model.Rule.OptionalNone -> check_none(cx, st, site)
     Model.Rule.JsonDecode -> check_json_type(cx, st, site, true)

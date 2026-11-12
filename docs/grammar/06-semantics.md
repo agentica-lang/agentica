@@ -815,8 +815,11 @@ puts(seen)
   is `CHECK-ARITY`; `code: some(19)` is `CHECK-TYPE-MISMATCH`.
 - A kind is a dotted name: parts of `a-z`, `0-9` and `_`, each starting with a
   letter, joined by single dots (`db`, `db.constraint`, `io.not_found`). A
-  text literal given as `kind:` that is not one is `CHECK-ERROR-KIND`; a
-  computed kind is not checked.
+  text literal given as `kind:` or to `is_a?` that is not one is
+  `CHECK-ERROR-KIND`; a computed kind is not checked. `e.is_a?(family)` is true
+  when the kind is `family` or starts with `family` and a dot (`db` takes
+  `db.constraint`, not `dbx`); `kind_of?` is the same method, and `is?` is
+  `CHECK-UNKNOWN-METHOD` with a help that shows `is_a?`.
 - `Error(...)` is `CHECK-ERROR-CONSTRUCTOR`: only `error(...)` builds an
   `Error`, and `e.with(...)` changes one.
 - `location` is `path:line:col` of the `error(...)` call, or for an error that a

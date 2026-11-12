@@ -31,9 +31,10 @@ export def method_key(name: String) -> String
 end
 
 ## The receiver kind of a builtin whose first parameter has this type: its tag (`String`, `List`, ...), but Mutex for
-## Native.Mutex, the one opaque type with methods.
+## Native.Mutex, the one opaque type with methods, and Error for the builtin record Error, the one struct with methods.
 export def parameter_kind(type: Types.Type) -> String
   return "Mutex" if Types.is?(type, "Opaque") and Types.name(type) == "Native.Mutex"
+  return "Error" if Types.error?(type)
 
   Types.tag(type)
 end

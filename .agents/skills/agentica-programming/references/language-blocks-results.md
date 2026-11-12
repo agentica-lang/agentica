@@ -86,8 +86,9 @@ error(e: Error) -> Result[T]
   arguments after the message, each optional, any order; `code` and `cause`
   are stored as `some(...)` (`code: some(19)` is an error). A `kind:` literal
   is a dotted name of `a-z`, `0-9`, `_` (`CHECK-ERROR-KIND`). Branch on
-  `e.kind` or `e.code`, not on the message. `Error(...)` is
-  `CHECK-ERROR-CONSTRUCTOR`; only `error(...)` builds one.
+  `e.is_a?("db")` (the kind `db` or any `db.*`; `kind_of?` too) or `e.code`,
+  never on the message. `Error(...)` is `CHECK-ERROR-CONSTRUCTOR`; only
+  `error(...)` builds one.
 - `e.inspect` and a printed failed Result show `error("text")`, plus the
   fields that are not their default (never `location`). `==` on Errors skips
   `location`. `Error` is a reserved type name (`CHECK-REDEFINED-NAME`).

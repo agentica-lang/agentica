@@ -151,6 +151,9 @@ Change style only in code you touch. Restyle untouched code separately.
   enum for caller-visible outcomes, `error(msg)` for human-readable failures.
 - A parser returns `Result[T]`, not a struct with a `valid` or `refused`
   field.
+- A failure a caller may branch on gets a kind (`error("...", kind:
+  "db.constraint")`); the caller tests `e.is_a?("db")` or `e.code`, never the
+  message text.
 
 ## Strings and collections
 

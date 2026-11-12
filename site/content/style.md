@@ -538,6 +538,32 @@ def main() -> Void
 end
 ```
 
+A failure that a caller may branch on gets a [kind](/library/errors/error/#kinds), and the caller tests the kind with `is_a?` or reads `e.code`, never the message text:
+
+```agentica {mode="check"}
+# bad
+def main() -> Void
+  r: Result[Int] = error("unique failed: 19")
+  case r
+    ok(n) -> puts(n)
+    error(e) if e.message.start_with?("unique failed") -> puts("duplicate")
+    error(e) -> IO.warn(e.message)
+  end
+end
+```
+
+```agentica {mode="check"}
+# good
+def main() -> Void
+  r: Result[Int] = error("unique failed", kind: "db.constraint", code: 19)
+  case r
+    ok(n) -> puts(n)
+    error(e) if e.is_a?("db.constraint") -> puts("duplicate")
+    error(e) -> IO.warn(e.message)
+  end
+end
+```
+
 ## Text and collections
 
 Build text with interpolation, not by joining pieces with `+` and `.to_s`. To wrap a long text, a few sentence-sized `+` pieces in parentheses are fine. Use a heredoc for text of several lines:

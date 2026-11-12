@@ -39,6 +39,7 @@ export def receiver_kind(type: T.Type) -> String
   end
 
   return "Mutex" if RubyForm.parameter_kind(type) == "Mutex"
+  return "Error" if RubyForm.parameter_kind(type) == "Error"
 
   # No tag is "Mutex", so only the words of the tags match here.
   return word if METHOD_KINDS.include?(word)
