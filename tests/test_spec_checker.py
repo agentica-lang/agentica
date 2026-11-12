@@ -120,20 +120,35 @@ def test_pipe_calls_user_functions_and_builtins(tmp_path):
 
 
 def test_pipe_into_a_builtin_with_a_method_form_is_pipe_method(tmp_path):
-    expect(main_with('  s = " a "\n  t = s |> String.trim()\n  puts(t)'),
-           "CHECK-PIPE-METHOD", (3, 12), tmp_path, "String.trim()")
-    tried = (METHOD_PIPE_HELPERS + "def h() -> Result[String]\n  z = 1 |> try g() |> String.from_int()\n"
+    expect(main_with('  s = " a "\n  t = s |> String.strip()\n  puts(t)'),
+           "CHECK-PIPE-METHOD", (3, 12), tmp_path, "String.strip()")
+    tried = (METHOD_PIPE_HELPERS + "def h() -> Result[String]\n  z = 1 |> try g() |> Int.to_s()\n"
              "  return ok(z)\nend\n\n")
     cases = [
         main_with('  s = "a,b"\n  xs = s.strip |> String.split(",")\n  puts(xs.size)'),
         main_with('  n = "a" + "b" |> String.length()'),
-        METHOD_PIPE_HELPERS + main_with("  z = 1 |> f() |> String.from_int()"),
+        METHOD_PIPE_HELPERS + main_with("  z = 1 |> f() |> Int.to_s()"),
         tried + main_with("  puts(1)"),
         METHOD_PIPE_HELPERS + main_with("  xs = [1, 2]\n  ys = xs |> List.map() do |v: Int| v |> f() end"),
         main_with("  xs = [1, 2]\n  ys = (xs |> List.map()) do |v: Int| v end"),
     ]
     for text in cases:
         assert_code(text, "CHECK-PIPE-METHOD", tmp_path)
+
+
+def test_an_old_name_of_a_builtin_is_an_unknown_method_or_name(tmp_path):
+    # The Ruby name is the only name (#574): the old one is an error with a help (it names the Ruby form).
+    for body, code, start, covers in (
+            ('  puts(" a ".trim)', "CHECK-UNKNOWN-METHOD", (2, 8), '" a ".trim'),
+            ('  puts("12".to_int!)', "CHECK-UNKNOWN-METHOD", (2, 8), '"12".to_int!'),
+            ('  puts("ab".starts_with?("a"))', "CHECK-UNKNOWN-METHOD", (2, 8), '"ab".starts_with?("a")'),
+            ("  puts(2.5.to_int!)", "CHECK-UNKNOWN-METHOD", (2, 8), "2.5.to_int!"),
+            ('  puts(String.trim(" a "))', "CHECK-UNKNOWN-NAME", (2, 8), 'String.trim(" a ")'),
+            ("  puts(String.from_int(1))", "CHECK-UNKNOWN-NAME", (2, 8), "String.from_int(1)"),
+            ("  puts(Float.from_int(1))", "CHECK-UNKNOWN-NAME", (2, 8), "Float.from_int(1)"),
+            ("  f = &String.to_int", "CHECK-UNKNOWN-NAME", (2, 7), "&String.to_int")):
+        found = expect(main_with(body), code, start, tmp_path, covers)
+        assert found.get("help"), body
 
 
 def test_length_and_size_are_both_methods_of_string_list_map_set_and_range(tmp_path):

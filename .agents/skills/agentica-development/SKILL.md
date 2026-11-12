@@ -22,11 +22,15 @@ This file says how to work and which reference to read; the tree is in
   (`gh issue view N -R agentica-lang/agentica`) and build only what it asks;
   `docs/future/` keeps the designs that issues point to.
 - One way per thing, and it is the Ruby form (name, method form, syntax). A
-  different Agentica name is only the internal builtin name, with the Ruby
-  name as its alias (`method_aliases` in `check_tables.agc`); every
+  builtin row has the Ruby name (`String.strip`, `Int.to_s`, `List.join`); a
+  few keep an older Agentica name with the Ruby name as its alias
+  (`List.filter` and `select`; `method_aliases` in `check_tables.agc`). Every
   user-facing text (help, diagnostics, docs, site, skills) shows only the
-  Ruby form (`s.strip`, not `String.trim`). A non-Ruby habit gets a `help:`
-  hint, not a second accepted form. Exception: Ruby's own synonyms are all
+  Ruby form (`list.select`, not `List.filter`). A non-Ruby habit or an old
+  name (`trim`, `String.from_int`) gets a `help:` hint
+  (`foreign_kind_methods`, `foreign_names`), not a second accepted form. The
+  VM keys (`implementation`) keep the old names: stage0 and compiled bytecode
+  import them. Exception: Ruby's own synonyms are all
   accepted (`length`/`size`, `collect`, `inject`, `detect`, `member?`;
   `ruby_synonyms`), and texts show only the most common one.
 

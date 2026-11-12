@@ -1,7 +1,8 @@
-## The builtins that a name from another language stands for, for `agentica help`: `strip` and `String.strip` are
-## `String.trim` (which `help` writes in its Ruby form, `s.strip()`), `len` is `size` or `length` of each type that has
-## one, `value!` is `Result.unwrap!`. The names come from the tables the checker already keeps for its "did you mean"
-## help (check_tables.agc), plus every public builtin whose method name (the part after the dot) is the name asked.
+## The builtins that a name from another language stands for, for `agentica help`: `select` and `List.select` are
+## `List.filter` (which `help` writes in its Ruby form, `list.select()`), `len` is `size` or `length` of each type that
+## has one, `value!` is `Result.unwrap!`. The names come from the tables the checker already keeps for its "did you
+## mean" help (check_tables.agc), plus every public builtin whose method name (the part after the dot) is the name
+## asked.
 
 import {PUBLIC_NAMES} from "../catalog/builtins"
 import CatalogJson from "../catalog/catalog_json"
@@ -56,7 +57,7 @@ export def kind_hints(name: String) -> Map[String, String]
   found
 end
 
-# The method aliases of the checker: `String.strip` is `String.trim`. `self` (`String.to_s`) is no builtin.
+# The method aliases of the checker: `List.select` is `List.filter`. `self` (`String.to_s`) is no builtin.
 def from_aliases(method: String, kind: String) -> List[String]
   aliases = Tables.method_aliases()
   found: List[String] = []
@@ -94,7 +95,7 @@ def from_renamed(method: String, kind: String, modules: Map[String, String]) -> 
   found
 end
 
-# The builtins whose method name is `method`: `trim` is `String.trim`.
+# The builtins whose method name is `method`: `strip` is `String.strip`.
 def from_method_names(method: String, kind: String, modules: Map[String, String]) -> List[String]
   ending = ".#{method}"
   found: List[String] = []

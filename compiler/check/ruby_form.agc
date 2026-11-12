@@ -1,7 +1,7 @@
 ## The Ruby form of a builtin, which `agentica help`, the JSON catalog and the helps of the checker show instead of
-## the name of the builtin: `String.trim` is written `s.strip()`, `Result.ok?` is written `r.ok?()`. Both names are
+## the name of the builtin: `List.filter` is written `list.select()`, `Result.ok?` is written `r.ok?()`. Both names are
 ## accepted (check_tables.agc, `method_aliases`); only the text speaks Ruby. A builtin has a method form when a method
-## alias points to it (`String.strip`) or when it is a method of its own kind (`Result.ok?`, the same rule as the
+## alias points to it (`List.select`) or when it is a method of its own kind (`Result.ok?`, the same rule as the
 ## checker's `catalog_method`). A builtin that is no method of any kind (`File.read`) has none.
 
 import Types from "../syntax/types"
@@ -10,7 +10,7 @@ import Builtins from "../catalog/builtins"
 import {ENTRIES} from "../catalog/builtins"
 import Tables from "check_tables"
 
-## `Kind.method` of the Ruby method form of the builtin `name` (`String.strip` for `String.trim`), or "" when it has
+## `Kind.method` of the Ruby method form of the builtin `name` (`List.select` for `List.filter`), or "" when it has
 ## none.
 export def method_key(name: String) -> String
   aliased = by_builtin().get(name)
@@ -38,7 +38,7 @@ export def parameter_kind(type: Types.Type) -> String
   Types.tag(type)
 end
 
-## The method name of the Ruby form of the builtin `name` (`strip` for `String.trim`), or "".
+## The method name of the Ruby form of the builtin `name` (`select` for `List.filter`), or "".
 export def method_name(name: String) -> String
   key = method_key(name)
   return "" if key == ""
@@ -80,7 +80,7 @@ export def written_as?(name: String, method: String) -> Bool
   false
 end
 
-## The Ruby form of a builtin name as a suggestion: `s.strip` for `String.trim`; `name` when it has none.
+## The Ruby form of a builtin name as a suggestion: `list.select` for `List.filter`; `name` when it has none.
 export def shown(name: String) -> String
   method = method_name(name)
   entry = ENTRIES.get(name)

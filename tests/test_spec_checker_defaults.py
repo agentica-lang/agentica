@@ -280,7 +280,7 @@ SINGLE_FILE = [
      main_with('  f = &File.open\n'), "CHECK-UNKNOWN-NAME", "&File.open"),
     ("a builtin with a rule of its own is no function value",
      main_with('  f = &List.map\n'), "CHECK-UNKNOWN-NAME", "&List.map"),
-    ("a builtin method is a function value only under its Ruby name",
+    ("a builtin method is no function value under an old name",
      main_with('  f = &String.trim\n'), "CHECK-UNKNOWN-NAME", "&String.trim"),
     ("a function value of an unknown builtin is an unknown name",
      main_with('  f = &Time.nope\n'), "CHECK-UNKNOWN-NAME", "&Time.nope"),

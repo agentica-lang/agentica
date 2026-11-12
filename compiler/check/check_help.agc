@@ -101,7 +101,7 @@ export def moved(name: String) -> String
 end
 
 ## The "did you mean" help for the closest of the candidates and the shared names, or "". A builtin that has a Ruby
-## method form is offered in it (`s.strip`, not `String.trim`).
+## method form is offered in it (`list.select`, not `List.filter`).
 export def near(name: String, candidates: List[String], shared: List[String]) -> String
   case Suggest.closest_among(name, candidates, shared)
     some(found) -> "did you mean \"#{RubyForm.shown(found)}\"?"

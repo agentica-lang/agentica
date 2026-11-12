@@ -40,7 +40,7 @@ program #161 0:1:1-781:37:1
           arg: block-lit #38 216:12:30-233:12:47 type=Fn([Int], String)
             param: block-param #34 220:12:34-221:12:35 name="x"
             body: expr-stmt #37 223:12:37-229:12:43
-              value: field-access #36 223:12:37-229:12:43 name="to_s" type=String resolved=call("String.from_int", Int)
+              value: field-access #36 223:12:37-229:12:43 name="to_s" type=String resolved=call("Int.to_s", Int)
                 target: name-ref #35 223:12:37-224:12:38 name="x" type=Int
       body: binding #51 236:13:3-280:14:1 name="_zs"
         type: type-ref #42 241:13:8-250:13:17 name="List"
@@ -83,7 +83,7 @@ program #161 0:1:1-781:37:1
             param: block-param #76 403:16:15-404:16:16 name="x"
             body: expr-stmt #80 410:17:5-423:18:1
               value: call #79 410:17:5-422:17:17 name="puts" piped=false type=Void
-                arg: field-access #78 415:17:10-421:17:16 name="to_s" type=String resolved=call("String.from_int", Int)
+                arg: field-access #78 415:17:10-421:17:16 name="to_s" type=String resolved=call("Int.to_s", Int)
                   target: name-ref #77 415:17:10-416:17:11 name="x" type=Int
       body: binding #93 431:19:3-468:20:1 name="_a"
         type: type-ref #84 435:19:7-439:19:11 name="Bool"
@@ -138,7 +138,7 @@ program #161 0:1:1-781:37:1
             param: block-param #131 668:28:19-669:28:20 name="s"
             body: binding #135 675:29:5-690:30:1 name="v"
               value: try-expr #134 679:29:9-689:29:19 type=Int
-                operand: field-access #133 683:29:13-689:29:19 name="to_i" type=Result(Int) resolved=call("String.to_int", String)
+                operand: field-access #133 683:29:13-689:29:19 name="to_i" type=Result(Int) resolved=call("String.to_i", String)
                   target: name-ref #132 683:29:13-684:29:14 name="s" type=String
             body: expr-stmt #140 694:30:5-704:31:1
               value: call #139 694:30:5-703:30:14 name="ok" piped=false type=Result(Int)

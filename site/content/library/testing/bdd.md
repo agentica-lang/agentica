@@ -111,13 +111,11 @@ Without `--steps`, `agentica test` uses the nearest `steps.agc` found in the fol
 ```agentica {mode="check"}
 import BDD from "std/bdd"
 
-def remember(ctx: BDD.Context, args: List[String]) -> BDD.Context
-  BDD.set(ctx, "count", JSON.from(String.to_int!(args[0])))
-end
+def remember(ctx: BDD.Context, args: List[String]) -> BDD.Context = BDD.set(ctx, "count", JSON.from(args[0].to_i!))
 
 def check_count(ctx: BDD.Context, args: List[String]) -> BDD.Context
   count = JSON.int(BDD.get(ctx, "count").unwrap!).unwrap!
-  BDD.assert(ctx, count == String.to_int!(args[0]), "wrong count")
+  BDD.assert(ctx, count == args[0].to_i!, "wrong count")
 end
 
 def main() -> Void
@@ -345,7 +343,7 @@ The built-in steps as functions, to combine in your own steps. Pass on the conte
 
 `BDD.read_line` gives the next output line instead of comparing it, so a step can use it. It is an error when the output ended or no line came within `timeout_ms`; a timeout stops the program under test, as for `BDD.then_line`: every later read, send or exit check fails with `RUNTIME-BDD-IO`, so make it the last use of the program.
 
-`stdout is:` compares the output that no line step has read yet. `stdout includes:` and `stderr includes:` check the same text for a substring, as `String.contains?` does (an empty text is `RUNTIME-BDD-CONTEXT`), so a log scenario can assert one line of a noisy stderr; a failure shows the whole stream as `actual`. All four need the program to have exited. Output is kept up to 1 MiB per stream.
+`stdout is:` compares the output that no line step has read yet. `stdout includes:` and `stderr includes:` check the same text for a substring, as `s.include?` does (an empty text is `RUNTIME-BDD-CONTEXT`), so a log scenario can assert one line of a noisy stderr; a failure shows the whole stream as `actual`. All four need the program to have exited. Output is kept up to 1 MiB per stream.
 
 A failed `then_*` check reports `expected` and `actual` in the inspect form, as `Test.eq` does: a line or output in quotes, an exit code as a number, a JSON line as its sorted-key text. An undefined or ambiguous step's `actual` is the step text in quotes. Text over 64 Ki characters is cut and ends with `...` and the count left out. A front-end error of the step program keeps the raw type names (`Int`, `String`), so its `--json` form depends on the code.
 

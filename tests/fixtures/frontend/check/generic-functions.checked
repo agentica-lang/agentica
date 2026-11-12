@@ -100,7 +100,7 @@ program #123 0:1:1-709:40:1
             param: block-param #93 566:33:23-567:33:24 name="n"
             body: expr-stmt #97 573:34:5-584:35:1
               value: call #96 573:34:5-583:34:15 name="ok" piped=false type=Result(String)
-                arg: field-access #95 576:34:8-582:34:14 name="to_s" type=String resolved=call("String.from_int", Int)
+                arg: field-access #95 576:34:8-582:34:14 name="to_s" type=String resolved=call("Int.to_s", Int)
                   target: name-ref #94 576:34:8-577:34:9 name="n" type=Int
       body: expr-stmt #108 592:36:3-636:37:1
         value: call #107 592:36:3-635:36:46 name="puts" piped=false type=Void

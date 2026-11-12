@@ -37,7 +37,7 @@ section for the area you are changing.
   The checker allows only Int, Float or String elements/keys. sort_by calls the
   key once per element; the key callback's parameter type types an empty input
   list.
-- `Float.to_int/to_int!`: NaN/infinity give
+- `Float.to_i/to_i!`: NaN/infinity give
   RUNTIME-INVALID-NUMBER, out-of-range truncation RUNTIME-INTEGER-OVERFLOW.
   `Float` works as a builtin module prefix because catalog names are full dotted
   strings.

@@ -457,7 +457,7 @@ def main() -> Void
   inbox: Channel[Task[Result[Int]]] = Channel.new(1)
   task = Task.spawn(&follow, inbox)
   _ = inbox.send(task, 1000)
-  puts(Task.await(task).message.starts_with?("task crashed: RUNTIME-TASK-AWAIT-CYCLE"))
+  puts(Task.await(task).message.start_with?("task crashed: RUNTIME-TASK-AWAIT-CYCLE"))
 end
 ```
 

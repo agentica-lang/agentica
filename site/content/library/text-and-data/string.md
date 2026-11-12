@@ -8,17 +8,7 @@ Strings are Unicode text. Lengths and indexes count characters, not bytes; `byte
 
 ## Aliases
 
-Some methods have Ruby names too:
-
-| Method | Same as |
-|---|---|
-| `s.size` | `String.length(s)` |
-| `s.strip` | `String.trim(s)` |
-| `s.include?(x)` | `String.contains?(s, x)` |
-| `s.start_with?(x)`, `s.end_with?(x)` | `String.starts_with?`, `String.ends_with?` |
-| `s.to_i`, `s.to_i!` | `String.to_int(s)`, `String.to_int!(s)` |
-| `s.to_f`, `s.to_f!` | `String.to_float(s)`, `String.to_float!(s)` |
-| `xs.join(sep)` on a `List[String]` | `String.join(xs, sep)` |
+As in Ruby, `s.size` is the same as `s.length`.
 
 ## length and empty?
 
@@ -64,17 +54,17 @@ HELLO
 hello
 ```
 
-## trim
+## strip
 
 ```signature
-String.trim(s: String) -> String
+String.strip(s: String) -> String
 ```
 
 Removes spaces, tabs and new lines at both ends.
 
 ```agentica
 def main() -> Void
-  puts("[" + "  hi \n".trim + "]")
+  puts("[" + "  hi \n".strip + "]")
 end
 ```
 
@@ -113,14 +103,14 @@ a,,b,
 ## join
 
 ```signature
-String.join(parts: List[String], separator: String) -> String
+List.join(parts: List[String], separator: String) -> String
 ```
 
-Puts the separator between the parts.
+A method of a `List[String]`: puts the separator between the parts.
 
 ```agentica
 def main() -> Void
-  puts(String.join(["a", "b", "c"], "-"))
+  puts(["a", "b", "c"].join("-"))
   puts(["x", "y"].join(", "))
 end
 ```
@@ -130,20 +120,20 @@ a-b-c
 x, y
 ```
 
-## contains?, starts_with? and ends_with?
+## include?, start_with? and end_with?
 
 ```signature
-String.contains?(s: String, part: String) -> Bool
-String.starts_with?(s: String, prefix: String) -> Bool
-String.ends_with?(s: String, suffix: String) -> Bool
+String.include?(s: String, part: String) -> Bool
+String.start_with?(s: String, prefix: String) -> Bool
+String.end_with?(s: String, suffix: String) -> Bool
 ```
 
 ```agentica
 def main() -> Void
   file = "report.txt"
-  puts(file.contains?("port"))
-  puts(file.starts_with?("rep"))
-  puts(file.ends_with?(".csv"))
+  puts(file.include?("port"))
+  puts(file.start_with?("rep"))
+  puts(file.end_with?(".csv"))
 end
 ```
 
@@ -306,41 +296,20 @@ end
 -1
 ```
 
-## from_int and from_float
+## to_i and to_f
 
 ```signature
-String.from_int(n: Int) -> String
-String.from_float(x: Float) -> String
+String.to_i(s: String) -> Result[Int]
+String.to_f(s: String) -> Result[Float]
 ```
 
-The same as `n.to_s` and `x.to_s`.
+Read a signed decimal number. Bad text gives an error Result. A number becomes text with [`n.to_s`](/library/text-and-data/numbers/#to_s).
+
+`to_f` also reads an exponent (`1.5E-3`, `1e+20`) and the text `to_s` writes for infinity and NaN (`+inf.0`, `-inf.0`, `+nan.0`), so `x.to_s.to_f` gives `x` back (a NaN reads back as NaN). It rounds to the nearest Float, and a value past the range becomes an infinity or zero. `Infinity`, `.5` and `1_000.0` are errors.
 
 ```agentica
 def main() -> Void
-  puts(String.from_int(42) + "!")
-  puts(String.from_float(2.5) + "!")
-end
-```
-
-```output
-42!
-2.5!
-```
-
-## to_int and to_float
-
-```signature
-String.to_int(s: String) -> Result[Int]
-String.to_float(s: String) -> Result[Float]
-```
-
-Read a signed decimal number. Bad text gives an error Result.
-
-`to_float` also reads an exponent (`1.5E-3`, `1e+20`) and the text `to_s` writes for infinity and NaN (`+inf.0`, `-inf.0`, `+nan.0`), so `x.to_s.to_f` gives `x` back (a NaN reads back as NaN). It rounds to the nearest Float, and a value past the range becomes an infinity or zero. `Infinity`, `.5` and `1_000.0` are errors.
-
-```agentica
-def main() -> Void
-  puts(String.to_int("-12"))
+  puts("-12".to_i)
   puts("3.5".to_f)
   puts("1e+20".to_f)
   puts("-inf.0".to_f)
@@ -356,14 +325,14 @@ ok(-inf.0)
 false
 ```
 
-## to_int! and to_float!
+## to_i! and to_f!
 
 ```signature
-String.to_int!(s: String) -> Int
-String.to_float!(s: String) -> Float
+String.to_i!(s: String) -> Int
+String.to_f!(s: String) -> Float
 ```
 
-Like `to_int` and `to_float`, but give the number itself and stop the program on bad text: `RUNTIME-INVALID-NUMBER` for text that is not a number (`1e`, `.5`, ` 1`, `1_000.0` and `Infinity` for `to_float!`), and `RUNTIME-INTEGER-OVERFLOW` for an integer outside `Int`.
+Like `to_i` and `to_f`, but give the number itself and stop the program on bad text: `RUNTIME-INVALID-NUMBER` for text that is not a number (`1e`, `.5`, ` 1`, `1_000.0` and `Infinity` for `to_f!`), and `RUNTIME-INTEGER-OVERFLOW` for an integer outside `Int`.
 
 ```agentica
 def main() -> Void

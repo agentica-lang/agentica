@@ -70,7 +70,7 @@ Reads a whole file as text.
 ```agentica {mode="check"}
 def main() -> Void
   case File.read_text("notes.txt", 1000)
-    ok(text) -> puts("#{text.trim.split("\n").size} lines")
+    ok(text) -> puts("#{text.strip.split("\n").size} lines")
     error(message) -> IO.warn("cannot read: #{message}")
   end
 end
@@ -261,7 +261,7 @@ Calls the block with each line, without its line ending (LF and CRLF; a last lin
 ```agentica {mode="check"}
 def main() -> Void
   r = File.each_line("notes.txt", 4096, 1000) do |line|
-    return error("comment found: #{line}") if line.starts_with?("#")
+    return error("comment found: #{line}") if line.start_with?("#")
 
     ok()
   end

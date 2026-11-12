@@ -438,7 +438,7 @@ end
 
 def display(option: Option[Int]) -> Void
   case option
-    Option.Some(item) -> puts(String.from_int(item))
+    Option.Some(item) -> puts(item.to_s)
     Option.None -> puts("empty")
   end
 end
@@ -830,7 +830,7 @@ puts(seen)
 
 ```ruby
 def read_age(text: String) -> Result[Int]
-  age = try String.to_int(text)
+  age = try text.to_i
   return ok(age)
 end
 ```
@@ -864,8 +864,8 @@ A builtin is a function value too: `&Time.now_ms` is `Fn[Int]`, and a method
 written on its type, `&Int.to_s`, takes the receiver first (`Fn[Int, String]`).
 It takes every parameter, those with a default included (`&Zlib.crc32` is
 `Fn[Bytes, Int, Result[Int]]`). Only a builtin with one form, no rule of its own
-and no type parameter can be one, written as Ruby writes it (`&String.strip`,
-not `&String.trim`); any other (`&File.open`, `&List.map`, `&puts`, a function
+and no type parameter can be one, written as Ruby writes it (`&List.join`, not
+`&String.join`); any other (`&File.open`, `&List.map`, `&puts`, a function
 of a family member such as `&OpenSSL.Digest.sha256`) is `CHECK-UNKNOWN-NAME`
 with a help: pass a block that calls it.
 

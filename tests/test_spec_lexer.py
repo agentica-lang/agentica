@@ -282,7 +282,7 @@ RUNS = [
      "2\n"),
     ("function names take ? and ! with or without a space before the parentheses",
      SUFFIX_DEFS + program(MAIN, '  s = "abc"', '  puts(s.include?("b"))',
-                           '  puts(String.contains? (s, "b"))', "  puts(ready?())", "  puts(save!(1)!=2)", "end"),
+                           '  puts(String.include? (s, "b"))', "  puts(ready?())", "  puts(save!(1)!=2)", "end"),
      "true\ntrue\ntrue\ntrue\n"),
     ("blank and comment lines emit NL without changing parsing",
      program(MAIN, "  x = 1", "", "  # comment", "  puts(x)", "end"),

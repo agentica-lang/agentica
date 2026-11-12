@@ -5,7 +5,7 @@ program #77 0:1:1-520:37:1
         type: type-ref #0 12:1:13-15:1:16 name="Int"
       result: type-ref #2 20:1:21-26:1:27 name="String"
       body: return-stmt #5 29:2:3-43:3:1
-        value: field-access #4 36:2:10-42:2:16 name="to_s" type=String resolved=call("String.from_int", Int)
+        value: field-access #4 36:2:10-42:2:16 name="to_s" type=String resolved=call("Int.to_s", Int)
           target: name-ref #3 36:2:10-37:2:11 name="n" type=Int
     declaration: function-decl #14 49:6:1-93:9:1 name="keep"
       param: param #8 58:6:10-64:6:16 name="n"
@@ -24,7 +24,7 @@ program #77 0:1:1-520:37:1
       body: return-stmt #24 137:12:3-157:13:1
         value: binary #23 144:12:10-156:12:22 op=plus op-span=148:12:14-149:12:15 type=String
           left: name-ref #20 144:12:10-147:12:13 name="acc" type=String
-          right: field-access #22 150:12:16-156:12:22 name="to_s" type=String resolved=call("String.from_int", Int)
+          right: field-access #22 150:12:16-156:12:22 name="to_s" type=String resolved=call("Int.to_s", Int)
             target: name-ref #21 150:12:16-151:12:17 name="n" type=Int
     declaration: function-decl #37 163:16:1-245:19:1 name="collect"
       param: param #28 175:16:13-189:16:27 name="acc"

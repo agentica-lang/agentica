@@ -32,7 +32,7 @@ program #65 0:1:1-389:18:1
             arg: literal #25 152:6:20-158:6:26 value=string:"home" type=String
           body: expr-stmt #32 164:7:5-190:8:1
             value: call #31 164:7:5-189:7:30 name="puts" piped=false type=Void
-              arg: method-call #30 169:7:10-188:7:29 name="join" type=String resolved=call("String.join", List(String))
+              arg: method-call #30 169:7:10-188:7:29 name="join" type=String resolved=call("List.join", List(String))
                 target: field-access #28 169:7:10-178:7:19 name="keys" type=List(String) resolved=call("ATS.keys", ATS(String, Int))
                   target: name-ref #27 169:7:10-173:7:14 name="hits" type=ATS(String, Int)
                 arg: literal #29 184:7:25-187:7:28 value=string:"," type=String

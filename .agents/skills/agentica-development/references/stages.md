@@ -88,7 +88,7 @@ diagnostics keep their original code and span.
 - Number literals drop the `_`s from the value; `LEX-INVALID-NUMBER` spans the
   literal as written. A `.` followed by a digit or `_` continues a number, so
   `1_000.times` and `1_000..2_000` are not Floats. The text conversions
-  (`String.to_int`, JSON) reject `_`.
+  (`String.to_i`, JSON) reject `_`.
 - Heredoc `<<~NAME` yields the string tokens at the opener's place, all with the
   span of `<<~NAME`; `#{...}` pieces in a body are lexed by the main loop
   (`lex_from`, `stop_depth`) and keep their real positions, so spans inside a

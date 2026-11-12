@@ -94,7 +94,7 @@ end
 
 ```ruby
 # good
-def parse(text: String) -> Result[Int] = text.trim.to_i
+def parse(text: String) -> Result[Int] = text.strip.to_i
 
 def check(n: Int) -> Result[Int]
   return error("negative: #{n}") if n < 0

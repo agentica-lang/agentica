@@ -543,8 +543,9 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, signature: State.S
   State.fail_callee(cx, st, "CHECK-ARITY", message, node.span, callee)
 end
 
-# The help of an unknown function: a name of another language, a module that needs an import, or a close name. A
-# type of the program named like a module that moved into a family (struct Digest) gets no move hint.
+# The help of an unknown function: a name of another language, a module that needs an import, the help of a method of
+# another language, or a close name. A type of the program named like a module that moved into a family (struct
+# Digest) gets no move hint.
 def unknown_function_help(cx: State.Cx, name: String) -> String
   help = Help.foreign(cx.help, name)
   if help != "" and !(help == Help.moved(name) and program_type?(cx, name.split(".")[0]))
@@ -559,6 +560,10 @@ def unknown_function_help(cx: State.Cx, name: String) -> String
   elsif name.start_with?("HTTP.")
     return "import HTTP from \"std/http\""
   end
+
+  # A method of another language called as a function (String.trim(s)) gets the help of the method.
+  method_help = cx.help.kind_methods.get(name)
+  return method_help.unwrap! if method_help.some?
 
   Help.near(name, cx.functions.keys, CALLABLE_NAMES)
 end

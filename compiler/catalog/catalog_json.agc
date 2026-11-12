@@ -26,9 +26,9 @@ end
 
 ## The JSON of a builtin: one object for a builtin with one form, else the name, the description and the effects of
 ## the first form with the object of each form under `overloads`. `ruby` gives the signature of a form in the Ruby
-## method form (`s.strip() -> String` for `String.trim`) or "" for none (check/ruby_form.agc: catalog/ cannot read
-## the checker's alias tables, so the caller passes it); a form has it as `ruby`, or null. `name` and `signature` stay
-## the name of the builtin.
+## method form (`map.key?(key: K) -> Bool` for `Map.has_key?`) or "" for none (check/ruby_form.agc: catalog/ cannot
+## read the checker's alias tables, so the caller passes it); a form has it as `ruby`, or null. `name` and `signature`
+## stay the name of the builtin.
 export def builtin(entry: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> Json
   return form_json(entry, ruby) if entry.alternatives.size == 0
 

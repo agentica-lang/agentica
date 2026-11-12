@@ -22,6 +22,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- **Breaking:** a builtin has only its Ruby name: `trim`, `to_int`, `to_float`,
+  `contains?`, `starts_with?`, `ends_with?`, `String.from_int`,
+  `String.from_float`, `Float.from_int` and `String.join` are errors whose help
+  names the Ruby form (`strip`, `to_i`, `n.to_s`, `list.join`, ...).
 - **Breaking:** the HTTP types are `HTTP.Request`, `HTTP.Response`,
   `HTTP.Header`, `HTTP.ClientOptions`, `HTTP.ServerOptions`, `HTTP.Client` and
   `HTTP.Server` of `std/http`; the old names are unknown, with a help. A value

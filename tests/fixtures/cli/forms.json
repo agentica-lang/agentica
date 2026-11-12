@@ -391,10 +391,10 @@
   "stdout": "{\"alias\":\"List.concat\",\"builtins\":[],\"hints\":{\"List.concat\":\"join two lists with +: xs + ys is a new list, and both stay as they were\"}}\n",
   "written": []
  },
- "[[\"--json\", \"help\", \"String.to_int\"], {}]": {
+ "[[\"--json\", \"help\", \"String.to_i\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_int\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"s.to_i() -> Result[Int]\",\"signature\":\"String.to_int(s: String) -> Result[Int]\"}\n",
+  "stdout": "{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_i\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"s.to_i() -> Result[Int]\",\"signature\":\"String.to_i(s: String) -> Result[Int]\"}\n",
   "written": []
  },
  "[[\"--json\", \"help\", \"std/queue.\"], {}]": {
@@ -451,10 +451,10 @@
   "stdout": "",
   "written": []
  },
- "[[\"--max-steps\", \"10\", \"help\", \"String.to_int\", \"--json\"], {}]": {
+ "[[\"--max-steps\", \"10\", \"help\", \"String.to_i\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_int\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"s.to_i() -> Result[Int]\",\"signature\":\"String.to_int(s: String) -> Result[Int]\"}\n",
+  "stdout": "{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_i\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"s.to_i() -> Result[Int]\",\"signature\":\"String.to_i(s: String) -> Result[Int]\"}\n",
   "written": []
  },
  "[[\"--max-steps\", \"1000\", \"--json\", \"loop.agc\"], {}]": {
@@ -976,7 +976,7 @@
  "[[\"help\", \"String.strip\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"String.strip\",\"builtins\":[{\"arity\":1,\"description\":\"Strip surrounding whitespace.\",\"effects\":[],\"name\":\"String.trim\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"String\",\"ruby\":\"s.strip() -> String\",\"signature\":\"String.trim(s: String) -> String\"}],\"hints\":{}}\n",
+  "stdout": "{\"arity\":1,\"description\":\"Strip surrounding whitespace.\",\"effects\":[],\"name\":\"String.strip\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"String\",\"ruby\":\"s.strip() -> String\",\"signature\":\"String.strip(s: String) -> String\"}\n",
   "written": []
  },
  "[[\"help\", \"String.strip\"], {}]": {
@@ -994,7 +994,7 @@
  "[[\"help\", \"String.to_int\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_int\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"s.to_i() -> Result[Int]\",\"signature\":\"String.to_int(s: String) -> Result[Int]\"}\n",
+  "stdout": "{\"alias\":\"String.to_int\",\"builtins\":[{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_i\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"s.to_i() -> Result[Int]\",\"signature\":\"String.to_i(s: String) -> Result[Int]\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"String.to_int\"], {}]": {
@@ -1016,15 +1016,15 @@
   "written": []
  },
  "[[\"help\", \"String.trim\", \"--json\"], {}]": {
-  "code": 0,
-  "stderr": "",
-  "stdout": "{\"arity\":1,\"description\":\"Strip surrounding whitespace.\",\"effects\":[],\"name\":\"String.trim\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"String\",\"ruby\":\"s.strip() -> String\",\"signature\":\"String.trim(s: String) -> String\"}\n",
+  "code": 2,
+  "stderr": "agentica: unknown builtin String.trim; use s.strip\n",
+  "stdout": "",
   "written": []
  },
  "[[\"help\", \"String.trim\"], {}]": {
-  "code": 0,
-  "stderr": "",
-  "stdout": "`String.trim` is written `.strip`\ns.strip() -> String\nStrip surrounding whitespace.\n",
+  "code": 2,
+  "stderr": "agentica: unknown builtin String.trim; use s.strip\n",
+  "stdout": "",
   "written": []
  },
  "[[\"help\", \"Task.await\", \"--json\"], {}]": {
@@ -1072,7 +1072,7 @@
  "[[\"help\", \"contains\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"contains\",\"builtins\":[{\"arity\":2,\"description\":\"Check whether a value is in the list, comparing with ==; items need equality; O(n).\",\"effects\":[],\"name\":\"List.include?\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"list.include?(value: T) -> Bool\",\"signature\":\"List.include?(list: List[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a key exists.\",\"effects\":[],\"name\":\"Map.has_key?\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"ruby\":\"map.key?(key: K) -> Bool\",\"signature\":\"Map.has_key?(map: Map[K, V], key: K) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a value is in the range.\",\"effects\":[],\"name\":\"Range.include?\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"value\",\"type\":\"Int\"}],\"result\":\"Bool\",\"ruby\":\"range.include?(value: Int) -> Bool\",\"signature\":\"Range.include?(range: Range, value: Int) -> Bool\"},{\"arity\":2,\"description\":\"Check whether an element is in the set.\",\"effects\":[],\"name\":\"Set.include?\",\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"set.include?(value: T) -> Bool\",\"signature\":\"Set.include?(set: Set[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check for a substring.\",\"effects\":[],\"name\":\"String.contains?\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"},{\"name\":\"part\",\"type\":\"String\"}],\"result\":\"Bool\",\"ruby\":\"s.include?(part: String) -> Bool\",\"signature\":\"String.contains?(s: String, part: String) -> Bool\"}],\"hints\":{\"List.contains\":\"a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?\",\"Map.contains\":\"use m.key?(key)\",\"Set.contains\":\"use s.include?(x)\"}}\n",
+  "stdout": "{\"alias\":\"contains\",\"builtins\":[{\"arity\":2,\"description\":\"Check whether a value is in the list, comparing with ==; items need equality; O(n).\",\"effects\":[],\"name\":\"List.include?\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"list.include?(value: T) -> Bool\",\"signature\":\"List.include?(list: List[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a key exists.\",\"effects\":[],\"name\":\"Map.has_key?\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"ruby\":\"map.key?(key: K) -> Bool\",\"signature\":\"Map.has_key?(map: Map[K, V], key: K) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a value is in the range.\",\"effects\":[],\"name\":\"Range.include?\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"value\",\"type\":\"Int\"}],\"result\":\"Bool\",\"ruby\":\"range.include?(value: Int) -> Bool\",\"signature\":\"Range.include?(range: Range, value: Int) -> Bool\"},{\"arity\":2,\"description\":\"Check whether an element is in the set.\",\"effects\":[],\"name\":\"Set.include?\",\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"set.include?(value: T) -> Bool\",\"signature\":\"Set.include?(set: Set[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check for a substring.\",\"effects\":[],\"name\":\"String.include?\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"},{\"name\":\"part\",\"type\":\"String\"}],\"result\":\"Bool\",\"ruby\":\"s.include?(part: String) -> Bool\",\"signature\":\"String.include?(s: String, part: String) -> Bool\"}],\"hints\":{\"List.contains\":\"a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?\",\"Map.contains\":\"use m.key?(key)\",\"Set.contains\":\"use s.include?(x)\"}}\n",
   "written": []
  },
  "[[\"help\", \"contains\"], {}]": {
@@ -1082,15 +1082,15 @@
   "written": []
  },
  "[[\"help\", \"contains?\", \"--json\"], {}]": {
-  "code": 0,
-  "stderr": "",
-  "stdout": "{\"alias\":\"contains?\",\"builtins\":[{\"arity\":2,\"description\":\"Check for a substring.\",\"effects\":[],\"name\":\"String.contains?\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"},{\"name\":\"part\",\"type\":\"String\"}],\"result\":\"Bool\",\"ruby\":\"s.include?(part: String) -> Bool\",\"signature\":\"String.contains?(s: String, part: String) -> Bool\"}],\"hints\":{\"List.contains?\":\"a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?\",\"Map.contains?\":\"use m.key?(key)\",\"Set.contains?\":\"use s.include?(x)\"}}\n",
+  "code": 2,
+  "stderr": "agentica: unknown builtin contains?; List.contains?: a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?; Map.contains?: use m.key?(key); Set.contains?: use s.include?(x); String.contains?: use s.include?(part)\n",
+  "stdout": "",
   "written": []
  },
  "[[\"help\", \"contains?\"], {}]": {
-  "code": 0,
-  "stderr": "",
-  "stdout": "`String.contains?` is written `.include?`\ns.include?(part: String) -> Bool\nCheck for a substring.\n\nList.contains?: a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?\n\nMap.contains?: use m.key?(key)\n\nSet.contains?: use s.include?(x)\n",
+  "code": 2,
+  "stderr": "agentica: unknown builtin contains?; List.contains?: a List has no membership method; use xs.any? do |x| x == value end, or a Set with include?; Map.contains?: use m.key?(key); Set.contains?: use s.include?(x); String.contains?: use s.include?(part)\n",
+  "stdout": "",
   "written": []
  },
  "[[\"help\", \"detect\", \"--json\"], {}]": {
@@ -1156,7 +1156,7 @@
  "[[\"help\", \"include\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"include\",\"builtins\":[{\"arity\":2,\"description\":\"Check whether a value is in the list, comparing with ==; items need equality; O(n).\",\"effects\":[],\"name\":\"List.include?\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"list.include?(value: T) -> Bool\",\"signature\":\"List.include?(list: List[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a key exists.\",\"effects\":[],\"name\":\"Map.has_key?\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"ruby\":\"map.key?(key: K) -> Bool\",\"signature\":\"Map.has_key?(map: Map[K, V], key: K) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a value is in the range.\",\"effects\":[],\"name\":\"Range.include?\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"value\",\"type\":\"Int\"}],\"result\":\"Bool\",\"ruby\":\"range.include?(value: Int) -> Bool\",\"signature\":\"Range.include?(range: Range, value: Int) -> Bool\"},{\"arity\":2,\"description\":\"Check whether an element is in the set.\",\"effects\":[],\"name\":\"Set.include?\",\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"set.include?(value: T) -> Bool\",\"signature\":\"Set.include?(set: Set[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check for a substring.\",\"effects\":[],\"name\":\"String.contains?\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"},{\"name\":\"part\",\"type\":\"String\"}],\"result\":\"Bool\",\"ruby\":\"s.include?(part: String) -> Bool\",\"signature\":\"String.contains?(s: String, part: String) -> Bool\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"include\",\"builtins\":[{\"arity\":2,\"description\":\"Check whether a value is in the list, comparing with ==; items need equality; O(n).\",\"effects\":[],\"name\":\"List.include?\",\"parameters\":[{\"name\":\"list\",\"type\":\"List[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"list.include?(value: T) -> Bool\",\"signature\":\"List.include?(list: List[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a key exists.\",\"effects\":[],\"name\":\"Map.has_key?\",\"parameters\":[{\"name\":\"map\",\"type\":\"Map[K, V]\"},{\"name\":\"key\",\"type\":\"K\"}],\"result\":\"Bool\",\"ruby\":\"map.key?(key: K) -> Bool\",\"signature\":\"Map.has_key?(map: Map[K, V], key: K) -> Bool\"},{\"arity\":2,\"description\":\"Check whether a value is in the range.\",\"effects\":[],\"name\":\"Range.include?\",\"parameters\":[{\"name\":\"range\",\"type\":\"Range\"},{\"name\":\"value\",\"type\":\"Int\"}],\"result\":\"Bool\",\"ruby\":\"range.include?(value: Int) -> Bool\",\"signature\":\"Range.include?(range: Range, value: Int) -> Bool\"},{\"arity\":2,\"description\":\"Check whether an element is in the set.\",\"effects\":[],\"name\":\"Set.include?\",\"parameters\":[{\"name\":\"set\",\"type\":\"Set[T]\"},{\"name\":\"value\",\"type\":\"T\"}],\"result\":\"Bool\",\"ruby\":\"set.include?(value: T) -> Bool\",\"signature\":\"Set.include?(set: Set[T], value: T) -> Bool\"},{\"arity\":2,\"description\":\"Check for a substring.\",\"effects\":[],\"name\":\"String.include?\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"},{\"name\":\"part\",\"type\":\"String\"}],\"result\":\"Bool\",\"ruby\":\"s.include?(part: String) -> Bool\",\"signature\":\"String.include?(s: String, part: String) -> Bool\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"include\"], {}]": {
@@ -1186,7 +1186,7 @@
  "[[\"help\", \"join\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"join\",\"builtins\":[{\"arity\":2,\"description\":\"Join text elements.\",\"effects\":[],\"name\":\"String.join\",\"parameters\":[{\"name\":\"parts\",\"type\":\"List[String]\"},{\"name\":\"separator\",\"type\":\"String\"}],\"result\":\"String\",\"ruby\":\"parts.join(separator: String) -> String\",\"signature\":\"String.join(parts: List[String], separator: String) -> String\"},{\"arity\":1,\"description\":\"Join path parts using host path semantics.\",\"effects\":[\"filesystem\"],\"name\":\"Path.join\",\"parameters\":[{\"name\":\"parts\",\"type\":\"List[String]\"}],\"result\":\"Result[String]\",\"ruby\":null,\"signature\":\"Path.join(parts: List[String]) -> Result[String]\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"join\",\"builtins\":[{\"arity\":2,\"description\":\"Join text elements.\",\"effects\":[],\"name\":\"List.join\",\"parameters\":[{\"name\":\"parts\",\"type\":\"List[String]\"},{\"name\":\"separator\",\"type\":\"String\"}],\"result\":\"String\",\"ruby\":\"parts.join(separator: String) -> String\",\"signature\":\"List.join(parts: List[String], separator: String) -> String\"},{\"arity\":1,\"description\":\"Join path parts using host path semantics.\",\"effects\":[\"filesystem\"],\"name\":\"Path.join\",\"parameters\":[{\"name\":\"parts\",\"type\":\"List[String]\"}],\"result\":\"Result[String]\",\"ruby\":null,\"signature\":\"Path.join(parts: List[String]) -> Result[String]\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"join\"], {}]": {
@@ -1342,7 +1342,7 @@
  "[[\"help\", \"strip\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"strip\",\"builtins\":[{\"arity\":1,\"description\":\"Strip surrounding whitespace.\",\"effects\":[],\"name\":\"String.trim\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"String\",\"ruby\":\"s.strip() -> String\",\"signature\":\"String.trim(s: String) -> String\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"strip\",\"builtins\":[{\"arity\":1,\"description\":\"Strip surrounding whitespace.\",\"effects\":[],\"name\":\"String.strip\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"String\",\"ruby\":\"s.strip() -> String\",\"signature\":\"String.strip(s: String) -> String\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"strip\"], {}]": {
@@ -1354,7 +1354,7 @@
  "[[\"help\", \"to_i\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"to_i\",\"builtins\":[{\"arity\":1,\"description\":\"Truncate toward zero; NaN, infinity or overflow return an error.\",\"effects\":[],\"name\":\"Float.to_int\",\"parameters\":[{\"name\":\"x\",\"type\":\"Float\"}],\"result\":\"Result[Int]\",\"ruby\":\"x.to_i() -> Result[Int]\",\"signature\":\"Float.to_int(x: Float) -> Result[Int]\"},{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_int\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"s.to_i() -> Result[Int]\",\"signature\":\"String.to_int(s: String) -> Result[Int]\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"to_i\",\"builtins\":[{\"arity\":1,\"description\":\"Truncate toward zero; NaN, infinity or overflow return an error.\",\"effects\":[],\"name\":\"Float.to_i\",\"parameters\":[{\"name\":\"x\",\"type\":\"Float\"}],\"result\":\"Result[Int]\",\"ruby\":\"x.to_i() -> Result[Int]\",\"signature\":\"Float.to_i(x: Float) -> Result[Int]\"},{\"arity\":1,\"description\":\"Parse signed decimal Int as a Result.\",\"effects\":[],\"name\":\"String.to_i\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"Result[Int]\",\"ruby\":\"s.to_i() -> Result[Int]\",\"signature\":\"String.to_i(s: String) -> Result[Int]\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"to_i\"], {}]": {
@@ -1364,15 +1364,15 @@
   "written": []
  },
  "[[\"help\", \"trim\", \"--json\"], {}]": {
-  "code": 0,
-  "stderr": "",
-  "stdout": "{\"alias\":\"trim\",\"builtins\":[{\"arity\":1,\"description\":\"Strip surrounding whitespace.\",\"effects\":[],\"name\":\"String.trim\",\"parameters\":[{\"name\":\"s\",\"type\":\"String\"}],\"result\":\"String\",\"ruby\":\"s.strip() -> String\",\"signature\":\"String.trim(s: String) -> String\"}],\"hints\":{}}\n",
+  "code": 2,
+  "stderr": "agentica: unknown builtin trim; String.trim: use s.strip\n",
+  "stdout": "",
   "written": []
  },
  "[[\"help\", \"trim\"], {}]": {
-  "code": 0,
-  "stderr": "",
-  "stdout": "`String.trim` is written `.strip`\ns.strip() -> String\nStrip surrounding whitespace.\n",
+  "code": 2,
+  "stderr": "agentica: unknown builtin trim; String.trim: use s.strip\n",
+  "stdout": "",
   "written": []
  },
  "[[\"help\", \"unwrap_or\", \"--json\"], {}]": {

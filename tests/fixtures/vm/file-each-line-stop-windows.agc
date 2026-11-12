@@ -69,7 +69,7 @@ def main() -> Void
   words = put(dir, "words.txt", "7\nx\n9\n")
   letters = put(dir, "letters.txt", "a\nb\n")
   report("an error from the block stops the call", stop_at_two(numbers))
-  report("try returns the error of String.to_int", parse_each(words))
+  report("try returns the error of to_i", parse_each(words))
   report("try with all lines numeric", parse_each(numbers))
   report("a call inside the block", read_other(letters, numbers))
   report("a block that waits on other tasks", wait_each(numbers))

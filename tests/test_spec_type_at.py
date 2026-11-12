@@ -126,7 +126,7 @@ def test_a_method_call_is_a_name_on_its_method_and_a_builtin_has_no_definition(p
     constant = answer(("orders.agc", where(ORDERS, "LIMIT. to_s", 8)), cwd=program)
     # `to_s` on an Int is the builtin that the checker resolved it to.
     assert (constant["kind"], constant["type"], constant["text"]) == ("builtin", "String", "LIMIT. to_s")
-    assert constant["help"]["name"] == "String.from_int"
+    assert constant["help"]["name"] == "Int.to_s"
     on_receiver = answer(("orders.agc", where(ORDERS, "LIMIT. to_s", 1)), cwd=program)
     assert (on_receiver["kind"], on_receiver["type"], on_receiver["definition"]["kind"]) == ("name", "Int", "constant")
     # A dot that starts the next line: the member is a name on its own line, and the dot before it is not.

@@ -390,16 +390,16 @@ def test_first_and_last_halt_on_an_empty_list_and_empty_asks_the_three_kinds(pro
 
 def test_the_helps_of_diagnostics_name_the_ruby_form_not_the_builtin(tmp_path):
     for expression, code, help_text in [
-            ('String.strip("a")', "CHECK-UNKNOWN-NAME", 'did you mean "s.strip"?'),
-            ('"a" |> String.trim()', "CHECK-PIPE-METHOD", '"a".strip')]:
+            ('String.trim("a")', "CHECK-UNKNOWN-NAME", "use s.strip"),
+            ('"a" |> String.strip()', "CHECK-PIPE-METHOD", '"a".strip')]:
         source = "def main() -> Void\n  puts(%s)\nend\n\n" % expression
         found = check_diagnostic(source, tmp_path)
         assert (found["code"], found["help"]) == (code, help_text), expression
     # A call in method form counts the arguments after the receiver and names the Ruby method; the callee note keeps
     # the signature of the catalog.
-    for expression, name, internal in [('"a".include?()', "s.include?", "String.contains?"),
+    for expression, name, internal in [('"a".include?()', "s.include?", "String.include?"),
                                        ("[1].push()", "list.push", "List.append"),
-                                       ('"a".strip(1)', "s.strip", "String.trim"),
+                                       ('"a".strip(1)', "s.strip", "String.strip"),
                                        ("m.length(1)", "map.size", "Map.size"),
                                        ("[1].filter(1, 2)", "list.select", "List.filter"),
                                        ("[1].collect()", "list.map", "List.map"),

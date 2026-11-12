@@ -29,7 +29,7 @@ end
 def front_end() -> String
   label = "{\"range\":{\"end\":{\"column\":8,\"line\":2},\"start\":{\"column\":7,\"line\":2}},\"text\":\"this is Int\"}"
   return ("{\"actual\":\"String\",\"code\":\"CHECK-TYPE-MISMATCH\",\"expected\":\"Int\",\"file\":\"/specs/steps.agc\"," +
-    "\"function\":\"main() -> Void\",\"help\":\"convert it with String.to_int!(...)\",\"labels\":[#{label}]," +
+    "\"function\":\"main() -> Void\",\"help\":\"convert it with s.to_i!\",\"labels\":[#{label}]," +
     "\"message\":\"operator expects two values of the same type\",\"range\":{\"end\":{\"column\":10,\"line\":2}," +
     "\"start\":{\"column\":9,\"line\":2}}}")
 end

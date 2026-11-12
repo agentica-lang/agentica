@@ -4,7 +4,7 @@
 type. The checker picks the module from the static type (`String`, `Bytes`,
 `List`, `Map`, `Set`, `Float`, `Result`, `Range`, `Int`, `Json` through `JSON`,
 and `Codec[T]` through `Codec`); there is no dynamic dispatch. `s.strip` is
-`String.trim(s)`, but `"a".from_int` is not a method. The methods of a codec are
+`String.strip(s)`, and `n.to_s` is `Int.to_s(n)`. The methods of a codec are
 also functions, `Codec.decode(c, s)`, as `String.upcase` is. Without
 parentheses, `receiver.name` on a non-struct value is a method without arguments
 (`s.length`, `r.ok?`). On a struct, `.name` is a field. Structs and enums have
@@ -12,9 +12,12 @@ no methods. The forms on a type name are `Type.members`, the list of the fields
 of a struct (`docs/grammar/06-semantics.md`, "Structs and lists"), and
 `Type.codec`, its codec (JSON, below).
 
-Ruby aliases are the module functions named in the library pages: `strip`,
-`include?`, `start_with?`, `end_with?`, `push`, `join`, `select`, `key?`,
-`to_f`, and `to_s` and `inspect` on any data value. Ruby's other names for a
+A builtin has its Ruby name (`strip`, `include?`, `start_with?`, `to_i`,
+`to_f`, `to_s` and `join`); an old name (`trim`, `contains?`, `to_int`,
+`String.from_int`, `String.join`) is `CHECK-UNKNOWN-METHOD`, or
+`CHECK-UNKNOWN-NAME` for a function, with the Ruby form as help. Ruby aliases
+are the module functions named in the library pages: `push`, `select`, `key?`,
+and `to_s` and `inspect` on any data value. Ruby's other names for a
 method work too, and the texts show only the first: `length` and `size` on
 `String`, `Bytes`, `List`, `Map`, `Set` and `Range`; `collect` for `map`,
 `inject` for `reduce` and `detect` for `find` (on `List` and `Lazy`); `member?`
@@ -175,14 +178,14 @@ end
 signature, effects and description, from the catalog that checking and execution
 use. A parameter with a default also has `default`, its source text (`"0"`),
 and the arity counts every parameter. `ruby` is the signature in the Ruby
-method form (`s.strip() -> String` for `String.trim`), or null for a builtin
-with no method form. The help text
-and the helps of diagnostics write that form too (`s.strip`, not `String.trim`),
-while both names stay accepted. Effects are informational (I/O, tasks, or
+method form (`list.select(f: Fn[A, Bool]) -> List[A]` for `List.filter`), or
+null for a builtin with no method form. The help text and the helps of
+diagnostics write that form too (`list.select`, not `List.filter`), while both
+names stay accepted. Effects are informational (I/O, tasks, or
 `test`). An unknown target exits 2, with a hint when the name is a close
 builtin or one from another language that the checker knows (`Hash.new`,
 `int`). A name that other languages use for
-a builtin (`strip`, `String.to_i`, `value!`) is not unknown: it exits 0 with
+a builtin (`len`, `List.push`, `value!`) is not unknown: it exits 0 with
 the builtins it stands for, and `--json` prints
 `{"alias": NAME, "builtins": [...], "hints": {...}}`, `builtins` holding what
 `help NAME --json` prints for each. `agentica help --json` with no NAME prints

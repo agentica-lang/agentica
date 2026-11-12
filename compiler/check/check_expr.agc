@@ -251,7 +251,16 @@ end
 def check_builtin_ref(cx: State.Cx, st: State.St, node: Ast.FunctionRef) -> Result[State.Out]
   case BuiltinRef.find(node.name)
     BuiltinRef.Found.Missing ->
-      error(State.fail(cx, st, "CHECK-UNKNOWN-NAME", "a function reference requires a declared function", node.span))
+      error(
+        State.fail_maybe(
+          cx,
+          st,
+          "CHECK-UNKNOWN-NAME",
+          "a function reference requires a declared function",
+          node.span,
+          missing_ref_help(cx, node.name),
+        ),
+      )
     BuiltinRef.Found.Refused(help) ->
       error(
         State.fail_help(
@@ -267,6 +276,15 @@ def check_builtin_ref(cx: State.Cx, st: State.St, node: Ast.FunctionRef) -> Resu
       recorded = st.with(bodies: st.bodies.put(node.id, "#{REFS_MODULE}::#{node.name}"))
       ok(State.Out(st: recorded, type: BuiltinRef.fn_type(ref)))
   end
+end
+
+# The help of &name when no function or builtin has the name: the Ruby form of an old or foreign name of a builtin
+# (&String.trim, &String.from_int), or "".
+def missing_ref_help(cx: State.Cx, name: String) -> String
+  help = Help.foreign(cx.help, name)
+  return help if help != ""
+
+  cx.help.kind_methods.get(name).unwrap_or("")
 end
 
 # target.call(args): the target is a function value and the arguments match its parameters.

@@ -918,7 +918,7 @@ ROWS_8: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "Float.from_int",
+    name: "Int.to_f",
     parameters: [Model.Named(name: "n", type: Types.Type.Int)],
     result: Types.Type.Float,
     rule: Model.Rule.Plain,
@@ -961,7 +961,7 @@ ROWS_8: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "Float.to_int",
+    name: "Float.to_i",
     parameters: [Model.Named(name: "x", type: Types.Type.Float)],
     result: Types.Type.Result(Types.Type.Int),
     rule: Model.Rule.Plain,
@@ -974,7 +974,7 @@ ROWS_8: List[Model.Builtin] = [
 
 ROWS_9: List[Model.Builtin] = [
   Model.Builtin(
-    name: "Float.to_int!",
+    name: "Float.to_i!",
     parameters: [Model.Named(name: "x", type: Types.Type.Float)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
@@ -4512,7 +4512,7 @@ ROWS_40: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "String.contains?",
+    name: "String.include?",
     parameters: [Model.Named(name: "s", type: Types.Type.String), Model.Named(name: "part", type: Types.Type.String)],
     result: Types.Type.Bool,
     rule: Model.Rule.Plain,
@@ -4545,7 +4545,7 @@ ROWS_41: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "String.ends_with?",
+    name: "String.end_with?",
     parameters: [
       Model.Named(name: "s", type: Types.Type.String),
       Model.Named(name: "suffix", type: Types.Type.String),
@@ -4578,7 +4578,7 @@ ROWS_41: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "String.from_float",
+    name: "Float.to_s",
     parameters: [Model.Named(name: "x", type: Types.Type.Float)],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
@@ -4591,7 +4591,7 @@ ROWS_41: List[Model.Builtin] = [
 
 ROWS_42: List[Model.Builtin] = [
   Model.Builtin(
-    name: "String.from_int",
+    name: "Int.to_s",
     parameters: [Model.Named(name: "n", type: Types.Type.Int)],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
@@ -4611,7 +4611,7 @@ ROWS_42: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "String.join",
+    name: "List.join",
     parameters: [
       Model.Named(name: "parts", type: Types.Type.List(Types.Type.String)),
       Model.Named(name: "separator", type: Types.Type.String),
@@ -4691,7 +4691,7 @@ ROWS_43: List[Model.Builtin] = [
 
 ROWS_44: List[Model.Builtin] = [
   Model.Builtin(
-    name: "String.starts_with?",
+    name: "String.start_with?",
     parameters: [
       Model.Named(name: "s", type: Types.Type.String),
       Model.Named(name: "prefix", type: Types.Type.String),
@@ -4704,7 +4704,7 @@ ROWS_44: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "String.to_float",
+    name: "String.to_f",
     parameters: [Model.Named(name: "s", type: Types.Type.String)],
     result: Types.Type.Result(Types.Type.Float),
     rule: Model.Rule.Plain,
@@ -4714,7 +4714,7 @@ ROWS_44: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "String.to_float!",
+    name: "String.to_f!",
     parameters: [Model.Named(name: "s", type: Types.Type.String)],
     result: Types.Type.Float,
     rule: Model.Rule.Plain,
@@ -4724,7 +4724,7 @@ ROWS_44: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "String.to_int",
+    name: "String.to_i",
     parameters: [Model.Named(name: "s", type: Types.Type.String)],
     result: Types.Type.Result(Types.Type.Int),
     rule: Model.Rule.Plain,
@@ -4734,7 +4734,7 @@ ROWS_44: List[Model.Builtin] = [
     alternatives: [],
   ),
   Model.Builtin(
-    name: "String.to_int!",
+    name: "String.to_i!",
     parameters: [Model.Named(name: "s", type: Types.Type.String)],
     result: Types.Type.Int,
     rule: Model.Rule.Plain,
@@ -4747,7 +4747,7 @@ ROWS_44: List[Model.Builtin] = [
 
 ROWS_45: List[Model.Builtin] = [
   Model.Builtin(
-    name: "String.trim",
+    name: "String.strip",
     parameters: [Model.Named(name: "s", type: Types.Type.String)],
     result: Types.Type.String,
     rule: Model.Rule.Plain,
