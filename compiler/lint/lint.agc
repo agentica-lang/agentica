@@ -49,6 +49,7 @@ def of_program(file: String, program: Ast.Program) -> List[Problems.Problem]
   mentions: List[Qualified.Mention] = []
   imports: List[Ast.ImportDecl] = []
   aliases = module_aliases(program)
+  functions = file_functions(program)
   for decl in program.declarations
     for suggestion in Decls.suggestions(file, decl)
       found = found.push(suggestion)
@@ -59,7 +60,7 @@ def of_program(file: String, program: Ast.Program) -> List[Problems.Problem]
       _ -> imports = imports
     end
 
-    scan = scan_decl(file, decl, aliases)
+    scan = scan_decl(file, decl, aliases, functions)
     for suggestion in scan.found
       found = found.push(suggestion)
     end
@@ -94,19 +95,44 @@ def module_aliases(program: Ast.Program) -> Set[String]
   found
 end
 
+# The names of the top-level functions of the file, `export` or not.
+def file_functions(program: Ast.Program) -> Set[String]
+  found: Set[String] = Set.new([])
+  for decl in program.declarations
+    inner = decl
+    case decl
+      Ast.Decl.Export(node) -> inner = node.declaration
+      _ -> inner = decl
+    end
+
+    case inner
+      Ast.Decl.Function(node) -> found = found.add(node.name)
+      _ -> next
+    end
+  end
+
+  found
+end
+
 # The walk of a function body or of the value of a constant, `export` or not.
-def scan_decl(file: String, decl: Ast.Decl, aliases: Set[String]) -> Scan
+def scan_decl(file: String, decl: Ast.Decl, aliases: Set[String], functions: Set[String]) -> Scan
   case decl
-    Ast.Decl.Export(node) -> scan_decl(file, node.declaration, aliases)
+    Ast.Decl.Export(node) -> scan_decl(file, node.declaration, aliases, functions)
     Ast.Decl.Function(node) ->
       roots = node.body.map do |stmt: Ast.Stmt| Walk.Node.Stmt(stmt) end
-      scan(file, roots, function_locals(node, roots, aliases), aliases)
-    Ast.Decl.Constant(node) -> scan(file, [Walk.Node.Expr(node.value)], Stmts.Locals(origins: {}), aliases)
+      scan(file, roots, function_locals(node, roots, aliases), aliases, functions)
+    Ast.Decl.Constant(node) -> scan(file, [Walk.Node.Expr(node.value)], Stmts.Locals(origins: {}), aliases, functions)
     _ -> Scan(found: [], mentions: [])
   end
 end
 
-def scan(file: String, roots: List[Walk.Node], locals: Stmts.Locals, aliases: Set[String]) -> Scan
+def scan(
+  file: String,
+  roots: List[Walk.Node],
+  locals: Stmts.Locals,
+  aliases: Set[String],
+  functions: Set[String],
+) -> Scan
   found: List[Problems.Problem] = []
   mentions: List[Qualified.Mention] = []
   work: List[Item] = roots.map do |node: Walk.Node| Item(node: node, path: [], chained: false) end
@@ -114,7 +140,7 @@ def scan(file: String, roots: List[Walk.Node], locals: Stmts.Locals, aliases: Se
   while at < work.size
     item = work[at]
     at += 1
-    for suggestion in suggestions(file, item, locals, aliases)
+    for suggestion in suggestions(file, item, locals, aliases, functions)
       found = found.push(suggestion)
     end
 
@@ -130,9 +156,15 @@ def scan(file: String, roots: List[Walk.Node], locals: Stmts.Locals, aliases: Se
   Scan(found: found, mentions: mentions)
 end
 
-def suggestions(file: String, item: Item, locals: Stmts.Locals, aliases: Set[String]) -> List[Problems.Problem]
+def suggestions(
+  file: String,
+  item: Item,
+  locals: Stmts.Locals,
+  aliases: Set[String],
+  functions: Set[String],
+) -> List[Problems.Problem]
   case item.node
-    Walk.Node.Expr(expr) -> Exprs.suggestions(file, expr, item.chained, aliases)
+    Walk.Node.Expr(expr) -> Exprs.suggestions(file, expr, item.chained, aliases, functions)
     Walk.Node.Stmt(stmt) -> Stmts.suggestions(file, stmt, item.path, locals)
   end
 end
@@ -169,14 +201,17 @@ def path_below(item: Item) -> List[Int]
 end
 
 # Whether `first`, the first child of the item, is the first operand of a chain that the item continues: the value a
-# pipe passes on, the left side of a `+`, the first argument of a step that is a step too (a nest, Exprs.step?), or
-# the receiver of a method call that is a link of a method chain too.
-# Only a child of the same chain counts: in `(a + b.to_s) |> f()` and in `a |> f() + "x"` the child is a chain of the
-# other kind, which nobody has judged yet. A `try` that wraps a pipe is part of it when the `try` is; a `+` does not
-# look through a `try` (Shape.plus_operands), so the `+` inside is its own chain.
+# pipe passes on, the left side of a `+`, the first argument of a step that is a step too (a nest, Exprs.step?), or a
+# method call that is the receiver of a method call or a field (the last link judges the chain, Exprs.lambda_steps, and
+# walks through method calls only, so a field inside the chain judges the part below it on its own). Only a child of
+# the same chain counts: in `(a + b.to_s) |> f()` and in `a |> f() + "x"` the child is a chain of the other kind, which
+# nobody has judged yet. A `try` that wraps a pipe is part of it when the `try` is; a `+` does not look through a `try`
+# (Shape.plus_operands), so the `+` inside is its own chain.
 def continues?(item: Item, first: Walk.Node, aliases: Set[String]) -> Bool
   kind = chain_kind(item.node, aliases)
-  return false if kind == "" or kind != chain_kind(first, aliases)
+  inner = chain_kind(first, aliases)
+  return inner == "method" if kind == "method" or kind == "field"
+  return false if kind == "" or kind != inner
 
   case item.node
     Walk.Node.Expr(Ast.Expr.Try(_)) -> item.chained
@@ -185,8 +220,8 @@ def continues?(item: Item, first: Walk.Node, aliases: Set[String]) -> Bool
 end
 
 # "pipe" for a piped call, "nest" for a call that is a step, "plus" for a `+`, "pipe" for a `try` around a piped call,
-# "method" for a method call or a field, whose receiver is the link before it, and "" for anything else: a builtin call
-# breaks a nest, so `puts(f(g(h(x))))` is judged at `f`.
+# "method" for a method call and "field" for a name without arguments, whose receiver is the link before it, and "" for
+# anything else: a builtin call breaks a nest, so `puts(f(g(h(x))))` is judged at `f`.
 def chain_kind(node: Walk.Node, aliases: Set[String]) -> String
   case node
     Walk.Node.Expr(Ast.Expr.Call(call)) ->
@@ -206,7 +241,7 @@ def chain_kind(node: Walk.Node, aliases: Set[String]) -> String
 
       ""
     Walk.Node.Expr(Ast.Expr.MethodCall(_)) -> "method"
-    Walk.Node.Expr(Ast.Expr.FieldAccess(_)) -> "method"
+    Walk.Node.Expr(Ast.Expr.FieldAccess(_)) -> "field"
     _ -> ""
   end
 end

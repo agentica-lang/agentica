@@ -242,46 +242,41 @@ def check_pipe_method(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.B
       cx,
       st,
       "CHECK-PIPE-METHOD",
-      "\"#{entry.name}\" has a method form for #{kind}, so a pipe names the method alone",
+      "\"#{entry.name}\" has a method form for #{kind}, so it is written as the method",
       node.span,
       pipe_help(cx, node, method),
     ),
   )
 end
 
-# The method form of a piped call: receiver.method(arguments) do ... end, or, when the receiver is a pipe itself,
-# one more step: receiver |> method(arguments) do ... end.
+# The two method forms of a piped call: receiver.method(arguments) do ... end, and the pipe step by the method name,
+# receiver |> method(arguments) do ... end.
 def pipe_help(cx: State.Cx, node: Ast.Call, method: String) -> String
   left = node.args[0]
-  receiver = "(#{extent_text(cx, left)})."
-  if piped?(left)
-    receiver = "#{extent_text(cx, left)} |> "
-  elsif simple_receiver?(left)
-    receiver = "#{extent_text(cx, left)}."
+  receiver = "(#{extent_text(cx, left)})"
+  if simple_receiver?(left) and !piped?(left)
+    receiver = extent_text(cx, left)
   end
 
   plain: List[String] = []
-  block = false
+  block = ""
   index = 1
   while index < node.args.size
     case node.args[index]
-      Ast.Expr.BlockLit(found) if !found.lambda -> block = true
+      Ast.Expr.BlockLit(found) if !found.lambda -> block = " do ... end"
       _ -> plain = plain.push(extent_text(cx, node.args[index]))
     end
 
     index += 1
   end
 
-  text = "#{receiver}#{method}"
-  if plain.size > 0 or piped?(left)
-    text = "#{text}(#{plain.join(", ")})"
+  arguments = "(#{plain.join(", ")})"
+  dot = "#{receiver}.#{method}"
+  if plain.size > 0
+    dot = "#{dot}#{arguments}"
   end
 
-  if block
-    text = "#{text} do ... end"
-  end
-
-  text
+  "write the method: #{dot}#{block} or #{extent_text(cx, left)} |> #{method}#{arguments}#{block}"
 end
 
 def simple_receiver?(node: Ast.Expr) -> Bool

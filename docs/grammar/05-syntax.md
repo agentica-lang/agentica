@@ -515,8 +515,9 @@ use `.` on the result, as in `(x |> f()).unwrap!`. A bare name that is no
 function of the file, no function it imports by name and no builtin function
 is a method of the left value: `xs |> map(->(x) { x * 2 })` is
 `xs.map(->(x) { x * 2 })`, and `xs |> sum()` is `xs.sum`; a name that is no
-method of the value either is `CHECK-UNKNOWN-NAME` at the right side. A
-function of the program with the same name as a method wins. A builtin written
+method of the value either, a struct field (an `Fn` field too) included, is
+`CHECK-UNKNOWN-NAME` at the right side. A function of the program with the
+same name as a method wins. A builtin written
 with its type, `x |> String.strip()`, is `CHECK-PIPE-METHOD` at the right side,
 with the method form as help. The styles mix: `s.strip |> try parse() |> try
 validate()`. `|>` binds lower than `+` and

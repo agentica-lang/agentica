@@ -445,3 +445,36 @@ def test_a_lambda_chain_is_judged_once_at_its_last_link_and_a_chain_in_an_argume
     )
     found = suggested(tmp_path / "chains.agc", source)
     assert found == {"LINT-LAMBDA-CHAIN": [where(source, "xs.map"), where(source, "xs.map", nth=2)]}
+
+
+def test_a_lambda_chain_after_a_field_is_judged_below_it_and_a_chain_through_a_file_function_is_not(tmp_path):
+    """A name without arguments ends the part of a chain that a pipe writes, so the method calls below it are judged as
+    a chain of their own; a link named as a function of the file would call that function in a pipe, so its chain is
+    left alone."""
+    source = (
+        "def f(xs: List[Int]) -> String\n"
+        "  one = xs.map(->(x) { x * 2 }).select(->(x) { x > 2 }).sum.to_s\n"
+        "  return one\n"
+        "end\n"
+    )
+    assert suggested(tmp_path / "field.agc", source) == {"LINT-LAMBDA-CHAIN": [where(source, "xs.map")]}
+    clash = "def select(xs: List[Int], f: Fn[Int, Bool]) -> List[Int] = xs\n\n" + source
+    assert suggested(tmp_path / "clash.agc", clash) == {}
+
+
+def test_the_help_of_a_one_step_pipe_into_a_method_is_the_method_call(tmp_path):
+    source = (
+        "def shout(text: String) -> String = text\n\n"
+        "def f(xs: List[Int], text: String) -> Bool\n"
+        "  loud = text |> shout()\n"
+        "  return xs |> any?(->(x) { x > 0 })\n"
+        "end\n"
+    )
+    path = tmp_path / "single.agc"
+    path.write_text(source, encoding="utf-8")
+    found = report(lint_json(path.name, cwd=tmp_path), 0)["files"][0]["suggestions"]
+    assert [(s["code"], start(s)) for s in found] == [
+        ("LINT-SINGLE-PIPE", where(source, "shout()")),
+        ("LINT-SINGLE-PIPE", where(source, "any?(")),
+    ]
+    assert found[0]["help"] != found[1]["help"]

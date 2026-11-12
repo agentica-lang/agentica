@@ -391,7 +391,7 @@ def test_first_and_last_halt_on_an_empty_list_and_empty_asks_the_three_kinds(pro
 def test_the_helps_of_diagnostics_name_the_ruby_form_not_the_builtin(tmp_path):
     for expression, code, help_text in [
             ('String.trim("a")', "CHECK-UNKNOWN-NAME", "use s.strip"),
-            ('"a" |> String.strip()', "CHECK-PIPE-METHOD", '"a".strip')]:
+            ('"a" |> String.strip()', "CHECK-PIPE-METHOD", 'write the method: "a".strip or "a" |> strip()')]:
         source = "def main() -> Void\n  puts(%s)\nend\n\n" % expression
         found = check_diagnostic(source, tmp_path)
         assert (found["code"], found["help"]) == (code, help_text), expression

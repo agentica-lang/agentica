@@ -91,3 +91,32 @@ WRONG_CLASH = 'def map(xs: List[Int], n: Int) -> String = "mine"\n\ndef main() -
 @table("program", [WRONG_CLASH])
 def test_the_function_that_wins_gives_its_own_type(checked, program):
     assert_rule(checked(program), program, "CHECK-TYPE-MISMATCH", "map(1)")
+
+
+FIELDS = """struct Handler
+  run: Fn[Int, Int]
+  to_s: Fn[String]
+  name: String
+end
+
+def main() -> Void
+  h = Handler(run: ->(n: Int) { n * 10 }, to_s: -> { "handler" }, name: "h")
+  puts(h.run(4))
+  puts(h.name)
+%s
+end
+"""
+
+PIPED_FIELDS = [
+    # A step names only methods: an Fn field would drop the piped value, so it is no step, also when it shadows a
+    # method name (to_s); nor is a field of another type.
+    ("  puts(h |> run(4))", "run(4)"),
+    ("  puts(h |> to_s())", "to_s()"),
+    ("  puts(h |> name())", "name()"),
+]
+
+
+@table("body, text", PIPED_FIELDS, FIELDS)
+def test_a_pipe_step_is_never_a_struct_field(checked, body, text):
+    program = FIELDS % body
+    assert_rule(checked(program), program, "CHECK-UNKNOWN-NAME", text)

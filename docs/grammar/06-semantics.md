@@ -962,9 +962,10 @@ half: Fn[String, Result[Int]] = ->(s) {
 - **In the place of a block.** A lambda written as the last argument of a call
   whose last parameter is an `Fn` is that call's block:
   `xs.map(->(x) { x * 2 })` means `xs.map do |x| x * 2 end`, with the
-  parameter types from the expected `Fn`, and it picks the block form of a
-  builtin that has one (`File.open`). So is a lambda kept in a variable whose
-  type fits (`xs.map(double)`). A `do ... end` block still follows the call and
+  parameter types from the expected `Fn`, and a lambda literal picks the block
+  form of a builtin that has one (`File.open`). A lambda kept in a variable is
+  passed as a value: `xs.map(double)` checks when its type fits the `Fn`
+  parameter. A `do ... end` block still follows the call and
   never goes inside its parentheses. A parameter of a generic type takes no
   block, so `some(->(x: Int) { x })` and `fs.push(->(x: Int) { x })` pass the
   lambda as a value.
