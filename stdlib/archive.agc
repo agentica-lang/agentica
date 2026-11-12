@@ -43,7 +43,7 @@ SPARSE_KEY = "sparse".bytes
 
 # A run of zero bytes. The padding after the archive end is compared with it piece by piece: `==` on Bytes is one
 # memcmp, where a loop over each byte took about 0.34 s per 8 MiB.
-ZERO_RUN = Bytes.from_list((1..4096).to_a.map do |_| 0 end).unwrap!
+ZERO_RUN = Bytes.from_list(List.repeat(0, 4096)).unwrap!
 
 # One header block of zeros: two of them end the archive.
 ZERO_BLOCK = ZERO_RUN.take(HEADER_BYTES)
