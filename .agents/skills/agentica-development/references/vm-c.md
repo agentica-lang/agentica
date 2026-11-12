@@ -49,6 +49,12 @@ Each rule names one place in the VM that follows it.
   and the end of the run; a libuv request also gets its `uv_*_req_cleanup`
   (`vm/file_io.c`). cchecker checks this from the marks (`CC_OWNS`,
   `CC_JUMPS`; "cchecker" in `references/ci.md`).
+- **A libuv pool request outlives the wait.** Once a pool thread runs a
+  `uv_getaddrinfo` request, `uv_cancel` gives `UV_EBUSY` and the thread still
+  writes into it (`vm/dns.c`). So a deadline or a drop only marks the job
+  (`dropped`), and the completion callback frees it; `vm/tcp.c` does the same
+  with counts (`settle`, and `shared_done` with `refs`). Test a deadline while
+  it runs with a slow shim (`tests/fixtures/dns_shim.c`).
 - **The hot path allocates nothing it can avoid.** Scratch space starts in a
   C-stack array and moves to `agc_alloc` memory only when it grows
   (`agc_equal`, `vm/equal.c`). Flags read on the hot path are plain

@@ -24,7 +24,8 @@ diagnostic: `Lexer.lex` returns `Diag.Outcome`, and other stages may use
   `symbol` links only. A local comes from `locals.agc` and `Checked.bound`, kept
   apart from `Checked.types` so lowering never sees it. The tree has no span for
   a name inside a call or a pattern, so `written` reads the dotted name from the
-  text.
+  text. Test a query by name and by position (`FILE:LINE:COL`): editors use
+  the position, which resolves through other code (a re-exported builtin type).
 - Formatter (`format/`): a syntax change updates the printer in the same PR. A
   node without a layout rule makes `fmt` refuse the file (`FMT-INTERNAL`); it
   never guesses. Heredocs are printed byte for byte and force a broken call.
@@ -145,8 +146,12 @@ copy).
   differ, a module's signature means two things to two importers ("expected
   Address[Int], found Address[Int]"). So a new
   builtin type name has one resolution order that both use, or refuses user
-  declarations of the name (`CHECK-REDEFINED-NAME`). Add spec cases for an
-  alias, a struct and an imported module (`tests/test_spec_<area>.py`).
+  declarations of the name (`CHECK-REDEFINED-NAME`).
+- When a builtin name becomes reserved or unreserved, or a builtin type is
+  added, add spec cases (`tests/test_spec_<area>.py`) for a root-file user
+  `enum`, `struct` and alias of that name next to a `std/` module that uses the
+  builtin, and for the root file building the builtin record itself. The linker
+  gives both forms one dotted name, so a check by file cannot tell them apart.
 
 ## Common tasks
 
@@ -180,6 +185,26 @@ right place (statement, primary or program parser). Add a valid test and a
 rejection test that asserts the code, in `tests/test_spec_<area>.py`. The syntax
 is Ruby's when Ruby has one; another habit gets a diagnostic with a `help:`.
 
+### Syntax change checklist
+
+Required for a lexer, parser, checker-rule or `fmt` change, before review: fixes
+made only for the reported input kept missing the cases next to it.
+
+- Generate programs from contexts × block forms × chain kinds (such as 12 × 8
+  × 17). For each program that `check` accepts, `fmt` succeeds, its output
+  checks, a second `fmt` gives the same text, and `fmt --tree` prints the same
+  for the input and the output.
+- A lexer frame change: put each block opener of `WORD_ACTIONS` (action 2)
+  both last in its block and followed by another statement, inside `[]`, `()`,
+  `{}` and nested `do` blocks: `if`, `while`, `for`, `case` and `do`. `def`,
+  `struct` and `enum` are top-level declarations, so they get only the first
+  two cases. A construct that is last in its block hides a frame imbalance.
+- Frozen corpus: rewrite the valid programs that now fail so they check again,
+  refreeze every tier (no `--fast-only`), and compare the first diagnostic of
+  every corpus program with a binary built from `origin/master`; the main
+  checkout's `dist/agentica` may be stale. Manifest sizes hide a negative
+  program whose first diagnostic changed.
+
 ### Add a diagnostic code
 
 Raise it with the stage helper (`Base.bail`, `Failure.problem`) and a span.
@@ -190,6 +215,9 @@ Test the code and the location (`start`, `covers` from `--json check`), as in
 its own test id. When a test builds its program from the row, `Batch.table`
 replaces `pytest.mark.parametrize` and takes the builder (as in
 `tests/test_spec_extern.py`).
+
+The message never indexes a list that can be empty (`types[0]`). A rule that
+computes candidates gets a typo spec case (`x.lenght`).
 
 ### Add a builtin rule
 
@@ -255,8 +283,9 @@ The slow tiers compare the stages with the frozen outputs in
 `tests/fixtures/frontend/frozen/` (`tests/test_frontend_<stage>.py`, through the
 product CLI); helpers in `tests/frontend_support.py` and `frontend_cases.py`.
 
-- `frozen/corpus/*.json` is a fixed snapshot of inputs (a new `stdlib/` file is
-  not in it).
+- `frozen/corpus/*.json` is a fixed set of inputs (a new `stdlib/` file is not
+  in it); its texts still change when the language does ("Syntax change
+  checklist").
 - Manifests `frozen/<stage>/<set>.sha256` hold the output's and the input's
   SHA-256 and size. `.agcb` files hash without the length and the version text,
   so a release does not change the freeze. `stdlib-registry.expected` (a new
