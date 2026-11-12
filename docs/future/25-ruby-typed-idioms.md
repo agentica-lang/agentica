@@ -100,8 +100,6 @@ one exists.
 - **Generators and fibers** (`Enumerator.new`, `Fiber`): see
   `27-iteration-and-concurrency.md`; a producer task that sends into a
   `Channel` is the generator.
-- **`{ |x| ... }` brace blocks:** they re-spell `do |x| ... end`, and `{` is
-  already the map literal.
 - **Keyword arguments:** `connect("a", port: 8080)` would be a second way to
   pass an argument that can already be passed by position. Calls stay
   positional; `with` and struct construction stay the only places with named
