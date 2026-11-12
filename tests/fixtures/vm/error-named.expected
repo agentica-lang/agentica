@@ -1,0 +1,18 @@
+{
+  "exit": 0,
+  "code": null,
+  "steps": 216,
+  "stdout": [
+    "insert: kind=db.constraint message=unique failed code=some(19) details={} at error-named.agc:5:10",
+    "error(\"unique failed\", kind: \"db.constraint\", code: 19)",
+    "load: kind=config message=cannot load taken code=none details={\"name\": \"taken\"} at error-named.agc:13:17",
+    "cause: kind=db.constraint message=unique failed code=some(19) details={} at error-named.agc:5:10",
+    "cannot load taken",
+    "computed: kind=Any Text message=x code=none details={} at error-named.agc:43:27",
+    "true",
+    "false",
+    "ok(2)",
+    ""
+  ],
+  "stderr": []
+}

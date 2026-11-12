@@ -1,0 +1,1 @@
+ERROR CHECK-ERROR-KIND 67:2:49-82:2:64 "\"Db Constraint\" is not an error kind" "a kind is a dotted name such as db.constraint: parts of a-z, 0-9 and _ that start with a letter" signature="main() -> Void" file="error-kind.agc"
