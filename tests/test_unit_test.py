@@ -90,6 +90,23 @@ class UnitTest(TestCase):
         self.assertIn('actual "a\\"b" | output "first line\\n\\u001Eagentica-bdd ', ai)
         self.assertRegex(ai, r"\[RUNTIME-DIVISION-BY-ZERO\] division by zero \| stack divide at [^;]*:2:13; block at ")
 
+    def test_an_assertion_message_writes_a_re_exported_builtin_type_as_a_program_does(self):
+        # HTTP.Header and Logger.Level are the builtin types HttpWire.Header and LogRegistry.Level, which std/http and
+        # std/logger re-export: the expected and actual values of Test.eq show the names the program wrote.
+        directory = self.make_temp_dir("agentica-unit-").resolve()
+        path = directory / "written_test.agc"
+        path.write_text(
+            'import HTTP from "std/http"\nimport Logger from "std/logger"\n\n'
+            "def test_header() -> Result[Void]\n"
+            '  Test.eq(HTTP.Header(name: "a", value: "b"), HTTP.Header(name: "a", value: "c"))\nend\n\n'
+            "def test_level() -> Result[Void]\n  Test.eq(Logger.Level.Info, Logger.Level.Error)\nend\n",
+            encoding="utf-8")
+        status, report = self.json_test(str(path))
+        self.assertEqual(status, 1)
+        self.assertEqual([[field(item, "expected"), field(item, "actual")] for item in report_cases(report)], [
+            ['HTTP.Header(name: "a", value: "c")', 'HTTP.Header(name: "a", value: "b")'],
+            ["Logger.Level.Error", "Logger.Level.Info"]])
+
     def test_a_file_without_main_runs_its_test_functions_in_source_order_named_after_them(self):
         status, report = self.json_test(fixture("functions_test.agc"))
         self.assertEqual(status, 1)

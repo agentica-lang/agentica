@@ -72,6 +72,14 @@ def test_every_builtin_type_a_std_module_re_exports_has_its_written_name():
                 assert families[family][0] == std_path, (family, path)
                 exported["%s.%s" % (family, member)] = "%s.%s" % (families[family][1], member)
     assert written == exported
+    # A printed value shows the written name too: vm/text.c maps each record and enum (written_names) and prints
+    # each handle as <WRITTEN>.
+    text_c = (ROOT / "vm" / "text.c").read_text(encoding="utf-8")
+    printed = dict(re.findall(r'\{"([^"]+)", "([^"]+)"\}', text_c[text_c.index("written_names[][2] = {"):]
+                              .split("};", 1)[0]))
+    handles = {name: shown for name, shown in written.items() if '"<%s>"' % shown in text_c}
+    assert printed == {name: shown for name, shown in written.items() if name not in handles}
+    assert sorted(handles) == ["HttpWire.Client", "HttpWire.Server"]
     moved = re.findall(r'"\w+": "([^"]+)"', table("catalog/builtins_data.agc", "MOVED_TYPES"))
     assert set(moved) <= set(written)
 

@@ -173,10 +173,10 @@ size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
   if (agc_is(v, AGC_T_PROCESS)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Process>");
   if (agc_is(v, AGC_T_SOCKET)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Socket>");
   if (agc_is(v, AGC_T_LISTENER)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Listener>");
-  if (agc_is(v, AGC_T_HTTP_CLIENT)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<HttpWire.Client>");
+  if (agc_is(v, AGC_T_HTTP_CLIENT)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<HTTP.Client>");
   if (agc_is(v, AGC_T_TLS_CONTEXT)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<TlsContext>");
   if (agc_is(v, AGC_T_TEST)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<TestCase>");
-  if (agc_is(v, AGC_T_HTTP_SERVER)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<HttpWire.Server>");
+  if (agc_is(v, AGC_T_HTTP_SERVER)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<HTTP.Server>");
   if (agc_is(v, AGC_T_CHANNEL)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Channel>");
   if (agc_is(v, AGC_T_LAZY)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Lazy>");
   if (agc_is(v, AGC_T_ATS)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<ATS>");
@@ -219,6 +219,32 @@ static void append_string(builder *b, const agc_string *s) {
   if (s->bytes) memcpy(reserve(b, s->bytes), s->data, s->bytes);
   b->s->bytes += s->bytes;
   b->s->chars += s->chars;
+}
+
+/* The builtin records and enums that a std/ module re-exports, by their builtin name, with the name a program writes:
+   a printed value shows the written name (HTTP.Response(...), Logger.Level.Info), while the builtin name stays the key
+   of the bytecode and the lowering. The records and enums of REEXPORTED_TYPES (compiler/syntax/types.agc); its
+   handles print in agc_scalar_text (<HTTP.Client>). tests/test_frontend_catalog.py checks that they agree. */
+static const char *const written_names[][2] = {
+    {"HttpWire.ClientOptions", "HTTP.ClientOptions"},
+    {"HttpWire.Header", "HTTP.Header"},
+    {"HttpWire.Request", "HTTP.Request"},
+    {"HttpWire.Response", "HTTP.Response"},
+    {"HttpWire.ServerOptions", "HTTP.ServerOptions"},
+    {"LogRegistry.Event", "Logger.Event"},
+    {"LogRegistry.Level", "Logger.Level"},
+};
+
+/* The name of a struct or an enum as a program writes it. */
+static void append_type_name(builder *b, const agc_string *name) {
+  for (size_t k = 0; k < sizeof written_names / sizeof written_names[0]; k++) {
+    size_t len = strlen(written_names[k][0]);
+    if (len == name->bytes && memcmp(written_names[k][0], name->data, len) == 0) {
+      append(b, written_names[k][1], strlen(written_names[k][1]));
+      return;
+    }
+  }
+  append_string(b, name);
 }
 
 /* A Void has no text form (the checker rejects one with CHECK-VOID-VALUE): where the formatter would reach
@@ -305,7 +331,7 @@ static bool open_value(agc_vm *vm, builder *b, agc_value v) {
     return true;
   }
   if (agc_is(v, AGC_T_STRUCT)) {
-    append_string(b, agc_struct_def_of(vm, agc_as_struct(vm, v))->name);
+    append_type_name(b, agc_struct_def_of(vm, agc_as_struct(vm, v))->name);
     append(b, "(", 1);
     return true;
   }
@@ -329,7 +355,7 @@ static bool open_value(agc_vm *vm, builder *b, agc_value v) {
     append(b, "some(", 5);
     return true;
   }
-  append_string(b, owner);
+  append_type_name(b, owner);
   append(b, ".", 1);
   append_string(b, variant->name);
   if (e->n == 0) return false;
