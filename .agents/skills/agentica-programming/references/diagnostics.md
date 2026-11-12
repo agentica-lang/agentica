@@ -187,8 +187,9 @@ lines show. A task's stack ends with `task spawned at file:line:column`.
   statement of a `Void` block, from any call (`Result[Void]` too). Use `try`
   where it is allowed, a `case`, or `.unwrap!`; `_ = f(...)` drops it on
   purpose. `IO.inspect(r)` is exempt, and `Task.spawn(&f)` is not a Result.
-- `CHECK-BLOCK-TYPE`: a block parameter has no type from the call (`do |x:
-  Int|`), or a lambda parameter none from an `Fn` type (`->(x: Int) { ... }`).
+- `CHECK-BLOCK-TYPE`: a block parameter has no type from the call, or a lambda
+  parameter none from an `Fn` type, and its uses in the body leave no single
+  type (`x * 2`: Int or String); annotate (`do |x: Int|`, `->(x: Int) { ... }`).
 - `CHECK-LAMBDA-BLOCK`: a lambda as the last argument of a call that takes a
   block; write the block (`xs.map do |x| ... end`).
 - `CHECK-LOOP-CONTROL`: `break` or `next` outside a `while`/`for` body, or
