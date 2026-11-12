@@ -46,7 +46,7 @@ export def find(workspace: Workspace.Workspace, root_dir: String, running: Strin
 
   manifest = try Manifest.read_checked(workspace, Paths.join(dir, MANIFEST_FILE), "", running)
   try check_paths(workspace, dir, manifest)
-  members = try Members.find(workspace, dir)
+  members = try Members.find(workspace, dir, running)
   empty = Lock.Lock(file: Paths.join(dir, LOCK_FILE), packages: [], artifacts: [])
   if manifest.dependencies.size == 0 and !Manifest.has_downloaded(manifest)
     return ok(Project.Declared(Found(dir: dir, manifest: manifest, lock: empty, members: members)))
@@ -88,7 +88,7 @@ export def find_to_write(workspace: Workspace.Workspace, root_dir: String, runni
 
   manifest = try Manifest.read_checked(workspace, Paths.join(dir, MANIFEST_FILE), "", running)
   try check_paths(workspace, dir, manifest)
-  members = try Members.find(workspace, dir)
+  members = try Members.find(workspace, dir, running)
   lock = Lock.Lock(file: Paths.join(dir, LOCK_FILE), packages: [], artifacts: [])
   if workspace.file_exists.call(lock.file)
     lock = try Lock.read(workspace, lock.file)
