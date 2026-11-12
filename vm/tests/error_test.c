@@ -1,6 +1,6 @@
 /*
  * The builtin Error record in C (#671): agc_error and its location, the error builtins (error, Result.message,
- * Result.unwrap!), printing as the error(...) call, equality without the location, and hostile field values.
+ * Result.unwrap!, Error.is_a?), printing as the error(...) call, equality without the location, and hostile field values.
  */
 #include "../core.h"
 #include "builtin_test.h"
@@ -238,6 +238,29 @@ static void test_readers(void) {
   assert(strcmp(agc_test_fail_code(&vm, message, &failed), "RUNTIME-INTERNAL") == 0);
 }
 
+/* Error.is_a?: the kind itself or a kind below it at a dot. A receiver that is not the Error record, or a kind that is
+   not a String, is a wrong tag. */
+static void test_is_a(void) {
+  agc_value none = agc_optional_make(&shapes->program, false, agc_void());
+  agc_value db = make("db.constraint", "boom", none, vm.rt->empty_map, none);
+  const agc_builtin *is_a = agc_find_builtin((const uint8_t *)"Error.is_a?", 11, 2);
+  const char *yes[] = {"db", "db.constraint"};
+  const char *no[] = {"", "d", "dbx", "db.c", "db.constraint.x", "db.constraint."};
+  for (size_t i = 0; i < sizeof yes / sizeof yes[0]; i++) {
+    agc_value args[] = {db, agc_test_str(yes[i])};
+    assert(agc_as_bool(&vm, is_a->fn(&vm, args, 0)));
+  }
+  for (size_t i = 0; i < sizeof no / sizeof no[0]; i++) {
+    agc_value args[] = {db, agc_test_str(no[i])};
+    assert(!agc_as_bool(&vm, is_a->fn(&vm, args, 0)));
+  }
+  agc_value text_args[] = {agc_test_str("db"), agc_test_str("db")};
+  assert(strcmp(agc_test_fail_code(&vm, is_a, text_args), "RUNTIME-INTERNAL") == 0);
+  agc_as_struct(&vm, db)->fields[AGC_ERROR_KIND] = agc_int(1);
+  agc_value int_args[] = {db, agc_test_str("db")};
+  assert(strcmp(agc_test_fail_code(&vm, is_a, int_args), "RUNTIME-INTERNAL") == 0);
+}
+
 /* A program without the struct keeps String payloads, which every reader takes as before. */
 static void test_fallback(void) {
   uint32_t found = vm.rt->error_struct;
@@ -282,6 +305,7 @@ int main(void) {
   AGC_TEST_RUN(test_printing());
   AGC_TEST_RUN(test_equality());
   AGC_TEST_RUN(test_readers());
+  AGC_TEST_RUN(test_is_a());
   AGC_TEST_RUN(test_fallback());
   AGC_TEST_RUN(test_shape());
   puts("error tests passed");
