@@ -1055,7 +1055,8 @@ void agc_output_file_done(agc_output *out);
 bool agc_output_failed(const agc_output *out);
 
 uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count);
-/* The builtin Error struct of PROGRAM, by its name and its exact field list (AGC_ERROR_* in value.h), or UINT32_MAX:
+/* The builtin Error struct of PROGRAM, by its name, its exact field list (AGC_ERROR_* in value.h) and its field types,
+   or UINT32_MAX:
    unlike agc_builtin_struct it never fails, because a program without one still runs with String errors. */
 uint32_t agc_error_struct(const agc_program *program);
 uint32_t agc_builtin_variant(agc_vm *vm, const char *enum_name, const char *variant_name, uint32_t arity);

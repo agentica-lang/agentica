@@ -605,13 +605,39 @@ static uint32_t find_struct(const agc_program *p, const char *name, const char *
   return UINT32_MAX;
 }
 
+/* Whether type index AT of P is KIND and, for a Map or an Optional, holds an item of kind ITEM (with arg ITEM_ARG
+   when ITEM is AGC_TYPE_STRUCT). The loader checked every index, so the reads stay in the table. */
+static bool type_is(const agc_program *p, uint32_t at, uint32_t kind, uint32_t item, uint32_t item_arg) {
+  const agc_type *t = &p->types[at];
+  if (t->kind != kind) return false;
+  if (kind != AGC_TYPE_MAP && kind != AGC_TYPE_OPTIONAL) return true;
+  const agc_type *in = &p->types[t->arg];
+  return in->kind == item && (item != AGC_TYPE_STRUCT || in->arg == item_arg);
+}
+
+/* The field types of struct K are those of the builtin Error: String, String, Optional[Int], Map[String, String],
+   Optional[Error] and String. The front end gives a builtin record of JSON-able fields its types (builtin_decodable,
+   compiler/lower/lower_program.agc), so a struct without them is not the builtin one. */
+static bool error_types(const agc_program *p, uint32_t k) {
+  const uint32_t *t = p->structs[k].field_types;
+  return t && type_is(p, t[AGC_ERROR_KIND], AGC_TYPE_STRING, 0, 0) &&
+         type_is(p, t[AGC_ERROR_MESSAGE], AGC_TYPE_STRING, 0, 0) &&
+         type_is(p, t[AGC_ERROR_CODE], AGC_TYPE_OPTIONAL, AGC_TYPE_INT, 0) &&
+         type_is(p, t[AGC_ERROR_DETAILS], AGC_TYPE_MAP, AGC_TYPE_STRING, 0) &&
+         type_is(p, t[AGC_ERROR_CAUSE], AGC_TYPE_OPTIONAL, AGC_TYPE_STRUCT, k) &&
+         type_is(p, t[AGC_ERROR_LOCATION], AGC_TYPE_STRING, 0, 0);
+}
+
 uint32_t agc_error_struct(const agc_program *program) {
   static const char *const fields[AGC_ERROR_FIELDS] = {"kind", "message", "code", "details", "cause", "location"};
   /* code and cause are Optionals: without the enum an Error could not be built, so the program keeps String errors. */
   if (!program || program->optional == UINT32_MAX || program->optional >= program->variant_count ||
       !program->variants[program->optional].shared)
     return UINT32_MAX;
-  return find_struct(program, "Error", fields, AGC_ERROR_FIELDS);
+  /* The name is reserved, but a .agcb from before the reservation, or a hand-made one, may hold a struct Error of its
+     own whose fields the checker typed otherwise: filling it with an Error's values would break those types. */
+  uint32_t found = find_struct(program, "Error", fields, AGC_ERROR_FIELDS);
+  return found != UINT32_MAX && error_types(program, found) ? found : UINT32_MAX;
 }
 
 uint32_t agc_builtin_struct(agc_vm *vm, const char *name, const char *const *fields, uint32_t count) {

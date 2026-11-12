@@ -1211,8 +1211,13 @@ static void stored_name_tests(void) {
   }
 }
 
-/* The builtin Error struct (#671): a struct named Error with FIELDS, and the Optional enum when OPTIONAL. */
-static buffer error_tables(const char *const *fields, uint32_t count, bool optional) {
+/* The builtin Error struct (#671): a struct named Error with FIELDS, and the Optional enum when OPTIONAL. With TYPES
+   (indexes into Int, String, Optional[Int], Map[String, String], Error, Optional[Error]; needs OPTIONAL) the struct
+   is decodable with those field types, as the front end writes a builtin record. */
+static buffer error_tables(const char *const *fields, uint32_t count, bool optional, const uint32_t *types) {
+  static const uint8_t kinds[] = {AGC_TYPE_INT, AGC_TYPE_STRING, AGC_TYPE_OPTIONAL, AGC_TYPE_MAP, AGC_TYPE_STRUCT,
+                                  AGC_TYPE_OPTIONAL};
+  static const uint32_t args[] = {0, 0, 0, 1, 0, 4};
   buffer t;
   t.data = malloc(512);
   assert(t.data);
@@ -1221,8 +1226,17 @@ static buffer error_tables(const char *const *fields, uint32_t count, bool optio
   str(&t, "Error");
   u32(&t, count);
   for (uint32_t k = 0; k < count; k++) str(&t, fields[k]);
-  u32(&t, 0);
-  u32(&t, 0);
+  u32(&t, types ? 6 : 0);
+  for (uint32_t k = 0; types && k < 6; k++) {
+    u8(&t, kinds[k]);
+    if (kinds[k] >= AGC_TYPE_LIST) u32(&t, args[k]);
+  }
+  u32(&t, types ? 1 : 0);
+  if (types) {
+    u32(&t, 0);
+    str(&t, "Error");
+    for (uint32_t k = 0; k < count; k++) u32(&t, types[k]);
+  }
   u32(&t, optional ? 1 : 0);
   if (optional) {
     str(&t, "Optional");
@@ -1249,13 +1263,16 @@ static agc_value error_payload(const buffer *tables, uint32_t *found) {
   return r->value;
 }
 
-/* agc_vm_init finds the Error struct by its name and exact fields, with the Optional enum its code and cause need; a
- * look-alike, a file without it or without Optional keep String errors, as an older front end makes them. */
+/* agc_vm_init finds the Error struct by its name, exact fields and field types, with the Optional enum its code and
+ * cause need; a look-alike (other fields, other types, no types), a file without it or without Optional keep String
+ * errors, as an older front end makes them. */
 static void error_struct_tests(void) {
   static const char *const exact[] = {"kind", "message", "code", "details", "cause", "location"};
   static const char *const moved[] = {"message", "kind", "code", "details", "cause", "location"};
+  static const uint32_t typed[] = {1, 1, 2, 3, 5, 1};
+  static const uint32_t retyped[] = {1, 1, 2, 3, 5, 0};
   uint32_t found;
-  buffer t = error_tables(exact, 6, true);
+  buffer t = error_tables(exact, 6, true, typed);
   agc_value e = error_payload(&t, &found);
   assert(found == 0 && agc_is(e, AGC_T_STRUCT));
   const agc_struct *fields = e.as.p;
@@ -1266,7 +1283,9 @@ static void error_struct_tests(void) {
   /* No frame of the program runs: the location is empty, as for a detached job's done half. */
   assert(is_name(fields->fields[AGC_ERROR_LOCATION].as.p, ""));
   free(t.data);
-  const buffer others[] = {error_tables(moved, 6, true), error_tables(exact, 5, true), error_tables(exact, 6, false)};
+  const buffer others[] = {error_tables(moved, 6, true, typed), error_tables(exact, 5, true, NULL),
+                           error_tables(exact, 6, false, NULL), error_tables(exact, 6, true, NULL),
+                           error_tables(exact, 6, true, retyped)};
   for (size_t k = 0; k < sizeof others / sizeof others[0]; k++) {
     assert(agc_is(error_payload(&others[k], &found), AGC_T_STRING) && found == UINT32_MAX);
     free(others[k].data);

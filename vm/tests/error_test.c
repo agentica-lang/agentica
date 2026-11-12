@@ -22,6 +22,8 @@ typedef struct {
   agc_instr code[SPANS];
   uint32_t spans[SPANS];
   agc_string *error_fields[AGC_ERROR_FIELDS];
+  uint32_t error_types[AGC_ERROR_FIELDS];
+  agc_type types[6];
   agc_struct_def structs[1];
   agc_enum_def enums[1];
   agc_variant_def variants[2];
@@ -49,7 +51,14 @@ static fixture *build(void) {
   static const char *const fields[AGC_ERROR_FIELDS] = {"kind", "message", "code", "details", "cause", "location"};
   fixture *f = agc_alloc(sizeof *f);
   for (size_t k = 0; k < AGC_ERROR_FIELDS; k++) f->error_fields[k] = text(fields[k]);
-  f->structs[0] = (agc_struct_def){text("Error"), AGC_ERROR_FIELDS, false, f->error_fields, NULL, NULL};
+  /* The types: Int, String, Optional[Int], Map[String, String], Error and Optional[Error]. */
+  static const agc_type types[] = {{AGC_TYPE_INT, 0},    {AGC_TYPE_STRING, 0}, {AGC_TYPE_OPTIONAL, 0},
+                                   {AGC_TYPE_MAP, 1},    {AGC_TYPE_STRUCT, 0}, {AGC_TYPE_OPTIONAL, 4}};
+  static const uint32_t field_types[AGC_ERROR_FIELDS] = {1, 1, 2, 3, 5, 1};
+  memcpy(f->types, types, sizeof types);
+  memcpy(f->error_types, field_types, sizeof field_types);
+  f->structs[0] = (agc_struct_def){text("Error"), AGC_ERROR_FIELDS, false, f->error_fields, text("Error"),
+                                   f->error_types};
   f->enums[0] = (agc_enum_def){text("Optional"), 0, 2, NULL, NULL};
   f->variants[0] = (agc_variant_def){text("None"), 0, 0, agc_new_enum(0, 0)};
   f->variants[1] = (agc_variant_def){text("Some"), 0, 1, NULL};
@@ -68,6 +77,8 @@ static fixture *build(void) {
     f->fns[k] = (agc_function){.name = text(k == F_MAIN ? "main" : "to_result"), .registers = 1, .count = CODE,
                                .prelude = k == F_PRELUDE, .code = f->code + (size_t)k * CODE,
                                .spans = f->spans + (size_t)k * CODE};
+  f->program.types = f->types;
+  f->program.type_count = 6;
   f->program.structs = f->structs;
   f->program.struct_count = 1;
   f->program.enums = f->enums;
@@ -222,6 +233,29 @@ static void test_fallback(void) {
   vm.rt->error_struct = found;
 }
 
+/* A struct Error with the right names but other field types (one of an older .agcb that the checker typed as the
+   program declared it) is not the builtin record: agc_error_struct refuses it, so errors stay Strings. */
+static void test_shape(void) {
+  assert(agc_error_struct(&shapes->program) == 0);
+  for (uint32_t field = 0; field < AGC_ERROR_FIELDS; field++) {
+    uint32_t kept = shapes->error_types[field];
+    shapes->error_types[field] = 0;
+    assert(agc_error_struct(&shapes->program) == UINT32_MAX);
+    shapes->error_types[field] = kept;
+  }
+  /* cause is Optional[Error] of this struct, not of another one or of an Optional of Int. */
+  shapes->types[4].arg = 1;
+  assert(agc_error_struct(&shapes->program) == UINT32_MAX);
+  shapes->types[4].arg = 0;
+  shapes->error_types[AGC_ERROR_CAUSE] = 2;
+  assert(agc_error_struct(&shapes->program) == UINT32_MAX);
+  shapes->error_types[AGC_ERROR_CAUSE] = 5;
+  shapes->structs[0].field_types = NULL;
+  assert(agc_error_struct(&shapes->program) == UINT32_MAX);
+  shapes->structs[0].field_types = shapes->error_types;
+  assert(agc_error_struct(&shapes->program) == 0);
+}
+
 int main(void) {
   agc_init();
   shapes = build();
@@ -232,6 +266,7 @@ int main(void) {
   AGC_TEST_RUN(test_equality());
   AGC_TEST_RUN(test_readers());
   AGC_TEST_RUN(test_fallback());
+  AGC_TEST_RUN(test_shape());
   puts("error tests passed");
   return 0;
 }
