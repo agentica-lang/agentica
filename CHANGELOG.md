@@ -20,6 +20,10 @@ Versioning](https://semver.org/spec/v2.0.0.html).
   `error(e) if e.message == "x"` for `error("x") ->`; `"#{e}"` and `puts(e)`
   still give the message, but `e.inspect` gives `error("boom")` (was
   `"boom"`) and `JSON.encode(e)` gives the record (was `"boom"`).
+- `BDD.given_program` compiles each program once per run and starts its
+  bytecode, instead of going through the front end in every scenario (#1458).
+- `agentica compile` reads and writes the bytecode cache, as a run does (not
+  under a `--deny-*` flag or `--sandbox`).
 
 ## [0.31.0-alpha.1] - 2026-11-12
 
@@ -48,18 +52,6 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 ### Changed
 
 - **Breaking:** `agentica test --jobs N` runs the scenarios of one file as
-  separate jobs, so they can overlap: ones that share a port, a path or a DB
-  need `--jobs 1` (#1458).
-- `BDD.given_program` compiles each program once per run and starts its
-  bytecode, instead of going through the front end in every scenario (#1458).
-- `agentica compile` reads and writes the bytecode cache, as a run does (not
-  under a `--deny-*` flag or `--sandbox`).
-- **Breaking:** a builtin has only its Ruby name: `trim`, `to_int`, `to_float`,
-  `contains?`, `starts_with?`, `ends_with?`, `String.from_int`,
-  `String.from_float`, `Float.from_int` and `String.join` are errors whose help
-  names the Ruby form (`strip`, `to_i`, `n.to_s`, `list.join`, ...); the
-  function forms moved too: `Int.to_s(n)`, `Float.to_s(x)`, `Int.to_f(n)`,
-  `List.join(xs, sep)`, `String.strip(s)`, `String.to_i(s)`, ...
   separate jobs: ones that share a port, a path or a DB need `--jobs 1`
   (#1458).
 - **Breaking:** a builtin has only its Ruby name: `trim`, `to_int`,

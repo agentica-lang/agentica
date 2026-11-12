@@ -41,13 +41,13 @@ the list of commands and flags.
   `--json`).
 - `agentica F.agc`, `agentica compile` and `agentica test` keep the compiled
   program of each root file in `_build/bytecode/`, in the folder of the nearest
-  `agentica.toml` (else beside F), and read it while F, its imports, `agentica.toml`,
-  `agentica.lock` and the places the `pkg/` search looked at are the same (a
-  hit has no front-end diagnostics). A folder or entry that is a link, not
-  yours, or writable by others is not used (`chmod go-w` a folder you made).
-  `--no-cache` skips it for one run; `AGENTICA_BUILD_DIR=DIR` replaces
+  `agentica.toml` (else beside F), and read it while F, its imports,
+  `agentica.toml`, `agentica.lock` and the places the `pkg/` search looked at
+  are the same (a hit has no front-end diagnostics). A folder or entry that is a
+  link, not yours, or writable by others is not used (`chmod go-w` a folder you
+  made). `--no-cache` skips it for one run; `AGENTICA_BUILD_DIR=DIR` replaces
   `_build/`; an unwritable folder runs without it. `--dump*`, `run` and a
-  `compile` under `--deny-*` never use it. `check` and `type-at` keep checked imports in
-  `_build/check/` under the same rules and give the same answers with and
-  without it.
+  `compile` under `--deny-*` never use it. `check` and `type-at` keep checked
+  imports in `_build/check/` under the same rules and give the same answers with
+  and without it.
 - Scheduler threads (`--schedulers N`): `tasks.md`.
