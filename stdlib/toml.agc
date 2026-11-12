@@ -7,6 +7,19 @@
 ## and inline tables nest at most 256 levels, and a key (a header or a dotted key) has at most 256 parts; a deeper
 ## input is an error at the opening bracket or the key.
 
+# Bits of the class table, indexed by code point (0 .. 127; other code points have none).
+#   1 digit   2 bare-key character   4 hex digit   8 number character (digit, letter, _ . + -)
+#   16 control character that TOML forbids in strings and comments (tab and LF are not)
+#   32 ends a run of plain string characters (quote, apostrophe, backslash, LF)
+# A literal, so a parse does not build it again (#1471).
+CLASS_TABLE = [
+  16, 16, 16, 16, 16, 16, 16, 16, 16, 0, 32, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16,
+  16, 16, 16, 0, 0, 32, 0, 0, 0, 0, 32, 0, 0, 0, 8, 0, 10, 8, 0, 15, 15, 15, 15, 15, 15, 15, 15, 15, 15, 0, 0, 0, 0, 0,
+  0, 0, 14, 14, 14, 14, 14, 14, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 0, 32,
+  0, 0, 10, 0, 14, 14, 14, 14, 14, 14, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10,
+  0, 0, 0, 0, 16,
+]
+
 ## A TOML value. The root of a document is always a `Table`.
 ## A `Map` keeps the order its keys were first written in, so `encode` is deterministic.
 export enum Value
@@ -52,7 +65,7 @@ struct Tbl
   stamp: Int
 end
 
-# The input as code points, with a class table (see class_table) for fast tests.
+# The input as code points, with a class table (see CLASS_TABLE) for fast tests.
 struct Src
   text: String
   codes: List[Int]
@@ -142,7 +155,7 @@ end
 export def encode(value: Value) -> Result[String]
   case value
     Value.Table(entries) ->
-      lines = try emit_table(entries, [], [], class_table())
+      lines = try emit_table(entries, [], [], CLASS_TABLE)
       return ok("") if lines.size == 0
       ok("#{lines.join("\n")}\n")
     _ -> error("the root of a TOML document must be a table")
@@ -227,37 +240,10 @@ def empty_tbl(origin: Origin, stamp: Int) -> Tbl
   Tbl(entries: entries, origin: origin, stamp: stamp)
 end
 
-# Bits of the class table, indexed by code point (0 .. 127; other code points have none).
-#   1 digit   2 bare-key character   4 hex digit   8 number character (digit, letter, _ . + -)
-#   16 control character that TOML forbids in strings and comments (tab and LF are not)
-#   32 ends a run of plain string characters (quote, apostrophe, backslash, LF)
-def class_table() -> List[Int]
-  table = List.repeat(0, 128)
-  for i in 0...128
-    bits = 0
-    if i >= 48 and i <= 57
-      bits = 1 + 2 + 4 + 8
-    elsif (i >= 97 and i <= 102) or (i >= 65 and i <= 70)
-      bits = 2 + 4 + 8
-    elsif (i >= 97 and i <= 122) or (i >= 65 and i <= 90) or i == 95 or i == 45
-      bits = 2 + 8
-    elsif i == 46 or i == 43
-      bits = 8
-    elsif i == 34 or i == 39 or i == 92 or i == 10
-      bits = 32
-    end
-    if i <= 8 or (i >= 11 and i <= 31) or i == 127
-      bits = 16
-    end
-    table = table.set(i, bits)
-  end
-  table
-end
-
 def make_src(text: String) -> Src
   clean = text.replace("\r\n", "\n")
   codes = clean.split("").map do |c| String.code(c) end
-  Src(text: clean, codes: codes, n: codes.size, cls: class_table())
+  Src(text: clean, codes: codes, n: codes.size, cls: CLASS_TABLE)
 end
 
 # The code point at `pos`, or -1 past the end.

@@ -39,9 +39,6 @@ MODE_ALL = 2
 DIGIT_RANGES = [48, 57]
 WORD_RANGES = [48, 57, 65, 90, 95, 95, 97, 122]
 SPACE_RANGES = [9, 10, 12, 13, 32, 32]
-WORD_ASCII = (0...128).to_a.map do |c|
-  (c >= 48 and c <= 57) or (c >= 65 and c <= 90) or c == 95 or (c >= 97 and c <= 122)
-end
 HEX_DIGITS = "0123456789abcdef"
 SPECIAL = Set.new(["\\", ".", "+", "*", "?", "(", ")", "|", "[", "]", "{", "}", "^", "$"])
 
@@ -479,7 +476,7 @@ end
 def group_name?(name: String) -> Bool
   codes = name.split("").map do |c| c.code end
   return false if codes.size == 0 or (codes[0] >= 48 and codes[0] <= 57)
-  codes.all? do |c| c < 128 and WORD_ASCII[c] end
+  codes.all? do |c| (c >= 48 and c <= 57) or (c >= 65 and c <= 90) or c == 95 or (c >= 97 and c <= 122) end
 end
 
 # `(?flags)` or `(?flags:`, from the first flag letter: i, m and s, and after one `-` the flags to turn off.
