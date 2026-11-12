@@ -224,7 +224,7 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
     return error(std_only_failure(cx, alias, member, want, span))
   elsif nested(cx, alias, member) != ""
     return ok(nested(cx, alias, member))
-  elsif family?(cx, alias)
+  elsif family?(cx, alias) and !(alias == "JSON" and member == "Codec")
     return family_member(cx, alias, member, want, span)
   elsif function_wanted?(want) or std_record?(alias, member, want) or builtin_type?(alias, member, want)
     return ok("#{alias}.#{member}")
@@ -238,15 +238,21 @@ def qualified(cx: Context, alias: String, member: String, want: Want, span: Sour
   error(Failure.fail_at(site(cx, span), "CHECK-IMPORT-NAME", message, Failure.hint(alias_help(alias, member, hint))))
 end
 
-# Family.Member: a builtin type of the family where a type is wanted, or a function of the family itself
-# (Family.fn). A member that is a group of functions is no type or enum (CHECK-UNKNOWN-TYPE); a name that is no member
-# is CHECK-UNKNOWN-NAME with the members in the help.
+# Family.Member: a builtin type of the family where a type or an enum is wanted (JSON.Field), or a function of the
+# family itself (Family.fn). A member that is a group of functions is no type or enum (CHECK-UNKNOWN-TYPE); a name
+# that is no member is CHECK-UNKNOWN-NAME with the members in the help.
 def family_member(cx: Context, family: String, member: String, want: Want, span: Source.Span) -> Result[String]
   name = "#{family}.#{member}"
   if function_wanted?(want) and (ENTRIES.has_key?(name) or Builtins.member?(family, member))
     # A member called as a function is an unknown function for the checker, with the closest name.
     return ok(name)
+  elsif function_wanted?(want) and own_functions?(family) and member_owners(family, member).size == 0
+    # File.reed: the checker gives the unknown function with the closest one (File.read).
+    return ok(name)
   elsif type_wanted?(want) and Builtins.member_type?(family, member)
+    return ok(name)
+  elsif enum_wanted?(want) and Builtins.member_type?(family, member)
+    # JSON.Field, or a type of the family that is no enum (File.Info.Foo), which the checker reports as for any type.
     return ok(name)
   elsif !function_wanted?(want) and Builtins.member?(family, member)
     return error(not_a_type(cx, name, name, span))
@@ -277,7 +283,7 @@ end
 def unknown_member(cx: Context, family: String, member: String, span: Source.Span) -> String
   members = FAMILY_MEMBERS[family]
   help = "the members of #{family} are #{members.join(", ")}"
-  owners = members.filter do |owner: String| ENTRIES.has_key?("#{family}.#{owner}.#{member}") end
+  owners = member_owners(family, member)
   if owners.size > 0
     help = "use #{family}.#{owners[0]}.#{member}; #{help}"
   else
@@ -288,6 +294,16 @@ def unknown_member(cx: Context, family: String, member: String, span: Source.Spa
   end
 
   Failure.fail_at(site(cx, span), "CHECK-UNKNOWN-NAME", "#{family} has no member \"#{member}\"", Failure.hint(help))
+end
+
+# The members of the family that have a function of this name (OpenSSL.Digest for sha256).
+def member_owners(family: String, name: String) -> List[String]
+  FAMILY_MEMBERS[family].filter do |owner: String| ENTRIES.has_key?("#{family}.#{owner}.#{name}") end
+end
+
+# True when the family has functions of its own, written Family.fn (File.read, JSON.parse).
+def own_functions?(family: String) -> Bool
+  ENTRIES.keys.any? do |name: String| name.start_with?("#{family}.") and name.split(".").size == 2 end
 end
 
 # The first function, by name, of a member that is a group of functions: an example for a help.
@@ -321,6 +337,13 @@ end
 def type_wanted?(want: Want) -> Bool
   case want
     Want.Type -> true
+    _ -> false
+  end
+end
+
+def enum_wanted?(want: Want) -> Bool
+  case want
+    Want.Enum -> true
     _ -> false
   end
 end

@@ -9,7 +9,7 @@ description: The std/toml module, which reads and writes TOML 1.0 documents.
 ```ruby
 Toml.parse(text: String) -> Result[Toml.Value]
 Toml.encode(value: Toml.Value) -> Result[String]
-Toml.to_json(value: Toml.Value) -> Result[Json]
+Toml.to_json(value: Toml.Value) -> Result[JSON.Value]
 Toml.get(value: Toml.Value, path: String) -> Result[Toml.Value]
 ```
 

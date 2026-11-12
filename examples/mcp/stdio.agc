@@ -9,8 +9,8 @@ end
 
 struct RpcResponse
   jsonrpc: String
-  id: Json
-  result: Json
+  id: JSON.Value
+  result: JSON.Value
 end
 
 struct RpcError
@@ -37,7 +37,7 @@ struct InitializeResult
 end
 
 struct ToolsResult
-  tools: List[Json]
+  tools: List[JSON.Value]
 end
 
 # Responses have different struct types; share only the text transport.
@@ -46,12 +46,12 @@ def send_message(text: String) -> Void
   IO.flush()
 end
 
-def reply(id: Json, result: Json) -> Void
+def reply(id: JSON.Value, result: JSON.Value) -> Void
   response = RpcResponse(jsonrpc: "2.0", id: id, result: result)
   send_message(JSON.encode(response))
 end
 
-def reject(id: Json, code: Int, message: String) -> Void
+def reject(id: JSON.Value, code: Int, message: String) -> Void
   # `error` is a reserved field name, so only this envelope needs a map.
   problem = RpcError(code: code, message: message)
   response = {

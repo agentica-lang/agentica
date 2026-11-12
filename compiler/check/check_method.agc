@@ -332,8 +332,8 @@ def unknown_method_help(cx: State.Cx, st: State.St, id: Int, target: T.Type, kin
     return "a method call on a range needs parentheses: (a..b).#{name}"
   elsif name == "to_s" or name == "inspect"
     return (
-      "only data values have to_s and inspect: numbers, Bool, String, nil, Json, ranges, and lists, maps, sets, " +
-      "Results, structs and enums of those"
+      "only data values have to_s and inspect: numbers, Bool, String, nil, JSON.Value, ranges, and lists, maps, " +
+      "sets, Results, structs and enums of those"
     )
   elsif T.error?(target) and Names.resolve_method(cx, "String", name) != ""
     # A String method on the payload of error(e), which was a String before it was an Error.

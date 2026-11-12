@@ -32,23 +32,23 @@ export def read(text: String) -> Result[Model.Diagnostic]
   )
 end
 
-def has?(object: Json, key: String) -> Bool = JSON.get(object, key).ok?
+def has?(object: JSON.Value, key: String) -> Bool = JSON.get(object, key).ok?
 
-def string(object: Json, key: String) -> Result[String] = JSON.string(try JSON.get(object, key))
+def string(object: JSON.Value, key: String) -> Result[String] = JSON.string(try JSON.get(object, key))
 
 # A note the diagnostic does not have is left out of the object.
-def note(object: Json, key: String) -> Result[String]
+def note(object: JSON.Value, key: String) -> Result[String]
   return ok("") if !has?(object, key)
 
   string(object, key)
 end
 
-def range_of(object: Json) -> Result[Model.Region]
+def range_of(object: JSON.Value) -> Result[Model.Region]
   range = try JSON.get(object, "range")
   ok(Model.Region(start: try position(range, "start"), stop: try position(range, "end")))
 end
 
-def position(object: Json, key: String) -> Result[Model.Position]
+def position(object: JSON.Value, key: String) -> Result[Model.Position]
   at = try JSON.get(object, key)
   line = try JSON.int(try JSON.get(at, "line"))
   column = try JSON.int(try JSON.get(at, "column"))

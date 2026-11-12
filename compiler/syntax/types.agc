@@ -341,7 +341,7 @@ export def to_text_as(type: Type, written: Map[String, String]) -> String
     Type.String -> "String"
     Type.Nil -> "Nil"
     Type.Void -> "Void"
-    Type.Json -> "Json"
+    Type.Json -> "JSON.Value"
     Type.Range -> "Range"
     Type.Bytes -> "Bytes"
     Type.Unknown -> "?"

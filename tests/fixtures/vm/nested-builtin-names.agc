@@ -1,4 +1,4 @@
-# A nested builtin name (#1182) is the old builtin: the linker turns JSON.Field.Value into JsonField.Value and
+# A nested builtin name (#1182) is the old builtin: the linker turns JSON.Field.Value into JSON.Field.Value and
 # System.Profile.steps into Profile.steps, so a value of either name is one type.
 struct Patch
   age: JSON.Field[Int]
@@ -14,7 +14,7 @@ end
 
 def main() -> Void
   value: JSON.Value = JSON.parse("[1, 2]").unwrap!
-  old: Json = value
+  old: JSON.Value = value
   puts(old)
   puts(label(Patch(age: JSON.Field.Value(3)).age))
   puts(label(JSON.Field.Null))

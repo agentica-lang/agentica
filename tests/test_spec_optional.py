@@ -130,7 +130,7 @@ end
     ),
     (
         "== needs items with equality",
-        "def main() -> Void\n  xs: Optional[Json] = none\n  puts(xs == none)\nend\n",
+        "def main() -> Void\n  xs: Optional[JSON.Value] = none\n  puts(xs == none)\nend\n",
         "CHECK-TYPE-MISMATCH",
         None,
     ),
@@ -148,7 +148,7 @@ struct User
   limits: Map[String, Optional[Float]]
   deep: Optional[Optional[Int]]
   nicks: Optional[List[String]]
-  note: JsonField[String]
+  note: JSON.Field[String]
 end
 
 def main() -> Void
@@ -187,27 +187,27 @@ end
         'm.get("a").ok?',
     ),
     (
-        "Optional[JsonField[T]] is no JSON field",
-        "struct P\n  age: Optional[JsonField[Int]]\nend\n\ndef main() -> Void\n  puts(JSON.encode(P(age: none)))\nend\n",
+        "Optional[JSON.Field[T]] is no JSON field",
+        "struct P\n  age: Optional[JSON.Field[Int]]\nend\n\ndef main() -> Void\n  puts(JSON.encode(P(age: none)))\nend\n",
         "CHECK-JSON-FIELD-PLACE",
         "P(age: none)",
     ),
     (
-        "a JsonField inside an Optional list item is no JSON field",
-        "struct P\n  ages: List[Optional[JsonField[Int]]]\nend\n\ndef main() -> Void\n  puts(JSON.schema(P))\nend\n",
+        "a JSON.Field inside an Optional list item is no JSON field",
+        "struct P\n  ages: List[Optional[JSON.Field[Int]]]\nend\n\ndef main() -> Void\n  puts(JSON.schema(P))\nend\n",
         "CHECK-JSON-FIELD-PLACE",
         "P",
     ),
     (
-        "JsonField[Optional[T]] cannot be encoded",
-        "struct P\n  age: JsonField[Optional[Int]]\nend\n\n"
-        "def main() -> Void\n  puts(JSON.encode(P(age: JsonField.Absent)))\nend\n",
+        "JSON.Field[Optional[T]] cannot be encoded",
+        "struct P\n  age: JSON.Field[Optional[Int]]\nend\n\n"
+        "def main() -> Void\n  puts(JSON.encode(P(age: JSON.Field.Absent)))\nend\n",
         "CHECK-NOT-ENCODABLE",
-        "P(age: JsonField.Absent)",
+        "P(age: JSON.Field.Absent)",
     ),
     (
-        "JsonField[Optional[T]] cannot be decoded",
-        'struct P\n  age: JsonField[Optional[Int]]\nend\n\ndef main() -> Void\n  puts(JSON.decode("{}", P))\nend\n',
+        "JSON.Field[Optional[T]] cannot be decoded",
+        'struct P\n  age: JSON.Field[Optional[Int]]\nend\n\ndef main() -> Void\n  puts(JSON.decode("{}", P))\nend\n',
         "CHECK-NOT-DECODABLE",
         "P",
     ),

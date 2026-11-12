@@ -647,7 +647,7 @@ def run_child(
   p = spawned.unwrap!
   _ = Process.close_stdin(p, 5000)
   deadline = started + 30000
-  fields: Map[String, Json] = {
+  fields: Map[String, JSON.Value] = {
     "base": JSON.from(base),
     "agentica": JSON.from(config.agentica),
     "seeded": JSON.from(config.seeded),
@@ -713,7 +713,7 @@ def step_line(index: Int, found: Match.Resolved, patterns: List[Match.Pattern], 
       table = rows
     Gherkin.Argument.NoArgument -> has_doc = false
   end
-  fields: Map[String, Json] = {
+  fields: Map[String, JSON.Value] = {
     "index": JSON.from(index),
     "definition": JSON.from(found.index),
     "pattern": JSON.from(patterns[found.index].text),
@@ -866,7 +866,7 @@ def send_failure(p: Process, message: String, deadline: Int, span: Report.Span) 
   read_failure(p, message, deadline, span)
 end
 
-def record_error(record: Json, span: Report.Span) -> Report.Failure
+def record_error(record: JSON.Value, span: Report.Span) -> Report.Failure
   Report.Failure(
     code: Child.text_of(record, "code"),
     message: Child.text_of(record, "message"),

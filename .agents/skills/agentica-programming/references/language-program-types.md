@@ -87,15 +87,15 @@ constants, declarations and types. Builtin methods and `to_s`: `builtins.md`.
   (`language-blocks-results.md`).
 - `Range`: `a..b` (includes `b`) or `a...b` (excludes it) over `Int`; prints
   `1..5`.
-- `Json`: opaque; use `JSON` functions. `Fn[A, ..., R]`: a block or `&name`, the
-  last type is the return; `Fn[Void]` takes no arguments.
+- `JSON.Value`: opaque; use `JSON` functions. `Fn[A, ..., R]`: a block or
+  `&name`, the last type is the return; `Fn[Void]` takes no arguments.
 - Opaque, with no constructor or `==`: `Process`, `Lazy[T]` (`lazy.md`),
   `Task[R]`, `TaskRef`, `Channel[T]`, `ATS[K, V]` (`tasks.md`), `Socket`,
   `Listener`, `HTTP.Client`, `HTTP.Server`, `Codec[T]` (`json.md`).
 - `Address[T]`: a channel's send-only address (`ch.address`), data with `==`
   and text, no JSON, not a map key (`tasks.md`).
 - Builtin enums, reserved: `Await[T]` (`Await.Done(value)`, `Await.TimedOut`;
-  `tasks.md`), `JsonField[T]` (`Absent`, `Null`, `Value(x)`; `json.md`) and
+  `tasks.md`), `JSON.Field[T]` (`Absent`, `Null`, `Value(x)`; `json.md`) and
   `TaskExit` (`Ok`, `Crashed`, `Cancelled`; `tasks.md`). `std/logger` exports
   the builtin `Logger.Level` (`Debug`, `Info`, `Warning`, `Error`) and
   `Logger.Event` (`logger.md`); they reserve no name.

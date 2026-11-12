@@ -152,7 +152,7 @@
  "[[\"--ai\", \"help\", \"Json.get\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "j.get(key: String) -> Result[Json]\nRead an object member; wrong kind or missing key returns an error.\n",
+  "stdout": "j.get(key: String) -> Result[JSON.Value]\nRead an object member; wrong kind or missing key returns an error.\n",
   "written": []
  },
  "[[\"--ai\", \"help\", \"Nope.frobnicate\"], {}]": {
@@ -856,13 +856,13 @@
  "[[\"help\", \"Json.get\", \"--json\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "{\"alias\":\"Json.get\",\"builtins\":[{\"arity\":2,\"description\":\"Read an object member; wrong kind or missing key returns an error.\",\"effects\":[],\"name\":\"JSON.get\",\"parameters\":[{\"name\":\"j\",\"type\":\"Json\"},{\"name\":\"key\",\"type\":\"String\"}],\"result\":\"Result[Json]\",\"ruby\":\"j.get(key: String) -> Result[Json]\",\"signature\":\"JSON.get(j: Json, key: String) -> Result[Json]\"}],\"hints\":{}}\n",
+  "stdout": "{\"alias\":\"Json.get\",\"builtins\":[{\"arity\":2,\"description\":\"Read an object member; wrong kind or missing key returns an error.\",\"effects\":[],\"name\":\"JSON.get\",\"parameters\":[{\"name\":\"j\",\"type\":\"JSON.Value\"},{\"name\":\"key\",\"type\":\"String\"}],\"result\":\"Result[JSON.Value]\",\"ruby\":\"j.get(key: String) -> Result[JSON.Value]\",\"signature\":\"JSON.get(j: JSON.Value, key: String) -> Result[JSON.Value]\"}],\"hints\":{}}\n",
   "written": []
  },
  "[[\"help\", \"Json.get\"], {}]": {
   "code": 0,
   "stderr": "",
-  "stdout": "j.get(key: String) -> Result[Json]\nRead an object member; wrong kind or missing key returns an error.\n",
+  "stdout": "j.get(key: String) -> Result[JSON.Value]\nRead an object member; wrong kind or missing key returns an error.\n",
   "written": []
  },
  "[[\"help\", \"List.concat\"], {}]": {

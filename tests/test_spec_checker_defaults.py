@@ -268,7 +268,7 @@ SINGLE_FILE = [
      main_with('  puts([1, 2].map(&Int.to_s))\n  f: Fn[String, String] = &String.strip\n  puts(f.call(" a "))\n'),
      None, None),
     ("a method of a type whose builtins live in another module is written with the type",
-     main_with('  f: Fn[Json, String, Result[Json]] = &Json.get\n  puts(f.call(JSON.parse("{}").unwrap!, "a"))\n'),
+     main_with('  f: Fn[JSON.Value, String, Result[JSON.Value]] = &JSON.Value.get\n  puts(f.call(JSON.parse("{}").unwrap!, "a"))\n'),
      None, None),
     ("a function value of a builtin has the type of the builtin",
      main_with("  f: Fn[String] = &Time.now_ms\n  puts(f.call())\n"), "CHECK-TYPE-MISMATCH", "&Time.now_ms"),

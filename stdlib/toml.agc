@@ -162,11 +162,11 @@ export def encode(value: Value) -> Result[String]
   end
 end
 
-## Converts a `Value` to `Json`, for typed decoding: `JSON.decode(json, Config)`.
-## A `DateTime` becomes its string. An `inf` or `nan` float is an error, since `Json` cannot hold it. An integer stays
-## an integer and a float stays a float (`1.0` is not `1`). A value nested more than 2,048 levels (no document `parse`
-## reads is that deep) is an error, not a halt.
-export def to_json(value: Value) -> Result[Json] = json_of(value, 0)
+## Converts a `Value` to `JSON.Value`, for typed decoding: `JSON.decode(json, Config)`. A `DateTime` becomes its
+## string. An `inf` or `nan` float is an error, since `JSON.Value` cannot hold it. An integer stays an integer and a
+## float stays a float (`1.0` is not `1`). A value nested more than 2,048 levels (no document `parse` reads is that
+## deep) is an error, not a halt.
+export def to_json(value: Value) -> Result[JSON.Value] = json_of(value, 0)
 
 ## Looks up a value by a dotted path of keys: `Toml.get(doc, "package.name")`. A segment of plain ASCII digits without
 ## a leading zero also indexes an array (`"bin.0.path"`). Returns an error that names the missing key. A key that holds
@@ -203,7 +203,7 @@ end
 # `depth` counts the arrays and tables above `value`. The deepest tree `parse` can build has under
 # 1,100 levels (256 header tables, as many arrays of tables, 256 dotted-key tables, 256 inline
 # levels), so the limit of 2,048 never refuses a parsed document.
-def json_of(value: Value, depth: Int) -> Result[Json]
+def json_of(value: Value, depth: Int) -> Result[JSON.Value]
   case value
     Value.Str(s) -> ok(JSON.from(s))
     Value.Int(n) -> ok(JSON.from(n))
@@ -214,7 +214,7 @@ def json_of(value: Value, depth: Int) -> Result[Json]
       ok(JSON.from(x))
     Value.Array(items) ->
       return error("a value nests more than 2048 levels") if depth >= 2048
-      out: List[Json] = []
+      out: List[JSON.Value] = []
       for item in items
         j = try json_of(item, depth + 1)
         out = out.push(j)
@@ -222,7 +222,7 @@ def json_of(value: Value, depth: Int) -> Result[Json]
       ok(JSON.array(out))
     Value.Table(entries) ->
       return error("a value nests more than 2048 levels") if depth >= 2048
-      out: Map[String, Json] = {}
+      out: Map[String, JSON.Value] = {}
       for k in entries.keys
         j = try json_of(entries[k], depth + 1)
         out = out.put(k, j)

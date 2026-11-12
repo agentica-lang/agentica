@@ -189,7 +189,7 @@ size_t agc_scalar_text(agc_vm *vm, agc_value v, char text[AGC_SCALAR_TEXT]) {
   if (agc_is(v, AGC_T_BOOL)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "%s", agc_as_bool(vm, v) ? "true" : "false");
   if (agc_is(v, AGC_T_FLOAT)) return agc_float_text(agc_as_float(vm, v), text);
   if (agc_is(v, AGC_T_FN)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Fn>");
-  if (agc_is(v, AGC_T_JSON)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Json>");
+  if (agc_is(v, AGC_T_JSON)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<JSON.Value>");
   if (agc_is(v, AGC_T_HANDLE)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<FileHandle>");
   if (agc_is(v, AGC_T_TASK)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Task>");
   if (agc_is(v, AGC_T_PROCESS)) return (size_t)snprintf(text, AGC_SCALAR_TEXT, "<Process>");

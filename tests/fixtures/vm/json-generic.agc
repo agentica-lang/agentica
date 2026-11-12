@@ -14,7 +14,7 @@ def to_json[T](value: T) -> String
   return JSON.encode(value)
 end
 
-def boxed[T](value: T) -> Json
+def boxed[T](value: T) -> JSON.Value
   return JSON.from(Box(value: value))
 end
 

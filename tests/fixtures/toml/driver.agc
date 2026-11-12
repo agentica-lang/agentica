@@ -3,12 +3,12 @@
 
 import Toml from "std/toml"
 
-def tag(kind: String, payload: Json) -> Json
+def tag(kind: String, payload: JSON.Value) -> JSON.Value
   return JSON.object({"t": JSON.from(kind), "v": payload})
 end
 
 # Ints and floats are text (a float as its 64 bits), so Python can compare them exactly.
-def tagged(value: Toml.Value) -> Json
+def tagged(value: Toml.Value) -> JSON.Value
   case value
     Toml.Value.Str(s) -> return tag("str", JSON.from(s))
     Toml.Value.Int(n) -> return tag("int", JSON.from(n.to_s))
@@ -17,7 +17,7 @@ def tagged(value: Toml.Value) -> Json
     Toml.Value.DateTime(s) -> return tag("datetime", JSON.from(s))
     Toml.Value.Array(items) -> return tag("array", JSON.array(items.map do |item| tagged(item) end))
     Toml.Value.Table(entries) ->
-      out: Map[String, Json] = {}
+      out: Map[String, JSON.Value] = {}
       for k in entries.keys
         out = out.put(k, tagged(entries[k]))
       end
@@ -25,7 +25,7 @@ def tagged(value: Toml.Value) -> Json
   end
 end
 
-def report(path: String) -> Json
+def report(path: String) -> JSON.Value
   text = File.read_text(path, 10000)
   if !text.ok?
     return JSON.object({"name": JSON.from(path), "ok": JSON.from(false), "error": JSON.from(text.message)})

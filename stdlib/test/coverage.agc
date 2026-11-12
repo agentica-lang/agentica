@@ -219,7 +219,7 @@ end
 ## The `coverage` object of the `--json` report: `{path, lines, hit, files: [{file, lines, hit}], broken: [{part,
 ## message}], problem: {code, message}}`, with `path` null when no report was written and `problem` null when nothing
 ## went wrong.
-export def json(run: Run) -> Json
+export def json(run: Run) -> JSON.Value
   files = run.files.map do |file: Covered|
     JSON.object({"file": JSON.from(file.file), "lines": JSON.from(file.lines), "hit": JSON.from(file.hit)})
   end

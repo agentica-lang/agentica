@@ -4,7 +4,7 @@ weight: 7
 description: The std/option_parser module, which reads the command line of a program into typed values, with defaults, choices, errors and a help text.
 ---
 
-`std/option_parser` is written in Agentica: `import OP from "std/option_parser"` and `import {Arg, Opt, Kind} from "std/option_parser"`. It has the shape of Python's `argparse` and the names of Ruby's `OptionParser`. It uses only structs, enums and `Optional`: no Json. You describe the program with `Arg` (a positional argument) and `Opt` (an option), `parse` checks the words, and typed getters read each value into your own struct.
+`std/option_parser` is written in Agentica: `import OP from "std/option_parser"` and `import {Arg, Opt, Kind} from "std/option_parser"`. It has the shape of Python's `argparse` and the names of Ruby's `OptionParser`. It uses only structs, enums and `Optional`: no JSON.Value. You describe the program with `Arg` (a positional argument) and `Opt` (an option), `parse` checks the words, and typed getters read each value into your own struct.
 
 ```ruby
 OP.new(program: String, description: String = "", args: List[Arg] = [], opts: List[Opt] = [], rest: String = "") -> Parser

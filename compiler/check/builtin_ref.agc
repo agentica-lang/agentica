@@ -7,7 +7,7 @@
 ## other is refused with a help that names the block to write instead.
 
 import Model from "../catalog/builtin_model"
-import {ENTRIES, PUBLIC_NAMES} from "../catalog/builtins"
+import {ENTRIES, JSON_VALUE, PUBLIC_NAMES} from "../catalog/builtins"
 import T from "../syntax/types"
 import RubyForm from "ruby_form"
 import Tables from "check_tables"
@@ -33,8 +33,14 @@ export enum Found
   Builtin(Ref)
 end
 
-## The builtin that `&name` names, as written in the program (`Int.to_s`, `Time.now_ms`, `puts`).
-export def find(name: String) -> Found
+## The builtin that `&name` names, as written in the program (`Int.to_s`, `Time.now_ms`, `puts`). A method of
+## JSON.Value (`&JSON.Value.get`) is the method of its kind, Json.
+export def find(written: String) -> Found
+  name = written
+  if written.start_with?("#{JSON_VALUE}.")
+    name = "Json.#{written.slice(JSON_VALUE.length + 1, written.length - JSON_VALUE.length - 1)}"
+  end
+
   parts = name.split(".")
   aliased = Tables.method_aliases().get(name)
   if parts.size == 2 and aliased.some? and PUBLIC_NAMES.include?(aliased.unwrap!)
@@ -43,7 +49,7 @@ export def find(name: String) -> Found
 
   entry = ENTRIES.get(name)
   if parts.size == 2 and (entry.none? or !PUBLIC_NAMES.include?(name))
-    # A method of a kind whose builtins live in another module: `&Json.get` is JSON.get.
+    # A method of a kind whose builtins live in another module: the get of the kind Json is JSON.get.
     for candidate in PUBLIC_NAMES
       if candidate.end_with?(".#{parts[1]}") and RubyForm.method_key(candidate) == name
         return usable(ENTRIES[candidate], name, parts[1])

@@ -159,7 +159,7 @@ def type_help(word: String) -> Optional[String]
     "Set",
     "Result",
     "Optional",
-    "Json",
+    "JSON.Value",
     "Fn",
     "Task",
     "Channel",

@@ -1,16 +1,16 @@
 import Patch from "lib/json_patch"
 
 struct UpdateUser
-  name: JsonField[String]
-  age: JsonField[Int]
+  name: JSON.Field[String]
+  age: JSON.Field[Int]
 end
 
-def describe_age(age: JsonField[Int]) -> String
+def describe_age(age: JSON.Field[Int]) -> String
   text = ""
   case age
-    JsonField.Absent -> text = "age: keep"
-    JsonField.Null -> text = "age: clear"
-    JsonField.Value(n) -> text = "age: set to #{n}"
+    JSON.Field.Absent -> text = "age: keep"
+    JSON.Field.Null -> text = "age: clear"
+    JSON.Field.Value(n) -> text = "age: set to #{n}"
   end
   return text
 end
@@ -20,7 +20,7 @@ def show(text: String) -> Result[Void]
   puts(describe_age(update.age))
   name = ""
   case update.name
-    JsonField.Value(n) -> name = "set to #{n}"
+    JSON.Field.Value(n) -> name = "set to #{n}"
     _ -> name = "keep"          # this API treats null like absent
   end
   puts("name: #{name}")
@@ -32,10 +32,10 @@ def main() -> Void
   for text in ["{}", "{\"age\": null}", "{\"name\": \"Ana\", \"age\": 30}"]
     Result.unwrap!(show(text))
   end
-  reply = UpdateUser(name: JsonField.Value("Bo"), age: JsonField.Null)
+  reply = UpdateUser(name: JSON.Field.Value("Bo"), age: JSON.Field.Null)
   puts(JSON.encode(reply))
   puts(JSON.encode(JSON.from(reply)))
-  puts(JSON.encode(JSON.from(UpdateUser(name: JsonField.Absent, age: JsonField.Absent))))
+  puts(JSON.encode(JSON.from(UpdateUser(name: JSON.Field.Absent, age: JSON.Field.Absent))))
   puts(reply)
   puts(JSON.encode(JSON.schema(UpdateUser)))
   for text in ["{}", "{\"title\": null}", "{\"title\": \"Notes\"}"]

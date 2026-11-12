@@ -583,13 +583,13 @@ def rewrite_compound(cx: Resolve.Context, expr: Ast.Expr) -> Result[Ast.Expr]
     Ast.Expr.ListLit(node) -> ok(Ast.Expr.ListLit(node.with(elements: try rewrite_exprs(cx, node.elements))))
     Ast.Expr.MapLit(node) -> rewrite_map(cx, node)
     Ast.Expr.FieldAccess(node) ->
-      if family_member(cx, node.target) != ""
+      if family_member(cx, node.target, node.name) != ""
         return member_call(cx, node.target, node.id, node.name, [], false, node.span)
       end
 
       ok(Ast.Expr.FieldAccess(node.with(target: try rewrite_expr(cx, node.target))))
     Ast.Expr.MethodCall(node) ->
-      if family_member(cx, node.target) != ""
+      if family_member(cx, node.target, node.name) != ""
         return member_call(cx, node.target, node.id, node.name, node.args, true, node.span)
       end
 
@@ -615,12 +615,13 @@ end
 # The name Family.Member when the target is a member of a builtin family that is no type (OpenSSL.Digest), or "": the
 # parser reads Family.Member.fn(args) as a method call on that name, which is the call of the builtin
 # Family.Member.fn. A name that is no member of the family counts too, so the call reports it
-# (Resolve.member_function).
-def family_member(cx: Resolve.Context, target: Ast.Expr) -> String
+# (Resolve.member_function). So does a type of the family before any method but codec and members (File.Info.size):
+# the unknown function File.Info.size, as for any other Type.fn.
+def family_member(cx: Resolve.Context, target: Ast.Expr, method: String) -> String
   case target
     Ast.Expr.TypeName(node) ->
       parts = node.name.split(".")
-      if parts.size == 2 and Resolve.family?(cx, parts[0]) and !Builtins.member_type?(parts[0], parts[1])
+      if parts.size == 2 and Resolve.family?(cx, parts[0]) and called_member?(parts[0], parts[1], method)
         return node.name
       elsif parts.size == 2 and nested_group?(cx, parts[0], parts[1])
         # System.Profile.fn(args), which is Profile.fn(args).
@@ -633,6 +634,12 @@ def family_member(cx: Resolve.Context, target: Ast.Expr) -> String
       ""
     _ -> ""
   end
+end
+
+# True when Family.Member.method is the call of a builtin function: Member is a group of functions, or a type before
+# any method but codec and members.
+def called_member?(family: String, member: String, method: String) -> Bool
+  !Builtins.member_type?(family, member) or (method != "codec" and method != "members")
 end
 
 # True when Alias.Member is the nested name of a group of builtin functions (System.Profile), not of a type.
@@ -653,7 +660,7 @@ def member_call(
   parenthesized: Bool,
   span: Source.Span,
 ) -> Result[Ast.Expr]
-  name = "#{family_member(cx, target)}.#{method}"
+  name = "#{family_member(cx, target, method)}.#{method}"
   try Resolve.resolve(cx, name, Resolve.Want.Function, Ast.expr_span(target), false)
   call = Ast.Call(id: id, name: name, args: args, piped: false, parenthesized: parenthesized, span: span)
   rewrite_call(cx, call)

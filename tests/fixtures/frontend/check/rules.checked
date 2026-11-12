@@ -84,15 +84,15 @@ program #220 0:1:1-1396:57:1
           arg: field-access #78 511:27:8-526:27:23 name="message" type=String resolved=call("Result.message", Result(Struct(Reading)))
             target: name-ref #77 511:27:8-518:27:15 name="decoded" type=Result(Struct(Reading))
       body: binding #83 530:28:3-555:29:1 name="json"
-        value: call #82 537:28:10-554:28:27 name="JSON.from" piped=false type=Json
+        value: call #82 537:28:10-554:28:27 name="JSON.from" piped=false type=JSON.Value
           arg: name-ref #81 547:28:20-553:28:26 name="scores" type=Map(String, Int)
       body: expr-stmt #87 557:29:3-581:30:1
         value: call #86 557:29:3-580:29:26 name="puts" piped=false type=Void
           arg: call #85 562:29:8-579:29:25 name="JSON.encode" piped=false type=String
-            arg: name-ref #84 574:29:20-578:29:24 name="json" type=Json
+            arg: name-ref #84 574:29:20-578:29:24 name="json" type=JSON.Value
       body: expr-stmt #91 583:30:3-610:31:1
         value: call #90 583:30:3-609:30:29 name="puts" piped=false type=Void
-          arg: call #89 588:30:8-608:30:28 name="JSON.schema" piped=false type=Json
+          arg: call #89 588:30:8-608:30:28 name="JSON.schema" piped=false type=JSON.Value
             arg: type-expression #88 600:30:20-607:30:27 name="Reading" type=Struct(Reading)
       body: binding #95 612:31:3-642:32:1 name="task"
         value: call #94 619:31:10-641:31:32 name="Task.spawn" piped=false type=Task(Int)

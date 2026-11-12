@@ -50,8 +50,8 @@ export def ensure_printable(cx: State.Cx, st: State.St, type: T.Type, span: Sour
         "CHECK-TYPE-MISMATCH",
         "#{T.to_text(type)} has no to_s, so it cannot be printed or interpolated",
         span,
-        "only data values have to_s: numbers, Bool, String, nil, Json, ranges, and lists, maps, sets, Results, " +
-        "structs and enums of those",
+        "only data values have to_s: numbers, Bool, String, nil, JSON.Value, ranges, and lists, maps, sets, " +
+        "Results, structs and enums of those",
       ),
     )
   end
@@ -75,7 +75,7 @@ def arity_failure(cx: State.Cx, st: State.St, node: Ast.Call, entry: Model.Built
     name = RubyForm.shown(entry.name)
   end
 
-  # Forms of one arity (JSON.decode of text or of a Json) count once.
+  # Forms of one arity (JSON.decode of text or of a JSON.Value) count once.
   counts: List[String] = []
   for form in [entry].concat(entry.alternatives)
     text = Builtins.arity_text(form, skipped)
@@ -362,7 +362,7 @@ end
 
 # JSON.decode(source, Type) and JSON.schema(Type): the type argument is a struct or enum name whose fields or payloads
 # can all be decoded, or for JSON.decode also a List[T] or Map[String, T] of such a T. The source of JSON.decode is
-# JSON text (String) or a Json value.
+# JSON text (String) or a JSON.Value.
 def check_json_type(cx: State.Cx, st: State.St, site: State.Site, decode: Bool) -> Result[State.Out]
   current = st
   target = site.args[0]
@@ -379,7 +379,7 @@ def check_json_type(cx: State.Cx, st: State.St, site: State.Site, decode: Bool) 
   ok(State.Out(st: current, type: T.Type.Json))
 end
 
-# codec.decode(source): JSON.decode into the struct of the codec, from JSON text or a Json value. The receiver of a
+# codec.decode(source): JSON.decode into the struct of the codec, from JSON text or a JSON.Value. The receiver of a
 # codec method is a Codec: the rows are reached only as methods of one.
 def check_codec_decode(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   codec = try State.expr(cx, st, site.args[0], T.Type.Unknown)
@@ -394,14 +394,14 @@ def check_codec_members(cx: State.Cx, st: State.St, site: State.Site) -> Result[
 end
 
 # codec.encode(value) and codec.from(value): a value of the struct of the codec, which can be written as JSON because
-# the struct can be decoded. The form gives the result type (String or Json).
+# the struct can be decoded. The form gives the result type (String or JSON.Value).
 def check_codec_encode(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.Out]
   codec = try State.expr(cx, st, site.args[0], T.Type.Unknown)
   value = try State.expr(cx, codec.st, site.args[1], T.item(codec.type))
   ok(State.Out(st: value.st, type: site.selected.result))
 end
 
-# The source of a decode, which is JSON text (String) or a Json value.
+# The source of a decode, which is JSON text (String) or a JSON.Value.
 def check_decode_source(cx: State.Cx, st: State.St, source: Ast.Expr) -> Result[State.St]
   out = try State.expr(cx, st, source, T.Type.Unknown)
   if !T.is?(out.type, "String") and !T.is?(out.type, "Json")
@@ -429,12 +429,12 @@ def json_type(cx: State.Cx, st: State.St, target: Ast.Expr, decode: Bool) -> Res
   end
 end
 
-# CHECK-TYPE-MISMATCH for a JSON.decode source that is neither JSON text nor a Json value.
+# CHECK-TYPE-MISMATCH for a JSON.decode source that is neither JSON text nor a JSON.Value.
 def decode_source_mismatch(cx: State.Cx, st: State.St, actual: T.Type, span: Source.Span) -> String
   found = T.to_text(actual)
-  message = "expected String or Json, found #{found}"
+  message = "expected String or JSON.Value, found #{found}"
   base = Failure.problem(cx.file, st.signature, "CHECK-TYPE-MISMATCH", message, span, State.hint_of(""))
-  Failure.pack(base.with(expected: "String or Json", actual: found))
+  Failure.pack(base.with(expected: "String or JSON.Value", actual: found))
 end
 
 # The type a JSON target names. refusal is the CHECK-TYPE-MISMATCH message for a List or Map target, or "" when the
@@ -465,13 +465,13 @@ end
 # True for a List or Map JSON target, which only JSON.decode takes.
 def container?(type: T.Type) -> Bool = T.is?(type, "List") or T.is?(type, "Map")
 
-# The help of a JSON builtin that refuses a type with a JsonField of an Optional or a Bytes inside, or "": JSON has no
+# The help of a JSON builtin that refuses a type with a JSON.Field of an Optional or a Bytes inside, or "": JSON has no
 # byte type, so the bytes are written as Base64 text and read back from it.
 def json_refusal_help(cx: State.Cx, type: T.Type, verb: String) -> String
   if CheckTypes.optional_json_field_inside?(cx, type)
     return (
-      "JsonField[Optional[T]] would write null for JsonField.Null and for none; use Optional[T], or JsonField[T] to " +
-      "tell a missing key from null"
+      "JSON.Field[Optional[T]] would write null for JSON.Field.Null and for none; use Optional[T], or JSON.Field[T] " +
+      "to tell a missing key from null"
     )
   end
 
@@ -522,7 +522,7 @@ def check_json_encode(cx: State.Cx, st: State.St, site: State.Site, from: Bool) 
   ok(State.Out(st: out.st, type: T.Type.String))
 end
 
-# CHECK-JSON-FIELD-PLACE when a JSON builtin's target or argument has a JsonField that is not the direct type of a
+# CHECK-JSON-FIELD-PLACE when a JSON builtin's target or argument has a JSON.Field that is not the direct type of a
 # struct field. kind names the place of the whole type.
 def json_field_place(cx: State.Cx, st: State.St, type: T.Type, kind: String, span: Source.Span) -> Result[Void]
   place = CheckTypes.json_field_place(cx, type, false, kind, "")
@@ -533,9 +533,9 @@ def json_field_place(cx: State.Cx, st: State.St, type: T.Type, kind: String, spa
       cx,
       st,
       "CHECK-JSON-FIELD-PLACE",
-      "JsonField is only allowed as the direct type of a struct field, not as the #{place}",
+      "JSON.Field is only allowed as the direct type of a struct field, not as the #{place}",
       span,
-      "JsonField tells an absent key from null, so it belongs to a struct field: name: JsonField[String]",
+      "JSON.Field tells an absent key from null, so it belongs to a struct field: name: JSON.Field[String]",
     ),
   )
 end
@@ -556,7 +556,7 @@ def check_test_eq(cx: State.Cx, st: State.St, site: State.Site) -> Result[State.
         "CHECK-TYPE-MISMATCH",
         "Test.eq needs a type with equality, found #{T.to_text(actual.type)}",
         Ast.expr_span(site.args[0]),
-        "Test.eq compares numbers, Bool, String, nil, ranges, Json, and lists, maps, sets, Results, " +
+        "Test.eq compares numbers, Bool, String, nil, ranges, JSON.Value, and lists, maps, sets, Results, " +
         "structs and enums of those",
       ),
     )

@@ -1,30 +1,30 @@
 # JSON
 
 ```text
-JSON.object(fields: Map[String, Json]) -> Json
-JSON.array(items: List[Json]) -> Json
-JSON.from(value: T) -> Json
-JSON.null() -> Json
-JSON.null?(value: Json) -> Bool
-JSON.kind(value: Json) -> String
-JSON.schema(type: T) -> Json
+JSON.object(fields: Map[String, JSON.Value]) -> JSON.Value
+JSON.array(items: List[JSON.Value]) -> JSON.Value
+JSON.from(value: T) -> JSON.Value
+JSON.null() -> JSON.Value
+JSON.null?(value: JSON.Value) -> Bool
+JSON.kind(value: JSON.Value) -> String
+JSON.schema(type: T) -> JSON.Value
 JSON.decode(s: String, type: T) -> Result[T]
-JSON.decode(json: Json, type: T) -> Result[T]
+JSON.decode(json: JSON.Value, type: T) -> Result[T]
 T.codec -> Codec[T]
 codec.decode(s: String) -> Result[T]
-codec.decode(json: Json) -> Result[T]
+codec.decode(json: JSON.Value) -> Result[T]
 codec.encode(value: T) -> String
-codec.from(value: T) -> Json
+codec.from(value: T) -> JSON.Value
 codec.members -> List[StructMember]
-JSON.parse(s: String) -> Result[Json]
+JSON.parse(s: String) -> Result[JSON.Value]
 JSON.encode(value: T) -> String
-JSON.get(j: Json, key: String) -> Result[Json]
-JSON.at(j: Json, index: Int) -> Result[Json]
-JSON.string(j: Json) -> Result[String]
-JSON.int(j: Json) -> Result[Int]
-JSON.float(j: Json) -> Result[Float]
-JSON.bool(j: Json) -> Result[Bool]
-JSON.list(j: Json) -> Result[List[Json]]
+JSON.get(j: JSON.Value, key: String) -> Result[JSON.Value]
+JSON.at(j: JSON.Value, index: Int) -> Result[JSON.Value]
+JSON.string(j: JSON.Value) -> Result[String]
+JSON.int(j: JSON.Value) -> Result[Int]
+JSON.float(j: JSON.Value) -> Result[Float]
+JSON.bool(j: JSON.Value) -> Result[Bool]
+JSON.list(j: JSON.Value) -> Result[List[JSON.Value]]
 ```
 
 ## Building
@@ -36,14 +36,14 @@ JSON.list(j: Json) -> Result[List[Json]]
 
 - `JSON.schema(User)`, `JSON.decode(text, User)` and `User.codec` take a
   named struct type, not a value (bare type names are valid only there). A
-  schema is a `Json` value, not text.
+  schema is a `JSON.Value`, not text.
 - `JSON.decode(text, List[User])` and `JSON.decode(text, Map[String, User])`
   read a top-level array or object in one call; `schema` and `codec` take only
   a named type.
-- `JSON.decode` takes JSON text or a `Json` value (`JSON.decode(item, User)` for
-  an item of a parsed document; no `JSON.encode` first).
+- `JSON.decode` takes JSON text or a `JSON.Value` value (`JSON.decode(item,
+  User)` for an item of a parsed document; no `JSON.encode` first).
 - Decoded fields may be Int, Float, Bool, String, lists, String-keyed maps,
-  nested or recursive structs and enums, and `Optional` and `JsonField` of
+  nested or recursive structs and enums, and `Optional` and `JSON.Field` of
   those; other types, an instance of a generic struct or enum included, are
   `CHECK-NOT-DECODABLE`. `JSON.decode(text, Shape)`, `schema` and `Shape.codec`
   take an enum name too.
@@ -52,7 +52,7 @@ JSON.list(j: Json) -> Result[List[Json]]
   payload writes `"values":[]`); decode accepts a missing `values` for such a
   variant. Any user enum with encodable payloads can be encoded, generic
   instances included (`Maybe[Int]`); only non-generic ones are decodable. A
-  `JsonField` in a payload is `CHECK-JSON-FIELD-PLACE`.
+  `JSON.Field` in a payload is `CHECK-JSON-FIELD-PLACE`.
 - `JSON.decode` returns errors, with field or index paths
   (`shapes[0].values[1]`), for malformed JSON, missing fields, wrong types, Int
   overflow and non-finite Floats. Extra object keys are ignored. An integer may
@@ -94,9 +94,9 @@ value, the whole value of `JSON.encode`).
 - Decode: `null` and a missing key of an `Optional` field are `none`; a wrong
   kind reads `age: expected signed 64-bit Int or null`. Schema: not
   `required`, allows `null` (`anyOf`).
-- `Optional[Nil]` is not encodable or decodable; `Optional[JsonField[T]]` is
-  `CHECK-JSON-FIELD-PLACE`; `JsonField[Optional[T]]` is not encodable or
-  decodable. Use `JsonField` only to tell a missing key from `null`.
+- `Optional[Nil]` is not encodable or decodable; `Optional[JSON.Field[T]]` is
+  `CHECK-JSON-FIELD-PLACE`; `JSON.Field[Optional[T]]` is not encodable or
+  decodable. Use `JSON.Field` only to tell a missing key from `null`.
 
 ```ruby
 struct Server
@@ -113,9 +113,9 @@ end
 
 ## Optional and nullable fields
 
-A field `age: JsonField[Int]` tells an absent key, `null` and a value apart. The
-builtin enum has `JsonField.Absent`, `JsonField.Null` and `JsonField.Value(x)`;
-match all three or use `_`.
+A field `age: JSON.Field[Int]` tells an absent key, `null` and a value apart.
+The builtin enum has `JSON.Field.Absent`, `JSON.Field.Null` and
+`JSON.Field.Value(x)`; match all three or use `_`.
 
 - Decode: a missing key is `Absent`, `null` is `Null`, anything else is
   decoded as `T` into `Value`. A wrong kind reads `age: expected signed 64-bit
@@ -124,35 +124,35 @@ match all three or use `_`.
 - Encode (`JSON.encode`, `JSON.from`): `Absent` leaves the key out, `Null`
   writes `null`. Schema: the field is not `required` and allows `null`
   (`anyOf`).
-- Only as the direct type of a struct field: `List[JsonField[Int]]`, a map of
-  them, `JsonField[JsonField[T]]` or `JSON.encode(field_value)` is
-  `CHECK-JSON-FIELD-PLACE`. `JsonField[Nil]` is not encodable or decodable.
-  A type argument counts after substitution: `Box[JsonField[Int]]` with
-  `value: T` encodes `value` as a `JsonField` field, but `items: List[T]` with
+- Only as the direct type of a struct field: `List[JSON.Field[Int]]`, a map of
+  them, `JSON.Field[JSON.Field[T]]` or `JSON.encode(field_value)` is
+  `CHECK-JSON-FIELD-PLACE`. `JSON.Field[Nil]` is not encodable or decodable.
+  A type argument counts after substitution: `Box[JSON.Field[Int]]` with
+  `value: T` encodes `value` as a `JSON.Field` field, but `items: List[T]` with
   that argument is `CHECK-JSON-FIELD-PLACE`.
-  `JsonField` is a reserved name.
 
 ```ruby
 struct Patch
-  name: JsonField[String]
+  name: JSON.Field[String]
 end
 
 def main() -> Void
   patch = JSON.decode("{\"name\": null}", Patch).unwrap!
   case patch.name
-    JsonField.Value(name) -> puts("rename to #{name}")
-    JsonField.Null -> puts("clear the name")
-    JsonField.Absent -> puts("keep the name")
+    JSON.Field.Value(name) -> puts("rename to #{name}")
+    JSON.Field.Null -> puts("clear the name")
+    JSON.Field.Absent -> puts("keep the name")
   end
 
-  puts(JSON.encode(Patch(name: JsonField.Absent)))   # {}
+  puts(JSON.encode(Patch(name: JSON.Field.Absent)))   # {}
 end
 ```
 
-## Json values
+## JSON.Value values
 
-- `Json` is opaque: no constructor, equality, fields, `j[key]` or `j[index]`.
-  `j.to_s`, `"#{j}"`, `puts(j)` and `JSON.encode(j)` give the JSON text.
+- `JSON.Value` is opaque: no constructor, equality, fields, `j[key]` or
+  `j[index]`. `j.to_s`, `"#{j}"`, `puts(j)` and `JSON.encode(j)` give the JSON
+  text.
 - `JSON.parse` needs exactly one value; empty input, malformed JSON and
   trailing content return errors. A repeated object key keeps its last value.
 - `JSON.get` needs an object and a present key; `JSON.at` an array and an index
@@ -164,12 +164,12 @@ end
 - `JSON.kind` returns `"null"`, `"bool"`, `"int"`, `"float"`, `"string"`,
   `"array"` or `"object"` and never fails. `1` and `-0` are `"int"` (even beyond
   Int bounds, where `JSON.int` still errors); `1.0` and `1e2` are `"float"`.
-- `JSON.list` returns elements as `Json` values, mixed arrays included.
+- `JSON.list` returns elements as `JSON.Value` values, mixed arrays included.
 
 ## Encoding
 
-- `JSON.encode` accepts Int, Float, Bool, String, Nil (as null), Json, lists,
-  String-keyed maps, Optionals and structs (`JsonField` fields too),
+- `JSON.encode` accepts Int, Float, Bool, String, Nil (as null), JSON.Value,
+  lists, String-keyed maps, Optionals and structs (`JSON.Field` fields too),
   recursively. Results, other enums and Int-keyed maps are
   `CHECK-NOT-ENCODABLE`, even when empty or nested. Empty literals still need a
   known type.
@@ -183,14 +183,14 @@ end
 
 Struct fields may differ in type; maps and lists hold one type. For a protocol
 envelope, declare the struct (`struct RpcResponse` with `jsonrpc: String`, `id:
-Json`, `result: Json`) and `puts(JSON.encode(RpcResponse(...)))`, then
-`IO.flush()`, instead of wrapping every scalar with `JSON.from`.
+JSON.Value`, `result: JSON.Value`) and `puts(JSON.encode(RpcResponse(...)))`,
+then `IO.flush()`, instead of wrapping every scalar with `JSON.from`.
 
 - `ok` and `error` are reserved field names, so a JSON-RPC error envelope cannot
   be a struct: use a String-keyed map for the envelope and a typed struct for
   its nested code and message.
-- Give fixed nested records typed fields. Keep `Json` for variable payloads or
-  identifiers, and call `JSON.from(payload)` once at that boundary.
+- Give fixed nested records typed fields. Keep `JSON.Value` for variable
+  payloads or identifiers, and call `JSON.from(payload)` once at that boundary.
 - `JSON.encode` takes structs and String-keyed maps directly; use builders for
   dynamic objects or mixed arrays. A generic `def emit[T](x: T)` can
   `JSON.encode(x)`.

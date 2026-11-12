@@ -4,7 +4,7 @@ struct Point
 end
 
 # Follows a path of the peer: "." is the root, "#3" an array index, any other step an object key.
-def follow(j: Json, path: String) -> Result[Json]
+def follow(j: JSON.Value, path: String) -> Result[JSON.Value]
   if path == "."
     return ok(j)
   end

@@ -440,7 +440,7 @@ typedef struct {
   uint32_t *spans;
 } agc_function;
 
-/* A JSON field type. AGC_TYPE_JSON_FIELD is JsonField[T], an optional and nullable struct field (arg is T), and
+/* A JSON field type. AGC_TYPE_JSON_FIELD is JSON.Field[T], an optional and nullable struct field (arg is T), and
    AGC_TYPE_OPTIONAL is Optional[T] (null or T, anywhere a type is); both point to an earlier type like List and Map.
    AGC_TYPE_ENUM is a user enum (arg is its index), like STRUCT a leaf of the table: its payload types are in the
    variants (agc_enum_def.payload_types). */
@@ -449,7 +449,7 @@ typedef enum {
   AGC_TYPE_JSON_FIELD, AGC_TYPE_OPTIONAL, AGC_TYPE_ENUM
 } agc_type_kind;
 
-/* The variants of the builtin JsonField enum, in table order from agc_program.json_field. */
+/* The variants of the builtin JSON.Field enum, in table order from agc_program.json_field. */
 enum { AGC_JSON_FIELD_ABSENT, AGC_JSON_FIELD_NULL, AGC_JSON_FIELD_VALUE };
 
 typedef struct {
@@ -503,7 +503,7 @@ typedef struct {
   agc_enum_def *enums;
   agc_variant_def *variants;
   agc_update_def *updates;
-  /* The variant id of JsonField.Absent (Null and Value follow it), or UINT32_MAX when the program has no JsonField
+  /* The variant id of JSON.Field.Absent (Null and Value follow it), or UINT32_MAX when the program has no JSON.Field
      enum. The loader checks the enum's shape, so typed JSON and the encoders trust these three ids. */
   uint32_t json_field;
   /* The variant id of Optional.None (Some follows it), or UINT32_MAX when the program has no builtin Optional enum.

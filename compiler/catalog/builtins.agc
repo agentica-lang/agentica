@@ -38,10 +38,16 @@ end
 
 export OPAQUE_TYPES = Set.new(DATA_OPAQUE_TYPES)
 
-## The builtin types of a family (Family.Member): the records, enums and opaque types whose name starts with a family.
+## The builtin type of a family that is a type of its own in the checker, not a record, enum or opaque type: JSON.Value
+## is Types.Type.Json.
+export JSON_VALUE = "JSON.Value"
+
+## The builtin types of a family (Family.Member): the records, enums and opaque types whose name starts with a family,
+## and JSON.Value.
 FAMILY_TYPE_NAMES = RECORDS.keys
   .concat(ENUMS.keys)
   .concat(DATA_OPAQUE_TYPES)
+  .concat([JSON_VALUE])
   .filter do |name: String| name.include?(".") and DATA_FAMILIES.include?(name.split(".")[0]) end
 
 export FAMILY_TYPES = Set.new(FAMILY_TYPE_NAMES)

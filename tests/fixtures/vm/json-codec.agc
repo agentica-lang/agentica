@@ -21,7 +21,7 @@ def show[T](codec: Codec[T], value: T) -> String
   return codec.encode(value)
 end
 
-def tree[T](codec: Codec[T], value: T) -> Json
+def tree[T](codec: Codec[T], value: T) -> JSON.Value
   return codec.from(value)
 end
 

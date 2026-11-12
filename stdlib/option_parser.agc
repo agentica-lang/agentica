@@ -1,6 +1,6 @@
 ## Parses the command line of a program: positional arguments (`Arg`), options with a long and a short name
 ## (`Opt`), defaults, choices and the `--help` text. The shape is that of Python's `argparse`, the names are Ruby's
-## (`OptionParser`, `parse`, `run!`). Pure Agentica: no Json, only structs, enums and `Optional`.
+## (`OptionParser`, `parse`, `run!`). Pure Agentica: no JSON.Value, only structs, enums and `Optional`.
 ##
 ## Import it with `import OP from "std/option_parser"` and `import {Arg, Opt, Kind} from "std/option_parser"`.
 ## `OP.new(program, description, args, opts)` describes the interface and `OP.parse(parser, args)` checks the words

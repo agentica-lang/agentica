@@ -571,8 +571,9 @@ static buffer type_tables(int which) {
     str(&t, "P");
     u32(&t, 2);
   }
-  /* 13: a JsonField type (kind 7) and no enum; 14: with the JsonField enum; 15 to 18: a JsonField enum of the
-     wrong shape (Value without its payload, a fourth variant, Null before Absent) or a second JsonField enum. 19: an
+  /* 13: a JSON.Field type (kind 7) and no enum; 14: with the JSON.Field enum; 15 to 18: a JSON.Field enum of the
+     wrong shape (Value without its payload, a fourth variant, Null before Absent) or a second one, under the name
+     JsonField of an older front end (the checked-in stage0), which counts as the same enum. 19: an
      Optional type (kind 8) and no enum; 20: with the Optional enum; 21: an enum named Optional of another shape (Some
      without its payload), which is not the builtin one; 22: two Optional enums. 23: a List target name (a `[`) on Q,
      which has two fields; 24: one on P, which has one; 25: one on a Q of no fields. */
@@ -594,7 +595,7 @@ static buffer type_tables(int which) {
   }
   u32(&t, which == 18 ? 2 : 1);
   for (int copy = 0; copy < (which == 18 ? 2 : 1); copy++) {
-    str(&t, "JsonField");
+    str(&t, copy == 1 ? "JsonField" : "JSON.Field");
     u32(&t, which == 16 ? 4 : 3);
     str(&t, which == 17 ? "Null" : "Absent");
     u32(&t, 0);
@@ -2130,12 +2131,12 @@ int main(void) {
   assert(!loads_types(10, "type nesting too deep"));
   assert(!loads_types(11, "duplicate JSON type name"));
   assert(loads_types(12, NULL));
-  assert(!loads_types(13, "JsonField type without the JsonField enum"));
+  assert(!loads_types(13, "JSON.Field type without the JSON.Field enum"));
   assert(loads_types(14, NULL));
-  assert(!loads_types(15, "bad JsonField enum"));
-  assert(!loads_types(16, "bad JsonField enum"));
-  assert(!loads_types(17, "bad JsonField enum"));
-  assert(!loads_types(18, "duplicate JsonField enum"));
+  assert(!loads_types(15, "bad JSON.Field enum"));
+  assert(!loads_types(16, "bad JSON.Field enum"));
+  assert(!loads_types(17, "bad JSON.Field enum"));
+  assert(!loads_types(18, "duplicate JSON.Field enum"));
   assert(!loads_types(19, "Optional type without the Optional enum"));
   assert(loads_types(20, NULL));
   assert(!loads_types(21, "Optional type without the Optional enum"));

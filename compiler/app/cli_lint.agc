@@ -104,7 +104,7 @@ export def json_text(entries: List[Entry]) -> String
   "#{JSON.encode(document)}\n"
 end
 
-def json_entry(entry: Entry) -> Map[String, Json]
+def json_entry(entry: Entry) -> Map[String, JSON.Value]
   case entry
     Entry.Clean(file) -> {"file": JSON.from(file), "ok": JSON.from(true), "suggestions": JSON.array([])}
     Entry.Suggested(file, found) ->

@@ -1,5 +1,5 @@
 # Checks typed JSON for enums against the vectors of tests/fixtures/json-enum-vectors.py: each document is decoded from
-# its text and from its Json value, and both must give the peer's encoded text or error message. A "same" vector must
+# its text and from its JSON.Value value, and both must give the peer's encoded text or error message. A "same" vector must
 # come back unchanged up to key order, and every decoded value must encode back to the same text after a second
 # decode (the round trip).
 enum Shape

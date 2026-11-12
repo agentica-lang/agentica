@@ -19,7 +19,7 @@ export def public(name: String) -> Result[Model.Builtin]
 end
 
 ## Every public builtin, in name order, each as `builtin` gives it.
-export def catalog(ruby: Fn[Model.Builtin, String]) -> Json
+export def catalog(ruby: Fn[Model.Builtin, String]) -> JSON.Value
   # `unwrap!` cannot fail: PUBLIC_NAMES are keys of the same ENTRIES that `Builtins.lookup` reads.
   JSON.array(PUBLIC_NAMES.sort.map do |name: String| builtin(Builtins.lookup(name).unwrap!, ruby) end)
 end
@@ -29,7 +29,7 @@ end
 ## method form (`map.key?(key: K) -> Bool` for `Map.has_key?`) or "" for none (check/ruby_form.agc: catalog/ cannot
 ## read the checker's alias tables, so the caller passes it); a form has it as `ruby`, or null. `name` and `signature`
 ## stay the name of the builtin.
-export def builtin(entry: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> Json
+export def builtin(entry: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> JSON.Value
   return form_json(entry, ruby) if entry.alternatives.size == 0
 
   forms = [entry].concat(entry.alternatives)
@@ -41,7 +41,7 @@ export def builtin(entry: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> Jso
   })
 end
 
-def form_json(form: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> Json
+def form_json(form: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> JSON.Value
   parameters = form.parameters.map do |parameter: Model.Named| parameter_json(parameter) end
 
   JSON.object({
@@ -57,7 +57,7 @@ def form_json(form: Model.Builtin, ruby: Fn[Model.Builtin, String]) -> Json
 end
 
 # A parameter has `default` (the source text of its default value) only when it has one.
-def parameter_json(parameter: Model.Named) -> Json
+def parameter_json(parameter: Model.Named) -> JSON.Value
   fields = {"name": JSON.from(parameter.name), "type": JSON.from(Types.to_text(parameter.type))}
   if Builtins.default_present?(parameter.default)
     fields = fields.put("default", JSON.from(Builtins.default_text(parameter.default)))
@@ -66,10 +66,10 @@ def parameter_json(parameter: Model.Named) -> Json
   JSON.object(fields)
 end
 
-def text_or_null(text: String) -> Json
+def text_or_null(text: String) -> JSON.Value
   return JSON.null() if text == ""
 
   JSON.from(text)
 end
 
-def strings(items: List[String]) -> Json = JSON.array(items.map do |item: String| JSON.from(item) end)
+def strings(items: List[String]) -> JSON.Value = JSON.array(items.map do |item: String| JSON.from(item) end)

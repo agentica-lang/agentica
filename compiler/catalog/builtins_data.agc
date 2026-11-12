@@ -280,7 +280,7 @@ export ENUMS: List[Model.EnumDef] = [
     ],
   ),
   Model.EnumDef(
-    name: "JsonField",
+    name: "JSON.Field",
     parameters: ["T"],
     variants: [
       Model.Variant(name: "Absent", payload: []),
@@ -338,8 +338,6 @@ export RESERVED_TYPE_NAMES: List[String] = [
   "IO",
   "Int",
   "JSON",
-  "Json",
-  "JsonField",
   "Lazy",
   "List",
   "Listener",
@@ -380,7 +378,7 @@ export RESERVED_TYPE_NAMES: List[String] = [
 ## Family.Member: a group of functions (the rows named Family.Member.fn) or a builtin type named Family.Member (a
 ## record, an enum or an opaque type). A new member, or a new function of a member, only adds its rows or its type and
 ## reserves no name.
-export FAMILIES: List[String] = ["OpenSSL"]
+export FAMILIES: List[String] = ["JSON", "OpenSSL"]
 
 ## The modules only std/ may call: each name with the std module that wraps it and the alias its help shows.
 export STD_ONLY_IMPORTS: Map[String, List[String]] = {
@@ -410,8 +408,6 @@ export MOVED_TYPES: Map[String, String] = {
 export NESTED_NAMES: Map[String, String] = {
   "File.Handle": "FileHandle",
   "File.Info": "FileInfo",
-  "JSON.Field": "JsonField",
-  "JSON.Value": "Json",
   "Process.Output": "ProcessOutput",
   "System.Profile": "Profile",
   "TCP.Listener": "Listener",
@@ -1756,7 +1752,7 @@ ROWS_17: List[Model.Builtin] = [
         rule: Model.Rule.CodecDecode,
         implementation: "JSON.decode",
         effects: [],
-        description: "Decode a Json value into the codec's struct, as JSON.decode does.",
+        description: "Decode a JSON.Value into the codec's struct, as JSON.decode does.",
         alternatives: [],
       ),
     ],
@@ -1784,7 +1780,7 @@ ROWS_17: List[Model.Builtin] = [
     rule: Model.Rule.CodecEncode,
     implementation: "JSON.from",
     effects: [],
-    description: "Convert a value of the codec's struct to a Json value, as JSON.from does.",
+    description: "Convert a value of the codec's struct to a JSON.Value, as JSON.from does.",
     alternatives: [],
   ),
   Model.Builtin(
@@ -1819,7 +1815,7 @@ ROWS_17: List[Model.Builtin] = [
         rule: Model.Rule.JsonDecode,
         implementation: "JSON.decode",
         effects: [],
-        description: "Decode a Json value into a named struct, with the rules and errors of its text.",
+        description: "Decode a JSON.Value into a named struct, with the rules and errors of its text.",
         alternatives: [],
       ),
     ],
@@ -5269,7 +5265,7 @@ ROWS_52: List[Model.Builtin] = [
     implementation: "Test.eq",
     effects: ["test"],
     description: (
-      "Compare two values of a type with equality (Json as canonical text); a failure is recorded on the test."
+      "Compare two values of a type with equality (a JSON.Value as canonical text); a failure is recorded on the test."
     ),
     alternatives: [],
   ),

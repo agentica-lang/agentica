@@ -1,19 +1,19 @@
-# Checks typed JSON with JsonField against the vectors of tests/fixtures/json-field-vectors.py: each document is
-# decoded from its text and from its Json value, and both must give the peer's encoded text or error message. A
+# Checks typed JSON with JSON.Field against the vectors of tests/fixtures/json-field-vectors.py: each document is
+# decoded from its text and from its JSON.Value value, and both must give the peer's encoded text or error message. A
 # "same" vector must come back unchanged up to key order (the round trip).
 struct Address
   zip: String
-  note: JsonField[String]
+  note: JSON.Field[String]
 end
 
 struct Patch
   id: Int
-  name: JsonField[String]
-  age: JsonField[Int]
-  score: JsonField[Float]
-  address: JsonField[Address]
-  tags: JsonField[List[String]]
-  homes: JsonField[List[Address]]
+  name: JSON.Field[String]
+  age: JSON.Field[Int]
+  score: JSON.Field[Float]
+  address: JSON.Field[Address]
+  tags: JSON.Field[List[String]]
+  homes: JSON.Field[List[Address]]
 end
 
 # The outcome of one decode in the peer's words: "ok", a tab and the encoded text, or "error", a tab and the message.

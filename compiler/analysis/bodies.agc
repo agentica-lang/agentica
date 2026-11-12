@@ -414,7 +414,7 @@ def shape(type: Types.Type) -> Model.TypeShape
     Types.Type.String -> builtin("String", [])
     Types.Type.Nil -> builtin("Nil", [])
     Types.Type.Void -> builtin("Void", [])
-    Types.Type.Json -> builtin("Json", [])
+    Types.Type.Json -> builtin("JSON.Value", [])
     Types.Type.Range -> builtin("Range", [])
     Types.Type.Bytes -> builtin("Bytes", [])
   end

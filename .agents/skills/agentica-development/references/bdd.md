@@ -161,19 +161,19 @@ the programming skill or the site).
 ## `std/bdd` and its helpers
 
 - `stdlib/bdd.agc`: `step`, `run`, `Context`, `assert`, `set`/`get`,
-  `keep`/`call` (closures `Fn[Json, Result[Json]]` that capture a scenario's
-  non-JSON values: `Context` cannot hold the step program's own type, since
-  functions and structs are not generic), `read_line` and the program steps.
-  The `then_*` checks compare with `Test.eq` (a `Json` line by canonical text)
-  and put the inspect texts in the `fail` record, so BDD and unit tests show
-  values the same way. In the child, `run` checks the step index and pattern,
-  calls the handler, fails on pending tasks and an unobserved task crash,
-  probes the output limit and sends `end`. Each record is one JSON line sent
-  with `Process.parent_send` after `IO.flush()`; scenario mode reads step lines
-  with `Process.parent_read_line` and a 24 h timeout (the runner holds the
-  deadline). Every failure sends one `fail` record and exits 1. A record over
-  1 MiB (`process: send exceeds`) becomes a small `RUNTIME-BDD-OUTPUT-LIMIT`
-  fail record.
+  `keep`/`call` (closures `Fn[JSON.Value, Result[JSON.Value]]` that capture a
+  scenario's non-JSON values: `Context` cannot hold the step program's own type,
+  since functions and structs are not generic), `read_line` and the program
+  steps. The `then_*` checks compare with `Test.eq` (a `JSON.Value` line by
+  canonical text) and put the inspect texts in the `fail` record, so BDD and
+  unit tests show values the same way. In the child, `run` checks the step index
+  and pattern, calls the handler, fails on pending tasks and an unobserved task
+  crash, probes the output limit and sends `end`. Each record is one JSON line
+  sent with `Process.parent_send` after `IO.flush()`; scenario mode reads step
+  lines with `Process.parent_read_line` and a 24 h timeout (the runner holds the
+  deadline). Every failure sends one `fail` record and exits 1. A record over 1
+  MiB (`process: send exceeds`) becomes a small `RUNTIME-BDD-OUTPUT-LIMIT` fail
+  record.
 - Program launch and hooks: `given_env` and `given_argument` keep a `Map` and a
   list in `Scenario` until `start`, which passes them to
   `Process.spawn_captured` (`env`) and after the file. `after` keeps

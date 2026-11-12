@@ -44,7 +44,7 @@ program #58 0:1:1-477:22:1
             arg: name-ref #36 359:17:17-364:17:22 name="codec" type=Codec(Struct(Reading))
             arg: name-ref #37 366:17:24-373:17:31 name="reading" type=Struct(Reading)
       body: binding #44 378:18:3-405:19:1 name="tree"
-        value: method-call #43 385:18:10-404:18:29 name="from" type=Json resolved=call("Codec.from", Codec(Struct(Reading)))
+        value: method-call #43 385:18:10-404:18:29 name="from" type=JSON.Value resolved=call("Codec.from", Codec(Struct(Reading)))
           target: name-ref #41 385:18:10-390:18:15 name="codec" type=Codec(Struct(Reading))
           arg: name-ref #42 396:18:21-403:18:28 name="reading" type=Struct(Reading)
       body: expr-stmt #51 407:19:3-446:20:1
@@ -53,7 +53,7 @@ program #58 0:1:1-477:22:1
             target: field-access #48 412:19:8-438:19:34 name="unwrap!" type=Struct(Reading) resolved=call("Result.unwrap!", Result(Struct(Reading)))
               target: method-call #47 412:19:8-430:19:26 name="decode" type=Result(Struct(Reading)) resolved=call("Codec.decode", Codec(Struct(Reading)))
                 target: name-ref #45 412:19:8-417:19:13 name="codec" type=Codec(Struct(Reading))
-                arg: name-ref #46 425:19:21-429:19:25 name="tree" type=Json
+                arg: name-ref #46 425:19:21-429:19:25 name="tree" type=JSON.Value
       body: expr-stmt #56 448:20:3-473:21:1
         value: call #55 448:20:3-472:20:27 name="puts" piped=false type=Void
           arg: field-access #54 453:20:8-471:20:26 name="size" type=Int resolved=call("List.size", List(Struct(StructMember)))

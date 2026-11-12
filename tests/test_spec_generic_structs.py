@@ -15,8 +15,8 @@ PAIR = "struct Pair[T]\n  a: T\n  b: T\nend\n\n"
 INC = "def inc(x: Int) -> Int\n  return x + 1\nend\n\n"
 
 
-NIL_WALK = "struct W[T]\n  f: JsonField[T]\n  rest: List[W[Nil]]\nend\n\n"
-NIL_VALUES = ("inner = W(f: JsonField.Value(nil), rest: [])", "outer = W(f: JsonField.Value(1), rest: [inner])")
+NIL_WALK = "struct W[T]\n  f: JSON.Field[T]\n  rest: List[W[Nil]]\nend\n\n"
+NIL_VALUES = ("inner = W(f: JSON.Field.Value(nil), rest: [])", "outer = W(f: JSON.Field.Value(1), rest: [inner])")
 
 
 def main(*lines: str) -> str:
@@ -105,47 +105,47 @@ RULES = {
     "JSON.encode ends on a recursion that changes its type argument": (
         "struct Deep[T]\n  v: T\n  rest: List[Deep[List[T]]]\nend\n\n"
         + main("puts(JSON.encode(Deep(v: 1, rest: [])))"), None, None),
-    "JSON.encode finds a JsonField of Nil behind a struct already on the walk": (
+    "JSON.encode finds a JSON.Field of Nil behind a struct already on the walk": (
         NIL_WALK + main(*NIL_VALUES, "puts(JSON.encode(outer))"), "CHECK-NOT-ENCODABLE", "outer"),
-    "JSON.from finds a JsonField of Nil behind a struct already on the walk": (
+    "JSON.from finds a JSON.Field of Nil behind a struct already on the walk": (
         NIL_WALK + main(*NIL_VALUES, "puts(JSON.from(outer).inspect)"), "CHECK-NOT-ENCODABLE", "outer"),
     "JSON.encode takes the same recursion without a Nil argument": (
         NIL_WALK.replace("W[Nil]", "W[Int]")
-        + main("inner = W(f: JsonField.Value(2), rest: [])", "puts(JSON.encode(W(f: JsonField.Value(1), rest: [inner])))"),
+        + main("inner = W(f: JSON.Field.Value(2), rest: [])", "puts(JSON.encode(W(f: JSON.Field.Value(1), rest: [inner])))"),
         None, None),
-    "a JsonField argument is a direct field after substitution": (
-        declared("b: Box[JsonField[Int]] = Box(value: JsonField.Absent)", "puts(JSON.encode(b))", "puts(JSON.from(b))"),
+    "a JSON.Field argument is a direct field after substitution": (
+        declared("b: Box[JSON.Field[Int]] = Box(value: JSON.Field.Absent)", "puts(JSON.encode(b))", "puts(JSON.from(b))"),
         None, None),
-    "a JsonField argument is direct in the inner Box of a nest": (
-        declared("b: Box[Box[JsonField[Int]]] = Box(value: Box(value: JsonField.Null))", "puts(JSON.encode(b))"),
+    "a JSON.Field argument is direct in the inner Box of a nest": (
+        declared("b: Box[Box[JSON.Field[Int]]] = Box(value: Box(value: JSON.Field.Null))", "puts(JSON.encode(b))"),
         None, None),
-    "a JsonField argument is direct in the Box of another generic field": (
-        declared("w: Wrap[JsonField[Int]] = Wrap(inner: Box(value: JsonField.Value(1)))", "puts(JSON.encode(w))",
+    "a JSON.Field argument is direct in the Box of another generic field": (
+        declared("w: Wrap[JSON.Field[Int]] = Wrap(inner: Box(value: JSON.Field.Value(1)))", "puts(JSON.encode(w))",
                    header=BOX + "struct Wrap[T]\n  inner: Box[T]\nend\n\n"),
         None, None),
-    "a JsonField argument that is a list item after substitution": (
-        declared("b: Both[JsonField[Int]] = Both(value: JsonField.Absent, items: [])", "puts(JSON.encode(b))",
+    "a JSON.Field argument that is a list item after substitution": (
+        declared("b: Both[JSON.Field[Int]] = Both(value: JSON.Field.Absent, items: [])", "puts(JSON.encode(b))",
                  header=BOTH),
         "CHECK-JSON-FIELD-PLACE", "b"),
-    "a JsonField argument that is a list item in the Box of another generic field": (
-        declared("b: Outer[JsonField[Int]] = Outer(inner: Both(value: JsonField.Absent, items: []))", "puts(JSON.from(b).inspect)",
+    "a JSON.Field argument that is a list item in the Box of another generic field": (
+        declared("b: Outer[JSON.Field[Int]] = Outer(inner: Both(value: JSON.Field.Absent, items: []))", "puts(JSON.from(b).inspect)",
                  header=BOTH + "struct Outer[T]\n  inner: Both[T]\nend\n\n"),
         "CHECK-JSON-FIELD-PLACE", "b"),
-    "a JsonField argument inside a JsonField field": (
-        declared("b: Nested[JsonField[Int]] = Nested(f: JsonField.Absent)", "puts(JSON.encode(b))",
-                 header="struct Nested[T]\n  f: JsonField[T]\nend\n\n"),
+    "a JSON.Field argument inside a JSON.Field field": (
+        declared("b: Nested[JSON.Field[Int]] = Nested(f: JSON.Field.Absent)", "puts(JSON.encode(b))",
+                 header="struct Nested[T]\n  f: JSON.Field[T]\nend\n\n"),
         "CHECK-JSON-FIELD-PLACE", "b"),
-    "a JsonField argument inside a JsonField argument": (
-        declared("b: Box[JsonField[JsonField[Int]]] = Box(value: JsonField.Absent)", "puts(JSON.encode(b))"),
+    "a JSON.Field argument inside a JSON.Field argument": (
+        declared("b: Box[JSON.Field[JSON.Field[Int]]] = Box(value: JSON.Field.Absent)", "puts(JSON.encode(b))"),
         "CHECK-JSON-FIELD-PLACE", "b"),
-    "a JsonField argument under a list argument": (
-        declared("b: Box[List[JsonField[Int]]] = Box(value: [])", "puts(JSON.encode(b))"),
+    "a JSON.Field argument under a list argument": (
+        declared("b: Box[List[JSON.Field[Int]]] = Box(value: [])", "puts(JSON.encode(b))"),
         "CHECK-JSON-FIELD-PLACE", "b"),
-    "a JsonField argument is no whole JSON.from argument": (
-        declared("puts(JSON.from(JsonField.Value(1)).inspect)"), "CHECK-JSON-FIELD-PLACE", "JsonField.Value(1)"),
-    "a generic instance with a JsonField argument is not decodable": (
+    "a JSON.Field argument is no whole JSON.from argument": (
+        declared("puts(JSON.from(JSON.Field.Value(1)).inspect)"), "CHECK-JSON-FIELD-PLACE", "JSON.Field.Value(1)"),
+    "a generic instance with a JSON.Field argument is not decodable": (
         declared('r = JSON.decode("{}", Wrapper)',
-                 header=BOX + "struct Wrapper\n  b: Box[JsonField[Int]]\nend\n\n"),
+                 header=BOX + "struct Wrapper\n  b: Box[JSON.Field[Int]]\nend\n\n"),
         "CHECK-NOT-DECODABLE", "Wrapper"),
     "JSON.decode rejects a bare generic struct": (
         declared('r = JSON.decode("{}", Box)'), "CHECK-UNKNOWN-TYPE", "Box"),

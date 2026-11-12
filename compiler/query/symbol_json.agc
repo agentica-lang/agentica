@@ -11,7 +11,7 @@ import DocJson from "../docs/doc_json"
 
 ## The object of the answer; the `module` of each match is the name the answer gives its file (query_files.agc,
 ## `display`).
-export def json(found: Model.Symbols) -> Json
+export def json(found: Model.Symbols) -> JSON.Value
   JSON.object({
     "version": JSON.from(found.version),
     "command": JSON.from("symbol"),
@@ -22,7 +22,7 @@ export def json(found: Model.Symbols) -> Json
 end
 
 ## The object of one match, which `refs` gives its `definition` as well.
-export def match_json(match: Model.Symbol) -> Json
+export def match_json(match: Model.Symbol) -> JSON.Value
   if match.kind == "builtin"
     return JSON.object({
       "kind": JSON.from(match.kind),
@@ -37,7 +37,7 @@ export def match_json(match: Model.Symbol) -> Json
     })
   end
 
-  fields: Map[String, Json] = {
+  fields: Map[String, JSON.Value] = {
     "kind": JSON.from(match.kind),
     "name": JSON.from(match.name),
     "module": JSON.from(match.module),
@@ -58,6 +58,6 @@ export def match_json(match: Model.Symbol) -> Json
   JSON.object(fields)
 end
 
-def skipped_json(left: Model.Skipped) -> Json
+def skipped_json(left: Model.Skipped) -> JSON.Value
   JSON.object({"file": JSON.from(left.file), "diagnostic": DiagnosticJson.object(left.diagnostic)})
 end

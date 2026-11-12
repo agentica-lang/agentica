@@ -33,6 +33,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - The bytecode cache keys on the C compiler file that a native build would run
   (`CC`, else `cc` found in `PATH`), and `BDD.given_program` on `PATH`: another
   compiler makes a new build.
+- **Breaking:** `Json` and `JsonField` are `JSON.Value` and `JSON.Field`
+  (#1182); the old names are unknown, and a program may take them. `inspect`
+  shows a JSON value as `<JSON.Value>`.
 
 ## [0.31.0-alpha.1] - 2026-11-12
 
