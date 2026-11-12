@@ -603,12 +603,14 @@ export struct Interpolation
   span: Source.Span
 end
 
-## do |params| body end, or a lambda ->(params) { body } (`lambda`): the same function value without a call.
+## do |params| body end, { |params| body } after a call without arguments (`braces`), or a lambda ->(params) { body }
+## (`lambda`): the same function value without a call.
 export struct BlockLit
   id: Int
   params: List[BlockParam]
   body: List[Stmt]
   lambda: Bool
+  braces: Bool
   span: Source.Span
 end
 
@@ -704,6 +706,27 @@ export struct TypedTarget
   target: Expr
   type: Types.Type
   span: Source.Span
+end
+
+## The names that take a block only after parentheses (`loop() do ... end`): Ruby's lambda, proc and loop, and the
+## foreign keywords, whose parser errors explain them better than the checker can.
+export def block_word?(name: String) -> Bool
+  name == "lambda" or name == "proc" or name == "loop" or foreign_keyword?(name)
+end
+
+## The keywords of other languages and the loop controls, which the parser names in its errors: let, var, val, const,
+## match, break, continue and next.
+export def foreign_keyword?(name: String) -> Bool
+  (
+    name == "let" or
+    name == "var" or
+    name == "val" or
+    name == "const" or
+    name == "match" or
+    name == "break" or
+    name == "continue" or
+    name == "next"
+  )
 end
 
 ## The id of an expression node.

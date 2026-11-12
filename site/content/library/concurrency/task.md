@@ -317,7 +317,7 @@ A block can run in a task too, when you pass it through a function parameter:
 def start(f: Fn[Int, Int]) -> Task[Int] = Task.spawn(f, 20)
 
 def main() -> Void
-  task = start() do |n| n + 1 end
+  task = start do |n| n + 1 end
   puts(Task.await(task))
 end
 ```

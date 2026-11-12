@@ -111,16 +111,16 @@ end
 
 def in_memory(files: Map[String, String]) -> Workspace.Workspace
   return Workspace.Workspace(
-    read_text: reader() do |path: String| read_file(files, path) end,
-    file_exists: predicate() do |path: String| files.has_key?(path) end,
-    directory_exists: predicate() do |path: String| folder?(files, path) end,
-    real_path: resolver() do |path: String| ok(path) end,
-    resolve_path: resolver() do |path: String| ok(path) end,
-    std_source: resolver() do |name: String| std_module(name) end,
-    list_folder: lister() do |path: String| entries(files, path) end,
-    read_bytes: byter() do |path: String| bytes_of(files, path) end,
-    read_prefix: prefixer() do |path: String, limit: Int| prefix_of(files, path, limit) end,
-    native_artifact: nativer() do |_request: Workspace.NativeRequest| error("no native artifact in this workspace") end,
+    read_text: reader do |path: String| read_file(files, path) end,
+    file_exists: predicate do |path: String| files.has_key?(path) end,
+    directory_exists: predicate do |path: String| folder?(files, path) end,
+    real_path: resolver do |path: String| ok(path) end,
+    resolve_path: resolver do |path: String| ok(path) end,
+    std_source: resolver do |name: String| std_module(name) end,
+    list_folder: lister do |path: String| entries(files, path) end,
+    read_bytes: byter do |path: String| bytes_of(files, path) end,
+    read_prefix: prefixer do |path: String, limit: Int| prefix_of(files, path, limit) end,
+    native_artifact: nativer do |_request: Workspace.NativeRequest| error("no native artifact in this workspace") end,
     native_build: &Workspace.no_build,
     check_cache: Workspace.no_check_cache(),
   )

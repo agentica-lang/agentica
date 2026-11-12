@@ -33,7 +33,7 @@ def backed_up(feed: Feed) -> Void
 end
 
 def routes(said: Channel[String]) -> Fn[HTTP.Request, Result[HTTP.StreamResponse]]
-  return handler_of() do |_|
+  return handler_of do |_|
     body: Channel[Bytes] = Channel.new(2)
     Task.spawn(&backed_up, Feed(said: said, body: body))
     return ok(
@@ -60,7 +60,7 @@ def stream_answer(route: Fn[HTTP.Request, Result[HTTP.StreamResponse]], request:
 end
 
 def streamed(route: Fn[HTTP.Request, Result[HTTP.StreamResponse]]) -> HTTP.App
-  return app_of() do |request, body| stream_answer(route, request, body) end
+  return app_of do |request, body| stream_answer(route, request, body) end
 end
 
 # The status line and the headers, without the Date, which differs on every run.

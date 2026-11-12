@@ -33,6 +33,21 @@ end
 [2, 4]
 ```
 
+## Braces
+
+A call without arguments can take its block in braces instead, on one line or several. A call with arguments takes `do ... end`.
+
+```agentica
+def main() -> Void
+  squares = [1, 2, 3].map { |x| x * x }
+  puts(squares)
+end
+```
+
+```output
+[1, 4, 9]
+```
+
 ## Blocks that return nothing
 
 `each` runs the block for every element.
@@ -123,6 +138,22 @@ end
 
 ```output
 23
+```
+
+A call with no other argument drops the empty `()` before its block, also for your own function. Without a block, keep the `()`: a bare name is never a call.
+
+```agentica
+def answer(f: Fn[Int]) -> Int = f.call()
+
+def main() -> Void
+  puts(answer do 42 end)
+  puts(answer { 7 })
+end
+```
+
+```output
+42
+7
 ```
 
 ## Lambdas

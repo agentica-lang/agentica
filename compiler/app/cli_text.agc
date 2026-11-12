@@ -105,7 +105,7 @@ SUMMARY = [
   "                                          --json prints every builtin as a JSON array",
   "Core rules:",
   "  - A program starts at `def main() -> Void`. Calls always use parentheses: puts(\"hi\").",
-  "  - Ruby syntax: no semicolons and no braces for blocks; blocks end with \"end\".",
+  "  - Ruby syntax: no semicolons; a block is do ... end, or { ... } after a call without arguments.",
   "  - Values are immutable: methods return new values, so assign them: xs = xs.push(2), m = m.put(k, v).",
   "  - A block (do |x| ... end) cannot assign an outer variable (CHECK-CAPTURED-ASSIGNMENT):",
   "    use `for x in xs ... end`, or xs.reduce(0) do |acc, x| ... end.",

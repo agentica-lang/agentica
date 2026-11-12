@@ -1,3 +1,5 @@
 def main() -> Void
-  ys = run do |x| x end
+  if ready do
+    puts("x")
+  end
 end

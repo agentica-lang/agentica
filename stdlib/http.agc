@@ -1007,7 +1007,7 @@ export def app(handler: Handler, max_body_bytes: Int = 1048576) -> App
   if limit < 0
     limit = 0
   end
-  serving() do |request, body| whole_answer(handler, limit, request, body) end
+  ->(request, body) { whole_answer(handler, limit, request, body) }
 end
 
 ## The answer that refuses a request body `read_all` could not read, from its error: 413 for a body over its limit
@@ -2197,8 +2197,6 @@ def stream_closing_unless(response: StreamResponse, whole: Bool) -> StreamRespon
   headers = response.headers.push(HttpWire.Header(name: "Connection", value: "close"))
   StreamResponse(status: response.status, headers: headers, body: response.body, length: response.length)
 end
-
-def serving(f: App) -> App = f
 
 # The answer of `app(handler)`: the body read whole (the `body_refusal` of its error when it cannot be), then the
 # handler's response.

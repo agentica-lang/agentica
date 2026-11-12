@@ -62,6 +62,9 @@ export struct Context
   width: Int
   # The type aliases of the file whose target is Void (void_aliases): a def with such a result keeps its last `return`.
   void_aliases: List[String] = []
+  # The start offsets of the calls by plain name at the top level of the condition being printed (head_doc): there a
+  # call keeps the `()` before its `do` block, since the parser refuses `name do` in a condition.
+  head_calls: List[Int] = []
 end
 
 ## An `extern` block, copied whole: its first and last lines and offsets, and the comments that the attachment gave
@@ -728,7 +731,7 @@ def statement_doc(c: Context, stmt: Ast.Stmt, forced: Bool) -> Docs.Doc
       items = statement_items(c, node.body).concat(dangling_items(c, key))
       head = Docs.Doc.Concat([
         text("while "),
-        expr_doc(c, node.condition, false),
+        head_doc(c, node.condition, false),
         text(optional_do(c, node.condition)),
       ])
 
@@ -736,7 +739,7 @@ def statement_doc(c: Context, stmt: Ast.Stmt, forced: Bool) -> Docs.Doc
     Ast.Stmt.For(node) ->
       key = Comments.key_of("ForStmt", node.span)
       items = statement_items(c, node.body).concat(dangling_items(c, key))
-      iterable = expr_doc(c, node.iterable, false)
+      iterable = head_doc(c, node.iterable, false)
       head = Docs.Doc.Concat([text("for #{node.variable} in "), iterable, text(optional_do(c, node.iterable))])
       Docs.Doc.Concat([head, body(c, items), Docs.Doc.HardLine, text("end")])
     Ast.Stmt.Control(node) -> text(node.kind)
@@ -783,7 +786,8 @@ end
 # in a body.
 def guard_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
   branch = node.branches[0]
-  Docs.Doc.Concat([statement_doc(c, branch.body[0], true), text(" if "), expr_doc(c, branch.condition, false)])
+  condition = head_doc(c, branch.condition, true)
+  Docs.Doc.Concat([statement_doc(c, branch.body[0], true), text(" if "), condition])
 end
 
 # `if`, its `elsif` branches and its `else`. A comment before `elsif` or `else` stays just before the keyword, at the
@@ -812,7 +816,7 @@ def spelled_if_doc(c: Context, node: Ast.IfStmt) -> Docs.Doc
     head = commented(
       c,
       Comments.key_of("IfBranch", branch.span),
-      Docs.Doc.Concat([text(keyword), expr_doc(c, branch.condition, false)]),
+      Docs.Doc.Concat([text(keyword), head_doc(c, branch.condition, true)]),
     )
 
     parts = parts.concat([head, body(c, items)])
@@ -895,16 +899,131 @@ def case_doc(c: Context, node: Ast.CaseStmt) -> Docs.Doc
   end
 
   items = items.concat(dangling_items(c, key))
-  head = Docs.Doc.Concat([text("case "), expr_doc(c, node.value, false), text(optional_do(c, node.value))])
+  head = Docs.Doc.Concat([text("case "), head_doc(c, node.value, false), text(optional_do(c, node.value))])
   Docs.Doc.Concat([head, body(c, items), Docs.Doc.HardLine, text("end")])
 end
 
-# " do" when the source writes the optional `do` after the header expression of a `while`, `for` or `case`.
+# " do" when the source writes the optional `do` after the header expression of a `while`, `for` or `case`, also
+# after the parentheses around it.
 def optional_do(c: Context, header: Ast.Expr) -> String
   at = token_index(c, tight(c, Ast.expr_span(header)).stop.offset)
+  while at < c.tokens.size and c.tokens[at].kind == "right-paren"
+    at += 1
+  end
+
   return " do" if at < c.tokens.size and c.tokens[at].kind == "do"
 
   ""
+end
+
+# Whether the last of `args` is a block in braces.
+def braced?(args: List[Ast.Expr]) -> Bool
+  return false if args.size == 0
+
+  case args[args.size - 1]
+    Ast.Expr.BlockLit(lit) -> lit.braces
+    _ -> false
+  end
+end
+
+# The expression of a head: the condition of an if, an elsif or a guard (`condition`), or the value of a while, for or
+# case head. It goes in parentheses when its top level holds a block that the parser refuses there (blocked?); inside
+# them every block is allowed again.
+def head_doc(c: Context, expr: Ast.Expr, condition: Bool) -> Docs.Doc
+  return Docs.Doc.Concat([text("("), expr_doc(c, expr, true), text(")")]) if blocked?(expr, condition)
+
+  return expr_doc(c, expr, false) if !condition
+
+  calls: List[Int] = []
+  for node in top_level(expr)
+    case node
+      Ast.Expr.Call(call) if !call.piped and !call.name.include?(".") -> calls = calls.push(call.span.start.offset)
+      _ -> calls = calls
+    end
+  end
+
+  expr_doc(c.with(head_calls: calls), expr, false)
+end
+
+# The nodes at the top level of a head, where the parser's head rules hold: the expression and, down chains,
+# operators, `try` and the left side of a pipe, its parts. Arguments, brackets, interpolations and block bodies
+# allow every block again (Base.with_blocks and with_block_body of the parser), so the walk stops there.
+def top_level(expr: Ast.Expr) -> List[Ast.Expr]
+  case expr
+    Ast.Expr.Call(node) ->
+      return [expr].concat(top_level(node.args[0])) if node.piped and node.args.size > 0
+
+      [expr]
+    Ast.Expr.MethodCall(node) -> [expr].concat(top_level(node.target))
+    Ast.Expr.FieldAccess(node) -> [expr].concat(top_level(node.target))
+    Ast.Expr.Invoke(node) -> [expr].concat(top_level(node.target))
+    Ast.Expr.Update(node) -> [expr].concat(top_level(node.target))
+    Ast.Expr.Index(node) -> [expr].concat(top_level(node.target))
+    Ast.Expr.Try(node) -> [expr].concat(top_level(node.operand))
+    Ast.Expr.Unary(node) -> [expr].concat(top_level(node.operand))
+    Ast.Expr.Binary(node) -> [expr].concat(top_level(node.left)).concat(top_level(node.right))
+    _ -> [expr]
+  end
+end
+
+# Whether the top level of a head holds a block that the parser refuses there.
+def blocked?(expr: Ast.Expr, condition: Bool) -> Bool
+  for node in top_level(expr)
+    case node
+      Ast.Expr.Call(call) ->
+        bare = !call.parenthesized and !call.piped and !call.name.include?(".")
+        return true if refused_block?(call.args, condition, bare)
+      Ast.Expr.MethodCall(call) -> return true if refused_block?(call.args, condition, false)
+      _ -> next
+    end
+  end
+
+  false
+end
+
+# Whether the last of `args` is a block that a head refuses: any block in a while, for or case head; in a condition a
+# block in braces, or a `do` block after a plain name written without `()` (`bare`).
+def refused_block?(args: List[Ast.Expr], condition: Bool, bare: Bool) -> Bool
+  return false if args.size == 0
+
+  case args[args.size - 1]
+    Ast.Expr.BlockLit(lit) if !lit.lambda -> !condition or lit.braces or bare
+    _ -> false
+  end
+end
+
+# The index of the last token of a case arm guard: the guard expression's last token, then the `)` that close
+# parentheses around it, which are all that may stand before the arm's `->` (a block in the guard may hold `->` of its
+# own).
+def guard_end(c: Context, guard: Ast.Expr) -> Int
+  last = token_index(c, tight(c, Ast.expr_span(guard)).stop.offset) - 1
+  while last + 1 < c.tokens.size and c.tokens[last + 1].kind == "right-paren"
+    last += 1
+  end
+
+  last
+end
+
+# Whether the tokens from `first` to `last` are one pair of parentheses and what is inside them.
+def wrapped?(c: Context, first: Int, last: Int) -> Bool
+  return false if c.tokens[first].kind != "left-paren" or c.tokens[last].kind != "right-paren"
+
+  depth = 0
+  index = first
+  while index < last
+    kind = c.tokens[index].kind
+    if kind == "left-paren"
+      depth += 1
+    elsif kind == "right-paren"
+      depth -= 1
+    end
+
+    return false if depth == 0
+
+    index += 1
+  end
+
+  true
 end
 
 # An arm: `pattern -> statement` on one line when its body is one simple statement that fits, else the body on the
@@ -913,7 +1032,21 @@ def arm_doc(c: Context, arm: Ast.CaseArm) -> Docs.Doc
   patterns = Ast.alternatives(arm.pattern)
   head = patterns.map do |pattern: Ast.Pattern| source(c, tight(c, Ast.pattern_span(pattern))) end.join(", ")
   case arm.guard
-    some(guard) -> head = "#{head} if #{source(c, tight(c, Ast.expr_span(guard)))}"
+    some(guard) ->
+      # The guard is the tokens between the arm's `if` and its `->`, parentheses included. A block that a condition
+      # refuses needs parentheses around the whole guard.
+      first = token_index(c, Ast.pattern_span(arm.pattern).stop.offset)
+      while first < c.tokens.size and c.tokens[first].kind != "if"
+        first += 1
+      end
+
+      last = guard_end(c, guard)
+      written = source(c, Source.Span(start: c.tokens[first + 1].span.start, stop: c.tokens[last].span.stop))
+      if blocked?(guard, true) and !wrapped?(c, first + 1, last)
+        written = "(#{written})"
+      end
+
+      head = "#{head} if #{written}"
     none -> head = head
   end
 
@@ -1475,6 +1608,17 @@ def call_doc_keyed(c: Context, node: Ast.Call, key: String) -> Docs.Doc
     end
   end
 
+  # The empty `()` before a block goes, except where the parser needs it: a pipe stage, a block word and a plain name
+  # at the top level of a condition (bare_block_name? of the parser). A block in braces never follows `()`.
+  plain = !node.name.include?(".")
+  kept = node.piped or (plain and (c.head_calls.include?(node.span.start.offset) or Ast.block_word?(node.name)))
+  kept = kept and !braced?(node.args)
+  if args.size == 0 and block.size > 0
+    return Docs.Doc.Concat([text(call_name(c, node))].concat(block)) if !kept
+
+    return Docs.Doc.Concat([text(call_name(c, node) + "()")].concat(block)) if !node.piped
+  end
+
   return Docs.Doc.Concat([text(call_name(c, node)), arguments(c, args, key)].concat(block)) if node.parenthesized
 
   return Docs.Doc.Concat([text(node.name)].concat(block)) if args.size == 0
@@ -1658,7 +1802,7 @@ def target_of(expr: Ast.Expr) -> Ast.Expr
   end
 end
 
-# `.name(args)`, with a trailing `do` block. A call whose only argument is a block keeps the `()` it was written with.
+# `.name(args)`, with a trailing block. A call whose only argument is a block drops the empty `()`.
 def method_link(c: Context, node: Ast.MethodCall) -> Link
   args = node.args
   block: List[Docs.Doc] = []
@@ -1672,19 +1816,14 @@ def method_link(c: Context, node: Ast.MethodCall) -> Link
   end
 
   name = text(".#{node.name}")
-  if args.size == 0 and block.size > 0
-    at = token_index(c, node.name_span.start.offset) + 1
-    if at >= c.tokens.size or c.tokens[at].kind != "left-paren"
-      return Link(doc: name, block: block, call: true, breaks: true)
-    end
-  end
+  return Link(doc: name, block: block, call: true, breaks: true) if args.size == 0 and block.size > 0
 
   shown = Docs.Doc.Concat([name, arguments(c, args, Comments.key_of("MethodCall", node.span))])
   Link(doc: shown, block: block, call: true, breaks: true)
 end
 
-# `do |params| body end`, or a lambda `->(params) { body }`: on one line when the body is one simple statement with no
-# comments and it fits, else with the body on the lines below.
+# `do |params| body end`, `{ |params| body }`, or a lambda `->(params) { body }`: on one line when the body is one
+# simple statement with no comments and it fits, else with the body on the lines below.
 def block_doc(c: Context, node: Ast.BlockLit) -> Docs.Doc
   key = Comments.key_of("BlockLit", node.span)
   params = node.params.map do |param: Ast.BlockParam| block_param(c, param) end
@@ -1695,6 +1834,12 @@ def block_doc(c: Context, node: Ast.BlockLit) -> Docs.Doc
     close = "}"
     if params.size > 0
       head = "->(#{params.join(", ")}) {"
+    end
+  elsif node.braces
+    head = "{"
+    close = "}"
+    if params.size > 0
+      head = "{ |#{params.join(", ")}|"
     end
   elsif params.size > 0
     head = "do |#{params.join(", ")}|"

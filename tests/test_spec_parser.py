@@ -57,7 +57,7 @@ HABITS = [
     ("  f = fn(x: Int) -> Int", 2),
     ("  f = lambda do |x|\n    x\n  end", 2),
     ("  f = do |x|\n    x\n  end", 2),
-    ("  ys = run do |x| x end", 2),
+    ("  if ready do\n    puts(\"a\")\n  end", 2),
     ("  if x > 0 do\n    puts(\"a\")\n  end", 2),
     ("  loop do\n    puts(\"a\")\n  end", 2),
     ("  // note", 2),
@@ -263,6 +263,69 @@ class TestSpecParser:
             Reject(main_of("  x = 1 do\n  end\n"), "PARSE-UNEXPECTED-TOKEN"),
             Reject(main_of("  xs.each do |x|\n    if x\n      puts(x) end\n  end\n"), "PARSE-UNEXPECTED-TOKEN"),
             Reject(main_of("  xs.each do |x|\n    puts(x)\n"), "PARSE-UNCLOSED-BLOCK"),
+        ])
+
+    def test_a_call_without_arguments_takes_its_block_without_parentheses(self):
+        # `name do`, `recv.name do` and `{ |x| ... }` after a name call with no other argument; `name() do` still
+        # parses. The `()` stays after |>, for lambda, proc and loop, and for a plain name in an if or guard
+        # condition, where no call takes a `{ }` block; a call with parentheses takes only a `do` block.
+        blocks = (
+            "def answer(f: Fn[Int]) -> Int = f.call()\n\n"
+            "def twice(f: Fn[Int, Int]) -> Int = f.call(1) + f.call(2)\n\n"
+            "def ready(f: Fn[Int, Bool]) -> Bool = f.call(1)\n\n"
+            "def each_pair(xs: List[Int], body: Fn[Int, Int, Void]) -> Void\n  body.call(xs[0], xs[1])\nend\n\n"
+        )
+        self.check_output([
+            Output(blocks + main_of("  xs = [1, 2, 3]\n  puts(answer do 4 end)\n  puts(answer { 5 })\n"
+                                    "  puts(twice { |v| v * 10 })\n  puts(xs.map { |x|\n    x + 1\n  })\n"
+                                    "  xs.each do |x| puts(x) end\n  puts(answer() do 6 end)\n"
+                                    "  puts(ready() do |x| x > 0 end)\n  if ready() do |x| x > 0 end\n"
+                                    "    puts(\"if\")\n  end\n"),
+                   ["4", "5", "30", "[2, 3, 4]", "1", "2", "3", "6", "true", "if"]),
+        ])
+        self.check_rejected([
+            Reject(blocks + main_of("  if ready do |x| x > 0 end\n    puts(1)\n  end\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (12, 12, 12, 14)),
+            Reject(blocks + main_of("  return if ready do |x| x > 0 end\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (12, 19, 12, 21)),
+            Reject(blocks + main_of("  xs = [1]\n  if xs.any? { |x| x > 0 }\n    puts(1)\n  end\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (13, 14, 13, 15)),
+            Reject(blocks + main_of("  xs = [1]\n  return if xs.any? { |x| x > 0 }\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (13, 21, 13, 22)),
+            Reject(blocks + main_of("  xs = [1]\n  _ys = xs.map() { |x| x }\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (13, 18, 13, 19)),
+            Reject(blocks + main_of("  xs = [1]\n  _n = xs.reduce(0) { |a, x| a + x }\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (13, 21, 13, 22)),
+            Reject(blocks + main_of("  xs = [1]\n  _ys = xs.map { || 1 }\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (13, 18, 13, 20)),
+            Reject(blocks + main_of("  xs = [1, 2]\n  xs |> each_pair do |a, b| puts(a + b) end\n"),
+                   "PARSE-PIPE-TARGET", (13, 9, 13, 44)),
+            Reject(blocks + main_of("  _f = proc do |x| x end\n"), "PARSE-UNEXPECTED-TOKEN", (12, 13, 12, 15)),
+            Reject(blocks + main_of("  y = 1\n  _z = y do 2 end\n"), "CHECK-UNKNOWN-NAME", (13, 8, 13, 18)),
+            # A loop control or a foreign keyword takes no block; a map literal needs the call's parentheses.
+            Reject(blocks + main_of("  for x in [1]\n    next { x }\n  end\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (13, 5, 13, 9)),
+            Reject(blocks + main_of("  while true\n    break do\n    end\n  end\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (13, 11, 13, 13)),
+            Reject(blocks + main_of("  puts {\"a\": 1}\n"), "PARSE-UNEXPECTED-TOKEN", (12, 8, 12, 9)),
+            # A case arm guard is a condition too.
+            Reject(blocks + main_of("  case 1\n    1 if ready do |v| v > 0 end -> puts(1)\n    _ -> puts(2)\n  end\n"),
+                   "PARSE-UNEXPECTED-TOKEN", (13, 16, 13, 18)),
+            Reject(blocks + main_of("  xs = [1]\n  case 1\n    1 if xs.any? { |v| v > 0 } -> puts(1)\n"
+                                    "    _ -> puts(2)\n  end\n"), "PARSE-UNEXPECTED-TOKEN", (14, 18, 14, 19)),
+        ])
+        # Inside parentheses a head takes any block.
+        self.check_output([
+            Output(blocks + main_of("  xs = [1, 2]\n  case 1\n    1 if ready() do |v| v > 0 end -> puts(\"arm\")\n"
+                                    "    _ -> puts(\"other\")\n  end\n"
+                                    "  if (xs.any? { |x| x > 0 }) and (ready do |v| v > 0 end)\n"
+                                    "    puts(\"if\")\n  end\n"
+                                    "  for y in (xs.map { |x| x * 3 })\n    puts(y)\n  end\n"
+                                    "  if \"#{xs.any? { |x| x > 0 }}\" == \"true\" and {1: ready do |v| v > 0 end}[1]\n"
+                                    "    puts(\"inside\")\n  end\n"),
+                   ["arm", "if", "3", "6", "inside"]),
+            Output("struct Box\n  ok: Bool\nend\n\n" + blocks
+                   + main_of("  if Box(ok: ready do |v| v > 0 end).ok\n    puts(\"named\")\n  end\n"), ["named"]),
         ])
 
     def test_ruby_headers_one_line_case_arms_and_module_calls_without_parentheses(self):

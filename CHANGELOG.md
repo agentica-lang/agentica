@@ -21,6 +21,9 @@ Versioning](https://semver.org/spec/v2.0.0.html).
 - A program may name a type `Header`, `HttpRequest`, `HttpResponse`,
   `HttpClient`, `HttpServer`, `HttpClientOptions`, `HttpServerOptions` or
   `HttpWire` (an enum `HttpWire` stays an error).
+- A call without arguments drops its `()` before a block: `run do ... end`,
+  `xs.each do |x| ... end`, and a block in braces, `xs.map { |x| x * 2 }`;
+  `agentica fmt` removes the empty `()` (`run() do` still parses).
 
 ### Changed
 

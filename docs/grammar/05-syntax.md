@@ -381,7 +381,8 @@ A guard, `return x if c`, `return if c`, `break if c` or `next if c`, is the
 same way. Its `if` is on the line where the statement starts, so a `case` value
 or a block that spans lines cannot take one, and nothing follows the condition
 (no `elsif`, `else` or second `if`); each is `PARSE-UNEXPECTED-TOKEN`. The
-condition reads as an `if` condition: a call with a block needs no parentheses.
+condition reads as an `if` condition: a method call with a block needs no
+parentheses, and a function called by its plain name keeps them.
 A guard is a simple statement, so it can be the one-line body of a `case` arm
 (`1 -> return x if c`) or of a one-line `do` block.
 No other statement takes a modifier (`puts(x) if c`, `x = 1 if c`), and there
@@ -418,9 +419,11 @@ postfix_expr     = primary, { ".", NAME
                             | ".", "with", "(", named_arguments, ")"
                             | ".", NAME, "(", [ arguments ], ")"
                             | "[", expression, "]"
-                            | block } ;
+                            | block | brace_block } ;
 block            = "do", [ "|", block_param, { ",", block_param }, "|" ],
                    block_body, "end" ;
+brace_block      = "{", [ "|", block_param, { ",", block_param }, "|" ],
+                   lambda_body, "}" ;
 block_param      = NAME, [ ":", type ] ;
 block_body       = NL, { statement } | simple_statement ;
 lambda           = "->", [ "(", block_param, { ",", block_param }, ")" ],
@@ -458,6 +461,19 @@ an import alias: `s.length`, `IO.gets!`, `while !IO.eof? do`, `Util.reset`. So
 `f = Util.helper` calls `helper`; write `&Util.helper` for the function value.
 `&name` references a declared top-level function without captures, and
 `&Time.now_ms` or `&Int.to_s` a builtin (06-semantics.md, "Function values").
+A call without arguments drops its `()` before a block: `xs.each do |x| ... end`,
+`run do ... end` for a function `run`, and `xs.map { |x| x * 2 }`. A bare name
+without a block is never a call. `run() do ... end` still parses, and
+`agentica fmt` drops the `()`. A `{ ... }` block follows only a call written
+without `(`, and its body is a lambda's: one line or several, up to the `}`;
+`xs.map() { ... }` and `xs.map(1) { ... }` are `PARSE-UNEXPECTED-TOKEN`, since
+a call with parentheses takes a `do` block. The `()` stays after `|>`
+(`PARSE-PIPE-TARGET` without it), for `lambda`, `proc` and `loop`, and for a
+function called by its plain name in an `if`, `elsif`, guard or case arm guard
+condition: there `ready do` is `PARSE-UNEXPECTED-TOKEN` (the `do` reads as a
+mistake for the end of the line), and no call takes a `{ ... }` block. Inside
+parentheses, brackets, a map literal or `#{...}`, a condition or a `while`,
+`for` or `case` head takes any block: `if (xs.any? { |x| x > 0 })`.
 A lambda, `->(x) { x + 1 }`, is a block that no call takes; one without
 parameters has no parentheses (`-> { 42 }`), and its body is always in braces.
 `->() { ... }`, `->x { ... }`, `->(x) do ... end`, `lambda { ... }`,
